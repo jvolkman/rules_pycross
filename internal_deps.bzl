@@ -11,6 +11,14 @@ def rules_pycross_internal_deps():
     "Fetch deps needed for local development"
     maybe(
         http_archive,
+        name = "rules_python",
+        url = "https://github.com/bazelbuild/rules_python/archive/refs/tags/0.7.0.tar.gz",
+        strip_prefix = "rules_python-0.7.0",
+        sha256 = "15f84594af9da06750ceb878abbf129241421e3abbd6e36893041188db67f2fb",
+    )
+
+    maybe(
+        http_archive,
         name = "build_bazel_integration_testing",
         urls = [
             "https://github.com/bazelbuild/bazel-integration-testing/archive/165440b2dbda885f8d1ccb8d0f417e6cf8c54f17.zip",

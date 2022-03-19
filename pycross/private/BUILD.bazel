@@ -1,7 +1,15 @@
 load("@bazel_skylib//:bzl_library.bzl", "bzl_library")
+load("@rules_python//python/pip_install:requirements.bzl", "compile_pip_requirements")
 
 bzl_library(
     name = "versions",
     srcs = ["versions.bzl"],
     visibility = ["//pycross:__subpackages__"],
+)
+
+compile_pip_requirements(
+    name = "requirements",
+    extra_args = ["--allow-unsafe"],
+    requirements_in = "requirements.in",
+    requirements_txt = "requirements.txt",
 )
