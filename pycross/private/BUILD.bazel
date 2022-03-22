@@ -7,6 +7,12 @@ bzl_library(
     visibility = ["//pycross:__subpackages__"],
 )
 
+bzl_library(
+    name = "target_python",
+    srcs = ["target_python.bzl"],
+    visibility = ["//visibility:public"],
+)
+
 compile_pip_requirements(
     name = "requirements",
     extra_args = ["--allow-unsafe"],

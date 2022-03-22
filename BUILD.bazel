@@ -20,3 +20,35 @@ bzl_library(
         "@bazel_tools//tools/build_defs/repo:utils.bzl",
     ],
 )
+
+
+###
+# Testing
+
+config_setting(
+    name = "linux_x86",
+    constraint_values = [
+        "@platforms//os:linux",
+        "@platforms//cpu:x86_64",
+    ],
+)
+
+load("//pycross:defs.bzl", "target_python", "pycross_lock_file")
+target_python(
+    name = "py_foo",
+    platform = ":linux_x86",
+    platform_tag = "cp39-cp39-manylinux_2_17_x86_64",
+    marker_overrides = {
+        "implementation_version": "3.9.12",
+    },
+)
+
+pycross_lock_file(
+    name = "pclock",
+    project_file = "pyproject.toml",
+    input_lock_file = "foo.lock",
+    target_pythons = [
+        ":py_foo",
+    ],
+    out = "pclock.bzl",
+)

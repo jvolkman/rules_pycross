@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 from typing import List
 import argparse
+import json
 import os
 import sys
 
@@ -37,27 +38,38 @@ def main():
         "--project-file",
         type=str,
         required=True,
-        help="The path to pyproject.toml",
+        help="The path to pyproject.toml.",
     )
 
     parser.add_argument(
         "--lock-file",
         type=str,
         required=True,
-        help="The path to pdm.lock",
+        help="The path to pdm.lock.",
     )
 
     parser.add_argument(
-        "--bzl-file",
+        "--target-python-file",
+        type=str,
+        nargs="*",
+        help="A target_python output file.",
+    )
+
+    parser.add_argument(
+        "--output",
         type=str,
         required=True,
-        help="The path to output bzl file",
+        help="The path to the output bzl file.",
     )
 
     args = parser.parse_args()
     project_file = args.project_file
     lock_file = args.lock_file
-    bzl_file = args.bzl_file
+    output = args.output
+    targets = []
+    for tpf in args.target_python_file or []:
+        with open(tpf, "r") as f:
+            targets.append(json.load(f))
 
     try:
         with open(project_file, 'rb') as f:
