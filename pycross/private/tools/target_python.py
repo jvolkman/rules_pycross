@@ -4,9 +4,13 @@ marker overrides and outputs the result of guessed markers with overrides.
 """
 
 import argparse
+import json
+import os
+import sys
+
 from packaging import tags
 
-from . import env_markers
+import env_markers
 
 
 def main():
@@ -36,34 +40,31 @@ def main():
     )
 
     args = parser.parse_args()
-    platform_tag = args.platform_tag
-    output = args.output
+    platform_tag_set = tags.parse_tag(args.platform_tag)
+    if len(platform_tag_set) > 1:
+        raise ValueError(f"Platform tag must be singular, but evaluated to {list(platform_tag_set)}")
+
+    platform_tag = next(iter(platform_tag_set))
 
     overrides = {}
-    for override_str in args.marker_override:
-        marker, val = override_str.split("=", maxsplit=1)
-        overrides[marker] = val
+    for override_str in args.marker_override or []:
+        key, val = override_str.split("=", maxsplit=1)
+        overrides[key] = val
 
-    guessed_markers = env_markers.guess_environment_markers()
+    markers = env_markers.guess_environment_markers(platform_tag)
+    for key, val in overrides.items():
+        if key not in markers:
+            raise ValueError(f"Invalid marker: {key}")
+        markers[key] = val
 
-    project_file = args.project_file
-    lock_file = args.lock_file
-
-    if not os.path.isfile(project_file):
-        parser.error(f"Missing project file: {project_file}")
-
-    with tempfile.TemporaryDirectory(prefix="locker") as tempdir:
-        temp_project_file = os.path.join(tempdir, "pyproject.toml")
-        temp_lock_file = os.path.join(tempdir, "pdm.lock")
-
-        shutil.copyfile(project_file, temp_project_file)
-        if os.path.isfile(lock_file):
-            shutil.copyfile(lock_file, temp_lock_file)
-
-        args = [sys.executable, "-m", "pdm", "lock"]
-        subprocess.run(args, check=True, cwd=tempdir)
-
-        shutil.copyfile(temp_lock_file, lock_file)
+    struct = dict(
+        platform_tag=str(platform_tag),
+        compatibility_tags=[str(platform_tag)],
+        markers=markers,
+    )
+    with open(args.output, "w") as f:
+        json.dump(struct, f, indent=2, sort_keys=True)
+        f.write("\n")
 
 
 if __name__ == "__main__":
