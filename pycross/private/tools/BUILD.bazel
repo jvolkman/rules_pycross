@@ -2,10 +2,28 @@ load("@rules_python//python:defs.bzl", "py_binary")
 
 package(default_visibility = ["//visibility:private"])
 
+py_library(
+    name = "env_markers",
+    srcs = ["env_markers.py"],
+    deps = [
+        "@rules_pycross_pypi_deps_packaging//:pkg",
+    ]
+)
+
+py_library(
+    name = "tag_helpers",
+    srcs = ["tag_helpers.py"],
+    deps = [
+        "@rules_pycross_pypi_deps_packaging//:pkg",
+    ]
+)
+
 py_binary(
     name = "bzlifier",
     srcs = ["bzlifier.py"],
     deps = [
+        ":env_markers",
+        ":tag_helpers",
         "@rules_pycross_pypi_deps_packaging//:pkg",
         "@rules_pycross_pypi_deps_tomli//:pkg",
     ]
