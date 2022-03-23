@@ -5,10 +5,9 @@ import subprocess
 import sys
 import tempfile
 
+
 def main():
-    parser = argparse.ArgumentParser(
-        description = "Generate lockfile for dependencies."
-    )
+    parser = argparse.ArgumentParser(description="Generate lockfile for dependencies.")
 
     parser.add_argument(
         "--project-file",

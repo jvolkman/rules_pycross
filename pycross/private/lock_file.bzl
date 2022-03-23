@@ -1,6 +1,6 @@
 """Implementation of the target_python rule."""
 
-load(":target_python.bzl", "TargetPythonInfo")
+load(":target_environment.bzl", "TargetEnvironmentInfo")
 
 def _pycross_lock_file_impl(ctx):
     out = ctx.outputs.out
@@ -14,17 +14,17 @@ def _pycross_lock_file_impl(ctx):
         out.path,
     ]
 
-    for t in ctx.files.target_pythons:
+    for t in ctx.files.target_environments:
         args.extend([
-            "--target-python-file",
+            "--target-environment-file",
             t.path,
         ])
 
     ctx.actions.run(
         inputs = (
-            ctx.files.pdm_project_file + 
-            ctx.files.pdm_lock_file + 
-            ctx.files.target_pythons
+            ctx.files.pdm_project_file +
+            ctx.files.pdm_lock_file +
+            ctx.files.target_environments
         ),
         outputs = [out],
         executable = ctx.executable._tool,
@@ -41,10 +41,10 @@ def _pycross_lock_file_impl(ctx):
 pycross_lock_file = rule(
     implementation = _pycross_lock_file_impl,
     attrs = {
-        "target_pythons": attr.label_list(
-            doc = "A list of target_python labels.",
+        "target_environments": attr.label_list(
+            doc = "A list of pycross_target_environment labels.",
             allow_files = True,
-            # providers = [TargetPythonInfo],
+            providers = [TargetEnvironmentInfo],
         ),
         "pdm_project_file": attr.label(
             doc = "The pyproject.toml file.",
@@ -61,7 +61,7 @@ pycross_lock_file = rule(
             mandatory = True,
         ),
         "_tool": attr.label(
-            default = Label("//pycross/private/tools:bzlifier"),
+            default = Label("//pycross/private/tools:bzl_lock_generator"),
             cfg = "host",
             executable = True,
         ),
