@@ -45,8 +45,8 @@ target_python(
 
 pycross_lock_file(
     name = "pclock",
-    project_file = "pyproject.toml",
-    input_lock_file = "foo.lock",
+    pdm_project_file = "pyproject.toml",
+    pdm_lock_file = "foo.lock",
     target_pythons = [
         ":py_foo",
     ],
