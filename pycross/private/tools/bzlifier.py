@@ -1,12 +1,17 @@
+from collections import defaultdict
 from dataclasses import dataclass
-from typing import List
+from typing import Dict, List, Type, TypeVar
 import argparse
 import json
 import os
 import sys
 
 from packaging.requirements import Requirement
+from packaging.version import Version
 import tomli
+
+
+T = TypeVar("T")
 
 # from pip._vendor.packaging import tags
 # compatibility_tags.get_supported
@@ -19,6 +24,65 @@ import tomli
 def requirement_name(req: str) -> str:
     return Requirement(req).name.lower()
 
+
+@dataclass
+class Package:
+    name: str
+    version: Version
+    extras: List[str]
+    requires_python: str
+    dependencies: List[Requirement]
+
+
+class PdmMetadata:
+    def __init__(self, requirements, packages_by_name, links):
+        self._requirements = requirements
+        self._packages_by_name = packages_by_name
+
+    def get_requirements(self) -> List[Requirement]:
+        return self._requirements
+
+    def get_package(self, req: Requirement) -> Package:
+        matching = self._packages_by_name.get(req.name.lower(), [])
+        for m in matching:
+            if set(m.extras) == req.extras and req.specifier.contains(m.version):
+                return m
+
+        raise Exception(f"Could not find a package matching {req}")
+
+
+    @classmethod
+    def create(cls: Type[T], project_file: str, lock_file: str) -> T:
+        try:
+            with open(project_file, 'rb') as f:
+                project_dict = tomli.load(f)
+        except Exception as e:
+            raise Exception(f"Could not load project file: {project_file}: {e}")
+
+        requirement_strings = project_dict.get("project", {}).get("dependencies", [])
+        requirements = [Requirement(s) for s in requirement_strings]
+
+        try:
+            with open(lock_file, 'rb') as f:
+                lock_dict = tomli.load(f)
+        except Exception as e:
+            raise Exception(f"Could not load lock file: {lock_file}: {e}")
+
+        packages_by_name: Dict[str, List[Package]] = defaultdict(list)
+        for lock_pkg in lock_dict.get("package", []):
+            package_name = lock_pkg["name"]
+            packages_by_name[package_name.lower()].append(
+                Package(
+                    name = package_name,
+                    version = Version(lock_pkg["version"]),
+                    extras = lock_pkg.get("extras", []),
+                    requires_python = lock_pkg.get("requires_python", ""),
+                    dependencies = [Requirement(d) for d in lock_pkg.get("dependencies", [])],
+                )
+            )
+
+        return cls(requirements, packages_by_name, [])
+    
 
 @dataclass
 class Entry:
@@ -35,14 +99,14 @@ def main():
     )
 
     parser.add_argument(
-        "--project-file",
+        "--pdm-project-file",
         type=str,
         required=True,
         help="The path to pyproject.toml.",
     )
 
     parser.add_argument(
-        "--lock-file",
+        "--pdm-lock-file",
         type=str,
         required=True,
         help="The path to pdm.lock.",
@@ -63,49 +127,34 @@ def main():
     )
 
     args = parser.parse_args()
-    project_file = args.project_file
-    lock_file = args.lock_file
     output = args.output
     targets = []
     for tpf in args.target_python_file or []:
         with open(tpf, "r") as f:
             targets.append(json.load(f))
 
-    try:
-        with open(project_file, 'rb') as f:
-            project_dict = tomli.load(f)
-    except Exception as e:
-        parser.error(f"Could not load project file: {project_file}: {e}")
+    metadata = PdmMetadata.create(args.pdm_project_file, args.pdm_lock_file)
 
-    try:
-        with open(lock_file, 'rb') as f:
-            lock_dict = tomli.load(f)
-    except Exception as e:
-        parser.error(f"Could not load lock file: {lock_file}: {e}")
-
-    top_dependency_requirements = project_dict.get("project", {}).get("dependencies", [])
-    top_dependencies = [requirement_name(d) for d in top_dependency_requirements]
-    lock_packages = {p["name"]: p for p in lock_dict["package"]}
-
-    work = list(top_dependencies)
+    work = list(metadata.get_requirements())
 
     entries = {}
     while work:
-        next_pkg = work.pop()
-        if next_pkg in entries:
+        next_req = work.pop()
+        pkg_name = next_req.name.lower()
+        if pkg_name in entries:
             continue
-        info = lock_packages[next_pkg]
-        # TODO: handle platform/extra crap
-        dependencies = [requirement_name(d) for d in info.get("dependencies", [])]
+        package = metadata.get_package(next_req)
+        work.extend(package.dependencies)
 
-        entries[next_pkg] = Entry(package_name=next_pkg, package_deps=dependencies)
-        work.extend(dependencies)
+        # TODO: handle platform/extra crap
+        dependency_names = [d.name.lower() for d in package.dependencies]
+        entries[pkg_name] = Entry(package_name=pkg_name, package_deps=dependency_names)
 
     entry_list = sorted(entries.values(), key=lambda e: e.package_name)
-    for e in entry_list:
-        print(e)
-        print()
-        print()
+    with open(output, "w") as f:
+        for e in entry_list:
+            print(e, file=f)
+            print(file=f)
 
 
 if __name__ == "__main__":
