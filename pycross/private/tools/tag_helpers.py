@@ -11,7 +11,7 @@ def parse_tag(tag: str) -> List[tags.Tag]:
         parsed = tags.parse_tag(tag)
     except ValueError:
         raise ValueError(f"Invalid PEP 425 tag: {tag}")
-    
+
     return list(parsed)
 
 

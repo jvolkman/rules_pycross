@@ -33,21 +33,20 @@ config_setting(
     ],
 )
 
-load("//pycross:defs.bzl", "target_python", "pycross_lock_file")
-target_python(
+load("//pycross:defs.bzl", "pycross_target_environment", "pycross_lock_file")
+pycross_target_environment(
     name = "py_foo",
-    platform = ":linux_x86",
-    platform_tag = "cp39-cp39-manylinux_2_17_x86_64",
-    marker_overrides = {
-        "implementation_version": "3.9.12",
-    },
+    python_compatible_with = ":linux_x86",
+    version = "3.9.12",
+    abis = ["cp39"],
+    platforms = ["manylinux_2_17_x86_64"],
 )
 
 pycross_lock_file(
     name = "pclock",
     pdm_project_file = "pyproject.toml",
     pdm_lock_file = "foo.lock",
-    target_pythons = [
+    target_environments = [
         ":py_foo",
     ],
     out = "pclock.bzl",

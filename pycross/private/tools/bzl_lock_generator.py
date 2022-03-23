@@ -10,19 +10,15 @@ from packaging.requirements import Requirement
 from packaging.version import Version
 import tomli
 
+from pycross.private.tools.target_environment import TargetEnv
 
 T = TypeVar("T")
 
-# from pip._vendor.packaging import tags
-# compatibility_tags.get_supported
-
-# tag -> TargetPython??
 # Filter through LinkEvaluator first
 # Then compute_best_candidate
 
 
-def requirement_name(req: str) -> str:
-    return Requirement(req).name.lower()
+# For downloads: https://github.com/pypa/warehouse/issues/1944
 
 
 @dataclass
@@ -50,11 +46,10 @@ class PdmMetadata:
 
         raise Exception(f"Could not find a package matching {req}")
 
-
     @classmethod
     def create(cls: Type[T], project_file: str, lock_file: str) -> T:
         try:
-            with open(project_file, 'rb') as f:
+            with open(project_file, "rb") as f:
                 project_dict = tomli.load(f)
         except Exception as e:
             raise Exception(f"Could not load project file: {project_file}: {e}")
@@ -63,7 +58,7 @@ class PdmMetadata:
         requirements = [Requirement(s) for s in requirement_strings]
 
         try:
-            with open(lock_file, 'rb') as f:
+            with open(lock_file, "rb") as f:
                 lock_dict = tomli.load(f)
         except Exception as e:
             raise Exception(f"Could not load lock file: {lock_file}: {e}")
@@ -73,16 +68,18 @@ class PdmMetadata:
             package_name = lock_pkg["name"]
             packages_by_name[package_name.lower()].append(
                 Package(
-                    name = package_name,
-                    version = Version(lock_pkg["version"]),
-                    extras = lock_pkg.get("extras", []),
-                    requires_python = lock_pkg.get("requires_python", ""),
-                    dependencies = [Requirement(d) for d in lock_pkg.get("dependencies", [])],
+                    name=package_name,
+                    version=Version(lock_pkg["version"]),
+                    extras=lock_pkg.get("extras", []),
+                    requires_python=lock_pkg.get("requires_python", ""),
+                    dependencies=[
+                        Requirement(d) for d in lock_pkg.get("dependencies", [])
+                    ],
                 )
             )
 
         return cls(requirements, packages_by_name, [])
-    
+
 
 @dataclass
 class Entry:
@@ -90,12 +87,14 @@ class Entry:
     package_deps: List[str]
 
     def __str__(self):
-        return f"Entry(\n    name = \"{self.package_name}\"\n    deps={self.package_deps}\n)"
+        return (
+            f'Entry(\n    name = "{self.package_name}"\n    deps={self.package_deps}\n)'
+        )
 
 
 def main():
     parser = argparse.ArgumentParser(
-        description = "Generate pycross dependency bzl file."
+        description="Generate pycross dependency bzl file."
     )
 
     parser.add_argument(
@@ -113,10 +112,10 @@ def main():
     )
 
     parser.add_argument(
-        "--target-python-file",
+        "--target-environment-file",
         type=str,
         nargs="*",
-        help="A target_python output file.",
+        help="A pycross_target_environment output file.",
     )
 
     parser.add_argument(
@@ -129,9 +128,9 @@ def main():
     args = parser.parse_args()
     output = args.output
     targets = []
-    for tpf in args.target_python_file or []:
-        with open(tpf, "r") as f:
-            targets.append(json.load(f))
+    for target_file in args.target_environment_file or []:
+        with open(target_file, "r") as f:
+            targets.append(TargetEnv.from_dict(json.load(f)))
 
     metadata = PdmMetadata.create(args.pdm_project_file, args.pdm_lock_file)
 
@@ -150,7 +149,7 @@ def main():
         dependency_names = [d.name.lower() for d in package.dependencies]
         entries[pkg_name] = Entry(package_name=pkg_name, package_deps=dependency_names)
 
-    entry_list = sorted(entries.values(), key=lambda e: e.package_name)
+    entry_list = sorted(entries.values(), key=lambda x: x.package_name)
     with open(output, "w") as f:
         for e in entry_list:
             print(e, file=f)
