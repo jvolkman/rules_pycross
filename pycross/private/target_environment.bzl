@@ -12,14 +12,14 @@ def _target_python_impl(ctx):
     f = ctx.actions.declare_file(ctx.attr.name + ".json")
 
     args = [
+        "--name",
+        ctx.attr.name,
         "--output",
         f.path,
         "--implementation",
         ctx.attr.implementation,
         "--version",
         ctx.attr.version,
-        "--python-compatible-with",
-        fully_qualified_label(ctx.attr.python_compatible_with.label),
     ]
 
     for abi in ctx.attr.abis:
@@ -27,6 +27,12 @@ def _target_python_impl(ctx):
 
     for platform in ctx.attr.platforms:
         args.extend(["--platform", platform])
+
+    for constraint in ctx.attr.python_compatible_with:
+        args.extend([
+            "--python-compatible-with",
+            fully_qualified_label(constraint.label),
+        ])
 
     for key, val in ctx.attr.envornment_markers.items():
         args.extend([
@@ -76,12 +82,13 @@ pycross_target_environment = rule(
             mandatory = False,
             default = [],
         ),
-        "python_compatible_with": attr.label(
+        "python_compatible_with": attr.label_list(
             doc = (
-                "A constraint that, when satisfied, indicates this " +
+                "A list of constraints that, when satisfied, indicates this " +
                 "target_platform should be selected."
             ),
             mandatory = True,
+            allow_empty = False,
         ),
         "envornment_markers": attr.string_dict(
             doc = "Environment marker overrides.",

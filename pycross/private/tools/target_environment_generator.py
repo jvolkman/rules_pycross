@@ -14,7 +14,40 @@ from pycross.private.tools.target_environment import TargetEnv
 
 
 def main():
+    parser = make_parser()
+    args = parser.parse_args()
+
+    overrides = {}
+    for override_str in args.environment_marker or []:
+        key, val = override_str.split("=", maxsplit=1)
+        overrides[key] = val
+
+    version_info = tuple(args.version.split("."))
+    if len(version_info) != 3:
+        parser.error("Version must be in the format a.b.c.")
+
+    target_python = TargetPython(
+        platforms=args.platform or [],
+        py_version_info=version_info,
+        abis=args.abi or [],
+        implementation=args.implementation,
+    )
+
+    target = TargetEnv.from_target_python(args.name, target_python, overrides, args.python_compatible_with)
+    with open(args.output, "w") as f:
+        json.dump(target.to_dict(), f, indent=2, sort_keys=True)
+        f.write("\n")
+
+
+def make_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Generate target python information.")
+
+    parser.add_argument(
+        "--name",
+        type=str,
+        required=True,
+        help="The given platform name.",
+    )
 
     parser.add_argument(
         "--implementation",
@@ -54,6 +87,7 @@ def main():
     parser.add_argument(
         "--python-compatible-with",
         type=str,
+        action='append',
         required=True,
         help="Name of the environment constraint label.",
     )
@@ -65,28 +99,7 @@ def main():
         help="The output file.",
     )
 
-    args = parser.parse_args()
-
-    overrides = {}
-    for override_str in args.environment_marker or []:
-        key, val = override_str.split("=", maxsplit=1)
-        overrides[key] = val
-
-    version_info = tuple(args.version.split("."))
-    if len(version_info) != 3:
-        parser.error("Version must be in the format a.b.c.")
-
-    target_python = TargetPython(
-        platforms=args.platform or [],
-        py_version_info=version_info,
-        abis=args.abi or [],
-        implementation=args.implementation,
-    )
-
-    target = TargetEnv.from_target_python(target_python, overrides, args.python_compatible_with)
-    with open(args.output, "w") as f:
-        json.dump(target.to_dict(), f, indent=2, sort_keys=True)
-        f.write("\n")
+    return parser
 
 
 if __name__ == "__main__":

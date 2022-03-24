@@ -13,17 +13,18 @@ T = TypeVar("T")
 
 @dataclass
 class TargetEnv:
+    name: str
     implementation: str
     version: str
     abis: List[str]
     platforms: List[str]
     compatibility_tags: List[str]
     markers: Dict[str, str]
-    python_compatible_with: str
+    python_compatible_with: List[str]
 
     @classmethod
     def from_target_python(
-        cls: Type[T], target_python: TargetPython, markers: Dict[str, str], python_compatible_with: str
+        cls: Type[T], name: str, target_python: TargetPython, markers: Dict[str, str], python_compatible_with: List[str]
     ) -> T:
         all_markers = guess_environment_markers(target_python)
         for key, val in markers.items():
@@ -32,6 +33,7 @@ class TargetEnv:
             all_markers[key] = val
 
         return cls(
+            name=name,
             implementation=target_python.implementation,
             version=".".join((str(i) for i in target_python.py_version_info)),
             abis=target_python.abis,
