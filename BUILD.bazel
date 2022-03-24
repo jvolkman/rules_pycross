@@ -26,6 +26,14 @@ bzl_library(
 # Testing
 
 config_setting(
+    name = "darwin_x86",
+    constraint_values = [
+        "@platforms//os:macos",
+        "@platforms//cpu:x86_64",
+    ],
+)
+
+config_setting(
     name = "linux_x86",
     constraint_values = [
         "@platforms//os:linux",
@@ -35,7 +43,15 @@ config_setting(
 
 load("//pycross:defs.bzl", "pycross_target_environment", "pycross_lock_file")
 pycross_target_environment(
-    name = "py_foo",
+    name = "python_darwin_x86",
+    python_compatible_with = ":darwin_x86",
+    version = "3.9.12",
+    abis = ["cp39"],
+    platforms = ["macosx"],
+)
+
+pycross_target_environment(
+    name = "python_linux_x86",
     python_compatible_with = ":linux_x86",
     version = "3.9.12",
     abis = ["cp39"],
@@ -47,7 +63,8 @@ pycross_lock_file(
     pdm_project_file = "pyproject.toml",
     pdm_lock_file = "foo.lock",
     target_environments = [
-        ":py_foo",
+        ":python_darwin_x86",
+        ":python_linux_x86",
     ],
     out = "pclock.bzl",
 )

@@ -84,11 +84,11 @@ class PdmMetadata:
 @dataclass
 class Entry:
     package_name: str
-    package_deps: List[str]
+    package_deps_by_target: Dict[str, str]
 
     def __str__(self):
         return (
-            f'Entry(\n    name = "{self.package_name}"\n    deps={self.package_deps}\n)'
+            f'Entry(\n    name = "{self.package_name}"\n    deps={self.package_deps_by_target}\n)'
         )
 
 
@@ -114,7 +114,7 @@ def main():
     parser.add_argument(
         "--target-environment-file",
         type=str,
-        nargs="*",
+        action='append',
         help="A pycross_target_environment output file.",
     )
 
@@ -145,9 +145,20 @@ def main():
         package = metadata.get_package(next_req)
         work.extend(package.dependencies)
 
+        deps_by_target = defaultdict(list)
+        for dep in package.dependencies:
+            for target in targets:
+                if not dep.marker or dep.marker.evaluate(target.markers):
+                    deps_by_target[target.python_compatible_with].append(dep)
+
+        if deps_by_target:
+            common_deps = set.intersection(*(set(v) for v in deps_by_target.values()))
+            deps_by_target = {k: [d for d in v if d not in common_deps] for k, v in deps_by_target.items()}
+            deps_by_target[None] = common_deps
+
+
         # TODO: handle platform/extra crap
-        dependency_names = [d.name.lower() for d in package.dependencies]
-        entries[pkg_name] = Entry(package_name=pkg_name, package_deps=dependency_names)
+        entries[pkg_name] = Entry(package_name=pkg_name, package_deps_by_target=deps_by_target)
 
     entry_list = sorted(entries.values(), key=lambda x: x.package_name)
     with open(output, "w") as f:
