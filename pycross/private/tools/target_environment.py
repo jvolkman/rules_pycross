@@ -1,5 +1,5 @@
 """
-Tools to guess environment markers given a tag.
+Stuff to define a target Python environment.
 
 See https://peps.python.org/pep-0508/#environment-markers
 """
@@ -19,10 +19,11 @@ class TargetEnv:
     platforms: List[str]
     compatibility_tags: List[str]
     markers: Dict[str, str]
+    python_compatible_with: str
 
     @classmethod
     def from_target_python(
-        cls: Type[T], target_python: TargetPython, markers: Dict[str, str]
+        cls: Type[T], target_python: TargetPython, markers: Dict[str, str], python_compatible_with: str
     ) -> T:
         all_markers = guess_environment_markers(target_python)
         for key, val in markers.items():
@@ -37,6 +38,7 @@ class TargetEnv:
             platforms=target_python.platforms,
             compatibility_tags=[str(t) for t in target_python.get_tags()],
             markers=all_markers,
+            python_compatible_with=python_compatible_with,
         )
 
     @classmethod

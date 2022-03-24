@@ -4,6 +4,10 @@
 TargetEnvironmentInfo = provider()
 
 
+def fully_qualified_label(label):
+    return "@%s//%s:%s" % (label.workspace_name, label.package, label.name)
+
+
 def _target_python_impl(ctx):
     f = ctx.actions.declare_file(ctx.attr.name + ".json")
 
@@ -14,6 +18,8 @@ def _target_python_impl(ctx):
         ctx.attr.implementation,
         "--version",
         ctx.attr.version,
+        "--python-compatible-with",
+        fully_qualified_label(ctx.attr.python_compatible_with.label),
     ]
 
     for abi in ctx.attr.abis:
