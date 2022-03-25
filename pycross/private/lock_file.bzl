@@ -6,10 +6,8 @@ def _pycross_lock_file_impl(ctx):
     out = ctx.outputs.out
 
     args = [
-        "--pdm-project-file",
-        ctx.file.pdm_project_file.path,
-        "--pdm-lock-file",
-        ctx.file.pdm_lock_file.path,
+        "--poetry-lock-file",
+        ctx.file.poetry_lock_file.path,
         "--output",
         out.path,
     ]
@@ -22,8 +20,7 @@ def _pycross_lock_file_impl(ctx):
 
     ctx.actions.run(
         inputs = (
-            ctx.files.pdm_project_file +
-            ctx.files.pdm_lock_file +
+            ctx.files.poetry_lock_file +
             ctx.files.target_environments
         ),
         outputs = [out],
@@ -46,13 +43,8 @@ pycross_lock_file = rule(
             allow_files = True,
             providers = [TargetEnvironmentInfo],
         ),
-        "pdm_project_file": attr.label(
-            doc = "The pyproject.toml file.",
-            allow_single_file = True,
-            mandatory = True,
-        ),
-        "pdm_lock_file": attr.label(
-            doc = "The pdm.lock file.",
+        "poetry_lock_file": attr.label(
+            doc = "The poetry.lock file.",
             allow_single_file = True,
             mandatory = True,
         ),
