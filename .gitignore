@@ -1,3 +1,5 @@
+.ijwb
+env
 bazel-*
 .bazelrc.user
 __pycache__
