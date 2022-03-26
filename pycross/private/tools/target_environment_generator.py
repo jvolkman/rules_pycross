@@ -33,7 +33,9 @@ def main():
         implementation=args.implementation,
     )
 
-    target = TargetEnv.from_target_python(args.name, target_python, overrides, args.python_compatible_with)
+    target = TargetEnv.from_target_python(
+        args.name, target_python, overrides, args.python_compatible_with
+    )
     with open(args.output, "w") as f:
         json.dump(target.to_dict(), f, indent=2, sort_keys=True)
         f.write("\n")
@@ -66,28 +68,28 @@ def make_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--abi",
         type=str,
-        action='append',
+        action="append",
         help="A list of PEP 425 abi tags.",
     )
 
     parser.add_argument(
         "--platform",
         type=str,
-        action='append',
+        action="append",
         help="A list of PEP 425 platform tags.",
     )
 
     parser.add_argument(
         "--environment-marker",
         type=str,
-        action='append',
+        action="append",
         help="Environment marker overrides in the format `marker=override`.",
     )
 
     parser.add_argument(
         "--python-compatible-with",
         type=str,
-        action='append',
+        action="append",
         required=True,
         help="Name of the environment constraint label.",
     )
