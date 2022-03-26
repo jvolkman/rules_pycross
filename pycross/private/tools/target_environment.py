@@ -24,7 +24,11 @@ class TargetEnv:
 
     @classmethod
     def from_target_python(
-        cls: Type[T], name: str, target_python: TargetPython, markers: Dict[str, str], python_compatible_with: List[str]
+        cls: Type[T],
+        name: str,
+        target_python: TargetPython,
+        markers: Dict[str, str],
+        python_compatible_with: List[str],
     ) -> T:
         all_markers = guess_environment_markers(target_python)
         for key, val in markers.items():

@@ -6,6 +6,10 @@ def _pycross_lock_file_impl(ctx):
     out = ctx.outputs.out
 
     args = [
+        "--prefix",
+        ctx.attr.name.lower().replace("-", "_"),
+        "--poetry-project-file",
+        ctx.file.poetry_project_file.path,
         "--poetry-lock-file",
         ctx.file.poetry_lock_file.path,
         "--output",
@@ -20,6 +24,7 @@ def _pycross_lock_file_impl(ctx):
 
     ctx.actions.run(
         inputs = (
+            ctx.files.poetry_project_file +
             ctx.files.poetry_lock_file +
             ctx.files.target_environments
         ),
@@ -42,6 +47,11 @@ pycross_lock_file = rule(
             doc = "A list of pycross_target_environment labels.",
             allow_files = True,
             providers = [TargetEnvironmentInfo],
+        ),
+        "poetry_project_file": attr.label(
+            doc = "The pyproject.toml file with Poetry dependencies.",
+            allow_single_file = True,
+            mandatory = True,
         ),
         "poetry_lock_file": attr.label(
             doc = "The poetry.lock file.",
