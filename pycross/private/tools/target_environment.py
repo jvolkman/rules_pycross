@@ -3,12 +3,10 @@ Stuff to define a target Python environment.
 
 See https://peps.python.org/pep-0508/#environment-markers
 """
-from typing import Any, Dict, List, Type, TypeVar
+from typing import Any, Dict, List
 from dataclasses import asdict, dataclass
 
 from pip._internal.models.target_python import TargetPython
-
-T = TypeVar("T")
 
 
 @dataclass
@@ -22,21 +20,20 @@ class TargetEnv:
     markers: Dict[str, str]
     python_compatible_with: List[str]
 
-    @classmethod
+    @staticmethod
     def from_target_python(
-        cls: Type[T],
         name: str,
         target_python: TargetPython,
         markers: Dict[str, str],
         python_compatible_with: List[str],
-    ) -> T:
+    ) -> "TargetEnv":
         all_markers = guess_environment_markers(target_python)
         for key, val in markers.items():
             if key not in all_markers:
                 raise ValueError(f"Invalid marker: {key}")
             all_markers[key] = val
 
-        return cls(
+        return TargetEnv(
             name=name,
             implementation=target_python.implementation,
             version=".".join((str(i) for i in target_python.py_version_info)),
@@ -47,9 +44,18 @@ class TargetEnv:
             python_compatible_with=python_compatible_with,
         )
 
-    @classmethod
-    def from_dict(cls: Type[T], data: Dict[str, Any]) -> T:
-        return cls(**data)
+    @property
+    def target_python(self) -> TargetPython:
+        return TargetPython(
+            platforms=self.platforms,
+            py_version_info=tuple(int(p) for p in self.version.split(".")[:3]),
+            abis=self.abis,
+            implementation=self.implementation,
+        )
+
+    @staticmethod
+    def from_dict(data: Dict[str, Any]) -> "TargetEnv":
+        return TargetEnv(**data)
 
     def to_dict(self) -> Dict[str, Any]:
         return asdict(self)

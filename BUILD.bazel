@@ -50,7 +50,7 @@ pycross_target_environment(
     ],
     version = "3.9.12",
     abis = ["cp39"],
-    platforms = ["macosx"],
+    platforms = ["macosx_12_0_x86_64"],
 )
 
 pycross_target_environment(
@@ -61,7 +61,7 @@ pycross_target_environment(
     ],
     version = "3.9.12",
     abis = ["cp39"],
-    platforms = ["macosx"],
+    platforms = ["macosx_12_0_arm64"],
 )
 
 pycross_target_environment(
@@ -72,7 +72,9 @@ pycross_target_environment(
     ],
     version = "3.9.12",
     abis = ["cp39"],
-    platforms = ["manylinux_2_17_x86_64"],
+    platforms = ["manylinux2014_x86_64"] + [
+        "manylinux_2_%s_x86_64" % str(i) for i in range(17, 25)
+    ],
 )
 
 pycross_lock_file(
