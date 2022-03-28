@@ -451,26 +451,6 @@ class PackageTarget:
         return "\n".join(parts)
 
 
-class WheelBuildTarget:
-    def __init__(self, file: PackageFile, naming: Naming):
-        self.file = file
-        self.naming = naming
-        self.name = naming.wheel_repo(file)
-
-    def render(self) -> str:
-        assert self.file.hash.startswith("sha256:")
-        sha256 = self.file.hash[7:]
-        lines = [
-            "http_file(",
-            ind(f'name = "{self.naming.wheel_repo(self.file)}",'),
-            ind(f'url = "{self.file.pypi_url}",'),
-            ind(f'sha256 = "{sha256}",'),
-            ")",
-        ]
-
-        return "\n".join(lines)
-
-
 class FileRepoTarget:
     def __init__(self, name: str, file: PackageFile):
         self.name = name
@@ -482,7 +462,7 @@ class FileRepoTarget:
         lines = [
             "http_file(",
             ind(f'name = "{self.name}",'),
-            ind(f'url = "{self.file.pypi_url}",'),
+            ind(f'urls = ["{self.file.pypi_url}"],'),
             ind(f'sha256 = "{sha256}",'),
             ")",
         ]
@@ -571,8 +551,6 @@ def main():
         w(
             'load("@jvolkman_rules_pycross//pycross:defs.bzl", "pycross_wheel_build", "pycross_wheel_library")'
         )
-        w()
-        w('package(default_visibility = ["//visibility:public"])')
         w()
 
         # Build targets
