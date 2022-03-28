@@ -566,6 +566,7 @@ def main():
             print(text, file=f)
 
         # Header stuff
+        w('load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_file")')
         w('load("@rules_python//python:defs.bzl", "py_library")')
         w(
             'load("@jvolkman_rules_pycross//pycross:defs.bzl", "pycross_wheel_build", "pycross_wheel_library")'
