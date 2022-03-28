@@ -1,18 +1,21 @@
-from collections import defaultdict
-from dataclasses import dataclass
-from typing import Dict, List, Set
 import argparse
 import json
 import os
 import sys
 import textwrap
+from collections import defaultdict
+from dataclasses import dataclass
+from typing import Dict
+from typing import Iterator
+from typing import List
 from typing import Optional
+from typing import Set
 from typing import Union
 
+import tomli
 from packaging.markers import Marker
 from packaging.specifiers import SpecifierSet
 from packaging.version import Version
-import tomli
 from pip._internal.index.package_finder import CandidateEvaluator
 from pip._internal.index.package_finder import LinkEvaluator
 from pip._internal.models.candidate import InstallationCandidate
@@ -20,12 +23,24 @@ from pip._internal.models.link import Link
 
 from pycross.private.tools.target_environment import TargetEnv
 
-# Filter through LinkEvaluator first
-# Then compute_best_candidate
-
 
 # For downloads: https://github.com/pypa/warehouse/issues/1944
 WAREHOUSE_HOST = "https://files.pythonhosted.org"
+
+# Included in the generated bazel file for source archives.
+SOURCE_BUILD_CONTENT = """\
+package(default_visibility = ["//visibility:public"])
+
+filegroup(
+    name = "source",
+    srcs = glob(["**/*"]),
+)
+"""
+
+
+def ind(text: str, tabs=1):
+    """Indent text with the given number of tabs."""
+    return textwrap.indent(text, "    " * tabs)
 
 
 @dataclass(frozen=True)
@@ -103,14 +118,24 @@ class Naming:
     def __init__(self, prefix: str):
         self.prefix = prefix
 
+    @staticmethod
+    def _sanitize(name: str) -> str:
+        return name.lower().replace("-", "_")
+
     def package_target(self, package_name: str) -> str:
-        return self.prefix + "_pkg_" + package_name.lower().replace("-", "_")
+        return f"{self.prefix}_pkg_{self._sanitize(package_name)}"
 
     def package_label(self, package_name: str) -> str:
         return f":{self.package_target(package_name)}"
 
+    def package_deps_target(self, package_name: str) -> str:
+        return f"{self.prefix}_deps_{self._sanitize(package_name)}"
+
+    def package_deps_label(self, package_name: str) -> str:
+        return f":{self.package_deps_target(package_name)}"
+
     def environment_target(self, environment_name: str) -> str:
-        return self.prefix + "_env_" + environment_name.lower().replace("-", "_")
+        return f"{self.prefix}_env_{self._sanitize(environment_name)}"
 
     def environment_label(self, environment_name: str) -> str:
         return f":{self.environment_target(environment_name)}"
@@ -131,6 +156,9 @@ class Naming:
         parts = file.name.split("-")
         name = parts[0].lower()
         return f"{self.prefix}_src_{name}"
+
+    def source_label(self, file: PackageFile) -> str:
+        return f"@{self.source_repo(file)}//:source"
 
     def wheel_label(self, file: PackageFile):
         if file.is_wheel:
@@ -269,6 +297,25 @@ class PoetryMetadata:
         return PoetryMetadata(pinned_package_names, packages, package_file_sets)
 
 
+class EnvTarget:
+    def __init__(self, environment_name: str, constraints: List[str], naming: Naming):
+        self.naming = naming
+        self.environment_name = environment_name
+        self.constraints = constraints
+
+    def render(self) -> str:
+        lines = [
+            "native.config_setting(",
+            ind(f'name = "{self.naming.environment_target(self.environment_name)}",'),
+            ind(f"constraint_values = ["),
+        ]
+        for cv in self.constraints:
+            lines.append(ind(f'"{cv}",', 2))
+        lines.extend([ind("],"), ")"])
+
+        return "\n".join(lines)
+
+
 class PackageTarget:
     def __init__(
         self,
@@ -289,7 +336,9 @@ class PackageTarget:
         self.common_deps = deps_by_env.get(None, set())
         self.env_deps = {k: v for k, v in deps_by_env.items() if k is not None}
 
-        self.files_by_env = {e.name: package_file_set.get_file_for_environment(e) for e in environments}
+        self.files_by_env = {
+            e.name: package_file_set.get_file_for_environment(e) for e in environments
+        }
         self.distinct_files = set(self.files_by_env.values())
 
     @property
@@ -300,41 +349,86 @@ class PackageTarget:
             names |= set(d.name.lower() for d in env_deps)
         return names
 
-    def __str__(self):
-        def ind(text: str, tabs=1):
-            return textwrap.indent(text, "    " * tabs)
+    @property
+    def source_file(self) -> Optional[PackageFile]:
+        for f in self.distinct_files:
+            if not f.is_wheel:
+                return f
 
+    @property
+    def has_deps(self) -> bool:
+        return bool(self.common_deps or self.env_deps)
+
+    @property
+    def has_source(self) -> bool:
+        return self.source_file is not None
+
+    def _common_entries(self, deps: Set[Dependency], indent: int) -> Iterator[str]:
+        for d in sorted(deps, key=lambda x: x.name.lower()):
+            yield ind(f'"{self.naming.package_label(d.name)}",', indent)
+
+    def _select_entries(
+        self, env_deps: Dict[str, Set[PoetryPackage]], indent
+    ) -> Iterator[str]:
+        for env_name, deps in sorted(env_deps.items(), key=lambda x: x[0].lower()):
+            yield ind(f'"{self.naming.environment_label(env_name)}": [', indent)
+            yield from self._common_entries(deps, indent + 1)
+            yield ind("],", indent)
+
+    def render_deps(self) -> str:
+        assert self.has_deps
         lines = [
-            "Entry(",
-            ind(f'name = "{self.naming.package_target(self.package_name)}",'),
+            "py_library(",
+            ind(f'name = "{self.naming.package_deps_target(self.package_name)}",'),
         ]
-
-        def common_entries(_deps, indent):
-            for d in sorted(_deps, key=lambda x: x.name.lower()):
-                yield ind(f'"{self.naming.package_label(d.name)}",', indent)
-
-        def select_entries(_env_deps, indent):
-            for _env_name, _deps in sorted(_env_deps.items(), key=lambda x: x[0].lower()):
-                yield ind(f'"{self.naming.environment_label(_env_name)}": [', indent)
-                yield from common_entries(_deps, indent + 1)
-                yield ind("],", indent)
 
         if self.common_deps and self.env_deps:
             lines.append(ind("deps = [", 1))
-            lines.extend(common_entries(self.common_deps, 2))
+            lines.extend(self._common_entries(self.common_deps, 2))
             lines.append(ind("] + select({", 1))
-            lines.extend(select_entries(self.env_deps, 2))
+            lines.extend(self._select_entries(self.env_deps, 2))
             lines.append(ind("}),", 1))
 
         elif self.common_deps:
             lines.append(ind("deps = [", 1))
-            lines.extend(common_entries(self.common_deps, 2))
+            lines.extend(self._common_entries(self.common_deps, 2))
             lines.append(ind("],", 1))
 
         elif self.env_deps:
             lines.append(ind("deps = select({", 1))
-            lines.extend(select_entries(self.env_deps, 2))
+            lines.extend(self._select_entries(self.env_deps, 2))
             lines.append(ind("}),", 1))
+
+        lines.append(")")
+
+        return "\n".join(lines)
+
+    def render_build(self) -> str:
+        source_file = self.source_file
+        assert source_file is not None
+
+        lines = [
+            "pycross_wheel_build(",
+            ind(f'name = "{self.naming.package_target(self.package_name)}",'),
+            ind(f'src = ["{self.naming.source_label(source_file)}"],'),
+        ]
+        if self.has_deps:
+            lines.append(
+                ind(f'deps = ["{self.naming.package_deps_label(self.package_name)}"],')
+            )
+        lines.append(")")
+
+        return "\n".join(lines)
+
+    def render_pkg(self) -> str:
+        lines = [
+            "pycross_wheel_library(",
+            ind(f'name = "{self.naming.package_target(self.package_name)}",'),
+        ]
+        if self.has_deps:
+            lines.append(
+                ind(f'deps = ["{self.naming.package_deps_label(self.package_name)}"],')
+            )
 
         # Add the wheel attribute.
         # If all environments use the same wheel, don't use select.
@@ -344,32 +438,91 @@ class PackageTarget:
         else:
             lines.append(ind("wheel = select({"))
             for env_name, file in self.files_by_env.items():
-                lines.append(ind(f'"{self.naming.environment_label(env_name)}": "{self.naming.wheel_label(file)}",', 2))
+                lines.append(
+                    ind(
+                        f'"{self.naming.environment_label(env_name)}": "{self.naming.wheel_label(file)}",',
+                        2,
+                    )
+                )
             lines.append(ind("}),"))
 
         lines.append(")")
 
         return "\n".join(lines)
 
+    def render(self) -> str:
+        parts = []
+        if self.has_deps:
+            parts.append(self.render_deps())
+            parts.append("")
+        if self.has_source:
+            parts.append(self.render_build())
+            parts.append("")
+        parts.append(self.render_pkg())
+        return "\n".join(parts)
 
-class EnvTarget:
-    def __init__(self, environment_name: str, constraints: List[str], naming: Naming):
+
+class WheelBuildTarget:
+    def __init__(self, file: PackageFile, naming: Naming):
+        self.file = file
         self.naming = naming
-        self.environment_name = environment_name
-        self.constraints = constraints
+        self.name = naming.wheel_repo(file)
 
-    def __str__(self):
-        def ind(text: str, tabs=1):
-            return textwrap.indent(text, "    " * tabs)
+    def render(self) -> str:
+        assert self.file.hash.startswith("sha256:")
+        sha256 = self.file.hash[7:]
+        lines = [
+            "http_file(",
+            ind(f'name = "{self.naming.wheel_repo(self.file)}",'),
+            ind(f'url = "{self.file.pypi_url}",'),
+            ind(f'sha256 = "{sha256}",'),
+            ")",
+        ]
+
+        return "\n".join(lines)
+
+
+class WheelRepoTarget:
+    def __init__(self, file: PackageFile, naming: Naming):
+        self.file = file
+        self.naming = naming
+        self.name = naming.wheel_repo(file)
+
+    def render(self) -> str:
+        assert self.file.hash.startswith("sha256:")
+        sha256 = self.file.hash[7:]
+        lines = [
+            "http_file(",
+            ind(f'name = "{self.naming.wheel_repo(self.file)}",'),
+            ind(f'url = "{self.file.pypi_url}",'),
+            ind(f'sha256 = "{sha256}",'),
+            ")",
+        ]
+
+        return "\n".join(lines)
+
+
+class SourceRepoTarget:
+    def __init__(self, file: PackageFile, naming: Naming):
+        self.file = file
+        self.naming = naming
+        self.name = naming.source_repo(file)
+
+    def render(self) -> str:
+        assert self.file.name.endswith("tar.gz")
+        name_and_version = self.file.name[:-7]
+        assert self.file.hash.startswith("sha256:")
+        sha256 = self.file.hash[7:]
 
         lines = [
-            "config_setting(",
-            ind(f'name = "{self.naming.environment_target(self.environment_name)}",'),
-            ind(f"constraint_values = ["),
+            "http_archive(",
+            ind(f'name = "{self.name}",'),
+            ind(f'url = "{self.file.pypi_url}",'),
+            ind(f'strip_prefix = "{name_and_version}",'),
+            ind(f'sha256 = "{sha256}",'),
+            ind(f"build_file_content = _SOURCE_BUILD_CONTENT,"),
+            ")",
         ]
-        for cv in self.constraints:
-            lines.append(ind(f'"{cv}",', 2))
-        lines.extend([ind("],"), ")"])
 
         return "\n".join(lines)
 
@@ -377,6 +530,7 @@ class EnvTarget:
 def check_package_compatibility(
     package: PoetryPackage, environments: List[TargetEnv]
 ) -> None:
+    """Sanity check to make sure the requires_python attribute on each package matches our environments."""
     for environment in environments:
         if not package.supports_environment(environment):
             raise Exception(
@@ -422,16 +576,53 @@ def main():
     package_targets = sorted(
         package_targets_by_package_name.values(), key=lambda x: x.package_name
     )
+
+    repos = []
+    for package in package_targets:
+        for file in package.distinct_files:
+            if file.is_wheel:
+                repos.append(WheelRepoTarget(file, naming))
+            else:
+                repos.append(SourceRepoTarget(file, naming))
+
+    repos.sort(key=lambda r: r.name)
+
     with open(output, "w") as f:
+
+        def w(text=""):
+            print(text, file=f)
+
+        # Header stuff
+        w('load("@rules_python//python:defs.bzl", "py_library")')
+        w(
+            'load("@jvolkman_rules_pycross//pycross:defs.bzl", "pycross_wheel_build", "pycross_wheel_library")'
+        )
+        w()
+        w('package(default_visibility = ["//visibility:public"])')
+        w()
+        w('_SOURCE_BUILD_CONTENT = """\\')
+        w(SOURCE_BUILD_CONTENT)
+        w('"""')
+        w()
+
+        # Build targets
+        w("def targets():")
         for environment in sorted(environments, key=lambda x: x.name.lower()):
-            print(
-                EnvTarget(environment.name, environment.python_compatible_with, naming),
-                file=f,
+            env_target = EnvTarget(
+                environment.name, environment.python_compatible_with, naming
             )
-            print(file=f)
+            w(ind(env_target.render()))
+            w()
+
         for e in package_targets:
-            print(e, file=f)
-            print(file=f)
+            w(ind(e.render()))
+            w()
+
+        # Repos
+        w("def repositories():")
+        for r in repos:
+            w(ind(r.render()))
+            w()
 
 
 def make_parser() -> argparse.ArgumentParser:
