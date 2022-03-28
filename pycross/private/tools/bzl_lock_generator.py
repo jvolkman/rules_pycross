@@ -27,16 +27,6 @@ from pycross.private.tools.target_environment import TargetEnv
 # For downloads: https://github.com/pypa/warehouse/issues/1944
 WAREHOUSE_HOST = "https://files.pythonhosted.org"
 
-# Included in the generated bazel file for source archives.
-SOURCE_BUILD_CONTENT = """\
-package(default_visibility = ["//visibility:public"])
-
-filegroup(
-    name = "source",
-    srcs = glob(["**/*"]),
-)
-"""
-
 
 def ind(text: str, tabs=1):
     """Indent text with the given number of tabs."""
@@ -143,7 +133,7 @@ class Naming:
     def wheel_repo(self, file: PackageFile) -> str:
         assert file.is_wheel
         normalized_name = file.name[:-4].lower().replace("-", "_")
-        return f"{self.prefix}_whl_{normalized_name}"
+        return f"{self.prefix}_wheel_{normalized_name}"
 
     def wheel_build_target(self, file: PackageFile) -> str:
         assert not file.is_wheel
@@ -151,14 +141,13 @@ class Naming:
         name = parts[0].lower()
         return f"{self.prefix}_build_{name}"
 
-    def source_repo(self, file: PackageFile) -> str:
-        assert not file.is_wheel
-        parts = file.name.split("-")
-        name = parts[0].lower()
-        return f"{self.prefix}_src_{name}"
+    def sdist_repo(self, file: PackageFile) -> str:
+        assert file.name.endswith(".tar.gz")
+        name = file.name[:-7]
+        return f"{self.prefix}_sdist_{self._sanitize(name)}"
 
-    def source_label(self, file: PackageFile) -> str:
-        return f"@{self.source_repo(file)}//:source"
+    def sdist_label(self, file: PackageFile) -> str:
+        return f"@{self.sdist_repo(file)}//file"
 
     def wheel_label(self, file: PackageFile):
         if file.is_wheel:
@@ -410,7 +399,7 @@ class PackageTarget:
         lines = [
             "pycross_wheel_build(",
             ind(f'name = "{self.naming.package_target(self.package_name)}",'),
-            ind(f'src = ["{self.naming.source_label(source_file)}"],'),
+            ind(f'sdist = "{self.naming.sdist_label(source_file)}",'),
         ]
         if self.has_deps:
             lines.append(
@@ -482,49 +471,33 @@ class WheelBuildTarget:
         return "\n".join(lines)
 
 
-class WheelRepoTarget:
-    def __init__(self, file: PackageFile, naming: Naming):
+class FileRepoTarget:
+    def __init__(self, name: str, file: PackageFile):
+        self.name = name
         self.file = file
-        self.naming = naming
-        self.name = naming.wheel_repo(file)
 
     def render(self) -> str:
         assert self.file.hash.startswith("sha256:")
         sha256 = self.file.hash[7:]
         lines = [
             "http_file(",
-            ind(f'name = "{self.naming.wheel_repo(self.file)}",'),
-            ind(f'url = "{self.file.pypi_url}",'),
-            ind(f'sha256 = "{sha256}",'),
-            ")",
-        ]
-
-        return "\n".join(lines)
-
-
-class SourceRepoTarget:
-    def __init__(self, file: PackageFile, naming: Naming):
-        self.file = file
-        self.naming = naming
-        self.name = naming.source_repo(file)
-
-    def render(self) -> str:
-        assert self.file.name.endswith("tar.gz")
-        name_and_version = self.file.name[:-7]
-        assert self.file.hash.startswith("sha256:")
-        sha256 = self.file.hash[7:]
-
-        lines = [
-            "http_archive(",
             ind(f'name = "{self.name}",'),
             ind(f'url = "{self.file.pypi_url}",'),
-            ind(f'strip_prefix = "{name_and_version}",'),
             ind(f'sha256 = "{sha256}",'),
-            ind(f"build_file_content = _SOURCE_BUILD_CONTENT,"),
             ")",
         ]
 
         return "\n".join(lines)
+
+
+class WheelRepoTarget(FileRepoTarget):
+    def __init__(self, file: PackageFile, naming: Naming):
+        super().__init__(naming.wheel_repo(file), file)
+
+
+class SdistRepoTarget(FileRepoTarget):
+    def __init__(self, file: PackageFile, naming: Naming):
+        super().__init__(naming.sdist_repo(file), file)
 
 
 def check_package_compatibility(
@@ -583,7 +556,7 @@ def main():
             if file.is_wheel:
                 repos.append(WheelRepoTarget(file, naming))
             else:
-                repos.append(SourceRepoTarget(file, naming))
+                repos.append(SdistRepoTarget(file, naming))
 
     repos.sort(key=lambda r: r.name)
 
@@ -599,10 +572,6 @@ def main():
         )
         w()
         w('package(default_visibility = ["//visibility:public"])')
-        w()
-        w('_SOURCE_BUILD_CONTENT = """\\')
-        w(SOURCE_BUILD_CONTENT)
-        w('"""')
         w()
 
         # Build targets
