@@ -37,3 +37,8 @@ go_rules_dependencies()
 go_register_toolchains(version = "1.17.2")
 
 gazelle_dependencies()
+
+
+# Testing
+load("//:pclock.bzl", "repositories")
+repositories()

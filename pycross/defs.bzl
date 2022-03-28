@@ -4,3 +4,6 @@ load("//pycross/private:target_environment.bzl", _pycross_target_environment = "
 
 pycross_lock_file = _pycross_lock_file
 pycross_target_environment = _pycross_target_environment
+
+pycross_wheel_build = None
+pycross_wheel_library = None

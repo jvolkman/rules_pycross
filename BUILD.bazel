@@ -86,5 +86,8 @@ pycross_lock_file(
         ":python_darwin_arm64",
         ":python_linux_x86_64",
     ],
+    file_url_overrides = {
+        "xmltodict-0.12.0-py2.py3-none-any.whl": "https://files.pythonhosted.org/packages/3.7/x/xmltodict/xmltodict-0.12.0-py2.py3-none-any.whl",
+    },
     out = "pclock.bzl",
 )
