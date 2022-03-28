@@ -33,34 +33,42 @@ def ind(text: str, tabs=1):
     return textwrap.indent(text, "    " * tabs)
 
 
+def is_wheel(filename: str) -> bool:
+    return filename.lower().endswith(".whl")
+
+
+def pypi_url(filename: str, overrides: Optional[Dict[str, str]] = None) -> str:
+    """Returns the pypi URL for fetching this file."""
+    if overrides and filename in overrides:
+        return overrides[filename]
+
+    # See:
+    # https://github.com/pypa/warehouse/issues/1239
+    # https://github.com/pypa/warehouse/issues/1944
+
+    filename_parts = filename.split("-")
+    name = filename_parts[0]
+    if is_wheel(filename):
+        area = filename_parts[-3]  # python_tag
+    else:
+        area = "source"
+
+    return f"{WAREHOUSE_HOST}/packages/{area}/{name[0]}/{name}/{filename}"
+
+
 @dataclass(frozen=True)
 class PackageFile:
     name: str
     hash: str
+    url: str
 
     @property
     def is_wheel(self) -> bool:
-        return self.name.lower().endswith(".whl")
-
-    @property
-    def pypi_url(self) -> str:
-        """Returns the pypi URL for fetching this file."""
-        # See:
-        # https://github.com/pypa/warehouse/issues/1239
-        # https://github.com/pypa/warehouse/issues/1944
-
-        filename_parts = self.name.split("-")
-        name = filename_parts[0]
-        if self.is_wheel:
-            area = filename_parts[-3]  # python_tag
-        else:
-            area = "source"
-
-        return f"{WAREHOUSE_HOST}/packages/{area}/{name[0]}/{name}/{self.name}"
+        return is_wheel(self.name)
 
     @property
     def link(self) -> Link:
-        return Link(self.pypi_url)
+        return Link(self.url)
 
 
 class PackageFileSet:
@@ -225,7 +233,9 @@ class PoetryMetadata:
         self.package_file_sets = package_file_sets
 
     @staticmethod
-    def create(project_file: str, lock_file: str) -> "PoetryMetadata":
+    def create(
+        project_file: str, lock_file: str, url_overrides: Dict[str, str]
+    ) -> "PoetryMetadata":
         try:
             with open(project_file, "rb") as f:
                 project_dict = tomli.load(f)
@@ -277,7 +287,12 @@ class PoetryMetadata:
 
             package_file_dicts = metadata_files[package_name]
             package_files = [
-                PackageFile(name=p["file"], hash=p["hash"]) for p in package_file_dicts
+                PackageFile(
+                    name=p["file"],
+                    hash=p["hash"],
+                    url=pypi_url(p["file"], url_overrides),
+                )
+                for p in package_file_dicts
             ]
             package_file_sets[package_name] = PackageFileSet(
                 package_name, package_version, package_files
@@ -462,7 +477,7 @@ class FileRepoTarget:
         lines = [
             "http_file(",
             ind(f'name = "{self.name}",'),
-            ind(f'urls = ["{self.file.pypi_url}"],'),
+            ind(f'urls = ["{self.file.url}"],'),
             ind(f'sha256 = "{sha256}",'),
             ")",
         ]
@@ -501,8 +516,16 @@ def main():
         with open(target_file, "r") as f:
             environments.append(TargetEnv.from_dict(json.load(f)))
 
+    # TODO: Make this a file instead
+    url_overrides = {}
+    for url_override in args.file_url or []:
+        filename, url = url_override.split("=", maxsplit=1)
+        url_overrides[filename] = url
+
     naming = Naming(args.prefix)
-    metadata = PoetryMetadata.create(args.poetry_project_file, args.poetry_lock_file)
+    metadata = PoetryMetadata.create(
+        args.poetry_project_file, args.poetry_lock_file, url_overrides
+    )
 
     # First we walk the dependency graph starting from the set if pinned packages (in pyproject.toml), computing the
     # transitive closure.
@@ -604,6 +627,13 @@ def make_parser() -> argparse.ArgumentParser:
         type=str,
         action="append",
         help="A pycross_target_environment output file.",
+    )
+
+    parser.add_argument(
+        "--file-url",
+        type=str,
+        action="append",
+        help="A file=url parameter that sets the URL for the given wheel or sdist file.",
     )
 
     parser.add_argument(

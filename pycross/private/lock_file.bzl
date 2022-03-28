@@ -22,6 +22,12 @@ def _pycross_lock_file_impl(ctx):
             t.path,
         ])
 
+    for f, u in ctx.attr.file_url_overrides.items():
+        args.extend([
+            "--file-url",
+            "%s=%s" % (f, u)
+        ])
+
     ctx.actions.run(
         inputs = (
             ctx.files.poetry_project_file +
@@ -57,6 +63,9 @@ pycross_lock_file = rule(
             doc = "The poetry.lock file.",
             allow_single_file = True,
             mandatory = True,
+        ),
+        "file_url_overrides": attr.string_dict(
+            doc = "An optional mapping of wheel or sdist filenames to their URLs.",
         ),
         "out": attr.output(
             doc = "The output file.",
