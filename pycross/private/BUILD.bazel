@@ -8,8 +8,42 @@ bzl_library(
 )
 
 bzl_library(
-    name = "target_python",
+    name = "lock_file",
+    srcs = ["lock_file.bzl"],
+    deps = ["target_environment"],
+    visibility = ["//visibility:public"],
+)
+
+bzl_library(
+    name = "pypi_requirements",
+    srcs = ["pypi_requirements.bzl"],
+    deps = ["@rules_python//docs:pip_install_bzl"],
+    visibility = ["//visibility:public"],
+)
+
+bzl_library(
+    name = "target_environment",
     srcs = ["target_environment.bzl"],
+    visibility = ["//visibility:public"],
+)
+
+bzl_library(
+    name = "wheel_build",
+    srcs = ["wheel_build.bzl"],
+    deps = [
+        "@bazel_skylib//lib:paths",
+        "@rules_python//docs:defs",
+    ],
+    visibility = ["//visibility:public"],
+)
+
+bzl_library(
+    name = "wheel_library",
+    srcs = ["wheel_library.bzl"],
+    deps = [
+        "@bazel_skylib//lib:paths",
+        "@rules_python//docs:defs",
+    ],
     visibility = ["//visibility:public"],
 )
 
