@@ -143,11 +143,14 @@ class Naming:
         normalized_name = file.name[:-4].lower().replace("-", "_")
         return f"{self.prefix}_wheel_{normalized_name}"
 
-    def wheel_build_target(self, file: PackageFile) -> str:
-        assert not file.is_wheel
-        parts = file.name.split("-")
-        name = parts[0].lower()
-        return f"{self.prefix}_build_{name}"
+    def wheel_build_target(self, package_or_file: Union[str, PackageFile]) -> str:
+        if isinstance(package_or_file, PackageFile):
+            assert not package_or_file.is_wheel
+            parts = package_or_file.name.split("-")
+            name = parts[0].lower()
+            return f"{self.prefix}_build_{name}"
+        else:
+            return f"{self.prefix}_build_{package_or_file}"
 
     def sdist_repo(self, file: PackageFile) -> str:
         assert file.name.endswith(".tar.gz")
@@ -420,14 +423,19 @@ class PackageTarget:
 
         lines = [
             "pycross_wheel_build(",
-            ind(f'name = "{self.naming.package_target(self.package_name)}",'),
+            ind(f'name = "{self.naming.wheel_build_target(self.package_name)}",'),
             ind(f'sdist = "{self.naming.sdist_label(source_file)}",'),
         ]
         if self.has_deps:
             lines.append(
                 ind(f'deps = ["{self.naming.package_deps_label(self.package_name)}"],')
             )
-        lines.append(")")
+        lines.extend(
+            [
+                ind('tags = ["manual"],'),
+                ")",
+            ]
+        )
 
         return "\n".join(lines)
 
@@ -466,9 +474,9 @@ class PackageTarget:
         if self.has_deps:
             parts.append(self.render_deps())
             parts.append("")
-        # if self.has_source:
-        #     parts.append(self.render_build())
-        #     parts.append("")
+        if self.has_source:
+            parts.append(self.render_build())
+            parts.append("")
         parts.append(self.render_pkg())
         return "\n".join(parts)
 

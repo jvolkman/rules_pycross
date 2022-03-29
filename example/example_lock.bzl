@@ -265,6 +265,12 @@ def targets():
         wheel = "@example_lock_wheel_flask_cors_3.0.10_py2.py3_none_any//file",
     )
 
+    pycross_wheel_build(
+        name = "example_lock_build_future",
+        sdist = "@example_lock_sdist_future_0.18.2//file",
+        tags = ["manual"],
+    )
+
     pycross_wheel_library(
         name = "example_lock_pkg_future",
         wheel = ":example_lock_build_future",
@@ -273,6 +279,12 @@ def targets():
     pycross_wheel_library(
         name = "example_lock_pkg_graphql_core",
         wheel = "@example_lock_wheel_graphql_core_3.2.0_py3_none_any//file",
+    )
+
+    pycross_wheel_build(
+        name = "example_lock_build_greenlet",
+        sdist = "@example_lock_sdist_greenlet_1.1.2//file",
+        tags = ["manual"],
     )
 
     pycross_wheel_library(
@@ -381,6 +393,12 @@ def targets():
         name = "example_lock_pkg_jschema_to_python",
         deps = [":example_lock_deps_jschema_to_python"],
         wheel = "@example_lock_wheel_jschema_to_python_1.2.3_py3_none_any//file",
+    )
+
+    pycross_wheel_build(
+        name = "example_lock_build_jsondiff",
+        sdist = "@example_lock_sdist_jsondiff_1.3.1//file",
+        tags = ["manual"],
     )
 
     pycross_wheel_library(
@@ -700,6 +718,13 @@ def targets():
         deps = [
             ":example_lock_pkg_greenlet",
         ],
+    )
+
+    pycross_wheel_build(
+        name = "example_lock_build_sqlalchemy",
+        sdist = "@example_lock_sdist_sqlalchemy_1.4.32//file",
+        deps = [":example_lock_deps_sqlalchemy"],
+        tags = ["manual"],
     )
 
     pycross_wheel_library(

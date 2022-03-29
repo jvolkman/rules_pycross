@@ -32,3 +32,14 @@ py_binary(
     ],
     visibility = ["//visibility:public"],
 )
+
+py_binary(
+    name = "wheel_builder",
+    srcs = ["wheel_builder.py"],
+    deps = [
+        "@rules_pycross_pypi_deps_build//:pkg",
+        "@rules_pycross_pypi_deps_wheel//:pkg",
+        "@rules_python//python/runfiles",
+    ],
+    visibility = ["//visibility:public"],
+)
