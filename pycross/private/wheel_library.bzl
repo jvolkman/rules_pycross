@@ -21,6 +21,8 @@ def _pycross_wheel_library_impl(ctx):
         outputs = [out],
         executable = ctx.executable._tool,
         arguments = args,
+        mnemonic = "WheelExtract",
+        progress_message = "Extracting %s" % ctx.file.wheel.basename,
     )
 
     has_py2_only_sources = ctx.attr.python_version == "PY2"

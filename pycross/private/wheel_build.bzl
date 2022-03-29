@@ -18,6 +18,8 @@ def _pycross_wheel_build_impl(ctx):
         outputs = [out],
         executable = ctx.executable._tool,
         arguments = args,
+        mnemonic = "WheelBuild",
+        progress_message = "Building %s" % ctx.file.sdist.basename,
     )
 
     return [

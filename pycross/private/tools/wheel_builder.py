@@ -40,9 +40,16 @@ def main():
             extracted_dir,
         ]
 
-        # TODO: set PYTHONPATH
+        # TODO: set PYTHONPATH, setup toolchains, setup reproducible config
+        # https://github.com/bazelbuild/rules_python/blob/7740b22d0bae942af0797967f2617daa19834cb3/python/pip_install/extract_wheels/__init__.py#L24
+
         env = os.environ.copy()
-        subprocess.run(wheel_args, check=True, env=env)
+        try:
+            subprocess.check_output(args=wheel_args, env=env)
+        except subprocess.CalledProcessError as cpe:
+            print("===== BUILD FAILED =====", file=sys.stderr)
+            print(cpe.output.decode(), file=sys.stderr)
+            raise
 
         # After build, there should be a .whl file.
         (wheel_file,) = wheel_dir.glob("*.whl")
