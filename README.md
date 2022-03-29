@@ -45,4 +45,4 @@ A `pip install` operation can be roughly broken down into these parts:
 4. `pycross_wheel_library` "installs" (extracts) a Python wheel - either downloaded or built from an sdist - and
    provides it as a `py_library`.
 
-See the [generated docs](doc/rules.md).
+See the [generated docs](docs/rules.md).
