@@ -1,0 +1,5 @@
+load("//:example_lock.bzl", "targets")
+
+package(default_visibility = ["//visibility:public"])
+
+targets()
