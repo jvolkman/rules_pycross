@@ -2,6 +2,8 @@
 
 A proof-of-concept ruleset to (hopefully) improve cross-platform Python builds with Bazel.
 
+__Note:__ very much still experimental.
+
 ### Features:
 
 - A single lock file for all target platforms, thanks to Poetry
