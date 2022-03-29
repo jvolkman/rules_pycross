@@ -200,11 +200,17 @@ class PoetryPackage:
                 # `extra == "foo"` in addition to any platform-specific markers, so to match we need to include the
                 # correct extra value in our marker environment. We don't know the correct value, so instead we just
                 # try all possible extra names until something matches.
-                for extra in self.all_extras:
-                    markers_with_extra = dict(target.markers, extra=extra)
-                    if not dep.marker or dep.marker.evaluate(markers_with_extra):
+                if self.all_extras:
+                    for extra in self.all_extras:
+                        markers_with_extra = dict(target.markers, extra=extra)
+                        if not dep.marker or dep.marker.evaluate(markers_with_extra):
+                            env_deps[target.name].append(dep)
+                            break
+
+                # Otherwise, if no extras, just evaluate the markers normally.
+                else:
+                    if not dep.marker or dep.marker.evaluate(target.markers):
                         env_deps[target.name].append(dep)
-                        break
 
         if env_deps:
             # Pull out deps common to all environments
@@ -378,6 +384,7 @@ class PackageTarget:
             yield ind(f'"{self.naming.environment_label(env_name)}": [', indent)
             yield from self._common_entries(deps, indent + 1)
             yield ind("],", indent)
+        yield ind('"//conditions:default": [],', indent)
 
     def render_deps(self) -> str:
         assert self.has_deps
@@ -459,9 +466,9 @@ class PackageTarget:
         if self.has_deps:
             parts.append(self.render_deps())
             parts.append("")
-        if self.has_source:
-            parts.append(self.render_build())
-            parts.append("")
+        # if self.has_source:
+        #     parts.append(self.render_build())
+        #     parts.append("")
         parts.append(self.render_pkg())
         return "\n".join(parts)
 
@@ -479,6 +486,7 @@ class FileRepoTarget:
             ind(f'name = "{self.name}",'),
             ind(f'urls = ["{self.file.url}"],'),
             ind(f'sha256 = "{sha256}",'),
+            ind(f'downloaded_file_path = "{self.file.name}",'),
             ")",
         ]
 

@@ -9,13 +9,19 @@ py_library(
         "wheel.py",
     ],
     visibility = [
-        "//python/pip_install/extract_wheels:__subpackages__",
-        "//python/pip_install/parse_requirements_to_bzl:__subpackages__",
+        "//pycross/private:__subpackages__",
     ],
     deps = [
         "@rules_pycross_pypi_deps_packaging//:pkg",
         "@rules_pycross_pypi_deps_pkginfo//:pkg",
     ],
+)
+
+py_binary(
+    name = "extract",
+    srcs = ["extract.py"],
+    deps = [":lib"],
+    visibility = ["//visibility:public"],
 )
 
 py_test(
