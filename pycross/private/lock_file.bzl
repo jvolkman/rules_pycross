@@ -1,4 +1,4 @@
-"""Implementation of the target_python rule."""
+"""Implementation of the pycross_lock_file rule."""
 
 load(":target_environment.bzl", "TargetEnvironmentInfo")
 

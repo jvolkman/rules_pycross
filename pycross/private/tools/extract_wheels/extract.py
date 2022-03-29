@@ -1,4 +1,5 @@
 """Utility functions to manipulate Bazel files"""
+import argparse
 from pathlib import Path
 from typing import Optional
 from typing import Union
@@ -61,3 +62,34 @@ def extract_wheel(
 
     if not enable_implicit_namespace_pkgs:
         setup_namespace_pkg_compatibility(directory)
+
+
+def main():
+    parser = argparse.ArgumentParser(description="Extract a Python wheel.")
+
+    parser.add_argument(
+        "--wheel",
+        type=str,
+        required=True,
+        help="The wheel file path.",
+    )
+
+    parser.add_argument(
+        "--enable-implicit-namespace-pkgs",
+        action="store_true",
+        help="If true, disables conversion of implicit namespace packages and will unzip as-is.",
+    )
+
+    parser.add_argument(
+        "--directory",
+        type=str,
+        required=False,
+        help="The output path.",
+    )
+
+    args = parser.parse_args()
+    extract_wheel(args.wheel, args.enable_implicit_namespace_pkgs, args.directory)
+
+
+if __name__ == "__main__":
+    main()

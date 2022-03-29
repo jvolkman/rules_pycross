@@ -46,7 +46,36 @@ def targets():
     )
 
     pycross_wheel_library(
+        name = "example_lock_pkg_attrs",
+        wheel = "@example_lock_wheel_attrs_21.4.0_py2.py3_none_any//file",
+    )
+
+    py_library(
+        name = "example_lock_deps_aws_sam_translator",
+        deps = [
+            ":example_lock_pkg_boto3",
+            ":example_lock_pkg_jsonschema",
+        ],
+    )
+
+    pycross_wheel_library(
+        name = "example_lock_pkg_aws_sam_translator",
+        deps = [":example_lock_deps_aws_sam_translator"],
+        wheel = "@example_lock_wheel_aws_sam_translator_1.44.0_py3_none_any//file",
+    )
+
+    py_library(
+        name = "example_lock_deps_aws_xray_sdk",
+        deps = [
+            ":example_lock_pkg_botocore",
+            ":example_lock_pkg_future",
+            ":example_lock_pkg_wrapt",
+        ],
+    )
+
+    pycross_wheel_library(
         name = "example_lock_pkg_aws_xray_sdk",
+        deps = [":example_lock_deps_aws_xray_sdk"],
         wheel = "@example_lock_wheel_aws_xray_sdk_2.9.0_py2.py3_none_any//file",
     )
 
@@ -90,8 +119,16 @@ def targets():
         wheel = "@example_lock_wheel_certifi_2021.10.8_py2.py3_none_any//file",
     )
 
+    py_library(
+        name = "example_lock_deps_cffi",
+        deps = [
+            ":example_lock_pkg_pycparser",
+        ],
+    )
+
     pycross_wheel_library(
         name = "example_lock_pkg_cffi",
+        deps = [":example_lock_deps_cffi"],
         wheel = select({
             ":example_lock_env_python_darwin_x86_64": "@example_lock_wheel_cffi_1.15.0_cp39_cp39_macosx_10_9_x86_64//file",
             ":example_lock_env_python_darwin_arm64": "@example_lock_wheel_cffi_1.15.0_cp39_cp39_macosx_11_0_arm64//file",
@@ -99,8 +136,24 @@ def targets():
         }),
     )
 
+    py_library(
+        name = "example_lock_deps_cfn_lint",
+        deps = [
+            ":example_lock_pkg_aws_sam_translator",
+            ":example_lock_pkg_jschema_to_python",
+            ":example_lock_pkg_jsonpatch",
+            ":example_lock_pkg_jsonschema",
+            ":example_lock_pkg_junit_xml",
+            ":example_lock_pkg_networkx",
+            ":example_lock_pkg_pyyaml",
+            ":example_lock_pkg_sarif_om",
+            ":example_lock_pkg_six",
+        ],
+    )
+
     pycross_wheel_library(
         name = "example_lock_pkg_cfn_lint",
+        deps = [":example_lock_deps_cfn_lint"],
         wheel = "@example_lock_wheel_cfn_lint_0.58.4_py3_none_any//file",
     )
 
@@ -198,9 +251,23 @@ def targets():
         wheel = "@example_lock_wheel_flask_2.1.0_py3_none_any//file",
     )
 
+    py_library(
+        name = "example_lock_deps_flask_cors",
+        deps = [
+            ":example_lock_pkg_flask",
+            ":example_lock_pkg_six",
+        ],
+    )
+
     pycross_wheel_library(
         name = "example_lock_pkg_flask_cors",
+        deps = [":example_lock_deps_flask_cors"],
         wheel = "@example_lock_wheel_flask_cors_3.0.10_py2.py3_none_any//file",
+    )
+
+    pycross_wheel_library(
+        name = "example_lock_pkg_future",
+        wheel = ":example_lock_build_future",
     )
 
     pycross_wheel_library(
@@ -255,6 +322,7 @@ def targets():
             ":example_lock_env_python_darwin_x86_64": [
                 ":example_lock_pkg_appnope",
             ],
+            "//conditions:default": [],
         }),
     )
 
@@ -300,9 +368,75 @@ def targets():
         wheel = "@example_lock_wheel_jmespath_1.0.0_py3_none_any//file",
     )
 
+    py_library(
+        name = "example_lock_deps_jschema_to_python",
+        deps = [
+            ":example_lock_pkg_attrs",
+            ":example_lock_pkg_jsonpickle",
+            ":example_lock_pkg_pbr",
+        ],
+    )
+
+    pycross_wheel_library(
+        name = "example_lock_pkg_jschema_to_python",
+        deps = [":example_lock_deps_jschema_to_python"],
+        wheel = "@example_lock_wheel_jschema_to_python_1.2.3_py3_none_any//file",
+    )
+
     pycross_wheel_library(
         name = "example_lock_pkg_jsondiff",
         wheel = ":example_lock_build_jsondiff",
+    )
+
+    py_library(
+        name = "example_lock_deps_jsonpatch",
+        deps = [
+            ":example_lock_pkg_jsonpointer",
+        ],
+    )
+
+    pycross_wheel_library(
+        name = "example_lock_pkg_jsonpatch",
+        deps = [":example_lock_deps_jsonpatch"],
+        wheel = "@example_lock_wheel_jsonpatch_1.32_py2.py3_none_any//file",
+    )
+
+    pycross_wheel_library(
+        name = "example_lock_pkg_jsonpickle",
+        wheel = "@example_lock_wheel_jsonpickle_2.1.0_py2.py3_none_any//file",
+    )
+
+    pycross_wheel_library(
+        name = "example_lock_pkg_jsonpointer",
+        wheel = "@example_lock_wheel_jsonpointer_2.2_py2.py3_none_any//file",
+    )
+
+    py_library(
+        name = "example_lock_deps_jsonschema",
+        deps = [
+            ":example_lock_pkg_attrs",
+            ":example_lock_pkg_pyrsistent",
+            ":example_lock_pkg_six",
+        ],
+    )
+
+    pycross_wheel_library(
+        name = "example_lock_pkg_jsonschema",
+        deps = [":example_lock_deps_jsonschema"],
+        wheel = "@example_lock_wheel_jsonschema_3.2.0_py2.py3_none_any//file",
+    )
+
+    py_library(
+        name = "example_lock_deps_junit_xml",
+        deps = [
+            ":example_lock_pkg_six",
+        ],
+    )
+
+    pycross_wheel_library(
+        name = "example_lock_pkg_junit_xml",
+        deps = [":example_lock_deps_junit_xml"],
+        wheel = "@example_lock_wheel_junit_xml_1.9_py2.py3_none_any//file",
     )
 
     pycross_wheel_library(
@@ -314,8 +448,16 @@ def targets():
         }),
     )
 
+    py_library(
+        name = "example_lock_deps_matplotlib_inline",
+        deps = [
+            ":example_lock_pkg_traitlets",
+        ],
+    )
+
     pycross_wheel_library(
         name = "example_lock_pkg_matplotlib_inline",
+        deps = [":example_lock_deps_matplotlib_inline"],
         wheel = "@example_lock_wheel_matplotlib_inline_0.1.3_py3_none_any//file",
     )
 
@@ -355,12 +497,30 @@ def targets():
     )
 
     pycross_wheel_library(
+        name = "example_lock_pkg_networkx",
+        wheel = "@example_lock_wheel_networkx_2.7.1_py3_none_any//file",
+    )
+
+    pycross_wheel_library(
         name = "example_lock_pkg_parso",
         wheel = "@example_lock_wheel_parso_0.8.3_py2.py3_none_any//file",
     )
 
     pycross_wheel_library(
+        name = "example_lock_pkg_pbr",
+        wheel = "@example_lock_wheel_pbr_5.8.1_py2.py3_none_any//file",
+    )
+
+    py_library(
+        name = "example_lock_deps_pexpect",
+        deps = [
+            ":example_lock_pkg_ptyprocess",
+        ],
+    )
+
+    pycross_wheel_library(
         name = "example_lock_pkg_pexpect",
+        deps = [":example_lock_deps_pexpect"],
         wheel = "@example_lock_wheel_pexpect_4.8.0_py2.py3_none_any//file",
     )
 
@@ -369,9 +529,22 @@ def targets():
         wheel = "@example_lock_wheel_pickleshare_0.7.5_py2.py3_none_any//file",
     )
 
+    py_library(
+        name = "example_lock_deps_prompt_toolkit",
+        deps = [
+            ":example_lock_pkg_wcwidth",
+        ],
+    )
+
     pycross_wheel_library(
         name = "example_lock_pkg_prompt_toolkit",
+        deps = [":example_lock_deps_prompt_toolkit"],
         wheel = "@example_lock_wheel_prompt_toolkit_3.0.28_py3_none_any//file",
+    )
+
+    pycross_wheel_library(
+        name = "example_lock_pkg_ptyprocess",
+        wheel = "@example_lock_wheel_ptyprocess_0.7.0_py2.py3_none_any//file",
     )
 
     pycross_wheel_library(
@@ -385,12 +558,34 @@ def targets():
     )
 
     pycross_wheel_library(
+        name = "example_lock_pkg_pycparser",
+        wheel = "@example_lock_wheel_pycparser_2.21_py2.py3_none_any//file",
+    )
+
+    pycross_wheel_library(
         name = "example_lock_pkg_pygments",
         wheel = "@example_lock_wheel_pygments_2.11.2_py3_none_any//file",
     )
 
     pycross_wheel_library(
+        name = "example_lock_pkg_pyrsistent",
+        wheel = select({
+            ":example_lock_env_python_darwin_x86_64": "@example_lock_wheel_pyrsistent_0.18.1_cp39_cp39_macosx_10_9_universal2//file",
+            ":example_lock_env_python_darwin_arm64": "@example_lock_wheel_pyrsistent_0.18.1_cp39_cp39_macosx_10_9_universal2//file",
+            ":example_lock_env_python_linux_x86_64": "@example_lock_wheel_pyrsistent_0.18.1_cp39_cp39_manylinux_2_17_x86_64.manylinux2014_x86_64//file",
+        }),
+    )
+
+    py_library(
+        name = "example_lock_deps_python_dateutil",
+        deps = [
+            ":example_lock_pkg_six",
+        ],
+    )
+
+    pycross_wheel_library(
         name = "example_lock_pkg_python_dateutil",
+        deps = [":example_lock_deps_python_dateutil"],
         wheel = "@example_lock_wheel_python_dateutil_2.8.2_py2.py3_none_any//file",
     )
 
@@ -455,8 +650,16 @@ def targets():
         wheel = "@example_lock_wheel_responses_0.20.0_py3_none_any//file",
     )
 
+    py_library(
+        name = "example_lock_deps_rsa",
+        deps = [
+            ":example_lock_pkg_pyasn1",
+        ],
+    )
+
     pycross_wheel_library(
         name = "example_lock_pkg_rsa",
+        deps = [":example_lock_deps_rsa"],
         wheel = "@example_lock_wheel_rsa_4.8_py3_none_any//file",
     )
 
@@ -471,6 +674,20 @@ def targets():
         name = "example_lock_pkg_s3transfer",
         deps = [":example_lock_deps_s3transfer"],
         wheel = "@example_lock_wheel_s3transfer_0.5.2_py3_none_any//file",
+    )
+
+    py_library(
+        name = "example_lock_deps_sarif_om",
+        deps = [
+            ":example_lock_pkg_attrs",
+            ":example_lock_pkg_pbr",
+        ],
+    )
+
+    pycross_wheel_library(
+        name = "example_lock_pkg_sarif_om",
+        deps = [":example_lock_deps_sarif_om"],
+        wheel = "@example_lock_wheel_sarif_om_1.0.4_py3_none_any//file",
     )
 
     pycross_wheel_library(
@@ -549,6 +766,11 @@ def targets():
     )
 
     pycross_wheel_library(
+        name = "example_lock_pkg_wcwidth",
+        wheel = "@example_lock_wheel_wcwidth_0.2.5_py2.py3_none_any//file",
+    )
+
+    pycross_wheel_library(
         name = "example_lock_pkg_websocket_client",
         wheel = "@example_lock_wheel_websocket_client_1.3.1_py3_none_any//file",
     )
@@ -556,6 +778,15 @@ def targets():
     pycross_wheel_library(
         name = "example_lock_pkg_werkzeug",
         wheel = "@example_lock_wheel_werkzeug_2.1.0_py3_none_any//file",
+    )
+
+    pycross_wheel_library(
+        name = "example_lock_pkg_wrapt",
+        wheel = select({
+            ":example_lock_env_python_darwin_x86_64": "@example_lock_wheel_wrapt_1.14.0_cp39_cp39_macosx_10_9_x86_64//file",
+            ":example_lock_env_python_darwin_arm64": "@example_lock_wheel_wrapt_1.14.0_cp39_cp39_macosx_11_0_arm64//file",
+            ":example_lock_env_python_linux_x86_64": "@example_lock_wheel_wrapt_1.14.0_cp39_cp39_manylinux_2_5_x86_64.manylinux1_x86_64.manylinux_2_17_x86_64.manylinux2014_x86_64//file",
+        }),
     )
 
     pycross_wheel_library(
@@ -569,6 +800,13 @@ def targets():
     )
 
 def repositories():
+    http_file(
+        name = "example_lock_sdist_future_0.18.2",
+        urls = ["https://files.pythonhosted.org/packages/source/f/future/future-0.18.2.tar.gz"],
+        sha256 = "b1bead90b70cf6ec3f0710ae53a525360fa360d306a86583adc6bf83a4db537d",
+        downloaded_file_path = "future-0.18.2.tar.gz",
+    )
+
     http_file(
         name = "example_lock_sdist_greenlet_1.1.2",
         urls = ["https://files.pythonhosted.org/packages/source/g/greenlet/greenlet-1.1.2.tar.gz"],
@@ -602,6 +840,20 @@ def repositories():
         urls = ["https://files.pythonhosted.org/packages/py2.py3/a/asttokens/asttokens-2.0.5-py2.py3-none-any.whl"],
         sha256 = "0844691e88552595a6f4a4281a9f7f79b8dd45ca4ccea82e5e05b4bbdb76705c",
         downloaded_file_path = "asttokens-2.0.5-py2.py3-none-any.whl",
+    )
+
+    http_file(
+        name = "example_lock_wheel_attrs_21.4.0_py2.py3_none_any",
+        urls = ["https://files.pythonhosted.org/packages/py2.py3/a/attrs/attrs-21.4.0-py2.py3-none-any.whl"],
+        sha256 = "2d27e3784d7a565d36ab851fe94887c5eccd6a463168875832a1be79c82828b4",
+        downloaded_file_path = "attrs-21.4.0-py2.py3-none-any.whl",
+    )
+
+    http_file(
+        name = "example_lock_wheel_aws_sam_translator_1.44.0_py3_none_any",
+        urls = ["https://files.pythonhosted.org/packages/py3/a/aws_sam_translator/aws_sam_translator-1.44.0-py3-none-any.whl"],
+        sha256 = "77be965487f20303528c9febd17bbe0bad6a980be2762486d090a7c5e07b4187",
+        downloaded_file_path = "aws_sam_translator-1.44.0-py3-none-any.whl",
     )
 
     http_file(
@@ -822,6 +1074,48 @@ def repositories():
     )
 
     http_file(
+        name = "example_lock_wheel_jschema_to_python_1.2.3_py3_none_any",
+        urls = ["https://files.pythonhosted.org/packages/py3/j/jschema_to_python/jschema_to_python-1.2.3-py3-none-any.whl"],
+        sha256 = "8a703ca7604d42d74b2815eecf99a33359a8dccbb80806cce386d5e2dd992b05",
+        downloaded_file_path = "jschema_to_python-1.2.3-py3-none-any.whl",
+    )
+
+    http_file(
+        name = "example_lock_wheel_jsonpatch_1.32_py2.py3_none_any",
+        urls = ["https://files.pythonhosted.org/packages/py2.py3/j/jsonpatch/jsonpatch-1.32-py2.py3-none-any.whl"],
+        sha256 = "26ac385719ac9f54df8a2f0827bb8253aa3ea8ab7b3368457bcdb8c14595a397",
+        downloaded_file_path = "jsonpatch-1.32-py2.py3-none-any.whl",
+    )
+
+    http_file(
+        name = "example_lock_wheel_jsonpickle_2.1.0_py2.py3_none_any",
+        urls = ["https://files.pythonhosted.org/packages/py2.py3/j/jsonpickle/jsonpickle-2.1.0-py2.py3-none-any.whl"],
+        sha256 = "1dee77ddc5d652dfdabc33d33cff9d7e131d428007007da4fd6f7071ae774b0f",
+        downloaded_file_path = "jsonpickle-2.1.0-py2.py3-none-any.whl",
+    )
+
+    http_file(
+        name = "example_lock_wheel_jsonpointer_2.2_py2.py3_none_any",
+        urls = ["https://files.pythonhosted.org/packages/py2.py3/j/jsonpointer/jsonpointer-2.2-py2.py3-none-any.whl"],
+        sha256 = "26d9a47a72d4dc3e3ae72c4c6cd432afd73c680164cd2540772eab53cb3823b6",
+        downloaded_file_path = "jsonpointer-2.2-py2.py3-none-any.whl",
+    )
+
+    http_file(
+        name = "example_lock_wheel_jsonschema_3.2.0_py2.py3_none_any",
+        urls = ["https://files.pythonhosted.org/packages/py2.py3/j/jsonschema/jsonschema-3.2.0-py2.py3-none-any.whl"],
+        sha256 = "4e5b3cf8216f577bee9ce139cbe72eca3ea4f292ec60928ff24758ce626cd163",
+        downloaded_file_path = "jsonschema-3.2.0-py2.py3-none-any.whl",
+    )
+
+    http_file(
+        name = "example_lock_wheel_junit_xml_1.9_py2.py3_none_any",
+        urls = ["https://files.pythonhosted.org/packages/py2.py3/j/junit_xml/junit_xml-1.9-py2.py3-none-any.whl"],
+        sha256 = "ec5ca1a55aefdd76d28fcc0b135251d156c7106fa979686a4b48d62b761b4732",
+        downloaded_file_path = "junit_xml-1.9-py2.py3-none-any.whl",
+    )
+
+    http_file(
         name = "example_lock_wheel_markupsafe_2.1.1_cp39_cp39_macosx_10_9_universal2",
         urls = ["https://files.pythonhosted.org/packages/cp39/M/MarkupSafe/MarkupSafe-2.1.1-cp39-cp39-macosx_10_9_universal2.whl"],
         sha256 = "e04e26803c9c3851c931eac40c695602c6295b8d432cbe78609649ad9bd2da8a",
@@ -857,10 +1151,24 @@ def repositories():
     )
 
     http_file(
+        name = "example_lock_wheel_networkx_2.7.1_py3_none_any",
+        urls = ["https://files.pythonhosted.org/packages/py3/n/networkx/networkx-2.7.1-py3-none-any.whl"],
+        sha256 = "011e85d277c89681e8fa661cf5ff0743443445049b0b68789ad55ef09340c6e0",
+        downloaded_file_path = "networkx-2.7.1-py3-none-any.whl",
+    )
+
+    http_file(
         name = "example_lock_wheel_parso_0.8.3_py2.py3_none_any",
         urls = ["https://files.pythonhosted.org/packages/py2.py3/p/parso/parso-0.8.3-py2.py3-none-any.whl"],
         sha256 = "c001d4636cd3aecdaf33cbb40aebb59b094be2a74c556778ef5576c175e19e75",
         downloaded_file_path = "parso-0.8.3-py2.py3-none-any.whl",
+    )
+
+    http_file(
+        name = "example_lock_wheel_pbr_5.8.1_py2.py3_none_any",
+        urls = ["https://files.pythonhosted.org/packages/py2.py3/p/pbr/pbr-5.8.1-py2.py3-none-any.whl"],
+        sha256 = "27108648368782d07bbf1cb468ad2e2eeef29086affd14087a6d04b7de8af4ec",
+        downloaded_file_path = "pbr-5.8.1-py2.py3-none-any.whl",
     )
 
     http_file(
@@ -885,6 +1193,13 @@ def repositories():
     )
 
     http_file(
+        name = "example_lock_wheel_ptyprocess_0.7.0_py2.py3_none_any",
+        urls = ["https://files.pythonhosted.org/packages/py2.py3/p/ptyprocess/ptyprocess-0.7.0-py2.py3-none-any.whl"],
+        sha256 = "4b41f3967fce3af57cc7e94b888626c18bf37a083e3651ca8feeb66d492fef35",
+        downloaded_file_path = "ptyprocess-0.7.0-py2.py3-none-any.whl",
+    )
+
+    http_file(
         name = "example_lock_wheel_pure_eval_0.2.2_py3_none_any",
         urls = ["https://files.pythonhosted.org/packages/py3/p/pure_eval/pure_eval-0.2.2-py3-none-any.whl"],
         sha256 = "01eaab343580944bc56080ebe0a674b39ec44a945e6d09ba7db3cb8cec289350",
@@ -899,10 +1214,31 @@ def repositories():
     )
 
     http_file(
+        name = "example_lock_wheel_pycparser_2.21_py2.py3_none_any",
+        urls = ["https://files.pythonhosted.org/packages/py2.py3/p/pycparser/pycparser-2.21-py2.py3-none-any.whl"],
+        sha256 = "8ee45429555515e1f6b185e78100aea234072576aa43ab53aefcae078162fca9",
+        downloaded_file_path = "pycparser-2.21-py2.py3-none-any.whl",
+    )
+
+    http_file(
         name = "example_lock_wheel_pygments_2.11.2_py3_none_any",
         urls = ["https://files.pythonhosted.org/packages/py3/P/Pygments/Pygments-2.11.2-py3-none-any.whl"],
         sha256 = "44238f1b60a76d78fc8ca0528ee429702aae011c265fe6a8dd8b63049ae41c65",
         downloaded_file_path = "Pygments-2.11.2-py3-none-any.whl",
+    )
+
+    http_file(
+        name = "example_lock_wheel_pyrsistent_0.18.1_cp39_cp39_macosx_10_9_universal2",
+        urls = ["https://files.pythonhosted.org/packages/cp39/p/pyrsistent/pyrsistent-0.18.1-cp39-cp39-macosx_10_9_universal2.whl"],
+        sha256 = "f87cc2863ef33c709e237d4b5f4502a62a00fab450c9e020892e8e2ede5847f5",
+        downloaded_file_path = "pyrsistent-0.18.1-cp39-cp39-macosx_10_9_universal2.whl",
+    )
+
+    http_file(
+        name = "example_lock_wheel_pyrsistent_0.18.1_cp39_cp39_manylinux_2_17_x86_64.manylinux2014_x86_64",
+        urls = ["https://files.pythonhosted.org/packages/cp39/p/pyrsistent/pyrsistent-0.18.1-cp39-cp39-manylinux_2_17_x86_64.manylinux2014_x86_64.whl"],
+        sha256 = "6bc66318fb7ee012071b2792024564973ecc80e9522842eb4e17743604b5e045",
+        downloaded_file_path = "pyrsistent-0.18.1-cp39-cp39-manylinux_2_17_x86_64.manylinux2014_x86_64.whl",
     )
 
     http_file(
@@ -976,6 +1312,13 @@ def repositories():
     )
 
     http_file(
+        name = "example_lock_wheel_sarif_om_1.0.4_py3_none_any",
+        urls = ["https://files.pythonhosted.org/packages/py3/s/sarif_om/sarif_om-1.0.4-py3-none-any.whl"],
+        sha256 = "539ef47a662329b1c8502388ad92457425e95dc0aaaf995fe46f4984c4771911",
+        downloaded_file_path = "sarif_om-1.0.4-py3-none-any.whl",
+    )
+
+    http_file(
         name = "example_lock_wheel_six_1.16.0_py2.py3_none_any",
         urls = ["https://files.pythonhosted.org/packages/py2.py3/s/six/six-1.16.0-py2.py3-none-any.whl"],
         sha256 = "8abb2f1d86890a2dfb989f9a77cfcfd3e47c2a354b01111771326f8aa26e0254",
@@ -1032,6 +1375,13 @@ def repositories():
     )
 
     http_file(
+        name = "example_lock_wheel_wcwidth_0.2.5_py2.py3_none_any",
+        urls = ["https://files.pythonhosted.org/packages/py2.py3/w/wcwidth/wcwidth-0.2.5-py2.py3-none-any.whl"],
+        sha256 = "beb4802a9cebb9144e99086eff703a642a13d6a0052920003a230f3294bbe784",
+        downloaded_file_path = "wcwidth-0.2.5-py2.py3-none-any.whl",
+    )
+
+    http_file(
         name = "example_lock_wheel_websocket_client_1.3.1_py3_none_any",
         urls = ["https://files.pythonhosted.org/packages/py3/w/websocket_client/websocket_client-1.3.1-py3-none-any.whl"],
         sha256 = "074e2ed575e7c822fc0940d31c3ac9bb2b1142c303eafcf3e304e6ce035522e8",
@@ -1043,6 +1393,27 @@ def repositories():
         urls = ["https://files.pythonhosted.org/packages/py3/W/Werkzeug/Werkzeug-2.1.0-py3-none-any.whl"],
         sha256 = "094ecfc981948f228b30ee09dbfe250e474823b69b9b1292658301b5894bbf08",
         downloaded_file_path = "Werkzeug-2.1.0-py3-none-any.whl",
+    )
+
+    http_file(
+        name = "example_lock_wheel_wrapt_1.14.0_cp39_cp39_macosx_10_9_x86_64",
+        urls = ["https://files.pythonhosted.org/packages/cp39/w/wrapt/wrapt-1.14.0-cp39-cp39-macosx_10_9_x86_64.whl"],
+        sha256 = "b3f7e671fb19734c872566e57ce7fc235fa953d7c181bb4ef138e17d607dc8a1",
+        downloaded_file_path = "wrapt-1.14.0-cp39-cp39-macosx_10_9_x86_64.whl",
+    )
+
+    http_file(
+        name = "example_lock_wheel_wrapt_1.14.0_cp39_cp39_macosx_11_0_arm64",
+        urls = ["https://files.pythonhosted.org/packages/cp39/w/wrapt/wrapt-1.14.0-cp39-cp39-macosx_11_0_arm64.whl"],
+        sha256 = "87fa943e8bbe40c8c1ba4086971a6fefbf75e9991217c55ed1bcb2f1985bd3d4",
+        downloaded_file_path = "wrapt-1.14.0-cp39-cp39-macosx_11_0_arm64.whl",
+    )
+
+    http_file(
+        name = "example_lock_wheel_wrapt_1.14.0_cp39_cp39_manylinux_2_5_x86_64.manylinux1_x86_64.manylinux_2_17_x86_64.manylinux2014_x86_64",
+        urls = ["https://files.pythonhosted.org/packages/cp39/w/wrapt/wrapt-1.14.0-cp39-cp39-manylinux_2_5_x86_64.manylinux1_x86_64.manylinux_2_17_x86_64.manylinux2014_x86_64.whl"],
+        sha256 = "00108411e0f34c52ce16f81f1d308a571df7784932cc7491d1e94be2ee93374b",
+        downloaded_file_path = "wrapt-1.14.0-cp39-cp39-manylinux_2_5_x86_64.manylinux1_x86_64.manylinux_2_17_x86_64.manylinux2014_x86_64.whl",
     )
 
     http_file(
