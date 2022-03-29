@@ -1,0 +1,14 @@
+[tool.poetry]
+name = "rules_pycross_example"
+version = "0.1"
+description = "rules_pycross"
+authors = []
+
+[tool.poetry.dependencies]
+python = "~=3.9"
+
+ipython = ">=8.0.1"
+moto = {version = "=3.1.1", extras = ["server", "all"]}
+SQLAlchemy-Utils = "=0.38.2"
+cognitojwt = "*"
+python-jose = "=3.1.0"

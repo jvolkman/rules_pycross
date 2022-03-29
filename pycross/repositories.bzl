@@ -6,6 +6,8 @@ See https://docs.bazel.build/versions/main/skylark/deploying.html#dependencies
 
 load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
 load("@bazel_tools//tools/build_defs/repo:utils.bzl", "maybe")
+load("@rules_python//python/pip_install:repositories.bzl", "pip_install_dependencies")
+
 load("//pycross/private:versions.bzl", "TOOL_VERSIONS")
 load("//pycross/private:pypi_requirements.bzl", "install_deps")
 
@@ -27,4 +29,5 @@ def rules_pycross_dependencies():
         sha256 = "f7be3474d42aae265405a592bb7da8e171919d74c16f082a5457840f06054728",
     )
 
+    pip_install_dependencies()
     install_deps()
