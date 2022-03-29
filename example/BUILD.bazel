@@ -100,3 +100,8 @@ sh_binary(
     srcs = ["update.sh"],
     data = _GENERATED.values(),
 )
+
+load(":example_lock.bzl", "targets")
+targets()
+
+load("@rules_python//python:defs.bzl", "py_binary")
