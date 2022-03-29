@@ -198,21 +198,26 @@ class PoetryPackage:
         env_deps = defaultdict(list)
         for dep in self.dependencies:
             for target in environments:
+
+                # If the dependency has no marker, just add it for each environment.
+                if not dep.marker:
+                    env_deps[target.name].append(dep)
+
                 # Only requested extra dependencies are included in a package's deps list - whether they're requested
                 # by a top-level requirement or by some transitive dependency. Their specifiers still include
                 # `extra == "foo"` in addition to any platform-specific markers, so to match we need to include the
                 # correct extra value in our marker environment. We don't know the correct value, so instead we just
                 # try all possible extra names until something matches.
-                if self.all_extras:
+                elif self.all_extras:
                     for extra in self.all_extras:
                         markers_with_extra = dict(target.markers, extra=extra)
-                        if not dep.marker or dep.marker.evaluate(markers_with_extra):
+                        if dep.marker.evaluate(markers_with_extra):
                             env_deps[target.name].append(dep)
                             break
 
                 # Otherwise, if no extras, just evaluate the markers normally.
                 else:
-                    if not dep.marker or dep.marker.evaluate(target.markers):
+                    if dep.marker.evaluate(target.markers):
                         env_deps[target.name].append(dep)
 
         if env_deps:
