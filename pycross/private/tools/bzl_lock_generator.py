@@ -33,9 +33,14 @@ def ind(text: str, tabs=1):
     return textwrap.indent(text, "    " * tabs)
 
 
-def canonical_package_name(name: str) -> str:
+def package_canonical_name(name: str) -> str:
     # Canonical package names are lower-cased with dashes, not underscores.
     return name.lower().replace("_", "-")
+
+
+def package_label_name(name: str) -> str:
+    # Label names use underscores instead of dashes.
+    return name.lower().replace("-", "_")
 
 
 def is_wheel(filename: str) -> bool:
@@ -92,7 +97,7 @@ class PackageFileSet:
         )
         evaluator = LinkEvaluator(
             project_name=self.package_name,
-            canonical_name=canonical_package_name(self.package_name),
+            canonical_name=package_canonical_name(self.package_name),
             formats=formats,
             target_python=environment.target_python,
             allow_yanked=True,
@@ -126,50 +131,44 @@ class Naming:
         return name.lower().replace("-", "_")
 
     def package_target(self, package_name: str) -> str:
-        return f"{self.prefix}_pkg_{self._sanitize(package_name)}"
+        return f'_prefixed("{self._sanitize(package_name)}", package_prefix)'
 
     def package_label(self, package_name: str) -> str:
-        return f":{self.package_target(package_name)}"
-
-    def package_deps_target(self, package_name: str) -> str:
-        return f"{self.prefix}_deps_{self._sanitize(package_name)}"
-
-    def package_deps_label(self, package_name: str) -> str:
-        return f":{self.package_deps_target(package_name)}"
+        return f'":" + {self.package_target(package_name)}'
 
     def environment_target(self, environment_name: str) -> str:
-        return f"{self.prefix}_env_{self._sanitize(environment_name)}"
+        return f'_prefixed("{self._sanitize(environment_name)}", environment_prefix)'
 
     def environment_label(self, environment_name: str) -> str:
-        return f":{self.environment_target(environment_name)}"
+        return f'":" + {self.environment_target(environment_name)}'
 
     def wheel_repo(self, file: PackageFile) -> str:
         assert file.is_wheel
         normalized_name = file.name[:-4].lower().replace("-", "_")
-        return f"{self.prefix}_wheel_{normalized_name}"
+        return f'{self.prefix}_wheel_{normalized_name}'
 
     def wheel_build_target(self, package_or_file: Union[str, PackageFile]) -> str:
         if isinstance(package_or_file, PackageFile):
             assert not package_or_file.is_wheel
             parts = package_or_file.name.split("-")
             name = parts[0].lower()
-            return f"{self.prefix}_build_{name}"
+            return f'_prefixed("{name}", build_prefix)'
         else:
-            return f"{self.prefix}_build_{package_or_file}"
+            return f'_prefixed("{package_or_file}", build_prefix)'
 
     def sdist_repo(self, file: PackageFile) -> str:
         assert file.name.endswith(".tar.gz")
         name = file.name[:-7]
-        return f"{self.prefix}_sdist_{self._sanitize(name)}"
+        return f'{self.prefix}_sdist_{self._sanitize(name)}'
 
     def sdist_label(self, file: PackageFile) -> str:
-        return f"@{self.sdist_repo(file)}//file"
+        return f'"@{self.sdist_repo(file)}//file"'
 
     def wheel_label(self, file: PackageFile):
         if file.is_wheel:
-            return f"@{self.wheel_repo(file)}//file"
+            return f'"@{self.wheel_repo(file)}//file"'
         else:
-            return f":{self.wheel_build_target(file)}"
+            return f'":" + {self.wheel_build_target(file)}'
 
 
 @dataclass(frozen=True)
@@ -179,7 +178,7 @@ class Dependency:
 
     @property
     def canonical_name(self) -> str:
-        return canonical_package_name(self.name)
+        return package_canonical_name(self.name)
 
 
 @dataclass
@@ -192,7 +191,11 @@ class PoetryPackage:
 
     @property
     def canonical_name(self) -> str:
-        return canonical_package_name(self.name)
+        return package_canonical_name(self.name)
+
+    @property
+    def label_name(self) -> str:
+        return package_label_name(self.name)
 
     def supports_environment(self, environment: TargetEnv) -> bool:
         return self.requires_python.contains(environment.version)
@@ -279,14 +282,14 @@ class PoetryMetadata:
         for pinned in (
             project_dict.get("tool", {}).get("poetry", {}).get("dependencies", {})
         ):
-            pinned = canonical_package_name(pinned)
+            pinned = package_canonical_name(pinned)
             if pinned == "python":
                 # Skip the special line indicating python version.
                 continue
             pinned_package_names.add(pinned)
 
         metadata_files = {
-            canonical_package_name(k): v
+            package_canonical_name(k): v
             for k, v in lock_dict.get("metadata", {}).get("files", {}).items()
         }
 
@@ -332,7 +335,7 @@ class EnvTarget:
     def render(self) -> str:
         lines = [
             "native.config_setting(",
-            ind(f'name = "{self.naming.environment_target(self.environment_name)}",'),
+            ind(f'name = {self.naming.environment_target(self.environment_name)},'),
             ind(f"constraint_values = ["),
         ]
         for cv in self.constraints:
@@ -345,20 +348,19 @@ class EnvTarget:
 class PackageTarget:
     def __init__(
         self,
-        package_name: str,
+        package: PoetryPackage,
         naming: Naming,
-        poetry_package: PoetryPackage,
         package_file_set: PackageFileSet,
         environments: List[TargetEnv],
     ):
+        self.package = package
         self.naming = naming
-        self.package_name = package_name
         self.package_file_set = package_file_set
         self.common_deps: Set[Dependency] = set()
         self.environments = environments
         self.env_deps: Dict[str, Set[Dependency]] = {}
 
-        deps_by_env = poetry_package.dependencies_by_environment(environments)
+        deps_by_env = package.dependencies_by_environment(environments)
         self.common_deps = deps_by_env.get(None, set())
         self.env_deps = {k: v for k, v in deps_by_env.items() if k is not None}
 
@@ -370,9 +372,9 @@ class PackageTarget:
     @property
     def all_dependency_names(self) -> Set[str]:
         """Returns all package names (lower-cased) that this target depends on, including platform-specific."""
-        names = set(canonical_package_name(d.name) for d in self.common_deps)
+        names = set(package_canonical_name(d.name) for d in self.common_deps)
         for env_deps in self.env_deps.values():
-            names |= set(canonical_package_name(d.name) for d in env_deps)
+            names |= set(package_canonical_name(d.name) for d in env_deps)
         return names
 
     @property
@@ -390,43 +392,42 @@ class PackageTarget:
         return self.source_file is not None
 
     def _common_entries(self, deps: Set[Dependency], indent: int) -> Iterator[str]:
-        for d in sorted(deps, key=lambda x: canonical_package_name(x.name)):
-            yield ind(f'"{self.naming.package_label(d.name)}",', indent)
+        for d in sorted(deps, key=lambda x: package_canonical_name(x.name)):
+            yield ind(f'{self.naming.package_label(d.name)},', indent)
 
     def _select_entries(
         self, env_deps: Dict[str, Set[PoetryPackage]], indent
     ) -> Iterator[str]:
         for env_name, deps in sorted(env_deps.items(), key=lambda x: x[0].lower()):
-            yield ind(f'"{self.naming.environment_label(env_name)}": [', indent)
+            yield ind(f'{self.naming.environment_label(env_name)}: [', indent)
             yield from self._common_entries(deps, indent + 1)
             yield ind("],", indent)
         yield ind('"//conditions:default": [],', indent)
 
+    @property
+    def _deps_name(self):
+        return f"_{self.package.label_name}_deps"
+
     def render_deps(self) -> str:
         assert self.has_deps
-        lines = [
-            "py_library(",
-            ind(f'name = "{self.naming.package_deps_target(self.package_name)}",'),
-        ]
+        lines = []
 
         if self.common_deps and self.env_deps:
-            lines.append(ind("deps = [", 1))
-            lines.extend(self._common_entries(self.common_deps, 2))
-            lines.append(ind("] + select({", 1))
-            lines.extend(self._select_entries(self.env_deps, 2))
-            lines.append(ind("}),", 1))
+            lines.append(f"{self._deps_name} = [")
+            lines.extend(self._common_entries(self.common_deps, 1))
+            lines.append("] + select({")
+            lines.extend(self._select_entries(self.env_deps, 1))
+            lines.append("})")
 
         elif self.common_deps:
-            lines.append(ind("deps = [", 1))
-            lines.extend(self._common_entries(self.common_deps, 2))
-            lines.append(ind("],", 1))
+            lines.append(f"{self._deps_name} = [")
+            lines.extend(self._common_entries(self.common_deps, 1))
+            lines.append("]")
 
         elif self.env_deps:
-            lines.append(ind("deps = select({", 1))
-            lines.extend(self._select_entries(self.env_deps, 2))
-            lines.append(ind("}),", 1))
-
-        lines.append(")")
+            lines.append(self._deps_name + " = select({")
+            lines.extend(self._select_entries(self.env_deps, 1))
+            lines.append("})")
 
         return "\n".join(lines)
 
@@ -436,12 +437,12 @@ class PackageTarget:
 
         lines = [
             "pycross_wheel_build(",
-            ind(f'name = "{self.naming.wheel_build_target(self.package_name)}",'),
-            ind(f'sdist = "{self.naming.sdist_label(source_file)}",'),
+            ind(f'name = {self.naming.wheel_build_target(self.package.canonical_name)},'),
+            ind(f'sdist = {self.naming.sdist_label(source_file)},'),
         ]
         if self.has_deps:
             lines.append(
-                ind(f'deps = ["{self.naming.package_deps_label(self.package_name)}"],')
+                ind(f'deps = {self._deps_name},')
             )
         lines.extend(
             [
@@ -455,24 +456,24 @@ class PackageTarget:
     def render_pkg(self) -> str:
         lines = [
             "pycross_wheel_library(",
-            ind(f'name = "{self.naming.package_target(self.package_name)}",'),
+            ind(f'name = {self.naming.package_target(self.package.canonical_name)},'),
         ]
         if self.has_deps:
             lines.append(
-                ind(f'deps = ["{self.naming.package_deps_label(self.package_name)}"],')
+                ind(f'deps = {self._deps_name},')
             )
 
         # Add the wheel attribute.
         # If all environments use the same wheel, don't use select.
         if len(self.distinct_files) == 1:
             file = next(iter(self.distinct_files))
-            lines.append(ind(f'wheel = "{self.naming.wheel_label(file)}",'))
+            lines.append(ind(f'wheel = {self.naming.wheel_label(file)},'))
         else:
             lines.append(ind("wheel = select({"))
             for env_name, file in self.files_by_env.items():
                 lines.append(
                     ind(
-                        f'"{self.naming.environment_label(env_name)}": "{self.naming.wheel_label(file)}",',
+                        f'{self.naming.environment_label(env_name)}: {self.naming.wheel_label(file)},',
                         2,
                     )
                 )
@@ -569,9 +570,8 @@ def main():
         package = packages_by_name[next_package_name]
         check_package_compatibility(package, environments)
         entry = PackageTarget(
-            package.canonical_name,
-            naming,
             package,
+            naming,
             metadata.package_file_sets[next_package_name],
             environments,
         )
@@ -579,7 +579,7 @@ def main():
         work.extend(entry.all_dependency_names)
 
     package_targets = sorted(
-        package_targets_by_package_name.values(), key=lambda x: x.package_name
+        package_targets_by_package_name.values(), key=lambda x: x.package.canonical_name
     )
 
     repos = []
@@ -599,14 +599,19 @@ def main():
 
         # Header stuff
         w('load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_file")')
-        w('load("@rules_python//python:defs.bzl", "py_library")')
         w(
             'load("@jvolkman_rules_pycross//pycross:defs.bzl", "pycross_wheel_build", "pycross_wheel_library")'
         )
         w()
 
+        # _prefixed function
+        w(ind("def _prefixed(name, prefix):", 0))
+        w(ind('return prefix + "_" + name if prefix != None else name', 1))
+        w()
+
         # Build targets
-        w("def targets():")
+        w('def targets(package_prefix=None, build_prefix="_build", environment_prefix="_env"):')
+
         for environment in sorted(environments, key=lambda x: x.name.lower()):
             env_target = EnvTarget(
                 environment.name, environment.python_compatible_with, naming

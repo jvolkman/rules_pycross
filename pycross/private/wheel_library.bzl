@@ -87,7 +87,7 @@ This option is required to support some packages which cannot handle the convers
             """,
         ),
         "python_version": attr.string(
-            doc = "The python version required for this wheel.",
+            doc = "The python version required for this wheel ('PY2' or 'PY3')",
             values = ["PY2", "PY3", ""]
         ),
         "_tool": attr.label(
