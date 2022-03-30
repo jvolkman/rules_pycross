@@ -33,6 +33,11 @@ def ind(text: str, tabs=1):
     return textwrap.indent(text, "    " * tabs)
 
 
+def canonical_package_name(name: str) -> str:
+    # Canonical package names are lower-cased with dashes, not underscores.
+    return name.lower().replace("_", "-")
+
+
 def is_wheel(filename: str) -> bool:
     return filename.lower().endswith(".whl")
 
@@ -87,7 +92,7 @@ class PackageFileSet:
         )
         evaluator = LinkEvaluator(
             project_name=self.package_name,
-            canonical_name=self.package_name,
+            canonical_name=canonical_package_name(self.package_name),
             formats=formats,
             target_python=environment.target_python,
             allow_yanked=True,
@@ -174,7 +179,7 @@ class Dependency:
 
     @property
     def canonical_name(self) -> str:
-        return self.name.lower()
+        return canonical_package_name(self.name)
 
 
 @dataclass
@@ -187,7 +192,7 @@ class PoetryPackage:
 
     @property
     def canonical_name(self) -> str:
-        return self.name.lower()
+        return canonical_package_name(self.name)
 
     def supports_environment(self, environment: TargetEnv) -> bool:
         return self.requires_python.contains(environment.version)
@@ -274,13 +279,16 @@ class PoetryMetadata:
         for pinned in (
             project_dict.get("tool", {}).get("poetry", {}).get("dependencies", {})
         ):
-            pinned = pinned.lower()
+            pinned = canonical_package_name(pinned)
             if pinned == "python":
                 # Skip the special line indicating python version.
                 continue
             pinned_package_names.add(pinned)
 
-        metadata_files = lock_dict.get("metadata", {}).get("files", {})
+        metadata_files = {
+            canonical_package_name(k): v
+            for k, v in lock_dict.get("metadata", {}).get("files", {}).items()
+        }
 
         packages = []
         package_file_sets = {}
@@ -299,7 +307,7 @@ class PoetryMetadata:
             )
             packages.append(package)
 
-            package_file_dicts = metadata_files[package_name]
+            package_file_dicts = metadata_files[package.canonical_name]
             package_files = [
                 PackageFile(
                     name=p["file"],
@@ -308,8 +316,8 @@ class PoetryMetadata:
                 )
                 for p in package_file_dicts
             ]
-            package_file_sets[package_name] = PackageFileSet(
-                package_name, package_version, package_files
+            package_file_sets[package.canonical_name] = PackageFileSet(
+                package.name, package_version, package_files
             )
 
         return PoetryMetadata(pinned_package_names, packages, package_file_sets)
@@ -362,9 +370,9 @@ class PackageTarget:
     @property
     def all_dependency_names(self) -> Set[str]:
         """Returns all package names (lower-cased) that this target depends on, including platform-specific."""
-        names = set(d.name.lower() for d in self.common_deps)
+        names = set(canonical_package_name(d.name) for d in self.common_deps)
         for env_deps in self.env_deps.values():
-            names |= set(d.name.lower() for d in env_deps)
+            names |= set(canonical_package_name(d.name) for d in env_deps)
         return names
 
     @property
@@ -382,7 +390,7 @@ class PackageTarget:
         return self.source_file is not None
 
     def _common_entries(self, deps: Set[Dependency], indent: int) -> Iterator[str]:
-        for d in sorted(deps, key=lambda x: x.name.lower()):
+        for d in sorted(deps, key=lambda x: canonical_package_name(x.name)):
             yield ind(f'"{self.naming.package_label(d.name)}",', indent)
 
     def _select_entries(
