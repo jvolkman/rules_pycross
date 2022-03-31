@@ -10,6 +10,39 @@ import sys
 import tarfile
 import tempfile
 from pathlib import Path
+from typing import Dict
+
+
+def get_build_env(args: argparse.Namespace) -> Dict[str, str]:
+    env = os.environ.copy()
+    cwd = os.getcwd()
+
+    path_entries = [os.path.join(cwd, p) for p in args.path or []]
+    if "PYTHONPATH" in env:
+        path_entries.append(env["PYTHONPATH"])
+
+    if path_entries:
+        env["PYTHONPATH"] = os.pathsep.join(path_entries)
+
+    # wheel, by default, enables debug symbols in GCC. This incidentally captures the build path in the .so file
+    # We can override this behavior by disabling debug symbols entirely.
+    # https://github.com/pypa/pip/issues/6505
+    if "CFLAGS" in env:
+        env["CFLAGS"] += " -g0"
+    else:
+        env["CFLAGS"] = "-g0"
+
+    # set SOURCE_DATE_EPOCH to 1980 so that we can use python wheels
+    # https://github.com/NixOS/nixpkgs/blob/master/doc/languages-frameworks/python.section.md#python-setuppy-bdist_wheel-cannot-create-whl
+    if "SOURCE_DATE_EPOCH" not in env:
+        env["SOURCE_DATE_EPOCH"] = "315532800"
+
+    # Python wheel metadata files can be unstable.
+    # See https://bitbucket.org/pypa/wheel/pull-requests/74/make-the-output-of-metadata-files/diff
+    if "PYTHONHASHSEED" not in env:
+        env["PYTHONHASHSEED"] = "0"
+
+    return env
 
 
 def main():
@@ -40,12 +73,11 @@ def main():
             extracted_dir,
         ]
 
-        # TODO: set PYTHONPATH, setup toolchains, setup reproducible config
-        # https://github.com/bazelbuild/rules_python/blob/7740b22d0bae942af0797967f2617daa19834cb3/python/pip_install/extract_wheels/__init__.py#L24
+        # TODO: setup toolchains
+        build_env = get_build_env(args)
 
-        env = os.environ.copy()
         try:
-            subprocess.check_output(args=wheel_args, env=env)
+            subprocess.check_output(args=wheel_args, env=build_env)
         except subprocess.CalledProcessError as cpe:
             print("===== BUILD FAILED =====", file=sys.stderr)
             print(cpe.output.decode(), file=sys.stderr)
@@ -71,6 +103,13 @@ def make_parser() -> argparse.ArgumentParser:
         type=str,
         required=True,
         help="The wheel output path.",
+    )
+
+    parser.add_argument(
+        "--path",
+        type=str,
+        action="append",
+        help="An entry to add to PYTHONPATH",
     )
 
     return parser

@@ -145,9 +145,10 @@ class Naming:
     def wheel_repo(self, file: PackageFile) -> str:
         assert file.is_wheel
         normalized_name = file.name[:-4].lower().replace("-", "_")
-        return f'{self.prefix}_wheel_{normalized_name}'
+        return f"{self.prefix}_wheel_{normalized_name}"
 
-    def wheel_build_target(self, package_or_file: Union[str, PackageFile]) -> str:
+    @staticmethod
+    def wheel_build_target(package_or_file: Union[str, PackageFile]) -> str:
         if isinstance(package_or_file, PackageFile):
             assert not package_or_file.is_wheel
             parts = package_or_file.name.split("-")
@@ -159,7 +160,7 @@ class Naming:
     def sdist_repo(self, file: PackageFile) -> str:
         assert file.name.endswith(".tar.gz")
         name = file.name[:-7]
-        return f'{self.prefix}_sdist_{self._sanitize(name)}'
+        return f"{self.prefix}_sdist_{self._sanitize(name)}"
 
     def sdist_label(self, file: PackageFile) -> str:
         return f'"@{self.sdist_repo(file)}//file"'
@@ -335,7 +336,7 @@ class EnvTarget:
     def render(self) -> str:
         lines = [
             "native.config_setting(",
-            ind(f'name = {self.naming.environment_target(self.environment_name)},'),
+            ind(f"name = {self.naming.environment_target(self.environment_name)},"),
             ind(f"constraint_values = ["),
         ]
         for cv in self.constraints:
@@ -393,13 +394,13 @@ class PackageTarget:
 
     def _common_entries(self, deps: Set[Dependency], indent: int) -> Iterator[str]:
         for d in sorted(deps, key=lambda x: package_canonical_name(x.name)):
-            yield ind(f'{self.naming.package_label(d.name)},', indent)
+            yield ind(f"{self.naming.package_label(d.name)},", indent)
 
     def _select_entries(
         self, env_deps: Dict[str, Set[PoetryPackage]], indent
     ) -> Iterator[str]:
         for env_name, deps in sorted(env_deps.items(), key=lambda x: x[0].lower()):
-            yield ind(f'{self.naming.environment_label(env_name)}: [', indent)
+            yield ind(f"{self.naming.environment_label(env_name)}: [", indent)
             yield from self._common_entries(deps, indent + 1)
             yield ind("],", indent)
         yield ind('"//conditions:default": [],', indent)
@@ -437,13 +438,13 @@ class PackageTarget:
 
         lines = [
             "pycross_wheel_build(",
-            ind(f'name = {self.naming.wheel_build_target(self.package.canonical_name)},'),
-            ind(f'sdist = {self.naming.sdist_label(source_file)},'),
+            ind(
+                f"name = {self.naming.wheel_build_target(self.package.canonical_name)},"
+            ),
+            ind(f"sdist = {self.naming.sdist_label(source_file)},"),
         ]
         if self.has_deps:
-            lines.append(
-                ind(f'deps = {self._deps_name},')
-            )
+            lines.append(ind(f"deps = {self._deps_name},"))
         lines.extend(
             [
                 ind('tags = ["manual"],'),
@@ -456,24 +457,22 @@ class PackageTarget:
     def render_pkg(self) -> str:
         lines = [
             "pycross_wheel_library(",
-            ind(f'name = {self.naming.package_target(self.package.canonical_name)},'),
+            ind(f"name = {self.naming.package_target(self.package.canonical_name)},"),
         ]
         if self.has_deps:
-            lines.append(
-                ind(f'deps = {self._deps_name},')
-            )
+            lines.append(ind(f"deps = {self._deps_name},"))
 
         # Add the wheel attribute.
         # If all environments use the same wheel, don't use select.
         if len(self.distinct_files) == 1:
             file = next(iter(self.distinct_files))
-            lines.append(ind(f'wheel = {self.naming.wheel_label(file)},'))
+            lines.append(ind(f"wheel = {self.naming.wheel_label(file)},"))
         else:
             lines.append(ind("wheel = select({"))
             for env_name, file in self.files_by_env.items():
                 lines.append(
                     ind(
-                        f'{self.naming.environment_label(env_name)}: {self.naming.wheel_label(file)},',
+                        f"{self.naming.environment_label(env_name)}: {self.naming.wheel_label(file)},",
                         2,
                     )
                 )
@@ -610,7 +609,9 @@ def main():
         w()
 
         # Build targets
-        w('def targets(package_prefix=None, build_prefix="_build", environment_prefix="_env"):')
+        w(
+            'def targets(package_prefix=None, build_prefix="_build", environment_prefix="_env"):'
+        )
 
         for environment in sorted(environments, key=lambda x: x.name.lower()):
             env_target = EnvTarget(

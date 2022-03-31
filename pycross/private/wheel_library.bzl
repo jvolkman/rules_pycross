@@ -71,6 +71,7 @@ pycross_wheel_library = rule(
     attrs = {
         "deps": attr.label_list(
             doc = "A list of this wheel's Python library dependencies.",
+            providers = [DefaultInfo, PyInfo],
         ),
         "wheel": attr.label(
             doc = "The wheel file.",

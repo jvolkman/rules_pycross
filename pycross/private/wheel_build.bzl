@@ -13,8 +13,30 @@ def _pycross_wheel_build_impl(ctx):
         out.path,
     ]
 
+    imports = depset(
+        transitive = [d[PyInfo].imports for d in ctx.attr.deps],
+    )
+
+    for import_name in imports.to_list():
+        # The build action doesn't run in a runfiles path, so the import names aren't correct.
+        # Local-repo imports show up in ctx.bin_dir, whereas external imports show up in external/.
+
+        import_name_parts = import_name.split("/", 1)
+        if import_name_parts[0] == ctx.workspace_name:
+            # Local package; will be in ctx.bin_dir
+            args.extend([
+                "--path",
+                paths.join(ctx.bin_dir.path, import_name_parts[1])
+            ])
+        else:
+            # External package; will be in "external".
+            args.extend([
+                "--path",
+                paths.join("external", import_name)
+            ])
+
     ctx.actions.run(
-        inputs = [ctx.file.sdist],
+        inputs = [ctx.file.sdist] + ctx.files.deps,
         outputs = [out],
         executable = ctx.executable._tool,
         arguments = args,
@@ -33,6 +55,7 @@ pycross_wheel_build = rule(
     attrs = {
         "deps": attr.label_list(
             doc = "A list of build dependencies for the wheel.",
+            providers = [DefaultInfo, PyInfo],
         ),
         "sdist": attr.label(
             doc = "The sdist file.",
