@@ -11,4 +11,4 @@ To add dependencies:
 2. run `poetry add <new-package>`, where `<new-package>` is the name of the thing you want to add
 3. run `bazel run :update_example_lock` to update the `.bzl` lock file
 
-Following that, the new package should be available at `//deps:example_lock_pkg_<new_package>`
+Following that, the new package should be available at `//deps:<new_package>`
