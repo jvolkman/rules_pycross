@@ -18,9 +18,32 @@ def _pycross_wheel_build_impl(ctx):
     )
 
     for import_name in imports.to_list():
-        # The build action doesn't run in a runfiles path, so the import names aren't correct.
-        # Local-repo imports show up in ctx.bin_dir, whereas external imports show up in external/.
-
+        # The PyInfo import names assume a runfiles-type structure. E.g.:
+        #   mytool.runfiles/
+        #     main_repo/
+        #       my_package/
+        #     external_repo_1/
+        #       some_package/
+        #     external_repo_2/
+        #       ...
+        #
+        # So the import name starts with the workspace name, and the rest of the import is the path within
+        # that workspace. Our wheel builder isn't consuming these dependencies from runfiles though; they're
+        # inputs, and so for whatever reason the structure is different:
+        #
+        #   sandbox/main_repo/
+        #     bazel-out/
+        #       k8-fastbuild/
+        #         bin/
+        #           my_package/
+        #     external/
+        #       external_repo_1/
+        #         some_package/
+        #       external_repo_2/
+        #         ...
+        #
+        # So this logic translates the import paths into the proper structure: imports from the main repo
+        # are found under `ctx.bin_dir.path`, and external import are found under `external/`.
         import_name_parts = import_name.split("/", 1)
         if import_name_parts[0] == ctx.workspace_name:
             # Local package; will be in ctx.bin_dir
