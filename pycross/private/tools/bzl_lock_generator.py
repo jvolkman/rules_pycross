@@ -503,7 +503,8 @@ class FileRepoTarget:
         assert self.file.hash.startswith("sha256:")
         sha256 = self.file.hash[7:]
         lines = [
-            "http_file(",
+            "maybe(",
+            ind("http_file,"),
             ind(f'name = "{self.name}",'),
             ind(f'urls = ["{self.file.url}"],'),
             ind(f'sha256 = "{sha256}",'),
@@ -598,6 +599,7 @@ def main():
 
         # Header stuff
         w('load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_file")')
+        w('load("@bazel_tools//tools/build_defs/repo:utils.bzl", "maybe")')
         w(
             'load("@jvolkman_rules_pycross//pycross:defs.bzl", "pycross_wheel_build", "pycross_wheel_library")'
         )
