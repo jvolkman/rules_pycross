@@ -4,7 +4,7 @@ load(
     "@jvolkman_rules_pycross//pycross:defs.bzl",
     "pycross_target_environment",
     "pycross_lock_file",
-    "pycross_poetry_lock_model"
+    "pycross_poetry_lock_model",
 )
 
 _darwin_x86_64 = [
@@ -88,11 +88,12 @@ pycross_lock_file(
         "future@0.18.2": "@//deps:overridden_future_0.18.2",
     },
     always_build_packages = [
-        "pbr@5.9.0",
-        "sqlalchemy",
+        "pbr-5.9.0",
+        "setproctitle",
+        "numpy",
     ],
     package_build_dependencies = {
-        "sqlalchemy": [
+        "numpy": [
             "cython",
             "setuptools",
             "wheel",

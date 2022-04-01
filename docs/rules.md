@@ -107,7 +107,7 @@ pycross_target_environment(<a href="#pycross_target_environment-name">name</a>, 
 ## pycross_wheel_build
 
 <pre>
-pycross_wheel_build(<a href="#pycross_wheel_build-name">name</a>, <a href="#pycross_wheel_build-deps">deps</a>, <a href="#pycross_wheel_build-sdist">sdist</a>)
+pycross_wheel_build(<a href="#pycross_wheel_build-name">name</a>, <a href="#pycross_wheel_build-copts">copts</a>, <a href="#pycross_wheel_build-deps">deps</a>, <a href="#pycross_wheel_build-sdist">sdist</a>)
 </pre>
 
 
@@ -118,6 +118,7 @@ pycross_wheel_build(<a href="#pycross_wheel_build-name">name</a>, <a href="#pycr
 | Name  | Description | Type | Mandatory | Default |
 | :------------- | :------------- | :------------- | :------------- | :------------- |
 | <a id="pycross_wheel_build-name"></a>name |  A unique name for this target.   | <a href="https://bazel.build/docs/build-ref.html#name">Name</a> | required |  |
+| <a id="pycross_wheel_build-copts"></a>copts |  Additional C compiler options.   | List of strings | optional | [] |
 | <a id="pycross_wheel_build-deps"></a>deps |  A list of build dependencies for the wheel.   | <a href="https://bazel.build/docs/build-ref.html#labels">List of labels</a> | optional | [] |
 | <a id="pycross_wheel_build-sdist"></a>sdist |  The sdist file.   | <a href="https://bazel.build/docs/build-ref.html#labels">Label</a> | required |  |
 
