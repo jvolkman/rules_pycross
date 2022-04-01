@@ -1,59 +1,80 @@
 load("@bazel_skylib//:bzl_library.bzl", "bzl_library")
 load("@rules_python//python/pip_install:requirements.bzl", "compile_pip_requirements")
 
+default_visibility = ["//pycross:__subpackages__"]
+
 bzl_library(
     name = "versions",
     srcs = ["versions.bzl"],
-    visibility = ["//pycross:__subpackages__"],
+    visibility = default_visibility,
+)
+
+bzl_library(
+    name = "cc_toolchain_util",
+    srcs = ["cc_toolchain_util.bzl"],
+    deps = [
+        "@bazel_skylib//lib:collections",
+        "@bazel_tools//tools/build_defs/cc:action_names.bzl",
+        "@bazel_tools//tools/cpp:toolchain_utils.bzl",
+    ],
+    visibility = default_visibility,
 )
 
 bzl_library(
     name = "lock_file",
     srcs = ["lock_file.bzl"],
     deps = ["target_environment"],
-    visibility = ["//visibility:public"],
+    visibility = default_visibility,
 )
 
 bzl_library(
     name = "lock_repo",
     srcs = ["lock_repo.bzl"],
-    visibility = ["//visibility:public"],
+    visibility = default_visibility,
 )
 
 bzl_library(
     name = "poetry_lock_model",
     srcs = ["poetry_lock_model.bzl"],
-    visibility = ["//visibility:public"],
+    visibility = default_visibility,
 )
 
 bzl_library(
     name = "pypi_requirements",
     srcs = ["pypi_requirements.bzl"],
     deps = ["@rules_python//docs:pip_install_bzl"],
-    visibility = ["//visibility:public"],
+    visibility = default_visibility,
 )
 
 bzl_library(
     name = "pypi_file",
     srcs = ["pypi_file.bzl"],
     deps = ["@bazel_tools//tools/build_defs/repo:utils.bzl"],
-    visibility = ["//visibility:public"],
+    visibility = default_visibility,
+)
+
+bzl_library(
+    name = "sysconfig",
+    srcs = ["sysconfig.bzl"],
+    visibility = default_visibility,
 )
 
 bzl_library(
     name = "target_environment",
     srcs = ["target_environment.bzl"],
-    visibility = ["//visibility:public"],
+    visibility = default_visibility,
 )
 
 bzl_library(
     name = "wheel_build",
     srcs = ["wheel_build.bzl"],
     deps = [
+        ":cc_toolchain_util",
         "@bazel_skylib//lib:paths",
+        "@bazel_tools//tools/cpp:toolchain_utils.bzl",
         "@rules_python//docs:defs",
     ],
-    visibility = ["//visibility:public"],
+    visibility = default_visibility,
 )
 
 bzl_library(
@@ -63,7 +84,7 @@ bzl_library(
         "@bazel_skylib//lib:paths",
         "@rules_python//docs:defs",
     ],
-    visibility = ["//visibility:public"],
+    visibility = default_visibility,
 )
 
 compile_pip_requirements(

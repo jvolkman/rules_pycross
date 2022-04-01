@@ -124,7 +124,7 @@ class Naming:
         return f":{self.wheel_build_target(package_key)}"
 
     def sdist_repo(self, file: PackageFile) -> str:
-        assert file.name.endswith(".tar.gz")
+        assert file.name.endswith(".tar.gz") or file.name.endswith(".zip")
         name = file.name[:-7]
         return f"{self.repo_prefix}_sdist_{self._sanitize(name)}"
 

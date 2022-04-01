@@ -1,14 +1,57 @@
 """Implementation of the pycross_wheel_build rule."""
 
+load(":cc_toolchain_util.bzl", "absolutize_path_in_str", "get_env_vars", "get_flags_info", "get_tools_info")
+
 load("@bazel_skylib//lib:paths.bzl", "paths")
+load("@bazel_tools//tools/cpp:toolchain_utils.bzl", "find_cpp_toolchain", "use_cpp_toolchain")
 load("@rules_python//python:defs.bzl", "PyInfo")
 
+PYTHON_TOOLCHAIN_TYPE = "@bazel_tools//tools/python:toolchain_type"
+
+def _absolute_tool_value(workspace_name, value):
+    if value:
+        tool_value_absolute = absolutize_path_in_str(workspace_name, "$$EXT_BUILD_ROOT$$/", value, True)
+
+        # If the tool path contains whitespaces (e.g. C:\Program Files\...),
+        # MSYS2 requires that the path is wrapped in double quotes
+        if " " in tool_value_absolute:
+            tool_value_absolute = "\\\"" + tool_value_absolute + "\\\""
+
+        return tool_value_absolute
+    return value
+
+def _get_sysconfig_data(workspace_name, tools, flags):
+    cc = _absolute_tool_value(workspace_name, tools.cc)
+    cxx = _absolute_tool_value(workspace_name, tools.cxx)
+    ar = _absolute_tool_value(workspace_name, tools.cxx_linker_static)
+    vars = {
+        "CC": cc,
+        "CXX": cxx,
+        "CFLAGS": " ".join(flags.cc),
+        "CCSHARED": "-fPIC" if flags.needs_pic_for_dynamic_libraries else "",
+        "LDSHARED": " ".join([cc] + flags.cxx_linker_shared),
+        "AR": ar,
+        "ARFLAGS": " ".join(flags.cxx_linker_static),
+        "CUSTOMIZED_OSX_COMPILER": "True",
+        "GNULD": "yes" if "gcc" in cc else "no",  # is there a better way?
+    }
+
+    return vars
+
 def _pycross_wheel_build_impl(ctx):
+    cc_sysconfig_data = ctx.actions.declare_file(paths.join(ctx.attr.name, "cc_sysconfig.json"))
     out = ctx.actions.declare_file(paths.join(ctx.attr.name, "wheel.whl"))
+
+    cc_vars = get_env_vars(ctx)
+    flags = get_flags_info(ctx)
+    tools = get_tools_info(ctx)
+    sysconfig_vars = _get_sysconfig_data(ctx.workspace_name, tools, flags)
 
     args = [
         "--sdist",
         ctx.file.sdist.path,
+        "--sysconfig-vars",
+        cc_sysconfig_data.path,
         "--wheel",
         out.path,
     ]
@@ -16,6 +59,9 @@ def _pycross_wheel_build_impl(ctx):
     imports = depset(
         transitive = [d[PyInfo].imports for d in ctx.attr.deps],
     )
+
+    py_toolchain = ctx.toolchains[PYTHON_TOOLCHAIN_TYPE].py3_runtime
+    cpp_toolchain = find_cpp_toolchain(ctx)
 
     for import_name in imports.to_list():
         # The PyInfo import names assume a runfiles-type structure. E.g.:
@@ -49,19 +95,33 @@ def _pycross_wheel_build_impl(ctx):
             # Local package; will be in ctx.bin_dir
             args.extend([
                 "--path",
-                paths.join(ctx.bin_dir.path, import_name_parts[1])
+                paths.join(ctx.bin_dir.path, import_name_parts[1]),
             ])
         else:
             # External package; will be in "external".
             args.extend([
                 "--path",
-                paths.join("external", import_name)
+                paths.join("external", import_name),
             ])
 
+    ctx.actions.write(cc_sysconfig_data, json.encode(sysconfig_vars))
+
+    deps = [ctx.file.sdist, cc_sysconfig_data] + ctx.files.deps
+    toolchain_deps = []
+    if cpp_toolchain.all_files:
+        toolchain_deps.append(cpp_toolchain.all_files)
+    if py_toolchain.files:
+        toolchain_deps.append(py_toolchain.files)
+
+    env = dict(cc_vars)
+    env.update(ctx.configuration.default_shell_env)
+
     ctx.actions.run(
-        inputs = [ctx.file.sdist] + ctx.files.deps,
+        inputs = depset(deps, transitive = toolchain_deps),
         outputs = [out],
         executable = ctx.executable._tool,
+        use_default_shell_env = False,
+        env = env,
         arguments = args,
         mnemonic = "WheelBuild",
         progress_message = "Building %s" % ctx.file.sdist.basename,
@@ -82,13 +142,22 @@ pycross_wheel_build = rule(
         ),
         "sdist": attr.label(
             doc = "The sdist file.",
-            allow_single_file = [".tar.gz"],
+            allow_single_file = [".tar.gz", ".zip"],
             mandatory = True,
+        ),
+        "copts": attr.string_list(
+            doc = "Additional C compiler options.",
         ),
         "_tool": attr.label(
             default = Label("//pycross/private/tools:wheel_builder"),
             cfg = "host",
             executable = True,
         ),
-    }
+        "_cc_toolchain": attr.label(
+            default = Label("@bazel_tools//tools/cpp:current_cc_toolchain"),
+        ),
+    },
+    toolchains = [PYTHON_TOOLCHAIN_TYPE] + use_cpp_toolchain(),
+    fragments = ["cpp"],
+    host_fragments = ["cpp"],
 )
