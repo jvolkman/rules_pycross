@@ -1,6 +1,11 @@
 load("@bazel_skylib//rules:diff_test.bzl", "diff_test")
 load("@bazel_skylib//rules:write_file.bzl", "write_file")
-load("@jvolkman_rules_pycross//pycross:defs.bzl", "pycross_target_environment", "pycross_lock_file")
+load(
+    "@jvolkman_rules_pycross//pycross:defs.bzl",
+    "pycross_target_environment",
+    "pycross_lock_file",
+    "pycross_poetry_lock_model"
+)
 
 _darwin_x86_64 = [
     "@platforms//os:macos",
@@ -56,6 +61,13 @@ pycross_target_environment(
     platforms = ["manylinux2014_x86_64"] + [
         "manylinux_2_%s_x86_64" % str(i) for i in range(17, 25)
     ],
+)
+
+pycross_poetry_lock_model(
+    name = "example_lock_model",
+    poetry_project_file = "pyproject.toml",
+    poetry_lock_file = "poetry.lock",
+    out = "example_lock_model.json",
 )
 
 pycross_lock_file(

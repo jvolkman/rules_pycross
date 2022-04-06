@@ -30,6 +30,27 @@ pycross_lock_file(<a href="#pycross_lock_file-name">name</a>, <a href="#pycross_
 | <a id="pycross_lock_file-target_environments"></a>target_environments |  A list of pycross_target_environment labels.   | <a href="https://bazel.build/docs/build-ref.html#labels">List of labels</a> | optional | [] |
 
 
+<a id="#pycross_poetry_lock_model"></a>
+
+## pycross_poetry_lock_model
+
+<pre>
+pycross_poetry_lock_model(<a href="#pycross_poetry_lock_model-name">name</a>, <a href="#pycross_poetry_lock_model-out">out</a>, <a href="#pycross_poetry_lock_model-poetry_lock_file">poetry_lock_file</a>, <a href="#pycross_poetry_lock_model-poetry_project_file">poetry_project_file</a>)
+</pre>
+
+
+
+**ATTRIBUTES**
+
+
+| Name  | Description | Type | Mandatory | Default |
+| :------------- | :------------- | :------------- | :------------- | :------------- |
+| <a id="pycross_poetry_lock_model-name"></a>name |  A unique name for this target.   | <a href="https://bazel.build/docs/build-ref.html#name">Name</a> | required |  |
+| <a id="pycross_poetry_lock_model-out"></a>out |  The output file.   | <a href="https://bazel.build/docs/build-ref.html#labels">Label</a> | required |  |
+| <a id="pycross_poetry_lock_model-poetry_lock_file"></a>poetry_lock_file |  The poetry.lock file.   | <a href="https://bazel.build/docs/build-ref.html#labels">Label</a> | required |  |
+| <a id="pycross_poetry_lock_model-poetry_project_file"></a>poetry_project_file |  The pyproject.toml file with Poetry dependencies.   | <a href="https://bazel.build/docs/build-ref.html#labels">Label</a> | required |  |
+
+
 <a id="#pycross_target_environment"></a>
 
 ## pycross_target_environment
