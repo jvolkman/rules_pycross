@@ -123,53 +123,62 @@ class PackageFileSet:
 
 
 class Naming:
-    def __init__(self, prefix: str):
-        self.prefix = prefix
+    def __init__(self, package_prefix: Optional[str], build_prefix: Optional[str], environment_prefix: Optional[str], repo_prefix: Optional[str]):
+        self.package_prefix = package_prefix
+        self.build_prefix = build_prefix
+        self.environment_prefix = environment_prefix
+        self.repo_prefix = repo_prefix
 
     @staticmethod
     def _sanitize(name: str) -> str:
         return name.lower().replace("-", "_")
 
+    @staticmethod
+    def _prefixed(name: str, prefix: Optional[str]):
+        if not prefix:
+            return name
+        # Strip any trailing underscores from the provided prefix, first, then add one of our own.
+        return prefix.rstrip("_") + "_" + name
+
     def package_target(self, package_name: str) -> str:
-        return f'_prefixed("{self._sanitize(package_name)}", package_prefix)'
+        return self._prefixed(self._sanitize(package_name), self.package_prefix)
 
     def package_label(self, package_name: str) -> str:
-        return f'":" + {self.package_target(package_name)}'
+        return f":{self.package_target(package_name)}"
 
     def environment_target(self, environment_name: str) -> str:
-        return f'_prefixed("{self._sanitize(environment_name)}", environment_prefix)'
+        return self._prefixed(self._sanitize(environment_name), self.environment_prefix)
 
     def environment_label(self, environment_name: str) -> str:
-        return f'":" + {self.environment_target(environment_name)}'
+        return f":{self.environment_target(environment_name)}"
 
     def wheel_repo(self, file: PackageFile) -> str:
         assert file.is_wheel
         normalized_name = file.name[:-4].lower().replace("-", "_")
-        return f"{self.prefix}_wheel_{normalized_name}"
+        return f"{self.repo_prefix}_wheel_{normalized_name}"
 
-    @staticmethod
-    def wheel_build_target(package_or_file: Union[str, PackageFile]) -> str:
+    def wheel_build_target(self, package_or_file: Union[str, PackageFile]) -> str:
         if isinstance(package_or_file, PackageFile):
             assert not package_or_file.is_wheel
             parts = package_or_file.name.split("-")
             name = parts[0].lower()
-            return f'_prefixed("{name}", build_prefix)'
+            return self._prefixed(name, self.build_prefix)
         else:
-            return f'_prefixed("{package_or_file}", build_prefix)'
+            return self._prefixed(package_or_file, self.build_prefix)
 
     def sdist_repo(self, file: PackageFile) -> str:
         assert file.name.endswith(".tar.gz")
         name = file.name[:-7]
-        return f"{self.prefix}_sdist_{self._sanitize(name)}"
+        return f"{self.repo_prefix}_sdist_{self._sanitize(name)}"
 
     def sdist_label(self, file: PackageFile) -> str:
-        return f'"@{self.sdist_repo(file)}//file"'
+        return f"@{self.sdist_repo(file)}//file"
 
     def wheel_label(self, file: PackageFile):
         if file.is_wheel:
-            return f'"@{self.wheel_repo(file)}//file"'
+            return f"@{self.wheel_repo(file)}//file"
         else:
-            return f'":" + {self.wheel_build_target(file)}'
+            return f":{self.wheel_build_target(file)}"
 
 
 @dataclass(frozen=True)
@@ -336,7 +345,7 @@ class EnvTarget:
     def render(self) -> str:
         lines = [
             "native.config_setting(",
-            ind(f"name = {self.naming.environment_target(self.environment_name)},"),
+            ind(f'name = "{self.naming.environment_target(self.environment_name)}",'),
             ind(f"constraint_values = ["),
         ]
         for cv in self.constraints:
@@ -394,13 +403,13 @@ class PackageTarget:
 
     def _common_entries(self, deps: Set[Dependency], indent: int) -> Iterator[str]:
         for d in sorted(deps, key=lambda x: package_canonical_name(x.name)):
-            yield ind(f"{self.naming.package_label(d.name)},", indent)
+            yield ind(f'"{self.naming.package_label(d.name)}",', indent)
 
     def _select_entries(
         self, env_deps: Dict[str, Set[PoetryPackage]], indent
     ) -> Iterator[str]:
         for env_name, deps in sorted(env_deps.items(), key=lambda x: x[0].lower()):
-            yield ind(f"{self.naming.environment_label(env_name)}: [", indent)
+            yield ind(f'"{self.naming.environment_label(env_name)}": [', indent)
             yield from self._common_entries(deps, indent + 1)
             yield ind("],", indent)
         yield ind('"//conditions:default": [],', indent)
@@ -439,9 +448,9 @@ class PackageTarget:
         lines = [
             "pycross_wheel_build(",
             ind(
-                f"name = {self.naming.wheel_build_target(self.package.canonical_name)},"
+                f'name = "{self.naming.wheel_build_target(self.package.canonical_name)}",'
             ),
-            ind(f"sdist = {self.naming.sdist_label(source_file)},"),
+            ind(f'sdist = "{self.naming.sdist_label(source_file)}",'),
         ]
         if self.has_deps:
             lines.append(ind(f"deps = {self._deps_name},"))
@@ -457,7 +466,7 @@ class PackageTarget:
     def render_pkg(self) -> str:
         lines = [
             "pycross_wheel_library(",
-            ind(f"name = {self.naming.package_target(self.package.canonical_name)},"),
+            ind(f'name = "{self.naming.package_target(self.package.canonical_name)}",'),
         ]
         if self.has_deps:
             lines.append(ind(f"deps = {self._deps_name},"))
@@ -466,13 +475,13 @@ class PackageTarget:
         # If all environments use the same wheel, don't use select.
         if len(self.distinct_files) == 1:
             file = next(iter(self.distinct_files))
-            lines.append(ind(f"wheel = {self.naming.wheel_label(file)},"))
+            lines.append(ind(f'wheel = "{self.naming.wheel_label(file)}",'))
         else:
             lines.append(ind("wheel = select({"))
             for env_name, file in self.files_by_env.items():
                 lines.append(
                     ind(
-                        f"{self.naming.environment_label(env_name)}: {self.naming.wheel_label(file)},",
+                        f'"{self.naming.environment_label(env_name)}": "{self.naming.wheel_label(file)}",',
                         2,
                     )
                 )
@@ -552,7 +561,7 @@ def main():
         filename, url = url_override.split("=", maxsplit=1)
         url_overrides[filename] = url
 
-    naming = Naming(args.prefix)
+    naming = Naming(repo_prefix=args.repo_prefix, package_prefix=args.package_prefix, build_prefix=args.build_prefix, environment_prefix=args.environment_prefix)
     metadata = PoetryMetadata.create(
         args.poetry_project_file, args.poetry_lock_file, url_overrides
     )
@@ -605,15 +614,8 @@ def main():
         )
         w()
 
-        # _prefixed function
-        w(ind("def _prefixed(name, prefix):", 0))
-        w(ind('return prefix + "_" + name if prefix != None else name', 1))
-        w()
-
         # Build targets
-        w(
-            'def targets(package_prefix=None, build_prefix="_build", environment_prefix="_env"):'
-        )
+        w("def targets():")
 
         for environment in sorted(environments, key=lambda x: x.name.lower()):
             env_target = EnvTarget(
@@ -639,10 +641,35 @@ def make_parser() -> argparse.ArgumentParser:
     )
 
     parser.add_argument(
-        "--prefix",
+        "--repo-prefix",
         type=str,
-        required=True,
-        help="The prefix to apply to all targets.",
+        required=False,
+        default="",
+        help="The prefix to apply to repository targets.",
+    )
+
+    parser.add_argument(
+        "--package-prefix",
+        type=str,
+        required=False,
+        default="",
+        help="The prefix to apply to packages targets.",
+    )
+
+    parser.add_argument(
+        "--build-prefix",
+        type=str,
+        required=False,
+        default="",
+        help="The prefix to apply to package build targets.",
+    )
+
+    parser.add_argument(
+        "--environment-prefix",
+        type=str,
+        required=False,
+        default="",
+        help="The prefix to apply to packages environment targets.",
     )
 
     parser.add_argument(
