@@ -8,8 +8,14 @@ py_library(
         "target_environment.py",
     ],
     deps = [
+        ":lock_model",
         "@rules_pycross_pypi_deps_packaging//:pkg",
     ]
+)
+
+py_library(
+    name = "lock_model",
+    srcs = ["lock_model.py"],
 )
 
 py_binary(
@@ -29,6 +35,17 @@ py_binary(
     deps = [
         ":lib",
         "@rules_pycross_pypi_deps_packaging//:pkg",
+    ],
+    visibility = ["//visibility:public"],
+)
+
+py_binary(
+    name = "poetry_translator",
+    srcs = ["poetry_translator.py"],
+    deps = [
+        ":lock_model",
+        "@rules_pycross_pypi_deps_poetry_core//:pkg",
+        "@rules_pycross_pypi_deps_tomli//:pkg",
     ],
     visibility = ["//visibility:public"],
 )
