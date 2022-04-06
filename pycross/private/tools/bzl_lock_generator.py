@@ -123,7 +123,13 @@ class PackageFileSet:
 
 
 class Naming:
-    def __init__(self, package_prefix: Optional[str], build_prefix: Optional[str], environment_prefix: Optional[str], repo_prefix: Optional[str]):
+    def __init__(
+        self,
+        package_prefix: Optional[str],
+        build_prefix: Optional[str],
+        environment_prefix: Optional[str],
+        repo_prefix: Optional[str],
+    ):
         self.package_prefix = package_prefix
         self.build_prefix = build_prefix
         self.environment_prefix = environment_prefix
@@ -561,7 +567,12 @@ def main():
         filename, url = url_override.split("=", maxsplit=1)
         url_overrides[filename] = url
 
-    naming = Naming(repo_prefix=args.repo_prefix, package_prefix=args.package_prefix, build_prefix=args.build_prefix, environment_prefix=args.environment_prefix)
+    naming = Naming(
+        repo_prefix=args.repo_prefix,
+        package_prefix=args.package_prefix,
+        build_prefix=args.build_prefix,
+        environment_prefix=args.environment_prefix,
+    )
     metadata = PoetryMetadata.create(
         args.poetry_project_file, args.poetry_lock_file, url_overrides
     )
