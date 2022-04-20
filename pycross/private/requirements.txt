@@ -8,6 +8,10 @@ build==0.7.0 \
     --hash=sha256:1aaadcd69338252ade4f7ec1265e1a19184bf916d84c9b7df095f423948cb89f \
     --hash=sha256:21b7ebbd1b22499c4dac536abc7606696ea4d909fd755e00f09f3c0f2c05e3c8
     # via -r pycross/private/requirements.in
+dacite==1.6.0 \
+    --hash=sha256:4331535f7aabb505c732fa4c3c094313fc0a1d5ea19907bf4726a7819a68b93f \
+    --hash=sha256:d48125ed0a0352d3de9f493bf980038088f45f3f9d7498f090b50a847daaa6df
+    # via -r pycross/private/requirements.in
 packaging==21.3 \
     --hash=sha256:dd47c42927d89ab911e606518907cc2d3a1f38bbd026385970643f9c5b8ecfeb \
     --hash=sha256:ef103e05f519cdc783ae24ea4e2e0f508a9c99b2d4969652eed6a2e1ea5bd522

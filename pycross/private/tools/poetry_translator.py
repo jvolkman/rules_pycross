@@ -226,10 +226,9 @@ def main():
     output = args.output
 
     lock_set = translate(args.poetry_project_file, args.poetry_lock_file)
-    lock_set_dict = dataclasses.asdict(lock_set)
 
     with open(output, "w") as f:
-        json.dump(lock_set_dict, f, sort_keys=True, indent=2)
+        json.dump(lock_set.to_dict(), f, sort_keys=True, indent=2)
 
 
 def make_parser() -> argparse.ArgumentParser:
