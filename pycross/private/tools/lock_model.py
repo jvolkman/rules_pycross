@@ -1,8 +1,12 @@
+from __future__ import annotations
+
 import dataclasses
 from dataclasses import dataclass
 from typing import Any
 from typing import Dict
 from typing import List
+
+import dacite
 
 
 @dataclass
@@ -37,6 +41,10 @@ class LockSet:
 
     def to_dict(self) -> Dict[str, Any]:
         return dataclasses.asdict(self)
+
+    @staticmethod
+    def from_dict(data: Dict[str, Any]) -> LockSet:
+        return dacite.from_dict(LockSet, data)
 
 
 def package_canonical_name(name: str) -> str:

@@ -16,6 +16,9 @@ py_library(
 py_library(
     name = "lock_model",
     srcs = ["lock_model.py"],
+    deps = [
+        "@rules_pycross_pypi_deps_dacite//:pkg",
+    ]
 )
 
 py_binary(
