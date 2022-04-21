@@ -10,6 +10,7 @@ from typing import List
 from typing import Optional
 
 import tomli
+from packaging.utils import NormalizedName
 from poetry.core import semver
 from poetry.core.semver.version import Version
 from poetry.core.version import markers
@@ -49,7 +50,7 @@ class PoetryDependency:
 
 @dataclass
 class PoetryPackage:
-    name: str
+    name: NormalizedName
     version: Version
     python_versions: str
     dependencies: List[PoetryDependency]

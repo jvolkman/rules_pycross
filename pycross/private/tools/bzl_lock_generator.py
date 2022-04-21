@@ -4,6 +4,7 @@ import os
 import sys
 import textwrap
 from collections import defaultdict
+from dataclasses import dataclass
 from typing import Dict
 from typing import Iterator
 from typing import List
@@ -32,6 +33,26 @@ WAREHOUSE_HOST = "https://files.pythonhosted.org"
 def ind(text: str, tabs=1):
     """Indent text with the given number of tabs."""
     return textwrap.indent(text, "    " * tabs)
+
+
+@dataclass(frozen=True)
+class RemotePackage:
+    urls: List[str]
+    sha256: str
+
+    def __post_init__(self):
+        assert self.urls, "The urls field must be specified."
+        assert self.sha256, "The sha256 field must be specified."
+
+
+@dataclass(frozen=True)
+class WheelSource:
+    label: Optional[str]
+    remote_package: Optional[RemotePackage]
+
+    def __post_init__(self):
+        assert not ((self.label is None) ^ (self.remote_package is None)), \
+            "Exactly one of label or remote_package must be specified."
 
 
 class Naming:
@@ -175,7 +196,7 @@ class GenerationContext:
             frozenset(["source"]) if source_only else frozenset(["source", "binary"])
         )
         environment_files = {}
-        for environment in self.target_environments:
+        for environment in sorted(self.target_environments, key=lambda te: te.name.lower()):
             evaluator = LinkEvaluator(
                 project_name=package.name,
                 canonical_name=package.name,
@@ -439,7 +460,7 @@ def main():
 
     # TODO: Make this a file instead
     url_overrides = {}
-    for url_override in args.file_url or []:
+    for url_override in args.file_url_override or []:
         filename, url = url_override.split("=", maxsplit=1)
         url_overrides[filename] = url
 
@@ -585,10 +606,24 @@ def make_parser() -> argparse.ArgumentParser:
     )
 
     parser.add_argument(
-        "--file-url",
+        "--file-url-override",
         type=str,
         action="append",
         help="A file=url parameter that sets the URL for the given wheel or sdist file.",
+    )
+
+    parser.add_argument(
+        "--local-wheel",
+        type=str,
+        action="append",
+        help="A file=label parameter that points to a wheel file in the local repository."
+    )
+
+    parser.add_argument(
+        "--remote-wheel",
+        type=str,
+        action="append",
+        help="A url=sha256 parameter that points to a remote wheel.",
     )
 
     parser.add_argument(

@@ -1,11 +1,12 @@
 from __future__ import annotations
 
 import dataclasses
-import re
 from dataclasses import dataclass
 from typing import Any
 from typing import Dict
 from typing import List
+
+from packaging.utils import NormalizedName, canonicalize_name
 
 import dacite
 
@@ -38,16 +39,17 @@ class PackageDependency:
 
 @dataclass(frozen=True)
 class Package:
-    name: str
+    name: NormalizedName
     version: str
     python_versions: str
     dependencies: List[PackageDependency]
     files: List[PackageFile]
 
     def __post_init__(self):
-        assert self.name == package_canonical_name(
-            self.name
-        ), "The name field should be normalized per PEP 503."
+        normalized_name = package_canonical_name(self.name)
+        assert str(self.name) == str(normalized_name), "The name field should be normalized per PEP 503."
+        object.__setattr__(self, "name", normalized_name)
+
         assert self.version, "The version field must be specified."
         assert (
             self.python_versions is not None
@@ -79,9 +81,8 @@ class LockSet:
         return dacite.from_dict(LockSet, data)
 
 
-def package_canonical_name(name: str) -> str:
-    # See PEP 503
-    return re.sub(r"[-_.]+", "-", name).lower()
+def package_canonical_name(name: str) -> NormalizedName:
+    return canonicalize_name(name)
 
 
 def is_wheel(filename: str) -> bool:

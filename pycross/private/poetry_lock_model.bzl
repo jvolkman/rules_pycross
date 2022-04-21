@@ -1,7 +1,7 @@
 """Implementation of the pycross_poetry_lock_model rule."""
 
 def _pycross_poetry_lock_model_impl(ctx):
-    out = ctx.outputs.out
+    out = ctx.actions.declare_file(ctx.attr.name + ".json")
 
     args = [
         "--poetry-project-file",
@@ -39,10 +39,6 @@ pycross_poetry_lock_model = rule(
         "poetry_lock_file": attr.label(
             doc = "The poetry.lock file.",
             allow_single_file = True,
-            mandatory = True,
-        ),
-        "out": attr.output(
-            doc = "The output file.",
             mandatory = True,
         ),
         "_tool": attr.label(
