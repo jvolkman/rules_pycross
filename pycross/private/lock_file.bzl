@@ -2,6 +2,10 @@
 
 load(":target_environment.bzl", "TargetEnvironmentInfo")
 
+def fully_qualified_label(label):
+    return "@%s//%s:%s" % (label.workspace_name, label.package, label.name)
+
+
 def _pycross_lock_file_impl(ctx):
     out = ctx.outputs.out
 
@@ -33,8 +37,22 @@ def _pycross_lock_file_impl(ctx):
 
     for f, u in ctx.attr.file_url_overrides.items():
         args.extend([
-            "--file-url",
+            "--file-url-override",
             "%s=%s" % (f, u),
+        ])
+
+    for local_wheel in ctx.files.local_wheels:
+        if not local_wheel.owner:
+            fail("Could not determine owning lable for local wheel: %s" % local_wheel)
+        args.extend([
+            "--local-wheel",
+            "%s=%s" % (local_wheel.basename, fully_qualified_label(local_wheel.owner)),
+        ])
+
+    for remote_wheel_url, sha256 in ctx.attr.remote_wheels.items():
+        args.extend([
+            "--remote-wheel",
+            "%s=%s" % (remote_wheel_url, sha256),
         ])
 
     if ctx.attr.package_prefix != None:
@@ -86,6 +104,13 @@ pycross_lock_file = rule(
         ),
         "file_url_overrides": attr.string_dict(
             doc = "An optional mapping of wheel or sdist filenames to their URLs.",
+        ),
+        "local_wheels": attr.label_list(
+            doc = "A list of wheel files.",
+            allow_files = [".whl"],
+        ),
+        "remote_wheels": attr.string_dict(
+            doc = "A mapping of remote wheels to their sha256 hashes.",
         ),
         "repo_prefix": attr.string(
             doc = "The prefix to apply to repository targets. Defaults to the lock file target name.",

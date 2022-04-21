@@ -67,7 +67,6 @@ pycross_poetry_lock_model(
     name = "example_lock_model",
     poetry_project_file = "pyproject.toml",
     poetry_lock_file = "poetry.lock",
-    out = "example_lock_model.json",
 )
 
 pycross_lock_file(
@@ -81,6 +80,9 @@ pycross_lock_file(
     file_url_overrides = {
         "xmltodict-0.12.0-py2.py3-none-any.whl": "https://files.pythonhosted.org/packages/3.7/x/xmltodict/xmltodict-0.12.0-py2.py3-none-any.whl",
     },
+    local_wheels = [
+        "//wheels",
+    ],
     out = "example_lock.bzl",
 )
 
