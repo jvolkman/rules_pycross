@@ -72,8 +72,7 @@ pycross_poetry_lock_model(
 
 pycross_lock_file(
     name = "example_lock",
-    poetry_project_file = "pyproject.toml",
-    poetry_lock_file = "poetry.lock",
+    lock_model_file = ":example_lock_model",
     target_environments = [
         ":python_darwin_x86_64",
         ":python_darwin_arm64",

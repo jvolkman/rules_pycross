@@ -11,10 +11,8 @@ def _pycross_lock_file_impl(ctx):
         repo_prefix = ctx.attr.name.lower().replace("-", "_")
 
     args = [
-        "--poetry-project-file",
-        ctx.file.poetry_project_file.path,
-        "--poetry-lock-file",
-        ctx.file.poetry_lock_file.path,
+        "--lock-model-file",
+        ctx.file.lock_model_file.path,
         "--repo-prefix",
         repo_prefix,
         "--package-prefix",
@@ -59,8 +57,7 @@ def _pycross_lock_file_impl(ctx):
 
     ctx.actions.run(
         inputs = (
-            ctx.files.poetry_project_file +
-            ctx.files.poetry_lock_file +
+            ctx.files.lock_model_file +
             ctx.files.target_environments
         ),
         outputs = [out],
@@ -82,13 +79,8 @@ pycross_lock_file = rule(
             allow_files = True,
             providers = [TargetEnvironmentInfo],
         ),
-        "poetry_project_file": attr.label(
-            doc = "The pyproject.toml file with Poetry dependencies.",
-            allow_single_file = True,
-            mandatory = True,
-        ),
-        "poetry_lock_file": attr.label(
-            doc = "The poetry.lock file.",
+        "lock_model_file": attr.label(
+            doc = "The lock model JSON file.",
             allow_single_file = True,
             mandatory = True,
         ),
