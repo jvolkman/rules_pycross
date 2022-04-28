@@ -1,5 +1,4 @@
 import argparse
-import json
 import os
 import sys
 from collections import defaultdict
@@ -11,8 +10,9 @@ from typing import Optional
 
 import tomli
 from packaging.utils import NormalizedName
+from packaging.utils import Version
 from poetry.core import semver
-from poetry.core.semver.version import Version
+from poetry.core.semver.version import Version as PoetryVersion
 from poetry.core.version import markers
 
 from pycross.private.tools.lock_model import LockSet
@@ -51,7 +51,7 @@ class PoetryDependency:
 @dataclass
 class PoetryPackage:
     name: NormalizedName
-    version: Version
+    version: PoetryVersion
     python_versions: str
     dependencies: List[PoetryDependency]
     files: List[PackageFile]
@@ -64,7 +64,7 @@ class PoetryPackage:
     def to_lock_package(self) -> Package:
         return Package(
             name=self.name,
-            version=str(self.version),
+            version=Version(str(self.version)),
             python_versions=self.python_versions,
             dependencies=sorted(self.resolved_dependencies, key=lambda p: p.key),
             files=sorted(self.files, key=lambda f: f.name),
@@ -72,7 +72,7 @@ class PoetryPackage:
 
 
 def get_files_for_package(
-    files: List[PackageFile], package_name: str, package_version: Version
+    files: List[PackageFile], package_name: str, package_version: PoetryVersion
 ) -> List[PackageFile]:
     package_name = package_name.lower()
     # Test filename prefixes using our package name with dashes and underscores.
@@ -158,7 +158,7 @@ def translate(project_file: str, lock_file: str) -> LockSet:
         poetry_packages.append(
             PoetryPackage(
                 name=package_name,
-                version=Version.parse(package_version),
+                version=PoetryVersion.parse(package_version),
                 python_versions=package_python_versions,
                 dependencies=dependencies,
                 files=get_files_for_package(
@@ -228,7 +228,7 @@ def main():
     lock_set = translate(args.poetry_project_file, args.poetry_lock_file)
 
     with open(output, "w") as f:
-        json.dump(lock_set.to_dict(), f, sort_keys=True, indent=2)
+        f.write(lock_set.to_json(indent=2))
 
 
 def make_parser() -> argparse.ArgumentParser:

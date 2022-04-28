@@ -1,14 +1,23 @@
 from __future__ import annotations
 
 import dataclasses
+import json
 from dataclasses import dataclass
+from json import JSONEncoder
 from typing import Any
 from typing import Dict
 from typing import List
 
-from packaging.utils import NormalizedName, canonicalize_name
+from packaging.utils import NormalizedName, Version, canonicalize_name
 
 import dacite
+
+
+class _VersionHandlingEncoder(JSONEncoder):
+    def default(self, o):
+        if isinstance(o, Version):
+            return str(o)
+        return super().default(o)
 
 
 @dataclass(frozen=True)
@@ -40,7 +49,7 @@ class PackageDependency:
 @dataclass(frozen=True)
 class Package:
     name: NormalizedName
-    version: str
+    version: Version
     python_versions: str
     dependencies: List[PackageDependency]
     files: List[PackageFile]
@@ -76,9 +85,17 @@ class LockSet:
     def to_dict(self) -> Dict[str, Any]:
         return dataclasses.asdict(self)
 
+    def to_json(self, indent=None) -> str:
+        return json.dumps(self.to_dict(), sort_keys=True, indent=indent, cls=_VersionHandlingEncoder)
+
     @staticmethod
     def from_dict(data: Dict[str, Any]) -> LockSet:
-        return dacite.from_dict(LockSet, data)
+        return dacite.from_dict(LockSet, data, config=dacite.Config(cast=[Version]))
+
+    @staticmethod
+    def from_json(data: str) -> LockSet:
+        parsed = json.loads(data)
+        return dacite.from_dict(LockSet, parsed, config=dacite.Config(cast=[Version]))
 
 
 def package_canonical_name(name: str) -> NormalizedName:
