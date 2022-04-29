@@ -82,6 +82,12 @@ def _pycross_lock_file_impl(ctx):
             "%s=%s" % (k, t),
         ])
 
+    for k in ctx.attr.always_build_packages:
+        args.extend([
+            "--always-build-package",
+            k
+        ])
+
     ctx.actions.run(
         inputs = (
             ctx.files.lock_model_file +
@@ -142,6 +148,9 @@ pycross_lock_file = rule(
         ),
         "build_target_overrides": attr.string_dict(
             doc = "A mapping of package keys (name-version) to existing pycross_wheel_build build targets."
+        ),
+        "always_build_packages": attr.string_list(
+            doc = "A list of package keys (name-version) to always build from source."
         ),
         "out": attr.output(
             doc = "The output file.",

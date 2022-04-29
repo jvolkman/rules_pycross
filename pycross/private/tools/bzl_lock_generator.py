@@ -302,6 +302,7 @@ class PackageTarget:
         package: Package,
         context: GenerationContext,
         build_target_override: Optional[str],
+        always_build: bool,
     ):
         self.package = package
         self.context = context
@@ -313,10 +314,11 @@ class PackageTarget:
         self.env_deps = {k: v for k, v in deps_by_env.items() if k is not None}
 
         self.package_sources_by_env = context.get_package_sources_by_environment(
-            self.package
+            self.package, always_build
         )
         self.distinct_package_sources = set(self.package_sources_by_env.values())
         self.build_target_override = build_target_override
+        self.always_build = always_build
 
     @property
     def all_dependency_keys(self) -> Set[str]:
@@ -554,6 +556,8 @@ def main():
         key, target = build_target_override.split("=", maxsplit=1)
         build_target_overrides[key] = target
 
+    always_build_packages = set(args.always_build_package or [])
+
     naming = Naming(
         repo_prefix=args.repo_prefix,
         package_prefix=args.package_prefix,
@@ -587,6 +591,7 @@ def main():
             package,
             context,
             build_target_overrides.get(package.key),
+            package.key in always_build_packages,
         )
         package_targets_by_package_key[next_package_key] = entry
         work.extend(entry.all_dependency_keys)
@@ -600,7 +605,15 @@ def main():
     )
     if unused_build_target_overrides:
         raise Exception(
-            f"Build target overrides for non-existent packages: {unused_build_target_overrides}"
+            f"Build target overrides specified for non-existent packages: {unused_build_target_overrides}"
+        )
+
+    unused_always_build_packages = always_build_packages - set(
+        package_targets_by_package_key
+    )
+    if unused_always_build_packages:
+        raise Exception(
+            f"Always build specified for non-existent packages: {unused_always_build_packages}"
         )
 
     repos = []
@@ -750,6 +763,13 @@ def make_parser() -> argparse.ArgumentParser:
         type=str,
         action="append",
         help="A key=target parameter that specifies the existing pycross_wheel_build target for a package key.",
+    )
+
+    parser.add_argument(
+        "--always-build-package",
+        type=str,
+        action="append",
+        help="A package key that should always be built from source.",
     )
 
     parser.add_argument(
