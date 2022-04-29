@@ -76,6 +76,12 @@ def _pycross_lock_file_impl(ctx):
     if ctx.attr.default_pin_latest:
         args.append("--default-pin-latest")
 
+    for k, t in ctx.attr.build_target_overrides.items():
+        args.extend([
+            "--build-target-override",
+            "%s=%s" % (k, t),
+        ])
+
     ctx.actions.run(
         inputs = (
             ctx.files.lock_model_file +
@@ -133,6 +139,9 @@ pycross_lock_file = rule(
         ),
         "default_pin_latest": attr.bool(
             doc = "Generate aliases for the latest versions of packages not covered by the lock model's pins.",
+        ),
+        "build_target_overrides": attr.string_dict(
+            doc = "A mapping of package keys (name-version) to existing pycross_wheel_build build targets."
         ),
         "out": attr.output(
             doc = "The output file.",
