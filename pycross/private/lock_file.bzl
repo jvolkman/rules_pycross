@@ -73,6 +73,9 @@ def _pycross_lock_file_impl(ctx):
             ctx.attr.environment_prefix,
         ])
 
+    if ctx.attr.default_pin_latest:
+        args.append("--default-pin-latest")
+
     ctx.actions.run(
         inputs = (
             ctx.files.lock_model_file +
@@ -127,6 +130,9 @@ pycross_lock_file = rule(
         "environment_prefix": attr.string(
             doc = "An optional prefix to apply to environment targets. Defaults to _env",
             default = "_env",
+        ),
+        "default_pin_latest": attr.bool(
+            doc = "Generate aliases for the latest versions of packages not covered by the lock model's pins.",
         ),
         "out": attr.output(
             doc = "The output file.",

@@ -595,8 +595,20 @@ def main():
 
     repos.sort(key=lambda ft: ft.name)
 
+    pins = dict(lock_model.pins)
+    if args.default_pin_latest:
+        packages_by_name = defaultdict(list)
+        for package in lock_model.packages.values():
+            packages_by_name[package.name].append(package)
+
+        for package_name, packages in packages_by_name.items():
+            if package_name in pins:
+                continue
+            latest = max(packages, key=lambda p: p.version)
+            pins[package_name] = latest.key
+
     pin_targets = []
-    for pinned_package_key in sorted(lock_model.pins.values()):
+    for pinned_package_key in sorted(pins.values()):
         pin_targets.append(PinTarget(lock_model.packages[pinned_package_key], context))
 
     with open(output, "w") as f:
@@ -707,6 +719,12 @@ def make_parser() -> argparse.ArgumentParser:
         type=str,
         action="append",
         help="A url=sha256 parameter that points to a remote wheel.",
+    )
+
+    parser.add_argument(
+        "--default-pin-latest",
+        action="store_true",
+        help="Generate aliases for the latest versions of packages not covered by the lock model's pins.",
     )
 
     parser.add_argument(

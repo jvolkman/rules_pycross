@@ -28,8 +28,138 @@ def targets():
     )
 
     native.alias(
+        name = "appnope",
+        actual = ":appnope_0.1.2",
+    )
+
+    native.alias(
+        name = "asttokens",
+        actual = ":asttokens_2.0.5",
+    )
+
+    native.alias(
+        name = "attrs",
+        actual = ":attrs_21.4.0",
+    )
+
+    native.alias(
+        name = "aws_sam_translator",
+        actual = ":aws_sam_translator_1.44.0",
+    )
+
+    native.alias(
+        name = "aws_xray_sdk",
+        actual = ":aws_xray_sdk_2.9.0",
+    )
+
+    native.alias(
+        name = "backcall",
+        actual = ":backcall_0.2.0",
+    )
+
+    native.alias(
+        name = "boto3",
+        actual = ":boto3_1.21.28",
+    )
+
+    native.alias(
+        name = "botocore",
+        actual = ":botocore_1.24.28",
+    )
+
+    native.alias(
+        name = "certifi",
+        actual = ":certifi_2021.10.8",
+    )
+
+    native.alias(
+        name = "cffi",
+        actual = ":cffi_1.15.0",
+    )
+
+    native.alias(
+        name = "cfn_lint",
+        actual = ":cfn_lint_0.58.4",
+    )
+
+    native.alias(
+        name = "charset_normalizer",
+        actual = ":charset_normalizer_2.0.12",
+    )
+
+    native.alias(
+        name = "click",
+        actual = ":click_8.1.0",
+    )
+
+    native.alias(
         name = "cognitojwt",
         actual = ":cognitojwt_1.4.1",
+    )
+
+    native.alias(
+        name = "colorama",
+        actual = ":colorama_0.4.4",
+    )
+
+    native.alias(
+        name = "cryptography",
+        actual = ":cryptography_36.0.2",
+    )
+
+    native.alias(
+        name = "decorator",
+        actual = ":decorator_5.1.1",
+    )
+
+    native.alias(
+        name = "docker",
+        actual = ":docker_5.0.3",
+    )
+
+    native.alias(
+        name = "ecdsa",
+        actual = ":ecdsa_0.17.0",
+    )
+
+    native.alias(
+        name = "executing",
+        actual = ":executing_0.8.3",
+    )
+
+    native.alias(
+        name = "flask",
+        actual = ":flask_2.1.0",
+    )
+
+    native.alias(
+        name = "flask_cors",
+        actual = ":flask_cors_3.0.10",
+    )
+
+    native.alias(
+        name = "future",
+        actual = ":future_0.18.2",
+    )
+
+    native.alias(
+        name = "graphql_core",
+        actual = ":graphql_core_3.2.0",
+    )
+
+    native.alias(
+        name = "greenlet",
+        actual = ":greenlet_1.1.2",
+    )
+
+    native.alias(
+        name = "idna",
+        actual = ":idna_3.3",
+    )
+
+    native.alias(
+        name = "importlib_metadata",
+        actual = ":importlib_metadata_4.11.3",
     )
 
     native.alias(
@@ -38,8 +168,138 @@ def targets():
     )
 
     native.alias(
+        name = "itsdangerous",
+        actual = ":itsdangerous_2.1.2",
+    )
+
+    native.alias(
+        name = "jedi",
+        actual = ":jedi_0.18.1",
+    )
+
+    native.alias(
+        name = "jinja2",
+        actual = ":jinja2_3.1.1",
+    )
+
+    native.alias(
+        name = "jmespath",
+        actual = ":jmespath_1.0.0",
+    )
+
+    native.alias(
+        name = "jschema_to_python",
+        actual = ":jschema_to_python_1.2.3",
+    )
+
+    native.alias(
+        name = "jsondiff",
+        actual = ":jsondiff_1.3.1",
+    )
+
+    native.alias(
+        name = "jsonpatch",
+        actual = ":jsonpatch_1.32",
+    )
+
+    native.alias(
+        name = "jsonpickle",
+        actual = ":jsonpickle_2.1.0",
+    )
+
+    native.alias(
+        name = "jsonpointer",
+        actual = ":jsonpointer_2.2",
+    )
+
+    native.alias(
+        name = "jsonschema",
+        actual = ":jsonschema_3.2.0",
+    )
+
+    native.alias(
+        name = "junit_xml",
+        actual = ":junit_xml_1.9",
+    )
+
+    native.alias(
+        name = "markupsafe",
+        actual = ":markupsafe_2.1.1",
+    )
+
+    native.alias(
+        name = "matplotlib_inline",
+        actual = ":matplotlib_inline_0.1.3",
+    )
+
+    native.alias(
         name = "moto",
         actual = ":moto_3.1.1",
+    )
+
+    native.alias(
+        name = "networkx",
+        actual = ":networkx_2.7.1",
+    )
+
+    native.alias(
+        name = "parso",
+        actual = ":parso_0.8.3",
+    )
+
+    native.alias(
+        name = "pbr",
+        actual = ":pbr_5.8.1",
+    )
+
+    native.alias(
+        name = "pexpect",
+        actual = ":pexpect_4.8.0",
+    )
+
+    native.alias(
+        name = "pickleshare",
+        actual = ":pickleshare_0.7.5",
+    )
+
+    native.alias(
+        name = "prompt_toolkit",
+        actual = ":prompt_toolkit_3.0.28",
+    )
+
+    native.alias(
+        name = "ptyprocess",
+        actual = ":ptyprocess_0.7.0",
+    )
+
+    native.alias(
+        name = "pure_eval",
+        actual = ":pure_eval_0.2.2",
+    )
+
+    native.alias(
+        name = "pyasn1",
+        actual = ":pyasn1_0.4.8",
+    )
+
+    native.alias(
+        name = "pycparser",
+        actual = ":pycparser_2.21",
+    )
+
+    native.alias(
+        name = "pygments",
+        actual = ":pygments_2.11.2",
+    )
+
+    native.alias(
+        name = "pyrsistent",
+        actual = ":pyrsistent_0.18.1",
+    )
+
+    native.alias(
+        name = "python_dateutil",
+        actual = ":python_dateutil_2.8.2",
     )
 
     native.alias(
@@ -48,8 +308,108 @@ def targets():
     )
 
     native.alias(
+        name = "pytz",
+        actual = ":pytz_2022.1",
+    )
+
+    native.alias(
+        name = "pywin32",
+        actual = ":pywin32_227",
+    )
+
+    native.alias(
+        name = "pyyaml",
+        actual = ":pyyaml_6.0",
+    )
+
+    native.alias(
+        name = "requests",
+        actual = ":requests_2.27.1",
+    )
+
+    native.alias(
+        name = "responses",
+        actual = ":responses_0.20.0",
+    )
+
+    native.alias(
+        name = "rsa",
+        actual = ":rsa_4.8",
+    )
+
+    native.alias(
+        name = "s3transfer",
+        actual = ":s3transfer_0.5.2",
+    )
+
+    native.alias(
+        name = "sarif_om",
+        actual = ":sarif_om_1.0.4",
+    )
+
+    native.alias(
+        name = "six",
+        actual = ":six_1.16.0",
+    )
+
+    native.alias(
+        name = "sqlalchemy",
+        actual = ":sqlalchemy_1.4.32",
+    )
+
+    native.alias(
         name = "sqlalchemy_utils",
         actual = ":sqlalchemy_utils_0.38.2",
+    )
+
+    native.alias(
+        name = "sshpubkeys",
+        actual = ":sshpubkeys_3.3.1",
+    )
+
+    native.alias(
+        name = "stack_data",
+        actual = ":stack_data_0.2.0",
+    )
+
+    native.alias(
+        name = "traitlets",
+        actual = ":traitlets_5.1.1",
+    )
+
+    native.alias(
+        name = "urllib3",
+        actual = ":urllib3_1.26.9",
+    )
+
+    native.alias(
+        name = "wcwidth",
+        actual = ":wcwidth_0.2.5",
+    )
+
+    native.alias(
+        name = "websocket_client",
+        actual = ":websocket_client_1.3.2",
+    )
+
+    native.alias(
+        name = "werkzeug",
+        actual = ":werkzeug_2.1.0",
+    )
+
+    native.alias(
+        name = "wrapt",
+        actual = ":wrapt_1.14.0",
+    )
+
+    native.alias(
+        name = "xmltodict",
+        actual = ":xmltodict_0.12.0",
+    )
+
+    native.alias(
+        name = "zipp",
+        actual = ":zipp_3.7.0",
     )
 
     pycross_wheel_library(
