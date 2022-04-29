@@ -56,7 +56,9 @@ class Package:
 
     def __post_init__(self):
         normalized_name = package_canonical_name(self.name)
-        assert str(self.name) == str(normalized_name), "The name field should be normalized per PEP 503."
+        assert str(self.name) == str(
+            normalized_name
+        ), "The name field should be normalized per PEP 503."
         object.__setattr__(self, "name", normalized_name)
 
         assert self.version, "The version field must be specified."
@@ -86,7 +88,9 @@ class LockSet:
         return dataclasses.asdict(self)
 
     def to_json(self, indent=None) -> str:
-        return json.dumps(self.to_dict(), sort_keys=True, indent=indent, cls=_VersionHandlingEncoder)
+        return json.dumps(
+            self.to_dict(), sort_keys=True, indent=indent, cls=_VersionHandlingEncoder
+        )
 
     @staticmethod
     def from_dict(data: Dict[str, Any]) -> LockSet:

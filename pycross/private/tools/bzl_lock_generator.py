@@ -63,8 +63,11 @@ class PackageSource:
         return self.remote_sdist is not None
 
     def __post_init__(self):
-        assert not ((self.label is None) ^ (self.remote_wheel is None) ^ (self.remote_sdist is None)), \
-            "Exactly one of label, remote_wheel, remote_sdist or must be specified."
+        assert not (
+            (self.label is None)
+            ^ (self.remote_wheel is None)
+            ^ (self.remote_sdist is None)
+        ), "Exactly one of label, remote_wheel, remote_sdist or must be specified."
 
 
 class Naming:
@@ -212,7 +215,9 @@ class GenerationContext:
             frozenset(["source"]) if source_only else frozenset(["source", "binary"])
         )
         environment_sources = {}
-        for environment in sorted(self.target_environments, key=lambda te: te.name.lower()):
+        for environment in sorted(
+            self.target_environments, key=lambda te: te.name.lower()
+        ):
             evaluator = LinkEvaluator(
                 project_name=package.name,
                 canonical_name=package.name,
@@ -226,7 +231,11 @@ class GenerationContext:
 
             # Start with the files defined in the input lock model
             for file in package.files:
-                remote_file = RemoteFile(filename=file.name, urls=(self.pypi_url(file.name),), sha256=file.sha256)
+                remote_file = RemoteFile(
+                    filename=file.name,
+                    urls=(self.pypi_url(file.name),),
+                    sha256=file.sha256,
+                )
                 if file.is_wheel:
                     package_sources[file.name] = PackageSource(remote_wheel=remote_file)
                 else:
@@ -246,7 +255,9 @@ class GenerationContext:
 
             candidates_to_package_sources = {}
             for filename, package_source in package_sources.items():
-                candidate = InstallationCandidate(package.name, str(package.version), Link(filename))
+                candidate = InstallationCandidate(
+                    package.name, str(package.version), Link(filename)
+                )
                 candidates_to_package_sources[candidate] = package_source
 
             candidates = []
@@ -300,7 +311,9 @@ class PackageTarget:
         self.common_deps = deps_by_env.get(None, set())
         self.env_deps = {k: v for k, v in deps_by_env.items() if k is not None}
 
-        self.package_sources_by_env = context.get_package_sources_by_environment(self.package)
+        self.package_sources_by_env = context.get_package_sources_by_environment(
+            self.package
+        )
         self.distinct_package_sources = set(self.package_sources_by_env.values())
 
     @property
@@ -463,19 +476,21 @@ class FileRepoTarget:
         self.context = context
 
     def render(self) -> str:
-        lines = [
-            "maybe(",
-            ind("http_file,"),
-            ind(f'name = "{self.name}",'),
-            ind(f'urls = ['),
-        ] + [
-            ind(f'"{url}"', 2) for url in sorted(self.file.urls)
-        ] + [
-            ind(f'],'),
-            ind(f'sha256 = "{self.file.sha256}",'),
-            ind(f'downloaded_file_path = "{self.file.filename}",'),
-            ")",
-        ]
+        lines = (
+            [
+                "maybe(",
+                ind("http_file,"),
+                ind(f'name = "{self.name}",'),
+                ind(f"urls = ["),
+            ]
+            + [ind(f'"{url}"', 2) for url in sorted(self.file.urls)]
+            + [
+                ind(f"],"),
+                ind(f'sha256 = "{self.file.sha256}",'),
+                ind(f'downloaded_file_path = "{self.file.filename}",'),
+                ")",
+            ]
+        )
 
         return "\n".join(lines)
 
@@ -522,9 +537,13 @@ def main():
 
     remote_wheels = {}
     for remote_wheel in args.remote_wheel or []:
-        url, sha256 = remote_wheel.rsplit("=", maxsplit=1)  # rsplit because we know the sha256 contains no '='
+        url, sha256 = remote_wheel.rsplit(
+            "=", maxsplit=1
+        )  # rsplit because we know the sha256 contains no '='
         filename = url_wheel_name(url)
-        remote_wheels[filename] = RemoteFile(filename=filename, urls=(url,), sha256=sha256)
+        remote_wheels[filename] = RemoteFile(
+            filename=filename, urls=(url,), sha256=sha256
+        )
 
     naming = Naming(
         repo_prefix=args.repo_prefix,
@@ -680,7 +699,7 @@ def make_parser() -> argparse.ArgumentParser:
         "--local-wheel",
         type=str,
         action="append",
-        help="A file=label parameter that points to a wheel file in the local repository."
+        help="A file=label parameter that points to a wheel file in the local repository.",
     )
 
     parser.add_argument(
