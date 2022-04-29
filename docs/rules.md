@@ -7,9 +7,9 @@ Public API re-exports
 ## pycross_lock_file
 
 <pre>
-pycross_lock_file(<a href="#pycross_lock_file-name">name</a>, <a href="#pycross_lock_file-build_prefix">build_prefix</a>, <a href="#pycross_lock_file-default_pin_latest">default_pin_latest</a>, <a href="#pycross_lock_file-environment_prefix">environment_prefix</a>, <a href="#pycross_lock_file-file_url_overrides">file_url_overrides</a>,
-                  <a href="#pycross_lock_file-local_wheels">local_wheels</a>, <a href="#pycross_lock_file-lock_model_file">lock_model_file</a>, <a href="#pycross_lock_file-out">out</a>, <a href="#pycross_lock_file-package_prefix">package_prefix</a>, <a href="#pycross_lock_file-remote_wheels">remote_wheels</a>, <a href="#pycross_lock_file-repo_prefix">repo_prefix</a>,
-                  <a href="#pycross_lock_file-target_environments">target_environments</a>)
+pycross_lock_file(<a href="#pycross_lock_file-name">name</a>, <a href="#pycross_lock_file-build_prefix">build_prefix</a>, <a href="#pycross_lock_file-build_target_overrides">build_target_overrides</a>, <a href="#pycross_lock_file-default_pin_latest">default_pin_latest</a>,
+                  <a href="#pycross_lock_file-environment_prefix">environment_prefix</a>, <a href="#pycross_lock_file-file_url_overrides">file_url_overrides</a>, <a href="#pycross_lock_file-local_wheels">local_wheels</a>, <a href="#pycross_lock_file-lock_model_file">lock_model_file</a>, <a href="#pycross_lock_file-out">out</a>,
+                  <a href="#pycross_lock_file-package_prefix">package_prefix</a>, <a href="#pycross_lock_file-remote_wheels">remote_wheels</a>, <a href="#pycross_lock_file-repo_prefix">repo_prefix</a>, <a href="#pycross_lock_file-target_environments">target_environments</a>)
 </pre>
 
 
@@ -21,6 +21,7 @@ pycross_lock_file(<a href="#pycross_lock_file-name">name</a>, <a href="#pycross_
 | :------------- | :------------- | :------------- | :------------- | :------------- |
 | <a id="pycross_lock_file-name"></a>name |  A unique name for this target.   | <a href="https://bazel.build/docs/build-ref.html#name">Name</a> | required |  |
 | <a id="pycross_lock_file-build_prefix"></a>build_prefix |  An optional prefix to apply to package build targets. Defaults to _build   | String | optional | "_build" |
+| <a id="pycross_lock_file-build_target_overrides"></a>build_target_overrides |  A mapping of package keys (name-version) to existing pycross_wheel_build build targets.   | <a href="https://bazel.build/docs/skylark/lib/dict.html">Dictionary: String -> String</a> | optional | {} |
 | <a id="pycross_lock_file-default_pin_latest"></a>default_pin_latest |  Generate aliases for the latest versions of packages not covered by the lock model's pins.   | Boolean | optional | False |
 | <a id="pycross_lock_file-environment_prefix"></a>environment_prefix |  An optional prefix to apply to environment targets. Defaults to _env   | String | optional | "_env" |
 | <a id="pycross_lock_file-file_url_overrides"></a>file_url_overrides |  An optional mapping of wheel or sdist filenames to their URLs.   | <a href="https://bazel.build/docs/skylark/lib/dict.html">Dictionary: String -> String</a> | optional | {} |

@@ -301,6 +301,7 @@ class PackageTarget:
         self,
         package: Package,
         context: GenerationContext,
+        build_target_override: Optional[str],
     ):
         self.package = package
         self.context = context
@@ -315,6 +316,7 @@ class PackageTarget:
             self.package
         )
         self.distinct_package_sources = set(self.package_sources_by_env.values())
+        self.build_target_override = build_target_override
 
     @property
     def all_dependency_keys(self) -> Set[str]:
@@ -419,6 +421,8 @@ class PackageTarget:
                 return pkg_source.label
             elif pkg_source.remote_wheel:
                 return self.context.naming.wheel_label(pkg_source.remote_wheel)
+            elif self.build_target_override:
+                return self.build_target_override
             else:
                 return self.context.naming.wheel_build_label(self.package.key)
 
@@ -446,7 +450,7 @@ class PackageTarget:
         if self.has_deps:
             parts.append(self.render_deps())
             parts.append("")
-        if self.has_source:
+        if self.has_source and not self.build_target_override:
             parts.append(self.render_build())
             parts.append("")
         parts.append(self.render_pkg())
@@ -545,6 +549,11 @@ def main():
             filename=filename, urls=(url,), sha256=sha256
         )
 
+    build_target_overrides = {}
+    for build_target_override in args.build_target_override or []:
+        key, target = build_target_override.split("=", maxsplit=1)
+        build_target_overrides[key] = target
+
     naming = Naming(
         repo_prefix=args.repo_prefix,
         package_prefix=args.package_prefix,
@@ -577,6 +586,7 @@ def main():
         entry = PackageTarget(
             package,
             context,
+            build_target_overrides.get(package.key),
         )
         package_targets_by_package_key[next_package_key] = entry
         work.extend(entry.all_dependency_keys)
@@ -584,6 +594,14 @@ def main():
     package_targets = sorted(
         package_targets_by_package_key.values(), key=lambda x: x.package.name
     )
+
+    unused_build_target_overrides = set(build_target_overrides.keys()) - set(
+        package_targets_by_package_key
+    )
+    if unused_build_target_overrides:
+        raise Exception(
+            f"Build target overrides for non-existent packages: {unused_build_target_overrides}"
+        )
 
     repos = []
     for package in package_targets:
@@ -725,6 +743,13 @@ def make_parser() -> argparse.ArgumentParser:
         "--default-pin-latest",
         action="store_true",
         help="Generate aliases for the latest versions of packages not covered by the lock model's pins.",
+    )
+
+    parser.add_argument(
+        "--build-target-override",
+        type=str,
+        action="append",
+        help="A key=target parameter that specifies the existing pycross_wheel_build target for a package key.",
     )
 
     parser.add_argument(

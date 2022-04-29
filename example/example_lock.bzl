@@ -611,15 +611,9 @@ def targets():
         wheel = "@example_lock_wheel_flask_cors_3.0.10_py2.py3_none_any//file",
     )
 
-    pycross_wheel_build(
-        name = "_build_future_0.18.2",
-        sdist = "@example_lock_sdist_future_0.18.2//file",
-        tags = ["manual"],
-    )
-
     pycross_wheel_library(
         name = "future_0.18.2",
-        wheel = ":_build_future_0.18.2",
+        wheel = "@//deps:overridden_future_0.18.2",
     )
 
     pycross_wheel_library(
