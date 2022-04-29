@@ -7,8 +7,9 @@ Public API re-exports
 ## pycross_lock_file
 
 <pre>
-pycross_lock_file(<a href="#pycross_lock_file-name">name</a>, <a href="#pycross_lock_file-build_prefix">build_prefix</a>, <a href="#pycross_lock_file-environment_prefix">environment_prefix</a>, <a href="#pycross_lock_file-file_url_overrides">file_url_overrides</a>, <a href="#pycross_lock_file-lock_model_file">lock_model_file</a>, <a href="#pycross_lock_file-out">out</a>,
-                  <a href="#pycross_lock_file-package_prefix">package_prefix</a>, <a href="#pycross_lock_file-repo_prefix">repo_prefix</a>, <a href="#pycross_lock_file-target_environments">target_environments</a>)
+pycross_lock_file(<a href="#pycross_lock_file-name">name</a>, <a href="#pycross_lock_file-build_prefix">build_prefix</a>, <a href="#pycross_lock_file-environment_prefix">environment_prefix</a>, <a href="#pycross_lock_file-file_url_overrides">file_url_overrides</a>, <a href="#pycross_lock_file-local_wheels">local_wheels</a>,
+                  <a href="#pycross_lock_file-lock_model_file">lock_model_file</a>, <a href="#pycross_lock_file-out">out</a>, <a href="#pycross_lock_file-package_prefix">package_prefix</a>, <a href="#pycross_lock_file-remote_wheels">remote_wheels</a>, <a href="#pycross_lock_file-repo_prefix">repo_prefix</a>,
+                  <a href="#pycross_lock_file-target_environments">target_environments</a>)
 </pre>
 
 
@@ -22,9 +23,11 @@ pycross_lock_file(<a href="#pycross_lock_file-name">name</a>, <a href="#pycross_
 | <a id="pycross_lock_file-build_prefix"></a>build_prefix |  An optional prefix to apply to package build targets. Defaults to _build   | String | optional | "_build" |
 | <a id="pycross_lock_file-environment_prefix"></a>environment_prefix |  An optional prefix to apply to environment targets. Defaults to _env   | String | optional | "_env" |
 | <a id="pycross_lock_file-file_url_overrides"></a>file_url_overrides |  An optional mapping of wheel or sdist filenames to their URLs.   | <a href="https://bazel.build/docs/skylark/lib/dict.html">Dictionary: String -> String</a> | optional | {} |
+| <a id="pycross_lock_file-local_wheels"></a>local_wheels |  A list of wheel files.   | <a href="https://bazel.build/docs/build-ref.html#labels">List of labels</a> | optional | [] |
 | <a id="pycross_lock_file-lock_model_file"></a>lock_model_file |  The lock model JSON file.   | <a href="https://bazel.build/docs/build-ref.html#labels">Label</a> | required |  |
 | <a id="pycross_lock_file-out"></a>out |  The output file.   | <a href="https://bazel.build/docs/build-ref.html#labels">Label</a> | required |  |
 | <a id="pycross_lock_file-package_prefix"></a>package_prefix |  An optional prefix to apply to package targets.   | String | optional | "" |
+| <a id="pycross_lock_file-remote_wheels"></a>remote_wheels |  A mapping of remote wheels to their sha256 hashes.   | <a href="https://bazel.build/docs/skylark/lib/dict.html">Dictionary: String -> String</a> | optional | {} |
 | <a id="pycross_lock_file-repo_prefix"></a>repo_prefix |  The prefix to apply to repository targets. Defaults to the lock file target name.   | String | optional | "" |
 | <a id="pycross_lock_file-target_environments"></a>target_environments |  A list of pycross_target_environment labels.   | <a href="https://bazel.build/docs/build-ref.html#labels">List of labels</a> | optional | [] |
 
@@ -34,7 +37,7 @@ pycross_lock_file(<a href="#pycross_lock_file-name">name</a>, <a href="#pycross_
 ## pycross_poetry_lock_model
 
 <pre>
-pycross_poetry_lock_model(<a href="#pycross_poetry_lock_model-name">name</a>, <a href="#pycross_poetry_lock_model-out">out</a>, <a href="#pycross_poetry_lock_model-poetry_lock_file">poetry_lock_file</a>, <a href="#pycross_poetry_lock_model-poetry_project_file">poetry_project_file</a>)
+pycross_poetry_lock_model(<a href="#pycross_poetry_lock_model-name">name</a>, <a href="#pycross_poetry_lock_model-poetry_lock_file">poetry_lock_file</a>, <a href="#pycross_poetry_lock_model-poetry_project_file">poetry_project_file</a>)
 </pre>
 
 
@@ -45,7 +48,6 @@ pycross_poetry_lock_model(<a href="#pycross_poetry_lock_model-name">name</a>, <a
 | Name  | Description | Type | Mandatory | Default |
 | :------------- | :------------- | :------------- | :------------- | :------------- |
 | <a id="pycross_poetry_lock_model-name"></a>name |  A unique name for this target.   | <a href="https://bazel.build/docs/build-ref.html#name">Name</a> | required |  |
-| <a id="pycross_poetry_lock_model-out"></a>out |  The output file.   | <a href="https://bazel.build/docs/build-ref.html#labels">Label</a> | required |  |
 | <a id="pycross_poetry_lock_model-poetry_lock_file"></a>poetry_lock_file |  The poetry.lock file.   | <a href="https://bazel.build/docs/build-ref.html#labels">Label</a> | required |  |
 | <a id="pycross_poetry_lock_model-poetry_project_file"></a>poetry_project_file |  The pyproject.toml file with Poetry dependencies.   | <a href="https://bazel.build/docs/build-ref.html#labels">Label</a> | required |  |
 
