@@ -459,22 +459,6 @@ class PackageTarget:
         return "\n".join(parts)
 
 
-class PinTarget:
-    def __init__(self, package: Package, context: GenerationContext):
-        self.package = package
-        self.context = context
-
-    def render(self) -> str:
-        lines = [
-            "native.alias(",
-            ind(f'name = "{self.context.naming.pin_target(self.package.name)}",'),
-            ind(f'actual = "{self.context.naming.package_label(self.package.key)}",'),
-            ")",
-        ]
-
-        return "\n".join(lines)
-
-
 class FileRepoTarget:
     def __init__(self, name: str, file: RemoteFile, context: GenerationContext):
         self.name = name
@@ -638,35 +622,55 @@ def main():
             latest = max(packages, key=lambda p: p.version)
             pins[package_name] = latest.key
 
-    pin_targets = []
-    for pinned_package_key in sorted(pins.values()):
-        pin_targets.append(PinTarget(lock_model.packages[pinned_package_key], context))
-
     with open(output, "w") as f:
 
-        def w(text=""):
-            print(text, file=f)
+        def w(*text):
+            if not text:
+                text = [""]
+            for t in text:
+                print(t, file=f)
 
         # Header stuff
-        w('load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_file")')
-        w('load("@bazel_tools//tools/build_defs/repo:utils.bzl", "maybe")')
         w(
-            'load("@jvolkman_rules_pycross//pycross:defs.bzl", "pycross_wheel_build", "pycross_wheel_library")'
+            'load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_file")',
+            'load("@bazel_tools//tools/build_defs/repo:utils.bzl", "maybe")',
+            'load("@jvolkman_rules_pycross//pycross:defs.bzl", "pycross_wheel_build", "pycross_wheel_library")',
         )
+        w()
+
+        # Build PINS map
+        if pins:
+            w("PINS = {")
+            for pinned_package_name in sorted(pins.keys()):
+                pinned_package_key = pins[pinned_package_name]
+                w(
+                    ind(
+                        f'"{pinned_package_name}": "{naming.package_target(pinned_package_key)}",'
+                    )
+                )
+            w("}")
+        else:
+            w("PINS = {}")
         w()
 
         # Build targets
         w("def targets():")
+
+        # Create pin aliases based on the PINS dict above.
+        w(
+            ind("for pin_name, pin_target in PINS.items():", 1),
+            ind("native.alias(", 2),
+            ind("name = pin_name,", 3),
+            ind('actual = ":" + pin_target,', 3),
+            ind(")", 2),
+        )
+        w()
 
         for environment in sorted(environments, key=lambda x: x.name.lower()):
             env_target = EnvTarget(
                 environment.name, environment.python_compatible_with, naming
             )
             w(ind(env_target.render()))
-            w()
-
-        for e in pin_targets:
-            w(ind(e.render()))
             w()
 
         for e in package_targets:
