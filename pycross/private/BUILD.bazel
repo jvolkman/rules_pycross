@@ -15,6 +15,12 @@ bzl_library(
 )
 
 bzl_library(
+    name = "lock_repo",
+    srcs = ["lock_repo.bzl"],
+    visibility = ["//visibility:public"],
+)
+
+bzl_library(
     name = "poetry_lock_model",
     srcs = ["poetry_lock_model.bzl"],
     visibility = ["//visibility:public"],
