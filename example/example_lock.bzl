@@ -29,7 +29,7 @@ def targets():
 
     native.alias(
         name = "appnope",
-        actual = ":appnope_0.1.2",
+        actual = ":appnope_0.1.3",
     )
 
     native.alias(
@@ -44,7 +44,7 @@ def targets():
 
     native.alias(
         name = "aws_sam_translator",
-        actual = ":aws_sam_translator_1.44.0",
+        actual = ":aws_sam_translator_1.45.0",
     )
 
     native.alias(
@@ -59,12 +59,12 @@ def targets():
 
     native.alias(
         name = "boto3",
-        actual = ":boto3_1.21.28",
+        actual = ":boto3_1.22.3",
     )
 
     native.alias(
         name = "botocore",
-        actual = ":botocore_1.24.28",
+        actual = ":botocore_1.25.3",
     )
 
     native.alias(
@@ -79,7 +79,7 @@ def targets():
 
     native.alias(
         name = "cfn_lint",
-        actual = ":cfn_lint_0.58.4",
+        actual = ":cfn_lint_0.59.0",
     )
 
     native.alias(
@@ -89,7 +89,7 @@ def targets():
 
     native.alias(
         name = "click",
-        actual = ":click_8.1.0",
+        actual = ":click_8.1.3",
     )
 
     native.alias(
@@ -104,7 +104,7 @@ def targets():
 
     native.alias(
         name = "cryptography",
-        actual = ":cryptography_36.0.2",
+        actual = ":cryptography_37.0.1",
     )
 
     native.alias(
@@ -129,7 +129,7 @@ def targets():
 
     native.alias(
         name = "flask",
-        actual = ":flask_2.1.0",
+        actual = ":flask_2.1.2",
     )
 
     native.alias(
@@ -144,7 +144,7 @@ def targets():
 
     native.alias(
         name = "graphql_core",
-        actual = ":graphql_core_3.2.0",
+        actual = ":graphql_core_3.2.1",
     )
 
     native.alias(
@@ -179,7 +179,7 @@ def targets():
 
     native.alias(
         name = "jinja2",
-        actual = ":jinja2_3.1.1",
+        actual = ":jinja2_3.1.2",
     )
 
     native.alias(
@@ -194,7 +194,7 @@ def targets():
 
     native.alias(
         name = "jsondiff",
-        actual = ":jsondiff_1.3.1",
+        actual = ":jsondiff_2.0.0",
     )
 
     native.alias(
@@ -209,7 +209,7 @@ def targets():
 
     native.alias(
         name = "jsonpointer",
-        actual = ":jsonpointer_2.2",
+        actual = ":jsonpointer_2.3",
     )
 
     native.alias(
@@ -239,7 +239,7 @@ def targets():
 
     native.alias(
         name = "networkx",
-        actual = ":networkx_2.7.1",
+        actual = ":networkx_2.8",
     )
 
     native.alias(
@@ -264,7 +264,7 @@ def targets():
 
     native.alias(
         name = "prompt_toolkit",
-        actual = ":prompt_toolkit_3.0.28",
+        actual = ":prompt_toolkit_3.0.29",
     )
 
     native.alias(
@@ -289,7 +289,7 @@ def targets():
 
     native.alias(
         name = "pygments",
-        actual = ":pygments_2.11.2",
+        actual = ":pygments_2.12.0",
     )
 
     native.alias(
@@ -354,7 +354,7 @@ def targets():
 
     native.alias(
         name = "sqlalchemy",
-        actual = ":sqlalchemy_1.4.32",
+        actual = ":sqlalchemy_1.4.36",
     )
 
     native.alias(
@@ -394,7 +394,7 @@ def targets():
 
     native.alias(
         name = "werkzeug",
-        actual = ":werkzeug_2.1.0",
+        actual = ":werkzeug_2.1.2",
     )
 
     native.alias(
@@ -409,12 +409,12 @@ def targets():
 
     native.alias(
         name = "zipp",
-        actual = ":zipp_3.7.0",
+        actual = ":zipp_3.8.0",
     )
 
     pycross_wheel_library(
-        name = "appnope_0.1.2",
-        wheel = "@example_lock_wheel_appnope_0.1.2_py2.py3_none_any//file",
+        name = "appnope_0.1.3",
+        wheel = "@example_lock_wheel_appnope_0.1.3_py2.py3_none_any//file",
     )
 
     _asttokens_2_0_5_deps = [
@@ -432,19 +432,19 @@ def targets():
         wheel = "@example_lock_wheel_attrs_21.4.0_py2.py3_none_any//file",
     )
 
-    _aws_sam_translator_1_44_0_deps = [
-        ":boto3_1.21.28",
+    _aws_sam_translator_1_45_0_deps = [
+        ":boto3_1.22.3",
         ":jsonschema_3.2.0",
     ]
 
     pycross_wheel_library(
-        name = "aws_sam_translator_1.44.0",
-        deps = _aws_sam_translator_1_44_0_deps,
-        wheel = "@example_lock_wheel_aws_sam_translator_1.44.0_py3_none_any//file",
+        name = "aws_sam_translator_1.45.0",
+        deps = _aws_sam_translator_1_45_0_deps,
+        wheel = "@example_lock_wheel_aws_sam_translator_1.45.0_py3_none_any//file",
     )
 
     _aws_xray_sdk_2_9_0_deps = [
-        ":botocore_1.24.28",
+        ":botocore_1.25.3",
         ":future_0.18.2",
         ":wrapt_1.14.0",
     ]
@@ -460,28 +460,28 @@ def targets():
         wheel = "@example_lock_wheel_backcall_0.2.0_py2.py3_none_any//file",
     )
 
-    _boto3_1_21_28_deps = [
-        ":botocore_1.24.28",
+    _boto3_1_22_3_deps = [
+        ":botocore_1.25.3",
         ":jmespath_1.0.0",
         ":s3transfer_0.5.2",
     ]
 
     pycross_wheel_library(
-        name = "boto3_1.21.28",
-        deps = _boto3_1_21_28_deps,
-        wheel = "@example_lock_wheel_boto3_1.21.28_py3_none_any//file",
+        name = "boto3_1.22.3",
+        deps = _boto3_1_22_3_deps,
+        wheel = "@example_lock_wheel_boto3_1.22.3_py3_none_any//file",
     )
 
-    _botocore_1_24_28_deps = [
+    _botocore_1_25_3_deps = [
         ":jmespath_1.0.0",
         ":python_dateutil_2.8.2",
         ":urllib3_1.26.9",
     ]
 
     pycross_wheel_library(
-        name = "botocore_1.24.28",
-        deps = _botocore_1_24_28_deps,
-        wheel = "@example_lock_wheel_botocore_1.24.28_py3_none_any//file",
+        name = "botocore_1.25.3",
+        deps = _botocore_1_25_3_deps,
+        wheel = "@example_lock_wheel_botocore_1.25.3_py3_none_any//file",
     )
 
     pycross_wheel_library(
@@ -503,22 +503,21 @@ def targets():
         }),
     )
 
-    _cfn_lint_0_58_4_deps = [
-        ":aws_sam_translator_1.44.0",
+    _cfn_lint_0_59_0_deps = [
+        ":aws_sam_translator_1.45.0",
         ":jschema_to_python_1.2.3",
         ":jsonpatch_1.32",
         ":jsonschema_3.2.0",
         ":junit_xml_1.9",
-        ":networkx_2.7.1",
+        ":networkx_2.8",
         ":pyyaml_6.0",
         ":sarif_om_1.0.4",
-        ":six_1.16.0",
     ]
 
     pycross_wheel_library(
-        name = "cfn_lint_0.58.4",
-        deps = _cfn_lint_0_58_4_deps,
-        wheel = "@example_lock_wheel_cfn_lint_0.58.4_py3_none_any//file",
+        name = "cfn_lint_0.59.0",
+        deps = _cfn_lint_0_59_0_deps,
+        wheel = "@example_lock_wheel_cfn_lint_0.59.0_py3_none_any//file",
     )
 
     pycross_wheel_library(
@@ -527,8 +526,8 @@ def targets():
     )
 
     pycross_wheel_library(
-        name = "click_8.1.0",
-        wheel = "@example_lock_wheel_click_8.1.0_py3_none_any//file",
+        name = "click_8.1.3",
+        wheel = "@example_lock_wheel_click_8.1.3_py3_none_any//file",
     )
 
     _cognitojwt_1_4_1_deps = [
@@ -541,17 +540,17 @@ def targets():
         wheel = "@example_lock_wheel_cognitojwt_1.4.1_py3_none_any//file",
     )
 
-    _cryptography_36_0_2_deps = [
+    _cryptography_37_0_1_deps = [
         ":cffi_1.15.0",
     ]
 
     pycross_wheel_library(
-        name = "cryptography_36.0.2",
-        deps = _cryptography_36_0_2_deps,
+        name = "cryptography_37.0.1",
+        deps = _cryptography_37_0_1_deps,
         wheel = select({
-            ":_env_python_darwin_arm64": "@example_lock_wheel_cryptography_36.0.2_cp36_abi3_macosx_10_10_universal2//file",
-            ":_env_python_darwin_x86_64": "@example_lock_wheel_cryptography_36.0.2_cp36_abi3_macosx_10_10_x86_64//file",
-            ":_env_python_linux_x86_64": "@example_lock_wheel_cryptography_36.0.2_cp36_abi3_manylinux_2_17_x86_64.manylinux2014_x86_64//file",
+            ":_env_python_darwin_arm64": "@example_lock_wheel_cryptography_37.0.1_cp36_abi3_macosx_10_10_universal2//file",
+            ":_env_python_darwin_x86_64": "@example_lock_wheel_cryptography_37.0.1_cp36_abi3_macosx_10_10_x86_64//file",
+            ":_env_python_linux_x86_64": "@example_lock_wheel_cryptography_37.0.1_cp36_abi3_manylinux_2_17_x86_64.manylinux2014_x86_64//file",
         }),
     )
 
@@ -586,22 +585,22 @@ def targets():
         wheel = "@example_lock_wheel_executing_0.8.3_py2.py3_none_any//file",
     )
 
-    _flask_2_1_0_deps = [
-        ":click_8.1.0",
+    _flask_2_1_2_deps = [
+        ":click_8.1.3",
         ":importlib_metadata_4.11.3",
         ":itsdangerous_2.1.2",
-        ":jinja2_3.1.1",
-        ":werkzeug_2.1.0",
+        ":jinja2_3.1.2",
+        ":werkzeug_2.1.2",
     ]
 
     pycross_wheel_library(
-        name = "flask_2.1.0",
-        deps = _flask_2_1_0_deps,
-        wheel = "@//wheels:Flask-2.1.0-py3-none-any.whl",
+        name = "flask_2.1.2",
+        deps = _flask_2_1_2_deps,
+        wheel = "@example_lock_wheel_flask_2.1.2_py3_none_any//file",
     )
 
     _flask_cors_3_0_10_deps = [
-        ":flask_2.1.0",
+        ":flask_2.1.2",
         ":six_1.16.0",
     ]
 
@@ -617,8 +616,8 @@ def targets():
     )
 
     pycross_wheel_library(
-        name = "graphql_core_3.2.0",
-        wheel = "@example_lock_wheel_graphql_core_3.2.0_py3_none_any//file",
+        name = "graphql_core_3.2.1",
+        wheel = "@example_lock_wheel_graphql_core_3.2.1_py3_none_any//file",
     )
 
     pycross_wheel_build(
@@ -642,7 +641,7 @@ def targets():
     )
 
     _importlib_metadata_4_11_3_deps = [
-        ":zipp_3.7.0",
+        ":zipp_3.8.0",
     ]
 
     pycross_wheel_library(
@@ -658,16 +657,16 @@ def targets():
         ":matplotlib_inline_0.1.3",
         ":pexpect_4.8.0",
         ":pickleshare_0.7.5",
-        ":prompt_toolkit_3.0.28",
-        ":pygments_2.11.2",
+        ":prompt_toolkit_3.0.29",
+        ":pygments_2.12.0",
         ":stack_data_0.2.0",
         ":traitlets_5.1.1",
     ] + select({
         ":_env_python_darwin_arm64": [
-            ":appnope_0.1.2",
+            ":appnope_0.1.3",
         ],
         ":_env_python_darwin_x86_64": [
-            ":appnope_0.1.2",
+            ":appnope_0.1.3",
         ],
         "//conditions:default": [],
     })
@@ -693,14 +692,14 @@ def targets():
         wheel = "@example_lock_wheel_jedi_0.18.1_py2.py3_none_any//file",
     )
 
-    _jinja2_3_1_1_deps = [
+    _jinja2_3_1_2_deps = [
         ":markupsafe_2.1.1",
     ]
 
     pycross_wheel_library(
-        name = "jinja2_3.1.1",
-        deps = _jinja2_3_1_1_deps,
-        wheel = "@example_lock_wheel_jinja2_3.1.1_py3_none_any//file",
+        name = "jinja2_3.1.2",
+        deps = _jinja2_3_1_2_deps,
+        wheel = "@example_lock_wheel_jinja2_3.1.2_py3_none_any//file",
     )
 
     pycross_wheel_library(
@@ -720,19 +719,13 @@ def targets():
         wheel = "@example_lock_wheel_jschema_to_python_1.2.3_py3_none_any//file",
     )
 
-    pycross_wheel_build(
-        name = "_build_jsondiff_1.3.1",
-        sdist = "@example_lock_sdist_jsondiff_1.3.1//file",
-        tags = ["manual"],
-    )
-
     pycross_wheel_library(
-        name = "jsondiff_1.3.1",
-        wheel = ":_build_jsondiff_1.3.1",
+        name = "jsondiff_2.0.0",
+        wheel = "@example_lock_wheel_jsondiff_2.0.0_py3_none_any//file",
     )
 
     _jsonpatch_1_32_deps = [
-        ":jsonpointer_2.2",
+        ":jsonpointer_2.3",
     ]
 
     pycross_wheel_library(
@@ -747,8 +740,8 @@ def targets():
     )
 
     pycross_wheel_library(
-        name = "jsonpointer_2.2",
-        wheel = "@example_lock_wheel_jsonpointer_2.2_py2.py3_none_any//file",
+        name = "jsonpointer_2.3",
+        wheel = "@example_lock_wheel_jsonpointer_2.3_py2.py3_none_any//file",
     )
 
     _jsonschema_3_2_0_deps = [
@@ -794,18 +787,18 @@ def targets():
 
     _moto_3_1_1_deps = [
         ":aws_xray_sdk_2.9.0",
-        ":boto3_1.21.28",
-        ":botocore_1.24.28",
-        ":cfn_lint_0.58.4",
-        ":cryptography_36.0.2",
+        ":boto3_1.22.3",
+        ":botocore_1.25.3",
+        ":cfn_lint_0.59.0",
+        ":cryptography_37.0.1",
         ":docker_5.0.3",
         ":ecdsa_0.17.0",
-        ":flask_2.1.0",
+        ":flask_2.1.2",
         ":flask_cors_3.0.10",
-        ":graphql_core_3.2.0",
+        ":graphql_core_3.2.1",
         ":idna_3.3",
-        ":jinja2_3.1.1",
-        ":jsondiff_1.3.1",
+        ":jinja2_3.1.2",
+        ":jsondiff_2.0.0",
         ":markupsafe_2.1.1",
         ":python_dateutil_2.8.2",
         ":python_jose_3.1.0",
@@ -814,7 +807,7 @@ def targets():
         ":requests_2.27.1",
         ":responses_0.20.0",
         ":sshpubkeys_3.3.1",
-        ":werkzeug_2.1.0",
+        ":werkzeug_2.1.2",
         ":xmltodict_0.12.0",
     ]
 
@@ -825,8 +818,8 @@ def targets():
     )
 
     pycross_wheel_library(
-        name = "networkx_2.7.1",
-        wheel = "@example_lock_wheel_networkx_2.7.1_py3_none_any//file",
+        name = "networkx_2.8",
+        wheel = "@example_lock_wheel_networkx_2.8_py3_none_any//file",
     )
 
     pycross_wheel_library(
@@ -860,14 +853,14 @@ def targets():
         wheel = "@example_lock_wheel_pickleshare_0.7.5_py2.py3_none_any//file",
     )
 
-    _prompt_toolkit_3_0_28_deps = [
+    _prompt_toolkit_3_0_29_deps = [
         ":wcwidth_0.2.5",
     ]
 
     pycross_wheel_library(
-        name = "prompt_toolkit_3.0.28",
-        deps = _prompt_toolkit_3_0_28_deps,
-        wheel = "@example_lock_wheel_prompt_toolkit_3.0.28_py3_none_any//file",
+        name = "prompt_toolkit_3.0.29",
+        deps = _prompt_toolkit_3_0_29_deps,
+        wheel = "@example_lock_wheel_prompt_toolkit_3.0.29_py3_none_any//file",
     )
 
     pycross_wheel_library(
@@ -891,8 +884,8 @@ def targets():
     )
 
     pycross_wheel_library(
-        name = "pygments_2.11.2",
-        wheel = "@example_lock_wheel_pygments_2.11.2_py3_none_any//file",
+        name = "pygments_2.12.0",
+        wheel = "@example_lock_wheel_pygments_2.12.0_py3_none_any//file",
     )
 
     pycross_wheel_library(
@@ -915,7 +908,7 @@ def targets():
     )
 
     _python_jose_3_1_0_deps = [
-        ":cryptography_36.0.2",
+        ":cryptography_37.0.1",
         ":ecdsa_0.17.0",
         ":pyasn1_0.4.8",
         ":rsa_4.8",
@@ -977,7 +970,7 @@ def targets():
     )
 
     _s3transfer_0_5_2_deps = [
-        ":botocore_1.24.28",
+        ":botocore_1.25.3",
     ]
 
     pycross_wheel_library(
@@ -1002,30 +995,30 @@ def targets():
         wheel = "@example_lock_wheel_six_1.16.0_py2.py3_none_any//file",
     )
 
-    _sqlalchemy_1_4_32_deps = [
+    _sqlalchemy_1_4_36_deps = [
         ":greenlet_1.1.2",
     ]
 
     pycross_wheel_build(
-        name = "_build_sqlalchemy_1.4.32",
-        sdist = "@example_lock_sdist_sqlalchemy_1.4.32//file",
-        deps = _sqlalchemy_1_4_32_deps,
+        name = "_build_sqlalchemy_1.4.36",
+        sdist = "@example_lock_sdist_sqlalchemy_1.4.36//file",
+        deps = _sqlalchemy_1_4_36_deps,
         tags = ["manual"],
     )
 
     pycross_wheel_library(
-        name = "sqlalchemy_1.4.32",
-        deps = _sqlalchemy_1_4_32_deps,
+        name = "sqlalchemy_1.4.36",
+        deps = _sqlalchemy_1_4_36_deps,
         wheel = select({
-            ":_env_python_darwin_arm64": ":_build_sqlalchemy_1.4.32",
-            ":_env_python_darwin_x86_64": "@example_lock_wheel_sqlalchemy_1.4.32_cp39_cp39_macosx_10_15_x86_64//file",
-            ":_env_python_linux_x86_64": "@example_lock_wheel_sqlalchemy_1.4.32_cp39_cp39_manylinux_2_5_x86_64.manylinux1_x86_64.manylinux_2_17_x86_64.manylinux2014_x86_64//file",
+            ":_env_python_darwin_arm64": ":_build_sqlalchemy_1.4.36",
+            ":_env_python_darwin_x86_64": "@example_lock_wheel_sqlalchemy_1.4.36_cp39_cp39_macosx_10_15_x86_64//file",
+            ":_env_python_linux_x86_64": "@example_lock_wheel_sqlalchemy_1.4.36_cp39_cp39_manylinux_2_5_x86_64.manylinux1_x86_64.manylinux_2_17_x86_64.manylinux2014_x86_64//file",
         }),
     )
 
     _sqlalchemy_utils_0_38_2_deps = [
         ":six_1.16.0",
-        ":sqlalchemy_1.4.32",
+        ":sqlalchemy_1.4.36",
     ]
 
     pycross_wheel_library(
@@ -1035,7 +1028,7 @@ def targets():
     )
 
     _sshpubkeys_3_3_1_deps = [
-        ":cryptography_36.0.2",
+        ":cryptography_37.0.1",
         ":ecdsa_0.17.0",
     ]
 
@@ -1078,8 +1071,8 @@ def targets():
     )
 
     pycross_wheel_library(
-        name = "werkzeug_2.1.0",
-        wheel = "@example_lock_wheel_werkzeug_2.1.0_py3_none_any//file",
+        name = "werkzeug_2.1.2",
+        wheel = "@example_lock_wheel_werkzeug_2.1.2_py3_none_any//file",
     )
 
     pycross_wheel_library(
@@ -1097,8 +1090,8 @@ def targets():
     )
 
     pycross_wheel_library(
-        name = "zipp_3.7.0",
-        wheel = "@example_lock_wheel_zipp_3.7.0_py3_none_any//file",
+        name = "zipp_3.8.0",
+        wheel = "@example_lock_wheel_zipp_3.8.0_py3_none_any//file",
     )
 
 def repositories():
@@ -1124,16 +1117,6 @@ def repositories():
 
     maybe(
         http_file,
-        name = "example_lock_sdist_jsondiff_1.3.1",
-        urls = [
-            "https://files.pythonhosted.org/packages/source/j/jsondiff/jsondiff-1.3.1.tar.gz"
-        ],
-        sha256 = "04cfaebd4a5e5738948ab615710dc3ee98efbdf851255fd3977c4c2ee59e7312",
-        downloaded_file_path = "jsondiff-1.3.1.tar.gz",
-    )
-
-    maybe(
-        http_file,
         name = "example_lock_sdist_pbr_5.8.1",
         urls = [
             "https://files.pythonhosted.org/packages/source/p/pbr/pbr-5.8.1.tar.gz"
@@ -1144,22 +1127,22 @@ def repositories():
 
     maybe(
         http_file,
-        name = "example_lock_sdist_sqlalchemy_1.4.32",
+        name = "example_lock_sdist_sqlalchemy_1.4.36",
         urls = [
-            "https://files.pythonhosted.org/packages/source/S/SQLAlchemy/SQLAlchemy-1.4.32.tar.gz"
+            "https://files.pythonhosted.org/packages/source/S/SQLAlchemy/SQLAlchemy-1.4.36.tar.gz"
         ],
-        sha256 = "6fdd2dc5931daab778c2b65b03df6ae68376e028a3098eb624d0909d999885bc",
-        downloaded_file_path = "SQLAlchemy-1.4.32.tar.gz",
+        sha256 = "64678ac321d64a45901ef2e24725ec5e783f1f4a588305e196431447e7ace243",
+        downloaded_file_path = "SQLAlchemy-1.4.36.tar.gz",
     )
 
     maybe(
         http_file,
-        name = "example_lock_wheel_appnope_0.1.2_py2.py3_none_any",
+        name = "example_lock_wheel_appnope_0.1.3_py2.py3_none_any",
         urls = [
-            "https://files.pythonhosted.org/packages/py2.py3/a/appnope/appnope-0.1.2-py2.py3-none-any.whl"
+            "https://files.pythonhosted.org/packages/py2.py3/a/appnope/appnope-0.1.3-py2.py3-none-any.whl"
         ],
-        sha256 = "93aa393e9d6c54c5cd570ccadd8edad61ea0c4b9ea7a01409020c9aa019eb442",
-        downloaded_file_path = "appnope-0.1.2-py2.py3-none-any.whl",
+        sha256 = "265a455292d0bd8a72453494fa24df5a11eb18373a60c7c0430889f22548605e",
+        downloaded_file_path = "appnope-0.1.3-py2.py3-none-any.whl",
     )
 
     maybe(
@@ -1184,12 +1167,12 @@ def repositories():
 
     maybe(
         http_file,
-        name = "example_lock_wheel_aws_sam_translator_1.44.0_py3_none_any",
+        name = "example_lock_wheel_aws_sam_translator_1.45.0_py3_none_any",
         urls = [
-            "https://files.pythonhosted.org/packages/py3/a/aws_sam_translator/aws_sam_translator-1.44.0-py3-none-any.whl"
+            "https://files.pythonhosted.org/packages/py3/a/aws_sam_translator/aws_sam_translator-1.45.0-py3-none-any.whl"
         ],
-        sha256 = "77be965487f20303528c9febd17bbe0bad6a980be2762486d090a7c5e07b4187",
-        downloaded_file_path = "aws_sam_translator-1.44.0-py3-none-any.whl",
+        sha256 = "40a6dd5a0aba32c7b38b0f5c54470396acdcd75e4b64251b015abdf922a18b5f",
+        downloaded_file_path = "aws_sam_translator-1.45.0-py3-none-any.whl",
     )
 
     maybe(
@@ -1214,22 +1197,22 @@ def repositories():
 
     maybe(
         http_file,
-        name = "example_lock_wheel_boto3_1.21.28_py3_none_any",
+        name = "example_lock_wheel_boto3_1.22.3_py3_none_any",
         urls = [
-            "https://files.pythonhosted.org/packages/py3/b/boto3/boto3-1.21.28-py3-none-any.whl"
+            "https://files.pythonhosted.org/packages/py3/b/boto3/boto3-1.22.3-py3-none-any.whl"
         ],
-        sha256 = "ca37b9b4ade72f6d4fa2b7bee584dd5b1c7585f07f22ff1edbc9ecc0c4173b1f",
-        downloaded_file_path = "boto3-1.21.28-py3-none-any.whl",
+        sha256 = "b291e9b8057158c4ee75a7df8ab22079b4ab915f032af59bcae22677f2a6ceda",
+        downloaded_file_path = "boto3-1.22.3-py3-none-any.whl",
     )
 
     maybe(
         http_file,
-        name = "example_lock_wheel_botocore_1.24.28_py3_none_any",
+        name = "example_lock_wheel_botocore_1.25.3_py3_none_any",
         urls = [
-            "https://files.pythonhosted.org/packages/py3/b/botocore/botocore-1.24.28-py3-none-any.whl"
+            "https://files.pythonhosted.org/packages/py3/b/botocore/botocore-1.25.3-py3-none-any.whl"
         ],
-        sha256 = "03c41d26d1e765380b8175d4b136d3144aa051f17a86eebfdf9a885a5a9a6a72",
-        downloaded_file_path = "botocore-1.24.28-py3-none-any.whl",
+        sha256 = "b63343736f1e778f9a658736afd9773ea38b3605d96556fb5585fc0c04a0d1e1",
+        downloaded_file_path = "botocore-1.25.3-py3-none-any.whl",
     )
 
     maybe(
@@ -1274,12 +1257,12 @@ def repositories():
 
     maybe(
         http_file,
-        name = "example_lock_wheel_cfn_lint_0.58.4_py3_none_any",
+        name = "example_lock_wheel_cfn_lint_0.59.0_py3_none_any",
         urls = [
-            "https://files.pythonhosted.org/packages/py3/c/cfn_lint/cfn_lint-0.58.4-py3-none-any.whl"
+            "https://files.pythonhosted.org/packages/py3/c/cfn_lint/cfn_lint-0.59.0-py3-none-any.whl"
         ],
-        sha256 = "c21a4ea369e54501dc1bd6c294bb083bcd1731f4374f2fb1e87228ed720781f3",
-        downloaded_file_path = "cfn_lint-0.58.4-py3-none-any.whl",
+        sha256 = "e5e98712cb162ee70eedd0fd8eae8d45d6420d43502e6120ad768f00ff1eec05",
+        downloaded_file_path = "cfn_lint-0.59.0-py3-none-any.whl",
     )
 
     maybe(
@@ -1294,12 +1277,12 @@ def repositories():
 
     maybe(
         http_file,
-        name = "example_lock_wheel_click_8.1.0_py3_none_any",
+        name = "example_lock_wheel_click_8.1.3_py3_none_any",
         urls = [
-            "https://files.pythonhosted.org/packages/py3/c/click/click-8.1.0-py3-none-any.whl"
+            "https://files.pythonhosted.org/packages/py3/c/click/click-8.1.3-py3-none-any.whl"
         ],
-        sha256 = "19a4baa64da924c5e0cd889aba8e947f280309f1a2ce0947a3e3a7bcb7cc72d6",
-        downloaded_file_path = "click-8.1.0-py3-none-any.whl",
+        sha256 = "bb4d8133cb15a609f44e8213d9b391b0809795062913b383c62be0ee95b1db48",
+        downloaded_file_path = "click-8.1.3-py3-none-any.whl",
     )
 
     maybe(
@@ -1314,32 +1297,32 @@ def repositories():
 
     maybe(
         http_file,
-        name = "example_lock_wheel_cryptography_36.0.2_cp36_abi3_macosx_10_10_universal2",
+        name = "example_lock_wheel_cryptography_37.0.1_cp36_abi3_macosx_10_10_universal2",
         urls = [
-            "https://files.pythonhosted.org/packages/cp36/c/cryptography/cryptography-36.0.2-cp36-abi3-macosx_10_10_universal2.whl"
+            "https://files.pythonhosted.org/packages/cp36/c/cryptography/cryptography-37.0.1-cp36-abi3-macosx_10_10_universal2.whl"
         ],
-        sha256 = "4e2dddd38a5ba733be6a025a1475a9f45e4e41139d1321f412c6b360b19070b6",
-        downloaded_file_path = "cryptography-36.0.2-cp36-abi3-macosx_10_10_universal2.whl",
+        sha256 = "74b55f67f4cf026cb84da7a1b04fc2a1d260193d4ad0ea5e9897c8b74c1e76ac",
+        downloaded_file_path = "cryptography-37.0.1-cp36-abi3-macosx_10_10_universal2.whl",
     )
 
     maybe(
         http_file,
-        name = "example_lock_wheel_cryptography_36.0.2_cp36_abi3_macosx_10_10_x86_64",
+        name = "example_lock_wheel_cryptography_37.0.1_cp36_abi3_macosx_10_10_x86_64",
         urls = [
-            "https://files.pythonhosted.org/packages/cp36/c/cryptography/cryptography-36.0.2-cp36-abi3-macosx_10_10_x86_64.whl"
+            "https://files.pythonhosted.org/packages/cp36/c/cryptography/cryptography-37.0.1-cp36-abi3-macosx_10_10_x86_64.whl"
         ],
-        sha256 = "4881d09298cd0b669bb15b9cfe6166f16fc1277b4ed0d04a22f3d6430cb30f1d",
-        downloaded_file_path = "cryptography-36.0.2-cp36-abi3-macosx_10_10_x86_64.whl",
+        sha256 = "0db5cf21bd7d092baacb576482b0245102cea2d3cf09f09271ce9f69624ecb6f",
+        downloaded_file_path = "cryptography-37.0.1-cp36-abi3-macosx_10_10_x86_64.whl",
     )
 
     maybe(
         http_file,
-        name = "example_lock_wheel_cryptography_36.0.2_cp36_abi3_manylinux_2_17_x86_64.manylinux2014_x86_64",
+        name = "example_lock_wheel_cryptography_37.0.1_cp36_abi3_manylinux_2_17_x86_64.manylinux2014_x86_64",
         urls = [
-            "https://files.pythonhosted.org/packages/cp36/c/cryptography/cryptography-36.0.2-cp36-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl"
+            "https://files.pythonhosted.org/packages/cp36/c/cryptography/cryptography-37.0.1-cp36-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl"
         ],
-        sha256 = "7b2d54e787a884ffc6e187262823b6feb06c338084bbe80d45166a1cb1c6c5bf",
-        downloaded_file_path = "cryptography-36.0.2-cp36-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl",
+        sha256 = "6d4daf890e674d191757d8d7d60dc3a29c58c72c7a76a05f1c0a326013f47e8b",
+        downloaded_file_path = "cryptography-37.0.1-cp36-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl",
     )
 
     maybe(
@@ -1384,6 +1367,16 @@ def repositories():
 
     maybe(
         http_file,
+        name = "example_lock_wheel_flask_2.1.2_py3_none_any",
+        urls = [
+            "https://files.pythonhosted.org/packages/py3/F/Flask/Flask-2.1.2-py3-none-any.whl"
+        ],
+        sha256 = "fad5b446feb0d6db6aec0c3184d16a8c1f6c3e464b511649c8918a9be100b4fe",
+        downloaded_file_path = "Flask-2.1.2-py3-none-any.whl",
+    )
+
+    maybe(
+        http_file,
         name = "example_lock_wheel_flask_cors_3.0.10_py2.py3_none_any",
         urls = [
             "https://files.pythonhosted.org/packages/py2.py3/F/Flask_Cors/Flask_Cors-3.0.10-py2.py3-none-any.whl"
@@ -1394,12 +1387,12 @@ def repositories():
 
     maybe(
         http_file,
-        name = "example_lock_wheel_graphql_core_3.2.0_py3_none_any",
+        name = "example_lock_wheel_graphql_core_3.2.1_py3_none_any",
         urls = [
-            "https://files.pythonhosted.org/packages/py3/g/graphql_core/graphql_core-3.2.0-py3-none-any.whl"
+            "https://files.pythonhosted.org/packages/py3/g/graphql_core/graphql_core-3.2.1-py3-none-any.whl"
         ],
-        sha256 = "0dda7e63676f119bb3d814621190fedad72fda07a8e9ab780bedd9f1957c6dc6",
-        downloaded_file_path = "graphql_core-3.2.0-py3-none-any.whl",
+        sha256 = "f83c658e4968998eed1923a2e3e3eddd347e005ac0315fbb7ca4d70ea9156323",
+        downloaded_file_path = "graphql_core-3.2.1-py3-none-any.whl",
     )
 
     maybe(
@@ -1474,12 +1467,12 @@ def repositories():
 
     maybe(
         http_file,
-        name = "example_lock_wheel_jinja2_3.1.1_py3_none_any",
+        name = "example_lock_wheel_jinja2_3.1.2_py3_none_any",
         urls = [
-            "https://files.pythonhosted.org/packages/py3/J/Jinja2/Jinja2-3.1.1-py3-none-any.whl"
+            "https://files.pythonhosted.org/packages/py3/J/Jinja2/Jinja2-3.1.2-py3-none-any.whl"
         ],
-        sha256 = "539835f51a74a69f41b848a9645dbdc35b4f20a3b601e2d9a7e22947b15ff119",
-        downloaded_file_path = "Jinja2-3.1.1-py3-none-any.whl",
+        sha256 = "6088930bfe239f0e6710546ab9c19c9ef35e29792895fed6e6e31a023a182a61",
+        downloaded_file_path = "Jinja2-3.1.2-py3-none-any.whl",
     )
 
     maybe(
@@ -1504,6 +1497,16 @@ def repositories():
 
     maybe(
         http_file,
+        name = "example_lock_wheel_jsondiff_2.0.0_py3_none_any",
+        urls = [
+            "https://files.pythonhosted.org/packages/py3/j/jsondiff/jsondiff-2.0.0-py3-none-any.whl"
+        ],
+        sha256 = "689841d66273fc88fc79f7d33f4c074774f4f214b6466e3aff0e5adaf889d1e0",
+        downloaded_file_path = "jsondiff-2.0.0-py3-none-any.whl",
+    )
+
+    maybe(
+        http_file,
         name = "example_lock_wheel_jsonpatch_1.32_py2.py3_none_any",
         urls = [
             "https://files.pythonhosted.org/packages/py2.py3/j/jsonpatch/jsonpatch-1.32-py2.py3-none-any.whl"
@@ -1524,12 +1527,12 @@ def repositories():
 
     maybe(
         http_file,
-        name = "example_lock_wheel_jsonpointer_2.2_py2.py3_none_any",
+        name = "example_lock_wheel_jsonpointer_2.3_py2.py3_none_any",
         urls = [
-            "https://files.pythonhosted.org/packages/py2.py3/j/jsonpointer/jsonpointer-2.2-py2.py3-none-any.whl"
+            "https://files.pythonhosted.org/packages/py2.py3/j/jsonpointer/jsonpointer-2.3-py2.py3-none-any.whl"
         ],
-        sha256 = "26d9a47a72d4dc3e3ae72c4c6cd432afd73c680164cd2540772eab53cb3823b6",
-        downloaded_file_path = "jsonpointer-2.2-py2.py3-none-any.whl",
+        sha256 = "51801e558539b4e9cd268638c078c6c5746c9ac96bc38152d443400e4f3793e9",
+        downloaded_file_path = "jsonpointer-2.3-py2.py3-none-any.whl",
     )
 
     maybe(
@@ -1604,12 +1607,12 @@ def repositories():
 
     maybe(
         http_file,
-        name = "example_lock_wheel_networkx_2.7.1_py3_none_any",
+        name = "example_lock_wheel_networkx_2.8_py3_none_any",
         urls = [
-            "https://files.pythonhosted.org/packages/py3/n/networkx/networkx-2.7.1-py3-none-any.whl"
+            "https://files.pythonhosted.org/packages/py3/n/networkx/networkx-2.8-py3-none-any.whl"
         ],
-        sha256 = "011e85d277c89681e8fa661cf5ff0743443445049b0b68789ad55ef09340c6e0",
-        downloaded_file_path = "networkx-2.7.1-py3-none-any.whl",
+        sha256 = "1a1e8fe052cc1b4e0339b998f6795099562a264a13a5af7a32cad45ab9d4e126",
+        downloaded_file_path = "networkx-2.8-py3-none-any.whl",
     )
 
     maybe(
@@ -1644,12 +1647,12 @@ def repositories():
 
     maybe(
         http_file,
-        name = "example_lock_wheel_prompt_toolkit_3.0.28_py3_none_any",
+        name = "example_lock_wheel_prompt_toolkit_3.0.29_py3_none_any",
         urls = [
-            "https://files.pythonhosted.org/packages/py3/p/prompt_toolkit/prompt_toolkit-3.0.28-py3-none-any.whl"
+            "https://files.pythonhosted.org/packages/py3/p/prompt_toolkit/prompt_toolkit-3.0.29-py3-none-any.whl"
         ],
-        sha256 = "30129d870dcb0b3b6a53efdc9d0a83ea96162ffd28ffe077e94215b233dc670c",
-        downloaded_file_path = "prompt_toolkit-3.0.28-py3-none-any.whl",
+        sha256 = "62291dad495e665fca0bda814e342c69952086afb0f4094d0893d357e5c78752",
+        downloaded_file_path = "prompt_toolkit-3.0.29-py3-none-any.whl",
     )
 
     maybe(
@@ -1694,12 +1697,12 @@ def repositories():
 
     maybe(
         http_file,
-        name = "example_lock_wheel_pygments_2.11.2_py3_none_any",
+        name = "example_lock_wheel_pygments_2.12.0_py3_none_any",
         urls = [
-            "https://files.pythonhosted.org/packages/py3/P/Pygments/Pygments-2.11.2-py3-none-any.whl"
+            "https://files.pythonhosted.org/packages/py3/P/Pygments/Pygments-2.12.0-py3-none-any.whl"
         ],
-        sha256 = "44238f1b60a76d78fc8ca0528ee429702aae011c265fe6a8dd8b63049ae41c65",
-        downloaded_file_path = "Pygments-2.11.2-py3-none-any.whl",
+        sha256 = "dc9c10fb40944260f6ed4c688ece0cd2048414940f1cea51b8b226318411c519",
+        downloaded_file_path = "Pygments-2.12.0-py3-none-any.whl",
     )
 
     maybe(
@@ -1844,22 +1847,22 @@ def repositories():
 
     maybe(
         http_file,
-        name = "example_lock_wheel_sqlalchemy_1.4.32_cp39_cp39_macosx_10_15_x86_64",
+        name = "example_lock_wheel_sqlalchemy_1.4.36_cp39_cp39_macosx_10_15_x86_64",
         urls = [
-            "https://files.pythonhosted.org/packages/cp39/S/SQLAlchemy/SQLAlchemy-1.4.32-cp39-cp39-macosx_10_15_x86_64.whl"
+            "https://files.pythonhosted.org/packages/cp39/S/SQLAlchemy/SQLAlchemy-1.4.36-cp39-cp39-macosx_10_15_x86_64.whl"
         ],
-        sha256 = "5dc9801ae9884e822ba942ca493642fb50f049c06b6dbe3178691fce48ceb089",
-        downloaded_file_path = "SQLAlchemy-1.4.32-cp39-cp39-macosx_10_15_x86_64.whl",
+        sha256 = "f522214f6749bc073262529c056f7dfd660f3b5ec4180c5354d985eb7219801e",
+        downloaded_file_path = "SQLAlchemy-1.4.36-cp39-cp39-macosx_10_15_x86_64.whl",
     )
 
     maybe(
         http_file,
-        name = "example_lock_wheel_sqlalchemy_1.4.32_cp39_cp39_manylinux_2_5_x86_64.manylinux1_x86_64.manylinux_2_17_x86_64.manylinux2014_x86_64",
+        name = "example_lock_wheel_sqlalchemy_1.4.36_cp39_cp39_manylinux_2_5_x86_64.manylinux1_x86_64.manylinux_2_17_x86_64.manylinux2014_x86_64",
         urls = [
-            "https://files.pythonhosted.org/packages/cp39/S/SQLAlchemy/SQLAlchemy-1.4.32-cp39-cp39-manylinux_2_5_x86_64.manylinux1_x86_64.manylinux_2_17_x86_64.manylinux2014_x86_64.whl"
+            "https://files.pythonhosted.org/packages/cp39/S/SQLAlchemy/SQLAlchemy-1.4.36-cp39-cp39-manylinux_2_5_x86_64.manylinux1_x86_64.manylinux_2_17_x86_64.manylinux2014_x86_64.whl"
         ],
-        sha256 = "290cbdf19129ae520d4bdce392648c6fcdbee763bc8f750b53a5ab51880cb9c9",
-        downloaded_file_path = "SQLAlchemy-1.4.32-cp39-cp39-manylinux_2_5_x86_64.manylinux1_x86_64.manylinux_2_17_x86_64.manylinux2014_x86_64.whl",
+        sha256 = "2ec89bf98cc6a0f5d1e28e3ad28e9be6f3b4bdbd521a4053c7ae8d5e1289a8a1",
+        downloaded_file_path = "SQLAlchemy-1.4.36-cp39-cp39-manylinux_2_5_x86_64.manylinux1_x86_64.manylinux_2_17_x86_64.manylinux2014_x86_64.whl",
     )
 
     maybe(
@@ -1934,12 +1937,12 @@ def repositories():
 
     maybe(
         http_file,
-        name = "example_lock_wheel_werkzeug_2.1.0_py3_none_any",
+        name = "example_lock_wheel_werkzeug_2.1.2_py3_none_any",
         urls = [
-            "https://files.pythonhosted.org/packages/py3/W/Werkzeug/Werkzeug-2.1.0-py3-none-any.whl"
+            "https://files.pythonhosted.org/packages/py3/W/Werkzeug/Werkzeug-2.1.2-py3-none-any.whl"
         ],
-        sha256 = "094ecfc981948f228b30ee09dbfe250e474823b69b9b1292658301b5894bbf08",
-        downloaded_file_path = "Werkzeug-2.1.0-py3-none-any.whl",
+        sha256 = "72a4b735692dd3135217911cbeaa1be5fa3f62bffb8745c5215420a03dc55255",
+        downloaded_file_path = "Werkzeug-2.1.2-py3-none-any.whl",
     )
 
     maybe(
@@ -1984,11 +1987,11 @@ def repositories():
 
     maybe(
         http_file,
-        name = "example_lock_wheel_zipp_3.7.0_py3_none_any",
+        name = "example_lock_wheel_zipp_3.8.0_py3_none_any",
         urls = [
-            "https://files.pythonhosted.org/packages/py3/z/zipp/zipp-3.7.0-py3-none-any.whl"
+            "https://files.pythonhosted.org/packages/py3/z/zipp/zipp-3.8.0-py3-none-any.whl"
         ],
-        sha256 = "b47250dd24f92b7dd6a0a8fc5244da14608f3ca90a5efcd37a3b1642fac9a375",
-        downloaded_file_path = "zipp-3.7.0-py3-none-any.whl",
+        sha256 = "c4f6e5bbf48e74f7a38e7cc5b0480ff42b0ae5178957d564d18932525d5cf099",
+        downloaded_file_path = "zipp-3.8.0-py3-none-any.whl",
     )
 
