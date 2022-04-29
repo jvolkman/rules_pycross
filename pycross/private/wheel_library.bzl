@@ -39,7 +39,11 @@ def _pycross_wheel_library_impl(ctx):
                 break
 
     # TODO: Is there a more correct way to get this runfiles-relative import path?
-    imp = paths.join(ctx.workspace_name, ctx.label.package, ctx.label.name)
+    imp = paths.join(
+        ctx.label.workspace_name or ctx.workspace_name,  # Default to the local workspace.
+        ctx.label.package,
+        ctx.label.name,
+    )
 
     imports = depset(
         direct = [imp],
