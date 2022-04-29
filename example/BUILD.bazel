@@ -83,6 +83,7 @@ pycross_lock_file(
     local_wheels = [
         "//wheels",
     ],
+    default_pin_latest = True,
     out = "example_lock.bzl",
 )
 
