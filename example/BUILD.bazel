@@ -87,6 +87,9 @@ pycross_lock_file(
     build_target_overrides = {
         "future-0.18.2": "@//deps:overridden_future_0.18.2",
     },
+    always_build_packages = [
+        "pbr-5.8.1",
+    ],
     out = "example_lock.bzl",
 )
 

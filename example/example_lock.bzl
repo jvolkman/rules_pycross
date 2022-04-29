@@ -834,9 +834,15 @@ def targets():
         wheel = "@example_lock_wheel_parso_0.8.3_py2.py3_none_any//file",
     )
 
+    pycross_wheel_build(
+        name = "_build_pbr_5.8.1",
+        sdist = "@example_lock_sdist_pbr_5.8.1//file",
+        tags = ["manual"],
+    )
+
     pycross_wheel_library(
         name = "pbr_5.8.1",
-        wheel = "@example_lock_wheel_pbr_5.8.1_py2.py3_none_any//file",
+        wheel = ":_build_pbr_5.8.1",
     )
 
     _pexpect_4_8_0_deps = [
@@ -1124,6 +1130,16 @@ def repositories():
         ],
         sha256 = "04cfaebd4a5e5738948ab615710dc3ee98efbdf851255fd3977c4c2ee59e7312",
         downloaded_file_path = "jsondiff-1.3.1.tar.gz",
+    )
+
+    maybe(
+        http_file,
+        name = "example_lock_sdist_pbr_5.8.1",
+        urls = [
+            "https://files.pythonhosted.org/packages/source/p/pbr/pbr-5.8.1.tar.gz"
+        ],
+        sha256 = "66bc5a34912f408bb3925bf21231cb6f59206267b7f63f3503ef865c1a292e25",
+        downloaded_file_path = "pbr-5.8.1.tar.gz",
     )
 
     maybe(
@@ -1604,16 +1620,6 @@ def repositories():
         ],
         sha256 = "c001d4636cd3aecdaf33cbb40aebb59b094be2a74c556778ef5576c175e19e75",
         downloaded_file_path = "parso-0.8.3-py2.py3-none-any.whl",
-    )
-
-    maybe(
-        http_file,
-        name = "example_lock_wheel_pbr_5.8.1_py2.py3_none_any",
-        urls = [
-            "https://files.pythonhosted.org/packages/py2.py3/p/pbr/pbr-5.8.1-py2.py3-none-any.whl"
-        ],
-        sha256 = "27108648368782d07bbf1cb468ad2e2eeef29086affd14087a6d04b7de8af4ec",
-        downloaded_file_path = "pbr-5.8.1-py2.py3-none-any.whl",
     )
 
     maybe(
