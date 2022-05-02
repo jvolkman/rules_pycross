@@ -614,7 +614,7 @@ def main():
     repos.sort(key=lambda ft: ft.name)
 
     pins = dict(lock_model.pins)
-    if args.default_pin_latest:
+    if args.default_alias_single_version:
         packages_by_name = defaultdict(list)
         for package_target in package_targets:
             packages_by_name[package_target.package.name].append(package_target.package)
@@ -622,8 +622,9 @@ def main():
         for package_name, packages in packages_by_name.items():
             if package_name in pins:
                 continue
-            latest = max(packages, key=lambda p: p.version)
-            pins[package_name] = latest.key
+            if len(packages) > 1:
+                continue
+            pins[package_name] = packages[0].key
 
     with open(output, "w") as f:
 
@@ -760,9 +761,9 @@ def make_parser() -> argparse.ArgumentParser:
     )
 
     parser.add_argument(
-        "--default-pin-latest",
+        "--default-alias-single-version",
         action="store_true",
-        help="Generate aliases for the latest versions of packages not covered by the lock model's pins.",
+        help="Generate aliases for all packages with single versions.",
     )
 
     parser.add_argument(

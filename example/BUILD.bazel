@@ -83,7 +83,7 @@ pycross_lock_file(
     local_wheels = [
         "//wheels",
     ],
-    default_pin_latest = True,
+    default_alias_single_version = True,
     build_target_overrides = {
         "future-0.18.2": "@//deps:overridden_future_0.18.2",
     },

@@ -77,19 +77,27 @@ class PoetryPackage:
 
 
 def get_files_for_package(
-    files: List[PackageFile], package_name: NormalizedName, package_version: PoetryVersion
+    files: List[PackageFile],
+    package_name: NormalizedName,
+    package_version: PoetryVersion,
 ) -> List[PackageFile]:
     result = []
     for file in files:
         try:
-            file_package_name, file_package_version, _, _ = parse_wheel_filename(file.name)
+            file_package_name, file_package_version, _, _ = parse_wheel_filename(
+                file.name
+            )
         except InvalidWheelFilename:
             try:
-                file_package_name, file_package_version = parse_sdist_filename(file.name)
+                file_package_name, file_package_version = parse_sdist_filename(
+                    file.name
+                )
             except InvalidSdistFilename:
                 continue
 
-        if file_package_name == package_name and str(file_package_version) == str(package_version):
+        if file_package_name == package_name and str(file_package_version) == str(
+            package_version
+        ):
             result.append(file)
 
     return result
@@ -165,7 +173,9 @@ def translate(project_file: str, lock_file: str) -> LockSet:
                 python_versions=package_python_versions,
                 dependencies=dependencies,
                 files=get_files_for_package(
-                    files_by_package_name[package_listed_name], package_name, package_version
+                    files_by_package_name[package_listed_name],
+                    package_name,
+                    package_version,
                 ),
                 resolved_dependencies=[],
             )
