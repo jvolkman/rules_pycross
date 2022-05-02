@@ -73,8 +73,8 @@ def _pycross_lock_file_impl(ctx):
             ctx.attr.environment_prefix,
         ])
 
-    if ctx.attr.default_pin_latest:
-        args.append("--default-pin-latest")
+    if ctx.attr.default_alias_single_version:
+        args.append("--default-alias-single-version")
 
     for k, t in ctx.attr.build_target_overrides.items():
         args.extend([
@@ -143,8 +143,8 @@ pycross_lock_file = rule(
             doc = "An optional prefix to apply to environment targets. Defaults to _env",
             default = "_env",
         ),
-        "default_pin_latest": attr.bool(
-            doc = "Generate aliases for the latest versions of packages not covered by the lock model's pins.",
+        "default_alias_single_version": attr.bool(
+            doc = "Generate aliases for all packages that have a single version in the lock file.",
         ),
         "build_target_overrides": attr.string_dict(
             doc = "A mapping of package keys (name-version) to existing pycross_wheel_build build targets."
