@@ -30,6 +30,16 @@ local_repository(
 load("@jvolkman_rules_pycross//pycross:repositories.bzl", "rules_pycross_dependencies")
 rules_pycross_dependencies()
 
+http_archive(
+    name = "aspect_rules_py",
+    url = "https://github.com/aspect-build/rules_py/archive/9a8e2e5d15e3376a2ebac2278dd904dc24cbccb8.tar.gz",
+    strip_prefix = "rules_py-9a8e2e5d15e3376a2ebac2278dd904dc24cbccb8",
+    sha256 = "b4dae72a1d552b15f6a2b6d45f37a7a326677a52cfc77358f739ba467bc88531",
+)
+
+load("@aspect_rules_py//py:repositories.bzl", "rules_py_dependencies")
+rules_py_dependencies()
+
 load("@jvolkman_rules_pycross//pycross:defs.bzl", "pycross_lock_repo")
 pycross_lock_repo(
     name = "example_lock_repo",

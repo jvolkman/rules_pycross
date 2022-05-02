@@ -91,6 +91,7 @@ pycross_lock_file(
         "pbr-5.8.1",
     ],
     out = "example_lock.bzl",
+    use_rules_py = True,
 )
 
 _GENERATED = {

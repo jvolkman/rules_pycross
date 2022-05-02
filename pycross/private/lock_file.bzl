@@ -88,6 +88,9 @@ def _pycross_lock_file_impl(ctx):
             k
         ])
 
+    if ctx.attr.use_rules_py:
+        args.append("--use-rules-py")
+
     ctx.actions.run(
         inputs = (
             ctx.files.lock_model_file +
@@ -151,6 +154,9 @@ pycross_lock_file = rule(
         ),
         "always_build_packages": attr.string_list(
             doc = "A list of package keys (name-version) to always build from source."
+        ),
+        "use_rules_py": attr.bool(
+            doc = "Generate targets that use https://github.com/aspect-build/rules_py",
         ),
         "out": attr.output(
             doc = "The output file.",

@@ -1,6 +1,7 @@
 load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_file")
 load("@bazel_tools//tools/build_defs/repo:utils.bzl", "maybe")
-load("@jvolkman_rules_pycross//pycross:defs.bzl", "pycross_wheel_build", "pycross_wheel_library")
+load("@aspect_rules_py//py:defs.bzl", "py_wheel", "py_library")
+load("@jvolkman_rules_pycross//pycross:defs.bzl", "pycross_wheel_build")
 
 PINS = {
     "appnope": "appnope_0.1.3",
@@ -111,24 +112,38 @@ def targets():
         ],
     )
 
-    pycross_wheel_library(
+    py_wheel(
+        name = "appnope_0.1.3_whl",
+        src = "@example_lock_wheel_appnope_0.1.3_py2.py3_none_any//file",
+    )
+
+    py_library(
         name = "appnope_0.1.3",
-        wheel = "@example_lock_wheel_appnope_0.1.3_py2.py3_none_any//file",
+        deps = [":appnope_0.1.3_whl"],
     )
 
     _asttokens_2_0_5_deps = [
         ":six_1.16.0",
     ]
 
-    pycross_wheel_library(
-        name = "asttokens_2.0.5",
-        deps = _asttokens_2_0_5_deps,
-        wheel = "@example_lock_wheel_asttokens_2.0.5_py2.py3_none_any//file",
+    py_wheel(
+        name = "asttokens_2.0.5_whl",
+        src = "@example_lock_wheel_asttokens_2.0.5_py2.py3_none_any//file",
     )
 
-    pycross_wheel_library(
+    py_library(
+        name = "asttokens_2.0.5",
+        deps = [":asttokens_2.0.5_whl"] + _asttokens_2_0_5_deps,
+    )
+
+    py_wheel(
+        name = "attrs_21.4.0_whl",
+        src = "@example_lock_wheel_attrs_21.4.0_py2.py3_none_any//file",
+    )
+
+    py_library(
         name = "attrs_21.4.0",
-        wheel = "@example_lock_wheel_attrs_21.4.0_py2.py3_none_any//file",
+        deps = [":attrs_21.4.0_whl"],
     )
 
     _aws_sam_translator_1_45_0_deps = [
@@ -136,10 +151,14 @@ def targets():
         ":jsonschema_3.2.0",
     ]
 
-    pycross_wheel_library(
+    py_wheel(
+        name = "aws_sam_translator_1.45.0_whl",
+        src = "@example_lock_wheel_aws_sam_translator_1.45.0_py3_none_any//file",
+    )
+
+    py_library(
         name = "aws_sam_translator_1.45.0",
-        deps = _aws_sam_translator_1_45_0_deps,
-        wheel = "@example_lock_wheel_aws_sam_translator_1.45.0_py3_none_any//file",
+        deps = [":aws_sam_translator_1.45.0_whl"] + _aws_sam_translator_1_45_0_deps,
     )
 
     _aws_xray_sdk_2_9_0_deps = [
@@ -148,15 +167,24 @@ def targets():
         ":wrapt_1.14.0",
     ]
 
-    pycross_wheel_library(
-        name = "aws_xray_sdk_2.9.0",
-        deps = _aws_xray_sdk_2_9_0_deps,
-        wheel = "@example_lock_wheel_aws_xray_sdk_2.9.0_py2.py3_none_any//file",
+    py_wheel(
+        name = "aws_xray_sdk_2.9.0_whl",
+        src = "@example_lock_wheel_aws_xray_sdk_2.9.0_py2.py3_none_any//file",
     )
 
-    pycross_wheel_library(
+    py_library(
+        name = "aws_xray_sdk_2.9.0",
+        deps = [":aws_xray_sdk_2.9.0_whl"] + _aws_xray_sdk_2_9_0_deps,
+    )
+
+    py_wheel(
+        name = "backcall_0.2.0_whl",
+        src = "@example_lock_wheel_backcall_0.2.0_py2.py3_none_any//file",
+    )
+
+    py_library(
         name = "backcall_0.2.0",
-        wheel = "@example_lock_wheel_backcall_0.2.0_py2.py3_none_any//file",
+        deps = [":backcall_0.2.0_whl"],
     )
 
     _boto3_1_22_3_deps = [
@@ -165,10 +193,14 @@ def targets():
         ":s3transfer_0.5.2",
     ]
 
-    pycross_wheel_library(
+    py_wheel(
+        name = "boto3_1.22.3_whl",
+        src = "@example_lock_wheel_boto3_1.22.3_py3_none_any//file",
+    )
+
+    py_library(
         name = "boto3_1.22.3",
-        deps = _boto3_1_22_3_deps,
-        wheel = "@example_lock_wheel_boto3_1.22.3_py3_none_any//file",
+        deps = [":boto3_1.22.3_whl"] + _boto3_1_22_3_deps,
     )
 
     _botocore_1_25_3_deps = [
@@ -177,29 +209,42 @@ def targets():
         ":urllib3_1.26.9",
     ]
 
-    pycross_wheel_library(
-        name = "botocore_1.25.3",
-        deps = _botocore_1_25_3_deps,
-        wheel = "@example_lock_wheel_botocore_1.25.3_py3_none_any//file",
+    py_wheel(
+        name = "botocore_1.25.3_whl",
+        src = "@example_lock_wheel_botocore_1.25.3_py3_none_any//file",
     )
 
-    pycross_wheel_library(
+    py_library(
+        name = "botocore_1.25.3",
+        deps = [":botocore_1.25.3_whl"] + _botocore_1_25_3_deps,
+    )
+
+    py_wheel(
+        name = "certifi_2021.10.8_whl",
+        src = "@example_lock_wheel_certifi_2021.10.8_py2.py3_none_any//file",
+    )
+
+    py_library(
         name = "certifi_2021.10.8",
-        wheel = "@example_lock_wheel_certifi_2021.10.8_py2.py3_none_any//file",
+        deps = [":certifi_2021.10.8_whl"],
     )
 
     _cffi_1_15_0_deps = [
         ":pycparser_2.21",
     ]
 
-    pycross_wheel_library(
-        name = "cffi_1.15.0",
-        deps = _cffi_1_15_0_deps,
-        wheel = select({
+    py_wheel(
+        name = "cffi_1.15.0_whl",
+        src = select({
             ":_env_python_darwin_arm64": "@example_lock_wheel_cffi_1.15.0_cp39_cp39_macosx_11_0_arm64//file",
             ":_env_python_darwin_x86_64": "@example_lock_wheel_cffi_1.15.0_cp39_cp39_macosx_10_9_x86_64//file",
             ":_env_python_linux_x86_64": "@example_lock_wheel_cffi_1.15.0_cp39_cp39_manylinux_2_12_x86_64.manylinux2010_x86_64//file",
         }),
+    )
+
+    py_library(
+        name = "cffi_1.15.0",
+        deps = [":cffi_1.15.0_whl"] + _cffi_1_15_0_deps,
     )
 
     _cfn_lint_0_59_0_deps = [
@@ -213,49 +258,76 @@ def targets():
         ":sarif_om_1.0.4",
     ]
 
-    pycross_wheel_library(
+    py_wheel(
+        name = "cfn_lint_0.59.0_whl",
+        src = "@example_lock_wheel_cfn_lint_0.59.0_py3_none_any//file",
+    )
+
+    py_library(
         name = "cfn_lint_0.59.0",
-        deps = _cfn_lint_0_59_0_deps,
-        wheel = "@example_lock_wheel_cfn_lint_0.59.0_py3_none_any//file",
+        deps = [":cfn_lint_0.59.0_whl"] + _cfn_lint_0_59_0_deps,
     )
 
-    pycross_wheel_library(
+    py_wheel(
+        name = "charset_normalizer_2.0.12_whl",
+        src = "@example_lock_wheel_charset_normalizer_2.0.12_py3_none_any//file",
+    )
+
+    py_library(
         name = "charset_normalizer_2.0.12",
-        wheel = "@example_lock_wheel_charset_normalizer_2.0.12_py3_none_any//file",
+        deps = [":charset_normalizer_2.0.12_whl"],
     )
 
-    pycross_wheel_library(
+    py_wheel(
+        name = "click_8.1.3_whl",
+        src = "@example_lock_wheel_click_8.1.3_py3_none_any//file",
+    )
+
+    py_library(
         name = "click_8.1.3",
-        wheel = "@example_lock_wheel_click_8.1.3_py3_none_any//file",
+        deps = [":click_8.1.3_whl"],
     )
 
     _cognitojwt_1_4_1_deps = [
         ":python_jose_3.1.0",
     ]
 
-    pycross_wheel_library(
+    py_wheel(
+        name = "cognitojwt_1.4.1_whl",
+        src = "@example_lock_wheel_cognitojwt_1.4.1_py3_none_any//file",
+    )
+
+    py_library(
         name = "cognitojwt_1.4.1",
-        deps = _cognitojwt_1_4_1_deps,
-        wheel = "@example_lock_wheel_cognitojwt_1.4.1_py3_none_any//file",
+        deps = [":cognitojwt_1.4.1_whl"] + _cognitojwt_1_4_1_deps,
     )
 
     _cryptography_37_0_1_deps = [
         ":cffi_1.15.0",
     ]
 
-    pycross_wheel_library(
-        name = "cryptography_37.0.1",
-        deps = _cryptography_37_0_1_deps,
-        wheel = select({
+    py_wheel(
+        name = "cryptography_37.0.1_whl",
+        src = select({
             ":_env_python_darwin_arm64": "@example_lock_wheel_cryptography_37.0.1_cp36_abi3_macosx_10_10_universal2//file",
             ":_env_python_darwin_x86_64": "@example_lock_wheel_cryptography_37.0.1_cp36_abi3_macosx_10_10_x86_64//file",
             ":_env_python_linux_x86_64": "@example_lock_wheel_cryptography_37.0.1_cp36_abi3_manylinux_2_17_x86_64.manylinux2014_x86_64//file",
         }),
     )
 
-    pycross_wheel_library(
+    py_library(
+        name = "cryptography_37.0.1",
+        deps = [":cryptography_37.0.1_whl"] + _cryptography_37_0_1_deps,
+    )
+
+    py_wheel(
+        name = "decorator_5.1.1_whl",
+        src = "@example_lock_wheel_decorator_5.1.1_py3_none_any//file",
+    )
+
+    py_library(
         name = "decorator_5.1.1",
-        wheel = "@example_lock_wheel_decorator_5.1.1_py3_none_any//file",
+        deps = [":decorator_5.1.1_whl"],
     )
 
     _docker_5_0_3_deps = [
@@ -263,25 +335,38 @@ def targets():
         ":websocket_client_1.3.2",
     ]
 
-    pycross_wheel_library(
+    py_wheel(
+        name = "docker_5.0.3_whl",
+        src = "@example_lock_wheel_docker_5.0.3_py2.py3_none_any//file",
+    )
+
+    py_library(
         name = "docker_5.0.3",
-        deps = _docker_5_0_3_deps,
-        wheel = "@example_lock_wheel_docker_5.0.3_py2.py3_none_any//file",
+        deps = [":docker_5.0.3_whl"] + _docker_5_0_3_deps,
     )
 
     _ecdsa_0_17_0_deps = [
         ":six_1.16.0",
     ]
 
-    pycross_wheel_library(
-        name = "ecdsa_0.17.0",
-        deps = _ecdsa_0_17_0_deps,
-        wheel = "@example_lock_wheel_ecdsa_0.17.0_py2.py3_none_any//file",
+    py_wheel(
+        name = "ecdsa_0.17.0_whl",
+        src = "@example_lock_wheel_ecdsa_0.17.0_py2.py3_none_any//file",
     )
 
-    pycross_wheel_library(
+    py_library(
+        name = "ecdsa_0.17.0",
+        deps = [":ecdsa_0.17.0_whl"] + _ecdsa_0_17_0_deps,
+    )
+
+    py_wheel(
+        name = "executing_0.8.3_whl",
+        src = "@example_lock_wheel_executing_0.8.3_py2.py3_none_any//file",
+    )
+
+    py_library(
         name = "executing_0.8.3",
-        wheel = "@example_lock_wheel_executing_0.8.3_py2.py3_none_any//file",
+        deps = [":executing_0.8.3_whl"],
     )
 
     _flask_2_1_2_deps = [
@@ -292,10 +377,14 @@ def targets():
         ":werkzeug_2.1.2",
     ]
 
-    pycross_wheel_library(
+    py_wheel(
+        name = "flask_2.1.2_whl",
+        src = "@example_lock_wheel_flask_2.1.2_py3_none_any//file",
+    )
+
+    py_library(
         name = "flask_2.1.2",
-        deps = _flask_2_1_2_deps,
-        wheel = "@example_lock_wheel_flask_2.1.2_py3_none_any//file",
+        deps = [":flask_2.1.2_whl"] + _flask_2_1_2_deps,
     )
 
     _flask_cors_3_0_10_deps = [
@@ -303,20 +392,34 @@ def targets():
         ":six_1.16.0",
     ]
 
-    pycross_wheel_library(
+    py_wheel(
+        name = "flask_cors_3.0.10_whl",
+        src = "@example_lock_wheel_flask_cors_3.0.10_py2.py3_none_any//file",
+    )
+
+    py_library(
         name = "flask_cors_3.0.10",
-        deps = _flask_cors_3_0_10_deps,
-        wheel = "@example_lock_wheel_flask_cors_3.0.10_py2.py3_none_any//file",
+        deps = [":flask_cors_3.0.10_whl"] + _flask_cors_3_0_10_deps,
     )
 
-    pycross_wheel_library(
+    py_wheel(
+        name = "future_0.18.2_whl",
+        src = "@//deps:overridden_future_0.18.2",
+    )
+
+    py_library(
         name = "future_0.18.2",
-        wheel = "@//deps:overridden_future_0.18.2",
+        deps = [":future_0.18.2_whl"],
     )
 
-    pycross_wheel_library(
+    py_wheel(
+        name = "graphql_core_3.2.1_whl",
+        src = "@example_lock_wheel_graphql_core_3.2.1_py3_none_any//file",
+    )
+
+    py_library(
         name = "graphql_core_3.2.1",
-        wheel = "@example_lock_wheel_graphql_core_3.2.1_py3_none_any//file",
+        deps = [":graphql_core_3.2.1_whl"],
     )
 
     pycross_wheel_build(
@@ -325,28 +428,42 @@ def targets():
         tags = ["manual"],
     )
 
-    pycross_wheel_library(
-        name = "greenlet_1.1.2",
-        wheel = select({
+    py_wheel(
+        name = "greenlet_1.1.2_whl",
+        src = select({
             ":_env_python_darwin_arm64": ":_build_greenlet_1.1.2",
             ":_env_python_darwin_x86_64": "@example_lock_wheel_greenlet_1.1.2_cp39_cp39_macosx_10_14_x86_64//file",
             ":_env_python_linux_x86_64": "@example_lock_wheel_greenlet_1.1.2_cp39_cp39_manylinux_2_17_x86_64.manylinux2014_x86_64//file",
         }),
     )
 
-    pycross_wheel_library(
+    py_library(
+        name = "greenlet_1.1.2",
+        deps = [":greenlet_1.1.2_whl"],
+    )
+
+    py_wheel(
+        name = "idna_3.3_whl",
+        src = "@example_lock_wheel_idna_3.3_py3_none_any//file",
+    )
+
+    py_library(
         name = "idna_3.3",
-        wheel = "@example_lock_wheel_idna_3.3_py3_none_any//file",
+        deps = [":idna_3.3_whl"],
     )
 
     _importlib_metadata_4_11_3_deps = [
         ":zipp_3.8.0",
     ]
 
-    pycross_wheel_library(
+    py_wheel(
+        name = "importlib_metadata_4.11.3_whl",
+        src = "@example_lock_wheel_importlib_metadata_4.11.3_py3_none_any//file",
+    )
+
+    py_library(
         name = "importlib_metadata_4.11.3",
-        deps = _importlib_metadata_4_11_3_deps,
-        wheel = "@example_lock_wheel_importlib_metadata_4.11.3_py3_none_any//file",
+        deps = [":importlib_metadata_4.11.3_whl"] + _importlib_metadata_4_11_3_deps,
     )
 
     _ipython_8_2_0_deps = [
@@ -370,40 +487,62 @@ def targets():
         "//conditions:default": [],
     })
 
-    pycross_wheel_library(
-        name = "ipython_8.2.0",
-        deps = _ipython_8_2_0_deps,
-        wheel = "@example_lock_wheel_ipython_8.2.0_py3_none_any//file",
+    py_wheel(
+        name = "ipython_8.2.0_whl",
+        src = "@example_lock_wheel_ipython_8.2.0_py3_none_any//file",
     )
 
-    pycross_wheel_library(
+    py_library(
+        name = "ipython_8.2.0",
+        deps = [":ipython_8.2.0_whl"] + _ipython_8_2_0_deps,
+    )
+
+    py_wheel(
+        name = "itsdangerous_2.1.2_whl",
+        src = "@example_lock_wheel_itsdangerous_2.1.2_py3_none_any//file",
+    )
+
+    py_library(
         name = "itsdangerous_2.1.2",
-        wheel = "@example_lock_wheel_itsdangerous_2.1.2_py3_none_any//file",
+        deps = [":itsdangerous_2.1.2_whl"],
     )
 
     _jedi_0_18_1_deps = [
         ":parso_0.8.3",
     ]
 
-    pycross_wheel_library(
+    py_wheel(
+        name = "jedi_0.18.1_whl",
+        src = "@example_lock_wheel_jedi_0.18.1_py2.py3_none_any//file",
+    )
+
+    py_library(
         name = "jedi_0.18.1",
-        deps = _jedi_0_18_1_deps,
-        wheel = "@example_lock_wheel_jedi_0.18.1_py2.py3_none_any//file",
+        deps = [":jedi_0.18.1_whl"] + _jedi_0_18_1_deps,
     )
 
     _jinja2_3_1_2_deps = [
         ":markupsafe_2.1.1",
     ]
 
-    pycross_wheel_library(
-        name = "jinja2_3.1.2",
-        deps = _jinja2_3_1_2_deps,
-        wheel = "@example_lock_wheel_jinja2_3.1.2_py3_none_any//file",
+    py_wheel(
+        name = "jinja2_3.1.2_whl",
+        src = "@example_lock_wheel_jinja2_3.1.2_py3_none_any//file",
     )
 
-    pycross_wheel_library(
+    py_library(
+        name = "jinja2_3.1.2",
+        deps = [":jinja2_3.1.2_whl"] + _jinja2_3_1_2_deps,
+    )
+
+    py_wheel(
+        name = "jmespath_1.0.0_whl",
+        src = "@example_lock_wheel_jmespath_1.0.0_py3_none_any//file",
+    )
+
+    py_library(
         name = "jmespath_1.0.0",
-        wheel = "@example_lock_wheel_jmespath_1.0.0_py3_none_any//file",
+        deps = [":jmespath_1.0.0_whl"],
     )
 
     _jschema_to_python_1_2_3_deps = [
@@ -412,35 +551,58 @@ def targets():
         ":pbr_5.8.1",
     ]
 
-    pycross_wheel_library(
-        name = "jschema_to_python_1.2.3",
-        deps = _jschema_to_python_1_2_3_deps,
-        wheel = "@example_lock_wheel_jschema_to_python_1.2.3_py3_none_any//file",
+    py_wheel(
+        name = "jschema_to_python_1.2.3_whl",
+        src = "@example_lock_wheel_jschema_to_python_1.2.3_py3_none_any//file",
     )
 
-    pycross_wheel_library(
+    py_library(
+        name = "jschema_to_python_1.2.3",
+        deps = [":jschema_to_python_1.2.3_whl"] + _jschema_to_python_1_2_3_deps,
+    )
+
+    py_wheel(
+        name = "jsondiff_2.0.0_whl",
+        src = "@example_lock_wheel_jsondiff_2.0.0_py3_none_any//file",
+    )
+
+    py_library(
         name = "jsondiff_2.0.0",
-        wheel = "@example_lock_wheel_jsondiff_2.0.0_py3_none_any//file",
+        deps = [":jsondiff_2.0.0_whl"],
     )
 
     _jsonpatch_1_32_deps = [
         ":jsonpointer_2.3",
     ]
 
-    pycross_wheel_library(
+    py_wheel(
+        name = "jsonpatch_1.32_whl",
+        src = "@example_lock_wheel_jsonpatch_1.32_py2.py3_none_any//file",
+    )
+
+    py_library(
         name = "jsonpatch_1.32",
-        deps = _jsonpatch_1_32_deps,
-        wheel = "@example_lock_wheel_jsonpatch_1.32_py2.py3_none_any//file",
+        deps = [":jsonpatch_1.32_whl"] + _jsonpatch_1_32_deps,
     )
 
-    pycross_wheel_library(
+    py_wheel(
+        name = "jsonpickle_2.1.0_whl",
+        src = "@example_lock_wheel_jsonpickle_2.1.0_py2.py3_none_any//file",
+    )
+
+    py_library(
         name = "jsonpickle_2.1.0",
-        wheel = "@example_lock_wheel_jsonpickle_2.1.0_py2.py3_none_any//file",
+        deps = [":jsonpickle_2.1.0_whl"],
     )
 
-    pycross_wheel_library(
+    py_wheel(
+        name = "jsonpointer_2.3_whl",
+        src = "@example_lock_wheel_jsonpointer_2.3_py2.py3_none_any//file",
+    )
+
+    py_library(
         name = "jsonpointer_2.3",
-        wheel = "@example_lock_wheel_jsonpointer_2.3_py2.py3_none_any//file",
+        deps = [":jsonpointer_2.3_whl"],
     )
 
     _jsonschema_3_2_0_deps = [
@@ -449,39 +611,56 @@ def targets():
         ":six_1.16.0",
     ]
 
-    pycross_wheel_library(
+    py_wheel(
+        name = "jsonschema_3.2.0_whl",
+        src = "@example_lock_wheel_jsonschema_3.2.0_py2.py3_none_any//file",
+    )
+
+    py_library(
         name = "jsonschema_3.2.0",
-        deps = _jsonschema_3_2_0_deps,
-        wheel = "@example_lock_wheel_jsonschema_3.2.0_py2.py3_none_any//file",
+        deps = [":jsonschema_3.2.0_whl"] + _jsonschema_3_2_0_deps,
     )
 
     _junit_xml_1_9_deps = [
         ":six_1.16.0",
     ]
 
-    pycross_wheel_library(
-        name = "junit_xml_1.9",
-        deps = _junit_xml_1_9_deps,
-        wheel = "@example_lock_wheel_junit_xml_1.9_py2.py3_none_any//file",
+    py_wheel(
+        name = "junit_xml_1.9_whl",
+        src = "@example_lock_wheel_junit_xml_1.9_py2.py3_none_any//file",
     )
 
-    pycross_wheel_library(
-        name = "markupsafe_2.1.1",
-        wheel = select({
+    py_library(
+        name = "junit_xml_1.9",
+        deps = [":junit_xml_1.9_whl"] + _junit_xml_1_9_deps,
+    )
+
+    py_wheel(
+        name = "markupsafe_2.1.1_whl",
+        src = select({
             ":_env_python_darwin_arm64": "@example_lock_wheel_markupsafe_2.1.1_cp39_cp39_macosx_10_9_universal2//file",
             ":_env_python_darwin_x86_64": "@example_lock_wheel_markupsafe_2.1.1_cp39_cp39_macosx_10_9_x86_64//file",
             ":_env_python_linux_x86_64": "@example_lock_wheel_markupsafe_2.1.1_cp39_cp39_manylinux_2_17_x86_64.manylinux2014_x86_64//file",
         }),
     )
 
+    py_library(
+        name = "markupsafe_2.1.1",
+        deps = [":markupsafe_2.1.1_whl"],
+    )
+
     _matplotlib_inline_0_1_3_deps = [
         ":traitlets_5.1.1",
     ]
 
-    pycross_wheel_library(
+    py_wheel(
+        name = "matplotlib_inline_0.1.3_whl",
+        src = "@example_lock_wheel_matplotlib_inline_0.1.3_py3_none_any//file",
+    )
+
+    py_library(
         name = "matplotlib_inline_0.1.3",
-        deps = _matplotlib_inline_0_1_3_deps,
-        wheel = "@example_lock_wheel_matplotlib_inline_0.1.3_py3_none_any//file",
+        deps = [":matplotlib_inline_0.1.3_whl"] + _matplotlib_inline_0_1_3_deps,
     )
 
     _moto_3_1_1_deps = [
@@ -510,20 +689,34 @@ def targets():
         ":xmltodict_0.12.0",
     ]
 
-    pycross_wheel_library(
+    py_wheel(
+        name = "moto_3.1.1_whl",
+        src = "@example_lock_wheel_moto_3.1.1_py2.py3_none_any//file",
+    )
+
+    py_library(
         name = "moto_3.1.1",
-        deps = _moto_3_1_1_deps,
-        wheel = "@example_lock_wheel_moto_3.1.1_py2.py3_none_any//file",
+        deps = [":moto_3.1.1_whl"] + _moto_3_1_1_deps,
     )
 
-    pycross_wheel_library(
+    py_wheel(
+        name = "networkx_2.8_whl",
+        src = "@example_lock_wheel_networkx_2.8_py3_none_any//file",
+    )
+
+    py_library(
         name = "networkx_2.8",
-        wheel = "@example_lock_wheel_networkx_2.8_py3_none_any//file",
+        deps = [":networkx_2.8_whl"],
     )
 
-    pycross_wheel_library(
+    py_wheel(
+        name = "parso_0.8.3_whl",
+        src = "@example_lock_wheel_parso_0.8.3_py2.py3_none_any//file",
+    )
+
+    py_library(
         name = "parso_0.8.3",
-        wheel = "@example_lock_wheel_parso_0.8.3_py2.py3_none_any//file",
+        deps = [":parso_0.8.3_whl"],
     )
 
     pycross_wheel_build(
@@ -532,78 +725,130 @@ def targets():
         tags = ["manual"],
     )
 
-    pycross_wheel_library(
+    py_wheel(
+        name = "pbr_5.8.1_whl",
+        src = ":_build_pbr_5.8.1",
+    )
+
+    py_library(
         name = "pbr_5.8.1",
-        wheel = ":_build_pbr_5.8.1",
+        deps = [":pbr_5.8.1_whl"],
     )
 
     _pexpect_4_8_0_deps = [
         ":ptyprocess_0.7.0",
     ]
 
-    pycross_wheel_library(
-        name = "pexpect_4.8.0",
-        deps = _pexpect_4_8_0_deps,
-        wheel = "@example_lock_wheel_pexpect_4.8.0_py2.py3_none_any//file",
+    py_wheel(
+        name = "pexpect_4.8.0_whl",
+        src = "@example_lock_wheel_pexpect_4.8.0_py2.py3_none_any//file",
     )
 
-    pycross_wheel_library(
+    py_library(
+        name = "pexpect_4.8.0",
+        deps = [":pexpect_4.8.0_whl"] + _pexpect_4_8_0_deps,
+    )
+
+    py_wheel(
+        name = "pickleshare_0.7.5_whl",
+        src = "@example_lock_wheel_pickleshare_0.7.5_py2.py3_none_any//file",
+    )
+
+    py_library(
         name = "pickleshare_0.7.5",
-        wheel = "@example_lock_wheel_pickleshare_0.7.5_py2.py3_none_any//file",
+        deps = [":pickleshare_0.7.5_whl"],
     )
 
     _prompt_toolkit_3_0_29_deps = [
         ":wcwidth_0.2.5",
     ]
 
-    pycross_wheel_library(
+    py_wheel(
+        name = "prompt_toolkit_3.0.29_whl",
+        src = "@example_lock_wheel_prompt_toolkit_3.0.29_py3_none_any//file",
+    )
+
+    py_library(
         name = "prompt_toolkit_3.0.29",
-        deps = _prompt_toolkit_3_0_29_deps,
-        wheel = "@example_lock_wheel_prompt_toolkit_3.0.29_py3_none_any//file",
+        deps = [":prompt_toolkit_3.0.29_whl"] + _prompt_toolkit_3_0_29_deps,
     )
 
-    pycross_wheel_library(
+    py_wheel(
+        name = "ptyprocess_0.7.0_whl",
+        src = "@example_lock_wheel_ptyprocess_0.7.0_py2.py3_none_any//file",
+    )
+
+    py_library(
         name = "ptyprocess_0.7.0",
-        wheel = "@example_lock_wheel_ptyprocess_0.7.0_py2.py3_none_any//file",
+        deps = [":ptyprocess_0.7.0_whl"],
     )
 
-    pycross_wheel_library(
+    py_wheel(
+        name = "pure_eval_0.2.2_whl",
+        src = "@example_lock_wheel_pure_eval_0.2.2_py3_none_any//file",
+    )
+
+    py_library(
         name = "pure_eval_0.2.2",
-        wheel = "@example_lock_wheel_pure_eval_0.2.2_py3_none_any//file",
+        deps = [":pure_eval_0.2.2_whl"],
     )
 
-    pycross_wheel_library(
+    py_wheel(
+        name = "pyasn1_0.4.8_whl",
+        src = "@example_lock_wheel_pyasn1_0.4.8_py2.py3_none_any//file",
+    )
+
+    py_library(
         name = "pyasn1_0.4.8",
-        wheel = "@example_lock_wheel_pyasn1_0.4.8_py2.py3_none_any//file",
+        deps = [":pyasn1_0.4.8_whl"],
     )
 
-    pycross_wheel_library(
+    py_wheel(
+        name = "pycparser_2.21_whl",
+        src = "@example_lock_wheel_pycparser_2.21_py2.py3_none_any//file",
+    )
+
+    py_library(
         name = "pycparser_2.21",
-        wheel = "@example_lock_wheel_pycparser_2.21_py2.py3_none_any//file",
+        deps = [":pycparser_2.21_whl"],
     )
 
-    pycross_wheel_library(
+    py_wheel(
+        name = "pygments_2.12.0_whl",
+        src = "@example_lock_wheel_pygments_2.12.0_py3_none_any//file",
+    )
+
+    py_library(
         name = "pygments_2.12.0",
-        wheel = "@example_lock_wheel_pygments_2.12.0_py3_none_any//file",
+        deps = [":pygments_2.12.0_whl"],
     )
 
-    pycross_wheel_library(
-        name = "pyrsistent_0.18.1",
-        wheel = select({
+    py_wheel(
+        name = "pyrsistent_0.18.1_whl",
+        src = select({
             ":_env_python_darwin_arm64": "@example_lock_wheel_pyrsistent_0.18.1_cp39_cp39_macosx_10_9_universal2//file",
             ":_env_python_darwin_x86_64": "@example_lock_wheel_pyrsistent_0.18.1_cp39_cp39_macosx_10_9_universal2//file",
             ":_env_python_linux_x86_64": "@example_lock_wheel_pyrsistent_0.18.1_cp39_cp39_manylinux_2_17_x86_64.manylinux2014_x86_64//file",
         }),
     )
 
+    py_library(
+        name = "pyrsistent_0.18.1",
+        deps = [":pyrsistent_0.18.1_whl"],
+    )
+
     _python_dateutil_2_8_2_deps = [
         ":six_1.16.0",
     ]
 
-    pycross_wheel_library(
+    py_wheel(
+        name = "python_dateutil_2.8.2_whl",
+        src = "@example_lock_wheel_python_dateutil_2.8.2_py2.py3_none_any//file",
+    )
+
+    py_library(
         name = "python_dateutil_2.8.2",
-        deps = _python_dateutil_2_8_2_deps,
-        wheel = "@example_lock_wheel_python_dateutil_2.8.2_py2.py3_none_any//file",
+        deps = [":python_dateutil_2.8.2_whl"] + _python_dateutil_2_8_2_deps,
     )
 
     _python_jose_3_1_0_deps = [
@@ -614,24 +859,38 @@ def targets():
         ":six_1.16.0",
     ]
 
-    pycross_wheel_library(
+    py_wheel(
+        name = "python_jose_3.1.0_whl",
+        src = "@example_lock_wheel_python_jose_3.1.0_py2.py3_none_any//file",
+    )
+
+    py_library(
         name = "python_jose_3.1.0",
-        deps = _python_jose_3_1_0_deps,
-        wheel = "@example_lock_wheel_python_jose_3.1.0_py2.py3_none_any//file",
+        deps = [":python_jose_3.1.0_whl"] + _python_jose_3_1_0_deps,
     )
 
-    pycross_wheel_library(
+    py_wheel(
+        name = "pytz_2022.1_whl",
+        src = "@example_lock_wheel_pytz_2022.1_py2.py3_none_any//file",
+    )
+
+    py_library(
         name = "pytz_2022.1",
-        wheel = "@example_lock_wheel_pytz_2022.1_py2.py3_none_any//file",
+        deps = [":pytz_2022.1_whl"],
     )
 
-    pycross_wheel_library(
-        name = "pyyaml_6.0",
-        wheel = select({
+    py_wheel(
+        name = "pyyaml_6.0_whl",
+        src = select({
             ":_env_python_darwin_arm64": "@example_lock_wheel_pyyaml_6.0_cp39_cp39_macosx_11_0_arm64//file",
             ":_env_python_darwin_x86_64": "@example_lock_wheel_pyyaml_6.0_cp39_cp39_macosx_10_9_x86_64//file",
             ":_env_python_linux_x86_64": "@example_lock_wheel_pyyaml_6.0_cp39_cp39_manylinux_2_5_x86_64.manylinux1_x86_64.manylinux_2_12_x86_64.manylinux2010_x86_64//file",
         }),
+    )
+
+    py_library(
+        name = "pyyaml_6.0",
+        deps = [":pyyaml_6.0_whl"],
     )
 
     _requests_2_27_1_deps = [
@@ -641,10 +900,14 @@ def targets():
         ":urllib3_1.26.9",
     ]
 
-    pycross_wheel_library(
+    py_wheel(
+        name = "requests_2.27.1_whl",
+        src = "@example_lock_wheel_requests_2.27.1_py2.py3_none_any//file",
+    )
+
+    py_library(
         name = "requests_2.27.1",
-        deps = _requests_2_27_1_deps,
-        wheel = "@example_lock_wheel_requests_2.27.1_py2.py3_none_any//file",
+        deps = [":requests_2.27.1_whl"] + _requests_2_27_1_deps,
     )
 
     _responses_0_20_0_deps = [
@@ -652,30 +915,42 @@ def targets():
         ":urllib3_1.26.9",
     ]
 
-    pycross_wheel_library(
+    py_wheel(
+        name = "responses_0.20.0_whl",
+        src = "@example_lock_wheel_responses_0.20.0_py3_none_any//file",
+    )
+
+    py_library(
         name = "responses_0.20.0",
-        deps = _responses_0_20_0_deps,
-        wheel = "@example_lock_wheel_responses_0.20.0_py3_none_any//file",
+        deps = [":responses_0.20.0_whl"] + _responses_0_20_0_deps,
     )
 
     _rsa_4_8_deps = [
         ":pyasn1_0.4.8",
     ]
 
-    pycross_wheel_library(
+    py_wheel(
+        name = "rsa_4.8_whl",
+        src = "@example_lock_wheel_rsa_4.8_py3_none_any//file",
+    )
+
+    py_library(
         name = "rsa_4.8",
-        deps = _rsa_4_8_deps,
-        wheel = "@example_lock_wheel_rsa_4.8_py3_none_any//file",
+        deps = [":rsa_4.8_whl"] + _rsa_4_8_deps,
     )
 
     _s3transfer_0_5_2_deps = [
         ":botocore_1.25.3",
     ]
 
-    pycross_wheel_library(
+    py_wheel(
+        name = "s3transfer_0.5.2_whl",
+        src = "@example_lock_wheel_s3transfer_0.5.2_py3_none_any//file",
+    )
+
+    py_library(
         name = "s3transfer_0.5.2",
-        deps = _s3transfer_0_5_2_deps,
-        wheel = "@example_lock_wheel_s3transfer_0.5.2_py3_none_any//file",
+        deps = [":s3transfer_0.5.2_whl"] + _s3transfer_0_5_2_deps,
     )
 
     _sarif_om_1_0_4_deps = [
@@ -683,15 +958,24 @@ def targets():
         ":pbr_5.8.1",
     ]
 
-    pycross_wheel_library(
-        name = "sarif_om_1.0.4",
-        deps = _sarif_om_1_0_4_deps,
-        wheel = "@example_lock_wheel_sarif_om_1.0.4_py3_none_any//file",
+    py_wheel(
+        name = "sarif_om_1.0.4_whl",
+        src = "@example_lock_wheel_sarif_om_1.0.4_py3_none_any//file",
     )
 
-    pycross_wheel_library(
+    py_library(
+        name = "sarif_om_1.0.4",
+        deps = [":sarif_om_1.0.4_whl"] + _sarif_om_1_0_4_deps,
+    )
+
+    py_wheel(
+        name = "six_1.16.0_whl",
+        src = "@example_lock_wheel_six_1.16.0_py2.py3_none_any//file",
+    )
+
+    py_library(
         name = "six_1.16.0",
-        wheel = "@example_lock_wheel_six_1.16.0_py2.py3_none_any//file",
+        deps = [":six_1.16.0_whl"],
     )
 
     _sqlalchemy_1_4_36_deps = [
@@ -705,14 +989,18 @@ def targets():
         tags = ["manual"],
     )
 
-    pycross_wheel_library(
-        name = "sqlalchemy_1.4.36",
-        deps = _sqlalchemy_1_4_36_deps,
-        wheel = select({
+    py_wheel(
+        name = "sqlalchemy_1.4.36_whl",
+        src = select({
             ":_env_python_darwin_arm64": ":_build_sqlalchemy_1.4.36",
             ":_env_python_darwin_x86_64": "@example_lock_wheel_sqlalchemy_1.4.36_cp39_cp39_macosx_10_15_x86_64//file",
             ":_env_python_linux_x86_64": "@example_lock_wheel_sqlalchemy_1.4.36_cp39_cp39_manylinux_2_5_x86_64.manylinux1_x86_64.manylinux_2_17_x86_64.manylinux2014_x86_64//file",
         }),
+    )
+
+    py_library(
+        name = "sqlalchemy_1.4.36",
+        deps = [":sqlalchemy_1.4.36_whl"] + _sqlalchemy_1_4_36_deps,
     )
 
     _sqlalchemy_utils_0_38_2_deps = [
@@ -720,10 +1008,14 @@ def targets():
         ":sqlalchemy_1.4.36",
     ]
 
-    pycross_wheel_library(
+    py_wheel(
+        name = "sqlalchemy_utils_0.38.2_whl",
+        src = "@example_lock_wheel_sqlalchemy_utils_0.38.2_py3_none_any//file",
+    )
+
+    py_library(
         name = "sqlalchemy_utils_0.38.2",
-        deps = _sqlalchemy_utils_0_38_2_deps,
-        wheel = "@example_lock_wheel_sqlalchemy_utils_0.38.2_py3_none_any//file",
+        deps = [":sqlalchemy_utils_0.38.2_whl"] + _sqlalchemy_utils_0_38_2_deps,
     )
 
     _sshpubkeys_3_3_1_deps = [
@@ -731,10 +1023,14 @@ def targets():
         ":ecdsa_0.17.0",
     ]
 
-    pycross_wheel_library(
+    py_wheel(
+        name = "sshpubkeys_3.3.1_whl",
+        src = "@example_lock_wheel_sshpubkeys_3.3.1_py2.py3_none_any//file",
+    )
+
+    py_library(
         name = "sshpubkeys_3.3.1",
-        deps = _sshpubkeys_3_3_1_deps,
-        wheel = "@example_lock_wheel_sshpubkeys_3.3.1_py2.py3_none_any//file",
+        deps = [":sshpubkeys_3.3.1_whl"] + _sshpubkeys_3_3_1_deps,
     )
 
     _stack_data_0_2_0_deps = [
@@ -743,54 +1039,98 @@ def targets():
         ":pure_eval_0.2.2",
     ]
 
-    pycross_wheel_library(
+    py_wheel(
+        name = "stack_data_0.2.0_whl",
+        src = "@example_lock_wheel_stack_data_0.2.0_py3_none_any//file",
+    )
+
+    py_library(
         name = "stack_data_0.2.0",
-        deps = _stack_data_0_2_0_deps,
-        wheel = "@example_lock_wheel_stack_data_0.2.0_py3_none_any//file",
+        deps = [":stack_data_0.2.0_whl"] + _stack_data_0_2_0_deps,
     )
 
-    pycross_wheel_library(
+    py_wheel(
+        name = "traitlets_5.1.1_whl",
+        src = "@example_lock_wheel_traitlets_5.1.1_py3_none_any//file",
+    )
+
+    py_library(
         name = "traitlets_5.1.1",
-        wheel = "@example_lock_wheel_traitlets_5.1.1_py3_none_any//file",
+        deps = [":traitlets_5.1.1_whl"],
     )
 
-    pycross_wheel_library(
+    py_wheel(
+        name = "urllib3_1.26.9_whl",
+        src = "@example_lock_wheel_urllib3_1.26.9_py2.py3_none_any//file",
+    )
+
+    py_library(
         name = "urllib3_1.26.9",
-        wheel = "@example_lock_wheel_urllib3_1.26.9_py2.py3_none_any//file",
+        deps = [":urllib3_1.26.9_whl"],
     )
 
-    pycross_wheel_library(
+    py_wheel(
+        name = "wcwidth_0.2.5_whl",
+        src = "@example_lock_wheel_wcwidth_0.2.5_py2.py3_none_any//file",
+    )
+
+    py_library(
         name = "wcwidth_0.2.5",
-        wheel = "@example_lock_wheel_wcwidth_0.2.5_py2.py3_none_any//file",
+        deps = [":wcwidth_0.2.5_whl"],
     )
 
-    pycross_wheel_library(
+    py_wheel(
+        name = "websocket_client_1.3.2_whl",
+        src = "@example_lock_wheel_websocket_client_1.3.2_py3_none_any//file",
+    )
+
+    py_library(
         name = "websocket_client_1.3.2",
-        wheel = "@example_lock_wheel_websocket_client_1.3.2_py3_none_any//file",
+        deps = [":websocket_client_1.3.2_whl"],
     )
 
-    pycross_wheel_library(
+    py_wheel(
+        name = "werkzeug_2.1.2_whl",
+        src = "@example_lock_wheel_werkzeug_2.1.2_py3_none_any//file",
+    )
+
+    py_library(
         name = "werkzeug_2.1.2",
-        wheel = "@example_lock_wheel_werkzeug_2.1.2_py3_none_any//file",
+        deps = [":werkzeug_2.1.2_whl"],
     )
 
-    pycross_wheel_library(
-        name = "wrapt_1.14.0",
-        wheel = select({
+    py_wheel(
+        name = "wrapt_1.14.0_whl",
+        src = select({
             ":_env_python_darwin_arm64": "@example_lock_wheel_wrapt_1.14.0_cp39_cp39_macosx_11_0_arm64//file",
             ":_env_python_darwin_x86_64": "@example_lock_wheel_wrapt_1.14.0_cp39_cp39_macosx_10_9_x86_64//file",
             ":_env_python_linux_x86_64": "@example_lock_wheel_wrapt_1.14.0_cp39_cp39_manylinux_2_5_x86_64.manylinux1_x86_64.manylinux_2_17_x86_64.manylinux2014_x86_64//file",
         }),
     )
 
-    pycross_wheel_library(
-        name = "xmltodict_0.12.0",
-        wheel = "@example_lock_wheel_xmltodict_0.12.0_py2.py3_none_any//file",
+    py_library(
+        name = "wrapt_1.14.0",
+        deps = [":wrapt_1.14.0_whl"],
     )
 
-    pycross_wheel_library(
+    py_wheel(
+        name = "xmltodict_0.12.0_whl",
+        src = "@example_lock_wheel_xmltodict_0.12.0_py2.py3_none_any//file",
+    )
+
+    py_library(
+        name = "xmltodict_0.12.0",
+        deps = [":xmltodict_0.12.0_whl"],
+    )
+
+    py_wheel(
+        name = "zipp_3.8.0_whl",
+        src = "@example_lock_wheel_zipp_3.8.0_py3_none_any//file",
+    )
+
+    py_library(
         name = "zipp_3.8.0",
-        wheel = "@example_lock_wheel_zipp_3.8.0_py3_none_any//file",
+        deps = [":zipp_3.8.0_whl"],
     )
 
 def repositories():
