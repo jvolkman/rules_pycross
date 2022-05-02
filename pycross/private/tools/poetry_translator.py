@@ -9,8 +9,12 @@ from typing import List
 from typing import Optional
 
 import tomli
+from packaging.utils import InvalidSdistFilename
+from packaging.utils import InvalidWheelFilename
 from packaging.utils import NormalizedName
 from packaging.utils import Version
+from packaging.utils import parse_sdist_filename
+from packaging.utils import parse_wheel_filename
 from poetry.core import semver
 from poetry.core.semver.version import Version as PoetryVersion
 from poetry.core.version import markers
@@ -19,6 +23,7 @@ from pycross.private.tools.lock_model import LockSet
 from pycross.private.tools.lock_model import Package
 from pycross.private.tools.lock_model import PackageDependency
 from pycross.private.tools.lock_model import PackageFile
+from pycross.private.tools.lock_model import is_wheel
 from pycross.private.tools.lock_model import package_canonical_name
 
 
@@ -72,22 +77,20 @@ class PoetryPackage:
 
 
 def get_files_for_package(
-    files: List[PackageFile], package_name: str, package_version: PoetryVersion
+    files: List[PackageFile], package_name: NormalizedName, package_version: PoetryVersion
 ) -> List[PackageFile]:
-    package_name = package_name.lower()
-    # Test filename prefixes using our package name with dashes and underscores.
-    prefix_options = [
-        f"{package_name}-{package_version}",
-        f"{package_name.replace('-', '_')}-{package_version}",
-        f"{package_name.replace('_', '-')}-{package_version}",
-    ]
     result = []
     for file in files:
-        filename = file.name.lower()
-        for opt in prefix_options:
-            if filename.startswith(opt):
-                result.append(file)
-                break
+        try:
+            file_package_name, file_package_version, _, _ = parse_wheel_filename(file.name)
+        except InvalidWheelFilename:
+            try:
+                file_package_name, file_package_version = parse_sdist_filename(file.name)
+            except InvalidSdistFilename:
+                continue
+
+        if file_package_name == package_name and str(file_package_version) == str(package_version):
+            result.append(file)
 
     return result
 
@@ -162,7 +165,7 @@ def translate(project_file: str, lock_file: str) -> LockSet:
                 python_versions=package_python_versions,
                 dependencies=dependencies,
                 files=get_files_for_package(
-                    files_by_package_name[package_name], package_name, package_version
+                    files_by_package_name[package_listed_name], package_name, package_version
                 ),
                 resolved_dependencies=[],
             )

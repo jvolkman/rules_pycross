@@ -158,11 +158,14 @@ class GenerationContext:
         # https://github.com/pypa/warehouse/issues/1239
         # https://github.com/pypa/warehouse/issues/1944
 
-        filename_parts = filename.split("-")
-        name = filename_parts[0]
         if is_wheel(filename):
+            filename_parts = filename.split("-")
+            name = filename_parts[0]
             area = filename_parts[-3]  # python_tag
         else:
+            # Split from the right in case the package name contains a dash.
+            filename_parts = filename.rsplit("-", maxsplit=1)
+            name = filename_parts[0]
             area = "source"
 
         return f"{WAREHOUSE_HOST}/packages/{area}/{name[0]}/{name}/{filename}"
@@ -613,8 +616,8 @@ def main():
     pins = dict(lock_model.pins)
     if args.default_pin_latest:
         packages_by_name = defaultdict(list)
-        for package in lock_model.packages.values():
-            packages_by_name[package.name].append(package)
+        for package_target in package_targets:
+            packages_by_name[package_target.package.name].append(package_target.package)
 
         for package_name, packages in packages_by_name.items():
             if package_name in pins:
