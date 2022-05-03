@@ -34,6 +34,13 @@ bzl_library(
 )
 
 bzl_library(
+    name = "pypi_file",
+    srcs = ["pypi_file.bzl"],
+    deps = ["@bazel_tools//tools/build_defs/repo:utils.bzl"],
+    visibility = ["//visibility:public"],
+)
+
+bzl_library(
     name = "target_environment",
     srcs = ["target_environment.bzl"],
     visibility = ["//visibility:public"],

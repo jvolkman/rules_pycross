@@ -23,6 +23,7 @@ bzl_library(
         "//pycross/private:lock_file",
         "//pycross/private:lock_repo",
         "//pycross/private:poetry_lock_model",
+        "//pycross/private:pypi_file",
         "//pycross/private:target_environment",
         "//pycross/private:wheel_build",
         "//pycross/private:wheel_library",

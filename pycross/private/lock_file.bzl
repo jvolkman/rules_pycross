@@ -35,12 +35,6 @@ def _pycross_lock_file_impl(ctx):
             t.path,
         ])
 
-    for f, u in ctx.attr.file_url_overrides.items():
-        args.extend([
-            "--file-url-override",
-            "%s=%s" % (f, u),
-        ])
-
     for local_wheel in ctx.files.local_wheels:
         if not local_wheel.owner:
             fail("Could not determine owning lable for local wheel: %s" % local_wheel)
@@ -88,6 +82,12 @@ def _pycross_lock_file_impl(ctx):
             k
         ])
 
+    if ctx.attr.pypi_index:
+        args.extend([
+            "--pypi-index",
+            ctx.attr.pypi_index,
+        ])
+
     ctx.actions.run(
         inputs = (
             ctx.files.lock_model_file +
@@ -117,9 +117,6 @@ pycross_lock_file = rule(
             allow_single_file = True,
             mandatory = True,
         ),
-        "file_url_overrides": attr.string_dict(
-            doc = "An optional mapping of wheel or sdist filenames to their URLs.",
-        ),
         "local_wheels": attr.label_list(
             doc = "A list of wheel files.",
             allow_files = [".whl"],
@@ -147,10 +144,13 @@ pycross_lock_file = rule(
             doc = "Generate aliases for all packages that have a single version in the lock file.",
         ),
         "build_target_overrides": attr.string_dict(
-            doc = "A mapping of package keys (name-version) to existing pycross_wheel_build build targets."
+            doc = "A mapping of package keys (name-version) to existing pycross_wheel_build build targets.",
         ),
         "always_build_packages": attr.string_list(
-            doc = "A list of package keys (name-version) to always build from source."
+            doc = "A list of package keys (name-version) to always build from source.",
+        ),
+        "pypi_index": attr.string(
+            doc = "The PyPI-compatible index to use (must support the JSON API).",
         ),
         "out": attr.output(
             doc = "The output file.",
