@@ -77,8 +77,8 @@ pycross_lock_file(
         ":python_darwin_arm64",
         ":python_linux_x86_64",
     ],
-    file_url_overrides = {
-        "xmltodict-0.12.0-py2.py3-none-any.whl": "https://files.pythonhosted.org/packages/3.7/x/xmltodict/xmltodict-0.12.0-py2.py3-none-any.whl",
+    remote_wheels = {
+        "https://files.pythonhosted.org/packages/3.7/x/xmltodict/xmltodict-0.12.0-py2.py3-none-any.whl": "8bbcb45cc982f48b2ca8fe7e7827c5d792f217ecf1792626f808bf41c3b86051",
     },
     local_wheels = [
         "//wheels",
@@ -90,6 +90,7 @@ pycross_lock_file(
     always_build_packages = [
         "pbr-5.8.1",
     ],
+    pypi_index = "https://pypi.org",
     out = "example_lock.bzl",
 )
 

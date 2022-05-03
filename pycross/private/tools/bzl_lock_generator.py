@@ -24,6 +24,7 @@ from pip._internal.models.link import Link
 from pycross.private.tools.lock_model import LockSet
 from pycross.private.tools.lock_model import Package
 from pycross.private.tools.lock_model import PackageDependency
+from pycross.private.tools.lock_model import PackageFile
 from pycross.private.tools.lock_model import is_wheel
 from pycross.private.tools.target_environment import TargetEnv
 
@@ -38,36 +39,41 @@ def ind(text: str, tabs=1):
 
 
 @dataclass(frozen=True)
-class RemoteFile:
-    filename: str
+class UrlFile:
+    file: PackageFile
     urls: Tuple[str]
-    sha256: str
 
     def __post_init__(self):
-        assert self.filename, "The filename field must be specified."
+        assert self.file, "The file field must be specified."
         assert self.urls, "The urls field must be specified."
-        assert self.sha256, "The sha256 field must be specified."
 
     @property
     def is_wheel(self) -> bool:
-        return is_wheel(self.filename)
+        return self.file.is_wheel
 
 
 @dataclass(frozen=True)
 class PackageSource:
     label: Optional[str] = None
-    remote_wheel: Optional[RemoteFile] = None
-    remote_sdist: Optional[RemoteFile] = None
+    pypi_wheel: Optional[PackageFile] = None
+    pypi_sdist: Optional[PackageFile] = None
+    url_wheel: Optional[UrlFile] = None
 
     def needs_build(self) -> bool:
-        return self.remote_sdist is not None
+        return self.pypi_sdist is not None
 
     def __post_init__(self):
-        assert not (
-            (self.label is None)
-            ^ (self.remote_wheel is None)
-            ^ (self.remote_sdist is None)
-        ), "Exactly one of label, remote_wheel, remote_sdist or must be specified."
+        assert (
+            sum(
+                [
+                    int(self.label is not None),
+                    int(self.pypi_wheel is not None),
+                    int(self.pypi_sdist is not None),
+                    int(self.url_wheel is not None),
+                ]
+            )
+            == 1
+        ), "Exactly one of label, pypi_wheel, pypi_sdist or url_wheel must be specified."
 
 
 class Naming:
@@ -115,21 +121,21 @@ class Naming:
     def wheel_build_label(self, package_key: str):
         return f":{self.wheel_build_target(package_key)}"
 
-    def sdist_repo(self, file: RemoteFile) -> str:
-        assert file.filename.endswith(".tar.gz")
-        name = file.filename[:-7]
+    def sdist_repo(self, file: PackageFile) -> str:
+        assert file.name.endswith(".tar.gz")
+        name = file.name[:-7]
         return f"{self.repo_prefix}_sdist_{self._sanitize(name)}"
 
-    def sdist_label(self, file: RemoteFile) -> str:
+    def sdist_label(self, file: PackageFile) -> str:
         assert not file.is_wheel
         return f"@{self.sdist_repo(file)}//file"
 
-    def wheel_repo(self, file: RemoteFile) -> str:
+    def wheel_repo(self, file: PackageFile) -> str:
         assert file.is_wheel
-        normalized_name = file.filename[:-4].lower().replace("-", "_")
+        normalized_name = file.name[:-4].lower().replace("-", "_")
         return f"{self.repo_prefix}_wheel_{normalized_name}"
 
-    def wheel_label(self, file: RemoteFile):
+    def wheel_label(self, file: PackageFile):
         assert file.is_wheel
         return f"@{self.wheel_repo(file)}//file"
 
@@ -138,37 +144,14 @@ class GenerationContext:
     def __init__(
         self,
         target_environments: List[TargetEnv],
-        file_url_overrides: Dict[str, str],
         local_wheels: Dict[str, str],
-        remote_wheels: Dict[str, RemoteFile],
+        remote_wheels: Dict[str, UrlFile],
         naming: Naming,
     ):
         self.target_environments = target_environments
-        self.file_url_overrides = file_url_overrides
         self.local_wheels = local_wheels
         self.remote_wheels = remote_wheels
         self.naming = naming
-
-    def pypi_url(self, filename: str) -> str:
-        """Returns the pypi URL for fetching this file."""
-        if filename in self.file_url_overrides:
-            return self.file_url_overrides[filename]
-
-        # See:
-        # https://github.com/pypa/warehouse/issues/1239
-        # https://github.com/pypa/warehouse/issues/1944
-
-        if is_wheel(filename):
-            filename_parts = filename.split("-")
-            name = filename_parts[0]
-            area = filename_parts[-3]  # python_tag
-        else:
-            # Split from the right in case the package name contains a dash.
-            filename_parts = filename.rsplit("-", maxsplit=1)
-            name = filename_parts[0]
-            area = "source"
-
-        return f"{WAREHOUSE_HOST}/packages/{area}/{name[0]}/{name}/{filename}"
 
     def check_package_compatibility(self, package: Package) -> None:
         """Sanity check to make sure the requires_python attribute on each package matches our environments."""
@@ -234,21 +217,16 @@ class GenerationContext:
 
             # Start with the files defined in the input lock model
             for file in package.files:
-                remote_file = RemoteFile(
-                    filename=file.name,
-                    urls=(self.pypi_url(file.name),),
-                    sha256=file.sha256,
-                )
                 if file.is_wheel:
-                    package_sources[file.name] = PackageSource(remote_wheel=remote_file)
+                    package_sources[file.name] = PackageSource(pypi_wheel=file)
                 else:
-                    package_sources[file.name] = PackageSource(remote_sdist=remote_file)
+                    package_sources[file.name] = PackageSource(pypi_sdist=file)
 
             # Override per-file with given remote wheel URLs
             for filename, remote_file in self.remote_wheels.items():
                 name, version, _, _ = parse_wheel_filename(filename)
                 if (package.name, package.version) == (name, version):
-                    package_sources[filename] = remote_file
+                    package_sources[filename] = PackageSource(url_wheel=remote_file)
 
             # Override per-file with given local wheel labels
             for filename, local_label in self.local_wheels.items():
@@ -332,10 +310,10 @@ class PackageTarget:
         return keys
 
     @property
-    def source_file(self) -> Optional[RemoteFile]:
+    def source_file(self) -> Optional[PackageFile]:
         for f in self.distinct_package_sources:
-            if f.remote_sdist:
-                return f.remote_sdist
+            if f.pypi_sdist:
+                return f.pypi_sdist
 
     @property
     def has_deps(self) -> bool:
@@ -424,8 +402,10 @@ class PackageTarget:
         def wheel_target(pkg_source: PackageSource) -> str:
             if pkg_source.label:
                 return pkg_source.label
-            elif pkg_source.remote_wheel:
-                return self.context.naming.wheel_label(pkg_source.remote_wheel)
+            elif pkg_source.pypi_wheel:
+                return self.context.naming.wheel_label(pkg_source.pypi_wheel)
+            elif pkg_source.url_wheel:
+                return self.context.naming.wheel_label(pkg_source.url_wheel.file)
             elif self.build_target_override:
                 return self.build_target_override
             else:
@@ -462,11 +442,10 @@ class PackageTarget:
         return "\n".join(parts)
 
 
-class FileRepoTarget:
-    def __init__(self, name: str, file: RemoteFile, context: GenerationContext):
-        self.name = name
+class UrlWheelRepoTarget:
+    def __init__(self, file: UrlFile, context: GenerationContext):
+        self.name = context.naming.wheel_repo(file.file)
         self.file = file
-        self.context = context
 
     def render(self) -> str:
         lines = (
@@ -479,8 +458,8 @@ class FileRepoTarget:
             + [ind(f'"{url}"', 2) for url in sorted(self.file.urls)]
             + [
                 ind(f"],"),
-                ind(f'sha256 = "{self.file.sha256}",'),
-                ind(f'downloaded_file_path = "{self.file.filename}",'),
+                ind(f'sha256 = "{self.file.file.sha256}",'),
+                ind(f'downloaded_file_path = "{self.file.file.name}",'),
                 ")",
             ]
         )
@@ -488,14 +467,54 @@ class FileRepoTarget:
         return "\n".join(lines)
 
 
-class WheelRepoTarget(FileRepoTarget):
-    def __init__(self, file: RemoteFile, context: GenerationContext):
-        super().__init__(context.naming.wheel_repo(file), file, context)
+class PypiFileRepoTarget:
+    def __init__(
+        self, name: str, package: Package, file: PackageFile, pypi_index: Optional[str]
+    ):
+        self.name = name
+        self.package = package
+        self.file = file
+        self.pypi_index = pypi_index
+
+    def render(self) -> str:
+        lines = [
+            "maybe(",
+            ind("pypi_file,"),
+            ind(f'name = "{self.name}",'),
+            ind(f'package_name = "{self.package.name}",'),
+            ind(f'package_version = "{self.package.version}",'),
+            ind(f'filename = "{self.file.name}",'),
+            ind(f'sha256 = "{self.file.sha256}",'),
+        ]
+
+        if self.pypi_index:
+            lines.append(ind(f'index = "{self.pypi_index}",'))
+
+        lines.append(")")
+
+        return "\n".join(lines)
 
 
-class SdistRepoTarget(FileRepoTarget):
-    def __init__(self, file: RemoteFile, context: GenerationContext):
-        super().__init__(context.naming.sdist_repo(file), file, context)
+class PypiWheelRepoTarget(PypiFileRepoTarget):
+    def __init__(
+        self,
+        package: Package,
+        file: PackageFile,
+        pypi_index: Optional[str],
+        context: GenerationContext,
+    ):
+        super().__init__(context.naming.wheel_repo(file), package, file, pypi_index)
+
+
+class PypiSdistRepoTarget(PypiFileRepoTarget):
+    def __init__(
+        self,
+        package: Package,
+        file: PackageFile,
+        pypi_index: Optional[str],
+        context: GenerationContext,
+    ):
+        super().__init__(context.naming.sdist_repo(file), package, file, pypi_index)
 
 
 def url_wheel_name(url: str) -> str:
@@ -516,12 +535,6 @@ def main():
         with open(target_file, "r") as f:
             environments.append(TargetEnv.from_dict(json.load(f)))
 
-    # TODO: Make this a file instead
-    url_overrides = {}
-    for url_override in args.file_url_override or []:
-        filename, url = url_override.split("=", maxsplit=1)
-        url_overrides[filename] = url
-
     local_wheels = {}
     for local_wheel in args.local_wheel or []:
         filename, label = local_wheel.split("=", maxsplit=1)
@@ -534,8 +547,8 @@ def main():
             "=", maxsplit=1
         )  # rsplit because we know the sha256 contains no '='
         filename = url_wheel_name(url)
-        remote_wheels[filename] = RemoteFile(
-            filename=filename, urls=(url,), sha256=sha256
+        remote_wheels[filename] = UrlFile(
+            file=PackageFile(name=filename, sha256=sha256), urls=(url,)
         )
 
     build_target_overrides = {}
@@ -553,7 +566,6 @@ def main():
     )
     context = GenerationContext(
         target_environments=environments,
-        file_url_overrides=url_overrides,
         local_wheels=local_wheels,
         remote_wheels=remote_wheels,
         naming=naming,
@@ -603,13 +615,24 @@ def main():
             f"Always build specified for non-existent packages: {unused_always_build_packages}"
         )
 
+    pypi_index = args.pypi_index or None
     repos = []
-    for package in package_targets:
-        for source in package.distinct_package_sources:
-            if source.remote_wheel:
-                repos.append(WheelRepoTarget(source.remote_wheel, context))
-            elif source.remote_sdist:
-                repos.append(SdistRepoTarget(source.remote_sdist, context))
+    for package_target in package_targets:
+        for source in package_target.distinct_package_sources:
+            if source.pypi_wheel:
+                repos.append(
+                    PypiWheelRepoTarget(
+                        package_target.package, source.pypi_wheel, pypi_index, context
+                    )
+                )
+            elif source.pypi_sdist:
+                repos.append(
+                    PypiSdistRepoTarget(
+                        package_target.package, source.pypi_sdist, pypi_index, context
+                    )
+                )
+            elif source.url_wheel:
+                repos.append(UrlWheelRepoTarget(source.url_wheel, context))
 
     repos.sort(key=lambda ft: ft.name)
 
@@ -638,7 +661,7 @@ def main():
         w(
             'load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_file")',
             'load("@bazel_tools//tools/build_defs/repo:utils.bzl", "maybe")',
-            'load("@jvolkman_rules_pycross//pycross:defs.bzl", "pycross_wheel_build", "pycross_wheel_library")',
+            'load("@jvolkman_rules_pycross//pycross:defs.bzl", "pycross_wheel_build", "pycross_wheel_library", "pypi_file")',
         )
         w()
 
@@ -740,13 +763,6 @@ def make_parser() -> argparse.ArgumentParser:
     )
 
     parser.add_argument(
-        "--file-url-override",
-        type=str,
-        action="append",
-        help="A file=url parameter that sets the URL for the given wheel or sdist file.",
-    )
-
-    parser.add_argument(
         "--local-wheel",
         type=str,
         action="append",
@@ -778,6 +794,12 @@ def make_parser() -> argparse.ArgumentParser:
         type=str,
         action="append",
         help="A package key that should always be built from source.",
+    )
+
+    parser.add_argument(
+        "--pypi-index",
+        type=str,
+        help="The PyPI-compatible index to use. Defaults to pypi.org.",
     )
 
     parser.add_argument(
