@@ -26,6 +26,7 @@ from pycross.private.tools.lock_model import Package
 from pycross.private.tools.lock_model import PackageDependency
 from pycross.private.tools.lock_model import PackageFile
 from pycross.private.tools.lock_model import is_wheel
+from pycross.private.tools.lock_model import package_canonical_name
 from pycross.private.tools.target_environment import TargetEnv
 
 
@@ -636,18 +637,25 @@ def main():
 
     repos.sort(key=lambda ft: ft.name)
 
-    pins = dict(lock_model.pins)
-    if args.default_alias_single_version:
-        packages_by_name = defaultdict(list)
-        for package_target in package_targets:
-            packages_by_name[package_target.package.name].append(package_target.package)
+    # pin aliases are normalized package names with underscores rather than hashes.
+    def pin_name(name: str) -> str:
+        normal_name = package_canonical_name(name)
+        return normal_name.lower().replace("-", "_")
 
-        for package_name, packages in packages_by_name.items():
-            if package_name in pins:
+    pins = {pin_name(k): v for k, v in lock_model.pins.items()}
+    if args.default_alias_single_version:
+        packages_by_pin_name = defaultdict(list)
+        for package_target in package_targets:
+            packages_by_pin_name[pin_name(package_target.package.name)].append(
+                package_target.package
+            )
+
+        for package_pin_name, packages in packages_by_pin_name.items():
+            if package_pin_name in pins:
                 continue
             if len(packages) > 1:
                 continue
-            pins[package_name] = packages[0].key
+            pins[package_pin_name] = packages[0].key
 
     with open(output, "w") as f:
 
