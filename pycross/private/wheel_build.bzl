@@ -148,6 +148,9 @@ pycross_wheel_build = rule(
         "copts": attr.string_list(
             doc = "Additional C compiler options.",
         ),
+        "linkopts": attr.string_list(
+            doc = "Additional C linker options.",
+        ),
         "_tool": attr.label(
             default = Label("//pycross/private/tools:wheel_builder"),
             cfg = "host",
