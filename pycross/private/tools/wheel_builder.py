@@ -33,11 +33,10 @@ def get_build_env(
     # wheel, by default, enables debug symbols in GCC. This incidentally captures the build path in the .so file
     # We can override this behavior by disabling debug symbols entirely.
     # https://github.com/pypa/pip/issues/6505
-    # TODO: do we need this?
-    # if "CFLAGS" in env:
-    #     env["CFLAGS"] += " -g0"
-    # else:
-    #     env["CFLAGS"] = "-g0"
+    if "CFLAGS" in env:
+        env["CFLAGS"] += " -g0"
+    else:
+        env["CFLAGS"] = "-g0"
 
     # set SOURCE_DATE_EPOCH to 1980 so that we can use python wheels
     # https://github.com/NixOS/nixpkgs/blob/master/doc/languages-frameworks/python.section.md#python-setuppy-bdist_wheel-cannot-create-whl
