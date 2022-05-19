@@ -64,7 +64,7 @@ class PoetryPackage:
 
     @property
     def key(self):
-        return f"{self.name}-{self.version}"
+        return f"{self.name}@{self.version}"
 
     def to_lock_package(self) -> Package:
         return Package(

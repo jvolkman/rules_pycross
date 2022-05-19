@@ -92,7 +92,7 @@ class Naming:
 
     @staticmethod
     def _sanitize(name: str) -> str:
-        return name.lower().replace("-", "_")
+        return name.lower().replace("-", "_").replace("@", "_")
 
     @staticmethod
     def _prefixed(name: str, prefix: Optional[str]):
@@ -327,7 +327,7 @@ class PackageTarget:
     def _common_entries(
         self, deps: Set[PackageDependency], indent: int
     ) -> Iterator[str]:
-        for d in sorted(deps, key=lambda x: x.key):
+        for d in sorted(deps, key=lambda x: self.context.naming.package_label(x.key)):
             yield ind(f'"{self.context.naming.package_label(d.key)}",', indent)
 
     def _select_entries(
@@ -341,7 +341,7 @@ class PackageTarget:
 
     @property
     def _deps_name(self):
-        sanitized = self.package.key.replace("-", "_").replace(".", "_")
+        sanitized = self.package.key.replace("-", "_").replace(".", "_").replace("@", "_")
         return f"_{sanitized}_deps"
 
     def render_deps(self) -> str:

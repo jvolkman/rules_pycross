@@ -85,10 +85,10 @@ pycross_lock_file(
     ],
     default_alias_single_version = True,
     build_target_overrides = {
-        "future-0.18.2": "@//deps:overridden_future_0.18.2",
+        "future@0.18.2": "@//deps:overridden_future_0.18.2",
     },
     always_build_packages = [
-        "pbr-5.8.1",
+        "pbr@5.8.1",
     ],
     pypi_index = "https://pypi.org",
     out = "example_lock.bzl",
