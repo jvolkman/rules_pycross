@@ -708,11 +708,7 @@ def targets():
     pycross_wheel_library(
         name = "sqlalchemy_1.4.36",
         deps = _sqlalchemy_1_4_36_deps,
-        wheel = select({
-            ":_env_python_darwin_arm64": ":_build_sqlalchemy_1.4.36",
-            ":_env_python_darwin_x86_64": "@example_lock_wheel_sqlalchemy_1.4.36_cp39_cp39_macosx_10_15_x86_64//file",
-            ":_env_python_linux_x86_64": "@example_lock_wheel_sqlalchemy_1.4.36_cp39_cp39_manylinux_2_5_x86_64.manylinux1_x86_64.manylinux_2_17_x86_64.manylinux2014_x86_64//file",
-        }),
+        wheel = ":_build_sqlalchemy_1.4.36",
     )
 
     _sqlalchemy_utils_0_38_2_deps = [
@@ -1541,26 +1537,6 @@ def repositories():
         package_version = "1.16.0",
         filename = "six-1.16.0-py2.py3-none-any.whl",
         sha256 = "8abb2f1d86890a2dfb989f9a77cfcfd3e47c2a354b01111771326f8aa26e0254",
-        index = "https://pypi.org",
-    )
-
-    maybe(
-        pypi_file,
-        name = "example_lock_wheel_sqlalchemy_1.4.36_cp39_cp39_macosx_10_15_x86_64",
-        package_name = "sqlalchemy",
-        package_version = "1.4.36",
-        filename = "SQLAlchemy-1.4.36-cp39-cp39-macosx_10_15_x86_64.whl",
-        sha256 = "f522214f6749bc073262529c056f7dfd660f3b5ec4180c5354d985eb7219801e",
-        index = "https://pypi.org",
-    )
-
-    maybe(
-        pypi_file,
-        name = "example_lock_wheel_sqlalchemy_1.4.36_cp39_cp39_manylinux_2_5_x86_64.manylinux1_x86_64.manylinux_2_17_x86_64.manylinux2014_x86_64",
-        package_name = "sqlalchemy",
-        package_version = "1.4.36",
-        filename = "SQLAlchemy-1.4.36-cp39-cp39-manylinux_2_5_x86_64.manylinux1_x86_64.manylinux_2_17_x86_64.manylinux2014_x86_64.whl",
-        sha256 = "2ec89bf98cc6a0f5d1e28e3ad28e9be6f3b4bdbd521a4053c7ae8d5e1289a8a1",
         index = "https://pypi.org",
     )
 
