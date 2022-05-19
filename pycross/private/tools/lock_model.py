@@ -72,7 +72,7 @@ class Package:
 
     @property
     def key(self):
-        return f"{self.name}-{self.version}"
+        return f"{self.name}@{self.version}"
 
 
 @dataclass(frozen=True)
