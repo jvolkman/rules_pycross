@@ -283,8 +283,6 @@ class PackageTarget:
         self,
         package: Package,
         context: GenerationContext,
-        build_target_override: Optional[str],
-        always_build: bool,
     ):
         self.package = package
         self.context = context
@@ -295,12 +293,32 @@ class PackageTarget:
         self.common_deps = deps_by_env.get(None, set())
         self.env_deps = {k: v for k, v in deps_by_env.items() if k is not None}
 
-        self.package_sources_by_env = context.get_package_sources_by_environment(
-            self.package, always_build
-        )
-        self.distinct_package_sources = set(self.package_sources_by_env.values())
-        self.build_target_override = build_target_override
-        self.always_build = always_build
+        self.build_target_override = None
+        self._always_build = False
+        self._package_sources_by_env = None
+
+    @property
+    def package_sources_by_env(self) -> Dict[str, PackageSource]:
+        if self._package_sources_by_env is None:
+            self._package_sources_by_env = (
+                self.context.get_package_sources_by_environment(
+                    self.package, self.always_build
+                )
+            )
+        return self._package_sources_by_env
+
+    @property
+    def always_build(self) -> bool:
+        return self._always_build
+
+    @always_build.setter
+    def always_build(self, val: bool) -> None:
+        self._always_build = val
+        self._package_sources_by_env = None
+
+    @property
+    def distinct_package_sources(self) -> Set[PackageSource]:
+        return set(self.package_sources_by_env.values())
 
     @property
     def all_dependency_keys(self) -> Set[str]:
@@ -341,7 +359,9 @@ class PackageTarget:
 
     @property
     def _deps_name(self):
-        sanitized = self.package.key.replace("-", "_").replace(".", "_").replace("@", "_")
+        sanitized = (
+            self.package.key.replace("-", "_").replace(".", "_").replace("@", "_")
+        )
         return f"_{sanitized}_deps"
 
     def render_deps(self) -> str:
@@ -552,13 +572,6 @@ def main():
             file=PackageFile(name=filename, sha256=sha256), urls=(url,)
         )
 
-    build_target_overrides = {}
-    for build_target_override in args.build_target_override or []:
-        key, target = build_target_override.split("=", maxsplit=1)
-        build_target_overrides[key] = target
-
-    always_build_packages = set(args.always_build_package or [])
-
     naming = Naming(
         repo_prefix=args.repo_prefix,
         package_prefix=args.package_prefix,
@@ -590,8 +603,6 @@ def main():
         entry = PackageTarget(
             package,
             context,
-            build_target_overrides.get(package.key),
-            package.key in always_build_packages,
         )
         package_targets_by_package_key[next_package_key] = entry
         work.extend(entry.all_dependency_keys)
@@ -600,21 +611,46 @@ def main():
         package_targets_by_package_key.values(), key=lambda x: x.package.name
     )
 
-    unused_build_target_overrides = set(build_target_overrides.keys()) - set(
-        package_targets_by_package_key
-    )
-    if unused_build_target_overrides:
-        raise Exception(
-            f"Build target overrides specified for non-existent packages: {unused_build_target_overrides}"
-        )
+    # Build a map of package names to keys found during our walk. We use this to resolve e.g.
+    # "numpy" to "numpy@1.22.3", and fail if there are multiple versions.
+    package_keys_by_canonical_name = defaultdict(list)
+    for target in package_targets:
+        package_keys_by_canonical_name[target.package.name].append(target.package.key)
 
-    unused_always_build_packages = always_build_packages - set(
-        package_targets_by_package_key
-    )
-    if unused_always_build_packages:
-        raise Exception(
-            f"Always build specified for non-existent packages: {unused_always_build_packages}"
-        )
+    def resolve_single_version(name: str, attr_name: str):
+        # Handle the case of an exact version being specified.
+        if "@" in name:
+            if name not in package_targets_by_package_key:
+                raise Exception(f'{attr_name} entry "{name}" matches no packages')
+            return name
+
+        options = package_keys_by_canonical_name.get(name)
+        if not options:
+            raise Exception(f'{attr_name} entry "{name}" matches no packages')
+
+        if len(options) > 1:
+            raise Exception(
+                f'{attr_name} entry "{name}" matches multiple packages (choose one): {sorted(options)}'
+            )
+
+        return options[0]
+
+    # Apply build target overrides to package targets
+    build_target_overrides_used = set()
+    for build_target_override in args.build_target_override or []:
+        key, target = build_target_override.split("=", maxsplit=1)
+        resolved = resolve_single_version(key, "build_target_overrides")
+        if resolved in build_target_overrides_used:
+            raise Exception(
+                f'build_target_overrides entry "{resolved}" listed multiple times'
+            )
+        build_target_overrides_used.add(resolved)
+        package_targets_by_package_key[resolved].build_target_override = target
+
+    # Apply always build flags to package targets
+    for always_build_package in args.always_build_package or []:
+        resolved = resolve_single_version(always_build_package, "always_build_packages")
+        package_targets_by_package_key[resolved].always_build = True
 
     pypi_index = args.pypi_index or None
     repos = []
