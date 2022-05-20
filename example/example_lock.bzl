@@ -67,6 +67,7 @@ PINS = {
     "rsa": "rsa_4.8",
     "s3transfer": "s3transfer_0.5.2",
     "sarif_om": "sarif_om_1.0.4",
+    "setproctitle": "setproctitle_1.2.2",
     "setuptools": "setuptools_59.2.0",
     "six": "six_1.16.0",
     "sqlalchemy": "sqlalchemy_1.4.36",
@@ -74,6 +75,7 @@ PINS = {
     "sshpubkeys": "sshpubkeys_3.3.1",
     "stack_data": "stack_data_0.2.0",
     "traitlets": "traitlets_5.2.1.post0",
+    "tree_sitter": "tree_sitter_0.20.0",
     "urllib3": "urllib3_1.26.9",
     "wcwidth": "wcwidth_0.2.5",
     "websocket_client": "websocket_client_1.3.2",
@@ -537,13 +539,22 @@ def targets():
         wheel = "@example_lock_wheel_networkx_2.8.1_py3_none_any//file",
     )
 
+    _numpy_1_22_3_build_deps = [
+        ":cython_0.29.30",
+        ":setuptools_59.2.0",
+        ":wheel_0.37.0",
+    ]
+
+    pycross_wheel_build(
+        name = "_build_numpy_1.22.3",
+        sdist = "@example_lock_sdist_numpy_1.2//file",
+        deps = _numpy_1_22_3_build_deps,
+        tags = ["manual"],
+    )
+
     pycross_wheel_library(
         name = "numpy_1.22.3",
-        wheel = select({
-            ":_env_python_darwin_arm64": "@example_lock_wheel_numpy_1.22.3_cp39_cp39_macosx_11_0_arm64//file",
-            ":_env_python_darwin_x86_64": "@example_lock_wheel_numpy_1.22.3_cp39_cp39_macosx_10_14_x86_64//file",
-            ":_env_python_linux_x86_64": "@example_lock_wheel_numpy_1.22.3_cp39_cp39_manylinux_2_17_x86_64.manylinux2014_x86_64//file",
-        }),
+        wheel = ":_build_numpy_1.22.3",
     )
 
     pycross_wheel_library(
@@ -714,6 +725,17 @@ def targets():
         wheel = "@example_lock_wheel_sarif_om_1.0.4_py3_none_any//file",
     )
 
+    pycross_wheel_build(
+        name = "_build_setproctitle_1.2.2",
+        sdist = "@example_lock_sdist_setproctitle_1.2.2//file",
+        tags = ["manual"],
+    )
+
+    pycross_wheel_library(
+        name = "setproctitle_1.2.2",
+        wheel = ":_build_setproctitle_1.2.2",
+    )
+
     pycross_wheel_library(
         name = "setuptools_59.2.0",
         wheel = "@example_lock_wheel_setuptools_59.2.0_py3_none_any//file",
@@ -728,23 +750,21 @@ def targets():
         ":greenlet_1.1.2",
     ]
 
-    _sqlalchemy_1_4_36_build_deps = [
-        ":cython_0.29.30",
-        ":setuptools_59.2.0",
-        ":wheel_0.37.0",
-    ]
-
     pycross_wheel_build(
         name = "_build_sqlalchemy_1.4.36",
         sdist = "@example_lock_sdist_sqlalchemy_1.4.36//file",
-        deps = _sqlalchemy_1_4_36_deps + _sqlalchemy_1_4_36_build_deps,
+        deps = _sqlalchemy_1_4_36_deps,
         tags = ["manual"],
     )
 
     pycross_wheel_library(
         name = "sqlalchemy_1.4.36",
         deps = _sqlalchemy_1_4_36_deps,
-        wheel = ":_build_sqlalchemy_1.4.36",
+        wheel = select({
+            ":_env_python_darwin_arm64": ":_build_sqlalchemy_1.4.36",
+            ":_env_python_darwin_x86_64": "@example_lock_wheel_sqlalchemy_1.4.36_cp39_cp39_macosx_10_15_x86_64//file",
+            ":_env_python_linux_x86_64": "@example_lock_wheel_sqlalchemy_1.4.36_cp39_cp39_manylinux_2_5_x86_64.manylinux1_x86_64.manylinux_2_17_x86_64.manylinux2014_x86_64//file",
+        }),
     )
 
     _sqlalchemy_utils_0_38_2_deps = [
@@ -784,6 +804,21 @@ def targets():
     pycross_wheel_library(
         name = "traitlets_5.2.1.post0",
         wheel = "@example_lock_wheel_traitlets_5.2.1.post0_py3_none_any//file",
+    )
+
+    pycross_wheel_build(
+        name = "_build_tree_sitter_0.20.0",
+        sdist = "@example_lock_sdist_tree_sitter_0.20.0//file",
+        tags = ["manual"],
+    )
+
+    pycross_wheel_library(
+        name = "tree_sitter_0.20.0",
+        wheel = select({
+            ":_env_python_darwin_arm64": "@example_lock_wheel_tree_sitter_0.20.0_cp39_cp39_macosx_12_0_arm64//file",
+            ":_env_python_darwin_x86_64": ":_build_tree_sitter_0.20.0",
+            ":_env_python_linux_x86_64": ":_build_tree_sitter_0.20.0",
+        }),
     )
 
     pycross_wheel_library(
@@ -853,6 +888,16 @@ def repositories():
 
     maybe(
         pypi_file,
+        name = "example_lock_sdist_numpy_1.2",
+        package_name = "numpy",
+        package_version = "1.22.3",
+        filename = "numpy-1.22.3.zip",
+        sha256 = "dbc7601a3b7472d559dc7b933b18b4b66f9aa7452c120e87dfb33d02008c8a18",
+        index = "https://pypi.org",
+    )
+
+    maybe(
+        pypi_file,
         name = "example_lock_sdist_pbr_5.9.0",
         package_name = "pbr",
         package_version = "5.9.0",
@@ -863,11 +908,31 @@ def repositories():
 
     maybe(
         pypi_file,
+        name = "example_lock_sdist_setproctitle_1.2.2",
+        package_name = "setproctitle",
+        package_version = "1.2.2",
+        filename = "setproctitle-1.2.2.tar.gz",
+        sha256 = "7dfb472c8852403d34007e01d6e3c68c57eb66433fb8a5c77b13b89a160d97df",
+        index = "https://pypi.org",
+    )
+
+    maybe(
+        pypi_file,
         name = "example_lock_sdist_sqlalchemy_1.4.36",
         package_name = "sqlalchemy",
         package_version = "1.4.36",
         filename = "SQLAlchemy-1.4.36.tar.gz",
         sha256 = "64678ac321d64a45901ef2e24725ec5e783f1f4a588305e196431447e7ace243",
+        index = "https://pypi.org",
+    )
+
+    maybe(
+        pypi_file,
+        name = "example_lock_sdist_tree_sitter_0.20.0",
+        package_name = "tree-sitter",
+        package_version = "0.20.0",
+        filename = "tree_sitter-0.20.0.tar.gz",
+        sha256 = "1940f64be1e8c9c3c0e34a2258f1e4c324207534d5b1eefc5ab2960a9d98f668",
         index = "https://pypi.org",
     )
 
@@ -1373,36 +1438,6 @@ def repositories():
 
     maybe(
         pypi_file,
-        name = "example_lock_wheel_numpy_1.22.3_cp39_cp39_macosx_10_14_x86_64",
-        package_name = "numpy",
-        package_version = "1.22.3",
-        filename = "numpy-1.22.3-cp39-cp39-macosx_10_14_x86_64.whl",
-        sha256 = "2c10a93606e0b4b95c9b04b77dc349b398fdfbda382d2a39ba5a822f669a0123",
-        index = "https://pypi.org",
-    )
-
-    maybe(
-        pypi_file,
-        name = "example_lock_wheel_numpy_1.22.3_cp39_cp39_macosx_11_0_arm64",
-        package_name = "numpy",
-        package_version = "1.22.3",
-        filename = "numpy-1.22.3-cp39-cp39-macosx_11_0_arm64.whl",
-        sha256 = "fade0d4f4d292b6f39951b6836d7a3c7ef5b2347f3c420cd9820a1d90d794802",
-        index = "https://pypi.org",
-    )
-
-    maybe(
-        pypi_file,
-        name = "example_lock_wheel_numpy_1.22.3_cp39_cp39_manylinux_2_17_x86_64.manylinux2014_x86_64",
-        package_name = "numpy",
-        package_version = "1.22.3",
-        filename = "numpy-1.22.3-cp39-cp39-manylinux_2_17_x86_64.manylinux2014_x86_64.whl",
-        sha256 = "97098b95aa4e418529099c26558eeb8486e66bd1e53a6b606d684d0c3616b168",
-        index = "https://pypi.org",
-    )
-
-    maybe(
-        pypi_file,
         name = "example_lock_wheel_parso_0.8.3_py2.py3_none_any",
         package_name = "parso",
         package_version = "0.8.3",
@@ -1643,6 +1678,26 @@ def repositories():
 
     maybe(
         pypi_file,
+        name = "example_lock_wheel_sqlalchemy_1.4.36_cp39_cp39_macosx_10_15_x86_64",
+        package_name = "sqlalchemy",
+        package_version = "1.4.36",
+        filename = "SQLAlchemy-1.4.36-cp39-cp39-macosx_10_15_x86_64.whl",
+        sha256 = "f522214f6749bc073262529c056f7dfd660f3b5ec4180c5354d985eb7219801e",
+        index = "https://pypi.org",
+    )
+
+    maybe(
+        pypi_file,
+        name = "example_lock_wheel_sqlalchemy_1.4.36_cp39_cp39_manylinux_2_5_x86_64.manylinux1_x86_64.manylinux_2_17_x86_64.manylinux2014_x86_64",
+        package_name = "sqlalchemy",
+        package_version = "1.4.36",
+        filename = "SQLAlchemy-1.4.36-cp39-cp39-manylinux_2_5_x86_64.manylinux1_x86_64.manylinux_2_17_x86_64.manylinux2014_x86_64.whl",
+        sha256 = "2ec89bf98cc6a0f5d1e28e3ad28e9be6f3b4bdbd521a4053c7ae8d5e1289a8a1",
+        index = "https://pypi.org",
+    )
+
+    maybe(
+        pypi_file,
         name = "example_lock_wheel_sqlalchemy_utils_0.38.2_py3_none_any",
         package_name = "sqlalchemy-utils",
         package_version = "0.38.2",
@@ -1678,6 +1733,16 @@ def repositories():
         package_version = "5.2.1.post0",
         filename = "traitlets-5.2.1.post0-py3-none-any.whl",
         sha256 = "f44b708d33d98b0addb40c29d148a761f44af740603a8fd0e2f8b5b27cf0f087",
+        index = "https://pypi.org",
+    )
+
+    maybe(
+        pypi_file,
+        name = "example_lock_wheel_tree_sitter_0.20.0_cp39_cp39_macosx_12_0_arm64",
+        package_name = "tree-sitter",
+        package_version = "0.20.0",
+        filename = "tree_sitter-0.20.0-cp39-cp39-macosx_12_0_arm64.whl",
+        sha256 = "51a609a7c1bd9d9e75d92ee128c12c7852ae70a482900fbbccf3d13a79e0378c",
         index = "https://pypi.org",
     )
 
