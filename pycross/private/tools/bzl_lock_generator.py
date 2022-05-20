@@ -125,7 +125,11 @@ class Naming:
 
     def sdist_repo(self, file: PackageFile) -> str:
         assert file.name.endswith(".tar.gz") or file.name.endswith(".zip")
-        name = file.name[:-7]
+        if file.name.endswith(".tar.gz"):
+            name = file.name[:-7]
+        else:
+            name = file.name[:-4]
+
         return f"{self.repo_prefix}_sdist_{self._sanitize(name)}"
 
     def sdist_label(self, file: PackageFile) -> str:
