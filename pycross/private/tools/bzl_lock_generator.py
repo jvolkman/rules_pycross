@@ -5,6 +5,7 @@ import sys
 import textwrap
 from collections import defaultdict
 from dataclasses import dataclass
+from typing import AbstractSet
 from typing import Dict
 from typing import Iterator
 from typing import List
@@ -294,6 +295,7 @@ class PackageTarget:
         self.env_deps = {k: v for k, v in deps_by_env.items() if k is not None}
 
         self.build_target_override = None
+        self.build_deps = None
         self._always_build = False
         self._package_sources_by_env = None
 
@@ -364,6 +366,13 @@ class PackageTarget:
         )
         return f"_{sanitized}_deps"
 
+    @property
+    def _build_deps_name(self):
+        sanitized = (
+            self.package.key.replace("-", "_").replace(".", "_").replace("@", "_")
+        )
+        return f"_{sanitized}_build_deps"
+
     def render_deps(self) -> str:
         assert self.has_deps
         lines = []
@@ -387,6 +396,18 @@ class PackageTarget:
 
         return "\n".join(lines)
 
+    def render_build_deps(self) -> str:
+        assert self.build_deps
+
+        lines = [f"{self._build_deps_name} = ["]
+        for dep in sorted(
+            self.build_deps, key=lambda k: self.context.naming.package_label(k)
+        ):
+            lines.append(ind(f'"{self.context.naming.package_label(dep)}",', 1))
+        lines.append("]")
+
+        return "\n".join(lines)
+
     def render_build(self) -> str:
         source_file = self.source_file
         assert source_file is not None
@@ -398,8 +419,15 @@ class PackageTarget:
             ),
             ind(f'sdist = "{self.context.naming.sdist_label(source_file)}",'),
         ]
+
+        dep_names = []
         if self.has_deps:
-            lines.append(ind(f"deps = {self._deps_name},"))
+            dep_names.append(self._deps_name)
+        if self.build_deps:
+            dep_names.append(self._build_deps_name)
+
+        if dep_names:
+            lines.append(ind(f"deps = {' + '.join(dep_names)},"))
         lines.extend(
             [
                 ind('tags = ["manual"],'),
@@ -455,6 +483,9 @@ class PackageTarget:
         parts = []
         if self.has_deps:
             parts.append(self.render_deps())
+            parts.append("")
+        if self.build_deps:
+            parts.append(self.render_build_deps())
             parts.append("")
         if self.has_source and not self.build_target_override:
             parts.append(self.render_build())
@@ -547,6 +578,30 @@ def url_wheel_name(url: str) -> str:
     return filename
 
 
+def resolve_single_version(
+    name: str,
+    versions_by_name: Dict[str, List[str]],
+    all_versions: AbstractSet[str],
+    attr_name: str,
+):
+    # Handle the case of an exact version being specified.
+    if "@" in name:
+        if name not in all_versions:
+            raise Exception(f'{attr_name} entry "{name}" matches no packages')
+        return name
+
+    options = versions_by_name.get(name)
+    if not options:
+        raise Exception(f'{attr_name} entry "{name}" matches no packages')
+
+    if len(options) > 1:
+        raise Exception(
+            f'{attr_name} entry "{name}" matches multiple packages (choose one): {sorted(options)}'
+        )
+
+    return options[0]
+
+
 def main():
     parser = make_parser()
     args = parser.parse_args()
@@ -588,10 +643,26 @@ def main():
     with open(args.lock_model_file, "r") as f:
         data = f.read()
     lock_model = LockSet.from_json(data)
+    all_package_keys_by_canonical_name = defaultdict(list)
+    for package in lock_model.packages.values():
+        all_package_keys_by_canonical_name[package.name].append(package.key)
 
     # First we walk the dependency graph starting from the set if pinned packages (in pyproject.toml), computing the
     # transitive closure.
-    work = list(lock_model.pins.values())
+    work_set = set(lock_model.pins.values())
+
+    # Also add any declared build dependencies to the initial set.
+    for build_dependency in args.build_dependency or []:
+        _, dep = build_dependency.split("=", maxsplit=1)
+        resolved_dep = resolve_single_version(
+            dep,
+            all_package_keys_by_canonical_name,
+            lock_model.packages.keys(),
+            "package_build_dependencies",
+        )
+        work_set.add(resolved_dep)
+
+    work = list(work_set)
     package_targets_by_package_key = {}
 
     while work:
@@ -617,29 +688,16 @@ def main():
     for target in package_targets:
         package_keys_by_canonical_name[target.package.name].append(target.package.key)
 
-    def resolve_single_version(name: str, attr_name: str):
-        # Handle the case of an exact version being specified.
-        if "@" in name:
-            if name not in package_targets_by_package_key:
-                raise Exception(f'{attr_name} entry "{name}" matches no packages')
-            return name
-
-        options = package_keys_by_canonical_name.get(name)
-        if not options:
-            raise Exception(f'{attr_name} entry "{name}" matches no packages')
-
-        if len(options) > 1:
-            raise Exception(
-                f'{attr_name} entry "{name}" matches multiple packages (choose one): {sorted(options)}'
-            )
-
-        return options[0]
-
     # Apply build target overrides to package targets
     build_target_overrides_used = set()
     for build_target_override in args.build_target_override or []:
         key, target = build_target_override.split("=", maxsplit=1)
-        resolved = resolve_single_version(key, "build_target_overrides")
+        resolved = resolve_single_version(
+            key,
+            package_keys_by_canonical_name,
+            package_targets_by_package_key.keys(),
+            "build_target_overrides",
+        )
         if resolved in build_target_overrides_used:
             raise Exception(
                 f'build_target_overrides entry "{resolved}" listed multiple times'
@@ -649,8 +707,34 @@ def main():
 
     # Apply always build flags to package targets
     for always_build_package in args.always_build_package or []:
-        resolved = resolve_single_version(always_build_package, "always_build_packages")
+        resolved = resolve_single_version(
+            always_build_package,
+            package_keys_by_canonical_name,
+            package_targets_by_package_key.keys(),
+            "always_build_packages",
+        )
         package_targets_by_package_key[resolved].always_build = True
+
+    # Apply package build dependencies
+    for build_dependency in args.build_dependency or []:
+        pkg, dep = build_dependency.split("=", maxsplit=1)
+        resolved_pkg = resolve_single_version(
+            pkg,
+            package_keys_by_canonical_name,
+            package_targets_by_package_key.keys(),
+            "package_build_dependencies",
+        )
+        resolved_dep = resolve_single_version(
+            dep,
+            package_keys_by_canonical_name,
+            package_targets_by_package_key.keys(),
+            "package_build_dependencies",
+        )
+        target = package_targets_by_package_key[resolved_pkg]
+        if target.build_deps is None:
+            target.build_deps = [resolved_dep]
+        else:
+            target.build_deps.append(resolved_dep)
 
     pypi_index = args.pypi_index or None
     repos = []
@@ -838,6 +922,13 @@ def make_parser() -> argparse.ArgumentParser:
         type=str,
         action="append",
         help="A package key that should always be built from source.",
+    )
+
+    parser.add_argument(
+        "--build-dependency",
+        type=str,
+        action="append",
+        help="A key=key parameter that specifies an additional package build dependency",
     )
 
     parser.add_argument(
