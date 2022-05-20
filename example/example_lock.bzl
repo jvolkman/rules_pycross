@@ -547,7 +547,7 @@ def targets():
 
     pycross_wheel_build(
         name = "_build_numpy_1.22.3",
-        sdist = "@example_lock_sdist_numpy_1.2//file",
+        sdist = "@example_lock_sdist_numpy_1.22.3//file",
         deps = _numpy_1_22_3_build_deps,
         tags = ["manual"],
     )
@@ -888,7 +888,7 @@ def repositories():
 
     maybe(
         pypi_file,
-        name = "example_lock_sdist_numpy_1.2",
+        name = "example_lock_sdist_numpy_1.22.3",
         package_name = "numpy",
         package_version = "1.22.3",
         filename = "numpy-1.22.3.zip",
