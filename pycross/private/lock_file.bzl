@@ -82,6 +82,13 @@ def _pycross_lock_file_impl(ctx):
             k
         ])
 
+    for k, d in ctx.attr.package_build_dependencies.items():
+        for dep in d:
+            args.extend([
+                "--build-dependency",
+                "%s=%s" % (k, dep),
+            ])
+
     if ctx.attr.pypi_index:
         args.extend([
             "--pypi-index",
@@ -144,10 +151,13 @@ pycross_lock_file = rule(
             doc = "Generate aliases for all packages that have a single version in the lock file.",
         ),
         "build_target_overrides": attr.string_dict(
-            doc = "A mapping of package keys (name-version) to existing pycross_wheel_build build targets.",
+            doc = "A mapping of package keys (name or name@version) to existing pycross_wheel_build build targets.",
         ),
         "always_build_packages": attr.string_list(
-            doc = "A list of package keys (name-version) to always build from source.",
+            doc = "A list of package keys (name or name@version) to always build from source.",
+        ),
+        "package_build_dependencies": attr.string_list_dict(
+            doc = "A dict of package keys (name or name@version) to a list of that packages build dependency keys."
         ),
         "pypi_index": attr.string(
             doc = "The PyPI-compatible index to use (must support the JSON API).",
