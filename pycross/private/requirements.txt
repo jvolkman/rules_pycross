@@ -12,6 +12,10 @@ dacite==1.6.0 \
     --hash=sha256:4331535f7aabb505c732fa4c3c094313fc0a1d5ea19907bf4726a7819a68b93f \
     --hash=sha256:d48125ed0a0352d3de9f493bf980038088f45f3f9d7498f090b50a847daaa6df
     # via -r pycross/private/requirements.in
+installer==0.5.1 \
+    --hash=sha256:1d6c8d916ed82771945b9c813699e6f57424ded970c9d8bf16bbc23e1e826ed3 \
+    --hash=sha256:f970995ec2bb815e2fdaf7977b26b2091e1e386f0f42eafd5ac811953dc5d445
+    # via -r pycross/private/requirements.in
 packaging==21.3 \
     --hash=sha256:dd47c42927d89ab911e606518907cc2d3a1f38bbd026385970643f9c5b8ecfeb \
     --hash=sha256:ef103e05f519cdc783ae24ea4e2e0f508a9c99b2d4969652eed6a2e1ea5bd522
