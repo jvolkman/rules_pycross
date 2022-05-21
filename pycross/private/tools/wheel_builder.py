@@ -168,7 +168,9 @@ def main(temp_dir: Path, is_debug: bool) -> None:
 
     # After build, there should be a .whl file.
     (wheel_file,) = wheel_dir.glob("*.whl")
-    shutil.move(wheel_file, args.wheel)
+    shutil.move(wheel_file, args.wheel_file)
+    with open(args.wheel_name_file, "w") as f:
+        f.write(os.path.basename(wheel_file))
 
 
 def make_parser() -> argparse.ArgumentParser:
@@ -182,10 +184,17 @@ def make_parser() -> argparse.ArgumentParser:
     )
 
     parser.add_argument(
-        "--wheel",
+        "--wheel-file",
         type=str,
         required=True,
         help="The wheel output path.",
+    )
+
+    parser.add_argument(
+        "--wheel-name-file",
+        type=str,
+        required=True,
+        help="The wheel name output path.",
     )
 
     parser.add_argument(

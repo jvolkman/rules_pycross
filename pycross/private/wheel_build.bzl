@@ -1,6 +1,7 @@
 """Implementation of the pycross_wheel_build rule."""
 
 load(":cc_toolchain_util.bzl", "absolutize_path_in_str", "get_env_vars", "get_flags_info", "get_tools_info")
+load("//pycross:providers.bzl", "PycrossWheelInfo")
 
 load("@bazel_skylib//lib:paths.bzl", "paths")
 load("@bazel_tools//tools/cpp:toolchain_utils.bzl", "find_cpp_toolchain", "use_cpp_toolchain")
@@ -40,7 +41,8 @@ def _get_sysconfig_data(workspace_name, tools, flags):
 
 def _pycross_wheel_build_impl(ctx):
     cc_sysconfig_data = ctx.actions.declare_file(paths.join(ctx.attr.name, "cc_sysconfig.json"))
-    out = ctx.actions.declare_file(paths.join(ctx.attr.name, "wheel.whl"))
+    out_wheel = ctx.actions.declare_file(paths.join(ctx.attr.name, "wheel.whl"))
+    out_name = ctx.actions.declare_file(paths.join(ctx.attr.name, "wheel_name.txt"))
 
     cc_vars = get_env_vars(ctx)
     flags = get_flags_info(ctx)
@@ -52,8 +54,10 @@ def _pycross_wheel_build_impl(ctx):
         ctx.file.sdist.path,
         "--sysconfig-vars",
         cc_sysconfig_data.path,
-        "--wheel",
-        out.path,
+        "--wheel-file",
+        out_wheel.path,
+        "--wheel-name-file",
+        out_name.path,
     ]
 
     imports = depset(
@@ -118,7 +122,7 @@ def _pycross_wheel_build_impl(ctx):
 
     ctx.actions.run(
         inputs = depset(deps, transitive = toolchain_deps),
-        outputs = [out],
+        outputs = [out_wheel, out_name],
         executable = ctx.executable._tool,
         use_default_shell_env = False,
         env = env,
@@ -128,8 +132,12 @@ def _pycross_wheel_build_impl(ctx):
     )
 
     return [
+        PycrossWheelInfo(
+            wheel_file = out_wheel,
+            name_file = out_name,
+        ),
         DefaultInfo(
-            files = depset(direct = [out]),
+            files = depset(direct = [out_wheel]),
         ),
     ]
 
