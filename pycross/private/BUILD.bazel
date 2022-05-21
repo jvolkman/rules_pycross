@@ -70,6 +70,7 @@ bzl_library(
     srcs = ["wheel_build.bzl"],
     deps = [
         ":cc_toolchain_util",
+        "//pycross:providers",
         "@bazel_skylib//lib:paths",
         "@bazel_tools//tools/cpp:toolchain_utils.bzl",
         "@rules_python//docs:defs",
@@ -81,6 +82,7 @@ bzl_library(
     name = "wheel_library",
     srcs = ["wheel_library.bzl"],
     deps = [
+        "//pycross:providers",
         "@bazel_skylib//lib:paths",
         "@rules_python//docs:defs",
     ],
