@@ -38,8 +38,13 @@ def _pycross_wheel_library_impl(ctx):
         outputs = [out],
         executable = ctx.executable._tool,
         arguments = args,
-        mnemonic = "WheelExtract",
-        progress_message = "Extracting %s" % ctx.file.wheel.basename,
+        # Set environment variables to make generated .pyc files reproducible.
+        env = {
+            "SOURCE_DATE_EPOCH": "315532800",
+            "PYTHONHASHSEED": "0",
+        },
+        mnemonic = "WheelInstall",
+        progress_message = "Installing %s" % ctx.file.wheel.basename,
     )
 
     has_py2_only_sources = ctx.attr.python_version == "PY2"
@@ -60,6 +65,7 @@ def _pycross_wheel_library_impl(ctx):
         ctx.label.workspace_name or ctx.workspace_name,  # Default to the local workspace.
         ctx.label.package,
         ctx.label.name,
+        "lib",  # we put lib files in this subdirectory.
     )
 
     imports = depset(
@@ -113,7 +119,7 @@ This option is required to support some packages which cannot handle the convers
             values = ["PY2", "PY3", ""]
         ),
         "_tool": attr.label(
-            default = Label("//pycross/private/tools/extract_wheels:extract"),
+            default = Label("//pycross/private/tools:wheel_installer"),
             cfg = "host",
             executable = True,
         ),

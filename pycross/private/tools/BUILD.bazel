@@ -2,6 +2,17 @@ load("@rules_python//python:defs.bzl", "py_binary")
 
 package(default_visibility = ["//visibility:private"])
 
+py_binary(
+    name = "bzl_lock_generator",
+    srcs = ["bzl_lock_generator.py"],
+    deps = [
+        ":lib",
+        "@rules_pycross_pypi_deps_packaging//:pkg",
+        "@rules_pycross_pypi_deps_tomli//:pkg",
+    ],
+    visibility = ["//visibility:public"],
+)
+
 py_library(
     name = "lib",
     srcs = [
@@ -22,12 +33,31 @@ py_library(
     ]
 )
 
-py_binary(
-    name = "bzl_lock_generator",
-    srcs = ["bzl_lock_generator.py"],
+py_library(
+    name = "namespace_pkgs",
+    srcs = [
+        "namespace_pkgs.py",
+    ],
+)
+
+py_test(
+    name = "namespace_pkgs_test",
+    size = "small",
+    srcs = [
+        "namespace_pkgs_test.py",
+    ],
+    tags = ["unit"],
     deps = [
-        ":lib",
-        "@rules_pycross_pypi_deps_packaging//:pkg",
+        ":namespace_pkgs",
+    ],
+)
+
+py_binary(
+    name = "poetry_translator",
+    srcs = ["poetry_translator.py"],
+    deps = [
+        ":lock_model",
+        "@rules_pycross_pypi_deps_poetry_core//:pkg",
         "@rules_pycross_pypi_deps_tomli//:pkg",
     ],
     visibility = ["//visibility:public"],
@@ -44,23 +74,21 @@ py_binary(
 )
 
 py_binary(
-    name = "poetry_translator",
-    srcs = ["poetry_translator.py"],
-    deps = [
-        ":lock_model",
-        "@rules_pycross_pypi_deps_poetry_core//:pkg",
-        "@rules_pycross_pypi_deps_tomli//:pkg",
-    ],
-    visibility = ["//visibility:public"],
-)
-
-py_binary(
     name = "wheel_builder",
     srcs = ["wheel_builder.py"],
     deps = [
         "@rules_pycross_pypi_deps_build//:pkg",
         "@rules_pycross_pypi_deps_wheel//:pkg",
-        "@rules_python//python/runfiles",
+    ],
+    visibility = ["//visibility:public"],
+)
+
+py_binary(
+    name = "wheel_installer",
+    srcs = ["wheel_installer.py"],
+    deps = [
+        ":namespace_pkgs",
+        "@rules_pycross_pypi_deps_installer//:pkg",
     ],
     visibility = ["//visibility:public"],
 )

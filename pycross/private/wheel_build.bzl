@@ -41,8 +41,15 @@ def _get_sysconfig_data(workspace_name, tools, flags):
 
 def _pycross_wheel_build_impl(ctx):
     cc_sysconfig_data = ctx.actions.declare_file(paths.join(ctx.attr.name, "cc_sysconfig.json"))
-    out_wheel = ctx.actions.declare_file(paths.join(ctx.attr.name, "wheel.whl"))
-    out_name = ctx.actions.declare_file(paths.join(ctx.attr.name, "wheel_name.txt"))
+
+    sdist_name = ctx.file.sdist.basename
+    if sdist_name.lower().endswith(".tar.gz"):
+        wheel_name = sdist_name[:-7]
+    else:
+        wheel_name = sdist_name.rsplit(".", 1)[0]  # Also includes .zip
+
+    out_wheel = ctx.actions.declare_file(paths.join(ctx.attr.name, wheel_name + ".whl"))
+    out_name = ctx.actions.declare_file(paths.join(ctx.attr.name, wheel_name + ".whl.name"))
 
     cc_vars = get_env_vars(ctx)
     flags = get_flags_info(ctx)

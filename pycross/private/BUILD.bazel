@@ -54,12 +54,6 @@ bzl_library(
 )
 
 bzl_library(
-    name = "sysconfig",
-    srcs = ["sysconfig.bzl"],
-    visibility = default_visibility,
-)
-
-bzl_library(
     name = "target_environment",
     srcs = ["target_environment.bzl"],
     visibility = default_visibility,
