@@ -2,7 +2,6 @@ build==0.7.0
 dacite==1.6.0
 installer==0.5.1
 packaging==21.3
-pkginfo==1.8.2
 poetry-core==1.0.8
 tomli==2.0.1
 wheel==0.37.1
