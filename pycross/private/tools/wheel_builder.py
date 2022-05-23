@@ -157,7 +157,9 @@ def main(temp_dir: Path, is_debug: bool) -> None:
     build_env = get_build_env(args, cwd, sysconfig_vars, str(temp_dir))
 
     try:
-        output = subprocess.check_output(args=wheel_args, env=build_env, stderr=subprocess.STDOUT)
+        output = subprocess.check_output(
+            args=wheel_args, env=build_env, stderr=subprocess.STDOUT
+        )
     except subprocess.CalledProcessError as cpe:
         print("===== BUILD FAILED =====", file=sys.stderr)
         print(cpe.output.decode(), file=sys.stderr)

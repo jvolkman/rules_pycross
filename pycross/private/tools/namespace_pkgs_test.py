@@ -5,7 +5,7 @@ import tempfile
 import unittest
 from typing import Optional, Set
 
-from pycross.private.tools.extract_wheels import namespace_pkgs
+from pycross.private.tools import namespace_pkgs
 
 
 class TempDir:
