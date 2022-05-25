@@ -4,7 +4,7 @@ load("@example_lock_repo//:requirements.bzl", "requirement")
 py_binary(
     name = "ipython",
     srcs = ["ipython.py"],
-    deps = ["//deps:ipython"],
+    deps = ["//deps:ipython", "//deps:numpy"],
 )
 
 py_binary(
