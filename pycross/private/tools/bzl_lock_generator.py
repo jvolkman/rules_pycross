@@ -78,6 +78,12 @@ class PackageSource:
         ), "Exactly one of label, pypi_wheel, pypi_sdist or url_wheel must be specified."
 
 
+@dataclass
+class LabelAndTargetEnv:
+    label: str
+    target_environment: TargetEnv
+
+
 class Naming:
     def __init__(
         self,
@@ -153,11 +159,13 @@ class GenerationContext:
         local_wheels: Dict[str, str],
         remote_wheels: Dict[str, UrlFile],
         naming: Naming,
+        target_environment_select: str,
     ):
         self.target_environments = target_environments
         self.local_wheels = local_wheels
         self.remote_wheels = remote_wheels
         self.naming = naming
+        self.target_environment_select = target_environment_select
 
     def check_package_compatibility(self, package: Package) -> None:
         """Sanity check to make sure the requires_python attribute on each package matches our environments."""
@@ -422,6 +430,7 @@ class PackageTarget:
                 f'name = "{self.context.naming.wheel_build_target(self.package.key)}",'
             ),
             ind(f'sdist = "{self.context.naming.sdist_label(source_file)}",'),
+            ind(f"target_environment = {self.context.target_environment_select},"),
         ]
 
         dep_names = []
@@ -610,22 +619,28 @@ def main():
     parser = make_parser()
     args = parser.parse_args()
     output = args.output
-    environments = []
-    for target_file in args.target_environment_file or []:
+    environment_pairs = []
+    for target_environment in args.target_environment or []:
+        target_file, target_label = target_environment
         with open(target_file, "r") as f:
-            environments.append(TargetEnv.from_dict(json.load(f)))
+            environment_pairs.append(
+                LabelAndTargetEnv(
+                    label=target_label,
+                    target_environment=TargetEnv.from_dict(json.load(f)),
+                )
+            )
+    environment_pairs.sort(key=lambda x: x.target_environment.name.lower())
+    environments = [ep.target_environment for ep in environment_pairs]
 
     local_wheels = {}
     for local_wheel in args.local_wheel or []:
-        filename, label = local_wheel.split("=", maxsplit=1)
+        filename, label = local_wheel
         assert is_wheel(filename), f"Local label is not a wheel: {label}"
         local_wheels[filename] = label
 
     remote_wheels = {}
     for remote_wheel in args.remote_wheel or []:
-        url, sha256 = remote_wheel.rsplit(
-            "=", maxsplit=1
-        )  # rsplit because we know the sha256 contains no '='
+        url, sha256 = remote_wheel
         filename = url_wheel_name(url)
         remote_wheels[filename] = UrlFile(
             file=PackageFile(name=filename, sha256=sha256), urls=(url,)
@@ -642,6 +657,7 @@ def main():
         local_wheels=local_wheels,
         remote_wheels=remote_wheels,
         naming=naming,
+        target_environment_select="_target",
     )
 
     with open(args.lock_model_file, "r") as f:
@@ -657,7 +673,7 @@ def main():
 
     # Also add any declared build dependencies to the initial set.
     for build_dependency in args.build_dependency or []:
-        _, dep = build_dependency.split("=", maxsplit=1)
+        _, dep = build_dependency
         resolved_dep = resolve_single_version(
             dep,
             all_package_keys_by_canonical_name,
@@ -695,7 +711,7 @@ def main():
     # Apply build target overrides to package targets
     build_target_overrides_used = set()
     for build_target_override in args.build_target_override or []:
-        key, target = build_target_override.split("=", maxsplit=1)
+        key, target = build_target_override
         resolved = resolve_single_version(
             key,
             package_keys_by_canonical_name,
@@ -721,7 +737,7 @@ def main():
 
     # Apply package build dependencies
     for build_dependency in args.build_dependency or []:
-        pkg, dep = build_dependency.split("=", maxsplit=1)
+        pkg, dep = build_dependency
         resolved_pkg = resolve_single_version(
             pkg,
             package_keys_by_canonical_name,
@@ -825,12 +841,23 @@ def main():
         )
         w()
 
-        for environment in sorted(environments, key=lambda x: x.name.lower()):
+        for environment in environments:
             env_target = EnvTarget(
                 environment.name, environment.python_compatible_with, naming
             )
             w(ind(env_target.render()))
             w()
+
+        w(ind(f"{context.target_environment_select} = select({{"))
+        for ep in environment_pairs:
+            w(
+                ind(
+                    f'"{naming.environment_label(ep.target_environment.name)}": "{ep.label}",',
+                    2,
+                )
+            )
+        w(ind("})"))
+        w()
 
         for e in package_targets:
             w(ind(e.render()))
@@ -888,24 +915,27 @@ def make_parser() -> argparse.ArgumentParser:
     )
 
     parser.add_argument(
-        "--target-environment-file",
+        "--target-environment",
         type=str,
+        nargs=2,
         action="append",
-        help="A pycross_target_environment output file.",
+        help="A (file, label) parameter that maps a pycross_target_environment label to its JSON output file.",
     )
 
     parser.add_argument(
         "--local-wheel",
         type=str,
+        nargs=2,
         action="append",
-        help="A file=label parameter that points to a wheel file in the local repository.",
+        help="A (file, label) parameter that points to a wheel file in the local repository.",
     )
 
     parser.add_argument(
         "--remote-wheel",
         type=str,
+        nargs=2,
         action="append",
-        help="A url=sha256 parameter that points to a remote wheel.",
+        help="A (url, sha256) parameter that points to a remote wheel.",
     )
 
     parser.add_argument(
@@ -917,8 +947,9 @@ def make_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--build-target-override",
         type=str,
+        nargs=2,
         action="append",
-        help="A key=target parameter that specifies the existing pycross_wheel_build target for a package key.",
+        help="A (key, label) parameter that specifies the existing pycross_wheel_build target for a package key.",
     )
 
     parser.add_argument(
@@ -931,8 +962,9 @@ def make_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--build-dependency",
         type=str,
+        nargs=2,
         action="append",
-        help="A key=key parameter that specifies an additional package build dependency",
+        help="A (key, key) parameter that specifies an additional package build dependency",
     )
 
     parser.add_argument(

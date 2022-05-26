@@ -1,7 +1,7 @@
 """Implementation of the pycross_wheel_build rule."""
 
 load(":cc_toolchain_util.bzl", "absolutize_path_in_str", "get_env_vars", "get_flags_info", "get_tools_info")
-load("//pycross:providers.bzl", "PycrossWheelInfo")
+load("//pycross:providers.bzl", "PycrossTargetEnvironmentInfo", "PycrossWheelInfo")
 
 load("@bazel_skylib//lib:paths.bzl", "paths")
 load("@bazel_tools//tools/cpp:toolchain_utils.bzl", "find_cpp_toolchain", "use_cpp_toolchain")
@@ -61,6 +61,8 @@ def _pycross_wheel_build_impl(ctx):
         ctx.file.sdist.path,
         "--sysconfig-vars",
         cc_sysconfig_data.path,
+        "--target-environment-file",
+        ctx.attr.target_environment[PycrossTargetEnvironmentInfo].file.path,
         "--wheel-file",
         out_wheel.path,
         "--wheel-name-file",
@@ -117,7 +119,11 @@ def _pycross_wheel_build_impl(ctx):
 
     ctx.actions.write(cc_sysconfig_data, json.encode(sysconfig_vars))
 
-    deps = [ctx.file.sdist, cc_sysconfig_data] + ctx.files.deps
+    deps = [
+        ctx.file.sdist,
+        ctx.attr.target_environment[PycrossTargetEnvironmentInfo].file,
+        cc_sysconfig_data,
+    ] + ctx.files.deps
     toolchain_deps = []
     if cpp_toolchain.all_files:
         toolchain_deps.append(cpp_toolchain.all_files)
@@ -159,6 +165,10 @@ pycross_wheel_build = rule(
             doc = "The sdist file.",
             allow_single_file = [".tar.gz", ".zip"],
             mandatory = True,
+        ),
+        "target_environment": attr.label(
+            doc = "The target environment to build for.",
+            providers = [PycrossTargetEnvironmentInfo],
         ),
         "copts": attr.string_list(
             doc = "Additional C compiler options.",

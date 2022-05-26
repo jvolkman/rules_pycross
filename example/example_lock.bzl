@@ -117,6 +117,12 @@ def targets():
         ],
     )
 
+    _target = select({
+        ":_env_python_darwin_arm64": "@//:python_darwin_arm64",
+        ":_env_python_darwin_x86_64": "@//:python_darwin_x86_64",
+        ":_env_python_linux_x86_64": "@//:python_linux_x86_64",
+    })
+
     pycross_wheel_library(
         name = "appnope_0.1.3",
         wheel = "@example_lock_wheel_appnope_0.1.3_py2.py3_none_any//file",
@@ -337,6 +343,7 @@ def targets():
     pycross_wheel_build(
         name = "_build_greenlet_1.1.2",
         sdist = "@example_lock_sdist_greenlet_1.1.2//file",
+        target_environment = _target,
         tags = ["manual"],
     )
 
@@ -545,16 +552,13 @@ def targets():
         ":wheel_0.37.0",
     ]
 
-    pycross_wheel_build(
-        name = "_build_numpy_1.22.3",
-        sdist = "@example_lock_sdist_numpy_1.22.3//file",
-        deps = _numpy_1_22_3_build_deps,
-        tags = ["manual"],
-    )
-
     pycross_wheel_library(
         name = "numpy_1.22.3",
-        wheel = ":_build_numpy_1.22.3",
+        wheel = select({
+            ":_env_python_darwin_arm64": "@example_lock_wheel_numpy_1.22.3_cp39_cp39_macosx_11_0_arm64//file",
+            ":_env_python_darwin_x86_64": "@example_lock_wheel_numpy_1.22.3_cp39_cp39_macosx_10_14_x86_64//file",
+            ":_env_python_linux_x86_64": "@example_lock_wheel_numpy_1.22.3_cp39_cp39_manylinux_2_17_x86_64.manylinux2014_x86_64//file",
+        }),
     )
 
     pycross_wheel_library(
@@ -565,6 +569,7 @@ def targets():
     pycross_wheel_build(
         name = "_build_pbr_5.9.0",
         sdist = "@example_lock_sdist_pbr_5.9.0//file",
+        target_environment = _target,
         tags = ["manual"],
     )
 
@@ -728,6 +733,7 @@ def targets():
     pycross_wheel_build(
         name = "_build_setproctitle_1.2.2",
         sdist = "@example_lock_sdist_setproctitle_1.2.2//file",
+        target_environment = _target,
         tags = ["manual"],
     )
 
@@ -753,6 +759,7 @@ def targets():
     pycross_wheel_build(
         name = "_build_sqlalchemy_1.4.36",
         sdist = "@example_lock_sdist_sqlalchemy_1.4.36//file",
+        target_environment = _target,
         deps = _sqlalchemy_1_4_36_deps,
         tags = ["manual"],
     )
@@ -809,6 +816,7 @@ def targets():
     pycross_wheel_build(
         name = "_build_tree_sitter_0.20.0",
         sdist = "@example_lock_sdist_tree_sitter_0.20.0//file",
+        target_environment = _target,
         tags = ["manual"],
     )
 
@@ -883,16 +891,6 @@ def repositories():
         package_version = "1.1.2",
         filename = "greenlet-1.1.2.tar.gz",
         sha256 = "e30f5ea4ae2346e62cedde8794a56858a67b878dd79f7df76a0767e356b1744a",
-        index = "https://pypi.org",
-    )
-
-    maybe(
-        pypi_file,
-        name = "example_lock_sdist_numpy_1.22.3",
-        package_name = "numpy",
-        package_version = "1.22.3",
-        filename = "numpy-1.22.3.zip",
-        sha256 = "dbc7601a3b7472d559dc7b933b18b4b66f9aa7452c120e87dfb33d02008c8a18",
         index = "https://pypi.org",
     )
 
@@ -1433,6 +1431,36 @@ def repositories():
         package_version = "2.8.1",
         filename = "networkx-2.8.1-py3-none-any.whl",
         sha256 = "07b89bb42483d385ae31f110b3da873b98639ae00b7dbc05bf0da706e2d10459",
+        index = "https://pypi.org",
+    )
+
+    maybe(
+        pypi_file,
+        name = "example_lock_wheel_numpy_1.22.3_cp39_cp39_macosx_10_14_x86_64",
+        package_name = "numpy",
+        package_version = "1.22.3",
+        filename = "numpy-1.22.3-cp39-cp39-macosx_10_14_x86_64.whl",
+        sha256 = "2c10a93606e0b4b95c9b04b77dc349b398fdfbda382d2a39ba5a822f669a0123",
+        index = "https://pypi.org",
+    )
+
+    maybe(
+        pypi_file,
+        name = "example_lock_wheel_numpy_1.22.3_cp39_cp39_macosx_11_0_arm64",
+        package_name = "numpy",
+        package_version = "1.22.3",
+        filename = "numpy-1.22.3-cp39-cp39-macosx_11_0_arm64.whl",
+        sha256 = "fade0d4f4d292b6f39951b6836d7a3c7ef5b2347f3c420cd9820a1d90d794802",
+        index = "https://pypi.org",
+    )
+
+    maybe(
+        pypi_file,
+        name = "example_lock_wheel_numpy_1.22.3_cp39_cp39_manylinux_2_17_x86_64.manylinux2014_x86_64",
+        package_name = "numpy",
+        package_version = "1.22.3",
+        filename = "numpy-1.22.3-cp39-cp39-manylinux_2_17_x86_64.manylinux2014_x86_64.whl",
+        sha256 = "97098b95aa4e418529099c26558eeb8486e66bd1e53a6b606d684d0c3616b168",
         index = "https://pypi.org",
     )
 

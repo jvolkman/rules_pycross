@@ -17,6 +17,10 @@ import tempfile
 from pathlib import Path
 from typing import Dict
 
+from packaging.utils import parse_wheel_filename
+
+from pycross.private.tools.target_environment import TargetEnv
+
 
 def set_or_append(env: Dict[str, Any], key: str, value: str) -> None:
     if key in env:
@@ -122,10 +126,23 @@ def extract_sdist(sdist_path: str, sdist_dir: Path) -> None:
         assert False, f"Unsupported sdist format: {sdist_path}"
 
 
+def check_filename_against_target(
+    wheel_name: str, target_environment: TargetEnv
+) -> None:
+    _, _, _, tags = parse_wheel_filename(wheel_name)
+    tag_names = {str(t) for t in tags}
+    assert tag_names.intersection(
+        target_environment.compatibility_tags
+    ), f"No tags in {wheel_name} match target environment {target_environment.name}"
+
+
 def main(temp_dir: Path, is_debug: bool) -> None:
     parser = make_parser()
     args = parser.parse_args()
     cwd = os.getcwd()
+
+    with open(args.target_environment_file, "r") as f:
+        target_environment = TargetEnv.from_dict(json.load(f))
 
     sdist_dir = temp_dir / "sdist"
     wheel_dir = temp_dir / "wheel"
@@ -170,6 +187,8 @@ def main(temp_dir: Path, is_debug: bool) -> None:
 
     # After build, there should be a .whl file.
     (wheel_file,) = wheel_dir.glob("*.whl")
+    check_filename_against_target(os.path.basename(wheel_file), target_environment)
+
     shutil.move(wheel_file, args.wheel_file)
     with open(args.wheel_name_file, "w") as f:
         f.write(os.path.basename(wheel_file))
@@ -211,6 +230,13 @@ def make_parser() -> argparse.ArgumentParser:
         type=str,
         required=True,
         help="A JSON file containing variable to add to sysconfig.",
+    )
+
+    parser.add_argument(
+        "--target-environment-file",
+        type=str,
+        required=True,
+        help="A JSON file containing the target Python environment details.",
     )
 
     return parser
