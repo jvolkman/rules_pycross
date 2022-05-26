@@ -77,7 +77,9 @@ py_binary(
     name = "wheel_builder",
     srcs = ["wheel_builder.py"],
     deps = [
+        ":lib",
         "@rules_pycross_pypi_deps_build//:pkg",
+        "@rules_pycross_pypi_deps_packaging//:pkg",
         "@rules_pycross_pypi_deps_wheel//:pkg",
     ],
     visibility = ["//visibility:public"],

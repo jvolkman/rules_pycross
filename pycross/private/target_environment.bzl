@@ -1,8 +1,6 @@
 """Implementation of the pycross_target_environment rule."""
 
-
-TargetEnvironmentInfo = provider()
-
+load("//pycross:providers.bzl", "PycrossTargetEnvironmentInfo")
 
 def fully_qualified_label(label):
     return "@%s//%s:%s" % (label.workspace_name, label.package, label.name)
@@ -47,9 +45,9 @@ def _target_python_impl(ctx):
     )
 
     return [
-        TargetEnvironmentInfo(
+        PycrossTargetEnvironmentInfo(
             python_compatible_with=ctx.attr.python_compatible_with,
-            output=f,
+            file=f,
         ),
         DefaultInfo(
             files=depset([f])
@@ -142,9 +140,9 @@ def _macos_target_python_impl(ctx):
     )
 
     return [
-        TargetEnvironmentInfo(
+        PycrossTargetEnvironmentInfo(
             python_compatible_with=ctx.attr.python_compatible_with,
-            output=f,
+            file=f,
         ),
         DefaultInfo(
             files=depset([f])

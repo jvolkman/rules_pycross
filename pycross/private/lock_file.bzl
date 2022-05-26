@@ -1,6 +1,6 @@
 """Implementation of the pycross_lock_file rule."""
 
-load(":target_environment.bzl", "TargetEnvironmentInfo")
+load("//pycross:providers.bzl", "PycrossTargetEnvironmentInfo")
 
 def fully_qualified_label(label):
     return "@%s//%s:%s" % (label.workspace_name, label.package, label.name)
@@ -29,10 +29,11 @@ def _pycross_lock_file_impl(ctx):
         out.path,
     ]
 
-    for t in ctx.files.target_environments:
+    for t in ctx.attr.target_environments:
         args.extend([
-            "--target-environment-file",
-            t.path,
+            "--target-environment",
+            t[PycrossTargetEnvironmentInfo].file.path,
+            fully_qualified_label(t.label),
         ])
 
     for local_wheel in ctx.files.local_wheels:
@@ -40,13 +41,15 @@ def _pycross_lock_file_impl(ctx):
             fail("Could not determine owning lable for local wheel: %s" % local_wheel)
         args.extend([
             "--local-wheel",
-            "%s=%s" % (local_wheel.basename, fully_qualified_label(local_wheel.owner)),
+            local_wheel.basename,
+            fully_qualified_label(local_wheel.owner),
         ])
 
     for remote_wheel_url, sha256 in ctx.attr.remote_wheels.items():
         args.extend([
             "--remote-wheel",
-            "%s=%s" % (remote_wheel_url, sha256),
+            remote_wheel_url,
+            sha256,
         ])
 
     if ctx.attr.package_prefix != None:
@@ -73,7 +76,8 @@ def _pycross_lock_file_impl(ctx):
     for k, t in ctx.attr.build_target_overrides.items():
         args.extend([
             "--build-target-override",
-            "%s=%s" % (k, t),
+            k,
+            t,
         ])
 
     for k in ctx.attr.always_build_packages:
@@ -86,7 +90,8 @@ def _pycross_lock_file_impl(ctx):
         for dep in d:
             args.extend([
                 "--build-dependency",
-                "%s=%s" % (k, dep),
+                k,
+                dep,
             ])
 
     if ctx.attr.pypi_index:
@@ -117,7 +122,7 @@ pycross_lock_file = rule(
         "target_environments": attr.label_list(
             doc = "A list of pycross_target_environment labels.",
             allow_files = True,
-            providers = [TargetEnvironmentInfo],
+            providers = [PycrossTargetEnvironmentInfo],
         ),
         "lock_model_file": attr.label(
             doc = "The lock model JSON file.",
