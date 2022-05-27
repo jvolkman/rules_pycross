@@ -1,7 +1,7 @@
 """Implementation of the pycross_wheel_build rule."""
 
 load(":cc_toolchain_util.bzl", "absolutize_path_in_str", "get_env_vars", "get_flags_info", "get_tools_info")
-load("//pycross:providers.bzl", "PycrossTargetEnvironmentInfo", "PycrossWheelInfo")
+load(":providers.bzl", "PycrossTargetEnvironmentInfo", "PycrossWheelInfo")
 
 load("@bazel_skylib//lib:paths.bzl", "paths")
 load("@bazel_tools//tools/cpp:toolchain_utils.bzl", "find_cpp_toolchain", "use_cpp_toolchain")

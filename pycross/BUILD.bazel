@@ -30,9 +30,3 @@ bzl_library(
     ],
     visibility = ["//visibility:public"],
 )
-
-bzl_library(
-    name = "providers",
-    srcs = ["providers.bzl"],
-    visibility = ["//visibility:public"],
-)

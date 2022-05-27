@@ -172,3 +172,41 @@ Downloads a file from a PyPI-compatible package index.
 | <a id="pypi_file-sha256"></a>sha256 |  The expected SHA-256 of the file downloaded.   | String | required |  |
 
 
+<a id="#PycrossTargetEnvironmentInfo"></a>
+
+## PycrossTargetEnvironmentInfo
+
+<pre>
+PycrossTargetEnvironmentInfo(<a href="#PycrossTargetEnvironmentInfo-python_compatible_with">python_compatible_with</a>, <a href="#PycrossTargetEnvironmentInfo-file">file</a>)
+</pre>
+
+A target environment description.
+
+**FIELDS**
+
+
+| Name  | Description |
+| :------------- | :------------- |
+| <a id="PycrossTargetEnvironmentInfo-python_compatible_with"></a>python_compatible_with |  A list of constraints used to select this platform.    |
+| <a id="PycrossTargetEnvironmentInfo-file"></a>file |  The JSON file containing target environment information.    |
+
+
+<a id="#PycrossWheelInfo"></a>
+
+## PycrossWheelInfo
+
+<pre>
+PycrossWheelInfo(<a href="#PycrossWheelInfo-name_file">name_file</a>, <a href="#PycrossWheelInfo-wheel_file">wheel_file</a>)
+</pre>
+
+Information about a Python wheel.
+
+**FIELDS**
+
+
+| Name  | Description |
+| :------------- | :------------- |
+| <a id="PycrossWheelInfo-name_file"></a>name_file |  File: A file containing the canonical name of the wheel.    |
+| <a id="PycrossWheelInfo-wheel_file"></a>wheel_file |  File: The wheel file itself.    |
+
+
