@@ -44,11 +44,11 @@ install_deps()
 
 # Setup a CC toolchain using bazel-zig-cc
 # https://git.sr.ht/~motiejus/bazel-zig-cc
-BAZEL_ZIG_CC_VERSION = "79676d28515bc90254a5b1a4f878a20541f3c448"
+BAZEL_ZIG_CC_VERSION = "f042622b91e3232624fa1c7e8830db44b4b46cbf"
 
 http_archive(
     name = "bazel-zig-cc",
-    sha256 = "",
+    sha256 = "e248caf613017666d48eb0e60713561a26a95457671cf7cd875f5610d9e2896a",
     strip_prefix = "bazel-zig-cc-{}".format(BAZEL_ZIG_CC_VERSION),
     urls = ["https://git.sr.ht/~jvolkman/bazel-zig-cc/archive/{}.tar.gz".format(BAZEL_ZIG_CC_VERSION)],
 )
