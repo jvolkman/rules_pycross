@@ -2,7 +2,9 @@
 import os
 import textwrap
 from pathlib import Path  # supported in >= 3.4
-from typing import List, Optional, Set
+from typing import List
+from typing import Optional
+from typing import Set
 
 
 def implicit_namespace_packages(

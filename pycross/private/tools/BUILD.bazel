@@ -5,12 +5,12 @@ package(default_visibility = ["//visibility:private"])
 py_binary(
     name = "bzl_lock_generator",
     srcs = ["bzl_lock_generator.py"],
+    visibility = ["//visibility:public"],
     deps = [
         ":lib",
         "@rules_pycross_pypi_deps_packaging//:pkg",
         "@rules_pycross_pypi_deps_tomli//:pkg",
     ],
-    visibility = ["//visibility:public"],
 )
 
 py_library(
@@ -21,7 +21,7 @@ py_library(
     deps = [
         ":lock_model",
         "@rules_pycross_pypi_deps_packaging//:pkg",
-    ]
+    ],
 )
 
 py_library(
@@ -30,7 +30,7 @@ py_library(
     deps = [
         "@rules_pycross_pypi_deps_dacite//:pkg",
         "@rules_pycross_pypi_deps_packaging//:pkg",
-    ]
+    ],
 )
 
 py_library(
@@ -55,54 +55,53 @@ py_test(
 py_binary(
     name = "pdm_translator",
     srcs = ["pdm_translator.py"],
+    visibility = ["//visibility:public"],
     deps = [
         ":lock_model",
         "@rules_pycross_pypi_deps_pdm//:pkg",
         # ":pdm",
         "@rules_pycross_pypi_deps_tomli//:pkg",
     ],
-    visibility = ["//visibility:public"],
 )
 
 py_binary(
     name = "poetry_translator",
     srcs = ["poetry_translator.py"],
+    visibility = ["//visibility:public"],
     deps = [
         ":lock_model",
         "@rules_pycross_pypi_deps_poetry_core//:pkg",
         "@rules_pycross_pypi_deps_tomli//:pkg",
     ],
-    visibility = ["//visibility:public"],
 )
 
 py_binary(
     name = "target_environment_generator",
     srcs = ["target_environment_generator.py"],
+    visibility = ["//visibility:public"],
     deps = [
         ":lib",
         "@rules_pycross_pypi_deps_packaging//:pkg",
     ],
-    visibility = ["//visibility:public"],
 )
 
 py_binary(
     name = "wheel_builder",
     srcs = ["wheel_builder.py"],
+    visibility = ["//visibility:public"],
     deps = [
         ":lib",
         "@rules_pycross_pypi_deps_build//:pkg",
         "@rules_pycross_pypi_deps_packaging//:pkg",
-        "@rules_pycross_pypi_deps_wheel//:pkg",
     ],
-    visibility = ["//visibility:public"],
 )
 
 py_binary(
     name = "wheel_installer",
     srcs = ["wheel_installer.py"],
+    visibility = ["//visibility:public"],
     deps = [
         ":namespace_pkgs",
         "@rules_pycross_pypi_deps_installer//:pkg",
     ],
-    visibility = ["//visibility:public"],
 )

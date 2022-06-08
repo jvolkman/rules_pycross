@@ -3,7 +3,8 @@ import pathlib
 import shutil
 import tempfile
 import unittest
-from typing import Optional, Set
+from typing import Optional
+from typing import Set
 
 from pycross.private.tools import namespace_pkgs
 

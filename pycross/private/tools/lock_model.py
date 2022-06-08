@@ -11,9 +11,10 @@ from typing import Any
 from typing import Dict
 from typing import List
 
-from packaging.utils import NormalizedName, Version, canonicalize_name
-
 import dacite
+from packaging.utils import NormalizedName
+from packaging.utils import Version
+from packaging.utils import canonicalize_name
 
 
 class _VersionHandlingEncoder(JSONEncoder):
