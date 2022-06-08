@@ -3,6 +3,11 @@ load("@bazel_skylib//:bzl_library.bzl", "bzl_library")
 # For stardoc to reference the files
 exports_files(["defs.bzl"])
 
+toolchain_type(
+    name = "toolchain_type",
+    visibility = ["//visibility:public"],
+)
+
 bzl_library(
     name = "repositories",
     srcs = ["repositories.bzl"],
@@ -29,5 +34,14 @@ bzl_library(
         "//pycross/private:target_environment",
         "//pycross/private:wheel_build",
         "//pycross/private:wheel_library",
+    ],
+)
+
+bzl_library(
+    name = "toolchain",
+    srcs = ["toolchain.bzl"],
+    deps = [
+        "//pycross/private:providers",
+        "@bazel_skylib//lib:paths",
     ],
 )

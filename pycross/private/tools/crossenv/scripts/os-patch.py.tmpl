@@ -1,0 +1,31 @@
+from collections import namedtuple
+
+# Fixup os.uname, which should fix most of platform module
+uname_result_type = namedtuple('uname_result',
+        'sysname nodename release version machine')
+_uname_result = uname_result_type(
+        {{repr(target.uname_sysname.title())}},
+        'build',
+        {{repr(target.uname_release)}},
+        '',
+        {{repr(target.uname_machine)}})
+
+def uname():
+    return _uname_result
+
+# pip, packaging, and subprocess all use confstr to get the libc version. We do
+# not want the host's glibc version to show up, as this affects things like
+# manylinux determination. Always return something of the form "name version",
+# or pip will fall back to querying ctypes, which I am not brave enough to
+# patch. Subprocess will likely end up using less efficient implementations,
+# but functionality shouldn't be affected.
+_original_confstr = confstr
+def confstr(name):
+    if name == 'CS_GNU_LIBC_VERSION':
+        version = {{repr(target.effective_glibc)}}
+        if version is None:
+            return 'unknown 0.0'
+        else:
+            return f'glibc {version}'
+    else:
+        return _original_confstr(name)

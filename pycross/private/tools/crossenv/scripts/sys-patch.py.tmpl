@@ -1,0 +1,42 @@
+cross_compiling = True
+
+abiflags = {{repr(target.abiflags)}}
+if abiflags is None:
+    del abiflags
+
+implementation._multiarch = {{repr(target.multiarch)}}
+if implementation._multiarch is None:
+    del implementation._multiarch
+
+# Remove cross-python from sys.path. It's not needed after startup.
+path.remove({{repr(lib_path)}})
+path.remove({{repr(exec_stdlib)}})
+
+# Patch sys.platform
+exec_platform = platform
+target_platform = {{repr(target.uname_sysname.lower())}}
+del platform
+
+# TODO: improve the target vs. exec criteria in this method.
+def __getattr__(name):
+    if name != 'platform':
+        raise AttributeError(name)
+
+    import traceback
+    frames = traceback.extract_stack(limit=2)
+    assert len(frames) == 2
+    frame = frames[0]
+
+    # frozen modules - part of the interpreter itself? Report exec platform.
+    if frame.filename.startswith("<frozen"):
+        return exec_platform
+    # Report cross platform to distutils
+    elif "distutils/" in frame.filename:
+        return target_platform
+    # Report the target platform to anything local
+    # (e.g., setup.py in the module we're building)
+    elif not frame.filename.startswith("/"):
+        return target_platform
+    # Report exec platform to everything else
+    else:
+        return exec_platform

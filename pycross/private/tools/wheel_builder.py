@@ -1,5 +1,5 @@
 """
-A PEP 517 wheel builder.
+A PEP 517 wheel builder that supports (or tries to) cross-platform builds.
 """
 import argparse
 import json
@@ -23,7 +23,7 @@ from typing import Sequence
 
 from build import ProjectBuilder
 from packaging.utils import parse_wheel_filename
-
+from pycross.private.tools.crossenv.utils import find_sysconfig_data
 from pycross.private.tools.target_environment import TargetEnv
 
 _COLORS = {
@@ -60,31 +60,81 @@ def _error(msg: str, code: int = 1) -> NoReturn:  # pragma: no cover
     raise SystemExit(code)
 
 
-def get_original_sysconfig(
-    exec_python_exe: Path,
-) -> Dict[str, Any]:
+def determine_target_path_from_exec(exec_python_exe: Path, target_python_exe: Path) -> List[Path]:
     query_args = (
-        str(exec_python_exe),
+        exec_python_exe,
         "-c",
-        textwrap.dedent(
-            """\
-        import importlib, json, sysconfig
-        sysconfigdata_name = sysconfig._get_sysconfigdata_name()
-        if sysconfigdata_name:
-            vars = importlib.import_module(sysconfigdata_name).build_time_vars
-            print(json.dumps(vars))
-        else:
-            print("{}")
-        """
-        ),
+        "import json, sys; print(json.dumps(dict(exec=sys.executable, path=sys.path)))",
     )
     try:
-        vars_json = subprocess.check_output(args=query_args)
-        return json.loads(vars_json)
+        out_json = subprocess.check_output(args=query_args, env={})
+        query_result = json.loads(out_json)
     except subprocess.CalledProcessError as cpe:
-        print("Failed to query exec_python for sysconfig vars")
+        print("Failed to query exec_python for target path")
         print(cpe.output.decode(), file=sys.stderr)
         raise
+
+    exec_path = Path(query_result["exec"]).resolve()
+    sys_path = [Path(p).resolve() for p in query_result["path"]]
+    target_exec_resolved = target_python_exe.resolve()
+
+    result = []
+    for p in sys_path:
+        try:
+            # Get the ancestor common to both sys.executable and this path entry
+            common = Path(os.path.commonpath([exec_path, p])).absolute()
+            # Get the depth from sys.executable to that common ancestor
+            exec_depth = len(exec_path.relative_to(common).parents)
+            # Get the path entry relative to that common ancestor
+            rel = p.relative_to(common)
+            # Construct a path with the target executable + enough ".." entries + the relative path
+            up_path = Path(*[".."] * exec_depth)
+            path = (target_exec_resolved / up_path / rel).resolve()
+            result.append(path)
+
+        except ValueError:
+            continue
+
+    return result
+
+
+def get_target_sysconfig(
+    target_sys_path: List[Path],
+    exec_python_exe: Path,
+    target_python_exe: Path,
+) -> Dict[str, Any]:
+    if exec_python_exe == target_python_exe:
+        # No need to go searching if exec_python and target_python are the same.
+        query_args = (
+            exec_python_exe,
+            "-c",
+            textwrap.dedent(
+                """\
+            import importlib, json, sysconfig
+            sysconfigdata_name = sysconfig._get_sysconfigdata_name()
+            if sysconfigdata_name:
+                vars = importlib.import_module(sysconfigdata_name).build_time_vars
+                print(json.dumps(vars))
+            else:
+                print("{}")
+            """
+            ),
+        )
+        try:
+            vars_json = subprocess.check_output(args=query_args)
+            return json.loads(vars_json)
+        except subprocess.CalledProcessError as cpe:
+            print("Failed to query exec_python for sysconfig vars")
+            print(cpe.output.decode(), file=sys.stderr)
+            raise
+
+    # Otherwise, search target_sys_path entries.
+    # If target_sys_path is empty, we try to determine it from the exec python's sys path.
+
+    if not target_sys_path:
+        target_sys_path = determine_target_path_from_exec(exec_python_exe, target_python_exe)
+
+    return find_sysconfig_data(target_sys_path)
 
 
 def set_or_append(env: Dict[str, Any], key: str, value: str) -> None:
@@ -244,12 +294,12 @@ def generate_cc_wrappers(
 
 def generate_cross_sysconfig_vars(
     toolchain_vars: Dict[str, Any],
-    original_vars: Dict[str, Any],
+    target_vars: Dict[str, Any],
     wrapper_vars: Dict[str, Any],
 ) -> Dict[str, Any]:
     sysconfig_vars = toolchain_vars.copy()
     sysconfig_vars.update(wrapper_vars)
-    sysconfig_vars.update(get_inherited_vars(original_vars))
+    sysconfig_vars.update(get_inherited_vars(target_vars))
 
     # wheel_build.bzl gives us LDSHAREDFLAGS, but Python wants LDSHARED which is a combination of CC and LDSHAREDFLAGS
     sysconfig_vars["LDSHARED"] = " ".join(
@@ -307,6 +357,48 @@ def find_site_dir(env_dir: Path) -> Path:
         raise ValueError(f"Cannot find site-packages under {env_dir}")
 
 
+def build_cross_venv(
+    env_dir: Path,
+    exec_python_exe: Path,
+    target_python_exe: Path,
+    sysconfig_vars: Dict[str, Any],
+    target_env: TargetEnv,
+) -> None:
+    sysconfig_json = env_dir / "sysconfig.json"
+    with open(sysconfig_json, "w") as f:
+        json.dump(sysconfig_vars, f, indent=2)
+
+    crossenv_args = [
+        exec_python_exe,
+        "-m",
+        "pycross.private.tools.crossenv",
+        "--env-dir",
+        str(env_dir),
+        "--sysconfig-json",
+        str(sysconfig_json),
+        "--target-python",
+        target_python_exe,
+    ]
+
+    for tag in target_env.compatibility_tags:
+        if "manylinux" in tag:
+            crossenv_args.extend(
+                [
+                    "--manylinux",
+                    tag,
+                ]
+            )
+
+    try:
+        subprocess.check_output(
+            args=crossenv_args, env=os.environ, stderr=subprocess.STDOUT
+        )
+    except subprocess.CalledProcessError as cpe:
+        print("===== CROSSENV FAILED =====", file=sys.stderr)
+        print(cpe.output.decode(), file=sys.stderr)
+        raise
+
+
 def build_standard_venv(
     env_dir: Path, exec_python_exe: Path, sysconfig_vars: Dict[str, Any]
 ) -> None:
@@ -341,10 +433,18 @@ def build_standard_venv(
 def build_venv(
     env_dir: Path,
     exec_python_exe: Path,
+    target_python_exe: Path,
     sysconfig_vars: Dict[str, Any],
     path: List[str],
+    target_env: TargetEnv,
+    always_use_crossenv: bool = False,
 ) -> None:
-    build_standard_venv(env_dir, exec_python_exe, sysconfig_vars)
+    if exec_python_exe != target_python_exe or always_use_crossenv:
+        build_cross_venv(
+            env_dir, exec_python_exe, target_python_exe, sysconfig_vars, target_env
+        )
+    else:
+        build_standard_venv(env_dir, exec_python_exe, sysconfig_vars)
 
     site = find_site_dir(env_dir)
     with open(site / "deps.pth", "w") as f:
@@ -456,12 +556,14 @@ def main(temp_dir: Path, is_debug: bool) -> None:
         python_exe=args.exec_python_executable,
         bin_dir=bin_dir,
     )
-    original_sysconfig_vars = get_original_sysconfig(
+    target_sysconfig_vars = get_target_sysconfig(
+        target_sys_path=args.target_sys_path,
         exec_python_exe=args.exec_python_executable,
+        target_python_exe=args.target_python_executable,
     )
-    build_sysconfig_vars = generate_cross_sysconfig_vars(
+    sysconfig_vars = generate_cross_sysconfig_vars(
         toolchain_vars=toolchain_sysconfig_vars,
-        original_vars=original_sysconfig_vars,
+        target_vars=target_sysconfig_vars,
         wrapper_vars=wrapper_sysconfig_vars,
     )
 
@@ -469,8 +571,11 @@ def main(temp_dir: Path, is_debug: bool) -> None:
     build_venv(
         env_dir=build_env_dir,
         exec_python_exe=args.exec_python_executable,
-        sysconfig_vars=build_sysconfig_vars,
+        target_python_exe=args.target_python_executable,
+        sysconfig_vars=sysconfig_vars,
         path=absolute_path_entries,
+        target_env=target_environment,
+        always_use_crossenv=args.always_use_crossenv,
     )
     generate_bin_tools(toolchain_sysconfig_vars, bin_dir)
 
@@ -543,6 +648,25 @@ def make_parser() -> argparse.ArgumentParser:
         "--exec-python-executable",
         type=Path,
         required=True,
+    )
+
+    parser.add_argument(
+        "--target-sys-path",
+        type=Path,
+        required=False,
+        action="append",
+        default=[],
+    )
+
+    parser.add_argument(
+        "--target-python-executable",
+        type=Path,
+        required=True,
+    )
+
+    parser.add_argument(
+        "--always-use-crossenv",
+        action="store_true",
     )
 
     return parser

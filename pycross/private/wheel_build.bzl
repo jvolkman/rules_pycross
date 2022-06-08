@@ -7,6 +7,7 @@ load("@bazel_tools//tools/cpp:toolchain_utils.bzl", "find_cpp_toolchain", "use_c
 load("@rules_python//python:defs.bzl", "PyInfo")
 
 PYTHON_TOOLCHAIN_TYPE = "@bazel_tools//tools/python:toolchain_type"
+PYCROSS_TOOLCHAIN_TYPE = "@jvolkman_rules_pycross//pycross:toolchain_type"
 
 def _absolute_tool_value(workspace_name, value):
     if value:
@@ -140,23 +141,40 @@ def _pycross_wheel_build_impl(ctx):
     py_toolchain = ctx.toolchains[PYTHON_TOOLCHAIN_TYPE].py3_runtime
     cpp_toolchain = find_cpp_toolchain(ctx)
 
-    # Currently we just use the configured Python toolchain's interpreter. But Down the road
-    # we may want our own toolchain type to give more control over the interpreter used for
-    # building packages.
-    executable = py_toolchain.interpreter_path
-    if not executable:
-        executable = py_toolchain.interpreter.path
-
     args = ctx.actions.args()
     args.add("--sdist", ctx.file.sdist)
     args.add("--sysconfig-vars", cc_sysconfig_data)
     args.add("--wheel-file", out_wheel)
     args.add("--wheel-name-file", out_name)
-    args.add("--exec-python-executable", executable)
-
     if ctx.attr.target_environment:
         target_environment_file = ctx.attr.target_environment[PycrossTargetEnvironmentInfo].file
         args.add("--target-environment-file", target_environment_file)
+
+    toolchain_deps = []
+    if cpp_toolchain.all_files:
+        toolchain_deps.append(cpp_toolchain.all_files)
+    if py_toolchain.files:
+        toolchain_deps.append(py_toolchain.files)
+
+    # If a pycross toolchain is configured, we use that to get the exec and target Python.
+    if PYCROSS_TOOLCHAIN_TYPE in ctx.toolchains and ctx.toolchains[PYCROSS_TOOLCHAIN_TYPE]:
+        pycross_info = ctx.toolchains[PYCROSS_TOOLCHAIN_TYPE].pycross_info
+        args.add("--exec-python-executable", pycross_info.exec_python_executable)
+        args.add("--target-python-executable", pycross_info.target_python_executable)
+        if pycross_info.target_sys_path:
+            args.add_all(pycross_info.target_sys_path, before_each="--target-sys-path")
+        if pycross_info.exec_python_files:
+            toolchain_deps.append(pycross_info.exec_python_files)
+        if pycross_info.target_python_files:
+            toolchain_deps.append(pycross_info.target_python_files)
+
+    # Otherwise we use the configured Python toolchain.
+    else:
+        executable = py_toolchain.interpreter_path
+        if not executable:
+            executable = py_toolchain.interpreter.path
+        args.add("--exec-python-executable", executable)
+        args.add("--target-python-executable", executable)
 
     imports = depset(
         transitive = [d[PyInfo].imports for d in ctx.attr.deps],
@@ -175,12 +193,6 @@ def _pycross_wheel_build_impl(ctx):
 
     if ctx.attr.target_environment:
         deps.append(ctx.attr.target_environment[PycrossTargetEnvironmentInfo].file)
-
-    toolchain_deps = []
-    if cpp_toolchain.all_files:
-        toolchain_deps.append(cpp_toolchain.all_files)
-    if py_toolchain.files:
-        toolchain_deps.append(py_toolchain.files)
 
     env = dict(cc_vars)
     env.update(ctx.configuration.default_shell_env)
@@ -206,6 +218,16 @@ def _pycross_wheel_build_impl(ctx):
             files = depset(direct = [out_wheel]),
         ),
     ]
+
+def _pycross_toolchains():
+    if hasattr(config_common, "toolchain_type"):
+        # Optional toolchains are supported
+        return [
+            config_common.toolchain_type(PYTHON_TOOLCHAIN_TYPE, mandatory = True),
+            config_common.toolchain_type(PYCROSS_TOOLCHAIN_TYPE, mandatory = False),
+        ] + use_cpp_toolchain()
+    else:
+        return [PYTHON_TOOLCHAIN_TYPE] + use_cpp_toolchain()
 
 pycross_wheel_build = rule(
     implementation = _pycross_wheel_build_impl,
@@ -238,7 +260,7 @@ pycross_wheel_build = rule(
             default = Label("@bazel_tools//tools/cpp:current_cc_toolchain"),
         ),
     },
-    toolchains = [PYTHON_TOOLCHAIN_TYPE] + use_cpp_toolchain(),
+    toolchains = _pycross_toolchains(),
     fragments = ["cpp"],
     host_fragments = ["cpp"],
 )
