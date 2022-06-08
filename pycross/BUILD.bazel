@@ -19,6 +19,7 @@ bzl_library(
 bzl_library(
     name = "defs",
     srcs = ["defs.bzl"],
+    visibility = ["//visibility:public"],
     deps = [
         "//pycross/private:lock_file",
         "//pycross/private:lock_repo",
@@ -29,5 +30,4 @@ bzl_library(
         "//pycross/private:wheel_build",
         "//pycross/private:wheel_library",
     ],
-    visibility = ["//visibility:public"],
 )

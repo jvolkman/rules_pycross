@@ -2,7 +2,6 @@
 
 load(":cc_toolchain_util.bzl", "absolutize_path_in_str", "get_env_vars", "get_flags_info", "get_tools_info")
 load(":providers.bzl", "PycrossTargetEnvironmentInfo", "PycrossWheelInfo")
-
 load("@bazel_skylib//lib:paths.bzl", "paths")
 load("@bazel_tools//tools/cpp:toolchain_utils.bzl", "find_cpp_toolchain", "use_cpp_toolchain")
 load("@rules_python//python:defs.bzl", "PyInfo")
@@ -30,7 +29,7 @@ def _get_sysconfig_data(workspace_name, tools, flags):
         "CXX": cxx,
         "CFLAGS": " ".join(flags.cc),
         "CCSHARED": "-fPIC" if flags.needs_pic_for_dynamic_libraries else "",
-        "LDSHARED": " ".join([cc] + flags.cxx_linker_shared),
+        "LDSHAREDFLAGS": " ".join(flags.cxx_linker_shared),
         "AR": ar,
         "ARFLAGS": " ".join(flags.cxx_linker_static),
         "CUSTOMIZED_OSX_COMPILER": "True",
@@ -56,6 +55,16 @@ def _pycross_wheel_build_impl(ctx):
     tools = get_tools_info(ctx)
     sysconfig_vars = _get_sysconfig_data(ctx.workspace_name, tools, flags)
 
+    py_toolchain = ctx.toolchains[PYTHON_TOOLCHAIN_TYPE].py3_runtime
+    cpp_toolchain = find_cpp_toolchain(ctx)
+
+    # Currently we just use the configured Python toolchain's interpreter. But Down the road
+    # we may want our own toolchain type to give more control over the interpreter used for
+    # building packages.
+    executable = py_toolchain.interpreter_path
+    if not executable:
+        executable = py_toolchain.interpreter.path
+
     args = [
         "--sdist",
         ctx.file.sdist.path,
@@ -67,14 +76,13 @@ def _pycross_wheel_build_impl(ctx):
         out_wheel.path,
         "--wheel-name-file",
         out_name.path,
+        "--exec-python-executable",
+        executable,
     ]
 
     imports = depset(
         transitive = [d[PyInfo].imports for d in ctx.attr.deps],
     )
-
-    py_toolchain = ctx.toolchains[PYTHON_TOOLCHAIN_TYPE].py3_runtime
-    cpp_toolchain = find_cpp_toolchain(ctx)
 
     for import_name in imports.to_list():
         # The PyInfo import names assume a runfiles-type structure. E.g.:

@@ -21,7 +21,6 @@ from pip._internal.index.package_finder import CandidateEvaluator
 from pip._internal.index.package_finder import LinkEvaluator
 from pip._internal.models.candidate import InstallationCandidate
 from pip._internal.models.link import Link
-
 from pycross.private.tools.lock_model import LockSet
 from pycross.private.tools.lock_model import Package
 from pycross.private.tools.lock_model import PackageDependency
@@ -29,7 +28,6 @@ from pycross.private.tools.lock_model import PackageFile
 from pycross.private.tools.lock_model import is_wheel
 from pycross.private.tools.lock_model import package_canonical_name
 from pycross.private.tools.target_environment import TargetEnv
-
 
 # For downloads: https://github.com/pypa/warehouse/issues/1944
 WAREHOUSE_HOST = "https://files.pythonhosted.org"

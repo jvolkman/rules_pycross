@@ -6,14 +6,13 @@ import argparse
 import os
 import shutil
 import sys
-
 import tempfile
-from installer import install
-from installer.destinations import SchemeDictionaryDestination
-from installer.sources import WheelFile
 from pathlib import Path
 from typing import Union
 
+from installer import install
+from installer.destinations import SchemeDictionaryDestination
+from installer.sources import WheelFile
 from pycross.private.tools import namespace_pkgs
 
 

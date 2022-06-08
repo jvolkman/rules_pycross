@@ -18,7 +18,6 @@ from packaging.utils import parse_wheel_filename
 from poetry.core import semver
 from poetry.core.semver.version import Version as PoetryVersion
 from poetry.core.version import markers
-
 from pycross.private.tools.lock_model import LockSet
 from pycross.private.tools.lock_model import Package
 from pycross.private.tools.lock_model import PackageDependency

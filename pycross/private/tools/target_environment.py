@@ -3,8 +3,11 @@ Stuff to define a target Python environment.
 
 See https://peps.python.org/pep-0508/#environment-markers
 """
-from typing import Any, Dict, List
-from dataclasses import asdict, dataclass
+from dataclasses import asdict
+from dataclasses import dataclass
+from typing import Any
+from typing import Dict
+from typing import List
 
 from pip._internal.models.target_python import TargetPython
 
