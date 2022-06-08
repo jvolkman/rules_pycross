@@ -1,0 +1,27 @@
+#!{{exec_python_executable}} -I
+
+import os
+import sys
+
+
+for name in ['_PYTHON_PROJECT_BASE', '_PYTHON_HOST_PLATFORM',
+        '_PYTHON_SYSCONFIGDATA_NAME', 'PYTHONHOME', 'PYTHONPATH']:
+    old = '_OLD_' + name
+    if old not in os.environ and name in os.environ:
+        os.environ[old] = os.environ[name]
+
+os.environ['_PYTHON_PROJECT_BASE']={{repr(target.project_base)}}
+os.environ['_PYTHON_HOST_PLATFORM']={{repr(target.platform)}}
+os.environ['_PYTHON_SYSCONFIGDATA_NAME']={{repr(target.sysconfigdata_name)}}
+os.environ['PYTHONHOME']={{repr(target.home)}}
+oldpath = os.environ.get('PYTHONPATH')
+newpath = os.pathsep.join([{{repr(lib_path)}}, {{repr(exec_stdlib)}}])
+if oldpath:
+    path = os.pathsep.join([newpath, oldpath])
+else:
+    path = newpath
+
+os.environ['PYTHONPATH'] = path
+
+# This will fix up argv0 so that sys.executable will be correct
+os.execv({{repr(exec_python_executable)}}, sys.argv)

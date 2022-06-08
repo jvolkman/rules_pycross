@@ -1,0 +1,161 @@
+# Import only what we absolutely need before the path fixup
+
+# First a guard: If we left these environment variables in place we might
+# have messed with another Python installation. It's broken beyond repair
+# by this point in the startup process, but we can at least offer a helpful
+# warning...and who knows, it might still work, mostly.
+# There's also a chance that this is python2 we've messed with, so don't
+# import os, which can cause a SyntaxError.
+import sys
+import posix
+
+import os
+import importlib.machinery
+import importlib.abc
+import importlib.util
+import traceback  # used in sys-patch.py.tmpl; needs to be in sys.modules
+
+# To prevent the above scenario from playing out every time run a script that
+# starts with #!/usr/bin/python, we need to remove the environment variables so
+# subprocesses won't see them.
+for name in ['_PYTHON_PROJECT_BASE', '_PYTHON_HOST_PLATFORM',
+             '_PYTHON_SYSCONFIGDATA_NAME', 'PYTHONHOME', 'PYTHONPATH']:
+    prev = '_OLD_' + name
+    try:
+        os.environ[name] = os.environ[prev]
+    except KeyError:
+        os.environ.pop(name, None)
+    os.environ.pop(prev, None)
+
+# Very little is imported right now, which gives us a chance to patch most
+# things on import. A custom meta path finder will both patch things up and
+# forcibly load sysconfigdata from where we want it.
+#
+# This is more flexible than manually implementing our patches here.
+# Additionally, we need to patch something in distutils, but importing it in
+# order to patch will subsequently cause setuptools to complain.
+
+def _patch_module(module, patch):
+    # add our patch as if it had been typed just after
+    # explicit encoding, because we know that utf-8 has been loaded already.
+    # The default causes an import to happen too early.
+    with open(patch, 'r', encoding='utf-8') as fp:
+        src = fp.read()
+    exec(src, module.__dict__, module.__dict__)
+    module.__patched__ = True
+
+def make_loader(original, patch):
+    if hasattr(original, 'exec_module'):
+        return CrossenvPatchLoader(original, patch)
+    else:
+        return CrossenvPatchLegacyLoader(original, patch)
+
+class CrossenvPatchLoader(importlib.abc.Loader):
+    def __init__(self, original, patch):
+        self.original = original
+        self.patch = patch
+
+    def create_module(self, spec):
+        return self.original.create_module(spec)
+
+    def exec_module(self, module):
+        self.original.exec_module(module)
+        _patch_module(module, self.patch)
+
+    # runpy module expects a source loader, should we try to run 'python -m
+    # sysconfig'. This has extra methods, so we'll keep it happy with whatever
+    # it wants.
+    def __getattr__(self, name):
+        return getattr(self.original, name)
+
+class CrossenvPatchLegacyLoader(importlib.abc.Loader):
+    def __init__(self, original, patch):
+        self.original = original
+        self.patch = patch
+
+    def load_module(self, fullname):
+        module = self.original.load_module(fullname)
+        if not hasattr(module, '__patched__'):
+            _patch_module(module, self.patch)
+        return module
+
+    def __getattr__(self, name):
+        return getattr(self.original, name)
+
+class CrossenvFinder(importlib.abc.MetaPathFinder):
+    """Mucks with import machinery in two ways:
+
+    1) loads sysconfigdata from our hard-coded path, regardless of sys.path
+    2) intercepts and patches modules as they are loaded
+    """
+
+    PATCHES = {
+        'sys': '{{lib_path}}/sys-patch.py',
+        'os': '{{lib_path}}/os-patch.py',
+        'sysconfig': '{{lib_path}}/sysconfig-patch.py',
+        'distutils.sysconfig': '{{lib_path}}/distutils-sysconfig-patch.py',
+        'distutils.sysconfig_pypy': '{{lib_path}}/distutils-sysconfig-patch.py',
+        'platform': '{{lib_path}}/platform-patch.py',
+    }
+
+    def __init__(self):
+        # At startup, manually patch things that have already been loaded.  We
+        # can't re-load them because they might be used in many places already.
+        # This will be sys and os at the very least.
+        self.manually_patch_loaded()
+
+    def find_spec(self, fullname, path, target=None):
+        spec = self._find_sysconfigdata(fullname, path, target)
+        if spec:
+            return spec
+
+        return self._patch_spec(fullname, path, target)
+
+    def _find_sysconfigdata(self, fullname, path, target):
+        if fullname == {{repr(target.sysconfigdata_name)}}:
+            return importlib.util.spec_from_file_location(
+                    fullname, {{repr(target.sysconfigdata_path)}})
+        else:
+            return None
+
+    def _patch_spec(self, fullname, path, target):
+        """If necessary, set up to patch a module"""
+        if fullname not in self.PATCHES:
+            return None
+
+        # query the next finders to see who really would have loaded it
+        try:
+            start = sys.meta_path.index(self) + 1
+        except ValueError:
+            return None
+
+        for finder in sys.meta_path[start:]:
+            spec = finder.find_spec(fullname, path, target)
+            if spec is not None:
+                break
+        else:
+            return None
+
+        patch = self.PATCHES[fullname]
+        spec.loader = make_loader(spec.loader, patch)
+        return spec
+
+    def manually_patch_loaded(self):
+        for name, module in sys.modules.items():
+            if name in self.PATCHES:
+                _patch_module(module, self.PATCHES[name])
+
+# add just before the real path finder
+try:
+    _index = sys.meta_path.index(importlib.machinery.PathFinder)
+except ValueError:
+    _index = 0
+sys.meta_path.insert(_index, CrossenvFinder())
+
+# Re-import the real site module, so Python can continue booting. Crossenv is
+# ready! We do want to remove sysconfig or any other module that relies on
+# patching after site has messed with sys.
+del sys.modules['site']
+sys.modules.pop('sysconfig', None)
+sys.modules.pop('os', None)
+import site

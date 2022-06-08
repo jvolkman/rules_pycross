@@ -1,0 +1,23 @@
+from collections import namedtuple
+
+platform_uname_result_type = namedtuple('uname_result',
+                    'system node release version machine processor')
+_uname_result = platform_uname_result_type(
+        {{repr(target.uname_sysname.title())}},
+        'build',
+        {{repr(target.uname_release)}},
+        '',
+        {{repr(target.uname_machine)}},
+        {{repr(target.uname_machine)}})
+def uname():
+    return _uname_result
+
+def libc_ver(*args, **kwargs):
+    return ('', '')
+
+def mac_ver(release='', versioninfo=('', '', ''), machine=''):
+    if release == '':
+        release = {{repr(target.macosx_deployment_target)}}
+    if machine == '':
+        machine = _uname_result.machine
+    return release, versioninfo, machine
