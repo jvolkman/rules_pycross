@@ -5,3 +5,4 @@ packaging==21.3
 poetry-core==1.0.8
 tomli==2.0.1
 wheel==0.37.1
+pdm==2.1.1

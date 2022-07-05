@@ -24,7 +24,7 @@ load("@python3_9//:defs.bzl", "interpreter")
 
 local_repository(
     name = "jvolkman_rules_pycross",
-    path = "..",
+    path = "../..",
 )
 
 load("@jvolkman_rules_pycross//pycross:repositories.bzl", "rules_pycross_dependencies")

@@ -53,6 +53,18 @@ py_test(
 )
 
 py_binary(
+    name = "pdm_translator",
+    srcs = ["pdm_translator.py"],
+    deps = [
+        ":lock_model",
+        "@rules_pycross_pypi_deps_pdm//:pkg",
+        # ":pdm",
+        "@rules_pycross_pypi_deps_tomli//:pkg",
+    ],
+    visibility = ["//visibility:public"],
+)
+
+py_binary(
     name = "poetry_translator",
     srcs = ["poetry_translator.py"],
     deps = [
