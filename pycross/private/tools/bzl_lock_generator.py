@@ -500,7 +500,10 @@ class PackageTarget:
 
 class UrlRepoTarget:
     def __init__(self, name: str, file: PackageFile):
-        assert(file.urls, "UrlWheelRepoTarget requires a PackageFile with one or more URLs")
+        assert (
+            file.urls,
+            "UrlWheelRepoTarget requires a PackageFile with one or more URLs",
+        )
         self.name = name
         self.file = file
 
@@ -634,9 +637,7 @@ def main():
     for remote_wheel in args.remote_wheel or []:
         url, sha256 = remote_wheel
         filename = url_wheel_name(url)
-        remote_wheels[filename] = PackageFile(
-            name=filename, sha256=sha256, urls=(url,)
-        )
+        remote_wheels[filename] = PackageFile(name=filename, sha256=sha256, urls=(url,))
 
     naming = Naming(
         repo_prefix=args.repo_prefix,
@@ -766,9 +767,7 @@ def main():
                 repos.append(UrlRepoTarget(name, file))
             else:
                 repos.append(
-                    PypiFileRepoTarget(
-                        name, package_target.package, file, pypi_index
-                    )
+                    PypiFileRepoTarget(name, package_target.package, file, pypi_index)
                 )
 
     repos.sort(key=lambda ft: ft.name)
