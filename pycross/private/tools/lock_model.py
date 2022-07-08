@@ -1,6 +1,9 @@
 from __future__ import annotations
 
 import dataclasses
+from typing import Optional
+from typing import Tuple
+
 import json
 from dataclasses import dataclass
 from json import JSONEncoder
@@ -24,6 +27,7 @@ class _VersionHandlingEncoder(JSONEncoder):
 class PackageFile:
     name: str
     sha256: str
+    urls: Optional[Tuple[str]] = None
 
     def __post_init__(self):
         assert self.name, "The name field must be specified."
@@ -32,6 +36,10 @@ class PackageFile:
     @property
     def is_wheel(self) -> bool:
         return is_wheel(self.name)
+
+    @property
+    def is_sdist(self) -> bool:
+        return not self.is_wheel
 
 
 @dataclass(frozen=True)
