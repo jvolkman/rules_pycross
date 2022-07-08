@@ -1855,13 +1855,13 @@ def repositories():
     )
 
     maybe(
-        pypi_file,
+        http_file,
         name = "example_lock_wheel_xmltodict_0.13.0_py2.py3_none_any",
-        package_name = "xmltodict",
-        package_version = "0.13.0",
-        filename = "xmltodict-0.13.0-py2.py3-none-any.whl",
+        urls = [
+            "https://files.pythonhosted.org/packages/94/db/fd0326e331726f07ff7f40675cd86aa804bfd2e5016c727fa761c934990e/xmltodict-0.13.0-py2.py3-none-any.whl"
+        ],
         sha256 = "aa89e8fd76320154a40d19a0df04a4695fb9dc5ba977cbb68ab3e4eb225e7852",
-        index = "https://pypi.org",
+        downloaded_file_path = "xmltodict-0.13.0-py2.py3-none-any.whl",
     )
 
     maybe(

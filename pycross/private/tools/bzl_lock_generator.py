@@ -57,25 +57,21 @@ class UrlFile:
 @dataclass(frozen=True)
 class PackageSource:
     label: Optional[str] = None
-    pypi_wheel: Optional[PackageFile] = None
-    pypi_sdist: Optional[PackageFile] = None
-    url_wheel: Optional[UrlFile] = None
+    file: Optional[PackageFile] = None
 
     def needs_build(self) -> bool:
-        return self.pypi_sdist is not None
+        return self.file is not None and self.file.is_sdist
 
     def __post_init__(self):
         assert (
             sum(
                 [
                     int(self.label is not None),
-                    int(self.pypi_wheel is not None),
-                    int(self.pypi_sdist is not None),
-                    int(self.url_wheel is not None),
+                    int(self.file is not None),
                 ]
             )
             == 1
-        ), "Exactly one of label, pypi_wheel, pypi_sdist or url_wheel must be specified."
+        ), "Exactly one of label or file must be specified."
 
 
 @dataclass
@@ -157,7 +153,7 @@ class GenerationContext:
         self,
         target_environments: List[TargetEnv],
         local_wheels: Dict[str, str],
-        remote_wheels: Dict[str, UrlFile],
+        remote_wheels: Dict[str, PackageFile],
         naming: Naming,
         target_environment_select: str,
     ):
@@ -231,16 +227,13 @@ class GenerationContext:
 
             # Start with the files defined in the input lock model
             for file in package.files:
-                if file.is_wheel:
-                    package_sources[file.name] = PackageSource(pypi_wheel=file)
-                else:
-                    package_sources[file.name] = PackageSource(pypi_sdist=file)
+                package_sources[file.name] = PackageSource(file=file)
 
             # Override per-file with given remote wheel URLs
             for filename, remote_file in self.remote_wheels.items():
                 name, version, _, _ = parse_wheel_filename(filename)
                 if (package.name, package.version) == (name, version):
-                    package_sources[filename] = PackageSource(url_wheel=remote_file)
+                    package_sources[filename] = PackageSource(file=remote_file)
 
             # Override per-file with given local wheel labels
             for filename, local_label in self.local_wheels.items():
@@ -345,8 +338,8 @@ class PackageTarget:
     @property
     def source_file(self) -> Optional[PackageFile]:
         for f in self.distinct_package_sources:
-            if f.pypi_sdist:
-                return f.pypi_sdist
+            if f.file and f.file.is_sdist:
+                return f.file
 
     @property
     def has_deps(self) -> bool:
@@ -464,10 +457,8 @@ class PackageTarget:
         def wheel_target(pkg_source: PackageSource) -> str:
             if pkg_source.label:
                 return pkg_source.label
-            elif pkg_source.pypi_wheel:
-                return self.context.naming.wheel_label(pkg_source.pypi_wheel)
-            elif pkg_source.url_wheel:
-                return self.context.naming.wheel_label(pkg_source.url_wheel.file)
+            elif pkg_source.file and pkg_source.file.is_wheel:
+                return self.context.naming.wheel_label(pkg_source.file)
             elif self.build_target_override:
                 return self.build_target_override
             else:
@@ -507,9 +498,10 @@ class PackageTarget:
         return "\n".join(parts)
 
 
-class UrlWheelRepoTarget:
-    def __init__(self, file: UrlFile, context: GenerationContext):
-        self.name = context.naming.wheel_repo(file.file)
+class UrlRepoTarget:
+    def __init__(self, name: str, file: PackageFile):
+        assert(file.urls, "UrlWheelRepoTarget requires a PackageFile with one or more URLs")
+        self.name = name
         self.file = file
 
     def render(self) -> str:
@@ -523,8 +515,8 @@ class UrlWheelRepoTarget:
             + [ind(f'"{url}"', 2) for url in sorted(self.file.urls)]
             + [
                 ind(f"],"),
-                ind(f'sha256 = "{self.file.file.sha256}",'),
-                ind(f'downloaded_file_path = "{self.file.file.name}",'),
+                ind(f'sha256 = "{self.file.sha256}",'),
+                ind(f'downloaded_file_path = "{self.file.name}",'),
                 ")",
             ]
         )
@@ -642,8 +634,8 @@ def main():
     for remote_wheel in args.remote_wheel or []:
         url, sha256 = remote_wheel
         filename = url_wheel_name(url)
-        remote_wheels[filename] = UrlFile(
-            file=PackageFile(name=filename, sha256=sha256), urls=(url,)
+        remote_wheels[filename] = PackageFile(
+            name=filename, sha256=sha256, urls=(url,)
         )
 
     naming = Naming(
@@ -760,20 +752,24 @@ def main():
     repos = []
     for package_target in package_targets:
         for source in package_target.distinct_package_sources:
-            if source.pypi_wheel:
+            if not source.file:
+                continue
+
+            file = source.file
+
+            if file.is_wheel:
+                name = naming.wheel_repo(file)
+            else:
+                name = naming.sdist_repo(file)
+
+            if file.urls:
+                repos.append(UrlRepoTarget(name, file))
+            else:
                 repos.append(
-                    PypiWheelRepoTarget(
-                        package_target.package, source.pypi_wheel, pypi_index, context
+                    PypiFileRepoTarget(
+                        name, package_target.package, file, pypi_index
                     )
                 )
-            elif source.pypi_sdist:
-                repos.append(
-                    PypiSdistRepoTarget(
-                        package_target.package, source.pypi_sdist, pypi_index, context
-                    )
-                )
-            elif source.url_wheel:
-                repos.append(UrlWheelRepoTarget(source.url_wheel, context))
 
     repos.sort(key=lambda ft: ft.name)
 
