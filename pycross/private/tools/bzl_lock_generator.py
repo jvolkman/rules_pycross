@@ -494,15 +494,22 @@ class UrlRepoTarget:
         self.file = file
 
     def render(self) -> str:
-        lines = (
+        parts = []
+        parts.extend(
             [
                 "maybe(",
                 ind("http_file,"),
                 ind(f'name = "{self.name}",'),
                 ind(f"urls = ["),
             ]
-            + [ind(f'"{url}"', 2) for url in sorted(self.file.urls)]
-            + [
+        )
+
+        urls = sorted(self.file.urls)
+        for url in urls[:-1]:
+            parts.append(ind(f'"{url}",', 2))
+        parts.append(ind(f'"{urls[-1]}"', 2))
+
+        parts.extend([
                 ind(f"],"),
                 ind(f'sha256 = "{self.file.sha256}",'),
                 ind(f'downloaded_file_path = "{self.file.name}",'),
@@ -510,7 +517,7 @@ class UrlRepoTarget:
             ]
         )
 
-        return "\n".join(lines)
+        return "\n".join(parts)
 
 
 class PypiFileRepoTarget:
