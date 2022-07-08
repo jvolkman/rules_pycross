@@ -41,20 +41,6 @@ def ind(text: str, tabs=1):
 
 
 @dataclass(frozen=True)
-class UrlFile:
-    file: PackageFile
-    urls: Tuple[str]
-
-    def __post_init__(self):
-        assert self.file, "The file field must be specified."
-        assert self.urls, "The urls field must be specified."
-
-    @property
-    def is_wheel(self) -> bool:
-        return self.file.is_wheel
-
-
-@dataclass(frozen=True)
 class PackageSource:
     label: Optional[str] = None
     file: Optional[PackageFile] = None
