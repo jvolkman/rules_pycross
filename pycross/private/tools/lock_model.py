@@ -27,7 +27,7 @@ class _VersionHandlingEncoder(JSONEncoder):
 class PackageFile:
     name: str
     sha256: str
-    urls: Optional[Tuple[str]] = None
+    urls: Optional[Tuple[str, ...]] = None
 
     def __post_init__(self):
         assert self.name, "The name field must be specified."
@@ -102,12 +102,12 @@ class LockSet:
 
     @staticmethod
     def from_dict(data: Dict[str, Any]) -> LockSet:
-        return dacite.from_dict(LockSet, data, config=dacite.Config(cast=[Version]))
+        return dacite.from_dict(LockSet, data, config=dacite.Config(cast=[Tuple, Version]))
 
-    @staticmethod
-    def from_json(data: str) -> LockSet:
+    @classmethod
+    def from_json(cls, data: str) -> LockSet:
         parsed = json.loads(data)
-        return dacite.from_dict(LockSet, parsed, config=dacite.Config(cast=[Version]))
+        return cls.from_dict(parsed)
 
 
 def package_canonical_name(name: str) -> NormalizedName:
