@@ -338,8 +338,9 @@ class PackageTarget:
     def _common_entries(
         self, deps: Set[PackageDependency], indent: int
     ) -> Iterator[str]:
-        for d in sorted(deps, key=lambda x: self.context.naming.package_label(x.key)):
-            yield ind(f'"{self.context.naming.package_label(d.key)}",', indent)
+        package_labels = set([self.context.naming.package_label(d.key) for d in deps])
+        for package_label in sorted(package_labels):
+            yield ind(f'"{package_label}",', indent)
 
     def _select_entries(
         self, env_deps: Dict[str, Set[PackageDependency]], indent
