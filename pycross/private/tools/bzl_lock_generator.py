@@ -41,20 +41,6 @@ def ind(text: str, tabs=1):
 
 
 @dataclass(frozen=True)
-class UrlFile:
-    file: PackageFile
-    urls: Tuple[str]
-
-    def __post_init__(self):
-        assert self.file, "The file field must be specified."
-        assert self.urls, "The urls field must be specified."
-
-    @property
-    def is_wheel(self) -> bool:
-        return self.file.is_wheel
-
-
-@dataclass(frozen=True)
 class PackageSource:
     label: Optional[str] = None
     file: Optional[PackageFile] = None
@@ -95,7 +81,7 @@ class Naming:
 
     @staticmethod
     def _sanitize(name: str) -> str:
-        return name.lower().replace("-", "_").replace("@", "_")
+        return name.lower().replace("-", "_").replace("@", "_").replace("+", "_")
 
     @staticmethod
     def _prefixed(name: str, prefix: Optional[str]):
@@ -140,7 +126,7 @@ class Naming:
 
     def wheel_repo(self, file: PackageFile) -> str:
         assert file.is_wheel
-        normalized_name = file.name[:-4].lower().replace("-", "_")
+        normalized_name = file.name[:-4].lower().replace("-", "_").replace("+", "_")
         return f"{self.repo_prefix}_wheel_{normalized_name}"
 
     def wheel_label(self, file: PackageFile):
@@ -352,8 +338,9 @@ class PackageTarget:
     def _common_entries(
         self, deps: Set[PackageDependency], indent: int
     ) -> Iterator[str]:
-        for d in sorted(deps, key=lambda x: self.context.naming.package_label(x.key)):
-            yield ind(f'"{self.context.naming.package_label(d.key)}",', indent)
+        package_labels = sorted([self.context.naming.package_label(d.key) for d in deps])
+        for package_label in set(package_labels):
+            yield ind(f'"{package_label}",', indent)
 
     def _select_entries(
         self, env_deps: Dict[str, Set[PackageDependency]], indent
@@ -367,14 +354,14 @@ class PackageTarget:
     @property
     def _deps_name(self):
         sanitized = (
-            self.package.key.replace("-", "_").replace(".", "_").replace("@", "_")
+            self.package.key.replace("-", "_").replace(".", "_").replace("@", "_").replace("+", "_")
         )
         return f"_{sanitized}_deps"
 
     @property
     def _build_deps_name(self):
         sanitized = (
-            self.package.key.replace("-", "_").replace(".", "_").replace("@", "_")
+            self.package.key.replace("-", "_").replace(".", "_").replace("@", "_").replace("+", "_")
         )
         return f"_{sanitized}_build_deps"
 
@@ -508,15 +495,22 @@ class UrlRepoTarget:
         self.file = file
 
     def render(self) -> str:
-        lines = (
+        parts = []
+        parts.extend(
             [
                 "maybe(",
                 ind("http_file,"),
                 ind(f'name = "{self.name}",'),
                 ind(f"urls = ["),
             ]
-            + [ind(f'"{url}"', 2) for url in sorted(self.file.urls)]
-            + [
+        )
+
+        urls = sorted(self.file.urls)
+        for url in urls[:-1]:
+            parts.append(ind(f'"{url}",', 2))
+        parts.append(ind(f'"{urls[-1]}"', 2))
+
+        parts.extend([
                 ind(f"],"),
                 ind(f'sha256 = "{self.file.sha256}",'),
                 ind(f'downloaded_file_path = "{self.file.name}",'),
@@ -524,7 +518,7 @@ class UrlRepoTarget:
             ]
         )
 
-        return "\n".join(lines)
+        return "\n".join(parts)
 
 
 class PypiFileRepoTarget:
