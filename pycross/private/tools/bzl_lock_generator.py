@@ -81,7 +81,7 @@ class Naming:
 
     @staticmethod
     def _sanitize(name: str) -> str:
-        return name.lower().replace("-", "_").replace("@", "_")
+        return name.lower().replace("-", "_").replace("@", "_").replace("+", "_")
 
     @staticmethod
     def _prefixed(name: str, prefix: Optional[str]):
@@ -126,7 +126,7 @@ class Naming:
 
     def wheel_repo(self, file: PackageFile) -> str:
         assert file.is_wheel
-        normalized_name = file.name[:-4].lower().replace("-", "_")
+        normalized_name = file.name[:-4].lower().replace("-", "_").replace("+", "_")
         return f"{self.repo_prefix}_wheel_{normalized_name}"
 
     def wheel_label(self, file: PackageFile):
@@ -353,14 +353,14 @@ class PackageTarget:
     @property
     def _deps_name(self):
         sanitized = (
-            self.package.key.replace("-", "_").replace(".", "_").replace("@", "_")
+            self.package.key.replace("-", "_").replace(".", "_").replace("@", "_").replace("+", "_")
         )
         return f"_{sanitized}_deps"
 
     @property
     def _build_deps_name(self):
         sanitized = (
-            self.package.key.replace("-", "_").replace(".", "_").replace("@", "_")
+            self.package.key.replace("-", "_").replace(".", "_").replace("@", "_").replace("+", "_")
         )
         return f"_{sanitized}_build_deps"
 
