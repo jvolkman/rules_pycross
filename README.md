@@ -10,7 +10,7 @@ __Note:__ very much still experimental.
 - Builds that happen in build actions, not during WORKSPACE initialization
 - Standard Bazel `http_file` rules used for fetching dependencies. `pip` is not a build-time dependency.
 
-See the [example](example).
+See the [example](examples/poetry).
 
 ### Why?
 
