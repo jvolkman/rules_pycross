@@ -29,16 +29,7 @@ def _pypi_file_impl(ctx):
     if not ctx.attr.keep_metadata:
         ctx.delete("pypi_metadata.json")
 
-    if ctx.attr.package_version not in metadata["releases"]:
-        fail(
-            "Version {} of package {} does not exist in index {}".format(
-                ctx.attr.package_version,
-                ctx.attr.package_name,
-                ctx.attr.index,
-            )
-        )
-
-    release_files = metadata["releases"][ctx.attr.package_version]
+    release_files = metadata.get("urls", [])
     url = None
     for release_file in release_files:
         if release_file["filename"] == ctx.attr.filename:
