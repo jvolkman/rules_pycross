@@ -16,21 +16,10 @@ load("//pycross:repositories.bzl", "rules_pycross_dependencies")
 rules_pycross_dependencies()
 
 # This pip_parse repo is only used to generate the pycross/private/pypi_requirements.bzl
-# We generate using Python 3.8 to be compatible with Ubuntu 20.04 (which is github's ubuntu-latest).
-load("@rules_python//python:repositories.bzl", "python_register_toolchains")
-python_register_toolchains(
-    name = "python3_8",
-    # Available versions are listed in @rules_python//python:versions.bzl.
-    # We recommend using the same version your team is already standardized on.
-    python_version = "3.8",
-)
-load("@python3_8//:defs.bzl", "interpreter")
-
 load("@rules_python//python:pip.bzl", "pip_parse")
 pip_parse(
     name = "rules_pycross_pypi_deps",
     requirements_lock = "//pycross/private:requirements.txt",
-    python_interpreter_target = interpreter,
 )
 
 # For running our own unit tests
