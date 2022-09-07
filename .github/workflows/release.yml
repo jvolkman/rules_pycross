@@ -26,7 +26,10 @@ jobs:
         env:
           # Bazelisk will download bazel to here
           XDG_CACHE_HOME: ~/.cache/bazel-repo
-        run: bazel --bazelrc=.github/workflows/ci.bazelrc --bazelrc=.bazelrc test //...
+
+        # Don't run the requirements test because the ubuntu runner's python version doesn't necessarily match
+        # the development host's.
+        run: bazel --bazelrc=.github/workflows/ci.bazelrc --bazelrc=.bazelrc test -- //... -//pycross/private:requirements_test
       - name: Prepare workspace snippet
         run: .github/workflows/workspace_snippet.sh ${{ env.GITHUB_REF_NAME }} > release_notes.txt
       - name: Release
