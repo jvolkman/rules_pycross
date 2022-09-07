@@ -43,4 +43,7 @@ jobs:
         env:
           # Bazelisk will download bazel to here, ensure it is cached between runs.
           XDG_CACHE_HOME: ~/.cache/bazel-repo
-        run: bazel --bazelrc=.github/workflows/ci.bazelrc --bazelrc=.bazelrc test //...
+
+        # Don't run the requirements test because the ubuntu runner's python version doesn't necessarily match
+        # the development host's.
+        run: bazel --bazelrc=.github/workflows/ci.bazelrc --bazelrc=.bazelrc test -- //... -//pycross/private:requirements_test
