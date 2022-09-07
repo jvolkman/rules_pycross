@@ -57,6 +57,29 @@ pycross_lock_repo(<a href="#pycross_lock_repo-name">name</a>, <a href="#pycross_
 | <a id="pycross_lock_repo-repo_mapping"></a>repo_mapping |  A dictionary from local repository name to global repository name. This allows controls over workspace dependency resolution for dependencies of this repository.&lt;p&gt;For example, an entry <code>"@foo": "@bar"</code> declares that, for any time this repository depends on <code>@foo</code> (such as a dependency on <code>@foo//some:target</code>, it should actually resolve that dependency within globally-declared <code>@bar</code> (<code>@bar//some:target</code>).   | <a href="https://bazel.build/docs/skylark/lib/dict.html">Dictionary: String -> String</a> | required |  |
 
 
+<a id="#pycross_pdm_lock_model"></a>
+
+## pycross_pdm_lock_model
+
+<pre>
+pycross_pdm_lock_model(<a href="#pycross_pdm_lock_model-name">name</a>, <a href="#pycross_pdm_lock_model-default">default</a>, <a href="#pycross_pdm_lock_model-dev">dev</a>, <a href="#pycross_pdm_lock_model-groups">groups</a>, <a href="#pycross_pdm_lock_model-lock_file">lock_file</a>, <a href="#pycross_pdm_lock_model-project_file">project_file</a>)
+</pre>
+
+
+
+**ATTRIBUTES**
+
+
+| Name  | Description | Type | Mandatory | Default |
+| :------------- | :------------- | :------------- | :------------- | :------------- |
+| <a id="pycross_pdm_lock_model-name"></a>name |  A unique name for this target.   | <a href="https://bazel.build/docs/build-ref.html#name">Name</a> | required |  |
+| <a id="pycross_pdm_lock_model-default"></a>default |  Whether to install dependencies from the default group.   | Boolean | optional | True |
+| <a id="pycross_pdm_lock_model-dev"></a>dev |  Whether to install dev dependencies.   | Boolean | optional | False |
+| <a id="pycross_pdm_lock_model-groups"></a>groups |  Select groups of optional-dependencies or dev-dependencies to install.   | List of strings | optional | [] |
+| <a id="pycross_pdm_lock_model-lock_file"></a>lock_file |  The pdm.lock file.   | <a href="https://bazel.build/docs/build-ref.html#labels">Label</a> | required |  |
+| <a id="pycross_pdm_lock_model-project_file"></a>project_file |  The pyproject.toml file with pdm dependencies.   | <a href="https://bazel.build/docs/build-ref.html#labels">Label</a> | required |  |
+
+
 <a id="#pycross_poetry_lock_model"></a>
 
 ## pycross_poetry_lock_model
