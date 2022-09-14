@@ -80,7 +80,7 @@ pycross_lock_file(
     name = "example_lock",
     out = "example_lock.bzl",
     always_build_packages = [
-        "pbr@5.9.0",
+        "pbr@5.10.0",
         "setproctitle",
         "numpy",  # Doesn't work with zig cc since numpy can't detect the compiler type (assumes gcc)
     ],
