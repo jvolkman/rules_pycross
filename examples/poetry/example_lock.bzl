@@ -9,11 +9,11 @@ PINS = {
     "aws_sam_translator": "aws_sam_translator_1.51.0",
     "aws_xray_sdk": "aws_xray_sdk_2.10.0",
     "backcall": "backcall_0.2.0",
-    "boto3": "boto3_1.24.72",
-    "botocore": "botocore_1.27.72",
-    "certifi": "certifi_2022.6.15.2",
+    "boto3": "boto3_1.24.73",
+    "botocore": "botocore_1.27.73",
+    "certifi": "certifi_2022.9.14",
     "cffi": "cffi_1.15.1",
-    "cfn_lint": "cfn_lint_0.64.1",
+    "cfn_lint": "cfn_lint_0.65.0",
     "charset_normalizer": "charset_normalizer_2.1.1",
     "click": "click_8.1.3",
     "cognitojwt": "cognitojwt_1.4.1",
@@ -28,7 +28,7 @@ PINS = {
     "future": "future_0.18.2",
     "graphql_core": "graphql_core_3.2.1",
     "greenlet": "greenlet_1.1.3",
-    "idna": "idna_3.3",
+    "idna": "idna_3.4",
     "importlib_metadata": "importlib_metadata_4.12.0",
     "ipython": "ipython_8.5.0",
     "itsdangerous": "itsdangerous_2.1.2",
@@ -146,7 +146,7 @@ def targets():
     )
 
     _aws_sam_translator_1_51_0_deps = [
-        ":boto3_1.24.72",
+        ":boto3_1.24.73",
         ":jsonschema_3.2.0",
     ]
 
@@ -157,7 +157,7 @@ def targets():
     )
 
     _aws_xray_sdk_2_10_0_deps = [
-        ":botocore_1.27.72",
+        ":botocore_1.27.73",
         ":wrapt_1.14.1",
     ]
 
@@ -172,33 +172,33 @@ def targets():
         wheel = "@example_lock_wheel_backcall_0.2.0_py2.py3_none_any//file",
     )
 
-    _boto3_1_24_72_deps = [
-        ":botocore_1.27.72",
+    _boto3_1_24_73_deps = [
+        ":botocore_1.27.73",
         ":jmespath_1.0.1",
         ":s3transfer_0.6.0",
     ]
 
     pycross_wheel_library(
-        name = "boto3_1.24.72",
-        deps = _boto3_1_24_72_deps,
-        wheel = "@example_lock_wheel_boto3_1.24.72_py3_none_any//file",
+        name = "boto3_1.24.73",
+        deps = _boto3_1_24_73_deps,
+        wheel = "@example_lock_wheel_boto3_1.24.73_py3_none_any//file",
     )
 
-    _botocore_1_27_72_deps = [
+    _botocore_1_27_73_deps = [
         ":jmespath_1.0.1",
         ":python_dateutil_2.8.2",
         ":urllib3_1.26.12",
     ]
 
     pycross_wheel_library(
-        name = "botocore_1.27.72",
-        deps = _botocore_1_27_72_deps,
-        wheel = "@example_lock_wheel_botocore_1.27.72_py3_none_any//file",
+        name = "botocore_1.27.73",
+        deps = _botocore_1_27_73_deps,
+        wheel = "@example_lock_wheel_botocore_1.27.73_py3_none_any//file",
     )
 
     pycross_wheel_library(
-        name = "certifi_2022.6.15.2",
-        wheel = "@example_lock_wheel_certifi_2022.6.15.2_py3_none_any//file",
+        name = "certifi_2022.9.14",
+        wheel = "@example_lock_wheel_certifi_2022.9.14_py3_none_any//file",
     )
 
     _cffi_1_15_1_deps = [
@@ -215,7 +215,7 @@ def targets():
         }),
     )
 
-    _cfn_lint_0_64_1_deps = [
+    _cfn_lint_0_65_0_deps = [
         ":aws_sam_translator_1.51.0",
         ":jschema_to_python_1.2.3",
         ":jsonpatch_1.32",
@@ -227,9 +227,9 @@ def targets():
     ]
 
     pycross_wheel_library(
-        name = "cfn_lint_0.64.1",
-        deps = _cfn_lint_0_64_1_deps,
-        wheel = "@example_lock_wheel_cfn_lint_0.64.1_py3_none_any//file",
+        name = "cfn_lint_0.65.0",
+        deps = _cfn_lint_0_65_0_deps,
+        wheel = "@example_lock_wheel_cfn_lint_0.65.0_py3_none_any//file",
     )
 
     pycross_wheel_library(
@@ -360,8 +360,8 @@ def targets():
     )
 
     pycross_wheel_library(
-        name = "idna_3.3",
-        wheel = "@example_lock_wheel_idna_3.3_py3_none_any//file",
+        name = "idna_3.4",
+        wheel = "@example_lock_wheel_idna_3.4_py3_none_any//file",
     )
 
     _importlib_metadata_4_12_0_deps = [
@@ -512,16 +512,16 @@ def targets():
 
     _moto_3_1_1_deps = [
         ":aws_xray_sdk_2.10.0",
-        ":boto3_1.24.72",
-        ":botocore_1.27.72",
-        ":cfn_lint_0.64.1",
+        ":boto3_1.24.73",
+        ":botocore_1.27.73",
+        ":cfn_lint_0.65.0",
         ":cryptography_38.0.1",
         ":docker_6.0.0",
         ":ecdsa_0.18.0",
         ":flask_2.2.2",
         ":flask_cors_3.0.10",
         ":graphql_core_3.2.1",
-        ":idna_3.3",
+        ":idna_3.4",
         ":jinja2_3.1.2",
         ":jsondiff_2.0.0",
         ":markupsafe_2.1.1",
@@ -697,9 +697,9 @@ def targets():
     )
 
     _requests_2_28_1_deps = [
-        ":certifi_2022.6.15.2",
+        ":certifi_2022.9.14",
         ":charset_normalizer_2.1.1",
-        ":idna_3.3",
+        ":idna_3.4",
         ":urllib3_1.26.12",
     ]
 
@@ -731,7 +731,7 @@ def targets():
     )
 
     _s3transfer_0_6_0_deps = [
-        ":botocore_1.27.72",
+        ":botocore_1.27.73",
     ]
 
     pycross_wheel_library(
@@ -1038,31 +1038,31 @@ def repositories():
 
     maybe(
         pypi_file,
-        name = "example_lock_wheel_boto3_1.24.72_py3_none_any",
+        name = "example_lock_wheel_boto3_1.24.73_py3_none_any",
         package_name = "boto3",
-        package_version = "1.24.72",
-        filename = "boto3-1.24.72-py3-none-any.whl",
-        sha256 = "ef1f8afb832556fad5f90e7c46373edf9011a436df0d676e8450e05264c3ac0f",
+        package_version = "1.24.73",
+        filename = "boto3-1.24.73-py3-none-any.whl",
+        sha256 = "f7ca88a76c8e31c19fef3bad2dee3c2ee0e77a0bced151fa3922cf021d55755e",
         index = "https://pypi.org",
     )
 
     maybe(
         pypi_file,
-        name = "example_lock_wheel_botocore_1.27.72_py3_none_any",
+        name = "example_lock_wheel_botocore_1.27.73_py3_none_any",
         package_name = "botocore",
-        package_version = "1.27.72",
-        filename = "botocore-1.27.72-py3-none-any.whl",
-        sha256 = "e29a777d261360dcb9283dfd460dc5feca3a46b7774e0c79be406d1a85673789",
+        package_version = "1.27.73",
+        filename = "botocore-1.27.73-py3-none-any.whl",
+        sha256 = "0b94d1e7b1435f8ff108c74a09fe03ec88aadbfafe97e940ea415dc86ba305a3",
         index = "https://pypi.org",
     )
 
     maybe(
         pypi_file,
-        name = "example_lock_wheel_certifi_2022.6.15.2_py3_none_any",
+        name = "example_lock_wheel_certifi_2022.9.14_py3_none_any",
         package_name = "certifi",
-        package_version = "2022.6.15.2",
-        filename = "certifi-2022.6.15.2-py3-none-any.whl",
-        sha256 = "0aa1a42fbd57645fabeb6290a7687c21755b0344ecaeaa05f4e9f6207ae2e9a8",
+        package_version = "2022.9.14",
+        filename = "certifi-2022.9.14-py3-none-any.whl",
+        sha256 = "e232343de1ab72c2aa521b625c80f699e356830fd0e2c620b465b304b17b0516",
         index = "https://pypi.org",
     )
 
@@ -1098,11 +1098,11 @@ def repositories():
 
     maybe(
         pypi_file,
-        name = "example_lock_wheel_cfn_lint_0.64.1_py3_none_any",
+        name = "example_lock_wheel_cfn_lint_0.65.0_py3_none_any",
         package_name = "cfn-lint",
-        package_version = "0.64.1",
-        filename = "cfn_lint-0.64.1-py3-none-any.whl",
-        sha256 = "a32a9f24d9cb4ab0dcbf579916345520f8bf493bdbf13da1e33ac0d7c5cd90f8",
+        package_version = "0.65.0",
+        filename = "cfn_lint-0.65.0-py3-none-any.whl",
+        sha256 = "b5992f52a86e6ef0a150fabbb4d131bbf626eddd4154ca708193c1d233a7efca",
         index = "https://pypi.org",
     )
 
@@ -1278,11 +1278,11 @@ def repositories():
 
     maybe(
         pypi_file,
-        name = "example_lock_wheel_idna_3.3_py3_none_any",
+        name = "example_lock_wheel_idna_3.4_py3_none_any",
         package_name = "idna",
-        package_version = "3.3",
-        filename = "idna-3.3-py3-none-any.whl",
-        sha256 = "84d9dd047ffa80596e0f246e2eab0b391788b0503584e8945f2368256d2735ff",
+        package_version = "3.4",
+        filename = "idna-3.4-py3-none-any.whl",
+        sha256 = "90b77e79eaa3eba6de819a0c442c0b4ceefc341a7a2ab77d7562bf49f425c5c2",
         index = "https://pypi.org",
     )
 

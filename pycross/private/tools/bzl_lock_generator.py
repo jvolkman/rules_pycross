@@ -11,7 +11,6 @@ from typing import Iterator
 from typing import List
 from typing import Optional
 from typing import Set
-from typing import Tuple
 from urllib.parse import urlparse
 
 from packaging.markers import Marker
@@ -21,10 +20,12 @@ from pip._internal.index.package_finder import CandidateEvaluator
 from pip._internal.index.package_finder import LinkEvaluator
 from pip._internal.models.candidate import InstallationCandidate
 from pip._internal.models.link import Link
+
 from pycross.private.tools.lock_model import LockSet
 from pycross.private.tools.lock_model import Package
 from pycross.private.tools.lock_model import PackageDependency
 from pycross.private.tools.lock_model import PackageFile
+from pycross.private.tools.lock_model import PackageKey
 from pycross.private.tools.lock_model import is_wheel
 from pycross.private.tools.lock_model import package_canonical_name
 from pycross.private.tools.target_environment import TargetEnv
@@ -91,10 +92,10 @@ class Naming:
     def pin_target(self, package_name: str) -> str:
         return self._prefixed(self._sanitize(package_name), self.package_prefix)
 
-    def package_target(self, package_key: str) -> str:
-        return self._prefixed(self._sanitize(package_key), self.package_prefix)
+    def package_target(self, package_key: PackageKey) -> str:
+        return self._prefixed(self._sanitize(str(package_key)), self.package_prefix)
 
-    def package_label(self, package_key: str) -> str:
+    def package_label(self, package_key: PackageKey) -> str:
         return f":{self.package_target(package_key)}"
 
     def environment_target(self, environment_name: str) -> str:
@@ -103,10 +104,10 @@ class Naming:
     def environment_label(self, environment_name: str) -> str:
         return f":{self.environment_target(environment_name)}"
 
-    def wheel_build_target(self, package_key: str) -> str:
-        return self._prefixed(self._sanitize(package_key), self.build_prefix)
+    def wheel_build_target(self, package_key: PackageKey) -> str:
+        return self._prefixed(self._sanitize(str(package_key)), self.build_prefix)
 
-    def wheel_build_label(self, package_key: str):
+    def wheel_build_label(self, package_key: PackageKey):
         return f":{self.wheel_build_target(package_key)}"
 
     def sdist_repo(self, file: PackageFile) -> str:
@@ -314,9 +315,9 @@ class PackageTarget:
     @property
     def all_dependency_keys(self) -> Set[str]:
         """Returns all package keys (name-version) that this target depends on, including platform-specific."""
-        keys = set(d.key for d in self.common_deps)
+        keys = set(str(d.key) for d in self.common_deps)
         for env_deps in self.env_deps.values():
-            keys |= set(d.key for d in env_deps)
+            keys |= set(str(d.key) for d in env_deps)
         return keys
 
     @property
@@ -351,15 +352,17 @@ class PackageTarget:
 
     @property
     def _deps_name(self):
+        key_str = str(self.package.key)
         sanitized = (
-            self.package.key.replace("-", "_").replace(".", "_").replace("@", "_").replace("+", "_")
+            key_str.replace("-", "_").replace(".", "_").replace("@", "_").replace("+", "_")
         )
         return f"_{sanitized}_deps"
 
     @property
     def _build_deps_name(self):
+        key_str = str(self.package.key)
         sanitized = (
-            self.package.key.replace("-", "_").replace(".", "_").replace("@", "_").replace("+", "_")
+            key_str.replace("-", "_").replace(".", "_").replace("@", "_").replace("+", "_")
         )
         return f"_{sanitized}_build_deps"
 
@@ -485,10 +488,7 @@ class PackageTarget:
 
 class UrlRepoTarget:
     def __init__(self, name: str, file: PackageFile):
-        assert (
-            file.urls,
-            "UrlWheelRepoTarget requires a PackageFile with one or more URLs",
-        )
+        assert file.urls, "UrlWheelRepoTarget requires a PackageFile with one or more URLs"
         self.name = name
         self.file = file
 

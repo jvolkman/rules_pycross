@@ -1,15 +1,14 @@
 from __future__ import annotations
 
 import dataclasses
-from typing import Optional
-from typing import Tuple
-
 import json
 from dataclasses import dataclass
 from json import JSONEncoder
 from typing import Any
 from typing import Dict
 from typing import List
+from typing import Optional
+from typing import Tuple
 
 import dacite
 from packaging.utils import NormalizedName
@@ -17,7 +16,7 @@ from packaging.utils import Version
 from packaging.utils import canonicalize_name
 
 
-class _VersionHandlingEncoder(JSONEncoder):
+class _TypeHandlingEncoder(JSONEncoder):
     def default(self, o):
         if isinstance(o, Version):
             return str(o)
@@ -43,16 +42,33 @@ class PackageFile:
         return not self.is_wheel
 
 
+class PackageKey(str):
+    def __init__(self, val) -> None:
+        name, version = val.split("@", maxsplit=1)
+        self.name = package_canonical_name(name)
+        self.version = Version(version)
+
+    @staticmethod
+    def from_parts(name: NormalizedName, version: Version) -> PackageKey:
+        return PackageKey(f"{name}@{version}")
+
+
 @dataclass(frozen=True)
 class PackageDependency:
-    key: str
+    name: NormalizedName
+    version: Version
     marker: str
 
     def __post_init__(self):
-        assert self.key, "The key field must be specified."
+        assert self.name, "The name field must be specified."
+        assert self.version, "The version field must be specified."
         assert (
             self.marker is not None
         ), "The marker field must be specified, or an empty string."
+
+    @property
+    def key(self) -> PackageKey:
+        return PackageKey.from_parts(self.name, self.version)
 
 
 @dataclass(frozen=True)
@@ -80,14 +96,14 @@ class Package:
         assert self.files, "The files field must not be empty."
 
     @property
-    def key(self):
-        return f"{self.name}@{self.version}"
+    def key(self) -> PackageKey:
+        return PackageKey.from_parts(self.name, self.version)
 
 
 @dataclass(frozen=True)
 class LockSet:
-    packages: Dict[str, Package]
-    pins: Dict[str, str]
+    packages: Dict[PackageKey, Package]
+    pins: Dict[NormalizedName, PackageKey]
 
     def __post_init__(self):
         assert self.packages is not None, "The packages field must be specified."
@@ -98,12 +114,12 @@ class LockSet:
 
     def to_json(self, indent=None) -> str:
         return json.dumps(
-            self.to_dict(), sort_keys=True, indent=indent, cls=_VersionHandlingEncoder
+            self.to_dict(), sort_keys=True, indent=indent, cls=_TypeHandlingEncoder
         )
 
     @staticmethod
     def from_dict(data: Dict[str, Any]) -> LockSet:
-        return dacite.from_dict(LockSet, data, config=dacite.Config(cast=[Tuple, Version]))
+        return dacite.from_dict(LockSet, data, config=dacite.Config(cast=[Tuple, Version, PackageKey]))
 
     @classmethod
     def from_json(cls, data: str) -> LockSet:

@@ -22,6 +22,7 @@ from pycross.private.tools.lock_model import LockSet
 from pycross.private.tools.lock_model import Package
 from pycross.private.tools.lock_model import PackageDependency
 from pycross.private.tools.lock_model import PackageFile
+from pycross.private.tools.lock_model import PackageKey
 from pycross.private.tools.lock_model import package_canonical_name
 
 
@@ -61,13 +62,17 @@ class PoetryPackage:
     resolved_dependencies: List[PackageDependency]
 
     @property
-    def key(self):
-        return f"{self.name}@{self.version}"
+    def key(self) -> PackageKey:
+        return PackageKey.from_parts(self.name, Version(str(self.version)))
+
+    @property
+    def pypa_version(self) -> Version:
+        return Version(str(self.version))
 
     def to_lock_package(self) -> Package:
         return Package(
             name=self.name,
-            version=Version(str(self.version)),
+            version=self.pypa_version,
             python_versions=self.python_versions,
             dependencies=sorted(self.resolved_dependencies, key=lambda p: p.key),
             files=sorted(self.files, key=lambda f: f.name),
@@ -198,7 +203,8 @@ def translate(project_file: str, lock_file: str) -> LockSet:
             for dep_pkg in dependency_packages:
                 if dep.matches(dep_pkg):
                     resolved = PackageDependency(
-                        key=dep_pkg.key,
+                        name=dep_pkg.name,
+                        version=dep_pkg.pypa_version,
                         marker=dep.marker_without_extra,
                     )
                     package.resolved_dependencies.append(resolved)

@@ -5,6 +5,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from typing import List, Dict
 
+from packaging.utils import NormalizedName
 from packaging.utils import Version
 
 from pdm.core import Core as PDMCore
@@ -18,6 +19,7 @@ from pycross.private.tools.lock_model import LockSet
 from pycross.private.tools.lock_model import Package
 from pycross.private.tools.lock_model import PackageDependency
 from pycross.private.tools.lock_model import PackageFile
+from pycross.private.tools.lock_model import PackageKey
 from pycross.private.tools.lock_model import package_canonical_name
 
 
@@ -40,8 +42,8 @@ class Project(PDMProject):
         return self._cache_dir
 
 
-def candidate_package_key(candidate: PDMCandidate) -> str:
-    return f"{candidate.name}@{candidate.version}"
+def candidate_package_key(candidate: PDMCandidate) -> PackageKey:
+    return PackageKey.from_parts(package_canonical_name(candidate.name), Version(candidate.version))
 
 
 def parse_hash_sha256(hash: str) -> str:
@@ -54,7 +56,7 @@ def get_pins(
     default_dependencies: bool,
     dev_dependencies: bool,
     dependency_groups: List[str],
-) -> Dict[str, str]:
+) -> Dict[NormalizedName, PackageKey]:
     pins = {}
     repository = project.locked_repository
     try:
@@ -82,7 +84,7 @@ def get_pins(
     return pins
 
 
-def get_packages(project: Project) -> Dict[str, Package]:
+def get_packages(project: Project) -> Dict[PackageKey, Package]:
     packages = {}
     repository = project.locked_repository
     for _package in repository.packages.values():
@@ -126,12 +128,14 @@ def get_packages(project: Project) -> Dict[str, Package]:
                 if _candidate.name == _package.name:
                     continue
                 dependency = PackageDependency(
-                    key=candidate_package_key(_candidate),
+                    name=package_canonical_name(_candidate.name),
+                    version=Version(_candidate.version),
                     marker=str(_dependency.marker) if _dependency.marker else "",
                 )
                 package_dependencies.append(dependency)
 
-        # if there are multiple packages with the same name (eg in case of package+extras) merge dependencies into the main package
+        # if there are multiple packages with the same name (eg in case of package+extras) merge dependencies into
+        # the main package
         if package_key in packages:
             package_dependencies.extend(packages[package_key].dependencies)
 
