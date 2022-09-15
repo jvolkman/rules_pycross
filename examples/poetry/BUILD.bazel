@@ -82,7 +82,6 @@ pycross_lock_file(
     always_build_packages = [
         "pbr@5.10.0",
         "setproctitle",
-        "numpy",  # Doesn't work with zig cc since numpy can't detect the compiler type (assumes gcc)
     ],
     build_target_overrides = {
         "future@0.18.2": "@//deps:overridden_future_0.18.2",
@@ -93,11 +92,6 @@ pycross_lock_file(
     ],
     lock_model_file = ":example_lock_model",
     package_build_dependencies = {
-        "numpy": [
-            "cython",
-            "setuptools",
-            "wheel",
-        ],
         "setproctitle": [
             "setuptools",
             "wheel",

@@ -159,15 +159,20 @@ def translate(project_file: str, lock_file: str) -> LockSet:
             package_python_versions = ""
 
         dependencies = []
-        for name, dep in lock_pkg.get("dependencies", {}).items():
-            if isinstance(dep, str):
-                marker = None
-                spec = dep
-            else:
-                marker = dep.get("markers")
-                spec = dep.get("version")
+        for name, dep_list in lock_pkg.get("dependencies", {}).items():
+            # In some cases the dependency is actually a list of alternatives, each with a different
+            # marker. Generally this is not the case, but we coerce a single entry into a list of 1.
+            if not isinstance(dep_list, list):
+                dep_list = [dep_list]
+            for dep in dep_list:
+                if isinstance(dep, str):
+                    marker = None
+                    spec = dep
+                else:
+                    marker = dep.get("markers")
+                    spec = dep.get("version")
 
-            dependencies.append(PoetryDependency(name=name, spec=spec, marker=marker))
+                dependencies.append(PoetryDependency(name=name, spec=spec, marker=marker))
 
         poetry_packages.append(
             PoetryPackage(

@@ -219,7 +219,7 @@ def wrap_cc(lang: str, cc_exe: str, cflags: str, python_exe: str, bin_dir: Path)
                 #!{python_exe}
                 import os
                 import sys
-                os.execv("{cc_exe}", ["{wrapper_path}"] + {repr(wrapper_flags)} + sys.argv[1:])
+                os.execv("{cc_exe}", ["{cc_exe}"] + {repr(wrapper_flags)} + sys.argv[1:])
                 """
             )
         )

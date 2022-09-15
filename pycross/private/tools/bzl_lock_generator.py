@@ -1,5 +1,6 @@
 import argparse
 import json
+import operator
 import os
 import sys
 import textwrap
@@ -162,18 +163,27 @@ class GenerationContext:
         self, package: Package
     ) -> Dict[Optional[str], Set[PackageDependency]]:
         env_deps = defaultdict(list)
-        for dep in package.dependencies:
-            for target in self.target_environments:
-
+        # We sort deps by version in descending order. In case the list of dependencies
+        # has multiple entries for the same name that match an environment, we prefer the
+        # latest version.
+        ordered_deps = sorted(package.dependencies, key=operator.attrgetter('version'), reverse=True)
+        for target in self.target_environments:
+            added_for_target = set()
+            for dep in ordered_deps:
+                # Only add each dependency once per target.
+                if dep.name in added_for_target:
+                    continue
                 # If the dependency has no marker, just add it for each environment.
                 if not dep.marker:
                     env_deps[target.name].append(dep)
+                    added_for_target.add(dep.name)
 
-                # Otherwise, if no extras, just evaluate the markers normally.
+                # Otherwise, only add dependencies whose markers evaluate to the current target.
                 else:
                     marker = Marker(dep.marker)
                     if marker.evaluate(target.markers):
                         env_deps[target.name].append(dep)
+                        added_for_target.add(dep.name)
 
         if env_deps:
             # Pull out deps common to all environments
