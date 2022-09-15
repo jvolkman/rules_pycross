@@ -32,7 +32,9 @@ PINS = {
     "importlib_metadata": "importlib_metadata_4.12.0",
     "ipython": "ipython_8.5.0",
     "itsdangerous": "itsdangerous_2.1.2",
+    "jaraco_classes": "jaraco_classes_3.2.2",
     "jedi": "jedi_0.18.1",
+    "jeepney": "jeepney_0.8.0",
     "jinja2": "jinja2_3.1.2",
     "jmespath": "jmespath_1.0.1",
     "jschema_to_python": "jschema_to_python_1.2.3",
@@ -42,8 +44,10 @@ PINS = {
     "jsonpointer": "jsonpointer_2.3",
     "jsonschema": "jsonschema_3.2.0",
     "junit_xml": "junit_xml_1.9",
+    "keyring": "keyring_23.9.1",
     "markupsafe": "markupsafe_2.1.1",
     "matplotlib_inline": "matplotlib_inline_0.1.6",
+    "more_itertools": "more_itertools_8.14.0",
     "moto": "moto_3.1.1",
     "networkx": "networkx_2.8.6",
     "numpy": "numpy_1.22.3",
@@ -70,6 +74,7 @@ PINS = {
     "rsa": "rsa_4.9",
     "s3transfer": "s3transfer_0.6.0",
     "sarif_om": "sarif_om_1.0.4",
+    "secretstorage": "secretstorage_3.3.3",
     "setproctitle": "setproctitle_1.2.2",
     "setuptools": "setuptools_59.2.0",
     "six": "six_1.16.0",
@@ -407,6 +412,16 @@ def targets():
         wheel = "@example_lock_wheel_itsdangerous_2.1.2_py3_none_any//file",
     )
 
+    _jaraco_classes_3_2_2_deps = [
+        ":more_itertools_8.14.0",
+    ]
+
+    pycross_wheel_library(
+        name = "jaraco_classes_3.2.2",
+        deps = _jaraco_classes_3_2_2_deps,
+        wheel = "@example_lock_wheel_jaraco.classes_3.2.2_py3_none_any//file",
+    )
+
     _jedi_0_18_1_deps = [
         ":parso_0.8.3",
     ]
@@ -415,6 +430,11 @@ def targets():
         name = "jedi_0.18.1",
         deps = _jedi_0_18_1_deps,
         wheel = "@example_lock_wheel_jedi_0.18.1_py2.py3_none_any//file",
+    )
+
+    pycross_wheel_library(
+        name = "jeepney_0.8.0",
+        wheel = "@example_lock_wheel_jeepney_0.8.0_py3_none_any//file",
     )
 
     _jinja2_3_1_2_deps = [
@@ -492,6 +512,23 @@ def targets():
         wheel = "@example_lock_wheel_junit_xml_1.9_py2.py3_none_any//file",
     )
 
+    _keyring_23_9_1_deps = [
+        ":importlib_metadata_4.12.0",
+        ":jaraco_classes_3.2.2",
+    ] + select({
+        ":_env_python_linux_x86_64": [
+            ":jeepney_0.8.0",
+            ":secretstorage_3.3.3",
+        ],
+        "//conditions:default": [],
+    })
+
+    pycross_wheel_library(
+        name = "keyring_23.9.1",
+        deps = _keyring_23_9_1_deps,
+        wheel = "@example_lock_wheel_keyring_23.9.1_py3_none_any//file",
+    )
+
     pycross_wheel_library(
         name = "markupsafe_2.1.1",
         wheel = select({
@@ -509,6 +546,11 @@ def targets():
         name = "matplotlib_inline_0.1.6",
         deps = _matplotlib_inline_0_1_6_deps,
         wheel = "@example_lock_wheel_matplotlib_inline_0.1.6_py3_none_any//file",
+    )
+
+    pycross_wheel_library(
+        name = "more_itertools_8.14.0",
+        wheel = "@example_lock_wheel_more_itertools_8.14.0_py3_none_any//file",
     )
 
     _moto_3_1_1_deps = [
@@ -763,6 +805,17 @@ def targets():
         name = "sarif_om_1.0.4",
         deps = _sarif_om_1_0_4_deps,
         wheel = "@example_lock_wheel_sarif_om_1.0.4_py3_none_any//file",
+    )
+
+    _secretstorage_3_3_3_deps = [
+        ":cryptography_38.0.1",
+        ":jeepney_0.8.0",
+    ]
+
+    pycross_wheel_library(
+        name = "secretstorage_3.3.3",
+        deps = _secretstorage_3_3_3_deps,
+        wheel = "@example_lock_wheel_secretstorage_3.3.3_py3_none_any//file",
     )
 
     _setproctitle_1_2_2_build_deps = [
@@ -1322,11 +1375,31 @@ def repositories():
 
     maybe(
         pypi_file,
+        name = "example_lock_wheel_jaraco.classes_3.2.2_py3_none_any",
+        package_name = "jaraco-classes",
+        package_version = "3.2.2",
+        filename = "jaraco.classes-3.2.2-py3-none-any.whl",
+        sha256 = "e6ef6fd3fcf4579a7a019d87d1e56a883f4e4c35cfe925f86731abc58804e647",
+        index = "https://pypi.org",
+    )
+
+    maybe(
+        pypi_file,
         name = "example_lock_wheel_jedi_0.18.1_py2.py3_none_any",
         package_name = "jedi",
         package_version = "0.18.1",
         filename = "jedi-0.18.1-py2.py3-none-any.whl",
         sha256 = "637c9635fcf47945ceb91cd7f320234a7be540ded6f3e99a50cb6febdfd1ba8d",
+        index = "https://pypi.org",
+    )
+
+    maybe(
+        pypi_file,
+        name = "example_lock_wheel_jeepney_0.8.0_py3_none_any",
+        package_name = "jeepney",
+        package_version = "0.8.0",
+        filename = "jeepney-0.8.0-py3-none-any.whl",
+        sha256 = "c0a454ad016ca575060802ee4d590dd912e35c122fa04e70306de3d076cce755",
         index = "https://pypi.org",
     )
 
@@ -1422,6 +1495,16 @@ def repositories():
 
     maybe(
         pypi_file,
+        name = "example_lock_wheel_keyring_23.9.1_py3_none_any",
+        package_name = "keyring",
+        package_version = "23.9.1",
+        filename = "keyring-23.9.1-py3-none-any.whl",
+        sha256 = "3565b9e4ea004c96e158d2d332a49f466733d565bb24157a60fd2e49f41a0fd1",
+        index = "https://pypi.org",
+    )
+
+    maybe(
+        pypi_file,
         name = "example_lock_wheel_markupsafe_2.1.1_cp39_cp39_macosx_10_9_universal2",
         package_name = "markupsafe",
         package_version = "2.1.1",
@@ -1457,6 +1540,16 @@ def repositories():
         package_version = "0.1.6",
         filename = "matplotlib_inline-0.1.6-py3-none-any.whl",
         sha256 = "f1f41aab5328aa5aaea9b16d083b128102f8712542f819fe7e6a420ff581b311",
+        index = "https://pypi.org",
+    )
+
+    maybe(
+        pypi_file,
+        name = "example_lock_wheel_more_itertools_8.14.0_py3_none_any",
+        package_name = "more-itertools",
+        package_version = "8.14.0",
+        filename = "more_itertools-8.14.0-py3-none-any.whl",
+        sha256 = "1bc4f91ee5b1b31ac7ceacc17c09befe6a40a503907baf9c839c229b5095cfd2",
         index = "https://pypi.org",
     )
 
@@ -1777,6 +1870,16 @@ def repositories():
         package_version = "1.0.4",
         filename = "sarif_om-1.0.4-py3-none-any.whl",
         sha256 = "539ef47a662329b1c8502388ad92457425e95dc0aaaf995fe46f4984c4771911",
+        index = "https://pypi.org",
+    )
+
+    maybe(
+        pypi_file,
+        name = "example_lock_wheel_secretstorage_3.3.3_py3_none_any",
+        package_name = "secretstorage",
+        package_version = "3.3.3",
+        filename = "SecretStorage-3.3.3-py3-none-any.whl",
+        sha256 = "f356e6628222568e3af06f2eba8df495efa13b3b63081dafd4f7d9a7b7bc9f99",
         index = "https://pypi.org",
     )
 
