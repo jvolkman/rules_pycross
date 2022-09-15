@@ -41,3 +41,46 @@ pycross_lock_repo(
 load("@example_lock_repo//:requirements.bzl", "install_deps")
 
 install_deps()
+
+# Setup a CC toolchain using bazel-zig-cc
+# https://git.sr.ht/~motiejus/bazel-zig-cc
+BAZEL_ZIG_CC_VERSION = "v0.7.3"
+
+http_archive(
+    name = "bazel-zig-cc",
+    sha256 = "cd2629843fe4ba20cf29e1d73cc02559afba640f884e519b6a194a35627cbbf3",
+    strip_prefix = "bazel-zig-cc-{}".format(BAZEL_ZIG_CC_VERSION),
+    urls = ["https://git.sr.ht/~motiejus/bazel-zig-cc/archive/{}.tar.gz".format(BAZEL_ZIG_CC_VERSION)],
+)
+
+load(
+    "@bazel-zig-cc//toolchain:defs.bzl",
+    "URL_FORMAT_JAKSTYS",
+    "URL_FORMAT_NIGHTLY",
+    zig_toolchains = "toolchains",
+)
+
+zig_version = "0.10.0-dev.2156+458943e32"
+
+zig_host_platform_sha256 = {
+    "linux-aarch64": "43e55632c61833a598aff3dcb134a7967c19eddc6abd28273bb60585bbbf34af",
+    "linux-x86_64": "c22f4453ac45256d865defad05bfe0e42c6b73f15dc007e87fdae42f44933485",
+    "macos-aarch64": "f786a0d6674f9ec267eb1715de1b6265faedfdfdc7d4d05dedc534644e12224d",
+    "macos-x86_64": "7dffe1c995da9145872ae806d770cd2acc38993d3d32aabdece7107177853730",
+}
+
+zig_toolchains(
+    host_platform_sha256 = zig_host_platform_sha256,
+    url_formats = [
+        URL_FORMAT_NIGHTLY,
+        URL_FORMAT_JAKSTYS,
+    ],
+    version = zig_version,
+)
+
+register_toolchains(
+    "@zig_sdk//toolchain:linux_amd64_gnu.2.19",
+    "@zig_sdk//toolchain:linux_arm64_gnu.2.28",
+    "@zig_sdk//toolchain:darwin_amd64",
+    "@zig_sdk//toolchain:darwin_arm64",
+)

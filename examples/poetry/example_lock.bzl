@@ -349,10 +349,16 @@ def targets():
         wheel = "@example_lock_wheel_graphql_core_3.2.1_py3_none_any//file",
     )
 
+    _greenlet_1_1_3_build_deps = [
+        ":setuptools_59.2.0",
+        ":wheel_0.37.0",
+    ]
+
     pycross_wheel_build(
         name = "_build_greenlet_1.1.3",
         sdist = "@example_lock_sdist_greenlet_1.1.3//file",
         target_environment = _target,
+        deps = _greenlet_1_1_3_build_deps,
         tags = ["manual"],
     )
 

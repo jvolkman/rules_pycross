@@ -96,6 +96,10 @@ pycross_lock_file(
             "setuptools",
             "wheel",
         ],
+        "greenlet": [
+            "setuptools",
+            "wheel",
+        ],
     },
     pypi_index = "https://pypi.org",
     remote_wheels = {
