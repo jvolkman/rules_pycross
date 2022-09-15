@@ -47,6 +47,7 @@ PINS = {
     "moto": "moto_3.1.1",
     "networkx": "networkx_2.8.6",
     "numpy": "numpy_1.22.3",
+    "opencv_python": "opencv_python_4.6.0.66",
     "packaging": "packaging_21.3",
     "parso": "parso_0.8.3",
     "pbr": "pbr_5.10.0",
@@ -548,23 +549,36 @@ def targets():
         wheel = "@example_lock_wheel_networkx_2.8.6_py3_none_any//file",
     )
 
-    _numpy_1_22_3_build_deps = [
-        ":cython_0.29.32",
-        ":setuptools_59.2.0",
-        ":wheel_0.37.0",
-    ]
-
-    pycross_wheel_build(
-        name = "_build_numpy_1.22.3",
-        sdist = "@example_lock_sdist_numpy_1.22.3//file",
-        target_environment = _target,
-        deps = _numpy_1_22_3_build_deps,
-        tags = ["manual"],
-    )
-
     pycross_wheel_library(
         name = "numpy_1.22.3",
-        wheel = ":_build_numpy_1.22.3",
+        wheel = select({
+            ":_env_python_darwin_arm64": "@example_lock_wheel_numpy_1.22.3_cp39_cp39_macosx_11_0_arm64//file",
+            ":_env_python_darwin_x86_64": "@example_lock_wheel_numpy_1.22.3_cp39_cp39_macosx_10_14_x86_64//file",
+            ":_env_python_linux_x86_64": "@example_lock_wheel_numpy_1.22.3_cp39_cp39_manylinux_2_17_x86_64.manylinux2014_x86_64//file",
+        }),
+    )
+
+    _opencv_python_4_6_0_66_deps = select({
+        ":_env_python_darwin_arm64": [
+            ":numpy_1.22.3",
+        ],
+        ":_env_python_darwin_x86_64": [
+            ":numpy_1.22.3",
+        ],
+        ":_env_python_linux_x86_64": [
+            ":numpy_1.22.3",
+        ],
+        "//conditions:default": [],
+    })
+
+    pycross_wheel_library(
+        name = "opencv_python_4.6.0.66",
+        deps = _opencv_python_4_6_0_66_deps,
+        wheel = select({
+            ":_env_python_darwin_arm64": "@example_lock_wheel_opencv_python_4.6.0.66_cp37_abi3_macosx_11_0_arm64//file",
+            ":_env_python_darwin_x86_64": "@example_lock_wheel_opencv_python_4.6.0.66_cp36_abi3_macosx_10_15_x86_64//file",
+            ":_env_python_linux_x86_64": "@example_lock_wheel_opencv_python_4.6.0.66_cp36_abi3_manylinux_2_17_x86_64.manylinux2014_x86_64//file",
+        }),
     )
 
     _packaging_21_3_deps = [
@@ -923,16 +937,6 @@ def repositories():
         package_version = "1.1.3",
         filename = "greenlet-1.1.3.tar.gz",
         sha256 = "bcb6c6dd1d6be6d38d6db283747d07fda089ff8c559a835236560a4410340455",
-        index = "https://pypi.org",
-    )
-
-    maybe(
-        pypi_file,
-        name = "example_lock_sdist_numpy_1.22.3",
-        package_name = "numpy",
-        package_version = "1.22.3",
-        filename = "numpy-1.22.3.zip",
-        sha256 = "dbc7601a3b7472d559dc7b933b18b4b66f9aa7452c120e87dfb33d02008c8a18",
         index = "https://pypi.org",
     )
 
@@ -1473,6 +1477,66 @@ def repositories():
         package_version = "2.8.6",
         filename = "networkx-2.8.6-py3-none-any.whl",
         sha256 = "2a30822761f34d56b9a370d96a4bf4827a535f5591a4078a453425caeba0c5bb",
+        index = "https://pypi.org",
+    )
+
+    maybe(
+        pypi_file,
+        name = "example_lock_wheel_numpy_1.22.3_cp39_cp39_macosx_10_14_x86_64",
+        package_name = "numpy",
+        package_version = "1.22.3",
+        filename = "numpy-1.22.3-cp39-cp39-macosx_10_14_x86_64.whl",
+        sha256 = "2c10a93606e0b4b95c9b04b77dc349b398fdfbda382d2a39ba5a822f669a0123",
+        index = "https://pypi.org",
+    )
+
+    maybe(
+        pypi_file,
+        name = "example_lock_wheel_numpy_1.22.3_cp39_cp39_macosx_11_0_arm64",
+        package_name = "numpy",
+        package_version = "1.22.3",
+        filename = "numpy-1.22.3-cp39-cp39-macosx_11_0_arm64.whl",
+        sha256 = "fade0d4f4d292b6f39951b6836d7a3c7ef5b2347f3c420cd9820a1d90d794802",
+        index = "https://pypi.org",
+    )
+
+    maybe(
+        pypi_file,
+        name = "example_lock_wheel_numpy_1.22.3_cp39_cp39_manylinux_2_17_x86_64.manylinux2014_x86_64",
+        package_name = "numpy",
+        package_version = "1.22.3",
+        filename = "numpy-1.22.3-cp39-cp39-manylinux_2_17_x86_64.manylinux2014_x86_64.whl",
+        sha256 = "97098b95aa4e418529099c26558eeb8486e66bd1e53a6b606d684d0c3616b168",
+        index = "https://pypi.org",
+    )
+
+    maybe(
+        pypi_file,
+        name = "example_lock_wheel_opencv_python_4.6.0.66_cp36_abi3_macosx_10_15_x86_64",
+        package_name = "opencv-python",
+        package_version = "4.6.0.66",
+        filename = "opencv_python-4.6.0.66-cp36-abi3-macosx_10_15_x86_64.whl",
+        sha256 = "e6e448b62afc95c5b58f97e87ef84699e6607fe5c58730a03301c52496005cae",
+        index = "https://pypi.org",
+    )
+
+    maybe(
+        pypi_file,
+        name = "example_lock_wheel_opencv_python_4.6.0.66_cp36_abi3_manylinux_2_17_x86_64.manylinux2014_x86_64",
+        package_name = "opencv-python",
+        package_version = "4.6.0.66",
+        filename = "opencv_python-4.6.0.66-cp36-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl",
+        sha256 = "dbdc84a9b4ea2cbae33861652d25093944b9959279200b7ae0badd32439f74de",
+        index = "https://pypi.org",
+    )
+
+    maybe(
+        pypi_file,
+        name = "example_lock_wheel_opencv_python_4.6.0.66_cp37_abi3_macosx_11_0_arm64",
+        package_name = "opencv-python",
+        package_version = "4.6.0.66",
+        filename = "opencv_python-4.6.0.66-cp37-abi3-macosx_11_0_arm64.whl",
+        sha256 = "6e32af22e3202748bd233ed8f538741876191863882eba44e332d1a34993165b",
         index = "https://pypi.org",
     )
 
