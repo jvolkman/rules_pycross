@@ -449,7 +449,7 @@ def main(temp_dir: Path, is_debug: bool) -> None:
         wrapper_vars=wrapper_sysconfig_vars,
     )
 
-    absolute_path_entries = [os.path.join(cwd, p) for p in args.path]
+    absolute_path_entries = [os.path.join(cwd, p) for p in args.path] if args.path else []
     build_venv(
         env_dir=build_env_dir,
         exec_python_exe=args.exec_python_executable,
