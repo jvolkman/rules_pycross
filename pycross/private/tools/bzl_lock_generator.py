@@ -19,6 +19,7 @@ from packaging.specifiers import SpecifierSet
 from packaging.utils import parse_wheel_filename
 from pip._internal.index.package_finder import CandidateEvaluator
 from pip._internal.index.package_finder import LinkEvaluator
+from pip._internal.index.package_finder import LinkType
 from pip._internal.models.candidate import InstallationCandidate
 from pip._internal.models.link import Link
 
@@ -209,7 +210,7 @@ class GenerationContext:
         for environment in sorted(
             self.target_environments, key=lambda te: te.name.lower()
         ):
-            evaluator = LinkEvaluator(
+            link_evaluator = LinkEvaluator(
                 project_name=package.name,
                 canonical_name=package.name,
                 formats=formats,
@@ -245,14 +246,14 @@ class GenerationContext:
 
             candidates = []
             for candidate in candidates_to_package_sources:
-                valid, _ = evaluator.evaluate_link(candidate.link)
-                if valid:
+                link_type, _ = link_evaluator.evaluate_link(candidate.link)
+                if link_type == LinkType.candidate:
                     candidates.append(candidate)
 
-            evaluator = CandidateEvaluator.create(
+            candidate_evaluator = CandidateEvaluator.create(
                 package.name, environment.target_python
             )
-            compute_result = evaluator.compute_best_candidate(candidates)
+            compute_result = candidate_evaluator.compute_best_candidate(candidates)
             environment_sources[environment.name] = candidates_to_package_sources[
                 compute_result.best_candidate
             ]
