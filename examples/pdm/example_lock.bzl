@@ -698,7 +698,7 @@ def targets():
         wheel = "@example_lock_wheel_pathspec_0.10.1_py3_none_any//file",
     )
 
-    _pbr_5_9_0_build_deps = [
+    _pbr_5_10_0_build_deps = [
         ":setuptools_59.2.0",
         ":wheel_0.37.0",
     ]
@@ -707,7 +707,7 @@ def targets():
         name = "_build_pbr_5.10.0",
         sdist = "@example_lock_sdist_pbr_5.10.0//file",
         target_environment = _target,
-        deps = _pbr_5_9_0_build_deps,
+        deps = _pbr_5_10_0_build_deps,
         tags = ["manual"],
     )
 
