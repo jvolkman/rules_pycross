@@ -373,9 +373,9 @@ def build_wheel(
         if extra_environ:
             env.update(extra_environ)
 
-        # Run Python in isolated mode
+        # Run Python in isolated mode by inserting -I after the executable entry in the command line.
         cmd = list(cmd)
-        cmd.append("-I")
+        cmd.insert(1, "-I")
 
         try:
             output = subprocess.check_output(
