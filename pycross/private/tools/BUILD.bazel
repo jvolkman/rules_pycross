@@ -9,7 +9,7 @@ py_binary(
     deps = [
         ":lib",
         "@rules_pycross_pypi_deps_packaging//:pkg",
-	"@rules_pycross_pypi_deps_pip//:pkg",
+        "@rules_pycross_pypi_deps_pip//:pkg",
         "@rules_pycross_pypi_deps_tomli//:pkg",
     ],
 )
@@ -83,7 +83,7 @@ py_binary(
     deps = [
         ":lib",
         "@rules_pycross_pypi_deps_packaging//:pkg",
-	"@rules_pycross_pypi_deps_pip//:pkg",
+        "@rules_pycross_pypi_deps_pip//:pkg",
     ],
 )
 
