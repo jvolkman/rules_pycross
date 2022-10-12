@@ -74,7 +74,7 @@ def _pycross_wheel_library_impl(ctx):
     )
     transitive_sources = depset(
         direct = [out],
-        transitive = [d[PyInfo].transitive_sources for d in ctx.attr.deps],
+        transitive = [dep[PyInfo].transitive_sources for dep in ctx.attr.deps if PyInfo in dep],
     )
     runfiles = ctx.runfiles(files = [out])
     for d in ctx.attr.deps:
