@@ -116,6 +116,9 @@ pycross_lock_file(
             "wheel",
         ],
         "pbr": [
+            "setuptools",
+            "wheel",
+        ],
         "django-allauth": [
             "setuptools",
             "wheel",
