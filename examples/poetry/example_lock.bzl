@@ -4,6 +4,7 @@ load("@jvolkman_rules_pycross//pycross:defs.bzl", "pycross_wheel_build", "pycros
 
 PINS = {
     "appnope": "appnope_0.1.3",
+    "asgiref": "asgiref_3.5.2",
     "asttokens": "asttokens_2.0.8",
     "attrs": "attrs_22.1.0",
     "aws_sam_translator": "aws_sam_translator_1.51.0",
@@ -20,6 +21,9 @@ PINS = {
     "cryptography": "cryptography_38.0.1",
     "cython": "cython_0.29.32",
     "decorator": "decorator_5.1.1",
+    "defusedxml": "defusedxml_0.7.1",
+    "django": "django_4.1.2",
+    "django_allauth": "django_allauth_0.51.0",
     "docker": "docker_6.0.0",
     "ecdsa": "ecdsa_0.18.0",
     "executing": "executing_1.0.0",
@@ -51,6 +55,7 @@ PINS = {
     "moto": "moto_3.1.1",
     "networkx": "networkx_2.8.6",
     "numpy": "numpy_1.22.3",
+    "oauthlib": "oauthlib_3.2.1",
     "opencv_python": "opencv_python_4.6.0.66",
     "packaging": "packaging_21.3",
     "parso": "parso_0.8.3",
@@ -63,13 +68,16 @@ PINS = {
     "pyasn1": "pyasn1_0.4.8",
     "pycparser": "pycparser_2.21",
     "pygments": "pygments_2.13.0",
+    "pyjwt": "pyjwt_2.5.0",
     "pyparsing": "pyparsing_3.0.9",
     "pyrsistent": "pyrsistent_0.18.1",
+    "python3_openid": "python3_openid_3.2.0",
     "python_dateutil": "python_dateutil_2.8.2",
     "python_jose": "python_jose_3.1.0",
     "pytz": "pytz_2022.2.1",
     "pyyaml": "pyyaml_6.0",
     "requests": "requests_2.28.1",
+    "requests_oauthlib": "requests_oauthlib_1.3.1",
     "responses": "responses_0.21.0",
     "rsa": "rsa_4.9",
     "s3transfer": "s3transfer_0.6.0",
@@ -80,10 +88,12 @@ PINS = {
     "six": "six_1.16.0",
     "sqlalchemy": "sqlalchemy_1.4.41",
     "sqlalchemy_utils": "sqlalchemy_utils_0.38.2",
+    "sqlparse": "sqlparse_0.4.3",
     "sshpubkeys": "sshpubkeys_3.3.1",
     "stack_data": "stack_data_0.5.0",
     "traitlets": "traitlets_5.4.0",
     "tree_sitter": "tree_sitter_0.20.0",
+    "types_cryptography": "types_cryptography_3.3.23",
     "urllib3": "urllib3_1.26.12",
     "wcwidth": "wcwidth_0.2.5",
     "websocket_client": "websocket_client_1.4.1",
@@ -134,6 +144,11 @@ def targets():
     pycross_wheel_library(
         name = "appnope_0.1.3",
         wheel = "@example_lock_wheel_appnope_0.1.3_py2.py3_none_any//file",
+    )
+
+    pycross_wheel_library(
+        name = "asgiref_3.5.2",
+        wheel = "@example_lock_wheel_asgiref_3.5.2_py3_none_any//file",
     )
 
     _asttokens_2_0_8_deps = [
@@ -284,6 +299,44 @@ def targets():
     pycross_wheel_library(
         name = "decorator_5.1.1",
         wheel = "@example_lock_wheel_decorator_5.1.1_py3_none_any//file",
+    )
+
+    pycross_wheel_library(
+        name = "defusedxml_0.7.1",
+        wheel = "@example_lock_wheel_defusedxml_0.7.1_py2.py3_none_any//file",
+    )
+
+    _django_4_1_2_deps = [
+        ":asgiref_3.5.2",
+        ":sqlparse_0.4.3",
+    ]
+
+    pycross_wheel_library(
+        name = "django_4.1.2",
+        deps = _django_4_1_2_deps,
+        wheel = "@example_lock_wheel_django_4.1.2_py3_none_any//file",
+    )
+
+    _django_allauth_0_51_0_deps = [
+        ":django_4.1.2",
+        ":pyjwt_2.5.0",
+        ":python3_openid_3.2.0",
+        ":requests_2.28.1",
+        ":requests_oauthlib_1.3.1",
+    ]
+
+    pycross_wheel_build(
+        name = "_build_django_allauth_0.51.0",
+        sdist = "@example_lock_sdist_django_allauth_0.51.0//file",
+        target_environment = _target,
+        deps = _django_allauth_0_51_0_deps,
+        tags = ["manual"],
+    )
+
+    pycross_wheel_library(
+        name = "django_allauth_0.51.0",
+        deps = _django_allauth_0_51_0_deps,
+        wheel = ":_build_django_allauth_0.51.0",
     )
 
     _docker_6_0_0_deps = [
@@ -606,6 +659,11 @@ def targets():
         }),
     )
 
+    pycross_wheel_library(
+        name = "oauthlib_3.2.1",
+        wheel = "@example_lock_wheel_oauthlib_3.2.1_py3_none_any//file",
+    )
+
     _opencv_python_4_6_0_66_deps = select({
         ":_env_python_darwin_arm64": [
             ":numpy_1.22.3",
@@ -706,6 +764,17 @@ def targets():
         wheel = "@example_lock_wheel_pygments_2.13.0_py3_none_any//file",
     )
 
+    _pyjwt_2_5_0_deps = [
+        ":cryptography_38.0.1",
+        ":types_cryptography_3.3.23",
+    ]
+
+    pycross_wheel_library(
+        name = "pyjwt_2.5.0",
+        deps = _pyjwt_2_5_0_deps,
+        wheel = "@example_lock_wheel_pyjwt_2.5.0_py3_none_any//file",
+    )
+
     pycross_wheel_library(
         name = "pyparsing_3.0.9",
         wheel = "@example_lock_wheel_pyparsing_3.0.9_py3_none_any//file",
@@ -744,6 +813,16 @@ def targets():
         wheel = "@example_lock_wheel_python_jose_3.1.0_py2.py3_none_any//file",
     )
 
+    _python3_openid_3_2_0_deps = [
+        ":defusedxml_0.7.1",
+    ]
+
+    pycross_wheel_library(
+        name = "python3_openid_3.2.0",
+        deps = _python3_openid_3_2_0_deps,
+        wheel = "@example_lock_wheel_python3_openid_3.2.0_py3_none_any//file",
+    )
+
     pycross_wheel_library(
         name = "pytz_2022.2.1",
         wheel = "@example_lock_wheel_pytz_2022.2.1_py2.py3_none_any//file",
@@ -769,6 +848,17 @@ def targets():
         name = "requests_2.28.1",
         deps = _requests_2_28_1_deps,
         wheel = "@example_lock_wheel_requests_2.28.1_py3_none_any//file",
+    )
+
+    _requests_oauthlib_1_3_1_deps = [
+        ":oauthlib_3.2.1",
+        ":requests_2.28.1",
+    ]
+
+    pycross_wheel_library(
+        name = "requests_oauthlib_1.3.1",
+        deps = _requests_oauthlib_1_3_1_deps,
+        wheel = "@example_lock_wheel_requests_oauthlib_1.3.1_py2.py3_none_any//file",
     )
 
     _responses_0_21_0_deps = [
@@ -885,6 +975,11 @@ def targets():
         wheel = "@example_lock_wheel_sqlalchemy_utils_0.38.2_py3_none_any//file",
     )
 
+    pycross_wheel_library(
+        name = "sqlparse_0.4.3",
+        wheel = "@example_lock_wheel_sqlparse_0.4.3_py3_none_any//file",
+    )
+
     _sshpubkeys_3_3_1_deps = [
         ":cryptography_38.0.1",
         ":ecdsa_0.18.0",
@@ -927,6 +1022,11 @@ def targets():
             ":_env_python_darwin_x86_64": ":_build_tree_sitter_0.20.0",
             ":_env_python_linux_x86_64": ":_build_tree_sitter_0.20.0",
         }),
+    )
+
+    pycross_wheel_library(
+        name = "types_cryptography_3.3.23",
+        wheel = "@example_lock_wheel_types_cryptography_3.3.23_py3_none_any//file",
     )
 
     pycross_wheel_library(
@@ -979,6 +1079,16 @@ def targets():
     )
 
 def repositories():
+    maybe(
+        pypi_file,
+        name = "example_lock_sdist_django_allauth_0.51.0",
+        package_name = "django-allauth",
+        package_version = "0.51.0",
+        filename = "django-allauth-0.51.0.tar.gz",
+        sha256 = "ca1622733b6faa591580ccd3984042f12d8c79ade93438212de249b7ffb6f91f",
+        index = "https://pypi.org",
+    )
+
     maybe(
         pypi_file,
         name = "example_lock_sdist_future_0.18.2",
@@ -1046,6 +1156,16 @@ def repositories():
         package_version = "0.1.3",
         filename = "appnope-0.1.3-py2.py3-none-any.whl",
         sha256 = "265a455292d0bd8a72453494fa24df5a11eb18373a60c7c0430889f22548605e",
+        index = "https://pypi.org",
+    )
+
+    maybe(
+        pypi_file,
+        name = "example_lock_wheel_asgiref_3.5.2_py3_none_any",
+        package_name = "asgiref",
+        package_version = "3.5.2",
+        filename = "asgiref-3.5.2-py3-none-any.whl",
+        sha256 = "1d2880b792ae8757289136f1db2b7b99100ce959b2aa57fd69dab783d05afac4",
         index = "https://pypi.org",
     )
 
@@ -1256,6 +1376,26 @@ def repositories():
         package_version = "5.1.1",
         filename = "decorator-5.1.1-py3-none-any.whl",
         sha256 = "b8c3f85900b9dc423225913c5aace94729fe1fa9763b38939a95226f02d37186",
+        index = "https://pypi.org",
+    )
+
+    maybe(
+        pypi_file,
+        name = "example_lock_wheel_defusedxml_0.7.1_py2.py3_none_any",
+        package_name = "defusedxml",
+        package_version = "0.7.1",
+        filename = "defusedxml-0.7.1-py2.py3-none-any.whl",
+        sha256 = "a352e7e428770286cc899e2542b6cdaedb2b4953ff269a210103ec58f6198a61",
+        index = "https://pypi.org",
+    )
+
+    maybe(
+        pypi_file,
+        name = "example_lock_wheel_django_4.1.2_py3_none_any",
+        package_name = "django",
+        package_version = "4.1.2",
+        filename = "Django-4.1.2-py3-none-any.whl",
+        sha256 = "26dc24f99c8956374a054bcbf58aab8dc0cad2e6ac82b0fe036b752c00eee793",
         index = "https://pypi.org",
     )
 
@@ -1611,6 +1751,16 @@ def repositories():
 
     maybe(
         pypi_file,
+        name = "example_lock_wheel_oauthlib_3.2.1_py3_none_any",
+        package_name = "oauthlib",
+        package_version = "3.2.1",
+        filename = "oauthlib-3.2.1-py3-none-any.whl",
+        sha256 = "88e912ca1ad915e1dcc1c06fc9259d19de8deacd6fd17cc2df266decc2e49066",
+        index = "https://pypi.org",
+    )
+
+    maybe(
+        pypi_file,
         name = "example_lock_wheel_opencv_python_4.6.0.66_cp36_abi3_macosx_10_15_x86_64",
         package_name = "opencv-python",
         package_version = "4.6.0.66",
@@ -1741,6 +1891,16 @@ def repositories():
 
     maybe(
         pypi_file,
+        name = "example_lock_wheel_pyjwt_2.5.0_py3_none_any",
+        package_name = "pyjwt",
+        package_version = "2.5.0",
+        filename = "PyJWT-2.5.0-py3-none-any.whl",
+        sha256 = "8d82e7087868e94dd8d7d418e5088ce64f7daab4b36db654cbaedb46f9d1ca80",
+        index = "https://pypi.org",
+    )
+
+    maybe(
+        pypi_file,
         name = "example_lock_wheel_pyparsing_3.0.9_py3_none_any",
         package_name = "pyparsing",
         package_version = "3.0.9",
@@ -1766,6 +1926,16 @@ def repositories():
         package_version = "0.18.1",
         filename = "pyrsistent-0.18.1-cp39-cp39-manylinux_2_17_x86_64.manylinux2014_x86_64.whl",
         sha256 = "6bc66318fb7ee012071b2792024564973ecc80e9522842eb4e17743604b5e045",
+        index = "https://pypi.org",
+    )
+
+    maybe(
+        pypi_file,
+        name = "example_lock_wheel_python3_openid_3.2.0_py3_none_any",
+        package_name = "python3-openid",
+        package_version = "3.2.0",
+        filename = "python3_openid-3.2.0-py3-none-any.whl",
+        sha256 = "6626f771e0417486701e0b4daff762e7212e820ca5b29fcc0d05f6f8736dfa6b",
         index = "https://pypi.org",
     )
 
@@ -1836,6 +2006,16 @@ def repositories():
         package_version = "2.28.1",
         filename = "requests-2.28.1-py3-none-any.whl",
         sha256 = "8fefa2a1a1365bf5520aac41836fbee479da67864514bdb821f31ce07ce65349",
+        index = "https://pypi.org",
+    )
+
+    maybe(
+        pypi_file,
+        name = "example_lock_wheel_requests_oauthlib_1.3.1_py2.py3_none_any",
+        package_name = "requests-oauthlib",
+        package_version = "1.3.1",
+        filename = "requests_oauthlib-1.3.1-py2.py3-none-any.whl",
+        sha256 = "2577c501a2fb8d05a304c09d090d6e47c306fef15809d102b327cf8364bddab5",
         index = "https://pypi.org",
     )
 
@@ -1941,6 +2121,16 @@ def repositories():
 
     maybe(
         pypi_file,
+        name = "example_lock_wheel_sqlparse_0.4.3_py3_none_any",
+        package_name = "sqlparse",
+        package_version = "0.4.3",
+        filename = "sqlparse-0.4.3-py3-none-any.whl",
+        sha256 = "0323c0ec29cd52bceabc1b4d9d579e311f3e4961b98d174201d5622a23b85e34",
+        index = "https://pypi.org",
+    )
+
+    maybe(
+        pypi_file,
         name = "example_lock_wheel_sshpubkeys_3.3.1_py2.py3_none_any",
         package_name = "sshpubkeys",
         package_version = "3.3.1",
@@ -1976,6 +2166,16 @@ def repositories():
         package_version = "0.20.0",
         filename = "tree_sitter-0.20.0-cp39-cp39-macosx_12_0_arm64.whl",
         sha256 = "51a609a7c1bd9d9e75d92ee128c12c7852ae70a482900fbbccf3d13a79e0378c",
+        index = "https://pypi.org",
+    )
+
+    maybe(
+        pypi_file,
+        name = "example_lock_wheel_types_cryptography_3.3.23_py3_none_any",
+        package_name = "types-cryptography",
+        package_version = "3.3.23",
+        filename = "types_cryptography-3.3.23-py3-none-any.whl",
+        sha256 = "913b3e66a502edbf4bfc3bb45e33ab476040c56942164a7ff37bd1f0ef8ef783",
         index = "https://pypi.org",
     )
 
