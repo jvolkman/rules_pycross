@@ -84,7 +84,6 @@ def _pycross_wheel_build_impl(ctx):
             ctx.attr.target_environment[PycrossTargetEnvironmentInfo].file.path,
         ])
 
-
     imports = depset(
         transitive = [d[PyInfo].imports for d in ctx.attr.deps],
     )
@@ -137,6 +136,8 @@ def _pycross_wheel_build_impl(ctx):
         cc_sysconfig_data,
     ] + ctx.files.deps
 
+    transitive_sources = [dep[PyInfo].transitive_sources for dep in ctx.attr.deps if PyInfo in dep]
+
     if ctx.attr.target_environment:
         deps.append(ctx.attr.target_environment[PycrossTargetEnvironmentInfo].file)
 
@@ -150,7 +151,7 @@ def _pycross_wheel_build_impl(ctx):
     env.update(ctx.configuration.default_shell_env)
 
     ctx.actions.run(
-        inputs = depset(deps, transitive = toolchain_deps),
+        inputs = depset(deps, transitive = toolchain_deps + transitive_sources),
         outputs = [out_wheel, out_name],
         executable = ctx.executable._tool,
         use_default_shell_env = False,

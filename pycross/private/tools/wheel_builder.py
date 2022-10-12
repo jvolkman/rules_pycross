@@ -377,6 +377,17 @@ def build_wheel(
         cmd = list(cmd)
         cmd.insert(1, "-I")
 
+        if debug:
+            try:
+                site = subprocess.check_output(
+                    [cmd[0], "-I", "-m", "site"], cwd=cwd, env=env, stderr=subprocess.STDOUT
+                )
+                print("===== BUILD SITE =====", file=sys.stdout)
+                print(site.decode(), file=sys.stdout)
+            except subprocess.CalledProcessError as cpe:
+                print("Warning: failed to collect site output", file=sys.stderr)
+                print(cpe.output.decode(), file=sys.stderr)
+
         try:
             output = subprocess.check_output(
                 cmd, cwd=cwd, env=env, stderr=subprocess.STDOUT
@@ -387,7 +398,7 @@ def build_wheel(
             raise
 
         if debug:
-            print(output.decode(), file=sys.stderr)
+            print(output.decode(), file=sys.stdout)
 
     builder = ProjectBuilder(
         srcdir=sdist_dir,
