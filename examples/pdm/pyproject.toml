@@ -16,6 +16,7 @@ dependencies = [
     "setproctitle==1.2.2",
     "tree-sitter==0.20.0",
     "aws-xray-sdk==2.9.0",
+    "django-allauth==0.51.0",
 ]
 requires-python = "~=3.9"
 license = {text = "MIT"}
