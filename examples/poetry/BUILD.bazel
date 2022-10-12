@@ -100,6 +100,14 @@ pycross_lock_file(
             "setuptools",
             "wheel",
         ],
+        "tree-sitter": [
+            "setuptools",
+            "wheel",
+        ],
+        "pbr": [
+            "setuptools",
+            "wheel",
+        ],
     },
     pypi_index = "https://pypi.org",
     remote_wheels = {

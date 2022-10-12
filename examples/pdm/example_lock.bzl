@@ -277,10 +277,16 @@ def targets():
         wheel = "@example_lock_wheel_cognitojwt_1.4.1_py3_none_any//file",
     )
 
+    _cowsay_5_0_build_deps = [
+        ":setuptools_59.2.0",
+        ":wheel_0.37.0",
+    ]
+
     pycross_wheel_build(
         name = "_build_cowsay_5.0",
         sdist = "@example_lock_sdist_cowsay_5.0//file",
         target_environment = _target,
+        deps = _cowsay_5_0_build_deps,
         tags = ["manual"],
     )
 
@@ -614,10 +620,16 @@ def targets():
         wheel = "@example_lock_wheel_pathspec_0.9.0_py2.py3_none_any//file",
     )
 
+    _pbr_5_9_0_build_deps = [
+        ":setuptools_59.2.0",
+        ":wheel_0.37.0",
+    ]
+
     pycross_wheel_build(
         name = "_build_pbr_5.9.0",
         sdist = "@example_lock_sdist_pbr_5.9.0//file",
         target_environment = _target,
+        deps = _pbr_5_9_0_build_deps,
         tags = ["manual"],
     )
 
@@ -783,10 +795,16 @@ def targets():
         wheel = "@example_lock_wheel_sarif_om_1.0.4_py3_none_any//file",
     )
 
+    _setproctitle_1_2_2_build_deps = [
+        ":setuptools_59.2.0",
+        ":wheel_0.37.0",
+    ]
+
     pycross_wheel_build(
         name = "_build_setproctitle_1.2.2",
         sdist = "@example_lock_sdist_setproctitle_1.2.2//file",
         target_environment = _target,
+        deps = _setproctitle_1_2_2_build_deps,
         tags = ["manual"],
     )
 
@@ -871,10 +889,16 @@ def targets():
         wheel = "@example_lock_wheel_traitlets_5.3.0_py3_none_any//file",
     )
 
+    _tree_sitter_0_20_0_build_deps = [
+        ":setuptools_59.2.0",
+        ":wheel_0.37.0",
+    ]
+
     pycross_wheel_build(
         name = "_build_tree_sitter_0.20.0",
         sdist = "@example_lock_sdist_tree_sitter_0.20.0//file",
         target_environment = _target,
+        deps = _tree_sitter_0_20_0_build_deps,
         tags = ["manual"],
     )
 

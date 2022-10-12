@@ -418,8 +418,11 @@ def main(temp_dir: Path, is_debug: bool) -> None:
     args = parser.parse_args()
     cwd = os.getcwd()
 
-    with open(args.target_environment_file, "r") as f:
-        target_environment = TargetEnv.from_dict(json.load(f))
+    if args.target_environment_file:
+        with open(args.target_environment_file, "r") as f:
+            target_environment = TargetEnv.from_dict(json.load(f))
+    else:
+        target_environment = None
 
     with open(args.sysconfig_vars, "r") as f:
         toolchain_sysconfig_vars = json.load(f)
@@ -471,7 +474,8 @@ def main(temp_dir: Path, is_debug: bool) -> None:
         debug=is_debug,
     )
 
-    check_filename_against_target(os.path.basename(wheel_file), target_environment)
+    if target_environment:
+        check_filename_against_target(os.path.basename(wheel_file), target_environment)
 
     shutil.move(wheel_file, args.wheel_file)
     with open(args.wheel_name_file, "w") as f:
@@ -519,7 +523,6 @@ def make_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--target-environment-file",
         type=str,
-        required=True,
         help="A JSON file containing the target Python environment details.",
     )
 

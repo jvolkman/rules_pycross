@@ -103,6 +103,22 @@ pycross_lock_file(
             "setuptools",
             "wheel",
         ],
+        "setproctitle": [
+            "setuptools",
+            "wheel",
+        ],
+        "cowsay": [
+            "setuptools",
+            "wheel",
+        ],
+        "tree-sitter": [
+            "setuptools",
+            "wheel",
+        ],
+        "pbr": [
+            "setuptools",
+            "wheel",
+        ],
     },
     pypi_index = "https://pypi.org",
     out = "example_lock.bzl",

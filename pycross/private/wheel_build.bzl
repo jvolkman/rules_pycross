@@ -70,8 +70,6 @@ def _pycross_wheel_build_impl(ctx):
         ctx.file.sdist.path,
         "--sysconfig-vars",
         cc_sysconfig_data.path,
-        "--target-environment-file",
-        ctx.attr.target_environment[PycrossTargetEnvironmentInfo].file.path,
         "--wheel-file",
         out_wheel.path,
         "--wheel-name-file",
@@ -79,6 +77,13 @@ def _pycross_wheel_build_impl(ctx):
         "--exec-python-executable",
         executable,
     ]
+
+    if ctx.attr.target_environment:
+        args.extend([
+            "--target-environment-file",
+            ctx.attr.target_environment[PycrossTargetEnvironmentInfo].file.path,
+        ])
+
 
     imports = depset(
         transitive = [d[PyInfo].imports for d in ctx.attr.deps],
@@ -129,9 +134,12 @@ def _pycross_wheel_build_impl(ctx):
 
     deps = [
         ctx.file.sdist,
-        ctx.attr.target_environment[PycrossTargetEnvironmentInfo].file,
         cc_sysconfig_data,
     ] + ctx.files.deps
+
+    if ctx.attr.target_environment:
+        deps.append(ctx.attr.target_environment[PycrossTargetEnvironmentInfo].file)
+
     toolchain_deps = []
     if cpp_toolchain.all_files:
         toolchain_deps.append(cpp_toolchain.all_files)

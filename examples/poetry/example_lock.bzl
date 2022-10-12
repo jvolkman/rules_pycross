@@ -644,10 +644,16 @@ def targets():
         wheel = "@example_lock_wheel_parso_0.8.3_py2.py3_none_any//file",
     )
 
+    _pbr_5_10_0_build_deps = [
+        ":setuptools_59.2.0",
+        ":wheel_0.37.0",
+    ]
+
     pycross_wheel_build(
         name = "_build_pbr_5.10.0",
         sdist = "@example_lock_sdist_pbr_5.10.0//file",
         target_environment = _target,
+        deps = _pbr_5_10_0_build_deps,
         tags = ["manual"],
     )
 
@@ -913,10 +919,16 @@ def targets():
         wheel = "@example_lock_wheel_traitlets_5.4.0_py3_none_any//file",
     )
 
+    _tree_sitter_0_20_0_build_deps = [
+        ":setuptools_59.2.0",
+        ":wheel_0.37.0",
+    ]
+
     pycross_wheel_build(
         name = "_build_tree_sitter_0.20.0",
         sdist = "@example_lock_sdist_tree_sitter_0.20.0//file",
         target_environment = _target,
+        deps = _tree_sitter_0_20_0_build_deps,
         tags = ["manual"],
     )
 
