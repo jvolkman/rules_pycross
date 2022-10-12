@@ -90,6 +90,7 @@ def _pycross_wheel_library_impl(ctx):
             has_py3_only_sources = has_py3_only_sources,
             imports = imports,
             transitive_sources = transitive_sources,
+            uses_shared_libraries = True,  # Docs say this is unused
         ),
     ]
 
