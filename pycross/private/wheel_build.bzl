@@ -117,16 +117,16 @@ def _pycross_wheel_build_impl(ctx):
         # are found under `ctx.bin_dir.path`, and external import are found under `external/`.
         import_name_parts = import_name.split("/", 1)
         if import_name_parts[0] == ctx.workspace_name:
-            # Local package; will be in ctx.bin_dir
+            # Local package; will be in "bin/".
             args.extend([
                 "--path",
                 paths.join(ctx.bin_dir.path, import_name_parts[1]),
             ])
         else:
-            # External package; will be in "external".
+            # External package; will be in "bin/external/".
             args.extend([
                 "--path",
-                paths.join("external", import_name),
+                paths.join(ctx.bin_dir.path, "external", import_name),
             ])
 
     ctx.actions.write(cc_sysconfig_data, json.encode(sysconfig_vars))
