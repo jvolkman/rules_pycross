@@ -38,6 +38,76 @@ def _get_sysconfig_data(workspace_name, tools, flags):
 
     return vars
 
+def _is_sibling_repository_layout_enabled(ctx):
+    # It's possible to determine if --experimental_sibling_repository_layout is enabled by looking at
+    # Label(@foo).workspace_root. If it's enabled, this value will start with `../`. By default it'll
+    # start with `external/`.
+    test = Label("@not_" + ctx.workspace_name)  # the not_ prefix means it can't be our local workspace.
+    return test.workspace_root.startswith("..")
+
+def _resolve_import_path(ctx, import_name):
+    # The PyInfo import names assume a runfiles-type structure. E.g.:
+    #   mytool.runfiles/
+    #     main_repo/
+    #       my_package/
+    #     external_repo_1/
+    #       some_package/
+    #     external_repo_2/
+    #       ...
+    #
+    # An example PyInfo import name might be "external_repo_1/some_package", which maps nicely to the structure
+    # above. However, our wheel builder isn't consuming these dependencies as runfiles, but as inputs. And so
+    # for whatever reason the structure is different:
+    #
+    #   sandbox/main_repo/
+    #     bazel-out/
+    #       k8-fastbuild/
+    #         bin/
+    #           my_package/
+    #           external/
+    #             external_repo_1/
+    #               some_package/
+    #             external_repo_2/
+    #               ...
+    #
+    # And to complicate the matter even further, the --experimental_sibling_repository_layout flag changes this
+    # structure to be:
+    #
+    #   sandbox/main_repo/
+    #     bazel-out/
+    #       k8-fastbuild/
+    #         bin/
+    #           my_package/
+    #       external_repo_1/
+    #         k8-fastbuild/
+    #           bin/
+    #             some_package/
+    #       external_repo_2/
+    #         ...
+    #
+
+    # Split the import name into its repo and path.
+    import_repo, import_path = import_name.split("/", 1)
+
+    # ctx.bin_dir returns something like bazel-out/k8-fastbuild/bin in legacy mode, or
+    # bazel-out/my_external_repo/k8-fastbuild/bin in sibling layout when the target is within an external repo.
+    # We really just want the first part and the last two parts. The repo name that's added with sibling mode isn't
+    # useful for our case.
+    bin_dir_parts = ctx.bin_dir.path.split("/")
+    output_dir = bin_dir_parts[0]
+    bin_dir = paths.join(*bin_dir_parts[-2:])
+
+    # Packages within the workspace are always the same regardless of sibling layout.
+    if import_repo == ctx.workspace_name:
+        return paths.join(output_dir, bin_dir, import_path)
+
+    # Otherwise, if sibling layout is enabled...
+    if _is_sibling_repository_layout_enabled(ctx):
+        return paths.join(output_dir, import_repo, bin_dir, import_path)
+
+    # And lastly, just use the traditional layout.
+    return paths.join(output_dir, bin_dir, "external", import_repo, import_path)
+
 def _pycross_wheel_build_impl(ctx):
     cc_sysconfig_data = ctx.actions.declare_file(paths.join(ctx.attr.name, "cc_sysconfig.json"))
 
@@ -89,45 +159,10 @@ def _pycross_wheel_build_impl(ctx):
     )
 
     for import_name in imports.to_list():
-        # The PyInfo import names assume a runfiles-type structure. E.g.:
-        #   mytool.runfiles/
-        #     main_repo/
-        #       my_package/
-        #     external_repo_1/
-        #       some_package/
-        #     external_repo_2/
-        #       ...
-        #
-        # So the import name starts with the workspace name, and the rest of the import is the path within
-        # that workspace. Our wheel builder isn't consuming these dependencies from runfiles though; they're
-        # inputs, and so for whatever reason the structure is different:
-        #
-        #   sandbox/main_repo/
-        #     bazel-out/
-        #       k8-fastbuild/
-        #         bin/
-        #           my_package/
-        #     external/
-        #       external_repo_1/
-        #         some_package/
-        #       external_repo_2/
-        #         ...
-        #
-        # So this logic translates the import paths into the proper structure: imports from the main repo
-        # are found under `ctx.bin_dir.path`, and external import are found under `external/`.
-        import_name_parts = import_name.split("/", 1)
-        if import_name_parts[0] == ctx.workspace_name:
-            # Local package; will be in "bin/".
-            args.extend([
-                "--path",
-                paths.join(ctx.bin_dir.path, import_name_parts[1]),
-            ])
-        else:
-            # External package; will be in "bin/external/".
-            args.extend([
-                "--path",
-                paths.join(ctx.bin_dir.path, "external", import_name),
-            ])
+        args.extend([
+            "--path",
+            _resolve_import_path(ctx, import_name),
+        ])
 
     ctx.actions.write(cc_sysconfig_data, json.encode(sysconfig_vars))
 
