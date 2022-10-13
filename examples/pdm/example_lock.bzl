@@ -448,10 +448,16 @@ def targets():
         wheel = "@example_lock_wheel_graphql_core_3.2.3_py3_none_any//file",
     )
 
+    _greenlet_1_1_3_post0_build_deps = [
+        ":setuptools_59.2.0",
+        ":wheel_0.37.0",
+    ]
+
     pycross_wheel_build(
         name = "_build_greenlet_1.1.3.post0",
         sdist = "@example_lock_sdist_greenlet_1.1.3.post0//file",
         target_environment = _target,
+        deps = _greenlet_1_1_3_post0_build_deps,
         tags = ["manual"],
     )
 
@@ -944,11 +950,16 @@ def targets():
         ":greenlet_1.1.3.post0",
     ]
 
+    _sqlalchemy_1_4_41_build_deps = [
+        ":setuptools_59.2.0",
+        ":wheel_0.37.0",
+    ]
+
     pycross_wheel_build(
         name = "_build_sqlalchemy_1.4.41",
         sdist = "@example_lock_sdist_sqlalchemy_1.4.41//file",
         target_environment = _target,
-        deps = _sqlalchemy_1_4_41_deps,
+        deps = _sqlalchemy_1_4_41_deps + _sqlalchemy_1_4_41_build_deps,
         tags = ["manual"],
     )
 

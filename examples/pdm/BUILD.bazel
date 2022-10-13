@@ -123,6 +123,14 @@ pycross_lock_file(
             "setuptools",
             "wheel",
         ],
+        "greenlet": [
+            "setuptools",
+            "wheel",
+        ],
+        "sqlalchemy": [
+            "setuptools",
+            "wheel",
+        ],
     },
     pypi_index = "https://pypi.org",
     out = "example_lock.bzl",

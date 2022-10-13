@@ -108,6 +108,10 @@ pycross_lock_file(
             "setuptools",
             "wheel",
         ],
+        "sqlalchemy": [
+            "setuptools",
+            "wheel",
+        ],
     },
     pypi_index = "https://pypi.org",
     remote_wheels = {
