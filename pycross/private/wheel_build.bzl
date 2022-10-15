@@ -45,7 +45,16 @@ def _is_sibling_repository_layout_enabled(ctx):
     test = Label("@not_" + ctx.workspace_name)  # the not_ prefix means it can't be our local workspace.
     return test.workspace_root.startswith("..")
 
-def _resolve_import_path(ctx, import_name):
+def _resolve_import_path_fn(ctx):
+    # Call the inner function with simple values so the closure it returns doesn't hold onto a large
+    # amount of state.
+    return _resolve_import_path_fn_inner(
+        ctx.workspace_name,
+        ctx.bin_dir.path,
+        _is_sibling_repository_layout_enabled(ctx),
+    )
+
+def _resolve_import_path_fn_inner(workspace_name, bin_dir, sibling_layout):
     # The PyInfo import names assume a runfiles-type structure. E.g.:
     #   mytool.runfiles/
     #     main_repo/
@@ -86,27 +95,30 @@ def _resolve_import_path(ctx, import_name):
     #         ...
     #
 
-    # Split the import name into its repo and path.
-    import_repo, import_path = import_name.split("/", 1)
-
     # ctx.bin_dir returns something like bazel-out/k8-fastbuild/bin in legacy mode, or
     # bazel-out/my_external_repo/k8-fastbuild/bin in sibling layout when the target is within an external repo.
     # We really just want the first part and the last two parts. The repo name that's added with sibling mode isn't
     # useful for our case.
-    bin_dir_parts = ctx.bin_dir.path.split("/")
+    bin_dir_parts = bin_dir.split("/")
     output_dir = bin_dir_parts[0]
     bin_dir = paths.join(*bin_dir_parts[-2:])
 
-    # Packages within the workspace are always the same regardless of sibling layout.
-    if import_repo == ctx.workspace_name:
-        return paths.join(output_dir, bin_dir, import_path)
+    def fn(import_name):
+        # Split the import name into its repo and path.
+        import_repo, import_path = import_name.split("/", 1)
 
-    # Otherwise, if sibling layout is enabled...
-    if _is_sibling_repository_layout_enabled(ctx):
-        return paths.join(output_dir, import_repo, bin_dir, import_path)
+        # Packages within the workspace are always the same regardless of sibling layout.
+        if import_repo == workspace_name:
+            return paths.join(output_dir, bin_dir, import_path)
 
-    # And lastly, just use the traditional layout.
-    return paths.join(output_dir, bin_dir, "external", import_repo, import_path)
+        # Otherwise, if sibling layout is enabled...
+        if sibling_layout:
+            return paths.join(output_dir, import_repo, bin_dir, import_path)
+
+        # And lastly, just use the traditional layout.
+        return paths.join(output_dir, bin_dir, "external", import_repo, import_path)
+
+    return fn
 
 def _pycross_wheel_build_impl(ctx):
     cc_sysconfig_data = ctx.actions.declare_file(paths.join(ctx.attr.name, "cc_sysconfig.json"))
@@ -135,41 +147,29 @@ def _pycross_wheel_build_impl(ctx):
     if not executable:
         executable = py_toolchain.interpreter.path
 
-    args = [
-        "--sdist",
-        ctx.file.sdist.path,
-        "--sysconfig-vars",
-        cc_sysconfig_data.path,
-        "--wheel-file",
-        out_wheel.path,
-        "--wheel-name-file",
-        out_name.path,
-        "--exec-python-executable",
-        executable,
-    ]
+    args = ctx.actions.args()
+    args.add("--sdist", ctx.file.sdist)
+    args.add("--sysconfig-vars", cc_sysconfig_data)
+    args.add("--wheel-file", out_wheel)
+    args.add("--wheel-name-file", out_name)
+    args.add("--exec-python-executable", executable)
 
     if ctx.attr.target_environment:
-        args.extend([
-            "--target-environment-file",
-            ctx.attr.target_environment[PycrossTargetEnvironmentInfo].file.path,
-        ])
+        target_environment_file = ctx.attr.target_environment[PycrossTargetEnvironmentInfo].file
+        args.add("--target-environment-file", target_environment_file)
 
     imports = depset(
         transitive = [d[PyInfo].imports for d in ctx.attr.deps],
     )
 
-    for import_name in imports.to_list():
-        args.extend([
-            "--path",
-            _resolve_import_path(ctx, import_name),
-        ])
+    args.add_all(imports, before_each="--path", map_each=_resolve_import_path_fn(ctx), allow_closure=True)
 
     ctx.actions.write(cc_sysconfig_data, json.encode(sysconfig_vars))
 
     deps = [
         ctx.file.sdist,
         cc_sysconfig_data,
-    ] + ctx.files.deps
+    ]
 
     transitive_sources = [dep[PyInfo].transitive_sources for dep in ctx.attr.deps if PyInfo in dep]
 
@@ -186,12 +186,13 @@ def _pycross_wheel_build_impl(ctx):
     env.update(ctx.configuration.default_shell_env)
 
     ctx.actions.run(
-        inputs = depset(deps, transitive = toolchain_deps + transitive_sources),
+        inputs = deps,
         outputs = [out_wheel, out_name],
+        tools = depset(transitive = toolchain_deps + transitive_sources),
         executable = ctx.executable._tool,
         use_default_shell_env = False,
         env = env,
-        arguments = args,
+        arguments = [args],
         mnemonic = "WheelBuild",
         progress_message = "Building %s" % ctx.file.sdist.basename,
     )

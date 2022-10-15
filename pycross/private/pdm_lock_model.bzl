@@ -3,23 +3,19 @@
 def _pycross_pdm_lock_model_impl(ctx):
     out = ctx.actions.declare_file(ctx.attr.name + ".json")
 
-    args = [
-        "--project-file",
-        ctx.file.project_file.path,
-        "--lock-file",
-        ctx.file.lock_file.path,
-        "--output",
-        out.path,
-    ]
+    args = ctx.actions.args()
+    args.add("--project-file", ctx.file.project_file)
+    args.add("--lock-file", ctx.file.lock_file)
+    args.add("--output", out)
 
     if ctx.attr.default:
-      args.append("--default")
+      args.add("--default")
 
     if ctx.attr.dev:
-      args.append("--dev")
+      args.add("--dev")
 
     for group in ctx.attr.groups:
-      args.extend(["--group", group])
+      args.add("--group", group)
 
     ctx.actions.run(
         inputs = (
@@ -28,7 +24,7 @@ def _pycross_pdm_lock_model_impl(ctx):
         ),
         outputs = [out],
         executable = ctx.executable._tool,
-        arguments = args,
+        arguments = [args],
     )
 
     return [

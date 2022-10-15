@@ -9,39 +9,28 @@ def fully_qualified_label(label):
 def _target_python_impl(ctx):
     f = ctx.actions.declare_file(ctx.attr.name + ".json")
 
-    args = [
-        "--name",
-        ctx.attr.name,
-        "--output",
-        f.path,
-        "--implementation",
-        ctx.attr.implementation,
-        "--version",
-        ctx.attr.version,
-    ]
+    args = ctx.actions.args()
+    args.add("--name", ctx.attr.name)
+    args.add("--output", f)
+    args.add("--implementation", ctx.attr.implementation)
+    args.add("--version", ctx.attr.version)
 
     for abi in ctx.attr.abis:
-        args.extend(["--abi", abi])
+        args.add("--abi", abi)
 
     for platform in ctx.attr.platforms:
-        args.extend(["--platform", platform])
+        args.add("--platform", platform)
 
     for constraint in ctx.attr.python_compatible_with:
-        args.extend([
-            "--python-compatible-with",
-            fully_qualified_label(constraint.label),
-        ])
+        args.add("--python-compatible-with", fully_qualified_label(constraint.label))
 
     for key, val in ctx.attr.envornment_markers.items():
-        args.extend([
-            "--environment-marker",
-            "%s=%s" % (key, val),
-        ])
+        args.add("--environment-marker", "%s=%s" % (key, val))
 
     ctx.actions.run(
         outputs = [f],
         executable = ctx.executable._tool,
-        arguments = args,
+        arguments = [args],
     )
 
     return [
@@ -104,39 +93,28 @@ pycross_target_environment = rule(
 def _macos_target_python_impl(ctx):
     f = ctx.actions.declare_file(ctx.attr.name + ".json")
 
-    args = [
-        "--name",
-        ctx.attr.name,
-        "--output",
-        f.path,
-        "--implementation",
-        ctx.attr.implementation,
-        "--version",
-        ctx.attr.version,
-    ]
+    args = ctx.actions.args()
+    args.add("--name", ctx.attr.name)
+    args.add("--output", f)
+    args.add("--implementation", ctx.attr.implementation)
+    args.add("--version", ctx.attr.version)
 
     for abi in ctx.attr.abis:
-        args.extend(["--abi", abi])
+        args.add("--abi", abi)
 
     for platform in ctx.attr.platforms:
-        args.extend(["--platform", platform])
+        args.add("--platform", platform)
 
     for constraint in ctx.attr.python_compatible_with:
-        args.extend([
-            "--python-compatible-with",
-            fully_qualified_label(constraint.label),
-        ])
+        args.add("--python-compatible-with", fully_qualified_label(constraint.label))
 
     for key, val in ctx.attr.envornment_markers.items():
-        args.extend([
-            "--environment-marker",
-            "%s=%s" % (key, val),
-        ])
+        args.add("--environment-marker", "%s=%s" % (key, val))
 
     ctx.actions.run(
         outputs = [f],
         executable = ctx.executable._tool,
-        arguments = args,
+        arguments = [args],
     )
 
     return [
