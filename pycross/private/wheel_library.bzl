@@ -15,29 +15,23 @@ def _pycross_wheel_library_impl(ctx):
         wheel_file = ctx.file.wheel
         name_file = None
 
-    args = [
-        "--wheel",
-        wheel_file.path,
-        "--directory",
-        out.path,
-    ]
+    args = ctx.actions.args()
+    args.add("--wheel", wheel_file)
+    args.add("--directory", out.path)
 
     inputs = [wheel_file]
     if name_file:
         inputs.append(name_file)
-        args.extend([
-            "--wheel-name-file",
-            name_file.path,
-        ])
+        args.add("--wheel-name-file", name_file)
 
     if ctx.attr.enable_implicit_namespace_pkgs:
-        args.append("--enable-implicit-namespace-pkgs")
+        args.add("--enable-implicit-namespace-pkgs")
 
     ctx.actions.run(
         inputs = inputs,
         outputs = [out],
         executable = ctx.executable._tool,
-        arguments = args,
+        arguments = [args],
         # Set environment variables to make generated .pyc files reproducible.
         env = {
             "SOURCE_DATE_EPOCH": "315532800",

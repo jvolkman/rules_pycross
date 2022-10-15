@@ -3,14 +3,10 @@
 def _pycross_poetry_lock_model_impl(ctx):
     out = ctx.actions.declare_file(ctx.attr.name + ".json")
 
-    args = [
-        "--poetry-project-file",
-        ctx.file.poetry_project_file.path,
-        "--poetry-lock-file",
-        ctx.file.poetry_lock_file.path,
-        "--output",
-        out.path,
-    ]
+    args = ctx.actions.args()
+    args.add("--poetry-project-file", ctx.file.poetry_project_file)
+    args.add("--poetry-lock-file", ctx.file.poetry_lock_file)
+    args.add("--output", out)
 
     ctx.actions.run(
         inputs = (
@@ -19,7 +15,7 @@ def _pycross_poetry_lock_model_impl(ctx):
         ),
         outputs = [out],
         executable = ctx.executable._tool,
-        arguments = args,
+        arguments = [args],
     )
 
     return [

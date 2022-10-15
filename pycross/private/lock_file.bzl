@@ -14,91 +14,49 @@ def _pycross_lock_file_impl(ctx):
     else:
         repo_prefix = ctx.attr.name.lower().replace("-", "_")
 
-    args = [
-        "--lock-model-file",
-        ctx.file.lock_model_file.path,
-        "--repo-prefix",
-        repo_prefix,
-        "--package-prefix",
-        ctx.attr.package_prefix,
-        "--build-prefix",
-        ctx.attr.build_prefix,
-        "--environment-prefix",
-        ctx.attr.environment_prefix,
-        "--output",
-        out.path,
-    ]
+    args = ctx.actions.args()
+    args.add("--lock-model-file", ctx.file.lock_model_file)
+    args.add("--repo-prefix", repo_prefix)
+    args.add("--package-prefix", ctx.attr.package_prefix)
+    args.add("--build-prefix", ctx.attr.build_prefix)
+    args.add("--environment-prefix", ctx.attr.environment_prefix)
+    args.add("--output", out)
 
     for t in ctx.attr.target_environments:
-        args.extend([
-            "--target-environment",
-            t[PycrossTargetEnvironmentInfo].file.path,
-            fully_qualified_label(t.label),
-        ])
+        args.add_all("--target-environment", [t[PycrossTargetEnvironmentInfo].file.path, fully_qualified_label(t.label)])
 
     for local_wheel in ctx.files.local_wheels:
         if not local_wheel.owner:
             fail("Could not determine owning lable for local wheel: %s" % local_wheel)
-        args.extend([
-            "--local-wheel",
-            local_wheel.basename,
-            fully_qualified_label(local_wheel.owner),
-        ])
+        args.add_all("--local-wheel", [local_wheel.basename, fully_qualified_label(local_wheel.owner)])
 
     for remote_wheel_url, sha256 in ctx.attr.remote_wheels.items():
-        args.extend([
-            "--remote-wheel",
-            remote_wheel_url,
-            sha256,
-        ])
+        args.add_all("--remote-wheel", [remote_wheel_url, sha256])
 
     if ctx.attr.package_prefix != None:
-        args.extend([
-            "--package-prefix",
-            ctx.attr.package_prefix,
-        ])
+        args.add("--package-prefix", ctx.attr.package_prefix)
 
     if ctx.attr.build_prefix != None:
-        args.extend([
-            "--build-prefix",
-            ctx.attr.build_prefix,
-        ])
+        args.add("--build-prefix", ctx.attr.build_prefix)
 
     if ctx.attr.environment_prefix != None:
-        args.extend([
-            "--environment-prefix",
-            ctx.attr.environment_prefix,
-        ])
+        args.add("--environment-prefix", ctx.attr.environment_prefix)
 
     if ctx.attr.default_alias_single_version:
-        args.append("--default-alias-single-version")
+        args.add("--default-alias-single-version")
 
     for k, t in ctx.attr.build_target_overrides.items():
-        args.extend([
-            "--build-target-override",
-            k,
-            t,
-        ])
+        args.add_all("--build-target-override", [k, t])
 
     for k in ctx.attr.always_build_packages:
-        args.extend([
-            "--always-build-package",
-            k
-        ])
+        args.add("--always-build-package", k)
 
     for k, d in ctx.attr.package_build_dependencies.items():
         for dep in d:
-            args.extend([
-                "--build-dependency",
-                k,
-                dep,
-            ])
+            args.add_all("--build-dependency", [k, dep])
 
     if ctx.attr.pypi_index:
-        args.extend([
-            "--pypi-index",
-            ctx.attr.pypi_index,
-        ])
+        args.add("--pypi-index", ctx.attr.pypi_index)
 
     ctx.actions.run(
         inputs = (
@@ -107,7 +65,7 @@ def _pycross_lock_file_impl(ctx):
         ),
         outputs = [out],
         executable = ctx.executable._tool,
-        arguments = args,
+        arguments = [args],
     )
 
     return [
