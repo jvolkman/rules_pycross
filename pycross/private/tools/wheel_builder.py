@@ -551,6 +551,11 @@ if __name__ == "__main__":
     if "BUILD_WORKING_DIRECTORY" in os.environ:
         os.chdir(os.environ["BUILD_WORKING_DIRECTORY"])
 
+    # Some older versions of Python on MacOS leak __PYVENV_LAUNCHER__ through to subprocesses.
+    # When this is set, a created virtualenv will link to this value rather than sys.argv[0], which we don't want.
+    # So just clear it if it exists.
+    os.environ.pop("__PYVENV_LAUNCHER__", None)
+
     _is_debug = "RULES_PYCROSS_DEBUG" in os.environ
     _temp_dir = Path(tempfile.mkdtemp(prefix="wheelbuild"))
 
