@@ -17,7 +17,7 @@ load("//pycross/private:pypi_requirements.bzl", "install_deps")
 # ours took precedence. Such breakages are challenging for users, so any
 # changes in this function should be marked as BREAKING in the commit message
 # and released only in semver majors.
-def rules_pycross_dependencies():
+def rules_pycross_dependencies(python_interpreter_target=None):
     # The minimal version of bazel_skylib we require
     maybe(
         http_archive,
@@ -30,4 +30,4 @@ def rules_pycross_dependencies():
     )
 
     pip_install_dependencies()
-    install_deps()
+    install_deps(python_interpreter_target=python_interpreter_target)
