@@ -261,7 +261,7 @@ def generate_cross_sysconfig_vars(
     return sysconfig_vars
 
 
-def generate_bin_tools(toolchain_vars: Dict[str, str], bin_dir: Path):
+def generate_bin_tools(toolchain_vars: Dict[str, str], bin_dir: Path) -> None:
     # The bazel CC toolchains don't provide ranlib (as far as I can tell), and
     # we don't want to use the host ranlib. So we place a no-op in PATH.
     ranlib = bin_dir / "ranlib"
@@ -369,18 +369,21 @@ def build_wheel(
         extra_environ: Optional[Mapping[str, str]] = None,
     ):
         """The default method of calling the wrapper subprocess."""
+        cmd = list(cmd)
         env = build_env_vars.copy()
+
+        # Pop off some environment variables that might affect our build venv.
+        # We don't run in isolated mode because we want to be able to specify PYTHONHASHSEED.
+        env.pop("PYTHONHOME", None)
+        env.pop("PYTHONPATH", None)
+
         if extra_environ:
             env.update(extra_environ)
-
-        # Run Python in isolated mode by inserting -I after the executable entry in the command line.
-        cmd = list(cmd)
-        cmd.insert(1, "-I")
 
         if debug:
             try:
                 site = subprocess.check_output(
-                    [cmd[0], "-I", "-m", "site"], cwd=cwd, env=env, stderr=subprocess.STDOUT
+                    [cmd[0], "-m", "site"], cwd=cwd, env=env, stderr=subprocess.STDOUT
                 )
                 print("===== BUILD SITE =====", file=sys.stdout)
                 print(site.decode(), file=sys.stdout)
