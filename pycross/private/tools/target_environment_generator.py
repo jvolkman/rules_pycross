@@ -7,6 +7,7 @@ import argparse
 import json
 import os
 import sys
+from pathlib import Path
 
 from pip._internal.models.target_python import TargetPython
 from pycross.private.tools.target_environment import TargetEnv
@@ -95,7 +96,7 @@ def make_parser() -> argparse.ArgumentParser:
 
     parser.add_argument(
         "--output",
-        type=str,
+        type=Path,
         required=True,
         help="The output file.",
     )

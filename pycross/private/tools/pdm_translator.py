@@ -154,16 +154,16 @@ def get_packages(project: Project) -> Dict[PackageKey, Package]:
 
 
 def translate(
-    project_file: str,
-    lock_file: str,
+    project_file: Path,
+    lock_file: Path,
     default_dependencies: bool,
     dev_dependencies: bool,
     dependency_groups: List[str],
 ) -> LockSet:
     with TemporaryDirectory() as cache_dir:
         project = Project(
-            project_file=Path(project_file),
-            lock_file=Path(lock_file),
+            project_file=project_file,
+            lock_file=lock_file,
             cache_dir=Path(cache_dir),
         )
         pins = get_pins(
@@ -203,14 +203,14 @@ def make_parser() -> argparse.ArgumentParser:
 
     parser.add_argument(
         "--project-file",
-        type=str,
+        type=Path,
         required=True,
         help="The path to pyproject.toml.",
     )
 
     parser.add_argument(
         "--lock-file",
-        type=str,
+        type=Path,
         required=True,
         help="The path to pdm.lock.",
     )
@@ -241,7 +241,7 @@ def make_parser() -> argparse.ArgumentParser:
 
     parser.add_argument(
         "--output",
-        type=str,
+        type=Path,
         required=True,
         help="The path to the output bzl file.",
     )

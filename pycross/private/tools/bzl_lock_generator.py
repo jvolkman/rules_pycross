@@ -6,6 +6,7 @@ import sys
 import textwrap
 from collections import defaultdict
 from dataclasses import dataclass
+from pathlib import Path
 from typing import AbstractSet
 from typing import Dict
 from typing import Iterator
@@ -907,7 +908,7 @@ def make_parser() -> argparse.ArgumentParser:
 
     parser.add_argument(
         "--lock-model-file",
-        type=str,
+        type=Path,
         required=True,
         help="The path to the lock model JSON file.",
     )
@@ -973,7 +974,7 @@ def make_parser() -> argparse.ArgumentParser:
 
     parser.add_argument(
         "--output",
-        type=str,
+        type=Path,
         required=True,
         help="The path to the output bzl file.",
     )

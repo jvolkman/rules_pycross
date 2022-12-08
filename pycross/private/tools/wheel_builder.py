@@ -20,7 +20,6 @@ from typing import Mapping
 from typing import NoReturn
 from typing import Optional
 from typing import Sequence
-from typing import Union
 
 from build import ProjectBuilder
 from packaging.utils import parse_wheel_filename
@@ -62,7 +61,7 @@ def _error(msg: str, code: int = 1) -> NoReturn:  # pragma: no cover
 
 
 def get_original_sysconfig(
-    exec_python_exe: Union[str, Path],
+    exec_python_exe: Path,
 ) -> Dict[str, Any]:
     query_args = (
         str(exec_python_exe),
@@ -184,7 +183,7 @@ def get_wrapper_flags(cflags: str) -> List[str]:
     return result
 
 
-def wrap_cc(lang: str, cc_exe: str, cflags: str, python_exe: str, bin_dir: Path) -> str:
+def wrap_cc(lang: str, cc_exe: Path, cflags: str, python_exe: Path, bin_dir: Path) -> Path:
     assert lang in ("cc", "cxx")
     version_str = subprocess.check_output([cc_exe, "--version"]).decode("utf-8")
     first_line = version_str.splitlines()[0]
@@ -225,11 +224,11 @@ def wrap_cc(lang: str, cc_exe: str, cflags: str, python_exe: str, bin_dir: Path)
         )
 
     os.chmod(wrapper_path, 0o755)
-    return str(wrapper_path)
+    return wrapper_path
 
 
 def generate_cc_wrappers(
-    toolchain_vars: Dict[str, Any], python_exe: str, bin_dir: Path
+    toolchain_vars: Dict[str, Any], python_exe: Path, bin_dir: Path
 ) -> Dict[str, str]:
     orig_cc = toolchain_vars["CC"]
     orig_cxx = toolchain_vars["CXX"]
@@ -238,8 +237,8 @@ def generate_cc_wrappers(
     wrapped_cc = wrap_cc("cc", orig_cc, cflags, python_exe, bin_dir)
     wrapped_cxx = wrap_cc("cxx", orig_cxx, cflags, python_exe, bin_dir)
     return {
-        "CC": wrapped_cc,
-        "CXX": wrapped_cxx,
+        "CC": str(wrapped_cc),
+        "CXX": str(wrapped_cxx),
     }
 
 
@@ -275,11 +274,11 @@ def generate_bin_tools(toolchain_vars: Dict[str, str], bin_dir: Path) -> None:
         ar.symlink_to(ar_path)
 
 
-def extract_sdist(sdist_path: str, sdist_dir: Path) -> Path:
-    if sdist_path.endswith(".tar.gz"):
+def extract_sdist(sdist_path: Path, sdist_dir: Path) -> Path:
+    if sdist_path.name.endswith(".tar.gz"):
         with tarfile.open(sdist_path, "r") as f:
             f.extractall(sdist_dir)
-    elif sdist_path.endswith(".zip"):
+    elif sdist_path.name.endswith(".zip"):
         with zipfile.ZipFile(sdist_path, "r") as f:
             f.extractall(sdist_dir)
     else:
@@ -309,7 +308,7 @@ def find_site_dir(env_dir: Path) -> Path:
 
 
 def build_standard_venv(
-    env_dir: Path, exec_python_exe: str, sysconfig_vars: Dict[str, Any]
+    env_dir: Path, exec_python_exe: Path, sysconfig_vars: Dict[str, Any]
 ) -> None:
     venv_args = [
         exec_python_exe,
@@ -341,7 +340,7 @@ def build_standard_venv(
 
 def build_venv(
     env_dir: Path,
-    exec_python_exe: str,
+    exec_python_exe: Path,
     sysconfig_vars: Dict[str, Any],
     path: List[str],
 ) -> None:
@@ -501,28 +500,28 @@ def make_parser() -> argparse.ArgumentParser:
 
     parser.add_argument(
         "--sdist",
-        type=str,
+        type=Path,
         required=True,
         help="The sdist path.",
     )
 
     parser.add_argument(
         "--wheel-file",
-        type=str,
+        type=Path,
         required=True,
         help="The wheel output path.",
     )
 
     parser.add_argument(
         "--wheel-name-file",
-        type=str,
+        type=Path,
         required=True,
         help="The wheel name output path.",
     )
 
     parser.add_argument(
         "--path",
-        type=str,
+        type=Path,
         action="append",
         help="An entry to add to PYTHONPATH",
     )
@@ -536,13 +535,13 @@ def make_parser() -> argparse.ArgumentParser:
 
     parser.add_argument(
         "--target-environment-file",
-        type=str,
+        type=Path,
         help="A JSON file containing the target Python environment details.",
     )
 
     parser.add_argument(
         "--exec-python-executable",
-        type=str,
+        type=Path,
         required=True,
     )
 

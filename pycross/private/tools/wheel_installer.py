@@ -8,7 +8,6 @@ import shutil
 import sys
 import tempfile
 from pathlib import Path
-from typing import Union
 
 from installer import install
 from installer.destinations import SchemeDictionaryDestination
@@ -16,7 +15,7 @@ from installer.sources import WheelFile
 from pycross.private.tools import namespace_pkgs
 
 
-def setup_namespace_pkg_compatibility(wheel_dir: Union[str, Path]) -> None:
+def setup_namespace_pkg_compatibility(wheel_dir: Path) -> None:
     """Converts native namespace packages to pkgutil-style packages
 
     Namespace packages can be created in one of three ways. They are detailed here:
@@ -32,7 +31,7 @@ def setup_namespace_pkg_compatibility(wheel_dir: Union[str, Path]) -> None:
     """
 
     namespace_pkg_dirs = namespace_pkgs.implicit_namespace_packages(
-        wheel_dir,
+        str(wheel_dir),
         ignored_dirnames=["%s/bin" % wheel_dir],
     )
 
@@ -44,7 +43,7 @@ def main() -> None:
     parser = make_parser()
     args = parser.parse_args()
 
-    dest_dir = Path(args.directory)
+    dest_dir = args.directory
     lib_dir = dest_dir / "site-packages"
     destination = SchemeDictionaryDestination(
         scheme_dict={
@@ -90,14 +89,14 @@ def make_parser() -> argparse.ArgumentParser:
 
     parser.add_argument(
         "--wheel",
-        type=str,
+        type=Path,
         required=True,
         help="The wheel file path.",
     )
 
     parser.add_argument(
         "--wheel-name-file",
-        type=str,
+        type=Path,
         required=False,
         help="A file containing the canonical name of the wheel.",
     )
@@ -110,7 +109,7 @@ def make_parser() -> argparse.ArgumentParser:
 
     parser.add_argument(
         "--directory",
-        type=str,
+        type=Path,
         required=False,
         help="The output path.",
     )

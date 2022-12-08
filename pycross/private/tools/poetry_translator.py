@@ -4,6 +4,7 @@ import sys
 from collections import defaultdict
 from dataclasses import dataclass
 from functools import cached_property
+from pathlib import Path
 from typing import Dict
 from typing import List
 from typing import Optional
@@ -106,7 +107,7 @@ def get_files_for_package(
     return result
 
 
-def translate(project_file: str, lock_file: str) -> LockSet:
+def translate(project_file: Path, lock_file: Path) -> LockSet:
     try:
         with open(project_file, "rb") as f:
             project_dict = tomli.load(f)
@@ -260,21 +261,21 @@ def make_parser() -> argparse.ArgumentParser:
 
     parser.add_argument(
         "--poetry-project-file",
-        type=str,
+        type=Path,
         required=True,
         help="The path to pyproject.toml.",
     )
 
     parser.add_argument(
         "--poetry-lock-file",
-        type=str,
+        type=Path,
         required=True,
         help="The path to pdm.lock.",
     )
 
     parser.add_argument(
         "--output",
-        type=str,
+        type=Path,
         required=True,
         help="The path to the output bzl file.",
     )
