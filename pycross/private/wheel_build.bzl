@@ -124,6 +124,30 @@ def _resolve_import_path_fn_inner(workspace_name, bin_dir, sibling_layout):
 
     return fn
 
+def _expand_locations_and_vars(attribute_name, ctx, val, targets):
+    rule_dir = paths.join(
+        ctx.bin_dir.path,
+        ctx.label.workspace_root,
+        ctx.label.package,
+    )
+
+    additional_substitutions = {
+        "RULEDIR": rule_dir,
+        "BUILD_FILE_PATH": ctx.build_file_path,
+        "VERSION_FILE": ctx.version_file.path,
+        "INFO_FILE": ctx.info_file.path,
+        "TARGET": "{}//{}:{}".format(
+            "@" + ctx.label.workspace_name if ctx.label.workspace_name else "",
+            ctx.label.package,
+            ctx.label.name,
+        ),
+        "WORKSPACE": ctx.workspace_name,
+    }
+
+    val = ctx.expand_location(val, targets)
+    val = ctx.expand_make_variables(attribute_name, val, additional_substitutions)
+    return val
+
 def _pycross_wheel_build_impl(ctx):
     cc_sysconfig_data = ctx.actions.declare_file(paths.join(ctx.attr.name, "cc_sysconfig.json"))
 
@@ -180,7 +204,7 @@ def _pycross_wheel_build_impl(ctx):
         args.add("--target-python-executable", executable)
 
     imports = depset(
-        transitive = [d[PyInfo].imports for d in ctx.attr.deps],
+        transitive = [d[PyInfo].imports for d in ctx.attr.deps if PyInfo in d],
     )
 
     args.add_all(imports, before_each="--path", map_each=_resolve_import_path_fn(ctx), allow_closure=True)
@@ -192,7 +216,29 @@ def _pycross_wheel_build_impl(ctx):
         cc_sysconfig_data,
     ]
 
+    if ctx.attr.build_env:
+        build_env_data = ctx.actions.declare_file(paths.join(ctx.attr.name, "build_env.json"))
+        args.add("--build-env", build_env_data)
+        deps.append(build_env_data)
+        vals = {}
+        for key, value in ctx.attr.build_env.items():
+            vals[key] = _expand_locations_and_vars("build_env", ctx, value, ctx.attr.deps)
+        ctx.actions.write(build_env_data, json.encode(vals))
+
+    if ctx.attr.config_settings:
+        config_settings_data = ctx.actions.declare_file(paths.join(ctx.attr.name, "config_settings.json"))
+        args.add("--config-settings", config_settings_data)
+        deps.append(config_settings_data)
+        vals = {}
+        for key, value in ctx.attr.config_settings.items():
+            vals[key] = _expand_locations_and_vars("config_settings", ctx, value, ctx.attr.deps)
+        ctx.actions.write(config_settings_data, json.encode(vals))
+
+    if ctx.attr.sdist_files:
+        pass
+
     transitive_sources = [dep[PyInfo].transitive_sources for dep in ctx.attr.deps if PyInfo in dep]
+    default_files = [dep[DefaultInfo].files for dep in ctx.attr.deps if DefaultInfo in dep]
 
     if ctx.attr.target_environment:
         deps.append(ctx.attr.target_environment[PycrossTargetEnvironmentInfo].file)
@@ -203,7 +249,7 @@ def _pycross_wheel_build_impl(ctx):
     ctx.actions.run(
         inputs = deps,
         outputs = [out_wheel, out_name],
-        tools = depset(transitive = toolchain_deps + transitive_sources),
+        tools = depset(transitive = toolchain_deps + transitive_sources + default_files),
         executable = ctx.executable._tool,
         use_default_shell_env = False,
         env = env,
@@ -237,7 +283,7 @@ pycross_wheel_build = rule(
     attrs = {
         "deps": attr.label_list(
             doc = "A list of build dependencies for the wheel.",
-            providers = [DefaultInfo, PyInfo],
+            providers = [[DefaultInfo], [PyInfo]],
         ),
         "sdist": attr.label(
             doc = "The sdist file.",
@@ -248,11 +294,24 @@ pycross_wheel_build = rule(
             doc = "The target environment to build for.",
             providers = [PycrossTargetEnvironmentInfo],
         ),
-        "copts": attr.string_list(
-            doc = "Additional C compiler options.",
+        "build_env": attr.string_dict(
+            doc = """
+            Environment variables passed to the sdist build.
+            Values are subject to 'Make variable' and location expansion.
+            """,
         ),
-        "linkopts": attr.string_list(
-            doc = "Additional C linker options.",
+        "config_settings": attr.string_dict(
+            doc = """
+            PEP 517 config settings passed to the sdist build.
+            Values are subject to 'Make variable' and location expansion.
+            """,
+        ),
+        "sdist_files": attr.label_keyed_string_dict(
+            doc = """
+            A mapping of file targets to relative sdist paths. These files are written to the
+            sdist directory after extraction. Existing files will be overwritten.
+            """,
+            allow_files = True,
         ),
         "_tool": attr.label(
             default = Label("//pycross/private/tools:wheel_builder"),

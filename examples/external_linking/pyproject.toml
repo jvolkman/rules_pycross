@@ -1,0 +1,19 @@
+[project]
+name = "rules_pycross_example_external_linking"
+version = "0.1"
+description = "rules_pycross"
+authors = []
+dependencies = [
+    "ipython>=8.0.1",
+    "numpy==1.23.5",
+    "pandas==1.5.2",
+    "Cython>=0.29.24,<3.0",
+    "setuptools==59.2.0",
+    "wheel==0.37.0",
+]
+requires-python = "~=3.9"
+license = {text = "MIT"}
+
+[build-system]
+requires = ["pdm-pep517>=1.0.0"]
+build-backend = "pdm.pep517.api"

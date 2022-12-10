@@ -1,0 +1,20 @@
+load("@jvolkman_rules_pycross//pycross:defs.bzl", "pycross_wheel_build")
+load("//:example_lock.bzl", "targets")
+
+package(default_visibility = ["//visibility:public"])
+
+# Specified here as an override.
+pycross_wheel_build(
+    name = "numpy",
+    sdist = "@example_lock_sdist_numpy_1.23.5//file",
+    deps = [
+        "//deps:cython",
+        "//deps:setuptools",
+        "//deps:wheel",
+        "//deps/openblas:lib",
+    ],
+    config_settings = {
+        "foo": "$(locations //deps/openblas:lib)"
+    },
+    tags = ["manual"],
+)

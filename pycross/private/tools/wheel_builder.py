@@ -143,8 +143,12 @@ def get_target_sysconfig(
 
 
 def set_or_append(env: Dict[str, Any], key: str, value: str) -> None:
+    if key == "PATH":
+        sep = os.pathsep
+    else:
+        sep = " "
     if key in env:
-        env[key] += " " + value
+        env[key] += sep + value
     else:
         env[key] = value
 
@@ -555,6 +559,18 @@ def main(args: Any, temp_dir: Path, is_debug: bool) -> None:
     build_env_dir.mkdir()
 
     build_env_vars = get_build_env_vars(bin_dir)
+    if args.build_env:
+        with open(args.build_env, "r") as f:
+            additional_build_env = json.load(f)
+        for key, val in additional_build_env.items():
+            set_or_append(build_env_vars, key, val)
+
+    if args.config_settings:
+        with open(args.config_settings, "r") as f:
+            config_settings = json.load(f)
+    else:
+        config_settings = {}
+
     toolchain_sysconfig_vars = replace_cwd_tokens(toolchain_sysconfig_vars, cwd)
     wrapper_sysconfig_vars = generate_cc_wrappers(
         toolchain_vars=toolchain_sysconfig_vars,
@@ -589,15 +605,17 @@ def main(args: Any, temp_dir: Path, is_debug: bool) -> None:
     if is_debug:
         print(f"Build environment: {build_env_dir}")
 
+    print(config_settings)
+
     extracted_dir = extract_sdist(args.sdist, sdist_dir)
-    wheel_file = build_wheel(
-        env_dir=build_env_dir,
-        wheel_dir=wheel_dir,
-        sdist_dir=extracted_dir,
-        build_env_vars=build_env_vars,
-        config_settings={},  # TODO: support config settings
-        debug=is_debug,
-    )
+    # wheel_file = build_wheel(
+    #     env_dir=build_env_dir,
+    #     wheel_dir=wheel_dir,
+    #     sdist_dir=extracted_dir,
+    #     build_env_vars=build_env_vars,
+    #     config_settings=config_settings,
+    #     debug=is_debug,
+    # )
 
     if target_environment:
         check_filename_against_target(os.path.basename(wheel_file), target_environment)
@@ -644,6 +662,20 @@ def parse_flags(argv) -> Any:
         "--sysconfig-vars",
         required=True,
         help="A JSON file containing variable to add to sysconfig.",
+    )
+
+    parser.add_argument(
+        "--build-env",
+        type=Path,
+        required=False,
+        help="A JSON file containing build environment variables.",
+    )
+
+    parser.add_argument(
+        "--config-settings",
+        type=Path,
+        required=False,
+        help="A JSON file containing PEP 517 build config settings.",
     )
 
     parser.add_argument(
