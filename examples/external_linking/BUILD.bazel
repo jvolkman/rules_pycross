@@ -1,0 +1,136 @@
+load("@bazel_skylib//rules:diff_test.bzl", "diff_test")
+load("@bazel_skylib//rules:write_file.bzl", "write_file")
+load(
+    "@jvolkman_rules_pycross//pycross:defs.bzl",
+    "pycross_target_environment",
+    "pycross_lock_file",
+    "pycross_pdm_lock_model",
+)
+
+_darwin_x86_64 = [
+    "@platforms//os:macos",
+    "@platforms//cpu:x86_64",
+]
+
+_darwin_arm64 = [
+    "@platforms//os:macos",
+    "@platforms//cpu:arm64",
+]
+
+_linux_x86_64 = [
+    "@platforms//os:linux",
+    "@platforms//cpu:x86_64",
+]
+
+platform(
+    name = "darwin_x86_64",
+    constraint_values = _darwin_x86_64,
+)
+
+platform(
+    name = "darwin_arm64",
+    constraint_values = _darwin_arm64,
+)
+
+platform(
+    name = "linux_x86_64",
+    constraint_values = _linux_x86_64,
+)
+
+pycross_target_environment(
+    name = "python_darwin_x86_64",
+    python_compatible_with = _darwin_x86_64,
+    version = "3.9.12",
+    abis = ["cp39"],
+    platforms = ["macosx_12_0_x86_64"],
+    visibility = ["//visibility:public"],
+)
+
+pycross_target_environment(
+    name = "python_darwin_arm64",
+    python_compatible_with = _darwin_arm64,
+    version = "3.9.12",
+    abis = ["cp39"],
+    platforms = ["macosx_12_0_arm64"],
+    visibility = ["//visibility:public"],
+)
+
+pycross_target_environment(
+    name = "python_linux_x86_64",
+    python_compatible_with = _linux_x86_64,
+    version = "3.9.12",
+    abis = ["cp39"],
+    platforms = ["linux_x86_64", "manylinux2014_x86_64"] + [
+        "manylinux_2_%s_x86_64" % str(i) for i in range(17, 25)
+    ],
+    visibility = ["//visibility:public"],
+)
+
+pycross_pdm_lock_model(
+    name = "example_lock_model",
+    project_file = "pyproject.toml",
+    lock_file = "pdm.lock",
+    dev = True,
+    groups = ["cow", "dev"],
+)
+
+pycross_lock_file(
+    name = "example_lock",
+    lock_model_file = ":example_lock_model",
+    target_environments = [
+        ":python_darwin_x86_64",
+        ":python_darwin_arm64",
+        ":python_linux_x86_64",
+    ],
+    default_alias_single_version = True,
+    always_build_packages = [
+        "numpy",
+        "pandas",
+    ],
+    package_build_dependencies = {
+        "numpy": [
+            "cython",
+            "setuptools",
+            "wheel",
+        ],
+        "pandas": [
+            "cython",
+            "setuptools",
+            "wheel",
+        ],
+    },
+    out = "example_lock.bzl",
+)
+
+_GENERATED = {
+    "example_lock.bzl": "//:example_lock.bzl",
+}
+
+# Generate the updater script so there's only one target for devs to run,
+# even if many generated files are in the source folder.
+write_file(
+    name = "gen_update",
+    out = "update.sh",
+    content = [
+        # This depends on bash, would need tweaks for Windows
+        "#!/usr/bin/env bash",
+        # Bazel gives us a way to access the source folder!
+        "cd $BUILD_WORKSPACE_DIRECTORY",
+    ] + [
+        # Paths are now relative to the workspace.
+        # We can copy files from bazel-bin to the sources
+        "cp -fv bazel-bin/{1} {0}".format(
+            k,
+            # Convert label to path
+            v.replace(":", "/"),
+        )
+        for [k, v] in _GENERATED.items()
+    ],
+)
+
+# This is what you can `bazel run` and it can write to the source folder
+sh_binary(
+    name = "update_example_lock",
+    srcs = ["update.sh"],
+    data = _GENERATED.values(),
+)
