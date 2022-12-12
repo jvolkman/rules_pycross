@@ -23,6 +23,7 @@ from typing import Sequence
 from absl import app
 from absl.flags import argparse_flags
 from build import ProjectBuilder
+from dotenv import dotenv_values
 from packaging.utils import parse_wheel_filename
 from pycross.private.tools.crossenv.utils import find_sysconfig_data
 from pycross.private.tools.target_environment import TargetEnv
@@ -358,21 +359,44 @@ def run_hooks(
     build_env: Dict[str, str],
     build_cwd: str,
 ) -> (Dict[str, Any], Dict[str, str]):
+    config_settings_file = temp_dir / "config_settings.json"
+    env_file = temp_dir / "build.env"
+    result_env = dict(build_env)
     for hook in hooks:
         # write env file
         # write config_settings file
+        hook_env = dict(build_env)
+        hook_env["PYCROSS_CONFIG_SETTINGS_FILE"] = str(config_settings_file)
+        hook_env["PYCROSS_ENV_FILE"] = str(env_file)
+        hook_env["PYCROSS_BUILD_CWD"] = build_cwd
+
+        # Write current config settings to file.
+        with open(config_settings_file, "w") as f:
+            json.dump(config_settings, f)
+
+        # Create or truncate build.env
+        with open(config_settings_file, "w"):
+            pass
+
         try:
             subprocess.check_output(
-                args=crossenv_args, env=os.environ, stderr=subprocess.STDOUT
+                args=[hook], env=hook_env, stderr=subprocess.STDOUT, cwd=sdist_dir
             )
         except subprocess.CalledProcessError as cpe:
-            print("===== CROSSENV FAILED =====", file=sys.stderr)
+            print("===== PRE-BUILD HOOK FAILED =====", file=sys.stderr)
             print(cpe.output.decode(), file=sys.stderr)
             raise
-        # read env file
-        # read config_settings file
 
+        # Read post-hook config_settings.json.
+        with open(config_settings_file, "w") as f:
+            config_settings = json.load(f)
 
+        # Read post-hook build.env and update our own environment variables.
+        with open(config_settings_file, "w") as f:
+            env_file_values = dotenv_values(stream=f)
+            result_env.update(env_file_values)
+
+    return config_settings, result_env
 
 
 def check_filename_against_target(
@@ -649,12 +673,12 @@ def main(args: Any, temp_dir: Path, is_debug: bool) -> None:
     extracted_dir = extract_sdist(args.sdist, sdist_dir)
 
     if args.pre_build_hook:
-        config_settings, build_env = run_hooks(
+        config_settings, build_env_vars = run_hooks(
             args.pre_build_hook, 
             temp_dir,
             extracted_dir, 
-            config_settings, 
-            build_env,
+            config_settings,
+            build_env_vars,
             cwd,
         )
 
@@ -738,6 +762,13 @@ def parse_flags(argv) -> Any:
         type=Path,
         action="append",
         help="A tool to run before building the sdist.",
+    )
+
+    parser.add_argument(
+        "--path-tool",
+        type=Path,
+        action="append",
+        help="A tool to made available in PATH when building the sdist.",
     )
 
     parser.add_argument(

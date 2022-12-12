@@ -173,9 +173,6 @@ def _pycross_wheel_build_impl(ctx):
     args.add("--sysconfig-vars", cc_sysconfig_data)
     args.add("--wheel-file", out_wheel)
     args.add("--wheel-name-file", out_name)
-    if ctx.attr.target_environment:
-        target_environment_file = ctx.attr.target_environment[PycrossTargetEnvironmentInfo].file
-        args.add("--target-environment-file", target_environment_file)
 
     toolchain_deps = []
     if cpp_toolchain.all_files:
@@ -204,7 +201,7 @@ def _pycross_wheel_build_impl(ctx):
         args.add("--target-python-executable", executable)
 
     imports = depset(
-        transitive = [d[PyInfo].imports for d in ctx.attr.deps if PyInfo in d],
+        transitive = [d[PyInfo].imports for d in ctx.attr.deps],
     )
 
     args.add_all(imports, before_each="--path", map_each=_resolve_import_path_fn(ctx), allow_closure=True)
@@ -215,6 +212,11 @@ def _pycross_wheel_build_impl(ctx):
         ctx.file.sdist,
         cc_sysconfig_data,
     ]
+
+    if ctx.attr.target_environment:
+        target_environment_file = ctx.attr.target_environment[PycrossTargetEnvironmentInfo].file
+        args.add("--target-environment-file", target_environment_file)
+        deps.append(ctx.attr.target_environment[PycrossTargetEnvironmentInfo].file)
 
     if ctx.attr.build_env:
         build_env_data = ctx.actions.declare_file(paths.join(ctx.attr.name, "build_env.json"))
@@ -240,11 +242,11 @@ def _pycross_wheel_build_impl(ctx):
     if ctx.attr.pre_build_hooks:
         args.add_all(ctx.attr.pre_build_hooks, before_each="--pre-build-hook")
 
-    transitive_sources = [dep[PyInfo].transitive_sources for dep in ctx.attr.deps if PyInfo in dep]
-    default_files = [dep[DefaultInfo].files for dep in ctx.attr.deps if DefaultInfo in dep]
+    if ctx.attr.path_tools:
+        args.add_all(ctx.attr.path_tools, before_each="--path-tool")
 
-    if ctx.attr.target_environment:
-        deps.append(ctx.attr.target_environment[PycrossTargetEnvironmentInfo].file)
+    transitive_sources = [dep[PyInfo].transitive_sources for dep in ctx.attr.deps]
+    data_files = [data[DefaultInfo].files for data in ctx.attr.data]
 
     env = dict(cc_vars)
     env.update(ctx.configuration.default_shell_env)
@@ -252,7 +254,15 @@ def _pycross_wheel_build_impl(ctx):
     ctx.actions.run(
         inputs = deps,
         outputs = [out_wheel, out_name],
-        tools = depset(transitive = toolchain_deps + transitive_sources + default_files),
+        tools = depset(
+            transitive = (
+                toolchain_deps +
+                transitive_sources +
+                data_files +
+                ctx.attr.pre_build_hooks +
+                ctx.attr.path_tools
+            )
+        ),
         executable = ctx.executable._tool,
         use_default_shell_env = False,
         env = env,
@@ -323,6 +333,17 @@ pycross_wheel_build = rule(
             default = "%CWD%",
         ),
         "pre_build_hooks": attr.label_list(
+            doc = (
+                "A list of binaries that are executed prior to building the sdist. " +
+                "These binaries execute from within the sdist directory and can modify it as necessary."
+            ),
+            cfg = "exec",
+            executable = True,
+        ),
+        "path_tools": attr.label_list(
+            doc = (
+                "A list of binaries that are placed in PATH when building the sdist."
+            ),
             cfg = "exec",
             executable = True,
         ),
