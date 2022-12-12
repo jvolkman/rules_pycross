@@ -183,7 +183,10 @@ def get_build_env_vars(bin_dir: Path) -> Dict[str, str]:
     return env
 
 
-def replace_cwd_tokens(data: Dict[str, Any], replacement: str, cwd: str) -> Dict[str, Any]:
+def replace_cwd_tokens(
+    data: Dict[str, Any], replacement: str, cwd: Path
+) -> Dict[str, Any]:
+    cwd = str(cwd)
     if cwd.endswith("/"):
         cwd = cwd[:-1]
     result = {}
@@ -322,7 +325,7 @@ def generate_cross_sysconfig_vars(
     return sysconfig_vars
 
 
-def generate_bin_tools(toolchain_vars: Dict[str, str], bin_dir: Path) -> None:
+def generate_bin_tools(bin_dir: Path, toolchain_vars: Dict[str, str], path_tools: List[Path]) -> None:
     # The bazel CC toolchains don't provide ranlib (as far as I can tell), and
     # we don't want to use the host ranlib. So we place a no-op in PATH.
     ranlib = bin_dir / "ranlib"
@@ -334,6 +337,10 @@ def generate_bin_tools(toolchain_vars: Dict[str, str], bin_dir: Path) -> None:
     if ar_path:
         ar = bin_dir / "ar"
         ar.symlink_to(ar_path)
+
+    for path_tool in path_tools:
+        path_tool_in_bin = bin_dir / path_tool.name
+        path_tool_in_bin.symlink_to(path_tool)
 
 
 def extract_sdist(sdist_path: Path, sdist_dir: Path) -> Path:
@@ -351,13 +358,13 @@ def extract_sdist(sdist_path: Path, sdist_dir: Path) -> Path:
     return extracted_dir
 
 
-def run_hooks(
+def run_pre_build_hooks(
     hooks: List[Path],
     temp_dir: Path,
     sdist_dir: Path,
     config_settings: Dict[str, Any],
     build_env: Dict[str, str],
-    build_cwd: str,
+    build_cwd: Path,
 ) -> (Dict[str, Any], Dict[str, str]):
     config_settings_file = temp_dir / "config_settings.json"
     env_file = temp_dir / "build.env"
@@ -368,19 +375,19 @@ def run_hooks(
         hook_env = dict(build_env)
         hook_env["PYCROSS_CONFIG_SETTINGS_FILE"] = str(config_settings_file)
         hook_env["PYCROSS_ENV_FILE"] = str(env_file)
-        hook_env["PYCROSS_BUILD_CWD"] = build_cwd
+        hook_env["PYCROSS_BUILD_CWD"] = str(build_cwd)
 
         # Write current config settings to file.
         with open(config_settings_file, "w") as f:
             json.dump(config_settings, f)
 
         # Create or truncate build.env
-        with open(config_settings_file, "w"):
+        with open(env_file, "w"):
             pass
 
         try:
             subprocess.check_output(
-                args=[hook], env=hook_env, stderr=subprocess.STDOUT, cwd=sdist_dir
+                args=[build_cwd / hook], env=hook_env, stderr=subprocess.STDOUT, cwd=sdist_dir
             )
         except subprocess.CalledProcessError as cpe:
             print("===== PRE-BUILD HOOK FAILED =====", file=sys.stderr)
@@ -388,11 +395,11 @@ def run_hooks(
             raise
 
         # Read post-hook config_settings.json.
-        with open(config_settings_file, "w") as f:
+        with open(config_settings_file, "r") as f:
             config_settings = json.load(f)
 
         # Read post-hook build.env and update our own environment variables.
-        with open(config_settings_file, "w") as f:
+        with open(env_file, "r") as f:
             env_file_values = dotenv_values(stream=f)
             result_env.update(env_file_values)
 
@@ -587,7 +594,7 @@ def build_wheel(
 
 
 def main(args: Any, temp_dir: Path, is_debug: bool) -> None:
-    cwd = os.getcwd()
+    cwd = Path(os.getcwd())
 
     if args.target_environment_file:
         with open(args.target_environment_file, "r") as f:
@@ -613,8 +620,8 @@ def main(args: Any, temp_dir: Path, is_debug: bool) -> None:
             additional_build_env = json.load(f)
         if args.build_cwd_token:
             additional_build_env = replace_cwd_tokens(
-                additional_build_env, 
-                args.build_cwd_token, 
+                additional_build_env,
+                args.build_cwd_token,
                 cwd,
             )
         for key, val in additional_build_env.items():
@@ -625,8 +632,8 @@ def main(args: Any, temp_dir: Path, is_debug: bool) -> None:
             config_settings = json.load(f)
         if args.build_cwd_token:
             config_settings = replace_cwd_tokens(
-                config_settings, 
-                args.build_cwd_token, 
+                config_settings,
+                args.build_cwd_token,
                 cwd,
             )
     else:
@@ -665,7 +672,8 @@ def main(args: Any, temp_dir: Path, is_debug: bool) -> None:
         target_env=target_environment,
         always_use_crossenv=args.always_use_crossenv,
     )
-    generate_bin_tools(toolchain_sysconfig_vars, bin_dir)
+    path_tools = [cwd / path_tool for path_tool in args.path_tool or []]
+    generate_bin_tools(bin_dir, toolchain_sysconfig_vars, path_tools)
 
     if is_debug:
         print(f"Build environment: {build_env_dir}")
@@ -673,10 +681,10 @@ def main(args: Any, temp_dir: Path, is_debug: bool) -> None:
     extracted_dir = extract_sdist(args.sdist, sdist_dir)
 
     if args.pre_build_hook:
-        config_settings, build_env_vars = run_hooks(
-            args.pre_build_hook, 
+        config_settings, build_env_vars = run_pre_build_hooks(
+            args.pre_build_hook,
             temp_dir,
-            extracted_dir, 
+            extracted_dir,
             config_settings,
             build_env_vars,
             cwd,

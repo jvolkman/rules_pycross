@@ -87,6 +87,9 @@ pycross_lock_file(
         "numpy",
         "pandas",
     ],
+    build_target_overrides = {
+        "numpy": "@//deps/numpy",
+    },
     package_build_dependencies = {
         "numpy": [
             "cython",
