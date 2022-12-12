@@ -168,7 +168,9 @@ class GenerationContext:
         # We sort deps by version in descending order. In case the list of dependencies
         # has multiple entries for the same name that match an environment, we prefer the
         # latest version.
-        ordered_deps = sorted(package.dependencies, key=operator.attrgetter('version'), reverse=True)
+        ordered_deps = sorted(
+            package.dependencies, key=operator.attrgetter("version"), reverse=True
+        )
         for target in self.target_environments:
             added_for_target = set()
             for dep in ordered_deps:
@@ -366,7 +368,10 @@ class PackageTarget:
     def _deps_name(self):
         key_str = str(self.package.key)
         sanitized = (
-            key_str.replace("-", "_").replace(".", "_").replace("@", "_").replace("+", "_")
+            key_str.replace("-", "_")
+            .replace(".", "_")
+            .replace("@", "_")
+            .replace("+", "_")
         )
         return f"_{sanitized}_deps"
 
@@ -374,7 +379,10 @@ class PackageTarget:
     def _build_deps_name(self):
         key_str = str(self.package.key)
         sanitized = (
-            key_str.replace("-", "_").replace(".", "_").replace("@", "_").replace("+", "_")
+            key_str.replace("-", "_")
+            .replace(".", "_")
+            .replace("@", "_")
+            .replace("+", "_")
         )
         return f"_{sanitized}_build_deps"
 
@@ -500,7 +508,9 @@ class PackageTarget:
 
 class UrlRepoTarget:
     def __init__(self, name: str, file: PackageFile):
-        assert file.urls, "UrlWheelRepoTarget requires a PackageFile with one or more URLs"
+        assert (
+            file.urls
+        ), "UrlWheelRepoTarget requires a PackageFile with one or more URLs"
         self.name = name
         self.file = file
 
@@ -520,7 +530,8 @@ class UrlRepoTarget:
             parts.append(ind(f'"{url}",', 2))
         parts.append(ind(f'"{urls[-1]}"', 2))
 
-        parts.extend([
+        parts.extend(
+            [
                 ind(f"],"),
                 ind(f'sha256 = "{self.file.sha256}",'),
                 ind(f'downloaded_file_path = "{self.file.name}",'),

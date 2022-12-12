@@ -119,7 +119,9 @@ class LockSet:
 
     @staticmethod
     def from_dict(data: Dict[str, Any]) -> LockSet:
-        return dacite.from_dict(LockSet, data, config=dacite.Config(cast=[Tuple, Version, PackageKey]))
+        return dacite.from_dict(
+            LockSet, data, config=dacite.Config(cast=[Tuple, Version, PackageKey])
+        )
 
     @classmethod
     def from_json(cls, data: str) -> LockSet:

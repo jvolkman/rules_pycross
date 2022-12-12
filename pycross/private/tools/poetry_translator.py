@@ -173,7 +173,9 @@ def translate(project_file: Path, lock_file: Path) -> LockSet:
                     marker = dep.get("markers")
                     spec = dep.get("version")
 
-                dependencies.append(PoetryDependency(name=name, spec=spec, marker=marker))
+                dependencies.append(
+                    PoetryDependency(name=name, spec=spec, marker=marker)
+                )
 
         poetry_packages.append(
             PoetryPackage(

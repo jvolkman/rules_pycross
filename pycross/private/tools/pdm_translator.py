@@ -43,7 +43,9 @@ class Project(PDMProject):
 
 
 def candidate_package_key(candidate: PDMCandidate) -> PackageKey:
-    return PackageKey.from_parts(package_canonical_name(candidate.name), Version(candidate.version))
+    return PackageKey.from_parts(
+        package_canonical_name(candidate.name), Version(candidate.version)
+    )
 
 
 def parse_hash_sha256(hash: str) -> str:
@@ -170,7 +172,7 @@ def translate(
             project=project,
             default_dependencies=default_dependencies,
             dev_dependencies=dev_dependencies,
-            dependency_groups=dependency_groups
+            dependency_groups=dependency_groups,
         )
         packages = get_packages(project)
         return LockSet(

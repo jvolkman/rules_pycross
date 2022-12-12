@@ -60,7 +60,9 @@ def _error(msg: str, code: int = 1) -> NoReturn:  # pragma: no cover
     raise SystemExit(code)
 
 
-def determine_target_path_from_exec(exec_python_exe: Path, target_python_exe: Path) -> List[Path]:
+def determine_target_path_from_exec(
+    exec_python_exe: Path, target_python_exe: Path
+) -> List[Path]:
     query_args = (
         exec_python_exe,
         "-c",
@@ -132,7 +134,9 @@ def get_target_sysconfig(
     # If target_sys_path is empty, we try to determine it from the exec python's sys path.
 
     if not target_sys_path:
-        target_sys_path = determine_target_path_from_exec(exec_python_exe, target_python_exe)
+        target_sys_path = determine_target_path_from_exec(
+            exec_python_exe, target_python_exe
+        )
 
     return find_sysconfig_data(target_sys_path)
 
@@ -233,7 +237,9 @@ def get_wrapper_flags(cflags: str) -> List[str]:
     return result
 
 
-def wrap_cc(lang: str, cc_exe: Path, cflags: str, python_exe: Path, bin_dir: Path) -> Path:
+def wrap_cc(
+    lang: str, cc_exe: Path, cflags: str, python_exe: Path, bin_dir: Path
+) -> Path:
     assert lang in ("cc", "cxx")
     version_str = subprocess.check_output([cc_exe, "--version"]).decode("utf-8")
     first_line = version_str.splitlines()[0]
@@ -567,7 +573,9 @@ def main(temp_dir: Path, is_debug: bool) -> None:
         wrapper_vars=wrapper_sysconfig_vars,
     )
 
-    absolute_path_entries = [os.path.join(cwd, p) for p in args.path] if args.path else []
+    absolute_path_entries = (
+        [os.path.join(cwd, p) for p in args.path] if args.path else []
+    )
     build_venv(
         env_dir=build_env_dir,
         exec_python_exe=args.exec_python_executable,
