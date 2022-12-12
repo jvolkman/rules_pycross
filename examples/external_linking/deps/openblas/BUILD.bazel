@@ -1,3 +1,4 @@
+load("@bazel_skylib//rules:select_file.bzl", "select_file")
 load("@rules_foreign_cc//foreign_cc:defs.bzl", "cmake")
 
 package(default_visibility = ["//visibility:public"])
@@ -12,7 +13,14 @@ cmake(
     out_static_libs = ["libopenblas.a"],
 )
 
-cc_import(
-    name = "libopenblas",
-    static_library = ":openblas",
+select_file(
+    name = "libopenblas.a",
+    srcs = ":openblas",
+    subpath = "lib/libopenblas.a",
+)
+
+select_file(
+    name = "include",
+    srcs = ":openblas",
+    subpath = "include",
 )

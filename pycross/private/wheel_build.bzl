@@ -124,7 +124,7 @@ def _resolve_import_path_fn_inner(workspace_name, bin_dir, sibling_layout):
 
     return fn
 
-def _expand_locations_and_vars(attribute_name, ctx, val, targets):
+def _expand_locations_and_vars(attribute_name, ctx, val):
     rule_dir = paths.join(
         ctx.bin_dir.path,
         ctx.label.workspace_root,
@@ -144,7 +144,7 @@ def _expand_locations_and_vars(attribute_name, ctx, val, targets):
         "WORKSPACE": ctx.workspace_name,
     }
 
-    val = ctx.expand_location(val, targets)
+    val = ctx.expand_location(val, ctx.attr.deps + ctx.attr.data)
     val = ctx.expand_make_variables(attribute_name, val, additional_substitutions)
     return val
 
@@ -222,7 +222,7 @@ def _pycross_wheel_build_impl(ctx):
         deps.append(build_env_data)
         vals = {}
         for key, value in ctx.attr.build_env.items():
-            vals[key] = _expand_locations_and_vars("build_env", ctx, value, ctx.attr.deps)
+            vals[key] = _expand_locations_and_vars("build_env", ctx, value)
         ctx.actions.write(build_env_data, json.encode(vals))
 
     if ctx.attr.config_settings:
@@ -231,11 +231,14 @@ def _pycross_wheel_build_impl(ctx):
         deps.append(config_settings_data)
         vals = {}
         for key, value in ctx.attr.config_settings.items():
-            vals[key] = _expand_locations_and_vars("config_settings", ctx, value, ctx.attr.deps)
+            vals[key] = _expand_locations_and_vars("config_settings", ctx, value)
         ctx.actions.write(config_settings_data, json.encode(vals))
 
-    if ctx.attr.sdist_files:
-        pass
+    if ctx.attr.build_cwd_token:
+        args.add("--build-cwd-token", ctx.attr.build_cwd_token)
+
+    if ctx.attr.pre_build_hooks:
+        args.add_all(ctx.attr.pre_build_hooks, before_each="--pre-build-hook")
 
     transitive_sources = [dep[PyInfo].transitive_sources for dep in ctx.attr.deps if PyInfo in dep]
     default_files = [dep[DefaultInfo].files for dep in ctx.attr.deps if DefaultInfo in dep]
@@ -281,41 +284,51 @@ def _pycross_toolchains():
 pycross_wheel_build = rule(
     implementation = _pycross_wheel_build_impl,
     attrs = {
-        "deps": attr.label_list(
-            doc = "A list of build dependencies for the wheel.",
-            providers = [[DefaultInfo], [PyInfo]],
-        ),
         "sdist": attr.label(
             doc = "The sdist file.",
             allow_single_file = [".tar.gz", ".zip"],
             mandatory = True,
+        ),
+        "deps": attr.label_list(
+            doc = "A list of Python build dependencies for the wheel.",
+            providers = [PyInfo],
+        ),
+        "data": attr.label_list(
+            doc = "Additional data and dependencies used by the build.",
+            providers = [DefaultInfo],
+            allow_files = True,
         ),
         "target_environment": attr.label(
             doc = "The target environment to build for.",
             providers = [PycrossTargetEnvironmentInfo],
         ),
         "build_env": attr.string_dict(
-            doc = """
-            Environment variables passed to the sdist build.
-            Values are subject to 'Make variable' and location expansion.
-            """,
+            doc = (
+                "Environment variables passed to the sdist build. " +
+                "Values are subject to 'Make variable', location, and build_cwd_token expansion."
+            )
         ),
         "config_settings": attr.string_dict(
-            doc = """
-            PEP 517 config settings passed to the sdist build.
-            Values are subject to 'Make variable' and location expansion.
-            """,
+            doc = (
+                "PEP 517 config settings passed to the sdist build. " +
+                "Values are subject to 'Make variable', location, and build_cwd_token expansion."
+            ),
         ),
-        "sdist_files": attr.label_keyed_string_dict(
-            doc = """
-            A mapping of file targets to relative sdist paths. These files are written to the
-            sdist directory after extraction. Existing files will be overwritten.
-            """,
-            allow_files = True,
+        "build_cwd_token": attr.string(
+            doc = (
+                "A token replaced with the build action's working directory. " +
+                "If specified, values in build_env and config_settings will has this token " +
+                "replaced with the working directory of the build action."
+            ),
+            default = "%CWD%",
+        ),
+        "pre_build_hooks": attr.label_list(
+            cfg = "exec",
+            executable = True,
         ),
         "_tool": attr.label(
             default = Label("//pycross/private/tools:wheel_builder"),
-            cfg = "host",
+            cfg = "exec",
             executable = True,
         ),
         "_cc_toolchain": attr.label(
