@@ -18,3 +18,15 @@ pycross_wheel_build(
     },
     tags = ["manual"],
 )
+
+genrule(
+    name = "site_cfg",
+    srcs = ["//deps/openblas:libopenblas.a", "//deps/openblas:include"],
+    outs = ["site.cfg"],
+    cmd = """
+    echo "[openblas]" >> $@
+    echo "libraries = openblas" >> $@
+    echo "library_dirs = $(location //deps/openblas:libopenblas.a)/.." >> $@
+    echo "include_dirs = $(location //deps/openblas:include)" >> $@
+    """
+)
