@@ -182,12 +182,12 @@ def get_build_env_vars(bin_dir: Path) -> Dict[str, str]:
     return env
 
 
-def replace_cwd_tokens(data: Dict[str, Any], cwd: str) -> Dict[str, Any]:
+def replace_cwd_tokens(data: Dict[str, Any], replacement: str, cwd: str) -> Dict[str, Any]:
     if cwd.endswith("/"):
         cwd = cwd[:-1]
     result = {}
     for k, v in data.items():
-        result[k] = v.replace("$$EXT_BUILD_ROOT$$", cwd)
+        result[k] = v.replace(replacement, cwd)
 
     return result
 
@@ -348,6 +348,31 @@ def extract_sdist(sdist_path: Path, sdist_dir: Path) -> Path:
     # After extraction, there should be a `packageName-version` directory
     (extracted_dir,) = sdist_dir.glob("*")
     return extracted_dir
+
+
+def run_hooks(
+    hooks: List[Path],
+    temp_dir: Path,
+    sdist_dir: Path,
+    config_settings: Dict[str, Any],
+    build_env: Dict[str, str],
+    build_cwd: str,
+) -> (Dict[str, Any], Dict[str, str]):
+    for hook in hooks:
+        # write env file
+        # write config_settings file
+        try:
+            subprocess.check_output(
+                args=crossenv_args, env=os.environ, stderr=subprocess.STDOUT
+            )
+        except subprocess.CalledProcessError as cpe:
+            print("===== CROSSENV FAILED =====", file=sys.stderr)
+            print(cpe.output.decode(), file=sys.stderr)
+            raise
+        # read env file
+        # read config_settings file
+
+
 
 
 def check_filename_against_target(
@@ -562,16 +587,32 @@ def main(args: Any, temp_dir: Path, is_debug: bool) -> None:
     if args.build_env:
         with open(args.build_env, "r") as f:
             additional_build_env = json.load(f)
+        if args.build_cwd_token:
+            additional_build_env = replace_cwd_tokens(
+                additional_build_env, 
+                args.build_cwd_token, 
+                cwd,
+            )
         for key, val in additional_build_env.items():
             set_or_append(build_env_vars, key, val)
 
     if args.config_settings:
         with open(args.config_settings, "r") as f:
             config_settings = json.load(f)
+        if args.build_cwd_token:
+            config_settings = replace_cwd_tokens(
+                config_settings, 
+                args.build_cwd_token, 
+                cwd,
+            )
     else:
         config_settings = {}
 
-    toolchain_sysconfig_vars = replace_cwd_tokens(toolchain_sysconfig_vars, cwd)
+    toolchain_sysconfig_vars = replace_cwd_tokens(
+        toolchain_sysconfig_vars,
+        "$$EXT_BUILD_ROOT$$",
+        cwd,
+    )
     wrapper_sysconfig_vars = generate_cc_wrappers(
         toolchain_vars=toolchain_sysconfig_vars,
         python_exe=args.exec_python_executable,
@@ -605,17 +646,26 @@ def main(args: Any, temp_dir: Path, is_debug: bool) -> None:
     if is_debug:
         print(f"Build environment: {build_env_dir}")
 
-    print(config_settings)
-
     extracted_dir = extract_sdist(args.sdist, sdist_dir)
-    # wheel_file = build_wheel(
-    #     env_dir=build_env_dir,
-    #     wheel_dir=wheel_dir,
-    #     sdist_dir=extracted_dir,
-    #     build_env_vars=build_env_vars,
-    #     config_settings=config_settings,
-    #     debug=is_debug,
-    # )
+
+    if args.pre_build_hook:
+        config_settings, build_env = run_hooks(
+            args.pre_build_hook, 
+            temp_dir,
+            extracted_dir, 
+            config_settings, 
+            build_env,
+            cwd,
+        )
+
+    wheel_file = build_wheel(
+        env_dir=build_env_dir,
+        wheel_dir=wheel_dir,
+        sdist_dir=extracted_dir,
+        build_env_vars=build_env_vars,
+        config_settings=config_settings,
+        debug=is_debug,
+    )
 
     if target_environment:
         check_filename_against_target(os.path.basename(wheel_file), target_environment)
@@ -660,6 +710,7 @@ def parse_flags(argv) -> Any:
 
     parser.add_argument(
         "--sysconfig-vars",
+        type=Path,
         required=True,
         help="A JSON file containing variable to add to sysconfig.",
     )
@@ -667,15 +718,26 @@ def parse_flags(argv) -> Any:
     parser.add_argument(
         "--build-env",
         type=Path,
-        required=False,
         help="A JSON file containing build environment variables.",
     )
 
     parser.add_argument(
         "--config-settings",
         type=Path,
-        required=False,
         help="A JSON file containing PEP 517 build config settings.",
+    )
+
+    parser.add_argument(
+        "--build-cwd-token",
+        type=str,
+        help="A placeholder replaced by the build's initial working directory.",
+    )
+
+    parser.add_argument(
+        "--pre-build-hook",
+        type=Path,
+        action="append",
+        help="A tool to run before building the sdist.",
     )
 
     parser.add_argument(
@@ -693,7 +755,6 @@ def parse_flags(argv) -> Any:
     parser.add_argument(
         "--target-sys-path",
         type=Path,
-        required=False,
         action="append",
         default=[],
     )
