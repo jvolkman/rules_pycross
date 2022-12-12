@@ -11,22 +11,22 @@ pycross_wheel_build(
         "//deps:cython",
         "//deps:setuptools",
         "//deps:wheel",
-        "//deps/openblas:lib",
     ],
-    config_settings = {
-        "foo": "$(locations //deps/openblas:lib)"
+    data = [
+        "//deps/openblas:libopenblas.a",
+        "//deps/openblas:include",
+    ],
+    pre_build_hooks = [
+        ":gen_site_cfg",
+    ],
+    build_env = {
+        "OPENBLAS_LIB": "$(location //deps/openblas:libopenblas.a)",
+        "OPENBLAS_INCLUDE": "$(location //deps/openblas:include)",
     },
     tags = ["manual"],
 )
 
-genrule(
-    name = "site_cfg",
-    srcs = ["//deps/openblas:libopenblas.a", "//deps/openblas:include"],
-    outs = ["site.cfg"],
-    cmd = """
-    echo "[openblas]" >> $@
-    echo "libraries = openblas" >> $@
-    echo "library_dirs = $(location //deps/openblas:libopenblas.a)/.." >> $@
-    echo "include_dirs = $(location //deps/openblas:include)" >> $@
-    """
+py_binary(
+    name = "gen_site_cfg",
+    srcs = ["gen_site_cfg.py"],
 )
