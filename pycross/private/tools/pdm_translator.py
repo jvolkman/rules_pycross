@@ -89,10 +89,12 @@ def get_pins(
 def get_packages(project: Project) -> Dict[PackageKey, Package]:
     packages = {}
     repository = project.locked_repository
+    # Don't evaluate markers against current environment.
+    repository.ignore_compatibility = True
+
     for _package in repository.packages.values():
         # NOTE we need to call `get_dependencies` first, as it also fills `requires_python`
-        # NOTE we are calling `get_dependencies` of the parent-class, as it will noll not evaluate markers
-        _dependencies, _, _ = PDMBaseRepository.get_dependencies(repository, _package)
+        _dependencies, _, _ = repository.get_dependencies(_package)
 
         package_key = candidate_package_key(_package)
         package_name = _package.name

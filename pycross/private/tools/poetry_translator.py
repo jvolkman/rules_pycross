@@ -16,8 +16,8 @@ from packaging.utils import NormalizedName
 from packaging.utils import Version
 from packaging.utils import parse_sdist_filename
 from packaging.utils import parse_wheel_filename
-from poetry.core.semver import helpers
-from poetry.core.semver.version import Version as PoetryVersion
+from poetry.core.constraints.version import parse_constraint
+from poetry.core.constraints.version import Version as PoetryVersion
 from poetry.core.version import markers
 from pycross.private.tools.lock_model import LockSet
 from pycross.private.tools.lock_model import Package
@@ -39,7 +39,7 @@ class PoetryDependency:
 
     @cached_property
     def constraint(self):
-        return helpers.parse_constraint(self.spec)
+        return parse_constraint(self.spec)
 
     @cached_property
     def marker_without_extra(self) -> Optional[str]:
@@ -129,9 +129,9 @@ def translate(project_file: Path, lock_file: Path) -> LockSet:
             # Skip the special line indicating python version.
             continue
         if isinstance(pin_info, str):
-            pinned_package_specs[pin] = helpers.parse_constraint(pin_info)
+            pinned_package_specs[pin] = parse_constraint(pin_info)
         else:
-            pinned_package_specs[pin] = helpers.parse_constraint(pin_info["version"])
+            pinned_package_specs[pin] = parse_constraint(pin_info["version"])
 
     def parse_file_info(file_info) -> PackageFile:
         file_name = file_info["file"]
