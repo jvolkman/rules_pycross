@@ -160,17 +160,9 @@ def targets():
         ":wheel_0.37.0",
     ]
 
-    pycross_wheel_build(
-        name = "_build_numpy_1.23.5",
-        sdist = "@example_lock_sdist_numpy_1.23.5//file",
-        target_environment = _target,
-        deps = _numpy_1_23_5_build_deps,
-        tags = ["manual"],
-    )
-
     pycross_wheel_library(
         name = "numpy_1.23.5",
-        wheel = ":_build_numpy_1.23.5",
+        wheel = "@//deps/numpy",
     )
 
     _pandas_1_5_2_deps = [

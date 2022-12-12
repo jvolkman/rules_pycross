@@ -58,6 +58,12 @@ def _resolve_import_path_fn(ctx):
         _is_sibling_repository_layout_enabled(ctx),
     )
 
+def _executable(target):
+    exe = target[DefaultInfo].files_to_run.executable
+    if not exe:
+        fail("%s is not executable" % target.label)
+    return exe.path
+
 def _resolve_import_path_fn_inner(workspace_name, bin_dir, sibling_layout):
     # The PyInfo import names assume a runfiles-type structure. E.g.:
     #   mytool.runfiles/
@@ -239,14 +245,21 @@ def _pycross_wheel_build_impl(ctx):
     if ctx.attr.build_cwd_token:
         args.add("--build-cwd-token", ctx.attr.build_cwd_token)
 
-    if ctx.attr.pre_build_hooks:
-        args.add_all(ctx.attr.pre_build_hooks, before_each="--pre-build-hook")
-
-    if ctx.attr.path_tools:
-        args.add_all(ctx.attr.path_tools, before_each="--path-tool")
-
     transitive_sources = [dep[PyInfo].transitive_sources for dep in ctx.attr.deps]
     data_files = [data[DefaultInfo].files for data in ctx.attr.data]
+    input_manifests = []
+
+    if ctx.attr.pre_build_hooks:
+        args.add_all(ctx.attr.pre_build_hooks, before_each="--pre-build-hook", map_each=_executable)
+        tool_inputs, tool_manifests = ctx.resolve_tools(tools=ctx.attr.pre_build_hooks)
+        data_files += [tool_inputs]
+        input_manifests += tool_manifests
+
+    if ctx.attr.path_tools:
+        args.add_all(ctx.attr.path_tools, before_each="--path-tool", map_each=_executable)
+        tool_inputs, tool_manifests = ctx.resolve_tools(tools=ctx.attr.path_tools)
+        data_files += [tool_inputs]
+        input_manifests += tool_manifests
 
     env = dict(cc_vars)
     env.update(ctx.configuration.default_shell_env)
@@ -258,11 +271,10 @@ def _pycross_wheel_build_impl(ctx):
             transitive = (
                 toolchain_deps +
                 transitive_sources +
-                data_files +
-                ctx.attr.pre_build_hooks +
-                ctx.attr.path_tools
+                data_files
             )
         ),
+        input_manifests = input_manifests,
         executable = ctx.executable._tool,
         use_default_shell_env = False,
         env = env,
@@ -338,14 +350,12 @@ pycross_wheel_build = rule(
                 "These binaries execute from within the sdist directory and can modify it as necessary."
             ),
             cfg = "exec",
-            executable = True,
         ),
         "path_tools": attr.label_list(
             doc = (
                 "A list of binaries that are placed in PATH when building the sdist."
             ),
             cfg = "exec",
-            executable = True,
         ),
         "_tool": attr.label(
             default = Label("//pycross/private/tools:wheel_builder"),
