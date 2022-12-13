@@ -155,7 +155,7 @@ def set_or_append(env: Dict[str, Any], key: str, value: str) -> None:
         env[key] = value
 
 
-def get_build_env_vars(bin_dir: Path) -> Dict[str, str]:
+def get_default_build_env_vars(bin_dir: Path) -> Dict[str, str]:
     env = os.environ.copy()
 
     # wheel, by default, enables debug symbols in GCC. This incidentally captures the build path in the .so file
@@ -326,7 +326,9 @@ def generate_cross_sysconfig_vars(
     return sysconfig_vars
 
 
-def generate_bin_tools(bin_dir: Path, toolchain_vars: Dict[str, str], path_tools: List[Path]) -> None:
+def generate_bin_tools(
+    bin_dir: Path, toolchain_vars: Dict[str, str], path_tools: List[Path]
+) -> None:
     # The bazel CC toolchains don't provide ranlib (as far as I can tell), and
     # we don't want to use the host ranlib. So we place a no-op in PATH.
     ranlib = bin_dir / "ranlib"
@@ -388,7 +390,10 @@ def run_pre_build_hooks(
 
         try:
             subprocess.check_output(
-                args=[build_cwd / hook], env=hook_env, stderr=subprocess.STDOUT, cwd=sdist_dir
+                args=[build_cwd / hook],
+                env=hook_env,
+                stderr=subprocess.STDOUT,
+                cwd=sdist_dir,
             )
         except subprocess.CalledProcessError as cpe:
             print("===== PRE-BUILD HOOK FAILED =====", file=sys.stderr)
@@ -594,6 +599,39 @@ def build_wheel(
     return Path(wheel_file)
 
 
+def init_build_env_vars(args: Any, bin_dir: Path, cwd: Path) -> Dict[str, str]:
+    vars = get_default_build_env_vars(bin_dir)
+    if args.build_env:
+        with open(args.build_env, "r") as f:
+            additional_build_env = json.load(f)
+        if args.build_cwd_token:
+            additional_build_env = replace_cwd_tokens(
+                additional_build_env,
+                args.build_cwd_token,
+                cwd,
+            )
+        for key, val in additional_build_env.items():
+            set_or_append(vars, key, val)
+
+    return vars
+
+
+def init_config_settings(args: Any, cwd: Path) -> Dict[str, Any]:
+    if not args.config_settings:
+        return {}
+
+    with open(args.config_settings, "r") as f:
+        config_settings = json.load(f)
+    if args.build_cwd_token:
+        config_settings = replace_cwd_tokens(
+            config_settings,
+            args.build_cwd_token,
+            cwd,
+        )
+
+    return config_settings
+
+
 def main(args: Any, temp_dir: Path, is_debug: bool) -> None:
     cwd = Path(os.getcwd())
 
@@ -610,35 +648,11 @@ def main(args: Any, temp_dir: Path, is_debug: bool) -> None:
     wheel_dir = temp_dir / "wheel"
     bin_dir = temp_dir / "bin"
     build_env_dir = temp_dir / "env"
-    sdist_dir.mkdir()
-    wheel_dir.mkdir()
-    bin_dir.mkdir()
-    build_env_dir.mkdir()
+    for dir in [sdist_dir, wheel_dir, bin_dir, build_env_dir]:
+        dir.mkdir()
 
-    build_env_vars = get_build_env_vars(bin_dir)
-    if args.build_env:
-        with open(args.build_env, "r") as f:
-            additional_build_env = json.load(f)
-        if args.build_cwd_token:
-            additional_build_env = replace_cwd_tokens(
-                additional_build_env,
-                args.build_cwd_token,
-                cwd,
-            )
-        for key, val in additional_build_env.items():
-            set_or_append(build_env_vars, key, val)
-
-    if args.config_settings:
-        with open(args.config_settings, "r") as f:
-            config_settings = json.load(f)
-        if args.build_cwd_token:
-            config_settings = replace_cwd_tokens(
-                config_settings,
-                args.build_cwd_token,
-                cwd,
-            )
-    else:
-        config_settings = {}
+    build_env_vars = init_build_env_vars(args, bin_dir, cwd)
+    config_settings = init_config_settings(args, cwd)
 
     toolchain_sysconfig_vars = replace_cwd_tokens(
         toolchain_sysconfig_vars,

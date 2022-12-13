@@ -63,7 +63,7 @@ pycross_pdm_lock_model = rule(
         ),
         "_tool": attr.label(
             default = Label("//pycross/private/tools:pdm_translator"),
-            cfg = "host",
+            cfg = "exec",
             executable = True,
         ),
     },
