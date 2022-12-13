@@ -1,7 +1,5 @@
-""" Adopted from rules_foreign_cc.
-"""
+""" Adopted from rules_foreign_cc."""
 
-load("@bazel_skylib//lib:collections.bzl", "collections")
 load("@bazel_tools//tools/build_defs/cc:action_names.bzl", "ACTION_NAMES")
 load("@bazel_tools//tools/cpp:toolchain_utils.bzl", "find_cpp_toolchain")
 
@@ -49,6 +47,13 @@ def _defines_from_deps(ctx):
     return depset(transitive = [dep[CcInfo].compilation_context.defines for dep in getattr(ctx.attr, "deps", []) if CcInfo in dep])
 
 def get_env_vars(ctx):
+    """Returns environment variables for C tools
+
+    Args:
+        ctx: rule context
+    Returns:
+        environment variables
+    """
     cc_toolchain = find_cpp_toolchain(ctx)
     feature_configuration = _configure_features(
         ctx = ctx,

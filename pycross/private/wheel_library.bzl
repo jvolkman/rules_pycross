@@ -115,7 +115,7 @@ This option is required to support some packages which cannot handle the convers
         ),
         "_tool": attr.label(
             default = Label("//pycross/private/tools:wheel_installer"),
-            cfg = "host",
+            cfg = "exec",
             executable = True,
         ),
     }

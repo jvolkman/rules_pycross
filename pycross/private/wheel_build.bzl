@@ -227,7 +227,7 @@ def _handle_sysconfig_data(ctx, args, inputs):  # -> cc_vars
 def _handle_py_deps(ctx, args, tools):
     imports = depset(transitive = [d[PyInfo].imports for d in ctx.attr.deps])
     args.add_all(imports, before_each="--path", map_each=_resolve_import_path_fn(ctx), allow_closure=True)
-    tools += [dep[PyInfo].transitive_sources for dep in ctx.attr.deps]
+    tools.extend([dep[PyInfo].transitive_sources for dep in ctx.attr.deps])
 
 def _handle_target_environment(ctx, args, inputs):
     if not ctx.attr.target_environment:
@@ -259,19 +259,19 @@ def _handle_config_settings(ctx, args, inputs):
     ctx.actions.write(config_settings_data, json.encode(vals))
 
 def _handle_tools_and_data(ctx, args, tools, input_manifests):
-    tools += [data[DefaultInfo].files for data in ctx.attr.data]
+    tools.extend([data[DefaultInfo].files for data in ctx.attr.data])
 
     if ctx.attr.pre_build_hooks:
         args.add_all(ctx.attr.pre_build_hooks, before_each="--pre-build-hook", map_each=_executable)
         tool_inputs, tool_manifests = ctx.resolve_tools(tools=ctx.attr.pre_build_hooks)
-        tools += [tool_inputs]
-        input_manifests += tool_manifests
+        tools.extend([tool_inputs])
+        input_manifests.extend(tool_manifests)
 
     if ctx.attr.path_tools:
         args.add_all(ctx.attr.path_tools, before_each="--path-tool", map_each=_executable)
         tool_inputs, tool_manifests = ctx.resolve_tools(tools=ctx.attr.path_tools)
-        data_files += [tool_inputs]
-        input_manifests += tool_manifests
+        tools.extend([tool_inputs])
+        input_manifests.extend(tool_manifests)
 
 def _pycross_wheel_build_impl(ctx):
     args = ctx.actions.args().use_param_file("--flagfile=%s")
