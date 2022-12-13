@@ -19,6 +19,7 @@ from typing import Mapping
 from typing import NoReturn
 from typing import Optional
 from typing import Sequence
+from typing import Tuple
 
 from absl import app
 from absl.flags import argparse_flags
@@ -365,7 +366,7 @@ def run_pre_build_hooks(
     config_settings: Dict[str, Any],
     build_env: Dict[str, str],
     build_cwd: Path,
-) -> (Dict[str, Any], Dict[str, str]):
+) -> Tuple[Dict[str, Any], Dict[str, str]]:
     config_settings_file = temp_dir / "config_settings.json"
     env_file = temp_dir / "build.env"
     result_env = dict(build_env)
