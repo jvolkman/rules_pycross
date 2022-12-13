@@ -161,37 +161,14 @@ def _expand_locations_and_vars(attribute_name, ctx, val):
     val = ctx.expand_make_variables(attribute_name, val, additional_substitutions)
     return val
 
-def _pycross_wheel_build_impl(ctx):
-    cc_sysconfig_data = ctx.actions.declare_file(paths.join(ctx.attr.name, "cc_sysconfig.json"))
-
-    sdist_name = ctx.file.sdist.basename
-    if sdist_name.lower().endswith(".tar.gz"):
-        wheel_name = sdist_name[:-7]
-    else:
-        wheel_name = sdist_name.rsplit(".", 1)[0]  # Also includes .zip
-
-    out_wheel = ctx.actions.declare_file(paths.join(ctx.attr.name, wheel_name + ".whl"))
-    out_name = ctx.actions.declare_file(paths.join(ctx.attr.name, wheel_name + ".whl.name"))
-
-    cc_vars = get_env_vars(ctx)
-    flags = get_flags_info(ctx)
-    tools = get_tools_info(ctx)
-    sysconfig_vars = _get_sysconfig_data(ctx.workspace_name, tools, flags)
-
+def _handle_toolchains(ctx, args, tools):
     py_toolchain = ctx.toolchains[PYTHON_TOOLCHAIN_TYPE].py3_runtime
     cpp_toolchain = find_cpp_toolchain(ctx)
 
-    args = ctx.actions.args().use_param_file("--flagfile=%s")
-    args.add("--sdist", ctx.file.sdist)
-    args.add("--sysconfig-vars", cc_sysconfig_data)
-    args.add("--wheel-file", out_wheel)
-    args.add("--wheel-name-file", out_name)
-
-    toolchain_deps = []
     if cpp_toolchain.all_files:
-        toolchain_deps.append(cpp_toolchain.all_files)
+        tools.append(cpp_toolchain.all_files)
     if py_toolchain.files:
-        toolchain_deps.append(py_toolchain.files)
+        tools.append(py_toolchain.files)
 
     # If a pycross toolchain is configured, we use that to get the exec and target Python.
     if PYCROSS_TOOLCHAIN_TYPE in ctx.toolchains and ctx.toolchains[PYCROSS_TOOLCHAIN_TYPE]:
@@ -201,9 +178,9 @@ def _pycross_wheel_build_impl(ctx):
         if pycross_info.target_sys_path:
             args.add_all(pycross_info.target_sys_path, before_each="--target-sys-path")
         if pycross_info.exec_python_files:
-            toolchain_deps.append(pycross_info.exec_python_files)
+            tools.append(pycross_info.exec_python_files)
         if pycross_info.target_python_files:
-            toolchain_deps.append(pycross_info.target_python_files)
+            tools.append(pycross_info.target_python_files)
 
     # Otherwise we use the configured Python toolchain.
     else:
@@ -213,53 +190,81 @@ def _pycross_wheel_build_impl(ctx):
         args.add("--exec-python-executable", executable)
         args.add("--target-python-executable", executable)
 
-    imports = depset(
-        transitive = [d[PyInfo].imports for d in ctx.attr.deps],
+def _handle_sdist(ctx, args, inputs):  # -> PycrossWheelInfo
+    inputs.append(ctx.file.sdist)
+    args.add("--sdist", ctx.file.sdist)
+
+    sdist_name = ctx.file.sdist.basename
+    if sdist_name.lower().endswith(".tar.gz"):
+        wheel_name = sdist_name[:-7]
+    else:
+        wheel_name = sdist_name.rsplit(".", 1)[0]  # Also includes .zip
+
+    out_wheel = ctx.actions.declare_file(paths.join(ctx.attr.name, wheel_name + ".whl"))
+    out_wheel_name = ctx.actions.declare_file(paths.join(ctx.attr.name, wheel_name + ".whl.name"))
+
+    args.add("--wheel-file", out_wheel)
+    args.add("--wheel-name-file", out_wheel_name)
+
+    return PycrossWheelInfo(
+        wheel_file = out_wheel,
+        name_file = out_wheel_name,
     )
 
-    args.add_all(imports, before_each="--path", map_each=_resolve_import_path_fn(ctx), allow_closure=True)
-
+def _handle_sysconfig_data(ctx, args, inputs):  # -> cc_vars
+    cc_sysconfig_data = ctx.actions.declare_file(paths.join(ctx.attr.name, "cc_sysconfig.json"))
+    cc_vars = get_env_vars(ctx)
+    flags = get_flags_info(ctx)
+    tools = get_tools_info(ctx)
+    sysconfig_vars = _get_sysconfig_data(ctx.workspace_name, tools, flags)
     ctx.actions.write(cc_sysconfig_data, json.encode(sysconfig_vars))
 
-    deps = [
-        ctx.file.sdist,
-        cc_sysconfig_data,
-    ]
+    inputs.append(cc_sysconfig_data)
+    args.add("--sysconfig-vars", cc_sysconfig_data)
 
-    if ctx.attr.target_environment:
-        target_environment_file = ctx.attr.target_environment[PycrossTargetEnvironmentInfo].file
-        args.add("--target-environment-file", target_environment_file)
-        deps.append(ctx.attr.target_environment[PycrossTargetEnvironmentInfo].file)
+    return cc_vars
 
-    if ctx.attr.build_env:
-        build_env_data = ctx.actions.declare_file(paths.join(ctx.attr.name, "build_env.json"))
-        args.add("--build-env", build_env_data)
-        deps.append(build_env_data)
-        vals = {}
-        for key, value in ctx.attr.build_env.items():
-            vals[key] = _expand_locations_and_vars("build_env", ctx, value)
-        ctx.actions.write(build_env_data, json.encode(vals))
+def _handle_py_deps(ctx, args, tools):
+    imports = depset(transitive = [d[PyInfo].imports for d in ctx.attr.deps])
+    args.add_all(imports, before_each="--path", map_each=_resolve_import_path_fn(ctx), allow_closure=True)
+    tools += [dep[PyInfo].transitive_sources for dep in ctx.attr.deps]
 
-    if ctx.attr.config_settings:
-        config_settings_data = ctx.actions.declare_file(paths.join(ctx.attr.name, "config_settings.json"))
-        args.add("--config-settings", config_settings_data)
-        deps.append(config_settings_data)
-        vals = {}
-        for key, value in ctx.attr.config_settings.items():
-            vals[key] = _expand_locations_and_vars("config_settings", ctx, value)
-        ctx.actions.write(config_settings_data, json.encode(vals))
+def _handle_target_environment(ctx, args, inputs):
+    if not ctx.attr.target_environment:
+        return
+    target_environment_file = ctx.attr.target_environment[PycrossTargetEnvironmentInfo].file
+    args.add("--target-environment-file", target_environment_file)
+    inputs.append(ctx.attr.target_environment[PycrossTargetEnvironmentInfo].file)
 
-    if ctx.attr.build_cwd_token:
-        args.add("--build-cwd-token", ctx.attr.build_cwd_token)
+def _handle_build_env(ctx, args, inputs):
+    if not ctx.attr.build_env:
+        return
+    build_env_data = ctx.actions.declare_file(paths.join(ctx.attr.name, "build_env.json"))
+    args.add("--build-env", build_env_data)
+    inputs.append(build_env_data)
+    vals = {}
+    for key, value in ctx.attr.build_env.items():
+        vals[key] = _expand_locations_and_vars("build_env", ctx, value)
+    ctx.actions.write(build_env_data, json.encode(vals))
 
-    transitive_sources = [dep[PyInfo].transitive_sources for dep in ctx.attr.deps]
-    data_files = [data[DefaultInfo].files for data in ctx.attr.data]
-    input_manifests = []
+def _handle_config_settings(ctx, args, inputs):
+    if not ctx.attr.config_settings:
+        return
+    config_settings_data = ctx.actions.declare_file(paths.join(ctx.attr.name, "config_settings.json"))
+    args.add("--config-settings", config_settings_data)
+    inputs.append(config_settings_data)
+    vals = {}
+    for key, value in ctx.attr.config_settings.items():
+        vals[key] = _expand_locations_and_vars("config_settings", ctx, value)
+    ctx.actions.write(config_settings_data, json.encode(vals))
+
+def _handle_tools_and_data(ctx, args, tools, input_manifests):
+    tools += [data[DefaultInfo].files for data in ctx.attr.data]
 
     if ctx.attr.pre_build_hooks:
         args.add_all(ctx.attr.pre_build_hooks, before_each="--pre-build-hook", map_each=_executable)
         tool_inputs, tool_manifests = ctx.resolve_tools(tools=ctx.attr.pre_build_hooks)
-        data_files += [tool_inputs]
+        tools += [tool_inputs]
         input_manifests += tool_manifests
 
     if ctx.attr.path_tools:
@@ -268,19 +273,33 @@ def _pycross_wheel_build_impl(ctx):
         data_files += [tool_inputs]
         input_manifests += tool_manifests
 
+def _pycross_wheel_build_impl(ctx):
+    args = ctx.actions.args().use_param_file("--flagfile=%s")
+    inputs = []
+    tools = []
+    input_manifests = []
+
+    pycross_wheel_info = _handle_sdist(ctx, args, inputs)
+    cc_vars = _handle_sysconfig_data(ctx, args, inputs)
+    _handle_toolchains(ctx, args, tools)
+    _handle_py_deps(ctx, args, tools)
+    _handle_target_environment(ctx, args, inputs)
+
+    if ctx.attr.build_cwd_token:
+        args.add("--build-cwd-token", ctx.attr.build_cwd_token)
+
+    _handle_build_env(ctx, args, inputs)
+    _handle_config_settings(ctx, args, inputs)
+
+    _handle_tools_and_data(ctx, args, tools, input_manifests)
+
     env = dict(cc_vars)
     env.update(ctx.configuration.default_shell_env)
 
     ctx.actions.run(
-        inputs = deps,
-        outputs = [out_wheel, out_name],
-        tools = depset(
-            transitive = (
-                toolchain_deps +
-                transitive_sources +
-                data_files
-            )
-        ),
+        inputs = inputs,
+        outputs = [pycross_wheel_info.wheel_file, pycross_wheel_info.name_file],
+        tools = depset(transitive = tools),
         input_manifests = input_manifests,
         executable = ctx.executable._tool,
         use_default_shell_env = False,
@@ -291,12 +310,11 @@ def _pycross_wheel_build_impl(ctx):
     )
 
     return [
-        PycrossWheelInfo(
-            wheel_file = out_wheel,
-            name_file = out_name,
-        ),
+        pycross_wheel_info,
         DefaultInfo(
-            files = depset(direct = [out_wheel]),
+            files = depset(
+                direct = [pycross_wheel_info.wheel_file],
+            ),
         ),
     ]
 
