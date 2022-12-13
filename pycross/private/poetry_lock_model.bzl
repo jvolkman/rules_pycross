@@ -39,7 +39,7 @@ pycross_poetry_lock_model = rule(
         ),
         "_tool": attr.label(
             default = Label("//pycross/private/tools:poetry_translator"),
-            cfg = "host",
+            cfg = "exec",
             executable = True,
         ),
     },
