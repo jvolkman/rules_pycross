@@ -28,6 +28,13 @@ def _get_sysconfig_data(workspace_name, tools, flags):
     cc = _absolute_tool_value(workspace_name, tools.cc)
     cxx = _absolute_tool_value(workspace_name, tools.cxx)
     ar = _absolute_tool_value(workspace_name, tools.cxx_linker_static)
+    ar_flags = flags.cxx_linker_static
+
+    # If libtool is used as AR, the output file has to be prefixed with
+    # "-o".
+    if ar == "libtool" or ar.endswith("/libtool"):
+        ar_flags = ar_flags + ["-o"]
+
     vars = {
         "CC": cc,
         "CXX": cxx,
@@ -35,7 +42,7 @@ def _get_sysconfig_data(workspace_name, tools, flags):
         "CCSHARED": "-fPIC" if flags.needs_pic_for_dynamic_libraries else "",
         "LDSHAREDFLAGS": _join_flags_list(workspace_name, flags.cxx_linker_shared),
         "AR": ar,
-        "ARFLAGS": _join_flags_list(workspace_name, flags.cxx_linker_static),
+        "ARFLAGS": _join_flags_list(workspace_name, ar_flags),
         "CUSTOMIZED_OSX_COMPILER": "True",
         "GNULD": "yes" if "gcc" in cc else "no",  # is there a better way?
     }
