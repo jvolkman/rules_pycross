@@ -269,7 +269,7 @@ def _handle_tools_and_data(ctx, args, tools, input_manifests):
 
     if ctx.attr.path_tools:
         for tool, name in ctx.attr.path_tools.items():
-            args.add_all("--path-tool", [_executable(tool), name])
+            args.add_all("--path-tool", [name, _executable(tool)])
         tool_inputs, tool_manifests = ctx.resolve_tools(tools=ctx.attr.path_tools.keys())
         tools.extend([tool_inputs])
         input_manifests.extend(tool_manifests)

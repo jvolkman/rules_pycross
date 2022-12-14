@@ -155,7 +155,7 @@ def set_or_append(env: Dict[str, Any], key: str, value: str) -> None:
         env[key] = value
 
 
-def get_default_build_env_vars(bin_dir: Path) -> Dict[str, str]:
+def get_default_build_env_vars(path_dirs: List[Path]) -> Dict[str, str]:
     env = os.environ.copy()
 
     # wheel, by default, enables debug symbols in GCC. This incidentally captures the build path in the .so file
@@ -174,12 +174,12 @@ def get_default_build_env_vars(bin_dir: Path) -> Dict[str, str]:
     if "PYTHONHASHSEED" not in env:
         env["PYTHONHASHSEED"] = "0"
 
-    # Place our bin directory, with possible overridden commands, at the beginning of PATH.
+    # Place our own directories, with possible overridden commands, at the beginning of PATH.
+    path_entries = [str(pd) for pd in path_dirs]
     existing_path = env.get("PATH")
     if existing_path:
-        env["PATH"] = os.pathsep.join([str(bin_dir), existing_path])
-    else:
-        env["PATH"] = str(bin_dir)
+        path_entries.append(existing_path)
+    env["PATH"] = os.pathsep.join(path_entries)
 
     return env
 
@@ -326,9 +326,7 @@ def generate_cross_sysconfig_vars(
     return sysconfig_vars
 
 
-def generate_bin_tools(
-    bin_dir: Path, toolchain_vars: Dict[str, str], path_tools: Dict[Path, Path]
-) -> None:
+def generate_bin_tools(bin_dir: Path, toolchain_vars: Dict[str, str]) -> None:
     # The bazel CC toolchains don't provide ranlib (as far as I can tell), and
     # we don't want to use the host ranlib. So we place a no-op in PATH.
     ranlib = bin_dir / "ranlib"
@@ -341,12 +339,16 @@ def generate_bin_tools(
         ar = bin_dir / "ar"
         ar.symlink_to(ar_path)
 
-    for path_tool_name, path_tool in path_tools.items():
+
+def link_path_tools(
+    tools_dir: Path, cwd: Path, path_tools: List[Tuple[Path, Path]]
+) -> None:
+    for path_tool_name, relative_path_tool_path in path_tools:
         assert (
             len(path_tool_name.parts) == 1
         ), "path_tool name must not contain path separators"
-        path_tool_in_bin = bin_dir / path_tool_name
-        path_tool_in_bin.symlink_to(path_tool)
+        path_tool_in_bin = tools_dir / path_tool_name
+        path_tool_in_bin.symlink_to(cwd / relative_path_tool_path)
 
 
 def extract_sdist(sdist_path: Path, sdist_dir: Path) -> Path:
@@ -602,8 +604,8 @@ def build_wheel(
     return Path(wheel_file)
 
 
-def init_build_env_vars(args: Any, bin_dir: Path, cwd: Path) -> Dict[str, str]:
-    vars = get_default_build_env_vars(bin_dir)
+def init_build_env_vars(args: Any, path_dirs: List[Path], cwd: Path) -> Dict[str, str]:
+    vars = get_default_build_env_vars(path_dirs)
     if args.build_env:
         with open(args.build_env, "r") as f:
             additional_build_env = json.load(f)
@@ -635,33 +637,41 @@ def init_config_settings(args: Any, cwd: Path) -> Dict[str, Any]:
     return config_settings
 
 
-def main(args: Any, temp_dir: Path, is_debug: bool) -> None:
-    cwd = Path(os.getcwd())
-
+def load_target_environment(args: Any) -> Optional[TargetEnv]:
     if args.target_environment_file:
         with open(args.target_environment_file, "r") as f:
-            target_environment = TargetEnv.from_dict(json.load(f))
-    else:
-        target_environment = None
+            return TargetEnv.from_dict(json.load(f))
 
+
+def load_sysconfig_vars(args: Any, cwd: Path) -> Dict[str, Any]:
     with open(args.sysconfig_vars, "r") as f:
-        toolchain_sysconfig_vars = json.load(f)
-
-    sdist_dir = temp_dir / "sdist"
-    wheel_dir = temp_dir / "wheel"
-    bin_dir = temp_dir / "bin"
-    build_env_dir = temp_dir / "env"
-    for dir in [sdist_dir, wheel_dir, bin_dir, build_env_dir]:
-        dir.mkdir()
-
-    build_env_vars = init_build_env_vars(args, bin_dir, cwd)
-    config_settings = init_config_settings(args, cwd)
-
-    toolchain_sysconfig_vars = replace_cwd_tokens(
-        toolchain_sysconfig_vars,
+        vars = json.load(f)
+    return replace_cwd_tokens(
+        vars,
         "$$EXT_BUILD_ROOT$$",
         cwd,
     )
+
+
+def main(args: Any, temp_dir: Path, is_debug: bool) -> None:
+    cwd = Path(os.getcwd())
+
+    def mktmpdir(name: str) -> Path:
+        d = temp_dir / name
+        d.mkdir()
+        return d
+
+    sdist_dir = mktmpdir("sdist")
+    wheel_dir = mktmpdir("wheel")
+    bin_dir = mktmpdir("bin")
+    tools_dir = mktmpdir("tools")
+    build_env_dir = mktmpdir("env")
+
+    build_env_vars = init_build_env_vars(args, [tools_dir, bin_dir], cwd)
+    config_settings = init_config_settings(args, cwd)
+    toolchain_sysconfig_vars = load_sysconfig_vars(args, cwd)
+    target_environment = load_target_environment(args)
+
     wrapper_sysconfig_vars = generate_cc_wrappers(
         toolchain_vars=toolchain_sysconfig_vars,
         python_exe=args.exec_python_executable,
@@ -690,8 +700,9 @@ def main(args: Any, temp_dir: Path, is_debug: bool) -> None:
         target_env=target_environment,
         always_use_crossenv=args.always_use_crossenv,
     )
-    path_tools = {name: cwd / path_tool for path_tool, name in args.path_tool or []}
-    generate_bin_tools(bin_dir, toolchain_sysconfig_vars, path_tools)
+
+    generate_bin_tools(bin_dir, toolchain_sysconfig_vars)
+    link_path_tools(tools_dir, cwd, args.path_tool)
 
     if is_debug:
         print(f"Build environment: {build_env_dir}")
