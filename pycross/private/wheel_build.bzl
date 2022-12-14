@@ -268,8 +268,9 @@ def _handle_tools_and_data(ctx, args, tools, input_manifests):
         input_manifests.extend(tool_manifests)
 
     if ctx.attr.path_tools:
-        args.add_all(ctx.attr.path_tools, before_each="--path-tool", map_each=_executable)
-        tool_inputs, tool_manifests = ctx.resolve_tools(tools=ctx.attr.path_tools)
+        for tool, name in ctx.attr.path_tools.items():
+            args.add_all("--path-tool", [_executable(tool), name])
+        tool_inputs, tool_manifests = ctx.resolve_tools(tools=ctx.attr.path_tools.keys())
         tools.extend([tool_inputs])
         input_manifests.extend(tool_manifests)
 
@@ -376,9 +377,9 @@ pycross_wheel_build = rule(
             ),
             cfg = "exec",
         ),
-        "path_tools": attr.label_list(
+        "path_tools": attr.label_keyed_string_dict(
             doc = (
-                "A list of binaries that are placed in PATH when building the sdist."
+                "A mapping of binaries to names that are placed in PATH when building the sdist."
             ),
             cfg = "exec",
         ),
