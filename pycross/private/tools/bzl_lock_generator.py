@@ -887,31 +887,24 @@ def parse_flags(argv) -> Any:
     parser.add_argument(
         "--repo-prefix",
         type=str,
-        required=False,
         default="",
         help="The prefix to apply to repository targets.",
     )
 
     parser.add_argument(
         "--package-prefix",
-        type=str,
-        required=False,
         default="",
         help="The prefix to apply to packages targets.",
     )
 
     parser.add_argument(
         "--build-prefix",
-        type=str,
-        required=False,
         default="",
         help="The prefix to apply to package build targets.",
     )
 
     parser.add_argument(
         "--environment-prefix",
-        type=str,
-        required=False,
         default="",
         help="The prefix to apply to packages environment targets.",
     )
@@ -925,7 +918,6 @@ def parse_flags(argv) -> Any:
 
     parser.add_argument(
         "--target-environment",
-        type=str,
         nargs=2,
         action="append",
         help="A (file, label) parameter that maps a pycross_target_environment label to its JSON output file.",
@@ -933,7 +925,6 @@ def parse_flags(argv) -> Any:
 
     parser.add_argument(
         "--local-wheel",
-        type=str,
         nargs=2,
         action="append",
         help="A (file, label) parameter that points to a wheel file in the local repository.",
@@ -941,7 +932,6 @@ def parse_flags(argv) -> Any:
 
     parser.add_argument(
         "--remote-wheel",
-        type=str,
         nargs=2,
         action="append",
         help="A (url, sha256) parameter that points to a remote wheel.",
@@ -955,7 +945,6 @@ def parse_flags(argv) -> Any:
 
     parser.add_argument(
         "--build-target-override",
-        type=str,
         nargs=2,
         action="append",
         help="A (key, label) parameter that specifies the existing pycross_wheel_build target for a package key.",
@@ -963,14 +952,12 @@ def parse_flags(argv) -> Any:
 
     parser.add_argument(
         "--always-build-package",
-        type=str,
         action="append",
         help="A package key that should always be built from source.",
     )
 
     parser.add_argument(
         "--build-dependency",
-        type=str,
         nargs=2,
         action="append",
         help="A (key, key) parameter that specifies an additional package build dependency",
@@ -978,7 +965,6 @@ def parse_flags(argv) -> Any:
 
     parser.add_argument(
         "--pypi-index",
-        type=str,
         help="The PyPI-compatible index to use. Defaults to pypi.org.",
     )
 

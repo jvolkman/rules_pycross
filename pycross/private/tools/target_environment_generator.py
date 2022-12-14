@@ -41,53 +41,48 @@ def main(args: Any) -> None:
 
 
 def parse_flags(argv) -> Any:
-    parser = argparse_flags.ArgumentParser(description="Generate target python information.")
+    parser = argparse_flags.ArgumentParser(
+        description="Generate target python information."
+    )
 
     parser.add_argument(
         "--name",
-        type=str,
         required=True,
         help="The given platform name.",
     )
 
     parser.add_argument(
         "--implementation",
-        type=str,
         required=True,
         help="The PEP 425 implementation abbreviation (e.g., cp for cpython).",
     )
 
     parser.add_argument(
         "--version",
-        type=str,
         required=True,
         help="The Python version.",
     )
 
     parser.add_argument(
         "--abi",
-        type=str,
         action="append",
         help="A list of PEP 425 abi tags.",
     )
 
     parser.add_argument(
         "--platform",
-        type=str,
         action="append",
         help="A list of PEP 425 platform tags.",
     )
 
     parser.add_argument(
         "--environment-marker",
-        type=str,
         action="append",
         help="Environment marker overrides in the format `marker=override`.",
     )
 
     parser.add_argument(
         "--python-compatible-with",
-        type=str,
         action="append",
         required=True,
         help="Name of the environment constraint label.",

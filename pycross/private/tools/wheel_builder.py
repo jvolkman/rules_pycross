@@ -608,7 +608,9 @@ def main(args: Any, temp_dir: Path, is_debug: bool) -> None:
 
 
 def parse_flags(argv) -> Any:
-    parser = argparse_flags.ArgumentParser(description="Generate target python information.")
+    parser = argparse_flags.ArgumentParser(
+        description="Generate target python information."
+    )
 
     parser.add_argument(
         "--sdist",
@@ -640,7 +642,6 @@ def parse_flags(argv) -> Any:
 
     parser.add_argument(
         "--sysconfig-vars",
-        type=str,
         required=True,
         help="A JSON file containing variable to add to sysconfig.",
     )

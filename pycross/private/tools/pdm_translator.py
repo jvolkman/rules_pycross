@@ -237,9 +237,7 @@ def parse_flags(argv) -> Any:
         "--group",
         dest="dependency_groups",
         action="append",
-        type=str,
         default=[],
-        required=False,
         help="Additional groups to install.",
     )
 

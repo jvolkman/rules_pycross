@@ -108,7 +108,6 @@ def parse_flags(argv) -> Any:
     parser.add_argument(
         "--directory",
         type=Path,
-        required=False,
         help="The output path.",
     )
 
