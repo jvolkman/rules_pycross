@@ -3,20 +3,19 @@ A tool that takes an input PEP 425 tag and an optional list of environment
 marker overrides and outputs the result of guessed markers with overrides.
 """
 
-import argparse
 import json
 import os
-import sys
 from pathlib import Path
+from typing import Any
 
+from absl import app
+from absl.flags import argparse_flags
 from pip._internal.models.target_python import TargetPython
+
 from pycross.private.tools.target_environment import TargetEnv
 
 
-def main():
-    parser = make_parser()
-    args = parser.parse_args()
-
+def main(args: Any) -> None:
     overrides = {}
     for override_str in args.environment_marker or []:
         key, val = override_str.split("=", maxsplit=1)
@@ -41,8 +40,8 @@ def main():
         f.write("\n")
 
 
-def make_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Generate target python information.")
+def parse_flags(argv) -> Any:
+    parser = argparse_flags.ArgumentParser(description="Generate target python information.")
 
     parser.add_argument(
         "--name",
@@ -101,7 +100,7 @@ def make_parser() -> argparse.ArgumentParser:
         help="The output file.",
     )
 
-    return parser
+    return parser.parse_args(argv[1:])
 
 
 if __name__ == "__main__":
@@ -109,4 +108,4 @@ if __name__ == "__main__":
     if "BUILD_WORKING_DIRECTORY" in os.environ:
         os.chdir(os.environ["BUILD_WORKING_DIRECTORY"])
 
-    sys.exit(main())
+    app.run(main, flags_parser=parse_flags)

@@ -2,13 +2,14 @@
 A tool that invokes pypa/build to build the given sdist tarball.
 """
 
-import argparse
 import os
 import shutil
-import sys
 import tempfile
 from pathlib import Path
+from typing import Any
 
+from absl import app
+from absl.flags import argparse_flags
 from installer import install
 from installer.destinations import SchemeDictionaryDestination
 from installer.sources import WheelFile
@@ -39,10 +40,7 @@ def setup_namespace_pkg_compatibility(wheel_dir: Path) -> None:
         namespace_pkgs.add_pkgutil_style_namespace_pkg_init(ns_pkg_dir)
 
 
-def main() -> None:
-    parser = make_parser()
-    args = parser.parse_args()
-
+def main(args: Any) -> None:
     dest_dir = args.directory
     lib_dir = dest_dir / "site-packages"
     destination = SchemeDictionaryDestination(
@@ -84,8 +82,8 @@ def main() -> None:
     setup_namespace_pkg_compatibility(lib_dir)
 
 
-def make_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Extract a Python wheel.")
+def parse_flags(argv) -> Any:
+    parser = argparse_flags.ArgumentParser(description="Extract a Python wheel.")
 
     parser.add_argument(
         "--wheel",
@@ -114,7 +112,7 @@ def make_parser() -> argparse.ArgumentParser:
         help="The output path.",
     )
 
-    return parser
+    return parser.parse_args(argv[1:])
 
 
 if __name__ == "__main__":
@@ -122,4 +120,4 @@ if __name__ == "__main__":
     if "BUILD_WORKING_DIRECTORY" in os.environ:
         os.chdir(os.environ["BUILD_WORKING_DIRECTORY"])
 
-    sys.exit(main())
+    app.run(main, flags_parser=parse_flags)

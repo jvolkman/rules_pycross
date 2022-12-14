@@ -1,13 +1,12 @@
-import argparse
 import json
 import operator
 import os
-import sys
 import textwrap
 from collections import defaultdict
 from dataclasses import dataclass
 from pathlib import Path
 from typing import AbstractSet
+from typing import Any
 from typing import Dict
 from typing import Iterator
 from typing import List
@@ -15,6 +14,8 @@ from typing import Optional
 from typing import Set
 from urllib.parse import urlparse
 
+from absl import app
+from absl.flags import argparse_flags
 from packaging.markers import Marker
 from packaging.specifiers import SpecifierSet
 from packaging.utils import parse_wheel_filename
@@ -625,9 +626,7 @@ def resolve_single_version(
     return options[0]
 
 
-def main():
-    parser = make_parser()
-    args = parser.parse_args()
+def main(args: Any) -> None:
     output = args.output
     environment_pairs = []
     for target_environment in args.target_environment or []:
@@ -880,8 +879,8 @@ def main():
             w()
 
 
-def make_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(
+def parse_flags(argv) -> Any:
+    parser = argparse_flags.ArgumentParser(
         description="Generate pycross dependency bzl file."
     )
 
@@ -990,7 +989,7 @@ def make_parser() -> argparse.ArgumentParser:
         help="The path to the output bzl file.",
     )
 
-    return parser
+    return parser.parse_args(argv[1:])
 
 
 if __name__ == "__main__":
@@ -998,4 +997,4 @@ if __name__ == "__main__":
     if "BUILD_WORKING_DIRECTORY" in os.environ:
         os.chdir(os.environ["BUILD_WORKING_DIRECTORY"])
 
-    sys.exit(main())
+    app.run(main, flags_parser=parse_flags)

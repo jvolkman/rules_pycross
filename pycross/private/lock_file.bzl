@@ -14,12 +14,10 @@ def _pycross_lock_file_impl(ctx):
     else:
         repo_prefix = ctx.attr.name.lower().replace("-", "_")
 
-    args = ctx.actions.args()
+    args = ctx.actions.args().use_param_file("--flagfile=%s")
+
     args.add("--lock-model-file", ctx.file.lock_model_file)
     args.add("--repo-prefix", repo_prefix)
-    args.add("--package-prefix", ctx.attr.package_prefix)
-    args.add("--build-prefix", ctx.attr.build_prefix)
-    args.add("--environment-prefix", ctx.attr.environment_prefix)
     args.add("--output", out)
 
     for t in ctx.attr.target_environments:
@@ -33,13 +31,13 @@ def _pycross_lock_file_impl(ctx):
     for remote_wheel_url, sha256 in ctx.attr.remote_wheels.items():
         args.add_all("--remote-wheel", [remote_wheel_url, sha256])
 
-    if ctx.attr.package_prefix != None:
+    if ctx.attr.package_prefix:
         args.add("--package-prefix", ctx.attr.package_prefix)
 
-    if ctx.attr.build_prefix != None:
+    if ctx.attr.build_prefix:
         args.add("--build-prefix", ctx.attr.build_prefix)
 
-    if ctx.attr.environment_prefix != None:
+    if ctx.attr.environment_prefix:
         args.add("--environment-prefix", ctx.attr.environment_prefix)
 
     if ctx.attr.default_alias_single_version:

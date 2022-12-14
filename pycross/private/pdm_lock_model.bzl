@@ -3,7 +3,7 @@
 def _pycross_pdm_lock_model_impl(ctx):
     out = ctx.actions.declare_file(ctx.attr.name + ".json")
 
-    args = ctx.actions.args()
+    args = ctx.actions.args().use_param_file("--flagfile=%s")
     args.add("--project-file", ctx.file.project_file)
     args.add("--lock-file", ctx.file.lock_file)
     args.add("--output", out)

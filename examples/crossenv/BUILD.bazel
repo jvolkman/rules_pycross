@@ -151,9 +151,6 @@ pycross_lock_file(
         "future@0.18.2": "@//deps:overridden_future_0.18.2",
     },
     default_alias_single_version = True,
-    local_wheels = [
-        "//wheels",
-    ],
     lock_model_file = ":example_lock_model",
     package_build_dependencies = {
         "setproctitle": [

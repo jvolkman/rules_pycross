@@ -1,10 +1,12 @@
-import argparse
 import os
-import sys
 from pathlib import Path
 from tempfile import TemporaryDirectory
-from typing import List, Dict
+from typing import Any
+from typing import Dict
+from typing import List
 
+from absl import app
+from absl.flags import argparse_flags
 from packaging.utils import NormalizedName
 from packaging.utils import Version
 
@@ -183,9 +185,7 @@ def translate(
         )
 
 
-def main() -> None:
-    parser = make_parser()
-    args = parser.parse_args()
+def main(args: Any) -> None:
     output = args.output
 
     lock_set = translate(
@@ -200,8 +200,8 @@ def main() -> None:
         f.write(lock_set.to_json(indent=2))
 
 
-def make_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(
+def parse_flags(argv) -> Any:
+    parser = argparse_flags.ArgumentParser(
         description="Generate pycross dependency bzl file."
     )
 
@@ -223,7 +223,7 @@ def make_parser() -> argparse.ArgumentParser:
         "--default",
         dest="default_dependencies",
         action="store_true",
-        help="Whether to install dependencies from the default group.",
+        help="Whether to install dependencies fromArgumentParserthe default group.",
     )
 
     parser.add_argument(
@@ -250,7 +250,7 @@ def make_parser() -> argparse.ArgumentParser:
         help="The path to the output bzl file.",
     )
 
-    return parser
+    return parser.parse_args(argv[1:])
 
 
 if __name__ == "__main__":
@@ -258,4 +258,4 @@ if __name__ == "__main__":
     if "BUILD_WORKING_DIRECTORY" in os.environ:
         os.chdir(os.environ["BUILD_WORKING_DIRECTORY"])
 
-    sys.exit(main())
+    app.run(main, flags_parser=parse_flags)
