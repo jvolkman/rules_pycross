@@ -9,7 +9,7 @@ def fully_qualified_label(label):
 def _target_python_impl(ctx):
     f = ctx.actions.declare_file(ctx.attr.name + ".json")
 
-    args = ctx.actions.args()
+    args = ctx.actions.args().use_param_file("--flagfile=%s")
     args.add("--name", ctx.attr.name)
     args.add("--output", f)
     args.add("--implementation", ctx.attr.implementation)
@@ -93,7 +93,7 @@ pycross_target_environment = rule(
 def _macos_target_python_impl(ctx):
     f = ctx.actions.declare_file(ctx.attr.name + ".json")
 
-    args = ctx.actions.args()
+    args = ctx.actions.args().use_param_file("--flagfile=%s")
     args.add("--name", ctx.attr.name)
     args.add("--output", f)
     args.add("--implementation", ctx.attr.implementation)

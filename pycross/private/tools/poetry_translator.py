@@ -1,15 +1,16 @@
-import argparse
 import os
-import sys
 from collections import defaultdict
 from dataclasses import dataclass
 from functools import cached_property
 from pathlib import Path
+from typing import Any
 from typing import Dict
 from typing import List
 from typing import Optional
 
 import tomli
+from absl import app
+from absl.flags import argparse_flags
 from packaging.utils import InvalidSdistFilename
 from packaging.utils import InvalidWheelFilename
 from packaging.utils import NormalizedName
@@ -245,9 +246,7 @@ def translate(project_file: Path, lock_file: Path) -> LockSet:
     )
 
 
-def main():
-    parser = make_parser()
-    args = parser.parse_args()
+def main(args: Any) -> None:
     output = args.output
 
     lock_set = translate(args.poetry_project_file, args.poetry_lock_file)
@@ -256,8 +255,8 @@ def main():
         f.write(lock_set.to_json(indent=2))
 
 
-def make_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(
+def parse_flags(argv) -> Any:
+    parser = argparse_flags.ArgumentParser(
         description="Generate pycross dependency bzl file."
     )
 
@@ -282,7 +281,7 @@ def make_parser() -> argparse.ArgumentParser:
         help="The path to the output bzl file.",
     )
 
-    return parser
+    return parser.parse_args(argv[1:])
 
 
 if __name__ == "__main__":
@@ -290,4 +289,4 @@ if __name__ == "__main__":
     if "BUILD_WORKING_DIRECTORY" in os.environ:
         os.chdir(os.environ["BUILD_WORKING_DIRECTORY"])
 
-    sys.exit(main())
+    app.run(main, flags_parser=parse_flags)

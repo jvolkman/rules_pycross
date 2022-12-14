@@ -15,7 +15,7 @@ def _pycross_wheel_library_impl(ctx):
         wheel_file = ctx.file.wheel
         name_file = None
 
-    args = ctx.actions.args()
+    args = ctx.actions.args().use_param_file("--flagfile=%s")
     args.add("--wheel", wheel_file)
     args.add("--directory", out.path)
 

@@ -1,7 +1,6 @@
 """
 A PEP 517 wheel builder that supports (or tries to) cross-platform builds.
 """
-import argparse
 import json
 import os
 import shutil
@@ -21,6 +20,8 @@ from typing import NoReturn
 from typing import Optional
 from typing import Sequence
 
+from absl import app
+from absl.flags import argparse_flags
 from build import ProjectBuilder
 from packaging.utils import parse_wheel_filename
 from pycross.private.tools.crossenv.utils import find_sysconfig_data
@@ -532,9 +533,7 @@ def build_wheel(
     return Path(wheel_file)
 
 
-def main(temp_dir: Path, is_debug: bool) -> None:
-    parser = make_parser()
-    args = parser.parse_args()
+def main(args: Any, temp_dir: Path, is_debug: bool) -> None:
     cwd = os.getcwd()
 
     if args.target_environment_file:
@@ -608,8 +607,8 @@ def main(temp_dir: Path, is_debug: bool) -> None:
         f.write(os.path.basename(wheel_file))
 
 
-def make_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Generate target python information.")
+def parse_flags(argv) -> Any:
+    parser = argparse_flags.ArgumentParser(description="Generate target python information.")
 
     parser.add_argument(
         "--sdist",
@@ -677,14 +676,10 @@ def make_parser() -> argparse.ArgumentParser:
         action="store_true",
     )
 
-    return parser
+    return parser.parse_args(argv[1:])
 
 
-if __name__ == "__main__":
-    # When under `bazel run`, change to the actual working dir.
-    if "BUILD_WORKING_DIRECTORY" in os.environ:
-        os.chdir(os.environ["BUILD_WORKING_DIRECTORY"])
-
+def main_wrapper(args: Any) -> None:
     # Some older versions of Python on MacOS leak __PYVENV_LAUNCHER__ through to subprocesses.
     # When this is set, a created virtualenv will link to this value rather than sys.argv[0], which we don't want.
     # So just clear it if it exists.
@@ -694,7 +689,15 @@ if __name__ == "__main__":
     _temp_dir = Path(tempfile.mkdtemp(prefix="wheelbuild"))
 
     try:
-        sys.exit(main(_temp_dir, _is_debug))
+        main(args, _temp_dir, _is_debug)
     finally:
         if not _is_debug:
             shutil.rmtree(_temp_dir, ignore_errors=True)
+
+
+if __name__ == "__main__":
+    # When under `bazel run`, change to the actual working dir.
+    if "BUILD_WORKING_DIRECTORY" in os.environ:
+        os.chdir(os.environ["BUILD_WORKING_DIRECTORY"])
+
+    app.run(main_wrapper, flags_parser=parse_flags)

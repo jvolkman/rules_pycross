@@ -141,7 +141,7 @@ def _pycross_wheel_build_impl(ctx):
     py_toolchain = ctx.toolchains[PYTHON_TOOLCHAIN_TYPE].py3_runtime
     cpp_toolchain = find_cpp_toolchain(ctx)
 
-    args = ctx.actions.args()
+    args = ctx.actions.args().use_param_file("--flagfile=%s")
     args.add("--sdist", ctx.file.sdist)
     args.add("--sysconfig-vars", cc_sysconfig_data)
     args.add("--wheel-file", out_wheel)
