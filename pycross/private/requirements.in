@@ -7,7 +7,6 @@ packaging==23.1
 pdm==2.10.0
 pip==23.2.1
 poetry-core==1.4.0
-python-dotenv==0.21.0
 tomli==2.0.1
 typing-extensions==4.7.1
 wheel==0.41.0
