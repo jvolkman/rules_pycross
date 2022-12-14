@@ -226,7 +226,7 @@ def _handle_sysconfig_data(ctx, args, inputs):  # -> cc_vars
 
 def _handle_py_deps(ctx, args, tools):
     imports = depset(transitive = [d[PyInfo].imports for d in ctx.attr.deps])
-    args.add_all(imports, before_each="--path", map_each=_resolve_import_path_fn(ctx), allow_closure=True)
+    args.add_all(imports, before_each="--python-path", map_each=_resolve_import_path_fn(ctx), allow_closure=True)
     tools.extend([dep[PyInfo].transitive_sources for dep in ctx.attr.deps])
 
 def _handle_target_environment(ctx, args, inputs):
@@ -264,6 +264,12 @@ def _handle_tools_and_data(ctx, args, tools, input_manifests):
     if ctx.attr.pre_build_hooks:
         args.add_all(ctx.attr.pre_build_hooks, before_each="--pre-build-hook", map_each=_executable)
         tool_inputs, tool_manifests = ctx.resolve_tools(tools=ctx.attr.pre_build_hooks)
+        tools.extend([tool_inputs])
+        input_manifests.extend(tool_manifests)
+
+    if ctx.attr.post_build_hooks:
+        args.add_all(ctx.attr.post_build_hooks, before_each="--post-build-hook", map_each=_executable)
+        tool_inputs, tool_manifests = ctx.resolve_tools(tools=ctx.attr.post_build_hooks)
         tools.extend([tool_inputs])
         input_manifests.extend(tool_manifests)
 
@@ -373,6 +379,12 @@ pycross_wheel_build = rule(
         "pre_build_hooks": attr.label_list(
             doc = (
                 "A list of binaries that are executed prior to building the sdist."
+            ),
+            cfg = "exec",
+        ),
+        "post_build_hooks": attr.label_list(
+            doc = (
+                "A list of binaries that are executed after the wheel is built."
             ),
             cfg = "exec",
         ),
