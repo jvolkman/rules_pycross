@@ -372,8 +372,7 @@ pycross_wheel_build = rule(
         ),
         "pre_build_hooks": attr.label_list(
             doc = (
-                "A list of binaries that are executed prior to building the sdist. " +
-                "These binaries execute from within the sdist directory and can modify it as necessary."
+                "A list of binaries that are executed prior to building the sdist."
             ),
             cfg = "exec",
         ),

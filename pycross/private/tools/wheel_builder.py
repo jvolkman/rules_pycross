@@ -24,7 +24,6 @@ from typing import Tuple
 from absl import app
 from absl.flags import argparse_flags
 from build import ProjectBuilder
-from dotenv import dotenv_values
 from packaging.utils import parse_wheel_filename
 from pycross.private.tools.crossenv.utils import find_sysconfig_data
 from pycross.private.tools.target_environment import TargetEnv
@@ -158,6 +157,11 @@ def set_or_append(env: Dict[str, Any], key: str, value: str) -> None:
 def get_default_build_env_vars(path_dirs: List[Path]) -> Dict[str, str]:
     env = os.environ.copy()
 
+    # Pop off some environment variables that might affect our build venv.
+    env.pop("PYTHONHOME", None)
+    env.pop("PYTHONPATH", None)
+    env.pop("RUNFILES_DIR", None)
+
     # wheel, by default, enables debug symbols in GCC. This incidentally captures the build path in the .so file
     # We can override this behavior by disabling debug symbols entirely.
     # https://github.com/pypa/pip/issues/6505
@@ -173,6 +177,14 @@ def get_default_build_env_vars(path_dirs: List[Path]) -> Dict[str, str]:
     # See https://bitbucket.org/pypa/wheel/pull-requests/74/make-the-output-of-metadata-files/diff
     if "PYTHONHASHSEED" not in env:
         env["PYTHONHASHSEED"] = "0"
+
+    # Python 3.11+ supports PYTHONSAFEPATH which, when set, prevents adding unsafe entries to sys.path.
+    # Ideally we would use isolated mode which is present in < 3.11, but that prevents us from specifying
+    # PYTHON* variables like PYTHONHASHSEED.
+    #
+    # https://docs.python.org/3/using/cmdline.html#envvar-PYTHONSAFEPATH
+    if "PYTHONSAFEPATH" not in env:
+        env["PYTHONSAFEPATH"] = "1"
 
     # Place our own directories, with possible overridden commands, at the beginning of PATH.
     path_entries = [str(pd) for pd in path_dirs]
@@ -370,51 +382,52 @@ def run_pre_build_hooks(
     hooks: List[Path],
     temp_dir: Path,
     sdist_dir: Path,
-    config_settings: Dict[str, Any],
     build_env: Dict[str, str],
+    config_settings: Dict[str, Any],
     build_cwd: Path,
-) -> Tuple[Dict[str, Any], Dict[str, str]]:
+) -> Tuple[Dict[str, str], Dict[str, Any]]:
     config_settings_file = temp_dir / "config_settings.json"
-    env_file = temp_dir / "build.env"
-    result_env = dict(build_env)
+    env_file = temp_dir / "build_env.json"
     for hook in hooks:
         # write env file
         # write config_settings file
         hook_env = dict(build_env)
         hook_env["PYCROSS_CONFIG_SETTINGS_FILE"] = str(config_settings_file)
-        hook_env["PYCROSS_ENV_FILE"] = str(env_file)
-        hook_env["PYCROSS_BUILD_CWD"] = str(build_cwd)
+        hook_env["PYCROSS_ENV_VARS_FILE"] = str(env_file)
+        hook_env["PYCROSS_BUILD_ROOT"] = str(temp_dir)
+        hook_env["PYCROSS_SDIST_ROOT"] = str(sdist_dir)
 
-        # Write current config settings to file.
+        # Write the current build env to a file.
+        with open(env_file, "w") as f:
+            json.dump(build_env, f)
+
+        # Write current config settings to a file.
         with open(config_settings_file, "w") as f:
             json.dump(config_settings, f)
-
-        # Create or truncate build.env
-        with open(env_file, "w"):
-            pass
 
         try:
             subprocess.check_output(
                 args=[build_cwd / hook],
                 env=hook_env,
                 stderr=subprocess.STDOUT,
-                cwd=sdist_dir,
+                cwd=build_cwd,
             )
         except subprocess.CalledProcessError as cpe:
             print("===== PRE-BUILD HOOK FAILED =====", file=sys.stderr)
             print(cpe.output.decode(), file=sys.stderr)
             raise
 
+        # Read post-hook build.env and update our own environment variables.
+        with open(env_file, "r") as f:
+            build_env = json.load(f)
+            for k, v in build_env.items():
+                assert isinstance(k, str) and isinstance(v, str), "build_env.json must contain string keys and values"
+
         # Read post-hook config_settings.json.
         with open(config_settings_file, "r") as f:
             config_settings = json.load(f)
 
-        # Read post-hook build.env and update our own environment variables.
-        with open(env_file, "r") as f:
-            env_file_values = dotenv_values(stream=f)
-            result_env.update(env_file_values)
-
-    return config_settings, result_env
+    return build_env, config_settings
 
 
 def check_filename_against_target(
@@ -548,11 +561,6 @@ def build_wheel(
         """The default method of calling the wrapper subprocess."""
         cmd = list(cmd)
         env = build_env_vars.copy()
-
-        # Pop off some environment variables that might affect our build venv.
-        # We don't run in isolated mode because we want to be able to specify PYTHONHASHSEED.
-        env.pop("PYTHONHOME", None)
-        env.pop("PYTHONPATH", None)
 
         if extra_environ:
             env.update(extra_environ)
@@ -710,12 +718,12 @@ def main(args: Any, temp_dir: Path, is_debug: bool) -> None:
     extracted_dir = extract_sdist(args.sdist, sdist_dir)
 
     if args.pre_build_hook:
-        config_settings, build_env_vars = run_pre_build_hooks(
+        build_env_vars, config_settings = run_pre_build_hooks(
             args.pre_build_hook,
             temp_dir,
             extracted_dir,
-            config_settings,
             build_env_vars,
+            config_settings,
             cwd,
         )
 
@@ -806,6 +814,7 @@ def parse_flags(argv) -> Any:
         type=Path,
         nargs=2,
         action="append",
+        default=[],
         help="A tool to made available in PATH when building the sdist.",
     )
 

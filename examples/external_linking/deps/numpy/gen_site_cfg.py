@@ -1,16 +1,15 @@
 import os
 from pathlib import Path
 
-cwd_path = Path(os.environ["PYCROSS_BUILD_CWD"])
+cwd_path = Path(os.getcwd())
+sdist_path = Path(os.environ["PYCROSS_SDIST_ROOT"])
 openblas_lib = Path(os.environ["OPENBLAS_LIB"])
 openblas_include = Path(os.environ["OPENBLAS_INCLUDE"])
 
 include_dir = cwd_path / openblas_include
 lib_dir = cwd_path / openblas_lib.parent
 
-p = Path("openblas")
-
-
+p = sdist_path / "openblas"
 p.mkdir()
 (p / "include").symlink_to(include_dir, target_is_directory=True)
 (p / "lib").symlink_to(lib_dir, target_is_directory=True)
@@ -24,5 +23,5 @@ search_static_first = 1
 extra_link_args = -lm
 """
 
-with open("site.cfg", "w") as f:
+with open(sdist_path / "site.cfg", "w") as f:
     f.write(site_cfg)
