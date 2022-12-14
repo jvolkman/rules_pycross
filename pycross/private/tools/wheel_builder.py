@@ -327,7 +327,7 @@ def generate_cross_sysconfig_vars(
 
 
 def generate_bin_tools(
-    bin_dir: Path, toolchain_vars: Dict[str, str], path_tools: List[Path]
+    bin_dir: Path, toolchain_vars: Dict[str, str], path_tools: Dict[Path, Path]
 ) -> None:
     # The bazel CC toolchains don't provide ranlib (as far as I can tell), and
     # we don't want to use the host ranlib. So we place a no-op in PATH.
@@ -341,8 +341,11 @@ def generate_bin_tools(
         ar = bin_dir / "ar"
         ar.symlink_to(ar_path)
 
-    for path_tool in path_tools:
-        path_tool_in_bin = bin_dir / path_tool.name
+    for path_tool_name, path_tool in path_tools.items():
+        assert (
+            len(path_tool_name.parts) == 1
+        ), "path_tool name must not contain path separators"
+        path_tool_in_bin = bin_dir / path_tool_name
         path_tool_in_bin.symlink_to(path_tool)
 
 
@@ -687,7 +690,7 @@ def main(args: Any, temp_dir: Path, is_debug: bool) -> None:
         target_env=target_environment,
         always_use_crossenv=args.always_use_crossenv,
     )
-    path_tools = [cwd / path_tool for path_tool in args.path_tool or []]
+    path_tools = {name: cwd / path_tool for path_tool, name in args.path_tool or []}
     generate_bin_tools(bin_dir, toolchain_sysconfig_vars, path_tools)
 
     if is_debug:
@@ -790,6 +793,7 @@ def parse_flags(argv) -> Any:
     parser.add_argument(
         "--path-tool",
         type=Path,
+        nargs=2,
         action="append",
         help="A tool to made available in PATH when building the sdist.",
     )
