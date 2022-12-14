@@ -19,6 +19,9 @@ pycross_wheel_build(
     pre_build_hooks = [
         ":gen_site_cfg",
     ],
+    post_build_hooks = [
+        ":auditwheel",
+    ],
     build_env = {
         "OPENBLAS_LIB": "$(location //deps/openblas:libopenblas.a)",
         "OPENBLAS_INCLUDE": "$(location //deps/openblas:include)",
@@ -29,4 +32,9 @@ pycross_wheel_build(
 py_binary(
     name = "gen_site_cfg",
     srcs = ["gen_site_cfg.py"],
+)
+
+py_binary(
+    name = "auditwheel",
+    srcs = ["auditwheel.py"],
 )

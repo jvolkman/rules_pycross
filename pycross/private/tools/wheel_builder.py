@@ -356,9 +356,8 @@ def link_path_tools(
     tools_dir: Path, cwd: Path, path_tools: List[Tuple[Path, Path]]
 ) -> None:
     for path_tool_name, relative_path_tool_path in path_tools:
-        assert (
-            len(path_tool_name.parts) == 1
-        ), "path_tool name must not contain path separators"
+        if len(path_tool_name.parts) > 1:
+            _error("path_tool name must not contain path separators")
         path_tool_in_bin = tools_dir / path_tool_name
         path_tool_in_bin.symlink_to(cwd / relative_path_tool_path)
 
@@ -371,7 +370,7 @@ def extract_sdist(sdist_path: Path, sdist_dir: Path) -> Path:
         with zipfile.ZipFile(sdist_path, "r") as f:
             f.extractall(sdist_dir)
     else:
-        assert False, f"Unsupported sdist format: {sdist_path}"
+        _error(f"Unsupported sdist format: {sdist_path}")
 
     # After extraction, there should be a `packageName-version` directory
     (extracted_dir,) = sdist_dir.glob("*")
@@ -384,13 +383,10 @@ def run_pre_build_hooks(
     sdist_dir: Path,
     build_env: Dict[str, str],
     config_settings: Dict[str, Any],
-    build_cwd: Path,
 ) -> Tuple[Dict[str, str], Dict[str, Any]]:
     config_settings_file = temp_dir / "config_settings.json"
     env_file = temp_dir / "build_env.json"
     for hook in hooks:
-        # write env file
-        # write config_settings file
         hook_env = dict(build_env)
         hook_env["PYCROSS_CONFIG_SETTINGS_FILE"] = str(config_settings_file)
         hook_env["PYCROSS_ENV_VARS_FILE"] = str(env_file)
@@ -407,10 +403,9 @@ def run_pre_build_hooks(
 
         try:
             subprocess.check_output(
-                args=[build_cwd / hook],
+                args=[hook],
                 env=hook_env,
                 stderr=subprocess.STDOUT,
-                cwd=build_cwd,
             )
         except subprocess.CalledProcessError as cpe:
             print("===== PRE-BUILD HOOK FAILED =====", file=sys.stderr)
@@ -421,7 +416,10 @@ def run_pre_build_hooks(
         with open(env_file, "r") as f:
             build_env = json.load(f)
             for k, v in build_env.items():
-                assert isinstance(k, str) and isinstance(v, str), "build_env.json must contain string keys and values"
+                if not (isinstance(k, str) and isinstance(v, str)):
+                    _error(
+                        "pre-build hook build_env.json must contain string keys and values"
+                    )
 
         # Read post-hook config_settings.json.
         with open(config_settings_file, "r") as f:
@@ -430,14 +428,65 @@ def run_pre_build_hooks(
     return build_env, config_settings
 
 
+def run_post_build_hooks(
+    hooks: List[Path],
+    temp_dir: Path,
+    build_env: Dict[str, str],
+    wheel_file: Path,
+) -> Path:
+    wheel_in = temp_dir / "post_wheel_in"
+    wheel_out = temp_dir / "post_wheel_out"
+    wheel_in.mkdir()
+    wheel_out.mkdir()
+
+    orig_wheel_file = wheel_file
+    wheel_file = wheel_in / wheel_file.name
+    shutil.move(orig_wheel_file, wheel_file)
+
+    for hook in hooks:
+        hook_env = dict(build_env)
+        hook_env["PYCROSS_WHEEL_FILE"] = str(wheel_file)
+        hook_env["PYCROSS_WHEEL_OUTPUT_ROOT"] = str(wheel_out)
+
+        try:
+            subprocess.check_output(
+                args=[hook],
+                env=hook_env,
+                stderr=subprocess.STDOUT,
+            )
+        except subprocess.CalledProcessError as cpe:
+            print("===== POST-BUILD HOOK FAILED =====", file=sys.stderr)
+            print(cpe.output.decode(), file=sys.stderr)
+            raise
+
+        output_files = list(wheel_out.glob("*"))
+        if len(output_files) > 1:
+            _error("post-build hook wrote multiple files in PYCROSS_WHEEL_OUTPUT_ROOT")
+        if output_files:
+            hook_wheel_file = output_files[0]
+            if hook_wheel_file.suffix != ".whl":
+                _error(f"post-build hook wrote non-whl file: {hook_wheel_file.name}")
+
+            # We shuffle the newly-written wheel into post_wheel_in/ and clear post_wheel_out/
+            shutil.rmtree(wheel_in)
+            wheel_in.mkdir()
+            wheel_file = wheel_in / hook_wheel_file.name
+            shutil.move(hook_wheel_file, wheel_file)
+            shutil.rmtree(wheel_out)
+            wheel_out.mkdir()
+
+    return wheel_file
+
+
 def check_filename_against_target(
     wheel_name: str, target_environment: TargetEnv
 ) -> None:
     _, _, _, tags = parse_wheel_filename(wheel_name)
     tag_names = {str(t) for t in tags}
-    assert tag_names.intersection(
-        target_environment.compatibility_tags
-    ), f"No tags in {wheel_name} match target environment {target_environment.name}"
+    if not tag_names.intersection(target_environment.compatibility_tags):
+        _error(
+            f"No tags in {wheel_name} match target environment {target_environment.name}"
+        )
 
 
 def find_site_dir(env_dir: Path) -> Path:
@@ -696,9 +745,7 @@ def main(args: Any, temp_dir: Path, is_debug: bool) -> None:
         wrapper_vars=wrapper_sysconfig_vars,
     )
 
-    absolute_path_entries = (
-        [os.path.join(cwd, p) for p in args.path] if args.path else []
-    )
+    absolute_path_entries = [os.path.join(cwd, p) for p in args.python_path]
     build_venv(
         env_dir=build_env_dir,
         exec_python_exe=args.exec_python_executable,
@@ -717,15 +764,13 @@ def main(args: Any, temp_dir: Path, is_debug: bool) -> None:
 
     extracted_dir = extract_sdist(args.sdist, sdist_dir)
 
-    if args.pre_build_hook:
-        build_env_vars, config_settings = run_pre_build_hooks(
-            args.pre_build_hook,
-            temp_dir,
-            extracted_dir,
-            build_env_vars,
-            config_settings,
-            cwd,
-        )
+    build_env_vars, config_settings = run_pre_build_hooks(
+        args.pre_build_hook,
+        temp_dir,
+        extracted_dir,
+        build_env_vars,
+        config_settings,
+    )
 
     wheel_file = build_wheel(
         env_dir=build_env_dir,
@@ -734,6 +779,13 @@ def main(args: Any, temp_dir: Path, is_debug: bool) -> None:
         build_env_vars=build_env_vars,
         config_settings=config_settings,
         debug=is_debug,
+    )
+
+    wheel_file = run_post_build_hooks(
+        args.post_build_hook,
+        temp_dir,
+        build_env_vars,
+        wheel_file,
     )
 
     if target_environment:
@@ -771,10 +823,11 @@ def parse_flags(argv) -> Any:
     )
 
     parser.add_argument(
-        "--path",
+        "--python-path",
         type=Path,
         action="append",
-        help="An entry to add to PYTHONPATH",
+        default=[],
+        help="An entry to add to sys.path",
     )
 
     parser.add_argument(
@@ -806,7 +859,16 @@ def parse_flags(argv) -> Any:
         "--pre-build-hook",
         type=Path,
         action="append",
+        default=[],
         help="A tool to run before building the sdist.",
+    )
+
+    parser.add_argument(
+        "--post-build-hook",
+        type=Path,
+        action="append",
+        default=[],
+        help="A tool to run after building the wheel.",
     )
 
     parser.add_argument(
