@@ -1,7 +1,6 @@
 import os
 from collections import defaultdict
 from dataclasses import dataclass
-from functools import cached_property
 from pathlib import Path
 from typing import Any
 from typing import Dict
@@ -32,26 +31,36 @@ class MismatchedVersionException(Exception):
     pass
 
 
+# Not using cached_property to support python 3.7
+CONSTRAINT_CACHE_V = "__constraint_cache"
+MARKER_WITH_EXTRA_CACHE_V = "__marker_without_extra"
 @dataclass
 class PoetryDependency:
     name: str
     spec: str
     marker: Optional[str]
 
-    @cached_property
     def constraint(self):
-        return parse_constraint(self.spec)
+        CONSTRAINT_CACHE_V = "__constraint_cache"
+        if CONSTRAINT_CACHE_V in self.__dict__:
+            return self.__dict__[CONSTRAINT_CACHE_V]
+        else:
+            self.__dict__[CONSTRAINT_CACHE_V] = parse_constraint(self.spec)
+            return self.__dict__[CONSTRAINT_CACHE_V]
 
-    @cached_property
     def marker_without_extra(self) -> Optional[str]:
-        parsed = markers.parse_marker(self.marker)
-        result = str(parsed.without_extras())
-        return result
+        if MARKER_WITH_EXTRA_CACHE_V in self.__dict__:
+            return self.__dict__[MARKER_WITH_EXTRA_CACHE_V]
+        else:
+            parsed = markers.parse_marker(self.marker)
+            result = str(parsed.without_extras())
+            self.__dict__[MARKER_WITH_EXTRA_CACHE_V] = result
+            return self.__dict__[MARKER_WITH_EXTRA_CACHE_V]
 
     def matches(self, other: "PoetryPackage") -> bool:
         if package_canonical_name(self.name) != package_canonical_name(other.name):
             return False
-        return self.constraint.allows(other.version)
+        return self.constraint().allows(other.version)
 
 
 @dataclass
@@ -156,6 +165,7 @@ def translate(project_file: Path, lock_file: Path) -> LockSet:
         package_name = package_canonical_name(package_listed_name)
         package_version = lock_pkg["version"]
         package_python_versions = lock_pkg["python-versions"]
+
         if package_python_versions == "*":
             # Special case for all python versions
             package_python_versions = ""
@@ -178,6 +188,10 @@ def translate(project_file: Path, lock_file: Path) -> LockSet:
                     PoetryDependency(name=name, spec=spec, marker=marker)
                 )
 
+        files = [parse_file_info(f) for f in lock_pkg.get("files", [])]
+        if len(files) == 0:
+            files = files_by_package_name[package_listed_name]
+
         poetry_packages.append(
             PoetryPackage(
                 name=package_name,
@@ -185,7 +199,7 @@ def translate(project_file: Path, lock_file: Path) -> LockSet:
                 python_versions=package_python_versions,
                 dependencies=dependencies,
                 files=get_files_for_package(
-                    files_by_package_name[package_listed_name],
+                    files,
                     package_name,
                     package_version,
                 ),
@@ -214,7 +228,7 @@ def translate(project_file: Path, lock_file: Path) -> LockSet:
                     resolved = PackageDependency(
                         name=dep_pkg.name,
                         version=dep_pkg.pypa_version,
-                        marker=dep.marker_without_extra,
+                        marker=dep.marker_without_extra(),
                     )
                     package.resolved_dependencies.append(resolved)
                     break
