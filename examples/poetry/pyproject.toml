@@ -1,3 +1,8 @@
+
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"
+
 [tool.poetry]
 name = "rules_pycross_example"
 version = "0.1"
@@ -5,19 +10,17 @@ description = "rules_pycross"
 authors = []
 
 [tool.poetry.dependencies]
-python = "~=3.9"
+python = "~=3.7"
+wheel = "^0.37.1"
+ipython = ">=7.34.0"
+numpy = ">=1.21.0"
 
-ipython = ">=8.0.1"
-moto = {version = "=3.1.1", extras = ["server", "all"]}
-SQLAlchemy-Utils = "=0.38.2"
 cognitojwt = "*"
-python-jose = "=3.1.0"
-numpy = "=1.22.3"
-Cython = ">=0.29.24,<3.0"
-setuptools = "=59.2.0"
-wheel = "=0.37.0"
 setproctitle = "=1.2.2"
 tree-sitter = "=0.20.0"
 future = "=0.18.2"
-opencv-python = "=4.6.0.66"
+opencv-python = ">=4.0"
 keyring = "=23.9.1"
+
+moto = {version = "=3.1.1", extras = ["server", "all"]}
+SQLAlchemy-Utils = "=0.38.2"

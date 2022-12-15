@@ -156,6 +156,7 @@ def translate(project_file: Path, lock_file: Path) -> LockSet:
         package_name = package_canonical_name(package_listed_name)
         package_version = lock_pkg["version"]
         package_python_versions = lock_pkg["python-versions"]
+
         if package_python_versions == "*":
             # Special case for all python versions
             package_python_versions = ""
@@ -178,17 +179,21 @@ def translate(project_file: Path, lock_file: Path) -> LockSet:
                     PoetryDependency(name=name, spec=spec, marker=marker)
                 )
 
+        files = [parse_file_info(f) for f in lock_pkg.get("files", [])]
+        if len(files) == 0:
+            files = get_files_for_package(
+                    files_by_package_name[package_listed_name],
+                    package_name,
+                    package_version,
+                )
+
         poetry_packages.append(
             PoetryPackage(
                 name=package_name,
                 version=PoetryVersion.parse(package_version),
                 python_versions=package_python_versions,
                 dependencies=dependencies,
-                files=get_files_for_package(
-                    files_by_package_name[package_listed_name],
-                    package_name,
-                    package_version,
-                ),
+                files=files,
                 resolved_dependencies=[],
             )
         )

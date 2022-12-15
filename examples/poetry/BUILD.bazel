@@ -10,6 +10,7 @@ load(
     "@jvolkman_rules_pycross//pycross:toolchain.bzl",
     "pycross_hermetic_toolchain",
 )
+load("@rules_python//python:defs.bzl", "py_runtime", "py_runtime_pair")
 
 _darwin_x86_64 = [
     "@platforms//os:macos",
@@ -43,25 +44,25 @@ platform(
 
 pycross_target_environment(
     name = "python_darwin_x86_64",
-    abis = ["cp39"],
+    abis = ["cp37"],
     platforms = ["macosx_12_0_x86_64"],
     python_compatible_with = _darwin_x86_64,
-    version = "3.9.12",
+    version = "3.7.9",
     visibility = ["//visibility:public"],
 )
 
 pycross_target_environment(
     name = "python_darwin_arm64",
-    abis = ["cp39"],
+    abis = ["cp37"],
     platforms = ["macosx_12_0_arm64"],
     python_compatible_with = _darwin_arm64,
-    version = "3.9.12",
+    version = "3.7.9",
     visibility = ["//visibility:public"],
 )
 
 pycross_target_environment(
     name = "python_linux_x86_64",
-    abis = ["cp39"],
+    abis = ["cp37"],
     platforms = [
         "linux_x86_64",
         "manylinux2014_x86_64",
@@ -70,7 +71,7 @@ pycross_target_environment(
         for i in range(17, 25)
     ],
     python_compatible_with = _linux_x86_64,
-    version = "3.9.12",
+    version = "3.7.9",
     visibility = ["//visibility:public"],
 )
 
@@ -84,11 +85,10 @@ pycross_lock_file(
     name = "example_lock",
     out = "example_lock.bzl",
     always_build_packages = [
-        "pbr@5.10.0",
+        "pbr@5.11.0",
         "setproctitle",
     ],
     build_target_overrides = {
-        "future@0.18.2": "@//deps:overridden_future_0.18.2",
     },
     default_alias_single_version = True,
     local_wheels = [
@@ -162,4 +162,26 @@ sh_binary(
     name = "update_example_lock",
     srcs = ["update.sh"],
     data = _GENERATED.values(),
+)
+
+
+
+py_runtime(
+    name = "python3_runtime",
+    files = ["@python_interpreter//:files"],
+    interpreter = "@python_interpreter//:interpreter",
+    python_version = "PY3",
+    visibility = ["//visibility:public"],
+)
+
+py_runtime_pair(
+    name = "py_runtime",
+    py2_runtime = None,
+    py3_runtime = ":python3_runtime",
+)
+
+toolchain(
+    name = "py_toolchain",
+    toolchain = ":py_runtime",
+    toolchain_type = "@bazel_tools//tools/python:toolchain_type",
 )

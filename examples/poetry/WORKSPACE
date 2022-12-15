@@ -11,25 +11,31 @@ http_archive(
     url = "https://github.com/bazelbuild/rules_python/archive/refs/tags/0.13.0.tar.gz",
 )
 
-load("@rules_python//python:repositories.bzl", "python_register_toolchains")
+# load("@rules_python//python:repositories.bzl", "python_register_toolchains")
 
-python_register_toolchains(
-    name = "python3_9",
-    # Available versions are listed in @rules_python//python:versions.bzl.
-    # We recommend using the same version your team is already standardized on.
-    python_version = "3.9",
+# python_register_toolchains(
+#     name = "python3_7",
+#     # Available versions are listed in @rules_python//python:versions.bzl.
+#     # We recommend using the same version your team is already standardized on.
+#     python_version = "3.7",
+# )
+
+load("//:py_interpreter.bzl", "python_build_standalone_interpreter")
+
+python_build_standalone_interpreter(
+    name = "python_interpreter",
 )
 
-load("@python3_9//:defs.bzl", "interpreter")
 
 local_repository(
     name = "jvolkman_rules_pycross",
     path = "../..",
 )
+register_toolchains("//:py_toolchain")
 
 load("@jvolkman_rules_pycross//pycross:repositories.bzl", "rules_pycross_dependencies")
 
-rules_pycross_dependencies(python_interpreter_target = interpreter)
+rules_pycross_dependencies(python_interpreter_target = "@python_interpreter//:bin/python3.7")
 
 load("@jvolkman_rules_pycross//pycross:defs.bzl", "pycross_lock_repo")
 
@@ -53,6 +59,7 @@ http_archive(
     urls = ["https://git.sr.ht/~motiejus/bazel-zig-cc/archive/{}.tar.gz".format(BAZEL_ZIG_CC_VERSION)],
 )
 
+
 load(
     "@bazel-zig-cc//toolchain:defs.bzl",
     "URL_FORMAT_JAKSTYS",
@@ -60,13 +67,13 @@ load(
     zig_toolchains = "toolchains",
 )
 
-zig_version = "0.10.0-dev.2156+458943e32"
+zig_version = "0.10.0-dev.1393+291f5055f"
 
 zig_host_platform_sha256 = {
-    "linux-aarch64": "43e55632c61833a598aff3dcb134a7967c19eddc6abd28273bb60585bbbf34af",
-    "linux-x86_64": "c22f4453ac45256d865defad05bfe0e42c6b73f15dc007e87fdae42f44933485",
-    "macos-aarch64": "f786a0d6674f9ec267eb1715de1b6265faedfdfdc7d4d05dedc534644e12224d",
-    "macos-x86_64": "7dffe1c995da9145872ae806d770cd2acc38993d3d32aabdece7107177853730",
+    "linux-aarch64": "43e55632c11833a598aff3dcb134a7967c19eddc6abd28273bb60585bbbf34af",
+    "linux-x86_64": "c22f4453ac45256d815defad05bfe0e42c6b73f15dc007e87fdae42f44933485",
+    "macos-aarch64": "72edc26973d697bba68f138701ebf9755548677ecedd853fd224baa836bef2f8",
+    "macos-x86_64": "7dffe1c995da9145872ae806d770cd2a1c38993d3d32aabdece7107177853730",
 }
 
 zig_toolchains(
