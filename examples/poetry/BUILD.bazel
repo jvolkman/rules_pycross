@@ -44,7 +44,7 @@ platform(
 
 pycross_target_environment(
     name = "python_darwin_x86_64",
-    abis = ["cp37"],
+    abis = ["cp37", "cp37m"],
     platforms = ["macosx_12_0_x86_64"],
     python_compatible_with = _darwin_x86_64,
     version = "3.7.9",
@@ -53,7 +53,7 @@ pycross_target_environment(
 
 pycross_target_environment(
     name = "python_darwin_arm64",
-    abis = ["cp37"],
+    abis = ["cp37", "cp37m"],
     platforms = ["macosx_12_0_arm64"],
     python_compatible_with = _darwin_arm64,
     version = "3.7.9",
@@ -62,7 +62,7 @@ pycross_target_environment(
 
 pycross_target_environment(
     name = "python_linux_x86_64",
-    abis = ["cp37"],
+    abis = ["cp37", "cp37m"],
     platforms = [
         "linux_x86_64",
         "manylinux2014_x86_64",

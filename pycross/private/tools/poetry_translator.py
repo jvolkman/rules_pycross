@@ -181,11 +181,7 @@ def translate(project_file: Path, lock_file: Path) -> LockSet:
 
         files = [parse_file_info(f) for f in lock_pkg.get("files", [])]
         if len(files) == 0:
-            files = get_files_for_package(
-                    files_by_package_name[package_listed_name],
-                    package_name,
-                    package_version,
-                )
+            files = files_by_package_name[package_listed_name]
 
         poetry_packages.append(
             PoetryPackage(
@@ -193,7 +189,11 @@ def translate(project_file: Path, lock_file: Path) -> LockSet:
                 version=PoetryVersion.parse(package_version),
                 python_versions=package_python_versions,
                 dependencies=dependencies,
-                files=files,
+                files=get_files_for_package(
+                    files,
+                    package_name,
+                    package_version,
+                ),
                 resolved_dependencies=[],
             )
         )
