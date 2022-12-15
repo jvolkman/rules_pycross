@@ -1,0 +1,45 @@
+load("@jvolkman_rules_pycross//pycross:defs.bzl", "pycross_wheel_build")
+load("//:example_lock.bzl", "targets")
+load(":defs.bzl", "postgresql_config")
+
+package(default_visibility = ["//visibility:public"])
+
+# Specified here as an override.
+pycross_wheel_build(
+    name = "numpy",
+    sdist = "@example_lock_sdist_numpy_1.23.5//file",
+    deps = [
+        "//deps:cython",
+        "//deps:setuptools",
+        "//deps:wheel",
+    ],
+    data = [
+        "//deps/openblas:libopenblas.a",
+        "//deps/openblas:include",
+    ],
+    pre_build_hooks = [
+        ":gen_site_cfg",
+    ],
+    post_build_hooks = [
+        ":auditwheel",
+    ],
+    build_env = {
+        "OPENBLAS_LIB": "$(location //deps/openblas:libopenblas.a)",
+        "OPENBLAS_INCLUDE": "$(location //deps/openblas:include)",
+    },
+    tags = ["manual"],
+)
+
+py_binary(
+    name = "gen_site_cfg",
+    srcs = ["gen_site_cfg.py"],
+)
+
+py_binary(
+    name = "auditwheel",
+    srcs = ["auditwheel.py"],
+)
+
+postgresql_config(
+    name = "postgres"
+)

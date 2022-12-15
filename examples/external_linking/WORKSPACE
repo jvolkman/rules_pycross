@@ -102,3 +102,7 @@ filegroup(
 )
     """,
 )
+
+
+load("//deps/psycopg2:repositories.bzl", pg_repositories = "repositories")
+pg_repositories()
