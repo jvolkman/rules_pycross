@@ -199,16 +199,11 @@ def targets():
         ":pycparser_2.21",
     ]
 
-    _cffi_1_15_1_build_deps = [
-        ":setuptools_60.8.2",
-        ":wheel_0.37.1",
-    ]
-
     pycross_wheel_build(
         name = "_build_cffi_1.15.1",
         sdist = "@example_lock_sdist_cffi_1.15.1//file",
         target_environment = _target,
-        deps = _cffi_1_15_1_deps + _cffi_1_15_1_build_deps,
+        deps = _cffi_1_15_1_deps,
         tags = ["manual"],
     )
 
@@ -625,17 +620,10 @@ def targets():
         wheel = "@example_lock_wheel_networkx_2.6.3_py3_none_any//file",
     )
 
-    _numpy_1_21_1_build_deps = [
-        ":cython_0.29.32",
-        ":setuptools_60.8.2",
-        ":wheel_0.37.1",
-    ]
-
     pycross_wheel_build(
         name = "_build_numpy_1.21.1",
         sdist = "@example_lock_sdist_numpy_1.21.1//file",
         target_environment = _target,
-        deps = _numpy_1_21_1_build_deps,
         tags = ["manual"],
     )
 
@@ -724,11 +712,6 @@ def targets():
         name = "pyasn1_0.4.8",
         wheel = "@example_lock_wheel_pyasn1_0.4.8_py2.py3_none_any//file",
     )
-
-    _pycparser_2_21_build_deps = [
-        ":setuptools_60.8.2",
-        ":wheel_0.37.1",
-    ]
 
     pycross_wheel_library(
         name = "pycparser_2.21",
