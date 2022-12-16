@@ -46,11 +46,11 @@ rules_pycross_dependencies(python_interpreter_target = interpreter)
 
 # Setup a CC toolchain using bazel-zig-cc
 # https://git.sr.ht/~motiejus/bazel-zig-cc
-BAZEL_ZIG_CC_VERSION = "v0.9.2"
+BAZEL_ZIG_CC_VERSION = "v1.0.0-rc4"
 
 http_archive(
     name = "bazel-zig-cc",
-    sha256 = "73afa7e1af49e3dbfa1bae9362438cdc51cb177c359a6041a7a403011179d0b5",
+    sha256 = "af784b604c08f385358113dc41e22736369a8ad09951fecf31dd13c35f4aaa62",
     strip_prefix = "bazel-zig-cc-{}".format(BAZEL_ZIG_CC_VERSION),
     urls = ["https://git.sr.ht/~motiejus/bazel-zig-cc/archive/{}.tar.gz".format(BAZEL_ZIG_CC_VERSION)],
 )
@@ -88,21 +88,5 @@ register_toolchains(
 load("//:example_lock.bzl", "repositories")
 repositories()
 
-
-http_archive(
-    name = "openblas",
-    urls = ["https://github.com/xianyi/OpenBLAS/releases/download/v0.3.21/OpenBLAS-0.3.21.tar.gz"],
-    sha256 = "f36ba3d7a60e7c8bcc54cd9aaa9b1223dd42eaf02c811791c37e8ca707c241ca",
-    strip_prefix = "OpenBLAS-0.3.21",
-    build_file_content = """\
-filegroup(
-    name = "all",
-    srcs = glob(["**/*"]),
-    visibility = ["//visibility:public"],
-)
-    """,
-)
-
-
-load("//deps/psycopg2:repositories.bzl", pg_repositories = "repositories")
-pg_repositories()
+load("//third_party:repositories.bzl", third_party_repositories = "repositories")
+third_party_repositories()

@@ -1,0 +1,33 @@
+load("@bazel_skylib//rules:select_file.bzl", "select_file")
+load("@rules_foreign_cc//foreign_cc:defs.bzl", "configure_make")
+
+package(default_visibility = ["//visibility:public"])
+
+configure_make(
+    name = "postgresql",
+    lib_source = "@postgresql//:all",
+    configure_in_place = True,
+    configure_options = [
+        "--without-readline",
+        # "--without-zlib",
+        # "--with-ssl=openssl"
+    ],
+    targets = [
+        "all",
+        "install",
+    ],
+    deps = [
+        "//third_party/boringssl",
+        "@zlib//:zlib",
+    ],
+    data = [
+        "//third_party/zlib:z",
+    ],
+    env = {
+        "LD_LIBRARY_PATH": "$(execpath //third_party/zlib:z)/..",
+        "LIBRARY_PATH": "/home/jvolkman/repos/rules_pycross/examples/external_linking/bazel-bin/third_party/zlib",
+        "CFLAGS": "-L/home/jvolkman/repos/rules_pycross/examples/external_linking/bazel-bin/third_party/zlib",
+    },
+    linkopts = ["-L/home/jvolkman/repos/rules_pycross/examples/external_linking/bazel-bin/third_party/zlib"],
+    copts = ["-L/home/jvolkman/repos/rules_pycross/examples/external_linking/bazel-bin/third_party/zlib"],
+)
