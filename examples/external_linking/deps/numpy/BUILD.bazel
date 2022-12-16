@@ -13,8 +13,8 @@ pycross_wheel_build(
         "//deps:wheel",
     ],
     data = [
-        "//deps/openblas:libopenblas.a",
-        "//deps/openblas:include",
+        "//third_party/openblas:libopenblas.a",
+        "//third_party/openblas:include",
     ],
     pre_build_hooks = [
         ":gen_site_cfg",
@@ -23,8 +23,8 @@ pycross_wheel_build(
         ":auditwheel",
     ],
     build_env = {
-        "OPENBLAS_LIB": "$(location //deps/openblas:libopenblas.a)",
-        "OPENBLAS_INCLUDE": "$(location //deps/openblas:include)",
+        "OPENBLAS_LIB": "$(location //third_party/openblas:libopenblas.a)",
+        "OPENBLAS_INCLUDE": "$(location //third_party/openblas:include)",
     },
     tags = ["manual"],
 )
