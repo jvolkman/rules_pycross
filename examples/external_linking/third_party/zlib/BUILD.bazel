@@ -1,0 +1,9 @@
+package(default_visibility = ["//visibility:public"])
+
+cc_binary(
+    name = "z",
+    deps = [
+        "@zlib//:zlib",
+    ],
+    linkshared = True,
+)
