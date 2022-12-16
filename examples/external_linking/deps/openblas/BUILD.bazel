@@ -8,7 +8,15 @@ cmake(
     cache_entries = {
         "NOFORTRAN": "on",
         "BUILD_WITHOUT_LAPACK": "no",
+        "NUM_THREADS": "64",
+        "TARGET": "HASWELL",
     },
+    copts = [
+        "-Wno-error=int-conversion",
+    ],
+    build_args = [
+        "--verbose",
+    ],
     lib_source = "@openblas//:all",
     out_static_libs = ["libopenblas.a"],
 )
