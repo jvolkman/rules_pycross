@@ -31,9 +31,6 @@ class MismatchedVersionException(Exception):
     pass
 
 
-# Not using cached_property to support python 3.7
-CONSTRAINT_CACHE_V = "__constraint_cache"
-MARKER_WITH_EXTRA_CACHE_V = "__marker_without_extra"
 @dataclass
 class PoetryDependency:
     name: str
@@ -41,21 +38,11 @@ class PoetryDependency:
     marker: Optional[str]
 
     def constraint(self):
-        CONSTRAINT_CACHE_V = "__constraint_cache"
-        if CONSTRAINT_CACHE_V in self.__dict__:
-            return self.__dict__[CONSTRAINT_CACHE_V]
-        else:
-            self.__dict__[CONSTRAINT_CACHE_V] = parse_constraint(self.spec)
-            return self.__dict__[CONSTRAINT_CACHE_V]
+        return parse_constraint(self.spec)
 
     def marker_without_extra(self) -> Optional[str]:
-        if MARKER_WITH_EXTRA_CACHE_V in self.__dict__:
-            return self.__dict__[MARKER_WITH_EXTRA_CACHE_V]
-        else:
-            parsed = markers.parse_marker(self.marker)
-            result = str(parsed.without_extras())
-            self.__dict__[MARKER_WITH_EXTRA_CACHE_V] = result
-            return self.__dict__[MARKER_WITH_EXTRA_CACHE_V]
+        parsed = markers.parse_marker(self.marker)
+        return str(parsed.without_extras())
 
     def matches(self, other: "PoetryPackage") -> bool:
         if package_canonical_name(self.name) != package_canonical_name(other.name):
@@ -188,6 +175,9 @@ def translate(project_file: Path, lock_file: Path) -> LockSet:
                     PoetryDependency(name=name, spec=spec, marker=marker)
                 )
 
+        # In older versions of poetry the list of files was held in a metadata section at the bottom of the poetry.lock file
+        # The lock file format now (as of 2022-12-16), has the files specified local to each dependency as another field.
+        # Here we will check for the files being present in the new location, and if not there we fall back to the older one.
         files = [parse_file_info(f) for f in lock_pkg.get("files", [])]
         if len(files) == 0:
             files = files_by_package_name[package_listed_name]
