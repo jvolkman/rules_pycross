@@ -1,9 +1,7 @@
 package(default_visibility = ["//visibility:public"])
 
-cc_binary(
-    name = "z",
-    deps = [
-        "@zlib//:zlib",
-    ],
-    linkshared = True,
+filegroup(
+    name="libz",
+    srcs=["@zlib//:zlib"],
+    output_group = 'dynamic_library'
 )
