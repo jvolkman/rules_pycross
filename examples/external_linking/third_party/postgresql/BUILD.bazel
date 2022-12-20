@@ -45,11 +45,10 @@ configure_make(
         "-C src/bin install",
         "-C src/include install",
         "-C src/interfaces install",
-        "-C doc install",
     ],
     deps = [
         "//third_party/openssl",
-        "@zlib//:z",
+        "//third_party/zlib",
     ],
     out_shared_libs = select({
         "@platforms//os:macos": ["libpq.dylib"],
