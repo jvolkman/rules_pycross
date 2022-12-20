@@ -11,6 +11,30 @@ package(default_visibility = ["//visibility:public"])
 
 # Read https://wiki.openssl.org/index.php/Compilation_and_Installation
 
+config_setting(
+    name = "macos_x86_64",
+    constraint_values = [
+        "@platforms//os:macos",
+        "@platforms//cpu:x86_64",
+    ],
+)
+
+config_setting(
+    name = "macos_arm64",
+    constraint_values = [
+        "@platforms//os:macos",
+        "@platforms//cpu:arm64",
+    ],
+)
+
+config_setting(
+    name = "linux_x86_64",
+    constraint_values = [
+        "@platforms//os:linux",
+        "@platforms//cpu:x86_64",
+    ],
+)
+
 filegroup(
     name = "all_srcs",
     srcs = glob(
@@ -23,8 +47,11 @@ CONFIGURE_OPTIONS = [
     "no-comp",
     "no-tests",
     "no-engine",
-    # "no-legacy",
-]
+] + select({
+    ":macos_x86_64": ["darwin64-x86_64-cc"],
+    ":macos_arm64": ["darwin64-arm64-cc"],
+    ":linux_x86_64": ["linux-x86_64-clang"],
+})
 
 LIB_NAME = "openssl"
 
@@ -35,7 +62,7 @@ MAKE_TARGETS = [
 
 configure_make(
     name = "openssl",
-    configure_command = "config",
+    configure_command = "Configure",
     configure_in_place = True,
     configure_options = CONFIGURE_OPTIONS,
     copts = ["-DOPENSSL_NO_APPLE_CRYPTO_RANDOM"],
