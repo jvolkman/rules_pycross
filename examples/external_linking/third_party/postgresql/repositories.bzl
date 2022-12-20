@@ -11,4 +11,9 @@ def repositories():
         sha256 = "64fdf23d734afad0dfe4077daca96ac51dcd697e68ae2d3d4ca6c45cb14e21ae",
         strip_prefix = "postgresql-15.1",
         build_file = "//third_party:all_files.BUILD",
+        patch_cmds = [
+            "sed -i.bak 's/cross_compiling=no/cross_compiling=yes/g' configure",
+            "sed -i.bak 's/cross_compiling=no/cross_compiling=yes/g' configure",
+            "rm configure.bak",
+        ]
     )

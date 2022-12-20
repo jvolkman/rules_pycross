@@ -1,7 +1,6 @@
 package(default_visibility = ["//visibility:public"])
 
-filegroup(
-    name="zlib",
-    srcs=["@zlib//:z"],
-    output_group = 'dynamic_library'
+alias(
+    name = "zlib",
+    actual = "@zlib//:z",
 )
