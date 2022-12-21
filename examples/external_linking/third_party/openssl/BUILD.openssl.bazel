@@ -47,6 +47,7 @@ CONFIGURE_OPTIONS = [
     "no-comp",
     "no-tests",
     "no-engine",
+    "no-legacy",
     "--openssldir=/usr/lib/ssl",
 ] + select({
     ":macos_x86_64": ["darwin64-x86_64-cc"],
@@ -82,16 +83,20 @@ configure_make(
     lib_name = LIB_NAME,
     lib_source = ":all_srcs",
     out_binaries = ["openssl"],
+    out_lib_dir = select({
+        "@platforms//os:linux": "lib64",
+        "//conditions:default": "lib",
+    }),
     # Note that for Linux builds, libssl must come before libcrypto on the linker command-line.
     # As such, libssl must be listed before libcrypto
     out_shared_libs = select({
         "@platforms//os:macos": [
-            "libssl.1.1.dylib",
-            "libcrypto.1.1.dylib",
+            "libssl.3.dylib",
+            "libcrypto.3.dylib",
         ],
         "//conditions:default": [
-            "libssl.so.1.1",
-            "libcrypto.so.1.1",
+            "libssl.so.3",
+            "libcrypto.so.3",
         ],
     }),
     targets = MAKE_TARGETS,
