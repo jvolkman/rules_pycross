@@ -47,6 +47,7 @@ CONFIGURE_OPTIONS = [
     "no-comp",
     "no-tests",
     "no-engine",
+    "--openssldir=/usr/lib/ssl",
 ] + select({
     ":macos_x86_64": ["darwin64-x86_64-cc"],
     ":macos_arm64": ["darwin64-arm64-cc"],
@@ -65,7 +66,12 @@ configure_make(
     configure_command = "Configure",
     configure_in_place = True,
     configure_options = CONFIGURE_OPTIONS,
-    copts = ["-DOPENSSL_NO_APPLE_CRYPTO_RANDOM"],
+    copts = [
+        "-DOPENSSL_NO_APPLE_CRYPTO_RANDOM",
+        "-DOPENSSL_NO_FILENAMES",
+        "-O2",
+        "-DENGINESDIR=DISABLED",
+    ],
     env = select({
         "@platforms//os:macos": {
             "PERL": "$$EXT_BUILD_ROOT$$/$(PERL)",
