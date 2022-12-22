@@ -56,9 +56,9 @@ http_archive(
     strip_prefix = "bazel-zig-cc-{}".format(BAZEL_ZIG_CC_VERSION),
     urls = ["https://git.sr.ht/~motiejus/bazel-zig-cc/archive/{}.tar.gz".format(BAZEL_ZIG_CC_VERSION)],
     patches = [
-        "//:bazel-zig-cc-dynamic-linker.patch",
-        "//:bazel-zig-cc-mcpu.patch",
-        "//:bazel-zig-cc-name-patterns.patch",
+        "//patches:bazel-zig-cc-dynamic-linker.patch",
+        "//patches:bazel-zig-cc-mcpu.patch",
+        "//patches:bazel-zig-cc-name-patterns.patch",
     ],
     patch_args = ["-p1"],
 )
