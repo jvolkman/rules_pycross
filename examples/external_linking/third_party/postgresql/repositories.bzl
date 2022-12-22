@@ -10,7 +10,7 @@ def repositories():
         urls = ["https://ftp.postgresql.org/pub/source/v15.1/postgresql-15.1.tar.bz2"],
         sha256 = "64fdf23d734afad0dfe4077daca96ac51dcd697e68ae2d3d4ca6c45cb14e21ae",
         strip_prefix = "postgresql-15.1",
-        build_file = "//third_party:all_files.BUILD",
+        build_file = "//third_party/postgresql:postgresql.BUILD",
 
         # At configure time, postgres tries to compile, link, and run a simple program
         # using the rest of the built-up linker flags. This results in a program being
