@@ -37,23 +37,30 @@ configure_make(
     configure_options = [
         "--without-readline",
         "--with-ssl=openssl",
+        "--prefix=/usr",
     ] + select({
         ":macos_x86_64": ["--host=amd64-apple-darwin"],
         ":macos_arm64": ["--host=aarch64-apple-darwin"],
         ":linux_x86_64": ["--host=amd64-linux"],
     }),
+    copts = [
+        "-O2",
+    ],
     env = {
         "ZIC": "/usr/sbin/zic",
     },
     targets = [
-        "-C src/bin install",
-        "-C src/include install",
-        "-C src/interfaces install",
+        "-C src/bin install DESTDIR=$BUILD_TMPDIR/$INSTALL_PREFIX",
+        "-C src/include install DESTDIR=$BUILD_TMPDIR/$INSTALL_PREFIX",
+        "-C src/interfaces install DESTDIR=$BUILD_TMPDIR/$INSTALL_PREFIX",
     ],
     deps = [
         "@//third_party/openssl",
         "@//third_party/zlib",
     ],
+    out_bin_dir = "usr/bin",
+    out_lib_dir = "usr/lib",
+    out_include_dir = "usr/include",
     out_shared_libs = select({
         "@platforms//os:macos": ["libpq.dylib"],
         "@platforms//os:linux": ["libpq.so"],
