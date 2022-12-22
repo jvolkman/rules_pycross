@@ -38,12 +38,14 @@ configure_make(
         "--without-readline",
         "--with-ssl=openssl",
         "--prefix=/usr",
+        "--exec-prefix=/usr",
     ] + select({
         ":macos_x86_64": ["--host=amd64-apple-darwin"],
         ":macos_arm64": ["--host=aarch64-apple-darwin"],
         ":linux_x86_64": ["--host=amd64-linux"],
     }),
     copts = [
+        "-DOPENSSL_NO_FILENAMES",
         "-O2",
     ],
     env = {
