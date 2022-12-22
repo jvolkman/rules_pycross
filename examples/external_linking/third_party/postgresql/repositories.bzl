@@ -26,6 +26,14 @@ def repositories():
         patch_cmds = [
             "sed -i.bak 's/cross_compiling=no/cross_compiling=yes/g' configure",
             "sed -i.bak 's/cross_compiling=maybe/cross_compiling=yes/g' configure",
+
+            # Sanitize CONFIGURE_ARGS in pg_config.h
+            "sed -i.bak 's/#define CONFIGURE_ARGS \"$ac_configure_args\"/#define CONFIGURE_ARGS \"unavailable\"/g' configure",
+
+            # Remove non-reproducible values from src/common/Makefile
+            "sed -i.bak '/-DVAL_/d' src/common/Makefile",
+
             "rm configure.bak",
+            "rm src/common/Makefile.bak",
         ]
     )
