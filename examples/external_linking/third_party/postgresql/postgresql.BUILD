@@ -36,6 +36,7 @@ configure_make(
     lib_source = ":all_srcs",
     configure_options = [
         "--without-readline",
+        "--without-perl",
         "--with-ssl=openssl",
         "--prefix=/usr",
         "--exec-prefix=/usr",
