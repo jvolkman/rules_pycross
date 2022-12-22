@@ -67,7 +67,6 @@ MAKE_TARGETS = [
 
 configure_make(
     name = "openssl",
-    args = ["-j8"],  # Useful for iteration; may not be good in a prod build
     configure_command = "Configure",
     configure_in_place = True,
     configure_options = CONFIGURE_OPTIONS,
