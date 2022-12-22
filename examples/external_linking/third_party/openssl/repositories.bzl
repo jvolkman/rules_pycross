@@ -14,6 +14,10 @@ def repositories():
             "https://mirror.bazel.build/www.openssl.org/source/openssl-3.0.7.tar.gz",
             "https://www.openssl.org/source/openssl-3.0.7.tar.gz",
         ],
+        patches = [
+            "//patches:openssl-mkbuildinf.patch",
+        ],
+        patch_args = ["-p1"],
     )
 
     maybe(
