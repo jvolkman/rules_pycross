@@ -64,6 +64,7 @@ MAKE_TARGETS = [
 
 configure_make(
     name = "openssl",
+    args = ["-j8"],
     configure_command = "Configure",
     configure_in_place = True,
     configure_options = CONFIGURE_OPTIONS,
