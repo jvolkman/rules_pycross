@@ -40,6 +40,7 @@ configure_make(
         "--with-ssl=openssl",
         "--prefix=/usr",
         "--exec-prefix=/usr",
+        "PG_SYSROOT=/dev/null",  # Disable postgres' sysroot detection
     ] + select({
         ":macos_x86_64": ["--host=amd64-apple-darwin"],
         ":macos_arm64": ["--host=aarch64-apple-darwin"],
