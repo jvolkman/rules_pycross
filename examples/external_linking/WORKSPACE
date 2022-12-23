@@ -65,23 +65,23 @@ http_archive(
 
 load(
     "@bazel-zig-cc//toolchain:defs.bzl",
-    "URL_FORMAT_RELEASE",
+    "URL_FORMAT_NIGHTLY",
     zig_toolchains = "toolchains",
 )
 
-zig_version = "0.10.0"
+zig_version = "0.11.0-dev.926+266e2e9a3"
 
 zig_host_platform_sha256 = {
-    "linux-aarch64": "09ef50c8be73380799804169197820ee78760723b0430fa823f56ed42b06ea0f",
-    "linux-x86_64": "631ec7bcb649cd6795abe40df044d2473b59b44e10be689c15632a0458ddea55",
-    "macos-aarch64": "02f7a7839b6a1e127eeae22ea72c87603fb7298c58bc35822a951479d53c7557",
-    "macos-x86_64": "3a22cb6c4749884156a94ea9b60f3a28cf4e098a69f08c18fbca81c733ebfeda",
+    "linux-aarch64": "f3d529e9f416d58afd75a874a330b1633615c725f6ffddfd2dd64d16be5234df",
+    "linux-x86_64": "1fbb15d67805a5e16e9186f87d273f2611478bc9890a23bade5a6f4ff7f050ca",
+    "macos-aarch64": "441493c678826e8de384c98a73bacf188e851b1124e3a4efea1566e7006198e6",
+    "macos-x86_64": "8ceba9fcfabbc80caf9cca8a3e2b1b672861c74d70d1c978525ccfb28e170dc7",
 }
 
 zig_toolchains(
     host_platform_sha256 = zig_host_platform_sha256,
     url_formats = [
-        URL_FORMAT_RELEASE,
+        URL_FORMAT_NIGHTLY,
     ],
     version = zig_version,
 )
