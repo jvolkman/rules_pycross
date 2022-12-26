@@ -93,6 +93,11 @@ register_toolchains(
     "@zig_sdk//toolchain:darwin_arm64",
 )
 
+register_toolchains(
+    "//:pycross_darwin_linux_tc",
+    "//:pycross_linux_darwin_tc",
+)
+
 load("//:example_lock.bzl", "repositories")
 repositories()
 

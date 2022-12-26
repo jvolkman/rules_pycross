@@ -4,3 +4,11 @@ alias(
     name = "openssl",
     actual = "@openssl//:openssl",
 )
+
+
+filegroup(
+    name = "gen_dir",
+    srcs = [":openssl"],
+    output_group = "gen_dir",
+    visibility = ["//visibility:public"],
+)
