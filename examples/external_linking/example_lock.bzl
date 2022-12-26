@@ -18,15 +18,16 @@ PINS = {
     "pexpect": "pexpect_4.8.0",
     "pickleshare": "pickleshare_0.7.5",
     "prompt_toolkit": "prompt_toolkit_3.0.36",
+    "psycopg2": "psycopg2_2.9.5",
     "ptyprocess": "ptyprocess_0.7.0",
     "pure_eval": "pure_eval_0.2.2",
     "pygments": "pygments_2.13.0",
     "python_dateutil": "python_dateutil_2.8.2",
-    "pytz": "pytz_2022.6",
+    "pytz": "pytz_2022.7",
     "setuptools": "setuptools_59.2.0",
     "six": "six_1.16.0",
     "stack_data": "stack_data_0.6.2",
-    "traitlets": "traitlets_5.7.0",
+    "traitlets": "traitlets_5.8.0",
     "wcwidth": "wcwidth_0.2.5",
     "wheel": "wheel_0.37.0",
 }
@@ -117,7 +118,7 @@ def targets():
         ":prompt_toolkit_3.0.36",
         ":pygments_2.13.0",
         ":stack_data_0.6.2",
-        ":traitlets_5.7.0",
+        ":traitlets_5.8.0",
     ] + select({
         ":_env_python_darwin_arm64": [
             ":appnope_0.1.3",
@@ -145,7 +146,7 @@ def targets():
     )
 
     _matplotlib_inline_0_1_6_deps = [
-        ":traitlets_5.7.0",
+        ":traitlets_5.8.0",
     ]
 
     pycross_wheel_library(
@@ -168,7 +169,7 @@ def targets():
     _pandas_1_5_2_deps = [
         ":numpy_1.23.5",
         ":python_dateutil_2.8.2",
-        ":pytz_2022.6",
+        ":pytz_2022.7",
     ]
 
     _pandas_1_5_2_build_deps = [
@@ -222,6 +223,11 @@ def targets():
     )
 
     pycross_wheel_library(
+        name = "psycopg2_2.9.5",
+        wheel = "@//deps/psycopg2",
+    )
+
+    pycross_wheel_library(
         name = "ptyprocess_0.7.0",
         wheel = "@example_lock_wheel_ptyprocess_0.7.0_py2.py3_none_any//file",
     )
@@ -247,8 +253,8 @@ def targets():
     )
 
     pycross_wheel_library(
-        name = "pytz_2022.6",
-        wheel = "@example_lock_wheel_pytz_2022.6_py2.py3_none_any//file",
+        name = "pytz_2022.7",
+        wheel = "@example_lock_wheel_pytz_2022.7_py2.py3_none_any//file",
     )
 
     pycross_wheel_library(
@@ -274,8 +280,8 @@ def targets():
     )
 
     pycross_wheel_library(
-        name = "traitlets_5.7.0",
-        wheel = "@example_lock_wheel_traitlets_5.7.0_py3_none_any//file",
+        name = "traitlets_5.8.0",
+        wheel = "@example_lock_wheel_traitlets_5.8.0_py3_none_any//file",
     )
 
     pycross_wheel_library(
@@ -307,6 +313,16 @@ def repositories():
         ],
         sha256 = "220b98d15cee0b2cd839a6358bd1f273d0356bf964c1a1aeb32d47db0215488b",
         downloaded_file_path = "pandas-1.5.2.tar.gz",
+    )
+
+    maybe(
+        http_file,
+        name = "example_lock_sdist_psycopg2_2.9.5",
+        urls = [
+            "https://files.pythonhosted.org/packages/89/d6/cd8c46417e0f7a16b4b0fc321f4ab676a59250d08fce5b64921897fb07cc/psycopg2-2.9.5.tar.gz"
+        ],
+        sha256 = "a5246d2e683a972e2187a8714b5c2cf8156c064629f9a9b1a873c1730d9e245a",
+        downloaded_file_path = "psycopg2-2.9.5.tar.gz",
     )
 
     maybe(
@@ -491,12 +507,12 @@ def repositories():
 
     maybe(
         http_file,
-        name = "example_lock_wheel_pytz_2022.6_py2.py3_none_any",
+        name = "example_lock_wheel_pytz_2022.7_py2.py3_none_any",
         urls = [
-            "https://files.pythonhosted.org/packages/85/ac/92f998fc52a70afd7f6b788142632afb27cd60c8c782d1452b7466603332/pytz-2022.6-py2.py3-none-any.whl"
+            "https://files.pythonhosted.org/packages/3d/19/4de17f0d5cf5a0d87aa67532d4c2fa75e6e7d8df13c27635ff40fa6f4b76/pytz-2022.7-py2.py3-none-any.whl"
         ],
-        sha256 = "222439474e9c98fced559f1709d89e6c9cbf8d79c794ff3eb9f8800064291427",
-        downloaded_file_path = "pytz-2022.6-py2.py3-none-any.whl",
+        sha256 = "93007def75ae22f7cd991c84e02d434876818661f8df9ad5df9e950ff4e52cfd",
+        downloaded_file_path = "pytz-2022.7-py2.py3-none-any.whl",
     )
 
     maybe(
@@ -531,12 +547,12 @@ def repositories():
 
     maybe(
         http_file,
-        name = "example_lock_wheel_traitlets_5.7.0_py3_none_any",
+        name = "example_lock_wheel_traitlets_5.8.0_py3_none_any",
         urls = [
-            "https://files.pythonhosted.org/packages/da/31/a4740b0177838e5b1b50478cff4de09e5373ba8e5ed0998ae045b42218df/traitlets-5.7.0-py3-none-any.whl"
+            "https://files.pythonhosted.org/packages/44/2d/76503546de9c5eaf70a5864288e9b3eb4d017c7bd7800b5fd6e93d1d4ab0/traitlets-5.8.0-py3-none-any.whl"
         ],
-        sha256 = "61832ea7b7f910f5745e27e9bb269a181fd15af76027d99560299209d5b17c94",
-        downloaded_file_path = "traitlets-5.7.0-py3-none-any.whl",
+        sha256 = "c864831efa0ba6576d09b44884b34e41defc18c0d7e720b4a2d6698c842cab3e",
+        downloaded_file_path = "traitlets-5.8.0-py3-none-any.whl",
     )
 
     maybe(
