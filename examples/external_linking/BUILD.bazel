@@ -6,6 +6,10 @@ load(
     "pycross_lock_file",
     "pycross_pdm_lock_model",
 )
+load(
+    "@jvolkman_rules_pycross//pycross:toolchain.bzl",
+    "pycross_hermetic_toolchain",
+)
 
 _darwin_x86_64 = [
     "@platforms//os:macos",
@@ -66,6 +70,36 @@ pycross_target_environment(
     visibility = ["//visibility:public"],
 )
 
+pycross_hermetic_toolchain(
+    name = "pycross_darwin_linux",
+    exec_interpreter = "@python3_10_aarch64-apple-darwin//:py3_runtime",
+    target_environment = ":python_linux_x86_64",
+    target_interpreter = "@python3_10_x86_64-unknown-linux-gnu//:py3_runtime",
+)
+
+toolchain(
+    name = "pycross_darwin_linux_tc",
+    exec_compatible_with = _darwin_arm64,
+    target_compatible_with = _linux_x86_64,
+    toolchain = ":pycross_darwin_linux",
+    toolchain_type = "@jvolkman_rules_pycross//pycross:toolchain_type",
+)
+
+pycross_hermetic_toolchain(
+    name = "pycross_linux_darwin",
+    exec_interpreter = "@python3_10_x86_64-unknown-linux-gnu//:py3_runtime",
+    target_environment = ":python_darwin_x86_64",
+    target_interpreter = "@python3_10_aarch64-apple-darwin//:py3_runtime",
+)
+
+toolchain(
+    name = "pycross_linux_darwin_tc",
+    exec_compatible_with = _linux_x86_64,
+    target_compatible_with = _darwin_arm64,
+    toolchain = ":pycross_linux_darwin",
+    toolchain_type = "@jvolkman_rules_pycross//pycross:toolchain_type",
+)
+
 pycross_pdm_lock_model(
     name = "example_lock_model",
     project_file = "pyproject.toml",
@@ -89,6 +123,7 @@ pycross_lock_file(
     ],
     build_target_overrides = {
         "numpy": "@//deps/numpy",
+        "psycopg2": "@//deps/psycopg2",
     },
     package_build_dependencies = {
         "numpy": [

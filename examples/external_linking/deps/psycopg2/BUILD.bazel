@@ -1,45 +1,39 @@
 load("@jvolkman_rules_pycross//pycross:defs.bzl", "pycross_wheel_build")
 load("//:example_lock.bzl", "targets")
-load(":defs.bzl", "postgresql_config")
 
 package(default_visibility = ["//visibility:public"])
 
 # Specified here as an override.
 pycross_wheel_build(
-    name = "numpy",
-    sdist = "@example_lock_sdist_numpy_1.23.5//file",
+    name = "psycopg2",
+    sdist = "@example_lock_sdist_psycopg2_2.9.5//file",
     deps = [
-        "//deps:cython",
         "//deps:setuptools",
         "//deps:wheel",
     ],
     data = [
-        "//deps/openblas:libopenblas.a",
-        "//deps/openblas:include",
-    ],
-    pre_build_hooks = [
-        ":gen_site_cfg",
-    ],
-    post_build_hooks = [
-        ":auditwheel",
+        "//third_party/openssl:gen_dir",
+        "//third_party/postgresql:gen_dir",
     ],
     build_env = {
-        "OPENBLAS_LIB": "$(location //deps/openblas:libopenblas.a)",
-        "OPENBLAS_INCLUDE": "$(location //deps/openblas:include)",
+        "POSTGRESQL_PREFIX": "%CWD%/$(execpath //third_party/postgresql:gen_dir)/usr",
+        "OPENSSL_PREFIX": "%CWD%/$(execpath //third_party/openssl:gen_dir)/usr",
+        "LD_LIBRARY_PATH": (
+            "%CWD%/$(execpath //third_party/openssl:gen_dir)/usr/lib:" +
+            "%CWD%/$(execpath //third_party/openssl:gen_dir)/usr/lib64"
+        ),
+        "DYLD_LIBRARY_PATH": (
+            "%CWD%/$(execpath //third_party/openssl:gen_dir)/usr/lib:" +
+            "%CWD%/$(execpath //third_party/openssl:gen_dir)/usr/lib64"
+        ),
+    },
+    path_tools = {
+        ":pg_config": "pg_config",
     },
     tags = ["manual"],
 )
 
 py_binary(
-    name = "gen_site_cfg",
-    srcs = ["gen_site_cfg.py"],
-)
-
-py_binary(
-    name = "auditwheel",
-    srcs = ["auditwheel.py"],
-)
-
-postgresql_config(
-    name = "postgres"
+    name = "pg_config",
+    srcs = ["pg_config.py"],
 )

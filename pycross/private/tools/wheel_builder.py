@@ -520,14 +520,15 @@ def build_cross_venv(
         target_python_exe,
     ]
 
-    for tag in target_env.compatibility_tags:
-        if "manylinux" in tag:
-            crossenv_args.extend(
-                [
-                    "--manylinux",
-                    tag,
-                ]
-            )
+    if target_env:
+        for tag in target_env.compatibility_tags:
+            if "manylinux" in tag:
+                crossenv_args.extend(
+                    [
+                        "--manylinux",
+                        tag,
+                    ]
+                )
 
     try:
         subprocess.check_output(
