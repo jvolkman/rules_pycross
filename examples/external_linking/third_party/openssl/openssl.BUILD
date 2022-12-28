@@ -35,6 +35,14 @@ config_setting(
     ],
 )
 
+config_setting(
+    name = "linux_arm64",
+    constraint_values = [
+        "@platforms//os:linux",
+        "@platforms//cpu:arm64",
+    ],
+)
+
 filegroup(
     name = "all_srcs",
     srcs = glob(
@@ -53,6 +61,7 @@ CONFIGURE_OPTIONS = [
     ":macos_x86_64": ["darwin64-x86_64-cc"],
     ":macos_arm64": ["darwin64-arm64-cc"],
     ":linux_x86_64": ["linux-x86_64-clang"],
+    ":linux_arm64": ["linux-aarch64"],
 })
 
 LIB_NAME = "openssl"
@@ -87,7 +96,7 @@ configure_make(
     lib_source = ":all_srcs",
     out_bin_dir = "usr/bin",
     out_lib_dir = select({
-        "@platforms//os:linux": "usr/lib64",
+        ":linux_x86_64": "usr/lib64",
         "//conditions:default": "usr/lib",
     }),
     out_include_dir = "usr/include",

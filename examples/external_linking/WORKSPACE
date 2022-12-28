@@ -96,6 +96,7 @@ register_toolchains(
 register_toolchains(
     "//:pycross_darwin_linux_tc",
     "//:pycross_linux_darwin_tc",
+    "//:pycross_linux_x86_64_linux_arm64_tc",
 )
 
 load("//:example_lock.bzl", "repositories")
