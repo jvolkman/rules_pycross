@@ -11,6 +11,8 @@ load("@rules_python//python/pip_install:repositories.bzl", "pip_install_dependen
 load("//pycross/private:versions.bzl", "TOOL_VERSIONS")
 load("//pycross/private:pypi_requirements.bzl", "install_deps")
 
+load("//third_party/patchelf:repositories.bzl", patchelf_repositories = "repositories")
+
 # WARNING: any changes in this function may be BREAKING CHANGES for users
 # because we'll fetch a dependency which may be different from one that
 # they were previously fetching later in their WORKSPACE setup, and now
@@ -28,6 +30,8 @@ def rules_pycross_dependencies(python_interpreter_target=None):
         ],
         sha256 = "f7be3474d42aae265405a592bb7da8e171919d74c16f082a5457840f06054728",
     )
+
+    patchelf_repositories()
 
     pip_install_dependencies()
     install_deps(python_interpreter_target=python_interpreter_target)

@@ -1,0 +1,14 @@
+load("@rules_python//python:defs.bzl", "py_binary", "py_library")
+
+package(default_visibility = ["//visibility:private"])
+
+py_binary(
+    name = "repair_wheel",
+    srcs = [
+        "repair_wheel.py",
+    ],
+    deps = [
+        "@rules_pycross_pypi_deps_absl_py//:pkg",
+        "@rules_pycross_pypi_deps_auditwheel//:pkg",
+    ],
+)

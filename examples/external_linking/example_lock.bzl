@@ -56,6 +56,14 @@ def targets():
     )
 
     native.config_setting(
+        name = "_env_python_linux_arm64",
+        constraint_values = [
+            "@platforms//os:linux",
+            "@platforms//cpu:arm64",
+        ],
+    )
+
+    native.config_setting(
         name = "_env_python_linux_x86_64",
         constraint_values = [
             "@platforms//os:linux",
@@ -66,6 +74,7 @@ def targets():
     _target = select({
         ":_env_python_darwin_arm64": "@//:python_darwin_arm64",
         ":_env_python_darwin_x86_64": "@//:python_darwin_x86_64",
+        ":_env_python_linux_arm64": "@//:python_linux_arm64",
         ":_env_python_linux_x86_64": "@//:python_linux_x86_64",
     })
 
@@ -94,6 +103,7 @@ def targets():
         wheel = select({
             ":_env_python_darwin_arm64": "@example_lock_wheel_cython_0.29.32_py2.py3_none_any//file",
             ":_env_python_darwin_x86_64": "@example_lock_wheel_cython_0.29.32_py2.py3_none_any//file",
+            ":_env_python_linux_arm64": "@example_lock_wheel_cython_0.29.32_cp310_cp310_manylinux_2_17_aarch64.manylinux2014_aarch64.manylinux_2_24_aarch64//file",
             ":_env_python_linux_x86_64": "@example_lock_wheel_cython_0.29.32_cp310_cp310_manylinux_2_17_x86_64.manylinux2014_x86_64.manylinux_2_24_x86_64//file",
         }),
     )
@@ -353,6 +363,16 @@ def repositories():
         ],
         sha256 = "fbbce6a29f263178a1f7915c1940bde0ec2b2a967566fe1c65c1dfb7422bd255",
         downloaded_file_path = "backcall-0.2.0-py2.py3-none-any.whl",
+    )
+
+    maybe(
+        http_file,
+        name = "example_lock_wheel_cython_0.29.32_cp310_cp310_manylinux_2_17_aarch64.manylinux2014_aarch64.manylinux_2_24_aarch64",
+        urls = [
+            "https://files.pythonhosted.org/packages/dd/56/64511ba10e9766aec4b1fd8d478eca5654bb77859686d089f77229004dbf/Cython-0.29.32-cp310-cp310-manylinux_2_17_aarch64.manylinux2014_aarch64.manylinux_2_24_aarch64.whl"
+        ],
+        sha256 = "97335b2cd4acebf30d14e2855d882de83ad838491a09be2011745579ac975833",
+        downloaded_file_path = "Cython-0.29.32-cp310-cp310-manylinux_2_17_aarch64.manylinux2014_aarch64.manylinux_2_24_aarch64.whl",
     )
 
     maybe(
