@@ -229,6 +229,9 @@ def _handle_py_deps(ctx, args, tools):
     args.add_all(imports, before_each="--python-path", map_each=_resolve_import_path_fn(ctx), allow_closure=True)
     tools.extend([dep[PyInfo].transitive_sources for dep in ctx.attr.deps])
 
+def _handle_native_deps(ctx, args, tools):
+    pass
+
 def _handle_target_environment(ctx, args, inputs):
     if not ctx.attr.target_environment:
         return
@@ -290,6 +293,7 @@ def _pycross_wheel_build_impl(ctx):
     cc_vars = _handle_sysconfig_data(ctx, args, inputs)
     _handle_toolchains(ctx, args, tools)
     _handle_py_deps(ctx, args, tools)
+    _handle_native_deps(ctx, args, tools)
     _handle_target_environment(ctx, args, inputs)
 
     if ctx.attr.build_cwd_token:
@@ -346,6 +350,10 @@ pycross_wheel_build = rule(
         "deps": attr.label_list(
             doc = "A list of Python build dependencies for the wheel.",
             providers = [PyInfo],
+        ),
+        "native_deps": attr.label_list(
+            doc = "A list of native build dependencies (CcInfo) for the wheel.",
+            providers = [CcInfo],
         ),
         "data": attr.label_list(
             doc = "Additional data and dependencies used by the build.",
