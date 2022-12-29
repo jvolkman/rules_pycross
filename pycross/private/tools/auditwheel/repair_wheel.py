@@ -1,3 +1,4 @@
+import argparse
 import os
 import pathlib
 from typing import Any
@@ -5,24 +6,33 @@ from typing import Any
 from absl import app
 from absl.flags import argparse_flags
 
-
-def init_policies_for_machine(machine: str):
-    import platform
-    old_machine_fn = platform.machine
-    try:
-        platform.machine = lambda: machine
-        import auditwheel.policy
-    finally:
-        platform.machine = old_machine_fn
+from pycross.private.tools.auditwheel import monkeypatch
 
 
 def main(args: Any) -> None:
-    init_policies_for_machine("aarch64")
+    monkeypatch.apply_auditwheel_patches(args.target_machine)
 
-    from auditwheel import wheel_abi
+    from auditwheel.wheel_abi import analyze_wheel_abi
+    winfo = analyze_wheel_abi(args.wheel_file)
 
-    winfo = wheel_abi.analyze_wheel_abi(str(args.wheel_file))
-    print(winfo)
+    ap_parser = argparse.ArgumentParser()
+    ap_sub_parsers = ap_parser.add_subparsers(metavar="command", dest="cmd")
+
+    from auditwheel import main_repair
+    main_repair.configure_parser(ap_sub_parsers)
+
+    ap_args = ap_parser.parse_args([
+        "repair",
+        args.wheel_file,
+        "--only-plat",
+        "--plat",
+        winfo.overall_tag,
+        "--wheel-dir",
+        args.output_dir,
+    ])
+    ap_args.verbose = args.verbose
+
+    ap_args.func(ap_args, ap_parser)
 
 
 def parse_flags(argv) -> Any:
@@ -32,9 +42,28 @@ def parse_flags(argv) -> Any:
 
     parser.add_argument(
         "--wheel-file",
-        type=pathlib.Path,
         help="Path to wheel file.",
         required=True,
+    )
+
+    parser.add_argument(
+        "--target-machine",
+        help="The machine name for the target platform (x86_64, aarch64, ...)",
+        required=True,
+    )
+
+    parser.add_argument(
+        "--output-dir",
+        help="Path to directory where new wheel is written.",
+        required=True,
+    )
+
+    parser.add_argument(
+        "--verbose",
+        action="count",
+        dest="verbose",
+        default=0,
+        help="Give more output. Option is additive",
     )
 
     return parser.parse_args(argv[1:])
