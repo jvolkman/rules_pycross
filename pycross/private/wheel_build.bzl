@@ -1,6 +1,14 @@
 """Implementation of the pycross_wheel_build rule."""
 
-load(":cc_toolchain_util.bzl", "absolutize_path_in_str", "get_env_vars", "get_flags_info", "get_tools_info")
+load(
+    ":cc_toolchain_util.bzl",
+    "absolutize_path_in_str",
+    "get_env_vars",
+    "get_flags_info",
+    "get_headers",
+    "get_libraries",
+    "get_tools_info",
+)
 load(":providers.bzl", "PycrossTargetEnvironmentInfo", "PycrossWheelInfo")
 load("@bazel_skylib//lib:paths.bzl", "paths")
 load("@bazel_tools//tools/cpp:toolchain_utils.bzl", "find_cpp_toolchain", "use_cpp_toolchain")
@@ -229,34 +237,20 @@ def _handle_py_deps(ctx, args, tools):
     args.add_all(imports, before_each="--python-path", map_each=_resolve_import_path_fn(ctx), allow_closure=True)
     tools.extend([dep[PyInfo].transitive_sources for dep in ctx.attr.deps])
 
-def get_libraries(library_to_link):
-    all_libs = [
-        library_to_link.static_library,
-        library_to_link.pic_static_library,
-        library_to_link.dynamic_library,
-        library_to_link.interface_library,
-    ]
-    return [lib for lib in all_libs if lib]
-
 def _handle_native_deps(ctx, args, tools):
     for dep in ctx.attr.native_deps:
         if CcInfo not in dep:
             continue
         ccinfo = dep[CcInfo]
 
-        args.add_all(ccinfo.compilation_context.system_includes, before_each="--native-include-path")
-        args.add_all(ccinfo.compilation_context.includes, before_each="--native-include-path")
-
+        headers_and_includes = get_headers(ccinfo)
         tools.append(ccinfo.compilation_context.headers)
-        args.add_all(ccinfo.compilation_context.headers, before_each="--native-header")
+        args.add_all(headers_and_includes.include_dirs, before_each="--native-include-path")
+        args.add_all(headers_and_includes.headers, before_each="--native-header", expand_directories=False)
 
-        all_libraries = []
-        for li in ccinfo.linking_context.linker_inputs.to_list():
-            for library_to_link in li.libraries:
-                all_libraries.extend(get_libraries(library_to_link))
-
-        tools.append(depset(all_libraries))
-        args.add_all(all_libraries, before_each="--native-library")
+        libraries = get_libraries(ccinfo)
+        tools.append(depset(libraries))
+        args.add_all(libraries, before_each="--native-library")
 
 def _handle_target_environment(ctx, args, inputs):
     if not ctx.attr.target_environment:

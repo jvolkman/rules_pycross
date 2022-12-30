@@ -1,5 +1,4 @@
 load("@jvolkman_rules_pycross//pycross:defs.bzl", "pycross_wheel_build")
-load("//:example_lock.bzl", "targets")
 
 package(default_visibility = ["//visibility:public"])
 
