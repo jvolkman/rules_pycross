@@ -165,7 +165,11 @@ def _expand_locations_and_vars(attribute_name, ctx, val):
         "WORKSPACE": ctx.workspace_name,
     }
 
-    val = ctx.expand_location(val, ctx.attr.deps + ctx.attr.data)
+    # We import $(abspath :foo) by replacing it with $(execpath :foo) prefixed by 
+    # $$EXT_BUILD_ROOT$$/, which is replaced in our build action. Note that "$$$$"
+    # turns into "$$" after passing through ctx.expand_location.
+    val = val.replace("$(abspath ", "$$$$EXT_BUILD_ROOT$$$$/$(execpath ")
+    val = ctx.expand_location(val, ctx.attr.deps + ctx.attr.native_deps + ctx.attr.data)
     val = ctx.expand_make_variables(attribute_name, val, additional_substitutions)
     return val
 
@@ -316,9 +320,6 @@ def _pycross_wheel_build_impl(ctx):
     _handle_native_deps(ctx, args, tools)
     _handle_target_environment(ctx, args, inputs)
 
-    if ctx.attr.build_cwd_token:
-        args.add("--build-cwd-token", ctx.attr.build_cwd_token)
-
     _handle_build_env(ctx, args, inputs)
     _handle_config_settings(ctx, args, inputs)
 
@@ -395,14 +396,6 @@ pycross_wheel_build = rule(
                 "PEP 517 config settings passed to the sdist build. " +
                 "Values are subject to 'Make variable', location, and build_cwd_token expansion."
             ),
-        ),
-        "build_cwd_token": attr.string(
-            doc = (
-                "A token replaced with the build action's working directory. " +
-                "If specified, values in build_env and config_settings will has this token " +
-                "replaced with the working directory of the build action."
-            ),
-            default = "%CWD%",
         ),
         "pre_build_hooks": attr.label_list(
             doc = (
