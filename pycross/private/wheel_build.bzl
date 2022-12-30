@@ -229,8 +229,34 @@ def _handle_py_deps(ctx, args, tools):
     args.add_all(imports, before_each="--python-path", map_each=_resolve_import_path_fn(ctx), allow_closure=True)
     tools.extend([dep[PyInfo].transitive_sources for dep in ctx.attr.deps])
 
+def get_libraries(library_to_link):
+    all_libs = [
+        library_to_link.static_library,
+        library_to_link.pic_static_library,
+        library_to_link.dynamic_library,
+        library_to_link.interface_library,
+    ]
+    return [lib for lib in all_libs if lib]
+
 def _handle_native_deps(ctx, args, tools):
-    pass
+    for dep in ctx.attr.native_deps:
+        if CcInfo not in dep:
+            continue
+        ccinfo = dep[CcInfo]
+
+        args.add_all(ccinfo.compilation_context.system_includes, before_each="--native-include-path")
+        args.add_all(ccinfo.compilation_context.includes, before_each="--native-include-path")
+
+        tools.append(ccinfo.compilation_context.headers)
+        args.add_all(ccinfo.compilation_context.headers, before_each="--native-header")
+
+        all_libraries = []
+        for li in ccinfo.linking_context.linker_inputs.to_list():
+            for library_to_link in li.libraries:
+                all_libraries.extend(get_libraries(library_to_link))
+
+        tools.append(depset(all_libraries))
+        args.add_all(all_libraries, before_each="--native-library")
 
 def _handle_target_environment(ctx, args, inputs):
     if not ctx.attr.target_environment:
