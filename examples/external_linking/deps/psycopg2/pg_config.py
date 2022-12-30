@@ -5,26 +5,25 @@ from typing import Optional
 
 PG_VERSION_DEFINE = "#define PG_VERSION "
 
-build_root = Path(os.environ["PYCROSS_BUILD_ROOT"])
-lib_dir = build_root / "lib"
-
-# Search for the actual postgresql include path.
-include_paths = [Path(p) for p in os.environ["PYCROSS_INCLUDE_PATH"].split(":")]
-for p in include_paths:
-    if (p / "pg_config.h").is_file():
-        include_dir = p
-        if (include_dir / "server").is_dir():
-            server_include_dir = include_dir / "server"
-        elif (include_dir / "postgresql/server").is_dir():
-            server_include_dir = include_dir / "postgresql/server"
-        break
-else:
-    # We didn't find it, so just set the include dir to the one in our work environment.
-    include_dir = build_root / "include"
-    server_include_dir = include_dir
-
-
 def query(arg: str) -> Optional[str]:
+    build_root = Path(os.environ["PYCROSS_BUILD_ROOT"])
+    lib_dir = build_root / "lib"
+
+    # Search for the actual postgresql include path.
+    include_paths = [Path(p) for p in os.environ["PYCROSS_INCLUDE_PATH"].split(":")]
+    for p in include_paths:
+        if (p / "pg_config.h").is_file():
+            include_dir = p
+            if (include_dir / "server").is_dir():
+                server_include_dir = include_dir / "server"
+            elif (include_dir / "postgresql/server").is_dir():
+                server_include_dir = include_dir / "postgresql/server"
+            break
+    else:
+        # We didn't find it, so just set the include dir to the one in our work environment.
+        include_dir = build_root / "include"
+        server_include_dir = include_dir
+
     if arg == "libdir":
         return str(lib_dir)
 
