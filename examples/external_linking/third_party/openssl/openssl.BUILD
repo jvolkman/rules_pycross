@@ -105,11 +105,15 @@ configure_make(
     # As such, libssl must be listed before libcrypto
     out_shared_libs = select({
         "@platforms//os:macos": [
+            "libssl.dylib",
             "libssl.3.dylib",
+            "libcrypto.dylib",
             "libcrypto.3.dylib",
         ],
         "//conditions:default": [
+            "libssl.so",
             "libssl.so.3",
+            "libcrypto.so",
             "libcrypto.so.3",
         ],
     }),
