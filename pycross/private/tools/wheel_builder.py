@@ -718,11 +718,9 @@ def init_build_env_vars(args: Any, path_dirs: List[Path], cwd: Path) -> Dict[str
     vars = get_default_build_env_vars(path_dirs)
     if args.build_env:
         with open(args.build_env, "r") as f:
-            additional_build_env = json.load(f)
-        if args.build_cwd_token:
             additional_build_env = replace_path_placeholders(
-                additional_build_env,
-                args.build_cwd_token,
+                json.load(f),
+                "$$EXT_BUILD_ROOT$$",
                 cwd,
             )
         for key, val in additional_build_env.items():
@@ -736,11 +734,9 @@ def init_config_settings(args: Any, cwd: Path) -> Dict[str, Any]:
         return {}
 
     with open(args.config_settings, "r") as f:
-        config_settings = json.load(f)
-    if args.build_cwd_token:
         config_settings = replace_path_placeholders(
-            config_settings,
-            args.build_cwd_token,
+            json.load(f),
+            "$$EXT_BUILD_ROOT$$",
             cwd,
         )
 
@@ -872,12 +868,6 @@ def parse_flags(argv) -> Any:
     parser.add_argument(
         "--always-use-crossenv",
         action="store_true",
-    )
-
-    parser.add_argument(
-        "--build-cwd-token",
-        type=str,
-        help="A placeholder replaced by the build's initial working directory.",
     )
 
     parser.add_argument(
