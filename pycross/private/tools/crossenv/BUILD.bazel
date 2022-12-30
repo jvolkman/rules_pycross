@@ -11,7 +11,7 @@ py_library(
     ],
     data = [
         "//pycross/private/tools/crossenv/scripts",
-    ]
+    ],
 )
 
 py_binary(
