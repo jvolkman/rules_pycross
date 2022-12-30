@@ -3,8 +3,11 @@ import json
 import os
 import platform
 import pprint
+import re
+import subprocess
 import sys
 import sysconfig
+import tempfile
 from pathlib import Path
 from typing import Any
 from typing import Dict
@@ -15,6 +18,20 @@ from . import utils
 
 SYSCONFIG_DATA_NAME = "_pycross_sysconfig_data"
 
+# A tiny source file that gets the compiler to output the glibc version
+# it's going to link against without us having to actually execute the
+# resulting binary (which may be for a different architecture).
+#
+# There may be a better way.
+GLIBC_TELLER = """\
+#include <stdlib.h>
+#define XSTR(x) STR(x)
+#define STR(x) #x
+
+#if defined(__GLIBC__) && defined(__GLIBC_MINOR__)
+#pragma message "GLIBC" "=" XSTR(__GLIBC__) "." XSTR(__GLIBC_MINOR__)
+#endif
+"""
 
 @dataclasses.dataclass
 class Uname:
@@ -130,6 +147,27 @@ def guess_sysconfig_platform(
         return target_platform
 
 
+def determine_glibc_version(sysconfig_vars: Dict[str, Any]) -> Optional[str]:
+    cmd = sysconfig_vars["CC"].split() + sysconfig_vars["CFLAGS"].split()
+    with tempfile.TemporaryDirectory() as tmp:
+        tmp = Path(tmp)
+        teller_src = tmp / "teller.cc"
+        teller_out = tmp / "teller"
+
+        with open(teller_src, "w") as f:
+            f.write(GLIBC_TELLER)
+
+        cmd += ["-c", "-o", str(teller_out), str(teller_src)]
+        # Run the compiler and capture its output
+        print(" ".join(cmd))
+        out = subprocess.check_output(cmd, env=os.environ, stderr=subprocess.STDOUT)
+        out = out.decode("utf-8")
+
+        m = re.search("GLIBC=([0-9.]+)", out)
+        if m:
+            return m.group(1)
+
+
 def build_context(
     target_python_exe: str,
     lib_path: str,
@@ -163,7 +201,7 @@ def build_context(
 
     target_context = TargetContext(
         abiflags=sysconfig_vars.get("ABIFLAGS"),
-        effective_glibc="TODO",  # TODO
+        effective_glibc=determine_glibc_version(sysconfig_vars),
         home=str(home),
         macosx_deployment_target=macosx_deployment_target,
         manylinux_tags=manylinux_tags,
