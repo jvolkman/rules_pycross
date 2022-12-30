@@ -11,22 +11,10 @@ pycross_wheel_build(
         "//deps:setuptools",
         "//deps:wheel",
     ],
-    data = [
-        "//third_party/openssl:gen_dir",
-        "//third_party/postgresql:gen_dir",
+    native_deps = [
+        "//third_party/openssl",
+        "//third_party/postgresql",
     ],
-    build_env = {
-        "POSTGRESQL_PREFIX": "%CWD%/$(execpath //third_party/postgresql:gen_dir)/usr",
-        "OPENSSL_PREFIX": "%CWD%/$(execpath //third_party/openssl:gen_dir)/usr",
-        "LD_LIBRARY_PATH": (
-            "%CWD%/$(execpath //third_party/openssl:gen_dir)/usr/lib:" +
-            "%CWD%/$(execpath //third_party/openssl:gen_dir)/usr/lib64"
-        ),
-        "DYLD_LIBRARY_PATH": (
-            "%CWD%/$(execpath //third_party/openssl:gen_dir)/usr/lib:" +
-            "%CWD%/$(execpath //third_party/openssl:gen_dir)/usr/lib64"
-        ),
-    },
     path_tools = {
         ":pg_config": "pg_config",
     },

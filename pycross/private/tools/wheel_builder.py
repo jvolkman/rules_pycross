@@ -52,6 +52,14 @@ def _init_colors() -> Dict[str, str]:
 _STYLES = _init_colors()
 
 
+def _warn(msg: str) -> None:  # pragma: no cover
+    """
+    Print a warning message. Will color the output when writing to a TTY.
+    :param msg: Warning message
+    """
+    print("{yellow}WARNING{reset} {}".format(msg, **_STYLES))
+
+
 def _error(msg: str, code: int = 1) -> NoReturn:  # pragma: no cover
     """
     Print an error message and exit. Will color the output when writing to a TTY.
@@ -196,15 +204,15 @@ def get_default_build_env_vars(path_dirs: List[Path]) -> Dict[str, str]:
     return env
 
 
-def replace_cwd_tokens(
-    data: Dict[str, Any], replacement: str, cwd: Path
+def replace_path_placeholders(
+    data: Dict[str, Any], placeholder: str, replacement: Path
 ) -> Dict[str, Any]:
-    cwd = str(cwd)
-    if cwd.endswith("/"):
-        cwd = cwd[:-1]
+    replacement = str(replacement)
+    if replacement.endswith("/"):
+        replacement = replacement[:-1]
     result = {}
     for k, v in data.items():
-        result[k] = v.replace(replacement, cwd)
+        result[k] = v.replace(placeholder, replacement)
 
     return result
 
@@ -324,6 +332,10 @@ def generate_cross_sysconfig_vars(
     toolchain_vars: Dict[str, Any],
     target_vars: Dict[str, Any],
     wrapper_vars: Dict[str, Any],
+    cwd: Path,
+    include_dir: Path,
+    lib_dir: Path,
+    additional_include_paths: List[Path],
 ) -> Dict[str, Any]:
     sysconfig_vars = toolchain_vars.copy()
     sysconfig_vars.update(wrapper_vars)
@@ -334,6 +346,13 @@ def generate_cross_sysconfig_vars(
         [sysconfig_vars["CC"], sysconfig_vars["LDSHAREDFLAGS"]]
     )
     del sysconfig_vars["LDSHAREDFLAGS"]
+
+    # Add search paths for listed native deps
+    if additional_include_paths:
+        for path in additional_include_paths:
+            sysconfig_vars["CFLAGS"] += f" -I{cwd / path}"
+    sysconfig_vars["CFLAGS"] += f" -I{include_dir} -L{lib_dir}"
+    sysconfig_vars["LDSHARED"] += f" -L{lib_dir}"
 
     return sysconfig_vars
 
@@ -360,6 +379,28 @@ def link_path_tools(
             _error("path_tool name must not contain path separators")
         path_tool_in_bin = tools_dir / path_tool_name
         path_tool_in_bin.symlink_to(cwd / relative_path_tool_path)
+
+
+def link_native_headers(
+    include_dir: Path, cwd: Path, headers: List[Path]
+) -> None:
+    for header in headers:
+        path_in_include = include_dir / header.name
+        if path_in_include.exists():
+            _warn(f"Not linking {header} into include directory because {header.name} already exists.")
+            continue
+        # path_in_include.symlink_to(cwd / header)
+
+
+def link_native_libraries(
+    lib_dir: Path, cwd: Path, libraries: List[Path]
+) -> None:
+    for library in libraries:
+        path_in_lib = lib_dir / library.name
+        if path_in_lib.exists():
+            _warn(f"Not linking {library} into lib directory because {library.name} already exists.")
+            continue
+        path_in_lib.symlink_to(cwd / library)
 
 
 def extract_sdist(sdist_path: Path, sdist_dir: Path) -> Path:
@@ -593,6 +634,7 @@ def build_venv(
 
 
 def build_wheel(
+    temp_dir: Path,
     env_dir: Path,
     wheel_dir: Path,
     sdist_dir: Path,
@@ -614,6 +656,11 @@ def build_wheel(
 
         if extra_environ:
             env.update(extra_environ)
+
+        env.update({
+            "PYCROSS_BUILD_ROOT": str(temp_dir),
+            "PYCROSS_SDIST_ROOT": str(sdist_dir),
+        })
 
         if debug:
             try:
@@ -668,7 +715,7 @@ def init_build_env_vars(args: Any, path_dirs: List[Path], cwd: Path) -> Dict[str
         with open(args.build_env, "r") as f:
             additional_build_env = json.load(f)
         if args.build_cwd_token:
-            additional_build_env = replace_cwd_tokens(
+            additional_build_env = replace_path_placeholders(
                 additional_build_env,
                 args.build_cwd_token,
                 cwd,
@@ -686,7 +733,7 @@ def init_config_settings(args: Any, cwd: Path) -> Dict[str, Any]:
     with open(args.config_settings, "r") as f:
         config_settings = json.load(f)
     if args.build_cwd_token:
-        config_settings = replace_cwd_tokens(
+        config_settings = replace_path_placeholders(
             config_settings,
             args.build_cwd_token,
             cwd,
@@ -704,7 +751,7 @@ def load_target_environment(args: Any) -> Optional[TargetEnv]:
 def load_sysconfig_vars(args: Any, cwd: Path) -> Dict[str, Any]:
     with open(args.sysconfig_vars, "r") as f:
         vars = json.load(f)
-    return replace_cwd_tokens(
+    return replace_path_placeholders(
         vars,
         "$$EXT_BUILD_ROOT$$",
         cwd,
@@ -724,6 +771,8 @@ def main(args: Any, temp_dir: Path, is_debug: bool) -> None:
     bin_dir = mktmpdir("bin")
     tools_dir = mktmpdir("tools")
     build_env_dir = mktmpdir("env")
+    include_dir = mktmpdir("include")
+    lib_dir = mktmpdir("lib")
 
     build_env_vars = init_build_env_vars(args, [tools_dir, bin_dir], cwd)
     config_settings = init_config_settings(args, cwd)
@@ -744,6 +793,10 @@ def main(args: Any, temp_dir: Path, is_debug: bool) -> None:
         toolchain_vars=toolchain_sysconfig_vars,
         target_vars=target_sysconfig_vars,
         wrapper_vars=wrapper_sysconfig_vars,
+        cwd=cwd,
+        include_dir=include_dir,
+        lib_dir=lib_dir,
+        additional_include_paths=args.native_include_path,
     )
 
     absolute_path_entries = [os.path.join(cwd, p) for p in args.python_path]
@@ -759,6 +812,8 @@ def main(args: Any, temp_dir: Path, is_debug: bool) -> None:
 
     generate_bin_tools(bin_dir, toolchain_sysconfig_vars)
     link_path_tools(tools_dir, cwd, args.path_tool)
+    link_native_headers(include_dir, cwd, args.native_header)
+    link_native_libraries(lib_dir, cwd, args.native_library)
 
     if is_debug:
         print(f"Build environment: {build_env_dir}")
@@ -766,14 +821,15 @@ def main(args: Any, temp_dir: Path, is_debug: bool) -> None:
     extracted_dir = extract_sdist(args.sdist, sdist_dir)
 
     build_env_vars, config_settings = run_pre_build_hooks(
-        args.pre_build_hook,
-        temp_dir,
-        extracted_dir,
-        build_env_vars,
-        config_settings,
+        hooks=args.pre_build_hook,
+        temp_dir=temp_dir,
+        sdist_dir=extracted_dir,
+        build_env=build_env_vars,
+        config_settings=config_settings,
     )
 
     wheel_file = build_wheel(
+        temp_dir=temp_dir,
         env_dir=build_env_dir,
         wheel_dir=wheel_dir,
         sdist_dir=extracted_dir,
@@ -783,10 +839,10 @@ def main(args: Any, temp_dir: Path, is_debug: bool) -> None:
     )
 
     wheel_file = run_post_build_hooks(
-        args.post_build_hook,
-        temp_dir,
-        build_env_vars,
-        wheel_file,
+        hooks=args.post_build_hook,
+        temp_dir=temp_dir,
+        build_env=build_env_vars,
+        wheel_file=wheel_file,
     )
 
     if target_environment:
@@ -803,39 +859,14 @@ def parse_flags(argv) -> Any:
     )
 
     parser.add_argument(
-        "--sdist",
-        type=Path,
-        required=True,
-        help="The sdist path.",
+        "--always-use-crossenv",
+        action="store_true",
     )
 
     parser.add_argument(
-        "--wheel-file",
-        type=Path,
-        required=True,
-        help="The wheel output path.",
-    )
-
-    parser.add_argument(
-        "--wheel-name-file",
-        type=Path,
-        required=True,
-        help="The wheel name output path.",
-    )
-
-    parser.add_argument(
-        "--python-path",
-        type=Path,
-        action="append",
-        default=[],
-        help="An entry to add to sys.path",
-    )
-
-    parser.add_argument(
-        "--sysconfig-vars",
-        type=Path,
-        required=True,
-        help="A JSON file containing variable to add to sysconfig.",
+        "--build-cwd-token",
+        type=str,
+        help="A placeholder replaced by the build's initial working directory.",
     )
 
     parser.add_argument(
@@ -851,25 +882,33 @@ def parse_flags(argv) -> Any:
     )
 
     parser.add_argument(
-        "--build-cwd-token",
-        type=str,
-        help="A placeholder replaced by the build's initial working directory.",
+        "--exec-python-executable",
+        type=Path,
+        required=True,
     )
 
     parser.add_argument(
-        "--pre-build-hook",
+        "--native-header",
         type=Path,
         action="append",
         default=[],
-        help="A tool to run before building the sdist.",
+        help="Header file (or directory of files) to link into our include directory.",
     )
 
     parser.add_argument(
-        "--post-build-hook",
+        "--native-include-path",
         type=Path,
         action="append",
         default=[],
-        help="A tool to run after building the wheel.",
+        help="Include search path to add to CFLAGS.",
+    )
+
+    parser.add_argument(
+        "--native-library",
+        type=Path,
+        action="append",
+        default=[],
+        help="Library to link into our lib directory.",
     )
 
     parser.add_argument(
@@ -882,13 +921,51 @@ def parse_flags(argv) -> Any:
     )
 
     parser.add_argument(
+        "--post-build-hook",
+        type=Path,
+        action="append",
+        default=[],
+        help="A tool to run after building the wheel.",
+    )
+
+    parser.add_argument(
+        "--pre-build-hook",
+        type=Path,
+        action="append",
+        default=[],
+        help="A tool to run before building the sdist.",
+    )
+
+    parser.add_argument(
+        "--python-path",
+        type=Path,
+        action="append",
+        default=[],
+        help="An entry to add to sys.path",
+    )
+
+    parser.add_argument(
+        "--sdist",
+        type=Path,
+        required=True,
+        help="The sdist path.",
+    )
+
+    parser.add_argument(
+        "--sysconfig-vars",
+        type=Path,
+        required=True,
+        help="A JSON file containing variable to add to sysconfig.",
+    )
+
+    parser.add_argument(
         "--target-environment-file",
         type=Path,
         help="A JSON file containing the target Python environment details.",
     )
 
     parser.add_argument(
-        "--exec-python-executable",
+        "--target-python-executable",
         type=Path,
         required=True,
     )
@@ -901,14 +978,17 @@ def parse_flags(argv) -> Any:
     )
 
     parser.add_argument(
-        "--target-python-executable",
+        "--wheel-file",
         type=Path,
         required=True,
+        help="The wheel output path.",
     )
 
     parser.add_argument(
-        "--always-use-crossenv",
-        action="store_true",
+        "--wheel-name-file",
+        type=Path,
+        required=True,
+        help="The wheel name output path.",
     )
 
     return parser.parse_args(argv[1:])
