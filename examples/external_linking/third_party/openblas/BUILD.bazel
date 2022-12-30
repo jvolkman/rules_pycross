@@ -9,8 +9,10 @@ cmake(
         "NOFORTRAN": "on",
         "BUILD_WITHOUT_LAPACK": "no",
         "NUM_THREADS": "64",
-        "TARGET": "HASWELL",
-    },
+    } | select({
+        "@platforms//cpu:x86_64": {"TARGET": "HASWELL"},
+        "//conditions:default": {},
+    }),
     copts = [
         "-Wno-error=int-conversion",
     ],

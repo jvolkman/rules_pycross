@@ -19,9 +19,6 @@ pycross_wheel_build(
     pre_build_hooks = [
         ":gen_site_cfg",
     ],
-    post_build_hooks = [
-        ":auditwheel",
-    ],
     build_env = {
         "OPENBLAS_LIB": "$(location //third_party/openblas:libopenblas.a)",
         "OPENBLAS_INCLUDE": "$(location //third_party/openblas:include)",
