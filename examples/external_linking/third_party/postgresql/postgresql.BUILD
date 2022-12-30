@@ -74,8 +74,8 @@ configure_make(
     out_lib_dir = "usr/lib",
     out_include_dir = "usr/include",
     out_shared_libs = select({
-        "@platforms//os:macos": ["libpq.dylib", "libpq.5.15.dylib"],
-        "@platforms//os:linux": ["libpq.so", "libpq.so.5.15"],
+        "@platforms//os:macos": ["libpq.dylib", "libpq.5.dylib"],
+        "@platforms//os:linux": ["libpq.so", "libpq.so.5"],
     }),
     out_binaries = [
         "pg_config",
