@@ -332,10 +332,8 @@ def generate_cross_sysconfig_vars(
     toolchain_vars: Dict[str, Any],
     target_vars: Dict[str, Any],
     wrapper_vars: Dict[str, Any],
-    cwd: Path,
-    include_dir: Path,
     lib_dir: Path,
-    additional_include_paths: List[Path],
+    include_paths: List[Path],
 ) -> Dict[str, Any]:
     sysconfig_vars = toolchain_vars.copy()
     sysconfig_vars.update(wrapper_vars)
@@ -348,10 +346,9 @@ def generate_cross_sysconfig_vars(
     del sysconfig_vars["LDSHAREDFLAGS"]
 
     # Add search paths for listed native deps
-    if additional_include_paths:
-        for path in additional_include_paths:
-            sysconfig_vars["CFLAGS"] += f" -I{cwd / path}"
-    sysconfig_vars["CFLAGS"] += f" -I{include_dir} -L{lib_dir}"
+    for include_path in include_paths:
+        sysconfig_vars["CFLAGS"] += f" -I{include_path}"
+    sysconfig_vars["CFLAGS"] += f" -L{lib_dir}"
     sysconfig_vars["LDSHARED"] += f" -L{lib_dir}"
 
     return sysconfig_vars
@@ -389,7 +386,7 @@ def link_native_headers(
         if path_in_include.exists():
             _warn(f"Not linking {header} into include directory because {header.name} already exists.")
             continue
-        # path_in_include.symlink_to(cwd / header)
+        path_in_include.symlink_to(cwd / header)
 
 
 def link_native_libraries(
@@ -422,8 +419,10 @@ def run_pre_build_hooks(
     hooks: List[Path],
     temp_dir: Path,
     sdist_dir: Path,
+    lib_dir: Path,
     build_env: Dict[str, str],
     config_settings: Dict[str, Any],
+    include_paths: List[Path],
 ) -> Tuple[Dict[str, str], Dict[str, Any]]:
     config_settings_file = temp_dir / "config_settings.json"
     env_file = temp_dir / "build_env.json"
@@ -433,6 +432,8 @@ def run_pre_build_hooks(
         hook_env["PYCROSS_ENV_VARS_FILE"] = str(env_file)
         hook_env["PYCROSS_BUILD_ROOT"] = str(temp_dir)
         hook_env["PYCROSS_SDIST_ROOT"] = str(sdist_dir)
+        hook_env["PYCROSS_INCLUDE_PATH"] = ":".join(map(str, include_paths))
+        hook_env["PYCROSS_LIBRARY_PATH"] = lib_dir
 
         # Write the current build env to a file.
         with open(env_file, "w") as f:
@@ -472,6 +473,7 @@ def run_pre_build_hooks(
 def run_post_build_hooks(
     hooks: List[Path],
     temp_dir: Path,
+    lib_dir: Path,
     build_env: Dict[str, str],
     wheel_file: Path,
 ) -> Path:
@@ -488,6 +490,7 @@ def run_post_build_hooks(
         hook_env = dict(build_env)
         hook_env["PYCROSS_WHEEL_FILE"] = str(wheel_file)
         hook_env["PYCROSS_WHEEL_OUTPUT_ROOT"] = str(wheel_out)
+        hook_env["PYCROSS_LIBRARY_PATH"] = lib_dir
 
         try:
             subprocess.check_output(
@@ -638,8 +641,10 @@ def build_wheel(
     env_dir: Path,
     wheel_dir: Path,
     sdist_dir: Path,
+    lib_dir: Path,
     build_env_vars: Dict[str, str],
     config_settings: Dict[str, str],
+    include_paths: List[Path],
     debug: bool = False,
 ) -> Path:
 
@@ -657,10 +662,10 @@ def build_wheel(
         if extra_environ:
             env.update(extra_environ)
 
-        env.update({
-            "PYCROSS_BUILD_ROOT": str(temp_dir),
-            "PYCROSS_SDIST_ROOT": str(sdist_dir),
-        })
+        env["PYCROSS_BUILD_ROOT"] = str(temp_dir)
+        env["PYCROSS_SDIST_ROOT"] = str(sdist_dir)
+        env["PYCROSS_INCLUDE_PATH"] = ":".join(map(str, include_paths))
+        env["PYCROSS_LIBRARY_PATH"] = lib_dir
 
         if debug:
             try:
@@ -779,6 +784,9 @@ def main(args: Any, temp_dir: Path, is_debug: bool) -> None:
     toolchain_sysconfig_vars = load_sysconfig_vars(args, cwd)
     target_environment = load_target_environment(args)
 
+    include_paths = [cwd / Path(p) for p in args.native_include_path]
+    include_paths.append(include_dir)
+
     wrapper_sysconfig_vars = generate_cc_wrappers(
         toolchain_vars=toolchain_sysconfig_vars,
         python_exe=args.exec_python_executable,
@@ -793,10 +801,8 @@ def main(args: Any, temp_dir: Path, is_debug: bool) -> None:
         toolchain_vars=toolchain_sysconfig_vars,
         target_vars=target_sysconfig_vars,
         wrapper_vars=wrapper_sysconfig_vars,
-        cwd=cwd,
-        include_dir=include_dir,
         lib_dir=lib_dir,
-        additional_include_paths=args.native_include_path,
+        include_paths=include_paths,
     )
 
     absolute_path_entries = [os.path.join(cwd, p) for p in args.python_path]
@@ -824,8 +830,10 @@ def main(args: Any, temp_dir: Path, is_debug: bool) -> None:
         hooks=args.pre_build_hook,
         temp_dir=temp_dir,
         sdist_dir=extracted_dir,
+        lib_dir=lib_dir,
         build_env=build_env_vars,
         config_settings=config_settings,
+        include_paths=include_paths,
     )
 
     wheel_file = build_wheel(
@@ -833,14 +841,17 @@ def main(args: Any, temp_dir: Path, is_debug: bool) -> None:
         env_dir=build_env_dir,
         wheel_dir=wheel_dir,
         sdist_dir=extracted_dir,
+        lib_dir=lib_dir,
         build_env_vars=build_env_vars,
         config_settings=config_settings,
+        include_paths=include_paths,
         debug=is_debug,
     )
 
     wheel_file = run_post_build_hooks(
         hooks=args.post_build_hook,
         temp_dir=temp_dir,
+        lib_dir=lib_dir,
         build_env=build_env_vars,
         wheel_file=wheel_file,
     )

@@ -1,5 +1,6 @@
 """ Adopted from rules_foreign_cc."""
 
+load("@bazel_skylib//lib:collections.bzl", "collections")
 load("@bazel_tools//tools/build_defs/cc:action_names.bzl", "ACTION_NAMES")
 load("@bazel_tools//tools/cpp:toolchain_utils.bzl", "find_cpp_toolchain")
 
@@ -261,3 +262,55 @@ def _prefix(text, from_str, prefix):
     if not middle or before.endswith("/"):
         return text
     return before + prefix + middle + after
+
+def get_headers(ccinfo):
+    """Returns a struct containing headers and include_dirs for the given CcInfo.
+
+    Args:
+        ccinfo: The CcInfo provider
+
+    Returns:
+        struct: A struct containing headers and include_dirs.
+    """
+    compilation_info = ccinfo.compilation_context
+    include_dirs = compilation_info.system_includes.to_list() + \
+                   compilation_info.includes.to_list()
+
+    # do not use quote includes, currently they do not contain
+    # library-specific information
+    include_dirs = collections.uniq(include_dirs)
+    headers = []
+    for header in compilation_info.headers.to_list():
+        path = header.path
+        included = False
+        for dir_ in include_dirs:
+            if path.startswith(dir_):
+                included = True
+                break
+        if not included:
+            headers.append(header)
+    return struct(
+        headers = headers,
+        include_dirs = include_dirs,
+    )
+
+def get_libraries(ccinfo):
+    """Returns a list of libraries for the given CcInfo.
+
+    Args:
+        ccinfo: The CcInfo provider
+
+    Returns:
+        struct: A list of libraries.
+    """
+    all_libraries = []
+    def add(lib):
+        if lib:
+            all_libraries.append(lib)
+    for li in ccinfo.linking_context.linker_inputs.to_list():
+        for library_to_link in li.libraries:
+            add(library_to_link.static_library)
+            add(library_to_link.pic_static_library)
+            add(library_to_link.dynamic_library)
+            add(library_to_link.interface_library)
+    return all_libraries
