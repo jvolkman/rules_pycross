@@ -11,7 +11,6 @@ pycross_wheel_build(
         "//deps:wheel",
     ],
     native_deps = [
-        "//third_party/openssl",
         "//third_party/postgresql",
     ],
     path_tools = {
