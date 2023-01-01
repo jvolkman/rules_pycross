@@ -1,49 +1,26 @@
 import argparse
 import os
-import pathlib
+from pathlib import Path
 from typing import Any
 
 from absl import app
 from absl.flags import argparse_flags
 
-from pycross.private.tools.auditwheel import monkeypatch
+from pycross.private.tools.auditwheel.repair import repair
 
 
 def main(args: Any) -> None:
     lib_path = []
     for p in args.lib_path:
-        lib_path.extend(p.split(":"))
+        lib_path.extend(map(Path, p.split(":")))
 
-    monkeypatch.apply_auditwheel_patches(args.target_machine, args.lib_path)
-
-    from auditwheel.wheel_abi import analyze_wheel_abi
-    winfo = analyze_wheel_abi(args.wheel_file)
-
-    show_parser = argparse.ArgumentParser()
-    show_sub_parsers = show_parser.add_subparsers(metavar="command", dest="cmd")
-
-    repair_parser = argparse.ArgumentParser()
-    repair_sub_parsers = repair_parser.add_subparsers(metavar="command", dest="cmd")
-
-    from auditwheel import main_repair, main_show
-    main_show.configure_parser(show_sub_parsers)
-    main_repair.configure_parser(repair_sub_parsers)
-
-    show_args = show_parser.parse_args(["show", args.wheel_file])
-    show_args.verbose = args.verbose
-    show_args.func(show_args, show_parser)
-
-    repair_args = repair_parser.parse_args([
-        "repair",
-        args.wheel_file,
-        "--only-plat",
-        "--plat",
-        winfo.sym_tag,
-        "--wheel-dir",
-        args.output_dir,
-    ])
-    repair_args.verbose = args.verbose
-    repair_args.func(repair_args, repair_parser)
+    repair(
+        wheel_file=args.wheel_file,
+        output_dir=args.output_dir,
+        lib_path=lib_path,
+        target_machine=args.target_machine,
+        verbosity=args.verbose,
+    )
 
 
 def parse_flags(argv) -> Any:
@@ -54,6 +31,7 @@ def parse_flags(argv) -> Any:
     parser.add_argument(
         "--wheel-file",
         help="Path to wheel file.",
+        type=Path,
         required=True,
     )
 
@@ -73,6 +51,7 @@ def parse_flags(argv) -> Any:
     parser.add_argument(
         "--output-dir",
         help="Path to directory where new wheel is written.",
+        type=Path,
         required=True,
     )
 

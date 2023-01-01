@@ -16,6 +16,9 @@ pycross_wheel_build(
     path_tools = {
         ":pg_config": "pg_config",
     },
+    post_build_hooks = [
+        "@jvolkman_rules_pycross//pycross/hooks:repair_wheel",
+    ],
     tags = ["manual"],
 )
 
