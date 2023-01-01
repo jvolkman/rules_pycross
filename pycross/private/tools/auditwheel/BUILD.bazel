@@ -2,14 +2,17 @@ load("@rules_python//python:defs.bzl", "py_binary", "py_library")
 
 package(default_visibility = ["//visibility:private"])
 
-py_binary(
-    name = "lddtree",
+py_library(
+    name = "repair_lib",
     srcs = [
-        "lddtree.py",
+        "repair.py",
         "monkeypatch.py",
     ],
+    data = [
+        "//third_party/patchelf",
+    ],
     deps = [
-        "@rules_pycross_pypi_deps_absl_py//:pkg",
+        "@bazel_tools//tools/python/runfiles",
         "@rules_pycross_pypi_deps_auditwheel//:pkg",
     ],
 )
@@ -18,10 +21,20 @@ py_binary(
     name = "repair_wheel",
     srcs = [
         "repair_wheel.py",
-        "monkeypatch.py",
     ],
     deps = [
+        ":repair_lib",
         "@rules_pycross_pypi_deps_absl_py//:pkg",
-        "@rules_pycross_pypi_deps_auditwheel//:pkg",
     ],
+)
+
+py_binary(
+    name = "repair_wheel_hook",
+    srcs = [
+        "repair_wheel_hook.py",
+    ],
+    deps = [
+        ":repair_lib",
+    ],
+    visibility = ["//pycross/hooks:__pkg__"],
 )

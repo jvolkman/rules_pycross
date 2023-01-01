@@ -476,6 +476,7 @@ def run_post_build_hooks(
     lib_dir: Path,
     build_env: Dict[str, str],
     wheel_file: Path,
+    build_env_dir: Path,
 ) -> Path:
     wheel_in = temp_dir / "post_wheel_in"
     wheel_out = temp_dir / "post_wheel_out"
@@ -486,11 +487,20 @@ def run_post_build_hooks(
     wheel_file = wheel_in / wheel_file.name
     shutil.move(orig_wheel_file, wheel_file)
 
+    # Ask the build venv what its machine name is so we can pass
+    # the value along to hooks.
+    python_exe = build_env_dir / "bin/python"
+    target_machine = subprocess.check_output(
+        [python_exe, "-c", "import platform; print(platform.machine())"]
+    )
+    target_machine = target_machine.decode("utf-8").strip()
+
     for hook in hooks:
         hook_env = dict(build_env)
         hook_env["PYCROSS_WHEEL_FILE"] = str(wheel_file)
         hook_env["PYCROSS_WHEEL_OUTPUT_ROOT"] = str(wheel_out)
         hook_env["PYCROSS_LIBRARY_PATH"] = lib_dir
+        hook_env["PYCROSS_TARGET_PYTHON_MACHINE"] = target_machine
 
         try:
             subprocess.check_output(
@@ -850,6 +860,7 @@ def main(args: Any, temp_dir: Path, is_debug: bool) -> None:
         lib_dir=lib_dir,
         build_env=build_env_vars,
         wheel_file=wheel_file,
+        build_env_dir=build_env_dir,
     )
 
     if target_environment:
