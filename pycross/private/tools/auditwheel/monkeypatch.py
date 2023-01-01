@@ -1,3 +1,5 @@
+from typing import List
+
 def init_policies_for_machine(machine: str) -> None:
     import platform
     orig_machine_fn = platform.machine
@@ -8,15 +10,13 @@ def init_policies_for_machine(machine: str) -> None:
         platform.machine = orig_machine_fn
 
 
-def patch_load_ld_paths() -> None:
+def patch_load_ld_paths(lib_paths: List[str]) -> None:
     import auditwheel.lddtree
-    orig_load_ld_paths_fn = auditwheel.lddtree.load_ld_paths
 
     def load_ld_paths(root: str = "/", prefix: str = "") -> dict[str, list[str]]:
-        paths = orig_load_ld_paths_fn(root=root, prefix=prefix)
-        # All we want to return is the LD_LIBRARY_PATH paths
+        ld_library_path = ":".join(lib_paths)
         return {
-            "env": paths["env"],
+            "env": auditwheel.lddtree.parse_ld_paths(ld_library_path, path=""),
             "conf": [],
             "interp": [],
         }
@@ -24,6 +24,6 @@ def patch_load_ld_paths() -> None:
     auditwheel.lddtree.load_ld_paths = load_ld_paths
 
 
-def apply_auditwheel_patches(target_machine: str) -> None:
+def apply_auditwheel_patches(target_machine: str, lib_paths: List[str]) -> None:
     init_policies_for_machine(target_machine)
-    # patch_load_ld_paths()
+    patch_load_ld_paths(lib_paths)
