@@ -10,18 +10,30 @@ from pycross.private.tools.auditwheel import monkeypatch
 
 
 def main(args: Any) -> None:
-    monkeypatch.apply_auditwheel_patches(args.target_machine)
+    lib_path = []
+    for p in args.lib_path:
+        lib_path.extend(p.split(":"))
+
+    monkeypatch.apply_auditwheel_patches(args.target_machine, args.lib_path)
 
     from auditwheel.wheel_abi import analyze_wheel_abi
     winfo = analyze_wheel_abi(args.wheel_file)
 
-    ap_parser = argparse.ArgumentParser()
-    ap_sub_parsers = ap_parser.add_subparsers(metavar="command", dest="cmd")
+    show_parser = argparse.ArgumentParser()
+    show_sub_parsers = show_parser.add_subparsers(metavar="command", dest="cmd")
 
-    from auditwheel import main_repair
-    main_repair.configure_parser(ap_sub_parsers)
+    repair_parser = argparse.ArgumentParser()
+    repair_sub_parsers = repair_parser.add_subparsers(metavar="command", dest="cmd")
 
-    ap_args = ap_parser.parse_args([
+    from auditwheel import main_repair, main_show
+    main_show.configure_parser(show_sub_parsers)
+    main_repair.configure_parser(repair_sub_parsers)
+
+    show_args = show_parser.parse_args(["show", args.wheel_file])
+    show_args.verbose = args.verbose
+    show_args.func(show_args, show_parser)
+
+    repair_args = repair_parser.parse_args([
         "repair",
         args.wheel_file,
         "--only-plat",
@@ -30,9 +42,8 @@ def main(args: Any) -> None:
         "--wheel-dir",
         args.output_dir,
     ])
-    ap_args.verbose = args.verbose
-
-    ap_args.func(ap_args, ap_parser)
+    repair_args.verbose = args.verbose
+    repair_args.func(repair_args, repair_parser)
 
 
 def parse_flags(argv) -> Any:
@@ -44,6 +55,13 @@ def parse_flags(argv) -> Any:
         "--wheel-file",
         help="Path to wheel file.",
         required=True,
+    )
+
+    parser.add_argument(
+        "--lib-path",
+        help="Directories to be added to LD_LIBRARY_PATH",
+        action="append",
+        default=[],
     )
 
     parser.add_argument(
