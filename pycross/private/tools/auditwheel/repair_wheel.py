@@ -38,7 +38,7 @@ def main(args: Any) -> None:
         args.wheel_file,
         "--only-plat",
         "--plat",
-        winfo.overall_tag,
+        winfo.sym_tag,
         "--wheel-dir",
         args.output_dir,
     ])
