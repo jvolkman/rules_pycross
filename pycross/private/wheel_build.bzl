@@ -308,9 +308,6 @@ def _handle_tools_and_data(ctx, args, tools, input_manifests):
         input_manifests.extend(tool_manifests)
 
 def _pycross_wheel_build_impl(ctx):
-
-    print("HAS TARGET", ctx.target_platform_has_constraint("@platforms//os:linux"))
-
     args = ctx.actions.args().use_param_file("--flagfile=%s")
     inputs = []
     tools = []
