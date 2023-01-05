@@ -23,6 +23,9 @@ pycross_wheel_build(
         "OPENBLAS_LIB": "$(location //third_party/openblas:libopenblas.a)",
         "OPENBLAS_INCLUDE": "$(location //third_party/openblas:include)",
     },
+    post_build_hooks = [
+        "@jvolkman_rules_pycross//pycross/hooks:repair_wheel",
+    ],
     tags = ["manual"],
 )
 

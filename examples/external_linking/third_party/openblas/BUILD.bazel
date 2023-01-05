@@ -10,7 +10,21 @@ cmake(
         "BUILD_WITHOUT_LAPACK": "no",
         "NUM_THREADS": "64",
     } | select({
-        "@platforms//cpu:x86_64": {"TARGET": "HASWELL"},
+        "@platforms//cpu:x86_64": {
+            "CMAKE_SYSTEM_PROCESSOR": "x86_64",
+            "TARGET": "HASWELL",
+        },
+        "@platforms//cpu:arm64": {
+            "CMAKE_SYSTEM_PROCESSOR": "arm64",
+        },
+        "//conditions:default": {},
+    }) | select({
+        "@platforms//os:linux": {
+            "CMAKE_SYSTEM_NAME": "Linux",
+        },
+        "@platforms//os:macos": {
+            "CMAKE_SYSTEM_NAME": "Darwin",
+        },
         "//conditions:default": {},
     }),
     copts = [
