@@ -33,8 +33,3 @@ py_binary(
     name = "gen_site_cfg",
     srcs = ["gen_site_cfg.py"],
 )
-
-py_binary(
-    name = "auditwheel",
-    srcs = ["auditwheel.py"],
-)
