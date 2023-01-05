@@ -14,14 +14,25 @@ os.environ['_PYTHON_PROJECT_BASE']={{repr(target.project_base)}}
 os.environ['_PYTHON_HOST_PLATFORM']={{repr(target.platform)}}
 os.environ['_PYTHON_SYSCONFIGDATA_NAME']={{repr(target.sysconfigdata_name)}}
 os.environ['PYTHONHOME']={{repr(target.home)}}
+
+# In python 3.11, the import machinery imports from math, which breaks
+# in our cross environment.. so we inject lib-dynload to the path also
+stdlib = {{repr(exec_stdlib)}}
+lib_dynload = os.path.join(stdlib, "lib-dynload")
+
 oldpath = os.environ.get('PYTHONPATH')
-newpath = os.pathsep.join([{{repr(lib_path)}}, {{repr(exec_stdlib)}}])
+newpath = os.pathsep.join([{{repr(lib_path)}}, stdlib, lib_dynload])
 if oldpath:
     path = os.pathsep.join([newpath, oldpath])
 else:
     path = newpath
 
 os.environ['PYTHONPATH'] = path
+
+# In python 3.11, several system packages are frozen by default, which
+# prevents us from patching it. Disable it.
+if sys.version_info >= (3,11):
+    sys.argv[1:1] = ["-X", "frozen_modules=off"]
 
 # This will fix up argv0 so that sys.executable will be correct
 os.execv({{repr(exec_python_executable)}}, sys.argv)
