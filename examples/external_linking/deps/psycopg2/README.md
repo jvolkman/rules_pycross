@@ -1,5 +1,5 @@
 To run this example (on either Linux or macOS):
-* Install bazelisk somehow: `brew install bazelisk` or just [download](https://github.com/bazelbuild/bazelisk/releases) it. Make sure it's as `bazel`
+* Install bazelisk somehow: `brew install bazelisk` or just [download](https://github.com/bazelbuild/bazelisk/releases) it. Make sure it's aliased as `bazel`
 * Clone this repo and check out the `dev/external` branch.
 * Build a linux wheel: `bazel build //deps/psycopg2 --platforms @zig_sdk//platform:linux_x86_64`
 
