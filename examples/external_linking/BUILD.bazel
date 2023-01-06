@@ -157,6 +157,7 @@ pycross_lock_file(
     always_build_packages = [
         "numpy",
         "pandas",
+	"setproctitle",
     ],
     build_target_overrides = {
         "numpy": "@//deps/numpy",
