@@ -6,10 +6,10 @@ PINS = {
     "appnope": "appnope_0.1.3",
     "asttokens": "asttokens_2.2.1",
     "backcall": "backcall_0.2.0",
-    "cython": "cython_0.29.32",
+    "cython": "cython_0.29.33",
     "decorator": "decorator_5.1.1",
     "executing": "executing_1.2.0",
-    "ipython": "ipython_8.7.0",
+    "ipython": "ipython_8.8.0",
     "jedi": "jedi_0.18.2",
     "matplotlib_inline": "matplotlib_inline_0.1.6",
     "numpy": "numpy_1.23.5",
@@ -21,9 +21,10 @@ PINS = {
     "psycopg2": "psycopg2_2.9.5",
     "ptyprocess": "ptyprocess_0.7.0",
     "pure_eval": "pure_eval_0.2.2",
-    "pygments": "pygments_2.13.0",
+    "pygments": "pygments_2.14.0",
     "python_dateutil": "python_dateutil_2.8.2",
     "pytz": "pytz_2022.7",
+    "setproctitle": "setproctitle_1.3.2",
     "setuptools": "setuptools_59.2.0",
     "six": "six_1.16.0",
     "stack_data": "stack_data_0.6.2",
@@ -99,12 +100,12 @@ def targets():
     )
 
     pycross_wheel_library(
-        name = "cython_0.29.32",
+        name = "cython_0.29.33",
         wheel = select({
-            ":_env_python_darwin_arm64": "@example_lock_wheel_cython_0.29.32_py2.py3_none_any//file",
-            ":_env_python_darwin_x86_64": "@example_lock_wheel_cython_0.29.32_py2.py3_none_any//file",
-            ":_env_python_linux_arm64": "@example_lock_wheel_cython_0.29.32_cp310_cp310_manylinux_2_17_aarch64.manylinux2014_aarch64.manylinux_2_24_aarch64//file",
-            ":_env_python_linux_x86_64": "@example_lock_wheel_cython_0.29.32_cp310_cp310_manylinux_2_17_x86_64.manylinux2014_x86_64.manylinux_2_24_x86_64//file",
+            ":_env_python_darwin_arm64": "@example_lock_wheel_cython_0.29.33_py2.py3_none_any//file",
+            ":_env_python_darwin_x86_64": "@example_lock_wheel_cython_0.29.33_py2.py3_none_any//file",
+            ":_env_python_linux_arm64": "@example_lock_wheel_cython_0.29.33_cp310_cp310_manylinux_2_17_aarch64.manylinux2014_aarch64.manylinux_2_24_aarch64//file",
+            ":_env_python_linux_x86_64": "@example_lock_wheel_cython_0.29.33_cp310_cp310_manylinux_2_17_x86_64.manylinux2014_x86_64.manylinux_2_24_x86_64//file",
         }),
     )
 
@@ -118,7 +119,7 @@ def targets():
         wheel = "@example_lock_wheel_executing_1.2.0_py2.py3_none_any//file",
     )
 
-    _ipython_8_7_0_deps = [
+    _ipython_8_8_0_deps = [
         ":backcall_0.2.0",
         ":decorator_5.1.1",
         ":jedi_0.18.2",
@@ -126,7 +127,7 @@ def targets():
         ":pexpect_4.8.0",
         ":pickleshare_0.7.5",
         ":prompt_toolkit_3.0.36",
-        ":pygments_2.13.0",
+        ":pygments_2.14.0",
         ":stack_data_0.6.2",
         ":traitlets_5.8.0",
     ] + select({
@@ -140,9 +141,9 @@ def targets():
     })
 
     pycross_wheel_library(
-        name = "ipython_8.7.0",
-        deps = _ipython_8_7_0_deps,
-        wheel = "@example_lock_wheel_ipython_8.7.0_py3_none_any//file",
+        name = "ipython_8.8.0",
+        deps = _ipython_8_8_0_deps,
+        wheel = "@example_lock_wheel_ipython_8.8.0_py3_none_any//file",
     )
 
     _jedi_0_18_2_deps = [
@@ -166,7 +167,7 @@ def targets():
     )
 
     _numpy_1_23_5_build_deps = [
-        ":cython_0.29.32",
+        ":cython_0.29.33",
         ":setuptools_59.2.0",
         ":wheel_0.37.0",
     ]
@@ -183,7 +184,7 @@ def targets():
     ]
 
     _pandas_1_5_2_build_deps = [
-        ":cython_0.29.32",
+        ":cython_0.29.33",
         ":setuptools_59.2.0",
         ":wheel_0.37.0",
     ]
@@ -248,8 +249,8 @@ def targets():
     )
 
     pycross_wheel_library(
-        name = "pygments_2.13.0",
-        wheel = "@example_lock_wheel_pygments_2.13.0_py3_none_any//file",
+        name = "pygments_2.14.0",
+        wheel = "@example_lock_wheel_pygments_2.14.0_py3_none_any//file",
     )
 
     _python_dateutil_2_8_2_deps = [
@@ -265,6 +266,18 @@ def targets():
     pycross_wheel_library(
         name = "pytz_2022.7",
         wheel = "@example_lock_wheel_pytz_2022.7_py2.py3_none_any//file",
+    )
+
+    pycross_wheel_build(
+        name = "_build_setproctitle_1.3.2",
+        sdist = "@example_lock_sdist_setproctitle_1.3.2//file",
+        target_environment = _target,
+        tags = ["manual"],
+    )
+
+    pycross_wheel_library(
+        name = "setproctitle_1.3.2",
+        wheel = ":_build_setproctitle_1.3.2",
     )
 
     pycross_wheel_library(
@@ -337,6 +350,16 @@ def repositories():
 
     maybe(
         http_file,
+        name = "example_lock_sdist_setproctitle_1.3.2",
+        urls = [
+            "https://files.pythonhosted.org/packages/b5/47/ac709629ddb9779fee29b7d10ae9580f60a4b37e49bce72360ddf9a79cdc/setproctitle-1.3.2.tar.gz"
+        ],
+        sha256 = "b9fb97907c830d260fa0658ed58afd48a86b2b88aac521135c352ff7fd3477fd",
+        downloaded_file_path = "setproctitle-1.3.2.tar.gz",
+    )
+
+    maybe(
+        http_file,
         name = "example_lock_wheel_appnope_0.1.3_py2.py3_none_any",
         urls = [
             "https://files.pythonhosted.org/packages/41/4a/381783f26df413dde4c70c734163d88ca0550a1361cb74a1c68f47550619/appnope-0.1.3-py2.py3-none-any.whl"
@@ -367,32 +390,32 @@ def repositories():
 
     maybe(
         http_file,
-        name = "example_lock_wheel_cython_0.29.32_cp310_cp310_manylinux_2_17_aarch64.manylinux2014_aarch64.manylinux_2_24_aarch64",
+        name = "example_lock_wheel_cython_0.29.33_cp310_cp310_manylinux_2_17_aarch64.manylinux2014_aarch64.manylinux_2_24_aarch64",
         urls = [
-            "https://files.pythonhosted.org/packages/dd/56/64511ba10e9766aec4b1fd8d478eca5654bb77859686d089f77229004dbf/Cython-0.29.32-cp310-cp310-manylinux_2_17_aarch64.manylinux2014_aarch64.manylinux_2_24_aarch64.whl"
+            "https://files.pythonhosted.org/packages/be/f9/198c7b9d125b29bcedaf923f5f2c29bd4b4534d4a8dd2ee5780244337af4/Cython-0.29.33-cp310-cp310-manylinux_2_17_aarch64.manylinux2014_aarch64.manylinux_2_24_aarch64.whl"
         ],
-        sha256 = "97335b2cd4acebf30d14e2855d882de83ad838491a09be2011745579ac975833",
-        downloaded_file_path = "Cython-0.29.32-cp310-cp310-manylinux_2_17_aarch64.manylinux2014_aarch64.manylinux_2_24_aarch64.whl",
+        sha256 = "190e60b7505d3b9b60130bcc2251c01b9ef52603420829c19d3c3ede4ac2763a",
+        downloaded_file_path = "Cython-0.29.33-cp310-cp310-manylinux_2_17_aarch64.manylinux2014_aarch64.manylinux_2_24_aarch64.whl",
     )
 
     maybe(
         http_file,
-        name = "example_lock_wheel_cython_0.29.32_cp310_cp310_manylinux_2_17_x86_64.manylinux2014_x86_64.manylinux_2_24_x86_64",
+        name = "example_lock_wheel_cython_0.29.33_cp310_cp310_manylinux_2_17_x86_64.manylinux2014_x86_64.manylinux_2_24_x86_64",
         urls = [
-            "https://files.pythonhosted.org/packages/92/74/e3be5e08a6cf55eae64a7a64fdef7a7f77cb0cdd10e4689b60b3a131bf76/Cython-0.29.32-cp310-cp310-manylinux_2_17_x86_64.manylinux2014_x86_64.manylinux_2_24_x86_64.whl"
+            "https://files.pythonhosted.org/packages/21/76/ef852189cc39a33cedc08d30189de2d1e44d826ddcf101e24c82c8b8ea0c/Cython-0.29.33-cp310-cp310-manylinux_2_17_x86_64.manylinux2014_x86_64.manylinux_2_24_x86_64.whl"
         ],
-        sha256 = "06be83490c906b6429b4389e13487a26254ccaad2eef6f3d4ee21d8d3a4aaa2b",
-        downloaded_file_path = "Cython-0.29.32-cp310-cp310-manylinux_2_17_x86_64.manylinux2014_x86_64.manylinux_2_24_x86_64.whl",
+        sha256 = "0168482495b75fea1c97a9641a95bac991f313e85f378003f9a4909fdeb3d454",
+        downloaded_file_path = "Cython-0.29.33-cp310-cp310-manylinux_2_17_x86_64.manylinux2014_x86_64.manylinux_2_24_x86_64.whl",
     )
 
     maybe(
         http_file,
-        name = "example_lock_wheel_cython_0.29.32_py2.py3_none_any",
+        name = "example_lock_wheel_cython_0.29.33_py2.py3_none_any",
         urls = [
-            "https://files.pythonhosted.org/packages/1c/24/e3935e545b128a90146e743212703420287ed35885074a9f36b21f3bb68d/Cython-0.29.32-py2.py3-none-any.whl"
+            "https://files.pythonhosted.org/packages/56/3a/e59db3769dee48409c759a88b62cd605324e05d396e10af0a065adc956ad/Cython-0.29.33-py2.py3-none-any.whl"
         ],
-        sha256 = "eeb475eb6f0ccf6c039035eb4f0f928eb53ead88777e0a760eccb140ad90930b",
-        downloaded_file_path = "Cython-0.29.32-py2.py3-none-any.whl",
+        sha256 = "8b99252bde8ff51cd06a3fe4aeacd3af9b4ff4a4e6b701ac71bddc54f5da61d6",
+        downloaded_file_path = "Cython-0.29.33-py2.py3-none-any.whl",
     )
 
     maybe(
@@ -417,12 +440,12 @@ def repositories():
 
     maybe(
         http_file,
-        name = "example_lock_wheel_ipython_8.7.0_py3_none_any",
+        name = "example_lock_wheel_ipython_8.8.0_py3_none_any",
         urls = [
-            "https://files.pythonhosted.org/packages/24/ef/af8899488ae62a35b0815aa955779db25e616defb0061a478203fc460f40/ipython-8.7.0-py3-none-any.whl"
+            "https://files.pythonhosted.org/packages/1f/aa/a6509b4059359edd00308e3f068212dca53b7252940862cc40981a2bd713/ipython-8.8.0-py3-none-any.whl"
         ],
-        sha256 = "352042ddcb019f7c04e48171b4dd78e4c4bb67bf97030d170e154aac42b656d9",
-        downloaded_file_path = "ipython-8.7.0-py3-none-any.whl",
+        sha256 = "da01e6df1501e6e7c32b5084212ddadd4ee2471602e2cf3e0190f4de6b0ea481",
+        downloaded_file_path = "ipython-8.8.0-py3-none-any.whl",
     )
 
     maybe(
@@ -507,12 +530,12 @@ def repositories():
 
     maybe(
         http_file,
-        name = "example_lock_wheel_pygments_2.13.0_py3_none_any",
+        name = "example_lock_wheel_pygments_2.14.0_py3_none_any",
         urls = [
-            "https://files.pythonhosted.org/packages/4f/82/672cd382e5b39ab1cd422a672382f08a1fb3d08d9e0c0f3707f33a52063b/Pygments-2.13.0-py3-none-any.whl"
+            "https://files.pythonhosted.org/packages/0b/42/d9d95cc461f098f204cd20c85642ae40fbff81f74c300341b8d0e0df14e0/Pygments-2.14.0-py3-none-any.whl"
         ],
-        sha256 = "f643f331ab57ba3c9d89212ee4a2dabc6e94f117cf4eefde99a0574720d14c42",
-        downloaded_file_path = "Pygments-2.13.0-py3-none-any.whl",
+        sha256 = "fa7bd7bd2771287c0de303af8bfdfc731f51bd2c6a47ab69d117138893b82717",
+        downloaded_file_path = "Pygments-2.14.0-py3-none-any.whl",
     )
 
     maybe(
