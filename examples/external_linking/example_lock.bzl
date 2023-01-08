@@ -268,10 +268,16 @@ def targets():
         wheel = "@example_lock_wheel_pytz_2022.7_py2.py3_none_any//file",
     )
 
+    _setproctitle_1_3_2_build_deps = [
+        ":setuptools_59.2.0",
+        ":wheel_0.37.0",
+    ]
+
     pycross_wheel_build(
         name = "_build_setproctitle_1.3.2",
         sdist = "@example_lock_sdist_setproctitle_1.3.2//file",
         target_environment = _target,
+        deps = _setproctitle_1_3_2_build_deps,
         tags = ["manual"],
     )
 
