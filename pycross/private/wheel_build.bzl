@@ -21,6 +21,9 @@ def _absolute_tool_value(workspace_name, value):
         return tool_value_absolute
     return value
 
+def _join_flags_list(workspace_name, flags):
+    return " ".join([absolutize_path_in_str(workspace_name, "$$EXT_BUILD_ROOT$$/", flag) for flag in flags])
+
 def _get_sysconfig_data(workspace_name, tools, flags):
     cc = _absolute_tool_value(workspace_name, tools.cc)
     cxx = _absolute_tool_value(workspace_name, tools.cxx)
@@ -28,11 +31,11 @@ def _get_sysconfig_data(workspace_name, tools, flags):
     vars = {
         "CC": cc,
         "CXX": cxx,
-        "CFLAGS": " ".join(flags.cc),
+        "CFLAGS": _join_flags_list(workspace_name, flags.cc),
         "CCSHARED": "-fPIC" if flags.needs_pic_for_dynamic_libraries else "",
-        "LDSHAREDFLAGS": " ".join(flags.cxx_linker_shared),
+        "LDSHAREDFLAGS": _join_flags_list(workspace_name, flags.cxx_linker_shared),
         "AR": ar,
-        "ARFLAGS": " ".join(flags.cxx_linker_static),
+        "ARFLAGS": _join_flags_list(workspace_name, flags.cxx_linker_static),
         "CUSTOMIZED_OSX_COMPILER": "True",
         "GNULD": "yes" if "gcc" in cc else "no",  # is there a better way?
     }
