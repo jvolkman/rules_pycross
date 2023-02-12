@@ -44,11 +44,11 @@ install_deps()
 
 # Setup a CC toolchain using bazel-zig-cc
 # https://git.sr.ht/~motiejus/bazel-zig-cc
-BAZEL_ZIG_CC_VERSION = "v0.7.3"
+BAZEL_ZIG_CC_VERSION = "v1.0.0"
 
 http_archive(
     name = "bazel-zig-cc",
-    sha256 = "cd2629843fe4ba20cf29e1d73cc02559afba640f884e519b6a194a35627cbbf3",
+    sha256 = "1f4a1d1e0f6b3e5aa6e1c225fcb23c032f8849441de97b9a38d6ea37362d28e2",
     strip_prefix = "bazel-zig-cc-{}".format(BAZEL_ZIG_CC_VERSION),
     urls = ["https://git.sr.ht/~motiejus/bazel-zig-cc/archive/{}.tar.gz".format(BAZEL_ZIG_CC_VERSION)],
 )
@@ -57,21 +57,23 @@ load(
     "@bazel-zig-cc//toolchain:defs.bzl",
     "URL_FORMAT_JAKSTYS",
     "URL_FORMAT_NIGHTLY",
+    "URL_FORMAT_RELEASE",
     zig_toolchains = "toolchains",
 )
 
-zig_version = "0.10.0-dev.2156+458943e32"
+zig_version = "0.10.1"
 
 zig_host_platform_sha256 = {
-    "linux-aarch64": "43e55632c61833a598aff3dcb134a7967c19eddc6abd28273bb60585bbbf34af",
-    "linux-x86_64": "c22f4453ac45256d865defad05bfe0e42c6b73f15dc007e87fdae42f44933485",
-    "macos-aarch64": "f786a0d6674f9ec267eb1715de1b6265faedfdfdc7d4d05dedc534644e12224d",
-    "macos-x86_64": "7dffe1c995da9145872ae806d770cd2acc38993d3d32aabdece7107177853730",
+    "linux-aarch64": "db0761664f5f22aa5bbd7442a1617dd696c076d5717ddefcc9d8b95278f71f5d",
+    "linux-x86_64": "6699f0e7293081b42428f32c9d9c983854094bd15fee5489f12c4cf4518cc380",
+    "macos-aarch64": "b9b00477ec5fa1f1b89f35a7d2a58688e019910ab80a65eac2a7417162737656",
+    "macos-x86_64": "02483550b89d2a3070c2ed003357fd6e6a3059707b8ee3fbc0c67f83ca898437",
 }
 
 zig_toolchains(
     host_platform_sha256 = zig_host_platform_sha256,
     url_formats = [
+        URL_FORMAT_RELEASE,
         URL_FORMAT_NIGHTLY,
         URL_FORMAT_JAKSTYS,
     ],
