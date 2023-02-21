@@ -99,7 +99,7 @@ def get_packages(project: Project) -> Dict[PackageKey, Package]:
         _dependencies, _, _ = repository.get_dependencies(_package)
 
         package_key = candidate_package_key(_package)
-        package_name = _package.name
+        package_name = package_canonical_name(_package.name)
         package_version = Version(str(_package.version))
         package_python_versions = _package.requires_python
         package_dependencies = []
