@@ -258,9 +258,10 @@ class GenerationContext:
                 package.name, environment.target_python
             )
             compute_result = candidate_evaluator.compute_best_candidate(candidates)
-            environment_sources[environment.name] = candidates_to_package_sources[
-                compute_result.best_candidate
-            ]
+            if compute_result.best_candidate:
+                environment_sources[environment.name] = candidates_to_package_sources[
+                    compute_result.best_candidate
+                ]
 
         return environment_sources
 
