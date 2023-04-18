@@ -14,7 +14,7 @@ from pdm.core import Core as PDMCore
 from pdm.project import Project as PDMProject
 from pdm.models.repositories import BaseRepository as PDMBaseRepository
 from pdm.models.candidates import Candidate as PDMCandidate
-from pdm.cli.utils import translate_groups as pdm_translate_groups
+from pdm.cli.filters import GroupSelection
 from pdm.exceptions import PdmUsageError
 
 from pycross.private.tools.lock_model import LockSet
@@ -64,12 +64,12 @@ def get_pins(
     pins = {}
     repository = project.locked_repository
     try:
-        groups = pdm_translate_groups(
+        groups = GroupSelection(
             project=project,
             default=default_dependencies,
             dev=dev_dependencies,
             groups=dependency_groups,
-        )
+        ).all()
     except PdmUsageError:
         raise Exception(
             "Failed to resolve groups."

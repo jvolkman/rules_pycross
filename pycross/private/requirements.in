@@ -1,7 +1,7 @@
 absl-py==1.4.0
 blinker==1.6.0  # For PDM
 build==0.10.0
-dacite==1.8.0
+dacite==1.6.0
 importlib-metadata==6.4.1
 installer==0.7.0
 packaging==23.1
