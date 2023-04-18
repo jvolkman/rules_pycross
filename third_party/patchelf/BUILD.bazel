@@ -1,6 +1,0 @@
-package(default_visibility = ["//visibility:public"])
-
-alias(
-    name = "patchelf",
-    actual = "@rules_pycross_third_party_patchelf//:patchelf",
-)
