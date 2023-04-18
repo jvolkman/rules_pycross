@@ -3,6 +3,8 @@ load("@rules_python//python/pip_install:requirements.bzl", "compile_pip_requirem
 
 default_visibility = ["//pycross:__subpackages__"]
 
+default_visibility = ["//pycross:__subpackages__"]
+
 bzl_library(
     name = "versions",
     srcs = ["versions.bzl"],
