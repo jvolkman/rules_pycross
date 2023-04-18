@@ -1,8 +1,5 @@
 alias(
     name = "repair_wheel",
-    actual = "//pycross/private/tools/auditwheel:repair_wheel_hook",
-    # actual = select({
-    #     "@platforms//os:linux": "//pycross/private/tools/auditwheel:repair_wheel_hook",
-    # }),
+    actual = "//pycross/private/tools/repairwheel:repair_wheel_hook",
     visibility = ["//visibility:public"],
 )

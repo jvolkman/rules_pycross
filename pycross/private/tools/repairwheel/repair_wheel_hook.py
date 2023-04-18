@@ -1,9 +1,7 @@
-import argparse
 import os
+import subprocess
+import sys
 from pathlib import Path
-from typing import Any
-
-from pycross.private.tools.auditwheel.repair import repair
 
 
 def main() -> None:
@@ -11,14 +9,20 @@ def main() -> None:
     lib_path = [Path(p) for p in lib_path_env.split(":")]
     wheel_file = Path(os.environ["PYCROSS_WHEEL_FILE"])
     output_dir = Path(os.environ["PYCROSS_WHEEL_OUTPUT_ROOT"])
-    target_machine = os.environ["PYCROSS_TARGET_PYTHON_MACHINE"]
 
-    repair(
-        wheel_file=wheel_file,
-        output_dir=output_dir,
-        lib_path=lib_path,
-        target_machine=target_machine,
-    )
+    args = [
+        sys.executable,
+        "-m",
+        "repairwheel",
+        str(wheel_file),
+        "--output-dir",
+        str(output_dir),
+    ]
+
+    for l in lib_path:
+        args.extend(["--lib-dir", l])
+
+    subprocess.check_call(args, env=os.environ)
 
 
 if __name__ == "__main__":
