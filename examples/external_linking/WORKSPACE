@@ -46,21 +46,11 @@ load("@jvolkman_rules_pycross//pycross:repositories.bzl", "rules_pycross_depende
 
 rules_pycross_dependencies(python_interpreter_target = interpreter)
 
-# Setup a CC toolchain using bazel-zig-cc
-# https://git.sr.ht/~motiejus/bazel-zig-cc
-BAZEL_ZIG_CC_VERSION = "v1.0.0-rc4"
-
 http_archive(
     name = "bazel-zig-cc",
-    sha256 = "af784b604c08f385358113dc41e22736369a8ad09951fecf31dd13c35f4aaa62",
-    strip_prefix = "bazel-zig-cc-{}".format(BAZEL_ZIG_CC_VERSION),
-    urls = ["https://git.sr.ht/~motiejus/bazel-zig-cc/archive/{}.tar.gz".format(BAZEL_ZIG_CC_VERSION)],
-    patches = [
-        "//patches:bazel-zig-cc-dynamic-linker.patch",
-        "//patches:bazel-zig-cc-mcpu.patch",
-        "//patches:bazel-zig-cc-name-patterns.patch",
-    ],
-    patch_args = ["-p1"],
+    sha256 = "d7c4d519c1772b4fde574704a661d4d8e34fe5dd2ec13a59a1bb1bed475baa8f",
+    strip_prefix = "bazel-zig-cc-b4cc0574fc9cd61e08f2b854300c3dccadfa1481",
+    urls = ["https://github.com/uber/bazel-zig-cc/archive/b4cc0574fc9cd61e08f2b854300c3dccadfa1481.tar.gz"],
 )
 
 load(
@@ -69,13 +59,13 @@ load(
     zig_toolchains = "toolchains",
 )
 
-zig_version = "0.11.0-dev.1011+40ba4d4a8"
+zig_version = "0.11.0-dev.2191+30427ff79"
 
 zig_host_platform_sha256 = {
-    "linux-aarch64": "78b235071545ad6f064c2968b923b2830d7f5f51bbb387d091d687fa22207ee1",
-    "linux-x86_64": "867de39229dae954acbf75d329138ac8b556e9360f23db71a7eceb9b528c8d86",
-    "macos-aarch64": "abe0b047a244fc269d657fdfe88fb37b483d0116fe3f2d64bd531c987175e1a6",
-    "macos-x86_64": "85a4db4fe260273efd811f8e3589d12226eb16a724813e847c1171d3bc4921c7",
+    "linux-aarch64": "0dc1f989bc2e627ec37da25242d29a2a5f5ebbf0b67ffecfdcb26b99708f9eff",
+    "linux-x86_64": "66e024a67da49d743c5cf9cd9467d5b64fa9e4f1fdf0bb03523bf9e355e56ef2",
+    "macos-aarch64": "bd2c7e8f9a2dd0b63ca6b425cc0a9bf482ff66ce8c704efc73900945e7c74529",
+    "macos-x86_64": "d4eecf7f0b15913b7d2cace9b1a328d9cf04da7cee7be3d61ae47ae137af156c",
 }
 
 zig_toolchains(
