@@ -48,9 +48,9 @@ rules_pycross_dependencies(python_interpreter_target = interpreter)
 
 http_archive(
     name = "bazel-zig-cc",
-    sha256 = "d7c4d519c1772b4fde574704a661d4d8e34fe5dd2ec13a59a1bb1bed475baa8f",
-    strip_prefix = "bazel-zig-cc-b4cc0574fc9cd61e08f2b854300c3dccadfa1481",
-    urls = ["https://github.com/uber/bazel-zig-cc/archive/b4cc0574fc9cd61e08f2b854300c3dccadfa1481.tar.gz"],
+    sha256 = "b23d2a47bc79fa7d60f2ef3f18fb204f178029da824dc3c7462c5e87cd284635",
+    strip_prefix = "bazel-zig-cc-9d9dc016ef9b7995af0bef45ef8a6dc55993cb25",
+    urls = ["https://github.com/uber/bazel-zig-cc/archive/9d9dc016ef9b7995af0bef45ef8a6dc55993cb25.tar.gz"],
 )
 
 load(
