@@ -33,7 +33,11 @@ def repositories():
             # Remove non-reproducible values from src/common/Makefile
             "sed -i.bak '/-DVAL_/d' src/common/Makefile",
 
+            # Don't pass --enable-new-dtags
+            "sed -i.bak '/,--enable-new-dtags/d' src/makefiles/Makefile.linux",
+
             "rm configure.bak",
             "rm src/common/Makefile.bak",
+            "rm src/makefiles/Makefile.linux.bak",
         ]
     )
