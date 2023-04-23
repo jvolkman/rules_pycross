@@ -156,12 +156,12 @@ def install_script(name, dst, context=None, perms=0o755):
 
 
 def find_sysconfig_data(
-    paths: List[os.PathLike], given_file: Optional[os.PathLike] = None
+    paths: List[Path], given_file: Optional[Path] = None
 ) -> Dict[str, Any]:
     pattern = "_sysconfigdata_*.py*"
     maybe = []
     for path in paths:
-        maybe.extend(Path(path).glob(pattern))
+        maybe.extend(path.glob(pattern))
 
     if given_file:
         sysconfig_paths = [given_file]

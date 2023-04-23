@@ -33,6 +33,7 @@ GLIBC_TELLER = """\
 #endif
 """
 
+
 @dataclasses.dataclass
 class Uname:
     machine: str
@@ -334,7 +335,7 @@ def build_env(
     for link_name in ("python", "python3"):
         link = bin_path / link_name
         if not link.exists():
-            link.symlink_to(exe)
+            link.symlink_to(pyver)
 
     return env_path
 

@@ -70,6 +70,10 @@ def _error(msg: str, code: int = 1) -> NoReturn:  # pragma: no cover
     raise SystemExit(code)
 
 
+def relpath(path: os.PathLike, start: os.PathLike) -> Path:
+    return Path(os.path.relpath(path, start))
+
+
 def determine_target_path_from_exec(
     exec_python_exe: Path, target_python_exe: Path
 ) -> List[Path]:
@@ -207,12 +211,12 @@ def get_default_build_env_vars(path_dirs: List[Path]) -> Dict[str, str]:
 def replace_path_placeholders(
     data: Dict[str, Any], placeholder: str, replacement: Path
 ) -> Dict[str, Any]:
-    replacement = str(replacement)
-    if replacement.endswith("/"):
-        replacement = replacement[:-1]
+    replacement_str = str(replacement)
+    if replacement_str.endswith("/"):
+        replacement_str = replacement_str[:-1]
     result = {}
     for k, v in data.items():
-        result[k] = v.replace(placeholder, replacement)
+        result[k] = v.replace(placeholder, replacement_str)
 
     return result
 
@@ -296,15 +300,17 @@ def wrap_cc(
 
     wrapper_path = bin_dir / wrapper_name
 
-    python_exe = os.path.join(os.getcwd(), python_exe)
     with open(wrapper_path, "w") as f:
         f.write(
             textwrap.dedent(
                 f"""\
-                #!{python_exe}
+                #!{python_exe.absolute()}
                 import os
                 import sys
-                os.execv("{cc_exe}", ["{cc_exe}"] + {repr(wrapper_flags)} + sys.argv[1:])
+
+                here = os.path.dirname(sys.argv[0])
+                cc_exe = os.path.join(here, "{cc_exe}")
+                os.execv(cc_exe, [cc_exe] + {repr(wrapper_flags)} + sys.argv[1:])
                 """
             )
         )
@@ -368,36 +374,34 @@ def generate_bin_tools(bin_dir: Path, toolchain_vars: Dict[str, str]) -> None:
         ar.symlink_to(ar_path)
 
 
-def link_path_tools(
-    tools_dir: Path, cwd: Path, path_tools: List[Tuple[Path, Path]]
-) -> None:
+def link_path_tools(tools_dir: Path, path_tools: List[Tuple[Path, Path]]) -> None:
     for path_tool_name, relative_path_tool_path in path_tools:
         if len(path_tool_name.parts) > 1:
             _error("path_tool name must not contain path separators")
         path_tool_in_bin = tools_dir / path_tool_name
-        path_tool_in_bin.symlink_to(cwd / relative_path_tool_path)
+        path_tool_in_bin.symlink_to(relative_path_tool_path)
 
 
-def link_native_headers(
-    include_dir: Path, cwd: Path, headers: List[Path]
-) -> None:
+def link_native_headers(include_dir: Path, headers: List[Path]) -> None:
     for header in headers:
         path_in_include = include_dir / header.name
         if path_in_include.exists():
-            _warn(f"Not linking {header} into include directory because {header.name} already exists.")
+            _warn(
+                f"Not linking {header} into include directory because {header.name} already exists."
+            )
             continue
-        path_in_include.symlink_to(cwd / header)
+        path_in_include.symlink_to(relpath(header, include_dir))
 
 
-def link_native_libraries(
-    lib_dir: Path, cwd: Path, libraries: List[Path]
-) -> None:
+def link_native_libraries(lib_dir: Path, libraries: List[Path]) -> None:
     for library in libraries:
         path_in_lib = lib_dir / library.name
         if path_in_lib.exists():
-            _warn(f"Not linking {library} into lib directory because {library.name} already exists.")
+            _warn(
+                f"Not linking {library} into lib directory because {library.name} already exists."
+            )
             continue
-        path_in_lib.symlink_to(cwd / library)
+        path_in_lib.symlink_to(relpath(library, lib_dir))
 
 
 def extract_sdist(sdist_path: Path, sdist_dir: Path) -> Path:
@@ -433,7 +437,7 @@ def run_pre_build_hooks(
         hook_env["PYCROSS_BUILD_ROOT"] = str(temp_dir)
         hook_env["PYCROSS_SDIST_ROOT"] = str(sdist_dir)
         hook_env["PYCROSS_INCLUDE_PATH"] = ":".join(map(str, include_paths))
-        hook_env["PYCROSS_LIBRARY_PATH"] = lib_dir
+        hook_env["PYCROSS_LIBRARY_PATH"] = str(lib_dir)
 
         # Write the current build env to a file.
         with open(env_file, "w") as f:
@@ -499,7 +503,7 @@ def run_post_build_hooks(
         hook_env = dict(build_env)
         hook_env["PYCROSS_WHEEL_FILE"] = str(wheel_file)
         hook_env["PYCROSS_WHEEL_OUTPUT_ROOT"] = str(wheel_out)
-        hook_env["PYCROSS_LIBRARY_PATH"] = lib_dir
+        hook_env["PYCROSS_LIBRARY_PATH"] = str(lib_dir)
         hook_env["PYCROSS_TARGET_PYTHON_MACHINE"] = target_machine
 
         try:
@@ -556,7 +560,7 @@ def build_cross_venv(
     exec_python_exe: Path,
     target_python_exe: Path,
     sysconfig_vars: Dict[str, Any],
-    target_env: TargetEnv,
+    target_env: Optional[TargetEnv],
 ) -> None:
     sysconfig_json = env_dir / "sysconfig.json"
     with open(sysconfig_json, "w") as f:
@@ -630,8 +634,8 @@ def build_venv(
     exec_python_exe: Path,
     target_python_exe: Path,
     sysconfig_vars: Dict[str, Any],
-    path: List[str],
-    target_env: TargetEnv,
+    path: List[Path],
+    target_env: Optional[TargetEnv],
     always_use_crossenv: bool = False,
 ) -> None:
     if exec_python_exe != target_python_exe or always_use_crossenv:
@@ -643,7 +647,7 @@ def build_venv(
 
     site = find_site_dir(env_dir)
     with open(site / "deps.pth", "w") as f:
-        f.write("\n".join(path) + "\n")
+        f.write("\n".join(os.path.relpath(p, site) for p in path) + "\n")
 
 
 def build_wheel(
@@ -675,7 +679,7 @@ def build_wheel(
         env["PYCROSS_BUILD_ROOT"] = str(temp_dir)
         env["PYCROSS_SDIST_ROOT"] = str(sdist_dir)
         env["PYCROSS_INCLUDE_PATH"] = ":".join(map(str, include_paths))
-        env["PYCROSS_LIBRARY_PATH"] = lib_dir
+        env["PYCROSS_LIBRARY_PATH"] = str(lib_dir)
 
         if debug:
             try:
@@ -769,15 +773,44 @@ def load_sysconfig_vars(args: Any, cwd: Path) -> Dict[str, Any]:
     )
 
 
+def execroot_prefix(workspace_name: str) -> Path:
+    return Path("..") / "bazel-execroot" / workspace_name
+
+
 def main(args: Any, temp_dir: Path, is_debug: bool) -> None:
-    cwd = Path(os.getcwd())
+    # Paths passed into this action will be relative to bazel's execroot.
+    # But we need to build whe wheel from within the extracted sdist directory.
+    # So here's the plan:
+    # * Build a temp area. In here we'll have sdist, env (virual environment) and some
+    #   other stuff.
+    # * Extract the sdist.
+    # * Link the bazel execroot to the temp area as `bazel_execroot`.
+    # * Change this process' directory to the sdist directory.
+    # * Prefix all input paths with `../bazel_execroot/<workspace_name>`.
+    cwd = Path.cwd()
+
+    # Extract the sdist and rename it to 'sdist'
+    sdist_dir = temp_dir / "sdist"
+    _sdist_extracted_dir = extract_sdist(args.sdist, temp_dir)
+    _sdist_extracted_dir.rename(sdist_dir)
+
+    # Change into the new directory
+    os.chdir(sdist_dir)
+    sdist_dir = Path(".")
+
+    # Add the execroot symlink into our temp area. We link to the parent of current cwd since
+    # current cwd is something like <sandbox>/execroot/<workspace_name>
+    (temp_dir / "bazel-execroot").symlink_to(cwd.parent)
+
+    # This is the prefix relative to the sdist directory that we'll prepend to everything
+    prefix = execroot_prefix(cwd.name)
 
     def mktmpdir(name: str) -> Path:
         d = temp_dir / name
         d.mkdir()
-        return d
+        # Return as relative from the sdist directory
+        return Path("..") / name
 
-    sdist_dir = mktmpdir("sdist")
     wheel_dir = mktmpdir("wheel")
     bin_dir = mktmpdir("bin")
     tools_dir = mktmpdir("tools")
@@ -785,12 +818,12 @@ def main(args: Any, temp_dir: Path, is_debug: bool) -> None:
     include_dir = mktmpdir("include")
     lib_dir = mktmpdir("lib")
 
-    build_env_vars = init_build_env_vars(args, [tools_dir, bin_dir], cwd)
-    config_settings = init_config_settings(args, cwd)
-    toolchain_sysconfig_vars = load_sysconfig_vars(args, cwd)
+    build_env_vars = init_build_env_vars(args, [tools_dir, bin_dir], prefix)
+    config_settings = init_config_settings(args, prefix)
+    toolchain_sysconfig_vars = load_sysconfig_vars(args, prefix)
     target_environment = load_target_environment(args)
 
-    include_paths = [cwd / Path(p) for p in args.native_include_path]
+    include_paths = list(args.native_include_path)
     include_paths.append(include_dir)
 
     wrapper_sysconfig_vars = generate_cc_wrappers(
@@ -811,31 +844,28 @@ def main(args: Any, temp_dir: Path, is_debug: bool) -> None:
         include_paths=include_paths,
     )
 
-    absolute_path_entries = [os.path.join(cwd, p) for p in args.python_path]
     build_venv(
         env_dir=build_env_dir,
         exec_python_exe=args.exec_python_executable,
         target_python_exe=args.target_python_executable,
         sysconfig_vars=sysconfig_vars,
-        path=absolute_path_entries,
+        path=args.python_path,
         target_env=target_environment,
         always_use_crossenv=args.always_use_crossenv,
     )
 
     generate_bin_tools(bin_dir, toolchain_sysconfig_vars)
-    link_path_tools(tools_dir, cwd, args.path_tool)
-    link_native_headers(include_dir, cwd, args.native_header)
-    link_native_libraries(lib_dir, cwd, args.native_library)
+    link_path_tools(tools_dir, args.path_tool)
+    link_native_headers(include_dir, args.native_header)
+    link_native_libraries(lib_dir, args.native_library)
 
     if is_debug:
-        print(f"Build environment: {build_env_dir}")
-
-    extracted_dir = extract_sdist(args.sdist, sdist_dir)
+        print(f"Build environment: {build_env_dir.absolute()}")
 
     build_env_vars, config_settings = run_pre_build_hooks(
         hooks=args.pre_build_hook,
         temp_dir=temp_dir,
-        sdist_dir=extracted_dir,
+        sdist_dir=sdist_dir,
         lib_dir=lib_dir,
         build_env=build_env_vars,
         config_settings=config_settings,
@@ -846,7 +876,7 @@ def main(args: Any, temp_dir: Path, is_debug: bool) -> None:
         temp_dir=temp_dir,
         env_dir=build_env_dir,
         wheel_dir=wheel_dir,
-        sdist_dir=extracted_dir,
+        sdist_dir=sdist_dir,
         lib_dir=lib_dir,
         build_env_vars=build_env_vars,
         config_settings=config_settings,
@@ -872,6 +902,14 @@ def main(args: Any, temp_dir: Path, is_debug: bool) -> None:
 
 
 def parse_flags(argv) -> Any:
+
+    # At the time of flags parsing, we should be within .../execroot/<workspace_name>
+    workspace_name = Path.cwd().name
+    prefix = execroot_prefix(workspace_name)
+
+    def sdist_rel_path(val):
+        return prefix / val
+
     parser = argparse_flags.ArgumentParser(
         description="Generate target python information."
     )
@@ -883,25 +921,25 @@ def parse_flags(argv) -> Any:
 
     parser.add_argument(
         "--build-env",
-        type=Path,
+        type=sdist_rel_path,
         help="A JSON file containing build environment variables.",
     )
 
     parser.add_argument(
         "--config-settings",
-        type=Path,
+        type=sdist_rel_path,
         help="A JSON file containing PEP 517 build config settings.",
     )
 
     parser.add_argument(
         "--exec-python-executable",
-        type=Path,
+        type=sdist_rel_path,
         required=True,
     )
 
     parser.add_argument(
         "--native-header",
-        type=Path,
+        type=sdist_rel_path,
         action="append",
         default=[],
         help="Header file (or directory of files) to link into our include directory.",
@@ -909,7 +947,7 @@ def parse_flags(argv) -> Any:
 
     parser.add_argument(
         "--native-include-path",
-        type=Path,
+        type=sdist_rel_path,
         action="append",
         default=[],
         help="Include search path to add to CFLAGS.",
@@ -917,7 +955,7 @@ def parse_flags(argv) -> Any:
 
     parser.add_argument(
         "--native-library",
-        type=Path,
+        type=sdist_rel_path,
         action="append",
         default=[],
         help="Library to link into our lib directory.",
@@ -934,7 +972,7 @@ def parse_flags(argv) -> Any:
 
     parser.add_argument(
         "--post-build-hook",
-        type=Path,
+        type=sdist_rel_path,
         action="append",
         default=[],
         help="A tool to run after building the wheel.",
@@ -942,7 +980,7 @@ def parse_flags(argv) -> Any:
 
     parser.add_argument(
         "--pre-build-hook",
-        type=Path,
+        type=sdist_rel_path,
         action="append",
         default=[],
         help="A tool to run before building the sdist.",
@@ -950,7 +988,7 @@ def parse_flags(argv) -> Any:
 
     parser.add_argument(
         "--python-path",
-        type=Path,
+        type=sdist_rel_path,
         action="append",
         default=[],
         help="An entry to add to sys.path",
@@ -965,45 +1003,51 @@ def parse_flags(argv) -> Any:
 
     parser.add_argument(
         "--sysconfig-vars",
-        type=Path,
+        type=sdist_rel_path,
         required=True,
         help="A JSON file containing variable to add to sysconfig.",
     )
 
     parser.add_argument(
         "--target-environment-file",
-        type=Path,
+        type=sdist_rel_path,
         help="A JSON file containing the target Python environment details.",
     )
 
     parser.add_argument(
         "--target-python-executable",
-        type=Path,
+        type=sdist_rel_path,
         required=True,
     )
 
     parser.add_argument(
         "--target-sys-path",
-        type=Path,
+        type=sdist_rel_path,
         action="append",
         default=[],
     )
 
     parser.add_argument(
         "--wheel-file",
-        type=Path,
+        type=sdist_rel_path,
         required=True,
         help="The wheel output path.",
     )
 
     parser.add_argument(
         "--wheel-name-file",
-        type=Path,
+        type=sdist_rel_path,
         required=True,
         help="The wheel name output path.",
     )
 
-    return parser.parse_args(argv[1:])
+    args = parser.parse_args(argv[1:])
+
+    # Fix up path_tool; the second entry in each tuple should be sdist_rel_path, but the first should not.
+    if args.path_tool:
+        args.path_tool = [(p1, sdist_rel_path(p2)) for p1, p2 in args.path_tool]
+
+    return args
 
 
 def main_wrapper(args: Any) -> None:
