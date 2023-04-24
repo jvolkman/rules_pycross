@@ -16,6 +16,7 @@ cmake(
         },
         "@platforms//cpu:arm64": {
             "CMAKE_SYSTEM_PROCESSOR": "arm64",
+            "CMAKE_SIZEOF_VOID_P": "8",  # For some reason this is needed with later versions of zig
         },
         "//conditions:default": {},
     }) | select({
