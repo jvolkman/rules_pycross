@@ -7,4 +7,6 @@ build --nolegacy_external_runfiles
 # This causes pycross_wheel_build to print output and retain its temp directory
 build --action_env=RULES_PYCROSS_DEBUG=1
 
+build -c opt
+
 try-import %workspace%/.bazelrc.user
