@@ -11,6 +11,7 @@ def query(arg: str) -> Optional[str]:
 
     # Search for the actual postgresql include path.
     include_paths = [Path(p) for p in os.environ["PYCROSS_INCLUDE_PATH"].split(":")]
+    server_include_dir = ""
     for p in include_paths:
         if (p / "pg_config.h").is_file():
             include_dir = p
