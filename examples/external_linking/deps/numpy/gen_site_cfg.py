@@ -5,11 +5,12 @@ bazel_root = Path(os.environ["PYCROSS_BAZEL_ROOT"])
 openblas_lib = Path(os.environ["OPENBLAS_LIB"])
 openblas_include = Path(os.environ["OPENBLAS_INCLUDE"])
 
-include_dir = bazel_root / openblas_include
-lib_dir = bazel_root / openblas_lib.parent
-
 p = Path("openblas")
 p.mkdir()
+
+include_dir = os.path.relpath(bazel_root / openblas_include, p)
+lib_dir = os.path.relpath(bazel_root / openblas_lib.parent, p)
+
 (p / "include").symlink_to(include_dir, target_is_directory=True)
 (p / "lib").symlink_to(lib_dir, target_is_directory=True)
 

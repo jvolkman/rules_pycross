@@ -701,7 +701,14 @@ def build_wheel(
     return Path(wheel_file)
 
 
-def init_build_env_vars(args: Any, temp_dir: Path, path_dirs: List[Path], include_dirs: List[Path], lib_dir: Path, bazel_root: Path) -> Dict[str, str]:
+def init_build_env_vars(
+    args: Any,
+    temp_dir: Path,
+    path_dirs: List[Path],
+    include_dirs: List[Path],
+    lib_dirs: List[Path],
+    bazel_root: Path,
+) -> Dict[str, str]:
     vars = get_default_build_env_vars(path_dirs)
     if args.build_env:
         with open(args.build_env, "r") as f:
@@ -713,8 +720,8 @@ def init_build_env_vars(args: Any, temp_dir: Path, path_dirs: List[Path], includ
         for key, val in additional_build_env.items():
             set_or_append(vars, key, val)
 
-    vars["PYCROSS_INCLUDE_PATH"] = ":".join(map(str, include_dirs))
-    vars["PYCROSS_LIBRARY_PATH"] = str(lib_dir)
+    vars["PYCROSS_INCLUDE_PATH"] = os.pathsep.join(map(str, include_dirs))
+    vars["PYCROSS_LIBRARY_PATH"] = os.pathsep.join(map(str, lib_dirs))
     vars["PYCROSS_BAZEL_ROOT"] = str(bazel_root)
     vars["PYCROSS_BUILD_ROOT"] = str(temp_dir)
 
@@ -809,8 +816,8 @@ def main(args: Any, temp_dir: Path, is_debug: bool) -> None:
         temp_dir=temp_dir,
         path_dirs=[tools_dir, bin_dir],
         include_dirs=include_paths,
-        lib_dir=lib_dir,
-        bazel_root=prefix
+        lib_dirs=[lib_dir],
+        bazel_root=prefix,
     )
 
     wrapper_sysconfig_vars = generate_cc_wrappers(
