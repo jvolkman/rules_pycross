@@ -6,7 +6,7 @@ from pathlib import Path
 
 def main() -> None:
     lib_path_env = os.environ["PYCROSS_LIBRARY_PATH"]
-    lib_path = [Path(p) for p in lib_path_env.split(":")]
+    lib_path = [Path(p) for p in lib_path_env.split(os.pathsep)]
     wheel_file = Path(os.environ["PYCROSS_WHEEL_FILE"])
     output_dir = Path(os.environ["PYCROSS_WHEEL_OUTPUT_ROOT"])
 
