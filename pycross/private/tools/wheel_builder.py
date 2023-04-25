@@ -422,11 +422,8 @@ def extract_sdist(sdist_path: Path, sdist_dir: Path) -> Path:
 def run_pre_build_hooks(
     hooks: List[Path],
     temp_dir: Path,
-    sdist_dir: Path,
-    lib_dir: Path,
     build_env: Dict[str, str],
     config_settings: Dict[str, Any],
-    include_paths: List[Path],
 ) -> Tuple[Dict[str, str], Dict[str, Any]]:
     config_settings_file = temp_dir / "config_settings.json"
     env_file = temp_dir / "build_env.json"
@@ -434,10 +431,6 @@ def run_pre_build_hooks(
         hook_env = dict(build_env)
         hook_env["PYCROSS_CONFIG_SETTINGS_FILE"] = str(config_settings_file)
         hook_env["PYCROSS_ENV_VARS_FILE"] = str(env_file)
-        hook_env["PYCROSS_BUILD_ROOT"] = str(temp_dir)
-        hook_env["PYCROSS_SDIST_ROOT"] = str(sdist_dir)
-        hook_env["PYCROSS_INCLUDE_PATH"] = ":".join(map(str, include_paths))
-        hook_env["PYCROSS_LIBRARY_PATH"] = str(lib_dir)
 
         # Write the current build env to a file.
         with open(env_file, "w") as f:
@@ -477,10 +470,8 @@ def run_pre_build_hooks(
 def run_post_build_hooks(
     hooks: List[Path],
     temp_dir: Path,
-    lib_dir: Path,
     build_env: Dict[str, str],
     wheel_file: Path,
-    build_env_dir: Path,
 ) -> Path:
     wheel_in = temp_dir / "post_wheel_in"
     wheel_out = temp_dir / "post_wheel_out"
@@ -491,20 +482,10 @@ def run_post_build_hooks(
     wheel_file = wheel_in / wheel_file.name
     shutil.move(orig_wheel_file, wheel_file)
 
-    # Ask the build venv what its machine name is so we can pass
-    # the value along to hooks.
-    python_exe = build_env_dir / "bin/python"
-    target_machine = subprocess.check_output(
-        [python_exe, "-c", "import platform; print(platform.machine())"]
-    )
-    target_machine = target_machine.decode("utf-8").strip()
-
     for hook in hooks:
         hook_env = dict(build_env)
         hook_env["PYCROSS_WHEEL_FILE"] = str(wheel_file)
         hook_env["PYCROSS_WHEEL_OUTPUT_ROOT"] = str(wheel_out)
-        hook_env["PYCROSS_LIBRARY_PATH"] = str(lib_dir)
-        hook_env["PYCROSS_TARGET_PYTHON_MACHINE"] = target_machine
 
         try:
             subprocess.check_output(
@@ -651,14 +632,11 @@ def build_venv(
 
 
 def build_wheel(
-    temp_dir: Path,
     env_dir: Path,
     wheel_dir: Path,
     sdist_dir: Path,
-    lib_dir: Path,
-    build_env_vars: Dict[str, str],
+    build_env: Dict[str, str],
     config_settings: Dict[str, str],
-    include_paths: List[Path],
     debug: bool = False,
 ) -> Path:
 
@@ -671,15 +649,10 @@ def build_wheel(
     ):
         """The default method of calling the wrapper subprocess."""
         cmd = list(cmd)
-        env = build_env_vars.copy()
+        env = build_env.copy()
 
         if extra_environ:
             env.update(extra_environ)
-
-        env["PYCROSS_BUILD_ROOT"] = str(temp_dir)
-        env["PYCROSS_SDIST_ROOT"] = str(sdist_dir)
-        env["PYCROSS_INCLUDE_PATH"] = ":".join(map(str, include_paths))
-        env["PYCROSS_LIBRARY_PATH"] = str(lib_dir)
 
         if debug:
             try:
@@ -728,22 +701,27 @@ def build_wheel(
     return Path(wheel_file)
 
 
-def init_build_env_vars(args: Any, path_dirs: List[Path], cwd: Path) -> Dict[str, str]:
+def init_build_env_vars(args: Any, temp_dir: Path, path_dirs: List[Path], include_dirs: List[Path], lib_dir: Path, bazel_root: Path) -> Dict[str, str]:
     vars = get_default_build_env_vars(path_dirs)
     if args.build_env:
         with open(args.build_env, "r") as f:
             additional_build_env = replace_path_placeholders(
                 json.load(f),
                 "$$EXT_BUILD_ROOT$$",
-                cwd,
+                bazel_root,
             )
         for key, val in additional_build_env.items():
             set_or_append(vars, key, val)
 
+    vars["PYCROSS_INCLUDE_PATH"] = ":".join(map(str, include_dirs))
+    vars["PYCROSS_LIBRARY_PATH"] = str(lib_dir)
+    vars["PYCROSS_BAZEL_ROOT"] = str(bazel_root)
+    vars["PYCROSS_BUILD_ROOT"] = str(temp_dir)
+
     return vars
 
 
-def init_config_settings(args: Any, cwd: Path) -> Dict[str, Any]:
+def init_config_settings(args: Any, bazel_root: Path) -> Dict[str, Any]:
     if not args.config_settings:
         return {}
 
@@ -751,7 +729,7 @@ def init_config_settings(args: Any, cwd: Path) -> Dict[str, Any]:
         config_settings = replace_path_placeholders(
             json.load(f),
             "$$EXT_BUILD_ROOT$$",
-            cwd,
+            bazel_root,
         )
 
     return config_settings
@@ -763,13 +741,13 @@ def load_target_environment(args: Any) -> Optional[TargetEnv]:
             return TargetEnv.from_dict(json.load(f))
 
 
-def load_sysconfig_vars(args: Any, cwd: Path) -> Dict[str, Any]:
+def load_sysconfig_vars(args: Any, bazel_root: Path) -> Dict[str, Any]:
     with open(args.sysconfig_vars, "r") as f:
         vars = json.load(f)
     return replace_path_placeholders(
         vars,
         "$$EXT_BUILD_ROOT$$",
-        cwd,
+        bazel_root,
     )
 
 
@@ -797,6 +775,7 @@ def main(args: Any, temp_dir: Path, is_debug: bool) -> None:
     # Change into the new directory
     os.chdir(sdist_dir)
     sdist_dir = Path(".")
+    temp_dir = Path("..")
 
     # Add the execroot symlink into our temp area. We link to the parent of current cwd since
     # current cwd is something like <sandbox>/execroot/<workspace_name>
@@ -818,13 +797,21 @@ def main(args: Any, temp_dir: Path, is_debug: bool) -> None:
     include_dir = mktmpdir("include")
     lib_dir = mktmpdir("lib")
 
-    build_env_vars = init_build_env_vars(args, [tools_dir, bin_dir], prefix)
     config_settings = init_config_settings(args, prefix)
     toolchain_sysconfig_vars = load_sysconfig_vars(args, prefix)
     target_environment = load_target_environment(args)
 
     include_paths = list(args.native_include_path)
     include_paths.append(include_dir)
+
+    build_env_vars = init_build_env_vars(
+        args=args,
+        temp_dir=temp_dir,
+        path_dirs=[tools_dir, bin_dir],
+        include_dirs=include_paths,
+        lib_dir=lib_dir,
+        bazel_root=prefix
+    )
 
     wrapper_sysconfig_vars = generate_cc_wrappers(
         toolchain_vars=toolchain_sysconfig_vars,
@@ -865,32 +852,24 @@ def main(args: Any, temp_dir: Path, is_debug: bool) -> None:
     build_env_vars, config_settings = run_pre_build_hooks(
         hooks=args.pre_build_hook,
         temp_dir=temp_dir,
-        sdist_dir=sdist_dir,
-        lib_dir=lib_dir,
         build_env=build_env_vars,
         config_settings=config_settings,
-        include_paths=include_paths,
     )
 
     wheel_file = build_wheel(
-        temp_dir=temp_dir,
         env_dir=build_env_dir,
         wheel_dir=wheel_dir,
         sdist_dir=sdist_dir,
-        lib_dir=lib_dir,
-        build_env_vars=build_env_vars,
+        build_env=build_env_vars,
         config_settings=config_settings,
-        include_paths=include_paths,
         debug=is_debug,
     )
 
     wheel_file = run_post_build_hooks(
         hooks=args.post_build_hook,
         temp_dir=temp_dir,
-        lib_dir=lib_dir,
         build_env=build_env_vars,
         wheel_file=wheel_file,
-        build_env_dir=build_env_dir,
     )
 
     if target_environment:
