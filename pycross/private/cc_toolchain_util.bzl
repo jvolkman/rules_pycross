@@ -31,17 +31,25 @@ CxxFlagsInfo = provider(
 # them here when configuring the toolchain flags to pass to the external
 # build system.
 CC_DISABLED_FEATURES = [
+    "fdo_instrument",
+    "fdo_optimize",
     "layering_check",
     "module_maps",
     "thin_lto",
 ]
 
 def _configure_features(ctx, cc_toolchain):
+    disabled_features = ctx.disabled_features + CC_DISABLED_FEATURES
+    if not ctx.coverage_instrumented():
+        # In coverage mode, cc_common.configure_features() adds coverage related flags,
+        # such as --coverage to the compiler and linker. However, if this library is not
+        # instrumented, we don't need to pass those flags, and avoid unncessary rebuilds.
+        disabled_features.append("coverage")
     return cc_common.configure_features(
         ctx = ctx,
         cc_toolchain = cc_toolchain,
         requested_features = ctx.features,
-        unsupported_features = ctx.disabled_features + CC_DISABLED_FEATURES,
+        unsupported_features = disabled_features,
     )
 
 def _defines_from_deps(ctx):
@@ -162,6 +170,7 @@ def get_flags_info(ctx, link_output_file = None):
                 feature_configuration = feature_configuration,
                 is_using_linker = True,
                 is_linking_dynamic_library = True,
+                must_keep_debug = False,
             ),
         ),
         cxx_linker_static = cc_common.get_memory_inefficient_command_line(
@@ -173,6 +182,7 @@ def get_flags_info(ctx, link_output_file = None):
                 is_using_linker = False,
                 is_linking_dynamic_library = False,
                 output_file = link_output_file,
+                must_keep_debug = False,
             ),
         ),
         cxx_linker_executable = cc_common.get_memory_inefficient_command_line(
@@ -183,6 +193,7 @@ def get_flags_info(ctx, link_output_file = None):
                 feature_configuration = feature_configuration,
                 is_using_linker = True,
                 is_linking_dynamic_library = False,
+                must_keep_debug = False,
             ),
         ),
     )
