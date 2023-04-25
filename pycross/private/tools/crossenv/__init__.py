@@ -84,6 +84,10 @@ def guess_target_platform(host_gnu_type: str) -> str:
     if plat == "apple":
         plat = "darwin"
 
+    # On macos, aarch64 is called arm64 for whatever reason
+    if plat == "darwin" and machine == "aarch64":
+        machine = "arm64"
+
     return f"{plat}-{machine}"
 
 
@@ -109,6 +113,8 @@ def guess_uname(
             # Test that this is still a special case when we can.
             # On uname.machine=ppc64le, _PYTHON_HOST_PLATFORM is linux-powerpc64le
             uname_machine = "ppc64le"
+        elif len(target_info) > 1:
+            uname_machine = target_info[-1]
         else:
             uname_machine = host_gnu_type.split("-")[0]
 
