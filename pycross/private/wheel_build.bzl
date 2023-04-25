@@ -190,7 +190,7 @@ def _pycross_wheel_build_impl(ctx):
     deps = [
         ctx.file.sdist,
         cc_sysconfig_data,
-    ]
+    ] + ctx.files.data
 
     transitive_sources = [dep[PyInfo].transitive_sources for dep in ctx.attr.deps if PyInfo in dep]
 
@@ -238,6 +238,10 @@ pycross_wheel_build = rule(
         "deps": attr.label_list(
             doc = "A list of build dependencies for the wheel.",
             providers = [DefaultInfo, PyInfo],
+        ),
+        "data": attr.label_list(
+            doc = "A list of resources needed to build the wheel. For example, " + 
+            "additional headers and libraries.",
         ),
         "sdist": attr.label(
             doc = "The sdist file.",

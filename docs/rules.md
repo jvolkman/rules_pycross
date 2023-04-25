@@ -130,7 +130,7 @@ pycross_target_environment(<a href="#pycross_target_environment-name">name</a>, 
 ## pycross_wheel_build
 
 <pre>
-pycross_wheel_build(<a href="#pycross_wheel_build-name">name</a>, <a href="#pycross_wheel_build-copts">copts</a>, <a href="#pycross_wheel_build-deps">deps</a>, <a href="#pycross_wheel_build-linkopts">linkopts</a>, <a href="#pycross_wheel_build-sdist">sdist</a>, <a href="#pycross_wheel_build-target_environment">target_environment</a>)
+pycross_wheel_build(<a href="#pycross_wheel_build-name">name</a>, <a href="#pycross_wheel_build-copts">copts</a>, <a href="#pycross_wheel_build-data">data</a>, <a href="#pycross_wheel_build-deps">deps</a>, <a href="#pycross_wheel_build-linkopts">linkopts</a>, <a href="#pycross_wheel_build-sdist">sdist</a>, <a href="#pycross_wheel_build-target_environment">target_environment</a>)
 </pre>
 
 
@@ -142,6 +142,7 @@ pycross_wheel_build(<a href="#pycross_wheel_build-name">name</a>, <a href="#pycr
 | :------------- | :------------- | :------------- | :------------- | :------------- |
 | <a id="pycross_wheel_build-name"></a>name |  A unique name for this target.   | <a href="https://bazel.build/concepts/labels#target-names">Name</a> | required |  |
 | <a id="pycross_wheel_build-copts"></a>copts |  Additional C compiler options.   | List of strings | optional | <code>[]</code> |
+| <a id="pycross_wheel_build-data"></a>data |  A list of resources needed to build the wheel. For example, additional headers and libraries.   | <a href="https://bazel.build/concepts/labels">List of labels</a> | optional | <code>[]</code> |
 | <a id="pycross_wheel_build-deps"></a>deps |  A list of build dependencies for the wheel.   | <a href="https://bazel.build/concepts/labels">List of labels</a> | optional | <code>[]</code> |
 | <a id="pycross_wheel_build-linkopts"></a>linkopts |  Additional C linker options.   | List of strings | optional | <code>[]</code> |
 | <a id="pycross_wheel_build-sdist"></a>sdist |  The sdist file.   | <a href="https://bazel.build/concepts/labels">Label</a> | required |  |

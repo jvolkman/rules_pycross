@@ -106,6 +106,12 @@ def get_tools_info(ctx):
         ),
     )
 
+def expand_location(ctx, input, targets):
+    token = "$$EXT_BUILD_ROOT$$/"
+    for var in ["$(execpath", "$(rootpath", "$(rlocationpath", "$(location"]:
+        input = input.replace(var, token + var)
+    return ctx.expand_location(input, targets)
+
 def get_flags_info(ctx, link_output_file = None):
     """Takes information about flags from cc_toolchain, returns CxxFlagsInfo
 
@@ -123,9 +129,11 @@ def get_flags_info(ctx, link_output_file = None):
         cc_toolchain = cc_toolchain_,
     )
 
-    copts = (ctx.fragments.cpp.copts + ctx.fragments.cpp.conlyopts + getattr(ctx.attr, "copts", [])) or []
-    cxxopts = (ctx.fragments.cpp.copts + ctx.fragments.cpp.cxxopts + getattr(ctx.attr, "copts", [])) or []
-    linkopts = (ctx.fragments.cpp.linkopts + getattr(ctx.attr, "linkopts", [])) or []
+    user_copts = [expand_location(ctx, copt, ctx.attr.data) for copt in getattr(ctx.attr, "copts", [])]
+    copts = (ctx.fragments.cpp.copts + ctx.fragments.cpp.conlyopts + user_copts) or []
+    cxxopts = (ctx.fragments.cpp.copts + ctx.fragments.cpp.cxxopts + user_copts) or []
+    user_linkopts = [expand_location(ctx, copt, ctx.attr.data) for copt in getattr(ctx.attr, "linkopts", [])]
+    linkopts = (ctx.fragments.cpp.linkopts + user_linkopts) or []
     defines = _defines_from_deps(ctx)
 
     flags = CxxFlagsInfo(
@@ -187,7 +195,7 @@ def get_flags_info(ctx, link_output_file = None):
         cxx_linker_static = _convert_flags(cc_toolchain_.compiler, flags.cxx_linker_static),
         cxx_linker_executable = _convert_flags(cc_toolchain_.compiler, _add_if_needed(flags.cxx_linker_executable, linkopts)),
         needs_pic_for_dynamic_libraries = cc_toolchain_.needs_pic_for_dynamic_libraries(
-            feature_configuration = feature_configuration
+            feature_configuration = feature_configuration,
         ),
     )
 
