@@ -83,6 +83,7 @@ configure_make(
         "-DOPENSSL_NO_APPLE_CRYPTO_RANDOM",
         "-DOPENSSL_NO_FILENAMES",
         "-O2",
+        "-Wl,-S",
     ],
     env = select({
         "@platforms//os:macos": {
