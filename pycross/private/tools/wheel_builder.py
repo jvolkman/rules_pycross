@@ -174,12 +174,6 @@ def get_default_build_env_vars(path_dirs: List[Path]) -> Dict[str, str]:
     env.pop("PYTHONPATH", None)
     env.pop("RUNFILES_DIR", None)
 
-    # wheel, by default, enables debug symbols in GCC. This incidentally captures the build path in the .so file
-    # We can override this behavior by disabling debug symbols entirely.
-    # https://github.com/pypa/pip/issues/6505
-    set_or_append(env, "CFLAGS", "-g0")
-    set_or_append(env, "LDFLAGS", "-Wl,-s")
-
     # set SOURCE_DATE_EPOCH to 1980 so that we can use python wheels
     # https://github.com/NixOS/nixpkgs/blob/master/doc/languages-frameworks/python.section.md#python-setuppy-bdist_wheel-cannot-create-whl
     if "SOURCE_DATE_EPOCH" not in env:
