@@ -30,6 +30,7 @@ cmake(
     }),
     copts = [
         "-Wno-error=int-conversion",
+        "-Wl,-S",
     ],
     build_args = [
         "--verbose",

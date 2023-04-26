@@ -57,6 +57,7 @@ configure_make(
     copts = [
         "-DOPENSSL_NO_FILENAMES",
         "-O2",
+        "-Wl,-S",
     ],
     env = {
         "ZIC": "/usr/sbin/zic",

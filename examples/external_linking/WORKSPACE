@@ -47,14 +47,14 @@ load("@jvolkman_rules_pycross//pycross:repositories.bzl", "rules_pycross_depende
 rules_pycross_dependencies(python_interpreter_target = interpreter)
 
 http_archive(
-    name = "bazel-zig-cc",
-    sha256 = "b23d2a47bc79fa7d60f2ef3f18fb204f178029da824dc3c7462c5e87cd284635",
-    strip_prefix = "bazel-zig-cc-9d9dc016ef9b7995af0bef45ef8a6dc55993cb25",
-    urls = ["https://github.com/uber/bazel-zig-cc/archive/9d9dc016ef9b7995af0bef45ef8a6dc55993cb25.tar.gz"],
+    name = "hermetic_cc_toolchain",
+    sha256 = "602492507d8e7c8bd6161da43789e55c22739319a95f47b0a8bb63331da4fe11",
+    strip_prefix = "hermetic_cc_toolchain-f35f5d3eeb6b1dd35fd3ce35022f8abb12a4a11a",
+    urls = ["https://github.com/uber/hermetic_cc_toolchain/archive/f35f5d3eeb6b1dd35fd3ce35022f8abb12a4a11a.tar.gz"],
 )
 
 load(
-    "@bazel-zig-cc//toolchain:defs.bzl",
+    "@hermetic_cc_toolchain//toolchain:defs.bzl",
     "URL_FORMAT_NIGHTLY",
     zig_toolchains = "toolchains",
 )
