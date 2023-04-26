@@ -8,5 +8,6 @@ build --nolegacy_external_runfiles
 build --action_env=RULES_PYCROSS_DEBUG=1
 
 build -c opt
+build --strip=always
 
 try-import %workspace%/.bazelrc.user
