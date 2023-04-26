@@ -181,8 +181,8 @@ def get_flags_info(ctx, link_output_file = None):
                 feature_configuration = feature_configuration,
                 is_using_linker = False,
                 is_linking_dynamic_library = False,
-                output_file = link_output_file,
                 must_keep_debug = False,
+                output_file = link_output_file,
             ),
         ),
         cxx_linker_executable = cc_common.get_memory_inefficient_command_line(
