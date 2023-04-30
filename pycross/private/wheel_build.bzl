@@ -226,7 +226,9 @@ def _handle_sdist(ctx, args, inputs):  # -> PycrossWheelInfo
 def _handle_sysconfig_data(ctx, args, inputs):  # -> cc_vars
     cc_sysconfig_data = ctx.actions.declare_file(paths.join(ctx.attr.name, "cc_sysconfig.json"))
     cc_vars = get_env_vars(ctx)
-    flags = get_flags_info(ctx)
+    copts = [_expand_locations_and_vars("copts", ctx, copt) for copt in ctx.attr.copts]
+    linkopts = [_expand_locations_and_vars("linkopts", ctx, linkopt) for linkopt in ctx.attr.linkopts]
+    flags = get_flags_info(ctx, copts, linkopts)
     tools = get_tools_info(ctx)
     sysconfig_vars = _get_sysconfig_data(ctx.workspace_name, tools, flags)
     ctx.actions.write(cc_sysconfig_data, json.encode(sysconfig_vars))
@@ -414,6 +416,14 @@ pycross_wheel_build = rule(
                 "A mapping of binaries to names that are placed in PATH when building the sdist."
             ),
             cfg = "exec",
+        ),
+        "copts": attr.string_list(
+            doc = "Additional C compiler options.",
+            default = [],
+        ),
+        "linkopts": attr.string_list(
+            doc = "Additional C linker options.",
+            default = [],
         ),
         "_tool": attr.label(
             default = Label("//pycross/private/tools:wheel_builder"),
