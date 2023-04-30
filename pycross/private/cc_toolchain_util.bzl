@@ -120,7 +120,7 @@ def get_tools_info(ctx):
         ),
     )
 
-def get_flags_info(ctx, link_output_file = None):
+def get_flags_info(ctx, copts=[], linkopts=[], link_output_file = None):
     """Takes information about flags from cc_toolchain, returns CxxFlagsInfo
 
     Args:
@@ -137,9 +137,9 @@ def get_flags_info(ctx, link_output_file = None):
         cc_toolchain = cc_toolchain_,
     )
 
-    copts = (ctx.fragments.cpp.copts + ctx.fragments.cpp.conlyopts + getattr(ctx.attr, "copts", [])) or []
-    cxxopts = (ctx.fragments.cpp.copts + ctx.fragments.cpp.cxxopts + getattr(ctx.attr, "copts", [])) or []
-    linkopts = (ctx.fragments.cpp.linkopts + getattr(ctx.attr, "linkopts", [])) or []
+    copts = (ctx.fragments.cpp.copts + ctx.fragments.cpp.conlyopts + copts) or []
+    cxxopts = (ctx.fragments.cpp.copts + ctx.fragments.cpp.cxxopts + copts) or []
+    linkopts = (ctx.fragments.cpp.linkopts + linkopts) or []
     defines = _defines_from_deps(ctx)
 
     flags = CxxFlagsInfo(
