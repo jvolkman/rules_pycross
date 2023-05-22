@@ -605,6 +605,7 @@ def build_standard_venv(
 
 
 def build_venv(
+    bazel_root: Path,
     env_dir: Path,
     exec_python_exe: Path,
     target_python_exe: Path,
@@ -620,9 +621,28 @@ def build_venv(
     else:
         build_standard_venv(env_dir, exec_python_exe, sysconfig_vars)
 
-    site = find_site_dir(env_dir)
-    with open(site / "deps.pth", "w") as f:
-        f.write("\n".join(os.path.relpath(p, site) for p in path) + "\n")
+    site_dir = find_site_dir(env_dir)
+
+    # Add a pth file to override sys.prefix and sys.exec_prefix as paths relative to the sdist root.
+    with open(site_dir / "_pycross_sys_prefix.pth", "w") as f:
+        f.write(
+            f'import sys; sys.prefix = sys.exec_prefix = "{env_dir}"\n'
+        )
+
+    # If we're using a Bazel-provided python (i.e., not system python), set sys.base_prefix to a path 
+    # relative to the sdist root in an attempt to keep non-reproducible paths out of binaries.
+    if bazel_root in target_python_exe.parents:
+        # base_prefix and base_exec_prefix are the grandparent directory of the executable.
+        # E.g., if the executable is at python310/bin/python3, python310 is base_prefix.
+        # target_python_exe should already be a relative path.
+        with open(site_dir / "_pycross_sys_base_prefix.pth", "w") as f:
+            f.write(
+                f'import sys; sys.base_prefix = sys.base_exec_prefix = "{target_python_exe.parent.parent}"\n'
+            )
+
+    # Add a pth file to include all of our build dependencies.
+    with open(site_dir / "deps.pth", "w") as f:
+        f.write("\n".join(os.path.relpath(p, site_dir) for p in path) + "\n")
 
 
 def build_wheel(
@@ -833,6 +853,7 @@ def main(args: Any, temp_dir: Path, is_debug: bool) -> None:
     )
 
     build_venv(
+        bazel_root=prefix,
         env_dir=build_env_dir,
         exec_python_exe=args.exec_python_executable,
         target_python_exe=args.target_python_executable,
