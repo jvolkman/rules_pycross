@@ -27,7 +27,7 @@ pycross_wheel_build(
         "@jvolkman_rules_pycross//pycross/hooks:repair_wheel",
     ],
     tags = ["manual"],
-    copts = ["-Wl,-S"],
+    copts = ["-Wl,-s"],
 )
 
 py_binary(
