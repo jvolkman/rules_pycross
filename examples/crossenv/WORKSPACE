@@ -92,4 +92,5 @@ register_toolchains(
     "//:pycross_darwin_darwin_tc",
     "//:pycross_linux_linux_tc",
     "//:pycross_linux_darwin_tc",
+    "//:pycross_darwin_linux_aarch64_tc",
 )
