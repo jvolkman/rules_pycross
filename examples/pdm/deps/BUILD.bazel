@@ -5,8 +5,8 @@ package(default_visibility = ["//visibility:public"])
 
 # Specified here as an override.
 pycross_wheel_build(
-    name = "overridden_future_0.18.2",
-    sdist = "@example_lock_sdist_future_0.18.2//file",
+    name = "overridden_future_0.18.3",
+    sdist = "@example_lock_sdist_future_0.18.3//file",
     deps = [
         "//deps:setuptools",
         "//deps:wheel",
