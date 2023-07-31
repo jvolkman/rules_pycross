@@ -90,10 +90,10 @@ pycross_lock_file(
     ],
     default_alias_single_version = True,
     build_target_overrides = {
-        "future@0.18.2": "@//deps:overridden_future_0.18.2",
+        "future@0.18.3": "@//deps:overridden_future_0.18.3",
     },
     always_build_packages = [
-        "pbr@5.10.0",
+        "pbr@5.11.1",
         "setproctitle",
 #        "numpy",  # Doesn't work with zig cc since numpy can't detect the compiler type (assumes gcc)
     ],

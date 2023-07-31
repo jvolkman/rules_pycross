@@ -11,10 +11,10 @@ from packaging.utils import NormalizedName
 from packaging.utils import Version
 
 from pdm.core import Core as PDMCore
-from pdm.project import Project as PDMProject
+from pdm.project import Project as _PDMProject
 from pdm.models.repositories import BaseRepository as PDMBaseRepository
 from pdm.models.candidates import Candidate as PDMCandidate
-from pdm.cli.utils import translate_groups as pdm_translate_groups
+from pdm.cli.filters import GroupSelection as PDMGroupSelection
 from pdm.exceptions import PdmUsageError
 
 from pycross.private.tools.lock_model import LockSet
@@ -25,12 +25,31 @@ from pycross.private.tools.lock_model import PackageKey
 from pycross.private.tools.lock_model import package_canonical_name
 
 
-class Project(PDMProject):
+class LockfileIncompatibleException(Exception):
+    pass
+
+
+class LockfileNotStaticException(Exception):
+    pass
+
+
+class PDMProject(_PDMProject):
     def __init__(self, project_file: Path, lock_file: Path, cache_dir: Path) -> None:
         super().__init__(
             core=PDMCore(),
             root_path=project_file.parent.absolute(),
         )
+        if not self.lockfile.is_compatible():
+            raise LockfileIncompatibleException(
+                "Lock file is not compatible with PDM version used by pycross."
+            )
+
+        if not self.lockfile.static_urls:
+            raise LockfileNotStaticException(
+                "Lock file does not contain static urls. "
+                "Please use --static-urls when creating the lockfile."
+            )
+
         self._lockfile_file = lock_file.absolute()
         self._pyproject_file = project_file.absolute()
         self._cache_dir = cache_dir
@@ -56,7 +75,7 @@ def parse_hash_sha256(hash: str) -> str:
 
 
 def get_pins(
-    project: Project,
+    project: PDMProject,
     default_dependencies: bool,
     dev_dependencies: bool,
     dependency_groups: List[str],
@@ -64,7 +83,7 @@ def get_pins(
     pins = {}
     repository = project.locked_repository
     try:
-        groups = pdm_translate_groups(
+        groups = PDMGroupSelection(
             project=project,
             default=default_dependencies,
             dev=dev_dependencies,
@@ -88,7 +107,7 @@ def get_pins(
     return pins
 
 
-def get_packages(project: Project) -> Dict[PackageKey, Package]:
+def get_packages(project: PDMProject) -> Dict[PackageKey, Package]:
     packages = {}
     repository = project.locked_repository
     # Don't evaluate markers against current environment.
@@ -109,9 +128,10 @@ def get_packages(project: Project) -> Dict[PackageKey, Package]:
         hashes = repository.get_hashes(_package)
         if not hashes:
             raise Exception(f'package "{package_name}" has not hashes')
-        for file_link, file_hash in hashes.items():
-            file_name = file_link.filename
-            file_url = file_link.url
+        for hash in hashes:
+            file_url = hash.get("url")
+            _, _, file_name = file_url.rpartition("/")
+            file_hash = hash.get("hash")
             file_sha256 = parse_hash_sha256(file_hash)
             if file_name not in _package_files:
                 _package_files[file_name] = (file_sha256, [file_url])
@@ -167,7 +187,7 @@ def translate(
     dependency_groups: List[str],
 ) -> LockSet:
     with TemporaryDirectory() as cache_dir:
-        project = Project(
+        project = PDMProject(
             project_file=project_file,
             lock_file=lock_file,
             cache_dir=Path(cache_dir),
