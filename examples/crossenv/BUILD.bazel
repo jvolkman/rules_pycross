@@ -116,14 +116,14 @@ toolchain(
 
 pycross_hermetic_toolchain(
     name = "pycross_darwin_linux_aarch64",
-    exec_interpreter = "@python3_9_arm64-apple-darwin//:py3_runtime",
+    exec_interpreter = "@python3_9_x86_64-apple-darwin//:py3_runtime",
     target_environment = ":python_linux_aarch64",
     target_interpreter = "@python3_9_aarch64-unknown-linux-gnu//:py3_runtime",
 )
 
 toolchain(
     name = "pycross_darwin_linux_aarch64_tc",
-    exec_compatible_with = _darwin_arm64,
+    exec_compatible_with = _darwin_x86_64,
     target_compatible_with = _linux_aarch64,
     toolchain = ":pycross_darwin_linux_aarch64",
     toolchain_type = "@jvolkman_rules_pycross//pycross:toolchain_type",
