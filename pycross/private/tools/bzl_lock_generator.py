@@ -129,7 +129,13 @@ class Naming:
 
     def wheel_repo(self, file: PackageFile) -> str:
         assert file.is_wheel
-        normalized_name = file.name[:-4].lower().replace("-", "_").replace("+", "_")
+        normalized_name = (
+            file.name[:-4]
+            .lower()
+            .replace("-", "_")
+            .replace("+", "_")
+            .replace("%2b", "_")
+        )
         return f"{self.repo_prefix}_wheel_{normalized_name}"
 
     def wheel_label(self, file: PackageFile):
