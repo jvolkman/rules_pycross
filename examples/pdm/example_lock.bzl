@@ -457,16 +457,9 @@ def targets():
         wheel = "@example_lock_wheel_flask_cors_4.0.0_py2.py3_none_any//file",
     )
 
-    pycross_wheel_build(
-        name = "_build_future_0.18.3",
-        sdist = "@example_lock_sdist_future_0.18.3//file",
-        target_environment = _target,
-        tags = ["manual"],
-    )
-
     pycross_wheel_library(
         name = "future_0.18.3",
-        wheel = ":_build_future_0.18.3",
+        wheel = "@//deps:overridden_future_0.18.3",
     )
 
     pycross_wheel_library(
@@ -733,9 +726,17 @@ def targets():
         ":wheel_0.37.0",
     ]
 
+    pycross_wheel_build(
+        name = "_build_pbr_5.11.1",
+        sdist = "@example_lock_sdist_pbr_5.11.1//file",
+        target_environment = _target,
+        deps = _pbr_5_11_1_build_deps,
+        tags = ["manual"],
+    )
+
     pycross_wheel_library(
         name = "pbr_5.11.1",
-        wheel = "@example_lock_wheel_pbr_5.11.1_py2.py3_none_any//file",
+        wheel = ":_build_pbr_5.11.1",
     )
 
     _pexpect_4_8_0_deps = [
@@ -1184,6 +1185,16 @@ def repositories():
         ],
         sha256 = "e7c8dc13af7db097bed64a051d2dd49e9f0af495c26995c00a9ee842690d34c0",
         downloaded_file_path = "greenlet-2.0.2.tar.gz",
+    )
+
+    maybe(
+        http_file,
+        name = "example_lock_sdist_pbr_5.11.1",
+        urls = [
+            "https://files.pythonhosted.org/packages/02/d8/acee75603f31e27c51134a858e0dea28d321770c5eedb9d1d673eb7d3817/pbr-5.11.1.tar.gz"
+        ],
+        sha256 = "aefc51675b0b533d56bb5fd1c8c6c0522fe31896679882e1c4c63d5e4a0fccb3",
+        downloaded_file_path = "pbr-5.11.1.tar.gz",
     )
 
     maybe(
@@ -1884,16 +1895,6 @@ def repositories():
         ],
         sha256 = "d8af70af76652554bd134c22b3e8a1cc46ed7d91edcdd721ef1a0c51a84a5293",
         downloaded_file_path = "pathspec-0.11.1-py3-none-any.whl",
-    )
-
-    maybe(
-        http_file,
-        name = "example_lock_wheel_pbr_5.11.1_py2.py3_none_any",
-        urls = [
-            "https://files.pythonhosted.org/packages/01/06/4ab11bf70db5a60689fc521b636849c8593eb67a2c6bdf73a16c72d16a12/pbr-5.11.1-py2.py3-none-any.whl"
-        ],
-        sha256 = "567f09558bae2b3ab53cb3c1e2e33e726ff3338e7bae3db5dc954b3a44eef12b",
-        downloaded_file_path = "pbr-5.11.1-py2.py3-none-any.whl",
     )
 
     maybe(
