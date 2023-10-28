@@ -101,6 +101,7 @@ py_binary(
         "@rules_pycross_pypi_deps_absl_py//:pkg",
         "@rules_pycross_pypi_deps_build//:pkg",
         "@rules_pycross_pypi_deps_packaging//:pkg",
+        "@rules_pycross_pypi_deps_tomli//:pkg",
     ],
 )
 
