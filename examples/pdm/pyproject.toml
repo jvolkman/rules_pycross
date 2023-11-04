@@ -38,3 +38,6 @@ dev = [
 nodev = [
     "flake8>=5.0.4",
 ]
+
+[tool.pdm.scripts]
+post_lock = "bazel run //:update_example_lock"
