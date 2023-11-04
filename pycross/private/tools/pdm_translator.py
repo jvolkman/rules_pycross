@@ -44,7 +44,7 @@ class PDMProject(_PDMProject):
                 "Lock file is not compatible with PDM version used by pycross."
             )
 
-        if not self.lockfile.static_urls:
+        if "static_urls" not in self.lockfile.strategy:
             raise LockfileNotStaticException(
                 "Lock file does not contain static urls. "
                 "Please use --static-urls when creating the lockfile."
