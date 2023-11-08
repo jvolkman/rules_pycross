@@ -34,6 +34,6 @@ load("@bazel_gazelle//:deps.bzl", "gazelle_dependencies")
 
 go_rules_dependencies()
 
-go_register_toolchains(version = "1.21.4")
+go_register_toolchains(version = "1.17.2")
 
 gazelle_dependencies()
