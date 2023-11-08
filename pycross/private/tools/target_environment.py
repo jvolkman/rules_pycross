@@ -42,7 +42,7 @@ class TargetEnv:
             version=".".join((str(i) for i in target_python.py_version_info)),
             abis=target_python.abis,
             platforms=target_python.platforms,
-            compatibility_tags=[str(t) for t in target_python.get_tags()],
+            compatibility_tags=[str(t) for t in target_python.get_sorted_tags()],
             markers=all_markers,
             python_compatible_with=python_compatible_with,
         )

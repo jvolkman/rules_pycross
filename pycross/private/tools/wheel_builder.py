@@ -692,7 +692,7 @@ def build_wheel(
             print(output.decode(), file=sys.stdout)
 
     builder = ProjectBuilder(
-        srcdir=sdist_dir,
+        source_dir=sdist_dir,
         python_executable=str(python_exe),
         runner=_subprocess_runner,
     )

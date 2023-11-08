@@ -84,7 +84,7 @@ pycross_lock_file(
     name = "example_lock",
     out = "example_lock.bzl",
     always_build_packages = [
-        "pbr@5.10.0",
+        "pbr@6.0.0",
         "setproctitle",
     ],
     build_target_overrides = {
