@@ -56,18 +56,8 @@ def main(args: Any) -> None:
         bytecode_optimization_levels=[0, 1],
     )
 
-    link_dir = Path(tempfile.mkdtemp())
-    if args.wheel_name_file:
-        with open(args.wheel_name_file, "r") as f:
-            wheel_name = f.read().strip()
-    else:
-        wheel_name = os.path.basename(args.wheel)
-
-    link_path = link_dir / wheel_name
-    os.symlink(os.path.join(os.getcwd(), args.wheel), link_path)
-
-    try:
-        with WheelFile.open(link_path) as source:
+    for wheel_file in args.wheel:
+        with WheelFile.open(wheel_file) as source:
             install(
                 source=source,
                 destination=destination,
@@ -76,8 +66,6 @@ def main(args: Any) -> None:
                     "INSTALLER": b"https://github.com/jvolkman/rules_pycross",
                 },
             )
-    finally:
-        shutil.rmtree(link_dir, ignore_errors=True)
 
     setup_namespace_pkg_compatibility(lib_dir)
 
@@ -88,15 +76,9 @@ def parse_flags(argv) -> Any:
     parser.add_argument(
         "--wheel",
         type=Path,
+        action="append",
         required=True,
         help="The wheel file path.",
-    )
-
-    parser.add_argument(
-        "--wheel-name-file",
-        type=Path,
-        required=False,
-        help="A file containing the canonical name of the wheel.",
     )
 
     parser.add_argument(

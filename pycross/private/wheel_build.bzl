@@ -9,7 +9,7 @@ load(
     "get_libraries",
     "get_tools_info",
 )
-load(":providers.bzl", "PycrossTargetEnvironmentInfo", "PycrossWheelInfo")
+load(":providers.bzl", "PycrossTargetEnvironmentInfo")
 load("@bazel_skylib//lib:paths.bzl", "paths")
 load("@bazel_tools//tools/cpp:toolchain_utils.bzl", "find_cpp_toolchain", "use_cpp_toolchain")
 load("@rules_python//python:defs.bzl", "PyInfo")
@@ -202,7 +202,7 @@ def _handle_toolchains(ctx, args, tools):
         args.add("--exec-python-executable", executable)
         args.add("--target-python-executable", executable)
 
-def _handle_sdist(ctx, args, inputs):  # -> PycrossWheelInfo
+def _handle_sdist(ctx, args, inputs):  # -> out_wheel_dir
     inputs.append(ctx.file.sdist)
     args.add("--sdist", ctx.file.sdist)
 
@@ -212,16 +212,11 @@ def _handle_sdist(ctx, args, inputs):  # -> PycrossWheelInfo
     else:
         wheel_name = sdist_name.rsplit(".", 1)[0]  # Also includes .zip
 
-    out_wheel = ctx.actions.declare_file(paths.join(ctx.attr.name, wheel_name + ".whl"))
-    out_wheel_name = ctx.actions.declare_file(paths.join(ctx.attr.name, wheel_name + ".whl.name"))
+    out_wheel_dir = ctx.actions.declare_directory(paths.join(ctx.attr.name, wheel_name + ".whldir"))
 
-    args.add("--wheel-file", out_wheel)
-    args.add("--wheel-name-file", out_wheel_name)
+    args.add("--wheel-dir", out_wheel_dir.path)
 
-    return PycrossWheelInfo(
-        wheel_file = out_wheel,
-        name_file = out_wheel_name,
-    )
+    return out_wheel_dir
 
 def _handle_sysconfig_data(ctx, args, inputs):  # -> cc_vars
     cc_sysconfig_data = ctx.actions.declare_file(paths.join(ctx.attr.name, "cc_sysconfig.json"))
@@ -315,7 +310,7 @@ def _pycross_wheel_build_impl(ctx):
     tools = []
     input_manifests = []
 
-    pycross_wheel_info = _handle_sdist(ctx, args, inputs)
+    out_wheel_dir = _handle_sdist(ctx, args, inputs)
     cc_vars = _handle_sysconfig_data(ctx, args, inputs)
     _handle_toolchains(ctx, args, tools)
     _handle_py_deps(ctx, args, tools)
@@ -332,7 +327,7 @@ def _pycross_wheel_build_impl(ctx):
 
     ctx.actions.run(
         inputs = inputs,
-        outputs = [pycross_wheel_info.wheel_file, pycross_wheel_info.name_file],
+        outputs = [out_wheel_dir],
         tools = depset(transitive = tools),
         input_manifests = input_manifests,
         executable = ctx.executable._tool,
@@ -344,10 +339,9 @@ def _pycross_wheel_build_impl(ctx):
     )
 
     return [
-        pycross_wheel_info,
         DefaultInfo(
             files = depset(
-                direct = [pycross_wheel_info.wheel_file],
+                direct = [out_wheel_dir],
             ),
         ),
     ]

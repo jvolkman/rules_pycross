@@ -1,34 +1,20 @@
 """Implementation of the pycross_wheel_library rule."""
 
-load(":providers.bzl", "PycrossWheelInfo")
 load("@bazel_skylib//lib:paths.bzl", "paths")
 load("@rules_python//python:defs.bzl", "PyInfo")
 
 def _pycross_wheel_library_impl(ctx):
     out = ctx.actions.declare_directory(ctx.attr.name)
 
-    wheel_target = ctx.attr.wheel
-    if PycrossWheelInfo in wheel_target:
-        wheel_file = wheel_target[PycrossWheelInfo].wheel_file
-        name_file = wheel_target[PycrossWheelInfo].name_file
-    else:
-        wheel_file = ctx.file.wheel
-        name_file = None
-
     args = ctx.actions.args().use_param_file("--flagfile=%s")
-    args.add("--wheel", wheel_file)
+    args.add_all([ctx.file.wheel], before_each="--wheel")
     args.add("--directory", out.path)
-
-    inputs = [wheel_file]
-    if name_file:
-        inputs.append(name_file)
-        args.add("--wheel-name-file", name_file)
 
     if ctx.attr.enable_implicit_namespace_pkgs:
         args.add("--enable-implicit-namespace-pkgs")
 
     ctx.actions.run(
-        inputs = inputs,
+        inputs = [ctx.file.wheel],
         outputs = [out],
         executable = ctx.executable._tool,
         arguments = [args],
