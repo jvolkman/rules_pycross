@@ -897,9 +897,7 @@ def main(args: Any, temp_dir: Path, is_debug: bool) -> None:
     if target_environment:
         check_filename_against_target(os.path.basename(wheel_file), target_environment)
 
-    shutil.move(wheel_file, args.wheel_file)
-    with open(args.wheel_name_file, "w") as f:
-        f.write(os.path.basename(wheel_file))
+    shutil.move(wheel_file, args.wheel_dir)
 
 
 def parse_flags(argv) -> Any:
@@ -1029,17 +1027,10 @@ def parse_flags(argv) -> Any:
     )
 
     parser.add_argument(
-        "--wheel-file",
+        "--wheel-dir",
         type=sdist_rel_path,
         required=True,
         help="The wheel output path.",
-    )
-
-    parser.add_argument(
-        "--wheel-name-file",
-        type=sdist_rel_path,
-        required=True,
-        help="The wheel name output path.",
     )
 
     args = parser.parse_args(argv[1:])
