@@ -9,10 +9,9 @@ from pathlib import Path
 from typing import Any
 from typing import List
 
-from absl import app
-from absl.flags import argparse_flags
 from pip._internal.models.target_python import TargetPython
 
+from pycross.private.tools.args import FlagFileArgumentParser
 from pycross.private.tools.target_environment import TargetEnv
 
 _MANYLINUX_ALIASES = {
@@ -66,8 +65,8 @@ def main(args: Any) -> None:
         f.write("\n")
 
 
-def parse_flags(argv) -> Any:
-    parser = argparse_flags.ArgumentParser(
+def parse_flags() -> Any:
+    parser = FlagFileArgumentParser(
         description="Generate target python information."
     )
 
@@ -128,7 +127,7 @@ def parse_flags(argv) -> Any:
         help="The output file.",
     )
 
-    return parser.parse_args(argv[1:])
+    return parser.parse_args()
 
 
 if __name__ == "__main__":
@@ -136,4 +135,4 @@ if __name__ == "__main__":
     if "BUILD_WORKING_DIRECTORY" in os.environ:
         os.chdir(os.environ["BUILD_WORKING_DIRECTORY"])
 
-    app.run(main, flags_parser=parse_flags)
+    main(parse_flags())
