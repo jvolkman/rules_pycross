@@ -5,8 +5,6 @@ from typing import Any
 from typing import Dict
 from typing import List
 
-from absl import app
-from absl.flags import argparse_flags
 from packaging.utils import NormalizedName
 from packaging.utils import Version
 
@@ -17,6 +15,7 @@ from pdm.models.candidates import Candidate as PDMCandidate
 from pdm.cli.filters import GroupSelection as PDMGroupSelection
 from pdm.exceptions import PdmUsageError
 
+from pycross.private.tools.args import FlagFileArgumentParser
 from pycross.private.tools.lock_model import LockSet
 from pycross.private.tools.lock_model import Package
 from pycross.private.tools.lock_model import PackageDependency
@@ -220,8 +219,8 @@ def main(args: Any) -> None:
         f.write(lock_set.to_json(indent=2))
 
 
-def parse_flags(argv) -> Any:
-    parser = argparse_flags.ArgumentParser(
+def parse_flags() -> Any:
+    parser = FlagFileArgumentParser(
         description="Generate pycross dependency bzl file."
     )
 
@@ -268,7 +267,7 @@ def parse_flags(argv) -> Any:
         help="The path to the output bzl file.",
     )
 
-    return parser.parse_args(argv[1:])
+    return parser.parse_args()
 
 
 if __name__ == "__main__":
@@ -276,4 +275,4 @@ if __name__ == "__main__":
     if "BUILD_WORKING_DIRECTORY" in os.environ:
         os.chdir(os.environ["BUILD_WORKING_DIRECTORY"])
 
-    app.run(main, flags_parser=parse_flags)
+    main(parse_flags())

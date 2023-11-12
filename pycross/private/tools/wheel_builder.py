@@ -22,10 +22,9 @@ from typing import Sequence
 from typing import Tuple
 from typing import Union
 
-from absl import app
-from absl.flags import argparse_flags
 from build import ProjectBuilder
 from packaging.utils import parse_wheel_filename
+from pycross.private.tools.args import FlagFileArgumentParser
 from pycross.private.tools.crossenv.utils import find_sysconfig_data
 from pycross.private.tools.target_environment import TargetEnv
 
@@ -906,7 +905,7 @@ def main(args: Any, temp_dir: Path, is_debug: bool) -> None:
         f.write(os.path.basename(wheel_file))
 
 
-def parse_flags(argv) -> Any:
+def parse_flags() -> Any:
 
     # At the time of flags parsing, we should be within .../execroot/<workspace_name>
     workspace_name = Path.cwd().name
@@ -915,7 +914,7 @@ def parse_flags(argv) -> Any:
     def sdist_rel_path(val):
         return prefix / val
 
-    parser = argparse_flags.ArgumentParser(
+    parser = FlagFileArgumentParser(
         description="Generate target python information."
     )
 
@@ -1046,7 +1045,7 @@ def parse_flags(argv) -> Any:
         help="The wheel name output path.",
     )
 
-    args = parser.parse_args(argv[1:])
+    args = parser.parse_args()
 
     # Fix up path_tool; the second entry in each tuple should be sdist_rel_path, but the first should not.
     if args.path_tool:
@@ -1076,4 +1075,4 @@ if __name__ == "__main__":
     if "BUILD_WORKING_DIRECTORY" in os.environ:
         os.chdir(os.environ["BUILD_WORKING_DIRECTORY"])
 
-    app.run(main_wrapper, flags_parser=parse_flags)
+    main_wrapper(parse_flags())

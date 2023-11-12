@@ -15,8 +15,6 @@ from typing import Optional
 from typing import Set
 from urllib.parse import urlparse
 
-from absl import app
-from absl.flags import argparse_flags
 from packaging.markers import Marker
 from packaging.specifiers import SpecifierSet
 from packaging.utils import parse_wheel_filename
@@ -26,6 +24,7 @@ from pip._internal.index.package_finder import LinkType
 from pip._internal.models.candidate import InstallationCandidate
 from pip._internal.models.link import Link
 
+from pycross.private.tools.args import FlagFileArgumentParser
 from pycross.private.tools.lock_model import LockSet
 from pycross.private.tools.lock_model import Package
 from pycross.private.tools.lock_model import PackageDependency
@@ -906,8 +905,8 @@ def main(args: Any) -> None:
             w()
 
 
-def parse_flags(argv) -> Any:
-    parser = argparse_flags.ArgumentParser(
+def parse_flags() -> Any:
+    parser = FlagFileArgumentParser(
         description="Generate pycross dependency bzl file."
     )
 
@@ -1009,7 +1008,7 @@ def parse_flags(argv) -> Any:
         help="The path to the output bzl file.",
     )
 
-    return parser.parse_args(argv[1:])
+    return parser.parse_args()
 
 
 if __name__ == "__main__":
@@ -1017,4 +1016,4 @@ if __name__ == "__main__":
     if "BUILD_WORKING_DIRECTORY" in os.environ:
         os.chdir(os.environ["BUILD_WORKING_DIRECTORY"])
 
-    app.run(main, flags_parser=parse_flags)
+    main(parse_flags())
