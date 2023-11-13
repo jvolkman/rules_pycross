@@ -20,6 +20,7 @@ from typing import NoReturn
 from typing import Optional
 from typing import Sequence
 from typing import Tuple
+from typing import Union
 
 from absl import app
 from absl.flags import argparse_flags
@@ -203,14 +204,17 @@ def get_default_build_env_vars(path_dirs: List[Path]) -> Dict[str, str]:
 
 
 def replace_path_placeholders(
-    data: Dict[str, Any], placeholder: str, replacement: Path
+    data: Dict[str, Union[str, List[str]]], placeholder: str, replacement: Path
 ) -> Dict[str, Any]:
     replacement_str = str(replacement)
     if replacement_str.endswith("/"):
         replacement_str = replacement_str[:-1]
     result = {}
     for k, v in data.items():
-        result[k] = v.replace(placeholder, replacement_str)
+        if isinstance(v, list):
+            result[k] = [vi.replace(placeholder, replacement_str) for vi in v]
+        else:
+            result[k] = v.replace(placeholder, replacement_str)
 
     return result
 
