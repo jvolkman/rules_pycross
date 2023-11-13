@@ -3,3 +3,4 @@ env
 bazel-*
 .bazelrc.user
 __pycache__
+.pdm-python

@@ -1,0 +1,15 @@
+load("//:test_shared.bzl", "setup_test_targets")
+load("@jvolkman_rules_pycross//pycross:defs.bzl", "pycross_poetry_lock_model")
+
+package(default_visibility = ["//visibility:public"])
+
+pycross_poetry_lock_model(
+    name = "lock_model",
+    poetry_project_file = "//:pyproject.toml",
+    poetry_lock_file = "//:poetry.lock",
+)
+
+setup_test_targets(
+    lock_name = "poetry_lock",
+    lock_model = ":lock_model",
+)
