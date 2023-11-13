@@ -284,7 +284,7 @@ def _handle_config_settings(ctx, args, inputs):
     inputs.append(config_settings_data)
     vals = {}
     for key, value in ctx.attr.config_settings.items():
-        vals[key] = _expand_locations_and_vars("config_settings", ctx, value)
+        vals[key] = [_expand_locations_and_vars("config_settings", ctx, vi) for vi in value]
     ctx.actions.write(config_settings_data, json.encode(vals))
 
 def _handle_tools_and_data(ctx, args, tools, input_manifests):
@@ -393,7 +393,7 @@ pycross_wheel_build = rule(
                 "Values are subject to 'Make variable', location, and build_cwd_token expansion."
             )
         ),
-        "config_settings": attr.string_dict(
+        "config_settings": attr.string_list_dict(
             doc = (
                 "PEP 517 config settings passed to the sdist build. " +
                 "Values are subject to 'Make variable', location, and build_cwd_token expansion."
