@@ -290,6 +290,10 @@ def build_env(
     pyver = "python" + sysconfig.get_config_var("py_version_short")
     env_path = Path(env_path)
     lib_path = env_path / "lib"
+
+    # resolve this because Python 3.11 seems to do so itself, and we need both of our representations to be the same.
+    lib_path = lib_path.resolve()
+
     site_path = lib_path / pyver / "site-packages"
     bin_path = env_path / "bin"
     exe = bin_path / pyver
