@@ -322,6 +322,6 @@ def get_libraries(ccinfo):
         for library_to_link in li.libraries:
             add(library_to_link.static_library)
             add(library_to_link.pic_static_library)
-            add(library_to_link.dynamic_library)
-            add(library_to_link.interface_library)
+            add(library_to_link.resolved_symlink_dynamic_library or library_to_link.dynamic_library)
+            add(library_to_link.resolved_symlink_interface_library or library_to_link.interface_library)
     return all_libraries
