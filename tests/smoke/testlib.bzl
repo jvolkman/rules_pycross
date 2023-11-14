@@ -1,3 +1,5 @@
+"""Shared test code"""
+
 load("@aspect_bazel_lib//lib:write_source_files.bzl", "write_source_files")
 load("@bazel_skylib//rules:write_file.bzl", "write_file")
 load(
@@ -15,21 +17,25 @@ def setup_test_targets(lock_name, lock_model):
         lock_model: the target providing the lock model
     """
 
-    # zlib-state is just some library I found that builds against a small shared library,
-    # zlib. We can use it to test the build process as well as the optional repair step.
     pycross_wheel_build(
-        name = "zlib_state_build",
-        sdist = "@{}_sdist_zlib_state_0.1.6//file".format(lock_name),
+        name = "zstandard_build",
+        sdist = "@{}_sdist_zstandard_0.22.0//file".format(lock_name),
         deps = [
             "@{}_repo//deps:setuptools".format(lock_name),
             "@{}_repo//deps:wheel".format(lock_name),
         ],
         native_deps = [
-            "//third_party/zlib",
+            "//third_party/zstd",
         ],
         post_build_hooks = [
             "@jvolkman_rules_pycross//pycross/hooks:repair_wheel",
         ],
+        config_settings = {
+            "--build-option": [
+                "--no-cffi-backend",
+                "--system-zstd",
+            ],
+        },
         tags = ["manual"],
         copts = ["-Wl,-s"],
     )
@@ -45,13 +51,13 @@ def setup_test_targets(lock_name, lock_model):
         ],
         default_alias_single_version = True,
         always_build_packages = [
-            "zlib-state",
+            "zstandard",
         ],
         build_target_overrides = {
-            "zlib-state": "@//{}:zlib_state_build".format(native.package_name()),
+            "zstandard": "@//{}:zstandard_build".format(native.package_name()),
         },
         package_build_dependencies = {
-            "zlib-state": [
+            "zstandard": [
                 "setuptools",
                 "wheel",
             ],
@@ -70,17 +76,22 @@ def setup_test_targets(lock_name, lock_model):
         name = "ipython_py",
         out = "ipython.py",
         content = [
+            "import os",
+            "import tempfile",
             "from IPython import start_ipython",
-            "start_ipython()",
+            "with tempfile.TemporaryDirectory() as d:",
+            "  os.environ['IPYTHONDIR'] = str(d)",
+            "  start_ipython()",
         ],
     )
 
     py_test(
-        name = "ipython",
-        srcs = ["ipython.py", "//:test_script.py"],
-        args = ["$(location //:test_script.py)"],
+        name = "test_library_usage_via_ipython",
+        srcs = ["ipython.py", "//:test_zstandard.py"],
+        args = ["$(location //:test_zstandard.py)"],
+        main = "ipython.py",
         deps = [
             "@{}_repo//deps:ipython".format(lock_name),
-            "@{}_repo//deps:zlib_state".format(lock_name),
+            "@{}_repo//deps:zstandard".format(lock_name),
         ]
     )
