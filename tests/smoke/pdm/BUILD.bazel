@@ -1,4 +1,4 @@
-load("//:test_shared.bzl", "setup_test_targets")
+load("//:testlib.bzl", "setup_test_targets")
 load("@jvolkman_rules_pycross//pycross:defs.bzl", "pycross_pdm_lock_model")
 
 package(default_visibility = ["//visibility:public"])

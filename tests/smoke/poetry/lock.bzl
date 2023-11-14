@@ -23,9 +23,9 @@ PINS = {
     "six": "six_1.16.0",
     "stack_data": "stack_data_0.6.3",
     "traitlets": "traitlets_5.13.0",
-    "wcwidth": "wcwidth_0.2.9",
+    "wcwidth": "wcwidth_0.2.10",
     "wheel": "wheel_0.41.3",
-    "zlib_state": "zlib_state_0.1.6",
+    "zstandard": "zstandard_0.22.0",
 }
 
 def targets():
@@ -160,7 +160,7 @@ def targets():
     )
 
     _prompt_toolkit_3_0_40_deps = [
-        ":wcwidth_0.2.9",
+        ":wcwidth_0.2.10",
     ]
 
     pycross_wheel_library(
@@ -212,8 +212,8 @@ def targets():
     )
 
     pycross_wheel_library(
-        name = "wcwidth_0.2.9",
-        wheel = "@poetry_lock_wheel_wcwidth_0.2.9_py2.py3_none_any//file",
+        name = "wcwidth_0.2.10",
+        wheel = "@poetry_lock_wheel_wcwidth_0.2.10_py2.py3_none_any//file",
     )
 
     pycross_wheel_library(
@@ -221,24 +221,24 @@ def targets():
         wheel = "@poetry_lock_wheel_wheel_0.41.3_py3_none_any//file",
     )
 
-    _zlib_state_0_1_6_build_deps = [
+    _zstandard_0_22_0_build_deps = [
         ":setuptools_68.2.2",
         ":wheel_0.41.3",
     ]
 
     pycross_wheel_library(
-        name = "zlib_state_0.1.6",
-        wheel = "@//poetry:zlib_state_build",
+        name = "zstandard_0.22.0",
+        wheel = "@//poetry:zstandard_build",
     )
 
 def repositories():
     maybe(
         pypi_file,
-        name = "poetry_lock_sdist_zlib_state_0.1.6",
-        package_name = "zlib-state",
-        package_version = "0.1.6",
-        filename = "zlib-state-0.1.6.tar.gz",
-        sha256 = "dea6ccc7e35c314cdbaf9c439d4790b57ea92dd5fb80534e1d46c72f5d7698ae",
+        name = "poetry_lock_sdist_zstandard_0.22.0",
+        package_name = "zstandard",
+        package_version = "0.22.0",
+        filename = "zstandard-0.22.0.tar.gz",
+        sha256 = "8226a33c542bcb54cd6bd0a366067b610b41713b64c9abec1bc4533d69f51e70",
     )
 
     maybe(
@@ -396,11 +396,11 @@ def repositories():
 
     maybe(
         pypi_file,
-        name = "poetry_lock_wheel_wcwidth_0.2.9_py2.py3_none_any",
+        name = "poetry_lock_wheel_wcwidth_0.2.10_py2.py3_none_any",
         package_name = "wcwidth",
-        package_version = "0.2.9",
-        filename = "wcwidth-0.2.9-py2.py3-none-any.whl",
-        sha256 = "9a929bd8380f6cd9571a968a9c8f4353ca58d7cd812a4822bba831f8d685b223",
+        package_version = "0.2.10",
+        filename = "wcwidth-0.2.10-py2.py3-none-any.whl",
+        sha256 = "aec5179002dd0f0d40c456026e74a729661c9d468e1ed64405e3a6c2176ca36f",
     )
 
     maybe(

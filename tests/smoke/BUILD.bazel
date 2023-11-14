@@ -141,6 +141,6 @@ exports_files([
     "pdm.lock",
     "poetry.lock",
     "pyproject.toml",
-    "test_script.py",
-    "test_shared.bzl",
+    "test_zstandard.py",
+    "testlib.bzl",
 ])

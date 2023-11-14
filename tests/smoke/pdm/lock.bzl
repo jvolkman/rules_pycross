@@ -23,9 +23,9 @@ PINS = {
     "six": "six_1.16.0",
     "stack_data": "stack_data_0.6.3",
     "traitlets": "traitlets_5.13.0",
-    "wcwidth": "wcwidth_0.2.9",
+    "wcwidth": "wcwidth_0.2.10",
     "wheel": "wheel_0.41.3",
-    "zlib_state": "zlib_state_0.1.6",
+    "zstandard": "zstandard_0.22.0",
 }
 
 def targets():
@@ -160,7 +160,7 @@ def targets():
     )
 
     _prompt_toolkit_3_0_40_deps = [
-        ":wcwidth_0.2.9",
+        ":wcwidth_0.2.10",
     ]
 
     pycross_wheel_library(
@@ -212,8 +212,8 @@ def targets():
     )
 
     pycross_wheel_library(
-        name = "wcwidth_0.2.9",
-        wheel = "@pdm_lock_wheel_wcwidth_0.2.9_py2.py3_none_any//file",
+        name = "wcwidth_0.2.10",
+        wheel = "@pdm_lock_wheel_wcwidth_0.2.10_py2.py3_none_any//file",
     )
 
     pycross_wheel_library(
@@ -221,25 +221,25 @@ def targets():
         wheel = "@pdm_lock_wheel_wheel_0.41.3_py3_none_any//file",
     )
 
-    _zlib_state_0_1_6_build_deps = [
+    _zstandard_0_22_0_build_deps = [
         ":setuptools_68.2.2",
         ":wheel_0.41.3",
     ]
 
     pycross_wheel_library(
-        name = "zlib_state_0.1.6",
-        wheel = "@//pdm:zlib_state_build",
+        name = "zstandard_0.22.0",
+        wheel = "@//pdm:zstandard_build",
     )
 
 def repositories():
     maybe(
         http_file,
-        name = "pdm_lock_sdist_zlib_state_0.1.6",
+        name = "pdm_lock_sdist_zstandard_0.22.0",
         urls = [
-            "https://files.pythonhosted.org/packages/00/6d/5e7cbfcd0f9b0ea13985ff859ed3ffcc5bed2f3a059a31441b94912a1da9/zlib-state-0.1.6.tar.gz"
+            "https://files.pythonhosted.org/packages/5d/91/2162ab4239b3bd6743e8e407bc2442fca0d326e2d77b3f4a88d90ad5a1fa/zstandard-0.22.0.tar.gz"
         ],
-        sha256 = "dea6ccc7e35c314cdbaf9c439d4790b57ea92dd5fb80534e1d46c72f5d7698ae",
-        downloaded_file_path = "zlib-state-0.1.6.tar.gz",
+        sha256 = "8226a33c542bcb54cd6bd0a366067b610b41713b64c9abec1bc4533d69f51e70",
+        downloaded_file_path = "zstandard-0.22.0.tar.gz",
     )
 
     maybe(
@@ -414,12 +414,12 @@ def repositories():
 
     maybe(
         http_file,
-        name = "pdm_lock_wheel_wcwidth_0.2.9_py2.py3_none_any",
+        name = "pdm_lock_wheel_wcwidth_0.2.10_py2.py3_none_any",
         urls = [
-            "https://files.pythonhosted.org/packages/19/0b/00728863778b14ececfc97e40850fd71529b6a1695907981cc3fdc085ba6/wcwidth-0.2.9-py2.py3-none-any.whl"
+            "https://files.pythonhosted.org/packages/cd/af/fb045bb3d3daedf28e1bedd771674f73de9e06664a48b1579e14d4120158/wcwidth-0.2.10-py2.py3-none-any.whl"
         ],
-        sha256 = "9a929bd8380f6cd9571a968a9c8f4353ca58d7cd812a4822bba831f8d685b223",
-        downloaded_file_path = "wcwidth-0.2.9-py2.py3-none-any.whl",
+        sha256 = "aec5179002dd0f0d40c456026e74a729661c9d468e1ed64405e3a6c2176ca36f",
+        downloaded_file_path = "wcwidth-0.2.10-py2.py3-none-any.whl",
     )
 
     maybe(
