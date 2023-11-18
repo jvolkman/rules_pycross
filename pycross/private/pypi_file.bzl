@@ -1,3 +1,5 @@
+"""Rule to download files from pypi."""
+
 load("@bazel_tools//tools/build_defs/repo:utils.bzl", "update_attrs")
 
 _PYPI_FILE_BUILD = """\

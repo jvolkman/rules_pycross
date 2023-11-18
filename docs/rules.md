@@ -130,7 +130,8 @@ pycross_target_environment(<a href="#pycross_target_environment-name">name</a>, 
 ## pycross_wheel_build
 
 <pre>
-pycross_wheel_build(<a href="#pycross_wheel_build-name">name</a>, <a href="#pycross_wheel_build-copts">copts</a>, <a href="#pycross_wheel_build-deps">deps</a>, <a href="#pycross_wheel_build-linkopts">linkopts</a>, <a href="#pycross_wheel_build-sdist">sdist</a>, <a href="#pycross_wheel_build-target_environment">target_environment</a>)
+pycross_wheel_build(<a href="#pycross_wheel_build-name">name</a>, <a href="#pycross_wheel_build-build_env">build_env</a>, <a href="#pycross_wheel_build-config_settings">config_settings</a>, <a href="#pycross_wheel_build-copts">copts</a>, <a href="#pycross_wheel_build-data">data</a>, <a href="#pycross_wheel_build-deps">deps</a>, <a href="#pycross_wheel_build-linkopts">linkopts</a>, <a href="#pycross_wheel_build-native_deps">native_deps</a>,
+                    <a href="#pycross_wheel_build-path_tools">path_tools</a>, <a href="#pycross_wheel_build-post_build_hooks">post_build_hooks</a>, <a href="#pycross_wheel_build-pre_build_hooks">pre_build_hooks</a>, <a href="#pycross_wheel_build-sdist">sdist</a>, <a href="#pycross_wheel_build-target_environment">target_environment</a>)
 </pre>
 
 
@@ -141,9 +142,16 @@ pycross_wheel_build(<a href="#pycross_wheel_build-name">name</a>, <a href="#pycr
 | Name  | Description | Type | Mandatory | Default |
 | :------------- | :------------- | :------------- | :------------- | :------------- |
 | <a id="pycross_wheel_build-name"></a>name |  A unique name for this target.   | <a href="https://bazel.build/concepts/labels#target-names">Name</a> | required |  |
+| <a id="pycross_wheel_build-build_env"></a>build_env |  Environment variables passed to the sdist build. Values are subject to 'Make variable', location, and build_cwd_token expansion.   | <a href="https://bazel.build/rules/lib/dict">Dictionary: String -> String</a> | optional | <code>{}</code> |
+| <a id="pycross_wheel_build-config_settings"></a>config_settings |  PEP 517 config settings passed to the sdist build. Values are subject to 'Make variable', location, and build_cwd_token expansion.   | <a href="https://bazel.build/rules/lib/dict">Dictionary: String -> String</a> | optional | <code>{}</code> |
 | <a id="pycross_wheel_build-copts"></a>copts |  Additional C compiler options.   | List of strings | optional | <code>[]</code> |
-| <a id="pycross_wheel_build-deps"></a>deps |  A list of build dependencies for the wheel.   | <a href="https://bazel.build/concepts/labels">List of labels</a> | optional | <code>[]</code> |
+| <a id="pycross_wheel_build-data"></a>data |  Additional data and dependencies used by the build.   | <a href="https://bazel.build/concepts/labels">List of labels</a> | optional | <code>[]</code> |
+| <a id="pycross_wheel_build-deps"></a>deps |  A list of Python build dependencies for the wheel.   | <a href="https://bazel.build/concepts/labels">List of labels</a> | optional | <code>[]</code> |
 | <a id="pycross_wheel_build-linkopts"></a>linkopts |  Additional C linker options.   | List of strings | optional | <code>[]</code> |
+| <a id="pycross_wheel_build-native_deps"></a>native_deps |  A list of native build dependencies (CcInfo) for the wheel.   | <a href="https://bazel.build/concepts/labels">List of labels</a> | optional | <code>[]</code> |
+| <a id="pycross_wheel_build-path_tools"></a>path_tools |  A mapping of binaries to names that are placed in PATH when building the sdist.   | <a href="https://bazel.build/rules/lib/dict">Dictionary: Label -> String</a> | optional | <code>{}</code> |
+| <a id="pycross_wheel_build-post_build_hooks"></a>post_build_hooks |  A list of binaries that are executed after the wheel is built.   | <a href="https://bazel.build/concepts/labels">List of labels</a> | optional | <code>[]</code> |
+| <a id="pycross_wheel_build-pre_build_hooks"></a>pre_build_hooks |  A list of binaries that are executed prior to building the sdist.   | <a href="https://bazel.build/concepts/labels">List of labels</a> | optional | <code>[]</code> |
 | <a id="pycross_wheel_build-sdist"></a>sdist |  The sdist file.   | <a href="https://bazel.build/concepts/labels">Label</a> | required |  |
 | <a id="pycross_wheel_build-target_environment"></a>target_environment |  The target environment to build for.   | <a href="https://bazel.build/concepts/labels">Label</a> | optional | <code>None</code> |
 

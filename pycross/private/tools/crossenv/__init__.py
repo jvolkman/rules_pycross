@@ -3,8 +3,11 @@ import json
 import os
 import platform
 import pprint
+import re
+import subprocess
 import sys
 import sysconfig
+import tempfile
 from pathlib import Path
 from typing import Any
 from typing import Dict
@@ -14,6 +17,21 @@ from typing import Optional
 from . import utils
 
 SYSCONFIG_DATA_NAME = "_pycross_sysconfig_data"
+
+# A tiny source file that gets the compiler to output the glibc version
+# it's going to link against without us having to actually execute the
+# resulting binary (which may be for a different architecture).
+#
+# There may be a better way.
+GLIBC_TELLER = """\
+#include <stdlib.h>
+#define XSTR(x) STR(x)
+#define STR(x) #x
+
+#if defined(__GLIBC__) && defined(__GLIBC_MINOR__)
+#pragma message "GLIBC" "=" XSTR(__GLIBC__) "." XSTR(__GLIBC_MINOR__)
+#endif
+"""
 
 
 @dataclasses.dataclass
@@ -66,6 +84,10 @@ def guess_target_platform(host_gnu_type: str) -> str:
     if plat == "apple":
         plat = "darwin"
 
+    # On macos, aarch64 is called arm64 for whatever reason
+    if plat == "darwin" and machine == "aarch64":
+        machine = "arm64"
+
     return f"{plat}-{machine}"
 
 
@@ -91,6 +113,8 @@ def guess_uname(
             # Test that this is still a special case when we can.
             # On uname.machine=ppc64le, _PYTHON_HOST_PLATFORM is linux-powerpc64le
             uname_machine = "ppc64le"
+        elif len(target_info) > 1:
+            uname_machine = target_info[-1]
         else:
             uname_machine = host_gnu_type.split("-")[0]
 
@@ -130,6 +154,27 @@ def guess_sysconfig_platform(
         return target_platform
 
 
+def determine_glibc_version(sysconfig_vars: Dict[str, Any]) -> Optional[str]:
+    cmd = sysconfig_vars["CC"].split() + sysconfig_vars["CFLAGS"].split()
+    with tempfile.TemporaryDirectory() as tmp:
+        tmp = Path(tmp)
+        teller_src = tmp / "teller.cc"
+        teller_out = tmp / "teller"
+
+        with open(teller_src, "w") as f:
+            f.write(GLIBC_TELLER)
+
+        cmd += ["-c", "-o", str(teller_out), str(teller_src)]
+        # Run the compiler and capture its output
+        print(" ".join(cmd))
+        out = subprocess.check_output(cmd, env=os.environ, stderr=subprocess.STDOUT)
+        out = out.decode("utf-8")
+
+        m = re.search("GLIBC=([0-9.]+)", out)
+        if m:
+            return m.group(1)
+
+
 def build_context(
     target_python_exe: str,
     lib_path: str,
@@ -163,7 +208,7 @@ def build_context(
 
     target_context = TargetContext(
         abiflags=sysconfig_vars.get("ABIFLAGS"),
-        effective_glibc="TODO",  # TODO
+        effective_glibc=determine_glibc_version(sysconfig_vars),
         home=str(home),
         macosx_deployment_target=macosx_deployment_target,
         manylinux_tags=manylinux_tags,
@@ -296,7 +341,7 @@ def build_env(
     for link_name in ("python", "python3"):
         link = bin_path / link_name
         if not link.exists():
-            link.symlink_to(exe)
+            link.symlink_to(pyver)
 
     return env_path
 

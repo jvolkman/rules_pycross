@@ -88,7 +88,7 @@ def get_pins(
             default=default_dependencies,
             dev=dev_dependencies,
             groups=dependency_groups,
-        )
+        ).all()
     except PdmUsageError:
         raise Exception(
             "Failed to resolve groups."

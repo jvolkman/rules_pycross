@@ -1,0 +1,36 @@
+load("@jvolkman_rules_pycross//pycross:defs.bzl", "pycross_wheel_build")
+load("//:example_lock.bzl", "targets")
+
+package(default_visibility = ["//visibility:public"])
+
+# Specified here as an override.
+pycross_wheel_build(
+    name = "numpy",
+    sdist = "@example_lock_sdist_numpy_1.23.5//file",
+    deps = [
+        "//deps:cython",
+        "//deps:setuptools",
+        "//deps:wheel",
+    ],
+    data = [
+        "//third_party/openblas:libopenblas.a",
+        "//third_party/openblas:include",
+    ],
+    pre_build_hooks = [
+        ":gen_site_cfg",
+    ],
+    build_env = {
+        "OPENBLAS_LIB": "$(location //third_party/openblas:libopenblas.a)",
+        "OPENBLAS_INCLUDE": "$(location //third_party/openblas:include)",
+    },
+    post_build_hooks = [
+        "@jvolkman_rules_pycross//pycross/hooks:repair_wheel",
+    ],
+    tags = ["manual"],
+    copts = ["-Wl,-s"],
+)
+
+py_binary(
+    name = "gen_site_cfg",
+    srcs = ["gen_site_cfg.py"],
+)

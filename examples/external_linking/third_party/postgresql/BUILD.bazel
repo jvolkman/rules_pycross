@@ -1,0 +1,13 @@
+package(default_visibility = ["//visibility:public"])
+
+alias(
+    name = "postgresql",
+    actual = "@postgresql//:postgresql",
+)
+
+filegroup(
+    name = "gen_dir",
+    srcs = [":postgresql"],
+    output_group = "gen_dir",
+    visibility = ["//visibility:public"],
+)

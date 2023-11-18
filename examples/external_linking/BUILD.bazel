@@ -2,9 +2,9 @@ load("@bazel_skylib//rules:diff_test.bzl", "diff_test")
 load("@bazel_skylib//rules:write_file.bzl", "write_file")
 load(
     "@jvolkman_rules_pycross//pycross:defs.bzl",
-    "pycross_lock_file",
-    "pycross_poetry_lock_model",
     "pycross_target_environment",
+    "pycross_lock_file",
+    "pycross_pdm_lock_model",
 )
 load(
     "@jvolkman_rules_pycross//pycross:toolchain.bzl",
@@ -26,6 +26,11 @@ _linux_x86_64 = [
     "@platforms//cpu:x86_64",
 ]
 
+_linux_arm64 = [
+    "@platforms//os:linux",
+    "@platforms//cpu:arm64",
+]
+
 platform(
     name = "darwin_x86_64",
     constraint_values = _darwin_x86_64,
@@ -41,44 +46,56 @@ platform(
     constraint_values = _linux_x86_64,
 )
 
+platform(
+    name = "linux_arm64",
+    constraint_values = _linux_arm64,
+)
+
 pycross_target_environment(
     name = "python_darwin_x86_64",
-    abis = ["cp39"],
-    platforms = ["macosx_12_0_x86_64"],
     python_compatible_with = _darwin_x86_64,
-    version = "3.9.12",
+    version = "3.10.8",
+    abis = ["cp310"],
+    platforms = ["macosx_12_0_x86_64"],
     visibility = ["//visibility:public"],
 )
 
 pycross_target_environment(
     name = "python_darwin_arm64",
-    abis = ["cp39"],
-    platforms = ["macosx_12_0_arm64"],
     python_compatible_with = _darwin_arm64,
-    version = "3.9.12",
+    version = "3.10.8",
+    abis = ["cp310"],
+    platforms = ["macosx_12_0_arm64"],
     visibility = ["//visibility:public"],
 )
 
 pycross_target_environment(
     name = "python_linux_x86_64",
-    abis = ["cp39"],
-    platforms = [
-        "linux_x86_64",
-        "manylinux2014_x86_64",
-    ] + [
-        "manylinux_2_%s_x86_64" % str(i)
-        for i in range(17, 25)
-    ],
     python_compatible_with = _linux_x86_64,
-    version = "3.9.12",
+    version = "3.10.8",
+    abis = ["cp310"],
+    platforms = ["linux_x86_64", "manylinux2014_x86_64"] + [
+        "manylinux_2_%s_x86_64" % str(i) for i in range(17, 25)
+    ],
+    visibility = ["//visibility:public"],
+)
+
+pycross_target_environment(
+    name = "python_linux_arm64",
+    python_compatible_with = _linux_arm64,
+    version = "3.10.8",
+    abis = ["cp310"],
+    platforms = ["linux_aarch64", "manylinux2014_aarch64"] + [
+        "manylinux_2_%s_aarch64" % str(i) for i in range(17, 25)
+    ],
     visibility = ["//visibility:public"],
 )
 
 pycross_hermetic_toolchain(
     name = "pycross_darwin_linux",
-    exec_interpreter = "@python3_9_aarch64-apple-darwin//:py3_runtime",
+    exec_interpreter = "@python3_10_aarch64-apple-darwin//:py3_runtime",
     target_environment = ":python_linux_x86_64",
-    target_interpreter = "@python3_9_x86_64-unknown-linux-gnu//:py3_runtime",
+    target_interpreter = "@python3_10_x86_64-unknown-linux-gnu//:py3_runtime",
 )
 
 toolchain(
@@ -90,99 +107,79 @@ toolchain(
 )
 
 pycross_hermetic_toolchain(
-    name = "pycross_darwin_darwin",
-    exec_interpreter = "@python3_9_x86_64-apple-darwin//:py3_runtime",
-    target_environment = ":python_darwin_x86_64",
-    target_interpreter = "@python3_9_x86_64-apple-darwin//:py3_runtime",
-)
-
-toolchain(
-    name = "pycross_darwin_darwin_tc",
-    exec_compatible_with = _darwin_x86_64,
-    target_compatible_with = _darwin_x86_64,
-    toolchain = ":pycross_darwin_darwin",
-    toolchain_type = "@jvolkman_rules_pycross//pycross:toolchain_type",
-)
-
-pycross_hermetic_toolchain(
-    name = "pycross_linux_linux",
-    exec_interpreter = "@python3_9_x86_64-unknown-linux-gnu//:py3_runtime",
-    target_environment = ":python_linux_x86_64",
-    target_interpreter = "@python3_9_x86_64-unknown-linux-gnu//:py3_runtime",
-)
-
-toolchain(
-    name = "pycross_linux_linux_tc",
-    exec_compatible_with = _linux_x86_64,
-    target_compatible_with = _linux_x86_64,
-    toolchain = ":pycross_linux_linux",
-    toolchain_type = "@jvolkman_rules_pycross//pycross:toolchain_type",
-)
-
-pycross_hermetic_toolchain(
     name = "pycross_linux_darwin",
-    exec_interpreter = "@python3_9_x86_64-unknown-linux-gnu//:py3_runtime",
+    exec_interpreter = "@python3_10_x86_64-unknown-linux-gnu//:py3_runtime",
     target_environment = ":python_darwin_x86_64",
-    target_interpreter = "@python3_9_x86_64-apple-darwin//:py3_runtime",
+    target_interpreter = "@python3_10_aarch64-apple-darwin//:py3_runtime",
 )
 
 toolchain(
     name = "pycross_linux_darwin_tc",
     exec_compatible_with = _linux_x86_64,
-    target_compatible_with = _darwin_x86_64,
+    target_compatible_with = _darwin_arm64,
     toolchain = ":pycross_linux_darwin",
     toolchain_type = "@jvolkman_rules_pycross//pycross:toolchain_type",
 )
 
-pycross_poetry_lock_model(
+pycross_hermetic_toolchain(
+    name = "pycross_linux_x86_64_linux_arm64",
+    exec_interpreter = "@python3_10_x86_64-unknown-linux-gnu//:py3_runtime",
+    target_environment = ":python_darwin_x86_64",
+    target_interpreter = "@python3_10_aarch64-unknown-linux-gnu//:py3_runtime",
+)
+
+toolchain(
+    name = "pycross_linux_x86_64_linux_arm64_tc",
+    exec_compatible_with = _linux_x86_64,
+    target_compatible_with = _linux_arm64,
+    toolchain = ":pycross_linux_x86_64_linux_arm64",
+    toolchain_type = "@jvolkman_rules_pycross//pycross:toolchain_type",
+)
+
+pycross_pdm_lock_model(
     name = "example_lock_model",
-    poetry_lock_file = "poetry.lock",
-    poetry_project_file = "pyproject.toml",
+    project_file = "pyproject.toml",
+    lock_file = "pdm.lock",
+    dev = True,
+    groups = ["cow", "dev"],
 )
 
 pycross_lock_file(
     name = "example_lock",
-    out = "example_lock.bzl",
-    always_build_packages = [
-        "pbr@5.10.0",
-        "setproctitle",
-    ],
-    build_target_overrides = {
-        "future@0.18.2": "@//deps:overridden_future_0.18.2",
-    },
-    default_alias_single_version = True,
     lock_model_file = ":example_lock_model",
-    package_build_dependencies = {
-        "setproctitle": [
-            "setuptools",
-            "wheel",
-        ],
-        "greenlet": [
-            "setuptools",
-            "wheel",
-        ],
-        "tree-sitter": [
-            "setuptools",
-            "wheel",
-        ],
-        "pbr": [
-            "setuptools",
-            "wheel",
-        ],
-        "sqlalchemy": [
-            "setuptools",
-            "wheel",
-        ],
-    },
-    pypi_index = "https://pypi.org",
-    remote_wheels = {
-        "https://files.pythonhosted.org/packages/94/db/fd0326e331726f07ff7f40675cd86aa804bfd2e5016c727fa761c934990e/xmltodict-0.13.0-py2.py3-none-any.whl": "aa89e8fd76320154a40d19a0df04a4695fb9dc5ba977cbb68ab3e4eb225e7852",
-    },
     target_environments = [
         ":python_darwin_x86_64",
         ":python_darwin_arm64",
         ":python_linux_x86_64",
+        ":python_linux_arm64",
     ],
+    default_alias_single_version = True,
+    always_build_packages = [
+        "numpy",
+        "pandas",
+	"setproctitle",
+    ],
+    build_target_overrides = {
+        "numpy": "@//deps/numpy",
+        "psycopg2": "@//deps/psycopg2",
+    },
+    package_build_dependencies = {
+        "numpy": [
+            "cython",
+            "setuptools",
+            "wheel",
+        ],
+        "pandas": [
+            "cython",
+            "setuptools",
+            "wheel",
+        ],
+	"setproctitle": [
+	    "setuptools",
+	    "wheel",
+	],
+    },
+    out = "example_lock.bzl",
 )
 
 _GENERATED = {
@@ -207,10 +204,7 @@ write_file(
             # Convert label to path
             v.replace(":", "/"),
         )
-        for [
-            k,
-            v,
-        ] in _GENERATED.items()
+        for [k, v] in _GENERATED.items()
     ],
 )
 

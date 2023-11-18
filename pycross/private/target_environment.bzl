@@ -84,7 +84,7 @@ pycross_target_environment = rule(
         ),
         "_tool": attr.label(
             default = Label("//pycross/private/tools:target_environment_generator"),
-            cfg = "host",
+            cfg = "exec",
             executable = True,
         ),
     }
@@ -168,7 +168,7 @@ pycross_macos_environment = rule(
         ),
         "_tool": attr.label(
             default = Label("//pycross/private/tools:target_environment_generator"),
-            cfg = "host",
+            cfg = "exec",
             executable = True,
         ),
     }

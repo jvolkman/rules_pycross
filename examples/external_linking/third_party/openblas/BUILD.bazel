@@ -1,0 +1,52 @@
+load("@bazel_skylib//rules:select_file.bzl", "select_file")
+load("@rules_foreign_cc//foreign_cc:defs.bzl", "cmake")
+
+package(default_visibility = ["//visibility:public"])
+
+cmake(
+    name = "openblas",
+    cache_entries = {
+        "NOFORTRAN": "on",
+        "BUILD_WITHOUT_LAPACK": "no",
+        "NUM_THREADS": "64",
+    } | select({
+        "@platforms//cpu:x86_64": {
+            "CMAKE_SYSTEM_PROCESSOR": "x86_64",
+            "TARGET": "HASWELL",
+        },
+        "@platforms//cpu:arm64": {
+            "CMAKE_SYSTEM_PROCESSOR": "arm64",
+            "CMAKE_SIZEOF_VOID_P": "8",  # For some reason this is needed with later versions of zig
+        },
+        "//conditions:default": {},
+    }) | select({
+        "@platforms//os:linux": {
+            "CMAKE_SYSTEM_NAME": "Linux",
+        },
+        "@platforms//os:macos": {
+            "CMAKE_SYSTEM_NAME": "Darwin",
+        },
+        "//conditions:default": {},
+    }),
+    copts = [
+        "-Wno-error=int-conversion",
+        "-Wl,-S",
+    ],
+    build_args = [
+        "--verbose",
+    ],
+    lib_source = "@openblas//:all",
+    out_static_libs = ["libopenblas.a"],
+)
+
+select_file(
+    name = "libopenblas.a",
+    srcs = ":openblas",
+    subpath = "lib/libopenblas.a",
+)
+
+select_file(
+    name = "include",
+    srcs = ":openblas",
+    subpath = "include",
+)

@@ -43,34 +43,30 @@ platform(
 
 pycross_target_environment(
     name = "python_darwin_x86_64",
-    abis = ["cp39"],
-    platforms = ["macosx_12_0_x86_64"],
     python_compatible_with = _darwin_x86_64,
-    version = "3.9.12",
+    version = "3.11.6",
+    abis = ["cp311"],
+    platforms = ["macosx_12_0_x86_64"],
     visibility = ["//visibility:public"],
 )
 
 pycross_target_environment(
     name = "python_darwin_arm64",
-    abis = ["cp39"],
-    platforms = ["macosx_12_0_arm64"],
     python_compatible_with = _darwin_arm64,
-    version = "3.9.12",
+    version = "3.11.6",
+    abis = ["cp311"],
+    platforms = ["macosx_12_0_arm64"],
     visibility = ["//visibility:public"],
 )
 
 pycross_target_environment(
     name = "python_linux_x86_64",
-    abis = ["cp39"],
-    platforms = [
-        "linux_x86_64",
-        "manylinux2014_x86_64",
-    ] + [
-        "manylinux_2_%s_x86_64" % str(i)
-        for i in range(17, 25)
-    ],
     python_compatible_with = _linux_x86_64,
-    version = "3.9.12",
+    version = "3.11.6",
+    abis = ["cp311"],
+    platforms = ["linux_x86_64", "manylinux2014_x86_64"] + [
+        "manylinux_2_%s_x86_64" % str(i) for i in range(17, 25)
+    ],
     visibility = ["//visibility:public"],
 )
 
@@ -84,7 +80,7 @@ pycross_lock_file(
     name = "example_lock",
     out = "example_lock.bzl",
     always_build_packages = [
-        "pbr@5.10.0",
+        "pbr@6.0.0",
         "setproctitle",
     ],
     build_target_overrides = {

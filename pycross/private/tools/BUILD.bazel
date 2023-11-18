@@ -1,4 +1,4 @@
-load("@rules_python//python:defs.bzl", "py_binary")
+load("@rules_python//python:defs.bzl", "py_binary", "py_library")
 
 package(default_visibility = ["//visibility:private"])
 
@@ -101,6 +101,7 @@ py_binary(
         "@rules_pycross_pypi_deps_absl_py//:pkg",
         "@rules_pycross_pypi_deps_build//:pkg",
         "@rules_pycross_pypi_deps_packaging//:pkg",
+        "@rules_pycross_pypi_deps_python_dotenv//:pkg",
         "@rules_pycross_pypi_deps_tomli//:pkg",
     ],
 )

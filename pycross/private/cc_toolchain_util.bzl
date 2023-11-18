@@ -1,5 +1,4 @@
-""" Adopted from rules_foreign_cc.
-"""
+""" Adopted from rules_foreign_cc."""
 
 load("@bazel_skylib//lib:collections.bzl", "collections")
 load("@bazel_tools//tools/build_defs/cc:action_names.bzl", "ACTION_NAMES")
@@ -32,23 +31,38 @@ CxxFlagsInfo = provider(
 # them here when configuring the toolchain flags to pass to the external
 # build system.
 CC_DISABLED_FEATURES = [
+    "fdo_instrument",
+    "fdo_optimize",
     "layering_check",
     "module_maps",
     "thin_lto",
 ]
 
 def _configure_features(ctx, cc_toolchain):
+    disabled_features = ctx.disabled_features + CC_DISABLED_FEATURES
+    if not ctx.coverage_instrumented():
+        # In coverage mode, cc_common.configure_features() adds coverage related flags,
+        # such as --coverage to the compiler and linker. However, if this library is not
+        # instrumented, we don't need to pass those flags, and avoid unncessary rebuilds.
+        disabled_features.append("coverage")
     return cc_common.configure_features(
         ctx = ctx,
         cc_toolchain = cc_toolchain,
         requested_features = ctx.features,
-        unsupported_features = ctx.disabled_features + CC_DISABLED_FEATURES,
+        unsupported_features = disabled_features,
     )
 
 def _defines_from_deps(ctx):
     return depset(transitive = [dep[CcInfo].compilation_context.defines for dep in getattr(ctx.attr, "deps", []) if CcInfo in dep])
 
 def get_env_vars(ctx):
+    """Returns environment variables for C tools
+
+    Args:
+        ctx: rule context
+    Returns:
+        environment variables
+    """
     cc_toolchain = find_cpp_toolchain(ctx)
     feature_configuration = _configure_features(
         ctx = ctx,
@@ -106,7 +120,7 @@ def get_tools_info(ctx):
         ),
     )
 
-def get_flags_info(ctx, link_output_file = None):
+def get_flags_info(ctx, copts=[], linkopts=[], link_output_file = None):
     """Takes information about flags from cc_toolchain, returns CxxFlagsInfo
 
     Args:
@@ -123,9 +137,9 @@ def get_flags_info(ctx, link_output_file = None):
         cc_toolchain = cc_toolchain_,
     )
 
-    copts = (ctx.fragments.cpp.copts + ctx.fragments.cpp.conlyopts + getattr(ctx.attr, "copts", [])) or []
-    cxxopts = (ctx.fragments.cpp.copts + ctx.fragments.cpp.cxxopts + getattr(ctx.attr, "copts", [])) or []
-    linkopts = (ctx.fragments.cpp.linkopts + getattr(ctx.attr, "linkopts", [])) or []
+    copts = (ctx.fragments.cpp.copts + ctx.fragments.cpp.conlyopts + copts) or []
+    cxxopts = (ctx.fragments.cpp.copts + ctx.fragments.cpp.cxxopts + copts) or []
+    linkopts = (ctx.fragments.cpp.linkopts + linkopts) or []
     defines = _defines_from_deps(ctx)
 
     flags = CxxFlagsInfo(
@@ -156,6 +170,7 @@ def get_flags_info(ctx, link_output_file = None):
                 feature_configuration = feature_configuration,
                 is_using_linker = True,
                 is_linking_dynamic_library = True,
+                must_keep_debug = False,
             ),
         ),
         cxx_linker_static = cc_common.get_memory_inefficient_command_line(
@@ -166,6 +181,7 @@ def get_flags_info(ctx, link_output_file = None):
                 feature_configuration = feature_configuration,
                 is_using_linker = False,
                 is_linking_dynamic_library = False,
+                must_keep_debug = False,
                 output_file = link_output_file,
             ),
         ),
@@ -177,6 +193,7 @@ def get_flags_info(ctx, link_output_file = None):
                 feature_configuration = feature_configuration,
                 is_using_linker = True,
                 is_linking_dynamic_library = False,
+                must_keep_debug = False,
             ),
         ),
     )
@@ -256,3 +273,55 @@ def _prefix(text, from_str, prefix):
     if not middle or before.endswith("/"):
         return text
     return before + prefix + middle + after
+
+def get_headers(ccinfo):
+    """Returns a struct containing headers and include_dirs for the given CcInfo.
+
+    Args:
+        ccinfo: The CcInfo provider
+
+    Returns:
+        struct: A struct containing headers and include_dirs.
+    """
+    compilation_info = ccinfo.compilation_context
+    include_dirs = compilation_info.system_includes.to_list() + \
+                   compilation_info.includes.to_list()
+
+    # do not use quote includes, currently they do not contain
+    # library-specific information
+    include_dirs = collections.uniq(include_dirs)
+    headers = []
+    for header in compilation_info.headers.to_list():
+        path = header.path
+        included = False
+        for dir_ in include_dirs:
+            if path.startswith(dir_):
+                included = True
+                break
+        if not included:
+            headers.append(header)
+    return struct(
+        headers = headers,
+        include_dirs = include_dirs,
+    )
+
+def get_libraries(ccinfo):
+    """Returns a list of libraries for the given CcInfo.
+
+    Args:
+        ccinfo: The CcInfo provider
+
+    Returns:
+        struct: A list of libraries.
+    """
+    all_libraries = []
+    def add(lib):
+        if lib:
+            all_libraries.append(lib)
+    for li in ccinfo.linking_context.linker_inputs.to_list():
+        for library_to_link in li.libraries:
+            add(library_to_link.static_library)
+            add(library_to_link.pic_static_library)
+            add(library_to_link.dynamic_library)
+            add(library_to_link.interface_library)
+    return all_libraries

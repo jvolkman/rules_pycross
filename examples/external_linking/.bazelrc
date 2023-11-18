@@ -1,7 +1,13 @@
-#build --action_env=BAZEL_DO_NOT_DETECT_CPP_TOOLCHAIN=1
+build --action_env=BAZEL_DO_NOT_DETECT_CPP_TOOLCHAIN=1
 build --incompatible_enable_cc_toolchain_resolution
 build --incompatible_strict_action_env
 build --nolegacy_external_runfiles
+#build --experimental_sibling_repository_layout
 
 # This causes pycross_wheel_build to print output and retain its temp directory
 build --action_env=RULES_PYCROSS_DEBUG=1
+
+build -c opt
+build --strip=always
+
+try-import %workspace%/.bazelrc.user

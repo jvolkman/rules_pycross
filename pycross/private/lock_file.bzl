@@ -129,7 +129,7 @@ pycross_lock_file = rule(
         ),
         "_tool": attr.label(
             default = Label("//pycross/private/tools:bzl_lock_generator"),
-            cfg = "host",
+            cfg = "exec",
             executable = True,
         ),
     },
