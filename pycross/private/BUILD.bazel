@@ -76,6 +76,16 @@ bzl_library(
 )
 
 bzl_library(
+    name = "toolchain_helpers",
+    srcs = ["toolchain_helpers.bzl"],
+    deps = [
+        "//pycross:toolchain",
+        "@rules_python//python:versions.bzl",
+    ],
+    visibility = default_visibility,
+)
+
+bzl_library(
     name = "wheel_build",
     srcs = ["wheel_build.bzl"],
     deps = [

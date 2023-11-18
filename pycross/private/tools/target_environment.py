@@ -22,6 +22,7 @@ class TargetEnv:
     compatibility_tags: List[str]
     markers: Dict[str, str]
     python_compatible_with: List[str]
+    flag_values: Dict[str, str]
 
     @staticmethod
     def from_target_python(
@@ -29,6 +30,7 @@ class TargetEnv:
         target_python: TargetPython,
         markers: Dict[str, str],
         python_compatible_with: List[str],
+        flag_values: Dict[str, str],
     ) -> "TargetEnv":
         all_markers = guess_environment_markers(target_python)
         for key, val in markers.items():
@@ -45,6 +47,7 @@ class TargetEnv:
             compatibility_tags=[str(t) for t in target_python.get_sorted_tags()],
             markers=all_markers,
             python_compatible_with=python_compatible_with,
+            flag_values=flag_values,
         )
 
     @property

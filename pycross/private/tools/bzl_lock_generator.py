@@ -273,10 +273,11 @@ class GenerationContext:
 
 
 class EnvTarget:
-    def __init__(self, environment_name: str, constraints: List[str], naming: Naming):
+    def __init__(self, environment_name: str, constraints: List[str], flag_values: Dict[str, str], naming: Naming):
         self.naming = naming
         self.environment_name = environment_name
         self.constraints = constraints
+        self.flag_values = flag_values
 
     def render(self) -> str:
         lines = [
@@ -286,7 +287,13 @@ class EnvTarget:
         ]
         for cv in self.constraints:
             lines.append(ind(f'"{cv}",', 2))
-        lines.extend([ind("],"), ")"])
+        lines.append(ind("],"))
+        if self.flag_values:
+            lines.append(ind("flag_values = {"),)
+            for flag, value in self.flag_values:
+                lines.append(ind(repr(flag) + ": " + repr(value) + ",", 2))
+            lines.append(ind("}"))
+        lines.append(")")
 
         return "\n".join(lines)
 
@@ -862,7 +869,7 @@ def main(args: Any) -> None:
 
         for environment in environments:
             env_target = EnvTarget(
-                environment.name, environment.python_compatible_with, naming
+                environment.name, environment.python_compatible_with, environment.flag_values, naming
             )
             w(ind(env_target.render()))
             w()

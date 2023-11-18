@@ -74,8 +74,8 @@ pycross_target_environment(
     python_compatible_with = _linux_x86_64,
     version = "3.10.8",
     abis = ["cp310"],
-    platforms = ["linux_x86_64", "manylinux2014_x86_64"] + [
-        "manylinux_2_%s_x86_64" % str(i) for i in range(17, 25)
+    platforms = [] + [
+        "manylinux_2_%s_x86_64" % str(i) for i in range(5, 38)
     ],
     visibility = ["//visibility:public"],
 )

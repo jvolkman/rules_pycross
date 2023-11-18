@@ -8,6 +8,7 @@ load(
     "pycross_wheel_build",
 )
 load("@rules_python//python:defs.bzl", "py_test")
+load("@pycross_toolchains//:defs.bzl", "environments")
 
 def setup_test_targets(lock_name, lock_model):
     """Create common test targets.
@@ -43,12 +44,7 @@ def setup_test_targets(lock_name, lock_model):
     pycross_lock_file(
         name = lock_name,
         lock_model_file = lock_model,
-        target_environments = [
-            "//:python_darwin_x86_64",
-            "//:python_darwin_arm64",
-            "//:python_linux_x86_64",
-            "//:python_linux_arm64",
-        ],
+        target_environments = environments,
         default_alias_single_version = True,
         always_build_packages = [
             "zstandard",
