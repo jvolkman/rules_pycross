@@ -9,13 +9,14 @@ PINS = {
     "appnope": "appnope_0.1.3",
     "asttokens": "asttokens_2.4.1",
     "decorator": "decorator_5.1.1",
+    "exceptiongroup": "exceptiongroup_1.1.3",
     "executing": "executing_2.0.1",
     "ipython": "ipython_8.17.2",
     "jedi": "jedi_0.19.1",
     "matplotlib_inline": "matplotlib_inline_0.1.6",
     "parso": "parso_0.8.3",
     "pexpect": "pexpect_4.8.0",
-    "prompt_toolkit": "prompt_toolkit_3.0.40",
+    "prompt_toolkit": "prompt_toolkit_3.0.41",
     "ptyprocess": "ptyprocess_0.7.0",
     "pure_eval": "pure_eval_0.2.2",
     "pygments": "pygments_2.16.1",
@@ -36,42 +37,150 @@ def targets():
         )
 
     native.config_setting(
-        name = "_env_python_darwin_arm64",
+        name = "_env_python_3.10.13_aarch64_apple_darwin",
         constraint_values = [
             "@platforms//os:osx",
             "@platforms//cpu:aarch64",
         ],
+        flag_values = {
+            '@rules_python//python/config_settings:python_version': '3.10.13',
+        }
     )
 
     native.config_setting(
-        name = "_env_python_darwin_x86_64",
-        constraint_values = [
-            "@platforms//os:osx",
-            "@platforms//cpu:x86_64",
-        ],
-    )
-
-    native.config_setting(
-        name = "_env_python_linux_arm64",
+        name = "_env_python_3.10.13_aarch64_unknown_linux_gnu",
         constraint_values = [
             "@platforms//os:linux",
             "@platforms//cpu:aarch64",
         ],
+        flag_values = {
+            '@rules_python//python/config_settings:python_version': '3.10.13',
+        }
     )
 
     native.config_setting(
-        name = "_env_python_linux_x86_64",
+        name = "_env_python_3.10.13_x86_64_apple_darwin",
+        constraint_values = [
+            "@platforms//os:osx",
+            "@platforms//cpu:x86_64",
+        ],
+        flag_values = {
+            '@rules_python//python/config_settings:python_version': '3.10.13',
+        }
+    )
+
+    native.config_setting(
+        name = "_env_python_3.10.13_x86_64_unknown_linux_gnu",
         constraint_values = [
             "@platforms//os:linux",
             "@platforms//cpu:x86_64",
         ],
+        flag_values = {
+            '@rules_python//python/config_settings:python_version': '3.10.13',
+        }
+    )
+
+    native.config_setting(
+        name = "_env_python_3.11.6_aarch64_apple_darwin",
+        constraint_values = [
+            "@platforms//os:osx",
+            "@platforms//cpu:aarch64",
+        ],
+        flag_values = {
+            '@rules_python//python/config_settings:python_version': '3.11.6',
+        }
+    )
+
+    native.config_setting(
+        name = "_env_python_3.11.6_aarch64_unknown_linux_gnu",
+        constraint_values = [
+            "@platforms//os:linux",
+            "@platforms//cpu:aarch64",
+        ],
+        flag_values = {
+            '@rules_python//python/config_settings:python_version': '3.11.6',
+        }
+    )
+
+    native.config_setting(
+        name = "_env_python_3.11.6_x86_64_apple_darwin",
+        constraint_values = [
+            "@platforms//os:osx",
+            "@platforms//cpu:x86_64",
+        ],
+        flag_values = {
+            '@rules_python//python/config_settings:python_version': '3.11.6',
+        }
+    )
+
+    native.config_setting(
+        name = "_env_python_3.11.6_x86_64_unknown_linux_gnu",
+        constraint_values = [
+            "@platforms//os:linux",
+            "@platforms//cpu:x86_64",
+        ],
+        flag_values = {
+            '@rules_python//python/config_settings:python_version': '3.11.6',
+        }
+    )
+
+    native.config_setting(
+        name = "_env_python_3.12.0_aarch64_apple_darwin",
+        constraint_values = [
+            "@platforms//os:osx",
+            "@platforms//cpu:aarch64",
+        ],
+        flag_values = {
+            '@rules_python//python/config_settings:python_version': '3.12.0',
+        }
+    )
+
+    native.config_setting(
+        name = "_env_python_3.12.0_aarch64_unknown_linux_gnu",
+        constraint_values = [
+            "@platforms//os:linux",
+            "@platforms//cpu:aarch64",
+        ],
+        flag_values = {
+            '@rules_python//python/config_settings:python_version': '3.12.0',
+        }
+    )
+
+    native.config_setting(
+        name = "_env_python_3.12.0_x86_64_apple_darwin",
+        constraint_values = [
+            "@platforms//os:osx",
+            "@platforms//cpu:x86_64",
+        ],
+        flag_values = {
+            '@rules_python//python/config_settings:python_version': '3.12.0',
+        }
+    )
+
+    native.config_setting(
+        name = "_env_python_3.12.0_x86_64_unknown_linux_gnu",
+        constraint_values = [
+            "@platforms//os:linux",
+            "@platforms//cpu:x86_64",
+        ],
+        flag_values = {
+            '@rules_python//python/config_settings:python_version': '3.12.0',
+        }
     )
 
     _target = select({
-        ":_env_python_darwin_arm64": "@//:python_darwin_arm64",
-        ":_env_python_darwin_x86_64": "@//:python_darwin_x86_64",
-        ":_env_python_linux_arm64": "@//:python_linux_arm64",
-        ":_env_python_linux_x86_64": "@//:python_linux_x86_64",
+        ":_env_python_3.10.13_aarch64_apple_darwin": "@pycross_toolchains//:python_3.10.13_aarch64-apple-darwin",
+        ":_env_python_3.10.13_aarch64_unknown_linux_gnu": "@pycross_toolchains//:python_3.10.13_aarch64-unknown-linux-gnu",
+        ":_env_python_3.10.13_x86_64_apple_darwin": "@pycross_toolchains//:python_3.10.13_x86_64-apple-darwin",
+        ":_env_python_3.10.13_x86_64_unknown_linux_gnu": "@pycross_toolchains//:python_3.10.13_x86_64-unknown-linux-gnu",
+        ":_env_python_3.11.6_aarch64_apple_darwin": "@pycross_toolchains//:python_3.11.6_aarch64-apple-darwin",
+        ":_env_python_3.11.6_aarch64_unknown_linux_gnu": "@pycross_toolchains//:python_3.11.6_aarch64-unknown-linux-gnu",
+        ":_env_python_3.11.6_x86_64_apple_darwin": "@pycross_toolchains//:python_3.11.6_x86_64-apple-darwin",
+        ":_env_python_3.11.6_x86_64_unknown_linux_gnu": "@pycross_toolchains//:python_3.11.6_x86_64-unknown-linux-gnu",
+        ":_env_python_3.12.0_aarch64_apple_darwin": "@pycross_toolchains//:python_3.12.0_aarch64-apple-darwin",
+        ":_env_python_3.12.0_aarch64_unknown_linux_gnu": "@pycross_toolchains//:python_3.12.0_aarch64-unknown-linux-gnu",
+        ":_env_python_3.12.0_x86_64_apple_darwin": "@pycross_toolchains//:python_3.12.0_x86_64-apple-darwin",
+        ":_env_python_3.12.0_x86_64_unknown_linux_gnu": "@pycross_toolchains//:python_3.12.0_x86_64-unknown-linux-gnu",
     })
 
     pycross_wheel_library(
@@ -95,6 +204,11 @@ def targets():
     )
 
     pycross_wheel_library(
+        name = "exceptiongroup_1.1.3",
+        wheel = "@poetry_lock_wheel_exceptiongroup_1.1.3_py3_none_any//file",
+    )
+
+    pycross_wheel_library(
         name = "executing_2.0.1",
         wheel = "@poetry_lock_wheel_executing_2.0.1_py2.py3_none_any//file",
     )
@@ -104,15 +218,35 @@ def targets():
         ":jedi_0.19.1",
         ":matplotlib_inline_0.1.6",
         ":pexpect_4.8.0",
-        ":prompt_toolkit_3.0.40",
+        ":prompt_toolkit_3.0.41",
         ":pygments_2.16.1",
         ":stack_data_0.6.3",
         ":traitlets_5.13.0",
     ] + select({
-        ":_env_python_darwin_arm64": [
+        ":_env_python_3.10.13_aarch64_apple_darwin": [
+            ":appnope_0.1.3",
+            ":exceptiongroup_1.1.3",
+        ],
+        ":_env_python_3.10.13_aarch64_unknown_linux_gnu": [
+            ":exceptiongroup_1.1.3",
+        ],
+        ":_env_python_3.10.13_x86_64_apple_darwin": [
+            ":appnope_0.1.3",
+            ":exceptiongroup_1.1.3",
+        ],
+        ":_env_python_3.10.13_x86_64_unknown_linux_gnu": [
+            ":exceptiongroup_1.1.3",
+        ],
+        ":_env_python_3.11.6_aarch64_apple_darwin": [
             ":appnope_0.1.3",
         ],
-        ":_env_python_darwin_x86_64": [
+        ":_env_python_3.11.6_x86_64_apple_darwin": [
+            ":appnope_0.1.3",
+        ],
+        ":_env_python_3.12.0_aarch64_apple_darwin": [
+            ":appnope_0.1.3",
+        ],
+        ":_env_python_3.12.0_x86_64_apple_darwin": [
             ":appnope_0.1.3",
         ],
         "//conditions:default": [],
@@ -159,14 +293,14 @@ def targets():
         wheel = "@poetry_lock_wheel_pexpect_4.8.0_py2.py3_none_any//file",
     )
 
-    _prompt_toolkit_3_0_40_deps = [
+    _prompt_toolkit_3_0_41_deps = [
         ":wcwidth_0.2.10",
     ]
 
     pycross_wheel_library(
-        name = "prompt_toolkit_3.0.40",
-        deps = _prompt_toolkit_3_0_40_deps,
-        wheel = "@poetry_lock_wheel_prompt_toolkit_3.0.40_py3_none_any//file",
+        name = "prompt_toolkit_3.0.41",
+        deps = _prompt_toolkit_3_0_41_deps,
+        wheel = "@poetry_lock_wheel_prompt_toolkit_3.0.41_py3_none_any//file",
     )
 
     pycross_wheel_library(
@@ -270,6 +404,15 @@ def repositories():
 
     maybe(
         pypi_file,
+        name = "poetry_lock_wheel_exceptiongroup_1.1.3_py3_none_any",
+        package_name = "exceptiongroup",
+        package_version = "1.1.3",
+        filename = "exceptiongroup-1.1.3-py3-none-any.whl",
+        sha256 = "343280667a4585d195ca1cf9cef84a4e178c4b6cf2274caef9859782b567d5e3",
+    )
+
+    maybe(
+        pypi_file,
         name = "poetry_lock_wheel_executing_2.0.1_py2.py3_none_any",
         package_name = "executing",
         package_version = "2.0.1",
@@ -324,11 +467,11 @@ def repositories():
 
     maybe(
         pypi_file,
-        name = "poetry_lock_wheel_prompt_toolkit_3.0.40_py3_none_any",
+        name = "poetry_lock_wheel_prompt_toolkit_3.0.41_py3_none_any",
         package_name = "prompt-toolkit",
-        package_version = "3.0.40",
-        filename = "prompt_toolkit-3.0.40-py3-none-any.whl",
-        sha256 = "99ba3dfb23d5b5af89712f89e60a5f3d9b8b67a9482ca377c5771d0e9047a34b",
+        package_version = "3.0.41",
+        filename = "prompt_toolkit-3.0.41-py3-none-any.whl",
+        sha256 = "f36fe301fafb7470e86aaf90f036eef600a3210be4decf461a5b1ca8403d3cb2",
     )
 
     maybe(

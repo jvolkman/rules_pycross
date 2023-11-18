@@ -11,7 +11,7 @@ dependencies = [
     "wheel==0.41.3",
     "zstandard==0.22.0",
 ]
-requires-python = ">=3.11"
+requires-python = ">=3.9, <3.13"
 license = {text = "MIT"}
 
 [build-system]
@@ -27,7 +27,7 @@ description = "rules_pycross"
 authors = []
 
 [tool.poetry.dependencies]
-python = ">=3.11"
+python = ">=3.9, <3.13"
 
 ipython = "=8.17.2"
 setuptools = "=68.2.2"

@@ -55,3 +55,11 @@ pycross_hermetic_toolchain = rule(
         ),
     },
 )
+
+def config_compatible(config_setting_target):
+    return select(
+        {
+            config_setting_target: [],
+            "//conditions:default": ["@platforms//:incompatible"],
+        }
+    )

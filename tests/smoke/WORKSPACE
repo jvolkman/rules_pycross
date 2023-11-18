@@ -80,16 +80,17 @@ py_repositories()
 #     python_version = "3.11.6",
 # )
 
-default_python_version = "3.11"
+default_python_version = "3.12"
+python_versions = [
+        "3.10",
+        "3.11",
+        "3.12",
+]
 
 python_register_multi_toolchains(
     name = "python",
     default_version = default_python_version,
-    python_versions = [
-        "3.10",
-        "3.11",
-        "3.12",
-    ],
+    python_versions = python_versions,
     register_coverage_tool = True,
 )
 
@@ -111,13 +112,18 @@ load("@jvolkman_rules_pycross//pycross:repositories.bzl", "rules_pycross_depende
 
 rules_pycross_dependencies(python_interpreter_target = interpreter)
 
-register_toolchains(
-    "//:pycross_darwin_linux_tc",
-    "//:pycross_linux_darwin_tc",
-    "//:pycross_linux_x86_64_linux_arm64_tc",
+load("@jvolkman_rules_pycross//pycross:defs.bzl", "pycross_lock_repo", "pycross_register_toolchains")
+pycross_register_toolchains(
+    name = "pycross_toolchains",
+    python_toolchain_name = "python",
+    python_versions = python_versions,
+    platforms = [
+        "aarch64-apple-darwin",
+        "x86_64-apple-darwin",
+        "aarch64-unknown-linux-gnu",
+        "x86_64-unknown-linux-gnu",
+    ],
 )
-
-load("@jvolkman_rules_pycross//pycross:defs.bzl", "pycross_lock_repo")
 
 pycross_lock_repo(
     name = "poetry_lock_repo",

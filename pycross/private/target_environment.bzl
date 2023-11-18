@@ -24,8 +24,11 @@ def _target_python_impl(ctx):
     for constraint in ctx.attr.python_compatible_with:
         args.add("--python-compatible-with", fully_qualified_label(constraint.label))
 
+    for flag, value in ctx.attr.flag_values.items():
+        args.add_all("--flag-value", [fully_qualified_label(flag.label), value])
+
     for key, val in ctx.attr.envornment_markers.items():
-        args.add("--environment-marker", "%s=%s" % (key, val))
+        args.add_all("--environment-marker", [key, val])
 
     ctx.actions.run(
         outputs = [f],
@@ -72,94 +75,19 @@ pycross_target_environment = rule(
         "python_compatible_with": attr.label_list(
             doc = (
                 "A list of constraints that, when satisfied, indicates this " +
-                "target_platform should be selected."
+                "target_platform should be selected (together with flag_values)."
             ),
             mandatory = True,
             allow_empty = False,
         ),
-        "envornment_markers": attr.string_dict(
-            doc = "Environment marker overrides.",
+        "flag_values": attr.label_keyed_string_dict(
+            doc = (
+                "A list of flag values that, when satisfied, indicates this " +
+                "target_platform should be selected (together with python_compatible_with)."
+            ),
             mandatory = False,
+            allow_empty = True,
             default = {},
-        ),
-        "_tool": attr.label(
-            default = Label("//pycross/private/tools:target_environment_generator"),
-            cfg = "exec",
-            executable = True,
-        ),
-    }
-)
-
-def _macos_target_python_impl(ctx):
-    f = ctx.actions.declare_file(ctx.attr.name + ".json")
-
-    args = ctx.actions.args().use_param_file("--flagfile=%s")
-    args.add("--name", ctx.attr.name)
-    args.add("--output", f)
-    args.add("--implementation", ctx.attr.implementation)
-    args.add("--version", ctx.attr.version)
-
-    for abi in ctx.attr.abis:
-        args.add("--abi", abi)
-
-    for platform in ctx.attr.platforms:
-        args.add("--platform", platform)
-
-    for constraint in ctx.attr.python_compatible_with:
-        args.add("--python-compatible-with", fully_qualified_label(constraint.label))
-
-    for key, val in ctx.attr.envornment_markers.items():
-        args.add("--environment-marker", "%s=%s" % (key, val))
-
-    ctx.actions.run(
-        outputs = [f],
-        executable = ctx.executable._tool,
-        arguments = [args],
-    )
-
-    return [
-        PycrossTargetEnvironmentInfo(
-            python_compatible_with=ctx.attr.python_compatible_with,
-            file=f,
-        ),
-        DefaultInfo(
-            files=depset([f])
-        ),
-    ]
-
-
-pycross_macos_environment = rule(
-    implementation = _macos_target_python_impl,
-    attrs = {
-        "implementation": attr.string(
-            doc = (
-                "The PEP 425 implementation abbreviation " +
-                "(defaults to 'cp' for CPython)."
-            ),
-            mandatory = False,
-            default = "cp",
-        ),
-        "version": attr.string(
-            doc = "The python version.",
-            mandatory = True,
-        ),
-        "abis": attr.string_list(
-            doc = "A list of PEP 425 abi tags.",
-            mandatory = False,
-            default = [],
-        ),
-        "platforms": attr.string_list(
-            doc = "A list of PEP 425 platform tags.",
-            mandatory = False,
-            default = [],
-        ),
-        "python_compatible_with": attr.label_list(
-            doc = (
-                "A list of constraints that, when satisfied, indicates this " +
-                "target_platform should be selected."
-            ),
-            mandatory = True,
-            allow_empty = False,
         ),
         "envornment_markers": attr.string_dict(
             doc = "Environment marker overrides.",

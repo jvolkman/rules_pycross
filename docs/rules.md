@@ -106,7 +106,7 @@ pycross_poetry_lock_model(<a href="#pycross_poetry_lock_model-name">name</a>, <a
 ## pycross_target_environment
 
 <pre>
-pycross_target_environment(<a href="#pycross_target_environment-name">name</a>, <a href="#pycross_target_environment-abis">abis</a>, <a href="#pycross_target_environment-envornment_markers">envornment_markers</a>, <a href="#pycross_target_environment-implementation">implementation</a>, <a href="#pycross_target_environment-platforms">platforms</a>,
+pycross_target_environment(<a href="#pycross_target_environment-name">name</a>, <a href="#pycross_target_environment-abis">abis</a>, <a href="#pycross_target_environment-envornment_markers">envornment_markers</a>, <a href="#pycross_target_environment-flag_values">flag_values</a>, <a href="#pycross_target_environment-implementation">implementation</a>, <a href="#pycross_target_environment-platforms">platforms</a>,
                            <a href="#pycross_target_environment-python_compatible_with">python_compatible_with</a>, <a href="#pycross_target_environment-version">version</a>)
 </pre>
 
@@ -120,9 +120,10 @@ pycross_target_environment(<a href="#pycross_target_environment-name">name</a>, 
 | <a id="pycross_target_environment-name"></a>name |  A unique name for this target.   | <a href="https://bazel.build/concepts/labels#target-names">Name</a> | required |  |
 | <a id="pycross_target_environment-abis"></a>abis |  A list of PEP 425 abi tags.   | List of strings | optional | <code>[]</code> |
 | <a id="pycross_target_environment-envornment_markers"></a>envornment_markers |  Environment marker overrides.   | <a href="https://bazel.build/rules/lib/dict">Dictionary: String -> String</a> | optional | <code>{}</code> |
+| <a id="pycross_target_environment-flag_values"></a>flag_values |  A list of flag values that, when satisfied, indicates this target_platform should be selected (together with python_compatible_with).   | <a href="https://bazel.build/rules/lib/dict">Dictionary: Label -> String</a> | optional | <code>{}</code> |
 | <a id="pycross_target_environment-implementation"></a>implementation |  The PEP 425 implementation abbreviation (defaults to 'cp' for CPython).   | String | optional | <code>"cp"</code> |
 | <a id="pycross_target_environment-platforms"></a>platforms |  A list of PEP 425 platform tags.   | List of strings | optional | <code>[]</code> |
-| <a id="pycross_target_environment-python_compatible_with"></a>python_compatible_with |  A list of constraints that, when satisfied, indicates this target_platform should be selected.   | <a href="https://bazel.build/concepts/labels">List of labels</a> | required |  |
+| <a id="pycross_target_environment-python_compatible_with"></a>python_compatible_with |  A list of constraints that, when satisfied, indicates this target_platform should be selected (together with flag_values).   | <a href="https://bazel.build/concepts/labels">List of labels</a> | required |  |
 | <a id="pycross_target_environment-version"></a>version |  The python version.   | String | required |  |
 
 
@@ -240,5 +241,29 @@ Information about a Python wheel.
 | :------------- | :------------- |
 | <a id="PycrossWheelInfo-name_file"></a>name_file |  File: A file containing the canonical name of the wheel.    |
 | <a id="PycrossWheelInfo-wheel_file"></a>wheel_file |  File: The wheel file itself.    |
+
+
+<a id="pycross_register_toolchains"></a>
+
+## pycross_register_toolchains
+
+<pre>
+pycross_register_toolchains(<a href="#pycross_register_toolchains-name">name</a>, <a href="#pycross_register_toolchains-python_toolchain_name">python_toolchain_name</a>, <a href="#pycross_register_toolchains-python_versions">python_versions</a>, <a href="#pycross_register_toolchains-platforms">platforms</a>, <a href="#pycross_register_toolchains-glibc_version">glibc_version</a>,
+                            <a href="#pycross_register_toolchains-macos_version">macos_version</a>)
+</pre>
+
+    Register target environments and toolchains for a given list of Python versions.
+
+**PARAMETERS**
+
+
+| Name  | Description | Default Value |
+| :------------- | :------------- | :------------- |
+| <a id="pycross_register_toolchains-name"></a>name |  the toolchain repo name.   |  none |
+| <a id="pycross_register_toolchains-python_toolchain_name"></a>python_toolchain_name |  the repo name of the registered rules_python tolchain repo.   |  none |
+| <a id="pycross_register_toolchains-python_versions"></a>python_versions |  the list of Python versions registered with rules_python.   |  none |
+| <a id="pycross_register_toolchains-platforms"></a>platforms |  an optional list of platforms to support (e.g., "x86_64-unknown-linux-gnu"). By default, all platforms supported by rules_python are registered.   |  <code>None</code> |
+| <a id="pycross_register_toolchains-glibc_version"></a>glibc_version |  the maximum supported GLIBC version.   |  <code>"2.25"</code> |
+| <a id="pycross_register_toolchains-macos_version"></a>macos_version |  the maximum supported macOS version.   |  <code>"12.0"</code> |
 
 
