@@ -37,46 +37,46 @@ def targets():
         )
 
     native.config_setting(
-        name = "_env_python_3.10.13_aarch64_apple_darwin",
+        name = "_env_python_3.10.12_aarch64_apple_darwin",
         constraint_values = [
             "@platforms//os:osx",
             "@platforms//cpu:aarch64",
         ],
         flag_values = {
-            '@rules_python//python/config_settings:python_version': '3.10.13',
+            '@rules_python//python/config_settings:python_version': '3.10.12',
         }
     )
 
     native.config_setting(
-        name = "_env_python_3.10.13_aarch64_unknown_linux_gnu",
+        name = "_env_python_3.10.12_aarch64_unknown_linux_gnu",
         constraint_values = [
             "@platforms//os:linux",
             "@platforms//cpu:aarch64",
         ],
         flag_values = {
-            '@rules_python//python/config_settings:python_version': '3.10.13',
+            '@rules_python//python/config_settings:python_version': '3.10.12',
         }
     )
 
     native.config_setting(
-        name = "_env_python_3.10.13_x86_64_apple_darwin",
+        name = "_env_python_3.10.12_x86_64_apple_darwin",
         constraint_values = [
             "@platforms//os:osx",
             "@platforms//cpu:x86_64",
         ],
         flag_values = {
-            '@rules_python//python/config_settings:python_version': '3.10.13',
+            '@rules_python//python/config_settings:python_version': '3.10.12',
         }
     )
 
     native.config_setting(
-        name = "_env_python_3.10.13_x86_64_unknown_linux_gnu",
+        name = "_env_python_3.10.12_x86_64_unknown_linux_gnu",
         constraint_values = [
             "@platforms//os:linux",
             "@platforms//cpu:x86_64",
         ],
         flag_values = {
-            '@rules_python//python/config_settings:python_version': '3.10.13',
+            '@rules_python//python/config_settings:python_version': '3.10.12',
         }
     )
 
@@ -169,10 +169,10 @@ def targets():
     )
 
     _target = select({
-        ":_env_python_3.10.13_aarch64_apple_darwin": "@pycross_toolchains//:python_3.10.13_aarch64-apple-darwin",
-        ":_env_python_3.10.13_aarch64_unknown_linux_gnu": "@pycross_toolchains//:python_3.10.13_aarch64-unknown-linux-gnu",
-        ":_env_python_3.10.13_x86_64_apple_darwin": "@pycross_toolchains//:python_3.10.13_x86_64-apple-darwin",
-        ":_env_python_3.10.13_x86_64_unknown_linux_gnu": "@pycross_toolchains//:python_3.10.13_x86_64-unknown-linux-gnu",
+        ":_env_python_3.10.12_aarch64_apple_darwin": "@pycross_toolchains//:python_3.10.12_aarch64-apple-darwin",
+        ":_env_python_3.10.12_aarch64_unknown_linux_gnu": "@pycross_toolchains//:python_3.10.12_aarch64-unknown-linux-gnu",
+        ":_env_python_3.10.12_x86_64_apple_darwin": "@pycross_toolchains//:python_3.10.12_x86_64-apple-darwin",
+        ":_env_python_3.10.12_x86_64_unknown_linux_gnu": "@pycross_toolchains//:python_3.10.12_x86_64-unknown-linux-gnu",
         ":_env_python_3.11.6_aarch64_apple_darwin": "@pycross_toolchains//:python_3.11.6_aarch64-apple-darwin",
         ":_env_python_3.11.6_aarch64_unknown_linux_gnu": "@pycross_toolchains//:python_3.11.6_aarch64-unknown-linux-gnu",
         ":_env_python_3.11.6_x86_64_apple_darwin": "@pycross_toolchains//:python_3.11.6_x86_64-apple-darwin",
@@ -223,18 +223,18 @@ def targets():
         ":stack_data_0.6.3",
         ":traitlets_5.13.0",
     ] + select({
-        ":_env_python_3.10.13_aarch64_apple_darwin": [
+        ":_env_python_3.10.12_aarch64_apple_darwin": [
             ":appnope_0.1.3",
             ":exceptiongroup_1.1.3",
         ],
-        ":_env_python_3.10.13_aarch64_unknown_linux_gnu": [
+        ":_env_python_3.10.12_aarch64_unknown_linux_gnu": [
             ":exceptiongroup_1.1.3",
         ],
-        ":_env_python_3.10.13_x86_64_apple_darwin": [
+        ":_env_python_3.10.12_x86_64_apple_darwin": [
             ":appnope_0.1.3",
             ":exceptiongroup_1.1.3",
         ],
-        ":_env_python_3.10.13_x86_64_unknown_linux_gnu": [
+        ":_env_python_3.10.12_x86_64_unknown_linux_gnu": [
             ":exceptiongroup_1.1.3",
         ],
         ":_env_python_3.11.6_aarch64_apple_darwin": [
