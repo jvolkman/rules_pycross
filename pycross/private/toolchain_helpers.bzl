@@ -66,7 +66,7 @@ def _compute_environments_and_toolchains(
 
     for version in python_versions:
         minor_version = _get_minor_version(version)
-        version_components = _get_version_components(minor_version)
+        underscore_version = version.replace(".", "_")
 
         version_info = TOOL_VERSIONS[minor_version]
         available_version_platforms = version_info["sha256"].keys()
@@ -96,17 +96,15 @@ def _compute_environments_and_toolchains(
                 exec_compatible_with = list(PLATFORMS[exec_platform].compatible_with)
                 target_compatible_with = list(PLATFORMS[target_platform].compatible_with)
 
-                exec_interpreter = "@{}_{}_{}_{}//:py3_runtime".format(
+                exec_interpreter = "@{}_{}_{}//:py3_runtime".format(
                     python_toolchain_name,
-                    version_components[0],
-                    version_components[1],
+                    underscore_version,
                     exec_platform,
                 )
 
-                target_interpreter = "@{}_{}_{}_{}//:py3_runtime".format(
+                target_interpreter = "@{}_{}_{}//:py3_runtime".format(
                     python_toolchain_name,
-                    version_components[0],
-                    version_components[1],
+                    underscore_version,
                     target_platform,
                 )
 
