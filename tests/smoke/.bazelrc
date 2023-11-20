@@ -8,3 +8,4 @@ build -c opt
 build --strip=always
 
 try-import %workspace%/.bazelrc.user
+try-import %workspace%/.bazelrc.ci
