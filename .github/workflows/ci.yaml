@@ -8,42 +8,121 @@ on:
   pull_request:
     branches: [main]
 
-  # Allows you to run this workflow manually from the Actions tab
-  workflow_dispatch:
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: true
 
 jobs:
-  test:
+  main-tests:
     # The type of runner that the job will run on
     runs-on: ubuntu-latest
 
     # Steps represent a sequence of tasks that will be executed as part of the job
     steps:
-      # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
       - uses: actions/checkout@v2
-      # Cache build and external artifacts so that the next ci build is incremental.
-      # Because github action caches cannot be updated after a build, we need to
-      # store the contents of each build in a unique cache key, then fall back to loading
-      # it on the next ci run. We use hashFiles(...) in the key and restore-keys- with
-      # the prefix to load the most recent cache for the branch on a cache miss. You
-      # should customize the contents of hashFiles to capture any bazel input sources,
-      # although this doesn't need to be perfect. If none of the input sources change
-      # then a cache hit will load an existing cache and bazel won't have to do any work.
-      # In the case of a cache miss, you want the fallback cache to contain most of the
-      # previously built artifacts to minimize build time. The more precise you are with
-      # hashFiles sources the less work bazel will have to do.
-      - name: Mount bazel caches
-        uses: actions/cache@v2
-        with:
-          path: |
-            "~/.cache/bazel"
-            "~/.cache/bazel-repo"
-          key: bazel-cache-${{ hashFiles('**/BUILD.bazel', '**/*.bzl', 'WORKSPACE') }}
-          restore-keys: bazel-cache-
-      - name: bazel test //...
-        env:
-          # Bazelisk will download bazel to here, ensure it is cached between runs.
-          XDG_CACHE_HOME: ~/.cache/bazel-repo
 
+      - name: .bazelrc.ci
+        run: |
+          python -c "import os; file = open('.bazelrc.ci', 'w'); file.write(os.environ['BAZELRC_CI']); file.close()"
+        shell: bash
+        env:
+          BAZELRC_CI : ${{secrets.BAZELRC_CI}}
+
+      - name: bazel test //pycross/...
         # Don't run the requirements test because the ubuntu runner's python version doesn't necessarily match
         # the development host's.
-        run: bazel --bazelrc=.github/workflows/ci.bazelrc --bazelrc=.bazelrc test -- //... -//pycross/private:requirements_test
+        run: |
+          bazel --bazelrc=.github/workflows/ci.bazelrc --bazelrc=.bazelrc test -- //pycross/... -//pycross/private:requirements_test
+
+  smoke-test-gen:
+    name: Smoke test/generate - Python ${{ matrix.python-version }} on ${{ startsWith(matrix.os, 'macos-') && 'macOS' || startsWith(matrix.os, 'windows-') && 'Windows' || 'Linux' }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+        # This needs to stay in sync with tests/smoke/WORKSPACE
+        python-version: ["3.10.12", "3.11.6", "3.12.0"]
+    defaults:
+      run:
+        working-directory: tests/smoke
+
+    steps:
+      - uses: actions/checkout@v2
+
+      - name: .bazelrc.ci
+        run: |
+          python -c "import os; file = open('.bazelrc.ci', 'w'); file.write(os.environ['BAZELRC_CI']); file.close()"
+        shell: bash
+        env:
+          BAZELRC_CI : ${{secrets.BAZELRC_CI}}
+
+      - name: run smoke tests
+        run: |
+          bazel test //... --@rules_python//python/config_settings:python_version=${{ matrix.python-version }}
+
+      - name: build zstandard wheels for macos and linux
+        run: |
+          ARTIFACT_PATH="${{ runner.temp }}/testwheel-out/${{ matrix.python-version }}/${{ matrix.os }}"
+          mkdir -p "$ARTIFACT_PATH"
+          for plat in macos_x86_64 linux_x86_64; do
+            bazel build //pdm:zstandard_build \
+              --@rules_python//python/config_settings:python_version=${{ matrix.python-version }} \
+              --platforms=@zig_sdk//platform:$plat
+            cp bazel-bin/pdm/zstandard_build/zstandard-*.whl "$ARTIFACT_PATH/$(cat bazel-bin/pdm/zstandard_build/zstandard-*.whl.name)"
+          done;
+
+      - uses: actions/upload-artifact@v3
+        with:
+          name: built-test-wheel
+          path: ${{ runner.temp }}/testwheel-out
+
+  smoke-test-check:
+    name: Smoke test/check - Python ${{ matrix.python-version }} on ${{ startsWith(matrix.os, 'macos-') && 'macOS' || startsWith(matrix.os, 'windows-') && 'Windows' || 'Linux' }}
+    needs: smoke-test-gen
+
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+        # This needs to stay in sync with tests/smoke/WORKSPACE
+        python-version: ["3.10.12", "3.11.6", "3.12.0"]
+    defaults:
+      run:
+        working-directory: tests/smoke
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Ensure latest pip
+        run: |
+          python -m pip install --upgrade pip
+
+      - uses: actions/download-artifact@v3
+        with:
+          name: built-test-wheel
+          path: ${{ runner.temp }}/testwheel-out
+
+      - name: Check wheels
+        run: |
+          ARTIFACT_PATH="${{ runner.temp }}/testwheel-out/${{ matrix.python-version }}"
+          case "${{ matrix.os }}" in
+           macos-latest) wheel_plat="macosx" ;;
+           *) wheel_plat="linux" ;;
+          esac
+          
+          for wheel in $(find $ARTIFACT_PATH -name '*.whl' | grep "$wheel_plat"); do
+            rm -rf "${{ runner.temp }}/env"
+            python3 -m venv "${{ runner.temp }}/env"
+            . "${{ runner.temp }}/env/bin/activate"
+            shasum -a 256 "$wheel"
+            pip install "$wheel"
+            python3 test_zstandard.py
+            deactivate
+          done;
