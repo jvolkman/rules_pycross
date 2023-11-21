@@ -6,6 +6,7 @@ load("@bazel_tools//tools/build_defs/repo:utils.bzl", "maybe")
 load("@jvolkman_rules_pycross//pycross:defs.bzl", "pycross_wheel_build", "pycross_wheel_library", "pypi_file")
 
 PINS = {
+    "alabaster": "alabaster_0.7.13",
     "annotated_types": "annotated_types_0.6.0",
     "appnope": "appnope_0.1.3",
     "asgiref": "asgiref_3.7.2",
@@ -13,6 +14,7 @@ PINS = {
     "attrs": "attrs_23.1.0",
     "aws_sam_translator": "aws_sam_translator_1.79.0",
     "aws_xray_sdk": "aws_xray_sdk_2.12.1",
+    "babel": "babel_2.13.1",
     "black": "black_23.11.0",
     "blinker": "blinker_1.7.0",
     "boto3": "boto3_1.28.80",
@@ -31,6 +33,7 @@ PINS = {
     "django": "django_4.2.7",
     "django_allauth": "django_allauth_0.58.2",
     "docker": "docker_6.1.3",
+    "docutils": "docutils_0.20.1",
     "ecdsa": "ecdsa_0.18.0",
     "executing": "executing_2.0.1",
     "flask": "flask_3.0.0",
@@ -39,6 +42,7 @@ PINS = {
     "graphql_core": "graphql_core_3.2.3",
     "greenlet": "greenlet_3.0.1",
     "idna": "idna_3.4",
+    "imagesize": "imagesize_1.4.1",
     "ipython": "ipython_8.17.2",
     "itsdangerous": "itsdangerous_2.1.2",
     "jedi": "jedi_0.19.1",
@@ -100,6 +104,14 @@ PINS = {
     "setproctitle": "setproctitle_1.3.3",
     "setuptools": "setuptools_68.2.2",
     "six": "six_1.16.0",
+    "snowballstemmer": "snowballstemmer_2.2.0",
+    "sphinx": "sphinx_7.2.6",
+    "sphinxcontrib_applehelp": "sphinxcontrib_applehelp_1.0.7",
+    "sphinxcontrib_devhelp": "sphinxcontrib_devhelp_1.0.5",
+    "sphinxcontrib_htmlhelp": "sphinxcontrib_htmlhelp_2.0.4",
+    "sphinxcontrib_jsmath": "sphinxcontrib_jsmath_1.0.1",
+    "sphinxcontrib_qthelp": "sphinxcontrib_qthelp_1.0.6",
+    "sphinxcontrib_serializinghtml": "sphinxcontrib_serializinghtml_1.1.9",
     "sqlalchemy": "sqlalchemy_2.0.23",
     "sqlalchemy_utils": "sqlalchemy_utils_0.41.1",
     "sqlparse": "sqlparse_0.4.4",
@@ -156,6 +168,11 @@ def targets():
     })
 
     pycross_wheel_library(
+        name = "alabaster_0.7.13",
+        wheel = "@example_lock_wheel_alabaster_0.7.13_py3_none_any//file",
+    )
+
+    pycross_wheel_library(
         name = "annotated_types_0.6.0",
         wheel = "@example_lock_wheel_annotated_types_0.6.0_py3_none_any//file",
     )
@@ -207,6 +224,11 @@ def targets():
         name = "aws_xray_sdk_2.12.1",
         deps = _aws_xray_sdk_2_12_1_deps,
         wheel = "@example_lock_wheel_aws_xray_sdk_2.12.1_py2.py3_none_any//file",
+    )
+
+    pycross_wheel_library(
+        name = "babel_2.13.1",
+        wheel = "@example_lock_wheel_babel_2.13.1_py3_none_any//file",
     )
 
     _black_23_11_0_deps = [
@@ -412,6 +434,11 @@ def targets():
         wheel = "@example_lock_wheel_docker_6.1.3_py3_none_any//file",
     )
 
+    pycross_wheel_library(
+        name = "docutils_0.20.1",
+        wheel = "@example_lock_wheel_docutils_0.20.1_py3_none_any//file",
+    )
+
     _ecdsa_0_18_0_deps = [
         ":six_1.16.0",
     ]
@@ -478,6 +505,11 @@ def targets():
     pycross_wheel_library(
         name = "idna_3.4",
         wheel = "@example_lock_wheel_idna_3.4_py3_none_any//file",
+    )
+
+    pycross_wheel_library(
+        name = "imagesize_1.4.1",
+        wheel = "@example_lock_wheel_imagesize_1.4.1_py2.py3_none_any//file",
     )
 
     _ipython_8_17_2_deps = [
@@ -1062,6 +1094,65 @@ def targets():
         wheel = "@example_lock_wheel_six_1.16.0_py2.py3_none_any//file",
     )
 
+    pycross_wheel_library(
+        name = "snowballstemmer_2.2.0",
+        wheel = "@example_lock_wheel_snowballstemmer_2.2.0_py2.py3_none_any//file",
+    )
+
+    _sphinx_7_2_6_deps = [
+        ":alabaster_0.7.13",
+        ":babel_2.13.1",
+        ":docutils_0.20.1",
+        ":imagesize_1.4.1",
+        ":jinja2_3.1.2",
+        ":packaging_23.2",
+        ":pygments_2.16.1",
+        ":requests_2.31.0",
+        ":snowballstemmer_2.2.0",
+        ":sphinxcontrib_applehelp_1.0.7",
+        ":sphinxcontrib_devhelp_1.0.5",
+        ":sphinxcontrib_htmlhelp_2.0.4",
+        ":sphinxcontrib_jsmath_1.0.1",
+        ":sphinxcontrib_qthelp_1.0.6",
+        ":sphinxcontrib_serializinghtml_1.1.9",
+    ]
+
+    pycross_wheel_library(
+        name = "sphinx_7.2.6",
+        deps = _sphinx_7_2_6_deps,
+        wheel = "@example_lock_wheel_sphinx_7.2.6_py3_none_any//file",
+    )
+
+    pycross_wheel_library(
+        name = "sphinxcontrib_applehelp_1.0.7",
+        wheel = "@example_lock_wheel_sphinxcontrib_applehelp_1.0.7_py3_none_any//file",
+    )
+
+    pycross_wheel_library(
+        name = "sphinxcontrib_devhelp_1.0.5",
+        wheel = "@example_lock_wheel_sphinxcontrib_devhelp_1.0.5_py3_none_any//file",
+    )
+
+    pycross_wheel_library(
+        name = "sphinxcontrib_htmlhelp_2.0.4",
+        wheel = "@example_lock_wheel_sphinxcontrib_htmlhelp_2.0.4_py3_none_any//file",
+    )
+
+    pycross_wheel_library(
+        name = "sphinxcontrib_jsmath_1.0.1",
+        wheel = "@example_lock_wheel_sphinxcontrib_jsmath_1.0.1_py2.py3_none_any//file",
+    )
+
+    pycross_wheel_library(
+        name = "sphinxcontrib_qthelp_1.0.6",
+        wheel = "@example_lock_wheel_sphinxcontrib_qthelp_1.0.6_py3_none_any//file",
+    )
+
+    pycross_wheel_library(
+        name = "sphinxcontrib_serializinghtml_1.1.9",
+        wheel = "@example_lock_wheel_sphinxcontrib_serializinghtml_1.1.9_py3_none_any//file",
+    )
+
     _sqlalchemy_2_0_23_deps = [
         ":typing_extensions_4.8.0",
     ] + select({
@@ -1258,6 +1349,16 @@ def repositories():
 
     maybe(
         http_file,
+        name = "example_lock_wheel_alabaster_0.7.13_py3_none_any",
+        urls = [
+            "https://files.pythonhosted.org/packages/64/88/c7083fc61120ab661c5d0b82cb77079fc1429d3f913a456c1c82cf4658f7/alabaster-0.7.13-py3-none-any.whl"
+        ],
+        sha256 = "1ee19aca801bbabb5ba3f5f258e4422dfa86f82f3e9cefb0859b283cdd7f62a3",
+        downloaded_file_path = "alabaster-0.7.13-py3-none-any.whl",
+    )
+
+    maybe(
+        http_file,
         name = "example_lock_wheel_annotated_types_0.6.0_py3_none_any",
         urls = [
             "https://files.pythonhosted.org/packages/28/78/d31230046e58c207284c6b2c4e8d96e6d3cb4e52354721b944d3e1ee4aa5/annotated_types-0.6.0-py3-none-any.whl"
@@ -1324,6 +1425,16 @@ def repositories():
         ],
         sha256 = "f6803832dc08d18cc265e2327a69bfa9ee41c121fac195edc9745d04b7a566c3",
         downloaded_file_path = "aws_xray_sdk-2.12.1-py2.py3-none-any.whl",
+    )
+
+    maybe(
+        http_file,
+        name = "example_lock_wheel_babel_2.13.1_py3_none_any",
+        urls = [
+            "https://files.pythonhosted.org/packages/86/14/5dc2eb02b7cc87b2f95930310a2cc5229198414919a116b564832c747bc1/Babel-2.13.1-py3-none-any.whl"
+        ],
+        sha256 = "7077a4984b02b6727ac10f1f7294484f737443d7e2e66c5e4380e41a3ae0b4ed",
+        downloaded_file_path = "Babel-2.13.1-py3-none-any.whl",
     )
 
     maybe(
@@ -1588,6 +1699,16 @@ def repositories():
 
     maybe(
         http_file,
+        name = "example_lock_wheel_docutils_0.20.1_py3_none_any",
+        urls = [
+            "https://files.pythonhosted.org/packages/26/87/f238c0670b94533ac0353a4e2a1a771a0cc73277b88bff23d3ae35a256c1/docutils-0.20.1-py3-none-any.whl"
+        ],
+        sha256 = "96f387a2c5562db4476f09f13bbab2192e764cac08ebbf3a34a95d9b1e4a59d6",
+        downloaded_file_path = "docutils-0.20.1-py3-none-any.whl",
+    )
+
+    maybe(
+        http_file,
         name = "example_lock_wheel_ecdsa_0.18.0_py2.py3_none_any",
         urls = [
             "https://files.pythonhosted.org/packages/09/d4/4f05f5d16a4863b30ba96c23b23e942da8889abfa1cdbabf2a0df12a4532/ecdsa-0.18.0-py2.py3-none-any.whl"
@@ -1664,6 +1785,16 @@ def repositories():
         ],
         sha256 = "90b77e79eaa3eba6de819a0c442c0b4ceefc341a7a2ab77d7562bf49f425c5c2",
         downloaded_file_path = "idna-3.4-py3-none-any.whl",
+    )
+
+    maybe(
+        http_file,
+        name = "example_lock_wheel_imagesize_1.4.1_py2.py3_none_any",
+        urls = [
+            "https://files.pythonhosted.org/packages/ff/62/85c4c919272577931d407be5ba5d71c20f0b616d31a0befe0ae45bb79abd/imagesize-1.4.1-py2.py3-none-any.whl"
+        ],
+        sha256 = "0d8d18d08f840c19d0ee7ca1fd82490fdc3729b7ac93f49870406ddde8ef8d8b",
+        downloaded_file_path = "imagesize-1.4.1-py2.py3-none-any.whl",
     )
 
     maybe(
@@ -2384,6 +2515,86 @@ def repositories():
         ],
         sha256 = "8abb2f1d86890a2dfb989f9a77cfcfd3e47c2a354b01111771326f8aa26e0254",
         downloaded_file_path = "six-1.16.0-py2.py3-none-any.whl",
+    )
+
+    maybe(
+        http_file,
+        name = "example_lock_wheel_snowballstemmer_2.2.0_py2.py3_none_any",
+        urls = [
+            "https://files.pythonhosted.org/packages/ed/dc/c02e01294f7265e63a7315fe086dd1df7dacb9f840a804da846b96d01b96/snowballstemmer-2.2.0-py2.py3-none-any.whl"
+        ],
+        sha256 = "c8e1716e83cc398ae16824e5572ae04e0d9fc2c6b985fb0f900f5f0c96ecba1a",
+        downloaded_file_path = "snowballstemmer-2.2.0-py2.py3-none-any.whl",
+    )
+
+    maybe(
+        http_file,
+        name = "example_lock_wheel_sphinx_7.2.6_py3_none_any",
+        urls = [
+            "https://files.pythonhosted.org/packages/b2/b6/8ed35256aa530a9d3da15d20bdc0ba888d5364441bb50a5a83ee7827affe/sphinx-7.2.6-py3-none-any.whl"
+        ],
+        sha256 = "1e09160a40b956dc623c910118fa636da93bd3ca0b9876a7b3df90f07d691560",
+        downloaded_file_path = "sphinx-7.2.6-py3-none-any.whl",
+    )
+
+    maybe(
+        http_file,
+        name = "example_lock_wheel_sphinxcontrib_applehelp_1.0.7_py3_none_any",
+        urls = [
+            "https://files.pythonhosted.org/packages/c0/0c/261c0949083c0ac635853528bb0070c89e927841d4e533ba0b5563365c06/sphinxcontrib_applehelp-1.0.7-py3-none-any.whl"
+        ],
+        sha256 = "094c4d56209d1734e7d252f6e0b3ccc090bd52ee56807a5d9315b19c122ab15d",
+        downloaded_file_path = "sphinxcontrib_applehelp-1.0.7-py3-none-any.whl",
+    )
+
+    maybe(
+        http_file,
+        name = "example_lock_wheel_sphinxcontrib_devhelp_1.0.5_py3_none_any",
+        urls = [
+            "https://files.pythonhosted.org/packages/c0/03/010ac733ec7b7f71c1dc88e7115743ee466560d6d85373b56fb9916e4586/sphinxcontrib_devhelp-1.0.5-py3-none-any.whl"
+        ],
+        sha256 = "fe8009aed765188f08fcaadbb3ea0d90ce8ae2d76710b7e29ea7d047177dae2f",
+        downloaded_file_path = "sphinxcontrib_devhelp-1.0.5-py3-none-any.whl",
+    )
+
+    maybe(
+        http_file,
+        name = "example_lock_wheel_sphinxcontrib_htmlhelp_2.0.4_py3_none_any",
+        urls = [
+            "https://files.pythonhosted.org/packages/28/7a/958f8e3e6abe8219d0d1f1224886de847ab227b218f4a07b61bc337f64be/sphinxcontrib_htmlhelp-2.0.4-py3-none-any.whl"
+        ],
+        sha256 = "8001661c077a73c29beaf4a79968d0726103c5605e27db92b9ebed8bab1359e9",
+        downloaded_file_path = "sphinxcontrib_htmlhelp-2.0.4-py3-none-any.whl",
+    )
+
+    maybe(
+        http_file,
+        name = "example_lock_wheel_sphinxcontrib_jsmath_1.0.1_py2.py3_none_any",
+        urls = [
+            "https://files.pythonhosted.org/packages/c2/42/4c8646762ee83602e3fb3fbe774c2fac12f317deb0b5dbeeedd2d3ba4b77/sphinxcontrib_jsmath-1.0.1-py2.py3-none-any.whl"
+        ],
+        sha256 = "2ec2eaebfb78f3f2078e73666b1415417a116cc848b72e5172e596c871103178",
+        downloaded_file_path = "sphinxcontrib_jsmath-1.0.1-py2.py3-none-any.whl",
+    )
+
+    maybe(
+        http_file,
+        name = "example_lock_wheel_sphinxcontrib_qthelp_1.0.6_py3_none_any",
+        urls = [
+            "https://files.pythonhosted.org/packages/1f/e5/1850f3f118e95581c1e30b57028ac979badee1eb29e70ee72b0241f5a185/sphinxcontrib_qthelp-1.0.6-py3-none-any.whl"
+        ],
+        sha256 = "bf76886ee7470b934e363da7a954ea2825650013d367728588732c7350f49ea4",
+        downloaded_file_path = "sphinxcontrib_qthelp-1.0.6-py3-none-any.whl",
+    )
+
+    maybe(
+        http_file,
+        name = "example_lock_wheel_sphinxcontrib_serializinghtml_1.1.9_py3_none_any",
+        urls = [
+            "https://files.pythonhosted.org/packages/95/d6/2e0bda62b2a808070ac922d21a950aa2cb5e4fcfb87e5ff5f86bc43a2201/sphinxcontrib_serializinghtml-1.1.9-py3-none-any.whl"
+        ],
+        sha256 = "9b36e503703ff04f20e9675771df105e58aa029cfcbc23b8ed716019b7416ae1",
+        downloaded_file_path = "sphinxcontrib_serializinghtml-1.1.9-py3-none-any.whl",
     )
 
     maybe(

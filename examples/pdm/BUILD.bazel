@@ -131,6 +131,23 @@ pycross_lock_file(
             "wheel",
         ],
     },
+    package_ignore_dependencies = {
+        "sphinxcontrib-applehelp": [
+            "sphinx",
+        ],
+        "sphinxcontrib-devhelp": [
+            "sphinx",
+        ],
+        "sphinxcontrib-htmlhelp": [
+            "sphinx",
+        ],
+        "sphinxcontrib-qthelp": [
+            "sphinx",
+        ],
+        "sphinxcontrib-serializinghtml": [
+            "sphinx",
+        ],
+    },
     pypi_index = "https://pypi.org",
     out = "example_lock.bzl",
 )
