@@ -15,11 +15,24 @@ load("//pycross:repositories.bzl", "rules_pycross_dependencies")
 # Fetch dependencies which users need as well
 rules_pycross_dependencies()
 
+load("@rules_python//python:repositories.bzl", "py_repositories", "python_register_toolchains")
+
+py_repositories()
+
+python_register_toolchains(
+    name = "python",
+    python_version = "3.12.0",
+)
+
+load("@python//:defs.bzl", "interpreter")
+
 # This pip_parse repo is only used to generate the pycross/private/pypi_requirements.bzl
 load("@rules_python//python:pip.bzl", "pip_parse")
+
 pip_parse(
     name = "rules_pycross_pypi_deps",
     requirements_lock = "//pycross/private:requirements.txt",
+    python_interpreter_target = interpreter,
 )
 
 # For running our own unit tests
