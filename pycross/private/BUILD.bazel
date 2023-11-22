@@ -91,7 +91,6 @@ bzl_library(
     deps = [
         ":cc_toolchain_util",
         ":providers",
-        "@aspect_bazel_lib//lib:expand_make_vars",
         "@bazel_skylib//lib:paths",
         "@bazel_tools//tools/cpp:toolchain_utils.bzl",
         "@rules_python//docs:defs",
