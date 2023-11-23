@@ -1,4 +1,5 @@
 load("@rules_python//python:defs.bzl", "py_binary", "py_library")
+load("//pycross/private:wheel_zipimport_library.bzl", "pycross_wheel_zipimport_library")
 
 package(default_visibility = ["//visibility:private"])
 
@@ -20,6 +21,11 @@ py_binary(
         "@rules_pycross_pypi_deps_pip//:pkg",
         "@rules_pycross_pypi_deps_tomli//:pkg",
     ],
+)
+
+pycross_wheel_zipimport_library(
+    name = "installer",
+    wheel = "@rules_pycross_installer//file"
 )
 
 py_library(
@@ -117,8 +123,8 @@ py_binary(
     srcs = ["wheel_installer.py"],
     visibility = ["//visibility:public"],
     deps = [
+        ":installer",
         ":args",
         ":namespace_pkgs",
-        "@rules_pycross_pypi_deps_installer//:pkg",
     ],
 )

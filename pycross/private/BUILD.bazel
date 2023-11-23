@@ -109,6 +109,16 @@ bzl_library(
     visibility = default_visibility,
 )
 
+bzl_library(
+    name = "wheel_zipimport_library",
+    srcs = ["wheel_zipimport_library.bzl"],
+    deps = [
+        "@bazel_skylib//lib:paths",
+        "@rules_python//docs:defs",
+    ],
+    visibility = default_visibility,
+)
+
 compile_pip_requirements(
     name = "requirements",
     extra_args = ["--allow-unsafe"],

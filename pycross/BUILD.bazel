@@ -35,6 +35,7 @@ bzl_library(
         "//pycross/private:toolchain_helpers",
         "//pycross/private:wheel_build",
         "//pycross/private:wheel_library",
+        "//pycross/private:wheel_zipimport_library",
     ],
 )
 
