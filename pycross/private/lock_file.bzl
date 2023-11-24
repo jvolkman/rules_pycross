@@ -57,6 +57,9 @@ def _pycross_lock_file_impl(ctx):
         for dep in d:
             args.add_all("--ignore-dependency", [k, dep])
 
+    if ctx.attr.disallow_builds:
+        args.add("--disallow-builds")
+
     if ctx.attr.pypi_index:
         args.add("--pypi-index", ctx.attr.pypi_index)
 
@@ -126,6 +129,9 @@ pycross_lock_file = rule(
         ),
         "package_ignore_dependencies": attr.string_list_dict(
             doc = "A dict of package keys (name or name@version) to a list of that packages dependency keys to ignore."
+        ),
+        "disallow_builds": attr.bool(
+            doc = "Do not allow pycross_wheel_build targets in the final lock file (i.e., require wheels).",
         ),
         "pypi_index": attr.string(
             doc = "The PyPI-compatible index to use (must support the JSON API).",
