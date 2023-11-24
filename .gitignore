@@ -1,4 +1,5 @@
 .ijwb
+.vscode
 env
 bazel-*
 .bazelrc.user
