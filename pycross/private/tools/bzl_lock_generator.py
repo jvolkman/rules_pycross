@@ -4,6 +4,7 @@ import os
 import textwrap
 from collections import defaultdict
 from dataclasses import dataclass
+from dataclasses import field
 from pathlib import Path
 from typing import AbstractSet
 from typing import Any
@@ -169,7 +170,7 @@ class GenerationContext:
                 )
 
     def get_dependencies_by_environment(
-        self, package: Package
+        self, package: Package, ignore_dependency_names: Set[str]
     ) -> Dict[Optional[str], Set[PackageDependency]]:
         env_deps = defaultdict(list)
         # We sort deps by version in descending order. In case the list of dependencies
@@ -178,6 +179,10 @@ class GenerationContext:
         ordered_deps = sorted(
             package.dependencies, key=operator.attrgetter("version"), reverse=True
         )
+        # Filter out dependencies that we've been told to ignore
+        if ignore_dependency_names:
+            ordered_deps = [d for d in ordered_deps if d.name not in ignore_dependency_names]
+
         for target in self.target_environments:
             added_for_target = set()
             for dep in ordered_deps:
@@ -298,46 +303,39 @@ class EnvTarget:
         return "\n".join(lines)
 
 
+@dataclass
+class PackageAnnotations:
+    build_dependencies: List[str] = field(default_factory=list)
+    build_target_override: Optional[str] = None
+    always_build: bool = False
+    ignore_dependencies: Set[str] = field(default_factory=set)
+
+
 class PackageTarget:
     def __init__(
         self,
         package: Package,
         context: GenerationContext,
+        annotations: Optional[PackageAnnotations],
     ):
+        annotations = annotations or PackageAnnotations()  # Default to an empty set
         self.package = package
         self.context = context
-        self._common_deps: Set[PackageDependency] = set()
-        self._env_deps: Dict[str, Set[PackageDependency]] = {}
 
-        deps_by_env = context.get_dependencies_by_environment(package)
-        self._common_deps = deps_by_env.get(None, set())
-        self._env_deps = {k: v for k, v in deps_by_env.items() if k is not None}
+        self.build_deps = annotations.build_dependencies
+        self.build_target_override = annotations.build_target_override
 
-        self.ignore_deps = None
+        deps_by_env = context.get_dependencies_by_environment(
+            package,
+            annotations.ignore_dependencies,
+        )
+        self.common_deps = deps_by_env.get(None, set())
+        self.env_deps = {k: v for k, v in deps_by_env.items() if k is not None}
 
-        self.build_target_override = None
-        self.build_deps = None
-        self._always_build = False
-        self._package_sources_by_env = None
-
-    @property
-    def package_sources_by_env(self) -> Dict[str, PackageSource]:
-        if self._package_sources_by_env is None:
-            self._package_sources_by_env = (
-                self.context.get_package_sources_by_environment(
-                    self.package, self.always_build
-                )
-            )
-        return self._package_sources_by_env
-
-    @property
-    def always_build(self) -> bool:
-        return self._always_build
-
-    @always_build.setter
-    def always_build(self, val: bool) -> None:
-        self._always_build = val
-        self._package_sources_by_env = None
+        self.package_sources_by_env = self.context.get_package_sources_by_environment(
+            package,
+            annotations.always_build,
+        )
 
     @property
     def distinct_package_sources(self) -> Set[PackageSource]:
@@ -345,10 +343,12 @@ class PackageTarget:
 
     @property
     def all_dependency_keys(self) -> Set[str]:
-        """Returns all package keys (name-version) that this target depends on, including platform-specific."""
+        """Returns all package keys (name-version) that this target depends on, 
+        including platform-specific and build dependencies."""
         keys = set(str(d.key) for d in self.common_deps)
         for env_deps in self.env_deps.values():
             keys |= set(str(d.key) for d in env_deps)
+        keys |= set(self.build_deps)
         return keys
 
     @property
@@ -358,7 +358,7 @@ class PackageTarget:
                 return f.file
 
     @property
-    def has_deps(self) -> bool:
+    def has_runtime_deps(self) -> bool:
         return bool(self.common_deps or self.env_deps)
 
     @property
@@ -403,24 +403,8 @@ class PackageTarget:
         )
         return f"_{sanitized}_build_deps"
 
-    @property
-    def common_deps(self):
-        ignore_deps = self.ignore_deps or []
-        return {d for d in self._common_deps if d.name not in ignore_deps}
-
-    @property
-    def env_deps(self):
-        ignore_deps = self.ignore_deps or []
-        final_env_deps = {}
-        for env, deps in self._env_deps.items():
-            env_deps = {d for d in deps if d.name not in ignore_deps}
-            if not env_deps:
-                continue
-            final_env_deps[env] = env_deps
-        return final_env_deps
-
-    def render_deps(self) -> str:
-        assert self.has_deps
+    def render_runtime_deps(self) -> str:
+        assert self.has_runtime_deps
         lines = []
 
         if self.common_deps and self.env_deps:
@@ -468,7 +452,7 @@ class PackageTarget:
         ]
 
         dep_names = []
-        if self.has_deps:
+        if self.has_runtime_deps:
             dep_names.append(self._deps_name)
         if self.build_deps:
             dep_names.append(self._build_deps_name)
@@ -489,7 +473,7 @@ class PackageTarget:
             "pycross_wheel_library(",
             ind(f'name = "{self.context.naming.package_target(self.package.key)}",'),
         ]
-        if self.has_deps:
+        if self.has_runtime_deps:
             lines.append(ind(f"deps = {self._deps_name},"))
 
         # Add the wheel attribute.
@@ -526,8 +510,8 @@ class PackageTarget:
 
     def render(self) -> str:
         parts = []
-        if self.has_deps:
-            parts.append(self.render_deps())
+        if self.has_runtime_deps:
+            parts.append(self.render_runtime_deps())
             parts.append("")
         if self.build_deps:
             parts.append(self.render_build_deps())
@@ -658,6 +642,71 @@ def resolve_single_version(
     return options[0]
 
 
+def collect_package_annotations(args: Any, lock_model: LockSet) -> Dict[str, PackageAnnotations]:
+    annotations = defaultdict(PackageAnnotations)
+    all_package_keys_by_canonical_name = defaultdict(list)
+    for package in lock_model.packages.values():
+        all_package_keys_by_canonical_name[package.name].append(package.key)
+
+    for build_dependency in args.build_dependency or []:
+        pkg, dep = build_dependency
+        resolved_pkg = resolve_single_version(
+            pkg,
+            all_package_keys_by_canonical_name,
+            lock_model.packages.keys(),
+            "package_build_dependencies",
+        )
+        resolved_dep = resolve_single_version(
+            dep,
+            all_package_keys_by_canonical_name,
+            lock_model.packages.keys(),
+            "package_build_dependencies",
+        )
+        annotations[resolved_pkg].build_dependencies.append(resolved_dep)
+
+    build_target_overrides_used = set()
+    for build_target_override in args.build_target_override or []:
+        pkg, target = build_target_override
+        resolved_pkg = resolve_single_version(
+            pkg,
+            all_package_keys_by_canonical_name,
+            lock_model.packages.keys(),
+            "build_target_overrides",
+        )
+        if resolved_pkg in build_target_overrides_used:
+            raise Exception(
+                f'build_target_overrides entry "{resolved_pkg}" listed multiple times'
+            )
+        build_target_overrides_used.add(resolved_pkg)
+        annotations[resolved_pkg].build_target_override = target
+
+    for always_build_package in args.always_build_package or []:
+        resolved_pkg = resolve_single_version(
+            always_build_package,
+            all_package_keys_by_canonical_name,
+            lock_model.packages.keys(),
+            "always_build_packages",
+        )
+        annotations[resolved_pkg].always_build = True
+
+    for ignore_dependency in args.ignore_dependency or []:
+        pkg, dep = ignore_dependency
+        resolved_pkg = resolve_single_version(
+            pkg,
+            all_package_keys_by_canonical_name,
+            lock_model.packages.keys(),
+            "package_ignore_dependencies",
+        )
+        if dep not in all_package_keys_by_canonical_name and dep not in lock_model.packages.keys():
+            raise Exception(f'package_ignore_dependencies entry "{dep}" matches no packages')
+
+        # This dependency will be resolved to a single version later
+        annotations[resolved_pkg].ignore_dependencies.add(dep)
+
+    # Return as a non-default dict
+    return dict(annotations)
+
+
 def main(args: Any) -> None:
     output = args.output
     environment_pairs = []
@@ -702,26 +751,13 @@ def main(args: Any) -> None:
     with open(args.lock_model_file, "r") as f:
         data = f.read()
     lock_model = LockSet.from_json(data)
-    all_package_keys_by_canonical_name = defaultdict(list)
-    for package in lock_model.packages.values():
-        all_package_keys_by_canonical_name[package.name].append(package.key)
 
-    # First we walk the dependency graph starting from the set if pinned packages (in pyproject.toml), computing the
+    # Collect package "annotations"
+    annotations = collect_package_annotations(args, lock_model)
+
+    # Walk the dependency graph starting from the set if pinned packages (in pyproject.toml), computing the
     # transitive closure.
-    work_set = set(lock_model.pins.values())
-
-    # Also add any declared build dependencies to the initial set.
-    for build_dependency in args.build_dependency or []:
-        _, dep = build_dependency
-        resolved_dep = resolve_single_version(
-            dep,
-            all_package_keys_by_canonical_name,
-            lock_model.packages.keys(),
-            "package_build_dependencies",
-        )
-        work_set.add(resolved_dep)
-
-    work = list(work_set)
+    work = list(lock_model.pins.values())
     package_targets_by_package_key = {}
 
     while work:
@@ -733,81 +769,22 @@ def main(args: Any) -> None:
         entry = PackageTarget(
             package,
             context,
+            annotations.pop(next_package_key, None),
         )
         package_targets_by_package_key[next_package_key] = entry
         work.extend(entry.all_dependency_keys)
 
+    # The annotations dict should be empty now; if not, annotations were specified
+    # for packages that are not actually part of our final set.
+    if annotations:
+        raise Exception(
+            f"Annotations specified for packages that are not part of the locked set: "
+            f'{", ".join(sorted(annotations.keys()))}'
+        )
+
     package_targets = sorted(
         package_targets_by_package_key.values(), key=lambda x: x.package.name
     )
-
-    # Build a map of package names to keys found during our walk. We use this to resolve e.g.
-    # "numpy" to "numpy@1.22.3", and fail if there are multiple versions.
-    package_keys_by_canonical_name = defaultdict(list)
-    for target in package_targets:
-        package_keys_by_canonical_name[target.package.name].append(target.package.key)
-
-    # Apply build target overrides to package targets
-    build_target_overrides_used = set()
-    for build_target_override in args.build_target_override or []:
-        key, target = build_target_override
-        resolved = resolve_single_version(
-            key,
-            package_keys_by_canonical_name,
-            package_targets_by_package_key.keys(),
-            "build_target_overrides",
-        )
-        if resolved in build_target_overrides_used:
-            raise Exception(
-                f'build_target_overrides entry "{resolved}" listed multiple times'
-            )
-        build_target_overrides_used.add(resolved)
-        package_targets_by_package_key[resolved].build_target_override = target
-
-    # Apply always build flags to package targets
-    for always_build_package in args.always_build_package or []:
-        resolved = resolve_single_version(
-            always_build_package,
-            package_keys_by_canonical_name,
-            package_targets_by_package_key.keys(),
-            "always_build_packages",
-        )
-        package_targets_by_package_key[resolved].always_build = True
-
-    # Apply package build dependencies
-    for build_dependency in args.build_dependency or []:
-        pkg, dep = build_dependency
-        resolved_pkg = resolve_single_version(
-            pkg,
-            package_keys_by_canonical_name,
-            package_targets_by_package_key.keys(),
-            "package_build_dependencies",
-        )
-        resolved_dep = resolve_single_version(
-            dep,
-            package_keys_by_canonical_name,
-            package_targets_by_package_key.keys(),
-            "package_build_dependencies",
-        )
-        target = package_targets_by_package_key[resolved_pkg]
-        if target.build_deps is None:
-            target.build_deps = [resolved_dep]
-        else:
-            target.build_deps.append(resolved_dep)
-
-    for ignore_dependency in args.ignore_dependency or []:
-        pkg, dep = ignore_dependency
-        resolved_pkg = resolve_single_version(
-            pkg,
-            package_keys_by_canonical_name,
-            package_targets_by_package_key.keys(),
-            "package_ignore_dependencies",
-        )
-        target = package_targets_by_package_key[resolved_pkg]
-        if target.ignore_deps is None:
-            target.ignore_deps = [dep]
-        else:
-            target.ignore_deps.append(dep)
 
     pypi_index = args.pypi_index or None
     repos = []
