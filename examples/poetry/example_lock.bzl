@@ -6,95 +6,108 @@ load("@bazel_tools//tools/build_defs/repo:utils.bzl", "maybe")
 load("@jvolkman_rules_pycross//pycross:defs.bzl", "pycross_wheel_build", "pycross_wheel_library", "pypi_file")
 
 PINS = {
+    "annotated_types": "annotated_types_0.6.0",
     "appnope": "appnope_0.1.3",
-    "asttokens": "asttokens_2.0.8",
-    "attrs": "attrs_22.1.0",
-    "aws_sam_translator": "aws_sam_translator_1.51.0",
-    "aws_xray_sdk": "aws_xray_sdk_2.10.0",
-    "backcall": "backcall_0.2.0",
-    "boto3": "boto3_1.24.73",
-    "botocore": "botocore_1.27.73",
-    "certifi": "certifi_2022.9.14",
-    "cffi": "cffi_1.15.1",
-    "cfn_lint": "cfn_lint_0.65.0",
-    "charset_normalizer": "charset_normalizer_2.1.1",
-    "click": "click_8.1.3",
+    "asttokens": "asttokens_2.4.1",
+    "attrs": "attrs_23.1.0",
+    "aws_sam_translator": "aws_sam_translator_1.79.0",
+    "aws_xray_sdk": "aws_xray_sdk_2.12.1",
+    "blinker": "blinker_1.7.0",
+    "boto3": "boto3_1.28.80",
+    "botocore": "botocore_1.31.80",
+    "certifi": "certifi_2023.7.22",
+    "cffi": "cffi_1.16.0",
+    "cfn_lint": "cfn_lint_0.83.1",
+    "charset_normalizer": "charset_normalizer_3.3.2",
+    "click": "click_8.1.7",
     "cognitojwt": "cognitojwt_1.4.1",
-    "cryptography": "cryptography_38.0.1",
-    "cython": "cython_0.29.32",
+    "cryptography": "cryptography_41.0.5",
+    "cython": "cython_0.29.36",
     "decorator": "decorator_5.1.1",
-    "docker": "docker_6.0.0",
+    "docker": "docker_6.1.3",
     "ecdsa": "ecdsa_0.18.0",
-    "executing": "executing_1.0.0",
-    "flask": "flask_2.2.2",
-    "flask_cors": "flask_cors_3.0.10",
+    "executing": "executing_2.0.1",
+    "flask": "flask_3.0.0",
+    "flask_cors": "flask_cors_4.0.0",
     "future": "future_0.18.2",
-    "graphql_core": "graphql_core_3.2.1",
-    "greenlet": "greenlet_1.1.3",
+    "graphql_core": "graphql_core_3.2.3",
+    "greenlet": "greenlet_3.0.1",
     "idna": "idna_3.4",
-    "importlib_metadata": "importlib_metadata_4.12.0",
-    "ipython": "ipython_8.5.0",
+    "ipython": "ipython_8.17.2",
     "itsdangerous": "itsdangerous_2.1.2",
-    "jaraco_classes": "jaraco_classes_3.2.2",
-    "jedi": "jedi_0.18.1",
+    "jaraco_classes": "jaraco_classes_3.3.0",
+    "jedi": "jedi_0.19.1",
     "jeepney": "jeepney_0.8.0",
     "jinja2": "jinja2_3.1.2",
     "jmespath": "jmespath_1.0.1",
     "jschema_to_python": "jschema_to_python_1.2.3",
     "jsondiff": "jsondiff_2.0.0",
-    "jsonpatch": "jsonpatch_1.32",
-    "jsonpickle": "jsonpickle_2.2.0",
-    "jsonpointer": "jsonpointer_2.3",
-    "jsonschema": "jsonschema_3.2.0",
+    "jsonpatch": "jsonpatch_1.33",
+    "jsonpickle": "jsonpickle_3.0.2",
+    "jsonpointer": "jsonpointer_2.4",
+    "jsonschema": "jsonschema_4.19.2",
+    "jsonschema_path": "jsonschema_path_0.3.1",
+    "jsonschema_specifications": "jsonschema_specifications_2023.7.1",
     "junit_xml": "junit_xml_1.9",
     "keyring": "keyring_23.9.1",
-    "markupsafe": "markupsafe_2.1.1",
+    "lazy_object_proxy": "lazy_object_proxy_1.9.0",
+    "markupsafe": "markupsafe_2.1.3",
     "matplotlib_inline": "matplotlib_inline_0.1.6",
-    "more_itertools": "more_itertools_8.14.0",
-    "moto": "moto_3.1.1",
-    "networkx": "networkx_2.8.6",
-    "numpy": "numpy_1.22.3",
+    "more_itertools": "more_itertools_10.1.0",
+    "moto": "moto_4.2.7",
+    "mpmath": "mpmath_1.3.0",
+    "multipart": "multipart_0.2.4",
+    "networkx": "networkx_3.2.1",
+    "numpy": "numpy_1.26.1",
+    "openapi_schema_validator": "openapi_schema_validator_0.6.2",
+    "openapi_spec_validator": "openapi_spec_validator_0.7.1",
     "opencv_python": "opencv_python_4.6.0.66",
-    "packaging": "packaging_21.3",
+    "packaging": "packaging_23.2",
     "parso": "parso_0.8.3",
-    "pbr": "pbr_5.10.0",
+    "pathable": "pathable_0.4.3",
+    "pbr": "pbr_6.0.0",
     "pexpect": "pexpect_4.8.0",
-    "pickleshare": "pickleshare_0.7.5",
-    "prompt_toolkit": "prompt_toolkit_3.0.31",
+    "prompt_toolkit": "prompt_toolkit_3.0.39",
     "ptyprocess": "ptyprocess_0.7.0",
     "pure_eval": "pure_eval_0.2.2",
-    "pyasn1": "pyasn1_0.4.8",
+    "py_partiql_parser": "py_partiql_parser_0.4.1",
+    "pyasn1": "pyasn1_0.5.0",
     "pycparser": "pycparser_2.21",
-    "pygments": "pygments_2.13.0",
-    "pyparsing": "pyparsing_3.0.9",
-    "pyrsistent": "pyrsistent_0.18.1",
+    "pydantic": "pydantic_2.4.2",
+    "pydantic_core": "pydantic_core_2.10.1",
+    "pygments": "pygments_2.16.1",
+    "pyparsing": "pyparsing_3.1.1",
     "python_dateutil": "python_dateutil_2.8.2",
-    "python_jose": "python_jose_3.1.0",
-    "pytz": "pytz_2022.2.1",
-    "pyyaml": "pyyaml_6.0",
-    "requests": "requests_2.28.1",
-    "responses": "responses_0.21.0",
+    "python_jose": "python_jose_3.3.0",
+    "pyyaml": "pyyaml_6.0.1",
+    "referencing": "referencing_0.30.2",
+    "regex": "regex_2023.10.3",
+    "requests": "requests_2.31.0",
+    "responses": "responses_0.24.0",
+    "rfc3339_validator": "rfc3339_validator_0.1.4",
+    "rpds_py": "rpds_py_0.12.0",
     "rsa": "rsa_4.9",
-    "s3transfer": "s3transfer_0.6.0",
+    "s3transfer": "s3transfer_0.7.0",
     "sarif_om": "sarif_om_1.0.4",
     "secretstorage": "secretstorage_3.3.3",
-    "setproctitle": "setproctitle_1.2.2",
-    "setuptools": "setuptools_59.2.0",
+    "setproctitle": "setproctitle_1.3.3",
+    "setuptools": "setuptools_68.2.2",
     "six": "six_1.16.0",
-    "sqlalchemy": "sqlalchemy_1.4.41",
-    "sqlalchemy_utils": "sqlalchemy_utils_0.38.2",
+    "sqlalchemy": "sqlalchemy_2.0.23",
+    "sqlalchemy_utils": "sqlalchemy_utils_0.41.1",
     "sshpubkeys": "sshpubkeys_3.3.1",
-    "stack_data": "stack_data_0.5.0",
-    "traitlets": "traitlets_5.4.0",
-    "tree_sitter": "tree_sitter_0.20.0",
-    "urllib3": "urllib3_1.26.12",
-    "wcwidth": "wcwidth_0.2.5",
-    "websocket_client": "websocket_client_1.4.1",
-    "werkzeug": "werkzeug_2.2.2",
-    "wheel": "wheel_0.37.0",
-    "wrapt": "wrapt_1.14.1",
+    "stack_data": "stack_data_0.6.3",
+    "sympy": "sympy_1.12",
+    "traitlets": "traitlets_5.13.0",
+    "tree_sitter": "tree_sitter_0.20.2",
+    "typing_extensions": "typing_extensions_4.8.0",
+    "urllib3": "urllib3_2.0.7",
+    "wcwidth": "wcwidth_0.2.9",
+    "websocket_client": "websocket_client_1.6.4",
+    "werkzeug": "werkzeug_3.0.1",
+    "wheel": "wheel_0.41.3",
+    "wrapt": "wrapt_1.15.0",
     "xmltodict": "xmltodict_0.13.0",
-    "zipp": "zipp_3.8.1",
 }
 
 def targets():
@@ -108,7 +121,7 @@ def targets():
         name = "_env_python_darwin_arm64",
         constraint_values = [
             "@platforms//os:osx",
-            "@platforms//cpu:arm64",
+            "@platforms//cpu:aarch64",
         ],
     )
 
@@ -135,124 +148,137 @@ def targets():
     })
 
     pycross_wheel_library(
+        name = "annotated_types_0.6.0",
+        wheel = "@example_lock_wheel_annotated_types_0.6.0_py3_none_any//file",
+    )
+
+    pycross_wheel_library(
         name = "appnope_0.1.3",
         wheel = "@example_lock_wheel_appnope_0.1.3_py2.py3_none_any//file",
     )
 
-    _asttokens_2_0_8_deps = [
+    _asttokens_2_4_1_deps = [
         ":six_1.16.0",
     ]
 
     pycross_wheel_library(
-        name = "asttokens_2.0.8",
-        deps = _asttokens_2_0_8_deps,
-        wheel = "@example_lock_wheel_asttokens_2.0.8_py2.py3_none_any//file",
+        name = "asttokens_2.4.1",
+        deps = _asttokens_2_4_1_deps,
+        wheel = "@example_lock_wheel_asttokens_2.4.1_py2.py3_none_any//file",
     )
 
     pycross_wheel_library(
-        name = "attrs_22.1.0",
-        wheel = "@example_lock_wheel_attrs_22.1.0_py2.py3_none_any//file",
+        name = "attrs_23.1.0",
+        wheel = "@example_lock_wheel_attrs_23.1.0_py3_none_any//file",
     )
 
-    _aws_sam_translator_1_51_0_deps = [
-        ":boto3_1.24.73",
-        ":jsonschema_3.2.0",
+    _aws_sam_translator_1_79_0_deps = [
+        ":boto3_1.28.80",
+        ":jsonschema_4.19.2",
+        ":pydantic_2.4.2",
+        ":typing_extensions_4.8.0",
     ]
 
     pycross_wheel_library(
-        name = "aws_sam_translator_1.51.0",
-        deps = _aws_sam_translator_1_51_0_deps,
-        wheel = "@example_lock_wheel_aws_sam_translator_1.51.0_py3_none_any//file",
+        name = "aws_sam_translator_1.79.0",
+        deps = _aws_sam_translator_1_79_0_deps,
+        wheel = "@example_lock_wheel_aws_sam_translator_1.79.0_py3_none_any//file",
     )
 
-    _aws_xray_sdk_2_10_0_deps = [
-        ":botocore_1.27.73",
-        ":wrapt_1.14.1",
+    _aws_xray_sdk_2_12_1_deps = [
+        ":botocore_1.31.80",
+        ":wrapt_1.15.0",
     ]
 
     pycross_wheel_library(
-        name = "aws_xray_sdk_2.10.0",
-        deps = _aws_xray_sdk_2_10_0_deps,
-        wheel = "@example_lock_wheel_aws_xray_sdk_2.10.0_py2.py3_none_any//file",
+        name = "aws_xray_sdk_2.12.1",
+        deps = _aws_xray_sdk_2_12_1_deps,
+        wheel = "@example_lock_wheel_aws_xray_sdk_2.12.1_py2.py3_none_any//file",
     )
 
     pycross_wheel_library(
-        name = "backcall_0.2.0",
-        wheel = "@example_lock_wheel_backcall_0.2.0_py2.py3_none_any//file",
+        name = "blinker_1.7.0",
+        wheel = "@example_lock_wheel_blinker_1.7.0_py3_none_any//file",
     )
 
-    _boto3_1_24_73_deps = [
-        ":botocore_1.27.73",
+    _boto3_1_28_80_deps = [
+        ":botocore_1.31.80",
         ":jmespath_1.0.1",
-        ":s3transfer_0.6.0",
+        ":s3transfer_0.7.0",
     ]
 
     pycross_wheel_library(
-        name = "boto3_1.24.73",
-        deps = _boto3_1_24_73_deps,
-        wheel = "@example_lock_wheel_boto3_1.24.73_py3_none_any//file",
+        name = "boto3_1.28.80",
+        deps = _boto3_1_28_80_deps,
+        wheel = "@example_lock_wheel_boto3_1.28.80_py3_none_any//file",
     )
 
-    _botocore_1_27_73_deps = [
+    _botocore_1_31_80_deps = [
         ":jmespath_1.0.1",
         ":python_dateutil_2.8.2",
-        ":urllib3_1.26.12",
+        ":urllib3_2.0.7",
     ]
 
     pycross_wheel_library(
-        name = "botocore_1.27.73",
-        deps = _botocore_1_27_73_deps,
-        wheel = "@example_lock_wheel_botocore_1.27.73_py3_none_any//file",
+        name = "botocore_1.31.80",
+        deps = _botocore_1_31_80_deps,
+        wheel = "@example_lock_wheel_botocore_1.31.80_py3_none_any//file",
     )
 
     pycross_wheel_library(
-        name = "certifi_2022.9.14",
-        wheel = "@example_lock_wheel_certifi_2022.9.14_py3_none_any//file",
+        name = "certifi_2023.7.22",
+        wheel = "@example_lock_wheel_certifi_2023.7.22_py3_none_any//file",
     )
 
-    _cffi_1_15_1_deps = [
+    _cffi_1_16_0_deps = [
         ":pycparser_2.21",
     ]
 
     pycross_wheel_library(
-        name = "cffi_1.15.1",
-        deps = _cffi_1_15_1_deps,
+        name = "cffi_1.16.0",
+        deps = _cffi_1_16_0_deps,
         wheel = select({
-            ":_env_python_darwin_arm64": "@example_lock_wheel_cffi_1.15.1_cp39_cp39_macosx_11_0_arm64//file",
-            ":_env_python_darwin_x86_64": "@example_lock_wheel_cffi_1.15.1_cp39_cp39_macosx_10_9_x86_64//file",
-            ":_env_python_linux_x86_64": "@example_lock_wheel_cffi_1.15.1_cp39_cp39_manylinux_2_17_x86_64.manylinux2014_x86_64//file",
+            ":_env_python_darwin_arm64": "@example_lock_wheel_cffi_1.16.0_cp311_cp311_macosx_11_0_arm64//file",
+            ":_env_python_darwin_x86_64": "@example_lock_wheel_cffi_1.16.0_cp311_cp311_macosx_10_9_x86_64//file",
+            ":_env_python_linux_x86_64": "@example_lock_wheel_cffi_1.16.0_cp311_cp311_manylinux_2_17_x86_64.manylinux2014_x86_64//file",
         }),
     )
 
-    _cfn_lint_0_65_0_deps = [
-        ":aws_sam_translator_1.51.0",
+    _cfn_lint_0_83_1_deps = [
+        ":aws_sam_translator_1.79.0",
         ":jschema_to_python_1.2.3",
-        ":jsonpatch_1.32",
-        ":jsonschema_3.2.0",
+        ":jsonpatch_1.33",
+        ":jsonschema_4.19.2",
         ":junit_xml_1.9",
-        ":networkx_2.8.6",
-        ":pyyaml_6.0",
+        ":networkx_3.2.1",
+        ":pyyaml_6.0.1",
+        ":regex_2023.10.3",
         ":sarif_om_1.0.4",
+        ":sympy_1.12",
     ]
 
     pycross_wheel_library(
-        name = "cfn_lint_0.65.0",
-        deps = _cfn_lint_0_65_0_deps,
-        wheel = "@example_lock_wheel_cfn_lint_0.65.0_py3_none_any//file",
+        name = "cfn_lint_0.83.1",
+        deps = _cfn_lint_0_83_1_deps,
+        wheel = "@example_lock_wheel_cfn_lint_0.83.1_py3_none_any//file",
     )
 
     pycross_wheel_library(
-        name = "charset_normalizer_2.1.1",
-        wheel = "@example_lock_wheel_charset_normalizer_2.1.1_py3_none_any//file",
+        name = "charset_normalizer_3.3.2",
+        wheel = select({
+            ":_env_python_darwin_arm64": "@example_lock_wheel_charset_normalizer_3.3.2_cp311_cp311_macosx_11_0_arm64//file",
+            ":_env_python_darwin_x86_64": "@example_lock_wheel_charset_normalizer_3.3.2_cp311_cp311_macosx_10_9_x86_64//file",
+            ":_env_python_linux_x86_64": "@example_lock_wheel_charset_normalizer_3.3.2_cp311_cp311_manylinux_2_17_x86_64.manylinux2014_x86_64//file",
+        }),
     )
 
     pycross_wheel_library(
-        name = "click_8.1.3",
-        wheel = "@example_lock_wheel_click_8.1.3_py3_none_any//file",
+        name = "click_8.1.7",
+        wheel = "@example_lock_wheel_click_8.1.7_py3_none_any//file",
     )
 
     _cognitojwt_1_4_1_deps = [
-        ":python_jose_3.1.0",
+        ":python_jose_3.3.0",
     ]
 
     pycross_wheel_library(
@@ -261,26 +287,26 @@ def targets():
         wheel = "@example_lock_wheel_cognitojwt_1.4.1_py3_none_any//file",
     )
 
-    _cryptography_38_0_1_deps = [
-        ":cffi_1.15.1",
+    _cryptography_41_0_5_deps = [
+        ":cffi_1.16.0",
     ]
 
     pycross_wheel_library(
-        name = "cryptography_38.0.1",
-        deps = _cryptography_38_0_1_deps,
+        name = "cryptography_41.0.5",
+        deps = _cryptography_41_0_5_deps,
         wheel = select({
-            ":_env_python_darwin_arm64": "@example_lock_wheel_cryptography_38.0.1_cp36_abi3_macosx_10_10_universal2//file",
-            ":_env_python_darwin_x86_64": "@example_lock_wheel_cryptography_38.0.1_cp36_abi3_macosx_10_10_x86_64//file",
-            ":_env_python_linux_x86_64": "@example_lock_wheel_cryptography_38.0.1_cp36_abi3_manylinux_2_17_x86_64.manylinux2014_x86_64//file",
+            ":_env_python_darwin_arm64": "@example_lock_wheel_cryptography_41.0.5_cp37_abi3_macosx_10_12_universal2//file",
+            ":_env_python_darwin_x86_64": "@example_lock_wheel_cryptography_41.0.5_cp37_abi3_macosx_10_12_x86_64//file",
+            ":_env_python_linux_x86_64": "@example_lock_wheel_cryptography_41.0.5_cp37_abi3_manylinux_2_17_x86_64.manylinux2014_x86_64//file",
         }),
     )
 
     pycross_wheel_library(
-        name = "cython_0.29.32",
+        name = "cython_0.29.36",
         wheel = select({
-            ":_env_python_darwin_arm64": "@example_lock_wheel_cython_0.29.32_py2.py3_none_any//file",
-            ":_env_python_darwin_x86_64": "@example_lock_wheel_cython_0.29.32_py2.py3_none_any//file",
-            ":_env_python_linux_x86_64": "@example_lock_wheel_cython_0.29.32_cp39_cp39_manylinux_2_17_x86_64.manylinux2014_x86_64.manylinux_2_24_x86_64//file",
+            ":_env_python_darwin_arm64": "@example_lock_wheel_cython_0.29.36_py2.py3_none_any//file",
+            ":_env_python_darwin_x86_64": "@example_lock_wheel_cython_0.29.36_py2.py3_none_any//file",
+            ":_env_python_linux_x86_64": "@example_lock_wheel_cython_0.29.36_cp311_cp311_manylinux_2_17_x86_64.manylinux2014_x86_64.manylinux_2_24_x86_64//file",
         }),
     )
 
@@ -289,17 +315,17 @@ def targets():
         wheel = "@example_lock_wheel_decorator_5.1.1_py3_none_any//file",
     )
 
-    _docker_6_0_0_deps = [
-        ":packaging_21.3",
-        ":requests_2.28.1",
-        ":urllib3_1.26.12",
-        ":websocket_client_1.4.1",
+    _docker_6_1_3_deps = [
+        ":packaging_23.2",
+        ":requests_2.31.0",
+        ":urllib3_2.0.7",
+        ":websocket_client_1.6.4",
     ]
 
     pycross_wheel_library(
-        name = "docker_6.0.0",
-        deps = _docker_6_0_0_deps,
-        wheel = "@example_lock_wheel_docker_6.0.0_py3_none_any//file",
+        name = "docker_6.1.3",
+        deps = _docker_6_1_3_deps,
+        wheel = "@example_lock_wheel_docker_6.1.3_py3_none_any//file",
     )
 
     _ecdsa_0_18_0_deps = [
@@ -313,33 +339,32 @@ def targets():
     )
 
     pycross_wheel_library(
-        name = "executing_1.0.0",
-        wheel = "@example_lock_wheel_executing_1.0.0_py2.py3_none_any//file",
+        name = "executing_2.0.1",
+        wheel = "@example_lock_wheel_executing_2.0.1_py2.py3_none_any//file",
     )
 
-    _flask_2_2_2_deps = [
-        ":click_8.1.3",
-        ":importlib_metadata_4.12.0",
+    _flask_3_0_0_deps = [
+        ":blinker_1.7.0",
+        ":click_8.1.7",
         ":itsdangerous_2.1.2",
         ":jinja2_3.1.2",
-        ":werkzeug_2.2.2",
+        ":werkzeug_3.0.1",
     ]
 
     pycross_wheel_library(
-        name = "flask_2.2.2",
-        deps = _flask_2_2_2_deps,
-        wheel = "@example_lock_wheel_flask_2.2.2_py3_none_any//file",
+        name = "flask_3.0.0",
+        deps = _flask_3_0_0_deps,
+        wheel = "@example_lock_wheel_flask_3.0.0_py3_none_any//file",
     )
 
-    _flask_cors_3_0_10_deps = [
-        ":flask_2.2.2",
-        ":six_1.16.0",
+    _flask_cors_4_0_0_deps = [
+        ":flask_3.0.0",
     ]
 
     pycross_wheel_library(
-        name = "flask_cors_3.0.10",
-        deps = _flask_cors_3_0_10_deps,
-        wheel = "@example_lock_wheel_flask_cors_3.0.10_py2.py3_none_any//file",
+        name = "flask_cors_4.0.0",
+        deps = _flask_cors_4_0_0_deps,
+        wheel = "@example_lock_wheel_flask_cors_4.0.0_py2.py3_none_any//file",
     )
 
     pycross_wheel_library(
@@ -348,29 +373,21 @@ def targets():
     )
 
     pycross_wheel_library(
-        name = "graphql_core_3.2.1",
-        wheel = "@example_lock_wheel_graphql_core_3.2.1_py3_none_any//file",
+        name = "graphql_core_3.2.3",
+        wheel = "@example_lock_wheel_graphql_core_3.2.3_py3_none_any//file",
     )
 
-    _greenlet_1_1_3_build_deps = [
-        ":setuptools_59.2.0",
-        ":wheel_0.37.0",
+    _greenlet_3_0_1_build_deps = [
+        ":setuptools_68.2.2",
+        ":wheel_0.41.3",
     ]
 
-    pycross_wheel_build(
-        name = "_build_greenlet_1.1.3",
-        sdist = "@example_lock_sdist_greenlet_1.1.3//file",
-        target_environment = _target,
-        deps = _greenlet_1_1_3_build_deps,
-        tags = ["manual"],
-    )
-
     pycross_wheel_library(
-        name = "greenlet_1.1.3",
+        name = "greenlet_3.0.1",
         wheel = select({
-            ":_env_python_darwin_arm64": ":_build_greenlet_1.1.3",
-            ":_env_python_darwin_x86_64": "@example_lock_wheel_greenlet_1.1.3_cp39_cp39_macosx_10_15_x86_64//file",
-            ":_env_python_linux_x86_64": "@example_lock_wheel_greenlet_1.1.3_cp39_cp39_manylinux_2_17_x86_64.manylinux2014_x86_64//file",
+            ":_env_python_darwin_arm64": "@example_lock_wheel_greenlet_3.0.1_cp311_cp311_macosx_10_9_universal2//file",
+            ":_env_python_darwin_x86_64": "@example_lock_wheel_greenlet_3.0.1_cp311_cp311_macosx_10_9_universal2//file",
+            ":_env_python_linux_x86_64": "@example_lock_wheel_greenlet_3.0.1_cp311_cp311_manylinux_2_17_x86_64.manylinux2014_x86_64//file",
         }),
     )
 
@@ -379,27 +396,15 @@ def targets():
         wheel = "@example_lock_wheel_idna_3.4_py3_none_any//file",
     )
 
-    _importlib_metadata_4_12_0_deps = [
-        ":zipp_3.8.1",
-    ]
-
-    pycross_wheel_library(
-        name = "importlib_metadata_4.12.0",
-        deps = _importlib_metadata_4_12_0_deps,
-        wheel = "@example_lock_wheel_importlib_metadata_4.12.0_py3_none_any//file",
-    )
-
-    _ipython_8_5_0_deps = [
-        ":backcall_0.2.0",
+    _ipython_8_17_2_deps = [
         ":decorator_5.1.1",
-        ":jedi_0.18.1",
+        ":jedi_0.19.1",
         ":matplotlib_inline_0.1.6",
         ":pexpect_4.8.0",
-        ":pickleshare_0.7.5",
-        ":prompt_toolkit_3.0.31",
-        ":pygments_2.13.0",
-        ":stack_data_0.5.0",
-        ":traitlets_5.4.0",
+        ":prompt_toolkit_3.0.39",
+        ":pygments_2.16.1",
+        ":stack_data_0.6.3",
+        ":traitlets_5.13.0",
     ] + select({
         ":_env_python_darwin_arm64": [
             ":appnope_0.1.3",
@@ -411,9 +416,9 @@ def targets():
     })
 
     pycross_wheel_library(
-        name = "ipython_8.5.0",
-        deps = _ipython_8_5_0_deps,
-        wheel = "@example_lock_wheel_ipython_8.5.0_py3_none_any//file",
+        name = "ipython_8.17.2",
+        deps = _ipython_8_17_2_deps,
+        wheel = "@example_lock_wheel_ipython_8.17.2_py3_none_any//file",
     )
 
     pycross_wheel_library(
@@ -421,24 +426,24 @@ def targets():
         wheel = "@example_lock_wheel_itsdangerous_2.1.2_py3_none_any//file",
     )
 
-    _jaraco_classes_3_2_2_deps = [
-        ":more_itertools_8.14.0",
+    _jaraco_classes_3_3_0_deps = [
+        ":more_itertools_10.1.0",
     ]
 
     pycross_wheel_library(
-        name = "jaraco_classes_3.2.2",
-        deps = _jaraco_classes_3_2_2_deps,
-        wheel = "@example_lock_wheel_jaraco.classes_3.2.2_py3_none_any//file",
+        name = "jaraco_classes_3.3.0",
+        deps = _jaraco_classes_3_3_0_deps,
+        wheel = "@example_lock_wheel_jaraco.classes_3.3.0_py3_none_any//file",
     )
 
-    _jedi_0_18_1_deps = [
+    _jedi_0_19_1_deps = [
         ":parso_0.8.3",
     ]
 
     pycross_wheel_library(
-        name = "jedi_0.18.1",
-        deps = _jedi_0_18_1_deps,
-        wheel = "@example_lock_wheel_jedi_0.18.1_py2.py3_none_any//file",
+        name = "jedi_0.19.1",
+        deps = _jedi_0_19_1_deps,
+        wheel = "@example_lock_wheel_jedi_0.19.1_py2.py3_none_any//file",
     )
 
     pycross_wheel_library(
@@ -447,7 +452,7 @@ def targets():
     )
 
     _jinja2_3_1_2_deps = [
-        ":markupsafe_2.1.1",
+        ":markupsafe_2.1.3",
     ]
 
     pycross_wheel_library(
@@ -462,9 +467,9 @@ def targets():
     )
 
     _jschema_to_python_1_2_3_deps = [
-        ":attrs_22.1.0",
-        ":jsonpickle_2.2.0",
-        ":pbr_5.10.0",
+        ":attrs_23.1.0",
+        ":jsonpickle_3.0.2",
+        ":pbr_6.0.0",
     ]
 
     pycross_wheel_library(
@@ -478,37 +483,60 @@ def targets():
         wheel = "@example_lock_wheel_jsondiff_2.0.0_py3_none_any//file",
     )
 
-    _jsonpatch_1_32_deps = [
-        ":jsonpointer_2.3",
+    _jsonpatch_1_33_deps = [
+        ":jsonpointer_2.4",
     ]
 
     pycross_wheel_library(
-        name = "jsonpatch_1.32",
-        deps = _jsonpatch_1_32_deps,
-        wheel = "@example_lock_wheel_jsonpatch_1.32_py2.py3_none_any//file",
+        name = "jsonpatch_1.33",
+        deps = _jsonpatch_1_33_deps,
+        wheel = "@example_lock_wheel_jsonpatch_1.33_py2.py3_none_any//file",
     )
 
     pycross_wheel_library(
-        name = "jsonpickle_2.2.0",
-        wheel = "@example_lock_wheel_jsonpickle_2.2.0_py2.py3_none_any//file",
+        name = "jsonpickle_3.0.2",
+        wheel = "@example_lock_wheel_jsonpickle_3.0.2_py3_none_any//file",
     )
 
     pycross_wheel_library(
-        name = "jsonpointer_2.3",
-        wheel = "@example_lock_wheel_jsonpointer_2.3_py2.py3_none_any//file",
+        name = "jsonpointer_2.4",
+        wheel = "@example_lock_wheel_jsonpointer_2.4_py2.py3_none_any//file",
     )
 
-    _jsonschema_3_2_0_deps = [
-        ":attrs_22.1.0",
-        ":pyrsistent_0.18.1",
-        ":setuptools_59.2.0",
-        ":six_1.16.0",
+    _jsonschema_4_19_2_deps = [
+        ":attrs_23.1.0",
+        ":jsonschema_specifications_2023.7.1",
+        ":referencing_0.30.2",
+        ":rpds_py_0.12.0",
     ]
 
     pycross_wheel_library(
-        name = "jsonschema_3.2.0",
-        deps = _jsonschema_3_2_0_deps,
-        wheel = "@example_lock_wheel_jsonschema_3.2.0_py2.py3_none_any//file",
+        name = "jsonschema_4.19.2",
+        deps = _jsonschema_4_19_2_deps,
+        wheel = "@example_lock_wheel_jsonschema_4.19.2_py3_none_any//file",
+    )
+
+    _jsonschema_path_0_3_1_deps = [
+        ":pathable_0.4.3",
+        ":pyyaml_6.0.1",
+        ":referencing_0.30.2",
+        ":requests_2.31.0",
+    ]
+
+    pycross_wheel_library(
+        name = "jsonschema_path_0.3.1",
+        deps = _jsonschema_path_0_3_1_deps,
+        wheel = "@example_lock_wheel_jsonschema_path_0.3.1_py3_none_any//file",
+    )
+
+    _jsonschema_specifications_2023_7_1_deps = [
+        ":referencing_0.30.2",
+    ]
+
+    pycross_wheel_library(
+        name = "jsonschema_specifications_2023.7.1",
+        deps = _jsonschema_specifications_2023_7_1_deps,
+        wheel = "@example_lock_wheel_jsonschema_specifications_2023.7.1_py3_none_any//file",
     )
 
     _junit_xml_1_9_deps = [
@@ -522,8 +550,7 @@ def targets():
     )
 
     _keyring_23_9_1_deps = [
-        ":importlib_metadata_4.12.0",
-        ":jaraco_classes_3.2.2",
+        ":jaraco_classes_3.3.0",
     ] + select({
         ":_env_python_linux_x86_64": [
             ":jeepney_0.8.0",
@@ -538,17 +565,33 @@ def targets():
         wheel = "@example_lock_wheel_keyring_23.9.1_py3_none_any//file",
     )
 
+    pycross_wheel_build(
+        name = "_build_lazy_object_proxy_1.9.0",
+        sdist = "@example_lock_sdist_lazy_object_proxy_1.9.0//file",
+        target_environment = _target,
+        tags = ["manual"],
+    )
+
     pycross_wheel_library(
-        name = "markupsafe_2.1.1",
+        name = "lazy_object_proxy_1.9.0",
         wheel = select({
-            ":_env_python_darwin_arm64": "@example_lock_wheel_markupsafe_2.1.1_cp39_cp39_macosx_10_9_universal2//file",
-            ":_env_python_darwin_x86_64": "@example_lock_wheel_markupsafe_2.1.1_cp39_cp39_macosx_10_9_x86_64//file",
-            ":_env_python_linux_x86_64": "@example_lock_wheel_markupsafe_2.1.1_cp39_cp39_manylinux_2_17_x86_64.manylinux2014_x86_64//file",
+            ":_env_python_darwin_arm64": ":_build_lazy_object_proxy_1.9.0",
+            ":_env_python_darwin_x86_64": "@example_lock_wheel_lazy_object_proxy_1.9.0_cp311_cp311_macosx_10_9_x86_64//file",
+            ":_env_python_linux_x86_64": "@example_lock_wheel_lazy_object_proxy_1.9.0_cp311_cp311_manylinux_2_5_x86_64.manylinux1_x86_64.manylinux_2_17_x86_64.manylinux2014_x86_64//file",
+        }),
+    )
+
+    pycross_wheel_library(
+        name = "markupsafe_2.1.3",
+        wheel = select({
+            ":_env_python_darwin_arm64": "@example_lock_wheel_markupsafe_2.1.3_cp311_cp311_macosx_10_9_universal2//file",
+            ":_env_python_darwin_x86_64": "@example_lock_wheel_markupsafe_2.1.3_cp311_cp311_macosx_10_9_x86_64//file",
+            ":_env_python_linux_x86_64": "@example_lock_wheel_markupsafe_2.1.3_cp311_cp311_manylinux_2_17_x86_64.manylinux2014_x86_64//file",
         }),
     )
 
     _matplotlib_inline_0_1_6_deps = [
-        ":traitlets_5.4.0",
+        ":traitlets_5.13.0",
     ]
 
     pycross_wheel_library(
@@ -558,69 +601,96 @@ def targets():
     )
 
     pycross_wheel_library(
-        name = "more_itertools_8.14.0",
-        wheel = "@example_lock_wheel_more_itertools_8.14.0_py3_none_any//file",
+        name = "more_itertools_10.1.0",
+        wheel = "@example_lock_wheel_more_itertools_10.1.0_py3_none_any//file",
     )
 
-    _moto_3_1_1_deps = [
-        ":aws_xray_sdk_2.10.0",
-        ":boto3_1.24.73",
-        ":botocore_1.27.73",
-        ":cfn_lint_0.65.0",
-        ":cryptography_38.0.1",
-        ":docker_6.0.0",
+    _moto_4_2_7_deps = [
+        ":aws_xray_sdk_2.12.1",
+        ":boto3_1.28.80",
+        ":botocore_1.31.80",
+        ":cfn_lint_0.83.1",
+        ":cryptography_41.0.5",
+        ":docker_6.1.3",
         ":ecdsa_0.18.0",
-        ":flask_2.2.2",
-        ":flask_cors_3.0.10",
-        ":graphql_core_3.2.1",
-        ":idna_3.4",
+        ":flask_3.0.0",
+        ":flask_cors_4.0.0",
+        ":graphql_core_3.2.3",
         ":jinja2_3.1.2",
         ":jsondiff_2.0.0",
-        ":markupsafe_2.1.1",
+        ":multipart_0.2.4",
+        ":openapi_spec_validator_0.7.1",
+        ":py_partiql_parser_0.4.1",
+        ":pyparsing_3.1.1",
         ":python_dateutil_2.8.2",
-        ":python_jose_3.1.0",
-        ":pytz_2022.2.1",
-        ":pyyaml_6.0",
-        ":requests_2.28.1",
-        ":responses_0.21.0",
-        ":setuptools_59.2.0",
+        ":python_jose_3.3.0",
+        ":pyyaml_6.0.1",
+        ":requests_2.31.0",
+        ":responses_0.24.0",
+        ":setuptools_68.2.2",
         ":sshpubkeys_3.3.1",
-        ":werkzeug_2.2.2",
+        ":werkzeug_3.0.1",
         ":xmltodict_0.13.0",
     ]
 
     pycross_wheel_library(
-        name = "moto_3.1.1",
-        deps = _moto_3_1_1_deps,
-        wheel = "@example_lock_wheel_moto_3.1.1_py2.py3_none_any//file",
+        name = "moto_4.2.7",
+        deps = _moto_4_2_7_deps,
+        wheel = "@example_lock_wheel_moto_4.2.7_py2.py3_none_any//file",
     )
 
     pycross_wheel_library(
-        name = "networkx_2.8.6",
-        wheel = "@example_lock_wheel_networkx_2.8.6_py3_none_any//file",
+        name = "mpmath_1.3.0",
+        wheel = "@example_lock_wheel_mpmath_1.3.0_py3_none_any//file",
     )
 
     pycross_wheel_library(
-        name = "numpy_1.22.3",
+        name = "multipart_0.2.4",
+        wheel = "@example_lock_wheel_multipart_0.2.4_py3_none_any//file",
+    )
+
+    pycross_wheel_library(
+        name = "networkx_3.2.1",
+        wheel = "@example_lock_wheel_networkx_3.2.1_py3_none_any//file",
+    )
+
+    pycross_wheel_library(
+        name = "numpy_1.26.1",
         wheel = select({
-            ":_env_python_darwin_arm64": "@example_lock_wheel_numpy_1.22.3_cp39_cp39_macosx_11_0_arm64//file",
-            ":_env_python_darwin_x86_64": "@example_lock_wheel_numpy_1.22.3_cp39_cp39_macosx_10_14_x86_64//file",
-            ":_env_python_linux_x86_64": "@example_lock_wheel_numpy_1.22.3_cp39_cp39_manylinux_2_17_x86_64.manylinux2014_x86_64//file",
+            ":_env_python_darwin_arm64": "@example_lock_wheel_numpy_1.26.1_cp311_cp311_macosx_11_0_arm64//file",
+            ":_env_python_darwin_x86_64": "@example_lock_wheel_numpy_1.26.1_cp311_cp311_macosx_10_9_x86_64//file",
+            ":_env_python_linux_x86_64": "@example_lock_wheel_numpy_1.26.1_cp311_cp311_manylinux_2_17_x86_64.manylinux2014_x86_64//file",
         }),
     )
 
-    _opencv_python_4_6_0_66_deps = select({
-        ":_env_python_darwin_arm64": [
-            ":numpy_1.22.3",
-        ],
-        ":_env_python_darwin_x86_64": [
-            ":numpy_1.22.3",
-        ],
-        ":_env_python_linux_x86_64": [
-            ":numpy_1.22.3",
-        ],
-        "//conditions:default": [],
-    })
+    _openapi_schema_validator_0_6_2_deps = [
+        ":jsonschema_4.19.2",
+        ":jsonschema_specifications_2023.7.1",
+        ":rfc3339_validator_0.1.4",
+    ]
+
+    pycross_wheel_library(
+        name = "openapi_schema_validator_0.6.2",
+        deps = _openapi_schema_validator_0_6_2_deps,
+        wheel = "@example_lock_wheel_openapi_schema_validator_0.6.2_py3_none_any//file",
+    )
+
+    _openapi_spec_validator_0_7_1_deps = [
+        ":jsonschema_4.19.2",
+        ":jsonschema_path_0.3.1",
+        ":lazy_object_proxy_1.9.0",
+        ":openapi_schema_validator_0.6.2",
+    ]
+
+    pycross_wheel_library(
+        name = "openapi_spec_validator_0.7.1",
+        deps = _openapi_spec_validator_0_7_1_deps,
+        wheel = "@example_lock_wheel_openapi_spec_validator_0.7.1_py3_none_any//file",
+    )
+
+    _opencv_python_4_6_0_66_deps = [
+        ":numpy_1.26.1",
+    ]
 
     pycross_wheel_library(
         name = "opencv_python_4.6.0.66",
@@ -632,14 +702,9 @@ def targets():
         }),
     )
 
-    _packaging_21_3_deps = [
-        ":pyparsing_3.0.9",
-    ]
-
     pycross_wheel_library(
-        name = "packaging_21.3",
-        deps = _packaging_21_3_deps,
-        wheel = "@example_lock_wheel_packaging_21.3_py3_none_any//file",
+        name = "packaging_23.2",
+        wheel = "@example_lock_wheel_packaging_23.2_py3_none_any//file",
     )
 
     pycross_wheel_library(
@@ -647,22 +712,27 @@ def targets():
         wheel = "@example_lock_wheel_parso_0.8.3_py2.py3_none_any//file",
     )
 
-    _pbr_5_10_0_build_deps = [
-        ":setuptools_59.2.0",
-        ":wheel_0.37.0",
+    pycross_wheel_library(
+        name = "pathable_0.4.3",
+        wheel = "@example_lock_wheel_pathable_0.4.3_py3_none_any//file",
+    )
+
+    _pbr_6_0_0_build_deps = [
+        ":setuptools_68.2.2",
+        ":wheel_0.41.3",
     ]
 
     pycross_wheel_build(
-        name = "_build_pbr_5.10.0",
-        sdist = "@example_lock_sdist_pbr_5.10.0//file",
+        name = "_build_pbr_6.0.0",
+        sdist = "@example_lock_sdist_pbr_6.0.0//file",
         target_environment = _target,
-        deps = _pbr_5_10_0_build_deps,
+        deps = _pbr_6_0_0_build_deps,
         tags = ["manual"],
     )
 
     pycross_wheel_library(
-        name = "pbr_5.10.0",
-        wheel = ":_build_pbr_5.10.0",
+        name = "pbr_6.0.0",
+        wheel = ":_build_pbr_6.0.0",
     )
 
     _pexpect_4_8_0_deps = [
@@ -675,19 +745,14 @@ def targets():
         wheel = "@example_lock_wheel_pexpect_4.8.0_py2.py3_none_any//file",
     )
 
-    pycross_wheel_library(
-        name = "pickleshare_0.7.5",
-        wheel = "@example_lock_wheel_pickleshare_0.7.5_py2.py3_none_any//file",
-    )
-
-    _prompt_toolkit_3_0_31_deps = [
-        ":wcwidth_0.2.5",
+    _prompt_toolkit_3_0_39_deps = [
+        ":wcwidth_0.2.9",
     ]
 
     pycross_wheel_library(
-        name = "prompt_toolkit_3.0.31",
-        deps = _prompt_toolkit_3_0_31_deps,
-        wheel = "@example_lock_wheel_prompt_toolkit_3.0.31_py3_none_any//file",
+        name = "prompt_toolkit_3.0.39",
+        deps = _prompt_toolkit_3_0_39_deps,
+        wheel = "@example_lock_wheel_prompt_toolkit_3.0.39_py3_none_any//file",
     )
 
     pycross_wheel_library(
@@ -701,8 +766,13 @@ def targets():
     )
 
     pycross_wheel_library(
-        name = "pyasn1_0.4.8",
-        wheel = "@example_lock_wheel_pyasn1_0.4.8_py2.py3_none_any//file",
+        name = "py_partiql_parser_0.4.1",
+        wheel = "@example_lock_wheel_py_partiql_parser_0.4.1_py3_none_any//file",
+    )
+
+    pycross_wheel_library(
+        name = "pyasn1_0.5.0",
+        wheel = "@example_lock_wheel_pyasn1_0.5.0_py2.py3_none_any//file",
     )
 
     pycross_wheel_library(
@@ -710,23 +780,40 @@ def targets():
         wheel = "@example_lock_wheel_pycparser_2.21_py2.py3_none_any//file",
     )
 
-    pycross_wheel_library(
-        name = "pygments_2.13.0",
-        wheel = "@example_lock_wheel_pygments_2.13.0_py3_none_any//file",
-    )
+    _pydantic_2_4_2_deps = [
+        ":annotated_types_0.6.0",
+        ":pydantic_core_2.10.1",
+        ":typing_extensions_4.8.0",
+    ]
 
     pycross_wheel_library(
-        name = "pyparsing_3.0.9",
-        wheel = "@example_lock_wheel_pyparsing_3.0.9_py3_none_any//file",
+        name = "pydantic_2.4.2",
+        deps = _pydantic_2_4_2_deps,
+        wheel = "@example_lock_wheel_pydantic_2.4.2_py3_none_any//file",
     )
 
+    _pydantic_core_2_10_1_deps = [
+        ":typing_extensions_4.8.0",
+    ]
+
     pycross_wheel_library(
-        name = "pyrsistent_0.18.1",
+        name = "pydantic_core_2.10.1",
+        deps = _pydantic_core_2_10_1_deps,
         wheel = select({
-            ":_env_python_darwin_arm64": "@example_lock_wheel_pyrsistent_0.18.1_cp39_cp39_macosx_10_9_universal2//file",
-            ":_env_python_darwin_x86_64": "@example_lock_wheel_pyrsistent_0.18.1_cp39_cp39_macosx_10_9_universal2//file",
-            ":_env_python_linux_x86_64": "@example_lock_wheel_pyrsistent_0.18.1_cp39_cp39_manylinux_2_17_x86_64.manylinux2014_x86_64//file",
+            ":_env_python_darwin_arm64": "@example_lock_wheel_pydantic_core_2.10.1_cp311_cp311_macosx_11_0_arm64//file",
+            ":_env_python_darwin_x86_64": "@example_lock_wheel_pydantic_core_2.10.1_cp311_cp311_macosx_10_7_x86_64//file",
+            ":_env_python_linux_x86_64": "@example_lock_wheel_pydantic_core_2.10.1_cp311_cp311_manylinux_2_17_x86_64.manylinux2014_x86_64//file",
         }),
+    )
+
+    pycross_wheel_library(
+        name = "pygments_2.16.1",
+        wheel = "@example_lock_wheel_pygments_2.16.1_py3_none_any//file",
+    )
+
+    pycross_wheel_library(
+        name = "pyparsing_3.1.1",
+        wheel = "@example_lock_wheel_pyparsing_3.1.1_py3_none_any//file",
     )
 
     _python_dateutil_2_8_2_deps = [
@@ -739,60 +826,94 @@ def targets():
         wheel = "@example_lock_wheel_python_dateutil_2.8.2_py2.py3_none_any//file",
     )
 
-    _python_jose_3_1_0_deps = [
-        ":cryptography_38.0.1",
+    _python_jose_3_3_0_deps = [
+        ":cryptography_41.0.5",
         ":ecdsa_0.18.0",
-        ":pyasn1_0.4.8",
+        ":pyasn1_0.5.0",
         ":rsa_4.9",
+    ]
+
+    pycross_wheel_library(
+        name = "python_jose_3.3.0",
+        deps = _python_jose_3_3_0_deps,
+        wheel = "@example_lock_wheel_python_jose_3.3.0_py2.py3_none_any//file",
+    )
+
+    pycross_wheel_library(
+        name = "pyyaml_6.0.1",
+        wheel = select({
+            ":_env_python_darwin_arm64": "@example_lock_wheel_pyyaml_6.0.1_cp311_cp311_macosx_11_0_arm64//file",
+            ":_env_python_darwin_x86_64": "@example_lock_wheel_pyyaml_6.0.1_cp311_cp311_macosx_10_9_x86_64//file",
+            ":_env_python_linux_x86_64": "@example_lock_wheel_pyyaml_6.0.1_cp311_cp311_manylinux_2_17_x86_64.manylinux2014_x86_64//file",
+        }),
+    )
+
+    _referencing_0_30_2_deps = [
+        ":attrs_23.1.0",
+        ":rpds_py_0.12.0",
+    ]
+
+    pycross_wheel_library(
+        name = "referencing_0.30.2",
+        deps = _referencing_0_30_2_deps,
+        wheel = "@example_lock_wheel_referencing_0.30.2_py3_none_any//file",
+    )
+
+    pycross_wheel_library(
+        name = "regex_2023.10.3",
+        wheel = select({
+            ":_env_python_darwin_arm64": "@example_lock_wheel_regex_2023.10.3_cp311_cp311_macosx_11_0_arm64//file",
+            ":_env_python_darwin_x86_64": "@example_lock_wheel_regex_2023.10.3_cp311_cp311_macosx_10_9_x86_64//file",
+            ":_env_python_linux_x86_64": "@example_lock_wheel_regex_2023.10.3_cp311_cp311_manylinux_2_17_x86_64.manylinux2014_x86_64//file",
+        }),
+    )
+
+    _requests_2_31_0_deps = [
+        ":certifi_2023.7.22",
+        ":charset_normalizer_3.3.2",
+        ":idna_3.4",
+        ":urllib3_2.0.7",
+    ]
+
+    pycross_wheel_library(
+        name = "requests_2.31.0",
+        deps = _requests_2_31_0_deps,
+        wheel = "@example_lock_wheel_requests_2.31.0_py3_none_any//file",
+    )
+
+    _responses_0_24_0_deps = [
+        ":pyyaml_6.0.1",
+        ":requests_2.31.0",
+        ":urllib3_2.0.7",
+    ]
+
+    pycross_wheel_library(
+        name = "responses_0.24.0",
+        deps = _responses_0_24_0_deps,
+        wheel = "@example_lock_wheel_responses_0.24.0_py3_none_any//file",
+    )
+
+    _rfc3339_validator_0_1_4_deps = [
         ":six_1.16.0",
     ]
 
     pycross_wheel_library(
-        name = "python_jose_3.1.0",
-        deps = _python_jose_3_1_0_deps,
-        wheel = "@example_lock_wheel_python_jose_3.1.0_py2.py3_none_any//file",
+        name = "rfc3339_validator_0.1.4",
+        deps = _rfc3339_validator_0_1_4_deps,
+        wheel = "@example_lock_wheel_rfc3339_validator_0.1.4_py2.py3_none_any//file",
     )
 
     pycross_wheel_library(
-        name = "pytz_2022.2.1",
-        wheel = "@example_lock_wheel_pytz_2022.2.1_py2.py3_none_any//file",
-    )
-
-    pycross_wheel_library(
-        name = "pyyaml_6.0",
+        name = "rpds_py_0.12.0",
         wheel = select({
-            ":_env_python_darwin_arm64": "@example_lock_wheel_pyyaml_6.0_cp39_cp39_macosx_11_0_arm64//file",
-            ":_env_python_darwin_x86_64": "@example_lock_wheel_pyyaml_6.0_cp39_cp39_macosx_10_9_x86_64//file",
-            ":_env_python_linux_x86_64": "@example_lock_wheel_pyyaml_6.0_cp39_cp39_manylinux_2_5_x86_64.manylinux1_x86_64.manylinux_2_12_x86_64.manylinux2010_x86_64//file",
+            ":_env_python_darwin_arm64": "@example_lock_wheel_rpds_py_0.12.0_cp311_cp311_macosx_11_0_arm64//file",
+            ":_env_python_darwin_x86_64": "@example_lock_wheel_rpds_py_0.12.0_cp311_cp311_macosx_10_7_x86_64//file",
+            ":_env_python_linux_x86_64": "@example_lock_wheel_rpds_py_0.12.0_cp311_cp311_manylinux_2_17_x86_64.manylinux2014_x86_64//file",
         }),
     )
 
-    _requests_2_28_1_deps = [
-        ":certifi_2022.9.14",
-        ":charset_normalizer_2.1.1",
-        ":idna_3.4",
-        ":urllib3_1.26.12",
-    ]
-
-    pycross_wheel_library(
-        name = "requests_2.28.1",
-        deps = _requests_2_28_1_deps,
-        wheel = "@example_lock_wheel_requests_2.28.1_py3_none_any//file",
-    )
-
-    _responses_0_21_0_deps = [
-        ":requests_2.28.1",
-        ":urllib3_1.26.12",
-    ]
-
-    pycross_wheel_library(
-        name = "responses_0.21.0",
-        deps = _responses_0_21_0_deps,
-        wheel = "@example_lock_wheel_responses_0.21.0_py3_none_any//file",
-    )
-
     _rsa_4_9_deps = [
-        ":pyasn1_0.4.8",
+        ":pyasn1_0.5.0",
     ]
 
     pycross_wheel_library(
@@ -801,19 +922,19 @@ def targets():
         wheel = "@example_lock_wheel_rsa_4.9_py3_none_any//file",
     )
 
-    _s3transfer_0_6_0_deps = [
-        ":botocore_1.27.73",
+    _s3transfer_0_7_0_deps = [
+        ":botocore_1.31.80",
     ]
 
     pycross_wheel_library(
-        name = "s3transfer_0.6.0",
-        deps = _s3transfer_0_6_0_deps,
-        wheel = "@example_lock_wheel_s3transfer_0.6.0_py3_none_any//file",
+        name = "s3transfer_0.7.0",
+        deps = _s3transfer_0_7_0_deps,
+        wheel = "@example_lock_wheel_s3transfer_0.7.0_py3_none_any//file",
     )
 
     _sarif_om_1_0_4_deps = [
-        ":attrs_22.1.0",
-        ":pbr_5.10.0",
+        ":attrs_23.1.0",
+        ":pbr_6.0.0",
     ]
 
     pycross_wheel_library(
@@ -823,7 +944,7 @@ def targets():
     )
 
     _secretstorage_3_3_3_deps = [
-        ":cryptography_38.0.1",
+        ":cryptography_41.0.5",
         ":jeepney_0.8.0",
     ]
 
@@ -833,27 +954,27 @@ def targets():
         wheel = "@example_lock_wheel_secretstorage_3.3.3_py3_none_any//file",
     )
 
-    _setproctitle_1_2_2_build_deps = [
-        ":setuptools_59.2.0",
-        ":wheel_0.37.0",
+    _setproctitle_1_3_3_build_deps = [
+        ":setuptools_68.2.2",
+        ":wheel_0.41.3",
     ]
 
     pycross_wheel_build(
-        name = "_build_setproctitle_1.2.2",
-        sdist = "@example_lock_sdist_setproctitle_1.2.2//file",
+        name = "_build_setproctitle_1.3.3",
+        sdist = "@example_lock_sdist_setproctitle_1.3.3//file",
         target_environment = _target,
-        deps = _setproctitle_1_2_2_build_deps,
+        deps = _setproctitle_1_3_3_build_deps,
         tags = ["manual"],
     )
 
     pycross_wheel_library(
-        name = "setproctitle_1.2.2",
-        wheel = ":_build_setproctitle_1.2.2",
+        name = "setproctitle_1.3.3",
+        wheel = ":_build_setproctitle_1.3.3",
     )
 
     pycross_wheel_library(
-        name = "setuptools_59.2.0",
-        wheel = "@example_lock_wheel_setuptools_59.2.0_py3_none_any//file",
+        name = "setuptools_68.2.2",
+        wheel = "@example_lock_wheel_setuptools_68.2.2_py3_none_any//file",
     )
 
     pycross_wheel_library(
@@ -861,46 +982,45 @@ def targets():
         wheel = "@example_lock_wheel_six_1.16.0_py2.py3_none_any//file",
     )
 
-    _sqlalchemy_1_4_41_deps = [
-        ":greenlet_1.1.3",
-    ]
+    _sqlalchemy_2_0_23_deps = [
+        ":typing_extensions_4.8.0",
+    ] + select({
+        ":_env_python_darwin_x86_64": [
+            ":greenlet_3.0.1",
+        ],
+        ":_env_python_linux_x86_64": [
+            ":greenlet_3.0.1",
+        ],
+        "//conditions:default": [],
+    })
 
-    _sqlalchemy_1_4_41_build_deps = [
-        ":setuptools_59.2.0",
-        ":wheel_0.37.0",
+    _sqlalchemy_2_0_23_build_deps = [
+        ":setuptools_68.2.2",
+        ":wheel_0.41.3",
     ]
-
-    pycross_wheel_build(
-        name = "_build_sqlalchemy_1.4.41",
-        sdist = "@example_lock_sdist_sqlalchemy_1.4.41//file",
-        target_environment = _target,
-        deps = _sqlalchemy_1_4_41_deps + _sqlalchemy_1_4_41_build_deps,
-        tags = ["manual"],
-    )
 
     pycross_wheel_library(
-        name = "sqlalchemy_1.4.41",
-        deps = _sqlalchemy_1_4_41_deps,
+        name = "sqlalchemy_2.0.23",
+        deps = _sqlalchemy_2_0_23_deps,
         wheel = select({
-            ":_env_python_darwin_arm64": ":_build_sqlalchemy_1.4.41",
-            ":_env_python_darwin_x86_64": "@example_lock_wheel_sqlalchemy_1.4.41_cp39_cp39_macosx_10_15_x86_64//file",
-            ":_env_python_linux_x86_64": "@example_lock_wheel_sqlalchemy_1.4.41_cp39_cp39_manylinux_2_5_x86_64.manylinux1_x86_64.manylinux_2_17_x86_64.manylinux2014_x86_64//file",
+            ":_env_python_darwin_arm64": "@example_lock_wheel_sqlalchemy_2.0.23_cp311_cp311_macosx_11_0_arm64//file",
+            ":_env_python_darwin_x86_64": "@example_lock_wheel_sqlalchemy_2.0.23_cp311_cp311_macosx_10_9_x86_64//file",
+            ":_env_python_linux_x86_64": "@example_lock_wheel_sqlalchemy_2.0.23_cp311_cp311_manylinux_2_17_x86_64.manylinux2014_x86_64//file",
         }),
     )
 
-    _sqlalchemy_utils_0_38_2_deps = [
-        ":six_1.16.0",
-        ":sqlalchemy_1.4.41",
+    _sqlalchemy_utils_0_41_1_deps = [
+        ":sqlalchemy_2.0.23",
     ]
 
     pycross_wheel_library(
-        name = "sqlalchemy_utils_0.38.2",
-        deps = _sqlalchemy_utils_0_38_2_deps,
-        wheel = "@example_lock_wheel_sqlalchemy_utils_0.38.2_py3_none_any//file",
+        name = "sqlalchemy_utils_0.41.1",
+        deps = _sqlalchemy_utils_0_41_1_deps,
+        wheel = "@example_lock_wheel_sqlalchemy_utils_0.41.1_py3_none_any//file",
     )
 
     _sshpubkeys_3_3_1_deps = [
-        ":cryptography_38.0.1",
+        ":cryptography_41.0.5",
         ":ecdsa_0.18.0",
     ]
 
@@ -910,92 +1030,94 @@ def targets():
         wheel = "@example_lock_wheel_sshpubkeys_3.3.1_py2.py3_none_any//file",
     )
 
-    _stack_data_0_5_0_deps = [
-        ":asttokens_2.0.8",
-        ":executing_1.0.0",
+    _stack_data_0_6_3_deps = [
+        ":asttokens_2.4.1",
+        ":executing_2.0.1",
         ":pure_eval_0.2.2",
     ]
 
     pycross_wheel_library(
-        name = "stack_data_0.5.0",
-        deps = _stack_data_0_5_0_deps,
-        wheel = "@example_lock_wheel_stack_data_0.5.0_py3_none_any//file",
+        name = "stack_data_0.6.3",
+        deps = _stack_data_0_6_3_deps,
+        wheel = "@example_lock_wheel_stack_data_0.6.3_py3_none_any//file",
     )
 
-    pycross_wheel_library(
-        name = "traitlets_5.4.0",
-        wheel = "@example_lock_wheel_traitlets_5.4.0_py3_none_any//file",
-    )
-
-    _tree_sitter_0_20_0_build_deps = [
-        ":setuptools_59.2.0",
-        ":wheel_0.37.0",
+    _sympy_1_12_deps = [
+        ":mpmath_1.3.0",
     ]
 
-    pycross_wheel_build(
-        name = "_build_tree_sitter_0.20.0",
-        sdist = "@example_lock_sdist_tree_sitter_0.20.0//file",
-        target_environment = _target,
-        deps = _tree_sitter_0_20_0_build_deps,
-        tags = ["manual"],
+    pycross_wheel_library(
+        name = "sympy_1.12",
+        deps = _sympy_1_12_deps,
+        wheel = "@example_lock_wheel_sympy_1.12_py3_none_any//file",
     )
 
     pycross_wheel_library(
-        name = "tree_sitter_0.20.0",
+        name = "traitlets_5.13.0",
+        wheel = "@example_lock_wheel_traitlets_5.13.0_py3_none_any//file",
+    )
+
+    _tree_sitter_0_20_2_build_deps = [
+        ":setuptools_68.2.2",
+        ":wheel_0.41.3",
+    ]
+
+    pycross_wheel_library(
+        name = "tree_sitter_0.20.2",
         wheel = select({
-            ":_env_python_darwin_arm64": "@example_lock_wheel_tree_sitter_0.20.0_cp39_cp39_macosx_12_0_arm64//file",
-            ":_env_python_darwin_x86_64": ":_build_tree_sitter_0.20.0",
-            ":_env_python_linux_x86_64": ":_build_tree_sitter_0.20.0",
+            ":_env_python_darwin_arm64": "@example_lock_wheel_tree_sitter_0.20.2_cp311_cp311_macosx_11_0_arm64//file",
+            ":_env_python_darwin_x86_64": "@example_lock_wheel_tree_sitter_0.20.2_cp311_cp311_macosx_10_9_x86_64//file",
+            ":_env_python_linux_x86_64": "@example_lock_wheel_tree_sitter_0.20.2_cp311_cp311_manylinux_2_17_x86_64.manylinux2014_x86_64//file",
         }),
     )
 
     pycross_wheel_library(
-        name = "urllib3_1.26.12",
-        wheel = "@example_lock_wheel_urllib3_1.26.12_py2.py3_none_any//file",
+        name = "typing_extensions_4.8.0",
+        wheel = "@example_lock_wheel_typing_extensions_4.8.0_py3_none_any//file",
     )
 
     pycross_wheel_library(
-        name = "wcwidth_0.2.5",
-        wheel = "@example_lock_wheel_wcwidth_0.2.5_py2.py3_none_any//file",
+        name = "urllib3_2.0.7",
+        wheel = "@example_lock_wheel_urllib3_2.0.7_py3_none_any//file",
     )
 
     pycross_wheel_library(
-        name = "websocket_client_1.4.1",
-        wheel = "@example_lock_wheel_websocket_client_1.4.1_py3_none_any//file",
+        name = "wcwidth_0.2.9",
+        wheel = "@example_lock_wheel_wcwidth_0.2.9_py2.py3_none_any//file",
     )
 
-    _werkzeug_2_2_2_deps = [
-        ":markupsafe_2.1.1",
+    pycross_wheel_library(
+        name = "websocket_client_1.6.4",
+        wheel = "@example_lock_wheel_websocket_client_1.6.4_py3_none_any//file",
+    )
+
+    _werkzeug_3_0_1_deps = [
+        ":markupsafe_2.1.3",
     ]
 
     pycross_wheel_library(
-        name = "werkzeug_2.2.2",
-        deps = _werkzeug_2_2_2_deps,
-        wheel = "@example_lock_wheel_werkzeug_2.2.2_py3_none_any//file",
+        name = "werkzeug_3.0.1",
+        deps = _werkzeug_3_0_1_deps,
+        wheel = "@example_lock_wheel_werkzeug_3.0.1_py3_none_any//file",
     )
 
     pycross_wheel_library(
-        name = "wheel_0.37.0",
-        wheel = "@example_lock_wheel_wheel_0.37.0_py2.py3_none_any//file",
+        name = "wheel_0.41.3",
+        wheel = "@example_lock_wheel_wheel_0.41.3_py3_none_any//file",
     )
 
     pycross_wheel_library(
-        name = "wrapt_1.14.1",
+        name = "wrapt_1.15.0",
         wheel = select({
-            ":_env_python_darwin_arm64": "@example_lock_wheel_wrapt_1.14.1_cp39_cp39_macosx_11_0_arm64//file",
-            ":_env_python_darwin_x86_64": "@example_lock_wheel_wrapt_1.14.1_cp39_cp39_macosx_10_9_x86_64//file",
-            ":_env_python_linux_x86_64": "@example_lock_wheel_wrapt_1.14.1_cp39_cp39_manylinux_2_5_x86_64.manylinux1_x86_64.manylinux_2_17_x86_64.manylinux2014_x86_64//file",
+            ":_env_python_darwin_arm64": "@example_lock_wheel_wrapt_1.15.0_cp311_cp311_macosx_11_0_arm64//file",
+            ":_env_python_darwin_x86_64": "@example_lock_wheel_wrapt_1.15.0_cp311_cp311_macosx_10_9_x86_64//file",
+            ":_env_python_linux_x86_64": "@example_lock_wheel_wrapt_1.15.0_cp311_cp311_manylinux_2_5_x86_64.manylinux1_x86_64.manylinux_2_17_x86_64.manylinux2014_x86_64//file",
         }),
     )
 
     pycross_wheel_library(
         name = "xmltodict_0.13.0",
         wheel = "@example_lock_wheel_xmltodict_0.13.0_py2.py3_none_any//file",
-    )
-
-    pycross_wheel_library(
-        name = "zipp_3.8.1",
-        wheel = "@example_lock_wheel_zipp_3.8.1_py3_none_any//file",
     )
 
 def repositories():
@@ -1011,51 +1133,41 @@ def repositories():
 
     maybe(
         pypi_file,
-        name = "example_lock_sdist_greenlet_1.1.3",
-        package_name = "greenlet",
-        package_version = "1.1.3",
-        filename = "greenlet-1.1.3.tar.gz",
-        sha256 = "bcb6c6dd1d6be6d38d6db283747d07fda089ff8c559a835236560a4410340455",
+        name = "example_lock_sdist_lazy_object_proxy_1.9.0",
+        package_name = "lazy-object-proxy",
+        package_version = "1.9.0",
+        filename = "lazy-object-proxy-1.9.0.tar.gz",
+        sha256 = "659fb5809fa4629b8a1ac5106f669cfc7bef26fbb389dda53b3e010d1ac4ebae",
         index = "https://pypi.org",
     )
 
     maybe(
         pypi_file,
-        name = "example_lock_sdist_pbr_5.10.0",
+        name = "example_lock_sdist_pbr_6.0.0",
         package_name = "pbr",
-        package_version = "5.10.0",
-        filename = "pbr-5.10.0.tar.gz",
-        sha256 = "cfcc4ff8e698256fc17ea3ff796478b050852585aa5bae79ecd05b2ab7b39b9a",
+        package_version = "6.0.0",
+        filename = "pbr-6.0.0.tar.gz",
+        sha256 = "d1377122a5a00e2f940ee482999518efe16d745d423a670c27773dfbc3c9a7d9",
         index = "https://pypi.org",
     )
 
     maybe(
         pypi_file,
-        name = "example_lock_sdist_setproctitle_1.2.2",
+        name = "example_lock_sdist_setproctitle_1.3.3",
         package_name = "setproctitle",
-        package_version = "1.2.2",
-        filename = "setproctitle-1.2.2.tar.gz",
-        sha256 = "7dfb472c8852403d34007e01d6e3c68c57eb66433fb8a5c77b13b89a160d97df",
+        package_version = "1.3.3",
+        filename = "setproctitle-1.3.3.tar.gz",
+        sha256 = "c913e151e7ea01567837ff037a23ca8740192880198b7fbb90b16d181607caae",
         index = "https://pypi.org",
     )
 
     maybe(
         pypi_file,
-        name = "example_lock_sdist_sqlalchemy_1.4.41",
-        package_name = "sqlalchemy",
-        package_version = "1.4.41",
-        filename = "SQLAlchemy-1.4.41.tar.gz",
-        sha256 = "0292f70d1797e3c54e862e6f30ae474014648bc9c723e14a2fda730adb0a9791",
-        index = "https://pypi.org",
-    )
-
-    maybe(
-        pypi_file,
-        name = "example_lock_sdist_tree_sitter_0.20.0",
-        package_name = "tree-sitter",
-        package_version = "0.20.0",
-        filename = "tree_sitter-0.20.0.tar.gz",
-        sha256 = "1940f64be1e8c9c3c0e34a2258f1e4c324207534d5b1eefc5ab2960a9d98f668",
+        name = "example_lock_wheel_annotated_types_0.6.0_py3_none_any",
+        package_name = "annotated-types",
+        package_version = "0.6.0",
+        filename = "annotated_types-0.6.0-py3-none-any.whl",
+        sha256 = "0641064de18ba7a25dee8f96403ebc39113d0cb953a01429249d5c7564666a43",
         index = "https://pypi.org",
     )
 
@@ -1071,141 +1183,161 @@ def repositories():
 
     maybe(
         pypi_file,
-        name = "example_lock_wheel_asttokens_2.0.8_py2.py3_none_any",
+        name = "example_lock_wheel_asttokens_2.4.1_py2.py3_none_any",
         package_name = "asttokens",
-        package_version = "2.0.8",
-        filename = "asttokens-2.0.8-py2.py3-none-any.whl",
-        sha256 = "e3305297c744ae53ffa032c45dc347286165e4ffce6875dc662b205db0623d86",
+        package_version = "2.4.1",
+        filename = "asttokens-2.4.1-py2.py3-none-any.whl",
+        sha256 = "051ed49c3dcae8913ea7cd08e46a606dba30b79993209636c4875bc1d637bc24",
         index = "https://pypi.org",
     )
 
     maybe(
         pypi_file,
-        name = "example_lock_wheel_attrs_22.1.0_py2.py3_none_any",
+        name = "example_lock_wheel_attrs_23.1.0_py3_none_any",
         package_name = "attrs",
-        package_version = "22.1.0",
-        filename = "attrs-22.1.0-py2.py3-none-any.whl",
-        sha256 = "86efa402f67bf2df34f51a335487cf46b1ec130d02b8d39fd248abfd30da551c",
+        package_version = "23.1.0",
+        filename = "attrs-23.1.0-py3-none-any.whl",
+        sha256 = "1f28b4522cdc2fb4256ac1a020c78acf9cba2c6b461ccd2c126f3aa8e8335d04",
         index = "https://pypi.org",
     )
 
     maybe(
         pypi_file,
-        name = "example_lock_wheel_aws_sam_translator_1.51.0_py3_none_any",
+        name = "example_lock_wheel_aws_sam_translator_1.79.0_py3_none_any",
         package_name = "aws-sam-translator",
-        package_version = "1.51.0",
-        filename = "aws_sam_translator-1.51.0-py3-none-any.whl",
-        sha256 = "f0f09f95fcc0c5e699603b9b1daa86307b94920b0823c423ed2ff1eb1cac497f",
+        package_version = "1.79.0",
+        filename = "aws_sam_translator-1.79.0-py3-none-any.whl",
+        sha256 = "6f0c6bbcebcc98c4f98dc238352a06b0befe7fb72535cca75712fffff4873875",
         index = "https://pypi.org",
     )
 
     maybe(
         pypi_file,
-        name = "example_lock_wheel_aws_xray_sdk_2.10.0_py2.py3_none_any",
+        name = "example_lock_wheel_aws_xray_sdk_2.12.1_py2.py3_none_any",
         package_name = "aws-xray-sdk",
-        package_version = "2.10.0",
-        filename = "aws_xray_sdk-2.10.0-py2.py3-none-any.whl",
-        sha256 = "7551e81a796e1a5471ebe84844c40e8edf7c218db33506d046fec61f7495eda4",
+        package_version = "2.12.1",
+        filename = "aws_xray_sdk-2.12.1-py2.py3-none-any.whl",
+        sha256 = "f6803832dc08d18cc265e2327a69bfa9ee41c121fac195edc9745d04b7a566c3",
         index = "https://pypi.org",
     )
 
     maybe(
         pypi_file,
-        name = "example_lock_wheel_backcall_0.2.0_py2.py3_none_any",
-        package_name = "backcall",
-        package_version = "0.2.0",
-        filename = "backcall-0.2.0-py2.py3-none-any.whl",
-        sha256 = "fbbce6a29f263178a1f7915c1940bde0ec2b2a967566fe1c65c1dfb7422bd255",
+        name = "example_lock_wheel_blinker_1.7.0_py3_none_any",
+        package_name = "blinker",
+        package_version = "1.7.0",
+        filename = "blinker-1.7.0-py3-none-any.whl",
+        sha256 = "c3f865d4d54db7abc53758a01601cf343fe55b84c1de4e3fa910e420b438d5b9",
         index = "https://pypi.org",
     )
 
     maybe(
         pypi_file,
-        name = "example_lock_wheel_boto3_1.24.73_py3_none_any",
+        name = "example_lock_wheel_boto3_1.28.80_py3_none_any",
         package_name = "boto3",
-        package_version = "1.24.73",
-        filename = "boto3-1.24.73-py3-none-any.whl",
-        sha256 = "f7ca88a76c8e31c19fef3bad2dee3c2ee0e77a0bced151fa3922cf021d55755e",
+        package_version = "1.28.80",
+        filename = "boto3-1.28.80-py3-none-any.whl",
+        sha256 = "2f43e032ab804a3c39996d524003d2b906e5d86856a32da3427e36912a22d2b7",
         index = "https://pypi.org",
     )
 
     maybe(
         pypi_file,
-        name = "example_lock_wheel_botocore_1.27.73_py3_none_any",
+        name = "example_lock_wheel_botocore_1.31.80_py3_none_any",
         package_name = "botocore",
-        package_version = "1.27.73",
-        filename = "botocore-1.27.73-py3-none-any.whl",
-        sha256 = "0b94d1e7b1435f8ff108c74a09fe03ec88aadbfafe97e940ea415dc86ba305a3",
+        package_version = "1.31.80",
+        filename = "botocore-1.31.80-py3-none-any.whl",
+        sha256 = "1c693c0f8b2553fcbe0df223241191e6f9f60b4245d65c1822c08f659274fef2",
         index = "https://pypi.org",
     )
 
     maybe(
         pypi_file,
-        name = "example_lock_wheel_certifi_2022.9.14_py3_none_any",
+        name = "example_lock_wheel_certifi_2023.7.22_py3_none_any",
         package_name = "certifi",
-        package_version = "2022.9.14",
-        filename = "certifi-2022.9.14-py3-none-any.whl",
-        sha256 = "e232343de1ab72c2aa521b625c80f699e356830fd0e2c620b465b304b17b0516",
+        package_version = "2023.7.22",
+        filename = "certifi-2023.7.22-py3-none-any.whl",
+        sha256 = "92d6037539857d8206b8f6ae472e8b77db8058fec5937a1ef3f54304089edbb9",
         index = "https://pypi.org",
     )
 
     maybe(
         pypi_file,
-        name = "example_lock_wheel_cffi_1.15.1_cp39_cp39_macosx_10_9_x86_64",
+        name = "example_lock_wheel_cffi_1.16.0_cp311_cp311_macosx_10_9_x86_64",
         package_name = "cffi",
-        package_version = "1.15.1",
-        filename = "cffi-1.15.1-cp39-cp39-macosx_10_9_x86_64.whl",
-        sha256 = "54a2db7b78338edd780e7ef7f9f6c442500fb0d41a5a4ea24fff1c929d5af585",
+        package_version = "1.16.0",
+        filename = "cffi-1.16.0-cp311-cp311-macosx_10_9_x86_64.whl",
+        sha256 = "b84834d0cf97e7d27dd5b7f3aca7b6e9263c56308ab9dc8aae9784abb774d404",
         index = "https://pypi.org",
     )
 
     maybe(
         pypi_file,
-        name = "example_lock_wheel_cffi_1.15.1_cp39_cp39_macosx_11_0_arm64",
+        name = "example_lock_wheel_cffi_1.16.0_cp311_cp311_macosx_11_0_arm64",
         package_name = "cffi",
-        package_version = "1.15.1",
-        filename = "cffi-1.15.1-cp39-cp39-macosx_11_0_arm64.whl",
-        sha256 = "fcd131dd944808b5bdb38e6f5b53013c5aa4f334c5cad0c72742f6eba4b73db0",
+        package_version = "1.16.0",
+        filename = "cffi-1.16.0-cp311-cp311-macosx_11_0_arm64.whl",
+        sha256 = "1b8ebc27c014c59692bb2664c7d13ce7a6e9a629be20e54e7271fa696ff2b417",
         index = "https://pypi.org",
     )
 
     maybe(
         pypi_file,
-        name = "example_lock_wheel_cffi_1.15.1_cp39_cp39_manylinux_2_17_x86_64.manylinux2014_x86_64",
+        name = "example_lock_wheel_cffi_1.16.0_cp311_cp311_manylinux_2_17_x86_64.manylinux2014_x86_64",
         package_name = "cffi",
-        package_version = "1.15.1",
-        filename = "cffi-1.15.1-cp39-cp39-manylinux_2_17_x86_64.manylinux2014_x86_64.whl",
-        sha256 = "5d598b938678ebf3c67377cdd45e09d431369c3b1a5b331058c338e201f12b27",
+        package_version = "1.16.0",
+        filename = "cffi-1.16.0-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl",
+        sha256 = "7b78010e7b97fef4bee1e896df8a4bbb6712b7f05b7ef630f9d1da00f6444d2e",
         index = "https://pypi.org",
     )
 
     maybe(
         pypi_file,
-        name = "example_lock_wheel_cfn_lint_0.65.0_py3_none_any",
+        name = "example_lock_wheel_cfn_lint_0.83.1_py3_none_any",
         package_name = "cfn-lint",
-        package_version = "0.65.0",
-        filename = "cfn_lint-0.65.0-py3-none-any.whl",
-        sha256 = "b5992f52a86e6ef0a150fabbb4d131bbf626eddd4154ca708193c1d233a7efca",
+        package_version = "0.83.1",
+        filename = "cfn_lint-0.83.1-py3-none-any.whl",
+        sha256 = "e801e9ca384f8c0fbbcd3e342cad5b038d6ca60214b81e70e2710b4dc3339567",
         index = "https://pypi.org",
     )
 
     maybe(
         pypi_file,
-        name = "example_lock_wheel_charset_normalizer_2.1.1_py3_none_any",
+        name = "example_lock_wheel_charset_normalizer_3.3.2_cp311_cp311_macosx_10_9_x86_64",
         package_name = "charset-normalizer",
-        package_version = "2.1.1",
-        filename = "charset_normalizer-2.1.1-py3-none-any.whl",
-        sha256 = "83e9a75d1911279afd89352c68b45348559d1fc0506b054b346651b5e7fee29f",
+        package_version = "3.3.2",
+        filename = "charset_normalizer-3.3.2-cp311-cp311-macosx_10_9_x86_64.whl",
+        sha256 = "573f6eac48f4769d667c4442081b1794f52919e7edada77495aaed9236d13a96",
         index = "https://pypi.org",
     )
 
     maybe(
         pypi_file,
-        name = "example_lock_wheel_click_8.1.3_py3_none_any",
+        name = "example_lock_wheel_charset_normalizer_3.3.2_cp311_cp311_macosx_11_0_arm64",
+        package_name = "charset-normalizer",
+        package_version = "3.3.2",
+        filename = "charset_normalizer-3.3.2-cp311-cp311-macosx_11_0_arm64.whl",
+        sha256 = "549a3a73da901d5bc3ce8d24e0600d1fa85524c10287f6004fbab87672bf3e1e",
+        index = "https://pypi.org",
+    )
+
+    maybe(
+        pypi_file,
+        name = "example_lock_wheel_charset_normalizer_3.3.2_cp311_cp311_manylinux_2_17_x86_64.manylinux2014_x86_64",
+        package_name = "charset-normalizer",
+        package_version = "3.3.2",
+        filename = "charset_normalizer-3.3.2-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl",
+        sha256 = "753f10e867343b4511128c6ed8c82f7bec3bd026875576dfd88483c5c73b2fd8",
+        index = "https://pypi.org",
+    )
+
+    maybe(
+        pypi_file,
+        name = "example_lock_wheel_click_8.1.7_py3_none_any",
         package_name = "click",
-        package_version = "8.1.3",
-        filename = "click-8.1.3-py3-none-any.whl",
-        sha256 = "bb4d8133cb15a609f44e8213d9b391b0809795062913b383c62be0ee95b1db48",
+        package_version = "8.1.7",
+        filename = "click-8.1.7-py3-none-any.whl",
+        sha256 = "ae74fb96c20a0277a1d615f1e4d73c8414f5a98db8b799a7931d1582f3390c28",
         index = "https://pypi.org",
     )
 
@@ -1221,51 +1353,51 @@ def repositories():
 
     maybe(
         pypi_file,
-        name = "example_lock_wheel_cryptography_38.0.1_cp36_abi3_macosx_10_10_universal2",
+        name = "example_lock_wheel_cryptography_41.0.5_cp37_abi3_macosx_10_12_universal2",
         package_name = "cryptography",
-        package_version = "38.0.1",
-        filename = "cryptography-38.0.1-cp36-abi3-macosx_10_10_universal2.whl",
-        sha256 = "10d1f29d6292fc95acb597bacefd5b9e812099d75a6469004fd38ba5471a977f",
+        package_version = "41.0.5",
+        filename = "cryptography-41.0.5-cp37-abi3-macosx_10_12_universal2.whl",
+        sha256 = "da6a0ff8f1016ccc7477e6339e1d50ce5f59b88905585f77193ebd5068f1e797",
         index = "https://pypi.org",
     )
 
     maybe(
         pypi_file,
-        name = "example_lock_wheel_cryptography_38.0.1_cp36_abi3_macosx_10_10_x86_64",
+        name = "example_lock_wheel_cryptography_41.0.5_cp37_abi3_macosx_10_12_x86_64",
         package_name = "cryptography",
-        package_version = "38.0.1",
-        filename = "cryptography-38.0.1-cp36-abi3-macosx_10_10_x86_64.whl",
-        sha256 = "3fc26e22840b77326a764ceb5f02ca2d342305fba08f002a8c1f139540cdfaad",
+        package_version = "41.0.5",
+        filename = "cryptography-41.0.5-cp37-abi3-macosx_10_12_x86_64.whl",
+        sha256 = "b948e09fe5fb18517d99994184854ebd50b57248736fd4c720ad540560174ec5",
         index = "https://pypi.org",
     )
 
     maybe(
         pypi_file,
-        name = "example_lock_wheel_cryptography_38.0.1_cp36_abi3_manylinux_2_17_x86_64.manylinux2014_x86_64",
+        name = "example_lock_wheel_cryptography_41.0.5_cp37_abi3_manylinux_2_17_x86_64.manylinux2014_x86_64",
         package_name = "cryptography",
-        package_version = "38.0.1",
-        filename = "cryptography-38.0.1-cp36-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl",
-        sha256 = "ca9f6784ea96b55ff41708b92c3f6aeaebde4c560308e5fbbd3173fbc466e94e",
+        package_version = "41.0.5",
+        filename = "cryptography-41.0.5-cp37-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl",
+        sha256 = "e270c04f4d9b5671ebcc792b3ba5d4488bf7c42c3c241a3748e2599776f29696",
         index = "https://pypi.org",
     )
 
     maybe(
         pypi_file,
-        name = "example_lock_wheel_cython_0.29.32_cp39_cp39_manylinux_2_17_x86_64.manylinux2014_x86_64.manylinux_2_24_x86_64",
+        name = "example_lock_wheel_cython_0.29.36_cp311_cp311_manylinux_2_17_x86_64.manylinux2014_x86_64.manylinux_2_24_x86_64",
         package_name = "cython",
-        package_version = "0.29.32",
-        filename = "Cython-0.29.32-cp39-cp39-manylinux_2_17_x86_64.manylinux2014_x86_64.manylinux_2_24_x86_64.whl",
-        sha256 = "f3fd44cc362eee8ae569025f070d56208908916794b6ab21e139cea56470a2b3",
+        package_version = "0.29.36",
+        filename = "Cython-0.29.36-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.manylinux_2_24_x86_64.whl",
+        sha256 = "6c4d7e36fe0211e394adffd296382b435ac22762d14f2fe45c506c230f91cf2d",
         index = "https://pypi.org",
     )
 
     maybe(
         pypi_file,
-        name = "example_lock_wheel_cython_0.29.32_py2.py3_none_any",
+        name = "example_lock_wheel_cython_0.29.36_py2.py3_none_any",
         package_name = "cython",
-        package_version = "0.29.32",
-        filename = "Cython-0.29.32-py2.py3-none-any.whl",
-        sha256 = "eeb475eb6f0ccf6c039035eb4f0f928eb53ead88777e0a760eccb140ad90930b",
+        package_version = "0.29.36",
+        filename = "Cython-0.29.36-py2.py3-none-any.whl",
+        sha256 = "95bb13d8be507425d03ebe051f90d4b2a9fdccc64e4f30b35645fdb7542742eb",
         index = "https://pypi.org",
     )
 
@@ -1281,11 +1413,11 @@ def repositories():
 
     maybe(
         pypi_file,
-        name = "example_lock_wheel_docker_6.0.0_py3_none_any",
+        name = "example_lock_wheel_docker_6.1.3_py3_none_any",
         package_name = "docker",
-        package_version = "6.0.0",
-        filename = "docker-6.0.0-py3-none-any.whl",
-        sha256 = "6e06ee8eca46cd88733df09b6b80c24a1a556bc5cb1e1ae54b2c239886d245cf",
+        package_version = "6.1.3",
+        filename = "docker-6.1.3-py3-none-any.whl",
+        sha256 = "aecd2277b8bf8e506e484f6ab7aec39abe0038e29fa4a6d3ba86c3fe01844ed9",
         index = "https://pypi.org",
     )
 
@@ -1301,61 +1433,61 @@ def repositories():
 
     maybe(
         pypi_file,
-        name = "example_lock_wheel_executing_1.0.0_py2.py3_none_any",
+        name = "example_lock_wheel_executing_2.0.1_py2.py3_none_any",
         package_name = "executing",
-        package_version = "1.0.0",
-        filename = "executing-1.0.0-py2.py3-none-any.whl",
-        sha256 = "550d581b497228b572235e633599133eeee67073c65914ca346100ad56775349",
+        package_version = "2.0.1",
+        filename = "executing-2.0.1-py2.py3-none-any.whl",
+        sha256 = "eac49ca94516ccc753f9fb5ce82603156e590b27525a8bc32cce8ae302eb61bc",
         index = "https://pypi.org",
     )
 
     maybe(
         pypi_file,
-        name = "example_lock_wheel_flask_2.2.2_py3_none_any",
+        name = "example_lock_wheel_flask_3.0.0_py3_none_any",
         package_name = "flask",
-        package_version = "2.2.2",
-        filename = "Flask-2.2.2-py3-none-any.whl",
-        sha256 = "b9c46cc36662a7949f34b52d8ec7bb59c0d74ba08ba6cb9ce9adc1d8676d9526",
+        package_version = "3.0.0",
+        filename = "flask-3.0.0-py3-none-any.whl",
+        sha256 = "21128f47e4e3b9d597a3e8521a329bf56909b690fcc3fa3e477725aa81367638",
         index = "https://pypi.org",
     )
 
     maybe(
         pypi_file,
-        name = "example_lock_wheel_flask_cors_3.0.10_py2.py3_none_any",
+        name = "example_lock_wheel_flask_cors_4.0.0_py2.py3_none_any",
         package_name = "flask-cors",
-        package_version = "3.0.10",
-        filename = "Flask_Cors-3.0.10-py2.py3-none-any.whl",
-        sha256 = "74efc975af1194fc7891ff5cd85b0f7478be4f7f59fe158102e91abb72bb4438",
+        package_version = "4.0.0",
+        filename = "Flask_Cors-4.0.0-py2.py3-none-any.whl",
+        sha256 = "bc3492bfd6368d27cfe79c7821df5a8a319e1a6d5eab277a3794be19bdc51783",
         index = "https://pypi.org",
     )
 
     maybe(
         pypi_file,
-        name = "example_lock_wheel_graphql_core_3.2.1_py3_none_any",
+        name = "example_lock_wheel_graphql_core_3.2.3_py3_none_any",
         package_name = "graphql-core",
-        package_version = "3.2.1",
-        filename = "graphql_core-3.2.1-py3-none-any.whl",
-        sha256 = "f83c658e4968998eed1923a2e3e3eddd347e005ac0315fbb7ca4d70ea9156323",
+        package_version = "3.2.3",
+        filename = "graphql_core-3.2.3-py3-none-any.whl",
+        sha256 = "5766780452bd5ec8ba133f8bf287dc92713e3868ddd83aee4faab9fc3e303dc3",
         index = "https://pypi.org",
     )
 
     maybe(
         pypi_file,
-        name = "example_lock_wheel_greenlet_1.1.3_cp39_cp39_macosx_10_15_x86_64",
+        name = "example_lock_wheel_greenlet_3.0.1_cp311_cp311_macosx_10_9_universal2",
         package_name = "greenlet",
-        package_version = "1.1.3",
-        filename = "greenlet-1.1.3-cp39-cp39-macosx_10_15_x86_64.whl",
-        sha256 = "cbc1eb55342cbac8f7ec159088d54e2cfdd5ddf61c87b8bbe682d113789331b2",
+        package_version = "3.0.1",
+        filename = "greenlet-3.0.1-cp311-cp311-macosx_10_9_universal2.whl",
+        sha256 = "f7bfb769f7efa0eefcd039dd19d843a4fbfbac52f1878b1da2ed5793ec9b1a65",
         index = "https://pypi.org",
     )
 
     maybe(
         pypi_file,
-        name = "example_lock_wheel_greenlet_1.1.3_cp39_cp39_manylinux_2_17_x86_64.manylinux2014_x86_64",
+        name = "example_lock_wheel_greenlet_3.0.1_cp311_cp311_manylinux_2_17_x86_64.manylinux2014_x86_64",
         package_name = "greenlet",
-        package_version = "1.1.3",
-        filename = "greenlet-1.1.3-cp39-cp39-manylinux_2_17_x86_64.manylinux2014_x86_64.whl",
-        sha256 = "2fb0aa7f6996879551fd67461d5d3ab0c3c0245da98be90c89fcb7a18d437403",
+        package_version = "3.0.1",
+        filename = "greenlet-3.0.1-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl",
+        sha256 = "e9d21aaa84557d64209af04ff48e0ad5e28c5cca67ce43444e939579d085da72",
         index = "https://pypi.org",
     )
 
@@ -1371,21 +1503,11 @@ def repositories():
 
     maybe(
         pypi_file,
-        name = "example_lock_wheel_importlib_metadata_4.12.0_py3_none_any",
-        package_name = "importlib-metadata",
-        package_version = "4.12.0",
-        filename = "importlib_metadata-4.12.0-py3-none-any.whl",
-        sha256 = "7401a975809ea1fdc658c3aa4f78cc2195a0e019c5cbc4c06122884e9ae80c23",
-        index = "https://pypi.org",
-    )
-
-    maybe(
-        pypi_file,
-        name = "example_lock_wheel_ipython_8.5.0_py3_none_any",
+        name = "example_lock_wheel_ipython_8.17.2_py3_none_any",
         package_name = "ipython",
-        package_version = "8.5.0",
-        filename = "ipython-8.5.0-py3-none-any.whl",
-        sha256 = "6f090e29ab8ef8643e521763a4f1f39dc3914db643122b1e9d3328ff2e43ada2",
+        package_version = "8.17.2",
+        filename = "ipython-8.17.2-py3-none-any.whl",
+        sha256 = "1e4d1d666a023e3c93585ba0d8e962867f7a111af322efff6b9c58062b3e5444",
         index = "https://pypi.org",
     )
 
@@ -1401,21 +1523,21 @@ def repositories():
 
     maybe(
         pypi_file,
-        name = "example_lock_wheel_jaraco.classes_3.2.2_py3_none_any",
+        name = "example_lock_wheel_jaraco.classes_3.3.0_py3_none_any",
         package_name = "jaraco-classes",
-        package_version = "3.2.2",
-        filename = "jaraco.classes-3.2.2-py3-none-any.whl",
-        sha256 = "e6ef6fd3fcf4579a7a019d87d1e56a883f4e4c35cfe925f86731abc58804e647",
+        package_version = "3.3.0",
+        filename = "jaraco.classes-3.3.0-py3-none-any.whl",
+        sha256 = "10afa92b6743f25c0cf5f37c6bb6e18e2c5bb84a16527ccfc0040ea377e7aaeb",
         index = "https://pypi.org",
     )
 
     maybe(
         pypi_file,
-        name = "example_lock_wheel_jedi_0.18.1_py2.py3_none_any",
+        name = "example_lock_wheel_jedi_0.19.1_py2.py3_none_any",
         package_name = "jedi",
-        package_version = "0.18.1",
-        filename = "jedi-0.18.1-py2.py3-none-any.whl",
-        sha256 = "637c9635fcf47945ceb91cd7f320234a7be540ded6f3e99a50cb6febdfd1ba8d",
+        package_version = "0.19.1",
+        filename = "jedi-0.19.1-py2.py3-none-any.whl",
+        sha256 = "e983c654fe5c02867aef4cdfce5a2fbb4a50adc0af145f70504238f18ef5e7e0",
         index = "https://pypi.org",
     )
 
@@ -1471,41 +1593,61 @@ def repositories():
 
     maybe(
         pypi_file,
-        name = "example_lock_wheel_jsonpatch_1.32_py2.py3_none_any",
+        name = "example_lock_wheel_jsonpatch_1.33_py2.py3_none_any",
         package_name = "jsonpatch",
-        package_version = "1.32",
-        filename = "jsonpatch-1.32-py2.py3-none-any.whl",
-        sha256 = "26ac385719ac9f54df8a2f0827bb8253aa3ea8ab7b3368457bcdb8c14595a397",
+        package_version = "1.33",
+        filename = "jsonpatch-1.33-py2.py3-none-any.whl",
+        sha256 = "0ae28c0cd062bbd8b8ecc26d7d164fbbea9652a1a3693f3b956c1eae5145dade",
         index = "https://pypi.org",
     )
 
     maybe(
         pypi_file,
-        name = "example_lock_wheel_jsonpickle_2.2.0_py2.py3_none_any",
+        name = "example_lock_wheel_jsonpickle_3.0.2_py3_none_any",
         package_name = "jsonpickle",
-        package_version = "2.2.0",
-        filename = "jsonpickle-2.2.0-py2.py3-none-any.whl",
-        sha256 = "de7f2613818aa4f234138ca11243d6359ff83ae528b2185efdd474f62bcf9ae1",
+        package_version = "3.0.2",
+        filename = "jsonpickle-3.0.2-py3-none-any.whl",
+        sha256 = "4a8442d97ca3f77978afa58068768dba7bff2dbabe79a9647bc3cdafd4ef019f",
         index = "https://pypi.org",
     )
 
     maybe(
         pypi_file,
-        name = "example_lock_wheel_jsonpointer_2.3_py2.py3_none_any",
+        name = "example_lock_wheel_jsonpointer_2.4_py2.py3_none_any",
         package_name = "jsonpointer",
-        package_version = "2.3",
-        filename = "jsonpointer-2.3-py2.py3-none-any.whl",
-        sha256 = "51801e558539b4e9cd268638c078c6c5746c9ac96bc38152d443400e4f3793e9",
+        package_version = "2.4",
+        filename = "jsonpointer-2.4-py2.py3-none-any.whl",
+        sha256 = "15d51bba20eea3165644553647711d150376234112651b4f1811022aecad7d7a",
         index = "https://pypi.org",
     )
 
     maybe(
         pypi_file,
-        name = "example_lock_wheel_jsonschema_3.2.0_py2.py3_none_any",
+        name = "example_lock_wheel_jsonschema_4.19.2_py3_none_any",
         package_name = "jsonschema",
-        package_version = "3.2.0",
-        filename = "jsonschema-3.2.0-py2.py3-none-any.whl",
-        sha256 = "4e5b3cf8216f577bee9ce139cbe72eca3ea4f292ec60928ff24758ce626cd163",
+        package_version = "4.19.2",
+        filename = "jsonschema-4.19.2-py3-none-any.whl",
+        sha256 = "eee9e502c788e89cb166d4d37f43084e3b64ab405c795c03d343a4dbc2c810fc",
+        index = "https://pypi.org",
+    )
+
+    maybe(
+        pypi_file,
+        name = "example_lock_wheel_jsonschema_path_0.3.1_py3_none_any",
+        package_name = "jsonschema-path",
+        package_version = "0.3.1",
+        filename = "jsonschema_path-0.3.1-py3-none-any.whl",
+        sha256 = "06f01b1848a28963f49a17730e11204d252aa6ff5db4ef84ec77e5ac93cfa831",
+        index = "https://pypi.org",
+    )
+
+    maybe(
+        pypi_file,
+        name = "example_lock_wheel_jsonschema_specifications_2023.7.1_py3_none_any",
+        package_name = "jsonschema-specifications",
+        package_version = "2023.7.1",
+        filename = "jsonschema_specifications-2023.7.1-py3-none-any.whl",
+        sha256 = "05adf340b659828a004220a9613be00fa3f223f2b82002e273dee62fd50524b1",
         index = "https://pypi.org",
     )
 
@@ -1531,31 +1673,51 @@ def repositories():
 
     maybe(
         pypi_file,
-        name = "example_lock_wheel_markupsafe_2.1.1_cp39_cp39_macosx_10_9_universal2",
-        package_name = "markupsafe",
-        package_version = "2.1.1",
-        filename = "MarkupSafe-2.1.1-cp39-cp39-macosx_10_9_universal2.whl",
-        sha256 = "e04e26803c9c3851c931eac40c695602c6295b8d432cbe78609649ad9bd2da8a",
+        name = "example_lock_wheel_lazy_object_proxy_1.9.0_cp311_cp311_macosx_10_9_x86_64",
+        package_name = "lazy-object-proxy",
+        package_version = "1.9.0",
+        filename = "lazy_object_proxy-1.9.0-cp311-cp311-macosx_10_9_x86_64.whl",
+        sha256 = "946d27deaff6cf8452ed0dba83ba38839a87f4f7a9732e8f9fd4107b21e6ff07",
         index = "https://pypi.org",
     )
 
     maybe(
         pypi_file,
-        name = "example_lock_wheel_markupsafe_2.1.1_cp39_cp39_macosx_10_9_x86_64",
-        package_name = "markupsafe",
-        package_version = "2.1.1",
-        filename = "MarkupSafe-2.1.1-cp39-cp39-macosx_10_9_x86_64.whl",
-        sha256 = "b87db4360013327109564f0e591bd2a3b318547bcef31b468a92ee504d07ae4f",
+        name = "example_lock_wheel_lazy_object_proxy_1.9.0_cp311_cp311_manylinux_2_5_x86_64.manylinux1_x86_64.manylinux_2_17_x86_64.manylinux2014_x86_64",
+        package_name = "lazy-object-proxy",
+        package_version = "1.9.0",
+        filename = "lazy_object_proxy-1.9.0-cp311-cp311-manylinux_2_5_x86_64.manylinux1_x86_64.manylinux_2_17_x86_64.manylinux2014_x86_64.whl",
+        sha256 = "f699ac1c768270c9e384e4cbd268d6e67aebcfae6cd623b4d7c3bfde5a35db59",
         index = "https://pypi.org",
     )
 
     maybe(
         pypi_file,
-        name = "example_lock_wheel_markupsafe_2.1.1_cp39_cp39_manylinux_2_17_x86_64.manylinux2014_x86_64",
+        name = "example_lock_wheel_markupsafe_2.1.3_cp311_cp311_macosx_10_9_universal2",
         package_name = "markupsafe",
-        package_version = "2.1.1",
-        filename = "MarkupSafe-2.1.1-cp39-cp39-manylinux_2_17_x86_64.manylinux2014_x86_64.whl",
-        sha256 = "56442863ed2b06d19c37f94d999035e15ee982988920e12a5b4ba29b62ad1f77",
+        package_version = "2.1.3",
+        filename = "MarkupSafe-2.1.3-cp311-cp311-macosx_10_9_universal2.whl",
+        sha256 = "ad9e82fb8f09ade1c3e1b996a6337afac2b8b9e365f926f5a61aacc71adc5b3c",
+        index = "https://pypi.org",
+    )
+
+    maybe(
+        pypi_file,
+        name = "example_lock_wheel_markupsafe_2.1.3_cp311_cp311_macosx_10_9_x86_64",
+        package_name = "markupsafe",
+        package_version = "2.1.3",
+        filename = "MarkupSafe-2.1.3-cp311-cp311-macosx_10_9_x86_64.whl",
+        sha256 = "3c0fae6c3be832a0a0473ac912810b2877c8cb9d76ca48de1ed31e1c68386575",
+        index = "https://pypi.org",
+    )
+
+    maybe(
+        pypi_file,
+        name = "example_lock_wheel_markupsafe_2.1.3_cp311_cp311_manylinux_2_17_x86_64.manylinux2014_x86_64",
+        package_name = "markupsafe",
+        package_version = "2.1.3",
+        filename = "MarkupSafe-2.1.3-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl",
+        sha256 = "bfce63a9e7834b12b87c64d6b155fdd9b3b96191b6bd334bf37db7ff1fe457f2",
         index = "https://pypi.org",
     )
 
@@ -1571,61 +1733,101 @@ def repositories():
 
     maybe(
         pypi_file,
-        name = "example_lock_wheel_more_itertools_8.14.0_py3_none_any",
+        name = "example_lock_wheel_more_itertools_10.1.0_py3_none_any",
         package_name = "more-itertools",
-        package_version = "8.14.0",
-        filename = "more_itertools-8.14.0-py3-none-any.whl",
-        sha256 = "1bc4f91ee5b1b31ac7ceacc17c09befe6a40a503907baf9c839c229b5095cfd2",
+        package_version = "10.1.0",
+        filename = "more_itertools-10.1.0-py3-none-any.whl",
+        sha256 = "64e0735fcfdc6f3464ea133afe8ea4483b1c5fe3a3d69852e6503b43a0b222e6",
         index = "https://pypi.org",
     )
 
     maybe(
         pypi_file,
-        name = "example_lock_wheel_moto_3.1.1_py2.py3_none_any",
+        name = "example_lock_wheel_moto_4.2.7_py2.py3_none_any",
         package_name = "moto",
-        package_version = "3.1.1",
-        filename = "moto-3.1.1-py2.py3-none-any.whl",
-        sha256 = "462495563847134ea8ef4135a229731a598a8e7b6b10a74f8d745815aa20a25b",
+        package_version = "4.2.7",
+        filename = "moto-4.2.7-py2.py3-none-any.whl",
+        sha256 = "3e0ef388900448485cd6eff18e9f7fcaa6cf4560b6fb536ba2e2e1278a5ecc59",
         index = "https://pypi.org",
     )
 
     maybe(
         pypi_file,
-        name = "example_lock_wheel_networkx_2.8.6_py3_none_any",
+        name = "example_lock_wheel_mpmath_1.3.0_py3_none_any",
+        package_name = "mpmath",
+        package_version = "1.3.0",
+        filename = "mpmath-1.3.0-py3-none-any.whl",
+        sha256 = "a0b2b9fe80bbcd81a6647ff13108738cfb482d481d826cc0e02f5b35e5c88d2c",
+        index = "https://pypi.org",
+    )
+
+    maybe(
+        pypi_file,
+        name = "example_lock_wheel_multipart_0.2.4_py3_none_any",
+        package_name = "multipart",
+        package_version = "0.2.4",
+        filename = "multipart-0.2.4-py3-none-any.whl",
+        sha256 = "5aec990820b8a9e94f9c164fbeb58cf118cfbde2854865b67a9a730edd1fb9d1",
+        index = "https://pypi.org",
+    )
+
+    maybe(
+        pypi_file,
+        name = "example_lock_wheel_networkx_3.2.1_py3_none_any",
         package_name = "networkx",
-        package_version = "2.8.6",
-        filename = "networkx-2.8.6-py3-none-any.whl",
-        sha256 = "2a30822761f34d56b9a370d96a4bf4827a535f5591a4078a453425caeba0c5bb",
+        package_version = "3.2.1",
+        filename = "networkx-3.2.1-py3-none-any.whl",
+        sha256 = "f18c69adc97877c42332c170849c96cefa91881c99a7cb3e95b7c659ebdc1ec2",
         index = "https://pypi.org",
     )
 
     maybe(
         pypi_file,
-        name = "example_lock_wheel_numpy_1.22.3_cp39_cp39_macosx_10_14_x86_64",
+        name = "example_lock_wheel_numpy_1.26.1_cp311_cp311_macosx_10_9_x86_64",
         package_name = "numpy",
-        package_version = "1.22.3",
-        filename = "numpy-1.22.3-cp39-cp39-macosx_10_14_x86_64.whl",
-        sha256 = "2c10a93606e0b4b95c9b04b77dc349b398fdfbda382d2a39ba5a822f669a0123",
+        package_version = "1.26.1",
+        filename = "numpy-1.26.1-cp311-cp311-macosx_10_9_x86_64.whl",
+        sha256 = "cd7837b2b734ca72959a1caf3309457a318c934abef7a43a14bb984e574bbb9a",
         index = "https://pypi.org",
     )
 
     maybe(
         pypi_file,
-        name = "example_lock_wheel_numpy_1.22.3_cp39_cp39_macosx_11_0_arm64",
+        name = "example_lock_wheel_numpy_1.26.1_cp311_cp311_macosx_11_0_arm64",
         package_name = "numpy",
-        package_version = "1.22.3",
-        filename = "numpy-1.22.3-cp39-cp39-macosx_11_0_arm64.whl",
-        sha256 = "fade0d4f4d292b6f39951b6836d7a3c7ef5b2347f3c420cd9820a1d90d794802",
+        package_version = "1.26.1",
+        filename = "numpy-1.26.1-cp311-cp311-macosx_11_0_arm64.whl",
+        sha256 = "1c59c046c31a43310ad0199d6299e59f57a289e22f0f36951ced1c9eac3665b9",
         index = "https://pypi.org",
     )
 
     maybe(
         pypi_file,
-        name = "example_lock_wheel_numpy_1.22.3_cp39_cp39_manylinux_2_17_x86_64.manylinux2014_x86_64",
+        name = "example_lock_wheel_numpy_1.26.1_cp311_cp311_manylinux_2_17_x86_64.manylinux2014_x86_64",
         package_name = "numpy",
-        package_version = "1.22.3",
-        filename = "numpy-1.22.3-cp39-cp39-manylinux_2_17_x86_64.manylinux2014_x86_64.whl",
-        sha256 = "97098b95aa4e418529099c26558eeb8486e66bd1e53a6b606d684d0c3616b168",
+        package_version = "1.26.1",
+        filename = "numpy-1.26.1-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl",
+        sha256 = "6081aed64714a18c72b168a9276095ef9155dd7888b9e74b5987808f0dd0a974",
+        index = "https://pypi.org",
+    )
+
+    maybe(
+        pypi_file,
+        name = "example_lock_wheel_openapi_schema_validator_0.6.2_py3_none_any",
+        package_name = "openapi-schema-validator",
+        package_version = "0.6.2",
+        filename = "openapi_schema_validator-0.6.2-py3-none-any.whl",
+        sha256 = "c4887c1347c669eb7cded9090f4438b710845cd0f90d1fb9e1b3303fb37339f8",
+        index = "https://pypi.org",
+    )
+
+    maybe(
+        pypi_file,
+        name = "example_lock_wheel_openapi_spec_validator_0.7.1_py3_none_any",
+        package_name = "openapi-spec-validator",
+        package_version = "0.7.1",
+        filename = "openapi_spec_validator-0.7.1-py3-none-any.whl",
+        sha256 = "3c81825043f24ccbcd2f4b149b11e8231abce5ba84f37065e14ec947d8f4e959",
         index = "https://pypi.org",
     )
 
@@ -1661,11 +1863,11 @@ def repositories():
 
     maybe(
         pypi_file,
-        name = "example_lock_wheel_packaging_21.3_py3_none_any",
+        name = "example_lock_wheel_packaging_23.2_py3_none_any",
         package_name = "packaging",
-        package_version = "21.3",
-        filename = "packaging-21.3-py3-none-any.whl",
-        sha256 = "ef103e05f519cdc783ae24ea4e2e0f508a9c99b2d4969652eed6a2e1ea5bd522",
+        package_version = "23.2",
+        filename = "packaging-23.2-py3-none-any.whl",
+        sha256 = "8c491190033a9af7e1d931d0b5dacc2ef47509b34dd0de67ed209b5203fc88c7",
         index = "https://pypi.org",
     )
 
@@ -1681,6 +1883,16 @@ def repositories():
 
     maybe(
         pypi_file,
+        name = "example_lock_wheel_pathable_0.4.3_py3_none_any",
+        package_name = "pathable",
+        package_version = "0.4.3",
+        filename = "pathable-0.4.3-py3-none-any.whl",
+        sha256 = "cdd7b1f9d7d5c8b8d3315dbf5a86b2596053ae845f056f57d97c0eefff84da14",
+        index = "https://pypi.org",
+    )
+
+    maybe(
+        pypi_file,
         name = "example_lock_wheel_pexpect_4.8.0_py2.py3_none_any",
         package_name = "pexpect",
         package_version = "4.8.0",
@@ -1691,21 +1903,11 @@ def repositories():
 
     maybe(
         pypi_file,
-        name = "example_lock_wheel_pickleshare_0.7.5_py2.py3_none_any",
-        package_name = "pickleshare",
-        package_version = "0.7.5",
-        filename = "pickleshare-0.7.5-py2.py3-none-any.whl",
-        sha256 = "9649af414d74d4df115d5d718f82acb59c9d418196b7b4290ed47a12ce62df56",
-        index = "https://pypi.org",
-    )
-
-    maybe(
-        pypi_file,
-        name = "example_lock_wheel_prompt_toolkit_3.0.31_py3_none_any",
+        name = "example_lock_wheel_prompt_toolkit_3.0.39_py3_none_any",
         package_name = "prompt-toolkit",
-        package_version = "3.0.31",
-        filename = "prompt_toolkit-3.0.31-py3-none-any.whl",
-        sha256 = "9696f386133df0fc8ca5af4895afe5d78f5fcfe5258111c2a79a1c3e41ffa96d",
+        package_version = "3.0.39",
+        filename = "prompt_toolkit-3.0.39-py3-none-any.whl",
+        sha256 = "9dffbe1d8acf91e3de75f3b544e4842382fc06c6babe903ac9acb74dc6e08d88",
         index = "https://pypi.org",
     )
 
@@ -1731,11 +1933,21 @@ def repositories():
 
     maybe(
         pypi_file,
-        name = "example_lock_wheel_pyasn1_0.4.8_py2.py3_none_any",
+        name = "example_lock_wheel_py_partiql_parser_0.4.1_py3_none_any",
+        package_name = "py-partiql-parser",
+        package_version = "0.4.1",
+        filename = "py_partiql_parser-0.4.1-py3-none-any.whl",
+        sha256 = "6357ec3215f4ceabe4aa1926e4a0f808b9ebc9f7fd438e7f22dbdc3d6efb2eae",
+        index = "https://pypi.org",
+    )
+
+    maybe(
+        pypi_file,
+        name = "example_lock_wheel_pyasn1_0.5.0_py2.py3_none_any",
         package_name = "pyasn1",
-        package_version = "0.4.8",
-        filename = "pyasn1-0.4.8-py2.py3-none-any.whl",
-        sha256 = "39c7e2ec30515947ff4e87fb6f456dfc6e84857d34be479c9d4a4ba4bf46aa5d",
+        package_version = "0.5.0",
+        filename = "pyasn1-0.5.0-py2.py3-none-any.whl",
+        sha256 = "87a2121042a1ac9358cabcaf1d07680ff97ee6404333bacca15f76aa8ad01a57",
         index = "https://pypi.org",
     )
 
@@ -1751,41 +1963,61 @@ def repositories():
 
     maybe(
         pypi_file,
-        name = "example_lock_wheel_pygments_2.13.0_py3_none_any",
+        name = "example_lock_wheel_pydantic_2.4.2_py3_none_any",
+        package_name = "pydantic",
+        package_version = "2.4.2",
+        filename = "pydantic-2.4.2-py3-none-any.whl",
+        sha256 = "bc3ddf669d234f4220e6e1c4d96b061abe0998185a8d7855c0126782b7abc8c1",
+        index = "https://pypi.org",
+    )
+
+    maybe(
+        pypi_file,
+        name = "example_lock_wheel_pydantic_core_2.10.1_cp311_cp311_macosx_10_7_x86_64",
+        package_name = "pydantic-core",
+        package_version = "2.10.1",
+        filename = "pydantic_core-2.10.1-cp311-cp311-macosx_10_7_x86_64.whl",
+        sha256 = "073d4a470b195d2b2245d0343569aac7e979d3a0dcce6c7d2af6d8a920ad0bea",
+        index = "https://pypi.org",
+    )
+
+    maybe(
+        pypi_file,
+        name = "example_lock_wheel_pydantic_core_2.10.1_cp311_cp311_macosx_11_0_arm64",
+        package_name = "pydantic-core",
+        package_version = "2.10.1",
+        filename = "pydantic_core-2.10.1-cp311-cp311-macosx_11_0_arm64.whl",
+        sha256 = "600d04a7b342363058b9190d4e929a8e2e715c5682a70cc37d5ded1e0dd370b4",
+        index = "https://pypi.org",
+    )
+
+    maybe(
+        pypi_file,
+        name = "example_lock_wheel_pydantic_core_2.10.1_cp311_cp311_manylinux_2_17_x86_64.manylinux2014_x86_64",
+        package_name = "pydantic-core",
+        package_version = "2.10.1",
+        filename = "pydantic_core-2.10.1-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl",
+        sha256 = "caa48fc31fc7243e50188197b5f0c4228956f97b954f76da157aae7f67269ae8",
+        index = "https://pypi.org",
+    )
+
+    maybe(
+        pypi_file,
+        name = "example_lock_wheel_pygments_2.16.1_py3_none_any",
         package_name = "pygments",
-        package_version = "2.13.0",
-        filename = "Pygments-2.13.0-py3-none-any.whl",
-        sha256 = "f643f331ab57ba3c9d89212ee4a2dabc6e94f117cf4eefde99a0574720d14c42",
+        package_version = "2.16.1",
+        filename = "Pygments-2.16.1-py3-none-any.whl",
+        sha256 = "13fc09fa63bc8d8671a6d247e1eb303c4b343eaee81d861f3404db2935653692",
         index = "https://pypi.org",
     )
 
     maybe(
         pypi_file,
-        name = "example_lock_wheel_pyparsing_3.0.9_py3_none_any",
+        name = "example_lock_wheel_pyparsing_3.1.1_py3_none_any",
         package_name = "pyparsing",
-        package_version = "3.0.9",
-        filename = "pyparsing-3.0.9-py3-none-any.whl",
-        sha256 = "5026bae9a10eeaefb61dab2f09052b9f4307d44aee4eda64b309723d8d206bbc",
-        index = "https://pypi.org",
-    )
-
-    maybe(
-        pypi_file,
-        name = "example_lock_wheel_pyrsistent_0.18.1_cp39_cp39_macosx_10_9_universal2",
-        package_name = "pyrsistent",
-        package_version = "0.18.1",
-        filename = "pyrsistent-0.18.1-cp39-cp39-macosx_10_9_universal2.whl",
-        sha256 = "f87cc2863ef33c709e237d4b5f4502a62a00fab450c9e020892e8e2ede5847f5",
-        index = "https://pypi.org",
-    )
-
-    maybe(
-        pypi_file,
-        name = "example_lock_wheel_pyrsistent_0.18.1_cp39_cp39_manylinux_2_17_x86_64.manylinux2014_x86_64",
-        package_name = "pyrsistent",
-        package_version = "0.18.1",
-        filename = "pyrsistent-0.18.1-cp39-cp39-manylinux_2_17_x86_64.manylinux2014_x86_64.whl",
-        sha256 = "6bc66318fb7ee012071b2792024564973ecc80e9522842eb4e17743604b5e045",
+        package_version = "3.1.1",
+        filename = "pyparsing-3.1.1-py3-none-any.whl",
+        sha256 = "32c7c0b711493c72ff18a981d24f28aaf9c1fb7ed5e9667c9e84e3db623bdbfb",
         index = "https://pypi.org",
     )
 
@@ -1801,71 +2033,141 @@ def repositories():
 
     maybe(
         pypi_file,
-        name = "example_lock_wheel_python_jose_3.1.0_py2.py3_none_any",
+        name = "example_lock_wheel_python_jose_3.3.0_py2.py3_none_any",
         package_name = "python-jose",
-        package_version = "3.1.0",
-        filename = "python_jose-3.1.0-py2.py3-none-any.whl",
-        sha256 = "1ac4caf4bfebd5a70cf5bd82702ed850db69b0b6e1d0ae7368e5f99ac01c9571",
+        package_version = "3.3.0",
+        filename = "python_jose-3.3.0-py2.py3-none-any.whl",
+        sha256 = "9b1376b023f8b298536eedd47ae1089bcdb848f1535ab30555cd92002d78923a",
         index = "https://pypi.org",
     )
 
     maybe(
         pypi_file,
-        name = "example_lock_wheel_pytz_2022.2.1_py2.py3_none_any",
-        package_name = "pytz",
-        package_version = "2022.2.1",
-        filename = "pytz-2022.2.1-py2.py3-none-any.whl",
-        sha256 = "220f481bdafa09c3955dfbdddb7b57780e9a94f5127e35456a48589b9e0c0197",
-        index = "https://pypi.org",
-    )
-
-    maybe(
-        pypi_file,
-        name = "example_lock_wheel_pyyaml_6.0_cp39_cp39_macosx_10_9_x86_64",
+        name = "example_lock_wheel_pyyaml_6.0.1_cp311_cp311_macosx_10_9_x86_64",
         package_name = "pyyaml",
-        package_version = "6.0",
-        filename = "PyYAML-6.0-cp39-cp39-macosx_10_9_x86_64.whl",
-        sha256 = "055d937d65826939cb044fc8c9b08889e8c743fdc6a32b33e2390f66013e449b",
+        package_version = "6.0.1",
+        filename = "PyYAML-6.0.1-cp311-cp311-macosx_10_9_x86_64.whl",
+        sha256 = "6965a7bc3cf88e5a1c3bd2e0b5c22f8d677dc88a455344035f03399034eb3007",
         index = "https://pypi.org",
     )
 
     maybe(
         pypi_file,
-        name = "example_lock_wheel_pyyaml_6.0_cp39_cp39_macosx_11_0_arm64",
+        name = "example_lock_wheel_pyyaml_6.0.1_cp311_cp311_macosx_11_0_arm64",
         package_name = "pyyaml",
-        package_version = "6.0",
-        filename = "PyYAML-6.0-cp39-cp39-macosx_11_0_arm64.whl",
-        sha256 = "e61ceaab6f49fb8bdfaa0f92c4b57bcfbea54c09277b1b4f7ac376bfb7a7c174",
+        package_version = "6.0.1",
+        filename = "PyYAML-6.0.1-cp311-cp311-macosx_11_0_arm64.whl",
+        sha256 = "f003ed9ad21d6a4713f0a9b5a7a0a79e08dd0f221aff4525a2be4c346ee60aab",
         index = "https://pypi.org",
     )
 
     maybe(
         pypi_file,
-        name = "example_lock_wheel_pyyaml_6.0_cp39_cp39_manylinux_2_5_x86_64.manylinux1_x86_64.manylinux_2_12_x86_64.manylinux2010_x86_64",
+        name = "example_lock_wheel_pyyaml_6.0.1_cp311_cp311_manylinux_2_17_x86_64.manylinux2014_x86_64",
         package_name = "pyyaml",
-        package_version = "6.0",
-        filename = "PyYAML-6.0-cp39-cp39-manylinux_2_5_x86_64.manylinux1_x86_64.manylinux_2_12_x86_64.manylinux2010_x86_64.whl",
-        sha256 = "40527857252b61eacd1d9af500c3337ba8deb8fc298940291486c465c8b46ec0",
+        package_version = "6.0.1",
+        filename = "PyYAML-6.0.1-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl",
+        sha256 = "d2b04aac4d386b172d5b9692e2d2da8de7bfb6c387fa4f801fbf6fb2e6ba4673",
         index = "https://pypi.org",
     )
 
     maybe(
         pypi_file,
-        name = "example_lock_wheel_requests_2.28.1_py3_none_any",
+        name = "example_lock_wheel_referencing_0.30.2_py3_none_any",
+        package_name = "referencing",
+        package_version = "0.30.2",
+        filename = "referencing-0.30.2-py3-none-any.whl",
+        sha256 = "449b6669b6121a9e96a7f9e410b245d471e8d48964c67113ce9afe50c8dd7bdf",
+        index = "https://pypi.org",
+    )
+
+    maybe(
+        pypi_file,
+        name = "example_lock_wheel_regex_2023.10.3_cp311_cp311_macosx_10_9_x86_64",
+        package_name = "regex",
+        package_version = "2023.10.3",
+        filename = "regex-2023.10.3-cp311-cp311-macosx_10_9_x86_64.whl",
+        sha256 = "90a79bce019c442604662d17bf69df99090e24cdc6ad95b18b6725c2988a490e",
+        index = "https://pypi.org",
+    )
+
+    maybe(
+        pypi_file,
+        name = "example_lock_wheel_regex_2023.10.3_cp311_cp311_macosx_11_0_arm64",
+        package_name = "regex",
+        package_version = "2023.10.3",
+        filename = "regex-2023.10.3-cp311-cp311-macosx_11_0_arm64.whl",
+        sha256 = "c7964c2183c3e6cce3f497e3a9f49d182e969f2dc3aeeadfa18945ff7bdd7051",
+        index = "https://pypi.org",
+    )
+
+    maybe(
+        pypi_file,
+        name = "example_lock_wheel_regex_2023.10.3_cp311_cp311_manylinux_2_17_x86_64.manylinux2014_x86_64",
+        package_name = "regex",
+        package_version = "2023.10.3",
+        filename = "regex-2023.10.3-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl",
+        sha256 = "8d1f21af4c1539051049796a0f50aa342f9a27cde57318f2fc41ed50b0dbc4ac",
+        index = "https://pypi.org",
+    )
+
+    maybe(
+        pypi_file,
+        name = "example_lock_wheel_requests_2.31.0_py3_none_any",
         package_name = "requests",
-        package_version = "2.28.1",
-        filename = "requests-2.28.1-py3-none-any.whl",
-        sha256 = "8fefa2a1a1365bf5520aac41836fbee479da67864514bdb821f31ce07ce65349",
+        package_version = "2.31.0",
+        filename = "requests-2.31.0-py3-none-any.whl",
+        sha256 = "58cd2187c01e70e6e26505bca751777aa9f2ee0b7f4300988b709f44e013003f",
         index = "https://pypi.org",
     )
 
     maybe(
         pypi_file,
-        name = "example_lock_wheel_responses_0.21.0_py3_none_any",
+        name = "example_lock_wheel_responses_0.24.0_py3_none_any",
         package_name = "responses",
-        package_version = "0.21.0",
-        filename = "responses-0.21.0-py3-none-any.whl",
-        sha256 = "2dcc863ba63963c0c3d9ee3fa9507cbe36b7d7b0fccb4f0bdfd9e96c539b1487",
+        package_version = "0.24.0",
+        filename = "responses-0.24.0-py3-none-any.whl",
+        sha256 = "060be153c270c06fa4d22c1ef8865fdef43902eb595204deeef736cddb62d353",
+        index = "https://pypi.org",
+    )
+
+    maybe(
+        pypi_file,
+        name = "example_lock_wheel_rfc3339_validator_0.1.4_py2.py3_none_any",
+        package_name = "rfc3339-validator",
+        package_version = "0.1.4",
+        filename = "rfc3339_validator-0.1.4-py2.py3-none-any.whl",
+        sha256 = "24f6ec1eda14ef823da9e36ec7113124b39c04d50a4d3d3a3c2859577e7791fa",
+        index = "https://pypi.org",
+    )
+
+    maybe(
+        pypi_file,
+        name = "example_lock_wheel_rpds_py_0.12.0_cp311_cp311_macosx_10_7_x86_64",
+        package_name = "rpds-py",
+        package_version = "0.12.0",
+        filename = "rpds_py-0.12.0-cp311-cp311-macosx_10_7_x86_64.whl",
+        sha256 = "0a38612d07a36138507d69646c470aedbfe2b75b43a4643f7bd8e51e52779624",
+        index = "https://pypi.org",
+    )
+
+    maybe(
+        pypi_file,
+        name = "example_lock_wheel_rpds_py_0.12.0_cp311_cp311_macosx_11_0_arm64",
+        package_name = "rpds-py",
+        package_version = "0.12.0",
+        filename = "rpds_py-0.12.0-cp311-cp311-macosx_11_0_arm64.whl",
+        sha256 = "f12d69d568f5647ec503b64932874dade5a20255736c89936bf690951a5e79f5",
+        index = "https://pypi.org",
+    )
+
+    maybe(
+        pypi_file,
+        name = "example_lock_wheel_rpds_py_0.12.0_cp311_cp311_manylinux_2_17_x86_64.manylinux2014_x86_64",
+        package_name = "rpds-py",
+        package_version = "0.12.0",
+        filename = "rpds_py-0.12.0-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl",
+        sha256 = "d9e7f29c00577aff6b318681e730a519b235af292732a149337f6aaa4d1c5e31",
         index = "https://pypi.org",
     )
 
@@ -1881,11 +2183,11 @@ def repositories():
 
     maybe(
         pypi_file,
-        name = "example_lock_wheel_s3transfer_0.6.0_py3_none_any",
+        name = "example_lock_wheel_s3transfer_0.7.0_py3_none_any",
         package_name = "s3transfer",
-        package_version = "0.6.0",
-        filename = "s3transfer-0.6.0-py3-none-any.whl",
-        sha256 = "06176b74f3a15f61f1b4f25a1fc29a4429040b7647133a463da8fa5bd28d5ecd",
+        package_version = "0.7.0",
+        filename = "s3transfer-0.7.0-py3-none-any.whl",
+        sha256 = "10d6923c6359175f264811ef4bf6161a3156ce8e350e705396a7557d6293c33a",
         index = "https://pypi.org",
     )
 
@@ -1911,11 +2213,11 @@ def repositories():
 
     maybe(
         pypi_file,
-        name = "example_lock_wheel_setuptools_59.2.0_py3_none_any",
+        name = "example_lock_wheel_setuptools_68.2.2_py3_none_any",
         package_name = "setuptools",
-        package_version = "59.2.0",
-        filename = "setuptools-59.2.0-py3-none-any.whl",
-        sha256 = "4adde3d1e1c89bde1c643c64d89cdd94cbfd8c75252ee459d4500bccb9c7d05d",
+        package_version = "68.2.2",
+        filename = "setuptools-68.2.2-py3-none-any.whl",
+        sha256 = "b454a35605876da60632df1a60f736524eb73cc47bbc9f3f1ef1b644de74fd2a",
         index = "https://pypi.org",
     )
 
@@ -1931,31 +2233,41 @@ def repositories():
 
     maybe(
         pypi_file,
-        name = "example_lock_wheel_sqlalchemy_1.4.41_cp39_cp39_macosx_10_15_x86_64",
+        name = "example_lock_wheel_sqlalchemy_2.0.23_cp311_cp311_macosx_10_9_x86_64",
         package_name = "sqlalchemy",
-        package_version = "1.4.41",
-        filename = "SQLAlchemy-1.4.41-cp39-cp39-macosx_10_15_x86_64.whl",
-        sha256 = "199a73c31ac8ea59937cc0bf3dfc04392e81afe2ec8a74f26f489d268867846c",
+        package_version = "2.0.23",
+        filename = "SQLAlchemy-2.0.23-cp311-cp311-macosx_10_9_x86_64.whl",
+        sha256 = "d5578e6863eeb998980c212a39106ea139bdc0b3f73291b96e27c929c90cd8e1",
         index = "https://pypi.org",
     )
 
     maybe(
         pypi_file,
-        name = "example_lock_wheel_sqlalchemy_1.4.41_cp39_cp39_manylinux_2_5_x86_64.manylinux1_x86_64.manylinux_2_17_x86_64.manylinux2014_x86_64",
+        name = "example_lock_wheel_sqlalchemy_2.0.23_cp311_cp311_macosx_11_0_arm64",
         package_name = "sqlalchemy",
-        package_version = "1.4.41",
-        filename = "SQLAlchemy-1.4.41-cp39-cp39-manylinux_2_5_x86_64.manylinux1_x86_64.manylinux_2_17_x86_64.manylinux2014_x86_64.whl",
-        sha256 = "2307495d9e0ea00d0c726be97a5b96615035854972cc538f6e7eaed23a35886c",
+        package_version = "2.0.23",
+        filename = "SQLAlchemy-2.0.23-cp311-cp311-macosx_11_0_arm64.whl",
+        sha256 = "62d9e964870ea5ade4bc870ac4004c456efe75fb50404c03c5fd61f8bc669a72",
         index = "https://pypi.org",
     )
 
     maybe(
         pypi_file,
-        name = "example_lock_wheel_sqlalchemy_utils_0.38.2_py3_none_any",
+        name = "example_lock_wheel_sqlalchemy_2.0.23_cp311_cp311_manylinux_2_17_x86_64.manylinux2014_x86_64",
+        package_name = "sqlalchemy",
+        package_version = "2.0.23",
+        filename = "SQLAlchemy-2.0.23-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl",
+        sha256 = "75eefe09e98043cff2fb8af9796e20747ae870c903dc61d41b0c2e55128f958d",
+        index = "https://pypi.org",
+    )
+
+    maybe(
+        pypi_file,
+        name = "example_lock_wheel_sqlalchemy_utils_0.41.1_py3_none_any",
         package_name = "sqlalchemy-utils",
-        package_version = "0.38.2",
-        filename = "SQLAlchemy_Utils-0.38.2-py3-none-any.whl",
-        sha256 = "622235b1598f97300e4d08820ab024f5219c9a6309937a8b908093f487b4ba54",
+        package_version = "0.41.1",
+        filename = "SQLAlchemy_Utils-0.41.1-py3-none-any.whl",
+        sha256 = "6c96b0768ea3f15c0dc56b363d386138c562752b84f647fb8d31a2223aaab801",
         index = "https://pypi.org",
     )
 
@@ -1971,111 +2283,151 @@ def repositories():
 
     maybe(
         pypi_file,
-        name = "example_lock_wheel_stack_data_0.5.0_py3_none_any",
+        name = "example_lock_wheel_stack_data_0.6.3_py3_none_any",
         package_name = "stack-data",
-        package_version = "0.5.0",
-        filename = "stack_data-0.5.0-py3-none-any.whl",
-        sha256 = "66d2ebd3d7f29047612ead465b6cae5371006a71f45037c7e2507d01367bce3b",
+        package_version = "0.6.3",
+        filename = "stack_data-0.6.3-py3-none-any.whl",
+        sha256 = "d5558e0c25a4cb0853cddad3d77da9891a08cb85dd9f9f91b9f8cd66e511e695",
         index = "https://pypi.org",
     )
 
     maybe(
         pypi_file,
-        name = "example_lock_wheel_traitlets_5.4.0_py3_none_any",
+        name = "example_lock_wheel_sympy_1.12_py3_none_any",
+        package_name = "sympy",
+        package_version = "1.12",
+        filename = "sympy-1.12-py3-none-any.whl",
+        sha256 = "c3588cd4295d0c0f603d0f2ae780587e64e2efeedb3521e46b9bb1d08d184fa5",
+        index = "https://pypi.org",
+    )
+
+    maybe(
+        pypi_file,
+        name = "example_lock_wheel_traitlets_5.13.0_py3_none_any",
         package_name = "traitlets",
-        package_version = "5.4.0",
-        filename = "traitlets-5.4.0-py3-none-any.whl",
-        sha256 = "93663cc8236093d48150e2af5e2ed30fc7904a11a6195e21bab0408af4e6d6c8",
+        package_version = "5.13.0",
+        filename = "traitlets-5.13.0-py3-none-any.whl",
+        sha256 = "baf991e61542da48fe8aef8b779a9ea0aa38d8a54166ee250d5af5ecf4486619",
         index = "https://pypi.org",
     )
 
     maybe(
         pypi_file,
-        name = "example_lock_wheel_tree_sitter_0.20.0_cp39_cp39_macosx_12_0_arm64",
+        name = "example_lock_wheel_tree_sitter_0.20.2_cp311_cp311_macosx_10_9_x86_64",
         package_name = "tree-sitter",
-        package_version = "0.20.0",
-        filename = "tree_sitter-0.20.0-cp39-cp39-macosx_12_0_arm64.whl",
-        sha256 = "51a609a7c1bd9d9e75d92ee128c12c7852ae70a482900fbbccf3d13a79e0378c",
+        package_version = "0.20.2",
+        filename = "tree_sitter-0.20.2-cp311-cp311-macosx_10_9_x86_64.whl",
+        sha256 = "942dbfb8bc380f09b0e323d3884de07d19022930516f33b7503a6eb5f6e18979",
         index = "https://pypi.org",
     )
 
     maybe(
         pypi_file,
-        name = "example_lock_wheel_urllib3_1.26.12_py2.py3_none_any",
+        name = "example_lock_wheel_tree_sitter_0.20.2_cp311_cp311_macosx_11_0_arm64",
+        package_name = "tree-sitter",
+        package_version = "0.20.2",
+        filename = "tree_sitter-0.20.2-cp311-cp311-macosx_11_0_arm64.whl",
+        sha256 = "ee5651c11924d426f8d6858a40fd5090ae31574f81ef180bef2055282f43bf62",
+        index = "https://pypi.org",
+    )
+
+    maybe(
+        pypi_file,
+        name = "example_lock_wheel_tree_sitter_0.20.2_cp311_cp311_manylinux_2_17_x86_64.manylinux2014_x86_64",
+        package_name = "tree-sitter",
+        package_version = "0.20.2",
+        filename = "tree_sitter-0.20.2-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl",
+        sha256 = "067609c6c7cb6e5a6c4be50076a380fe52b6e8f0641ee9d0da33b24a5b972e82",
+        index = "https://pypi.org",
+    )
+
+    maybe(
+        pypi_file,
+        name = "example_lock_wheel_typing_extensions_4.8.0_py3_none_any",
+        package_name = "typing-extensions",
+        package_version = "4.8.0",
+        filename = "typing_extensions-4.8.0-py3-none-any.whl",
+        sha256 = "8f92fc8806f9a6b641eaa5318da32b44d401efaac0f6678c9bc448ba3605faa0",
+        index = "https://pypi.org",
+    )
+
+    maybe(
+        pypi_file,
+        name = "example_lock_wheel_urllib3_2.0.7_py3_none_any",
         package_name = "urllib3",
-        package_version = "1.26.12",
-        filename = "urllib3-1.26.12-py2.py3-none-any.whl",
-        sha256 = "b930dd878d5a8afb066a637fbb35144fe7901e3b209d1cd4f524bd0e9deee997",
+        package_version = "2.0.7",
+        filename = "urllib3-2.0.7-py3-none-any.whl",
+        sha256 = "fdb6d215c776278489906c2f8916e6e7d4f5a9b602ccbcfdf7f016fc8da0596e",
         index = "https://pypi.org",
     )
 
     maybe(
         pypi_file,
-        name = "example_lock_wheel_wcwidth_0.2.5_py2.py3_none_any",
+        name = "example_lock_wheel_wcwidth_0.2.9_py2.py3_none_any",
         package_name = "wcwidth",
-        package_version = "0.2.5",
-        filename = "wcwidth-0.2.5-py2.py3-none-any.whl",
-        sha256 = "beb4802a9cebb9144e99086eff703a642a13d6a0052920003a230f3294bbe784",
+        package_version = "0.2.9",
+        filename = "wcwidth-0.2.9-py2.py3-none-any.whl",
+        sha256 = "9a929bd8380f6cd9571a968a9c8f4353ca58d7cd812a4822bba831f8d685b223",
         index = "https://pypi.org",
     )
 
     maybe(
         pypi_file,
-        name = "example_lock_wheel_websocket_client_1.4.1_py3_none_any",
+        name = "example_lock_wheel_websocket_client_1.6.4_py3_none_any",
         package_name = "websocket-client",
-        package_version = "1.4.1",
-        filename = "websocket_client-1.4.1-py3-none-any.whl",
-        sha256 = "398909eb7e261f44b8f4bd474785b6ec5f5b499d4953342fe9755e01ef624090",
+        package_version = "1.6.4",
+        filename = "websocket_client-1.6.4-py3-none-any.whl",
+        sha256 = "084072e0a7f5f347ef2ac3d8698a5e0b4ffbfcab607628cadabc650fc9a83a24",
         index = "https://pypi.org",
     )
 
     maybe(
         pypi_file,
-        name = "example_lock_wheel_werkzeug_2.2.2_py3_none_any",
+        name = "example_lock_wheel_werkzeug_3.0.1_py3_none_any",
         package_name = "werkzeug",
-        package_version = "2.2.2",
-        filename = "Werkzeug-2.2.2-py3-none-any.whl",
-        sha256 = "f979ab81f58d7318e064e99c4506445d60135ac5cd2e177a2de0089bfd4c9bd5",
+        package_version = "3.0.1",
+        filename = "werkzeug-3.0.1-py3-none-any.whl",
+        sha256 = "90a285dc0e42ad56b34e696398b8122ee4c681833fb35b8334a095d82c56da10",
         index = "https://pypi.org",
     )
 
     maybe(
         pypi_file,
-        name = "example_lock_wheel_wheel_0.37.0_py2.py3_none_any",
+        name = "example_lock_wheel_wheel_0.41.3_py3_none_any",
         package_name = "wheel",
-        package_version = "0.37.0",
-        filename = "wheel-0.37.0-py2.py3-none-any.whl",
-        sha256 = "21014b2bd93c6d0034b6ba5d35e4eb284340e09d63c59aef6fc14b0f346146fd",
+        package_version = "0.41.3",
+        filename = "wheel-0.41.3-py3-none-any.whl",
+        sha256 = "488609bc63a29322326e05560731bf7bfea8e48ad646e1f5e40d366607de0942",
         index = "https://pypi.org",
     )
 
     maybe(
         pypi_file,
-        name = "example_lock_wheel_wrapt_1.14.1_cp39_cp39_macosx_10_9_x86_64",
+        name = "example_lock_wheel_wrapt_1.15.0_cp311_cp311_macosx_10_9_x86_64",
         package_name = "wrapt",
-        package_version = "1.14.1",
-        filename = "wrapt-1.14.1-cp39-cp39-macosx_10_9_x86_64.whl",
-        sha256 = "3232822c7d98d23895ccc443bbdf57c7412c5a65996c30442ebe6ed3df335383",
+        package_version = "1.15.0",
+        filename = "wrapt-1.15.0-cp311-cp311-macosx_10_9_x86_64.whl",
+        sha256 = "ba1711cda2d30634a7e452fc79eabcadaffedf241ff206db2ee93dd2c89a60e7",
         index = "https://pypi.org",
     )
 
     maybe(
         pypi_file,
-        name = "example_lock_wheel_wrapt_1.14.1_cp39_cp39_macosx_11_0_arm64",
+        name = "example_lock_wheel_wrapt_1.15.0_cp311_cp311_macosx_11_0_arm64",
         package_name = "wrapt",
-        package_version = "1.14.1",
-        filename = "wrapt-1.14.1-cp39-cp39-macosx_11_0_arm64.whl",
-        sha256 = "988635d122aaf2bdcef9e795435662bcd65b02f4f4c1ae37fbee7401c440b3a7",
+        package_version = "1.15.0",
+        filename = "wrapt-1.15.0-cp311-cp311-macosx_11_0_arm64.whl",
+        sha256 = "56374914b132c702aa9aa9959c550004b8847148f95e1b824772d453ac204a72",
         index = "https://pypi.org",
     )
 
     maybe(
         pypi_file,
-        name = "example_lock_wheel_wrapt_1.14.1_cp39_cp39_manylinux_2_5_x86_64.manylinux1_x86_64.manylinux_2_17_x86_64.manylinux2014_x86_64",
+        name = "example_lock_wheel_wrapt_1.15.0_cp311_cp311_manylinux_2_5_x86_64.manylinux1_x86_64.manylinux_2_17_x86_64.manylinux2014_x86_64",
         package_name = "wrapt",
-        package_version = "1.14.1",
-        filename = "wrapt-1.14.1-cp39-cp39-manylinux_2_5_x86_64.manylinux1_x86_64.manylinux_2_17_x86_64.manylinux2014_x86_64.whl",
-        sha256 = "40e7bc81c9e2b2734ea4bc1aceb8a8f0ceaac7c5299bc5d69e37c44d9081d43b",
+        package_version = "1.15.0",
+        filename = "wrapt-1.15.0-cp311-cp311-manylinux_2_5_x86_64.manylinux1_x86_64.manylinux_2_17_x86_64.manylinux2014_x86_64.whl",
+        sha256 = "3abbe948c3cbde2689370a262a8d04e32ec2dd4f27103669a45c6929bcdbfe7c",
         index = "https://pypi.org",
     )
 
@@ -2087,15 +2439,5 @@ def repositories():
         ],
         sha256 = "aa89e8fd76320154a40d19a0df04a4695fb9dc5ba977cbb68ab3e4eb225e7852",
         downloaded_file_path = "xmltodict-0.13.0-py2.py3-none-any.whl",
-    )
-
-    maybe(
-        pypi_file,
-        name = "example_lock_wheel_zipp_3.8.1_py3_none_any",
-        package_name = "zipp",
-        package_version = "3.8.1",
-        filename = "zipp-3.8.1-py3-none-any.whl",
-        sha256 = "47c40d7fe183a6f21403a199b3e4192cca5774656965b0a4988ad2f8feb5f009",
-        index = "https://pypi.org",
     )
 

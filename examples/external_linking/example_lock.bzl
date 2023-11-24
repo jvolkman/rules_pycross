@@ -8,19 +8,17 @@ load("@jvolkman_rules_pycross//pycross:defs.bzl", "pycross_wheel_build", "pycros
 PINS = {
     "appnope": "appnope_0.1.3",
     "asttokens": "asttokens_2.4.1",
-    "backcall": "backcall_0.2.0",
     "cython": "cython_0.29.36",
     "decorator": "decorator_5.1.1",
     "exceptiongroup": "exceptiongroup_1.1.3",
-    "executing": "executing_2.0.0",
-    "ipython": "ipython_8.16.1",
+    "executing": "executing_2.0.1",
+    "ipython": "ipython_8.17.2",
     "jedi": "jedi_0.19.1",
     "matplotlib_inline": "matplotlib_inline_0.1.6",
     "numpy": "numpy_1.23.5",
     "pandas": "pandas_1.5.2",
     "parso": "parso_0.8.3",
     "pexpect": "pexpect_4.8.0",
-    "pickleshare": "pickleshare_0.7.5",
     "prompt_toolkit": "prompt_toolkit_3.0.39",
     "psycopg2": "psycopg2_2.9.5",
     "ptyprocess": "ptyprocess_0.7.0",
@@ -32,8 +30,8 @@ PINS = {
     "setuptools": "setuptools_59.2.0",
     "six": "six_1.16.0",
     "stack_data": "stack_data_0.6.3",
-    "traitlets": "traitlets_5.12.0",
-    "wcwidth": "wcwidth_0.2.8",
+    "traitlets": "traitlets_5.13.0",
+    "wcwidth": "wcwidth_0.2.9",
     "wheel": "wheel_0.37.0",
 }
 
@@ -99,11 +97,6 @@ def targets():
     )
 
     pycross_wheel_library(
-        name = "backcall_0.2.0",
-        wheel = "@example_lock_wheel_backcall_0.2.0_py2.py3_none_any//file",
-    )
-
-    pycross_wheel_library(
         name = "cython_0.29.36",
         wheel = select({
             ":_env_python_darwin_arm64": "@example_lock_wheel_cython_0.29.36_py2.py3_none_any//file",
@@ -124,22 +117,20 @@ def targets():
     )
 
     pycross_wheel_library(
-        name = "executing_2.0.0",
-        wheel = "@example_lock_wheel_executing_2.0.0_py2.py3_none_any//file",
+        name = "executing_2.0.1",
+        wheel = "@example_lock_wheel_executing_2.0.1_py2.py3_none_any//file",
     )
 
-    _ipython_8_16_1_deps = [
-        ":backcall_0.2.0",
+    _ipython_8_17_2_deps = [
         ":decorator_5.1.1",
         ":exceptiongroup_1.1.3",
         ":jedi_0.19.1",
         ":matplotlib_inline_0.1.6",
         ":pexpect_4.8.0",
-        ":pickleshare_0.7.5",
         ":prompt_toolkit_3.0.39",
         ":pygments_2.16.1",
         ":stack_data_0.6.3",
-        ":traitlets_5.12.0",
+        ":traitlets_5.13.0",
     ] + select({
         ":_env_python_darwin_arm64": [
             ":appnope_0.1.3",
@@ -151,9 +142,9 @@ def targets():
     })
 
     pycross_wheel_library(
-        name = "ipython_8.16.1",
-        deps = _ipython_8_16_1_deps,
-        wheel = "@example_lock_wheel_ipython_8.16.1_py3_none_any//file",
+        name = "ipython_8.17.2",
+        deps = _ipython_8_17_2_deps,
+        wheel = "@example_lock_wheel_ipython_8.17.2_py3_none_any//file",
     )
 
     _jedi_0_19_1_deps = [
@@ -167,7 +158,7 @@ def targets():
     )
 
     _matplotlib_inline_0_1_6_deps = [
-        ":traitlets_5.12.0",
+        ":traitlets_5.13.0",
     ]
 
     pycross_wheel_library(
@@ -228,13 +219,8 @@ def targets():
         wheel = "@example_lock_wheel_pexpect_4.8.0_py2.py3_none_any//file",
     )
 
-    pycross_wheel_library(
-        name = "pickleshare_0.7.5",
-        wheel = "@example_lock_wheel_pickleshare_0.7.5_py2.py3_none_any//file",
-    )
-
     _prompt_toolkit_3_0_39_deps = [
-        ":wcwidth_0.2.8",
+        ":wcwidth_0.2.9",
     ]
 
     pycross_wheel_library(
@@ -308,7 +294,7 @@ def targets():
 
     _stack_data_0_6_3_deps = [
         ":asttokens_2.4.1",
-        ":executing_2.0.0",
+        ":executing_2.0.1",
         ":pure_eval_0.2.2",
     ]
 
@@ -319,13 +305,13 @@ def targets():
     )
 
     pycross_wheel_library(
-        name = "traitlets_5.12.0",
-        wheel = "@example_lock_wheel_traitlets_5.12.0_py3_none_any//file",
+        name = "traitlets_5.13.0",
+        wheel = "@example_lock_wheel_traitlets_5.13.0_py3_none_any//file",
     )
 
     pycross_wheel_library(
-        name = "wcwidth_0.2.8",
-        wheel = "@example_lock_wheel_wcwidth_0.2.8_py2.py3_none_any//file",
+        name = "wcwidth_0.2.9",
+        wheel = "@example_lock_wheel_wcwidth_0.2.9_py2.py3_none_any//file",
     )
 
     pycross_wheel_library(
@@ -396,16 +382,6 @@ def repositories():
 
     maybe(
         http_file,
-        name = "example_lock_wheel_backcall_0.2.0_py2.py3_none_any",
-        urls = [
-            "https://files.pythonhosted.org/packages/4c/1c/ff6546b6c12603d8dd1070aa3c3d273ad4c07f5771689a7b69a550e8c951/backcall-0.2.0-py2.py3-none-any.whl"
-        ],
-        sha256 = "fbbce6a29f263178a1f7915c1940bde0ec2b2a967566fe1c65c1dfb7422bd255",
-        downloaded_file_path = "backcall-0.2.0-py2.py3-none-any.whl",
-    )
-
-    maybe(
-        http_file,
         name = "example_lock_wheel_cython_0.29.36_cp310_cp310_manylinux_2_17_aarch64.manylinux2014_aarch64.manylinux_2_24_aarch64",
         urls = [
             "https://files.pythonhosted.org/packages/48/93/a3a183e87a6f9442bd05adc84282d4b156b1246310f9a15729c4783640eb/Cython-0.29.36-cp310-cp310-manylinux_2_17_aarch64.manylinux2014_aarch64.manylinux_2_24_aarch64.whl"
@@ -456,22 +432,22 @@ def repositories():
 
     maybe(
         http_file,
-        name = "example_lock_wheel_executing_2.0.0_py2.py3_none_any",
+        name = "example_lock_wheel_executing_2.0.1_py2.py3_none_any",
         urls = [
-            "https://files.pythonhosted.org/packages/bb/3f/748594706233e45fd0e6fb57a2fbfe572485009c52b19919d161a0ae5d52/executing-2.0.0-py2.py3-none-any.whl"
+            "https://files.pythonhosted.org/packages/80/03/6ea8b1b2a5ab40a7a60dc464d3daa7aa546e0a74d74a9f8ff551ea7905db/executing-2.0.1-py2.py3-none-any.whl"
         ],
-        sha256 = "06df6183df67389625f4e763921c6cf978944721abf3e714000200aab95b0657",
-        downloaded_file_path = "executing-2.0.0-py2.py3-none-any.whl",
+        sha256 = "eac49ca94516ccc753f9fb5ce82603156e590b27525a8bc32cce8ae302eb61bc",
+        downloaded_file_path = "executing-2.0.1-py2.py3-none-any.whl",
     )
 
     maybe(
         http_file,
-        name = "example_lock_wheel_ipython_8.16.1_py3_none_any",
+        name = "example_lock_wheel_ipython_8.17.2_py3_none_any",
         urls = [
-            "https://files.pythonhosted.org/packages/ef/02/fc039fca3ec40a00f962eb6e9da45c507334b0650a3cb9facd38d234fb7a/ipython-8.16.1-py3-none-any.whl"
+            "https://files.pythonhosted.org/packages/20/45/18f0dc2cbc3ee6680a004f620fb1400c6511ded0a76a2dd241813786ce73/ipython-8.17.2-py3-none-any.whl"
         ],
-        sha256 = "0852469d4d579d9cd613c220af7bf0c9cc251813e12be647cb9d463939db9b1e",
-        downloaded_file_path = "ipython-8.16.1-py3-none-any.whl",
+        sha256 = "1e4d1d666a023e3c93585ba0d8e962867f7a111af322efff6b9c58062b3e5444",
+        downloaded_file_path = "ipython-8.17.2-py3-none-any.whl",
     )
 
     maybe(
@@ -512,16 +488,6 @@ def repositories():
         ],
         sha256 = "0b48a55dcb3c05f3329815901ea4fc1537514d6ba867a152b581d69ae3710937",
         downloaded_file_path = "pexpect-4.8.0-py2.py3-none-any.whl",
-    )
-
-    maybe(
-        http_file,
-        name = "example_lock_wheel_pickleshare_0.7.5_py2.py3_none_any",
-        urls = [
-            "https://files.pythonhosted.org/packages/9a/41/220f49aaea88bc6fa6cba8d05ecf24676326156c23b991e80b3f2fc24c77/pickleshare-0.7.5-py2.py3-none-any.whl"
-        ],
-        sha256 = "9649af414d74d4df115d5d718f82acb59c9d418196b7b4290ed47a12ce62df56",
-        downloaded_file_path = "pickleshare-0.7.5-py2.py3-none-any.whl",
     )
 
     maybe(
@@ -616,22 +582,22 @@ def repositories():
 
     maybe(
         http_file,
-        name = "example_lock_wheel_traitlets_5.12.0_py3_none_any",
+        name = "example_lock_wheel_traitlets_5.13.0_py3_none_any",
         urls = [
-            "https://files.pythonhosted.org/packages/e0/ad/0ec97a5a37481552b43352190e509b8dfb2e379d55b41fac8ba5a635bb9a/traitlets-5.12.0-py3-none-any.whl"
+            "https://files.pythonhosted.org/packages/ed/fd/cfc0d27ca11f3dd12b2a90d06875d8bfb532ef40ce67be4066d10807f4aa/traitlets-5.13.0-py3-none-any.whl"
         ],
-        sha256 = "81539f07f7aebcde2e4b5ab76727f53eabf18ad155c6ed7979a681411602fa47",
-        downloaded_file_path = "traitlets-5.12.0-py3-none-any.whl",
+        sha256 = "baf991e61542da48fe8aef8b779a9ea0aa38d8a54166ee250d5af5ecf4486619",
+        downloaded_file_path = "traitlets-5.13.0-py3-none-any.whl",
     )
 
     maybe(
         http_file,
-        name = "example_lock_wheel_wcwidth_0.2.8_py2.py3_none_any",
+        name = "example_lock_wheel_wcwidth_0.2.9_py2.py3_none_any",
         urls = [
-            "https://files.pythonhosted.org/packages/58/19/a9ce39f89cf58cf1e7ce01c8bb76ab7e2c7aadbc5a2136c3e192097344f5/wcwidth-0.2.8-py2.py3-none-any.whl"
+            "https://files.pythonhosted.org/packages/19/0b/00728863778b14ececfc97e40850fd71529b6a1695907981cc3fdc085ba6/wcwidth-0.2.9-py2.py3-none-any.whl"
         ],
-        sha256 = "77f719e01648ed600dfa5402c347481c0992263b81a027344f3e1ba25493a704",
-        downloaded_file_path = "wcwidth-0.2.8-py2.py3-none-any.whl",
+        sha256 = "9a929bd8380f6cd9571a968a9c8f4353ca58d7cd812a4822bba831f8d685b223",
+        downloaded_file_path = "wcwidth-0.2.9-py2.py3-none-any.whl",
     )
 
     maybe(
