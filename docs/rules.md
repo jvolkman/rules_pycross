@@ -8,9 +8,9 @@ Public API re-exports
 
 <pre>
 pycross_lock_file(<a href="#pycross_lock_file-name">name</a>, <a href="#pycross_lock_file-always_build_packages">always_build_packages</a>, <a href="#pycross_lock_file-build_prefix">build_prefix</a>, <a href="#pycross_lock_file-build_target_overrides">build_target_overrides</a>,
-                  <a href="#pycross_lock_file-default_alias_single_version">default_alias_single_version</a>, <a href="#pycross_lock_file-environment_prefix">environment_prefix</a>, <a href="#pycross_lock_file-local_wheels">local_wheels</a>, <a href="#pycross_lock_file-lock_model_file">lock_model_file</a>,
-                  <a href="#pycross_lock_file-out">out</a>, <a href="#pycross_lock_file-package_build_dependencies">package_build_dependencies</a>, <a href="#pycross_lock_file-package_ignore_dependencies">package_ignore_dependencies</a>, <a href="#pycross_lock_file-package_prefix">package_prefix</a>,
-                  <a href="#pycross_lock_file-pypi_index">pypi_index</a>, <a href="#pycross_lock_file-remote_wheels">remote_wheels</a>, <a href="#pycross_lock_file-repo_prefix">repo_prefix</a>, <a href="#pycross_lock_file-target_environments">target_environments</a>)
+                  <a href="#pycross_lock_file-default_alias_single_version">default_alias_single_version</a>, <a href="#pycross_lock_file-disallow_builds">disallow_builds</a>, <a href="#pycross_lock_file-environment_prefix">environment_prefix</a>, <a href="#pycross_lock_file-local_wheels">local_wheels</a>,
+                  <a href="#pycross_lock_file-lock_model_file">lock_model_file</a>, <a href="#pycross_lock_file-out">out</a>, <a href="#pycross_lock_file-package_build_dependencies">package_build_dependencies</a>, <a href="#pycross_lock_file-package_ignore_dependencies">package_ignore_dependencies</a>,
+                  <a href="#pycross_lock_file-package_prefix">package_prefix</a>, <a href="#pycross_lock_file-pypi_index">pypi_index</a>, <a href="#pycross_lock_file-remote_wheels">remote_wheels</a>, <a href="#pycross_lock_file-repo_prefix">repo_prefix</a>, <a href="#pycross_lock_file-target_environments">target_environments</a>)
 </pre>
 
 
@@ -25,6 +25,7 @@ pycross_lock_file(<a href="#pycross_lock_file-name">name</a>, <a href="#pycross_
 | <a id="pycross_lock_file-build_prefix"></a>build_prefix |  An optional prefix to apply to package build targets. Defaults to _build   | String | optional | <code>"_build"</code> |
 | <a id="pycross_lock_file-build_target_overrides"></a>build_target_overrides |  A mapping of package keys (name or name@version) to existing pycross_wheel_build build targets.   | <a href="https://bazel.build/rules/lib/dict">Dictionary: String -> String</a> | optional | <code>{}</code> |
 | <a id="pycross_lock_file-default_alias_single_version"></a>default_alias_single_version |  Generate aliases for all packages that have a single version in the lock file.   | Boolean | optional | <code>False</code> |
+| <a id="pycross_lock_file-disallow_builds"></a>disallow_builds |  Do not allow pycross_wheel_build targets in the final lock file (i.e., require wheels).   | Boolean | optional | <code>False</code> |
 | <a id="pycross_lock_file-environment_prefix"></a>environment_prefix |  An optional prefix to apply to environment targets. Defaults to _env   | String | optional | <code>"_env"</code> |
 | <a id="pycross_lock_file-local_wheels"></a>local_wheels |  A list of wheel files.   | <a href="https://bazel.build/concepts/labels">List of labels</a> | optional | <code>[]</code> |
 | <a id="pycross_lock_file-lock_model_file"></a>lock_model_file |  The lock model JSON file.   | <a href="https://bazel.build/concepts/labels">Label</a> | required |  |
@@ -180,6 +181,26 @@ pycross_wheel_library(<a href="#pycross_wheel_library-name">name</a>, <a href="#
 | <a id="pycross_wheel_library-wheel"></a>wheel |  The wheel file.   | <a href="https://bazel.build/concepts/labels">Label</a> | required |  |
 
 
+<a id="pycross_wheel_zipimport_library"></a>
+
+## pycross_wheel_zipimport_library
+
+<pre>
+pycross_wheel_zipimport_library(<a href="#pycross_wheel_zipimport_library-name">name</a>, <a href="#pycross_wheel_zipimport_library-deps">deps</a>, <a href="#pycross_wheel_zipimport_library-wheel">wheel</a>)
+</pre>
+
+
+
+**ATTRIBUTES**
+
+
+| Name  | Description | Type | Mandatory | Default |
+| :------------- | :------------- | :------------- | :------------- | :------------- |
+| <a id="pycross_wheel_zipimport_library-name"></a>name |  A unique name for this target.   | <a href="https://bazel.build/concepts/labels#target-names">Name</a> | required |  |
+| <a id="pycross_wheel_zipimport_library-deps"></a>deps |  A list of this wheel's Python library dependencies.   | <a href="https://bazel.build/concepts/labels">List of labels</a> | optional | <code>[]</code> |
+| <a id="pycross_wheel_zipimport_library-wheel"></a>wheel |  The wheel file.   | <a href="https://bazel.build/concepts/labels">Label</a> | required |  |
+
+
 <a id="pypi_file"></a>
 
 ## pypi_file
@@ -243,13 +264,13 @@ Information about a Python wheel.
 | <a id="PycrossWheelInfo-wheel_file"></a>wheel_file |  File: The wheel file itself.    |
 
 
-<a id="pycross_register_toolchains"></a>
+<a id="pycross_register_for_python_toolchains"></a>
 
-## pycross_register_toolchains
+## pycross_register_for_python_toolchains
 
 <pre>
-pycross_register_toolchains(<a href="#pycross_register_toolchains-name">name</a>, <a href="#pycross_register_toolchains-python_toolchain_name">python_toolchain_name</a>, <a href="#pycross_register_toolchains-python_versions">python_versions</a>, <a href="#pycross_register_toolchains-platforms">platforms</a>, <a href="#pycross_register_toolchains-glibc_version">glibc_version</a>,
-                            <a href="#pycross_register_toolchains-macos_version">macos_version</a>)
+pycross_register_for_python_toolchains(<a href="#pycross_register_for_python_toolchains-name">name</a>, <a href="#pycross_register_for_python_toolchains-python_toolchains_repo_name">python_toolchains_repo_name</a>, <a href="#pycross_register_for_python_toolchains-platforms">platforms</a>, <a href="#pycross_register_for_python_toolchains-glibc_version">glibc_version</a>,
+                                       <a href="#pycross_register_for_python_toolchains-macos_version">macos_version</a>)
 </pre>
 
     Register target environments and toolchains for a given list of Python versions.
@@ -259,11 +280,10 @@ pycross_register_toolchains(<a href="#pycross_register_toolchains-name">name</a>
 
 | Name  | Description | Default Value |
 | :------------- | :------------- | :------------- |
-| <a id="pycross_register_toolchains-name"></a>name |  the toolchain repo name.   |  none |
-| <a id="pycross_register_toolchains-python_toolchain_name"></a>python_toolchain_name |  the repo name of the registered rules_python tolchain repo.   |  none |
-| <a id="pycross_register_toolchains-python_versions"></a>python_versions |  the list of Python versions registered with rules_python.   |  none |
-| <a id="pycross_register_toolchains-platforms"></a>platforms |  an optional list of platforms to support (e.g., "x86_64-unknown-linux-gnu"). By default, all platforms supported by rules_python are registered.   |  <code>None</code> |
-| <a id="pycross_register_toolchains-glibc_version"></a>glibc_version |  the maximum supported GLIBC version.   |  <code>"2.25"</code> |
-| <a id="pycross_register_toolchains-macos_version"></a>macos_version |  the maximum supported macOS version.   |  <code>"12.0"</code> |
+| <a id="pycross_register_for_python_toolchains-name"></a>name |  the toolchain repo name.   |  none |
+| <a id="pycross_register_for_python_toolchains-python_toolchains_repo_name"></a>python_toolchains_repo_name |  the repo name of the registered rules_python tolchain repo.   |  none |
+| <a id="pycross_register_for_python_toolchains-platforms"></a>platforms |  an optional list of platforms to support (e.g., "x86_64-unknown-linux-gnu"). By default, all platforms supported by rules_python are registered.   |  <code>None</code> |
+| <a id="pycross_register_for_python_toolchains-glibc_version"></a>glibc_version |  the maximum supported GLIBC version.   |  <code>"2.25"</code> |
+| <a id="pycross_register_for_python_toolchains-macos_version"></a>macos_version |  the maximum supported macOS version.   |  <code>"12.0"</code> |
 
 

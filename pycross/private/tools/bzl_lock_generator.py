@@ -352,7 +352,7 @@ class PackageTarget:
         return keys
 
     @property
-    def source_file(self) -> Optional[PackageFile]:
+    def sdist_file(self) -> Optional[PackageFile]:
         for f in self.distinct_package_sources:
             if f.file and f.file.is_sdist:
                 return f.file
@@ -362,8 +362,8 @@ class PackageTarget:
         return bool(self.common_deps or self.env_deps)
 
     @property
-    def has_source(self) -> bool:
-        return self.source_file is not None
+    def has_sdist(self) -> bool:
+        return self.sdist_file is not None
 
     def _common_entries(
         self, deps: Set[PackageDependency], indent: int
@@ -439,7 +439,7 @@ class PackageTarget:
         return "\n".join(lines)
 
     def render_build(self) -> str:
-        source_file = self.source_file
+        source_file = self.sdist_file
         assert source_file is not None
 
         lines = [
@@ -516,7 +516,7 @@ class PackageTarget:
         if self.build_deps:
             parts.append(self.render_build_deps())
             parts.append("")
-        if self.has_source and not self.build_target_override:
+        if self.has_sdist and not self.build_target_override:
             parts.append(self.render_build())
             parts.append("")
         parts.append(self.render_pkg())
@@ -786,6 +786,18 @@ def main(args: Any) -> None:
         package_targets_by_package_key.values(), key=lambda x: x.package.name
     )
 
+    # If builds are disallowed, ensure that none of the targets include an sdist build
+    if args.disallow_builds:
+        builds = []
+        for target in package_targets:
+            if target.has_sdist:
+                builds.append(target.package.key)
+        if builds:
+            raise Exception(
+                "Builds are disallowed, but the following would include pycross_wheel_build targets: "
+                f"{', '.join(builds)}"
+            )
+
     pypi_index = args.pypi_index or None
     repos = []
     for package_target in package_targets:
@@ -986,14 +998,20 @@ def parse_flags() -> Any:
         "--build-dependency",
         nargs=2,
         action="append",
-        help="A (key, key) parameter that specifies an additional package build dependency",
+        help="A (key, key) parameter that specifies an additional package build dependency.",
     )
 
     parser.add_argument(
         "--ignore-dependency",
         nargs=2,
         action="append",
-        help="A (key, key) parameter that specifies a package dependency to ignore",
+        help="A (key, key) parameter that specifies a package dependency to ignore.",
+    )
+
+    parser.add_argument(
+        "--disallow-builds",
+        action="store_true",
+        help="If set, an error is raised if the generated lock contains wheel build targets.",
     )
 
     parser.add_argument(
