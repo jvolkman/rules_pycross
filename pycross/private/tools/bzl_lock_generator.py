@@ -288,11 +288,12 @@ class EnvTarget:
         lines = [
             "native.config_setting(",
             ind(f'name = "{self.naming.environment_target(self.environment_name)}",'),
-            ind(f"constraint_values = ["),
         ]
-        for cv in self.constraints:
-            lines.append(ind(f'"{cv}",', 2))
-        lines.append(ind("],"))
+        if self.constraints:
+            lines.append(ind(f"constraint_values = ["))
+            for cv in self.constraints:
+                lines.append(ind(f'"{cv}",', 2))
+            lines.append(ind("],"))
         if self.flag_values:
             lines.append(ind("flag_values = {"),)
             for flag, value in self.flag_values:
