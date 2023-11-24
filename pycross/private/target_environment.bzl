@@ -78,7 +78,6 @@ pycross_target_environment = rule(
                 "target_platform should be selected (together with flag_values)."
             ),
             mandatory = True,
-            allow_empty = False,
         ),
         "flag_values": attr.label_keyed_string_dict(
             doc = (

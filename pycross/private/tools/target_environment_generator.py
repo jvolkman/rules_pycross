@@ -111,7 +111,6 @@ def parse_flags(argv) -> Any:
     parser.add_argument(
         "--python-compatible-with",
         action="append",
-        required=True,
         help="Name of the environment constraint label.",
     )
 
@@ -119,7 +118,6 @@ def parse_flags(argv) -> Any:
         "--flag-value",
         nargs=2,
         action="append",
-        required=True,
         help="A config",
     )
 
