@@ -1,21 +1,13 @@
-"""Declare runtime dependencies
-
-These are needed for local dev, and users must install them as well.
-See https://docs.bazel.build/versions/main/skylark/deploying.html#dependencies
-"""
+"""Declare runtime dependencies"""
 
 load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive", "http_file")
 load("@bazel_tools//tools/build_defs/repo:utils.bzl", "maybe")
-
 load("//pycross/private:lock_repo.bzl", "pycross_lock_repo")
 load("//pycross/private:pycross_deps_lock.bzl", pip_repositories = "repositories")
 
-# WARNING: any changes in this function may be BREAKING CHANGES for users
-# because we'll fetch a dependency which may be different from one that
-# they were previously fetching later in their WORKSPACE setup, and now
-# ours took precedence. Such breakages are challenging for users, so any
-# changes in this function should be marked as BREAKING in the commit message
-# and released only in semver majors.
+# The python_interpreter_target was previously used when pip_install was used for
+# pycross' own dependencies. Leaving it here in case we need it in the future.
+# buildifier: disable=unused-variable
 def rules_pycross_dependencies(python_interpreter_target = None):
     # The minimal version of bazel_skylib we require
     maybe(
@@ -32,7 +24,7 @@ def rules_pycross_dependencies(python_interpreter_target = None):
         http_file,
         name = "rules_pycross_installer",
         urls = [
-            "https://files.pythonhosted.org/packages/e5/ca/1172b6638d52f2d6caa2dd262ec4c811ba59eee96d54a7701930726bce18/installer-0.7.0-py3-none-any.whl"
+            "https://files.pythonhosted.org/packages/e5/ca/1172b6638d52f2d6caa2dd262ec4c811ba59eee96d54a7701930726bce18/installer-0.7.0-py3-none-any.whl",
         ],
         sha256 = "05d1933f0a5ba7d8d6296bb6d5018e7c94fa473ceb10cf198a92ccea19c27b53",
         downloaded_file_path = "installer-0.7.0-py3-none-any.whl",

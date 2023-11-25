@@ -1,10 +1,9 @@
 """Helpers for creating Pycross environments and toolchains"""
-load("@rules_python//python:versions.bzl", "MINOR_MAPPING", "PLATFORMS", "TOOL_VERSIONS")
 
+load("@rules_python//python:versions.bzl", "MINOR_MAPPING", "PLATFORMS", "TOOL_VERSIONS")
 
 DEFAULT_MACOS_VERSION = "12.0"
 DEFAULT_GLIBC_VERSION = "2.25"
-
 
 def _get_minor_version(version):
     if version in MINOR_MAPPING:
@@ -14,19 +13,16 @@ def _get_minor_version(version):
 
     fail("Unknown Python version: {}".format(version))
 
-
 def _get_version_components(version):
     parts = version.split(".")
     if len(parts) < 2:
         fail("Invalid Python version; must be format X.Y or X.Y.Z: {}".format(version))
-    
-    return int(parts[0]), int(parts[1])
 
+    return int(parts[0]), int(parts[1])
 
 def _get_abi(version):
     major, minor = _get_version_components(version)
     return "cp{}{}".format(major, minor)
-
 
 def _get_env_platforms(py_platform, glibc_version, macos_version):
     glibc_major, glibc_minor = _get_version_components(glibc_version)
@@ -41,7 +37,8 @@ def _get_env_platforms(py_platform, glibc_version, macos_version):
     arch = platform_info.arch
     if py_platform.endswith("linux-gnu"):
         return ["linux_{}".format(arch)] + [
-            "manylinux_2_{}_{}".format(i, arch) for i in range(5, glibc_minor + 1)
+            "manylinux_2_{}_{}".format(i, arch)
+            for i in range(5, glibc_minor + 1)
         ]
     elif py_platform.endswith("darwin"):
         return ["macosx_{}_{}_{}".format(macos_major, macos_minor, arch)]
@@ -50,15 +47,13 @@ def _get_env_platforms(py_platform, glibc_version, macos_version):
 
     fail("Unknown platform: {}".format(py_platform))
 
-
 def _compute_environments_and_toolchains(
-    python_toolchains_repo_name,
-    is_multi_version_layout,
-    python_versions,
-    platforms,
-    glibc_version,
-    macos_version,
-):
+        python_toolchains_repo_name,
+        is_multi_version_layout,
+        python_versions,
+        platforms,
+        glibc_version,
+        macos_version):
     environments = []
     toolchains = []
 
@@ -86,7 +81,7 @@ def _compute_environments_and_toolchains(
                     version = minor_version,
                     abis = [_get_abi(minor_version)],
                     platforms = env_platforms,
-                )
+                ),
             )
 
             for exec_platform in selected_platforms:
@@ -120,18 +115,16 @@ def _compute_environments_and_toolchains(
                         exec_interpreter = exec_interpreter,
                         target_interpreter = target_interpreter,
                         target_environment = target_env_name,
-
                         exec_compatible_with = exec_compatible_with,
                         target_compatible_with = target_compatible_with,
                         python_version = minor_version,
-                    )
+                    ),
                 )
 
     return dict(
         environments = environments,
         toolchains = toolchains,
     )
-
 
 def _is_multi_version_layout(rctx, python_toolchain_repo):
     # Ideally we'd just check whether pip.bzl exists, but `path(Label(<non-existent-label>))`
@@ -142,7 +135,6 @@ def _is_multi_version_layout(rctx, python_toolchain_repo):
         if file.basename == "pip.bzl":
             return True
     return False
-
 
 def _get_single_python_version(rctx, python_toolchain_repo):
     defs_bzl_file = Label("@{}//:defs.bzl".format(python_toolchain_repo))
@@ -158,13 +150,13 @@ def _get_single_python_version(rctx, python_toolchain_repo):
 
     fail("Unable to determine version from " + defs_bzl_file)
 
-
 def _get_multi_python_versions(rctx, python_toolchain_repo):
     pip_bzl_file = Label("@{}//:pip.bzl".format(python_toolchain_repo))
     content = rctx.read(pip_bzl_file)
     for line in content.splitlines():
         if line.strip().startswith("python_versions"):
             versions = []
+
             # We found a line that is like `python_versions = ["3.11.6", "3.12.0"],`
             # Split by the equal sign and parse the array.
             _, version_side = line.split("=")
@@ -179,7 +171,6 @@ def _get_multi_python_versions(rctx, python_toolchain_repo):
             return versions
 
     fail("Unable to determine versions from " + pip_bzl_file)
-
 
 _BUILD_HEADER = """\
 load("@jvolkman_rules_pycross//pycross:defs.bzl", "pycross_target_environment")
@@ -221,6 +212,7 @@ toolchain(
     toolchain_type = "@jvolkman_rules_pycross//pycross:toolchain_type",
 )
 """
+
 def _pycross_toolchain_repo_impl(rctx):
     python_repo = rctx.attr.python_toolchains_repo_name
     is_multi_version_layout = _is_multi_version_layout(rctx, python_repo)
@@ -255,7 +247,6 @@ def _pycross_toolchain_repo_impl(rctx):
 
     rctx.file(rctx.path("defs.bzl"), "\n".join(defs_lines))
 
-
 _pycross_toolchain_repo = repository_rule(
     implementation = _pycross_toolchain_repo_impl,
     attrs = {
@@ -267,12 +258,11 @@ _pycross_toolchain_repo = repository_rule(
 )
 
 def pycross_register_for_python_toolchains(
-    name,
-    python_toolchains_repo_name,
-    platforms = None,
-    glibc_version = DEFAULT_GLIBC_VERSION,
-    macos_version = DEFAULT_MACOS_VERSION,
-):
+        name,
+        python_toolchains_repo_name,
+        platforms = None,
+        glibc_version = DEFAULT_GLIBC_VERSION,
+        macos_version = DEFAULT_MACOS_VERSION):
     """
     Register target environments and toolchains for a given list of Python versions.
 

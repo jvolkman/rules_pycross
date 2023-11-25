@@ -11,9 +11,9 @@ from typing import Optional
 from typing import Tuple
 
 import dacite
+from packaging.utils import canonicalize_name
 from packaging.utils import NormalizedName
 from packaging.utils import Version
-from packaging.utils import canonicalize_name
 
 
 class _TypeHandlingEncoder(JSONEncoder):
@@ -62,9 +62,7 @@ class PackageDependency:
     def __post_init__(self):
         assert self.name, "The name field must be specified."
         assert self.version, "The version field must be specified."
-        assert (
-            self.marker is not None
-        ), "The marker field must be specified, or an empty string."
+        assert self.marker is not None, "The marker field must be specified, or an empty string."
 
     @property
     def key(self) -> PackageKey:
@@ -81,18 +79,12 @@ class Package:
 
     def __post_init__(self):
         normalized_name = package_canonical_name(self.name)
-        assert str(self.name) == str(
-            normalized_name
-        ), "The name field should be normalized per PEP 503."
+        assert str(self.name) == str(normalized_name), "The name field should be normalized per PEP 503."
         object.__setattr__(self, "name", normalized_name)
 
         assert self.version, "The version field must be specified."
-        assert (
-            self.python_versions is not None
-        ), "The python_versions field must be specified, or an empty string."
-        assert (
-            self.dependencies is not None
-        ), "The dependencies field must be specified as a list."
+        assert self.python_versions is not None, "The python_versions field must be specified, or an empty string."
+        assert self.dependencies is not None, "The dependencies field must be specified as a list."
         assert self.files, "The files field must not be empty."
 
     @property
@@ -113,15 +105,11 @@ class LockSet:
         return dataclasses.asdict(self)
 
     def to_json(self, indent=None) -> str:
-        return json.dumps(
-            self.to_dict(), sort_keys=True, indent=indent, cls=_TypeHandlingEncoder
-        )
+        return json.dumps(self.to_dict(), sort_keys=True, indent=indent, cls=_TypeHandlingEncoder)
 
     @staticmethod
     def from_dict(data: Dict[str, Any]) -> LockSet:
-        return dacite.from_dict(
-            LockSet, data, config=dacite.Config(cast=[Tuple, Version, PackageKey])
-        )
+        return dacite.from_dict(LockSet, data, config=dacite.Config(cast=[Tuple, Version, PackageKey]))
 
     @classmethod
     def from_json(cls, data: str) -> LockSet:

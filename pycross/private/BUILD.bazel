@@ -9,22 +9,22 @@ default_visibility = ["//pycross:__subpackages__"]
 bzl_library(
     name = "cc_toolchain_util",
     srcs = ["cc_toolchain_util.bzl"],
+    visibility = default_visibility,
     deps = [
         "@bazel_skylib//lib:collections",
         "@bazel_tools//tools/build_defs/cc:action_names.bzl",
         "@bazel_tools//tools/cpp:toolchain_utils.bzl",
     ],
-    visibility = default_visibility,
 )
 
 bzl_library(
     name = "lock_file",
     srcs = ["lock_file.bzl"],
-    deps = [
-        ":target_environment",
-        ":providers",
-    ],
     visibility = default_visibility,
+    deps = [
+        ":providers",
+        ":target_environment",
+    ],
 )
 
 bzl_library(
@@ -54,41 +54,42 @@ bzl_library(
 bzl_library(
     name = "pycross_deps_lock",
     srcs = ["pycross_deps_lock.bzl"],
+    visibility = default_visibility,
     deps = [
+        "//pycross:defs",
         "@bazel_tools//tools/build_defs/repo:http.bzl",
         "@bazel_tools//tools/build_defs/repo:utils.bzl",
-        "//pycross:defs",
     ],
-    visibility = default_visibility,
 )
 
 bzl_library(
     name = "pypi_file",
     srcs = ["pypi_file.bzl"],
-    deps = ["@bazel_tools//tools/build_defs/repo:utils.bzl"],
     visibility = default_visibility,
+    deps = ["@bazel_tools//tools/build_defs/repo:utils.bzl"],
 )
 
 bzl_library(
     name = "target_environment",
     srcs = ["target_environment.bzl"],
-    deps = [":providers"],
     visibility = default_visibility,
+    deps = [":providers"],
 )
 
 bzl_library(
     name = "toolchain_helpers",
     srcs = ["toolchain_helpers.bzl"],
+    visibility = default_visibility,
     deps = [
         "//pycross:toolchain",
         "@rules_python//python:versions.bzl",
     ],
-    visibility = default_visibility,
 )
 
 bzl_library(
     name = "wheel_build",
     srcs = ["wheel_build.bzl"],
+    visibility = default_visibility,
     deps = [
         ":cc_toolchain_util",
         ":providers",
@@ -96,28 +97,27 @@ bzl_library(
         "@bazel_tools//tools/cpp:toolchain_utils.bzl",
         "@rules_python//docs:defs",
     ],
-    visibility = default_visibility,
 )
 
 bzl_library(
     name = "wheel_library",
     srcs = ["wheel_library.bzl"],
+    visibility = default_visibility,
     deps = [
         ":providers",
         "@bazel_skylib//lib:paths",
         "@rules_python//docs:defs",
     ],
-    visibility = default_visibility,
 )
 
 bzl_library(
     name = "wheel_zipimport_library",
     srcs = ["wheel_zipimport_library.bzl"],
+    visibility = default_visibility,
     deps = [
         "@bazel_skylib//lib:paths",
         "@rules_python//docs:defs",
     ],
-    visibility = default_visibility,
 )
 
 # This is the environment we advertise for what should be pure-python
@@ -131,20 +131,20 @@ pycross_target_environment(
 
 pycross_pdm_lock_model(
     name = "rules_pycross_deps_lock_model",
-    project_file = "//:pyproject.toml",
     lock_file = "//:pdm.lock",
+    project_file = "//:pyproject.toml",
 )
 
 pycross_lock_file(
     name = "rules_pycross_deps",
-    lock_model_file = ":rules_pycross_deps_lock_model",
-    target_environments = [":rules_pycross_deps_target_env"],
+    out = "updated_pycross_deps_lock.bzl",
+    default_alias_single_version = True,
+    disallow_builds = True,
     local_wheels = [
         "//third_party/wheels",
     ],
-    default_alias_single_version = True,
-    disallow_builds = True,
-    out = "updated_pycross_deps_lock.bzl",
+    lock_model_file = ":rules_pycross_deps_lock_model",
+    target_environments = [":rules_pycross_deps_target_env"],
 )
 
 write_source_files(

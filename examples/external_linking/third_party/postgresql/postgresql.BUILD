@@ -41,7 +41,6 @@ filegroup(
 
 configure_make(
     name = "postgresql",
-    lib_source = ":all_srcs",
     configure_options = [
         "--without-readline",
         "--without-perl",
@@ -62,6 +61,23 @@ configure_make(
     env = {
         "ZIC": "/usr/sbin/zic",
     },
+    lib_source = ":all_srcs",
+    out_bin_dir = "usr/bin",
+    out_binaries = [
+        "pg_config",
+    ],
+    out_include_dir = "usr/include",
+    out_lib_dir = "usr/lib",
+    out_shared_libs = select({
+        "@platforms//os:macos": [
+            "libpq.dylib",
+            "libpq.5.dylib",
+        ],
+        "@platforms//os:linux": [
+            "libpq.so",
+            "libpq.so.5",
+        ],
+    }),
     targets = [
         "-C src/bin install DESTDIR=$BUILD_TMPDIR/$INSTALL_PREFIX",
         "-C src/include install DESTDIR=$BUILD_TMPDIR/$INSTALL_PREFIX",
@@ -70,15 +86,5 @@ configure_make(
     deps = [
         "@//third_party/openssl",
         "@//third_party/zlib",
-    ],
-    out_bin_dir = "usr/bin",
-    out_lib_dir = "usr/lib",
-    out_include_dir = "usr/include",
-    out_shared_libs = select({
-        "@platforms//os:macos": ["libpq.dylib", "libpq.5.dylib"],
-        "@platforms//os:linux": ["libpq.so", "libpq.so.5"],
-    }),
-    out_binaries = [
-        "pg_config",
     ],
 )

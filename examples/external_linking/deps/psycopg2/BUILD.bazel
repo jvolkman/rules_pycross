@@ -5,11 +5,6 @@ package(default_visibility = ["//visibility:public"])
 # Specified here as an override.
 pycross_wheel_build(
     name = "psycopg2",
-    sdist = "@example_lock_sdist_psycopg2_2.9.5//file",
-    deps = [
-        "//deps:setuptools",
-        "//deps:wheel",
-    ],
     native_deps = [
         "//third_party/postgresql",
     ],
@@ -19,7 +14,12 @@ pycross_wheel_build(
     post_build_hooks = [
         "@jvolkman_rules_pycross//pycross/hooks:repair_wheel",
     ],
+    sdist = "@example_lock_sdist_psycopg2_2.9.5//file",
     tags = ["manual"],
+    deps = [
+        "//deps:setuptools",
+        "//deps:wheel",
+    ],
 )
 
 py_binary(

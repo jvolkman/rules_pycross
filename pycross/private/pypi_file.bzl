@@ -45,7 +45,7 @@ def _pypi_file_impl(ctx):
                 ctx.attr.package_version,
                 ctx.attr.package_name,
                 ctx.attr.index,
-            )
+            ),
         )
 
     download_info = ctx.download(

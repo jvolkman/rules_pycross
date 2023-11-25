@@ -7,11 +7,11 @@ package(default_visibility = ["//visibility:public"])
 pycross_wheel_build(
     name = "overridden_future_0.18.3",
     sdist = "@example_lock_sdist_future_0.18.3//file",
+    tags = ["manual"],
     deps = [
         "//deps:setuptools",
         "//deps:wheel",
     ],
-    tags = ["manual"],
 )
 
 targets()

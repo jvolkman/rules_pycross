@@ -7,21 +7,19 @@ from typing import List
 
 from packaging.utils import NormalizedName
 from packaging.utils import Version
-
-from pdm.core import Core as PDMCore
-from pdm.project import Project as _PDMProject
-from pdm.models.repositories import BaseRepository as PDMBaseRepository
-from pdm.models.candidates import Candidate as PDMCandidate
 from pdm.cli.filters import GroupSelection as PDMGroupSelection
+from pdm.core import Core as PDMCore
 from pdm.exceptions import PdmUsageError
+from pdm.models.candidates import Candidate as PDMCandidate
+from pdm.project import Project as _PDMProject
 
 from pycross.private.tools.args import FlagFileArgumentParser
 from pycross.private.tools.lock_model import LockSet
 from pycross.private.tools.lock_model import Package
+from pycross.private.tools.lock_model import package_canonical_name
 from pycross.private.tools.lock_model import PackageDependency
 from pycross.private.tools.lock_model import PackageFile
 from pycross.private.tools.lock_model import PackageKey
-from pycross.private.tools.lock_model import package_canonical_name
 
 
 class LockfileIncompatibleException(Exception):
@@ -39,14 +37,11 @@ class PDMProject(_PDMProject):
             root_path=project_file.parent.absolute(),
         )
         if not self.lockfile.is_compatible():
-            raise LockfileIncompatibleException(
-                "Lock file is not compatible with PDM version used by pycross."
-            )
+            raise LockfileIncompatibleException("Lock file is not compatible with PDM version used by pycross.")
 
         if "static_urls" not in self.lockfile.strategy:
             raise LockfileNotStaticException(
-                "Lock file does not contain static urls. "
-                "Please use --static-urls when creating the lockfile."
+                "Lock file does not contain static urls. " "Please use --static-urls when creating the lockfile."
             )
 
         self._lockfile_file = lock_file.absolute()
@@ -63,9 +58,7 @@ class PDMProject(_PDMProject):
 
 
 def candidate_package_key(candidate: PDMCandidate) -> PackageKey:
-    return PackageKey.from_parts(
-        package_canonical_name(candidate.name), Version(candidate.version)
-    )
+    return PackageKey.from_parts(package_canonical_name(candidate.name), Version(candidate.version))
 
 
 def parse_hash_sha256(hash: str) -> str:
@@ -137,15 +130,11 @@ def get_packages(project: PDMProject) -> Dict[PackageKey, Package]:
             else:
                 _file_sha256, _file_urls = _package_files[file_name]
                 if file_sha256 != _file_sha256:
-                    raise Exception(
-                        f'package "{package_name}" has conflicting hashes for "{file_name}"'
-                    )
+                    raise Exception(f'package "{package_name}" has conflicting hashes for "{file_name}"')
                 _file_urls.append(file_url)
 
         for file_name, (file_sha256, file_urls) in _package_files.items():
-            package_files.append(
-                PackageFile(name=file_name, sha256=file_sha256, urls=tuple(file_urls))
-            )
+            package_files.append(PackageFile(name=file_name, sha256=file_sha256, urls=tuple(file_urls)))
 
         for _dependency in _dependencies:
             for _candidate in repository.find_candidates(_dependency):
@@ -220,9 +209,7 @@ def main(args: Any) -> None:
 
 
 def parse_flags() -> Any:
-    parser = FlagFileArgumentParser(
-        description="Generate pycross dependency bzl file."
-    )
+    parser = FlagFileArgumentParser(description="Generate pycross dependency bzl file.")
 
     parser.add_argument(
         "--project-file",

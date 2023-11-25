@@ -1,4 +1,5 @@
 import unittest
+
 import zstandard
 
 ZEN = b"""\
@@ -32,7 +33,7 @@ class TestZstandard(unittest.TestCase):
         compressed = cctx.compress(ZEN)
 
         # Make sure we actually compressed
-        assert len(compressed) < len(ZEN) 
+        assert len(compressed) < len(ZEN)
 
         dctx = zstandard.ZstdDecompressor()
         decompressed = dctx.decompress(compressed)

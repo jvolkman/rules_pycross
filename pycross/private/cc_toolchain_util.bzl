@@ -120,11 +120,13 @@ def get_tools_info(ctx):
         ),
     )
 
-def get_flags_info(ctx, copts=[], linkopts=[], link_output_file = None):
+def get_flags_info(ctx, copts = [], linkopts = [], link_output_file = None):
     """Takes information about flags from cc_toolchain, returns CxxFlagsInfo
 
     Args:
         ctx: rule context
+        copts: compiler options
+        linkopts: linker options
         link_output_file: output file to be specified in the link command line
             flags
 
@@ -204,7 +206,7 @@ def get_flags_info(ctx, copts=[], linkopts=[], link_output_file = None):
         cxx_linker_static = _convert_flags(cc_toolchain_.compiler, flags.cxx_linker_static),
         cxx_linker_executable = _convert_flags(cc_toolchain_.compiler, _add_if_needed(flags.cxx_linker_executable, linkopts)),
         needs_pic_for_dynamic_libraries = cc_toolchain_.needs_pic_for_dynamic_libraries(
-            feature_configuration = feature_configuration
+            feature_configuration = feature_configuration,
         ),
     )
 
@@ -315,9 +317,11 @@ def get_libraries(ccinfo):
         struct: A list of libraries.
     """
     all_libraries = []
+
     def add(lib):
         if lib:
             all_libraries.append(lib)
+
     for li in ccinfo.linking_context.linker_inputs.to_list():
         for library_to_link in li.libraries:
             add(library_to_link.static_library)

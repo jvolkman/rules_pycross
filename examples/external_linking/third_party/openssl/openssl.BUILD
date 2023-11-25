@@ -96,12 +96,12 @@ configure_make(
     lib_name = LIB_NAME,
     lib_source = ":all_srcs",
     out_bin_dir = "usr/bin",
+    out_binaries = ["openssl"],
+    out_include_dir = "usr/include",
     out_lib_dir = select({
         ":linux_x86_64": "usr/lib64",
         "//conditions:default": "usr/lib",
     }),
-    out_include_dir = "usr/include",
-    out_binaries = ["openssl"],
     # Note that for Linux builds, libssl must come before libcrypto on the linker command-line.
     # As such, libssl must be listed before libcrypto
     out_shared_libs = select({

@@ -9,13 +9,13 @@ def _pycross_pdm_lock_model_impl(ctx):
     args.add("--output", out)
 
     if ctx.attr.default:
-      args.add("--default")
+        args.add("--default")
 
     if ctx.attr.dev:
-      args.add("--dev")
+        args.add("--dev")
 
     for group in ctx.attr.groups:
-      args.add("--group", group)
+        args.add("--group", group)
 
     ctx.actions.run(
         inputs = (

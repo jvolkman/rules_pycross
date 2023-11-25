@@ -1,5 +1,8 @@
 """Implementation of the pycross_wheel_build rule."""
 
+load("@bazel_skylib//lib:paths.bzl", "paths")
+load("@bazel_tools//tools/cpp:toolchain_utils.bzl", "find_cpp_toolchain", "use_cpp_toolchain")
+load("@rules_python//python:defs.bzl", "PyInfo")
 load(
     ":cc_toolchain_util.bzl",
     "absolutize_path_in_str",
@@ -10,9 +13,6 @@ load(
     "get_tools_info",
 )
 load(":providers.bzl", "PycrossTargetEnvironmentInfo", "PycrossWheelInfo")
-load("@bazel_skylib//lib:paths.bzl", "paths")
-load("@bazel_tools//tools/cpp:toolchain_utils.bzl", "find_cpp_toolchain", "use_cpp_toolchain")
-load("@rules_python//python:defs.bzl", "PyInfo")
 
 PYTHON_TOOLCHAIN_TYPE = "@bazel_tools//tools/python:toolchain_type"
 PYCROSS_TOOLCHAIN_TYPE = "@jvolkman_rules_pycross//pycross:toolchain_type"
@@ -165,7 +165,7 @@ def _expand_locations_and_vars(attribute_name, ctx, val):
         "WORKSPACE": ctx.workspace_name,
     }
 
-    # We import $(abspath :foo) by replacing it with $(execpath :foo) prefixed by 
+    # We import $(abspath :foo) by replacing it with $(execpath :foo) prefixed by
     # $$EXT_BUILD_ROOT$$/, which is replaced in our build action. Note that "$$$$"
     # turns into "$$" after passing through ctx.expand_location.
     val = val.replace("$(abspath ", "$$$$EXT_BUILD_ROOT$$$$/$(execpath ")
@@ -188,13 +188,13 @@ def _handle_toolchains(ctx, args, tools):
         args.add("--exec-python-executable", pycross_info.exec_python_executable)
         args.add("--target-python-executable", pycross_info.target_python_executable)
         if pycross_info.target_sys_path:
-            args.add_all(pycross_info.target_sys_path, before_each="--target-sys-path")
+            args.add_all(pycross_info.target_sys_path, before_each = "--target-sys-path")
         if pycross_info.exec_python_files:
             tools.append(pycross_info.exec_python_files)
         if pycross_info.target_python_files:
             tools.append(pycross_info.target_python_files)
 
-    # Otherwise we use the configured Python toolchain.
+        # Otherwise we use the configured Python toolchain.
     else:
         executable = py_toolchain.interpreter_path
         if not executable:
@@ -240,7 +240,7 @@ def _handle_sysconfig_data(ctx, args, inputs):  # -> cc_vars
 
 def _handle_py_deps(ctx, args, tools):
     imports = depset(transitive = [d[PyInfo].imports for d in ctx.attr.deps])
-    args.add_all(imports, before_each="--python-path", map_each=_resolve_import_path_fn(ctx), allow_closure=True)
+    args.add_all(imports, before_each = "--python-path", map_each = _resolve_import_path_fn(ctx), allow_closure = True)
     tools.extend([dep[PyInfo].transitive_sources for dep in ctx.attr.deps])
 
 def _handle_native_deps(ctx, args, tools):
@@ -251,12 +251,12 @@ def _handle_native_deps(ctx, args, tools):
 
         headers_and_includes = get_headers(ccinfo)
         tools.append(ccinfo.compilation_context.headers)
-        args.add_all(headers_and_includes.include_dirs, before_each="--native-include-path")
-        args.add_all(headers_and_includes.headers, before_each="--native-header", expand_directories=False)
+        args.add_all(headers_and_includes.include_dirs, before_each = "--native-include-path")
+        args.add_all(headers_and_includes.headers, before_each = "--native-header", expand_directories = False)
 
         libraries = get_libraries(ccinfo)
         tools.append(depset(libraries))
-        args.add_all(libraries, before_each="--native-library")
+        args.add_all(libraries, before_each = "--native-library")
 
 def _handle_target_environment(ctx, args, inputs):
     if not ctx.attr.target_environment:
@@ -291,21 +291,21 @@ def _handle_tools_and_data(ctx, args, tools, input_manifests):
     tools.extend([data[DefaultInfo].files for data in ctx.attr.data])
 
     if ctx.attr.pre_build_hooks:
-        args.add_all(ctx.attr.pre_build_hooks, before_each="--pre-build-hook", map_each=_executable)
-        tool_inputs, tool_manifests = ctx.resolve_tools(tools=ctx.attr.pre_build_hooks)
+        args.add_all(ctx.attr.pre_build_hooks, before_each = "--pre-build-hook", map_each = _executable)
+        tool_inputs, tool_manifests = ctx.resolve_tools(tools = ctx.attr.pre_build_hooks)
         tools.extend([tool_inputs])
         input_manifests.extend(tool_manifests)
 
     if ctx.attr.post_build_hooks:
-        args.add_all(ctx.attr.post_build_hooks, before_each="--post-build-hook", map_each=_executable)
-        tool_inputs, tool_manifests = ctx.resolve_tools(tools=ctx.attr.post_build_hooks)
+        args.add_all(ctx.attr.post_build_hooks, before_each = "--post-build-hook", map_each = _executable)
+        tool_inputs, tool_manifests = ctx.resolve_tools(tools = ctx.attr.post_build_hooks)
         tools.extend([tool_inputs])
         input_manifests.extend(tool_manifests)
 
     if ctx.attr.path_tools:
         for tool, name in ctx.attr.path_tools.items():
             args.add_all("--path-tool", [name, _executable(tool)])
-        tool_inputs, tool_manifests = ctx.resolve_tools(tools=ctx.attr.path_tools.keys())
+        tool_inputs, tool_manifests = ctx.resolve_tools(tools = ctx.attr.path_tools.keys())
         tools.extend([tool_inputs])
         input_manifests.extend(tool_manifests)
 
@@ -391,7 +391,7 @@ pycross_wheel_build = rule(
             doc = (
                 "Environment variables passed to the sdist build. " +
                 "Values are subject to 'Make variable', location, and build_cwd_token expansion."
-            )
+            ),
         ),
         "config_settings": attr.string_list_dict(
             doc = (

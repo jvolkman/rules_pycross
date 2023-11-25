@@ -35,9 +35,8 @@ def repositories():
 
             # Don't pass --enable-new-dtags
             "sed -i.bak '/,--enable-new-dtags/d' src/makefiles/Makefile.linux",
-
             "rm configure.bak",
             "rm src/common/Makefile.bak",
             "rm src/makefiles/Makefile.linux.bak",
-        ]
+        ],
     )

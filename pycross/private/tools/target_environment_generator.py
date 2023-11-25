@@ -2,7 +2,6 @@
 A tool that takes an input PEP 425 tag and an optional list of environment
 marker overrides and outputs the result of guessed markers with overrides.
 """
-
 import json
 import os
 from pathlib import Path
@@ -47,7 +46,7 @@ def main(args: Any) -> None:
 
     version_info = tuple(args.version.split("."))
     if len(version_info) != 3:
-        parser.error("Version must be in the format a.b.c.")
+        raise ValueError("Version must be in the format a.b.c.")
 
     platforms = _expand_manylinux_platforms(args.platform or [])
     target_python = TargetPython(
@@ -66,9 +65,7 @@ def main(args: Any) -> None:
 
 
 def parse_flags() -> Any:
-    parser = FlagFileArgumentParser(
-        description="Generate target python information."
-    )
+    parser = FlagFileArgumentParser(description="Generate target python information.")
 
     parser.add_argument(
         "--name",

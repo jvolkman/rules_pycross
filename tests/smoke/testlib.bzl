@@ -7,12 +7,12 @@ load(
     "pycross_lock_file",
     "pycross_wheel_build",
 )
-load("@rules_python//python:defs.bzl", "py_test")
 load("@pycross_toolchains//:defs.bzl", "environments")
+load("@rules_python//python:defs.bzl", "py_test")
 
 def setup_test_targets(lock_name, lock_model):
     """Create common test targets.
-    
+
     Args:
         lock_name: the name of the lock target to create
         lock_model: the target providing the lock model
@@ -89,5 +89,5 @@ def setup_test_targets(lock_name, lock_model):
         deps = [
             "@{}_repo//deps:ipython".format(lock_name),
             "@{}_repo//deps:zstandard".format(lock_name),
-        ]
+        ],
     )

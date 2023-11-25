@@ -5,6 +5,9 @@ package(default_visibility = ["//visibility:public"])
 
 cmake(
     name = "openblas",
+    build_args = [
+        "--verbose",
+    ],
     cache_entries = {
         "NOFORTRAN": "on",
         "BUILD_WITHOUT_LAPACK": "no",
@@ -31,9 +34,6 @@ cmake(
     copts = [
         "-Wno-error=int-conversion",
         "-Wl,-S",
-    ],
-    build_args = [
-        "--verbose",
     ],
     lib_source = "@openblas//:all",
     out_static_libs = ["libopenblas.a"],
