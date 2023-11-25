@@ -25,7 +25,7 @@ py_binary(
 
 pycross_wheel_zipimport_library(
     name = "installer",
-    wheel = "@rules_pycross_installer//file"
+    wheel = "@rules_pycross_installer//file",
 )
 
 py_library(
@@ -110,7 +110,7 @@ py_binary(
     deps = [
         ":args",
         ":lib",
-        "//pycross/private/tools/crossenv:crossenv",
+        "//pycross/private/tools/crossenv",
         "@rules_pycross_deps//deps:build",
         "@rules_pycross_deps//deps:packaging",
         "@rules_pycross_deps//deps:python_dotenv",
@@ -123,8 +123,8 @@ py_binary(
     srcs = ["wheel_installer.py"],
     visibility = ["//visibility:public"],
     deps = [
-        ":installer",
         ":args",
+        ":installer",
         ":namespace_pkgs",
     ],
 )

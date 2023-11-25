@@ -25,13 +25,13 @@ from pip._internal.models.candidate import InstallationCandidate
 from pip._internal.models.link import Link
 
 from pycross.private.tools.args import FlagFileArgumentParser
+from pycross.private.tools.lock_model import is_wheel
 from pycross.private.tools.lock_model import LockSet
 from pycross.private.tools.lock_model import Package
+from pycross.private.tools.lock_model import package_canonical_name
 from pycross.private.tools.lock_model import PackageDependency
 from pycross.private.tools.lock_model import PackageFile
 from pycross.private.tools.lock_model import PackageKey
-from pycross.private.tools.lock_model import is_wheel
-from pycross.private.tools.lock_model import package_canonical_name
 from pycross.private.tools.target_environment import TargetEnv
 
 # For downloads: https://github.com/pypa/warehouse/issues/1944
@@ -129,13 +129,7 @@ class Naming:
 
     def wheel_repo(self, file: PackageFile) -> str:
         assert file.is_wheel
-        normalized_name = (
-            file.name[:-4]
-            .lower()
-            .replace("-", "_")
-            .replace("+", "_")
-            .replace("%2b", "_")
-        )
+        normalized_name = file.name[:-4].lower().replace("-", "_").replace("+", "_").replace("%2b", "_")
         return f"{self.repo_prefix}_wheel_{normalized_name}"
 
     def wheel_label(self, file: PackageFile):
@@ -175,9 +169,7 @@ class GenerationContext:
         # We sort deps by version in descending order. In case the list of dependencies
         # has multiple entries for the same name that match an environment, we prefer the
         # latest version.
-        ordered_deps = sorted(
-            package.dependencies, key=operator.attrgetter("version"), reverse=True
-        )
+        ordered_deps = sorted(package.dependencies, key=operator.attrgetter("version"), reverse=True)
         # Filter out dependencies that we've been told to ignore
         if ignore_dependency_names:
             ordered_deps = [d for d in ordered_deps if d.name not in ignore_dependency_names]
@@ -217,13 +209,9 @@ class GenerationContext:
     def get_package_sources_by_environment(
         self, package: Package, source_only: bool = False
     ) -> Dict[str, PackageSource]:
-        formats = (
-            frozenset(["source"]) if source_only else frozenset(["source", "binary"])
-        )
+        formats = frozenset(["source"]) if source_only else frozenset(["source", "binary"])
         environment_sources = {}
-        for environment in sorted(
-            self.target_environments, key=lambda te: te.name.lower()
-        ):
+        for environment in sorted(self.target_environments, key=lambda te: te.name.lower()):
             link_evaluator = LinkEvaluator(
                 project_name=package.name,
                 canonical_name=package.name,
@@ -253,9 +241,7 @@ class GenerationContext:
 
             candidates_to_package_sources = {}
             for filename, package_source in package_sources.items():
-                candidate = InstallationCandidate(
-                    package.name, str(package.version), Link(filename)
-                )
+                candidate = InstallationCandidate(package.name, str(package.version), Link(filename))
                 candidates_to_package_sources[candidate] = package_source
 
             candidates = []
@@ -264,14 +250,10 @@ class GenerationContext:
                 if link_type == LinkType.candidate:
                     candidates.append(candidate)
 
-            candidate_evaluator = CandidateEvaluator.create(
-                package.name, environment.target_python
-            )
+            candidate_evaluator = CandidateEvaluator.create(package.name, environment.target_python)
             compute_result = candidate_evaluator.compute_best_candidate(candidates)
             if compute_result.best_candidate:
-                environment_sources[environment.name] = candidates_to_package_sources[
-                    compute_result.best_candidate
-                ]
+                environment_sources[environment.name] = candidates_to_package_sources[compute_result.best_candidate]
 
         return environment_sources
 
@@ -294,7 +276,9 @@ class EnvTarget:
                 lines.append(ind(f'"{cv}",', 2))
             lines.append(ind("],"))
         if self.flag_values:
-            lines.append(ind("flag_values = {"),)
+            lines.append(
+                ind("flag_values = {"),
+            )
             for flag, value in self.flag_values:
                 lines.append(ind(repr(flag) + ": " + repr(value) + ",", 2))
             lines.append(ind("}"))
@@ -343,7 +327,7 @@ class PackageTarget:
 
     @property
     def all_dependency_keys(self) -> Set[str]:
-        """Returns all package keys (name-version) that this target depends on, 
+        """Returns all package keys (name-version) that this target depends on,
         including platform-specific and build dependencies."""
         keys = set(str(d.key) for d in self.common_deps)
         for env_deps in self.env_deps.values():
@@ -365,16 +349,12 @@ class PackageTarget:
     def has_sdist(self) -> bool:
         return self.sdist_file is not None
 
-    def _common_entries(
-        self, deps: Set[PackageDependency], indent: int
-    ) -> Iterator[str]:
+    def _common_entries(self, deps: Set[PackageDependency], indent: int) -> Iterator[str]:
         package_labels = set([self.context.naming.package_label(d.key) for d in deps])
         for package_label in sorted(package_labels):
             yield ind(f'"{package_label}",', indent)
 
-    def _select_entries(
-        self, env_deps: Dict[str, Set[PackageDependency]], indent
-    ) -> Iterator[str]:
+    def _select_entries(self, env_deps: Dict[str, Set[PackageDependency]], indent) -> Iterator[str]:
         for env_name, deps in sorted(env_deps.items(), key=lambda x: x[0].lower()):
             yield ind(f'"{self.context.naming.environment_label(env_name)}": [', indent)
             yield from self._common_entries(deps, indent + 1)
@@ -384,23 +364,13 @@ class PackageTarget:
     @property
     def _deps_name(self):
         key_str = str(self.package.key)
-        sanitized = (
-            key_str.replace("-", "_")
-            .replace(".", "_")
-            .replace("@", "_")
-            .replace("+", "_")
-        )
+        sanitized = key_str.replace("-", "_").replace(".", "_").replace("@", "_").replace("+", "_")
         return f"_{sanitized}_deps"
 
     @property
     def _build_deps_name(self):
         key_str = str(self.package.key)
-        sanitized = (
-            key_str.replace("-", "_")
-            .replace(".", "_")
-            .replace("@", "_")
-            .replace("+", "_")
-        )
+        sanitized = key_str.replace("-", "_").replace(".", "_").replace("@", "_").replace("+", "_")
         return f"_{sanitized}_build_deps"
 
     def render_runtime_deps(self) -> str:
@@ -430,9 +400,7 @@ class PackageTarget:
         assert self.build_deps
 
         lines = [f"{self._build_deps_name} = ["]
-        for dep in sorted(
-            self.build_deps, key=lambda k: self.context.naming.package_label(k)
-        ):
+        for dep in sorted(self.build_deps, key=lambda k: self.context.naming.package_label(k)):
             lines.append(ind(f'"{self.context.naming.package_label(dep)}",', 1))
         lines.append("]")
 
@@ -444,9 +412,7 @@ class PackageTarget:
 
         lines = [
             "pycross_wheel_build(",
-            ind(
-                f'name = "{self.context.naming.wheel_build_target(self.package.key)}",'
-            ),
+            ind(f'name = "{self.context.naming.wheel_build_target(self.package.key)}",'),
             ind(f'sdist = "{self.context.naming.sdist_label(source_file)}",'),
             ind(f"target_environment = {self.context.target_environment_select},"),
         ]
@@ -525,9 +491,7 @@ class PackageTarget:
 
 class UrlRepoTarget:
     def __init__(self, name: str, file: PackageFile):
-        assert (
-            file.urls
-        ), "UrlWheelRepoTarget requires a PackageFile with one or more URLs"
+        assert file.urls, "UrlWheelRepoTarget requires a PackageFile with one or more URLs"
         self.name = name
         self.file = file
 
@@ -560,9 +524,7 @@ class UrlRepoTarget:
 
 
 class PypiFileRepoTarget:
-    def __init__(
-        self, name: str, package: Package, file: PackageFile, pypi_index: Optional[str]
-    ):
+    def __init__(self, name: str, package: Package, file: PackageFile, pypi_index: Optional[str]):
         self.name = name
         self.package = package
         self.file = file
@@ -635,9 +597,7 @@ def resolve_single_version(
         raise Exception(f'{attr_name} entry "{name}" matches no packages')
 
     if len(options) > 1:
-        raise Exception(
-            f'{attr_name} entry "{name}" matches multiple packages (choose one): {sorted(options)}'
-        )
+        raise Exception(f'{attr_name} entry "{name}" matches multiple packages (choose one): {sorted(options)}')
 
     return options[0]
 
@@ -674,9 +634,7 @@ def collect_package_annotations(args: Any, lock_model: LockSet) -> Dict[str, Pac
             "build_target_overrides",
         )
         if resolved_pkg in build_target_overrides_used:
-            raise Exception(
-                f'build_target_overrides entry "{resolved_pkg}" listed multiple times'
-            )
+            raise Exception(f'build_target_overrides entry "{resolved_pkg}" listed multiple times')
         build_target_overrides_used.add(resolved_pkg)
         annotations[resolved_pkg].build_target_override = target
 
@@ -782,9 +740,7 @@ def main(args: Any) -> None:
             f'{", ".join(sorted(annotations.keys()))}'
         )
 
-    package_targets = sorted(
-        package_targets_by_package_key.values(), key=lambda x: x.package.name
-    )
+    package_targets = sorted(package_targets_by_package_key.values(), key=lambda x: x.package.name)
 
     # If builds are disallowed, ensure that none of the targets include an sdist build
     if args.disallow_builds:
@@ -815,9 +771,7 @@ def main(args: Any) -> None:
             if file.urls:
                 repos.append(UrlRepoTarget(name, file))
             else:
-                repos.append(
-                    PypiFileRepoTarget(name, package_target.package, file, pypi_index)
-                )
+                repos.append(PypiFileRepoTarget(name, package_target.package, file, pypi_index))
 
     repos.sort(key=lambda ft: ft.name)
 
@@ -830,9 +784,7 @@ def main(args: Any) -> None:
     if args.default_alias_single_version:
         packages_by_pin_name = defaultdict(list)
         for package_target in package_targets:
-            packages_by_pin_name[pin_name(package_target.package.name)].append(
-                package_target.package
-            )
+            packages_by_pin_name[pin_name(package_target.package.name)].append(package_target.package)
 
         for package_pin_name, packages in packages_by_pin_name.items():
             if package_pin_name in pins:
@@ -865,11 +817,7 @@ def main(args: Any) -> None:
             w("PINS = {")
             for pinned_package_name in sorted(pins.keys()):
                 pinned_package_key = pins[pinned_package_name]
-                w(
-                    ind(
-                        f'"{pinned_package_name}": "{naming.package_target(pinned_package_key)}",'
-                    )
-                )
+                w(ind(f'"{pinned_package_name}": "{naming.package_target(pinned_package_key)}",'))
             w("}")
         else:
             w("PINS = {}")
@@ -918,9 +866,7 @@ def main(args: Any) -> None:
 
 
 def parse_flags() -> Any:
-    parser = FlagFileArgumentParser(
-        description="Generate pycross dependency bzl file."
-    )
+    parser = FlagFileArgumentParser(description="Generate pycross dependency bzl file.")
 
     parser.add_argument(
         "--repo-prefix",

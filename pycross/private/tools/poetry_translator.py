@@ -11,19 +11,20 @@ import tomli
 from packaging.utils import InvalidSdistFilename
 from packaging.utils import InvalidWheelFilename
 from packaging.utils import NormalizedName
-from packaging.utils import Version
 from packaging.utils import parse_sdist_filename
 from packaging.utils import parse_wheel_filename
+from packaging.utils import Version
 from poetry.core.constraints.version import parse_constraint
 from poetry.core.constraints.version import Version as PoetryVersion
 from poetry.core.version import markers
+
 from pycross.private.tools.args import FlagFileArgumentParser
 from pycross.private.tools.lock_model import LockSet
 from pycross.private.tools.lock_model import Package
+from pycross.private.tools.lock_model import package_canonical_name
 from pycross.private.tools.lock_model import PackageDependency
 from pycross.private.tools.lock_model import PackageFile
 from pycross.private.tools.lock_model import PackageKey
-from pycross.private.tools.lock_model import package_canonical_name
 
 
 class MismatchedVersionException(Exception):
@@ -86,20 +87,14 @@ def get_files_for_package(
     result = []
     for file in files:
         try:
-            file_package_name, file_package_version, _, _ = parse_wheel_filename(
-                file.name
-            )
+            file_package_name, file_package_version, _, _ = parse_wheel_filename(file.name)
         except InvalidWheelFilename:
             try:
-                file_package_name, file_package_version = parse_sdist_filename(
-                    file.name
-                )
+                file_package_name, file_package_version = parse_sdist_filename(file.name)
             except InvalidSdistFilename:
                 continue
 
-        if file_package_name == package_name and str(file_package_version) == str(
-            package_version
-        ):
+        if file_package_name == package_name and str(file_package_version) == str(package_version):
             result.append(file)
 
     return result
@@ -119,9 +114,7 @@ def translate(project_file: Path, lock_file: Path) -> LockSet:
         raise Exception(f"Could not load lock file: {lock_file}: {e}")
 
     pinned_package_specs = {}
-    for pin, pin_info in (
-        project_dict.get("tool", {}).get("poetry", {}).get("dependencies", {})
-    ).items():
+    for pin, pin_info in (project_dict.get("tool", {}).get("poetry", {}).get("dependencies", {})).items():
         pin = package_canonical_name(pin)
         if pin == "python":
             # Skip the special line indicating python version.
@@ -142,8 +135,7 @@ def translate(project_file: Path, lock_file: Path) -> LockSet:
     # later.
     lock_files = lock_dict.get("metadata", {}).get("files", {})
     files_by_package_name = {
-        package_name: [parse_file_info(f) for f in files]
-        for package_name, files in lock_files.items()
+        package_name: [parse_file_info(f) for f in files] for package_name, files in lock_files.items()
     }
 
     # Next, pull out all Package entries in a poetry-specific model.
@@ -172,9 +164,7 @@ def translate(project_file: Path, lock_file: Path) -> LockSet:
                     marker = dep.get("markers")
                     spec = dep.get("version")
 
-                dependencies.append(
-                    PoetryDependency(name=name, spec=spec, marker=marker)
-                )
+                dependencies.append(PoetryDependency(name=name, spec=spec, marker=marker))
 
         # In older versions of poetry the list of files was held in a metadata section at the bottom of the poetry.lock file
         # The lock file format now (as of 2022-12-16), has the files specified local to each dependency as another field.
@@ -211,9 +201,7 @@ def translate(project_file: Path, lock_file: Path) -> LockSet:
     # Construct a PackageDependency and store it.
     for package in poetry_packages:
         for dep in package.dependencies:
-            dependency_packages = packages_by_canonical_name[
-                package_canonical_name(dep.name)
-            ]
+            dependency_packages = packages_by_canonical_name[package_canonical_name(dep.name)]
             for dep_pkg in dependency_packages:
                 if dep.matches(dep_pkg):
                     resolved = PackageDependency(
@@ -236,9 +224,7 @@ def translate(project_file: Path, lock_file: Path) -> LockSet:
                 pinned_keys[pin] = pin_pkg.key
                 break
         else:
-            raise MismatchedVersionException(
-                f"Found no packages to satisfy pin (name={pin}, spec={pin_spec})"
-            )
+            raise MismatchedVersionException(f"Found no packages to satisfy pin (name={pin}, spec={pin_spec})")
 
     lock_packages = {}
     for package in poetry_packages:
@@ -261,9 +247,7 @@ def main(args: Any) -> None:
 
 
 def parse_flags() -> Any:
-    parser = FlagFileArgumentParser(
-        description="Generate pycross dependency bzl file."
-    )
+    parser = FlagFileArgumentParser(description="Generate pycross dependency bzl file.")
 
     parser.add_argument(
         "--poetry-project-file",

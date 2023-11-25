@@ -65,5 +65,5 @@ pycross_wheel_zipimport_library = rule(
             allow_single_file = [".whl"],
             mandatory = True,
         ),
-    }
+    },
 )

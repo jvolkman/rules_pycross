@@ -1,10 +1,15 @@
-load("@rules_python//python:defs.bzl", "py_binary")
 load("@example_lock_repo//:requirements.bzl", "requirement")
+load("@rules_python//python:defs.bzl", "py_binary")
 
 py_binary(
     name = "ipython",
     srcs = ["ipython.py"],
-    deps = ["//deps:ipython", "//deps:numpy", "//deps:keyring", "//deps:greenlet"],
+    deps = [
+        "//deps:greenlet",
+        "//deps:ipython",
+        "//deps:keyring",
+        "//deps:numpy",
+    ],
 )
 
 py_binary(

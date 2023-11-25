@@ -7,6 +7,7 @@ on Windows yet).
 Try running IPython: `bazel run //tools:ipython`
 
 To add dependencies:
+
 1. install [Poetry](https://github.com/python-poetry/poetry) - it's not currently a dependency
 2. run `poetry add <new-package>`, where `<new-package>` is the name of the thing you want to add
 3. run `bazel run :update_example_lock` to update the `.bzl` lock file

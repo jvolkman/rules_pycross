@@ -7,8 +7,8 @@ py_binary(
     srcs = [
         "repair_wheel_hook.py",
     ],
+    visibility = ["//pycross/hooks:__pkg__"],
     deps = [
         "@rules_pycross_deps//deps:repairwheel",
     ],
-    visibility = ["//pycross/hooks:__pkg__"],
 )

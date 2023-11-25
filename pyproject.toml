@@ -17,3 +17,20 @@ dependencies = [
     "typing-extensions==4.8.0",
     "wheel==0.41.3",
 ]
+
+[tool.black]
+line-length = 120
+
+[tool.pylint]
+line-length = 120
+
+[tool.flakeheaven]
+max_line_length = 120
+
+[tool.flakeheaven.plugins]
+"flake8-*" = ["+*"]
+flake8-import-restrictions = ["+I2043"]
+pyflakes = ["+*", "-F541"]
+
+[tool.flakeheaven.exceptions."**/*.md"]
+pyflakes = ["-*"]

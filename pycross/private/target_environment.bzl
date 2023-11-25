@@ -5,7 +5,6 @@ load(":providers.bzl", "PycrossTargetEnvironmentInfo")
 def fully_qualified_label(label):
     return "@%s//%s:%s" % (label.workspace_name, label.package, label.name)
 
-
 def _target_python_impl(ctx):
     f = ctx.actions.declare_file(ctx.attr.name + ".json")
 
@@ -38,14 +37,13 @@ def _target_python_impl(ctx):
 
     return [
         PycrossTargetEnvironmentInfo(
-            python_compatible_with=ctx.attr.python_compatible_with,
-            file=f,
+            python_compatible_with = ctx.attr.python_compatible_with,
+            file = f,
         ),
         DefaultInfo(
-            files=depset([f])
+            files = depset([f]),
         ),
     ]
-
 
 pycross_target_environment = rule(
     implementation = _target_python_impl,
@@ -89,5 +87,5 @@ pycross_target_environment = rule(
             cfg = "exec",
             executable = True,
         ),
-    }
+    },
 )

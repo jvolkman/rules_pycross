@@ -69,7 +69,7 @@ def overwrite_file(name, mode="w", perms=None):
         if perms is not None:
             os.chmod(fp.name, perms)
         shutil.move(fp.name, name)
-    except Exception as e:
+    except Exception:
         fp.close()
         try:
             os.unlink(fp.name)
@@ -155,9 +155,7 @@ def install_script(name, dst, context=None, perms=0o755):
         fp.write(src)
 
 
-def find_sysconfig_data(
-    paths: List[Path], given_file: Optional[Path] = None
-) -> Dict[str, Any]:
+def find_sysconfig_data(paths: List[Path], given_file: Optional[Path] = None) -> Dict[str, Any]:
     pattern = "_sysconfigdata_*.py*"
     maybe = []
     for path in paths:
@@ -200,8 +198,6 @@ def find_sysconfig_data(
             )
     if not target_sysconfigdata:
         path_strs = [str(p) for p in sysconfig_paths]
-        raise FileNotFoundError(
-            f"No {pattern} found in target paths. Looked in {', '.join(path_strs)}"
-        )
+        raise FileNotFoundError(f"No {pattern} found in target paths. Looked in {', '.join(path_strs)}")
 
     return target_sysconfigdata.build_time_vars

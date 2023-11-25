@@ -1,5 +1,3 @@
-load("@pycross_toolchains//:defs.bzl", "environments")
-
 package(default_visibility = ["//visibility:public"])
 
 exports_files([

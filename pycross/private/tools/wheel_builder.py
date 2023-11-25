@@ -24,6 +24,7 @@ from typing import Union
 
 from build import ProjectBuilder
 from packaging.utils import parse_wheel_filename
+
 from pycross.private.tools.args import FlagFileArgumentParser
 from pycross.private.tools.crossenv.utils import find_sysconfig_data
 from pycross.private.tools.target_environment import TargetEnv
@@ -74,9 +75,7 @@ def relpath(path: os.PathLike, start: os.PathLike) -> Path:
     return Path(os.path.relpath(path, start))
 
 
-def determine_target_path_from_exec(
-    exec_python_exe: Path, target_python_exe: Path
-) -> List[Path]:
+def determine_target_path_from_exec(exec_python_exe: Path, target_python_exe: Path) -> List[Path]:
     query_args = (
         exec_python_exe,
         "-c",
@@ -148,9 +147,7 @@ def get_target_sysconfig(
     # If target_sys_path is empty, we try to determine it from the exec python's sys path.
 
     if not target_sys_path:
-        target_sys_path = determine_target_path_from_exec(
-            exec_python_exe, target_python_exe
-        )
+        target_sys_path = determine_target_path_from_exec(exec_python_exe, target_python_exe)
 
     return find_sysconfig_data(target_sys_path)
 
@@ -268,9 +265,7 @@ def get_wrapper_flags(cflags: str) -> List[str]:
     return result
 
 
-def wrap_cc(
-    lang: str, cc_exe: Path, cflags: str, python_exe: Path, bin_dir: Path
-) -> Path:
+def wrap_cc(lang: str, cc_exe: Path, cflags: str, python_exe: Path, bin_dir: Path) -> Path:
     assert lang in ("cc", "cxx")
     version_str = subprocess.check_output([cc_exe, "--version"]).decode("utf-8")
     first_line = version_str.splitlines()[0]
@@ -316,9 +311,7 @@ def wrap_cc(
     return wrapper_path
 
 
-def generate_cc_wrappers(
-    toolchain_vars: Dict[str, Any], python_exe: Path, bin_dir: Path
-) -> Dict[str, str]:
+def generate_cc_wrappers(toolchain_vars: Dict[str, Any], python_exe: Path, bin_dir: Path) -> Dict[str, str]:
     orig_cc = toolchain_vars["CC"]
     orig_cxx = toolchain_vars["CXX"]
     cflags = toolchain_vars["CFLAGS"]
@@ -343,9 +336,7 @@ def generate_cross_sysconfig_vars(
     sysconfig_vars.update(get_inherited_vars(target_vars))
 
     # wheel_build.bzl gives us LDSHAREDFLAGS, but Python wants LDSHARED which is a combination of CC and LDSHAREDFLAGS
-    sysconfig_vars["LDSHARED"] = " ".join(
-        [sysconfig_vars["CC"], sysconfig_vars["LDSHAREDFLAGS"]]
-    )
+    sysconfig_vars["LDSHARED"] = " ".join([sysconfig_vars["CC"], sysconfig_vars["LDSHAREDFLAGS"]])
     del sysconfig_vars["LDSHAREDFLAGS"]
 
     # Add search paths for listed native deps
@@ -383,9 +374,7 @@ def link_native_headers(include_dir: Path, headers: List[Path]) -> None:
     for header in headers:
         path_in_include = include_dir / header.name
         if path_in_include.exists():
-            _warn(
-                f"Not linking {header} into include directory because {header.name} already exists."
-            )
+            _warn(f"Not linking {header} into include directory because {header.name} already exists.")
             continue
         path_in_include.symlink_to(relpath(header, include_dir))
 
@@ -394,9 +383,7 @@ def link_native_libraries(lib_dir: Path, libraries: List[Path]) -> None:
     for library in libraries:
         path_in_lib = lib_dir / library.name
         if path_in_lib.exists():
-            _warn(
-                f"Not linking {library} into lib directory because {library.name} already exists."
-            )
+            _warn(f"Not linking {library} into lib directory because {library.name} already exists.")
             continue
         path_in_lib.symlink_to(relpath(library, lib_dir))
 
@@ -453,9 +440,7 @@ def run_pre_build_hooks(
             build_env = json.load(f)
             for k, v in build_env.items():
                 if not (isinstance(k, str) and isinstance(v, str)):
-                    _error(
-                        "pre-build hook build_env.json must contain string keys and values"
-                    )
+                    _error("pre-build hook build_env.json must contain string keys and values")
 
         # Read post-hook config_settings.json.
         with open(config_settings_file, "r") as f:
@@ -514,15 +499,11 @@ def run_post_build_hooks(
     return wheel_file
 
 
-def check_filename_against_target(
-    wheel_name: str, target_environment: TargetEnv
-) -> None:
+def check_filename_against_target(wheel_name: str, target_environment: TargetEnv) -> None:
     _, _, _, tags = parse_wheel_filename(wheel_name)
     tag_names = {str(t) for t in tags}
     if not tag_names.intersection(target_environment.compatibility_tags):
-        _error(
-            f"No tags in {wheel_name} match target environment {target_environment.name}"
-        )
+        _error(f"No tags in {wheel_name} match target environment {target_environment.name}")
 
 
 def find_site_dir(env_dir: Path) -> Path:
@@ -567,18 +548,14 @@ def build_cross_venv(
                 )
 
     try:
-        subprocess.check_output(
-            args=crossenv_args, env=os.environ, stderr=subprocess.STDOUT
-        )
+        subprocess.check_output(args=crossenv_args, env=os.environ, stderr=subprocess.STDOUT)
     except subprocess.CalledProcessError as cpe:
         print("===== CROSSENV FAILED =====", file=sys.stderr)
         print(cpe.output.decode(), file=sys.stderr)
         raise
 
 
-def build_standard_venv(
-    env_dir: Path, exec_python_exe: Path, sysconfig_vars: Dict[str, Any]
-) -> None:
+def build_standard_venv(env_dir: Path, exec_python_exe: Path, sysconfig_vars: Dict[str, Any]) -> None:
     venv_args = [
         exec_python_exe,
         "-m",
@@ -589,9 +566,7 @@ def build_standard_venv(
     ]
 
     try:
-        subprocess.check_output(
-            args=venv_args, env=os.environ, stderr=subprocess.STDOUT
-        )
+        subprocess.check_output(args=venv_args, env=os.environ, stderr=subprocess.STDOUT)
     except subprocess.CalledProcessError as cpe:
         print("===== VENV FAILED =====", file=sys.stderr)
         print(cpe.output.decode(), file=sys.stderr)
@@ -602,9 +577,7 @@ def build_standard_venv(
     with open(site_dir / "_pycross_sysconfigdata.py", "w") as f:
         f.write(f"build_time_vars = {repr(sysconfig_vars)}\n")
     with open(site_dir / "_pycross_sysconfigdata.pth", "w") as f:
-        f.write(
-            'import os; os.environ["_PYTHON_SYSCONFIGDATA_NAME"] = "_pycross_sysconfigdata"\n'
-        )
+        f.write('import os; os.environ["_PYTHON_SYSCONFIGDATA_NAME"] = "_pycross_sysconfigdata"\n')
 
 
 def build_venv(
@@ -618,9 +591,7 @@ def build_venv(
     always_use_crossenv: bool = False,
 ) -> None:
     if exec_python_exe != target_python_exe or always_use_crossenv:
-        build_cross_venv(
-            env_dir, exec_python_exe, target_python_exe, sysconfig_vars, target_env
-        )
+        build_cross_venv(env_dir, exec_python_exe, target_python_exe, sysconfig_vars, target_env)
     else:
         build_standard_venv(env_dir, exec_python_exe, sysconfig_vars)
 
@@ -628,20 +599,16 @@ def build_venv(
 
     # Add a pth file to override sys.prefix and sys.exec_prefix as paths relative to the sdist root.
     with open(site_dir / "_pycross_sys_prefix.pth", "w") as f:
-        f.write(
-            f'import sys; sys.prefix = sys.exec_prefix = "{env_dir}"\n'
-        )
+        f.write(f'import sys; sys.prefix = sys.exec_prefix = "{env_dir}"\n')
 
-    # If we're using a Bazel-provided python (i.e., not system python), set sys.base_prefix to a path 
+    # If we're using a Bazel-provided python (i.e., not system python), set sys.base_prefix to a path
     # relative to the sdist root in an attempt to keep non-reproducible paths out of binaries.
     if bazel_root in target_python_exe.parents:
         # base_prefix and base_exec_prefix are the grandparent directory of the executable.
         # E.g., if the executable is at python310/bin/python3, python310 is base_prefix.
         # target_python_exe should already be a relative path.
         with open(site_dir / "_pycross_sys_base_prefix.pth", "w") as f:
-            f.write(
-                f'import sys; sys.base_prefix = sys.base_exec_prefix = "{target_python_exe.parent.parent}"\n'
-            )
+            f.write(f'import sys; sys.base_prefix = sys.base_exec_prefix = "{target_python_exe.parent.parent}"\n')
 
     # Add a pth file to include all of our build dependencies.
     with open(site_dir / "deps.pth", "w") as f:
@@ -656,7 +623,6 @@ def build_wheel(
     config_settings: Dict[str, str],
     debug: bool = False,
 ) -> Path:
-
     python_exe = env_dir / "bin" / "python"
 
     def _subprocess_runner(
@@ -673,9 +639,7 @@ def build_wheel(
 
         if debug:
             try:
-                site = subprocess.check_output(
-                    [cmd[0], "-m", "site"], cwd=cwd, env=env, stderr=subprocess.STDOUT
-                )
+                site = subprocess.check_output([cmd[0], "-m", "site"], cwd=cwd, env=env, stderr=subprocess.STDOUT)
                 print("===== BUILD SITE =====", file=sys.stdout)
                 print(site.decode(), file=sys.stdout)
             except subprocess.CalledProcessError as cpe:
@@ -683,9 +647,7 @@ def build_wheel(
                 print(cpe.output.decode(), file=sys.stderr)
 
         try:
-            output = subprocess.check_output(
-                cmd, cwd=cwd, env=env, stderr=subprocess.STDOUT
-            )
+            output = subprocess.check_output(cmd, cwd=cwd, env=env, stderr=subprocess.STDOUT)
         except subprocess.CalledProcessError as cpe:
             print("===== BUILD FAILED =====", file=sys.stderr)
             print(cpe.output.decode(), file=sys.stderr)
@@ -906,7 +868,6 @@ def main(args: Any, temp_dir: Path, is_debug: bool) -> None:
 
 
 def parse_flags() -> Any:
-
     # At the time of flags parsing, we should be within .../execroot/<workspace_name>
     workspace_name = Path.cwd().name
     prefix = execroot_prefix(workspace_name)
@@ -914,9 +875,7 @@ def parse_flags() -> Any:
     def sdist_rel_path(val):
         return prefix / val
 
-    parser = FlagFileArgumentParser(
-        description="Generate target python information."
-    )
+    parser = FlagFileArgumentParser(description="Generate target python information.")
 
     parser.add_argument(
         "--always-use-crossenv",

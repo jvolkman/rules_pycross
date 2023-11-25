@@ -22,8 +22,6 @@ python_register_toolchains(
     python_version = "3.11.6",
 )
 
-load("@python3_11//:defs.bzl", "interpreter")
-
 local_repository(
     name = "jvolkman_rules_pycross",
     path = "../..",

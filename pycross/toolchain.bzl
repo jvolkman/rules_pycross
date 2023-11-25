@@ -1,7 +1,7 @@
 """This module implements the language-specific toolchain rule.
 """
+
 load("//pycross/private:providers.bzl", "PycrossTargetEnvironmentInfo")
-load("@bazel_skylib//lib:paths.bzl", "paths")
 
 PycrossBuildExecRuntimeInfo = provider(
     doc = "Extended information about a (exec, target) Python interpreter pair.",
@@ -20,12 +20,12 @@ def _pycross_hermetic_toolchain_impl(ctx):
     target_py_info = ctx.attr.target_interpreter[PyRuntimeInfo]
 
     pycross_info = PycrossBuildExecRuntimeInfo(
-        exec_python_files=exec_py_info.files,
-        exec_python_executable=exec_py_info.interpreter.path,
-        target_python_files=target_py_info.files,
-        target_python_executable=target_py_info.interpreter.path,
-        target_sys_path=[], #find_hermetic_sys_path(target_py_info),
-        target_environment=ctx.attr.target_environment,
+        exec_python_files = exec_py_info.files,
+        exec_python_executable = exec_py_info.interpreter.path,
+        target_python_files = target_py_info.files,
+        target_python_executable = target_py_info.interpreter.path,
+        target_sys_path = [],  #find_hermetic_sys_path(target_py_info),
+        target_environment = ctx.attr.target_environment,
     )
 
     return [
@@ -33,7 +33,6 @@ def _pycross_hermetic_toolchain_impl(ctx):
             pycross_info = pycross_info,
         ),
     ]
-
 
 pycross_hermetic_toolchain = rule(
     implementation = _pycross_hermetic_toolchain_impl,
@@ -61,5 +60,5 @@ def config_compatible(config_setting_target):
         {
             config_setting_target: [],
             "//conditions:default": ["@platforms//:incompatible"],
-        }
+        },
     )

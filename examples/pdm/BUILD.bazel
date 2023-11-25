@@ -1,9 +1,9 @@
 load("@bazel_skylib//rules:write_file.bzl", "write_file")
 load(
     "@jvolkman_rules_pycross//pycross:defs.bzl",
-    "pycross_target_environment",
     "pycross_lock_file",
     "pycross_pdm_lock_model",
+    "pycross_target_environment",
 )
 
 _darwin_x86_64 = [
@@ -38,63 +38,63 @@ platform(
 
 pycross_target_environment(
     name = "python_darwin_x86_64",
-    python_compatible_with = _darwin_x86_64,
-    version = "3.11.6",
     abis = ["cp311"],
     platforms = ["macosx_12_0_x86_64"],
+    python_compatible_with = _darwin_x86_64,
+    version = "3.11.6",
     visibility = ["//visibility:public"],
 )
 
 pycross_target_environment(
     name = "python_darwin_arm64",
-    python_compatible_with = _darwin_arm64,
-    version = "3.11.6",
     abis = ["cp311"],
     platforms = ["macosx_12_0_arm64"],
+    python_compatible_with = _darwin_arm64,
+    version = "3.11.6",
     visibility = ["//visibility:public"],
 )
 
 pycross_target_environment(
     name = "python_linux_x86_64",
+    abis = ["cp311"],
+    platforms = [
+        "linux_x86_64",
+        "manylinux2014_x86_64",
+    ] + [
+        "manylinux_2_%s_x86_64" % str(i)
+        for i in range(17, 25)
+    ],
     python_compatible_with = _linux_x86_64,
     version = "3.11.6",
-    abis = ["cp311"],
-    platforms = ["linux_x86_64", "manylinux2014_x86_64"] + [
-        "manylinux_2_%s_x86_64" % str(i) for i in range(17, 25)
-    ],
     visibility = ["//visibility:public"],
 )
 
 pycross_pdm_lock_model(
     name = "example_lock_model",
-    project_file = "pyproject.toml",
-    lock_file = "pdm.lock",
     dev = True,
-    groups = ["cow", "dev"],
+    groups = [
+        "cow",
+        "dev",
+    ],
+    lock_file = "pdm.lock",
+    project_file = "pyproject.toml",
 )
 
 pycross_lock_file(
     name = "example_lock",
-    lock_model_file = ":example_lock_model",
-    target_environments = [
-        ":python_darwin_x86_64",
-        ":python_darwin_arm64",
-        ":python_linux_x86_64",
-    ],
-    remote_wheels = {
-        "https://files.pythonhosted.org/packages/3.7/x/xmltodict/xmltodict-0.12.0-py2.py3-none-any.whl": "8bbcb45cc982f48b2ca8fe7e7827c5d792f217ecf1792626f808bf41c3b86051",
-    },
-    local_wheels = [
-        "//wheels",
-    ],
-    default_alias_single_version = True,
-    build_target_overrides = {
-        "future@0.18.3": "@//deps:overridden_future_0.18.3",
-    },
+    out = "example_lock.bzl",
     always_build_packages = [
         "pbr@6.0.0",
         "setproctitle",
     ],
+    build_target_overrides = {
+        "future@0.18.3": "@//deps:overridden_future_0.18.3",
+    },
+    default_alias_single_version = True,
+    local_wheels = [
+        "//wheels",
+    ],
+    lock_model_file = ":example_lock_model",
     package_build_dependencies = {
         "numpy": [
             "cython",
@@ -148,7 +148,14 @@ pycross_lock_file(
         ],
     },
     pypi_index = "https://pypi.org",
-    out = "example_lock.bzl",
+    remote_wheels = {
+        "https://files.pythonhosted.org/packages/3.7/x/xmltodict/xmltodict-0.12.0-py2.py3-none-any.whl": "8bbcb45cc982f48b2ca8fe7e7827c5d792f217ecf1792626f808bf41c3b86051",
+    },
+    target_environments = [
+        ":python_darwin_x86_64",
+        ":python_darwin_arm64",
+        ":python_linux_x86_64",
+    ],
 )
 
 _GENERATED = {
@@ -173,7 +180,10 @@ write_file(
             # Convert label to path
             v.replace(":", "/"),
         )
-        for [k, v] in _GENERATED.items()
+        for [
+            k,
+            v,
+        ] in _GENERATED.items()
     ],
 )
 

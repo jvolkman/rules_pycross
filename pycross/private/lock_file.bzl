@@ -5,7 +5,6 @@ load(":providers.bzl", "PycrossTargetEnvironmentInfo")
 def fully_qualified_label(ctx, label):
     return "@%s//%s:%s" % (label.workspace_name or ctx.workspace_name, label.package, label.name)
 
-
 def _pycross_lock_file_impl(ctx):
     out = ctx.outputs.out
 
@@ -125,10 +124,10 @@ pycross_lock_file = rule(
             doc = "A list of package keys (name or name@version) to always build from source.",
         ),
         "package_build_dependencies": attr.string_list_dict(
-            doc = "A dict of package keys (name or name@version) to a list of that packages build dependency keys."
+            doc = "A dict of package keys (name or name@version) to a list of that packages build dependency keys.",
         ),
         "package_ignore_dependencies": attr.string_list_dict(
-            doc = "A dict of package keys (name or name@version) to a list of that packages dependency keys to ignore."
+            doc = "A dict of package keys (name or name@version) to a list of that packages dependency keys to ignore.",
         ),
         "disallow_builds": attr.bool(
             doc = "Do not allow pycross_wheel_build targets in the final lock file (i.e., require wheels).",

@@ -26,7 +26,7 @@ jobs:
           python -c "import os; file = open('.bazelrc.ci', 'w'); file.write(os.environ['BAZELRC_CI']); file.close()"
         shell: bash
         env:
-          BAZELRC_CI : ${{secrets.BAZELRC_CI}}
+          BAZELRC_CI: ${{secrets.BAZELRC_CI}}
 
       - name: bazel test //pycross/...
         run: |
@@ -53,7 +53,7 @@ jobs:
           python -c "import os; file = open('.bazelrc.ci', 'w'); file.write(os.environ['BAZELRC_CI']); file.close()"
         shell: bash
         env:
-          BAZELRC_CI : ${{secrets.BAZELRC_CI}}
+          BAZELRC_CI: ${{secrets.BAZELRC_CI}}
 
       - name: run smoke tests
         run: |
@@ -114,7 +114,7 @@ jobs:
            macos-latest) wheel_plat="macosx" ;;
            *) wheel_plat="linux" ;;
           esac
-          
+
           for wheel in $(find $ARTIFACT_PATH -name '*.whl' | grep "$wheel_plat"); do
             rm -rf "${{ runner.temp }}/env"
             python3 -m venv "${{ runner.temp }}/env"

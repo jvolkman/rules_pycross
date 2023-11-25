@@ -16,7 +16,10 @@ py_library(
 
 py_binary(
     name = "crossenv",
-    srcs = ["__main__.py", "__init__.py"],
-    deps = [":crossenv_lib"],
+    srcs = [
+        "__init__.py",
+        "__main__.py",
+    ],
     main = "__main__.py",
+    deps = [":crossenv_lib"],
 )

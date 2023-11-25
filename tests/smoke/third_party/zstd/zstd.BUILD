@@ -9,19 +9,25 @@ package(default_visibility = ["//visibility:public"])
 
 filegroup(
     name = "common_sources",
-    srcs = glob(["lib/common/*.c", "lib/common/*.h"]),
+    srcs = glob([
+        "lib/common/*.c",
+        "lib/common/*.h",
+    ]),
 )
 
 filegroup(
     name = "compress_sources",
-    srcs = glob(["lib/compress/*.c", "lib/compress/*.h"]),
+    srcs = glob([
+        "lib/compress/*.c",
+        "lib/compress/*.h",
+    ]),
 )
 
 filegroup(
     name = "decompress_sources",
     srcs = glob([
         "lib/decompress/*.c",
-        "lib/decompress/*.h"
+        "lib/decompress/*.h",
     ]) + select({
         "@platforms//os:windows": [],
         "//conditions:default": glob(["lib/decompress/*.S"]),
@@ -30,7 +36,10 @@ filegroup(
 
 filegroup(
     name = "dictbuilder_sources",
-    srcs = glob(["lib/dictBuilder/*.c", "lib/dictBuilder/*.h"]),
+    srcs = glob([
+        "lib/dictBuilder/*.c",
+        "lib/dictBuilder/*.h",
+    ]),
 )
 
 cc_library(
@@ -46,6 +55,9 @@ cc_library(
         "lib/zstd.h",
         "lib/zstd_errors.h",
     ],
+    linkopts = [
+        "-pthread",
+    ],
     local_defines = [
         "XXH_NAMESPACE=ZSTD_",
         "ZSTD_MULTITHREAD",
@@ -55,35 +67,32 @@ cc_library(
         "@platforms//os:windows": ["ZSTD_DISABLE_ASM"],
         "//conditions:default": [],
     }),
-    linkopts = [
-        "-pthread",
-    ],
 )
 
 cc_library(
     name = "util",
-    hdrs = [
-        "programs/util.h",
-        "lib/common/mem.h",
-        "lib/common/compiler.h",
-        "lib/common/portability_macros.h",
-        "lib/common/debug.h",
-        "lib/common/zstd_deps.h",
-    ],
     srcs = [
-        "programs/util.c",
         "programs/platform.h",
+        "programs/util.c",
+    ],
+    hdrs = [
+        "lib/common/compiler.h",
+        "lib/common/debug.h",
+        "lib/common/mem.h",
+        "lib/common/portability_macros.h",
+        "lib/common/zstd_deps.h",
+        "programs/util.h",
     ],
 )
 
 cc_library(
     name = "datagen",
-    hdrs = [
-        "programs/datagen.h",
-    ],
     srcs = [
         "programs/datagen.c",
         "programs/platform.h",
+    ],
+    hdrs = [
+        "programs/datagen.h",
     ],
     deps = [":util"],
 )
@@ -97,20 +106,27 @@ cc_binary(
 
 cc_test(
     name = "fullbench",
-    deps = [":zstd", ":datagen"],
     srcs = [
-        "programs/timefn.c",
-        "programs/timefn.h",
+        "lib/decompress/zstd_decompress_internal.h",
         "programs/benchfn.c",
         "programs/benchfn.h",
         "programs/benchzstd.c",
         "programs/benchzstd.h",
+        "programs/timefn.c",
+        "programs/timefn.h",
         "tests/fullbench.c",
-        "lib/decompress/zstd_decompress_internal.h",
     ],
-    includes = ["programs", "lib", "lib/common"],
     copts = select({
         "@platforms//os:windows": [],
         "//conditions:default": ["-Wno-deprecated-declarations"],
     }),
+    includes = [
+        "lib",
+        "lib/common",
+        "programs",
+    ],
+    deps = [
+        ":datagen",
+        ":zstd",
+    ],
 )

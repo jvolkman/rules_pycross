@@ -5,6 +5,7 @@ from typing import Optional
 
 PG_VERSION_DEFINE = "#define PG_VERSION "
 
+
 def query(arg: str) -> Optional[str]:
     build_root = Path(os.environ["PYCROSS_BUILD_ROOT"])
     lib_dir = build_root / "lib"
@@ -36,7 +37,7 @@ def query(arg: str) -> Optional[str]:
 
     elif arg == "ldflags":
         return f"-L{lib_dir}"
-    
+
     elif arg == "cppflags":
         return "none"
 
@@ -48,7 +49,7 @@ def query(arg: str) -> Optional[str]:
             for line in f:
                 line = line.strip()
                 if line.startswith(PG_VERSION_DEFINE):
-                    version_str = line[len(PG_VERSION_DEFINE):]
+                    version_str = line[len(PG_VERSION_DEFINE) :]
                     version_str = version_str.strip('"')  # Remove quotes
                     return f"PostgreSQL {version_str}"
 

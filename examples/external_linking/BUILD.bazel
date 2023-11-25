@@ -1,10 +1,9 @@
-load("@bazel_skylib//rules:diff_test.bzl", "diff_test")
 load("@bazel_skylib//rules:write_file.bzl", "write_file")
 load(
     "@jvolkman_rules_pycross//pycross:defs.bzl",
-    "pycross_target_environment",
     "pycross_lock_file",
     "pycross_pdm_lock_model",
+    "pycross_target_environment",
 )
 load(
     "@jvolkman_rules_pycross//pycross:toolchain.bzl",
@@ -53,41 +52,46 @@ platform(
 
 pycross_target_environment(
     name = "python_darwin_x86_64",
-    python_compatible_with = _darwin_x86_64,
-    version = "3.10.8",
     abis = ["cp310"],
     platforms = ["macosx_12_0_x86_64"],
+    python_compatible_with = _darwin_x86_64,
+    version = "3.10.8",
     visibility = ["//visibility:public"],
 )
 
 pycross_target_environment(
     name = "python_darwin_arm64",
-    python_compatible_with = _darwin_arm64,
-    version = "3.10.8",
     abis = ["cp310"],
     platforms = ["macosx_12_0_arm64"],
+    python_compatible_with = _darwin_arm64,
+    version = "3.10.8",
     visibility = ["//visibility:public"],
 )
 
 pycross_target_environment(
     name = "python_linux_x86_64",
-    python_compatible_with = _linux_x86_64,
-    version = "3.10.8",
     abis = ["cp310"],
     platforms = [] + [
-        "manylinux_2_%s_x86_64" % str(i) for i in range(5, 38)
+        "manylinux_2_%s_x86_64" % str(i)
+        for i in range(5, 38)
     ],
+    python_compatible_with = _linux_x86_64,
+    version = "3.10.8",
     visibility = ["//visibility:public"],
 )
 
 pycross_target_environment(
     name = "python_linux_arm64",
+    abis = ["cp310"],
+    platforms = [
+        "linux_aarch64",
+        "manylinux2014_aarch64",
+    ] + [
+        "manylinux_2_%s_aarch64" % str(i)
+        for i in range(17, 25)
+    ],
     python_compatible_with = _linux_arm64,
     version = "3.10.8",
-    abis = ["cp310"],
-    platforms = ["linux_aarch64", "manylinux2014_aarch64"] + [
-        "manylinux_2_%s_aarch64" % str(i) for i in range(17, 25)
-    ],
     visibility = ["//visibility:public"],
 )
 
@@ -138,31 +142,29 @@ toolchain(
 
 pycross_pdm_lock_model(
     name = "example_lock_model",
-    project_file = "pyproject.toml",
-    lock_file = "pdm.lock",
     dev = True,
-    groups = ["cow", "dev"],
+    groups = [
+        "cow",
+        "dev",
+    ],
+    lock_file = "pdm.lock",
+    project_file = "pyproject.toml",
 )
 
 pycross_lock_file(
     name = "example_lock",
-    lock_model_file = ":example_lock_model",
-    target_environments = [
-        ":python_darwin_x86_64",
-        ":python_darwin_arm64",
-        ":python_linux_x86_64",
-        ":python_linux_arm64",
-    ],
-    default_alias_single_version = True,
+    out = "example_lock.bzl",
     always_build_packages = [
         "numpy",
         "pandas",
-	"setproctitle",
+        "setproctitle",
     ],
     build_target_overrides = {
         "numpy": "@//deps/numpy",
         "psycopg2": "@//deps/psycopg2",
     },
+    default_alias_single_version = True,
+    lock_model_file = ":example_lock_model",
     package_build_dependencies = {
         "numpy": [
             "cython",
@@ -174,12 +176,17 @@ pycross_lock_file(
             "setuptools",
             "wheel",
         ],
-	"setproctitle": [
-	    "setuptools",
-	    "wheel",
-	],
+        "setproctitle": [
+            "setuptools",
+            "wheel",
+        ],
     },
-    out = "example_lock.bzl",
+    target_environments = [
+        ":python_darwin_x86_64",
+        ":python_darwin_arm64",
+        ":python_linux_x86_64",
+        ":python_linux_arm64",
+    ],
 )
 
 _GENERATED = {
@@ -204,7 +211,10 @@ write_file(
             # Convert label to path
             v.replace(":", "/"),
         )
-        for [k, v] in _GENERATED.items()
+        for [
+            k,
+            v,
+        ] in _GENERATED.items()
     ],
 )
 
