@@ -119,12 +119,12 @@ pycross_target_environment(<a href="#pycross_target_environment-name">name</a>, 
 | Name  | Description | Type | Mandatory | Default |
 | :------------- | :------------- | :------------- | :------------- | :------------- |
 | <a id="pycross_target_environment-name"></a>name |  A unique name for this target.   | <a href="https://bazel.build/concepts/labels#target-names">Name</a> | required |  |
-| <a id="pycross_target_environment-abis"></a>abis |  A list of PEP 425 abi tags.   | List of strings | optional | <code>[]</code> |
+| <a id="pycross_target_environment-abis"></a>abis |  A list of PEP 425 abi tags. Defaults to ['none'].   | List of strings | optional | <code>["none"]</code> |
 | <a id="pycross_target_environment-envornment_markers"></a>envornment_markers |  Environment marker overrides.   | <a href="https://bazel.build/rules/lib/dict">Dictionary: String -> String</a> | optional | <code>{}</code> |
 | <a id="pycross_target_environment-flag_values"></a>flag_values |  A list of flag values that, when satisfied, indicates this target_platform should be selected (together with python_compatible_with).   | <a href="https://bazel.build/rules/lib/dict">Dictionary: Label -> String</a> | optional | <code>{}</code> |
-| <a id="pycross_target_environment-implementation"></a>implementation |  The PEP 425 implementation abbreviation (defaults to 'cp' for CPython).   | String | optional | <code>"cp"</code> |
-| <a id="pycross_target_environment-platforms"></a>platforms |  A list of PEP 425 platform tags.   | List of strings | optional | <code>[]</code> |
-| <a id="pycross_target_environment-python_compatible_with"></a>python_compatible_with |  A list of constraints that, when satisfied, indicates this target_platform should be selected (together with flag_values).   | <a href="https://bazel.build/concepts/labels">List of labels</a> | required |  |
+| <a id="pycross_target_environment-implementation"></a>implementation |  The PEP 425 implementation abbreviation. Defaults to 'cp' for CPython.   | String | optional | <code>"cp"</code> |
+| <a id="pycross_target_environment-platforms"></a>platforms |  A list of PEP 425 platform tags. Defaults to ['any'].   | List of strings | optional | <code>["any"]</code> |
+| <a id="pycross_target_environment-python_compatible_with"></a>python_compatible_with |  A list of constraints that, when satisfied, indicates this target_platform should be selected (together with flag_values).   | <a href="https://bazel.build/concepts/labels">List of labels</a> | optional | <code>[]</code> |
 | <a id="pycross_target_environment-version"></a>version |  The python version.   | String | required |  |
 
 

@@ -51,9 +51,9 @@ def main(args: Any) -> None:
 
     platforms = _expand_manylinux_platforms(args.platform or [])
     target_python = TargetPython(
-        platforms=platforms,
+        platforms=platforms or ["any"],
         py_version_info=version_info,
-        abis=args.abi or [],
+        abis=args.abi or ["none"],
         implementation=args.implementation,
     )
 
