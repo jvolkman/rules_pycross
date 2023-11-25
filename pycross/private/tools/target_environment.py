@@ -136,6 +136,8 @@ def guess_platform_machine(py: TargetPython) -> str:
             "x86_64": "x86_64",
         }.get(normalize_arch(py), "")
 
+    return ""
+
 
 def guess_platform_python_implementation(py: TargetPython) -> str:
     # See https://peps.python.org/pep-0425/#python-tag

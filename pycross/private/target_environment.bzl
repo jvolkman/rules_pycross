@@ -52,10 +52,9 @@ pycross_target_environment = rule(
     attrs = {
         "implementation": attr.string(
             doc = (
-                "The PEP 425 implementation abbreviation " +
-                "(defaults to 'cp' for CPython)."
+                "The PEP 425 implementation abbreviation. " +
+                "Defaults to 'cp' for CPython."
             ),
-            mandatory = False,
             default = "cp",
         ),
         "version": attr.string(
@@ -63,35 +62,27 @@ pycross_target_environment = rule(
             mandatory = True,
         ),
         "abis": attr.string_list(
-            doc = "A list of PEP 425 abi tags.",
-            mandatory = False,
-            default = [],
+            doc = "A list of PEP 425 abi tags. Defaults to ['none'].",
+            default = ["none"],
         ),
         "platforms": attr.string_list(
-            doc = "A list of PEP 425 platform tags.",
-            mandatory = False,
-            default = [],
+            doc = "A list of PEP 425 platform tags. Defaults to ['any'].",
+            default = ["any"],
         ),
         "python_compatible_with": attr.label_list(
             doc = (
                 "A list of constraints that, when satisfied, indicates this " +
                 "target_platform should be selected (together with flag_values)."
             ),
-            mandatory = True,
         ),
         "flag_values": attr.label_keyed_string_dict(
             doc = (
                 "A list of flag values that, when satisfied, indicates this " +
                 "target_platform should be selected (together with python_compatible_with)."
             ),
-            mandatory = False,
-            allow_empty = True,
-            default = {},
         ),
         "envornment_markers": attr.string_dict(
             doc = "Environment marker overrides.",
-            mandatory = False,
-            default = {},
         ),
         "_tool": attr.label(
             default = Label("//pycross/private/tools:target_environment_generator"),

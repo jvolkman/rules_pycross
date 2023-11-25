@@ -126,7 +126,6 @@ pycross_target_environment(
     name = "rules_pycross_deps_target_env",
     python_compatible_with = [],
     version = "3.8.0",
-    abis = ["py38"],
     visibility = ["//visibility:public"],
 )
 
