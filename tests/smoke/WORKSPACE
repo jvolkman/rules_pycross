@@ -96,7 +96,7 @@ local_repository(
 
 load("@jvolkman_rules_pycross//pycross:repositories.bzl", "rules_pycross_dependencies")
 
-rules_pycross_dependencies(python_interpreter_target = interpreter)
+rules_pycross_dependencies()
 
 load("@jvolkman_rules_pycross//pycross:defs.bzl", "pycross_lock_repo", "pycross_register_for_python_toolchains")
 pycross_register_for_python_toolchains(

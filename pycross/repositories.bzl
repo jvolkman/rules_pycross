@@ -6,10 +6,9 @@ See https://docs.bazel.build/versions/main/skylark/deploying.html#dependencies
 
 load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive", "http_file")
 load("@bazel_tools//tools/build_defs/repo:utils.bzl", "maybe")
-load("@rules_python//python/pip_install:repositories.bzl", "pip_install_dependencies")
 
-load("//pycross/private:versions.bzl", "TOOL_VERSIONS")
-load("//pycross/private:pypi_requirements.bzl", "install_deps")
+load("//pycross/private:lock_repo.bzl", "pycross_lock_repo")
+load("//pycross/private:pycross_deps_lock.bzl", pip_repositories = "repositories")
 
 # WARNING: any changes in this function may be BREAKING CHANGES for users
 # because we'll fetch a dependency which may be different from one that
@@ -17,7 +16,7 @@ load("//pycross/private:pypi_requirements.bzl", "install_deps")
 # ours took precedence. Such breakages are challenging for users, so any
 # changes in this function should be marked as BREAKING in the commit message
 # and released only in semver majors.
-def rules_pycross_dependencies(python_interpreter_target=None):
+def rules_pycross_dependencies(python_interpreter_target = None):
     # The minimal version of bazel_skylib we require
     maybe(
         http_archive,
@@ -39,5 +38,9 @@ def rules_pycross_dependencies(python_interpreter_target=None):
         downloaded_file_path = "installer-0.7.0-py3-none-any.whl",
     )
 
-    pip_install_dependencies()
-    install_deps(python_interpreter_target=python_interpreter_target)
+    maybe(
+        pycross_lock_repo,
+        name = "rules_pycross_deps",
+        lock_file = "@jvolkman_rules_pycross//pycross/private:pycross_deps_lock.bzl",
+    )
+    pip_repositories()

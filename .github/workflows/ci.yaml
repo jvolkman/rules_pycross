@@ -29,10 +29,8 @@ jobs:
           BAZELRC_CI : ${{secrets.BAZELRC_CI}}
 
       - name: bazel test //pycross/...
-        # Don't run the requirements test because the ubuntu runner's python version doesn't necessarily match
-        # the development host's.
         run: |
-          bazel --bazelrc=.github/workflows/ci.bazelrc --bazelrc=.bazelrc test -- //pycross/... -//pycross/private:requirements_test
+          bazel --bazelrc=.github/workflows/ci.bazelrc --bazelrc=.bazelrc test -- //pycross/...
 
   smoke-test-gen:
     name: Smoke test/generate - Python ${{ matrix.python-version }} on ${{ startsWith(matrix.os, 'macos-') && 'macOS' || startsWith(matrix.os, 'windows-') && 'Windows' || 'Linux' }}

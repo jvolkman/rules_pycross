@@ -94,7 +94,6 @@ pycross_lock_file(
     always_build_packages = [
         "pbr@6.0.0",
         "setproctitle",
-#        "numpy",  # Doesn't work with zig cc since numpy can't detect the compiler type (assumes gcc)
     ],
     package_build_dependencies = {
         "numpy": [

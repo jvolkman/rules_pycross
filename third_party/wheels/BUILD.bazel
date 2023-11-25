@@ -1,0 +1,8 @@
+package(default_visibility = ["//visibility:public"])
+
+filegroup(
+    name = "wheels",
+    srcs = [
+        "msgpack-1.0.7-py3-none-any.whl",
+    ],
+)
