@@ -17,9 +17,9 @@ py_binary(
     deps = [
         ":args",
         ":lib",
-        "@rules_pycross_pypi_deps_packaging//:pkg",
-        "@rules_pycross_pypi_deps_pip//:pkg",
-        "@rules_pycross_pypi_deps_tomli//:pkg",
+        "@rules_pycross_deps//deps:packaging",
+        "@rules_pycross_deps//deps:pip",
+        "@rules_pycross_deps//deps:tomli",
     ],
 )
 
@@ -35,7 +35,7 @@ py_library(
     ],
     deps = [
         ":lock_model",
-        "@rules_pycross_pypi_deps_packaging//:pkg",
+        "@rules_pycross_deps//deps:packaging",
     ],
 )
 
@@ -43,8 +43,8 @@ py_library(
     name = "lock_model",
     srcs = ["lock_model.py"],
     deps = [
-        "@rules_pycross_pypi_deps_dacite//:pkg",
-        "@rules_pycross_pypi_deps_packaging//:pkg",
+        "@rules_pycross_deps//deps:dacite",
+        "@rules_pycross_deps//deps:packaging",
     ],
 )
 
@@ -74,8 +74,8 @@ py_binary(
     deps = [
         ":args",
         ":lock_model",
-        "@rules_pycross_pypi_deps_pdm//:pkg",
-        "@rules_pycross_pypi_deps_tomli//:pkg",
+        "@rules_pycross_deps//deps:pdm",
+        "@rules_pycross_deps//deps:tomli",
     ],
 )
 
@@ -86,8 +86,8 @@ py_binary(
     deps = [
         ":args",
         ":lock_model",
-        "@rules_pycross_pypi_deps_poetry_core//:pkg",
-        "@rules_pycross_pypi_deps_tomli//:pkg",
+        "@rules_pycross_deps//deps:poetry_core",
+        "@rules_pycross_deps//deps:tomli",
     ],
 )
 
@@ -98,8 +98,8 @@ py_binary(
     deps = [
         ":args",
         ":lib",
-        "@rules_pycross_pypi_deps_packaging//:pkg",
-        "@rules_pycross_pypi_deps_pip//:pkg",
+        "@rules_pycross_deps//deps:packaging",
+        "@rules_pycross_deps//deps:pip",
     ],
 )
 
@@ -111,10 +111,10 @@ py_binary(
         ":args",
         ":lib",
         "//pycross/private/tools/crossenv:crossenv",
-        "@rules_pycross_pypi_deps_build//:pkg",
-        "@rules_pycross_pypi_deps_packaging//:pkg",
-        "@rules_pycross_pypi_deps_python_dotenv//:pkg",
-        "@rules_pycross_pypi_deps_tomli//:pkg",
+        "@rules_pycross_deps//deps:build",
+        "@rules_pycross_deps//deps:packaging",
+        "@rules_pycross_deps//deps:python_dotenv",
+        "@rules_pycross_deps//deps:tomli",
     ],
 )
 

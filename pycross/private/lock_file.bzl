@@ -2,8 +2,8 @@
 
 load(":providers.bzl", "PycrossTargetEnvironmentInfo")
 
-def fully_qualified_label(label):
-    return "@%s//%s:%s" % (label.workspace_name, label.package, label.name)
+def fully_qualified_label(ctx, label):
+    return "@%s//%s:%s" % (label.workspace_name or ctx.workspace_name, label.package, label.name)
 
 
 def _pycross_lock_file_impl(ctx):
@@ -21,12 +21,12 @@ def _pycross_lock_file_impl(ctx):
     args.add("--output", out)
 
     for t in ctx.attr.target_environments:
-        args.add_all("--target-environment", [t[PycrossTargetEnvironmentInfo].file.path, fully_qualified_label(t.label)])
+        args.add_all("--target-environment", [t[PycrossTargetEnvironmentInfo].file.path, fully_qualified_label(ctx, t.label)])
 
     for local_wheel in ctx.files.local_wheels:
         if not local_wheel.owner:
-            fail("Could not determine owning lable for local wheel: %s" % local_wheel)
-        args.add_all("--local-wheel", [local_wheel.basename, fully_qualified_label(local_wheel.owner)])
+            fail("Could not determine owning label for local wheel: %s" % local_wheel)
+        args.add_all("--local-wheel", [local_wheel.basename, fully_qualified_label(ctx, local_wheel.owner)])
 
     for remote_wheel_url, sha256 in ctx.attr.remote_wheels.items():
         args.add_all("--remote-wheel", [remote_wheel_url, sha256])

@@ -7,37 +7,20 @@ load(":internal_deps.bzl", "rules_pycross_internal_deps")
 # Fetch deps needed only locally for development
 rules_pycross_internal_deps()
 
-load("@rules_python//python/pip_install:repositories.bzl", "pip_install_dependencies")
-pip_install_dependencies()
-
-load("//pycross:repositories.bzl", "rules_pycross_dependencies")
-
-# Fetch dependencies which users need as well
-rules_pycross_dependencies()
-
+# Setup rules_python
 load("@rules_python//python:repositories.bzl", "py_repositories", "python_register_toolchains")
-
 py_repositories()
-
 python_register_toolchains(
     name = "python",
     python_version = "3.12.0",
 )
 
-load("@python//:defs.bzl", "interpreter")
-
-# This pip_parse repo is only used to generate the pycross/private/pypi_requirements.bzl
-load("@rules_python//python:pip.bzl", "pip_parse")
-
-pip_parse(
-    name = "rules_pycross_pypi_deps",
-    requirements_lock = "//pycross/private:requirements.txt",
-    python_interpreter_target = interpreter,
-)
+# Fetch dependencies which users need as well
+load("//pycross:repositories.bzl", "rules_pycross_dependencies")
+rules_pycross_dependencies()
 
 # For running our own unit tests
 load("@bazel_skylib//:workspace.bzl", "bazel_skylib_workspace")
-
 bazel_skylib_workspace()
 
 ############################################

@@ -1,13 +1,10 @@
+load("@aspect_bazel_lib//lib:write_source_files.bzl", "write_source_files")
 load("@bazel_skylib//:bzl_library.bzl", "bzl_library")
-load("@rules_python//python/pip_install:requirements.bzl", "compile_pip_requirements")
+load(":lock_file.bzl", "pycross_lock_file")
+load(":pdm_lock_model.bzl", "pycross_pdm_lock_model")
+load(":target_environment.bzl", "pycross_target_environment")
 
 default_visibility = ["//pycross:__subpackages__"]
-
-bzl_library(
-    name = "versions",
-    srcs = ["versions.bzl"],
-    visibility = default_visibility,
-)
 
 bzl_library(
     name = "cc_toolchain_util",
@@ -55,9 +52,13 @@ bzl_library(
 )
 
 bzl_library(
-    name = "pypi_requirements",
-    srcs = ["pypi_requirements.bzl"],
-    deps = ["@rules_python//docs:pip_install_bzl"],
+    name = "pycross_deps_lock",
+    srcs = ["pycross_deps_lock.bzl"],
+    deps = [
+        "@bazel_tools//tools/build_defs/repo:http.bzl",
+        "@bazel_tools//tools/build_defs/repo:utils.bzl",
+        "//pycross:defs",
+    ],
     visibility = default_visibility,
 )
 
@@ -119,9 +120,37 @@ bzl_library(
     visibility = default_visibility,
 )
 
-compile_pip_requirements(
-    name = "requirements",
-    extra_args = ["--allow-unsafe"],
-    requirements_in = "requirements.in",
-    requirements_txt = "requirements.txt",
+# This is the environment we advertise for what should be pure-python
+# dependencies used by Pycross
+pycross_target_environment(
+    name = "rules_pycross_deps_target_env",
+    python_compatible_with = [],
+    version = "3.8.0",
+    abis = ["py38"],
+    visibility = ["//visibility:public"],
+)
+
+pycross_pdm_lock_model(
+    name = "rules_pycross_deps_lock_model",
+    project_file = "//:pyproject.toml",
+    lock_file = "//:pdm.lock",
+)
+
+pycross_lock_file(
+    name = "rules_pycross_deps",
+    lock_model_file = ":rules_pycross_deps_lock_model",
+    target_environments = [":rules_pycross_deps_target_env"],
+    local_wheels = [
+        "//third_party/wheels",
+    ],
+    default_alias_single_version = True,
+    disallow_builds = True,
+    out = "updated_pycross_deps_lock.bzl",
+)
+
+write_source_files(
+    name = "update_pycross_deps",
+    files = {
+        "pycross_deps_lock.bzl": ":updated_pycross_deps_lock.bzl",
+    },
 )

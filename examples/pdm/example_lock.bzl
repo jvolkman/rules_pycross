@@ -162,9 +162,9 @@ def targets():
     )
 
     _target = select({
-        ":_env_python_darwin_arm64": "@//:python_darwin_arm64",
-        ":_env_python_darwin_x86_64": "@//:python_darwin_x86_64",
-        ":_env_python_linux_x86_64": "@//:python_linux_x86_64",
+        ":_env_python_darwin_arm64": "@jvolkman_rules_pycross_example//:python_darwin_arm64",
+        ":_env_python_darwin_x86_64": "@jvolkman_rules_pycross_example//:python_darwin_x86_64",
+        ":_env_python_linux_x86_64": "@jvolkman_rules_pycross_example//:python_linux_x86_64",
     })
 
     pycross_wheel_library(

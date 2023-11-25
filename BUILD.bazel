@@ -20,3 +20,11 @@ bzl_library(
         "@bazel_tools//tools/build_defs/repo:utils.bzl",
     ],
 )
+
+exports_files(
+    [
+        "pdm.lock",
+        "pyproject.toml",
+    ],
+    visibility = ["//pycross:__subpackages__"],
+)
