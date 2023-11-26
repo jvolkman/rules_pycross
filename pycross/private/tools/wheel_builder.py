@@ -743,9 +743,9 @@ def execroot_prefix(workspace_name: str) -> Path:
 
 def main(args: Any, temp_dir: Path, is_debug: bool) -> None:
     # Paths passed into this action will be relative to bazel's execroot.
-    # But we need to build whe wheel from within the extracted sdist directory.
+    # But we need to build the wheel from within the extracted sdist directory.
     # So here's the plan:
-    # * Build a temp area. In here we'll have sdist, env (virual environment) and some
+    # * Build a temp area. In here we'll have sdist, env (virtual environment) and some
     #   other stuff.
     # * Extract the sdist.
     # * Link the bazel execroot to the temp area as `bazel_execroot`.

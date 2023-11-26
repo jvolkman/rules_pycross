@@ -21,6 +21,9 @@ dependencies = [
 [tool.black]
 line-length = 120
 
+[tool.ruff]
+line-length = 120
+
 [tool.pylint]
 line-length = 120
 

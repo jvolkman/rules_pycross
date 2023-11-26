@@ -6,7 +6,7 @@
 # but we don't want to run the other hooks on commit messages
 default_stages: [commit]
 
-exclude: ^third_party/.*$
+exclude: (^third_party/.*$|\.lock$)
 repos:
   # Check formatting and lint for starlark code
   - repo: https://github.com/keith/pre-commit-buildifier
@@ -25,12 +25,23 @@ repos:
     rev: "v3.1.0"
     hooks:
       - id: prettier
-  - repo: https://github.com/flakeheaven/flakeheaven
-    rev: 3.3.0
+  - repo: https://github.com/charliermarsh/ruff-pre-commit
+    rev: v0.1.6
     hooks:
-      - id: flakeheaven
-        additional_dependencies:
-          - flake8-import-restrictions
+      - id: ruff
+        args: [--fix, --show-fixes]
+      - id: ruff-format
+  - repo: https://github.com/codespell-project/codespell
+    rev: "v2.2.6"
+    hooks:
+      - id: codespell
+        args: ["-L", "sur"]
+  - repo: https://github.com/pre-commit/pygrep-hooks
+    rev: "v1.10.0"
+    hooks:
+      - id: rst-backticks
+      - id: rst-directive-colons
+      - id: rst-inline-touching-normal
   - repo: https://github.com/asottile/reorder_python_imports
     rev: v3.12.0
     hooks:
@@ -39,7 +50,7 @@ repos:
     rev: v0.3.1
     hooks:
       - id: absolufy-imports
-  - repo: https://github.com/psf/black
-    rev: 23.11.0
-    hooks:
-      - id: black
+  # - repo: https://github.com/psf/black
+  #   rev: 23.11.0
+  #   hooks:
+  #     - id: black

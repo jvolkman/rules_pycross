@@ -44,7 +44,7 @@ def ind(text: str, tabs=1):
 
 
 def quoted_str(text: str) -> str:
-    """Return text wrapped in doulbe quotes."""
+    """Return text wrapped in double quotes."""
     return json.dumps(text)
 
 
@@ -216,7 +216,7 @@ class GenerationContext:
     ) -> Dict[str, PackageSource]:
         formats = frozenset(["source"]) if source_only else frozenset(["source", "binary"])
         environment_sources = {}
-        for environment in sorted(self.target_environments, key=lambda te: te.name.lower()):
+        for environment in sorted(self.target_environments, key=lambda tenv: tenv.name.lower()):
             link_evaluator = LinkEvaluator(
                 project_name=package.name,
                 canonical_name=package.name,
@@ -276,7 +276,7 @@ class EnvTarget:
             ind(f'name = "{self.naming.environment_target(self.environment_name)}",'),
         ]
         if self.constraints:
-            lines.append(ind(f"constraint_values = ["))
+            lines.append(ind("constraint_values = ["))
             for cv in self.constraints:
                 lines.append(ind(f"{quoted_str(cv)},", 2))
             lines.append(ind("],"))
@@ -518,7 +518,7 @@ class UrlRepoTarget:
                 "maybe(",
                 ind("http_file,"),
                 ind(f'name = "{self.name}",'),
-                ind(f"urls = ["),
+                ind("urls = ["),
             ]
         )
 
@@ -528,7 +528,7 @@ class UrlRepoTarget:
 
         parts.extend(
             [
-                ind(f"],"),
+                ind("],"),
                 ind(f'sha256 = "{self.file.sha256}",'),
                 ind(f'downloaded_file_path = "{self.file.name}",'),
                 ")",
