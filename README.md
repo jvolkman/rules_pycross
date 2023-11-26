@@ -34,7 +34,7 @@ A `pip install` operation can be roughly broken down into these parts:
 4. download sdists and wheels
 5. build and install sdists; install wheels
 
-`rules_pycross` attemps to deconstruct this operation into its constituent parts and glue them together with Bazel:
+`rules_pycross` attempts to deconstruct this operation into its constituent parts and glue them together with Bazel:
 
 1. `pycross_target_environment` is used to specify target environments ahead of time provided with ABI, platform,
    and implementation parameters (similar to pip's `--abi`, `--platform`, and `--implementation` flags). These

@@ -19,8 +19,8 @@ def main() -> None:
         str(output_dir),
     ]
 
-    for l in lib_path:
-        args.extend(["--lib-dir", l])
+    for lp in lib_path:
+        args.extend(["--lib-dir", lp])
 
     subprocess.check_call(args, env=os.environ)
 

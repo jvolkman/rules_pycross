@@ -14,7 +14,7 @@ lib_dir = os.path.relpath(bazel_root / openblas_lib.parent, p)
 (p / "include").symlink_to(include_dir, target_is_directory=True)
 (p / "lib").symlink_to(lib_dir, target_is_directory=True)
 
-site_cfg = f"""\
+site_cfg = """\
 [openblas]
 libraries = openblas
 library_dirs = openblas/lib

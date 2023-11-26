@@ -43,7 +43,7 @@ def _configure_features(ctx, cc_toolchain):
     if not ctx.coverage_instrumented():
         # In coverage mode, cc_common.configure_features() adds coverage related flags,
         # such as --coverage to the compiler and linker. However, if this library is not
-        # instrumented, we don't need to pass those flags, and avoid unncessary rebuilds.
+        # instrumented, we don't need to pass those flags, and avoid unnecessary rebuilds.
         disabled_features.append("coverage")
     return cc_common.configure_features(
         ctx = ctx,
