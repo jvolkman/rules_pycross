@@ -131,10 +131,7 @@ def _is_multi_version_layout(rctx, python_toolchain_repo):
     # unfortunately raises an exception.
     repo_build_file = Label("@{}//:BUILD.bazel".format(python_toolchain_repo))
     repo_dir = rctx.path(repo_build_file).dirname
-    for file in repo_dir.readdir():
-        if file.basename == "pip.bzl":
-            return True
-    return False
+    return repo_dir.get_child("pip.bzl").exists
 
 def _get_single_python_version(rctx, python_toolchain_repo):
     defs_bzl_file = Label("@{}//:defs.bzl".format(python_toolchain_repo))
