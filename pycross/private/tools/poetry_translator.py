@@ -13,7 +13,7 @@ from packaging.utils import InvalidWheelFilename
 from packaging.utils import NormalizedName
 from packaging.utils import parse_sdist_filename
 from packaging.utils import parse_wheel_filename
-from packaging.utils import Version
+from packaging.version import Version
 from poetry.core.constraints.version import parse_constraint
 from poetry.core.constraints.version import Version as PoetryVersion
 from poetry.core.version import markers

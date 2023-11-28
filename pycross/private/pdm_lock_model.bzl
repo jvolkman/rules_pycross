@@ -11,11 +11,20 @@ def _pycross_pdm_lock_model_impl(ctx):
     if ctx.attr.default:
         args.add("--default")
 
-    if ctx.attr.dev:
-        args.add("--dev")
+    for group in ctx.attr.optional_groups:
+        args.add("--optional-group", group)
 
-    for group in ctx.attr.groups:
-        args.add("--group", group)
+    if ctx.attr.all_optional_groups:
+        args.add("--all-optional-groups")
+
+    for group in ctx.attr.development_groups:
+        args.add("--development-group", group)
+
+    if ctx.attr.all_development_groups:
+        args.add("--all-development-groups")
+
+    if ctx.attr.require_static_urls:
+        args.add("--require-static-urls")
 
     ctx.actions.run(
         inputs = (
@@ -48,18 +57,23 @@ pycross_pdm_lock_model = rule(
         ),
         "default": attr.bool(
             doc = "Whether to install dependencies from the default group.",
-            mandatory = False,
             default = True,
         ),
-        "dev": attr.bool(
-            doc = "Whether to install dev dependencies.",
-            mandatory = False,
-            default = False,
+        "optional_groups": attr.string_list(
+            doc = "List of optional dependency groups to install.",
         ),
-        "groups": attr.string_list(
-            doc = "Select groups of optional-dependencies or dev-dependencies to install.",
-            mandatory = False,
-            default = [],
+        "all_optional_groups": attr.bool(
+            doc = "Install all optional dependencies.",
+        ),
+        "development_groups": attr.string_list(
+            doc = "List of development dependency groups to install.",
+        ),
+        "all_development_groups": attr.bool(
+            doc = "Install all dev dependencies.",
+        ),
+        "require_static_urls": attr.bool(
+            doc = "Require that the lock file is created with --static-urls.",
+            default = True,
         ),
         "_tool": attr.label(
             default = Label("//pycross/private/tools:pdm_translator"),
