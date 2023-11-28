@@ -71,12 +71,13 @@ pycross_target_environment(
 
 pycross_pdm_lock_model(
     name = "example_lock_model",
-    dev = True,
-    groups = [
-        "cow",
+    development_groups = [
         "dev",
     ],
     lock_file = "pdm.lock",
+    optional_groups = [
+        "cow",
+    ],
     project_file = "pyproject.toml",
 )
 

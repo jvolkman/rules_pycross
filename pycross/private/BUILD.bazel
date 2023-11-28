@@ -138,11 +138,7 @@ pycross_pdm_lock_model(
 pycross_lock_file(
     name = "rules_pycross_deps",
     out = "updated_pycross_deps_lock.bzl",
-    default_alias_single_version = True,
     disallow_builds = True,
-    local_wheels = [
-        "//third_party/wheels",
-    ],
     lock_model_file = ":rules_pycross_deps_lock_model",
     target_environments = [":rules_pycross_deps_target_env"],
 )

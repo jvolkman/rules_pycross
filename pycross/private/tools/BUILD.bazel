@@ -74,7 +74,6 @@ py_binary(
     deps = [
         ":args",
         ":lock_model",
-        "@rules_pycross_deps//deps:pdm",
         "@rules_pycross_deps//deps:tomli",
     ],
 )
@@ -113,7 +112,6 @@ py_binary(
         "//pycross/private/tools/crossenv",
         "@rules_pycross_deps//deps:build",
         "@rules_pycross_deps//deps:packaging",
-        "@rules_pycross_deps//deps:python_dotenv",
         "@rules_pycross_deps//deps:tomli",
     ],
 )
