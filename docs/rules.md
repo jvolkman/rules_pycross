@@ -64,7 +64,9 @@ pycross_lock_repo(<a href="#pycross_lock_repo-name">name</a>, <a href="#pycross_
 ## pycross_pdm_lock_model
 
 <pre>
-pycross_pdm_lock_model(<a href="#pycross_pdm_lock_model-name">name</a>, <a href="#pycross_pdm_lock_model-default">default</a>, <a href="#pycross_pdm_lock_model-dev">dev</a>, <a href="#pycross_pdm_lock_model-groups">groups</a>, <a href="#pycross_pdm_lock_model-lock_file">lock_file</a>, <a href="#pycross_pdm_lock_model-project_file">project_file</a>)
+pycross_pdm_lock_model(<a href="#pycross_pdm_lock_model-name">name</a>, <a href="#pycross_pdm_lock_model-all_development_groups">all_development_groups</a>, <a href="#pycross_pdm_lock_model-all_optional_groups">all_optional_groups</a>, <a href="#pycross_pdm_lock_model-default">default</a>,
+                       <a href="#pycross_pdm_lock_model-development_groups">development_groups</a>, <a href="#pycross_pdm_lock_model-lock_file">lock_file</a>, <a href="#pycross_pdm_lock_model-optional_groups">optional_groups</a>, <a href="#pycross_pdm_lock_model-project_file">project_file</a>,
+                       <a href="#pycross_pdm_lock_model-require_static_urls">require_static_urls</a>)
 </pre>
 
 
@@ -75,11 +77,14 @@ pycross_pdm_lock_model(<a href="#pycross_pdm_lock_model-name">name</a>, <a href=
 | Name  | Description | Type | Mandatory | Default |
 | :------------- | :------------- | :------------- | :------------- | :------------- |
 | <a id="pycross_pdm_lock_model-name"></a>name |  A unique name for this target.   | <a href="https://bazel.build/concepts/labels#target-names">Name</a> | required |  |
+| <a id="pycross_pdm_lock_model-all_development_groups"></a>all_development_groups |  Install all dev dependencies.   | Boolean | optional | <code>False</code> |
+| <a id="pycross_pdm_lock_model-all_optional_groups"></a>all_optional_groups |  Install all optional dependencies.   | Boolean | optional | <code>False</code> |
 | <a id="pycross_pdm_lock_model-default"></a>default |  Whether to install dependencies from the default group.   | Boolean | optional | <code>True</code> |
-| <a id="pycross_pdm_lock_model-dev"></a>dev |  Whether to install dev dependencies.   | Boolean | optional | <code>False</code> |
-| <a id="pycross_pdm_lock_model-groups"></a>groups |  Select groups of optional-dependencies or dev-dependencies to install.   | List of strings | optional | <code>[]</code> |
+| <a id="pycross_pdm_lock_model-development_groups"></a>development_groups |  List of development dependency groups to install.   | List of strings | optional | <code>[]</code> |
 | <a id="pycross_pdm_lock_model-lock_file"></a>lock_file |  The pdm.lock file.   | <a href="https://bazel.build/concepts/labels">Label</a> | required |  |
+| <a id="pycross_pdm_lock_model-optional_groups"></a>optional_groups |  List of optional dependency groups to install.   | List of strings | optional | <code>[]</code> |
 | <a id="pycross_pdm_lock_model-project_file"></a>project_file |  The pyproject.toml file with pdm dependencies.   | <a href="https://bazel.build/concepts/labels">Label</a> | required |  |
+| <a id="pycross_pdm_lock_model-require_static_urls"></a>require_static_urls |  Require that the lock file is created with --static-urls.   | Boolean | optional | <code>True</code> |
 
 
 <a id="pycross_poetry_lock_model"></a>
