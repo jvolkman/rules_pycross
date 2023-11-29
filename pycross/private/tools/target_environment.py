@@ -8,11 +8,12 @@ from dataclasses import dataclass
 from typing import Any
 from typing import Dict
 from typing import List
+from typing import Optional
 
 from pip._internal.models.target_python import TargetPython
 
 
-@dataclass
+@dataclass(frozen=True)
 class TargetEnv:
     name: str
     implementation: str
@@ -23,6 +24,7 @@ class TargetEnv:
     markers: Dict[str, str]
     python_compatible_with: List[str]
     flag_values: Dict[str, str]
+    config_setting_target: Optional[str] = None
 
     @staticmethod
     def from_target_python(
@@ -31,6 +33,7 @@ class TargetEnv:
         markers: Dict[str, str],
         python_compatible_with: List[str],
         flag_values: Dict[str, str],
+        config_setting_target: Optional[str] = None,
     ) -> "TargetEnv":
         all_markers = guess_environment_markers(target_python)
         for key, val in markers.items():
@@ -48,6 +51,7 @@ class TargetEnv:
             markers=all_markers,
             python_compatible_with=python_compatible_with,
             flag_values=flag_values,
+            config_setting_target=config_setting_target,
         )
 
     @property

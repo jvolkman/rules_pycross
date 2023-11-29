@@ -156,6 +156,13 @@ class GenerationContext:
         self.remote_wheels = remote_wheels
         self.naming = naming
         self.target_environment_select = target_environment_select
+        self.target_environments_by_name = {tenv.name: tenv for tenv in target_environments}
+
+    def environment_label(self, environment_name: str) -> str:
+        target_env = self.target_environments_by_name[environment_name]
+        if target_env.config_setting_target:
+            return target_env.config_setting_target
+        return self.naming.environment_label(environment_name)
 
     def check_package_compatibility(self, package: Package) -> None:
         """Sanity check to make sure the requires_python attribute on each package matches our environments."""
@@ -368,7 +375,7 @@ class PackageTarget:
 
     def _select_entries(self, env_deps: Dict[str, Set[PackageDependency]], indent) -> Iterator[str]:
         for env_name, deps in sorted(env_deps.items(), key=lambda x: x[0].lower()):
-            yield ind(f'"{self.context.naming.environment_label(env_name)}": [', indent)
+            yield ind(f'"{self.context.environment_label(env_name)}": [', indent)
             yield from self._common_entries(deps, indent + 1)
             yield ind("],", indent)
         yield ind('"//conditions:default": [],', indent)
@@ -472,11 +479,10 @@ class PackageTarget:
             lines.append(ind(f'wheel = "{wheel_target(source)}",'))
         else:
             lines.append(ind("wheel = select({"))
-            naming = self.context.naming
             for env_name, source in self.package_sources_by_env.items():
                 lines.append(
                     ind(
-                        f'"{naming.environment_label(env_name)}": "{wheel_target(source)}",',
+                        f'"{self.context.environment_label(env_name)}": "{wheel_target(source)}",',
                         2,
                     )
                 )
@@ -888,18 +894,19 @@ def main(args: Any) -> None:
         w()
 
         for environment in environments:
-            env_target = EnvTarget(
-                environment.name, environment.python_compatible_with, environment.flag_values, naming
-            )
-            w(ind(env_target.render()))
-            w()
+            if not environment.config_setting_target:
+                env_target = EnvTarget(
+                    environment.name, environment.python_compatible_with, environment.flag_values, naming
+                )
+                w(ind(env_target.render()))
+                w()
 
         w(ind("# buildifier: disable=unused-variable"))
         w(ind(f"{context.target_environment_select} = select({{"))
         for ep in environment_pairs:
             w(
                 ind(
-                    f'"{naming.environment_label(ep.target_environment.name)}": "{ep.label}",',
+                    f'"{context.environment_label(ep.target_environment.name)}": "{ep.label}",',
                     2,
                 )
             )
@@ -910,16 +917,15 @@ def main(args: Any) -> None:
             w(ind(e.render()))
 
         # Repos
-        if repos:
-            w(
-                "",
-                "# buildifier: disable=unnamed-macro",
-                "def repositories():",
-                ind('"""Generated package repositories."""'),
-            )
-            for r in repos:
-                w()
-                w(ind(r.render()))
+        w(
+            "",
+            "# buildifier: disable=unnamed-macro",
+            "def repositories():",
+            ind('"""Generated package repositories."""'),
+        )
+        for r in repos:
+            w()
+            w(ind(r.render()))
 
 
 def parse_flags() -> Any:

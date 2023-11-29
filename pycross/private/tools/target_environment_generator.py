@@ -57,7 +57,12 @@ def main(args: Any) -> None:
     )
 
     target = TargetEnv.from_target_python(
-        args.name, target_python, overrides, args.python_compatible_with, args.flag_value
+        args.name,
+        target_python,
+        overrides,
+        args.python_compatible_with,
+        args.flag_value,
+        args.config_setting_target,
     )
     with open(args.output, "w") as f:
         json.dump(target.to_dict(), f, indent=2, sort_keys=True)
@@ -114,7 +119,12 @@ def parse_flags() -> Any:
         "--flag-value",
         nargs=2,
         action="append",
-        help="A config",
+        help="A config_setting flag value.",
+    )
+
+    parser.add_argument(
+        "--config-setting-target",
+        help="The config_setting target to use.",
     )
 
     parser.add_argument(
