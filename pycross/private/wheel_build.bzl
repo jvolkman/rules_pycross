@@ -12,7 +12,7 @@ load(
     "get_libraries",
     "get_tools_info",
 )
-load(":providers.bzl", "PycrossTargetEnvironmentInfo", "PycrossWheelInfo")
+load(":providers.bzl", "PycrossWheelInfo")
 
 PYTHON_TOOLCHAIN_TYPE = "@bazel_tools//tools/python:toolchain_type"
 PYCROSS_TOOLCHAIN_TYPE = "@jvolkman_rules_pycross//pycross:toolchain_type"
@@ -261,9 +261,9 @@ def _handle_native_deps(ctx, args, tools):
 def _handle_target_environment(ctx, args, inputs):
     if not ctx.attr.target_environment:
         return
-    target_environment_file = ctx.attr.target_environment[PycrossTargetEnvironmentInfo].file
-    args.add("--target-environment-file", target_environment_file)
-    inputs.append(ctx.attr.target_environment[PycrossTargetEnvironmentInfo].file)
+    target_environment_file = ctx.file.target_environment
+    args.add("--target-environment-file", target_environment_file.path)
+    inputs.append(target_environment_file)
 
 def _handle_build_env(ctx, args, inputs):
     if not ctx.attr.build_env:
@@ -385,7 +385,7 @@ pycross_wheel_build = rule(
         ),
         "target_environment": attr.label(
             doc = "The target environment to build for.",
-            providers = [PycrossTargetEnvironmentInfo],
+            allow_single_file = [".json"],
         ),
         "build_env": attr.string_dict(
             doc = (

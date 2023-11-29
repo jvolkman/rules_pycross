@@ -1,7 +1,5 @@
 """Implementation of the pycross_lock_file rule."""
 
-load(":providers.bzl", "PycrossTargetEnvironmentInfo")
-
 def fully_qualified_label(ctx, label):
     return "@%s//%s:%s" % (label.workspace_name or ctx.workspace_name, label.package, label.name)
 
@@ -19,8 +17,8 @@ def _pycross_lock_file_impl(ctx):
     args.add("--repo-prefix", repo_prefix)
     args.add("--output", out)
 
-    for t in ctx.attr.target_environments:
-        args.add_all("--target-environment", [t[PycrossTargetEnvironmentInfo].file.path, fully_qualified_label(ctx, t.label)])
+    for t in ctx.files.target_environments:
+        args.add_all("--target-environment", [t.path, fully_qualified_label(ctx, t.owner)])
 
     for local_wheel in ctx.files.local_wheels:
         if not local_wheel.owner:
@@ -83,12 +81,11 @@ pycross_lock_file = rule(
     attrs = {
         "target_environments": attr.label_list(
             doc = "A list of pycross_target_environment labels.",
-            allow_files = True,
-            providers = [PycrossTargetEnvironmentInfo],
+            allow_files = [".json"],
         ),
         "lock_model_file": attr.label(
             doc = "The lock model JSON file.",
-            allow_single_file = True,
+            allow_single_file = [".json"],
             mandatory = True,
         ),
         "local_wheels": attr.label_list(

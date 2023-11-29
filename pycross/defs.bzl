@@ -6,7 +6,6 @@ load("//pycross/private:pdm_lock_model.bzl", _pycross_pdm_lock_model = "pycross_
 load("//pycross/private:poetry_lock_model.bzl", _pycross_poetry_lock_model = "pycross_poetry_lock_model")
 load(
     "//pycross/private:providers.bzl",
-    _PycrossTargetEnvironmentInfo = "PycrossTargetEnvironmentInfo",
     _PycrossWheelInfo = "PycrossWheelInfo",
 )
 load("//pycross/private:pypi_file.bzl", _pypi_file = "pypi_file")
@@ -16,7 +15,6 @@ load("//pycross/private:wheel_build.bzl", _pycross_wheel_build = "pycross_wheel_
 load("//pycross/private:wheel_library.bzl", _pycross_wheel_library = "pycross_wheel_library")
 load("//pycross/private:wheel_zipimport_library.bzl", _pycross_wheel_zipimport_library = "pycross_wheel_zipimport_library")
 
-PycrossTargetEnvironmentInfo = _PycrossTargetEnvironmentInfo
 PycrossWheelInfo = _PycrossWheelInfo
 
 pycross_lock_file = _pycross_lock_file
