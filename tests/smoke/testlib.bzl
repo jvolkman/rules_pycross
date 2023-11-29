@@ -47,12 +47,17 @@ def setup_test_targets(lock_name, lock_model):
         target_environments = environments,
         default_alias_single_version = True,
         always_build_packages = [
+            "regex",
             "zstandard",
         ],
         build_target_overrides = {
             "zstandard": "@//{}:zstandard_build".format(native.package_name()),
         },
         package_build_dependencies = {
+            "regex": [
+                "setuptools",
+                "wheel",
+            ],
             "zstandard": [
                 "setuptools",
                 "wheel",
@@ -90,4 +95,10 @@ def setup_test_targets(lock_name, lock_model):
             "@{}_repo//deps:ipython".format(lock_name),
             "@{}_repo//deps:zstandard".format(lock_name),
         ],
+    )
+
+    py_test(
+        name = "test_regex",
+        srcs = ["//:test_regex.py"],
+        deps = ["@{}_repo//deps:regex".format(lock_name)],
     )

@@ -4,28 +4,29 @@
 
 load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_file")
 load("@bazel_tools//tools/build_defs/repo:utils.bzl", "maybe")
-load("@jvolkman_rules_pycross//pycross:defs.bzl", "pycross_wheel_library")
+load("@jvolkman_rules_pycross//pycross:defs.bzl", "pycross_wheel_build", "pycross_wheel_library")
 
 PINS = {
     "appnope": "appnope_0.1.3",
     "asttokens": "asttokens_2.4.1",
     "decorator": "decorator_5.1.1",
-    "exceptiongroup": "exceptiongroup_1.1.3",
+    "exceptiongroup": "exceptiongroup_1.2.0",
     "executing": "executing_2.0.1",
     "ipython": "ipython_8.17.2",
     "jedi": "jedi_0.19.1",
     "matplotlib_inline": "matplotlib_inline_0.1.6",
     "parso": "parso_0.8.3",
-    "pexpect": "pexpect_4.8.0",
+    "pexpect": "pexpect_4.9.0",
     "prompt_toolkit": "prompt_toolkit_3.0.41",
     "ptyprocess": "ptyprocess_0.7.0",
     "pure_eval": "pure_eval_0.2.2",
-    "pygments": "pygments_2.16.1",
+    "pygments": "pygments_2.17.2",
+    "regex": "regex_2023.10.3",
     "setuptools": "setuptools_68.2.2",
     "six": "six_1.16.0",
     "stack_data": "stack_data_0.6.3",
-    "traitlets": "traitlets_5.13.0",
-    "wcwidth": "wcwidth_0.2.10",
+    "traitlets": "traitlets_5.14.0",
+    "wcwidth": "wcwidth_0.2.12",
     "wheel": "wheel_0.41.3",
     "zstandard": "zstandard_0.22.0",
 }
@@ -77,8 +78,8 @@ def targets():
     )
 
     pycross_wheel_library(
-        name = "exceptiongroup_1.1.3",
-        wheel = "@pdm_lock_wheel_exceptiongroup_1.1.3_py3_none_any//file",
+        name = "exceptiongroup_1.2.0",
+        wheel = "@pdm_lock_wheel_exceptiongroup_1.2.0_py3_none_any//file",
     )
 
     pycross_wheel_library(
@@ -90,25 +91,25 @@ def targets():
         ":decorator_5.1.1",
         ":jedi_0.19.1",
         ":matplotlib_inline_0.1.6",
-        ":pexpect_4.8.0",
+        ":pexpect_4.9.0",
         ":prompt_toolkit_3.0.41",
-        ":pygments_2.16.1",
+        ":pygments_2.17.2",
         ":stack_data_0.6.3",
-        ":traitlets_5.13.0",
+        ":traitlets_5.14.0",
     ] + select({
         "@pycross_toolchains//:python_3.10.12_aarch64-apple-darwin_config": [
             ":appnope_0.1.3",
-            ":exceptiongroup_1.1.3",
+            ":exceptiongroup_1.2.0",
         ],
         "@pycross_toolchains//:python_3.10.12_aarch64-unknown-linux-gnu_config": [
-            ":exceptiongroup_1.1.3",
+            ":exceptiongroup_1.2.0",
         ],
         "@pycross_toolchains//:python_3.10.12_x86_64-apple-darwin_config": [
             ":appnope_0.1.3",
-            ":exceptiongroup_1.1.3",
+            ":exceptiongroup_1.2.0",
         ],
         "@pycross_toolchains//:python_3.10.12_x86_64-unknown-linux-gnu_config": [
-            ":exceptiongroup_1.1.3",
+            ":exceptiongroup_1.2.0",
         ],
         "@pycross_toolchains//:python_3.11.6_aarch64-apple-darwin_config": [
             ":appnope_0.1.3",
@@ -142,7 +143,7 @@ def targets():
     )
 
     _matplotlib_inline_0_1_6_deps = [
-        ":traitlets_5.13.0",
+        ":traitlets_5.14.0",
     ]
 
     pycross_wheel_library(
@@ -156,18 +157,18 @@ def targets():
         wheel = "@pdm_lock_wheel_parso_0.8.3_py2.py3_none_any//file",
     )
 
-    _pexpect_4_8_0_deps = [
+    _pexpect_4_9_0_deps = [
         ":ptyprocess_0.7.0",
     ]
 
     pycross_wheel_library(
-        name = "pexpect_4.8.0",
-        deps = _pexpect_4_8_0_deps,
-        wheel = "@pdm_lock_wheel_pexpect_4.8.0_py2.py3_none_any//file",
+        name = "pexpect_4.9.0",
+        deps = _pexpect_4_9_0_deps,
+        wheel = "@pdm_lock_wheel_pexpect_4.9.0_py2.py3_none_any//file",
     )
 
     _prompt_toolkit_3_0_41_deps = [
-        ":wcwidth_0.2.10",
+        ":wcwidth_0.2.12",
     ]
 
     pycross_wheel_library(
@@ -187,8 +188,26 @@ def targets():
     )
 
     pycross_wheel_library(
-        name = "pygments_2.16.1",
-        wheel = "@pdm_lock_wheel_pygments_2.16.1_py3_none_any//file",
+        name = "pygments_2.17.2",
+        wheel = "@pdm_lock_wheel_pygments_2.17.2_py3_none_any//file",
+    )
+
+    _regex_2023_10_3_build_deps = [
+        ":setuptools_68.2.2",
+        ":wheel_0.41.3",
+    ]
+
+    pycross_wheel_build(
+        name = "_build_regex_2023.10.3",
+        sdist = "@pdm_lock_sdist_regex_2023.10.3//file",
+        target_environment = _target,
+        deps = _regex_2023_10_3_build_deps,
+        tags = ["manual"],
+    )
+
+    pycross_wheel_library(
+        name = "regex_2023.10.3",
+        wheel = ":_build_regex_2023.10.3",
     )
 
     pycross_wheel_library(
@@ -214,13 +233,13 @@ def targets():
     )
 
     pycross_wheel_library(
-        name = "traitlets_5.13.0",
-        wheel = "@pdm_lock_wheel_traitlets_5.13.0_py3_none_any//file",
+        name = "traitlets_5.14.0",
+        wheel = "@pdm_lock_wheel_traitlets_5.14.0_py3_none_any//file",
     )
 
     pycross_wheel_library(
-        name = "wcwidth_0.2.10",
-        wheel = "@pdm_lock_wheel_wcwidth_0.2.10_py2.py3_none_any//file",
+        name = "wcwidth_0.2.12",
+        wheel = "@pdm_lock_wheel_wcwidth_0.2.12_py2.py3_none_any//file",
     )
 
     pycross_wheel_library(
@@ -236,6 +255,16 @@ def targets():
 # buildifier: disable=unnamed-macro
 def repositories():
     """Generated package repositories."""
+
+    maybe(
+        http_file,
+        name = "pdm_lock_sdist_regex_2023.10.3",
+        urls = [
+            "https://files.pythonhosted.org/packages/6b/38/49d968981b5ec35dbc0f742f8219acab179fc1567d9c22444152f950cf0d/regex-2023.10.3.tar.gz",
+        ],
+        sha256 = "3fef4f844d2290ee0ba57addcec17eec9e3df73f10a2748485dfd6a3a188cc0f",
+        downloaded_file_path = "regex-2023.10.3.tar.gz",
+    )
 
     maybe(
         http_file,
@@ -279,12 +308,12 @@ def repositories():
 
     maybe(
         http_file,
-        name = "pdm_lock_wheel_exceptiongroup_1.1.3_py3_none_any",
+        name = "pdm_lock_wheel_exceptiongroup_1.2.0_py3_none_any",
         urls = [
-            "https://files.pythonhosted.org/packages/ad/83/b71e58666f156a39fb29417e4c8ca4bc7400c0dd4ed9e8842ab54dc8c344/exceptiongroup-1.1.3-py3-none-any.whl",
+            "https://files.pythonhosted.org/packages/b8/9a/5028fd52db10e600f1c4674441b968cf2ea4959085bfb5b99fb1250e5f68/exceptiongroup-1.2.0-py3-none-any.whl",
         ],
-        sha256 = "343280667a4585d195ca1cf9cef84a4e178c4b6cf2274caef9859782b567d5e3",
-        downloaded_file_path = "exceptiongroup-1.1.3-py3-none-any.whl",
+        sha256 = "4bfd3996ac73b41e9b9628b04e079f193850720ea5945fc96a08633c66912f14",
+        downloaded_file_path = "exceptiongroup-1.2.0-py3-none-any.whl",
     )
 
     maybe(
@@ -339,12 +368,12 @@ def repositories():
 
     maybe(
         http_file,
-        name = "pdm_lock_wheel_pexpect_4.8.0_py2.py3_none_any",
+        name = "pdm_lock_wheel_pexpect_4.9.0_py2.py3_none_any",
         urls = [
-            "https://files.pythonhosted.org/packages/39/7b/88dbb785881c28a102619d46423cb853b46dbccc70d3ac362d99773a78ce/pexpect-4.8.0-py2.py3-none-any.whl",
+            "https://files.pythonhosted.org/packages/9e/c3/059298687310d527a58bb01f3b1965787ee3b40dce76752eda8b44e9a2c5/pexpect-4.9.0-py2.py3-none-any.whl",
         ],
-        sha256 = "0b48a55dcb3c05f3329815901ea4fc1537514d6ba867a152b581d69ae3710937",
-        downloaded_file_path = "pexpect-4.8.0-py2.py3-none-any.whl",
+        sha256 = "7236d1e080e4936be2dc3e326cec0af72acf9212a7e1d060210e70a47e253523",
+        downloaded_file_path = "pexpect-4.9.0-py2.py3-none-any.whl",
     )
 
     maybe(
@@ -379,12 +408,12 @@ def repositories():
 
     maybe(
         http_file,
-        name = "pdm_lock_wheel_pygments_2.16.1_py3_none_any",
+        name = "pdm_lock_wheel_pygments_2.17.2_py3_none_any",
         urls = [
-            "https://files.pythonhosted.org/packages/43/88/29adf0b44ba6ac85045e63734ae0997d3c58d8b1a91c914d240828d0d73d/Pygments-2.16.1-py3-none-any.whl",
+            "https://files.pythonhosted.org/packages/97/9c/372fef8377a6e340b1704768d20daaded98bf13282b5327beb2e2fe2c7ef/pygments-2.17.2-py3-none-any.whl",
         ],
-        sha256 = "13fc09fa63bc8d8671a6d247e1eb303c4b343eaee81d861f3404db2935653692",
-        downloaded_file_path = "Pygments-2.16.1-py3-none-any.whl",
+        sha256 = "b27c2826c47d0f3219f29554824c30c5e8945175d888647acd804ddd04af846c",
+        downloaded_file_path = "pygments-2.17.2-py3-none-any.whl",
     )
 
     maybe(
@@ -419,22 +448,22 @@ def repositories():
 
     maybe(
         http_file,
-        name = "pdm_lock_wheel_traitlets_5.13.0_py3_none_any",
+        name = "pdm_lock_wheel_traitlets_5.14.0_py3_none_any",
         urls = [
-            "https://files.pythonhosted.org/packages/ed/fd/cfc0d27ca11f3dd12b2a90d06875d8bfb532ef40ce67be4066d10807f4aa/traitlets-5.13.0-py3-none-any.whl",
+            "https://files.pythonhosted.org/packages/a7/1d/7d07e1b152b419a8a9c7f812eeefd408a0610d869489ee2e86973486713f/traitlets-5.14.0-py3-none-any.whl",
         ],
-        sha256 = "baf991e61542da48fe8aef8b779a9ea0aa38d8a54166ee250d5af5ecf4486619",
-        downloaded_file_path = "traitlets-5.13.0-py3-none-any.whl",
+        sha256 = "f14949d23829023013c47df20b4a76ccd1a85effb786dc060f34de7948361b33",
+        downloaded_file_path = "traitlets-5.14.0-py3-none-any.whl",
     )
 
     maybe(
         http_file,
-        name = "pdm_lock_wheel_wcwidth_0.2.10_py2.py3_none_any",
+        name = "pdm_lock_wheel_wcwidth_0.2.12_py2.py3_none_any",
         urls = [
-            "https://files.pythonhosted.org/packages/cd/af/fb045bb3d3daedf28e1bedd771674f73de9e06664a48b1579e14d4120158/wcwidth-0.2.10-py2.py3-none-any.whl",
+            "https://files.pythonhosted.org/packages/31/b1/a59de0ad3aabb17523a39804f4c6df3ae87ead053a4e25362ae03d73d03a/wcwidth-0.2.12-py2.py3-none-any.whl",
         ],
-        sha256 = "aec5179002dd0f0d40c456026e74a729661c9d468e1ed64405e3a6c2176ca36f",
-        downloaded_file_path = "wcwidth-0.2.10-py2.py3-none-any.whl",
+        sha256 = "f26ec43d96c8cbfed76a5075dac87680124fa84e0855195a6184da9c187f133c",
+        downloaded_file_path = "wcwidth-0.2.12-py2.py3-none-any.whl",
     )
 
     maybe(
