@@ -1,0 +1,41 @@
+load("@aspect_bazel_lib//lib:write_source_files.bzl", "write_source_files")
+load("@jvolkman_rules_pycross//pycross:defs.bzl", "pycross_lock_file", "pycross_pdm_lock_model")
+load("@pycross_toolchains//:defs.bzl", "environments")
+load("@rules_python//python:defs.bzl", "py_test")
+
+package(default_visibility = ["//visibility:public"])
+
+pycross_pdm_lock_model(
+    name = "lock_model",
+    lock_file = "//:pdm.lock",
+    project_file = "//:pyproject.toml",
+)
+
+pycross_lock_file(
+    name = "pypi",
+    out = "updated_pypi_lock.bzl",
+    always_build_packages = [
+        "regex",
+    ],
+    lock_model_file = ":lock_model",
+    package_build_dependencies = {
+        "regex": [
+            "setuptools",
+            "wheel",
+        ],
+    },
+    target_environments = environments,
+)
+
+py_test(
+    name = "regex_test",
+    srcs = ["regex_test.py"],
+    deps = ["@pypi//deps:regex"],
+)
+
+write_source_files(
+    name = "update_lock",
+    files = {
+        "pypi_lock.bzl": ":updated_pypi_lock.bzl",
+    },
+)

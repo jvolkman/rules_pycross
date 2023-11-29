@@ -1,0 +1,9 @@
+[project]
+name = "rules_pycross_regex_example"
+version = "0.0"
+dependencies = [
+    "regex",
+    "setuptools",
+    "wheel",
+]
+requires-python = ">=3.8"
