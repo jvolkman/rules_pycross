@@ -112,8 +112,8 @@ pycross_poetry_lock_model(<a href="#pycross_poetry_lock_model-name">name</a>, <a
 ## pycross_target_environment
 
 <pre>
-pycross_target_environment(<a href="#pycross_target_environment-name">name</a>, <a href="#pycross_target_environment-abis">abis</a>, <a href="#pycross_target_environment-envornment_markers">envornment_markers</a>, <a href="#pycross_target_environment-flag_values">flag_values</a>, <a href="#pycross_target_environment-implementation">implementation</a>, <a href="#pycross_target_environment-platforms">platforms</a>,
-                           <a href="#pycross_target_environment-python_compatible_with">python_compatible_with</a>, <a href="#pycross_target_environment-version">version</a>)
+pycross_target_environment(<a href="#pycross_target_environment-name">name</a>, <a href="#pycross_target_environment-abis">abis</a>, <a href="#pycross_target_environment-config_setting">config_setting</a>, <a href="#pycross_target_environment-envornment_markers">envornment_markers</a>, <a href="#pycross_target_environment-flag_values">flag_values</a>,
+                           <a href="#pycross_target_environment-implementation">implementation</a>, <a href="#pycross_target_environment-platforms">platforms</a>, <a href="#pycross_target_environment-python_compatible_with">python_compatible_with</a>, <a href="#pycross_target_environment-version">version</a>)
 </pre>
 
 
@@ -125,6 +125,7 @@ pycross_target_environment(<a href="#pycross_target_environment-name">name</a>, 
 | :------------- | :------------- | :------------- | :------------- | :------------- |
 | <a id="pycross_target_environment-name"></a>name |  A unique name for this target.   | <a href="https://bazel.build/concepts/labels#target-names">Name</a> | required |  |
 | <a id="pycross_target_environment-abis"></a>abis |  A list of PEP 425 abi tags. Defaults to ['none'].   | List of strings | optional | <code>["none"]</code> |
+| <a id="pycross_target_environment-config_setting"></a>config_setting |  Optional config_setting target to select this environment.   | <a href="https://bazel.build/concepts/labels">Label</a> | optional | <code>None</code> |
 | <a id="pycross_target_environment-envornment_markers"></a>envornment_markers |  Environment marker overrides.   | <a href="https://bazel.build/rules/lib/dict">Dictionary: String -> String</a> | optional | <code>{}</code> |
 | <a id="pycross_target_environment-flag_values"></a>flag_values |  A list of flag values that, when satisfied, indicates this target_platform should be selected (together with python_compatible_with).   | <a href="https://bazel.build/rules/lib/dict">Dictionary: Label -> String</a> | optional | <code>{}</code> |
 | <a id="pycross_target_environment-implementation"></a>implementation |  The PEP 425 implementation abbreviation. Defaults to 'cp' for CPython.   | String | optional | <code>"cp"</code> |
