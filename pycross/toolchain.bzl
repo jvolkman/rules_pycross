@@ -1,8 +1,6 @@
 """This module implements the language-specific toolchain rule.
 """
 
-load("//pycross/private:providers.bzl", "PycrossTargetEnvironmentInfo")
-
 PycrossBuildExecRuntimeInfo = provider(
     doc = "Extended information about a (exec, target) Python interpreter pair.",
     fields = {
@@ -11,7 +9,7 @@ PycrossBuildExecRuntimeInfo = provider(
         "target_python_files": "A depset containing all files for the target interpreter.",
         "target_python_executable": "The path to the target Python interpreter, either absolute or relative to execroot.",
         "target_sys_path": "An array of system path directories (i.e., the value of sys.path from `python -m site`).",
-        "target_environment": "The label of an associated PycrossTargetEnvironmentInfo target.",
+        "target_environment": "The label of a pycross_target_environment JSON file.",
     },
 )
 
@@ -40,7 +38,7 @@ pycross_hermetic_toolchain = rule(
         "target_environment": attr.label(
             doc = "The target environment associated with this toolchain.",
             mandatory = True,
-            providers = [PycrossTargetEnvironmentInfo],
+            allow_single_file = [".json"],
         ),
         "target_interpreter": attr.label(
             doc = "The target Python interpreter (PyRuntimeInfo).",
