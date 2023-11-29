@@ -272,13 +272,13 @@ def write_pyvenv_cfg(env_path: Path, target_bin: str) -> None:
 
 
 def build_env(
-    env_path: str,
+    env_dir: str,
     target_python_exe: str,
     sysconfig_vars: Dict[str, Any],
     manylinux_tags: List[str],
 ) -> Path:
     pyver = "python" + sysconfig.get_config_var("py_version_short")
-    env_path = Path(env_path)
+    env_path = Path(env_dir)
     lib_path = env_path / "lib"
 
     # resolve this because Python 3.11 seems to do so itself, and we need both of our representations to be the same.
@@ -372,7 +372,7 @@ def main():
         sysconfig_vars = json.load(f)
 
     build_env(
-        env_path=args.env_dir,
+        env_dir=args.env_dir,
         target_python_exe=args.target_python,
         sysconfig_vars=sysconfig_vars,
         manylinux_tags=args.manylinux,

@@ -43,10 +43,10 @@ class TargetEnv:
 
         return TargetEnv(
             name=name,
-            implementation=target_python.implementation,
+            implementation=target_python.implementation or "py",
             version=".".join((str(i) for i in target_python.py_version_info)),
-            abis=target_python.abis,
-            platforms=target_python.platforms,
+            abis=target_python.abis or [],
+            platforms=target_python.platforms or [],
             compatibility_tags=[str(t) for t in target_python.get_sorted_tags()],
             markers=all_markers,
             python_compatible_with=python_compatible_with,
@@ -72,7 +72,7 @@ class TargetEnv:
 
 
 def normalize_os(py: TargetPython) -> str:
-    for platform in py.platforms:
+    for platform in py.platforms or []:
         if platform.startswith("linux"):
             return "linux"
         elif platform.startswith("manylinux"):
@@ -85,7 +85,7 @@ def normalize_os(py: TargetPython) -> str:
 
 
 def normalize_arch(py: TargetPython) -> str:
-    for platform in py.platforms:
+    for platform in py.platforms or []:
         if "x86_64" in platform:
             return "x86_64"
         elif "amd64" in platform:
@@ -145,6 +145,8 @@ def guess_platform_machine(py: TargetPython) -> str:
 
 def guess_platform_python_implementation(py: TargetPython) -> str:
     # See https://peps.python.org/pep-0425/#python-tag
+    if not py.implementation:
+        return ""
     abbrev = py.implementation[:2]
     return {
         "py": "Python",
@@ -183,6 +185,8 @@ def guess_python_full_version(py: TargetPython) -> str:
 
 def guess_implementation_name(py: TargetPython) -> str:
     # See https://peps.python.org/pep-0425/#python-tag
+    if not py.implementation:
+        return ""
     abbrev = py.implementation[:2]
     return {
         "py": "python",

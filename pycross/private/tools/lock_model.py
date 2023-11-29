@@ -10,10 +10,11 @@ from typing import List
 from typing import Optional
 from typing import Tuple
 
-import dacite
+from dacite.config import Config
+from dacite.core import from_dict
 from packaging.utils import canonicalize_name
 from packaging.utils import NormalizedName
-from packaging.utils import Version
+from packaging.version import Version
 
 
 class _TypeHandlingEncoder(JSONEncoder):
@@ -109,7 +110,7 @@ class LockSet:
 
     @staticmethod
     def from_dict(data: Dict[str, Any]) -> LockSet:
-        return dacite.from_dict(LockSet, data, config=dacite.Config(cast=[Tuple, Version, PackageKey]))
+        return from_dict(LockSet, data, config=Config(cast=[Tuple, Version, PackageKey]))
 
     @classmethod
     def from_json(cls, data: str) -> LockSet:

@@ -17,7 +17,9 @@ from urllib.parse import urlparse
 
 from packaging.markers import Marker
 from packaging.specifiers import SpecifierSet
+from packaging.utils import NormalizedName
 from packaging.utils import parse_wheel_filename
+from packaging.version import Version
 from pip._internal.index.package_finder import CandidateEvaluator
 from pip._internal.index.package_finder import LinkEvaluator
 from pip._internal.index.package_finder import LinkType
@@ -301,7 +303,7 @@ class EnvTarget:
 
 @dataclass
 class PackageAnnotations:
-    build_dependencies: List[str] = field(default_factory=list)
+    build_dependencies: List[PackageKey] = field(default_factory=list)
     build_target_override: Optional[str] = None
     always_build: bool = False
     ignore_dependencies: Set[str] = field(default_factory=set)
@@ -338,12 +340,12 @@ class PackageTarget:
         return set(self.package_sources_by_env.values())
 
     @property
-    def all_dependency_keys(self) -> Set[str]:
+    def all_dependency_keys(self) -> Set[PackageKey]:
         """Returns all package keys (name-version) that this target depends on,
         including platform-specific and build dependencies."""
-        keys = set(str(d.key) for d in self.common_deps)
+        keys = set(d.key for d in self.common_deps)
         for env_deps in self.env_deps.values():
-            keys |= set(str(d.key) for d in env_deps)
+            keys |= set(d.key for d in env_deps)
         keys |= set(self.build_deps)
         return keys
 
@@ -528,7 +530,7 @@ class UrlRepoTarget:
             ]
         )
 
-        urls = sorted(self.file.urls)
+        urls = sorted(self.file.urls or [])
         for url in urls:
             parts.append(ind(f'"{url}",', 2))
 
@@ -607,17 +609,19 @@ def url_wheel_name(url: str) -> str:
 
 def resolve_single_version(
     name: str,
-    versions_by_name: Dict[str, List[str]],
+    versions_by_name: Dict[NormalizedName, List[PackageKey]],
     all_versions: AbstractSet[str],
     attr_name: str,
-):
+) -> PackageKey:
     # Handle the case of an exact version being specified.
     if "@" in name:
-        if name not in all_versions:
+        name_part, version_part = name.split("@", maxsplit=1)
+        key = PackageKey.from_parts(package_canonical_name(name_part), Version(version_part))
+        if key not in all_versions:
             raise Exception(f'{attr_name} entry "{name}" matches no packages')
-        return name
+        return key
 
-    options = versions_by_name.get(name)
+    options = versions_by_name.get(package_canonical_name(name))
     if not options:
         raise Exception(f'{attr_name} entry "{name}" matches no packages')
 
@@ -629,7 +633,7 @@ def resolve_single_version(
 
 def collect_package_annotations(args: Any, lock_model: LockSet) -> Dict[str, PackageAnnotations]:
     annotations = defaultdict(PackageAnnotations)
-    all_package_keys_by_canonical_name = defaultdict(list)
+    all_package_keys_by_canonical_name: Dict[NormalizedName, List[PackageKey]] = defaultdict(list)
     for package in lock_model.packages.values():
         all_package_keys_by_canonical_name[package.name].append(package.key)
 
@@ -704,8 +708,8 @@ def gen_load_statements(imports: Set[str]) -> List[str]:
         load_statement_groups[possible_imports[i]].append(i)
 
     lines = []
-    for file, imports in load_statement_groups.items():
-        lines.append(f"load({quoted_str(file)}, {', '.join(quoted_str(i) for i in sorted(imports))})")
+    for file, file_imports in load_statement_groups.items():
+        lines.append(f"load({quoted_str(file)}, {', '.join(quoted_str(i) for i in sorted(file_imports))})")
 
     return sorted(lines)
 

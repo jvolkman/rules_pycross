@@ -207,7 +207,7 @@ def translate(project_file: Path, lock_file: Path) -> LockSet:
                     resolved = PackageDependency(
                         name=dep_pkg.name,
                         version=dep_pkg.pypa_version,
-                        marker=dep.marker_without_extra,
+                        marker=dep.marker_without_extra or "",
                     )
                     package.resolved_dependencies.append(resolved)
                     break

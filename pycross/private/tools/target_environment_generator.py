@@ -6,6 +6,7 @@ import json
 import os
 from pathlib import Path
 from typing import Any
+from typing import Iterable
 from typing import List
 
 from pip._internal.models.target_python import TargetPython
@@ -29,7 +30,7 @@ _MANYLINUX_ALIASES = {
 _MANYLINUX_ALIASES.update({v: k for k, v in _MANYLINUX_ALIASES.items()})
 
 
-def _expand_manylinux_platforms(platforms: List[str]) -> List[str]:
+def _expand_manylinux_platforms(platforms: Iterable[str]) -> List[str]:
     extra_platforms = set()
     platforms = set(platforms)
     for platform in platforms:

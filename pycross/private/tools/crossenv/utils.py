@@ -146,7 +146,7 @@ def fixup_shebang(src):
 def install_script(name, dst, context=None, perms=0o755):
     srcname = os.path.join("scripts", name)
     src = pkgutil.get_data(__package__, srcname)
-    if context is not None:
+    if src and context is not None:
         src = context.expand(src.decode())
     src = fixup_shebang(src)
     mkdir_if_needed(os.path.dirname(dst))
@@ -187,6 +187,7 @@ def find_sysconfig_data(paths: List[Path], given_file: Optional[Path] = None) ->
         basename = os.path.basename(path)
         name, _ = os.path.splitext(basename)
         spec = importlib.util.spec_from_file_location(name, path)
+        assert spec and spec.loader
         syscfg = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(syscfg)
         if target_sysconfigdata is None:
