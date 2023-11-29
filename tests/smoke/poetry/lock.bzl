@@ -39,152 +39,20 @@ def targets():
             actual = ":" + pin_target,
         )
 
-    native.config_setting(
-        name = "_env_python_3.10.12_aarch64_apple_darwin",
-        constraint_values = [
-            "@platforms//os:osx",
-            "@platforms//cpu:aarch64",
-        ],
-        flag_values = {
-            "@rules_python//python/config_settings:python_version": "3.10.12",
-        },
-    )
-
-    native.config_setting(
-        name = "_env_python_3.10.12_aarch64_unknown_linux_gnu",
-        constraint_values = [
-            "@platforms//os:linux",
-            "@platforms//cpu:aarch64",
-        ],
-        flag_values = {
-            "@rules_python//python/config_settings:python_version": "3.10.12",
-        },
-    )
-
-    native.config_setting(
-        name = "_env_python_3.10.12_x86_64_apple_darwin",
-        constraint_values = [
-            "@platforms//os:osx",
-            "@platforms//cpu:x86_64",
-        ],
-        flag_values = {
-            "@rules_python//python/config_settings:python_version": "3.10.12",
-        },
-    )
-
-    native.config_setting(
-        name = "_env_python_3.10.12_x86_64_unknown_linux_gnu",
-        constraint_values = [
-            "@platforms//os:linux",
-            "@platforms//cpu:x86_64",
-        ],
-        flag_values = {
-            "@rules_python//python/config_settings:python_version": "3.10.12",
-        },
-    )
-
-    native.config_setting(
-        name = "_env_python_3.11.6_aarch64_apple_darwin",
-        constraint_values = [
-            "@platforms//os:osx",
-            "@platforms//cpu:aarch64",
-        ],
-        flag_values = {
-            "@rules_python//python/config_settings:python_version": "3.11.6",
-        },
-    )
-
-    native.config_setting(
-        name = "_env_python_3.11.6_aarch64_unknown_linux_gnu",
-        constraint_values = [
-            "@platforms//os:linux",
-            "@platforms//cpu:aarch64",
-        ],
-        flag_values = {
-            "@rules_python//python/config_settings:python_version": "3.11.6",
-        },
-    )
-
-    native.config_setting(
-        name = "_env_python_3.11.6_x86_64_apple_darwin",
-        constraint_values = [
-            "@platforms//os:osx",
-            "@platforms//cpu:x86_64",
-        ],
-        flag_values = {
-            "@rules_python//python/config_settings:python_version": "3.11.6",
-        },
-    )
-
-    native.config_setting(
-        name = "_env_python_3.11.6_x86_64_unknown_linux_gnu",
-        constraint_values = [
-            "@platforms//os:linux",
-            "@platforms//cpu:x86_64",
-        ],
-        flag_values = {
-            "@rules_python//python/config_settings:python_version": "3.11.6",
-        },
-    )
-
-    native.config_setting(
-        name = "_env_python_3.12.0_aarch64_apple_darwin",
-        constraint_values = [
-            "@platforms//os:osx",
-            "@platforms//cpu:aarch64",
-        ],
-        flag_values = {
-            "@rules_python//python/config_settings:python_version": "3.12.0",
-        },
-    )
-
-    native.config_setting(
-        name = "_env_python_3.12.0_aarch64_unknown_linux_gnu",
-        constraint_values = [
-            "@platforms//os:linux",
-            "@platforms//cpu:aarch64",
-        ],
-        flag_values = {
-            "@rules_python//python/config_settings:python_version": "3.12.0",
-        },
-    )
-
-    native.config_setting(
-        name = "_env_python_3.12.0_x86_64_apple_darwin",
-        constraint_values = [
-            "@platforms//os:osx",
-            "@platforms//cpu:x86_64",
-        ],
-        flag_values = {
-            "@rules_python//python/config_settings:python_version": "3.12.0",
-        },
-    )
-
-    native.config_setting(
-        name = "_env_python_3.12.0_x86_64_unknown_linux_gnu",
-        constraint_values = [
-            "@platforms//os:linux",
-            "@platforms//cpu:x86_64",
-        ],
-        flag_values = {
-            "@rules_python//python/config_settings:python_version": "3.12.0",
-        },
-    )
-
     # buildifier: disable=unused-variable
     _target = select({
-        ":_env_python_3.10.12_aarch64_apple_darwin": "@pycross_toolchains//:python_3.10.12_aarch64-apple-darwin",
-        ":_env_python_3.10.12_aarch64_unknown_linux_gnu": "@pycross_toolchains//:python_3.10.12_aarch64-unknown-linux-gnu",
-        ":_env_python_3.10.12_x86_64_apple_darwin": "@pycross_toolchains//:python_3.10.12_x86_64-apple-darwin",
-        ":_env_python_3.10.12_x86_64_unknown_linux_gnu": "@pycross_toolchains//:python_3.10.12_x86_64-unknown-linux-gnu",
-        ":_env_python_3.11.6_aarch64_apple_darwin": "@pycross_toolchains//:python_3.11.6_aarch64-apple-darwin",
-        ":_env_python_3.11.6_aarch64_unknown_linux_gnu": "@pycross_toolchains//:python_3.11.6_aarch64-unknown-linux-gnu",
-        ":_env_python_3.11.6_x86_64_apple_darwin": "@pycross_toolchains//:python_3.11.6_x86_64-apple-darwin",
-        ":_env_python_3.11.6_x86_64_unknown_linux_gnu": "@pycross_toolchains//:python_3.11.6_x86_64-unknown-linux-gnu",
-        ":_env_python_3.12.0_aarch64_apple_darwin": "@pycross_toolchains//:python_3.12.0_aarch64-apple-darwin",
-        ":_env_python_3.12.0_aarch64_unknown_linux_gnu": "@pycross_toolchains//:python_3.12.0_aarch64-unknown-linux-gnu",
-        ":_env_python_3.12.0_x86_64_apple_darwin": "@pycross_toolchains//:python_3.12.0_x86_64-apple-darwin",
-        ":_env_python_3.12.0_x86_64_unknown_linux_gnu": "@pycross_toolchains//:python_3.12.0_x86_64-unknown-linux-gnu",
+        "@pycross_toolchains//:python_3.10.12_aarch64-apple-darwin_config": "@pycross_toolchains//:python_3.10.12_aarch64-apple-darwin",
+        "@pycross_toolchains//:python_3.10.12_aarch64-unknown-linux-gnu_config": "@pycross_toolchains//:python_3.10.12_aarch64-unknown-linux-gnu",
+        "@pycross_toolchains//:python_3.10.12_x86_64-apple-darwin_config": "@pycross_toolchains//:python_3.10.12_x86_64-apple-darwin",
+        "@pycross_toolchains//:python_3.10.12_x86_64-unknown-linux-gnu_config": "@pycross_toolchains//:python_3.10.12_x86_64-unknown-linux-gnu",
+        "@pycross_toolchains//:python_3.11.6_aarch64-apple-darwin_config": "@pycross_toolchains//:python_3.11.6_aarch64-apple-darwin",
+        "@pycross_toolchains//:python_3.11.6_aarch64-unknown-linux-gnu_config": "@pycross_toolchains//:python_3.11.6_aarch64-unknown-linux-gnu",
+        "@pycross_toolchains//:python_3.11.6_x86_64-apple-darwin_config": "@pycross_toolchains//:python_3.11.6_x86_64-apple-darwin",
+        "@pycross_toolchains//:python_3.11.6_x86_64-unknown-linux-gnu_config": "@pycross_toolchains//:python_3.11.6_x86_64-unknown-linux-gnu",
+        "@pycross_toolchains//:python_3.12.0_aarch64-apple-darwin_config": "@pycross_toolchains//:python_3.12.0_aarch64-apple-darwin",
+        "@pycross_toolchains//:python_3.12.0_aarch64-unknown-linux-gnu_config": "@pycross_toolchains//:python_3.12.0_aarch64-unknown-linux-gnu",
+        "@pycross_toolchains//:python_3.12.0_x86_64-apple-darwin_config": "@pycross_toolchains//:python_3.12.0_x86_64-apple-darwin",
+        "@pycross_toolchains//:python_3.12.0_x86_64-unknown-linux-gnu_config": "@pycross_toolchains//:python_3.12.0_x86_64-unknown-linux-gnu",
     })
 
     pycross_wheel_library(
@@ -227,30 +95,30 @@ def targets():
         ":stack_data_0.6.3",
         ":traitlets_5.13.0",
     ] + select({
-        ":_env_python_3.10.12_aarch64_apple_darwin": [
+        "@pycross_toolchains//:python_3.10.12_aarch64-apple-darwin_config": [
             ":appnope_0.1.3",
             ":exceptiongroup_1.1.3",
         ],
-        ":_env_python_3.10.12_aarch64_unknown_linux_gnu": [
+        "@pycross_toolchains//:python_3.10.12_aarch64-unknown-linux-gnu_config": [
             ":exceptiongroup_1.1.3",
         ],
-        ":_env_python_3.10.12_x86_64_apple_darwin": [
+        "@pycross_toolchains//:python_3.10.12_x86_64-apple-darwin_config": [
             ":appnope_0.1.3",
             ":exceptiongroup_1.1.3",
         ],
-        ":_env_python_3.10.12_x86_64_unknown_linux_gnu": [
+        "@pycross_toolchains//:python_3.10.12_x86_64-unknown-linux-gnu_config": [
             ":exceptiongroup_1.1.3",
         ],
-        ":_env_python_3.11.6_aarch64_apple_darwin": [
+        "@pycross_toolchains//:python_3.11.6_aarch64-apple-darwin_config": [
             ":appnope_0.1.3",
         ],
-        ":_env_python_3.11.6_x86_64_apple_darwin": [
+        "@pycross_toolchains//:python_3.11.6_x86_64-apple-darwin_config": [
             ":appnope_0.1.3",
         ],
-        ":_env_python_3.12.0_aarch64_apple_darwin": [
+        "@pycross_toolchains//:python_3.12.0_aarch64-apple-darwin_config": [
             ":appnope_0.1.3",
         ],
-        ":_env_python_3.12.0_x86_64_apple_darwin": [
+        "@pycross_toolchains//:python_3.12.0_x86_64-apple-darwin_config": [
             ":appnope_0.1.3",
         ],
         "//conditions:default": [],
