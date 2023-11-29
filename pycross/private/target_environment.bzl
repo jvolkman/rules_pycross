@@ -29,6 +29,9 @@ def _target_python_impl(ctx):
     for key, val in ctx.attr.envornment_markers.items():
         args.add_all("--environment-marker", [key, val])
 
+    if ctx.attr.config_setting:
+        args.add("--config-setting-target", fully_qualified_label(ctx.attr.config_setting.label))
+
     ctx.actions.run(
         outputs = [f],
         executable = ctx.executable._tool,
@@ -81,6 +84,9 @@ pycross_target_environment = rule(
         ),
         "envornment_markers": attr.string_dict(
             doc = "Environment marker overrides.",
+        ),
+        "config_setting": attr.label(
+            doc = "Optional config_setting target to select this environment.",
         ),
         "_tool": attr.label(
             default = Label("//pycross/private/tools:target_environment_generator"),

@@ -51,13 +51,14 @@ def _compute_environments_and_toolchains(
         python_toolchains_repo_name,
         is_multi_version_layout,
         python_versions,
+        default_version,
         platforms,
         glibc_version,
         macos_version):
     environments = []
     toolchains = []
 
-    if platforms == None:
+    if not platforms:
         platforms = sorted(PLATFORMS.keys())
 
     for version in python_versions:
@@ -73,12 +74,18 @@ def _compute_environments_and_toolchains(
             target_env_name = "python_{}_{}".format(minor_version, target_platform)
 
             environment_compatible_with = list(PLATFORMS[target_platform].compatible_with)
+            if version == default_version:
+                flag_values = {}
+            else:
+                flag_values = {"@rules_python//python/config_settings:python_version": minor_version}
+
             environments.append(
                 dict(
                     name = target_env_name,
+                    config_setting_name = "{}_config".format(target_env_name),
                     python_version = minor_version,
                     python_compatible_with = environment_compatible_with,
-                    version = minor_version,
+                    flag_values = flag_values,
                     abis = [_get_abi(minor_version)],
                     platforms = env_platforms,
                 ),
@@ -107,17 +114,22 @@ def _compute_environments_and_toolchains(
                     target_platform,
                 )
 
+                if version == default_version:
+                    flag_values = {}
+                else:
+                    flag_values = {"@rules_python//python/config_settings:python_version": minor_version}
+
                 toolchains.append(
                     dict(
                         name = tc_name,
                         provider_name = tc_provider_name,
                         target_config_name = tc_target_config_name,
+                        flag_values = flag_values,
                         exec_interpreter = exec_interpreter,
                         target_interpreter = target_interpreter,
                         target_environment = target_env_name,
                         exec_compatible_with = exec_compatible_with,
                         target_compatible_with = target_compatible_with,
-                        python_version = minor_version,
                     ),
                 )
 
@@ -147,13 +159,13 @@ def _get_single_python_version(rctx, python_toolchain_repo):
 
     fail("Unable to determine version from " + defs_bzl_file)
 
-def _get_multi_python_versions(rctx, python_toolchain_repo):
+def _get_multi_python_version_info(rctx, python_toolchain_repo):
     pip_bzl_file = Label("@{}//:pip.bzl".format(python_toolchain_repo))
     content = rctx.read(pip_bzl_file)
+
+    versions = []
     for line in content.splitlines():
         if line.strip().startswith("python_versions"):
-            versions = []
-
             # We found a line that is like `python_versions = ["3.11.6", "3.12.0"],`
             # Split by the equal sign and parse the array.
             _, version_side = line.split("=")
@@ -165,9 +177,30 @@ def _get_multi_python_versions(rctx, python_toolchain_repo):
                 version = version.strip("'\"")  # strip quotes
                 versions.append(version)
 
-            return versions
+            break
 
-    fail("Unable to determine versions from " + pip_bzl_file)
+    if not versions:
+        fail("Unable to determine versions from " + pip_bzl_file)
+
+    # Figure out the default version
+    default_version = None
+    for version in versions:
+        underscore_version = version.replace(".", "_")
+        toolchain_bzl_file = Label("@{}_{}_toolchains//:BUILD.bazel".format(python_toolchain_repo, underscore_version))
+        content = rctx.read(toolchain_bzl_file)
+
+        # Default version toolchains have empty target_settings lists.
+        if "target_settings" not in content or "target_settings = []" in content:
+            default_version = version
+            break
+
+    if not default_version:
+        fail("Unable to determine default version for python toolchain repo '{}'".format(python_toolchain_repo))
+
+    return {
+        "versions": versions,
+        "default_version": default_version,
+    }
 
 _BUILD_HEADER = """\
 load("@jvolkman_rules_pycross//pycross:defs.bzl", "pycross_target_environment")
@@ -177,13 +210,18 @@ package(default_visibility = ["//visibility:public"])
 """
 
 _ENVIRONMENT_TEMPLATE = """\
+config_setting(
+    name = {config_setting_name},
+    constraint_values = {python_compatible_with},
+    flag_values = {flag_values},
+)
+
 pycross_target_environment(
     name = {name},
-    python_compatible_with = {python_compatible_with},
-    flag_values = {{"@rules_python//python/config_settings:python_version": {python_version}}},
-    version = {version},
+    version = {python_version},
     abis = {abis},
     platforms = {platforms},
+    config_setting = {config_setting_name},
 )
 """
 
@@ -198,7 +236,7 @@ pycross_hermetic_toolchain(
 config_setting(
     name = {target_config_name},
     constraint_values = {target_compatible_with},
-    flag_values = {{"@rules_python//python/config_settings:python_version": {python_version}}},
+    flag_values = {flag_values},
 )
 
 toolchain(
@@ -214,14 +252,18 @@ def _pycross_toolchain_repo_impl(rctx):
     python_repo = rctx.attr.python_toolchains_repo_name
     is_multi_version_layout = _is_multi_version_layout(rctx, python_repo)
     if is_multi_version_layout:
-        python_versions = _get_multi_python_versions(rctx, python_repo)
+        version_info = _get_multi_python_version_info(rctx, python_repo)
+        default_version = version_info["default_version"]
+        python_versions = version_info["versions"]
     else:
-        python_versions = [_get_single_python_version(rctx, python_repo)]
+        default_version = _get_single_python_version(rctx, python_repo)
+        python_versions = [default_version]
 
     computed = _compute_environments_and_toolchains(
         python_toolchains_repo_name = rctx.attr.python_toolchains_repo_name,
         is_multi_version_layout = is_multi_version_layout,
         python_versions = python_versions,
+        default_version = default_version,
         platforms = rctx.attr.platforms,
         glibc_version = rctx.attr.glibc_version,
         macos_version = rctx.attr.macos_version,
