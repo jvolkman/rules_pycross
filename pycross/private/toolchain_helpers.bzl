@@ -1,6 +1,7 @@
 """Helpers for creating Pycross environments and toolchains"""
 
 load("@rules_python//python:versions.bzl", "MINOR_MAPPING", "PLATFORMS", "TOOL_VERSIONS")
+load(":internal.bzl", "exec_internal_tool")
 
 DEFAULT_MACOS_VERSION = "12.0"
 DEFAULT_GLIBC_VERSION = "2.25"
@@ -48,6 +49,7 @@ def _get_env_platforms(py_platform, glibc_version, macos_version):
     fail("Unknown platform: {}".format(py_platform))
 
 def _compute_environments_and_toolchains(
+        repo_name,
         python_toolchains_repo_name,
         is_multi_version_layout,
         python_versions,
@@ -79,11 +81,15 @@ def _compute_environments_and_toolchains(
             else:
                 flag_values = {"@rules_python//python/config_settings:python_version": minor_version}
 
+            config_setting_name = "{}_config".format(target_env_name)
             environments.append(
                 dict(
                     name = target_env_name,
-                    config_setting_name = "{}_config".format(target_env_name),
-                    python_version = minor_version,
+                    output = target_env_name + ".json",
+                    implementation = "cp",
+                    config_setting_name = config_setting_name,
+                    config_setting_target = "@{}//:{}".format(repo_name, config_setting_name),
+                    version = minor_version,
                     python_compatible_with = environment_compatible_with,
                     flag_values = flag_values,
                     abis = [_get_abi(minor_version)],
@@ -216,12 +222,9 @@ config_setting(
     flag_values = {flag_values},
 )
 
-pycross_target_environment(
+alias(
     name = {name},
-    version = {python_version},
-    abis = {abis},
-    platforms = {platforms},
-    config_setting = {config_setting_name},
+    actual = {output},
 )
 """
 
@@ -248,6 +251,16 @@ toolchain(
 )
 """
 
+def _create_env_json(rctx, env_settings_list):
+    env_file = rctx.path("env_input.json")
+    rctx.file(env_file, json.encode(env_settings_list))
+
+    exec_internal_tool(
+        rctx,
+        Label("@jvolkman_rules_pycross//pycross/private/tools:target_environment_generator.py"),
+        ["batch-create", "--input", str(env_file)],
+    )
+
 def _pycross_toolchain_repo_impl(rctx):
     python_repo = rctx.attr.python_toolchains_repo_name
     is_multi_version_layout = _is_multi_version_layout(rctx, python_repo)
@@ -260,6 +273,7 @@ def _pycross_toolchain_repo_impl(rctx):
         python_versions = [default_version]
 
     computed = _compute_environments_and_toolchains(
+        repo_name = rctx.attr.name,
         python_toolchains_repo_name = rctx.attr.python_toolchains_repo_name,
         is_multi_version_layout = is_multi_version_layout,
         python_versions = python_versions,
@@ -269,12 +283,19 @@ def _pycross_toolchain_repo_impl(rctx):
         macos_version = rctx.attr.macos_version,
     )
 
+    _create_env_json(rctx, computed["environments"])
+
     build_sections = [_BUILD_HEADER]
     for env in computed["environments"]:
         build_sections.append(_ENVIRONMENT_TEMPLATE.format(**{k: repr(v) for k, v in env.items()}))
 
     for tc in computed["toolchains"]:
         build_sections.append(_TOOLCHAIN_TEMPLATE.format(**{k: repr(v) for k, v in tc.items()}))
+
+    build_sections.append("exports_files([")
+    for env in computed["environments"]:
+        build_sections.append("    {},".format(repr(env["output"])))
+    build_sections.append("])")
 
     rctx.file(rctx.path("BUILD.bazel"), "\n".join(build_sections))
 

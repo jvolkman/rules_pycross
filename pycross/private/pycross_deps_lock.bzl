@@ -10,6 +10,7 @@ PINS = {
     "build": "build_1.0.3",
     "dacite": "dacite_1.6.0",
     "importlib_metadata": "importlib_metadata_6.8.0",
+    "installer": "installer_0.7.0",
     "packaging": "packaging_23.2",
     "pip": "pip_23.3.1",
     "poetry_core": "poetry_core_1.8.1",
@@ -20,23 +21,24 @@ PINS = {
 }
 
 FILES = {
-    "altgraph-0.17.4-py2.py3-none-any.whl": "@rules_pycross_deps_wheel_altgraph_0.17.4_py2.py3_none_any//file:altgraph-0.17.4-py2.py3-none-any.whl",
-    "build-1.0.3-py3-none-any.whl": "@rules_pycross_deps_wheel_build_1.0.3_py3_none_any//file:build-1.0.3-py3-none-any.whl",
-    "dacite-1.6.0-py3-none-any.whl": "@rules_pycross_deps_wheel_dacite_1.6.0_py3_none_any//file:dacite-1.6.0-py3-none-any.whl",
-    "delvewheel-1.5.1-py3-none-any.whl": "@rules_pycross_deps_wheel_delvewheel_1.5.1_py3_none_any//file:delvewheel-1.5.1-py3-none-any.whl",
-    "importlib_metadata-6.8.0-py3-none-any.whl": "@rules_pycross_deps_wheel_importlib_metadata_6.8.0_py3_none_any//file:importlib_metadata-6.8.0-py3-none-any.whl",
-    "macholib-1.16.3-py2.py3-none-any.whl": "@rules_pycross_deps_wheel_macholib_1.16.3_py2.py3_none_any//file:macholib-1.16.3-py2.py3-none-any.whl",
-    "packaging-23.2-py3-none-any.whl": "@rules_pycross_deps_wheel_packaging_23.2_py3_none_any//file:packaging-23.2-py3-none-any.whl",
-    "pefile-2023.2.7-py3-none-any.whl": "@rules_pycross_deps_wheel_pefile_2023.2.7_py3_none_any//file:pefile-2023.2.7-py3-none-any.whl",
-    "pip-23.3.1-py3-none-any.whl": "@rules_pycross_deps_wheel_pip_23.3.1_py3_none_any//file:pip-23.3.1-py3-none-any.whl",
-    "poetry_core-1.8.1-py3-none-any.whl": "@rules_pycross_deps_wheel_poetry_core_1.8.1_py3_none_any//file:poetry_core-1.8.1-py3-none-any.whl",
-    "pyelftools-0.30-py2.py3-none-any.whl": "@rules_pycross_deps_wheel_pyelftools_0.30_py2.py3_none_any//file:pyelftools-0.30-py2.py3-none-any.whl",
-    "pyproject_hooks-1.0.0-py3-none-any.whl": "@rules_pycross_deps_wheel_pyproject_hooks_1.0.0_py3_none_any//file:pyproject_hooks-1.0.0-py3-none-any.whl",
-    "repairwheel-0.2.6-py3-none-any.whl": "@rules_pycross_deps_wheel_repairwheel_0.2.6_py3_none_any//file:repairwheel-0.2.6-py3-none-any.whl",
-    "tomli-2.0.1-py3-none-any.whl": "@rules_pycross_deps_wheel_tomli_2.0.1_py3_none_any//file:tomli-2.0.1-py3-none-any.whl",
-    "typing_extensions-4.8.0-py3-none-any.whl": "@rules_pycross_deps_wheel_typing_extensions_4.8.0_py3_none_any//file:typing_extensions-4.8.0-py3-none-any.whl",
-    "wheel-0.41.3-py3-none-any.whl": "@rules_pycross_deps_wheel_wheel_0.41.3_py3_none_any//file:wheel-0.41.3-py3-none-any.whl",
-    "zipp-3.17.0-py3-none-any.whl": "@rules_pycross_deps_wheel_zipp_3.17.0_py3_none_any//file:zipp-3.17.0-py3-none-any.whl",
+    "altgraph-0.17.4-py2.py3-none-any.whl": "@rules_pycross_internal_deps_wheel_altgraph_0.17.4_py2.py3_none_any//file:altgraph-0.17.4-py2.py3-none-any.whl",
+    "build-1.0.3-py3-none-any.whl": "@rules_pycross_internal_deps_wheel_build_1.0.3_py3_none_any//file:build-1.0.3-py3-none-any.whl",
+    "dacite-1.6.0-py3-none-any.whl": "@rules_pycross_internal_deps_wheel_dacite_1.6.0_py3_none_any//file:dacite-1.6.0-py3-none-any.whl",
+    "delvewheel-1.5.1-py3-none-any.whl": "@rules_pycross_internal_deps_wheel_delvewheel_1.5.1_py3_none_any//file:delvewheel-1.5.1-py3-none-any.whl",
+    "importlib_metadata-6.8.0-py3-none-any.whl": "@rules_pycross_internal_deps_wheel_importlib_metadata_6.8.0_py3_none_any//file:importlib_metadata-6.8.0-py3-none-any.whl",
+    "installer-0.7.0-py3-none-any.whl": "@rules_pycross_internal_deps_wheel_installer_0.7.0_py3_none_any//file:installer-0.7.0-py3-none-any.whl",
+    "macholib-1.16.3-py2.py3-none-any.whl": "@rules_pycross_internal_deps_wheel_macholib_1.16.3_py2.py3_none_any//file:macholib-1.16.3-py2.py3-none-any.whl",
+    "packaging-23.2-py3-none-any.whl": "@rules_pycross_internal_deps_wheel_packaging_23.2_py3_none_any//file:packaging-23.2-py3-none-any.whl",
+    "pefile-2023.2.7-py3-none-any.whl": "@rules_pycross_internal_deps_wheel_pefile_2023.2.7_py3_none_any//file:pefile-2023.2.7-py3-none-any.whl",
+    "pip-23.3.1-py3-none-any.whl": "@rules_pycross_internal_deps_wheel_pip_23.3.1_py3_none_any//file:pip-23.3.1-py3-none-any.whl",
+    "poetry_core-1.8.1-py3-none-any.whl": "@rules_pycross_internal_deps_wheel_poetry_core_1.8.1_py3_none_any//file:poetry_core-1.8.1-py3-none-any.whl",
+    "pyelftools-0.30-py2.py3-none-any.whl": "@rules_pycross_internal_deps_wheel_pyelftools_0.30_py2.py3_none_any//file:pyelftools-0.30-py2.py3-none-any.whl",
+    "pyproject_hooks-1.0.0-py3-none-any.whl": "@rules_pycross_internal_deps_wheel_pyproject_hooks_1.0.0_py3_none_any//file:pyproject_hooks-1.0.0-py3-none-any.whl",
+    "repairwheel-0.2.6-py3-none-any.whl": "@rules_pycross_internal_deps_wheel_repairwheel_0.2.6_py3_none_any//file:repairwheel-0.2.6-py3-none-any.whl",
+    "tomli-2.0.1-py3-none-any.whl": "@rules_pycross_internal_deps_wheel_tomli_2.0.1_py3_none_any//file:tomli-2.0.1-py3-none-any.whl",
+    "typing_extensions-4.8.0-py3-none-any.whl": "@rules_pycross_internal_deps_wheel_typing_extensions_4.8.0_py3_none_any//file:typing_extensions-4.8.0-py3-none-any.whl",
+    "wheel-0.41.3-py3-none-any.whl": "@rules_pycross_internal_deps_wheel_wheel_0.41.3_py3_none_any//file:wheel-0.41.3-py3-none-any.whl",
+    "zipp-3.17.0-py3-none-any.whl": "@rules_pycross_internal_deps_wheel_zipp_3.17.0_py3_none_any//file:zipp-3.17.0-py3-none-any.whl",
 }
 
 # buildifier: disable=unnamed-macro
@@ -60,7 +62,7 @@ def targets():
 
     pycross_wheel_library(
         name = "altgraph_0.17.4",
-        wheel = "@rules_pycross_deps_wheel_altgraph_0.17.4_py2.py3_none_any//file",
+        wheel = "@rules_pycross_internal_deps_wheel_altgraph_0.17.4_py2.py3_none_any//file",
     )
 
     _build_1_0_3_deps = [
@@ -73,12 +75,12 @@ def targets():
     pycross_wheel_library(
         name = "build_1.0.3",
         deps = _build_1_0_3_deps,
-        wheel = "@rules_pycross_deps_wheel_build_1.0.3_py3_none_any//file",
+        wheel = "@rules_pycross_internal_deps_wheel_build_1.0.3_py3_none_any//file",
     )
 
     pycross_wheel_library(
         name = "dacite_1.6.0",
-        wheel = "@rules_pycross_deps_wheel_dacite_1.6.0_py3_none_any//file",
+        wheel = "@rules_pycross_internal_deps_wheel_dacite_1.6.0_py3_none_any//file",
     )
 
     _delvewheel_1_5_1_deps = [
@@ -88,7 +90,7 @@ def targets():
     pycross_wheel_library(
         name = "delvewheel_1.5.1",
         deps = _delvewheel_1_5_1_deps,
-        wheel = "@rules_pycross_deps_wheel_delvewheel_1.5.1_py3_none_any//file",
+        wheel = "@rules_pycross_internal_deps_wheel_delvewheel_1.5.1_py3_none_any//file",
     )
 
     _importlib_metadata_6_8_0_deps = [
@@ -98,7 +100,12 @@ def targets():
     pycross_wheel_library(
         name = "importlib_metadata_6.8.0",
         deps = _importlib_metadata_6_8_0_deps,
-        wheel = "@rules_pycross_deps_wheel_importlib_metadata_6.8.0_py3_none_any//file",
+        wheel = "@rules_pycross_internal_deps_wheel_importlib_metadata_6.8.0_py3_none_any//file",
+    )
+
+    pycross_wheel_library(
+        name = "installer_0.7.0",
+        wheel = "@rules_pycross_internal_deps_wheel_installer_0.7.0_py3_none_any//file",
     )
 
     _macholib_1_16_3_deps = [
@@ -108,32 +115,32 @@ def targets():
     pycross_wheel_library(
         name = "macholib_1.16.3",
         deps = _macholib_1_16_3_deps,
-        wheel = "@rules_pycross_deps_wheel_macholib_1.16.3_py2.py3_none_any//file",
+        wheel = "@rules_pycross_internal_deps_wheel_macholib_1.16.3_py2.py3_none_any//file",
     )
 
     pycross_wheel_library(
         name = "packaging_23.2",
-        wheel = "@rules_pycross_deps_wheel_packaging_23.2_py3_none_any//file",
+        wheel = "@rules_pycross_internal_deps_wheel_packaging_23.2_py3_none_any//file",
     )
 
     pycross_wheel_library(
         name = "pefile_2023.2.7",
-        wheel = "@rules_pycross_deps_wheel_pefile_2023.2.7_py3_none_any//file",
+        wheel = "@rules_pycross_internal_deps_wheel_pefile_2023.2.7_py3_none_any//file",
     )
 
     pycross_wheel_library(
         name = "pip_23.3.1",
-        wheel = "@rules_pycross_deps_wheel_pip_23.3.1_py3_none_any//file",
+        wheel = "@rules_pycross_internal_deps_wheel_pip_23.3.1_py3_none_any//file",
     )
 
     pycross_wheel_library(
         name = "poetry_core_1.8.1",
-        wheel = "@rules_pycross_deps_wheel_poetry_core_1.8.1_py3_none_any//file",
+        wheel = "@rules_pycross_internal_deps_wheel_poetry_core_1.8.1_py3_none_any//file",
     )
 
     pycross_wheel_library(
         name = "pyelftools_0.30",
-        wheel = "@rules_pycross_deps_wheel_pyelftools_0.30_py2.py3_none_any//file",
+        wheel = "@rules_pycross_internal_deps_wheel_pyelftools_0.30_py2.py3_none_any//file",
     )
 
     _pyproject_hooks_1_0_0_deps = [
@@ -143,7 +150,7 @@ def targets():
     pycross_wheel_library(
         name = "pyproject_hooks_1.0.0",
         deps = _pyproject_hooks_1_0_0_deps,
-        wheel = "@rules_pycross_deps_wheel_pyproject_hooks_1.0.0_py3_none_any//file",
+        wheel = "@rules_pycross_internal_deps_wheel_pyproject_hooks_1.0.0_py3_none_any//file",
     )
 
     _repairwheel_0_2_6_deps = [
@@ -157,27 +164,27 @@ def targets():
     pycross_wheel_library(
         name = "repairwheel_0.2.6",
         deps = _repairwheel_0_2_6_deps,
-        wheel = "@rules_pycross_deps_wheel_repairwheel_0.2.6_py3_none_any//file",
+        wheel = "@rules_pycross_internal_deps_wheel_repairwheel_0.2.6_py3_none_any//file",
     )
 
     pycross_wheel_library(
         name = "tomli_2.0.1",
-        wheel = "@rules_pycross_deps_wheel_tomli_2.0.1_py3_none_any//file",
+        wheel = "@rules_pycross_internal_deps_wheel_tomli_2.0.1_py3_none_any//file",
     )
 
     pycross_wheel_library(
         name = "typing_extensions_4.8.0",
-        wheel = "@rules_pycross_deps_wheel_typing_extensions_4.8.0_py3_none_any//file",
+        wheel = "@rules_pycross_internal_deps_wheel_typing_extensions_4.8.0_py3_none_any//file",
     )
 
     pycross_wheel_library(
         name = "wheel_0.41.3",
-        wheel = "@rules_pycross_deps_wheel_wheel_0.41.3_py3_none_any//file",
+        wheel = "@rules_pycross_internal_deps_wheel_wheel_0.41.3_py3_none_any//file",
     )
 
     pycross_wheel_library(
         name = "zipp_3.17.0",
-        wheel = "@rules_pycross_deps_wheel_zipp_3.17.0_py3_none_any//file",
+        wheel = "@rules_pycross_internal_deps_wheel_zipp_3.17.0_py3_none_any//file",
     )
 
 # buildifier: disable=unnamed-macro
@@ -186,7 +193,7 @@ def repositories():
 
     maybe(
         http_file,
-        name = "rules_pycross_deps_wheel_altgraph_0.17.4_py2.py3_none_any",
+        name = "rules_pycross_internal_deps_wheel_altgraph_0.17.4_py2.py3_none_any",
         urls = [
             "https://files.pythonhosted.org/packages/4d/3f/3bc3f1d83f6e4a7fcb834d3720544ca597590425be5ba9db032b2bf322a2/altgraph-0.17.4-py2.py3-none-any.whl",
         ],
@@ -196,7 +203,7 @@ def repositories():
 
     maybe(
         http_file,
-        name = "rules_pycross_deps_wheel_build_1.0.3_py3_none_any",
+        name = "rules_pycross_internal_deps_wheel_build_1.0.3_py3_none_any",
         urls = [
             "https://files.pythonhosted.org/packages/93/dd/b464b728b866aaa62785a609e0dd8c72201d62c5f7c53e7c20f4dceb085f/build-1.0.3-py3-none-any.whl",
         ],
@@ -206,7 +213,7 @@ def repositories():
 
     maybe(
         http_file,
-        name = "rules_pycross_deps_wheel_dacite_1.6.0_py3_none_any",
+        name = "rules_pycross_internal_deps_wheel_dacite_1.6.0_py3_none_any",
         urls = [
             "https://files.pythonhosted.org/packages/06/9d/11a073172d889e9e0d0ad270a1b468876c82d759af7864a8095dfc73f46d/dacite-1.6.0-py3-none-any.whl",
         ],
@@ -216,7 +223,7 @@ def repositories():
 
     maybe(
         http_file,
-        name = "rules_pycross_deps_wheel_delvewheel_1.5.1_py3_none_any",
+        name = "rules_pycross_internal_deps_wheel_delvewheel_1.5.1_py3_none_any",
         urls = [
             "https://files.pythonhosted.org/packages/af/39/b371f0ad72100c8aed22a65d211a44a3840ef4370b880b2d647464672944/delvewheel-1.5.1-py3-none-any.whl",
         ],
@@ -226,7 +233,7 @@ def repositories():
 
     maybe(
         http_file,
-        name = "rules_pycross_deps_wheel_importlib_metadata_6.8.0_py3_none_any",
+        name = "rules_pycross_internal_deps_wheel_importlib_metadata_6.8.0_py3_none_any",
         urls = [
             "https://files.pythonhosted.org/packages/cc/37/db7ba97e676af155f5fcb1a35466f446eadc9104e25b83366e8088c9c926/importlib_metadata-6.8.0-py3-none-any.whl",
         ],
@@ -236,7 +243,17 @@ def repositories():
 
     maybe(
         http_file,
-        name = "rules_pycross_deps_wheel_macholib_1.16.3_py2.py3_none_any",
+        name = "rules_pycross_internal_deps_wheel_installer_0.7.0_py3_none_any",
+        urls = [
+            "https://files.pythonhosted.org/packages/e5/ca/1172b6638d52f2d6caa2dd262ec4c811ba59eee96d54a7701930726bce18/installer-0.7.0-py3-none-any.whl",
+        ],
+        sha256 = "05d1933f0a5ba7d8d6296bb6d5018e7c94fa473ceb10cf198a92ccea19c27b53",
+        downloaded_file_path = "installer-0.7.0-py3-none-any.whl",
+    )
+
+    maybe(
+        http_file,
+        name = "rules_pycross_internal_deps_wheel_macholib_1.16.3_py2.py3_none_any",
         urls = [
             "https://files.pythonhosted.org/packages/d1/5d/c059c180c84f7962db0aeae7c3b9303ed1d73d76f2bfbc32bc231c8be314/macholib-1.16.3-py2.py3-none-any.whl",
         ],
@@ -246,7 +263,7 @@ def repositories():
 
     maybe(
         http_file,
-        name = "rules_pycross_deps_wheel_packaging_23.2_py3_none_any",
+        name = "rules_pycross_internal_deps_wheel_packaging_23.2_py3_none_any",
         urls = [
             "https://files.pythonhosted.org/packages/ec/1a/610693ac4ee14fcdf2d9bf3c493370e4f2ef7ae2e19217d7a237ff42367d/packaging-23.2-py3-none-any.whl",
         ],
@@ -256,7 +273,7 @@ def repositories():
 
     maybe(
         http_file,
-        name = "rules_pycross_deps_wheel_pefile_2023.2.7_py3_none_any",
+        name = "rules_pycross_internal_deps_wheel_pefile_2023.2.7_py3_none_any",
         urls = [
             "https://files.pythonhosted.org/packages/55/26/d0ad8b448476d0a1e8d3ea5622dc77b916db84c6aa3cb1e1c0965af948fc/pefile-2023.2.7-py3-none-any.whl",
         ],
@@ -266,7 +283,7 @@ def repositories():
 
     maybe(
         http_file,
-        name = "rules_pycross_deps_wheel_pip_23.3.1_py3_none_any",
+        name = "rules_pycross_internal_deps_wheel_pip_23.3.1_py3_none_any",
         urls = [
             "https://files.pythonhosted.org/packages/47/6a/453160888fab7c6a432a6e25f8afe6256d0d9f2cbd25971021da6491d899/pip-23.3.1-py3-none-any.whl",
         ],
@@ -276,7 +293,7 @@ def repositories():
 
     maybe(
         http_file,
-        name = "rules_pycross_deps_wheel_poetry_core_1.8.1_py3_none_any",
+        name = "rules_pycross_internal_deps_wheel_poetry_core_1.8.1_py3_none_any",
         urls = [
             "https://files.pythonhosted.org/packages/99/bc/058b8ff87871fce6615ad032d62c773272f243266b110f7b86d146cf78d8/poetry_core-1.8.1-py3-none-any.whl",
         ],
@@ -286,7 +303,7 @@ def repositories():
 
     maybe(
         http_file,
-        name = "rules_pycross_deps_wheel_pyelftools_0.30_py2.py3_none_any",
+        name = "rules_pycross_internal_deps_wheel_pyelftools_0.30_py2.py3_none_any",
         urls = [
             "https://files.pythonhosted.org/packages/33/f9/281a411a5281b674b10830a2f312c64464b49916d097b8919f009de579e0/pyelftools-0.30-py2.py3-none-any.whl",
         ],
@@ -296,7 +313,7 @@ def repositories():
 
     maybe(
         http_file,
-        name = "rules_pycross_deps_wheel_pyproject_hooks_1.0.0_py3_none_any",
+        name = "rules_pycross_internal_deps_wheel_pyproject_hooks_1.0.0_py3_none_any",
         urls = [
             "https://files.pythonhosted.org/packages/d5/ea/9ae603de7fbb3df820b23a70f6aff92bf8c7770043254ad8d2dc9d6bcba4/pyproject_hooks-1.0.0-py3-none-any.whl",
         ],
@@ -306,7 +323,7 @@ def repositories():
 
     maybe(
         http_file,
-        name = "rules_pycross_deps_wheel_repairwheel_0.2.6_py3_none_any",
+        name = "rules_pycross_internal_deps_wheel_repairwheel_0.2.6_py3_none_any",
         urls = [
             "https://files.pythonhosted.org/packages/54/e6/f6965de43c9cd5183688656bb98e38d999bd6b7a20303b96137a3213642f/repairwheel-0.2.6-py3-none-any.whl",
         ],
@@ -316,7 +333,7 @@ def repositories():
 
     maybe(
         http_file,
-        name = "rules_pycross_deps_wheel_tomli_2.0.1_py3_none_any",
+        name = "rules_pycross_internal_deps_wheel_tomli_2.0.1_py3_none_any",
         urls = [
             "https://files.pythonhosted.org/packages/97/75/10a9ebee3fd790d20926a90a2547f0bf78f371b2f13aa822c759680ca7b9/tomli-2.0.1-py3-none-any.whl",
         ],
@@ -326,7 +343,7 @@ def repositories():
 
     maybe(
         http_file,
-        name = "rules_pycross_deps_wheel_typing_extensions_4.8.0_py3_none_any",
+        name = "rules_pycross_internal_deps_wheel_typing_extensions_4.8.0_py3_none_any",
         urls = [
             "https://files.pythonhosted.org/packages/24/21/7d397a4b7934ff4028987914ac1044d3b7d52712f30e2ac7a2ae5bc86dd0/typing_extensions-4.8.0-py3-none-any.whl",
         ],
@@ -336,7 +353,7 @@ def repositories():
 
     maybe(
         http_file,
-        name = "rules_pycross_deps_wheel_wheel_0.41.3_py3_none_any",
+        name = "rules_pycross_internal_deps_wheel_wheel_0.41.3_py3_none_any",
         urls = [
             "https://files.pythonhosted.org/packages/fa/7f/4c07234086edbce4a0a446209dc0cb08a19bb206a3ea53b2f56a403f983b/wheel-0.41.3-py3-none-any.whl",
         ],
@@ -346,7 +363,7 @@ def repositories():
 
     maybe(
         http_file,
-        name = "rules_pycross_deps_wheel_zipp_3.17.0_py3_none_any",
+        name = "rules_pycross_internal_deps_wheel_zipp_3.17.0_py3_none_any",
         urls = [
             "https://files.pythonhosted.org/packages/d9/66/48866fc6b158c81cc2bfecc04c480f105c6040e8b077bc54c634b4a67926/zipp-3.17.0-py3-none-any.whl",
         ],

@@ -12,11 +12,11 @@ class FlagFileArgumentParser(ArgumentParser):
     def parse_known_args(self, args=None, namespace=None):
         flagfile_parser = ArgumentParser()
         flagfile_parser.add_argument("--flagfile", type=open)
-
         ff_namespace, args = flagfile_parser.parse_known_args(args)
         if ff_namespace.flagfile:
             with ff_namespace.flagfile as f:
                 additional_args = shlex.split(f.read())
+                print(additional_args)
             args.extend(additional_args)
 
         # Pass the original namespace, if given, not the intermediate flagfile

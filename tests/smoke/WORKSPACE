@@ -84,6 +84,8 @@ python_register_multi_toolchains(
     register_coverage_tool = True,
 )
 
+load("@python//3.12.0:defs.bzl", python_interpreter = "interpreter")
+
 # Third-party deps
 
 load("//third_party:repositories.bzl", third_party_repositories = "repositories")
@@ -99,7 +101,7 @@ local_repository(
 
 load("@jvolkman_rules_pycross//pycross:repositories.bzl", "rules_pycross_dependencies")
 
-rules_pycross_dependencies()
+rules_pycross_dependencies(python_interpreter)
 
 load("@jvolkman_rules_pycross//pycross:defs.bzl", "pycross_lock_repo", "pycross_register_for_python_toolchains")
 

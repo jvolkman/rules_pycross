@@ -17,10 +17,12 @@ python_register_toolchains(
     python_version = "3.12.0",
 )
 
+load("@python//:defs.bzl", python_interpreter = "interpreter")
+
 # Fetch dependencies which users need as well
 load("//pycross:repositories.bzl", "rules_pycross_dependencies")
 
-rules_pycross_dependencies()
+rules_pycross_dependencies(python_interpreter)
 
 # For running our own unit tests
 load("@bazel_skylib//:workspace.bzl", "bazel_skylib_workspace")
