@@ -19,6 +19,26 @@ PINS = {
     "wheel": "wheel_0.41.3",
 }
 
+FILES = {
+    "altgraph-0.17.4-py2.py3-none-any.whl": "@rules_pycross_deps_wheel_altgraph_0.17.4_py2.py3_none_any//file:altgraph-0.17.4-py2.py3-none-any.whl",
+    "build-1.0.3-py3-none-any.whl": "@rules_pycross_deps_wheel_build_1.0.3_py3_none_any//file:build-1.0.3-py3-none-any.whl",
+    "dacite-1.6.0-py3-none-any.whl": "@rules_pycross_deps_wheel_dacite_1.6.0_py3_none_any//file:dacite-1.6.0-py3-none-any.whl",
+    "delvewheel-1.5.1-py3-none-any.whl": "@rules_pycross_deps_wheel_delvewheel_1.5.1_py3_none_any//file:delvewheel-1.5.1-py3-none-any.whl",
+    "importlib_metadata-6.8.0-py3-none-any.whl": "@rules_pycross_deps_wheel_importlib_metadata_6.8.0_py3_none_any//file:importlib_metadata-6.8.0-py3-none-any.whl",
+    "macholib-1.16.3-py2.py3-none-any.whl": "@rules_pycross_deps_wheel_macholib_1.16.3_py2.py3_none_any//file:macholib-1.16.3-py2.py3-none-any.whl",
+    "packaging-23.2-py3-none-any.whl": "@rules_pycross_deps_wheel_packaging_23.2_py3_none_any//file:packaging-23.2-py3-none-any.whl",
+    "pefile-2023.2.7-py3-none-any.whl": "@rules_pycross_deps_wheel_pefile_2023.2.7_py3_none_any//file:pefile-2023.2.7-py3-none-any.whl",
+    "pip-23.3.1-py3-none-any.whl": "@rules_pycross_deps_wheel_pip_23.3.1_py3_none_any//file:pip-23.3.1-py3-none-any.whl",
+    "poetry_core-1.8.1-py3-none-any.whl": "@rules_pycross_deps_wheel_poetry_core_1.8.1_py3_none_any//file:poetry_core-1.8.1-py3-none-any.whl",
+    "pyelftools-0.30-py2.py3-none-any.whl": "@rules_pycross_deps_wheel_pyelftools_0.30_py2.py3_none_any//file:pyelftools-0.30-py2.py3-none-any.whl",
+    "pyproject_hooks-1.0.0-py3-none-any.whl": "@rules_pycross_deps_wheel_pyproject_hooks_1.0.0_py3_none_any//file:pyproject_hooks-1.0.0-py3-none-any.whl",
+    "repairwheel-0.2.6-py3-none-any.whl": "@rules_pycross_deps_wheel_repairwheel_0.2.6_py3_none_any//file:repairwheel-0.2.6-py3-none-any.whl",
+    "tomli-2.0.1-py3-none-any.whl": "@rules_pycross_deps_wheel_tomli_2.0.1_py3_none_any//file:tomli-2.0.1-py3-none-any.whl",
+    "typing_extensions-4.8.0-py3-none-any.whl": "@rules_pycross_deps_wheel_typing_extensions_4.8.0_py3_none_any//file:typing_extensions-4.8.0-py3-none-any.whl",
+    "wheel-0.41.3-py3-none-any.whl": "@rules_pycross_deps_wheel_wheel_0.41.3_py3_none_any//file:wheel-0.41.3-py3-none-any.whl",
+    "zipp-3.17.0-py3-none-any.whl": "@rules_pycross_deps_wheel_zipp_3.17.0_py3_none_any//file:zipp-3.17.0-py3-none-any.whl",
+}
+
 # buildifier: disable=unnamed-macro
 def targets():
     """Generated package targets."""

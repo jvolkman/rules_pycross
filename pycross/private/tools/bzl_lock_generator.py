@@ -873,11 +873,24 @@ def main(args: Any) -> None:
             w("PINS = {")
             for pinned_package_name in sorted(pins.keys()):
                 pinned_package_key = pins[pinned_package_name]
-                w(ind(f'"{pinned_package_name}": "{naming.package_target(pinned_package_key)}",'))
+                w(ind(f"{quoted_str(pinned_package_name)}: {quoted_str(naming.package_target(pinned_package_key))},"))
             w("}")
+            w()
         else:
             w("PINS = {}")
-        w()
+            w()
+
+        if args.generate_file_map:
+            if repos:
+                w("FILES = {")
+                for repo in repos:
+                    label = f"@{repo.name}//file:{repo.file.name}"
+                    w(ind(f"{quoted_str(repo.file.name)}: {quoted_str(label)},"))
+                w("}")
+                w()
+            else:
+                w("FILES = {}")
+                w()
 
         # Build targets
         w(
@@ -1030,6 +1043,12 @@ def parse_flags() -> Any:
     parser.add_argument(
         "--pypi-index",
         help="The PyPI-compatible index to use. Defaults to pypi.org.",
+    )
+
+    parser.add_argument(
+        "--generate-file-map",
+        action="store_true",
+        help="Generate a FILES dict containing a mapping of filenames to repo labels.",
     )
 
     parser.add_argument(
