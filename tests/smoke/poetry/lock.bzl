@@ -42,18 +42,18 @@ def targets():
 
     # buildifier: disable=unused-variable
     _target = select({
-        "@pycross_toolchains//:python_3.10.12_aarch64-apple-darwin_config": "@pycross_toolchains//:python_3.10.12_aarch64-apple-darwin",
-        "@pycross_toolchains//:python_3.10.12_aarch64-unknown-linux-gnu_config": "@pycross_toolchains//:python_3.10.12_aarch64-unknown-linux-gnu",
-        "@pycross_toolchains//:python_3.10.12_x86_64-apple-darwin_config": "@pycross_toolchains//:python_3.10.12_x86_64-apple-darwin",
-        "@pycross_toolchains//:python_3.10.12_x86_64-unknown-linux-gnu_config": "@pycross_toolchains//:python_3.10.12_x86_64-unknown-linux-gnu",
-        "@pycross_toolchains//:python_3.11.6_aarch64-apple-darwin_config": "@pycross_toolchains//:python_3.11.6_aarch64-apple-darwin",
-        "@pycross_toolchains//:python_3.11.6_aarch64-unknown-linux-gnu_config": "@pycross_toolchains//:python_3.11.6_aarch64-unknown-linux-gnu",
-        "@pycross_toolchains//:python_3.11.6_x86_64-apple-darwin_config": "@pycross_toolchains//:python_3.11.6_x86_64-apple-darwin",
-        "@pycross_toolchains//:python_3.11.6_x86_64-unknown-linux-gnu_config": "@pycross_toolchains//:python_3.11.6_x86_64-unknown-linux-gnu",
-        "@pycross_toolchains//:python_3.12.0_aarch64-apple-darwin_config": "@pycross_toolchains//:python_3.12.0_aarch64-apple-darwin",
-        "@pycross_toolchains//:python_3.12.0_aarch64-unknown-linux-gnu_config": "@pycross_toolchains//:python_3.12.0_aarch64-unknown-linux-gnu",
-        "@pycross_toolchains//:python_3.12.0_x86_64-apple-darwin_config": "@pycross_toolchains//:python_3.12.0_x86_64-apple-darwin",
-        "@pycross_toolchains//:python_3.12.0_x86_64-unknown-linux-gnu_config": "@pycross_toolchains//:python_3.12.0_x86_64-unknown-linux-gnu",
+        "@pycross_toolchains//:python_3.10.12_aarch64-apple-darwin_config": "@pycross_toolchains//:python_3.10.12_aarch64-apple-darwin.json",
+        "@pycross_toolchains//:python_3.10.12_aarch64-unknown-linux-gnu_config": "@pycross_toolchains//:python_3.10.12_aarch64-unknown-linux-gnu.json",
+        "@pycross_toolchains//:python_3.10.12_x86_64-apple-darwin_config": "@pycross_toolchains//:python_3.10.12_x86_64-apple-darwin.json",
+        "@pycross_toolchains//:python_3.10.12_x86_64-unknown-linux-gnu_config": "@pycross_toolchains//:python_3.10.12_x86_64-unknown-linux-gnu.json",
+        "@pycross_toolchains//:python_3.11.6_aarch64-apple-darwin_config": "@pycross_toolchains//:python_3.11.6_aarch64-apple-darwin.json",
+        "@pycross_toolchains//:python_3.11.6_aarch64-unknown-linux-gnu_config": "@pycross_toolchains//:python_3.11.6_aarch64-unknown-linux-gnu.json",
+        "@pycross_toolchains//:python_3.11.6_x86_64-apple-darwin_config": "@pycross_toolchains//:python_3.11.6_x86_64-apple-darwin.json",
+        "@pycross_toolchains//:python_3.11.6_x86_64-unknown-linux-gnu_config": "@pycross_toolchains//:python_3.11.6_x86_64-unknown-linux-gnu.json",
+        "@pycross_toolchains//:python_3.12.0_aarch64-apple-darwin_config": "@pycross_toolchains//:python_3.12.0_aarch64-apple-darwin.json",
+        "@pycross_toolchains//:python_3.12.0_aarch64-unknown-linux-gnu_config": "@pycross_toolchains//:python_3.12.0_aarch64-unknown-linux-gnu.json",
+        "@pycross_toolchains//:python_3.12.0_x86_64-apple-darwin_config": "@pycross_toolchains//:python_3.12.0_x86_64-apple-darwin.json",
+        "@pycross_toolchains//:python_3.12.0_x86_64-unknown-linux-gnu_config": "@pycross_toolchains//:python_3.12.0_x86_64-unknown-linux-gnu.json",
     })
 
     pycross_wheel_library(

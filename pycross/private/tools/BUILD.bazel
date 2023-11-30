@@ -17,15 +17,15 @@ py_binary(
     deps = [
         ":args",
         ":lib",
-        "@rules_pycross_deps//deps:packaging",
-        "@rules_pycross_deps//deps:pip",
-        "@rules_pycross_deps//deps:tomli",
+        "@rules_pycross_internal//deps/core:packaging",
+        "@rules_pycross_internal//deps/core:pip",
+        "@rules_pycross_internal//deps/core:tomli",
     ],
 )
 
 pycross_wheel_zipimport_library(
     name = "installer",
-    wheel = "@rules_pycross_installer//file",
+    wheel = "@rules_pycross_internal//:installer_whl",
 )
 
 py_library(
@@ -35,7 +35,7 @@ py_library(
     ],
     deps = [
         ":lock_model",
-        "@rules_pycross_deps//deps:packaging",
+        "@rules_pycross_internal//deps/core:packaging",
     ],
 )
 
@@ -43,8 +43,8 @@ py_library(
     name = "lock_model",
     srcs = ["lock_model.py"],
     deps = [
-        "@rules_pycross_deps//deps:dacite",
-        "@rules_pycross_deps//deps:packaging",
+        "@rules_pycross_internal//deps/core:dacite",
+        "@rules_pycross_internal//deps/core:packaging",
     ],
 )
 
@@ -74,7 +74,7 @@ py_binary(
     deps = [
         ":args",
         ":lock_model",
-        "@rules_pycross_deps//deps:tomli",
+        "@rules_pycross_internal//deps/core:tomli",
     ],
 )
 
@@ -85,8 +85,8 @@ py_binary(
     deps = [
         ":args",
         ":lock_model",
-        "@rules_pycross_deps//deps:poetry_core",
-        "@rules_pycross_deps//deps:tomli",
+        "@rules_pycross_internal//deps/core:poetry_core",
+        "@rules_pycross_internal//deps/core:tomli",
     ],
 )
 
@@ -97,8 +97,9 @@ py_binary(
     deps = [
         ":args",
         ":lib",
-        "@rules_pycross_deps//deps:packaging",
-        "@rules_pycross_deps//deps:pip",
+        "@rules_pycross_internal//deps/core:dacite",
+        "@rules_pycross_internal//deps/core:packaging",
+        "@rules_pycross_internal//deps/core:pip",
     ],
 )
 
@@ -110,9 +111,9 @@ py_binary(
         ":args",
         ":lib",
         "//pycross/private/tools/crossenv",
-        "@rules_pycross_deps//deps:build",
-        "@rules_pycross_deps//deps:packaging",
-        "@rules_pycross_deps//deps:tomli",
+        "@rules_pycross_internal//deps/core:build",
+        "@rules_pycross_internal//deps/core:packaging",
+        "@rules_pycross_internal//deps/core:tomli",
     ],
 )
 

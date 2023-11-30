@@ -18,6 +18,15 @@ bzl_library(
 )
 
 bzl_library(
+    name = "internal",
+    srcs = ["internal.bzl"],
+    visibility = default_visibility,
+    deps = [
+        ":repolib",
+    ],
+)
+
+bzl_library(
     name = "lock_file",
     srcs = ["lock_file.bzl"],
     visibility = default_visibility,
@@ -70,6 +79,15 @@ bzl_library(
 )
 
 bzl_library(
+    name = "repolib",
+    srcs = ["repolib.bzl"],
+    visibility = default_visibility,
+    deps = [
+        "@bazel_skylib//lib:paths",
+    ],
+)
+
+bzl_library(
     name = "target_environment",
     srcs = ["target_environment.bzl"],
     visibility = default_visibility,
@@ -81,6 +99,7 @@ bzl_library(
     srcs = ["toolchain_helpers.bzl"],
     visibility = default_visibility,
     deps = [
+        ":internal",
         "//pycross:toolchain",
         "@rules_python//python:versions.bzl",
     ],
@@ -136,7 +155,7 @@ pycross_pdm_lock_model(
 )
 
 pycross_lock_file(
-    name = "rules_pycross_deps",
+    name = "rules_pycross_internal_deps",
     out = "updated_pycross_deps_lock.bzl",
     disallow_builds = True,
     generate_file_map = True,

@@ -293,7 +293,7 @@ class EnvTarget:
             lines.append(
                 ind("flag_values = {"),
             )
-            for flag, value in self.flag_values:
+            for flag, value in self.flag_values.items():
                 lines.append(ind(f"{quoted_str(flag)}: {quoted_str(value)},", 2))
             lines.append(ind("},"))
         lines.append(")")

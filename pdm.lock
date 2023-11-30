@@ -5,7 +5,7 @@
 groups = ["default"]
 strategy = ["cross_platform", "static_urls"]
 lock_version = "4.4"
-content_hash = "sha256:e4d05f5c0d3b133837ee53338737c6de56fe2a4422f9425a2e70660fb5da355e"
+content_hash = "sha256:7b831928f708c7fbfb3b7cea71eb2763960b9f03ae90ff457dd00f8b9805d2d1"
 
 [[package]]
 name = "altgraph"
@@ -77,6 +77,16 @@ dependencies = [
 files = [
     {url = "https://files.pythonhosted.org/packages/33/44/ae06b446b8d8263d712a211e959212083a5eda2bf36d57ca7415e03f6f36/importlib_metadata-6.8.0.tar.gz", hash = "sha256:dbace7892d8c0c4ac1ad096662232f831d4e64f4c4545bd53016a3e9d4654743"},
     {url = "https://files.pythonhosted.org/packages/cc/37/db7ba97e676af155f5fcb1a35466f446eadc9104e25b83366e8088c9c926/importlib_metadata-6.8.0-py3-none-any.whl", hash = "sha256:3ebb78df84a805d7698245025b975d9d67053cd94c79245ba4b3eb694abe68bb"},
+]
+
+[[package]]
+name = "installer"
+version = "0.7.0"
+requires_python = ">=3.7"
+summary = "A library for installing Python wheels."
+files = [
+    {url = "https://files.pythonhosted.org/packages/05/18/ceeb4e3ab3aa54495775775b38ae42b10a92f42ce42dfa44da684289b8c8/installer-0.7.0.tar.gz", hash = "sha256:a26d3e3116289bb08216e0d0f7d925fcef0b0194eedfa0c944bcaaa106c4b631"},
+    {url = "https://files.pythonhosted.org/packages/e5/ca/1172b6638d52f2d6caa2dd262ec4c811ba59eee96d54a7701930726bce18/installer-0.7.0-py3-none-any.whl", hash = "sha256:05d1933f0a5ba7d8d6296bb6d5018e7c94fa473ceb10cf198a92ccea19c27b53"},
 ]
 
 [[package]]
