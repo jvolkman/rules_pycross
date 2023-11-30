@@ -60,6 +60,9 @@ def _pycross_lock_file_impl(ctx):
     if ctx.attr.pypi_index:
         args.add("--pypi-index", ctx.attr.pypi_index)
 
+    if ctx.attr.generate_file_map:
+        args.add("--generate-file-map")
+
     ctx.actions.run(
         inputs = (
             ctx.files.lock_model_file +
@@ -131,6 +134,9 @@ pycross_lock_file = rule(
         ),
         "pypi_index": attr.string(
             doc = "The PyPI-compatible index to use (must support the JSON API).",
+        ),
+        "generate_file_map": attr.bool(
+            doc = "Generate a FILES dict containing a mapping of filenames to repo labels.",
         ),
         "out": attr.output(
             doc = "The output file.",
