@@ -3,18 +3,22 @@ name = "rules_pycross"
 version = "0.0"
 authors = []
 requires-python = ">=3.8"
-dependencies = [
-    "build==1.0.3",
+
+[project.optional-dependencies]
+# core dependencies are required by repo rules
+core = [
     "dacite==1.6.0",
-    "importlib-metadata==6.8.0",
     "installer==0.7.0",
     "packaging==23.2",
     "pip==23.3.1",
     "poetry-core==1.8.1",
-    "repairwheel==0.2.6",
     "tomli==2.0.1",
-    "typing-extensions==4.8.0",
-    "wheel==0.41.3",
+]
+build = [
+    "build==1.0.3",
+]
+repairwheel = [
+    "repairwheel==0.2.6",
 ]
 
 [tool.black]
