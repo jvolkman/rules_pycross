@@ -106,8 +106,11 @@ def _pycross_internal_repo_impl(rctx):
 
     venv_path = rctx.path("exec_venv")
     pip_whl = _pip_whl(rctx.attr.wheels)
-    create_venv(rctx, python_executable, venv_path, [pycross_path])
-    install_venv_wheels(rctx, venv_path, pip_whl, wheel_paths)
+    if rctx.attr.install_wheels:
+        create_venv(rctx, python_executable, venv_path, [pycross_path])
+        install_venv_wheels(rctx, venv_path, pip_whl, wheel_paths)
+    else:
+        create_venv(rctx, python_executable, venv_path, [pycross_path] + wheel_paths)
 
     # Core deps
     rctx.file("deps/core/BUILD.bazel", _deps_build.format(lock = str(rctx.attr.core_lock)))
@@ -130,6 +133,8 @@ pycross_internal_repo = repository_rule(
         "wheels": attr.label_keyed_string_dict(
             mandatory = True,
             allow_files = [".whl"],
+        ),
+        "install_wheels": attr.bool(
         ),
     },
 )
