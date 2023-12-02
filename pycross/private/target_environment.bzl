@@ -1,5 +1,7 @@
 """Implementation of the pycross_target_environment rule."""
 
+load(":internal.bzl", "exec_internal_tool")
+
 def fully_qualified_label(label):
     return "@%s//%s:%s" % (label.workspace_name, label.package, label.name)
 
@@ -90,3 +92,23 @@ pycross_target_environment = rule(
         ),
     },
 )
+
+def repo_batch_create_target_environments(rctx, env_settings_list):
+    """
+    Create many target environment JSON files.
+
+    Args:
+      rctx: repository_ctx
+      env_settings_list: a list of dicts containing fields described in target_environment_generator.py's Input.
+    """
+
+    env_file = rctx.path("_env_input.json")
+    rctx.file(env_file, json.encode(env_settings_list))
+
+    exec_internal_tool(
+        rctx,
+        Label("@jvolkman_rules_pycross//pycross/private/tools:target_environment_generator.py"),
+        ["batch-create", "--input", str(env_file)],
+    )
+
+    rctx.delete(env_file)
