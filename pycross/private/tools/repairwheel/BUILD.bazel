@@ -9,6 +9,6 @@ py_binary(
     ],
     visibility = ["//pycross/hooks:__pkg__"],
     deps = [
-        "@rules_pycross_internal//deps/core:repairwheel",
+        "@rules_pycross_internal//deps:repairwheel",
     ],
 )

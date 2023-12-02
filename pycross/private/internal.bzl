@@ -3,6 +3,11 @@
 load(":repolib.bzl", "create_venv", "get_venv_python_executable", "install_venv_wheels")
 
 INTERNAL_REPO_NAME = "rules_pycross_internal"
+LOCK_FILES = {
+    "build": "@jvolkman_rules_pycross//pycross/private:pycross_deps_build.lock.bzl",
+    "core": "@jvolkman_rules_pycross//pycross/private:pycross_deps_core.lock.bzl",
+    "repairwheel": "@jvolkman_rules_pycross//pycross/private:pycross_deps_repairwheel.lock.bzl",
+}
 
 _deps_build = """\
 package(default_visibility = ["//visibility:public"])
@@ -112,8 +117,11 @@ def _pycross_internal_repo_impl(rctx):
     else:
         create_venv(rctx, python_executable, venv_path, [pycross_path] + wheel_paths)
 
-    # Core deps
-    rctx.file("deps/core/BUILD.bazel", _deps_build.format(lock = str(rctx.attr.core_lock)))
+    # All deps
+    rctx.file(
+        "deps/BUILD.bazel",
+        _deps_build.format(lock = "@jvolkman_rules_pycross//pycross/private:pycross_deps.lock.bzl"),
+    )
 
     # Root build file and defs
     venv_python_exe = "@{}//exec_venv:python".format(INTERNAL_REPO_NAME)
@@ -127,9 +135,6 @@ pycross_internal_repo = repository_rule(
             allow_single_file = True,
         ),
         "python_interpreter": attr.string(),
-        "core_lock": attr.label(
-            mandatory = True,
-        ),
         "wheels": attr.label_keyed_string_dict(
             mandatory = True,
             allow_files = [".whl"],
@@ -142,7 +147,6 @@ pycross_internal_repo = repository_rule(
 def create_internal_repo(python_interpreter_target = None, python_interpreter = None, wheels = {}):
     pycross_internal_repo(
         name = INTERNAL_REPO_NAME,
-        core_lock = "@jvolkman_rules_pycross//pycross/private:pycross_deps_lock.bzl",
         wheels = {Label(wheel_label): wheel_name for wheel_name, wheel_label in wheels.items()},
         python_interpreter = python_interpreter,
         python_interpreter_target = python_interpreter_target,

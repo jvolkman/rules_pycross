@@ -9,36 +9,12 @@ load("@jvolkman_rules_pycross//pycross:defs.bzl", "pycross_wheel_library")
 PINS = {
     "build": "build_1.0.3",
     "dacite": "dacite_1.6.0",
-    "importlib_metadata": "importlib_metadata_6.8.0",
     "installer": "installer_0.7.0",
     "packaging": "packaging_23.2",
     "pip": "pip_23.3.1",
     "poetry_core": "poetry_core_1.8.1",
     "repairwheel": "repairwheel_0.2.6",
     "tomli": "tomli_2.0.1",
-    "typing_extensions": "typing_extensions_4.8.0",
-    "wheel": "wheel_0.41.3",
-}
-
-FILES = {
-    "altgraph-0.17.4-py2.py3-none-any.whl": "@rules_pycross_internal_deps_wheel_altgraph_0.17.4_py2.py3_none_any//file:altgraph-0.17.4-py2.py3-none-any.whl",
-    "build-1.0.3-py3-none-any.whl": "@rules_pycross_internal_deps_wheel_build_1.0.3_py3_none_any//file:build-1.0.3-py3-none-any.whl",
-    "dacite-1.6.0-py3-none-any.whl": "@rules_pycross_internal_deps_wheel_dacite_1.6.0_py3_none_any//file:dacite-1.6.0-py3-none-any.whl",
-    "delvewheel-1.5.1-py3-none-any.whl": "@rules_pycross_internal_deps_wheel_delvewheel_1.5.1_py3_none_any//file:delvewheel-1.5.1-py3-none-any.whl",
-    "importlib_metadata-6.8.0-py3-none-any.whl": "@rules_pycross_internal_deps_wheel_importlib_metadata_6.8.0_py3_none_any//file:importlib_metadata-6.8.0-py3-none-any.whl",
-    "installer-0.7.0-py3-none-any.whl": "@rules_pycross_internal_deps_wheel_installer_0.7.0_py3_none_any//file:installer-0.7.0-py3-none-any.whl",
-    "macholib-1.16.3-py2.py3-none-any.whl": "@rules_pycross_internal_deps_wheel_macholib_1.16.3_py2.py3_none_any//file:macholib-1.16.3-py2.py3-none-any.whl",
-    "packaging-23.2-py3-none-any.whl": "@rules_pycross_internal_deps_wheel_packaging_23.2_py3_none_any//file:packaging-23.2-py3-none-any.whl",
-    "pefile-2023.2.7-py3-none-any.whl": "@rules_pycross_internal_deps_wheel_pefile_2023.2.7_py3_none_any//file:pefile-2023.2.7-py3-none-any.whl",
-    "pip-23.3.1-py3-none-any.whl": "@rules_pycross_internal_deps_wheel_pip_23.3.1_py3_none_any//file:pip-23.3.1-py3-none-any.whl",
-    "poetry_core-1.8.1-py3-none-any.whl": "@rules_pycross_internal_deps_wheel_poetry_core_1.8.1_py3_none_any//file:poetry_core-1.8.1-py3-none-any.whl",
-    "pyelftools-0.30-py2.py3-none-any.whl": "@rules_pycross_internal_deps_wheel_pyelftools_0.30_py2.py3_none_any//file:pyelftools-0.30-py2.py3-none-any.whl",
-    "pyproject_hooks-1.0.0-py3-none-any.whl": "@rules_pycross_internal_deps_wheel_pyproject_hooks_1.0.0_py3_none_any//file:pyproject_hooks-1.0.0-py3-none-any.whl",
-    "repairwheel-0.2.6-py3-none-any.whl": "@rules_pycross_internal_deps_wheel_repairwheel_0.2.6_py3_none_any//file:repairwheel-0.2.6-py3-none-any.whl",
-    "tomli-2.0.1-py3-none-any.whl": "@rules_pycross_internal_deps_wheel_tomli_2.0.1_py3_none_any//file:tomli-2.0.1-py3-none-any.whl",
-    "typing_extensions-4.8.0-py3-none-any.whl": "@rules_pycross_internal_deps_wheel_typing_extensions_4.8.0_py3_none_any//file:typing_extensions-4.8.0-py3-none-any.whl",
-    "wheel-0.41.3-py3-none-any.whl": "@rules_pycross_internal_deps_wheel_wheel_0.41.3_py3_none_any//file:wheel-0.41.3-py3-none-any.whl",
-    "zipp-3.17.0-py3-none-any.whl": "@rules_pycross_internal_deps_wheel_zipp_3.17.0_py3_none_any//file:zipp-3.17.0-py3-none-any.whl",
 }
 
 # buildifier: disable=unnamed-macro
@@ -66,7 +42,7 @@ def targets():
     )
 
     _build_1_0_3_deps = [
-        ":importlib_metadata_6.8.0",
+        ":importlib_metadata_6.9.0",
         ":packaging_23.2",
         ":pyproject_hooks_1.0.0",
         ":tomli_2.0.1",
@@ -93,14 +69,14 @@ def targets():
         wheel = "@rules_pycross_internal_deps_wheel_delvewheel_1.5.1_py3_none_any//file",
     )
 
-    _importlib_metadata_6_8_0_deps = [
+    _importlib_metadata_6_9_0_deps = [
         ":zipp_3.17.0",
     ]
 
     pycross_wheel_library(
-        name = "importlib_metadata_6.8.0",
-        deps = _importlib_metadata_6_8_0_deps,
-        wheel = "@rules_pycross_internal_deps_wheel_importlib_metadata_6.8.0_py3_none_any//file",
+        name = "importlib_metadata_6.9.0",
+        deps = _importlib_metadata_6_9_0_deps,
+        wheel = "@rules_pycross_internal_deps_wheel_importlib_metadata_6.9.0_py3_none_any//file",
     )
 
     pycross_wheel_library(
@@ -173,16 +149,6 @@ def targets():
     )
 
     pycross_wheel_library(
-        name = "typing_extensions_4.8.0",
-        wheel = "@rules_pycross_internal_deps_wheel_typing_extensions_4.8.0_py3_none_any//file",
-    )
-
-    pycross_wheel_library(
-        name = "wheel_0.41.3",
-        wheel = "@rules_pycross_internal_deps_wheel_wheel_0.41.3_py3_none_any//file",
-    )
-
-    pycross_wheel_library(
         name = "zipp_3.17.0",
         wheel = "@rules_pycross_internal_deps_wheel_zipp_3.17.0_py3_none_any//file",
     )
@@ -233,12 +199,12 @@ def repositories():
 
     maybe(
         http_file,
-        name = "rules_pycross_internal_deps_wheel_importlib_metadata_6.8.0_py3_none_any",
+        name = "rules_pycross_internal_deps_wheel_importlib_metadata_6.9.0_py3_none_any",
         urls = [
-            "https://files.pythonhosted.org/packages/cc/37/db7ba97e676af155f5fcb1a35466f446eadc9104e25b83366e8088c9c926/importlib_metadata-6.8.0-py3-none-any.whl",
+            "https://files.pythonhosted.org/packages/fa/86/c232691b27dd721d810243c9bfd97abc81bc5a0c5370e07002511fce87c1/importlib_metadata-6.9.0-py3-none-any.whl",
         ],
-        sha256 = "3ebb78df84a805d7698245025b975d9d67053cd94c79245ba4b3eb694abe68bb",
-        downloaded_file_path = "importlib_metadata-6.8.0-py3-none-any.whl",
+        sha256 = "1c8dc6839ddc9771412596926f24cb5a553bbd40624ee2c7e55e531542bed3b8",
+        downloaded_file_path = "importlib_metadata-6.9.0-py3-none-any.whl",
     )
 
     maybe(
@@ -339,26 +305,6 @@ def repositories():
         ],
         sha256 = "939de3e7a6161af0c887ef91b7d41a53e7c5a1ca976325f429cb46ea9bc30ecc",
         downloaded_file_path = "tomli-2.0.1-py3-none-any.whl",
-    )
-
-    maybe(
-        http_file,
-        name = "rules_pycross_internal_deps_wheel_typing_extensions_4.8.0_py3_none_any",
-        urls = [
-            "https://files.pythonhosted.org/packages/24/21/7d397a4b7934ff4028987914ac1044d3b7d52712f30e2ac7a2ae5bc86dd0/typing_extensions-4.8.0-py3-none-any.whl",
-        ],
-        sha256 = "8f92fc8806f9a6b641eaa5318da32b44d401efaac0f6678c9bc448ba3605faa0",
-        downloaded_file_path = "typing_extensions-4.8.0-py3-none-any.whl",
-    )
-
-    maybe(
-        http_file,
-        name = "rules_pycross_internal_deps_wheel_wheel_0.41.3_py3_none_any",
-        urls = [
-            "https://files.pythonhosted.org/packages/fa/7f/4c07234086edbce4a0a446209dc0cb08a19bb206a3ea53b2f56a403f983b/wheel-0.41.3-py3-none-any.whl",
-        ],
-        sha256 = "488609bc63a29322326e05560731bf7bfea8e48ad646e1f5e40d366607de0942",
-        downloaded_file_path = "wheel-0.41.3-py3-none-any.whl",
     )
 
     maybe(
