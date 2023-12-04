@@ -23,6 +23,7 @@ bzl_library(
     visibility = default_visibility,
     deps = [
         ":repo_venv_utils",
+        "@bazel_skylib//lib:shell",
     ],
 )
 
