@@ -1,6 +1,6 @@
 """Implementation of the pycross_target_environment rule."""
 
-load(":internal.bzl", "exec_internal_tool")
+load(":internal_repo.bzl", "exec_internal_tool")
 
 def fully_qualified_label(label):
     return "@%s//%s:%s" % (label.workspace_name, label.package, label.name)

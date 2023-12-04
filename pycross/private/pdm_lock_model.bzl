@@ -1,6 +1,6 @@
 """Implementation of the pycross_pdm_lock_model rule."""
 
-load(":internal.bzl", "exec_internal_tool")
+load(":internal_repo.bzl", "exec_internal_tool")
 
 def _handle_args(attrs, project_file, lock_file, output):
     args = []

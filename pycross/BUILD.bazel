@@ -13,7 +13,7 @@ bzl_library(
     srcs = ["repositories.bzl"],
     visibility = ["//visibility:public"],
     deps = [
-        "//pycross/private:internal",
+        "//pycross/private:internal_repo",
         "//pycross/private:pycross_deps_core_lock",
         "//pycross/private:pycross_deps_lock",
         "@bazel_tools//tools/build_defs/repo:http.bzl",

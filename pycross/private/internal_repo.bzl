@@ -1,6 +1,6 @@
 """Internal repo"""
 
-load(":repolib.bzl", "create_venv", "get_venv_python_executable", "install_venv_wheels")
+load(":repo_venv_utils.bzl", "create_venv", "get_venv_python_executable", "install_venv_wheels")
 
 INTERNAL_REPO_NAME = "rules_pycross_internal"
 LOCK_FILES = {
