@@ -289,7 +289,7 @@ def _pycross_toolchain_repo_impl(rctx):
 
     rctx.file(rctx.path("BUILD.bazel"), "\n".join(build_sections))
 
-    environment_names = ["@{}//:{}".format(rctx.attr.name, env["name"]) for env in computed["environments"]]
+    environment_names = ["@{}//:{}".format(rctx.attr.name, env["output"]) for env in computed["environments"]]
     defs_lines = ["environments = ["]
     for environment_name in environment_names:
         defs_lines.append("    {},".format(repr(environment_name)))

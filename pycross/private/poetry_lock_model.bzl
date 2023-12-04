@@ -1,5 +1,7 @@
 """Implementation of the pycross_poetry_lock_model rule."""
 
+load(":internal.bzl", "exec_internal_tool")
+
 def _pycross_poetry_lock_model_impl(ctx):
     out = ctx.actions.declare_file(ctx.attr.name + ".json")
 
@@ -44,3 +46,26 @@ pycross_poetry_lock_model = rule(
         ),
     },
 )
+
+def pkg_repo_model_poetry(*, project_file, lock_file):
+    return json.encode(dict(
+        model_type = "poetry",
+        project_file = project_file,
+        lock_file = lock_file,
+    ))
+
+def repo_create_poetry_model(rctx, params, output):
+    args = [
+        "--poetry-project-file",
+        str(rctx.path(Label(params["project_file"]))),
+        "--poetry-lock-file",
+        str(rctx.path(Label(params["lock_file"]))),
+        "--output",
+        output,
+    ]
+
+    exec_internal_tool(
+        rctx,
+        Label("@jvolkman_rules_pycross//pycross/private/tools:poetry_translator.py"),
+        args,
+    )

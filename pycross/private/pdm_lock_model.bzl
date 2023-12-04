@@ -1,30 +1,45 @@
 """Implementation of the pycross_pdm_lock_model rule."""
 
+load(":internal.bzl", "exec_internal_tool")
+
+def _handle_args(attrs, project_file, lock_file, output):
+    args = []
+    args.extend(["--project-file", project_file])
+    args.extend(["--lock-file", lock_file])
+    args.extend(["--output", output])
+
+    if attrs.default:
+        args.append("--default")
+
+    for group in attrs.optional_groups:
+        args.extend(["--optional-group", group])
+
+    if attrs.all_optional_groups:
+        args.append("--all-optional-groups")
+
+    for group in attrs.development_groups:
+        args.extend(["--development-group", group])
+
+    if attrs.all_development_groups:
+        args.append("--all-development-groups")
+
+    if attrs.require_static_urls:
+        args.append("--require-static-urls")
+
+    return args
+
 def _pycross_pdm_lock_model_impl(ctx):
     out = ctx.actions.declare_file(ctx.attr.name + ".json")
 
     args = ctx.actions.args().use_param_file("--flagfile=%s")
-    args.add("--project-file", ctx.file.project_file)
-    args.add("--lock-file", ctx.file.lock_file)
-    args.add("--output", out)
-
-    if ctx.attr.default:
-        args.add("--default")
-
-    for group in ctx.attr.optional_groups:
-        args.add("--optional-group", group)
-
-    if ctx.attr.all_optional_groups:
-        args.add("--all-optional-groups")
-
-    for group in ctx.attr.development_groups:
-        args.add("--development-group", group)
-
-    if ctx.attr.all_development_groups:
-        args.add("--all-development-groups")
-
-    if ctx.attr.require_static_urls:
-        args.add("--require-static-urls")
+    args.add_all(
+        _handle_args(
+            ctx.attr,
+            ctx.file.project_file.path,
+            ctx.file.lock_file.path,
+            out.path,
+        ),
+    )
 
     ctx.actions.run(
         inputs = (
@@ -82,3 +97,31 @@ pycross_pdm_lock_model = rule(
         ),
     },
 )
+
+def pkg_repo_model_pdm(*, project_file, lock_file, default = True, optional_groups = [], all_optional_groups = False, development_groups = [], all_development_groups = False, require_static_urls = True):
+    return json.encode(dict(
+        model_type = "pdm",
+        project_file = project_file,
+        lock_file = lock_file,
+        default = default,
+        optional_groups = optional_groups,
+        all_optional_groups = all_optional_groups,
+        development_groups = development_groups,
+        all_development_groups = all_development_groups,
+        require_static_urls = require_static_urls,
+    ))
+
+def repo_create_pdm_model(rctx, params, output):
+    attrs = struct(**params)
+    args = _handle_args(
+        attrs,
+        str(rctx.path(Label(attrs.project_file))),
+        str(rctx.path(Label(attrs.lock_file))),
+        output,
+    )
+
+    exec_internal_tool(
+        rctx,
+        Label("@jvolkman_rules_pycross//pycross/private/tools:pdm_translator.py"),
+        args,
+    )

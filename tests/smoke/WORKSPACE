@@ -103,7 +103,7 @@ load("@jvolkman_rules_pycross//pycross:repositories.bzl", "rules_pycross_depende
 
 rules_pycross_dependencies(python_interpreter)
 
-load("@jvolkman_rules_pycross//pycross:defs.bzl", "pycross_lock_repo", "pycross_register_for_python_toolchains")
+load("@jvolkman_rules_pycross//pycross:defs.bzl", "pkg_repo_model_pdm", "pkg_repo_model_poetry", "pycross_lock_repo", "pycross_pkg_repo", "pycross_register_for_python_toolchains")
 
 pycross_register_for_python_toolchains(
     name = "pycross_toolchains",
@@ -116,6 +116,73 @@ pycross_register_for_python_toolchains(
     python_toolchains_repo_name = "python",
 )
 
+load("@pycross_toolchains//:defs.bzl", "environments")
+
+# pkg_repo with Poetry
+pycross_pkg_repo(
+    name = "poetry_pkg_repo",
+    always_build_packages = [
+        "regex",
+        "zstandard",
+    ],
+    build_target_overrides = {
+        "zstandard": "@//pdm:zstandard_build",
+    },
+    default_alias_single_version = True,
+    lock_model = pkg_repo_model_poetry(
+        lock_file = "@//:poetry.lock",
+        project_file = "@//:pyproject.toml",
+    ),
+    package_build_dependencies = {
+        "regex": [
+            "setuptools",
+            "wheel",
+        ],
+        "zstandard": [
+            "setuptools",
+            "wheel",
+        ],
+    },
+    target_environments = environments,
+)
+
+load("@poetry_pkg_repo//:defs.bzl", poetry_pkg_install_deps = "install_deps")
+
+poetry_pkg_install_deps()
+
+# pkg_repo with PDM
+pycross_pkg_repo(
+    name = "pdm_pkg_repo",
+    always_build_packages = [
+        "regex",
+        "zstandard",
+    ],
+    build_target_overrides = {
+        "zstandard": "@//pdm:zstandard_build",
+    },
+    default_alias_single_version = True,
+    lock_model = pkg_repo_model_pdm(
+        lock_file = "@//:pdm.lock",
+        project_file = "@//:pyproject.toml",
+    ),
+    package_build_dependencies = {
+        "regex": [
+            "setuptools",
+            "wheel",
+        ],
+        "zstandard": [
+            "setuptools",
+            "wheel",
+        ],
+    },
+    target_environments = environments,
+)
+
+load("@pdm_pkg_repo//:defs.bzl", pdm_pkg_install_deps = "install_deps")
+
+pdm_pkg_install_deps()
+
+# Lock repo for vended poetry lock
 pycross_lock_repo(
     name = "poetry_lock_repo",
     lock_file = "//poetry:lock.bzl",
@@ -125,6 +192,7 @@ load("@poetry_lock_repo//:requirements.bzl", poetry_install_deps = "install_deps
 
 poetry_install_deps()
 
+# Lock repo for vended poetry lock
 pycross_lock_repo(
     name = "pdm_lock_repo",
     lock_file = "//pdm:lock.bzl",

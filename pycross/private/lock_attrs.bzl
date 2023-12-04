@@ -73,11 +73,6 @@ def handle_common_attrs(attrs, environment_files_and_labels):
     for env_file, env_label in environment_files_and_labels:
         args.extend(["--target-environment", env_file, env_label])
 
-    # for local_wheel in ctx.files.local_wheels:
-    #     if not local_wheel.owner:
-    #         fail("Could not determine owning label for local wheel: %s" % local_wheel)
-    #     args.add_all("--local-wheel", [local_wheel.basename, fully_qualified_label(ctx, local_wheel.owner)])
-
     for remote_wheel_url, sha256 in attrs.remote_wheels.items():
         args.extend(["--remote-wheel", remote_wheel_url, sha256])
 

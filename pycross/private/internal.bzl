@@ -140,6 +140,7 @@ pycross_internal_repo = repository_rule(
             allow_files = [".whl"],
         ),
         "install_wheels": attr.bool(
+            default = True,
         ),
     },
 )
