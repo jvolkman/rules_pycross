@@ -1,6 +1,6 @@
 """Implementation of the pycross_pkg_repo rule."""
 
-load(":internal.bzl", "exec_internal_tool")
+load(":internal_repo.bzl", "exec_internal_tool")
 load(":lock_attrs.bzl", "COMMON_ATTRS", "handle_common_attrs")
 load(":pdm_lock_model.bzl", "repo_create_pdm_model")
 load(":poetry_lock_model.bzl", "repo_create_poetry_model")

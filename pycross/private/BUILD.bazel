@@ -18,11 +18,11 @@ bzl_library(
 )
 
 bzl_library(
-    name = "internal",
-    srcs = ["internal.bzl"],
+    name = "internal_repo",
+    srcs = ["internal_repo.bzl"],
     visibility = default_visibility,
     deps = [
-        ":repolib",
+        ":repo_venv_utils",
     ],
 )
 
@@ -53,7 +53,7 @@ bzl_library(
     name = "pdm_lock_model",
     srcs = ["pdm_lock_model.bzl"],
     visibility = default_visibility,
-    deps = [":internal"],
+    deps = [":internal_repo"],
 )
 
 bzl_library(
@@ -61,7 +61,7 @@ bzl_library(
     srcs = ["pkg_repo.bzl"],
     visibility = default_visibility,
     deps = [
-        ":internal",
+        ":internal_repo",
         ":lock_attrs",
         ":pdm_lock_model",
         ":poetry_lock_model",
@@ -72,7 +72,7 @@ bzl_library(
     name = "poetry_lock_model",
     srcs = ["poetry_lock_model.bzl"],
     visibility = default_visibility,
-    deps = [":internal"],
+    deps = [":internal_repo"],
 )
 
 bzl_library(
@@ -111,8 +111,8 @@ bzl_library(
 )
 
 bzl_library(
-    name = "repolib",
-    srcs = ["repolib.bzl"],
+    name = "repo_venv_utils",
+    srcs = ["repo_venv_utils.bzl"],
     visibility = default_visibility,
     deps = [
         "@bazel_skylib//lib:paths",
@@ -131,8 +131,7 @@ bzl_library(
     srcs = ["toolchain_helpers.bzl"],
     visibility = default_visibility,
     deps = [
-        ":internal",
-        "//pycross:toolchain",
+        ":target_environment",
         "@rules_python//python:versions.bzl",
     ],
 )

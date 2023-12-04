@@ -2,7 +2,7 @@
 
 load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
 load("@bazel_tools//tools/build_defs/repo:utils.bzl", "maybe")
-load("//pycross/private:internal.bzl", "create_internal_repo")
+load("//pycross/private:internal_repo.bzl", "create_internal_repo")
 load("//pycross/private:pycross_deps.lock.bzl", pypi_all_repositories = "repositories")
 load("//pycross/private:pycross_deps_core.lock.bzl", core_files = "FILES")
 

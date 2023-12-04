@@ -1,6 +1,6 @@
 """Implementation of the pycross_poetry_lock_model rule."""
 
-load(":internal.bzl", "exec_internal_tool")
+load(":internal_repo.bzl", "exec_internal_tool")
 
 def _pycross_poetry_lock_model_impl(ctx):
     out = ctx.actions.declare_file(ctx.attr.name + ".json")
