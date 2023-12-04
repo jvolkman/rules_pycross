@@ -53,12 +53,26 @@ bzl_library(
     name = "pdm_lock_model",
     srcs = ["pdm_lock_model.bzl"],
     visibility = default_visibility,
+    deps = [":internal"],
+)
+
+bzl_library(
+    name = "pkg_repo",
+    srcs = ["pkg_repo.bzl"],
+    visibility = default_visibility,
+    deps = [
+        ":internal",
+        ":lock_attrs",
+        ":pdm_lock_model",
+        ":poetry_lock_model",
+    ],
 )
 
 bzl_library(
     name = "poetry_lock_model",
     srcs = ["poetry_lock_model.bzl"],
     visibility = default_visibility,
+    deps = [":internal"],
 )
 
 bzl_library(
