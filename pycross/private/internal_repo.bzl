@@ -25,14 +25,6 @@ alias(
     name = "installer_whl",
     actual = "{installer_whl}",
 )
-
-exports_files([
-    "defs.bzl",
-])
-"""
-
-_defs_bzl = """\
-# TODO
 """
 
 def exec_internal_tool(rctx, tool, args, *, flagfile_param = "--flagfile", flagfile_threshold = 1000):
@@ -145,10 +137,8 @@ def _pycross_internal_repo_impl(rctx):
         _deps_build.format(lock = "@jvolkman_rules_pycross//pycross/private:pycross_deps.lock.bzl"),
     )
 
-    # Root build file and defs
-    venv_python_exe = "@{}//exec_venv:python".format(INTERNAL_REPO_NAME)
+    # Root build file
     rctx.file("BUILD.bazel", _root_build.format(installer_whl = _installer_whl(rctx.attr.wheels)))
-    rctx.file("defs.bzl", _defs_bzl.format(venv_python_exe = venv_python_exe))
 
 pycross_internal_repo = repository_rule(
     implementation = _pycross_internal_repo_impl,
