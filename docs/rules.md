@@ -89,6 +89,45 @@ pycross_pdm_lock_model(<a href="#pycross_pdm_lock_model-name">name</a>, <a href=
 | <a id="pycross_pdm_lock_model-require_static_urls"></a>require_static_urls |  Require that the lock file is created with --static-urls.   | Boolean | optional | <code>True</code> |
 
 
+<a id="pycross_pkg_repo"></a>
+
+## pycross_pkg_repo
+
+<pre>
+pycross_pkg_repo(<a href="#pycross_pkg_repo-name">name</a>, <a href="#pycross_pkg_repo-always_build_packages">always_build_packages</a>, <a href="#pycross_pkg_repo-build_prefix">build_prefix</a>, <a href="#pycross_pkg_repo-build_target_overrides">build_target_overrides</a>,
+                 <a href="#pycross_pkg_repo-default_alias_single_version">default_alias_single_version</a>, <a href="#pycross_pkg_repo-disallow_builds">disallow_builds</a>, <a href="#pycross_pkg_repo-environment_prefix">environment_prefix</a>, <a href="#pycross_pkg_repo-generate_file_map">generate_file_map</a>,
+                 <a href="#pycross_pkg_repo-local_wheels">local_wheels</a>, <a href="#pycross_pkg_repo-lock_model">lock_model</a>, <a href="#pycross_pkg_repo-package_build_dependencies">package_build_dependencies</a>, <a href="#pycross_pkg_repo-package_ignore_dependencies">package_ignore_dependencies</a>,
+                 <a href="#pycross_pkg_repo-package_prefix">package_prefix</a>, <a href="#pycross_pkg_repo-pypi_index">pypi_index</a>, <a href="#pycross_pkg_repo-remote_wheels">remote_wheels</a>, <a href="#pycross_pkg_repo-repo_mapping">repo_mapping</a>, <a href="#pycross_pkg_repo-repo_prefix">repo_prefix</a>,
+                 <a href="#pycross_pkg_repo-target_environments">target_environments</a>)
+</pre>
+
+
+
+**ATTRIBUTES**
+
+
+| Name  | Description | Type | Mandatory | Default |
+| :------------- | :------------- | :------------- | :------------- | :------------- |
+| <a id="pycross_pkg_repo-name"></a>name |  A unique name for this repository.   | <a href="https://bazel.build/concepts/labels#target-names">Name</a> | required |  |
+| <a id="pycross_pkg_repo-always_build_packages"></a>always_build_packages |  A list of package keys (name or name@version) to always build from source.   | List of strings | optional | <code>[]</code> |
+| <a id="pycross_pkg_repo-build_prefix"></a>build_prefix |  An optional prefix to apply to package build targets. Defaults to _build   | String | optional | <code>"_build"</code> |
+| <a id="pycross_pkg_repo-build_target_overrides"></a>build_target_overrides |  A mapping of package keys (name or name@version) to existing pycross_wheel_build build targets.   | <a href="https://bazel.build/rules/lib/dict">Dictionary: String -> String</a> | optional | <code>{}</code> |
+| <a id="pycross_pkg_repo-default_alias_single_version"></a>default_alias_single_version |  Generate aliases for all packages that have a single version in the lock file.   | Boolean | optional | <code>False</code> |
+| <a id="pycross_pkg_repo-disallow_builds"></a>disallow_builds |  Do not allow pycross_wheel_build targets in the final lock file (i.e., require wheels).   | Boolean | optional | <code>False</code> |
+| <a id="pycross_pkg_repo-environment_prefix"></a>environment_prefix |  An optional prefix to apply to environment targets. Defaults to _env   | String | optional | <code>"_env"</code> |
+| <a id="pycross_pkg_repo-generate_file_map"></a>generate_file_map |  Generate a FILES dict containing a mapping of filenames to repo labels.   | Boolean | optional | <code>False</code> |
+| <a id="pycross_pkg_repo-local_wheels"></a>local_wheels |  A list of wheel files.   | <a href="https://bazel.build/concepts/labels">List of labels</a> | optional | <code>[]</code> |
+| <a id="pycross_pkg_repo-lock_model"></a>lock_model |  Lock model params. The returned value of pkg_repo_model_pdm or pkg_repo_model_poetry.   | String | required |  |
+| <a id="pycross_pkg_repo-package_build_dependencies"></a>package_build_dependencies |  A dict of package keys (name or name@version) to a list of that packages build dependency keys.   | <a href="https://bazel.build/rules/lib/dict">Dictionary: String -> List of strings</a> | optional | <code>{}</code> |
+| <a id="pycross_pkg_repo-package_ignore_dependencies"></a>package_ignore_dependencies |  A dict of package keys (name or name@version) to a list of that packages dependency keys to ignore.   | <a href="https://bazel.build/rules/lib/dict">Dictionary: String -> List of strings</a> | optional | <code>{}</code> |
+| <a id="pycross_pkg_repo-package_prefix"></a>package_prefix |  An optional prefix to apply to package targets.   | String | optional | <code>""</code> |
+| <a id="pycross_pkg_repo-pypi_index"></a>pypi_index |  The PyPI-compatible index to use (must support the JSON API).   | String | optional | <code>""</code> |
+| <a id="pycross_pkg_repo-remote_wheels"></a>remote_wheels |  A mapping of remote wheels to their sha256 hashes.   | <a href="https://bazel.build/rules/lib/dict">Dictionary: String -> String</a> | optional | <code>{}</code> |
+| <a id="pycross_pkg_repo-repo_mapping"></a>repo_mapping |  A dictionary from local repository name to global repository name. This allows controls over workspace dependency resolution for dependencies of this repository.&lt;p&gt;For example, an entry <code>"@foo": "@bar"</code> declares that, for any time this repository depends on <code>@foo</code> (such as a dependency on <code>@foo//some:target</code>, it should actually resolve that dependency within globally-declared <code>@bar</code> (<code>@bar//some:target</code>).   | <a href="https://bazel.build/rules/lib/dict">Dictionary: String -> String</a> | required |  |
+| <a id="pycross_pkg_repo-repo_prefix"></a>repo_prefix |  The prefix to apply to repository targets. Defaults to the lock file target name.   | String | optional | <code>""</code> |
+| <a id="pycross_pkg_repo-target_environments"></a>target_environments |  A list of pycross_target_environment labels.   | <a href="https://bazel.build/concepts/labels">List of labels</a> | optional | <code>[]</code> |
+
+
 <a id="pycross_poetry_lock_model"></a>
 
 ## pycross_poetry_lock_model
@@ -251,6 +290,51 @@ Information about a Python wheel.
 | :------------- | :------------- |
 | <a id="PycrossWheelInfo-name_file"></a>name_file |  File: A file containing the canonical name of the wheel.    |
 | <a id="PycrossWheelInfo-wheel_file"></a>wheel_file |  File: The wheel file itself.    |
+
+
+<a id="pkg_repo_model_pdm"></a>
+
+## pkg_repo_model_pdm
+
+<pre>
+pkg_repo_model_pdm(<a href="#pkg_repo_model_pdm-project_file">project_file</a>, <a href="#pkg_repo_model_pdm-lock_file">lock_file</a>, <a href="#pkg_repo_model_pdm-default">default</a>, <a href="#pkg_repo_model_pdm-optional_groups">optional_groups</a>, <a href="#pkg_repo_model_pdm-all_optional_groups">all_optional_groups</a>,
+                   <a href="#pkg_repo_model_pdm-development_groups">development_groups</a>, <a href="#pkg_repo_model_pdm-all_development_groups">all_development_groups</a>, <a href="#pkg_repo_model_pdm-require_static_urls">require_static_urls</a>)
+</pre>
+
+
+
+**PARAMETERS**
+
+
+| Name  | Description | Default Value |
+| :------------- | :------------- | :------------- |
+| <a id="pkg_repo_model_pdm-project_file"></a>project_file |  <p align="center"> - </p>   |  none |
+| <a id="pkg_repo_model_pdm-lock_file"></a>lock_file |  <p align="center"> - </p>   |  none |
+| <a id="pkg_repo_model_pdm-default"></a>default |  <p align="center"> - </p>   |  <code>True</code> |
+| <a id="pkg_repo_model_pdm-optional_groups"></a>optional_groups |  <p align="center"> - </p>   |  <code>[]</code> |
+| <a id="pkg_repo_model_pdm-all_optional_groups"></a>all_optional_groups |  <p align="center"> - </p>   |  <code>False</code> |
+| <a id="pkg_repo_model_pdm-development_groups"></a>development_groups |  <p align="center"> - </p>   |  <code>[]</code> |
+| <a id="pkg_repo_model_pdm-all_development_groups"></a>all_development_groups |  <p align="center"> - </p>   |  <code>False</code> |
+| <a id="pkg_repo_model_pdm-require_static_urls"></a>require_static_urls |  <p align="center"> - </p>   |  <code>True</code> |
+
+
+<a id="pkg_repo_model_poetry"></a>
+
+## pkg_repo_model_poetry
+
+<pre>
+pkg_repo_model_poetry(<a href="#pkg_repo_model_poetry-project_file">project_file</a>, <a href="#pkg_repo_model_poetry-lock_file">lock_file</a>)
+</pre>
+
+
+
+**PARAMETERS**
+
+
+| Name  | Description | Default Value |
+| :------------- | :------------- | :------------- |
+| <a id="pkg_repo_model_poetry-project_file"></a>project_file |  <p align="center"> - </p>   |  none |
+| <a id="pkg_repo_model_poetry-lock_file"></a>lock_file |  <p align="center"> - </p>   |  none |
 
 
 <a id="pycross_register_for_python_toolchains"></a>
