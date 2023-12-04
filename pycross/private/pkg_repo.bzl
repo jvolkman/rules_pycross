@@ -16,7 +16,6 @@ package(default_visibility = ["//visibility:public"])
 
 exports_files([
     "lock.bzl",
-    "model.bzl",
 ])
 """
 
@@ -38,9 +37,9 @@ def _fully_qualified_label(label):
 def _generate_lock_model_file(rctx):
     model_params = json.decode(rctx.attr.lock_model)
     if model_params["model_type"] == "pdm":
-        repo_create_pdm_model(rctx, model_params, "lock/model.bzl")
+        repo_create_pdm_model(rctx, model_params, "lock/model.json")
     elif model_params["model_type"] == "poetry":
-        repo_create_poetry_model(rctx, model_params, "lock/model.bzl")
+        repo_create_poetry_model(rctx, model_params, "lock/model.json")
     else:
         fail("Invalid model type: " + model_params["model_type"])
 
@@ -52,7 +51,7 @@ def _generate_lock_file(rctx):
         wheel_path = rctx.path(local_wheel)
         args.extend(["--local-wheel", wheel_path.basename, local_wheel])
 
-    args.extend(["--lock-model-file", "lock/model.bzl"])
+    args.extend(["--lock-model-file", "lock/model.json"])
     args.extend(["--output", "lock/lock.bzl"])
 
     exec_internal_tool(
