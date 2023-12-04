@@ -1,5 +1,6 @@
 """Internal repo"""
 
+load("@bazel_skylib//lib:shell.bzl", "shell")
 load(":repo_venv_utils.bzl", "create_venv", "get_venv_python_executable", "install_venv_wheels")
 
 INTERNAL_REPO_NAME = "rules_pycross_internal"
@@ -34,7 +35,7 @@ _defs_bzl = """\
 # TODO
 """
 
-def exec_internal_tool(rctx, tool, args):
+def exec_internal_tool(rctx, tool, args, *, flagfile_param = "--flagfile", flagfile_threshold = 1000):
     """
     Execute a script under //pycross/private/tools.
 
@@ -42,16 +43,37 @@ def exec_internal_tool(rctx, tool, args):
       rctx: repository context
       tool: the script to execute
       args: a list of args to pass to the script
+      flagfile_param: the parameter name used when dumping arguments to a flag file
+      flagfile_threshold: use a flag file if len(args) >= this value
 
     Returns:
       exec_result
     """
     venv_path = rctx.path(Label("@{}//exec_venv:BUILD.bazel".format(INTERNAL_REPO_NAME))).dirname
     python_exe = get_venv_python_executable(venv_path)
-    all_args = [str(python_exe), str(rctx.path(tool))] + args
+
+    # Setup the flagfile if necessary
+    flagfile = None
+    if flagfile_param and len(args) >= flagfile_threshold:
+        flagfile = rctx.path("_internal_flagfile.params")
+        if flagfile.exists:
+            rctx.delete(flagfile)
+        flagfile_data = "\n".join([shell.quote(str(arg)) for arg in args])
+        rctx.file(flagfile, flagfile_data)
+        tool_args = ["--flagfile", str(flagfile)]
+    else:
+        tool_args = args
+
+    all_args = [str(python_exe), str(rctx.path(tool))] + tool_args
     result = rctx.execute(all_args, quiet = False)
+
+    # Clean up the flagfile
+    if flagfile and flagfile.exists:
+        rctx.delete(flagfile)
+
     if result.return_code:
         fail("Internal command failed: {}\n{}".format(all_args, result.stderr))
+
     return result
 
 def _get_python_interpreter_attr(rctx):
