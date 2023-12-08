@@ -48,6 +48,13 @@ COMMON_ATTRS = {
     "generate_file_map": attr.bool(
         doc = "Generate a FILES dict containing a mapping of filenames to repo labels.",
     ),
+    "use_rules_py": attr.bool(
+        doc = "Generate targets that use https://github.com/aspect-build/rules_py",
+    ),
+    "py_wheel_prefix": attr.string(
+        doc = "An optional prefix to apply to rules_py wheel targets. Defaults to _wheel",
+        default = "_wheel",
+    ),
 }
 
 def handle_common_attrs(attrs, environment_files_and_labels):
@@ -110,5 +117,11 @@ def handle_common_attrs(attrs, environment_files_and_labels):
 
     if attrs.generate_file_map:
         args.append("--generate-file-map")
+
+    if attrs.use_rules_py:
+        args.append("--use-rules-py")
+
+    if attrs.py_wheel_prefix:
+        args.extend(["--py-wheel-prefix", attrs.py_wheel_prefix])
 
     return args

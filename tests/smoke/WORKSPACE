@@ -86,6 +86,17 @@ python_register_multi_toolchains(
 
 load("@python//3.12.0:defs.bzl", python_interpreter = "interpreter")
 
+http_archive(
+    name = "aspect_rules_py",
+    sha256 = "e1d1023bc9ba8545dc87c6df10508d9d7c20f489f5e5c5c1e16380b33c013485",
+    strip_prefix = "rules_py-0.5.0",
+    url = "https://github.com/aspect-build/rules_py/releases/download/v0.5.0/rules_py-v0.5.0.tar.gz",
+)
+
+load("@aspect_rules_py//py:repositories.bzl", "rules_py_dependencies")
+
+rules_py_dependencies()
+
 # Third-party deps
 
 load("//third_party:repositories.bzl", third_party_repositories = "repositories")

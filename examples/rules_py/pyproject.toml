@@ -1,0 +1,19 @@
+[project]
+name = "rules_pycross_example_rules_py"
+version = "0.1"
+description = "rules_pycross"
+authors = []
+dependencies = [
+    "setuptools==68.2.2",
+    "wheel==0.41.3",
+    "grpclib>=0.4.6",
+]
+requires-python = ">=3.11,<3.13"
+license = {text = "MIT"}
+
+[build-system]
+requires = ["pdm-backend"]
+build-backend = "pdm.backend"
+
+[tool.pdm.scripts]
+post_lock = "bazel run //:update_example_lock"

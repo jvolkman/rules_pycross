@@ -82,7 +82,8 @@ def determine_target_path_from_exec(exec_python_exe: Path, target_python_exe: Pa
         "import json, sys; print(json.dumps(dict(exec=sys.executable, path=sys.path)))",
     )
     try:
-        out_json = subprocess.check_output(args=query_args, env={})
+        query_env: Dict[str, str] = {}
+        out_json = subprocess.check_output(args=query_args, env=query_env)
         query_result = json.loads(out_json)
     except subprocess.CalledProcessError as cpe:
         print("Failed to query exec_python for target path")
@@ -205,7 +206,7 @@ def replace_path_placeholders(
     replacement_str = str(replacement)
     if replacement_str.endswith("/"):
         replacement_str = replacement_str[:-1]
-    result = {}
+    result: Dict[str, Any] = {}
     for k, v in data.items():
         if isinstance(v, list):
             result[k] = [vi.replace(placeholder, replacement_str) for vi in v]
@@ -525,8 +526,8 @@ def build_cross_venv(
     with open(sysconfig_json, "w") as f:
         json.dump(sysconfig_vars, f, indent=2)
 
-    crossenv_args = [
-        exec_python_exe,
+    crossenv_args: List[str] = [
+        str(exec_python_exe),
         "-m",
         "pycross.private.tools.crossenv",
         "--env-dir",
@@ -534,7 +535,7 @@ def build_cross_venv(
         "--sysconfig-json",
         str(sysconfig_json),
         "--target-python",
-        target_python_exe,
+        str(target_python_exe),
     ]
 
     if target_env:
@@ -555,9 +556,15 @@ def build_cross_venv(
         raise
 
 
-def build_standard_venv(env_dir: Path, exec_python_exe: Path, sysconfig_vars: Dict[str, Any]) -> None:
-    venv_args = [
-        exec_python_exe,
+def build_standard_venv(
+    bazel_root: Path,
+    env_dir: Path,
+    exec_python_exe: Path,
+    sysconfig_vars: Dict[str, Any],
+    install_wheels: List[Path],
+) -> None:
+    venv_args: List[str] = [
+        str(exec_python_exe),
         "-m",
         "venv",
         "--symlinks",
@@ -579,6 +586,24 @@ def build_standard_venv(env_dir: Path, exec_python_exe: Path, sysconfig_vars: Di
     with open(site_dir / "_pycross_sysconfigdata.pth", "w") as f:
         f.write('import os; os.environ["_PYTHON_SYSCONFIGDATA_NAME"] = "_pycross_sysconfigdata"\n')
 
+    # install wheels
+    for wheel in install_wheels:
+        installer_args: List[str] = [
+            str(exec_python_exe),
+            "-m",
+            "installer",
+            "--prefix=/",
+            "--destdir",
+            str(env_dir),
+            str(bazel_root / wheel),
+        ]
+        try:
+            subprocess.check_output(args=installer_args, env=os.environ, stderr=subprocess.STDOUT)
+        except subprocess.CalledProcessError as cpe:
+            print("===== WHEEL INSTALL FAILED =====", file=sys.stderr)
+            print(cpe.output.decode(), file=sys.stderr)
+            raise
+
 
 def build_venv(
     bazel_root: Path,
@@ -588,12 +613,13 @@ def build_venv(
     sysconfig_vars: Dict[str, Any],
     path: List[Path],
     target_env: Optional[TargetEnv],
+    install_wheels: List[Path],
     always_use_crossenv: bool = False,
 ) -> None:
     if exec_python_exe != target_python_exe or always_use_crossenv:
         build_cross_venv(env_dir, exec_python_exe, target_python_exe, sysconfig_vars, target_env)
     else:
-        build_standard_venv(env_dir, exec_python_exe, sysconfig_vars)
+        build_standard_venv(bazel_root, env_dir, exec_python_exe, sysconfig_vars, install_wheels)
 
     site_dir = find_site_dir(env_dir)
 
@@ -725,6 +751,7 @@ def load_target_environment(args: Any) -> Optional[TargetEnv]:
     if args.target_environment_file:
         with open(args.target_environment_file, "r") as f:
             return TargetEnv.from_dict(json.load(f))
+    return None
 
 
 def load_sysconfig_vars(args: Any, bazel_root: Path) -> Dict[str, Any]:
@@ -826,6 +853,7 @@ def main(args: Any, temp_dir: Path, is_debug: bool) -> None:
         path=args.python_path,
         target_env=target_environment,
         always_use_crossenv=args.always_use_crossenv,
+        install_wheels=args.install_wheels,
     )
 
     generate_bin_tools(bin_dir, toolchain_sysconfig_vars)
@@ -1002,6 +1030,15 @@ def parse_flags() -> Any:
         type=sdist_rel_path,
         required=True,
         help="The wheel name output path.",
+    )
+
+    parser.add_argument(
+        "--install-wheel",
+        type=Path,
+        dest="install_wheels",
+        action="append",
+        default=[],
+        help="TODO",
     )
 
     args = parser.parse_args()
