@@ -16,12 +16,12 @@ PINS = {
 }
 
 FILES = {
-    "dacite-1.6.0-py3-none-any.whl": "@rules_pycross_internal_deps_wheel_dacite_1.6.0_py3_none_any//file:dacite-1.6.0-py3-none-any.whl",
-    "installer-0.7.0-py3-none-any.whl": "@rules_pycross_internal_deps_wheel_installer_0.7.0_py3_none_any//file:installer-0.7.0-py3-none-any.whl",
-    "packaging-23.2-py3-none-any.whl": "@rules_pycross_internal_deps_wheel_packaging_23.2_py3_none_any//file:packaging-23.2-py3-none-any.whl",
-    "pip-23.3.1-py3-none-any.whl": "@rules_pycross_internal_deps_wheel_pip_23.3.1_py3_none_any//file:pip-23.3.1-py3-none-any.whl",
-    "poetry_core-1.8.1-py3-none-any.whl": "@rules_pycross_internal_deps_wheel_poetry_core_1.8.1_py3_none_any//file:poetry_core-1.8.1-py3-none-any.whl",
-    "tomli-2.0.1-py3-none-any.whl": "@rules_pycross_internal_deps_wheel_tomli_2.0.1_py3_none_any//file:tomli-2.0.1-py3-none-any.whl",
+    "dacite-1.6.0-py3-none-any.whl": Label("@rules_pycross_internal_deps_wheel_dacite_1.6.0_py3_none_any//file:dacite-1.6.0-py3-none-any.whl"),
+    "installer-0.7.0-py3-none-any.whl": Label("@rules_pycross_internal_deps_wheel_installer_0.7.0_py3_none_any//file:installer-0.7.0-py3-none-any.whl"),
+    "packaging-23.2-py3-none-any.whl": Label("@rules_pycross_internal_deps_wheel_packaging_23.2_py3_none_any//file:packaging-23.2-py3-none-any.whl"),
+    "pip-23.3.1-py3-none-any.whl": Label("@rules_pycross_internal_deps_wheel_pip_23.3.1_py3_none_any//file:pip-23.3.1-py3-none-any.whl"),
+    "poetry_core-1.8.1-py3-none-any.whl": Label("@rules_pycross_internal_deps_wheel_poetry_core_1.8.1_py3_none_any//file:poetry_core-1.8.1-py3-none-any.whl"),
+    "tomli-2.0.1-py3-none-any.whl": Label("@rules_pycross_internal_deps_wheel_tomli_2.0.1_py3_none_any//file:tomli-2.0.1-py3-none-any.whl"),
 }
 
 # buildifier: disable=unnamed-macro
