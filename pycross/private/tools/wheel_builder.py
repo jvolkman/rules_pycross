@@ -82,7 +82,8 @@ def determine_target_path_from_exec(exec_python_exe: Path, target_python_exe: Pa
         "import json, sys; print(json.dumps(dict(exec=sys.executable, path=sys.path)))",
     )
     try:
-        out_json = subprocess.check_output(args=query_args, env={})
+        query_env: Dict[str, str] = {}
+        out_json = subprocess.check_output(args=query_args, env=query_env)
         query_result = json.loads(out_json)
     except subprocess.CalledProcessError as cpe:
         print("Failed to query exec_python for target path")
@@ -205,7 +206,7 @@ def replace_path_placeholders(
     replacement_str = str(replacement)
     if replacement_str.endswith("/"):
         replacement_str = replacement_str[:-1]
-    result = {}
+    result: Dict[str, Any] = {}
     for k, v in data.items():
         if isinstance(v, list):
             result[k] = [vi.replace(placeholder, replacement_str) for vi in v]
@@ -525,8 +526,8 @@ def build_cross_venv(
     with open(sysconfig_json, "w") as f:
         json.dump(sysconfig_vars, f, indent=2)
 
-    crossenv_args = [
-        exec_python_exe,
+    crossenv_args: List[str] = [
+        str(exec_python_exe),
         "-m",
         "pycross.private.tools.crossenv",
         "--env-dir",
@@ -534,7 +535,7 @@ def build_cross_venv(
         "--sysconfig-json",
         str(sysconfig_json),
         "--target-python",
-        target_python_exe,
+        str(target_python_exe),
     ]
 
     if target_env:
@@ -556,8 +557,8 @@ def build_cross_venv(
 
 
 def build_standard_venv(env_dir: Path, exec_python_exe: Path, sysconfig_vars: Dict[str, Any]) -> None:
-    venv_args = [
-        exec_python_exe,
+    venv_args: List[str] = [
+        str(exec_python_exe),
         "-m",
         "venv",
         "--symlinks",
@@ -725,6 +726,7 @@ def load_target_environment(args: Any) -> Optional[TargetEnv]:
     if args.target_environment_file:
         with open(args.target_environment_file, "r") as f:
             return TargetEnv.from_dict(json.load(f))
+    return None
 
 
 def load_sysconfig_vars(args: Any, bazel_root: Path) -> Dict[str, Any]:
