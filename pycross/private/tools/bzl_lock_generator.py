@@ -13,6 +13,7 @@ from typing import Iterator
 from typing import List
 from typing import Optional
 from typing import Set
+from typing import Union
 from urllib.parse import urlparse
 
 from packaging.markers import Marker
@@ -118,7 +119,7 @@ class Naming:
     def wheel_build_target(self, package_key: PackageKey) -> str:
         return self._prefixed(self._sanitize(str(package_key)), self.build_prefix)
 
-    def wheel_build_label(self, package_key: PackageKey):
+    def wheel_build_label(self, package_key: PackageKey) -> str:
         return f":{self.wheel_build_target(package_key)}"
 
     def sdist_repo(self, file: PackageFile) -> str:
@@ -179,7 +180,7 @@ class GenerationContext:
     def get_dependencies_by_environment(
         self, package: Package, ignore_dependency_names: Set[str]
     ) -> Dict[Optional[str], Set[PackageDependency]]:
-        env_deps = defaultdict(list)
+        env_deps: Dict[str, List[PackageDependency]] = defaultdict(list)
         # We sort deps by version in descending order. In case the list of dependencies
         # has multiple entries for the same name that match an environment, we prefer the
         # latest version.
@@ -209,11 +210,11 @@ class GenerationContext:
         if env_deps:
             # Pull out deps common to all environments
             common_deps = set.intersection(*(set(v) for v in env_deps.values()))
-            env_deps_deduped = {}
+            env_deps_deduped: Dict[Optional[str], Set[PackageDependency]] = {}
             for env, deps in env_deps.items():
-                deps = set(deps) - common_deps
-                if deps:
-                    env_deps_deduped[env] = deps
+                exclusive_deps = set(deps) - common_deps
+                if exclusive_deps:
+                    env_deps_deduped[env] = exclusive_deps
 
             env_deps_deduped[None] = common_deps
             return env_deps_deduped
@@ -354,6 +355,7 @@ class PackageTarget:
         for f in self.distinct_package_sources:
             if f.file and f.file.is_sdist:
                 return f.file
+        return None
 
     @property
     def has_runtime_deps(self) -> bool:
@@ -631,8 +633,8 @@ def resolve_single_version(
     return options[0]
 
 
-def collect_package_annotations(args: Any, lock_model: LockSet) -> Dict[str, PackageAnnotations]:
-    annotations = defaultdict(PackageAnnotations)
+def collect_package_annotations(args: Any, lock_model: LockSet) -> Dict[PackageKey, PackageAnnotations]:
+    annotations: Dict[PackageKey, PackageAnnotations] = defaultdict(PackageAnnotations)
     all_package_keys_by_canonical_name: Dict[NormalizedName, List[PackageKey]] = defaultdict(list)
     for package in lock_model.packages.values():
         all_package_keys_by_canonical_name[package.name].append(package.key)
@@ -804,7 +806,7 @@ def main(args: Any) -> None:
             )
 
     pypi_index = args.pypi_index or None
-    repos = []
+    repos: List[Union[UrlRepoTarget, PypiFileRepoTarget]] = []
     for package_target in package_targets:
         for source in package_target.distinct_package_sources:
             if not source.file:
