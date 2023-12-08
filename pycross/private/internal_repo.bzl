@@ -160,7 +160,7 @@ pycross_internal_repo = repository_rule(
 def create_internal_repo(python_interpreter_target = None, python_interpreter = None, wheels = {}):
     pycross_internal_repo(
         name = INTERNAL_REPO_NAME,
-        wheels = {Label(wheel_label): wheel_name for wheel_name, wheel_label in wheels.items()},
+        wheels = {wheel_label: wheel_name for wheel_name, wheel_label in wheels.items()},
         python_interpreter = python_interpreter,
         python_interpreter_target = python_interpreter_target,
     )

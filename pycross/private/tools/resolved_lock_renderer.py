@@ -523,7 +523,7 @@ def render(resolved_lock: ResolvedLockSet, args: Any, output: TextIO) -> None:
             w("FILES = {")
             for repo in repo_targets:
                 label = f"@{repo.name}//file:{repo.file.name}"
-                w(ind(f"{quoted_str(repo.file.name)}: {quoted_str(label)},"))
+                w(ind(f"{quoted_str(repo.file.name)}: Label({quoted_str(label)}),"))
             w("}")
             w()
         else:
