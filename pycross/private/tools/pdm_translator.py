@@ -82,7 +82,7 @@ class PDMPackage:
         # Extras are case-insensitive. The left side is already lower-cased.
         if not self.extras.issuperset(set(r.lower() for r in req.extras)):
             return False
-        return req.specifier.contains(self.version)
+        return req.specifier.contains(self.version, prereleases=True)
 
     def to_lock_package(self) -> Package:
         dependencies_without_self = sorted(
@@ -258,7 +258,7 @@ def translate(
     for pin, pin_spec in pinned_package_specs.items():
         pin_packages = packages_by_canonical_name[pin]
         for pin_pkg in pin_packages:
-            if pin_spec.specifier.contains(pin_pkg.version):
+            if pin_spec.specifier.contains(pin_pkg.version, prereleases=True):
                 pinned_keys[pin] = pin_pkg.key
                 break
         else:
