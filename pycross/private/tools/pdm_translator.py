@@ -189,12 +189,12 @@ def translate(
             raise Exception(f"Non-existent development dependency group: {group_name}")
         requirements.extend(development_dependencies[group_name])
 
-    pinned_package_specs = {}
+    pinned_package_specs: Dict[NormalizedName, Requirement] = {}
     for req in requirements:
         pin = package_canonical_name(req.name)
         pinned_package_specs[pin] = req
 
-    distinct_packages = {}
+    distinct_packages: Dict[PackageKey, PDMPackage] = {}
     # Pull out all Package entries in a pdm-specific model.
     for lock_pkg in lock_dict.get("package", []):
         package_listed_name = lock_pkg["name"]
@@ -254,7 +254,7 @@ def translate(
                     f"Found no packages to satisfy dependency (name={dep.name}, spec={dep.specifier})"
                 )
 
-    pinned_keys = {}
+    pinned_keys: Dict[NormalizedName, PackageKey] = {}
     for pin, pin_spec in pinned_package_specs.items():
         pin_packages = packages_by_canonical_name[pin]
         for pin_pkg in pin_packages:
@@ -264,7 +264,7 @@ def translate(
         else:
             raise MismatchedVersionException(f"Found no packages to satisfy pin (name={pin}, spec={pin_spec})")
 
-    lock_packages = {}
+    lock_packages: Dict[PackageKey, Package] = {}
     for package in all_packages:
         lock_package = package.to_lock_package()
         lock_packages[lock_package.key] = lock_package
