@@ -84,11 +84,13 @@ class Naming:
         build_prefix: Optional[str],
         environment_prefix: Optional[str],
         repo_prefix: Optional[str],
+        py_wheel_prefix: Optional[str],
     ):
         self.package_prefix = package_prefix
         self.build_prefix = build_prefix
         self.environment_prefix = environment_prefix
         self.repo_prefix = repo_prefix
+        self.py_wheel_prefix = py_wheel_prefix
 
     @staticmethod
     def _sanitize(name: str) -> str:
@@ -122,6 +124,12 @@ class Naming:
     def wheel_build_label(self, package_key: PackageKey) -> str:
         return f":{self.wheel_build_target(package_key)}"
 
+    def py_wheel_target(self, package_key: PackageKey) -> str:
+        return self._prefixed(self._sanitize(str(package_key)), self.py_wheel_prefix)
+
+    def py_wheel_label(self, package_key: PackageKey) -> str:
+        return f":{self.py_wheel_target(package_key)}"
+
     def sdist_repo(self, file: PackageFile) -> str:
         assert file.name.endswith(".tar.gz") or file.name.endswith(".zip")
         if file.name.endswith(".tar.gz"):
@@ -153,6 +161,7 @@ class GenerationContext:
         remote_wheels: Dict[str, PackageFile],
         naming: Naming,
         target_environment_select: str,
+        use_rules_py: bool,
     ):
         self.target_environments = target_environments
         self.local_wheels = local_wheels
@@ -160,6 +169,7 @@ class GenerationContext:
         self.naming = naming
         self.target_environment_select = target_environment_select
         self.target_environments_by_name = {tenv.name: tenv for tenv in target_environments}
+        self.use_rules_py = use_rules_py
 
     def environment_label(self, environment_name: str) -> str:
         target_env = self.target_environments_by_name[environment_name]
@@ -367,10 +377,17 @@ class PackageTarget:
 
     @property
     def imports(self) -> Set[str]:
-        if self.has_sdist and not self.build_target_override:
-            return {"pycross_wheel_build", "pycross_wheel_library"}
+        imports = []
+
+        if self.context.use_rules_py:
+            imports.extend(["py_library", "py_wheel"])
         else:
-            return {"pycross_wheel_library"}
+            imports.append("pycross_wheel_library")
+
+        if self.has_sdist and not self.build_target_override:
+            imports.append("pycross_wheel_build")
+
+        return set(imports)
 
     def _common_entries(self, deps: Set[PackageDependency], indent: int) -> Iterator[str]:
         package_labels = set([self.context.naming.package_label(d.key) for d in deps])
@@ -457,7 +474,17 @@ class PackageTarget:
 
         return "\n".join(lines)
 
-    def render_pkg(self) -> str:
+    def wheel_target(self, pkg_source: PackageSource) -> str:
+        if pkg_source.label:
+            return pkg_source.label
+        elif pkg_source.file and pkg_source.file.is_wheel:
+            return self.context.naming.wheel_label(pkg_source.file)
+        elif self.build_target_override:
+            return self.build_target_override
+        else:
+            return self.context.naming.wheel_build_label(self.package.key)
+
+    def render_pycross_pkg(self) -> str:
         lines = [
             "pycross_wheel_library(",
             ind(f'name = "{self.context.naming.package_target(self.package.key)}",'),
@@ -467,30 +494,60 @@ class PackageTarget:
 
         # Add the wheel attribute.
         # If all environments use the same wheel, don't use select.
-
-        def wheel_target(pkg_source: PackageSource) -> str:
-            if pkg_source.label:
-                return pkg_source.label
-            elif pkg_source.file and pkg_source.file.is_wheel:
-                return self.context.naming.wheel_label(pkg_source.file)
-            elif self.build_target_override:
-                return self.build_target_override
-            else:
-                return self.context.naming.wheel_build_label(self.package.key)
-
         if len(self.distinct_package_sources) == 1:
             source = next(iter(self.distinct_package_sources))
-            lines.append(ind(f'wheel = "{wheel_target(source)}",'))
+            lines.append(ind(f'wheel = "{self.wheel_target(source)}",'))
         else:
             lines.append(ind("wheel = select({"))
             for env_name, source in self.package_sources_by_env.items():
                 lines.append(
                     ind(
-                        f'"{self.context.environment_label(env_name)}": "{wheel_target(source)}",',
+                        f'"{self.context.environment_label(env_name)}": "{self.wheel_target(source)}",',
                         2,
                     )
                 )
             lines.append(ind("}),"))
+
+        lines.append(")")
+
+        return "\n".join(lines)
+
+    def render_rules_py_pkg(self) -> str:
+        lines = [
+            "py_wheel(",
+            ind(f'name = "{self.context.naming.py_wheel_target(self.package.key)}",'),
+        ]
+
+        # Add the wheel attribute.
+        # If all environments use the same wheel, don't use select.
+        if len(self.distinct_package_sources) == 1:
+            source = next(iter(self.distinct_package_sources))
+            lines.append(ind(f'src = "{self.wheel_target(source)}",'))
+        else:
+            lines.append(ind("src = select({"))
+            for env_name, source in self.package_sources_by_env.items():
+                lines.append(
+                    ind(
+                        f'"{self.context.environment_label(env_name)}": "{self.wheel_target(source)}",',
+                        2,
+                    )
+                )
+            lines.append(ind("}),"))
+
+        lines.append(")")
+        lines.append("")
+
+        lines.extend(
+            [
+                "py_library(",
+                ind(f'name = "{self.context.naming.package_target(self.package.key)}",'),
+            ]
+        )
+
+        if self.has_runtime_deps:
+            lines.append(ind(f'deps = ["{self.context.naming.py_wheel_label(self.package.key)}"] + {self._deps_name},'))
+        else:
+            lines.append(ind(f'deps = ["{self.context.naming.py_wheel_label(self.package.key)}"],'))
 
         lines.append(")")
 
@@ -507,7 +564,10 @@ class PackageTarget:
                 parts.append("")
             parts.append(self.render_build())
             parts.append("")
-        parts.append(self.render_pkg())
+        if self.context.use_rules_py:
+            parts.append(self.render_rules_py_pkg())
+        else:
+            parts.append(self.render_pycross_pkg())
         return "\n".join(parts)
 
 
@@ -700,6 +760,8 @@ def gen_load_statements(imports: Set[str]) -> List[str]:
     possible_imports = {
         "http_file": "@bazel_tools//tools/build_defs/repo:http.bzl",
         "maybe": "@bazel_tools//tools/build_defs/repo:utils.bzl",
+        "py_library": "@aspect_rules_py//py:defs.bzl",
+        "py_wheel": "@aspect_rules_py//py:defs.bzl",
         "pycross_wheel_build": "@jvolkman_rules_pycross//pycross:defs.bzl",
         "pycross_wheel_library": "@jvolkman_rules_pycross//pycross:defs.bzl",
         "pypi_file": "@jvolkman_rules_pycross//pycross:defs.bzl",
@@ -748,6 +810,7 @@ def main(args: Any) -> None:
         package_prefix=args.package_prefix,
         build_prefix=args.build_prefix,
         environment_prefix=args.environment_prefix,
+        py_wheel_prefix=args.py_wheel_prefix,
     )
     context = GenerationContext(
         target_environments=environments,
@@ -755,6 +818,7 @@ def main(args: Any) -> None:
         remote_wheels=remote_wheels,
         naming=naming,
         target_environment_select="_target",
+        use_rules_py=args.use_rules_py,
     )
 
     with open(args.lock_model_file, "r") as f:
@@ -1051,6 +1115,20 @@ def parse_flags() -> Any:
         "--generate-file-map",
         action="store_true",
         help="Generate a FILES dict containing a mapping of filenames to repo labels.",
+    )
+
+    parser.add_argument(
+        "--use-rules-py",
+        action="store_true",
+        help="Generate targets that use https://github.com/aspect-build/rules_py.",
+    )
+
+    parser.add_argument(
+        "--py-wheel-prefix",
+        type=str,
+        required=False,
+        default="",
+        help="The prefix to apply to py_wheel targets.",
     )
 
     parser.add_argument(

@@ -1,5 +1,6 @@
 """Implementation of the pycross_wheel_build rule."""
 
+load("@aspect_rules_py//py/private:providers.bzl", "PyWheelInfo")
 load("@bazel_skylib//lib:paths.bzl", "paths")
 load("@bazel_tools//tools/cpp:toolchain_utils.bzl", "find_cpp_toolchain", "use_cpp_toolchain")
 load("@rules_python//python:defs.bzl", "PyInfo")
@@ -212,6 +213,9 @@ def _handle_sdist(ctx, args, inputs):  # -> PycrossWheelInfo
     else:
         wheel_name = sdist_name.rsplit(".", 1)[0]  # Also includes .zip
 
+    # TODO generate a valid PEP-0427 name depending on environment
+    wheel_name = wheel_name + "-py3-none-any"
+
     out_wheel = ctx.actions.declare_file(paths.join(ctx.attr.name, wheel_name + ".whl"))
     out_wheel_name = ctx.actions.declare_file(paths.join(ctx.attr.name, wheel_name + ".whl.name"))
 
@@ -238,10 +242,16 @@ def _handle_sysconfig_data(ctx, args, inputs):  # -> cc_vars
 
     return cc_vars
 
-def _handle_py_deps(ctx, args, tools):
-    imports = depset(transitive = [d[PyInfo].imports for d in ctx.attr.deps])
+def _handle_py_deps(ctx, args, tools, inputs):
+    imports_depsets = [d[PyInfo].imports for d in ctx.attr.deps if not PyWheelInfo in d]
+    imports = depset(transitive = imports_depsets)
     args.add_all(imports, before_each = "--python-path", map_each = _resolve_import_path_fn(ctx), allow_closure = True)
     tools.extend([dep[PyInfo].transitive_sources for dep in ctx.attr.deps])
+
+    install_wheels_depsets = [d[PyWheelInfo].files for d in ctx.attr.deps if PyWheelInfo in d]
+    install_wheels_depset = depset(transitive = install_wheels_depsets)
+    args.add_all(install_wheels_depset, before_each = "--install-wheel")
+    inputs.extend(install_wheels_depset.to_list())
 
 def _handle_native_deps(ctx, args, tools):
     for dep in ctx.attr.native_deps:
@@ -318,7 +328,7 @@ def _pycross_wheel_build_impl(ctx):
     pycross_wheel_info = _handle_sdist(ctx, args, inputs)
     cc_vars = _handle_sysconfig_data(ctx, args, inputs)
     _handle_toolchains(ctx, args, tools)
-    _handle_py_deps(ctx, args, tools)
+    _handle_py_deps(ctx, args, tools, inputs)
     _handle_native_deps(ctx, args, tools)
     _handle_target_environment(ctx, args, inputs)
 

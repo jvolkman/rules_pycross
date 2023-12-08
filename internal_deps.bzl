@@ -19,6 +19,14 @@ def rules_pycross_internal_deps():
 
     maybe(
         http_archive,
+        name = "aspect_rules_py",
+        sha256 = "e1d1023bc9ba8545dc87c6df10508d9d7c20f489f5e5c5c1e16380b33c013485",
+        strip_prefix = "rules_py-0.5.0",
+        url = "https://github.com/aspect-build/rules_py/releases/download/v0.5.0/rules_py-v0.5.0.tar.gz",
+    )
+
+    maybe(
+        http_archive,
         name = "build_bazel_integration_testing",
         urls = [
             "https://github.com/bazelbuild/bazel-integration-testing/archive/165440b2dbda885f8d1ccb8d0f417e6cf8c54f17.zip",

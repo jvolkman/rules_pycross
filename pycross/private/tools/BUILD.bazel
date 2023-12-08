@@ -112,6 +112,7 @@ py_binary(
         ":lib",
         "//pycross/private/tools/crossenv",
         "@rules_pycross_internal//deps:build",
+        "@rules_pycross_internal//deps:installer",
         "@rules_pycross_internal//deps:packaging",
         "@rules_pycross_internal//deps:tomli",
     ],
