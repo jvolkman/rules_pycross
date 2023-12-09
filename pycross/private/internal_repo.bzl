@@ -27,6 +27,19 @@ alias(
 )
 """
 
+_python_bzl = """\
+load(
+    "{python_defs}",
+    _py_binary = "py_binary",
+    _py_library = "py_library",
+    _py_test = "py_test"
+)
+
+py_binary = _py_binary
+py_library = _py_library
+py_test = _py_test
+"""
+
 def exec_internal_tool(rctx, tool, args, *, flagfile_param = "--flagfile", flagfile_threshold = 1000):
     """
     Execute a script under //pycross/private/tools.
@@ -136,6 +149,9 @@ def _pycross_internal_repo_impl(rctx):
         "deps/BUILD.bazel",
         _deps_build.format(lock = Label("//pycross/private:pycross_deps.lock.bzl")),
     )
+
+    # python.bzl
+    rctx.file("python.bzl", _python_bzl.format(python_defs = "@rules_python//python:defs.bzl"))
 
     # Root build file
     rctx.file("BUILD.bazel", _root_build.format(installer_whl = _installer_whl(rctx.attr.wheels)))
