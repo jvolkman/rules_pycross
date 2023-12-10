@@ -47,7 +47,7 @@ load(
 
 pycross_register_for_python_toolchains(
     name = "pycross_toolchains",
-    python_toolchains_repo_name = "python",
+    python_toolchains_repo = "@python",
 )
 
 load("@pycross_toolchains//:defs.bzl", "environments")

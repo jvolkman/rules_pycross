@@ -251,7 +251,7 @@ toolchain(
 """ % Label("//pycross:toolchain_type")
 
 def _pycross_toolchain_repo_impl(rctx):
-    python_repo = rctx.attr.python_toolchains_repo_name
+    python_repo = rctx.attr.python_toolchains_repo.workspace_name
     is_multi_version_layout = _is_multi_version_layout(rctx, python_repo)
     if is_multi_version_layout:
         version_info = _get_multi_python_version_info(rctx, python_repo)
@@ -263,7 +263,7 @@ def _pycross_toolchain_repo_impl(rctx):
 
     computed = _compute_environments_and_toolchains(
         repo_name = rctx.attr.name,
-        python_toolchains_repo_name = rctx.attr.python_toolchains_repo_name,
+        python_toolchains_repo_name = python_repo,
         is_multi_version_layout = is_multi_version_layout,
         python_versions = python_versions,
         default_version = default_version,
@@ -301,7 +301,7 @@ def _pycross_toolchain_repo_impl(rctx):
 _pycross_toolchain_repo = repository_rule(
     implementation = _pycross_toolchain_repo_impl,
     attrs = {
-        "python_toolchains_repo_name": attr.string(mandatory = True),
+        "python_toolchains_repo": attr.label(mandatory = True),
         "platforms": attr.string_list(),
         "glibc_version": attr.string(mandatory = True),
         "macos_version": attr.string(mandatory = True),
@@ -310,7 +310,7 @@ _pycross_toolchain_repo = repository_rule(
 
 def pycross_register_for_python_toolchains(
         name,
-        python_toolchains_repo_name,
+        python_toolchains_repo,
         platforms = None,
         glibc_version = DEFAULT_GLIBC_VERSION,
         macos_version = DEFAULT_MACOS_VERSION):
@@ -319,7 +319,7 @@ def pycross_register_for_python_toolchains(
 
     Args:
         name: the toolchain repo name.
-        python_toolchains_repo_name: the repo name of the registered rules_python tolchain repo.
+        python_toolchains_repo: a label to the registered rules_python tolchain repo.
         platforms: an optional list of platforms to support (e.g., "x86_64-unknown-linux-gnu").
             By default, all platforms supported by rules_python are registered.
         glibc_version: the maximum supported GLIBC version.
@@ -327,7 +327,7 @@ def pycross_register_for_python_toolchains(
     """
     _pycross_toolchain_repo(
         name = name,
-        python_toolchains_repo_name = python_toolchains_repo_name,
+        python_toolchains_repo = python_toolchains_repo,
         platforms = platforms,
         glibc_version = glibc_version,
         macos_version = macos_version,
