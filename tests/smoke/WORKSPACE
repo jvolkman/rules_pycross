@@ -113,7 +113,7 @@ pycross_register_for_python_toolchains(
         "aarch64-unknown-linux-gnu",
         "x86_64-unknown-linux-gnu",
     ],
-    python_toolchains_repo_name = "python",
+    python_toolchains_repo = "@python",
 )
 
 load("@pycross_toolchains//:defs.bzl", "environments")
@@ -216,5 +216,5 @@ pycross_register_for_python_toolchains(
         "aarch64-unknown-linux-gnu",
         "x86_64-unknown-linux-gnu",
     ],
-    python_toolchains_repo_name = "python_single",
+    python_toolchains_repo = "@python_single",
 )
