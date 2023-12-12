@@ -122,6 +122,6 @@ def repo_create_pdm_model(rctx, params, output):
 
     exec_internal_tool(
         rctx,
-        Label("@jvolkman_rules_pycross//pycross/private/tools:pdm_translator.py"),
+        Label("//pycross/private/tools:pdm_translator.py"),
         args,
     )

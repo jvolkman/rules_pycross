@@ -4,7 +4,7 @@
 
 load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_file")
 load("@bazel_tools//tools/build_defs/repo:utils.bzl", "maybe")
-load("@jvolkman_rules_pycross//pycross:defs.bzl", "pycross_wheel_library")
+load("//pycross:defs.bzl", "pycross_wheel_library")
 
 PINS = {
     "build": "build_1.0.3",
@@ -33,7 +33,7 @@ def targets():
 
     # buildifier: disable=unused-variable
     _target = select({
-        ":_env_rules_pycross_deps_target_env": "@jvolkman_rules_pycross//pycross/private:rules_pycross_deps_target_env",
+        ":_env_rules_pycross_deps_target_env": "//pycross/private:rules_pycross_deps_target_env",
     })
 
     pycross_wheel_library(

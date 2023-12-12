@@ -14,8 +14,8 @@ load(
 )
 load(":providers.bzl", "PycrossWheelInfo")
 
-PYTHON_TOOLCHAIN_TYPE = "@bazel_tools//tools/python:toolchain_type"
-PYCROSS_TOOLCHAIN_TYPE = "@jvolkman_rules_pycross//pycross:toolchain_type"
+PYTHON_TOOLCHAIN_TYPE = Label("@bazel_tools//tools/python:toolchain_type")
+PYCROSS_TOOLCHAIN_TYPE = Label("//pycross:toolchain_type")
 
 def _absolute_tool_value(workspace_name, value):
     if value:

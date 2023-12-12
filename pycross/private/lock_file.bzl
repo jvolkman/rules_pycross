@@ -2,9 +2,6 @@
 
 load(":lock_attrs.bzl", "COMMON_ATTRS", "handle_common_attrs")
 
-def fully_qualified_label(ctx, label):
-    return "@%s//%s:%s" % (label.workspace_name or ctx.workspace_name, label.package, label.name)
-
 def _pycross_lock_file_impl(ctx):
     out = ctx.outputs.out
 
@@ -16,9 +13,9 @@ def _pycross_lock_file_impl(ctx):
     for local_wheel in ctx.files.local_wheels:
         if not local_wheel.owner:
             fail("Could not determine owning label for local wheel: %s" % local_wheel)
-        args.add_all("--local-wheel", [local_wheel.basename, fully_qualified_label(ctx, local_wheel.owner)])
+        args.add_all("--local-wheel", [local_wheel.basename, local_wheel.owner])
 
-    environment_files_and_labels = [(t.path, fully_qualified_label(ctx, t.owner)) for t in ctx.files.target_environments]
+    environment_files_and_labels = [(t.path, t.owner) for t in ctx.files.target_environments]
     args.add_all(handle_common_attrs(ctx.attr, environment_files_and_labels))
 
     ctx.actions.run(

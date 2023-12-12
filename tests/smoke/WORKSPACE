@@ -1,5 +1,5 @@
 workspace(
-    name = "jvolkman_rules_pycross_smoke",
+    name = "rules_pycross_smoke",
 )
 
 load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
@@ -95,15 +95,15 @@ third_party_repositories()
 # Pycross
 
 local_repository(
-    name = "jvolkman_rules_pycross",
+    name = "rules_pycross",
     path = "../..",
 )
 
-load("@jvolkman_rules_pycross//pycross:repositories.bzl", "rules_pycross_dependencies")
+load("@rules_pycross//pycross:repositories.bzl", "rules_pycross_dependencies")
 
 rules_pycross_dependencies(python_interpreter)
 
-load("@jvolkman_rules_pycross//pycross:defs.bzl", "pkg_repo_model_pdm", "pkg_repo_model_poetry", "pycross_lock_repo", "pycross_pkg_repo", "pycross_register_for_python_toolchains")
+load("@rules_pycross//pycross:defs.bzl", "pkg_repo_model_pdm", "pkg_repo_model_poetry", "pycross_lock_repo", "pycross_pkg_repo", "pycross_register_for_python_toolchains")
 
 pycross_register_for_python_toolchains(
     name = "pycross_toolchains",

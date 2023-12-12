@@ -56,7 +56,7 @@ def _generate_lock_file(rctx):
 
     exec_internal_tool(
         rctx,
-        Label("@jvolkman_rules_pycross//pycross/private/tools:bzl_lock_generator.py"),
+        Label("//pycross/private/tools:bzl_lock_generator.py"),
         args,
     )
 

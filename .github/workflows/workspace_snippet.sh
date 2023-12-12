@@ -13,7 +13,7 @@ WORKSPACE snippet:
 \`\`\`starlark
 load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
 http_archive(
-    name = "jvolkman_rules_pycross",
+    name = "rules_pycross",
     sha256 = "${SHA}",
     strip_prefix = "${PREFIX}",
     url = "https://github.com/jvolkman/rules_pycross/archive/refs/tags/${TAG}.tar.gz",
@@ -24,7 +24,7 @@ http_archive(
 # you should fetch it *before* calling this.
 # Alternatively, you can skip calling this function, so long as you've
 # already fetched all the dependencies.
-load("@jvolkman_rules_pycross//pycross:repositories.bzl", "rules_pycross_dependencies")
+load("@rules_pycross//pycross:repositories.bzl", "rules_pycross_dependencies")
 rules_pycross_dependencies()
 
 \`\`\`

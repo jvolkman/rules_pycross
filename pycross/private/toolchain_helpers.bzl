@@ -210,16 +210,16 @@ def _get_multi_python_version_info(rctx, python_toolchain_repo):
     }
 
 _ROOT_BUILD_HEADER = """\
-load("@jvolkman_rules_pycross//pycross:defs.bzl", "pycross_target_environment")
+load("{}", "pycross_target_environment")
 
 package(default_visibility = ["//visibility:public"])
-"""
+""".format(Label("//pycross:defs.bzl"))
 
 _TOOLCHAINS_BUILD_HEADER = """\
-load("@jvolkman_rules_pycross//pycross:toolchain.bzl", "pycross_hermetic_toolchain")
+load("{}", "pycross_hermetic_toolchain")
 
 package(default_visibility = ["//visibility:public"])
-"""
+""".format(Label("//pycross:toolchain.bzl"))
 
 _ENVIRONMENT_TEMPLATE = """\
 config_setting(
@@ -248,9 +248,9 @@ toolchain(
     exec_compatible_with = {exec_compatible_with},
     target_settings = [{target_config_name}],
     toolchain = {provider_name},
-    toolchain_type = "@jvolkman_rules_pycross//pycross:toolchain_type",
+    toolchain_type = "%s",
 )
-"""
+""" % Label("//pycross:toolchain_type")
 
 def _pycross_toolchain_repo_impl(rctx):
     python_repo = rctx.attr.python_toolchains_repo_name

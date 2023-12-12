@@ -5,9 +5,9 @@ load(":repo_venv_utils.bzl", "create_venv", "get_venv_python_executable", "insta
 
 INTERNAL_REPO_NAME = "rules_pycross_internal"
 LOCK_FILES = {
-    "build": "@jvolkman_rules_pycross//pycross/private:pycross_deps_build.lock.bzl",
-    "core": "@jvolkman_rules_pycross//pycross/private:pycross_deps_core.lock.bzl",
-    "repairwheel": "@jvolkman_rules_pycross//pycross/private:pycross_deps_repairwheel.lock.bzl",
+    "build": "//pycross/private:pycross_deps_build.lock.bzl",
+    "core": "//pycross/private:pycross_deps_core.lock.bzl",
+    "repairwheel": "//pycross/private:pycross_deps_repairwheel.lock.bzl",
 }
 
 _deps_build = """\
@@ -121,7 +121,7 @@ def _pip_whl(wheels):
 def _pycross_internal_repo_impl(rctx):
     python_executable = _resolve_python_interpreter(rctx)
     wheel_paths = sorted([rctx.path(w) for w in rctx.attr.wheels.keys()], key = lambda k: str(k))
-    pycross_path = rctx.path(Label("@jvolkman_rules_pycross//:BUILD.bazel")).dirname
+    pycross_path = rctx.path(Label("//:BUILD.bazel")).dirname
 
     venv_path = rctx.path("exec_venv")
     pip_whl = _pip_whl(rctx.attr.wheels)
@@ -134,7 +134,7 @@ def _pycross_internal_repo_impl(rctx):
     # All deps
     rctx.file(
         "deps/BUILD.bazel",
-        _deps_build.format(lock = "@jvolkman_rules_pycross//pycross/private:pycross_deps.lock.bzl"),
+        _deps_build.format(lock = Label("//pycross/private:pycross_deps.lock.bzl")),
     )
 
     # Root build file
