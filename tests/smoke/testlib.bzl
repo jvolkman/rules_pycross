@@ -2,12 +2,12 @@
 
 load("@aspect_bazel_lib//lib:write_source_files.bzl", "write_source_files")
 load("@bazel_skylib//rules:write_file.bzl", "write_file")
+load("@pycross_toolchains//:defs.bzl", "environments")
 load(
-    "@jvolkman_rules_pycross//pycross:defs.bzl",
+    "@rules_pycross//pycross:defs.bzl",
     "pycross_lock_file",
     "pycross_wheel_build",
 )
-load("@pycross_toolchains//:defs.bzl", "environments")
 load("@rules_python//python:defs.bzl", "py_test")
 
 def setup_test_targets(lock_name, lock_model):
@@ -29,7 +29,7 @@ def setup_test_targets(lock_name, lock_model):
             "//third_party/zstd",
         ],
         post_build_hooks = [
-            "@jvolkman_rules_pycross//pycross/hooks:repair_wheel",
+            "@rules_pycross//pycross/hooks:repair_wheel",
         ],
         config_settings = {
             "--build-option": [

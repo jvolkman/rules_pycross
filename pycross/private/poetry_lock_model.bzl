@@ -66,6 +66,6 @@ def repo_create_poetry_model(rctx, params, output):
 
     exec_internal_tool(
         rctx,
-        Label("@jvolkman_rules_pycross//pycross/private/tools:poetry_translator.py"),
+        Label("//pycross/private/tools:poetry_translator.py"),
         args,
     )

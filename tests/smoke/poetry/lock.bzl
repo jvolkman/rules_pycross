@@ -3,7 +3,7 @@
 """Pycross-generated dependency targets."""
 
 load("@bazel_tools//tools/build_defs/repo:utils.bzl", "maybe")
-load("@jvolkman_rules_pycross//pycross:defs.bzl", "pycross_wheel_build", "pycross_wheel_library", "pypi_file")
+load("@rules_pycross//pycross:defs.bzl", "pycross_wheel_build", "pycross_wheel_library", "pypi_file")
 
 PINS = {
     "appnope": "appnope_0.1.3",

@@ -4,7 +4,7 @@
 
 load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_file")
 load("@bazel_tools//tools/build_defs/repo:utils.bzl", "maybe")
-load("@jvolkman_rules_pycross//pycross:defs.bzl", "pycross_wheel_build", "pycross_wheel_library")
+load("@rules_pycross//pycross:defs.bzl", "pycross_wheel_build", "pycross_wheel_library")
 
 PINS = {
     "appnope": "appnope_0.1.3",
@@ -80,10 +80,10 @@ def targets():
 
     # buildifier: disable=unused-variable
     _target = select({
-        ":_env_python_darwin_arm64": "@jvolkman_rules_pycross_example//:python_darwin_arm64",
-        ":_env_python_darwin_x86_64": "@jvolkman_rules_pycross_example//:python_darwin_x86_64",
-        ":_env_python_linux_arm64": "@jvolkman_rules_pycross_example//:python_linux_arm64",
-        ":_env_python_linux_x86_64": "@jvolkman_rules_pycross_example//:python_linux_x86_64",
+        ":_env_python_darwin_arm64": "@rules_pycross_example//:python_darwin_arm64",
+        ":_env_python_darwin_x86_64": "@rules_pycross_example//:python_darwin_x86_64",
+        ":_env_python_linux_arm64": "@rules_pycross_example//:python_linux_arm64",
+        ":_env_python_linux_x86_64": "@rules_pycross_example//:python_linux_x86_64",
     })
 
     pycross_wheel_library(

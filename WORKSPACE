@@ -1,5 +1,5 @@
 workspace(
-    name = "jvolkman_rules_pycross",
+    name = "rules_pycross",
 )
 
 load(":internal_deps.bzl", "rules_pycross_internal_deps")

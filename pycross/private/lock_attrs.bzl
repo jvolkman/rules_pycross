@@ -62,7 +62,16 @@ def handle_common_attrs(attrs, environment_files_and_labels):
     Returns:
       a list of arguments.
     """
-    args = []
+
+    # If build locks for pycross itself, we don't want a repo name prefix on labels in the
+    # generated .bzl file. We can figure that out by comparing our workspace against the root workspace.
+    if Label("@//:WORKSPACE").workspace_name == Label("//:WORKSPACE").workspace_name:
+        pycross_repo_name = ""
+    else:
+        pycross_repo_name = "@" + Label("//:WORKSPACE").workspace_name
+
+    args = ["--pycross-repo-name", pycross_repo_name]
+
     if attrs.repo_prefix:
         repo_prefix = attrs.repo_prefix
     else:

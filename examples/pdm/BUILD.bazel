@@ -1,6 +1,6 @@
 load("@bazel_skylib//rules:write_file.bzl", "write_file")
 load(
-    "@jvolkman_rules_pycross//pycross:defs.bzl",
+    "@rules_pycross//pycross:defs.bzl",
     "pycross_lock_file",
     "pycross_pdm_lock_model",
     "pycross_target_environment",

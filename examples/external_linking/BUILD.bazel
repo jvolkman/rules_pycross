@@ -1,12 +1,12 @@
 load("@bazel_skylib//rules:write_file.bzl", "write_file")
 load(
-    "@jvolkman_rules_pycross//pycross:defs.bzl",
+    "@rules_pycross//pycross:defs.bzl",
     "pycross_lock_file",
     "pycross_pdm_lock_model",
     "pycross_target_environment",
 )
 load(
-    "@jvolkman_rules_pycross//pycross:toolchain.bzl",
+    "@rules_pycross//pycross:toolchain.bzl",
     "pycross_hermetic_toolchain",
 )
 
@@ -107,7 +107,7 @@ toolchain(
     exec_compatible_with = _darwin_arm64,
     target_compatible_with = _linux_x86_64,
     toolchain = ":pycross_darwin_linux",
-    toolchain_type = "@jvolkman_rules_pycross//pycross:toolchain_type",
+    toolchain_type = "@rules_pycross//pycross:toolchain_type",
 )
 
 pycross_hermetic_toolchain(
@@ -122,7 +122,7 @@ toolchain(
     exec_compatible_with = _linux_x86_64,
     target_compatible_with = _darwin_arm64,
     toolchain = ":pycross_linux_darwin",
-    toolchain_type = "@jvolkman_rules_pycross//pycross:toolchain_type",
+    toolchain_type = "@rules_pycross//pycross:toolchain_type",
 )
 
 pycross_hermetic_toolchain(
@@ -137,7 +137,7 @@ toolchain(
     exec_compatible_with = _linux_x86_64,
     target_compatible_with = _linux_arm64,
     toolchain = ":pycross_linux_x86_64_linux_arm64",
-    toolchain_type = "@jvolkman_rules_pycross//pycross:toolchain_type",
+    toolchain_type = "@rules_pycross//pycross:toolchain_type",
 )
 
 pycross_pdm_lock_model(

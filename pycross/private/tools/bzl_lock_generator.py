@@ -694,24 +694,28 @@ def collect_package_annotations(args: Any, lock_model: LockSet) -> Dict[str, Pac
     return dict(annotations)
 
 
-def gen_load_statements(imports: Set[str]) -> List[str]:
+def gen_load_statements(imports: Set[str], pycross_repo: str) -> List[str]:
     possible_imports = {
         "http_file": "@bazel_tools//tools/build_defs/repo:http.bzl",
         "maybe": "@bazel_tools//tools/build_defs/repo:utils.bzl",
-        "pycross_wheel_build": "@jvolkman_rules_pycross//pycross:defs.bzl",
-        "pycross_wheel_library": "@jvolkman_rules_pycross//pycross:defs.bzl",
-        "pypi_file": "@jvolkman_rules_pycross//pycross:defs.bzl",
+        "pycross_wheel_build": f"{pycross_repo}//pycross:defs.bzl",
+        "pycross_wheel_library": f"{pycross_repo}//pycross:defs.bzl",
+        "pypi_file": f"{pycross_repo}//pycross:defs.bzl",
     }
 
     load_statement_groups = defaultdict(list)
     for i in imports:
         load_statement_groups[possible_imports[i]].append(i)
 
+    # External repo loads come before local loads.
+    sorted_files = sorted(load_statement_groups, key=lambda f: (0 if f.startswith("@") else 1, f))
+
     lines = []
-    for file, file_imports in load_statement_groups.items():
+    for file in sorted_files:
+        file_imports = load_statement_groups[file]
         lines.append(f"load({quoted_str(file)}, {', '.join(quoted_str(i) for i in sorted(file_imports))})")
 
-    return sorted(lines)
+    return lines
 
 
 def main(args: Any) -> None:
@@ -848,7 +852,7 @@ def main(args: Any) -> None:
         imports.update(p.imports)
     for r in repos:
         imports.update(r.imports)
-    load_statements = gen_load_statements(imports)
+    load_statements = gen_load_statements(imports, args.pycross_repo_name)
 
     with open(output, "w") as f:
 
@@ -1049,6 +1053,12 @@ def parse_flags() -> Any:
         "--generate-file-map",
         action="store_true",
         help="Generate a FILES dict containing a mapping of filenames to repo labels.",
+    )
+
+    parser.add_argument(
+        "--pycross-repo-name",
+        default="@rules_pycross",
+        help="Our own repo name",
     )
 
     parser.add_argument(

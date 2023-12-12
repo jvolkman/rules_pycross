@@ -107,7 +107,7 @@ def repo_batch_create_target_environments(rctx, env_settings_list):
 
     exec_internal_tool(
         rctx,
-        Label("@jvolkman_rules_pycross//pycross/private/tools:target_environment_generator.py"),
+        Label("//pycross/private/tools:target_environment_generator.py"),
         ["batch-create", "--input", str(env_file)],
     )
 

@@ -1,4 +1,4 @@
-load("@jvolkman_rules_pycross//pycross:defs.bzl", "pycross_wheel_build")
+load("@rules_pycross//pycross:defs.bzl", "pycross_wheel_build")
 
 package(default_visibility = ["//visibility:public"])
 
@@ -15,7 +15,7 @@ pycross_wheel_build(
         "//third_party/openblas:libopenblas.a",
     ],
     post_build_hooks = [
-        "@jvolkman_rules_pycross//pycross/hooks:repair_wheel",
+        "@rules_pycross//pycross/hooks:repair_wheel",
     ],
     pre_build_hooks = [
         ":gen_site_cfg",
