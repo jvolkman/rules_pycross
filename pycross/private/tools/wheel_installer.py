@@ -3,6 +3,7 @@ A tool that invokes pypa/build to build the given sdist tarball.
 """
 import os
 import shutil
+import subprocess
 import tempfile
 from pathlib import Path
 from typing import Any
@@ -79,6 +80,8 @@ def main(args: Any) -> None:
         shutil.rmtree(link_dir, ignore_errors=True)
 
     setup_namespace_pkg_compatibility(lib_dir)
+    if args.post_extraction_command:
+        subprocess.run(str(args.post_extraction_command.resolve()), cwd=str(lib_dir), check=True)
 
 
 def parse_flags() -> Any:
@@ -108,6 +111,12 @@ def parse_flags() -> Any:
         "--directory",
         type=Path,
         help="The output path.",
+    )
+
+    parser.add_argument(
+        "--post-extraction-command",
+        type=Path,
+        required=False,
     )
 
     return parser.parse_args()

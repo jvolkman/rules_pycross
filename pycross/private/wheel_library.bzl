@@ -27,6 +27,12 @@ def _pycross_wheel_library_impl(ctx):
     if ctx.attr.enable_implicit_namespace_pkgs:
         args.add("--enable-implicit-namespace-pkgs")
 
+    if ctx.attr.post_extraction_command:
+        script = ctx.actions.declare_file(ctx.attr.name + "_post_extraction_command")
+        inputs.append(script)
+        ctx.actions.write(script, "#!/usr/bin/env bash\n" + ctx.attr.post_extraction_command, is_executable = True)
+        args.add("--post-extraction-command", script)
+
     ctx.actions.run(
         inputs = inputs,
         outputs = [out],
@@ -112,6 +118,10 @@ This option is required to support some packages which cannot handle the convers
         "python_version": attr.string(
             doc = "The python version required for this wheel ('PY2' or 'PY3')",
             values = ["PY2", "PY3", ""],
+        ),
+        "post_extraction_command": attr.string(
+            doc = "Bash command to run after content of the wheel gets extracted. The working directory is set to the extraction location",
+            default = "",
         ),
         "_tool": attr.label(
             default = Label("//pycross/private/tools:wheel_installer"),
