@@ -134,7 +134,6 @@ def _compute_environments_and_toolchains(
                         flag_values = flag_values,
                         exec_interpreter = exec_interpreter,
                         target_interpreter = target_interpreter,
-                        target_environment = "//:" + target_env_json,
                         exec_compatible_with = exec_compatible_with,
                         target_compatible_with = target_compatible_with,
                     ),
@@ -233,7 +232,6 @@ _TOOLCHAIN_TEMPLATE = """\
 pycross_hermetic_toolchain(
     name = {provider_name},
     exec_interpreter = {exec_interpreter},
-    target_environment = {target_environment},
     target_interpreter = {target_interpreter},
 )
 
