@@ -6,6 +6,9 @@ load(":target_environment.bzl", "repo_batch_create_target_environments")
 DEFAULT_MACOS_VERSION = "12.0"
 DEFAULT_GLIBC_VERSION = "2.25"
 
+# Whether bzlmod is enabled.
+BZLMOD = str(Label("//:invalid")).startswith("@@")
+
 def _get_minor_version(version):
     if version in MINOR_MAPPING:
         return MINOR_MAPPING[version]
@@ -17,7 +20,7 @@ def _get_minor_version(version):
 def _get_version_components(version):
     parts = version.split(".")
     if len(parts) < 2:
-        fail("Invalid Python version; must be format X.Y or X.Y.Z: {}".format(version))
+        fail("Invalid Python version; must be format X.Y or X.Y.Z: %s" % str(version))
 
     return int(parts[0]), int(parts[1])
 
@@ -106,20 +109,36 @@ def _compute_environments_and_toolchains(
                 exec_compatible_with = list(PLATFORMS[exec_platform].compatible_with)
                 target_compatible_with = list(PLATFORMS[target_platform].compatible_with)
 
-                if is_multi_version_layout:
-                    interpreter_repo_prefix = "{}_{}".format(python_toolchains_repo_name, underscore_version)
+                # These conditionals create a `interpreter_repo_pattern` which accepts a
+                # platform name (e.g., x86_64-unknown-linux-gnu).
+
+                if BZLMOD:
+                    # With bzlmod need to construct the canonical repository names for platform-specific interpreters.
+                    # We assume that python_toolchains_repo_name points to the `python_versions` repo
+                    # that rules_python generates. From there, we strip of `python_versions` and replace it with
+                    # a toolchain repo name. E.g., python_3_12_x86_64-unknown-linux-gnu.
+                    if not python_toolchains_repo_name.endswith("python_versions"):
+                        fail(
+                            "Expected python_toolchains_repo_name to end with 'python_versions', " +
+                            "but it does not: " + python_toolchains_repo_name,
+                        )
+                    repo_name_prefix = python_toolchains_repo_name[:-len("python_versions")]
+                    interpreter_repo_pattern = "@@{}python_{}_{{plat}}//:py3_runtime".format(
+                        repo_name_prefix,
+                        underscore_version,
+                    )
+
+                    # These other modes are WORKSPACE and should eventually be dropped.
+                elif is_multi_version_layout:
+                    interpreter_repo_pattern = "@{}_{}_{{plat}}//:py3_runtime".format(
+                        python_toolchains_repo_name,
+                        underscore_version,
+                    )
                 else:
-                    interpreter_repo_prefix = python_toolchains_repo_name
+                    interpreter_repo_pattern = "@{}_{{plat}}//:py3_runtime".format(python_toolchains_repo_name)
 
-                exec_interpreter = "@{}_{}//:py3_runtime".format(
-                    interpreter_repo_prefix,
-                    exec_platform,
-                )
-
-                target_interpreter = "@{}_{}//:py3_runtime".format(
-                    interpreter_repo_prefix,
-                    target_platform,
-                )
+                exec_interpreter = interpreter_repo_pattern.format(plat = exec_platform)
+                target_interpreter = interpreter_repo_pattern.format(plat = target_platform)
 
                 if version == default_version:
                     flag_values = {}
@@ -147,12 +166,12 @@ def _compute_environments_and_toolchains(
 def _is_multi_version_layout(rctx, python_toolchain_repo):
     # Ideally we'd just check whether pip.bzl exists, but `path(Label(<non-existent-label>))`
     # unfortunately raises an exception.
-    repo_build_file = Label("@{}//:BUILD.bazel".format(python_toolchain_repo))
+    repo_build_file = python_toolchain_repo.relative("//:BUILD.bazel")
     repo_dir = rctx.path(repo_build_file).dirname
     return repo_dir.get_child("pip.bzl").exists
 
 def _get_single_python_version(rctx, python_toolchain_repo):
-    defs_bzl_file = Label("@{}//:defs.bzl".format(python_toolchain_repo))
+    defs_bzl_file = python_toolchain_repo.relative("//:defs.bzl")
     content = rctx.read(defs_bzl_file)
     for line in content.splitlines():
         if line.strip().startswith("python_version"):
@@ -165,8 +184,8 @@ def _get_single_python_version(rctx, python_toolchain_repo):
 
     fail("Unable to determine version from " + defs_bzl_file)
 
-def _get_multi_python_version_info(rctx, python_toolchain_repo):
-    pip_bzl_file = Label("@{}//:pip.bzl".format(python_toolchain_repo))
+def _get_multi_python_versions(rctx, python_toolchain_repo):
+    pip_bzl_file = python_toolchain_repo.relative("//:pip.bzl")
     content = rctx.read(pip_bzl_file)
 
     versions = []
@@ -188,11 +207,14 @@ def _get_multi_python_version_info(rctx, python_toolchain_repo):
     if not versions:
         fail("Unable to determine versions from " + pip_bzl_file)
 
+    return versions
+
+def _get_default_python_version(rctx, python_toolchain_repo, versions):
     # Figure out the default version
     default_version = None
     for version in versions:
         underscore_version = version.replace(".", "_")
-        toolchain_bzl_file = Label("@{}_{}_toolchains//:BUILD.bazel".format(python_toolchain_repo, underscore_version))
+        toolchain_bzl_file = Label("@{}_{}_toolchains//:BUILD.bazel".format(python_toolchain_repo.workspace_name, underscore_version))
         content = rctx.read(toolchain_bzl_file)
 
         # Default version toolchains have empty target_settings lists.
@@ -203,10 +225,7 @@ def _get_multi_python_version_info(rctx, python_toolchain_repo):
     if not default_version:
         fail("Unable to determine default version for python toolchain repo '{}'".format(python_toolchain_repo))
 
-    return {
-        "versions": versions,
-        "default_version": default_version,
-    }
+    return default_version
 
 _ROOT_BUILD_HEADER = """\
 load("{}", "pycross_target_environment")
@@ -250,20 +269,43 @@ toolchain(
 )
 """ % Label("//pycross:toolchain_type")
 
+def _get_requested_python_versions(rctx, registered_python_versions):
+    """
+    Returns Python versions filtered to what the user requested.
+    """
+    if not rctx.attr.requested_python_versions:
+        return registered_python_versions
+
+    not_found_python_versions = []
+    python_versions = []
+    for requested_version in rctx.attr.requested_python_versions:
+        if requested_version in registered_python_versions:
+            python_versions.append(requested_version)
+        else:
+            not_found_python_versions.append(requested_version)
+    if not_found_python_versions:
+        fail("Requested Python versions are not registered: {}".format(not_found_python_versions))
+
+    return python_versions
+
 def _pycross_toolchain_repo_impl(rctx):
-    python_repo = rctx.attr.python_toolchains_repo.workspace_name
+    python_repo = rctx.attr.python_toolchains_repo
     is_multi_version_layout = _is_multi_version_layout(rctx, python_repo)
     if is_multi_version_layout:
-        version_info = _get_multi_python_version_info(rctx, python_repo)
-        default_version = version_info["default_version"]
-        python_versions = version_info["versions"]
+        registered_python_versions = _get_multi_python_versions(rctx, python_repo)
+        python_versions = _get_requested_python_versions(rctx, registered_python_versions)
+
+        if rctx.attr.default_python_version:
+            default_version = rctx.attr.default_python_version
+        else:
+            default_version = _get_default_python_version(rctx, python_repo, registered_python_versions)
     else:
         default_version = _get_single_python_version(rctx, python_repo)
         python_versions = [default_version]
 
     computed = _compute_environments_and_toolchains(
         repo_name = rctx.attr.name,
-        python_toolchains_repo_name = python_repo,
+        python_toolchains_repo_name = python_repo.workspace_name,
         is_multi_version_layout = is_multi_version_layout,
         python_versions = python_versions,
         default_version = default_version,
@@ -298,10 +340,12 @@ def _pycross_toolchain_repo_impl(rctx):
 
     rctx.file(rctx.path("defs.bzl"), "\n".join(defs_lines))
 
-_pycross_toolchain_repo = repository_rule(
+pycross_toolchain_repo = repository_rule(
     implementation = _pycross_toolchain_repo_impl,
     attrs = {
-        "python_toolchains_repo": attr.label(mandatory = True),
+        "python_toolchains_repo": attr.label(),
+        "requested_python_versions": attr.string_list(),
+        "default_python_version": attr.string(),
         "platforms": attr.string_list(),
         "glibc_version": attr.string(mandatory = True),
         "macos_version": attr.string(mandatory = True),
@@ -325,7 +369,7 @@ def pycross_register_for_python_toolchains(
         glibc_version: the maximum supported GLIBC version.
         macos_version: the maximum supported macOS version.
     """
-    _pycross_toolchain_repo(
+    pycross_toolchain_repo(
         name = name,
         python_toolchains_repo = python_toolchains_repo,
         platforms = platforms,
