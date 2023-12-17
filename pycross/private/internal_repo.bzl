@@ -28,12 +28,8 @@ alias(
 """
 
 _python_bzl = """\
-load(
-    "{python_defs}",
-    _py_binary = "py_binary",
-    _py_library = "py_library",
-    _py_test = "py_test"
-)
+load("@rules_python//python:defs.bzl", _py_library = "py_library")
+load("{python_defs}", _py_binary = "py_binary", _py_test = "py_test")
 
 py_binary = _py_binary
 py_library = _py_library
@@ -151,7 +147,11 @@ def _pycross_internal_repo_impl(rctx):
     )
 
     # python.bzl
-    rctx.file("python.bzl", _python_bzl.format(python_defs = "@rules_python//python:defs.bzl"))
+    if rctx.attr.python_defs_file:
+        python_defs = rctx.attr.python_defs_file
+    else:
+        python_defs = Label("@rules_python//python:defs.bzl")
+    rctx.file("python.bzl", _python_bzl.format(python_defs = python_defs))
 
     # Root build file
     rctx.file("BUILD.bazel", _root_build.format(installer_whl = _installer_whl(rctx.attr.wheels)))
@@ -160,6 +160,9 @@ pycross_internal_repo = repository_rule(
     implementation = _pycross_internal_repo_impl,
     attrs = {
         "python_interpreter_target": attr.label(
+            allow_single_file = True,
+        ),
+        "python_defs_file": attr.label(
             allow_single_file = True,
         ),
         "python_interpreter": attr.string(),
@@ -173,10 +176,11 @@ pycross_internal_repo = repository_rule(
     },
 )
 
-def create_internal_repo(python_interpreter_target = None, python_interpreter = None, wheels = {}):
+def create_internal_repo(python_interpreter_target = None, python_interpreter = None, python_defs_file = None, wheels = {}):
     pycross_internal_repo(
         name = INTERNAL_REPO_NAME,
         wheels = {wheel_label: wheel_name for wheel_name, wheel_label in wheels.items()},
         python_interpreter = python_interpreter,
         python_interpreter_target = python_interpreter_target,
+        python_defs_file = python_defs_file,
     )
