@@ -51,24 +51,20 @@ def _get_env_platforms(py_platform, glibc_version, macos_version):
 
     fail("Unknown platform: {}".format(py_platform))
 
-def _compute_environments_and_toolchains(
+def _compute_environments(
         repo_name,
-        python_toolchains_repo_name,
-        is_multi_version_layout,
         python_versions,
         default_version,
         platforms,
         glibc_version,
         macos_version):
     environments = []
-    toolchains = []
 
     if not platforms:
         platforms = sorted(PLATFORMS.keys())
 
     for version in python_versions:
         minor_version = _get_minor_version(version)
-        underscore_version = version.replace(".", "_")
 
         version_info = TOOL_VERSIONS[minor_version]
         available_version_platforms = version_info["sha256"].keys()
@@ -100,6 +96,33 @@ def _compute_environments_and_toolchains(
                     platforms = env_platforms,
                 ),
             )
+
+    return environments
+
+def _compute_toolchains(
+        python_toolchains_repo_name,
+        is_multi_version_layout,
+        python_versions,
+        default_version,
+        platforms):
+    toolchains = []
+
+    if not platforms:
+        platforms = sorted(PLATFORMS.keys())
+
+    for version in python_versions:
+        minor_version = _get_minor_version(version)
+        underscore_version = version.replace(".", "_")
+
+        version_info = TOOL_VERSIONS[minor_version]
+        available_version_platforms = version_info["sha256"].keys()
+        selected_platforms = [p for p in platforms if p in available_version_platforms]
+
+        for target_platform in selected_platforms:
+            if version == default_version:
+                flag_values = {}
+            else:
+                flag_values = {"@rules_python//python/config_settings:python_version": minor_version}
 
             for exec_platform in selected_platforms:
                 tc_provider_name = "python_{}_{}_{}".format(minor_version, exec_platform, target_platform)
@@ -157,11 +180,7 @@ def _compute_environments_and_toolchains(
                         target_compatible_with = target_compatible_with,
                     ),
                 )
-
-    return dict(
-        environments = environments,
-        toolchains = toolchains,
-    )
+    return toolchains
 
 def _is_multi_version_layout(rctx, python_toolchain_repo):
     # Ideally we'd just check whether pip.bzl exists, but `path(Label(<non-existent-label>))`
@@ -288,7 +307,10 @@ def _get_requested_python_versions(rctx, registered_python_versions):
 
     return python_versions
 
-def _pycross_toolchain_repo_impl(rctx):
+def _get_python_version_info(rctx):
+    """
+    Returns a struct containing python versions and the default interpreter version.
+    """
     python_repo = rctx.attr.python_toolchains_repo
     is_multi_version_layout = _is_multi_version_layout(rctx, python_repo)
     if is_multi_version_layout:
@@ -303,36 +325,63 @@ def _pycross_toolchain_repo_impl(rctx):
         default_version = _get_single_python_version(rctx, python_repo)
         python_versions = [default_version]
 
-    computed = _compute_environments_and_toolchains(
-        repo_name = rctx.attr.name,
-        python_toolchains_repo_name = python_repo.workspace_name,
-        is_multi_version_layout = is_multi_version_layout,
+    return struct(
         python_versions = python_versions,
         default_version = default_version,
+        is_multi_version_layout = is_multi_version_layout,
+    )
+
+def _pycross_toolchain_repo_impl(rctx):
+    version_info = _get_python_version_info(rctx)
+    computed_toolchains = _compute_toolchains(
+        python_toolchains_repo_name = rctx.attr.python_toolchains_repo.workspace_name,
+        is_multi_version_layout = version_info.is_multi_version_layout,
+        python_versions = version_info.python_versions,
+        default_version = version_info.default_version,
+        platforms = rctx.attr.platforms,
+    )
+
+    toolchains_build_sections = [_TOOLCHAINS_BUILD_HEADER]
+    for tc in computed_toolchains:
+        toolchains_build_sections.append(_TOOLCHAIN_TEMPLATE.format(**{k: repr(v) for k, v in tc.items()}))
+
+    rctx.file(rctx.path("BUILD.bazel"), "\n".join(toolchains_build_sections))
+
+pycross_toolchains_repo = repository_rule(
+    implementation = _pycross_toolchain_repo_impl,
+    attrs = {
+        "python_toolchains_repo": attr.label(),
+        "requested_python_versions": attr.string_list(),
+        "default_python_version": attr.string(),
+        "platforms": attr.string_list(),
+    },
+)
+
+def _pycross_environment_repo_impl(rctx):
+    version_info = _get_python_version_info(rctx)
+    computed_environments = _compute_environments(
+        repo_name = rctx.attr.name,
+        python_versions = version_info.python_versions,
+        default_version = version_info.default_version,
         platforms = rctx.attr.platforms,
         glibc_version = rctx.attr.glibc_version,
         macos_version = rctx.attr.macos_version,
     )
 
-    repo_batch_create_target_environments(rctx, computed["environments"])
+    repo_batch_create_target_environments(rctx, computed_environments)
 
     root_build_sections = [_ROOT_BUILD_HEADER]
-    for env in computed["environments"]:
+    for env in computed_environments:
         root_build_sections.append(_ENVIRONMENT_TEMPLATE.format(**{k: repr(v) for k, v in env.items()}))
 
     root_build_sections.append("exports_files([")
-    for env in computed["environments"]:
+    for env in computed_environments:
         root_build_sections.append("    {},".format(repr(env["output"])))
     root_build_sections.append("])")
 
-    toolchains_build_sections = [_TOOLCHAINS_BUILD_HEADER]
-    for tc in computed["toolchains"]:
-        toolchains_build_sections.append(_TOOLCHAIN_TEMPLATE.format(**{k: repr(v) for k, v in tc.items()}))
-
     rctx.file(rctx.path("BUILD.bazel"), "\n".join(root_build_sections))
-    rctx.file(rctx.path("toolchains/BUILD.bazel"), "\n".join(toolchains_build_sections))
 
-    environment_names = ["@{}//:{}".format(rctx.attr.name, env["output"]) for env in computed["environments"]]
+    environment_names = ["@{}//:{}".format(rctx.attr.name, env["output"]) for env in computed_environments]
     defs_lines = ["environments = ["]
     for environment_name in environment_names:
         defs_lines.append("    {},".format(repr(environment_name)))
@@ -340,8 +389,8 @@ def _pycross_toolchain_repo_impl(rctx):
 
     rctx.file(rctx.path("defs.bzl"), "\n".join(defs_lines))
 
-pycross_toolchain_repo = repository_rule(
-    implementation = _pycross_toolchain_repo_impl,
+pycross_environments_repo = repository_rule(
+    implementation = _pycross_environment_repo_impl,
     attrs = {
         "python_toolchains_repo": attr.label(),
         "requested_python_versions": attr.string_list(),
@@ -369,7 +418,9 @@ def pycross_register_for_python_toolchains(
         glibc_version: the maximum supported GLIBC version.
         macos_version: the maximum supported macOS version.
     """
-    pycross_toolchain_repo(
+    toolchain_repo_name = "{}_toolchains".format(name)
+
+    pycross_environments_repo(
         name = name,
         python_toolchains_repo = python_toolchains_repo,
         platforms = platforms,
@@ -377,4 +428,10 @@ def pycross_register_for_python_toolchains(
         macos_version = macos_version,
     )
 
-    native.register_toolchains("@{}//toolchains/...".format(name))
+    pycross_toolchains_repo(
+        name = toolchain_repo_name,
+        python_toolchains_repo = python_toolchains_repo,
+        platforms = platforms,
+    )
+
+    native.register_toolchains("@{}_toolchains//...".format(name))
