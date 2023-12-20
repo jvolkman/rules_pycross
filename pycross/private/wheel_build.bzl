@@ -57,11 +57,12 @@ def _get_sysconfig_data(workspace_name, tools, flags):
 
     return vars
 
-def _is_sibling_repository_layout_enabled(ctx):
+def _is_sibling_repository_layout_enabled():
     # It's possible to determine if --experimental_sibling_repository_layout is enabled by looking at
     # Label(@foo).workspace_root. If it's enabled, this value will start with `../`. By default it'll
     # start with `external/`.
-    test = Label("@not_" + ctx.workspace_name)  # the not_ prefix means it can't be our local workspace.
+    # Use rules_pycross_internal, which we know is external to this rule and always available.
+    test = Label("@rules_pycross_internal//:BUILD.bazel")
     return test.workspace_root.startswith("..")
 
 def _resolve_import_path_fn(ctx):
@@ -70,7 +71,7 @@ def _resolve_import_path_fn(ctx):
     return _resolve_import_path_fn_inner(
         ctx.workspace_name,
         ctx.bin_dir.path,
-        _is_sibling_repository_layout_enabled(ctx),
+        _is_sibling_repository_layout_enabled(),
     )
 
 def _executable(target):

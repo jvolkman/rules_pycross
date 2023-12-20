@@ -3,6 +3,8 @@
 load(":internal_repo.bzl", "exec_internal_tool")
 load(":lock_attrs.bzl", "POETRY_IMPORT_ATTRS")
 
+TRANSLATOR_TOOL = Label("//pycross/private/tools:poetry_translator.py")
+
 def _pycross_poetry_lock_model_impl(ctx):
     out = ctx.actions.declare_file(ctx.attr.name + ".json")
 
@@ -41,22 +43,33 @@ pycross_poetry_lock_model = rule(
 def pkg_repo_model_poetry(*, project_file, lock_file):
     return json.encode(dict(
         model_type = "poetry",
-        project_file = project_file,
-        lock_file = lock_file,
+        project_file = str(project_file),
+        lock_file = str(lock_file),
     ))
 
 def repo_create_poetry_model(rctx, params, output):
+    """Run the poetry lock translator.
+
+    Args:
+        rctx: The repository_ctx or module_ctx object.
+        params: a struct or dict containing the same attrs as the pycross_poetry_lock_model rule.
+        output: the output file.
+    """
+    if type(params) == "dict":
+        attrs = struct(**params)
+    else:
+        attrs = params
     args = [
         "--project-file",
-        str(rctx.path(Label(params["project_file"]))),
+        str(rctx.path(Label(attrs.project_file))),
         "--lock-file",
-        str(rctx.path(Label(params["lock_file"]))),
+        str(rctx.path(Label(attrs.lock_file))),
         "--output",
         output,
     ]
 
     exec_internal_tool(
         rctx,
-        Label("//pycross/private/tools:poetry_translator.py"),
+        TRANSLATOR_TOOL,
         args,
     )

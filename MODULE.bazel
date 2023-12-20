@@ -1,0 +1,55 @@
+"""rules_pycross"""
+
+module(
+    name = "rules_pycross",
+    version = "0.0.0",
+    compatibility_level = 1,
+)
+
+bazel_dep(name = "aspect_bazel_lib", version = "1.38.1")
+bazel_dep(name = "bazel_features", version = "1.1.1")
+bazel_dep(name = "bazel_skylib", version = "1.3.0")
+bazel_dep(name = "platforms", version = "0.0.4")
+bazel_dep(name = "rules_python", version = "0.26.0")
+
+python = use_extension("@rules_python//python/extensions:python.bzl", "python")
+python.toolchain(python_version = "3.12")
+use_repo(python, "python_3_12", "python_versions", "pythons_hub")
+
+internal_deps = use_extension("@rules_pycross//pycross/private/bzlmod:internal_deps.bzl", "internal_deps")
+internal_deps.install(
+    registered_python_version = "3.12",
+)
+use_repo(
+    internal_deps,
+    "rules_pycross_internal",
+    "rules_pycross_internal_deps_wheel_dacite_1.6.0_py3_none_any",
+    "rules_pycross_internal_deps_wheel_installer_0.7.0_py3_none_any",
+    "rules_pycross_internal_deps_wheel_packaging_23.2_py3_none_any",
+    "rules_pycross_internal_deps_wheel_pip_23.3.1_py3_none_any",
+    "rules_pycross_internal_deps_wheel_poetry_core_1.8.1_py3_none_any",
+    "rules_pycross_internal_deps_wheel_tomli_2.0.1_py3_none_any",
+)
+
+toolchains = use_extension("@rules_pycross//pycross/private/bzlmod:toolchains.bzl", "toolchains")
+toolchains.create_for_python_toolchains(
+    python_versions_repo = "@python_versions",
+)
+use_repo(toolchains, "pycross_toolchains")
+
+register_toolchains("@pycross_toolchains//...")
+
+environments = use_extension("@rules_pycross//pycross/extensions:environments.bzl", "environments")
+environments.create_for_python_toolchains(
+    python_versions_repo = "@python_versions",
+)
+use_repo(environments, "pycross_environments")
+
+lock_import = use_extension("@rules_pycross//pycross/extensions:lock_import.bzl", "lock_import")
+use_repo(lock_import, "lock_import_repos_hub")
+
+lock_repos = use_extension("@rules_pycross//pycross/extensions:lock_repos.bzl", "lock_repos")
+lock_repos.create()
+
+# Currently development-only
+bazel_dep(name = "gazelle", version = "0.34.0", dev_dependency = True)

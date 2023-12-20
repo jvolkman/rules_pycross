@@ -1,0 +1,22 @@
+load("@bazel_skylib//:bzl_library.bzl", "bzl_library")
+
+bzl_library(
+    name = "environments",
+    srcs = ["environments.bzl"],
+    visibility = ["//visibility:public"],
+    deps = ["//pycross/private/bzlmod:environments"],
+)
+
+bzl_library(
+    name = "lock_import",
+    srcs = ["lock_import.bzl"],
+    visibility = ["//visibility:public"],
+    deps = ["//pycross/private/bzlmod:lock_import"],
+)
+
+bzl_library(
+    name = "lock_repos",
+    srcs = ["lock_repos.bzl"],
+    visibility = ["//visibility:public"],
+    deps = ["//pycross/private/bzlmod:lock_repos"],
+)

@@ -56,10 +56,10 @@ def exec_internal_tool(rctx, tool, args, *, flagfile_param = "--flagfile", flagf
     # Setup the flagfile if necessary
     flagfile = None
     if flagfile_param and len(args) >= flagfile_threshold:
-        flagfile = rctx.path("_internal_flagfile.params")
+        flagfile_data = "\n".join([shell.quote(str(arg)) for arg in args])
+        flagfile = rctx.path("_internal_flagfile_%s.params" % hash(flagfile_data))
         if flagfile.exists:
             rctx.delete(flagfile)
-        flagfile_data = "\n".join([shell.quote(str(arg)) for arg in args])
         rctx.file(flagfile, flagfile_data)
         tool_args = ["--flagfile", str(flagfile)]
     else:

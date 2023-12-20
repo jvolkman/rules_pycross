@@ -1,0 +1,82 @@
+load("@bazel_skylib//:bzl_library.bzl", "bzl_library")
+
+package(default_visibility = ["//pycross:__subpackages__"])
+
+bzl_library(
+    name = "environments",
+    srcs = ["environments.bzl"],
+    deps = [
+        "//pycross/private:toolchain_helpers",
+    ],
+)
+
+bzl_library(
+    name = "internal_deps",
+    srcs = ["internal_deps.bzl"],
+    deps = [
+        "//pycross/private:internal_repo",
+        "//pycross/private:pycross_deps.lock",
+        "//pycross/private:pycross_deps_core.lock",
+    ],
+)
+
+bzl_library(
+    name = "lock_import",
+    srcs = ["lock_import.bzl"],
+    deps = [
+        ":resolved_lock_repo",
+        ":tag_attrs",
+        "//pycross/private:internal_repo",
+        "//pycross/private:pdm_lock_model",
+        "//pycross/private:poetry_lock_model",
+        "//pycross/private:pypi_file",
+        "@bazel_tools//tools/build_defs/repo:http.bzl",
+    ],
+)
+
+bzl_library(
+    name = "rendered_lock_repo",
+    srcs = ["rendered_lock_repo.bzl"],
+    deps = ["//pycross/private:internal_repo"],
+)
+
+bzl_library(
+    name = "resolved_lock_repo",
+    srcs = ["resolved_lock_repo.bzl"],
+    deps = [
+        "//pycross/private:internal_repo",
+        "//pycross/private:lock_attrs",
+        "//pycross/private:pdm_lock_model",
+        "//pycross/private:poetry_lock_model",
+    ],
+)
+
+bzl_library(
+    name = "tag_attrs",
+    srcs = ["tag_attrs.bzl"],
+    deps = ["//pycross/private:lock_attrs"],
+)
+
+bzl_library(
+    name = "toolchains",
+    srcs = ["toolchains.bzl"],
+    deps = [
+        "//pycross/private:toolchain_helpers",
+    ],
+)
+
+bzl_library(
+    name = "lock_hub_repo",
+    srcs = ["lock_hub_repo.bzl"],
+)
+
+bzl_library(
+    name = "lock_repos",
+    srcs = ["lock_repos.bzl"],
+    deps = [
+        ":rendered_lock_repo",
+        ":tag_attrs",
+        "//pycross/private:pypi_file",
+        "@bazel_tools//tools/build_defs/repo:http.bzl",
+    ],
+)

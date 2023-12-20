@@ -7,7 +7,13 @@ DEFAULT_MACOS_VERSION = "12.0"
 DEFAULT_GLIBC_VERSION = "2.25"
 
 # Whether bzlmod is enabled.
-BZLMOD = str(Label("//:invalid")).startswith("@@")
+_BZLMOD = str(Label("//:invalid")).startswith("@@")
+
+def _repo_label(repo_name, label):
+    if _BZLMOD:
+        return "@@{}{}".format(repo_name, label)
+    else:
+        return "@{}{}".format(repo_name, label)
 
 def _get_minor_version(version):
     if version in MINOR_MAPPING:
@@ -88,7 +94,7 @@ def _compute_environments(
                     output = target_env_json,
                     implementation = "cp",
                     config_setting_name = config_setting_name,
-                    config_setting_target = "@{}//:{}".format(repo_name, config_setting_name),
+                    config_setting_target = _repo_label(repo_name, "//:{}".format(config_setting_name)),
                     version = minor_version,
                     python_compatible_with = environment_compatible_with,
                     flag_values = flag_values,
@@ -135,7 +141,7 @@ def _compute_toolchains(
                 # These conditionals create a `interpreter_repo_pattern` which accepts a
                 # platform name (e.g., x86_64-unknown-linux-gnu).
 
-                if BZLMOD:
+                if _BZLMOD:
                     # With bzlmod need to construct the canonical repository names for platform-specific interpreters.
                     # We assume that python_toolchains_repo_name points to the `python_versions` repo
                     # that rules_python generates. From there, we strip of `python_versions` and replace it with
@@ -360,7 +366,7 @@ pycross_toolchains_repo = repository_rule(
 def _pycross_environment_repo_impl(rctx):
     version_info = _get_python_version_info(rctx)
     computed_environments = _compute_environments(
-        repo_name = rctx.attr.name,
+        repo_name = rctx.name,
         python_versions = version_info.python_versions,
         default_version = version_info.default_version,
         platforms = rctx.attr.platforms,
@@ -374,20 +380,30 @@ def _pycross_environment_repo_impl(rctx):
     for env in computed_environments:
         root_build_sections.append(_ENVIRONMENT_TEMPLATE.format(**{k: repr(v) for k, v in env.items()}))
 
-    root_build_sections.append("exports_files([")
+    root_build_sections.append("filegroup(")
+    root_build_sections.append('    name = "environments",')
+    root_build_sections.append("    srcs = [")
     for env in computed_environments:
-        root_build_sections.append("    {},".format(repr(env["output"])))
-    root_build_sections.append("])")
+        root_build_sections.append("        {},".format(repr(env["output"])))
+    root_build_sections.append("    ]")
+    root_build_sections.append(")")
 
     rctx.file(rctx.path("BUILD.bazel"), "\n".join(root_build_sections))
 
-    environment_names = ["@{}//:{}".format(rctx.attr.name, env["output"]) for env in computed_environments]
     defs_lines = ["environments = ["]
-    for environment_name in environment_names:
-        defs_lines.append("    {},".format(repr(environment_name)))
+    for env in computed_environments:
+        defs_lines.append('    Label("//:{}"),'.format(env["output"]))
     defs_lines.append("]")
 
     rctx.file(rctx.path("defs.bzl"), "\n".join(defs_lines))
+
+    index_struct = {
+        "environments": [
+            "//:{}".format(env["output"])
+            for env in computed_environments
+        ],
+    }
+    rctx.file(rctx.path("environments"), json.encode_indent(index_struct, indent = "  ") + "\n")
 
 pycross_environments_repo = repository_rule(
     implementation = _pycross_environment_repo_impl,

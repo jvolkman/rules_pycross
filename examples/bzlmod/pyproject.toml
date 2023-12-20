@@ -1,0 +1,19 @@
+[project]
+dependencies = [
+    "ipython>=8.17",
+    "setuptools>=68",
+    "wheel>=0.42",
+]
+requires-python = ">=3.10"
+
+[tool.poetry]
+name = "rules_pycross_example_bzlmod"
+version = "0.1"
+description = "rules_pycross_example_bzlmod"
+authors = []
+
+[tool.poetry.dependencies]
+python = ">=3.10"
+ipython = ">=8.17"
+setuptools = ">=68"
+wheel = ">=0.42"
