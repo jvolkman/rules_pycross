@@ -2,9 +2,6 @@
 
 load(":internal_repo.bzl", "exec_internal_tool")
 
-def fully_qualified_label(label):
-    return "@%s//%s:%s" % (label.workspace_name, label.package, label.name)
-
 def _target_python_impl(ctx):
     f = ctx.actions.declare_file(ctx.attr.name + ".json")
 
@@ -22,16 +19,16 @@ def _target_python_impl(ctx):
         args.add("--platform", platform)
 
     for constraint in ctx.attr.python_compatible_with:
-        args.add("--python-compatible-with", fully_qualified_label(constraint.label))
+        args.add("--python-compatible-with", str(constraint.label))
 
     for flag, value in ctx.attr.flag_values.items():
-        args.add_all("--flag-value", [fully_qualified_label(flag.label), value])
+        args.add_all("--flag-value", [str(flag.label), value])
 
     for key, val in ctx.attr.envornment_markers.items():
         args.add_all("--environment-marker", [key, val])
 
     if ctx.attr.config_setting:
-        args.add("--config-setting-target", fully_qualified_label(ctx.attr.config_setting.label))
+        args.add("--config-setting-target", str(ctx.attr.config_setting.label))
 
     ctx.actions.run(
         outputs = [f],

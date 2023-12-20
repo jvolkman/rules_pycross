@@ -1,6 +1,6 @@
 """Implementation of the pycross_lock_file rule."""
 
-load(":lock_attrs.bzl", "COMMON_ATTRS", "handle_common_attrs")
+load(":lock_attrs.bzl", "RENDER_ATTRS", "RESOLVE_ATTRS", "handle_render_attrs", "handle_resolve_attrs")
 
 def fully_qualified_label(ctx, label):
     return "@%s//%s:%s" % (label.workspace_name or ctx.workspace_name, label.package, label.name)
@@ -13,19 +13,21 @@ def _pycross_lock_file_impl(ctx):
     args.add("--lock-model-file", ctx.file.lock_model_file)
     args.add("--output", out)
 
-    for local_wheel in ctx.files.local_wheels:
-        if not local_wheel.owner:
-            fail("Could not determine owning label for local wheel: %s" % local_wheel)
-        args.add_all("--local-wheel", [local_wheel.basename, local_wheel.owner])
-
     def qualify(label):
         if ctx.attr.fully_qualified_environment_labels:
             return fully_qualified_label(ctx, label)
         else:
             return label
 
+    def whl_name_and_label(whl_file):
+        if not whl_file.owner:
+            fail("Could not determine owning label for local wheel: %s" % whl_file)
+        return whl_file.basename, whl_file.owner
+
     environment_files_and_labels = [(t.path, qualify(t.owner)) for t in ctx.files.target_environments]
-    args.add_all(handle_common_attrs(ctx.attr, environment_files_and_labels))
+    wheel_names_and_labels = [whl_name_and_label(f) for f in ctx.files.local_wheels]
+    args.add_all(handle_resolve_attrs(ctx.attr, environment_files_and_labels, wheel_names_and_labels))
+    args.add_all(handle_render_attrs(ctx.attr))
 
     ctx.actions.run(
         inputs = (
@@ -51,10 +53,6 @@ pycross_lock_file = rule(
             allow_single_file = [".json"],
             mandatory = True,
         ),
-        local_wheels = attr.label_list(
-            doc = "A list of wheel files.",
-            allow_files = [".whl"],
-        ),
         fully_qualified_environment_labels = attr.bool(
             doc = "Generate fully-qualified environment labels.",
             default = True,
@@ -68,6 +66,6 @@ pycross_lock_file = rule(
             cfg = "exec",
             executable = True,
         ),
-        **COMMON_ATTRS
+        **(RENDER_ATTRS | RESOLVE_ATTRS)
     ),
 )

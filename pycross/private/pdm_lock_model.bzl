@@ -1,6 +1,9 @@
 """Implementation of the pycross_pdm_lock_model rule."""
 
 load(":internal_repo.bzl", "exec_internal_tool")
+load(":lock_attrs.bzl", "PDM_IMPORT_ATTRS")
+
+TRANSLATOR_TOOL = Label("//pycross/private/tools:pdm_translator.py")
 
 def _handle_args(attrs, project_file, lock_file, output):
     args = []
@@ -60,49 +63,19 @@ def _pycross_pdm_lock_model_impl(ctx):
 pycross_pdm_lock_model = rule(
     implementation = _pycross_pdm_lock_model_impl,
     attrs = {
-        "project_file": attr.label(
-            doc = "The pyproject.toml file with pdm dependencies.",
-            allow_single_file = True,
-            mandatory = True,
-        ),
-        "lock_file": attr.label(
-            doc = "The pdm.lock file.",
-            allow_single_file = True,
-            mandatory = True,
-        ),
-        "default": attr.bool(
-            doc = "Whether to install dependencies from the default group.",
-            default = True,
-        ),
-        "optional_groups": attr.string_list(
-            doc = "List of optional dependency groups to install.",
-        ),
-        "all_optional_groups": attr.bool(
-            doc = "Install all optional dependencies.",
-        ),
-        "development_groups": attr.string_list(
-            doc = "List of development dependency groups to install.",
-        ),
-        "all_development_groups": attr.bool(
-            doc = "Install all dev dependencies.",
-        ),
-        "require_static_urls": attr.bool(
-            doc = "Require that the lock file is created with --static-urls.",
-            default = True,
-        ),
         "_tool": attr.label(
             default = Label("//pycross/private/tools:pdm_translator"),
             cfg = "exec",
             executable = True,
         ),
-    },
+    } | PDM_IMPORT_ATTRS,
 )
 
 def pkg_repo_model_pdm(*, project_file, lock_file, default = True, optional_groups = [], all_optional_groups = False, development_groups = [], all_development_groups = False, require_static_urls = True):
     return json.encode(dict(
         model_type = "pdm",
-        project_file = project_file,
-        lock_file = lock_file,
+        project_file = str(project_file),
+        lock_file = str(lock_file),
         default = default,
         optional_groups = optional_groups,
         all_optional_groups = all_optional_groups,
@@ -112,7 +85,17 @@ def pkg_repo_model_pdm(*, project_file, lock_file, default = True, optional_grou
     ))
 
 def repo_create_pdm_model(rctx, params, output):
-    attrs = struct(**params)
+    """Run the pdm lock translator.
+
+    Args:
+        rctx: The repository_ctx or module_ctx object.
+        params: a struct or dict containing the same attrs as the pycross_pdm_lock_model rule.
+        output: the output file.
+    """
+    if type(params) == "dict":
+        attrs = struct(**params)
+    else:
+        attrs = params
     args = _handle_args(
         attrs,
         str(rctx.path(Label(attrs.project_file))),
@@ -122,6 +105,6 @@ def repo_create_pdm_model(rctx, params, output):
 
     exec_internal_tool(
         rctx,
-        Label("//pycross/private/tools:pdm_translator.py"),
+        TRANSLATOR_TOOL,
         args,
     )

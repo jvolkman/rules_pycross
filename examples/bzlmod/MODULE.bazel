@@ -1,0 +1,44 @@
+module(
+    name = "example_bzlmod",
+    version = "0.0.0",
+    compatibility_level = 1,
+)
+
+bazel_dep(name = "rules_python", version = "0.27.0")
+
+python = use_extension("@rules_python//python/extensions:python.bzl", "python")
+python.toolchain(
+    is_default = True,
+    python_version = "3.11.5",
+)
+use_repo(python, "python_versions")
+
+bazel_dep(name = "rules_pycross", version = "0.0.0")
+local_path_override(
+    module_name = "rules_pycross",
+    path = "../..",
+)
+
+lock_import = use_extension("@rules_pycross//pycross/extensions:lock_import.bzl", "lock_import")
+lock_import.import_pdm_lock(
+    lock_file = "//:pdm.lock",
+    project_file = "//:pyproject.toml",
+    repo = "pdm_deps",
+)
+lock_import.package(
+    name = "ipython",
+    always_build = True,
+    build_dependencies = [
+        "setuptools",
+        "wheel",
+    ],
+    repo = "pdm_deps",
+)
+lock_import.import_poetry_lock(
+    lock_file = "//:poetry.lock",
+    project_file = "//:pyproject.toml",
+    repo = "poetry_deps",
+)
+
+lock_repos = use_extension("@rules_pycross//pycross/extensions:lock_repos.bzl", "lock_repos")
+use_repo(lock_repos, "pdm_deps", "poetry_deps")
