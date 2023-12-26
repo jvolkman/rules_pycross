@@ -18,12 +18,12 @@ from packaging.utils import NormalizedName
 from packaging.version import Version
 
 from pycross.private.tools.args import FlagFileArgumentParser
-from pycross.private.tools.lock_model import LockSet
-from pycross.private.tools.lock_model import Package
 from pycross.private.tools.lock_model import package_canonical_name
 from pycross.private.tools.lock_model import PackageDependency
 from pycross.private.tools.lock_model import PackageFile
 from pycross.private.tools.lock_model import PackageKey
+from pycross.private.tools.lock_model import RawLockSet
+from pycross.private.tools.lock_model import RawPackage
 
 
 class LockfileIncompatibleException(Exception):
@@ -84,11 +84,11 @@ class PDMPackage:
             return False
         return req.specifier.contains(self.version, prereleases=True)
 
-    def to_lock_package(self) -> Package:
+    def to_lock_package(self) -> RawPackage:
         dependencies_without_self = sorted(
             [dep for dep in self.resolved_dependencies if dep.key != self.key], key=lambda p: p.key
         )
-        return Package(
+        return RawPackage(
             name=self.name,
             version=self.version,
             python_versions=str(self.python_versions),
@@ -143,7 +143,7 @@ def translate(
     all_optional_groups: bool,
     development_groups: List[str],
     all_development_groups: bool,
-) -> LockSet:
+) -> RawLockSet:
     try:
         with open(project_file, "rb") as f:
             project_dict = tomli.load(f)
@@ -264,12 +264,12 @@ def translate(
         else:
             raise MismatchedVersionException(f"Found no packages to satisfy pin (name={pin}, spec={pin_spec})")
 
-    lock_packages: Dict[PackageKey, Package] = {}
+    lock_packages: Dict[PackageKey, RawPackage] = {}
     for package in all_packages:
         lock_package = package.to_lock_package()
         lock_packages[lock_package.key] = lock_package
 
-    return LockSet(
+    return RawLockSet(
         packages=lock_packages,
         pins=pinned_keys,
     )

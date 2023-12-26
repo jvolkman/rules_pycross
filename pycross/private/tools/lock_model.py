@@ -3,6 +3,7 @@ from __future__ import annotations
 import dataclasses
 import json
 from dataclasses import dataclass
+from functools import cached_property
 from json import JSONEncoder
 from typing import Any
 from typing import Dict
@@ -14,7 +15,11 @@ from dacite.config import Config
 from dacite.core import from_dict
 from packaging.utils import canonicalize_name
 from packaging.utils import NormalizedName
+from packaging.utils import parse_sdist_filename
+from packaging.utils import parse_wheel_filename
 from packaging.version import Version
+
+from pycross.private.tools.target_environment import TargetEnv
 
 
 class _TypeHandlingEncoder(JSONEncoder):
@@ -22,6 +27,96 @@ class _TypeHandlingEncoder(JSONEncoder):
         if isinstance(o, Version):
             return str(o)
         return super().default(o)
+
+
+class PackageKey(str):
+    def __init__(self, val) -> None:
+        name, version = val.split("@", maxsplit=1)
+        self.name = package_canonical_name(name)
+        self.version = Version(version)
+
+    @staticmethod
+    def from_parts(name: NormalizedName, version: Version) -> PackageKey:
+        return PackageKey(f"{name}@{version}")
+
+
+class FileKey(str):
+    def __init__(self, val) -> None:
+        self.name, self.hash_prefix = val.split("/", maxsplit=1)
+
+    @property
+    def is_wheel(self) -> bool:
+        return is_wheel(self.name)
+
+    @property
+    def is_sdist(self) -> bool:
+        return not self.is_wheel
+
+    @cached_property
+    def package_name_version(self) -> Tuple[NormalizedName, Version]:
+        if self.is_wheel:
+            name, version, _, _ = parse_wheel_filename(self.name)
+        else:
+            name, version = parse_sdist_filename(self.name)
+
+        return name, version
+
+    @property
+    def package_name(self) -> NormalizedName:
+        return self.package_name_version[0]
+
+    @property
+    def package_version(self) -> Version:
+        return self.package_name_version[1]
+
+    @staticmethod
+    def from_parts(name: str, hash_prefix: str) -> FileKey:
+        return FileKey(f"{name}/{hash_prefix}")
+
+
+@dataclass(frozen=True)
+class FileReference:
+    label: Optional[str] = None
+    key: Optional[FileKey] = None
+
+    def __post_init__(self):
+        assert (
+            int(self.label is not None) + int(self.key is not None) == 1
+        ), "Exactly one of label or key must be specified."
+
+
+@dataclass
+class ConfigSetting:
+    constraint_values: List[str]
+    flag_values: Dict[str, str]
+
+
+@dataclass(frozen=True)
+class EnvironmentReference:
+    environment_label: str
+    config_setting: Optional[ConfigSetting] = None
+    config_setting_label: Optional[str] = None
+
+    def __post_init__(self):
+        assert (
+            int(self.config_setting is not None) + int(self.config_setting_label is not None) == 1
+        ), "Exactly one of config_setting or config_setting_label must be specified."
+
+    @classmethod
+    def from_target_env(cls, environment_label: str, target_env: TargetEnv) -> EnvironmentReference:
+        if target_env.config_setting_target:
+            return cls(
+                environment_label=environment_label,
+                config_setting_label=target_env.config_setting_target,
+            )
+        else:
+            return cls(
+                environment_label=environment_label,
+                config_setting=ConfigSetting(
+                    constraint_values=target_env.python_compatible_with,
+                    flag_values=target_env.flag_values,
+                ),
+            )
 
 
 @dataclass(frozen=True)
@@ -35,23 +130,8 @@ class PackageFile:
         assert self.sha256, "The sha256 field must be specified."
 
     @property
-    def is_wheel(self) -> bool:
-        return is_wheel(self.name)
-
-    @property
-    def is_sdist(self) -> bool:
-        return not self.is_wheel
-
-
-class PackageKey(str):
-    def __init__(self, val) -> None:
-        name, version = val.split("@", maxsplit=1)
-        self.name = package_canonical_name(name)
-        self.version = Version(version)
-
-    @staticmethod
-    def from_parts(name: NormalizedName, version: Version) -> PackageKey:
-        return PackageKey(f"{name}@{version}")
+    def key(self) -> FileKey:
+        return FileKey.from_parts(self.name, self.sha256[:8])
 
 
 @dataclass(frozen=True)
@@ -71,7 +151,7 @@ class PackageDependency:
 
 
 @dataclass(frozen=True)
-class Package:
+class RawPackage:
     name: NormalizedName
     version: Version
     python_versions: str
@@ -93,9 +173,19 @@ class Package:
         return PackageKey.from_parts(self.name, self.version)
 
 
+@dataclass
+class ResolvedPackage:
+    key: PackageKey
+    build_dependencies: List[PackageKey]
+    common_dependencies: List[PackageKey]
+    environment_dependencies: Dict[str, List[PackageKey]]
+    build_target: Optional[str]
+    environment_files: Dict[str, FileReference]
+
+
 @dataclass(frozen=True)
-class LockSet:
-    packages: Dict[PackageKey, Package]
+class RawLockSet:
+    packages: Dict[PackageKey, RawPackage]
     pins: Dict[NormalizedName, PackageKey]
 
     def __post_init__(self):
@@ -109,11 +199,40 @@ class LockSet:
         return json.dumps(self.to_dict(), sort_keys=True, indent=indent, cls=_TypeHandlingEncoder)
 
     @staticmethod
-    def from_dict(data: Dict[str, Any]) -> LockSet:
-        return from_dict(LockSet, data, config=Config(cast=[Tuple, Version, PackageKey]))
+    def from_dict(data: Dict[str, Any]) -> RawLockSet:
+        return from_dict(RawLockSet, data, config=Config(cast=[Tuple, Version, PackageKey]))
 
     @classmethod
-    def from_json(cls, data: str) -> LockSet:
+    def from_json(cls, data: str) -> RawLockSet:
+        parsed = json.loads(data)
+        return cls.from_dict(parsed)
+
+
+@dataclass(frozen=True)
+class ResolvedLockSet:
+    environments: Dict[str, EnvironmentReference]
+    packages: Dict[PackageKey, ResolvedPackage]
+    pins: Dict[NormalizedName, PackageKey]
+    remote_files: Dict[FileKey, PackageFile]
+
+    def __post_init__(self):
+        assert self.environments is not None, "The environments field must be specified."
+        assert self.packages is not None, "The packages field must be specified."
+        assert self.pins is not None, "The pins field must be specified."
+        assert self.remote_files is not None, "The remote_files field must be specified."
+
+    def to_dict(self) -> Dict[str, Any]:
+        return dataclasses.asdict(self)
+
+    def to_json(self, indent=None) -> str:
+        return json.dumps(self.to_dict(), sort_keys=True, indent=indent, cls=_TypeHandlingEncoder)
+
+    @staticmethod
+    def from_dict(data: Dict[str, Any]) -> ResolvedLockSet:
+        return from_dict(ResolvedLockSet, data, config=Config(cast=[Tuple, Version, FileKey, PackageKey]))
+
+    @classmethod
+    def from_json(cls, data: str) -> ResolvedLockSet:
         parsed = json.loads(data)
         return cls.from_dict(parsed)
 

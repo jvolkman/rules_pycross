@@ -16,10 +16,31 @@ py_binary(
     visibility = ["//visibility:public"],
     deps = [
         ":args",
-        ":lib",
+        ":raw_lock_resolver",
+        ":resolved_lock_renderer",
+    ],
+)
+
+py_binary(
+    name = "raw_lock_resolver",
+    srcs = ["raw_lock_resolver.py"],
+    visibility = ["//visibility:public"],
+    deps = [
+        ":args",
+        ":lock_model",
+        ":target_environment",
         "@rules_pycross_internal//deps:packaging",
         "@rules_pycross_internal//deps:pip",
-        "@rules_pycross_internal//deps:tomli",
+    ],
+)
+
+py_binary(
+    name = "resolved_lock_renderer",
+    srcs = ["resolved_lock_renderer.py"],
+    visibility = ["//visibility:public"],
+    deps = [
+        ":args",
+        ":lock_model",
     ],
 )
 
@@ -29,13 +50,12 @@ pycross_wheel_zipimport_library(
 )
 
 py_library(
-    name = "lib",
+    name = "target_environment",
     srcs = [
         "target_environment.py",
     ],
     deps = [
-        ":lock_model",
-        "@rules_pycross_internal//deps:packaging",
+        "@rules_pycross_internal//deps:pip",
     ],
 )
 
@@ -43,6 +63,7 @@ py_library(
     name = "lock_model",
     srcs = ["lock_model.py"],
     deps = [
+        ":target_environment",
         "@rules_pycross_internal//deps:dacite",
         "@rules_pycross_internal//deps:packaging",
     ],
@@ -96,7 +117,7 @@ py_binary(
     visibility = ["//visibility:public"],
     deps = [
         ":args",
-        ":lib",
+        ":target_environment",
         "@rules_pycross_internal//deps:dacite",
         "@rules_pycross_internal//deps:packaging",
         "@rules_pycross_internal//deps:pip",
@@ -109,7 +130,7 @@ py_binary(
     visibility = ["//visibility:public"],
     deps = [
         ":args",
-        ":lib",
+        ":target_environment",
         "//pycross/private/tools/crossenv",
         "@rules_pycross_internal//deps:build",
         "@rules_pycross_internal//deps:packaging",
