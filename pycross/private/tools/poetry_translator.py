@@ -19,12 +19,12 @@ from poetry.core.constraints.version import Version as PoetryVersion
 from poetry.core.version import markers
 
 from pycross.private.tools.args import FlagFileArgumentParser
-from pycross.private.tools.lock_model import LockSet
-from pycross.private.tools.lock_model import Package
 from pycross.private.tools.lock_model import package_canonical_name
 from pycross.private.tools.lock_model import PackageDependency
 from pycross.private.tools.lock_model import PackageFile
 from pycross.private.tools.lock_model import PackageKey
+from pycross.private.tools.lock_model import RawLockSet
+from pycross.private.tools.lock_model import RawPackage
 
 
 class MismatchedVersionException(Exception):
@@ -69,8 +69,8 @@ class PoetryPackage:
     def pypa_version(self) -> Version:
         return Version(str(self.version))
 
-    def to_lock_package(self) -> Package:
-        return Package(
+    def to_lock_package(self) -> RawPackage:
+        return RawPackage(
             name=self.name,
             version=self.pypa_version,
             python_versions=self.python_versions,
@@ -100,7 +100,7 @@ def get_files_for_package(
     return result
 
 
-def translate(project_file: Path, lock_file: Path) -> LockSet:
+def translate(project_file: Path, lock_file: Path) -> RawLockSet:
     try:
         with open(project_file, "rb") as f:
             project_dict = tomli.load(f)
@@ -231,7 +231,7 @@ def translate(project_file: Path, lock_file: Path) -> LockSet:
         lock_package = package.to_lock_package()
         lock_packages[lock_package.key] = lock_package
 
-    return LockSet(
+    return RawLockSet(
         packages=lock_packages,
         pins=pinned_keys,
     )
