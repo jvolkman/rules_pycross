@@ -265,7 +265,7 @@ def url_wheel_name(url: str) -> str:
 def resolve_single_version(
     name: str,
     versions_by_name: Dict[NormalizedName, List[PackageKey]],
-    all_versions: AbstractSet[str],
+    all_versions: AbstractSet[PackageKey],
     attr_name: str,
 ) -> PackageKey:
     # Handle the case of an exact version being specified.
@@ -286,8 +286,8 @@ def resolve_single_version(
     return options[0]
 
 
-def collect_package_annotations(args: Any, lock_model: RawLockSet) -> Dict[str, PackageAnnotations]:
-    annotations = defaultdict(PackageAnnotations)
+def collect_package_annotations(args: Any, lock_model: RawLockSet) -> Dict[PackageKey, PackageAnnotations]:
+    annotations: Dict[PackageKey, PackageAnnotations] = defaultdict(PackageAnnotations)
     all_package_keys_by_canonical_name: Dict[NormalizedName, List[PackageKey]] = defaultdict(list)
     for package in lock_model.packages.values():
         all_package_keys_by_canonical_name[package.name].append(package.key)
@@ -412,17 +412,17 @@ def resolve(args: Any) -> ResolvedLockSet:
     if annotations:
         raise Exception(
             f"Annotations specified for packages that are not part of the locked set: "
-            f'{", ".join(sorted(annotations.keys()))}'
+            f'{", ".join([str(key) for key in sorted(annotations.keys())])}'
         )
 
-    package_targets = sorted(packages_by_package_key.values(), key=lambda x: x.key)
+    resolved_packages = sorted(packages_by_package_key.values(), key=lambda x: x.key)
 
     # If builds are disallowed, ensure that none of the targets include an sdist build
     if args.disallow_builds:
         builds = []
-        for target in package_targets:
-            if target.has_sdist:
-                builds.append(target.key)
+        for package in resolved_packages:
+            if package.has_sdist:
+                builds.append(package.key)
         if builds:
             raise Exception(
                 "Builds are disallowed, but the following would include pycross_wheel_build targets: "
@@ -430,7 +430,7 @@ def resolve(args: Any) -> ResolvedLockSet:
             )
 
     repos: Dict[FileKey, PackageFile] = {}
-    for package_target in package_targets:
+    for package_target in resolved_packages:
         for source in package_target.distinct_package_sources:
             if not source.file:
                 continue
@@ -444,7 +444,7 @@ def resolve(args: Any) -> ResolvedLockSet:
     pins = {pin_name(k): v for k, v in lock_model.pins.items()}
     if args.default_alias_single_version:
         packages_by_pin_name = defaultdict(list)
-        for package_target in package_targets:
+        for package_target in resolved_packages:
             packages_by_pin_name[pin_name(package_target.package_name)].append(package_target.key)
 
         for package_pin_name, packages in packages_by_pin_name.items():
@@ -455,7 +455,7 @@ def resolve(args: Any) -> ResolvedLockSet:
             pins[package_pin_name] = packages[0]
 
     resolved_environments = {env.target_environment.name: env.to_environment_reference() for env in environment_pairs}
-    resolved_packages = {pkg.key: pkg.to_resolved_package() for pkg in package_targets}
+    resolved_packages = {pkg.key: pkg.to_resolved_package() for pkg in resolved_packages}
 
     return ResolvedLockSet(
         environments=resolved_environments,
