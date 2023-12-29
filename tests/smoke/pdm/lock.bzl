@@ -41,20 +41,80 @@ def targets():
             actual = ":" + pin_target,
         )
 
+    native.alias(
+        name = "_env_python_3.10.12_aarch64_apple_darwin",
+        actual = "@pycross_toolchains//:python_3.10.12_aarch64-apple-darwin_config",
+    )
+
+    native.alias(
+        name = "_env_python_3.10.12_aarch64_unknown_linux_gnu",
+        actual = "@pycross_toolchains//:python_3.10.12_aarch64-unknown-linux-gnu_config",
+    )
+
+    native.alias(
+        name = "_env_python_3.10.12_x86_64_apple_darwin",
+        actual = "@pycross_toolchains//:python_3.10.12_x86_64-apple-darwin_config",
+    )
+
+    native.alias(
+        name = "_env_python_3.10.12_x86_64_unknown_linux_gnu",
+        actual = "@pycross_toolchains//:python_3.10.12_x86_64-unknown-linux-gnu_config",
+    )
+
+    native.alias(
+        name = "_env_python_3.11.6_aarch64_apple_darwin",
+        actual = "@pycross_toolchains//:python_3.11.6_aarch64-apple-darwin_config",
+    )
+
+    native.alias(
+        name = "_env_python_3.11.6_aarch64_unknown_linux_gnu",
+        actual = "@pycross_toolchains//:python_3.11.6_aarch64-unknown-linux-gnu_config",
+    )
+
+    native.alias(
+        name = "_env_python_3.11.6_x86_64_apple_darwin",
+        actual = "@pycross_toolchains//:python_3.11.6_x86_64-apple-darwin_config",
+    )
+
+    native.alias(
+        name = "_env_python_3.11.6_x86_64_unknown_linux_gnu",
+        actual = "@pycross_toolchains//:python_3.11.6_x86_64-unknown-linux-gnu_config",
+    )
+
+    native.alias(
+        name = "_env_python_3.12.0_aarch64_apple_darwin",
+        actual = "@pycross_toolchains//:python_3.12.0_aarch64-apple-darwin_config",
+    )
+
+    native.alias(
+        name = "_env_python_3.12.0_aarch64_unknown_linux_gnu",
+        actual = "@pycross_toolchains//:python_3.12.0_aarch64-unknown-linux-gnu_config",
+    )
+
+    native.alias(
+        name = "_env_python_3.12.0_x86_64_apple_darwin",
+        actual = "@pycross_toolchains//:python_3.12.0_x86_64-apple-darwin_config",
+    )
+
+    native.alias(
+        name = "_env_python_3.12.0_x86_64_unknown_linux_gnu",
+        actual = "@pycross_toolchains//:python_3.12.0_x86_64-unknown-linux-gnu_config",
+    )
+
     # buildifier: disable=unused-variable
     _target = select({
-        "@pycross_toolchains//:python_3.10.12_aarch64-apple-darwin_config": "@pycross_toolchains//:python_3.10.12_aarch64-apple-darwin.json",
-        "@pycross_toolchains//:python_3.10.12_aarch64-unknown-linux-gnu_config": "@pycross_toolchains//:python_3.10.12_aarch64-unknown-linux-gnu.json",
-        "@pycross_toolchains//:python_3.10.12_x86_64-apple-darwin_config": "@pycross_toolchains//:python_3.10.12_x86_64-apple-darwin.json",
-        "@pycross_toolchains//:python_3.10.12_x86_64-unknown-linux-gnu_config": "@pycross_toolchains//:python_3.10.12_x86_64-unknown-linux-gnu.json",
-        "@pycross_toolchains//:python_3.11.6_aarch64-apple-darwin_config": "@pycross_toolchains//:python_3.11.6_aarch64-apple-darwin.json",
-        "@pycross_toolchains//:python_3.11.6_aarch64-unknown-linux-gnu_config": "@pycross_toolchains//:python_3.11.6_aarch64-unknown-linux-gnu.json",
-        "@pycross_toolchains//:python_3.11.6_x86_64-apple-darwin_config": "@pycross_toolchains//:python_3.11.6_x86_64-apple-darwin.json",
-        "@pycross_toolchains//:python_3.11.6_x86_64-unknown-linux-gnu_config": "@pycross_toolchains//:python_3.11.6_x86_64-unknown-linux-gnu.json",
-        "@pycross_toolchains//:python_3.12.0_aarch64-apple-darwin_config": "@pycross_toolchains//:python_3.12.0_aarch64-apple-darwin.json",
-        "@pycross_toolchains//:python_3.12.0_aarch64-unknown-linux-gnu_config": "@pycross_toolchains//:python_3.12.0_aarch64-unknown-linux-gnu.json",
-        "@pycross_toolchains//:python_3.12.0_x86_64-apple-darwin_config": "@pycross_toolchains//:python_3.12.0_x86_64-apple-darwin.json",
-        "@pycross_toolchains//:python_3.12.0_x86_64-unknown-linux-gnu_config": "@pycross_toolchains//:python_3.12.0_x86_64-unknown-linux-gnu.json",
+        ":_env_python_3.10.12_aarch64_apple_darwin": "@pycross_toolchains//:python_3.10.12_aarch64-apple-darwin.json",
+        ":_env_python_3.10.12_aarch64_unknown_linux_gnu": "@pycross_toolchains//:python_3.10.12_aarch64-unknown-linux-gnu.json",
+        ":_env_python_3.10.12_x86_64_apple_darwin": "@pycross_toolchains//:python_3.10.12_x86_64-apple-darwin.json",
+        ":_env_python_3.10.12_x86_64_unknown_linux_gnu": "@pycross_toolchains//:python_3.10.12_x86_64-unknown-linux-gnu.json",
+        ":_env_python_3.11.6_aarch64_apple_darwin": "@pycross_toolchains//:python_3.11.6_aarch64-apple-darwin.json",
+        ":_env_python_3.11.6_aarch64_unknown_linux_gnu": "@pycross_toolchains//:python_3.11.6_aarch64-unknown-linux-gnu.json",
+        ":_env_python_3.11.6_x86_64_apple_darwin": "@pycross_toolchains//:python_3.11.6_x86_64-apple-darwin.json",
+        ":_env_python_3.11.6_x86_64_unknown_linux_gnu": "@pycross_toolchains//:python_3.11.6_x86_64-unknown-linux-gnu.json",
+        ":_env_python_3.12.0_aarch64_apple_darwin": "@pycross_toolchains//:python_3.12.0_aarch64-apple-darwin.json",
+        ":_env_python_3.12.0_aarch64_unknown_linux_gnu": "@pycross_toolchains//:python_3.12.0_aarch64-unknown-linux-gnu.json",
+        ":_env_python_3.12.0_x86_64_apple_darwin": "@pycross_toolchains//:python_3.12.0_x86_64-apple-darwin.json",
+        ":_env_python_3.12.0_x86_64_unknown_linux_gnu": "@pycross_toolchains//:python_3.12.0_x86_64-unknown-linux-gnu.json",
     })
 
     pycross_wheel_library(
@@ -97,30 +157,30 @@ def targets():
         ":stack_data_0.6.3",
         ":traitlets_5.14.0",
     ] + select({
-        "@pycross_toolchains//:python_3.10.12_aarch64-apple-darwin_config": [
+        ":_env_python_3.10.12_aarch64_apple_darwin": [
             ":appnope_0.1.3",
             ":exceptiongroup_1.2.0",
         ],
-        "@pycross_toolchains//:python_3.10.12_aarch64-unknown-linux-gnu_config": [
+        ":_env_python_3.10.12_aarch64_unknown_linux_gnu": [
             ":exceptiongroup_1.2.0",
         ],
-        "@pycross_toolchains//:python_3.10.12_x86_64-apple-darwin_config": [
+        ":_env_python_3.10.12_x86_64_apple_darwin": [
             ":appnope_0.1.3",
             ":exceptiongroup_1.2.0",
         ],
-        "@pycross_toolchains//:python_3.10.12_x86_64-unknown-linux-gnu_config": [
+        ":_env_python_3.10.12_x86_64_unknown_linux_gnu": [
             ":exceptiongroup_1.2.0",
         ],
-        "@pycross_toolchains//:python_3.11.6_aarch64-apple-darwin_config": [
+        ":_env_python_3.11.6_aarch64_apple_darwin": [
             ":appnope_0.1.3",
         ],
-        "@pycross_toolchains//:python_3.11.6_x86_64-apple-darwin_config": [
+        ":_env_python_3.11.6_x86_64_apple_darwin": [
             ":appnope_0.1.3",
         ],
-        "@pycross_toolchains//:python_3.12.0_aarch64-apple-darwin_config": [
+        ":_env_python_3.12.0_aarch64_apple_darwin": [
             ":appnope_0.1.3",
         ],
-        "@pycross_toolchains//:python_3.12.0_x86_64-apple-darwin_config": [
+        ":_env_python_3.12.0_x86_64_apple_darwin": [
             ":appnope_0.1.3",
         ],
         "//conditions:default": [],
