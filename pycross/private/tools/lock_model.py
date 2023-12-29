@@ -7,6 +7,7 @@ from functools import cached_property
 from json import JSONEncoder
 from typing import Any
 from typing import Dict
+from typing import Iterator
 from typing import List
 from typing import Optional
 from typing import Tuple
@@ -24,25 +25,60 @@ from pycross.private.tools.target_environment import TargetEnv
 
 class _TypeHandlingEncoder(JSONEncoder):
     def default(self, o):
-        if isinstance(o, Version):
+        if isinstance(o, (FileKey, PackageKey, Version)):
             return str(o)
+        if dataclasses.is_dataclass(o):
+            return o.__dict__
         return super().default(o)
 
 
-class PackageKey(str):
+def _stringify_keys(original: Dict[Any, Any]) -> Dict[str, Any]:
+    """
+    Return original with keys stringified.
+
+    The json module's encoder does not support complex key types, such as
+    PackageKey and FileKey. We stringify these values before passing them to
+    json.
+    """
+    return {str(key): val for key, val in original.items()}
+
+
+def _dataclass_items(dc) -> Iterator[Tuple[str, Any]]:
+    for field in dataclasses.fields(dc):
+        yield field.name, getattr(dc, field.name)
+
+
+@dataclass(frozen=True, order=True)
+class PackageKey:
+    name: NormalizedName
+    version: Version
+
     def __init__(self, val) -> None:
         name, version = val.split("@", maxsplit=1)
-        self.name = package_canonical_name(name)
-        self.version = Version(version)
+        object.__setattr__(self, "name", package_canonical_name(name))
+        object.__setattr__(self, "version", Version(version))
 
     @staticmethod
     def from_parts(name: NormalizedName, version: Version) -> PackageKey:
         return PackageKey(f"{name}@{version}")
 
+    def __str__(self) -> str:
+        return f"{self.name}@{self.version}"
 
-class FileKey(str):
-    def __init__(self, val) -> None:
-        self.name, self.hash_prefix = val.split("/", maxsplit=1)
+
+@dataclass(frozen=True, order=True)
+class FileKey:
+    name: str
+    hash_prefix: str
+
+    def __init__(self, val: str) -> None:
+        name, hash_prefix = val.split("/", maxsplit=1)
+        object.__setattr__(self, "name", name)
+        object.__setattr__(self, "hash_prefix", hash_prefix)
+
+    @staticmethod
+    def from_parts(name: str, hash_prefix: str) -> FileKey:
+        return FileKey(f"{name}/{hash_prefix}")
 
     @property
     def is_wheel(self) -> bool:
@@ -69,9 +105,8 @@ class FileKey(str):
     def package_version(self) -> Version:
         return self.package_name_version[1]
 
-    @staticmethod
-    def from_parts(name: str, hash_prefix: str) -> FileKey:
-        return FileKey(f"{name}/{hash_prefix}")
+    def __str__(self) -> str:
+        return f"{self.name}/{self.hash_prefix}"
 
 
 @dataclass(frozen=True)
@@ -192,20 +227,17 @@ class RawLockSet:
         assert self.packages is not None, "The packages field must be specified."
         assert self.pins is not None, "The pins field must be specified."
 
-    def to_dict(self) -> Dict[str, Any]:
-        return dataclasses.asdict(self)
+    @property
+    def __dict__(self) -> Dict[str, Any]:
+        return dict(_dataclass_items(self), packages=_stringify_keys(self.packages))
 
     def to_json(self, indent=None) -> str:
-        return json.dumps(self.to_dict(), sort_keys=True, indent=indent, cls=_TypeHandlingEncoder)
-
-    @staticmethod
-    def from_dict(data: Dict[str, Any]) -> RawLockSet:
-        return from_dict(RawLockSet, data, config=Config(cast=[Tuple, Version, PackageKey]))
+        return json.dumps(self, sort_keys=True, indent=indent, cls=_TypeHandlingEncoder)
 
     @classmethod
     def from_json(cls, data: str) -> RawLockSet:
         parsed = json.loads(data)
-        return cls.from_dict(parsed)
+        return from_dict(RawLockSet, parsed, config=Config(cast=[Tuple, Version, PackageKey]))
 
 
 @dataclass(frozen=True)
@@ -221,20 +253,21 @@ class ResolvedLockSet:
         assert self.pins is not None, "The pins field must be specified."
         assert self.remote_files is not None, "The remote_files field must be specified."
 
-    def to_dict(self) -> Dict[str, Any]:
-        return dataclasses.asdict(self)
+    @property
+    def __dict__(self) -> Dict[str, Any]:
+        return dict(
+            _dataclass_items(self),
+            packages=_stringify_keys(self.packages),
+            remote_files=_stringify_keys(self.remote_files),
+        )
 
     def to_json(self, indent=None) -> str:
-        return json.dumps(self.to_dict(), sort_keys=True, indent=indent, cls=_TypeHandlingEncoder)
-
-    @staticmethod
-    def from_dict(data: Dict[str, Any]) -> ResolvedLockSet:
-        return from_dict(ResolvedLockSet, data, config=Config(cast=[Tuple, Version, FileKey, PackageKey]))
+        return json.dumps(self, sort_keys=True, indent=indent, cls=_TypeHandlingEncoder)
 
     @classmethod
     def from_json(cls, data: str) -> ResolvedLockSet:
         parsed = json.loads(data)
-        return cls.from_dict(parsed)
+        return from_dict(ResolvedLockSet, parsed, config=Config(cast=[Tuple, Version, FileKey, PackageKey]))
 
 
 def package_canonical_name(name: str) -> NormalizedName:
