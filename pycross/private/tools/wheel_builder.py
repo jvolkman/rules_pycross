@@ -71,7 +71,7 @@ def _error(msg: str, code: int = 1) -> NoReturn:  # pragma: no cover
     raise SystemExit(code)
 
 
-def relpath(path: os.PathLike, start: os.PathLike) -> Path:
+def relpath(path: Path, start: Path) -> Path:
     return Path(os.path.relpath(path, start))
 
 
