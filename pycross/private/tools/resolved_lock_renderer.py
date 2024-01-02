@@ -92,16 +92,16 @@ class Naming:
         return f"{self.repo_prefix}_sdist_{self._sanitize(name)}"
 
     def sdist_label(self, file: PackageFile) -> str:
-        assert not file.key.is_wheel
+        assert not file.is_wheel
         return f"@{self.sdist_repo(file)}//file"
 
     def wheel_repo(self, file: PackageFile) -> str:
-        assert file.key.is_wheel
+        assert file.is_wheel
         normalized_name = file.name[:-4].lower().replace("-", "_").replace("+", "_").replace("%2b", "_")
         return f"{self.repo_prefix}_wheel_{normalized_name}"
 
     def wheel_label(self, file: PackageFile):
-        assert file.key.is_wheel
+        assert file.is_wheel
         return f"@{self.wheel_repo(file)}//file"
 
 
@@ -376,8 +376,8 @@ class PypiFileRepoTarget:
             "maybe(",
             ind("pypi_file,"),
             ind(f'name = "{self.name}",'),
-            ind(f'package_name = "{self.file.key.package_name}",'),
-            ind(f'package_version = "{self.file.key.package_version}",'),
+            ind(f'package_name = "{self.file.package_name}",'),
+            ind(f'package_version = "{self.file.package_version}",'),
             ind(f'filename = "{self.file.name}",'),
             ind(f'sha256 = "{self.file.sha256}",'),
         ]
@@ -452,7 +452,7 @@ def render(resolved_lock: ResolvedLockSet, args: Any, output: TextIO) -> None:
         if file_key in repo_labels:
             continue
 
-        if file.key.is_wheel:
+        if file.is_wheel:
             name = naming.wheel_repo(file)
             repo_labels[file_key] = naming.wheel_label(file)
         else:

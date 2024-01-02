@@ -3,6 +3,7 @@ from __future__ import annotations
 import dataclasses
 import json
 from dataclasses import dataclass
+from dataclasses import field
 from functools import cached_property
 from json import JSONEncoder
 from typing import Any
@@ -23,12 +24,20 @@ from packaging.version import Version
 from pycross.private.tools.target_environment import TargetEnv
 
 
-class _TypeHandlingEncoder(JSONEncoder):
+class _Encoder(JSONEncoder):
     def default(self, o):
+        def _is_empty(val):
+            if val is None:
+                return True
+            if isinstance(val, (list, dict)):
+                return len(val) == 0
+            return False
+
         if isinstance(o, (FileKey, PackageKey, Version)):
             return str(o)
         if dataclasses.is_dataclass(o):
-            return o.__dict__
+            # Omit None values from serialized output.
+            return {k: v for k, v in o.__dict__.items() if not _is_empty(v)}
         return super().default(o)
 
 
@@ -44,8 +53,8 @@ def _stringify_keys(original: Dict[Any, Any]) -> Dict[str, Any]:
 
 
 def _dataclass_items(dc) -> Iterator[Tuple[str, Any]]:
-    for field in dataclasses.fields(dc):
-        yield field.name, getattr(dc, field.name)
+    for item in dataclasses.fields(dc):
+        yield item.name, getattr(dc, item.name)
 
 
 @dataclass(frozen=True, order=True)
@@ -88,23 +97,6 @@ class FileKey:
     def is_sdist(self) -> bool:
         return not self.is_wheel
 
-    @cached_property
-    def package_name_version(self) -> Tuple[NormalizedName, Version]:
-        if self.is_wheel:
-            name, version, _, _ = parse_wheel_filename(self.name)
-        else:
-            name, version = parse_sdist_filename(self.name)
-
-        return name, version
-
-    @property
-    def package_name(self) -> NormalizedName:
-        return self.package_name_version[0]
-
-    @property
-    def package_version(self) -> Version:
-        return self.package_name_version[1]
-
     def __str__(self) -> str:
         return f"{self.name}/{self.hash_prefix}"
 
@@ -122,8 +114,8 @@ class FileReference:
 
 @dataclass
 class ConfigSetting:
-    constraint_values: List[str]
-    flag_values: Dict[str, str]
+    constraint_values: List[str] = field(default_factory=list)
+    flag_values: Dict[str, str] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -158,13 +150,33 @@ class EnvironmentReference:
 class PackageFile:
     name: str
     sha256: str
-    urls: Optional[Tuple[str, ...]] = None
+    urls: Tuple[str, ...] = field(default_factory=tuple)
+    package_name: Optional[NormalizedName] = None
+    package_version: Optional[Version] = None
 
     def __post_init__(self):
         assert self.name, "The name field must be specified."
         assert self.sha256, "The sha256 field must be specified."
+        if self.package_name is None or self.package_version is None:
+            # Derive package name + version from file name
+            if is_wheel(self.name):
+                name, version, _, _ = parse_wheel_filename(self.name)
+            else:
+                name, version = parse_sdist_filename(self.name)
+            if self.package_name is None:
+                object.__setattr__(self, "package_name", name)
+            if self.package_version is None:
+                object.__setattr__(self, "package_version", version)
 
     @property
+    def is_wheel(self) -> bool:
+        return is_wheel(self.name)
+
+    @property
+    def is_sdist(self) -> bool:
+        return not self.is_wheel
+
+    @cached_property
     def key(self) -> FileKey:
         return FileKey.from_parts(self.name, self.sha256[:8])
 
@@ -190,8 +202,8 @@ class RawPackage:
     name: NormalizedName
     version: Version
     python_versions: str
-    dependencies: List[PackageDependency]
-    files: List[PackageFile]
+    dependencies: List[PackageDependency] = field(default_factory=list)
+    files: List[PackageFile] = field(default_factory=list)
 
     def __post_init__(self):
         normalized_name = package_canonical_name(self.name)
@@ -211,28 +223,24 @@ class RawPackage:
 @dataclass
 class ResolvedPackage:
     key: PackageKey
-    build_dependencies: List[PackageKey]
-    common_dependencies: List[PackageKey]
-    environment_dependencies: Dict[str, List[PackageKey]]
-    build_target: Optional[str]
-    environment_files: Dict[str, FileReference]
+    build_dependencies: List[PackageKey] = field(default_factory=list)
+    common_dependencies: List[PackageKey] = field(default_factory=list)
+    environment_dependencies: Dict[str, List[PackageKey]] = field(default_factory=dict)
+    build_target: Optional[str] = None
+    environment_files: Dict[str, FileReference] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
 class RawLockSet:
-    packages: Dict[PackageKey, RawPackage]
-    pins: Dict[NormalizedName, PackageKey]
-
-    def __post_init__(self):
-        assert self.packages is not None, "The packages field must be specified."
-        assert self.pins is not None, "The pins field must be specified."
+    packages: Dict[PackageKey, RawPackage] = field(default_factory=dict)
+    pins: Dict[NormalizedName, PackageKey] = field(default_factory=dict)
 
     @property
     def __dict__(self) -> Dict[str, Any]:
         return dict(_dataclass_items(self), packages=_stringify_keys(self.packages))
 
     def to_json(self, indent=None) -> str:
-        return json.dumps(self, sort_keys=True, indent=indent, cls=_TypeHandlingEncoder)
+        return json.dumps(self, sort_keys=True, indent=indent, cls=_Encoder)
 
     @classmethod
     def from_json(cls, data: str) -> RawLockSet:
@@ -242,16 +250,10 @@ class RawLockSet:
 
 @dataclass(frozen=True)
 class ResolvedLockSet:
-    environments: Dict[str, EnvironmentReference]
-    packages: Dict[PackageKey, ResolvedPackage]
-    pins: Dict[NormalizedName, PackageKey]
-    remote_files: Dict[FileKey, PackageFile]
-
-    def __post_init__(self):
-        assert self.environments is not None, "The environments field must be specified."
-        assert self.packages is not None, "The packages field must be specified."
-        assert self.pins is not None, "The pins field must be specified."
-        assert self.remote_files is not None, "The remote_files field must be specified."
+    environments: Dict[str, EnvironmentReference] = field(default_factory=dict)
+    packages: Dict[PackageKey, ResolvedPackage] = field(default_factory=dict)
+    pins: Dict[NormalizedName, PackageKey] = field(default_factory=dict)
+    remote_files: Dict[FileKey, PackageFile] = field(default_factory=dict)
 
     @property
     def __dict__(self) -> Dict[str, Any]:
@@ -262,7 +264,7 @@ class ResolvedLockSet:
         )
 
     def to_json(self, indent=None) -> str:
-        return json.dumps(self, sort_keys=True, indent=indent, cls=_TypeHandlingEncoder)
+        return json.dumps(self, sort_keys=True, indent=indent, cls=_Encoder)
 
     @classmethod
     def from_json(cls, data: str) -> ResolvedLockSet:

@@ -238,7 +238,7 @@ class PackageResolver:
     @cached_property
     def has_sdist(self) -> bool:
         for f in self.distinct_package_sources:
-            if f.file and f.file.key.is_sdist:
+            if f.file and f.file.is_sdist:
                 return True
         return False
 
