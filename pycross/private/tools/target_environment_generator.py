@@ -44,7 +44,6 @@ class Input:
     name: str
     implementation: str
     version: str
-    output: Path
     abis: List[str] = field(default_factory=list)
     platforms: List[str] = field(default_factory=list)
     environment_markers: Dict[str, str] = field(default_factory=dict)
@@ -67,7 +66,7 @@ def _expand_manylinux_platforms(platforms: Iterable[str]) -> List[str]:
     return sorted(platforms)
 
 
-def create(input: Input) -> None:
+def create_environment(input: Input) -> TargetEnv:
     overrides = {}
     for key, val in input.environment_markers:
         overrides[key] = val
@@ -84,7 +83,7 @@ def create(input: Input) -> None:
         implementation=input.implementation,
     )
 
-    target = TargetEnv.from_target_python(
+    return TargetEnv.from_target_python(
         input.name,
         target_python,
         overrides,
@@ -92,8 +91,12 @@ def create(input: Input) -> None:
         input.flag_values,
         input.config_setting_target,
     )
-    with open(input.output, "w") as f:
-        json.dump(target.to_dict(), f, indent=2, sort_keys=True)
+
+
+def create(inputs: List[Input], output: Path) -> None:
+    environment_dicts = [create_environment(input).to_dict() for input in inputs]
+    with open(output, "w") as f:
+        json.dump(environment_dicts, f, indent=2, sort_keys=True)
         f.write("\n")
 
 
@@ -177,6 +180,13 @@ def parse_flags() -> Namespace:
         help="The input file.",
     )
 
+    create_parser.add_argument(
+        "--output",
+        type=Path,
+        required=True,
+        help="The output file.",
+    )
+
     return root.parse_args()
 
 
@@ -189,18 +199,22 @@ if __name__ == "__main__":
     if args.subparser_name == "create":
         input_dict = {k: v for k, v in vars(args).items() if v is not None}
 
+        # output is specified separately.
+        input_dict.pop("output", None)
+
         # Some of the parsed values come as lists of tuples, but they should be dicts.
         for dict_key in ("environment_markers", "flag_values"):
             if dict_key in input_dict:
                 input_dict[dict_key] = dict(input_dict[dict_key])
 
         input = Input.from_dict(input_dict)
-        create(input)
+        create([input], args.output)
+
     elif args.subparser_name == "batch-create":
         with open(args.input) as f:
-            inputs = json.load(f)
-        for input_dict in inputs:
-            input = Input.from_dict(input_dict)
-            create(input)
+            input_dicts = json.load(f)
+        inputs = [Input.from_dict(input_dict) for input_dict in input_dicts]
+        create(inputs, args.output)
+
     else:
         raise AssertionError("Bad subparser_name: " + args.subparser_name)

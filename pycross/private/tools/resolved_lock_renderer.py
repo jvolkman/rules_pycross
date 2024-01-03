@@ -16,6 +16,7 @@ from typing import Union
 
 from pycross.private.tools.args import FlagFileArgumentParser
 from pycross.private.tools.lock_model import ConfigSetting
+from pycross.private.tools.lock_model import EnvironmentReference
 from pycross.private.tools.lock_model import FileKey
 from pycross.private.tools.lock_model import FileReference
 from pycross.private.tools.lock_model import package_canonical_name
@@ -104,6 +105,9 @@ class Naming:
         assert file.is_wheel
         return f"@{self.wheel_repo(file)}//file"
 
+    def target_environment_select_label(self):
+        return f":{self.target_environment_select}"
+
 
 class EnvTarget:
     def __init__(self, environment_name: str, setting: ConfigSetting, naming: Naming):
@@ -142,6 +146,21 @@ class EnvAliasTarget:
     def render(self) -> str:
         lines = [
             "native.alias(",
+            ind(f"name = {quoted_str(self.naming.environment_target(self.environment_name))},"),
+            ind(f"actual = {quoted_str(self.config_setting_target)},"),
+            ")",
+        ]
+        return "\n".join(lines)
+
+
+class EnvSelectTarget:
+    def __init__(self, environments: List[EnvironmentReference], naming: Naming):
+        self.naming = naming
+        self.environments = environments
+
+    def render(self) -> str:
+        lines = [
+            "pycross_tar(",
             ind(f"name = {quoted_str(self.naming.environment_target(self.environment_name))},"),
             ind(f"actual = {quoted_str(self.config_setting_target)},"),
             ")",
@@ -247,7 +266,7 @@ class PackageTarget:
             "pycross_wheel_build(",
             ind(f'name = "{self.naming.wheel_build_target(self.package.key)}",'),
             ind(f'sdist = "{sdist_label}",'),
-            ind(f"target_environment = {self.naming.target_environment_select},"),
+            ind(f"target_environment = {self.naming.target_environment_select_label()},"),
         ]
 
         dep_names = []
@@ -414,6 +433,7 @@ def gen_load_statements(imports: Set[str], pycross_repo: str) -> List[str]:
     possible_imports = {
         "http_file": "@bazel_tools//tools/build_defs/repo:http.bzl",
         "maybe": "@bazel_tools//tools/build_defs/repo:utils.bzl",
+        "pycross_target_environment_select": f"{pycross_repo}//pycross:defs.bzl",
         "pycross_wheel_build": f"{pycross_repo}//pycross:defs.bzl",
         "pycross_wheel_library": f"{pycross_repo}//pycross:defs.bzl",
         "pypi_file": f"{pycross_repo}//pycross:defs.bzl",
@@ -483,7 +503,7 @@ def render(resolved_lock: ResolvedLockSet, args: Any, output: TextIO) -> None:
     pins = {pin_name(k): v for k, v in resolved_lock.pins.items()}
 
     # Figure out which load statements we need.
-    imports = set()
+    imports = {"pycross_target_environment_select"}
     for p in package_targets:
         imports.update(p.imports)
     for r in repo_targets:
@@ -557,7 +577,7 @@ def render(resolved_lock: ResolvedLockSet, args: Any, output: TextIO) -> None:
         w(ind(env_target.render()))
         w()
 
-    w(ind("# buildifier: disable=unused-variable"))
+    w(ind())
     w(ind(f"{naming.target_environment_select} = select({{"))
     for env_name, env_ref in resolved_lock.environments.items():
         w(

@@ -74,7 +74,6 @@ def _compute_environments_and_toolchains(
         for target_platform in selected_platforms:
             env_platforms = _get_env_platforms(target_platform, glibc_version, macos_version)
             target_env_name = "python_{}_{}".format(minor_version, target_platform)
-            target_env_json = target_env_name + ".json"
 
             environment_compatible_with = list(PLATFORMS[target_platform].compatible_with)
             if version == default_version:
@@ -86,7 +85,6 @@ def _compute_environments_and_toolchains(
             environments.append(
                 dict(
                     name = target_env_name,
-                    output = target_env_json,
                     implementation = "cp",
                     config_setting_name = config_setting_name,
                     config_setting_target = "@{}//:{}".format(repo_name, config_setting_name),
@@ -278,10 +276,10 @@ def _pycross_toolchain_repo_impl(rctx):
     for env in computed["environments"]:
         root_build_sections.append(_ENVIRONMENT_TEMPLATE.format(**{k: repr(v) for k, v in env.items()}))
 
-    root_build_sections.append("exports_files([")
-    for env in computed["environments"]:
-        root_build_sections.append("    {},".format(repr(env["output"])))
-    root_build_sections.append("])")
+    root_build_sections.append("filegroup(")
+    root_build_sections.append('    name = "environments",')
+    root_build_sections.append('    srcs = ["//:environments.json"],')
+    root_build_sections.append(")")
 
     toolchains_build_sections = [_TOOLCHAINS_BUILD_HEADER]
     for tc in computed["toolchains"]:
@@ -290,12 +288,11 @@ def _pycross_toolchain_repo_impl(rctx):
     rctx.file(rctx.path("BUILD.bazel"), "\n".join(root_build_sections))
     rctx.file(rctx.path("toolchains/BUILD.bazel"), "\n".join(toolchains_build_sections))
 
-    environment_names = ["@{}//:{}".format(rctx.attr.name, env["output"]) for env in computed["environments"]]
-    defs_lines = ["environments = ["]
-    for environment_name in environment_names:
-        defs_lines.append("    {},".format(repr(environment_name)))
-    defs_lines.append("]")
-
+    defs_lines = [
+        "environments = [",
+        '    Label("//:environments.json"),',
+        "]",
+    ]
     rctx.file(rctx.path("defs.bzl"), "\n".join(defs_lines))
 
 _pycross_toolchain_repo = repository_rule(

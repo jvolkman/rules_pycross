@@ -5,7 +5,7 @@ load(":internal_repo.bzl", "exec_internal_tool")
 def fully_qualified_label(label):
     return "@%s//%s:%s" % (label.workspace_name, label.package, label.name)
 
-def _target_python_impl(ctx):
+def _pycross_target_environment_impl(ctx):
     f = ctx.actions.declare_file(ctx.attr.name + ".json")
 
     args = ctx.actions.args().use_param_file("--flagfile=%s")
@@ -46,7 +46,7 @@ def _target_python_impl(ctx):
     ]
 
 pycross_target_environment = rule(
-    implementation = _target_python_impl,
+    implementation = _pycross_target_environment_impl,
     attrs = {
         "implementation": attr.string(
             doc = (
@@ -93,22 +93,63 @@ pycross_target_environment = rule(
     },
 )
 
-def repo_batch_create_target_environments(rctx, env_settings_list):
+def _pycross_target_environment_select_impl(ctx):
+    output = ctx.actions.declare_file(ctx.attr.name + ".json")
+
+    args = ctx.actions.args().use_param_file("--flagfile=%s")
+    args.add_all(ctx.file.environments, before_each = "--file")
+    args.add("--name", ctx.attr.select_name)
+    args.add("--output", output)
+
+    ctx.actions.run(
+        inputs = [ctx.file.environments],
+        outputs = [output],
+        executable = ctx.executable._tool,
+        arguments = [args],
+    )
+
+    return [
+        DefaultInfo(
+            files = depset([output]),
+        ),
+    ]
+
+pycross_target_environment_select = rule(
+    implementation = _pycross_target_environment_select_impl,
+    attrs = {
+        "environments": attr.label_list(
+            doc = "A list of target environment files, each pontially containing multiple environments.",
+            mandatory = True,
+        ),
+        "select_name": attr.string(
+            doc = "The name of the environment to select.",
+            mandatory = True,
+        ),
+        "_tool": attr.label(
+            default = Label("//pycross/private/tools:target_environment_selector"),
+            cfg = "exec",
+            executable = True,
+        ),
+    },
+)
+
+def repo_batch_create_target_environments(rctx, env_settings_list, output):
     """
     Create many target environment JSON files.
 
     Args:
       rctx: repository_ctx
       env_settings_list: a list of dicts containing fields described in target_environment_generator.py's Input.
+      output: the output file.
     """
 
-    env_file = rctx.path("_env_input.json")
-    rctx.file(env_file, json.encode(env_settings_list))
+    env_input_file = rctx.path("_env_input.json")
+    rctx.file(env_input_file, json.encode(env_settings_list))
 
     exec_internal_tool(
         rctx,
         Label("//pycross/private/tools:target_environment_generator.py"),
-        ["batch-create", "--input", str(env_file)],
+        ["batch-create", "--input", str(env_input_file), "--output", str(output)],
     )
 
-    rctx.delete(env_file)
+    rctx.delete(env_input_file)

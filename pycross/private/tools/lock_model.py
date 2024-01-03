@@ -120,7 +120,8 @@ class ConfigSetting:
 
 @dataclass(frozen=True)
 class EnvironmentReference:
-    environment_label: str
+    name: str
+    label: str
     config_setting: Optional[ConfigSetting] = None
     config_setting_label: Optional[str] = None
 
@@ -133,12 +134,14 @@ class EnvironmentReference:
     def from_target_env(cls, environment_label: str, target_env: TargetEnv) -> EnvironmentReference:
         if target_env.config_setting_target:
             return cls(
-                environment_label=environment_label,
+                name=target_env.name,
+                label=environment_label,
                 config_setting_label=target_env.config_setting_target,
             )
         else:
             return cls(
-                environment_label=environment_label,
+                name=target_env.name,
+                label=environment_label,
                 config_setting=ConfigSetting(
                     constraint_values=target_env.python_compatible_with,
                     flag_values=target_env.flag_values,

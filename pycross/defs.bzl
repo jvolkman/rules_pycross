@@ -18,7 +18,11 @@ load(
     _PycrossWheelInfo = "PycrossWheelInfo",
 )
 load("//pycross/private:pypi_file.bzl", _pypi_file = "pypi_file")
-load("//pycross/private:target_environment.bzl", _pycross_target_environment = "pycross_target_environment")
+load(
+    "//pycross/private:target_environment.bzl",
+    _pycross_target_environment = "pycross_target_environment",
+    _pycross_target_environment_select = "pycross_target_environment_select",
+)
 load("//pycross/private:toolchain_helpers.bzl", _pycross_register_for_python_toolchains = "pycross_register_for_python_toolchains")
 load("//pycross/private:wheel_build.bzl", _pycross_wheel_build = "pycross_wheel_build")
 load("//pycross/private:wheel_library.bzl", _pycross_wheel_library = "pycross_wheel_library")
@@ -33,8 +37,9 @@ pycross_lock_repo = _pycross_lock_repo
 pycross_pdm_lock_model = _pycross_pdm_lock_model
 pycross_pkg_repo = _pycross_pkg_repo
 pycross_poetry_lock_model = _pycross_poetry_lock_model
-pycross_target_environment = _pycross_target_environment
 pycross_register_for_python_toolchains = _pycross_register_for_python_toolchains
+pycross_target_environment = _pycross_target_environment
+pycross_target_environment_select = _pycross_target_environment_select
 pycross_wheel_build = _pycross_wheel_build
 pycross_wheel_library = _pycross_wheel_library
 pycross_wheel_zipimport_library = _pycross_wheel_zipimport_library
