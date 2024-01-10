@@ -1,19 +1,20 @@
 """Implementation of the pycross_poetry_lock_model rule."""
 
 load(":internal_repo.bzl", "exec_internal_tool")
+load(":lock_attrs.bzl", "POETRY_IMPORT_ATTRS")
 
 def _pycross_poetry_lock_model_impl(ctx):
     out = ctx.actions.declare_file(ctx.attr.name + ".json")
 
     args = ctx.actions.args().use_param_file("--flagfile=%s")
-    args.add("--poetry-project-file", ctx.file.poetry_project_file)
-    args.add("--poetry-lock-file", ctx.file.poetry_lock_file)
+    args.add("--project-file", ctx.file.project_file)
+    args.add("--lock-file", ctx.file.lock_file)
     args.add("--output", out)
 
     ctx.actions.run(
         inputs = (
-            ctx.files.poetry_project_file +
-            ctx.files.poetry_lock_file
+            ctx.files.project_file +
+            ctx.files.lock_file
         ),
         outputs = [out],
         executable = ctx.executable._tool,
@@ -29,22 +30,12 @@ def _pycross_poetry_lock_model_impl(ctx):
 pycross_poetry_lock_model = rule(
     implementation = _pycross_poetry_lock_model_impl,
     attrs = {
-        "poetry_project_file": attr.label(
-            doc = "The pyproject.toml file with Poetry dependencies.",
-            allow_single_file = True,
-            mandatory = True,
-        ),
-        "poetry_lock_file": attr.label(
-            doc = "The poetry.lock file.",
-            allow_single_file = True,
-            mandatory = True,
-        ),
         "_tool": attr.label(
             default = Label("//pycross/private/tools:poetry_translator"),
             cfg = "exec",
             executable = True,
         ),
-    },
+    } | POETRY_IMPORT_ATTRS,
 )
 
 def pkg_repo_model_poetry(*, project_file, lock_file):
@@ -56,9 +47,9 @@ def pkg_repo_model_poetry(*, project_file, lock_file):
 
 def repo_create_poetry_model(rctx, params, output):
     args = [
-        "--poetry-project-file",
+        "--project-file",
         str(rctx.path(Label(params["project_file"]))),
-        "--poetry-lock-file",
+        "--lock-file",
         str(rctx.path(Label(params["lock_file"]))),
         "--output",
         output,

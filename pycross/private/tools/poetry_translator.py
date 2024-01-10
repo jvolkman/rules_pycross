@@ -240,7 +240,7 @@ def translate(project_file: Path, lock_file: Path) -> RawLockSet:
 def main(args: Any) -> None:
     output = args.output
 
-    lock_set = translate(args.poetry_project_file, args.poetry_lock_file)
+    lock_set = translate(args.project_file, args.lock_file)
 
     with open(output, "w") as f:
         f.write(lock_set.to_json(indent=2))
@@ -250,14 +250,14 @@ def parse_flags() -> Any:
     parser = FlagFileArgumentParser(description="Generate pycross dependency bzl file.")
 
     parser.add_argument(
-        "--poetry-project-file",
+        "--project-file",
         type=Path,
         required=True,
         help="The path to pyproject.toml.",
     )
 
     parser.add_argument(
-        "--poetry-lock-file",
+        "--lock-file",
         type=Path,
         required=True,
         help="The path to pdm.lock.",
