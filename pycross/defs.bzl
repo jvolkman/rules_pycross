@@ -1,7 +1,7 @@
 "Public API re-exports"
 
 load("//pycross/private:lock_file.bzl", _pycross_lock_file = "pycross_lock_file")
-load("//pycross/private:lock_repo.bzl", _pycross_lock_repo = "pycross_lock_repo")
+load("//pycross/private:lock_file_repo.bzl", _pycross_lock_file_repo = "pycross_lock_file_repo")
 load(
     "//pycross/private:pdm_lock_model.bzl",
     _pkg_repo_model_pdm = "pkg_repo_model_pdm",
@@ -29,7 +29,7 @@ PycrossWheelInfo = _PycrossWheelInfo
 pkg_repo_model_pdm = _pkg_repo_model_pdm
 pkg_repo_model_poetry = _pkg_repo_model_poetry
 pycross_lock_file = _pycross_lock_file
-pycross_lock_repo = _pycross_lock_repo
+pycross_lock_file_repo = _pycross_lock_file_repo
 pycross_pdm_lock_model = _pycross_pdm_lock_model
 pycross_pkg_repo = _pycross_pkg_repo
 pycross_poetry_lock_model = _pycross_poetry_lock_model

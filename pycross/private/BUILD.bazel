@@ -238,8 +238,8 @@ bzl_library(
 )
 
 bzl_library(
-    name = "lock_repo",
-    srcs = ["lock_repo.bzl"],
+    name = "lock_file_repo",
+    srcs = ["lock_file_repo.bzl"],
     visibility = ["//pycross:__subpackages__"],
 )
 

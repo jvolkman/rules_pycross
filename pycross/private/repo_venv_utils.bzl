@@ -1,4 +1,4 @@
-"""Implementation of the pycross_lock_repo rule."""
+"""Repo rule tools for creating/managing venvs."""
 
 load("@bazel_skylib//lib:paths.bzl", "paths")
 
