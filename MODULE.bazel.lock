@@ -1665,7 +1665,7 @@
   "moduleExtensions": {
     "//pycross/private/bzlmod:internal_deps.bzl%internal_deps": {
       "general": {
-        "bzlTransitiveDigest": "3qRWvoOODIR0s88OJUG7YEI1JoSJJDraFXdxI12bLek=",
+        "bzlTransitiveDigest": "j+PRVb7N3Ik13hYiBWyfvWVR9/VRgFcoGvF/pjLqQHo=",
         "accumulatedFileDigests": {},
         "envVariables": {},
         "generatedRepoSpecs": {
@@ -1884,7 +1884,7 @@
     },
     "//pycross/private/bzlmod:toolchains.bzl%toolchains": {
       "general": {
-        "bzlTransitiveDigest": "+5KDiIga0wSJK/3zRAOabduFLAgH5XKvF3Rl8WJLqgU=",
+        "bzlTransitiveDigest": "bNRwkagEXY8ap1AMvz1nnbEigcfTfL/4IgcTMTCo+9k=",
         "accumulatedFileDigests": {},
         "envVariables": {},
         "generatedRepoSpecs": {
