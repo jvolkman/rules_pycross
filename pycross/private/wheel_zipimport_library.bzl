@@ -1,7 +1,7 @@
 """Implementation of the pycross_wheel_zipimport_library rule."""
 
 load("@bazel_skylib//lib:paths.bzl", "paths")
-load("@rules_python//python:defs.bzl", "PyInfo")
+load("@rules_python//python:py_info.bzl", "PyInfo")
 
 def _pycross_wheel_zipimport_library_impl(ctx):
     wheel_label = ctx.file.wheel.owner or ctx.attr.wheel.label

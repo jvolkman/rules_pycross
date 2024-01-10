@@ -28,12 +28,6 @@ bzl_library(
 )
 
 bzl_library(
-    name = "lock_attrs",
-    srcs = ["lock_attrs.bzl"],
-    visibility = default_visibility,
-)
-
-bzl_library(
     name = "lock_file",
     srcs = ["lock_file.bzl"],
     visibility = default_visibility,
@@ -42,12 +36,6 @@ bzl_library(
         ":providers",
         ":target_environment",
     ],
-)
-
-bzl_library(
-    name = "lock_repo",
-    srcs = ["lock_repo.bzl"],
-    visibility = default_visibility,
 )
 
 bzl_library(
@@ -77,14 +65,7 @@ bzl_library(
 )
 
 bzl_library(
-    name = "providers",
-    srcs = ["providers.bzl"],
-    visibility = default_visibility,
-)
-
-bzl_library(
     name = "pycross_deps_core_lock",
-    srcs = ["pycross_deps_core.lock.bzl"],
     visibility = default_visibility,
     deps = [
         "//pycross:defs",
@@ -95,7 +76,6 @@ bzl_library(
 
 bzl_library(
     name = "pycross_deps_lock",
-    srcs = ["pycross_deps.lock.bzl"],
     visibility = default_visibility,
     deps = [
         "//pycross:defs",
@@ -146,7 +126,7 @@ bzl_library(
         ":providers",
         "@bazel_skylib//lib:paths",
         "@bazel_tools//tools/cpp:toolchain_utils.bzl",
-        "@rules_python//docs:defs",
+        "@rules_python//python:py_info_bzl",
     ],
 )
 
@@ -157,7 +137,7 @@ bzl_library(
     deps = [
         ":providers",
         "@bazel_skylib//lib:paths",
-        "@rules_python//docs:defs",
+        "@rules_python//python:py_info_bzl",
     ],
 )
 
@@ -167,7 +147,7 @@ bzl_library(
     visibility = default_visibility,
     deps = [
         "@bazel_skylib//lib:paths",
-        "@rules_python//docs:defs",
+        "@rules_python//python:py_info_bzl",
     ],
 )
 
@@ -221,4 +201,62 @@ write_source_files(
         "pycross_deps.lock.bzl": ":updated-pycross_deps.lock.bzl",
         "pycross_deps_core.lock.bzl": ":updated-pycross_deps_core.lock.bzl",
     },
+)
+
+bzl_library(
+    name = "pycross_deps.lock",
+    srcs = ["pycross_deps.lock.bzl"],
+    visibility = ["//pycross:__subpackages__"],
+    deps = [
+        "//pycross:defs",
+        "@bazel_tools//tools/build_defs/repo:http.bzl",
+        "@bazel_tools//tools/build_defs/repo:utils.bzl",
+    ],
+)
+
+bzl_library(
+    name = "pycross_deps_core.lock",
+    srcs = ["pycross_deps_core.lock.bzl"],
+    visibility = ["//pycross:__subpackages__"],
+    deps = [
+        "//pycross:defs",
+        "@bazel_tools//tools/build_defs/repo:http.bzl",
+        "@bazel_tools//tools/build_defs/repo:utils.bzl",
+    ],
+)
+
+bzl_library(
+    name = "debug",
+    srcs = ["debug.bzl"],
+    visibility = ["//pycross:__subpackages__"],
+)
+
+bzl_library(
+    name = "lock_attrs",
+    srcs = ["lock_attrs.bzl"],
+    visibility = ["//pycross:__subpackages__"],
+)
+
+bzl_library(
+    name = "lock_repo",
+    srcs = ["lock_repo.bzl"],
+    visibility = ["//pycross:__subpackages__"],
+)
+
+bzl_library(
+    name = "providers",
+    srcs = ["providers.bzl"],
+    visibility = ["//pycross:__subpackages__"],
+)
+
+bzl_library(
+    name = "updated-pycross_deps.lock",
+    srcs = ["updated-pycross_deps.lock.bzl"],
+    visibility = ["//pycross:__subpackages__"],
+)
+
+bzl_library(
+    name = "updated-pycross_deps_core.lock",
+    srcs = ["updated-pycross_deps_core.lock.bzl"],
+    visibility = ["//pycross:__subpackages__"],
 )

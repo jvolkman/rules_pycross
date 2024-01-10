@@ -2,7 +2,7 @@
 
 load("@bazel_skylib//lib:paths.bzl", "paths")
 load("@bazel_tools//tools/cpp:toolchain_utils.bzl", "find_cpp_toolchain", "use_cpp_toolchain")
-load("@rules_python//python:defs.bzl", "PyInfo")
+load("@rules_python//python:py_info.bzl", "PyInfo")
 load(
     ":cc_toolchain_util.bzl",
     "absolutize_path_in_str",
