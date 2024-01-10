@@ -3,7 +3,7 @@
 load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_file")
 load("@lock_import_repos_hub//:locks.bzl", lock_import_locks = "locks")
 load("//pycross/private:pypi_file.bzl", "pypi_file")
-load(":rendered_lock_repo.bzl", "rendered_lock_repo")
+load("//pycross/private:rendered_lock_repo.bzl", "rendered_lock_repo")
 load(":tag_attrs.bzl", "CREATE_REPOS_ATTRS")
 
 # buildifier: disable=print

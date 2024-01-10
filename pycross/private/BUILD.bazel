@@ -92,11 +92,30 @@ bzl_library(
 )
 
 bzl_library(
+    name = "rendered_lock_repo",
+    srcs = ["rendered_lock_repo.bzl"],
+    visibility = default_visibility,
+    deps = [":internal_repo"],
+)
+
+bzl_library(
     name = "repo_venv_utils",
     srcs = ["repo_venv_utils.bzl"],
     visibility = default_visibility,
     deps = [
         "@bazel_skylib//lib:paths",
+    ],
+)
+
+bzl_library(
+    name = "resolved_lock_repo",
+    srcs = ["resolved_lock_repo.bzl"],
+    visibility = default_visibility,
+    deps = [
+        ":internal_repo",
+        ":lock_attrs",
+        ":pdm_lock_model",
+        ":poetry_lock_model",
     ],
 )
 

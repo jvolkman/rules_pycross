@@ -24,30 +24,13 @@ bzl_library(
     name = "lock_import",
     srcs = ["lock_import.bzl"],
     deps = [
-        ":resolved_lock_repo",
         ":tag_attrs",
         "//pycross/private:internal_repo",
         "//pycross/private:pdm_lock_model",
         "//pycross/private:poetry_lock_model",
         "//pycross/private:pypi_file",
+        "//pycross/private:resolved_lock_repo",
         "@bazel_tools//tools/build_defs/repo:http.bzl",
-    ],
-)
-
-bzl_library(
-    name = "rendered_lock_repo",
-    srcs = ["rendered_lock_repo.bzl"],
-    deps = ["//pycross/private:internal_repo"],
-)
-
-bzl_library(
-    name = "resolved_lock_repo",
-    srcs = ["resolved_lock_repo.bzl"],
-    deps = [
-        "//pycross/private:internal_repo",
-        "//pycross/private:lock_attrs",
-        "//pycross/private:pdm_lock_model",
-        "//pycross/private:poetry_lock_model",
     ],
 )
 
@@ -69,9 +52,9 @@ bzl_library(
     name = "lock_repos",
     srcs = ["lock_repos.bzl"],
     deps = [
-        ":rendered_lock_repo",
         ":tag_attrs",
         "//pycross/private:pypi_file",
+        "//pycross/private:rendered_lock_repo",
         "@bazel_tools//tools/build_defs/repo:http.bzl",
     ],
 )
