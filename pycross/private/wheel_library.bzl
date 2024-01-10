@@ -1,7 +1,7 @@
 """Implementation of the pycross_wheel_library rule."""
 
 load("@bazel_skylib//lib:paths.bzl", "paths")
-load("@rules_python//python:defs.bzl", "PyInfo")
+load("@rules_python//python:py_info.bzl", "PyInfo")
 load(":providers.bzl", "PycrossWheelInfo")
 
 def _pycross_wheel_library_impl(ctx):
