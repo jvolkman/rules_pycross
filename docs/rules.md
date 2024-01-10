@@ -277,12 +277,12 @@ Register target environments and toolchains for a given list of Python versions.
 | <a id="pycross_register_for_python_toolchains-macos_version"></a>macos_version |  the maximum supported macOS version.   |  `"12.0"` |
 
 
-<a id="pycross_lock_repo"></a>
+<a id="pycross_lock_file_repo"></a>
 
-## pycross_lock_repo
+## pycross_lock_file_repo
 
 <pre>
-pycross_lock_repo(<a href="#pycross_lock_repo-name">name</a>, <a href="#pycross_lock_repo-lock_file">lock_file</a>, <a href="#pycross_lock_repo-repo_mapping">repo_mapping</a>)
+pycross_lock_file_repo(<a href="#pycross_lock_file_repo-name">name</a>, <a href="#pycross_lock_file_repo-lock_file">lock_file</a>, <a href="#pycross_lock_file_repo-repo_mapping">repo_mapping</a>)
 </pre>
 
 **ATTRIBUTES**
@@ -290,9 +290,9 @@ pycross_lock_repo(<a href="#pycross_lock_repo-name">name</a>, <a href="#pycross_
 
 | Name  | Description | Type | Mandatory | Default |
 | :------------- | :------------- | :------------- | :------------- | :------------- |
-| <a id="pycross_lock_repo-name"></a>name |  A unique name for this repository.   | <a href="https://bazel.build/concepts/labels#target-names">Name</a> | required |  |
-| <a id="pycross_lock_repo-lock_file"></a>lock_file |  The generated bzl lock file.   | <a href="https://bazel.build/concepts/labels">Label</a> | required |  |
-| <a id="pycross_lock_repo-repo_mapping"></a>repo_mapping |  In `WORKSPACE` context only: a dictionary from local repository name to global repository name. This allows controls over workspace dependency resolution for dependencies of this repository.<br><br>For example, an entry `"@foo": "@bar"` declares that, for any time this repository depends on `@foo` (such as a dependency on `@foo//some:target`, it should actually resolve that dependency within globally-declared `@bar` (`@bar//some:target`).<br><br>This attribute is _not_ supported in `MODULE.bazel` context (when invoking a repository rule inside a module extension's implementation function).   | <a href="https://bazel.build/rules/lib/dict">Dictionary: String -> String</a> | optional |  |
+| <a id="pycross_lock_file_repo-name"></a>name |  A unique name for this repository.   | <a href="https://bazel.build/concepts/labels#target-names">Name</a> | required |  |
+| <a id="pycross_lock_file_repo-lock_file"></a>lock_file |  The generated bzl lock file.   | <a href="https://bazel.build/concepts/labels">Label</a> | required |  |
+| <a id="pycross_lock_file_repo-repo_mapping"></a>repo_mapping |  In `WORKSPACE` context only: a dictionary from local repository name to global repository name. This allows controls over workspace dependency resolution for dependencies of this repository.<br><br>For example, an entry `"@foo": "@bar"` declares that, for any time this repository depends on `@foo` (such as a dependency on `@foo//some:target`, it should actually resolve that dependency within globally-declared `@bar` (`@bar//some:target`).<br><br>This attribute is _not_ supported in `MODULE.bazel` context (when invoking a repository rule inside a module extension's implementation function).   | <a href="https://bazel.build/rules/lib/dict">Dictionary: String -> String</a> | optional |  |
 
 
 <a id="pycross_pkg_repo"></a>

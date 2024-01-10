@@ -103,7 +103,7 @@ load("@rules_pycross//pycross:repositories.bzl", "rules_pycross_dependencies")
 
 rules_pycross_dependencies(python_interpreter)
 
-load("@rules_pycross//pycross:defs.bzl", "pkg_repo_model_pdm", "pkg_repo_model_poetry", "pycross_lock_repo", "pycross_pkg_repo", "pycross_register_for_python_toolchains")
+load("@rules_pycross//pycross:defs.bzl", "pkg_repo_model_pdm", "pkg_repo_model_poetry", "pycross_lock_file_repo", "pycross_pkg_repo", "pycross_register_for_python_toolchains")
 
 pycross_register_for_python_toolchains(
     name = "pycross_toolchains",
@@ -183,7 +183,7 @@ load("@pdm_pkg_repo//:defs.bzl", pdm_pkg_install_deps = "install_deps")
 pdm_pkg_install_deps()
 
 # Lock repo for vended poetry lock
-pycross_lock_repo(
+pycross_lock_file_repo(
     name = "poetry_lock_repo",
     lock_file = "//poetry:lock.bzl",
 )
@@ -193,7 +193,7 @@ load("@poetry_lock_repo//:requirements.bzl", poetry_install_deps = "install_deps
 poetry_install_deps()
 
 # Lock repo for vended poetry lock
-pycross_lock_repo(
+pycross_lock_file_repo(
     name = "pdm_lock_repo",
     lock_file = "//pdm:lock.bzl",
 )

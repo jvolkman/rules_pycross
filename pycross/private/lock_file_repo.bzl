@@ -1,6 +1,6 @@
-"""Implementation of the pycross_lock_repo rule."""
+"""Implementation of the pycross_lock_file_repo rule."""
 
-def _pycross_lock_repo_impl(rctx):
+def _pycross_lock_file_repo_impl(rctx):
     lock_file_label = rctx.attr.lock_file
 
     rctx.file(rctx.path("requirements.bzl"), """\
@@ -41,8 +41,8 @@ targets()
 """.format(lock_file = lock_file_label),
     )
 
-pycross_lock_repo = repository_rule(
-    implementation = _pycross_lock_repo_impl,
+pycross_lock_file_repo = repository_rule(
+    implementation = _pycross_lock_file_repo_impl,
     attrs = {
         "lock_file": attr.label(
             doc = "The generated bzl lock file.",
