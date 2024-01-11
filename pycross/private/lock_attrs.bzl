@@ -33,6 +33,9 @@ RESOLVE_ATTRS = dict(
     disallow_builds = attr.bool(
         doc = "Do not allow pycross_wheel_build targets in the final lock file (i.e., require wheels).",
     ),
+    always_include_sdist = attr.bool(
+        doc = "Always include an entry for a package's sdist if one exists.",
+    ),
 )
 
 CREATE_REPOS_ATTRS = dict(
@@ -150,6 +153,9 @@ def handle_resolve_attrs(attrs, environment_files_and_labels, local_wheel_names_
 
     if attrs.disallow_builds:
         args.append("--disallow-builds")
+
+    if attrs.always_include_sdist:
+        args.append("--always-include-sdist")
 
     for wheel_name, wheel_label in local_wheel_names_and_labels:
         args.extend(["--local-wheel", wheel_name, wheel_label])
