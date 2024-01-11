@@ -11,5 +11,5 @@ pycross_pdm_lock_model(
 
 setup_test_targets(
     lock_model = ":lock_model",
-    lock_name = "pdm_lock",
+    lock_name = "pdm_lock_file",
 )

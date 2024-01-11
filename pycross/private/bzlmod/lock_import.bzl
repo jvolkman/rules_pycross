@@ -1,7 +1,7 @@
 """The lock_import extension."""
 
-load("//pycross/private:pdm_lock_model.bzl", "pkg_repo_model_pdm")
-load("//pycross/private:poetry_lock_model.bzl", "pkg_repo_model_poetry")
+load("//pycross/private:pdm_lock_model.bzl", "lock_repo_model_pdm")
+load("//pycross/private:poetry_lock_model.bzl", "lock_repo_model_poetry")
 load("//pycross/private:resolved_lock_repo.bzl", "resolved_lock_repo")
 load(":lock_hub_repo.bzl", "lock_hub_repo")
 load(":tag_attrs.bzl", "COMMON_ATTRS", "COMMON_IMPORT_ATTRS", "PACKAGE_ATTRS", "PDM_IMPORT_ATTRS", "POETRY_IMPORT_ATTRS")
@@ -109,9 +109,9 @@ def _lock_import_impl(module_ctx):
     # Iterate over the various from_pdm and from_poetry tags and create lock models
     for module in module_ctx.modules:
         for tag in module.tags.import_pdm_lock:
-            lock_model_structs[tag.repo] = pkg_repo_model_pdm(**{attr: getattr(tag, attr) for attr in PDM_IMPORT_ATTRS})
+            lock_model_structs[tag.repo] = lock_repo_model_pdm(**{attr: getattr(tag, attr) for attr in PDM_IMPORT_ATTRS})
         for tag in module.tags.import_poetry_lock:
-            lock_model_structs[tag.repo] = pkg_repo_model_poetry(**{attr: getattr(tag, attr) for attr in POETRY_IMPORT_ATTRS})
+            lock_model_structs[tag.repo] = lock_repo_model_poetry(**{attr: getattr(tag, attr) for attr in POETRY_IMPORT_ATTRS})
 
     # Add package attributes
     for module in module_ctx.modules:

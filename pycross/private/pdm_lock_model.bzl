@@ -71,7 +71,7 @@ pycross_pdm_lock_model = rule(
     } | PDM_IMPORT_ATTRS,
 )
 
-def pkg_repo_model_pdm(*, project_file, lock_file, default = True, optional_groups = [], all_optional_groups = False, development_groups = [], all_development_groups = False, require_static_urls = True):
+def lock_repo_model_pdm(*, project_file, lock_file, default = True, optional_groups = [], all_optional_groups = False, development_groups = [], all_development_groups = False, require_static_urls = True):
     return json.encode(dict(
         model_type = "pdm",
         project_file = str(project_file),

@@ -40,8 +40,8 @@ rules_pycross_dependencies(
 
 load(
     "@rules_pycross//pycross:defs.bzl",
-    "pkg_repo_model_pdm",
-    "pycross_pkg_repo",
+    "lock_repo_model_pdm",
+    "pycross_lock_repo",
     "pycross_register_for_python_toolchains",
 )
 
@@ -52,9 +52,9 @@ pycross_register_for_python_toolchains(
 
 load("@pycross_toolchains//:defs.bzl", "environments")
 
-pycross_pkg_repo(
+pycross_lock_repo(
     name = "pdm",
-    lock_model = pkg_repo_model_pdm(
+    lock_model = lock_repo_model_pdm(
         lock_file = "@//:pdm.lock",
         project_file = "@//:pyproject.toml",
     ),
