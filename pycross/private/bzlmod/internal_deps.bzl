@@ -1,3 +1,5 @@
+"""Pycross internal deps."""
+
 load("@pythons_hub//:interpreters.bzl", "INTERPRETER_LABELS")
 load("//pycross/private:internal_repo.bzl", "create_internal_repo")
 load("//pycross/private:pycross_deps.lock.bzl", pypi_all_repositories = "repositories")
@@ -56,8 +58,11 @@ def _internal_deps_impl(module_ctx):
     )
 
 internal_deps = module_extension(
-    doc = "Register internal rules_pycross dependecies.",
+    doc = "Register internal rules_pycross dependencies.",
     implementation = _internal_deps_impl,
+    # OS and arch dependent since the python interpreter is OS- and arch-specific.
+    os_dependent = True,
+    arch_dependent = True,
     tag_classes = {
         "install": tag_class(
             attrs = {
