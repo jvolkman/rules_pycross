@@ -1664,8 +1664,8 @@
   },
   "moduleExtensions": {
     "//pycross/private/bzlmod:internal_deps.bzl%internal_deps": {
-      "general": {
-        "bzlTransitiveDigest": "D/IknjULlPaAsxOwrZdAZhOaNcJEHRTaPaZoOkbhnWI=",
+      "os:linux,arch:amd64": {
+        "bzlTransitiveDigest": "ft2TXQOhdzZeq8wfn9jkWOOeSbPWMejq9TdUvKoVfv4=",
         "accumulatedFileDigests": {},
         "envVariables": {},
         "generatedRepoSpecs": {
