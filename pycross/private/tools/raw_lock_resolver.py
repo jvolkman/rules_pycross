@@ -205,6 +205,12 @@ class PackageResolver:
 
         self.key = package.key
         self.package_name = package.name
+        for file in package.files:
+            if file.is_sdist:
+                self.sdist_file = file
+                break
+        else:
+            self.sdist_file = None
 
         self._build_deps = annotations.build_dependencies
         self._build_target_override = annotations.build_target_override
@@ -236,7 +242,7 @@ class PackageResolver:
         return keys
 
     @cached_property
-    def has_sdist(self) -> bool:
+    def uses_sdist(self) -> bool:
         for f in self.distinct_package_sources:
             if f.file and f.file.is_sdist:
                 return True
@@ -421,7 +427,7 @@ def resolve(args: Any) -> ResolvedLockSet:
     if args.disallow_builds:
         builds = []
         for package in resolved_packages:
-            if package.has_sdist:
+            if package.uses_sdist:
                 builds.append(package.key)
         if builds:
             raise Exception(
@@ -435,6 +441,8 @@ def resolve(args: Any) -> ResolvedLockSet:
             if not source.file:
                 continue
             repos[source.file.key] = source.file
+        if args.always_include_sdist and package_target.sdist_file:
+            repos[package_target.sdist_file.key] = package_target.sdist_file
 
     repos = dict(sorted(repos.items()))
 
@@ -531,6 +539,12 @@ def add_shared_flags(parser: ArgumentParser) -> None:
         "--disallow-builds",
         action="store_true",
         help="If set, an error is raised if the generated lock contains wheel build targets.",
+    )
+
+    parser.add_argument(
+        "--always-include-sdist",
+        action="store_true",
+        help="If set, always include a package's sdist if one exists.",
     )
 
 
