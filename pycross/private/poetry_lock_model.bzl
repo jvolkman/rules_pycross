@@ -40,7 +40,7 @@ pycross_poetry_lock_model = rule(
     } | POETRY_IMPORT_ATTRS,
 )
 
-def pkg_repo_model_poetry(*, project_file, lock_file):
+def lock_repo_model_poetry(*, project_file, lock_file):
     return json.encode(dict(
         model_type = "poetry",
         project_file = str(project_file),

@@ -1,9 +1,9 @@
 """Implementation of the resolved_lock_repo rule."""
 
-load("//pycross/private:internal_repo.bzl", "exec_internal_tool")
-load("//pycross/private:lock_attrs.bzl", "RESOLVE_ATTRS", "handle_resolve_attrs")
-load("//pycross/private:pdm_lock_model.bzl", "repo_create_pdm_model", PDM_TRANSLATOR_TOOL = "TRANSLATOR_TOOL")
-load("//pycross/private:poetry_lock_model.bzl", "repo_create_poetry_model", POETRY_TRANSLATOR_TOOL = "TRANSLATOR_TOOL")
+load(":internal_repo.bzl", "exec_internal_tool")
+load(":lock_attrs.bzl", "RESOLVE_ATTRS", "handle_resolve_attrs")
+load(":pdm_lock_model.bzl", "repo_create_pdm_model", PDM_TRANSLATOR_TOOL = "TRANSLATOR_TOOL")
+load(":poetry_lock_model.bzl", "repo_create_poetry_model", POETRY_TRANSLATOR_TOOL = "TRANSLATOR_TOOL")
 
 _RESOLVER_TOOL = Label("//pycross/private/tools:raw_lock_resolver.py")
 

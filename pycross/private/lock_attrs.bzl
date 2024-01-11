@@ -35,6 +35,12 @@ RESOLVE_ATTRS = dict(
     ),
 )
 
+CREATE_REPOS_ATTRS = dict(
+    pypi_index = attr.string(
+        doc = "The PyPI-compatible index to use (must support the JSON API).",
+    ),
+)
+
 RENDER_ATTRS = dict(
     repo_prefix = attr.string(
         doc = "The prefix to apply to repository targets. Defaults to the lock file target name.",
@@ -52,13 +58,10 @@ RENDER_ATTRS = dict(
         doc = "An optional prefix to apply to environment targets. Defaults to _env",
         default = "_env",
     ),
-    pypi_index = attr.string(
-        doc = "The PyPI-compatible index to use (must support the JSON API).",
-    ),
     generate_file_map = attr.bool(
         doc = "Generate a FILES dict containing a mapping of filenames to repo labels.",
     ),
-)
+) | CREATE_REPOS_ATTRS
 
 PDM_IMPORT_ATTRS = dict(
     lock_file = attr.label(
@@ -191,10 +194,24 @@ def handle_render_attrs(attrs):
     if attrs.environment_prefix:
         args.extend(["--environment-prefix", attrs.environment_prefix])
 
-    if attrs.pypi_index:
-        args.extend(["--pypi-index", attrs.pypi_index])
-
     if attrs.generate_file_map:
         args.append("--generate-file-map")
+
+    return args + handle_create_repos_attrs(attrs)
+
+def handle_create_repos_attrs(attrs):
+    """
+    Parse repository materializing attrs and return a list of arguments.
+
+    Args:
+      attrs: ctx.attr or repository_ctx.attr
+
+    Returns:
+      a list of arguments.
+    """
+    args = []
+
+    if attrs.pypi_index:
+        args.extend(["--pypi-index", attrs.pypi_index])
 
     return args

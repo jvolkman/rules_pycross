@@ -1,6 +1,11 @@
 """Shared attr definitions"""
 
-load("//pycross/private:lock_attrs.bzl", _PDM_IMPORT_ATTRS = "PDM_IMPORT_ATTRS", _POETRY_IMPORT_ATTRS = "POETRY_IMPORT_ATTRS")
+load(
+    "//pycross/private:lock_attrs.bzl",
+    _CREATE_REPOS_ATTRS = "CREATE_REPOS_ATTRS",
+    _PDM_IMPORT_ATTRS = "PDM_IMPORT_ATTRS",
+    _POETRY_IMPORT_ATTRS = "POETRY_IMPORT_ATTRS",
+)
 
 # Attrs common to all tags
 COMMON_ATTRS = dict(
@@ -50,11 +55,6 @@ PACKAGE_ATTRS = dict(
     ),
 )
 
-CREATE_REPOS_ATTRS = dict(
-    pypi_index = attr.string(
-        doc = "The PyPI-compatible index to use (must support the JSON API).",
-    ),
-)
-
+CREATE_REPOS_ATTRS = _CREATE_REPOS_ATTRS
 PDM_IMPORT_ATTRS = _PDM_IMPORT_ATTRS
 POETRY_IMPORT_ATTRS = _POETRY_IMPORT_ATTRS
