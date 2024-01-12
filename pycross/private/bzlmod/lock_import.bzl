@@ -102,15 +102,15 @@ def _lock_import_impl(module_ctx):
 
     # A first pass initialize lock structures and make sure none of the repo names are duplicated.
     for module in module_ctx.modules:
-        for tag in module.tags.import_pdm_lock + module.tags.import_poetry_lock:
+        for tag in module.tags.import_pdm + module.tags.import_poetry:
             _check_unique_lock_repo(lock_owners, module, tag)
             lock_repos[tag.repo] = _lock_struct(module_ctx, tag)
 
     # Iterate over the various from_pdm and from_poetry tags and create lock models
     for module in module_ctx.modules:
-        for tag in module.tags.import_pdm_lock:
+        for tag in module.tags.import_pdm:
             lock_model_structs[tag.repo] = lock_repo_model_pdm(**{attr: getattr(tag, attr) for attr in PDM_IMPORT_ATTRS})
-        for tag in module.tags.import_poetry_lock:
+        for tag in module.tags.import_poetry:
             lock_model_structs[tag.repo] = lock_repo_model_poetry(**{attr: getattr(tag, attr) for attr in POETRY_IMPORT_ATTRS})
 
     # Add package attributes
@@ -132,11 +132,11 @@ def _lock_import_impl(module_ctx):
     )
 
 # Tag classes
-_import_pdm_lock_tag = tag_class(
+_import_pdm_tag = tag_class(
     doc = "Import a PDM lock file.",
     attrs = PDM_IMPORT_ATTRS | COMMON_IMPORT_ATTRS | COMMON_ATTRS,
 )
-_import_poetry_lock_tag = tag_class(
+_import_poetry_tag = tag_class(
     doc = "Import a Poetry lock file.",
     attrs = POETRY_IMPORT_ATTRS | COMMON_IMPORT_ATTRS | COMMON_ATTRS,
 )
@@ -148,8 +148,8 @@ _package_tag = tag_class(
 lock_import = module_extension(
     implementation = _lock_import_impl,
     tag_classes = dict(
-        import_pdm_lock = _import_pdm_lock_tag,
-        import_poetry_lock = _import_poetry_lock_tag,
+        import_pdm = _import_pdm_tag,
+        import_poetry = _import_poetry_tag,
         package = _package_tag,
     ),
 )

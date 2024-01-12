@@ -20,7 +20,7 @@ local_path_override(
 )
 
 lock_import = use_extension("@rules_pycross//pycross/extensions:lock_import.bzl", "lock_import")
-lock_import.import_pdm_lock(
+lock_import.import_pdm(
     lock_file = "//:pdm.lock",
     project_file = "//:pyproject.toml",
     repo = "pdm_deps",
@@ -34,7 +34,7 @@ lock_import.package(
     ],
     repo = "pdm_deps",
 )
-lock_import.import_poetry_lock(
+lock_import.import_poetry(
     lock_file = "//:poetry.lock",
     project_file = "//:pyproject.toml",
     repo = "poetry_deps",
