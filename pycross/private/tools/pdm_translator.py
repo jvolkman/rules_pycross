@@ -66,6 +66,7 @@ class PDMPackage:
     python_versions: SpecifierSet
     dependencies: Set[Requirement]
     files: Set[PackageFile]
+    is_local: bool
     resolved_dependencies: Set[PackageDependency]
     extras: Set[str]
 
@@ -95,6 +96,7 @@ class PDMPackage:
             python_versions=str(self.python_versions),
             dependencies=dependencies_without_self,
             files=sorted(self.files, key=lambda f: f.name),
+            is_local = self.is_local,
         )
 
     def merge(self, other: PDMPackage) -> PDMPackage:
@@ -107,6 +109,7 @@ class PDMPackage:
 
         merged_dependencies = set(self.dependencies) | set(other.dependencies)
         merged_files = set(self.files) | set(other.files)
+        merged_is_local = self.is_local or other.is_local
         merged_resolved_dependencies = set(self.resolved_dependencies) | set(other.resolved_dependencies)
         merged_extras = set(self.extras) | set(other.extras)
 
@@ -116,6 +119,7 @@ class PDMPackage:
             python_versions=self.python_versions,
             dependencies=merged_dependencies,
             files=merged_files,
+            is_local=merged_is_local,
             resolved_dependencies=merged_resolved_dependencies,
             extras=merged_extras,
         )
@@ -211,6 +215,7 @@ def translate(
 
         dependencies = {Requirement(dep) for dep in lock_pkg.get("dependencies", [])}
         files = {parse_file_info(f) for f in lock_pkg.get("files", [])}
+        is_local = "path" in lock_pkg and "files" not in lock_pkg
 
         package = PDMPackage(
             name=package_name,
@@ -218,6 +223,7 @@ def translate(
             python_versions=SpecifierSet(package_requires_python),
             dependencies=dependencies,
             files=files,
+            is_local=is_local,
             resolved_dependencies=set(),
             extras=set(package_extras),
         )

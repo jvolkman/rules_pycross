@@ -204,6 +204,7 @@ class RawPackage:
     python_versions: str
     dependencies: List[PackageDependency] = field(default_factory=list)
     files: List[PackageFile] = field(default_factory=list)
+    is_local: bool = False
 
     def __post_init__(self):
         normalized_name = package_canonical_name(self.name)
@@ -213,7 +214,7 @@ class RawPackage:
         assert self.version, "The version field must be specified."
         assert self.python_versions is not None, "The python_versions field must be specified, or an empty string."
         assert self.dependencies is not None, "The dependencies field must be specified as a list."
-        assert self.files, "The files field must not be empty."
+        assert self.files or self.is_local, "The files field must not be empty for non-local packages."
 
     @property
     def key(self) -> PackageKey:
