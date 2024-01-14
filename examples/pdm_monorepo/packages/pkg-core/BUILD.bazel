@@ -1,0 +1,11 @@
+load("@rules_python//python:packaging.bzl", "py_wheel")
+
+py_wheel(
+    name = "pkg-core",
+    distribution = "pkg-core",
+    version = "0.1.0",
+    deps = [
+        "//packages/pkg-core/mycore",
+    ],
+    visibility = ["//visibility:public"],
+)
