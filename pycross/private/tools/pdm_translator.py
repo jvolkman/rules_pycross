@@ -124,7 +124,7 @@ class PDMPackage:
 def parse_file_info(file_info: Dict[str, Any]) -> PackageFile:
     if "file" in file_info:
         file_name = file_info["file"]
-        urls = None
+        urls = tuple()
     elif "url" in file_info:
         url = file_info["url"]
         _, file_name = urlparse(url).path.rsplit("/", 1)
