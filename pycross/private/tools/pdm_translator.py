@@ -9,6 +9,7 @@ from typing import Any
 from typing import Dict
 from typing import List
 from typing import Set
+from urllib.parse import unquote
 from urllib.parse import urlparse
 
 import tomli
@@ -127,6 +128,7 @@ def parse_file_info(file_info: Dict[str, Any]) -> PackageFile:
     elif "url" in file_info:
         url = file_info["url"]
         _, file_name = urlparse(url).path.rsplit("/", 1)
+        file_name = unquote(file_name)
         urls = (url,)
     else:
         raise AssertionError("file entry has no file or url member")
