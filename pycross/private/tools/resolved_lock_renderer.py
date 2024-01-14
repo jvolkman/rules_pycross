@@ -35,6 +35,17 @@ def quoted_str(text: str) -> str:
     return json.dumps(text)
 
 
+def sanitized(name: str) -> str:
+    return name.lower().replace("-", "_").replace("@", "_").replace("+", "_")
+
+
+def prefixed(name: str, prefix: Optional[str]):
+    if not prefix:
+        return name
+    # Strip any trailing underscores from the provided prefix, first, then add one of our own.
+    return prefix.rstrip("_") + "_" + name
+
+
 class Naming:
     def __init__(
         self,
@@ -50,34 +61,23 @@ class Naming:
         self.repo_prefix = repo_prefix
         self.target_environment_select = target_environment_select
 
-    @staticmethod
-    def _sanitize(name: str) -> str:
-        return name.lower().replace("-", "_").replace("@", "_").replace("+", "_")
-
-    @staticmethod
-    def _prefixed(name: str, prefix: Optional[str]):
-        if not prefix:
-            return name
-        # Strip any trailing underscores from the provided prefix, first, then add one of our own.
-        return prefix.rstrip("_") + "_" + name
-
     def pin_target(self, package_name: str) -> str:
-        return self._prefixed(self._sanitize(package_name), self.package_prefix)
+        return prefixed(sanitized(package_name), self.package_prefix)
 
     def package_target(self, package_key: PackageKey) -> str:
-        return self._prefixed(self._sanitize(str(package_key)), self.package_prefix)
+        return prefixed(sanitized(str(package_key)), self.package_prefix)
 
     def package_label(self, package_key: PackageKey) -> str:
         return f":{self.package_target(package_key)}"
 
     def environment_target(self, environment_name: str) -> str:
-        return self._prefixed(self._sanitize(environment_name), self.environment_prefix)
+        return prefixed(sanitized(environment_name), self.environment_prefix)
 
     def environment_label(self, environment_name: str) -> str:
         return f":{self.environment_target(environment_name)}"
 
     def wheel_build_target(self, package_key: PackageKey) -> str:
-        return self._prefixed(self._sanitize(str(package_key)), self.build_prefix)
+        return prefixed(sanitized(str(package_key)), self.build_prefix)
 
     def wheel_build_label(self, package_key: PackageKey):
         return f":{self.wheel_build_target(package_key)}"
@@ -89,7 +89,7 @@ class Naming:
         else:
             name = file.name[:-4]
 
-        return f"{self.repo_prefix}_sdist_{self._sanitize(name)}"
+        return f"{self.repo_prefix}_sdist_{sanitized(name)}"
 
     def sdist_label(self, file: PackageFile) -> str:
         assert not file.is_wheel
