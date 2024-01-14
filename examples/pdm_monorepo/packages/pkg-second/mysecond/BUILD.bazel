@@ -3,6 +3,7 @@ load("@rules_python//python:defs.bzl", "py_library")
 py_library(
     name = "mysecond",
     srcs = ["__init__.py"],
+    imports = [".."],
     deps = [
         "//packages/pkg-core/mycore",
     ],

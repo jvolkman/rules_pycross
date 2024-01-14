@@ -4,4 +4,5 @@ py_library(
     name = "mycore",
     srcs = ["__init__.py"],
     visibility = ["//visibility:public"],
+    imports = [".."],
 )
