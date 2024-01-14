@@ -1,4 +1,4 @@
-load("@rules_python//python:defs.bzl", "py_library")
+load("@rules_python//python:defs.bzl", "py_binary", "py_library")
 
 py_library(
     name = "myfirst",
@@ -8,4 +8,13 @@ py_library(
         "//packages/pkg-core/mycore",
     ],
     visibility = ["//visibility:public"],
+)
+
+py_binary(
+    name = "myfirst_bin",
+    srcs = ["__init__.py"],
+    main = "__init__.py",
+    deps = [
+        "//packages/pkg-core/mycore",
+    ],
 )
