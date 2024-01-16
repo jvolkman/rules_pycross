@@ -7,11 +7,12 @@ def _pycross_lock_file_repo_impl(rctx):
 load("{lock_file}", "PINS", "repositories")
 
 def requirement(pkg):
-    # Convert given name into normalized package name with underscores.
-    pkg = pkg.replace("-", "_").replace(".", "_").lower()
+    # Convert given name into normalized package name.
+    # https://packaging.python.org/en/latest/specifications/name-normalization/#name-normalization
+    pkg = pkg.replace("_", "-").replace(".", "-").lower()
     for i in range(len(pkg)):
-        if "__" in pkg:
-            pkg = pkg.replace("__", "_")
+        if "--" in pkg:
+            pkg = pkg.replace("--", "-")
         else:
             break
     return "@{repo_name}//deps:%s" % pkg

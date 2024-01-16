@@ -7,12 +7,12 @@ load("@bazel_tools//tools/build_defs/repo:utils.bzl", "maybe")
 load("//pycross:defs.bzl", "pycross_wheel_library")
 
 PINS = {
-    "dacite": "dacite_1.6.0",
-    "installer": "installer_0.7.0",
-    "packaging": "packaging_23.2",
-    "pip": "pip_23.3.1",
-    "poetry_core": "poetry_core_1.8.1",
-    "tomli": "tomli_2.0.1",
+    "dacite": "dacite@1.6.0",
+    "installer": "installer@0.7.0",
+    "packaging": "packaging@23.2",
+    "pip": "pip@23.3.1",
+    "poetry-core": "poetry-core@1.8.1",
+    "tomli": "tomli@2.0.1",
 }
 
 FILES = {
@@ -44,32 +44,32 @@ def targets():
     })
 
     pycross_wheel_library(
-        name = "dacite_1.6.0",
+        name = "dacite@1.6.0",
         wheel = "@rules_pycross_internal_deps_wheel_dacite_1.6.0_py3_none_any//file",
     )
 
     pycross_wheel_library(
-        name = "installer_0.7.0",
+        name = "installer@0.7.0",
         wheel = "@rules_pycross_internal_deps_wheel_installer_0.7.0_py3_none_any//file",
     )
 
     pycross_wheel_library(
-        name = "packaging_23.2",
+        name = "packaging@23.2",
         wheel = "@rules_pycross_internal_deps_wheel_packaging_23.2_py3_none_any//file",
     )
 
     pycross_wheel_library(
-        name = "pip_23.3.1",
+        name = "pip@23.3.1",
         wheel = "@rules_pycross_internal_deps_wheel_pip_23.3.1_py3_none_any//file",
     )
 
     pycross_wheel_library(
-        name = "poetry_core_1.8.1",
+        name = "poetry-core@1.8.1",
         wheel = "@rules_pycross_internal_deps_wheel_poetry_core_1.8.1_py3_none_any//file",
     )
 
     pycross_wheel_library(
-        name = "tomli_2.0.1",
+        name = "tomli@2.0.1",
         wheel = "@rules_pycross_internal_deps_wheel_tomli_2.0.1_py3_none_any//file",
     )
 
