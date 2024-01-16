@@ -49,10 +49,6 @@ RENDER_ATTRS = dict(
         doc = "The prefix to apply to repository targets. Defaults to the lock file target name.",
         default = "",
     ),
-    package_prefix = attr.string(
-        doc = "An optional prefix to apply to package targets.",
-        default = "",
-    ),
     build_prefix = attr.string(
         doc = "An optional prefix to apply to package build targets. Defaults to _build",
         default = "_build",
@@ -190,9 +186,6 @@ def handle_render_attrs(attrs):
         repo_prefix = attrs.name.lower().replace("-", "_")
 
     args.extend(["--repo-prefix", repo_prefix])
-
-    if attrs.package_prefix:
-        args.extend(["--package-prefix", attrs.package_prefix])
 
     if attrs.build_prefix:
         args.extend(["--build-prefix", attrs.build_prefix])

@@ -6,28 +6,28 @@ load("@bazel_tools//tools/build_defs/repo:utils.bzl", "maybe")
 load("@rules_pycross//pycross:defs.bzl", "pycross_wheel_build", "pycross_wheel_library", "pypi_file")
 
 PINS = {
-    "appnope": "appnope_0.1.3",
-    "asttokens": "asttokens_2.4.1",
-    "decorator": "decorator_5.1.1",
-    "exceptiongroup": "exceptiongroup_1.2.0",
-    "executing": "executing_2.0.1",
-    "ipython": "ipython_8.17.2",
-    "jedi": "jedi_0.19.1",
-    "matplotlib_inline": "matplotlib_inline_0.1.6",
-    "parso": "parso_0.8.3",
-    "pexpect": "pexpect_4.9.0",
-    "prompt_toolkit": "prompt_toolkit_3.0.41",
-    "ptyprocess": "ptyprocess_0.7.0",
-    "pure_eval": "pure_eval_0.2.2",
-    "pygments": "pygments_2.17.2",
-    "regex": "regex_2023.10.3",
-    "setuptools": "setuptools_68.2.2",
-    "six": "six_1.16.0",
-    "stack_data": "stack_data_0.6.3",
-    "traitlets": "traitlets_5.14.0",
-    "wcwidth": "wcwidth_0.2.12",
-    "wheel": "wheel_0.41.3",
-    "zstandard": "zstandard_0.22.0",
+    "appnope": "appnope@0.1.3",
+    "asttokens": "asttokens@2.4.1",
+    "decorator": "decorator@5.1.1",
+    "exceptiongroup": "exceptiongroup@1.2.0",
+    "executing": "executing@2.0.1",
+    "ipython": "ipython@8.17.2",
+    "jedi": "jedi@0.19.1",
+    "matplotlib-inline": "matplotlib-inline@0.1.6",
+    "parso": "parso@0.8.3",
+    "pexpect": "pexpect@4.9.0",
+    "prompt-toolkit": "prompt-toolkit@3.0.41",
+    "ptyprocess": "ptyprocess@0.7.0",
+    "pure-eval": "pure-eval@0.2.2",
+    "pygments": "pygments@2.17.2",
+    "regex": "regex@2023.10.3",
+    "setuptools": "setuptools@68.2.2",
+    "six": "six@1.16.0",
+    "stack-data": "stack-data@0.6.3",
+    "traitlets": "traitlets@5.14.0",
+    "wcwidth": "wcwidth@0.2.12",
+    "wheel": "wheel@0.41.3",
+    "zstandard": "zstandard@0.22.0",
 }
 
 # buildifier: disable=unnamed-macro
@@ -41,223 +41,223 @@ def targets():
         )
 
     native.alias(
-        name = "_env_python_3.10.12_aarch64_apple_darwin",
+        name = "_env_python_3.10.12_aarch64-apple-darwin",
         actual = "@pycross_toolchains//:python_3.10.12_aarch64-apple-darwin_config",
     )
 
     native.alias(
-        name = "_env_python_3.10.12_aarch64_unknown_linux_gnu",
+        name = "_env_python_3.10.12_aarch64-unknown-linux-gnu",
         actual = "@pycross_toolchains//:python_3.10.12_aarch64-unknown-linux-gnu_config",
     )
 
     native.alias(
-        name = "_env_python_3.10.12_x86_64_apple_darwin",
+        name = "_env_python_3.10.12_x86_64-apple-darwin",
         actual = "@pycross_toolchains//:python_3.10.12_x86_64-apple-darwin_config",
     )
 
     native.alias(
-        name = "_env_python_3.10.12_x86_64_unknown_linux_gnu",
+        name = "_env_python_3.10.12_x86_64-unknown-linux-gnu",
         actual = "@pycross_toolchains//:python_3.10.12_x86_64-unknown-linux-gnu_config",
     )
 
     native.alias(
-        name = "_env_python_3.11.6_aarch64_apple_darwin",
+        name = "_env_python_3.11.6_aarch64-apple-darwin",
         actual = "@pycross_toolchains//:python_3.11.6_aarch64-apple-darwin_config",
     )
 
     native.alias(
-        name = "_env_python_3.11.6_aarch64_unknown_linux_gnu",
+        name = "_env_python_3.11.6_aarch64-unknown-linux-gnu",
         actual = "@pycross_toolchains//:python_3.11.6_aarch64-unknown-linux-gnu_config",
     )
 
     native.alias(
-        name = "_env_python_3.11.6_x86_64_apple_darwin",
+        name = "_env_python_3.11.6_x86_64-apple-darwin",
         actual = "@pycross_toolchains//:python_3.11.6_x86_64-apple-darwin_config",
     )
 
     native.alias(
-        name = "_env_python_3.11.6_x86_64_unknown_linux_gnu",
+        name = "_env_python_3.11.6_x86_64-unknown-linux-gnu",
         actual = "@pycross_toolchains//:python_3.11.6_x86_64-unknown-linux-gnu_config",
     )
 
     native.alias(
-        name = "_env_python_3.12.0_aarch64_apple_darwin",
+        name = "_env_python_3.12.0_aarch64-apple-darwin",
         actual = "@pycross_toolchains//:python_3.12.0_aarch64-apple-darwin_config",
     )
 
     native.alias(
-        name = "_env_python_3.12.0_aarch64_unknown_linux_gnu",
+        name = "_env_python_3.12.0_aarch64-unknown-linux-gnu",
         actual = "@pycross_toolchains//:python_3.12.0_aarch64-unknown-linux-gnu_config",
     )
 
     native.alias(
-        name = "_env_python_3.12.0_x86_64_apple_darwin",
+        name = "_env_python_3.12.0_x86_64-apple-darwin",
         actual = "@pycross_toolchains//:python_3.12.0_x86_64-apple-darwin_config",
     )
 
     native.alias(
-        name = "_env_python_3.12.0_x86_64_unknown_linux_gnu",
+        name = "_env_python_3.12.0_x86_64-unknown-linux-gnu",
         actual = "@pycross_toolchains//:python_3.12.0_x86_64-unknown-linux-gnu_config",
     )
 
     # buildifier: disable=unused-variable
     _target = select({
-        ":_env_python_3.10.12_aarch64_apple_darwin": "@pycross_toolchains//:python_3.10.12_aarch64-apple-darwin.json",
-        ":_env_python_3.10.12_aarch64_unknown_linux_gnu": "@pycross_toolchains//:python_3.10.12_aarch64-unknown-linux-gnu.json",
-        ":_env_python_3.10.12_x86_64_apple_darwin": "@pycross_toolchains//:python_3.10.12_x86_64-apple-darwin.json",
-        ":_env_python_3.10.12_x86_64_unknown_linux_gnu": "@pycross_toolchains//:python_3.10.12_x86_64-unknown-linux-gnu.json",
-        ":_env_python_3.11.6_aarch64_apple_darwin": "@pycross_toolchains//:python_3.11.6_aarch64-apple-darwin.json",
-        ":_env_python_3.11.6_aarch64_unknown_linux_gnu": "@pycross_toolchains//:python_3.11.6_aarch64-unknown-linux-gnu.json",
-        ":_env_python_3.11.6_x86_64_apple_darwin": "@pycross_toolchains//:python_3.11.6_x86_64-apple-darwin.json",
-        ":_env_python_3.11.6_x86_64_unknown_linux_gnu": "@pycross_toolchains//:python_3.11.6_x86_64-unknown-linux-gnu.json",
-        ":_env_python_3.12.0_aarch64_apple_darwin": "@pycross_toolchains//:python_3.12.0_aarch64-apple-darwin.json",
-        ":_env_python_3.12.0_aarch64_unknown_linux_gnu": "@pycross_toolchains//:python_3.12.0_aarch64-unknown-linux-gnu.json",
-        ":_env_python_3.12.0_x86_64_apple_darwin": "@pycross_toolchains//:python_3.12.0_x86_64-apple-darwin.json",
-        ":_env_python_3.12.0_x86_64_unknown_linux_gnu": "@pycross_toolchains//:python_3.12.0_x86_64-unknown-linux-gnu.json",
+        ":_env_python_3.10.12_aarch64-apple-darwin": "@pycross_toolchains//:python_3.10.12_aarch64-apple-darwin.json",
+        ":_env_python_3.10.12_aarch64-unknown-linux-gnu": "@pycross_toolchains//:python_3.10.12_aarch64-unknown-linux-gnu.json",
+        ":_env_python_3.10.12_x86_64-apple-darwin": "@pycross_toolchains//:python_3.10.12_x86_64-apple-darwin.json",
+        ":_env_python_3.10.12_x86_64-unknown-linux-gnu": "@pycross_toolchains//:python_3.10.12_x86_64-unknown-linux-gnu.json",
+        ":_env_python_3.11.6_aarch64-apple-darwin": "@pycross_toolchains//:python_3.11.6_aarch64-apple-darwin.json",
+        ":_env_python_3.11.6_aarch64-unknown-linux-gnu": "@pycross_toolchains//:python_3.11.6_aarch64-unknown-linux-gnu.json",
+        ":_env_python_3.11.6_x86_64-apple-darwin": "@pycross_toolchains//:python_3.11.6_x86_64-apple-darwin.json",
+        ":_env_python_3.11.6_x86_64-unknown-linux-gnu": "@pycross_toolchains//:python_3.11.6_x86_64-unknown-linux-gnu.json",
+        ":_env_python_3.12.0_aarch64-apple-darwin": "@pycross_toolchains//:python_3.12.0_aarch64-apple-darwin.json",
+        ":_env_python_3.12.0_aarch64-unknown-linux-gnu": "@pycross_toolchains//:python_3.12.0_aarch64-unknown-linux-gnu.json",
+        ":_env_python_3.12.0_x86_64-apple-darwin": "@pycross_toolchains//:python_3.12.0_x86_64-apple-darwin.json",
+        ":_env_python_3.12.0_x86_64-unknown-linux-gnu": "@pycross_toolchains//:python_3.12.0_x86_64-unknown-linux-gnu.json",
     })
 
     pycross_wheel_library(
-        name = "appnope_0.1.3",
+        name = "appnope@0.1.3",
         wheel = "@poetry_lock_file_wheel_appnope_0.1.3_py2.py3_none_any//file",
     )
 
     _asttokens_2_4_1_deps = [
-        ":six_1.16.0",
+        ":six@1.16.0",
     ]
 
     pycross_wheel_library(
-        name = "asttokens_2.4.1",
+        name = "asttokens@2.4.1",
         deps = _asttokens_2_4_1_deps,
         wheel = "@poetry_lock_file_wheel_asttokens_2.4.1_py2.py3_none_any//file",
     )
 
     pycross_wheel_library(
-        name = "decorator_5.1.1",
+        name = "decorator@5.1.1",
         wheel = "@poetry_lock_file_wheel_decorator_5.1.1_py3_none_any//file",
     )
 
     pycross_wheel_library(
-        name = "exceptiongroup_1.2.0",
+        name = "exceptiongroup@1.2.0",
         wheel = "@poetry_lock_file_wheel_exceptiongroup_1.2.0_py3_none_any//file",
     )
 
     pycross_wheel_library(
-        name = "executing_2.0.1",
+        name = "executing@2.0.1",
         wheel = "@poetry_lock_file_wheel_executing_2.0.1_py2.py3_none_any//file",
     )
 
     _ipython_8_17_2_deps = [
-        ":decorator_5.1.1",
-        ":jedi_0.19.1",
-        ":matplotlib_inline_0.1.6",
-        ":pexpect_4.9.0",
-        ":prompt_toolkit_3.0.41",
-        ":pygments_2.17.2",
-        ":stack_data_0.6.3",
-        ":traitlets_5.14.0",
+        ":decorator@5.1.1",
+        ":jedi@0.19.1",
+        ":matplotlib-inline@0.1.6",
+        ":pexpect@4.9.0",
+        ":prompt-toolkit@3.0.41",
+        ":pygments@2.17.2",
+        ":stack-data@0.6.3",
+        ":traitlets@5.14.0",
     ] + select({
-        ":_env_python_3.10.12_aarch64_apple_darwin": [
-            ":appnope_0.1.3",
-            ":exceptiongroup_1.2.0",
+        ":_env_python_3.10.12_aarch64-apple-darwin": [
+            ":appnope@0.1.3",
+            ":exceptiongroup@1.2.0",
         ],
-        ":_env_python_3.10.12_aarch64_unknown_linux_gnu": [
-            ":exceptiongroup_1.2.0",
+        ":_env_python_3.10.12_aarch64-unknown-linux-gnu": [
+            ":exceptiongroup@1.2.0",
         ],
-        ":_env_python_3.10.12_x86_64_apple_darwin": [
-            ":appnope_0.1.3",
-            ":exceptiongroup_1.2.0",
+        ":_env_python_3.10.12_x86_64-apple-darwin": [
+            ":appnope@0.1.3",
+            ":exceptiongroup@1.2.0",
         ],
-        ":_env_python_3.10.12_x86_64_unknown_linux_gnu": [
-            ":exceptiongroup_1.2.0",
+        ":_env_python_3.10.12_x86_64-unknown-linux-gnu": [
+            ":exceptiongroup@1.2.0",
         ],
-        ":_env_python_3.11.6_aarch64_apple_darwin": [
-            ":appnope_0.1.3",
+        ":_env_python_3.11.6_aarch64-apple-darwin": [
+            ":appnope@0.1.3",
         ],
-        ":_env_python_3.11.6_x86_64_apple_darwin": [
-            ":appnope_0.1.3",
+        ":_env_python_3.11.6_x86_64-apple-darwin": [
+            ":appnope@0.1.3",
         ],
-        ":_env_python_3.12.0_aarch64_apple_darwin": [
-            ":appnope_0.1.3",
+        ":_env_python_3.12.0_aarch64-apple-darwin": [
+            ":appnope@0.1.3",
         ],
-        ":_env_python_3.12.0_x86_64_apple_darwin": [
-            ":appnope_0.1.3",
+        ":_env_python_3.12.0_x86_64-apple-darwin": [
+            ":appnope@0.1.3",
         ],
         "//conditions:default": [],
     })
 
     pycross_wheel_library(
-        name = "ipython_8.17.2",
+        name = "ipython@8.17.2",
         deps = _ipython_8_17_2_deps,
         wheel = "@poetry_lock_file_wheel_ipython_8.17.2_py3_none_any//file",
     )
 
     _jedi_0_19_1_deps = [
-        ":parso_0.8.3",
+        ":parso@0.8.3",
     ]
 
     pycross_wheel_library(
-        name = "jedi_0.19.1",
+        name = "jedi@0.19.1",
         deps = _jedi_0_19_1_deps,
         wheel = "@poetry_lock_file_wheel_jedi_0.19.1_py2.py3_none_any//file",
     )
 
     _matplotlib_inline_0_1_6_deps = [
-        ":traitlets_5.14.0",
+        ":traitlets@5.14.0",
     ]
 
     pycross_wheel_library(
-        name = "matplotlib_inline_0.1.6",
+        name = "matplotlib-inline@0.1.6",
         deps = _matplotlib_inline_0_1_6_deps,
         wheel = "@poetry_lock_file_wheel_matplotlib_inline_0.1.6_py3_none_any//file",
     )
 
     pycross_wheel_library(
-        name = "parso_0.8.3",
+        name = "parso@0.8.3",
         wheel = "@poetry_lock_file_wheel_parso_0.8.3_py2.py3_none_any//file",
     )
 
     _pexpect_4_9_0_deps = [
-        ":ptyprocess_0.7.0",
+        ":ptyprocess@0.7.0",
     ]
 
     pycross_wheel_library(
-        name = "pexpect_4.9.0",
+        name = "pexpect@4.9.0",
         deps = _pexpect_4_9_0_deps,
         wheel = "@poetry_lock_file_wheel_pexpect_4.9.0_py2.py3_none_any//file",
     )
 
     _prompt_toolkit_3_0_41_deps = [
-        ":wcwidth_0.2.12",
+        ":wcwidth@0.2.12",
     ]
 
     pycross_wheel_library(
-        name = "prompt_toolkit_3.0.41",
+        name = "prompt-toolkit@3.0.41",
         deps = _prompt_toolkit_3_0_41_deps,
         wheel = "@poetry_lock_file_wheel_prompt_toolkit_3.0.41_py3_none_any//file",
     )
 
     pycross_wheel_library(
-        name = "ptyprocess_0.7.0",
+        name = "ptyprocess@0.7.0",
         wheel = "@poetry_lock_file_wheel_ptyprocess_0.7.0_py2.py3_none_any//file",
     )
 
     pycross_wheel_library(
-        name = "pure_eval_0.2.2",
+        name = "pure-eval@0.2.2",
         wheel = "@poetry_lock_file_wheel_pure_eval_0.2.2_py3_none_any//file",
     )
 
     pycross_wheel_library(
-        name = "pygments_2.17.2",
+        name = "pygments@2.17.2",
         wheel = "@poetry_lock_file_wheel_pygments_2.17.2_py3_none_any//file",
     )
 
     _regex_2023_10_3_build_deps = [
-        ":setuptools_68.2.2",
-        ":wheel_0.41.3",
+        ":setuptools@68.2.2",
+        ":wheel@0.41.3",
     ]
 
     pycross_wheel_build(
-        name = "_build_regex_2023.10.3",
+        name = "_build_regex@2023.10.3",
         sdist = "@poetry_lock_file_sdist_regex_2023.10.3//file",
         target_environment = _target,
         deps = _regex_2023_10_3_build_deps,
@@ -265,49 +265,49 @@ def targets():
     )
 
     pycross_wheel_library(
-        name = "regex_2023.10.3",
-        wheel = ":_build_regex_2023.10.3",
+        name = "regex@2023.10.3",
+        wheel = ":_build_regex@2023.10.3",
     )
 
     pycross_wheel_library(
-        name = "setuptools_68.2.2",
+        name = "setuptools@68.2.2",
         wheel = "@poetry_lock_file_wheel_setuptools_68.2.2_py3_none_any//file",
     )
 
     pycross_wheel_library(
-        name = "six_1.16.0",
+        name = "six@1.16.0",
         wheel = "@poetry_lock_file_wheel_six_1.16.0_py2.py3_none_any//file",
     )
 
     _stack_data_0_6_3_deps = [
-        ":asttokens_2.4.1",
-        ":executing_2.0.1",
-        ":pure_eval_0.2.2",
+        ":asttokens@2.4.1",
+        ":executing@2.0.1",
+        ":pure-eval@0.2.2",
     ]
 
     pycross_wheel_library(
-        name = "stack_data_0.6.3",
+        name = "stack-data@0.6.3",
         deps = _stack_data_0_6_3_deps,
         wheel = "@poetry_lock_file_wheel_stack_data_0.6.3_py3_none_any//file",
     )
 
     pycross_wheel_library(
-        name = "traitlets_5.14.0",
+        name = "traitlets@5.14.0",
         wheel = "@poetry_lock_file_wheel_traitlets_5.14.0_py3_none_any//file",
     )
 
     pycross_wheel_library(
-        name = "wcwidth_0.2.12",
+        name = "wcwidth@0.2.12",
         wheel = "@poetry_lock_file_wheel_wcwidth_0.2.12_py2.py3_none_any//file",
     )
 
     pycross_wheel_library(
-        name = "wheel_0.41.3",
+        name = "wheel@0.41.3",
         wheel = "@poetry_lock_file_wheel_wheel_0.41.3_py3_none_any//file",
     )
 
     pycross_wheel_library(
-        name = "zstandard_0.22.0",
+        name = "zstandard@0.22.0",
         wheel = "@//poetry:zstandard_build",
     )
 

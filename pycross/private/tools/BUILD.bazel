@@ -106,7 +106,7 @@ py_binary(
     deps = [
         ":args",
         ":lock_model",
-        "@rules_pycross_internal//deps:poetry_core",
+        "@rules_pycross_internal//deps:poetry-core",
         "@rules_pycross_internal//deps:tomli",
     ],
 )

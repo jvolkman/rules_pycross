@@ -1,8 +1,11 @@
+from __future__ import annotations
+
 import json
 import os
 import textwrap
 from argparse import ArgumentParser
 from collections import defaultdict
+from dataclasses import dataclass
 from functools import cached_property
 from pathlib import Path
 from typing import Any
@@ -46,63 +49,72 @@ def prefixed(name: str, prefix: Optional[str]):
     return prefix.rstrip("_") + "_" + name
 
 
+@dataclass(frozen=True)
+class TargetRef:
+    """A reference to a target, able to generate a label."""
+
+    target: str
+    package: Optional[str] = None
+    repo: Optional[str] = None
+
+    def __post_init__(self):
+        if self.repo is not None:
+            if self.package is None:
+                raise ValueError("package must be specified with repo")
+
+    @cached_property
+    def label(self):
+        repo_part = f"@{self.repo}" if self.repo is not None else ""
+        package_part = f"//{self.package}" if self.package is not None else ""
+        target_part = f":{self.target}"
+        # Handle special case target shorthand
+        if package_part:
+            _, last_component = package_part.rsplit("/", 1)
+            if last_component == self.target:
+                target_part = ""
+
+        return repo_part + package_part + target_part
+
+
+@dataclass(frozen=True)
+class QualifiedTargetRef(TargetRef):
+    """A TargetRef where all components are required."""
+
+    package: str
+    repo: str
+
+
 class Naming:
     def __init__(
         self,
-        package_prefix: Optional[str],
         build_prefix: Optional[str],
         environment_prefix: Optional[str],
         repo_prefix: Optional[str],
         target_environment_select: str,
     ):
-        self.package_prefix = package_prefix
         self.build_prefix = build_prefix
         self.environment_prefix = environment_prefix
         self.repo_prefix = repo_prefix
         self.target_environment_select = target_environment_select
 
-    def pin_target(self, package_name: str) -> str:
-        return prefixed(sanitized(package_name), self.package_prefix)
+    def package(self, package_key: PackageKey) -> TargetRef:
+        return TargetRef(str(package_key))
 
-    def package_target(self, package_key: PackageKey) -> str:
-        return prefixed(sanitized(str(package_key)), self.package_prefix)
+    def environment(self, environment_name: str) -> TargetRef:
+        return TargetRef(prefixed(environment_name, self.environment_prefix))
 
-    def package_label(self, package_key: PackageKey) -> str:
-        return f":{self.package_target(package_key)}"
+    def wheel_build(self, package_key: PackageKey) -> TargetRef:
+        return TargetRef(prefixed(str(package_key), self.build_prefix))
 
-    def environment_target(self, environment_name: str) -> str:
-        return prefixed(sanitized(environment_name), self.environment_prefix)
-
-    def environment_label(self, environment_name: str) -> str:
-        return f":{self.environment_target(environment_name)}"
-
-    def wheel_build_target(self, package_key: PackageKey) -> str:
-        return prefixed(sanitized(str(package_key)), self.build_prefix)
-
-    def wheel_build_label(self, package_key: PackageKey):
-        return f":{self.wheel_build_target(package_key)}"
-
-    def sdist_repo(self, file: PackageFile) -> str:
-        assert file.name.endswith(".tar.gz") or file.name.endswith(".zip")
-        if file.name.endswith(".tar.gz"):
-            name = file.name[:-7]
-        else:
-            name = file.name[:-4]
-
-        return f"{self.repo_prefix}_sdist_{sanitized(name)}"
-
-    def sdist_label(self, file: PackageFile) -> str:
-        assert not file.is_wheel
-        return f"@{self.sdist_repo(file)}//file"
-
-    def wheel_repo(self, file: PackageFile) -> str:
-        assert file.is_wheel
-        normalized_name = file.name[:-4].lower().replace("-", "_").replace("+", "_").replace("%2b", "_")
-        return f"{self.repo_prefix}_wheel_{normalized_name}"
-
-    def wheel_label(self, file: PackageFile):
-        assert file.is_wheel
-        return f"@{self.wheel_repo(file)}//file"
+    def repo_file(self, file: PackageFile) -> QualifiedTargetRef:
+        name = file.name
+        for extension in [".tar.gz", ".zip", ".whl"]:
+            if name.endswith(extension):
+                name = name[: -len(extension)]
+                break
+        typ = "sdist" if file.is_sdist else "wheel"
+        repo = f"{self.repo_prefix}_{typ}_{sanitized(name)}"
+        return QualifiedTargetRef(repo=repo, package="file", target="file")
 
 
 class EnvTarget:
@@ -114,7 +126,7 @@ class EnvTarget:
     def render(self) -> str:
         lines = [
             "native.config_setting(",
-            ind(f'name = "{self.naming.environment_target(self.environment_name)}",'),
+            ind(f'name = "{self.naming.environment(self.environment_name).target}",'),
         ]
         if self.setting.constraint_values:
             lines.append(ind("constraint_values = ["))
@@ -142,7 +154,7 @@ class EnvAliasTarget:
     def render(self) -> str:
         lines = [
             "native.alias(",
-            ind(f"name = {quoted_str(self.naming.environment_target(self.environment_name))},"),
+            ind(f"name = {quoted_str(self.naming.environment(self.environment_name).target)},"),
             ind(f"actual = {quoted_str(self.config_setting_target)},"),
             ")",
         ]
@@ -188,11 +200,11 @@ class PackageTarget:
 
     def _common_entries(self, deps: List[PackageKey], indent: int) -> Iterator[str]:
         for dep in deps:
-            yield ind(f'"{self.naming.package_label(dep)}",', indent)
+            yield ind(f'"{self.naming.package(dep).label}",', indent)
 
     def _select_entries(self, env_deps: Dict[str, List[PackageKey]], indent) -> Iterator[str]:
         for env_name, deps in env_deps.items():
-            yield ind(f'"{self.naming.environment_label(env_name)}": [', indent)
+            yield ind(f'"{self.naming.environment(env_name).label}": [', indent)
             yield from self._common_entries(deps, indent + 1)
             yield ind("],", indent)
         yield ind('"//conditions:default": [],', indent)
@@ -233,8 +245,8 @@ class PackageTarget:
 
     def _render_build_deps(self) -> str:
         lines = [f"{self._build_deps_name} = ["]
-        for dep in sorted(self.package.build_dependencies, key=lambda k: self.naming.package_label(k)):
-            lines.append(ind(f'"{self.naming.package_label(dep)}",', 1))
+        for dep in sorted(self.package.build_dependencies, key=lambda k: self.naming.package(k).label):
+            lines.append(ind(f'"{self.naming.package(dep).label}",', 1))
         lines.append("]")
 
         return "\n".join(lines)
@@ -245,7 +257,7 @@ class PackageTarget:
 
         lines = [
             "pycross_wheel_build(",
-            ind(f'name = "{self.naming.wheel_build_target(self.package.key)}",'),
+            ind(f'name = "{self.naming.wheel_build(self.package.key).target}",'),
             ind(f'sdist = "{sdist_label}",'),
             ind(f"target_environment = {self.naming.target_environment_select},"),
         ]
@@ -270,7 +282,7 @@ class PackageTarget:
     def _render_pkg(self) -> str:
         lines = [
             "pycross_wheel_library(",
-            ind(f'name = "{self.naming.package_target(self.package.key)}",'),
+            ind(f'name = "{self.naming.package(self.package.key).target}",'),
         ]
         if self._has_runtime_deps:
             lines.append(ind(f"deps = {self._deps_name},"))
@@ -288,7 +300,7 @@ class PackageTarget:
             elif self.package.build_target:
                 return self.package.build_target
             else:
-                return self.naming.wheel_build_label(self.package.key)
+                return self.naming.wheel_build(self.package.key).label
 
         distinct_file_refs = set(self.package.environment_files.values())
         if len(distinct_file_refs) == 1:
@@ -299,7 +311,7 @@ class PackageTarget:
             for env_name, ref in self.package.environment_files.items():
                 lines.append(
                     ind(
-                        f'"{self.naming.environment_label(env_name)}": "{wheel_target(ref)}",',
+                        f'"{self.naming.environment(env_name).label}": "{wheel_target(ref)}",',
                         2,
                     )
                 )
@@ -390,26 +402,6 @@ class PypiFileRepoTarget:
         return "\n".join(lines)
 
 
-class PypiWheelRepoTarget(PypiFileRepoTarget):
-    def __init__(
-        self,
-        file: PackageFile,
-        pypi_index: Optional[str],
-        naming: Naming,
-    ):
-        super().__init__(naming.wheel_repo(file), file, pypi_index)
-
-
-class PypiSdistRepoTarget(PypiFileRepoTarget):
-    def __init__(
-        self,
-        file: PackageFile,
-        pypi_index: Optional[str],
-        naming: Naming,
-    ):
-        super().__init__(naming.sdist_repo(file), file, pypi_index)
-
-
 def gen_load_statements(imports: Set[str], pycross_repo: str) -> List[str]:
     possible_imports = {
         "http_file": "@bazel_tools//tools/build_defs/repo:http.bzl",
@@ -437,7 +429,6 @@ def gen_load_statements(imports: Set[str], pycross_repo: str) -> List[str]:
 def render(resolved_lock: ResolvedLockSet, args: Any, output: TextIO) -> None:
     naming = Naming(
         repo_prefix=args.repo_prefix,
-        package_prefix=args.package_prefix,
         build_prefix=args.build_prefix,
         environment_prefix=args.environment_prefix,
         target_environment_select="_target",
@@ -452,12 +443,9 @@ def render(resolved_lock: ResolvedLockSet, args: Any, output: TextIO) -> None:
         if file_key in repo_labels:
             continue
 
-        if file.is_wheel:
-            name = naming.wheel_repo(file)
-            repo_labels[file_key] = naming.wheel_label(file)
-        else:
-            name = naming.sdist_repo(file)
-            repo_labels[file_key] = naming.sdist_label(file)
+        target = naming.repo_file(file)
+        name = target.repo
+        repo_labels[file_key] = target.label
 
         if file.urls:
             repo_targets.append(UrlRepoTarget(name, file))
@@ -475,10 +463,10 @@ def render(resolved_lock: ResolvedLockSet, args: Any, output: TextIO) -> None:
         for p in resolved_lock.packages.values()
     ]
 
-    # pin aliases are normalized package names with underscores rather than hashes.
+    # pin aliases follow the standard package normalization rules.
+    # https://packaging.python.org/en/latest/specifications/name-normalization/#name-normalization
     def pin_name(name: str) -> str:
-        normal_name = package_canonical_name(name)
-        return normal_name.lower().replace("-", "_")
+        return package_canonical_name(name)
 
     pins = {pin_name(k): v for k, v in resolved_lock.pins.items()}
 
@@ -511,7 +499,7 @@ def render(resolved_lock: ResolvedLockSet, args: Any, output: TextIO) -> None:
         w("PINS = {")
         for pinned_package_name in sorted(pins.keys()):
             pinned_package_key = pins[pinned_package_name]
-            w(ind(f"{quoted_str(pinned_package_name)}: {quoted_str(naming.package_target(pinned_package_key))},"))
+            w(ind(f"{quoted_str(pinned_package_name)}: {quoted_str(naming.package(pinned_package_key).target)},"))
         w("}")
         w()
     else:
@@ -562,7 +550,7 @@ def render(resolved_lock: ResolvedLockSet, args: Any, output: TextIO) -> None:
     for env_name, env_ref in resolved_lock.environments.items():
         w(
             ind(
-                f'"{naming.environment_label(env_name)}": "{env_ref.environment_label}",',
+                f'"{naming.environment(env_name).label}": "{env_ref.environment_label}",',
                 2,
             )
         )
@@ -596,12 +584,6 @@ def add_shared_flags(parser: ArgumentParser) -> None:
         type=str,
         default="",
         help="The prefix to apply to repository targets.",
-    )
-
-    parser.add_argument(
-        "--package-prefix",
-        default="",
-        help="The prefix to apply to packages targets.",
     )
 
     parser.add_argument(
