@@ -1,4 +1,11 @@
-"""Implementation of the resolved_lock_repo rule."""
+"""Implementation of the resolved_lock_repo rule.
+
+`resolved_lock_repo` takes an importable third-party lock (PDM or Poetry) and:
+1. runs that lock type's translator to generate a "raw" lock structure.
+2. runs `raw_lock_resolver` to generate a resolved lock structure.
+
+The output of #2 is stored as `//:lock.json` and consumed by `package_repo`.
+"""
 
 load(":internal_repo.bzl", "exec_internal_tool")
 load(":lock_attrs.bzl", "RESOLVE_ATTRS", "handle_resolve_attrs")

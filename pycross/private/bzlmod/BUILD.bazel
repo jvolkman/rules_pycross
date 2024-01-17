@@ -53,8 +53,8 @@ bzl_library(
     srcs = ["lock_repos.bzl"],
     deps = [
         ":tag_attrs",
+        "//pycross/private:package_repo",
         "//pycross/private:pypi_file",
-        "//pycross/private:rendered_lock_repo",
         "@bazel_tools//tools/build_defs/repo:http.bzl",
     ],
 )

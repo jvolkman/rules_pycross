@@ -2,8 +2,8 @@
 
 load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_file")
 load("@lock_import_repos_hub//:locks.bzl", lock_import_locks = "locks")
+load("//pycross/private:package_repo.bzl", "package_repo")
 load("//pycross/private:pypi_file.bzl", "pypi_file")
-load("//pycross/private:rendered_lock_repo.bzl", "rendered_lock_repo")
 load(":tag_attrs.bzl", "CREATE_REPOS_ATTRS")
 
 # buildifier: disable=print
@@ -76,7 +76,7 @@ def _lock_repos_impl(module_ctx):
             repo_remote_files[key] = remote_file_label
             all_remote_files[key] = remote_file_label
 
-        rendered_lock_repo(
+        package_repo(
             name = repo_name,
             resolved_lock_file = lock_file,
             repo_map = repo_remote_files,
