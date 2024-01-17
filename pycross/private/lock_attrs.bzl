@@ -53,6 +53,10 @@ RENDER_ATTRS = dict(
         doc = "An optional prefix to apply to package build targets. Defaults to _build",
         default = "_build",
     ),
+    wheel_prefix = attr.string(
+        doc = "The prefix to apply to package wheel targets. Defaults to _wheel",
+        default = "_wheel",
+    ),
     environment_prefix = attr.string(
         doc = "An optional prefix to apply to environment targets. Defaults to _env",
         default = "_env",
@@ -186,6 +190,9 @@ def handle_render_attrs(attrs):
         repo_prefix = attrs.name.lower().replace("-", "_")
 
     args.extend(["--repo-prefix", repo_prefix])
+
+    if attrs.wheel_prefix:
+        args.extend(["--wheel-prefix", attrs.wheel_prefix])
 
     if attrs.build_prefix:
         args.extend(["--build-prefix", attrs.build_prefix])

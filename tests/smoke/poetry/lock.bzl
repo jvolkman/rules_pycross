@@ -116,34 +116,59 @@ def targets():
         ":_env_python_3.12.0_x86_64-unknown-linux-gnu": "@pycross_toolchains//:python_3.12.0_x86_64-unknown-linux-gnu.json",
     })
 
+    native.alias(
+        name = "_wheel_appnope@0.1.3",
+        actual = "@poetry_lock_file_wheel_appnope_0.1.3_py2.py3_none_any//file",
+    )
+
     pycross_wheel_library(
         name = "appnope@0.1.3",
-        wheel = "@poetry_lock_file_wheel_appnope_0.1.3_py2.py3_none_any//file",
+        wheel = ":_wheel_appnope@0.1.3",
     )
 
     _asttokens_2_4_1_deps = [
         ":six@1.16.0",
     ]
 
+    native.alias(
+        name = "_wheel_asttokens@2.4.1",
+        actual = "@poetry_lock_file_wheel_asttokens_2.4.1_py2.py3_none_any//file",
+    )
+
     pycross_wheel_library(
         name = "asttokens@2.4.1",
         deps = _asttokens_2_4_1_deps,
-        wheel = "@poetry_lock_file_wheel_asttokens_2.4.1_py2.py3_none_any//file",
+        wheel = ":_wheel_asttokens@2.4.1",
+    )
+
+    native.alias(
+        name = "_wheel_decorator@5.1.1",
+        actual = "@poetry_lock_file_wheel_decorator_5.1.1_py3_none_any//file",
     )
 
     pycross_wheel_library(
         name = "decorator@5.1.1",
-        wheel = "@poetry_lock_file_wheel_decorator_5.1.1_py3_none_any//file",
+        wheel = ":_wheel_decorator@5.1.1",
+    )
+
+    native.alias(
+        name = "_wheel_exceptiongroup@1.2.0",
+        actual = "@poetry_lock_file_wheel_exceptiongroup_1.2.0_py3_none_any//file",
     )
 
     pycross_wheel_library(
         name = "exceptiongroup@1.2.0",
-        wheel = "@poetry_lock_file_wheel_exceptiongroup_1.2.0_py3_none_any//file",
+        wheel = ":_wheel_exceptiongroup@1.2.0",
+    )
+
+    native.alias(
+        name = "_wheel_executing@2.0.1",
+        actual = "@poetry_lock_file_wheel_executing_2.0.1_py2.py3_none_any//file",
     )
 
     pycross_wheel_library(
         name = "executing@2.0.1",
-        wheel = "@poetry_lock_file_wheel_executing_2.0.1_py2.py3_none_any//file",
+        wheel = ":_wheel_executing@2.0.1",
     )
 
     _ipython_8_17_2_deps = [
@@ -185,70 +210,115 @@ def targets():
         "//conditions:default": [],
     })
 
+    native.alias(
+        name = "_wheel_ipython@8.17.2",
+        actual = "@poetry_lock_file_wheel_ipython_8.17.2_py3_none_any//file",
+    )
+
     pycross_wheel_library(
         name = "ipython@8.17.2",
         deps = _ipython_8_17_2_deps,
-        wheel = "@poetry_lock_file_wheel_ipython_8.17.2_py3_none_any//file",
+        wheel = ":_wheel_ipython@8.17.2",
     )
 
     _jedi_0_19_1_deps = [
         ":parso@0.8.3",
     ]
 
+    native.alias(
+        name = "_wheel_jedi@0.19.1",
+        actual = "@poetry_lock_file_wheel_jedi_0.19.1_py2.py3_none_any//file",
+    )
+
     pycross_wheel_library(
         name = "jedi@0.19.1",
         deps = _jedi_0_19_1_deps,
-        wheel = "@poetry_lock_file_wheel_jedi_0.19.1_py2.py3_none_any//file",
+        wheel = ":_wheel_jedi@0.19.1",
     )
 
     _matplotlib_inline_0_1_6_deps = [
         ":traitlets@5.14.0",
     ]
 
+    native.alias(
+        name = "_wheel_matplotlib-inline@0.1.6",
+        actual = "@poetry_lock_file_wheel_matplotlib_inline_0.1.6_py3_none_any//file",
+    )
+
     pycross_wheel_library(
         name = "matplotlib-inline@0.1.6",
         deps = _matplotlib_inline_0_1_6_deps,
-        wheel = "@poetry_lock_file_wheel_matplotlib_inline_0.1.6_py3_none_any//file",
+        wheel = ":_wheel_matplotlib-inline@0.1.6",
+    )
+
+    native.alias(
+        name = "_wheel_parso@0.8.3",
+        actual = "@poetry_lock_file_wheel_parso_0.8.3_py2.py3_none_any//file",
     )
 
     pycross_wheel_library(
         name = "parso@0.8.3",
-        wheel = "@poetry_lock_file_wheel_parso_0.8.3_py2.py3_none_any//file",
+        wheel = ":_wheel_parso@0.8.3",
     )
 
     _pexpect_4_9_0_deps = [
         ":ptyprocess@0.7.0",
     ]
 
+    native.alias(
+        name = "_wheel_pexpect@4.9.0",
+        actual = "@poetry_lock_file_wheel_pexpect_4.9.0_py2.py3_none_any//file",
+    )
+
     pycross_wheel_library(
         name = "pexpect@4.9.0",
         deps = _pexpect_4_9_0_deps,
-        wheel = "@poetry_lock_file_wheel_pexpect_4.9.0_py2.py3_none_any//file",
+        wheel = ":_wheel_pexpect@4.9.0",
     )
 
     _prompt_toolkit_3_0_41_deps = [
         ":wcwidth@0.2.12",
     ]
 
+    native.alias(
+        name = "_wheel_prompt-toolkit@3.0.41",
+        actual = "@poetry_lock_file_wheel_prompt_toolkit_3.0.41_py3_none_any//file",
+    )
+
     pycross_wheel_library(
         name = "prompt-toolkit@3.0.41",
         deps = _prompt_toolkit_3_0_41_deps,
-        wheel = "@poetry_lock_file_wheel_prompt_toolkit_3.0.41_py3_none_any//file",
+        wheel = ":_wheel_prompt-toolkit@3.0.41",
+    )
+
+    native.alias(
+        name = "_wheel_ptyprocess@0.7.0",
+        actual = "@poetry_lock_file_wheel_ptyprocess_0.7.0_py2.py3_none_any//file",
     )
 
     pycross_wheel_library(
         name = "ptyprocess@0.7.0",
-        wheel = "@poetry_lock_file_wheel_ptyprocess_0.7.0_py2.py3_none_any//file",
+        wheel = ":_wheel_ptyprocess@0.7.0",
+    )
+
+    native.alias(
+        name = "_wheel_pure-eval@0.2.2",
+        actual = "@poetry_lock_file_wheel_pure_eval_0.2.2_py3_none_any//file",
     )
 
     pycross_wheel_library(
         name = "pure-eval@0.2.2",
-        wheel = "@poetry_lock_file_wheel_pure_eval_0.2.2_py3_none_any//file",
+        wheel = ":_wheel_pure-eval@0.2.2",
+    )
+
+    native.alias(
+        name = "_wheel_pygments@2.17.2",
+        actual = "@poetry_lock_file_wheel_pygments_2.17.2_py3_none_any//file",
     )
 
     pycross_wheel_library(
         name = "pygments@2.17.2",
-        wheel = "@poetry_lock_file_wheel_pygments_2.17.2_py3_none_any//file",
+        wheel = ":_wheel_pygments@2.17.2",
     )
 
     _regex_2023_10_3_build_deps = [
@@ -264,19 +334,34 @@ def targets():
         tags = ["manual"],
     )
 
+    native.alias(
+        name = "_wheel_regex@2023.10.3",
+        actual = ":_build_regex@2023.10.3",
+    )
+
     pycross_wheel_library(
         name = "regex@2023.10.3",
-        wheel = ":_build_regex@2023.10.3",
+        wheel = ":_wheel_regex@2023.10.3",
+    )
+
+    native.alias(
+        name = "_wheel_setuptools@68.2.2",
+        actual = "@poetry_lock_file_wheel_setuptools_68.2.2_py3_none_any//file",
     )
 
     pycross_wheel_library(
         name = "setuptools@68.2.2",
-        wheel = "@poetry_lock_file_wheel_setuptools_68.2.2_py3_none_any//file",
+        wheel = ":_wheel_setuptools@68.2.2",
+    )
+
+    native.alias(
+        name = "_wheel_six@1.16.0",
+        actual = "@poetry_lock_file_wheel_six_1.16.0_py2.py3_none_any//file",
     )
 
     pycross_wheel_library(
         name = "six@1.16.0",
-        wheel = "@poetry_lock_file_wheel_six_1.16.0_py2.py3_none_any//file",
+        wheel = ":_wheel_six@1.16.0",
     )
 
     _stack_data_0_6_3_deps = [
@@ -285,30 +370,55 @@ def targets():
         ":pure-eval@0.2.2",
     ]
 
+    native.alias(
+        name = "_wheel_stack-data@0.6.3",
+        actual = "@poetry_lock_file_wheel_stack_data_0.6.3_py3_none_any//file",
+    )
+
     pycross_wheel_library(
         name = "stack-data@0.6.3",
         deps = _stack_data_0_6_3_deps,
-        wheel = "@poetry_lock_file_wheel_stack_data_0.6.3_py3_none_any//file",
+        wheel = ":_wheel_stack-data@0.6.3",
+    )
+
+    native.alias(
+        name = "_wheel_traitlets@5.14.0",
+        actual = "@poetry_lock_file_wheel_traitlets_5.14.0_py3_none_any//file",
     )
 
     pycross_wheel_library(
         name = "traitlets@5.14.0",
-        wheel = "@poetry_lock_file_wheel_traitlets_5.14.0_py3_none_any//file",
+        wheel = ":_wheel_traitlets@5.14.0",
+    )
+
+    native.alias(
+        name = "_wheel_wcwidth@0.2.12",
+        actual = "@poetry_lock_file_wheel_wcwidth_0.2.12_py2.py3_none_any//file",
     )
 
     pycross_wheel_library(
         name = "wcwidth@0.2.12",
-        wheel = "@poetry_lock_file_wheel_wcwidth_0.2.12_py2.py3_none_any//file",
+        wheel = ":_wheel_wcwidth@0.2.12",
+    )
+
+    native.alias(
+        name = "_wheel_wheel@0.41.3",
+        actual = "@poetry_lock_file_wheel_wheel_0.41.3_py3_none_any//file",
     )
 
     pycross_wheel_library(
         name = "wheel@0.41.3",
-        wheel = "@poetry_lock_file_wheel_wheel_0.41.3_py3_none_any//file",
+        wheel = ":_wheel_wheel@0.41.3",
+    )
+
+    native.alias(
+        name = "_wheel_zstandard@0.22.0",
+        actual = "@//poetry:zstandard_build",
     )
 
     pycross_wheel_library(
         name = "zstandard@0.22.0",
-        wheel = "@//poetry:zstandard_build",
+        wheel = ":_wheel_zstandard@0.22.0",
     )
 
 # buildifier: disable=unnamed-macro

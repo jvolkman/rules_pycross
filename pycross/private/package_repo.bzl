@@ -12,6 +12,7 @@ The file structure is as follows:
 From a target perspective:
 - //:package            - The pycross_wheel_library target.
 - //package:lib         - Same as above.
+- //package:wheel       - The package's wheel file.
 
 The idea is that, for a repo named "pypi", something will depend on e.g. `@pypi//:numpy` or `@pypi//:pandas`.
 
@@ -49,6 +50,11 @@ alias(
     name = "lib",
     actual = "//_pkg:{package_key}",
 )
+
+alias(
+    name = "wheel",
+    actual = "//_pkg:_wheel_{package_key}",
+)
 """
 
 def _root_build(pins):
@@ -74,10 +80,6 @@ def _generate_lock_bzl(rctx, lock_json_path, lock_bzl_path):
     args = [
         "--pycross-repo-name",
         "@rules_pycross",
-        "--build-prefix",
-        "_build",
-        "--environment-prefix",
-        "_env",
         "--no-pins",
         "--resolved-lock",
         lock_json_path,
