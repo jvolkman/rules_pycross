@@ -36,9 +36,14 @@ def targets():
         ":_env_rules_pycross_deps_target_env": "//pycross/private:rules_pycross_deps_target_env",
     })
 
+    native.alias(
+        name = "_wheel_altgraph@0.17.4",
+        actual = "@rules_pycross_internal_deps_wheel_altgraph_0.17.4_py2.py3_none_any//file",
+    )
+
     pycross_wheel_library(
         name = "altgraph@0.17.4",
-        wheel = "@rules_pycross_internal_deps_wheel_altgraph_0.17.4_py2.py3_none_any//file",
+        wheel = ":_wheel_altgraph@0.17.4",
     )
 
     _build_1_0_3_deps = [
@@ -48,85 +53,145 @@ def targets():
         ":tomli@2.0.1",
     ]
 
+    native.alias(
+        name = "_wheel_build@1.0.3",
+        actual = "@rules_pycross_internal_deps_wheel_build_1.0.3_py3_none_any//file",
+    )
+
     pycross_wheel_library(
         name = "build@1.0.3",
         deps = _build_1_0_3_deps,
-        wheel = "@rules_pycross_internal_deps_wheel_build_1.0.3_py3_none_any//file",
+        wheel = ":_wheel_build@1.0.3",
+    )
+
+    native.alias(
+        name = "_wheel_dacite@1.6.0",
+        actual = "@rules_pycross_internal_deps_wheel_dacite_1.6.0_py3_none_any//file",
     )
 
     pycross_wheel_library(
         name = "dacite@1.6.0",
-        wheel = "@rules_pycross_internal_deps_wheel_dacite_1.6.0_py3_none_any//file",
+        wheel = ":_wheel_dacite@1.6.0",
     )
 
     _delvewheel_1_5_1_deps = [
         ":pefile@2023.2.7",
     ]
 
+    native.alias(
+        name = "_wheel_delvewheel@1.5.1",
+        actual = "@rules_pycross_internal_deps_wheel_delvewheel_1.5.1_py3_none_any//file",
+    )
+
     pycross_wheel_library(
         name = "delvewheel@1.5.1",
         deps = _delvewheel_1_5_1_deps,
-        wheel = "@rules_pycross_internal_deps_wheel_delvewheel_1.5.1_py3_none_any//file",
+        wheel = ":_wheel_delvewheel@1.5.1",
     )
 
     _importlib_metadata_6_9_0_deps = [
         ":zipp@3.17.0",
     ]
 
+    native.alias(
+        name = "_wheel_importlib-metadata@6.9.0",
+        actual = "@rules_pycross_internal_deps_wheel_importlib_metadata_6.9.0_py3_none_any//file",
+    )
+
     pycross_wheel_library(
         name = "importlib-metadata@6.9.0",
         deps = _importlib_metadata_6_9_0_deps,
-        wheel = "@rules_pycross_internal_deps_wheel_importlib_metadata_6.9.0_py3_none_any//file",
+        wheel = ":_wheel_importlib-metadata@6.9.0",
+    )
+
+    native.alias(
+        name = "_wheel_installer@0.7.0",
+        actual = "@rules_pycross_internal_deps_wheel_installer_0.7.0_py3_none_any//file",
     )
 
     pycross_wheel_library(
         name = "installer@0.7.0",
-        wheel = "@rules_pycross_internal_deps_wheel_installer_0.7.0_py3_none_any//file",
+        wheel = ":_wheel_installer@0.7.0",
     )
 
     _macholib_1_16_3_deps = [
         ":altgraph@0.17.4",
     ]
 
+    native.alias(
+        name = "_wheel_macholib@1.16.3",
+        actual = "@rules_pycross_internal_deps_wheel_macholib_1.16.3_py2.py3_none_any//file",
+    )
+
     pycross_wheel_library(
         name = "macholib@1.16.3",
         deps = _macholib_1_16_3_deps,
-        wheel = "@rules_pycross_internal_deps_wheel_macholib_1.16.3_py2.py3_none_any//file",
+        wheel = ":_wheel_macholib@1.16.3",
+    )
+
+    native.alias(
+        name = "_wheel_packaging@23.2",
+        actual = "@rules_pycross_internal_deps_wheel_packaging_23.2_py3_none_any//file",
     )
 
     pycross_wheel_library(
         name = "packaging@23.2",
-        wheel = "@rules_pycross_internal_deps_wheel_packaging_23.2_py3_none_any//file",
+        wheel = ":_wheel_packaging@23.2",
+    )
+
+    native.alias(
+        name = "_wheel_pefile@2023.2.7",
+        actual = "@rules_pycross_internal_deps_wheel_pefile_2023.2.7_py3_none_any//file",
     )
 
     pycross_wheel_library(
         name = "pefile@2023.2.7",
-        wheel = "@rules_pycross_internal_deps_wheel_pefile_2023.2.7_py3_none_any//file",
+        wheel = ":_wheel_pefile@2023.2.7",
+    )
+
+    native.alias(
+        name = "_wheel_pip@23.3.1",
+        actual = "@rules_pycross_internal_deps_wheel_pip_23.3.1_py3_none_any//file",
     )
 
     pycross_wheel_library(
         name = "pip@23.3.1",
-        wheel = "@rules_pycross_internal_deps_wheel_pip_23.3.1_py3_none_any//file",
+        wheel = ":_wheel_pip@23.3.1",
+    )
+
+    native.alias(
+        name = "_wheel_poetry-core@1.8.1",
+        actual = "@rules_pycross_internal_deps_wheel_poetry_core_1.8.1_py3_none_any//file",
     )
 
     pycross_wheel_library(
         name = "poetry-core@1.8.1",
-        wheel = "@rules_pycross_internal_deps_wheel_poetry_core_1.8.1_py3_none_any//file",
+        wheel = ":_wheel_poetry-core@1.8.1",
+    )
+
+    native.alias(
+        name = "_wheel_pyelftools@0.30",
+        actual = "@rules_pycross_internal_deps_wheel_pyelftools_0.30_py2.py3_none_any//file",
     )
 
     pycross_wheel_library(
         name = "pyelftools@0.30",
-        wheel = "@rules_pycross_internal_deps_wheel_pyelftools_0.30_py2.py3_none_any//file",
+        wheel = ":_wheel_pyelftools@0.30",
     )
 
     _pyproject_hooks_1_0_0_deps = [
         ":tomli@2.0.1",
     ]
 
+    native.alias(
+        name = "_wheel_pyproject-hooks@1.0.0",
+        actual = "@rules_pycross_internal_deps_wheel_pyproject_hooks_1.0.0_py3_none_any//file",
+    )
+
     pycross_wheel_library(
         name = "pyproject-hooks@1.0.0",
         deps = _pyproject_hooks_1_0_0_deps,
-        wheel = "@rules_pycross_internal_deps_wheel_pyproject_hooks_1.0.0_py3_none_any//file",
+        wheel = ":_wheel_pyproject-hooks@1.0.0",
     )
 
     _repairwheel_0_2_6_deps = [
@@ -137,20 +202,35 @@ def targets():
         ":pyelftools@0.30",
     ]
 
+    native.alias(
+        name = "_wheel_repairwheel@0.2.6",
+        actual = "@rules_pycross_internal_deps_wheel_repairwheel_0.2.6_py3_none_any//file",
+    )
+
     pycross_wheel_library(
         name = "repairwheel@0.2.6",
         deps = _repairwheel_0_2_6_deps,
-        wheel = "@rules_pycross_internal_deps_wheel_repairwheel_0.2.6_py3_none_any//file",
+        wheel = ":_wheel_repairwheel@0.2.6",
+    )
+
+    native.alias(
+        name = "_wheel_tomli@2.0.1",
+        actual = "@rules_pycross_internal_deps_wheel_tomli_2.0.1_py3_none_any//file",
     )
 
     pycross_wheel_library(
         name = "tomli@2.0.1",
-        wheel = "@rules_pycross_internal_deps_wheel_tomli_2.0.1_py3_none_any//file",
+        wheel = ":_wheel_tomli@2.0.1",
+    )
+
+    native.alias(
+        name = "_wheel_zipp@3.17.0",
+        actual = "@rules_pycross_internal_deps_wheel_zipp_3.17.0_py3_none_any//file",
     )
 
     pycross_wheel_library(
         name = "zipp@3.17.0",
-        wheel = "@rules_pycross_internal_deps_wheel_zipp_3.17.0_py3_none_any//file",
+        wheel = ":_wheel_zipp@3.17.0",
     )
 
 # buildifier: disable=unnamed-macro

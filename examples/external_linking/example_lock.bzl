@@ -86,24 +86,34 @@ def targets():
         ":_env_python_linux_x86_64": "@rules_pycross_example//:python_linux_x86_64",
     })
 
+    native.alias(
+        name = "_wheel_appnope@0.1.3",
+        actual = "@example_lock_wheel_appnope_0.1.3_py2.py3_none_any//file",
+    )
+
     pycross_wheel_library(
         name = "appnope@0.1.3",
-        wheel = "@example_lock_wheel_appnope_0.1.3_py2.py3_none_any//file",
+        wheel = ":_wheel_appnope@0.1.3",
     )
 
     _asttokens_2_4_1_deps = [
         ":six@1.16.0",
     ]
 
-    pycross_wheel_library(
-        name = "asttokens@2.4.1",
-        deps = _asttokens_2_4_1_deps,
-        wheel = "@example_lock_wheel_asttokens_2.4.1_py2.py3_none_any//file",
+    native.alias(
+        name = "_wheel_asttokens@2.4.1",
+        actual = "@example_lock_wheel_asttokens_2.4.1_py2.py3_none_any//file",
     )
 
     pycross_wheel_library(
-        name = "cython@0.29.36",
-        wheel = select({
+        name = "asttokens@2.4.1",
+        deps = _asttokens_2_4_1_deps,
+        wheel = ":_wheel_asttokens@2.4.1",
+    )
+
+    native.alias(
+        name = "_wheel_cython@0.29.36",
+        actual = select({
             ":_env_python_darwin_arm64": "@example_lock_wheel_cython_0.29.36_py2.py3_none_any//file",
             ":_env_python_darwin_x86_64": "@example_lock_wheel_cython_0.29.36_py2.py3_none_any//file",
             ":_env_python_linux_arm64": "@example_lock_wheel_cython_0.29.36_cp310_cp310_manylinux_2_17_aarch64.manylinux2014_aarch64.manylinux_2_24_aarch64//file",
@@ -112,18 +122,38 @@ def targets():
     )
 
     pycross_wheel_library(
+        name = "cython@0.29.36",
+        wheel = ":_wheel_cython@0.29.36",
+    )
+
+    native.alias(
+        name = "_wheel_decorator@5.1.1",
+        actual = "@example_lock_wheel_decorator_5.1.1_py3_none_any//file",
+    )
+
+    pycross_wheel_library(
         name = "decorator@5.1.1",
-        wheel = "@example_lock_wheel_decorator_5.1.1_py3_none_any//file",
+        wheel = ":_wheel_decorator@5.1.1",
+    )
+
+    native.alias(
+        name = "_wheel_exceptiongroup@1.1.3",
+        actual = "@example_lock_wheel_exceptiongroup_1.1.3_py3_none_any//file",
     )
 
     pycross_wheel_library(
         name = "exceptiongroup@1.1.3",
-        wheel = "@example_lock_wheel_exceptiongroup_1.1.3_py3_none_any//file",
+        wheel = ":_wheel_exceptiongroup@1.1.3",
+    )
+
+    native.alias(
+        name = "_wheel_executing@2.0.1",
+        actual = "@example_lock_wheel_executing_2.0.1_py2.py3_none_any//file",
     )
 
     pycross_wheel_library(
         name = "executing@2.0.1",
-        wheel = "@example_lock_wheel_executing_2.0.1_py2.py3_none_any//file",
+        wheel = ":_wheel_executing@2.0.1",
     )
 
     _ipython_8_17_2_deps = [
@@ -146,35 +176,55 @@ def targets():
         "//conditions:default": [],
     })
 
+    native.alias(
+        name = "_wheel_ipython@8.17.2",
+        actual = "@example_lock_wheel_ipython_8.17.2_py3_none_any//file",
+    )
+
     pycross_wheel_library(
         name = "ipython@8.17.2",
         deps = _ipython_8_17_2_deps,
-        wheel = "@example_lock_wheel_ipython_8.17.2_py3_none_any//file",
+        wheel = ":_wheel_ipython@8.17.2",
     )
 
     _jedi_0_19_1_deps = [
         ":parso@0.8.3",
     ]
 
+    native.alias(
+        name = "_wheel_jedi@0.19.1",
+        actual = "@example_lock_wheel_jedi_0.19.1_py2.py3_none_any//file",
+    )
+
     pycross_wheel_library(
         name = "jedi@0.19.1",
         deps = _jedi_0_19_1_deps,
-        wheel = "@example_lock_wheel_jedi_0.19.1_py2.py3_none_any//file",
+        wheel = ":_wheel_jedi@0.19.1",
     )
 
     _matplotlib_inline_0_1_6_deps = [
         ":traitlets@5.13.0",
     ]
 
+    native.alias(
+        name = "_wheel_matplotlib-inline@0.1.6",
+        actual = "@example_lock_wheel_matplotlib_inline_0.1.6_py3_none_any//file",
+    )
+
     pycross_wheel_library(
         name = "matplotlib-inline@0.1.6",
         deps = _matplotlib_inline_0_1_6_deps,
-        wheel = "@example_lock_wheel_matplotlib_inline_0.1.6_py3_none_any//file",
+        wheel = ":_wheel_matplotlib-inline@0.1.6",
+    )
+
+    native.alias(
+        name = "_wheel_numpy@1.23.5",
+        actual = "@//deps/numpy",
     )
 
     pycross_wheel_library(
         name = "numpy@1.23.5",
-        wheel = "@//deps/numpy",
+        wheel = ":_wheel_numpy@1.23.5",
     )
 
     _pandas_1_5_2_deps = [
@@ -197,70 +247,120 @@ def targets():
         tags = ["manual"],
     )
 
+    native.alias(
+        name = "_wheel_pandas@1.5.2",
+        actual = ":_build_pandas@1.5.2",
+    )
+
     pycross_wheel_library(
         name = "pandas@1.5.2",
         deps = _pandas_1_5_2_deps,
-        wheel = ":_build_pandas@1.5.2",
+        wheel = ":_wheel_pandas@1.5.2",
+    )
+
+    native.alias(
+        name = "_wheel_parso@0.8.3",
+        actual = "@example_lock_wheel_parso_0.8.3_py2.py3_none_any//file",
     )
 
     pycross_wheel_library(
         name = "parso@0.8.3",
-        wheel = "@example_lock_wheel_parso_0.8.3_py2.py3_none_any//file",
+        wheel = ":_wheel_parso@0.8.3",
     )
 
     _pexpect_4_8_0_deps = [
         ":ptyprocess@0.7.0",
     ]
 
+    native.alias(
+        name = "_wheel_pexpect@4.8.0",
+        actual = "@example_lock_wheel_pexpect_4.8.0_py2.py3_none_any//file",
+    )
+
     pycross_wheel_library(
         name = "pexpect@4.8.0",
         deps = _pexpect_4_8_0_deps,
-        wheel = "@example_lock_wheel_pexpect_4.8.0_py2.py3_none_any//file",
+        wheel = ":_wheel_pexpect@4.8.0",
     )
 
     _prompt_toolkit_3_0_39_deps = [
         ":wcwidth@0.2.9",
     ]
 
+    native.alias(
+        name = "_wheel_prompt-toolkit@3.0.39",
+        actual = "@example_lock_wheel_prompt_toolkit_3.0.39_py3_none_any//file",
+    )
+
     pycross_wheel_library(
         name = "prompt-toolkit@3.0.39",
         deps = _prompt_toolkit_3_0_39_deps,
-        wheel = "@example_lock_wheel_prompt_toolkit_3.0.39_py3_none_any//file",
+        wheel = ":_wheel_prompt-toolkit@3.0.39",
+    )
+
+    native.alias(
+        name = "_wheel_psycopg2@2.9.5",
+        actual = "@//deps/psycopg2",
     )
 
     pycross_wheel_library(
         name = "psycopg2@2.9.5",
-        wheel = "@//deps/psycopg2",
+        wheel = ":_wheel_psycopg2@2.9.5",
+    )
+
+    native.alias(
+        name = "_wheel_ptyprocess@0.7.0",
+        actual = "@example_lock_wheel_ptyprocess_0.7.0_py2.py3_none_any//file",
     )
 
     pycross_wheel_library(
         name = "ptyprocess@0.7.0",
-        wheel = "@example_lock_wheel_ptyprocess_0.7.0_py2.py3_none_any//file",
+        wheel = ":_wheel_ptyprocess@0.7.0",
+    )
+
+    native.alias(
+        name = "_wheel_pure-eval@0.2.2",
+        actual = "@example_lock_wheel_pure_eval_0.2.2_py3_none_any//file",
     )
 
     pycross_wheel_library(
         name = "pure-eval@0.2.2",
-        wheel = "@example_lock_wheel_pure_eval_0.2.2_py3_none_any//file",
+        wheel = ":_wheel_pure-eval@0.2.2",
+    )
+
+    native.alias(
+        name = "_wheel_pygments@2.16.1",
+        actual = "@example_lock_wheel_pygments_2.16.1_py3_none_any//file",
     )
 
     pycross_wheel_library(
         name = "pygments@2.16.1",
-        wheel = "@example_lock_wheel_pygments_2.16.1_py3_none_any//file",
+        wheel = ":_wheel_pygments@2.16.1",
     )
 
     _python_dateutil_2_8_2_deps = [
         ":six@1.16.0",
     ]
 
+    native.alias(
+        name = "_wheel_python-dateutil@2.8.2",
+        actual = "@example_lock_wheel_python_dateutil_2.8.2_py2.py3_none_any//file",
+    )
+
     pycross_wheel_library(
         name = "python-dateutil@2.8.2",
         deps = _python_dateutil_2_8_2_deps,
-        wheel = "@example_lock_wheel_python_dateutil_2.8.2_py2.py3_none_any//file",
+        wheel = ":_wheel_python-dateutil@2.8.2",
+    )
+
+    native.alias(
+        name = "_wheel_pytz@2023.3.post1",
+        actual = "@example_lock_wheel_pytz_2023.3.post1_py2.py3_none_any//file",
     )
 
     pycross_wheel_library(
         name = "pytz@2023.3.post1",
-        wheel = "@example_lock_wheel_pytz_2023.3.post1_py2.py3_none_any//file",
+        wheel = ":_wheel_pytz@2023.3.post1",
     )
 
     _setproctitle_1_3_2_build_deps = [
@@ -276,19 +376,34 @@ def targets():
         tags = ["manual"],
     )
 
+    native.alias(
+        name = "_wheel_setproctitle@1.3.2",
+        actual = ":_build_setproctitle@1.3.2",
+    )
+
     pycross_wheel_library(
         name = "setproctitle@1.3.2",
-        wheel = ":_build_setproctitle@1.3.2",
+        wheel = ":_wheel_setproctitle@1.3.2",
+    )
+
+    native.alias(
+        name = "_wheel_setuptools@59.2.0",
+        actual = "@example_lock_wheel_setuptools_59.2.0_py3_none_any//file",
     )
 
     pycross_wheel_library(
         name = "setuptools@59.2.0",
-        wheel = "@example_lock_wheel_setuptools_59.2.0_py3_none_any//file",
+        wheel = ":_wheel_setuptools@59.2.0",
+    )
+
+    native.alias(
+        name = "_wheel_six@1.16.0",
+        actual = "@example_lock_wheel_six_1.16.0_py2.py3_none_any//file",
     )
 
     pycross_wheel_library(
         name = "six@1.16.0",
-        wheel = "@example_lock_wheel_six_1.16.0_py2.py3_none_any//file",
+        wheel = ":_wheel_six@1.16.0",
     )
 
     _stack_data_0_6_3_deps = [
@@ -297,25 +412,45 @@ def targets():
         ":pure-eval@0.2.2",
     ]
 
+    native.alias(
+        name = "_wheel_stack-data@0.6.3",
+        actual = "@example_lock_wheel_stack_data_0.6.3_py3_none_any//file",
+    )
+
     pycross_wheel_library(
         name = "stack-data@0.6.3",
         deps = _stack_data_0_6_3_deps,
-        wheel = "@example_lock_wheel_stack_data_0.6.3_py3_none_any//file",
+        wheel = ":_wheel_stack-data@0.6.3",
+    )
+
+    native.alias(
+        name = "_wheel_traitlets@5.13.0",
+        actual = "@example_lock_wheel_traitlets_5.13.0_py3_none_any//file",
     )
 
     pycross_wheel_library(
         name = "traitlets@5.13.0",
-        wheel = "@example_lock_wheel_traitlets_5.13.0_py3_none_any//file",
+        wheel = ":_wheel_traitlets@5.13.0",
+    )
+
+    native.alias(
+        name = "_wheel_wcwidth@0.2.9",
+        actual = "@example_lock_wheel_wcwidth_0.2.9_py2.py3_none_any//file",
     )
 
     pycross_wheel_library(
         name = "wcwidth@0.2.9",
-        wheel = "@example_lock_wheel_wcwidth_0.2.9_py2.py3_none_any//file",
+        wheel = ":_wheel_wcwidth@0.2.9",
+    )
+
+    native.alias(
+        name = "_wheel_wheel@0.37.0",
+        actual = "@example_lock_wheel_wheel_0.37.0_py2.py3_none_any//file",
     )
 
     pycross_wheel_library(
         name = "wheel@0.37.0",
-        wheel = "@example_lock_wheel_wheel_0.37.0_py2.py3_none_any//file",
+        wheel = ":_wheel_wheel@0.37.0",
     )
 
 # buildifier: disable=unnamed-macro

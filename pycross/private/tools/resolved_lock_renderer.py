@@ -88,11 +88,13 @@ class Naming:
     def __init__(
         self,
         build_prefix: Optional[str],
+        wheel_prefix: Optional[str],
         environment_prefix: Optional[str],
         repo_prefix: Optional[str],
         target_environment_select: str,
     ):
         self.build_prefix = build_prefix
+        self.wheel_prefix = wheel_prefix
         self.environment_prefix = environment_prefix
         self.repo_prefix = repo_prefix
         self.target_environment_select = target_environment_select
@@ -105,6 +107,9 @@ class Naming:
 
     def wheel_build(self, package_key: PackageKey) -> TargetRef:
         return TargetRef(prefixed(str(package_key), self.build_prefix))
+
+    def wheel(self, package_key: PackageKey) -> TargetRef:
+        return TargetRef(prefixed(str(package_key), self.wheel_prefix))
 
     def repo_file(self, file: PackageFile) -> QualifiedTargetRef:
         name = file.name
@@ -279,15 +284,12 @@ class PackageTarget:
 
         return "\n".join(lines)
 
-    def _render_pkg(self) -> str:
+    def _render_wheel(self) -> str:
         lines = [
-            "pycross_wheel_library(",
-            ind(f'name = "{self.naming.package(self.package.key).target}",'),
+            "native.alias(",
+            ind(f'name = "{self.naming.wheel(self.package.key).target}",'),
         ]
-        if self._has_runtime_deps:
-            lines.append(ind(f"deps = {self._deps_name},"))
-
-        # Add the wheel attribute.
+        # Add the wheel alias target.
         # If all environments use the same wheel, don't use select.
 
         def wheel_target(file_ref: FileReference) -> str:
@@ -305,9 +307,9 @@ class PackageTarget:
         distinct_file_refs = set(self.package.environment_files.values())
         if len(distinct_file_refs) == 1:
             source = next(iter(distinct_file_refs))
-            lines.append(ind(f'wheel = "{wheel_target(source)}",'))
+            lines.append(ind(f'actual = "{wheel_target(source)}",'))
         else:
-            lines.append(ind("wheel = select({"))
+            lines.append(ind("actual = select({"))
             for env_name, ref in self.package.environment_files.items():
                 lines.append(
                     ind(
@@ -317,6 +319,19 @@ class PackageTarget:
                 )
             lines.append(ind("}),"))
 
+        lines.append(")")
+
+        return "\n".join(lines)
+
+    def _render_pkg(self) -> str:
+        lines = [
+            "pycross_wheel_library(",
+            ind(f'name = "{self.naming.package(self.package.key).target}",'),
+        ]
+        if self._has_runtime_deps:
+            lines.append(ind(f"deps = {self._deps_name},"))
+
+        lines.append(ind(f'wheel = "{self.naming.wheel(self.package.key).label}",'))
         lines.append(")")
 
         return "\n".join(lines)
@@ -332,6 +347,8 @@ class PackageTarget:
                 parts.append("")
             parts.append(self._render_build())
             parts.append("")
+        parts.append(self._render_wheel())
+        parts.append("")
         parts.append(self._render_pkg())
         return "\n".join(parts)
 
@@ -430,6 +447,7 @@ def render(resolved_lock: ResolvedLockSet, args: Any, output: TextIO) -> None:
     naming = Naming(
         repo_prefix=args.repo_prefix,
         build_prefix=args.build_prefix,
+        wheel_prefix=args.wheel_prefix,
         environment_prefix=args.environment_prefix,
         target_environment_select="_target",
     )
@@ -581,6 +599,7 @@ def add_shared_flags(parser: ArgumentParser) -> None:
         action="append",
         help="A (file_key, label) parameter that maps a FileKey to a label that provides it.",
     )
+
     parser.add_argument(
         "--repo-prefix",
         type=str,
@@ -590,13 +609,19 @@ def add_shared_flags(parser: ArgumentParser) -> None:
 
     parser.add_argument(
         "--build-prefix",
-        default="",
+        default="_build",
         help="The prefix to apply to package build targets.",
     )
 
     parser.add_argument(
+        "--wheel-prefix",
+        default="_wheel",
+        help="The prefix to apply to package wheel targets.",
+    )
+
+    parser.add_argument(
         "--environment-prefix",
-        default="",
+        default="_env",
         help="The prefix to apply to packages environment targets.",
     )
 

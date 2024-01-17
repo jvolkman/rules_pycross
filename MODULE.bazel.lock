@@ -1882,7 +1882,7 @@
         }
       },
       "os:osx,arch:aarch64": {
-        "bzlTransitiveDigest": "fBtqgpB+Ngeok5dsf7TxMEifzklGo5HaFH08JEQh9uA=",
+        "bzlTransitiveDigest": "KtvZeYNrDeKCyksjH+AMg0ArjWQWAH2eXnEXpLK/wpw=",
         "accumulatedFileDigests": {},
         "envVariables": {},
         "generatedRepoSpecs": {
