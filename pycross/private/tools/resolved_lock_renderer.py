@@ -495,16 +495,17 @@ def render(resolved_lock: ResolvedLockSet, args: Any, output: TextIO) -> None:
         w()
 
     # Build PINS map
-    if pins:
-        w("PINS = {")
-        for pinned_package_name in sorted(pins.keys()):
-            pinned_package_key = pins[pinned_package_name]
-            w(ind(f"{quoted_str(pinned_package_name)}: {quoted_str(naming.package(pinned_package_key).target)},"))
-        w("}")
-        w()
-    else:
-        w("PINS = {}")
-        w()
+    if not args.no_pins:
+        if pins:
+            w("PINS = {")
+            for pinned_package_name in sorted(pins.keys()):
+                pinned_package_key = pins[pinned_package_name]
+                w(ind(f"{quoted_str(pinned_package_name)}: {quoted_str(naming.package(pinned_package_key).target)},"))
+            w("}")
+            w()
+        else:
+            w("PINS = {}")
+            w()
 
     if args.generate_file_map:
         if repo_targets:
@@ -526,15 +527,16 @@ def render(resolved_lock: ResolvedLockSet, args: Any, output: TextIO) -> None:
         "",
     )
 
-    # Create pin aliases based on the PINS dict above.
-    w(
-        ind("for pin_name, pin_target in PINS.items():", 1),
-        ind("native.alias(", 2),
-        ind("name = pin_name,", 3),
-        ind('actual = ":" + pin_target,', 3),
-        ind(")", 2),
-    )
-    w()
+    if not args.no_pins:
+        # Create pin aliases based on the PINS dict above.
+        w(
+            ind("for pin_name, pin_target in PINS.items():", 1),
+            ind("native.alias(", 2),
+            ind("name = pin_name,", 3),
+            ind('actual = ":" + pin_target,', 3),
+            ind(")", 2),
+        )
+        w()
 
     for env_name, env_ref in resolved_lock.environments.items():
         if env_ref.config_setting_label:
@@ -612,7 +614,13 @@ def add_shared_flags(parser: ArgumentParser) -> None:
     parser.add_argument(
         "--pycross-repo-name",
         default="@rules_pycross",
-        help="Our own repo name",
+        help="Our own repo name.",
+    )
+
+    parser.add_argument(
+        "--no-pins",
+        action="store_true",
+        help="Don't create pinned alias targets.",
     )
 
 
