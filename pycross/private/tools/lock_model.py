@@ -228,6 +228,7 @@ class ResolvedPackage:
     environment_dependencies: Dict[str, List[PackageKey]] = field(default_factory=dict)
     build_target: Optional[str] = None
     environment_files: Dict[str, FileReference] = field(default_factory=dict)
+    sdist_file: Optional[FileReference] = None
 
 
 @dataclass(frozen=True)

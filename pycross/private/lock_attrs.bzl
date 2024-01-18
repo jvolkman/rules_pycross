@@ -50,15 +50,19 @@ RENDER_ATTRS = dict(
         default = "",
     ),
     build_prefix = attr.string(
-        doc = "An optional prefix to apply to package build targets. Defaults to _build",
+        doc = "The prefix to apply to package build targets.",
         default = "_build",
     ),
     wheel_prefix = attr.string(
-        doc = "The prefix to apply to package wheel targets. Defaults to _wheel",
+        doc = "The prefix to apply to package wheel targets.",
         default = "_wheel",
     ),
+    sdist_prefix = attr.string(
+        doc = "The prefix to apply to package sdist targets.",
+        default = "_sdist",
+    ),
     environment_prefix = attr.string(
-        doc = "An optional prefix to apply to environment targets. Defaults to _env",
+        doc = "The prefix to apply to environment targets.",
         default = "_env",
     ),
     generate_file_map = attr.bool(
@@ -196,6 +200,9 @@ def handle_render_attrs(attrs):
 
     if attrs.build_prefix:
         args.extend(["--build-prefix", attrs.build_prefix])
+
+    if attrs.sdist_prefix:
+        args.extend(["--sdist-prefix", attrs.sdist_prefix])
 
     if attrs.environment_prefix:
         args.extend(["--environment-prefix", attrs.environment_prefix])

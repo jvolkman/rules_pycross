@@ -88,12 +88,14 @@ class Naming:
     def __init__(
         self,
         build_prefix: Optional[str],
+        sdist_prefix: Optional[str],
         wheel_prefix: Optional[str],
         environment_prefix: Optional[str],
         repo_prefix: Optional[str],
         target_environment_select: str,
     ):
         self.build_prefix = build_prefix
+        self.sdist_prefix = sdist_prefix
         self.wheel_prefix = wheel_prefix
         self.environment_prefix = environment_prefix
         self.repo_prefix = repo_prefix
@@ -110,6 +112,9 @@ class Naming:
 
     def wheel(self, package_key: PackageKey) -> TargetRef:
         return TargetRef(prefixed(str(package_key), self.wheel_prefix))
+
+    def sdist(self, package_key: PackageKey) -> TargetRef:
+        return TargetRef(prefixed(str(package_key), self.sdist_prefix))
 
     def repo_file(self, file: PackageFile) -> QualifiedTargetRef:
         name = file.name
@@ -179,8 +184,8 @@ class PackageTarget:
 
     @cached_property
     def _sdist_label(self) -> Optional[str]:
-        for f in self.package.environment_files.values():
-            key = f.key
+        if self.package.sdist_file:
+            key = self.package.sdist_file.key
             if key is not None and key.is_sdist:
                 return self.file_labels[key]
 
@@ -195,6 +200,15 @@ class PackageTarget:
     @property
     def _has_sdist(self) -> bool:
         return self._sdist_label is not None
+
+    @cached_property
+    def _needs_generated_build_target(self) -> bool:
+        if self.package.build_target:
+            return False
+        for f in self.package.environment_files.values():
+            if f.key and f.key.is_sdist:
+                return True
+        return False
 
     @property
     def imports(self) -> Set[str]:
@@ -256,14 +270,26 @@ class PackageTarget:
 
         return "\n".join(lines)
 
-    def _render_build(self) -> str:
+    def _render_sdist(self) -> str:
         sdist_label = self._sdist_label
-        assert sdist_label is not None
+        assert self._sdist_label
+
+        lines = [
+            "native.alias(",
+            ind(f'name = "{self.naming.sdist(self.package.key).target}",'),
+            ind(f'actual = "{sdist_label}",'),
+            ")",
+        ]
+
+        return "\n".join(lines)
+
+    def _render_build(self) -> str:
+        assert self._has_sdist
 
         lines = [
             "pycross_wheel_build(",
             ind(f'name = "{self.naming.wheel_build(self.package.key).target}",'),
-            ind(f'sdist = "{sdist_label}",'),
+            ind(f'sdist = "{self.naming.sdist(self.package.key).label}",'),
             ind(f"target_environment = {self.naming.target_environment_select},"),
         ]
 
@@ -341,7 +367,10 @@ class PackageTarget:
         if self._has_runtime_deps:
             parts.append(self._render_runtime_deps())
             parts.append("")
-        if self._has_sdist and not self.package.build_target:
+        if self._has_sdist:
+            parts.append(self._render_sdist())
+            parts.append("")
+        if self._needs_generated_build_target:
             if self.package.build_dependencies:
                 parts.append(self._render_build_deps())
                 parts.append("")
@@ -447,6 +476,7 @@ def render(resolved_lock: ResolvedLockSet, args: Any, output: TextIO) -> None:
     naming = Naming(
         repo_prefix=args.repo_prefix,
         build_prefix=args.build_prefix,
+        sdist_prefix=args.sdist_prefix,
         wheel_prefix=args.wheel_prefix,
         environment_prefix=args.environment_prefix,
         target_environment_select="_target",
@@ -611,6 +641,12 @@ def add_shared_flags(parser: ArgumentParser) -> None:
         "--build-prefix",
         default="_build",
         help="The prefix to apply to package build targets.",
+    )
+
+    parser.add_argument(
+        "--sdist-prefix",
+        default="_sdist",
+        help="The prefix to apply to package sdist targets.",
     )
 
     parser.add_argument(

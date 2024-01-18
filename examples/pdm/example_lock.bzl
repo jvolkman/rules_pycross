@@ -527,6 +527,11 @@ def targets():
         ":requests-oauthlib@1.3.1",
     ]
 
+    native.alias(
+        name = "_sdist_django-allauth@0.58.2",
+        actual = "@example_lock_sdist_django_allauth_0.58.2//file",
+    )
+
     _django_allauth_0_58_2_build_deps = [
         ":setuptools@68.2.2",
         ":wheel@0.41.3",
@@ -534,7 +539,7 @@ def targets():
 
     pycross_wheel_build(
         name = "_build_django-allauth@0.58.2",
-        sdist = "@example_lock_sdist_django_allauth_0.58.2//file",
+        sdist = ":_sdist_django-allauth@0.58.2",
         target_environment = _target,
         deps = _django_allauth_0_58_2_deps + _django_allauth_0_58_2_build_deps,
         tags = ["manual"],
@@ -636,6 +641,11 @@ def targets():
         name = "flask-cors@4.0.0",
         deps = _flask_cors_4_0_0_deps,
         wheel = ":_wheel_flask-cors@4.0.0",
+    )
+
+    native.alias(
+        name = "_sdist_future@0.18.3",
+        actual = "@example_lock_sdist_future_0.18.3//file",
     )
 
     native.alias(
@@ -900,9 +910,14 @@ def targets():
         wheel = ":_wheel_junit-xml@1.9",
     )
 
+    native.alias(
+        name = "_sdist_lazy-object-proxy@1.9.0",
+        actual = "@example_lock_sdist_lazy_object_proxy_1.9.0//file",
+    )
+
     pycross_wheel_build(
         name = "_build_lazy-object-proxy@1.9.0",
-        sdist = "@example_lock_sdist_lazy_object_proxy_1.9.0//file",
+        sdist = ":_sdist_lazy-object-proxy@1.9.0",
         target_environment = _target,
         tags = ["manual"],
     )
@@ -1128,6 +1143,11 @@ def targets():
         wheel = ":_wheel_pathspec@0.11.2",
     )
 
+    native.alias(
+        name = "_sdist_pbr@6.0.0",
+        actual = "@example_lock_sdist_pbr_6.0.0//file",
+    )
+
     _pbr_6_0_0_build_deps = [
         ":setuptools@68.2.2",
         ":wheel@0.41.3",
@@ -1135,7 +1155,7 @@ def targets():
 
     pycross_wheel_build(
         name = "_build_pbr@6.0.0",
-        sdist = "@example_lock_sdist_pbr_6.0.0//file",
+        sdist = ":_sdist_pbr@6.0.0",
         target_environment = _target,
         deps = _pbr_6_0_0_build_deps,
         tags = ["manual"],
@@ -1530,6 +1550,11 @@ def targets():
         wheel = ":_wheel_sarif-om@1.0.4",
     )
 
+    native.alias(
+        name = "_sdist_setproctitle@1.3.3",
+        actual = "@example_lock_sdist_setproctitle_1.3.3//file",
+    )
+
     _setproctitle_1_3_3_build_deps = [
         ":setuptools@68.2.2",
         ":wheel@0.41.3",
@@ -1537,7 +1562,7 @@ def targets():
 
     pycross_wheel_build(
         name = "_build_setproctitle@1.3.3",
-        sdist = "@example_lock_sdist_setproctitle_1.3.3//file",
+        sdist = ":_sdist_setproctitle@1.3.3",
         target_environment = _target,
         deps = _setproctitle_1_3_3_build_deps,
         tags = ["manual"],

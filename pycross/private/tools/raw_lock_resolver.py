@@ -74,11 +74,13 @@ class GenerationContext:
         target_environments: List[TargetEnv],
         local_wheels: Dict[str, str],
         remote_wheels: Dict[str, PackageFile],
+        always_include_sdist: bool,
     ):
         self.target_environments = target_environments
         self.local_wheels = local_wheels
         self.remote_wheels = remote_wheels
         self.target_environments_by_name = {tenv.name: tenv for tenv in target_environments}
+        self.always_include_sdist = always_include_sdist
 
     def check_package_compatibility(self, package: RawPackage) -> None:
         """Sanity check to make sure the requires_python attribute on each package matches our environments."""
@@ -205,12 +207,7 @@ class PackageResolver:
 
         self.key = package.key
         self.package_name = package.name
-        for file in package.files:
-            if file.is_sdist:
-                self.sdist_file = file
-                break
-        else:
-            self.sdist_file = None
+        self.uses_sdist = False
 
         self._build_deps = annotations.build_dependencies
         self._build_target_override = annotations.build_target_override
@@ -227,9 +224,26 @@ class PackageResolver:
             annotations.always_build,
         )
 
-    @cached_property
-    def distinct_package_sources(self) -> Set[PackageSource]:
-        return set(self._package_sources_by_env.values())
+        used_package_sources = set(self._package_sources_by_env.values())
+
+        # Figure out if environments require an sdist (build from source).
+        sdist_file_key = None
+        for package_source in used_package_sources:
+            if package_source.file and package_source.file.is_sdist:
+                sdist_file_key = package_source.file.key
+                self.uses_sdist = True
+                break
+
+        # If we didn't find an sdist in environment sources but
+        # always_include_sdist is enabled, search all of the package's files.
+        if not sdist_file_key and context.always_include_sdist:
+            for file in package.files:
+                if file.is_sdist:
+                    sdist_file_key = file.key
+                    used_package_sources.add(PackageSource(file=file))
+
+        self.sdist_file = FileReference(key=sdist_file_key) if sdist_file_key else None
+        self.package_sources = frozenset(used_package_sources)
 
     @cached_property
     def all_dependency_keys(self) -> Set[PackageKey]:
@@ -241,13 +255,6 @@ class PackageResolver:
         keys |= set(self._build_deps)
         return keys
 
-    @cached_property
-    def uses_sdist(self) -> bool:
-        for f in self.distinct_package_sources:
-            if f.file and f.file.is_sdist:
-                return True
-        return False
-
     def to_resolved_package(self) -> ResolvedPackage:
         return ResolvedPackage(
             key=self.key,
@@ -256,6 +263,7 @@ class PackageResolver:
             environment_dependencies={env: sorted(deps) for env, deps in sorted(self._env_deps.items())},
             environment_files={env: ps.file_reference for env, ps in sorted(self._package_sources_by_env.items())},
             build_target=self._build_target_override,
+            sdist_file=self.sdist_file,
         )
 
 
@@ -385,6 +393,7 @@ def resolve(args: Any) -> ResolvedLockSet:
         target_environments=environments,
         local_wheels=local_wheels,
         remote_wheels=remote_wheels,
+        always_include_sdist=args.always_include_sdist,
     )
 
     with open(args.lock_model_file, "r") as f:
@@ -437,12 +446,10 @@ def resolve(args: Any) -> ResolvedLockSet:
 
     repos: Dict[FileKey, PackageFile] = {}
     for package_target in resolved_packages:
-        for source in package_target.distinct_package_sources:
+        for source in package_target.package_sources:
             if not source.file:
                 continue
             repos[source.file.key] = source.file
-        if args.always_include_sdist and package_target.sdist_file:
-            repos[package_target.sdist_file.key] = package_target.sdist_file
 
     repos = dict(sorted(repos.items()))
 
