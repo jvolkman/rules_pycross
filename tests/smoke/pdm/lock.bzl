@@ -322,6 +322,11 @@ def targets():
         wheel = ":_wheel_pygments@2.17.2",
     )
 
+    native.alias(
+        name = "_sdist_regex@2023.10.3",
+        actual = "@pdm_lock_file_sdist_regex_2023.10.3//file",
+    )
+
     _regex_2023_10_3_build_deps = [
         ":setuptools@68.2.2",
         ":wheel@0.41.3",
@@ -329,7 +334,7 @@ def targets():
 
     pycross_wheel_build(
         name = "_build_regex@2023.10.3",
-        sdist = "@pdm_lock_file_sdist_regex_2023.10.3//file",
+        sdist = ":_sdist_regex@2023.10.3",
         target_environment = _target,
         deps = _regex_2023_10_3_build_deps,
         tags = ["manual"],
@@ -410,6 +415,11 @@ def targets():
     pycross_wheel_library(
         name = "wheel@0.41.3",
         wheel = ":_wheel_wheel@0.41.3",
+    )
+
+    native.alias(
+        name = "_sdist_zstandard@0.22.0",
+        actual = "@pdm_lock_file_sdist_zstandard_0.22.0//file",
     )
 
     native.alias(

@@ -488,6 +488,11 @@ def targets():
     )
 
     native.alias(
+        name = "_sdist_future@0.18.2",
+        actual = "@example_lock_sdist_future_0.18.2//file",
+    )
+
+    native.alias(
         name = "_wheel_future@0.18.2",
         actual = "@//deps:overridden_future_0.18.2",
     )
@@ -785,9 +790,14 @@ def targets():
         wheel = ":_wheel_keyring@23.9.1",
     )
 
+    native.alias(
+        name = "_sdist_lazy-object-proxy@1.9.0",
+        actual = "@example_lock_sdist_lazy_object_proxy_1.9.0//file",
+    )
+
     pycross_wheel_build(
         name = "_build_lazy-object-proxy@1.9.0",
-        sdist = "@example_lock_sdist_lazy_object_proxy_1.9.0//file",
+        sdist = ":_sdist_lazy-object-proxy@1.9.0",
         target_environment = _target,
         tags = ["manual"],
     )
@@ -1012,6 +1022,11 @@ def targets():
         wheel = ":_wheel_pathable@0.4.3",
     )
 
+    native.alias(
+        name = "_sdist_pbr@6.0.0",
+        actual = "@example_lock_sdist_pbr_6.0.0//file",
+    )
+
     _pbr_6_0_0_build_deps = [
         ":setuptools@68.2.2",
         ":wheel@0.41.3",
@@ -1019,7 +1034,7 @@ def targets():
 
     pycross_wheel_build(
         name = "_build_pbr@6.0.0",
-        sdist = "@example_lock_sdist_pbr_6.0.0//file",
+        sdist = ":_sdist_pbr@6.0.0",
         target_environment = _target,
         deps = _pbr_6_0_0_build_deps,
         tags = ["manual"],
@@ -1374,6 +1389,11 @@ def targets():
         wheel = ":_wheel_secretstorage@3.3.3",
     )
 
+    native.alias(
+        name = "_sdist_setproctitle@1.3.3",
+        actual = "@example_lock_sdist_setproctitle_1.3.3//file",
+    )
+
     _setproctitle_1_3_3_build_deps = [
         ":setuptools@68.2.2",
         ":wheel@0.41.3",
@@ -1381,7 +1401,7 @@ def targets():
 
     pycross_wheel_build(
         name = "_build_setproctitle@1.3.3",
-        sdist = "@example_lock_sdist_setproctitle_1.3.3//file",
+        sdist = ":_sdist_setproctitle@1.3.3",
         target_environment = _target,
         deps = _setproctitle_1_3_3_build_deps,
         tags = ["manual"],

@@ -218,6 +218,11 @@ def targets():
     )
 
     native.alias(
+        name = "_sdist_numpy@1.23.5",
+        actual = "@example_lock_sdist_numpy_1.23.5//file",
+    )
+
+    native.alias(
         name = "_wheel_numpy@1.23.5",
         actual = "@//deps/numpy",
     )
@@ -233,6 +238,11 @@ def targets():
         ":pytz@2023.3.post1",
     ]
 
+    native.alias(
+        name = "_sdist_pandas@1.5.2",
+        actual = "@example_lock_sdist_pandas_1.5.2//file",
+    )
+
     _pandas_1_5_2_build_deps = [
         ":cython@0.29.36",
         ":setuptools@59.2.0",
@@ -241,7 +251,7 @@ def targets():
 
     pycross_wheel_build(
         name = "_build_pandas@1.5.2",
-        sdist = "@example_lock_sdist_pandas_1.5.2//file",
+        sdist = ":_sdist_pandas@1.5.2",
         target_environment = _target,
         deps = _pandas_1_5_2_deps + _pandas_1_5_2_build_deps,
         tags = ["manual"],
@@ -296,6 +306,11 @@ def targets():
         name = "prompt-toolkit@3.0.39",
         deps = _prompt_toolkit_3_0_39_deps,
         wheel = ":_wheel_prompt-toolkit@3.0.39",
+    )
+
+    native.alias(
+        name = "_sdist_psycopg2@2.9.5",
+        actual = "@example_lock_sdist_psycopg2_2.9.5//file",
     )
 
     native.alias(
@@ -363,6 +378,11 @@ def targets():
         wheel = ":_wheel_pytz@2023.3.post1",
     )
 
+    native.alias(
+        name = "_sdist_setproctitle@1.3.2",
+        actual = "@example_lock_sdist_setproctitle_1.3.2//file",
+    )
+
     _setproctitle_1_3_2_build_deps = [
         ":setuptools@59.2.0",
         ":wheel@0.37.0",
@@ -370,7 +390,7 @@ def targets():
 
     pycross_wheel_build(
         name = "_build_setproctitle@1.3.2",
-        sdist = "@example_lock_sdist_setproctitle_1.3.2//file",
+        sdist = ":_sdist_setproctitle@1.3.2",
         target_environment = _target,
         deps = _setproctitle_1_3_2_build_deps,
         tags = ["manual"],
