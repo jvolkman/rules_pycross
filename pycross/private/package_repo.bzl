@@ -4,15 +4,19 @@ The file structure is as follows:
 - WORKSPACE.bazel       - The workspace root marker.
 - BUILD.bazel           - The root build file.
 - defs.bzl              - A defs file that provides an `install_deps` macro in some contexts. May be empty.
-- _pkg/BUILD.bazel      - Contains instantiations of all of the definitions in `lock.bzl`.
-- _pkg/lock.bzl         - The rendered lock file. This is where most of the "meat" is.
-- <package>/BUILD.bazel - Contains aliases to targets under //_pkg. Most notably, an alias named <package>
+- .lock/BUILD.bazel     - Contains instantiations of all of the definitions in `lock.bzl`.
+- .lock/lock.bzl        - The rendered lock file. This is where most of the "meat" is.
+- _sdist/BUILD.bazel    - Version-aware aliases to package sdist targets.
+- _wheel/BUILD.bazel    - Version-aware aliases to package wheel targets.
+- <package>/BUILD.bazel - Contains aliases to targets under //.lock. Most notably, an alias named <package>
                           is what most people will want to import.
 
 From a target perspective:
-- //:package            - The pycross_wheel_library target.
-- //package:lib         - Same as above.
-- //package:wheel       - The package's wheel file.
+- //:package               - The pycross_wheel_library target.
+- //package:sdist          - The package's sdist file.
+- //package:wheel          - The package's wheel file.
+- //_sdist:package@version - The sdist for a specific version of package.
+- //_wheel:package@version - The wheel for a specific version of package.
 
 The idea is that, for a repo named "pypi", something will depend on e.g. `@pypi//:numpy` or `@pypi//:pandas`.
 
@@ -25,7 +29,7 @@ load(":internal_repo.bzl", "exec_internal_tool")
 load(":lock_attrs.bzl", "CREATE_REPOS_ATTRS", "handle_create_repos_attrs")
 
 _install_deps_bzl = """\
-load("//_pkg:lock.bzl", _install_deps = "repositories")
+load("//.lock:lock.bzl", _install_deps = "repositories")
 
 install_deps = _install_deps
 """
@@ -35,27 +39,70 @@ _workspace = """\
 workspace(name = "{repo_name}")
 """
 
-_pkg_build = """\
+_lock_build = """\
 package(default_visibility = ["//:__subpackages__"])
 
-load("//_pkg:lock.bzl", "targets")
+load("//.lock:lock.bzl", "targets")
 
 targets()
 """
 
-_pin_tmpl = """\
-package(default_visibility = ["//visibility:public"])
+def _pin_build(package):
+    package_key = package["key"]
+    lines = [
+        'package(default_visibility = ["//visibility:public"])',
+        "",
+        "alias(",
+        '    name = "wheel",',
+        '    actual = "//.lock:_wheel_{}",'.format(package_key),
+        ")",
+        "",
+    ]
 
-alias(
-    name = "lib",
-    actual = "//_pkg:{package_key}",
-)
+    if package.get("sdist_file", {}).get("key"):
+        lines.extend([
+            "alias(",
+            '    name = "sdist",',
+            '    actual = "//.lock:_sdist_{}",'.format(package_key),
+            ")",
+            "",
+        ])
 
-alias(
-    name = "wheel",
-    actual = "//_pkg:_wheel_{package_key}",
-)
-"""
+    return "\n".join(lines)
+
+def _wheel_build(packages):
+    lines = [
+        'package(default_visibility = ["//visibility:public"])',
+        "",
+    ]
+    for pkg in packages:
+        package_key = pkg["key"]
+        lines.extend([
+            "alias(",
+            '    name = "{}",'.format(package_key),
+            '    actual = "//.lock:_wheel_{}",'.format(package_key),
+            ")",
+            "",
+        ])
+
+    return "\n".join(lines)
+
+def _sdist_build(packages):
+    lines = [
+        'package(default_visibility = ["//visibility:public"])',
+        "",
+    ]
+    for pkg in packages:
+        package_key = pkg["key"]
+        lines.extend([
+            "alias(",
+            '    name = "{}",'.format(package_key),
+            '    actual = "//.lock:_sdist_{}",'.format(package_key),
+            ")",
+            "",
+        ])
+
+    return "\n".join(lines)
 
 def _root_build(pins):
     lines = [
@@ -69,7 +116,7 @@ def _root_build(pins):
         lines.extend([
             "alias(",
             '    name = "{}",'.format(pin_name),
-            '    actual = "//_pkg:{}",'.format(pin_target),
+            '    actual = "//.lock:{}",'.format(pin_target),
             ")",
             "",
         ])
@@ -105,12 +152,16 @@ def _package_repo_impl(rctx):
     # `workspace-bazel`.
 
     lock_json_path = rctx.path(rctx.attr.resolved_lock_file)
-    lock_bzl_path = rctx.path("_pkg/lock.bzl")
+    lock_bzl_path = rctx.path(".lock/lock.bzl")
 
     lock = json.decode(rctx.read(lock_json_path))
+    packages = lock["packages"].values()
 
-    rctx.file("_pkg/BUILD.bazel", _pkg_build)
     rctx.file("WORKSPACE.bazel", _workspace.format(repo_name = rctx.name))
+    rctx.file(".lock/BUILD.bazel", _lock_build)
+    rctx.file("_sdist/BUILD.bazel", _sdist_build(packages))
+    rctx.file("_wheel/BUILD.bazel", _wheel_build(packages))
+
     if rctx.attr.write_install_deps:
         rctx.file("defs.bzl", _install_deps_bzl)
     else:
@@ -119,8 +170,8 @@ def _package_repo_impl(rctx):
     _generate_lock_bzl(rctx, lock_json_path, lock_bzl_path)
 
     for pin, pin_target in lock["pins"].items():
-        pin_content = _pin_tmpl.format(package_name = pin, package_key = pin_target)
-        rctx.file(paths.join(pin, "BUILD.bazel"), pin_content)
+        package = lock["packages"][pin_target]
+        rctx.file(paths.join(pin, "BUILD.bazel"), _pin_build(package))
 
     rctx.file("BUILD.bazel", _root_build(lock["pins"]))
 
