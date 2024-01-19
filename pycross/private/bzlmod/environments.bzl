@@ -1,3 +1,5 @@
+"""The environments extension creates target environment definitions."""
+
 load("@pythons_hub//:interpreters.bzl", "DEFAULT_PYTHON_VERSION")
 load("//pycross/private:toolchain_helpers.bzl", "DEFAULT_GLIBC_VERSION", "DEFAULT_MACOS_VERSION", "pycross_environments_repo")
 
@@ -21,7 +23,7 @@ environments = module_extension(
         "create_for_python_toolchains": tag_class(
             attrs = {
                 "name": attr.string(
-                    default = "pycross_environments",
+                    mandatory = True,
                 ),
                 "python_versions_repo": attr.label(
                     mandatory = True,

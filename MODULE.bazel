@@ -41,6 +41,7 @@ register_toolchains("@pycross_toolchains//...")
 
 environments = use_extension("@rules_pycross//pycross/extensions:environments.bzl", "environments")
 environments.create_for_python_toolchains(
+    name = "pycross_environments",
     python_versions_repo = "@python_versions",
 )
 use_repo(environments, "pycross_environments")
