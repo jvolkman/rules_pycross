@@ -19,12 +19,24 @@ local_path_override(
     path = "../..",
 )
 
+# Use the lock_import extension to import external lock files.
 lock_import = use_extension("@rules_pycross//pycross/extensions:lock_import.bzl", "lock_import")
+
+# Import from PDM
 lock_import.import_pdm(
     lock_file = "//:pdm.lock",
     project_file = "//:pyproject.toml",
     repo = "pdm_deps",
 )
+
+# Import from Poetry
+lock_import.import_poetry(
+    lock_file = "//:poetry.lock",
+    project_file = "//:pyproject.toml",
+    repo = "poetry_deps",
+)
+
+# Specify per-package overrides. Here we say that we want to build ipython from an sdist.
 lock_import.package(
     name = "ipython",
     always_build = True,
@@ -34,11 +46,7 @@ lock_import.package(
     ],
     repo = "pdm_deps",
 )
-lock_import.import_poetry(
-    lock_file = "//:poetry.lock",
-    project_file = "//:pyproject.toml",
-    repo = "poetry_deps",
-)
 
+# The actual repos are loaded from the lock_repos extension.
 lock_repos = use_extension("@rules_pycross//pycross/extensions:lock_repos.bzl", "lock_repos")
 use_repo(lock_repos, "pdm_deps", "poetry_deps")
