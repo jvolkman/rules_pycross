@@ -17,7 +17,7 @@ def main(file):
     def maybe(func, *a, **kw):
         func(*a, **kw)
 
-    exec_globals = {"__builtins__": None, "maybe": maybe, "repos": repos}
+    exec_globals = {"__builtins__": None, "maybe": maybe}
 
     def load(_file, *a, **kw):
         # Mimic a load by creating functions named in *a and **kw.
