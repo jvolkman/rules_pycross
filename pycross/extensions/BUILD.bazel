@@ -20,3 +20,10 @@ bzl_library(
     visibility = ["//visibility:public"],
     deps = ["//pycross/private/bzlmod:lock_repos"],
 )
+
+bzl_library(
+    name = "pycross",
+    srcs = ["pycross.bzl"],
+    visibility = ["//visibility:public"],
+    deps = ["//pycross/private/bzlmod:pycross"],
+)

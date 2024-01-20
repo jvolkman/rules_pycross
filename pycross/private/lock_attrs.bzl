@@ -3,6 +3,52 @@
 # Whether bzlmod is enabled.
 _BZLMOD = str(Label("//:invalid")).startswith("@@")
 
+DEFAULT_MACOS_VERSION = "12.0"
+DEFAULT_GLIBC_VERSION = "2.25"
+
+CREATE_ENVIRONMENTS_ATTRS = dict(
+    python_versions = attr.string_list(
+        doc = (
+            "The list of Python versions to support in by default in Pycross builds. " +
+            "These strings will be X.Y or X.Y.Z depending on how versions were registered " +
+            "with rules_python. By default all registered versions are supported."
+        ),
+    ),
+    platforms = attr.string_list(
+        doc = (
+            "The list of Python platforms to support in by default in Pycross builds. " +
+            "See https://github.com/bazelbuild/rules_python/blob/main/python/versions.bzl " +
+            "for the list of supported platforms per Python version. By default all supported " +
+            "platforms for each registered version are supported."
+        ),
+    ),
+    glibc_version = attr.string(
+        doc = (
+            "The maximum glibc version to accept for Bazel platforms that match the " +
+            "@platforms//os:linux constraint. Must be in the format '2.X', and greater than 2.5. " +
+            "All versions from 2.5 through this version will be supported. For example, if this " +
+            "value is set to 2.15, wheels tagged manylinux_2_5, manylinux_2_6, ..., " +
+            "manylinux_2_15 will be accepted. Defaults to '{}' if unspecified.".format(DEFAULT_GLIBC_VERSION)
+        ),
+    ),
+    macos_version = attr.string(
+        doc = (
+            "The maximum macOS version to accept for Bazel platforms that match the " +
+            "@platforms//os:osx constraint. Must be in the format 'X.Y' with X >= 10. " +
+            "All versions from 10.4 through this version will be supported. For example, if this " +
+            "value is set to 12.0, wheels tagged macosx_10_4, macosx_10_5, ..., macosx_11_0, " +
+            "macosx_12_0 will be accepted. Defaults to '{}' if unspecified.".format(DEFAULT_MACOS_VERSION)
+        ),
+    ),
+)
+
+REGISTER_TOOLCHAINS_ATTRS = dict(
+    register_toolchains = attr.bool(
+        doc = "Register toolchains for all rules_python-registered interpreters.",
+        default = True,
+    ),
+)
+
 RESOLVE_ATTRS = dict(
     target_environments = attr.label_list(
         doc = "A list of pycross_target_environment labels.",

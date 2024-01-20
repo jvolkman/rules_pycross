@@ -133,6 +133,7 @@ bzl_library(
     srcs = ["toolchain_helpers.bzl"],
     visibility = default_visibility,
     deps = [
+        ":lock_attrs",
         ":target_environment",
         "@rules_python//python:versions.bzl",
     ],

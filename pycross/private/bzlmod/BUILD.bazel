@@ -6,14 +6,16 @@ bzl_library(
     name = "environments",
     srcs = ["environments.bzl"],
     deps = [
+        ":tag_attrs",
         "//pycross/private:toolchain_helpers",
     ],
 )
 
 bzl_library(
-    name = "internal_deps",
-    srcs = ["internal_deps.bzl"],
+    name = "pycross",
+    srcs = ["pycross.bzl"],
     deps = [
+        ":tag_attrs",
         "//pycross/private:internal_repo",
         "//pycross/private:pycross_deps.lock",
         "//pycross/private:pycross_deps_core.lock",
@@ -37,7 +39,9 @@ bzl_library(
 bzl_library(
     name = "tag_attrs",
     srcs = ["tag_attrs.bzl"],
-    deps = ["//pycross/private:lock_attrs"],
+    deps = [
+        "//pycross/private:lock_attrs",
+    ],
 )
 
 bzl_library(
