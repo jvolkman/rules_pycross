@@ -64,6 +64,17 @@ bzl_library(
 )
 
 bzl_library(
+    name = "lock_file",
+    srcs = ["lock_file.bzl"],
+    deps = [
+        "//pycross/private:internal_repo",
+        "//pycross/private:lock_file_repo",
+        "//pycross/private:pypi_file",
+        "@bazel_tools//tools/build_defs/repo:http.bzl",
+    ],
+)
+
+bzl_library(
     name = "lock_hub_repo",
     srcs = ["lock_hub_repo.bzl"],
 )

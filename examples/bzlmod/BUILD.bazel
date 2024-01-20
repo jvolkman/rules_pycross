@@ -1,4 +1,10 @@
+load("@aspect_bazel_lib//lib:write_source_files.bzl", "write_source_files")
 load("@python_versions//3.12:defs.bzl", py_binary_312 = "py_binary")
+load(
+    "@rules_pycross//pycross:defs.bzl",
+    "pycross_lock_file",
+    "pycross_poetry_lock_model",
+)
 load("@rules_python//python:defs.bzl", "py_binary")
 
 py_binary(
@@ -16,4 +22,33 @@ py_binary_312(
     deps = [
         "@pdm_deps//:ipython",
     ],
+)
+
+py_binary(
+    name = "ipython_from_lock_file",
+    srcs = ["ipython.py"],
+    main = "ipython.py",
+    deps = [
+        "@poetry_lock_file//deps:ipython",
+    ],
+)
+
+pycross_poetry_lock_model(
+    name = "example_lock_model",
+    lock_file = "//:poetry.lock",
+    project_file = "//:pyproject.toml",
+)
+
+pycross_lock_file(
+    name = "poetry_lock",
+    out = "updated_poetry_lock.bzl",
+    lock_model_file = ":example_lock_model",
+    target_environments = ["@pycross_environments//:environments"],
+)
+
+write_source_files(
+    name = "update_locks",
+    files = {
+        "poetry_lock.bzl": ":updated_poetry_lock.bzl",
+    },
 )

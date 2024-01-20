@@ -1,7 +1,7 @@
 load("@rules_pycross_internal//:python.bzl", "py_binary", "py_library")
 load("//pycross/private:wheel_zipimport_library.bzl", "pycross_wheel_zipimport_library")
 
-package(default_visibility = ["//visibility:private"])
+package(default_visibility = ["//pycross:__subpackages__"])
 
 py_library(
     name = "args",
@@ -19,6 +19,11 @@ py_binary(
         ":raw_lock_resolver",
         ":resolved_lock_renderer",
     ],
+)
+
+py_binary(
+    name = "extract_lock_repos",
+    srcs = ["extract_lock_repos.py"],
 )
 
 py_binary(

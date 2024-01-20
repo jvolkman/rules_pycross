@@ -37,7 +37,7 @@ py_library = _py_library
 py_test = _py_test
 """
 
-def exec_internal_tool(rctx, tool, args, *, flagfile_param = "--flagfile", flagfile_threshold = 1000):
+def exec_internal_tool(rctx, tool, args, *, flagfile_param = "--flagfile", flagfile_threshold = 1000, quiet = False):
     """
     Execute a script under //pycross/private/tools.
 
@@ -47,6 +47,7 @@ def exec_internal_tool(rctx, tool, args, *, flagfile_param = "--flagfile", flagf
       args: a list of args to pass to the script
       flagfile_param: the parameter name used when dumping arguments to a flag file
       flagfile_threshold: use a flag file if len(args) >= this value
+      quiet: The quiet value to pass to rctx.execute.
 
     Returns:
       exec_result
@@ -67,7 +68,7 @@ def exec_internal_tool(rctx, tool, args, *, flagfile_param = "--flagfile", flagf
         tool_args = args
 
     all_args = [str(python_exe), str(rctx.path(tool))] + tool_args
-    result = rctx.execute(all_args, quiet = False)
+    result = rctx.execute(all_args, quiet = quiet)
 
     # Clean up the flagfile
     if flagfile and flagfile.exists:
