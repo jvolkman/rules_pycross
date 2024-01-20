@@ -16,12 +16,12 @@ python = use_extension("@rules_python//python/extensions:python.bzl", "python")
 python.toolchain(python_version = "3.12")
 use_repo(python, "python_3_12", "python_versions", "pythons_hub")
 
-internal_deps = use_extension("@rules_pycross//pycross/private/bzlmod:internal_deps.bzl", "internal_deps")
-internal_deps.install(
-    registered_python_version = "3.12",
-)
+pycross = use_extension("@rules_pycross//pycross/extensions:pycross.bzl", "pycross")
+pycross.configure_environments()
+pycross.configure_interpreter(registered_python_version = "3.12")
+pycross.configure_toolchains()
 use_repo(
-    internal_deps,
+    pycross,
     "rules_pycross_internal",
     "rules_pycross_internal_deps_wheel_dacite_1.6.0_py3_none_any",
     "rules_pycross_internal_deps_wheel_installer_0.7.0_py3_none_any",

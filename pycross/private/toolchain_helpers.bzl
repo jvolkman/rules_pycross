@@ -1,10 +1,8 @@
 """Helpers for creating Pycross environments and toolchains"""
 
 load("@rules_python//python:versions.bzl", "MINOR_MAPPING", "PLATFORMS", "TOOL_VERSIONS")
+load(":lock_attrs.bzl", "DEFAULT_GLIBC_VERSION", "DEFAULT_MACOS_VERSION")
 load(":target_environment.bzl", "repo_batch_create_target_environments")
-
-DEFAULT_MACOS_VERSION = "12.0"
-DEFAULT_GLIBC_VERSION = "2.25"
 
 # Whether bzlmod is enabled.
 _BZLMOD = str(Label("//:invalid")).startswith("@@")
@@ -309,7 +307,7 @@ def _get_requested_python_versions(rctx, registered_python_versions):
         else:
             not_found_python_versions.append(requested_version)
     if not_found_python_versions:
-        fail("Requested Python versions are not registered: {}".format(not_found_python_versions))
+        fail("Requested Python versions are not registered: {} (registered versions: {})".format(not_found_python_versions, registered_python_versions))
 
     return python_versions
 
@@ -370,8 +368,8 @@ def _pycross_environment_repo_impl(rctx):
         python_versions = version_info.python_versions,
         default_version = version_info.default_version,
         platforms = rctx.attr.platforms,
-        glibc_version = rctx.attr.glibc_version,
-        macos_version = rctx.attr.macos_version,
+        glibc_version = rctx.attr.glibc_version or DEFAULT_GLIBC_VERSION,
+        macos_version = rctx.attr.macos_version or DEFAULT_MACOS_VERSION,
     )
 
     repo_batch_create_target_environments(rctx, computed_environments)
@@ -412,8 +410,8 @@ pycross_environments_repo = repository_rule(
         "requested_python_versions": attr.string_list(),
         "default_python_version": attr.string(),
         "platforms": attr.string_list(),
-        "glibc_version": attr.string(mandatory = True),
-        "macos_version": attr.string(mandatory = True),
+        "glibc_version": attr.string(),
+        "macos_version": attr.string(),
     },
 )
 
@@ -421,8 +419,8 @@ def pycross_register_for_python_toolchains(
         name,
         python_toolchains_repo,
         platforms = None,
-        glibc_version = DEFAULT_GLIBC_VERSION,
-        macos_version = DEFAULT_MACOS_VERSION):
+        glibc_version = None,
+        macos_version = None):
     """
     Register target environments and toolchains for a given list of Python versions.
 

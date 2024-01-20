@@ -1,6 +1,7 @@
 """Internal repo"""
 
 load("@bazel_skylib//lib:shell.bzl", "shell")
+load(":lock_attrs.bzl", "CREATE_ENVIRONMENTS_ATTRS", "REGISTER_TOOLCHAINS_ATTRS")
 load(":repo_venv_utils.bzl", "create_venv", "get_venv_python_executable", "install_venv_wheels")
 
 INTERNAL_REPO_NAME = "rules_pycross_internal"
@@ -127,6 +128,15 @@ def _pip_whl(wheels):
             return label
     fail("Unable to find `pip` wheel in lock file.")
 
+def _defaults_bzl(rctx):
+    lines = []
+    for key in CREATE_ENVIRONMENTS_ATTRS | REGISTER_TOOLCHAINS_ATTRS:
+        val = getattr(rctx.attr, key)
+
+        lines.append("{} = {}".format(key, repr(val)))
+
+    return "\n".join(lines) + "\n"
+
 def _pycross_internal_repo_impl(rctx):
     python_executable = _resolve_python_interpreter(rctx)
     wheel_paths = sorted([rctx.path(w) for w in rctx.attr.wheels.keys()], key = lambda k: str(k))
@@ -153,6 +163,9 @@ def _pycross_internal_repo_impl(rctx):
         python_defs = Label("@rules_python//python:defs.bzl")
     rctx.file("python.bzl", _python_bzl.format(python_defs = python_defs))
 
+    # defaults.bzl
+    rctx.file("defaults.bzl", _defaults_bzl(rctx))
+
     # Root build file
     rctx.file("BUILD.bazel", _root_build.format(installer_whl = _installer_whl(rctx.attr.wheels)))
 
@@ -173,14 +186,12 @@ pycross_internal_repo = repository_rule(
         "install_wheels": attr.bool(
             default = True,
         ),
-    },
+    } | CREATE_ENVIRONMENTS_ATTRS | REGISTER_TOOLCHAINS_ATTRS,
 )
 
-def create_internal_repo(python_interpreter_target = None, python_interpreter = None, python_defs_file = None, wheels = {}):
+def create_internal_repo(wheels = {}, **kwargs):
     pycross_internal_repo(
         name = INTERNAL_REPO_NAME,
         wheels = {wheel_label: wheel_name for wheel_name, wheel_label in wheels.items()},
-        python_interpreter = python_interpreter,
-        python_interpreter_target = python_interpreter_target,
-        python_defs_file = python_defs_file,
+        **kwargs
     )
