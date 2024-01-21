@@ -42,78 +42,78 @@ def targets():
 
     native.alias(
         name = "_env_python_3.10.12_aarch64-apple-darwin",
-        actual = "@pycross_toolchains//:python_3.10.12_aarch64-apple-darwin_config",
+        actual = "@smoke_environments//:python_3.10.12_aarch64-apple-darwin_config",
     )
 
     native.alias(
         name = "_env_python_3.10.12_aarch64-unknown-linux-gnu",
-        actual = "@pycross_toolchains//:python_3.10.12_aarch64-unknown-linux-gnu_config",
+        actual = "@smoke_environments//:python_3.10.12_aarch64-unknown-linux-gnu_config",
     )
 
     native.alias(
         name = "_env_python_3.10.12_x86_64-apple-darwin",
-        actual = "@pycross_toolchains//:python_3.10.12_x86_64-apple-darwin_config",
+        actual = "@smoke_environments//:python_3.10.12_x86_64-apple-darwin_config",
     )
 
     native.alias(
         name = "_env_python_3.10.12_x86_64-unknown-linux-gnu",
-        actual = "@pycross_toolchains//:python_3.10.12_x86_64-unknown-linux-gnu_config",
+        actual = "@smoke_environments//:python_3.10.12_x86_64-unknown-linux-gnu_config",
     )
 
     native.alias(
         name = "_env_python_3.11.6_aarch64-apple-darwin",
-        actual = "@pycross_toolchains//:python_3.11.6_aarch64-apple-darwin_config",
+        actual = "@smoke_environments//:python_3.11.6_aarch64-apple-darwin_config",
     )
 
     native.alias(
         name = "_env_python_3.11.6_aarch64-unknown-linux-gnu",
-        actual = "@pycross_toolchains//:python_3.11.6_aarch64-unknown-linux-gnu_config",
+        actual = "@smoke_environments//:python_3.11.6_aarch64-unknown-linux-gnu_config",
     )
 
     native.alias(
         name = "_env_python_3.11.6_x86_64-apple-darwin",
-        actual = "@pycross_toolchains//:python_3.11.6_x86_64-apple-darwin_config",
+        actual = "@smoke_environments//:python_3.11.6_x86_64-apple-darwin_config",
     )
 
     native.alias(
         name = "_env_python_3.11.6_x86_64-unknown-linux-gnu",
-        actual = "@pycross_toolchains//:python_3.11.6_x86_64-unknown-linux-gnu_config",
+        actual = "@smoke_environments//:python_3.11.6_x86_64-unknown-linux-gnu_config",
     )
 
     native.alias(
         name = "_env_python_3.12.0_aarch64-apple-darwin",
-        actual = "@pycross_toolchains//:python_3.12.0_aarch64-apple-darwin_config",
+        actual = "@smoke_environments//:python_3.12.0_aarch64-apple-darwin_config",
     )
 
     native.alias(
         name = "_env_python_3.12.0_aarch64-unknown-linux-gnu",
-        actual = "@pycross_toolchains//:python_3.12.0_aarch64-unknown-linux-gnu_config",
+        actual = "@smoke_environments//:python_3.12.0_aarch64-unknown-linux-gnu_config",
     )
 
     native.alias(
         name = "_env_python_3.12.0_x86_64-apple-darwin",
-        actual = "@pycross_toolchains//:python_3.12.0_x86_64-apple-darwin_config",
+        actual = "@smoke_environments//:python_3.12.0_x86_64-apple-darwin_config",
     )
 
     native.alias(
         name = "_env_python_3.12.0_x86_64-unknown-linux-gnu",
-        actual = "@pycross_toolchains//:python_3.12.0_x86_64-unknown-linux-gnu_config",
+        actual = "@smoke_environments//:python_3.12.0_x86_64-unknown-linux-gnu_config",
     )
 
     # buildifier: disable=unused-variable
     _target = select({
-        ":_env_python_3.10.12_aarch64-apple-darwin": "@pycross_toolchains//:python_3.10.12_aarch64-apple-darwin.json",
-        ":_env_python_3.10.12_aarch64-unknown-linux-gnu": "@pycross_toolchains//:python_3.10.12_aarch64-unknown-linux-gnu.json",
-        ":_env_python_3.10.12_x86_64-apple-darwin": "@pycross_toolchains//:python_3.10.12_x86_64-apple-darwin.json",
-        ":_env_python_3.10.12_x86_64-unknown-linux-gnu": "@pycross_toolchains//:python_3.10.12_x86_64-unknown-linux-gnu.json",
-        ":_env_python_3.11.6_aarch64-apple-darwin": "@pycross_toolchains//:python_3.11.6_aarch64-apple-darwin.json",
-        ":_env_python_3.11.6_aarch64-unknown-linux-gnu": "@pycross_toolchains//:python_3.11.6_aarch64-unknown-linux-gnu.json",
-        ":_env_python_3.11.6_x86_64-apple-darwin": "@pycross_toolchains//:python_3.11.6_x86_64-apple-darwin.json",
-        ":_env_python_3.11.6_x86_64-unknown-linux-gnu": "@pycross_toolchains//:python_3.11.6_x86_64-unknown-linux-gnu.json",
-        ":_env_python_3.12.0_aarch64-apple-darwin": "@pycross_toolchains//:python_3.12.0_aarch64-apple-darwin.json",
-        ":_env_python_3.12.0_aarch64-unknown-linux-gnu": "@pycross_toolchains//:python_3.12.0_aarch64-unknown-linux-gnu.json",
-        ":_env_python_3.12.0_x86_64-apple-darwin": "@pycross_toolchains//:python_3.12.0_x86_64-apple-darwin.json",
-        ":_env_python_3.12.0_x86_64-unknown-linux-gnu": "@pycross_toolchains//:python_3.12.0_x86_64-unknown-linux-gnu.json",
+        ":_env_python_3.10.12_aarch64-apple-darwin": "@smoke_environments//:python_3.10.12_aarch64-apple-darwin.json",
+        ":_env_python_3.10.12_aarch64-unknown-linux-gnu": "@smoke_environments//:python_3.10.12_aarch64-unknown-linux-gnu.json",
+        ":_env_python_3.10.12_x86_64-apple-darwin": "@smoke_environments//:python_3.10.12_x86_64-apple-darwin.json",
+        ":_env_python_3.10.12_x86_64-unknown-linux-gnu": "@smoke_environments//:python_3.10.12_x86_64-unknown-linux-gnu.json",
+        ":_env_python_3.11.6_aarch64-apple-darwin": "@smoke_environments//:python_3.11.6_aarch64-apple-darwin.json",
+        ":_env_python_3.11.6_aarch64-unknown-linux-gnu": "@smoke_environments//:python_3.11.6_aarch64-unknown-linux-gnu.json",
+        ":_env_python_3.11.6_x86_64-apple-darwin": "@smoke_environments//:python_3.11.6_x86_64-apple-darwin.json",
+        ":_env_python_3.11.6_x86_64-unknown-linux-gnu": "@smoke_environments//:python_3.11.6_x86_64-unknown-linux-gnu.json",
+        ":_env_python_3.12.0_aarch64-apple-darwin": "@smoke_environments//:python_3.12.0_aarch64-apple-darwin.json",
+        ":_env_python_3.12.0_aarch64-unknown-linux-gnu": "@smoke_environments//:python_3.12.0_aarch64-unknown-linux-gnu.json",
+        ":_env_python_3.12.0_x86_64-apple-darwin": "@smoke_environments//:python_3.12.0_x86_64-apple-darwin.json",
+        ":_env_python_3.12.0_x86_64-unknown-linux-gnu": "@smoke_environments//:python_3.12.0_x86_64-unknown-linux-gnu.json",
     })
 
     native.alias(
@@ -423,7 +423,7 @@ def targets():
 
     native.alias(
         name = "_wheel_zstandard@0.22.0",
-        actual = "@//poetry:zstandard_build",
+        actual = "@@//poetry:zstandard_build",
     )
 
     pycross_wheel_library(

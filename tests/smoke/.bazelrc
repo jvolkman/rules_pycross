@@ -4,6 +4,7 @@ build --incompatible_strict_action_env
 build --nolegacy_external_runfiles
 #build --experimental_sibling_repository_layout
 build --experimental_platform_in_output_dir
+build --sandbox_add_mount_pair=/tmp
 
 build -c opt
 build --strip=always
