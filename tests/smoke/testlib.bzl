@@ -2,7 +2,6 @@
 
 load("@aspect_bazel_lib//lib:write_source_files.bzl", "write_source_files")
 load("@bazel_skylib//rules:write_file.bzl", "write_file")
-load("@pycross_toolchains//:defs.bzl", "environments")
 load(
     "@rules_pycross//pycross:defs.bzl",
     "pycross_lock_file",
@@ -44,14 +43,14 @@ def setup_test_targets(lock_name, lock_model):
     pycross_lock_file(
         name = lock_name,
         lock_model_file = lock_model,
-        target_environments = environments,
+        target_environments = ["@smoke_environments//:environments"],
         default_alias_single_version = True,
         always_build_packages = [
             "regex",
             "zstandard",
         ],
         build_target_overrides = {
-            "zstandard": "@//{}:zstandard_build".format(native.package_name()),
+            "zstandard": "@@//{}:zstandard_build".format(native.package_name()),
         },
         package_build_dependencies = {
             "regex": [
