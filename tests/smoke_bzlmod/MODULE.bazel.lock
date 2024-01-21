@@ -2963,7 +2963,7 @@
     },
     "@@rules_pycross~override//pycross/extensions:environments.bzl%environments": {
       "general": {
-        "bzlTransitiveDigest": "EqfvKWNEbwsFf5MVHfsJ9bsOzGQ8vBHI3/7Z2J7NEew=",
+        "bzlTransitiveDigest": "KdilFK40wN4cm9H71TaQK1jm37S7QnBqiYNegRNWIoM=",
         "accumulatedFileDigests": {},
         "envVariables": {},
         "generatedRepoSpecs": {
@@ -4462,7 +4462,7 @@
     },
     "@@rules_pycross~override//pycross/extensions:pycross.bzl%pycross": {
       "os:osx,arch:aarch64": {
-        "bzlTransitiveDigest": "qOfY7RO/qbOlvv86bN2w45I4UqXr1y3dbqnOwE0mR1o=",
+        "bzlTransitiveDigest": "ZFxk+QQCXJGy8ojYDAzK+91o9bHCzaM6mRn1G9rFwGE=",
         "accumulatedFileDigests": {},
         "envVariables": {},
         "generatedRepoSpecs": {
@@ -4777,7 +4777,7 @@
     },
     "@@rules_pycross~override//pycross/private/bzlmod:toolchains.bzl%toolchains": {
       "general": {
-        "bzlTransitiveDigest": "+/rO9U+wNZsNrIPm8vc8OEQiYO3keXe63HrQBl05bj4=",
+        "bzlTransitiveDigest": "SdFkQgAw3Olvkeke5XuTSG2m59XuuQXp/fJ83qh2Dn8=",
         "accumulatedFileDigests": {},
         "envVariables": {},
         "generatedRepoSpecs": {

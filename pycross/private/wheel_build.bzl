@@ -351,6 +351,12 @@ def _pycross_wheel_build_impl(ctx):
                 direct = [pycross_wheel_info.wheel_file],
             ),
         ),
+        OutputGroupInfo(
+            all_files = depset([
+                pycross_wheel_info.wheel_file,
+                pycross_wheel_info.name_file,
+            ]),
+        ),
     ]
 
 def _pycross_toolchains():

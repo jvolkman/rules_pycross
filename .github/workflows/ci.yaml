@@ -87,7 +87,8 @@ jobs:
           for plat in macos_x86_64 linux_x86_64; do
             bazel build //pdm:zstandard_build \
               --@rules_python//python/config_settings:python_version=${{ matrix.python-version }} \
-              --platforms=@zig_sdk//platform:$plat
+              --platforms=@zig_sdk//platform:$plat \
+              --output_groups=all_files
             cp bazel-bin/pdm/zstandard_build/zstandard-*.whl "$ARTIFACT_PATH/$(cat bazel-bin/pdm/zstandard_build/zstandard-*.whl.name)"
           done;
 
