@@ -1,0 +1,37 @@
+# PDM dependencies
+
+[project]
+name = "rules_pycross_smoke"
+version = "0.1"
+description = "rules_pycross"
+authors = []
+dependencies = [
+    "ipython==8.17.2",
+    "regex==2023.10.3",
+    "setuptools==68.2.2",
+    "wheel==0.41.3",
+    "zstandard==0.22.0",
+]
+requires-python = ">=3.9, <3.13"
+license = {text = "MIT"}
+
+[build-system]
+requires = ["pdm-pep517>=1.0.0"]
+build-backend = "pdm.pep517.api"
+
+# Poetry dependencies (someday they'll both share the PEP 621 space)
+
+[tool.poetry]
+name = "rules_pycross_smoke"
+version = "0.1"
+description = "rules_pycross"
+authors = []
+
+[tool.poetry.dependencies]
+python = ">=3.9, <3.13"
+
+ipython = "=8.17.2"
+regex = "=2023.10.3"
+setuptools = "=68.2.2"
+wheel = "=0.41.3"
+zstandard = "=0.22.0"

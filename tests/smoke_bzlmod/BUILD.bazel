@@ -1,0 +1,10 @@
+package(default_visibility = ["//visibility:public"])
+
+exports_files([
+    "pdm.lock",
+    "poetry.lock",
+    "pyproject.toml",
+    "test_regex.py",
+    "test_zstandard.py",
+    "testlib.bzl",
+])

@@ -32,18 +32,39 @@ jobs:
         run: |
           bazel --bazelrc=.github/workflows/ci.bazelrc --bazelrc=.bazelrc test -- //pycross/...
 
-  smoke-test-gen:
-    name: Smoke test/generate - Python ${{ matrix.python-version }} on ${{ startsWith(matrix.os, 'macos-') && 'macOS' || startsWith(matrix.os, 'windows-') && 'Windows' || 'Linux' }}
+  workspace-smoke-test:
+    name: workspace smoke test - Python ${{ matrix.python-version }} on ${{ startsWith(matrix.os, 'macos-') && 'macOS' || startsWith(matrix.os, 'windows-') && 'Windows' || 'Linux' }}
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: tests/smoke_workspace
+
+    steps:
+      - uses: actions/checkout@v2
+
+      - name: .bazelrc.ci
+        run: |
+          python -c "import os; file = open('.bazelrc.ci', 'w'); file.write(os.environ['BAZELRC_CI']); file.close()"
+        shell: bash
+        env:
+          BAZELRC_CI: ${{secrets.BAZELRC_CI}}
+
+      - name: run smoke tests
+        run: |
+          bazel test //...
+
+  bzlmod-smoke-test-gen:
+    name: bzlmod smoke test/generate - Python ${{ matrix.python-version }} on ${{ startsWith(matrix.os, 'macos-') && 'macOS' || startsWith(matrix.os, 'windows-') && 'Windows' || 'Linux' }}
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest]
-        # This needs to stay in sync with tests/smoke_workspace/WORKSPACE
+        # This needs to stay in sync with tests/smoke_bzlmod/MODULE.bazel
         python-version: ["3.10.12", "3.11.6", "3.12.0"]
     defaults:
       run:
-        working-directory: tests/smoke_workspace
+        working-directory: tests/smoke_bzlmod
 
     steps:
       - uses: actions/checkout@v2
@@ -75,20 +96,20 @@ jobs:
           name: built-test-wheel
           path: ${{ runner.temp }}/testwheel-out
 
-  smoke-test-check:
-    name: Smoke test/check - Python ${{ matrix.python-version }} on ${{ startsWith(matrix.os, 'macos-') && 'macOS' || startsWith(matrix.os, 'windows-') && 'Windows' || 'Linux' }}
-    needs: smoke-test-gen
+  bzlmod-smoke-test-check:
+    name: bzlmod smoke test/check - Python ${{ matrix.python-version }} on ${{ startsWith(matrix.os, 'macos-') && 'macOS' || startsWith(matrix.os, 'windows-') && 'Windows' || 'Linux' }}
+    needs: bzlmod-smoke-test-gen
 
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest]
-        # This needs to stay in sync with tests/smoke/WORKSPACE
+        # This needs to stay in sync with tests/smoke_bzlmod/MODULE.bazel
         python-version: ["3.10.12", "3.11.6", "3.12.0"]
     defaults:
       run:
-        working-directory: tests/smoke_workspace
+        working-directory: tests/smoke_bzlmod
 
     steps:
       - uses: actions/checkout@v4
