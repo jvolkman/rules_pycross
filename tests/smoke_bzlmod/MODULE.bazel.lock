@@ -1,6 +1,6 @@
 {
   "lockFileVersion": 3,
-  "moduleFileHash": "ddeb3974a78e666787f1056ddc6375742f87da63186031654d25618af4ab7101",
+  "moduleFileHash": "84184706f38fb8c8e2f808b27cf9c0346b09c11bb813c2c5a561cf84aeda2757",
   "flags": {
     "cmdRegistries": [
       "https://bcr.bazel.build/"
@@ -156,18 +156,18 @@
               "tagName": "create_for_python_toolchains",
               "attributeValues": {
                 "name": "smoke_environments",
-                "python_versions_repo": "@python_versions",
-                "python_versions": [
-                  "3.10.12",
-                  "3.11.6",
-                  "3.12.0"
-                ],
                 "platforms": [
                   "aarch64-apple-darwin",
                   "x86_64-apple-darwin",
                   "aarch64-unknown-linux-gnu",
                   "x86_64-unknown-linux-gnu"
-                ]
+                ],
+                "python_versions": [
+                  "3.10.12",
+                  "3.11.6",
+                  "3.12.0"
+                ],
+                "python_versions_repo": "@python_versions"
               },
               "devDependency": false,
               "location": {
@@ -2963,7 +2963,7 @@
     },
     "@@rules_pycross~override//pycross/extensions:environments.bzl%environments": {
       "general": {
-        "bzlTransitiveDigest": "x5Su9PlU2M0xItzoVGetyh61VOcDmFBee6yeJpeXpyk=",
+        "bzlTransitiveDigest": "EqfvKWNEbwsFf5MVHfsJ9bsOzGQ8vBHI3/7Z2J7NEew=",
         "accumulatedFileDigests": {},
         "envVariables": {},
         "generatedRepoSpecs": {
@@ -3616,7 +3616,6 @@
         "accumulatedFileDigests": {
           "@@rules_pycross~override~environments~pycross_environments//:python_3.10.12_aarch64-apple-darwin.json": "4628731ae8637e6d1f81810d984e01da06dba84e48ac1d92814ffd43ea658956",
           "@@rules_pycross~override~environments~pycross_environments//:python_3.11.6_x86_64-apple-darwin.json": "a7dbe4fbbd6141d60a537e280d4da3dabf23310abb9f173e8d7a6a44209728f7",
-          "@@rules_pycross~override~environments~pycross_environments//:python_3.11_x86_64-pc-windows-msvc.json": "f3668fe81a708313f9b02dd4aad1506c8f553040fcb400992188dc89878f98c5",
           "@@rules_pycross~override~environments~pycross_environments//:python_3.10.12_s390x-unknown-linux-gnu.json": "4c09c558dcd318c819b53367982ce0779895d6561cef88dfede882ac394a1f12",
           "@@rules_pycross~override~environments~pycross_environments//:python_3.12.0_aarch64-unknown-linux-gnu.json": "80d525f3fd8c503279fd0d8d39444c8e6aa3a8f8bfa3f4c1de26dd918601b6a2",
           "@@rules_pycross~override~environments~pycross_environments//:python_3.11.6_x86_64-pc-windows-msvc.json": "7ffac341162c012e80ee033addc55d5554863c5bc1583917dae7ee5f99b2b4dd",
@@ -3628,27 +3627,21 @@
           "@@rules_pycross~override~environments~pycross_environments//:python_3.11.6_s390x-unknown-linux-gnu.json": "4e771bf85f862bf6a3e312470907eec368bf461120b97d32eb17ec302ac7b1e8",
           "@@rules_pycross~override~environments~pycross_environments//:python_3.11.6_ppc64le-unknown-linux-gnu.json": "c7d2994f151dc446b4fc144c14f7562319e640800b92bfcb68a42576623aca19",
           "@@rules_pycross~override~environments~pycross_environments//:python_3.12.0_aarch64-apple-darwin.json": "4b8617d41b1e85ad5586269818b4bb0fcf4f9b82ef84e10646257af5fe896839",
-          "@@rules_pycross~override~environments~pycross_environments//:python_3.11_x86_64-apple-darwin.json": "f721834fa4b6c13d2e53f123070fd89b0e303ad3b312f4af8b3266bac0c8456a",
-          "@@rules_pycross~override~environments~pycross_environments//:python_3.11_aarch64-apple-darwin.json": "a405bea62318b375a449e7438e475c992a77b4f9d347927346f401d8dab6be8c",
           "@@rules_pycross~override~environments~pycross_environments//:python_3.12_x86_64-unknown-linux-gnu.json": "0a0e60188aad6fc7a2b7b9eac304087813dcbf7452073830ef744f871550ede4",
           "@@rules_pycross~override~environments~pycross_environments//:python_3.10.12_x86_64-unknown-linux-gnu.json": "195d915ee35183df774fe5ab69bb55d6f055a0b4ff1bac9ec8e30b81b3d2a1f2",
           "@@rules_pycross~override~environments~pycross_environments//:python_3.12_ppc64le-unknown-linux-gnu.json": "5c92e32b0c792e61ffd0d9913bfdfdc59b3224a9a1164619c78c9317cdfe9845",
-          "@@rules_pycross~override~environments~pycross_environments//:python_3.11_aarch64-unknown-linux-gnu.json": "102065e6ffea001db91eab63bf42352623f1036675bc7f3cdfc406b27dd70067",
           "@@rules_pycross~override~environments~pycross_environments//:python_3.12_x86_64-apple-darwin.json": "ae83725369483d225fcfdc2eec54ae342c706648305554c6664792f1ebfda523",
           "@@rules_pycross~override~environments~pycross_environments//:python_3.12.0_s390x-unknown-linux-gnu.json": "48d1cf15cef0f39716fe90d2a695316654a99ba9feebc6ad82bdf54d611594db",
           "@@rules_pycross~override~environments~pycross_environments//:python_3.10.12_x86_64-pc-windows-msvc.json": "3144abb2aa6ca4a94c6494a9fa68a53e5687421573487daedde6beb5fb3d34c6",
           "@@rules_pycross~override~environments~pycross_environments//:python_3.10.12_ppc64le-unknown-linux-gnu.json": "588c4dd7dc8488b1cff34b30e675930a119185237040eb9f18cf64a87a4b50e5",
-          "@@rules_pycross~override~environments~pycross_environments//:python_3.11_s390x-unknown-linux-gnu.json": "5c09e7a9c4232a80bd49dd11eb350e2125b94c97108acf4bf7ccfb6e1d3a43cb",
           "@@rules_pycross~override~environments~pycross_environments//:python_3.10.12_aarch64-unknown-linux-gnu.json": "ba90e5b2c56052a230695dbd98cdd351680fc99b4c8c3295bfc499066f147d88",
           "@@rules_pycross~override~environments~pycross_environments//:python_3.12.0_x86_64-unknown-linux-gnu.json": "fd1f2aeccd493ba6dbaebd5e11b6c5a4f2d00580b2ebfcf6d6ffc4f2e68d8c93",
-          "@@rules_pycross~override~environments~pycross_environments//:python_3.11_x86_64-unknown-linux-gnu.json": "7a3a841ff07eea2cc9125a303fcc977f647a770235a73d95630ae16c323af02d",
-          "@@rules_pycross~override~environments~pycross_environments//:environments": "2ae11c355ccffb2dc3ba0fcdef9693b5f6b49e982461ab12e98ba4447fee9ef3",
+          "@@rules_pycross~override~environments~pycross_environments//:environments": "0d6ab50a9b4890ebaadd41a41a8a392637987b70105249e4f97ea9e19a5857d9",
           "@@rules_pycross~override~environments~pycross_environments//:python_3.12.0_ppc64le-unknown-linux-gnu.json": "1ad59c9637a4947d6191eca441f8d9e23e34d2c6c5a17cc66694fc90c22a132b",
           "@@rules_pycross~override~environments~pycross_environments//:python_3.12.0_x86_64-apple-darwin.json": "1aa2ba65f7a20e31c305fb8a383851fac6cb2f6b2bcf3aaa6890e13c356475e7",
           "@@rules_pycross~override~environments~pycross_environments//:python_3.12_x86_64-pc-windows-msvc.json": "973e7a961b3785525000cb733f71029105829eaac33077bc7336e4af68f6fa31",
           "@@rules_pycross~override~environments~pycross_environments//:python_3.11.6_aarch64-apple-darwin.json": "2ab02126f019814f26f43ad9ed1239b019dc1e999bb0deaca3559cca8d8d09cf",
           "@@rules_pycross~override~environments~pycross_environments//:python_3.12_aarch64-unknown-linux-gnu.json": "3b715ff9b5f463b778d93526ed5ae9d9f269b4c1e54c82bc39de3750f06127bc",
-          "@@rules_pycross~override~environments~pycross_environments//:python_3.11_ppc64le-unknown-linux-gnu.json": "0bfdb60288df4f10620665cc028926cbadced55740672440f1400cc16c2226b6",
           "@@rules_pycross~override~environments~pycross_environments//:python_3.12.0_x86_64-pc-windows-msvc.json": "bfb59e7aa92666d3cd4ac15f2d5fcf2e268b17fc7b95b5a1c46f91fbbf0ea9d5"
         },
         "envVariables": {},
@@ -3685,13 +3678,6 @@
                 "@@rules_pycross~override~environments~pycross_environments//:python_3.11.6_x86_64-apple-darwin.json",
                 "@@rules_pycross~override~environments~pycross_environments//:python_3.11.6_x86_64-pc-windows-msvc.json",
                 "@@rules_pycross~override~environments~pycross_environments//:python_3.11.6_x86_64-unknown-linux-gnu.json",
-                "@@rules_pycross~override~environments~pycross_environments//:python_3.11_aarch64-apple-darwin.json",
-                "@@rules_pycross~override~environments~pycross_environments//:python_3.11_aarch64-unknown-linux-gnu.json",
-                "@@rules_pycross~override~environments~pycross_environments//:python_3.11_ppc64le-unknown-linux-gnu.json",
-                "@@rules_pycross~override~environments~pycross_environments//:python_3.11_s390x-unknown-linux-gnu.json",
-                "@@rules_pycross~override~environments~pycross_environments//:python_3.11_x86_64-apple-darwin.json",
-                "@@rules_pycross~override~environments~pycross_environments//:python_3.11_x86_64-pc-windows-msvc.json",
-                "@@rules_pycross~override~environments~pycross_environments//:python_3.11_x86_64-unknown-linux-gnu.json",
                 "@@rules_pycross~override~environments~pycross_environments//:python_3.12.0_aarch64-apple-darwin.json",
                 "@@rules_pycross~override~environments~pycross_environments//:python_3.12.0_aarch64-unknown-linux-gnu.json",
                 "@@rules_pycross~override~environments~pycross_environments//:python_3.12.0_ppc64le-unknown-linux-gnu.json",
@@ -3751,13 +3737,6 @@
                 "@@rules_pycross~override~environments~pycross_environments//:python_3.11.6_x86_64-apple-darwin.json",
                 "@@rules_pycross~override~environments~pycross_environments//:python_3.11.6_x86_64-pc-windows-msvc.json",
                 "@@rules_pycross~override~environments~pycross_environments//:python_3.11.6_x86_64-unknown-linux-gnu.json",
-                "@@rules_pycross~override~environments~pycross_environments//:python_3.11_aarch64-apple-darwin.json",
-                "@@rules_pycross~override~environments~pycross_environments//:python_3.11_aarch64-unknown-linux-gnu.json",
-                "@@rules_pycross~override~environments~pycross_environments//:python_3.11_ppc64le-unknown-linux-gnu.json",
-                "@@rules_pycross~override~environments~pycross_environments//:python_3.11_s390x-unknown-linux-gnu.json",
-                "@@rules_pycross~override~environments~pycross_environments//:python_3.11_x86_64-apple-darwin.json",
-                "@@rules_pycross~override~environments~pycross_environments//:python_3.11_x86_64-pc-windows-msvc.json",
-                "@@rules_pycross~override~environments~pycross_environments//:python_3.11_x86_64-unknown-linux-gnu.json",
                 "@@rules_pycross~override~environments~pycross_environments//:python_3.12.0_aarch64-apple-darwin.json",
                 "@@rules_pycross~override~environments~pycross_environments//:python_3.12.0_aarch64-unknown-linux-gnu.json",
                 "@@rules_pycross~override~environments~pycross_environments//:python_3.12.0_ppc64le-unknown-linux-gnu.json",
@@ -3810,8 +3789,8 @@
       "general": {
         "bzlTransitiveDigest": "WzjWhEt0NxNaqjqDLNvSYiaLVNxKz++adDa7h53/Jm8=",
         "accumulatedFileDigests": {
-          "@@rules_pycross~override~lock_import~pdm_lock_repo//:lock.json": "115a92dde01df1f902d91e7c0f6631363f39760ef058db87d6c34c6a85e4e514",
-          "@@rules_pycross~override~lock_import~poetry_lock_repo//:lock.json": "8437f3c79bd5b0a18641770ad4647694714a580e63815b75e5f3cd803f1a95e9"
+          "@@rules_pycross~override~lock_import~pdm_lock_repo//:lock.json": "58b7662d1781ae67e31c8b6bab48a6f04347a6834f401e7b21666480c8d95c98",
+          "@@rules_pycross~override~lock_import~poetry_lock_repo//:lock.json": "f3d7ff51dda90b53aeb643d4e820f22a13d48cf37b5789cdb821088e77e27273"
         },
         "envVariables": {},
         "generatedRepoSpecs": {
@@ -4483,7 +4462,7 @@
     },
     "@@rules_pycross~override//pycross/extensions:pycross.bzl%pycross": {
       "os:osx,arch:aarch64": {
-        "bzlTransitiveDigest": "bh3d/EjbhDFIZrCpr/qa+k2ezecqkS2Sh2Te/CzrywY=",
+        "bzlTransitiveDigest": "qOfY7RO/qbOlvv86bN2w45I4UqXr1y3dbqnOwE0mR1o=",
         "accumulatedFileDigests": {},
         "envVariables": {},
         "generatedRepoSpecs": {
@@ -4798,7 +4777,7 @@
     },
     "@@rules_pycross~override//pycross/private/bzlmod:toolchains.bzl%toolchains": {
       "general": {
-        "bzlTransitiveDigest": "FYkXO5VzYh8tEfgtEZMJ123SGos4vZoRygqO+WdtVKI=",
+        "bzlTransitiveDigest": "+/rO9U+wNZsNrIPm8vc8OEQiYO3keXe63HrQBl05bj4=",
         "accumulatedFileDigests": {},
         "envVariables": {},
         "generatedRepoSpecs": {
