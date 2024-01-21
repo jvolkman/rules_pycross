@@ -55,6 +55,24 @@ def _get_env_platforms(py_platform, glibc_version, macos_version):
 
     fail("Unknown platform: {}".format(py_platform))
 
+def _dedupe_versions(versions, default_version):
+    """Returns a list of versions deduped by resolved minor version."""
+
+    # E.g., if '3.10' and '3.10.6' are both passed, we only want '3.10.6'. Otherwise we'll run into
+    # ambiguous select() criteria.
+    # The exception is if one of the two is the default version, in which case we need to keep both
+    # due to how the @rules_python//python/config_settings:python_version setting works.
+
+    unique_versions = {}
+    for version in sorted(versions):
+        minor_version = _get_minor_version(version)
+        is_default = version == default_version
+
+        # In sorted order, 3.10.6 will override 3.10 if neither is default.
+        unique_versions[(minor_version, is_default)] = version
+
+    return sorted(unique_versions.values())
+
 def _compute_environments(
         repo_name,
         python_versions,
@@ -67,7 +85,7 @@ def _compute_environments(
     if not platforms:
         platforms = sorted(PLATFORMS.keys())
 
-    for version in python_versions:
+    for version in _dedupe_versions(python_versions, default_version):
         minor_version = _get_minor_version(version)
 
         version_info = TOOL_VERSIONS[minor_version]
@@ -76,7 +94,7 @@ def _compute_environments(
 
         for target_platform in selected_platforms:
             env_platforms = _get_env_platforms(target_platform, glibc_version, macos_version)
-            target_env_name = "python_{}_{}".format(minor_version, target_platform)
+            target_env_name = "python_{}_{}".format(version, target_platform)
             target_env_json = target_env_name + ".json"
 
             environment_compatible_with = list(PLATFORMS[target_platform].compatible_with)
@@ -114,7 +132,7 @@ def _compute_toolchains(
     if not platforms:
         platforms = sorted(PLATFORMS.keys())
 
-    for version in python_versions:
+    for version in _dedupe_versions(python_versions, default_version):
         minor_version = _get_minor_version(version)
         underscore_version = version.replace(".", "_")
 
@@ -129,7 +147,7 @@ def _compute_toolchains(
                 flag_values = {"@rules_python//python/config_settings:python_version": minor_version}
 
             for exec_platform in selected_platforms:
-                tc_provider_name = "python_{}_{}_{}".format(minor_version, exec_platform, target_platform)
+                tc_provider_name = "python_{}_{}_{}".format(version, exec_platform, target_platform)
                 tc_target_config_name = "{}_target_config".format(tc_provider_name)
                 tc_name = "{}_tc".format(tc_provider_name)
 
