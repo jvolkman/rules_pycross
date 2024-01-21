@@ -1,0 +1,15 @@
+load("@rules_python//python:defs.bzl", "py_test")
+
+package(default_visibility = ["//visibility:public"])
+
+py_test(
+    name = "test_zstandard",
+    srcs = ["//:test_zstandard.py"],
+    deps = ["@poetry_lock_repo//:zstandard"],
+)
+
+py_test(
+    name = "test_regex",
+    srcs = ["//:test_regex.py"],
+    deps = ["@poetry_lock_repo//:regex"],
+)

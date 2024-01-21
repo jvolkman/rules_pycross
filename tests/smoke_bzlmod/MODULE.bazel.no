@@ -1,0 +1,154 @@
+"""rules_pycross e2e tests"""
+
+module(
+    name = "rules_pycross_smoke",
+    version = "0.0.0",
+    compatibility_level = 1,
+)
+
+http_archive = use_repo_rule("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
+
+# Deps
+bazel_dep(name = "aspect_bazel_lib", version = "2.3.0")
+bazel_dep(name = "hermetic_cc_toolchain", version = "2.2.1")
+bazel_dep(name = "platforms", version = "0.0.8")
+bazel_dep(name = "rules_cc", version = "0.0.9")
+bazel_dep(name = "rules_python", version = "0.28.0")
+bazel_dep(name = "rules_pycross", version = "0.0.0")
+local_path_override(
+    module_name = "rules_pycross",
+    path = "../..",
+)
+
+# CC toolchain
+
+toolchains = use_extension("@hermetic_cc_toolchain//toolchain:ext.bzl", "toolchains")
+use_repo(toolchains, "zig_sdk")
+
+register_toolchains(
+    "@zig_sdk//toolchain:linux_amd64_gnu.2.19",
+    "@zig_sdk//toolchain:linux_arm64_gnu.2.28",
+    "@zig_sdk//toolchain:darwin_amd64",
+    "@zig_sdk//toolchain:darwin_arm64",
+)
+
+# Python
+
+python = use_extension("@rules_python//python/extensions:python.bzl", "python")
+python.toolchain(python_version = "3.10.12")
+python.toolchain(python_version = "3.11.6")
+python.toolchain(
+    is_default = True,
+    python_version = "3.12.0",
+)
+use_repo(python, "python_versions")
+
+# Third-party deps
+
+http_archive(
+    name = "zstd",
+    build_file = "//third_party/zstd:zstd.BUILD",
+    sha256 = "9c4396cc829cfae319a6e2615202e82aad41372073482fce286fac78646d3ee4",
+    strip_prefix = "zstd-1.5.5",
+    urls = ["https://github.com/facebook/zstd/releases/download/v1.5.5/zstd-1.5.5.tar.gz"],
+)
+
+# Pycross
+environments = use_extension("@rules_pycross//pycross/extensions:environments.bzl", "environments")
+environments.create_for_python_toolchains(
+    name = "smoke_environments",
+    python_versions_repo = "@python_versions",
+    python_versions = [
+        "3.10.12",
+        "3.11.6",
+        "3.12.0",
+    ],
+    platforms = [
+        "aarch64-apple-darwin",
+        "x86_64-apple-darwin",
+        "aarch64-unknown-linux-gnu",
+        "x86_64-unknown-linux-gnu",
+    ],
+)
+use_repo(environments, "smoke_environments")
+
+# Use the lock_import extension to import external lock files.
+lock_import = use_extension("@rules_pycross//pycross/extensions:lock_import.bzl", "lock_import")
+
+# lock_repo with Poetry
+lock_import.import_poetry(
+    default_alias_single_version = True,
+    lock_file = "//:poetry.lock",
+    project_file = "//:pyproject.toml",
+    repo = "poetry_lock_repo",
+)
+lock_import.package(
+    name = "regex",
+    always_build = True,
+    build_dependencies = [
+        "setuptools",
+        "wheel",
+    ],
+    repo = "poetry_lock_repo",
+)
+lock_import.package(
+    name = "zstandard",
+    always_build = True,
+    build_dependencies = [
+        "setuptools",
+        "wheel",
+    ],
+    build_target = "@//pdm:zstandard_build",
+    repo = "poetry_lock_repo",
+)
+
+# lock_repo with PDM
+lock_import.import_pdm(
+    default_alias_single_version = True,
+    lock_file = "//:pdm.lock",
+    project_file = "//:pyproject.toml",
+    repo = "pdm_lock_repo",
+)
+lock_import.package(
+    name = "regex",
+    always_build = True,
+    build_dependencies = [
+        "setuptools",
+        "wheel",
+    ],
+    repo = "pdm_lock_repo",
+)
+lock_import.package(
+    name = "zstandard",
+    always_build = True,
+    build_dependencies = [
+        "setuptools",
+        "wheel",
+    ],
+    build_target = "@//pdm:zstandard_build",
+    repo = "pdm_lock_repo",
+)
+
+# The actual repos are loaded from the lock_repos extension.
+lock_repos = use_extension("@rules_pycross//pycross/extensions:lock_repos.bzl", "lock_repos")
+use_repo(lock_repos, "pdm_lock_repo", "poetry_lock_repo")
+
+# Lock repo for vended poetry lock
+lock_file = use_extension("@rules_pycross//pycross/extensions:lock_file.bzl", "lock_file")
+lock_file.instantiate(
+    name = "poetry_lock_file_repo",
+    lock_file = "//poetry:lock.bzl",
+)
+
+# Lock repo for vended poetry lock
+lock_file.instantiate(
+    name = "pdm_lock_file_repo",
+    lock_file = "//pdm:lock.bzl",
+)
+use_repo(
+    lock_file,
+    "pdm_lock_file_repo",
+    "pdm_lock_file_sdist_zstandard_0.22.0",
+    "poetry_lock_file_repo",
+    "poetry_lock_file_sdist_zstandard_0.22.0",
+)
