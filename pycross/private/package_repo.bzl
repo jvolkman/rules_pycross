@@ -128,6 +128,8 @@ def _generate_lock_bzl(rctx, lock_json_path, lock_bzl_path):
         "--pycross-repo-name",
         "@rules_pycross",
         "--no-pins",
+        "--repo-prefix",
+        rctx.attr.name.lower().replace("-", "_"),
         "--resolved-lock",
         lock_json_path,
         "--output",
