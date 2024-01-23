@@ -2,7 +2,7 @@
 # It is not intended for manual editing.
 """Pycross-generated dependency targets."""
 
-load("@@rules_pycross~override//pycross:defs.bzl", "pycross_wheel_build", "pycross_wheel_library")
+load("@@rules_pycross~override//pycross:defs.bzl", "pycross_wheel_library")
 load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_file")
 load("@bazel_tools//tools/build_defs/repo:utils.bzl", "maybe")
 
@@ -119,7 +119,7 @@ def targets():
 
     native.alias(
         name = "_wheel_appnope@0.1.3",
-        actual = "@pdm_lock_file_wheel_appnope_0.1.3_py2.py3_none_any//file",
+        actual = "@pdm_lock_wheel_appnope_0.1.3_py2.py3_none_any//file",
     )
 
     pycross_wheel_library(
@@ -133,7 +133,7 @@ def targets():
 
     native.alias(
         name = "_wheel_asttokens@2.4.1",
-        actual = "@pdm_lock_file_wheel_asttokens_2.4.1_py2.py3_none_any//file",
+        actual = "@pdm_lock_wheel_asttokens_2.4.1_py2.py3_none_any//file",
     )
 
     pycross_wheel_library(
@@ -144,7 +144,7 @@ def targets():
 
     native.alias(
         name = "_wheel_decorator@5.1.1",
-        actual = "@pdm_lock_file_wheel_decorator_5.1.1_py3_none_any//file",
+        actual = "@pdm_lock_wheel_decorator_5.1.1_py3_none_any//file",
     )
 
     pycross_wheel_library(
@@ -154,7 +154,7 @@ def targets():
 
     native.alias(
         name = "_wheel_exceptiongroup@1.2.0",
-        actual = "@pdm_lock_file_wheel_exceptiongroup_1.2.0_py3_none_any//file",
+        actual = "@pdm_lock_wheel_exceptiongroup_1.2.0_py3_none_any//file",
     )
 
     pycross_wheel_library(
@@ -164,7 +164,7 @@ def targets():
 
     native.alias(
         name = "_wheel_executing@2.0.1",
-        actual = "@pdm_lock_file_wheel_executing_2.0.1_py2.py3_none_any//file",
+        actual = "@pdm_lock_wheel_executing_2.0.1_py2.py3_none_any//file",
     )
 
     pycross_wheel_library(
@@ -213,7 +213,7 @@ def targets():
 
     native.alias(
         name = "_wheel_ipython@8.17.2",
-        actual = "@pdm_lock_file_wheel_ipython_8.17.2_py3_none_any//file",
+        actual = "@pdm_lock_wheel_ipython_8.17.2_py3_none_any//file",
     )
 
     pycross_wheel_library(
@@ -228,7 +228,7 @@ def targets():
 
     native.alias(
         name = "_wheel_jedi@0.19.1",
-        actual = "@pdm_lock_file_wheel_jedi_0.19.1_py2.py3_none_any//file",
+        actual = "@pdm_lock_wheel_jedi_0.19.1_py2.py3_none_any//file",
     )
 
     pycross_wheel_library(
@@ -243,7 +243,7 @@ def targets():
 
     native.alias(
         name = "_wheel_matplotlib-inline@0.1.6",
-        actual = "@pdm_lock_file_wheel_matplotlib_inline_0.1.6_py3_none_any//file",
+        actual = "@pdm_lock_wheel_matplotlib_inline_0.1.6_py3_none_any//file",
     )
 
     pycross_wheel_library(
@@ -254,7 +254,7 @@ def targets():
 
     native.alias(
         name = "_wheel_parso@0.8.3",
-        actual = "@pdm_lock_file_wheel_parso_0.8.3_py2.py3_none_any//file",
+        actual = "@pdm_lock_wheel_parso_0.8.3_py2.py3_none_any//file",
     )
 
     pycross_wheel_library(
@@ -268,7 +268,7 @@ def targets():
 
     native.alias(
         name = "_wheel_pexpect@4.9.0",
-        actual = "@pdm_lock_file_wheel_pexpect_4.9.0_py2.py3_none_any//file",
+        actual = "@pdm_lock_wheel_pexpect_4.9.0_py2.py3_none_any//file",
     )
 
     pycross_wheel_library(
@@ -283,7 +283,7 @@ def targets():
 
     native.alias(
         name = "_wheel_prompt-toolkit@3.0.41",
-        actual = "@pdm_lock_file_wheel_prompt_toolkit_3.0.41_py3_none_any//file",
+        actual = "@pdm_lock_wheel_prompt_toolkit_3.0.41_py3_none_any//file",
     )
 
     pycross_wheel_library(
@@ -294,7 +294,7 @@ def targets():
 
     native.alias(
         name = "_wheel_ptyprocess@0.7.0",
-        actual = "@pdm_lock_file_wheel_ptyprocess_0.7.0_py2.py3_none_any//file",
+        actual = "@pdm_lock_wheel_ptyprocess_0.7.0_py2.py3_none_any//file",
     )
 
     pycross_wheel_library(
@@ -304,7 +304,7 @@ def targets():
 
     native.alias(
         name = "_wheel_pure-eval@0.2.2",
-        actual = "@pdm_lock_file_wheel_pure_eval_0.2.2_py3_none_any//file",
+        actual = "@pdm_lock_wheel_pure_eval_0.2.2_py3_none_any//file",
     )
 
     pycross_wheel_library(
@@ -314,7 +314,7 @@ def targets():
 
     native.alias(
         name = "_wheel_pygments@2.17.2",
-        actual = "@pdm_lock_file_wheel_pygments_2.17.2_py3_none_any//file",
+        actual = "@pdm_lock_wheel_pygments_2.17.2_py3_none_any//file",
     )
 
     pycross_wheel_library(
@@ -323,26 +323,21 @@ def targets():
     )
 
     native.alias(
-        name = "_sdist_regex@2023.10.3",
-        actual = "@pdm_lock_file_sdist_regex_2023.10.3//file",
-    )
-
-    _regex_2023_10_3_build_deps = [
-        ":setuptools@68.2.2",
-        ":wheel@0.41.3",
-    ]
-
-    pycross_wheel_build(
-        name = "_build_regex@2023.10.3",
-        sdist = ":_sdist_regex@2023.10.3",
-        target_environment = _target,
-        deps = _regex_2023_10_3_build_deps,
-        tags = ["manual"],
-    )
-
-    native.alias(
         name = "_wheel_regex@2023.10.3",
-        actual = ":_build_regex@2023.10.3",
+        actual = select({
+            ":_env_python_3.10.12_aarch64-apple-darwin": "@pdm_lock_wheel_regex_2023.10.3_cp310_cp310_macosx_11_0_arm64//file",
+            ":_env_python_3.10.12_aarch64-unknown-linux-gnu": "@pdm_lock_wheel_regex_2023.10.3_cp310_cp310_manylinux_2_17_aarch64.manylinux2014_aarch64//file",
+            ":_env_python_3.10.12_x86_64-apple-darwin": "@pdm_lock_wheel_regex_2023.10.3_cp310_cp310_macosx_10_9_x86_64//file",
+            ":_env_python_3.10.12_x86_64-unknown-linux-gnu": "@pdm_lock_wheel_regex_2023.10.3_cp310_cp310_manylinux_2_5_x86_64.manylinux1_x86_64.manylinux_2_12_x86_64.manylinux2010_x86_64//file",
+            ":_env_python_3.11.6_aarch64-apple-darwin": "@pdm_lock_wheel_regex_2023.10.3_cp311_cp311_macosx_11_0_arm64//file",
+            ":_env_python_3.11.6_aarch64-unknown-linux-gnu": "@pdm_lock_wheel_regex_2023.10.3_cp311_cp311_manylinux_2_17_aarch64.manylinux2014_aarch64//file",
+            ":_env_python_3.11.6_x86_64-apple-darwin": "@pdm_lock_wheel_regex_2023.10.3_cp311_cp311_macosx_10_9_x86_64//file",
+            ":_env_python_3.11.6_x86_64-unknown-linux-gnu": "@pdm_lock_wheel_regex_2023.10.3_cp311_cp311_manylinux_2_17_x86_64.manylinux2014_x86_64//file",
+            ":_env_python_3.12.0_aarch64-apple-darwin": "@pdm_lock_wheel_regex_2023.10.3_cp312_cp312_macosx_11_0_arm64//file",
+            ":_env_python_3.12.0_aarch64-unknown-linux-gnu": "@pdm_lock_wheel_regex_2023.10.3_cp312_cp312_manylinux_2_17_aarch64.manylinux2014_aarch64//file",
+            ":_env_python_3.12.0_x86_64-apple-darwin": "@pdm_lock_wheel_regex_2023.10.3_cp312_cp312_macosx_10_9_x86_64//file",
+            ":_env_python_3.12.0_x86_64-unknown-linux-gnu": "@pdm_lock_wheel_regex_2023.10.3_cp312_cp312_manylinux_2_17_x86_64.manylinux2014_x86_64//file",
+        }),
     )
 
     pycross_wheel_library(
@@ -352,7 +347,7 @@ def targets():
 
     native.alias(
         name = "_wheel_setuptools@68.2.2",
-        actual = "@pdm_lock_file_wheel_setuptools_68.2.2_py3_none_any//file",
+        actual = "@pdm_lock_wheel_setuptools_68.2.2_py3_none_any//file",
     )
 
     pycross_wheel_library(
@@ -362,7 +357,7 @@ def targets():
 
     native.alias(
         name = "_wheel_six@1.16.0",
-        actual = "@pdm_lock_file_wheel_six_1.16.0_py2.py3_none_any//file",
+        actual = "@pdm_lock_wheel_six_1.16.0_py2.py3_none_any//file",
     )
 
     pycross_wheel_library(
@@ -378,7 +373,7 @@ def targets():
 
     native.alias(
         name = "_wheel_stack-data@0.6.3",
-        actual = "@pdm_lock_file_wheel_stack_data_0.6.3_py3_none_any//file",
+        actual = "@pdm_lock_wheel_stack_data_0.6.3_py3_none_any//file",
     )
 
     pycross_wheel_library(
@@ -389,7 +384,7 @@ def targets():
 
     native.alias(
         name = "_wheel_traitlets@5.14.0",
-        actual = "@pdm_lock_file_wheel_traitlets_5.14.0_py3_none_any//file",
+        actual = "@pdm_lock_wheel_traitlets_5.14.0_py3_none_any//file",
     )
 
     pycross_wheel_library(
@@ -399,7 +394,7 @@ def targets():
 
     native.alias(
         name = "_wheel_wcwidth@0.2.12",
-        actual = "@pdm_lock_file_wheel_wcwidth_0.2.12_py2.py3_none_any//file",
+        actual = "@pdm_lock_wheel_wcwidth_0.2.12_py2.py3_none_any//file",
     )
 
     pycross_wheel_library(
@@ -409,7 +404,7 @@ def targets():
 
     native.alias(
         name = "_wheel_wheel@0.41.3",
-        actual = "@pdm_lock_file_wheel_wheel_0.41.3_py3_none_any//file",
+        actual = "@pdm_lock_wheel_wheel_0.41.3_py3_none_any//file",
     )
 
     pycross_wheel_library(
@@ -418,13 +413,21 @@ def targets():
     )
 
     native.alias(
-        name = "_sdist_zstandard@0.22.0",
-        actual = "@pdm_lock_file_sdist_zstandard_0.22.0//file",
-    )
-
-    native.alias(
         name = "_wheel_zstandard@0.22.0",
-        actual = "@@//pdm:zstandard_build",
+        actual = select({
+            ":_env_python_3.10.12_aarch64-apple-darwin": "@pdm_lock_wheel_zstandard_0.22.0_cp310_cp310_macosx_11_0_arm64//file",
+            ":_env_python_3.10.12_aarch64-unknown-linux-gnu": "@pdm_lock_wheel_zstandard_0.22.0_cp310_cp310_manylinux_2_17_aarch64.manylinux2014_aarch64//file",
+            ":_env_python_3.10.12_x86_64-apple-darwin": "@pdm_lock_wheel_zstandard_0.22.0_cp310_cp310_macosx_10_9_x86_64//file",
+            ":_env_python_3.10.12_x86_64-unknown-linux-gnu": "@pdm_lock_wheel_zstandard_0.22.0_cp310_cp310_manylinux_2_17_x86_64.manylinux2014_x86_64//file",
+            ":_env_python_3.11.6_aarch64-apple-darwin": "@pdm_lock_wheel_zstandard_0.22.0_cp311_cp311_macosx_11_0_arm64//file",
+            ":_env_python_3.11.6_aarch64-unknown-linux-gnu": "@pdm_lock_wheel_zstandard_0.22.0_cp311_cp311_manylinux_2_17_aarch64.manylinux2014_aarch64//file",
+            ":_env_python_3.11.6_x86_64-apple-darwin": "@pdm_lock_wheel_zstandard_0.22.0_cp311_cp311_macosx_10_9_x86_64//file",
+            ":_env_python_3.11.6_x86_64-unknown-linux-gnu": "@pdm_lock_wheel_zstandard_0.22.0_cp311_cp311_manylinux_2_17_x86_64.manylinux2014_x86_64//file",
+            ":_env_python_3.12.0_aarch64-apple-darwin": "@pdm_lock_wheel_zstandard_0.22.0_cp312_cp312_macosx_11_0_arm64//file",
+            ":_env_python_3.12.0_aarch64-unknown-linux-gnu": "@pdm_lock_wheel_zstandard_0.22.0_cp312_cp312_manylinux_2_17_aarch64.manylinux2014_aarch64//file",
+            ":_env_python_3.12.0_x86_64-apple-darwin": "@pdm_lock_wheel_zstandard_0.22.0_cp312_cp312_macosx_10_9_x86_64//file",
+            ":_env_python_3.12.0_x86_64-unknown-linux-gnu": "@pdm_lock_wheel_zstandard_0.22.0_cp312_cp312_manylinux_2_17_x86_64.manylinux2014_x86_64//file",
+        }),
     )
 
     pycross_wheel_library(
@@ -438,27 +441,7 @@ def repositories():
 
     maybe(
         http_file,
-        name = "pdm_lock_file_sdist_regex_2023.10.3",
-        urls = [
-            "https://files.pythonhosted.org/packages/6b/38/49d968981b5ec35dbc0f742f8219acab179fc1567d9c22444152f950cf0d/regex-2023.10.3.tar.gz",
-        ],
-        sha256 = "3fef4f844d2290ee0ba57addcec17eec9e3df73f10a2748485dfd6a3a188cc0f",
-        downloaded_file_path = "regex-2023.10.3.tar.gz",
-    )
-
-    maybe(
-        http_file,
-        name = "pdm_lock_file_sdist_zstandard_0.22.0",
-        urls = [
-            "https://files.pythonhosted.org/packages/5d/91/2162ab4239b3bd6743e8e407bc2442fca0d326e2d77b3f4a88d90ad5a1fa/zstandard-0.22.0.tar.gz",
-        ],
-        sha256 = "8226a33c542bcb54cd6bd0a366067b610b41713b64c9abec1bc4533d69f51e70",
-        downloaded_file_path = "zstandard-0.22.0.tar.gz",
-    )
-
-    maybe(
-        http_file,
-        name = "pdm_lock_file_wheel_appnope_0.1.3_py2.py3_none_any",
+        name = "pdm_lock_wheel_appnope_0.1.3_py2.py3_none_any",
         urls = [
             "https://files.pythonhosted.org/packages/41/4a/381783f26df413dde4c70c734163d88ca0550a1361cb74a1c68f47550619/appnope-0.1.3-py2.py3-none-any.whl",
         ],
@@ -468,7 +451,7 @@ def repositories():
 
     maybe(
         http_file,
-        name = "pdm_lock_file_wheel_asttokens_2.4.1_py2.py3_none_any",
+        name = "pdm_lock_wheel_asttokens_2.4.1_py2.py3_none_any",
         urls = [
             "https://files.pythonhosted.org/packages/45/86/4736ac618d82a20d87d2f92ae19441ebc7ac9e7a581d7e58bbe79233b24a/asttokens-2.4.1-py2.py3-none-any.whl",
         ],
@@ -478,7 +461,7 @@ def repositories():
 
     maybe(
         http_file,
-        name = "pdm_lock_file_wheel_decorator_5.1.1_py3_none_any",
+        name = "pdm_lock_wheel_decorator_5.1.1_py3_none_any",
         urls = [
             "https://files.pythonhosted.org/packages/d5/50/83c593b07763e1161326b3b8c6686f0f4b0f24d5526546bee538c89837d6/decorator-5.1.1-py3-none-any.whl",
         ],
@@ -488,7 +471,7 @@ def repositories():
 
     maybe(
         http_file,
-        name = "pdm_lock_file_wheel_exceptiongroup_1.2.0_py3_none_any",
+        name = "pdm_lock_wheel_exceptiongroup_1.2.0_py3_none_any",
         urls = [
             "https://files.pythonhosted.org/packages/b8/9a/5028fd52db10e600f1c4674441b968cf2ea4959085bfb5b99fb1250e5f68/exceptiongroup-1.2.0-py3-none-any.whl",
         ],
@@ -498,7 +481,7 @@ def repositories():
 
     maybe(
         http_file,
-        name = "pdm_lock_file_wheel_executing_2.0.1_py2.py3_none_any",
+        name = "pdm_lock_wheel_executing_2.0.1_py2.py3_none_any",
         urls = [
             "https://files.pythonhosted.org/packages/80/03/6ea8b1b2a5ab40a7a60dc464d3daa7aa546e0a74d74a9f8ff551ea7905db/executing-2.0.1-py2.py3-none-any.whl",
         ],
@@ -508,7 +491,7 @@ def repositories():
 
     maybe(
         http_file,
-        name = "pdm_lock_file_wheel_ipython_8.17.2_py3_none_any",
+        name = "pdm_lock_wheel_ipython_8.17.2_py3_none_any",
         urls = [
             "https://files.pythonhosted.org/packages/20/45/18f0dc2cbc3ee6680a004f620fb1400c6511ded0a76a2dd241813786ce73/ipython-8.17.2-py3-none-any.whl",
         ],
@@ -518,7 +501,7 @@ def repositories():
 
     maybe(
         http_file,
-        name = "pdm_lock_file_wheel_jedi_0.19.1_py2.py3_none_any",
+        name = "pdm_lock_wheel_jedi_0.19.1_py2.py3_none_any",
         urls = [
             "https://files.pythonhosted.org/packages/20/9f/bc63f0f0737ad7a60800bfd472a4836661adae21f9c2535f3957b1e54ceb/jedi-0.19.1-py2.py3-none-any.whl",
         ],
@@ -528,7 +511,7 @@ def repositories():
 
     maybe(
         http_file,
-        name = "pdm_lock_file_wheel_matplotlib_inline_0.1.6_py3_none_any",
+        name = "pdm_lock_wheel_matplotlib_inline_0.1.6_py3_none_any",
         urls = [
             "https://files.pythonhosted.org/packages/f2/51/c34d7a1d528efaae3d8ddb18ef45a41f284eacf9e514523b191b7d0872cc/matplotlib_inline-0.1.6-py3-none-any.whl",
         ],
@@ -538,7 +521,7 @@ def repositories():
 
     maybe(
         http_file,
-        name = "pdm_lock_file_wheel_parso_0.8.3_py2.py3_none_any",
+        name = "pdm_lock_wheel_parso_0.8.3_py2.py3_none_any",
         urls = [
             "https://files.pythonhosted.org/packages/05/63/8011bd08a4111858f79d2b09aad86638490d62fbf881c44e434a6dfca87b/parso-0.8.3-py2.py3-none-any.whl",
         ],
@@ -548,7 +531,7 @@ def repositories():
 
     maybe(
         http_file,
-        name = "pdm_lock_file_wheel_pexpect_4.9.0_py2.py3_none_any",
+        name = "pdm_lock_wheel_pexpect_4.9.0_py2.py3_none_any",
         urls = [
             "https://files.pythonhosted.org/packages/9e/c3/059298687310d527a58bb01f3b1965787ee3b40dce76752eda8b44e9a2c5/pexpect-4.9.0-py2.py3-none-any.whl",
         ],
@@ -558,7 +541,7 @@ def repositories():
 
     maybe(
         http_file,
-        name = "pdm_lock_file_wheel_prompt_toolkit_3.0.41_py3_none_any",
+        name = "pdm_lock_wheel_prompt_toolkit_3.0.41_py3_none_any",
         urls = [
             "https://files.pythonhosted.org/packages/1f/9d/be9b01085bbd67a71c4b6aa02518fade8104e7a2224e5de5e947811d7176/prompt_toolkit-3.0.41-py3-none-any.whl",
         ],
@@ -568,7 +551,7 @@ def repositories():
 
     maybe(
         http_file,
-        name = "pdm_lock_file_wheel_ptyprocess_0.7.0_py2.py3_none_any",
+        name = "pdm_lock_wheel_ptyprocess_0.7.0_py2.py3_none_any",
         urls = [
             "https://files.pythonhosted.org/packages/22/a6/858897256d0deac81a172289110f31629fc4cee19b6f01283303e18c8db3/ptyprocess-0.7.0-py2.py3-none-any.whl",
         ],
@@ -578,7 +561,7 @@ def repositories():
 
     maybe(
         http_file,
-        name = "pdm_lock_file_wheel_pure_eval_0.2.2_py3_none_any",
+        name = "pdm_lock_wheel_pure_eval_0.2.2_py3_none_any",
         urls = [
             "https://files.pythonhosted.org/packages/2b/27/77f9d5684e6bce929f5cfe18d6cfbe5133013c06cb2fbf5933670e60761d/pure_eval-0.2.2-py3-none-any.whl",
         ],
@@ -588,7 +571,7 @@ def repositories():
 
     maybe(
         http_file,
-        name = "pdm_lock_file_wheel_pygments_2.17.2_py3_none_any",
+        name = "pdm_lock_wheel_pygments_2.17.2_py3_none_any",
         urls = [
             "https://files.pythonhosted.org/packages/97/9c/372fef8377a6e340b1704768d20daaded98bf13282b5327beb2e2fe2c7ef/pygments-2.17.2-py3-none-any.whl",
         ],
@@ -598,7 +581,127 @@ def repositories():
 
     maybe(
         http_file,
-        name = "pdm_lock_file_wheel_setuptools_68.2.2_py3_none_any",
+        name = "pdm_lock_wheel_regex_2023.10.3_cp310_cp310_macosx_10_9_x86_64",
+        urls = [
+            "https://files.pythonhosted.org/packages/2c/6b/4828fdbbabcb51986ddc1e7c618cf9dc8606f75c2f0cc381d3729cf31348/regex-2023.10.3-cp310-cp310-macosx_10_9_x86_64.whl",
+        ],
+        sha256 = "4c34d4f73ea738223a094d8e0ffd6d2c1a1b4c175da34d6b0de3d8d69bee6bcc",
+        downloaded_file_path = "regex-2023.10.3-cp310-cp310-macosx_10_9_x86_64.whl",
+    )
+
+    maybe(
+        http_file,
+        name = "pdm_lock_wheel_regex_2023.10.3_cp310_cp310_macosx_11_0_arm64",
+        urls = [
+            "https://files.pythonhosted.org/packages/d1/f1/9c50c0e1e76234f05f876dd49df925dae49da7fb8cb152a429006c71f65b/regex-2023.10.3-cp310-cp310-macosx_11_0_arm64.whl",
+        ],
+        sha256 = "a8f4e49fc3ce020f65411432183e6775f24e02dff617281094ba6ab079ef0915",
+        downloaded_file_path = "regex-2023.10.3-cp310-cp310-macosx_11_0_arm64.whl",
+    )
+
+    maybe(
+        http_file,
+        name = "pdm_lock_wheel_regex_2023.10.3_cp310_cp310_manylinux_2_17_aarch64.manylinux2014_aarch64",
+        urls = [
+            "https://files.pythonhosted.org/packages/5d/ba/a9b104f3e78d9a08c093c325419ddd4a03fc04e9f391f8cf580cdf21a0fe/regex-2023.10.3-cp310-cp310-manylinux_2_17_aarch64.manylinux2014_aarch64.whl",
+        ],
+        sha256 = "4cd1bccf99d3ef1ab6ba835308ad85be040e6a11b0977ef7ea8c8005f01a3c29",
+        downloaded_file_path = "regex-2023.10.3-cp310-cp310-manylinux_2_17_aarch64.manylinux2014_aarch64.whl",
+    )
+
+    maybe(
+        http_file,
+        name = "pdm_lock_wheel_regex_2023.10.3_cp310_cp310_manylinux_2_5_x86_64.manylinux1_x86_64.manylinux_2_12_x86_64.manylinux2010_x86_64",
+        urls = [
+            "https://files.pythonhosted.org/packages/bd/79/ced572f3316e2a1ddfec801d69c167ab3c2d5f76c12918b4f0de147b3180/regex-2023.10.3-cp310-cp310-manylinux_2_5_x86_64.manylinux1_x86_64.manylinux_2_12_x86_64.manylinux2010_x86_64.whl",
+        ],
+        sha256 = "4a8bf76e3182797c6b1afa5b822d1d5802ff30284abe4599e1247be4fd6b03be",
+        downloaded_file_path = "regex-2023.10.3-cp310-cp310-manylinux_2_5_x86_64.manylinux1_x86_64.manylinux_2_12_x86_64.manylinux2010_x86_64.whl",
+    )
+
+    maybe(
+        http_file,
+        name = "pdm_lock_wheel_regex_2023.10.3_cp311_cp311_macosx_10_9_x86_64",
+        urls = [
+            "https://files.pythonhosted.org/packages/27/b8/fde0e99442b328d159bd0b2c0ff5401e1f1839e7a8d7339308b3915c7faa/regex-2023.10.3-cp311-cp311-macosx_10_9_x86_64.whl",
+        ],
+        sha256 = "90a79bce019c442604662d17bf69df99090e24cdc6ad95b18b6725c2988a490e",
+        downloaded_file_path = "regex-2023.10.3-cp311-cp311-macosx_10_9_x86_64.whl",
+    )
+
+    maybe(
+        http_file,
+        name = "pdm_lock_wheel_regex_2023.10.3_cp311_cp311_macosx_11_0_arm64",
+        urls = [
+            "https://files.pythonhosted.org/packages/4d/d3/38b09813a32618acd437906c4d0194119e27139dbcd7486e69d58e375a27/regex-2023.10.3-cp311-cp311-macosx_11_0_arm64.whl",
+        ],
+        sha256 = "c7964c2183c3e6cce3f497e3a9f49d182e969f2dc3aeeadfa18945ff7bdd7051",
+        downloaded_file_path = "regex-2023.10.3-cp311-cp311-macosx_11_0_arm64.whl",
+    )
+
+    maybe(
+        http_file,
+        name = "pdm_lock_wheel_regex_2023.10.3_cp311_cp311_manylinux_2_17_aarch64.manylinux2014_aarch64",
+        urls = [
+            "https://files.pythonhosted.org/packages/be/5d/bf0e6eca09839b82ac640adabad2560cc39a69bf802c6d2759e52c113f7e/regex-2023.10.3-cp311-cp311-manylinux_2_17_aarch64.manylinux2014_aarch64.whl",
+        ],
+        sha256 = "4ef80829117a8061f974b2fda8ec799717242353bff55f8a29411794d635d964",
+        downloaded_file_path = "regex-2023.10.3-cp311-cp311-manylinux_2_17_aarch64.manylinux2014_aarch64.whl",
+    )
+
+    maybe(
+        http_file,
+        name = "pdm_lock_wheel_regex_2023.10.3_cp311_cp311_manylinux_2_17_x86_64.manylinux2014_x86_64",
+        urls = [
+            "https://files.pythonhosted.org/packages/f2/b8/b1ec82fce93064a73ba67f2bb158ec9cac4a0e8f0b6942268ec963947329/regex-2023.10.3-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl",
+        ],
+        sha256 = "8d1f21af4c1539051049796a0f50aa342f9a27cde57318f2fc41ed50b0dbc4ac",
+        downloaded_file_path = "regex-2023.10.3-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl",
+    )
+
+    maybe(
+        http_file,
+        name = "pdm_lock_wheel_regex_2023.10.3_cp312_cp312_macosx_10_9_x86_64",
+        urls = [
+            "https://files.pythonhosted.org/packages/59/f6/b719df3bc93004bb0c646d4fddd769a018ad2eff7f149f5c72770faedf7a/regex-2023.10.3-cp312-cp312-macosx_10_9_x86_64.whl",
+        ],
+        sha256 = "bff507ae210371d4b1fe316d03433ac099f184d570a1a611e541923f78f05037",
+        downloaded_file_path = "regex-2023.10.3-cp312-cp312-macosx_10_9_x86_64.whl",
+    )
+
+    maybe(
+        http_file,
+        name = "pdm_lock_wheel_regex_2023.10.3_cp312_cp312_macosx_11_0_arm64",
+        urls = [
+            "https://files.pythonhosted.org/packages/c6/a9/d543130248a2ceba74787518aea5d4a9f9373fb09fa860283fb0afa2718b/regex-2023.10.3-cp312-cp312-macosx_11_0_arm64.whl",
+        ],
+        sha256 = "be5e22bbb67924dea15039c3282fa4cc6cdfbe0cbbd1c0515f9223186fc2ec5f",
+        downloaded_file_path = "regex-2023.10.3-cp312-cp312-macosx_11_0_arm64.whl",
+    )
+
+    maybe(
+        http_file,
+        name = "pdm_lock_wheel_regex_2023.10.3_cp312_cp312_manylinux_2_17_aarch64.manylinux2014_aarch64",
+        urls = [
+            "https://files.pythonhosted.org/packages/38/a4/645e381727142609772a37c50d2f4b0316bbfa40a6e5b1ad27f8493767f4/regex-2023.10.3-cp312-cp312-manylinux_2_17_aarch64.manylinux2014_aarch64.whl",
+        ],
+        sha256 = "4a992f702c9be9c72fa46f01ca6e18d131906a7180950958f766c2aa294d4b41",
+        downloaded_file_path = "regex-2023.10.3-cp312-cp312-manylinux_2_17_aarch64.manylinux2014_aarch64.whl",
+    )
+
+    maybe(
+        http_file,
+        name = "pdm_lock_wheel_regex_2023.10.3_cp312_cp312_manylinux_2_17_x86_64.manylinux2014_x86_64",
+        urls = [
+            "https://files.pythonhosted.org/packages/0a/9e/f5bac36b963741bf3abbcd719f7a7375b95486efcb27c1e2faaaead26c67/regex-2023.10.3-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl",
+        ],
+        sha256 = "a9e908ef5889cda4de038892b9accc36d33d72fb3e12c747e2799a0e806ec841",
+        downloaded_file_path = "regex-2023.10.3-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl",
+    )
+
+    maybe(
+        http_file,
+        name = "pdm_lock_wheel_setuptools_68.2.2_py3_none_any",
         urls = [
             "https://files.pythonhosted.org/packages/bb/26/7945080113158354380a12ce26873dd6c1ebd88d47f5bc24e2c5bb38c16a/setuptools-68.2.2-py3-none-any.whl",
         ],
@@ -608,7 +711,7 @@ def repositories():
 
     maybe(
         http_file,
-        name = "pdm_lock_file_wheel_six_1.16.0_py2.py3_none_any",
+        name = "pdm_lock_wheel_six_1.16.0_py2.py3_none_any",
         urls = [
             "https://files.pythonhosted.org/packages/d9/5a/e7c31adbe875f2abbb91bd84cf2dc52d792b5a01506781dbcf25c91daf11/six-1.16.0-py2.py3-none-any.whl",
         ],
@@ -618,7 +721,7 @@ def repositories():
 
     maybe(
         http_file,
-        name = "pdm_lock_file_wheel_stack_data_0.6.3_py3_none_any",
+        name = "pdm_lock_wheel_stack_data_0.6.3_py3_none_any",
         urls = [
             "https://files.pythonhosted.org/packages/f1/7b/ce1eafaf1a76852e2ec9b22edecf1daa58175c090266e9f6c64afcd81d91/stack_data-0.6.3-py3-none-any.whl",
         ],
@@ -628,7 +731,7 @@ def repositories():
 
     maybe(
         http_file,
-        name = "pdm_lock_file_wheel_traitlets_5.14.0_py3_none_any",
+        name = "pdm_lock_wheel_traitlets_5.14.0_py3_none_any",
         urls = [
             "https://files.pythonhosted.org/packages/a7/1d/7d07e1b152b419a8a9c7f812eeefd408a0610d869489ee2e86973486713f/traitlets-5.14.0-py3-none-any.whl",
         ],
@@ -638,7 +741,7 @@ def repositories():
 
     maybe(
         http_file,
-        name = "pdm_lock_file_wheel_wcwidth_0.2.12_py2.py3_none_any",
+        name = "pdm_lock_wheel_wcwidth_0.2.12_py2.py3_none_any",
         urls = [
             "https://files.pythonhosted.org/packages/31/b1/a59de0ad3aabb17523a39804f4c6df3ae87ead053a4e25362ae03d73d03a/wcwidth-0.2.12-py2.py3-none-any.whl",
         ],
@@ -648,10 +751,130 @@ def repositories():
 
     maybe(
         http_file,
-        name = "pdm_lock_file_wheel_wheel_0.41.3_py3_none_any",
+        name = "pdm_lock_wheel_wheel_0.41.3_py3_none_any",
         urls = [
             "https://files.pythonhosted.org/packages/fa/7f/4c07234086edbce4a0a446209dc0cb08a19bb206a3ea53b2f56a403f983b/wheel-0.41.3-py3-none-any.whl",
         ],
         sha256 = "488609bc63a29322326e05560731bf7bfea8e48ad646e1f5e40d366607de0942",
         downloaded_file_path = "wheel-0.41.3-py3-none-any.whl",
+    )
+
+    maybe(
+        http_file,
+        name = "pdm_lock_wheel_zstandard_0.22.0_cp310_cp310_macosx_10_9_x86_64",
+        urls = [
+            "https://files.pythonhosted.org/packages/aa/a4/b7cc74e836ec006427d18439c12b7898697c1eae91b06ffdfa63da8cd041/zstandard-0.22.0-cp310-cp310-macosx_10_9_x86_64.whl",
+        ],
+        sha256 = "275df437ab03f8c033b8a2c181e51716c32d831082d93ce48002a5227ec93019",
+        downloaded_file_path = "zstandard-0.22.0-cp310-cp310-macosx_10_9_x86_64.whl",
+    )
+
+    maybe(
+        http_file,
+        name = "pdm_lock_wheel_zstandard_0.22.0_cp310_cp310_macosx_11_0_arm64",
+        urls = [
+            "https://files.pythonhosted.org/packages/fc/e5/a1fa6f70764777553cb8ab668690ba793ebf512b3d415e28720d2275d445/zstandard-0.22.0-cp310-cp310-macosx_11_0_arm64.whl",
+        ],
+        sha256 = "2ac9957bc6d2403c4772c890916bf181b2653640da98f32e04b96e4d6fb3252a",
+        downloaded_file_path = "zstandard-0.22.0-cp310-cp310-macosx_11_0_arm64.whl",
+    )
+
+    maybe(
+        http_file,
+        name = "pdm_lock_wheel_zstandard_0.22.0_cp310_cp310_manylinux_2_17_aarch64.manylinux2014_aarch64",
+        urls = [
+            "https://files.pythonhosted.org/packages/8e/3b/0284ed7b2612f793d2490339c1b772232c04a6f20dbbdec050020bd730b2/zstandard-0.22.0-cp310-cp310-manylinux_2_17_aarch64.manylinux2014_aarch64.whl",
+        ],
+        sha256 = "fe3390c538f12437b859d815040763abc728955a52ca6ff9c5d4ac707c4ad98e",
+        downloaded_file_path = "zstandard-0.22.0-cp310-cp310-manylinux_2_17_aarch64.manylinux2014_aarch64.whl",
+    )
+
+    maybe(
+        http_file,
+        name = "pdm_lock_wheel_zstandard_0.22.0_cp310_cp310_manylinux_2_17_x86_64.manylinux2014_x86_64",
+        urls = [
+            "https://files.pythonhosted.org/packages/c9/79/07f6d2670fa2708ae3b79aabb82da78e9cbdb08d9bafadf8638d356775ff/zstandard-0.22.0-cp310-cp310-manylinux_2_17_x86_64.manylinux2014_x86_64.whl",
+        ],
+        sha256 = "1958100b8a1cc3f27fa21071a55cb2ed32e9e5df4c3c6e661c193437f171cba2",
+        downloaded_file_path = "zstandard-0.22.0-cp310-cp310-manylinux_2_17_x86_64.manylinux2014_x86_64.whl",
+    )
+
+    maybe(
+        http_file,
+        name = "pdm_lock_wheel_zstandard_0.22.0_cp311_cp311_macosx_10_9_x86_64",
+        urls = [
+            "https://files.pythonhosted.org/packages/32/41/80fc08ed96e68df920d28592710f5ed96fb288fda1fbb4b6aee5fdbaa5f6/zstandard-0.22.0-cp311-cp311-macosx_10_9_x86_64.whl",
+        ],
+        sha256 = "589402548251056878d2e7c8859286eb91bd841af117dbe4ab000e6450987e08",
+        downloaded_file_path = "zstandard-0.22.0-cp311-cp311-macosx_10_9_x86_64.whl",
+    )
+
+    maybe(
+        http_file,
+        name = "pdm_lock_wheel_zstandard_0.22.0_cp311_cp311_macosx_11_0_arm64",
+        urls = [
+            "https://files.pythonhosted.org/packages/54/fc/c1b1a1e140451f3362789f546731b3ef36c78668be19d7fc6fbd4326b535/zstandard-0.22.0-cp311-cp311-macosx_11_0_arm64.whl",
+        ],
+        sha256 = "a97079b955b00b732c6f280d5023e0eefe359045e8b83b08cf0333af9ec78f26",
+        downloaded_file_path = "zstandard-0.22.0-cp311-cp311-macosx_11_0_arm64.whl",
+    )
+
+    maybe(
+        http_file,
+        name = "pdm_lock_wheel_zstandard_0.22.0_cp311_cp311_manylinux_2_17_aarch64.manylinux2014_aarch64",
+        urls = [
+            "https://files.pythonhosted.org/packages/68/fb/0a9389ee8ccc532ac4567562c7746bd7537d16bc5b079b2696fe3c510c37/zstandard-0.22.0-cp311-cp311-manylinux_2_17_aarch64.manylinux2014_aarch64.whl",
+        ],
+        sha256 = "445b47bc32de69d990ad0f34da0e20f535914623d1e506e74d6bc5c9dc40bb09",
+        downloaded_file_path = "zstandard-0.22.0-cp311-cp311-manylinux_2_17_aarch64.manylinux2014_aarch64.whl",
+    )
+
+    maybe(
+        http_file,
+        name = "pdm_lock_wheel_zstandard_0.22.0_cp311_cp311_manylinux_2_17_x86_64.manylinux2014_x86_64",
+        urls = [
+            "https://files.pythonhosted.org/packages/80/6a/f8a618f84aafb9c373a959e7e51ad34bda73f1d99cd856c05c8f0b78e87f/zstandard-0.22.0-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl",
+        ],
+        sha256 = "33591d59f4956c9812f8063eff2e2c0065bc02050837f152574069f5f9f17775",
+        downloaded_file_path = "zstandard-0.22.0-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl",
+    )
+
+    maybe(
+        http_file,
+        name = "pdm_lock_wheel_zstandard_0.22.0_cp312_cp312_macosx_10_9_x86_64",
+        urls = [
+            "https://files.pythonhosted.org/packages/0f/f9/6b531e83f2e61bb9d66508113fd68557d990639be3dd37116af272932614/zstandard-0.22.0-cp312-cp312-macosx_10_9_x86_64.whl",
+        ],
+        sha256 = "6c25b8eb733d4e741246151d895dd0308137532737f337411160ff69ca24f93a",
+        downloaded_file_path = "zstandard-0.22.0-cp312-cp312-macosx_10_9_x86_64.whl",
+    )
+
+    maybe(
+        http_file,
+        name = "pdm_lock_wheel_zstandard_0.22.0_cp312_cp312_macosx_11_0_arm64",
+        urls = [
+            "https://files.pythonhosted.org/packages/7d/80/9e40e57ba17dbbf6c55bcf0ac4ee533c367285209f309bdd9ab290c40536/zstandard-0.22.0-cp312-cp312-macosx_11_0_arm64.whl",
+        ],
+        sha256 = "f9b2cde1cd1b2a10246dbc143ba49d942d14fb3d2b4bccf4618d475c65464912",
+        downloaded_file_path = "zstandard-0.22.0-cp312-cp312-macosx_11_0_arm64.whl",
+    )
+
+    maybe(
+        http_file,
+        name = "pdm_lock_wheel_zstandard_0.22.0_cp312_cp312_manylinux_2_17_aarch64.manylinux2014_aarch64",
+        urls = [
+            "https://files.pythonhosted.org/packages/47/44/be2d67304ba9bf4694ffcaa99d146814d70c4cb0bfc00e0e86fdfae66a31/zstandard-0.22.0-cp312-cp312-manylinux_2_17_aarch64.manylinux2014_aarch64.whl",
+        ],
+        sha256 = "a88b7df61a292603e7cd662d92565d915796b094ffb3d206579aaebac6b85d5f",
+        downloaded_file_path = "zstandard-0.22.0-cp312-cp312-manylinux_2_17_aarch64.manylinux2014_aarch64.whl",
+    )
+
+    maybe(
+        http_file,
+        name = "pdm_lock_wheel_zstandard_0.22.0_cp312_cp312_manylinux_2_17_x86_64.manylinux2014_x86_64",
+        urls = [
+            "https://files.pythonhosted.org/packages/e5/01/080939755ca12ebbb7fc38b6f4ddecd5e8c416d571d4927ece1360baba2c/zstandard-0.22.0-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl",
+        ],
+        sha256 = "466e6ad8caefb589ed281c076deb6f0cd330e8bc13c5035854ffb9c2014b118c",
+        downloaded_file_path = "zstandard-0.22.0-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl",
     )

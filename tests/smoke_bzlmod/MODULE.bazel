@@ -75,39 +75,20 @@ use_repo(environments, "smoke_environments")
 # Use the lock_import extension to import external lock files.
 lock_import = use_extension("@rules_pycross//pycross/extensions:lock_import.bzl", "lock_import")
 
-# lock_repo with Poetry
+# simple lock_repo with Poetry
 lock_import.import_poetry(
     default_alias_single_version = True,
     lock_file = "//:poetry.lock",
     project_file = "//:pyproject.toml",
-    repo = "poetry_lock_repo",
-)
-lock_import.package(
-    name = "regex",
-    always_build = True,
-    build_dependencies = [
-        "setuptools",
-        "wheel",
-    ],
-    repo = "poetry_lock_repo",
-)
-lock_import.package(
-    name = "zstandard",
-    always_build = True,
-    build_dependencies = [
-        "setuptools",
-        "wheel",
-    ],
-    build_target = "@//pdm:zstandard_build",
-    repo = "poetry_lock_repo",
+    repo = "poetry",
 )
 
-# lock_repo with PDM
+# lock_repo with PDM and some package overrides
 lock_import.import_pdm(
     default_alias_single_version = True,
     lock_file = "//:pdm.lock",
     project_file = "//:pyproject.toml",
-    repo = "pdm_lock_repo",
+    repo = "pdm",
 )
 lock_import.package(
     name = "regex",
@@ -116,39 +97,31 @@ lock_import.package(
         "setuptools",
         "wheel",
     ],
-    repo = "pdm_lock_repo",
+    repo = "pdm",
 )
 lock_import.package(
     name = "zstandard",
     always_build = True,
-    build_dependencies = [
-        "setuptools",
-        "wheel",
-    ],
     build_target = "@//pdm:zstandard_build",
-    repo = "pdm_lock_repo",
+    repo = "pdm",
 )
 
 # The actual repos are loaded from the lock_repos extension.
 lock_repos = use_extension("@rules_pycross//pycross/extensions:lock_repos.bzl", "lock_repos")
-use_repo(lock_repos, "pdm_lock_repo", "poetry_lock_repo")
+use_repo(lock_repos, "pdm", "poetry")
 
-# Lock repo for vended poetry lock
+# Lock repos for vended lock files
 lock_file = use_extension("@rules_pycross//pycross/extensions:lock_file.bzl", "lock_file")
 lock_file.instantiate(
     name = "poetry_lock_file_repo",
-    lock_file = "//poetry:lock.bzl",
+    lock_file = "//lock_file:poetry_lock.bzl",
 )
-
-# Lock repo for vended poetry lock
 lock_file.instantiate(
     name = "pdm_lock_file_repo",
-    lock_file = "//pdm:lock.bzl",
+    lock_file = "//lock_file:pdm_lock.bzl",
 )
 use_repo(
     lock_file,
     "pdm_lock_file_repo",
-    "pdm_lock_file_sdist_zstandard_0.22.0",
     "poetry_lock_file_repo",
-    "poetry_lock_file_sdist_zstandard_0.22.0",
 )

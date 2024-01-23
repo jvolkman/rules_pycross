@@ -1,0 +1,69 @@
+load("@aspect_bazel_lib//lib:write_source_files.bzl", "write_source_files")
+load("@rules_pycross//pycross:defs.bzl", "pycross_lock_file", "pycross_pdm_lock_model", "pycross_poetry_lock_model")
+
+package(default_visibility = ["//visibility:public"])
+
+pycross_pdm_lock_model(
+    name = "pdm_lock_model",
+    lock_file = "//:pdm.lock",
+    project_file = "//:pyproject.toml",
+)
+
+pycross_lock_file(
+    name = "pdm_lock",
+    out = "updated_pdm_lock.bzl",
+    default_alias_single_version = True,
+    lock_model_file = ":pdm_lock_model",
+    target_environments = ["@smoke_environments//:environments"],
+)
+
+pycross_poetry_lock_model(
+    name = "poetry_lock_model",
+    lock_file = "//:poetry.lock",
+    project_file = "//:pyproject.toml",
+)
+
+pycross_lock_file(
+    name = "poetry_lock",
+    out = "updated_poetry_lock.bzl",
+    default_alias_single_version = True,
+    lock_model_file = ":poetry_lock_model",
+    target_environments = ["@smoke_environments//:environments"],
+)
+
+write_source_files(
+    name = "update_locks",
+    files = {
+        "pdm_lock.bzl": ":updated_pdm_lock.bzl",
+        "poetry_lock.bzl": ":updated_poetry_lock.bzl",
+    },
+)
+
+# Tests
+py_test(
+    name = "pdm_test_zstandard",
+    srcs = ["//:test_zstandard.py"],
+    main = "test_zstandard.py",
+    deps = ["@pdm_lock_file_repo//deps:zstandard"],
+)
+
+py_test(
+    name = "pdm_test_regex",
+    srcs = ["//:test_regex.py"],
+    main = "test_regex.py",
+    deps = ["@pdm_lock_file_repo//deps:regex"],
+)
+
+py_test(
+    name = "poetry_test_zstandard",
+    srcs = ["//:test_zstandard.py"],
+    main = "test_zstandard.py",
+    deps = ["@poetry_lock_file_repo//deps:zstandard"],
+)
+
+py_test(
+    name = "poetry_test_regex",
+    srcs = ["//:test_regex.py"],
+    main = "test_regex.py",
+    deps = ["@poetry_lock_file_repo//deps:regex"],
+)
