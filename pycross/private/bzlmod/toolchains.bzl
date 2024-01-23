@@ -32,6 +32,9 @@ def _toolchains_impl(module_ctx):
 toolchains = module_extension(
     doc = "Create toolchains.",
     implementation = _toolchains_impl,
+    # OS and arch dependent since we load from @pythons_hub//:interpreters.bzl.
+    os_dependent = True,
+    arch_dependent = True,
     tag_classes = {
         "create_for_python_toolchains": tag_class(
             attrs = {

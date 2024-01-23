@@ -73,7 +73,7 @@ def _pycross_impl(module_ctx):
 pycross = module_extension(
     doc = "Configure rules_pycross.",
     implementation = _pycross_impl,
-    # OS and arch dependent since the python interpreter is OS- and arch-specific.
+    # OS and arch dependent since we load from @pythons_hub//:interpreters.bzl.
     os_dependent = True,
     arch_dependent = True,
     tag_classes = {
