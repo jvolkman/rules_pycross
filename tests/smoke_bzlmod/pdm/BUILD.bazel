@@ -1,15 +1,69 @@
-load("@rules_pycross//pycross:defs.bzl", "pycross_pdm_lock_model")
-load("//:testlib.bzl", "setup_test_targets")
+load("@bazel_skylib//rules:write_file.bzl", "write_file")
+load("@rules_pycross//pycross:defs.bzl", "pycross_wheel_build")
+load("@rules_python//python:defs.bzl", "py_test")
 
 package(default_visibility = ["//visibility:public"])
 
-pycross_pdm_lock_model(
-    name = "lock_model",
-    lock_file = "//:pdm.lock",
-    project_file = "//:pyproject.toml",
+pycross_wheel_build(
+    name = "zstandard_build",
+    config_settings = {
+        "--build-option": [
+            "--no-cffi-backend",
+            "--system-zstd",
+        ],
+    },
+    copts = ["-Wl,-s"],
+    native_deps = [
+        "//third_party/zstd",
+    ],
+    post_build_hooks = [
+        "@rules_pycross//pycross/hooks:repair_wheel",
+    ],
+    sdist = "@pdm//zstandard:sdist",
+    tags = ["manual"],
+    deps = [
+        "@pdm//:setuptools",
+        "@pdm//:wheel",
+    ],
 )
 
-setup_test_targets(
-    lock_model = ":lock_model",
-    lock_name = "pdm_lock_file",
+write_file(
+    name = "ipython_py",
+    out = "ipython.py",
+    content = [
+        "import os",
+        "import tempfile",
+        "from IPython import start_ipython",
+        "with tempfile.TemporaryDirectory() as d:",
+        "  os.environ['IPYTHONDIR'] = str(d)",
+        "  start_ipython()",
+    ],
+)
+
+# Tests
+
+py_test(
+    name = "test_library_usage_via_ipython",
+    srcs = [
+        "ipython.py",
+        "//:test_zstandard.py",
+    ],
+    args = ["$(location //:test_zstandard.py)"],
+    main = "ipython.py",
+    deps = [
+        "@pdm//:ipython",
+        "@pdm//:zstandard",
+    ],
+)
+
+py_test(
+    name = "test_zstandard",
+    srcs = ["//:test_zstandard.py"],
+    deps = ["@pdm//:zstandard"],
+)
+
+py_test(
+    name = "test_regex",
+    srcs = ["//:test_regex.py"],
+    deps = ["@pdm//:regex"],
 )
