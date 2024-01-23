@@ -87,17 +87,9 @@ class QualifiedTargetRef(TargetRef):
 class Naming:
     def __init__(
         self,
-        build_prefix: Optional[str],
-        sdist_prefix: Optional[str],
-        wheel_prefix: Optional[str],
-        environment_prefix: Optional[str],
         repo_prefix: Optional[str],
         target_environment_select: str,
     ):
-        self.build_prefix = build_prefix
-        self.sdist_prefix = sdist_prefix
-        self.wheel_prefix = wheel_prefix
-        self.environment_prefix = environment_prefix
         self.repo_prefix = repo_prefix
         self.target_environment_select = target_environment_select
 
@@ -105,16 +97,16 @@ class Naming:
         return TargetRef(str(package_key))
 
     def environment(self, environment_name: str) -> TargetRef:
-        return TargetRef(prefixed(environment_name, self.environment_prefix))
+        return TargetRef(prefixed(environment_name, "_env"))
 
     def wheel_build(self, package_key: PackageKey) -> TargetRef:
-        return TargetRef(prefixed(str(package_key), self.build_prefix))
+        return TargetRef(prefixed(str(package_key), "_build"))
 
     def wheel(self, package_key: PackageKey) -> TargetRef:
-        return TargetRef(prefixed(str(package_key), self.wheel_prefix))
+        return TargetRef(prefixed(str(package_key), "_wheel"))
 
     def sdist(self, package_key: PackageKey) -> TargetRef:
-        return TargetRef(prefixed(str(package_key), self.sdist_prefix))
+        return TargetRef(prefixed(str(package_key), "_sdist"))
 
     def repo_file(self, file: PackageFile) -> QualifiedTargetRef:
         name = file.name
@@ -475,10 +467,6 @@ def gen_load_statements(imports: Set[str], pycross_repo: str) -> List[str]:
 def render(resolved_lock: ResolvedLockSet, args: Any, output: TextIO) -> None:
     naming = Naming(
         repo_prefix=args.repo_prefix,
-        build_prefix=args.build_prefix,
-        sdist_prefix=args.sdist_prefix,
-        wheel_prefix=args.wheel_prefix,
-        environment_prefix=args.environment_prefix,
         target_environment_select="_target",
     )
 
@@ -635,30 +623,6 @@ def add_shared_flags(parser: ArgumentParser) -> None:
         type=str,
         default="",
         help="The prefix to apply to repository targets.",
-    )
-
-    parser.add_argument(
-        "--build-prefix",
-        default="_build",
-        help="The prefix to apply to package build targets.",
-    )
-
-    parser.add_argument(
-        "--sdist-prefix",
-        default="_sdist",
-        help="The prefix to apply to package sdist targets.",
-    )
-
-    parser.add_argument(
-        "--wheel-prefix",
-        default="_wheel",
-        help="The prefix to apply to package wheel targets.",
-    )
-
-    parser.add_argument(
-        "--environment-prefix",
-        default="_env",
-        help="The prefix to apply to packages environment targets.",
     )
 
     parser.add_argument(

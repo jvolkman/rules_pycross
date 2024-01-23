@@ -2963,7 +2963,7 @@
     },
     "@@rules_pycross~override//pycross/extensions:environments.bzl%environments": {
       "general": {
-        "bzlTransitiveDigest": "KdilFK40wN4cm9H71TaQK1jm37S7QnBqiYNegRNWIoM=",
+        "bzlTransitiveDigest": "+BOT2y1hGhx4Jg7pzbZBJNgLrUlrIlQ2qj0tcyQG/wU=",
         "accumulatedFileDigests": {},
         "envVariables": {},
         "generatedRepoSpecs": {
@@ -3054,7 +3054,7 @@
     },
     "@@rules_pycross~override//pycross/extensions:lock_file.bzl%lock_file": {
       "general": {
-        "bzlTransitiveDigest": "Gu72uCute4lpQ1Cki60UpQhn6wdA4wjCaeli5lVH9uA=",
+        "bzlTransitiveDigest": "b0dOrGP1+CiLh75WNnrWy38a3Uw1+RtbGxmO2Nt4D4E=",
         "accumulatedFileDigests": {
           "@@//pdm:lock.bzl": "de392a68112a93c6e8626708c3808b594c41b8676fb58f11f2e478ad2f14b2c2",
           "@@rules_pycross~override//pycross/private/tools:extract_lock_repos.py": "d4b2a722a70891bdd8d6d1506404e2ab75a8998a80a9b9edeb84b1aa6dfe0f6b",
@@ -3612,7 +3612,7 @@
     },
     "@@rules_pycross~override//pycross/extensions:lock_import.bzl%lock_import": {
       "general": {
-        "bzlTransitiveDigest": "DVg3+FUZN84DBtf7CzufvG1gKy70KINiPK9ORPZtCCc=",
+        "bzlTransitiveDigest": "/+pZ65jfIVieDosvqSnBLAV+xrlA+8M3J1crXU14qvs=",
         "accumulatedFileDigests": {
           "@@rules_pycross~override~environments~pycross_environments//:python_3.10.12_aarch64-apple-darwin.json": "4628731ae8637e6d1f81810d984e01da06dba84e48ac1d92814ffd43ea658956",
           "@@rules_pycross~override~environments~pycross_environments//:python_3.11.6_x86_64-apple-darwin.json": "a7dbe4fbbd6141d60a537e280d4da3dabf23310abb9f173e8d7a6a44209728f7",
@@ -3787,7 +3787,7 @@
     },
     "@@rules_pycross~override//pycross/extensions:lock_repos.bzl%lock_repos": {
       "general": {
-        "bzlTransitiveDigest": "WzjWhEt0NxNaqjqDLNvSYiaLVNxKz++adDa7h53/Jm8=",
+        "bzlTransitiveDigest": "jJUWcRcD0S9w+bfw57OGMDzQjbZJR/X2mkPT2iQeq5c=",
         "accumulatedFileDigests": {
           "@@rules_pycross~override~lock_import~pdm_lock_repo//:lock.json": "58b7662d1781ae67e31c8b6bab48a6f04347a6834f401e7b21666480c8d95c98",
           "@@rules_pycross~override~lock_import~poetry_lock_repo//:lock.json": "f3d7ff51dda90b53aeb643d4e820f22a13d48cf37b5789cdb821088e77e27273"
@@ -4462,7 +4462,7 @@
     },
     "@@rules_pycross~override//pycross/extensions:pycross.bzl%pycross": {
       "os:osx,arch:aarch64": {
-        "bzlTransitiveDigest": "ZFxk+QQCXJGy8ojYDAzK+91o9bHCzaM6mRn1G9rFwGE=",
+        "bzlTransitiveDigest": "7BsPbzpolLd6k0ZWzNGLmnoFELtCEdHFXhZTO57YmzA=",
         "accumulatedFileDigests": {},
         "envVariables": {},
         "generatedRepoSpecs": {
@@ -4777,7 +4777,7 @@
     },
     "@@rules_pycross~override//pycross/private/bzlmod:toolchains.bzl%toolchains": {
       "general": {
-        "bzlTransitiveDigest": "SdFkQgAw3Olvkeke5XuTSG2m59XuuQXp/fJ83qh2Dn8=",
+        "bzlTransitiveDigest": "QrzprZzSKaMJJK5yGzAXri2GF5ZdRCno8SGL3zC8Tsg=",
         "accumulatedFileDigests": {},
         "envVariables": {},
         "generatedRepoSpecs": {

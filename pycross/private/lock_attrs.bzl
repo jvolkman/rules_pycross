@@ -95,22 +95,6 @@ RENDER_ATTRS = dict(
         doc = "The prefix to apply to repository targets. Defaults to the lock file target name.",
         default = "",
     ),
-    build_prefix = attr.string(
-        doc = "The prefix to apply to package build targets.",
-        default = "_build",
-    ),
-    wheel_prefix = attr.string(
-        doc = "The prefix to apply to package wheel targets.",
-        default = "_wheel",
-    ),
-    sdist_prefix = attr.string(
-        doc = "The prefix to apply to package sdist targets.",
-        default = "_sdist",
-    ),
-    environment_prefix = attr.string(
-        doc = "The prefix to apply to environment targets.",
-        default = "_env",
-    ),
     generate_file_map = attr.bool(
         doc = "Generate a FILES dict containing a mapping of filenames to repo labels.",
     ),
@@ -240,18 +224,6 @@ def handle_render_attrs(attrs):
         repo_prefix = attrs.name.lower().replace("-", "_")
 
     args.extend(["--repo-prefix", repo_prefix])
-
-    if attrs.wheel_prefix:
-        args.extend(["--wheel-prefix", attrs.wheel_prefix])
-
-    if attrs.build_prefix:
-        args.extend(["--build-prefix", attrs.build_prefix])
-
-    if attrs.sdist_prefix:
-        args.extend(["--sdist-prefix", attrs.sdist_prefix])
-
-    if attrs.environment_prefix:
-        args.extend(["--environment-prefix", attrs.environment_prefix])
 
     if attrs.generate_file_map:
         args.append("--generate-file-map")
