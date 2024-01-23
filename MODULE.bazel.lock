@@ -1686,7 +1686,7 @@
   "moduleExtensions": {
     "//pycross/extensions:pycross.bzl%pycross": {
       "os:linux,arch:amd64": {
-        "bzlTransitiveDigest": "5LOGjrq8JIOS2e8f8bBmgsjJ6v6rHuxPekps3M43AoQ=",
+        "bzlTransitiveDigest": "3Y+ojGEX39bG8Olnybr87k7IgAnh5WFLdaSAqhurmRU=",
         "accumulatedFileDigests": {},
         "envVariables": {},
         "generatedRepoSpecs": {
@@ -1907,7 +1907,7 @@
         }
       },
       "os:osx,arch:aarch64": {
-        "bzlTransitiveDigest": "TejBhuyvdP/pnb40DMTwsCv1+LqxlaT7mlWMvTZfRV8=",
+        "bzlTransitiveDigest": "OiNDX3/jz9QJbd06VQ1FfI/r3PguBL0BK/9i6mO/A5o=",
         "accumulatedFileDigests": {},
         "envVariables": {},
         "generatedRepoSpecs": {
@@ -2129,8 +2129,26 @@
       }
     },
     "//pycross/private/bzlmod:toolchains.bzl%toolchains": {
-      "general": {
-        "bzlTransitiveDigest": "KMIH7yDEEI4fNjoD0HCUgMjtDIQY+onaKQZMGudjAIQ=",
+      "os:linux,arch:amd64": {
+        "bzlTransitiveDigest": "6EF6tta8HPjXSWJi+HeUvD/XMVr1UFz6DvhTlxsgW7U=",
+        "accumulatedFileDigests": {},
+        "envVariables": {},
+        "generatedRepoSpecs": {
+          "pycross_toolchains": {
+            "bzlFile": "@@//pycross/private:toolchain_helpers.bzl",
+            "ruleClassName": "pycross_toolchains_repo",
+            "attributes": {
+              "name": "_main~toolchains~pycross_toolchains",
+              "python_toolchains_repo": "@@rules_python~0.26.0~python~python_versions//:python_versions",
+              "requested_python_versions": [],
+              "default_python_version": "3.12",
+              "platforms": []
+            }
+          }
+        }
+      },
+      "os:osx,arch:aarch64": {
+        "bzlTransitiveDigest": "uU6BQtvZqLhL4JTR2rQvaVzgeB3dwe2LHZ4lEy2mQnk=",
         "accumulatedFileDigests": {},
         "envVariables": {},
         "generatedRepoSpecs": {
