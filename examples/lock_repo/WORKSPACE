@@ -39,7 +39,7 @@ rules_pycross_dependencies(
 )
 
 load(
-    "@rules_pycross//pycross:defs.bzl",
+    "@rules_pycross//pycross:workspace.bzl",
     "lock_repo_model_pdm",
     "pycross_lock_repo",
     "pycross_register_for_python_toolchains",
