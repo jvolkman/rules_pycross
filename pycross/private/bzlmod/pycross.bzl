@@ -40,7 +40,10 @@ def _pycross_impl(module_ctx):
 
     requested_version = interpreter_tag.registered_python_version
     if requested_version:
-        repo_name = "python_{}".format(requested_version.replace(".", "_"))
+        repo_name = "python_{}_host".format(requested_version.replace(".", "_"))
+        if repo_name not in INTERPRETER_LABELS:
+            # Try the old style
+            repo_name = "python_{}".format(requested_version.replace(".", "_"))
         if repo_name not in INTERPRETER_LABELS:
             fail("Python version {} has not been registered".format(requested_version))
         python_interpreter_target = INTERPRETER_LABELS[repo_name]
