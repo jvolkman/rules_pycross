@@ -1907,7 +1907,7 @@
         }
       },
       "os:osx,arch:aarch64": {
-        "bzlTransitiveDigest": "OiNDX3/jz9QJbd06VQ1FfI/r3PguBL0BK/9i6mO/A5o=",
+        "bzlTransitiveDigest": "2XMtnxnwlqWKKnRRd8EEPFWlKvS5fW0mjd0469ae3ic=",
         "accumulatedFileDigests": {},
         "envVariables": {},
         "generatedRepoSpecs": {

@@ -7,5 +7,10 @@ stardoc_with_diff_test(
     bzl_library_target = "//pycross:defs",
 )
 
+stardoc_with_diff_test(
+    name = "workspace_rules",
+    bzl_library_target = "//pycross:workspace",
+)
+
 update_docs(
 )

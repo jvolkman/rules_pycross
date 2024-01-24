@@ -1,18 +1,17 @@
 <!-- Generated with Stardoc: http://skydoc.bazel.build -->
 
-Public API re-exports
+Public build rule API re-exports
 
 <a id="pycross_lock_file"></a>
 
 ## pycross_lock_file
 
 <pre>
-pycross_lock_file(<a href="#pycross_lock_file-name">name</a>, <a href="#pycross_lock_file-out">out</a>, <a href="#pycross_lock_file-always_build_packages">always_build_packages</a>, <a href="#pycross_lock_file-always_include_sdist">always_include_sdist</a>, <a href="#pycross_lock_file-build_prefix">build_prefix</a>,
-                  <a href="#pycross_lock_file-build_target_overrides">build_target_overrides</a>, <a href="#pycross_lock_file-default_alias_single_version">default_alias_single_version</a>, <a href="#pycross_lock_file-disallow_builds">disallow_builds</a>,
-                  <a href="#pycross_lock_file-environment_prefix">environment_prefix</a>, <a href="#pycross_lock_file-fully_qualified_environment_labels">fully_qualified_environment_labels</a>, <a href="#pycross_lock_file-generate_file_map">generate_file_map</a>,
-                  <a href="#pycross_lock_file-local_wheels">local_wheels</a>, <a href="#pycross_lock_file-lock_model_file">lock_model_file</a>, <a href="#pycross_lock_file-package_build_dependencies">package_build_dependencies</a>,
-                  <a href="#pycross_lock_file-package_ignore_dependencies">package_ignore_dependencies</a>, <a href="#pycross_lock_file-pypi_index">pypi_index</a>, <a href="#pycross_lock_file-remote_wheels">remote_wheels</a>, <a href="#pycross_lock_file-repo_prefix">repo_prefix</a>, <a href="#pycross_lock_file-sdist_prefix">sdist_prefix</a>,
-                  <a href="#pycross_lock_file-target_environments">target_environments</a>, <a href="#pycross_lock_file-wheel_prefix">wheel_prefix</a>)
+pycross_lock_file(<a href="#pycross_lock_file-name">name</a>, <a href="#pycross_lock_file-out">out</a>, <a href="#pycross_lock_file-always_build_packages">always_build_packages</a>, <a href="#pycross_lock_file-always_include_sdist">always_include_sdist</a>, <a href="#pycross_lock_file-build_target_overrides">build_target_overrides</a>,
+                  <a href="#pycross_lock_file-default_alias_single_version">default_alias_single_version</a>, <a href="#pycross_lock_file-disallow_builds">disallow_builds</a>, <a href="#pycross_lock_file-fully_qualified_environment_labels">fully_qualified_environment_labels</a>,
+                  <a href="#pycross_lock_file-generate_file_map">generate_file_map</a>, <a href="#pycross_lock_file-local_wheels">local_wheels</a>, <a href="#pycross_lock_file-lock_model_file">lock_model_file</a>, <a href="#pycross_lock_file-package_build_dependencies">package_build_dependencies</a>,
+                  <a href="#pycross_lock_file-package_ignore_dependencies">package_ignore_dependencies</a>, <a href="#pycross_lock_file-pypi_index">pypi_index</a>, <a href="#pycross_lock_file-remote_wheels">remote_wheels</a>, <a href="#pycross_lock_file-repo_prefix">repo_prefix</a>,
+                  <a href="#pycross_lock_file-target_environments">target_environments</a>)
 </pre>
 
 
@@ -26,11 +25,9 @@ pycross_lock_file(<a href="#pycross_lock_file-name">name</a>, <a href="#pycross_
 | <a id="pycross_lock_file-out"></a>out |  The output file.   | <a href="https://bazel.build/concepts/labels">Label</a> | required |  |
 | <a id="pycross_lock_file-always_build_packages"></a>always_build_packages |  A list of package keys (name or name@version) to always build from source.   | List of strings | optional |  `[]`  |
 | <a id="pycross_lock_file-always_include_sdist"></a>always_include_sdist |  Always include an entry for a package's sdist if one exists.   | Boolean | optional |  `False`  |
-| <a id="pycross_lock_file-build_prefix"></a>build_prefix |  The prefix to apply to package build targets.   | String | optional |  `"_build"`  |
 | <a id="pycross_lock_file-build_target_overrides"></a>build_target_overrides |  A mapping of package keys (name or name@version) to existing pycross_wheel_build build targets.   | <a href="https://bazel.build/rules/lib/dict">Dictionary: String -> String</a> | optional |  `{}`  |
 | <a id="pycross_lock_file-default_alias_single_version"></a>default_alias_single_version |  Generate aliases for all packages that have a single version in the lock file.   | Boolean | optional |  `False`  |
 | <a id="pycross_lock_file-disallow_builds"></a>disallow_builds |  Do not allow pycross_wheel_build targets in the final lock file (i.e., require wheels).   | Boolean | optional |  `False`  |
-| <a id="pycross_lock_file-environment_prefix"></a>environment_prefix |  The prefix to apply to environment targets.   | String | optional |  `"_env"`  |
 | <a id="pycross_lock_file-fully_qualified_environment_labels"></a>fully_qualified_environment_labels |  Generate fully-qualified environment labels.   | Boolean | optional |  `True`  |
 | <a id="pycross_lock_file-generate_file_map"></a>generate_file_map |  Generate a FILES dict containing a mapping of filenames to repo labels.   | Boolean | optional |  `False`  |
 | <a id="pycross_lock_file-local_wheels"></a>local_wheels |  A list of wheel files.   | <a href="https://bazel.build/concepts/labels">List of labels</a> | optional |  `[]`  |
@@ -40,9 +37,7 @@ pycross_lock_file(<a href="#pycross_lock_file-name">name</a>, <a href="#pycross_
 | <a id="pycross_lock_file-pypi_index"></a>pypi_index |  The PyPI-compatible index to use (must support the JSON API).   | String | optional |  `""`  |
 | <a id="pycross_lock_file-remote_wheels"></a>remote_wheels |  A mapping of remote wheels to their sha256 hashes.   | <a href="https://bazel.build/rules/lib/dict">Dictionary: String -> String</a> | optional |  `{}`  |
 | <a id="pycross_lock_file-repo_prefix"></a>repo_prefix |  The prefix to apply to repository targets. Defaults to the lock file target name.   | String | optional |  `""`  |
-| <a id="pycross_lock_file-sdist_prefix"></a>sdist_prefix |  The prefix to apply to package sdist targets.   | String | optional |  `"_sdist"`  |
 | <a id="pycross_lock_file-target_environments"></a>target_environments |  A list of pycross_target_environment labels.   | <a href="https://bazel.build/concepts/labels">List of labels</a> | optional |  `[]`  |
-| <a id="pycross_lock_file-wheel_prefix"></a>wheel_prefix |  The prefix to apply to package wheel targets.   | String | optional |  `"_wheel"`  |
 
 
 <a id="pycross_pdm_lock_model"></a>
@@ -210,112 +205,6 @@ Information about a Python wheel.
 | :------------- | :------------- |
 | <a id="PycrossWheelInfo-name_file"></a>name_file |  File: A file containing the canonical name of the wheel.    |
 | <a id="PycrossWheelInfo-wheel_file"></a>wheel_file |  File: The wheel file itself.    |
-
-
-<a id="lock_repo_model_pdm"></a>
-
-## lock_repo_model_pdm
-
-<pre>
-lock_repo_model_pdm(<a href="#lock_repo_model_pdm-project_file">project_file</a>, <a href="#lock_repo_model_pdm-lock_file">lock_file</a>, <a href="#lock_repo_model_pdm-default">default</a>, <a href="#lock_repo_model_pdm-optional_groups">optional_groups</a>, <a href="#lock_repo_model_pdm-all_optional_groups">all_optional_groups</a>,
-                    <a href="#lock_repo_model_pdm-development_groups">development_groups</a>, <a href="#lock_repo_model_pdm-all_development_groups">all_development_groups</a>, <a href="#lock_repo_model_pdm-require_static_urls">require_static_urls</a>)
-</pre>
-
-
-
-**PARAMETERS**
-
-
-| Name  | Description | Default Value |
-| :------------- | :------------- | :------------- |
-| <a id="lock_repo_model_pdm-project_file"></a>project_file |  <p align="center"> - </p>   |  none |
-| <a id="lock_repo_model_pdm-lock_file"></a>lock_file |  <p align="center"> - </p>   |  none |
-| <a id="lock_repo_model_pdm-default"></a>default |  <p align="center"> - </p>   |  `True` |
-| <a id="lock_repo_model_pdm-optional_groups"></a>optional_groups |  <p align="center"> - </p>   |  `[]` |
-| <a id="lock_repo_model_pdm-all_optional_groups"></a>all_optional_groups |  <p align="center"> - </p>   |  `False` |
-| <a id="lock_repo_model_pdm-development_groups"></a>development_groups |  <p align="center"> - </p>   |  `[]` |
-| <a id="lock_repo_model_pdm-all_development_groups"></a>all_development_groups |  <p align="center"> - </p>   |  `False` |
-| <a id="lock_repo_model_pdm-require_static_urls"></a>require_static_urls |  <p align="center"> - </p>   |  `True` |
-
-
-<a id="lock_repo_model_poetry"></a>
-
-## lock_repo_model_poetry
-
-<pre>
-lock_repo_model_poetry(<a href="#lock_repo_model_poetry-project_file">project_file</a>, <a href="#lock_repo_model_poetry-lock_file">lock_file</a>)
-</pre>
-
-
-
-**PARAMETERS**
-
-
-| Name  | Description | Default Value |
-| :------------- | :------------- | :------------- |
-| <a id="lock_repo_model_poetry-project_file"></a>project_file |  <p align="center"> - </p>   |  none |
-| <a id="lock_repo_model_poetry-lock_file"></a>lock_file |  <p align="center"> - </p>   |  none |
-
-
-<a id="pycross_lock_repo"></a>
-
-## pycross_lock_repo
-
-<pre>
-pycross_lock_repo(<a href="#pycross_lock_repo-name">name</a>, <a href="#pycross_lock_repo-lock_model">lock_model</a>, <a href="#pycross_lock_repo-kwargs">kwargs</a>)
-</pre>
-
-Create a repo containing packages described by an imported lock.
-
-**PARAMETERS**
-
-
-| Name  | Description | Default Value |
-| :------------- | :------------- | :------------- |
-| <a id="pycross_lock_repo-name"></a>name |  the repo name.   |  none |
-| <a id="pycross_lock_repo-lock_model"></a>lock_model |  the serialized lock model struct. Use `lock_repo_model_pdm` or `lock_repo_model_poetry`.   |  none |
-| <a id="pycross_lock_repo-kwargs"></a>kwargs |  additional args to pass to `resolved_lock_repo` and `package_repo`.   |  none |
-
-
-<a id="pycross_register_for_python_toolchains"></a>
-
-## pycross_register_for_python_toolchains
-
-<pre>
-pycross_register_for_python_toolchains(<a href="#pycross_register_for_python_toolchains-name">name</a>, <a href="#pycross_register_for_python_toolchains-python_toolchains_repo">python_toolchains_repo</a>, <a href="#pycross_register_for_python_toolchains-platforms">platforms</a>, <a href="#pycross_register_for_python_toolchains-glibc_version">glibc_version</a>,
-                                       <a href="#pycross_register_for_python_toolchains-macos_version">macos_version</a>)
-</pre>
-
-Register target environments and toolchains for a given list of Python versions.
-
-**PARAMETERS**
-
-
-| Name  | Description | Default Value |
-| :------------- | :------------- | :------------- |
-| <a id="pycross_register_for_python_toolchains-name"></a>name |  the toolchain repo name.   |  none |
-| <a id="pycross_register_for_python_toolchains-python_toolchains_repo"></a>python_toolchains_repo |  a label to the registered rules_python tolchain repo.   |  none |
-| <a id="pycross_register_for_python_toolchains-platforms"></a>platforms |  an optional list of platforms to support (e.g., "x86_64-unknown-linux-gnu"). By default, all platforms supported by rules_python are registered.   |  `None` |
-| <a id="pycross_register_for_python_toolchains-glibc_version"></a>glibc_version |  the maximum supported GLIBC version.   |  `None` |
-| <a id="pycross_register_for_python_toolchains-macos_version"></a>macos_version |  the maximum supported macOS version.   |  `None` |
-
-
-<a id="pycross_lock_file_repo"></a>
-
-## pycross_lock_file_repo
-
-<pre>
-pycross_lock_file_repo(<a href="#pycross_lock_file_repo-name">name</a>, <a href="#pycross_lock_file_repo-lock_file">lock_file</a>, <a href="#pycross_lock_file_repo-repo_mapping">repo_mapping</a>)
-</pre>
-
-**ATTRIBUTES**
-
-
-| Name  | Description | Type | Mandatory | Default |
-| :------------- | :------------- | :------------- | :------------- | :------------- |
-| <a id="pycross_lock_file_repo-name"></a>name |  A unique name for this repository.   | <a href="https://bazel.build/concepts/labels#target-names">Name</a> | required |  |
-| <a id="pycross_lock_file_repo-lock_file"></a>lock_file |  The generated bzl lock file.   | <a href="https://bazel.build/concepts/labels">Label</a> | required |  |
-| <a id="pycross_lock_file_repo-repo_mapping"></a>repo_mapping |  In `WORKSPACE` context only: a dictionary from local repository name to global repository name. This allows controls over workspace dependency resolution for dependencies of this repository.<br><br>For example, an entry `"@foo": "@bar"` declares that, for any time this repository depends on `@foo` (such as a dependency on `@foo//some:target`, it should actually resolve that dependency within globally-declared `@bar` (`@bar//some:target`).<br><br>This attribute is _not_ supported in `MODULE.bazel` context (when invoking a repository rule inside a module extension's implementation function).   | <a href="https://bazel.build/rules/lib/dict">Dictionary: String -> String</a> | optional |  |
 
 
 <a id="pypi_file"></a>
