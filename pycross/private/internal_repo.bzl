@@ -26,6 +26,11 @@ alias(
     name = "installer_whl",
     actual = "{installer_whl}",
 )
+
+exports_files([
+    "defaults.bzl",
+    "python.bzl",
+])
 """
 
 _python_bzl = """\

@@ -10,7 +10,7 @@ bazel_dep(name = "aspect_bazel_lib", version = "1.38.1")
 bazel_dep(name = "bazel_features", version = "1.1.1")
 bazel_dep(name = "bazel_skylib", version = "1.4.2")
 bazel_dep(name = "platforms", version = "0.0.4")
-bazel_dep(name = "rules_python", version = "0.26.0")
+bazel_dep(name = "rules_python", version = "0.29.0")
 
 python = use_extension("@rules_python//python/extensions:python.bzl", "python")
 python.toolchain(python_version = "3.12")
@@ -32,18 +32,13 @@ use_repo(
 )
 
 toolchains = use_extension("@rules_pycross//pycross/private/bzlmod:toolchains.bzl", "toolchains")
-toolchains.create_for_python_toolchains(
-    python_versions_repo = "@python_versions",
-)
+toolchains.create_for_python_toolchains(name = "pycross_toolchains")
 use_repo(toolchains, "pycross_toolchains")
 
 register_toolchains("@pycross_toolchains//...")
 
 environments = use_extension("@rules_pycross//pycross/extensions:environments.bzl", "environments")
-environments.create_for_python_toolchains(
-    name = "pycross_environments",
-    python_versions_repo = "@python_versions",
-)
+environments.create_for_python_toolchains(name = "pycross_environments")
 use_repo(environments, "pycross_environments")
 
 lock_import = use_extension("@rules_pycross//pycross/extensions:lock_import.bzl", "lock_import")
