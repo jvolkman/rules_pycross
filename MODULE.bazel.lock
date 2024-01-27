@@ -1,6 +1,6 @@
 {
   "lockFileVersion": 3,
-  "moduleFileHash": "157087e1cf4f53f2cc698362c2c5ee293d7ec02cf5518524502c831ea57c2d4b",
+  "moduleFileHash": "3c9bbfcfbfff6c91ccc3f9ea68bbfe964c368bc48b61e0f2b7e59e6267182dcd",
   "flags": {
     "cmdRegistries": [
       "https://bcr.bazel.build/"
@@ -32,11 +32,12 @@
           "usingModule": "<root>",
           "location": {
             "file": "@@//:MODULE.bazel",
-            "line": 15,
+            "line": 20,
             "column": 23
           },
           "imports": {
             "python_3_12": "python_3_12",
+            "python_3_12_host": "python_3_12_host",
             "python_versions": "python_versions",
             "pythons_hub": "pythons_hub"
           },
@@ -50,7 +51,7 @@
               "devDependency": false,
               "location": {
                 "file": "@@//:MODULE.bazel",
-                "line": 16,
+                "line": 21,
                 "column": 17
               }
             }
@@ -64,7 +65,7 @@
           "usingModule": "<root>",
           "location": {
             "file": "@@//:MODULE.bazel",
-            "line": 19,
+            "line": 30,
             "column": 24
           },
           "imports": {
@@ -84,19 +85,20 @@
               "devDependency": false,
               "location": {
                 "file": "@@//:MODULE.bazel",
-                "line": 20,
+                "line": 31,
                 "column": 31
               }
             },
             {
               "tagName": "configure_interpreter",
               "attributeValues": {
-                "registered_python_version": "3.12"
+                "python_defs_file": "@python_3_12//:defs.bzl",
+                "python_interpreter_target": "@python_3_12_host//:python"
               },
               "devDependency": false,
               "location": {
                 "file": "@@//:MODULE.bazel",
-                "line": 21,
+                "line": 32,
                 "column": 30
               }
             },
@@ -106,7 +108,7 @@
               "devDependency": false,
               "location": {
                 "file": "@@//:MODULE.bazel",
-                "line": 22,
+                "line": 36,
                 "column": 29
               }
             }
@@ -120,7 +122,7 @@
           "usingModule": "<root>",
           "location": {
             "file": "@@//:MODULE.bazel",
-            "line": 34,
+            "line": 50,
             "column": 27
           },
           "imports": {
@@ -136,7 +138,7 @@
               "devDependency": false,
               "location": {
                 "file": "@@//:MODULE.bazel",
-                "line": 35,
+                "line": 51,
                 "column": 40
               }
             }
@@ -150,7 +152,7 @@
           "usingModule": "<root>",
           "location": {
             "file": "@@//:MODULE.bazel",
-            "line": 40,
+            "line": 56,
             "column": 29
           },
           "imports": {
@@ -166,7 +168,7 @@
               "devDependency": false,
               "location": {
                 "file": "@@//:MODULE.bazel",
-                "line": 41,
+                "line": 57,
                 "column": 42
               }
             }
@@ -180,7 +182,7 @@
           "usingModule": "<root>",
           "location": {
             "file": "@@//:MODULE.bazel",
-            "line": 44,
+            "line": 60,
             "column": 28
           },
           "imports": {
@@ -197,7 +199,7 @@
           "usingModule": "<root>",
           "location": {
             "file": "@@//:MODULE.bazel",
-            "line": 47,
+            "line": 63,
             "column": 27
           },
           "imports": {},
@@ -209,7 +211,7 @@
               "devDependency": false,
               "location": {
                 "file": "@@//:MODULE.bazel",
-                "line": 48,
+                "line": 64,
                 "column": 18
               }
             }
@@ -1684,8 +1686,8 @@
   },
   "moduleExtensions": {
     "//pycross/extensions:pycross.bzl%pycross": {
-      "os:osx,arch:aarch64": {
-        "bzlTransitiveDigest": "5Rw7mzI42uZvPmg7d8Pua1s7avJm1EQ7j7/uhn658mA=",
+      "general": {
+        "bzlTransitiveDigest": "HtwHtcLN6DSr+SPcniEl+Cz4Jk7drwqoUO4Z/L/gi+0=",
         "accumulatedFileDigests": {},
         "envVariables": {},
         "generatedRepoSpecs": {
@@ -1871,7 +1873,7 @@
                 "@@_main~pycross~rules_pycross_internal_deps_wheel_tomli_2.0.1_py3_none_any//file:tomli-2.0.1-py3-none-any.whl": "tomli-2.0.1-py3-none-any.whl"
               },
               "python_interpreter_target": "@@rules_python~0.29.0~python~python_3_12_host//:python",
-              "python_defs_file": "@@rules_python~0.29.0~python~python_versions//3.12:defs.bzl",
+              "python_defs_file": "@@rules_python~0.29.0~python~python_3_12//:defs.bzl",
               "glibc_version": "",
               "macos_version": "",
               "platforms": [],
