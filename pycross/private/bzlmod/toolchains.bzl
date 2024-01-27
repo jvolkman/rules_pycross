@@ -1,6 +1,5 @@
 """Internal extension to create pycross toolchains."""
 
-load("@pythons_hub//:interpreters.bzl", "DEFAULT_PYTHON_VERSION")
 load(
     "@rules_pycross_internal//:defaults.bzl",
     "register_toolchains",
@@ -21,9 +20,9 @@ def _toolchains_impl(module_ctx):
             if register_toolchains:
                 pycross_toolchains_repo(
                     name = tag.name,
-                    python_toolchains_repo = tag.python_versions_repo,
+                    python_toolchains_repo = "@python_versions",
+                    pythons_hub_repo = "@pythons_hub",
                     requested_python_versions = tag.python_versions,
-                    default_python_version = DEFAULT_PYTHON_VERSION,
                     platforms = tag.platforms,
                 )
             else:
@@ -32,18 +31,10 @@ def _toolchains_impl(module_ctx):
 toolchains = module_extension(
     doc = "Create toolchains.",
     implementation = _toolchains_impl,
-    # OS and arch dependent since we load from @pythons_hub//:interpreters.bzl.
-    os_dependent = True,
-    arch_dependent = True,
     tag_classes = {
         "create_for_python_toolchains": tag_class(
             attrs = {
-                "name": attr.string(
-                    default = "pycross_toolchains",
-                ),
-                "python_versions_repo": attr.label(
-                    mandatory = True,
-                ),
+                "name": attr.string(),
                 "python_versions": attr.string_list(default = default_python_versions),
                 "platforms": attr.string_list(default = default_platforms),
             },

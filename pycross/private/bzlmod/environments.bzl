@@ -1,6 +1,5 @@
 """The environments extension creates target environment definitions."""
 
-load("@pythons_hub//:interpreters.bzl", "DEFAULT_PYTHON_VERSION")
 load(
     "@rules_pycross_internal//:defaults.bzl",
     default_glibc_version = "glibc_version",
@@ -16,8 +15,8 @@ def _environments_impl(module_ctx):
         for tag in module.tags.create_for_python_toolchains:
             pycross_environments_repo(
                 name = tag.name,
-                python_toolchains_repo = tag.python_versions_repo,
-                default_python_version = DEFAULT_PYTHON_VERSION,
+                python_toolchains_repo = "@python_versions",
+                pythons_hub_repo = "@pythons_hub",
                 platforms = tag.platforms or default_platforms,
                 requested_python_versions = tag.python_versions or default_python_versions,
                 glibc_version = tag.glibc_version or default_glibc_version,
@@ -31,9 +30,6 @@ environments = module_extension(
         "create_for_python_toolchains": tag_class(
             attrs = dict(
                 name = attr.string(
-                    mandatory = True,
-                ),
-                python_versions_repo = attr.label(
                     mandatory = True,
                 ),
             ) | CREATE_ENVIRONMENTS_ATTRS,

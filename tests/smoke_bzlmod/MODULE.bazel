@@ -13,7 +13,7 @@ bazel_dep(name = "aspect_bazel_lib", version = "2.3.0")
 bazel_dep(name = "hermetic_cc_toolchain", version = "2.2.1")
 bazel_dep(name = "platforms", version = "0.0.8")
 bazel_dep(name = "rules_cc", version = "0.0.9")
-bazel_dep(name = "rules_python", version = "0.28.0")
+bazel_dep(name = "rules_python", version = "0.29.0")
 bazel_dep(name = "rules_pycross", version = "0.0.0")
 local_path_override(
     module_name = "rules_pycross",
@@ -41,7 +41,6 @@ python.toolchain(
     is_default = True,
     python_version = "3.12.0",
 )
-use_repo(python, "python_versions")
 
 # Third-party deps
 
@@ -67,8 +66,8 @@ environments.create_for_python_toolchains(
         "3.10.12",
         "3.11.6",
         "3.12.0",
+        "3.12",
     ],
-    python_versions_repo = "@python_versions",
 )
 use_repo(environments, "smoke_environments")
 
@@ -81,6 +80,7 @@ lock_import.import_poetry(
     lock_file = "//:poetry.lock",
     project_file = "//:pyproject.toml",
     repo = "poetry",
+    target_environments = ["@smoke_environments//:environments"],
 )
 
 # lock_repo with PDM and some package overrides
@@ -89,6 +89,7 @@ lock_import.import_pdm(
     lock_file = "//:pdm.lock",
     project_file = "//:pyproject.toml",
     repo = "pdm",
+    target_environments = ["@smoke_environments//:environments"],
 )
 lock_import.package(
     name = "regex",

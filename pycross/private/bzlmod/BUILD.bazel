@@ -8,6 +8,7 @@ bzl_library(
     deps = [
         ":tag_attrs",
         "//pycross/private:toolchain_helpers",
+        "@rules_pycross_internal//:defaults.bzl",
     ],
 )
 
