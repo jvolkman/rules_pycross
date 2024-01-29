@@ -110,7 +110,7 @@ def _compute_environments(
 
             if not is_default_version:
                 flag_values = {
-                    "@rules_pycross//pycross/private:rules_python_interpreter_version": micro_version,
+                    "@rules_pycross//pycross/private/interpreter_version": micro_version,
                 }
             else:
                 flag_values = {}
@@ -156,7 +156,7 @@ def _compute_toolchains(
             if is_default_version:
                 flag_values = {}
             else:
-                flag_values = {"@rules_pycross//pycross/private:rules_python_interpreter_version": micro_version}
+                flag_values = {"@rules_pycross//pycross/private/interpreter_version": micro_version}
 
             for exec_platform in selected_platforms:
                 tc_provider_name = "python_{}_{}_{}".format(version, exec_platform, target_platform)

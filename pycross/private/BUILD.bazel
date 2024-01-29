@@ -1,18 +1,10 @@
 load("@aspect_bazel_lib//lib:write_source_files.bzl", "write_source_files")
 load("@bazel_skylib//:bzl_library.bzl", "bzl_library")
-load(":interpreter_version.bzl", "rules_python_interpreter_version")
 load(":lock_file.bzl", "pycross_lock_file")
 load(":pdm_lock_model.bzl", "pycross_pdm_lock_model")
 load(":target_environment.bzl", "pycross_target_environment")
 
 default_visibility = ["//pycross:__subpackages__"]
-
-# This target is used by generated environment definitions.
-# Thus it needs to be public, but it's not really part of the public API.
-rules_python_interpreter_version(
-    name = "rules_python_interpreter_version",
-    visibility = ["//visibility:public"],
-)
 
 bzl_library(
     name = "cc_toolchain_util",
@@ -33,15 +25,6 @@ bzl_library(
         ":lock_attrs",
         ":repo_venv_utils",
         "@bazel_skylib//lib:shell",
-    ],
-)
-
-bzl_library(
-    name = "interpreter_version",
-    srcs = ["interpreter_version.bzl"],
-    visibility = default_visibility,
-    deps = [
-        "@rules_python//python:versions.bzl",
     ],
 )
 
