@@ -14,24 +14,16 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v2
-      - name: Mount bazel caches
-        uses: actions/cache@v2
-        with:
-          path: |
-            "~/.cache/bazel"
-            "~/.cache/bazel-repo"
-          key: bazel-cache-${{ hashFiles('**/BUILD.bazel', '**/*.bzl', 'WORKSPACE') }}
-          restore-keys: bazel-cache-
-      - name: bazel test //...
+      - name: .bazelrc.ci
+        run: |
+          python -c "import os; file = open('.bazelrc.ci', 'w'); file.write(os.environ['BAZELRC_CI']); file.close()"
+        shell: bash
         env:
-          # Bazelisk will download bazel to here
-          XDG_CACHE_HOME: ~/.cache/bazel-repo
-
-        # Don't run the requirements test because the ubuntu runner's python version doesn't necessarily match
-        # the development host's.
-        run: bazel --bazelrc=.github/workflows/ci.bazelrc --bazelrc=.bazelrc test -- //... -//pycross/private:requirements_test
-      - name: Prepare workspace snippet
-        run: .github/workflows/workspace_snippet.sh ${{ env.GITHUB_REF_NAME }} > release_notes.txt
+          BAZELRC_CI: ${{secrets.BAZELRC_CI}}
+      - name: bazel test //...
+        run: bazel test -- //...
+      - name: Prepare release
+        run: .github/workflows/release_prep.sh ${{ env.GITHUB_REF_NAME }} > release_notes.txt
       - name: Release
         uses: softprops/action-gh-release@v1
         with:
@@ -39,3 +31,5 @@ jobs:
           # Use GH feature to populate the changelog automatically
           generate_release_notes: true
           body_path: release_notes.txt
+          files: rules_pycross-*.tar.gz
+          fail_on_unmatched_files: true
