@@ -3,5 +3,4 @@
 # Don't include examples in the distribution artifact, just to reduce size
 .github/ export-ignore
 examples/ export-ignore
-tests/smoke_bzlmod/ export-ignore
 tests/smoke_workspace/ export-ignore
