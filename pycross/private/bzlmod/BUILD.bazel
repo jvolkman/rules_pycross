@@ -27,6 +27,7 @@ bzl_library(
     name = "lock_import",
     srcs = ["lock_import.bzl"],
     deps = [
+        ":lock_hub_repo",
         ":tag_attrs",
         "//pycross/private:internal_repo",
         "//pycross/private:pdm_lock_model",
@@ -60,7 +61,9 @@ bzl_library(
         ":tag_attrs",
         "//pycross/private:package_repo",
         "//pycross/private:pypi_file",
+        "@bazel_tools//tools/build_defs/repo:cache.bzl",
         "@bazel_tools//tools/build_defs/repo:http.bzl",
+        "@lock_import_repos_hub//:locks.bzl",
     ],
 )
 
@@ -71,6 +74,7 @@ bzl_library(
         "//pycross/private:internal_repo",
         "//pycross/private:lock_file_repo",
         "//pycross/private:pypi_file",
+        "@bazel_tools//tools/build_defs/repo:cache.bzl",
         "@bazel_tools//tools/build_defs/repo:http.bzl",
     ],
 )

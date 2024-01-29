@@ -12,5 +12,30 @@ stardoc_with_diff_test(
     bzl_library_target = "//pycross:workspace",
 )
 
+stardoc_with_diff_test(
+    name = "ext_environments",
+    bzl_library_target = "//pycross/extensions:environments",
+)
+
+stardoc_with_diff_test(
+    name = "ext_lock_file",
+    bzl_library_target = "//pycross/extensions:lock_file",
+)
+
+stardoc_with_diff_test(
+    name = "ext_lock_import",
+    bzl_library_target = "//pycross/extensions:lock_import",
+)
+
+stardoc_with_diff_test(
+    name = "ext_lock_repos",
+    bzl_library_target = "//pycross/extensions:lock_repos",
+)
+
+stardoc_with_diff_test(
+    name = "ext_pycross",
+    bzl_library_target = "//pycross/extensions:pycross",
+)
+
 update_docs(
 )

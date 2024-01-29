@@ -30,6 +30,7 @@ bzl_library(
     srcs = ["internal_repo.bzl"],
     visibility = default_visibility,
     deps = [
+        ":lock_attrs",
         ":repo_venv_utils",
         "@bazel_skylib//lib:shell",
     ],
