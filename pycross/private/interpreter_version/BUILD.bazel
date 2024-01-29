@@ -1,0 +1,19 @@
+load("@bazel_skylib//:bzl_library.bzl", "bzl_library")
+load(":interpreter_version.bzl", "rules_python_interpreter_version")
+
+package(default_visibility = ["//pycross:__subpackages__"])
+
+# This target is used by generated environment definitions.
+# Thus it needs to be public, but it's not really part of the public API.
+rules_python_interpreter_version(
+    name = "interpreter_version",
+    visibility = ["//visibility:public"],
+)
+
+bzl_library(
+    name = "interpreter_version_bzl",
+    srcs = ["interpreter_version.bzl"],
+    deps = [
+        "@rules_python//python:versions.bzl",
+    ],
+)
