@@ -32,7 +32,10 @@ http_archive(
     url = "https://github.com/jvolkman/rules_pycross/releases/download/${TAG}/${ARCHIVE}",
 )
 
+# change this to something that works in your environment.
+load("@python//3.12.0:defs.bzl", python_interpreter = "interpreter")
+
 load("@rules_pycross//pycross:repositories.bzl", "rules_pycross_dependencies")
-rules_pycross_dependencies()
+rules_pycross_dependencies(python_interpreter)
 \`\`\`
 EOF
