@@ -1,12 +1,10 @@
 """Implementation of the pycross_lock_file rule."""
 
 load(":lock_attrs.bzl", "RENDER_ATTRS", "RESOLVE_ATTRS", "handle_render_attrs", "handle_resolve_attrs")
-
-# Whether bzlmod is enabled.
-_BZLMOD = str(Label("//:invalid")).startswith("@@")
+load(":util.bzl", "BZLMOD")
 
 def fully_qualified_label(ctx, label):
-    prefix = "@@" if _BZLMOD else "@"
+    prefix = "@@" if BZLMOD else "@"
     return "%s%s//%s:%s" % (prefix, label.workspace_name or ctx.workspace_name, label.package, label.name)
 
 def _pycross_lock_file_impl(ctx):

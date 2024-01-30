@@ -1,4 +1,5 @@
 load("@bazel_skylib//:bzl_library.bzl", "bzl_library")
+load("//pycross/private:util.bzl", "REPO_HTTP_DEPS")
 
 package(default_visibility = ["//pycross:__subpackages__"])
 
@@ -34,8 +35,7 @@ bzl_library(
         "//pycross/private:poetry_lock_model",
         "//pycross/private:pypi_file",
         "//pycross/private:resolved_lock_repo",
-        "@bazel_tools//tools/build_defs/repo:http.bzl",
-    ],
+    ] + REPO_HTTP_DEPS,
 )
 
 bzl_library(
@@ -61,10 +61,8 @@ bzl_library(
         ":tag_attrs",
         "//pycross/private:package_repo",
         "//pycross/private:pypi_file",
-        "@bazel_tools//tools/build_defs/repo:cache.bzl",
-        "@bazel_tools//tools/build_defs/repo:http.bzl",
         "@lock_import_repos_hub//:locks.bzl",
-    ],
+    ] + REPO_HTTP_DEPS,
 )
 
 bzl_library(
@@ -74,9 +72,7 @@ bzl_library(
         "//pycross/private:internal_repo",
         "//pycross/private:lock_file_repo",
         "//pycross/private:pypi_file",
-        "@bazel_tools//tools/build_defs/repo:cache.bzl",
-        "@bazel_tools//tools/build_defs/repo:http.bzl",
-    ],
+    ] + REPO_HTTP_DEPS,
 )
 
 bzl_library(

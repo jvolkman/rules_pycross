@@ -30,7 +30,7 @@ jobs:
           bazel test -- //... -//pycross/...
 
   smoke-test-multi-bazel:
-    name: workspace smoke test - Python - default version tests - Bazel ${{matrix.bazel-version}}
+    name: Default Python version tests - Bazel ${{matrix.bazel-version}}
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false

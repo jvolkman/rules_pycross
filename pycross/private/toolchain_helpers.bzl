@@ -3,12 +3,10 @@
 load("@rules_python//python:versions.bzl", "MINOR_MAPPING", "PLATFORMS", "TOOL_VERSIONS")
 load(":lock_attrs.bzl", "DEFAULT_GLIBC_VERSION", "DEFAULT_MACOS_VERSION")
 load(":target_environment.bzl", "repo_batch_create_target_environments")
-
-# Whether bzlmod is enabled.
-_BZLMOD = str(Label("//:invalid")).startswith("@@")
+load(":util.bzl", "BZLMOD")
 
 def _repo_label(repo_name, label):
-    if _BZLMOD:
+    if BZLMOD:
         return "@@{}{}".format(repo_name, label)
     else:
         return "@{}{}".format(repo_name, label)
@@ -169,7 +167,7 @@ def _compute_toolchains(
                 # These conditionals create a `interpreter_repo_pattern` which accepts a
                 # platform name (e.g., x86_64-unknown-linux-gnu).
 
-                if _BZLMOD:
+                if BZLMOD:
                     # With bzlmod we need to construct the canonical repository names for platform-specific interpreters.
                     interpreter_repo_pattern = "@@{}python_{}_{{plat}}//:py3_runtime".format(
                         _canonical_prefix(python_toolchains_repo_name),

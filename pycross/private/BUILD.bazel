@@ -33,6 +33,7 @@ bzl_library(
         ":lock_attrs",
         ":providers",
         ":target_environment",
+        ":util",
     ],
 )
 
@@ -124,6 +125,7 @@ bzl_library(
     deps = [
         ":lock_attrs",
         ":target_environment",
+        ":util",
         "@rules_python//python:versions.bzl",
     ],
 )
@@ -239,13 +241,9 @@ bzl_library(
 )
 
 bzl_library(
-    name = "debug",
-    srcs = ["debug.bzl"],
-)
-
-bzl_library(
     name = "lock_attrs",
     srcs = ["lock_attrs.bzl"],
+    deps = ["util"],
 )
 
 bzl_library(
@@ -266,6 +264,11 @@ bzl_library(
 bzl_library(
     name = "updated-pycross_deps_core.lock",
     srcs = ["updated-pycross_deps_core.lock.bzl"],
+)
+
+bzl_library(
+    name = "util",
+    srcs = ["util.bzl"],
 )
 
 exports_files(
