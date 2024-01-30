@@ -13,40 +13,41 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  main-tests:
-    # The type of runner that the job will run on
+  dev-tests:
     runs-on: ubuntu-latest
 
-    # Steps represent a sequence of tasks that will be executed as part of the job
     steps:
       - uses: actions/checkout@v2
 
-      - name: .bazelrc.ci
-        run: |
-          python -c "import os; file = open('.bazelrc.ci', 'w'); file.write(os.environ['BAZELRC_CI']); file.close()"
-        shell: bash
-        env:
-          BAZELRC_CI: ${{secrets.BAZELRC_CI}}
+      - uses: DamianReeves/write-file-action@master
+        with:
+          path: .bazelrc.ci
+          contents: ${{secrets.BAZELRC_CI}}
+          write-mode: overwrite
 
-      - name: bazel test //docs/... //pycross/...
+      - name: Everything except //pycross/...
         run: |
-          bazel --bazelrc=.github/workflows/ci.bazelrc --bazelrc=.bazelrc test -- //pycross/...
+          bazel test -- //... -//pycross/...
 
-  smoke-test-default-python-versions:
-    name: workspace smoke test - Python - default version tests
+  smoke-test-multi-bazel:
+    name: Default Python version tests - Bazel ${{matrix.bazel-version}}
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
+      matrix:
+        bazel-version: ["6.x", "7.x"]
+
+    env:
+      USE_BAZEL_VERSION: ${{matrix.bazel-version}}
 
     steps:
       - uses: actions/checkout@v2
 
-      - name: .bazelrc.ci
-        run: |
-          python -c "import os; file = open('.bazelrc.ci', 'w'); file.write(os.environ['BAZELRC_CI']); file.close()"
-        shell: bash
-        env:
-          BAZELRC_CI: ${{secrets.BAZELRC_CI}}
+      - uses: DamianReeves/write-file-action@master
+        with:
+          path: .bazelrc.ci
+          contents: ${{secrets.BAZELRC_CI}}
+          write-mode: overwrite
 
       - name: run smoke tests - workspace
         working-directory: tests/smoke_workspace
@@ -54,9 +55,14 @@ jobs:
           bazel test //...
 
       - name: run smoke tests - bzlmod
-        working-directory: tests/smoke_workspace
+        working-directory: tests/smoke_bzlmod
         run: |
           bazel test //...
+
+      - name: run pycross tests as consumer
+        working-directory: tests/smoke_bzlmod
+        run: |
+          bazel test @rules_pycross//pycross/...
 
   workspace-smoke-test:
     name: workspace smoke test - Python ${{ matrix.python-version }} on ${{ startsWith(matrix.os, 'macos-') && 'macOS' || startsWith(matrix.os, 'windows-') && 'Windows' || 'Linux' }}
@@ -67,6 +73,7 @@ jobs:
         os: [ubuntu-latest, macos-latest]
         # This needs to stay in sync with tests/smoke_bzlmod/MODULE.bazel
         python-version: ["3.10.12", "3.11.6", "3.12.0"]
+
     defaults:
       run:
         working-directory: tests/smoke_workspace
@@ -74,12 +81,11 @@ jobs:
     steps:
       - uses: actions/checkout@v2
 
-      - name: .bazelrc.ci
-        run: |
-          python -c "import os; file = open('.bazelrc.ci', 'w'); file.write(os.environ['BAZELRC_CI']); file.close()"
-        shell: bash
-        env:
-          BAZELRC_CI: ${{secrets.BAZELRC_CI}}
+      - uses: DamianReeves/write-file-action@master
+        with:
+          path: .bazelrc.ci
+          contents: ${{secrets.BAZELRC_CI}}
+          write-mode: overwrite
 
       - name: run smoke tests
         run: |
@@ -101,12 +107,11 @@ jobs:
     steps:
       - uses: actions/checkout@v2
 
-      - name: .bazelrc.ci
-        run: |
-          python -c "import os; file = open('.bazelrc.ci', 'w'); file.write(os.environ['BAZELRC_CI']); file.close()"
-        shell: bash
-        env:
-          BAZELRC_CI: ${{secrets.BAZELRC_CI}}
+      - uses: DamianReeves/write-file-action@master
+        with:
+          path: .bazelrc.ci
+          contents: ${{secrets.BAZELRC_CI}}
+          write-mode: overwrite
 
       - name: run smoke tests
         run: |

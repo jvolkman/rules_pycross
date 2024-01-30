@@ -1,7 +1,6 @@
 """Common attr handling for things that generate lock files."""
 
-# Whether bzlmod is enabled.
-_BZLMOD = str(Label("//:invalid")).startswith("@@")
+load(":util.bzl", "BZLMOD")
 
 DEFAULT_MACOS_VERSION = "12.0"
 DEFAULT_GLIBC_VERSION = "2.25"
@@ -211,7 +210,7 @@ def handle_render_attrs(attrs):
     # generated .bzl file. We can figure that out by comparing our workspace against the root workspace.
     if Label("@@//:invalid").workspace_name == Label("//:invalid").workspace_name:
         pycross_repo_name = ""
-    elif _BZLMOD:
+    elif BZLMOD:
         pycross_repo_name = "@@" + Label("//:invalid").workspace_name
     else:
         pycross_repo_name = "@" + Label("//:invalid").workspace_name

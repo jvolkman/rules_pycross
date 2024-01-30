@@ -1,20 +1,21 @@
 load("@bazel_skylib//:bzl_library.bzl", "bzl_library")
-#load("@gazelle//:def.bzl", "gazelle", "gazelle_binary")
+load("@bazel_skylib//rules:diff_test.bzl", "diff_test")
+load("@gazelle//:def.bzl", "gazelle", "gazelle_binary")
 
 # gazelle:exclude tests
 # gazelle:exclude examples
 
-#gazelle_binary(
-#    name = "gazelle_bin",
-#    languages = [
-#        "@bazel_skylib_gazelle_plugin//bzl",
-#    ],
-#)
+gazelle_binary(
+    name = "gazelle_bin",
+    languages = [
+        "@bazel_skylib_gazelle_plugin//bzl",
+    ],
+)
 
-#gazelle(
-#    name = "gazelle",
-#    gazelle = "gazelle_bin",
-#)
+gazelle(
+    name = "gazelle",
+    gazelle = "gazelle_bin",
+)
 
 bzl_library(
     name = "internal_deps",
@@ -26,10 +27,16 @@ bzl_library(
     ],
 )
 
-exports_files(
-    [
-        "pdm.lock",
-        "pyproject.toml",
-    ],
-    visibility = ["//pycross:__subpackages__"],
+diff_test(
+    name = "test_core_deps_diff",
+    failure_message = "Please run `bazel run //pycross/private:update_pycross_deps`",
+    file1 = "//pycross/private:updated-pycross_deps_core.lock.bzl",
+    file2 = "//pycross/private:pycross_deps_core.lock.bzl",
+)
+
+diff_test(
+    name = "test_deps_diff",
+    failure_message = "Please run `bazel run //pycross/private:update_pycross_deps`",
+    file1 = "//pycross/private:updated-pycross_deps.lock.bzl",
+    file2 = "//pycross/private:pycross_deps.lock.bzl",
 )

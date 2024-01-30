@@ -1,4 +1,17 @@
-"""Debug utilities"""
+"""Shared utilities"""
+
+# Whether we're using at least Bazel 7
+IS_BAZEL_7_OR_HIGHER = hasattr(native, "starlark_doc_extract")
+
+# Whether we're using bzlmod
+BZLMOD = str(Label("//:invalid")).startswith("@@")
+
+# The http library seems to depend on cache.bzl as of Bazel 7
+REPO_HTTP_DEPS = [
+    "@bazel_tools//tools/build_defs/repo:http.bzl",
+] + [
+    "@bazel_tools//tools/build_defs/repo:cache.bzl",
+] if IS_BAZEL_7_OR_HIGHER else []
 
 def trace_ctx(ctx, display_name = "ctx"):
     """Wraps a context object so that method calls are printed with their arguments.
