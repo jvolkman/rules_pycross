@@ -35,7 +35,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        bazel-version: ["6", "7"]
+        bazel-version: ["6.x", "7.x"]
 
     env:
       USE_BAZEL_VERSION: ${{matrix.bazel-version}}
