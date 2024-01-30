@@ -12,18 +12,20 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v2
-      - name: .bazelrc.ci
-        run: |
-          python -c "import os; file = open('.bazelrc.ci', 'w'); file.write(os.environ['BAZELRC_CI']); file.close()"
-        shell: bash
-        env:
-          BAZELRC_CI: ${{secrets.BAZELRC_CI}}
+      - uses: actions/checkout@v2
+
+      - uses: DamianReeves/write-file-action@master
+        with:
+          path: .bazelrc.ci
+          contents: ${{secrets.BAZELRC_CI}}
+          write-mode: overwrite
+
       - name: bazel test //...
         run: bazel test -- //...
+
       - name: Prepare release
         run: .github/workflows/release_prep.sh ${{ env.GITHUB_REF_NAME }} > release_notes.txt
+
       - name: Release
         uses: softprops/action-gh-release@v1
         with:
