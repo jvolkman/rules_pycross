@@ -34,7 +34,7 @@ rules_pycross_dependencies(
     python_interpreter_target = python_interpreter,
 )
 
-load("@rules_pycross//pycross:defs.bzl", "pycross_lock_file_repo")
+load("@rules_pycross//pycross:workspace.bzl", "pycross_lock_file_repo")
 
 pycross_lock_file_repo(
     name = "example_lock_repo",
