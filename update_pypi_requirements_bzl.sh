@@ -2,4 +2,4 @@
 set -e
 
 pdm lock
-bazel run :update_pycross_deps
+bazel run //pycross/private:update_pycross_deps
