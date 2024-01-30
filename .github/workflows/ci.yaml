@@ -22,7 +22,7 @@ jobs:
       - uses: DamianReeves/write-file-action@master
         with:
           path: .bazelrc.ci
-          contents: ${{secrets.BAZELRC_CI}}
+          contents: ${{secrets.BAZELRC_CI || '# no rbe access'}}
           write-mode: overwrite
 
       - name: Everything except //pycross/...
@@ -46,7 +46,7 @@ jobs:
       - uses: DamianReeves/write-file-action@master
         with:
           path: .bazelrc.ci
-          contents: ${{secrets.BAZELRC_CI}}
+          contents: ${{secrets.BAZELRC_CI || '# no rbe access'}}
           write-mode: overwrite
 
       - name: run smoke tests - workspace
@@ -84,7 +84,7 @@ jobs:
       - uses: DamianReeves/write-file-action@master
         with:
           path: .bazelrc.ci
-          contents: ${{secrets.BAZELRC_CI}}
+          contents: ${{secrets.BAZELRC_CI || '# no rbe access'}}
           write-mode: overwrite
 
       - name: run smoke tests
@@ -110,7 +110,7 @@ jobs:
       - uses: DamianReeves/write-file-action@master
         with:
           path: .bazelrc.ci
-          contents: ${{secrets.BAZELRC_CI}}
+          contents: ${{secrets.BAZELRC_CI || '# no rbe access'}}
           write-mode: overwrite
 
       - name: run smoke tests
