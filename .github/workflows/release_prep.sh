@@ -13,6 +13,8 @@ git archive --format=tar --prefix=${PREFIX}/ ${TAG} | gzip > $ARCHIVE
 SHA=$(git archive --format=tar --prefix=${PREFIX}/ ${TAG} | gzip | shasum -a 256 | awk '{print $1}')
 
 cat << EOF
+See the [changelog](CHANGELOG.md).
+
 ## Using Bzlmod:
 
 Add to your \`MODULE.bazel\` file:
