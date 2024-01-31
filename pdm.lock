@@ -4,8 +4,8 @@
 [metadata]
 groups = ["default", "build", "core", "repairwheel"]
 strategy = ["cross_platform", "static_urls"]
-lock_version = "4.4"
-content_hash = "sha256:5cc777354dfb6168eb5693136f0d2038696693e4950156e73344bb3b28f9c62b"
+lock_version = "4.4.1"
+content_hash = "sha256:2a0144b44fe7188bda7236fa5d6340d53fd4303bf5d9ede7ba46dd4714b5dd2a"
 
 [[package]]
 name = "altgraph"
@@ -55,28 +55,28 @@ files = [
 
 [[package]]
 name = "delvewheel"
-version = "1.5.1"
+version = "1.5.2"
 requires_python = ">=3.7"
 summary = "Self-contained wheels for Windows"
 dependencies = [
     "pefile",
 ]
 files = [
-    {url = "https://files.pythonhosted.org/packages/af/39/b371f0ad72100c8aed22a65d211a44a3840ef4370b880b2d647464672944/delvewheel-1.5.1-py3-none-any.whl", hash = "sha256:878fbe44860ff4ab53f19abfa733df809612341d340501c4e8df54cbf5a89194"},
-    {url = "https://files.pythonhosted.org/packages/e9/3c/032aed31867ce4e7f38ec0f3e5a4891b45a0b465a496f0279273efd28853/delvewheel-1.5.1.tar.gz", hash = "sha256:e2c62259200ee483adaa9232907ae37e07ea23afdf7545d473e21e080f944bf5"},
+    {url = "https://files.pythonhosted.org/packages/3f/cc/2f244482c66ed41aeabc328af4817521e98d7a9695b661d5a6595a31b10a/delvewheel-1.5.2.tar.gz", hash = "sha256:fde628c128536665c3899c47f4df849c905e7f3f850948639b02f209c1cb289f"},
+    {url = "https://files.pythonhosted.org/packages/58/f0/1d2d0496131d23fca5661d31e386a5b1806672570c1f39c4a5106dbe92c3/delvewheel-1.5.2-py3-none-any.whl", hash = "sha256:83eddfb42c406ce26be91604127695afff53045a3e68de8bc3499ba5997843cc"},
 ]
 
 [[package]]
 name = "importlib-metadata"
-version = "6.9.0"
+version = "7.0.1"
 requires_python = ">=3.8"
 summary = "Read metadata from Python packages"
 dependencies = [
     "zipp>=0.5",
 ]
 files = [
-    {url = "https://files.pythonhosted.org/packages/97/4b/54711968ae127aa7c781017c85344477ed7da8e8493a06f02cd92bdc8dae/importlib_metadata-6.9.0.tar.gz", hash = "sha256:e8acb523c335a91822674e149b46c0399ec4d328c4d1f6e49c273da5ff0201b9"},
-    {url = "https://files.pythonhosted.org/packages/fa/86/c232691b27dd721d810243c9bfd97abc81bc5a0c5370e07002511fce87c1/importlib_metadata-6.9.0-py3-none-any.whl", hash = "sha256:1c8dc6839ddc9771412596926f24cb5a553bbd40624ee2c7e55e531542bed3b8"},
+    {url = "https://files.pythonhosted.org/packages/90/b4/206081fca69171b4dc1939e77b378a7b87021b0f43ce07439d49d8ac5c84/importlib_metadata-7.0.1.tar.gz", hash = "sha256:f238736bb06590ae52ac1fab06a3a9ef1d8dce2b7a35b5ab329371d6c8f5d2cc"},
+    {url = "https://files.pythonhosted.org/packages/c0/8b/d8427f023c081a8303e6ac7209c16e6878f2765d5b59667f3903fbcfd365/importlib_metadata-7.0.1-py3-none-any.whl", hash = "sha256:4805911c3a4ec7c3966410053e9ec6a1fecd629117df5adee56dfc9432a1081e"},
 ]
 
 [[package]]
@@ -165,7 +165,7 @@ files = [
 
 [[package]]
 name = "repairwheel"
-version = "0.2.6"
+version = "0.2.8"
 requires_python = ">=3.8"
 summary = "Repair any wheel, anywhere"
 dependencies = [
@@ -176,8 +176,8 @@ dependencies = [
     "pyelftools>=0.24",
 ]
 files = [
-    {url = "https://files.pythonhosted.org/packages/54/e6/f6965de43c9cd5183688656bb98e38d999bd6b7a20303b96137a3213642f/repairwheel-0.2.6-py3-none-any.whl", hash = "sha256:0b6bf4d5fc4967eb5c819bedf803c358d186a5503b6037023ca2dbafa6842f3e"},
-    {url = "https://files.pythonhosted.org/packages/f9/60/9750dd45b868dd6204eee8a1d66cd979937dabb687f96b0adc6613f156d1/repairwheel-0.2.6.tar.gz", hash = "sha256:90c1b4999daca8d6b585daab1db6030c57afd6409d7f415535c1ae5fcb5afd62"},
+    {url = "https://files.pythonhosted.org/packages/06/a9/d40432111cd6629cea8a5ed489427169d690e29711393a106053fbfec8d2/repairwheel-0.2.8-py3-none-any.whl", hash = "sha256:185133fe9a09d2773dc7ffaac419c9300285ba2859eadc4bfd376bc1e3740da1"},
+    {url = "https://files.pythonhosted.org/packages/19/48/7222a6e4c8e4da4884e2bcab1e3146cfe26ab740bad2ee949075040585ec/repairwheel-0.2.8.tar.gz", hash = "sha256:222c368733ea02adae2b394f87818bc1babe5d990785d17bd651a28a167fb3ab"},
 ]
 
 [[package]]
