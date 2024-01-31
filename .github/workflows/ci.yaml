@@ -45,7 +45,7 @@ jobs:
 
       - uses: DamianReeves/write-file-action@master
         with:
-          path: .bazelrc.ci
+          path: tests/smoke_workspace/.bazelrc.ci
           contents: ${{secrets.BAZELRC_CI || '# no rbe access'}}
           write-mode: overwrite
 
@@ -83,7 +83,7 @@ jobs:
 
       - uses: DamianReeves/write-file-action@master
         with:
-          path: .bazelrc.ci
+          path: tests/smoke_workspace/.bazelrc.ci
           contents: ${{secrets.BAZELRC_CI || '# no rbe access'}}
           write-mode: overwrite
 
@@ -109,7 +109,7 @@ jobs:
 
       - uses: DamianReeves/write-file-action@master
         with:
-          path: .bazelrc.ci
+          path: tests/smoke_bzlmod/.bazelrc.ci
           contents: ${{secrets.BAZELRC_CI || '# no rbe access'}}
           write-mode: overwrite
 
