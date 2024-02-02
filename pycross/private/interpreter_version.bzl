@@ -14,7 +14,7 @@ _rules_python_interpreter_version = rule(
     },
 )
 
-def rules_python_interpreter_version(name, **kwargs):
+def rules_python_interpreter_version(name, default_version, **kwargs):
     """Builds a target that returns the currently-selected rules_pycross toolchain version.
 
     This value can be used in a config_setting; e.g.,
@@ -30,7 +30,7 @@ def rules_python_interpreter_version(name, **kwargs):
         "@rules_python//python/config_settings:is_python_%s" % version: version
         for version in sorted(TOOL_VERSIONS)
     }
-    selects["//conditions:default"] = ""
+    selects["//conditions:default"] = default_version
 
     _rules_python_interpreter_version(
         name = name,

@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Fixed
+
+- Fixed a toolchain resolution issue if the default version toolchain came before the requested toolchain in
+  lexicographical order. E.g., if 3.12.0 was the default, and 3.9.18 was requested, the matched toolchain would
+  be 3.12.0.
+
 ## [0.5.1]
 
 ### Fixed
