@@ -1,4 +1,3 @@
 env
 examples
-tests/smoke_bzlmod
-tests/smoke_workspace
+e2e

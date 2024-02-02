@@ -15,7 +15,7 @@ tasks:
     build_targets:
       - "@rules_pycross//pycross/..."
 bcr_test_module:
-  module_path: tests/smoke_bzlmod
+  module_path: e2e/bzlmod
   matrix:
     platform:
       - debian10

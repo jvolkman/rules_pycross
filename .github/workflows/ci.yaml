@@ -29,7 +29,7 @@ jobs:
         run: |
           bazel test -- //... -//pycross/...
 
-  smoke-test-multi-bazel:
+  e2e-test-multi-bazel:
     name: Default Python version tests - Bazel ${{matrix.bazel-version}}
     runs-on: ubuntu-latest
     strategy:
@@ -45,75 +45,75 @@ jobs:
 
       - uses: DamianReeves/write-file-action@master
         with:
-          path: tests/smoke_workspace/.bazelrc.ci
+          path: e2e/workspace/.bazelrc.ci
           contents: ${{secrets.BAZELRC_CI || '# no rbe access'}}
           write-mode: overwrite
 
-      - name: run smoke tests - workspace
-        working-directory: tests/smoke_workspace
+      - name: run e2e tests - workspace
+        working-directory: e2e/workspace
         run: |
           bazel test //...
 
-      - name: run smoke tests - bzlmod
-        working-directory: tests/smoke_bzlmod
+      - name: run e2e tests - bzlmod
+        working-directory: e2e/bzlmod
         run: |
           bazel test //...
 
       - name: run pycross tests as consumer
-        working-directory: tests/smoke_bzlmod
+        working-directory: e2e/bzlmod
         run: |
           bazel test @rules_pycross//pycross/...
 
-  workspace-smoke-test:
-    name: workspace smoke test - Python ${{ matrix.python-version }} on ${{ startsWith(matrix.os, 'macos-') && 'macOS' || startsWith(matrix.os, 'windows-') && 'Windows' || 'Linux' }}
+  workspace-e2e-test:
+    name: workspace e2e test - Python ${{ matrix.python-version }} on ${{ startsWith(matrix.os, 'macos-') && 'macOS' || startsWith(matrix.os, 'windows-') && 'Windows' || 'Linux' }}
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest]
-        # This needs to stay in sync with tests/smoke_bzlmod/MODULE.bazel
+        # This needs to stay in sync with e2e/bzlmod/MODULE.bazel
         python-version: ["3.10.12", "3.11.6", "3.12.0"]
 
     defaults:
       run:
-        working-directory: tests/smoke_workspace
+        working-directory: e2e/workspace
 
     steps:
       - uses: actions/checkout@v2
 
       - uses: DamianReeves/write-file-action@master
         with:
-          path: tests/smoke_workspace/.bazelrc.ci
+          path: e2e/workspace/.bazelrc.ci
           contents: ${{secrets.BAZELRC_CI || '# no rbe access'}}
           write-mode: overwrite
 
-      - name: run smoke tests
+      - name: run e2e tests
         run: |
           bazel test //...
 
-  bzlmod-smoke-test-gen:
-    name: bzlmod smoke test/generate - Python ${{ matrix.python-version }} on ${{ startsWith(matrix.os, 'macos-') && 'macOS' || startsWith(matrix.os, 'windows-') && 'Windows' || 'Linux' }}
+  bzlmod-e2e-test-gen:
+    name: bzlmod e2e test/generate - Python ${{ matrix.python-version }} on ${{ startsWith(matrix.os, 'macos-') && 'macOS' || startsWith(matrix.os, 'windows-') && 'Windows' || 'Linux' }}
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest]
-        # This needs to stay in sync with tests/smoke_bzlmod/MODULE.bazel
+        # This needs to stay in sync with e2e/bzlmod/MODULE.bazel
         python-version: ["3.10.12", "3.11.6", "3.12.0"]
     defaults:
       run:
-        working-directory: tests/smoke_bzlmod
+        working-directory: e2e/bzlmod
 
     steps:
       - uses: actions/checkout@v2
 
       - uses: DamianReeves/write-file-action@master
         with:
-          path: tests/smoke_bzlmod/.bazelrc.ci
+          path: e2e/bzlmod/.bazelrc.ci
           contents: ${{secrets.BAZELRC_CI || '# no rbe access'}}
           write-mode: overwrite
 
-      - name: run smoke tests
+      - name: run e2e tests
         run: |
           bazel test //... --@rules_python//python/config_settings:python_version=${{ matrix.python-version }}
 
@@ -134,20 +134,20 @@ jobs:
           name: built-test-wheel
           path: ${{ runner.temp }}/testwheel-out
 
-  bzlmod-smoke-test-check:
-    name: bzlmod smoke test/check - Python ${{ matrix.python-version }} on ${{ startsWith(matrix.os, 'macos-') && 'macOS' || startsWith(matrix.os, 'windows-') && 'Windows' || 'Linux' }}
-    needs: bzlmod-smoke-test-gen
+  bzlmod-e2e-test-check:
+    name: bzlmod e2e test/check - Python ${{ matrix.python-version }} on ${{ startsWith(matrix.os, 'macos-') && 'macOS' || startsWith(matrix.os, 'windows-') && 'Windows' || 'Linux' }}
+    needs: bzlmod-e2e-test-gen
 
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest]
-        # This needs to stay in sync with tests/smoke_bzlmod/MODULE.bazel
+        # This needs to stay in sync with e2e/bzlmod/MODULE.bazel
         python-version: ["3.10.12", "3.11.6", "3.12.0"]
     defaults:
       run:
-        working-directory: tests/smoke_bzlmod
+        working-directory: e2e/bzlmod
 
     steps:
       - uses: actions/checkout@v4
