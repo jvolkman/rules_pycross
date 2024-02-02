@@ -4,6 +4,7 @@ The file structure is as follows:
 - WORKSPACE.bazel       - The workspace root marker.
 - BUILD.bazel           - The root build file.
 - defs.bzl              - A defs file that provides an `install_deps` macro in some contexts. May be empty.
+- requirements.bzl      - A defs file that provides the traditional `requirement` and `all_requirements`.
 - _lock/BUILD.bazel     - Contains instantiations of all of the definitions in `lock.bzl`.
 - _lock/lock.bzl        - The rendered lock file. This is where most of the "meat" is.
 - _sdist/BUILD.bazel    - Version-aware aliases to package sdist targets.
@@ -68,7 +69,7 @@ def _pin_build(package):
             "",
         ])
 
-    return "\n".join(lines)
+    return "\n".join(lines) + "\n"
 
 def _wheel_build(packages):
     lines = [
@@ -85,7 +86,7 @@ def _wheel_build(packages):
             "",
         ])
 
-    return "\n".join(lines)
+    return "\n".join(lines) + "\n"
 
 def _sdist_build(packages):
     lines = [
@@ -102,13 +103,13 @@ def _sdist_build(packages):
             "",
         ])
 
-    return "\n".join(lines)
+    return "\n".join(lines) + "\n"
 
 def _root_build(pins):
     lines = [
         'package(default_visibility = ["//visibility:public"])',
         "",
-        'exports_files(["defs.bzl"])',
+        'exports_files(["defs.bzl", "requirements.bzl"])',
         "",
     ]
 
@@ -121,7 +122,33 @@ def _root_build(pins):
             "",
         ])
 
-    return "\n".join(lines)
+    return "\n".join(lines) + "\n"
+
+_requirement_func = """\
+def requirement(pkg):
+    # Convert given name into normalized package name.
+    # https://packaging.python.org/en/latest/specifications/name-normalization/#name-normalization
+    pkg = pkg.replace("_", "-").replace(".", "-").lower()
+    for i in range(len(pkg)):
+        if "--" in pkg:
+            pkg = pkg.replace("--", "-")
+        else:
+            break
+    return "@@{repo_name}//:%s" % pkg
+"""
+
+def _requirements_bzl(rctx, pins):
+    lines = [
+        _requirement_func.format(repo_name = rctx.name),
+        "",
+        "# All pinned requirements",
+        "all_requirements = [",
+    ]
+    for pin in pins:
+        lines.append('    "@@{repo_name}//:{pin}",'.format(repo_name = rctx.name, pin = pin))
+    lines.append("]")
+
+    return "\n".join(lines) + "\n"
 
 def _generate_lock_bzl(rctx, lock_json_path, lock_bzl_path):
     args = [
@@ -168,6 +195,8 @@ def _package_repo_impl(rctx):
         rctx.file("defs.bzl", _install_deps_bzl)
     else:
         rctx.file("defs.bzl")  # Empty file
+
+    rctx.file("requirements.bzl", _requirements_bzl(rctx, lock["pins"]))
 
     _generate_lock_bzl(rctx, lock_json_path, lock_bzl_path)
 
