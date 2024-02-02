@@ -53,21 +53,17 @@ def _get_env_platforms(py_platform, glibc_version, macos_version):
 
     fail("Unknown platform: {}".format(py_platform))
 
-def _dedupe_versions(versions, default_version):
-    """Returns a list of (version, is_default) tuples deduped by resolved minor version."""
+def _dedupe_versions(versions):
+    """Returns a list of versions deduped by resolved minor version."""
 
     # E.g., if '3.10' and '3.10.6' are both passed, we only want '3.10.6'. Otherwise we'll run into
     # ambiguous select() criteria.
-    # The exception is if one of the two is the default version, in which case we need to keep both
-    # due to how the @rules_python//python/config_settings:python_version setting works.
-
     unique_versions = {}
-    default_micro_version = _get_micro_version(default_version)
     for version in sorted(versions):
         micro_version = _get_micro_version(version)
 
-        # In sorted order, 3.10.6 will override 3.10 if neither is default.
-        unique_versions[micro_version] = (version, micro_version == default_micro_version)
+        # In sorted order, 3.10.6 will override 3.10.
+        unique_versions[micro_version] = version
 
     return sorted(unique_versions.values())
 
@@ -85,7 +81,6 @@ def _canonical_prefix(python_toolchains_repo_name):
 def _compute_environments(
         repo_name,
         python_versions,
-        default_version,
         platforms,
         glibc_version,
         macos_version):
@@ -94,7 +89,7 @@ def _compute_environments(
     if not platforms:
         platforms = sorted(PLATFORMS.keys())
 
-    for version, is_default_version in _dedupe_versions(python_versions, default_version):
+    for version in _dedupe_versions(python_versions):
         micro_version = _get_micro_version(version)
 
         version_info = TOOL_VERSIONS[micro_version]
@@ -106,13 +101,6 @@ def _compute_environments(
             target_env_name = "python_{}_{}".format(version, target_platform)
             target_env_json = target_env_name + ".json"
 
-            if not is_default_version:
-                flag_values = {
-                    "@rules_pycross//pycross/private/interpreter_version": micro_version,
-                }
-            else:
-                flag_values = {}
-
             config_setting_name = "{}_config".format(target_env_name)
             environments.append(
                 dict(
@@ -122,7 +110,6 @@ def _compute_environments(
                     config_setting_name = config_setting_name,
                     config_setting_target = _repo_label(repo_name, "//:{}".format(config_setting_name)),
                     target_compatible_with = list(PLATFORMS[target_platform].compatible_with),
-                    flag_values = flag_values,
                     version = micro_version,
                     abis = [_get_abi(micro_version)],
                     platforms = env_platforms,
@@ -135,14 +122,13 @@ def _compute_toolchains(
         python_toolchains_repo_name,
         is_multi_version_layout,
         python_versions,
-        default_version,
         platforms):
     toolchains = []
 
     if not platforms:
         platforms = sorted(PLATFORMS.keys())
 
-    for version, is_default_version in _dedupe_versions(python_versions, default_version):
+    for version in _dedupe_versions(python_versions):
         micro_version = _get_micro_version(version)
         underscore_version = version.replace(".", "_")
 
@@ -151,11 +137,6 @@ def _compute_toolchains(
         selected_platforms = [p for p in platforms if p in available_version_platforms]
 
         for target_platform in selected_platforms:
-            if is_default_version:
-                flag_values = {}
-            else:
-                flag_values = {"@rules_pycross//pycross/private/interpreter_version": micro_version}
-
             for exec_platform in selected_platforms:
                 tc_provider_name = "python_{}_{}_{}".format(version, exec_platform, target_platform)
                 tc_target_config_name = "{}_target_config".format(tc_provider_name)
@@ -190,11 +171,11 @@ def _compute_toolchains(
                         name = tc_name,
                         provider_name = tc_provider_name,
                         target_config_name = tc_target_config_name,
-                        flag_values = flag_values,
                         exec_interpreter = exec_interpreter,
                         target_interpreter = target_interpreter,
                         exec_compatible_with = exec_compatible_with,
                         target_compatible_with = target_compatible_with,
+                        version = micro_version,
                     ),
                 )
     return toolchains
@@ -275,23 +256,45 @@ def _get_default_python_version_workspace(rctx, python_toolchain_repo, versions)
 
     return default_version
 
+# This requires the user to provide a `default_version` value.
 _ENVIRONMENTS_BUILD_HEADER = """\
-load("{}", "pycross_target_environment")
+load("{defs}", "pycross_target_environment")
+load("{ver}", "rules_python_interpreter_version")
 
 package(default_visibility = ["//visibility:public"])
-""".format(Label("//pycross:defs.bzl"))
 
+rules_python_interpreter_version(
+    name = "_interpreter_version",
+    default_version = "{{default_version}}",
+    visibility = ["//visibility:private"],
+)
+""".format(
+    defs = Label("//pycross:defs.bzl"),
+    ver = Label("//pycross/private:interpreter_version.bzl"),
+)
+
+# This requires the user to provide a `default_version` value.
 _TOOLCHAINS_BUILD_HEADER = """\
-load("{}", "pycross_hermetic_toolchain")
+load("{toolchain}", "pycross_hermetic_toolchain")
+load("{ver}", "rules_python_interpreter_version")
 
 package(default_visibility = ["//visibility:public"])
-""".format(Label("//pycross:toolchain.bzl"))
+
+rules_python_interpreter_version(
+    name = "_interpreter_version",
+    default_version = "{{default_version}}",
+    visibility = ["//visibility:private"],
+)
+""".format(
+    toolchain = Label("//pycross:toolchain.bzl"),
+    ver = Label("//pycross/private:interpreter_version.bzl"),
+)
 
 _ENVIRONMENT_TEMPLATE = """\
 config_setting(
     name = {config_setting_name},
     constraint_values = {target_compatible_with},
-    flag_values = {flag_values},
+    flag_values = {{":_interpreter_version": {version}}},
 )
 """
 
@@ -305,7 +308,7 @@ pycross_hermetic_toolchain(
 config_setting(
     name = {target_config_name},
     constraint_values = {target_compatible_with},
-    flag_values = {flag_values},
+    flag_values = {{":_interpreter_version": {version}}},
 )
 
 toolchain(
@@ -366,11 +369,10 @@ def _pycross_toolchain_repo_impl(rctx):
         python_toolchains_repo_name = rctx.attr.python_toolchains_repo.workspace_name,
         is_multi_version_layout = version_info.is_multi_version_layout,
         python_versions = version_info.python_versions,
-        default_version = version_info.default_version,
         platforms = rctx.attr.platforms,
     )
 
-    toolchains_build_sections = [_TOOLCHAINS_BUILD_HEADER]
+    toolchains_build_sections = [_TOOLCHAINS_BUILD_HEADER.format(default_version = version_info.default_version)]
     for tc in computed_toolchains:
         toolchains_build_sections.append(_TOOLCHAIN_TEMPLATE.format(**{k: repr(v) for k, v in tc.items()}))
 
@@ -391,7 +393,6 @@ def _pycross_environment_repo_impl(rctx):
     computed_environments = _compute_environments(
         repo_name = rctx.name,
         python_versions = version_info.python_versions,
-        default_version = version_info.default_version,
         platforms = rctx.attr.platforms,
         glibc_version = rctx.attr.glibc_version or DEFAULT_GLIBC_VERSION,
         macos_version = rctx.attr.macos_version or DEFAULT_MACOS_VERSION,
@@ -399,7 +400,7 @@ def _pycross_environment_repo_impl(rctx):
 
     repo_batch_create_target_environments(rctx, computed_environments)
 
-    root_build_sections = [_ENVIRONMENTS_BUILD_HEADER]
+    root_build_sections = [_ENVIRONMENTS_BUILD_HEADER.format(default_version = version_info.default_version)]
     for env in computed_environments:
         root_build_sections.append(_ENVIRONMENT_TEMPLATE.format(**{k: repr(v) for k, v in env.items()}))
 

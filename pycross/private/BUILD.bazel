@@ -27,6 +27,17 @@ bzl_library(
 )
 
 bzl_library(
+    name = "interpreter_version",
+    srcs = ["interpreter_version.bzl"],
+    # This isn't a public API, but it's publicly accessible because generated
+    # toolchain and environment BUILD rules load from it.
+    visibility = ["//visibility:public"],
+    deps = [
+        "@rules_python//python:versions.bzl",
+    ],
+)
+
+bzl_library(
     name = "lock_file",
     srcs = ["lock_file.bzl"],
     deps = [
