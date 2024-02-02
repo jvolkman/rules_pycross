@@ -6,6 +6,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Added
+
+- Adds `requirements.bzl` to `lock_repo` with the standard `requirement` function and
+  `all_requirements` list.
+
 ### Fixed
 
 - Fixed a toolchain resolution issue if the default version toolchain came before the requested toolchain in
