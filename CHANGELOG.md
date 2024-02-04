@@ -6,6 +6,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Changed
+
+- Set default GLIBC version to `2.28`, using [pep600_compliance]
+  (https://github.com/mayeut/pep600_compliance#acceptable-distros-to-build-wheels) as a guide.
+
 ## [0.5.2]
 
 ### Added

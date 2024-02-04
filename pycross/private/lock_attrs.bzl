@@ -3,7 +3,9 @@
 load(":util.bzl", "BZLMOD")
 
 DEFAULT_MACOS_VERSION = "12.0"
-DEFAULT_GLIBC_VERSION = "2.25"
+
+# Use https://github.com/mayeut/pep600_compliance to keep this reasonable.
+DEFAULT_GLIBC_VERSION = "2.28"
 
 CREATE_ENVIRONMENTS_ATTRS = dict(
     python_versions = attr.string_list(
