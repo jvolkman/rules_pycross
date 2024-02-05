@@ -360,6 +360,7 @@ def _get_python_version_info(rctx):
     return struct(
         python_versions = python_versions,
         default_version = default_version,
+        default_micro_version = _get_micro_version(default_version),
         is_multi_version_layout = is_multi_version_layout,
     )
 
@@ -372,7 +373,7 @@ def _pycross_toolchain_repo_impl(rctx):
         platforms = rctx.attr.platforms,
     )
 
-    toolchains_build_sections = [_TOOLCHAINS_BUILD_HEADER.format(default_version = version_info.default_version)]
+    toolchains_build_sections = [_TOOLCHAINS_BUILD_HEADER.format(default_version = version_info.default_micro_version)]
     for tc in computed_toolchains:
         toolchains_build_sections.append(_TOOLCHAIN_TEMPLATE.format(**{k: repr(v) for k, v in tc.items()}))
 
@@ -400,7 +401,7 @@ def _pycross_environment_repo_impl(rctx):
 
     repo_batch_create_target_environments(rctx, computed_environments)
 
-    root_build_sections = [_ENVIRONMENTS_BUILD_HEADER.format(default_version = version_info.default_version)]
+    root_build_sections = [_ENVIRONMENTS_BUILD_HEADER.format(default_version = version_info.default_micro_version)]
     for env in computed_environments:
         root_build_sections.append(_ENVIRONMENT_TEMPLATE.format(**{k: repr(v) for k, v in env.items()}))
 
