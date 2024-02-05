@@ -5,5 +5,6 @@ py_binary(
     srcs = ["ipython.py"],
     deps = [
         "@pdm//:ipython",
+        "@pdm//:pillow",
     ],
 )

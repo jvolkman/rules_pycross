@@ -17,15 +17,13 @@ py_repositories()
 
 python_register_multi_toolchains(
     name = "python",
-    default_version = "3.12",
+    default_version = "3.10.12",
     python_versions = [
-        "3.10",
-        "3.11",
-        "3.12",
+        "3.10.12",
     ],
 )
 
-load("@python//3.12:defs.bzl", python_interpreter = "interpreter")
+load("@python//3.10.12:defs.bzl", python_interpreter = "interpreter")
 
 local_repository(
     name = "rules_pycross",
