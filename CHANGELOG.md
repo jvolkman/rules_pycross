@@ -6,11 +6,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
-### Changed
-
-- Set default GLIBC version to `2.28`, using [pep600_compliance]
-  (https://github.com/mayeut/pep600_compliance#acceptable-distros-to-build-wheels) as a guide.
-
 ## [0.5.2]
 
 ### Added
@@ -23,6 +18,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - Fixed a toolchain resolution issue if the default version toolchain came before the requested toolchain in
   lexicographical order. E.g., if 3.12.0 was the default, and 3.9.18 was requested, the matched toolchain would
   be 3.12.0.
+- Fixed an issue where toolchain resolution would fail if the default python version was configured as X.Y
+  instead of X.Y.Z
+
+### Changed
+
+- Set default GLIBC version to `2.28`, using [pep600_compliance]
+  (https://github.com/mayeut/pep600_compliance#acceptable-distros-to-build-wheels) as a guide.
 
 ## [0.5.1]
 
