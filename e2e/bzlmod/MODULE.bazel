@@ -82,6 +82,9 @@ lock_import.import_poetry(
 # lock_repo with PDM and some package overrides
 lock_import.import_pdm(
     default_alias_single_version = True,
+    local_wheels = [
+        "//:cowsay-6.1-py3-none-any.whl",
+    ],
     lock_file = "//:pdm.lock",
     project_file = "//:pyproject.toml",
     repo = "pdm",

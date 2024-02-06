@@ -13,3 +13,10 @@ py_test(
     srcs = ["//:test_regex.py"],
     deps = ["@pdm_lock_repo//:regex"],
 )
+
+py_test(
+    name = "test_cowsay",
+    srcs = ["//:test_cowsay.py"],
+    main = "test_cowsay.py",
+    deps = ["@pdm_lock_repo//:cowsay"],
+)

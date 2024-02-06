@@ -115,6 +115,9 @@ pycross_lock_repo(
         "zstandard": "@//pdm:zstandard_build",
     },
     default_alias_single_version = True,
+    local_wheels = [
+        "@//:cowsay-6.1-py3-none-any.whl",
+    ],
     lock_model = lock_repo_model_poetry(
         lock_file = "@//:poetry.lock",
         project_file = "@//:pyproject.toml",

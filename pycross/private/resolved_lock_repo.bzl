@@ -34,7 +34,7 @@ def _generate_lock_model_file(rctx):
 
 def _generate_lock_file(rctx):
     environment_files_and_labels = [(rctx.path(t), str(t)) for t in rctx.attr.target_environments]
-    wheel_names_and_labels = [(rctx.path(local_wheel).basename, local_wheel) for local_wheel in rctx.attr.local_wheels]
+    wheel_names_and_labels = [(rctx.path(local_wheel).basename, str(local_wheel)) for local_wheel in rctx.attr.local_wheels]
     args = handle_resolve_attrs(rctx.attr, environment_files_and_labels, wheel_names_and_labels)
     args.append("--always-include-sdist")
     args.extend(["--lock-model-file", "raw_lock.json"])
