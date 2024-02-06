@@ -69,6 +69,13 @@ py_test(
     deps = ["@pdm//:regex"],
 )
 
+py_test(
+    name = "test_cowsay",
+    srcs = ["//:test_cowsay.py"],
+    main = "test_cowsay.py",
+    deps = ["@pdm//:cowsay"],
+)
+
 # Test using the `requirement` function
 py_test(
     name = "test_regex_using_requirement",

@@ -6,6 +6,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Fixed
+
+- Using `local_wheels` in `pycross_lock_repo` or the `lock_import` extension resulted in an invalid `select`
+  statement being generated.
+
 ## [0.5.2]
 
 ### Added
