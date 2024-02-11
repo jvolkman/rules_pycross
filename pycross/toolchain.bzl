@@ -37,11 +37,13 @@ pycross_hermetic_toolchain = rule(
             doc = "The target Python interpreter (PyRuntimeInfo).",
             mandatory = True,
             providers = [PyRuntimeInfo],
+            cfg = "target",
         ),
         "exec_interpreter": attr.label(
             doc = "The execution Python interpreter (PyRuntimeInfo).",
             mandatory = True,
             providers = [PyRuntimeInfo],
+            cfg = "exec",
         ),
     },
 )
