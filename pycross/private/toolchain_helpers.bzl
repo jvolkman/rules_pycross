@@ -132,52 +132,34 @@ def _compute_toolchains(
         micro_version = _get_micro_version(version)
         underscore_version = version.replace(".", "_")
 
-        version_info = TOOL_VERSIONS[micro_version]
-        available_version_platforms = version_info["sha256"].keys()
-        selected_platforms = [p for p in platforms if p in available_version_platforms]
+        tc_provider_name = "python_{}".format(version)
+        tc_target_config_name = "{}_target_config".format(tc_provider_name)
+        tc_name = "{}_tc".format(tc_provider_name)
 
-        for target_platform in selected_platforms:
-            for exec_platform in selected_platforms:
-                tc_provider_name = "python_{}_{}_{}".format(version, exec_platform, target_platform)
-                tc_target_config_name = "{}_target_config".format(tc_provider_name)
-                tc_name = "{}_tc".format(tc_provider_name)
+        if BZLMOD:
+            # With bzlmod we need to construct the canonical repository names for version interpreters.
+            runtime = "@@{}python_{}//:py3_runtime".format(
+                _canonical_prefix(python_toolchains_repo_name),
+                underscore_version,
+            )
+        elif is_multi_version_layout:
+            # These other modes are WORKSPACE and should eventually be dropped.
+            runtime = "@{}_{}//:py3_runtime".format(
+                python_toolchains_repo_name,
+                underscore_version,
+            )
+        else:
+            runtime = "@{}//:py3_runtime".format(python_toolchains_repo_name)
 
-                exec_compatible_with = list(PLATFORMS[exec_platform].compatible_with)
-                target_compatible_with = list(PLATFORMS[target_platform].compatible_with)
-
-                # These conditionals create a `interpreter_repo_pattern` which accepts a
-                # platform name (e.g., x86_64-unknown-linux-gnu).
-
-                if BZLMOD:
-                    # With bzlmod we need to construct the canonical repository names for platform-specific interpreters.
-                    interpreter_repo_pattern = "@@{}python_{}_{{plat}}//:py3_runtime".format(
-                        _canonical_prefix(python_toolchains_repo_name),
-                        underscore_version,
-                    )
-                elif is_multi_version_layout:
-                    # These other modes are WORKSPACE and should eventually be dropped.
-                    interpreter_repo_pattern = "@{}_{}_{{plat}}//:py3_runtime".format(
-                        python_toolchains_repo_name,
-                        underscore_version,
-                    )
-                else:
-                    interpreter_repo_pattern = "@{}_{{plat}}//:py3_runtime".format(python_toolchains_repo_name)
-
-                exec_interpreter = interpreter_repo_pattern.format(plat = exec_platform)
-                target_interpreter = interpreter_repo_pattern.format(plat = target_platform)
-
-                toolchains.append(
-                    dict(
-                        name = tc_name,
-                        provider_name = tc_provider_name,
-                        target_config_name = tc_target_config_name,
-                        exec_interpreter = exec_interpreter,
-                        target_interpreter = target_interpreter,
-                        exec_compatible_with = exec_compatible_with,
-                        target_compatible_with = target_compatible_with,
-                        version = micro_version,
-                    ),
-                )
+        toolchains.append(
+            dict(
+                name = tc_name,
+                provider_name = tc_provider_name,
+                target_config_name = tc_target_config_name,
+                runtime = runtime,
+                version = micro_version,
+            ),
+        )
     return toolchains
 
 def _is_multi_version_layout(rctx, python_toolchain_repo):
@@ -298,22 +280,24 @@ config_setting(
 )
 """
 
+# exec_interpreter and target_interpreter below are both set to the same
+# target. We rely on `cfg = 'exec'` and `cfg = 'target'` in the
+# pycross_hermetic_toolchain label definitions to pick the correct values.
+
 _TOOLCHAIN_TEMPLATE = """\
 pycross_hermetic_toolchain(
     name = {provider_name},
-    exec_interpreter = {exec_interpreter},
-    target_interpreter = {target_interpreter},
+    exec_interpreter = {runtime},
+    target_interpreter = {runtime},
 )
 
 config_setting(
     name = {target_config_name},
-    constraint_values = {target_compatible_with},
     flag_values = {{":_interpreter_version": {version}}},
 )
 
 toolchain(
     name = {name},
-    exec_compatible_with = {exec_compatible_with},
     target_settings = [{target_config_name}],
     toolchain = {provider_name},
     toolchain_type = "%s",
