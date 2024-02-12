@@ -59,17 +59,40 @@ def _dataclass_items(dc) -> Iterator[Tuple[str, Any]]:
 
 @dataclass(frozen=True, order=True)
 class PackageKey:
-    name: NormalizedName
+    package_name: NormalizedName
+    extra_name: Optional[NormalizedName]
     version: Version
 
     def __init__(self, val) -> None:
-        name, version = val.split("@", maxsplit=1)
-        object.__setattr__(self, "name", package_canonical_name(name))
+        name_and_extra, version = val.split("@", maxsplit=1)
+        package_name, bracket, extra_name = name_and_extra.partition("[")
+
+        if bracket:
+            if not extra_name.endswith("]"):
+                raise ValueError(f"Invalid format for package with extra: {name_and_extra}")
+            extra_name = extra_name[:-1]
+            object.__setattr__(self, "extra_name", package_canonical_name(extra_name))
+        else:
+            object.__setattr__(self, "extra_name", None)
+
+        object.__setattr__(self, "package_name", package_canonical_name(package_name))
         object.__setattr__(self, "version", Version(version))
 
     @staticmethod
-    def from_parts(name: NormalizedName, version: Version) -> PackageKey:
-        return PackageKey(f"{name}@{version}")
+    def from_parts(
+        package_name: NormalizedName, version: Version, extra_name: Optional[NormalizedName] = None
+    ) -> PackageKey:
+        if extra_name:
+            return PackageKey(f"{package_name}[{extra_name}]@{version}")
+        else:
+            return PackageKey(f"{package_name}@{version}")
+
+    @property
+    def name(self) -> str:
+        if self.extra_name:
+            return f"{self.package_name}[{self.extra_name}]"
+        else:
+            return str(self.package_name)
 
     def __str__(self) -> str:
         return f"{self.name}@{self.version}"
