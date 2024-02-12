@@ -23,10 +23,10 @@ use_repo(environments, "pycross_environments")
 
 lock_import = use_extension("@rules_pycross//pycross/extensions:lock_import.bzl", "lock_import")
 lock_import.import_pdm(
+    all_development_groups = True,
     lock_file = "//:pdm.lock",
     project_file = "//:pyproject.toml",
     repo = "pdm_deps",
-    all_development_groups = True,
 )
 
 lock_repos = use_extension("@rules_pycross//pycross/extensions:lock_repos.bzl", "lock_repos")

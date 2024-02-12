@@ -4,8 +4,8 @@ py_wheel(
     name = "pkg-core",
     distribution = "pkg-core",
     version = "0.1.0",
+    visibility = ["//visibility:public"],
     deps = [
         "//packages/pkg-core/mycore",
     ],
-    visibility = ["//visibility:public"],
 )

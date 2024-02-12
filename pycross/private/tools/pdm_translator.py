@@ -58,6 +58,7 @@ def get_development_dependencies(lock: Dict[str, Any]) -> Dict[str, List[Require
     dep_groups = lock.get("tool", {}).get("pdm", {}).get("dev-dependencies", {})
     return {group: [Requirement(EDITABLE_PATTERN.sub("", dep)) for dep in deps] for group, deps in dep_groups.items()}
 
+
 def _print_warn(msg):
     print("WARNING:", msg)
 
@@ -286,7 +287,11 @@ def translate(
     lock_packages: Dict[PackageKey, RawPackage] = {}
     for package in all_packages:
         if package.is_local:
-            _print_warn("Local package {} elided from pycross repo. It can still be referenced directly from the main repo.".format(package.key))
+            _print_warn(
+                "Local package {} elided from pycross repo. It can still be referenced directly from the main repo.".format(
+                    package.key
+                )
+            )
             continue
         lock_package = package.to_lock_package()
         lock_packages[lock_package.key] = lock_package

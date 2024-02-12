@@ -9,10 +9,10 @@ py_package(
 py_wheel(
     name = "pkg-second",
     distribution = "pkg-second",
-    version = "0.1.0",
-    deps = [":mysecond_pkg"],
     strip_path_prefixes = [
         "packages/pkg-second",
     ],
+    version = "0.1.0",
     visibility = ["//visibility:public"],
+    deps = [":mysecond_pkg"],
 )
