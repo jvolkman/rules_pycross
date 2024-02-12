@@ -4,5 +4,8 @@ py_library(
     name = "mycore",
     srcs = ["__init__.py"],
     visibility = ["//visibility:public"],
+    deps = [
+	    "@pdm_deps//:click",
+    ],
     imports = [".."],
 )
