@@ -26,6 +26,7 @@ lock_import.import_pdm(
     lock_file = "//:pdm.lock",
     project_file = "//:pyproject.toml",
     repo = "pdm_deps",
+    all_development_groups = True,
 )
 
 lock_repos = use_extension("@rules_pycross//pycross/extensions:lock_repos.bzl", "lock_repos")

@@ -8,6 +8,7 @@ load(
 pycross_pdm_lock_model(
     name = "example_lock_model",
     lock_file = "//:pdm.lock",
+    all_development_groups = True,
     project_file = "//:pyproject.toml",
 )
 
