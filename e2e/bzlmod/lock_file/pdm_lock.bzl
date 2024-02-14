@@ -102,6 +102,26 @@ def targets():
         actual = "@@rules_pycross~override~environments~smoke_environments//:python_3.12.0_x86_64-unknown-linux-gnu_config",
     )
 
+    native.alias(
+        name = "_env_python_3.12_aarch64-apple-darwin",
+        actual = "@@rules_pycross~override~environments~smoke_environments//:python_3.12_aarch64-apple-darwin_config",
+    )
+
+    native.alias(
+        name = "_env_python_3.12_aarch64-unknown-linux-gnu",
+        actual = "@@rules_pycross~override~environments~smoke_environments//:python_3.12_aarch64-unknown-linux-gnu_config",
+    )
+
+    native.alias(
+        name = "_env_python_3.12_x86_64-apple-darwin",
+        actual = "@@rules_pycross~override~environments~smoke_environments//:python_3.12_x86_64-apple-darwin_config",
+    )
+
+    native.alias(
+        name = "_env_python_3.12_x86_64-unknown-linux-gnu",
+        actual = "@@rules_pycross~override~environments~smoke_environments//:python_3.12_x86_64-unknown-linux-gnu_config",
+    )
+
     # buildifier: disable=unused-variable
     _target = select({
         ":_env_python_3.10.12_aarch64-apple-darwin": "@@rules_pycross~override~environments~smoke_environments//:python_3.10.12_aarch64-apple-darwin.json",
@@ -116,6 +136,10 @@ def targets():
         ":_env_python_3.12.0_aarch64-unknown-linux-gnu": "@@rules_pycross~override~environments~smoke_environments//:python_3.12.0_aarch64-unknown-linux-gnu.json",
         ":_env_python_3.12.0_x86_64-apple-darwin": "@@rules_pycross~override~environments~smoke_environments//:python_3.12.0_x86_64-apple-darwin.json",
         ":_env_python_3.12.0_x86_64-unknown-linux-gnu": "@@rules_pycross~override~environments~smoke_environments//:python_3.12.0_x86_64-unknown-linux-gnu.json",
+        ":_env_python_3.12_aarch64-apple-darwin": "@@rules_pycross~override~environments~smoke_environments//:python_3.12_aarch64-apple-darwin.json",
+        ":_env_python_3.12_aarch64-unknown-linux-gnu": "@@rules_pycross~override~environments~smoke_environments//:python_3.12_aarch64-unknown-linux-gnu.json",
+        ":_env_python_3.12_x86_64-apple-darwin": "@@rules_pycross~override~environments~smoke_environments//:python_3.12_x86_64-apple-darwin.json",
+        ":_env_python_3.12_x86_64-unknown-linux-gnu": "@@rules_pycross~override~environments~smoke_environments//:python_3.12_x86_64-unknown-linux-gnu.json",
     })
 
     native.alias(
@@ -217,6 +241,12 @@ def targets():
             ":appnope@0.1.4",
         ],
         ":_env_python_3.12.0_x86_64-apple-darwin": [
+            ":appnope@0.1.4",
+        ],
+        ":_env_python_3.12_aarch64-apple-darwin": [
+            ":appnope@0.1.4",
+        ],
+        ":_env_python_3.12_x86_64-apple-darwin": [
             ":appnope@0.1.4",
         ],
         "//conditions:default": [],
@@ -348,6 +378,10 @@ def targets():
             ":_env_python_3.12.0_aarch64-unknown-linux-gnu": "@pdm_lock_wheel_regex_2023.10.3_cp312_cp312_manylinux_2_17_aarch64.manylinux2014_aarch64//file",
             ":_env_python_3.12.0_x86_64-apple-darwin": "@pdm_lock_wheel_regex_2023.10.3_cp312_cp312_macosx_10_9_x86_64//file",
             ":_env_python_3.12.0_x86_64-unknown-linux-gnu": "@pdm_lock_wheel_regex_2023.10.3_cp312_cp312_manylinux_2_17_x86_64.manylinux2014_x86_64//file",
+            ":_env_python_3.12_aarch64-apple-darwin": "@pdm_lock_wheel_regex_2023.10.3_cp312_cp312_macosx_11_0_arm64//file",
+            ":_env_python_3.12_aarch64-unknown-linux-gnu": "@pdm_lock_wheel_regex_2023.10.3_cp312_cp312_manylinux_2_17_aarch64.manylinux2014_aarch64//file",
+            ":_env_python_3.12_x86_64-apple-darwin": "@pdm_lock_wheel_regex_2023.10.3_cp312_cp312_macosx_10_9_x86_64//file",
+            ":_env_python_3.12_x86_64-unknown-linux-gnu": "@pdm_lock_wheel_regex_2023.10.3_cp312_cp312_manylinux_2_17_x86_64.manylinux2014_x86_64//file",
         }),
     )
 
@@ -438,6 +472,10 @@ def targets():
             ":_env_python_3.12.0_aarch64-unknown-linux-gnu": "@pdm_lock_wheel_zstandard_0.22.0_cp312_cp312_manylinux_2_17_aarch64.manylinux2014_aarch64//file",
             ":_env_python_3.12.0_x86_64-apple-darwin": "@pdm_lock_wheel_zstandard_0.22.0_cp312_cp312_macosx_10_9_x86_64//file",
             ":_env_python_3.12.0_x86_64-unknown-linux-gnu": "@pdm_lock_wheel_zstandard_0.22.0_cp312_cp312_manylinux_2_17_x86_64.manylinux2014_x86_64//file",
+            ":_env_python_3.12_aarch64-apple-darwin": "@pdm_lock_wheel_zstandard_0.22.0_cp312_cp312_macosx_11_0_arm64//file",
+            ":_env_python_3.12_aarch64-unknown-linux-gnu": "@pdm_lock_wheel_zstandard_0.22.0_cp312_cp312_manylinux_2_17_aarch64.manylinux2014_aarch64//file",
+            ":_env_python_3.12_x86_64-apple-darwin": "@pdm_lock_wheel_zstandard_0.22.0_cp312_cp312_macosx_10_9_x86_64//file",
+            ":_env_python_3.12_x86_64-unknown-linux-gnu": "@pdm_lock_wheel_zstandard_0.22.0_cp312_cp312_manylinux_2_17_x86_64.manylinux2014_x86_64//file",
         }),
     )
 
