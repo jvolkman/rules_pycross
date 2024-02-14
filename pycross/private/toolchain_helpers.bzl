@@ -228,10 +228,23 @@ def _get_default_python_version_workspace(rctx, python_toolchain_repo, versions)
         toolchain_bzl_file = Label("@{}_{}_toolchains//:BUILD.bazel".format(python_toolchain_repo.workspace_name, underscore_version))
         content = rctx.read(toolchain_bzl_file)
 
-        # Default version toolchains have empty target_settings lists.
-        if "target_settings" not in content or "target_settings = []" in content:
-            default_version = version
-            break
+        if "py_toolchain_suite" in content:
+            # Handle rules_python 0.30+
+            # Default version toolchains have set_python_version_constraint set to "False".
+            for line in content.lower().splitlines():
+                if "set_python_version_constraint" in line:
+                    if "false" in line:
+                        default_version = version
+                    break
+            if default_version:
+                break
+
+        else:
+            # Handle rules_python versions prior to 0.30.
+            # Default version toolchains have empty target_settings lists.
+            if "target_settings" not in content or "target_settings = []" in content:
+                default_version = version
+                break
 
     if not default_version:
         fail("Unable to determine default version for python toolchain repo '{}'".format(python_toolchain_repo))
