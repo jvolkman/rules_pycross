@@ -15,7 +15,6 @@ from urllib.parse import urlparse
 import tomli
 from packaging.requirements import Requirement
 from packaging.specifiers import SpecifierSet
-from packaging.utils import NormalizedName
 from packaging.version import Version
 
 from pycross.private.tools.args import FlagFileArgumentParser
@@ -23,6 +22,7 @@ from pycross.private.tools.lock_model import package_canonical_name
 from pycross.private.tools.lock_model import PackageDependency
 from pycross.private.tools.lock_model import PackageFile
 from pycross.private.tools.lock_model import PackageKey
+from pycross.private.tools.lock_model import PackageName
 from pycross.private.tools.lock_model import RawLockSet
 from pycross.private.tools.lock_model import RawPackage
 
@@ -65,7 +65,7 @@ def _print_warn(msg):
 
 @dataclass
 class PDMPackage:
-    name: NormalizedName
+    name: PackageName
     version: Version
     python_versions: SpecifierSet
     dependencies: Set[Requirement]
@@ -199,7 +199,7 @@ def translate(
             raise Exception(f"Non-existent development dependency group: {group_name}")
         requirements.extend(development_dependencies[group_name])
 
-    pinned_package_specs: Dict[NormalizedName, Requirement] = {}
+    pinned_package_specs: Dict[PackageName, Requirement] = {}
     for req in requirements:
         pin = package_canonical_name(req.name)
         pinned_package_specs[pin] = req
@@ -239,7 +239,7 @@ def translate(
     all_packages = distinct_packages.values()
 
     # Next, group packages by their canonical name
-    packages_by_canonical_name: Dict[str, List[PDMPackage]] = defaultdict(list)
+    packages_by_canonical_name: Dict[PackageName, List[PDMPackage]] = defaultdict(list)
     for package in all_packages:
         packages_by_canonical_name[package.name].append(package)
 
@@ -266,7 +266,7 @@ def translate(
                     f"Found no packages to satisfy dependency (name={dep.name}, spec={dep.specifier})"
                 )
 
-    pinned_keys: Dict[NormalizedName, PackageKey] = {}
+    pinned_keys: Dict[PackageName, PackageKey] = {}
     for pin, pin_spec in pinned_package_specs.items():
         pin_packages = packages_by_canonical_name[pin]
         for pin_pkg in pin_packages:

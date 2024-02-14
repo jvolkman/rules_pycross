@@ -12,6 +12,7 @@ from typing import Iterator
 from typing import List
 from typing import Optional
 from typing import Tuple
+from typing import Union
 
 from dacite.config import Config
 from dacite.core import from_dict
@@ -33,7 +34,7 @@ class _Encoder(JSONEncoder):
                 return len(val) == 0
             return False
 
-        if isinstance(o, (FileKey, PackageKey, Version)):
+        if isinstance(o, (DependencyName, FileKey, PackageKey, Version)):
             return str(o)
         if dataclasses.is_dataclass(o):
             # Omit None values from serialized output.
@@ -58,41 +59,51 @@ def _dataclass_items(dc) -> Iterator[Tuple[str, Any]]:
 
 
 @dataclass(frozen=True, order=True)
-class PackageKey:
-    package_name: NormalizedName
-    extra_name: Optional[NormalizedName]
-    version: Version
+class DependencyName:
+    package: NormalizedName
+    extra: Optional[NormalizedName]
 
-    def __init__(self, val) -> None:
-        name_and_extra, version = val.split("@", maxsplit=1)
-        package_name, bracket, extra_name = name_and_extra.partition("[")
+    def __init__(self, val: Union[str, DependencyName]) -> None:
+        val = str(val)
+        package_name, bracket, extra_name = val.partition("[")
 
         if bracket:
             if not extra_name.endswith("]"):
-                raise ValueError(f"Invalid format for package with extra: {name_and_extra}")
+                raise ValueError(f"Invalid format for package with extra: {val}")
             extra_name = extra_name[:-1]
-            object.__setattr__(self, "extra_name", package_canonical_name(extra_name))
+            object.__setattr__(self, "extra", canonicalize_name(extra_name))
         else:
-            object.__setattr__(self, "extra_name", None)
+            object.__setattr__(self, "extra", None)
 
-        object.__setattr__(self, "package_name", package_canonical_name(package_name))
+        object.__setattr__(self, "package", canonicalize_name(package_name))
+
+    @staticmethod
+    def from_parts(package: str, extra: Optional[str] = None) -> DependencyName:
+        if extra:
+            return DependencyName(f"{package}[{extra}]")
+        else:
+            return DependencyName(package)
+
+    def __str__(self) -> str:
+        if self.extra:
+            return f"{self.package}[{self.extra}]"
+        else:
+            return str(self.package)
+
+
+@dataclass(frozen=True, order=True)
+class PackageKey:
+    name: DependencyName
+    version: Version
+
+    def __init__(self, val) -> None:
+        name, version = val.split("@", maxsplit=1)
+        object.__setattr__(self, "name", DependencyName(name))
         object.__setattr__(self, "version", Version(version))
 
     @staticmethod
-    def from_parts(
-        package_name: NormalizedName, version: Version, extra_name: Optional[NormalizedName] = None
-    ) -> PackageKey:
-        if extra_name:
-            return PackageKey(f"{package_name}[{extra_name}]@{version}")
-        else:
-            return PackageKey(f"{package_name}@{version}")
-
-    @property
-    def name(self) -> str:
-        if self.extra_name:
-            return f"{self.package_name}[{self.extra_name}]"
-        else:
-            return str(self.package_name)
+    def from_parts(name: DependencyName, version: Version) -> PackageKey:
+        return PackageKey(f"{name}@{version}")
 
     def __str__(self) -> str:
         return f"{self.name}@{self.version}"
@@ -206,7 +217,7 @@ class PackageFile:
 
 @dataclass(frozen=True)
 class PackageDependency:
-    name: NormalizedName
+    name: DependencyName
     version: Version
     marker: str
 
@@ -222,14 +233,14 @@ class PackageDependency:
 
 @dataclass(frozen=True)
 class RawPackage:
-    name: NormalizedName
+    name: DependencyName
     version: Version
     python_versions: str
     dependencies: List[PackageDependency] = field(default_factory=list)
     files: List[PackageFile] = field(default_factory=list)
 
     def __post_init__(self):
-        normalized_name = package_canonical_name(self.name)
+        normalized_name = DependencyName(self.name)
         assert str(self.name) == str(normalized_name), "The name field should be normalized per PEP 503."
         object.__setattr__(self, "name", normalized_name)
 
@@ -258,11 +269,15 @@ class ResolvedPackage:
 @dataclass(frozen=True)
 class RawLockSet:
     packages: Dict[PackageKey, RawPackage] = field(default_factory=dict)
-    pins: Dict[NormalizedName, PackageKey] = field(default_factory=dict)
+    pins: Dict[DependencyName, PackageKey] = field(default_factory=dict)
 
     @property
     def __dict__(self) -> Dict[str, Any]:
-        return dict(_dataclass_items(self), packages=_stringify_keys(self.packages))
+        return dict(
+            _dataclass_items(self),
+            packages=_stringify_keys(self.packages),
+            pins=_stringify_keys(self.pins),
+        )
 
     def to_json(self, indent=None) -> str:
         return json.dumps(self, sort_keys=True, indent=indent, cls=_Encoder)
@@ -277,7 +292,7 @@ class RawLockSet:
 class ResolvedLockSet:
     environments: Dict[str, EnvironmentReference] = field(default_factory=dict)
     packages: Dict[PackageKey, ResolvedPackage] = field(default_factory=dict)
-    pins: Dict[NormalizedName, PackageKey] = field(default_factory=dict)
+    pins: Dict[DependencyName, PackageKey] = field(default_factory=dict)
     remote_files: Dict[FileKey, PackageFile] = field(default_factory=dict)
 
     @property
@@ -285,6 +300,7 @@ class ResolvedLockSet:
         return dict(
             _dataclass_items(self),
             packages=_stringify_keys(self.packages),
+            pins=_stringify_keys(self.pins),
             remote_files=_stringify_keys(self.remote_files),
         )
 
@@ -297,8 +313,8 @@ class ResolvedLockSet:
         return from_dict(ResolvedLockSet, parsed, config=Config(cast=[Tuple, Version, FileKey, PackageKey]))
 
 
-def package_canonical_name(name: str) -> NormalizedName:
-    return canonicalize_name(name)
+def package_canonical_name(name: str) -> DependencyName:
+    return DependencyName(name)
 
 
 def is_wheel(filename: str) -> bool:

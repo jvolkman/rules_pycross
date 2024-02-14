@@ -1,9 +1,12 @@
+from __future__ import annotations
+
 import os
 from collections import defaultdict
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 from typing import Dict
+from typing import Iterable
 from typing import List
 from typing import Optional
 
@@ -16,10 +19,12 @@ from packaging.utils import parse_wheel_filename
 from packaging.version import Version
 from poetry.core.constraints.version import parse_constraint
 from poetry.core.constraints.version import Version as PoetryVersion
+from poetry.core.factory import Factory
+from poetry.core.packages.dependency import Dependency
 from poetry.core.version import markers
 
 from pycross.private.tools.args import FlagFileArgumentParser
-from pycross.private.tools.lock_model import package_canonical_name
+from pycross.private.tools.lock_model import DependencyName
 from pycross.private.tools.lock_model import PackageDependency
 from pycross.private.tools.lock_model import PackageFile
 from pycross.private.tools.lock_model import PackageKey
@@ -33,7 +38,7 @@ class MismatchedVersionException(Exception):
 
 @dataclass
 class PoetryDependency:
-    name: str
+    name: DependencyName
     spec: str
     marker: Optional[str]
 
@@ -46,15 +51,15 @@ class PoetryDependency:
         parsed = markers.parse_marker(self.marker)
         return str(parsed.without_extras())
 
-    def matches(self, other: "PoetryPackage") -> bool:
-        if package_canonical_name(self.name) != package_canonical_name(other.name):
+    def matches(self, other: PoetryPackage) -> bool:
+        if self.name != other.name:
             return False
         return self.constraint.allows(other.version)
 
 
 @dataclass
 class PoetryPackage:
-    name: NormalizedName
+    name: DependencyName
     version: PoetryVersion
     python_versions: str
     dependencies: List[PoetryDependency]
@@ -76,6 +81,18 @@ class PoetryPackage:
             python_versions=self.python_versions,
             dependencies=sorted(self.resolved_dependencies, key=lambda p: p.key),
             files=sorted(self.files, key=lambda f: f.name),
+        )
+
+
+def iterate_dependencies(dep: Dependency) -> Iterable[PoetryDependency]:
+    if dep.extras:
+        for extra in dep.extras:
+            yield PoetryDependency(
+                name=DependencyName.from_parts(dep.name, extra), spec=str(dep.constraint), marker=str(dep.marker)
+            )
+    else:
+        yield PoetryDependency(
+            name=DependencyName.from_parts(dep.name), spec=str(dep.constraint), marker=str(dep.marker)
         )
 
 
@@ -115,14 +132,18 @@ def translate(project_file: Path, lock_file: Path) -> RawLockSet:
 
     pinned_package_specs = {}
     for pin, pin_info in (project_dict.get("tool", {}).get("poetry", {}).get("dependencies", {})).items():
-        pin = package_canonical_name(pin)
         if pin == "python":
             # Skip the special line indicating python version.
             continue
         if isinstance(pin_info, str):
-            pinned_package_specs[pin] = parse_constraint(pin_info)
+            pinned_package_specs[DependencyName(pin)] = parse_constraint(pin_info)
         else:
-            pinned_package_specs[pin] = parse_constraint(pin_info["version"])
+            constraint = parse_constraint(pin_info["version"])
+            if "extras" in pin_info:
+                for extra in pin_info["extras"]:
+                    pinned_package_specs[DependencyName.from_parts(pin, extra)] = constraint
+            else:
+                pinned_package_specs[DependencyName(pin)] = constraint
 
     def parse_file_info(file_info) -> PackageFile:
         file_name = file_info["file"]
@@ -142,7 +163,6 @@ def translate(project_file: Path, lock_file: Path) -> RawLockSet:
     poetry_packages: List[PoetryPackage] = []
     for lock_pkg in lock_dict.get("package", []):
         package_listed_name = lock_pkg["name"]
-        package_name = package_canonical_name(package_listed_name)
         package_version = lock_pkg["version"]
         package_python_versions = lock_pkg["python-versions"]
 
@@ -150,21 +170,31 @@ def translate(project_file: Path, lock_file: Path) -> RawLockSet:
             # Special case for all python versions
             package_python_versions = ""
 
-        dependencies = []
+        base_dependencies = []
+        all_dependencies = {}
+
         for name, dep_list in lock_pkg.get("dependencies", {}).items():
             # In some cases the dependency is actually a list of alternatives, each with a different
             # marker. Generally this is not the case, but we coerce a single entry into a list of 1.
             if not isinstance(dep_list, list):
                 dep_list = [dep_list]
-            for dep in dep_list:
-                if isinstance(dep, str):
-                    marker = None
-                    spec = dep
-                else:
-                    marker = dep.get("markers")
-                    spec = dep.get("version")
+            deps = [Factory.create_dependency(name, dep) for dep in dep_list]
+            for dep in deps:
+                all_dependencies[dep] = dep
+                if not dep.is_optional():
+                    base_dependencies.append(dep)
 
-                dependencies.append(PoetryDependency(name=name, spec=spec, marker=marker))
+        extra_dependencies = {}
+        for extra_name, extra_reqs in lock_pkg.get("extras", {}):
+            matched_deps = []
+            for extra_req in extra_reqs:
+                extra_req_dep = Dependency.create_from_pep_508(extra_req)
+                matching_active_dep = all_dependencies.get(extra_req_dep)
+                if not matching_active_dep:
+                    break
+                matched_deps.append(matching_active_dep)
+            if len(matched_deps) == len(extra_reqs):
+                extra_dependencies[extra_name] = matched_deps
 
         # In older versions of poetry the list of files was held in a metadata section at the bottom of the poetry.lock file
         # The lock file format now (as of 2022-12-16), has the files specified local to each dependency as another field.
@@ -173,23 +203,31 @@ def translate(project_file: Path, lock_file: Path) -> RawLockSet:
         if len(files) == 0:
             files = files_by_package_name[package_listed_name]
 
+        # First we create the base package without any extra dependencies.
+        base_name = DependencyName(package_listed_name)
         poetry_packages.append(
             PoetryPackage(
-                name=package_name,
+                name=base_name,
                 version=PoetryVersion.parse(package_version),
                 python_versions=package_python_versions,
-                dependencies=dependencies,
+                dependencies=base_dependencies,
                 files=get_files_for_package(
                     files,
-                    package_name,
+                    base_name.package,
                     package_version,
                 ),
                 resolved_dependencies=[],
             )
         )
 
+        # Now figure out which extras are active in this lock by iterating through the package's `extras` dict and determining
+        # which entries are fully satisfied by `dependencies_by_name`.
+        for extra_name, extra_requirements in lock_pkg.get("extras", {}).items():
+            pass
+            # TODO!!
+
     # Next, group poetry packages by their canonical name
-    packages_by_canonical_name: Dict[str, List[PoetryPackage]] = defaultdict(list)
+    packages_by_canonical_name: Dict[DependencyName, List[PoetryPackage]] = defaultdict(list)
     for package in poetry_packages:
         packages_by_canonical_name[package.name].append(package)
 
@@ -201,7 +239,7 @@ def translate(project_file: Path, lock_file: Path) -> RawLockSet:
     # Construct a PackageDependency and store it.
     for package in poetry_packages:
         for dep in package.dependencies:
-            dependency_packages = packages_by_canonical_name[package_canonical_name(dep.name)]
+            dependency_packages = packages_by_canonical_name[dep.name]
             for dep_pkg in dependency_packages:
                 if dep.matches(dep_pkg):
                     resolved = PackageDependency(
