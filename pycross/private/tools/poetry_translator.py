@@ -117,6 +117,67 @@ def get_files_for_package(
     return result
 
 
+def create_packages(
+    lock_pkg: Dict[str, Any],
+) -> List[PoetryPackage]:
+    package_listed_name = lock_pkg["name"]
+    package_version = lock_pkg["version"]
+    package_python_versions = lock_pkg["python-versions"]
+
+    if package_python_versions == "*":
+        # Special case for all python versions
+        package_python_versions = ""
+
+    grouped_dependencies = {}
+
+    for name, dep_list in lock_pkg.get("dependencies", {}).items():
+        # In some cases the dependency is actually a list of alternatives, each with a different
+        # marker. Generally this is not the case, but we coerce a single entry into a list of 1.
+        if not isinstance(dep_list, list):
+            dep_list = [dep_list]
+        for lock_dep in dep_list:
+            parsed_dep = Factory.create_dependency(name, lock_dep)
+            all_dependencies[dep] = dep
+            if not dep.is_optional():
+                base_dependencies.append(dep)
+
+    extra_dependencies = {}
+    for extra_name, extra_reqs in lock_pkg.get("extras", {}):
+        matched_deps = []
+        for extra_req in extra_reqs:
+            extra_req_dep = Dependency.create_from_pep_508(extra_req)
+            matching_active_dep = all_dependencies.get(extra_req_dep)
+            if not matching_active_dep:
+                break
+            matched_deps.append(matching_active_dep)
+        if len(matched_deps) == len(extra_reqs):
+            extra_dependencies[extra_name] = matched_deps
+
+    # In older versions of poetry the list of files was held in a metadata section at the bottom of the poetry.lock file
+    # The lock file format now (as of 2022-12-16), has the files specified local to each dependency as another field.
+    # Here we will check for the files being present in the new location, and if not there we fall back to the older one.
+    files = [parse_file_info(f) for f in lock_pkg.get("files", [])]
+    if len(files) == 0:
+        files = files_by_package_name[package_listed_name]
+
+    # First we create the base package without any extra dependencies.
+    base_name = DependencyName(package_listed_name)
+    poetry_packages.append(
+        PoetryPackage(
+            name=base_name,
+            version=PoetryVersion.parse(package_version),
+            python_versions=package_python_versions,
+            dependencies=base_dependencies,
+            files=get_files_for_package(
+                files,
+                base_name.package,
+                package_version,
+            ),
+            resolved_dependencies=[],
+        )
+    )
+
+
 def translate(project_file: Path, lock_file: Path) -> RawLockSet:
     try:
         with open(project_file, "rb") as f:
@@ -219,12 +280,6 @@ def translate(project_file: Path, lock_file: Path) -> RawLockSet:
                 resolved_dependencies=[],
             )
         )
-
-        # Now figure out which extras are active in this lock by iterating through the package's `extras` dict and determining
-        # which entries are fully satisfied by `dependencies_by_name`.
-        for extra_name, extra_requirements in lock_pkg.get("extras", {}).items():
-            pass
-            # TODO!!
 
     # Next, group poetry packages by their canonical name
     packages_by_canonical_name: Dict[DependencyName, List[PoetryPackage]] = defaultdict(list)
