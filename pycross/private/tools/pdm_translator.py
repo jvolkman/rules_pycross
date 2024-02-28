@@ -59,6 +59,10 @@ def get_development_dependencies(lock: Dict[str, Any]) -> Dict[str, List[Require
     return {group: [Requirement(EDITABLE_PATTERN.sub("", dep)) for dep in deps] for group, deps in dep_groups.items()}
 
 
+def _print_warn(msg):
+    print("WARNING:", msg)
+
+
 @dataclass
 class PDMPackage:
     name: NormalizedName
@@ -66,6 +70,7 @@ class PDMPackage:
     python_versions: SpecifierSet
     dependencies: Set[Requirement]
     files: Set[PackageFile]
+    is_local: bool
     resolved_dependencies: Set[PackageDependency]
     extras: Set[str]
 
@@ -86,6 +91,7 @@ class PDMPackage:
         return req.specifier.contains(self.version, prereleases=True)
 
     def to_lock_package(self) -> RawPackage:
+        assert not self.is_local, "Local packages have no analogue in pycross lockfile"
         dependencies_without_self = sorted(
             [dep for dep in self.resolved_dependencies if dep.key != self.key], key=lambda p: p.key
         )
@@ -107,6 +113,7 @@ class PDMPackage:
 
         merged_dependencies = set(self.dependencies) | set(other.dependencies)
         merged_files = set(self.files) | set(other.files)
+        merged_is_local = self.is_local or other.is_local
         merged_resolved_dependencies = set(self.resolved_dependencies) | set(other.resolved_dependencies)
         merged_extras = set(self.extras) | set(other.extras)
 
@@ -116,6 +123,7 @@ class PDMPackage:
             python_versions=self.python_versions,
             dependencies=merged_dependencies,
             files=merged_files,
+            is_local=merged_is_local,
             resolved_dependencies=merged_resolved_dependencies,
             extras=merged_extras,
         )
@@ -211,6 +219,7 @@ def translate(
 
         dependencies = {Requirement(dep) for dep in lock_pkg.get("dependencies", [])}
         files = {parse_file_info(f) for f in lock_pkg.get("files", [])}
+        is_local = "path" in lock_pkg and "files" not in lock_pkg
 
         package = PDMPackage(
             name=package_name,
@@ -218,6 +227,7 @@ def translate(
             python_versions=SpecifierSet(package_requires_python),
             dependencies=dependencies,
             files=files,
+            is_local=is_local,
             resolved_dependencies=set(),
             extras=set(package_extras),
         )
@@ -266,8 +276,23 @@ def translate(
         else:
             raise MismatchedVersionException(f"Found no packages to satisfy pin (name={pin}, spec={pin_spec})")
 
+    # Replace pins of local packages with pins of their dependencies.
+    # We may need to loop multiple times if local packages depend on one another.
+    while local_pins := [key for key in pinned_keys.values() if distinct_packages[key].is_local]:
+        for pin_key in local_pins:
+            pin_pkg = distinct_packages[pin_key]
+            pinned_keys.update({dep.name: dep.key for dep in pin_pkg.resolved_dependencies})
+            del pinned_keys[pin_key.name]
+
     lock_packages: Dict[PackageKey, RawPackage] = {}
     for package in all_packages:
+        if package.is_local:
+            _print_warn(
+                "Local package {} elided from pycross repo. It can still be referenced directly from the main repo.".format(
+                    package.key
+                )
+            )
+            continue
         lock_package = package.to_lock_package()
         lock_packages[lock_package.key] = lock_package
 

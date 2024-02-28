@@ -1,0 +1,20 @@
+load("@rules_python//python:defs.bzl", "py_binary", "py_library")
+
+py_library(
+    name = "mysecond",
+    srcs = ["__init__.py"],
+    imports = [".."],
+    visibility = ["//visibility:public"],
+    deps = [
+        "//packages/pkg-core/mycore",
+    ],
+)
+
+py_binary(
+    name = "mysecond_bin",
+    srcs = ["__init__.py"],
+    main = "__init__.py",
+    deps = [
+        "//packages/pkg-core/mycore",
+    ],
+)

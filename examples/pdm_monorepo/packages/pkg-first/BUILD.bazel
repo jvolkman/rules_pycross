@@ -1,0 +1,18 @@
+load("@rules_python//python:packaging.bzl", "py_package", "py_wheel")
+
+py_package(
+    name = "myfirst_pkg",
+    packages = ["packages.pkg-first.myfirst"],
+    deps = ["//packages/pkg-first/myfirst"],
+)
+
+py_wheel(
+    name = "pkg-first",
+    distribution = "pkg-first",
+    strip_path_prefixes = [
+        "packages/pkg-first",
+    ],
+    version = "0.1.0",
+    visibility = ["//visibility:public"],
+    deps = [":myfirst_pkg"],
+)

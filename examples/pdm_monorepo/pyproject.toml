@@ -1,0 +1,10 @@
+[project]
+dependencies = []
+requires-python = ">=3.8"
+
+[tool.pdm.dev-dependencies]
+dev = [
+    "-e pkg-core @ file:///${PROJECT_ROOT}/packages/pkg-core",
+    "-e pkg-first @ file:///${PROJECT_ROOT}/packages/pkg-first",
+    "-e pkg-second @ file:///${PROJECT_ROOT}/packages/pkg-second",
+]

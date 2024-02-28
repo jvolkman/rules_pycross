@@ -1,0 +1,18 @@
+load("@rules_python//python:packaging.bzl", "py_package", "py_wheel")
+
+py_package(
+    name = "mysecond_pkg",
+    packages = ["packages.pkg-second.mysecond"],
+    deps = ["//packages/pkg-second/mysecond"],
+)
+
+py_wheel(
+    name = "pkg-second",
+    distribution = "pkg-second",
+    strip_path_prefixes = [
+        "packages/pkg-second",
+    ],
+    version = "0.1.0",
+    visibility = ["//visibility:public"],
+    deps = [":mysecond_pkg"],
+)
