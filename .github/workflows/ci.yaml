@@ -57,7 +57,13 @@ jobs:
       - name: run e2e tests - bzlmod
         working-directory: e2e/bzlmod
         run: |
-          bazel test //...
+          bazel test -- //... -//lock_file/...
+
+      - name: run e2e tests - bzlmod + static lock file
+        if: matrix.bazel-version != '6.x'
+        working-directory: e2e/bzlmod
+        run: |
+          bazel test //lock_file/...
 
       - name: run pycross tests as consumer
         working-directory: e2e/bzlmod
