@@ -12,6 +12,7 @@ py_library(
     data = [
         "//pycross/private/tools/crossenv/scripts",
     ],
+    imports = ["../../../.."],
 )
 
 py_binary(
@@ -20,6 +21,7 @@ py_binary(
         "__init__.py",
         "__main__.py",
     ],
+    imports = ["../../../.."],
     main = "__main__.py",
     deps = [":crossenv_lib"],
 )

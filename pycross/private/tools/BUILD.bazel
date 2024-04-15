@@ -8,11 +8,13 @@ py_library(
     srcs = [
         "args.py",
     ],
+    imports = ["../../.."],
 )
 
 py_binary(
     name = "bzl_lock_generator",
     srcs = ["bzl_lock_generator.py"],
+    imports = ["../../.."],
     visibility = ["//visibility:public"],
     deps = [
         ":args",
@@ -24,11 +26,13 @@ py_binary(
 py_binary(
     name = "extract_lock_repos",
     srcs = ["extract_lock_repos.py"],
+    imports = ["../../.."],
 )
 
 py_binary(
     name = "raw_lock_resolver",
     srcs = ["raw_lock_resolver.py"],
+    imports = ["../../.."],
     visibility = ["//visibility:public"],
     deps = [
         ":args",
@@ -42,6 +46,7 @@ py_binary(
 py_binary(
     name = "resolved_lock_renderer",
     srcs = ["resolved_lock_renderer.py"],
+    imports = ["../../.."],
     visibility = ["//visibility:public"],
     deps = [
         ":args",
@@ -59,6 +64,7 @@ py_library(
     srcs = [
         "target_environment.py",
     ],
+    imports = ["../../.."],
     deps = [
         "@rules_pycross_internal//deps:pip",
     ],
@@ -67,6 +73,7 @@ py_library(
 py_library(
     name = "lock_model",
     srcs = ["lock_model.py"],
+    imports = ["../../.."],
     deps = [
         ":target_environment",
         "@rules_pycross_internal//deps:dacite",
@@ -79,6 +86,7 @@ py_library(
     srcs = [
         "namespace_pkgs.py",
     ],
+    imports = ["../../.."],
 )
 
 py_test(
@@ -96,6 +104,7 @@ py_test(
 py_binary(
     name = "pdm_translator",
     srcs = ["pdm_translator.py"],
+    imports = ["../../.."],
     visibility = ["//visibility:public"],
     deps = [
         ":args",
@@ -107,6 +116,7 @@ py_binary(
 py_binary(
     name = "poetry_translator",
     srcs = ["poetry_translator.py"],
+    imports = ["../../.."],
     visibility = ["//visibility:public"],
     deps = [
         ":args",
@@ -119,6 +129,7 @@ py_binary(
 py_binary(
     name = "target_environment_generator",
     srcs = ["target_environment_generator.py"],
+    imports = ["../../.."],
     visibility = ["//visibility:public"],
     deps = [
         ":args",
@@ -132,6 +143,7 @@ py_binary(
 py_binary(
     name = "wheel_builder",
     srcs = ["wheel_builder.py"],
+    imports = ["../../.."],
     visibility = ["//visibility:public"],
     deps = [
         ":args",
@@ -146,6 +158,7 @@ py_binary(
 py_binary(
     name = "wheel_installer",
     srcs = ["wheel_installer.py"],
+    imports = ["../../.."],
     visibility = ["//visibility:public"],
     deps = [
         ":args",
