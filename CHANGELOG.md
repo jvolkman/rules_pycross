@@ -6,11 +6,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+## [0.5.3]
+
 ### Fixed
 
 - Using `local_wheels` in `pycross_lock_repo` or the `lock_import` extension resulted in an invalid `select`
   statement being generated.
 - Auto toolchain creation compatibility with rules_python 0.30+.
+- Fix `pycross` package imports when using `--experimental_python_import_all_repositories`.
 
 ### Changed
 
@@ -91,7 +94,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 (No notes - pre-dates this file.)
 
-[unreleased]: https://github.com/jvolkman/rules_pycross/compare/v0.5.2...HEAD
+[unreleased]: https://github.com/jvolkman/rules_pycross/compare/v0.5.3...HEAD
+[0.5.3]: https://github.com/jvolkman/rules_pycross/compare/v0.5.2...v0.5.3
 [0.5.2]: https://github.com/jvolkman/rules_pycross/compare/v0.5.1...v0.5.2
 [0.5.1]: https://github.com/jvolkman/rules_pycross/compare/v0.5.0...v0.5.1
 [0.5.0]: https://github.com/jvolkman/rules_pycross/compare/v0.4...v0.5.0
