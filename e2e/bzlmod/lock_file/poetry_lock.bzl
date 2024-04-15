@@ -2,7 +2,7 @@
 # It is not intended for manual editing.
 """Pycross-generated dependency targets."""
 
-load("@@rules_pycross~override//pycross:defs.bzl", "pycross_wheel_library", "pypi_file")
+load("@@rules_pycross~//pycross:defs.bzl", "pycross_wheel_library", "pypi_file")
 load("@bazel_tools//tools/build_defs/repo:utils.bzl", "maybe")
 
 PINS = {
@@ -42,102 +42,102 @@ def targets():
 
     native.alias(
         name = "_env_python_3.10.12_aarch64-apple-darwin",
-        actual = "@@rules_pycross~override~environments~smoke_environments//:python_3.10.12_aarch64-apple-darwin_config",
+        actual = "@@rules_pycross~~environments~smoke_environments//:python_3.10.12_aarch64-apple-darwin_config",
     )
 
     native.alias(
         name = "_env_python_3.10.12_aarch64-unknown-linux-gnu",
-        actual = "@@rules_pycross~override~environments~smoke_environments//:python_3.10.12_aarch64-unknown-linux-gnu_config",
+        actual = "@@rules_pycross~~environments~smoke_environments//:python_3.10.12_aarch64-unknown-linux-gnu_config",
     )
 
     native.alias(
         name = "_env_python_3.10.12_x86_64-apple-darwin",
-        actual = "@@rules_pycross~override~environments~smoke_environments//:python_3.10.12_x86_64-apple-darwin_config",
+        actual = "@@rules_pycross~~environments~smoke_environments//:python_3.10.12_x86_64-apple-darwin_config",
     )
 
     native.alias(
         name = "_env_python_3.10.12_x86_64-unknown-linux-gnu",
-        actual = "@@rules_pycross~override~environments~smoke_environments//:python_3.10.12_x86_64-unknown-linux-gnu_config",
+        actual = "@@rules_pycross~~environments~smoke_environments//:python_3.10.12_x86_64-unknown-linux-gnu_config",
     )
 
     native.alias(
         name = "_env_python_3.11.6_aarch64-apple-darwin",
-        actual = "@@rules_pycross~override~environments~smoke_environments//:python_3.11.6_aarch64-apple-darwin_config",
+        actual = "@@rules_pycross~~environments~smoke_environments//:python_3.11.6_aarch64-apple-darwin_config",
     )
 
     native.alias(
         name = "_env_python_3.11.6_aarch64-unknown-linux-gnu",
-        actual = "@@rules_pycross~override~environments~smoke_environments//:python_3.11.6_aarch64-unknown-linux-gnu_config",
+        actual = "@@rules_pycross~~environments~smoke_environments//:python_3.11.6_aarch64-unknown-linux-gnu_config",
     )
 
     native.alias(
         name = "_env_python_3.11.6_x86_64-apple-darwin",
-        actual = "@@rules_pycross~override~environments~smoke_environments//:python_3.11.6_x86_64-apple-darwin_config",
+        actual = "@@rules_pycross~~environments~smoke_environments//:python_3.11.6_x86_64-apple-darwin_config",
     )
 
     native.alias(
         name = "_env_python_3.11.6_x86_64-unknown-linux-gnu",
-        actual = "@@rules_pycross~override~environments~smoke_environments//:python_3.11.6_x86_64-unknown-linux-gnu_config",
+        actual = "@@rules_pycross~~environments~smoke_environments//:python_3.11.6_x86_64-unknown-linux-gnu_config",
     )
 
     native.alias(
         name = "_env_python_3.12.0_aarch64-apple-darwin",
-        actual = "@@rules_pycross~override~environments~smoke_environments//:python_3.12.0_aarch64-apple-darwin_config",
+        actual = "@@rules_pycross~~environments~smoke_environments//:python_3.12.0_aarch64-apple-darwin_config",
     )
 
     native.alias(
         name = "_env_python_3.12.0_aarch64-unknown-linux-gnu",
-        actual = "@@rules_pycross~override~environments~smoke_environments//:python_3.12.0_aarch64-unknown-linux-gnu_config",
+        actual = "@@rules_pycross~~environments~smoke_environments//:python_3.12.0_aarch64-unknown-linux-gnu_config",
     )
 
     native.alias(
         name = "_env_python_3.12.0_x86_64-apple-darwin",
-        actual = "@@rules_pycross~override~environments~smoke_environments//:python_3.12.0_x86_64-apple-darwin_config",
+        actual = "@@rules_pycross~~environments~smoke_environments//:python_3.12.0_x86_64-apple-darwin_config",
     )
 
     native.alias(
         name = "_env_python_3.12.0_x86_64-unknown-linux-gnu",
-        actual = "@@rules_pycross~override~environments~smoke_environments//:python_3.12.0_x86_64-unknown-linux-gnu_config",
+        actual = "@@rules_pycross~~environments~smoke_environments//:python_3.12.0_x86_64-unknown-linux-gnu_config",
     )
 
     native.alias(
         name = "_env_python_3.12_aarch64-apple-darwin",
-        actual = "@@rules_pycross~override~environments~smoke_environments//:python_3.12_aarch64-apple-darwin_config",
+        actual = "@@rules_pycross~~environments~smoke_environments//:python_3.12_aarch64-apple-darwin_config",
     )
 
     native.alias(
         name = "_env_python_3.12_aarch64-unknown-linux-gnu",
-        actual = "@@rules_pycross~override~environments~smoke_environments//:python_3.12_aarch64-unknown-linux-gnu_config",
+        actual = "@@rules_pycross~~environments~smoke_environments//:python_3.12_aarch64-unknown-linux-gnu_config",
     )
 
     native.alias(
         name = "_env_python_3.12_x86_64-apple-darwin",
-        actual = "@@rules_pycross~override~environments~smoke_environments//:python_3.12_x86_64-apple-darwin_config",
+        actual = "@@rules_pycross~~environments~smoke_environments//:python_3.12_x86_64-apple-darwin_config",
     )
 
     native.alias(
         name = "_env_python_3.12_x86_64-unknown-linux-gnu",
-        actual = "@@rules_pycross~override~environments~smoke_environments//:python_3.12_x86_64-unknown-linux-gnu_config",
+        actual = "@@rules_pycross~~environments~smoke_environments//:python_3.12_x86_64-unknown-linux-gnu_config",
     )
 
     # buildifier: disable=unused-variable
     _target = select({
-        ":_env_python_3.10.12_aarch64-apple-darwin": "@@rules_pycross~override~environments~smoke_environments//:python_3.10.12_aarch64-apple-darwin.json",
-        ":_env_python_3.10.12_aarch64-unknown-linux-gnu": "@@rules_pycross~override~environments~smoke_environments//:python_3.10.12_aarch64-unknown-linux-gnu.json",
-        ":_env_python_3.10.12_x86_64-apple-darwin": "@@rules_pycross~override~environments~smoke_environments//:python_3.10.12_x86_64-apple-darwin.json",
-        ":_env_python_3.10.12_x86_64-unknown-linux-gnu": "@@rules_pycross~override~environments~smoke_environments//:python_3.10.12_x86_64-unknown-linux-gnu.json",
-        ":_env_python_3.11.6_aarch64-apple-darwin": "@@rules_pycross~override~environments~smoke_environments//:python_3.11.6_aarch64-apple-darwin.json",
-        ":_env_python_3.11.6_aarch64-unknown-linux-gnu": "@@rules_pycross~override~environments~smoke_environments//:python_3.11.6_aarch64-unknown-linux-gnu.json",
-        ":_env_python_3.11.6_x86_64-apple-darwin": "@@rules_pycross~override~environments~smoke_environments//:python_3.11.6_x86_64-apple-darwin.json",
-        ":_env_python_3.11.6_x86_64-unknown-linux-gnu": "@@rules_pycross~override~environments~smoke_environments//:python_3.11.6_x86_64-unknown-linux-gnu.json",
-        ":_env_python_3.12.0_aarch64-apple-darwin": "@@rules_pycross~override~environments~smoke_environments//:python_3.12.0_aarch64-apple-darwin.json",
-        ":_env_python_3.12.0_aarch64-unknown-linux-gnu": "@@rules_pycross~override~environments~smoke_environments//:python_3.12.0_aarch64-unknown-linux-gnu.json",
-        ":_env_python_3.12.0_x86_64-apple-darwin": "@@rules_pycross~override~environments~smoke_environments//:python_3.12.0_x86_64-apple-darwin.json",
-        ":_env_python_3.12.0_x86_64-unknown-linux-gnu": "@@rules_pycross~override~environments~smoke_environments//:python_3.12.0_x86_64-unknown-linux-gnu.json",
-        ":_env_python_3.12_aarch64-apple-darwin": "@@rules_pycross~override~environments~smoke_environments//:python_3.12_aarch64-apple-darwin.json",
-        ":_env_python_3.12_aarch64-unknown-linux-gnu": "@@rules_pycross~override~environments~smoke_environments//:python_3.12_aarch64-unknown-linux-gnu.json",
-        ":_env_python_3.12_x86_64-apple-darwin": "@@rules_pycross~override~environments~smoke_environments//:python_3.12_x86_64-apple-darwin.json",
-        ":_env_python_3.12_x86_64-unknown-linux-gnu": "@@rules_pycross~override~environments~smoke_environments//:python_3.12_x86_64-unknown-linux-gnu.json",
+        ":_env_python_3.10.12_aarch64-apple-darwin": "@@rules_pycross~~environments~smoke_environments//:python_3.10.12_aarch64-apple-darwin.json",
+        ":_env_python_3.10.12_aarch64-unknown-linux-gnu": "@@rules_pycross~~environments~smoke_environments//:python_3.10.12_aarch64-unknown-linux-gnu.json",
+        ":_env_python_3.10.12_x86_64-apple-darwin": "@@rules_pycross~~environments~smoke_environments//:python_3.10.12_x86_64-apple-darwin.json",
+        ":_env_python_3.10.12_x86_64-unknown-linux-gnu": "@@rules_pycross~~environments~smoke_environments//:python_3.10.12_x86_64-unknown-linux-gnu.json",
+        ":_env_python_3.11.6_aarch64-apple-darwin": "@@rules_pycross~~environments~smoke_environments//:python_3.11.6_aarch64-apple-darwin.json",
+        ":_env_python_3.11.6_aarch64-unknown-linux-gnu": "@@rules_pycross~~environments~smoke_environments//:python_3.11.6_aarch64-unknown-linux-gnu.json",
+        ":_env_python_3.11.6_x86_64-apple-darwin": "@@rules_pycross~~environments~smoke_environments//:python_3.11.6_x86_64-apple-darwin.json",
+        ":_env_python_3.11.6_x86_64-unknown-linux-gnu": "@@rules_pycross~~environments~smoke_environments//:python_3.11.6_x86_64-unknown-linux-gnu.json",
+        ":_env_python_3.12.0_aarch64-apple-darwin": "@@rules_pycross~~environments~smoke_environments//:python_3.12.0_aarch64-apple-darwin.json",
+        ":_env_python_3.12.0_aarch64-unknown-linux-gnu": "@@rules_pycross~~environments~smoke_environments//:python_3.12.0_aarch64-unknown-linux-gnu.json",
+        ":_env_python_3.12.0_x86_64-apple-darwin": "@@rules_pycross~~environments~smoke_environments//:python_3.12.0_x86_64-apple-darwin.json",
+        ":_env_python_3.12.0_x86_64-unknown-linux-gnu": "@@rules_pycross~~environments~smoke_environments//:python_3.12.0_x86_64-unknown-linux-gnu.json",
+        ":_env_python_3.12_aarch64-apple-darwin": "@@rules_pycross~~environments~smoke_environments//:python_3.12_aarch64-apple-darwin.json",
+        ":_env_python_3.12_aarch64-unknown-linux-gnu": "@@rules_pycross~~environments~smoke_environments//:python_3.12_aarch64-unknown-linux-gnu.json",
+        ":_env_python_3.12_x86_64-apple-darwin": "@@rules_pycross~~environments~smoke_environments//:python_3.12_x86_64-apple-darwin.json",
+        ":_env_python_3.12_x86_64-unknown-linux-gnu": "@@rules_pycross~~environments~smoke_environments//:python_3.12_x86_64-unknown-linux-gnu.json",
     })
 
     native.alias(
