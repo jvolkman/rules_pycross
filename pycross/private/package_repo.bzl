@@ -48,7 +48,7 @@ load("//_lock:lock.bzl", "targets")
 targets()
 """
 
-def _pin_build(package):
+def _pin_build(pin, package):
     package_key = package["key"]
     lines = [
         'package(default_visibility = ["//visibility:public"])',
@@ -56,6 +56,11 @@ def _pin_build(package):
         "alias(",
         '    name = "wheel",',
         '    actual = "//_lock:_wheel_{}",'.format(package_key),
+        ")",
+        "",
+        "alias(",
+        '    name = "{}",'.format(pin),
+        '    actual = "//_lock:{}",'.format(package_key),
         ")",
         "",
     ]
@@ -201,8 +206,9 @@ def _package_repo_impl(rctx):
     _generate_lock_bzl(rctx, lock_json_path, lock_bzl_path)
 
     for pin, pin_target in lock["pins"].items():
+        pin = pin.replace("-", "_")
         package = lock["packages"][pin_target]
-        rctx.file(paths.join(pin, "BUILD.bazel"), _pin_build(package))
+        rctx.file(paths.join(pin, "BUILD.bazel"), _pin_build(pin, package))
 
     rctx.file("BUILD.bazel", _root_build(lock["pins"]))
 
