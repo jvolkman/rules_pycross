@@ -47,7 +47,7 @@ def _lock_repos_impl(module_ctx):
                 continue
 
             # Use the key as our repo name, but replace its / with _
-            remote_file_repo = "pypi_{}".format(key.replace("/", "_"))
+            remote_file_repo = "pypi_{}".format(key.replace("/", "_").replace("+", "_"))
             remote_file_label = "@{}//file".format(remote_file_repo)
 
             urls = file.get("urls", [])
