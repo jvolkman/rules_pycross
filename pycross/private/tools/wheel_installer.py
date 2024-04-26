@@ -52,7 +52,7 @@ def main(args: Any) -> None:
         },
         interpreter="/usr/bin/env python3",  # Generic; it's not feasible to run these scripts directly.
         script_kind="posix",
-        bytecode_optimization_levels=[0, 1],
+        bytecode_optimization_levels=[],  # Setting to empty list to disable generation of .pyc files.
     )
 
     link_dir = Path(tempfile.mkdtemp())
