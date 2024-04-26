@@ -9,4 +9,5 @@ exports_files([
     "test_regex.py",
     "test_zstandard.py",
     "testlib.bzl",
+    "test_all_whl_requirements.py",
 ])

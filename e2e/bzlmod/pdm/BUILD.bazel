@@ -1,5 +1,5 @@
 load("@bazel_skylib//rules:write_file.bzl", "write_file")
-load("@pdm//:requirements.bzl", "all_requirements", "requirement")
+load("@pdm//:requirements.bzl", "all_requirements", "all_whl_requirements", "requirement")
 load("@rules_pycross//pycross:defs.bzl", "pycross_wheel_build")
 load("@rules_python//python:defs.bzl", "py_test")
 
@@ -90,4 +90,14 @@ py_test(
     srcs = ["//:test_regex.py"],
     main = "test_regex.py",
     deps = all_requirements,
+)
+
+# Test using `all_whl_requirements`
+py_test(
+    name = "test_all_whl_requirements",
+    srcs = ["//:test_all_whl_requirements.py"],
+    env = {
+        "ALL_WHL_REQUIREMENTS": ",".join(all_whl_requirements),
+    },
+    main = "test_all_whl_requirements.py",
 )
