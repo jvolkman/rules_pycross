@@ -41,23 +41,18 @@ def targets():
         )
 
     native.alias(
-        name = "_env_python_3.10.12_aarch64-apple-darwin",
-        actual = "@@rules_pycross~~environments~smoke_environments//:python_3.10.12_aarch64-apple-darwin_config",
+        name = "_env_python_3.10.11_aarch64-apple-darwin",
+        actual = "@@rules_pycross~~environments~smoke_environments//:python_3.10.11_aarch64-apple-darwin_config",
     )
 
     native.alias(
-        name = "_env_python_3.10.12_aarch64-unknown-linux-gnu",
-        actual = "@@rules_pycross~~environments~smoke_environments//:python_3.10.12_aarch64-unknown-linux-gnu_config",
+        name = "_env_python_3.10.11_aarch64-unknown-linux-gnu",
+        actual = "@@rules_pycross~~environments~smoke_environments//:python_3.10.11_aarch64-unknown-linux-gnu_config",
     )
 
     native.alias(
-        name = "_env_python_3.10.12_x86_64-apple-darwin",
-        actual = "@@rules_pycross~~environments~smoke_environments//:python_3.10.12_x86_64-apple-darwin_config",
-    )
-
-    native.alias(
-        name = "_env_python_3.10.12_x86_64-unknown-linux-gnu",
-        actual = "@@rules_pycross~~environments~smoke_environments//:python_3.10.12_x86_64-unknown-linux-gnu_config",
+        name = "_env_python_3.10.11_x86_64-unknown-linux-gnu",
+        actual = "@@rules_pycross~~environments~smoke_environments//:python_3.10.11_x86_64-unknown-linux-gnu_config",
     )
 
     native.alias(
@@ -68,11 +63,6 @@ def targets():
     native.alias(
         name = "_env_python_3.11.6_aarch64-unknown-linux-gnu",
         actual = "@@rules_pycross~~environments~smoke_environments//:python_3.11.6_aarch64-unknown-linux-gnu_config",
-    )
-
-    native.alias(
-        name = "_env_python_3.11.6_x86_64-apple-darwin",
-        actual = "@@rules_pycross~~environments~smoke_environments//:python_3.11.6_x86_64-apple-darwin_config",
     )
 
     native.alias(
@@ -91,11 +81,6 @@ def targets():
     )
 
     native.alias(
-        name = "_env_python_3.12.0_x86_64-apple-darwin",
-        actual = "@@rules_pycross~~environments~smoke_environments//:python_3.12.0_x86_64-apple-darwin_config",
-    )
-
-    native.alias(
         name = "_env_python_3.12.0_x86_64-unknown-linux-gnu",
         actual = "@@rules_pycross~~environments~smoke_environments//:python_3.12.0_x86_64-unknown-linux-gnu_config",
     )
@@ -111,32 +96,23 @@ def targets():
     )
 
     native.alias(
-        name = "_env_python_3.12_x86_64-apple-darwin",
-        actual = "@@rules_pycross~~environments~smoke_environments//:python_3.12_x86_64-apple-darwin_config",
-    )
-
-    native.alias(
         name = "_env_python_3.12_x86_64-unknown-linux-gnu",
         actual = "@@rules_pycross~~environments~smoke_environments//:python_3.12_x86_64-unknown-linux-gnu_config",
     )
 
     # buildifier: disable=unused-variable
     _target = select({
-        ":_env_python_3.10.12_aarch64-apple-darwin": "@@rules_pycross~~environments~smoke_environments//:python_3.10.12_aarch64-apple-darwin.json",
-        ":_env_python_3.10.12_aarch64-unknown-linux-gnu": "@@rules_pycross~~environments~smoke_environments//:python_3.10.12_aarch64-unknown-linux-gnu.json",
-        ":_env_python_3.10.12_x86_64-apple-darwin": "@@rules_pycross~~environments~smoke_environments//:python_3.10.12_x86_64-apple-darwin.json",
-        ":_env_python_3.10.12_x86_64-unknown-linux-gnu": "@@rules_pycross~~environments~smoke_environments//:python_3.10.12_x86_64-unknown-linux-gnu.json",
+        ":_env_python_3.10.11_aarch64-apple-darwin": "@@rules_pycross~~environments~smoke_environments//:python_3.10.11_aarch64-apple-darwin.json",
+        ":_env_python_3.10.11_aarch64-unknown-linux-gnu": "@@rules_pycross~~environments~smoke_environments//:python_3.10.11_aarch64-unknown-linux-gnu.json",
+        ":_env_python_3.10.11_x86_64-unknown-linux-gnu": "@@rules_pycross~~environments~smoke_environments//:python_3.10.11_x86_64-unknown-linux-gnu.json",
         ":_env_python_3.11.6_aarch64-apple-darwin": "@@rules_pycross~~environments~smoke_environments//:python_3.11.6_aarch64-apple-darwin.json",
         ":_env_python_3.11.6_aarch64-unknown-linux-gnu": "@@rules_pycross~~environments~smoke_environments//:python_3.11.6_aarch64-unknown-linux-gnu.json",
-        ":_env_python_3.11.6_x86_64-apple-darwin": "@@rules_pycross~~environments~smoke_environments//:python_3.11.6_x86_64-apple-darwin.json",
         ":_env_python_3.11.6_x86_64-unknown-linux-gnu": "@@rules_pycross~~environments~smoke_environments//:python_3.11.6_x86_64-unknown-linux-gnu.json",
         ":_env_python_3.12.0_aarch64-apple-darwin": "@@rules_pycross~~environments~smoke_environments//:python_3.12.0_aarch64-apple-darwin.json",
         ":_env_python_3.12.0_aarch64-unknown-linux-gnu": "@@rules_pycross~~environments~smoke_environments//:python_3.12.0_aarch64-unknown-linux-gnu.json",
-        ":_env_python_3.12.0_x86_64-apple-darwin": "@@rules_pycross~~environments~smoke_environments//:python_3.12.0_x86_64-apple-darwin.json",
         ":_env_python_3.12.0_x86_64-unknown-linux-gnu": "@@rules_pycross~~environments~smoke_environments//:python_3.12.0_x86_64-unknown-linux-gnu.json",
         ":_env_python_3.12_aarch64-apple-darwin": "@@rules_pycross~~environments~smoke_environments//:python_3.12_aarch64-apple-darwin.json",
         ":_env_python_3.12_aarch64-unknown-linux-gnu": "@@rules_pycross~~environments~smoke_environments//:python_3.12_aarch64-unknown-linux-gnu.json",
-        ":_env_python_3.12_x86_64-apple-darwin": "@@rules_pycross~~environments~smoke_environments//:python_3.12_x86_64-apple-darwin.json",
         ":_env_python_3.12_x86_64-unknown-linux-gnu": "@@rules_pycross~~environments~smoke_environments//:python_3.12_x86_64-unknown-linux-gnu.json",
     })
 
@@ -205,36 +181,23 @@ def targets():
         ":stack-data@0.6.3",
         ":traitlets@5.14.0",
     ] + select({
-        ":_env_python_3.10.12_aarch64-apple-darwin": [
+        ":_env_python_3.10.11_aarch64-apple-darwin": [
             ":appnope@0.1.3",
             ":exceptiongroup@1.2.0",
         ],
-        ":_env_python_3.10.12_aarch64-unknown-linux-gnu": [
+        ":_env_python_3.10.11_aarch64-unknown-linux-gnu": [
             ":exceptiongroup@1.2.0",
         ],
-        ":_env_python_3.10.12_x86_64-apple-darwin": [
-            ":appnope@0.1.3",
-            ":exceptiongroup@1.2.0",
-        ],
-        ":_env_python_3.10.12_x86_64-unknown-linux-gnu": [
+        ":_env_python_3.10.11_x86_64-unknown-linux-gnu": [
             ":exceptiongroup@1.2.0",
         ],
         ":_env_python_3.11.6_aarch64-apple-darwin": [
             ":appnope@0.1.3",
         ],
-        ":_env_python_3.11.6_x86_64-apple-darwin": [
-            ":appnope@0.1.3",
-        ],
         ":_env_python_3.12.0_aarch64-apple-darwin": [
             ":appnope@0.1.3",
         ],
-        ":_env_python_3.12.0_x86_64-apple-darwin": [
-            ":appnope@0.1.3",
-        ],
         ":_env_python_3.12_aarch64-apple-darwin": [
-            ":appnope@0.1.3",
-        ],
-        ":_env_python_3.12_x86_64-apple-darwin": [
             ":appnope@0.1.3",
         ],
         "//conditions:default": [],
@@ -354,21 +317,17 @@ def targets():
     native.alias(
         name = "_wheel_regex@2023.10.3",
         actual = select({
-            ":_env_python_3.10.12_aarch64-apple-darwin": "@poetry_lock_wheel_regex_2023.10.3_cp310_cp310_macosx_11_0_arm64//file",
-            ":_env_python_3.10.12_aarch64-unknown-linux-gnu": "@poetry_lock_wheel_regex_2023.10.3_cp310_cp310_manylinux_2_17_aarch64.manylinux2014_aarch64//file",
-            ":_env_python_3.10.12_x86_64-apple-darwin": "@poetry_lock_wheel_regex_2023.10.3_cp310_cp310_macosx_10_9_x86_64//file",
-            ":_env_python_3.10.12_x86_64-unknown-linux-gnu": "@poetry_lock_wheel_regex_2023.10.3_cp310_cp310_manylinux_2_5_x86_64.manylinux1_x86_64.manylinux_2_12_x86_64.manylinux2010_x86_64//file",
+            ":_env_python_3.10.11_aarch64-apple-darwin": "@poetry_lock_wheel_regex_2023.10.3_cp310_cp310_macosx_11_0_arm64//file",
+            ":_env_python_3.10.11_aarch64-unknown-linux-gnu": "@poetry_lock_wheel_regex_2023.10.3_cp310_cp310_manylinux_2_17_aarch64.manylinux2014_aarch64//file",
+            ":_env_python_3.10.11_x86_64-unknown-linux-gnu": "@poetry_lock_wheel_regex_2023.10.3_cp310_cp310_manylinux_2_5_x86_64.manylinux1_x86_64.manylinux_2_12_x86_64.manylinux2010_x86_64//file",
             ":_env_python_3.11.6_aarch64-apple-darwin": "@poetry_lock_wheel_regex_2023.10.3_cp311_cp311_macosx_11_0_arm64//file",
             ":_env_python_3.11.6_aarch64-unknown-linux-gnu": "@poetry_lock_wheel_regex_2023.10.3_cp311_cp311_manylinux_2_17_aarch64.manylinux2014_aarch64//file",
-            ":_env_python_3.11.6_x86_64-apple-darwin": "@poetry_lock_wheel_regex_2023.10.3_cp311_cp311_macosx_10_9_x86_64//file",
             ":_env_python_3.11.6_x86_64-unknown-linux-gnu": "@poetry_lock_wheel_regex_2023.10.3_cp311_cp311_manylinux_2_17_x86_64.manylinux2014_x86_64//file",
             ":_env_python_3.12.0_aarch64-apple-darwin": "@poetry_lock_wheel_regex_2023.10.3_cp312_cp312_macosx_11_0_arm64//file",
             ":_env_python_3.12.0_aarch64-unknown-linux-gnu": "@poetry_lock_wheel_regex_2023.10.3_cp312_cp312_manylinux_2_17_aarch64.manylinux2014_aarch64//file",
-            ":_env_python_3.12.0_x86_64-apple-darwin": "@poetry_lock_wheel_regex_2023.10.3_cp312_cp312_macosx_10_9_x86_64//file",
             ":_env_python_3.12.0_x86_64-unknown-linux-gnu": "@poetry_lock_wheel_regex_2023.10.3_cp312_cp312_manylinux_2_17_x86_64.manylinux2014_x86_64//file",
             ":_env_python_3.12_aarch64-apple-darwin": "@poetry_lock_wheel_regex_2023.10.3_cp312_cp312_macosx_11_0_arm64//file",
             ":_env_python_3.12_aarch64-unknown-linux-gnu": "@poetry_lock_wheel_regex_2023.10.3_cp312_cp312_manylinux_2_17_aarch64.manylinux2014_aarch64//file",
-            ":_env_python_3.12_x86_64-apple-darwin": "@poetry_lock_wheel_regex_2023.10.3_cp312_cp312_macosx_10_9_x86_64//file",
             ":_env_python_3.12_x86_64-unknown-linux-gnu": "@poetry_lock_wheel_regex_2023.10.3_cp312_cp312_manylinux_2_17_x86_64.manylinux2014_x86_64//file",
         }),
     )
@@ -448,21 +407,17 @@ def targets():
     native.alias(
         name = "_wheel_zstandard@0.22.0",
         actual = select({
-            ":_env_python_3.10.12_aarch64-apple-darwin": "@poetry_lock_wheel_zstandard_0.22.0_cp310_cp310_macosx_11_0_arm64//file",
-            ":_env_python_3.10.12_aarch64-unknown-linux-gnu": "@poetry_lock_wheel_zstandard_0.22.0_cp310_cp310_manylinux_2_17_aarch64.manylinux2014_aarch64//file",
-            ":_env_python_3.10.12_x86_64-apple-darwin": "@poetry_lock_wheel_zstandard_0.22.0_cp310_cp310_macosx_10_9_x86_64//file",
-            ":_env_python_3.10.12_x86_64-unknown-linux-gnu": "@poetry_lock_wheel_zstandard_0.22.0_cp310_cp310_manylinux_2_17_x86_64.manylinux2014_x86_64//file",
+            ":_env_python_3.10.11_aarch64-apple-darwin": "@poetry_lock_wheel_zstandard_0.22.0_cp310_cp310_macosx_11_0_arm64//file",
+            ":_env_python_3.10.11_aarch64-unknown-linux-gnu": "@poetry_lock_wheel_zstandard_0.22.0_cp310_cp310_manylinux_2_17_aarch64.manylinux2014_aarch64//file",
+            ":_env_python_3.10.11_x86_64-unknown-linux-gnu": "@poetry_lock_wheel_zstandard_0.22.0_cp310_cp310_manylinux_2_17_x86_64.manylinux2014_x86_64//file",
             ":_env_python_3.11.6_aarch64-apple-darwin": "@poetry_lock_wheel_zstandard_0.22.0_cp311_cp311_macosx_11_0_arm64//file",
             ":_env_python_3.11.6_aarch64-unknown-linux-gnu": "@poetry_lock_wheel_zstandard_0.22.0_cp311_cp311_manylinux_2_17_aarch64.manylinux2014_aarch64//file",
-            ":_env_python_3.11.6_x86_64-apple-darwin": "@poetry_lock_wheel_zstandard_0.22.0_cp311_cp311_macosx_10_9_x86_64//file",
             ":_env_python_3.11.6_x86_64-unknown-linux-gnu": "@poetry_lock_wheel_zstandard_0.22.0_cp311_cp311_manylinux_2_17_x86_64.manylinux2014_x86_64//file",
             ":_env_python_3.12.0_aarch64-apple-darwin": "@poetry_lock_wheel_zstandard_0.22.0_cp312_cp312_macosx_11_0_arm64//file",
             ":_env_python_3.12.0_aarch64-unknown-linux-gnu": "@poetry_lock_wheel_zstandard_0.22.0_cp312_cp312_manylinux_2_17_aarch64.manylinux2014_aarch64//file",
-            ":_env_python_3.12.0_x86_64-apple-darwin": "@poetry_lock_wheel_zstandard_0.22.0_cp312_cp312_macosx_10_9_x86_64//file",
             ":_env_python_3.12.0_x86_64-unknown-linux-gnu": "@poetry_lock_wheel_zstandard_0.22.0_cp312_cp312_manylinux_2_17_x86_64.manylinux2014_x86_64//file",
             ":_env_python_3.12_aarch64-apple-darwin": "@poetry_lock_wheel_zstandard_0.22.0_cp312_cp312_macosx_11_0_arm64//file",
             ":_env_python_3.12_aarch64-unknown-linux-gnu": "@poetry_lock_wheel_zstandard_0.22.0_cp312_cp312_manylinux_2_17_aarch64.manylinux2014_aarch64//file",
-            ":_env_python_3.12_x86_64-apple-darwin": "@poetry_lock_wheel_zstandard_0.22.0_cp312_cp312_macosx_10_9_x86_64//file",
             ":_env_python_3.12_x86_64-unknown-linux-gnu": "@poetry_lock_wheel_zstandard_0.22.0_cp312_cp312_manylinux_2_17_x86_64.manylinux2014_x86_64//file",
         }),
     )
@@ -604,15 +559,6 @@ def repositories():
 
     maybe(
         pypi_file,
-        name = "poetry_lock_wheel_regex_2023.10.3_cp310_cp310_macosx_10_9_x86_64",
-        package_name = "regex",
-        package_version = "2023.10.3",
-        filename = "regex-2023.10.3-cp310-cp310-macosx_10_9_x86_64.whl",
-        sha256 = "4c34d4f73ea738223a094d8e0ffd6d2c1a1b4c175da34d6b0de3d8d69bee6bcc",
-    )
-
-    maybe(
-        pypi_file,
         name = "poetry_lock_wheel_regex_2023.10.3_cp310_cp310_macosx_11_0_arm64",
         package_name = "regex",
         package_version = "2023.10.3",
@@ -640,15 +586,6 @@ def repositories():
 
     maybe(
         pypi_file,
-        name = "poetry_lock_wheel_regex_2023.10.3_cp311_cp311_macosx_10_9_x86_64",
-        package_name = "regex",
-        package_version = "2023.10.3",
-        filename = "regex-2023.10.3-cp311-cp311-macosx_10_9_x86_64.whl",
-        sha256 = "90a79bce019c442604662d17bf69df99090e24cdc6ad95b18b6725c2988a490e",
-    )
-
-    maybe(
-        pypi_file,
         name = "poetry_lock_wheel_regex_2023.10.3_cp311_cp311_macosx_11_0_arm64",
         package_name = "regex",
         package_version = "2023.10.3",
@@ -672,15 +609,6 @@ def repositories():
         package_version = "2023.10.3",
         filename = "regex-2023.10.3-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl",
         sha256 = "8d1f21af4c1539051049796a0f50aa342f9a27cde57318f2fc41ed50b0dbc4ac",
-    )
-
-    maybe(
-        pypi_file,
-        name = "poetry_lock_wheel_regex_2023.10.3_cp312_cp312_macosx_10_9_x86_64",
-        package_name = "regex",
-        package_version = "2023.10.3",
-        filename = "regex-2023.10.3-cp312-cp312-macosx_10_9_x86_64.whl",
-        sha256 = "bff507ae210371d4b1fe316d03433ac099f184d570a1a611e541923f78f05037",
     )
 
     maybe(
@@ -766,15 +694,6 @@ def repositories():
 
     maybe(
         pypi_file,
-        name = "poetry_lock_wheel_zstandard_0.22.0_cp310_cp310_macosx_10_9_x86_64",
-        package_name = "zstandard",
-        package_version = "0.22.0",
-        filename = "zstandard-0.22.0-cp310-cp310-macosx_10_9_x86_64.whl",
-        sha256 = "275df437ab03f8c033b8a2c181e51716c32d831082d93ce48002a5227ec93019",
-    )
-
-    maybe(
-        pypi_file,
         name = "poetry_lock_wheel_zstandard_0.22.0_cp310_cp310_macosx_11_0_arm64",
         package_name = "zstandard",
         package_version = "0.22.0",
@@ -802,15 +721,6 @@ def repositories():
 
     maybe(
         pypi_file,
-        name = "poetry_lock_wheel_zstandard_0.22.0_cp311_cp311_macosx_10_9_x86_64",
-        package_name = "zstandard",
-        package_version = "0.22.0",
-        filename = "zstandard-0.22.0-cp311-cp311-macosx_10_9_x86_64.whl",
-        sha256 = "589402548251056878d2e7c8859286eb91bd841af117dbe4ab000e6450987e08",
-    )
-
-    maybe(
-        pypi_file,
         name = "poetry_lock_wheel_zstandard_0.22.0_cp311_cp311_macosx_11_0_arm64",
         package_name = "zstandard",
         package_version = "0.22.0",
@@ -834,15 +744,6 @@ def repositories():
         package_version = "0.22.0",
         filename = "zstandard-0.22.0-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl",
         sha256 = "33591d59f4956c9812f8063eff2e2c0065bc02050837f152574069f5f9f17775",
-    )
-
-    maybe(
-        pypi_file,
-        name = "poetry_lock_wheel_zstandard_0.22.0_cp312_cp312_macosx_10_9_x86_64",
-        package_name = "zstandard",
-        package_version = "0.22.0",
-        filename = "zstandard-0.22.0-cp312-cp312-macosx_10_9_x86_64.whl",
-        sha256 = "6c25b8eb733d4e741246151d895dd0308137532737f337411160ff69ca24f93a",
     )
 
     maybe(
