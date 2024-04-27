@@ -34,7 +34,7 @@ register_toolchains(
 # Python
 
 python = use_extension("@rules_python//python/extensions:python.bzl", "python")
-python.toolchain(python_version = "3.10.12")
+python.toolchain(python_version = "3.10.11")
 
 # The default is latest - 1 to make sure nothing assumes latest == default
 python.toolchain(
@@ -54,12 +54,11 @@ environments.create_for_python_toolchains(
     name = "smoke_environments",
     platforms = [
         "aarch64-apple-darwin",
-        "x86_64-apple-darwin",
         "aarch64-unknown-linux-gnu",
         "x86_64-unknown-linux-gnu",
     ],
     python_versions = [
-        "3.10.12",
+        "3.10.11",
         "3.11.6",
         "3.12.0",
         "3.12",

@@ -41,23 +41,18 @@ def targets():
         )
 
     native.alias(
-        name = "_env_python_3.10.12_aarch64-apple-darwin",
-        actual = "@smoke_environments//:python_3.10.12_aarch64-apple-darwin_config",
+        name = "_env_python_3.10.11_aarch64-apple-darwin",
+        actual = "@smoke_environments//:python_3.10.11_aarch64-apple-darwin_config",
     )
 
     native.alias(
-        name = "_env_python_3.10.12_aarch64-unknown-linux-gnu",
-        actual = "@smoke_environments//:python_3.10.12_aarch64-unknown-linux-gnu_config",
+        name = "_env_python_3.10.11_aarch64-unknown-linux-gnu",
+        actual = "@smoke_environments//:python_3.10.11_aarch64-unknown-linux-gnu_config",
     )
 
     native.alias(
-        name = "_env_python_3.10.12_x86_64-apple-darwin",
-        actual = "@smoke_environments//:python_3.10.12_x86_64-apple-darwin_config",
-    )
-
-    native.alias(
-        name = "_env_python_3.10.12_x86_64-unknown-linux-gnu",
-        actual = "@smoke_environments//:python_3.10.12_x86_64-unknown-linux-gnu_config",
+        name = "_env_python_3.10.11_x86_64-unknown-linux-gnu",
+        actual = "@smoke_environments//:python_3.10.11_x86_64-unknown-linux-gnu_config",
     )
 
     native.alias(
@@ -68,11 +63,6 @@ def targets():
     native.alias(
         name = "_env_python_3.11.6_aarch64-unknown-linux-gnu",
         actual = "@smoke_environments//:python_3.11.6_aarch64-unknown-linux-gnu_config",
-    )
-
-    native.alias(
-        name = "_env_python_3.11.6_x86_64-apple-darwin",
-        actual = "@smoke_environments//:python_3.11.6_x86_64-apple-darwin_config",
     )
 
     native.alias(
@@ -91,28 +81,20 @@ def targets():
     )
 
     native.alias(
-        name = "_env_python_3.12.0_x86_64-apple-darwin",
-        actual = "@smoke_environments//:python_3.12.0_x86_64-apple-darwin_config",
-    )
-
-    native.alias(
         name = "_env_python_3.12.0_x86_64-unknown-linux-gnu",
         actual = "@smoke_environments//:python_3.12.0_x86_64-unknown-linux-gnu_config",
     )
 
     # buildifier: disable=unused-variable
     _target = select({
-        ":_env_python_3.10.12_aarch64-apple-darwin": "@smoke_environments//:python_3.10.12_aarch64-apple-darwin.json",
-        ":_env_python_3.10.12_aarch64-unknown-linux-gnu": "@smoke_environments//:python_3.10.12_aarch64-unknown-linux-gnu.json",
-        ":_env_python_3.10.12_x86_64-apple-darwin": "@smoke_environments//:python_3.10.12_x86_64-apple-darwin.json",
-        ":_env_python_3.10.12_x86_64-unknown-linux-gnu": "@smoke_environments//:python_3.10.12_x86_64-unknown-linux-gnu.json",
+        ":_env_python_3.10.11_aarch64-apple-darwin": "@smoke_environments//:python_3.10.11_aarch64-apple-darwin.json",
+        ":_env_python_3.10.11_aarch64-unknown-linux-gnu": "@smoke_environments//:python_3.10.11_aarch64-unknown-linux-gnu.json",
+        ":_env_python_3.10.11_x86_64-unknown-linux-gnu": "@smoke_environments//:python_3.10.11_x86_64-unknown-linux-gnu.json",
         ":_env_python_3.11.6_aarch64-apple-darwin": "@smoke_environments//:python_3.11.6_aarch64-apple-darwin.json",
         ":_env_python_3.11.6_aarch64-unknown-linux-gnu": "@smoke_environments//:python_3.11.6_aarch64-unknown-linux-gnu.json",
-        ":_env_python_3.11.6_x86_64-apple-darwin": "@smoke_environments//:python_3.11.6_x86_64-apple-darwin.json",
         ":_env_python_3.11.6_x86_64-unknown-linux-gnu": "@smoke_environments//:python_3.11.6_x86_64-unknown-linux-gnu.json",
         ":_env_python_3.12.0_aarch64-apple-darwin": "@smoke_environments//:python_3.12.0_aarch64-apple-darwin.json",
         ":_env_python_3.12.0_aarch64-unknown-linux-gnu": "@smoke_environments//:python_3.12.0_aarch64-unknown-linux-gnu.json",
-        ":_env_python_3.12.0_x86_64-apple-darwin": "@smoke_environments//:python_3.12.0_x86_64-apple-darwin.json",
         ":_env_python_3.12.0_x86_64-unknown-linux-gnu": "@smoke_environments//:python_3.12.0_x86_64-unknown-linux-gnu.json",
     })
 
@@ -181,30 +163,20 @@ def targets():
         ":stack-data@0.6.3",
         ":traitlets@5.14.0",
     ] + select({
-        ":_env_python_3.10.12_aarch64-apple-darwin": [
+        ":_env_python_3.10.11_aarch64-apple-darwin": [
             ":appnope@0.1.3",
             ":exceptiongroup@1.2.0",
         ],
-        ":_env_python_3.10.12_aarch64-unknown-linux-gnu": [
+        ":_env_python_3.10.11_aarch64-unknown-linux-gnu": [
             ":exceptiongroup@1.2.0",
         ],
-        ":_env_python_3.10.12_x86_64-apple-darwin": [
-            ":appnope@0.1.3",
-            ":exceptiongroup@1.2.0",
-        ],
-        ":_env_python_3.10.12_x86_64-unknown-linux-gnu": [
+        ":_env_python_3.10.11_x86_64-unknown-linux-gnu": [
             ":exceptiongroup@1.2.0",
         ],
         ":_env_python_3.11.6_aarch64-apple-darwin": [
             ":appnope@0.1.3",
         ],
-        ":_env_python_3.11.6_x86_64-apple-darwin": [
-            ":appnope@0.1.3",
-        ],
         ":_env_python_3.12.0_aarch64-apple-darwin": [
-            ":appnope@0.1.3",
-        ],
-        ":_env_python_3.12.0_x86_64-apple-darwin": [
             ":appnope@0.1.3",
         ],
         "//conditions:default": [],
