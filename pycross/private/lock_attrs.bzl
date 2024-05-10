@@ -65,17 +65,8 @@ RESOLVE_ATTRS = dict(
     default_alias_single_version = attr.bool(
         doc = "Generate aliases for all packages that have a single version in the lock file.",
     ),
-    build_target_overrides = attr.string_dict(
-        doc = "A mapping of package keys (name or name@version) to existing pycross_wheel_build build targets.",
-    ),
-    always_build_packages = attr.string_list(
-        doc = "A list of package keys (name or name@version) to always build from source.",
-    ),
-    package_build_dependencies = attr.string_list_dict(
-        doc = "A dict of package keys (name or name@version) to a list of that packages build dependency keys.",
-    ),
-    package_ignore_dependencies = attr.string_list_dict(
-        doc = "A dict of package keys (name or name@version) to a list of that packages dependency keys to ignore.",
+    annotations = attr.string_dict(
+        doc = "Optional annotations to apply to packages.",
     ),
     disallow_builds = attr.bool(
         doc = "Do not allow pycross_wheel_build targets in the final lock file (i.e., require wheels).",
@@ -171,20 +162,6 @@ def handle_resolve_attrs(attrs, environment_files_and_labels, local_wheel_names_
 
     if attrs.default_alias_single_version:
         args.append("--default-alias-single-version")
-
-    for k, t in attrs.build_target_overrides.items():
-        args.extend(["--build-target-override", k, t])
-
-    for k in attrs.always_build_packages:
-        args.extend(["--always-build-package", k])
-
-    for k, d in attrs.package_build_dependencies.items():
-        for dep in d:
-            args.extend(["--build-dependency", k, dep])
-
-    for k, d in attrs.package_ignore_dependencies.items():
-        for dep in d:
-            args.extend(["--ignore-dependency", k, dep])
 
     if attrs.disallow_builds:
         args.append("--disallow-builds")

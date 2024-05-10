@@ -306,58 +306,38 @@ def collect_package_annotations(args: Any, lock_model: RawLockSet) -> Dict[Packa
     for package in lock_model.packages.values():
         all_package_keys_by_canonical_name[package.name].append(package.key)
 
-    for build_dependency in args.build_dependency or []:
-        pkg, dep = build_dependency
+    with open(args.annotations_file, "r") as f:
+        annotations_data = json.load(f)
+
+    for pkg, annotation in annotations_data.items():
         resolved_pkg = resolve_single_version(
             pkg,
             all_package_keys_by_canonical_name,
             lock_model.packages.keys(),
-            "package_build_dependencies",
+            "annotations",
         )
-        resolved_dep = resolve_single_version(
-            dep,
-            all_package_keys_by_canonical_name,
-            lock_model.packages.keys(),
-            "package_build_dependencies",
-        )
-        annotations[resolved_pkg].build_dependencies.append(resolved_dep)
 
-    build_target_overrides_used = set()
-    for build_target_override in args.build_target_override or []:
-        pkg, target = build_target_override
-        resolved_pkg = resolve_single_version(
-            pkg,
-            all_package_keys_by_canonical_name,
-            lock_model.packages.keys(),
-            "build_target_overrides",
-        )
-        if resolved_pkg in build_target_overrides_used:
-            raise Exception(f'build_target_overrides entry "{resolved_pkg}" listed multiple times')
-        build_target_overrides_used.add(resolved_pkg)
-        annotations[resolved_pkg].build_target_override = target
+        for dep in annotation.get("build_dependencies", []):
+            resolved_dep = resolve_single_version(
+                dep,
+                all_package_keys_by_canonical_name,
+                lock_model.packages.keys(),
+                "build_dependencies",
+            )
+            annotations[resolved_pkg].build_dependencies.append(resolved_dep)
 
-    for always_build_package in args.always_build_package or []:
-        resolved_pkg = resolve_single_version(
-            always_build_package,
-            all_package_keys_by_canonical_name,
-            lock_model.packages.keys(),
-            "always_build_packages",
-        )
-        annotations[resolved_pkg].always_build = True
+        if annotation.get("build_target_override"):
+            annotations[resolved_pkg].build_target_override = annotation["build_target_override"]
 
-    for ignore_dependency in args.ignore_dependency or []:
-        pkg, dep = ignore_dependency
-        resolved_pkg = resolve_single_version(
-            pkg,
-            all_package_keys_by_canonical_name,
-            lock_model.packages.keys(),
-            "package_ignore_dependencies",
-        )
-        if dep not in all_package_keys_by_canonical_name and dep not in lock_model.packages.keys():
-            raise Exception(f'package_ignore_dependencies entry "{dep}" matches no packages')
+        if annotation.get("always_build"):
+            annotations[resolved_pkg].always_build = True
 
-        # This dependency will be resolved to a single version later
-        annotations[resolved_pkg].ignore_dependencies.add(dep)
+        for dep in annotation.get("ignore_dependencies", []):
+            if dep not in all_package_keys_by_canonical_name and dep not in lock_model.packages.keys():
+                raise Exception(f'package_ignore_dependencies entry "{dep}" matches no packages')
+
+            # This dependency will be resolved to a single version later
+            annotations[resolved_pkg].ignore_dependencies.add(dep)
 
     # Return as a non-default dict
     return dict(annotations)
@@ -516,33 +496,6 @@ def add_shared_flags(parser: ArgumentParser) -> None:
     )
 
     parser.add_argument(
-        "--build-target-override",
-        nargs=2,
-        action="append",
-        help="A (key, label) parameter that specifies the existing pycross_wheel_build target for a package key.",
-    )
-
-    parser.add_argument(
-        "--always-build-package",
-        action="append",
-        help="A package key that should always be built from source.",
-    )
-
-    parser.add_argument(
-        "--build-dependency",
-        nargs=2,
-        action="append",
-        help="A (key, key) parameter that specifies an additional package build dependency.",
-    )
-
-    parser.add_argument(
-        "--ignore-dependency",
-        nargs=2,
-        action="append",
-        help="A (key, key) parameter that specifies a package dependency to ignore.",
-    )
-
-    parser.add_argument(
         "--disallow-builds",
         action="store_true",
         help="If set, an error is raised if the generated lock contains wheel build targets.",
@@ -552,6 +505,12 @@ def add_shared_flags(parser: ArgumentParser) -> None:
         "--always-include-sdist",
         action="store_true",
         help="If set, always include a package's sdist if one exists.",
+    )
+
+    parser.add_argument(
+        "--annotations-file",
+        type=Path,
+        help="The path to the annotations JSON file.",
     )
 
 

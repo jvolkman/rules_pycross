@@ -1,5 +1,6 @@
 """The lock_import extension."""
 
+load("//pycross/private:package_annotation.bzl", "pycross_package_annotation")
 load("//pycross/private:pdm_lock_model.bzl", "lock_repo_model_pdm")
 load("//pycross/private:poetry_lock_model.bzl", "lock_repo_model_poetry")
 load("//pycross/private:resolved_lock_repo.bzl", "resolved_lock_repo")
@@ -15,21 +16,16 @@ def _generate_resolved_lock_repo(lock_info, serialized_lock_model):
         "default_alias_single_version": lock_info.default_alias_single_version,
         "disallow_builds": lock_info.disallow_builds,
         "local_wheels": lock_info.local_wheels,
-        "build_target_overrides": {},
-        "always_build_packages": [],
-        "package_build_dependencies": {},
-        "package_ignore_dependencies": {},
+        "annotations": {},
     }
 
     for package_name, package in lock_info.packages.items():
-        if package.build_target:
-            args["build_target_overrides"][package_name] = str(package.build_target)
-        if package.always_build:
-            args["always_build_packages"].append(package_name)
-        if package.build_dependencies:
-            args["package_build_dependencies"][package_name] = package.build_dependencies
-        if package.ignore_dependencies:
-            args["package_ignore_dependencies"][package_name] = package.ignore_dependencies
+        args["annotations"][package_name] = pycross_package_annotation(
+            always_build = package.always_build,
+            build_dependencies = package.build_dependencies,
+            build_target_override = str(package.build_target) if package.build_target else None,
+            ignore_dependencies = package.ignore_dependencies,
+        )
 
     resolved_lock_repo(**args)
     return "@{}//:lock.json".format(repo_name)

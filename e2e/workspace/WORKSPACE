@@ -89,6 +89,7 @@ load("@rules_pycross//pycross:repositories.bzl", "rules_pycross_dependencies")
 
 rules_pycross_dependencies(python_interpreter)
 
+load("@rules_pycross//pycross:defs.bzl", "pycross_package_annotation")
 load("@rules_pycross//pycross:workspace.bzl", "lock_repo_model_pdm", "lock_repo_model_poetry", "pycross_lock_file_repo", "pycross_lock_repo", "pycross_register_for_python_toolchains")
 
 pycross_register_for_python_toolchains(
@@ -106,12 +107,22 @@ load("@smoke_environments//:defs.bzl", "environments")
 # lock_repo with Poetry
 pycross_lock_repo(
     name = "poetry_lock_repo",
-    always_build_packages = [
-        "regex",
-        "zstandard",
-    ],
-    build_target_overrides = {
-        "zstandard": "@//pdm:zstandard_build",
+    annotations = {
+        "regex": pycross_package_annotation(
+            always_build = True,
+            build_dependencies = [
+                "setuptools",
+                "wheel",
+            ],
+        ),
+        "zstandard": pycross_package_annotation(
+            always_build = True,
+            build_dependencies = [
+                "setuptools",
+                "wheel",
+            ],
+            build_target_override = "@//pdm:zstandard_build",
+        ),
     },
     default_alias_single_version = True,
     local_wheels = [
@@ -121,16 +132,6 @@ pycross_lock_repo(
         lock_file = "@//:poetry.lock",
         project_file = "@//:pyproject.toml",
     ),
-    package_build_dependencies = {
-        "regex": [
-            "setuptools",
-            "wheel",
-        ],
-        "zstandard": [
-            "setuptools",
-            "wheel",
-        ],
-    },
     target_environments = environments,
 )
 
@@ -141,28 +142,28 @@ poetry_lock_install_deps()
 # lock_repo with PDM
 pycross_lock_repo(
     name = "pdm_lock_repo",
-    always_build_packages = [
-        "regex",
-        "zstandard",
-    ],
-    build_target_overrides = {
-        "zstandard": "@//pdm:zstandard_build",
+    annotations = {
+        "regex": pycross_package_annotation(
+            always_build = True,
+            build_dependencies = [
+                "setuptools",
+                "wheel",
+            ],
+        ),
+        "zstandard": pycross_package_annotation(
+            always_build = True,
+            build_dependencies = [
+                "setuptools",
+                "wheel",
+            ],
+            build_target_override = "@//pdm:zstandard_build",
+        ),
     },
     default_alias_single_version = True,
     lock_model = lock_repo_model_pdm(
         lock_file = "@//:pdm.lock",
         project_file = "@//:pyproject.toml",
     ),
-    package_build_dependencies = {
-        "regex": [
-            "setuptools",
-            "wheel",
-        ],
-        "zstandard": [
-            "setuptools",
-            "wheel",
-        ],
-    },
     target_environments = environments,
 )
 

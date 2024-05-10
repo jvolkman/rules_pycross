@@ -5,6 +5,7 @@ load("@bazel_skylib//rules:write_file.bzl", "write_file")
 load(
     "@rules_pycross//pycross:defs.bzl",
     "pycross_lock_file",
+    "pycross_package_annotation",
     "pycross_wheel_build",
 )
 load("@rules_python//python:defs.bzl", "py_test")
@@ -45,22 +46,22 @@ def setup_test_targets(lock_name, lock_model):
         lock_model_file = lock_model,
         target_environments = ["@smoke_environments//:environments"],
         default_alias_single_version = True,
-        always_build_packages = [
-            "regex",
-            "zstandard",
-        ],
-        build_target_overrides = {
-            "zstandard": "@@//{}:zstandard_build".format(native.package_name()),
-        },
-        package_build_dependencies = {
-            "regex": [
-                "setuptools",
-                "wheel",
-            ],
-            "zstandard": [
-                "setuptools",
-                "wheel",
-            ],
+        annotations = {
+            "regex": pycross_package_annotation(
+                always_build = True,
+                build_dependencies = [
+                    "setuptools",
+                    "wheel",
+                ],
+            ),
+            "zstandard": pycross_package_annotation(
+                always_build = True,
+                build_target_override = "@@//{}:zstandard_build".format(native.package_name()),
+                build_dependencies = [
+                    "setuptools",
+                    "wheel",
+                ],
+            ),
         },
         out = "updated_lock.bzl",
     )

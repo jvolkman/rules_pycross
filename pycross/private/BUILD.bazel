@@ -95,6 +95,11 @@ bzl_library(
 )
 
 bzl_library(
+    name = "package_annotation",
+    srcs = ["package_annotation.bzl"],
+)
+
+bzl_library(
     name = "package_repo",
     srcs = ["package_repo.bzl"],
     deps = [
