@@ -6,6 +6,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Changed
+
+- **BREAKING** Introduce `package_annotation` which replaces `always_build_packages`, `build_target_overrides`,
+  `package_build_dependencies` and `package_ignore_dependencies`.
+
 ## [0.5.3]
 
 ### Fixed

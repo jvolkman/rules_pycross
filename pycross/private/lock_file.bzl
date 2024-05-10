@@ -15,6 +15,11 @@ def _pycross_lock_file_impl(ctx):
     args.add("--lock-model-file", ctx.file.lock_model_file)
     args.add("--output", out)
 
+    annotations = {p: json.decode(a) for p, a in ctx.attr.annotations.items()}
+    annotations_file = ctx.actions.declare_file("{}.annotations.json".format(ctx.attr.name))
+    ctx.actions.write(annotations_file, json.encode(annotations))
+    args.add("--annotations-file", annotations_file)
+
     def qualify(label):
         if ctx.attr.fully_qualified_environment_labels:
             return fully_qualified_label(ctx, label)
@@ -34,7 +39,8 @@ def _pycross_lock_file_impl(ctx):
     ctx.actions.run(
         inputs = (
             ctx.files.lock_model_file +
-            ctx.files.target_environments
+            ctx.files.target_environments +
+            [annotations_file]
         ),
         outputs = [out],
         executable = ctx.executable._tool,
