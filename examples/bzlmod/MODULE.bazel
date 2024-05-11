@@ -51,6 +51,15 @@ lock_import.package(
     repo = "pdm_deps",
 )
 
+# Specify per-package overrides. Here we say that we want certain files excluded during installation.
+lock_import.package(
+    name = "amqp-mock",
+    install_exclude_globs = [
+        "tests/**",
+    ],
+    repo = "pdm_deps",
+)
+
 # The actual repos are loaded from the lock_repos extension.
 lock_repos = use_extension("@rules_pycross//pycross/extensions:lock_repos.bzl", "lock_repos")
 use_repo(lock_repos, "pdm_deps", "poetry_deps")

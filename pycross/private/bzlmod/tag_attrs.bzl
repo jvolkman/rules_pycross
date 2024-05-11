@@ -55,6 +55,9 @@ PACKAGE_ATTRS = dict(
     ignore_dependencies = attr.string_list(
         doc = "A list of package keys (name or name@version) to drop from this package's set of declared dependencies.",
     ),
+    install_exclude_globs = attr.string_list(
+        doc = "A list of globs for files to exclude during installation.",
+    ),
 )
 
 CREATE_ENVIRONMENTS_ATTRS = _CREATE_ENVIRONMENTS_ATTRS

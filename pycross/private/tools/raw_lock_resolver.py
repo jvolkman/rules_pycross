@@ -194,6 +194,7 @@ class PackageAnnotations:
     build_target_override: Optional[str] = None
     always_build: bool = False
     ignore_dependencies: Set[str] = field(default_factory=set)
+    install_exclude_globs: Set[str] = field(default_factory=set)
 
 
 class PackageResolver:
@@ -211,6 +212,7 @@ class PackageResolver:
 
         self._build_deps = annotations.build_dependencies
         self._build_target_override = annotations.build_target_override
+        self._install_exclude_globs = annotations.install_exclude_globs
 
         deps_by_env = context.get_dependencies_by_environment(
             package,
@@ -264,6 +266,7 @@ class PackageResolver:
             environment_files={env: ps.file_reference for env, ps in sorted(self._package_sources_by_env.items())},
             build_target=self._build_target_override,
             sdist_file=self.sdist_file,
+            install_exclude_globs=list(self._install_exclude_globs),
         )
 
 
@@ -338,6 +341,9 @@ def collect_package_annotations(args: Any, lock_model: RawLockSet) -> Dict[Packa
 
             # This dependency will be resolved to a single version later
             annotations[resolved_pkg].ignore_dependencies.add(dep)
+
+        for glob in annotation.get("install_exclude_globs", []):
+            annotations[resolved_pkg].install_exclude_globs.add(glob)
 
     # Return as a non-default dict
     return dict(annotations)

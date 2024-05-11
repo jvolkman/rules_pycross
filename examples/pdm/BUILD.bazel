@@ -86,6 +86,11 @@ pycross_lock_file(
     name = "example_lock",
     out = "example_lock.bzl",
     annotations = {
+        "amqp-mock": pycross_package_annotation(
+            install_exclude_globs = [
+                "tests/**",
+            ],
+        ),
         "cowsay": pycross_package_annotation(
             build_dependencies = [
                 "setuptools",
