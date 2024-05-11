@@ -27,6 +27,9 @@ def _pycross_wheel_library_impl(ctx):
     if ctx.attr.enable_implicit_namespace_pkgs:
         args.add("--enable-implicit-namespace-pkgs")
 
+    for install_exclude_glob in ctx.attr.install_exclude_globs:
+        args.add("--install-exclude-glob", install_exclude_glob)
+
     ctx.actions.run(
         inputs = inputs,
         outputs = [out],
@@ -99,6 +102,9 @@ pycross_wheel_library = rule(
             doc = "The wheel file.",
             allow_single_file = [".whl"],
             mandatory = True,
+        ),
+        "install_exclude_globs": attr.string_list(
+            doc = "A list of globs for files to exclude during installation.",
         ),
         "enable_implicit_namespace_pkgs": attr.bool(
             default = True,

@@ -19,6 +19,7 @@ dependencies = [
     "django-allauth==0.58.2",
     "future==0.18.3",
     "sphinx>=7.2.6",
+    "amqp-mock==0.6.1",
 ]
 requires-python = ">=3.11,<3.13"
 license = {text = "MIT"}

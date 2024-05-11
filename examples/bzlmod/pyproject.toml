@@ -3,6 +3,7 @@ dependencies = [
     "ipython>=8.17",
     "setuptools>=68",
     "wheel>=0.42",
+    "amqp-mock==0.6.1",
 ]
 requires-python = ">=3.10"
 

@@ -1,14 +1,23 @@
 """
 A tool that invokes pypa/build to build the given sdist tarball.
 """
+from __future__ import annotations
+
+import fnmatch
 import os
 import shutil
 import tempfile
+import zipfile
+from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
+from typing import Iterator
+from typing import List
+from typing import Union
 
 from installer import install
 from installer.destinations import SchemeDictionaryDestination
+from installer.sources import WheelContentElement
 from installer.sources import WheelFile
 
 from pycross.private.tools import namespace_pkgs
@@ -39,6 +48,32 @@ def setup_namespace_pkg_compatibility(wheel_dir: Path) -> None:
         namespace_pkgs.add_pkgutil_style_namespace_pkg_init(ns_pkg_dir)
 
 
+class FilteredWheelFile(WheelFile):
+    def __init__(self, f: zipfile.ZipFile, install_exclude_globs: List[str]) -> None:
+        super().__init__(f)
+        self._install_exclude_globs = install_exclude_globs
+
+    @classmethod
+    @contextmanager
+    def open_filtered(
+        cls, path: Union[os.PathLike, str], install_exclude_globs: List[str]
+    ) -> Iterator[FilteredWheelFile]:
+        with zipfile.ZipFile(path) as f:
+            yield cls(f, install_exclude_globs)
+
+    def get_contents(self) -> Iterator[WheelContentElement]:
+        for record_elements, stream, is_executable in super().get_contents():
+            if not self.should_install(stream.name):
+                continue
+            yield record_elements, stream, is_executable
+
+    def should_install(self, filename: str) -> bool:
+        for install_exclude_glob in self._install_exclude_globs:
+            if fnmatch.fnmatch(filename, install_exclude_glob):
+                return False
+        return True
+
+
 def main(args: Any) -> None:
     dest_dir = args.directory
     lib_dir = dest_dir / "site-packages"
@@ -66,7 +101,7 @@ def main(args: Any) -> None:
     os.symlink(os.path.join(os.getcwd(), args.wheel), link_path)
 
     try:
-        with WheelFile.open(link_path) as source:
+        with FilteredWheelFile.open_filtered(link_path, args.install_exclude_globs) as source:
             install(
                 source=source,
                 destination=destination,
@@ -102,6 +137,14 @@ def parse_flags() -> Any:
         "--enable-implicit-namespace-pkgs",
         action="store_true",
         help="If true, disables conversion of implicit namespace packages and will unzip as-is.",
+    )
+
+    parser.add_argument(
+        "--install-exclude-glob",
+        action="append",
+        dest="install_exclude_globs",
+        default=[],
+        help="A glob for files to exclude during installation.",
     )
 
     parser.add_argument(

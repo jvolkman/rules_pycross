@@ -25,6 +25,7 @@ def _generate_resolved_lock_repo(lock_info, serialized_lock_model):
             build_dependencies = package.build_dependencies,
             build_target = str(package.build_target) if package.build_target else None,
             ignore_dependencies = package.ignore_dependencies,
+            install_exclude_globs = package.install_exclude_globs,
         )
 
     resolved_lock_repo(**args)
