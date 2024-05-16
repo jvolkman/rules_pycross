@@ -5,6 +5,7 @@ py_binary(
     name = "ipython",
     srcs = ["ipython.py"],
     deps = [
+        "//deps:amqp-mock",
         "//deps:ipython",
         "//deps:numpy",
     ],

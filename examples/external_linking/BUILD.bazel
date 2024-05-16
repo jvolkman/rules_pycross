@@ -1,6 +1,7 @@
 load("@bazel_skylib//rules:write_file.bzl", "write_file")
 load(
     "@rules_pycross//pycross:defs.bzl",
+    "package_annotation",
     "pycross_lock_file",
     "pycross_pdm_lock_model",
     "pycross_target_environment",
@@ -146,33 +147,37 @@ pycross_pdm_lock_model(
 pycross_lock_file(
     name = "example_lock",
     out = "example_lock.bzl",
-    always_build_packages = [
-        "numpy",
-        "pandas",
-        "setproctitle",
-    ],
-    build_target_overrides = {
-        "numpy": "@//deps/numpy",
-        "psycopg2": "@//deps/psycopg2",
+    annotations = {
+        "numpy": package_annotation(
+            always_build = True,
+            build_dependencies = [
+                "cython",
+                "setuptools",
+                "wheel",
+            ],
+            build_target = "@//deps/numpy",
+        ),
+        "pandas": package_annotation(
+            always_build = True,
+            build_dependencies = [
+                "cython",
+                "setuptools",
+                "wheel",
+            ],
+        ),
+        "psycopg2": package_annotation(
+            build_target = "@//deps/psycopg2",
+        ),
+        "setproctitle": package_annotation(
+            always_build = True,
+            build_dependencies = [
+                "setuptools",
+                "wheel",
+            ],
+        ),
     },
     default_alias_single_version = True,
     lock_model_file = ":example_lock_model",
-    package_build_dependencies = {
-        "numpy": [
-            "cython",
-            "setuptools",
-            "wheel",
-        ],
-        "pandas": [
-            "cython",
-            "setuptools",
-            "wheel",
-        ],
-        "setproctitle": [
-            "setuptools",
-            "wheel",
-        ],
-    },
     target_environments = [
         ":python_darwin_x86_64",
         ":python_darwin_arm64",

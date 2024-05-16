@@ -229,6 +229,7 @@ class ResolvedPackage:
     build_target: Optional[str] = None
     environment_files: Dict[str, FileReference] = field(default_factory=dict)
     sdist_file: Optional[FileReference] = None
+    install_exclude_globs: List[str] = field(default_factory=list)
 
 
 @dataclass(frozen=True)

@@ -32,12 +32,17 @@ def _generate_lock_model_file(rctx):
     else:
         fail("Invalid model type: " + model_params["model_type"])
 
+def _generate_annotations_file(rctx):
+    annotations = {p: json.decode(a) for p, a in rctx.attr.annotations.items()}
+    rctx.file("annotations.json", json.encode(annotations))
+
 def _generate_lock_file(rctx):
     environment_files_and_labels = [(rctx.path(t), str(t)) for t in rctx.attr.target_environments]
     wheel_names_and_labels = [(rctx.path(local_wheel).basename, str(local_wheel)) for local_wheel in rctx.attr.local_wheels]
     args = handle_resolve_attrs(rctx.attr, environment_files_and_labels, wheel_names_and_labels)
     args.append("--always-include-sdist")
     args.extend(["--lock-model-file", "raw_lock.json"])
+    args.extend(["--annotations-file", "annotations.json"])
     args.extend(["--output", "lock.json"])
 
     exec_internal_tool(
@@ -50,6 +55,8 @@ def _resolved_lock_repo_impl(rctx):
     rctx.file(rctx.path("BUILD.bazel"), _ROOT_BUILD)
     rctx.report_progress("Generating raw_lock.json")
     _generate_lock_model_file(rctx)
+    rctx.report_progress("Generating annotations.json")
+    _generate_annotations_file(rctx)
     rctx.report_progress("Generating lock.json")
     _generate_lock_file(rctx)
     rctx.report_progress()

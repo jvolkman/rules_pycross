@@ -1,6 +1,7 @@
 load("@bazel_skylib//rules:write_file.bzl", "write_file")
 load(
     "@rules_pycross//pycross:defs.bzl",
+    "package_annotation",
     "pycross_lock_file",
     "pycross_poetry_lock_model",
     "pycross_target_environment",
@@ -78,40 +79,48 @@ pycross_poetry_lock_model(
 pycross_lock_file(
     name = "example_lock",
     out = "example_lock.bzl",
-    always_build_packages = [
-        "pbr@6.0.0",
-        "setproctitle",
-    ],
-    build_target_overrides = {
-        "future@0.18.2": "@//deps:overridden_future_0.18.2",
+    annotations = {
+        "future@0.18.2": package_annotation(
+            build_target = "@//deps:overridden_future_0.18.2",
+        ),
+        "greenlet": package_annotation(
+            build_dependencies = [
+                "setuptools",
+                "wheel",
+            ],
+        ),
+        "pbr@6.0.0": package_annotation(
+            always_build = True,
+            build_dependencies = [
+                "setuptools",
+                "wheel",
+            ],
+        ),
+        "setproctitle": package_annotation(
+            always_build = True,
+            build_dependencies = [
+                "setuptools",
+                "wheel",
+            ],
+        ),
+        "sqlalchemy": package_annotation(
+            build_dependencies = [
+                "setuptools",
+                "wheel",
+            ],
+        ),
+        "tree-sitter": package_annotation(
+            build_dependencies = [
+                "setuptools",
+                "wheel",
+            ],
+        ),
     },
     default_alias_single_version = True,
     local_wheels = [
         "//wheels",
     ],
     lock_model_file = ":example_lock_model",
-    package_build_dependencies = {
-        "setproctitle": [
-            "setuptools",
-            "wheel",
-        ],
-        "greenlet": [
-            "setuptools",
-            "wheel",
-        ],
-        "tree-sitter": [
-            "setuptools",
-            "wheel",
-        ],
-        "pbr": [
-            "setuptools",
-            "wheel",
-        ],
-        "sqlalchemy": [
-            "setuptools",
-            "wheel",
-        ],
-    },
     pypi_index = "https://pypi.org",
     remote_wheels = {
         "https://files.pythonhosted.org/packages/94/db/fd0326e331726f07ff7f40675cd86aa804bfd2e5016c727fa761c934990e/xmltodict-0.13.0-py2.py3-none-any.whl": "aa89e8fd76320154a40d19a0df04a4695fb9dc5ba977cbb68ab3e4eb225e7852",

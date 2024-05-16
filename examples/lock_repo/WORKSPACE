@@ -51,9 +51,24 @@ pycross_register_for_python_toolchains(
 )
 
 load("@pycross_toolchains//:defs.bzl", "environments")
+load("@rules_pycross//pycross:defs.bzl", "package_annotation")
 
 pycross_lock_repo(
     name = "pdm",
+    annotations = {
+        "amqp-mock": package_annotation(
+            install_exclude_globs = [
+                "tests/**",
+            ],
+        ),
+        "grpclib": package_annotation(
+            always_build = True,
+            build_dependencies = [
+                "setuptools",
+                "wheel",
+            ],
+        ),
+    },
     lock_model = lock_repo_model_pdm(
         lock_file = "@//:pdm.lock",
         project_file = "@//:pyproject.toml",

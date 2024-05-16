@@ -1,6 +1,7 @@
 load("@bazel_skylib//rules:write_file.bzl", "write_file")
 load(
     "@rules_pycross//pycross:defs.bzl",
+    "package_annotation",
     "pycross_lock_file",
     "pycross_pdm_lock_model",
     "pycross_target_environment",
@@ -84,70 +85,97 @@ pycross_pdm_lock_model(
 pycross_lock_file(
     name = "example_lock",
     out = "example_lock.bzl",
-    always_build_packages = [
-        "pbr@6.0.0",
-        "setproctitle",
-    ],
-    build_target_overrides = {
-        "future@0.18.3": "@//deps:overridden_future_0.18.3",
+    annotations = {
+        "amqp-mock": package_annotation(
+            install_exclude_globs = [
+                "tests/**",
+            ],
+        ),
+        "cowsay": package_annotation(
+            build_dependencies = [
+                "setuptools",
+                "wheel",
+            ],
+        ),
+        "django-allauth": package_annotation(
+            build_dependencies = [
+                "setuptools",
+                "wheel",
+            ],
+        ),
+        "future@0.18.3": package_annotation(
+            build_target = "@//deps:overridden_future_0.18.3",
+        ),
+        "greenlet": package_annotation(
+            build_dependencies = [
+                "setuptools",
+                "wheel",
+            ],
+        ),
+        "numpy": package_annotation(
+            build_dependencies = [
+                "cython",
+                "setuptools",
+                "wheel",
+            ],
+        ),
+        "pbr@6.0.0": package_annotation(
+            always_build = True,
+            build_dependencies = [
+                "setuptools",
+                "wheel",
+            ],
+        ),
+        "setproctitle": package_annotation(
+            always_build = True,
+            build_dependencies = [
+                "setuptools",
+                "wheel",
+            ],
+        ),
+        "sphinxcontrib-applehelp": package_annotation(
+            ignore_dependencies = [
+                "sphinx",
+            ],
+        ),
+        "sphinxcontrib-devhelp": package_annotation(
+            ignore_dependencies = [
+                "sphinx",
+            ],
+        ),
+        "sphinxcontrib-htmlhelp": package_annotation(
+            ignore_dependencies = [
+                "sphinx",
+            ],
+        ),
+        "sphinxcontrib-qthelp": package_annotation(
+            ignore_dependencies = [
+                "sphinx",
+            ],
+        ),
+        "sphinxcontrib-serializinghtml": package_annotation(
+            ignore_dependencies = [
+                "sphinx",
+            ],
+        ),
+        "sqlalchemy": package_annotation(
+            build_dependencies = [
+                "setuptools",
+                "wheel",
+            ],
+        ),
+        "tree-sitter": package_annotation(
+            build_dependencies = [
+                "setuptools",
+                "wheel",
+            ],
+        ),
     },
     default_alias_single_version = True,
     local_wheels = [
         "//wheels",
     ],
     lock_model_file = ":example_lock_model",
-    package_build_dependencies = {
-        "numpy": [
-            "cython",
-            "setuptools",
-            "wheel",
-        ],
-        "setproctitle": [
-            "setuptools",
-            "wheel",
-        ],
-        "cowsay": [
-            "setuptools",
-            "wheel",
-        ],
-        "tree-sitter": [
-            "setuptools",
-            "wheel",
-        ],
-        "pbr": [
-            "setuptools",
-            "wheel",
-        ],
-        "django-allauth": [
-            "setuptools",
-            "wheel",
-        ],
-        "greenlet": [
-            "setuptools",
-            "wheel",
-        ],
-        "sqlalchemy": [
-            "setuptools",
-            "wheel",
-        ],
-    },
-    package_ignore_dependencies = {
-        "sphinxcontrib-applehelp": [
-            "sphinx",
-        ],
-        "sphinxcontrib-devhelp": [
-            "sphinx",
-        ],
-        "sphinxcontrib-htmlhelp": [
-            "sphinx",
-        ],
-        "sphinxcontrib-qthelp": [
-            "sphinx",
-        ],
-        "sphinxcontrib-serializinghtml": [
-            "sphinx",
-        ],
-    },
     pypi_index = "https://pypi.org",
     remote_wheels = {
         "https://files.pythonhosted.org/packages/3.7/x/xmltodict/xmltodict-0.12.0-py2.py3-none-any.whl": "8bbcb45cc982f48b2ca8fe7e7827c5d792f217ecf1792626f808bf41c3b86051",

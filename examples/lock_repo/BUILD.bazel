@@ -4,6 +4,8 @@ py_binary(
     name = "ipython",
     srcs = ["ipython.py"],
     deps = [
+        "@pdm//:amqp-mock",
+        "@pdm//:grpclib",
         "@pdm//:ipython",
     ],
 )

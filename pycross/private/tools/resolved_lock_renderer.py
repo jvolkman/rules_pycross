@@ -350,6 +350,13 @@ class PackageTarget:
             lines.append(ind(f"deps = {self._deps_name},"))
 
         lines.append(ind(f'wheel = "{self.naming.wheel(self.package.key).label}",'))
+
+        if self.package.install_exclude_globs:
+            lines.append(ind("install_exclude_globs = ["))
+            for install_exclude_glob in self.package.install_exclude_globs:
+                lines.append(ind(f'"{install_exclude_glob}",', 2))
+            lines.append(ind("],"))
+
         lines.append(")")
 
         return "\n".join(lines)
