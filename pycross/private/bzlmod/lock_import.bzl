@@ -1,5 +1,6 @@
 """The lock_import extension."""
 
+load("@bazel_features//:features.bzl", "bazel_features")
 load("//pycross/private:lock_attrs.bzl", "package_annotation")
 load("//pycross/private:pdm_lock_model.bzl", "lock_repo_model_pdm")
 load("//pycross/private:poetry_lock_model.bzl", "lock_repo_model_poetry")
@@ -127,6 +128,10 @@ def _lock_import_impl(module_ctx):
         name = "lock_import_repos_hub",
         repo_files = resolved_lock_files,
     )
+
+    if bazel_features.external_deps.extension_metadata_has_reproducible:
+        return module_ctx.extension_metadata(reproducible = True)
+    return module_ctx.extension_metadata()
 
 # Tag classes
 _import_pdm_tag = tag_class(

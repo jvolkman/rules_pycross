@@ -1,5 +1,6 @@
 """The lock_repos extension."""
 
+load("@bazel_features//:features.bzl", "bazel_features")
 load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_file")
 load("@lock_import_repos_hub//:locks.bzl", lock_import_locks = "locks")
 load("//pycross/private:package_repo.bzl", "package_repo")
@@ -81,6 +82,10 @@ def _lock_repos_impl(module_ctx):
             resolved_lock_file = lock_file,
             repo_map = repo_remote_files,
         )
+
+    if bazel_features.external_deps.extension_metadata_has_reproducible:
+        return module_ctx.extension_metadata(reproducible = True)
+    return module_ctx.extension_metadata()
 
 # Tag classes
 _create_tag = tag_class(
