@@ -5,7 +5,7 @@
 groups = ["default", "build", "core", "repairwheel"]
 strategy = ["cross_platform", "static_urls"]
 lock_version = "4.4.1"
-content_hash = "sha256:2a0144b44fe7188bda7236fa5d6340d53fd4303bf5d9ede7ba46dd4714b5dd2a"
+content_hash = "sha256:8602048fb1550b976d7cfa5de97c25be78f1d6b80d1da04b0791d61245097a8a"
 
 [[package]]
 name = "altgraph"
@@ -55,28 +55,28 @@ files = [
 
 [[package]]
 name = "delvewheel"
-version = "1.5.2"
+version = "1.6.0"
 requires_python = ">=3.7"
 summary = "Self-contained wheels for Windows"
 dependencies = [
     "pefile",
 ]
 files = [
-    {url = "https://files.pythonhosted.org/packages/3f/cc/2f244482c66ed41aeabc328af4817521e98d7a9695b661d5a6595a31b10a/delvewheel-1.5.2.tar.gz", hash = "sha256:fde628c128536665c3899c47f4df849c905e7f3f850948639b02f209c1cb289f"},
-    {url = "https://files.pythonhosted.org/packages/58/f0/1d2d0496131d23fca5661d31e386a5b1806672570c1f39c4a5106dbe92c3/delvewheel-1.5.2-py3-none-any.whl", hash = "sha256:83eddfb42c406ce26be91604127695afff53045a3e68de8bc3499ba5997843cc"},
+    {url = "https://files.pythonhosted.org/packages/24/f7/35e5657954452f6c221969e67a7c69433b1f230dc076cf49e5a9186a7fd4/delvewheel-1.6.0-py3-none-any.whl", hash = "sha256:15be02e749caacafdd51c283175a041a3f467484a1a96fc2d36340ced6869bff"},
+    {url = "https://files.pythonhosted.org/packages/78/20/c62d194a3ad524d2f26687a908d5cb621d4f0695af23778a1d65f314050e/delvewheel-1.6.0.tar.gz", hash = "sha256:fb2bfc91183330297898992a6b25bde8b1c542f73c4242b73cbef9c747ebcd9b"},
 ]
 
 [[package]]
 name = "importlib-metadata"
-version = "7.0.1"
+version = "7.1.0"
 requires_python = ">=3.8"
 summary = "Read metadata from Python packages"
 dependencies = [
     "zipp>=0.5",
 ]
 files = [
-    {url = "https://files.pythonhosted.org/packages/90/b4/206081fca69171b4dc1939e77b378a7b87021b0f43ce07439d49d8ac5c84/importlib_metadata-7.0.1.tar.gz", hash = "sha256:f238736bb06590ae52ac1fab06a3a9ef1d8dce2b7a35b5ab329371d6c8f5d2cc"},
-    {url = "https://files.pythonhosted.org/packages/c0/8b/d8427f023c081a8303e6ac7209c16e6878f2765d5b59667f3903fbcfd365/importlib_metadata-7.0.1-py3-none-any.whl", hash = "sha256:4805911c3a4ec7c3966410053e9ec6a1fecd629117df5adee56dfc9432a1081e"},
+    {url = "https://files.pythonhosted.org/packages/2d/0a/679461c511447ffaf176567d5c496d1de27cbe34a87df6677d7171b2fbd4/importlib_metadata-7.1.0-py3-none-any.whl", hash = "sha256:30962b96c0c223483ed6cc7280e7f0199feb01a0e40cfae4d4450fc6fab1f570"},
+    {url = "https://files.pythonhosted.org/packages/a0/fc/c4e6078d21fc4fa56300a241b87eae76766aa380a23fc450fc85bb7bf547/importlib_metadata-7.1.0.tar.gz", hash = "sha256:b78938b926ee8d5f020fc4772d487045805a55ddbad2ecf21c6d60938dc7fcd2"},
 ]
 
 [[package]]
@@ -143,29 +143,26 @@ files = [
 
 [[package]]
 name = "pyelftools"
-version = "0.30"
+version = "0.31"
 summary = "Library for analyzing ELF files and DWARF debugging information"
 files = [
-    {url = "https://files.pythonhosted.org/packages/33/f9/281a411a5281b674b10830a2f312c64464b49916d097b8919f009de579e0/pyelftools-0.30-py2.py3-none-any.whl", hash = "sha256:544c3440eddb9a0dce70b6611de0b28163d71def759d2ed57a0d00118fc5da86"},
-    {url = "https://files.pythonhosted.org/packages/84/05/fd41cd647de044d1ffec90ce5aaae935126ac217f8ecb302186655284fc8/pyelftools-0.30.tar.gz", hash = "sha256:2fc92b0d534f8b081f58c7c370967379123d8e00984deb53c209364efd575b40"},
+    {url = "https://files.pythonhosted.org/packages/88/56/0f2d69ed9a0060da009f672ddec8a71c041d098a66f6b1d80264bf6bbdc0/pyelftools-0.31.tar.gz", hash = "sha256:c774416b10310156879443b81187d182d8d9ee499660380e645918b50bc88f99"},
+    {url = "https://files.pythonhosted.org/packages/f8/64/711030d9fe9ccaf6ee3ab1bcf4801c6bb3d0e585af18824a50b016b4f39c/pyelftools-0.31-py3-none-any.whl", hash = "sha256:f52de7b3c7e8c64c8abc04a79a1cf37ac5fb0b8a49809827130b858944840607"},
 ]
 
 [[package]]
 name = "pyproject-hooks"
-version = "1.0.0"
+version = "1.1.0"
 requires_python = ">=3.7"
 summary = "Wrappers to call pyproject.toml-based build backend hooks."
-dependencies = [
-    "tomli>=1.1.0; python_version < \"3.11\"",
-]
 files = [
-    {url = "https://files.pythonhosted.org/packages/25/c1/374304b8407d3818f7025457b7366c8e07768377ce12edfe2aa58aa0f64c/pyproject_hooks-1.0.0.tar.gz", hash = "sha256:f271b298b97f5955d53fb12b72c1fb1948c22c1a6b70b315c54cedaca0264ef5"},
-    {url = "https://files.pythonhosted.org/packages/d5/ea/9ae603de7fbb3df820b23a70f6aff92bf8c7770043254ad8d2dc9d6bcba4/pyproject_hooks-1.0.0-py3-none-any.whl", hash = "sha256:283c11acd6b928d2f6a7c73fa0d01cb2bdc5f07c57a2eeb6e83d5e56b97976f8"},
+    {url = "https://files.pythonhosted.org/packages/ae/f3/431b9d5fe7d14af7a32340792ef43b8a714e7726f1d7b69cc4e8e7a3f1d7/pyproject_hooks-1.1.0-py3-none-any.whl", hash = "sha256:7ceeefe9aec63a1064c18d939bdc3adf2d8aa1988a510afec15151578b232aa2"},
+    {url = "https://files.pythonhosted.org/packages/c7/07/6f63dda440d4abb191b91dc383b472dae3dd9f37e4c1e4a5c3db150531c6/pyproject_hooks-1.1.0.tar.gz", hash = "sha256:4b37730834edbd6bd37f26ece6b44802fb1c1ee2ece0e54ddff8bfc06db86965"},
 ]
 
 [[package]]
 name = "repairwheel"
-version = "0.2.8"
+version = "0.3.0"
 requires_python = ">=3.8"
 summary = "Repair any wheel, anywhere"
 dependencies = [
@@ -176,8 +173,8 @@ dependencies = [
     "pyelftools>=0.24",
 ]
 files = [
-    {url = "https://files.pythonhosted.org/packages/06/a9/d40432111cd6629cea8a5ed489427169d690e29711393a106053fbfec8d2/repairwheel-0.2.8-py3-none-any.whl", hash = "sha256:185133fe9a09d2773dc7ffaac419c9300285ba2859eadc4bfd376bc1e3740da1"},
-    {url = "https://files.pythonhosted.org/packages/19/48/7222a6e4c8e4da4884e2bcab1e3146cfe26ab740bad2ee949075040585ec/repairwheel-0.2.8.tar.gz", hash = "sha256:222c368733ea02adae2b394f87818bc1babe5d990785d17bd651a28a167fb3ab"},
+    {url = "https://files.pythonhosted.org/packages/52/ee/18c8641792d0c886d410dfd8c4b7dc54148034cad2a66a18727d30f57e3d/repairwheel-0.3.0-py3-none-any.whl", hash = "sha256:7554d16ed4c350f5416f18e170b9330746edc342bdb9c12c276c6f2855c7205f"},
+    {url = "https://files.pythonhosted.org/packages/9b/df/ab7b0f66d83d6d5e7c5a7f2c7205064202a0beea0defa88069de4a3ca28c/repairwheel-0.3.0.tar.gz", hash = "sha256:4afc02fb2a0932009f63098f294eba6aa67be97b3c05860f36e54d679175b3fd"},
 ]
 
 [[package]]
@@ -192,10 +189,10 @@ files = [
 
 [[package]]
 name = "zipp"
-version = "3.17.0"
+version = "3.19.2"
 requires_python = ">=3.8"
 summary = "Backport of pathlib-compatible object wrapper for zip files"
 files = [
-    {url = "https://files.pythonhosted.org/packages/58/03/dd5ccf4e06dec9537ecba8fcc67bbd4ea48a2791773e469e73f94c3ba9a6/zipp-3.17.0.tar.gz", hash = "sha256:84e64a1c28cf7e91ed2078bb8cc8c259cb19b76942096c8d7b84947690cabaf0"},
-    {url = "https://files.pythonhosted.org/packages/d9/66/48866fc6b158c81cc2bfecc04c480f105c6040e8b077bc54c634b4a67926/zipp-3.17.0-py3-none-any.whl", hash = "sha256:0e923e726174922dce09c53c59ad483ff7bbb8e572e00c7f7c46b88556409f31"},
+    {url = "https://files.pythonhosted.org/packages/20/38/f5c473fe9b90c8debdd29ea68d5add0289f1936d6f923b6b9cc0b931194c/zipp-3.19.2-py3-none-any.whl", hash = "sha256:f091755f667055f2d02b32c53771a7a6c8b47e1fdbc4b72a8b9072b3eef8015c"},
+    {url = "https://files.pythonhosted.org/packages/d3/20/b48f58857d98dcb78f9e30ed2cfe533025e2e9827bbd36ea0a64cc00cbc1/zipp-3.19.2.tar.gz", hash = "sha256:bf1dcf6450f873a13e952a29504887c89e6de7506209e5b1bcc3460135d4de19"},
 ]
