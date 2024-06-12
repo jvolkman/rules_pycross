@@ -17,6 +17,7 @@ def main() -> None:
         str(wheel_file),
         "--output-dir",
         str(output_dir),
+        "--no-sys-paths",
     ]
 
     for lp in lib_path:
