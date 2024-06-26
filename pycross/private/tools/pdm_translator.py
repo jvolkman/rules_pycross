@@ -5,12 +5,8 @@ import re
 from collections import defaultdict
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
-from typing import Dict
-from typing import List
-from typing import Set
-from urllib.parse import unquote
-from urllib.parse import urlparse
+from typing import Any, Dict, List, Set
+from urllib.parse import unquote, urlparse
 
 import tomli
 from packaging.requirements import Requirement
@@ -19,12 +15,14 @@ from packaging.utils import NormalizedName
 from packaging.version import Version
 
 from pycross.private.tools.args import FlagFileArgumentParser
-from pycross.private.tools.lock_model import package_canonical_name
-from pycross.private.tools.lock_model import PackageDependency
-from pycross.private.tools.lock_model import PackageFile
-from pycross.private.tools.lock_model import PackageKey
-from pycross.private.tools.lock_model import RawLockSet
-from pycross.private.tools.lock_model import RawPackage
+from pycross.private.tools.lock_model import (
+    PackageDependency,
+    PackageFile,
+    PackageKey,
+    RawLockSet,
+    RawPackage,
+    package_canonical_name,
+)
 
 
 class LockfileIncompatibleException(Exception):
@@ -165,14 +163,15 @@ def translate(
             lock_dict = tomli.load(f)
     except Exception as e:
         raise Exception(f"Could not load lock file: {lock_file}: {e}")
-
-    lock_version = lock_dict.get("metadata", {}).get("lock_version")
+    lock_version = lock_dict.get("metadata", {}).get("lock_version") or lock_dict.get("version")
     if not lock_version:
         raise LockfileIncompatibleException(f"Lock file at {lock_file} has no version")
-    if Version(lock_version) not in SUPPORTED_LOCK_VERSIONS:
+    if isinstance(lock_version, str) and Version(lock_version) not in SUPPORTED_LOCK_VERSIONS:
         raise LockfileIncompatibleException(
             f"Lock file version {lock_version} not included in {SUPPORTED_LOCK_VERSIONS}"
         )
+    if isinstance(lock_version, int) and lock_version != 1:
+        raise LockfileIncompatibleException(f"Lock file version {lock_version} is not supported")
 
     requirements: List[Requirement] = []
 
@@ -206,7 +205,7 @@ def translate(
 
     distinct_packages: Dict[PackageKey, PDMPackage] = {}
     # Pull out all Package entries in a pdm-specific model.
-    for lock_pkg in lock_dict.get("package", []):
+    for lock_pkg in lock_dict.get("package", lock_dict.get("distribution", [])):
         package_listed_name = lock_pkg["name"]
         package_name = package_canonical_name(package_listed_name)
         package_version = lock_pkg["version"]
@@ -217,9 +216,21 @@ def translate(
             # Special case for all python versions
             package_requires_python = ""
 
-        dependencies = {Requirement(dep) for dep in lock_pkg.get("dependencies", [])}
-        files = {parse_file_info(f) for f in lock_pkg.get("files", [])}
-        is_local = "path" in lock_pkg and "files" not in lock_pkg
+        dependencies = set()
+        for dep in lock_pkg.get("dependencies", []):
+            if isinstance(dep, dict):
+                dep_string = (
+                    f"{dep['name']}=={dep['version']};{dep['marker']}"
+                    if dep.get("marker")
+                    else f"{dep['name']}=={dep['version']}"
+                )
+                dependencies.add(Requirement(dep_string))
+            else:
+                dependencies.add(Requirement(dep))
+
+        # dependencies = {Requirement(dep) for dep in lock_pkg.get("dependencies", [])}
+        files = {parse_file_info(f) for f in lock_pkg.get("files", lock_pkg.get("wheels", []))}
+        is_local = ("path" in lock_pkg and "files" not in lock_pkg) or lock_pkg.get("sdist") == {"path": "."}
 
         package = PDMPackage(
             name=package_name,
@@ -267,6 +278,7 @@ def translate(
                 )
 
     pinned_keys: Dict[NormalizedName, PackageKey] = {}
+
     for pin, pin_spec in pinned_package_specs.items():
         pin_packages = packages_by_canonical_name[pin]
         for pin_pkg in pin_packages:
