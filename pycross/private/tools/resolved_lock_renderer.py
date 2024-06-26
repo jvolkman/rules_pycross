@@ -357,6 +357,24 @@ class PackageTarget:
                 lines.append(ind(f'"{install_exclude_glob}",', 2))
             lines.append(ind("],"))
 
+        if self.package.cc_hdrs_globs is not None:
+            lines.append(ind("cc_hdrs_globs = ["))
+            for cc_hdrs_glob in self.package.cc_hdrs_globs:
+                lines.append(ind(f'"{cc_hdrs_glob}",', 2))
+            lines.append(ind("],"))
+
+        if self.package.cc_deps is not None:
+            lines.append(ind("cc_deps = ["))
+            for cc_dep in self.package.cc_deps:
+                lines.append(ind(f'"{cc_dep}",', 2))
+            lines.append(ind("],"))
+
+        if self.package.cc_includes is not None:
+            lines.append(ind("cc_includes = ["))
+            for cc_include in self.package.cc_includes:
+                lines.append(ind(f'"{cc_include}",', 2))
+            lines.append(ind("],"))
+
         lines.append(")")
 
         return "\n".join(lines)

@@ -57,98 +57,98 @@ def targets():
     )
 
     native.alias(
-        name = "_env_python_3.11.6_aarch64-apple-darwin",
-        actual = "@@rules_pycross~override~environments~pycross_environments//:python_3.11.6_aarch64-apple-darwin_config",
+        name = "_env_python_3.11_aarch64-apple-darwin",
+        actual = "@@rules_pycross~override~environments~pycross_environments//:python_3.11_aarch64-apple-darwin_config",
     )
 
     native.alias(
-        name = "_env_python_3.11.6_aarch64-unknown-linux-gnu",
-        actual = "@@rules_pycross~override~environments~pycross_environments//:python_3.11.6_aarch64-unknown-linux-gnu_config",
+        name = "_env_python_3.11_aarch64-unknown-linux-gnu",
+        actual = "@@rules_pycross~override~environments~pycross_environments//:python_3.11_aarch64-unknown-linux-gnu_config",
     )
 
     native.alias(
-        name = "_env_python_3.11.6_ppc64le-unknown-linux-gnu",
-        actual = "@@rules_pycross~override~environments~pycross_environments//:python_3.11.6_ppc64le-unknown-linux-gnu_config",
+        name = "_env_python_3.11_ppc64le-unknown-linux-gnu",
+        actual = "@@rules_pycross~override~environments~pycross_environments//:python_3.11_ppc64le-unknown-linux-gnu_config",
     )
 
     native.alias(
-        name = "_env_python_3.11.6_s390x-unknown-linux-gnu",
-        actual = "@@rules_pycross~override~environments~pycross_environments//:python_3.11.6_s390x-unknown-linux-gnu_config",
+        name = "_env_python_3.11_s390x-unknown-linux-gnu",
+        actual = "@@rules_pycross~override~environments~pycross_environments//:python_3.11_s390x-unknown-linux-gnu_config",
     )
 
     native.alias(
-        name = "_env_python_3.11.6_x86_64-apple-darwin",
-        actual = "@@rules_pycross~override~environments~pycross_environments//:python_3.11.6_x86_64-apple-darwin_config",
+        name = "_env_python_3.11_x86_64-apple-darwin",
+        actual = "@@rules_pycross~override~environments~pycross_environments//:python_3.11_x86_64-apple-darwin_config",
     )
 
     native.alias(
-        name = "_env_python_3.11.6_x86_64-pc-windows-msvc",
-        actual = "@@rules_pycross~override~environments~pycross_environments//:python_3.11.6_x86_64-pc-windows-msvc_config",
+        name = "_env_python_3.11_x86_64-pc-windows-msvc",
+        actual = "@@rules_pycross~override~environments~pycross_environments//:python_3.11_x86_64-pc-windows-msvc_config",
     )
 
     native.alias(
-        name = "_env_python_3.11.6_x86_64-unknown-linux-gnu",
-        actual = "@@rules_pycross~override~environments~pycross_environments//:python_3.11.6_x86_64-unknown-linux-gnu_config",
+        name = "_env_python_3.11_x86_64-unknown-linux-gnu",
+        actual = "@@rules_pycross~override~environments~pycross_environments//:python_3.11_x86_64-unknown-linux-gnu_config",
     )
 
     native.alias(
-        name = "_env_python_3.12.0_aarch64-apple-darwin",
-        actual = "@@rules_pycross~override~environments~pycross_environments//:python_3.12.0_aarch64-apple-darwin_config",
+        name = "_env_python_3.12_aarch64-apple-darwin",
+        actual = "@@rules_pycross~override~environments~pycross_environments//:python_3.12_aarch64-apple-darwin_config",
     )
 
     native.alias(
-        name = "_env_python_3.12.0_aarch64-unknown-linux-gnu",
-        actual = "@@rules_pycross~override~environments~pycross_environments//:python_3.12.0_aarch64-unknown-linux-gnu_config",
+        name = "_env_python_3.12_aarch64-unknown-linux-gnu",
+        actual = "@@rules_pycross~override~environments~pycross_environments//:python_3.12_aarch64-unknown-linux-gnu_config",
     )
 
     native.alias(
-        name = "_env_python_3.12.0_ppc64le-unknown-linux-gnu",
-        actual = "@@rules_pycross~override~environments~pycross_environments//:python_3.12.0_ppc64le-unknown-linux-gnu_config",
+        name = "_env_python_3.12_ppc64le-unknown-linux-gnu",
+        actual = "@@rules_pycross~override~environments~pycross_environments//:python_3.12_ppc64le-unknown-linux-gnu_config",
     )
 
     native.alias(
-        name = "_env_python_3.12.0_s390x-unknown-linux-gnu",
-        actual = "@@rules_pycross~override~environments~pycross_environments//:python_3.12.0_s390x-unknown-linux-gnu_config",
+        name = "_env_python_3.12_s390x-unknown-linux-gnu",
+        actual = "@@rules_pycross~override~environments~pycross_environments//:python_3.12_s390x-unknown-linux-gnu_config",
     )
 
     native.alias(
-        name = "_env_python_3.12.0_x86_64-apple-darwin",
-        actual = "@@rules_pycross~override~environments~pycross_environments//:python_3.12.0_x86_64-apple-darwin_config",
+        name = "_env_python_3.12_x86_64-apple-darwin",
+        actual = "@@rules_pycross~override~environments~pycross_environments//:python_3.12_x86_64-apple-darwin_config",
     )
 
     native.alias(
-        name = "_env_python_3.12.0_x86_64-pc-windows-msvc",
-        actual = "@@rules_pycross~override~environments~pycross_environments//:python_3.12.0_x86_64-pc-windows-msvc_config",
+        name = "_env_python_3.12_x86_64-pc-windows-msvc",
+        actual = "@@rules_pycross~override~environments~pycross_environments//:python_3.12_x86_64-pc-windows-msvc_config",
     )
 
     native.alias(
-        name = "_env_python_3.12.0_x86_64-unknown-linux-gnu",
-        actual = "@@rules_pycross~override~environments~pycross_environments//:python_3.12.0_x86_64-unknown-linux-gnu_config",
+        name = "_env_python_3.12_x86_64-unknown-linux-gnu",
+        actual = "@@rules_pycross~override~environments~pycross_environments//:python_3.12_x86_64-unknown-linux-gnu_config",
     )
 
     # buildifier: disable=unused-variable
     _target = select({
-        ":_env_python_3.11.5_aarch64-apple-darwin": "@rules_pycross~override~environments~pycross_environments//:python_3.11.5_aarch64-apple-darwin.json",
-        ":_env_python_3.11.5_aarch64-unknown-linux-gnu": "@rules_pycross~override~environments~pycross_environments//:python_3.11.5_aarch64-unknown-linux-gnu.json",
-        ":_env_python_3.11.5_ppc64le-unknown-linux-gnu": "@rules_pycross~override~environments~pycross_environments//:python_3.11.5_ppc64le-unknown-linux-gnu.json",
-        ":_env_python_3.11.5_s390x-unknown-linux-gnu": "@rules_pycross~override~environments~pycross_environments//:python_3.11.5_s390x-unknown-linux-gnu.json",
-        ":_env_python_3.11.5_x86_64-apple-darwin": "@rules_pycross~override~environments~pycross_environments//:python_3.11.5_x86_64-apple-darwin.json",
-        ":_env_python_3.11.5_x86_64-pc-windows-msvc": "@rules_pycross~override~environments~pycross_environments//:python_3.11.5_x86_64-pc-windows-msvc.json",
-        ":_env_python_3.11.5_x86_64-unknown-linux-gnu": "@rules_pycross~override~environments~pycross_environments//:python_3.11.5_x86_64-unknown-linux-gnu.json",
-        ":_env_python_3.11.6_aarch64-apple-darwin": "@rules_pycross~override~environments~pycross_environments//:python_3.11.6_aarch64-apple-darwin.json",
-        ":_env_python_3.11.6_aarch64-unknown-linux-gnu": "@rules_pycross~override~environments~pycross_environments//:python_3.11.6_aarch64-unknown-linux-gnu.json",
-        ":_env_python_3.11.6_ppc64le-unknown-linux-gnu": "@rules_pycross~override~environments~pycross_environments//:python_3.11.6_ppc64le-unknown-linux-gnu.json",
-        ":_env_python_3.11.6_s390x-unknown-linux-gnu": "@rules_pycross~override~environments~pycross_environments//:python_3.11.6_s390x-unknown-linux-gnu.json",
-        ":_env_python_3.11.6_x86_64-apple-darwin": "@rules_pycross~override~environments~pycross_environments//:python_3.11.6_x86_64-apple-darwin.json",
-        ":_env_python_3.11.6_x86_64-pc-windows-msvc": "@rules_pycross~override~environments~pycross_environments//:python_3.11.6_x86_64-pc-windows-msvc.json",
-        ":_env_python_3.11.6_x86_64-unknown-linux-gnu": "@rules_pycross~override~environments~pycross_environments//:python_3.11.6_x86_64-unknown-linux-gnu.json",
-        ":_env_python_3.12.0_aarch64-apple-darwin": "@rules_pycross~override~environments~pycross_environments//:python_3.12.0_aarch64-apple-darwin.json",
-        ":_env_python_3.12.0_aarch64-unknown-linux-gnu": "@rules_pycross~override~environments~pycross_environments//:python_3.12.0_aarch64-unknown-linux-gnu.json",
-        ":_env_python_3.12.0_ppc64le-unknown-linux-gnu": "@rules_pycross~override~environments~pycross_environments//:python_3.12.0_ppc64le-unknown-linux-gnu.json",
-        ":_env_python_3.12.0_s390x-unknown-linux-gnu": "@rules_pycross~override~environments~pycross_environments//:python_3.12.0_s390x-unknown-linux-gnu.json",
-        ":_env_python_3.12.0_x86_64-apple-darwin": "@rules_pycross~override~environments~pycross_environments//:python_3.12.0_x86_64-apple-darwin.json",
-        ":_env_python_3.12.0_x86_64-pc-windows-msvc": "@rules_pycross~override~environments~pycross_environments//:python_3.12.0_x86_64-pc-windows-msvc.json",
-        ":_env_python_3.12.0_x86_64-unknown-linux-gnu": "@rules_pycross~override~environments~pycross_environments//:python_3.12.0_x86_64-unknown-linux-gnu.json",
+        ":_env_python_3.11.5_aarch64-apple-darwin": "@@rules_pycross~override~environments~pycross_environments//:python_3.11.5_aarch64-apple-darwin.json",
+        ":_env_python_3.11.5_aarch64-unknown-linux-gnu": "@@rules_pycross~override~environments~pycross_environments//:python_3.11.5_aarch64-unknown-linux-gnu.json",
+        ":_env_python_3.11.5_ppc64le-unknown-linux-gnu": "@@rules_pycross~override~environments~pycross_environments//:python_3.11.5_ppc64le-unknown-linux-gnu.json",
+        ":_env_python_3.11.5_s390x-unknown-linux-gnu": "@@rules_pycross~override~environments~pycross_environments//:python_3.11.5_s390x-unknown-linux-gnu.json",
+        ":_env_python_3.11.5_x86_64-apple-darwin": "@@rules_pycross~override~environments~pycross_environments//:python_3.11.5_x86_64-apple-darwin.json",
+        ":_env_python_3.11.5_x86_64-pc-windows-msvc": "@@rules_pycross~override~environments~pycross_environments//:python_3.11.5_x86_64-pc-windows-msvc.json",
+        ":_env_python_3.11.5_x86_64-unknown-linux-gnu": "@@rules_pycross~override~environments~pycross_environments//:python_3.11.5_x86_64-unknown-linux-gnu.json",
+        ":_env_python_3.11_aarch64-apple-darwin": "@@rules_pycross~override~environments~pycross_environments//:python_3.11_aarch64-apple-darwin.json",
+        ":_env_python_3.11_aarch64-unknown-linux-gnu": "@@rules_pycross~override~environments~pycross_environments//:python_3.11_aarch64-unknown-linux-gnu.json",
+        ":_env_python_3.11_ppc64le-unknown-linux-gnu": "@@rules_pycross~override~environments~pycross_environments//:python_3.11_ppc64le-unknown-linux-gnu.json",
+        ":_env_python_3.11_s390x-unknown-linux-gnu": "@@rules_pycross~override~environments~pycross_environments//:python_3.11_s390x-unknown-linux-gnu.json",
+        ":_env_python_3.11_x86_64-apple-darwin": "@@rules_pycross~override~environments~pycross_environments//:python_3.11_x86_64-apple-darwin.json",
+        ":_env_python_3.11_x86_64-pc-windows-msvc": "@@rules_pycross~override~environments~pycross_environments//:python_3.11_x86_64-pc-windows-msvc.json",
+        ":_env_python_3.11_x86_64-unknown-linux-gnu": "@@rules_pycross~override~environments~pycross_environments//:python_3.11_x86_64-unknown-linux-gnu.json",
+        ":_env_python_3.12_aarch64-apple-darwin": "@@rules_pycross~override~environments~pycross_environments//:python_3.12_aarch64-apple-darwin.json",
+        ":_env_python_3.12_aarch64-unknown-linux-gnu": "@@rules_pycross~override~environments~pycross_environments//:python_3.12_aarch64-unknown-linux-gnu.json",
+        ":_env_python_3.12_ppc64le-unknown-linux-gnu": "@@rules_pycross~override~environments~pycross_environments//:python_3.12_ppc64le-unknown-linux-gnu.json",
+        ":_env_python_3.12_s390x-unknown-linux-gnu": "@@rules_pycross~override~environments~pycross_environments//:python_3.12_s390x-unknown-linux-gnu.json",
+        ":_env_python_3.12_x86_64-apple-darwin": "@@rules_pycross~override~environments~pycross_environments//:python_3.12_x86_64-apple-darwin.json",
+        ":_env_python_3.12_x86_64-pc-windows-msvc": "@@rules_pycross~override~environments~pycross_environments//:python_3.12_x86_64-pc-windows-msvc.json",
+        ":_env_python_3.12_x86_64-unknown-linux-gnu": "@@rules_pycross~override~environments~pycross_environments//:python_3.12_x86_64-unknown-linux-gnu.json",
     })
 
     _asttokens_2_4_1_deps = [
@@ -164,6 +164,12 @@ def targets():
         name = "asttokens@2.4.1",
         deps = _asttokens_2_4_1_deps,
         wheel = ":_wheel_asttokens@2.4.1",
+        cc_hdrs_globs = [
+        ],
+        cc_deps = [
+        ],
+        cc_includes = [
+        ],
     )
 
     native.alias(
@@ -174,6 +180,12 @@ def targets():
     pycross_wheel_library(
         name = "colorama@0.4.6",
         wheel = ":_wheel_colorama@0.4.6",
+        cc_hdrs_globs = [
+        ],
+        cc_deps = [
+        ],
+        cc_includes = [
+        ],
     )
 
     native.alias(
@@ -184,6 +196,12 @@ def targets():
     pycross_wheel_library(
         name = "decorator@5.1.1",
         wheel = ":_wheel_decorator@5.1.1",
+        cc_hdrs_globs = [
+        ],
+        cc_deps = [
+        ],
+        cc_includes = [
+        ],
     )
 
     native.alias(
@@ -194,6 +212,12 @@ def targets():
     pycross_wheel_library(
         name = "executing@2.0.1",
         wheel = ":_wheel_executing@2.0.1",
+        cc_hdrs_globs = [
+        ],
+        cc_deps = [
+        ],
+        cc_includes = [
+        ],
     )
 
     _ipython_8_19_0_deps = [
@@ -226,46 +250,46 @@ def targets():
         ":_env_python_3.11.5_x86_64-unknown-linux-gnu": [
             ":pexpect@4.9.0",
         ],
-        ":_env_python_3.11.6_aarch64-apple-darwin": [
+        ":_env_python_3.11_aarch64-apple-darwin": [
             ":pexpect@4.9.0",
         ],
-        ":_env_python_3.11.6_aarch64-unknown-linux-gnu": [
+        ":_env_python_3.11_aarch64-unknown-linux-gnu": [
             ":pexpect@4.9.0",
         ],
-        ":_env_python_3.11.6_ppc64le-unknown-linux-gnu": [
+        ":_env_python_3.11_ppc64le-unknown-linux-gnu": [
             ":pexpect@4.9.0",
         ],
-        ":_env_python_3.11.6_s390x-unknown-linux-gnu": [
+        ":_env_python_3.11_s390x-unknown-linux-gnu": [
             ":pexpect@4.9.0",
         ],
-        ":_env_python_3.11.6_x86_64-apple-darwin": [
+        ":_env_python_3.11_x86_64-apple-darwin": [
             ":pexpect@4.9.0",
         ],
-        ":_env_python_3.11.6_x86_64-pc-windows-msvc": [
+        ":_env_python_3.11_x86_64-pc-windows-msvc": [
             ":colorama@0.4.6",
         ],
-        ":_env_python_3.11.6_x86_64-unknown-linux-gnu": [
+        ":_env_python_3.11_x86_64-unknown-linux-gnu": [
             ":pexpect@4.9.0",
         ],
-        ":_env_python_3.12.0_aarch64-apple-darwin": [
+        ":_env_python_3.12_aarch64-apple-darwin": [
             ":pexpect@4.9.0",
         ],
-        ":_env_python_3.12.0_aarch64-unknown-linux-gnu": [
+        ":_env_python_3.12_aarch64-unknown-linux-gnu": [
             ":pexpect@4.9.0",
         ],
-        ":_env_python_3.12.0_ppc64le-unknown-linux-gnu": [
+        ":_env_python_3.12_ppc64le-unknown-linux-gnu": [
             ":pexpect@4.9.0",
         ],
-        ":_env_python_3.12.0_s390x-unknown-linux-gnu": [
+        ":_env_python_3.12_s390x-unknown-linux-gnu": [
             ":pexpect@4.9.0",
         ],
-        ":_env_python_3.12.0_x86_64-apple-darwin": [
+        ":_env_python_3.12_x86_64-apple-darwin": [
             ":pexpect@4.9.0",
         ],
-        ":_env_python_3.12.0_x86_64-pc-windows-msvc": [
+        ":_env_python_3.12_x86_64-pc-windows-msvc": [
             ":colorama@0.4.6",
         ],
-        ":_env_python_3.12.0_x86_64-unknown-linux-gnu": [
+        ":_env_python_3.12_x86_64-unknown-linux-gnu": [
             ":pexpect@4.9.0",
         ],
         "//conditions:default": [],
@@ -280,6 +304,12 @@ def targets():
         name = "ipython@8.19.0",
         deps = _ipython_8_19_0_deps,
         wheel = ":_wheel_ipython@8.19.0",
+        cc_hdrs_globs = [
+        ],
+        cc_deps = [
+        ],
+        cc_includes = [
+        ],
     )
 
     _jedi_0_19_1_deps = [
@@ -295,6 +325,12 @@ def targets():
         name = "jedi@0.19.1",
         deps = _jedi_0_19_1_deps,
         wheel = ":_wheel_jedi@0.19.1",
+        cc_hdrs_globs = [
+        ],
+        cc_deps = [
+        ],
+        cc_includes = [
+        ],
     )
 
     _matplotlib_inline_0_1_6_deps = [
@@ -310,6 +346,12 @@ def targets():
         name = "matplotlib-inline@0.1.6",
         deps = _matplotlib_inline_0_1_6_deps,
         wheel = ":_wheel_matplotlib-inline@0.1.6",
+        cc_hdrs_globs = [
+        ],
+        cc_deps = [
+        ],
+        cc_includes = [
+        ],
     )
 
     native.alias(
@@ -320,6 +362,12 @@ def targets():
     pycross_wheel_library(
         name = "parso@0.8.3",
         wheel = ":_wheel_parso@0.8.3",
+        cc_hdrs_globs = [
+        ],
+        cc_deps = [
+        ],
+        cc_includes = [
+        ],
     )
 
     _pexpect_4_9_0_deps = [
@@ -335,6 +383,12 @@ def targets():
         name = "pexpect@4.9.0",
         deps = _pexpect_4_9_0_deps,
         wheel = ":_wheel_pexpect@4.9.0",
+        cc_hdrs_globs = [
+        ],
+        cc_deps = [
+        ],
+        cc_includes = [
+        ],
     )
 
     _prompt_toolkit_3_0_43_deps = [
@@ -350,6 +404,12 @@ def targets():
         name = "prompt-toolkit@3.0.43",
         deps = _prompt_toolkit_3_0_43_deps,
         wheel = ":_wheel_prompt-toolkit@3.0.43",
+        cc_hdrs_globs = [
+        ],
+        cc_deps = [
+        ],
+        cc_includes = [
+        ],
     )
 
     native.alias(
@@ -360,6 +420,12 @@ def targets():
     pycross_wheel_library(
         name = "ptyprocess@0.7.0",
         wheel = ":_wheel_ptyprocess@0.7.0",
+        cc_hdrs_globs = [
+        ],
+        cc_deps = [
+        ],
+        cc_includes = [
+        ],
     )
 
     native.alias(
@@ -370,6 +436,12 @@ def targets():
     pycross_wheel_library(
         name = "pure-eval@0.2.2",
         wheel = ":_wheel_pure-eval@0.2.2",
+        cc_hdrs_globs = [
+        ],
+        cc_deps = [
+        ],
+        cc_includes = [
+        ],
     )
 
     native.alias(
@@ -380,6 +452,12 @@ def targets():
     pycross_wheel_library(
         name = "pygments@2.17.2",
         wheel = ":_wheel_pygments@2.17.2",
+        cc_hdrs_globs = [
+        ],
+        cc_deps = [
+        ],
+        cc_includes = [
+        ],
     )
 
     native.alias(
@@ -390,6 +468,12 @@ def targets():
     pycross_wheel_library(
         name = "setuptools@69.0.3",
         wheel = ":_wheel_setuptools@69.0.3",
+        cc_hdrs_globs = [
+        ],
+        cc_deps = [
+        ],
+        cc_includes = [
+        ],
     )
 
     native.alias(
@@ -400,6 +484,12 @@ def targets():
     pycross_wheel_library(
         name = "six@1.16.0",
         wheel = ":_wheel_six@1.16.0",
+        cc_hdrs_globs = [
+        ],
+        cc_deps = [
+        ],
+        cc_includes = [
+        ],
     )
 
     _stack_data_0_6_3_deps = [
@@ -417,6 +507,12 @@ def targets():
         name = "stack-data@0.6.3",
         deps = _stack_data_0_6_3_deps,
         wheel = ":_wheel_stack-data@0.6.3",
+        cc_hdrs_globs = [
+        ],
+        cc_deps = [
+        ],
+        cc_includes = [
+        ],
     )
 
     native.alias(
@@ -427,6 +523,12 @@ def targets():
     pycross_wheel_library(
         name = "traitlets@5.14.1",
         wheel = ":_wheel_traitlets@5.14.1",
+        cc_hdrs_globs = [
+        ],
+        cc_deps = [
+        ],
+        cc_includes = [
+        ],
     )
 
     native.alias(
@@ -437,6 +539,12 @@ def targets():
     pycross_wheel_library(
         name = "wcwidth@0.2.12",
         wheel = ":_wheel_wcwidth@0.2.12",
+        cc_hdrs_globs = [
+        ],
+        cc_deps = [
+        ],
+        cc_includes = [
+        ],
     )
 
     native.alias(
@@ -447,6 +555,12 @@ def targets():
     pycross_wheel_library(
         name = "wheel@0.42.0",
         wheel = ":_wheel_wheel@0.42.0",
+        cc_hdrs_globs = [
+        ],
+        cc_deps = [
+        ],
+        cc_includes = [
+        ],
     )
 
 # buildifier: disable=unnamed-macro

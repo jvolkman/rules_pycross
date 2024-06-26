@@ -115,6 +115,11 @@ pycross_lock_file(
                 "wheel",
             ],
         ),
+        "numpy": package_annotation(
+            cc_deps = ["@rules_python//python/cc:current_py_cc_headers"],
+            cc_hdrs_globs = ["numpy/core/include/numpy/*.h"],
+            cc_includes = ["numpy/core/include"],
+        ),
     },
     default_alias_single_version = True,
     local_wheels = [
@@ -166,4 +171,10 @@ sh_binary(
     name = "update_example_lock",
     srcs = ["update.sh"],
     data = _GENERATED.values(),
+)
+
+cc_binary(
+    name = "depend_on_numpy",
+    srcs = ["depend_on_numpy.cc"],
+    deps = ["//deps:numpy"],
 )
