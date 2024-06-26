@@ -94,6 +94,12 @@ def targets():
     pycross_wheel_library(
         name = "appnope@0.1.3",
         wheel = ":_wheel_appnope@0.1.3",
+        cc_hdrs_globs = [
+        ],
+        cc_deps = [
+        ],
+        cc_includes = [
+        ],
     )
 
     _asttokens_2_4_1_deps = [
@@ -109,6 +115,12 @@ def targets():
         name = "asttokens@2.4.1",
         deps = _asttokens_2_4_1_deps,
         wheel = ":_wheel_asttokens@2.4.1",
+        cc_hdrs_globs = [
+        ],
+        cc_deps = [
+        ],
+        cc_includes = [
+        ],
     )
 
     native.alias(
@@ -124,6 +136,12 @@ def targets():
     pycross_wheel_library(
         name = "cython@0.29.36",
         wheel = ":_wheel_cython@0.29.36",
+        cc_hdrs_globs = [
+        ],
+        cc_deps = [
+        ],
+        cc_includes = [
+        ],
     )
 
     native.alias(
@@ -134,6 +152,12 @@ def targets():
     pycross_wheel_library(
         name = "decorator@5.1.1",
         wheel = ":_wheel_decorator@5.1.1",
+        cc_hdrs_globs = [
+        ],
+        cc_deps = [
+        ],
+        cc_includes = [
+        ],
     )
 
     native.alias(
@@ -144,6 +168,12 @@ def targets():
     pycross_wheel_library(
         name = "exceptiongroup@1.1.3",
         wheel = ":_wheel_exceptiongroup@1.1.3",
+        cc_hdrs_globs = [
+        ],
+        cc_deps = [
+        ],
+        cc_includes = [
+        ],
     )
 
     native.alias(
@@ -154,6 +184,12 @@ def targets():
     pycross_wheel_library(
         name = "executing@2.0.1",
         wheel = ":_wheel_executing@2.0.1",
+        cc_hdrs_globs = [
+        ],
+        cc_deps = [
+        ],
+        cc_includes = [
+        ],
     )
 
     _ipython_8_17_2_deps = [
@@ -185,6 +221,12 @@ def targets():
         name = "ipython@8.17.2",
         deps = _ipython_8_17_2_deps,
         wheel = ":_wheel_ipython@8.17.2",
+        cc_hdrs_globs = [
+        ],
+        cc_deps = [
+        ],
+        cc_includes = [
+        ],
     )
 
     _jedi_0_19_1_deps = [
@@ -200,6 +242,12 @@ def targets():
         name = "jedi@0.19.1",
         deps = _jedi_0_19_1_deps,
         wheel = ":_wheel_jedi@0.19.1",
+        cc_hdrs_globs = [
+        ],
+        cc_deps = [
+        ],
+        cc_includes = [
+        ],
     )
 
     _matplotlib_inline_0_1_6_deps = [
@@ -215,6 +263,12 @@ def targets():
         name = "matplotlib-inline@0.1.6",
         deps = _matplotlib_inline_0_1_6_deps,
         wheel = ":_wheel_matplotlib-inline@0.1.6",
+        cc_hdrs_globs = [
+        ],
+        cc_deps = [
+        ],
+        cc_includes = [
+        ],
     )
 
     native.alias(
@@ -230,6 +284,12 @@ def targets():
     pycross_wheel_library(
         name = "numpy@1.23.5",
         wheel = ":_wheel_numpy@1.23.5",
+        cc_hdrs_globs = [
+        ],
+        cc_deps = [
+        ],
+        cc_includes = [
+        ],
     )
 
     _pandas_1_5_2_deps = [
@@ -266,6 +326,12 @@ def targets():
         name = "pandas@1.5.2",
         deps = _pandas_1_5_2_deps,
         wheel = ":_wheel_pandas@1.5.2",
+        cc_hdrs_globs = [
+        ],
+        cc_deps = [
+        ],
+        cc_includes = [
+        ],
     )
 
     native.alias(
@@ -276,6 +342,12 @@ def targets():
     pycross_wheel_library(
         name = "parso@0.8.3",
         wheel = ":_wheel_parso@0.8.3",
+        cc_hdrs_globs = [
+        ],
+        cc_deps = [
+        ],
+        cc_includes = [
+        ],
     )
 
     _pexpect_4_8_0_deps = [
@@ -291,6 +363,12 @@ def targets():
         name = "pexpect@4.8.0",
         deps = _pexpect_4_8_0_deps,
         wheel = ":_wheel_pexpect@4.8.0",
+        cc_hdrs_globs = [
+        ],
+        cc_deps = [
+        ],
+        cc_includes = [
+        ],
     )
 
     _prompt_toolkit_3_0_39_deps = [
@@ -306,6 +384,12 @@ def targets():
         name = "prompt-toolkit@3.0.39",
         deps = _prompt_toolkit_3_0_39_deps,
         wheel = ":_wheel_prompt-toolkit@3.0.39",
+        cc_hdrs_globs = [
+        ],
+        cc_deps = [
+        ],
+        cc_includes = [
+        ],
     )
 
     native.alias(
@@ -321,6 +405,12 @@ def targets():
     pycross_wheel_library(
         name = "psycopg2@2.9.5",
         wheel = ":_wheel_psycopg2@2.9.5",
+        cc_hdrs_globs = [
+        ],
+        cc_deps = [
+        ],
+        cc_includes = [
+        ],
     )
 
     native.alias(
@@ -331,6 +421,12 @@ def targets():
     pycross_wheel_library(
         name = "ptyprocess@0.7.0",
         wheel = ":_wheel_ptyprocess@0.7.0",
+        cc_hdrs_globs = [
+        ],
+        cc_deps = [
+        ],
+        cc_includes = [
+        ],
     )
 
     native.alias(
@@ -341,6 +437,12 @@ def targets():
     pycross_wheel_library(
         name = "pure-eval@0.2.2",
         wheel = ":_wheel_pure-eval@0.2.2",
+        cc_hdrs_globs = [
+        ],
+        cc_deps = [
+        ],
+        cc_includes = [
+        ],
     )
 
     native.alias(
@@ -351,6 +453,12 @@ def targets():
     pycross_wheel_library(
         name = "pygments@2.16.1",
         wheel = ":_wheel_pygments@2.16.1",
+        cc_hdrs_globs = [
+        ],
+        cc_deps = [
+        ],
+        cc_includes = [
+        ],
     )
 
     _python_dateutil_2_8_2_deps = [
@@ -366,6 +474,12 @@ def targets():
         name = "python-dateutil@2.8.2",
         deps = _python_dateutil_2_8_2_deps,
         wheel = ":_wheel_python-dateutil@2.8.2",
+        cc_hdrs_globs = [
+        ],
+        cc_deps = [
+        ],
+        cc_includes = [
+        ],
     )
 
     native.alias(
@@ -376,6 +490,12 @@ def targets():
     pycross_wheel_library(
         name = "pytz@2023.3.post1",
         wheel = ":_wheel_pytz@2023.3.post1",
+        cc_hdrs_globs = [
+        ],
+        cc_deps = [
+        ],
+        cc_includes = [
+        ],
     )
 
     native.alias(
@@ -404,6 +524,12 @@ def targets():
     pycross_wheel_library(
         name = "setproctitle@1.3.2",
         wheel = ":_wheel_setproctitle@1.3.2",
+        cc_hdrs_globs = [
+        ],
+        cc_deps = [
+        ],
+        cc_includes = [
+        ],
     )
 
     native.alias(
@@ -414,6 +540,12 @@ def targets():
     pycross_wheel_library(
         name = "setuptools@59.2.0",
         wheel = ":_wheel_setuptools@59.2.0",
+        cc_hdrs_globs = [
+        ],
+        cc_deps = [
+        ],
+        cc_includes = [
+        ],
     )
 
     native.alias(
@@ -424,6 +556,12 @@ def targets():
     pycross_wheel_library(
         name = "six@1.16.0",
         wheel = ":_wheel_six@1.16.0",
+        cc_hdrs_globs = [
+        ],
+        cc_deps = [
+        ],
+        cc_includes = [
+        ],
     )
 
     _stack_data_0_6_3_deps = [
@@ -441,6 +579,12 @@ def targets():
         name = "stack-data@0.6.3",
         deps = _stack_data_0_6_3_deps,
         wheel = ":_wheel_stack-data@0.6.3",
+        cc_hdrs_globs = [
+        ],
+        cc_deps = [
+        ],
+        cc_includes = [
+        ],
     )
 
     native.alias(
@@ -451,6 +595,12 @@ def targets():
     pycross_wheel_library(
         name = "traitlets@5.13.0",
         wheel = ":_wheel_traitlets@5.13.0",
+        cc_hdrs_globs = [
+        ],
+        cc_deps = [
+        ],
+        cc_includes = [
+        ],
     )
 
     native.alias(
@@ -461,6 +611,12 @@ def targets():
     pycross_wheel_library(
         name = "wcwidth@0.2.9",
         wheel = ":_wheel_wcwidth@0.2.9",
+        cc_hdrs_globs = [
+        ],
+        cc_deps = [
+        ],
+        cc_includes = [
+        ],
     )
 
     native.alias(
@@ -471,6 +627,12 @@ def targets():
     pycross_wheel_library(
         name = "wheel@0.37.0",
         wheel = ":_wheel_wheel@0.37.0",
+        cc_hdrs_globs = [
+        ],
+        cc_deps = [
+        ],
+        cc_includes = [
+        ],
     )
 
 # buildifier: disable=unnamed-macro

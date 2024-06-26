@@ -195,6 +195,9 @@ class PackageAnnotations:
     always_build: bool = False
     ignore_dependencies: Set[str] = field(default_factory=set)
     install_exclude_globs: Set[str] = field(default_factory=set)
+    cc_hdrs_globs: Set[str] = field(default_factory=set)
+    cc_deps: Set[str] = field(default_factory=set)
+    cc_includes: Set[str] = field(default_factory=set)
 
 
 class PackageResolver:
@@ -213,6 +216,9 @@ class PackageResolver:
         self._build_deps = annotations.build_dependencies
         self._build_target = annotations.build_target
         self._install_exclude_globs = annotations.install_exclude_globs
+        self._cc_hdrs_globs = annotations.cc_hdrs_globs
+        self._cc_deps = annotations.cc_deps
+        self._cc_includes = annotations.cc_includes
 
         deps_by_env = context.get_dependencies_by_environment(
             package,
@@ -267,6 +273,9 @@ class PackageResolver:
             build_target=self._build_target,
             sdist_file=self.sdist_file,
             install_exclude_globs=list(self._install_exclude_globs),
+            cc_hdrs_globs=list(self._cc_hdrs_globs),
+            cc_deps=list(self._cc_deps),
+            cc_includes=list(self._cc_includes),
         )
 
 
@@ -344,6 +353,15 @@ def collect_package_annotations(args: Any, lock_model: RawLockSet) -> Dict[Packa
 
         for glob in annotation.get("install_exclude_globs", []):
             annotations[resolved_pkg].install_exclude_globs.add(glob)
+
+        for glob in annotation.get("cc_hdrs_globs", []):
+            annotations[resolved_pkg].cc_hdrs_globs.add(glob)
+
+        for dep in annotation.get("cc_deps", []):
+            annotations[resolved_pkg].cc_deps.add(dep)
+
+        for include in annotation.get("cc_includes", []):
+            annotations[resolved_pkg].cc_includes.add(include)
 
     # Return as a non-default dict
     return dict(annotations)

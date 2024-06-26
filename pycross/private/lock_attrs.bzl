@@ -230,7 +230,10 @@ def package_annotation(
         build_dependencies = [],
         build_target = None,
         ignore_dependencies = [],
-        install_exclude_globs = []):
+        install_exclude_globs = [],
+        cc_hdrs_globs = [],
+        cc_deps = [],
+        cc_includes = []):
     """Annotations to apply to individual packages.
 
     Args:
@@ -239,6 +242,9 @@ def package_annotation(
       build_target (str, optional): An optional override build target to use when and if this package needs to be built from source.
       ignore_dependencies (list, optional): A list of package keys (name or name@version) to drop from this package's set of declared dependencies.
       install_exclude_globs (list, optional): A list of globs for files to exclude during installation.
+      cc_hdrs_globs (list, optional): A list of globs for files to use as C/C++ header files.
+      cc_deps (list, optional): Dependencies for the C/C++ files.
+      cc_includes (list, optional): C/C++ include directories.
 
     Returns:
       str: A json encoded string of the provided content.
@@ -249,4 +255,7 @@ def package_annotation(
         build_target = build_target,
         ignore_dependencies = ignore_dependencies,
         install_exclude_globs = install_exclude_globs,
+        cc_hdrs_globs = cc_hdrs_globs,
+        cc_deps = cc_deps,
+        cc_includes = cc_includes,
     ))

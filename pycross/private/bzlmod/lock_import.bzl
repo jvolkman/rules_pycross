@@ -27,6 +27,9 @@ def _generate_resolved_lock_repo(lock_info, serialized_lock_model):
             build_target = str(package.build_target) if package.build_target else None,
             ignore_dependencies = package.ignore_dependencies,
             install_exclude_globs = package.install_exclude_globs,
+            cc_hdrs_globs = package.cc_hdrs_globs,
+            cc_deps = package.cc_deps,
+            cc_includes = package.cc_includes,
         )
 
     resolved_lock_repo(**args)
