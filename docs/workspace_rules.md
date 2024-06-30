@@ -47,6 +47,32 @@ lock_repo_model_poetry(<a href="#lock_repo_model_poetry-project_file">project_fi
 | <a id="lock_repo_model_poetry-lock_file"></a>lock_file |  <p align="center"> - </p>   |  none |
 
 
+<a id="lock_repo_model_uv"></a>
+
+## lock_repo_model_uv
+
+<pre>
+lock_repo_model_uv(<a href="#lock_repo_model_uv-project_file">project_file</a>, <a href="#lock_repo_model_uv-lock_file">lock_file</a>, <a href="#lock_repo_model_uv-default">default</a>, <a href="#lock_repo_model_uv-optional_groups">optional_groups</a>, <a href="#lock_repo_model_uv-all_optional_groups">all_optional_groups</a>,
+                   <a href="#lock_repo_model_uv-development_groups">development_groups</a>, <a href="#lock_repo_model_uv-all_development_groups">all_development_groups</a>, <a href="#lock_repo_model_uv-require_static_urls">require_static_urls</a>)
+</pre>
+
+
+
+**PARAMETERS**
+
+
+| Name  | Description | Default Value |
+| :------------- | :------------- | :------------- |
+| <a id="lock_repo_model_uv-project_file"></a>project_file |  <p align="center"> - </p>   |  none |
+| <a id="lock_repo_model_uv-lock_file"></a>lock_file |  <p align="center"> - </p>   |  none |
+| <a id="lock_repo_model_uv-default"></a>default |  <p align="center"> - </p>   |  `True` |
+| <a id="lock_repo_model_uv-optional_groups"></a>optional_groups |  <p align="center"> - </p>   |  `[]` |
+| <a id="lock_repo_model_uv-all_optional_groups"></a>all_optional_groups |  <p align="center"> - </p>   |  `False` |
+| <a id="lock_repo_model_uv-development_groups"></a>development_groups |  <p align="center"> - </p>   |  `[]` |
+| <a id="lock_repo_model_uv-all_development_groups"></a>all_development_groups |  <p align="center"> - </p>   |  `False` |
+| <a id="lock_repo_model_uv-require_static_urls"></a>require_static_urls |  <p align="center"> - </p>   |  `True` |
+
+
 <a id="pycross_lock_repo"></a>
 
 ## pycross_lock_repo

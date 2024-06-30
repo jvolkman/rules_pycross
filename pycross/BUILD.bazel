@@ -50,6 +50,7 @@ bzl_library(
         "//pycross/private:pdm_lock_model",
         "//pycross/private:poetry_lock_model",
         "//pycross/private:toolchain_helpers",
+        "//pycross/private:uv_lock_model",
     ],
 )
 

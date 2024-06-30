@@ -107,6 +107,28 @@ py_binary(
     imports = ["../../.."],
     visibility = ["//visibility:public"],
     deps = [
+        ":lock_model",
+        ":translation_utils",
+    ],
+)
+
+py_binary(
+    name = "uv_translator",
+    srcs = ["uv_translator.py"],
+    imports = ["../../.."],
+    visibility = ["//visibility:public"],
+    deps = [
+        ":lock_model",
+        ":translation_utils",
+    ],
+)
+
+py_library(
+    name = "translation_utils",
+    srcs = ["translation_utils.py"],
+    imports = ["../../.."],
+    visibility = ["//visibility:public"],
+    deps = [
         ":args",
         ":lock_model",
         "@rules_pycross_internal//deps:tomli",

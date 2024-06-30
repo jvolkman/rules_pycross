@@ -90,8 +90,8 @@ lock_import.import_pdm(
     target_environments = ["@smoke_environments//:environments"],
 )
 
-# lock_repo with PDM and some package overrides
-lock_import.import_pdm(
+# lock_repo with UV and some package overrides
+lock_import.import_uv(
     default_alias_single_version = True,
     local_wheels = [
         "//:cowsay-6.1-py3-none-any.whl",
@@ -101,6 +101,8 @@ lock_import.import_pdm(
     repo = "uv",
     target_environments = ["@smoke_environments//:environments"],
 )
+
+# lock_repo with PDM and some package overrides
 lock_import.package(
     name = "regex",
     always_build = True,
