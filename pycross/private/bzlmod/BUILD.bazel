@@ -35,6 +35,7 @@ bzl_library(
         "//pycross/private:poetry_lock_model",
         "//pycross/private:pypi_file",
         "//pycross/private:resolved_lock_repo",
+        "//pycross/private:uv_lock_model",
         "@bazel_features//:features",
     ] + REPO_HTTP_DEPS,
 )

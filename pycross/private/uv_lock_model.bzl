@@ -1,13 +1,13 @@
-"""Implementation of the pycross_pdm_lock_model rule."""
+"""Implementation of the pycross_uv_lock_model rule."""
 
-load(":lock_attrs.bzl", "PDM_IMPORT_ATTRS")
+load(":lock_attrs.bzl", "UV_IMPORT_ATTRS")
 load(":lock_model.bzl", "lock_model")
 
-TRANSLATOR_TOOL = Label("//pycross/private/tools:pdm_translator.py")
+TRANSLATOR_TOOL = Label("//pycross/private/tools:uv_translator.py")
 
-def lock_repo_model_pdm(*, project_file, lock_file, default = True, optional_groups = [], all_optional_groups = False, development_groups = [], all_development_groups = False, require_static_urls = True):
+def lock_repo_model_uv(*, project_file, lock_file, default = True, optional_groups = [], all_optional_groups = False, development_groups = [], all_development_groups = False, require_static_urls = True):
     return lock_model.lock_repo_model(
-        model_type = "pdm",
+        model_type = "uv",
         project_file = project_file,
         lock_file = lock_file,
         default = default,
@@ -18,7 +18,7 @@ def lock_repo_model_pdm(*, project_file, lock_file, default = True, optional_gro
         require_static_urls = require_static_urls,
     )
 
-def repo_create_pdm_model(rctx, params, output):
+def repo_create_uv_model(rctx, params, output):
     """Run the pdm lock translator.
 
     Args:
@@ -33,13 +33,13 @@ def repo_create_pdm_model(rctx, params, output):
         translator_tool = TRANSLATOR_TOOL,
     )
 
-pycross_pdm_lock_model = rule(
+pycross_uv_lock_model = rule(
     implementation = lock_model.implementation,
     attrs = {
         "_tool": attr.label(
-            default = Label("//pycross/private/tools:pdm_translator"),
+            default = Label("//pycross/private/tools:uv_translator"),
             cfg = "exec",
             executable = True,
         ),
-    } | PDM_IMPORT_ATTRS,
+    } | UV_IMPORT_ATTRS,
 )

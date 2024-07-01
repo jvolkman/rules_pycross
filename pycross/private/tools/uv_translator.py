@@ -11,15 +11,11 @@ from packaging.version import Version
 from pycross.private.tools.lock_model import package_canonical_name
 from pycross.private.tools.lock_model import PackageKey
 from pycross.private.tools.translation_utils import LockfileIncompatibleException
-from pycross.private.tools.translation_utils import LockfileNotStaticException
 from pycross.private.tools.translation_utils import Package
 from pycross.private.tools.translation_utils import parse_file_info
 from pycross.private.tools.translation_utils import parse_flags
 from pycross.private.tools.translation_utils import read_files
 from pycross.private.tools.translation_utils import translate
-
-# We support anything in the 4.x range. At least that's the idea.
-SUPPORTED_LOCK_VERSIONS = SpecifierSet("~=4.0")
 
 
 def collect_and_process_packages(packages_list: list[Dict[str, Any]]) -> Dict[PackageKey, Package]:
@@ -69,14 +65,12 @@ def collect_and_process_packages(packages_list: list[Dict[str, Any]]) -> Dict[Pa
     return distinct_packages
 
 
-def validate_lockfile_version(lock_dict: Dict[str, Any], lock_file) -> None:
-    lock_version = lock_dict.get("metadata", {}).get("lock_version")
-    if not lock_version:
-        raise LockfileIncompatibleException(f"Lock file at {lock_file} has no version")
-    if isinstance(lock_version, str) and Version(lock_version) not in SUPPORTED_LOCK_VERSIONS:
-        raise LockfileIncompatibleException(
-            f"Lock file version {lock_version} not included in {SUPPORTED_LOCK_VERSIONS}"
-        )
+def validate_lockfile_version(lock_dict: Dict[str, Any]) -> None:
+    lock_version = lock_dict.get("version")
+    if not isinstance(lock_version, int):
+        raise LockfileIncompatibleException(f"Lock file version {lock_version} is not an integer")
+    if lock_version != 1:
+        raise LockfileIncompatibleException(f"Lock file version {lock_version} is not supported")
 
 
 def main(args: Any) -> None:
@@ -84,9 +78,8 @@ def main(args: Any) -> None:
     project_files = read_files(args.project_file, args.lock_file)
     project_dict = project_files.project_file
     lock_dict = project_files.lock_file
-
-    packages_list = lock_dict.get("package", [])
-    validate_lockfile_version(lock_dict, args.lock_file)
+    validate_lockfile_version(lock_dict)
+    packages_list = lock_dict.get("distribution", [])
 
     lock_set = translate(
         project_dict,
@@ -96,16 +89,7 @@ def main(args: Any) -> None:
         all_optional_groups=args.all_optional_groups,
         development_groups=args.development_group,
         all_development_groups=args.all_development_groups,
-        package_processor=collect_and_process_packages,
     )
-
-    if args.require_static_urls:
-        for pkg in lock_set.packages.values():
-            for file in pkg.files:
-                if not file.urls:
-                    raise LockfileNotStaticException(
-                        "Lock file does not contain static urls. Please use --static-urls when creating the lockfile."
-                    )
 
     with open(output, "w") as f:
         f.write(lock_set.to_json(indent=2))

@@ -11,6 +11,7 @@ load(":internal_repo.bzl", "exec_internal_tool")
 load(":lock_attrs.bzl", "RESOLVE_ATTRS", "handle_resolve_attrs")
 load(":pdm_lock_model.bzl", "repo_create_pdm_model", PDM_TRANSLATOR_TOOL = "TRANSLATOR_TOOL")
 load(":poetry_lock_model.bzl", "repo_create_poetry_model", POETRY_TRANSLATOR_TOOL = "TRANSLATOR_TOOL")
+load(":uv_lock_model.bzl", "repo_create_uv_model", UV_TRANSLATOR_TOOL = "TRANSLATOR_TOOL")
 
 _RESOLVER_TOOL = Label("//pycross/private/tools:raw_lock_resolver.py")
 
@@ -29,6 +30,8 @@ def _generate_lock_model_file(rctx):
         repo_create_pdm_model(rctx, model_params, "raw_lock.json")
     elif model_params["model_type"] == "poetry":
         repo_create_poetry_model(rctx, model_params, "raw_lock.json")
+    elif model_params["model_type"] == "uv":
+        repo_create_uv_model(rctx, model_params, "raw_lock.json")
     else:
         fail("Invalid model type: " + model_params["model_type"])
 
@@ -72,6 +75,7 @@ resolved_lock_repo = repository_rule(
             _RESOLVER_TOOL,
             PDM_TRANSLATOR_TOOL,
             POETRY_TRANSLATOR_TOOL,
+            UV_TRANSLATOR_TOOL,
         ]),
     ) | RESOLVE_ATTRS,
 )
