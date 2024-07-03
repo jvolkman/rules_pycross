@@ -94,7 +94,7 @@ RENDER_ATTRS = dict(
 
 _IMPORT_ATTRS = dict(
     lock_file = attr.label(
-        doc = "The pdm.lock file.",
+        doc = "The lock file.",
         allow_single_file = True,
         mandatory = True,
     ),

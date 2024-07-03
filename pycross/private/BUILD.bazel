@@ -49,21 +49,15 @@ bzl_library(
 )
 
 bzl_library(
-    name = "lock_model",
-    srcs = ["lock_model.bzl"],
-    deps = [":internal_repo"],
-)
-
-bzl_library(
     name = "pdm_lock_model",
     srcs = ["pdm_lock_model.bzl"],
-    deps = [":lock_model"],
+    deps = [":internal_repo"],
 )
 
 bzl_library(
     name = "uv_lock_model",
     srcs = ["uv_lock_model.bzl"],
-    deps = [":lock_model"],
+    deps = [":internal_repo"],
 )
 
 bzl_library(

@@ -42,7 +42,7 @@ Import a PDM lock file.
 | <a id="lock_import.import_pdm-development_groups"></a>development_groups |  List of development dependency groups to install.   | List of strings | optional |  `[]`  |
 | <a id="lock_import.import_pdm-disallow_builds"></a>disallow_builds |  If True, only pre-built wheels are allowed.   | Boolean | optional |  `False`  |
 | <a id="lock_import.import_pdm-local_wheels"></a>local_wheels |  A list of local .whl files to consider when processing lock files.   | <a href="https://bazel.build/concepts/labels">List of labels</a> | optional |  `[]`  |
-| <a id="lock_import.import_pdm-lock_file"></a>lock_file |  The pdm.lock file.   | <a href="https://bazel.build/concepts/labels">Label</a> | required |  |
+| <a id="lock_import.import_pdm-lock_file"></a>lock_file |  The lock file.   | <a href="https://bazel.build/concepts/labels">Label</a> | required |  |
 | <a id="lock_import.import_pdm-optional_groups"></a>optional_groups |  List of optional dependency groups to install.   | List of strings | optional |  `[]`  |
 | <a id="lock_import.import_pdm-project_file"></a>project_file |  The pyproject.toml file.   | <a href="https://bazel.build/concepts/labels">Label</a> | required |  |
 | <a id="lock_import.import_pdm-repo"></a>repo |  The repository name   | String | required |  |
@@ -84,7 +84,7 @@ Import a uv lock file.
 | <a id="lock_import.import_uv-development_groups"></a>development_groups |  List of development dependency groups to install.   | List of strings | optional |  `[]`  |
 | <a id="lock_import.import_uv-disallow_builds"></a>disallow_builds |  If True, only pre-built wheels are allowed.   | Boolean | optional |  `False`  |
 | <a id="lock_import.import_uv-local_wheels"></a>local_wheels |  A list of local .whl files to consider when processing lock files.   | <a href="https://bazel.build/concepts/labels">List of labels</a> | optional |  `[]`  |
-| <a id="lock_import.import_uv-lock_file"></a>lock_file |  The pdm.lock file.   | <a href="https://bazel.build/concepts/labels">Label</a> | required |  |
+| <a id="lock_import.import_uv-lock_file"></a>lock_file |  The lock file.   | <a href="https://bazel.build/concepts/labels">Label</a> | required |  |
 | <a id="lock_import.import_uv-optional_groups"></a>optional_groups |  List of optional dependency groups to install.   | List of strings | optional |  `[]`  |
 | <a id="lock_import.import_uv-project_file"></a>project_file |  The pyproject.toml file.   | <a href="https://bazel.build/concepts/labels">Label</a> | required |  |
 | <a id="lock_import.import_uv-repo"></a>repo |  The repository name   | String | required |  |

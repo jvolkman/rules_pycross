@@ -58,7 +58,7 @@ pycross_pdm_lock_model(<a href="#pycross_pdm_lock_model-name">name</a>, <a href=
 | <a id="pycross_pdm_lock_model-all_optional_groups"></a>all_optional_groups |  Install all optional dependencies.   | Boolean | optional |  `False`  |
 | <a id="pycross_pdm_lock_model-default"></a>default |  Whether to install dependencies from the default group.   | Boolean | optional |  `True`  |
 | <a id="pycross_pdm_lock_model-development_groups"></a>development_groups |  List of development dependency groups to install.   | List of strings | optional |  `[]`  |
-| <a id="pycross_pdm_lock_model-lock_file"></a>lock_file |  The pdm.lock file.   | <a href="https://bazel.build/concepts/labels">Label</a> | required |  |
+| <a id="pycross_pdm_lock_model-lock_file"></a>lock_file |  The lock file.   | <a href="https://bazel.build/concepts/labels">Label</a> | required |  |
 | <a id="pycross_pdm_lock_model-optional_groups"></a>optional_groups |  List of optional dependency groups to install.   | List of strings | optional |  `[]`  |
 | <a id="pycross_pdm_lock_model-project_file"></a>project_file |  The pyproject.toml file.   | <a href="https://bazel.build/concepts/labels">Label</a> | required |  |
 | <a id="pycross_pdm_lock_model-require_static_urls"></a>require_static_urls |  Require that the lock file is created with --static-urls.   | Boolean | optional |  `True`  |
