@@ -110,6 +110,22 @@ def main(args: Any) -> None:
                     "INSTALLER": b"https://github.com/jvolkman/rules_pycross",
                 },
             )
+
+        if args.cc_hdrs_directory:
+            with WheelFile.open(link_path) as source:
+
+                def is_cc_hdr(filename: str) -> bool:
+                    for cc_hdrs_glob in args.cc_hdrs_globs:
+                        if fnmatch.fnmatch(filename, cc_hdrs_glob):
+                            return True
+                    return False
+
+                for _, stream, _ in source.get_contents():
+                    if is_cc_hdr(stream.name):
+                        dest_path = os.path.join(args.cc_hdrs_directory, stream.name)
+                        os.makedirs(os.path.dirname(dest_path), exist_ok=True)
+                        with open(dest_path, "wb") as dest:
+                            shutil.copyfileobj(stream, dest)
     finally:
         shutil.rmtree(link_dir, ignore_errors=True)
 
@@ -148,9 +164,31 @@ def parse_flags() -> Any:
     )
 
     parser.add_argument(
+        "--cc-hdrs-glob",
+        action="append",
+        dest="cc_hdrs_globs",
+        default=[],
+        help="A glob for files to use as C/C++ headers.",
+    )
+
+    parser.add_argument(
+        "--cc-dep",
+        action="append",
+        dest="cc_deps",
+        default=[],
+        help="A dependency for C/C++ files.",
+    )
+
+    parser.add_argument(
         "--directory",
         type=Path,
         help="The output path.",
+    )
+
+    parser.add_argument(
+        "--cc-hdrs-directory",
+        type=Path,
+        help="The C/C++ headers output path.",
     )
 
     return parser.parse_args()

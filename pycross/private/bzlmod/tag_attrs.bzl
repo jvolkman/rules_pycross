@@ -59,6 +59,16 @@ PACKAGE_ATTRS = dict(
     install_exclude_globs = attr.string_list(
         doc = "A list of globs for files to exclude during installation.",
     ),
+    cc_hdrs_globs = attr.string_list(
+        doc = "A list of globs for files to use as C/C++ header files.",
+    ),
+    cc_deps = attr.label_list(
+        doc = "Dependencies for the C/C++ files.",
+        providers = [CcInfo],
+    ),
+    cc_includes = attr.string_list(
+        doc = "C/C++ include directories.",
+    ),
 )
 
 CREATE_ENVIRONMENTS_ATTRS = _CREATE_ENVIRONMENTS_ATTRS

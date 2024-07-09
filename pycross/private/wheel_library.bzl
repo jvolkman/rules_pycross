@@ -1,11 +1,15 @@
 """Implementation of the pycross_wheel_library rule."""
 
 load("@bazel_skylib//lib:paths.bzl", "paths")
+load("@bazel_tools//tools/cpp:toolchain_utils.bzl", "find_cpp_toolchain", "use_cpp_toolchain")
 load("@rules_python//python:py_info.bzl", "PyInfo")
 load(":providers.bzl", "PycrossWheelInfo")
 
 def _pycross_wheel_library_impl(ctx):
     out = ctx.actions.declare_directory(ctx.attr.name)
+    install_outputs = [out]
+
+    enable_cc = ctx.attr.cc_hdrs_globs or ctx.attr.cc_deps or ctx.attr.cc_includes
 
     wheel_target = ctx.attr.wheel
     if PycrossWheelInfo in wheel_target:
@@ -30,9 +34,24 @@ def _pycross_wheel_library_impl(ctx):
     for install_exclude_glob in ctx.attr.install_exclude_globs:
         args.add("--install-exclude-glob", install_exclude_glob)
 
+    cc_hdrs = None
+    if enable_cc:
+        # This needs to end in .h so the C/C++ rules know it has header files.
+        # Those rules normally split out header files by extension, but that
+        # logic doesn't have access to the filenames inside a tree artifact, so
+        # we need to do the filtering ourselves and then put the correct
+        # extension on the folder name.
+        cc_hdrs = ctx.actions.declare_directory(ctx.attr.name + "__hdrs.h")
+        install_outputs.append(cc_hdrs)
+        args.add("--cc-hdrs-directory", cc_hdrs.path)
+
+        for cc_hdrs_glob in ctx.attr.cc_hdrs_globs:
+            args.add("--cc-hdrs-glob", cc_hdrs_glob)
+            args.add("--install-exclude-glob", cc_hdrs_glob)
+
     ctx.actions.run(
         inputs = inputs,
-        outputs = [out],
+        outputs = install_outputs,
         executable = ctx.executable._tool,
         arguments = [args],
         # Set environment variables to make generated .pyc files reproducible.
@@ -77,7 +96,7 @@ def _pycross_wheel_library_impl(ctx):
     for d in ctx.attr.deps:
         runfiles = runfiles.merge(d[DefaultInfo].default_runfiles)
 
-    return [
+    providers = [
         DefaultInfo(
             files = depset(direct = [out]),
             runfiles = runfiles,
@@ -90,6 +109,41 @@ def _pycross_wheel_library_impl(ctx):
             uses_shared_libraries = True,  # Docs say this is unused
         ),
     ]
+
+    if enable_cc:
+        cc_toolchain = find_cpp_toolchain(ctx)
+        feature_configuration = cc_common.configure_features(
+            ctx = ctx,
+            cc_toolchain = cc_toolchain,
+            requested_features = [],
+            unsupported_features = [],
+        )
+        (compilation_context, compilation_outputs) = cc_common.compile(
+            actions = ctx.actions,
+            feature_configuration = feature_configuration,
+            cc_toolchain = cc_toolchain,
+            public_hdrs = [cc_hdrs],
+            includes = [paths.join(
+                cc_hdrs.path,
+                include,
+            ) for include in ctx.attr.cc_includes],
+            compilation_contexts = [dep[CcInfo].compilation_context for dep in ctx.attr.cc_deps],
+            name = ctx.attr.name + "__cc_compile",
+        )
+        (linking_context, _) = cc_common.create_linking_context_from_compilation_outputs(
+            actions = ctx.actions,
+            feature_configuration = feature_configuration,
+            cc_toolchain = cc_toolchain,
+            name = ctx.attr.name + "__cc",
+            compilation_outputs = compilation_outputs,
+            linking_contexts = [dep[CcInfo].linking_context for dep in ctx.attr.cc_deps],
+        )
+        providers.append(CcInfo(
+            compilation_context = compilation_context,
+            linking_context = linking_context,
+        ))
+
+    return providers
 
 pycross_wheel_library = rule(
     implementation = _pycross_wheel_library_impl,
@@ -105,6 +159,19 @@ pycross_wheel_library = rule(
         ),
         "install_exclude_globs": attr.string_list(
             doc = "A list of globs for files to exclude during installation.",
+        ),
+        "cc_hdrs_globs": attr.string_list(
+            doc = "A list of globs for files to use as C/C++ header files.",
+            default = [],
+        ),
+        "cc_deps": attr.label_list(
+            doc = "Dependencies for the C/C++ files.",
+            providers = [CcInfo],
+            default = [],
+        ),
+        "cc_includes": attr.string_list(
+            doc = "C/C++ include directories.",
+            default = [],
         ),
         "enable_implicit_namespace_pkgs": attr.bool(
             default = True,
@@ -125,4 +192,6 @@ This option is required to support some packages which cannot handle the convers
             executable = True,
         ),
     },
+    fragments = ["cpp"],
+    toolchains = use_cpp_toolchain(),
 )
