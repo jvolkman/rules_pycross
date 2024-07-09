@@ -1,12 +1,14 @@
 # `rules_pycross` - Python + cross platform
 
-Use your Poetry or PDM lock files with Bazel and enabling cross-platform builds.
+Use your Poetry or PDM or UV lock files with Bazel and enabling cross-platform builds.
 
 ### Features:
 
-- A single lock file for all target platforms, thanks to Poetry and PDM
+- A single lock file for all target platforms, thanks to Poetry, PDM and UV
 - Builds that happen in build actions, not during WORKSPACE initialization
 - Standard Bazel `http_file` rules used for fetching dependencies. `pip` is not a build-time dependency.
+
+> **Notice:** UV is still experimental
 
 See the [examples](examples).
 

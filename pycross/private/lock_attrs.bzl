@@ -92,9 +92,9 @@ RENDER_ATTRS = dict(
     ),
 ) | CREATE_REPOS_ATTRS
 
-PDM_IMPORT_ATTRS = dict(
+_IMPORT_ATTRS = dict(
     lock_file = attr.label(
-        doc = "The pdm.lock file.",
+        doc = "The lock file.",
         allow_single_file = True,
         mandatory = True,
     ),
@@ -250,3 +250,6 @@ def package_annotation(
         ignore_dependencies = ignore_dependencies,
         install_exclude_globs = install_exclude_globs,
     ))
+
+PDM_IMPORT_ATTRS = _IMPORT_ATTRS
+UV_IMPORT_ATTRS = _IMPORT_ATTRS

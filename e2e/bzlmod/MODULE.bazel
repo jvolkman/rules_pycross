@@ -89,6 +89,20 @@ lock_import.import_pdm(
     repo = "pdm",
     target_environments = ["@smoke_environments//:environments"],
 )
+
+# lock_repo with UV and some package overrides
+lock_import.import_uv(
+    default_alias_single_version = True,
+    local_wheels = [
+        "//:cowsay-6.1-py3-none-any.whl",
+    ],
+    lock_file = "//:uv.lock",
+    project_file = "//:pyproject.toml",
+    repo = "uv",
+    target_environments = ["@smoke_environments//:environments"],
+)
+
+# lock_repo with PDM and some package overrides
 lock_import.package(
     name = "regex",
     always_build = True,
@@ -107,7 +121,7 @@ lock_import.package(
 
 # The actual repos are loaded from the lock_repos extension.
 lock_repos = use_extension("@rules_pycross//pycross/extensions:lock_repos.bzl", "lock_repos")
-use_repo(lock_repos, "pdm", "poetry")
+use_repo(lock_repos, "pdm", "poetry", "uv")
 
 # Lock repos for vended lock files
 lock_file = use_extension("@rules_pycross//pycross/extensions:lock_file.bzl", "lock_file")

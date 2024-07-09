@@ -114,6 +114,18 @@ py_binary(
 )
 
 py_binary(
+    name = "uv_translator",
+    srcs = ["uv_translator.py"],
+    imports = ["../../.."],
+    visibility = ["//visibility:public"],
+    deps = [
+        ":args",
+        ":lock_model",
+        "@rules_pycross_internal//deps:tomli",
+    ],
+)
+
+py_binary(
     name = "poetry_translator",
     srcs = ["poetry_translator.py"],
     imports = ["../../.."],

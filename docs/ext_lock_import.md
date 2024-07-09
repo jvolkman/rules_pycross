@@ -14,6 +14,10 @@ lock_import.import_pdm(<a href="#lock_import.import_pdm-all_development_groups">
                        <a href="#lock_import.import_pdm-require_static_urls">require_static_urls</a>, <a href="#lock_import.import_pdm-target_environments">target_environments</a>)
 lock_import.import_poetry(<a href="#lock_import.import_poetry-default_alias_single_version">default_alias_single_version</a>, <a href="#lock_import.import_poetry-disallow_builds">disallow_builds</a>, <a href="#lock_import.import_poetry-local_wheels">local_wheels</a>, <a href="#lock_import.import_poetry-lock_file">lock_file</a>,
                           <a href="#lock_import.import_poetry-project_file">project_file</a>, <a href="#lock_import.import_poetry-repo">repo</a>, <a href="#lock_import.import_poetry-target_environments">target_environments</a>)
+lock_import.import_uv(<a href="#lock_import.import_uv-all_development_groups">all_development_groups</a>, <a href="#lock_import.import_uv-all_optional_groups">all_optional_groups</a>, <a href="#lock_import.import_uv-default">default</a>,
+                      <a href="#lock_import.import_uv-default_alias_single_version">default_alias_single_version</a>, <a href="#lock_import.import_uv-development_groups">development_groups</a>, <a href="#lock_import.import_uv-disallow_builds">disallow_builds</a>, <a href="#lock_import.import_uv-local_wheels">local_wheels</a>,
+                      <a href="#lock_import.import_uv-lock_file">lock_file</a>, <a href="#lock_import.import_uv-optional_groups">optional_groups</a>, <a href="#lock_import.import_uv-project_file">project_file</a>, <a href="#lock_import.import_uv-repo">repo</a>, <a href="#lock_import.import_uv-require_static_urls">require_static_urls</a>,
+                      <a href="#lock_import.import_uv-target_environments">target_environments</a>)
 lock_import.package(<a href="#lock_import.package-name">name</a>, <a href="#lock_import.package-always_build">always_build</a>, <a href="#lock_import.package-build_dependencies">build_dependencies</a>, <a href="#lock_import.package-build_target">build_target</a>, <a href="#lock_import.package-ignore_dependencies">ignore_dependencies</a>,
                     <a href="#lock_import.package-install_exclude_globs">install_exclude_globs</a>, <a href="#lock_import.package-repo">repo</a>)
 </pre>
@@ -38,7 +42,7 @@ Import a PDM lock file.
 | <a id="lock_import.import_pdm-development_groups"></a>development_groups |  List of development dependency groups to install.   | List of strings | optional |  `[]`  |
 | <a id="lock_import.import_pdm-disallow_builds"></a>disallow_builds |  If True, only pre-built wheels are allowed.   | Boolean | optional |  `False`  |
 | <a id="lock_import.import_pdm-local_wheels"></a>local_wheels |  A list of local .whl files to consider when processing lock files.   | <a href="https://bazel.build/concepts/labels">List of labels</a> | optional |  `[]`  |
-| <a id="lock_import.import_pdm-lock_file"></a>lock_file |  The pdm.lock file.   | <a href="https://bazel.build/concepts/labels">Label</a> | required |  |
+| <a id="lock_import.import_pdm-lock_file"></a>lock_file |  The lock file.   | <a href="https://bazel.build/concepts/labels">Label</a> | required |  |
 | <a id="lock_import.import_pdm-optional_groups"></a>optional_groups |  List of optional dependency groups to install.   | List of strings | optional |  `[]`  |
 | <a id="lock_import.import_pdm-project_file"></a>project_file |  The pyproject.toml file.   | <a href="https://bazel.build/concepts/labels">Label</a> | required |  |
 | <a id="lock_import.import_pdm-repo"></a>repo |  The repository name   | String | required |  |
@@ -62,6 +66,30 @@ Import a Poetry lock file.
 | <a id="lock_import.import_poetry-project_file"></a>project_file |  The pyproject.toml file.   | <a href="https://bazel.build/concepts/labels">Label</a> | required |  |
 | <a id="lock_import.import_poetry-repo"></a>repo |  The repository name   | String | required |  |
 | <a id="lock_import.import_poetry-target_environments"></a>target_environments |  A list of target environment descriptors.   | <a href="https://bazel.build/concepts/labels">List of labels</a> | optional |  `["@pycross_environments//:environments"]`  |
+
+<a id="lock_import.import_uv"></a>
+
+### import_uv
+
+Import a uv lock file.
+
+**Attributes**
+
+| Name  | Description | Type | Mandatory | Default |
+| :------------- | :------------- | :------------- | :------------- | :------------- |
+| <a id="lock_import.import_uv-all_development_groups"></a>all_development_groups |  Install all dev dependencies.   | Boolean | optional |  `False`  |
+| <a id="lock_import.import_uv-all_optional_groups"></a>all_optional_groups |  Install all optional dependencies.   | Boolean | optional |  `False`  |
+| <a id="lock_import.import_uv-default"></a>default |  Whether to install dependencies from the default group.   | Boolean | optional |  `True`  |
+| <a id="lock_import.import_uv-default_alias_single_version"></a>default_alias_single_version |  Generate aliases for all packages that have a single version in the lock file.   | Boolean | optional |  `False`  |
+| <a id="lock_import.import_uv-development_groups"></a>development_groups |  List of development dependency groups to install.   | List of strings | optional |  `[]`  |
+| <a id="lock_import.import_uv-disallow_builds"></a>disallow_builds |  If True, only pre-built wheels are allowed.   | Boolean | optional |  `False`  |
+| <a id="lock_import.import_uv-local_wheels"></a>local_wheels |  A list of local .whl files to consider when processing lock files.   | <a href="https://bazel.build/concepts/labels">List of labels</a> | optional |  `[]`  |
+| <a id="lock_import.import_uv-lock_file"></a>lock_file |  The lock file.   | <a href="https://bazel.build/concepts/labels">Label</a> | required |  |
+| <a id="lock_import.import_uv-optional_groups"></a>optional_groups |  List of optional dependency groups to install.   | List of strings | optional |  `[]`  |
+| <a id="lock_import.import_uv-project_file"></a>project_file |  The pyproject.toml file.   | <a href="https://bazel.build/concepts/labels">Label</a> | required |  |
+| <a id="lock_import.import_uv-repo"></a>repo |  The repository name   | String | required |  |
+| <a id="lock_import.import_uv-require_static_urls"></a>require_static_urls |  Require that the lock file is created with --static-urls.   | Boolean | optional |  `True`  |
+| <a id="lock_import.import_uv-target_environments"></a>target_environments |  A list of target environment descriptors.   | <a href="https://bazel.build/concepts/labels">List of labels</a> | optional |  `["@pycross_environments//:environments"]`  |
 
 <a id="lock_import.package"></a>
 
