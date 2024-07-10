@@ -16,6 +16,7 @@ def _generate_resolved_lock_repo(lock_info, serialized_lock_model):
         "lock_model": serialized_lock_model,
         "target_environments": lock_info.environments,
         "default_alias_single_version": lock_info.default_alias_single_version,
+        "default_build_dependencies": lock_info.default_build_dependencies,
         "disallow_builds": lock_info.disallow_builds,
         "local_wheels": lock_info.local_wheels,
         "annotations": {},
@@ -90,6 +91,7 @@ def _lock_struct(mctx, tag):
         environments = environment_files,
         local_wheels = tag.local_wheels,
         disallow_builds = tag.disallow_builds,
+        default_build_dependencies = tag.default_build_dependencies,
         packages = {},
     )
 
