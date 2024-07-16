@@ -74,6 +74,9 @@ RESOLVE_ATTRS = dict(
     always_include_sdist = attr.bool(
         doc = "Always include an entry for a package's sdist if one exists.",
     ),
+    default_build_dependencies = attr.string_list(
+        doc = "A list of package keys (name or name@version) that will be used as default build dependencies.",
+    ),
 )
 
 CREATE_REPOS_ATTRS = dict(
@@ -171,6 +174,11 @@ def handle_resolve_attrs(attrs, environment_files_and_labels, local_wheel_names_
 
     for wheel_name, wheel_label in local_wheel_names_and_labels:
         args.extend(["--local-wheel", wheel_name, wheel_label])
+
+    # for dep in attrs.default_build_dependencies:
+    if attrs.default_build_dependencies:
+        args.append("--default-build-dependencies")
+        args.extend(attrs.default_build_dependencies)
 
     return args
 

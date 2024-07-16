@@ -2,7 +2,7 @@
 # It is not intended for manual editing.
 """Pycross-generated dependency targets."""
 
-load("@@rules_pycross~//pycross:defs.bzl", "pycross_wheel_library")
+load("@@rules_pycross~//pycross:defs.bzl", "pycross_wheel_build", "pycross_wheel_library")
 load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_file")
 load("@bazel_tools//tools/build_defs/repo:utils.bzl", "maybe")
 
@@ -11,24 +11,25 @@ PINS = {
     "asttokens": "asttokens@2.4.1",
     "cowsay": "cowsay@6.1",
     "decorator": "decorator@5.1.1",
-    "exceptiongroup": "exceptiongroup@1.2.0",
+    "exceptiongroup": "exceptiongroup@1.2.1",
     "executing": "executing@2.0.1",
     "ipython": "ipython@8.17.2",
     "jedi": "jedi@0.19.1",
-    "matplotlib-inline": "matplotlib-inline@0.1.6",
-    "parso": "parso@0.8.3",
+    "matplotlib-inline": "matplotlib-inline@0.1.7",
+    "parso": "parso@0.8.4",
     "pexpect": "pexpect@4.9.0",
-    "prompt-toolkit": "prompt-toolkit@3.0.43",
+    "prompt-toolkit": "prompt-toolkit@3.0.47",
     "ptyprocess": "ptyprocess@0.7.0",
     "pure-eval": "pure-eval@0.2.2",
-    "pygments": "pygments@2.17.2",
+    "pygments": "pygments@2.18.0",
     "regex": "regex@2023.10.3",
     "setuptools": "setuptools@68.2.2",
     "six": "six@1.16.0",
     "stack-data": "stack-data@0.6.3",
-    "traitlets": "traitlets@5.14.1",
+    "traitlets": "traitlets@5.14.3",
     "wcwidth": "wcwidth@0.2.13",
     "wheel": "wheel@0.41.3",
+    "zope-interface": "zope-interface@5.5.2",
     "zstandard": "zstandard@0.22.0",
 }
 
@@ -164,13 +165,13 @@ def targets():
     )
 
     native.alias(
-        name = "_wheel_exceptiongroup@1.2.0",
-        actual = "@pdm_lock_wheel_exceptiongroup_1.2.0_py3_none_any//file",
+        name = "_wheel_exceptiongroup@1.2.1",
+        actual = "@pdm_lock_wheel_exceptiongroup_1.2.1_py3_none_any//file",
     )
 
     pycross_wheel_library(
-        name = "exceptiongroup@1.2.0",
-        wheel = ":_wheel_exceptiongroup@1.2.0",
+        name = "exceptiongroup@1.2.1",
+        wheel = ":_wheel_exceptiongroup@1.2.1",
     )
 
     native.alias(
@@ -186,22 +187,22 @@ def targets():
     _ipython_8_17_2_deps = [
         ":decorator@5.1.1",
         ":jedi@0.19.1",
-        ":matplotlib-inline@0.1.6",
+        ":matplotlib-inline@0.1.7",
         ":pexpect@4.9.0",
-        ":prompt-toolkit@3.0.43",
-        ":pygments@2.17.2",
+        ":prompt-toolkit@3.0.47",
+        ":pygments@2.18.0",
         ":stack-data@0.6.3",
-        ":traitlets@5.14.1",
+        ":traitlets@5.14.3",
     ] + select({
         ":_env_python_3.10.11_aarch64-apple-darwin": [
             ":appnope@0.1.4",
-            ":exceptiongroup@1.2.0",
+            ":exceptiongroup@1.2.1",
         ],
         ":_env_python_3.10.11_aarch64-unknown-linux-gnu": [
-            ":exceptiongroup@1.2.0",
+            ":exceptiongroup@1.2.1",
         ],
         ":_env_python_3.10.11_x86_64-unknown-linux-gnu": [
-            ":exceptiongroup@1.2.0",
+            ":exceptiongroup@1.2.1",
         ],
         ":_env_python_3.11.6_aarch64-apple-darwin": [
             ":appnope@0.1.4",
@@ -227,7 +228,7 @@ def targets():
     )
 
     _jedi_0_19_1_deps = [
-        ":parso@0.8.3",
+        ":parso@0.8.4",
     ]
 
     native.alias(
@@ -241,29 +242,29 @@ def targets():
         wheel = ":_wheel_jedi@0.19.1",
     )
 
-    _matplotlib_inline_0_1_6_deps = [
-        ":traitlets@5.14.1",
+    _matplotlib_inline_0_1_7_deps = [
+        ":traitlets@5.14.3",
     ]
 
     native.alias(
-        name = "_wheel_matplotlib-inline@0.1.6",
-        actual = "@pdm_lock_wheel_matplotlib_inline_0.1.6_py3_none_any//file",
+        name = "_wheel_matplotlib-inline@0.1.7",
+        actual = "@pdm_lock_wheel_matplotlib_inline_0.1.7_py3_none_any//file",
     )
 
     pycross_wheel_library(
-        name = "matplotlib-inline@0.1.6",
-        deps = _matplotlib_inline_0_1_6_deps,
-        wheel = ":_wheel_matplotlib-inline@0.1.6",
+        name = "matplotlib-inline@0.1.7",
+        deps = _matplotlib_inline_0_1_7_deps,
+        wheel = ":_wheel_matplotlib-inline@0.1.7",
     )
 
     native.alias(
-        name = "_wheel_parso@0.8.3",
-        actual = "@pdm_lock_wheel_parso_0.8.3_py2.py3_none_any//file",
+        name = "_wheel_parso@0.8.4",
+        actual = "@pdm_lock_wheel_parso_0.8.4_py2.py3_none_any//file",
     )
 
     pycross_wheel_library(
-        name = "parso@0.8.3",
-        wheel = ":_wheel_parso@0.8.3",
+        name = "parso@0.8.4",
+        wheel = ":_wheel_parso@0.8.4",
     )
 
     _pexpect_4_9_0_deps = [
@@ -281,19 +282,19 @@ def targets():
         wheel = ":_wheel_pexpect@4.9.0",
     )
 
-    _prompt_toolkit_3_0_43_deps = [
+    _prompt_toolkit_3_0_47_deps = [
         ":wcwidth@0.2.13",
     ]
 
     native.alias(
-        name = "_wheel_prompt-toolkit@3.0.43",
-        actual = "@pdm_lock_wheel_prompt_toolkit_3.0.43_py3_none_any//file",
+        name = "_wheel_prompt-toolkit@3.0.47",
+        actual = "@pdm_lock_wheel_prompt_toolkit_3.0.47_py3_none_any//file",
     )
 
     pycross_wheel_library(
-        name = "prompt-toolkit@3.0.43",
-        deps = _prompt_toolkit_3_0_43_deps,
-        wheel = ":_wheel_prompt-toolkit@3.0.43",
+        name = "prompt-toolkit@3.0.47",
+        deps = _prompt_toolkit_3_0_47_deps,
+        wheel = ":_wheel_prompt-toolkit@3.0.47",
     )
 
     native.alias(
@@ -317,13 +318,13 @@ def targets():
     )
 
     native.alias(
-        name = "_wheel_pygments@2.17.2",
-        actual = "@pdm_lock_wheel_pygments_2.17.2_py3_none_any//file",
+        name = "_wheel_pygments@2.18.0",
+        actual = "@pdm_lock_wheel_pygments_2.18.0_py3_none_any//file",
     )
 
     pycross_wheel_library(
-        name = "pygments@2.17.2",
-        wheel = ":_wheel_pygments@2.17.2",
+        name = "pygments@2.18.0",
+        wheel = ":_wheel_pygments@2.18.0",
     )
 
     native.alias(
@@ -387,13 +388,13 @@ def targets():
     )
 
     native.alias(
-        name = "_wheel_traitlets@5.14.1",
-        actual = "@pdm_lock_wheel_traitlets_5.14.1_py3_none_any//file",
+        name = "_wheel_traitlets@5.14.3",
+        actual = "@pdm_lock_wheel_traitlets_5.14.3_py3_none_any//file",
     )
 
     pycross_wheel_library(
-        name = "traitlets@5.14.1",
-        wheel = ":_wheel_traitlets@5.14.1",
+        name = "traitlets@5.14.3",
+        wheel = ":_wheel_traitlets@5.14.3",
     )
 
     native.alias(
@@ -414,6 +415,47 @@ def targets():
     pycross_wheel_library(
         name = "wheel@0.41.3",
         wheel = ":_wheel_wheel@0.41.3",
+    )
+
+    _zope_interface_5_5_2_deps = [
+        ":setuptools@68.2.2",
+    ]
+
+    native.alias(
+        name = "_sdist_zope-interface@5.5.2",
+        actual = "@pdm_lock_sdist_zope.interface_5.5.2//file",
+    )
+
+    pycross_wheel_build(
+        name = "_build_zope-interface@5.5.2",
+        sdist = ":_sdist_zope-interface@5.5.2",
+        target_environment = _target,
+        deps = _zope_interface_5_5_2_deps,
+        tags = ["manual"],
+    )
+
+    native.alias(
+        name = "_wheel_zope-interface@5.5.2",
+        actual = select({
+            ":_env_python_3.10.11_aarch64-apple-darwin": "@pdm_lock_wheel_zope.interface_5.5.2_cp310_cp310_macosx_11_0_arm64//file",
+            ":_env_python_3.10.11_aarch64-unknown-linux-gnu": "@pdm_lock_wheel_zope.interface_5.5.2_cp310_cp310_manylinux_2_17_aarch64.manylinux2014_aarch64//file",
+            ":_env_python_3.10.11_x86_64-unknown-linux-gnu": "@pdm_lock_wheel_zope.interface_5.5.2_cp310_cp310_manylinux_2_5_x86_64.manylinux1_x86_64.manylinux_2_12_x86_64.manylinux2010_x86_64//file",
+            ":_env_python_3.11.6_aarch64-apple-darwin": "@pdm_lock_wheel_zope.interface_5.5.2_cp311_cp311_macosx_11_0_arm64//file",
+            ":_env_python_3.11.6_aarch64-unknown-linux-gnu": "@pdm_lock_wheel_zope.interface_5.5.2_cp311_cp311_manylinux_2_17_aarch64.manylinux2014_aarch64//file",
+            ":_env_python_3.11.6_x86_64-unknown-linux-gnu": ":_build_zope-interface@5.5.2",
+            ":_env_python_3.12.0_aarch64-apple-darwin": ":_build_zope-interface@5.5.2",
+            ":_env_python_3.12.0_aarch64-unknown-linux-gnu": ":_build_zope-interface@5.5.2",
+            ":_env_python_3.12.0_x86_64-unknown-linux-gnu": ":_build_zope-interface@5.5.2",
+            ":_env_python_3.12_aarch64-apple-darwin": ":_build_zope-interface@5.5.2",
+            ":_env_python_3.12_aarch64-unknown-linux-gnu": ":_build_zope-interface@5.5.2",
+            ":_env_python_3.12_x86_64-unknown-linux-gnu": ":_build_zope-interface@5.5.2",
+        }),
+    )
+
+    pycross_wheel_library(
+        name = "zope-interface@5.5.2",
+        deps = _zope_interface_5_5_2_deps,
+        wheel = ":_wheel_zope-interface@5.5.2",
     )
 
     native.alias(
@@ -442,6 +484,16 @@ def targets():
 # buildifier: disable=unnamed-macro
 def repositories():
     """Generated package repositories."""
+
+    maybe(
+        http_file,
+        name = "pdm_lock_sdist_zope.interface_5.5.2",
+        urls = [
+            "https://files.pythonhosted.org/packages/38/6f/fbfb7dde38be7e5644bb342c4c7cdc444cd5e2ffbd70d091263b3858a8cb/zope.interface-5.5.2.tar.gz",
+        ],
+        sha256 = "bfee1f3ff62143819499e348f5b8a7f3aa0259f9aca5e0ddae7391d059dce671",
+        downloaded_file_path = "zope.interface-5.5.2.tar.gz",
+    )
 
     maybe(
         http_file,
@@ -485,12 +537,12 @@ def repositories():
 
     maybe(
         http_file,
-        name = "pdm_lock_wheel_exceptiongroup_1.2.0_py3_none_any",
+        name = "pdm_lock_wheel_exceptiongroup_1.2.1_py3_none_any",
         urls = [
-            "https://files.pythonhosted.org/packages/b8/9a/5028fd52db10e600f1c4674441b968cf2ea4959085bfb5b99fb1250e5f68/exceptiongroup-1.2.0-py3-none-any.whl",
+            "https://files.pythonhosted.org/packages/01/90/79fe92dd413a9cab314ef5c591b5aa9b9ba787ae4cadab75055b0ae00b33/exceptiongroup-1.2.1-py3-none-any.whl",
         ],
-        sha256 = "4bfd3996ac73b41e9b9628b04e079f193850720ea5945fc96a08633c66912f14",
-        downloaded_file_path = "exceptiongroup-1.2.0-py3-none-any.whl",
+        sha256 = "5258b9ed329c5bbdd31a309f53cbfb0b155341807f6ff7606a1e801a891b29ad",
+        downloaded_file_path = "exceptiongroup-1.2.1-py3-none-any.whl",
     )
 
     maybe(
@@ -525,22 +577,22 @@ def repositories():
 
     maybe(
         http_file,
-        name = "pdm_lock_wheel_matplotlib_inline_0.1.6_py3_none_any",
+        name = "pdm_lock_wheel_matplotlib_inline_0.1.7_py3_none_any",
         urls = [
-            "https://files.pythonhosted.org/packages/f2/51/c34d7a1d528efaae3d8ddb18ef45a41f284eacf9e514523b191b7d0872cc/matplotlib_inline-0.1.6-py3-none-any.whl",
+            "https://files.pythonhosted.org/packages/8f/8e/9ad090d3553c280a8060fbf6e24dc1c0c29704ee7d1c372f0c174aa59285/matplotlib_inline-0.1.7-py3-none-any.whl",
         ],
-        sha256 = "f1f41aab5328aa5aaea9b16d083b128102f8712542f819fe7e6a420ff581b311",
-        downloaded_file_path = "matplotlib_inline-0.1.6-py3-none-any.whl",
+        sha256 = "df192d39a4ff8f21b1895d72e6a13f5fcc5099f00fa84384e0ea28c2cc0653ca",
+        downloaded_file_path = "matplotlib_inline-0.1.7-py3-none-any.whl",
     )
 
     maybe(
         http_file,
-        name = "pdm_lock_wheel_parso_0.8.3_py2.py3_none_any",
+        name = "pdm_lock_wheel_parso_0.8.4_py2.py3_none_any",
         urls = [
-            "https://files.pythonhosted.org/packages/05/63/8011bd08a4111858f79d2b09aad86638490d62fbf881c44e434a6dfca87b/parso-0.8.3-py2.py3-none-any.whl",
+            "https://files.pythonhosted.org/packages/c6/ac/dac4a63f978e4dcb3c6d3a78c4d8e0192a113d288502a1216950c41b1027/parso-0.8.4-py2.py3-none-any.whl",
         ],
-        sha256 = "c001d4636cd3aecdaf33cbb40aebb59b094be2a74c556778ef5576c175e19e75",
-        downloaded_file_path = "parso-0.8.3-py2.py3-none-any.whl",
+        sha256 = "a418670a20291dacd2dddc80c377c5c3791378ee1e8d12bffc35420643d43f18",
+        downloaded_file_path = "parso-0.8.4-py2.py3-none-any.whl",
     )
 
     maybe(
@@ -555,12 +607,12 @@ def repositories():
 
     maybe(
         http_file,
-        name = "pdm_lock_wheel_prompt_toolkit_3.0.43_py3_none_any",
+        name = "pdm_lock_wheel_prompt_toolkit_3.0.47_py3_none_any",
         urls = [
-            "https://files.pythonhosted.org/packages/ee/fd/ca7bf3869e7caa7a037e23078539467b433a4e01eebd93f77180ab927766/prompt_toolkit-3.0.43-py3-none-any.whl",
+            "https://files.pythonhosted.org/packages/e8/23/22750c4b768f09386d1c3cc4337953e8936f48a888fa6dddfb669b2c9088/prompt_toolkit-3.0.47-py3-none-any.whl",
         ],
-        sha256 = "a11a29cb3bf0a28a387fe5122cdb649816a957cd9261dcedf8c9f1fef33eacf6",
-        downloaded_file_path = "prompt_toolkit-3.0.43-py3-none-any.whl",
+        sha256 = "0d7bfa67001d5e39d02c224b663abc33687405033a8c422d0d675a5a13361d10",
+        downloaded_file_path = "prompt_toolkit-3.0.47-py3-none-any.whl",
     )
 
     maybe(
@@ -585,12 +637,12 @@ def repositories():
 
     maybe(
         http_file,
-        name = "pdm_lock_wheel_pygments_2.17.2_py3_none_any",
+        name = "pdm_lock_wheel_pygments_2.18.0_py3_none_any",
         urls = [
-            "https://files.pythonhosted.org/packages/97/9c/372fef8377a6e340b1704768d20daaded98bf13282b5327beb2e2fe2c7ef/pygments-2.17.2-py3-none-any.whl",
+            "https://files.pythonhosted.org/packages/f7/3f/01c8b82017c199075f8f788d0d906b9ffbbc5a47dc9918a945e13d5a2bda/pygments-2.18.0-py3-none-any.whl",
         ],
-        sha256 = "b27c2826c47d0f3219f29554824c30c5e8945175d888647acd804ddd04af846c",
-        downloaded_file_path = "pygments-2.17.2-py3-none-any.whl",
+        sha256 = "b8e6aca0523f3ab76fee51799c488e38782ac06eafcf95e7ba832985c8e7b13a",
+        downloaded_file_path = "pygments-2.18.0-py3-none-any.whl",
     )
 
     maybe(
@@ -715,12 +767,12 @@ def repositories():
 
     maybe(
         http_file,
-        name = "pdm_lock_wheel_traitlets_5.14.1_py3_none_any",
+        name = "pdm_lock_wheel_traitlets_5.14.3_py3_none_any",
         urls = [
-            "https://files.pythonhosted.org/packages/45/34/5dc77fdc7bb4bd198317eea5679edf9cc0a186438b5b19dbb9062fb0f4d5/traitlets-5.14.1-py3-none-any.whl",
+            "https://files.pythonhosted.org/packages/00/c0/8f5d070730d7836adc9c9b6408dec68c6ced86b304a9b26a14df072a6e8c/traitlets-5.14.3-py3-none-any.whl",
         ],
-        sha256 = "2e5a030e6eff91737c643231bfcf04a65b0132078dad75e4936700b213652e74",
-        downloaded_file_path = "traitlets-5.14.1-py3-none-any.whl",
+        sha256 = "b74e89e397b1ed28cc831db7aea759ba6640cb3de13090ca145426688ff1ac4f",
+        downloaded_file_path = "traitlets-5.14.3-py3-none-any.whl",
     )
 
     maybe(
@@ -741,6 +793,56 @@ def repositories():
         ],
         sha256 = "488609bc63a29322326e05560731bf7bfea8e48ad646e1f5e40d366607de0942",
         downloaded_file_path = "wheel-0.41.3-py3-none-any.whl",
+    )
+
+    maybe(
+        http_file,
+        name = "pdm_lock_wheel_zope.interface_5.5.2_cp310_cp310_macosx_11_0_arm64",
+        urls = [
+            "https://files.pythonhosted.org/packages/01/45/9ff2b9281597da5fcf84995ca18cde71abf248c98bfc7c6bdee60af87dbb/zope.interface-5.5.2-cp310-cp310-macosx_11_0_arm64.whl",
+        ],
+        sha256 = "5334e2ef60d3d9439c08baedaf8b84dc9bb9522d0dacbc10572ef5609ef8db6d",
+        downloaded_file_path = "zope.interface-5.5.2-cp310-cp310-macosx_11_0_arm64.whl",
+    )
+
+    maybe(
+        http_file,
+        name = "pdm_lock_wheel_zope.interface_5.5.2_cp310_cp310_manylinux_2_17_aarch64.manylinux2014_aarch64",
+        urls = [
+            "https://files.pythonhosted.org/packages/ed/c9/265a39c9933aef7cea402c25fb80f6455407d74ed761816496166f55d05a/zope.interface-5.5.2-cp310-cp310-manylinux_2_17_aarch64.manylinux2014_aarch64.whl",
+        ],
+        sha256 = "dc26c8d44472e035d59d6f1177eb712888447f5799743da9c398b0339ed90b1b",
+        downloaded_file_path = "zope.interface-5.5.2-cp310-cp310-manylinux_2_17_aarch64.manylinux2014_aarch64.whl",
+    )
+
+    maybe(
+        http_file,
+        name = "pdm_lock_wheel_zope.interface_5.5.2_cp310_cp310_manylinux_2_5_x86_64.manylinux1_x86_64.manylinux_2_12_x86_64.manylinux2010_x86_64",
+        urls = [
+            "https://files.pythonhosted.org/packages/48/fa/25d98f89f07e4524e465d4d5ca4164a443628eae0548f1ec085ea0ed2889/zope.interface-5.5.2-cp310-cp310-manylinux_2_5_x86_64.manylinux1_x86_64.manylinux_2_12_x86_64.manylinux2010_x86_64.whl",
+        ],
+        sha256 = "f98d4bd7bbb15ca701d19b93263cc5edfd480c3475d163f137385f49e5b3a3a7",
+        downloaded_file_path = "zope.interface-5.5.2-cp310-cp310-manylinux_2_5_x86_64.manylinux1_x86_64.manylinux_2_12_x86_64.manylinux2010_x86_64.whl",
+    )
+
+    maybe(
+        http_file,
+        name = "pdm_lock_wheel_zope.interface_5.5.2_cp311_cp311_macosx_11_0_arm64",
+        urls = [
+            "https://files.pythonhosted.org/packages/1a/ba/ca524f2f7184346e93bae317580c4906bc2e81bdac6e3b68b64c632a7df0/zope.interface-5.5.2-cp311-cp311-macosx_11_0_arm64.whl",
+        ],
+        sha256 = "765d703096ca47aa5d93044bf701b00bbce4d903a95b41fff7c3796e747b1f1d",
+        downloaded_file_path = "zope.interface-5.5.2-cp311-cp311-macosx_11_0_arm64.whl",
+    )
+
+    maybe(
+        http_file,
+        name = "pdm_lock_wheel_zope.interface_5.5.2_cp311_cp311_manylinux_2_17_aarch64.manylinux2014_aarch64",
+        urls = [
+            "https://files.pythonhosted.org/packages/fb/a7/4e2a58146d909115e102ce4038e3e8672f566174c55d8fa75325151b11fb/zope.interface-5.5.2-cp311-cp311-manylinux_2_17_aarch64.manylinux2014_aarch64.whl",
+        ],
+        sha256 = "e945de62917acbf853ab968d8916290548df18dd62c739d862f359ecd25842a6",
+        downloaded_file_path = "zope.interface-5.5.2-cp311-cp311-manylinux_2_17_aarch64.manylinux2014_aarch64.whl",
     )
 
     maybe(

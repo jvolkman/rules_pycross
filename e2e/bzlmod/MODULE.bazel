@@ -81,6 +81,10 @@ lock_import.import_poetry(
 # lock_repo with PDM and some package overrides
 lock_import.import_pdm(
     default_alias_single_version = True,
+    default_build_dependencies = [
+        "setuptools",
+        "wheel",
+    ],
     local_wheels = [
         "//:cowsay-6.1-py3-none-any.whl",
     ],
@@ -93,6 +97,10 @@ lock_import.import_pdm(
 # lock_repo with UV and some package overrides
 lock_import.import_uv(
     default_alias_single_version = True,
+    default_build_dependencies = [
+        "setuptools",
+        "wheel",
+    ],
     local_wheels = [
         "//:cowsay-6.1-py3-none-any.whl",
     ],

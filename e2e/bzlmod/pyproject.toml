@@ -12,6 +12,7 @@ dependencies = [
     "setuptools==68.2.2",
     "wheel==0.41.3",
     "zstandard==0.22.0",
+    "zope-interface==5.5.2" # Test that packages with default build deps don't throw MismatchedVersionException
 ]
 requires-python = ">=3.9, <3.13"
 license = {text = "MIT"}

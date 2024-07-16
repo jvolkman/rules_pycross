@@ -36,6 +36,9 @@ COMMON_IMPORT_ATTRS = dict(
     disallow_builds = attr.bool(
         doc = "If True, only pre-built wheels are allowed.",
     ),
+    default_build_dependencies = attr.string_list(
+        doc = "A list of package keys (name or name@version) that will be used as default build dependencies.",
+    ),
 )
 
 # Attrs for the package tag

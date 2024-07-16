@@ -203,6 +203,7 @@ class PackageResolver:
         package: RawPackage,
         context: GenerationContext,
         annotations: Optional[PackageAnnotations],
+        default_build_dependencies: List[PackageKey],
     ):
         annotations = annotations or PackageAnnotations()  # Default to an empty set
 
@@ -210,7 +211,11 @@ class PackageResolver:
         self.package_name = package.name
         self.uses_sdist = False
 
-        self._build_deps = annotations.build_dependencies
+        build_dependencies = annotations.build_dependencies or default_build_dependencies
+
+        # Filter out any dependencies that are already in the package's dependencies
+        self._build_deps = [dep for dep in build_dependencies if dep not in (p.key for p in package.dependencies)]
+
         self._build_target = annotations.build_target
         self._install_exclude_globs = annotations.install_exclude_globs
 
@@ -349,6 +354,24 @@ def collect_package_annotations(args: Any, lock_model: RawLockSet) -> Dict[Packa
     return dict(annotations)
 
 
+def collect_default_build_dependencies(lock_model: RawLockSet, build_dependencies: list[str]) -> list[PackageKey]:
+    all_package_keys_by_canonical_name: Dict[NormalizedName, List[PackageKey]] = defaultdict(list)
+    resolved_build_penpendencies = []
+    for package in lock_model.packages.values():
+        all_package_keys_by_canonical_name[package.name].append(package.key)
+
+    for dep in build_dependencies:
+        resolved_dep = resolve_single_version(
+            dep,
+            all_package_keys_by_canonical_name,
+            lock_model.packages.keys(),
+            "build_dependencies",
+        )
+        resolved_build_penpendencies.append(resolved_dep)
+
+    return resolved_build_penpendencies
+
+
 def resolve(args: Any) -> ResolvedLockSet:
     environment_pairs: List[LabelAndTargetEnv] = []
     for target_environment in args.target_environment or []:
@@ -389,6 +412,8 @@ def resolve(args: Any) -> ResolvedLockSet:
     # Collect package "annotations"
     annotations = collect_package_annotations(args, lock_model)
 
+    default_build_dependencies = collect_default_build_dependencies(lock_model, args.default_build_dependencies)
+
     # Walk the dependency graph starting from the set if pinned packages (in pyproject.toml), computing the
     # transitive closure.
     work = list(lock_model.pins.values())
@@ -404,6 +429,7 @@ def resolve(args: Any) -> ResolvedLockSet:
             package,
             context,
             annotations.pop(next_package_key, None),
+            default_build_dependencies,
         )
         packages_by_package_key[next_package_key] = entry
         work.extend(entry.all_dependency_keys)
@@ -417,7 +443,6 @@ def resolve(args: Any) -> ResolvedLockSet:
         )
 
     resolved_packages = sorted(packages_by_package_key.values(), key=lambda x: x.key)
-
     # If builds are disallowed, ensure that none of the targets include an sdist build
     if args.disallow_builds:
         builds = []
@@ -517,6 +542,12 @@ def add_shared_flags(parser: ArgumentParser) -> None:
         "--annotations-file",
         type=Path,
         help="The path to the annotations JSON file.",
+    )
+    parser.add_argument(
+        "--default-build-dependencies",
+        nargs="*",
+        default=[],
+        help="A list of default build dependencies to include in all packages.",
     )
 
 
