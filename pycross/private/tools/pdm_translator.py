@@ -13,6 +13,7 @@ from urllib.parse import unquote
 from urllib.parse import urlparse
 
 import tomli
+from dep_logic.tags import EnvSpec
 from packaging.requirements import Requirement
 from packaging.specifiers import SpecifierSet
 from packaging.utils import NormalizedName
