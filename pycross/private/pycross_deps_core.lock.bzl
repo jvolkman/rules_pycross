@@ -8,6 +8,7 @@ load("//pycross:defs.bzl", "pycross_wheel_library")
 
 PINS = {
     "dacite": "dacite@1.6.0",
+    "dep-logic": "dep-logic@0.4.4",
     "installer": "installer@0.7.0",
     "packaging": "packaging@23.2",
     "pip": "pip@23.3.1",
@@ -17,6 +18,7 @@ PINS = {
 
 FILES = {
     "dacite-1.6.0-py3-none-any.whl": Label("@rules_pycross_internal_deps_wheel_dacite_1.6.0_py3_none_any//file:dacite-1.6.0-py3-none-any.whl"),
+    "dep_logic-0.4.4-py3-none-any.whl": Label("@rules_pycross_internal_deps_wheel_dep_logic_0.4.4_py3_none_any//file:dep_logic-0.4.4-py3-none-any.whl"),
     "installer-0.7.0-py3-none-any.whl": Label("@rules_pycross_internal_deps_wheel_installer_0.7.0_py3_none_any//file:installer-0.7.0-py3-none-any.whl"),
     "packaging-23.2-py3-none-any.whl": Label("@rules_pycross_internal_deps_wheel_packaging_23.2_py3_none_any//file:packaging-23.2-py3-none-any.whl"),
     "pip-23.3.1-py3-none-any.whl": Label("@rules_pycross_internal_deps_wheel_pip_23.3.1_py3_none_any//file:pip-23.3.1-py3-none-any.whl"),
@@ -51,6 +53,21 @@ def targets():
     pycross_wheel_library(
         name = "dacite@1.6.0",
         wheel = ":_wheel_dacite@1.6.0",
+    )
+
+    _dep_logic_0_4_4_deps = [
+        ":packaging@23.2",
+    ]
+
+    native.alias(
+        name = "_wheel_dep-logic@0.4.4",
+        actual = "@rules_pycross_internal_deps_wheel_dep_logic_0.4.4_py3_none_any//file",
+    )
+
+    pycross_wheel_library(
+        name = "dep-logic@0.4.4",
+        deps = _dep_logic_0_4_4_deps,
+        wheel = ":_wheel_dep-logic@0.4.4",
     )
 
     native.alias(
@@ -115,6 +132,16 @@ def repositories():
         ],
         sha256 = "4331535f7aabb505c732fa4c3c094313fc0a1d5ea19907bf4726a7819a68b93f",
         downloaded_file_path = "dacite-1.6.0-py3-none-any.whl",
+    )
+
+    maybe(
+        http_file,
+        name = "rules_pycross_internal_deps_wheel_dep_logic_0.4.4_py3_none_any",
+        urls = [
+            "https://files.pythonhosted.org/packages/29/91/2a9fd596cdaec9dc0f52179c08c6b3a18ae6487a3d4a90dace72cb4686f3/dep_logic-0.4.4-py3-none-any.whl",
+        ],
+        sha256 = "3f47301f9a8230443d3df7d7f9bdc33d35d8591a14112d36f221b0e33810d3ae",
+        downloaded_file_path = "dep_logic-0.4.4-py3-none-any.whl",
     )
 
     maybe(

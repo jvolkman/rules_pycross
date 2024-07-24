@@ -8,6 +8,7 @@ requires-python = ">=3.8"
 # core dependencies are required by repo rules
 core = [
     "dacite==1.6.0",
+    "dep-logic==0.4.4",
     "installer==0.7.0",
     "packaging==23.2",
     "pip==23.3.1",

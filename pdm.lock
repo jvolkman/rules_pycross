@@ -3,9 +3,12 @@
 
 [metadata]
 groups = ["default", "build", "core", "repairwheel"]
-strategy = ["cross_platform", "static_urls"]
-lock_version = "4.4.1"
-content_hash = "sha256:58210034e1d6e749f0a0d1e8670a6c7cb706a794bdb7d9ebcee61df42a3d29fc"
+strategy = ["static_urls"]
+lock_version = "4.5.0"
+content_hash = "sha256:c5421b6c699a8a32b3726d6927ee9dc800dd985c1ebd51db77f201552d53b0ad"
+
+[[metadata.targets]]
+requires_python = ">=3.8"
 
 [[package]]
 name = "altgraph"
@@ -48,6 +51,9 @@ name = "dacite"
 version = "1.6.0"
 requires_python = ">=3.6"
 summary = "Simple creation of data classes from dictionaries."
+dependencies = [
+    "dataclasses; python_version < \"3.7\"",
+]
 files = [
     {url = "https://files.pythonhosted.org/packages/06/9d/11a073172d889e9e0d0ad270a1b468876c82d759af7864a8095dfc73f46d/dacite-1.6.0-py3-none-any.whl", hash = "sha256:4331535f7aabb505c732fa4c3c094313fc0a1d5ea19907bf4726a7819a68b93f"},
     {url = "https://files.pythonhosted.org/packages/f9/bf/3f0912b4cfd861cd0fb7278c2b8d5bfb0c613ec1b7922e25e4115287b73a/dacite-1.6.0.tar.gz", hash = "sha256:d48125ed0a0352d3de9f493bf980038088f45f3f9d7498f090b50a847daaa6df"},
@@ -55,28 +61,42 @@ files = [
 
 [[package]]
 name = "delvewheel"
-version = "1.6.0"
+version = "1.7.1"
 requires_python = ">=3.7"
 summary = "Self-contained wheels for Windows"
 dependencies = [
     "pefile",
 ]
 files = [
-    {url = "https://files.pythonhosted.org/packages/24/f7/35e5657954452f6c221969e67a7c69433b1f230dc076cf49e5a9186a7fd4/delvewheel-1.6.0-py3-none-any.whl", hash = "sha256:15be02e749caacafdd51c283175a041a3f467484a1a96fc2d36340ced6869bff"},
-    {url = "https://files.pythonhosted.org/packages/78/20/c62d194a3ad524d2f26687a908d5cb621d4f0695af23778a1d65f314050e/delvewheel-1.6.0.tar.gz", hash = "sha256:fb2bfc91183330297898992a6b25bde8b1c542f73c4242b73cbef9c747ebcd9b"},
+    {url = "https://files.pythonhosted.org/packages/1f/08/2fc061b5f390759c8197bb7b5d31c09da559d8eac6f570d3fa9d14c06ab2/delvewheel-1.7.1.tar.gz", hash = "sha256:2e782e2aad81f076b61d25ed2d4ab97885c964157fc0eeb65f3e7e4cc972fd55"},
+    {url = "https://files.pythonhosted.org/packages/bc/92/c7d46b8c316869a5229e58431f46a2773638748edd04591258c8bd742aed/delvewheel-1.7.1-py3-none-any.whl", hash = "sha256:c9478d2f35471f013acc613efb685cad38240bbf892724168a2ec924345196fd"},
+]
+
+[[package]]
+name = "dep-logic"
+version = "0.4.4"
+requires_python = ">=3.8"
+summary = "Python dependency specifications supporting logical operations"
+dependencies = [
+    "packaging>=22",
+]
+files = [
+    {url = "https://files.pythonhosted.org/packages/29/91/2a9fd596cdaec9dc0f52179c08c6b3a18ae6487a3d4a90dace72cb4686f3/dep_logic-0.4.4-py3-none-any.whl", hash = "sha256:3f47301f9a8230443d3df7d7f9bdc33d35d8591a14112d36f221b0e33810d3ae"},
+    {url = "https://files.pythonhosted.org/packages/a7/f8/8be6fa95351ddf624a5c15c159bc1f6e2f4cb7ca899835911d64d915d0eb/dep_logic-0.4.4.tar.gz", hash = "sha256:e716afdda9351107c54ef4f6fd3fd29568f53529afb333b4958183b9d306e44a"},
 ]
 
 [[package]]
 name = "importlib-metadata"
-version = "7.1.0"
+version = "8.2.0"
 requires_python = ">=3.8"
 summary = "Read metadata from Python packages"
 dependencies = [
+    "typing-extensions>=3.6.4; python_version < \"3.8\"",
     "zipp>=0.5",
 ]
 files = [
-    {url = "https://files.pythonhosted.org/packages/2d/0a/679461c511447ffaf176567d5c496d1de27cbe34a87df6677d7171b2fbd4/importlib_metadata-7.1.0-py3-none-any.whl", hash = "sha256:30962b96c0c223483ed6cc7280e7f0199feb01a0e40cfae4d4450fc6fab1f570"},
-    {url = "https://files.pythonhosted.org/packages/a0/fc/c4e6078d21fc4fa56300a241b87eae76766aa380a23fc450fc85bb7bf547/importlib_metadata-7.1.0.tar.gz", hash = "sha256:b78938b926ee8d5f020fc4772d487045805a55ddbad2ecf21c6d60938dc7fcd2"},
+    {url = "https://files.pythonhosted.org/packages/82/47/bb25ec04985d0693da478797c3d8c1092b140f3a53ccb984fbbd38affa5b/importlib_metadata-8.2.0-py3-none-any.whl", hash = "sha256:11901fa0c2f97919b288679932bb64febaeacf289d18ac84dd68cb2e74213369"},
+    {url = "https://files.pythonhosted.org/packages/f6/a1/db39a513aa99ab3442010a994eef1cb977a436aded53042e69bee6959f74/importlib_metadata-8.2.0.tar.gz", hash = "sha256:72e8d4399996132204f9a16dcc751af254a48f8d1b20b9ff0f98d4a8f901e73d"},
 ]
 
 [[package]]

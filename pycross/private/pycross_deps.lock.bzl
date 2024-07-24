@@ -9,6 +9,7 @@ load("//pycross:defs.bzl", "pycross_wheel_library")
 PINS = {
     "build": "build@1.0.3",
     "dacite": "dacite@1.6.0",
+    "dep-logic": "dep-logic@0.4.4",
     "installer": "installer@0.7.0",
     "packaging": "packaging@23.2",
     "pip": "pip@23.3.1",
@@ -47,7 +48,7 @@ def targets():
     )
 
     _build_1_0_3_deps = [
-        ":importlib-metadata@7.1.0",
+        ":importlib-metadata@8.2.0",
         ":packaging@23.2",
         ":pyproject-hooks@1.1.0",
         ":tomli@2.0.1",
@@ -74,34 +75,49 @@ def targets():
         wheel = ":_wheel_dacite@1.6.0",
     )
 
-    _delvewheel_1_6_0_deps = [
+    _delvewheel_1_7_1_deps = [
         ":pefile@2023.2.7",
     ]
 
     native.alias(
-        name = "_wheel_delvewheel@1.6.0",
-        actual = "@rules_pycross_internal_deps_wheel_delvewheel_1.6.0_py3_none_any//file",
+        name = "_wheel_delvewheel@1.7.1",
+        actual = "@rules_pycross_internal_deps_wheel_delvewheel_1.7.1_py3_none_any//file",
     )
 
     pycross_wheel_library(
-        name = "delvewheel@1.6.0",
-        deps = _delvewheel_1_6_0_deps,
-        wheel = ":_wheel_delvewheel@1.6.0",
+        name = "delvewheel@1.7.1",
+        deps = _delvewheel_1_7_1_deps,
+        wheel = ":_wheel_delvewheel@1.7.1",
     )
 
-    _importlib_metadata_7_1_0_deps = [
+    _dep_logic_0_4_4_deps = [
+        ":packaging@23.2",
+    ]
+
+    native.alias(
+        name = "_wheel_dep-logic@0.4.4",
+        actual = "@rules_pycross_internal_deps_wheel_dep_logic_0.4.4_py3_none_any//file",
+    )
+
+    pycross_wheel_library(
+        name = "dep-logic@0.4.4",
+        deps = _dep_logic_0_4_4_deps,
+        wheel = ":_wheel_dep-logic@0.4.4",
+    )
+
+    _importlib_metadata_8_2_0_deps = [
         ":zipp@3.19.2",
     ]
 
     native.alias(
-        name = "_wheel_importlib-metadata@7.1.0",
-        actual = "@rules_pycross_internal_deps_wheel_importlib_metadata_7.1.0_py3_none_any//file",
+        name = "_wheel_importlib-metadata@8.2.0",
+        actual = "@rules_pycross_internal_deps_wheel_importlib_metadata_8.2.0_py3_none_any//file",
     )
 
     pycross_wheel_library(
-        name = "importlib-metadata@7.1.0",
-        deps = _importlib_metadata_7_1_0_deps,
-        wheel = ":_wheel_importlib-metadata@7.1.0",
+        name = "importlib-metadata@8.2.0",
+        deps = _importlib_metadata_8_2_0_deps,
+        wheel = ":_wheel_importlib-metadata@8.2.0",
     )
 
     native.alias(
@@ -190,7 +206,7 @@ def targets():
     )
 
     _repairwheel_0_3_1_deps = [
-        ":delvewheel@1.6.0",
+        ":delvewheel@1.7.1",
         ":macholib@1.16.3",
         ":packaging@23.2",
         ":pefile@2023.2.7",
@@ -264,22 +280,32 @@ def repositories():
 
     maybe(
         http_file,
-        name = "rules_pycross_internal_deps_wheel_delvewheel_1.6.0_py3_none_any",
+        name = "rules_pycross_internal_deps_wheel_delvewheel_1.7.1_py3_none_any",
         urls = [
-            "https://files.pythonhosted.org/packages/24/f7/35e5657954452f6c221969e67a7c69433b1f230dc076cf49e5a9186a7fd4/delvewheel-1.6.0-py3-none-any.whl",
+            "https://files.pythonhosted.org/packages/bc/92/c7d46b8c316869a5229e58431f46a2773638748edd04591258c8bd742aed/delvewheel-1.7.1-py3-none-any.whl",
         ],
-        sha256 = "15be02e749caacafdd51c283175a041a3f467484a1a96fc2d36340ced6869bff",
-        downloaded_file_path = "delvewheel-1.6.0-py3-none-any.whl",
+        sha256 = "c9478d2f35471f013acc613efb685cad38240bbf892724168a2ec924345196fd",
+        downloaded_file_path = "delvewheel-1.7.1-py3-none-any.whl",
     )
 
     maybe(
         http_file,
-        name = "rules_pycross_internal_deps_wheel_importlib_metadata_7.1.0_py3_none_any",
+        name = "rules_pycross_internal_deps_wheel_dep_logic_0.4.4_py3_none_any",
         urls = [
-            "https://files.pythonhosted.org/packages/2d/0a/679461c511447ffaf176567d5c496d1de27cbe34a87df6677d7171b2fbd4/importlib_metadata-7.1.0-py3-none-any.whl",
+            "https://files.pythonhosted.org/packages/29/91/2a9fd596cdaec9dc0f52179c08c6b3a18ae6487a3d4a90dace72cb4686f3/dep_logic-0.4.4-py3-none-any.whl",
         ],
-        sha256 = "30962b96c0c223483ed6cc7280e7f0199feb01a0e40cfae4d4450fc6fab1f570",
-        downloaded_file_path = "importlib_metadata-7.1.0-py3-none-any.whl",
+        sha256 = "3f47301f9a8230443d3df7d7f9bdc33d35d8591a14112d36f221b0e33810d3ae",
+        downloaded_file_path = "dep_logic-0.4.4-py3-none-any.whl",
+    )
+
+    maybe(
+        http_file,
+        name = "rules_pycross_internal_deps_wheel_importlib_metadata_8.2.0_py3_none_any",
+        urls = [
+            "https://files.pythonhosted.org/packages/82/47/bb25ec04985d0693da478797c3d8c1092b140f3a53ccb984fbbd38affa5b/importlib_metadata-8.2.0-py3-none-any.whl",
+        ],
+        sha256 = "11901fa0c2f97919b288679932bb64febaeacf289d18ac84dd68cb2e74213369",
+        downloaded_file_path = "importlib_metadata-8.2.0-py3-none-any.whl",
     )
 
     maybe(
