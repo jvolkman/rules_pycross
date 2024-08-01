@@ -1,4 +1,3 @@
-import os
 from collections import defaultdict
 from dataclasses import dataclass
 from pathlib import Path
@@ -274,8 +273,4 @@ def parse_flags() -> Any:
 
 
 if __name__ == "__main__":
-    # When under `bazel run`, change to the actual working dir.
-    if "BUILD_WORKING_DIRECTORY" in os.environ:
-        os.chdir(os.environ["BUILD_WORKING_DIRECTORY"])
-
     main(parse_flags())

@@ -1,4 +1,3 @@
-import os
 from pathlib import Path
 from typing import Any
 
@@ -29,8 +28,4 @@ def main(args: Any) -> None:
 
 
 if __name__ == "__main__":
-    # When under `bazel run`, change to the actual working dir.
-    if "BUILD_WORKING_DIRECTORY" in os.environ:
-        os.chdir(os.environ["BUILD_WORKING_DIRECTORY"])
-
     main(parse_flags())
