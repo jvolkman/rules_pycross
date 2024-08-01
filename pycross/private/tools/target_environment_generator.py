@@ -5,7 +5,6 @@ marker overrides and outputs the result of guessed markers with overrides.
 from __future__ import annotations
 
 import json
-import os
 from argparse import Namespace
 from dataclasses import dataclass
 from dataclasses import field
@@ -181,10 +180,6 @@ def parse_flags() -> Namespace:
 
 
 if __name__ == "__main__":
-    # When under `bazel run`, change to the actual working dir.
-    if "BUILD_WORKING_DIRECTORY" in os.environ:
-        os.chdir(os.environ["BUILD_WORKING_DIRECTORY"])
-
     args = parse_flags()
     if args.subparser_name == "create":
         input_dict = {k: v for k, v in vars(args).items() if v is not None}
