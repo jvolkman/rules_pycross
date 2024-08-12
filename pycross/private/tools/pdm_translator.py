@@ -260,10 +260,10 @@ def translate(
                     )
                     package.resolved_dependencies.add(resolved)
                     break
-            else:
-                raise MismatchedVersionException(
-                    f"Found no packages to satisfy dependency (name={dep.name}, spec={dep.specifier})"
-                )
+                else:
+                    raise MismatchedVersionException(
+                        f"Found no packages to satisfy dependency (name={dep.name}, spec={dep.specifier})"
+                    )
 
     pinned_keys: Dict[NormalizedName, PackageKey] = {}
     for pin, pin_spec in pinned_package_specs.items():
