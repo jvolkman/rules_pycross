@@ -96,7 +96,7 @@ def create_venv(rctx, python_executable, venv_path, path_entries = []):
     ]
     result = rctx.execute(venv_args)
     if result.return_code:
-        fail("venv creation exited with {}".format(result.return_code()))
+        fail("venv creation exited with {}\n{}".format(result.return_code, result.stderr))
 
     if not venv_path.exists:
         fail("Failed to create virtual environment.")
