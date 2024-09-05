@@ -312,8 +312,8 @@ def wrap_cc(lang: str, cc_exe: Path, cflags: str, python_exe: Path, bin_dir: Pat
 
 
 def generate_cc_wrappers(toolchain_vars: Dict[str, Any], python_exe: Path, bin_dir: Path) -> Dict[str, str]:
-    orig_cc = toolchain_vars["CC"]
-    orig_cxx = toolchain_vars["CXX"]
+    orig_cc = os.path.abspath(toolchain_vars["CC"])
+    orig_cxx = os.path.abspath(toolchain_vars["CXX"])
     cflags = toolchain_vars["CFLAGS"]
     # Possibly generate wrappers around the CC and CXX executables.
     wrapped_cc = wrap_cc("cc", orig_cc, cflags, python_exe, bin_dir)
