@@ -91,6 +91,7 @@ def get_files_for_package(
             try:
                 file_package_name, file_package_version = parse_sdist_filename(file.name)
             except InvalidSdistFilename:
+                result.append(file)
                 continue
 
         if file_package_name == package_name and str(file_package_version) == str(package_version):
@@ -120,21 +121,25 @@ def translate(project_file: Path, lock_file: Path) -> RawLockSet:
             continue
         if isinstance(pin_info, str):
             pinned_package_specs[pin] = parse_constraint(pin_info)
-        else:
+        elif "version" in pin_info:
             pinned_package_specs[pin] = parse_constraint(pin_info["version"])
+        elif "url" in pin_info:
+            pinned_package_specs[pin] = parse_constraint("*")
+        else:
+            raise Exception(f"invalid pin_info: {pin_info}")
 
-    def parse_file_info(file_info) -> PackageFile:
+    def parse_file_info(file_info, package_name = None, package_version = None) -> PackageFile:
         file_name = file_info["file"]
         file_hash = file_info["hash"]
         assert file_hash.startswith("sha256:")
-        return PackageFile(name=file_name, sha256=file_hash[7:])
+        return PackageFile(name=file_name, sha256=file_hash[7:], package_name=package_name, package_version=package_version)
 
     # First, build a list of package files.
     # There are scenarios when files for multiple versions of a package are present in the list. They'll be filtered
     # later.
     lock_files = lock_dict.get("metadata", {}).get("files", {})
     files_by_package_name = {
-        package_name: [parse_file_info(f) for f in files] for package_name, files in lock_files.items()
+        package_name: [parse_file_info(f, package_name=package_name) for f in files] for package_name, files in lock_files.items()
     }
 
     # Next, pull out all Package entries in a poetry-specific model.
@@ -168,7 +173,7 @@ def translate(project_file: Path, lock_file: Path) -> RawLockSet:
         # In older versions of poetry the list of files was held in a metadata section at the bottom of the poetry.lock file
         # The lock file format now (as of 2022-12-16), has the files specified local to each dependency as another field.
         # Here we will check for the files being present in the new location, and if not there we fall back to the older one.
-        files = [parse_file_info(f) for f in lock_pkg.get("files", [])]
+        files = [parse_file_info(f, package_name=package_name, package_version=package_version) for f in lock_pkg.get("files", [])]
         if len(files) == 0:
             files = files_by_package_name[package_listed_name]
 
