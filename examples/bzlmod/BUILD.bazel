@@ -34,6 +34,15 @@ py_binary(
     ],
 )
 
+py_binary(
+    name = "cowsay_from_lock_file",
+    srcs = ["cowsay.py"],
+    main = "cowsay.py",
+    deps = [
+        "@poetry_lock_file//deps:cowsay",
+    ],
+)
+
 pycross_poetry_lock_model(
     name = "example_lock_model",
     lock_file = "//:poetry.lock",

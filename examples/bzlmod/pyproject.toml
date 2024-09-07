@@ -18,3 +18,4 @@ python = ">=3.10"
 ipython = ">=8.17"
 setuptools = ">=68"
 wheel = ">=0.42"
+cowsay = {url = "https://github.com/VaasuDevanS/cowsay-python/archive/refs/tags/v6.1.zip"}
