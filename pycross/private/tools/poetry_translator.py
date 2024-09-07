@@ -128,11 +128,15 @@ def translate(project_file: Path, lock_file: Path) -> RawLockSet:
         else:
             raise Exception(f"invalid pin_info: {pin_info}")
 
-    def parse_file_info(file_info, package_name = None, package_version = None) -> PackageFile:
+    def parse_file_info(file_info, package_name = None, package_version = None, source = None) -> PackageFile:
         file_name = file_info["file"]
         file_hash = file_info["hash"]
         assert file_hash.startswith("sha256:")
-        return PackageFile(name=file_name, sha256=file_hash[7:], package_name=package_name, package_version=package_version)
+        if source and source.get("type") == "url":
+            urls = [source.get("url")]
+        else:
+            urls = []
+        return PackageFile(name=file_name, sha256=file_hash[7:], package_name=package_name, package_version=package_version, urls = urls)
 
     # First, build a list of package files.
     # There are scenarios when files for multiple versions of a package are present in the list. They'll be filtered
@@ -173,7 +177,8 @@ def translate(project_file: Path, lock_file: Path) -> RawLockSet:
         # In older versions of poetry the list of files was held in a metadata section at the bottom of the poetry.lock file
         # The lock file format now (as of 2022-12-16), has the files specified local to each dependency as another field.
         # Here we will check for the files being present in the new location, and if not there we fall back to the older one.
-        files = [parse_file_info(f, package_name=package_name, package_version=package_version) for f in lock_pkg.get("files", [])]
+        pkg_source = lock_pkg.get("source")
+        files = [parse_file_info(f, package_name=package_name, package_version=package_version, source=pkg_source) for f in lock_pkg.get("files", [])]
         if len(files) == 0:
             files = files_by_package_name[package_listed_name]
 

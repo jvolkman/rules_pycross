@@ -151,11 +151,24 @@ class GenerationContext:
                 ignore_requires_python=True,
             )
 
-            package_sources = {}
+            package_sources: Dict[str, PackageSource] = {}
+
+            # FIXME: Link for LinkEvaluator is for pip path - so github archive does not work
+            # Therefore use the first url (if any) over other candidates.
+            # I'm not sure this works for non-poetry examples though
+            from_url = None
 
             # Start with the files defined in the input lock model
             for file in package.files:
                 package_sources[file.name] = PackageSource(file=file)
+
+                if file.urls:
+                    from_url = package_sources[file.name]
+
+
+            if from_url:
+                environment_sources[environment.name] = from_url
+                continue
 
             # Override per-file with given remote wheel URLs
             for filename, remote_file in self.remote_wheels.items():
