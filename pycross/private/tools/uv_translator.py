@@ -386,7 +386,7 @@ def collect_and_process_packages(packages_list: list[Dict[str, Any]]) -> Dict[Pa
 
         files = {parse_file_info(f) for f in files}
 
-        is_local = lock_pkg.get("source") == {"editable": "."} or lock_pkg.get("sdist") == {"path": "."}
+        is_local = lock_pkg.get("source") in ({"virtual": "."}, {"editable": "."}) or lock_pkg.get("sdist") == {"path": "."}
 
         if not files and not is_local:
             raise Exception(lock_pkg, is_local)
@@ -428,7 +428,7 @@ def main(args: Any) -> None:
 
     validate_lockfile_version(lock_dict)
 
-    packages_list = lock_dict.get("distribution", [])
+    packages_list = lock_dict.get("package", lock_dict.get("distribution", []))
 
     lock_set = translate(
         project_dict,
