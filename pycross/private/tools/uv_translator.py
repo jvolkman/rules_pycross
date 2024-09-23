@@ -428,7 +428,7 @@ def main(args: Any) -> None:
 
     validate_lockfile_version(lock_dict)
 
-    packages_list = lock_dict.get("distribution", [])
+    packages_list = lock_dict.get("package", [])
 
     lock_set = translate(
         project_dict,
