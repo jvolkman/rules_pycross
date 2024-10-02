@@ -58,6 +58,11 @@ def get_development_dependencies(lock: Dict[str, Any]) -> Dict[str, List[Require
     return {group: [Requirement(EDITABLE_PATTERN.sub("", dep)) for dep in deps] for group, deps in dep_groups.items()}
 
 
+def get_excluded_packages(lock: Dict[str, Any]) -> List[str]:
+    packages = lock.get("tool", {}).get("pdm", {}).get("resolution", {}).get("excludes", [])
+    return packages
+
+
 def _print_warn(msg):
     print("WARNING:", msg)
 
@@ -203,7 +208,10 @@ def translate(
         pin = package_canonical_name(req.name)
         pinned_package_specs[pin] = req
 
+    excluded_packages = get_excluded_packages(project_dict)
+
     distinct_packages: Dict[PackageKey, PDMPackage] = {}
+
     # Pull out all Package entries in a pdm-specific model.
     for lock_pkg in lock_dict.get("package", []):
         package_listed_name = lock_pkg["name"]
@@ -216,7 +224,18 @@ def translate(
             # Special case for all python versions
             package_requires_python = ""
 
-        dependencies = {Requirement(dep) for dep in lock_pkg.get("dependencies", [])}
+        dependencies = set()
+        for dep in lock_pkg.get("dependencies", []):
+            req = Requirement(dep)
+
+            if req.name in excluded_packages:
+                continue
+
+            if req.marker and not req.marker.evaluate():
+                continue
+
+            dependencies.add(req)
+
         files = {parse_file_info(f) for f in lock_pkg.get("files", [])}
         is_local = "path" in lock_pkg and "files" not in lock_pkg
 
