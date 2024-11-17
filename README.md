@@ -56,12 +56,13 @@ that generates BUILD files content for `rules_python` rules, but requires additi
 `rules_pycross` uses the Python [name normalization](https://packaging.python.org/en/latest/specifications/name-normalization/).
 
 To switch name normalization, use the following Gazelle [directives](https://github.com/bazelbuild/rules_python/blob/main/gazelle/README.md#directives):
+
 ```
 # gazelle:python_label_convention :$distribution_name$
 # gazelle:python_label_normalization pep503
 ```
 
-Other than these options, the configuration is identical to a setup with `rules_python`. 
+Other than these options, the configuration is identical to a setup with `rules_python`.
 Read more [here](https://github.com/bazelbuild/rules_python/blob/main/gazelle/README.md#directives).
 
 <details>
@@ -109,9 +110,12 @@ gazelle_python_manifest(
 ```
 
 ###### Useful Commands
+
 ```
 > bazel run //:gazelle.update    # Update gazelle_python.yaml used by Gazelle
 > bazel run //:gazelle.check     # Show changes needed to build scripts per Gazelle
 > bazel run //:gazelle.update    # Apply changes needed to build scripts per Gazelle
 ```
+
 </details>
+
