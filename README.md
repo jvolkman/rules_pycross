@@ -47,3 +47,75 @@ A `pip install` operation can be roughly broken down into these parts:
    provides it as a `py_library`.
 
 See the [generated docs](docs).
+
+### Gazelle Plugin
+
+`rules_pycross` is compatible with `rules_python_gazelle_plugin`, a plugin for [Gazelle](https://github.com/bazelbuild/bazel-gazelle)
+that generates BUILD files content for `rules_python` rules, but requires additional configuration.
+
+`rules_python_gazelle_plugin` is originally designed for `rules_python` rules that uses custom name normalization, whereas
+`rules_pycross` uses the Python [name normalization](https://packaging.python.org/en/latest/specifications/name-normalization/).
+
+To switch name normalization, use the following Gazelle [directives](https://github.com/bazelbuild/rules_python/blob/main/gazelle/README.md#directives):
+
+```
+# gazelle:python_label_convention :$distribution_name$
+# gazelle:python_label_normalization pep503
+```
+
+Other than these options, the configuration is identical to a setup with `rules_python`.
+Read more [here](https://github.com/bazelbuild/rules_python/blob/main/gazelle/README.md#directives).
+
+<details>
+  <summary>Example BUILD.bazel</summary>
+
+```
+load("@gazelle//:def.bzl", "DEFAULT_LANGUAGES", "gazelle", "gazelle_binary")
+load("@pip//:requirements.bzl", "all_whl_requirements")
+load("@rules_python_gazelle_plugin//manifest:defs.bzl", "gazelle_python_manifest")
+load("@rules_python_gazelle_plugin//modules_mapping:def.bzl", "modules_mapping")
+
+# gazelle:python_root
+# gazelle:python_label_convention :$distribution_name$
+# gazelle:python_label_normalization pep503
+gazelle_binary(
+    name = "gazelle_bin",
+    languages = DEFAULT_LANGUAGES + [
+        "@rules_python_gazelle_plugin//python",
+    ],
+)
+
+gazelle(
+    name = "gazelle.update",
+    gazelle = ":gazelle_bin",
+)
+
+gazelle(
+    name = "gazelle.check",
+    args = ["-mode=diff"],
+    gazelle = ":gazelle_bin",
+)
+
+modules_mapping(
+    name = "gazelle.metadata",
+    tags = ["manual"],
+    wheels = all_whl_requirements,
+)
+
+gazelle_python_manifest(
+    name = "gazelle.mapping",
+    modules_mapping = ":gazelle.metadata",
+    pip_repository_name = "pip",
+    tags = ["manual"],
+)
+```
+
+###### Useful Commands
+
+```
+> bazel run //:gazelle.update    # Update gazelle_python.yaml used by Gazelle
+> bazel run //:gazelle.check     # Show changes needed to build scripts per Gazelle
+> bazel run //:gazelle.update    # Apply changes needed to build scripts per Gazelle
+```
+
+</details>
