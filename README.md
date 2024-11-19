@@ -49,6 +49,7 @@ A `pip install` operation can be roughly broken down into these parts:
 See the [generated docs](docs).
 
 ### Gazelle Plugin
+
 `rules_pycross` is compatible with `rules_python_gazelle_plugin`, a plugin for [Gazelle](https://github.com/bazelbuild/bazel-gazelle)
 that generates BUILD files content for `rules_python` rules, but requires additional configuration.
 
@@ -118,4 +119,3 @@ gazelle_python_manifest(
 ```
 
 </details>
-
