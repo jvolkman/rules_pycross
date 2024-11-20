@@ -11,5 +11,7 @@ build --sandbox_add_mount_pair=/tmp
 build -c opt
 build --strip=always
 
+build:toolchains_llvm --extra_toolchains=@llvm_toolchain//:all
+
 try-import %workspace%/.bazelrc.user
 try-import %workspace%/.bazelrc.ci

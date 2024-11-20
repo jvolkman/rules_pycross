@@ -31,6 +31,19 @@ register_toolchains(
     "@zig_sdk//toolchain:darwin_arm64",
 )
 
+# Alternative CC toolchain (not registered, selected via --extra_toolchains in .bazelrc)
+
+bazel_dep(name = "toolchains_llvm", version = "0.10.3")
+
+# Configure and register the toolchain.
+llvm = use_extension("@toolchains_llvm//toolchain/extensions:llvm.bzl", "llvm")
+llvm.toolchain(
+    llvm_version = "16.0.0",
+)
+use_repo(llvm, "llvm_toolchain")
+# use_repo(llvm, "llvm_toolchain_llvm") # if you depend on specific tools in scripts
+#register_toolchains("@llvm_toolchain//:all")
+
 # Python
 
 python = use_extension("@rules_python//python/extensions:python.bzl", "python")

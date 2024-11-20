@@ -70,6 +70,16 @@ jobs:
         run: |
           bazel test @rules_pycross//pycross/...
 
+      - name: run e2e tests - workspace with toolchains_llvm
+        working-directory: e2e/workspace
+        run: |
+          bazel test --config=toolchains_llvm //...
+
+      - name: run e2e tests - bzlmod with toolchains_llvm
+        working-directory: e2e/bzlmod
+        run: |
+          bazel test --config=toolchains_llvm -- //... -//lock_file/...
+
   workspace-e2e-test:
     name: workspace e2e test - Python ${{ matrix.python-version }} on ${{ startsWith(matrix.os, 'macos-') && 'macOS' || startsWith(matrix.os, 'windows-') && 'Windows' || 'Linux' }}
     runs-on: ubuntu-latest
