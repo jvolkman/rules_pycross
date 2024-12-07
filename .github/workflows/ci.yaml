@@ -7,10 +7,14 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+  # Allows you to run this workflow manually from the Actions tab
+  workflow_dispatch:
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.sha }}
-  cancel-in-progress: true
+  # Cancel previous actions from the same PR or branch except 'main' branch.
+  # See https://docs.github.com/en/actions/using-jobs/using-concurrency and https://docs.github.com/en/actions/learn-github-actions/contexts for more info.
+  group: concurrency-group::${{ github.workflow }}::${{ github.event.pull_request.number > 0 && format('pr-{0}', github.event.pull_request.number) || github.ref_name }}${{ github.ref_name == 'main' && format('::{0}', github.run_id) || ''}}
+  cancel-in-progress: ${{ github.ref_name != 'main' }}
 
 jobs:
   dev-tests:
@@ -19,173 +23,42 @@ jobs:
     steps:
       - uses: actions/checkout@v2
 
-      - uses: DamianReeves/write-file-action@master
-        with:
-          path: .bazelrc.ci
-          contents: ${{secrets.BAZELRC_CI || '# no rbe access'}}
-          write-mode: overwrite
-
-      - name: Everything except //pycross/...
+      - name: Test //pycross/... and //docs/...
         run: |
-          bazel test -- //... -//pycross/...
+          bazel test -- //pycross/... //docs/...
 
-  e2e-test-multi-bazel:
-    name: Default Python version tests - Bazel ${{matrix.bazel-version}}
+  test:
+    uses: ./.github/workflows/bazel.yaml
+    with:
+      bazelversions: |
+        [
+          "6.5.0",
+          "7.4.1"
+        ]
+      folders: |
+        [
+        ]
+      exclude: |
+        [
+          {"os": "windows-latest"}
+        ]
+  # For branch protection settings, this job provides a "stable" name that can be used to gate PR merges
+  # on "all matrix jobs were successful".
+  conclusion:
+    needs: test
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        bazel-version: ["6.x", "7.x"]
-
-    env:
-      USE_BAZEL_VERSION: ${{matrix.bazel-version}}
-
+    if: always()
     steps:
-      - uses: actions/checkout@v2
+      - uses: technote-space/workflow-conclusion-action@45ce8e0eb155657ab8ccf346ade734257fd196a5 # v3.0.3
 
-      - uses: DamianReeves/write-file-action@master
-        with:
-          path: e2e/workspace/.bazelrc.ci
-          contents: ${{secrets.BAZELRC_CI || '# no rbe access'}}
-          write-mode: overwrite
+      # Note: possible conclusion values:
+      # https://github.com/technote-space/workflow-conclusion-action/blob/main/src/constant.ts
+      - name: report success
+        if: ${{ env.WORKFLOW_CONCLUSION == 'success' }}
+        working-directory: /tmp
+        run: echo ${{ env.WORKFLOW_CONCLUSION }} && exit 0
 
-      - name: run e2e tests - workspace
-        working-directory: e2e/workspace
-        run: |
-          bazel test //...
-
-      - name: run e2e tests - bzlmod
-        working-directory: e2e/bzlmod
-        run: |
-          bazel test -- //... -//lock_file/...
-
-      - name: run e2e tests - bzlmod + static lock file
-        if: matrix.bazel-version != '6.x'
-        working-directory: e2e/bzlmod
-        run: |
-          bazel test //lock_file/...
-
-      - name: run pycross tests as consumer
-        working-directory: e2e/bzlmod
-        run: |
-          bazel test @rules_pycross//pycross/...
-
-  workspace-e2e-test:
-    name: workspace e2e test - Python ${{ matrix.python-version }} on ${{ startsWith(matrix.os, 'macos-') && 'macOS' || startsWith(matrix.os, 'windows-') && 'Windows' || 'Linux' }}
-    runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, macos-latest]
-        # This needs to stay in sync with e2e/workspace/WORKSPACE
-        python-version: ["3.10.11", "3.11.6", "3.12.0"]
-
-    defaults:
-      run:
-        working-directory: e2e/workspace
-
-    steps:
-      - uses: actions/checkout@v2
-
-      - uses: DamianReeves/write-file-action@master
-        with:
-          path: e2e/workspace/.bazelrc.ci
-          contents: ${{secrets.BAZELRC_CI || '# no rbe access'}}
-          write-mode: overwrite
-
-      - name: run e2e tests
-        run: |
-          bazel test //...
-
-  bzlmod-e2e-test-gen:
-    name: bzlmod e2e test/generate - Python ${{ matrix.python-version }} on ${{ startsWith(matrix.os, 'macos-') && 'macOS' || startsWith(matrix.os, 'windows-') && 'Windows' || 'Linux' }}
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, macos-latest]
-        # This needs to stay in sync with e2e/bzlmod/MODULE.bazel
-        python-version: ["3.10.11", "3.11.6", "3.12.0"]
-    defaults:
-      run:
-        working-directory: e2e/bzlmod
-
-    steps:
-      - uses: actions/checkout@v2
-
-      - uses: DamianReeves/write-file-action@master
-        with:
-          path: e2e/bzlmod/.bazelrc.ci
-          contents: ${{secrets.BAZELRC_CI || '# no rbe access'}}
-          write-mode: overwrite
-
-      - name: run e2e tests
-        run: |
-          bazel test //... --@rules_python//python/config_settings:python_version=${{ matrix.python-version }}
-
-      - name: build zstandard wheels for macos and linux
-        run: |
-          ARTIFACT_PATH="${{ runner.temp }}/testwheel-out/${{ matrix.python-version }}/${{ matrix.os }}"
-          mkdir -p "$ARTIFACT_PATH"
-          for plat in macos_arm64 linux_x86_64; do
-            bazel build //pdm:zstandard_build \
-              --@rules_python//python/config_settings:python_version=${{ matrix.python-version }} \
-              --platforms=@zig_sdk//platform:$plat \
-              --output_groups=all_files
-            cp bazel-bin/pdm/zstandard_build/zstandard-*.whl "$ARTIFACT_PATH/$(cat bazel-bin/pdm/zstandard_build/zstandard-*.whl.name)"
-          done;
-
-      - uses: actions/upload-artifact@v3
-        with:
-          name: built-test-wheel
-          path: ${{ runner.temp }}/testwheel-out
-
-  bzlmod-e2e-test-check:
-    name: bzlmod e2e test/check - Python ${{ matrix.python-version }} on ${{ startsWith(matrix.os, 'macos-') && 'macOS' || startsWith(matrix.os, 'windows-') && 'Windows' || 'Linux' }}
-    needs: bzlmod-e2e-test-gen
-
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, macos-latest]
-        # This needs to stay in sync with e2e/bzlmod/MODULE.bazel
-        python-version: ["3.10.11", "3.11.6", "3.12.0"]
-    defaults:
-      run:
-        working-directory: e2e/bzlmod
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v4
-        with:
-          python-version: ${{ matrix.python-version }}
-
-      - name: Ensure latest pip
-        run: |
-          python -m pip install --upgrade pip
-
-      - uses: actions/download-artifact@v3
-        with:
-          name: built-test-wheel
-          path: ${{ runner.temp }}/testwheel-out
-
-      - name: Check wheels
-        run: |
-          ARTIFACT_PATH="${{ runner.temp }}/testwheel-out/${{ matrix.python-version }}"
-          case "${{ matrix.os }}" in
-           macos-latest) wheel_plat="macosx" ;;
-           *) wheel_plat="linux" ;;
-          esac
-
-          for wheel in $(find $ARTIFACT_PATH -name '*.whl' | grep "$wheel_plat"); do
-            rm -rf "${{ runner.temp }}/env"
-            python3 -m venv "${{ runner.temp }}/env"
-            . "${{ runner.temp }}/env/bin/activate"
-            shasum -a 256 "$wheel"
-            pip install "$wheel"
-            python3 test_zstandard.py
-            deactivate
-          done;
+      - name: report failure
+        if: ${{ env.WORKFLOW_CONCLUSION == 'failure' }}
+        working-directory: /tmp
+        run: echo ${{ env.WORKFLOW_CONCLUSION }} && exit 1
