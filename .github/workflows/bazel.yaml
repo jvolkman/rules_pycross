@@ -1,0 +1,178 @@
+# This is a modified version of upstream.
+# see: https://github.com/bazel-contrib/.github/issues/21
+#
+# Reusable workflow that can be referenced by repositories in their .github/workflows/ci.yaml.
+# See example usage in https://github.com/bazel-contrib/rules-template/blob/main/.github/workflows/ci.yaml
+#
+# This assumes the repo calling the workflow has at least these files:
+# - .github/workflows/ci.bazelrc
+# - .bazelrc
+#
+# This workflow uses https://github.com/bazel-contrib/setup-bazel to prepare the cache folders.
+# Caching may be disabled by setting `mount_bazel_caches` to false.
+
+on:
+  # Make this workflow reusable, see
+  # https://github.blog/2022-02-10-using-reusable-workflows-github-actions
+  workflow_call:
+    inputs:
+      folders:
+        required: true
+        # JSON is needed because list is not supported:
+        # https://docs.github.com/en/actions/using-workflows/workflow-syntax-for-github-actions#onworkflow_callinputsinput_idtype
+        description: |
+          JSON-formatted array of folders to run 'bazel test' in.
+          For example, '[".", "e2e/smoke"]'
+        type: string
+      bazelversions:
+        description: |
+          JSON-formatted array of bazelversion to run 'bazel test' for.
+
+          The version from .bazelversion is used unless this option is set.
+
+          For example, '["6.5.0", "7.4.1", "8.0.0rc1"]'
+        type: string
+        default: "[]"
+      exclude:
+        description: |
+          JSON-formatted array of exclusions to the generated matrix of tests.
+
+          By default, we don't test non-linux with Bazel 8 to minimize macOS and Windows minutes
+          since they are billed at 10X and 2X respectively:
+          https://docs.github.com/en/billing/managing-billing-for-github-actions/about-billing-for-github-actions#included-storage-and-minutes
+
+          Note: independent of this setting, we don't create MacOS/Windows matrix entries for pull requests
+          unless they come from a specially-named branch. See logic below.
+        type: string
+        default: |
+          [
+            {"bazelversion": "8.0.0rc1", "os": "macos-latest"},
+            {"bazelversion": "8.0.0rc1", "os": "windows-latest"}
+          ]
+      exclude_windows:
+        description: Don't run any tests on Windows
+        type: boolean
+      bazel_test_command:
+        default: "bazel test //..."
+        description: |
+          Bazel test command that may be overridden to set custom flags and targets.
+          The `--enable_bzlmod={true,false}`, `--disk_cache=~/.cache/bazel-disk-cache`,
+          and `--repository_cache=~/.cache/bazel-repository-cache` flags are
+          automatically appended to the command.
+        type: string
+      mount_bazel_caches:
+        default: true
+        description: |
+          Whether to enable caching in the bazel-contrib/setup-bazel action.
+        type: boolean
+
+jobs:
+  # matrix-prep-* steps generate JSON used to create a dynamic actions matrix.
+  # Inspired from
+  # https://stackoverflow.com/questions/65384420/how-to-make-a-github-action-matrix-element-conditional
+
+  matrix-prep-os:
+    # Prepares the 'os' axis of the test matrix, to reduce costs since GitHub hosted runners cost more on some platforms.
+    # https://docs.github.com/en/billing/managing-billing-for-github-actions/about-billing-for-github-actions#included-storage-and-minutes
+    runs-on: ubuntu-latest
+    steps:
+      - id: linux
+        run: echo "os=ubuntu-latest" >> $GITHUB_OUTPUT
+      - id: windows
+        run: echo "os=windows-latest" >> $GITHUB_OUTPUT
+        # Only run on main branch (or PR branches that contain 'windows') to minimize Windows minutes (billed at 2X)
+        if: (github.ref == 'refs/heads/main' || contains(github.head_ref, 'windows')) && !inputs.exclude_windows
+      - id: macos
+        run: echo "os=macos-latest" >> $GITHUB_OUTPUT
+        # Only run on main branch (or PR branches that contain 'macos') to minimize macOS minutes (billed at 10X)
+        if: github.ref == 'refs/heads/main' || contains(github.head_ref, 'macos')
+    outputs:
+      # Will look like ["ubuntu-latest", "windows-latest", "macos-latest"]
+      os: ${{ toJSON(steps.*.outputs.os) }}
+
+  matrix-prep-bazelversion:
+    # Prepares the 'bazelversion' axis of the test matrix
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # NB: we assume this is Bazel 7
+      - id: bazel_from_bazelversion
+        if: inputs.bazelversions == '[]'
+        run: echo "bazelversion=$(head -n 1 .bazelversion)" >> $GITHUB_OUTPUT
+    outputs:
+      # Will look like ["<version from .bazelversion>"]
+      bazelversions: ${{ toJSON(steps.*.outputs.bazelversion) }}
+
+  test:
+    # The type of runner that the job will run on
+    runs-on: ${{ matrix.os }}
+
+    needs:
+      - matrix-prep-bazelversion
+      - matrix-prep-os
+
+    # Run bazel test in each workspace with each version of Bazel supported
+    strategy:
+      fail-fast: false
+      matrix:
+        os: ${{ fromJSON(needs.matrix-prep-os.outputs.os) }}
+        bazelversion:
+          [
+            "${{ fromJSON(needs.matrix-prep-bazelversion.outputs.bazelversions) }}",
+            "${{ fromJSON(inputs.bazelversions) }}",
+          ]
+        folder: ${{ fromJSON(inputs.folders) }}
+        bzlmodEnabled: [true, false]
+        exclude: ${{ fromJSON(inputs.exclude) }}
+
+    # Steps represent a sequence of tasks that will be executed as part of the job
+    steps:
+      # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
+      - uses: actions/checkout@v4
+
+      - uses: bazel-contrib/setup-bazel@0.8.0
+        with:
+          repository-cache: ${{ inputs.mount_bazel_caches }}
+          bazelrc: |
+            common --announce_rc
+            common --color=yes
+            common --enable_bzlmod=${{ matrix.bzlmodEnabled }}
+
+      - name: Configure bazelrc --enable_workspace (bazelversion >= 7.1.0)
+        working-directory: ${{ matrix.folder }}
+        if: ${{ !startsWith(matrix.bazelversion, '6.') && !startsWith(matrix.bazelversion, '7.0.') }}
+        run: |
+          echo "common --enable_workspace=${{ ! matrix.bzlmodEnabled }}" >> .bazelrc
+
+      - name: Configure Bazel version
+        working-directory: ${{ matrix.folder }}
+        run: |
+          echo "${{ matrix.bazelversion }}" > .bazelversion
+          bazel version
+
+      - name: Check for test.sh
+        # Checks for the existence of test.sh in the folder. Downstream steps can use
+        # steps.has_test_sh.outputs.files_exists as a conditional.
+        id: has_test_sh
+        uses: andstor/file-existence-action@v3
+        with:
+          files: "${{ matrix.folder }}/test.sh"
+
+      # See https://github.com/bazel-contrib/publish-to-bcr#including-patches
+      - name: verify bcr patches
+        if: matrix.bzlmodEnabled && hashFiles('.bcr/patches/*.patch') != '' && ! startsWith(matrix.os, 'windows')
+        run: patch --dry-run -p1 < .bcr/patches/*.patch
+
+      - name: Test
+        working-directory: ${{ matrix.folder }}
+        run: ${{ inputs.bazel_test_command }}
+
+      - name: Run ./test.sh
+        # Run if there is a test.sh file in the folder
+        # Don't run integration tests on Windows since they are bash scripts and Windows runs Powershell
+        if: steps.has_test_sh.outputs.files_exists == 'true' && ! startsWith(matrix.os, 'windows')
+        working-directory: ${{ matrix.folder }}
+        shell: bash
+        # Run the script potentially setting BZLMOD_FLAG=--enable_bzlmod. All test.sh
+        # scripts that run bazel directly should make use of this variable.
+        run: BZLMOD_FLAG=--enable_bzlmod=${{ matrix.bzlmodEnabled }} ./test.sh

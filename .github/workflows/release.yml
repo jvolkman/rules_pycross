@@ -8,30 +8,11 @@ on:
     tags:
       - "v*.*.*"
 
+permissions:
+  contents: write
+
 jobs:
-  build:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v2
-
-      - uses: DamianReeves/write-file-action@master
-        with:
-          path: .bazelrc.ci
-          contents: ${{secrets.BAZELRC_CI}}
-          write-mode: overwrite
-
-      - name: bazel test //...
-        run: bazel test -- //...
-
-      - name: Prepare release
-        run: .github/workflows/release_prep.sh ${{ env.GITHUB_REF_NAME }} > release_notes.txt
-
-      - name: Release
-        uses: softprops/action-gh-release@v1
-        with:
-          prerelease: true
-          # Use GH feature to populate the changelog automatically
-          generate_release_notes: true
-          body_path: release_notes.txt
-          files: rules_pycross-*.tar.gz
-          fail_on_unmatched_files: true
+  release:
+    uses: bazel-contrib/.github/.github/workflows/release_ruleset.yaml@v6
+    with:
+      release_files: rules_pycross-*.tar.gz
