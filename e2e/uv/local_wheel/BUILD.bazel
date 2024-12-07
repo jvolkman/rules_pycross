@@ -1,0 +1,10 @@
+load("@rules_python//python:defs.bzl", "py_test")
+
+package(default_visibility = ["//visibility:public"])
+
+py_test(
+    name = "test_cowsay",
+    srcs = ["@rules_pycross_e2e_shared//:test_cowsay.py"],
+    main = "test_cowsay.py",
+    deps = ["@uv//:cowsay"],
+)

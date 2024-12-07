@@ -1,0 +1,33 @@
+load("@aspect_bazel_lib//lib:write_source_files.bzl", "write_source_files")
+load("@rules_pycross//pycross:defs.bzl", "pycross_lock_file", "pycross_poetry_lock_model")
+load("@rules_python//python:defs.bzl", "py_test")
+
+package(default_visibility = ["//visibility:public"])
+
+pycross_poetry_lock_model(
+    name = "poetry_lock_model",
+    lock_file = "//:poetry.lock",
+    project_file = "//:pyproject.toml",
+)
+
+pycross_lock_file(
+    name = "poetry_lock_file",
+    out = "updated_poetry_lock_file.bzl",
+    default_alias_single_version = True,
+    lock_model_file = ":poetry_lock_model",
+    target_environments = ["@rules_pycross_e2e_environments//:environments"],
+)
+
+write_source_files(
+    name = "update_poetry_lock_file",
+    files = {
+        "poetry_lock_file.bzl": ":updated_poetry_lock_file.bzl",
+    },
+)
+
+py_test(
+    name = "test_regex",
+    srcs = ["@rules_pycross_e2e_shared//:test_regex.py"],
+    main = "test_regex.py",
+    deps = ["@poetry_lock_file_repo//deps:regex"],
+)

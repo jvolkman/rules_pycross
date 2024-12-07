@@ -1,0 +1,55 @@
+load("@python_versions//3.10.11:defs.bzl", py_test_3_10_11 = "py_test")
+load("@python_versions//3.11.6:defs.bzl", py_test_3_11_6 = "py_test")
+load("@python_versions//3.12.0:defs.bzl", py_test_3_12_0 = "py_test")
+load("@rules_pycross//pycross:defs.bzl", "pycross_wheel_build", "pycross_wheel_library")
+
+package(default_visibility = ["//visibility:public"])
+
+pycross_wheel_build(
+    name = "zstandard_build",
+    config_settings = {
+        "--build-option": [
+            "--no-cffi-backend",
+            "--system-zstd",
+        ],
+    },
+    copts = ["-Wl,-s"],
+    native_deps = [
+        "//third_party/zstd",
+    ],
+    post_build_hooks = [
+        "@rules_pycross//pycross/hooks:repair_wheel",
+    ],
+    sdist = "@pdm//zstandard:sdist",
+    tags = ["manual"],
+    deps = [
+        "@pdm//:setuptools",
+        "@pdm//:wheel",
+    ],
+)
+
+pycross_wheel_library(
+    name = "zstandard",
+    wheel = ":zstandard_build",
+)
+
+py_test_3_10_11(
+    name = "test_zstandard_3_10_11",
+    srcs = ["@rules_pycross_e2e_shared//:test_zstandard.py"],
+    main = "test_zstandard.py",
+    deps = [":zstandard"],
+)
+
+py_test_3_11_6(
+    name = "test_zstandard_3_11_6",
+    srcs = ["@rules_pycross_e2e_shared//:test_zstandard.py"],
+    main = "test_zstandard.py",
+    deps = [":zstandard"],
+)
+
+py_test_3_12_0(
+    name = "test_zstandard_3_12_0",
+    srcs = ["@rules_pycross_e2e_shared//:test_zstandard.py"],
+    main = "test_zstandard.py",
+    deps = [":zstandard"],
+)

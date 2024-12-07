@@ -1,0 +1,2 @@
+# required for hermetic_cc_toolchain under bazel 6
+build --incompatible_enable_cc_toolchain_resolution

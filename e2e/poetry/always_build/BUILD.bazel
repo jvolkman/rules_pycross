@@ -1,0 +1,10 @@
+load("@rules_python//python:defs.bzl", "py_test")
+
+package(default_visibility = ["//visibility:public"])
+
+py_test(
+    name = "test_regex",
+    srcs = ["@rules_pycross_e2e_shared//:test_regex.py"],
+    main = "test_regex.py",
+    deps = ["@poetry//:regex"],
+)
