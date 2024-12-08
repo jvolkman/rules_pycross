@@ -96,6 +96,13 @@ dependencies = [
     { name = "wheel" },
 ]
 
+[package.metadata]
+requires-dist = [
+    { name = "regex", specifier = ">=2024.11.6" },
+    { name = "setuptools", specifier = ">=75.6.0" },
+    { name = "wheel", specifier = ">=0.45.1" },
+]
+
 [[package]]
 name = "setuptools"
 version = "75.6.0"

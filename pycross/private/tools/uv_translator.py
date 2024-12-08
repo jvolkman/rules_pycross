@@ -386,7 +386,11 @@ def collect_and_process_packages(packages_list: list[Dict[str, Any]]) -> Dict[Pa
 
         files = {parse_file_info(f) for f in files}
 
-        is_local = lock_pkg.get("source") == {"editable": "."} or lock_pkg.get("sdist") == {"path": "."}
+        is_local_sdist = lock_pkg.get("sdist") == {"path": "."}
+        is_local_editable = lock_pkg.get("source") == {"editable": "."}
+        is_local_virtual = lock_pkg.get("source") == {"virtual": "."}
+
+        is_local = is_local_sdist or is_local_editable or is_local_virtual
 
         if not files and not is_local:
             raise Exception(lock_pkg, is_local)

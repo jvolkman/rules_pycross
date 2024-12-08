@@ -93,3 +93,6 @@ source = { editable = "." }
 dependencies = [
     { name = "regex" },
 ]
+
+[package.metadata]
+requires-dist = [{ name = "regex", specifier = ">=2024.11.6" }]

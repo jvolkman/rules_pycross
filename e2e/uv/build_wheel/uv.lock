@@ -89,6 +89,13 @@ dependencies = [
     { name = "zstandard" },
 ]
 
+[package.metadata]
+requires-dist = [
+    { name = "setuptools", specifier = ">=75.6.0" },
+    { name = "wheel", specifier = ">=0.45.1" },
+    { name = "zstandard", specifier = "==0.22.0" },
+]
+
 [[package]]
 name = "setuptools"
 version = "75.6.0"
