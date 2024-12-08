@@ -16,6 +16,3 @@ source = { editable = "." }
 dependencies = [
     { name = "cowsay" },
 ]
-
-[package.metadata]
-requires-dist = [{ name = "cowsay", specifier = "==6.1" }]
