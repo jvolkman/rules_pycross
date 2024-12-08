@@ -1,7 +1,7 @@
 version = 1
 requires-python = ">=3.9, <3.13"
 
-[[distribution]]
+[[package]]
 name = "regex"
 version = "2024.11.6"
 source = { registry = "https://pypi.org/simple" }
@@ -86,7 +86,7 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/dc/7b/e59b7f7c91ae110d154370c24133f947262525b5d6406df65f23422acc17/regex-2024.11.6-cp39-cp39-win_amd64.whl", hash = "sha256:b2837718570f95dd41675328e111345f9b7095d821bac435aac173ac80b19983", size = 274110 },
 ]
 
-[[distribution]]
+[[package]]
 name = "rules-pycross-test"
 version = "0.1.0"
 source = { editable = "." }

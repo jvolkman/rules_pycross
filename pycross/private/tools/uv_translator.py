@@ -428,7 +428,9 @@ def main(args: Any) -> None:
 
     validate_lockfile_version(lock_dict)
 
-    packages_list = lock_dict.get("distribution", [])
+    # backwards-compatiblity for https://github.com/astral-sh/uv/pull/5861
+    distributions_list = lock_dict.get("distribution", [])
+    packages_list = lock_dict.get("package", distributions_list)
 
     lock_set = translate(
         project_dict,
