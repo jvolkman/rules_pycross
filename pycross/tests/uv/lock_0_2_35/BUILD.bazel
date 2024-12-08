@@ -1,0 +1,32 @@
+"""
+Previously uv used `distribution` instead of `packages` in `uv.lock`.
+
+This has changed in the following PR:
+  https://github.com/astral-sh/uv/pull/5861
+
+This PR was contained in the following release:
+  https://github.com/astral-sh/uv/releases/tag/0.2.35
+"""
+
+load("@aspect_bazel_lib//lib:testing.bzl", "assert_json_matches")
+load("@aspect_bazel_lib//lib:write_source_files.bzl", "write_source_file")
+load("//pycross:defs.bzl", "pycross_uv_lock_model")
+
+pycross_uv_lock_model(
+    name = "lock",
+    lock_file = "uv.lock",
+    project_file = "pyproject.toml",
+)
+
+write_source_file(
+    name = "update_expected",
+    diff_test = False,
+    in_file = ":lock",
+    out_file = "expected.json",
+)
+
+assert_json_matches(
+    name = "test",
+    file1 = ":lock",
+    file2 = "expected.json",
+)
