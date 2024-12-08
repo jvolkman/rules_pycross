@@ -1,6 +1,11 @@
+# In code review, collapse generated files
+docs/*.md linguist-generated=true
+
+#################################
 # Configuration for 'git archive'
-# see https://git-scm.com/docs/git-archive/2.40.0#ATTRIBUTES
-# Don't include examples in the distribution artifact, just to reduce size
-.github/ export-ignore
-examples/ export-ignore
-tests/smoke_workspace/ export-ignore
+# See https://git-scm.com/docs/git-archive#ATTRIBUTES
+
+# Don't include examples in the distribution artifact, to reduce size.
+# You may want to add additional exclusions for folders or files that users don't need.
+examples export-ignore
+.github export-ignore

@@ -1,0 +1,10 @@
+package(default_visibility = ["//visibility:public"])
+
+exports_files([
+    "cowsay-6.1-py3-none-any.whl",
+    "ipython.py",
+    "test_all_whl_requirements.py",
+    "test_cowsay.py",
+    "test_regex.py",
+    "test_zstandard.py",
+])

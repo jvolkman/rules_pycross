@@ -1,0 +1,52 @@
+load("@pdm//:requirements.bzl", "all_requirements", "all_whl_requirements", "requirement")
+load("@rules_python//python:defs.bzl", "py_test")
+
+package(default_visibility = ["//visibility:public"])
+
+py_test(
+    name = "test_regex",
+    srcs = ["@rules_pycross_e2e_shared//:test_regex.py"],
+    main = "test_regex.py",
+    deps = ["@pdm//:regex"],
+)
+
+py_test(
+    name = "test_regex_using_requirement",
+    srcs = ["@rules_pycross_e2e_shared//:test_regex.py"],
+    main = "test_regex.py",
+    deps = [requirement("regex")],
+)
+
+py_test(
+    name = "test_regex_using_all_requirements",
+    srcs = ["@rules_pycross_e2e_shared//:test_regex.py"],
+    main = "test_regex.py",
+    deps = all_requirements,
+)
+
+py_test(
+    name = "test_all_whl_requirements",
+    srcs = ["@rules_pycross_e2e_shared//:test_all_whl_requirements.py"],
+    env = {
+        "ALL_WHL_REQUIREMENTS": ",".join(all_whl_requirements),
+        "EXPECTED_WHL_REQUIREMENTS": ",".join([
+            "ipython",
+            "regex",
+        ]),
+    },
+    main = "test_all_whl_requirements.py",
+)
+
+py_test(
+    name = "test_regex_usage_via_ipython",
+    srcs = [
+        "@rules_pycross_e2e_shared//:ipython.py",
+        "@rules_pycross_e2e_shared//:test_regex.py",
+    ],
+    args = ["$(location @rules_pycross_e2e_shared//:test_regex.py)"],
+    main = "ipython.py",
+    deps = [
+        "@pdm//:ipython",
+        "@pdm//:regex",
+    ],
+)
