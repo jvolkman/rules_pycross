@@ -52,7 +52,14 @@ def get_optional_dependencies(lock: Dict[str, Any]) -> Dict[str, List[Requiremen
 
 
 def get_development_dependencies(lock: Dict[str, Any]) -> Dict[str, List[Requirement]]:
-    dep_groups = lock.get("tool", {}).get("uv", {}).get("dev-dependencies", {})
+    dep_groups = lock.get("dependency-groups", {})
+    # backwards-compatiblity for https://github.com/astral-sh/uv/pull/8272
+    # see: https://docs.astral.sh/uv/concepts/projects/dependencies/#legacy-dev-dependencies
+    legacy_dev_deps = lock.get("tool", {}).get("uv", {}).get("dev-dependencies", [])
+    if legacy_dev_deps:
+        dev_deps = dep_groups.get("dev", []) + legacy_dev_deps
+        dep_groups["dev"] = list(set(dev_deps))
+
     return {group: [Requirement(EDITABLE_PATTERN.sub("", dep)) for dep in deps] for group, deps in dep_groups.items()}
 
 
