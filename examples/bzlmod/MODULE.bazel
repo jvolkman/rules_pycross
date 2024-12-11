@@ -4,7 +4,7 @@ module(
     compatibility_level = 1,
 )
 
-bazel_dep(name = "aspect_bazel_lib", version = "1.38.1")
+bazel_dep(name = "aspect_bazel_lib", version = "2.9.4")
 bazel_dep(name = "rules_python", version = "0.29.0")
 
 python = use_extension("@rules_python//python/extensions:python.bzl", "python")
