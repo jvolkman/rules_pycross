@@ -209,10 +209,21 @@ def _get_multi_python_versions(rctx, python_toolchain_repo):
     return versions
 
 def _get_default_python_version_bzlmod(rctx, pythons_hub_repo):
+    # prior rules_python 1.0.0 DEFAULT_PYTHON_VERSION was contained in interpreters.bzl
     interpreters_bzl_file = Label("@@{}//:interpreters.bzl".format(pythons_hub_repo.workspace_name))
     build_content = rctx.read(interpreters_bzl_file)
 
     for line in build_content.splitlines():
+        if line.startswith("DEFAULT_PYTHON_VERSION"):
+            _, val = line.split("=")
+            val = val.strip(" \"'")
+            return val
+
+    # rules_python 1.0.0 moved DEFAULT_PYTHON_VERSION to versions.bzl
+    versions_bzl_file = Label("@@{}//:versions.bzl".format(pythons_hub_repo.workspace_name))
+    content = rctx.read(versions_bzl_file)
+
+    for line in content.splitlines():
         if line.startswith("DEFAULT_PYTHON_VERSION"):
             _, val = line.split("=")
             val = val.strip(" \"'")

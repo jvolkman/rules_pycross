@@ -38,7 +38,7 @@ python_register_multi_toolchains(
     register_coverage_tool = True,
 )
 
-load("@python_versions//3.12.0:defs.bzl", python_interpreter = "interpreter")
+python_interpreter = "@python_3_12_0_host//:python"
 
 # rules_pycross
 local_repository(
