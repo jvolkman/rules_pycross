@@ -1,8 +1,8 @@
-bazel_dep(name = "aspect_bazel_lib", version = "2.3.0")
+bazel_dep(name = "aspect_bazel_lib", version = "2.9.4")
 bazel_dep(name = "hermetic_cc_toolchain", version = "2.2.1")
 bazel_dep(name = "rules_pycross", version = "0.0.0")
 bazel_dep(name = "rules_pycross_e2e_shared", version = "0.0.0")
-bazel_dep(name = "rules_python", version = "0.31.0")
+bazel_dep(name = "rules_python", version = "1.0.0")
 
 local_path_override(
     module_name = "rules_pycross",
