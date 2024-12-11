@@ -7,6 +7,8 @@ Public repository rule API re-exports
 ## lock_repo_model_pdm
 
 <pre>
+load("@rules_pycross//pycross:workspace.bzl", "lock_repo_model_pdm")
+
 lock_repo_model_pdm(<a href="#lock_repo_model_pdm-project_file">project_file</a>, <a href="#lock_repo_model_pdm-lock_file">lock_file</a>, <a href="#lock_repo_model_pdm-default">default</a>, <a href="#lock_repo_model_pdm-optional_groups">optional_groups</a>, <a href="#lock_repo_model_pdm-all_optional_groups">all_optional_groups</a>,
                     <a href="#lock_repo_model_pdm-development_groups">development_groups</a>, <a href="#lock_repo_model_pdm-all_development_groups">all_development_groups</a>, <a href="#lock_repo_model_pdm-require_static_urls">require_static_urls</a>)
 </pre>
@@ -33,6 +35,8 @@ lock_repo_model_pdm(<a href="#lock_repo_model_pdm-project_file">project_file</a>
 ## lock_repo_model_poetry
 
 <pre>
+load("@rules_pycross//pycross:workspace.bzl", "lock_repo_model_poetry")
+
 lock_repo_model_poetry(<a href="#lock_repo_model_poetry-project_file">project_file</a>, <a href="#lock_repo_model_poetry-lock_file">lock_file</a>, <a href="#lock_repo_model_poetry-default">default</a>, <a href="#lock_repo_model_poetry-optional_groups">optional_groups</a>, <a href="#lock_repo_model_poetry-all_optional_groups">all_optional_groups</a>)
 </pre>
 
@@ -55,6 +59,8 @@ lock_repo_model_poetry(<a href="#lock_repo_model_poetry-project_file">project_fi
 ## lock_repo_model_uv
 
 <pre>
+load("@rules_pycross//pycross:workspace.bzl", "lock_repo_model_uv")
+
 lock_repo_model_uv(<a href="#lock_repo_model_uv-project_file">project_file</a>, <a href="#lock_repo_model_uv-lock_file">lock_file</a>, <a href="#lock_repo_model_uv-default">default</a>, <a href="#lock_repo_model_uv-optional_groups">optional_groups</a>, <a href="#lock_repo_model_uv-all_optional_groups">all_optional_groups</a>,
                    <a href="#lock_repo_model_uv-development_groups">development_groups</a>, <a href="#lock_repo_model_uv-all_development_groups">all_development_groups</a>, <a href="#lock_repo_model_uv-require_static_urls">require_static_urls</a>)
 </pre>
@@ -81,6 +87,8 @@ lock_repo_model_uv(<a href="#lock_repo_model_uv-project_file">project_file</a>, 
 ## pycross_lock_repo
 
 <pre>
+load("@rules_pycross//pycross:workspace.bzl", "pycross_lock_repo")
+
 pycross_lock_repo(<a href="#pycross_lock_repo-name">name</a>, <a href="#pycross_lock_repo-lock_model">lock_model</a>, <a href="#pycross_lock_repo-kwargs">kwargs</a>)
 </pre>
 
@@ -101,6 +109,8 @@ Create a repo containing packages described by an imported lock.
 ## pycross_register_for_python_toolchains
 
 <pre>
+load("@rules_pycross//pycross:workspace.bzl", "pycross_register_for_python_toolchains")
+
 pycross_register_for_python_toolchains(<a href="#pycross_register_for_python_toolchains-name">name</a>, <a href="#pycross_register_for_python_toolchains-python_toolchains_repo">python_toolchains_repo</a>, <a href="#pycross_register_for_python_toolchains-platforms">platforms</a>, <a href="#pycross_register_for_python_toolchains-glibc_version">glibc_version</a>,
                                        <a href="#pycross_register_for_python_toolchains-macos_version">macos_version</a>)
 </pre>
@@ -124,6 +134,8 @@ Register target environments and toolchains for a given list of Python versions.
 ## pycross_lock_file_repo
 
 <pre>
+load("@rules_pycross//pycross:workspace.bzl", "pycross_lock_file_repo")
+
 pycross_lock_file_repo(<a href="#pycross_lock_file_repo-name">name</a>, <a href="#pycross_lock_file_repo-lock_file">lock_file</a>, <a href="#pycross_lock_file_repo-repo_mapping">repo_mapping</a>)
 </pre>
 
