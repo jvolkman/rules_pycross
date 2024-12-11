@@ -2,10 +2,12 @@
 # It is not intended for manual editing.
 """Pycross-generated dependency targets."""
 
-load("@@rules_pycross~override//pycross:defs.bzl", "pycross_wheel_library", "pypi_file")
+load("@@rules_pycross~override//pycross:defs.bzl", "pycross_wheel_build", "pycross_wheel_library", "pypi_file")
+load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_file")
 load("@bazel_tools//tools/build_defs/repo:utils.bzl", "maybe")
 
 PINS = {
+    "cowsay": "cowsay@6.1",
     "ipython": "ipython@8.19.0",
     "setuptools": "setuptools@69.0.3",
     "wheel": "wheel@0.42.0",
@@ -57,98 +59,98 @@ def targets():
     )
 
     native.alias(
-        name = "_env_python_3.11.6_aarch64-apple-darwin",
-        actual = "@@rules_pycross~override~environments~pycross_environments//:python_3.11.6_aarch64-apple-darwin_config",
+        name = "_env_python_3.11_aarch64-apple-darwin",
+        actual = "@@rules_pycross~override~environments~pycross_environments//:python_3.11_aarch64-apple-darwin_config",
     )
 
     native.alias(
-        name = "_env_python_3.11.6_aarch64-unknown-linux-gnu",
-        actual = "@@rules_pycross~override~environments~pycross_environments//:python_3.11.6_aarch64-unknown-linux-gnu_config",
+        name = "_env_python_3.11_aarch64-unknown-linux-gnu",
+        actual = "@@rules_pycross~override~environments~pycross_environments//:python_3.11_aarch64-unknown-linux-gnu_config",
     )
 
     native.alias(
-        name = "_env_python_3.11.6_ppc64le-unknown-linux-gnu",
-        actual = "@@rules_pycross~override~environments~pycross_environments//:python_3.11.6_ppc64le-unknown-linux-gnu_config",
+        name = "_env_python_3.11_ppc64le-unknown-linux-gnu",
+        actual = "@@rules_pycross~override~environments~pycross_environments//:python_3.11_ppc64le-unknown-linux-gnu_config",
     )
 
     native.alias(
-        name = "_env_python_3.11.6_s390x-unknown-linux-gnu",
-        actual = "@@rules_pycross~override~environments~pycross_environments//:python_3.11.6_s390x-unknown-linux-gnu_config",
+        name = "_env_python_3.11_s390x-unknown-linux-gnu",
+        actual = "@@rules_pycross~override~environments~pycross_environments//:python_3.11_s390x-unknown-linux-gnu_config",
     )
 
     native.alias(
-        name = "_env_python_3.11.6_x86_64-apple-darwin",
-        actual = "@@rules_pycross~override~environments~pycross_environments//:python_3.11.6_x86_64-apple-darwin_config",
+        name = "_env_python_3.11_x86_64-apple-darwin",
+        actual = "@@rules_pycross~override~environments~pycross_environments//:python_3.11_x86_64-apple-darwin_config",
     )
 
     native.alias(
-        name = "_env_python_3.11.6_x86_64-pc-windows-msvc",
-        actual = "@@rules_pycross~override~environments~pycross_environments//:python_3.11.6_x86_64-pc-windows-msvc_config",
+        name = "_env_python_3.11_x86_64-pc-windows-msvc",
+        actual = "@@rules_pycross~override~environments~pycross_environments//:python_3.11_x86_64-pc-windows-msvc_config",
     )
 
     native.alias(
-        name = "_env_python_3.11.6_x86_64-unknown-linux-gnu",
-        actual = "@@rules_pycross~override~environments~pycross_environments//:python_3.11.6_x86_64-unknown-linux-gnu_config",
+        name = "_env_python_3.11_x86_64-unknown-linux-gnu",
+        actual = "@@rules_pycross~override~environments~pycross_environments//:python_3.11_x86_64-unknown-linux-gnu_config",
     )
 
     native.alias(
-        name = "_env_python_3.12.0_aarch64-apple-darwin",
-        actual = "@@rules_pycross~override~environments~pycross_environments//:python_3.12.0_aarch64-apple-darwin_config",
+        name = "_env_python_3.12_aarch64-apple-darwin",
+        actual = "@@rules_pycross~override~environments~pycross_environments//:python_3.12_aarch64-apple-darwin_config",
     )
 
     native.alias(
-        name = "_env_python_3.12.0_aarch64-unknown-linux-gnu",
-        actual = "@@rules_pycross~override~environments~pycross_environments//:python_3.12.0_aarch64-unknown-linux-gnu_config",
+        name = "_env_python_3.12_aarch64-unknown-linux-gnu",
+        actual = "@@rules_pycross~override~environments~pycross_environments//:python_3.12_aarch64-unknown-linux-gnu_config",
     )
 
     native.alias(
-        name = "_env_python_3.12.0_ppc64le-unknown-linux-gnu",
-        actual = "@@rules_pycross~override~environments~pycross_environments//:python_3.12.0_ppc64le-unknown-linux-gnu_config",
+        name = "_env_python_3.12_ppc64le-unknown-linux-gnu",
+        actual = "@@rules_pycross~override~environments~pycross_environments//:python_3.12_ppc64le-unknown-linux-gnu_config",
     )
 
     native.alias(
-        name = "_env_python_3.12.0_s390x-unknown-linux-gnu",
-        actual = "@@rules_pycross~override~environments~pycross_environments//:python_3.12.0_s390x-unknown-linux-gnu_config",
+        name = "_env_python_3.12_s390x-unknown-linux-gnu",
+        actual = "@@rules_pycross~override~environments~pycross_environments//:python_3.12_s390x-unknown-linux-gnu_config",
     )
 
     native.alias(
-        name = "_env_python_3.12.0_x86_64-apple-darwin",
-        actual = "@@rules_pycross~override~environments~pycross_environments//:python_3.12.0_x86_64-apple-darwin_config",
+        name = "_env_python_3.12_x86_64-apple-darwin",
+        actual = "@@rules_pycross~override~environments~pycross_environments//:python_3.12_x86_64-apple-darwin_config",
     )
 
     native.alias(
-        name = "_env_python_3.12.0_x86_64-pc-windows-msvc",
-        actual = "@@rules_pycross~override~environments~pycross_environments//:python_3.12.0_x86_64-pc-windows-msvc_config",
+        name = "_env_python_3.12_x86_64-pc-windows-msvc",
+        actual = "@@rules_pycross~override~environments~pycross_environments//:python_3.12_x86_64-pc-windows-msvc_config",
     )
 
     native.alias(
-        name = "_env_python_3.12.0_x86_64-unknown-linux-gnu",
-        actual = "@@rules_pycross~override~environments~pycross_environments//:python_3.12.0_x86_64-unknown-linux-gnu_config",
+        name = "_env_python_3.12_x86_64-unknown-linux-gnu",
+        actual = "@@rules_pycross~override~environments~pycross_environments//:python_3.12_x86_64-unknown-linux-gnu_config",
     )
 
     # buildifier: disable=unused-variable
     _target = select({
-        ":_env_python_3.11.5_aarch64-apple-darwin": "@rules_pycross~override~environments~pycross_environments//:python_3.11.5_aarch64-apple-darwin.json",
-        ":_env_python_3.11.5_aarch64-unknown-linux-gnu": "@rules_pycross~override~environments~pycross_environments//:python_3.11.5_aarch64-unknown-linux-gnu.json",
-        ":_env_python_3.11.5_ppc64le-unknown-linux-gnu": "@rules_pycross~override~environments~pycross_environments//:python_3.11.5_ppc64le-unknown-linux-gnu.json",
-        ":_env_python_3.11.5_s390x-unknown-linux-gnu": "@rules_pycross~override~environments~pycross_environments//:python_3.11.5_s390x-unknown-linux-gnu.json",
-        ":_env_python_3.11.5_x86_64-apple-darwin": "@rules_pycross~override~environments~pycross_environments//:python_3.11.5_x86_64-apple-darwin.json",
-        ":_env_python_3.11.5_x86_64-pc-windows-msvc": "@rules_pycross~override~environments~pycross_environments//:python_3.11.5_x86_64-pc-windows-msvc.json",
-        ":_env_python_3.11.5_x86_64-unknown-linux-gnu": "@rules_pycross~override~environments~pycross_environments//:python_3.11.5_x86_64-unknown-linux-gnu.json",
-        ":_env_python_3.11.6_aarch64-apple-darwin": "@rules_pycross~override~environments~pycross_environments//:python_3.11.6_aarch64-apple-darwin.json",
-        ":_env_python_3.11.6_aarch64-unknown-linux-gnu": "@rules_pycross~override~environments~pycross_environments//:python_3.11.6_aarch64-unknown-linux-gnu.json",
-        ":_env_python_3.11.6_ppc64le-unknown-linux-gnu": "@rules_pycross~override~environments~pycross_environments//:python_3.11.6_ppc64le-unknown-linux-gnu.json",
-        ":_env_python_3.11.6_s390x-unknown-linux-gnu": "@rules_pycross~override~environments~pycross_environments//:python_3.11.6_s390x-unknown-linux-gnu.json",
-        ":_env_python_3.11.6_x86_64-apple-darwin": "@rules_pycross~override~environments~pycross_environments//:python_3.11.6_x86_64-apple-darwin.json",
-        ":_env_python_3.11.6_x86_64-pc-windows-msvc": "@rules_pycross~override~environments~pycross_environments//:python_3.11.6_x86_64-pc-windows-msvc.json",
-        ":_env_python_3.11.6_x86_64-unknown-linux-gnu": "@rules_pycross~override~environments~pycross_environments//:python_3.11.6_x86_64-unknown-linux-gnu.json",
-        ":_env_python_3.12.0_aarch64-apple-darwin": "@rules_pycross~override~environments~pycross_environments//:python_3.12.0_aarch64-apple-darwin.json",
-        ":_env_python_3.12.0_aarch64-unknown-linux-gnu": "@rules_pycross~override~environments~pycross_environments//:python_3.12.0_aarch64-unknown-linux-gnu.json",
-        ":_env_python_3.12.0_ppc64le-unknown-linux-gnu": "@rules_pycross~override~environments~pycross_environments//:python_3.12.0_ppc64le-unknown-linux-gnu.json",
-        ":_env_python_3.12.0_s390x-unknown-linux-gnu": "@rules_pycross~override~environments~pycross_environments//:python_3.12.0_s390x-unknown-linux-gnu.json",
-        ":_env_python_3.12.0_x86_64-apple-darwin": "@rules_pycross~override~environments~pycross_environments//:python_3.12.0_x86_64-apple-darwin.json",
-        ":_env_python_3.12.0_x86_64-pc-windows-msvc": "@rules_pycross~override~environments~pycross_environments//:python_3.12.0_x86_64-pc-windows-msvc.json",
-        ":_env_python_3.12.0_x86_64-unknown-linux-gnu": "@rules_pycross~override~environments~pycross_environments//:python_3.12.0_x86_64-unknown-linux-gnu.json",
+        ":_env_python_3.11.5_aarch64-apple-darwin": "@@rules_pycross~override~environments~pycross_environments//:python_3.11.5_aarch64-apple-darwin.json",
+        ":_env_python_3.11.5_aarch64-unknown-linux-gnu": "@@rules_pycross~override~environments~pycross_environments//:python_3.11.5_aarch64-unknown-linux-gnu.json",
+        ":_env_python_3.11.5_ppc64le-unknown-linux-gnu": "@@rules_pycross~override~environments~pycross_environments//:python_3.11.5_ppc64le-unknown-linux-gnu.json",
+        ":_env_python_3.11.5_s390x-unknown-linux-gnu": "@@rules_pycross~override~environments~pycross_environments//:python_3.11.5_s390x-unknown-linux-gnu.json",
+        ":_env_python_3.11.5_x86_64-apple-darwin": "@@rules_pycross~override~environments~pycross_environments//:python_3.11.5_x86_64-apple-darwin.json",
+        ":_env_python_3.11.5_x86_64-pc-windows-msvc": "@@rules_pycross~override~environments~pycross_environments//:python_3.11.5_x86_64-pc-windows-msvc.json",
+        ":_env_python_3.11.5_x86_64-unknown-linux-gnu": "@@rules_pycross~override~environments~pycross_environments//:python_3.11.5_x86_64-unknown-linux-gnu.json",
+        ":_env_python_3.11_aarch64-apple-darwin": "@@rules_pycross~override~environments~pycross_environments//:python_3.11_aarch64-apple-darwin.json",
+        ":_env_python_3.11_aarch64-unknown-linux-gnu": "@@rules_pycross~override~environments~pycross_environments//:python_3.11_aarch64-unknown-linux-gnu.json",
+        ":_env_python_3.11_ppc64le-unknown-linux-gnu": "@@rules_pycross~override~environments~pycross_environments//:python_3.11_ppc64le-unknown-linux-gnu.json",
+        ":_env_python_3.11_s390x-unknown-linux-gnu": "@@rules_pycross~override~environments~pycross_environments//:python_3.11_s390x-unknown-linux-gnu.json",
+        ":_env_python_3.11_x86_64-apple-darwin": "@@rules_pycross~override~environments~pycross_environments//:python_3.11_x86_64-apple-darwin.json",
+        ":_env_python_3.11_x86_64-pc-windows-msvc": "@@rules_pycross~override~environments~pycross_environments//:python_3.11_x86_64-pc-windows-msvc.json",
+        ":_env_python_3.11_x86_64-unknown-linux-gnu": "@@rules_pycross~override~environments~pycross_environments//:python_3.11_x86_64-unknown-linux-gnu.json",
+        ":_env_python_3.12_aarch64-apple-darwin": "@@rules_pycross~override~environments~pycross_environments//:python_3.12_aarch64-apple-darwin.json",
+        ":_env_python_3.12_aarch64-unknown-linux-gnu": "@@rules_pycross~override~environments~pycross_environments//:python_3.12_aarch64-unknown-linux-gnu.json",
+        ":_env_python_3.12_ppc64le-unknown-linux-gnu": "@@rules_pycross~override~environments~pycross_environments//:python_3.12_ppc64le-unknown-linux-gnu.json",
+        ":_env_python_3.12_s390x-unknown-linux-gnu": "@@rules_pycross~override~environments~pycross_environments//:python_3.12_s390x-unknown-linux-gnu.json",
+        ":_env_python_3.12_x86_64-apple-darwin": "@@rules_pycross~override~environments~pycross_environments//:python_3.12_x86_64-apple-darwin.json",
+        ":_env_python_3.12_x86_64-pc-windows-msvc": "@@rules_pycross~override~environments~pycross_environments//:python_3.12_x86_64-pc-windows-msvc.json",
+        ":_env_python_3.12_x86_64-unknown-linux-gnu": "@@rules_pycross~override~environments~pycross_environments//:python_3.12_x86_64-unknown-linux-gnu.json",
     })
 
     _asttokens_2_4_1_deps = [
@@ -174,6 +176,28 @@ def targets():
     pycross_wheel_library(
         name = "colorama@0.4.6",
         wheel = ":_wheel_colorama@0.4.6",
+    )
+
+    native.alias(
+        name = "_sdist_cowsay@6.1",
+        actual = "@poetry_lock_sdist_v6.1//file",
+    )
+
+    pycross_wheel_build(
+        name = "_build_cowsay@6.1",
+        sdist = ":_sdist_cowsay@6.1",
+        target_environment = _target,
+        tags = ["manual"],
+    )
+
+    native.alias(
+        name = "_wheel_cowsay@6.1",
+        actual = ":_build_cowsay@6.1",
+    )
+
+    pycross_wheel_library(
+        name = "cowsay@6.1",
+        wheel = ":_wheel_cowsay@6.1",
     )
 
     native.alias(
@@ -226,46 +250,46 @@ def targets():
         ":_env_python_3.11.5_x86_64-unknown-linux-gnu": [
             ":pexpect@4.9.0",
         ],
-        ":_env_python_3.11.6_aarch64-apple-darwin": [
+        ":_env_python_3.11_aarch64-apple-darwin": [
             ":pexpect@4.9.0",
         ],
-        ":_env_python_3.11.6_aarch64-unknown-linux-gnu": [
+        ":_env_python_3.11_aarch64-unknown-linux-gnu": [
             ":pexpect@4.9.0",
         ],
-        ":_env_python_3.11.6_ppc64le-unknown-linux-gnu": [
+        ":_env_python_3.11_ppc64le-unknown-linux-gnu": [
             ":pexpect@4.9.0",
         ],
-        ":_env_python_3.11.6_s390x-unknown-linux-gnu": [
+        ":_env_python_3.11_s390x-unknown-linux-gnu": [
             ":pexpect@4.9.0",
         ],
-        ":_env_python_3.11.6_x86_64-apple-darwin": [
+        ":_env_python_3.11_x86_64-apple-darwin": [
             ":pexpect@4.9.0",
         ],
-        ":_env_python_3.11.6_x86_64-pc-windows-msvc": [
+        ":_env_python_3.11_x86_64-pc-windows-msvc": [
             ":colorama@0.4.6",
         ],
-        ":_env_python_3.11.6_x86_64-unknown-linux-gnu": [
+        ":_env_python_3.11_x86_64-unknown-linux-gnu": [
             ":pexpect@4.9.0",
         ],
-        ":_env_python_3.12.0_aarch64-apple-darwin": [
+        ":_env_python_3.12_aarch64-apple-darwin": [
             ":pexpect@4.9.0",
         ],
-        ":_env_python_3.12.0_aarch64-unknown-linux-gnu": [
+        ":_env_python_3.12_aarch64-unknown-linux-gnu": [
             ":pexpect@4.9.0",
         ],
-        ":_env_python_3.12.0_ppc64le-unknown-linux-gnu": [
+        ":_env_python_3.12_ppc64le-unknown-linux-gnu": [
             ":pexpect@4.9.0",
         ],
-        ":_env_python_3.12.0_s390x-unknown-linux-gnu": [
+        ":_env_python_3.12_s390x-unknown-linux-gnu": [
             ":pexpect@4.9.0",
         ],
-        ":_env_python_3.12.0_x86_64-apple-darwin": [
+        ":_env_python_3.12_x86_64-apple-darwin": [
             ":pexpect@4.9.0",
         ],
-        ":_env_python_3.12.0_x86_64-pc-windows-msvc": [
+        ":_env_python_3.12_x86_64-pc-windows-msvc": [
             ":colorama@0.4.6",
         ],
-        ":_env_python_3.12.0_x86_64-unknown-linux-gnu": [
+        ":_env_python_3.12_x86_64-unknown-linux-gnu": [
             ":pexpect@4.9.0",
         ],
         "//conditions:default": [],
@@ -452,6 +476,16 @@ def targets():
 # buildifier: disable=unnamed-macro
 def repositories():
     """Generated package repositories."""
+
+    maybe(
+        http_file,
+        name = "poetry_lock_sdist_v6.1",
+        urls = [
+            "https://github.com/VaasuDevanS/cowsay-python/archive/refs/tags/v6.1.zip",
+        ],
+        sha256 = "f7937a2e721a308c0fd1c4b48c6c088ab4c221865a78057f456eba7bf67b547e",
+        downloaded_file_path = "v6.1.zip",
+    )
 
     maybe(
         pypi_file,
