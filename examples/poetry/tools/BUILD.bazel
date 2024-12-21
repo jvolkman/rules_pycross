@@ -18,3 +18,10 @@ py_binary(
     main = "ipython.py",
     deps = [requirement("ipython")],
 )
+
+py_binary(
+    name = "app",
+    srcs = ["app.py"],
+    main = "app.py",
+    deps = [requirement("cowsay")],
+)

@@ -22,6 +22,7 @@ PINS = {
     "charset-normalizer": "charset-normalizer@3.3.2",
     "click": "click@8.1.7",
     "cognitojwt": "cognitojwt@1.4.1",
+    "cowsay": "cowsay@6.1",
     "cryptography": "cryptography@41.0.5",
     "cython": "cython@0.29.36",
     "decorator": "decorator@5.1.1",
@@ -365,6 +366,16 @@ def targets():
         name = "cognitojwt@1.4.1",
         deps = _cognitojwt_1_4_1_deps,
         wheel = ":_wheel_cognitojwt@1.4.1",
+    )
+
+    native.alias(
+        name = "_wheel_cowsay@6.1",
+        actual = "@example_lock_wheel_cowsay_6.1_py3_none_any//file",
+    )
+
+    pycross_wheel_library(
+        name = "cowsay@6.1",
+        wheel = ":_wheel_cowsay@6.1",
     )
 
     _cryptography_41_0_5_deps = [
@@ -1871,6 +1882,16 @@ def repositories():
         package_version = "1.4.1",
         filename = "cognitojwt-1.4.1-py3-none-any.whl",
         sha256 = "8ee189f82289d140dc750c91e8772436b64b94d071507ace42efc22c525f42ce",
+        index = "https://pypi.org",
+    )
+
+    maybe(
+        pypi_file,
+        name = "example_lock_wheel_cowsay_6.1_py3_none_any",
+        package_name = "cowsay",
+        package_version = "6.1",
+        filename = "cowsay-6.1-py3-none-any.whl",
+        sha256 = "274b1e6fc1b966d53976333eb90ac94cb07a450a700b455af9fbdf882244b30a",
         index = "https://pypi.org",
     )
 

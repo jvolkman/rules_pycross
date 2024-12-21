@@ -113,7 +113,17 @@ def translate(project_file: Path, lock_file: Path) -> RawLockSet:
         raise Exception(f"Could not load lock file: {lock_file}: {e}")
 
     pinned_package_specs = {}
-    for pin, pin_info in (project_dict.get("tool", {}).get("poetry", {}).get("dependencies", {})).items():
+
+    dependency_items = []
+
+    dependency_items.extend((project_dict.get("tool", {}).get("poetry", {}).get("dependencies", {})).items())
+
+    groups = project_dict.get("tool", {}).get("poetry", {}).get("group", {})
+
+    for _, group in groups.items():
+        dependency_items.extend(group.get("dependencies", {}).items())
+
+    for pin, pin_info in dependency_items:
         pin = package_canonical_name(pin)
         if pin == "python":
             # Skip the special line indicating python version.
