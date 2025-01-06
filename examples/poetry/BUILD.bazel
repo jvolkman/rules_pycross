@@ -74,6 +74,7 @@ pycross_poetry_lock_model(
     name = "example_lock_model",
     lock_file = "poetry.lock",
     project_file = "pyproject.toml",
+    optional_groups = ["dev"],
 )
 
 pycross_lock_file(

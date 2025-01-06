@@ -99,7 +99,13 @@ def get_files_for_package(
     return result
 
 
-def translate(project_file: Path, lock_file: Path) -> RawLockSet:
+def translate(
+    project_file: Path,
+    lock_file: Path,
+    default_group: bool,
+    optional_groups: List[str],
+    all_optional_groups: bool,
+) -> RawLockSet:
     try:
         with open(project_file, "rb") as f:
             project_dict = tomli.load(f)
@@ -116,12 +122,14 @@ def translate(project_file: Path, lock_file: Path) -> RawLockSet:
 
     dependency_items = []
 
-    dependency_items.extend((project_dict.get("tool", {}).get("poetry", {}).get("dependencies", {})).items())
+    if default_group:
+        dependency_items.extend((project_dict.get("tool", {}).get("poetry", {}).get("dependencies", {})).items())
 
     groups = project_dict.get("tool", {}).get("poetry", {}).get("group", {})
 
-    for _, group in groups.items():
-        dependency_items.extend(group.get("dependencies", {}).items())
+    for group_name, group in groups.items():
+        if all_optional_groups or group_name in optional_groups:
+            dependency_items.extend(group.get("dependencies", {}).items())
 
     for pin, pin_info in dependency_items:
         pin = package_canonical_name(pin)
@@ -249,7 +257,13 @@ def translate(project_file: Path, lock_file: Path) -> RawLockSet:
 def main(args: Any) -> None:
     output = args.output
 
-    lock_set = translate(args.project_file, args.lock_file)
+    lock_set = translate(
+        project_file=args.project_file,
+        lock_file=args.lock_file,
+        default_group=args.default_group,
+        optional_groups=args.optional_group,
+        all_optional_groups=args.all_optional_groups,
+    )
 
     with open(output, "w") as f:
         f.write(lock_set.to_json(indent=2))
@@ -270,6 +284,25 @@ def parse_flags() -> Any:
         type=Path,
         required=True,
         help="The path to pdm.lock.",
+    )
+
+    parser.add_argument(
+        "--default-group",
+        action="store_true",
+        help="Whether to install dependencies from the default group.",
+    )
+
+    parser.add_argument(
+        "--optional-group",
+        action="append",
+        default=[],
+        help="Optional dependency groups to install.",
+    )
+
+    parser.add_argument(
+        "--all-optional-groups",
+        action="store_true",
+        help="Install all optional dependency groups.",
     )
 
     parser.add_argument(

@@ -13,6 +13,15 @@ def _pycross_poetry_lock_model_impl(ctx):
     args.add("--lock-file", ctx.file.lock_file)
     args.add("--output", out)
 
+    if ctx.attr.default:
+        args.add("--default")
+
+    for group in ctx.attr.optional_groups:
+        args.add_all(["--optional-group", group])
+
+    if ctx.attr.all_optional_groups:
+        args.add("--all-optional-groups")
+
     ctx.actions.run(
         inputs = (
             ctx.files.project_file +
