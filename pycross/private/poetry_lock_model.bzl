@@ -19,7 +19,6 @@ def _handle_args(attrs, project_file, lock_file, output):
 
     return args
 
-
 def _pycross_poetry_lock_model_impl(ctx):
     out = ctx.actions.declare_file(ctx.attr.name + ".json")
 
