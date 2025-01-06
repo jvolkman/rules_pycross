@@ -209,10 +209,19 @@ def _get_multi_python_versions(rctx, python_toolchain_repo):
     return versions
 
 def _get_default_python_version_bzlmod(rctx, pythons_hub_repo):
-    interpreters_bzl_file = Label("@@{}//:interpreters.bzl".format(pythons_hub_repo.workspace_name))
-    build_content = rctx.read(interpreters_bzl_file)
-
-    for line in build_content.splitlines():
+    # Check if Python hub repo has versions.bzl file. versions.bzl was introduced in rules_python 0.37.0.
+    pythons_hub_build_file = pythons_hub_repo.relative("//:BUILD.bazel")
+    pythons_hub_repo_dir = rctx.path(pythons_hub_build_file).dirname
+    if pythons_hub_repo_dir.get_child("versions.bzl").exists:
+        # Use versions.bzl for rules_python 0.37.0+.
+        versions_bzl_file = Label("@@{}//:versions.bzl".format(pythons_hub_repo.workspace_name))
+        content = rctx.read(versions_bzl_file)
+    else:
+        # Fall back to interpreters.bzl as versions.bzl does not exists for rules_python < 0.37.0.
+        # DEFAULT_PYTHON_VERSION was removed from interpreters.bzl in rules_python 1.0.0.
+        interpreters_bzl_file = Label("@@{}//:interpreters.bzl".format(pythons_hub_repo.workspace_name))
+        content = rctx.read(interpreters_bzl_file)
+    for line in content.splitlines():
         if line.startswith("DEFAULT_PYTHON_VERSION"):
             _, val = line.split("=")
             val = val.strip(" \"'")
