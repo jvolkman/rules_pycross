@@ -260,7 +260,7 @@ def main(args: Any) -> None:
     lock_set = translate(
         project_file=args.project_file,
         lock_file=args.lock_file,
-        default_group=args.default_group,
+        default_group=args.default,
         optional_groups=args.optional_group,
         all_optional_groups=args.all_optional_groups,
     )
@@ -287,7 +287,7 @@ def parse_flags() -> Any:
     )
 
     parser.add_argument(
-        "--default-group",
+        "--default",
         action="store_true",
         help="Whether to install dependencies from the default group.",
     )
