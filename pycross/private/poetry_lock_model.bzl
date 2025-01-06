@@ -5,22 +5,33 @@ load(":lock_attrs.bzl", "POETRY_IMPORT_ATTRS")
 
 TRANSLATOR_TOOL = Label("//pycross/private/tools:poetry_translator.py")
 
+def _handle_args(attrs, project_file, lock_file, output):
+    args = []
+    args.extend(["--project-file", project_file])
+    args.extend(["--lock-file", lock_file])
+    args.extend(["--output", output])
+
+    if attrs.default:
+        args.append("--default")
+
+    for group in attrs.optional_groups:
+        args.extend(["--optional-group", group])
+
+    return args
+
+
 def _pycross_poetry_lock_model_impl(ctx):
     out = ctx.actions.declare_file(ctx.attr.name + ".json")
 
     args = ctx.actions.args().use_param_file("--flagfile=%s")
-    args.add("--project-file", ctx.file.project_file)
-    args.add("--lock-file", ctx.file.lock_file)
-    args.add("--output", out)
-
-    if ctx.attr.default:
-        args.add("--default")
-
-    for group in ctx.attr.optional_groups:
-        args.add_all(["--optional-group", group])
-
-    if ctx.attr.all_optional_groups:
-        args.add("--all-optional-groups")
+    args.add_all(
+        _handle_args(
+            ctx.attr,
+            ctx.file.project_file.path,
+            ctx.file.lock_file.path,
+            out.path,
+        ),
+    )
 
     ctx.actions.run(
         inputs = (
@@ -49,11 +60,14 @@ pycross_poetry_lock_model = rule(
     } | POETRY_IMPORT_ATTRS,
 )
 
-def lock_repo_model_poetry(*, project_file, lock_file):
+def lock_repo_model_poetry(*, project_file, lock_file, default = True, optional_groups = [], all_optional_groups = False):
     return json.encode(dict(
         model_type = "poetry",
         project_file = str(project_file),
         lock_file = str(lock_file),
+        default = default,
+        optional_groups = optional_groups,
+        all_optional_groups = all_optional_groups,
     ))
 
 def repo_create_poetry_model(rctx, params, output):
@@ -68,14 +82,12 @@ def repo_create_poetry_model(rctx, params, output):
         attrs = struct(**params)
     else:
         attrs = params
-    args = [
-        "--project-file",
+    args = _handle_args(
+        attrs,
         str(rctx.path(Label(attrs.project_file))),
-        "--lock-file",
         str(rctx.path(Label(attrs.lock_file))),
-        "--output",
         output,
-    ]
+    )
 
     exec_internal_tool(
         rctx,
