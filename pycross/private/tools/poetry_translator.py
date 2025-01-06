@@ -121,6 +121,9 @@ def translate(project_file: Path, lock_file: Path) -> RawLockSet:
         if isinstance(pin_info, str):
             pinned_package_specs[pin] = parse_constraint(pin_info)
         else:
+            if "path" in pin_info:
+                # Skip path dependencies.
+                continue
             pinned_package_specs[pin] = parse_constraint(pin_info["version"])
 
     def parse_file_info(file_info) -> PackageFile:
