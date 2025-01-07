@@ -33,7 +33,7 @@ lock_repo_model_pdm(<a href="#lock_repo_model_pdm-project_file">project_file</a>
 ## lock_repo_model_poetry
 
 <pre>
-lock_repo_model_poetry(<a href="#lock_repo_model_poetry-project_file">project_file</a>, <a href="#lock_repo_model_poetry-lock_file">lock_file</a>)
+lock_repo_model_poetry(<a href="#lock_repo_model_poetry-project_file">project_file</a>, <a href="#lock_repo_model_poetry-lock_file">lock_file</a>, <a href="#lock_repo_model_poetry-default">default</a>, <a href="#lock_repo_model_poetry-optional_groups">optional_groups</a>, <a href="#lock_repo_model_poetry-all_optional_groups">all_optional_groups</a>)
 </pre>
 
 
@@ -45,6 +45,9 @@ lock_repo_model_poetry(<a href="#lock_repo_model_poetry-project_file">project_fi
 | :------------- | :------------- | :------------- |
 | <a id="lock_repo_model_poetry-project_file"></a>project_file |  <p align="center"> - </p>   |  none |
 | <a id="lock_repo_model_poetry-lock_file"></a>lock_file |  <p align="center"> - </p>   |  none |
+| <a id="lock_repo_model_poetry-default"></a>default |  <p align="center"> - </p>   |  `True` |
+| <a id="lock_repo_model_poetry-optional_groups"></a>optional_groups |  <p align="center"> - </p>   |  `[]` |
+| <a id="lock_repo_model_poetry-all_optional_groups"></a>all_optional_groups |  <p align="center"> - </p>   |  `False` |
 
 
 <a id="lock_repo_model_uv"></a>

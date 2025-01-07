@@ -139,6 +139,16 @@ POETRY_IMPORT_ATTRS = dict(
         allow_single_file = True,
         mandatory = True,
     ),
+    default = attr.bool(
+        doc = "Whether to install dependencies from the default group.",
+        default = True,
+    ),
+    optional_groups = attr.string_list(
+        doc = "List of optional dependency groups to install.",
+    ),
+    all_optional_groups = attr.bool(
+        doc = "Install all optional dependencies.",
+    ),
 )
 
 def handle_resolve_attrs(attrs, environment_files_and_labels, local_wheel_names_and_labels):

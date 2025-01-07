@@ -21,3 +21,6 @@ tree-sitter = "=0.20.2"
 future = "=0.18.2"
 opencv-python = "=4.6.0.66"
 keyring = "=23.9.1"
+
+[tool.poetry.group.dev.dependencies]
+cowsay = "^6.1"

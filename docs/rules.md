@@ -70,7 +70,8 @@ pycross_pdm_lock_model(<a href="#pycross_pdm_lock_model-name">name</a>, <a href=
 ## pycross_poetry_lock_model
 
 <pre>
-pycross_poetry_lock_model(<a href="#pycross_poetry_lock_model-name">name</a>, <a href="#pycross_poetry_lock_model-lock_file">lock_file</a>, <a href="#pycross_poetry_lock_model-project_file">project_file</a>)
+pycross_poetry_lock_model(<a href="#pycross_poetry_lock_model-name">name</a>, <a href="#pycross_poetry_lock_model-all_optional_groups">all_optional_groups</a>, <a href="#pycross_poetry_lock_model-default">default</a>, <a href="#pycross_poetry_lock_model-lock_file">lock_file</a>, <a href="#pycross_poetry_lock_model-optional_groups">optional_groups</a>,
+                          <a href="#pycross_poetry_lock_model-project_file">project_file</a>)
 </pre>
 
 
@@ -81,7 +82,10 @@ pycross_poetry_lock_model(<a href="#pycross_poetry_lock_model-name">name</a>, <a
 | Name  | Description | Type | Mandatory | Default |
 | :------------- | :------------- | :------------- | :------------- | :------------- |
 | <a id="pycross_poetry_lock_model-name"></a>name |  A unique name for this target.   | <a href="https://bazel.build/concepts/labels#target-names">Name</a> | required |  |
+| <a id="pycross_poetry_lock_model-all_optional_groups"></a>all_optional_groups |  Install all optional dependencies.   | Boolean | optional |  `False`  |
+| <a id="pycross_poetry_lock_model-default"></a>default |  Whether to install dependencies from the default group.   | Boolean | optional |  `True`  |
 | <a id="pycross_poetry_lock_model-lock_file"></a>lock_file |  The poetry.lock file.   | <a href="https://bazel.build/concepts/labels">Label</a> | required |  |
+| <a id="pycross_poetry_lock_model-optional_groups"></a>optional_groups |  List of optional dependency groups to install.   | List of strings | optional |  `[]`  |
 | <a id="pycross_poetry_lock_model-project_file"></a>project_file |  The pyproject.toml file.   | <a href="https://bazel.build/concepts/labels">Label</a> | required |  |
 
 

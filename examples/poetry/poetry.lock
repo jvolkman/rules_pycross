@@ -2632,3 +2632,13 @@ files = [
 lock-version = "2.0"
 python-versions = ">=3.11,<3.13"
 content-hash = "058183c94e35a7f1f3105fac99063ccd83b2c240b6e0552711b551b34bd7c72d"
+
+[[package]]
+name = "cowsay"
+version = "6.1"
+description = "The famous cowsay for GNU/Linux is now available for python"
+optional = false
+python-versions = ">=3.8"
+files = [
+    {file = "cowsay-6.1-py3-none-any.whl", hash = "sha256:274b1e6fc1b966d53976333eb90ac94cb07a450a700b455af9fbdf882244b30a"},
+]
