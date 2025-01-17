@@ -1,5 +1,5 @@
 bcr_test_module:
-  module_path: e2e/bzlmod
+  module_path: e2e/uv/always_build
   matrix:
     bazel:
       - 7.x
