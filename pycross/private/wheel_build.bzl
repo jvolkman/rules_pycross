@@ -80,6 +80,9 @@ def _executable(target):
         fail("%s is not executable" % target.label)
     return exe.path
 
+def _files_to_run(targets):
+    return [t[DefaultInfo].files_to_run for t in targets]
+
 def _resolve_import_path_fn_inner(workspace_name, bin_dir, sibling_layout):
     # The PyInfo import names assume a runfiles-type structure. E.g.:
     #   mytool.runfiles/
@@ -288,33 +291,26 @@ def _handle_config_settings(ctx, args, inputs):
         vals[key] = [_expand_locations_and_vars("config_settings", ctx, vi) for vi in value]
     ctx.actions.write(config_settings_data, json.encode(vals))
 
-def _handle_tools_and_data(ctx, args, tools, input_manifests):
+def _handle_tools_and_data(ctx, args, tools):
     tools.extend([data[DefaultInfo].files for data in ctx.attr.data])
 
     if ctx.attr.pre_build_hooks:
         args.add_all(ctx.attr.pre_build_hooks, before_each = "--pre-build-hook", map_each = _executable)
-        tool_inputs, tool_manifests = ctx.resolve_tools(tools = ctx.attr.pre_build_hooks)
-        tools.extend([tool_inputs])
-        input_manifests.extend(tool_manifests)
+        tools.extend(_files_to_run(ctx.attr.pre_build_hooks))
 
     if ctx.attr.post_build_hooks:
         args.add_all(ctx.attr.post_build_hooks, before_each = "--post-build-hook", map_each = _executable)
-        tool_inputs, tool_manifests = ctx.resolve_tools(tools = ctx.attr.post_build_hooks)
-        tools.extend([tool_inputs])
-        input_manifests.extend(tool_manifests)
+        tools.extend(_files_to_run(ctx.attr.post_build_hooks))
 
     if ctx.attr.path_tools:
         for tool, name in ctx.attr.path_tools.items():
             args.add_all("--path-tool", [name, _executable(tool)])
-        tool_inputs, tool_manifests = ctx.resolve_tools(tools = ctx.attr.path_tools.keys())
-        tools.extend([tool_inputs])
-        input_manifests.extend(tool_manifests)
+        tools.extend(_files_to_run(ctx.attr.path_tools.keys()))
 
 def _pycross_wheel_build_impl(ctx):
     args = ctx.actions.args().use_param_file("--flagfile=%s")
     inputs = []
     tools = []
-    input_manifests = []
 
     pycross_wheel_info = _handle_sdist(ctx, args, inputs)
     cc_vars = _handle_sysconfig_data(ctx, args, inputs)
@@ -326,7 +322,7 @@ def _pycross_wheel_build_impl(ctx):
     _handle_build_env(ctx, args, inputs)
     _handle_config_settings(ctx, args, inputs)
 
-    _handle_tools_and_data(ctx, args, tools, input_manifests)
+    _handle_tools_and_data(ctx, args, tools)
 
     env = dict(cc_vars)
     env.update(ctx.configuration.default_shell_env)
@@ -334,8 +330,7 @@ def _pycross_wheel_build_impl(ctx):
     ctx.actions.run(
         inputs = inputs,
         outputs = [pycross_wheel_info.wheel_file, pycross_wheel_info.name_file],
-        tools = depset(transitive = tools),
-        input_manifests = input_manifests,
+        tools = tools,
         executable = ctx.executable._tool,
         use_default_shell_env = False,
         env = env,
