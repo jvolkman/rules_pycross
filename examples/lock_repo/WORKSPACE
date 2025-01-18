@@ -6,9 +6,9 @@ load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
 
 http_archive(
     name = "rules_python",
-    sha256 = "d71d2c67e0bce986e1c5a7731b4693226867c45bfe0b7c5e0067228a536fc580",
-    strip_prefix = "rules_python-0.29.0",
-    url = "https://github.com/bazelbuild/rules_python/releases/download/0.29.0/rules_python-0.29.0.tar.gz",
+    sha256 = "9c6e26911a79fbf510a8f06d8eedb40f412023cf7fa6d1461def27116bff022c",
+    strip_prefix = "rules_python-1.1.0",
+    url = "https://github.com/bazelbuild/rules_python/releases/download/1.1.0/rules_python-1.1.0.tar.gz",
 )
 
 load("@rules_python//python:repositories.bzl", "py_repositories", "python_register_multi_toolchains")
@@ -25,8 +25,6 @@ python_register_multi_toolchains(
     ],
 )
 
-load("@python//3.12:defs.bzl", python_interpreter = "interpreter")
-
 local_repository(
     name = "rules_pycross",
     path = "../..",
@@ -35,7 +33,7 @@ local_repository(
 load("@rules_pycross//pycross:repositories.bzl", "rules_pycross_dependencies")
 
 rules_pycross_dependencies(
-    python_interpreter_target = python_interpreter,
+    python_interpreter_target = "@python_3_12_host//:python",
 )
 
 load(
@@ -47,6 +45,11 @@ load(
 
 pycross_register_for_python_toolchains(
     name = "pycross_toolchains",
+    platforms = [
+        "aarch64-apple-darwin",
+        "aarch64-unknown-linux-gnu",
+        "x86_64-unknown-linux-gnu",
+    ],
     python_toolchains_repo = "@python",
 )
 
