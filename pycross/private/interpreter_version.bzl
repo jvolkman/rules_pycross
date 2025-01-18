@@ -2,12 +2,13 @@
 
 load("@bazel_skylib//rules:common_settings.bzl", "BuildSettingInfo")
 load("@pythons_hub//:versions.bzl", "MINOR_MAPPING")
+load("@rules_python//python:versions.bzl", "TOOL_VERSIONS")
 
 def _rules_python_interpreter_version_impl(ctx):
     value = _flag_value(ctx.attr._python_version_flag)
     value = MINOR_MAPPING.get(value, value)
 
-    if not value:
+    if value not in TOOL_VERSIONS:
         value = ctx.attr.default_version
 
     return [config_common.FeatureFlagInfo(value = value)]
