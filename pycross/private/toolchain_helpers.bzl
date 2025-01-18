@@ -47,6 +47,8 @@ def _get_env_platforms(py_platform, glibc_version, macos_version):
             for i in range(5, glibc_micro + 1)
         ]
     elif py_platform.endswith("darwin"):
+        if arch == "aarch64":
+            arch = "arm64"
         return ["macosx_{}_{}_{}".format(macos_major, macos_micro, arch)]
     elif py_platform.endswith("windows-msvc"):
         return ["win_amd64"]
