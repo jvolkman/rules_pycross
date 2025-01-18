@@ -2,7 +2,7 @@
 # It is not intended for manual editing.
 """Pycross-generated dependency targets."""
 
-load("@@rules_pycross~//pycross:defs.bzl", "pycross_wheel_library")
+load("@@rules_pycross+//pycross:defs.bzl", "pycross_wheel_library")
 load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_file")
 load("@bazel_tools//tools/build_defs/repo:utils.bzl", "maybe")
 
@@ -22,93 +22,93 @@ def targets():
 
     native.alias(
         name = "_env_python_3.10.11_aarch64-apple-darwin",
-        actual = "@@rules_pycross~~environments~rules_pycross_e2e_environments//:python_3.10.11_aarch64-apple-darwin_config",
+        actual = "@@rules_pycross++environments+rules_pycross_e2e_environments//:python_3.10.11_aarch64-apple-darwin_config",
     )
 
     native.alias(
         name = "_env_python_3.10.11_aarch64-unknown-linux-gnu",
-        actual = "@@rules_pycross~~environments~rules_pycross_e2e_environments//:python_3.10.11_aarch64-unknown-linux-gnu_config",
+        actual = "@@rules_pycross++environments+rules_pycross_e2e_environments//:python_3.10.11_aarch64-unknown-linux-gnu_config",
     )
 
     native.alias(
         name = "_env_python_3.10.11_x86_64-unknown-linux-gnu",
-        actual = "@@rules_pycross~~environments~rules_pycross_e2e_environments//:python_3.10.11_x86_64-unknown-linux-gnu_config",
+        actual = "@@rules_pycross++environments+rules_pycross_e2e_environments//:python_3.10.11_x86_64-unknown-linux-gnu_config",
     )
 
     native.alias(
         name = "_env_python_3.11.6_aarch64-apple-darwin",
-        actual = "@@rules_pycross~~environments~rules_pycross_e2e_environments//:python_3.11.6_aarch64-apple-darwin_config",
+        actual = "@@rules_pycross++environments+rules_pycross_e2e_environments//:python_3.11.6_aarch64-apple-darwin_config",
     )
 
     native.alias(
         name = "_env_python_3.11.6_aarch64-unknown-linux-gnu",
-        actual = "@@rules_pycross~~environments~rules_pycross_e2e_environments//:python_3.11.6_aarch64-unknown-linux-gnu_config",
+        actual = "@@rules_pycross++environments+rules_pycross_e2e_environments//:python_3.11.6_aarch64-unknown-linux-gnu_config",
     )
 
     native.alias(
         name = "_env_python_3.11.6_x86_64-unknown-linux-gnu",
-        actual = "@@rules_pycross~~environments~rules_pycross_e2e_environments//:python_3.11.6_x86_64-unknown-linux-gnu_config",
+        actual = "@@rules_pycross++environments+rules_pycross_e2e_environments//:python_3.11.6_x86_64-unknown-linux-gnu_config",
     )
 
     native.alias(
         name = "_env_python_3.12.0_aarch64-apple-darwin",
-        actual = "@@rules_pycross~~environments~rules_pycross_e2e_environments//:python_3.12.0_aarch64-apple-darwin_config",
+        actual = "@@rules_pycross++environments+rules_pycross_e2e_environments//:python_3.12.0_aarch64-apple-darwin_config",
     )
 
     native.alias(
         name = "_env_python_3.12.0_aarch64-unknown-linux-gnu",
-        actual = "@@rules_pycross~~environments~rules_pycross_e2e_environments//:python_3.12.0_aarch64-unknown-linux-gnu_config",
+        actual = "@@rules_pycross++environments+rules_pycross_e2e_environments//:python_3.12.0_aarch64-unknown-linux-gnu_config",
     )
 
     native.alias(
         name = "_env_python_3.12.0_x86_64-unknown-linux-gnu",
-        actual = "@@rules_pycross~~environments~rules_pycross_e2e_environments//:python_3.12.0_x86_64-unknown-linux-gnu_config",
+        actual = "@@rules_pycross++environments+rules_pycross_e2e_environments//:python_3.12.0_x86_64-unknown-linux-gnu_config",
     )
 
     native.alias(
         name = "_env_python_3.12_aarch64-apple-darwin",
-        actual = "@@rules_pycross~~environments~rules_pycross_e2e_environments//:python_3.12_aarch64-apple-darwin_config",
+        actual = "@@rules_pycross++environments+rules_pycross_e2e_environments//:python_3.12_aarch64-apple-darwin_config",
     )
 
     native.alias(
         name = "_env_python_3.12_aarch64-unknown-linux-gnu",
-        actual = "@@rules_pycross~~environments~rules_pycross_e2e_environments//:python_3.12_aarch64-unknown-linux-gnu_config",
+        actual = "@@rules_pycross++environments+rules_pycross_e2e_environments//:python_3.12_aarch64-unknown-linux-gnu_config",
     )
 
     native.alias(
         name = "_env_python_3.12_x86_64-unknown-linux-gnu",
-        actual = "@@rules_pycross~~environments~rules_pycross_e2e_environments//:python_3.12_x86_64-unknown-linux-gnu_config",
+        actual = "@@rules_pycross++environments+rules_pycross_e2e_environments//:python_3.12_x86_64-unknown-linux-gnu_config",
     )
 
     # buildifier: disable=unused-variable
     _target = select({
-        ":_env_python_3.10.11_aarch64-apple-darwin": "@@rules_pycross~~environments~rules_pycross_e2e_environments//:python_3.10.11_aarch64-apple-darwin.json",
-        ":_env_python_3.10.11_aarch64-unknown-linux-gnu": "@@rules_pycross~~environments~rules_pycross_e2e_environments//:python_3.10.11_aarch64-unknown-linux-gnu.json",
-        ":_env_python_3.10.11_x86_64-unknown-linux-gnu": "@@rules_pycross~~environments~rules_pycross_e2e_environments//:python_3.10.11_x86_64-unknown-linux-gnu.json",
-        ":_env_python_3.11.6_aarch64-apple-darwin": "@@rules_pycross~~environments~rules_pycross_e2e_environments//:python_3.11.6_aarch64-apple-darwin.json",
-        ":_env_python_3.11.6_aarch64-unknown-linux-gnu": "@@rules_pycross~~environments~rules_pycross_e2e_environments//:python_3.11.6_aarch64-unknown-linux-gnu.json",
-        ":_env_python_3.11.6_x86_64-unknown-linux-gnu": "@@rules_pycross~~environments~rules_pycross_e2e_environments//:python_3.11.6_x86_64-unknown-linux-gnu.json",
-        ":_env_python_3.12.0_aarch64-apple-darwin": "@@rules_pycross~~environments~rules_pycross_e2e_environments//:python_3.12.0_aarch64-apple-darwin.json",
-        ":_env_python_3.12.0_aarch64-unknown-linux-gnu": "@@rules_pycross~~environments~rules_pycross_e2e_environments//:python_3.12.0_aarch64-unknown-linux-gnu.json",
-        ":_env_python_3.12.0_x86_64-unknown-linux-gnu": "@@rules_pycross~~environments~rules_pycross_e2e_environments//:python_3.12.0_x86_64-unknown-linux-gnu.json",
-        ":_env_python_3.12_aarch64-apple-darwin": "@@rules_pycross~~environments~rules_pycross_e2e_environments//:python_3.12_aarch64-apple-darwin.json",
-        ":_env_python_3.12_aarch64-unknown-linux-gnu": "@@rules_pycross~~environments~rules_pycross_e2e_environments//:python_3.12_aarch64-unknown-linux-gnu.json",
-        ":_env_python_3.12_x86_64-unknown-linux-gnu": "@@rules_pycross~~environments~rules_pycross_e2e_environments//:python_3.12_x86_64-unknown-linux-gnu.json",
+        ":_env_python_3.10.11_aarch64-apple-darwin": "@@rules_pycross++environments+rules_pycross_e2e_environments//:python_3.10.11_aarch64-apple-darwin.json",
+        ":_env_python_3.10.11_aarch64-unknown-linux-gnu": "@@rules_pycross++environments+rules_pycross_e2e_environments//:python_3.10.11_aarch64-unknown-linux-gnu.json",
+        ":_env_python_3.10.11_x86_64-unknown-linux-gnu": "@@rules_pycross++environments+rules_pycross_e2e_environments//:python_3.10.11_x86_64-unknown-linux-gnu.json",
+        ":_env_python_3.11.6_aarch64-apple-darwin": "@@rules_pycross++environments+rules_pycross_e2e_environments//:python_3.11.6_aarch64-apple-darwin.json",
+        ":_env_python_3.11.6_aarch64-unknown-linux-gnu": "@@rules_pycross++environments+rules_pycross_e2e_environments//:python_3.11.6_aarch64-unknown-linux-gnu.json",
+        ":_env_python_3.11.6_x86_64-unknown-linux-gnu": "@@rules_pycross++environments+rules_pycross_e2e_environments//:python_3.11.6_x86_64-unknown-linux-gnu.json",
+        ":_env_python_3.12.0_aarch64-apple-darwin": "@@rules_pycross++environments+rules_pycross_e2e_environments//:python_3.12.0_aarch64-apple-darwin.json",
+        ":_env_python_3.12.0_aarch64-unknown-linux-gnu": "@@rules_pycross++environments+rules_pycross_e2e_environments//:python_3.12.0_aarch64-unknown-linux-gnu.json",
+        ":_env_python_3.12.0_x86_64-unknown-linux-gnu": "@@rules_pycross++environments+rules_pycross_e2e_environments//:python_3.12.0_x86_64-unknown-linux-gnu.json",
+        ":_env_python_3.12_aarch64-apple-darwin": "@@rules_pycross++environments+rules_pycross_e2e_environments//:python_3.12_aarch64-apple-darwin.json",
+        ":_env_python_3.12_aarch64-unknown-linux-gnu": "@@rules_pycross++environments+rules_pycross_e2e_environments//:python_3.12_aarch64-unknown-linux-gnu.json",
+        ":_env_python_3.12_x86_64-unknown-linux-gnu": "@@rules_pycross++environments+rules_pycross_e2e_environments//:python_3.12_x86_64-unknown-linux-gnu.json",
     })
 
     native.alias(
         name = "_wheel_regex@2024.11.6",
         actual = select({
-            ":_env_python_3.10.11_aarch64-apple-darwin": "@uv_lock_file_wheel_regex_2024.11.6_cp310_cp310_macosx_11_0_arm64//file",
+            ":_env_python_3.10.11_aarch64-apple-darwin": "@uv_lock_file_wheel_regex_2024.11.6_cp310_cp310_macosx_10_9_universal2//file",
             ":_env_python_3.10.11_aarch64-unknown-linux-gnu": "@uv_lock_file_wheel_regex_2024.11.6_cp310_cp310_manylinux_2_17_aarch64.manylinux2014_aarch64//file",
             ":_env_python_3.10.11_x86_64-unknown-linux-gnu": "@uv_lock_file_wheel_regex_2024.11.6_cp310_cp310_manylinux_2_5_x86_64.manylinux1_x86_64.manylinux_2_12_x86_64.manylinux2010_x86_64//file",
-            ":_env_python_3.11.6_aarch64-apple-darwin": "@uv_lock_file_wheel_regex_2024.11.6_cp311_cp311_macosx_11_0_arm64//file",
+            ":_env_python_3.11.6_aarch64-apple-darwin": "@uv_lock_file_wheel_regex_2024.11.6_cp311_cp311_macosx_10_9_universal2//file",
             ":_env_python_3.11.6_aarch64-unknown-linux-gnu": "@uv_lock_file_wheel_regex_2024.11.6_cp311_cp311_manylinux_2_17_aarch64.manylinux2014_aarch64//file",
             ":_env_python_3.11.6_x86_64-unknown-linux-gnu": "@uv_lock_file_wheel_regex_2024.11.6_cp311_cp311_manylinux_2_17_x86_64.manylinux2014_x86_64//file",
-            ":_env_python_3.12.0_aarch64-apple-darwin": "@uv_lock_file_wheel_regex_2024.11.6_cp312_cp312_macosx_11_0_arm64//file",
+            ":_env_python_3.12.0_aarch64-apple-darwin": "@uv_lock_file_wheel_regex_2024.11.6_cp312_cp312_macosx_10_13_universal2//file",
             ":_env_python_3.12.0_aarch64-unknown-linux-gnu": "@uv_lock_file_wheel_regex_2024.11.6_cp312_cp312_manylinux_2_17_aarch64.manylinux2014_aarch64//file",
             ":_env_python_3.12.0_x86_64-unknown-linux-gnu": "@uv_lock_file_wheel_regex_2024.11.6_cp312_cp312_manylinux_2_17_x86_64.manylinux2014_x86_64//file",
-            ":_env_python_3.12_aarch64-apple-darwin": "@uv_lock_file_wheel_regex_2024.11.6_cp312_cp312_macosx_11_0_arm64//file",
+            ":_env_python_3.12_aarch64-apple-darwin": "@uv_lock_file_wheel_regex_2024.11.6_cp312_cp312_macosx_10_13_universal2//file",
             ":_env_python_3.12_aarch64-unknown-linux-gnu": "@uv_lock_file_wheel_regex_2024.11.6_cp312_cp312_manylinux_2_17_aarch64.manylinux2014_aarch64//file",
             ":_env_python_3.12_x86_64-unknown-linux-gnu": "@uv_lock_file_wheel_regex_2024.11.6_cp312_cp312_manylinux_2_17_x86_64.manylinux2014_x86_64//file",
         }),
@@ -125,12 +125,12 @@ def repositories():
 
     maybe(
         http_file,
-        name = "uv_lock_file_wheel_regex_2024.11.6_cp310_cp310_macosx_11_0_arm64",
+        name = "uv_lock_file_wheel_regex_2024.11.6_cp310_cp310_macosx_10_9_universal2",
         urls = [
-            "https://files.pythonhosted.org/packages/bd/18/b731f5510d1b8fb63c6b6d3484bfa9a59b84cc578ac8b5172970e05ae07c/regex-2024.11.6-cp310-cp310-macosx_11_0_arm64.whl",
+            "https://files.pythonhosted.org/packages/95/3c/4651f6b130c6842a8f3df82461a8950f923925db8b6961063e82744bddcc/regex-2024.11.6-cp310-cp310-macosx_10_9_universal2.whl",
         ],
-        sha256 = "164d8b7b3b4bcb2068b97428060b2a53be050085ef94eca7f240e7947f1b080e",
-        downloaded_file_path = "regex-2024.11.6-cp310-cp310-macosx_11_0_arm64.whl",
+        sha256 = "ff590880083d60acc0433f9c3f713c51f7ac6ebb9adf889c79a261ecf541aa91",
+        downloaded_file_path = "regex-2024.11.6-cp310-cp310-macosx_10_9_universal2.whl",
     )
 
     maybe(
@@ -155,12 +155,12 @@ def repositories():
 
     maybe(
         http_file,
-        name = "uv_lock_file_wheel_regex_2024.11.6_cp311_cp311_macosx_11_0_arm64",
+        name = "uv_lock_file_wheel_regex_2024.11.6_cp311_cp311_macosx_10_9_universal2",
         urls = [
-            "https://files.pythonhosted.org/packages/c5/1b/f0e4d13e6adf866ce9b069e191f303a30ab1277e037037a365c3aad5cc9c/regex-2024.11.6-cp311-cp311-macosx_11_0_arm64.whl",
+            "https://files.pythonhosted.org/packages/58/58/7e4d9493a66c88a7da6d205768119f51af0f684fe7be7bac8328e217a52c/regex-2024.11.6-cp311-cp311-macosx_10_9_universal2.whl",
         ],
-        sha256 = "94d87b689cdd831934fa3ce16cc15cd65748e6d689f5d2b8f4f4df2065c9fa20",
-        downloaded_file_path = "regex-2024.11.6-cp311-cp311-macosx_11_0_arm64.whl",
+        sha256 = "5478c6962ad548b54a591778e93cd7c456a7a29f8eca9c49e4f9a806dcc5d638",
+        downloaded_file_path = "regex-2024.11.6-cp311-cp311-macosx_10_9_universal2.whl",
     )
 
     maybe(
@@ -185,12 +185,12 @@ def repositories():
 
     maybe(
         http_file,
-        name = "uv_lock_file_wheel_regex_2024.11.6_cp312_cp312_macosx_11_0_arm64",
+        name = "uv_lock_file_wheel_regex_2024.11.6_cp312_cp312_macosx_10_13_universal2",
         urls = [
-            "https://files.pythonhosted.org/packages/60/85/cebcc0aff603ea0a201667b203f13ba75d9fc8668fab917ac5b2de3967bc/regex-2024.11.6-cp312-cp312-macosx_11_0_arm64.whl",
+            "https://files.pythonhosted.org/packages/ba/30/9a87ce8336b172cc232a0db89a3af97929d06c11ceaa19d97d84fa90a8f8/regex-2024.11.6-cp312-cp312-macosx_10_13_universal2.whl",
         ],
-        sha256 = "805e6b60c54bf766b251e94526ebad60b7de0c70f70a4e6210ee2891acb70bf2",
-        downloaded_file_path = "regex-2024.11.6-cp312-cp312-macosx_11_0_arm64.whl",
+        sha256 = "52fb28f528778f184f870b7cf8f225f5eef0a8f6e3778529bdd40c7b3920796a",
+        downloaded_file_path = "regex-2024.11.6-cp312-cp312-macosx_10_13_universal2.whl",
     )
 
     maybe(

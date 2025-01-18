@@ -8,6 +8,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [0.7.0]
 
+### Added
+
+- Updates to support Bazel 8.0
+- uv translator updates
+
 ### Fixed
 
 - Obtain default Python version for Python hub repo from `versions.bzl` file, falling back to `interpreters.bzl` for backwards compatibility. `DEFAULT_PYTHON_VERSION` was [removed](https://github.com/bazelbuild/rules_python/blob/6a04d3832e82fec0a7b0675e9964b360bc358554/CHANGELOG.md?plain=1#L211) from `interpreters.bzl` in rules_python version 1.0.0.

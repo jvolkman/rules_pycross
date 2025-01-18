@@ -7,6 +7,8 @@ Public build rule API re-exports
 ## pycross_lock_file
 
 <pre>
+load("@rules_pycross//pycross:defs.bzl", "pycross_lock_file")
+
 pycross_lock_file(<a href="#pycross_lock_file-name">name</a>, <a href="#pycross_lock_file-out">out</a>, <a href="#pycross_lock_file-always_include_sdist">always_include_sdist</a>, <a href="#pycross_lock_file-annotations">annotations</a>, <a href="#pycross_lock_file-default_alias_single_version">default_alias_single_version</a>,
                   <a href="#pycross_lock_file-default_build_dependencies">default_build_dependencies</a>, <a href="#pycross_lock_file-disallow_builds">disallow_builds</a>, <a href="#pycross_lock_file-fully_qualified_environment_labels">fully_qualified_environment_labels</a>,
                   <a href="#pycross_lock_file-generate_file_map">generate_file_map</a>, <a href="#pycross_lock_file-local_wheels">local_wheels</a>, <a href="#pycross_lock_file-lock_model_file">lock_model_file</a>, <a href="#pycross_lock_file-pypi_index">pypi_index</a>, <a href="#pycross_lock_file-remote_wheels">remote_wheels</a>,
@@ -42,6 +44,8 @@ pycross_lock_file(<a href="#pycross_lock_file-name">name</a>, <a href="#pycross_
 ## pycross_pdm_lock_model
 
 <pre>
+load("@rules_pycross//pycross:defs.bzl", "pycross_pdm_lock_model")
+
 pycross_pdm_lock_model(<a href="#pycross_pdm_lock_model-name">name</a>, <a href="#pycross_pdm_lock_model-all_development_groups">all_development_groups</a>, <a href="#pycross_pdm_lock_model-all_optional_groups">all_optional_groups</a>, <a href="#pycross_pdm_lock_model-default">default</a>,
                        <a href="#pycross_pdm_lock_model-development_groups">development_groups</a>, <a href="#pycross_pdm_lock_model-lock_file">lock_file</a>, <a href="#pycross_pdm_lock_model-optional_groups">optional_groups</a>, <a href="#pycross_pdm_lock_model-project_file">project_file</a>,
                        <a href="#pycross_pdm_lock_model-require_static_urls">require_static_urls</a>)
@@ -70,6 +74,8 @@ pycross_pdm_lock_model(<a href="#pycross_pdm_lock_model-name">name</a>, <a href=
 ## pycross_poetry_lock_model
 
 <pre>
+load("@rules_pycross//pycross:defs.bzl", "pycross_poetry_lock_model")
+
 pycross_poetry_lock_model(<a href="#pycross_poetry_lock_model-name">name</a>, <a href="#pycross_poetry_lock_model-all_optional_groups">all_optional_groups</a>, <a href="#pycross_poetry_lock_model-default">default</a>, <a href="#pycross_poetry_lock_model-lock_file">lock_file</a>, <a href="#pycross_poetry_lock_model-optional_groups">optional_groups</a>,
                           <a href="#pycross_poetry_lock_model-project_file">project_file</a>)
 </pre>
@@ -94,6 +100,8 @@ pycross_poetry_lock_model(<a href="#pycross_poetry_lock_model-name">name</a>, <a
 ## pycross_target_environment
 
 <pre>
+load("@rules_pycross//pycross:defs.bzl", "pycross_target_environment")
+
 pycross_target_environment(<a href="#pycross_target_environment-name">name</a>, <a href="#pycross_target_environment-abis">abis</a>, <a href="#pycross_target_environment-config_setting">config_setting</a>, <a href="#pycross_target_environment-envornment_markers">envornment_markers</a>, <a href="#pycross_target_environment-flag_values">flag_values</a>,
                            <a href="#pycross_target_environment-implementation">implementation</a>, <a href="#pycross_target_environment-platforms">platforms</a>, <a href="#pycross_target_environment-python_compatible_with">python_compatible_with</a>, <a href="#pycross_target_environment-version">version</a>)
 </pre>
@@ -121,6 +129,8 @@ pycross_target_environment(<a href="#pycross_target_environment-name">name</a>, 
 ## pycross_uv_lock_model
 
 <pre>
+load("@rules_pycross//pycross:defs.bzl", "pycross_uv_lock_model")
+
 pycross_uv_lock_model(<a href="#pycross_uv_lock_model-name">name</a>, <a href="#pycross_uv_lock_model-all_development_groups">all_development_groups</a>, <a href="#pycross_uv_lock_model-all_optional_groups">all_optional_groups</a>, <a href="#pycross_uv_lock_model-default">default</a>,
                       <a href="#pycross_uv_lock_model-development_groups">development_groups</a>, <a href="#pycross_uv_lock_model-lock_file">lock_file</a>, <a href="#pycross_uv_lock_model-optional_groups">optional_groups</a>, <a href="#pycross_uv_lock_model-project_file">project_file</a>,
                       <a href="#pycross_uv_lock_model-require_static_urls">require_static_urls</a>)
@@ -149,6 +159,8 @@ pycross_uv_lock_model(<a href="#pycross_uv_lock_model-name">name</a>, <a href="#
 ## pycross_wheel_build
 
 <pre>
+load("@rules_pycross//pycross:defs.bzl", "pycross_wheel_build")
+
 pycross_wheel_build(<a href="#pycross_wheel_build-name">name</a>, <a href="#pycross_wheel_build-deps">deps</a>, <a href="#pycross_wheel_build-data">data</a>, <a href="#pycross_wheel_build-build_env">build_env</a>, <a href="#pycross_wheel_build-config_settings">config_settings</a>, <a href="#pycross_wheel_build-copts">copts</a>, <a href="#pycross_wheel_build-linkopts">linkopts</a>, <a href="#pycross_wheel_build-native_deps">native_deps</a>,
                     <a href="#pycross_wheel_build-path_tools">path_tools</a>, <a href="#pycross_wheel_build-post_build_hooks">post_build_hooks</a>, <a href="#pycross_wheel_build-pre_build_hooks">pre_build_hooks</a>, <a href="#pycross_wheel_build-sdist">sdist</a>, <a href="#pycross_wheel_build-target_environment">target_environment</a>)
 </pre>
@@ -180,6 +192,8 @@ pycross_wheel_build(<a href="#pycross_wheel_build-name">name</a>, <a href="#pycr
 ## pycross_wheel_library
 
 <pre>
+load("@rules_pycross//pycross:defs.bzl", "pycross_wheel_library")
+
 pycross_wheel_library(<a href="#pycross_wheel_library-name">name</a>, <a href="#pycross_wheel_library-deps">deps</a>, <a href="#pycross_wheel_library-enable_implicit_namespace_pkgs">enable_implicit_namespace_pkgs</a>, <a href="#pycross_wheel_library-install_exclude_globs">install_exclude_globs</a>,
                       <a href="#pycross_wheel_library-python_version">python_version</a>, <a href="#pycross_wheel_library-wheel">wheel</a>)
 </pre>
@@ -204,6 +218,8 @@ pycross_wheel_library(<a href="#pycross_wheel_library-name">name</a>, <a href="#
 ## pycross_wheel_zipimport_library
 
 <pre>
+load("@rules_pycross//pycross:defs.bzl", "pycross_wheel_zipimport_library")
+
 pycross_wheel_zipimport_library(<a href="#pycross_wheel_zipimport_library-name">name</a>, <a href="#pycross_wheel_zipimport_library-deps">deps</a>, <a href="#pycross_wheel_zipimport_library-wheel">wheel</a>)
 </pre>
 
@@ -224,13 +240,14 @@ pycross_wheel_zipimport_library(<a href="#pycross_wheel_zipimport_library-name">
 ## PycrossWheelInfo
 
 <pre>
+load("@rules_pycross//pycross:defs.bzl", "PycrossWheelInfo")
+
 PycrossWheelInfo(<a href="#PycrossWheelInfo-name_file">name_file</a>, <a href="#PycrossWheelInfo-wheel_file">wheel_file</a>)
 </pre>
 
 Information about a Python wheel.
 
 **FIELDS**
-
 
 | Name  | Description |
 | :------------- | :------------- |
@@ -243,6 +260,8 @@ Information about a Python wheel.
 ## package_annotation
 
 <pre>
+load("@rules_pycross//pycross:defs.bzl", "package_annotation")
+
 package_annotation(<a href="#package_annotation-always_build">always_build</a>, <a href="#package_annotation-build_dependencies">build_dependencies</a>, <a href="#package_annotation-build_target">build_target</a>, <a href="#package_annotation-ignore_dependencies">ignore_dependencies</a>,
                    <a href="#package_annotation-install_exclude_globs">install_exclude_globs</a>)
 </pre>
@@ -270,6 +289,8 @@ str: A json encoded string of the provided content.
 ## pypi_file
 
 <pre>
+load("@rules_pycross//pycross:defs.bzl", "pypi_file")
+
 pypi_file(<a href="#pypi_file-name">name</a>, <a href="#pypi_file-filename">filename</a>, <a href="#pypi_file-index">index</a>, <a href="#pypi_file-keep_metadata">keep_metadata</a>, <a href="#pypi_file-package_name">package_name</a>, <a href="#pypi_file-package_version">package_version</a>, <a href="#pypi_file-repo_mapping">repo_mapping</a>, <a href="#pypi_file-sha256">sha256</a>)
 </pre>
 

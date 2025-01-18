@@ -80,13 +80,13 @@ def targets():
     native.alias(
         name = "_wheel_regex@2024.11.6",
         actual = select({
-            ":_env_python_3.10.11_aarch64-apple-darwin": "@poetry_lock_file_wheel_regex_2024.11.6_cp310_cp310_macosx_11_0_arm64//file",
+            ":_env_python_3.10.11_aarch64-apple-darwin": "@poetry_lock_file_wheel_regex_2024.11.6_cp310_cp310_macosx_10_9_universal2//file",
             ":_env_python_3.10.11_aarch64-unknown-linux-gnu": "@poetry_lock_file_wheel_regex_2024.11.6_cp310_cp310_manylinux_2_17_aarch64.manylinux2014_aarch64//file",
             ":_env_python_3.10.11_x86_64-unknown-linux-gnu": "@poetry_lock_file_wheel_regex_2024.11.6_cp310_cp310_manylinux_2_5_x86_64.manylinux1_x86_64.manylinux_2_12_x86_64.manylinux2010_x86_64//file",
-            ":_env_python_3.11.6_aarch64-apple-darwin": "@poetry_lock_file_wheel_regex_2024.11.6_cp311_cp311_macosx_11_0_arm64//file",
+            ":_env_python_3.11.6_aarch64-apple-darwin": "@poetry_lock_file_wheel_regex_2024.11.6_cp311_cp311_macosx_10_9_universal2//file",
             ":_env_python_3.11.6_aarch64-unknown-linux-gnu": "@poetry_lock_file_wheel_regex_2024.11.6_cp311_cp311_manylinux_2_17_aarch64.manylinux2014_aarch64//file",
             ":_env_python_3.11.6_x86_64-unknown-linux-gnu": "@poetry_lock_file_wheel_regex_2024.11.6_cp311_cp311_manylinux_2_17_x86_64.manylinux2014_x86_64//file",
-            ":_env_python_3.12.0_aarch64-apple-darwin": "@poetry_lock_file_wheel_regex_2024.11.6_cp312_cp312_macosx_11_0_arm64//file",
+            ":_env_python_3.12.0_aarch64-apple-darwin": "@poetry_lock_file_wheel_regex_2024.11.6_cp312_cp312_macosx_10_13_universal2//file",
             ":_env_python_3.12.0_aarch64-unknown-linux-gnu": "@poetry_lock_file_wheel_regex_2024.11.6_cp312_cp312_manylinux_2_17_aarch64.manylinux2014_aarch64//file",
             ":_env_python_3.12.0_x86_64-unknown-linux-gnu": "@poetry_lock_file_wheel_regex_2024.11.6_cp312_cp312_manylinux_2_17_x86_64.manylinux2014_x86_64//file",
         }),
@@ -103,11 +103,11 @@ def repositories():
 
     maybe(
         pypi_file,
-        name = "poetry_lock_file_wheel_regex_2024.11.6_cp310_cp310_macosx_11_0_arm64",
+        name = "poetry_lock_file_wheel_regex_2024.11.6_cp310_cp310_macosx_10_9_universal2",
         package_name = "regex",
         package_version = "2024.11.6",
-        filename = "regex-2024.11.6-cp310-cp310-macosx_11_0_arm64.whl",
-        sha256 = "164d8b7b3b4bcb2068b97428060b2a53be050085ef94eca7f240e7947f1b080e",
+        filename = "regex-2024.11.6-cp310-cp310-macosx_10_9_universal2.whl",
+        sha256 = "ff590880083d60acc0433f9c3f713c51f7ac6ebb9adf889c79a261ecf541aa91",
     )
 
     maybe(
@@ -130,11 +130,11 @@ def repositories():
 
     maybe(
         pypi_file,
-        name = "poetry_lock_file_wheel_regex_2024.11.6_cp311_cp311_macosx_11_0_arm64",
+        name = "poetry_lock_file_wheel_regex_2024.11.6_cp311_cp311_macosx_10_9_universal2",
         package_name = "regex",
         package_version = "2024.11.6",
-        filename = "regex-2024.11.6-cp311-cp311-macosx_11_0_arm64.whl",
-        sha256 = "94d87b689cdd831934fa3ce16cc15cd65748e6d689f5d2b8f4f4df2065c9fa20",
+        filename = "regex-2024.11.6-cp311-cp311-macosx_10_9_universal2.whl",
+        sha256 = "5478c6962ad548b54a591778e93cd7c456a7a29f8eca9c49e4f9a806dcc5d638",
     )
 
     maybe(
@@ -157,11 +157,11 @@ def repositories():
 
     maybe(
         pypi_file,
-        name = "poetry_lock_file_wheel_regex_2024.11.6_cp312_cp312_macosx_11_0_arm64",
+        name = "poetry_lock_file_wheel_regex_2024.11.6_cp312_cp312_macosx_10_13_universal2",
         package_name = "regex",
         package_version = "2024.11.6",
-        filename = "regex-2024.11.6-cp312-cp312-macosx_11_0_arm64.whl",
-        sha256 = "805e6b60c54bf766b251e94526ebad60b7de0c70f70a4e6210ee2891acb70bf2",
+        filename = "regex-2024.11.6-cp312-cp312-macosx_10_13_universal2.whl",
+        sha256 = "52fb28f528778f184f870b7cf8f225f5eef0a8f6e3778529bdd40c7b3920796a",
     )
 
     maybe(

@@ -1,18 +1,33 @@
 """Provides a config flag that returns the micro-level version of the selected rules_python toolchain."""
 
+load("@bazel_skylib//rules:common_settings.bzl", "BuildSettingInfo")
+load("@pythons_hub//:versions.bzl", "MINOR_MAPPING")
 load("@rules_python//python:versions.bzl", "TOOL_VERSIONS")
 
 def _rules_python_interpreter_version_impl(ctx):
-    return [
-        config_common.FeatureFlagInfo(value = ctx.attr.version),
-    ]
+    value = _flag_value(ctx.attr._python_version_flag)
+    value = MINOR_MAPPING.get(value, value)
+
+    if value not in TOOL_VERSIONS:
+        value = ctx.attr.default_version
+
+    return [config_common.FeatureFlagInfo(value = value)]
 
 _rules_python_interpreter_version = rule(
     implementation = _rules_python_interpreter_version_impl,
     attrs = {
-        "version": attr.string(mandatory = True),
+        "default_version": attr.string(mandatory = True),
+        "_python_version_flag": attr.label(
+            default = "@rules_python//python/config_settings:python_version",
+        ),
     },
 )
+
+def _flag_value(s):
+    if config_common.FeatureFlagInfo in s:
+        return s[config_common.FeatureFlagInfo].value
+    else:
+        return s[BuildSettingInfo].value
 
 def rules_python_interpreter_version(name, default_version, **kwargs):
     """Builds a target that returns the currently-selected rules_pycross toolchain version.
@@ -26,14 +41,8 @@ def rules_python_interpreter_version(name, default_version, **kwargs):
     )
     """
 
-    selects = {
-        "@rules_python//python/config_settings:is_python_%s" % version: version
-        for version in sorted(TOOL_VERSIONS)
-    }
-    selects["//conditions:default"] = default_version
-
     _rules_python_interpreter_version(
         name = name,
-        version = select(selects),
+        default_version = default_version,
         **kwargs
     )
