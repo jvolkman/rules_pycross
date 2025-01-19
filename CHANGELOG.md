@@ -6,12 +6,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [unreleased]
 
-## [0.7.0]
+## [0.7.1]
 
 ### Added
 
 - Updates to support Bazel 8.0
 - uv translator updates
+- Adds support for rules_python musl interpreter builds
 
 ### Fixed
 
@@ -123,8 +124,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 (No notes - pre-dates this file.)
 
-[unreleased]: https://github.com/jvolkman/rules_pycross/compare/v0.7.0...HEAD
-[0.7.0]: https://github.com/jvolkman/rules_pycross/compare/v0.6.1...v0.7.0
+[unreleased]: https://github.com/jvolkman/rules_pycross/compare/v0.7.1...HEAD
+[0.7.0]: https://github.com/jvolkman/rules_pycross/compare/v0.6.1...v0.7.1
 [0.6.1]: https://github.com/jvolkman/rules_pycross/compare/v0.6.0...v0.6.1
 [0.6.0]: https://github.com/jvolkman/rules_pycross/compare/v0.5.2...v0.6.0
 [0.5.3]: https://github.com/jvolkman/rules_pycross/compare/v0.5.2...v0.5.3

@@ -4,6 +4,7 @@ load(
     "@rules_pycross_internal//:defaults.bzl",
     default_glibc_version = "glibc_version",
     default_macos_version = "macos_version",
+    default_musl_version = "musl_version",
     default_platforms = "platforms",
     default_python_versions = "python_versions",
 )
@@ -20,6 +21,7 @@ def _environments_impl(module_ctx):
                 platforms = tag.platforms or default_platforms,
                 requested_python_versions = tag.python_versions or default_python_versions,
                 glibc_version = tag.glibc_version or default_glibc_version,
+                musl_version = tag.musl_version or default_musl_version,
                 macos_version = tag.macos_version or default_macos_version,
             )
 

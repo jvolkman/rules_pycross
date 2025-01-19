@@ -112,7 +112,7 @@ Create a repo containing packages described by an imported lock.
 load("@rules_pycross//pycross:workspace.bzl", "pycross_register_for_python_toolchains")
 
 pycross_register_for_python_toolchains(<a href="#pycross_register_for_python_toolchains-name">name</a>, <a href="#pycross_register_for_python_toolchains-python_toolchains_repo">python_toolchains_repo</a>, <a href="#pycross_register_for_python_toolchains-platforms">platforms</a>, <a href="#pycross_register_for_python_toolchains-glibc_version">glibc_version</a>,
-                                       <a href="#pycross_register_for_python_toolchains-macos_version">macos_version</a>)
+                                       <a href="#pycross_register_for_python_toolchains-musl_verison">musl_verison</a>, <a href="#pycross_register_for_python_toolchains-macos_version">macos_version</a>)
 </pre>
 
 Register target environments and toolchains for a given list of Python versions.
@@ -126,6 +126,7 @@ Register target environments and toolchains for a given list of Python versions.
 | <a id="pycross_register_for_python_toolchains-python_toolchains_repo"></a>python_toolchains_repo |  a label to the registered rules_python tolchain repo.   |  none |
 | <a id="pycross_register_for_python_toolchains-platforms"></a>platforms |  an optional list of platforms to support (e.g., "x86_64-unknown-linux-gnu"). By default, all platforms supported by rules_python are registered.   |  `None` |
 | <a id="pycross_register_for_python_toolchains-glibc_version"></a>glibc_version |  the maximum supported GLIBC version.   |  `None` |
+| <a id="pycross_register_for_python_toolchains-musl_verison"></a>musl_verison |  the maximum supported musl version.   |  `None` |
 | <a id="pycross_register_for_python_toolchains-macos_version"></a>macos_version |  the maximum supported macOS version.   |  `None` |
 
 
