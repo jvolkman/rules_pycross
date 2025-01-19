@@ -7,6 +7,8 @@ DEFAULT_MACOS_VERSION = "12.0"
 # Use https://github.com/mayeut/pep600_compliance to keep this reasonable.
 DEFAULT_GLIBC_VERSION = "2.28"
 
+DEFAULT_MUSL_VERSION = "1.2"
+
 CREATE_ENVIRONMENTS_ATTRS = dict(
     python_versions = attr.string_list(
         doc = (
@@ -30,6 +32,13 @@ CREATE_ENVIRONMENTS_ATTRS = dict(
             "All versions from 2.5 through this version will be supported. For example, if this " +
             "value is set to 2.15, wheels tagged manylinux_2_5, manylinux_2_6, ..., " +
             "manylinux_2_15 will be accepted. Defaults to '{}' if unspecified.".format(DEFAULT_GLIBC_VERSION)
+        ),
+    ),
+    musl_version = attr.string(
+        doc = (
+            "The musl version to accept for Bazel platforms that match the " +
+            "@platforms//os:linux constraint when @rules_python//python/config_settings:py_linux_libc " +
+            "is set to 'musl'. Defaults to '{}' if unspecified.".format(DEFAULT_MUSL_VERSION)
         ),
     ),
     macos_version = attr.string(

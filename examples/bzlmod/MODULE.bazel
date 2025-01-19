@@ -5,12 +5,12 @@ module(
 )
 
 bazel_dep(name = "aspect_bazel_lib", version = "2.9.4")
-bazel_dep(name = "rules_python", version = "1.0.0")
+bazel_dep(name = "rules_python", version = "1.1.0")
 
 python = use_extension("@rules_python//python/extensions:python.bzl", "python")
 python.toolchain(
     is_default = True,
-    python_version = "3.11.5",
+    python_version = "3.11.11",
 )
 use_repo(python, "python_versions")
 
@@ -20,8 +20,18 @@ local_path_override(
     path = "../..",
 )
 
-environments = use_extension("@rules_pycross//pycross/extensions:environments.bzl", "environments")
-use_repo(environments, "pycross_environments")
+pycross = use_extension("@rules_pycross//pycross/extensions:pycross.bzl", "pycross")
+pycross.configure_environments(
+    platforms = [
+        "aarch64-apple-darwin",
+        "aarch64-unknown-linux-gnu",
+        "x86_64-unknown-linux-gnu",
+        "x86_64-unknown-linux-musl",
+    ],
+    python_versions = [
+        "3.11.11",
+    ],
+)
 
 # Use the lock_import extension to import external lock files.
 lock_import = use_extension("@rules_pycross//pycross/extensions:lock_import.bzl", "lock_import")
