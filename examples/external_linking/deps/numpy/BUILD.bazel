@@ -20,12 +20,12 @@ pycross_wheel_build(
     pre_build_hooks = [
         ":gen_site_cfg",
     ],
-    sdist = "@example_lock_sdist_numpy_1.23.5//file",
+    sdist = "@pydeps//numpy:sdist",
     tags = ["manual"],
     deps = [
-        "//deps:cython",
-        "//deps:setuptools",
-        "//deps:wheel",
+        "@pydeps//:cython",
+        "@pydeps//:setuptools",
+        "@pydeps//:wheel",
     ],
 )
 

@@ -14,11 +14,11 @@ pycross_wheel_build(
     post_build_hooks = [
         "@rules_pycross//pycross/hooks:repair_wheel",
     ],
-    sdist = "@example_lock_sdist_psycopg2_2.9.5//file",
+    sdist = "@pydeps//psycopg2:sdist",
     tags = ["manual"],
     deps = [
-        "//deps:setuptools",
-        "//deps:wheel",
+        "@pydeps//:setuptools",
+        "@pydeps//:wheel",
     ],
 )
 

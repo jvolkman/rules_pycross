@@ -4,8 +4,10 @@ py_binary(
     name = "ipython",
     srcs = ["ipython.py"],
     deps = [
-        "//deps:ipython",
-        "//deps:numpy",
-        "//deps:pandas",
+        "@pydeps//:ipython",
+        "@pydeps//:numpy",
+        "@pydeps//:pandas",
+        "@pydeps//:psycopg2",
+        "@pydeps//:setproctitle",
     ],
 )
