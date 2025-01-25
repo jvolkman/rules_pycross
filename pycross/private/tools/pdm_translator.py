@@ -256,6 +256,12 @@ def translate(
     # Construct a PackageDependency and store it.
     for package in all_packages:
         for dep in package.dependencies:
+            # Note: Not all dependencies are actually required for the target environments specified
+            # in the pdm lockfile. Let X the package name of a dependency with a marker that
+            # evaluates to false for every target environment. In that case, if the lockfile has a
+            # package entry for X that is compatible with the version specifier of the dependency,
+            # we will still include the dependency in the pycross lockfile, even though it is not
+            # required by any of the target environments.
             dependency_packages = packages_by_canonical_name[package_canonical_name(dep.name)]
             for dep_pkg in dependency_packages:
                 if dep_pkg.satisfies(dep):
@@ -266,10 +272,9 @@ def translate(
                     )
                     package.resolved_dependencies.add(resolved)
                     break
-            else:
-                raise MismatchedVersionException(
-                    f"Found no packages to satisfy dependency (name={dep.name}, spec={dep.specifier})"
-                )
+
+                # Note: If we don't find a match, the dependency is not required by any of the
+                # specified target environments, assuming that pdm creates consistent lockfiles.
 
     pinned_keys: Dict[NormalizedName, PackageKey] = {}
     for pin, pin_spec in pinned_package_specs.items():
