@@ -577,5 +577,6 @@
   },
   "pins": {
     "regex": "regex@2024.11.6"
-  }
+  },
+  "python_versions": "<3.13,>=3.9"
 }

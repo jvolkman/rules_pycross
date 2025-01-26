@@ -7,6 +7,7 @@ from typing import List
 from typing import Optional
 
 import tomli
+from packaging.specifiers import SpecifierSet
 from packaging.utils import InvalidSdistFilename
 from packaging.utils import InvalidWheelFilename
 from packaging.utils import NormalizedName
@@ -55,7 +56,7 @@ class PoetryDependency:
 class PoetryPackage:
     name: NormalizedName
     version: PoetryVersion
-    python_versions: str
+    python_versions: SpecifierSet
     dependencies: List[PoetryDependency]
     files: List[PackageFile]
     resolved_dependencies: List[PackageDependency]
@@ -76,6 +77,12 @@ class PoetryPackage:
             dependencies=sorted(self.resolved_dependencies, key=lambda p: p.key),
             files=sorted(self.files, key=lambda f: f.name),
         )
+
+
+def parse_python_versions(python_versions: str) -> SpecifierSet:
+    if python_versions == "*":
+        return SpecifierSet()
+    return SpecifierSet(python_versions)
 
 
 def get_files_for_package(
@@ -150,6 +157,9 @@ def translate(
         assert file_hash.startswith("sha256:")
         return PackageFile(name=file_name, sha256=file_hash[7:])
 
+    # Grab the list of supported Python versions
+    lock_python_versions = parse_python_versions(lock_dict.get("metadata", {}).get("python-versions", ""))
+
     # First, build a list of package files.
     # There are scenarios when files for multiple versions of a package are present in the list. They'll be filtered
     # later.
@@ -165,10 +175,6 @@ def translate(
         package_name = package_canonical_name(package_listed_name)
         package_version = lock_pkg["version"]
         package_python_versions = lock_pkg["python-versions"]
-
-        if package_python_versions == "*":
-            # Special case for all python versions
-            package_python_versions = ""
 
         dependencies = []
         for name, dep_list in lock_pkg.get("dependencies", {}).items():
@@ -197,7 +203,7 @@ def translate(
             PoetryPackage(
                 name=package_name,
                 version=PoetryVersion.parse(package_version),
-                python_versions=package_python_versions,
+                python_versions=parse_python_versions(package_python_versions),
                 dependencies=dependencies,
                 files=get_files_for_package(
                     files,
@@ -252,6 +258,7 @@ def translate(
         lock_packages[lock_package.key] = lock_package
 
     return RawLockSet(
+        python_versions=lock_python_versions,
         packages=lock_packages,
         pins=pinned_keys,
     )

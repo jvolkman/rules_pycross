@@ -102,7 +102,7 @@ class Package:
         return RawPackage(
             name=self.name,
             version=self.version,
-            python_versions=str(self.python_versions),
+            python_versions=self.python_versions,
             dependencies=dependencies_without_self,
             files=sorted(self.files, key=lambda f: f.name),
         )
@@ -186,6 +186,7 @@ def validate_uv_lockfile_version(lock_dict: Dict[str, Any]) -> None:
 def translate(
     project_dict: Dict[str, Any],
     packages_list: list[Dict[str, Any]],
+    requires_python: SpecifierSet,
     default_group: bool,
     optional_groups: List[str],
     all_optional_groups: bool,
@@ -286,6 +287,7 @@ def translate(
         lock_packages[lock_package.key] = lock_package
 
     return RawLockSet(
+        python_versions=requires_python,
         packages=lock_packages,
         pins=pinned_keys,
     )
@@ -442,10 +444,12 @@ def main(args: Any) -> None:
     # backwards-compatiblity for https://github.com/astral-sh/uv/pull/5861
     distributions_list = lock_dict.get("distribution", [])
     packages_list = lock_dict.get("package", distributions_list)
+    requires_python = SpecifierSet(lock_dict.get("requires-python", ""))
 
     lock_set = translate(
         project_dict,
         packages_list,
+        requires_python,
         default_group=args.default_group,
         optional_groups=args.optional_group,
         all_optional_groups=args.all_optional_groups,
