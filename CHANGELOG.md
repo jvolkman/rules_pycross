@@ -6,6 +6,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [unreleased]
 
+### Added
+
+- When importing a lock file, only consider Python versions that match the lock file's
+  `requires-python` (or equivalent) set.
+
 ## [0.7.1]
 
 ### Added

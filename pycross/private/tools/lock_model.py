@@ -15,6 +15,7 @@ from typing import Tuple
 
 from dacite.config import Config
 from dacite.core import from_dict
+from packaging.specifiers import SpecifierSet
 from packaging.utils import canonicalize_name
 from packaging.utils import NormalizedName
 from packaging.utils import parse_sdist_filename
@@ -33,7 +34,7 @@ class _Encoder(JSONEncoder):
                 return len(val) == 0
             return False
 
-        if isinstance(o, (FileKey, PackageKey, Version)):
+        if isinstance(o, (FileKey, PackageKey, SpecifierSet, Version)):
             return str(o)
         if dataclasses.is_dataclass(o):
             # Omit None values from serialized output.
@@ -201,7 +202,7 @@ class PackageDependency:
 class RawPackage:
     name: NormalizedName
     version: Version
-    python_versions: str
+    python_versions: SpecifierSet
     dependencies: List[PackageDependency] = field(default_factory=list)
     files: List[PackageFile] = field(default_factory=list)
 
@@ -211,7 +212,7 @@ class RawPackage:
         object.__setattr__(self, "name", normalized_name)
 
         assert self.version, "The version field must be specified."
-        assert self.python_versions is not None, "The python_versions field must be specified, or an empty string."
+        assert self.python_versions is not None, "The python_versions field must be specified."
         assert self.dependencies is not None, "The dependencies field must be specified as a list."
         assert self.files, "The files field must not be empty."
 
@@ -234,8 +235,12 @@ class ResolvedPackage:
 
 @dataclass(frozen=True)
 class RawLockSet:
+    python_versions: SpecifierSet
     packages: Dict[PackageKey, RawPackage] = field(default_factory=dict)
     pins: Dict[NormalizedName, PackageKey] = field(default_factory=dict)
+
+    def __post_init__(self):
+        assert self.python_versions is not None, "The python_versions field must be specified."
 
     @property
     def __dict__(self) -> Dict[str, Any]:
@@ -247,7 +252,7 @@ class RawLockSet:
     @classmethod
     def from_json(cls, data: str) -> RawLockSet:
         parsed = json.loads(data)
-        return from_dict(RawLockSet, parsed, config=Config(cast=[Tuple, Version, PackageKey]))
+        return from_dict(RawLockSet, parsed, config=Config(cast=[Tuple, Version, PackageKey, SpecifierSet]))
 
 
 @dataclass(frozen=True)

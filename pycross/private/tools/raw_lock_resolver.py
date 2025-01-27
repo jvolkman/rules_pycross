@@ -16,7 +16,6 @@ from typing import Set
 from urllib.parse import urlparse
 
 from packaging.markers import Marker
-from packaging.specifiers import SpecifierSet
 from packaging.utils import NormalizedName
 from packaging.utils import parse_wheel_filename
 from packaging.version import Version
@@ -84,9 +83,8 @@ class GenerationContext:
 
     def check_package_compatibility(self, package: RawPackage) -> None:
         """Sanity check to make sure the requires_python attribute on each package matches our environments."""
-        spec = SpecifierSet(package.python_versions or "")
         for environment in self.target_environments:
-            if not spec.contains(environment.version):
+            if not package.python_versions.contains(environment.version):
                 raise Exception(
                     f"Package {package.name} does not support Python version {environment.version} "
                     f"in environment {environment.name}"
@@ -373,16 +371,26 @@ def collect_default_build_dependencies(lock_model: RawLockSet, build_dependencie
 
 
 def resolve(args: Any) -> ResolvedLockSet:
+    with open(args.lock_model_file, "r") as f:
+        data = f.read()
+    lock_model = RawLockSet.from_json(data)
+
     environment_pairs: List[LabelAndTargetEnv] = []
     for target_environment in args.target_environment or []:
         target_file, target_label = target_environment
         with open(target_file, "r") as f:
-            environment_pairs.append(
-                LabelAndTargetEnv(
-                    label=target_label,
-                    target_environment=TargetEnv.from_dict(json.load(f)),
-                )
+            target_env = TargetEnv.from_dict(json.load(f))
+
+        # Only consider Python versions that the lock file targets.
+        if not lock_model.python_versions.contains(target_env.version):
+            continue
+
+        environment_pairs.append(
+            LabelAndTargetEnv(
+                label=target_label,
+                target_environment=target_env,
             )
+        )
     environment_pairs.sort(key=lambda x: x.target_environment.name.lower())
     environments = [ep.target_environment for ep in environment_pairs]
 
@@ -404,10 +412,6 @@ def resolve(args: Any) -> ResolvedLockSet:
         remote_wheels=remote_wheels,
         always_include_sdist=args.always_include_sdist,
     )
-
-    with open(args.lock_model_file, "r") as f:
-        data = f.read()
-    lock_model = RawLockSet.from_json(data)
 
     # Collect package "annotations"
     annotations = collect_package_annotations(args, lock_model)

@@ -43,19 +43,24 @@ SUPPORTED_LOCK_VERSIONS = SpecifierSet("~=4.0")
 EDITABLE_PATTERN = re.compile("^ *-e +")
 
 
-def get_default_dependencies(lock: Dict[str, Any]) -> List[Requirement]:
-    deps = lock.get("project", {}).get("dependencies", [])
+def get_default_dependencies(project: Dict[str, Any]) -> List[Requirement]:
+    deps = project.get("project", {}).get("dependencies", [])
     return [Requirement(dep) for dep in deps]
 
 
-def get_optional_dependencies(lock: Dict[str, Any]) -> Dict[str, List[Requirement]]:
-    dep_groups = lock.get("project", {}).get("optional-dependencies", {})
+def get_optional_dependencies(project: Dict[str, Any]) -> Dict[str, List[Requirement]]:
+    dep_groups = project.get("project", {}).get("optional-dependencies", {})
     return {group: [Requirement(dep) for dep in deps] for group, deps in dep_groups.items()}
 
 
-def get_development_dependencies(lock: Dict[str, Any]) -> Dict[str, List[Requirement]]:
-    dep_groups = lock.get("tool", {}).get("pdm", {}).get("dev-dependencies", {})
+def get_development_dependencies(project: Dict[str, Any]) -> Dict[str, List[Requirement]]:
+    dep_groups = project.get("tool", {}).get("pdm", {}).get("dev-dependencies", {})
     return {group: [Requirement(EDITABLE_PATTERN.sub("", dep)) for dep in deps] for group, deps in dep_groups.items()}
+
+
+def get_requires_python(project: Dict[str, Any]) -> SpecifierSet:
+    requires_python = project.get("project", {}).get("requires-python", "")
+    return SpecifierSet(requires_python)
 
 
 def _print_warn(msg):
@@ -97,7 +102,7 @@ class PDMPackage:
         return RawPackage(
             name=self.name,
             version=self.version,
-            python_versions=str(self.python_versions),
+            python_versions=self.python_versions,
             dependencies=dependencies_without_self,
             files=sorted(self.files, key=lambda f: f.name),
         )
@@ -178,6 +183,7 @@ def translate(
     default_dependencies = get_default_dependencies(project_dict)
     optional_dependencies = get_optional_dependencies(project_dict)
     development_dependencies = get_development_dependencies(project_dict)
+    lock_python_versions = get_requires_python(project_dict)
 
     if default_group:
         requirements.extend(default_dependencies)
@@ -296,6 +302,7 @@ def translate(
         lock_packages[lock_package.key] = lock_package
 
     return RawLockSet(
+        python_versions=lock_python_versions,
         packages=lock_packages,
         pins=pinned_keys,
     )
