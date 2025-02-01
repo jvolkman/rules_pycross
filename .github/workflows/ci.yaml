@@ -37,6 +37,7 @@ jobs:
         ]
       folders: |
         [
+          "e2e/toolchains_llvm",
           "e2e/pdm/always_build",
           "e2e/pdm/build_wheel",
           "e2e/pdm/local_wheel",
