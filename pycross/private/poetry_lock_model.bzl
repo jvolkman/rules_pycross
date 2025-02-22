@@ -69,22 +69,20 @@ def lock_repo_model_poetry(*, project_file, lock_file, default = True, optional_
         all_optional_groups = all_optional_groups,
     ))
 
-def repo_create_poetry_model(rctx, params, output):
+def repo_create_poetry_model(rctx, project_file, lock_file, lock_model, output):
     """Run the poetry lock translator.
 
     Args:
         rctx: The repository_ctx or module_ctx object.
-        params: a struct or dict containing the same attrs as the pycross_poetry_lock_model rule.
+        project_file: The pyproject.toml file.
+        lock_file: The lock file.
+        lock_model: a struct containing the same attrs as the pycross_poetry_lock_model rule.
         output: the output file.
     """
-    if type(params) == "dict":
-        attrs = struct(**params)
-    else:
-        attrs = params
     args = _handle_args(
-        attrs,
-        str(rctx.path(Label(attrs.project_file))),
-        str(rctx.path(Label(attrs.lock_file))),
+        lock_model,
+        str(rctx.path(project_file)),
+        str(rctx.path(lock_file)),
         output,
     )
 

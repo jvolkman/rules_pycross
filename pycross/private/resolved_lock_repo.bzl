@@ -25,15 +25,28 @@ exports_files([
 """
 
 def _generate_lock_model_file(rctx):
-    model_params = json.decode(rctx.attr.lock_model)
-    if model_params["model_type"] == "pdm":
-        repo_create_pdm_model(rctx, model_params, "raw_lock.json")
-    elif model_params["model_type"] == "poetry":
-        repo_create_poetry_model(rctx, model_params, "raw_lock.json")
-    elif model_params["model_type"] == "uv":
-        repo_create_uv_model(rctx, model_params, "raw_lock.json")
+    lock_model = json.decode(rctx.attr.lock_model)
+
+    if type(lock_model) == "dict":
+        lock_model = struct(**lock_model)
+
+    project_file = Label(lock_model.project_file)
+    lock_file = Label(lock_model.lock_file)
+
+    if project_file and hasattr(rctx, "watch"):
+        rctx.watch(project_file)
+
+    if lock_file and hasattr(rctx, "watch"):
+        rctx.watch(lock_file)
+
+    if lock_model.model_type == "pdm":
+        repo_create_pdm_model(rctx, project_file, lock_file, lock_model, "raw_lock.json")
+    elif lock_model.model_type == "poetry":
+        repo_create_poetry_model(rctx, project_file, lock_file, lock_model, "raw_lock.json")
+    elif lock_model.model_type == "uv":
+        repo_create_uv_model(rctx, project_file, lock_file, lock_model, "raw_lock.json")
     else:
-        fail("Invalid model type: " + model_params["model_type"])
+        fail("Invalid model type: " + lock_model.model_type)
 
 def _generate_annotations_file(rctx):
     annotations = {p: json.decode(a) for p, a in rctx.attr.annotations.items()}
