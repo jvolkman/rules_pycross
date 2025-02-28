@@ -42,7 +42,7 @@ def _get_env_platforms(py_platform, glibc_version, musl_version, macos_version):
 
     platform_info = PLATFORMS[py_platform]
     arch = platform_info.arch
-    if py_platform.endswith("linux-gnu"):
+    if py_platform.endswith("linux-gnu") or py_platform.endswith("linux-gnu-freethreaded"):
         return ["linux_{}".format(arch)] + [
             "manylinux_2_{}_{}".format(i, arch)
             for i in range(5, glibc_micro + 1)
@@ -52,11 +52,11 @@ def _get_env_platforms(py_platform, glibc_version, musl_version, macos_version):
             "musllinux_{}_{}_{}".format(musl_major, micro, arch)
             for micro in range(musl_micro, -1, -1)
         ]
-    elif py_platform.endswith("darwin"):
+    elif py_platform.endswith("darwin") or py_platform.endswith("darwin-freethreaded"):
         if arch == "aarch64":
             arch = "arm64"
         return ["macosx_{}_{}_{}".format(macos_major, macos_micro, arch)]
-    elif py_platform.endswith("windows-msvc"):
+    elif py_platform.endswith("windows-msvc") or py_platform.endswith("windows-msvc-freethreaded"):
         return ["win_amd64"]
 
     fail("Unknown platform: {}".format(py_platform))
