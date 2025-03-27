@@ -28,4 +28,4 @@ def pycross_lock_repo(*, name, lock_model, **kwargs):
     resolved_lock_label = "@{}//:lock.json".format(resolved_repo_name)
 
     resolved_lock_repo(name = resolved_repo_name, **resolve_args)
-    package_repo(name = name, resolved_lock_file = resolved_lock_label, write_install_deps = True)
+    package_repo(name = name, resolved_lock_file = resolved_lock_label, write_install_deps = True, **render_args)
