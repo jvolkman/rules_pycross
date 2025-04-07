@@ -94,14 +94,15 @@ def _sdist_build(packages):
         "",
     ]
     for pkg in packages:
-        package_key = pkg["key"]
-        lines.extend([
-            "alias(",
-            '    name = "{}",'.format(package_key),
-            '    actual = "//_lock:_sdist_{}",'.format(package_key),
-            ")",
-            "",
-        ])
+        if pkg.get("sdist_file", {}).get("key"):
+            package_key = pkg["key"]
+            lines.extend([
+                "alias(",
+                '    name = "{}",'.format(package_key),
+                '    actual = "//_lock:_sdist_{}",'.format(package_key),
+                ")",
+                "",
+            ])
 
     return "\n".join(lines) + "\n"
 
