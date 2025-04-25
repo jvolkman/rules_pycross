@@ -95,6 +95,7 @@ def repo_create_uv_model(rctx, project_file, lock_file, lock_model, output):
         output: the output file.
     """
 
+    rctx.watch(lock_file)
     args = _handle_args(
         lock_model,
         str(rctx.path(project_file)),

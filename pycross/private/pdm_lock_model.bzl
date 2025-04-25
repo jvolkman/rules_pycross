@@ -94,6 +94,7 @@ def repo_create_pdm_model(rctx, project_file, lock_file, lock_model, output):
         lock_model: a struct containing the same attrs as the pycross_pdm_lock_model rule.
         output: the output file.
     """
+    rctx.watch(lock_file)
     args = _handle_args(
         lock_model,
         str(rctx.path(project_file)),
