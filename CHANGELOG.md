@@ -6,10 +6,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [unreleased]
 
+## [0.8.0]
+
 ### Added
 
 - When importing a lock file, only consider Python versions that match the lock file's
   `requires-python` (or equivalent) set.
+
+### Fixed
+
+- Correctly detect changes to lock files in Bazel 8
+- Improved support for -freethreaded Python builds
+- Fix cases when packages don't provide sdists
+- Fix stringify bug in exception description
+- Properly pass `render_args` to `package_repo`
 
 ## [0.7.1]
 
@@ -129,7 +139,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 (No notes - pre-dates this file.)
 
-[unreleased]: https://github.com/jvolkman/rules_pycross/compare/v0.7.1...HEAD
+[unreleased]: https://github.com/jvolkman/rules_pycross/compare/v0.8.0...HEAD
+[0.8.0]: https://github.com/jvolkman/rules_pycross/compare/v0.7.1...v0.8.0
+[0.7.1]: https://github.com/jvolkman/rules_pycross/compare/v0.7.0...v0.7.1
 [0.7.0]: https://github.com/jvolkman/rules_pycross/compare/v0.6.1...v0.7.1
 [0.6.1]: https://github.com/jvolkman/rules_pycross/compare/v0.6.0...v0.6.1
 [0.6.0]: https://github.com/jvolkman/rules_pycross/compare/v0.5.2...v0.6.0
