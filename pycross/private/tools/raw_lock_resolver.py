@@ -456,7 +456,7 @@ def resolve(args: Any) -> ResolvedLockSet:
         if builds:
             raise Exception(
                 "Builds are disallowed, but the following would include pycross_wheel_build targets: "
-                f"{', '.join(builds)}"
+                f"{', '.join(str(key) for key in builds)}"
             )
 
     repos: Dict[FileKey, PackageFile] = {}
