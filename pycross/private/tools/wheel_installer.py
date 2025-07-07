@@ -1,5 +1,6 @@
 """
-A tool that invokes pypa/build to build the given sdist tarball.
+A tool that uses pypa/installer to install wheel files to a specified directory.
+The wheels may be pre-built or built from sdist tarballs using pypa/build (via wheel_builder.py).
 """
 from __future__ import annotations
 
