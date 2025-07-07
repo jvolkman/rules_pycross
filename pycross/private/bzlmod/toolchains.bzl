@@ -1,5 +1,6 @@
 """Internal extension to create pycross toolchains."""
 
+load("@bazel_features//:features.bzl", "bazel_features")
 load(
     "@rules_pycross_internal//:defaults.bzl",
     "register_toolchains",
@@ -27,6 +28,10 @@ def _toolchains_impl(module_ctx):
                 )
             else:
                 _empty_repo(name = tag.name)
+
+    if bazel_features.external_deps.extension_metadata_has_reproducible:
+        return module_ctx.extension_metadata(reproducible = True)
+    return module_ctx.extension_metadata()
 
 toolchains = module_extension(
     doc = "Create toolchains.",

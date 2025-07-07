@@ -1,5 +1,6 @@
 """The lock_file_repo extension creates repositories for an original-style Pycross .bzl lock."""
 
+load("@bazel_features//:features.bzl", "bazel_features")
 load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_file")
 load("//pycross/private:internal_repo.bzl", "exec_internal_tool")
 load("//pycross/private:lock_file_repo.bzl", "pycross_lock_file_repo")
@@ -30,6 +31,10 @@ def _lock_file_impl(module_ctx):
 
             # Create the packages repo
             pycross_lock_file_repo(name = tag.name, lock_file = tag.lock_file)
+
+    if bazel_features.external_deps.extension_metadata_has_reproducible:
+        return module_ctx.extension_metadata(reproducible = True)
+    return module_ctx.extension_metadata()
 
 # Tag classes
 _instantiate_tag = tag_class(
