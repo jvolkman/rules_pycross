@@ -10,7 +10,6 @@ import tarfile
 import tempfile
 import textwrap
 import traceback
-import warnings
 import zipfile
 from pathlib import Path
 from typing import Any
@@ -390,16 +389,14 @@ def link_native_libraries(lib_dir: Path, libraries: List[Path]) -> None:
 
 
 def extract_sdist(sdist_path: Path, sdist_dir: Path) -> Path:
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore")
-        if sdist_path.name.endswith(".tar.gz"):
-            with tarfile.open(sdist_path, "r") as f:
-                f.extractall(sdist_dir)
-        elif sdist_path.name.endswith(".zip"):
-            with zipfile.ZipFile(sdist_path, "r") as f:
-                f.extractall(sdist_dir)
-        else:
-            _error(f"Unsupported sdist format: {sdist_path}")
+    if sdist_path.name.endswith(".tar.gz"):
+        with tarfile.open(sdist_path, "r") as f:
+            f.extractall(sdist_dir)
+    elif sdist_path.name.endswith(".zip"):
+        with zipfile.ZipFile(sdist_path, "r") as f:
+            f.extractall(sdist_dir)
+    else:
+        _error(f"Unsupported sdist format: {sdist_path}")
 
     # After extraction, there should be a `packageName-version` directory
     (extracted_dir,) = sdist_dir.glob("*")
