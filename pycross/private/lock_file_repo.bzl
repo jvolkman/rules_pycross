@@ -2,6 +2,8 @@
 
 def _pycross_lock_file_repo_impl(rctx):
     lock_file_label = rctx.attr.lock_file
+    if hasattr(rctx, "watch"):
+        rctx.watch(lock_file_label)
 
     rctx.file(rctx.path("requirements.bzl"), """\
 load("{lock_file}", "PINS", "repositories")
