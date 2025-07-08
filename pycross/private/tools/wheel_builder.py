@@ -339,6 +339,9 @@ def generate_cross_sysconfig_vars(
     sysconfig_vars["LDSHARED"] = " ".join([sysconfig_vars["CC"], sysconfig_vars["LDSHAREDFLAGS"]])
     del sysconfig_vars["LDSHAREDFLAGS"]
 
+    # https://github.com/pypa/distutils/issues/283
+    sysconfig_vars["LDCXXSHARED"] = sysconfig_vars["LDSHARED"]
+
     # Add search paths for listed native deps
     for include_path in include_paths:
         sysconfig_vars["CFLAGS"] += f" -I{include_path}"
