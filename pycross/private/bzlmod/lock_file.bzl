@@ -16,6 +16,8 @@ def _lock_file_impl(module_ctx):
     for module in module_ctx.modules:
         for tag in module.tags.instantiate:
             path = module_ctx.path(tag.lock_file)
+            if hasattr(module_ctx, "watch"):
+                module_ctx.watch(tag.lock_file)
             result = exec_internal_tool(module_ctx, tool, [path], quiet = True)
             repos = json.decode(result.stdout)
 
