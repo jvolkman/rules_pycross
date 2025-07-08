@@ -9,6 +9,7 @@ bzl_library(
     deps = [
         ":tag_attrs",
         "//pycross/private:toolchain_helpers",
+        "@bazel_features//:features",
         "@rules_pycross_internal//:defaults.bzl",
     ],
 )
@@ -21,6 +22,7 @@ bzl_library(
         "//pycross/private:internal_repo",
         "//pycross/private:pycross_deps.lock",
         "//pycross/private:pycross_deps_core.lock",
+        "@bazel_features//:features",
     ],
 )
 
@@ -53,6 +55,7 @@ bzl_library(
     srcs = ["toolchains.bzl"],
     deps = [
         "//pycross/private:toolchain_helpers",
+        "@bazel_features//:features",
     ],
 )
 
@@ -75,6 +78,7 @@ bzl_library(
         "//pycross/private:internal_repo",
         "//pycross/private:lock_file_repo",
         "//pycross/private:pypi_file",
+        "@bazel_features//:features",
     ] + REPO_HTTP_DEPS,
 )
 

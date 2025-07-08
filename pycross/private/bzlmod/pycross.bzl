@@ -1,5 +1,6 @@
 """Pycross internal deps."""
 
+load("@bazel_features//:features.bzl", "bazel_features")
 load("//pycross/private:internal_repo.bzl", "create_internal_repo")
 load("//pycross/private:pycross_deps.lock.bzl", pypi_all_repositories = "repositories")
 load("//pycross/private:pycross_deps_core.lock.bzl", core_files = "FILES")
@@ -59,6 +60,10 @@ def _pycross_impl(module_ctx):
         wheels = core_files,
         **(environments_attrs | toolchains_attrs)
     )
+
+    if bazel_features.external_deps.extension_metadata_has_reproducible:
+        return module_ctx.extension_metadata(reproducible = True)
+    return module_ctx.extension_metadata()
 
 pycross = module_extension(
     doc = "Configure rules_pycross.",

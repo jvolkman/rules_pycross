@@ -1,5 +1,6 @@
 """The environments extension creates target environment definitions."""
 
+load("@bazel_features//:features.bzl", "bazel_features")
 load(
     "@rules_pycross_internal//:defaults.bzl",
     default_glibc_version = "glibc_version",
@@ -24,6 +25,10 @@ def _environments_impl(module_ctx):
                 musl_version = tag.musl_version or default_musl_version,
                 macos_version = tag.macos_version or default_macos_version,
             )
+
+    if bazel_features.external_deps.extension_metadata_has_reproducible:
+        return module_ctx.extension_metadata(reproducible = True)
+    return module_ctx.extension_metadata()
 
 environments = module_extension(
     doc = "Create target environments.",
