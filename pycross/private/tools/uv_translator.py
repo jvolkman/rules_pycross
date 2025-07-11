@@ -13,6 +13,7 @@ from urllib.parse import unquote
 from urllib.parse import urlparse
 
 import tomli
+from packaging.markers import Marker
 from packaging.requirements import Requirement
 from packaging.specifiers import SpecifierSet
 from packaging.utils import NormalizedName
@@ -365,12 +366,8 @@ def collect_and_process_packages(packages_list: list[Dict[str, Any]]) -> Dict[Pa
         package_listed_name = lock_pkg["name"]
         package_name = package_canonical_name(package_listed_name)
         package_version = lock_pkg["version"]
-        package_requires_python = lock_pkg.get("requires_python", "")
+        package_requires_python = resolve_package_requires_python(lock_pkg.get("resolution-markers", []))
         package_extras = lock_pkg.get("extras", [])
-
-        if package_requires_python == "*":
-            # Special case for all python versions
-            package_requires_python = ""
 
         optional_deps = []
         for dep in lock_pkg.get("optional-dependencies", {}).values():
@@ -407,7 +404,7 @@ def collect_and_process_packages(packages_list: list[Dict[str, Any]]) -> Dict[Pa
         package = Package(
             name=package_name,
             version=Version(package_version),
-            python_versions=SpecifierSet(package_requires_python),
+            python_versions=package_requires_python,
             dependencies=dependencies,
             files=files,
             is_local=is_local,
@@ -419,6 +416,16 @@ def collect_and_process_packages(packages_list: list[Dict[str, Any]]) -> Dict[Pa
         else:
             distinct_packages[package.key] = package
     return distinct_packages
+
+
+def resolve_package_requires_python(markers: list[str]) -> SpecifierSet:
+    for marker in markers:
+        # Use Marker implementation details to parse marker
+        match Marker(marker)._markers:
+            case [(l, op, r)] if l.value == "python_full_version":
+                return SpecifierSet(f"{op.value} {r.value}")
+
+    return SpecifierSet()
 
 
 def validate_lockfile_version(lock_dict: Dict[str, Any]) -> None:
