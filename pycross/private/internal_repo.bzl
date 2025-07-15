@@ -114,6 +114,8 @@ def _resolve_python_interpreter(rctx):
 
     if rctx.attr.python_interpreter_target != None:
         python_interpreter = rctx.path(rctx.attr.python_interpreter_target)
+        if hasattr(rctx, "watch"):
+            rctx.watch(python_interpreter)
     elif "/" not in python_interpreter:
         found_python_interpreter = rctx.which(python_interpreter)
         if not found_python_interpreter:
