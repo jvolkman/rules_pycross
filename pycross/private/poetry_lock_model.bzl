@@ -17,6 +17,9 @@ def _handle_args(attrs, project_file, lock_file, output):
     for group in attrs.optional_groups:
         args.extend(["--optional-group", group])
 
+    if attrs.all_optional_groups:
+        args.append("--all-optional-groups")
+
     return args
 
 def _pycross_poetry_lock_model_impl(ctx):
