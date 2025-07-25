@@ -127,7 +127,8 @@ def _resolve_python_interpreter(rctx):
 def _installer_whl(wheels):
     for label, name in wheels.items():
         if name.startswith("installer-"):
-            return label
+            # use the exported alias label
+            return Label("@@" + label.repo_name + "//" + label.package)
     fail("Unable to find `installer` wheel in lock file.")
 
 def _pip_whl(wheels):
