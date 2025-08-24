@@ -1,6 +1,8 @@
 """This module implements the language-specific toolchain rule.
 """
 
+load("@rules_python//python:defs.bzl", "PyRuntimeInfo")
+
 PycrossBuildExecRuntimeInfo = provider(
     doc = "Extended information about a (exec, target) Python interpreter pair.",
     fields = {
