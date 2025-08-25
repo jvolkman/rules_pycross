@@ -38,16 +38,22 @@ def _pycross_impl(module_ctx):
     python_interpreter_target = None
     python_defs_file = None
 
-    if interpreter_tag.python_interpreter_target:
-        python_interpreter_target = interpreter_tag.python_interpreter_target
+    if interpreter_tag.use_default:
+        if interpreter_tag.python_interpreter_target or interpreter_tag.python_defs_file:
+            fail(
+                "When use_default is true, python_interpreter_target and python_defs_file must not be set",
+            )
+    else:
+        if interpreter_tag.python_interpreter_target:
+            python_interpreter_target = interpreter_tag.python_interpreter_target
 
-    if interpreter_tag.python_defs_file:
-        python_defs_file = interpreter_tag.python_defs_file
+        if interpreter_tag.python_defs_file:
+            python_defs_file = interpreter_tag.python_defs_file
 
-    if not python_interpreter_target or not python_defs_file:
-        fail(
-            "Both python_interpreter_target and python_defs_file must be set",
-        )
+        if not python_interpreter_target or not python_defs_file:
+            fail(
+                "Both python_interpreter_target and python_defs_file must be set",
+            )
 
     pypi_all_repositories()
 
@@ -80,6 +86,7 @@ pycross = module_extension(
                 "python_defs_file": attr.label(
                     doc = "A label to a .bzl file that provides py_binary and py_test.",
                 ),
+                "use_default": attr.bool(doc = "Internal tools will use the default resolved Python toolchain when enabled."),
             },
         ),
         "configure_toolchains": tag_class(
