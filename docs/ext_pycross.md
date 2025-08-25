@@ -10,7 +10,7 @@ The lock_import extension.
 pycross = use_extension("@rules_pycross//pycross/extensions:pycross.bzl", "pycross")
 pycross.configure_environments(<a href="#pycross.configure_environments-glibc_version">glibc_version</a>, <a href="#pycross.configure_environments-macos_version">macos_version</a>, <a href="#pycross.configure_environments-musl_version">musl_version</a>, <a href="#pycross.configure_environments-platforms">platforms</a>,
                                <a href="#pycross.configure_environments-python_versions">python_versions</a>)
-pycross.configure_interpreter(<a href="#pycross.configure_interpreter-python_defs_file">python_defs_file</a>, <a href="#pycross.configure_interpreter-python_interpreter_target">python_interpreter_target</a>)
+pycross.configure_interpreter(<a href="#pycross.configure_interpreter-python_defs_file">python_defs_file</a>, <a href="#pycross.configure_interpreter-python_interpreter_target">python_interpreter_target</a>, <a href="#pycross.configure_interpreter-use_default">use_default</a>)
 pycross.configure_toolchains(<a href="#pycross.configure_toolchains-register_toolchains">register_toolchains</a>)
 </pre>
 
@@ -43,6 +43,7 @@ Configure rules_pycross.
 | :------------- | :------------- | :------------- | :------------- | :------------- |
 | <a id="pycross.configure_interpreter-python_defs_file"></a>python_defs_file |  A label to a .bzl file that provides py_binary and py_test.   | <a href="https://bazel.build/concepts/labels">Label</a> | optional |  `None`  |
 | <a id="pycross.configure_interpreter-python_interpreter_target"></a>python_interpreter_target |  The label to a python executable to use for invoking internal tools.   | <a href="https://bazel.build/concepts/labels">Label</a> | optional |  `None`  |
+| <a id="pycross.configure_interpreter-use_default"></a>use_default |  Internal tools will use the default resolved Python toolchain when enabled.   | Boolean | optional |  `False`  |
 
 <a id="pycross.configure_toolchains"></a>
 
