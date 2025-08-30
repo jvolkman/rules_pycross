@@ -183,7 +183,7 @@ bzl_library(
 pycross_target_environment(
     name = "rules_pycross_deps_target_env",
     python_compatible_with = [],
-    version = "3.8.0",
+    version = "3.9.0",
     visibility = ["//visibility:public"],
 )
 
