@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import re
 from collections import defaultdict
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -27,8 +26,6 @@ from pycross.private.tools.lock_model import PackageKey
 from pycross.private.tools.lock_model import RawLockSet
 from pycross.private.tools.lock_model import RawPackage
 
-EDITABLE_PATTERN = re.compile("^ *-e +")
-
 
 class LockfileIncompatibleException(Exception):
     pass
@@ -40,28 +37,6 @@ class LockfileNotStaticException(Exception):
 
 class MismatchedVersionException(Exception):
     pass
-
-
-def get_default_dependencies(lock: Dict[str, Any]) -> List[Requirement]:
-    deps = lock.get("project", {}).get("dependencies", [])
-    return [Requirement(dep) for dep in deps]
-
-
-def get_optional_dependencies(lock: Dict[str, Any]) -> Dict[str, List[Requirement]]:
-    dep_groups = lock.get("project", {}).get("optional-dependencies", {})
-    return {group: [Requirement(dep) for dep in deps] for group, deps in dep_groups.items()}
-
-
-def get_development_dependencies(lock: Dict[str, Any]) -> Dict[str, List[Requirement]]:
-    dep_groups = lock.get("dependency-groups", {})
-    # backwards-compatiblity for https://github.com/astral-sh/uv/pull/8272
-    # see: https://docs.astral.sh/uv/concepts/projects/dependencies/#legacy-dev-dependencies
-    legacy_dev_deps = lock.get("tool", {}).get("uv", {}).get("dev-dependencies", [])
-    if legacy_dev_deps:
-        dev_deps = dep_groups.get("dev", []) + legacy_dev_deps
-        dep_groups["dev"] = list(set(dev_deps))
-
-    return {group: [Requirement(EDITABLE_PATTERN.sub("", dep)) for dep in deps] for group, deps in dep_groups.items()}
 
 
 def _print_warn(msg):
@@ -185,7 +160,7 @@ def validate_uv_lockfile_version(lock_dict: Dict[str, Any]) -> None:
 
 
 def translate(
-    project_dict: Dict[str, Any],
+    project_name: str,
     packages_list: list[Dict[str, Any]],
     requires_python: SpecifierSet,
     default_group: bool,
@@ -197,9 +172,16 @@ def translate(
 ) -> RawLockSet:
     requirements: List[Requirement] = []
 
-    default_dependencies = get_default_dependencies(project_dict)
-    optional_dependencies = get_optional_dependencies(project_dict)
-    development_dependencies = get_development_dependencies(project_dict)
+    project_info = next(pkg for pkg in packages_list if pkg["name"] == project_name)
+    default_dependencies = [Requirement(dep["name"]) for dep in project_info.get("dependencies", {})]
+    optional_dependencies = {
+        group: [Requirement(dep["name"]) for dep in deps]
+        for group, deps in project_info.get("optional-dependencies", {}).items()
+    }
+    development_dependencies = {
+        group: [Requirement(dep["name"]) for dep in deps]
+        for group, deps in project_info.get("dependency-groups", {}).items()
+    }
 
     if default_group:
         requirements.extend(default_dependencies)
@@ -444,8 +426,9 @@ def main(args: Any) -> None:
     project_files = read_files(args.project_file, args.lock_file)
 
     project_dict = project_files.project_file
-    lock_dict = project_files.lock_file
+    project_name = project_dict["project"]["name"]
 
+    lock_dict = project_files.lock_file
     validate_lockfile_version(lock_dict)
 
     # backwards-compatiblity for https://github.com/astral-sh/uv/pull/5861
@@ -454,7 +437,7 @@ def main(args: Any) -> None:
     requires_python = SpecifierSet(lock_dict.get("requires-python", ""))
 
     lock_set = translate(
-        project_dict,
+        project_name,
         packages_list,
         requires_python,
         default_group=args.default_group,
