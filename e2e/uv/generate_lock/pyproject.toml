@@ -1,0 +1,15 @@
+[project]
+name = "rules-pycross-test"
+version = "0.1.0"
+description = ""
+requires-python = ">=3.9, <3.13"
+dependencies = [
+    "regex",
+    # should NOT be in uv.lock, simulating a user adding
+    # numpy and regenerating it with BUILD.bazel
+    "numpy",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
