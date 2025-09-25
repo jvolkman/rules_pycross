@@ -1,0 +1,33 @@
+load("@rules_python//python:defs.bzl", "py_test")
+load("@uv//:requirements.bzl", "all_whl_requirements")
+
+genrule(
+    name = "generate_lock",
+    outs = ["generate_lock.sh"],
+    cmd = """
+    echo 'cd $$BUILD_WORKING_DIRECTORY && uv lock' > $@
+    """,
+    executable = True,
+)
+
+# Simulate some rule that uses requirements.bzl, e.g. Gazelle
+genrule(
+    name = "gazelle",
+    outs = ["gazelle.sh"],
+    cmd = """
+    echo 'echo {}' > $@
+    """.format(",".join(all_whl_requirements)),
+    executable = True,
+)
+
+py_test(
+    name = "test_all_whl_requirements",
+    srcs = ["@rules_pycross_e2e_shared//:test_all_whl_requirements.py"],
+    env = {
+        "ALL_WHL_REQUIREMENTS": ",".join(all_whl_requirements),
+        "EXPECTED_WHL_REQUIREMENTS": ",".join([
+            "regex",
+        ]),
+    },
+    main = "test_all_whl_requirements.py",
+)

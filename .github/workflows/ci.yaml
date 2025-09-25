@@ -51,6 +51,7 @@ jobs:
           "e2e/poetry/vendored_lock_file_workspace",
           "e2e/uv/always_build",
           "e2e/uv/build_wheel",
+          "e2e/uv/generate_lock",
           "e2e/uv/local_wheel",
           "e2e/uv/requirements",
           "e2e/uv/vendored_lock_file_bzlmod",
