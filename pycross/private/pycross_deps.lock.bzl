@@ -13,7 +13,7 @@ PINS = {
     "packaging": "packaging@23.2",
     "pip": "pip@23.3.1",
     "poetry-core": "poetry-core@1.8.1",
-    "repairwheel": "repairwheel@0.3.1",
+    "repairwheel": "repairwheel@0.3.2",
     "tomli": "tomli@2.0.1",
 }
 
@@ -74,19 +74,19 @@ def targets():
         wheel = ":_wheel_dacite@1.6.0",
     )
 
-    _delvewheel_1_11_1_deps = [
+    _delvewheel_1_11_2_deps = [
         ":pefile@2024.8.26",
     ]
 
     native.alias(
-        name = "_wheel_delvewheel@1.11.1",
-        actual = "@rules_pycross_internal_deps_wheel_delvewheel_1.11.1_py3_none_any//file",
+        name = "_wheel_delvewheel@1.11.2",
+        actual = "@rules_pycross_internal_deps_wheel_delvewheel_1.11.2_py3_none_any//file",
     )
 
     pycross_wheel_library(
-        name = "delvewheel@1.11.1",
-        deps = _delvewheel_1_11_1_deps,
-        wheel = ":_wheel_delvewheel@1.11.1",
+        name = "delvewheel@1.11.2",
+        deps = _delvewheel_1_11_2_deps,
+        wheel = ":_wheel_delvewheel@1.11.2",
     )
 
     _importlib_metadata_8_7_0_deps = [
@@ -189,8 +189,8 @@ def targets():
         wheel = ":_wheel_pyproject-hooks@1.2.0",
     )
 
-    _repairwheel_0_3_1_deps = [
-        ":delvewheel@1.11.1",
+    _repairwheel_0_3_2_deps = [
+        ":delvewheel@1.11.2",
         ":macholib@1.16.3",
         ":packaging@23.2",
         ":pefile@2024.8.26",
@@ -198,14 +198,14 @@ def targets():
     ]
 
     native.alias(
-        name = "_wheel_repairwheel@0.3.1",
-        actual = "@rules_pycross_internal_deps_wheel_repairwheel_0.3.1_py3_none_any//file",
+        name = "_wheel_repairwheel@0.3.2",
+        actual = "@rules_pycross_internal_deps_wheel_repairwheel_0.3.2_py3_none_any//file",
     )
 
     pycross_wheel_library(
-        name = "repairwheel@0.3.1",
-        deps = _repairwheel_0_3_1_deps,
-        wheel = ":_wheel_repairwheel@0.3.1",
+        name = "repairwheel@0.3.2",
+        deps = _repairwheel_0_3_2_deps,
+        wheel = ":_wheel_repairwheel@0.3.2",
     )
 
     native.alias(
@@ -264,12 +264,12 @@ def repositories():
 
     maybe(
         http_file,
-        name = "rules_pycross_internal_deps_wheel_delvewheel_1.11.1_py3_none_any",
+        name = "rules_pycross_internal_deps_wheel_delvewheel_1.11.2_py3_none_any",
         urls = [
-            "https://files.pythonhosted.org/packages/74/fb/f0a368040e51079d6e2827ce5dd8c27cc3a1182cfd5b7db2d9f9c7c0a834/delvewheel-1.11.1-py3-none-any.whl",
+            "https://files.pythonhosted.org/packages/58/44/ba50aa4c7c70b802a4335d43b6053101736a2597bbe1c10d1202600357e1/delvewheel-1.11.2-py3-none-any.whl",
         ],
-        sha256 = "dcb9e16cea3fa9df86e992c43c975e86ac8f64bce903968bc4dbfb197b673bab",
-        downloaded_file_path = "delvewheel-1.11.1-py3-none-any.whl",
+        sha256 = "0e7fcd24d4cefb3285e1e40b9873e9164ebd310f7e2597015d3b6adbd1605d01",
+        downloaded_file_path = "delvewheel-1.11.2-py3-none-any.whl",
     )
 
     maybe(
@@ -364,12 +364,12 @@ def repositories():
 
     maybe(
         http_file,
-        name = "rules_pycross_internal_deps_wheel_repairwheel_0.3.1_py3_none_any",
+        name = "rules_pycross_internal_deps_wheel_repairwheel_0.3.2_py3_none_any",
         urls = [
-            "https://files.pythonhosted.org/packages/9a/c4/a22f2a9807661d4f9375a46738695c6f2441821b78c09d3943c93875267a/repairwheel-0.3.1-py3-none-any.whl",
+            "https://files.pythonhosted.org/packages/92/e2/61fd32315057099516bf931a3d7199370fab57e4dc9fd9f8bd79dcf64115/repairwheel-0.3.2-py3-none-any.whl",
         ],
-        sha256 = "d42b00b4ce9a2a398771ddd9a554cf58390e2a982d2b1376384970b2651f3688",
-        downloaded_file_path = "repairwheel-0.3.1-py3-none-any.whl",
+        sha256 = "638770df8c5e3384bfa60220ca4f254a8243c436c8f3b649269a126ad5d71dc5",
+        downloaded_file_path = "repairwheel-0.3.2-py3-none-any.whl",
     )
 
     maybe(
