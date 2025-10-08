@@ -120,6 +120,7 @@ def _compute_environments(
                     config_setting_target = _repo_label(repo_name, "//:{}".format(config_setting_name)),
                     target_compatible_with = list(PLATFORMS[target_platform].compatible_with),
                     target_flag_values = {str(key): val for key, val in PLATFORMS[target_platform].flag_values.items()},
+                    target_settings = getattr(PLATFORMS[target_platform], "target_settings", []),
                     version = micro_version,
                     abis = [_get_abi(micro_version)],
                     platforms = env_platforms,
@@ -270,6 +271,7 @@ def _get_default_python_version_workspace(rctx, python_toolchain_repo, versions)
 _ENVIRONMENTS_BUILD_HEADER = """\
 load("{defs}", "pycross_target_environment")
 load("{ver}", "rules_python_interpreter_version")
+load("{skylib_selects}", "selects")
 
 package(default_visibility = ["//visibility:public"])
 
@@ -281,6 +283,7 @@ rules_python_interpreter_version(
 """.format(
     defs = Label("//pycross:defs.bzl"),
     ver = Label("//pycross/private:interpreter_version.bzl"),
+    skylib_selects = Label("@bazel_skylib//lib:selects.bzl"),
 )
 
 # This requires the user to provide a `default_version` value.
@@ -302,9 +305,14 @@ rules_python_interpreter_version(
 
 _ENVIRONMENT_TEMPLATE = """\
 config_setting(
-    name = {config_setting_name},
+    name = {config_setting_name} + "_inner",
     constraint_values = {target_compatible_with},
     flag_values = {{":_interpreter_version": {version}}} | {target_flag_values},
+)
+
+selects.config_setting_group(
+    name = {config_setting_name},
+    match_all = [{config_setting_name} + "_inner"] + {target_settings},
 )
 """
 
