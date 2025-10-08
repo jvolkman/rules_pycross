@@ -58,15 +58,15 @@ files = [
 
 [[package]]
 name = "delvewheel"
-version = "1.11.1"
+version = "1.11.2"
 requires_python = ">=3.9"
 summary = "Self-contained wheels for Windows"
 dependencies = [
     "pefile>=2024.8.26",
 ]
 files = [
-    {url = "https://files.pythonhosted.org/packages/6f/fb/50b5449234125677fb137ff9cf58a0945914a90888652d086b7a9a279233/delvewheel-1.11.1.tar.gz", hash = "sha256:1d0f0b9f2a8970ed1aa85b833768e05793f1ec3c53ab75b3e7d6400ea5b9b356"},
-    {url = "https://files.pythonhosted.org/packages/74/fb/f0a368040e51079d6e2827ce5dd8c27cc3a1182cfd5b7db2d9f9c7c0a834/delvewheel-1.11.1-py3-none-any.whl", hash = "sha256:dcb9e16cea3fa9df86e992c43c975e86ac8f64bce903968bc4dbfb197b673bab"},
+    {url = "https://files.pythonhosted.org/packages/58/44/ba50aa4c7c70b802a4335d43b6053101736a2597bbe1c10d1202600357e1/delvewheel-1.11.2-py3-none-any.whl", hash = "sha256:0e7fcd24d4cefb3285e1e40b9873e9164ebd310f7e2597015d3b6adbd1605d01"},
+    {url = "https://files.pythonhosted.org/packages/e0/e1/cf5ee89909c955d434896c73172be835fb114041367c94216c043b77a2e1/delvewheel-1.11.2.tar.gz", hash = "sha256:a9abf51b01871fa717efca0138bbaebb5aa88cc9dc36e26af37d1045eadefc2f"},
 ]
 
 [[package]]
@@ -165,7 +165,7 @@ files = [
 
 [[package]]
 name = "repairwheel"
-version = "0.3.1"
+version = "0.3.2"
 requires_python = ">=3.8"
 summary = "Repair any wheel, anywhere"
 dependencies = [
@@ -176,8 +176,8 @@ dependencies = [
     "pyelftools>=0.24",
 ]
 files = [
-    {url = "https://files.pythonhosted.org/packages/9a/c4/a22f2a9807661d4f9375a46738695c6f2441821b78c09d3943c93875267a/repairwheel-0.3.1-py3-none-any.whl", hash = "sha256:d42b00b4ce9a2a398771ddd9a554cf58390e2a982d2b1376384970b2651f3688"},
-    {url = "https://files.pythonhosted.org/packages/ec/6c/2cf3a3c35c07109c7cded00a2ca0668dc09b83c8aa8df264db66a3228baf/repairwheel-0.3.1.tar.gz", hash = "sha256:38d7149f628971d32df6c40fc4f36ceb1be8e887a8136f269421a94b986e79ae"},
+    {url = "https://files.pythonhosted.org/packages/57/64/09a67f2c808a1e8850c5b1868c6642d834445b35f6b191c41bc807879b98/repairwheel-0.3.2.tar.gz", hash = "sha256:7aa4870d82ff4d1845608c8b9c30338ea55747b2405584fe0e4d4016acc228ac"},
+    {url = "https://files.pythonhosted.org/packages/92/e2/61fd32315057099516bf931a3d7199370fab57e4dc9fd9f8bd79dcf64115/repairwheel-0.3.2-py3-none-any.whl", hash = "sha256:638770df8c5e3384bfa60220ca4f254a8243c436c8f3b649269a126ad5d71dc5"},
 ]
 
 [[package]]
