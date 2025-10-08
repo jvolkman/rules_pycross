@@ -2,7 +2,7 @@
 
 load(":util.bzl", "BZLMOD")
 
-DEFAULT_MACOS_VERSION = "12.0"
+DEFAULT_MACOS_VERSION = "15.0"
 
 # Use https://github.com/mayeut/pep600_compliance to keep this reasonable.
 DEFAULT_GLIBC_VERSION = "2.28"
