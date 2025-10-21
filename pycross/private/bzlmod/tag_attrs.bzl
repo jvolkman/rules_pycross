@@ -62,6 +62,9 @@ PACKAGE_ATTRS = dict(
     install_exclude_globs = attr.string_list(
         doc = "A list of globs for files to exclude during installation.",
     ),
+    post_install_patches = attr.string_list(
+        doc = "A list of patches to apply after wheel installation.",
+    ),
 )
 
 CREATE_ENVIRONMENTS_ATTRS = _CREATE_ENVIRONMENTS_ATTRS

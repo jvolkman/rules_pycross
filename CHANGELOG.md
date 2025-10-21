@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [unreleased]
 
+### Added
+
+- Adds `post_install_patches` to apply patches after installation of wheels.
+
 ## [0.8.0]
 
 ### Added

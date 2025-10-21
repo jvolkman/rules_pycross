@@ -18,8 +18,9 @@ def _pycross_wheel_library_impl(ctx):
     args = ctx.actions.args().use_param_file("--flagfile=%s")
     args.add("--wheel", wheel_file)
     args.add("--directory", out.path)
+    args.add_all("--patch", ctx.files.post_install_patches)
 
-    inputs = [wheel_file]
+    inputs = [wheel_file] + ctx.files.post_install_patches
     if name_file:
         inputs.append(name_file)
         args.add("--wheel-name-file", name_file)
@@ -105,6 +106,10 @@ pycross_wheel_library = rule(
         ),
         "install_exclude_globs": attr.string_list(
             doc = "A list of globs for files to exclude during installation.",
+        ),
+        "post_install_patches": attr.label_list(
+            doc = "A list of patches to apply after installation.",
+            allow_files = True,
         ),
         "enable_implicit_namespace_pkgs": attr.bool(
             default = True,

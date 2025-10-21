@@ -231,6 +231,7 @@ class ResolvedPackage:
     environment_files: Dict[str, FileReference] = field(default_factory=dict)
     sdist_file: Optional[FileReference] = None
     install_exclude_globs: List[str] = field(default_factory=list)
+    post_install_patches: List[str] = field(default_factory=list)
 
 
 @dataclass(frozen=True)

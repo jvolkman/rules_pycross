@@ -7,6 +7,7 @@ from __future__ import annotations
 import fnmatch
 import os
 import shutil
+import subprocess
 import tempfile
 import zipfile
 from contextlib import contextmanager
@@ -75,6 +76,11 @@ class FilteredWheelFile(WheelFile):
         return True
 
 
+def apply_patches(lib_dir: Path, patches: List[str]) -> None:
+    for patch in patches:
+        subprocess.check_call(["patch", "-p1", "-d", lib_dir, "-i", os.path.abspath(patch)])
+
+
 def main(args: Any) -> None:
     dest_dir = args.directory
     lib_dir = dest_dir / "site-packages"
@@ -115,6 +121,7 @@ def main(args: Any) -> None:
         shutil.rmtree(link_dir, ignore_errors=True)
 
     setup_namespace_pkg_compatibility(lib_dir)
+    apply_patches(lib_dir, args.patches)
 
 
 def parse_flags() -> Any:
@@ -146,6 +153,14 @@ def parse_flags() -> Any:
         dest="install_exclude_globs",
         default=[],
         help="A glob for files to exclude during installation.",
+    )
+
+    parser.add_argument(
+        "--patch",
+        action="append",
+        dest="patches",
+        default=[],
+        help="A list of patches to apply after installation.",
     )
 
     parser.add_argument(

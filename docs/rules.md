@@ -195,7 +195,7 @@ pycross_wheel_build(<a href="#pycross_wheel_build-name">name</a>, <a href="#pycr
 load("@rules_pycross//pycross:defs.bzl", "pycross_wheel_library")
 
 pycross_wheel_library(<a href="#pycross_wheel_library-name">name</a>, <a href="#pycross_wheel_library-deps">deps</a>, <a href="#pycross_wheel_library-enable_implicit_namespace_pkgs">enable_implicit_namespace_pkgs</a>, <a href="#pycross_wheel_library-install_exclude_globs">install_exclude_globs</a>,
-                      <a href="#pycross_wheel_library-python_version">python_version</a>, <a href="#pycross_wheel_library-wheel">wheel</a>)
+                      <a href="#pycross_wheel_library-post_install_patches">post_install_patches</a>, <a href="#pycross_wheel_library-python_version">python_version</a>, <a href="#pycross_wheel_library-wheel">wheel</a>)
 </pre>
 
 
@@ -209,6 +209,7 @@ pycross_wheel_library(<a href="#pycross_wheel_library-name">name</a>, <a href="#
 | <a id="pycross_wheel_library-deps"></a>deps |  A list of this wheel's Python library dependencies.   | <a href="https://bazel.build/concepts/labels">List of labels</a> | optional |  `[]`  |
 | <a id="pycross_wheel_library-enable_implicit_namespace_pkgs"></a>enable_implicit_namespace_pkgs |  If true, disables conversion of native namespace packages into pkg-util style namespace packages. When set all py_binary and py_test targets must specify either `legacy_create_init=False` or the global Bazel option `--incompatible_default_to_explicit_init_py` to prevent `__init__.py` being automatically generated in every directory. This option is required to support some packages which cannot handle the conversion to pkg-util style.   | Boolean | optional |  `True`  |
 | <a id="pycross_wheel_library-install_exclude_globs"></a>install_exclude_globs |  A list of globs for files to exclude during installation.   | List of strings | optional |  `[]`  |
+| <a id="pycross_wheel_library-post_install_patches"></a>post_install_patches |  A list of patches to apply after installation.   | <a href="https://bazel.build/concepts/labels">List of labels</a> | optional |  `[]`  |
 | <a id="pycross_wheel_library-python_version"></a>python_version |  The python version required for this wheel ('PY2' or 'PY3')   | String | optional |  `""`  |
 | <a id="pycross_wheel_library-wheel"></a>wheel |  The wheel file.   | <a href="https://bazel.build/concepts/labels">Label</a> | required |  |
 
@@ -263,7 +264,7 @@ Information about a Python wheel.
 load("@rules_pycross//pycross:defs.bzl", "package_annotation")
 
 package_annotation(<a href="#package_annotation-always_build">always_build</a>, <a href="#package_annotation-build_dependencies">build_dependencies</a>, <a href="#package_annotation-build_target">build_target</a>, <a href="#package_annotation-ignore_dependencies">ignore_dependencies</a>,
-                   <a href="#package_annotation-install_exclude_globs">install_exclude_globs</a>)
+                   <a href="#package_annotation-install_exclude_globs">install_exclude_globs</a>, <a href="#package_annotation-post_install_patches">post_install_patches</a>)
 </pre>
 
 Annotations to apply to individual packages.
@@ -278,6 +279,7 @@ Annotations to apply to individual packages.
 | <a id="package_annotation-build_target"></a>build_target |  An optional override build target to use when and if this package needs to be built from source.   |  `None` |
 | <a id="package_annotation-ignore_dependencies"></a>ignore_dependencies |  A list of package keys (name or name@version) to drop from this package's set of declared dependencies.   |  `[]` |
 | <a id="package_annotation-install_exclude_globs"></a>install_exclude_globs |  A list of globs for files to exclude during installation.   |  `[]` |
+| <a id="package_annotation-post_install_patches"></a>post_install_patches |  A list of patches to apply after wheel installation.   |  `[]` |
 
 **RETURNS**
 

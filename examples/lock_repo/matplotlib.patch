@@ -1,0 +1,15 @@
+--- a/matplotlib/__init__.py
++++ b/matplotlib/__init__.py
+@@ -154,6 +154,12 @@
+ import sys
+ import tempfile
+ 
++# Python initially loaded mpl_toolkits in site-packages by pth might not be the one we need, so we explicitly reload it
++try:
++    __import__('importlib').reload(sys.modules['mpl_toolkits'])
++except:
++    pass
++
+ from packaging.version import parse as parse_version
+
+ # cbook must import matplotlib only within function

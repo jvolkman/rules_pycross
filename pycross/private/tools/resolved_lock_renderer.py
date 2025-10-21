@@ -356,6 +356,12 @@ class PackageTarget:
                 lines.append(ind(f'"{install_exclude_glob}",', 2))
             lines.append(ind("],"))
 
+        if self.package.post_install_patches:
+            lines.append(ind("post_install_patches = ["))
+            for post_install_patch in self.package.post_install_patches:
+                lines.append(ind(f'"{post_install_patch}",', 2))
+            lines.append(ind("],"))
+
         lines.append(")")
 
         return "\n".join(lines)
