@@ -5,6 +5,7 @@ The wheels may be pre-built or built from sdist tarballs using pypa/build (via w
 from __future__ import annotations
 
 import fnmatch
+import logging
 import os
 import shutil
 import tempfile
@@ -21,8 +22,15 @@ from installer.destinations import SchemeDictionaryDestination
 from installer.sources import WheelContentElement
 from installer.sources import WheelFile
 
+import patch_ng
+
 from pycross.private.tools import namespace_pkgs
 from pycross.private.tools.args import FlagFileArgumentParser
+
+logging.basicConfig()
+
+logger = logging.getLogger("patch_ng")
+logger.setLevel(logging.WARNING)
 
 
 def setup_namespace_pkg_compatibility(wheel_dir: Path) -> None:
@@ -111,6 +119,11 @@ def main(args: Any) -> None:
                     "INSTALLER": b"https://github.com/jvolkman/rules_pycross",
                 },
             )
+            if args.patches:
+                for patch in args.patches.split(";"):
+                    patch_file = patch_ng.fromfile(patch)
+                    assert patch_file
+                    assert patch_file.apply(root=dest_dir)
     finally:
         shutil.rmtree(link_dir, ignore_errors=True)
 
@@ -152,6 +165,13 @@ def parse_flags() -> Any:
         "--directory",
         type=Path,
         help="The output path.",
+    )
+
+    parser.add_argument(
+        "--patches",
+        type=str,
+        default="",
+        help="Semicolon-separated list of patch files",
     )
 
     return parser.parse_args()
