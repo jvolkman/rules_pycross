@@ -6,9 +6,6 @@ load("//pycross/private:internal_repo.bzl", "create_internal_repo")
 load("//pycross/private:pycross_deps.lock.bzl", pypi_all_repositories = "repositories")
 load("//pycross/private:pycross_deps_core.lock.bzl", core_files = "FILES")
 
-# The python_interpreter_target was previously used when pip_install was used for
-# pycross' own dependencies. Leaving it here in case we need it in the future.
-# buildifier: disable=unused-variable
 def rules_pycross_dependencies(python_interpreter_target = None, python_interpreter = None):
     # The minimal version of bazel_skylib we require
     maybe(
@@ -26,4 +23,26 @@ def rules_pycross_dependencies(python_interpreter_target = None, python_interpre
         python_interpreter_target = python_interpreter_target,
         python_interpreter = python_interpreter,
         wheels = core_files,
+    )
+
+    # TODO: patch-ng doesn't upload built wheels, only sdists, so we can't pull it
+    # normally through our rules (would create a bootstrapping problem).
+    # The library is a single file with no dependencies, we can just pull manually for now.
+    # See https://github.com/conan-io/python-patch-ng/issues/51
+    # http_archive = use_repo_rule("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
+
+    http_archive(
+        name = "patch-ng",
+        url = "https://github.com/conan-io/python-patch-ng/archive/refs/tags/1.19.0.tar.gz",
+        strip_prefix = "python-patch-ng-1.19.0",
+        build_file_content = """
+load("@rules_python//python:defs.bzl", "py_library")
+py_library(
+    name = "patch-ng",
+    srcs = [":patch_ng.py"],
+    imports = ["."],
+    visibility = ["//visibility:public"],
+)
+    """,
+        integrity = "sha256-Gb4jkHC5YiT/XZXeW+PAEGEDYc3JKvhjRYj4yYaG7wg=",
     )
