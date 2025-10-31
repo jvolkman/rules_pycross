@@ -263,14 +263,6 @@ bzl_library(
     deps = ["util"],
 )
 
-exports_files(
-    [
-        "pycross_deps_core.lock.bzl",
-        "pycross_deps.lock.bzl",
-    ],
-    visibility = ["//:__subpackages__"],
-)
-
 bzl_library(
     name = "lock_file_repo",
     srcs = ["lock_file_repo.bzl"],
@@ -282,11 +274,6 @@ bzl_library(
 )
 
 bzl_library(
-    name = "util",
-    srcs = ["util.bzl"],
-)
-
-bzl_library(
     name = "updated-pycross_deps.lock",
     srcs = ["updated-pycross_deps.lock.bzl"],
 )
@@ -294,4 +281,17 @@ bzl_library(
 bzl_library(
     name = "updated-pycross_deps_core.lock",
     srcs = ["updated-pycross_deps_core.lock.bzl"],
+)
+
+bzl_library(
+    name = "util",
+    srcs = ["util.bzl"],
+)
+
+exports_files(
+    [
+        "pycross_deps_core.lock.bzl",
+        "pycross_deps.lock.bzl",
+    ],
+    visibility = ["//:__subpackages__"],
 )

@@ -7,6 +7,16 @@ load("//pycross/private:pycross_deps.lock.bzl", pypi_all_repositories = "reposit
 load("//pycross/private:pycross_deps_core.lock.bzl", core_files = "FILES")
 
 def rules_pycross_dependencies(python_interpreter_target = None, python_interpreter = None):
+    """Runtime dependencies that users must install.
+
+    This function should be loaded and called in the user's `WORKSPACE`.
+    With `bzlmod` enabled, this function is not needed since `MODULE.bazel` handles transitive deps.
+
+    Args:
+        python_interpreter_target: Label, the python interpreter to use in label.
+        python_interpreter: str, the python interpreter to use.
+    """
+
     # The minimal version of bazel_skylib we require
     maybe(
         http_archive,
@@ -29,9 +39,8 @@ def rules_pycross_dependencies(python_interpreter_target = None, python_interpre
     # normally through our rules (would create a bootstrapping problem).
     # The library is a single file with no dependencies, we can just pull manually for now.
     # See https://github.com/conan-io/python-patch-ng/issues/51
-    # http_archive = use_repo_rule("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
-
-    http_archive(
+    maybe(
+        http_archive,
         name = "patch-ng",
         url = "https://github.com/conan-io/python-patch-ng/archive/refs/tags/1.19.0.tar.gz",
         strip_prefix = "python-patch-ng-1.19.0",

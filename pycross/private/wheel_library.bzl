@@ -18,7 +18,7 @@ def _pycross_wheel_library_impl(ctx):
     args = ctx.actions.args().use_param_file("--flagfile=%s")
     args.add("--wheel", wheel_file)
     args.add("--directory", out.path)
-    args.add_all("--patch", ctx.files.post_install_patches)
+    args.add_all(ctx.files.post_install_patches, format_each = "--patch=%s")
 
     inputs = [wheel_file] + ctx.files.post_install_patches
     if name_file:
@@ -30,11 +30,6 @@ def _pycross_wheel_library_impl(ctx):
 
     for install_exclude_glob in ctx.attr.install_exclude_globs:
         args.add("--install-exclude-glob", install_exclude_glob)
-
-    patches = ";".join([patch.path for patch in ctx.files.patches])
-    if patches:
-        inputs.extend(ctx.files.patches)
-        args.add("--patches", patches)
 
     ctx.actions.run(
         inputs = inputs,
@@ -124,10 +119,6 @@ and py_test targets must specify either `legacy_create_init=False` or the global
 `--incompatible_default_to_explicit_init_py` to prevent `__init__.py` being automatically generated in every directory.
 This option is required to support some packages which cannot handle the conversion to pkg-util style.
             """,
-        ),
-        "patches": attr.label_list(
-            doc = "Patches to apply after the wheel is installed",
-            allow_files = True,
         ),
         "python_version": attr.string(
             doc = "The python version required for this wheel ('PY2' or 'PY3')",

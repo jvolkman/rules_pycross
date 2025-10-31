@@ -73,8 +73,6 @@ http_archive = use_repo_rule("@bazel_tools//tools/build_defs/repo:http.bzl", "ht
 
 http_archive(
     name = "patch-ng",
-    url = "https://github.com/conan-io/python-patch-ng/archive/refs/tags/1.19.0.tar.gz",
-    strip_prefix = "python-patch-ng-1.19.0",
     build_file_content = """
 load("@rules_python//python:defs.bzl", "py_library")
 py_library(
@@ -85,6 +83,8 @@ py_library(
 )
 """,
     integrity = "sha256-Gb4jkHC5YiT/XZXeW+PAEGEDYc3JKvhjRYj4yYaG7wg=",
+    strip_prefix = "python-patch-ng-1.19.0",
+    url = "https://github.com/conan-io/python-patch-ng/archive/refs/tags/1.19.0.tar.gz",
 )
 
 # Currently development-only

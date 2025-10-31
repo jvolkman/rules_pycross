@@ -8,7 +8,6 @@ import fnmatch
 import logging
 import os
 import shutil
-import subprocess
 import tempfile
 import zipfile
 from contextlib import contextmanager
@@ -18,20 +17,14 @@ from typing import Iterator
 from typing import List
 from typing import Union
 
+import patch_ng
 from installer import install
 from installer.destinations import SchemeDictionaryDestination
 from installer.sources import WheelContentElement
 from installer.sources import WheelFile
 
-import patch_ng
-
 from pycross.private.tools import namespace_pkgs
 from pycross.private.tools.args import FlagFileArgumentParser
-
-logging.basicConfig()
-
-logger = logging.getLogger("patch_ng")
-logger.setLevel(logging.WARNING)
 
 
 def setup_namespace_pkg_compatibility(wheel_dir: Path) -> None:
@@ -86,7 +79,9 @@ class FilteredWheelFile(WheelFile):
 
 def apply_patches(lib_dir: Path, patches: List[str]) -> None:
     for patch in patches:
-        subprocess.check_call(["patch", "-p1", "-d", lib_dir, "-i", os.path.abspath(patch)])
+        patch_file = patch_ng.fromfile(patch)
+        assert patch_file
+        patch_file.apply(root=lib_dir)
 
 
 def main(args: Any) -> None:
@@ -125,11 +120,6 @@ def main(args: Any) -> None:
                     "INSTALLER": b"https://github.com/jvolkman/rules_pycross",
                 },
             )
-            if args.patches:
-                for patch in args.patches.split(";"):
-                    patch_file = patch_ng.fromfile(patch)
-                    assert patch_file
-                    assert patch_file.apply(root=dest_dir)
     finally:
         shutil.rmtree(link_dir, ignore_errors=True)
 
@@ -182,15 +172,9 @@ def parse_flags() -> Any:
         help="The output path.",
     )
 
-    parser.add_argument(
-        "--patches",
-        type=str,
-        default="",
-        help="Semicolon-separated list of patch files",
-    )
-
     return parser.parse_args()
 
 
 if __name__ == "__main__":
+    logging.getLogger("patch_ng").setLevel(logging.WARNING)
     main(parse_flags())
