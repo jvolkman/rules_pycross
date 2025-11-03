@@ -193,6 +193,7 @@ class PackageAnnotations:
     always_build: bool = False
     ignore_dependencies: Set[str] = field(default_factory=set)
     install_exclude_globs: Set[str] = field(default_factory=set)
+    post_install_patches: List[str] = field(default_factory=list)
 
 
 class PackageResolver:
@@ -216,6 +217,7 @@ class PackageResolver:
 
         self._build_target = annotations.build_target
         self._install_exclude_globs = annotations.install_exclude_globs
+        self._post_install_patches = annotations.post_install_patches
 
         deps_by_env = context.get_dependencies_by_environment(
             package,
@@ -270,6 +272,7 @@ class PackageResolver:
             build_target=self._build_target,
             sdist_file=self.sdist_file,
             install_exclude_globs=list(self._install_exclude_globs),
+            post_install_patches=self._post_install_patches,
         )
 
 
@@ -347,6 +350,9 @@ def collect_package_annotations(args: Any, lock_model: RawLockSet) -> Dict[Packa
 
         for glob in annotation.get("install_exclude_globs", []):
             annotations[resolved_pkg].install_exclude_globs.add(glob)
+
+        for patch in annotation.get("post_install_patches", []):
+            annotations[resolved_pkg].post_install_patches.append(patch)
 
     # Return as a non-default dict
     return dict(annotations)

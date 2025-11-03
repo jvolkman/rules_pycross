@@ -53,3 +53,5 @@ write_source_files(
         "poetry_lock.bzl": ":updated_poetry_lock.bzl",
     },
 )
+
+exports_files(["matplotlib.patch"])

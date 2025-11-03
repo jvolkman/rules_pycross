@@ -257,7 +257,8 @@ def package_annotation(
         build_dependencies = [],
         build_target = None,
         ignore_dependencies = [],
-        install_exclude_globs = []):
+        install_exclude_globs = [],
+        post_install_patches = []):
     """Annotations to apply to individual packages.
 
     Args:
@@ -266,6 +267,7 @@ def package_annotation(
       build_target (str, optional): An optional override build target to use when and if this package needs to be built from source.
       ignore_dependencies (list, optional): A list of package keys (name or name@version) to drop from this package's set of declared dependencies.
       install_exclude_globs (list, optional): A list of globs for files to exclude during installation.
+      post_install_patches (list, optional): A list of patches to apply after wheel installation.
 
     Returns:
       str: A json encoded string of the provided content.
@@ -276,6 +278,7 @@ def package_annotation(
         build_target = build_target,
         ignore_dependencies = ignore_dependencies,
         install_exclude_globs = install_exclude_globs,
+        post_install_patches = post_install_patches,
     ))
 
 PDM_IMPORT_ATTRS = _IMPORT_ATTRS

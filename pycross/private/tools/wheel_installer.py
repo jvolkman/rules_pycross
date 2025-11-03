@@ -5,6 +5,7 @@ The wheels may be pre-built or built from sdist tarballs using pypa/build (via w
 from __future__ import annotations
 
 import fnmatch
+import logging
 import os
 import shutil
 import tempfile
@@ -16,6 +17,7 @@ from typing import Iterator
 from typing import List
 from typing import Union
 
+import patch_ng
 from installer import install
 from installer.destinations import SchemeDictionaryDestination
 from installer.sources import WheelContentElement
@@ -75,6 +77,13 @@ class FilteredWheelFile(WheelFile):
         return True
 
 
+def apply_patches(lib_dir: Path, patches: List[str]) -> None:
+    for patch in patches:
+        patch_file = patch_ng.fromfile(patch)
+        assert patch_file
+        patch_file.apply(root=lib_dir)
+
+
 def main(args: Any) -> None:
     dest_dir = args.directory
     lib_dir = dest_dir / "site-packages"
@@ -115,6 +124,7 @@ def main(args: Any) -> None:
         shutil.rmtree(link_dir, ignore_errors=True)
 
     setup_namespace_pkg_compatibility(lib_dir)
+    apply_patches(lib_dir, args.patches)
 
 
 def parse_flags() -> Any:
@@ -149,6 +159,14 @@ def parse_flags() -> Any:
     )
 
     parser.add_argument(
+        "--patch",
+        action="append",
+        dest="patches",
+        default=[],
+        help="A list of patches to apply after installation.",
+    )
+
+    parser.add_argument(
         "--directory",
         type=Path,
         help="The output path.",
@@ -158,4 +176,5 @@ def parse_flags() -> Any:
 
 
 if __name__ == "__main__":
+    logging.getLogger("patch_ng").setLevel(logging.WARNING)
     main(parse_flags())

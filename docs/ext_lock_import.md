@@ -20,7 +20,7 @@ lock_import.import_uv(<a href="#lock_import.import_uv-all_development_groups">al
                       <a href="#lock_import.import_uv-disallow_builds">disallow_builds</a>, <a href="#lock_import.import_uv-local_wheels">local_wheels</a>, <a href="#lock_import.import_uv-lock_file">lock_file</a>, <a href="#lock_import.import_uv-optional_groups">optional_groups</a>, <a href="#lock_import.import_uv-project_file">project_file</a>, <a href="#lock_import.import_uv-repo">repo</a>,
                       <a href="#lock_import.import_uv-require_static_urls">require_static_urls</a>, <a href="#lock_import.import_uv-target_environments">target_environments</a>)
 lock_import.package(<a href="#lock_import.package-name">name</a>, <a href="#lock_import.package-always_build">always_build</a>, <a href="#lock_import.package-build_dependencies">build_dependencies</a>, <a href="#lock_import.package-build_target">build_target</a>, <a href="#lock_import.package-ignore_dependencies">ignore_dependencies</a>,
-                    <a href="#lock_import.package-install_exclude_globs">install_exclude_globs</a>, <a href="#lock_import.package-repo">repo</a>)
+                    <a href="#lock_import.package-install_exclude_globs">install_exclude_globs</a>, <a href="#lock_import.package-post_install_patches">post_install_patches</a>, <a href="#lock_import.package-repo">repo</a>)
 </pre>
 
 
@@ -114,6 +114,7 @@ Specify package-specific settings.
 | <a id="lock_import.package-build_target"></a>build_target |  An optional override build target to use when and if this package needs to be built from source.   | <a href="https://bazel.build/concepts/labels">Label</a> | optional |  `None`  |
 | <a id="lock_import.package-ignore_dependencies"></a>ignore_dependencies |  A list of package keys (name or name@version) to drop from this package's set of declared dependencies.   | List of strings | optional |  `[]`  |
 | <a id="lock_import.package-install_exclude_globs"></a>install_exclude_globs |  A list of globs for files to exclude during installation.   | List of strings | optional |  `[]`  |
+| <a id="lock_import.package-post_install_patches"></a>post_install_patches |  A list of patches to apply after wheel installation.   | List of strings | optional |  `[]`  |
 | <a id="lock_import.package-repo"></a>repo |  The repository name   | String | required |  |
 
 

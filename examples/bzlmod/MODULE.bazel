@@ -69,6 +69,13 @@ lock_import.package(
     ],
     repo = "pdm_deps",
 )
+lock_import.package(
+    name = "matplotlib",
+    post_install_patches = [
+        "@@//:matplotlib.patch",
+    ],
+    repo = "pdm_deps",
+)
 
 # The actual repos are loaded from the lock_repos extension.
 lock_repos = use_extension("@rules_pycross//pycross/extensions:lock_repos.bzl", "lock_repos")

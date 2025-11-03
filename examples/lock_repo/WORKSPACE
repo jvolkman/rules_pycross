@@ -71,6 +71,11 @@ pycross_lock_repo(
                 "wheel",
             ],
         ),
+        "matplotlib": package_annotation(
+            post_install_patches = [
+                "@rules_pycross_example//:matplotlib.patch",
+            ],
+        ),
     },
     lock_model = lock_repo_model_pdm(
         lock_file = "@//:pdm.lock",
