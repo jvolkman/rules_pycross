@@ -72,7 +72,9 @@ load("@rules_pycross_e2e_environments//:defs.bzl", "environments")
 pycross_lock_repo(
     name = "uv",
     lock_model = lock_repo_model_uv(
+        development_groups = ["dev"],
         lock_file = "@//:uv.lock",
+        optional_groups = ["yaml"],
         project_file = "@//:pyproject.toml",
     ),
     target_environments = environments,

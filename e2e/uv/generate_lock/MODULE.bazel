@@ -42,7 +42,9 @@ lock_import = use_extension("@rules_pycross//pycross/extensions:lock_import.bzl"
 
 # lock_repo with uv and some package overrides
 lock_import.import_uv(
+    development_groups = ["dev"],
     lock_file = "//:uv.lock",
+    optional_groups = ["yaml"],
     project_file = "//:pyproject.toml",
     repo = "uv",
     target_environments = ["@rules_pycross_e2e_environments//:environments"],

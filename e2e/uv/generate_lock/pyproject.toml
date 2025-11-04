@@ -2,12 +2,24 @@
 name = "rules-pycross-test"
 version = "0.1.0"
 description = ""
-requires-python = ">=3.9, <3.13"
+requires-python = ">=3.10, <3.13"
 dependencies = [
     "regex",
-    # should NOT be in uv.lock, simulating a user adding
-    # numpy and regenerating it with BUILD.bazel
+    # Should NOT be in uv.lock, simulating a user adding
+    # numpy and regenerating it with BUILD.bazel.
+    # Comment out when regenerating uv.lock.
     "numpy",
+]
+
+[project.optional-dependencies]
+yaml = [
+    "pyyaml",
+]
+
+[dependency-groups]
+dev = [
+    "pytest",
+    "ruff",
 ]
 
 [build-system]
