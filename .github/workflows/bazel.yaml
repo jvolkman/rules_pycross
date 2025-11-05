@@ -137,6 +137,7 @@ jobs:
             common --announce_rc
             common --color=yes
             common --enable_bzlmod=${{ matrix.bzlmodEnabled }}
+            test --test_output=errors
 
       - name: Configure bazelrc --enable_workspace (bazelversion >= 7.1.0)
         working-directory: ${{ matrix.folder }}
