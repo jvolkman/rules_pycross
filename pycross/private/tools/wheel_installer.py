@@ -80,8 +80,10 @@ class FilteredWheelFile(WheelFile):
 def apply_patches(lib_dir: Path, patches: List[str]) -> None:
     for patch in patches:
         patch_file = patch_ng.fromfile(patch)
-        assert patch_file
-        patch_file.apply(root=lib_dir)
+        if not patch_file:
+            raise SystemExit(f"error: failed to parse patch file: {patch}")
+        if not patch_file.apply(root=lib_dir):
+            raise SystemExit(f"error: failed to apply patch file: {patch}")
 
 
 def main(args: Any) -> None:
