@@ -180,7 +180,7 @@ def translate(
     }
     development_dependencies = {
         group: [Requirement(dep["name"]) for dep in deps]
-        for group, deps in project_info.get("dependency-groups", {}).items()
+        for group, deps in project_info.get("dev-dependencies", {}).items()
     }
 
     if default_group:
