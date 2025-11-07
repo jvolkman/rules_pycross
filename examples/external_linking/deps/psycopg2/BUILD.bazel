@@ -1,4 +1,5 @@
 load("@rules_pycross//pycross:defs.bzl", "pycross_wheel_build")
+load("@rules_python//python:defs.bzl", "py_binary")
 
 package(default_visibility = ["//visibility:public"])
 

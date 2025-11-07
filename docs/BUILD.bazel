@@ -37,5 +37,4 @@ stardoc_with_diff_test(
     bzl_library_target = "//pycross/extensions:pycross",
 )
 
-update_docs(
-)
+update_docs()

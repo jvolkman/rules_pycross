@@ -4,9 +4,6 @@ http_archive = use_repo_rule("@bazel_tools//tools/build_defs/repo:http.bzl", "ht
 
 http_archive(
     name = "postgresql",
-    urls = ["https://ftp.postgresql.org/pub/source/v15.1/postgresql-15.1.tar.bz2"],
-    sha256 = "64fdf23d734afad0dfe4077daca96ac51dcd697e68ae2d3d4ca6c45cb14e21ae",
-    strip_prefix = "postgresql-15.1",
     build_file = "//third_party/postgresql:postgresql.BUILD",
 
     # At configure time, postgres tries to compile, link, and run a simple program
@@ -36,4 +33,7 @@ http_archive(
         "rm src/common/Makefile.bak",
         "rm src/makefiles/Makefile.linux.bak",
     ],
+    sha256 = "64fdf23d734afad0dfe4077daca96ac51dcd697e68ae2d3d4ca6c45cb14e21ae",
+    strip_prefix = "postgresql-15.1",
+    urls = ["https://ftp.postgresql.org/pub/source/v15.1/postgresql-15.1.tar.bz2"],
 )

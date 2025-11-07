@@ -2,8 +2,8 @@
 # It is not intended for manual editing.
 """Pycross-generated dependency targets."""
 
-load("@@rules_pycross~override//pycross:defs.bzl", "pycross_wheel_library", "pypi_file")
 load("@bazel_tools//tools/build_defs/repo:utils.bzl", "maybe")
+load("@@rules_pycross~override//pycross:defs.bzl", "pycross_wheel_library", "pypi_file")
 
 PINS = {
     "ipython": "ipython@8.19.0",
