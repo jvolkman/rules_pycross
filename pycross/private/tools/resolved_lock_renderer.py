@@ -466,7 +466,7 @@ def gen_load_statements(imports: Set[str], pycross_repo: str) -> List[str]:
         load_statement_groups[possible_imports[i]].append(i)
 
     # External repo loads come before local loads.
-    sorted_files = sorted(load_statement_groups, key=lambda f: (0 if f.startswith("@") else 1, f))
+    sorted_files = sorted(load_statement_groups, key=lambda f: (1 if f.startswith("@@") else (0 if f.startswith("@") else 2), f))
 
     lines = []
     for file in sorted_files:
