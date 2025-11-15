@@ -18,13 +18,9 @@ local_path_override(
 
 # Third party deps
 include("//third_party/boringssl:repositories.MODULE.bazel")
-
 include("//third_party/openblas:repositories.MODULE.bazel")
-
 include("//third_party/openssl:repositories.MODULE.bazel")
-
 include("//third_party/postgresql:repositories.MODULE.bazel")
-
 include("//third_party/zlib:repositories.MODULE.bazel")
 
 python = use_extension("@rules_python//python/extensions:python.bzl", "python")

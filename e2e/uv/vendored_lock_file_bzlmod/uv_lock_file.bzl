@@ -2,9 +2,9 @@
 # It is not intended for manual editing.
 """Pycross-generated dependency targets."""
 
-load("@@rules_pycross+//pycross:defs.bzl", "pycross_wheel_library")
 load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_file")
 load("@bazel_tools//tools/build_defs/repo:utils.bzl", "maybe")
+load("@@rules_pycross+//pycross:defs.bzl", "pycross_wheel_library")
 
 PINS = {
     "regex": "regex@2024.11.6",

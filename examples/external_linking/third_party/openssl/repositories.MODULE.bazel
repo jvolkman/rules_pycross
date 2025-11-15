@@ -1,19 +1,20 @@
 """A module defining the third party dependency OpenSSL"""
 
 bazel_dep(name = "rules_perl", version = "0.2.5")
+
 http_archive = use_repo_rule("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
 
 http_archive(
     name = "openssl",
     build_file = "@//third_party/openssl:openssl.BUILD",
+    patch_args = ["-p1"],
+    patches = [
+        "//patches:openssl-mkbuildinf.patch",
+    ],
     sha256 = "83049d042a260e696f62406ac5c08bf706fd84383f945cf21bd61e9ed95c396e",
     strip_prefix = "openssl-3.0.7",
     urls = [
         "https://mirror.bazel.build/www.openssl.org/source/openssl-3.0.7.tar.gz",
         "https://www.openssl.org/source/openssl-3.0.7.tar.gz",
     ],
-    patches = [
-        "//patches:openssl-mkbuildinf.patch",
-    ],
-    patch_args = ["-p1"],
 )
