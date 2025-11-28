@@ -202,7 +202,8 @@ def get_default_build_env_vars(path_dirs: List[Path]) -> Dict[str, str]:
 def replace_path_placeholders(
     data: Dict[str, Union[str, List[str]]], placeholder: str, replacement: Path
 ) -> Dict[str, Any]:
-    replacement_str = str(replacement)
+    # Use absolute path for replacements so compiler/linker paths work from temp build dirs
+    replacement_str = str(replacement.resolve())
     if replacement_str.endswith("/"):
         replacement_str = replacement_str[:-1]
     result = {}
