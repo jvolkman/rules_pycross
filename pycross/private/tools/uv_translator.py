@@ -426,7 +426,7 @@ def main(args: Any) -> None:
     project_files = read_files(args.project_file, args.lock_file)
 
     project_dict = project_files.project_file
-    project_name = project_dict["project"]["name"]
+    project_name = package_canonical_name(project_dict["project"]["name"])
 
     lock_dict = project_files.lock_file
     validate_lockfile_version(lock_dict)
