@@ -1,5 +1,6 @@
 [project]
-name = "rules-pycross-test"
+# use underscores to test name normalization
+name = "rules_pycross_test"
 version = "0.1.0"
 description = ""
 requires-python = ">=3.10, <3.13"
