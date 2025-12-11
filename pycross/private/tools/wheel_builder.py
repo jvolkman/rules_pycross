@@ -513,8 +513,9 @@ def check_filename_against_target(wheel_name: str, target_environment: TargetEnv
 
 def find_site_dir(env_dir: Path) -> Path:
     lib_dir = env_dir / "lib"
+    pattern = "site-packages" if "win32" == sys.platform else "python*/site-packages"
     try:
-        return next(lib_dir.glob("python*/site-packages"))
+        return next(lib_dir.glob(pattern))
     except StopIteration:
         raise ValueError(f"Cannot find site-packages under {env_dir}")
 
@@ -628,7 +629,9 @@ def build_wheel(
     config_settings: Dict[str, str],
     debug: bool = False,
 ) -> Path:
-    python_exe = env_dir / "bin" / "python"
+    posix_python_exe = env_dir / "bin" / "python"
+    win_python_exe = env_dir / "scripts" / "python.exe"
+    python_exe = win_python_exe if "win32" == sys.platform else posix_python_exe
 
     def _subprocess_runner(
         cmd: Sequence[str],
