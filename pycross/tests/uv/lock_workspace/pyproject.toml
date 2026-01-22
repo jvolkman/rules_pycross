@@ -1,0 +1,19 @@
+[project]
+name = "workspace-root"
+version = "0.1.0"
+description = "Test workspace with multiple editable packages"
+requires-python = ">=3.9, <3.13"
+dependencies = [
+    "lib-a",
+    "lib-b",
+]
+
+[tool.uv]
+package = false
+
+[tool.uv.workspace]
+members = ["packages/*"]
+
+[tool.uv.sources]
+lib-a = { workspace = true }
+lib-b = { workspace = true }

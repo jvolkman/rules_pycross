@@ -1,0 +1,12 @@
+[project]
+name = "lib-a"
+version = "0.1.0"
+description = "Workspace member A"
+requires-python = ">=3.9, <3.13"
+dependencies = [
+    "regex>=2024.11.6",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"

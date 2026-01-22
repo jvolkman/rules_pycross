@@ -374,9 +374,17 @@ def collect_and_process_packages(packages_list: list[Dict[str, Any]]) -> Dict[Pa
 
         files = {parse_file_info(f) for f in files}
 
-        is_local_sdist = lock_pkg.get("sdist") == {"path": "."}
-        is_local_editable = lock_pkg.get("source") == {"editable": "."}
-        is_local_virtual = lock_pkg.get("source") == {"virtual": "."}
+        source = lock_pkg.get("source", {})
+        sdist = lock_pkg.get("sdist", {})
+
+        # Check for editable source (any path value)
+        is_local_editable = "editable" in source and isinstance(source.get("editable"), str)
+
+        # Check for virtual source (any path value)
+        is_local_virtual = "virtual" in source and isinstance(source.get("virtual"), str)
+
+        # Check for sdist with path (not URL-based - local sdists have "path" but not "url")
+        is_local_sdist = isinstance(sdist, dict) and "path" in sdist and "url" not in sdist
 
         is_local = is_local_sdist or is_local_editable or is_local_virtual
 
