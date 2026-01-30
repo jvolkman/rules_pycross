@@ -1,0 +1,32 @@
+"""
+Test that uv workspace members with editable dependencies at arbitrary paths
+are correctly detected as local packages and elided from the output.
+
+This test covers:
+- `source = { editable = "./packages/lib-a" }` (workspace member)
+- `source = { editable = "./packages/lib-b" }` (workspace member)
+- `source = { virtual = "." }` (root virtual package)
+"""
+
+load("@aspect_bazel_lib//lib:testing.bzl", "assert_json_matches")
+load("@aspect_bazel_lib//lib:write_source_files.bzl", "write_source_file")
+load("//pycross:defs.bzl", "pycross_uv_lock_model")
+
+pycross_uv_lock_model(
+    name = "lock",
+    lock_file = "uv.lock",
+    project_file = "pyproject.toml",
+)
+
+write_source_file(
+    name = "update_expected",
+    diff_test = False,
+    in_file = ":lock",
+    out_file = "expected.json",
+)
+
+assert_json_matches(
+    name = "test",
+    file1 = ":lock",
+    file2 = "expected.json",
+)

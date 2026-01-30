@@ -1,0 +1,15 @@
+[project]
+name = "lib-b"
+version = "0.1.0"
+description = "Workspace member B"
+requires-python = ">=3.9, <3.13"
+dependencies = [
+    "lib-a",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.uv.sources]
+lib-a = { workspace = true }
