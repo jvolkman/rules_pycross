@@ -175,6 +175,20 @@ def translate(
         package_name = package_canonical_name(package_listed_name)
         package_version = lock_pkg["version"]
         package_python_versions = lock_pkg["python-versions"]
+        package_source = lock_pkg.get("source", {})
+        package_source_type = package_source.get("type", None)
+
+        # Poetry records non-index packages in poetry.lock, and path dependencies are represented
+        # as:
+        #
+        #     [package.source]
+        #     type = "directory"
+        #
+        # We skip these as we let the user handle them directly in Bazel.
+        if package_source_type == "directory":
+            continue
+        # FIXME: We should probably warn the user if we encounter a non-index package that's not
+        #        just a directory as it may fail to fetch or resolve later.
 
         dependencies = []
         for name, dep_list in lock_pkg.get("dependencies", {}).items():
