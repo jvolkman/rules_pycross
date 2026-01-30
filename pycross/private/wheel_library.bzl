@@ -1,6 +1,7 @@
 """Implementation of the pycross_wheel_library rule."""
 
 load("@bazel_skylib//lib:paths.bzl", "paths")
+load("@bazel_skylib//rules:common_settings.bzl", "BuildSettingInfo")
 load("@rules_python//python:py_info.bzl", "PyInfo")
 load(":providers.bzl", "PycrossWheelInfo")
 
@@ -25,7 +26,10 @@ def _pycross_wheel_library_impl(ctx):
         inputs.append(name_file)
         args.add("--wheel-name-file", name_file)
 
-    if ctx.attr.enable_implicit_namespace_pkgs:
+    enable_implicit_namespace_pkgs = (
+        ctx.attr.enable_implicit_namespace_pkgs if enable_implicit_namespace_pkgs == -1 else ctx.attr._default_enable_implicit_namespace_pkgs[BuildSettingInfo].value
+    )
+    if enable_implicit_namespace_pkgs:
         args.add("--enable-implicit-namespace-pkgs")
 
     for install_exclude_glob in ctx.attr.install_exclude_globs:
@@ -111,13 +115,14 @@ pycross_wheel_library = rule(
             doc = "A list of patches to apply after installation.",
             allow_files = True,
         ),
-        "enable_implicit_namespace_pkgs": attr.bool(
-            default = True,
+        "enable_implicit_namespace_pkgs": attr.int(
+            default = -1,
             doc = """
 If true, disables conversion of native namespace packages into pkg-util style namespace packages. When set all py_binary
 and py_test targets must specify either `legacy_create_init=False` or the global Bazel option
 `--incompatible_default_to_explicit_init_py` to prevent `__init__.py` being automatically generated in every directory.
-This option is required to support some packages which cannot handle the conversion to pkg-util style.
+This option is required to support some packages which cannot handle the conversion to pkg-util style. The default is
+derived from the flag `@rules_pycross//config_settings:default_enable_implicit_namespace_pkgs`.
             """,
         ),
         "python_version": attr.string(
@@ -128,6 +133,9 @@ This option is required to support some packages which cannot handle the convers
             default = Label("//pycross/private/tools:wheel_installer"),
             cfg = "exec",
             executable = True,
+        ),
+        "_default_enable_implicit_namespace_pkgs": attr.label(
+            default = "//config_settings:default_enable_implicit_namespace_pkgs",
         ),
     },
 )

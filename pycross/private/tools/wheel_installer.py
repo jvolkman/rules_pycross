@@ -125,7 +125,9 @@ def main(args: Any) -> None:
     finally:
         shutil.rmtree(link_dir, ignore_errors=True)
 
-    setup_namespace_pkg_compatibility(lib_dir)
+    if not args.enable_implicit_namespace_pkgs:
+        setup_namespace_pkg_compatibility(lib_dir)
+
     apply_patches(lib_dir, args.patches)
 
 
