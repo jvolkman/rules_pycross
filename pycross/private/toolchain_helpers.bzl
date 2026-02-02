@@ -425,6 +425,16 @@ def _pycross_environment_repo_impl(rctx):
     for env in computed_environments:
         root_build_sections.append(_ENVIRONMENT_TEMPLATE.format(**{k: repr(v) for k, v in env.items()}))
 
+    root_build_sections.append("# A convenience config_setting_group to allow users to declare compatibility with")
+    root_build_sections.append("# any platform with a pycross environment configured.")
+    root_build_sections.append("selects.config_setting_group(")
+    root_build_sections.append('    name = "any_environment",')
+    root_build_sections.append("    match_any = [")
+    for env in computed_environments:
+        root_build_sections.append("        {},".format(repr(env["config_setting_name"])))
+    root_build_sections.append("    ],")
+    root_build_sections.append(")")
+
     root_build_sections.append("filegroup(")
     root_build_sections.append('    name = "environments",')
     root_build_sections.append("    srcs = [")
