@@ -432,6 +432,7 @@ def _pycross_environment_repo_impl(rctx):
         root_build_sections.append("        {},".format(repr(env["output"])))
     root_build_sections.append("    ]")
     root_build_sections.append(")")
+    root_build_sections.append("exports_files(glob([\"*.json\"]))")
 
     rctx.file(rctx.path("BUILD.bazel"), "\n".join(root_build_sections))
 
