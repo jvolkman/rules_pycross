@@ -16,6 +16,7 @@ load(
 load(":providers.bzl", "PycrossWheelInfo")
 
 PYTHON_TOOLCHAIN_TYPE = Label("@rules_python//python:toolchain_type")
+PYTHON_VERSION_FLAG = "@rules_python//python/config_settings:python_version"
 PYCROSS_TOOLCHAIN_TYPE = Label("//pycross:toolchain_type")
 
 def _absolute_tool_value(workspace_name, value):
@@ -365,6 +366,19 @@ def _pycross_toolchains():
     else:
         return [PYTHON_TOOLCHAIN_TYPE] + use_cpp_toolchain()
 
+def _python_version_transition_impl(_, attr):
+    if attr.python_version:
+        return {
+            PYTHON_VERSION_FLAG: attr.python_version,
+        }
+    return {}
+
+python_version_transition = transition(
+    implementation = _python_version_transition_impl,
+    inputs = [],
+    outputs = [PYTHON_VERSION_FLAG],
+)
+
 pycross_wheel_build = rule(
     implementation = _pycross_wheel_build_impl,
     attrs = {
@@ -420,6 +434,10 @@ pycross_wheel_build = rule(
             ),
             cfg = "exec",
         ),
+        "python_version": attr.string(
+            doc = "The python version to use for building the wheel in X.Y or X.Y.Z format. " +
+                  "There must be a configured toolchain that matches the requested Python version.",
+        ),
         "copts": attr.string_list(
             doc = "Additional C compiler options.",
             default = [],
@@ -440,4 +458,5 @@ pycross_wheel_build = rule(
     toolchains = _pycross_toolchains(),
     fragments = ["cpp"],
     host_fragments = ["cpp"],
+    cfg = python_version_transition,
 )
