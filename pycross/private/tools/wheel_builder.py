@@ -567,9 +567,7 @@ def build_cross_venv(
         crossenv_env = dict(os.environ)
         existing_pythonpath = crossenv_env.get("PYTHONPATH", "")
         non_stdlib_str = os.pathsep.join(non_stdlib)
-        crossenv_env["PYTHONPATH"] = (
-            non_stdlib_str + (os.pathsep + existing_pythonpath if existing_pythonpath else "")
-        )
+        crossenv_env["PYTHONPATH"] = non_stdlib_str + (os.pathsep + existing_pythonpath if existing_pythonpath else "")
         subprocess.check_output(args=crossenv_args, env=crossenv_env, stderr=subprocess.STDOUT)
     except subprocess.CalledProcessError as cpe:
         print("===== CROSSENV FAILED =====", file=sys.stderr)
