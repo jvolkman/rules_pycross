@@ -6,6 +6,7 @@ import os
 import shutil
 import subprocess
 import sys
+import sysconfig
 import tarfile
 import tempfile
 import textwrap
@@ -553,7 +554,23 @@ def build_cross_venv(
                 )
 
     try:
-        subprocess.check_output(args=crossenv_args, env=os.environ, stderr=subprocess.STDOUT)
+        # The new-style rules_python bootstrap (stage2) sets sys.path in-process
+        # but does NOT update os.environ["PYTHONPATH"], so the crossenv subprocess
+        # can't find pycross. Propagate non-stdlib sys.path entries as PYTHONPATH.
+        #
+        # We exclude the current interpreter's stdlib directory (and everything
+        # under it, e.g. lib-dynload) because exec_python_exe may be a different
+        # Python version; mixing stdlib paths across versions causes C-extension
+        # magic-number mismatches (e.g. _sre.MAGIC AssertionError).
+        stdlib = sysconfig.get_path("stdlib")
+        non_stdlib = [p for p in sys.path if p and not p.startswith(stdlib)]
+        crossenv_env = dict(os.environ)
+        existing_pythonpath = crossenv_env.get("PYTHONPATH", "")
+        non_stdlib_str = os.pathsep.join(non_stdlib)
+        crossenv_env["PYTHONPATH"] = (
+            non_stdlib_str + (os.pathsep + existing_pythonpath if existing_pythonpath else "")
+        )
+        subprocess.check_output(args=crossenv_args, env=crossenv_env, stderr=subprocess.STDOUT)
     except subprocess.CalledProcessError as cpe:
         print("===== CROSSENV FAILED =====", file=sys.stderr)
         print(cpe.output.decode(), file=sys.stderr)
