@@ -68,6 +68,12 @@ def _dedupe_versions(versions):
     # ambiguous select() criteria.
     unique_versions = {}
     for version in sorted(versions):
+        # Skip versions not known to this rules_python release (e.g. EOL Python 3.8 was removed
+        # from MINOR_MAPPING in rules_python 1.9.0 but still appears in the python_versions hub's
+        # pip.bzl because that file lists all historically-supported versions).
+        if version not in MINOR_MAPPING and version not in TOOL_VERSIONS:
+            continue
+
         micro_version = _get_micro_version(version)
 
         # In sorted order, 3.10.6 will override 3.10.
