@@ -5,6 +5,7 @@ marker overrides and outputs the result of guessed markers with overrides.
 from __future__ import annotations
 
 import json
+import re
 from argparse import Namespace
 from dataclasses import dataclass
 from dataclasses import field
@@ -56,6 +57,14 @@ class Input:
         return from_dict(Input, data, config=Config(cast=[Path]))
 
 
+def _platform_sort_key(platform: str) -> tuple:
+    if platform.startswith("manylinux_2_"):
+        m = re.match(r"manylinux_2_(\d+)_", platform)
+        n = int(m.group(1)) if m else 0
+        return (0, -n, platform)
+    return (1, 0, platform)
+
+
 def _expand_manylinux_platforms(platforms: Iterable[str]) -> List[str]:
     extra_platforms = set()
     platforms = set(platforms)
@@ -63,7 +72,7 @@ def _expand_manylinux_platforms(platforms: Iterable[str]) -> List[str]:
         if platform in _MANYLINUX_ALIASES:
             extra_platforms.add(_MANYLINUX_ALIASES[platform])
     platforms.update(extra_platforms)
-    return sorted(platforms)
+    return sorted(platforms, key=_platform_sort_key)
 
 
 def create(input: Input) -> None:
