@@ -1,0 +1,7 @@
+load("@bazel_skylib//rules:common_settings.bzl", "bool_flag")
+
+bool_flag(
+    name = "default_enable_implicit_namespace_packages",
+    build_setting_default = False,
+    visibility = ["//visibility:public"],
+)
