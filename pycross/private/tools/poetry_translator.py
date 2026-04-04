@@ -145,17 +145,26 @@ def translate(
             continue
         if isinstance(pin_info, str):
             pinned_package_specs[pin] = parse_constraint(pin_info)
+        elif isinstance(pin_info, list):
+            # List-based dependencies (platform-specific URLs)
+            # Use wildcard constraint since version is resolved per-platform
+            pinned_package_specs[pin] = parse_constraint("*")
         else:
             if "path" in pin_info:
                 # Skip path dependencies.
                 continue
+            if "url" in pin_info:
+                # URL-based dependency - use wildcard since version comes from URL
+                pinned_package_specs[pin] = parse_constraint("*")
+                continue
             pinned_package_specs[pin] = parse_constraint(pin_info["version"])
 
-    def parse_file_info(file_info) -> PackageFile:
+    def parse_file_info(file_info, source_url: Optional[str] = None) -> PackageFile:
         file_name = file_info["file"]
         file_hash = file_info["hash"]
         assert file_hash.startswith("sha256:")
-        return PackageFile(name=file_name, sha256=file_hash[7:])
+        urls = (source_url,) if source_url else ()
+        return PackageFile(name=file_name, sha256=file_hash[7:], urls=urls)
 
     # Grab the list of supported Python versions
     lock_python_versions = parse_python_versions(lock_dict.get("metadata", {}).get("python-versions", ""))
@@ -176,6 +185,10 @@ def translate(
         package_version = lock_pkg["version"]
         package_python_versions = lock_pkg["python-versions"]
 
+        # Extract source URL for URL-based dependencies (e.g., platform-specific wheels)
+        source_info = lock_pkg.get("source", {})
+        source_url = source_info.get("url") if source_info.get("type") == "url" else None
+
         dependencies = []
         for name, dep_list in lock_pkg.get("dependencies", {}).items():
             # In some cases the dependency is actually a list of alternatives, each with a different
@@ -195,9 +208,10 @@ def translate(
         # In older versions of poetry the list of files was held in a metadata section at the bottom of the poetry.lock file
         # The lock file format now (as of 2022-12-16), has the files specified local to each dependency as another field.
         # Here we will check for the files being present in the new location, and if not there we fall back to the older one.
-        files = [parse_file_info(f) for f in lock_pkg.get("files", [])]
+        # Pass source_url for URL-based dependencies so the file can be fetched directly.
+        files = [parse_file_info(f, source_url=source_url) for f in lock_pkg.get("files", [])]
         if len(files) == 0:
-            files = files_by_package_name[package_listed_name]
+            files = files_by_package_name.get(package_listed_name, [])
 
         poetry_packages.append(
             PoetryPackage(
@@ -252,10 +266,82 @@ def translate(
         else:
             raise MismatchedVersionException(f"Found no packages to satisfy pin (name={pin}, spec={pin_spec})")
 
+    # For packages with URL-based files (platform-specific wheels), we need to merge
+    # ALL versions into a single package entry. This handles cases like torch where
+    # different platforms have different versions (e.g., 2.2.2 vs 2.2.2+cpu).
+    #
+    # Strategy: Group packages by name, identify URL-based ones, merge them into
+    # a single entry using the first pinned version as the canonical version.
     lock_packages = {}
+
+    # First, identify packages that have URL-based files
+    url_based_packages = set()
     for package in poetry_packages:
         lock_package = package.to_lock_package()
-        lock_packages[lock_package.key] = lock_package
+        for f in lock_package.files:
+            if f.urls:
+                url_based_packages.add(lock_package.name)
+                break
+
+    # Process packages, merging URL-based ones by name
+    merged_by_name = {}
+    for package in poetry_packages:
+        lock_package = package.to_lock_package()
+
+        if lock_package.name in url_based_packages:
+            # Merge all versions of this URL-based package by name
+            if lock_package.name in merged_by_name:
+                existing = merged_by_name[lock_package.name]
+                existing_files = set((f.name, f.sha256) for f in existing.files)
+                merged_files = list(existing.files)
+                for f in lock_package.files:
+                    if (f.name, f.sha256) not in existing_files:
+                        merged_files.append(f)
+                # Keep the existing version (pinned one will be used)
+                merged_by_name[lock_package.name] = RawPackage(
+                    name=existing.name,
+                    version=existing.version,
+                    python_versions=existing.python_versions,
+                    dependencies=existing.dependencies,
+                    files=sorted(merged_files, key=lambda f: f.name),
+                )
+            else:
+                merged_by_name[lock_package.name] = lock_package
+        else:
+            # Regular package - handle same key merging
+            if lock_package.key in lock_packages:
+                existing = lock_packages[lock_package.key]
+                existing_files = set((f.name, f.sha256) for f in existing.files)
+                merged_files = list(existing.files)
+                for f in lock_package.files:
+                    if (f.name, f.sha256) not in existing_files:
+                        merged_files.append(f)
+                lock_packages[lock_package.key] = RawPackage(
+                    name=existing.name,
+                    version=existing.version,
+                    python_versions=existing.python_versions,
+                    dependencies=existing.dependencies,
+                    files=sorted(merged_files, key=lambda f: f.name),
+                )
+            else:
+                lock_packages[lock_package.key] = lock_package
+
+    # Add merged URL-based packages with their pinned keys
+    for name, merged_pkg in merged_by_name.items():
+        # Update pinned_keys to point to the merged package's key
+        if name in pinned_keys:
+            # Update the merged package to use the pinned version's key
+            pinned_key = pinned_keys[name]
+            # Create a new package with the pinned version
+            lock_packages[pinned_key] = RawPackage(
+                name=merged_pkg.name,
+                version=pinned_key.version,
+                python_versions=merged_pkg.python_versions,
+                dependencies=merged_pkg.dependencies,
+                files=merged_pkg.files,
+            )
+        else:
+            lock_packages[merged_pkg.key] = merged_pkg
 
     return RawLockSet(
         python_versions=lock_python_versions,
