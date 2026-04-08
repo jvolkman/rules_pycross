@@ -70,7 +70,7 @@ def _lock_repos_impl(module_ctx):
                     sha256 = file["sha256"],
                 )
                 if create_tag.pypi_index:
-                    pypi_file_attrs["pypi_index"] = create_tag.pypi_index
+                    pypi_file_attrs["index"] = create_tag.pypi_index
 
                 pypi_file(**pypi_file_attrs)
 
