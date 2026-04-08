@@ -48,6 +48,19 @@ def _pypi_file_impl(ctx):
             ),
         )
 
+    # Resolve relative URLs. Artifactory anchors relative URLs to the simple
+    # index path (simple/{package}/), not to the JSON API path, so use that
+    # as the base rather than index_url.
+    if not url.startswith("http://") and not url.startswith("https://"):
+        simple_base = ctx.attr.index.rstrip("/") + "/simple/" + ctx.attr.package_name
+        base_parts = simple_base.split("/")
+        for part in url.split("/"):
+            if part == "..":
+                base_parts = base_parts[:-1]
+            elif part != ".":
+                base_parts.append(part)
+        url = "/".join(base_parts)
+
     download_info = ctx.download(
         url,
         "file/" + ctx.attr.filename,
