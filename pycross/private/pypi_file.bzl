@@ -48,6 +48,19 @@ def _pypi_file_impl(ctx):
             ),
         )
 
+    # Resolve relative URLs. These relative paths return by JSON API are the same as
+    # those returned by HTML index paths. So they are relative to the simple index path,
+    # not the JSON API path.
+    if not url.startswith("http://") and not url.startswith("https://"):
+        simple_base = ctx.attr.index.rstrip("/") + "/simple/" + ctx.attr.package_name
+        base_parts = simple_base.split("/")
+        for part in url.split("/"):
+            if part == "..":
+                base_parts = base_parts[:-1]
+            elif part != ".":
+                base_parts.append(part)
+        url = "/".join(base_parts)
+
     download_info = ctx.download(
         url,
         "file/" + ctx.attr.filename,
