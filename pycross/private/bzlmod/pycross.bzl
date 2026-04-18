@@ -51,8 +51,14 @@ def _pycross_impl(module_ctx):
 
     pypi_all_repositories()
 
-    environments_attrs = {k: getattr(environments_tag, k) for k in dir(environments_tag)}
-    toolchains_attrs = {k: getattr(toolchains_tag, k) for k in dir(toolchains_tag)}
+    environments_attrs = {
+        k: getattr(environments_tag, k)
+        for k in CREATE_ENVIRONMENTS_ATTRS.keys()
+    }
+    toolchains_attrs = {
+        k: getattr(toolchains_tag, k)
+        for k in REGISTER_TOOLCHAINS_ATTRS.keys()
+    }
 
     create_internal_repo(
         python_interpreter_target = python_interpreter_target,
