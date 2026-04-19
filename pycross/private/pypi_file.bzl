@@ -1,6 +1,6 @@
 """Rule to download files from pypi."""
 
-load("@bazel_tools//tools/build_defs/repo:utils.bzl", "update_attrs")
+load("@bazel_tools//tools/build_defs/repo:utils.bzl", "read_user_netrc", "update_attrs", "use_netrc")
 
 _PYPI_FILE_BUILD = """\
 package(default_visibility = ["//visibility:public"])
@@ -12,6 +12,8 @@ filegroup(
 
 def _pypi_file_impl(ctx):
     """Implementation of the pypi_file rule."""
+
+    netrc = read_user_netrc(ctx)
 
     index_url = ctx.attr.index
     if not index_url.endswith("/"):
@@ -25,6 +27,7 @@ def _pypi_file_impl(ctx):
     ctx.download(
         index_url,
         "pypi_metadata.json",
+        auth = use_netrc(netrc, [index_url], {}),
     )
     metadata = json.decode(ctx.read("pypi_metadata.json"))
 
@@ -52,6 +55,7 @@ def _pypi_file_impl(ctx):
         url,
         "file/" + ctx.attr.filename,
         ctx.attr.sha256,
+        auth = use_netrc(netrc, [url], {}),
     )
     ctx.file("file/BUILD.bazel", _PYPI_FILE_BUILD.format(ctx.attr.filename))
 
