@@ -1,6 +1,6 @@
 import io
-import tarfile
 import sys
+import tarfile
 from pathlib import Path
 
 

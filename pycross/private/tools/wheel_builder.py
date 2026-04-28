@@ -635,7 +635,7 @@ def build_venv(
     with open(site_dir / "deps.pth", "w") as f:
         for dep_path in path:
             rel_dep_path = os.path.relpath(dep_path, site_dir)
-            f.write(f'import os, site; site.addsitedir(os.path.join(sitedir, {rel_dep_path!r}))\n')
+            f.write(f"import os, site; site.addsitedir(os.path.join(sitedir, {rel_dep_path!r}))\n")
 
 
 def build_wheel(
