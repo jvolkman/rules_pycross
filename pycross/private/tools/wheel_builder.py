@@ -630,9 +630,12 @@ def build_venv(
         with open(site_dir / "_pycross_sys_base_prefix.pth", "w") as f:
             f.write(f'import sys; sys.base_prefix = sys.base_exec_prefix = "{target_python_exe.parent.parent}"\n')
 
-    # Add a pth file to include all of our build dependencies.
+    # Add build dependencies as site directories so nested .pth files from those
+    # dependencies are processed when Python initializes the build venv.
     with open(site_dir / "deps.pth", "w") as f:
-        f.write("\n".join(os.path.relpath(p, site_dir) for p in path) + "\n")
+        for dep_path in path:
+            rel_dep_path = os.path.relpath(dep_path, site_dir)
+            f.write(f'import os, site; site.addsitedir(os.path.join(sitedir, {rel_dep_path!r}))\n')
 
 
 def build_wheel(
