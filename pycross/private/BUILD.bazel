@@ -34,7 +34,7 @@ bzl_library(
     # toolchain and environment BUILD rules load from it.
     visibility = ["//visibility:public"],
     deps = [
-        "@rules_python//python:versions.bzl",
+        ":rules_python_bzl",
     ],
 )
 
@@ -144,7 +144,7 @@ bzl_library(
         ":lock_attrs",
         ":target_environment",
         ":util",
-        "@rules_python//python:versions.bzl",
+        ":rules_python_bzl",
     ],
 )
 
@@ -288,6 +288,11 @@ bzl_library(
 bzl_library(
     name = "util",
     srcs = ["util.bzl"],
+)
+
+bzl_library(
+    name = "rules_python_bzl",
+    srcs = ["@rules_python//:bzl"],
 )
 
 exports_files(

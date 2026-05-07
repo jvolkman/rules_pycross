@@ -293,7 +293,7 @@ str: A json encoded string of the provided content.
 <pre>
 load("@rules_pycross//pycross:defs.bzl", "pypi_file")
 
-pypi_file(<a href="#pypi_file-name">name</a>, <a href="#pypi_file-filename">filename</a>, <a href="#pypi_file-index">index</a>, <a href="#pypi_file-keep_metadata">keep_metadata</a>, <a href="#pypi_file-package_name">package_name</a>, <a href="#pypi_file-package_version">package_version</a>, <a href="#pypi_file-repo_mapping">repo_mapping</a>, <a href="#pypi_file-sha256">sha256</a>)
+pypi_file(<a href="#pypi_file-name">name</a>, <a href="#pypi_file-filename">filename</a>, <a href="#pypi_file-index">index</a>, <a href="#pypi_file-keep_metadata">keep_metadata</a>, <a href="#pypi_file-package_name">package_name</a>, <a href="#pypi_file-package_version">package_version</a>, <a href="#pypi_file-sha256">sha256</a>)
 </pre>
 
 Downloads a file from a PyPI-compatible package index.
@@ -309,7 +309,6 @@ Downloads a file from a PyPI-compatible package index.
 | <a id="pypi_file-keep_metadata"></a>keep_metadata |  Whether to store the pypi_metadata.json file for debugging.   | Boolean | optional |  `False`  |
 | <a id="pypi_file-package_name"></a>package_name |  The package name.   | String | required |  |
 | <a id="pypi_file-package_version"></a>package_version |  The package version.   | String | required |  |
-| <a id="pypi_file-repo_mapping"></a>repo_mapping |  In `WORKSPACE` context only: a dictionary from local repository name to global repository name. This allows controls over workspace dependency resolution for dependencies of this repository.<br><br>For example, an entry `"@foo": "@bar"` declares that, for any time this repository depends on `@foo` (such as a dependency on `@foo//some:target`, it should actually resolve that dependency within globally-declared `@bar` (`@bar//some:target`).<br><br>This attribute is _not_ supported in `MODULE.bazel` context (when invoking a repository rule inside a module extension's implementation function).   | <a href="https://bazel.build/rules/lib/dict">Dictionary: String -> String</a> | optional |  |
 | <a id="pypi_file-sha256"></a>sha256 |  The expected SHA-256 of the file downloaded.   | String | required |  |
 
 
