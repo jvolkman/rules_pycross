@@ -1,5 +1,5 @@
 bazel_dep(name = "bazel_lib", version = "3.1.0")
-bazel_dep(name = "hermetic_cc_toolchain", version = "2.2.1")
+bazel_dep(name = "hermetic_cc_toolchain", version = "4.1.0")
 bazel_dep(name = "rules_pycross", version = "0.0.0")
 bazel_dep(name = "rules_pycross_e2e_shared", version = "0.0.0")
 bazel_dep(name = "rules_python", version = "1.0.0")

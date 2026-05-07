@@ -113,11 +113,11 @@ load("@uv//:defs.bzl", uv_install_deps = "install_deps")
 uv_install_deps()
 
 # hermetic_cc_toolchain
-HERMETIC_CC_TOOLCHAIN_VERSION = "v2.2.1"
+HERMETIC_CC_TOOLCHAIN_VERSION = "v4.1.0"
 
 http_archive(
     name = "hermetic_cc_toolchain",
-    sha256 = "3b8107de0d017fe32e6434086a9568f97c60a111b49dc34fc7001e139c30fdea",
+    sha256 = "65b9f964ffc733bbe8559ff5497a887bbd384fee1d7592f355633d655f0dff4a",
     urls = [
         "https://mirror.bazel.build/github.com/uber/hermetic_cc_toolchain/releases/download/{0}/hermetic_cc_toolchain-{0}.tar.gz".format(HERMETIC_CC_TOOLCHAIN_VERSION),
         "https://github.com/uber/hermetic_cc_toolchain/releases/download/{0}/hermetic_cc_toolchain-{0}.tar.gz".format(HERMETIC_CC_TOOLCHAIN_VERSION),
