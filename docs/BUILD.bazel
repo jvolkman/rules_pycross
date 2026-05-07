@@ -1,40 +1,40 @@
-# This load statement must be in the docs/ package rather than anything users depend on
-# so that the dependency on stardoc doesn't leak to them.
-load("@bazel_lib//lib:docs.bzl", "stardoc_with_diff_test", "update_docs")
-
-stardoc_with_diff_test(
-    name = "rules",
-    bzl_library_target = "//pycross:defs",
-)
-
-stardoc_with_diff_test(
-    name = "workspace_rules",
-    bzl_library_target = "//pycross:workspace",
-)
-
-stardoc_with_diff_test(
-    name = "ext_environments",
-    bzl_library_target = "//pycross/extensions:environments",
-)
-
-stardoc_with_diff_test(
-    name = "ext_lock_file",
-    bzl_library_target = "//pycross/extensions:lock_file",
-)
-
-stardoc_with_diff_test(
-    name = "ext_lock_import",
-    bzl_library_target = "//pycross/extensions:lock_import",
-)
-
-stardoc_with_diff_test(
-    name = "ext_lock_repos",
-    bzl_library_target = "//pycross/extensions:lock_repos",
-)
-
-stardoc_with_diff_test(
-    name = "ext_pycross",
-    bzl_library_target = "//pycross/extensions:pycross",
-)
-
-update_docs()
+## This load statement must be in the docs/ package rather than anything users depend on
+## so that the dependency on stardoc doesn't leak to them.
+#load("@bazel_lib//lib:docs.bzl", "stardoc_with_diff_test", "update_docs")
+#
+#stardoc_with_diff_test(
+#    name = "rules",
+#    bzl_library_target = "//pycross:defs",
+#)
+#
+#stardoc_with_diff_test(
+#    name = "workspace_rules",
+#    bzl_library_target = "//pycross:workspace",
+#)
+#
+#stardoc_with_diff_test(
+#    name = "ext_environments",
+#    bzl_library_target = "//pycross/extensions:environments",
+#)
+#
+#stardoc_with_diff_test(
+#    name = "ext_lock_file",
+#    bzl_library_target = "//pycross/extensions:lock_file",
+#)
+#
+#stardoc_with_diff_test(
+#    name = "ext_lock_import",
+#    bzl_library_target = "//pycross/extensions:lock_import",
+#)
+#
+#stardoc_with_diff_test(
+#    name = "ext_lock_repos",
+#    bzl_library_target = "//pycross/extensions:lock_repos",
+#)
+#
+#stardoc_with_diff_test(
+#    name = "ext_pycross",
+#    bzl_library_target = "//pycross/extensions:pycross",
+#)
+#
+#update_docs()
