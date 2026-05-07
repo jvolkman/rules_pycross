@@ -1,0 +1,117 @@
+load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
+
+# aspect_bazel_lib
+http_archive(
+    name = "aspect_bazel_lib",
+    sha256 = "349aabd3c2b96caeda6181eb0ae1f14f2a1d9f3cd3c8b05d57f709ceb12e9fb3",
+    strip_prefix = "bazel-lib-2.9.4",
+    url = "https://github.com/bazel-contrib/bazel-lib/releases/download/v2.9.4/bazel-lib-v2.9.4.tar.gz",
+)
+
+load("@aspect_bazel_lib//lib:repositories.bzl", "aspect_bazel_lib_dependencies", "aspect_bazel_lib_register_toolchains")
+
+aspect_bazel_lib_dependencies()
+
+aspect_bazel_lib_register_toolchains()
+
+# rules_python
+http_archive(
+    name = "rules_python",
+    sha256 = "4f7e2aa1eb9aa722d96498f5ef514f426c1f55161c3c9ae628c857a7128ceb07",
+    strip_prefix = "rules_python-1.0.0",
+    url = "https://github.com/bazelbuild/rules_python/releases/download/1.0.0/rules_python-1.0.0.tar.gz",
+)
+
+load("@rules_python//python:repositories.bzl", "py_repositories", "python_register_multi_toolchains")
+
+py_repositories()
+
+python_register_multi_toolchains(
+    name = "python_versions",
+    # The default is latest - 1 to make sure nothing assumes latest == default
+    default_version = "3.11.6",
+    python_versions = [
+        "3.10.11",
+        "3.11.6",
+        "3.12.0",
+    ],
+    register_coverage_tool = True,
+)
+
+# rules_pycross
+local_repository(
+    name = "rules_pycross",
+    path = "../..",
+)
+
+local_repository(
+    name = "rules_pycross_e2e_shared",
+    path = "../shared",
+)
+
+load("@rules_pycross//pycross:repositories.bzl", "rules_pycross_dependencies")
+
+rules_pycross_dependencies(
+    python_interpreter_target = "@python_versions_3_12_0_host//:python",
+)
+
+load("@rules_pycross//pycross:workspace.bzl", "lock_repo_model_uv", "pycross_lock_repo", "pycross_register_for_python_toolchains")
+
+pycross_register_for_python_toolchains(
+    name = "rules_pycross_e2e_environments",
+    platforms = [
+        "aarch64-apple-darwin",
+        "aarch64-unknown-linux-gnu",
+        "x86_64-unknown-linux-gnu",
+    ],
+    python_toolchains_repo = "@python_versions",
+)
+
+load("@rules_pycross//pycross:defs.bzl", "package_annotation")
+load("@rules_pycross_e2e_environments//:defs.bzl", "environments")
+
+pycross_lock_repo(
+    name = "uv",
+    annotations = {
+        "regex": package_annotation(
+            always_build = True,
+            build_dependencies = [
+                "setuptools",
+                "wheel",
+            ],
+        ),
+    },
+    lock_model = lock_repo_model_uv(
+        lock_file = "@//:uv.lock",
+        project_file = "@//:pyproject.toml",
+    ),
+    target_environments = environments,
+)
+
+load("@uv//:defs.bzl", uv_install_deps = "install_deps")
+
+uv_install_deps()
+
+# toolchains_llvm
+http_archive(
+    name = "toolchains_llvm",
+    canonical_id = "v1.3.0",
+    sha256 = "d3c255b2ceec9eaebb6b5a44c904a48429b8dcb71e630de2f103e7b4aab9f073",
+    strip_prefix = "toolchains_llvm-v1.3.0",
+    url = "https://github.com/bazel-contrib/toolchains_llvm/releases/download/v1.3.0/toolchains_llvm-v1.3.0.tar.gz",
+)
+
+load("@toolchains_llvm//toolchain:deps.bzl", "bazel_toolchain_dependencies")
+
+bazel_toolchain_dependencies()
+
+load("@toolchains_llvm//toolchain:rules.bzl", "llvm_toolchain")
+
+llvm_toolchain(
+    name = "llvm_toolchain",
+    llvm_version = "19.1.3",
+)
+
+load("@llvm_toolchain//:toolchains.bzl", "llvm_register_toolchains")
+
+llvm_register_toolchains()
