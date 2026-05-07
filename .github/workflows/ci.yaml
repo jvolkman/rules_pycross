@@ -61,6 +61,7 @@ jobs:
       exclude: |
         [
           {"os": "windows-latest"},
+          {"bazelversion": "9.1.0", "bzlmodEnabled": false},
           {"folder": "e2e/pdm/vendored_lock_file_bzlmod", "bazelversion": "7.7.1"},
           {"folder": "e2e/pdm/vendored_lock_file_bzlmod", "bzlmodEnabled": false},
           {"folder": "e2e/pdm/vendored_lock_file_workspace", "bzlmodEnabled": true},
