@@ -57,13 +57,20 @@ class Input:
 
 
 def _expand_manylinux_platforms(platforms: Iterable[str]) -> List[str]:
-    extra_platforms = set()
-    platforms = set(platforms)
+    # Preserve the input order, inserting each platform's legacy alias (if any)
+    # immediately after it. Callers (e.g. toolchain_helpers.bzl) are responsible
+    # for providing platforms in the desired priority order.
+    expanded: List[str] = []
+    seen: set = set()
     for platform in platforms:
-        if platform in _MANYLINUX_ALIASES:
-            extra_platforms.add(_MANYLINUX_ALIASES[platform])
-    platforms.update(extra_platforms)
-    return sorted(platforms)
+        if platform not in seen:
+            expanded.append(platform)
+            seen.add(platform)
+        alias = _MANYLINUX_ALIASES.get(platform)
+        if alias and alias not in seen:
+            expanded.append(alias)
+            seen.add(alias)
+    return expanded
 
 
 def create(input: Input) -> None:

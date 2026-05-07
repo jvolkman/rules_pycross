@@ -101,7 +101,7 @@ def targets():
         actual = select({
             ":_env_python_3.10.11_aarch64-apple-darwin": "@uv_lock_file_wheel_regex_2024.11.6_cp310_cp310_macosx_11_0_arm64//file",
             ":_env_python_3.10.11_aarch64-unknown-linux-gnu": "@uv_lock_file_wheel_regex_2024.11.6_cp310_cp310_manylinux_2_17_aarch64.manylinux2014_aarch64//file",
-            ":_env_python_3.10.11_x86_64-unknown-linux-gnu": "@uv_lock_file_wheel_regex_2024.11.6_cp310_cp310_manylinux_2_5_x86_64.manylinux1_x86_64.manylinux_2_12_x86_64.manylinux2010_x86_64//file",
+            ":_env_python_3.10.11_x86_64-unknown-linux-gnu": "@uv_lock_file_wheel_regex_2024.11.6_cp310_cp310_manylinux_2_17_x86_64.manylinux2014_x86_64//file",
             ":_env_python_3.11.6_aarch64-apple-darwin": "@uv_lock_file_wheel_regex_2024.11.6_cp311_cp311_macosx_11_0_arm64//file",
             ":_env_python_3.11.6_aarch64-unknown-linux-gnu": "@uv_lock_file_wheel_regex_2024.11.6_cp311_cp311_manylinux_2_17_aarch64.manylinux2014_aarch64//file",
             ":_env_python_3.11.6_x86_64-unknown-linux-gnu": "@uv_lock_file_wheel_regex_2024.11.6_cp311_cp311_manylinux_2_17_x86_64.manylinux2014_x86_64//file",
@@ -145,12 +145,12 @@ def repositories():
 
     maybe(
         http_file,
-        name = "uv_lock_file_wheel_regex_2024.11.6_cp310_cp310_manylinux_2_5_x86_64.manylinux1_x86_64.manylinux_2_12_x86_64.manylinux2010_x86_64",
+        name = "uv_lock_file_wheel_regex_2024.11.6_cp310_cp310_manylinux_2_17_x86_64.manylinux2014_x86_64",
         urls = [
-            "https://files.pythonhosted.org/packages/74/c0/be707bcfe98254d8f9d2cff55d216e946f4ea48ad2fd8cf1428f8c5332ba/regex-2024.11.6-cp310-cp310-manylinux_2_5_x86_64.manylinux1_x86_64.manylinux_2_12_x86_64.manylinux2010_x86_64.whl",
+            "https://files.pythonhosted.org/packages/f2/98/26d3830875b53071f1f0ae6d547f1d98e964dd29ad35cbf94439120bb67a/regex-2024.11.6-cp310-cp310-manylinux_2_17_x86_64.manylinux2014_x86_64.whl",
         ],
-        sha256 = "f02f93b92358ee3f78660e43b4b0091229260c5d5c408d17d60bf26b6c900e86",
-        downloaded_file_path = "regex-2024.11.6-cp310-cp310-manylinux_2_5_x86_64.manylinux1_x86_64.manylinux_2_12_x86_64.manylinux2010_x86_64.whl",
+        sha256 = "997d6a487ff00807ba810e0f8332c18b4eb8d29463cfb7c820dc4b6e7562d0cf",
+        downloaded_file_path = "regex-2024.11.6-cp310-cp310-manylinux_2_17_x86_64.manylinux2014_x86_64.whl",
     )
 
     maybe(
