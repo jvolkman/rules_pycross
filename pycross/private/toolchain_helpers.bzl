@@ -43,9 +43,12 @@ def _get_env_platforms(py_platform, glibc_version, musl_version, macos_version):
     platform_info = PLATFORMS[py_platform]
     arch = platform_info.arch
     if py_platform.endswith("linux-gnu") or py_platform.endswith("linux-gnu-freethreaded"):
+        # Emit modern manylinux tags newest-first; the target environment
+        # generator will insert legacy aliases (e.g. manylinux2014_x86_64)
+        # immediately after their modern equivalents.
         return ["linux_{}".format(arch)] + [
             "manylinux_2_{}_{}".format(i, arch)
-            for i in range(5, glibc_micro + 1)
+            for i in range(glibc_micro, 4, -1)
         ]
     elif py_platform.endswith("linux-musl"):
         return [
