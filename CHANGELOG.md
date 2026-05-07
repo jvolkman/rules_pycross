@@ -6,9 +6,47 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [unreleased]
 
+## [0.8.2]
+
 ### Added
 
-- Adds `post_install_patches` to apply patches after installation of wheels.
+- Support for uv workspaces (#214)
+- `config_setting_group` to match any pycross environment (#217)
+- Pass netrc credentials when downloading from PyPI index (#222)
+- Support for Bazel 9
+
+### Fixed
+
+- Fix cross-compilation with rules_python ≥ 1.9.0 (#221)
+- Resolve relative wheel URLs returned by PyPI-compatible indexes (#224)
+- Process nested `.pth` files for wheel build dependencies (#227)
+- Fix `pypi_index` attr name passed to `pypi_file` rule (#223)
+- Avoid `sort_key` values when creating pycross internal repo (#226)
+- Export json files for `--incompatible_no_implicit_file_export` (#219)
+- Prefer newest manylinux wheels by sorting expanded platforms (#218)
+- Ignore PDM dependencies with markers not met by any target environment (#146)
+
+## [0.8.1]
+
+### Added
+
+- `post_install_patches` to apply patches after installation of wheels (#198)
+- Support for pulling `target_settings` from rules_python platforms (#194)
+- Support for dependency-groups in PDM (#173)
+- Use project dependencies from uv.lock (#186)
+
+### Fixed
+
+- Normalize package names (#208)
+- Fix dependency-groups in uv_translator (#203)
+- Fix patch application failures (#202)
+- Update repairwheel version to fix issue on macOS hosts (#195)
+- Bump DEFAULT_MACOS_VERSION (#190)
+- Fix parsing package required python versions from uv.lock (#175)
+- Fix `all_optional_groups` for `import_poetry` (#174)
+- Fix future warnings from tarfile (#169)
+- Add missing `py_test` and provider imports (#179)
+- Set LDCXXSHARED for wheel builds
 
 ## [0.8.0]
 
@@ -143,7 +181,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 (No notes - pre-dates this file.)
 
-[unreleased]: https://github.com/jvolkman/rules_pycross/compare/v0.8.0...HEAD
+[unreleased]: https://github.com/jvolkman/rules_pycross/compare/v0.8.2...HEAD
+[0.8.2]: https://github.com/jvolkman/rules_pycross/compare/v0.8.1...v0.8.2
+[0.8.1]: https://github.com/jvolkman/rules_pycross/compare/v0.8.0...v0.8.1
 [0.8.0]: https://github.com/jvolkman/rules_pycross/compare/v0.7.1...v0.8.0
 [0.7.1]: https://github.com/jvolkman/rules_pycross/compare/v0.7.0...v0.7.1
 [0.7.0]: https://github.com/jvolkman/rules_pycross/compare/v0.6.1...v0.7.1
