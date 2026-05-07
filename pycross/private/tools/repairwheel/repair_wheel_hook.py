@@ -23,7 +23,9 @@ def main() -> None:
     for lp in lib_path:
         args.extend(["--lib-dir", str(lp)])
 
-    subprocess.check_call(args, env=os.environ)
+    env = os.environ.copy()
+    env["PYTHONPATH"] = os.pathsep.join(sys.path)
+    subprocess.check_call(args, env=env)
 
 
 if __name__ == "__main__":

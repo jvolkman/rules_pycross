@@ -1,4 +1,4 @@
-load("@aspect_bazel_lib//lib:write_source_files.bzl", "write_source_files")
+load("@bazel_lib//lib:write_source_files.bzl", "write_source_files")
 load("@bazel_skylib//:bzl_library.bzl", "bzl_library")
 load(":lock_file.bzl", "pycross_lock_file")
 load(":pdm_lock_model.bzl", "pycross_pdm_lock_model")
@@ -34,7 +34,7 @@ bzl_library(
     # toolchain and environment BUILD rules load from it.
     visibility = ["//visibility:public"],
     deps = [
-        "@rules_python//python:versions.bzl",
+        ":rules_python_bzl",
     ],
 )
 
@@ -142,9 +142,9 @@ bzl_library(
     srcs = ["toolchain_helpers.bzl"],
     deps = [
         ":lock_attrs",
+        ":rules_python_bzl",
         ":target_environment",
         ":util",
-        "@rules_python//python:versions.bzl",
     ],
 )
 
@@ -288,6 +288,11 @@ bzl_library(
 bzl_library(
     name = "util",
     srcs = ["util.bzl"],
+)
+
+bzl_library(
+    name = "rules_python_bzl",
+    srcs = ["@rules_python//:bzl"],
 )
 
 exports_files(

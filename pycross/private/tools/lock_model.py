@@ -248,7 +248,7 @@ class RawLockSet:
         return dict(_dataclass_items(self), packages=_stringify_keys(self.packages))
 
     def to_json(self, indent=None) -> str:
-        return json.dumps(self, sort_keys=True, indent=indent, cls=_Encoder)
+        return json.dumps(self, sort_keys=True, indent=indent, cls=_Encoder) + "\n"
 
     @classmethod
     def from_json(cls, data: str) -> RawLockSet:
@@ -272,7 +272,7 @@ class ResolvedLockSet:
         )
 
     def to_json(self, indent=None) -> str:
-        return json.dumps(self, sort_keys=True, indent=indent, cls=_Encoder)
+        return json.dumps(self, sort_keys=True, indent=indent, cls=_Encoder) + "\n"
 
     @classmethod
     def from_json(cls, data: str) -> ResolvedLockSet:

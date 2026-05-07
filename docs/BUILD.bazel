@@ -1,40 +1,95 @@
-# This load statement must be in the docs/ package rather than anything users depend on
-# so that the dependency on stardoc doesn't leak to them.
-load("@aspect_bazel_lib//lib:docs.bzl", "stardoc_with_diff_test", "update_docs")
+load("@bazel_lib//lib:write_source_files.bzl", "write_source_files")
+load("@stardoc//stardoc:stardoc.bzl", "stardoc")
 
-stardoc_with_diff_test(
-    name = "rules",
-    bzl_library_target = "//pycross:defs",
+package(default_visibility = ["//visibility:private"])
+
+# rules
+stardoc(
+    name = "rules_gen",
+    out = "rules.gen.md",
+    input = "//pycross:defs.bzl",
+    deps = [
+        "//pycross:defs",
+        "@rules_cc//cc:find_cc_toolchain_bzl",
+    ],
 )
 
-stardoc_with_diff_test(
-    name = "workspace_rules",
-    bzl_library_target = "//pycross:workspace",
+# workspace_rules
+stardoc(
+    name = "workspace_rules_gen",
+    out = "workspace_rules.gen.md",
+    input = "//pycross:workspace.bzl",
+    deps = [
+        "//pycross:workspace",
+        "@rules_cc//cc:find_cc_toolchain_bzl",
+    ],
 )
 
-stardoc_with_diff_test(
-    name = "ext_environments",
-    bzl_library_target = "//pycross/extensions:environments",
+# ext_environments
+stardoc(
+    name = "ext_environments_gen",
+    out = "ext_environments.gen.md",
+    input = "//pycross/extensions:environments.bzl",
+    deps = [
+        "//pycross/extensions:environments",
+        "@rules_cc//cc:find_cc_toolchain_bzl",
+    ],
 )
 
-stardoc_with_diff_test(
-    name = "ext_lock_file",
-    bzl_library_target = "//pycross/extensions:lock_file",
+# ext_lock_file
+stardoc(
+    name = "ext_lock_file_gen",
+    out = "ext_lock_file.gen.md",
+    input = "//pycross/extensions:lock_file.bzl",
+    deps = [
+        "//pycross/extensions:lock_file",
+        "@rules_cc//cc:find_cc_toolchain_bzl",
+    ],
 )
 
-stardoc_with_diff_test(
-    name = "ext_lock_import",
-    bzl_library_target = "//pycross/extensions:lock_import",
+# ext_lock_import
+stardoc(
+    name = "ext_lock_import_gen",
+    out = "ext_lock_import.gen.md",
+    input = "//pycross/extensions:lock_import.bzl",
+    deps = [
+        "//pycross/extensions:lock_import",
+        "@rules_cc//cc:find_cc_toolchain_bzl",
+    ],
 )
 
-stardoc_with_diff_test(
-    name = "ext_lock_repos",
-    bzl_library_target = "//pycross/extensions:lock_repos",
+# ext_lock_repos
+stardoc(
+    name = "ext_lock_repos_gen",
+    out = "ext_lock_repos.gen.md",
+    input = "//pycross/extensions:lock_repos.bzl",
+    deps = [
+        "//pycross/extensions:lock_repos",
+        "@rules_cc//cc:find_cc_toolchain_bzl",
+    ],
 )
 
-stardoc_with_diff_test(
-    name = "ext_pycross",
-    bzl_library_target = "//pycross/extensions:pycross",
+# ext_pycross
+stardoc(
+    name = "ext_pycross_gen",
+    out = "ext_pycross.gen.md",
+    input = "//pycross/extensions:pycross.bzl",
+    deps = [
+        "//pycross/extensions:pycross",
+        "@rules_cc//cc:find_cc_toolchain_bzl",
+    ],
 )
 
-update_docs()
+# Update and test checked-in docs
+write_source_files(
+    name = "update",
+    files = {
+        "rules.md": ":rules_gen",
+        "workspace_rules.md": ":workspace_rules_gen",
+        "ext_environments.md": ":ext_environments_gen",
+        "ext_lock_file.md": ":ext_lock_file_gen",
+        "ext_lock_import.md": ":ext_lock_import_gen",
+        "ext_lock_repos.md": ":ext_lock_repos_gen",
+        "ext_pycross.md": ":ext_pycross_gen",
+    },
+)

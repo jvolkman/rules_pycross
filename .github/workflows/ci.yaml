@@ -32,8 +32,9 @@ jobs:
     with:
       bazelversions: |
         [
-          "7.4.1",
-          "8.0.0"
+          "7.7.1",
+          "8.7.0",
+          "9.1.0"
         ]
       folders: |
         [
@@ -60,13 +61,14 @@ jobs:
       exclude: |
         [
           {"os": "windows-latest"},
-          {"folder": "e2e/pdm/vendored_lock_file_bzlmod", "bazelversion": "7.4.1"},
+          {"bazelversion": "9.1.0", "bzlmodEnabled": false},
+          {"folder": "e2e/pdm/vendored_lock_file_bzlmod", "bazelversion": "7.7.1"},
           {"folder": "e2e/pdm/vendored_lock_file_bzlmod", "bzlmodEnabled": false},
           {"folder": "e2e/pdm/vendored_lock_file_workspace", "bzlmodEnabled": true},
-          {"folder": "e2e/poetry/vendored_lock_file_bzlmod", "bazelversion": "7.4.1"},
+          {"folder": "e2e/poetry/vendored_lock_file_bzlmod", "bazelversion": "7.7.1"},
           {"folder": "e2e/poetry/vendored_lock_file_bzlmod", "bzlmodEnabled": false},
           {"folder": "e2e/poetry/vendored_lock_file_workspace", "bzlmodEnabled": true},
-          {"folder": "e2e/uv/vendored_lock_file_bzlmod", "bazelversion": "7.4.1"},
+          {"folder": "e2e/uv/vendored_lock_file_bzlmod", "bazelversion": "7.7.1"},
           {"folder": "e2e/uv/vendored_lock_file_bzlmod", "bzlmodEnabled": false},
           {"folder": "e2e/uv/vendored_lock_file_workspace", "bzlmodEnabled": true}
         ]
