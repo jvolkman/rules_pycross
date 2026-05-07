@@ -1,4 +1,4 @@
-load("@aspect_bazel_lib//lib:write_source_files.bzl", "write_source_files")
+load("@bazel_lib//lib:write_source_files.bzl", "write_source_files")
 load("@bazel_skylib//:bzl_library.bzl", "bzl_library")
 load(":lock_file.bzl", "pycross_lock_file")
 load(":pdm_lock_model.bzl", "pycross_pdm_lock_model")

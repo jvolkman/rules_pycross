@@ -1,18 +1,38 @@
 load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
 
-# aspect_bazel_lib
 http_archive(
-    name = "aspect_bazel_lib",
-    sha256 = "349aabd3c2b96caeda6181eb0ae1f14f2a1d9f3cd3c8b05d57f709ceb12e9fb3",
-    strip_prefix = "bazel-lib-2.9.4",
-    url = "https://github.com/bazel-contrib/bazel-lib/releases/download/v2.9.4/bazel-lib-v2.9.4.tar.gz",
+    name = "bazel_lib",
+    sha256 = "fd0fe4df9b6b7837d5fd765c04ffcea462530a08b3d98627fb6be62a693f4e12",
+    strip_prefix = "bazel-lib-3.1.0",
+    url = "https://github.com/bazel-contrib/bazel-lib/releases/download/v3.1.0/bazel-lib-v3.1.0.tar.gz",
 )
 
-load("@aspect_bazel_lib//lib:repositories.bzl", "aspect_bazel_lib_dependencies", "aspect_bazel_lib_register_toolchains")
+load("@bazel_lib//lib:repositories.bzl", "bazel_lib_dependencies", "bazel_lib_register_toolchains")
 
-aspect_bazel_lib_dependencies()
+# Required bazel-lib dependencies
 
-aspect_bazel_lib_register_toolchains()
+bazel_lib_dependencies()
+
+# Required rules_shell dependencies
+load("@rules_shell//shell:repositories.bzl", "rules_shell_dependencies", "rules_shell_toolchains")
+
+rules_shell_dependencies()
+
+rules_shell_toolchains()
+
+# Register bazel-lib toolchains
+
+bazel_lib_register_toolchains()
+
+# Create the host platform repository transitively required by bazel-lib
+
+load("@bazel_tools//tools/build_defs/repo:utils.bzl", "maybe")
+load("@platforms//host:extension.bzl", "host_platform_repo")
+
+maybe(
+    host_platform_repo,
+    name = "host_platform",
+)
 
 # rules_python
 http_archive(

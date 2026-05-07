@@ -8,8 +8,8 @@ This PR was contained in the following release:
   https://github.com/astral-sh/uv/releases/tag/0.4.27
 """
 
-load("@aspect_bazel_lib//lib:testing.bzl", "assert_json_matches")
-load("@aspect_bazel_lib//lib:write_source_files.bzl", "write_source_file")
+load("@bazel_lib//lib:testing.bzl", "assert_json_matches")
+load("@bazel_lib//lib:write_source_files.bzl", "write_source_file")
 load("//pycross:defs.bzl", "pycross_uv_lock_model")
 
 pycross_uv_lock_model(
