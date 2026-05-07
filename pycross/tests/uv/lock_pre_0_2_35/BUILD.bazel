@@ -8,8 +8,8 @@ This PR was contained in the following release:
   https://github.com/astral-sh/uv/releases/tag/0.2.35
 """
 
-load("@bazel_skylib//rules:diff_test.bzl", "diff_test")
 load("@bazel_lib//lib:write_source_files.bzl", "write_source_file")
+load("@bazel_skylib//rules:diff_test.bzl", "diff_test")
 load("//pycross:defs.bzl", "pycross_uv_lock_model")
 
 pycross_uv_lock_model(

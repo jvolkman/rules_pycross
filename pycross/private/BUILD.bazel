@@ -142,9 +142,9 @@ bzl_library(
     srcs = ["toolchain_helpers.bzl"],
     deps = [
         ":lock_attrs",
+        ":rules_python_bzl",
         ":target_environment",
         ":util",
-        ":rules_python_bzl",
     ],
 )
 

@@ -1,13 +1,13 @@
-load("@stardoc//stardoc:stardoc.bzl", "stardoc")
 load("@bazel_lib//lib:write_source_files.bzl", "write_source_files")
+load("@stardoc//stardoc:stardoc.bzl", "stardoc")
 
 package(default_visibility = ["//visibility:private"])
 
 # rules
 stardoc(
     name = "rules_gen",
-    input = "//pycross:defs.bzl",
     out = "rules.gen.md",
+    input = "//pycross:defs.bzl",
     deps = [
         "//pycross:defs",
         "@rules_cc//cc:find_cc_toolchain_bzl",
@@ -17,8 +17,8 @@ stardoc(
 # workspace_rules
 stardoc(
     name = "workspace_rules_gen",
-    input = "//pycross:workspace.bzl",
     out = "workspace_rules.gen.md",
+    input = "//pycross:workspace.bzl",
     deps = [
         "//pycross:workspace",
         "@rules_cc//cc:find_cc_toolchain_bzl",
@@ -28,8 +28,8 @@ stardoc(
 # ext_environments
 stardoc(
     name = "ext_environments_gen",
-    input = "//pycross/extensions:environments.bzl",
     out = "ext_environments.gen.md",
+    input = "//pycross/extensions:environments.bzl",
     deps = [
         "//pycross/extensions:environments",
         "@rules_cc//cc:find_cc_toolchain_bzl",
@@ -39,8 +39,8 @@ stardoc(
 # ext_lock_file
 stardoc(
     name = "ext_lock_file_gen",
-    input = "//pycross/extensions:lock_file.bzl",
     out = "ext_lock_file.gen.md",
+    input = "//pycross/extensions:lock_file.bzl",
     deps = [
         "//pycross/extensions:lock_file",
         "@rules_cc//cc:find_cc_toolchain_bzl",
@@ -50,8 +50,8 @@ stardoc(
 # ext_lock_import
 stardoc(
     name = "ext_lock_import_gen",
-    input = "//pycross/extensions:lock_import.bzl",
     out = "ext_lock_import.gen.md",
+    input = "//pycross/extensions:lock_import.bzl",
     deps = [
         "//pycross/extensions:lock_import",
         "@rules_cc//cc:find_cc_toolchain_bzl",
@@ -61,8 +61,8 @@ stardoc(
 # ext_lock_repos
 stardoc(
     name = "ext_lock_repos_gen",
-    input = "//pycross/extensions:lock_repos.bzl",
     out = "ext_lock_repos.gen.md",
+    input = "//pycross/extensions:lock_repos.bzl",
     deps = [
         "//pycross/extensions:lock_repos",
         "@rules_cc//cc:find_cc_toolchain_bzl",
@@ -72,8 +72,8 @@ stardoc(
 # ext_pycross
 stardoc(
     name = "ext_pycross_gen",
-    input = "//pycross/extensions:pycross.bzl",
     out = "ext_pycross.gen.md",
+    input = "//pycross/extensions:pycross.bzl",
     deps = [
         "//pycross/extensions:pycross",
         "@rules_cc//cc:find_cc_toolchain_bzl",
