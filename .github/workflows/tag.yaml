@@ -1,0 +1,52 @@
+# Tag a new release using https://github.com/marketplace/actions/conventional-commits-versioner-action
+name: Tag a Release
+on:
+  workflow_dispatch:
+  # schedule:
+  #   - cron: "0 15 * * *" # Daily at 3PM UTC
+jobs:
+  tag:
+    permissions:
+      contents: write # allow create tag
+    runs-on: ubuntu-latest
+    outputs:
+      new-tag: ${{ steps.ccv.outputs.new-tag }}
+      new-tag-version: ${{ steps.ccv.outputs.new-tag-version }}
+      new-tag-version-type: ${{ steps.ccv.outputs.new-tag-version-type }}
+      recently-tagged: ${{ steps.recent-tag.outputs.recently-tagged }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - name: Check if there is a recent tag
+        id: recent-tag
+        if: github.event_name == 'schedule'
+        run: |
+          MAX_AGE=1209600  # 2 weeks
+          TAG=$(git describe --tags --match 'v[0-9]*.[0-9]*.[0-9]*' --abbrev=0 2>/dev/null) || {
+            echo "No matching tag — continue workflow."
+            exit 0
+          }
+          TAG_TIME=$(git log -1 --format=%ct "$TAG")
+          NOW=$(date +%s)
+          AGE=$((NOW - TAG_TIME))
+          echo "Latest tag: $TAG ($AGE seconds ago)"
+          if [ "$AGE" -lt "$MAX_AGE" ]; then
+            echo "recently-tagged=true" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Bump tag if necessary
+        id: ccv
+        if: github.event_name != 'schedule' || steps.recent-tag.outputs.recently-tagged != 'true'
+        uses: smlx/ccv@v0.10.0
+  release:
+    needs: tag
+    uses: ./.github/workflows/release.yml
+    with:
+      tag_name: ${{ needs.tag.outputs.new-tag-version }}
+    secrets:
+      publish_token: ${{ secrets.BCR_PUBLISH_TOKEN }}
+    if: needs.tag.outputs.new-tag == 'true' && needs.tag.outputs.new-tag-version-type != 'major'
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
