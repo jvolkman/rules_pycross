@@ -254,7 +254,9 @@ class RawLockSet:
     def from_json(cls, data: str) -> RawLockSet:
         parsed = json.loads(data)
         if "packages" in parsed:
-            parsed["packages"] = {k if isinstance(k, PackageKey) else PackageKey(k): v for k, v in parsed["packages"].items()}
+            parsed["packages"] = {
+                k if isinstance(k, PackageKey) else PackageKey(k): v for k, v in parsed["packages"].items()
+            }
         return from_dict(RawLockSet, parsed, config=Config(cast=[Tuple, Version, PackageKey, SpecifierSet]))
 
 
@@ -280,9 +282,13 @@ class ResolvedLockSet:
     def from_json(cls, data: str) -> ResolvedLockSet:
         parsed = json.loads(data)
         if "packages" in parsed:
-            parsed["packages"] = {k if isinstance(k, PackageKey) else PackageKey(k): v for k, v in parsed["packages"].items()}
+            parsed["packages"] = {
+                k if isinstance(k, PackageKey) else PackageKey(k): v for k, v in parsed["packages"].items()
+            }
         if "remote_files" in parsed:
-            parsed["remote_files"] = {k if isinstance(k, FileKey) else FileKey(k): v for k, v in parsed["remote_files"].items()}
+            parsed["remote_files"] = {
+                k if isinstance(k, FileKey) else FileKey(k): v for k, v in parsed["remote_files"].items()
+            }
         return from_dict(ResolvedLockSet, parsed, config=Config(cast=[Tuple, Version, FileKey, PackageKey]))
 
 

@@ -17,11 +17,11 @@ os.environ['PYTHONHOME']={{repr(target.home)}}
 
 # In python 3.11, the import machinery imports from math, which breaks
 # in our cross environment.. so we inject lib-dynload to the path also
-stdlib = {{repr(exec_stdlib)}}
-lib_dynload = os.path.join(stdlib, "lib-dynload")
+stdlib = {{repr(stdlib)}}
+dynload = {{repr(dynload)}}
 
 oldpath = os.environ.get('PYTHONPATH')
-newpath = os.pathsep.join([{{repr(lib_path)}}, stdlib, lib_dynload])
+newpath = os.pathsep.join([{{repr(lib_path)}}, stdlib, dynload])
 if oldpath:
     path = os.pathsep.join([newpath, oldpath])
 else:
@@ -31,7 +31,7 @@ os.environ['PYTHONPATH'] = path
 
 # In python 3.11, several system packages are frozen by default, which
 # prevents us from patching it. Disable it.
-if sys.version_info >= (3,11):
+if {{repr(disable_frozen_modules)}}:
     sys.argv[1:1] = ["-X", "frozen_modules=off"]
 
 # This will fix up argv0 so that sys.executable will be correct

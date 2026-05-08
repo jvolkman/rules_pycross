@@ -1,0 +1,21 @@
+# By default we disable manylinux/manymusl tags. However, we allow users to opt
+# in.
+
+
+def _linux_platforms():
+    # Allow users to override platform tags here
+    platform_tags = {{repr(platform_tags)}}
+    if platform_tags:
+        yield from platform_tags
+        return
+
+    # Otherwise use semi-default behavior
+    linux = _normalize_string(sysconfig.get_platform())
+    if not linux.startswith("linux_"):
+        # we should never be here, just yield the sysconfig one and return
+        yield linux
+        return
+    arch = _normalize_string({{repr(host_machine)}})
+    archs = {"armv8l": ["armv8l", "armv7l"]}.get(arch, [arch])
+    for arch in archs:
+        yield f"linux_{arch}"

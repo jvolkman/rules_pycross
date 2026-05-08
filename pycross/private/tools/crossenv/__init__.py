@@ -306,8 +306,29 @@ def build_env(
 
     write_pyvenv_cfg(env_path, str(context.target.project_base))
 
+    stdlib = os.path.abspath(os.path.dirname(os.__file__))
+    dynload = os.path.join(stdlib, "lib-dynload")
+
+    xopt = subprocess.run(
+        [sys.executable, "--help-xoptions"],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        universal_newlines=True,
+    )
+    disable_frozen_modules = "frozen_modules=" in xopt.stdout
+
     tmpl = utils.TemplateContext()
     tmpl.update(context.__dict__)
+    tmpl.update(
+        {
+            "stdlib": stdlib,
+            "dynload": dynload,
+            "disable_frozen_modules": disable_frozen_modules,
+            "platform_tags": context.target.manylinux_tags,
+            "host_machine": context.target.uname_machine,
+        }
+    )
+
     utils.install_script("pywrapper.py.tmpl", str(exe), tmpl)
 
     # Everything in lib_path follows the same pattern
@@ -318,6 +339,8 @@ def build_env(
         "platform-patch.py",
         "sysconfig-patch.py",
         "distutils-sysconfig-patch.py",
+        "packaging-tags-patch.py",
+        "subprocess-patch.py",
     ]
 
     for script in site_scripts:

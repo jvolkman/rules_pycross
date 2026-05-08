@@ -236,7 +236,7 @@ def repositories():
         http_file,
         name = "rules_pycross_internal_deps_wheel_altgraph_0.17.5_py2.py3_none_any",
         urls = [
-            "https://us-python.pkg.dev/artifact-foundry-prod/ah-3p-staging-python/altgraph/altgraph-0.17.5-py2.py3-none-any.whl",
+            "https://files.pythonhosted.org/packages/a9/ba/000a1996d4308bc65120167c21241a3b205464a2e0b58deda26ae8ac21d1/altgraph-0.17.5-py2.py3-none-any.whl",
         ],
         sha256 = "f3a22400bce1b0c701683820ac4f3b159cd301acab067c51c653e06961600597",
         downloaded_file_path = "altgraph-0.17.5-py2.py3-none-any.whl",
@@ -246,7 +246,7 @@ def repositories():
         http_file,
         name = "rules_pycross_internal_deps_wheel_build_1.5.0_py3_none_any",
         urls = [
-            "https://us-python.pkg.dev/artifact-foundry-prod/ah-3p-staging-python/build/build-1.5.0-py3-none-any.whl",
+            "https://files.pythonhosted.org/packages/0d/fe/6bea5c9162869c5beba5d9c8abbed835ec85bf1ec1fba05a3822325c45f3/build-1.5.0-py3-none-any.whl",
         ],
         sha256 = "13f3eecb844759ab66efec90ca17639bbf14dc06cb2fdf37a9010322d9c50a6f",
         downloaded_file_path = "build-1.5.0-py3-none-any.whl",
@@ -256,7 +256,7 @@ def repositories():
         http_file,
         name = "rules_pycross_internal_deps_wheel_dacite_1.9.2_py3_none_any",
         urls = [
-            "https://us-python.pkg.dev/artifact-foundry-prod/ah-3p-staging-python/dacite/dacite-1.9.2-py3-none-any.whl",
+            "https://files.pythonhosted.org/packages/94/35/386550fd60316d1e37eccdda609b074113298f23cef5bddb2049823fe666/dacite-1.9.2-py3-none-any.whl",
         ],
         sha256 = "053f7c3f5128ca2e9aceb66892b1a3c8936d02c686e707bee96e19deef4bc4a0",
         downloaded_file_path = "dacite-1.9.2-py3-none-any.whl",
@@ -266,7 +266,7 @@ def repositories():
         http_file,
         name = "rules_pycross_internal_deps_wheel_delvewheel_1.12.1_py3_none_any",
         urls = [
-            "https://us-python.pkg.dev/artifact-foundry-prod/ah-3p-staging-python/delvewheel/delvewheel-1.12.1-py3-none-any.whl",
+            "https://files.pythonhosted.org/packages/11/7a/69d66800a0e266a3b6de812e9a0e3b88730f18918b1e8cdcf806899e31b0/delvewheel-1.12.1-py3-none-any.whl",
         ],
         sha256 = "19ce88ba99e47c4fe452d5cc394d371499446b922ea2ae0d13682f636d980915",
         downloaded_file_path = "delvewheel-1.12.1-py3-none-any.whl",
@@ -276,7 +276,7 @@ def repositories():
         http_file,
         name = "rules_pycross_internal_deps_wheel_importlib_metadata_9.0.0_py3_none_any",
         urls = [
-            "https://us-python.pkg.dev/artifact-foundry-prod/ah-3p-staging-python/importlib-metadata/importlib_metadata-9.0.0-py3-none-any.whl",
+            "https://files.pythonhosted.org/packages/38/3d/2d244233ac4f76e38533cfcb2991c9eb4c7bf688ae0a036d30725b8faafe/importlib_metadata-9.0.0-py3-none-any.whl",
         ],
         sha256 = "2d21d1cc5a017bd0559e36150c21c830ab1dc304dedd1b7ea85d20f45ef3edd7",
         downloaded_file_path = "importlib_metadata-9.0.0-py3-none-any.whl",
@@ -286,7 +286,7 @@ def repositories():
         http_file,
         name = "rules_pycross_internal_deps_wheel_installer_1.0.0_py3_none_any",
         urls = [
-            "https://us-python.pkg.dev/artifact-foundry-prod/ah-3p-staging-python/installer/installer-1.0.0-py3-none-any.whl",
+            "https://files.pythonhosted.org/packages/fd/a8/7a1659fa61a225ea23b8e5d6d376e3ec427c994116141e6a1617dc253e0a/installer-1.0.0-py3-none-any.whl",
         ],
         sha256 = "7b46327ded20d8544bfe2d8561618bbcd12d88e7e3645333af1ed141d8bc1bfe",
         downloaded_file_path = "installer-1.0.0-py3-none-any.whl",
@@ -296,7 +296,7 @@ def repositories():
         http_file,
         name = "rules_pycross_internal_deps_wheel_macholib_1.16.4_py2.py3_none_any",
         urls = [
-            "https://us-python.pkg.dev/artifact-foundry-prod/ah-3p-staging-python/macholib/macholib-1.16.4-py2.py3-none-any.whl",
+            "https://files.pythonhosted.org/packages/c7/d1/a9f36f8ecdf0fb7c9b1e78c8d7af12b8c8754e74851ac7b94a8305540fc7/macholib-1.16.4-py2.py3-none-any.whl",
         ],
         sha256 = "da1a3fa8266e30f0ce7e97c6a54eefaae8edd1e5f86f3eb8b95457cae90265ea",
         downloaded_file_path = "macholib-1.16.4-py2.py3-none-any.whl",
@@ -306,7 +306,7 @@ def repositories():
         http_file,
         name = "rules_pycross_internal_deps_wheel_packaging_26.2_py3_none_any",
         urls = [
-            "https://us-python.pkg.dev/artifact-foundry-prod/ah-3p-staging-python/packaging/packaging-26.2-py3-none-any.whl",
+            "https://files.pythonhosted.org/packages/df/b2/87e62e8c3e2f4b32e5fe99e0b86d576da1312593b39f47d8ceef365e95ed/packaging-26.2-py3-none-any.whl",
         ],
         sha256 = "5fc45236b9446107ff2415ce77c807cee2862cb6fac22b8a73826d0693b0980e",
         downloaded_file_path = "packaging-26.2-py3-none-any.whl",
@@ -316,7 +316,7 @@ def repositories():
         http_file,
         name = "rules_pycross_internal_deps_wheel_pefile_2024.8.26_py3_none_any",
         urls = [
-            "https://us-python.pkg.dev/artifact-foundry-prod/ah-3p-staging-python/pefile/pefile-2024.8.26-py3-none-any.whl",
+            "https://files.pythonhosted.org/packages/54/16/12b82f791c7f50ddec566873d5bdd245baa1491bac11d15ffb98aecc8f8b/pefile-2024.8.26-py3-none-any.whl",
         ],
         sha256 = "76f8b485dcd3b1bb8166f1128d395fa3d87af26360c2358fb75b80019b957c6f",
         downloaded_file_path = "pefile-2024.8.26-py3-none-any.whl",
@@ -326,7 +326,7 @@ def repositories():
         http_file,
         name = "rules_pycross_internal_deps_wheel_pip_26.1.1_py3_none_any",
         urls = [
-            "https://us-python.pkg.dev/artifact-foundry-prod/ah-3p-staging-python/pip/pip-26.1.1-py3-none-any.whl",
+            "https://files.pythonhosted.org/packages/3a/eb/fea4d1d51c49832120f7f285d07306db3960f423a2612c6057caf3e8196f/pip-26.1.1-py3-none-any.whl",
         ],
         sha256 = "99cb1c2899893b075ff56e4ed0af55669a955b49ad7fb8d8603ecdaf4ed653fb",
         downloaded_file_path = "pip-26.1.1-py3-none-any.whl",
@@ -336,7 +336,7 @@ def repositories():
         http_file,
         name = "rules_pycross_internal_deps_wheel_poetry_core_2.4.0_py3_none_any",
         urls = [
-            "https://us-python.pkg.dev/artifact-foundry-prod/ah-3p-staging-python/poetry-core/poetry_core-2.4.0-py3-none-any.whl",
+            "https://files.pythonhosted.org/packages/6f/7f/6d97fb5b00cdb89159b648d16bee1d7c2c5046605c83868f36f940c99098/poetry_core-2.4.0-py3-none-any.whl",
         ],
         sha256 = "4305848477da00272bebd3f615bbec87f64bd117cdb858ab660b626a06a9d96c",
         downloaded_file_path = "poetry_core-2.4.0-py3-none-any.whl",
@@ -346,7 +346,7 @@ def repositories():
         http_file,
         name = "rules_pycross_internal_deps_wheel_pyelftools_0.32_py3_none_any",
         urls = [
-            "https://us-python.pkg.dev/artifact-foundry-prod/ah-3p-staging-python/pyelftools/pyelftools-0.32-py3-none-any.whl",
+            "https://files.pythonhosted.org/packages/af/43/700932c4f0638c3421177144a2e86448c0d75dbaee2c7936bda3f9fd0878/pyelftools-0.32-py3-none-any.whl",
         ],
         sha256 = "013df952a006db5e138b1edf6d8a68ecc50630adbd0d83a2d41e7f846163d738",
         downloaded_file_path = "pyelftools-0.32-py3-none-any.whl",
@@ -356,7 +356,7 @@ def repositories():
         http_file,
         name = "rules_pycross_internal_deps_wheel_pyproject_hooks_1.2.0_py3_none_any",
         urls = [
-            "https://us-python.pkg.dev/artifact-foundry-prod/ah-3p-staging-python/pyproject-hooks/pyproject_hooks-1.2.0-py3-none-any.whl",
+            "https://files.pythonhosted.org/packages/bd/24/12818598c362d7f300f18e74db45963dbcb85150324092410c8b49405e42/pyproject_hooks-1.2.0-py3-none-any.whl",
         ],
         sha256 = "9e5c6bfa8dcc30091c74b0cf803c81fdd29d94f01992a7707bc97babb1141913",
         downloaded_file_path = "pyproject_hooks-1.2.0-py3-none-any.whl",
@@ -366,7 +366,7 @@ def repositories():
         http_file,
         name = "rules_pycross_internal_deps_wheel_repairwheel_0.4.0_py3_none_any",
         urls = [
-            "https://us-python.pkg.dev/artifact-foundry-prod/ah-3p-staging-python/repairwheel/repairwheel-0.4.0-py3-none-any.whl",
+            "https://files.pythonhosted.org/packages/2e/23/035a91829de9be2235c81b62741dfda8675ac68d6724ac7b6cc4aff89fd7/repairwheel-0.4.0-py3-none-any.whl",
         ],
         sha256 = "25bc79f066937351d55321fe428793f95eb0807fb1d438ae0072d442285a4e6f",
         downloaded_file_path = "repairwheel-0.4.0-py3-none-any.whl",
@@ -376,7 +376,7 @@ def repositories():
         http_file,
         name = "rules_pycross_internal_deps_wheel_tomli_2.4.1_py3_none_any",
         urls = [
-            "https://us-python.pkg.dev/artifact-foundry-prod/ah-3p-staging-python/tomli/tomli-2.4.1-py3-none-any.whl",
+            "https://files.pythonhosted.org/packages/7b/61/cceae43728b7de99d9b847560c262873a1f6c98202171fd5ed62640b494b/tomli-2.4.1-py3-none-any.whl",
         ],
         sha256 = "0d85819802132122da43cb86656f8d1f8c6587d54ae7dcaf30e90533028b49fe",
         downloaded_file_path = "tomli-2.4.1-py3-none-any.whl",
@@ -386,7 +386,7 @@ def repositories():
         http_file,
         name = "rules_pycross_internal_deps_wheel_zipp_3.23.1_py3_none_any",
         urls = [
-            "https://us-python.pkg.dev/artifact-foundry-prod/ah-3p-staging-python/zipp/zipp-3.23.1-py3-none-any.whl",
+            "https://files.pythonhosted.org/packages/08/8a/0861bec20485572fbddf3dfba2910e38fe249796cb73ecdeb74e07eeb8d3/zipp-3.23.1-py3-none-any.whl",
         ],
         sha256 = "0b3596c50a5c700c9cb40ba8d86d9f2cc4807e9bedb06bcdf7fac85633e444dc",
         downloaded_file_path = "zipp-3.23.1-py3-none-any.whl",

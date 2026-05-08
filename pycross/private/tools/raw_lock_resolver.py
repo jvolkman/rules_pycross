@@ -449,7 +449,7 @@ def resolve(args: Any) -> ResolvedLockSet:
     if annotations:
         raise Exception(
             f"Annotations specified for packages that are not part of the locked set: "
-            f'{", ".join([str(key) for key in sorted(annotations.keys())])}'
+            f"{', '.join([str(key) for key in sorted(annotations.keys())])}"
         )
 
     resolved_packages = sorted(packages_by_package_key.values(), key=lambda x: x.key)
