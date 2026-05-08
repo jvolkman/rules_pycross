@@ -7,14 +7,14 @@ load("@bazel_tools//tools/build_defs/repo:utils.bzl", "maybe")
 load("//pycross:defs.bzl", "pycross_wheel_library")
 
 PINS = {
-    "build": "build@1.3.0",
-    "dacite": "dacite@1.6.0",
-    "installer": "installer@0.7.0",
-    "packaging": "packaging@23.2",
-    "pip": "pip@23.3.1",
-    "poetry-core": "poetry-core@1.8.1",
-    "repairwheel": "repairwheel@0.3.2",
-    "tomli": "tomli@2.0.1",
+    "build": "build@1.5.0",
+    "dacite": "dacite@1.9.2",
+    "installer": "installer@1.0.0",
+    "packaging": "packaging@26.2",
+    "pip": "pip@26.1.1",
+    "poetry-core": "poetry-core@2.4.0",
+    "repairwheel": "repairwheel@0.4.0",
+    "tomli": "tomli@2.4.1",
 }
 
 # buildifier: disable=unnamed-macro
@@ -37,106 +37,106 @@ def targets():
     })
 
     native.alias(
-        name = "_wheel_altgraph@0.17.4",
-        actual = "@rules_pycross_internal_deps_wheel_altgraph_0.17.4_py2.py3_none_any//file",
+        name = "_wheel_altgraph@0.17.5",
+        actual = "@rules_pycross_internal_deps_wheel_altgraph_0.17.5_py2.py3_none_any//file",
     )
 
     pycross_wheel_library(
-        name = "altgraph@0.17.4",
-        wheel = ":_wheel_altgraph@0.17.4",
+        name = "altgraph@0.17.5",
+        wheel = ":_wheel_altgraph@0.17.5",
     )
 
-    _build_1_3_0_deps = [
-        ":importlib-metadata@8.7.0",
-        ":packaging@23.2",
+    _build_1_5_0_deps = [
+        ":importlib-metadata@9.0.0",
+        ":packaging@26.2",
         ":pyproject-hooks@1.2.0",
-        ":tomli@2.0.1",
+        ":tomli@2.4.1",
     ]
 
     native.alias(
-        name = "_wheel_build@1.3.0",
-        actual = "@rules_pycross_internal_deps_wheel_build_1.3.0_py3_none_any//file",
+        name = "_wheel_build@1.5.0",
+        actual = "@rules_pycross_internal_deps_wheel_build_1.5.0_py3_none_any//file",
     )
 
     pycross_wheel_library(
-        name = "build@1.3.0",
-        deps = _build_1_3_0_deps,
-        wheel = ":_wheel_build@1.3.0",
+        name = "build@1.5.0",
+        deps = _build_1_5_0_deps,
+        wheel = ":_wheel_build@1.5.0",
     )
 
     native.alias(
-        name = "_wheel_dacite@1.6.0",
-        actual = "@rules_pycross_internal_deps_wheel_dacite_1.6.0_py3_none_any//file",
+        name = "_wheel_dacite@1.9.2",
+        actual = "@rules_pycross_internal_deps_wheel_dacite_1.9.2_py3_none_any//file",
     )
 
     pycross_wheel_library(
-        name = "dacite@1.6.0",
-        wheel = ":_wheel_dacite@1.6.0",
+        name = "dacite@1.9.2",
+        wheel = ":_wheel_dacite@1.9.2",
     )
 
-    _delvewheel_1_11_2_deps = [
+    _delvewheel_1_12_1_deps = [
         ":pefile@2024.8.26",
     ]
 
     native.alias(
-        name = "_wheel_delvewheel@1.11.2",
-        actual = "@rules_pycross_internal_deps_wheel_delvewheel_1.11.2_py3_none_any//file",
+        name = "_wheel_delvewheel@1.12.1",
+        actual = "@rules_pycross_internal_deps_wheel_delvewheel_1.12.1_py3_none_any//file",
     )
 
     pycross_wheel_library(
-        name = "delvewheel@1.11.2",
-        deps = _delvewheel_1_11_2_deps,
-        wheel = ":_wheel_delvewheel@1.11.2",
+        name = "delvewheel@1.12.1",
+        deps = _delvewheel_1_12_1_deps,
+        wheel = ":_wheel_delvewheel@1.12.1",
     )
 
-    _importlib_metadata_8_7_0_deps = [
-        ":zipp@3.23.0",
+    _importlib_metadata_9_0_0_deps = [
+        ":zipp@3.23.1",
     ]
 
     native.alias(
-        name = "_wheel_importlib-metadata@8.7.0",
-        actual = "@rules_pycross_internal_deps_wheel_importlib_metadata_8.7.0_py3_none_any//file",
+        name = "_wheel_importlib-metadata@9.0.0",
+        actual = "@rules_pycross_internal_deps_wheel_importlib_metadata_9.0.0_py3_none_any//file",
     )
 
     pycross_wheel_library(
-        name = "importlib-metadata@8.7.0",
-        deps = _importlib_metadata_8_7_0_deps,
-        wheel = ":_wheel_importlib-metadata@8.7.0",
+        name = "importlib-metadata@9.0.0",
+        deps = _importlib_metadata_9_0_0_deps,
+        wheel = ":_wheel_importlib-metadata@9.0.0",
     )
 
     native.alias(
-        name = "_wheel_installer@0.7.0",
-        actual = "@rules_pycross_internal_deps_wheel_installer_0.7.0_py3_none_any//file",
+        name = "_wheel_installer@1.0.0",
+        actual = "@rules_pycross_internal_deps_wheel_installer_1.0.0_py3_none_any//file",
     )
 
     pycross_wheel_library(
-        name = "installer@0.7.0",
-        wheel = ":_wheel_installer@0.7.0",
+        name = "installer@1.0.0",
+        wheel = ":_wheel_installer@1.0.0",
     )
 
-    _macholib_1_16_3_deps = [
-        ":altgraph@0.17.4",
+    _macholib_1_16_4_deps = [
+        ":altgraph@0.17.5",
     ]
 
     native.alias(
-        name = "_wheel_macholib@1.16.3",
-        actual = "@rules_pycross_internal_deps_wheel_macholib_1.16.3_py2.py3_none_any//file",
+        name = "_wheel_macholib@1.16.4",
+        actual = "@rules_pycross_internal_deps_wheel_macholib_1.16.4_py2.py3_none_any//file",
     )
 
     pycross_wheel_library(
-        name = "macholib@1.16.3",
-        deps = _macholib_1_16_3_deps,
-        wheel = ":_wheel_macholib@1.16.3",
+        name = "macholib@1.16.4",
+        deps = _macholib_1_16_4_deps,
+        wheel = ":_wheel_macholib@1.16.4",
     )
 
     native.alias(
-        name = "_wheel_packaging@23.2",
-        actual = "@rules_pycross_internal_deps_wheel_packaging_23.2_py3_none_any//file",
+        name = "_wheel_packaging@26.2",
+        actual = "@rules_pycross_internal_deps_wheel_packaging_26.2_py3_none_any//file",
     )
 
     pycross_wheel_library(
-        name = "packaging@23.2",
-        wheel = ":_wheel_packaging@23.2",
+        name = "packaging@26.2",
+        wheel = ":_wheel_packaging@26.2",
     )
 
     native.alias(
@@ -150,23 +150,23 @@ def targets():
     )
 
     native.alias(
-        name = "_wheel_pip@23.3.1",
-        actual = "@rules_pycross_internal_deps_wheel_pip_23.3.1_py3_none_any//file",
+        name = "_wheel_pip@26.1.1",
+        actual = "@rules_pycross_internal_deps_wheel_pip_26.1.1_py3_none_any//file",
     )
 
     pycross_wheel_library(
-        name = "pip@23.3.1",
-        wheel = ":_wheel_pip@23.3.1",
+        name = "pip@26.1.1",
+        wheel = ":_wheel_pip@26.1.1",
     )
 
     native.alias(
-        name = "_wheel_poetry-core@1.8.1",
-        actual = "@rules_pycross_internal_deps_wheel_poetry_core_1.8.1_py3_none_any//file",
+        name = "_wheel_poetry-core@2.4.0",
+        actual = "@rules_pycross_internal_deps_wheel_poetry_core_2.4.0_py3_none_any//file",
     )
 
     pycross_wheel_library(
-        name = "poetry-core@1.8.1",
-        wheel = ":_wheel_poetry-core@1.8.1",
+        name = "poetry-core@2.4.0",
+        wheel = ":_wheel_poetry-core@2.4.0",
     )
 
     native.alias(
@@ -189,43 +189,43 @@ def targets():
         wheel = ":_wheel_pyproject-hooks@1.2.0",
     )
 
-    _repairwheel_0_3_2_deps = [
-        ":delvewheel@1.11.2",
-        ":macholib@1.16.3",
-        ":packaging@23.2",
+    _repairwheel_0_4_0_deps = [
+        ":delvewheel@1.12.1",
+        ":macholib@1.16.4",
+        ":packaging@26.2",
         ":pefile@2024.8.26",
         ":pyelftools@0.32",
     ]
 
     native.alias(
-        name = "_wheel_repairwheel@0.3.2",
-        actual = "@rules_pycross_internal_deps_wheel_repairwheel_0.3.2_py3_none_any//file",
+        name = "_wheel_repairwheel@0.4.0",
+        actual = "@rules_pycross_internal_deps_wheel_repairwheel_0.4.0_py3_none_any//file",
     )
 
     pycross_wheel_library(
-        name = "repairwheel@0.3.2",
-        deps = _repairwheel_0_3_2_deps,
-        wheel = ":_wheel_repairwheel@0.3.2",
+        name = "repairwheel@0.4.0",
+        deps = _repairwheel_0_4_0_deps,
+        wheel = ":_wheel_repairwheel@0.4.0",
     )
 
     native.alias(
-        name = "_wheel_tomli@2.0.1",
-        actual = "@rules_pycross_internal_deps_wheel_tomli_2.0.1_py3_none_any//file",
+        name = "_wheel_tomli@2.4.1",
+        actual = "@rules_pycross_internal_deps_wheel_tomli_2.4.1_py3_none_any//file",
     )
 
     pycross_wheel_library(
-        name = "tomli@2.0.1",
-        wheel = ":_wheel_tomli@2.0.1",
+        name = "tomli@2.4.1",
+        wheel = ":_wheel_tomli@2.4.1",
     )
 
     native.alias(
-        name = "_wheel_zipp@3.23.0",
-        actual = "@rules_pycross_internal_deps_wheel_zipp_3.23.0_py3_none_any//file",
+        name = "_wheel_zipp@3.23.1",
+        actual = "@rules_pycross_internal_deps_wheel_zipp_3.23.1_py3_none_any//file",
     )
 
     pycross_wheel_library(
-        name = "zipp@3.23.0",
-        wheel = ":_wheel_zipp@3.23.0",
+        name = "zipp@3.23.1",
+        wheel = ":_wheel_zipp@3.23.1",
     )
 
 # buildifier: disable=unnamed-macro
@@ -234,89 +234,89 @@ def repositories():
 
     maybe(
         http_file,
-        name = "rules_pycross_internal_deps_wheel_altgraph_0.17.4_py2.py3_none_any",
+        name = "rules_pycross_internal_deps_wheel_altgraph_0.17.5_py2.py3_none_any",
         urls = [
-            "https://files.pythonhosted.org/packages/4d/3f/3bc3f1d83f6e4a7fcb834d3720544ca597590425be5ba9db032b2bf322a2/altgraph-0.17.4-py2.py3-none-any.whl",
+            "https://us-python.pkg.dev/artifact-foundry-prod/ah-3p-staging-python/altgraph/altgraph-0.17.5-py2.py3-none-any.whl",
         ],
-        sha256 = "642743b4750de17e655e6711601b077bc6598dbfa3ba5fa2b2a35ce12b508dff",
-        downloaded_file_path = "altgraph-0.17.4-py2.py3-none-any.whl",
+        sha256 = "f3a22400bce1b0c701683820ac4f3b159cd301acab067c51c653e06961600597",
+        downloaded_file_path = "altgraph-0.17.5-py2.py3-none-any.whl",
     )
 
     maybe(
         http_file,
-        name = "rules_pycross_internal_deps_wheel_build_1.3.0_py3_none_any",
+        name = "rules_pycross_internal_deps_wheel_build_1.5.0_py3_none_any",
         urls = [
-            "https://files.pythonhosted.org/packages/cb/8c/2b30c12155ad8de0cf641d76a8b396a16d2c36bc6d50b621a62b7c4567c1/build-1.3.0-py3-none-any.whl",
+            "https://us-python.pkg.dev/artifact-foundry-prod/ah-3p-staging-python/build/build-1.5.0-py3-none-any.whl",
         ],
-        sha256 = "7145f0b5061ba90a1500d60bd1b13ca0a8a4cebdd0cc16ed8adf1c0e739f43b4",
-        downloaded_file_path = "build-1.3.0-py3-none-any.whl",
+        sha256 = "13f3eecb844759ab66efec90ca17639bbf14dc06cb2fdf37a9010322d9c50a6f",
+        downloaded_file_path = "build-1.5.0-py3-none-any.whl",
     )
 
     maybe(
         http_file,
-        name = "rules_pycross_internal_deps_wheel_dacite_1.6.0_py3_none_any",
+        name = "rules_pycross_internal_deps_wheel_dacite_1.9.2_py3_none_any",
         urls = [
-            "https://files.pythonhosted.org/packages/06/9d/11a073172d889e9e0d0ad270a1b468876c82d759af7864a8095dfc73f46d/dacite-1.6.0-py3-none-any.whl",
+            "https://us-python.pkg.dev/artifact-foundry-prod/ah-3p-staging-python/dacite/dacite-1.9.2-py3-none-any.whl",
         ],
-        sha256 = "4331535f7aabb505c732fa4c3c094313fc0a1d5ea19907bf4726a7819a68b93f",
-        downloaded_file_path = "dacite-1.6.0-py3-none-any.whl",
+        sha256 = "053f7c3f5128ca2e9aceb66892b1a3c8936d02c686e707bee96e19deef4bc4a0",
+        downloaded_file_path = "dacite-1.9.2-py3-none-any.whl",
     )
 
     maybe(
         http_file,
-        name = "rules_pycross_internal_deps_wheel_delvewheel_1.11.2_py3_none_any",
+        name = "rules_pycross_internal_deps_wheel_delvewheel_1.12.1_py3_none_any",
         urls = [
-            "https://files.pythonhosted.org/packages/58/44/ba50aa4c7c70b802a4335d43b6053101736a2597bbe1c10d1202600357e1/delvewheel-1.11.2-py3-none-any.whl",
+            "https://us-python.pkg.dev/artifact-foundry-prod/ah-3p-staging-python/delvewheel/delvewheel-1.12.1-py3-none-any.whl",
         ],
-        sha256 = "0e7fcd24d4cefb3285e1e40b9873e9164ebd310f7e2597015d3b6adbd1605d01",
-        downloaded_file_path = "delvewheel-1.11.2-py3-none-any.whl",
+        sha256 = "19ce88ba99e47c4fe452d5cc394d371499446b922ea2ae0d13682f636d980915",
+        downloaded_file_path = "delvewheel-1.12.1-py3-none-any.whl",
     )
 
     maybe(
         http_file,
-        name = "rules_pycross_internal_deps_wheel_importlib_metadata_8.7.0_py3_none_any",
+        name = "rules_pycross_internal_deps_wheel_importlib_metadata_9.0.0_py3_none_any",
         urls = [
-            "https://files.pythonhosted.org/packages/20/b0/36bd937216ec521246249be3bf9855081de4c5e06a0c9b4219dbeda50373/importlib_metadata-8.7.0-py3-none-any.whl",
+            "https://us-python.pkg.dev/artifact-foundry-prod/ah-3p-staging-python/importlib-metadata/importlib_metadata-9.0.0-py3-none-any.whl",
         ],
-        sha256 = "e5dd1551894c77868a30651cef00984d50e1002d06942a7101d34870c5f02afd",
-        downloaded_file_path = "importlib_metadata-8.7.0-py3-none-any.whl",
+        sha256 = "2d21d1cc5a017bd0559e36150c21c830ab1dc304dedd1b7ea85d20f45ef3edd7",
+        downloaded_file_path = "importlib_metadata-9.0.0-py3-none-any.whl",
     )
 
     maybe(
         http_file,
-        name = "rules_pycross_internal_deps_wheel_installer_0.7.0_py3_none_any",
+        name = "rules_pycross_internal_deps_wheel_installer_1.0.0_py3_none_any",
         urls = [
-            "https://files.pythonhosted.org/packages/e5/ca/1172b6638d52f2d6caa2dd262ec4c811ba59eee96d54a7701930726bce18/installer-0.7.0-py3-none-any.whl",
+            "https://us-python.pkg.dev/artifact-foundry-prod/ah-3p-staging-python/installer/installer-1.0.0-py3-none-any.whl",
         ],
-        sha256 = "05d1933f0a5ba7d8d6296bb6d5018e7c94fa473ceb10cf198a92ccea19c27b53",
-        downloaded_file_path = "installer-0.7.0-py3-none-any.whl",
+        sha256 = "7b46327ded20d8544bfe2d8561618bbcd12d88e7e3645333af1ed141d8bc1bfe",
+        downloaded_file_path = "installer-1.0.0-py3-none-any.whl",
     )
 
     maybe(
         http_file,
-        name = "rules_pycross_internal_deps_wheel_macholib_1.16.3_py2.py3_none_any",
+        name = "rules_pycross_internal_deps_wheel_macholib_1.16.4_py2.py3_none_any",
         urls = [
-            "https://files.pythonhosted.org/packages/d1/5d/c059c180c84f7962db0aeae7c3b9303ed1d73d76f2bfbc32bc231c8be314/macholib-1.16.3-py2.py3-none-any.whl",
+            "https://us-python.pkg.dev/artifact-foundry-prod/ah-3p-staging-python/macholib/macholib-1.16.4-py2.py3-none-any.whl",
         ],
-        sha256 = "0e315d7583d38b8c77e815b1ecbdbf504a8258d8b3e17b61165c6feb60d18f2c",
-        downloaded_file_path = "macholib-1.16.3-py2.py3-none-any.whl",
+        sha256 = "da1a3fa8266e30f0ce7e97c6a54eefaae8edd1e5f86f3eb8b95457cae90265ea",
+        downloaded_file_path = "macholib-1.16.4-py2.py3-none-any.whl",
     )
 
     maybe(
         http_file,
-        name = "rules_pycross_internal_deps_wheel_packaging_23.2_py3_none_any",
+        name = "rules_pycross_internal_deps_wheel_packaging_26.2_py3_none_any",
         urls = [
-            "https://files.pythonhosted.org/packages/ec/1a/610693ac4ee14fcdf2d9bf3c493370e4f2ef7ae2e19217d7a237ff42367d/packaging-23.2-py3-none-any.whl",
+            "https://us-python.pkg.dev/artifact-foundry-prod/ah-3p-staging-python/packaging/packaging-26.2-py3-none-any.whl",
         ],
-        sha256 = "8c491190033a9af7e1d931d0b5dacc2ef47509b34dd0de67ed209b5203fc88c7",
-        downloaded_file_path = "packaging-23.2-py3-none-any.whl",
+        sha256 = "5fc45236b9446107ff2415ce77c807cee2862cb6fac22b8a73826d0693b0980e",
+        downloaded_file_path = "packaging-26.2-py3-none-any.whl",
     )
 
     maybe(
         http_file,
         name = "rules_pycross_internal_deps_wheel_pefile_2024.8.26_py3_none_any",
         urls = [
-            "https://files.pythonhosted.org/packages/54/16/12b82f791c7f50ddec566873d5bdd245baa1491bac11d15ffb98aecc8f8b/pefile-2024.8.26-py3-none-any.whl",
+            "https://us-python.pkg.dev/artifact-foundry-prod/ah-3p-staging-python/pefile/pefile-2024.8.26-py3-none-any.whl",
         ],
         sha256 = "76f8b485dcd3b1bb8166f1128d395fa3d87af26360c2358fb75b80019b957c6f",
         downloaded_file_path = "pefile-2024.8.26-py3-none-any.whl",
@@ -324,29 +324,29 @@ def repositories():
 
     maybe(
         http_file,
-        name = "rules_pycross_internal_deps_wheel_pip_23.3.1_py3_none_any",
+        name = "rules_pycross_internal_deps_wheel_pip_26.1.1_py3_none_any",
         urls = [
-            "https://files.pythonhosted.org/packages/47/6a/453160888fab7c6a432a6e25f8afe6256d0d9f2cbd25971021da6491d899/pip-23.3.1-py3-none-any.whl",
+            "https://us-python.pkg.dev/artifact-foundry-prod/ah-3p-staging-python/pip/pip-26.1.1-py3-none-any.whl",
         ],
-        sha256 = "55eb67bb6171d37447e82213be585b75fe2b12b359e993773aca4de9247a052b",
-        downloaded_file_path = "pip-23.3.1-py3-none-any.whl",
+        sha256 = "99cb1c2899893b075ff56e4ed0af55669a955b49ad7fb8d8603ecdaf4ed653fb",
+        downloaded_file_path = "pip-26.1.1-py3-none-any.whl",
     )
 
     maybe(
         http_file,
-        name = "rules_pycross_internal_deps_wheel_poetry_core_1.8.1_py3_none_any",
+        name = "rules_pycross_internal_deps_wheel_poetry_core_2.4.0_py3_none_any",
         urls = [
-            "https://files.pythonhosted.org/packages/99/bc/058b8ff87871fce6615ad032d62c773272f243266b110f7b86d146cf78d8/poetry_core-1.8.1-py3-none-any.whl",
+            "https://us-python.pkg.dev/artifact-foundry-prod/ah-3p-staging-python/poetry-core/poetry_core-2.4.0-py3-none-any.whl",
         ],
-        sha256 = "194832b24f3283e01c5402eae71a6aae850ecdfe53f50a979c76bf7aa5010ffa",
-        downloaded_file_path = "poetry_core-1.8.1-py3-none-any.whl",
+        sha256 = "4305848477da00272bebd3f615bbec87f64bd117cdb858ab660b626a06a9d96c",
+        downloaded_file_path = "poetry_core-2.4.0-py3-none-any.whl",
     )
 
     maybe(
         http_file,
         name = "rules_pycross_internal_deps_wheel_pyelftools_0.32_py3_none_any",
         urls = [
-            "https://files.pythonhosted.org/packages/af/43/700932c4f0638c3421177144a2e86448c0d75dbaee2c7936bda3f9fd0878/pyelftools-0.32-py3-none-any.whl",
+            "https://us-python.pkg.dev/artifact-foundry-prod/ah-3p-staging-python/pyelftools/pyelftools-0.32-py3-none-any.whl",
         ],
         sha256 = "013df952a006db5e138b1edf6d8a68ecc50630adbd0d83a2d41e7f846163d738",
         downloaded_file_path = "pyelftools-0.32-py3-none-any.whl",
@@ -356,7 +356,7 @@ def repositories():
         http_file,
         name = "rules_pycross_internal_deps_wheel_pyproject_hooks_1.2.0_py3_none_any",
         urls = [
-            "https://files.pythonhosted.org/packages/bd/24/12818598c362d7f300f18e74db45963dbcb85150324092410c8b49405e42/pyproject_hooks-1.2.0-py3-none-any.whl",
+            "https://us-python.pkg.dev/artifact-foundry-prod/ah-3p-staging-python/pyproject-hooks/pyproject_hooks-1.2.0-py3-none-any.whl",
         ],
         sha256 = "9e5c6bfa8dcc30091c74b0cf803c81fdd29d94f01992a7707bc97babb1141913",
         downloaded_file_path = "pyproject_hooks-1.2.0-py3-none-any.whl",
@@ -364,30 +364,30 @@ def repositories():
 
     maybe(
         http_file,
-        name = "rules_pycross_internal_deps_wheel_repairwheel_0.3.2_py3_none_any",
+        name = "rules_pycross_internal_deps_wheel_repairwheel_0.4.0_py3_none_any",
         urls = [
-            "https://files.pythonhosted.org/packages/92/e2/61fd32315057099516bf931a3d7199370fab57e4dc9fd9f8bd79dcf64115/repairwheel-0.3.2-py3-none-any.whl",
+            "https://us-python.pkg.dev/artifact-foundry-prod/ah-3p-staging-python/repairwheel/repairwheel-0.4.0-py3-none-any.whl",
         ],
-        sha256 = "638770df8c5e3384bfa60220ca4f254a8243c436c8f3b649269a126ad5d71dc5",
-        downloaded_file_path = "repairwheel-0.3.2-py3-none-any.whl",
+        sha256 = "25bc79f066937351d55321fe428793f95eb0807fb1d438ae0072d442285a4e6f",
+        downloaded_file_path = "repairwheel-0.4.0-py3-none-any.whl",
     )
 
     maybe(
         http_file,
-        name = "rules_pycross_internal_deps_wheel_tomli_2.0.1_py3_none_any",
+        name = "rules_pycross_internal_deps_wheel_tomli_2.4.1_py3_none_any",
         urls = [
-            "https://files.pythonhosted.org/packages/97/75/10a9ebee3fd790d20926a90a2547f0bf78f371b2f13aa822c759680ca7b9/tomli-2.0.1-py3-none-any.whl",
+            "https://us-python.pkg.dev/artifact-foundry-prod/ah-3p-staging-python/tomli/tomli-2.4.1-py3-none-any.whl",
         ],
-        sha256 = "939de3e7a6161af0c887ef91b7d41a53e7c5a1ca976325f429cb46ea9bc30ecc",
-        downloaded_file_path = "tomli-2.0.1-py3-none-any.whl",
+        sha256 = "0d85819802132122da43cb86656f8d1f8c6587d54ae7dcaf30e90533028b49fe",
+        downloaded_file_path = "tomli-2.4.1-py3-none-any.whl",
     )
 
     maybe(
         http_file,
-        name = "rules_pycross_internal_deps_wheel_zipp_3.23.0_py3_none_any",
+        name = "rules_pycross_internal_deps_wheel_zipp_3.23.1_py3_none_any",
         urls = [
-            "https://files.pythonhosted.org/packages/2e/54/647ade08bf0db230bfea292f893923872fd20be6ac6f53b2b936ba839d75/zipp-3.23.0-py3-none-any.whl",
+            "https://us-python.pkg.dev/artifact-foundry-prod/ah-3p-staging-python/zipp/zipp-3.23.1-py3-none-any.whl",
         ],
-        sha256 = "071652d6115ed432f5ce1d34c336c0adfd6a884660d1e9712a256d3d3bd4b14e",
-        downloaded_file_path = "zipp-3.23.0-py3-none-any.whl",
+        sha256 = "0b3596c50a5c700c9cb40ba8d86d9f2cc4807e9bedb06bcdf7fac85633e444dc",
+        downloaded_file_path = "zipp-3.23.1-py3-none-any.whl",
     )

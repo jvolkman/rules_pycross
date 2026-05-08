@@ -42,12 +42,12 @@ pycross.configure_toolchains()
 use_repo(
     pycross,
     "rules_pycross_internal",
-    "rules_pycross_internal_deps_wheel_dacite_1.6.0_py3_none_any",
-    "rules_pycross_internal_deps_wheel_installer_0.7.0_py3_none_any",
-    "rules_pycross_internal_deps_wheel_packaging_23.2_py3_none_any",
-    "rules_pycross_internal_deps_wheel_pip_23.3.1_py3_none_any",
-    "rules_pycross_internal_deps_wheel_poetry_core_1.8.1_py3_none_any",
-    "rules_pycross_internal_deps_wheel_tomli_2.0.1_py3_none_any",
+    "rules_pycross_internal_deps_wheel_dacite_1.9.2_py3_none_any",
+    "rules_pycross_internal_deps_wheel_installer_1.0.0_py3_none_any",
+    "rules_pycross_internal_deps_wheel_packaging_26.2_py3_none_any",
+    "rules_pycross_internal_deps_wheel_pip_26.1.1_py3_none_any",
+    "rules_pycross_internal_deps_wheel_poetry_core_2.4.0_py3_none_any",
+    "rules_pycross_internal_deps_wheel_tomli_2.4.1_py3_none_any",
 )
 
 toolchains = use_extension("@rules_pycross//pycross/private/bzlmod:toolchains.bzl", "toolchains")
