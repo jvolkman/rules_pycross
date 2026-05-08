@@ -2,6 +2,7 @@
 A tool that uses pypa/installer to install wheel files to a specified directory.
 The wheels may be pre-built or built from sdist tarballs using pypa/build (via wheel_builder.py).
 """
+
 from __future__ import annotations
 
 import fnmatch
@@ -22,7 +23,6 @@ from installer import install
 from installer.destinations import SchemeDictionaryDestination
 from installer.sources import WheelContentElement
 from installer.sources import WheelFile
-
 from pycross.private.tools import namespace_pkgs
 from pycross.private.tools.args import FlagFileArgumentParser
 

@@ -1,4 +1,5 @@
 """Utility functions to discover python package types"""
+
 import os
 import textwrap
 from pathlib import Path  # supported in >= 3.4

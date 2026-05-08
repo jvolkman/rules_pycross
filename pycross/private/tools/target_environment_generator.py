@@ -2,6 +2,7 @@
 A tool that takes an input PEP 425 tag and an optional list of environment
 marker overrides and outputs the result of guessed markers with overrides.
 """
+
 from __future__ import annotations
 
 import json
@@ -18,7 +19,6 @@ from typing import Optional
 from dacite.config import Config
 from dacite.core import from_dict
 from pip._internal.models.target_python import TargetPython
-
 from pycross.private.tools.args import FlagFileArgumentParser
 from pycross.private.tools.target_environment import TargetEnv
 

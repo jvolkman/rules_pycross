@@ -24,19 +24,18 @@ from pip._internal.index.package_finder import LinkEvaluator
 from pip._internal.index.package_finder import LinkType
 from pip._internal.models.candidate import InstallationCandidate
 from pip._internal.models.link import Link
-
 from pycross.private.tools.args import FlagFileArgumentParser
 from pycross.private.tools.lock_model import EnvironmentReference
 from pycross.private.tools.lock_model import FileKey
 from pycross.private.tools.lock_model import FileReference
-from pycross.private.tools.lock_model import is_wheel
-from pycross.private.tools.lock_model import package_canonical_name
 from pycross.private.tools.lock_model import PackageFile
 from pycross.private.tools.lock_model import PackageKey
 from pycross.private.tools.lock_model import RawLockSet
 from pycross.private.tools.lock_model import RawPackage
 from pycross.private.tools.lock_model import ResolvedLockSet
 from pycross.private.tools.lock_model import ResolvedPackage
+from pycross.private.tools.lock_model import is_wheel
+from pycross.private.tools.lock_model import package_canonical_name
 from pycross.private.tools.target_environment import TargetEnv
 
 
@@ -46,9 +45,9 @@ class PackageSource:
     file: Optional[PackageFile] = None
 
     def __post_init__(self):
-        assert (
-            int(self.label is not None) + int(self.file is not None) == 1
-        ), "Exactly one of label or file must be specified."
+        assert int(self.label is not None) + int(self.file is not None) == 1, (
+            "Exactly one of label or file must be specified."
+        )
 
     @property
     def file_reference(self) -> FileReference:

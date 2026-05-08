@@ -16,12 +16,11 @@ from typing import Tuple
 from dacite.config import Config
 from dacite.core import from_dict
 from packaging.specifiers import SpecifierSet
-from packaging.utils import canonicalize_name
 from packaging.utils import NormalizedName
+from packaging.utils import canonicalize_name
 from packaging.utils import parse_sdist_filename
 from packaging.utils import parse_wheel_filename
 from packaging.version import Version
-
 from pycross.private.tools.target_environment import TargetEnv
 
 
@@ -108,9 +107,9 @@ class FileReference:
     key: Optional[FileKey] = None
 
     def __post_init__(self):
-        assert (
-            int(self.label is not None) + int(self.key is not None) == 1
-        ), "Exactly one of label or key must be specified."
+        assert int(self.label is not None) + int(self.key is not None) == 1, (
+            "Exactly one of label or key must be specified."
+        )
 
 
 @dataclass
@@ -126,9 +125,9 @@ class EnvironmentReference:
     config_setting_label: Optional[str] = None
 
     def __post_init__(self):
-        assert (
-            int(self.config_setting is not None) + int(self.config_setting_label is not None) == 1
-        ), "Exactly one of config_setting or config_setting_label must be specified."
+        assert int(self.config_setting is not None) + int(self.config_setting_label is not None) == 1, (
+            "Exactly one of config_setting or config_setting_label must be specified."
+        )
 
     @classmethod
     def from_target_env(cls, environment_label: str, target_env: TargetEnv) -> EnvironmentReference:

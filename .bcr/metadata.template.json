@@ -4,11 +4,13 @@
     {
       "email": "jeremy@jvolkman.com",
       "github": "jvolkman",
-      "name": "Jeremy Volkman",
-      "github_user_id": 124501
+      "github_user_id": 124501,
+      "name": "Jeremy Volkman"
     }
   ],
-  "repository": ["github:jvolkman/rules_pycross"],
+  "repository": [
+    "github:jvolkman/rules_pycross"
+  ],
   "versions": [],
   "yanked_versions": {}
 }

@@ -4,34 +4,32 @@
 
 # Commitizen runs in commit-msg stage
 # but we don't want to run the other hooks on commit messages
-default_stages: [commit]
+default_stages: [pre-commit]
 
-exclude: (^third_party/.*$|\.lock$)
+exclude: (^third_party/.*$|\.lock$|^docs/.*$)
 repos:
   # Check formatting and lint for starlark code
   - repo: https://github.com/keith/pre-commit-buildifier
-    rev: 8.2.1
+    rev: 8.5.1.1
     hooks:
       - id: buildifier
       - id: buildifier-lint
+        args: ["--warnings=-canonical-repository"]
   # - repo: https://github.com/commitizen-tools/commitizen
   #   rev: v2.18.0
   #   hooks:
   #     # Requires that commitizen is already installed
   #     - id: commitizen
   #       stages: [commit-msg]
-  - repo: https://github.com/pre-commit/mirrors-prettier
-    rev: "v3.1.0"
-    hooks:
-      - id: prettier
+
   - repo: https://github.com/charliermarsh/ruff-pre-commit
-    rev: v0.1.6
+    rev: v0.15.12
     hooks:
       - id: ruff
         args: [--fix, --show-fixes]
       - id: ruff-format
   - repo: https://github.com/codespell-project/codespell
-    rev: "v2.2.6"
+    rev: "v2.4.2"
     hooks:
       - id: codespell
         args: ["-L", "sur"]
@@ -41,15 +39,27 @@ repos:
       - id: rst-backticks
       - id: rst-directive-colons
       - id: rst-inline-touching-normal
-  - repo: https://github.com/asottile/reorder_python_imports
-    rev: v3.12.0
-    hooks:
-      - id: reorder-python-imports
+
   - repo: https://github.com/MarcoGorelli/absolufy-imports
     rev: v0.3.1
     hooks:
       - id: absolufy-imports
-  # - repo: https://github.com/psf/black
-  #   rev: 23.11.0
-  #   hooks:
-  #     - id: black
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      - id: check-json
+      - id: check-yaml
+      - id: pretty-format-json
+        args: [--autofix]
+
+  - repo: https://github.com/adrienverge/yamllint
+    rev: v1.38.0
+    hooks:
+      - id: yamllint
+        args: [-d, "{rules: {document-start: disable}}"]
+
+  - repo: https://github.com/jackdewinter/pymarkdown
+    rev: v0.9.37
+    hooks:
+      - id: pymarkdown
+        args: ["-d", "MD013,MD033,MD024,MD037,MD041,MD034,MD001,MD026,MD040", "scan"]

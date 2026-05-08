@@ -14,17 +14,16 @@ from packaging.utils import NormalizedName
 from packaging.utils import parse_sdist_filename
 from packaging.utils import parse_wheel_filename
 from packaging.version import Version
-from poetry.core.constraints.version import parse_constraint
 from poetry.core.constraints.version import Version as PoetryVersion
+from poetry.core.constraints.version import parse_constraint
 from poetry.core.version import markers
-
 from pycross.private.tools.args import FlagFileArgumentParser
-from pycross.private.tools.lock_model import package_canonical_name
 from pycross.private.tools.lock_model import PackageDependency
 from pycross.private.tools.lock_model import PackageFile
 from pycross.private.tools.lock_model import PackageKey
 from pycross.private.tools.lock_model import RawLockSet
 from pycross.private.tools.lock_model import RawPackage
+from pycross.private.tools.lock_model import package_canonical_name
 
 
 class MismatchedVersionException(Exception):

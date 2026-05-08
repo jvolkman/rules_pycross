@@ -1,6 +1,6 @@
 # TODO write a meaningful smoke test
 
-#---SNIP--- Below here is re-used in the workspace snippet published on releases
+#---SNIP--- Below here is reused in the workspace snippet published on releases
 
 # change this to something that works in your environment.
 load("@rules_pycross//pycross:repositories.bzl", "rules_pycross_dependencies")
