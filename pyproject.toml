@@ -27,6 +27,12 @@ line-length = 120
 [tool.ruff]
 line-length = 120
 
+[tool.ruff.lint]
+extend-select = ["I"]
+
+[tool.ruff.lint.isort]
+force-single-line = true
+
 [tool.pylint]
 line-length = 120
 

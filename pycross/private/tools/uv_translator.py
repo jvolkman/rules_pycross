@@ -17,14 +17,13 @@ from packaging.requirements import Requirement
 from packaging.specifiers import SpecifierSet
 from packaging.utils import NormalizedName
 from packaging.version import Version
-
 from pycross.private.tools.args import FlagFileArgumentParser
-from pycross.private.tools.lock_model import package_canonical_name
 from pycross.private.tools.lock_model import PackageDependency
 from pycross.private.tools.lock_model import PackageFile
 from pycross.private.tools.lock_model import PackageKey
 from pycross.private.tools.lock_model import RawLockSet
 from pycross.private.tools.lock_model import RawPackage
+from pycross.private.tools.lock_model import package_canonical_name
 
 
 class LockfileIncompatibleException(Exception):

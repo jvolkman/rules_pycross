@@ -1,6 +1,7 @@
 """
 Dead simple template engine.
 """
+
 import copy
 import re
 

@@ -20,11 +20,11 @@ from pycross.private.tools.args import FlagFileArgumentParser
 from pycross.private.tools.lock_model import ConfigSetting
 from pycross.private.tools.lock_model import FileKey
 from pycross.private.tools.lock_model import FileReference
-from pycross.private.tools.lock_model import package_canonical_name
 from pycross.private.tools.lock_model import PackageFile
 from pycross.private.tools.lock_model import PackageKey
 from pycross.private.tools.lock_model import ResolvedLockSet
 from pycross.private.tools.lock_model import ResolvedPackage
+from pycross.private.tools.lock_model import package_canonical_name
 
 
 def ind(text: str, tabs=1):

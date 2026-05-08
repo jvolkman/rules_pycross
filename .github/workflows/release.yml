@@ -1,6 +1,6 @@
 # Cut a release whenever a new tag is pushed to the repo.
 name: Release
-on:
+"on":
   # Can be triggered from the tag.yaml workflow
   workflow_call:
     inputs:
