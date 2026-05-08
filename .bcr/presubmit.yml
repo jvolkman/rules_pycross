@@ -4,9 +4,10 @@ bcr_test_module:
     bazel:
       - 7.x
       - 8.x
+      - 9.x
     platform:
-      - debian10
-      - ubuntu2004
+      - debian11
+      - ubuntu2204
       - macos_arm64
   tasks:
     run_tests:
