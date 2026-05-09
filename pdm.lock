@@ -5,7 +5,7 @@
 groups = ["default", "build", "core", "repairwheel"]
 strategy = ["cross_platform", "static_urls"]
 lock_version = "4.5.0"
-content_hash = "sha256:6b40647f55e8c48c69d798b8b10a1cb8c7e1b705400d81bca9603319d550d780"
+content_hash = "sha256:b455de5817a6b8a9547d7bd6871c82e2d734db1347a679b4390ee813767dbc54"
 
 [[metadata.targets]]
 requires_python = ">=3.10"
@@ -168,7 +168,7 @@ files = [
 
 [[package]]
 name = "repairwheel"
-version = "0.4.0"
+version = "0.4.1"
 requires_python = ">=3.10"
 summary = "Repair any wheel, anywhere"
 dependencies = [
@@ -179,8 +179,8 @@ dependencies = [
     "pyelftools>=0.24",
 ]
 files = [
-    {url = "https://files.pythonhosted.org/packages/0c/43/1e93eed1ea5ba05c9748803ce8b44c83d0c3e9d66e9a696b61fb1aad29bf/repairwheel-0.4.0.tar.gz", hash = "sha256:7045a60fd6dd8d5e8d37cae640218e5af8629163a151e7aad765ab27cefb6af8"},
-    {url = "https://files.pythonhosted.org/packages/2e/23/035a91829de9be2235c81b62741dfda8675ac68d6724ac7b6cc4aff89fd7/repairwheel-0.4.0-py3-none-any.whl", hash = "sha256:25bc79f066937351d55321fe428793f95eb0807fb1d438ae0072d442285a4e6f"},
+    {url = "https://files.pythonhosted.org/packages/60/81/ac2ace1a8d274fca050d8694d69e6e89cd45debfa3e8b81bd6d8572eff7d/repairwheel-0.4.1-py3-none-any.whl", hash = "sha256:50b895e13962c708305ac8cbd5739e6b35c629cab56a1f8e68c66b177cab8ee8"},
+    {url = "https://files.pythonhosted.org/packages/81/1a/df8af03eb6c4fdfff65bcbb052245114192c59a3a9ee5431e4a798aaf411/repairwheel-0.4.1.tar.gz", hash = "sha256:d3d51cf50673ad25e2b3fd4e1b6750e53aceb1856e58a6cf32c27af82d4ed8c6"},
 ]
 
 [[package]]
