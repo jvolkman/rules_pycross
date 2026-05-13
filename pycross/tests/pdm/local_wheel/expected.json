@@ -1,0 +1,24 @@
+{
+  "packages": {
+    "cowsay@6.1": {
+      "files": [
+        {
+          "name": "cowsay-6.1-py3-none-any.whl",
+          "package_name": "cowsay",
+          "package_version": "6.1",
+          "sha256": "274b1e6fc1b966d53976333eb90ac94cb07a450a700b455af9fbdf882244b30a",
+          "urls": [
+            "https://files.pythonhosted.org/packages/f1/13/63c0a02c44024ee16f664e0b36eefeb22d54e93531630bd99e237986f534/cowsay-6.1-py3-none-any.whl"
+          ]
+        }
+      ],
+      "name": "cowsay",
+      "python_versions": ">=3.8",
+      "version": "6.1"
+    }
+  },
+  "pins": {
+    "cowsay": "cowsay@6.1"
+  },
+  "python_versions": "<3.13,>=3.9"
+}

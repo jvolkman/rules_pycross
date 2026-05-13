@@ -38,39 +38,21 @@ jobs:
         ]
       folders: |
         [
-          "e2e/pdm/always_build",
-          "e2e/pdm/build_wheel",
-          "e2e/pdm/local_wheel",
-          "e2e/pdm/requirements",
-          "e2e/pdm/vendored_lock_file_bzlmod",
-          "e2e/pdm/vendored_lock_file_workspace",
-          "e2e/poetry/always_build",
-          "e2e/poetry/build_wheel",
-          "e2e/poetry/local_wheel",
-          "e2e/poetry/requirements",
-          "e2e/poetry/vendored_lock_file_bzlmod",
-          "e2e/poetry/vendored_lock_file_workspace",
-          "e2e/uv/always_build",
-          "e2e/uv/build_wheel",
-          "e2e/uv/generate_lock",
-          "e2e/uv/local_wheel",
-          "e2e/uv/requirements",
-          "e2e/uv/vendored_lock_file_bzlmod",
-          "e2e/uv/vendored_lock_file_workspace"
+          "e2e/always_build",
+          "e2e/build_wheel",
+          "e2e/generate_lock",
+          "e2e/local_wheel",
+          "e2e/requirements",
+          "e2e/vendored_lock_file_bzlmod",
+          "e2e/vendored_lock_file_workspace"
         ]
       exclude: |
         [
           {"os": "windows-latest"},
           {"bazelversion": "9.1.0", "bzlmodEnabled": false},
-          {"folder": "e2e/pdm/vendored_lock_file_bzlmod", "bazelversion": "7.7.1"},
-          {"folder": "e2e/pdm/vendored_lock_file_bzlmod", "bzlmodEnabled": false},
-          {"folder": "e2e/pdm/vendored_lock_file_workspace", "bzlmodEnabled": true},
-          {"folder": "e2e/poetry/vendored_lock_file_bzlmod", "bazelversion": "7.7.1"},
-          {"folder": "e2e/poetry/vendored_lock_file_bzlmod", "bzlmodEnabled": false},
-          {"folder": "e2e/poetry/vendored_lock_file_workspace", "bzlmodEnabled": true},
-          {"folder": "e2e/uv/vendored_lock_file_bzlmod", "bazelversion": "7.7.1"},
-          {"folder": "e2e/uv/vendored_lock_file_bzlmod", "bzlmodEnabled": false},
-          {"folder": "e2e/uv/vendored_lock_file_workspace", "bzlmodEnabled": true}
+          {"folder": "e2e/vendored_lock_file_bzlmod", "bazelversion": "7.7.1"},
+          {"folder": "e2e/vendored_lock_file_bzlmod", "bzlmodEnabled": false},
+          {"folder": "e2e/vendored_lock_file_workspace", "bzlmodEnabled": true}
         ]
   # For branch protection settings, this job provides a "stable" name that can be used to gate PR merges
   # on "all matrix jobs were successful".
