@@ -1,0 +1,22 @@
+load("@bazel_lib//lib:write_source_files.bzl", "write_source_file")
+load("@bazel_skylib//rules:diff_test.bzl", "diff_test")
+load("//pycross:defs.bzl", "pycross_pdm_lock_model")
+
+pycross_pdm_lock_model(
+    name = "lock",
+    lock_file = "pdm.lock",
+    project_file = "pyproject.toml",
+)
+
+write_source_file(
+    name = "update_expected",
+    diff_test = False,
+    in_file = ":lock",
+    out_file = "expected.json",
+)
+
+diff_test(
+    name = "test",
+    file1 = ":lock",
+    file2 = "expected.json",
+)

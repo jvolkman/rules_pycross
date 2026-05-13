@@ -22,7 +22,7 @@ on:
         # https://docs.github.com/en/actions/using-workflows/workflow-syntax-for-github-actions#onworkflow_callinputsinput_idtype
         description: |
           JSON-formatted array of folders to run 'bazel test' in.
-          For example, '[".", "e2e/smoke"]'
+          For example, '[".", "e2e/always_build"]'
         type: string
       bazelversions:
         description: |
