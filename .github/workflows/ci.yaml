@@ -50,6 +50,10 @@ jobs:
         [
           {"os": "windows-latest"},
           {"bazelversion": "9.1.0", "bzlmodEnabled": false},
+          {"folder": "e2e/always_build", "bzlmodEnabled": false},
+          {"folder": "e2e/always_build", "bazelversion": "7.7.1"},
+          {"folder": "e2e/build_wheel", "bzlmodEnabled": false},
+          {"folder": "e2e/build_wheel", "bazelversion": "7.7.1"},
           {"folder": "e2e/vendored_lock_file_bzlmod", "bazelversion": "7.7.1"},
           {"folder": "e2e/vendored_lock_file_bzlmod", "bzlmodEnabled": false},
           {"folder": "e2e/vendored_lock_file_workspace", "bzlmodEnabled": true}

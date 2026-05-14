@@ -1,5 +1,5 @@
 bazel_dep(name = "bazel_lib", version = "3.1.0")
-bazel_dep(name = "hermetic_cc_toolchain", version = "4.1.0")
+bazel_dep(name = "llvm", version = "0.8.1")
 bazel_dep(name = "platforms", version = "0.0.8")
 bazel_dep(name = "rules_cc", version = "0.0.9")
 bazel_dep(name = "rules_pycross", version = "0.0.0")
@@ -55,16 +55,7 @@ lock_import.import_uv(
 lock_repos = use_extension("@rules_pycross//pycross/extensions:lock_repos.bzl", "lock_repos")
 use_repo(lock_repos, "uv")
 
-# hermetic_cc_toolchain
-toolchains = use_extension("@hermetic_cc_toolchain//toolchain:ext.bzl", "toolchains")
-use_repo(toolchains, "zig_sdk")
-
-register_toolchains(
-    "@zig_sdk//toolchain:linux_amd64_gnu.2.19",
-    "@zig_sdk//toolchain:linux_arm64_gnu.2.28",
-    "@zig_sdk//toolchain:darwin_amd64",
-    "@zig_sdk//toolchain:darwin_arm64",
-)
+register_toolchains("@llvm//toolchain:all")
 
 # Third-party deps
 # We're using a custom extension for `http_archive` as `use_repo_rule` is not available in bazel6
