@@ -102,7 +102,6 @@ load("@uv//:defs.bzl", uv_install_deps = "install_deps")
 
 uv_install_deps()
 
-
 # Third-party deps
 http_archive(
     name = "zstd",

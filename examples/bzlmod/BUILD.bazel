@@ -1,5 +1,4 @@
 load("@bazel_lib//lib:write_source_files.bzl", "write_source_files")
-
 load(
     "@rules_pycross//pycross:defs.bzl",
     "pycross_lock_file",

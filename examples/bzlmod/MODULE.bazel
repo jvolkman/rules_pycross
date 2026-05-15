@@ -32,6 +32,7 @@ pycross.configure_environments(
         "3.14.2",
     ],
 )
+
 # Import and configure environments extension to generate pycross_environments
 environments = use_extension("@rules_pycross//pycross/extensions:environments.bzl", "environments")
 use_repo(environments, "pycross_environments")
