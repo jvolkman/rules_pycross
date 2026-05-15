@@ -48,6 +48,7 @@ def _get_sysconfig_data(workspace_name, tools, flags):
         "CC": cc,
         "CXX": cxx,
         "CFLAGS": _join_flags_list(workspace_name, flags.cc),
+        "CXXFLAGS": _join_flags_list(workspace_name, flags.cxx),
         "CCSHARED": "-fPIC" if flags.needs_pic_for_dynamic_libraries else "",
         "LDSHAREDFLAGS": _join_flags_list(workspace_name, flags.cxx_linker_shared),
         "AR": ar,

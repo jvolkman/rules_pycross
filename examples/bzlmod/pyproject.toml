@@ -1,4 +1,6 @@
 [project]
+name = "rules-pycross-example-bzlmod"
+version = "0.1.0"
 dependencies = [
     "ipython>=8.17",
     "setuptools>=68",
@@ -6,16 +8,8 @@ dependencies = [
     "amqp-mock==0.6.1",
     "matplotlib>=3.10.7",
 ]
-requires-python = ">=3.10"
+requires-python = ">=3.14"
 
-[tool.poetry]
-name = "rules_pycross_example_bzlmod"
-version = "0.1"
-description = "rules_pycross_example_bzlmod"
-authors = []
-
-[tool.poetry.dependencies]
-python = ">=3.10"
-ipython = ">=8.17"
-setuptools = ">=68"
-wheel = ">=0.42"
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"

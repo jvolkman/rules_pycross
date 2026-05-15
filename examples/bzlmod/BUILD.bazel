@@ -1,9 +1,8 @@
 load("@bazel_lib//lib:write_source_files.bzl", "write_source_files")
-load("@python_versions//3.12:defs.bzl", py_binary_312 = "py_binary")
 load(
     "@rules_pycross//pycross:defs.bzl",
     "pycross_lock_file",
-    "pycross_poetry_lock_model",
+    "pycross_uv_lock_model",
 )
 load("@rules_python//python:defs.bzl", "py_binary")
 
@@ -11,17 +10,8 @@ py_binary(
     name = "ipython",
     srcs = ["ipython.py"],
     deps = [
-        "@pdm_deps//:amqp-mock",
-        "@pdm_deps//:ipython",
-    ],
-)
-
-py_binary_312(
-    name = "ipython_312",
-    srcs = ["ipython.py"],
-    main = "ipython.py",
-    deps = [
-        "@pdm_deps//:ipython",
+        "@uv_deps//:amqp-mock",
+        "@uv_deps//:ipython",
     ],
 )
 
@@ -30,19 +20,19 @@ py_binary(
     srcs = ["ipython.py"],
     main = "ipython.py",
     deps = [
-        "@poetry_lock_file//deps:ipython",
+        "@uv_lock_file//deps:ipython",
     ],
 )
 
-pycross_poetry_lock_model(
+pycross_uv_lock_model(
     name = "example_lock_model",
-    lock_file = "//:poetry.lock",
+    lock_file = "//:uv.lock",
     project_file = "//:pyproject.toml",
 )
 
 pycross_lock_file(
-    name = "poetry_lock",
-    out = "updated_poetry_lock.bzl",
+    name = "uv_lock",
+    out = "updated_uv_lock.bzl",
     lock_model_file = ":example_lock_model",
     target_environments = ["@pycross_environments//:environments"],
 )
@@ -50,7 +40,7 @@ pycross_lock_file(
 write_source_files(
     name = "update_locks",
     files = {
-        "poetry_lock.bzl": ":updated_poetry_lock.bzl",
+        "uv_lock.bzl": ":updated_uv_lock.bzl",
     },
 )
 

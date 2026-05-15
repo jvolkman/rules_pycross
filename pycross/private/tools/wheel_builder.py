@@ -365,6 +365,15 @@ def generate_bin_tools(bin_dir: Path, toolchain_vars: Dict[str, str]) -> None:
         ar = bin_dir / "ar"
         ar.symlink_to(ar_path)
 
+    # Symlink python and python3 to the executing host Python interpreter.
+    # This ensures that any subprocesses spawned during the build (like repair_wheel_hook)
+    # that utilize #!/usr/bin/env python3 can successfully find a valid, hermetic Python
+    # interpreter on PATH.
+    python_symlink = bin_dir / "python"
+    python3_symlink = bin_dir / "python3"
+    python_symlink.symlink_to(sys.executable)
+    python3_symlink.symlink_to(sys.executable)
+
 
 def link_path_tools(tools_dir: Path, path_tools: List[Tuple[Path, Path]]) -> None:
     for path_tool_name, relative_path_tool_path in path_tools:
