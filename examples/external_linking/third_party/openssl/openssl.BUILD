@@ -88,6 +88,7 @@ configure_make(
     env = select({
         "@platforms//os:macos": {
             "PERL": "$$EXT_BUILD_ROOT$$/$(PERL)",
+            "ARFLAGS": "-D -no_warning_for_no_symbols -static -o",
         },
         "//conditions:default": {
             "PERL": "$$EXT_BUILD_ROOT$$/$(PERL)",

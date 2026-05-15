@@ -154,7 +154,7 @@ def get_target_sysconfig(
 
 
 def set_or_append(env: Dict[str, Any], key: str, value: str) -> None:
-    if key == "PATH":
+    if key in ("PATH", "LD_LIBRARY_PATH"):
         sep = os.pathsep
     else:
         sep = " "
@@ -170,6 +170,7 @@ def get_default_build_env_vars(path_dirs: List[Path]) -> Dict[str, str]:
     # Pop off some environment variables that might affect our build venv.
     env.pop("PYTHONHOME", None)
     env.pop("PYTHONPATH", None)
+    env.pop("PYTHONSAFEPATH", None)
     env.pop("RUNFILES_DIR", None)
 
     # set SOURCE_DATE_EPOCH to 1980 so that we can use python wheels
@@ -187,8 +188,6 @@ def get_default_build_env_vars(path_dirs: List[Path]) -> Dict[str, str]:
     # PYTHON* variables like PYTHONHASHSEED.
     #
     # https://docs.python.org/3/using/cmdline.html#envvar-PYTHONSAFEPATH
-    if "PYTHONSAFEPATH" not in env:
-        env["PYTHONSAFEPATH"] = "1"
 
     # Place our own directories, with possible overridden commands, at the beginning of PATH.
     path_entries = [str(pd) for pd in path_dirs]
@@ -240,33 +239,24 @@ def get_inherited_vars(target_sysconfig: Dict[str, Any]) -> Dict[str, Any]:
     return inherited
 
 
-def get_wrapper_flags(cflags: str) -> List[str]:
-    """Returns flags that should be added to a cc wrapper."""
-    possible_flags = ["-target", "--target"]
+def wrap_cc(
+    lang: str,
+    cc_exe: Path,
+    wrapper_flags: List[str],
+    python_exe: Path,
+    bin_dir: Path,
+    target_is_darwin: bool = False,
+) -> Path:
+    """Generate a wrapper script for a C/C++ compiler.
 
-    result = []
-    split_cflags = cflags.split()
-    for i, flag in enumerate(split_cflags):
-        for possible_flag in possible_flags:
-            if not (flag.startswith(possible_flag)):
-                continue
-            if "=" in flag:
-                flag, value = flag.split("=")
-                additions = [f"{flag}={value}"]
-            else:
-                flag, value = flag, split_cflags[i + 1]
-                additions = [flag, value]
-
-            if not flag == possible_flag:
-                # This is something else, like --target-cpu
-                continue
-
-            result.extend(additions)
-
-    return result
-
-
-def wrap_cc(lang: str, cc_exe: Path, cflags: str, python_exe: Path, bin_dir: Path) -> Path:
+    Args:
+        lang: "cc" or "cxx"
+        cc_exe: Path to the real compiler executable
+        wrapper_flags: Pre-classified flags to bake into the wrapper (from Starlark classify_flags)
+        python_exe: Path to Python interpreter for the wrapper shebang
+        bin_dir: Directory to write the wrapper script into
+        target_is_darwin: Whether we are targeting macOS
+    """
     assert lang in ("cc", "cxx")
     version_str = subprocess.check_output([cc_exe, "--version"]).decode("utf-8")
     first_line = version_str.splitlines()[0]
@@ -286,7 +276,10 @@ def wrap_cc(lang: str, cc_exe: Path, cflags: str, python_exe: Path, bin_dir: Pat
         needs_wrap = False
         wrapper_name = os.path.basename(cc_exe)
 
-    wrapper_flags = get_wrapper_flags(cflags)
+    # Make a mutable copy so we can append without modifying the caller's list
+    wrapper_flags = list(wrapper_flags)
+    if "clang" in first_line or "zig" in first_line:
+        wrapper_flags.append("-Qunused-arguments")
     if not needs_wrap and not wrapper_flags:
         # No reason to generate a wrapper; just return the given cc location.
         return cc_exe
@@ -303,7 +296,26 @@ def wrap_cc(lang: str, cc_exe: Path, cflags: str, python_exe: Path, bin_dir: Pat
 
                 here = os.path.dirname(sys.argv[0])
                 cc_exe = os.path.join(here, "{cc_exe}")
-                os.execv(cc_exe, [cc_exe] + {repr(wrapper_flags)} + sys.argv[1:])
+
+                args = sys.argv[1:]
+                if {target_is_darwin}:
+                    _GNU_LINKER_FLAGS = {{
+                        "-Wl,--start-group",
+                        "-Wl,--end-group",
+                        "-Wl,--allow-shlib-undefined",
+                        "-Wl,--fatal-warnings",
+                        "-Wl,--as-needed",
+                        "-Wl,--no-as-needed",
+                        "--start-group",
+                        "--end-group",
+                        "--allow-shlib-undefined",
+                        "--fatal-warnings",
+                        "--as-needed",
+                        "--no-as-needed",
+                    }}
+                    args = [a for a in args if a not in _GNU_LINKER_FLAGS]
+
+                os.execv(cc_exe, [cc_exe] + {repr(wrapper_flags)} + args)
                 """
             )
         )
@@ -312,17 +324,47 @@ def wrap_cc(lang: str, cc_exe: Path, cflags: str, python_exe: Path, bin_dir: Pat
     return wrapper_path
 
 
-def generate_cc_wrappers(toolchain_vars: Dict[str, Any], python_exe: Path, bin_dir: Path) -> Dict[str, str]:
+def generate_cc_wrappers(
+    toolchain_vars: Dict[str, Any],
+    python_exe: Path,
+    bin_dir: Path,
+    target_is_darwin: bool = False,
+    extra_flags: Optional[List[str]] = None,
+) -> Dict[str, str]:
     orig_cc = toolchain_vars["CC"]
     orig_cxx = toolchain_vars["CXX"]
-    cflags = toolchain_vars["CFLAGS"]
-    # Possibly generate wrappers around the CC and CXX executables.
-    wrapped_cc = wrap_cc("cc", orig_cc, cflags, python_exe, bin_dir)
-    wrapped_cxx = wrap_cc("cxx", orig_cxx, cflags, python_exe, bin_dir)
+
+    # Read pre-classified wrapper flags from the Starlark layer.
+    # These are already proper lists — no string parsing needed.
+    cc_wrapper_flags = list(toolchain_vars.get("CC_WRAPPER_FLAGS", []))
+    cxx_wrapper_flags = list(toolchain_vars.get("CXX_WRAPPER_FLAGS", []))
+    ld_wrapper_flags = list(toolchain_vars.get("LD_WRAPPER_FLAGS", []))
+
+    if target_is_darwin:
+        extra = ["-mmacosx-version-min=11.0"]
+        cc_wrapper_flags.extend(extra)
+        cxx_wrapper_flags.extend(extra)
+
+    # Merge linker wrapper flags into both wrappers. Meson's compiler sanity
+    # check compiles AND links a test program, so the wrapper needs linker
+    # flags like -fuse-ld=, -B (CRT objects), -resource-dir, etc.
+    # However, filter out C++-only flags from the C wrapper.
+    _CXX_ONLY_FLAGS = {"-nostdlib++"}
+    cc_ld_flags = [f for f in ld_wrapper_flags if f not in _CXX_ONLY_FLAGS]
+    cc_wrapper_flags.extend(cc_ld_flags)
+    cxx_wrapper_flags.extend(ld_wrapper_flags)
+
+    if extra_flags:
+        cc_wrapper_flags.extend(extra_flags)
+        cxx_wrapper_flags.extend(extra_flags)
+
+    wrapped_cc = wrap_cc("cc", orig_cc, cc_wrapper_flags, python_exe, bin_dir, target_is_darwin=target_is_darwin)
+    wrapped_cxx = wrap_cc("cxx", orig_cxx, cxx_wrapper_flags, python_exe, bin_dir, target_is_darwin=target_is_darwin)
     return {
         "CC": str(wrapped_cc),
         "CXX": str(wrapped_cxx),
     }
+
 
 
 def generate_cross_sysconfig_vars(
@@ -331,6 +373,7 @@ def generate_cross_sysconfig_vars(
     wrapper_vars: Dict[str, Any],
     lib_dir: Path,
     include_paths: List[Path],
+    target_python_lib_dir: Optional[Path] = None,
 ) -> Dict[str, Any]:
     sysconfig_vars = toolchain_vars.copy()
     sysconfig_vars.update(wrapper_vars)
@@ -345,17 +388,165 @@ def generate_cross_sysconfig_vars(
     # symbols rather than erroring at link time.
     if sysconfig_vars.get("MACHDEP") == "darwin":
         sysconfig_vars["LDSHARED"] += " -Wl,-undefined,dynamic_lookup"
+        # Strip GNU-style double-dash linker flags (-Wl,--*) which are unsupported by macOS ld64
+        ldshared_parts = sysconfig_vars["LDSHARED"].split()
+        ldshared_parts = [p for p in ldshared_parts if not p.startswith("-Wl,--")]
+        sysconfig_vars["LDSHARED"] = " ".join(ldshared_parts)
+
+    # Always strip -lpython from LDSHARED and clear LIBPYTHON. Python C extensions
+    # on both Linux and macOS must not be hardlinked against libpython at compile-time,
+    # as symbols are resolved dynamically by the loading Python interpreter.
+    # Linking against libpython is forbidden for manylinux wheels and causes auditwheel repair failures.
+    ldshared_parts = sysconfig_vars["LDSHARED"].split()
+    ldshared_parts = [p for p in ldshared_parts if not p.startswith("-lpython")]
+    sysconfig_vars["LDSHARED"] = " ".join(ldshared_parts)
+    sysconfig_vars["LIBPYTHON"] = ""
 
     # https://github.com/pypa/distutils/issues/283
     sysconfig_vars["LDCXXSHARED"] = sysconfig_vars["LDSHARED"]
 
+    # Note: Python's distutils uses CFLAGS for both C and C++ compilation.
+    # Extra C++ flags (e.g., libcxx include paths) are baked into the CXX
+    # compiler wrapper instead, since adding C++ headers to CFLAGS would
+    # break C compilation.
+
+    # Strip linker-only flags from CFLAGS/CXXFLAGS. Bazel's C++ toolchain
+    # may include -Wl,* flags (e.g., -Wl,-s for stripping) in compiler flags,
+    # but distutils passes CFLAGS to compile-only invocations where these
+    # cause -Werror,-Wunused-command-line-argument errors.
+    for flag_var in ("CFLAGS", "CXXFLAGS"):
+        if flag_var in sysconfig_vars:
+            sysconfig_vars[flag_var] = " ".join(
+                f for f in sysconfig_vars[flag_var].split() if not f.startswith("-Wl,")
+            )
+
     # Add search paths for listed native deps
     for include_path in include_paths:
         sysconfig_vars["CFLAGS"] += f" -I{include_path}"
+        if "CXXFLAGS" in sysconfig_vars:
+            sysconfig_vars["CXXFLAGS"] += f" -I{include_path}"
     sysconfig_vars["CFLAGS"] += f" -L{lib_dir}"
+    if "CXXFLAGS" in sysconfig_vars:
+        sysconfig_vars["CXXFLAGS"] += f" -L{lib_dir}"
     sysconfig_vars["LDSHARED"] += f" -L{lib_dir}"
 
+    if target_python_lib_dir:
+        sysconfig_vars["CFLAGS"] += f" -L{target_python_lib_dir}"
+        if "CXXFLAGS" in sysconfig_vars:
+            sysconfig_vars["CXXFLAGS"] += f" -L{target_python_lib_dir}"
+        sysconfig_vars["LDSHARED"] += f" -L{target_python_lib_dir}"
+
     return sysconfig_vars
+
+
+def _is_meson_build(sdist_dir: Path) -> bool:
+    """Check if the sdist uses a Meson build system."""
+    return (sdist_dir / "meson.build").exists()
+
+
+def _prepare_meson_build(
+    sdist_dir: Path,
+    build_env: Dict[str, str],
+    config_settings: Dict[str, Any],
+    sysconfig_vars: Dict[str, Any],
+    target_system: str,
+    target_cpu: str,
+) -> Tuple[Dict[str, str], Dict[str, Any]]:
+    """Prepare build environment for Meson-backed packages.
+
+    Generates a Meson cross-file mapping our wrapped compilers and flags,
+    and registers it in the PEP-517 config_settings.
+
+    Args:
+        sdist_dir: Extracted sdist directory (CWD during build).
+        build_env: Mutable build environment dict.
+        config_settings: Mutable PEP-517 config settings dict.
+        sysconfig_vars: Sysconfig variables (read-only here).
+        target_system: Target OS (e.g., "linux", "darwin").
+        target_cpu: Target CPU (e.g., "x86_64", "aarch64").
+
+    Returns:
+        Modified (build_env, config_settings).
+    """
+    import platform as platform_mod
+
+    # Ensure NINJA is discoverable
+    if not build_env.get("NINJA"):
+        ninja_bin = shutil.which("ninja")
+        if ninja_bin:
+            build_env["NINJA"] = ninja_bin
+
+    # Determine if this is a cross-compilation
+    host_system = platform_mod.system().lower()
+    host_cpu = platform_mod.machine().lower()
+    if host_cpu == "arm64":
+        host_cpu = "aarch64"
+    elif host_cpu == "amd64":
+        host_cpu = "x86_64"
+    is_cross = (target_system != host_system) or (target_cpu != host_cpu)
+
+    # Get compiler paths from build env (wrapper paths) or sysconfig (originals)
+    cc_path = build_env.get("CC") or sysconfig_vars.get("CC")
+    cxx_path = build_env.get("CXX") or sysconfig_vars.get("CXX")
+
+    if not cc_path or not cxx_path:
+        _warn("Cannot generate Meson cross-file: CC or CXX not available")
+        return build_env, config_settings
+
+    # Extract compile flags from sysconfig
+    c_args = sysconfig_vars.get("CFLAGS", "").split()
+    cpp_args = sysconfig_vars.get("CXXFLAGS", "").split()
+
+    # Extract linker args from LDSHARED, stripping the leading compiler command.
+    # Meson calls the compiler for linking but passes link args separately.
+    ld_args = []
+    ldshared = sysconfig_vars.get("LDSHARED", "")
+    if ldshared:
+        parts = ldshared.split()
+        # Strip the leading compiler command if present
+        if parts and any(
+            parts[0] == p or parts[0].endswith("/" + p)
+            for p in ("cc", "c++", "gcc", "g++", "clang", "clang++")
+        ):
+            ld_args = parts[1:]
+        elif parts and (parts[0] == cc_path or parts[0] == cxx_path):
+            ld_args = parts[1:]
+        else:
+            ld_args = parts
+
+    cross_file_content = f"""\
+[binaries]
+c = '{cc_path}'
+cpp = '{cxx_path}'
+ar = '{sysconfig_vars.get("AR", "ar")}'
+strip = 'strip'
+
+[built-in options]
+c_args = {repr(c_args)}
+cpp_args = {repr(cpp_args)}
+c_link_args = {repr(ld_args)}
+cpp_link_args = {repr(ld_args)}
+
+[properties]
+needs_exe_wrapper = {'true' if is_cross else 'false'}
+
+[host_machine]
+system = '{target_system}'
+cpu_family = '{target_cpu}'
+cpu = '{target_cpu}'
+endian = 'little'
+"""
+    cross_file_path = (sdist_dir / "cross-file.ini").resolve()
+    with open(cross_file_path, "w") as f:
+        f.write(cross_file_content)
+
+    # Register cross-file in meson config settings
+    setup_args = config_settings.get("setup-args", [])
+    setup_args.append(f"--cross-file={cross_file_path}")
+    config_settings["setup-args"] = setup_args
+    config_settings["build-dir"] = "build"
+
+    return build_env, config_settings
 
 
 def generate_bin_tools(bin_dir: Path, toolchain_vars: Dict[str, str]) -> None:
@@ -612,7 +803,7 @@ def build_standard_venv(env_dir: Path, exec_python_exe: Path, sysconfig_vars: Di
     with open(site_dir / "_pycross_sysconfigdata.py", "w") as f:
         f.write(f"build_time_vars = {repr(sysconfig_vars)}\n")
     with open(site_dir / "_pycross_sysconfigdata.pth", "w") as f:
-        f.write('import os; os.environ["_PYTHON_SYSCONFIGDATA_NAME"] = "_pycross_sysconfigdata"\n')
+        f.write('import sysconfig; sysconfig._get_sysconfigdata_name = lambda: "_pycross_sysconfigdata"; sysconfig._CONFIG_VARS = None\n')
 
 
 def build_venv(
@@ -632,7 +823,7 @@ def build_venv(
 
     site_dir = find_site_dir(env_dir)
 
-    # Add a pth file to override sys.prefix and sys.exec_prefix as paths relative to the sdist root.
+    # Add a pth file to override sys.prefix and sys.exec_prefix.
     with open(site_dir / "_pycross_sys_prefix.pth", "w") as f:
         f.write(f'import sys; sys.prefix = sys.exec_prefix = "{env_dir}"\n')
 
@@ -676,6 +867,9 @@ def build_wheel(
             env.update(extra_environ)
 
         if debug:
+            print("===== BUILD ENV =====", file=sys.stdout)
+            for k, v in sorted(env.items()):
+                print(f"  {k}={v}", file=sys.stdout)
             try:
                 site = subprocess.check_output([cmd[0], "-m", "site"], cwd=cwd, env=env, stderr=subprocess.STDOUT)
                 print("===== BUILD SITE =====", file=sys.stdout)
@@ -683,7 +877,6 @@ def build_wheel(
             except subprocess.CalledProcessError as cpe:
                 print("Warning: failed to collect site output", file=sys.stderr)
                 print(cpe.output.decode(), file=sys.stderr)
-
         try:
             output = subprocess.check_output(cmd, cwd=cwd, env=env, stderr=subprocess.STDOUT)
         except subprocess.CalledProcessError as cpe:
@@ -710,6 +903,17 @@ def build_wheel(
         )
 
     except Exception as e:  # pragma: no cover
+        # Debugging helper: Print meson-log.txt on failure if it exists
+        try:
+            for log_path in sdist_dir.glob("**/meson-logs/meson-log.txt"):
+                if log_path.exists():
+                    print(f"\n===== FOUND MESON LOG: {log_path} =====", file=sys.stdout)
+                    with open(log_path, "r") as lf:
+                        print(lf.read(), file=sys.stdout)
+                    print("======================================\n", file=sys.stdout)
+        except Exception as log_err:
+            print(f"Warning: failed to collect meson-log.txt: {log_err}", file=sys.stderr)
+
         tb = traceback.format_exc().strip("\n")
         print("\n{dim}{}{reset}\n".format(tb, **_STYLES))
         _error(str(e))
@@ -779,6 +983,77 @@ def execroot_prefix(workspace_name: str) -> Path:
     return Path("..") / "bazel-execroot" / workspace_name
 
 
+def _sanitize_wheel(wheel_file: Path, temp_dir: Path, target_python_exe: Path) -> None:
+    """Strip non-reproducible absolute paths from text files in the wheel.
+
+    This rewrites the wheel in-place, replacing sandbox-specific paths
+    with stable placeholders for reproducibility.
+    """
+    # Binary file extensions that should never be modified
+    _BINARY_EXTENSIONS = frozenset([
+        ".so", ".dylib", ".dll", ".pyd",
+        ".pyc", ".pyo",
+        ".png", ".jpg", ".jpeg", ".gif", ".ico", ".bmp", ".webp",
+        ".woff", ".woff2", ".ttf", ".otf", ".eot",
+        ".wasm", ".dat", ".bin",
+        ".gz", ".bz2", ".xz", ".zip", ".tar",
+    ])
+
+    # Compute patterns to replace
+    temp_dir_str = os.fspath(temp_dir.resolve())
+    target_python_root = os.fspath(target_python_exe.resolve().parent.parent)
+
+    with tempfile.TemporaryDirectory(prefix="sanitize_wheel") as unpack_dir:
+        unpack_path = Path(unpack_dir)
+
+        # Preserve original ZIP member info (permissions, etc.)
+        member_info = {}
+        with zipfile.ZipFile(wheel_file, "r") as z:
+            for info in z.infolist():
+                member_info[info.filename] = info
+            z.extractall(unpack_path)
+
+        modified = False
+        for root, dirs, files in os.walk(unpack_path):
+            for file in files:
+                file_path = Path(root) / file
+                if file_path.suffix.lower() in _BINARY_EXTENSIONS:
+                    continue
+                try:
+                    content = file_path.read_bytes()
+                    # Quick binary check: if there are null bytes, skip
+                    if b"\x00" in content[:8192]:
+                        continue
+                    text = content.decode("utf-8")
+                except (UnicodeDecodeError, OSError):
+                    continue
+
+                original = text
+                if temp_dir_str in text:
+                    text = text.replace(temp_dir_str, "/tmp/rules_pycross_build")
+                if target_python_root in text:
+                    text = text.replace(target_python_root, "/rules_pycross_target_python")
+
+                if text != original:
+                    file_path.write_text(text, encoding="utf-8")
+                    modified = True
+
+        if modified:
+            # Repack, preserving original ZIP member metadata
+            os.remove(wheel_file)
+            with zipfile.ZipFile(wheel_file, "w", zipfile.ZIP_DEFLATED) as z:
+                for root, dirs, files in os.walk(unpack_path):
+                    for file in files:
+                        full_path = Path(root) / file
+                        rel_path = str(full_path.relative_to(unpack_path))
+                        # Reuse original ZipInfo if available to preserve permissions
+                        if rel_path in member_info:
+                            info = member_info[rel_path]
+                            z.writestr(info, full_path.read_bytes())
+                        else:
+                            z.write(full_path, rel_path)
+
+
 def main(args: Any, temp_dir: Path, is_debug: bool) -> None:
     # Paths passed into this action will be relative to bazel's execroot.
     # But we need to build the wheel from within the extracted sdist directory.
@@ -806,7 +1081,7 @@ def main(args: Any, temp_dir: Path, is_debug: bool) -> None:
     (temp_dir / "bazel-execroot").symlink_to(cwd.parent)
 
     # This is the prefix relative to the sdist directory that we'll prepend to everything
-    prefix = execroot_prefix(cwd.name)
+    prefix = execroot_prefix(cwd.name).resolve()
 
     def mktmpdir(name: str) -> Path:
         d = temp_dir / name
@@ -814,12 +1089,12 @@ def main(args: Any, temp_dir: Path, is_debug: bool) -> None:
         # Return as relative from the sdist directory
         return Path("..") / name
 
-    wheel_dir = mktmpdir("wheel")
-    bin_dir = mktmpdir("bin")
-    tools_dir = mktmpdir("tools")
-    build_env_dir = mktmpdir("env")
-    include_dir = mktmpdir("include")
-    lib_dir = mktmpdir("lib")
+    wheel_dir = mktmpdir("wheel").resolve()
+    bin_dir = mktmpdir("bin").resolve()
+    tools_dir = mktmpdir("tools").resolve()
+    build_env_dir = mktmpdir("env").resolve()
+    include_dir = mktmpdir("include").resolve()
+    lib_dir = mktmpdir("lib").resolve()
 
     config_settings = init_config_settings(args, prefix)
     toolchain_sysconfig_vars = load_sysconfig_vars(args, prefix)
@@ -837,23 +1112,92 @@ def main(args: Any, temp_dir: Path, is_debug: bool) -> None:
         bazel_root=prefix,
     )
 
-    wrapper_sysconfig_vars = generate_cc_wrappers(
-        toolchain_vars=toolchain_sysconfig_vars,
-        python_exe=args.exec_python_executable,
-        bin_dir=bin_dir,
-    )
     target_sysconfig_vars = get_target_sysconfig(
         target_sys_path=args.target_sys_path,
         exec_python_exe=args.exec_python_executable,
         target_python_exe=args.target_python_executable,
     )
+    target_is_darwin = (target_sysconfig_vars.get("MACHDEP") == "darwin")
+
+    target_python_lib_dir = (args.target_python_executable.parent.parent / "lib").resolve()
+
+    extra_wrapper_flags = [f"-L{lib_dir}"]
+    if target_python_lib_dir.exists():
+        extra_wrapper_flags.append(f"-L{target_python_lib_dir}")
+
+    wrapper_sysconfig_vars = generate_cc_wrappers(
+        toolchain_vars=toolchain_sysconfig_vars,
+        python_exe=args.exec_python_executable,
+        bin_dir=bin_dir,
+        target_is_darwin=target_is_darwin,
+        extra_flags=extra_wrapper_flags,
+    )
+    build_env_vars["CC"] = wrapper_sysconfig_vars["CC"]
+    build_env_vars["CXX"] = wrapper_sysconfig_vars["CXX"]
     sysconfig_vars = generate_cross_sysconfig_vars(
         toolchain_vars=toolchain_sysconfig_vars,
         target_vars=target_sysconfig_vars,
         wrapper_vars=wrapper_sysconfig_vars,
         lib_dir=lib_dir,
         include_paths=include_paths,
+        target_python_lib_dir=target_python_lib_dir if target_python_lib_dir.exists() else None,
     )
+    set_or_append(build_env_vars, "LDFLAGS", f"-L{lib_dir}")
+    set_or_append(build_env_vars, "LD_LIBRARY_PATH", str(lib_dir))
+    if target_python_lib_dir.exists():
+        set_or_append(build_env_vars, "LDFLAGS", f"-L{target_python_lib_dir}")
+        set_or_append(build_env_vars, "LD_LIBRARY_PATH", str(target_python_lib_dir))
+
+    # Copy libpython shared library if needed for linking.
+    # Derive the library name from the target Python version rather than hardcoding.
+    py_version = target_sysconfig_vars.get("VERSION", "")
+    if py_version and target_python_lib_dir.exists():
+        libpython_name = f"libpython{py_version}.so"
+        if not (target_python_lib_dir / libpython_name).exists():
+            # Try the versioned .so.1.0 form
+            for candidate in target_python_lib_dir.glob(f"libpython{py_version}.so*"):
+                dest = lib_dir / libpython_name
+                if not dest.exists():
+                    shutil.copy(candidate, dest)
+                break
+
+    build_env_vars["PYCROSS_TARGET_PYTHON_BIN_DIR"] = str(args.target_python_executable.resolve().parent)
+
+    target_machdep = target_sysconfig_vars.get("MACHDEP", "")
+    target_multiarch = " ".join([
+        target_sysconfig_vars.get("MULTIARCH") or "",
+        target_sysconfig_vars.get("HOST_GNU_TYPE") or "",
+    ])
+    if "x86_64" in target_multiarch:
+        target_cpu = "x86_64"
+    elif "aarch64" in target_multiarch or "arm64" in target_multiarch:
+        target_cpu = "aarch64"
+    else:
+        _warn(f"Could not determine target CPU from MULTIARCH={target_sysconfig_vars.get('MULTIARCH')!r}, "
+              f"HOST_GNU_TYPE={target_sysconfig_vars.get('HOST_GNU_TYPE')!r}; defaulting to x86_64")
+        target_cpu = "x86_64"
+    build_env_vars["PYCROSS_TARGET_SYSTEM"] = target_machdep
+    build_env_vars["PYCROSS_TARGET_CPU"] = target_cpu
+
+    # Generate path tools and native dependencies
+    generate_bin_tools(bin_dir, toolchain_sysconfig_vars)
+    link_path_tools(tools_dir, args.path_tool)
+    for path_tool_name, _ in args.path_tool:
+        if path_tool_name.name == "ninja":
+            build_env_vars["NINJA"] = str(tools_dir / path_tool_name)
+    link_native_headers(include_dir, args.native_header)
+    link_native_libraries(lib_dir, args.native_library)
+
+    # If the sdist uses Meson, generate a cross-file and register it
+    if _is_meson_build(sdist_dir):
+        build_env_vars, config_settings = _prepare_meson_build(
+            sdist_dir=sdist_dir,
+            build_env=build_env_vars,
+            config_settings=config_settings,
+            sysconfig_vars=sysconfig_vars,
+            target_system=target_machdep,
+            target_cpu=target_cpu,
+        )
 
     build_venv(
         bazel_root=prefix,
@@ -865,11 +1209,6 @@ def main(args: Any, temp_dir: Path, is_debug: bool) -> None:
         target_env=target_environment,
         always_use_crossenv=args.always_use_crossenv,
     )
-
-    generate_bin_tools(bin_dir, toolchain_sysconfig_vars)
-    link_path_tools(tools_dir, args.path_tool)
-    link_native_headers(include_dir, args.native_header)
-    link_native_libraries(lib_dir, args.native_library)
 
     if is_debug:
         print(f"Build environment: {build_env_dir.absolute()}")
@@ -899,6 +1238,8 @@ def main(args: Any, temp_dir: Path, is_debug: bool) -> None:
 
     if target_environment:
         check_filename_against_target(os.path.basename(wheel_file), target_environment)
+
+    _sanitize_wheel(wheel_file, temp_dir, args.target_python_executable)
 
     shutil.move(wheel_file, args.wheel_file)
     with open(args.wheel_name_file, "w") as f:

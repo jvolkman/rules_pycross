@@ -7,6 +7,7 @@ load("@rules_python//python:py_info.bzl", "PyInfo")
 load(
     ":cc_toolchain_util.bzl",
     "absolutize_path_in_str",
+    "classify_flags",
     "get_env_vars",
     "get_flags_info",
     "get_headers",
@@ -33,6 +34,9 @@ def _absolute_tool_value(workspace_name, value):
 def _join_flags_list(workspace_name, flags):
     return " ".join([absolutize_path_in_str(workspace_name, "$$EXT_BUILD_ROOT$$/", flag) for flag in flags])
 
+def _absolutize_flags(workspace_name, flags):
+    return [absolutize_path_in_str(workspace_name, "$$EXT_BUILD_ROOT$$/", flag) for flag in flags]
+
 def _get_sysconfig_data(workspace_name, tools, flags):
     cc = _absolute_tool_value(workspace_name, tools.cc)
     cxx = _absolute_tool_value(workspace_name, tools.cxx)
@@ -44,11 +48,21 @@ def _get_sysconfig_data(workspace_name, tools, flags):
     if ar == "libtool" or ar.endswith("/libtool"):
         ar_flags = ar_flags + ["-o"]
 
+    # Classify flags into wrapper flags (baked into CC/CXX wrapper scripts)
+    # and compile flags (passed via CFLAGS/CXXFLAGS sysconfig variables).
+    # This avoids fragile string re-parsing on the Python side.
+    cc_classified = classify_flags(flags.cc)
+    cxx_classified = classify_flags(flags.cxx)
+    ld_classified = classify_flags(flags.cxx_linker_shared)
+
     vars = {
         "CC": cc,
         "CXX": cxx,
-        "CFLAGS": _join_flags_list(workspace_name, flags.cc),
-        "CXXFLAGS": _join_flags_list(workspace_name, flags.cxx),
+        "CFLAGS": _join_flags_list(workspace_name, cc_classified.compile),
+        "CXXFLAGS": _join_flags_list(workspace_name, cxx_classified.compile),
+        "CC_WRAPPER_FLAGS": _absolutize_flags(workspace_name, cc_classified.wrapper),
+        "CXX_WRAPPER_FLAGS": _absolutize_flags(workspace_name, cxx_classified.wrapper),
+        "LD_WRAPPER_FLAGS": _absolutize_flags(workspace_name, ld_classified.wrapper),
         "CCSHARED": "-fPIC" if flags.needs_pic_for_dynamic_libraries else "",
         "LDSHAREDFLAGS": _join_flags_list(workspace_name, flags.cxx_linker_shared),
         "AR": ar,

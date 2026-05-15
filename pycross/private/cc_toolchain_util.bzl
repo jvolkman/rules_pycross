@@ -333,3 +333,87 @@ def get_libraries(ccinfo):
             add(library_to_link.resolved_symlink_dynamic_library or library_to_link.dynamic_library)
             add(library_to_link.resolved_symlink_interface_library or library_to_link.interface_library)
     return all_libraries
+
+# Flag prefixes that indicate toolchain-intrinsic flags to bake into the
+# compiler wrapper script. These control target triple, sysroot, header
+# search paths, and runtime library selection.
+_WRAPPER_FLAG_PREFIXES = [
+    "-target",
+    "--target",
+    "--sysroot",
+    "-isystem",
+    "-B",
+    "-resource-dir",
+    "-rtlib",
+    "--unwindlib",
+]
+
+# Exact-match flags for the wrapper (no argument).
+_WRAPPER_FLAG_EXACT = [
+    "-nostdlib",
+    "-nostdinc",
+    "-nostdlibinc",
+    "-nostdlib++",
+]
+
+def _match_prefix(s, prefixes):
+    """Returns the matching prefix, or None."""
+    for p in prefixes:
+        if s.startswith(p):
+            return p
+    return None
+
+def classify_flags(flags):
+    """Splits a flag list into wrapper flags and compile flags.
+
+    Wrapper flags are toolchain-intrinsic flags (e.g., --target, --sysroot,
+    -isystem, -Xclang -internal-isystem) that should be baked into the
+    compiler wrapper script. Compile flags are everything else (e.g., -O2,
+    -Wall, -DNDEBUG) that go into CFLAGS/CXXFLAGS sysconfig variables.
+
+    Args:
+        flags: List of compiler flag strings.
+
+    Returns:
+        struct with .wrapper (list) and .compile (list) fields.
+    """
+    wrapper = []
+    compile_flags = []
+    n = len(flags)
+
+    # skip_until tracks how many tokens to skip (for multi-token flags)
+    skip_until = 0
+
+    for i in range(n):
+        if i < skip_until:
+            pass  # Already consumed by a previous multi-token flag
+        elif flags[i] in _WRAPPER_FLAG_EXACT:
+            # Exact-match no-argument flags
+            wrapper.append(flags[i])
+        elif flags[i] == "-Xclang" and i + 3 < n and flags[i + 1] == "-internal-isystem" and flags[i + 2] == "-Xclang":
+            # -Xclang -internal-isystem -Xclang <path> (4-token sequence)
+            wrapper.extend([flags[i], flags[i + 1], flags[i + 2], flags[i + 3]])
+            skip_until = i + 4
+        elif _match_prefix(flags[i], _WRAPPER_FLAG_PREFIXES) != None:
+            # Prefix-match flags (e.g., -isystem, --sysroot, -target)
+            prefix = _match_prefix(flags[i], _WRAPPER_FLAG_PREFIXES)
+            if "=" in flags[i]:
+                # Value attached with =: --sysroot=/dev/null
+                wrapper.append(flags[i])
+            elif flags[i] == prefix:
+                # Value is next token: -isystem /path
+                wrapper.append(flags[i])
+                if i + 1 < n:
+                    wrapper.append(flags[i + 1])
+                    skip_until = i + 2
+            else:
+                # Value attached directly: -isystem/path, -B/path
+                wrapper.append(flags[i])
+        elif flags[i].startswith("-fuse-ld="):
+            # -fuse-ld=... goes to wrapper (linker driver selection)
+            wrapper.append(flags[i])
+        else:
+            # Everything else is a compile flag
+            compile_flags.append(flags[i])
+
+    return struct(wrapper = wrapper, compile = compile_flags)

@@ -44,6 +44,7 @@ configure_make(
     configure_options = [
         "--without-readline",
         "--without-perl",
+        "--without-icu",
         "--with-ssl=openssl",
         "--prefix=/usr",
         "--exec-prefix=/usr",
@@ -53,6 +54,10 @@ configure_make(
         ":linux_x86_64": ["--host=amd64-linux"],
         ":linux_arm64": ["--host=aarch64-linux"],
     }),
+    args = select({
+        "@platforms//os:macos": ["AROPT=\"-static -o\""],
+        "//conditions:default": [],
+    }),
     copts = [
         "-DOPENSSL_NO_FILENAMES",
         "-O2",
@@ -60,7 +65,12 @@ configure_make(
     ],
     env = {
         "ZIC": "/usr/sbin/zic",
-    },
+    } | select({
+        "@platforms//os:macos": {
+            "ARFLAGS": "-static -o",
+        },
+        "//conditions:default": {},
+    }),
     lib_source = ":all_srcs",
     out_bin_dir = "usr/bin",
     out_binaries = [
@@ -79,9 +89,9 @@ configure_make(
         ],
     }),
     targets = [
-        "-C src/bin install DESTDIR=$BUILD_TMPDIR/$INSTALL_PREFIX",
+        "-C src/bin/pg_config install DESTDIR=$BUILD_TMPDIR/$INSTALL_PREFIX",
         "-C src/include install DESTDIR=$BUILD_TMPDIR/$INSTALL_PREFIX",
-        "-C src/interfaces install DESTDIR=$BUILD_TMPDIR/$INSTALL_PREFIX",
+        "-C src/interfaces/libpq install DESTDIR=$BUILD_TMPDIR/$INSTALL_PREFIX",
     ],
     deps = [
         "@//third_party/openssl",

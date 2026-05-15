@@ -15,22 +15,50 @@ pycross_wheel_build(
         "//third_party/openblas:include",
         "//third_party/openblas:libopenblas.a",
     ],
+    path_tools = {
+        ":ninja_wrapper": "ninja",
+        ":cython_wrapper": "cython",
+        ":python3_config_wrapper": "python3-config",
+    },
     post_build_hooks = [
         "@rules_pycross//pycross/hooks:repair_wheel",
     ],
     pre_build_hooks = [
-        ":gen_site_cfg",
+        ":gen_openblas_pc",
     ],
-    sdist = "@pydeps//numpy:sdist",
+    sdist = "@uv//numpy:sdist",
     tags = ["manual"],
     deps = [
-        "@pydeps//:cython",
-        "@pydeps//:setuptools",
-        "@pydeps//:wheel",
+        "@uv//:cython",
+        "@uv//:meson-python",
+        "@uv//:meson",
     ],
 )
 
 py_binary(
-    name = "gen_site_cfg",
-    srcs = ["gen_site_cfg.py"],
+    name = "gen_openblas_pc",
+    srcs = ["gen_openblas_pc.py"],
+)
+
+
+
+py_binary(
+    name = "ninja_wrapper",
+    srcs = ["ninja_wrapper.py"],
+    deps = [
+        "@uv//:ninja",
+    ],
+)
+
+py_binary(
+    name = "cython_wrapper",
+    srcs = ["cython_wrapper.py"],
+    deps = [
+        "@uv//:cython",
+    ],
+)
+
+py_binary(
+    name = "python3_config_wrapper",
+    srcs = ["python3_config_wrapper.py"],
 )

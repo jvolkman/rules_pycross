@@ -18,25 +18,37 @@ target_platform = {{repr(target.uname_sysname.lower())}}
 del platform
 
 # TODO: improve the target vs. exec criteria in this method.
+_platform_guard = False
 def __getattr__(name):
+    global _platform_guard
     if name != 'platform':
         raise AttributeError(name)
 
-    import traceback
-    frames = traceback.extract_stack(limit=2)
-    assert len(frames) == 2
-    frame = frames[0]
+    # Guard against recursion: in Python 3.14+, traceback.extract_stack()
+    # can trigger linecache -> import os -> _fill_cache -> sys.platform,
+    # which re-enters this function. Return exec_platform in that case.
+    if _platform_guard:
+        return exec_platform
 
-    # frozen modules - part of the interpreter itself? Report exec platform.
-    if frame.filename.startswith("<frozen"):
-        return exec_platform
-    # Report cross platform to distutils
-    elif "distutils/" in frame.filename:
-        return target_platform
-    # Report the target platform to anything local
-    # (e.g., setup.py in the module we're building)
-    elif not frame.filename.startswith("/"):
-        return target_platform
-    # Report exec platform to everything else
-    else:
-        return exec_platform
+    _platform_guard = True
+    try:
+        import traceback
+        frames = traceback.extract_stack(limit=2)
+        assert len(frames) == 2
+        frame = frames[0]
+
+        # frozen modules - part of the interpreter itself? Report exec platform.
+        if frame.filename.startswith("<frozen"):
+            return exec_platform
+        # Report cross platform to distutils
+        elif "distutils/" in frame.filename:
+            return target_platform
+        # Report the target platform to anything local
+        # (e.g., setup.py in the module we're building)
+        elif not frame.filename.startswith("/"):
+            return target_platform
+        # Report exec platform to everything else
+        else:
+            return exec_platform
+    finally:
+        _platform_guard = False
