@@ -84,8 +84,6 @@ jobs:
         if: (github.ref == 'refs/heads/main' || contains(github.head_ref, 'windows')) && !inputs.exclude_windows
       - id: macos
         run: echo "os=macos-latest" >> $GITHUB_OUTPUT
-        # Only run on main branch (or PR branches that contain 'macos') to minimize macOS minutes (billed at 10X)
-        if: github.ref == 'refs/heads/main' || contains(github.head_ref, 'macos')
     outputs:
       # Will look like ["ubuntu-latest", "windows-latest", "macos-latest"]
       os: ${{ toJSON(steps.*.outputs.os) }}
