@@ -340,6 +340,12 @@ def generate_cross_sysconfig_vars(
     sysconfig_vars["LDSHARED"] = " ".join([sysconfig_vars["CC"], sysconfig_vars["LDSHAREDFLAGS"]])
     del sysconfig_vars["LDSHAREDFLAGS"]
 
+    # On macOS, Python C extension shared libraries reference Python API symbols (e.g. PyDict_New)
+    # that are resolved at load time by the interpreter. Tell the linker to allow these undefined
+    # symbols rather than erroring at link time.
+    if sysconfig_vars.get("MACHDEP") == "darwin":
+        sysconfig_vars["LDSHARED"] += " -Wl,-undefined,dynamic_lookup"
+
     # https://github.com/pypa/distutils/issues/283
     sysconfig_vars["LDCXXSHARED"] = sysconfig_vars["LDSHARED"]
 
