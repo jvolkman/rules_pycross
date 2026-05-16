@@ -168,6 +168,13 @@ py_binary(
 )
 
 py_binary(
+    name = "meson_cross_file_hook",
+    srcs = ["meson_cross_file_hook.py"],
+    imports = ["../../.."],
+    visibility = ["//visibility:public"],
+)
+
+py_binary(
     name = "wheel_installer",
     srcs = ["wheel_installer.py"],
     imports = ["../../.."],

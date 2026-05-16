@@ -167,11 +167,18 @@ def set_or_append(env: Dict[str, Any], key: str, value: str) -> None:
 def get_default_build_env_vars(path_dirs: List[Path]) -> Dict[str, str]:
     env = os.environ.copy()
 
-    # Pop off some environment variables that might affect our build venv.
-    env.pop("PYTHONHOME", None)
-    env.pop("PYTHONPATH", None)
-    env.pop("PYTHONSAFEPATH", None)
-    env.pop("RUNFILES_DIR", None)
+    # Pop off environment variables that might affect our build venv or
+    # leak implementation details from the rules_python stub/launcher.
+    for var in (
+        "PYTHONHOME",
+        "PYTHONPATH",
+        "PYTHONSAFEPATH",
+        "RUNFILES_DIR",
+        "RUNFILES_MANIFEST_FILE",
+        "RUNFILES_MANIFEST_ONLY",
+        "PYTHON_RUNFILES",
+    ):
+        env.pop(var, None)
 
     # set SOURCE_DATE_EPOCH to 1980 so that we can use python wheels
     # https://github.com/NixOS/nixpkgs/blob/master/doc/languages-frameworks/python.section.md#python-setuppy-bdist_wheel-cannot-create-whl
@@ -439,114 +446,8 @@ def generate_cross_sysconfig_vars(
     return sysconfig_vars
 
 
-def _is_meson_build(sdist_dir: Path) -> bool:
-    """Check if the sdist uses a Meson build system."""
-    return (sdist_dir / "meson.build").exists()
 
 
-def _prepare_meson_build(
-    sdist_dir: Path,
-    build_env: Dict[str, str],
-    config_settings: Dict[str, Any],
-    sysconfig_vars: Dict[str, Any],
-    target_system: str,
-    target_cpu: str,
-) -> Tuple[Dict[str, str], Dict[str, Any]]:
-    """Prepare build environment for Meson-backed packages.
-
-    Generates a Meson cross-file mapping our wrapped compilers and flags,
-    and registers it in the PEP-517 config_settings.
-
-    Args:
-        sdist_dir: Extracted sdist directory (CWD during build).
-        build_env: Mutable build environment dict.
-        config_settings: Mutable PEP-517 config settings dict.
-        sysconfig_vars: Sysconfig variables (read-only here).
-        target_system: Target OS (e.g., "linux", "darwin").
-        target_cpu: Target CPU (e.g., "x86_64", "aarch64").
-
-    Returns:
-        Modified (build_env, config_settings).
-    """
-    import platform as platform_mod
-
-    # Ensure NINJA is discoverable
-    if not build_env.get("NINJA"):
-        ninja_bin = shutil.which("ninja")
-        if ninja_bin:
-            build_env["NINJA"] = ninja_bin
-
-    # Determine if this is a cross-compilation
-    host_system = platform_mod.system().lower()
-    host_cpu = platform_mod.machine().lower()
-    if host_cpu == "arm64":
-        host_cpu = "aarch64"
-    elif host_cpu == "amd64":
-        host_cpu = "x86_64"
-    is_cross = (target_system != host_system) or (target_cpu != host_cpu)
-
-    # Get compiler paths from build env (wrapper paths) or sysconfig (originals)
-    cc_path = build_env.get("CC") or sysconfig_vars.get("CC")
-    cxx_path = build_env.get("CXX") or sysconfig_vars.get("CXX")
-
-    if not cc_path or not cxx_path:
-        _warn("Cannot generate Meson cross-file: CC or CXX not available")
-        return build_env, config_settings
-
-    # Extract compile flags from sysconfig
-    c_args = sysconfig_vars.get("CFLAGS", "").split()
-    cpp_args = sysconfig_vars.get("CXXFLAGS", "").split()
-
-    # Extract linker args from LDSHARED, stripping the leading compiler command.
-    # Meson calls the compiler for linking but passes link args separately.
-    ld_args = []
-    ldshared = sysconfig_vars.get("LDSHARED", "")
-    if ldshared:
-        parts = ldshared.split()
-        # Strip the leading compiler command if present
-        if parts and any(
-            parts[0] == p or parts[0].endswith("/" + p)
-            for p in ("cc", "c++", "gcc", "g++", "clang", "clang++")
-        ):
-            ld_args = parts[1:]
-        elif parts and (parts[0] == cc_path or parts[0] == cxx_path):
-            ld_args = parts[1:]
-        else:
-            ld_args = parts
-
-    cross_file_content = f"""\
-[binaries]
-c = '{cc_path}'
-cpp = '{cxx_path}'
-ar = '{sysconfig_vars.get("AR", "ar")}'
-strip = 'strip'
-
-[built-in options]
-c_args = {repr(c_args)}
-cpp_args = {repr(cpp_args)}
-c_link_args = {repr(ld_args)}
-cpp_link_args = {repr(ld_args)}
-
-[properties]
-needs_exe_wrapper = {'true' if is_cross else 'false'}
-
-[host_machine]
-system = '{target_system}'
-cpu_family = '{target_cpu}'
-cpu = '{target_cpu}'
-endian = 'little'
-"""
-    cross_file_path = (sdist_dir / "cross-file.ini").resolve()
-    with open(cross_file_path, "w") as f:
-        f.write(cross_file_content)
-
-    # Register cross-file in meson config settings
-    setup_args = config_settings.get("setup-args", [])
-    setup_args.append(f"--cross-file={cross_file_path}")
-    config_settings["setup-args"] = setup_args
-    config_settings["build-dir"] = "build"
-
-    return build_env, config_settings
 
 
 def generate_bin_tools(bin_dir: Path, toolchain_vars: Dict[str, str]) -> None:
@@ -844,6 +745,64 @@ def build_venv(
             f.write(f"import os, site; site.addsitedir(os.path.join(sitedir, {rel_dep_path!r}))\n")
 
 
+def validate_required_deps(
+    env_dir: Path,
+    build_env: Dict[str, str],
+    required_deps: List[str],
+) -> None:
+    """Validate that required dependencies are available in the build venv.
+
+    Each entry in required_deps is a PEP 508 requirement specifier, e.g.:
+      "meson-python"
+      "setuptools>=68.0"
+      "cython>=3.0,<4.0"
+
+    Validation runs inside the build venv's Python so that importlib.metadata
+    sees exactly the packages that will be available during the build.
+    """
+    if not required_deps:
+        return
+
+    python_exe = env_dir / "bin" / "python"
+
+    # Build a small validation script that checks each requirement.
+    script = textwrap.dedent("""\
+        import json
+        import sys
+        from importlib.metadata import version, PackageNotFoundError
+        from packaging.requirements import Requirement
+
+        errors = []
+        for spec_str in json.loads(sys.argv[1]):
+            req = Requirement(spec_str)
+            try:
+                installed_version = version(req.name)
+            except PackageNotFoundError:
+                errors.append(f"Missing required build dependency: {spec_str}")
+                continue
+            if not req.specifier.contains(installed_version):
+                errors.append(
+                    f"Build dependency {req.name}=={installed_version} "
+                    f"does not satisfy requirement: {spec_str}"
+                )
+        if errors:
+            print("\\n".join(errors), file=sys.stderr)
+            sys.exit(1)
+    """)
+
+    try:
+        subprocess.check_output(
+            [str(python_exe), "-c", script, json.dumps(required_deps)],
+            env=build_env,
+            stderr=subprocess.STDOUT,
+        )
+    except subprocess.CalledProcessError as e:
+        _error(
+            "Required build dependency check failed:\n"
+            + e.output.decode().strip()
+        )
+
+
 def build_wheel(
     env_dir: Path,
     wheel_dir: Path,
@@ -894,8 +853,6 @@ def build_wheel(
     )
 
     try:
-        # TODO: Verify requirements in environment.
-
         wheel_file = builder.build(
             distribution="wheel",
             output_directory=wheel_dir,
@@ -961,6 +918,32 @@ def init_config_settings(args: Any, bazel_root: Path) -> Dict[str, Any]:
         )
 
     return config_settings
+
+
+def setup_recipe_data(args: Any, temp_dir: Path, bazel_root: Path) -> Optional[Path]:
+    """Stage recipe data files into a known directory.
+
+    Reads the recipe data manifest (logical name -> sandbox path) and copies
+    each file into temp_dir/recipe_data/<logical_name>. Returns the recipe
+    data directory path, or None if no manifest was provided.
+    """
+    if not args.recipe_data_manifest:
+        return None
+
+    with open(args.recipe_data_manifest, "r") as f:
+        manifest = json.load(f)
+
+    if not manifest:
+        return None
+
+    data_dir = temp_dir / "recipe_data"
+    for name, path in manifest.items():
+        dest = data_dir / name
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        src = bazel_root / path if not Path(path).is_absolute() else Path(path)
+        shutil.copy2(src, dest)
+
+    return data_dir
 
 
 def load_target_environment(args: Any) -> Optional[TargetEnv]:
@@ -1182,22 +1165,21 @@ def main(args: Any, temp_dir: Path, is_debug: bool) -> None:
     # Generate path tools and native dependencies
     generate_bin_tools(bin_dir, toolchain_sysconfig_vars)
     link_path_tools(tools_dir, args.path_tool)
-    for path_tool_name, _ in args.path_tool:
-        if path_tool_name.name == "ninja":
-            build_env_vars["NINJA"] = str(tools_dir / path_tool_name)
     link_native_headers(include_dir, args.native_header)
     link_native_libraries(lib_dir, args.native_library)
 
-    # If the sdist uses Meson, generate a cross-file and register it
-    if _is_meson_build(sdist_dir):
-        build_env_vars, config_settings = _prepare_meson_build(
-            sdist_dir=sdist_dir,
-            build_env=build_env_vars,
-            config_settings=config_settings,
-            sysconfig_vars=sysconfig_vars,
-            target_system=target_machdep,
-            target_cpu=target_cpu,
-        )
+    # Expose key sysconfig toolchain vars to build hooks.
+    # Hooks (like the meson cross-file generator) need access to compiler flags
+    # and linker commands that are derived from sysconfig. We set them in
+    # build_env_vars so they're available via PYCROSS_ENV_VARS_FILE and as
+    # direct env vars in the hook subprocess.
+    for var in ("CFLAGS", "CXXFLAGS", "LDSHARED", "LDFLAGS", "AR"):
+        val = sysconfig_vars.get(var)
+        if val and var not in build_env_vars:
+            build_env_vars[var] = val
+
+    # Use crossenv if the recipe chain requests it, or if always_use_crossenv is set
+    use_crossenv = args.always_use_crossenv or args.use_crossenv
 
     build_venv(
         bazel_root=prefix,
@@ -1207,11 +1189,22 @@ def main(args: Any, temp_dir: Path, is_debug: bool) -> None:
         sysconfig_vars=sysconfig_vars,
         path=args.python_path,
         target_env=target_environment,
-        always_use_crossenv=args.always_use_crossenv,
+        always_use_crossenv=use_crossenv,
     )
 
     if is_debug:
         print(f"Build environment: {build_env_dir.absolute()}")
+
+    validate_required_deps(
+        env_dir=build_env_dir,
+        build_env=build_env_vars,
+        required_deps=args.require_dep,
+    )
+
+    # Stage recipe data files so hooks can access them
+    recipe_data_dir = setup_recipe_data(args, temp_dir, prefix)
+    if recipe_data_dir:
+        build_env_vars["PYCROSS_RECIPE_DATA_DIR"] = str(recipe_data_dir.resolve())
 
     build_env_vars, config_settings = run_pre_build_hooks(
         hooks=args.pre_build_hook,
@@ -1259,6 +1252,12 @@ def parse_flags() -> Any:
     parser.add_argument(
         "--always-use-crossenv",
         action="store_true",
+    )
+
+    parser.add_argument(
+        "--use-crossenv",
+        action="store_true",
+        help="Enable crossenv sysconfig patching (set by recipe chain).",
     )
 
     parser.add_argument(
@@ -1337,6 +1336,13 @@ def parse_flags() -> Any:
     )
 
     parser.add_argument(
+        "--require-dep",
+        action="append",
+        default=[],
+        help="A PEP 508 requirement specifier that must be satisfied by build deps (e.g. 'meson-python>=0.15').",
+    )
+
+    parser.add_argument(
         "--sdist",
         type=Path,
         required=True,
@@ -1381,6 +1387,13 @@ def parse_flags() -> Any:
         type=sdist_rel_path,
         required=True,
         help="The wheel name output path.",
+    )
+
+    parser.add_argument(
+        "--recipe-data-manifest",
+        type=sdist_rel_path,
+        required=False,
+        help="JSON manifest mapping logical names to file paths for recipe data.",
     )
 
     args = parser.parse_args()

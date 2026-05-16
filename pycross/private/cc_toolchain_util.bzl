@@ -337,7 +337,7 @@ def get_libraries(ccinfo):
 # Flag prefixes that indicate toolchain-intrinsic flags to bake into the
 # compiler wrapper script. These control target triple, sysroot, header
 # search paths, and runtime library selection.
-_WRAPPER_FLAG_PREFIXES = [
+_COMMON_WRAPPER_FLAG_PREFIXES = [
     "-target",
     "--target",
     "--sysroot",
@@ -346,6 +346,10 @@ _WRAPPER_FLAG_PREFIXES = [
     "-resource-dir",
     "-rtlib",
     "--unwindlib",
+]
+
+_LINKER_WRAPPER_FLAG_PREFIXES = _COMMON_WRAPPER_FLAG_PREFIXES + [
+    "-L",
 ]
 
 # Exact-match flags for the wrapper (no argument).
@@ -363,7 +367,7 @@ def _match_prefix(s, prefixes):
             return p
     return None
 
-def classify_flags(flags):
+def classify_flags(flags, is_linker = False):
     """Splits a flag list into wrapper flags and compile flags.
 
     Wrapper flags are toolchain-intrinsic flags (e.g., --target, --sysroot,
@@ -373,6 +377,7 @@ def classify_flags(flags):
 
     Args:
         flags: List of compiler flag strings.
+        is_linker: If True, include linker-specific wrapper flags like -L.
 
     Returns:
         struct with .wrapper (list) and .compile (list) fields.
@@ -380,6 +385,7 @@ def classify_flags(flags):
     wrapper = []
     compile_flags = []
     n = len(flags)
+    prefixes = _LINKER_WRAPPER_FLAG_PREFIXES if is_linker else _COMMON_WRAPPER_FLAG_PREFIXES
 
     # skip_until tracks how many tokens to skip (for multi-token flags)
     skip_until = 0
@@ -394,9 +400,9 @@ def classify_flags(flags):
             # -Xclang -internal-isystem -Xclang <path> (4-token sequence)
             wrapper.extend([flags[i], flags[i + 1], flags[i + 2], flags[i + 3]])
             skip_until = i + 4
-        elif _match_prefix(flags[i], _WRAPPER_FLAG_PREFIXES) != None:
+        elif _match_prefix(flags[i], prefixes) != None:
             # Prefix-match flags (e.g., -isystem, --sysroot, -target)
-            prefix = _match_prefix(flags[i], _WRAPPER_FLAG_PREFIXES)
+            prefix = _match_prefix(flags[i], prefixes)
             if "=" in flags[i]:
                 # Value attached with =: --sysroot=/dev/null
                 wrapper.append(flags[i])
@@ -417,3 +423,4 @@ def classify_flags(flags):
             compile_flags.append(flags[i])
 
     return struct(wrapper = wrapper, compile = compile_flags)
+

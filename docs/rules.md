@@ -2,6 +2,52 @@
 
 Public build rule API re-exports
 
+<a id="pycross_build_recipe"></a>
+
+## pycross_build_recipe
+
+<pre>
+load("@rules_pycross//pycross:defs.bzl", "pycross_build_recipe")
+
+pycross_build_recipe(<a href="#pycross_build_recipe-name">name</a>, <a href="#pycross_build_recipe-data">data</a>, <a href="#pycross_build_recipe-build_deps">build_deps</a>, <a href="#pycross_build_recipe-build_env">build_env</a>, <a href="#pycross_build_recipe-config_settings">config_settings</a>, <a href="#pycross_build_recipe-parent">parent</a>, <a href="#pycross_build_recipe-path_tools">path_tools</a>,
+                     <a href="#pycross_build_recipe-post_build_hooks">post_build_hooks</a>, <a href="#pycross_build_recipe-pre_build_hooks">pre_build_hooks</a>, <a href="#pycross_build_recipe-recipe_data">recipe_data</a>, <a href="#pycross_build_recipe-recipe_name">recipe_name</a>, <a href="#pycross_build_recipe-required_dep_names">required_dep_names</a>,
+                     <a href="#pycross_build_recipe-use_crossenv">use_crossenv</a>)
+</pre>
+
+Defines a build recipe for pycross_wheel_build.
+
+Recipes encapsulate build-system-specific hooks, dependencies, environment
+variables, and config settings. They form a single-inheritance chain via
+the `parent` attribute.
+
+Example:
+    pycross_build_recipe(
+        name = "meson",
+        parent = "@rules_pycross//pycross/recipes:crossenv",
+        pre_build_hooks = [":generate_cross_file"],
+        required_dep_names = ["meson-python"],
+    )
+
+**ATTRIBUTES**
+
+
+| Name  | Description | Type | Mandatory | Default |
+| :------------- | :------------- | :------------- | :------------- | :------------- |
+| <a id="pycross_build_recipe-name"></a>name |  A unique name for this target.   | <a href="https://bazel.build/concepts/labels#target-names">Name</a> | required |  |
+| <a id="pycross_build_recipe-data"></a>data |  Additional data files available at build time.   | <a href="https://bazel.build/concepts/labels">List of labels</a> | optional |  `[]`  |
+| <a id="pycross_build_recipe-build_deps"></a>build_deps |  Python dependencies this recipe provides to the build environment.   | <a href="https://bazel.build/concepts/labels">List of labels</a> | optional |  `[]`  |
+| <a id="pycross_build_recipe-build_env"></a>build_env |  Environment variables set during the build. Values are subject to 'Make variable', location, and build_cwd_token expansion.   | <a href="https://bazel.build/rules/lib/dict">Dictionary: String -> String</a> | optional |  `{}`  |
+| <a id="pycross_build_recipe-config_settings"></a>config_settings |  PEP 517 config settings passed to the build backend. Values are subject to 'Make variable', location, and build_cwd_token expansion.   | <a href="https://bazel.build/rules/lib/dict">Dictionary: String -> List of strings</a> | optional |  `{}`  |
+| <a id="pycross_build_recipe-parent"></a>parent |  Parent recipe. This recipe's pre-build hooks run after the parent's.   | <a href="https://bazel.build/concepts/labels">Label</a> | optional |  `None`  |
+| <a id="pycross_build_recipe-path_tools"></a>path_tools |  A mapping of executable targets to names placed on PATH during the build.   | <a href="https://bazel.build/rules/lib/dict">Dictionary: Label -> String</a> | optional |  `{}`  |
+| <a id="pycross_build_recipe-post_build_hooks"></a>post_build_hooks |  Executables run after the PEP 517 build.   | <a href="https://bazel.build/concepts/labels">List of labels</a> | optional |  `[]`  |
+| <a id="pycross_build_recipe-pre_build_hooks"></a>pre_build_hooks |  Executables run before the PEP 517 build.   | <a href="https://bazel.build/concepts/labels">List of labels</a> | optional |  `[]`  |
+| <a id="pycross_build_recipe-recipe_data"></a>recipe_data |  A mapping of file targets to logical names. Files are staged into PYCROSS_RECIPE_DATA_DIR and accessible to hooks by their logical name. Use namespaced names (e.g., 'meson/cross_properties.json') to avoid collisions.   | <a href="https://bazel.build/rules/lib/dict">Dictionary: Label -> String</a> | optional |  `{}`  |
+| <a id="pycross_build_recipe-recipe_name"></a>recipe_name |  Human-readable recipe name. Defaults to the target name.   | String | optional |  `""`  |
+| <a id="pycross_build_recipe-required_dep_names"></a>required_dep_names |  Package names that must be present in the user's build deps (validated at build time).   | List of strings | optional |  `[]`  |
+| <a id="pycross_build_recipe-use_crossenv"></a>use_crossenv |  Whether this recipe needs crossenv sysconfig patching.   | Boolean | optional |  `False`  |
+
+
 <a id="pycross_lock_file"></a>
 
 ## pycross_lock_file
@@ -162,7 +208,8 @@ pycross_uv_lock_model(<a href="#pycross_uv_lock_model-name">name</a>, <a href="#
 load("@rules_pycross//pycross:defs.bzl", "pycross_wheel_build")
 
 pycross_wheel_build(<a href="#pycross_wheel_build-name">name</a>, <a href="#pycross_wheel_build-deps">deps</a>, <a href="#pycross_wheel_build-data">data</a>, <a href="#pycross_wheel_build-build_env">build_env</a>, <a href="#pycross_wheel_build-config_settings">config_settings</a>, <a href="#pycross_wheel_build-copts">copts</a>, <a href="#pycross_wheel_build-linkopts">linkopts</a>, <a href="#pycross_wheel_build-native_deps">native_deps</a>,
-                    <a href="#pycross_wheel_build-path_tools">path_tools</a>, <a href="#pycross_wheel_build-post_build_hooks">post_build_hooks</a>, <a href="#pycross_wheel_build-pre_build_hooks">pre_build_hooks</a>, <a href="#pycross_wheel_build-sdist">sdist</a>, <a href="#pycross_wheel_build-target_environment">target_environment</a>)
+                    <a href="#pycross_wheel_build-path_tools">path_tools</a>, <a href="#pycross_wheel_build-post_build_hooks">post_build_hooks</a>, <a href="#pycross_wheel_build-pre_build_hooks">pre_build_hooks</a>, <a href="#pycross_wheel_build-recipe">recipe</a>, <a href="#pycross_wheel_build-recipe_data">recipe_data</a>, <a href="#pycross_wheel_build-sdist">sdist</a>,
+                    <a href="#pycross_wheel_build-target_environment">target_environment</a>)
 </pre>
 
 
@@ -175,14 +222,16 @@ pycross_wheel_build(<a href="#pycross_wheel_build-name">name</a>, <a href="#pycr
 | <a id="pycross_wheel_build-name"></a>name |  A unique name for this target.   | <a href="https://bazel.build/concepts/labels#target-names">Name</a> | required |  |
 | <a id="pycross_wheel_build-deps"></a>deps |  A list of Python build dependencies for the wheel.   | <a href="https://bazel.build/concepts/labels">List of labels</a> | optional |  `[]`  |
 | <a id="pycross_wheel_build-data"></a>data |  Additional data and dependencies used by the build.   | <a href="https://bazel.build/concepts/labels">List of labels</a> | optional |  `[]`  |
-| <a id="pycross_wheel_build-build_env"></a>build_env |  Environment variables passed to the sdist build. Values are subject to 'Make variable', location, and build_cwd_token expansion.   | <a href="https://bazel.build/rules/lib/dict">Dictionary: String -> String</a> | optional |  `{}`  |
-| <a id="pycross_wheel_build-config_settings"></a>config_settings |  PEP 517 config settings passed to the sdist build. Values are subject to 'Make variable', location, and build_cwd_token expansion.   | <a href="https://bazel.build/rules/lib/dict">Dictionary: String -> List of strings</a> | optional |  `{}`  |
+| <a id="pycross_wheel_build-build_env"></a>build_env |  Environment variables set during the build. Values are subject to 'Make variable', location, and build_cwd_token expansion.   | <a href="https://bazel.build/rules/lib/dict">Dictionary: String -> String</a> | optional |  `{}`  |
+| <a id="pycross_wheel_build-config_settings"></a>config_settings |  PEP 517 config settings passed to the build backend. Values are subject to 'Make variable', location, and build_cwd_token expansion.   | <a href="https://bazel.build/rules/lib/dict">Dictionary: String -> List of strings</a> | optional |  `{}`  |
 | <a id="pycross_wheel_build-copts"></a>copts |  Additional C compiler options.   | List of strings | optional |  `[]`  |
 | <a id="pycross_wheel_build-linkopts"></a>linkopts |  Additional C linker options.   | List of strings | optional |  `[]`  |
 | <a id="pycross_wheel_build-native_deps"></a>native_deps |  A list of native build dependencies (CcInfo) for the wheel.   | <a href="https://bazel.build/concepts/labels">List of labels</a> | optional |  `[]`  |
-| <a id="pycross_wheel_build-path_tools"></a>path_tools |  A mapping of binaries to names that are placed in PATH when building the sdist.   | <a href="https://bazel.build/rules/lib/dict">Dictionary: Label -> String</a> | optional |  `{}`  |
-| <a id="pycross_wheel_build-post_build_hooks"></a>post_build_hooks |  A list of binaries that are executed after the wheel is built.   | <a href="https://bazel.build/concepts/labels">List of labels</a> | optional |  `[]`  |
-| <a id="pycross_wheel_build-pre_build_hooks"></a>pre_build_hooks |  A list of binaries that are executed prior to building the sdist.   | <a href="https://bazel.build/concepts/labels">List of labels</a> | optional |  `[]`  |
+| <a id="pycross_wheel_build-path_tools"></a>path_tools |  A mapping of executable targets to names placed on PATH during the build.   | <a href="https://bazel.build/rules/lib/dict">Dictionary: Label -> String</a> | optional |  `{}`  |
+| <a id="pycross_wheel_build-post_build_hooks"></a>post_build_hooks |  Executables run after the PEP 517 build.   | <a href="https://bazel.build/concepts/labels">List of labels</a> | optional |  `[]`  |
+| <a id="pycross_wheel_build-pre_build_hooks"></a>pre_build_hooks |  Executables run before the PEP 517 build.   | <a href="https://bazel.build/concepts/labels">List of labels</a> | optional |  `[]`  |
+| <a id="pycross_wheel_build-recipe"></a>recipe |  Build recipe to use. Recipes encapsulate build-system-specific hooks, environment variables, config settings, and path tools. See pycross_build_recipe.   | <a href="https://bazel.build/concepts/labels">Label</a> | optional |  `None`  |
+| <a id="pycross_wheel_build-recipe_data"></a>recipe_data |  A mapping of file targets to logical names. Files are staged into PYCROSS_RECIPE_DATA_DIR and accessible to hooks by their logical name. Use namespaced names (e.g., 'meson/cross_properties.json') to avoid collisions.   | <a href="https://bazel.build/rules/lib/dict">Dictionary: Label -> String</a> | optional |  `{}`  |
 | <a id="pycross_wheel_build-sdist"></a>sdist |  The sdist file.   | <a href="https://bazel.build/concepts/labels">Label</a> | required |  |
 | <a id="pycross_wheel_build-target_environment"></a>target_environment |  The target environment to build for.   | <a href="https://bazel.build/concepts/labels">Label</a> | optional |  `None`  |
 
@@ -234,6 +283,38 @@ pycross_wheel_zipimport_library(<a href="#pycross_wheel_zipimport_library-name">
 | <a id="pycross_wheel_zipimport_library-name"></a>name |  A unique name for this target.   | <a href="https://bazel.build/concepts/labels#target-names">Name</a> | required |  |
 | <a id="pycross_wheel_zipimport_library-deps"></a>deps |  A list of this wheel's Python library dependencies.   | <a href="https://bazel.build/concepts/labels">List of labels</a> | optional |  `[]`  |
 | <a id="pycross_wheel_zipimport_library-wheel"></a>wheel |  The wheel file.   | <a href="https://bazel.build/concepts/labels">Label</a> | required |  |
+
+
+<a id="PycrossBuildRecipeInfo"></a>
+
+## PycrossBuildRecipeInfo
+
+<pre>
+load("@rules_pycross//pycross:defs.bzl", "PycrossBuildRecipeInfo")
+
+PycrossBuildRecipeInfo(<a href="#PycrossBuildRecipeInfo-name">name</a>, <a href="#PycrossBuildRecipeInfo-pre_build_hooks">pre_build_hooks</a>, <a href="#PycrossBuildRecipeInfo-post_build_hooks">post_build_hooks</a>, <a href="#PycrossBuildRecipeInfo-path_tools">path_tools</a>, <a href="#PycrossBuildRecipeInfo-build_deps">build_deps</a>, <a href="#PycrossBuildRecipeInfo-data">data</a>,
+                       <a href="#PycrossBuildRecipeInfo-required_dep_names">required_dep_names</a>, <a href="#PycrossBuildRecipeInfo-build_env">build_env</a>, <a href="#PycrossBuildRecipeInfo-config_settings">config_settings</a>, <a href="#PycrossBuildRecipeInfo-recipe_data">recipe_data</a>, <a href="#PycrossBuildRecipeInfo-use_crossenv">use_crossenv</a>,
+                       <a href="#PycrossBuildRecipeInfo-parent">parent</a>)
+</pre>
+
+Describes a build recipe for pycross_wheel_build.
+
+**FIELDS**
+
+| Name  | Description |
+| :------------- | :------------- |
+| <a id="PycrossBuildRecipeInfo-name"></a>name |  str: Human-readable recipe name.    |
+| <a id="PycrossBuildRecipeInfo-pre_build_hooks"></a>pre_build_hooks |  list[File]: Executables run before the PEP 517 build.    |
+| <a id="PycrossBuildRecipeInfo-post_build_hooks"></a>post_build_hooks |  list[File]: Executables run after the PEP 517 build.    |
+| <a id="PycrossBuildRecipeInfo-path_tools"></a>path_tools |  list[struct]: Each has .name (str) and .executable (File).    |
+| <a id="PycrossBuildRecipeInfo-build_deps"></a>build_deps |  list[Target]: Python deps this recipe provides.    |
+| <a id="PycrossBuildRecipeInfo-data"></a>data |  list[Target]: Additional data files for the build.    |
+| <a id="PycrossBuildRecipeInfo-required_dep_names"></a>required_dep_names |  list[str]: Package names required in user's build deps.    |
+| <a id="PycrossBuildRecipeInfo-build_env"></a>build_env |  dict[str, str]: Extra environment variables.    |
+| <a id="PycrossBuildRecipeInfo-config_settings"></a>config_settings |  dict[str, list[str]]: Extra PEP 517 config settings.    |
+| <a id="PycrossBuildRecipeInfo-recipe_data"></a>recipe_data |  list[struct]: Each has .name (str) and .file (File). Keyed files accessible to hooks.    |
+| <a id="PycrossBuildRecipeInfo-use_crossenv"></a>use_crossenv |  bool: Whether crossenv sysconfig patching is needed.    |
+| <a id="PycrossBuildRecipeInfo-parent"></a>parent |  PycrossBuildRecipeInfo or None: Parent recipe.    |
 
 
 <a id="PycrossWheelInfo"></a>

@@ -5,6 +5,11 @@ load("@bazel_tools//tools/cpp:toolchain_utils.bzl", "find_cpp_toolchain", "use_c
 load("@rules_cc//cc/common:cc_info.bzl", "CcInfo")
 load("@rules_python//python:py_info.bzl", "PyInfo")
 load(
+    ":build_recipe.bzl",
+    "RECIPE_ATTRS",
+    "flatten_recipe_chain",
+)
+load(
     ":cc_toolchain_util.bzl",
     "absolutize_path_in_str",
     "classify_flags",
@@ -14,7 +19,7 @@ load(
     "get_libraries",
     "get_tools_info",
 )
-load(":providers.bzl", "PycrossWheelInfo")
+load(":providers.bzl", "PycrossBuildRecipeInfo", "PycrossWheelInfo")
 
 PYTHON_TOOLCHAIN_TYPE = Label("@rules_python//python:toolchain_type")
 PYCROSS_TOOLCHAIN_TYPE = Label("//pycross:toolchain_type")
@@ -53,7 +58,7 @@ def _get_sysconfig_data(workspace_name, tools, flags):
     # This avoids fragile string re-parsing on the Python side.
     cc_classified = classify_flags(flags.cc)
     cxx_classified = classify_flags(flags.cxx)
-    ld_classified = classify_flags(flags.cxx_linker_shared)
+    ld_classified = classify_flags(flags.cxx_linker_shared, is_linker = True)
 
     vars = {
         "CC": cc,
@@ -90,11 +95,6 @@ def _resolve_import_path_fn(ctx):
         _is_sibling_repository_layout_enabled(),
     )
 
-def _executable(target):
-    exe = target[DefaultInfo].files_to_run.executable
-    if not exe:
-        fail("%s is not executable" % target.label)
-    return exe.path
 
 def _files_to_run(targets):
     return [t[DefaultInfo].files_to_run for t in targets]
@@ -285,48 +285,142 @@ def _handle_target_environment(ctx, args, inputs):
     args.add("--target-environment-file", target_environment_file.path)
     inputs.append(target_environment_file)
 
-def _handle_build_env(ctx, args, inputs):
-    if not ctx.attr.build_env:
+def _handle_build_env(ctx, args, inputs, extra_env = None):
+    """Merge recipe and user build_env, expand, and pass to wheel_builder."""
+    merged = {}
+    if extra_env:
+        merged.update(extra_env)
+    for key, value in ctx.attr.build_env.items():
+        merged[key] = value
+    if not merged:
         return
     build_env_data = ctx.actions.declare_file(paths.join(ctx.attr.name, "build_env.json"))
     args.add("--build-env", build_env_data)
     inputs.append(build_env_data)
     vals = {}
-    for key, value in ctx.attr.build_env.items():
+    for key, value in merged.items():
         vals[key] = _expand_locations_and_vars("build_env", ctx, value)
     ctx.actions.write(build_env_data, json.encode(vals))
 
-def _handle_config_settings(ctx, args, inputs):
-    if not ctx.attr.config_settings:
+def _handle_config_settings(ctx, args, inputs, extra_config = None):
+    """Merge recipe and user config_settings, expand, and pass to wheel_builder."""
+    merged = {}
+    if extra_config:
+        for k, v in extra_config.items():
+            merged[k] = list(v)
+    for key, value in ctx.attr.config_settings.items():
+        if key in merged:
+            merged[key] = merged[key] + list(value)
+        else:
+            merged[key] = list(value)
+    if not merged:
         return
     config_settings_data = ctx.actions.declare_file(paths.join(ctx.attr.name, "config_settings.json"))
     args.add("--config-settings", config_settings_data)
     inputs.append(config_settings_data)
     vals = {}
-    for key, value in ctx.attr.config_settings.items():
+    for key, value in merged.items():
         vals[key] = [_expand_locations_and_vars("config_settings", ctx, vi) for vi in value]
     ctx.actions.write(config_settings_data, json.encode(vals))
 
-def _handle_tools_and_data(ctx, args, tools):
+def _handle_recipe_data(ctx, args, inputs, recipe_flat = None):
+    """Write recipe data manifest and add data files as inputs."""
+    has_recipe_data = recipe_flat and recipe_flat.recipe_data
+    has_user_data = bool(ctx.attr.recipe_data)
+    if not has_recipe_data and not has_user_data:
+        return
+
+    # Merge recipe_data with any user-level recipe_data (user overrides recipe)
+    merged = dict(recipe_flat.recipe_data) if recipe_flat and recipe_flat.recipe_data else {}
+    for target, name in ctx.attr.recipe_data.items():
+        files = target[DefaultInfo].files.to_list()
+        if len(files) != 1:
+            fail("recipe_data target %s must provide exactly one file" % target.label)
+        merged[name] = struct(name = name, file = files[0])
+
+    # Build manifest: logical name -> sandbox path
+    manifest = {}
+    for name, rd in merged.items():
+        manifest[name] = rd.file.path
+        inputs.append(rd.file)
+
+    manifest_file = ctx.actions.declare_file(paths.join(ctx.attr.name, "recipe_data_manifest.json"))
+    ctx.actions.write(manifest_file, json.encode(manifest))
+    args.add("--recipe-data-manifest", manifest_file)
+    inputs.append(manifest_file)
+
+def _handle_tools_and_data(ctx, args, tools, recipe_flat = None):
     tools.extend([data[DefaultInfo].files for data in ctx.attr.data])
 
+    # Collect all pre/post hooks and path_tools.
+    # Recipe hooks are structs with .executable and .files_to_run.
+    # User hooks are just executable Files.
+    all_pre_hook_exes = []
+    all_post_hook_exes = []
+    all_path_tool_entries = {}  # name -> executable File
+
+    if recipe_flat:
+        # Recipe hooks: add files_to_run (includes runfiles) to tools
+        for hook in recipe_flat.pre_build_hooks:
+            all_pre_hook_exes.append(hook.executable)
+            tools.append(hook.files_to_run)
+        for hook in recipe_flat.post_build_hooks:
+            all_post_hook_exes.append(hook.executable)
+            tools.append(hook.files_to_run)
+        for name, pt in recipe_flat.path_tools.items():
+            all_path_tool_entries[name] = pt.executable
+            tools.append(pt.files_to_run)
+        # Recipe data/deps
+        for dep in recipe_flat.build_deps:
+            tools.append(dep[DefaultInfo].files)
+
+    # User hooks (run after recipe pre-hooks, before recipe post-hooks)
     if ctx.attr.pre_build_hooks:
-        args.add_all(ctx.attr.pre_build_hooks, before_each = "--pre-build-hook", map_each = _executable)
+        for h in ctx.attr.pre_build_hooks:
+            all_pre_hook_exes.append(h[DefaultInfo].files_to_run.executable)
         tools.extend(_files_to_run(ctx.attr.pre_build_hooks))
 
     if ctx.attr.post_build_hooks:
-        args.add_all(ctx.attr.post_build_hooks, before_each = "--post-build-hook", map_each = _executable)
+        for h in ctx.attr.post_build_hooks:
+            all_post_hook_exes.append(h[DefaultInfo].files_to_run.executable)
         tools.extend(_files_to_run(ctx.attr.post_build_hooks))
 
+    # User path_tools override recipe path_tools for same name
     if ctx.attr.path_tools:
         for tool, name in ctx.attr.path_tools.items():
-            args.add_all("--path-tool", [name, _executable(tool)])
+            all_path_tool_entries[name] = tool[DefaultInfo].files_to_run.executable
         tools.extend(_files_to_run(ctx.attr.path_tools.keys()))
+
+    # Emit all hooks to args
+    for exe in all_pre_hook_exes:
+        args.add("--pre-build-hook", exe)
+    for exe in all_post_hook_exes:
+        args.add("--post-build-hook", exe)
+    for name, exe in all_path_tool_entries.items():
+        args.add_all("--path-tool", [name, exe])
 
 def _pycross_wheel_build_impl(ctx):
     args = ctx.actions.args().use_param_file("--flagfile=%s")
     inputs = []
     tools = []
+
+    # Flatten the recipe chain if a recipe is configured
+    recipe_flat = None
+    if ctx.attr.recipe:
+        recipe_info = ctx.attr.recipe[PycrossBuildRecipeInfo]
+        recipe_flat = flatten_recipe_chain(recipe_info)
+
+        # Add recipe's transitive files and runfiles as tools
+        tools.append(ctx.attr.recipe[DefaultInfo].files)
+        recipe_runfiles = ctx.attr.recipe[DefaultInfo].default_runfiles
+        if recipe_runfiles:
+            tools.append(recipe_runfiles.files)
+        # Pass use_crossenv flag
+        if recipe_flat.use_crossenv:
+            args.add("--use-crossenv")
+        # Pass required dep specifiers for build-time validation
+        for req in recipe_flat.required_dep_names:
+            args.add("--require-dep", req)
 
     pycross_wheel_info = _handle_sdist(ctx, args, inputs)
     cc_vars = _handle_sysconfig_data(ctx, args, inputs)
@@ -335,10 +429,11 @@ def _pycross_wheel_build_impl(ctx):
     _handle_native_deps(ctx, args, tools)
     _handle_target_environment(ctx, args, inputs)
 
-    _handle_build_env(ctx, args, inputs)
-    _handle_config_settings(ctx, args, inputs)
+    _handle_build_env(ctx, args, inputs, extra_env = recipe_flat.build_env if recipe_flat else None)
+    _handle_config_settings(ctx, args, inputs, extra_config = recipe_flat.config_settings if recipe_flat else None)
+    _handle_recipe_data(ctx, args, inputs, recipe_flat = recipe_flat)
 
-    _handle_tools_and_data(ctx, args, tools)
+    _handle_tools_and_data(ctx, args, tools, recipe_flat = recipe_flat)
 
     env = dict(cc_vars)
     env.update(ctx.configuration.default_shell_env)
@@ -380,78 +475,59 @@ def _pycross_toolchains():
     else:
         return [PYTHON_TOOLCHAIN_TYPE] + use_cpp_toolchain()
 
+_PYCROSS_WHEEL_BUILD_ATTRS = {
+    "sdist": attr.label(
+        doc = "The sdist file.",
+        allow_single_file = [".tar.gz", ".zip"],
+        mandatory = True,
+    ),
+    "recipe": attr.label(
+        doc = (
+            "Build recipe to use. Recipes encapsulate build-system-specific " +
+            "hooks, environment variables, config settings, and path tools. " +
+            "See pycross_build_recipe."
+        ),
+        providers = [PycrossBuildRecipeInfo],
+    ),
+    "deps": attr.label_list(
+        doc = "A list of Python build dependencies for the wheel.",
+        providers = [PyInfo],
+    ),
+    "native_deps": attr.label_list(
+        doc = "A list of native build dependencies (CcInfo) for the wheel.",
+        providers = [CcInfo],
+    ),
+    "data": attr.label_list(
+        doc = "Additional data and dependencies used by the build.",
+        providers = [DefaultInfo],
+        allow_files = True,
+    ),
+    "target_environment": attr.label(
+        doc = "The target environment to build for.",
+        allow_single_file = [".json"],
+    ),
+    "copts": attr.string_list(
+        doc = "Additional C compiler options.",
+        default = [],
+    ),
+    "linkopts": attr.string_list(
+        doc = "Additional C linker options.",
+        default = [],
+    ),
+    "_tool": attr.label(
+        default = Label("//pycross/private/tools:wheel_builder"),
+        cfg = "exec",
+        executable = True,
+    ),
+    "_cc_toolchain": attr.label(
+        default = Label("@bazel_tools//tools/cpp:current_cc_toolchain"),
+    ),
+}
+_PYCROSS_WHEEL_BUILD_ATTRS.update(RECIPE_ATTRS)
+
 pycross_wheel_build = rule(
     implementation = _pycross_wheel_build_impl,
-    attrs = {
-        "sdist": attr.label(
-            doc = "The sdist file.",
-            allow_single_file = [".tar.gz", ".zip"],
-            mandatory = True,
-        ),
-        "deps": attr.label_list(
-            doc = "A list of Python build dependencies for the wheel.",
-            providers = [PyInfo],
-        ),
-        "native_deps": attr.label_list(
-            doc = "A list of native build dependencies (CcInfo) for the wheel.",
-            providers = [CcInfo],
-        ),
-        "data": attr.label_list(
-            doc = "Additional data and dependencies used by the build.",
-            providers = [DefaultInfo],
-            allow_files = True,
-        ),
-        "target_environment": attr.label(
-            doc = "The target environment to build for.",
-            allow_single_file = [".json"],
-        ),
-        "build_env": attr.string_dict(
-            doc = (
-                "Environment variables passed to the sdist build. " +
-                "Values are subject to 'Make variable', location, and build_cwd_token expansion."
-            ),
-        ),
-        "config_settings": attr.string_list_dict(
-            doc = (
-                "PEP 517 config settings passed to the sdist build. " +
-                "Values are subject to 'Make variable', location, and build_cwd_token expansion."
-            ),
-        ),
-        "pre_build_hooks": attr.label_list(
-            doc = (
-                "A list of binaries that are executed prior to building the sdist."
-            ),
-            cfg = "exec",
-        ),
-        "post_build_hooks": attr.label_list(
-            doc = (
-                "A list of binaries that are executed after the wheel is built."
-            ),
-            cfg = "exec",
-        ),
-        "path_tools": attr.label_keyed_string_dict(
-            doc = (
-                "A mapping of binaries to names that are placed in PATH when building the sdist."
-            ),
-            cfg = "exec",
-        ),
-        "copts": attr.string_list(
-            doc = "Additional C compiler options.",
-            default = [],
-        ),
-        "linkopts": attr.string_list(
-            doc = "Additional C linker options.",
-            default = [],
-        ),
-        "_tool": attr.label(
-            default = Label("//pycross/private/tools:wheel_builder"),
-            cfg = "exec",
-            executable = True,
-        ),
-        "_cc_toolchain": attr.label(
-            default = Label("@bazel_tools//tools/cpp:current_cc_toolchain"),
-        ),
-    },
+    attrs = _PYCROSS_WHEEL_BUILD_ATTRS,
     toolchains = _pycross_toolchains(),
     fragments = ["cpp"],
     host_fragments = ["cpp"],

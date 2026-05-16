@@ -1,11 +1,23 @@
-load("@rules_pycross//pycross:defs.bzl", "pycross_wheel_build")
+load("@rules_pycross//pycross:defs.bzl", "pycross_build_recipe", "pycross_wheel_build")
 load("@rules_python//python:defs.bzl", "py_binary")
 
 package(default_visibility = ["//visibility:public"])
 
-# Specified here as an override.
+# NumPy-specific recipe extending the built-in meson recipe.
+pycross_build_recipe(
+    name = "numpy_recipe",
+    parent = "@rules_pycross//pycross/recipes:meson",
+    pre_build_hooks = [":gen_openblas_pc"],
+    path_tools = {
+        ":ninja_wrapper": "ninja",
+        ":cython_wrapper": "cython",
+        ":python3_config_wrapper": "python3-config",
+    },
+)
+
 pycross_wheel_build(
     name = "numpy",
+    recipe = ":numpy_recipe",
     build_env = {
         "OPENBLAS_LIB": "$(location //third_party/openblas:libopenblas.a)",
         "OPENBLAS_INCLUDE": "$(location //third_party/openblas:include)",
@@ -15,16 +27,8 @@ pycross_wheel_build(
         "//third_party/openblas:include",
         "//third_party/openblas:libopenblas.a",
     ],
-    path_tools = {
-        ":ninja_wrapper": "ninja",
-        ":cython_wrapper": "cython",
-        ":python3_config_wrapper": "python3-config",
-    },
     post_build_hooks = [
         "@rules_pycross//pycross/hooks:repair_wheel",
-    ],
-    pre_build_hooks = [
-        ":gen_openblas_pc",
     ],
     sdist = "@uv//numpy:sdist",
     tags = ["manual"],

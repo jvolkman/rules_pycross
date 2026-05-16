@@ -7,6 +7,15 @@ load(":target_environment.bzl", "pycross_target_environment")
 package(default_visibility = ["//pycross:__subpackages__"])
 
 bzl_library(
+    name = "build_recipe",
+    srcs = ["build_recipe.bzl"],
+    deps = [
+        ":providers",
+        "@rules_python//python:py_info_bzl",
+    ],
+)
+
+bzl_library(
     name = "cc_toolchain_util",
     srcs = ["cc_toolchain_util.bzl"],
     deps = [
@@ -152,6 +161,7 @@ bzl_library(
     name = "wheel_build",
     srcs = ["wheel_build.bzl"],
     deps = [
+        ":build_recipe",
         ":cc_toolchain_util",
         ":providers",
         "@bazel_skylib//lib:paths",

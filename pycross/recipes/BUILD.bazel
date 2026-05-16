@@ -1,0 +1,31 @@
+"""Built-in build recipes shipped by rules_pycross."""
+
+load("//pycross/private:build_recipe.bzl", "pycross_build_recipe")
+
+package(default_visibility = ["//visibility:public"])
+
+# Root recipe that enables crossenv sysconfig patching.
+# Most recipes that build native extensions should use this as their parent.
+pycross_build_recipe(
+    name = "crossenv",
+    use_crossenv = True,
+)
+
+# Default recipe for setuptools/distutils-backed packages.
+pycross_build_recipe(
+    name = "setuptools",
+    parent = ":crossenv",
+    required_dep_names = [
+        "setuptools",
+        "wheel",
+    ],
+)
+
+# Recipe for Meson-backed packages (meson-python).
+pycross_build_recipe(
+    name = "meson",
+    parent = ":crossenv",
+    pre_build_hooks = ["//pycross/private/tools:meson_cross_file_hook"],
+    required_dep_names = ["meson-python"],
+)
+
