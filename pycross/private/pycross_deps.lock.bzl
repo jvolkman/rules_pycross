@@ -13,7 +13,7 @@ PINS = {
     "packaging": "packaging@26.2",
     "pip": "pip@26.1.1",
     "poetry-core": "poetry-core@2.4.0",
-    "repairwheel": "repairwheel@0.4.0",
+    "repairwheel": "repairwheel@0.5.1",
     "tomli": "tomli@2.4.1",
 }
 
@@ -189,7 +189,7 @@ def targets():
         wheel = ":_wheel_pyproject-hooks@1.2.0",
     )
 
-    _repairwheel_0_4_0_deps = [
+    _repairwheel_0_5_1_deps = [
         ":delvewheel@1.12.1",
         ":macholib@1.16.4",
         ":packaging@26.2",
@@ -198,14 +198,14 @@ def targets():
     ]
 
     native.alias(
-        name = "_wheel_repairwheel@0.4.0",
-        actual = "@rules_pycross_internal_deps_wheel_repairwheel_0.4.0_py3_none_any//file",
+        name = "_wheel_repairwheel@0.5.1",
+        actual = "@rules_pycross_internal_deps_wheel_repairwheel_0.5.1_py3_none_any//file",
     )
 
     pycross_wheel_library(
-        name = "repairwheel@0.4.0",
-        deps = _repairwheel_0_4_0_deps,
-        wheel = ":_wheel_repairwheel@0.4.0",
+        name = "repairwheel@0.5.1",
+        deps = _repairwheel_0_5_1_deps,
+        wheel = ":_wheel_repairwheel@0.5.1",
     )
 
     native.alias(
@@ -364,12 +364,12 @@ def repositories():
 
     maybe(
         http_file,
-        name = "rules_pycross_internal_deps_wheel_repairwheel_0.4.0_py3_none_any",
+        name = "rules_pycross_internal_deps_wheel_repairwheel_0.5.1_py3_none_any",
         urls = [
-            "https://files.pythonhosted.org/packages/2e/23/035a91829de9be2235c81b62741dfda8675ac68d6724ac7b6cc4aff89fd7/repairwheel-0.4.0-py3-none-any.whl",
+            "https://files.pythonhosted.org/packages/a6/9c/e9b8a736b4c050821501bae7dd8f4a53b0f369c17e4022e923048e6576f2/repairwheel-0.5.1-py3-none-any.whl",
         ],
-        sha256 = "25bc79f066937351d55321fe428793f95eb0807fb1d438ae0072d442285a4e6f",
-        downloaded_file_path = "repairwheel-0.4.0-py3-none-any.whl",
+        sha256 = "bedbdfca4405449949a15454f5f9d3d8e461124cc7fb769fde8383a499b028d1",
+        downloaded_file_path = "repairwheel-0.5.1-py3-none-any.whl",
     )
 
     maybe(
