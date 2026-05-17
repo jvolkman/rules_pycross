@@ -251,6 +251,12 @@ def _handle_sysconfig_data(ctx, args, inputs):  # -> cc_vars
     flags = get_flags_info(ctx, copts, linkopts)
     tools = get_tools_info(ctx)
     sysconfig_vars = _get_sysconfig_data(ctx.workspace_name, tools, flags)
+
+    # Pass the CC toolchain's target triple so Python doesn't need to guess
+    # the target CPU/OS from ambiguous sysconfig strings.
+    cc_toolchain = find_cpp_toolchain(ctx)
+    sysconfig_vars["PYCROSS_TARGET_GNU_SYSTEM"] = cc_toolchain.target_gnu_system_name
+
     ctx.actions.write(cc_sysconfig_data, json.encode(sysconfig_vars))
 
     inputs.append(cc_sysconfig_data)
@@ -370,9 +376,29 @@ def _handle_tools_and_data(ctx, args, tools, recipe_flat = None):
         for name, pt in recipe_flat.path_tools.items():
             all_path_tool_entries[name] = pt.executable
             tools.append(pt.files_to_run)
-        # Recipe data/deps
-        for dep in recipe_flat.build_deps:
-            tools.append(dep[DefaultInfo].files)
+        # Recipe build_deps: add their import paths (same treatment as user deps)
+        # so they are importable in the build venv, not just staged as files.
+        #
+        # build_deps has cfg="exec", so their files are in the exec output tree
+        # (e.g., bazel-out/k8-opt-exec-ST-xxx/bin/) which differs from the rule's
+        # ctx.bin_dir during cross-compilation. We extract the correct bin_dir
+        # from the deps' own file roots.
+        if recipe_flat.build_deps:
+            exec_bin_dir = ctx.bin_dir.path
+            for dep in recipe_flat.build_deps:
+                src_list = dep[PyInfo].transitive_sources.to_list()
+                if src_list:
+                    exec_bin_dir = src_list[0].root.path
+                    break
+
+            resolve_fn = _resolve_import_path_fn_inner(
+                ctx.workspace_name,
+                exec_bin_dir,
+                _is_sibling_repository_layout_enabled(),
+            )
+            recipe_imports = depset(transitive = [d[PyInfo].imports for d in recipe_flat.build_deps])
+            args.add_all(recipe_imports, before_each = "--python-path", map_each = resolve_fn, allow_closure = True)
+            tools.extend([dep[PyInfo].transitive_sources for dep in recipe_flat.build_deps])
 
     # User hooks (run after recipe pre-hooks, before recipe post-hooks)
     if ctx.attr.pre_build_hooks:

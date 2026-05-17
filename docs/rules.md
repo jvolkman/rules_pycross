@@ -367,6 +367,56 @@ Annotations to apply to individual packages.
 str: A json encoded string of the provided content.
 
 
+<a id="pycross_meson_recipe"></a>
+
+## pycross_meson_recipe
+
+<pre>
+load("@rules_pycross//pycross:defs.bzl", "pycross_meson_recipe")
+
+pycross_meson_recipe(<a href="#pycross_meson_recipe-name">name</a>, <a href="#pycross_meson_recipe-lock_repo">lock_repo</a>, <a href="#pycross_meson_recipe-ninja">ninja</a>, <a href="#pycross_meson_recipe-build_deps">build_deps</a>, <a href="#pycross_meson_recipe-cross_properties">cross_properties</a>, <a href="#pycross_meson_recipe-pre_build_hooks">pre_build_hooks</a>,
+                     <a href="#pycross_meson_recipe-post_build_hooks">post_build_hooks</a>, <a href="#pycross_meson_recipe-path_tools">path_tools</a>, <a href="#pycross_meson_recipe-recipe_data">recipe_data</a>, <a href="#pycross_meson_recipe-parent">parent</a>, <a href="#pycross_meson_recipe-use_crossenv">use_crossenv</a>, <a href="#pycross_meson_recipe-kwargs">**kwargs</a>)
+</pre>
+
+Defines a Meson-backed build recipe for pycross_wheel_build.
+
+When `lock_repo` is specified, the macro auto-fills `ninja` and `build_deps`
+from the user's lock repository using conventional package names:
+
+    pycross_meson_recipe(
+        name = "my_meson",
+        lock_repo = "@uv",
+    )
+    # Equivalent to:
+    #   ninja = "@uv//:ninja"
+    #   build_deps = ["@uv//:meson-python", "@uv//:meson"]
+
+Without `lock_repo`, the user must provide deps explicitly via `build_deps`
+on the recipe or `deps` on `pycross_wheel_build`.
+
+Explicit values for `ninja` and `build_deps` always take precedence over
+`lock_repo` defaults.
+
+
+**PARAMETERS**
+
+
+| Name  | Description | Default Value |
+| :------------- | :------------- | :------------- |
+| <a id="pycross_meson_recipe-name"></a>name |  The name of the recipe target.   |  none |
+| <a id="pycross_meson_recipe-lock_repo"></a>lock_repo |  Lock repository name (e.g., "@uv"). When set, auto-fills ninja, meson-python, and meson as build_deps.   |  `None` |
+| <a id="pycross_meson_recipe-ninja"></a>ninja |  The ninja target to wrap and put on PATH. Also added to build_deps. Defaults to `lock_repo + "//:ninja"` when lock_repo is set.   |  `None` |
+| <a id="pycross_meson_recipe-build_deps"></a>build_deps |  Python dependencies this recipe provides to the build environment. Defaults to meson-python and meson from lock_repo.   |  `[]` |
+| <a id="pycross_meson_recipe-cross_properties"></a>cross_properties |  A dictionary of properties to inject into the Meson cross-file.   |  `{}` |
+| <a id="pycross_meson_recipe-pre_build_hooks"></a>pre_build_hooks |  Executables to run before the PEP 517 build.   |  `[]` |
+| <a id="pycross_meson_recipe-post_build_hooks"></a>post_build_hooks |  Executables to run after the PEP 517 build.   |  `[]` |
+| <a id="pycross_meson_recipe-path_tools"></a>path_tools |  A dictionary of executable targets to names on PATH.   |  `{}` |
+| <a id="pycross_meson_recipe-recipe_data"></a>recipe_data |  A mapping of file targets to logical names staged at build-time.   |  `{}` |
+| <a id="pycross_meson_recipe-parent"></a>parent |  The parent build recipe target.   |  `Label("@rules_pycross//pycross/recipes:meson")` |
+| <a id="pycross_meson_recipe-use_crossenv"></a>use_crossenv |  Whether to use crossenv sysconfig patching.   |  `True` |
+| <a id="pycross_meson_recipe-kwargs"></a>kwargs |  Extra attributes passed to the underlying pycross_build_recipe.   |  none |
+
+
 <a id="pypi_file"></a>
 
 ## pypi_file

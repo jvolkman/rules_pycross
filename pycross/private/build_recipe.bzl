@@ -162,8 +162,10 @@ Example:
             providers = [PycrossBuildRecipeInfo],
         ),
         build_deps = attr.label_list(
-            doc = "Python dependencies this recipe provides to the build environment.",
+            doc = "Python dependencies this recipe provides to the build environment. " +
+                  "Resolved for the execution platform (cfg = exec) since they run during the build.",
             providers = [PyInfo],
+            cfg = "exec",
         ),
         data = attr.label_list(
             doc = "Additional data files available at build time.",

@@ -1,15 +1,18 @@
-load("@rules_pycross//pycross:defs.bzl", "pycross_build_recipe", "pycross_wheel_build")
+load("@rules_pycross//pycross:defs.bzl", "pycross_meson_recipe", "pycross_wheel_build")
 load("@rules_python//python:defs.bzl", "py_binary")
 
 package(default_visibility = ["//visibility:public"])
 
-# NumPy-specific recipe extending the built-in meson recipe.
-pycross_build_recipe(
+# NumPy-specific recipe using pycross_meson_recipe.
+# lock_repo auto-fills ninja, meson-python, and meson from @uv.
+pycross_meson_recipe(
     name = "numpy_recipe",
-    parent = "@rules_pycross//pycross/recipes:meson",
+    lock_repo = "@uv",
+    cross_properties = {
+        "longdouble_format": "IEEE_DOUBLE_LE",
+    },
     pre_build_hooks = [":gen_openblas_pc"],
     path_tools = {
-        ":ninja_wrapper": "ninja",
         ":cython_wrapper": "cython",
         ":python3_config_wrapper": "python3-config",
     },
@@ -34,24 +37,12 @@ pycross_wheel_build(
     tags = ["manual"],
     deps = [
         "@uv//:cython",
-        "@uv//:meson-python",
-        "@uv//:meson",
     ],
 )
 
 py_binary(
     name = "gen_openblas_pc",
     srcs = ["gen_openblas_pc.py"],
-)
-
-
-
-py_binary(
-    name = "ninja_wrapper",
-    srcs = ["ninja_wrapper.py"],
-    deps = [
-        "@uv//:ninja",
-    ],
 )
 
 py_binary(

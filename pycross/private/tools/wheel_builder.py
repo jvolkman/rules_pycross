@@ -2,6 +2,8 @@
 A PEP 517 wheel builder that supports (or tries to) cross-platform builds.
 """
 
+import base64
+import hashlib
 import json
 import os
 import shutil
@@ -301,7 +303,9 @@ def wrap_cc(
                 import os
                 import sys
 
-                here = os.path.dirname(sys.argv[0])
+                # Resolve cc_exe relative to this wrapper's directory to avoid baking
+                # absolute sandbox/cache paths into compiled artifacts.
+                here = os.path.dirname(os.path.abspath(sys.argv[0]))
                 cc_exe = os.path.join(here, "{cc_exe}")
 
                 args = sys.argv[1:]
@@ -473,12 +477,26 @@ def generate_bin_tools(bin_dir: Path, toolchain_vars: Dict[str, str]) -> None:
     python3_symlink.symlink_to(sys.executable)
 
 
-def link_path_tools(tools_dir: Path, path_tools: List[Tuple[Path, Path]]) -> None:
+def link_path_tools(tools_dir: Path, path_tools: List[Tuple[Path, Path]], env_dir: Path) -> None:
+    venv_python = env_dir / "bin" / "python"
     for path_tool_name, relative_path_tool_path in path_tools:
         if len(path_tool_name.parts) > 1:
             _error("path_tool name must not contain path separators")
         path_tool_in_bin = tools_dir / path_tool_name
-        path_tool_in_bin.symlink_to(relative_path_tool_path)
+
+        # Write a shell launcher stub that invokes the virtualenv python
+        # interpreter for Python-based tools.  We check for both .py extension
+        # and extensionless files because Starlark rules (like ninja_wrapper)
+        # produce output files without extensions that are still Python scripts.
+        # All current pycross path_tools are Python-based.
+        abs_tool_path = relative_path_tool_path.resolve()
+        if abs_tool_path.suffix in (".py", ""):
+            with open(path_tool_in_bin, "w") as f:
+                f.write(f"#!/bin/sh\n")
+                f.write(f'exec "{venv_python.resolve()}" "{abs_tool_path}" "$@"\n')
+            path_tool_in_bin.chmod(0o755)
+        else:
+            path_tool_in_bin.symlink_to(relative_path_tool_path)
 
 
 def link_native_headers(include_dir: Path, headers: List[Path]) -> None:
@@ -860,6 +878,17 @@ def build_wheel(
         )
 
     except Exception as e:  # pragma: no cover
+        # Debugging helper: Print pycross_ninja_error.log if it exists recursively
+        try:
+            for error_log in sdist_dir.glob("**/pycross_ninja_error.log"):
+                if error_log.exists():
+                    print(f"\n===== FOUND NINJA WRAPPER ERROR LOG: {error_log} =====", file=sys.stdout)
+                    with open(error_log, "r") as lf:
+                        print(lf.read(), file=sys.stdout)
+                    print("==========================================\n", file=sys.stdout)
+        except Exception as log_err:
+            print(f"Warning: failed to collect pycross_ninja_error.log: {log_err}", file=sys.stderr)
+
         # Debugging helper: Print meson-log.txt on failure if it exists
         try:
             for log_path in sdist_dir.glob("**/meson-logs/meson-log.txt"):
@@ -966,6 +995,41 @@ def execroot_prefix(workspace_name: str) -> Path:
     return Path("..") / "bazel-execroot" / workspace_name
 
 
+def _regenerate_record(unpack_dir: Path) -> None:
+    """Regenerate the wheel RECORD file with correct hashes.
+
+    Per PEP 427, RECORD contains one line per file:
+        path,hash_algorithm=hash_digest,file_size
+    The RECORD file itself is listed with empty hash and size fields.
+    """
+    # Find the *.dist-info/RECORD file
+    record_path = None
+    for dist_info in unpack_dir.glob("*.dist-info"):
+        candidate = dist_info / "RECORD"
+        if candidate.exists():
+            record_path = candidate
+            break
+
+    if not record_path:
+        return
+
+    lines = []
+    for root, _dirs, files in os.walk(unpack_dir):
+        for file in files:
+            full_path = Path(root) / file
+            rel_path = str(full_path.relative_to(unpack_dir))
+            if full_path == record_path:
+                # RECORD itself gets no hash per PEP 427
+                lines.append(f"{rel_path},,")
+            else:
+                data = full_path.read_bytes()
+                digest = hashlib.sha256(data).digest()
+                b64 = base64.urlsafe_b64encode(digest).rstrip(b"=").decode("ascii")
+                lines.append(f"{rel_path},sha256={b64},{len(data)}")
+
+    record_path.write_text("\n".join(sorted(lines)) + "\n", encoding="utf-8")
+
+
 def _sanitize_wheel(wheel_file: Path, temp_dir: Path, target_python_exe: Path) -> None:
     """Strip non-reproducible absolute paths from text files in the wheel.
 
@@ -1022,6 +1086,9 @@ def _sanitize_wheel(wheel_file: Path, temp_dir: Path, target_python_exe: Path) -
                     modified = True
 
         if modified:
+            # Regenerate RECORD with correct hashes for modified files.
+            _regenerate_record(unpack_path)
+
             # Repack, preserving original ZIP member metadata
             os.remove(wheel_file)
             with zipfile.ZipFile(wheel_file, "w", zipfile.ZIP_DEFLATED) as z:
@@ -1089,7 +1156,7 @@ def main(args: Any, temp_dir: Path, is_debug: bool) -> None:
     build_env_vars = init_build_env_vars(
         args=args,
         temp_dir=temp_dir,
-        path_dirs=[tools_dir, bin_dir],
+        path_dirs=[tools_dir, bin_dir, build_env_dir / "bin"],
         include_dirs=include_paths,
         lib_dirs=[lib_dir],
         bazel_root=prefix,
@@ -1147,24 +1214,38 @@ def main(args: Any, temp_dir: Path, is_debug: bool) -> None:
     build_env_vars["PYCROSS_TARGET_PYTHON_BIN_DIR"] = str(args.target_python_executable.resolve().parent)
 
     target_machdep = target_sysconfig_vars.get("MACHDEP", "")
-    target_multiarch = " ".join([
-        target_sysconfig_vars.get("MULTIARCH") or "",
-        target_sysconfig_vars.get("HOST_GNU_TYPE") or "",
-    ])
-    if "x86_64" in target_multiarch:
+
+    # Determine target CPU and system from the CC toolchain's target triple
+    # (authoritative), falling back to sysconfig MULTIARCH/HOST_GNU_TYPE parsing.
+    target_gnu_system = toolchain_sysconfig_vars.get("PYCROSS_TARGET_GNU_SYSTEM", "")
+    if not target_gnu_system:
+        # Legacy fallback: parse from sysconfig strings
+        target_gnu_system = " ".join([
+            target_sysconfig_vars.get("MULTIARCH") or "",
+            target_sysconfig_vars.get("HOST_GNU_TYPE") or "",
+        ])
+
+    if "x86_64" in target_gnu_system:
         target_cpu = "x86_64"
-    elif "aarch64" in target_multiarch or "arm64" in target_multiarch:
+    elif "aarch64" in target_gnu_system or "arm64" in target_gnu_system:
         target_cpu = "aarch64"
     else:
-        _warn(f"Could not determine target CPU from MULTIARCH={target_sysconfig_vars.get('MULTIARCH')!r}, "
-              f"HOST_GNU_TYPE={target_sysconfig_vars.get('HOST_GNU_TYPE')!r}; defaulting to x86_64")
+        _warn(f"Could not determine target CPU from target_gnu_system={target_gnu_system!r}; defaulting to x86_64")
         target_cpu = "x86_64"
-    build_env_vars["PYCROSS_TARGET_SYSTEM"] = target_machdep
+
+    if "darwin" in target_gnu_system:
+        target_system = "darwin"
+    elif target_machdep:
+        target_system = target_machdep
+    else:
+        target_system = "linux"
+
+    build_env_vars["PYCROSS_TARGET_SYSTEM"] = target_system
     build_env_vars["PYCROSS_TARGET_CPU"] = target_cpu
 
     # Generate path tools and native dependencies
     generate_bin_tools(bin_dir, toolchain_sysconfig_vars)
-    link_path_tools(tools_dir, args.path_tool)
+    link_path_tools(tools_dir, args.path_tool, build_env_dir)
     link_native_headers(include_dir, args.native_header)
     link_native_libraries(lib_dir, args.native_library)
 
@@ -1181,11 +1262,19 @@ def main(args: Any, temp_dir: Path, is_debug: bool) -> None:
     # Use crossenv if the recipe chain requests it, or if always_use_crossenv is set
     use_crossenv = args.always_use_crossenv or args.use_crossenv
 
+    # Calculate clean absolute paths for the compilers.
+    # Since the flags parser automatically prefixes relative paths with
+    # '../bazel-execroot/_main' (relative to the sdist CWD), calling .resolve()
+    # directly resolves our custom /tmp symlink and produces clean, loop-free
+    # absolute paths inside the sandbox.
+    abs_exec_python_exe = args.exec_python_executable.resolve()
+    abs_target_python_exe = args.target_python_executable.resolve()
+
     build_venv(
         bazel_root=prefix,
         env_dir=build_env_dir,
-        exec_python_exe=args.exec_python_executable,
-        target_python_exe=args.target_python_executable,
+        exec_python_exe=abs_exec_python_exe,
+        target_python_exe=abs_target_python_exe,
         sysconfig_vars=sysconfig_vars,
         path=args.python_path,
         target_env=target_environment,

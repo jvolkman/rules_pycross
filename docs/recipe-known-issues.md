@@ -40,7 +40,7 @@ version specifiers (e.g., `"setuptools>=68.0"`, `"cython>=3.0,<4.0"`).
 
 ## Medium Priority
 
-### 4. `longdouble_format` is NumPy-specific, not a Meson concept
+### ~~4. `longdouble_format` is NumPy-specific, not a Meson concept~~ ✅ RESOLVED
 
 **File:** `pycross/private/tools/meson_cross_file_hook.py`
 
@@ -62,9 +62,9 @@ recipe data file mechanism (see #11). NumPy/SciPy recipes declare
 writes it to the cross-file `[properties]` section. Auto-detection can
 remain as a convenience default for common architectures.
 
-- [ ] Extract `longdouble_format` to NumPy recipe data
-- [ ] Add generic `[properties]` injection to meson hook via recipe data
-- [ ] Expand architecture coverage for auto-detection default
+- [x] Extract `longdouble_format` to NumPy recipe data
+- [x] Add generic `[properties]` injection to meson hook via recipe data
+- [x] Expand architecture coverage for auto-detection default
 
 ### ~~5. `-L` as a wrapper flag is a blunt instrument~~ ✅ RESOLVED
 
@@ -146,7 +146,7 @@ This keeps both definitions in sync automatically and avoids attribute drift.
 
 ## Architectural / v2
 
-### 11. Recipe data files (keyed file mapping)
+### ~~11. Recipe data files (keyed file mapping)~~ ✅ RESOLVED
 
 Recipes need a way to pass structured data to hooks beyond flat env
 vars. Current workarounds (JSON-in-env-vars, magic naming conventions)
@@ -181,11 +181,11 @@ This solves:
 - **Future recipes**: CMake recipes contribute `cmake/toolchain.cmake`,
   Maturin recipes contribute `rust/config.toml`, etc.
 
-- [ ] Add `recipe_data` (`label_keyed_string_dict`) to `RECIPE_ATTRS`
-- [ ] Add `recipe_data` field to `PycrossBuildRecipeInfo` provider
-- [ ] Merge recipe_data in `flatten_recipe_chain`
-- [ ] Stage files and set `PYCROSS_RECIPE_DATA_DIR` in `wheel_builder.py`
-- [ ] Migrate `longdouble_format` to use recipe_data
+- [x] Add `recipe_data` (`label_keyed_string_dict`) to `RECIPE_ATTRS`
+- [x] Add `recipe_data` field to `PycrossBuildRecipeInfo` provider
+- [x] Merge recipe_data in `flatten_recipe_chain`
+- [x] Stage files and set `PYCROSS_RECIPE_DATA_DIR` in `wheel_builder.py`
+- [x] Migrate `longdouble_format` to use recipe_data
 
 ### 12. Split post-build hooks into separate Bazel actions
 

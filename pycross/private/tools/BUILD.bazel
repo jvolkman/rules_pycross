@@ -3,6 +3,10 @@ load("//pycross/private:wheel_zipimport_library.bzl", "pycross_wheel_zipimport_l
 
 package(default_visibility = ["//pycross:__subpackages__"])
 
+exports_files([
+    "ninja_wrapper.py",
+])
+
 py_library(
     name = "args",
     srcs = [
@@ -171,6 +175,23 @@ py_binary(
     name = "meson_cross_file_hook",
     srcs = ["meson_cross_file_hook.py"],
     imports = ["../../.."],
+    visibility = ["//visibility:public"],
+)
+
+# Standalone ninja path_tool for the built-in //pycross/recipes:meson recipe.
+# Produces an extensionless copy of ninja_wrapper.py so it appears as "ninja"
+# on PATH.  The wrapper locates the real ninja binary via `import ninja` from
+# the venv's site-packages (ninja must be a dep of the pycross_wheel_build).
+#
+# Note: The ninja_wrapper.bzl rule (used by pycross_meson_recipe macro) serves
+# a similar purpose but additionally merges runfiles from the user's ninja wheel
+# target for reliable import resolution in all sandbox configurations.
+genrule(
+    name = "ninja_wrapper",
+    srcs = ["ninja_wrapper.py"],
+    outs = ["ninja"],
+    cmd = "cp $< $@",
+    executable = True,
     visibility = ["//visibility:public"],
 )
 

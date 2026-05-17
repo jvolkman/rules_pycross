@@ -16,6 +16,21 @@ bzl_library(
 )
 
 bzl_library(
+    name = "meson_recipe",
+    srcs = ["meson_recipe.bzl"],
+    deps = [
+        ":build_recipe",
+        ":ninja_wrapper",
+    ],
+)
+
+bzl_library(
+    name = "ninja_wrapper",
+    srcs = ["ninja_wrapper.bzl"],
+    deps = [],
+)
+
+bzl_library(
     name = "cc_toolchain_util",
     srcs = ["cc_toolchain_util.bzl"],
     deps = [
