@@ -1,8 +1,18 @@
 """Built-in build recipes shipped by rules_pycross."""
 
+load("@bazel_skylib//:bzl_library.bzl", "bzl_library")
 load("//pycross/private:build_recipe.bzl", "pycross_build_recipe")
 
 package(default_visibility = ["//visibility:public"])
+
+bzl_library(
+    name = "meson_recipe",
+    srcs = ["meson_recipe.bzl"],
+    deps = [
+        "//pycross/private:build_recipe",
+        "//pycross/private:ninja_wrapper",
+    ],
+)
 
 # Root recipe that enables crossenv sysconfig patching.
 # Most recipes that build native extensions should use this as their parent.

@@ -1,13 +1,11 @@
-"""Specialized Meson build recipe macro for pycross_wheel_build.
+"""Meson build recipe macro for pycross_wheel_build.
 
-Exposes a clean, first-class Starlark API with a generic cross_properties dictionary.
-Provides a high-leverage macro that automatically instantiates user-space ninja wrappers,
-enabling seamless cross-compilation of Meson packages without rules_pycross having
-a bootstrap dependency on ninja.
+Wraps pycross_build_recipe with Meson-specific defaults: cross-file generation,
+ninja wrapper, and optional lock_repo-based dependency auto-fill.
 """
 
-load(":build_recipe.bzl", "pycross_build_recipe")
-load(":ninja_wrapper.bzl", "ninja_wrapper")
+load("//pycross/private:build_recipe.bzl", "pycross_build_recipe")
+load("//pycross/private:ninja_wrapper.bzl", "ninja_wrapper")
 
 def _pycross_meson_properties_impl(ctx):
     out = ctx.actions.declare_file(ctx.label.name + "_properties.json")

@@ -11,10 +11,10 @@ def _ninja_wrapper_impl(ctx):
     # Copy the script rather than symlink it.  The wrapper uses
     # Path(__file__).resolve() to locate its adjacent .runfiles directory.
     # A symlink would resolve to the source tree where no .runfiles exist.
-    ctx.actions.run_shell(
-        inputs = [ctx.file._script],
-        outputs = [out],
-        command = "cp '%s' '%s'" % (ctx.file._script.path, out.path),
+    ctx.actions.expand_template(
+        template = ctx.file._script,
+        output = out,
+        substitutions = {},
     )
 
     # Merge runfiles from the user's ninja wheel target so Bazel stages them

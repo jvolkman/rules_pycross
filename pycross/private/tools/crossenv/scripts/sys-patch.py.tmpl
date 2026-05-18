@@ -18,19 +18,22 @@ target_platform = {{repr(target.uname_sysname.lower())}}
 del platform
 
 # TODO: improve the target vs. exec criteria in this method.
-_platform_guard = False
+# Use a mutable container for the recursion guard to avoid the 'global' keyword.
+# We can't use threading.local() because `import threading` itself accesses
+# sys.platform, which would re-enter __getattr__ before the import completes.
+_guard = [False]
+
 def __getattr__(name):
-    global _platform_guard
     if name != 'platform':
         raise AttributeError(name)
 
     # Guard against recursion: in Python 3.14+, traceback.extract_stack()
     # can trigger linecache -> import os -> _fill_cache -> sys.platform,
     # which re-enters this function. Return exec_platform in that case.
-    if _platform_guard:
+    if _guard[0]:
         return exec_platform
 
-    _platform_guard = True
+    _guard[0] = True
     try:
         import traceback
         frames = traceback.extract_stack(limit=2)
@@ -51,4 +54,5 @@ def __getattr__(name):
         else:
             return exec_platform
     finally:
-        _platform_guard = False
+        _guard[0] = False
+

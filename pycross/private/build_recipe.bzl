@@ -185,8 +185,10 @@ def flatten_recipe_chain(recipe_info):
     """Flattens a recipe parent chain into merged, ordered configuration.
 
     Walks the parent chain from leaf to root, reverses it, and produces:
-      - pre_build_hooks: root's hooks first, leaf's hooks last
-      - post_build_hooks: leaf's hooks first, root's hooks last
+      - pre_build_hooks: leaf's hooks first, root's hooks last (onion model:
+        specialized modifications happen first on the unmodified sdist)
+      - post_build_hooks: root's hooks first, leaf's hooks last (onion model:
+        generic post-processing before specialized)
       - path_tools: merged (child overrides parent for same name)
       - build_deps: union of all
       - required_dep_names: union of all
@@ -229,9 +231,11 @@ def flatten_recipe_chain(recipe_info):
     recipe_data_by_name = {}
 
     for recipe in reversed_chain:
-        all_pre_hooks.extend(recipe.pre_build_hooks)
-        # Post hooks: prepend so leaf ends up first
-        all_post_hooks = list(recipe.post_build_hooks) + all_post_hooks
+        # Onion model: iterating root-to-leaf.
+        # Pre hooks: prepend so leaf ends up first (specialized before generic)
+        all_pre_hooks = list(recipe.pre_build_hooks) + all_pre_hooks
+        # Post hooks: extend so root stays first (generic before specialized)
+        all_post_hooks.extend(recipe.post_build_hooks)
         all_build_deps.extend(recipe.build_deps)
         all_required.extend(recipe.required_dep_names)
         merged_env.update(recipe.build_env)

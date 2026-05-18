@@ -2,8 +2,6 @@
 A PEP 517 wheel builder that supports (or tries to) cross-platform builds.
 """
 
-import base64
-import hashlib
 import json
 import os
 import shutil
@@ -192,10 +190,10 @@ def get_default_build_env_vars(path_dirs: List[Path]) -> Dict[str, str]:
     if "PYTHONHASHSEED" not in env:
         env["PYTHONHASHSEED"] = "0"
 
-    # Python 3.11+ supports PYTHONSAFEPATH which, when set, prevents adding unsafe entries to sys.path.
-    # Ideally we would use isolated mode which is present in < 3.11, but that prevents us from specifying
-    # PYTHON* variables like PYTHONHASHSEED.
-    #
+    # PYTHONSAFEPATH (Python 3.11+) prevents adding the current directory to sys.path.
+    # We must remove it because PEP 517 builds and pre-build hooks need to import
+    # modules from the sdist directory (CWD during builds). Ideally we'd use isolated
+    # mode for stricter control, but that also blocks PYTHON* variables like PYTHONHASHSEED.
     # https://docs.python.org/3/using/cmdline.html#envvar-PYTHONSAFEPATH
 
     # Place our own directories, with possible overridden commands, at the beginning of PATH.
@@ -248,6 +246,9 @@ def get_inherited_vars(target_sysconfig: Dict[str, Any]) -> Dict[str, Any]:
     return inherited
 
 
+# TODO: Rethink the CC wrapper approach. Consider generating wrappers only for
+# setuptools builds and moving platform-specific flag filtering (darwin vs GNU ld)
+# into the Starlark classify_flags layer instead of runtime wrapper scripts.
 def wrap_cc(
     lang: str,
     cc_exe: Path,
@@ -340,6 +341,7 @@ def generate_cc_wrappers(
     python_exe: Path,
     bin_dir: Path,
     target_is_darwin: bool = False,
+    macosx_deployment_target: Optional[str] = None,
     extra_flags: Optional[List[str]] = None,
 ) -> Dict[str, str]:
     orig_cc = toolchain_vars["CC"]
@@ -351,8 +353,8 @@ def generate_cc_wrappers(
     cxx_wrapper_flags = list(toolchain_vars.get("CXX_WRAPPER_FLAGS", []))
     ld_wrapper_flags = list(toolchain_vars.get("LD_WRAPPER_FLAGS", []))
 
-    if target_is_darwin:
-        extra = ["-mmacosx-version-min=11.0"]
+    if target_is_darwin and macosx_deployment_target:
+        extra = [f"-mmacosx-version-min={macosx_deployment_target}"]
         cc_wrapper_flags.extend(extra)
         cxx_wrapper_flags.extend(extra)
 
@@ -450,11 +452,7 @@ def generate_cross_sysconfig_vars(
     return sysconfig_vars
 
 
-
-
-
-
-def generate_bin_tools(bin_dir: Path, toolchain_vars: Dict[str, str]) -> None:
+def generate_bin_tools(bin_dir: Path, toolchain_vars: Dict[str, str], sysconfig_vars: Dict[str, Any]) -> None:
     # The bazel CC toolchains don't provide ranlib (as far as I can tell), and
     # we don't want to use the host ranlib. So we place a no-op in PATH.
     ranlib = bin_dir / "ranlib"
@@ -476,6 +474,120 @@ def generate_bin_tools(bin_dir: Path, toolchain_vars: Dict[str, str]) -> None:
     python_symlink.symlink_to(sys.executable)
     python3_symlink.symlink_to(sys.executable)
 
+    # Synthesize a correct, hermetic python3-config script based on the target sysconfig variables.
+    # This replaces the fragile user-space wrappers and handles `--embed` and macOS-specific `-lpython`
+    # filtering natively.
+    sysconfig_vars_json = json.dumps(sysconfig_vars, indent=4)
+    script_content = textwrap.dedent(
+        f"""\
+        #!/usr/bin/env python3
+        import sys
+
+        SYSCONFIG_VARS = {sysconfig_vars_json}
+
+        def exit_with_usage(code):
+            usage = f"Usage: {{sys.argv[0]}} --prefix|--exec-prefix|--includes|--libs|--cflags|--ldflags|--extension-suffix|--abiflags|--configdir|--embed"
+            if code == 0:
+                print(usage)
+            else:
+                print(usage, file=sys.stderr)
+            sys.exit(code)
+
+        def main():
+            args = sys.argv[1:]
+            if not args:
+                exit_with_usage(1)
+
+            py_embed = False
+            for arg in args:
+                if arg == "--help":
+                    exit_with_usage(0)
+                elif arg == "--embed":
+                    py_embed = True
+                elif arg.startswith("-"):
+                    if arg not in ("--prefix", "--exec-prefix", "--includes", "--libs", "--cflags", "--ldflags", "--extension-suffix", "--abiflags", "--configdir"):
+                        exit_with_usage(1)
+
+            prefix = SYSCONFIG_VARS.get("prefix", "")
+            exec_prefix = SYSCONFIG_VARS.get("exec_prefix", prefix)
+            version = SYSCONFIG_VARS.get("VERSION", "")
+            ldversion = SYSCONFIG_VARS.get("LDVERSION", version)
+            abiflags = SYSCONFIG_VARS.get("ABIFLAGS", "")
+
+            includepy = SYSCONFIG_VARS.get("INCLUDEPY", "")
+            platincludepy = SYSCONFIG_VARS.get("PLATINCLUDEPY", includepy)
+            incdir = f"-I{{includepy}}" if includepy else ""
+            platincdir = f"-I{{platincludepy}}" if platincludepy else ""
+            includes = " ".join(filter(None, [incdir, platincdir]))
+
+            basecflags = SYSCONFIG_VARS.get("BASECFLAGS", "")
+            cflags_var = SYSCONFIG_VARS.get("CFLAGS", "")
+            opt = SYSCONFIG_VARS.get("OPT", "")
+            cflags = " ".join(filter(None, [includes, basecflags, cflags_var, opt]))
+
+            ext_suffix = SYSCONFIG_VARS.get("EXT_SUFFIX") or SYSCONFIG_VARS.get("SO", "")
+
+            is_darwin = (SYSCONFIG_VARS.get("MACHDEP") == "darwin")
+
+            libs_list = []
+            if py_embed and not is_darwin:
+                libname = f"python{{ldversion}}"
+                libs_list.append(f"-l{{libname}}")
+
+            syslibs = SYSCONFIG_VARS.get("LIBS", "")
+            if syslibs:
+                libs_list.append(syslibs)
+            libs = " ".join(filter(None, libs_list))
+
+            ldflags_list = []
+            libpl = SYSCONFIG_VARS.get("LIBPL")
+            if libpl and SYSCONFIG_VARS.get("PY_ENABLE_SHARED") != "1":
+                ldflags_list.append(f"-L{{libpl}}")
+
+            libdir = SYSCONFIG_VARS.get("LIBDIR")
+            if libdir:
+                ldflags_list.append(f"-L{{libdir}}")
+
+            ldflags_list.append(libs)
+            ldflags = " ".join(filter(None, ldflags_list))
+
+            results = []
+            for arg in args:
+                if arg == "--prefix":
+                    results.append(prefix)
+                elif arg == "--exec-prefix":
+                    results.append(exec_prefix)
+                elif arg == "--includes":
+                    results.append(includes)
+                elif arg == "--cflags":
+                    results.append(cflags)
+                elif arg == "--libs":
+                    results.append(libs)
+                elif arg == "--ldflags":
+                    results.append(ldflags)
+                elif arg == "--extension-suffix":
+                    results.append(ext_suffix)
+                elif arg == "--abiflags":
+                    results.append(abiflags)
+                elif arg == "--configdir":
+                    results.append(libpl or "")
+
+            print(" ".join(results))
+
+        if __name__ == '__main__':
+            main()
+        """
+    )
+
+    config_script = bin_dir / "python3-config"
+    config_script.write_text(script_content, encoding="utf-8")
+    config_script.chmod(0o755)
+
+    # Symlink python-config to python3-config for maximum tool compatibility
+    python_config_link = bin_dir / "python-config"
+    if not python_config_link.exists():
+        python_config_link.symlink_to("python3-config")
+
 
 def link_path_tools(tools_dir: Path, path_tools: List[Tuple[Path, Path]], env_dir: Path) -> None:
     venv_python = env_dir / "bin" / "python"
@@ -485,12 +597,23 @@ def link_path_tools(tools_dir: Path, path_tools: List[Tuple[Path, Path]], env_di
         path_tool_in_bin = tools_dir / path_tool_name
 
         # Write a shell launcher stub that invokes the virtualenv python
-        # interpreter for Python-based tools.  We check for both .py extension
-        # and extensionless files because Starlark rules (like ninja_wrapper)
-        # produce output files without extensions that are still Python scripts.
-        # All current pycross path_tools are Python-based.
+        # interpreter for Python-based tools.  Python tools need to run under
+        # the venv to access site-packages and deps.pth.
         abs_tool_path = relative_path_tool_path.resolve()
-        if abs_tool_path.suffix in (".py", ""):
+        is_python_tool = abs_tool_path.suffix == ".py"
+        if not is_python_tool and abs_tool_path.suffix == "":
+            # Extensionless file — check for a Python shebang to avoid
+            # wrapping native ELF binaries in a Python launcher.
+            try:
+                with open(abs_tool_path, "rb") as f:
+                    header = f.read(2)
+                    if header == b"#!":
+                        shebang = f.readline().decode("utf-8", errors="replace")
+                        is_python_tool = "python" in shebang
+            except (OSError, UnicodeDecodeError):
+                pass
+
+        if is_python_tool:
             with open(path_tool_in_bin, "w") as f:
                 f.write(f"#!/bin/sh\n")
                 f.write(f'exec "{venv_python.resolve()}" "{abs_tool_path}" "$@"\n')
@@ -878,28 +1001,6 @@ def build_wheel(
         )
 
     except Exception as e:  # pragma: no cover
-        # Debugging helper: Print pycross_ninja_error.log if it exists recursively
-        try:
-            for error_log in sdist_dir.glob("**/pycross_ninja_error.log"):
-                if error_log.exists():
-                    print(f"\n===== FOUND NINJA WRAPPER ERROR LOG: {error_log} =====", file=sys.stdout)
-                    with open(error_log, "r") as lf:
-                        print(lf.read(), file=sys.stdout)
-                    print("==========================================\n", file=sys.stdout)
-        except Exception as log_err:
-            print(f"Warning: failed to collect pycross_ninja_error.log: {log_err}", file=sys.stderr)
-
-        # Debugging helper: Print meson-log.txt on failure if it exists
-        try:
-            for log_path in sdist_dir.glob("**/meson-logs/meson-log.txt"):
-                if log_path.exists():
-                    print(f"\n===== FOUND MESON LOG: {log_path} =====", file=sys.stdout)
-                    with open(log_path, "r") as lf:
-                        print(lf.read(), file=sys.stdout)
-                    print("======================================\n", file=sys.stdout)
-        except Exception as log_err:
-            print(f"Warning: failed to collect meson-log.txt: {log_err}", file=sys.stderr)
-
         tb = traceback.format_exc().strip("\n")
         print("\n{dim}{}{reset}\n".format(tb, **_STYLES))
         _error(str(e))
@@ -995,114 +1096,6 @@ def execroot_prefix(workspace_name: str) -> Path:
     return Path("..") / "bazel-execroot" / workspace_name
 
 
-def _regenerate_record(unpack_dir: Path) -> None:
-    """Regenerate the wheel RECORD file with correct hashes.
-
-    Per PEP 427, RECORD contains one line per file:
-        path,hash_algorithm=hash_digest,file_size
-    The RECORD file itself is listed with empty hash and size fields.
-    """
-    # Find the *.dist-info/RECORD file
-    record_path = None
-    for dist_info in unpack_dir.glob("*.dist-info"):
-        candidate = dist_info / "RECORD"
-        if candidate.exists():
-            record_path = candidate
-            break
-
-    if not record_path:
-        return
-
-    lines = []
-    for root, _dirs, files in os.walk(unpack_dir):
-        for file in files:
-            full_path = Path(root) / file
-            rel_path = str(full_path.relative_to(unpack_dir))
-            if full_path == record_path:
-                # RECORD itself gets no hash per PEP 427
-                lines.append(f"{rel_path},,")
-            else:
-                data = full_path.read_bytes()
-                digest = hashlib.sha256(data).digest()
-                b64 = base64.urlsafe_b64encode(digest).rstrip(b"=").decode("ascii")
-                lines.append(f"{rel_path},sha256={b64},{len(data)}")
-
-    record_path.write_text("\n".join(sorted(lines)) + "\n", encoding="utf-8")
-
-
-def _sanitize_wheel(wheel_file: Path, temp_dir: Path, target_python_exe: Path) -> None:
-    """Strip non-reproducible absolute paths from text files in the wheel.
-
-    This rewrites the wheel in-place, replacing sandbox-specific paths
-    with stable placeholders for reproducibility.
-    """
-    # Binary file extensions that should never be modified
-    _BINARY_EXTENSIONS = frozenset([
-        ".so", ".dylib", ".dll", ".pyd",
-        ".pyc", ".pyo",
-        ".png", ".jpg", ".jpeg", ".gif", ".ico", ".bmp", ".webp",
-        ".woff", ".woff2", ".ttf", ".otf", ".eot",
-        ".wasm", ".dat", ".bin",
-        ".gz", ".bz2", ".xz", ".zip", ".tar",
-    ])
-
-    # Compute patterns to replace
-    temp_dir_str = os.fspath(temp_dir.resolve())
-    target_python_root = os.fspath(target_python_exe.resolve().parent.parent)
-
-    with tempfile.TemporaryDirectory(prefix="sanitize_wheel") as unpack_dir:
-        unpack_path = Path(unpack_dir)
-
-        # Preserve original ZIP member info (permissions, etc.)
-        member_info = {}
-        with zipfile.ZipFile(wheel_file, "r") as z:
-            for info in z.infolist():
-                member_info[info.filename] = info
-            z.extractall(unpack_path)
-
-        modified = False
-        for root, dirs, files in os.walk(unpack_path):
-            for file in files:
-                file_path = Path(root) / file
-                if file_path.suffix.lower() in _BINARY_EXTENSIONS:
-                    continue
-                try:
-                    content = file_path.read_bytes()
-                    # Quick binary check: if there are null bytes, skip
-                    if b"\x00" in content[:8192]:
-                        continue
-                    text = content.decode("utf-8")
-                except (UnicodeDecodeError, OSError):
-                    continue
-
-                original = text
-                if temp_dir_str in text:
-                    text = text.replace(temp_dir_str, "/tmp/rules_pycross_build")
-                if target_python_root in text:
-                    text = text.replace(target_python_root, "/rules_pycross_target_python")
-
-                if text != original:
-                    file_path.write_text(text, encoding="utf-8")
-                    modified = True
-
-        if modified:
-            # Regenerate RECORD with correct hashes for modified files.
-            _regenerate_record(unpack_path)
-
-            # Repack, preserving original ZIP member metadata
-            os.remove(wheel_file)
-            with zipfile.ZipFile(wheel_file, "w", zipfile.ZIP_DEFLATED) as z:
-                for root, dirs, files in os.walk(unpack_path):
-                    for file in files:
-                        full_path = Path(root) / file
-                        rel_path = str(full_path.relative_to(unpack_path))
-                        # Reuse original ZipInfo if available to preserve permissions
-                        if rel_path in member_info:
-                            info = member_info[rel_path]
-                            z.writestr(info, full_path.read_bytes())
-                        else:
-                            z.write(full_path, rel_path)
-
 
 def main(args: Any, temp_dir: Path, is_debug: bool) -> None:
     # Paths passed into this action will be relative to bazel's execroot.
@@ -1180,6 +1173,7 @@ def main(args: Any, temp_dir: Path, is_debug: bool) -> None:
         python_exe=args.exec_python_executable,
         bin_dir=bin_dir,
         target_is_darwin=target_is_darwin,
+        macosx_deployment_target=target_sysconfig_vars.get("MACOSX_DEPLOYMENT_TARGET"),
         extra_flags=extra_wrapper_flags,
     )
     build_env_vars["CC"] = wrapper_sysconfig_vars["CC"]
@@ -1211,6 +1205,8 @@ def main(args: Any, temp_dir: Path, is_debug: bool) -> None:
                     shutil.copy(candidate, dest)
                 break
 
+    # Hook protocol env var: directory containing the target Python's binaries
+    # (python3, python3-config, etc.). Available to pre/post-build hooks.
     build_env_vars["PYCROSS_TARGET_PYTHON_BIN_DIR"] = str(args.target_python_executable.resolve().parent)
 
     target_machdep = target_sysconfig_vars.get("MACHDEP", "")
@@ -1244,7 +1240,7 @@ def main(args: Any, temp_dir: Path, is_debug: bool) -> None:
     build_env_vars["PYCROSS_TARGET_CPU"] = target_cpu
 
     # Generate path tools and native dependencies
-    generate_bin_tools(bin_dir, toolchain_sysconfig_vars)
+    generate_bin_tools(bin_dir, toolchain_sysconfig_vars, sysconfig_vars)
     link_path_tools(tools_dir, args.path_tool, build_env_dir)
     link_native_headers(include_dir, args.native_header)
     link_native_libraries(lib_dir, args.native_library)
@@ -1321,7 +1317,6 @@ def main(args: Any, temp_dir: Path, is_debug: bool) -> None:
     if target_environment:
         check_filename_against_target(os.path.basename(wheel_file), target_environment)
 
-    _sanitize_wheel(wheel_file, temp_dir, args.target_python_executable)
 
     shutil.move(wheel_file, args.wheel_file)
     with open(args.wheel_name_file, "w") as f:

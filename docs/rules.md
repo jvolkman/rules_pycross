@@ -35,7 +35,7 @@ Example:
 | :------------- | :------------- | :------------- | :------------- | :------------- |
 | <a id="pycross_build_recipe-name"></a>name |  A unique name for this target.   | <a href="https://bazel.build/concepts/labels#target-names">Name</a> | required |  |
 | <a id="pycross_build_recipe-data"></a>data |  Additional data files available at build time.   | <a href="https://bazel.build/concepts/labels">List of labels</a> | optional |  `[]`  |
-| <a id="pycross_build_recipe-build_deps"></a>build_deps |  Python dependencies this recipe provides to the build environment.   | <a href="https://bazel.build/concepts/labels">List of labels</a> | optional |  `[]`  |
+| <a id="pycross_build_recipe-build_deps"></a>build_deps |  Python dependencies this recipe provides to the build environment. Resolved for the execution platform (cfg = exec) since they run during the build.   | <a href="https://bazel.build/concepts/labels">List of labels</a> | optional |  `[]`  |
 | <a id="pycross_build_recipe-build_env"></a>build_env |  Environment variables set during the build. Values are subject to 'Make variable', location, and build_cwd_token expansion.   | <a href="https://bazel.build/rules/lib/dict">Dictionary: String -> String</a> | optional |  `{}`  |
 | <a id="pycross_build_recipe-config_settings"></a>config_settings |  PEP 517 config settings passed to the build backend. Values are subject to 'Make variable', location, and build_cwd_token expansion.   | <a href="https://bazel.build/rules/lib/dict">Dictionary: String -> List of strings</a> | optional |  `{}`  |
 | <a id="pycross_build_recipe-parent"></a>parent |  Parent recipe. This recipe's pre-build hooks run after the parent's.   | <a href="https://bazel.build/concepts/labels">Label</a> | optional |  `None`  |

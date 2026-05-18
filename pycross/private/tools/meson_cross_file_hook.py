@@ -154,8 +154,8 @@ def main() -> None:
     is_cross = (target_system != host_system) or (target_cpu != host_cpu)
 
     # For native (non-cross) builds, skip cross-file generation entirely.
-    # Meson picks up CC/CXX/CFLAGS/LDFLAGS from environment in native mode,
-    # and can run test executables to detect things like long double format.
+    # In native builds, Meson picks up CC/CXX/CFLAGS/LDFLAGS from environment
+    # directly. No cross-file is needed.
     if not is_cross:
         return
 

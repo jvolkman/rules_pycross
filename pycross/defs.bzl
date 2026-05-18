@@ -13,7 +13,7 @@ load("//pycross/private:wheel_build.bzl", _pycross_wheel_build = "pycross_wheel_
 load("//pycross/private:wheel_library.bzl", _pycross_wheel_library = "pycross_wheel_library")
 load("//pycross/private:wheel_zipimport_library.bzl", _pycross_wheel_zipimport_library = "pycross_wheel_zipimport_library")
 
-load("//pycross/private:meson_recipe.bzl", _pycross_meson_recipe = "pycross_meson_recipe")
+load("//pycross/recipes:meson_recipe.bzl", _pycross_meson_recipe = "pycross_meson_recipe")
 
 PycrossBuildRecipeInfo = _PycrossBuildRecipeInfo
 PycrossWheelInfo = _PycrossWheelInfo

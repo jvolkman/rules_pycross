@@ -14,7 +14,6 @@ pycross_meson_recipe(
     pre_build_hooks = [":gen_openblas_pc"],
     path_tools = {
         ":cython_wrapper": "cython",
-        ":python3_config_wrapper": "python3-config",
     },
 )
 
@@ -53,7 +52,3 @@ py_binary(
     ],
 )
 
-py_binary(
-    name = "python3_config_wrapper",
-    srcs = ["python3_config_wrapper.py"],
-)
