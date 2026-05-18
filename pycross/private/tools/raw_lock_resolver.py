@@ -81,13 +81,17 @@ class GenerationContext:
         self.always_include_sdist = always_include_sdist
 
     def check_package_compatibility(self, package: RawPackage) -> None:
-        """Sanity check to make sure the requires_python attribute on each package matches our environments."""
+        """Sanity check to make sure the requires_python attribute on each package matches at least one of our environments."""
+        supported = False
         for environment in self.target_environments:
-            if not package.python_versions.contains(environment.version):
-                raise Exception(
-                    f"Package {package.name} does not support Python version {environment.version} "
-                    f"in environment {environment.name}"
-                )
+            if package.python_versions.contains(environment.version):
+                supported = True
+                break
+        if not supported:
+            raise Exception(
+                f"Package {package.name} (version {package.version}) does not support any of the target environments. "
+                f"Python requirements: {package.python_versions}"
+            )
 
     def get_dependencies_by_environment(
         self, package: RawPackage, ignore_dependency_names: Set[str]

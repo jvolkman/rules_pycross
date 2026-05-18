@@ -56,10 +56,11 @@ def get_development_dependencies(project: Dict[str, Any]) -> Dict[str, List[Requ
     dep_groups = project.get("dependency-groups", {})
 
     # backwards-compatiblity after https://github.com/pdm-project/pdm/pull/3230
-    legacy_dev_deps = project.get("tool", {}).get("pdm", {}).get("dev-dependencies", [])
+    legacy_dev_deps = project.get("tool", {}).get("pdm", {}).get("dev-dependencies", {})
     if legacy_dev_deps:
-        dev_deps = dep_groups.get("dev", []) + legacy_dev_deps
-        dep_groups["dev"] = list(set(dev_deps))
+        for group, deps in legacy_dev_deps.items():
+            existing = dep_groups.get(group, [])
+            dep_groups[group] = list(set(existing + deps))
 
     return {group: [Requirement(EDITABLE_PATTERN.sub("", dep)) for dep in deps] for group, deps in dep_groups.items()}
 
