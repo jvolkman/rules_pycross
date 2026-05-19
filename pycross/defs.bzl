@@ -12,7 +12,6 @@ load("//pycross/private:uv_lock_model.bzl", _pycross_uv_lock_model = "pycross_uv
 load("//pycross/private:wheel_build.bzl", _pycross_wheel_build = "pycross_wheel_build")
 load("//pycross/private:wheel_library.bzl", _pycross_wheel_library = "pycross_wheel_library")
 load("//pycross/private:wheel_zipimport_library.bzl", _pycross_wheel_zipimport_library = "pycross_wheel_zipimport_library")
-
 load("//pycross/recipes:meson_recipe.bzl", _pycross_meson_recipe = "pycross_meson_recipe")
 
 PycrossBuildRecipeInfo = _PycrossBuildRecipeInfo
@@ -30,4 +29,3 @@ pycross_wheel_build = _pycross_wheel_build
 pycross_wheel_library = _pycross_wheel_library
 pycross_wheel_zipimport_library = _pycross_wheel_zipimport_library
 pypi_file = _pypi_file
-

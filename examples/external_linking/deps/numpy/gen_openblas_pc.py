@@ -1,5 +1,5 @@
-import os
 import json
+import os
 from pathlib import Path
 
 bazel_root = Path(os.environ["PYCROSS_BAZEL_ROOT"])
@@ -36,15 +36,15 @@ env_file = os.environ.get("PYCROSS_ENV_VARS_FILE")
 if env_file:
     with open(env_file, "r") as f:
         env_vars = json.load(f)
-    
+
     abs_pkgconfig_dir = pkgconfig_dir.resolve()
-    
+
     existing_pc_path = env_vars.get("PKG_CONFIG_PATH", "")
     if existing_pc_path:
         env_vars["PKG_CONFIG_PATH"] = f"{abs_pkgconfig_dir}{os.pathsep}{existing_pc_path}"
     else:
         env_vars["PKG_CONFIG_PATH"] = str(abs_pkgconfig_dir)
-        
+
     with open(env_file, "w") as f:
         json.dump(env_vars, f)
 
@@ -53,14 +53,16 @@ config_file = os.environ.get("PYCROSS_CONFIG_SETTINGS_FILE")
 if config_file:
     with open(config_file, "r") as f:
         config_settings = json.load(f)
-        
+
     setup_args = config_settings.get("setup-args", [])
-    setup_args.extend([
-        "-Dblas=openblas",
-        "-Dlapack=openblas",
-    ])
+    setup_args.extend(
+        [
+            "-Dblas=openblas",
+            "-Dlapack=openblas",
+        ]
+    )
     config_settings["setup-args"] = setup_args
     config_settings["build-dir"] = "build"
-    
+
     with open(config_file, "w") as f:
         json.dump(config_settings, f)

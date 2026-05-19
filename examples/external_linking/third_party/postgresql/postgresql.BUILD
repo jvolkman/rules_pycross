@@ -41,6 +41,10 @@ filegroup(
 
 configure_make(
     name = "postgresql",
+    args = select({
+        "@platforms//os:macos": ["AROPT=\"-static -o\""],
+        "//conditions:default": [],
+    }),
     configure_options = [
         "--without-readline",
         "--without-perl",
@@ -53,10 +57,6 @@ configure_make(
         ":macos_arm64": ["--host=aarch64-apple-darwin"],
         ":linux_x86_64": ["--host=amd64-linux"],
         ":linux_arm64": ["--host=aarch64-linux"],
-    }),
-    args = select({
-        "@platforms//os:macos": ["AROPT=\"-static -o\""],
-        "//conditions:default": [],
     }),
     copts = [
         "-DOPENSSL_NO_FILENAMES",

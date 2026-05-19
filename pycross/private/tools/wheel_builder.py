@@ -379,7 +379,6 @@ def generate_cc_wrappers(
     }
 
 
-
 def generate_cross_sysconfig_vars(
     toolchain_vars: Dict[str, Any],
     target_vars: Dict[str, Any],
@@ -429,9 +428,7 @@ def generate_cross_sysconfig_vars(
     # cause -Werror,-Wunused-command-line-argument errors.
     for flag_var in ("CFLAGS", "CXXFLAGS"):
         if flag_var in sysconfig_vars:
-            sysconfig_vars[flag_var] = " ".join(
-                f for f in sysconfig_vars[flag_var].split() if not f.startswith("-Wl,")
-            )
+            sysconfig_vars[flag_var] = " ".join(f for f in sysconfig_vars[flag_var].split() if not f.startswith("-Wl,"))
 
     # Add search paths for listed native deps
     for include_path in include_paths:
@@ -615,7 +612,7 @@ def link_path_tools(tools_dir: Path, path_tools: List[Tuple[Path, Path]], env_di
 
         if is_python_tool:
             with open(path_tool_in_bin, "w") as f:
-                f.write(f"#!/bin/sh\n")
+                f.write("#!/bin/sh\n")
                 f.write(f'exec "{venv_python.resolve()}" "{abs_tool_path}" "$@"\n')
             path_tool_in_bin.chmod(0o755)
         else:
@@ -845,7 +842,9 @@ def build_standard_venv(env_dir: Path, exec_python_exe: Path, sysconfig_vars: Di
     with open(site_dir / "_pycross_sysconfigdata.py", "w") as f:
         f.write(f"build_time_vars = {repr(sysconfig_vars)}\n")
     with open(site_dir / "_pycross_sysconfigdata.pth", "w") as f:
-        f.write('import sysconfig; sysconfig._get_sysconfigdata_name = lambda: "_pycross_sysconfigdata"; sysconfig._CONFIG_VARS = None\n')
+        f.write(
+            'import sysconfig; sysconfig._get_sysconfigdata_name = lambda: "_pycross_sysconfigdata"; sysconfig._CONFIG_VARS = None\n'
+        )
 
 
 def build_venv(
@@ -938,10 +937,7 @@ def validate_required_deps(
             stderr=subprocess.STDOUT,
         )
     except subprocess.CalledProcessError as e:
-        _error(
-            "Required build dependency check failed:\n"
-            + e.output.decode().strip()
-        )
+        _error("Required build dependency check failed:\n" + e.output.decode().strip())
 
 
 def build_wheel(
@@ -1096,7 +1092,6 @@ def execroot_prefix(workspace_name: str) -> Path:
     return Path("..") / "bazel-execroot" / workspace_name
 
 
-
 def main(args: Any, temp_dir: Path, is_debug: bool) -> None:
     # Paths passed into this action will be relative to bazel's execroot.
     # But we need to build the wheel from within the extracted sdist directory.
@@ -1160,7 +1155,7 @@ def main(args: Any, temp_dir: Path, is_debug: bool) -> None:
         exec_python_exe=args.exec_python_executable,
         target_python_exe=args.target_python_executable,
     )
-    target_is_darwin = (target_sysconfig_vars.get("MACHDEP") == "darwin")
+    target_is_darwin = target_sysconfig_vars.get("MACHDEP") == "darwin"
 
     target_python_lib_dir = (args.target_python_executable.parent.parent / "lib").resolve()
 
@@ -1216,10 +1211,12 @@ def main(args: Any, temp_dir: Path, is_debug: bool) -> None:
     target_gnu_system = toolchain_sysconfig_vars.get("PYCROSS_TARGET_GNU_SYSTEM", "")
     if not target_gnu_system:
         # Legacy fallback: parse from sysconfig strings
-        target_gnu_system = " ".join([
-            target_sysconfig_vars.get("MULTIARCH") or "",
-            target_sysconfig_vars.get("HOST_GNU_TYPE") or "",
-        ])
+        target_gnu_system = " ".join(
+            [
+                target_sysconfig_vars.get("MULTIARCH") or "",
+                target_sysconfig_vars.get("HOST_GNU_TYPE") or "",
+            ]
+        )
 
     if "x86_64" in target_gnu_system:
         target_cpu = "x86_64"
@@ -1316,7 +1313,6 @@ def main(args: Any, temp_dir: Path, is_debug: bool) -> None:
 
     if target_environment:
         check_filename_against_target(os.path.basename(wheel_file), target_environment)
-
 
     shutil.move(wheel_file, args.wheel_file)
     with open(args.wheel_name_file, "w") as f:

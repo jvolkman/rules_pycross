@@ -7,19 +7,18 @@ package(default_visibility = ["//visibility:public"])
 # lock_repo auto-fills ninja, meson-python, and meson from @uv.
 pycross_meson_recipe(
     name = "numpy_recipe",
-    lock_repo = "@uv",
     cross_properties = {
         "longdouble_format": "IEEE_DOUBLE_LE",
     },
-    pre_build_hooks = [":gen_openblas_pc"],
+    lock_repo = "@uv",
     path_tools = {
         ":cython_wrapper": "cython",
     },
+    pre_build_hooks = [":gen_openblas_pc"],
 )
 
 pycross_wheel_build(
     name = "numpy",
-    recipe = ":numpy_recipe",
     build_env = {
         "OPENBLAS_LIB": "$(location //third_party/openblas:libopenblas.a)",
         "OPENBLAS_INCLUDE": "$(location //third_party/openblas:include)",
@@ -32,6 +31,7 @@ pycross_wheel_build(
     post_build_hooks = [
         "@rules_pycross//pycross/hooks:repair_wheel",
     ],
+    recipe = ":numpy_recipe",
     sdist = "@uv//numpy:sdist",
     tags = ["manual"],
     deps = [
@@ -51,4 +51,3 @@ py_binary(
         "@uv//:cython",
     ],
 )
-

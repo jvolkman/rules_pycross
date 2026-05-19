@@ -423,4 +423,3 @@ def classify_flags(flags, is_linker = False):
             compile_flags.append(flags[i])
 
     return struct(wrapper = wrapper, compile = compile_flags)
-

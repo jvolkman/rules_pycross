@@ -95,7 +95,6 @@ def _resolve_import_path_fn(ctx):
         _is_sibling_repository_layout_enabled(),
     )
 
-
 def _files_to_run(targets):
     return [t[DefaultInfo].files_to_run for t in targets]
 
@@ -376,6 +375,7 @@ def _handle_tools_and_data(ctx, args, tools, recipe_flat = None):
         for name, pt in recipe_flat.path_tools.items():
             all_path_tool_entries[name] = pt.executable
             tools.append(pt.files_to_run)
+
         # Recipe build_deps: add their import paths (same treatment as user deps)
         # so they are importable in the build venv, not just staged as files.
         #
@@ -441,9 +441,11 @@ def _pycross_wheel_build_impl(ctx):
         recipe_runfiles = ctx.attr.recipe[DefaultInfo].default_runfiles
         if recipe_runfiles:
             tools.append(recipe_runfiles.files)
+
         # Pass use_crossenv flag
         if recipe_flat.use_crossenv:
             args.add("--use-crossenv")
+
         # Pass required dep specifiers for build-time validation
         for req in recipe_flat.required_dep_names:
             args.add("--require-dep", req)

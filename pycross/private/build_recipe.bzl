@@ -56,7 +56,6 @@ def _executable(target):
         fail("%s is not executable" % target.label)
     return exe
 
-
 def _pycross_build_recipe_impl(ctx):
     parent = None
     if ctx.attr.parent:
@@ -202,6 +201,7 @@ def flatten_recipe_chain(recipe_info):
     Returns:
         struct with the flattened fields.
     """
+
     # Build chain from leaf to root, then reverse to get root-first order
     chain = []
     node = recipe_info
@@ -234,6 +234,7 @@ def flatten_recipe_chain(recipe_info):
         # Onion model: iterating root-to-leaf.
         # Pre hooks: prepend so leaf ends up first (specialized before generic)
         all_pre_hooks = list(recipe.pre_build_hooks) + all_pre_hooks
+
         # Post hooks: extend so root stays first (generic before specialized)
         all_post_hooks.extend(recipe.post_build_hooks)
         all_build_deps.extend(recipe.build_deps)

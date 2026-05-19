@@ -35,10 +35,9 @@ pycross_build_recipe(
 pycross_build_recipe(
     name = "meson",
     parent = ":crossenv",
-    pre_build_hooks = ["//pycross/private/tools:meson_cross_file_hook"],
     path_tools = {
         "//pycross/private/tools:ninja_wrapper": "ninja",
     },
+    pre_build_hooks = ["//pycross/private/tools:meson_cross_file_hook"],
     required_dep_names = ["meson-python"],
 )
-
