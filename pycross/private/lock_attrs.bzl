@@ -258,7 +258,14 @@ def package_annotation(
         build_target = None,
         ignore_dependencies = [],
         install_exclude_globs = [],
-        post_install_patches = []):
+        post_install_patches = [],
+        build_profile = None,
+        copts = [],
+        linkopts = [],
+        native_deps = [],
+        sdist_python_paths = [],
+        config_settings = {},
+        tool_deps = {}):
     """Annotations to apply to individual packages.
 
     Args:
@@ -268,6 +275,13 @@ def package_annotation(
       ignore_dependencies (list, optional): A list of package keys (name or name@version) to drop from this package's set of declared dependencies.
       install_exclude_globs (list, optional): A list of globs for files to exclude during installation.
       post_install_patches (list, optional): A list of patches to apply after wheel installation.
+      build_profile (str, optional): The build profile to use (e.g., "meson_build" or "setuptools_build").
+      copts (list, optional): Extra C++ compiler options.
+      linkopts (list, optional): Extra linker options.
+      native_deps (list, optional): CC dependencies to link against.
+      sdist_python_paths (list, optional): Sdist-relative paths to add to PYTHONPATH.
+      config_settings (dict, optional): Setup configuration arguments.
+      tool_deps (dict, optional): Overrides for built-in dependencies.
 
     Returns:
       str: A json encoded string of the provided content.
@@ -279,6 +293,13 @@ def package_annotation(
         ignore_dependencies = ignore_dependencies,
         install_exclude_globs = install_exclude_globs,
         post_install_patches = post_install_patches,
+        build_profile = build_profile,
+        copts = copts,
+        linkopts = linkopts,
+        native_deps = [str(dep) for dep in native_deps],
+        sdist_python_paths = sdist_python_paths,
+        config_settings = config_settings,
+        tool_deps = tool_deps,
     ))
 
 PDM_IMPORT_ATTRS = _IMPORT_ATTRS

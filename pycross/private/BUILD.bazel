@@ -220,8 +220,3 @@ bzl_library(
     name = "util",
     srcs = ["util.bzl"],
 )
-
-bzl_library(
-    name = "rules_python_bzl",
-    srcs = ["@rules_python//:bzl"],
-)

@@ -12,62 +12,94 @@ _BACKEND_TO_PROFILE = {
 }
 
 def _sdist_repo_impl(rctx):
-    sdist_path = rctx.path(rctx.attr.sdist)
-    output_json = rctx.path("build_metadata.json")
+    macro_attrs = {
+        "name": "\"pkg\"",
+        "sdist": "\"{}\"".format(rctx.attr.sdist),
+        "deps": str(rctx.attr.deps),
+    }
 
-    # Run the Python inspector tool
-    exec_internal_tool(
-        rctx,
-        Label("//pycross/private/tools:inspect_package.py"),
-        [
-            "--sdist",
-            str(sdist_path),
-            "--output",
-            str(output_json),
-        ],
-    )
+    if rctx.attr.build_profile:
+        profile_macro = rctx.attr.build_profile
+        if profile_macro == "meson_build":
+            profile_bzl = "meson.bzl"
+        elif profile_macro == "cmake_build":
+            profile_bzl = "cmake.bzl"
+        elif profile_macro == "setuptools_build":
+            profile_bzl = "setuptools.bzl"
+        else:
+            fail("Unknown build profile: " + profile_macro)
+    else:
+        sdist_path = rctx.path(rctx.attr.sdist)
+        output_json = rctx.path("build_metadata.json")
 
-    metadata = json.decode(rctx.read(output_json))
-    backend = metadata.get("build_backend", "")
-    requires = metadata.get("build_requires", [])
+        # Run the Python inspector tool
+        exec_internal_tool(
+            rctx,
+            Label("//pycross/private/tools:inspect_package.py"),
+            [
+                "--sdist",
+                str(sdist_path),
+                "--output",
+                str(output_json),
+            ],
+        )
 
-    # Map backend to profile
-    # If not in the dictionary, we fall back to setuptools_build as the generic PEP 517 builder
-    profile_macro = _BACKEND_TO_PROFILE.get(backend, "setuptools_build")
-    profile_bzl = "meson.bzl" if profile_macro == "meson_build" else (
-        "cmake.bzl" if profile_macro == "cmake_build" else "setuptools.bzl"
-    )
+        metadata = json.decode(rctx.read(output_json))
+        backend = metadata.get("build_backend", "")
+        requires = metadata.get("build_requires", [])
 
-    # Map build requires to targets in the hub repo
-    build_deps = []
-    for req in requires:
-        req_name = extract_pep508_name(req)
+        # Map backend to profile
+        # If not in the dictionary, we fall back to setuptools_build as the generic PEP 517 builder
+        profile_macro = _BACKEND_TO_PROFILE.get(backend, "setuptools_build")
+        profile_bzl = "meson.bzl" if profile_macro == "meson_build" else (
+            "cmake.bzl" if profile_macro == "cmake_build" else "setuptools.bzl"
+        )
 
-        # We only add it if it's in the known lock repo mapping.
-        # (This will be passed in via rctx.attr.known_packages)
-        if req_name in rctx.attr.known_packages:
-            build_deps.append("@{}//:{}".format(rctx.attr.lock_repo, req_name))
+        # Map build requires to targets in the hub repo
+        build_deps = []
+        for req in requires:
+            req_name = extract_pep508_name(req)
+            if req_name == "oldest_supported_numpy":
+                req_name = "numpy"
 
-    # For runtime deps, the extension provides them based on the lock file graph
-    runtime_deps = rctx.attr.deps
+            # We only add it if it's in the known lock repo mapping.
+            # (This will be passed in via rctx.attr.known_packages)
+            if req_name in rctx.attr.known_packages:
+                build_deps.append("@{}//:{}".format(rctx.attr.lock_repo, req_name))
+        macro_attrs["build_deps"] = str(build_deps)
 
-    build_content = """\
-load("@rules_pycross//pycross/profiles:{profile_bzl}", "{profile_macro}")
+    # Add optional overrides if they are set/non-empty
+    if rctx.attr.copts:
+        macro_attrs["copts"] = str(rctx.attr.copts)
+    if rctx.attr.linkopts:
+        macro_attrs["linkopts"] = str(rctx.attr.linkopts)
+    if rctx.attr.native_deps:
+        macro_attrs["native_deps"] = str(rctx.attr.native_deps)
+    if rctx.attr.sdist_python_paths:
+        macro_attrs["sdist_python_paths"] = str(rctx.attr.sdist_python_paths)
+    if rctx.attr.config_settings:
+        macro_attrs["config_settings"] = str(rctx.attr.config_settings)
+    if rctx.attr.tool_deps:
+        macro_attrs["tool_deps"] = str(rctx.attr.tool_deps)
+
+    macro_attrs["repo"] = "\"@{}\"".format(rctx.attr.lock_repo)
+
+    # Now render the macro attributes in BUILD.bazel format
+    attr_lines = []
+    for key, val in sorted(macro_attrs.items()):
+        attr_lines.append("    {} = {},".format(key, val))
+
+    build_content = """\\\nload("@rules_pycross//pycross/profiles:{profile_bzl}", "{profile_macro}")
 
 package(default_visibility = ["//visibility:public"])
 
 {profile_macro}(
-    name = "pkg",
-    sdist = "{sdist}",
-    build_deps = {build_deps},
-    deps = {runtime_deps},
+{attrs}
 )
 """.format(
         profile_bzl = profile_bzl,
         profile_macro = profile_macro,
-        sdist = str(rctx.attr.sdist),
-        build_deps = build_deps,
-        runtime_deps = runtime_deps,
+        attrs = "\n".join(attr_lines),
     )
 
     rctx.file("BUILD.bazel", build_content)
@@ -80,5 +112,12 @@ pycross_sdist_repo = repository_rule(
         "deps": attr.string_list(doc = "Runtime dependencies from lock file."),
         "known_packages": attr.string_list(doc = "List of packages present in the lock file to filter build_requires."),
         "lock_repo": attr.string(doc = "Name of the lock hub repo (e.g. 'uv').", mandatory = True),
+        "build_profile": attr.string(doc = "The build profile to use."),
+        "copts": attr.string_list(doc = "C compiler options."),
+        "linkopts": attr.string_list(doc = "Linker options."),
+        "native_deps": attr.string_list(doc = "Labels of native C/C++ dependencies."),
+        "sdist_python_paths": attr.string_list(doc = "Additional Python paths during source build."),
+        "config_settings": attr.string_dict(doc = "Build configuration settings passed to backend."),
+        "tool_deps": attr.string_dict(doc = "Overridden tool dependencies."),
     },
 )

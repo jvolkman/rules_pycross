@@ -7,7 +7,7 @@ load("//pycross/private:poetry_lock_model.bzl", "lock_repo_model_poetry")
 load("//pycross/private:resolved_lock_repo.bzl", "resolved_lock_repo")
 load("//pycross/private:uv_lock_model.bzl", "lock_repo_model_uv")
 load(":lock_hub_repo.bzl", "lock_hub_repo")
-load(":tag_attrs.bzl", "COMMON_ATTRS", "COMMON_IMPORT_ATTRS", "PACKAGE_ATTRS", "PDM_IMPORT_ATTRS", "POETRY_IMPORT_ATTRS", "UV_IMPORT_ATTRS")
+load(":tag_attrs.bzl", "COMMON_ATTRS", "COMMON_IMPORT_ATTRS", "MESON_OVERRIDE_ATTRS", "PACKAGE_ATTRS", "PDM_IMPORT_ATTRS", "POETRY_IMPORT_ATTRS", "SETUPTOOLS_OVERRIDE_ATTRS", "UV_IMPORT_ATTRS")
 
 def _generate_resolved_lock_repo(lock_info, serialized_lock_model):
     repo_name = lock_info.repo_name
@@ -30,6 +30,13 @@ def _generate_resolved_lock_repo(lock_info, serialized_lock_model):
             ignore_dependencies = package.ignore_dependencies,
             install_exclude_globs = package.install_exclude_globs,
             post_install_patches = package.post_install_patches,
+            build_profile = package.build_profile,
+            copts = package.copts,
+            linkopts = package.linkopts,
+            native_deps = package.native_deps,
+            sdist_python_paths = package.sdist_python_paths,
+            config_settings = package.config_settings,
+            tool_deps = package.tool_deps,
         )
 
     resolved_lock_repo(**args)
@@ -96,6 +103,23 @@ def _lock_struct(mctx, tag):
         packages = {},
     )
 
+def _normalize_package_tag(tag, build_profile = None):
+    return struct(
+        always_build = tag.always_build,
+        build_dependencies = tag.build_dependencies,
+        build_target = getattr(tag, "build_target", None),
+        ignore_dependencies = tag.ignore_dependencies,
+        install_exclude_globs = tag.install_exclude_globs,
+        post_install_patches = tag.post_install_patches,
+        build_profile = build_profile,
+        copts = getattr(tag, "copts", []),
+        linkopts = getattr(tag, "linkopts", []),
+        native_deps = getattr(tag, "native_deps", []),
+        sdist_python_paths = getattr(tag, "sdist_python_paths", []),
+        config_settings = getattr(tag, "config_settings", {}),
+        tool_deps = getattr(tag, "tool_deps", {}),
+    )
+
 def _lock_import_impl(module_ctx):
     lock_owners = {}
     lock_repos = {}
@@ -123,7 +147,19 @@ def _lock_import_impl(module_ctx):
             _check_proper_package_repo(lock_owners, module, tag)
             repo_info = lock_repos[tag.repo]
             _check_package_entry_not_set(lock_owners, repo_info, tag)
-            repo_info.packages[tag.name] = tag
+            repo_info.packages[tag.name] = _normalize_package_tag(tag)
+
+        for tag in module.tags.meson_override:
+            _check_proper_package_repo(lock_owners, module, tag)
+            repo_info = lock_repos[tag.repo]
+            _check_package_entry_not_set(lock_owners, repo_info, tag)
+            repo_info.packages[tag.name] = _normalize_package_tag(tag, build_profile = "meson_build")
+
+        for tag in module.tags.setuptools_override:
+            _check_proper_package_repo(lock_owners, module, tag)
+            repo_info = lock_repos[tag.repo]
+            _check_package_entry_not_set(lock_owners, repo_info, tag)
+            repo_info.packages[tag.name] = _normalize_package_tag(tag, build_profile = "setuptools_build")
 
     # Generate the resolved lock repos
     for repo_name, repo_info in lock_repos.items():
@@ -156,6 +192,14 @@ _package_tag = tag_class(
     doc = "Specify package-specific settings.",
     attrs = PACKAGE_ATTRS | COMMON_ATTRS,
 )
+_meson_override_tag = tag_class(
+    doc = "Specify meson-specific overrides.",
+    attrs = MESON_OVERRIDE_ATTRS | COMMON_ATTRS,
+)
+_setuptools_override_tag = tag_class(
+    doc = "Specify setuptools-specific overrides.",
+    attrs = SETUPTOOLS_OVERRIDE_ATTRS | COMMON_ATTRS,
+)
 
 lock_import = module_extension(
     implementation = _lock_import_impl,
@@ -164,5 +208,7 @@ lock_import = module_extension(
         import_poetry = _import_poetry_tag,
         import_uv = _import_uv_tag,
         package = _package_tag,
+        meson_override = _meson_override_tag,
+        setuptools_override = _setuptools_override_tag,
     ),
 )
