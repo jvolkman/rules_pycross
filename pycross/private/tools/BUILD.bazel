@@ -144,3 +144,10 @@ py_binary(
         "@patch-ng",
     ],
 )
+
+py_binary(
+    name = "extract_console_script",
+    srcs = ["extract_console_script.py"],
+    imports = ["../../.."],
+    visibility = ["//visibility:public"],
+)

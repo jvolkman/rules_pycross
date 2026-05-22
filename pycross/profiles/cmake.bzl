@@ -1,22 +1,21 @@
-"""Build profile for CMake-based Python packages (scikit-build-core).
-
-This profile generates pycross_wheel_build + pycross_wheel_library targets
-configured for packages that use scikit-build-core or other CMake-based
-build backends.
-"""
+"""Build profile for CMake-based Python packages (scikit-build-core)."""
 
 load("//pycross:defs.bzl", "pycross_wheel_build", "pycross_wheel_library")
+load("//pycross/profiles:util.bzl", "glean_repo_name")
 
-def cmake_build(name, **kwargs):
+def cmake_build(name, sdist = None, build_deps = None, tool_deps = {}, repo = None, **kwargs):
     """Build profile for CMake-based packages.
 
     Args:
         name: Name of the target.
+        sdist: The sdist label to build.
+        build_deps: Build dependencies required for PEP 517 package.
+        tool_deps: Overrides for standard build tools.
+        repo: Optional central lock repository name.
         **kwargs: Additional arguments passed to pycross_wheel_build.
     """
-    build_deps = kwargs.pop("build_deps", [])
     deps = kwargs.pop("deps", [])
-    path_tools = dict(kwargs.pop("path_tools", {}))
+    path_tools = list(kwargs.pop("path_tools", []))
     visibility = kwargs.pop("visibility", None)
     tags = list(kwargs.pop("tags", []))
 
@@ -24,11 +23,40 @@ def cmake_build(name, **kwargs):
     if "manual" not in tags:
         tags.append("manual")
 
+    # If repo is not explicitly passed, try to glean it from sdist
+    if not repo:
+        repo_name = glean_repo_name(sdist)
+        repo = "@" + repo_name if repo_name else None
+
+    # Ensure repo has a leading '@' if defined
+    if repo and not repo.startswith("@"):
+        repo = "@" + repo
+
+    # Define standard built-in default targets for CMake
+    default_tools = {
+        "scikit-build-core": repo + "//_builtins:scikit-build-core" if repo else "//:scikit-build-core",
+    }
+
+    # Merge user-provided overrides
+    tools = {}
+    for tool, default_target in default_tools.items():
+        if tool in tool_deps:
+            tools[tool] = tool_deps[tool]
+        else:
+            tools[tool] = default_target
+
+    # Compute build_deps if not explicitly provided
+    if not build_deps:
+        build_deps = [
+            tools["scikit-build-core"],
+        ]
+
     pycross_wheel_build(
         name = build_name,
+        sdist = sdist,
         deps = build_deps,
         path_tools = path_tools,
-        visibility = ["//visibility:private"],
+        visibility = ["//visibility:public"],
         tags = tags,
         **kwargs
     )
@@ -38,4 +66,10 @@ def cmake_build(name, **kwargs):
         wheel = ":" + build_name,
         deps = deps,
         visibility = visibility,
+    )
+
+    native.alias(
+        name = "wheel",
+        actual = ":" + build_name,
+        visibility = ["//visibility:public"],
     )
