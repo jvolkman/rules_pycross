@@ -332,7 +332,7 @@ selects.config_setting_group(
 _TOOLCHAIN_TEMPLATE = """\
 pycross_hermetic_toolchain(
     name = {provider_name},
-    exec_interpreter = {runtime},
+    exec_interpreter = "@rules_python//python:current_py_toolchain",
     target_interpreter = {runtime},
 )
 
@@ -450,6 +450,17 @@ def _pycross_environment_repo_impl(rctx):
     for env in computed_environments:
         root_build_sections.append("        {},".format(repr(env["output"])))
     root_build_sections.append("    ]")
+    root_build_sections.append(")")
+
+    root_build_sections.append("# Automatically resolves to the target environment JSON based on target config.")
+    root_build_sections.append("filegroup(")
+    root_build_sections.append('    name = "current",')
+    root_build_sections.append("    srcs = select({")
+    for env in computed_environments:
+        root_build_sections.append("        {}: [{}],".format(repr(":" + env["config_setting_name"]), repr(":" + env["output"])))
+    root_build_sections.append('        "//conditions:default": [],')
+    root_build_sections.append("    }),")
+    root_build_sections.append("    visibility = [\"//visibility:public\"],")
     root_build_sections.append(")")
     root_build_sections.append("exports_files(glob([\"*.json\"]))")
 
