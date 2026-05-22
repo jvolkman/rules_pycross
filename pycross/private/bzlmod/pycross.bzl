@@ -1,10 +1,12 @@
 """Pycross internal deps."""
 
 load("@bazel_features//:features.bzl", "bazel_features")
+load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_file")
+load("@toml.bzl//toml:toml.bzl", "decode")
 load("//pycross/private:internal_repo.bzl", "create_internal_repo")
-load("//pycross/private:pycross_deps.lock.bzl", pypi_all_repositories = "repositories")
-load("//pycross/private:pycross_deps_core.lock.bzl", core_files = "FILES")
 load(":tag_attrs.bzl", "CREATE_ENVIRONMENTS_ATTRS", "REGISTER_TOOLCHAINS_ATTRS")
+
+_CORE_PACKAGES = ["dacite", "installer", "packaging", "pip", "poetry-core"]
 
 # buildifier: disable=print
 def _print_warn(msg):
@@ -49,7 +51,24 @@ def _pycross_impl(module_ctx):
             "Both python_interpreter_target and python_defs_file must be set",
         )
 
-    pypi_all_repositories()
+    # 1. Read and parse the TOML lock
+    deps_toml_path = module_ctx.path(Label("//pycross/private:pycross_deps.toml"))
+    deps_data = decode(module_ctx.read(deps_toml_path))
+
+    # 2. Instantiate http_file repos for all packages dynamically
+    for pkg in deps_data["packages"].values():
+        http_file(
+            name = pkg["repo_name"],
+            urls = [pkg["url"]],
+            sha256 = pkg["sha256"],
+            downloaded_file_path = pkg["filename"],
+        )
+
+    # 3. Construct core_files map dynamically for rules_pycross_internal
+    core_files = {}
+    for pkg in deps_data["packages"].values():
+        if pkg["name"] in _CORE_PACKAGES:
+            core_files[pkg["filename"]] = pkg["repo_name"]
 
     environments_attrs = {
         k: getattr(environments_tag, k)

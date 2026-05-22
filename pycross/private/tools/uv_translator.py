@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import tomllib
 from collections import defaultdict
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -11,7 +12,6 @@ from typing import Set
 from urllib.parse import unquote
 from urllib.parse import urlparse
 
-import tomli
 from packaging.markers import Marker
 from packaging.requirements import Requirement
 from packaging.specifiers import SpecifierSet
@@ -137,13 +137,13 @@ class ProjectFiles:
 def read_files(project_file: Path, lock_file: Path) -> ProjectFiles:
     try:
         with open(project_file, "rb") as f:
-            project_dict = tomli.load(f)
+            project_dict = tomllib.load(f)
     except Exception as e:
         raise Exception(f"Could not load project file: {project_file}: {e}")
 
     try:
         with open(lock_file, "rb") as f:
-            lock_dict = tomli.load(f)
+            lock_dict = tomllib.load(f)
     except Exception as e:
         raise Exception(f"Could not load lock file: {lock_file}: {e}")
 

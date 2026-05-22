@@ -41,3 +41,27 @@ def trace_ctx(ctx, display_name = "ctx"):
         return _wrapper
 
     return struct(**{field_name: wrap(field_name) for field_name in dir(ctx)})
+
+def sanitize_name(val):
+    """Sanitize a string into a valid Bazel repository and target name identifier."""
+    return val.lower().replace("-", "_").replace(".", "_").replace("+", "_").replace("@", "_").replace("!", "_")
+
+_PEP508_NAME_CHARS = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_."
+
+def extract_pep508_name(spec):
+    """Extract the normalized package name from a PEP508 requirement line.
+
+    Args:
+        spec: The PEP508 requirement string to parse.
+
+    Returns:
+        The normalized package name (with underscores) as a string.
+    """
+    spec = spec.strip()
+    stripped = spec.lstrip(_PEP508_NAME_CHARS)
+    name_len = len(spec) - len(stripped)
+    name = spec[:name_len]
+    normalized = name.lower().replace("-", "_").replace(".", "_")
+
+    # Dedup underscores (standard PEP 503 name normalization helper)
+    return "_".join([part for part in normalized.split("_") if part])

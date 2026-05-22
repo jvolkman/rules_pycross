@@ -1,23 +1,11 @@
 """Internal repo"""
 
 load("@bazel_skylib//lib:shell.bzl", "shell")
+load("@toml.bzl", "toml")
 load(":lock_attrs.bzl", "CREATE_ENVIRONMENTS_ATTRS", "REGISTER_TOOLCHAINS_ATTRS")
 load(":repo_venv_utils.bzl", "create_venv", "get_venv_python_executable", "install_venv_wheels")
 
 INTERNAL_REPO_NAME = "rules_pycross_internal"
-LOCK_FILES = {
-    "build": "//pycross/private:pycross_deps_build.lock.bzl",
-    "core": "//pycross/private:pycross_deps_core.lock.bzl",
-    "repairwheel": "//pycross/private:pycross_deps_repairwheel.lock.bzl",
-}
-
-_deps_build = """\
-package(default_visibility = ["//visibility:public"])
-
-load("{lock}", "targets")
-
-targets()
-"""
 
 _root_build = """\
 package(default_visibility = ["//visibility:public"])
@@ -124,17 +112,16 @@ def _resolve_python_interpreter(rctx):
 
     return python_interpreter.realpath
 
-def _installer_whl(wheels):
-    for label, name in wheels.items():
-        if name.startswith("installer-"):
-            # use the exported alias label
-            return Label("@@" + label.repo_name + "//" + label.package)
+def _installer_whl(wheels, prefix):
+    for repo_name, filename in wheels.items():
+        if filename.startswith("installer-"):
+            return Label("@@" + prefix + repo_name + "//file:" + filename)
     fail("Unable to find `installer` wheel in lock file.")
 
-def _pip_whl(wheels):
-    for label, name in wheels.items():
-        if name.startswith("pip-"):
-            return label
+def _pip_whl(wheels, prefix):
+    for repo_name, filename in wheels.items():
+        if filename.startswith("pip-"):
+            return Label("@@" + prefix + repo_name + "//file:" + filename)
     fail("Unable to find `pip` wheel in lock file.")
 
 def _defaults_bzl(rctx):
@@ -147,23 +134,79 @@ def _defaults_bzl(rctx):
     return "\n".join(lines) + "\n"
 
 def _pycross_internal_repo_impl(rctx):
+    # Extract Bzlmod extension repository prefix from rctx.name
+    # (e.g., "rules_pycross++pycross+" or "rules_pycross~1.0.0~pycross~")
+    prefix = rctx.name.split("rules_pycross_internal")[0]
+
     python_executable = _resolve_python_interpreter(rctx)
-    wheel_paths = sorted([rctx.path(w) for w in rctx.attr.wheels.keys()], key = lambda k: str(k))
+    wheel_paths = sorted([rctx.path(Label("@@" + prefix + repo + "//file:" + file)) for repo, file in rctx.attr.wheels.items()], key = lambda k: str(k))
     pycross_path = rctx.path(Label("//:BUILD.bazel")).dirname
 
     venv_path = rctx.path("exec_venv")
-    pip_whl = _pip_whl(rctx.attr.wheels)
+    pip_whl = _pip_whl(rctx.attr.wheels, prefix)
     if rctx.attr.install_wheels:
         create_venv(rctx, python_executable, venv_path, [pycross_path])
         install_venv_wheels(rctx, venv_path, pip_whl, wheel_paths)
     else:
         create_venv(rctx, python_executable, venv_path, [pycross_path] + wheel_paths)
 
-    # All deps
-    rctx.file(
-        "deps/BUILD.bazel",
-        _deps_build.format(lock = Label("//pycross/private:pycross_deps.lock.bzl")),
-    )
+    # 1. Read and parse the TOML lock
+    deps_toml_path = rctx.path(Label("//pycross/private:pycross_deps.toml"))
+    deps_data = toml.decode(rctx.read(deps_toml_path))
+
+    # 2. Write the target definitions
+    deps_build_lines = [
+        'load("@rules_pycross//pycross:defs.bzl", "pycross_wheel_library")',
+        "",
+        'package(default_visibility = ["//visibility:public"])',
+        "",
+    ]
+
+    # Config setting
+    deps_build_lines.extend([
+        "config_setting(",
+        '    name = "_env_rules_pycross_deps_target_env",',
+        ")",
+        "",
+    ])
+
+    # Pins
+    for pin_name, pin_target in sorted(deps_data["pins"].items()):
+        deps_build_lines.extend([
+            "alias(",
+            '    name = "{}",'.format(pin_name),
+            '    actual = ":" + "{}",'.format(pin_target),
+            ")",
+            "",
+        ])
+
+    # Packages
+    for pkg_version, pkg in sorted(deps_data["packages"].items()):
+        # Each package needs an alias and a wheel library
+        wheel_target_name = "_wheel_{}".format(pkg_version)
+        deps_build_lines.extend([
+            "alias(",
+            '    name = "{}",'.format(wheel_target_name),
+            '    actual = "@{}//file",'.format(pkg["repo_name"]),
+            ")",
+            "",
+        ])
+
+        deps = []
+        for dep in pkg.get("deps", []):
+            deps.append(":{}".format(dep))
+
+        deps_build_lines.extend([
+            "pycross_wheel_library(",
+            '    name = "{}",'.format(pkg_version),
+            '    wheel = ":{}",'.format(wheel_target_name),
+        ])
+        if deps:
+            deps_build_lines.append("    deps = {},".format(deps))
+        deps_build_lines.append(")")
+        deps_build_lines.append("")
+
+    rctx.file("deps/BUILD.bazel", "\n".join(deps_build_lines))
 
     # python.bzl
     if rctx.attr.python_defs_file:
@@ -176,7 +219,7 @@ def _pycross_internal_repo_impl(rctx):
     rctx.file("defaults.bzl", _defaults_bzl(rctx))
 
     # Root build file
-    rctx.file("BUILD.bazel", _root_build.format(installer_whl = _installer_whl(rctx.attr.wheels)))
+    rctx.file("BUILD.bazel", _root_build.format(installer_whl = _installer_whl(rctx.attr.wheels, prefix)))
 
 pycross_internal_repo = repository_rule(
     implementation = _pycross_internal_repo_impl,
@@ -188,9 +231,8 @@ pycross_internal_repo = repository_rule(
             allow_single_file = True,
         ),
         "python_interpreter": attr.string(),
-        "wheels": attr.label_keyed_string_dict(
+        "wheels": attr.string_dict(
             mandatory = True,
-            allow_files = [".whl"],
         ),
         "install_wheels": attr.bool(
             default = True,
