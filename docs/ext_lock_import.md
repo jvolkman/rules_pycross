@@ -21,6 +21,12 @@ lock_import.import_uv(<a href="#lock_import.import_uv-all_development_groups">al
                       <a href="#lock_import.import_uv-require_static_urls">require_static_urls</a>, <a href="#lock_import.import_uv-target_environments">target_environments</a>)
 lock_import.package(<a href="#lock_import.package-name">name</a>, <a href="#lock_import.package-always_build">always_build</a>, <a href="#lock_import.package-build_dependencies">build_dependencies</a>, <a href="#lock_import.package-build_target">build_target</a>, <a href="#lock_import.package-ignore_dependencies">ignore_dependencies</a>,
                     <a href="#lock_import.package-install_exclude_globs">install_exclude_globs</a>, <a href="#lock_import.package-post_install_patches">post_install_patches</a>, <a href="#lock_import.package-repo">repo</a>)
+lock_import.meson_override(<a href="#lock_import.meson_override-name">name</a>, <a href="#lock_import.meson_override-always_build">always_build</a>, <a href="#lock_import.meson_override-build_dependencies">build_dependencies</a>, <a href="#lock_import.meson_override-config_settings">config_settings</a>, <a href="#lock_import.meson_override-copts">copts</a>,
+                           <a href="#lock_import.meson_override-ignore_dependencies">ignore_dependencies</a>, <a href="#lock_import.meson_override-install_exclude_globs">install_exclude_globs</a>, <a href="#lock_import.meson_override-linkopts">linkopts</a>, <a href="#lock_import.meson_override-native_deps">native_deps</a>,
+                           <a href="#lock_import.meson_override-post_install_patches">post_install_patches</a>, <a href="#lock_import.meson_override-repo">repo</a>, <a href="#lock_import.meson_override-sdist_python_paths">sdist_python_paths</a>, <a href="#lock_import.meson_override-tool_deps">tool_deps</a>)
+lock_import.setuptools_override(<a href="#lock_import.setuptools_override-name">name</a>, <a href="#lock_import.setuptools_override-always_build">always_build</a>, <a href="#lock_import.setuptools_override-build_dependencies">build_dependencies</a>, <a href="#lock_import.setuptools_override-config_settings">config_settings</a>, <a href="#lock_import.setuptools_override-copts">copts</a>,
+                                <a href="#lock_import.setuptools_override-ignore_dependencies">ignore_dependencies</a>, <a href="#lock_import.setuptools_override-install_exclude_globs">install_exclude_globs</a>, <a href="#lock_import.setuptools_override-linkopts">linkopts</a>, <a href="#lock_import.setuptools_override-native_deps">native_deps</a>,
+                                <a href="#lock_import.setuptools_override-post_install_patches">post_install_patches</a>, <a href="#lock_import.setuptools_override-repo">repo</a>, <a href="#lock_import.setuptools_override-sdist_python_paths">sdist_python_paths</a>, <a href="#lock_import.setuptools_override-tool_deps">tool_deps</a>)
 </pre>
 
 
@@ -116,5 +122,53 @@ Specify package-specific settings.
 | <a id="lock_import.package-install_exclude_globs"></a>install_exclude_globs |  A list of globs for files to exclude during installation.   | List of strings | optional |  `[]`  |
 | <a id="lock_import.package-post_install_patches"></a>post_install_patches |  A list of patches to apply after wheel installation.   | List of strings | optional |  `[]`  |
 | <a id="lock_import.package-repo"></a>repo |  The repository name   | String | required |  |
+
+<a id="lock_import.meson_override"></a>
+
+### meson_override
+
+Specify meson-specific overrides.
+
+**Attributes**
+
+| Name  | Description | Type | Mandatory | Default |
+| :------------- | :------------- | :------------- | :------------- | :------------- |
+| <a id="lock_import.meson_override-name"></a>name |  The package key (name or name@version).   | <a href="https://bazel.build/concepts/labels#target-names">Name</a> | required |  |
+| <a id="lock_import.meson_override-always_build"></a>always_build |  If True, don't use pre-built wheels for this package.   | Boolean | optional |  `True`  |
+| <a id="lock_import.meson_override-build_dependencies"></a>build_dependencies |  A list of additional package keys (name or name@version) to use when building this package from source.   | List of strings | optional |  `[]`  |
+| <a id="lock_import.meson_override-config_settings"></a>config_settings |  Setup configuration arguments.   | <a href="https://bazel.build/rules/lib/dict">Dictionary: String -> List of strings</a> | optional |  `{}`  |
+| <a id="lock_import.meson_override-copts"></a>copts |  Extra C++ compiler options.   | List of strings | optional |  `[]`  |
+| <a id="lock_import.meson_override-ignore_dependencies"></a>ignore_dependencies |  A list of package keys (name or name@version) to drop from this package's set of declared dependencies.   | List of strings | optional |  `[]`  |
+| <a id="lock_import.meson_override-install_exclude_globs"></a>install_exclude_globs |  A list of globs for files to exclude during installation.   | List of strings | optional |  `[]`  |
+| <a id="lock_import.meson_override-linkopts"></a>linkopts |  Extra linker options.   | List of strings | optional |  `[]`  |
+| <a id="lock_import.meson_override-native_deps"></a>native_deps |  CC dependencies to link against.   | <a href="https://bazel.build/concepts/labels">List of labels</a> | optional |  `[]`  |
+| <a id="lock_import.meson_override-post_install_patches"></a>post_install_patches |  A list of patches to apply after wheel installation.   | List of strings | optional |  `[]`  |
+| <a id="lock_import.meson_override-repo"></a>repo |  The repository name   | String | required |  |
+| <a id="lock_import.meson_override-sdist_python_paths"></a>sdist_python_paths |  Sdist-relative paths to add to PYTHONPATH.   | List of strings | optional |  `[]`  |
+| <a id="lock_import.meson_override-tool_deps"></a>tool_deps |  Overrides for built-in dependencies.   | <a href="https://bazel.build/rules/lib/dict">Dictionary: String -> String</a> | optional |  `{}`  |
+
+<a id="lock_import.setuptools_override"></a>
+
+### setuptools_override
+
+Specify setuptools-specific overrides.
+
+**Attributes**
+
+| Name  | Description | Type | Mandatory | Default |
+| :------------- | :------------- | :------------- | :------------- | :------------- |
+| <a id="lock_import.setuptools_override-name"></a>name |  The package key (name or name@version).   | <a href="https://bazel.build/concepts/labels#target-names">Name</a> | required |  |
+| <a id="lock_import.setuptools_override-always_build"></a>always_build |  If True, don't use pre-built wheels for this package.   | Boolean | optional |  `True`  |
+| <a id="lock_import.setuptools_override-build_dependencies"></a>build_dependencies |  A list of additional package keys (name or name@version) to use when building this package from source.   | List of strings | optional |  `[]`  |
+| <a id="lock_import.setuptools_override-config_settings"></a>config_settings |  Setup configuration arguments.   | <a href="https://bazel.build/rules/lib/dict">Dictionary: String -> List of strings</a> | optional |  `{}`  |
+| <a id="lock_import.setuptools_override-copts"></a>copts |  Extra C++ compiler options.   | List of strings | optional |  `[]`  |
+| <a id="lock_import.setuptools_override-ignore_dependencies"></a>ignore_dependencies |  A list of package keys (name or name@version) to drop from this package's set of declared dependencies.   | List of strings | optional |  `[]`  |
+| <a id="lock_import.setuptools_override-install_exclude_globs"></a>install_exclude_globs |  A list of globs for files to exclude during installation.   | List of strings | optional |  `[]`  |
+| <a id="lock_import.setuptools_override-linkopts"></a>linkopts |  Extra linker options.   | List of strings | optional |  `[]`  |
+| <a id="lock_import.setuptools_override-native_deps"></a>native_deps |  CC dependencies to link against.   | <a href="https://bazel.build/concepts/labels">List of labels</a> | optional |  `[]`  |
+| <a id="lock_import.setuptools_override-post_install_patches"></a>post_install_patches |  A list of patches to apply after wheel installation.   | List of strings | optional |  `[]`  |
+| <a id="lock_import.setuptools_override-repo"></a>repo |  The repository name   | String | required |  |
+| <a id="lock_import.setuptools_override-sdist_python_paths"></a>sdist_python_paths |  Sdist-relative paths to add to PYTHONPATH.   | List of strings | optional |  `[]`  |
+| <a id="lock_import.setuptools_override-tool_deps"></a>tool_deps |  Overrides for built-in dependencies.   | <a href="https://bazel.build/rules/lib/dict">Dictionary: String -> String</a> | optional |  `{}`  |
 
 
