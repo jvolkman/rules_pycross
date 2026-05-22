@@ -270,7 +270,8 @@ Information about a Python wheel.
 load("@rules_pycross//pycross:defs.bzl", "package_annotation")
 
 package_annotation(<a href="#package_annotation-always_build">always_build</a>, <a href="#package_annotation-build_dependencies">build_dependencies</a>, <a href="#package_annotation-build_target">build_target</a>, <a href="#package_annotation-ignore_dependencies">ignore_dependencies</a>,
-                   <a href="#package_annotation-install_exclude_globs">install_exclude_globs</a>, <a href="#package_annotation-post_install_patches">post_install_patches</a>)
+                   <a href="#package_annotation-install_exclude_globs">install_exclude_globs</a>, <a href="#package_annotation-post_install_patches">post_install_patches</a>, <a href="#package_annotation-build_profile">build_profile</a>, <a href="#package_annotation-copts">copts</a>, <a href="#package_annotation-linkopts">linkopts</a>,
+                   <a href="#package_annotation-native_deps">native_deps</a>, <a href="#package_annotation-sdist_python_paths">sdist_python_paths</a>, <a href="#package_annotation-config_settings">config_settings</a>, <a href="#package_annotation-tool_deps">tool_deps</a>)
 </pre>
 
 Annotations to apply to individual packages.
@@ -286,6 +287,13 @@ Annotations to apply to individual packages.
 | <a id="package_annotation-ignore_dependencies"></a>ignore_dependencies |  A list of package keys (name or name@version) to drop from this package's set of declared dependencies.   |  `[]` |
 | <a id="package_annotation-install_exclude_globs"></a>install_exclude_globs |  A list of globs for files to exclude during installation.   |  `[]` |
 | <a id="package_annotation-post_install_patches"></a>post_install_patches |  A list of patches to apply after wheel installation.   |  `[]` |
+| <a id="package_annotation-build_profile"></a>build_profile |  The build profile to use (e.g., "meson_build" or "setuptools_build").   |  `None` |
+| <a id="package_annotation-copts"></a>copts |  Extra C++ compiler options.   |  `[]` |
+| <a id="package_annotation-linkopts"></a>linkopts |  Extra linker options.   |  `[]` |
+| <a id="package_annotation-native_deps"></a>native_deps |  CC dependencies to link against.   |  `[]` |
+| <a id="package_annotation-sdist_python_paths"></a>sdist_python_paths |  Sdist-relative paths to add to PYTHONPATH.   |  `[]` |
+| <a id="package_annotation-config_settings"></a>config_settings |  Setup configuration arguments.   |  `{}` |
+| <a id="package_annotation-tool_deps"></a>tool_deps |  Overrides for built-in dependencies.   |  `{}` |
 
 **RETURNS**
 

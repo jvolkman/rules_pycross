@@ -1,26 +1,24 @@
-load("@rules_pycross//pycross:defs.bzl", "pycross_wheel_build")
+load("@rules_pycross//pycross/profiles:setuptools.bzl", "setuptools_build")
 load("@rules_python//python:defs.bzl", "py_binary")
 
 package(default_visibility = ["//visibility:public"])
 
-# Specified here as an override.
-pycross_wheel_build(
+# Expose pg_config on PATH hermetically.
+# Since it is named 'pg_config', it will map to 'pg_config' on PATH.
+py_binary(
+    name = "pg_config",
+    srcs = ["pg_config.py"],
+)
+
+# Build psycopg2 utilizing the Setuptools build profile macro.
+# build_deps default to locked [setuptools, wheel].
+setuptools_build(
     name = "psycopg2",
     native_deps = [
         "//third_party/postgresql",
     ],
-    path_tools = {
-        ":pg_config": "pg_config",
-    },
-    sdist = "@uv//psycopg2:sdist",
-    tags = ["manual"],
-    deps = [
-        "@uv//:setuptools",
-        "@uv//:wheel",
+    path_tools = [
+        ":pg_config",
     ],
-)
-
-py_binary(
-    name = "pg_config",
-    srcs = ["pg_config.py"],
+    sdist = "@uv//psycopg2:sdist",
 )
