@@ -14,16 +14,6 @@ stardoc(
     ],
 )
 
-# workspace_rules
-stardoc(
-    name = "workspace_rules_gen",
-    out = "workspace_rules.gen.md",
-    input = "//pycross:workspace.bzl",
-    deps = [
-        "//pycross:workspace",
-        "@rules_cc//cc:find_cc_toolchain_bzl",
-    ],
-)
 
 # ext_environments
 stardoc(
@@ -36,16 +26,6 @@ stardoc(
     ],
 )
 
-# ext_lock_file
-stardoc(
-    name = "ext_lock_file_gen",
-    out = "ext_lock_file.gen.md",
-    input = "//pycross/extensions:lock_file.bzl",
-    deps = [
-        "//pycross/extensions:lock_file",
-        "@rules_cc//cc:find_cc_toolchain_bzl",
-    ],
-)
 
 # ext_lock_import
 stardoc(
@@ -85,9 +65,7 @@ write_source_files(
     name = "update",
     files = {
         "rules.md": ":rules_gen",
-        "workspace_rules.md": ":workspace_rules_gen",
         "ext_environments.md": ":ext_environments_gen",
-        "ext_lock_file.md": ":ext_lock_file_gen",
         "ext_lock_import.md": ":ext_lock_import_gen",
         "ext_lock_repos.md": ":ext_lock_repos_gen",
         "ext_pycross.md": ":ext_pycross_gen",
