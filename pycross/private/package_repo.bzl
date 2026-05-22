@@ -67,7 +67,7 @@ def _pin_build(pkg_sanitized, sdist_label = None):
         "",
         "alias(",
         '    name = "wheel",',
-        '    actual = "//_lock:{}",'.format(pkg_sanitized),
+        '    actual = "//_lock:{}_raw_wheel",'.format(pkg_sanitized),
         ")",
         "",
     ]
@@ -107,6 +107,7 @@ def _package_repo_impl(rctx):
         sdist_file_key = sdist_file["key"] if sdist_file else None
 
         select_cases = {}
+        raw_wheel_select_cases = {}
 
         # Loop through each environment
         for env_name, env_file_ref in sorted(pkg.get("environment_files", {}).items()):
@@ -137,6 +138,13 @@ def _package_repo_impl(rctx):
                 ])
                 select_cases[config_setting] = ":" + target_name
 
+                parts = sdist_repo_target.rsplit(":", 1)
+                if len(parts) == 2:
+                    sdist_repo_target_wheel = parts[0] + ":wheel"
+                else:
+                    sdist_repo_target_wheel = sdist_repo_target + ":wheel"
+                raw_wheel_select_cases[config_setting] = sdist_repo_target_wheel
+
             else:
                 # It's a pre-built wheel! Define a pycross_wheel_library target.
                 wheel_label = env_file_ref.get("label")
@@ -166,6 +174,7 @@ def _package_repo_impl(rctx):
                     "",
                 ])
                 select_cases[config_setting] = ":" + target_name
+                raw_wheel_select_cases[config_setting] = wheel_label
 
         # Write the main package select alias
         select_dict_lines = []
@@ -177,6 +186,21 @@ def _package_repo_impl(rctx):
             '    name = "{}",'.format(pkg_sanitized),
             "    actual = select({",
             "\n".join(select_dict_lines),
+            "    }),",
+            ")",
+            "",
+        ])
+
+        # Write the raw wheel select alias
+        raw_wheel_select_dict_lines = []
+        for cfg, target in sorted(raw_wheel_select_cases.items()):
+            raw_wheel_select_dict_lines.append('        "{}": "{}",'.format(cfg, target))
+
+        lock_build_lines.extend([
+            "alias(",
+            '    name = "{}_raw_wheel",'.format(pkg_sanitized),
+            "    actual = select({",
+            "\n".join(raw_wheel_select_dict_lines),
             "    }),",
             ")",
             "",
@@ -244,6 +268,43 @@ def _package_repo_impl(rctx):
         if sdist_file:
             sdist_label = rctx.attr.repo_map.get(sdist_file["key"])
         rctx.file(paths.join(pin, "BUILD.bazel"), _pin_build(sanitize_name(pin), sdist_label))
+
+    # 5. Write _builtins/BUILD.bazel
+    _STANDARD_TOOLS = ["meson", "ninja", "setuptools", "wheel", "meson-python", "scikit-build-core"]
+    builtins_build_lines = [
+        'load("@rules_pycross//pycross/private/build:missing_dependency.bzl", "pycross_missing_dependency")',
+        "",
+        'package(default_visibility = ["//visibility:public"])',
+        "",
+    ]
+
+    # Get a dict of all sanitized package names
+    locked_sanitized_names = {}
+    for pkg_key in packages.keys():
+        pkg_name = pkg_key.split("@")[0]
+        locked_sanitized_names[sanitize_name(pkg_name)] = True
+
+    for tool in _STANDARD_TOOLS:
+        sanitized_tool = sanitize_name(tool)
+        if sanitized_tool in locked_sanitized_names:
+            builtins_build_lines.extend([
+                "alias(",
+                '    name = "{}",'.format(tool),
+                '    actual = "//:{}",'.format(sanitized_tool),
+                ")",
+                "",
+            ])
+        else:
+            builtins_build_lines.extend([
+                "pycross_missing_dependency(",
+                '    name = "{}",'.format(tool),
+                '    tool_name = "{}",'.format(tool),
+                '    lock_repo = "@{}",'.format(rctx.name),
+                ")",
+                "",
+            ])
+
+    rctx.file("_builtins/BUILD.bazel", "\n".join(builtins_build_lines))
 
 package_repo = repository_rule(
     implementation = _package_repo_impl,
