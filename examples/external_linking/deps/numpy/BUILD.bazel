@@ -1,36 +1,68 @@
-load("@rules_pycross//pycross:defs.bzl", "pycross_wheel_build")
-load("@rules_python//python:defs.bzl", "py_binary")
+load("@rules_pycross//pycross/profiles:meson.bzl", "meson_build")
 
 package(default_visibility = ["//visibility:public"])
 
-# Specified here as an override.
-pycross_wheel_build(
-    name = "numpy",
-    build_env = {
-        "OPENBLAS_LIB": "$(location //third_party/openblas:libopenblas.a)",
-        "OPENBLAS_INCLUDE": "$(location //third_party/openblas:include)",
-    },
-    copts = ["-Wl,-s"],
-    data = [
+# Dynamically generate openblas.pc.
+# We use $$EXT_BUILD_ROOT$$ as a placeholder that meson_builder.py
+# will replace with the absolute path of the sandbox at runtime.
+genrule(
+    name = "gen_openblas_pc_file",
+    srcs = [
         "//third_party/openblas:include",
         "//third_party/openblas:libopenblas.a",
     ],
-    post_build_hooks = [
-        "@rules_pycross//pycross/hooks:repair_wheel",
+    outs = ["scipy-openblas.pc"],
+    cmd = """
+cat << 'EOF' > $@
+prefix=
+libdir=$$EXT_BUILD_ROOT$$/$(execpath //third_party/openblas:libopenblas.a)/..
+includedir=$$EXT_BUILD_ROOT$$/$(execpath //third_party/openblas:include)
+
+Name: scipy-openblas
+Description: OpenBLAS for SciPy
+Version: 0.3.20
+Libs: -L$${libdir} -lopenblas
+Cflags: -I$${includedir}
+EOF
+""",
+)
+
+meson_build(
+    name = "numpy",
+    build_deps = [
+        "@uv//:cython",
+        "@uv//:meson",
+        "@uv//:meson_python",
     ],
-    pre_build_hooks = [
-        ":gen_site_cfg",
+    config_settings = {
+        "setup-args": [],
+    },
+    copts = ["-Wl,-s"],
+    native_deps = ["//third_party/openblas"],
+    path_tools = [
+        ":cython_wrapper_gen",
+        ":ninja_wrapper_gen",
     ],
-    sdist = "@pydeps//numpy:sdist",
-    tags = ["manual"],
-    deps = [
-        "@pydeps//:cython",
-        "@pydeps//:setuptools",
-        "@pydeps//:wheel",
+    pkg_config_files = [":gen_openblas_pc_file"],
+    sdist = "@uv//numpy:sdist",
+    sdist_python_paths = [
+        "numpy/_core/code_generators",
+        "numpy/_build_utils",
     ],
 )
 
-py_binary(
-    name = "gen_site_cfg",
-    srcs = ["gen_site_cfg.py"],
+genrule(
+    name = "cython_wrapper_gen",
+    srcs = ["@uv//cython:wheel"],
+    outs = ["cython"],
+    cmd = "cp $(location @uv//cython:wheel)/bin/cython $@ && sed -i 's|^#!python|#!/usr/bin/env python3|' $@",
+    executable = True,
+)
+
+genrule(
+    name = "ninja_wrapper_gen",
+    srcs = ["@uv//ninja:wheel"],
+    outs = ["ninja"],
+    cmd = "cp $(location @uv//ninja:wheel)/bin/ninja $@",
+    executable = True,
 )

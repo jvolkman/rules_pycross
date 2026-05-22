@@ -17,7 +17,7 @@ cmake(
             "CMAKE_SYSTEM_PROCESSOR": "x86_64",
             "TARGET": "HASWELL",
         },
-        "@platforms//cpu:arm64": {
+        "@platforms//cpu:aarch64": {
             "CMAKE_SYSTEM_PROCESSOR": "arm64",
             "CMAKE_SIZEOF_VOID_P": "8",  # For some reason this is needed with later versions of zig
         },
@@ -33,6 +33,7 @@ cmake(
     }),
     copts = [
         "-Wno-error=int-conversion",
+        "-Wno-error=incompatible-pointer-types",
         "-Wl,-S",
     ],
     lib_source = "@openblas//:all",

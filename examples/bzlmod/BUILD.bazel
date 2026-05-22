@@ -1,7 +1,5 @@
-load("@bazel_lib//lib:write_source_files.bzl", "write_source_files")
 load(
     "@rules_pycross//pycross:defs.bzl",
-    "pycross_lock_file",
     "pycross_uv_lock_model",
 )
 load("@rules_python//python:defs.bzl", "py_binary")
@@ -15,33 +13,10 @@ py_binary(
     ],
 )
 
-py_binary(
-    name = "ipython_from_lock_file",
-    srcs = ["ipython.py"],
-    main = "ipython.py",
-    deps = [
-        "@uv_lock_file//deps:ipython",
-    ],
-)
-
 pycross_uv_lock_model(
     name = "example_lock_model",
     lock_file = "//:uv.lock",
     project_file = "//:pyproject.toml",
-)
-
-pycross_lock_file(
-    name = "uv_lock",
-    out = "updated_uv_lock.bzl",
-    lock_model_file = ":example_lock_model",
-    target_environments = ["@pycross_environments//:environments"],
-)
-
-write_source_files(
-    name = "update_locks",
-    files = {
-        "uv_lock.bzl": ":updated_uv_lock.bzl",
-    },
 )
 
 exports_files(["matplotlib.patch"])

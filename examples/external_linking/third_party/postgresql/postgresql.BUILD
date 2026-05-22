@@ -45,6 +45,7 @@ configure_make(
         "--without-readline",
         "--without-perl",
         "--with-ssl=openssl",
+        "--without-icu",
         "--prefix=/usr",
         "--exec-prefix=/usr",
     ] + select({
@@ -79,9 +80,9 @@ configure_make(
         ],
     }),
     targets = [
-        "-C src/bin install DESTDIR=$BUILD_TMPDIR/$INSTALL_PREFIX",
+        "-C src/bin/pg_config install DESTDIR=$BUILD_TMPDIR/$INSTALL_PREFIX",
         "-C src/include install DESTDIR=$BUILD_TMPDIR/$INSTALL_PREFIX",
-        "-C src/interfaces install DESTDIR=$BUILD_TMPDIR/$INSTALL_PREFIX",
+        "-C src/interfaces/libpq install DESTDIR=$BUILD_TMPDIR/$INSTALL_PREFIX",
     ],
     deps = [
         "@//third_party/openssl",

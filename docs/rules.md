@@ -2,17 +2,14 @@
 
 Public build rule API re-exports
 
-<a id="pycross_lock_file"></a>
+<a id="pycross_cc_mixin"></a>
 
-## pycross_lock_file
+## pycross_cc_mixin
 
 <pre>
-load("@rules_pycross//pycross:defs.bzl", "pycross_lock_file")
+load("@rules_pycross//pycross:defs.bzl", "pycross_cc_mixin")
 
-pycross_lock_file(<a href="#pycross_lock_file-name">name</a>, <a href="#pycross_lock_file-out">out</a>, <a href="#pycross_lock_file-always_include_sdist">always_include_sdist</a>, <a href="#pycross_lock_file-annotations">annotations</a>, <a href="#pycross_lock_file-default_alias_single_version">default_alias_single_version</a>,
-                  <a href="#pycross_lock_file-default_build_dependencies">default_build_dependencies</a>, <a href="#pycross_lock_file-disallow_builds">disallow_builds</a>, <a href="#pycross_lock_file-fully_qualified_environment_labels">fully_qualified_environment_labels</a>,
-                  <a href="#pycross_lock_file-generate_file_map">generate_file_map</a>, <a href="#pycross_lock_file-local_wheels">local_wheels</a>, <a href="#pycross_lock_file-lock_model_file">lock_model_file</a>, <a href="#pycross_lock_file-pypi_index">pypi_index</a>, <a href="#pycross_lock_file-remote_wheels">remote_wheels</a>,
-                  <a href="#pycross_lock_file-repo_prefix">repo_prefix</a>, <a href="#pycross_lock_file-target_environments">target_environments</a>)
+pycross_cc_mixin(<a href="#pycross_cc_mixin-name">name</a>, <a href="#pycross_cc_mixin-deps">deps</a>, <a href="#pycross_cc_mixin-copts">copts</a>, <a href="#pycross_cc_mixin-linkopts">linkopts</a>)
 </pre>
 
 
@@ -22,21 +19,33 @@ pycross_lock_file(<a href="#pycross_lock_file-name">name</a>, <a href="#pycross_
 
 | Name  | Description | Type | Mandatory | Default |
 | :------------- | :------------- | :------------- | :------------- | :------------- |
-| <a id="pycross_lock_file-name"></a>name |  A unique name for this target.   | <a href="https://bazel.build/concepts/labels#target-names">Name</a> | required |  |
-| <a id="pycross_lock_file-out"></a>out |  The output file.   | <a href="https://bazel.build/concepts/labels">Label</a> | required |  |
-| <a id="pycross_lock_file-always_include_sdist"></a>always_include_sdist |  Always include an entry for a package's sdist if one exists.   | Boolean | optional |  `False`  |
-| <a id="pycross_lock_file-annotations"></a>annotations |  Optional annotations to apply to packages.   | <a href="https://bazel.build/rules/lib/dict">Dictionary: String -> String</a> | optional |  `{}`  |
-| <a id="pycross_lock_file-default_alias_single_version"></a>default_alias_single_version |  Generate aliases for all packages that have a single version in the lock file.   | Boolean | optional |  `False`  |
-| <a id="pycross_lock_file-default_build_dependencies"></a>default_build_dependencies |  A list of package keys (name or name@version) that will be used as default build dependencies.   | List of strings | optional |  `[]`  |
-| <a id="pycross_lock_file-disallow_builds"></a>disallow_builds |  Do not allow pycross_wheel_build targets in the final lock file (i.e., require wheels).   | Boolean | optional |  `False`  |
-| <a id="pycross_lock_file-fully_qualified_environment_labels"></a>fully_qualified_environment_labels |  Generate fully-qualified environment labels.   | Boolean | optional |  `True`  |
-| <a id="pycross_lock_file-generate_file_map"></a>generate_file_map |  Generate a FILES dict containing a mapping of filenames to repo labels.   | Boolean | optional |  `False`  |
-| <a id="pycross_lock_file-local_wheels"></a>local_wheels |  A list of wheel files.   | <a href="https://bazel.build/concepts/labels">List of labels</a> | optional |  `[]`  |
-| <a id="pycross_lock_file-lock_model_file"></a>lock_model_file |  The lock model JSON file.   | <a href="https://bazel.build/concepts/labels">Label</a> | required |  |
-| <a id="pycross_lock_file-pypi_index"></a>pypi_index |  The PyPI-compatible index to use (must support the JSON API).   | String | optional |  `""`  |
-| <a id="pycross_lock_file-remote_wheels"></a>remote_wheels |  A mapping of remote wheels to their sha256 hashes.   | <a href="https://bazel.build/rules/lib/dict">Dictionary: String -> String</a> | optional |  `{}`  |
-| <a id="pycross_lock_file-repo_prefix"></a>repo_prefix |  The prefix to apply to repository targets. Defaults to the lock file target name.   | String | optional |  `""`  |
-| <a id="pycross_lock_file-target_environments"></a>target_environments |  A list of pycross_target_environment labels.   | <a href="https://bazel.build/concepts/labels">List of labels</a> | optional |  `[]`  |
+| <a id="pycross_cc_mixin-name"></a>name |  A unique name for this target.   | <a href="https://bazel.build/concepts/labels#target-names">Name</a> | required |  |
+| <a id="pycross_cc_mixin-deps"></a>deps |  -   | <a href="https://bazel.build/concepts/labels">List of labels</a> | optional |  `[]`  |
+| <a id="pycross_cc_mixin-copts"></a>copts |  -   | List of strings | optional |  `[]`  |
+| <a id="pycross_cc_mixin-linkopts"></a>linkopts |  -   | List of strings | optional |  `[]`  |
+
+
+<a id="pycross_hook_mixin"></a>
+
+## pycross_hook_mixin
+
+<pre>
+load("@rules_pycross//pycross:defs.bzl", "pycross_hook_mixin")
+
+pycross_hook_mixin(<a href="#pycross_hook_mixin-name">name</a>, <a href="#pycross_hook_mixin-data">data</a>, <a href="#pycross_hook_mixin-env">env</a>, <a href="#pycross_hook_mixin-hook">hook</a>)
+</pre>
+
+
+
+**ATTRIBUTES**
+
+
+| Name  | Description | Type | Mandatory | Default |
+| :------------- | :------------- | :------------- | :------------- | :------------- |
+| <a id="pycross_hook_mixin-name"></a>name |  A unique name for this target.   | <a href="https://bazel.build/concepts/labels#target-names">Name</a> | required |  |
+| <a id="pycross_hook_mixin-data"></a>data |  Additional data dependencies available to the hook.   | <a href="https://bazel.build/concepts/labels">List of labels</a> | optional |  `[]`  |
+| <a id="pycross_hook_mixin-env"></a>env |  Environment variables passed to the hook. Values are subject to location expansion against data deps.   | <a href="https://bazel.build/rules/lib/dict">Dictionary: String -> String</a> | optional |  `{}`  |
+| <a id="pycross_hook_mixin-hook"></a>hook |  The executable to run as a pre-build hook.   | <a href="https://bazel.build/concepts/labels">Label</a> | required |  |
 
 
 <a id="pycross_pdm_lock_model"></a>
@@ -69,6 +78,35 @@ pycross_pdm_lock_model(<a href="#pycross_pdm_lock_model-name">name</a>, <a href=
 | <a id="pycross_pdm_lock_model-require_static_urls"></a>require_static_urls |  Require that the lock file is created with --static-urls.   | Boolean | optional |  `True`  |
 
 
+<a id="pycross_pep517_build"></a>
+
+## pycross_pep517_build
+
+<pre>
+load("@rules_pycross//pycross:defs.bzl", "pycross_pep517_build")
+
+pycross_pep517_build(<a href="#pycross_pep517_build-name">name</a>, <a href="#pycross_pep517_build-deps">deps</a>, <a href="#pycross_pep517_build-builder">builder</a>, <a href="#pycross_pep517_build-config_settings">config_settings</a>, <a href="#pycross_pep517_build-mixins">mixins</a>, <a href="#pycross_pep517_build-path_tools">path_tools</a>, <a href="#pycross_pep517_build-pkg_config_files">pkg_config_files</a>,
+                     <a href="#pycross_pep517_build-sdist">sdist</a>, <a href="#pycross_pep517_build-sdist_python_paths">sdist_python_paths</a>)
+</pre>
+
+
+
+**ATTRIBUTES**
+
+
+| Name  | Description | Type | Mandatory | Default |
+| :------------- | :------------- | :------------- | :------------- | :------------- |
+| <a id="pycross_pep517_build-name"></a>name |  A unique name for this target.   | <a href="https://bazel.build/concepts/labels#target-names">Name</a> | required |  |
+| <a id="pycross_pep517_build-deps"></a>deps |  -   | <a href="https://bazel.build/concepts/labels">List of labels</a> | optional |  `[]`  |
+| <a id="pycross_pep517_build-builder"></a>builder |  -   | <a href="https://bazel.build/concepts/labels">Label</a> | required |  |
+| <a id="pycross_pep517_build-config_settings"></a>config_settings |  -   | <a href="https://bazel.build/rules/lib/dict">Dictionary: String -> List of strings</a> | optional |  `{}`  |
+| <a id="pycross_pep517_build-mixins"></a>mixins |  -   | <a href="https://bazel.build/concepts/labels">List of labels</a> | optional |  `[]`  |
+| <a id="pycross_pep517_build-path_tools"></a>path_tools |  -   | <a href="https://bazel.build/concepts/labels">List of labels</a> | optional |  `[]`  |
+| <a id="pycross_pep517_build-pkg_config_files"></a>pkg_config_files |  -   | <a href="https://bazel.build/concepts/labels">List of labels</a> | optional |  `[]`  |
+| <a id="pycross_pep517_build-sdist"></a>sdist |  -   | <a href="https://bazel.build/concepts/labels">Label</a> | required |  |
+| <a id="pycross_pep517_build-sdist_python_paths"></a>sdist_python_paths |  Sdist-relative paths to add to PYTHONPATH during the build (e.g., vendored build utilities).   | List of strings | optional |  `[]`  |
+
+
 <a id="pycross_poetry_lock_model"></a>
 
 ## pycross_poetry_lock_model
@@ -93,6 +131,29 @@ pycross_poetry_lock_model(<a href="#pycross_poetry_lock_model-name">name</a>, <a
 | <a id="pycross_poetry_lock_model-lock_file"></a>lock_file |  The poetry.lock file.   | <a href="https://bazel.build/concepts/labels">Label</a> | required |  |
 | <a id="pycross_poetry_lock_model-optional_groups"></a>optional_groups |  List of optional dependency groups to install.   | List of strings | optional |  `[]`  |
 | <a id="pycross_poetry_lock_model-project_file"></a>project_file |  The pyproject.toml file.   | <a href="https://bazel.build/concepts/labels">Label</a> | required |  |
+
+
+<a id="pycross_repaired_wheel"></a>
+
+## pycross_repaired_wheel
+
+<pre>
+load("@rules_pycross//pycross:defs.bzl", "pycross_repaired_wheel")
+
+pycross_repaired_wheel(<a href="#pycross_repaired_wheel-name">name</a>, <a href="#pycross_repaired_wheel-native_deps">native_deps</a>, <a href="#pycross_repaired_wheel-target_environment">target_environment</a>, <a href="#pycross_repaired_wheel-wheel">wheel</a>)
+</pre>
+
+
+
+**ATTRIBUTES**
+
+
+| Name  | Description | Type | Mandatory | Default |
+| :------------- | :------------- | :------------- | :------------- | :------------- |
+| <a id="pycross_repaired_wheel-name"></a>name |  A unique name for this target.   | <a href="https://bazel.build/concepts/labels#target-names">Name</a> | required |  |
+| <a id="pycross_repaired_wheel-native_deps"></a>native_deps |  Native dependencies providing shared libraries to bundle.   | <a href="https://bazel.build/concepts/labels">List of labels</a> | optional |  `[]`  |
+| <a id="pycross_repaired_wheel-target_environment"></a>target_environment |  The target environment mapping JSON (resolved dynamically via alias filegroup).   | <a href="https://bazel.build/concepts/labels">Label</a> | optional |  `"@pycross_environments//:current"`  |
+| <a id="pycross_repaired_wheel-wheel"></a>wheel |  The input wheel to repair.   | <a href="https://bazel.build/concepts/labels">Label</a> | required |  |
 
 
 <a id="pycross_target_environment"></a>
@@ -154,39 +215,6 @@ pycross_uv_lock_model(<a href="#pycross_uv_lock_model-name">name</a>, <a href="#
 | <a id="pycross_uv_lock_model-require_static_urls"></a>require_static_urls |  Require that the lock file is created with --static-urls.   | Boolean | optional |  `True`  |
 
 
-<a id="pycross_wheel_build"></a>
-
-## pycross_wheel_build
-
-<pre>
-load("@rules_pycross//pycross:defs.bzl", "pycross_wheel_build")
-
-pycross_wheel_build(<a href="#pycross_wheel_build-name">name</a>, <a href="#pycross_wheel_build-deps">deps</a>, <a href="#pycross_wheel_build-data">data</a>, <a href="#pycross_wheel_build-build_env">build_env</a>, <a href="#pycross_wheel_build-config_settings">config_settings</a>, <a href="#pycross_wheel_build-copts">copts</a>, <a href="#pycross_wheel_build-linkopts">linkopts</a>, <a href="#pycross_wheel_build-native_deps">native_deps</a>,
-                    <a href="#pycross_wheel_build-path_tools">path_tools</a>, <a href="#pycross_wheel_build-post_build_hooks">post_build_hooks</a>, <a href="#pycross_wheel_build-pre_build_hooks">pre_build_hooks</a>, <a href="#pycross_wheel_build-sdist">sdist</a>, <a href="#pycross_wheel_build-target_environment">target_environment</a>)
-</pre>
-
-
-
-**ATTRIBUTES**
-
-
-| Name  | Description | Type | Mandatory | Default |
-| :------------- | :------------- | :------------- | :------------- | :------------- |
-| <a id="pycross_wheel_build-name"></a>name |  A unique name for this target.   | <a href="https://bazel.build/concepts/labels#target-names">Name</a> | required |  |
-| <a id="pycross_wheel_build-deps"></a>deps |  A list of Python build dependencies for the wheel.   | <a href="https://bazel.build/concepts/labels">List of labels</a> | optional |  `[]`  |
-| <a id="pycross_wheel_build-data"></a>data |  Additional data and dependencies used by the build.   | <a href="https://bazel.build/concepts/labels">List of labels</a> | optional |  `[]`  |
-| <a id="pycross_wheel_build-build_env"></a>build_env |  Environment variables passed to the sdist build. Values are subject to 'Make variable', location, and build_cwd_token expansion.   | <a href="https://bazel.build/rules/lib/dict">Dictionary: String -> String</a> | optional |  `{}`  |
-| <a id="pycross_wheel_build-config_settings"></a>config_settings |  PEP 517 config settings passed to the sdist build. Values are subject to 'Make variable', location, and build_cwd_token expansion.   | <a href="https://bazel.build/rules/lib/dict">Dictionary: String -> List of strings</a> | optional |  `{}`  |
-| <a id="pycross_wheel_build-copts"></a>copts |  Additional C compiler options.   | List of strings | optional |  `[]`  |
-| <a id="pycross_wheel_build-linkopts"></a>linkopts |  Additional C linker options.   | List of strings | optional |  `[]`  |
-| <a id="pycross_wheel_build-native_deps"></a>native_deps |  A list of native build dependencies (CcInfo) for the wheel.   | <a href="https://bazel.build/concepts/labels">List of labels</a> | optional |  `[]`  |
-| <a id="pycross_wheel_build-path_tools"></a>path_tools |  A mapping of binaries to names that are placed in PATH when building the sdist.   | <a href="https://bazel.build/rules/lib/dict">Dictionary: Label -> String</a> | optional |  `{}`  |
-| <a id="pycross_wheel_build-post_build_hooks"></a>post_build_hooks |  A list of binaries that are executed after the wheel is built.   | <a href="https://bazel.build/concepts/labels">List of labels</a> | optional |  `[]`  |
-| <a id="pycross_wheel_build-pre_build_hooks"></a>pre_build_hooks |  A list of binaries that are executed prior to building the sdist.   | <a href="https://bazel.build/concepts/labels">List of labels</a> | optional |  `[]`  |
-| <a id="pycross_wheel_build-sdist"></a>sdist |  The sdist file.   | <a href="https://bazel.build/concepts/labels">Label</a> | required |  |
-| <a id="pycross_wheel_build-target_environment"></a>target_environment |  The target environment to build for.   | <a href="https://bazel.build/concepts/labels">Label</a> | optional |  `None`  |
-
-
 <a id="pycross_wheel_library"></a>
 
 ## pycross_wheel_library
@@ -212,28 +240,6 @@ pycross_wheel_library(<a href="#pycross_wheel_library-name">name</a>, <a href="#
 | <a id="pycross_wheel_library-post_install_patches"></a>post_install_patches |  A list of patches to apply after installation.   | <a href="https://bazel.build/concepts/labels">List of labels</a> | optional |  `[]`  |
 | <a id="pycross_wheel_library-python_version"></a>python_version |  The python version required for this wheel ('PY2' or 'PY3')   | String | optional |  `""`  |
 | <a id="pycross_wheel_library-wheel"></a>wheel |  The wheel file.   | <a href="https://bazel.build/concepts/labels">Label</a> | required |  |
-
-
-<a id="pycross_wheel_zipimport_library"></a>
-
-## pycross_wheel_zipimport_library
-
-<pre>
-load("@rules_pycross//pycross:defs.bzl", "pycross_wheel_zipimport_library")
-
-pycross_wheel_zipimport_library(<a href="#pycross_wheel_zipimport_library-name">name</a>, <a href="#pycross_wheel_zipimport_library-deps">deps</a>, <a href="#pycross_wheel_zipimport_library-wheel">wheel</a>)
-</pre>
-
-
-
-**ATTRIBUTES**
-
-
-| Name  | Description | Type | Mandatory | Default |
-| :------------- | :------------- | :------------- | :------------- | :------------- |
-| <a id="pycross_wheel_zipimport_library-name"></a>name |  A unique name for this target.   | <a href="https://bazel.build/concepts/labels#target-names">Name</a> | required |  |
-| <a id="pycross_wheel_zipimport_library-deps"></a>deps |  A list of this wheel's Python library dependencies.   | <a href="https://bazel.build/concepts/labels">List of labels</a> | optional |  `[]`  |
-| <a id="pycross_wheel_zipimport_library-wheel"></a>wheel |  The wheel file.   | <a href="https://bazel.build/concepts/labels">Label</a> | required |  |
 
 
 <a id="PycrossWheelInfo"></a>
@@ -284,6 +290,60 @@ Annotations to apply to individual packages.
 **RETURNS**
 
 str: A json encoded string of the provided content.
+
+
+<a id="pycross_console_script_binary"></a>
+
+## pycross_console_script_binary
+
+<pre>
+load("@rules_pycross//pycross:defs.bzl", "pycross_console_script_binary")
+
+pycross_console_script_binary(<a href="#pycross_console_script_binary-name">name</a>, <a href="#pycross_console_script_binary-wheel">wheel</a>, <a href="#pycross_console_script_binary-script">script</a>, <a href="#pycross_console_script_binary-deps">deps</a>, <a href="#pycross_console_script_binary-kwargs">**kwargs</a>)
+</pre>
+
+Exposes a console script from a wheel as a py_binary target.
+
+**PARAMETERS**
+
+
+| Name  | Description | Default Value |
+| :------------- | :------------- | :------------- |
+| <a id="pycross_console_script_binary-name"></a>name |  Name of the resulting py_binary target.   |  none |
+| <a id="pycross_console_script_binary-wheel"></a>wheel |  Label of the wheel file (.whl) containing the entry_points.txt.   |  none |
+| <a id="pycross_console_script_binary-script"></a>script |  The name of the console script to expose (e.g., "ninja").   |  none |
+| <a id="pycross_console_script_binary-deps"></a>deps |  Dependencies for the py_binary. This should include the pycross_wheel_library target for the wheel so the script's code is available.   |  `[]` |
+| <a id="pycross_console_script_binary-kwargs"></a>kwargs |  Additional arguments passed to py_binary.   |  none |
+
+
+<a id="pycross_wheel_build"></a>
+
+## pycross_wheel_build
+
+<pre>
+load("@rules_pycross//pycross:defs.bzl", "pycross_wheel_build")
+
+pycross_wheel_build(<a href="#pycross_wheel_build-name">name</a>, <a href="#pycross_wheel_build-native_deps">native_deps</a>, <a href="#pycross_wheel_build-copts">copts</a>, <a href="#pycross_wheel_build-linkopts">linkopts</a>, <a href="#pycross_wheel_build-post_build_hooks">post_build_hooks</a>, <a href="#pycross_wheel_build-kwargs">**kwargs</a>)
+</pre>
+
+Builds a Python wheel from a source distribution.
+
+This macro wraps pycross_pep517_build with automatic CC toolchain
+setup and wheel repair. When native_deps are present, the built
+wheel is automatically repaired to bundle shared libraries.
+
+
+**PARAMETERS**
+
+
+| Name  | Description | Default Value |
+| :------------- | :------------- | :------------- |
+| <a id="pycross_wheel_build-name"></a>name |  The target name.   |  none |
+| <a id="pycross_wheel_build-native_deps"></a>native_deps |  List of native dependencies (CcInfo).   |  `[]` |
+| <a id="pycross_wheel_build-copts"></a>copts |  Additional C compiler options.   |  `[]` |
+| <a id="pycross_wheel_build-linkopts"></a>linkopts |  Additional C linker options.   |  `[]` |
+| <a id="pycross_wheel_build-post_build_hooks"></a>post_build_hooks |  Deprecated. Ignored; repair is automatic when native_deps are present.   |  `[]` |
+| <a id="pycross_wheel_build-kwargs"></a>kwargs |  Additional arguments to pass to pycross_pep517_build.   |  none |
 
 
 <a id="pypi_file"></a>

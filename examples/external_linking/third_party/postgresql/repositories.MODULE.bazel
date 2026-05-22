@@ -20,6 +20,10 @@ http_archive(
     patch_cmds = [
         "sed -i.bak 's/cross_compiling=no/cross_compiling=yes/g' configure",
         "sed -i.bak 's/cross_compiling=maybe/cross_compiling=yes/g' configure",
+        "sed -i 's/as_fn_error $? \"bison not found\"/echo \"bison not found (bypassed)\"/g' configure",
+        "sed -i 's/as_fn_error $? \"flex not found\"/echo \"flex not found (bypassed)\"/g' configure",
+        "find . -name '*.l' -exec sh -c 'touch -c \"${1%.l}.c\"' _ {} \\;",
+        "find . -name '*.y' -exec sh -c 'touch -c \"${1%.y}.c\" \"${1%.y}.h\"' _ {} \\;",
 
         # Sanitize CONFIGURE_ARGS in pg_config.h
         "sed -i.bak 's/#define CONFIGURE_ARGS \"$ac_configure_args\"/#define CONFIGURE_ARGS \"unavailable\"/g' configure",
@@ -33,7 +37,7 @@ http_archive(
         "rm src/common/Makefile.bak",
         "rm src/makefiles/Makefile.linux.bak",
     ],
-    sha256 = "64fdf23d734afad0dfe4077daca96ac51dcd697e68ae2d3d4ca6c45cb14e21ae",
-    strip_prefix = "postgresql-15.1",
-    urls = ["https://ftp.postgresql.org/pub/source/v15.1/postgresql-15.1.tar.bz2"],
+    sha256 = "d95663fbbf3a80f81a9d98d895266bdcb74ba274bcc04ef6d76630a72dee016f",
+    strip_prefix = "postgresql-18.3",
+    urls = ["https://ftp.postgresql.org/pub/source/v18.3/postgresql-18.3.tar.bz2"],
 )

@@ -11,7 +11,7 @@ def query(arg: str) -> Optional[str]:
     lib_dir = build_root / "lib"
 
     # Search for the actual postgresql include path.
-    include_paths = [Path(p) for p in os.environ["PYCROSS_INCLUDE_PATH"].split(":")]
+    include_paths = [Path(p) for p in os.environ.get("PYCROSS_INCLUDE_PATH", "").split(":") if p]
     server_include_dir = ""
     for p in include_paths:
         if (p / "pg_config.h").is_file():
@@ -67,4 +67,11 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except Exception:
+        import traceback
+
+        tb = traceback.format_exc().replace("\n", " | ")
+        sys.stderr.write(f"PG_CONFIG_ERROR: {tb}\n")
+        sys.exit(1)

@@ -77,10 +77,3 @@ lock_import.package(
 # The actual repos are loaded from the lock_repos extension.
 lock_repos = use_extension("@rules_pycross//pycross/extensions:lock_repos.bzl", "lock_repos")
 use_repo(lock_repos, "uv_deps")
-
-lock_file = use_extension("@rules_pycross//pycross/extensions:lock_file.bzl", "lock_file")
-lock_file.instantiate(
-    name = "uv_lock_file",
-    lock_file = "//:uv_lock.bzl",
-)
-use_repo(lock_file, "uv_lock_file")

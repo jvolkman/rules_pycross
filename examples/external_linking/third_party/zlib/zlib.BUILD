@@ -56,6 +56,12 @@ cc_library(
     hdrs = _ZLIB_PREFIXED_HEADERS,
     copts = select({
         "@bazel_tools//src/conditions:windows": [],
+        "@platforms//os:macos": [
+            "-Wno-unused-variable",
+            "-Wno-implicit-function-declaration",
+            "-Wno-deprecated-non-prototype",
+            "-Dfdopen=fdopen",
+        ],
         "//conditions:default": [
             "-Wno-unused-variable",
             "-Wno-implicit-function-declaration",
