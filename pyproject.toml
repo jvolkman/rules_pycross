@@ -2,7 +2,7 @@
 name = "rules_pycross"
 version = "0.0"
 authors = []
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 
 [project.optional-dependencies]
 # core dependencies are required by repo rules
@@ -12,7 +12,7 @@ core = [
     "packaging==26.2",
     "pip==26.1.1",
     "poetry-core==2.4.0",
-    "tomli==2.4.1",
+    "tomli-w==1.1.0",
 ]
 build = [
     "build==1.5.0",
