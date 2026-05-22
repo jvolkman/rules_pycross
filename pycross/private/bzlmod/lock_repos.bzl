@@ -5,6 +5,8 @@ load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_file")
 load("@lock_import_repos_hub//:locks.bzl", lock_import_locks = "locks")
 load("//pycross/private:package_repo.bzl", "package_repo")
 load("//pycross/private:pypi_file.bzl", "pypi_file")
+load("//pycross/private:util.bzl", "sanitize_name")
+load("//pycross/private/bzlmod:sdist_repo.bzl", "pycross_sdist_repo")
 load(":tag_attrs.bzl", "CREATE_REPOS_ATTRS")
 
 # buildifier: disable=print
@@ -47,9 +49,9 @@ def _lock_repos_impl(module_ctx):
                 repo_remote_files[key] = all_remote_files[key]
                 continue
 
-            # Use the key as our repo name, but replace its / with _
-            remote_file_repo = "pypi_{}".format(key.replace("/", "_").replace("+", "_"))
-            remote_file_label = "@{}//file".format(remote_file_repo)
+            # Use the key as our repo name, but replace its / with _ and sanitize for Bazel
+            remote_file_repo = "pypi_{}".format(sanitize_name(key.replace("/", "_")))
+            remote_file_label = "@{}//file:{}".format(remote_file_repo, file["name"])
 
             urls = file.get("urls", [])
             if urls:
@@ -76,6 +78,54 @@ def _lock_repos_impl(module_ctx):
 
             repo_remote_files[key] = remote_file_label
             all_remote_files[key] = remote_file_label
+
+        # Pre-calculate known packages in this lock file to filter sdist build_requires
+        known_packages = [sanitize_name(key.split("@")[0]) for key in resolved_lock.get("packages", {})]
+
+        # Instantiate sdist repos for packages requiring source builds
+        for pkg_key, pkg in resolved_lock.get("packages", {}).items():
+            if pkg.get("build_target"):
+                # User provided a custom build target; skip auto-generating an sdist repo.
+                continue
+
+            sdist_file = pkg.get("sdist_file")
+            if not sdist_file:
+                continue
+
+            sdist_file_key = sdist_file["key"]
+            sdist_label = repo_remote_files[sdist_file_key]
+
+            # For each environment where the package resolves to an sdist,
+            # we must create a separate sdist repository to build it.
+            for env_name, env_file_ref in pkg.get("environment_files", {}).items():
+                # If the package resolves to an sdist in this environment (indicated by the sdist file key
+                # being the resolved target or if it matches the sdist file key)
+                if env_file_ref.get("key") != sdist_file_key:
+                    # This environment uses a pre-built wheel, not the sdist.
+                    continue
+
+                # Collect dependencies for this environment
+                deps = []
+                for dep in pkg.get("common_dependencies", []):
+                    dep_name = dep.split("@")[0]
+                    deps.append("@{}//:{}".format(repo_name, sanitize_name(dep_name)))
+                for dep in pkg.get("environment_dependencies", {}).get(env_name, []):
+                    dep_name = dep.split("@")[0]
+                    deps.append("@{}//:{}".format(repo_name, sanitize_name(dep_name)))
+
+                sdist_repo_name = "{}_sdist_{}_{}".format(
+                    repo_name,
+                    sanitize_name(pkg_key),
+                    sanitize_name(env_name),
+                )
+
+                pycross_sdist_repo(
+                    name = sdist_repo_name,
+                    sdist = sdist_label,
+                    deps = deps,
+                    known_packages = known_packages,
+                    lock_repo = repo_name,
+                )
 
         package_repo(
             name = repo_name,

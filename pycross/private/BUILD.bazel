@@ -139,6 +139,14 @@ bzl_library(
 )
 
 bzl_library(
+    name = "wheel_transform",
+    srcs = ["wheel_transform.bzl"],
+    deps = [
+        ":providers",
+    ],
+)
+
+bzl_library(
     name = "wheel_library",
     srcs = ["wheel_library.bzl"],
     deps = [

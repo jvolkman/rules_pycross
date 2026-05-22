@@ -309,6 +309,9 @@ def resolve_single_version(
 
 
 def collect_package_annotations(args: Any, lock_model: RawLockSet) -> Dict[PackageKey, PackageAnnotations]:
+    if not args.annotations_file:
+        return {}
+
     annotations: Dict[PackageKey, PackageAnnotations] = defaultdict(PackageAnnotations)
     all_package_keys_by_canonical_name: Dict[NormalizedName, List[PackageKey]] = defaultdict(list)
     for package in lock_model.packages.values():
