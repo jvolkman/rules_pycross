@@ -20,10 +20,9 @@ bzl_library(
     deps = [
         ":tag_attrs",
         "//pycross/private:internal_repo",
-        "//pycross/private:pycross_deps.lock",
-        "//pycross/private:pycross_deps_core.lock",
         "@bazel_features//:features",
-    ],
+        "@toml.bzl//:toml",
+    ] + REPO_HTTP_DEPS,
 )
 
 bzl_library(
@@ -63,12 +62,19 @@ bzl_library(
     name = "lock_repos",
     srcs = ["lock_repos.bzl"],
     deps = [
+        ":sdist_repo",
         ":tag_attrs",
         "//pycross/private:package_repo",
         "//pycross/private:pypi_file",
         "@bazel_features//:features",
         "@lock_import_repos_hub//:locks.bzl",
     ] + REPO_HTTP_DEPS,
+)
+
+bzl_library(
+    name = "sdist_repo",
+    srcs = ["sdist_repo.bzl"],
+    deps = ["//pycross/private:internal_repo"],
 )
 
 bzl_library(

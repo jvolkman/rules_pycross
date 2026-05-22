@@ -55,6 +55,7 @@ cc_library(
         "lib/zstd.h",
         "lib/zstd_errors.h",
     ],
+    includes = ["lib"],
     linkopts = [
         "-pthread",
     ],

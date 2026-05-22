@@ -24,6 +24,7 @@ python.toolchain(
 )
 python.toolchain(python_version = "3.10.11")
 python.toolchain(python_version = "3.12.0")
+python.toolchain(python_version = "3.14.0")
 use_repo(python, "python_versions")
 
 # rules_pycross

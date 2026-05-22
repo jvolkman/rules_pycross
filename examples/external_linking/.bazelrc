@@ -9,5 +9,8 @@ build --action_env=RULES_PYCROSS_DEBUG=1
 
 build -c opt
 build --strip=always
+build --@rules_cc//cc/toolchains/args/archiver_flags:use_libtool_on_macos=False
+
+common --disk_cache .cache
 
 try-import %workspace%/.bazelrc.user

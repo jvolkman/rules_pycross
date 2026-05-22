@@ -1,15 +1,9 @@
-bazel_dep(name = "hermetic_cc_toolchain", version = "3.1.1")
-bazel_dep(name = "platforms", version = "0.0.11")
-bazel_dep(name = "rules_cc", version = "0.1.0")
-bazel_dep(name = "rules_python", version = "1.1.0")
-bazel_dep(name = "rules_foreign_cc")
-single_version_override(
-    module_name = "rules_foreign_cc",
-    version = "0.13.0",
-    # patches = ["//patches:rules_foreign_cc.iconv.patch"],
-    # patch_strip = 1,
-)
-
+bazel_dep(name = "llvm", version = "0.8.3")
+bazel_dep(name = "platforms", version = "1.0.0")
+bazel_dep(name = "rules_cc", version = "0.2.18")
+bazel_dep(name = "rules_python", version = "2.0.0")
+bazel_dep(name = "rules_foreign_cc", version = "0.15.1")
+bazel_dep(name = "bazel_skylib", version = "1.9.0")
 bazel_dep(name = "rules_pycross", version = "0.0.0")
 local_path_override(
     module_name = "rules_pycross",
@@ -26,7 +20,7 @@ include("//third_party/zlib:repositories.MODULE.bazel")
 python = use_extension("@rules_python//python/extensions:python.bzl", "python")
 python.toolchain(
     is_default = True,
-    python_version = "3.10.8",
+    python_version = "3.14.2",
 )
 use_repo(python, "python_versions")
 
@@ -39,30 +33,39 @@ pycross.configure_environments(
         "x86_64-unknown-linux-musl",
     ],
     python_versions = [
-        "3.10.8",
+        "3.14.2",
     ],
 )
+
+# Workaround for Bazel local_path_override bug: the main repository must be able to
+# see the toolchains repo because register_toolchains in rules_pycross is resolved here.
+toolchains = use_extension("@rules_pycross//pycross/private/bzlmod:toolchains.bzl", "toolchains")
+use_repo(toolchains, "pycross_toolchains")
+
+environments = use_extension("@rules_pycross//pycross/extensions:environments.bzl", "environments")
+use_repo(environments, "pycross_environments")
 
 # Use the lock_import extension to import external lock files.
 lock_import = use_extension("@rules_pycross//pycross/extensions:lock_import.bzl", "lock_import")
 
-# Import from PDM
-lock_import.import_pdm(
+# Import from uv
+lock_import.import_uv(
     default_alias_single_version = True,
-    lock_file = "//:pdm.lock",
+    lock_file = "//:uv.lock",
     project_file = "//:pyproject.toml",
-    repo = "pydeps",
+    repo = "uv",
 )
 lock_import.package(
     name = "numpy",
     always_build = True,
     build_dependencies = [
         "cython",
-        "setuptools",
-        "wheel",
+        "meson-python",
+        "meson",
+        "ninja",
     ],
     build_target = "@//deps/numpy",
-    repo = "pydeps",
+    repo = "uv",
 )
 lock_import.package(
     name = "pandas",
@@ -72,12 +75,12 @@ lock_import.package(
         "setuptools",
         "wheel",
     ],
-    repo = "pydeps",
+    repo = "uv",
 )
 lock_import.package(
     name = "psycopg2",
     build_target = "@//deps/psycopg2",
-    repo = "pydeps",
+    repo = "uv",
 )
 lock_import.package(
     name = "setproctitle",
@@ -86,18 +89,10 @@ lock_import.package(
         "setuptools",
         "wheel",
     ],
-    repo = "pydeps",
+    repo = "uv",
 )
 
 lock_repos = use_extension("@rules_pycross//pycross/extensions:lock_repos.bzl", "lock_repos")
-use_repo(lock_repos, "pydeps")
+use_repo(lock_repos, "uv")
 
-zig_toolchains = use_extension("@hermetic_cc_toolchain//toolchain:ext.bzl", "toolchains")
-use_repo(zig_toolchains, "zig_sdk")
-
-register_toolchains(
-    "@zig_sdk//toolchain:linux_amd64_gnu.2.19",
-    "@zig_sdk//toolchain:linux_arm64_gnu.2.28",
-    "@zig_sdk//toolchain:darwin_amd64",
-    "@zig_sdk//toolchain:darwin_arm64",
-)
+register_toolchains("@llvm//toolchain:all")

@@ -12,14 +12,11 @@ pycross_wheel_build(
     path_tools = {
         ":pg_config": "pg_config",
     },
-    post_build_hooks = [
-        "@rules_pycross//pycross/hooks:repair_wheel",
-    ],
-    sdist = "@pydeps//psycopg2:sdist",
+    sdist = "@uv//psycopg2:sdist",
     tags = ["manual"],
     deps = [
-        "@pydeps//:setuptools",
-        "@pydeps//:wheel",
+        "@uv//:setuptools",
+        "@uv//:wheel",
     ],
 )
 
