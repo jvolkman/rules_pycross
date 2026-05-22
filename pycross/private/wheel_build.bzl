@@ -179,14 +179,31 @@ def _expand_locations_and_vars(attribute_name, ctx, val):
     val = ctx.expand_make_variables(attribute_name, val, additional_substitutions)
     return val
 
+def _get_files_to_run(runtime):
+    return getattr(runtime, "interpreter_files_to_run", None)
+
+def _add_py_executable(args, flag, runtime):
+    files_to_run = _get_files_to_run(runtime)
+    if files_to_run and files_to_run.executable:
+        args.add(flag, files_to_run.executable.path)
+    elif runtime.interpreter_path:
+        args.add(flag, runtime.interpreter_path)
+    else:
+        args.add(flag, runtime.interpreter.path)
+
+def _add_py_runtime_tools(tools, runtime):
+    files_to_run = _get_files_to_run(runtime)
+    if files_to_run:
+        tools.append(files_to_run)
+    if runtime.files:
+        tools.append(runtime.files)
+
 def _handle_toolchains(ctx, args, tools):
     py_toolchain = ctx.toolchains[PYTHON_TOOLCHAIN_TYPE].py3_runtime
     cpp_toolchain = find_cpp_toolchain(ctx)
 
     if cpp_toolchain.all_files:
         tools.append(cpp_toolchain.all_files)
-    if py_toolchain.files:
-        tools.append(py_toolchain.files)
 
     # If a pycross toolchain is configured, we use that to get the exec and target Python.
     if PYCROSS_TOOLCHAIN_TYPE in ctx.toolchains and ctx.toolchains[PYCROSS_TOOLCHAIN_TYPE]:
@@ -199,14 +216,16 @@ def _handle_toolchains(ctx, args, tools):
             tools.append(pycross_info.exec_python_files)
         if pycross_info.target_python_files:
             tools.append(pycross_info.target_python_files)
+        if pycross_info.exec_python_files_to_run:
+            tools.append(pycross_info.exec_python_files_to_run)
+        if pycross_info.target_python_files_to_run:
+            tools.append(pycross_info.target_python_files_to_run)
 
         # Otherwise we use the configured Python toolchain.
     else:
-        executable = py_toolchain.interpreter_path
-        if not executable:
-            executable = py_toolchain.interpreter.path
-        args.add("--exec-python-executable", executable)
-        args.add("--target-python-executable", executable)
+        for arg in ["--exec-python-executable", "--target-python-executable"]:
+            _add_py_executable(args, arg, py_toolchain)
+        _add_py_runtime_tools(tools, py_toolchain)
 
 def _handle_sdist(ctx, args, inputs):  # -> PycrossWheelInfo
     inputs.append(ctx.file.sdist)

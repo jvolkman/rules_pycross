@@ -7,12 +7,22 @@ PycrossBuildExecRuntimeInfo = provider(
     doc = "Extended information about a (exec, target) Python interpreter pair.",
     fields = {
         "exec_python_files": "A depset containing all files for the exec interpreter.",
+        "exec_python_files_to_run": "Optional FilesToRunProvider for the exec interpreter.",
         "exec_python_executable": "The path to the exec Python interpreter, either absolute or relative to execroot.",
         "target_python_files": "A depset containing all files for the target interpreter.",
+        "target_python_files_to_run": "Optional FilesToRunProvider for the target interpreter.",
         "target_python_executable": "The path to the target Python interpreter, either absolute or relative to execroot.",
         "target_sys_path": "An array of system path directories (i.e., the value of sys.path from `python -m site`).",
     },
 )
+
+def _python_executable(runtime):
+    files_to_run = getattr(runtime, "interpreter_files_to_run", None)
+    if files_to_run and files_to_run.executable:
+        return files_to_run.executable.path
+    if runtime.interpreter_path:
+        return runtime.interpreter_path
+    return runtime.interpreter.path
 
 def _pycross_hermetic_toolchain_impl(ctx):
     exec_py_info = ctx.attr.exec_interpreter[PyRuntimeInfo]
@@ -20,9 +30,11 @@ def _pycross_hermetic_toolchain_impl(ctx):
 
     pycross_info = PycrossBuildExecRuntimeInfo(
         exec_python_files = exec_py_info.files,
-        exec_python_executable = exec_py_info.interpreter.path,
+        exec_python_files_to_run = getattr(exec_py_info, "interpreter_files_to_run", None),
+        exec_python_executable = _python_executable(exec_py_info),
         target_python_files = target_py_info.files,
-        target_python_executable = target_py_info.interpreter.path,
+        target_python_files_to_run = getattr(target_py_info, "interpreter_files_to_run", None),
+        target_python_executable = _python_executable(target_py_info),
         target_sys_path = None,
     )
 
