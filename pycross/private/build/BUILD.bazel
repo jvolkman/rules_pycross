@@ -14,6 +14,15 @@ bzl_library(
 )
 
 bzl_library(
+    name = "cc_pkg_config",
+    srcs = ["cc_pkg_config.bzl"],
+    deps = [
+        "//pycross/private:cc_toolchain_util",
+        "@rules_cc//cc/common",
+    ],
+)
+
+bzl_library(
     name = "hook_mixin",
     srcs = ["hook_mixin.bzl"],
     deps = [
