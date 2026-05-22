@@ -1,5 +1,10 @@
+# Public aliases for hook tools.
+#
+# This target provides backwards-compatibility for rules_pycross v1 users
+# who manually reference the repair_wheel hook.
+
 alias(
     name = "repair_wheel",
-    actual = "//pycross/private/tools/repairwheel:repair_wheel_hook",
+    actual = "//pycross/private/build/tools:repair_wheel_hook",
     visibility = ["//visibility:public"],
 )

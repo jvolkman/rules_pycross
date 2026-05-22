@@ -1,0 +1,60 @@
+load("@rules_pycross_internal//:python.bzl", "py_binary", "py_library")
+
+package(default_visibility = ["//pycross:__subpackages__"])
+
+py_library(
+    name = "builder_utils",
+    srcs = ["builder_utils.py"],
+    imports = ["../../../.."],
+    visibility = ["//visibility:public"],
+    deps = [
+        "@rules_pycross_internal//deps:build",
+        "@rules_pycross_internal//deps:packaging",
+    ],
+)
+
+py_library(
+    name = "meson_utils",
+    srcs = ["meson_utils.py"],
+    imports = ["../../../.."],
+    deps = [
+        ":builder_utils",
+    ],
+)
+
+py_binary(
+    name = "meson_builder",
+    srcs = ["meson_builder.py"],
+    imports = ["../../../.."],
+    visibility = ["//visibility:public"],
+    deps = [
+        ":builder_utils",
+        ":meson_utils",
+        "@rules_pycross_internal//deps:build",
+        "@rules_pycross_internal//deps:packaging",
+    ],
+)
+
+py_binary(
+    name = "setuptools_builder",
+    srcs = ["setuptools_builder.py"],
+    imports = ["../../../.."],
+    visibility = ["//visibility:public"],
+    deps = [
+        ":builder_utils",
+        "//pycross/private/build/tools/crossenv",
+        "@rules_pycross_internal//deps:build",
+        "@rules_pycross_internal//deps:packaging",
+    ],
+)
+
+py_binary(
+    name = "repair_wheel_hook",
+    srcs = [
+        "repair_wheel_hook.py",
+    ],
+    visibility = ["//visibility:public"],
+    deps = [
+        "@rules_pycross_internal//deps:repairwheel",
+    ],
+)

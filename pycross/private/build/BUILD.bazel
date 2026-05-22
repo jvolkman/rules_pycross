@@ -1,0 +1,58 @@
+load("@bazel_skylib//:bzl_library.bzl", "bzl_library")
+
+package(default_visibility = ["//pycross:__subpackages__"])
+
+bzl_library(
+    name = "cc_mixin",
+    srcs = ["cc_mixin.bzl"],
+    deps = [
+        "//pycross/private:cc_toolchain_util",
+        "//pycross/private:providers",
+        "@bazel_tools//tools/cpp:toolchain_utils.bzl",
+        "@rules_cc//cc/common",
+    ],
+)
+
+bzl_library(
+    name = "hook_mixin",
+    srcs = ["hook_mixin.bzl"],
+    deps = [
+        "//pycross/private:providers",
+    ],
+)
+
+bzl_library(
+    name = "pep517_build",
+    srcs = ["pep517_build.bzl"],
+    deps = [
+        ":transitions",
+        "//pycross/private:providers",
+        "@bazel_skylib//lib:paths",
+        "@rules_python//python:py_info_bzl",
+    ],
+)
+
+bzl_library(
+    name = "repaired_wheel",
+    srcs = ["repaired_wheel.bzl"],
+    deps = [
+        "//pycross/private:cc_toolchain_util",
+        "//pycross/private:providers",
+        "@rules_cc//cc/common",
+    ],
+)
+
+bzl_library(
+    name = "wheel_build",
+    srcs = ["wheel_build.bzl"],
+    deps = [
+        ":cc_mixin",
+        ":pep517_build",
+        ":repaired_wheel",
+    ],
+)
+
+bzl_library(
+    name = "transitions",
+    srcs = ["transitions.bzl"],
+)

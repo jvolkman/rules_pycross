@@ -12,21 +12,15 @@ py_library(
 )
 
 py_binary(
-    name = "bzl_lock_generator",
-    srcs = ["bzl_lock_generator.py"],
+    name = "toml_lock_generator",
+    srcs = ["toml_lock_generator.py"],
     imports = ["../../.."],
     visibility = ["//visibility:public"],
     deps = [
         ":args",
         ":raw_lock_resolver",
-        ":resolved_lock_renderer",
+        "@rules_pycross_internal//deps:tomli-w",
     ],
-)
-
-py_binary(
-    name = "extract_lock_repos",
-    srcs = ["extract_lock_repos.py"],
-    imports = ["../../.."],
 )
 
 py_binary(
@@ -40,17 +34,6 @@ py_binary(
         ":target_environment",
         "@rules_pycross_internal//deps:packaging",
         "@rules_pycross_internal//deps:pip",
-    ],
-)
-
-py_binary(
-    name = "resolved_lock_renderer",
-    srcs = ["resolved_lock_renderer.py"],
-    imports = ["../../.."],
-    visibility = ["//visibility:public"],
-    deps = [
-        ":args",
-        ":lock_model",
     ],
 )
 
@@ -109,7 +92,6 @@ py_binary(
     deps = [
         ":args",
         ":lock_model",
-        "@rules_pycross_internal//deps:tomli",
     ],
 )
 
@@ -121,7 +103,6 @@ py_binary(
     deps = [
         ":args",
         ":lock_model",
-        "@rules_pycross_internal//deps:tomli",
     ],
 )
 
@@ -134,7 +115,6 @@ py_binary(
         ":args",
         ":lock_model",
         "@rules_pycross_internal//deps:poetry-core",
-        "@rules_pycross_internal//deps:tomli",
     ],
 )
 
@@ -153,21 +133,6 @@ py_binary(
 )
 
 py_binary(
-    name = "wheel_builder",
-    srcs = ["wheel_builder.py"],
-    imports = ["../../.."],
-    visibility = ["//visibility:public"],
-    deps = [
-        ":args",
-        ":target_environment",
-        "//pycross/private/tools/crossenv",
-        "@rules_pycross_internal//deps:build",
-        "@rules_pycross_internal//deps:packaging",
-        "@rules_pycross_internal//deps:tomli",
-    ],
-)
-
-py_binary(
     name = "wheel_installer",
     srcs = ["wheel_installer.py"],
     imports = ["../../.."],
@@ -177,17 +142,5 @@ py_binary(
         ":installer",
         ":namespace_pkgs",
         "@patch-ng",
-    ],
-)
-
-py_binary(
-    name = "toml_lock_generator",
-    srcs = ["toml_lock_generator.py"],
-    imports = ["../../.."],
-    visibility = ["//visibility:public"],
-    deps = [
-        ":args",
-        ":raw_lock_resolver",
-        "@rules_pycross_internal//deps:tomli-w",
     ],
 )

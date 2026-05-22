@@ -4,6 +4,7 @@ import os
 import platform
 import pprint
 import re
+import shutil
 import subprocess
 import sys
 import sysconfig
@@ -14,7 +15,7 @@ from typing import Dict
 from typing import List
 from typing import Optional
 
-from pycross.private.tools.crossenv import utils
+from pycross.private.build.tools.crossenv import utils
 
 SYSCONFIG_DATA_NAME = "_pycross_sysconfig_data"
 
@@ -147,7 +148,14 @@ def guess_sysconfig_platform(uname: Uname, target_platform: str, macosx_deployme
 
 
 def determine_glibc_version(sysconfig_vars: Dict[str, Any]) -> Optional[str]:
-    cmd = sysconfig_vars["CC"].split() + sysconfig_vars["CFLAGS"].split()
+    cc_parts = sysconfig_vars.get("CC", "").split()
+    if not cc_parts:
+        return None
+    # Verify the compiler is actually executable on the host
+    if not shutil.which(cc_parts[0]):
+        return None
+
+    cmd = cc_parts + sysconfig_vars.get("CFLAGS", "").split()
     with tempfile.TemporaryDirectory() as tmp:
         tmp = Path(tmp)
         teller_src = tmp / "teller.cc"
@@ -200,7 +208,7 @@ def build_context(
 
     target_context = TargetContext(
         abiflags=sysconfig_vars.get("ABIFLAGS"),
-        effective_glibc=determine_glibc_version(sysconfig_vars),
+        effective_glibc=determine_glibc_version(sysconfig_vars) if target_uname.sysname.lower() == "linux" else None,
         home=str(home),
         macosx_deployment_target=macosx_deployment_target,
         manylinux_tags=manylinux_tags,
