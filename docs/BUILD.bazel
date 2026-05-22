@@ -14,7 +14,6 @@ stardoc(
     ],
 )
 
-
 # ext_environments
 stardoc(
     name = "ext_environments_gen",
@@ -25,7 +24,6 @@ stardoc(
         "@rules_cc//cc:find_cc_toolchain_bzl",
     ],
 )
-
 
 # ext_lock_import
 stardoc(

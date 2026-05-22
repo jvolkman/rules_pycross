@@ -8,21 +8,28 @@ load("//pycross/private:providers.bzl", _PycrossWheelInfo = "PycrossWheelInfo")
 load("//pycross/private:pypi_file.bzl", _pypi_file = "pypi_file")
 load("//pycross/private:target_environment.bzl", _pycross_target_environment = "pycross_target_environment")
 load("//pycross/private:uv_lock_model.bzl", _pycross_uv_lock_model = "pycross_uv_lock_model")
-load("//pycross/private:wheel_build.bzl", _pycross_wheel_build = "pycross_wheel_build")
 load("//pycross/private:wheel_library.bzl", _pycross_wheel_library = "pycross_wheel_library")
-load("//pycross/private:wheel_zipimport_library.bzl", _pycross_wheel_zipimport_library = "pycross_wheel_zipimport_library")
+load("//pycross/private/build:cc_mixin.bzl", _pycross_cc_mixin = "pycross_cc_mixin")
+load("//pycross/private/build:hook_mixin.bzl", _pycross_hook_mixin = "pycross_hook_mixin")
+load("//pycross/private/build:pep517_build.bzl", _pycross_pep517_build = "pycross_pep517_build")
+load("//pycross/private/build:repaired_wheel.bzl", _pycross_repaired_wheel = "pycross_repaired_wheel")
+load("//pycross/private/build:wheel_build.bzl", _pycross_wheel_build = "pycross_wheel_build")
 
 PycrossWheelInfo = _PycrossWheelInfo
 
 package_annotation = _package_annotation
 
+pycross_cc_mixin = _pycross_cc_mixin
+pycross_hook_mixin = _pycross_hook_mixin
+pycross_pep517_build = _pycross_pep517_build
 pycross_pdm_lock_model = _pycross_pdm_lock_model
 pycross_poetry_lock_model = _pycross_poetry_lock_model
 pycross_target_environment = _pycross_target_environment
 pycross_uv_lock_model = _pycross_uv_lock_model
+pycross_console_script_binary = _pycross_console_script_binary
+
 pycross_wheel_build = _pycross_wheel_build
 pycross_wheel_library = _pycross_wheel_library
-pycross_wheel_zipimport_library = _pycross_wheel_zipimport_library
-pycross_console_script_binary = _pycross_console_script_binary
+pycross_repaired_wheel = _pycross_repaired_wheel
 
 pypi_file = _pypi_file

@@ -1,6 +1,6 @@
 load("@rules_pycross_internal//:python.bzl", "py_binary", "py_library")
 
-package(default_visibility = ["//pycross/private/tools:__subpackages__"])
+package(default_visibility = ["//pycross/private:__subpackages__"])
 
 py_library(
     name = "crossenv_lib",
@@ -10,9 +10,9 @@ py_library(
         "utils.py",
     ],
     data = [
-        "//pycross/private/tools/crossenv/scripts",
+        "//pycross/private/build/tools/crossenv/scripts",
     ],
-    imports = ["../../../.."],
+    imports = ["../../../../.."],
 )
 
 py_binary(
@@ -21,7 +21,7 @@ py_binary(
         "__init__.py",
         "__main__.py",
     ],
-    imports = ["../../../.."],
+    imports = ["../../../../.."],
     main = "__main__.py",
     deps = [":crossenv_lib"],
 )

@@ -1,0 +1,21 @@
+load("@bazel_skylib//:bzl_library.bzl", "bzl_library")
+
+package(default_visibility = ["//visibility:public"])
+
+bzl_library(
+    name = "meson",
+    srcs = ["meson.bzl"],
+    deps = ["//pycross:defs"],
+)
+
+bzl_library(
+    name = "setuptools",
+    srcs = ["setuptools.bzl"],
+    deps = ["//pycross:defs"],
+)
+
+bzl_library(
+    name = "cmake",
+    srcs = ["cmake.bzl"],
+    deps = ["//pycross:defs"],
+)
