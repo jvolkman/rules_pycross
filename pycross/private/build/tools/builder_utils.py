@@ -658,6 +658,12 @@ def apply_sysconfig_overrides(ctx: BuildContext) -> None:
 
             sys.meta_path.insert(0, SetuptoolsPatchFinder())
 
+            if sys.version_info >= (3, 12):
+                try:
+                    import _distutils_hack
+                    _distutils_hack.add_shim()
+                except ImportError:
+                    pass
             """)
         )
 
