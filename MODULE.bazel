@@ -12,11 +12,12 @@ bazel_dep(name = "rules_cc", version = "0.2.18")
 bazel_dep(name = "bazel_skylib", version = "1.9.0")
 bazel_dep(name = "platforms", version = "0.0.4")
 bazel_dep(name = "rules_python", version = "1.0.0")
+bazel_dep(name = "toml.bzl", version = "0.4.1")
 
 bazel_dep(name = "buildifier_prebuilt", version = "8.2.1", dev_dependency = True)
 
 # Change this value to set the Python version we use in our repo venv.
-PYTHON_VERSION = "3.12"
+PYTHON_VERSION = "3.13"
 
 py_underscore_version = PYTHON_VERSION.replace(".", "_")
 
@@ -37,17 +38,9 @@ pycross.configure_interpreter(
     python_interpreter_target = "@python_%s_host//:python" % py_underscore_version,
 )
 pycross.configure_toolchains()
-
-# TODO(jvolkman): Is there an easy way to not have to list these file repos?
 use_repo(
     pycross,
     "rules_pycross_internal",
-    "rules_pycross_internal_deps_wheel_dacite_1.9.2_py3_none_any",
-    "rules_pycross_internal_deps_wheel_installer_1.0.0_py3_none_any",
-    "rules_pycross_internal_deps_wheel_packaging_26.2_py3_none_any",
-    "rules_pycross_internal_deps_wheel_pip_26.1.1_py3_none_any",
-    "rules_pycross_internal_deps_wheel_poetry_core_2.4.0_py3_none_any",
-    "rules_pycross_internal_deps_wheel_tomli_2.4.1_py3_none_any",
 )
 
 toolchains = use_extension("@rules_pycross//pycross/private/bzlmod:toolchains.bzl", "toolchains")

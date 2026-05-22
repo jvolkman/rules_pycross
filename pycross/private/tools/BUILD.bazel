@@ -179,3 +179,15 @@ py_binary(
         "@patch-ng",
     ],
 )
+
+py_binary(
+    name = "toml_lock_generator",
+    srcs = ["toml_lock_generator.py"],
+    imports = ["../../.."],
+    visibility = ["//visibility:public"],
+    deps = [
+        ":args",
+        ":raw_lock_resolver",
+        "@rules_pycross_internal//deps:tomli-w",
+    ],
+)
