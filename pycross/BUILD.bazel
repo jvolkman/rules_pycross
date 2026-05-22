@@ -3,7 +3,6 @@ load("@bazel_skylib//:bzl_library.bzl", "bzl_library")
 # For stardoc to reference the files
 exports_files([
     "defs.bzl",
-    "workspace.bzl",
 ])
 
 toolchain_type(
@@ -12,24 +11,10 @@ toolchain_type(
 )
 
 bzl_library(
-    name = "repositories",
-    srcs = ["repositories.bzl"],
-    visibility = ["//visibility:public"],
-    deps = [
-        "//pycross/private:internal_repo",
-        "//pycross/private:pycross_deps_core_lock",
-        "//pycross/private:pycross_deps_lock",
-        "@bazel_tools//tools/build_defs/repo:http.bzl",
-        "@bazel_tools//tools/build_defs/repo:utils.bzl",
-    ],
-)
-
-bzl_library(
     name = "defs",
     srcs = ["defs.bzl"],
     visibility = ["//visibility:public"],
     deps = [
-        "//pycross/private:lock_file",
         "//pycross/private:pdm_lock_model",
         "//pycross/private:poetry_lock_model",
         "//pycross/private:pypi_file",
@@ -38,20 +23,6 @@ bzl_library(
         "//pycross/private:wheel_build",
         "//pycross/private:wheel_library",
         "//pycross/private:wheel_zipimport_library",
-    ],
-)
-
-bzl_library(
-    name = "workspace",
-    srcs = ["workspace.bzl"],
-    visibility = ["//visibility:public"],
-    deps = [
-        "//pycross/private:lock_file_repo",
-        "//pycross/private:lock_repo",
-        "//pycross/private:pdm_lock_model",
-        "//pycross/private:poetry_lock_model",
-        "//pycross/private:toolchain_helpers",
-        "//pycross/private:uv_lock_model",
     ],
 )
 

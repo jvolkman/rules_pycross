@@ -1,6 +1,4 @@
-load("@bazel_lib//lib:write_source_files.bzl", "write_source_files")
 load("@bazel_skylib//:bzl_library.bzl", "bzl_library")
-load(":lock_file.bzl", "pycross_lock_file")
 load(":pdm_lock_model.bzl", "pycross_pdm_lock_model")
 load(":target_environment.bzl", "pycross_target_environment")
 
@@ -39,17 +37,6 @@ bzl_library(
 )
 
 bzl_library(
-    name = "lock_file",
-    srcs = ["lock_file.bzl"],
-    deps = [
-        ":lock_attrs",
-        ":providers",
-        ":target_environment",
-        ":util",
-    ],
-)
-
-bzl_library(
     name = "pdm_lock_model",
     srcs = ["pdm_lock_model.bzl"],
     deps = [":internal_repo"],
@@ -59,16 +46,6 @@ bzl_library(
     name = "uv_lock_model",
     srcs = ["uv_lock_model.bzl"],
     deps = [":internal_repo"],
-)
-
-bzl_library(
-    name = "lock_repo",
-    srcs = ["lock_repo.bzl"],
-    deps = [
-        ":lock_attrs",
-        ":package_repo",
-        ":resolved_lock_repo",
-    ],
 )
 
 bzl_library(
@@ -207,38 +184,6 @@ pycross_pdm_lock_model(
     project_file = ":pyproject.toml",
 )
 
-pycross_lock_file(
-    name = "rules_pycross_all_deps",
-    out = "updated-pycross_deps.lock.bzl",
-    disallow_builds = True,
-    fully_qualified_environment_labels = False,
-    lock_model_file = ":rules_pycross_all_deps_lock_model",
-    repo_prefix = "rules_pycross_internal_deps",
-    target_environments = [":rules_pycross_deps_target_env"],
-    visibility = ["//:__subpackages__"],
-)
-
-pycross_lock_file(
-    name = "rules_pycross_core_deps",
-    out = "updated-pycross_deps_core.lock.bzl",
-    disallow_builds = True,
-    fully_qualified_environment_labels = False,
-    generate_file_map = True,
-    lock_model_file = ":rules_pycross_core_deps_lock_model",
-    repo_prefix = "rules_pycross_internal_deps",
-    target_environments = [":rules_pycross_deps_target_env"],
-    visibility = ["//:__subpackages__"],
-)
-
-write_source_files(
-    name = "update_pycross_deps",
-    diff_test = False,  # Diff tests for these files are in the workspace root.
-    files = {
-        "pycross_deps.lock.bzl": ":updated-pycross_deps.lock.bzl",
-        "pycross_deps_core.lock.bzl": ":updated-pycross_deps_core.lock.bzl",
-    },
-)
-
 bzl_library(
     name = "pycross_deps.lock",
     srcs = ["pycross_deps.lock.bzl"],
@@ -266,23 +211,8 @@ bzl_library(
 )
 
 bzl_library(
-    name = "lock_file_repo",
-    srcs = ["lock_file_repo.bzl"],
-)
-
-bzl_library(
     name = "providers",
     srcs = ["providers.bzl"],
-)
-
-bzl_library(
-    name = "updated-pycross_deps.lock",
-    srcs = ["updated-pycross_deps.lock.bzl"],
-)
-
-bzl_library(
-    name = "updated-pycross_deps_core.lock",
-    srcs = ["updated-pycross_deps_core.lock.bzl"],
 )
 
 bzl_library(
