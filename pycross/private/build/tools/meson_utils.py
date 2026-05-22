@@ -132,10 +132,13 @@ def generate_cross_ini(ctx: BuildContext, cc_config: Optional[Dict[str, Any]] = 
         # x86_64 Linux: 80-bit extended stored in 16 bytes
         longdouble_format = "INTEL_EXTENDED_16_BYTES_LE"
 
+    cc_list = shlex.split(cc) if cc else []
+    cxx_list = shlex.split(cxx) if cxx else []
+
     cross_ini = f"""\
 [binaries]
-c = '{cc}'
-cpp = '{cxx}'
+c = {format_meson_list(cc_list)}
+cpp = {format_meson_list(cxx_list)}
 cython = 'cython'
 pkgconfig = 'pkg-config'
 python = '{ctx.env_dir}/bin/python'
@@ -162,6 +165,7 @@ endian = 'little'
 
     # Write the cross file into our cc_hook directory
     cross_ini_path = ctx.temp_dir / "cc_hook" / "cross.ini"
+    cross_ini_path.parent.mkdir(parents=True, exist_ok=True)
     with open(cross_ini_path, "w") as f:
         f.write(textwrap.dedent(cross_ini))
 

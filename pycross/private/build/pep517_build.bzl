@@ -142,10 +142,13 @@ def _pep517_build_impl(ctx):
     # Inject builder runfiles
     tools.append(ctx.attr.builder[DefaultInfo].files_to_run)
 
+    sdist_root = out_wheel.dirname + "/sdist"
+
     action_env = dict(ctx.configuration.default_shell_env)
     action_env.update({
         "PYCROSS_BUILD_ROOT": ctx.bin_dir.path + "/" + ctx.label.package + "/" + ctx.label.name + "_tmp",
-        "PYCROSS_SDIST_DIR": out_wheel.dirname + "/sdist",
+        "PYCROSS_SDIST_DIR": sdist_root,
+        "PYTHONPATH": ":".join([sdist_root] + python_paths),
     })
 
     ctx.actions.run(
