@@ -73,3 +73,40 @@ PDM_IMPORT_ATTRS = _PDM_IMPORT_ATTRS
 UV_IMPORT_ATTRS = _UV_IMPORT_ATTRS
 POETRY_IMPORT_ATTRS = _POETRY_IMPORT_ATTRS
 REGISTER_TOOLCHAINS_ATTRS = _REGISTER_TOOLCHAINS_ATTRS
+
+# A helper to derive attributes for build-system overrides
+def _derive_override_attrs():
+    attrs = {}
+    for k, v in PACKAGE_ATTRS.items():
+        if k == "build_target":
+            continue
+        elif k == "always_build":
+            attrs[k] = attr.bool(
+                doc = "If True, don't use pre-built wheels for this package.",
+                default = True,
+            )
+        else:
+            attrs[k] = v
+    return attrs
+
+_BASE_OVERRIDE_ATTRS = _derive_override_attrs()
+
+MESON_OVERRIDE_ATTRS = dict(
+    _BASE_OVERRIDE_ATTRS,
+    copts = attr.string_list(doc = "Extra C++ compiler options."),
+    linkopts = attr.string_list(doc = "Extra linker options."),
+    native_deps = attr.label_list(doc = "CC dependencies to link against."),
+    sdist_python_paths = attr.string_list(doc = "Sdist-relative paths to add to PYTHONPATH."),
+    config_settings = attr.string_list_dict(doc = "Setup configuration arguments."),
+    tool_deps = attr.string_dict(doc = "Overrides for built-in dependencies."),
+)
+
+SETUPTOOLS_OVERRIDE_ATTRS = dict(
+    _BASE_OVERRIDE_ATTRS,
+    copts = attr.string_list(doc = "Extra C++ compiler options."),
+    linkopts = attr.string_list(doc = "Extra linker options."),
+    native_deps = attr.label_list(doc = "CC dependencies to link against."),
+    sdist_python_paths = attr.string_list(doc = "Sdist-relative paths to add to PYTHONPATH."),
+    config_settings = attr.string_list_dict(doc = "Setup configuration arguments."),
+    tool_deps = attr.string_dict(doc = "Overrides for built-in dependencies."),
+)

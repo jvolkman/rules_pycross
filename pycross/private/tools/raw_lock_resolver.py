@@ -193,6 +193,13 @@ class PackageAnnotations:
     ignore_dependencies: Set[str] = field(default_factory=set)
     install_exclude_globs: Set[str] = field(default_factory=set)
     post_install_patches: List[str] = field(default_factory=list)
+    build_profile: Optional[str] = None
+    copts: List[str] = field(default_factory=list)
+    linkopts: List[str] = field(default_factory=list)
+    native_deps: List[str] = field(default_factory=list)
+    sdist_python_paths: List[str] = field(default_factory=list)
+    config_settings: Dict[str, List[str]] = field(default_factory=dict)
+    tool_deps: Dict[str, str] = field(default_factory=dict)
 
 
 class PackageResolver:
@@ -217,6 +224,13 @@ class PackageResolver:
         self._build_target = annotations.build_target
         self._install_exclude_globs = annotations.install_exclude_globs
         self._post_install_patches = annotations.post_install_patches
+        self._build_profile = annotations.build_profile
+        self._copts = annotations.copts
+        self._linkopts = annotations.linkopts
+        self._native_deps = annotations.native_deps
+        self._sdist_python_paths = annotations.sdist_python_paths
+        self._config_settings = annotations.config_settings
+        self._tool_deps = annotations.tool_deps
 
         deps_by_env = context.get_dependencies_by_environment(
             package,
@@ -272,6 +286,13 @@ class PackageResolver:
             sdist_file=self.sdist_file,
             install_exclude_globs=list(self._install_exclude_globs),
             post_install_patches=self._post_install_patches,
+            build_profile=self._build_profile,
+            copts=self._copts,
+            linkopts=self._linkopts,
+            native_deps=self._native_deps,
+            sdist_python_paths=self._sdist_python_paths,
+            config_settings=self._config_settings,
+            tool_deps=self._tool_deps,
         )
 
 
@@ -355,6 +376,27 @@ def collect_package_annotations(args: Any, lock_model: RawLockSet) -> Dict[Packa
 
         for patch in annotation.get("post_install_patches", []):
             annotations[resolved_pkg].post_install_patches.append(patch)
+
+        if annotation.get("build_profile"):
+            annotations[resolved_pkg].build_profile = annotation["build_profile"]
+
+        if annotation.get("copts"):
+            annotations[resolved_pkg].copts = annotation["copts"]
+
+        if annotation.get("linkopts"):
+            annotations[resolved_pkg].linkopts = annotation["linkopts"]
+
+        if annotation.get("native_deps"):
+            annotations[resolved_pkg].native_deps = annotation["native_deps"]
+
+        if annotation.get("sdist_python_paths"):
+            annotations[resolved_pkg].sdist_python_paths = annotation["sdist_python_paths"]
+
+        if annotation.get("config_settings"):
+            annotations[resolved_pkg].config_settings = annotation["config_settings"]
+
+        if annotation.get("tool_deps"):
+            annotations[resolved_pkg].tool_deps = annotation["tool_deps"]
 
     # Return as a non-default dict
     return dict(annotations)
