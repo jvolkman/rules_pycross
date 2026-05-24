@@ -2,10 +2,17 @@
 
 load("@bazel_skylib//lib:paths.bzl", "paths")
 load("@rules_python//python:py_info.bzl", "PyInfo")
+load(":providers.bzl", "PycrossWheelInfo")
 
 def _pycross_wheel_zipimport_library_impl(ctx):
     wheel_label = ctx.file.wheel.owner or ctx.attr.wheel.label
     wheel_file = ctx.file.wheel
+    wheel_target = ctx.attr.wheel
+    extra_files = []
+    if PycrossWheelInfo in wheel_target:
+        wheel_dir = getattr(wheel_target[PycrossWheelInfo], "wheel_directory", None)
+        if wheel_dir:
+            extra_files.append(wheel_dir)
 
     has_py2_only_sources = False
     has_py3_only_sources = True
@@ -32,10 +39,10 @@ def _pycross_wheel_zipimport_library_impl(ctx):
         transitive = [d[PyInfo].imports for d in ctx.attr.deps],
     )
     transitive_sources = depset(
-        direct = [wheel_file],
+        direct = [wheel_file] + extra_files,
         transitive = [dep[PyInfo].transitive_sources for dep in ctx.attr.deps if PyInfo in dep],
     )
-    runfiles = ctx.runfiles(files = [wheel_file])
+    runfiles = ctx.runfiles(files = [wheel_file] + extra_files)
     for d in ctx.attr.deps:
         runfiles = runfiles.merge(d[DefaultInfo].default_runfiles)
 

@@ -5,6 +5,7 @@ PycrossWheelInfo = provider(
     fields = {
         "name_file": "File: A file containing the canonical name of the wheel.",
         "wheel_file": "File: The wheel file itself.",
+        "wheel_directory": "File (TreeArtifact, optional): A directory containing the wheel file under its proper name.",
     },
 )
 
