@@ -70,14 +70,14 @@ def _pep517_build_impl(ctx):
     python_paths = [map_fn(imp) for imp in imports.to_list()]
     transitive_inputs.extend([dep[PyInfo].transitive_sources for dep in ctx.attr.deps])
 
-    # 4. Resolve and merge pluggable Mixins (e.g., CC compiler JSONs)
+    # 3. Resolve and merge pluggable Mixins (e.g., CC compiler JSONs)
     mixin_jsons = []
     for mixin_target in ctx.attr.mixins:
         mixin_info = mixin_target[PycrossBuildMixinInfo]
         mixin_jsons.append(mixin_info.config_json.path)
         transitive_inputs.append(mixin_info.files)
 
-    # 5. Resolve user-provided config settings (expand location variables and write to json)
+    # 4. Resolve user-provided config settings (expand location variables and write to json)
     config_settings_file = None
     if ctx.attr.config_settings:
         config_settings_file = ctx.actions.declare_file(paths.join(ctx.attr.name, "config_settings.json"))
@@ -89,13 +89,13 @@ def _pep517_build_impl(ctx):
 
         ctx.actions.write(config_settings_file, json.encode(expanded_settings))
 
-    # 5.5. Resolve pkg_config_files
+    # 4.1. Resolve pkg_config_files
     pkg_config_paths = []
     for f in ctx.files.pkg_config_files:
         pkg_config_paths.append(f.path)
         inputs.append(f)
 
-    # 5.7. Resolve path_tools (list of executable labels)
+    # 4.2. Resolve path_tools (list of executable labels)
     path_tools_list = []
     for target in ctx.attr.path_tools:
         exe = target[DefaultInfo].files_to_run.executable
@@ -108,17 +108,18 @@ def _pep517_build_impl(ctx):
         inputs.append(exe)
         tools.append(target[DefaultInfo].files_to_run)
 
-    # 6. Declare output files
+    # 5. Declare output files
     sdist_name = ctx.file.sdist.basename
     if sdist_name.lower().endswith(".tar.gz"):
         wheel_name = sdist_name[:-7]
     else:
         wheel_name = sdist_name.rsplit(".", 1)[0]
 
-    out_wheel = ctx.actions.declare_file(paths.join(ctx.attr.name, wheel_name + ".whl"))
+    out_wheel = ctx.actions.declare_symlink(paths.join(ctx.attr.name, wheel_name + ".whl"))
     out_wheel_name = ctx.actions.declare_file(paths.join(ctx.attr.name, wheel_name + ".whl.name"))
+    out_wheel_directory = ctx.actions.declare_directory(paths.join(ctx.attr.name, "wheel"))
 
-    # 7. Write master `bazel_config.json` configuration file
+    # 6. Write master `bazel_config.json` configuration file
     master_config = {
         "sdist": ctx.file.sdist.path,
         "exec_python": exec_python,
@@ -132,28 +133,30 @@ def _pep517_build_impl(ctx):
         "sdist_python_paths": ctx.attr.sdist_python_paths,
         "wheel_file": out_wheel.path,
         "wheel_name_file": out_wheel_name.path,
+        "wheel_directory": out_wheel_directory.path,
     }
 
     config_json = ctx.actions.declare_file(ctx.label.name + "_config.json")
     ctx.actions.write(config_json, json.encode(master_config))
     inputs.append(config_json)
 
-    # 8. Execute pluggable Python builder tool
+    # 7. Execute pluggable Python builder tool
     # Inject builder runfiles
     tools.append(ctx.attr.builder[DefaultInfo].files_to_run)
 
     sdist_root = out_wheel.dirname + "/sdist"
 
+    build_root = ctx.bin_dir.path + "/" + ctx.label.package + "/" + ctx.label.name + "_tmp"
     action_env = dict(ctx.configuration.default_shell_env)
     action_env.update({
-        "PYCROSS_BUILD_ROOT": ctx.bin_dir.path + "/" + ctx.label.package + "/" + ctx.label.name + "_tmp",
+        "PYCROSS_BUILD_ROOT": build_root,
         "PYCROSS_SDIST_DIR": sdist_root,
         "PYTHONPATH": ":".join([sdist_root] + python_paths),
     })
 
     ctx.actions.run(
         inputs = depset(inputs, transitive = transitive_inputs),
-        outputs = [out_wheel, out_wheel_name],
+        outputs = [out_wheel, out_wheel_name, out_wheel_directory],
         executable = ctx.executable.builder,
         arguments = [config_json.path],
         env = action_env,
@@ -169,6 +172,7 @@ def _pep517_build_impl(ctx):
         PycrossWheelInfo(
             wheel_file = out_wheel,
             name_file = out_wheel_name,
+            wheel_directory = out_wheel_directory,
         ),
     ]
 

@@ -21,6 +21,10 @@ def _pycross_wheel_library_impl(ctx):
     args.add_all(ctx.files.post_install_patches, format_each = "--patch=%s")
 
     inputs = [wheel_file] + ctx.files.post_install_patches
+    if PycrossWheelInfo in wheel_target:
+        wheel_dir = getattr(wheel_target[PycrossWheelInfo], "wheel_directory", None)
+        if wheel_dir:
+            inputs.append(wheel_dir)
     if name_file:
         inputs.append(name_file)
         args.add("--wheel-name-file", name_file)
