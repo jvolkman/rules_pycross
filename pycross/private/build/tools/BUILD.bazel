@@ -3,8 +3,8 @@ load("@rules_pycross_internal//:python.bzl", "py_binary", "py_library")
 package(default_visibility = ["//pycross:__subpackages__"])
 
 py_library(
-    name = "builder_utils",
-    srcs = ["builder_utils.py"],
+    name = "utils",
+    srcs = glob(["utils/*.py"]),
     imports = ["../../../.."],
     visibility = ["//visibility:public"],
     deps = [
@@ -18,7 +18,7 @@ py_library(
     srcs = ["meson_utils.py"],
     imports = ["../../../.."],
     deps = [
-        ":builder_utils",
+        ":utils",
     ],
 )
 
@@ -28,8 +28,8 @@ py_binary(
     imports = ["../../../.."],
     visibility = ["//visibility:public"],
     deps = [
-        ":builder_utils",
         ":meson_utils",
+        ":utils",
         "@rules_pycross_internal//deps:build",
         "@rules_pycross_internal//deps:packaging",
     ],
@@ -41,7 +41,20 @@ py_binary(
     imports = ["../../../.."],
     visibility = ["//visibility:public"],
     deps = [
-        ":builder_utils",
+        ":utils",
+        "//pycross/private/build/tools/crossenv",
+        "@rules_pycross_internal//deps:build",
+        "@rules_pycross_internal//deps:packaging",
+    ],
+)
+
+py_binary(
+    name = "maturin_builder",
+    srcs = ["maturin_builder.py"],
+    imports = ["../../../.."],
+    visibility = ["//visibility:public"],
+    deps = [
+        ":utils",
         "//pycross/private/build/tools/crossenv",
         "@rules_pycross_internal//deps:build",
         "@rules_pycross_internal//deps:packaging",
