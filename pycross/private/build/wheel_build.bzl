@@ -4,7 +4,7 @@ load(":cc_mixin.bzl", "pycross_cc_mixin")
 load(":pep517_build.bzl", "pycross_pep517_build")
 load(":repaired_wheel.bzl", "pycross_repaired_wheel")
 
-def pycross_wheel_build(name, native_deps = [], copts = [], linkopts = [], post_build_hooks = [], **kwargs):
+def pycross_wheel_build(name, native_deps = [], copts = [], linkopts = [], **kwargs):
     """Builds a Python wheel from a source distribution.
 
     This macro wraps pycross_pep517_build with automatic CC toolchain
@@ -16,7 +16,6 @@ def pycross_wheel_build(name, native_deps = [], copts = [], linkopts = [], post_
         native_deps: List of native dependencies (CcInfo).
         copts: Additional C compiler options.
         linkopts: Additional C linker options.
-        post_build_hooks: Deprecated. Ignored; repair is automatic when native_deps are present.
         **kwargs: Additional arguments to pass to pycross_pep517_build.
     """
     all_mixins = list(kwargs.pop("mixins", []))
@@ -33,7 +32,7 @@ def pycross_wheel_build(name, native_deps = [], copts = [], linkopts = [], post_
         )
         all_mixins.append(":" + cc_env_name)
 
-    needs_repair = bool(native_deps) or bool(post_build_hooks)
+    needs_repair = bool(native_deps)
 
     if needs_repair:
         build_name = name + "_raw"

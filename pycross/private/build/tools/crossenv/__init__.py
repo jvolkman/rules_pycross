@@ -166,7 +166,6 @@ def determine_glibc_version(sysconfig_vars: Dict[str, Any]) -> Optional[str]:
 
         cmd += ["-c", "-o", str(teller_out), str(teller_src)]
         # Run the compiler and capture its output
-        print(" ".join(cmd))
         out = subprocess.check_output(cmd, env=os.environ, stderr=subprocess.STDOUT)
         out = out.decode("utf-8")
 
