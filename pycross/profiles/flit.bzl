@@ -1,10 +1,10 @@
-"""Build profile for setuptools-based Python packages."""
+"""Build profile for Flit-based Python packages."""
 
 load("//pycross:defs.bzl", "pycross_wheel_build", "pycross_wheel_library")
 load("//pycross/profiles:util.bzl", "glean_repo_name")
 
-def setuptools_build(name, sdist = None, build_deps = None, tool_deps = {}, repo = None, **kwargs):
-    """Build profile for setuptools-based packages.
+def flit_build(name, sdist = None, build_deps = None, tool_deps = {}, repo = None, **kwargs):
+    """Build profile for Flit-based packages.
 
     Args:
         name: Name of the target.
@@ -31,10 +31,9 @@ def setuptools_build(name, sdist = None, build_deps = None, tool_deps = {}, repo
     if repo and not repo.startswith("@"):
         repo = "@" + repo
 
-    # Define standard built-in default targets for setuptools
+    # Define standard built-in default targets for flit
     default_tools = {
-        "setuptools": repo + "//_builtins:setuptools" if repo else "//:setuptools",
-        "wheel": repo + "//_builtins:wheel" if repo else "//:wheel",
+        "flit-core": repo + "//_builtins:flit-core" if repo else "//:flit-core",
     }
 
     # Merge user-provided overrides
@@ -48,8 +47,7 @@ def setuptools_build(name, sdist = None, build_deps = None, tool_deps = {}, repo
     # Compute build_deps if not explicitly provided
     if not build_deps:
         build_deps = [
-            tools["setuptools"],
-            tools["wheel"],
+            tools["flit-core"],
         ]
 
     merged_deps = []

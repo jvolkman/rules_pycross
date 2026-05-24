@@ -1,7 +1,7 @@
 """Repository rule for auto-generating a BUILD file for an sdist package."""
 
 load("//pycross/private:internal_repo.bzl", "exec_internal_tool")
-load("//pycross/private:util.bzl", "extract_pep508_name")
+load("//pycross/private:util.bzl", "extract_pep508_name", "sanitize_name")
 
 _BACKEND_TO_PROFILE = {
     "mesonpy": "meson_build",
@@ -9,6 +9,18 @@ _BACKEND_TO_PROFILE = {
     "scikit_build_core.build": "cmake_build",
     "setuptools.build_meta": "setuptools_build",
     "setuptools.build_meta:__legacy__": "setuptools_build",
+    "maturin": "maturin_build",
+    "hatchling.build": "hatch_build",
+    "flit_core.buildapi": "flit_build",
+}
+
+_PROFILE_TO_BZL = {
+    "meson_build": "meson.bzl",
+    "cmake_build": "cmake.bzl",
+    "setuptools_build": "setuptools.bzl",
+    "maturin_build": "maturin.bzl",
+    "hatch_build": "hatch.bzl",
+    "flit_build": "flit.bzl",
 }
 
 def _sdist_repo_impl(rctx):
@@ -20,14 +32,16 @@ def _sdist_repo_impl(rctx):
 
     if rctx.attr.build_profile:
         profile_macro = rctx.attr.build_profile
-        if profile_macro == "meson_build":
-            profile_bzl = "meson.bzl"
-        elif profile_macro == "cmake_build":
-            profile_bzl = "cmake.bzl"
-        elif profile_macro == "setuptools_build":
-            profile_bzl = "setuptools.bzl"
-        else:
+        if profile_macro not in _PROFILE_TO_BZL:
             fail("Unknown build profile: " + profile_macro)
+        profile_bzl = _PROFILE_TO_BZL[profile_macro]
+
+        if rctx.attr.build_dependencies:
+            build_deps = []
+            for dep in rctx.attr.build_dependencies:
+                dep_name = dep.split("@")[0]
+                build_deps.append("@{}//:{}".format(rctx.attr.lock_repo, sanitize_name(dep_name)))
+            macro_attrs["build_deps"] = str(build_deps)
     else:
         sdist_path = rctx.path(rctx.attr.sdist)
         output_json = rctx.path("build_metadata.json")
@@ -51,9 +65,7 @@ def _sdist_repo_impl(rctx):
         # Map backend to profile
         # If not in the dictionary, we fall back to setuptools_build as the generic PEP 517 builder
         profile_macro = _BACKEND_TO_PROFILE.get(backend, "setuptools_build")
-        profile_bzl = "meson.bzl" if profile_macro == "meson_build" else (
-            "cmake.bzl" if profile_macro == "cmake_build" else "setuptools.bzl"
-        )
+        profile_bzl = _PROFILE_TO_BZL.get(profile_macro, "setuptools.bzl")
 
         # Map build requires to targets in the hub repo
         build_deps = []
@@ -89,7 +101,7 @@ def _sdist_repo_impl(rctx):
     for key, val in sorted(macro_attrs.items()):
         attr_lines.append("    {} = {},".format(key, val))
 
-    build_content = """\\\nload("@rules_pycross//pycross/profiles:{profile_bzl}", "{profile_macro}")
+    build_content = """\nload("@rules_pycross//pycross/profiles:{profile_bzl}", "{profile_macro}")
 
 package(default_visibility = ["//visibility:public"])
 
@@ -117,7 +129,8 @@ pycross_sdist_repo = repository_rule(
         "linkopts": attr.string_list(doc = "Linker options."),
         "native_deps": attr.string_list(doc = "Labels of native C/C++ dependencies."),
         "sdist_python_paths": attr.string_list(doc = "Additional Python paths during source build."),
-        "config_settings": attr.string_dict(doc = "Build configuration settings passed to backend."),
+        "config_settings": attr.string_list_dict(doc = "Build configuration settings passed to backend."),
         "tool_deps": attr.string_dict(doc = "Overridden tool dependencies."),
+        "build_dependencies": attr.string_list(doc = "Overridden build-time dependencies."),
     },
 )

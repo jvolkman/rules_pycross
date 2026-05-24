@@ -270,7 +270,7 @@ def _package_repo_impl(rctx):
         rctx.file(paths.join(pin, "BUILD.bazel"), _pin_build(sanitize_name(pin), sdist_label))
 
     # 5. Write _builtins/BUILD.bazel
-    _STANDARD_TOOLS = ["meson", "ninja", "setuptools", "wheel", "meson-python", "scikit-build-core"]
+    _STANDARD_TOOLS = ["meson", "ninja", "setuptools", "wheel", "meson-python", "scikit-build-core", "maturin", "hatchling", "flit-core"]
     builtins_build_lines = [
         'load("@rules_pycross//pycross/private/build:missing_dependency.bzl", "pycross_missing_dependency")',
         "",

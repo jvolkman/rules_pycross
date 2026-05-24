@@ -58,7 +58,7 @@ def meson_build(
     """
     mixins = []
     cc_mixin_name = name + "_cc_mixin"
-    raw_build_name = name + "_raw"
+    build_name = name + "_build"
 
     # If repo is not explicitly passed, try to glean it from sdist
     if not repo:
@@ -181,40 +181,46 @@ def meson_build(
         )
         mixins.append(":" + cc_mixin_name)
 
-    # Stage 2: Build raw wheel via PEP 517
+    merged_deps = []
+    seen = {}
+    for d in (build_deps or []) + (deps or []):
+        if d not in seen:
+            seen[d] = True
+            merged_deps.append(d)
+
+    # Stage 2: Build wheel via PEP 517
     pycross_pep517_build(
-        name = raw_build_name,
+        name = build_name,
         sdist = sdist,
         builder = "@rules_pycross//pycross/private/build/tools:meson_builder",
         mixins = mixins,
-        deps = build_deps,
+        deps = merged_deps,
         config_settings = config_settings,
         pkg_config_files = pkg_config_files,
         sdist_python_paths = sdist_python_paths,
         path_tools = actual_path_tools,
-        visibility = ["//visibility:private"],
+        visibility = ["//visibility:private" if native_deps else "//visibility:public"],
         tags = tags,
     )
 
-    # Stage 3: Repair wheel (bundle native shared libraries)
-    repaired_wheel_name = name + "_repaired"
-    pycross_repaired_wheel(
-        name = repaired_wheel_name,
-        wheel = ":" + raw_build_name,
-        native_deps = native_deps,
-        visibility = ["//visibility:public"],
-    )
+    needs_repair = bool(native_deps)
+    if needs_repair:
+        # Stage 3: Repair wheel (bundle native shared libraries)
+        repaired_wheel_name = name + "_repaired"
+        pycross_repaired_wheel(
+            name = repaired_wheel_name,
+            wheel = ":" + build_name,
+            native_deps = native_deps,
+            visibility = ["//visibility:public"],
+        )
+        actual_wheel = ":" + repaired_wheel_name
+    else:
+        actual_wheel = ":" + build_name
 
     # Stage 4: Expose final wheel library
     pycross_wheel_library(
         name = name,
-        wheel = ":" + repaired_wheel_name,
+        wheel = actual_wheel,
         deps = deps,
         visibility = visibility,
-    )
-
-    native.alias(
-        name = "wheel",
-        actual = ":" + repaired_wheel_name,
-        visibility = ["//visibility:public"],
     )

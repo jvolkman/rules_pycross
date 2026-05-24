@@ -3,6 +3,33 @@ load("@bazel_skylib//:bzl_library.bzl", "bzl_library")
 package(default_visibility = ["//visibility:public"])
 
 bzl_library(
+    name = "maturin",
+    srcs = ["maturin.bzl"],
+    deps = [
+        ":util",
+        "//pycross:defs",
+    ],
+)
+
+bzl_library(
+    name = "hatch",
+    srcs = ["hatch.bzl"],
+    deps = [
+        ":util",
+        "//pycross:defs",
+    ],
+)
+
+bzl_library(
+    name = "flit",
+    srcs = ["flit.bzl"],
+    deps = [
+        ":util",
+        "//pycross:defs",
+    ],
+)
+
+bzl_library(
     name = "meson",
     srcs = ["meson.bzl"],
     deps = [

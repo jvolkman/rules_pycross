@@ -1,0 +1,29 @@
+"""BUILD target for pywavelets."""
+
+load("@rules_pycross//pycross/profiles:meson.bzl", "meson_build")
+
+package(default_visibility = ["//visibility:public"])
+
+meson_build(
+    name = "pywavelets",
+    build_deps = [
+        "@uv//:meson_python",
+        "@uv//:meson",
+        "@uv//:ninja",
+        "@uv//:cython",
+        "@uv//:numpy",
+    ],
+    linkopts = [
+        "-lc++",
+        "-lc++abi",
+        "-lunwind",
+    ],
+    native_deps = [
+        "//deps/numpy:numpy_headers",
+        "//:llvm_static_runtime",
+    ],
+    sdist = "@uv//pywavelets:sdist",
+    deps = [
+        "@uv//:numpy",
+    ],
+)
