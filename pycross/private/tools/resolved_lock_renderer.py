@@ -292,6 +292,19 @@ class PackageTarget:
 
         if dep_names:
             lines.append(ind(f"deps = {' + '.join(dep_names)},"))
+
+        if self.package.copts:
+            lines.append(ind(f"copts = {repr(self.package.copts)},"))
+        if self.package.linkopts:
+            lines.append(ind(f"linkopts = {repr(self.package.linkopts)},"))
+        if self.package.native_deps:
+            lines.append(ind(f"native_deps = {repr(self.package.native_deps)},"))
+        if self.package.sdist_python_paths:
+            lines.append(ind(f"sdist_python_paths = {repr(self.package.sdist_python_paths)},"))
+        if self.package.config_settings:
+            lines.append(ind(f"config_settings = {repr(self.package.config_settings)},"))
+        if self.package.tool_deps:
+            lines.append(ind(f"tool_deps = {repr(self.package.tool_deps)},"))
         lines.extend(
             [
                 ind('tags = ["manual"],'),

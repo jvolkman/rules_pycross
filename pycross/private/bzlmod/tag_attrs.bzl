@@ -65,6 +65,12 @@ PACKAGE_ATTRS = dict(
     post_install_patches = attr.string_list(
         doc = "A list of patches to apply after wheel installation.",
     ),
+    copts = attr.string_list(doc = "Extra C++ compiler options."),
+    linkopts = attr.string_list(doc = "Extra linker options."),
+    native_deps = attr.label_list(doc = "CC dependencies to link against."),
+    sdist_python_paths = attr.string_list(doc = "Sdist-relative paths to add to PYTHONPATH."),
+    config_settings = attr.string_list_dict(doc = "Setup configuration arguments."),
+    tool_deps = attr.string_dict(doc = "Overrides for built-in dependencies."),
 )
 
 CREATE_ENVIRONMENTS_ATTRS = _CREATE_ENVIRONMENTS_ATTRS
@@ -91,22 +97,6 @@ def _derive_override_attrs():
 
 _BASE_OVERRIDE_ATTRS = _derive_override_attrs()
 
-MESON_OVERRIDE_ATTRS = dict(
-    _BASE_OVERRIDE_ATTRS,
-    copts = attr.string_list(doc = "Extra C++ compiler options."),
-    linkopts = attr.string_list(doc = "Extra linker options."),
-    native_deps = attr.label_list(doc = "CC dependencies to link against."),
-    sdist_python_paths = attr.string_list(doc = "Sdist-relative paths to add to PYTHONPATH."),
-    config_settings = attr.string_list_dict(doc = "Setup configuration arguments."),
-    tool_deps = attr.string_dict(doc = "Overrides for built-in dependencies."),
-)
+MESON_OVERRIDE_ATTRS = _BASE_OVERRIDE_ATTRS
 
-SETUPTOOLS_OVERRIDE_ATTRS = dict(
-    _BASE_OVERRIDE_ATTRS,
-    copts = attr.string_list(doc = "Extra C++ compiler options."),
-    linkopts = attr.string_list(doc = "Extra linker options."),
-    native_deps = attr.label_list(doc = "CC dependencies to link against."),
-    sdist_python_paths = attr.string_list(doc = "Sdist-relative paths to add to PYTHONPATH."),
-    config_settings = attr.string_list_dict(doc = "Setup configuration arguments."),
-    tool_deps = attr.string_dict(doc = "Overrides for built-in dependencies."),
-)
+SETUPTOOLS_OVERRIDE_ATTRS = _BASE_OVERRIDE_ATTRS

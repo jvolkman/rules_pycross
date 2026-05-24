@@ -404,7 +404,7 @@ def collect_package_annotations(args: Any, lock_model: RawLockSet) -> Dict[Packa
 
 def collect_default_build_dependencies(lock_model: RawLockSet, build_dependencies: list[str]) -> list[PackageKey]:
     all_package_keys_by_canonical_name: Dict[NormalizedName, List[PackageKey]] = defaultdict(list)
-    resolved_build_penpendencies = []
+    resolved_build_dependencies = []
     for package in lock_model.packages.values():
         all_package_keys_by_canonical_name[package.name].append(package.key)
 
@@ -415,9 +415,9 @@ def collect_default_build_dependencies(lock_model: RawLockSet, build_dependencie
             lock_model.packages.keys(),
             "build_dependencies",
         )
-        resolved_build_penpendencies.append(resolved_dep)
+        resolved_build_dependencies.append(resolved_dep)
 
-    return resolved_build_penpendencies
+    return resolved_build_dependencies
 
 
 def resolve(args: Any) -> ResolvedLockSet:
