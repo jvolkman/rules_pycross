@@ -1,0 +1,13 @@
+diff --git a/http_bsdtar_archive.bzl b/http_bsdtar_archive.bzl
+index 51b7691..481d41d 100644
+--- a/http_bsdtar_archive.bzl
++++ b/http_bsdtar_archive.bzl
+@@ -187,7 +187,7 @@ def _http_bsdtar_archive_impl(rctx):
+ 
+     host_bsdtar = _host_bsdtar_label(rctx)
+     res = rctx.execute([rctx.path(host_bsdtar)] + args)
+-    if res.return_code != 0:
++    if res.return_code not in [0, 1]:
+         fail("Failed to extract archive: {}\n{}".format(res.stderr, res.stdout))
+ 
+     if keep_file:

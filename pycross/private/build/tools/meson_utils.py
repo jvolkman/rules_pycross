@@ -8,7 +8,8 @@ from typing import Dict
 from typing import List
 from typing import Optional
 
-from pycross.private.build.tools.builder_utils import BuildContext
+from pycross.private.build.tools.utils.context import BuildContext
+from pycross.private.build.tools.utils.context import replace_placeholder
 
 
 def format_meson_list(items: List[str]) -> str:
@@ -23,7 +24,7 @@ def generate_cross_ini(ctx: BuildContext, cc_config: Optional[Dict[str, Any]] = 
         if val is not None:
             return val
         if cc_config and name in cc_config:
-            return cc_config[name].replace("$$EXT_BUILD_ROOT$$", str(ctx.prefix))
+            return replace_placeholder(ctx.prefix, cc_config[name])
         return default_fallback
 
     cc = get_var("CC", "gcc")
@@ -36,6 +37,14 @@ def generate_cross_ini(ctx: BuildContext, cc_config: Optional[Dict[str, Any]] = 
     c_args = shlex.split(cflags) if cflags else []
     cxx_args = shlex.split(cxxflags) if cxxflags else []
     c_link_args = shlex.split(ldsharedflags) if ldsharedflags else []
+
+    # Dynamically append all sandboxed C/C++ includes to c_args and cpp_args inside cross.ini
+    if cc_config and "include_dirs" in cc_config:
+        for inc_dir_str in cc_config["include_dirs"]:
+            inc_dir = replace_placeholder(ctx.prefix, inc_dir_str)
+            # Add as standard -isystem includes
+            c_args.append(f"-isystem{inc_dir}")
+            cxx_args.append(f"-isystem{inc_dir}")
 
     # Locate target Python library directory and add it to linker search path
     target_python_lib_dir = ctx.target_python.parent.parent / "lib"
@@ -115,7 +124,7 @@ def generate_cross_ini(ctx: BuildContext, cc_config: Optional[Dict[str, Any]] = 
 
         # Replace $$EXT_BUILD_ROOT$$ with prefix inside the .pc file content
         content = dest_pc.read_text()
-        dest_pc.write_text(content.replace("$$EXT_BUILD_ROOT$$", str(ctx.prefix)))
+        dest_pc.write_text(replace_placeholder(ctx.prefix, content))
 
     abs_pkgconfig_dir = pkgconfig_dir.resolve()
 

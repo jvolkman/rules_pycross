@@ -1,0 +1,23 @@
+diff --git a/runtimes/libcxx/BUILD.bazel b/runtimes/libcxx/BUILD.bazel
+index 4d8696d..bc66d40 100644
+--- a/runtimes/libcxx/BUILD.bazel
++++ b/runtimes/libcxx/BUILD.bazel
+@@ -44,6 +44,18 @@ copy_to_directory(
+     visibility = ["//visibility:public"],
+ )
+ 
++alias(
++    name = "headers",
++    actual = "@llvm-project//libcxx:headers",
++    visibility = ["//visibility:public"],
++)
++
++alias(
++    name = "libcxxabi_headers",
++    actual = "@llvm-project//libcxxabi:headers",
++    visibility = ["//visibility:public"],
++)
++
+ alias(
+     name = "libcxx_headers_include_search_directory",
+     actual = "@llvm-project//libcxx:libcxx_headers_include_search_directory",
