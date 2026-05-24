@@ -1,0 +1,41 @@
+"""BUILD target for contourpy."""
+
+load("@rules_pycross//pycross:defs.bzl", "pycross_console_script_binary")
+load("@rules_pycross//pycross/profiles:meson.bzl", "meson_build")
+
+package(default_visibility = ["//visibility:public"])
+
+# Expose pybind11-config on PATH hermetically for meson.build checks if needed
+pycross_console_script_binary(
+    name = "pybind11-config",
+    script = "pybind11-config",
+    wheel = "@uv//pybind11:wheel",
+    deps = ["@uv//:pybind11"],
+)
+
+meson_build(
+    name = "contourpy",
+    build_deps = [
+        "@uv//:meson_python",
+        "@uv//:meson",
+        "@uv//:ninja",
+        "@uv//:pybind11",
+        "@uv//:numpy",
+    ],
+    linkopts = [
+        "-lc++",
+        "-lc++abi",
+        "-lunwind",
+    ],
+    native_deps = [
+        "//deps/numpy:numpy_headers",
+        "//:llvm_static_runtime",
+    ],
+    path_tools = [
+        ":pybind11-config",
+    ],
+    sdist = "@uv//contourpy:sdist",
+    deps = [
+        "@uv//:numpy",
+    ],
+)

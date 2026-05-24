@@ -51,10 +51,17 @@ def cmake_build(name, sdist = None, build_deps = None, tool_deps = {}, repo = No
             tools["scikit-build-core"],
         ]
 
+    merged_deps = []
+    seen = {}
+    for d in (build_deps or []) + (deps or []):
+        if d not in seen:
+            seen[d] = True
+            merged_deps.append(d)
+
     pycross_wheel_build(
         name = build_name,
         sdist = sdist,
-        deps = build_deps,
+        deps = merged_deps,
         path_tools = path_tools,
         visibility = ["//visibility:public"],
         tags = tags,

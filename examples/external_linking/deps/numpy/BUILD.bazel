@@ -1,5 +1,6 @@
 load("@rules_pycross//pycross:defs.bzl", "pycross_cc_pkg_config", "pycross_console_script_binary")
 load("@rules_pycross//pycross/profiles:meson.bzl", "meson_build")
+load(":numpy_headers.bzl", "numpy_cc_library")
 
 package(default_visibility = ["//visibility:public"])
 
@@ -28,7 +29,15 @@ meson_build(
         "setup-args": [],
     },
     copts = ["-Wl,-s"],
-    native_deps = ["//third_party/openblas"],
+    linkopts = [
+        "-lc++",
+        "-lc++abi",
+        "-lunwind",
+    ],
+    native_deps = [
+        "//third_party/openblas",
+        "//:llvm_static_runtime",
+    ],
     path_tools = [":cython"],  # Cython put on PATH hermetically!
     pkg_config_files = [":gen_openblas_pc_file"],
     sdist = "@uv//numpy:sdist",
@@ -36,4 +45,10 @@ meson_build(
         "numpy/_core/code_generators",
         "numpy/_build_utils",
     ],
+)
+
+# Expose numpy headers to downstream C/C++ packages
+numpy_cc_library(
+    name = "numpy_headers",
+    numpy_wheel_dep = ":numpy",
 )
