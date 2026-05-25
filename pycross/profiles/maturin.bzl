@@ -9,6 +9,7 @@ load(
     "pycross_wheel_bin_tool",
     "pycross_wheel_library",
 )
+load("//pycross/private/build:rust_tool_wrapper.bzl", "pycross_rust_tool_wrapper")
 load("//pycross/profiles:util.bzl", "glean_repo_name")
 
 def maturin_build(name, sdist = None, build_deps = None, tool_deps = {}, repo = None, **kwargs):
@@ -83,6 +84,24 @@ def maturin_build(name, sdist = None, build_deps = None, tool_deps = {}, repo = 
         )
         actual_path_tools.append(":" + maturin_wrapper_name)
 
+    cargo_tool_name = name + "_cargo_tool"
+    rustc_tool_name = name + "_rustc_tool"
+
+    pycross_rust_tool_wrapper(
+        name = cargo_tool_name,
+        tool = "cargo",
+        visibility = ["//visibility:private"],
+    )
+
+    pycross_rust_tool_wrapper(
+        name = rustc_tool_name,
+        tool = "rustc",
+        visibility = ["//visibility:private"],
+    )
+
+    actual_path_tools.append(":" + cargo_tool_name)
+    actual_path_tools.append(":" + rustc_tool_name)
+
     # Extract extra mixin and compiler config attributes
     native_deps = kwargs.pop("native_deps", [])
     copts = kwargs.pop("copts", [])
@@ -146,4 +165,11 @@ def maturin_build(name, sdist = None, build_deps = None, tool_deps = {}, repo = 
         wheel = actual_wheel,
         deps = deps,
         visibility = visibility,
+    )
+
+    native.alias(
+        name = "wheel",
+        actual = actual_wheel,
+        visibility = ["//visibility:public"],
+        tags = tags,
     )

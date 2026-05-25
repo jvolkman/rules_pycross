@@ -79,4 +79,5 @@ def setuptools_build(name, sdist = None, build_deps = None, tool_deps = {}, repo
         name = "wheel",
         actual = ":" + build_name,
         visibility = ["//visibility:public"],
+        tags = tags,
     )

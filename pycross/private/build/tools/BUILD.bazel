@@ -68,6 +68,15 @@ py_binary(
     ],
     visibility = ["//visibility:public"],
     deps = [
+        "@rules_pycross_internal//deps:packaging",
         "@rules_pycross_internal//deps:repairwheel",
     ],
+)
+
+py_binary(
+    name = "wheel_transformer",
+    srcs = [
+        "wheel_transformer.py",
+    ],
+    visibility = ["//visibility:public"],
 )

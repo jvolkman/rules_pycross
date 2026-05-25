@@ -125,8 +125,51 @@ def derive_platform_overrides(sysconfig_vars: Dict[str, Any]) -> tuple[Optional[
     return None, None
 
 
+def _is_crossenv_active(env_dir: Path) -> bool:
+    """Check whether crossenv has already been set up in the virtualenv.
+
+    Crossenv writes its own platform-spoofing patches (e.g. sys-patch.py,
+    platform-patch.py, sysconfig-patch.py) into the venv's lib directory.
+    If these files are present, crossenv is handling cross-compilation and
+    additional sitecustomize.py spoofing is unnecessary.
+    """
+    lib_dir = env_dir / "lib"
+    if not lib_dir.exists():
+        return False
+    # crossenv creates these characteristic patch scripts in the lib dir
+    crossenv_markers = ["sys-patch.py", "platform-patch.py", "sysconfig-patch.py"]
+    return all((lib_dir / marker).exists() for marker in crossenv_markers)
+
+
 def apply_sysconfig_overrides(ctx: BuildContext) -> None:
-    """Inject sysconfig configuration and write sitecustomize.py monkeypatches."""
+    """Inject sysconfig configuration and write sitecustomize.py monkeypatches.
+
+    This function serves two purposes:
+
+    1. **Sysconfigdata override** (always applied): Writes a custom
+       ``_pycross_sysconfigdata.py`` module and a ``.pth`` file so that
+       Python's ``sysconfig`` reads target-platform build variables instead
+       of the host's.  This is needed by all builders.
+
+    2. **sitecustomize.py platform spoofing** (conditionally applied): Writes a
+       ``sitecustomize.py`` that monkey-patches ``sys.platform`` and
+       ``sysconfig.get_platform()`` so that callers like ``packaging.tags``
+       and ``mesonpy`` see the *target* platform rather than the host.
+
+       **Why this is necessary:** Meson-based builds (``mesonpy``) bypass
+       ``crossenv`` entirely and manage cross-compilation through their own
+       ``cross.ini``.  Without this spoofing, ``mesonpy`` and
+       ``packaging/tags`` would read the host platform and incorrectly tag
+       the output wheel.
+
+       **When it is redundant:** When ``crossenv`` is already active (e.g.
+       Setuptools or Maturin builds in cross-compilation mode), crossenv
+       installs its own comprehensive platform patches
+       (``sys-patch.py``, ``platform-patch.py``, ``sysconfig-patch.py``, etc.)
+       that handle all platform spoofing.  Injecting ``sitecustomize.py``
+       on top of crossenv's patches is unnecessary and risks conflicts.
+       In that case, this step is skipped.
+    """
     site_dir = find_site_dir(ctx.env_dir)
     with open(site_dir / "_pycross_sysconfigdata.py", "w") as f:
         f.write(f"build_time_vars = {repr(ctx.sysconfig_vars)}\n")
@@ -140,6 +183,11 @@ def apply_sysconfig_overrides(ctx: BuildContext) -> None:
         ctx.build_env["MACOSX_DEPLOYMENT_TARGET"] = macosx_deployment_target
     if target_platform:
         ctx.build_env["_PYTHON_HOST_PLATFORM"] = target_platform
+
+    # Skip sitecustomize.py injection when crossenv is active, since crossenv
+    # already provides its own comprehensive platform-spoofing patches.
+    if _is_crossenv_active(ctx.env_dir):
+        return
 
     with open(site_dir / "sitecustomize.py", "w") as f:
         f.write(

@@ -24,6 +24,9 @@ dependencies = [
     "filelock==3.17.0",
     "pybind11",
     "maturin",
+    "flit-core",
+    "hatchling",
+    "scikit-build-core",
 ]
 requires-python = "~=3.14.0"
 license = {text = "MIT"}

@@ -118,21 +118,21 @@ def _package_repo_impl(rctx):
 
             # If the package resolves to an sdist in this environment
             if sdist_file_key and file_key == sdist_file_key:
-                # It's a source build! Point to the sdist repo target, or the user's custom build target.
+                # It's a source build. Point to the sdist repo target, or the user's custom build target.
                 build_target = pkg.get("build_target")
                 if build_target:
                     sdist_repo_target = build_target
                 else:
-                    sdist_repo_target = "@@{}_sdist_{}_{}//:pkg".format(
+                    sdist_repo_target = "@@{}_sdist_{}//:pkg".format(
                         rctx.name,
                         sanitize_name(pkg_key),
-                        sanitize_name(env_name),
                     )
                 target_name = "_{}_sdist_{}".format(pkg_sanitized, sanitize_name(env_name))
                 lock_build_lines.extend([
                     "alias(",
                     '    name = "{}",'.format(target_name),
                     '    actual = "{}",'.format(sdist_repo_target),
+                    '    tags = ["manual"],',
                     ")",
                     "",
                 ])
@@ -146,7 +146,7 @@ def _package_repo_impl(rctx):
                 raw_wheel_select_cases[config_setting] = sdist_repo_target_wheel
 
             else:
-                # It's a pre-built wheel! Define a pycross_wheel_library target.
+                # It's a pre-built wheel. Define a pycross_wheel_library target.
                 wheel_label = env_file_ref.get("label")
                 if not wheel_label:
                     if not file_key:
@@ -170,6 +170,7 @@ def _package_repo_impl(rctx):
                     '    name = "{}",'.format(target_name),
                     '    wheel = "{}",'.format(wheel_label),
                     "    deps = {},".format(deps),
+                    '    tags = ["manual"],',
                     ")",
                     "",
                 ])
@@ -202,6 +203,7 @@ def _package_repo_impl(rctx):
             "    actual = select({",
             "\n".join(raw_wheel_select_dict_lines),
             "    }),",
+            '    tags = ["manual"],',
             ")",
             "",
         ])

@@ -82,7 +82,11 @@ def _lock_repos_impl(module_ctx):
         # Pre-calculate known packages in this lock file to filter sdist build_requires
         known_packages = [sanitize_name(key.split("@")[0]) for key in resolved_lock.get("packages", {})]
 
-        # Instantiate sdist repos for packages requiring source builds
+        # Instantiate sdist repos for packages requiring source builds.
+        # Sdist repos are environment-agnostic (the same source archive is
+        # used regardless of target platform), so we create one per package
+        # with the union of dependencies across all environments that resolve
+        # to an sdist.
         for pkg_key, pkg in resolved_lock.get("packages", {}).items():
             if pkg.get("build_target"):
                 # User provided a custom build target; skip auto-generating an sdist repo.
@@ -95,41 +99,47 @@ def _lock_repos_impl(module_ctx):
             sdist_file_key = sdist_file["key"]
             sdist_label = repo_remote_files[sdist_file_key]
 
-            # For each environment where the package resolves to an sdist,
-            # we must create a separate sdist repository to build it.
-            for env_name, env_file_ref in pkg.get("environment_files", {}).items():
-                # If the package resolves to an sdist in this environment (indicated by the sdist file key
-                # being the resolved target or if it matches the sdist file key)
-                if env_file_ref.get("key") != sdist_file_key:
-                    # This environment uses a pre-built wheel, not the sdist.
-                    continue
+            # Check whether any environment actually uses the sdist.
+            needs_sdist = False
+            for _env_name, env_file_ref in pkg.get("environment_files", {}).items():
+                if env_file_ref.get("key") == sdist_file_key:
+                    needs_sdist = True
+                    break
 
-                # Collect dependencies for this environment
-                deps = []
-                for dep in pkg.get("common_dependencies", []):
-                    dep_name = dep.split("@")[0]
-                    deps.append("@{}//:{}".format(repo_name, sanitize_name(dep_name)))
+            if not needs_sdist:
+                continue
+
+            # Collect the union of dependencies across all environments
+            # that resolve to the sdist.
+            deps_set = {}
+            for dep in pkg.get("common_dependencies", []):
+                dep_name = dep.split("@")[0]
+                dep_label = "@{}//:{}".format(repo_name, sanitize_name(dep_name))
+                deps_set[dep_label] = True
+            for env_name, env_file_ref in pkg.get("environment_files", {}).items():
+                if env_file_ref.get("key") != sdist_file_key:
+                    continue
                 for dep in pkg.get("environment_dependencies", {}).get(env_name, []):
                     dep_name = dep.split("@")[0]
-                    deps.append("@{}//:{}".format(repo_name, sanitize_name(dep_name)))
+                    dep_label = "@{}//:{}".format(repo_name, sanitize_name(dep_name))
+                    deps_set[dep_label] = True
 
-                sdist_repo_name = "{}_sdist_{}_{}".format(
-                    repo_name,
-                    sanitize_name(pkg_key),
-                    sanitize_name(env_name),
-                )
+            sdist_repo_name = "{}_sdist_{}".format(
+                repo_name,
+                sanitize_name(pkg_key),
+            )
 
-                sdist_repo_attrs = {
-                    "name": sdist_repo_name,
-                    "sdist": sdist_label,
-                    "deps": deps,
-                    "known_packages": known_packages,
-                    "lock_repo": repo_name,
-                }
-                for attr_name in ("build_profile", "copts", "linkopts", "native_deps", "sdist_python_paths", "config_settings", "tool_deps", "build_dependencies"):
-                    if attr_name in pkg and pkg[attr_name] != None:
-                        sdist_repo_attrs[attr_name] = pkg[attr_name]
-                pycross_sdist_repo(**sdist_repo_attrs)
+            sdist_repo_attrs = {
+                "name": sdist_repo_name,
+                "sdist": sdist_label,
+                "deps": sorted(deps_set.keys()),
+                "known_packages": known_packages,
+                "lock_repo": repo_name,
+            }
+            for attr_name in ("build_profile", "copts", "linkopts", "native_deps", "sdist_python_paths", "config_settings", "tool_deps", "build_dependencies"):
+                if attr_name in pkg and pkg[attr_name] != None:
+                    sdist_repo_attrs[attr_name] = pkg[attr_name]
+            pycross_sdist_repo(**sdist_repo_attrs)
 
         package_repo(
             name = repo_name,

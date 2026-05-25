@@ -224,3 +224,10 @@ def meson_build(
         deps = deps,
         visibility = visibility,
     )
+
+    native.alias(
+        name = "wheel",
+        actual = actual_wheel,
+        visibility = ["//visibility:public"],
+        tags = tags,
+    )

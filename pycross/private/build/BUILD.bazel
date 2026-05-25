@@ -75,3 +75,8 @@ bzl_library(
     name = "wheel_bin_tool",
     srcs = ["wheel_bin_tool.bzl"],
 )
+
+bzl_library(
+    name = "rust_tool_wrapper",
+    srcs = ["rust_tool_wrapper.bzl"],
+)

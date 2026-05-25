@@ -4,27 +4,10 @@ load("//pycross/private:providers.bzl", "PycrossBuildMixinInfo")
 
 def _get_executable_file(val):
     """Extract a File from a toolchain value, trying multiple access patterns."""
-    if not val:
-        return None
-
-    # Direct File object
-    if hasattr(val, "path") and hasattr(val, "is_source"):
+    if not val or type(val) == "File":
         return val
-
-    # FilesToRunProvider or similar
-    if hasattr(val, "executable") and val.executable:
-        return val.executable
-    if hasattr(val, "files_to_run") and hasattr(val.files_to_run, "executable") and val.files_to_run.executable:
-        return val.files_to_run.executable
-
-    # Depset/list of files — take first
-    if hasattr(val, "files") and val.files:
-        if hasattr(val.files, "to_list"):
-            files_list = val.files.to_list()
-        else:
-            files_list = val.files
-        if files_list:
-            return files_list[0]
+    if DefaultInfo in val:
+        return val[DefaultInfo].files_to_run.executable
     return None
 
 def _rust_mixin_impl(ctx):

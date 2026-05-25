@@ -77,4 +77,5 @@ def flit_build(name, sdist = None, build_deps = None, tool_deps = {}, repo = Non
         name = "wheel",
         actual = ":" + build_name,
         visibility = ["//visibility:public"],
+        tags = tags,
     )

@@ -10,7 +10,7 @@ from pycross.private.build.tools.utils.context import replace_placeholder
 
 
 def run_pre_build_hook(ctx: BuildContext, hook_config: Dict[str, Any]) -> None:
-    """Execute a pre-build hook mixin inside the build sandbox.
+    """Execute a pre-build hook inside the build sandbox.
 
     The hook receives the current build environment and config settings
     via JSON files. It may mutate both by writing back to those files.

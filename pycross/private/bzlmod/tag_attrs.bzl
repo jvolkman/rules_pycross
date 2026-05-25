@@ -65,6 +65,11 @@ PACKAGE_ATTRS = dict(
     post_install_patches = attr.string_list(
         doc = "A list of patches to apply after wheel installation.",
     ),
+)
+
+# Attrs specific to build-system overrides (meson, setuptools, etc.).
+# These do not belong on the generic package() tag.
+_BUILD_SYSTEM_ATTRS = dict(
     copts = attr.string_list(doc = "Extra C++ compiler options."),
     linkopts = attr.string_list(doc = "Extra linker options."),
     native_deps = attr.label_list(doc = "CC dependencies to link against."),
@@ -97,6 +102,8 @@ def _derive_override_attrs():
 
 _BASE_OVERRIDE_ATTRS = _derive_override_attrs()
 
-MESON_OVERRIDE_ATTRS = _BASE_OVERRIDE_ATTRS
+MESON_OVERRIDE_ATTRS = dict(_BASE_OVERRIDE_ATTRS, **_BUILD_SYSTEM_ATTRS)
 
-SETUPTOOLS_OVERRIDE_ATTRS = _BASE_OVERRIDE_ATTRS
+SETUPTOOLS_OVERRIDE_ATTRS = dict(_BASE_OVERRIDE_ATTRS, **_BUILD_SYSTEM_ATTRS)
+
+MATURIN_OVERRIDE_ATTRS = dict(_BASE_OVERRIDE_ATTRS, **_BUILD_SYSTEM_ATTRS)

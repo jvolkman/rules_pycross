@@ -175,7 +175,7 @@ lock_import.package(
     build_target = "@//deps/pywavelets",
     repo = "uv",
 )
-lock_import.package(
+lock_import.maturin_override(
     name = "rpds-py",
     always_build = True,
     build_dependencies = [

@@ -24,9 +24,7 @@ def _pycross_wheel_transform_impl(ctx):
     out_wheel_directory = ctx.actions.declare_directory(ctx.attr.name + "_wheel")
 
     # Build env vars with make variable expansion.
-    env = dict(ctx.configuration.default_shell_env)
-    env["PYCROSS_WHEEL_OUTPUT_ROOT"] = out_wheel_directory.path
-
+    env = {}
     for key, value in ctx.attr.env.items():
         env[key] = ctx.expand_make_variables("env", ctx.expand_location(value, ctx.attr.data), {})
 
@@ -42,70 +40,36 @@ def _pycross_wheel_transform_impl(ctx):
     if not input_wheel_directory:
         staging_dir = ctx.actions.declare_directory(ctx.attr.name + "_staging")
 
+    # Build arguments for the wheel transformer wrapper.
+    args = ctx.actions.args()
+    args.add("--wheel-file", input_wheel)
+    args.add("--output-dir", out_wheel_directory.path)
+    args.add("--out-wheel-file", out_wheel.path)
+    args.add("--out-wheel-name-file", out_wheel_name.path)
+    args.add("--out-wheel-dir-basename", out_wheel_directory.basename)
+    args.add("--tool", ctx.executable.transform)
+
     if input_wheel_directory:
-        setup_cmd = """WHEEL_FILE=$(ls {wheel_dir}/*.whl)
-export PYCROSS_WHEEL_FILE="$WHEEL_FILE"
-""".format(
-            wheel_dir = input_wheel_directory.path,
-        )
+        args.add("--wheel-directory", input_wheel_directory.path)
     elif input_name_file:
-        setup_cmd = """mkdir -p {staging}
-REAL_NAME=$(cat {name_file})
-cp {wheel} {staging}/"$REAL_NAME"
-export PYCROSS_WHEEL_FILE={staging}/"$REAL_NAME"
-""".format(
-            wheel = input_wheel.path,
-            name_file = input_name_file.path,
-            staging = staging_dir.path,
-        )
+        args.add("--wheel-name-file", input_name_file.path)
+        args.add("--staging-dir", staging_dir.path)
     else:
-        setup_cmd = """mkdir -p {staging}
-cp {wheel} {staging}/
-export PYCROSS_WHEEL_FILE={staging}/{basename}
-""".format(
-            wheel = input_wheel.path,
-            staging = staging_dir.path,
-            basename = input_wheel.basename,
-        )
+        args.add("--staging-dir", staging_dir.path)
 
-    # Build the env export commands.
-    env_exports = "\n".join([
-        'export %s="%s"' % (k, v)
-        for k, v in env.items()
-    ])
-
-    tool_exe = ctx.executable.transform
+    for key, value in env.items():
+        args.add("--env", "%s=%s" % (key, value))
 
     outputs = [out_wheel_directory, out_wheel, out_wheel_name]
     if staging_dir:
         outputs.append(staging_dir)
 
-    ctx.actions.run_shell(
+    ctx.actions.run(
+        executable = ctx.executable._wheel_transformer,
+        arguments = [args],
         inputs = depset(input_files, transitive = data_inputs),
         outputs = outputs,
         tools = [ctx.attr.transform[DefaultInfo].files_to_run],
-        command = """set -e
-{env_exports}
-{setup_cmd}
-{tool}
-
-# Collect output
-WHEEL=$(ls {out_wheel_dir}/*.whl 2>/dev/null | head -1)
-if [ -z "$WHEEL" ]; then
-    echo "ERROR: No .whl file found in transform output" >&2
-    exit 1
-fi
-ln -sf "{wheel_dir_basename}/$(basename "$WHEEL")" {out_wheel}
-basename "$WHEEL" > {out_wheel_name}
-""".format(
-            env_exports = env_exports,
-            setup_cmd = setup_cmd,
-            tool = tool_exe.path,
-            out_wheel_dir = out_wheel_directory.path,
-            wheel_dir_basename = out_wheel_directory.basename,
-            out_wheel = out_wheel.path,
-            out_wheel_name = out_wheel_name.path,
-        ),
         mnemonic = "WheelTransform",
         progress_message = "Transforming %s" % input_wheel.basename,
     )
@@ -144,6 +108,11 @@ pycross_wheel_transform = rule(
                 "Environment variables passed to the tool. " +
                 "Values are subject to make variable and location expansion."
             ),
+        ),
+        "_wheel_transformer": attr.label(
+            default = Label("//pycross/private/build/tools:wheel_transformer"),
+            executable = True,
+            cfg = "exec",
         ),
     },
 )

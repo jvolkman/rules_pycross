@@ -60,52 +60,18 @@ def generate_cross_ini(ctx: BuildContext, cc_config: Optional[Dict[str, Any]] = 
             if flag not in c_link_args:
                 c_link_args.extend([flag, cxx_args[i + 1]])
 
-    # Determine target operating system and CPU family from cc_config or fallbacks
-    target_system = None
-    target_cpu = None
+    # Determine target operating system and CPU family strictly from cc_config.
+    if not cc_config or not cc_config.get("target_os"):
+        raise ValueError(
+            "target_os is missing from cc_config. Ensure the CC mixin provides target_os in its configuration."
+        )
+    if not cc_config.get("target_cpu"):
+        raise ValueError(
+            "target_cpu is missing from cc_config. Ensure the CC mixin provides target_cpu in its configuration."
+        )
 
-    if cc_config:
-        target_system = cc_config.get("target_os")
-        target_cpu = cc_config.get("target_cpu")
-
-    # Fallback 1: Parse compiler flags if CC mixin metadata is absent
-    if not target_system or not target_cpu:
-        resolved_from_flags = False
-        for i, flag in enumerate(cxx_args):
-            if flag in ("-target", "--target") and i + 1 < len(cxx_args):
-                triple = cxx_args[i + 1]
-                if "darwin" in triple:
-                    target_system = "darwin"
-                elif "linux" in triple:
-                    target_system = "linux"
-                if "aarch64" in triple or "arm64" in triple:
-                    target_cpu = "aarch64"
-                elif "x86_64" in triple:
-                    target_cpu = "x86_64"
-                resolved_from_flags = True
-
-        # Fallback 2: Parse target sysconfig variables (crucial when host == build natively)
-        if not resolved_from_flags:
-            machdep = ctx.sysconfig_vars.get("MACHDEP")
-            if machdep:
-                if "darwin" in machdep:
-                    target_system = "darwin"
-                elif "linux" in machdep:
-                    target_system = "linux"
-
-            host_gnu_type = ctx.sysconfig_vars.get("HOST_GNU_TYPE", "")
-            multiarch = ctx.sysconfig_vars.get("MULTIARCH", "")
-            combined = (host_gnu_type + "_" + multiarch).lower()
-            if "aarch64" in combined or "arm64" in combined:
-                target_cpu = "aarch64"
-            elif "x86_64" in combined:
-                target_cpu = "x86_64"
-
-    # Hardcoded fallbacks as a last resort
-    if not target_system:
-        target_system = "linux"
-    if not target_cpu:
-        target_cpu = "x86_64"
+    target_system = cc_config["target_os"]
+    target_cpu = cc_config["target_cpu"]
 
     # If compiling for Darwin (macOS), C extensions must not link libpython
     # directly and instead rely on runtime dynamic lookup of Python symbols.
@@ -144,13 +110,35 @@ def generate_cross_ini(ctx: BuildContext, cc_config: Optional[Dict[str, Any]] = 
     cc_list = shlex.split(cc) if cc else []
     cxx_list = shlex.split(cxx) if cxx else []
 
+    # Build the [binaries] section dynamically to maintain hermeticity.
+    # Only reference tools that exist inside the build virtualenv, using
+    # their full absolute paths. Bare names like 'cython' or 'pkg-config'
+    # would resolve via the system PATH, breaking sandbox isolation.
+    binaries_lines = [
+        f"c = {format_meson_list(cc_list)}",
+        f"cpp = {format_meson_list(cxx_list)}",
+    ]
+
+    # Cython: only inject if present in the build virtualenv.
+    # Meson does NOT inherently require Cython; it is only needed for
+    # packages that contain .pyx sources.
+    cython_path = ctx.env_dir / "bin" / "cython"
+    if cython_path.exists():
+        binaries_lines.append(f"cython = '{cython_path}'")
+
+    # pkg-config: use the virtualenv copy if available. If not present,
+    # omit it and let Meson fall back to its built-in dependency lookup.
+    pkgconfig_path = ctx.env_dir / "bin" / "pkg-config"
+    if pkgconfig_path.exists():
+        binaries_lines.append(f"pkgconfig = '{pkgconfig_path}'")
+
+    binaries_lines.append(f"python = '{ctx.env_dir}/bin/python'")
+
+    binaries_section = "\n".join(binaries_lines)
+
     cross_ini = f"""\
 [binaries]
-c = {format_meson_list(cc_list)}
-cpp = {format_meson_list(cxx_list)}
-cython = 'cython'
-pkgconfig = 'pkg-config'
-python = '{ctx.env_dir}/bin/python'
+{binaries_section}
 
 [built-in options]
 c_args = {format_meson_list(c_args)}
@@ -172,8 +160,8 @@ cpu = '{target_cpu}'
 endian = 'little'
 """
 
-    # Write the cross file into our cc_hook directory
-    cross_ini_path = ctx.temp_dir / "cc_hook" / "cross.ini"
+    # Write the cross file into the cc_mixin directory
+    cross_ini_path = ctx.temp_dir / "cc_mixin" / "cross.ini"
     cross_ini_path.parent.mkdir(parents=True, exist_ok=True)
     with open(cross_ini_path, "w") as f:
         f.write(textwrap.dedent(cross_ini))

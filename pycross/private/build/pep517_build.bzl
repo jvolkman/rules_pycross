@@ -119,8 +119,8 @@ def _pep517_build_impl(ctx):
     out_wheel_name = ctx.actions.declare_file(paths.join(ctx.attr.name, wheel_name + ".whl.name"))
     out_wheel_directory = ctx.actions.declare_directory(paths.join(ctx.attr.name, "wheel"))
 
-    # 6. Write master `bazel_config.json` configuration file
-    master_config = {
+    # 6. Write main `bazel_config.json` configuration file
+    main_config = {
         "sdist": ctx.file.sdist.path,
         "exec_python": exec_python,
         "target_python": target_python,
@@ -137,7 +137,7 @@ def _pep517_build_impl(ctx):
     }
 
     config_json = ctx.actions.declare_file(ctx.label.name + "_config.json")
-    ctx.actions.write(config_json, json.encode(master_config))
+    ctx.actions.write(config_json, json.encode(main_config))
     inputs.append(config_json)
 
     # 7. Execute pluggable Python builder tool
