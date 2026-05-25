@@ -11,7 +11,7 @@ from typing import Optional
 
 @dataclass
 class BuildContext:
-    # Master configuration loaded from Bazel JSON
+    # Main configuration loaded from Bazel JSON
     bazel_config: Dict[str, Any]
 
     # Absolute sandbox paths
@@ -44,7 +44,7 @@ class BuildContext:
 
 
 def load_build_context(config_path: str) -> BuildContext:
-    """Loads Bazel master configuration and initializes a typed BuildContext."""
+    """Loads Bazel configuration and initializes a typed BuildContext."""
     with open(config_path, "r") as f:
         bazel_config = json.load(f)
 

@@ -79,4 +79,5 @@ def cmake_build(name, sdist = None, build_deps = None, tool_deps = {}, repo = No
         name = "wheel",
         actual = ":" + build_name,
         visibility = ["//visibility:public"],
+        tags = tags,
     )

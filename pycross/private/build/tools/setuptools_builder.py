@@ -1,4 +1,4 @@
-"""Setuptools / Standard PEP 517 builder using procedural composition with BuildContext."""
+"""Setuptools / Standard PEP 517 builder."""
 
 import sys
 

@@ -31,8 +31,10 @@ def get_wrapper_flags(cflags: str) -> List[str]:
     return result
 
 
-def wrap_compiler(lang: str, cc_exe: str, cflags: str, python_exe: Path, bin_dir: Path) -> Path:
-    """Generate custom compiler wrapper scripts to filter Apple linker compatibility flags."""
+def wrap_compiler(
+    lang: str, cc_exe: str, cflags: str, python_exe: Path, bin_dir: Path, *, strip_unwindlib: bool = False
+) -> Path:
+    """Generate custom compiler wrapper scripts to filter incompatible linker flags."""
     assert lang in ("cc", "cxx")
 
     cc_path = Path(cc_exe)
@@ -56,17 +58,20 @@ def wrap_compiler(lang: str, cc_exe: str, cflags: str, python_exe: Path, bin_dir
 
                 cc_exe = "{cc_exe}"
 
+                skip_flags = {{
+                    "-Wl,--start-group",
+                    "-Wl,--end-group",
+                    "-Wl,-start_group",
+                    "-Wl,-end_group",
+                    "-Wl,--as-needed",
+                    "-Wl,--allow-shlib-undefined",
+                    "-Wl,-O1",
+                }}
+                {"skip_flags.add('--unwindlib=none')" if strip_unwindlib else "# --unwindlib=none not stripped (non-LLVM-Linux toolchain)"}
+
                 filtered_args = []
                 for arg in sys.argv[1:]:
-                    if arg in (
-                        "-Wl,--start-group",
-                        "-Wl,--end-group",
-                        "-Wl,-start_group",
-                        "-Wl,-end_group",
-                        "-Wl,--as-needed",
-                        "-Wl,--allow-shlib-undefined",
-                        "-Wl,-O1"
-                    ):
+                    if arg in skip_flags:
                         continue
                     filtered_args.append(arg)
 
@@ -81,16 +86,16 @@ def wrap_compiler(lang: str, cc_exe: str, cflags: str, python_exe: Path, bin_dir
 
 def setup_cc_mixin(ctx: BuildContext, cc_config: Dict[str, Any]) -> None:
     """Populate environment parameters and wrappers for Bazel CC Toolchains."""
-    hook_bin_dir = ctx.temp_dir / "cc_hook" / "bin"
-    hook_include_dir = ctx.temp_dir / "cc_hook" / "include"
-    hook_lib_dir = ctx.temp_dir / "cc_hook" / "lib"
-    hook_bin_dir.mkdir(parents=True, exist_ok=True)
-    hook_include_dir.mkdir(parents=True, exist_ok=True)
-    hook_lib_dir.mkdir(parents=True, exist_ok=True)
+    mixin_bin_dir = ctx.temp_dir / "cc_mixin" / "bin"
+    mixin_include_dir = ctx.temp_dir / "cc_mixin" / "include"
+    mixin_lib_dir = ctx.temp_dir / "cc_mixin" / "lib"
+    mixin_bin_dir.mkdir(parents=True, exist_ok=True)
+    mixin_include_dir.mkdir(parents=True, exist_ok=True)
+    mixin_lib_dir.mkdir(parents=True, exist_ok=True)
 
     for lib_path_str in cc_config.get("static_libs", []) + cc_config.get("shared_libs", []):
         lib_path = Path(replace_placeholder(ctx.prefix, lib_path_str))
-        dest = hook_lib_dir / lib_path.name
+        dest = mixin_lib_dir / lib_path.name
         if not dest.exists():
             dest.symlink_to(lib_path.absolute())
 
@@ -98,8 +103,27 @@ def setup_cc_mixin(ctx: BuildContext, cc_config: Dict[str, Any]) -> None:
     orig_cxx = replace_placeholder(ctx.prefix, cc_config["CXX"])
     cflags = replace_placeholder(ctx.prefix, cc_config["CFLAGS"])
 
-    wrapped_cc = wrap_compiler("cc", orig_cc, cflags, ctx.exec_python, hook_bin_dir)
-    wrapped_cxx = wrap_compiler("cxx", orig_cxx, cflags, ctx.exec_python, hook_bin_dir)
+    # Detect LLVM-on-Linux: Rust/rustc hardcodes -lgcc_s on Linux, but hermetic
+    # LLVM toolchains use compiler-rt and lack libgcc_s. When this combination is
+    # detected, we (a) write dummy libgcc_s linker scripts that redirect to
+    # libunwind, and (b) strip --unwindlib=none from compiler invocations so that
+    # the unwinder symbols are actually resolved.
+    cc_name = Path(orig_cc).name
+    is_linux = cc_config.get("target_os") == "linux"
+    is_llvm = "clang" in cc_name or "zig" in cc_name
+    needs_libgcc_s_redirect = is_linux and is_llvm
+
+    if needs_libgcc_s_redirect:
+        for ext in ("so", "a"):
+            with open(mixin_lib_dir / f"libgcc_s.{ext}", "w") as f:
+                f.write("INPUT(-lunwind)\n")
+
+    wrapped_cc = wrap_compiler(
+        "cc", orig_cc, cflags, ctx.exec_python, mixin_bin_dir, strip_unwindlib=needs_libgcc_s_redirect
+    )
+    wrapped_cxx = wrap_compiler(
+        "cxx", orig_cxx, cflags, ctx.exec_python, mixin_bin_dir, strip_unwindlib=needs_libgcc_s_redirect
+    )
 
     extra_includes = []
     for inc_dir_str in cc_config.get("include_dirs", []):
@@ -120,11 +144,11 @@ def setup_cc_mixin(ctx: BuildContext, cc_config: Dict[str, Any]) -> None:
         return " ".join(filtered)
 
     ldflags = (
-        filter_cxx_stub_paths(replace_placeholder(ctx.prefix, cc_config["LDFLAGS"])) + f" -L{hook_lib_dir.absolute()}"
+        filter_cxx_stub_paths(replace_placeholder(ctx.prefix, cc_config["LDFLAGS"])) + f" -L{mixin_lib_dir.absolute()}"
     )
     ldsharedflags = (
         filter_cxx_stub_paths(replace_placeholder(ctx.prefix, cc_config["LDSHAREDFLAGS"]))
-        + f" -L{hook_lib_dir.absolute()}"
+        + f" -L{mixin_lib_dir.absolute()}"
     )
 
     ctx.sysconfig_vars.update(
@@ -132,10 +156,10 @@ def setup_cc_mixin(ctx: BuildContext, cc_config: Dict[str, Any]) -> None:
             "CC": str(wrapped_cc.absolute()),
             "CXX": str(wrapped_cxx.absolute()),
             "CFLAGS": cflags
-            + f" -I{hook_include_dir.absolute()}"
+            + f" -I{mixin_include_dir.absolute()}"
             + (f" {extra_includes_str}" if extra_includes_str else ""),
             "CXXFLAGS": replace_placeholder(ctx.prefix, cc_config["CXXFLAGS"])
-            + f" -I{hook_include_dir.absolute()}"
+            + f" -I{mixin_include_dir.absolute()}"
             + (f" {extra_includes_str}" if extra_includes_str else ""),
             "LDFLAGS": ldflags,
             "LDSHAREDFLAGS": ldsharedflags,
@@ -144,7 +168,7 @@ def setup_cc_mixin(ctx: BuildContext, cc_config: Dict[str, Any]) -> None:
         }
     )
     # Propagate the compiled CC toolchain flags directly to the shell environment dictionary
-    # so that downstream non-python builders (like Meson/Ninja) receive them cleanly!
+    # so that downstream non-python builders (like Meson/Ninja) receive them cleanly.
     for env_key in ["CC", "CXX", "CFLAGS", "CXXFLAGS", "LDFLAGS", "LDSHAREDFLAGS", "AR", "ARFLAGS"]:
         if env_key in ctx.sysconfig_vars:
             ctx.build_env[env_key] = ctx.sysconfig_vars[env_key]
@@ -154,13 +178,13 @@ def setup_cc_mixin(ctx: BuildContext, cc_config: Dict[str, Any]) -> None:
         ctx.sysconfig_vars["LDSHARED"] += " -Wl,-undefined,dynamic_lookup"
     ctx.sysconfig_vars["LDCXXSHARED"] = ctx.sysconfig_vars["LDSHARED"]
 
-    include_paths = [str(hook_include_dir.absolute())] + [
+    include_paths = [str(mixin_include_dir.absolute())] + [
         str(Path(replace_placeholder(ctx.prefix, p)).absolute()) for p in cc_config.get("include_dirs", [])
     ]
     ctx.build_env.update(
         {
-            "PATH": f"{hook_bin_dir.absolute()}:{ctx.build_env.get('PATH', '')}",
-            "PYCROSS_LIBRARY_PATH": str(hook_lib_dir.absolute()),
+            "PATH": f"{mixin_bin_dir.absolute()}:{ctx.build_env.get('PATH', '')}",
+            "PYCROSS_LIBRARY_PATH": str(mixin_lib_dir.absolute()),
             "PYCROSS_INCLUDE_PATH": ":".join(include_paths),
             "CC": ctx.sysconfig_vars["CC"],
             "CXX": ctx.sysconfig_vars["CXX"],

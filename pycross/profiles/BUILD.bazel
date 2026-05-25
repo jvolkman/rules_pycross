@@ -8,6 +8,7 @@ bzl_library(
     deps = [
         ":util",
         "//pycross:defs",
+        "//pycross/private/build:rust_tool_wrapper",
     ],
 )
 

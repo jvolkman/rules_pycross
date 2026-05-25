@@ -1,9 +1,8 @@
-"""Maturin / PEP 517 Rust builder using procedural composition with BuildContext."""
+"""Maturin / PEP 517 Rust builder."""
 
 import os
 import re
 import shlex
-import shutil
 import stat
 import sys
 import textwrap
@@ -38,6 +37,7 @@ def pre_build(ctx):
     target_triple = rust_config.get("target_triple")
     if not target_triple:
         raise ValueError("target_triple must be defined in rust_config")
+    is_native = target_triple == rust_config.get("host_triple")
     triple_env_name = target_triple.replace("-", "_").upper()
 
     version = ctx.sysconfig_vars.get("VERSION")
@@ -49,16 +49,17 @@ def pre_build(ctx):
     sizeof_void_p = int(ctx.sysconfig_vars.get("SIZEOF_VOID_P", 8))
     pointer_width = str(sizeof_void_p * 8)
 
-    hook_lib_dir = ctx.temp_dir / "cc_hook" / "lib"
+    mixin_lib_dir = ctx.temp_dir / "cc_mixin" / "lib"
     lib_name = f"python{version}"
-    if hook_lib_dir.exists():
-        for f in hook_lib_dir.glob("libpython*"):
+    if mixin_lib_dir.exists():
+        for f in mixin_lib_dir.glob("libpython*"):
             m = re.match(r"libpython(.*)\.(a|so|dylib)", f.name)
             if m:
                 lib_name = f"python{m.group(1)}"
                 break
 
     is_darwin = "apple-darwin" in target_triple
+    is_linux = "linux" in target_triple
     pyo3_config_lines = [
         "implementation=CPython",
         f"version={version}",
@@ -68,22 +69,26 @@ def pre_build(ctx):
         f"executable={ctx.target_python.absolute()}",
         "suppress_build_script_link_lines=true",
     ]
+    if not is_darwin and not is_linux:
+        pyo3_config_lines.append(f"extra_build_script_line=cargo:rustc-link-lib={lib_name}")
     if not is_darwin:
-        pyo3_config_lines.extend(
-            [
-                f"extra_build_script_line=cargo:rustc-link-search=native={hook_lib_dir.absolute()}",
-                f"extra_build_script_line=cargo:rustc-link-lib={lib_name}",
-            ]
-        )
+        pyo3_config_lines.append(f"extra_build_script_line=cargo:rustc-link-search=native={mixin_lib_dir.absolute()}")
     pyo3_config_path = ctx.temp_dir / "pyo3_config.txt"
     pyo3_config_path.write_text("\n".join(pyo3_config_lines) + "\n")
 
     ctx.build_env["PYO3_CONFIG_FILE"] = str(pyo3_config_path.absolute())
     ctx.build_env["PYO3_NO_PYTHON"] = "1"
 
-    ctx.build_env["RUSTC"] = resolve_sandbox_path(ctx.prefix, rust_config["rustc"])
+    rustc_bin = resolve_sandbox_path(ctx.prefix, rust_config["rustc"])
+    ctx.build_env["RUSTC"] = rustc_bin
+
+    cargo_bin = None
     if rust_config.get("cargo"):
-        ctx.build_env["CARGO"] = resolve_sandbox_path(ctx.prefix, rust_config["cargo"])
+        cargo_bin = resolve_sandbox_path(ctx.prefix, rust_config["cargo"])
+        ctx.build_env["CARGO"] = cargo_bin
+
+    # Prevent maturin from attempting to auto-bootstrap Rust via puccinialin
+    ctx.build_env["MATURIN_NO_INSTALL_RUST"] = "1"
 
     wrapped_cxx = ctx.sysconfig_vars.get("CXX")
     if not wrapped_cxx:
@@ -123,13 +128,10 @@ def pre_build(ctx):
             if not host_stdlib_src_path.exists():
                 raise RuntimeError(f"host_stdlib missing at {host_stdlib_src_path}")
             if host_stdlib_dst_path.exists() or host_stdlib_dst_path.is_symlink():
-                if host_stdlib_dst_path.is_symlink():
-                    host_stdlib_dst_path.unlink(missing_ok=True)
-                else:
-                    shutil.rmtree(host_stdlib_dst_path, ignore_errors=True)
+                host_stdlib_dst_path.unlink(missing_ok=True)
 
             host_stdlib_dst_path.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copytree(host_stdlib_src_path, host_stdlib_dst_path, symlinks=False, dirs_exist_ok=True)
+            os.symlink(host_stdlib_src_path.resolve(), host_stdlib_dst_path)
 
             target_stdlib_src_path = ctx.prefix / Path(f"external/{cross_repo_name}/lib/rustlib/{target_triple}/lib")
             if target_stdlib_src_path and target_stdlib_dst_path:
@@ -137,12 +139,9 @@ def pre_build(ctx):
                     raise RuntimeError(f"target_stdlib missing at {target_stdlib_src_path}")
                 if target_stdlib_src_path != host_stdlib_src_path:
                     if target_stdlib_dst_path.exists() or target_stdlib_dst_path.is_symlink():
-                        if target_stdlib_dst_path.is_symlink():
-                            target_stdlib_dst_path.unlink(missing_ok=True)
-                        else:
-                            shutil.rmtree(target_stdlib_dst_path, ignore_errors=True)
+                        target_stdlib_dst_path.unlink(missing_ok=True)
                     target_stdlib_dst_path.parent.mkdir(parents=True, exist_ok=True)
-                    shutil.copytree(target_stdlib_src_path, target_stdlib_dst_path, symlinks=False, dirs_exist_ok=True)
+                    os.symlink(target_stdlib_src_path.resolve(), target_stdlib_dst_path)
     except Exception as e:
         raise RuntimeError(f"Failed to populate hermetic Rust sysroot: {e}") from e
 
@@ -161,7 +160,7 @@ def pre_build(ctx):
     if not has_sysroot and os.path.isdir({repr(str(sysroot_dir.absolute()))}):
         args = ["--sysroot", {repr(str(sysroot_dir.absolute()))}] + args
 
-    is_target = any({repr(target_triple)} in arg for arg in args)
+    is_target = any({repr(target_triple)} in arg for arg in args) or {repr(is_native)}
     if is_target:
         for arg in {repr(ldflags_args)}:
             args.extend(["-C", f"link-arg={{arg}}"])
@@ -173,31 +172,24 @@ def pre_build(ctx):
     st = wrapper_path.stat()
     wrapper_path.chmod(st.st_mode | stat.S_IEXEC)
 
-    parent_cargo_dir = ctx.prefix / ".cargo"
-    parent_cargo_dir.mkdir(parents=True, exist_ok=True)
-
-    parent_flat_config = parent_cargo_dir / "config"
-    if parent_flat_config.exists() or parent_flat_config.is_symlink():
-        parent_flat_config.unlink(missing_ok=True)
-
-    cargo_config_lines = ["[build]", f'rustc-wrapper = "{wrapper_path.absolute()}"']
-    (parent_cargo_dir / "config.toml").write_text("\n".join(cargo_config_lines) + "\n")
-
+    # Write Cargo config to CARGO_HOME rather than ctx.prefix/.cargo/ to avoid
+    # polluting the shared sandbox execroot. Cargo checks $CARGO_HOME/config.toml
+    # with highest priority, so this is reliable as long as CARGO_HOME is set.
     cargo_home = ctx.temp_dir / "cargo_home"
     cargo_home.mkdir(parents=True, exist_ok=True)
 
-    ctx.build_env["CARGO_HOME"] = str(cargo_home.absolute())
-    os.environ["CARGO_HOME"] = str(cargo_home.absolute())
+    cargo_config_lines = ["[build]", f'rustc-wrapper = "{wrapper_path.absolute()}"']
+    (cargo_home / "config.toml").write_text("\n".join(cargo_config_lines) + "\n")
 
+    ctx.build_env["CARGO_HOME"] = str(cargo_home.absolute())
+
+    # Ensure inherited RUSTFLAGS/CARGO_ENCODED_RUSTFLAGS don't leak into the
+    # build — these conflict with per-target settings in the rustc wrapper.
     for var_name in ("RUSTFLAGS", "CARGO_ENCODED_RUSTFLAGS"):
-        if var_name in ctx.build_env:
-            del ctx.build_env[var_name]
-        if var_name in os.environ:
-            del os.environ[var_name]
+        ctx.build_env.pop(var_name, None)
 
     ctx.build_env["CARGO_TERM_VERBOSE"] = "true"
     ctx.build_env["PYO3_USE_ABI3_FORWARD_COMPATIBILITY"] = "1"
-    os.environ["PYO3_USE_ABI3_FORWARD_COMPATIBILITY"] = "1"
 
 
 def main():

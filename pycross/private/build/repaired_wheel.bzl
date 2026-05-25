@@ -38,13 +38,6 @@ def _pycross_repaired_wheel_impl(ctx):
                 lib_dirs.append(lib.dirname)
                 data_inputs.append(depset([lib]))
 
-    # Build environment.
-    env = dict(ctx.configuration.default_shell_env)
-    env["PYCROSS_WHEEL_OUTPUT_ROOT"] = out_wheel_directory.path
-
-    if lib_dirs:
-        env["PYCROSS_LIBRARY_PATH"] = ":".join(["$PWD/" + d for d in depset(lib_dirs).to_list()])
-
     # Collect inputs.
     input_files = [input_wheel]
     if input_name_file:
@@ -57,72 +50,38 @@ def _pycross_repaired_wheel_impl(ctx):
     if ctx.files.target_environment:
         target_env_file = ctx.files.target_environment[0]
         input_files.append(target_env_file)
-        env["PYCROSS_TARGET_ENVIRONMENT"] = target_env_file.path
 
-    # Staging: rename wheel to its real name so repairwheel can parse the filename.
+    # Build arguments for the repair tool.
+    args = ctx.actions.args()
+    args.add("--wheel-file", input_wheel)
+    args.add("--output-dir", out_wheel_directory.path)
+    args.add("--out-wheel-file", out_wheel.path)
+    args.add("--out-wheel-name-file", out_wheel_name.path)
+    args.add("--out-wheel-dir-basename", out_wheel_directory.basename)
+
     if input_wheel_directory:
-        setup_cmd = """WHEEL_FILE=$(ls {wheel_dir}/*.whl)
-export PYCROSS_WHEEL_FILE="$WHEEL_FILE"
-""".format(
-            wheel_dir = input_wheel_directory.path,
-        )
+        args.add("--wheel-directory", input_wheel_directory.path)
     elif input_name_file:
-        setup_cmd = """mkdir -p {staging}
-REAL_NAME=$(cat {name_file})
-cp {wheel} {staging}/"$REAL_NAME"
-export PYCROSS_WHEEL_FILE={staging}/"$REAL_NAME"
-""".format(
-            wheel = input_wheel.path,
-            name_file = input_name_file.path,
-            staging = staging_dir.path,
-        )
+        args.add("--wheel-name-file", input_name_file.path)
+        args.add("--staging-dir", staging_dir.path)
     else:
-        setup_cmd = """mkdir -p {staging}
-cp {wheel} {staging}/
-export PYCROSS_WHEEL_FILE={staging}/{basename}
-""".format(
-            wheel = input_wheel.path,
-            staging = staging_dir.path,
-            basename = input_wheel.basename,
-        )
+        args.add("--staging-dir", staging_dir.path)
 
-    env_exports = "\n".join([
-        'export %s="%s"' % (k, v)
-        for k, v in env.items()
-    ])
+    for d in depset(lib_dirs).to_list():
+        args.add("--lib-dir", d)
 
-    tool_exe = ctx.executable._repair_tool
+    if target_env_file:
+        args.add("--target-environment", target_env_file.path)
 
     outputs = [out_wheel_directory, out_wheel, out_wheel_name]
     if staging_dir:
         outputs.append(staging_dir)
 
-    ctx.actions.run_shell(
+    ctx.actions.run(
+        executable = ctx.executable._repair_tool,
+        arguments = [args],
         inputs = depset(input_files, transitive = data_inputs),
         outputs = outputs,
-        tools = [ctx.attr._repair_tool[DefaultInfo].files_to_run],
-        command = """set -e
-{env_exports}
-{setup_cmd}
-{tool}
-
-# Collect output
-WHEEL=$(ls {out_wheel_dir}/*.whl 2>/dev/null | head -1)
-if [ -z "$WHEEL" ]; then
-    echo "ERROR: No .whl file found in repair output" >&2
-    exit 1
-fi
-ln -sf "{wheel_dir_basename}/$(basename "$WHEEL")" {out_wheel}
-basename "$WHEEL" > {out_wheel_name}
-""".format(
-            env_exports = env_exports,
-            setup_cmd = setup_cmd,
-            tool = tool_exe.path,
-            out_wheel_dir = out_wheel_directory.path,
-            wheel_dir_basename = out_wheel_directory.basename,
-            out_wheel = out_wheel.path,
-            out_wheel_name = out_wheel_name.path,
-        ),
         mnemonic = "RepairWheel",
         progress_message = "Repairing %s" % input_wheel.basename,
     )

@@ -57,51 +57,41 @@ def _expand_locations_and_vars(attribute_name, ctx, val):
     return val
 
 def _get_target_os_and_cpu(cpp_toolchain):
-    """Safely extracts and normalizes target OS and CPU from C++ toolchain info."""
+    """Extracts and normalizes target OS and CPU from cpp_toolchain.cpu.
+
+    Uses cpp_toolchain.cpu as the single source of truth for determinism.
+    Fails explicitly if OS or CPU cannot be determined.
+    """
     target_os = None
     target_cpu = None
 
-    # 1. Try parsing from target_gnu_system_name (e.g. x86_64-unknown-linux-gnu, x86_64-apple-darwin)
-    sys_name = getattr(cpp_toolchain, "target_gnu_system_name", None)
-    if sys_name:
-        sys_name_lower = sys_name.lower()
-        if "linux" in sys_name_lower:
-            target_os = "linux"
-        elif "apple" in sys_name_lower or "darwin" in sys_name_lower:
+    cpu = getattr(cpp_toolchain, "cpu", None)
+    if cpu:
+        cpu_lower = cpu.lower()
+        if "darwin" in cpu_lower:
             target_os = "darwin"
-        elif "windows" in sys_name_lower or "mingw" in sys_name_lower or "msvc" in sys_name_lower:
+        elif "linux" in cpu_lower or cpu_lower == "k8" or cpu_lower == "piii" or cpu_lower == "aarch64":
+            target_os = "linux"
+        elif "windows" in cpu_lower or "win" in cpu_lower:
             target_os = "windows"
 
-        if "x86_64" in sys_name_lower or "amd64" in sys_name_lower:
+        if "k8" in cpu_lower or "x86_64" in cpu_lower or "amd64" in cpu_lower:
             target_cpu = "x86_64"
-        elif "aarch64" in sys_name_lower or "arm64" in sys_name_lower:
+        elif "aarch64" in cpu_lower or "arm64" in cpu_lower:
             target_cpu = "aarch64"
-        elif "arm" in sys_name_lower:
+        elif "arm" in cpu_lower:
             target_cpu = "arm"
-        elif "i386" in sys_name_lower or "i686" in sys_name_lower or "x86" in sys_name_lower:
+        elif "x86" in cpu_lower or "i386" in cpu_lower or "i686" in cpu_lower or cpu_lower == "piii":
             target_cpu = "x86"
 
-    # 2. Fallback to cpp_toolchain.cpu (e.g. k8, darwin, darwin_arm64)
-    if not target_os or not target_cpu:
-        cpu = getattr(cpp_toolchain, "cpu", None)
-        if cpu:
-            cpu_lower = cpu.lower()
-            if not target_os:
-                if "darwin" in cpu_lower:
-                    target_os = "darwin"
-                elif "linux" in cpu_lower or cpu_lower == "k8" or cpu_lower == "piii" or cpu_lower == "aarch64":
-                    target_os = "linux"
-                elif "windows" in cpu_lower or "win" in cpu_lower:
-                    target_os = "windows"
-            if not target_cpu:
-                if "k8" in cpu_lower or "x86_64" in cpu_lower or "amd64" in cpu_lower:
-                    target_cpu = "x86_64"
-                elif "aarch64" in cpu_lower or "arm64" in cpu_lower:
-                    target_cpu = "aarch64"
-                elif "arm" in cpu_lower:
-                    target_cpu = "arm"
-                elif "x86" in cpu_lower or "i386" in cpu_lower or "i686" in cpu_lower or cpu_lower == "piii":
-                    target_cpu = "x86"
+    if not target_os:
+        fail("Cannot determine target OS from cpp_toolchain.cpu='{}'. ".format(cpu) +
+             "Ensure your C++ toolchain sets a recognized cpu value " +
+             "(e.g., k8, darwin, darwin_arm64, aarch64).")
+    if not target_cpu:
+        fail("Cannot determine target CPU from cpp_toolchain.cpu='{}'. ".format(cpu) +
+             "Ensure your C++ toolchain sets a recognized cpu value " +
+             "(e.g., k8, darwin_arm64, aarch64).")
 
     return target_os, target_cpu
 

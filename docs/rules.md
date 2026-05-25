@@ -157,6 +157,26 @@ pycross_repaired_wheel(<a href="#pycross_repaired_wheel-name">name</a>, <a href=
 | <a id="pycross_repaired_wheel-wheel"></a>wheel |  The input wheel to repair.   | <a href="https://bazel.build/concepts/labels">Label</a> | required |  |
 
 
+<a id="pycross_rust_mixin"></a>
+
+## pycross_rust_mixin
+
+<pre>
+load("@rules_pycross//pycross:defs.bzl", "pycross_rust_mixin")
+
+pycross_rust_mixin(<a href="#pycross_rust_mixin-name">name</a>)
+</pre>
+
+
+
+**ATTRIBUTES**
+
+
+| Name  | Description | Type | Mandatory | Default |
+| :------------- | :------------- | :------------- | :------------- | :------------- |
+| <a id="pycross_rust_mixin-name"></a>name |  A unique name for this target.   | <a href="https://bazel.build/concepts/labels#target-names">Name</a> | required |  |
+
+
 <a id="pycross_target_environment"></a>
 
 ## pycross_target_environment

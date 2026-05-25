@@ -83,6 +83,30 @@ wheels = [
 ]
 
 [[package]]
+name = "flit-core"
+version = "3.12.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/69/59/b6fc2188dfc7ea4f936cd12b49d707f66a1cb7a1d2c16172963534db741b/flit_core-3.12.0.tar.gz", hash = "sha256:18f63100d6f94385c6ed57a72073443e1a71a4acb4339491615d0f16d6ff01b2", size = 53690, upload-time = "2025-03-25T08:03:23.969Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/f2/65/b6ba90634c984a4fcc02c7e3afe523fef500c4980fec67cc27536ee50acf/flit_core-3.12.0-py3-none-any.whl", hash = "sha256:e7a0304069ea895172e3c7bb703292e992c5d1555dd1233ab7b5621b5b69e62c", size = 45594, upload-time = "2025-03-25T08:03:20.772Z" },
+]
+
+[[package]]
+name = "hatchling"
+version = "1.29.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "packaging" },
+    { name = "pathspec" },
+    { name = "pluggy" },
+    { name = "trove-classifiers" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/cf/9c/b4cfe330cd4f49cff17fd771154730555fa4123beb7f292cf0098b4e6c20/hatchling-1.29.0.tar.gz", hash = "sha256:793c31816d952cee405b83488ce001c719f325d9cda69f1fc4cd750527640ea6", size = 55656, upload-time = "2026-02-23T19:42:06.539Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/d3/8a/44032265776062a89171285ede55a0bdaadc8ac00f27f0512a71a9e3e1c8/hatchling-1.29.0-py3-none-any.whl", hash = "sha256:50af9343281f34785fab12da82e445ed987a6efb34fd8c2fc0f6e6630dbcc1b0", size = 76356, upload-time = "2026-02-23T19:42:05.197Z" },
+]
+
+[[package]]
 name = "ipython"
 version = "8.39.0"
 source = { registry = "https://pypi.org/simple" }
@@ -232,6 +256,15 @@ wheels = [
 ]
 
 [[package]]
+name = "pathspec"
+version = "1.1.1"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/5a/82/42f767fc1c1143d6fd36efb827202a2d997a375e160a71eb2888a925aac1/pathspec-1.1.1.tar.gz", hash = "sha256:17db5ecd524104a120e173814c90367a96a98d07c45b2e10c2f3919fff91bf5a", size = 135180, upload-time = "2026-04-27T01:46:08.907Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/f1/d9/7fb5aa316bc299258e68c73ba3bddbc499654a07f151cba08f6153988714/pathspec-1.1.1-py3-none-any.whl", hash = "sha256:a00ce642f577bf7f473932318056212bc4f8bfdf53128c78bbd5af0b9b20b189", size = 57328, upload-time = "2026-04-27T01:46:07.06Z" },
+]
+
+[[package]]
 name = "pexpect"
 version = "4.9.0"
 source = { registry = "https://pypi.org/simple" }
@@ -241,6 +274,15 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/42/92/cc564bf6381ff43ce1f4d06852fc19a2f11d180f23dc32d9588bee2f149d/pexpect-4.9.0.tar.gz", hash = "sha256:ee7d41123f3c9911050ea2c2dac107568dc43b2d3b0c7557a33212c398ead30f", size = 166450, upload-time = "2023-11-25T09:07:26.339Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/9e/c3/059298687310d527a58bb01f3b1965787ee3b40dce76752eda8b44e9a2c5/pexpect-4.9.0-py2.py3-none-any.whl", hash = "sha256:7236d1e080e4936be2dc3e326cec0af72acf9212a7e1d060210e70a47e253523", size = 63772, upload-time = "2023-11-25T06:56:14.81Z" },
+]
+
+[[package]]
+name = "pluggy"
+version = "1.6.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/f9/e2/3e91f31a7d2b083fe6ef3fa267035b518369d9511ffab804f839851d2779/pluggy-1.6.0.tar.gz", hash = "sha256:7dcc130b76258d33b90f61b658791dede3486c3e6bfb003ee5c9bfb396dd22f3", size = 69412, upload-time = "2025-05-15T12:30:07.975Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/54/20/4d324d65cc6d9205fabedc306948156824eb9f0ee1633355a8f7ec5c66bf/pluggy-1.6.0-py3-none-any.whl", hash = "sha256:e920276dd6813095e9377c0bc5566d94c932c33b27a3e3945d8389c374dd4746", size = 20538, upload-time = "2025-05-15T12:30:06.134Z" },
 ]
 
 [[package]]
@@ -353,6 +395,8 @@ dependencies = [
     { name = "contourpy" },
     { name = "cython" },
     { name = "filelock" },
+    { name = "flit-core" },
+    { name = "hatchling" },
     { name = "ipython" },
     { name = "maturin" },
     { name = "meson" },
@@ -365,6 +409,7 @@ dependencies = [
     { name = "pyproject-metadata" },
     { name = "pywavelets" },
     { name = "rpds-py" },
+    { name = "scikit-build-core" },
     { name = "setproctitle" },
     { name = "setuptools" },
     { name = "tomli" },
@@ -377,6 +422,8 @@ requires-dist = [
     { name = "contourpy", specifier = "==1.3.1" },
     { name = "cython", specifier = ">=3.0.6" },
     { name = "filelock", specifier = "==3.17.0" },
+    { name = "flit-core" },
+    { name = "hatchling" },
     { name = "ipython", specifier = ">=8.0.1" },
     { name = "maturin" },
     { name = "meson" },
@@ -389,11 +436,25 @@ requires-dist = [
     { name = "pyproject-metadata", specifier = "==0.8.1" },
     { name = "pywavelets", specifier = "==1.8.0" },
     { name = "rpds-py", specifier = "==0.23.0" },
+    { name = "scikit-build-core" },
     { name = "setproctitle", specifier = "==1.3.2" },
     { name = "setuptools", specifier = "==69.5.1" },
     { name = "tomli", specifier = "==2.2.1" },
     { name = "versioneer", extras = ["toml"] },
     { name = "wheel", specifier = "==0.37.0" },
+]
+
+[[package]]
+name = "scikit-build-core"
+version = "0.12.2"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "packaging" },
+    { name = "pathspec" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/28/cd/9ebb50029b6d8a3ee9e38cdce514ebd70190ec1edf28ab0a1f66d0b84670/scikit_build_core-0.12.2.tar.gz", hash = "sha256:562e0bbc9de1a354c87825ccf732080268d6582a0200f648e8c4a2dcb1e3736d", size = 303553, upload-time = "2026-03-05T18:25:57.666Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/07/49/b2f0fbe3165d55c02e7f9eec6a10685d518af0ef6e919ff2f589c2d15c85/scikit_build_core-0.12.2-py3-none-any.whl", hash = "sha256:6ea4730da400f9a998ec3287bd3ebc1d751fe45ad0a93451bead8618adbc02b1", size = 192625, upload-time = "2026-03-05T18:25:56.207Z" },
 ]
 
 [[package]]
@@ -450,6 +511,15 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/1b/22/40f55b26baeab80c2d7b3f1db0682f8954e4617fee7d90ce634022ef05c6/traitlets-5.15.0.tar.gz", hash = "sha256:4fead733f81cf1c4c938e06f8ca4633896833c9d89eff878159457f4d4392971", size = 163197, upload-time = "2026-05-06T08:05:58.016Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/da/98/a9937a969d018a23badfea0b381f66783649d48e0ea6c41923265c3cbeb3/traitlets-5.15.0-py3-none-any.whl", hash = "sha256:fb36a18867a6803deab09f3c5e0fa81bb7b26a5c9e82501c9933f759166eff40", size = 85877, upload-time = "2026-05-06T08:05:55.853Z" },
+]
+
+[[package]]
+name = "trove-classifiers"
+version = "2026.5.22.10"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/86/b6/1c41aa221b157b624ea1a72e975404ef228724d249011ee411ac211a615e/trove_classifiers-2026.5.22.10.tar.gz", hash = "sha256:5477e9974e91904fb2cfa4a7581ab6e2f30c2c38d847fd00ed866080748101d5", size = 17061, upload-time = "2026-05-22T10:17:28.99Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/c9/02/9a14d3048ffa4f45b7c60956a9b22688dd925d6de50f6baf7e55f3664942/trove_classifiers-2026.5.22.10-py3-none-any.whl", hash = "sha256:01fe864225726e03efb843827ecabfe319fc4dee8dd66d65b8996cb09be46e2c", size = 14225, upload-time = "2026-05-22T10:17:27.569Z" },
 ]
 
 [[package]]

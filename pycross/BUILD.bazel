@@ -27,6 +27,8 @@ bzl_library(
         "//pycross/private/build:missing_dependency",
         "//pycross/private/build:pep517_build",
         "//pycross/private/build:repaired_wheel",
+        "//pycross/private/build:rust_mixin",
+        "//pycross/private/build:rust_tool_wrapper",
         "//pycross/private/build:wheel_bin_tool",
         "//pycross/private/build:wheel_build",
     ],

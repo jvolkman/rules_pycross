@@ -1,4 +1,4 @@
-"""Meson-specific PEP 517 builder using procedural composition with BuildContext."""
+"""Meson PEP 517 builder."""
 
 import sys
 
