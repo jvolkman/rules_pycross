@@ -171,15 +171,14 @@ def meson_build(
             actual_path_tools.append(":" + cython_wrapper_name)
 
     # Stage 1: Extract CC toolchains and static libs into a Mixin
-    if native_deps or copts or linkopts:
-        pycross_cc_mixin(
-            name = cc_mixin_name,
-            deps = native_deps,
-            copts = copts,
-            linkopts = linkopts,
-            visibility = ["//visibility:private"],
-        )
-        mixins.append(":" + cc_mixin_name)
+    pycross_cc_mixin(
+        name = cc_mixin_name,
+        deps = native_deps,
+        copts = copts,
+        linkopts = linkopts,
+        visibility = ["//visibility:private"],
+    )
+    mixins.append(":" + cc_mixin_name)
 
     merged_deps = []
     seen = {}
