@@ -167,6 +167,25 @@ py_binary(
     ],
 )
 
+py_test(
+    name = "wheel_builder_shebang_test",
+    size = "small",
+    srcs = [
+        "wheel_builder.py",
+        "wheel_builder_shebang_test.py",
+    ],
+    imports = ["../../.."],
+    tags = ["unit"],
+    deps = [
+        ":args",
+        ":target_environment",
+        "//pycross/private/tools/crossenv",
+        "@rules_pycross_internal//deps:build",
+        "@rules_pycross_internal//deps:packaging",
+        "@rules_pycross_internal//deps:tomli",
+    ],
+)
+
 py_binary(
     name = "wheel_installer",
     srcs = ["wheel_installer.py"],
