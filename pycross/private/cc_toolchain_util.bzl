@@ -259,6 +259,8 @@ def absolutize_path_in_str(workspace_name, root_str, text, force = False):
     """
     new_text = _prefix(text, "external/", root_str)
     if new_text == text:
+        new_text = _prefix(text, "../", root_str)  # Support Bzlmod sibling repository layout relative paths
+    if new_text == text:
         new_text = _prefix(text, workspace_name + "/", root_str)
     if new_text == text:
         new_text = _prefix(text, "bazel-out/", root_str)

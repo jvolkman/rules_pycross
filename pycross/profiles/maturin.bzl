@@ -112,15 +112,14 @@ def maturin_build(name, sdist = None, build_deps = None, tool_deps = {}, repo = 
 
     # Stage 1: Create C++ toolchain mixin if C++ options or dependencies exist
     cc_mixin_name = name + "_cc_mixin"
-    if cc_deps or copts or linkopts:
-        pycross_cc_mixin(
-            name = cc_mixin_name,
-            deps = cc_deps,
-            copts = copts,
-            linkopts = linkopts,
-            visibility = ["//visibility:private"],
-        )
-        mixins.append(":" + cc_mixin_name)
+    pycross_cc_mixin(
+        name = cc_mixin_name,
+        deps = cc_deps,
+        copts = copts,
+        linkopts = linkopts,
+        visibility = ["//visibility:private"],
+    )
+    mixins.append(":" + cc_mixin_name)
 
     # Stage 1.5: Create Rust toolchain mixin for Maturin build
     rust_mixin_name = name + "_rust_mixin"

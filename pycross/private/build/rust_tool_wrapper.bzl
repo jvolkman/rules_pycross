@@ -21,7 +21,7 @@ def _rust_tool_wrapper_impl(ctx):
     if not tool_file:
         fail("Could not find executable file for tool: %s" % ctx.attr.tool)
 
-    out_file = ctx.actions.declare_file(ctx.label.name)
+    out_file = ctx.actions.declare_file(ctx.attr.tool)
     ctx.actions.symlink(
         output = out_file,
         target_file = tool_file,

@@ -107,6 +107,8 @@ def _pep517_build_impl(ctx):
         })
         inputs.append(exe)
         tools.append(target[DefaultInfo].files_to_run)
+        if target[DefaultInfo].default_runfiles:
+            transitive_inputs.append(target[DefaultInfo].default_runfiles.files)
 
     # 5. Declare output files
     sdist_name = ctx.file.sdist.basename
@@ -143,6 +145,8 @@ def _pep517_build_impl(ctx):
     # 7. Execute pluggable Python builder tool
     # Inject builder runfiles
     tools.append(ctx.attr.builder[DefaultInfo].files_to_run)
+    if ctx.attr.builder[DefaultInfo].default_runfiles:
+        transitive_inputs.append(ctx.attr.builder[DefaultInfo].default_runfiles.files)
 
     sdist_root = out_wheel.dirname + "/sdist"
 

@@ -89,6 +89,7 @@ def pre_build(ctx):
 
     # Prevent maturin from attempting to auto-bootstrap Rust via puccinialin
     ctx.build_env["MATURIN_NO_INSTALL_RUST"] = "1"
+    ctx.build_env["CARGO_BUILD_TARGET"] = target_triple
 
     wrapped_cxx = ctx.sysconfig_vars.get("CXX")
     if not wrapped_cxx:

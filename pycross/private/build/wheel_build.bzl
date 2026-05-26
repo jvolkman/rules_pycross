@@ -20,17 +20,15 @@ def pycross_wheel_build(name, native_deps = [], copts = [], linkopts = [], **kwa
     """
     all_mixins = list(kwargs.pop("mixins", []))
 
-    cc_env_name = None
-    if native_deps or copts or linkopts:
-        cc_env_name = name + "_cc_env"
-        pycross_cc_mixin(
-            name = cc_env_name,
-            deps = native_deps,
-            copts = copts,
-            linkopts = linkopts,
-            visibility = ["//visibility:private"],
-        )
-        all_mixins.append(":" + cc_env_name)
+    cc_env_name = name + "_cc_env"
+    pycross_cc_mixin(
+        name = cc_env_name,
+        deps = native_deps,
+        copts = copts,
+        linkopts = linkopts,
+        visibility = ["//visibility:private"],
+    )
+    all_mixins.append(":" + cc_env_name)
 
     needs_repair = bool(native_deps)
 
