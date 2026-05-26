@@ -266,6 +266,21 @@ def get_wrapper_flags(cflags: str) -> List[str]:
     return result
 
 
+def _is_script(path: Path) -> bool:
+    try:
+        with open(path, "rb") as f:
+            return f.read(2) == b"#!"
+    except OSError:
+        return False
+
+
+def _python_wrapper_shebang(python_exe: Path) -> str:
+    python_path = python_exe.absolute()
+    if sys.platform == "darwin" and _is_script(python_path):
+        return f"#!/usr/bin/env {python_path}"
+    return f"#!{python_path}"
+
+
 def wrap_cc(lang: str, cc_exe: Path, cflags: str, python_exe: Path, bin_dir: Path) -> Path:
     assert lang in ("cc", "cxx")
     version_str = subprocess.check_output([cc_exe, "--version"]).decode("utf-8")
@@ -292,12 +307,13 @@ def wrap_cc(lang: str, cc_exe: Path, cflags: str, python_exe: Path, bin_dir: Pat
         return cc_exe
 
     wrapper_path = bin_dir / wrapper_name
+    shebang = _python_wrapper_shebang(python_exe)
 
     with open(wrapper_path, "w") as f:
         f.write(
             textwrap.dedent(
                 f"""\
-                #!{python_exe.absolute()}
+                {shebang}
                 import os
                 import sys
 
