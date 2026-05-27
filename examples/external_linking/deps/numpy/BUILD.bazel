@@ -35,10 +35,6 @@ meson_build(
     path_tools = [":cython"],
     pkg_config_files = [":gen_openblas_pc_file"],
     sdist = "@uv//numpy:sdist",
-    sdist_python_paths = [
-        "numpy/_core/code_generators",
-        "numpy/_build_utils",
-    ],
 )
 
 # Expose numpy headers to downstream C/C++ packages
