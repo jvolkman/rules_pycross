@@ -197,7 +197,6 @@ class PackageAnnotations:
     copts: List[str] = field(default_factory=list)
     linkopts: List[str] = field(default_factory=list)
     native_deps: List[str] = field(default_factory=list)
-    sdist_python_paths: List[str] = field(default_factory=list)
     config_settings: Dict[str, List[str]] = field(default_factory=dict)
     tool_deps: Dict[str, str] = field(default_factory=dict)
 
@@ -228,7 +227,6 @@ class PackageResolver:
         self._copts = annotations.copts
         self._linkopts = annotations.linkopts
         self._native_deps = annotations.native_deps
-        self._sdist_python_paths = annotations.sdist_python_paths
         self._config_settings = annotations.config_settings
         self._tool_deps = annotations.tool_deps
 
@@ -290,7 +288,6 @@ class PackageResolver:
             copts=self._copts,
             linkopts=self._linkopts,
             native_deps=self._native_deps,
-            sdist_python_paths=self._sdist_python_paths,
             config_settings=self._config_settings,
             tool_deps=self._tool_deps,
         )
@@ -388,9 +385,6 @@ def collect_package_annotations(args: Any, lock_model: RawLockSet) -> Dict[Packa
 
         if annotation.get("native_deps"):
             annotations[resolved_pkg].native_deps = annotation["native_deps"]
-
-        if annotation.get("sdist_python_paths"):
-            annotations[resolved_pkg].sdist_python_paths = annotation["sdist_python_paths"]
 
         if annotation.get("config_settings"):
             annotations[resolved_pkg].config_settings = annotation["config_settings"]

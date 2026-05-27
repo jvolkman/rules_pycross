@@ -34,7 +34,6 @@ def _generate_resolved_lock_repo(lock_info, serialized_lock_model):
             copts = package.copts,
             linkopts = package.linkopts,
             native_deps = package.native_deps,
-            sdist_python_paths = package.sdist_python_paths,
             config_settings = package.config_settings,
             tool_deps = package.tool_deps,
         )
@@ -115,7 +114,6 @@ def _normalize_package_tag(tag, build_profile = None):
         copts = getattr(tag, "copts", []),
         linkopts = getattr(tag, "linkopts", []),
         native_deps = getattr(tag, "native_deps", []),
-        sdist_python_paths = getattr(tag, "sdist_python_paths", []),
         config_settings = getattr(tag, "config_settings", {}),
         tool_deps = getattr(tag, "tool_deps", {}),
     )

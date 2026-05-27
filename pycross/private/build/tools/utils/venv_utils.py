@@ -104,12 +104,6 @@ def inject_python_wrapper(ctx: BuildContext) -> None:
     python_paths_list = [str(p.absolute()) for p in ctx.python_paths]
     sdist_paths = [str(ctx.sdist_dir.absolute())]
 
-    # Add user-configured sdist-relative paths (e.g., vendored build utilities)
-    for rel_path in ctx.bazel_config.get("sdist_python_paths", []):
-        p = ctx.sdist_dir / rel_path
-        if p.is_dir():
-            sdist_paths.append(str(p.absolute()))
-
     with open(python_exe, "w") as f:
         f.write(
             textwrap.dedent(f"""\

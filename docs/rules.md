@@ -86,8 +86,7 @@ pycross_pdm_lock_model(<a href="#pycross_pdm_lock_model-name">name</a>, <a href=
 <pre>
 load("@rules_pycross//pycross:defs.bzl", "pycross_pep517_build")
 
-pycross_pep517_build(<a href="#pycross_pep517_build-name">name</a>, <a href="#pycross_pep517_build-deps">deps</a>, <a href="#pycross_pep517_build-builder">builder</a>, <a href="#pycross_pep517_build-config_settings">config_settings</a>, <a href="#pycross_pep517_build-mixins">mixins</a>, <a href="#pycross_pep517_build-path_tools">path_tools</a>, <a href="#pycross_pep517_build-pkg_config_files">pkg_config_files</a>,
-                     <a href="#pycross_pep517_build-sdist">sdist</a>, <a href="#pycross_pep517_build-sdist_python_paths">sdist_python_paths</a>)
+                     <a href="#pycross_pep517_build-sdist">sdist</a>)
 </pre>
 
 
@@ -105,7 +104,6 @@ pycross_pep517_build(<a href="#pycross_pep517_build-name">name</a>, <a href="#py
 | <a id="pycross_pep517_build-path_tools"></a>path_tools |  -   | <a href="https://bazel.build/concepts/labels">List of labels</a> | optional |  `[]`  |
 | <a id="pycross_pep517_build-pkg_config_files"></a>pkg_config_files |  -   | <a href="https://bazel.build/concepts/labels">List of labels</a> | optional |  `[]`  |
 | <a id="pycross_pep517_build-sdist"></a>sdist |  -   | <a href="https://bazel.build/concepts/labels">Label</a> | required |  |
-| <a id="pycross_pep517_build-sdist_python_paths"></a>sdist_python_paths |  Sdist-relative paths to add to PYTHONPATH during the build (e.g., vendored build utilities).   | List of strings | optional |  `[]`  |
 
 
 <a id="pycross_poetry_lock_model"></a>
@@ -315,7 +313,7 @@ load("@rules_pycross//pycross:defs.bzl", "package_annotation")
 
 package_annotation(<a href="#package_annotation-always_build">always_build</a>, <a href="#package_annotation-build_dependencies">build_dependencies</a>, <a href="#package_annotation-build_target">build_target</a>, <a href="#package_annotation-ignore_dependencies">ignore_dependencies</a>,
                    <a href="#package_annotation-install_exclude_globs">install_exclude_globs</a>, <a href="#package_annotation-post_install_patches">post_install_patches</a>, <a href="#package_annotation-build_profile">build_profile</a>, <a href="#package_annotation-copts">copts</a>, <a href="#package_annotation-linkopts">linkopts</a>,
-                   <a href="#package_annotation-native_deps">native_deps</a>, <a href="#package_annotation-sdist_python_paths">sdist_python_paths</a>, <a href="#package_annotation-config_settings">config_settings</a>, <a href="#package_annotation-tool_deps">tool_deps</a>)
+                   <a href="#package_annotation-native_deps">native_deps</a>, <a href="#package_annotation-config_settings">config_settings</a>, <a href="#package_annotation-tool_deps">tool_deps</a>)
 </pre>
 
 Annotations to apply to individual packages.
@@ -335,7 +333,6 @@ Annotations to apply to individual packages.
 | <a id="package_annotation-copts"></a>copts |  Extra C++ compiler options.   |  `[]` |
 | <a id="package_annotation-linkopts"></a>linkopts |  Extra linker options.   |  `[]` |
 | <a id="package_annotation-native_deps"></a>native_deps |  CC dependencies to link against.   |  `[]` |
-| <a id="package_annotation-sdist_python_paths"></a>sdist_python_paths |  Sdist-relative paths to add to PYTHONPATH.   |  `[]` |
 | <a id="package_annotation-config_settings"></a>config_settings |  Setup configuration arguments.   |  `{}` |
 | <a id="package_annotation-tool_deps"></a>tool_deps |  Overrides for built-in dependencies.   |  `{}` |
 
