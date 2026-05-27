@@ -66,6 +66,10 @@ def load_build_context(config_path: str) -> BuildContext:
 
     build_env = os.environ.copy()
 
+    # Bazel py_binary launcher adds PYTHONSAFEPATH=1. This breaks numpy and other
+    # builds that rely on sys.path[0] being the script directory. Strip it.
+    build_env.pop("PYTHONSAFEPATH", None)
+
     return BuildContext(
         bazel_config=bazel_config,
         prefix=prefix,
