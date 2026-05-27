@@ -38,6 +38,16 @@ def generate_cross_ini(ctx: BuildContext, cc_config: Optional[Dict[str, Any]] = 
     cxx_args = shlex.split(cxxflags) if cxxflags else []
     c_link_args = shlex.split(ldsharedflags) if ldsharedflags else []
 
+    # Add C++ static runtime libraries directly by full path, replicating
+    # Bazel's static_link_cpp_runtimes behavior. The toolchain provides these
+    # .a files (e.g., libc++, libc++abi, libunwind) when the feature is
+    # enabled, and Bazel passes them as positional linker inputs — not via
+    # -l flags. We do the same here.
+    if cc_config:
+        for lib_path_str in cc_config.get("runtime_libs", []):
+            lib_path = replace_placeholder(ctx.prefix, lib_path_str)
+            c_link_args.append(lib_path)
+
     # Dynamically append all sandboxed C/C++ includes to c_args and cpp_args inside cross.ini
     if cc_config and "include_dirs" in cc_config:
         for inc_dir_str in cc_config["include_dirs"]:

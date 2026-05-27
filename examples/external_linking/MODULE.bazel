@@ -126,14 +126,6 @@ lock_import.meson_override(
     copts = [
         "-D__JETS_DUMMY__=8",
     ],
-    linkopts = [
-        "-lc++",
-        "-lc++abi",
-        "-lunwind",
-    ],
-    native_deps = [
-        "//:llvm_static_runtime",
-    ],
     repo = "uv",
 )
 lock_import.package(
@@ -181,9 +173,6 @@ lock_import.maturin_override(
     always_build = True,
     build_dependencies = [
         "maturin",
-    ],
-    native_deps = [
-        "//:llvm_static_runtime",
     ],
     repo = "uv",
 )

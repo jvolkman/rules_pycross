@@ -22,14 +22,8 @@ meson_build(
         "@uv//:pybind11",
         "@uv//:numpy",
     ],
-    linkopts = [
-        "-lc++",
-        "-lc++abi",
-        "-lunwind",
-    ],
     native_deps = [
         "//deps/numpy:numpy_headers",
-        "//:llvm_static_runtime",
     ],
     path_tools = [
         ":pybind11-config",

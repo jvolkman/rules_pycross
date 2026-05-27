@@ -163,6 +163,19 @@ def setup_cc_mixin(ctx: BuildContext, cc_config: Dict[str, Any]) -> None:
         + f" -L{mixin_lib_dir.absolute()}"
     )
 
+    # Append C++ static runtime libraries directly by full path to LDFLAGS and
+    # LDSHAREDFLAGS. This replicates Bazel's static_link_cpp_runtimes behavior
+    # and ensures all builders (Meson, Maturin, setuptools) can link the C++
+    # runtime without needing -l flags or specific library naming conventions.
+    runtime_libs = cc_config.get("runtime_libs", [])
+    if runtime_libs:
+        runtime_lib_flags = " ".join(
+            str(Path(replace_placeholder(ctx.prefix, lib)).absolute())
+            for lib in runtime_libs
+        )
+        ldflags += f" {runtime_lib_flags}"
+        ldsharedflags += f" {runtime_lib_flags}"
+
     ctx.sysconfig_vars.update(
         {
             "CC": str(wrapped_cc.absolute()),

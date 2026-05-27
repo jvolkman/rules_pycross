@@ -1,9 +1,11 @@
 """Rule for compiling C++ toolchain & dependency info into a PycrossBuildMixinInfo."""
 
 load("@bazel_tools//tools/cpp:toolchain_utils.bzl", "find_cpp_toolchain")
+load("@rules_cc//cc/common:cc_common.bzl", "cc_common")
 load("@rules_cc//cc/common:cc_info.bzl", "CcInfo")
 load(
     "//pycross/private:cc_toolchain_util.bzl",
+    "CC_DISABLED_FEATURES",
     "absolutize_path_in_str",
     "get_flags_info",
     "get_headers",
@@ -134,6 +136,31 @@ def _cc_mixin_impl(ctx):
             elif lib.path.endswith(".so") or lib.path.endswith(".dylib"):
                 shared_libs.append(lib_path)
 
+    # Extract C++ static runtime libraries from the CC toolchain.
+    # When the static_link_cpp_runtimes feature is enabled (Linux/Windows),
+    # the toolchain provides the C++ runtime .a files (libc++, libc++abi,
+    # libunwind). We extract them so Meson can link against them directly
+    # by full path, replicating what Bazel does for cc_binary targets.
+    runtime_libs = []
+    disabled_features = ctx.disabled_features + CC_DISABLED_FEATURES
+    if not ctx.coverage_instrumented():
+        disabled_features.append("coverage")
+    feature_configuration = cc_common.configure_features(
+        ctx = ctx,
+        cc_toolchain = cpp_toolchain,
+        requested_features = ctx.features,
+        unsupported_features = disabled_features,
+    )
+    runtime_depset = cpp_toolchain.static_runtime_lib(
+        feature_configuration = feature_configuration,
+    )
+    if runtime_depset:
+        for f in runtime_depset.to_list():
+            runtime_libs.append(
+                absolutize_path_in_str(ctx.workspace_name, "$$EXT_BUILD_ROOT$$/", f.path),
+            )
+        transitive_files.append(runtime_depset)
+
     # Combine everything into the unified config dictionary
     cc_config = {
         "CC": sysconfig_vars["CC"],
@@ -148,6 +175,7 @@ def _cc_mixin_impl(ctx):
         "include_dirs": include_dirs,
         "static_libs": static_libs,
         "shared_libs": shared_libs,
+        "runtime_libs": runtime_libs,
         "target_os": target_os,
         "target_cpu": target_cpu,
     }
