@@ -235,7 +235,6 @@ class ResolvedPackage:
     copts: List[str] = field(default_factory=list)
     linkopts: List[str] = field(default_factory=list)
     native_deps: List[str] = field(default_factory=list)
-    sdist_python_paths: List[str] = field(default_factory=list)
     config_settings: Dict[str, List[str]] = field(default_factory=dict)
     tool_deps: Dict[str, str] = field(default_factory=dict)
 

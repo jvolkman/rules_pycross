@@ -263,7 +263,6 @@ def package_annotation(
         copts = [],
         linkopts = [],
         native_deps = [],
-        sdist_python_paths = [],
         config_settings = {},
         tool_deps = {}):
     """Annotations to apply to individual packages.
@@ -279,7 +278,6 @@ def package_annotation(
       copts (list, optional): Extra C++ compiler options.
       linkopts (list, optional): Extra linker options.
       native_deps (list, optional): CC dependencies to link against.
-      sdist_python_paths (list, optional): Sdist-relative paths to add to PYTHONPATH.
       config_settings (dict, optional): Setup configuration arguments.
       tool_deps (dict, optional): Overrides for built-in dependencies.
 
@@ -297,7 +295,6 @@ def package_annotation(
         copts = copts,
         linkopts = linkopts,
         native_deps = [str(dep) for dep in native_deps],
-        sdist_python_paths = sdist_python_paths,
         config_settings = config_settings,
         tool_deps = tool_deps,
     ))

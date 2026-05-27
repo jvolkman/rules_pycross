@@ -31,7 +31,6 @@ def meson_build(
         repo = None,
         config_settings = {},
         pkg_config_files = [],
-        sdist_python_paths = [],
         visibility = None,
         tags = []):
     """Build profile for Meson-based Python packages.
@@ -52,7 +51,6 @@ def meson_build(
       repo: Optional central lock repository name.
       config_settings: Meson setup configuration arguments.
       pkg_config_files: Pkg-config files to copy to package directory.
-      sdist_python_paths: Sdist-relative paths to add to PYTHONPATH during the build.
       visibility: Target visibility.
       tags: Target tags.
     """
@@ -196,7 +194,6 @@ def meson_build(
         deps = merged_deps,
         config_settings = config_settings,
         pkg_config_files = pkg_config_files,
-        sdist_python_paths = sdist_python_paths,
         path_tools = actual_path_tools,
         visibility = ["//visibility:private" if native_deps else "//visibility:public"],
         tags = tags,

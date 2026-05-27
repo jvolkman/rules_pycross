@@ -136,7 +136,7 @@ def _lock_repos_impl(module_ctx):
                 "known_packages": known_packages,
                 "lock_repo": repo_name,
             }
-            for attr_name in ("build_profile", "copts", "linkopts", "native_deps", "sdist_python_paths", "config_settings", "tool_deps", "build_dependencies"):
+            for attr_name in ("build_profile", "copts", "linkopts", "native_deps", "config_settings", "tool_deps", "build_dependencies"):
                 if attr_name in pkg and pkg[attr_name] != None:
                     sdist_repo_attrs[attr_name] = pkg[attr_name]
             pycross_sdist_repo(**sdist_repo_attrs)

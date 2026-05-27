@@ -87,8 +87,6 @@ def _sdist_repo_impl(rctx):
         macro_attrs["linkopts"] = str(rctx.attr.linkopts)
     if rctx.attr.native_deps:
         macro_attrs["native_deps"] = str(rctx.attr.native_deps)
-    if rctx.attr.sdist_python_paths:
-        macro_attrs["sdist_python_paths"] = str(rctx.attr.sdist_python_paths)
     if rctx.attr.config_settings:
         macro_attrs["config_settings"] = str(rctx.attr.config_settings)
     if rctx.attr.tool_deps:
@@ -128,7 +126,6 @@ pycross_sdist_repo = repository_rule(
         "copts": attr.string_list(doc = "C compiler options."),
         "linkopts": attr.string_list(doc = "Linker options."),
         "native_deps": attr.string_list(doc = "Labels of native C/C++ dependencies."),
-        "sdist_python_paths": attr.string_list(doc = "Additional Python paths during source build."),
         "config_settings": attr.string_list_dict(doc = "Build configuration settings passed to backend."),
         "tool_deps": attr.string_dict(doc = "Overridden tool dependencies."),
         "build_dependencies": attr.string_list(doc = "Overridden build-time dependencies."),

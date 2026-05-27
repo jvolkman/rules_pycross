@@ -23,13 +23,13 @@ lock_import.package(<a href="#lock_import.package-name">name</a>, <a href="#lock
                     <a href="#lock_import.package-install_exclude_globs">install_exclude_globs</a>, <a href="#lock_import.package-post_install_patches">post_install_patches</a>, <a href="#lock_import.package-repo">repo</a>)
 lock_import.meson_override(<a href="#lock_import.meson_override-name">name</a>, <a href="#lock_import.meson_override-always_build">always_build</a>, <a href="#lock_import.meson_override-build_dependencies">build_dependencies</a>, <a href="#lock_import.meson_override-config_settings">config_settings</a>, <a href="#lock_import.meson_override-copts">copts</a>,
                            <a href="#lock_import.meson_override-ignore_dependencies">ignore_dependencies</a>, <a href="#lock_import.meson_override-install_exclude_globs">install_exclude_globs</a>, <a href="#lock_import.meson_override-linkopts">linkopts</a>, <a href="#lock_import.meson_override-native_deps">native_deps</a>,
-                           <a href="#lock_import.meson_override-post_install_patches">post_install_patches</a>, <a href="#lock_import.meson_override-repo">repo</a>, <a href="#lock_import.meson_override-sdist_python_paths">sdist_python_paths</a>, <a href="#lock_import.meson_override-tool_deps">tool_deps</a>)
+                           <a href="#lock_import.meson_override-post_install_patches">post_install_patches</a>, <a href="#lock_import.meson_override-repo">repo</a>, <a href="#lock_import.meson_override-tool_deps">tool_deps</a>)
 lock_import.setuptools_override(<a href="#lock_import.setuptools_override-name">name</a>, <a href="#lock_import.setuptools_override-always_build">always_build</a>, <a href="#lock_import.setuptools_override-build_dependencies">build_dependencies</a>, <a href="#lock_import.setuptools_override-config_settings">config_settings</a>, <a href="#lock_import.setuptools_override-copts">copts</a>,
                                 <a href="#lock_import.setuptools_override-ignore_dependencies">ignore_dependencies</a>, <a href="#lock_import.setuptools_override-install_exclude_globs">install_exclude_globs</a>, <a href="#lock_import.setuptools_override-linkopts">linkopts</a>, <a href="#lock_import.setuptools_override-native_deps">native_deps</a>,
-                                <a href="#lock_import.setuptools_override-post_install_patches">post_install_patches</a>, <a href="#lock_import.setuptools_override-repo">repo</a>, <a href="#lock_import.setuptools_override-sdist_python_paths">sdist_python_paths</a>, <a href="#lock_import.setuptools_override-tool_deps">tool_deps</a>)
+                                <a href="#lock_import.setuptools_override-post_install_patches">post_install_patches</a>, <a href="#lock_import.setuptools_override-repo">repo</a>, <a href="#lock_import.setuptools_override-tool_deps">tool_deps</a>)
 lock_import.maturin_override(<a href="#lock_import.maturin_override-name">name</a>, <a href="#lock_import.maturin_override-always_build">always_build</a>, <a href="#lock_import.maturin_override-build_dependencies">build_dependencies</a>, <a href="#lock_import.maturin_override-config_settings">config_settings</a>, <a href="#lock_import.maturin_override-copts">copts</a>,
                              <a href="#lock_import.maturin_override-ignore_dependencies">ignore_dependencies</a>, <a href="#lock_import.maturin_override-install_exclude_globs">install_exclude_globs</a>, <a href="#lock_import.maturin_override-linkopts">linkopts</a>, <a href="#lock_import.maturin_override-native_deps">native_deps</a>,
-                             <a href="#lock_import.maturin_override-post_install_patches">post_install_patches</a>, <a href="#lock_import.maturin_override-repo">repo</a>, <a href="#lock_import.maturin_override-sdist_python_paths">sdist_python_paths</a>, <a href="#lock_import.maturin_override-tool_deps">tool_deps</a>)
+                             <a href="#lock_import.maturin_override-post_install_patches">post_install_patches</a>, <a href="#lock_import.maturin_override-repo">repo</a>, <a href="#lock_import.maturin_override-tool_deps">tool_deps</a>)
 </pre>
 
 
@@ -147,7 +147,6 @@ Specify meson-specific overrides.
 | <a id="lock_import.meson_override-native_deps"></a>native_deps |  CC dependencies to link against.   | <a href="https://bazel.build/concepts/labels">List of labels</a> | optional |  `[]`  |
 | <a id="lock_import.meson_override-post_install_patches"></a>post_install_patches |  A list of patches to apply after wheel installation.   | List of strings | optional |  `[]`  |
 | <a id="lock_import.meson_override-repo"></a>repo |  The repository name   | String | required |  |
-| <a id="lock_import.meson_override-sdist_python_paths"></a>sdist_python_paths |  Sdist-relative paths to add to PYTHONPATH.   | List of strings | optional |  `[]`  |
 | <a id="lock_import.meson_override-tool_deps"></a>tool_deps |  Overrides for built-in dependencies.   | <a href="https://bazel.build/rules/lib/dict">Dictionary: String -> String</a> | optional |  `{}`  |
 
 <a id="lock_import.setuptools_override"></a>
@@ -171,7 +170,6 @@ Specify setuptools-specific overrides.
 | <a id="lock_import.setuptools_override-native_deps"></a>native_deps |  CC dependencies to link against.   | <a href="https://bazel.build/concepts/labels">List of labels</a> | optional |  `[]`  |
 | <a id="lock_import.setuptools_override-post_install_patches"></a>post_install_patches |  A list of patches to apply after wheel installation.   | List of strings | optional |  `[]`  |
 | <a id="lock_import.setuptools_override-repo"></a>repo |  The repository name   | String | required |  |
-| <a id="lock_import.setuptools_override-sdist_python_paths"></a>sdist_python_paths |  Sdist-relative paths to add to PYTHONPATH.   | List of strings | optional |  `[]`  |
 | <a id="lock_import.setuptools_override-tool_deps"></a>tool_deps |  Overrides for built-in dependencies.   | <a href="https://bazel.build/rules/lib/dict">Dictionary: String -> String</a> | optional |  `{}`  |
 
 <a id="lock_import.maturin_override"></a>
@@ -195,7 +193,6 @@ Specify maturin-specific overrides.
 | <a id="lock_import.maturin_override-native_deps"></a>native_deps |  CC dependencies to link against.   | <a href="https://bazel.build/concepts/labels">List of labels</a> | optional |  `[]`  |
 | <a id="lock_import.maturin_override-post_install_patches"></a>post_install_patches |  A list of patches to apply after wheel installation.   | List of strings | optional |  `[]`  |
 | <a id="lock_import.maturin_override-repo"></a>repo |  The repository name   | String | required |  |
-| <a id="lock_import.maturin_override-sdist_python_paths"></a>sdist_python_paths |  Sdist-relative paths to add to PYTHONPATH.   | List of strings | optional |  `[]`  |
 | <a id="lock_import.maturin_override-tool_deps"></a>tool_deps |  Overrides for built-in dependencies.   | <a href="https://bazel.build/rules/lib/dict">Dictionary: String -> String</a> | optional |  `{}`  |
 
 

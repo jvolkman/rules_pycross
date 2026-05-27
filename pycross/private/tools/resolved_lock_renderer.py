@@ -299,8 +299,6 @@ class PackageTarget:
             lines.append(ind(f"linkopts = {repr(self.package.linkopts)},"))
         if self.package.native_deps:
             lines.append(ind(f"native_deps = {repr(self.package.native_deps)},"))
-        if self.package.sdist_python_paths:
-            lines.append(ind(f"sdist_python_paths = {repr(self.package.sdist_python_paths)},"))
         if self.package.config_settings:
             lines.append(ind(f"config_settings = {repr(self.package.config_settings)},"))
         if self.package.tool_deps:

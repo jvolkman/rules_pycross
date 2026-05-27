@@ -132,7 +132,6 @@ def _pep517_build_impl(ctx):
         "config_settings_raw": config_settings_file.path if config_settings_file else None,
         "pkg_config_files": pkg_config_paths,
         "path_tools": path_tools_list,
-        "sdist_python_paths": ctx.attr.sdist_python_paths,
         "wheel_file": out_wheel.path,
         "wheel_name_file": out_wheel_name.path,
         "wheel_directory": out_wheel_directory.path,
@@ -187,9 +186,6 @@ pycross_pep517_build = rule(
         "builder": attr.label(mandatory = True, executable = True, cfg = "exec"),
         "mixins": attr.label_list(providers = [PycrossBuildMixinInfo]),
         "config_settings": attr.string_list_dict(),
-        "sdist_python_paths": attr.string_list(
-            doc = "Sdist-relative paths to add to PYTHONPATH during the build (e.g., vendored build utilities).",
-        ),
         "pkg_config_files": attr.label_list(allow_files = True),
         "path_tools": attr.label_list(
             cfg = pycross_exec_platform_transition,
