@@ -116,6 +116,40 @@ def inject_python_wrapper(ctx: BuildContext) -> None:
             #!{ctx.exec_python.absolute()} -S
             import os, sys
 
+            # Intercept and execute all -c commands internally inside the wrapper process with target sysconfig overrides
+            c_index = -1
+            for idx, arg in enumerate(sys.argv):
+                if arg == "-c":
+                    c_index = idx
+                    break
+
+            if c_index != -1 and len(sys.argv) > c_index + 1:
+                import sysconfig
+
+                _real_get_config_var = sysconfig.get_config_var
+                def _get_config_var(name):
+                    if name == "EXT_SUFFIX":
+                        return {repr(ctx.sysconfig_vars.get("EXT_SUFFIX"))}
+                    elif name == "SOABI":
+                        return {repr(ctx.sysconfig_vars.get("SOABI"))}
+                    return _real_get_config_var(name)
+                sysconfig.get_config_var = _get_config_var
+
+                _real_get_config_vars = sysconfig.get_config_vars
+                def _get_config_vars(*args, **kwargs):
+                    res = _real_get_config_vars(*args, **kwargs)
+                    if isinstance(res, dict):
+                        if "EXT_SUFFIX" in res:
+                            res["EXT_SUFFIX"] = {repr(ctx.sysconfig_vars.get("EXT_SUFFIX"))}
+                        if "SOABI" in res:
+                            res["SOABI"] = {repr(ctx.sysconfig_vars.get("SOABI"))}
+                    return res
+                sysconfig.get_config_vars = _get_config_vars
+
+                # Execute the Meson/packaging command string cleanly inside our monkey-patched wrapper process
+                exec(sys.argv[c_index + 1])
+                sys.exit(0)
+
             venv_site = {repr(str(site_dir.absolute()))}
             dependency_paths = {repr(python_paths_list)}
             sdist_paths = {repr(sdist_paths)}

@@ -125,9 +125,21 @@ def setup_cc_mixin(ctx: BuildContext, cc_config: Dict[str, Any]) -> None:
         "cxx", orig_cxx, cflags, ctx.exec_python, mixin_bin_dir, strip_unwindlib=needs_libgcc_s_redirect
     )
 
+    # When the toolchain already handles C++ header hermeticity (indicated by
+    # -nostdlibinc in flags), it provides libc++ headers via -isystem. We must
+    # NOT add duplicate libc++ include dirs from native_deps, as the duplicate
+    # -I paths break #include_next chains (libc++ wrapper headers can't reach
+    # the underlying C headers from glibc). Only add non-C++ stdlib includes
+    # (e.g., openblas headers) in this case.
+    toolchain_provides_cxx_headers = "-nostdlibinc" in cflags
+
     extra_includes = []
     for inc_dir_str in cc_config.get("include_dirs", []):
         inc_dir = Path(replace_placeholder(ctx.prefix, inc_dir_str))
+        if toolchain_provides_cxx_headers and (
+            "libcxx" in str(inc_dir) or "libcxxabi" in str(inc_dir)
+        ):
+            continue
         extra_includes.append(f"-I{inc_dir.absolute()}")
     extra_includes_str = " ".join(extra_includes)
 
