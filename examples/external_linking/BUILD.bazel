@@ -1,63 +1,6 @@
 """BUILD file for examples/external_linking root package."""
 
-load("@rules_cc//cc:defs.bzl", "cc_import", "cc_library")
 load("@rules_python//python:defs.bzl", "py_test")
-
-# 1. Rename libcxx.static to libc++.a
-genrule(
-    name = "rename_libcxx",
-    srcs = ["@llvm//runtimes/libcxx:libcxx.static"],
-    outs = ["libc++.a"],
-    cmd = "cp $< $@",
-)
-
-# 2. Rename libcxxabi.static to libc++abi.a
-genrule(
-    name = "rename_libcxxabi",
-    srcs = ["@llvm//runtimes/libcxx:libcxxabi.static"],
-    outs = ["libc++abi.a"],
-    cmd = "cp $< $@",
-)
-
-# 3. Rename libunwind.static to libunwind.a
-genrule(
-    name = "rename_libunwind",
-    srcs = ["@llvm//runtimes/libunwind:libunwind.static"],
-    outs = ["libunwind.a"],
-    cmd = "cp $< $@",
-)
-
-# 4. Import the renamed .a files using standard cc_import targets to generate CcInfo
-cc_import(
-    name = "libcxx_static",
-    static_library = ":rename_libcxx",
-    visibility = ["//visibility:public"],
-)
-
-cc_import(
-    name = "libcxxabi_static",
-    static_library = ":rename_libcxxabi",
-    visibility = ["//visibility:public"],
-)
-
-cc_import(
-    name = "libunwind_static",
-    static_library = ":rename_libunwind",
-    visibility = ["//visibility:public"],
-)
-
-# 5. Expose the cc_import targets inside deps of llvm_static_runtime
-cc_library(
-    name = "llvm_static_runtime",
-    visibility = ["//visibility:public"],
-    deps = [
-        ":libcxx_static",
-        ":libcxxabi_static",
-        ":libunwind_static",
-        "@llvm//runtimes/libcxx:headers",
-        "@llvm//runtimes/libcxx:libcxxabi_headers",
-    ],
-)
 
 py_test(
     name = "import_test",

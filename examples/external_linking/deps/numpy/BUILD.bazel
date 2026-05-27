@@ -29,16 +29,10 @@ meson_build(
         "setup-args": [],
     },
     copts = ["-Wl,-s"],
-    linkopts = [
-        "-lc++",
-        "-lc++abi",
-        "-lunwind",
-    ],
     native_deps = [
         "//third_party/openblas",
-        "//:llvm_static_runtime",
     ],
-    path_tools = [":cython"],  # Cython put on PATH hermetically!
+    path_tools = [":cython"],
     pkg_config_files = [":gen_openblas_pc_file"],
     sdist = "@uv//numpy:sdist",
     sdist_python_paths = [
