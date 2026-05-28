@@ -11,6 +11,9 @@ build -c opt
 build --strip=always
 build --@rules_cc//cc/toolchains/args/archiver_flags:use_libtool_on_macos=False
 
+# For Rust (maturin) builds
+build --@llvm//config:experimental_stub_libgcc_s=True
+
 common --disk_cache .cache
 
 try-import %workspace%/.bazelrc.user
