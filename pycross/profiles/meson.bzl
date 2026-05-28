@@ -24,6 +24,7 @@ def meson_build(
         native_deps = [],
         copts = [],
         linkopts = [],
+        meson_properties = {},
         build_deps = None,
         deps = [],
         path_tools = [],
@@ -44,6 +45,8 @@ def meson_build(
       native_deps: CC dependencies to link against.
       copts: Extra C++ compiler options.
       linkopts: Extra linker options.
+      meson_properties: Meson cross-file properties to inject into [properties] section.
+          Values may contain $(MAKE_VAR) references that will be expanded from native_deps.
       build_deps: Build dependencies required for PEP 517 package.
       deps: Additional Python runtime dependencies.
       path_tools: Executable tools to put on PATH during build.
@@ -174,6 +177,7 @@ def meson_build(
         deps = native_deps,
         copts = copts,
         linkopts = linkopts,
+        meson_properties = meson_properties,
         visibility = ["//visibility:private"],
     )
     mixins.append(":" + cc_mixin_name)

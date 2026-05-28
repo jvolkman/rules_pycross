@@ -16,6 +16,9 @@ meson_build(
     native_deps = [
         "//deps/numpy:numpy_headers",
     ],
+    meson_properties = {
+        "numpy-include-dir": "$(NUMPY_INCLUDE_DIR)",
+    },
     sdist = "@uv//pywavelets:sdist",
     deps = [
         "@uv//:numpy",

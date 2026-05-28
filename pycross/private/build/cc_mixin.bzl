@@ -129,6 +129,17 @@ def _cc_mixin_impl(ctx):
             elif lib.path.endswith(".so") or lib.path.endswith(".dylib"):
                 shared_libs.append(lib_path)
 
+    # Collect TemplateVariableInfo from deps for make variable expansion.
+    make_vars = {}
+    for dep in ctx.attr.deps:
+        if platform_common.TemplateVariableInfo in dep:
+            make_vars.update(dep[platform_common.TemplateVariableInfo].variables)
+
+    # Expand make variables in meson_properties.
+    meson_properties = {}
+    for key, value in ctx.attr.meson_properties.items():
+        meson_properties[key] = ctx.expand_make_variables("meson_properties", value, make_vars)
+
     # Extract C++ static runtime libraries from the CC toolchain.
     # When the static_link_cpp_runtimes feature is enabled (Linux/Windows),
     # the toolchain provides the C++ runtime .a files (libc++, libc++abi,
@@ -171,6 +182,7 @@ def _cc_mixin_impl(ctx):
         "runtime_libs": runtime_libs,
         "target_os": target_os,
         "target_cpu": target_cpu,
+        "meson_properties": meson_properties,
     }
 
     config_json = ctx.actions.declare_file(ctx.label.name + "_config.json")
@@ -189,6 +201,9 @@ pycross_cc_mixin = rule(
         "deps": attr.label_list(providers = [CcInfo]),
         "copts": attr.string_list(),
         "linkopts": attr.string_list(),
+        "meson_properties": attr.string_dict(
+            doc = "Meson cross-file properties to inject into [properties] section. Values may contain $(MAKE_VAR) references that will be expanded from native_deps.",
+        ),
         "_cc_toolchain": attr.label(
             default = Label("@bazel_tools//tools/cpp:current_cc_toolchain"),
         ),
