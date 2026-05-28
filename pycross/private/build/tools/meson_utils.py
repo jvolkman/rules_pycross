@@ -103,7 +103,7 @@ def generate_cross_ini(ctx: BuildContext, cc_config: Optional[Dict[str, Any]] = 
         content = dest_pc.read_text()
         dest_pc.write_text(replace_placeholder(ctx.prefix, content))
 
-    abs_pkgconfig_dir = pkgconfig_dir.resolve()
+    abs_pkgconfig_dir = pkgconfig_dir.resolve().as_posix()
 
     is_cross = ctx.exec_python != ctx.target_python
 
@@ -135,15 +135,15 @@ def generate_cross_ini(ctx: BuildContext, cc_config: Optional[Dict[str, Any]] = 
     # packages that contain .pyx sources.
     cython_path = ctx.env_dir / "bin" / "cython"
     if cython_path.exists():
-        binaries_lines.append(f"cython = '{cython_path}'")
+        binaries_lines.append(f"cython = '{cython_path.as_posix()}'")
 
     # pkg-config: use the virtualenv copy if available. If not present,
     # omit it and let Meson fall back to its built-in dependency lookup.
     pkgconfig_path = ctx.env_dir / "bin" / "pkg-config"
     if pkgconfig_path.exists():
-        binaries_lines.append(f"pkgconfig = '{pkgconfig_path}'")
+        binaries_lines.append(f"pkgconfig = '{pkgconfig_path.as_posix()}'")
 
-    binaries_lines.append(f"python = '{ctx.env_dir}/bin/python'")
+    binaries_lines.append(f"python = '{(ctx.env_dir / 'bin' / 'python').as_posix()}'")
 
     binaries_section = "\n".join(binaries_lines)
 
@@ -151,7 +151,7 @@ def generate_cross_ini(ctx: BuildContext, cc_config: Optional[Dict[str, Any]] = 
     if cc_config:
         for inc_dir in cc_config.get("include_dirs", []):
             if "numpy/_core/include" in inc_dir or "numpy/core/include" in inc_dir:
-                numpy_include_dir = Path(replace_placeholder(ctx.prefix, inc_dir)).absolute()
+                numpy_include_dir = Path(replace_placeholder(ctx.prefix, inc_dir)).absolute().as_posix()
                 break
 
     cross_ini = f"""\
@@ -187,6 +187,6 @@ endian = 'little'
 
     # Always use --cross-file so native and cross follow the same path.
     setup_args = ctx.config_settings.get("setup-args", [])
-    setup_args.append(f"--cross-file={cross_ini_path.absolute()}")
+    setup_args.append(f"--cross-file={cross_ini_path.as_posix()}")
     ctx.config_settings["setup-args"] = setup_args
     ctx.config_settings["build-dir"] = "build"
