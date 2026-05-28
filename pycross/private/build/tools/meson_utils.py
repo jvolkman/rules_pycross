@@ -8,6 +8,7 @@ from typing import Dict
 from typing import List
 from typing import Optional
 
+from pathlib import Path
 from pycross.private.build.tools.utils.context import BuildContext
 from pycross.private.build.tools.utils.context import replace_placeholder
 
@@ -146,6 +147,13 @@ def generate_cross_ini(ctx: BuildContext, cc_config: Optional[Dict[str, Any]] = 
 
     binaries_section = "\n".join(binaries_lines)
 
+    numpy_include_dir = None
+    if cc_config:
+        for inc_dir in cc_config.get("include_dirs", []):
+            if "numpy/_core/include" in inc_dir or "numpy/core/include" in inc_dir:
+                numpy_include_dir = Path(replace_placeholder(ctx.prefix, inc_dir)).absolute()
+                break
+
     cross_ini = f"""\
 [binaries]
 {binaries_section}
@@ -162,6 +170,7 @@ needs_exe_wrapper = {str(is_cross).lower()}
 skip_sanity_check = {str(is_cross).lower()}
 longdouble_format = '{longdouble_format}'
 pkg_config_libdir = '{abs_pkgconfig_dir}'
+{f"numpy-include-dir = '{numpy_include_dir}'" if numpy_include_dir else ""}
 
 [host_machine]
 system = '{target_system}'

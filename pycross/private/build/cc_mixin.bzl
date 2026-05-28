@@ -58,42 +58,35 @@ def _expand_locations_and_vars(attribute_name, ctx, val):
     val = ctx.expand_make_variables(attribute_name, val, additional_substitutions)
     return val
 
-def _get_target_os_and_cpu(cpp_toolchain):
-    """Extracts and normalizes target OS and CPU from cpp_toolchain.cpu.
+def _get_target_os_and_cpu(ctx):
+    """Extracts target OS and CPU by querying the target platform constraints.
 
-    Uses cpp_toolchain.cpu as the single source of truth for determinism.
+    Uses `@platforms` constraint values as the single source of truth for determinism.
     Fails explicitly if OS or CPU cannot be determined.
     """
     target_os = None
     target_cpu = None
 
-    cpu = getattr(cpp_toolchain, "cpu", None)
-    if cpu:
-        cpu_lower = cpu.lower()
-        if "darwin" in cpu_lower:
-            target_os = "darwin"
-        elif "linux" in cpu_lower or cpu_lower == "k8" or cpu_lower == "piii" or cpu_lower == "aarch64":
-            target_os = "linux"
-        elif "windows" in cpu_lower or "win" in cpu_lower:
-            target_os = "windows"
+    if ctx.target_platform_has_constraint(ctx.attr._os_linux[platform_common.ConstraintValueInfo]):
+        target_os = "linux"
+    elif ctx.target_platform_has_constraint(ctx.attr._os_macos[platform_common.ConstraintValueInfo]):
+        target_os = "darwin"
+    elif ctx.target_platform_has_constraint(ctx.attr._os_windows[platform_common.ConstraintValueInfo]):
+        target_os = "windows"
 
-        if "k8" in cpu_lower or "x86_64" in cpu_lower or "amd64" in cpu_lower:
-            target_cpu = "x86_64"
-        elif "aarch64" in cpu_lower or "arm64" in cpu_lower:
-            target_cpu = "aarch64"
-        elif "arm" in cpu_lower:
-            target_cpu = "arm"
-        elif "x86" in cpu_lower or "i386" in cpu_lower or "i686" in cpu_lower or cpu_lower == "piii":
-            target_cpu = "x86"
+    if ctx.target_platform_has_constraint(ctx.attr._cpu_x86_64[platform_common.ConstraintValueInfo]):
+        target_cpu = "x86_64"
+    elif ctx.target_platform_has_constraint(ctx.attr._cpu_aarch64[platform_common.ConstraintValueInfo]):
+        target_cpu = "aarch64"
+    elif ctx.target_platform_has_constraint(ctx.attr._cpu_arm[platform_common.ConstraintValueInfo]):
+        target_cpu = "arm"
+    elif ctx.target_platform_has_constraint(ctx.attr._cpu_x86_32[platform_common.ConstraintValueInfo]):
+        target_cpu = "x86"
 
     if not target_os:
-        fail("Cannot determine target OS from cpp_toolchain.cpu='{}'. ".format(cpu) +
-             "Ensure your C++ toolchain sets a recognized cpu value " +
-             "(e.g., k8, darwin, darwin_arm64, aarch64).")
+        fail("Cannot determine target OS. Ensure your target platform has a recognized @platforms//os constraint (linux, macos, windows).")
     if not target_cpu:
-        fail("Cannot determine target CPU from cpp_toolchain.cpu='{}'. ".format(cpu) +
-             "Ensure your C++ toolchain sets a recognized cpu value " +
-             "(e.g., k8, darwin_arm64, aarch64).")
+        fail("Cannot determine target CPU. Ensure your target platform has a recognized @platforms//cpu constraint (x86_64, aarch64, arm, x86_32).")
 
     return target_os, target_cpu
 
@@ -111,7 +104,7 @@ def _cc_mixin_impl(ctx):
     transitive_files = []
 
     cpp_toolchain = find_cpp_toolchain(ctx)
-    target_os, target_cpu = _get_target_os_and_cpu(cpp_toolchain)
+    target_os, target_cpu = _get_target_os_and_cpu(ctx)
     if cpp_toolchain.all_files:
         transitive_files.append(cpp_toolchain.all_files)
 
@@ -199,6 +192,13 @@ pycross_cc_mixin = rule(
         "_cc_toolchain": attr.label(
             default = Label("@bazel_tools//tools/cpp:current_cc_toolchain"),
         ),
+        "_os_linux": attr.label(default = "@platforms//os:linux"),
+        "_os_macos": attr.label(default = "@platforms//os:macos"),
+        "_os_windows": attr.label(default = "@platforms//os:windows"),
+        "_cpu_x86_64": attr.label(default = "@platforms//cpu:x86_64"),
+        "_cpu_aarch64": attr.label(default = "@platforms//cpu:aarch64"),
+        "_cpu_arm": attr.label(default = "@platforms//cpu:arm"),
+        "_cpu_x86_32": attr.label(default = "@platforms//cpu:x86_32"),
     },
     toolchains = ["@bazel_tools//tools/cpp:toolchain_type"],
     fragments = ["cpp"],
