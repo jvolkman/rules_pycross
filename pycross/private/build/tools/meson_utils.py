@@ -147,12 +147,16 @@ def generate_cross_ini(ctx: BuildContext, cc_config: Optional[Dict[str, Any]] = 
 
     binaries_section = "\n".join(binaries_lines)
 
-    numpy_include_dir = None
+    # Build additional [properties] lines from meson_properties
+    extra_properties_lines = []
     if cc_config:
-        for inc_dir in cc_config.get("include_dirs", []):
-            if "numpy/_core/include" in inc_dir or "numpy/core/include" in inc_dir:
-                numpy_include_dir = Path(replace_placeholder(ctx.prefix, inc_dir)).absolute().as_posix()
-                break
+        for key, value in cc_config.get("meson_properties", {}).items():
+            if "$$EXT_BUILD_ROOT$$" in value:
+                resolved = Path(replace_placeholder(ctx.prefix, value)).absolute().as_posix()
+            else:
+                resolved = value
+            extra_properties_lines.append(f"{key} = '{resolved}'")
+    extra_properties_str = "\n".join(extra_properties_lines)
 
     cross_ini = f"""\
 [binaries]
@@ -170,7 +174,7 @@ needs_exe_wrapper = {str(is_cross).lower()}
 skip_sanity_check = {str(is_cross).lower()}
 longdouble_format = '{longdouble_format}'
 pkg_config_libdir = '{abs_pkgconfig_dir}'
-{f"numpy-include-dir = '{numpy_include_dir}'" if numpy_include_dir else ""}
+{extra_properties_str}
 
 [host_machine]
 system = '{target_system}'

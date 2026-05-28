@@ -16,6 +16,7 @@ load("//pycross/private/build:repaired_wheel.bzl", _pycross_repaired_wheel = "py
 load("//pycross/private/build:rust_mixin.bzl", _pycross_rust_mixin = "pycross_rust_mixin")
 load("//pycross/private/build:wheel_bin_tool.bzl", _pycross_wheel_bin_tool = "pycross_wheel_bin_tool")
 load("//pycross/private/build:wheel_build.bzl", _pycross_wheel_build = "pycross_wheel_build")
+load("//pycross/private/build:wheel_headers.bzl", _pycross_wheel_headers = "pycross_wheel_headers")
 
 PycrossWheelInfo = _PycrossWheelInfo
 
@@ -33,6 +34,7 @@ pycross_console_script_binary = _pycross_console_script_binary
 pycross_wheel_bin_tool = _pycross_wheel_bin_tool
 
 pycross_wheel_build = _pycross_wheel_build
+pycross_wheel_headers = _pycross_wheel_headers
 pycross_wheel_library = _pycross_wheel_library
 pycross_repaired_wheel = _pycross_repaired_wheel
 
