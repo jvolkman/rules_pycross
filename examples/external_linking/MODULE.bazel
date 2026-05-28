@@ -17,26 +17,10 @@ rust.toolchain(
         "x86_64-unknown-linux-gnu",
     ],
 )
-use_repo(
-    rust,
-    "rust_linux_x86_64__x86_64-unknown-linux-gnu__stable_tools",
-)
 
 local_path_override(
     module_name = "rules_pycross",
     path = "../..",
-)
-
-single_version_override(
-    module_name = "llvm",
-    patch_strip = 1,
-    patches = [
-        "//patches:llvm_http_bsdtar_archive_tolerant.patch",
-        "//patches:llvm_osx_exclude_cpp_headers.patch",
-        "//patches:llvm_llvm_bzl_static_library_validator_darwin_target.patch",
-        "//patches:llvm_runtimes_libcxx_headers_alias.patch",  # Force Bzlmod re-patching v8
-    ],
-    version = "0.8.3",
 )
 
 # Third party deps
@@ -67,32 +51,8 @@ pycross.configure_environments(
     ],
 )
 
-# Workaround for Bazel local_path_override bug: the main repository must be able to
-# see the toolchains repo because register_toolchains in rules_pycross is resolved here.
-toolchains = use_extension("@rules_pycross//pycross/private/bzlmod:toolchains.bzl", "toolchains")
-use_repo(toolchains, "pycross_toolchains")
-
-environments = use_extension("@rules_pycross//pycross/extensions:environments.bzl", "environments")
-use_repo(environments, "pycross_environments")
-
 # Use the lock_import extension to import external lock files.
 lock_import = use_extension("@rules_pycross//pycross/extensions:lock_import.bzl", "lock_import")
-
-# Configure hermetic macOS SDK for LLVM cross-compilation
-osx = use_extension("@llvm//extensions:osx.bzl", "osx")
-osx.from_archive(
-    sha256 = "5e4d3be6b445f0eacc0333ff2117e93e4433d8c4fe44053a14f735033a98aaa9",
-    strip_prefix = "MacOSX14.0.sdk",
-    type = "tar.xz",
-    urls = [
-        "https://github.com/joseluisq/macosx-sdks/releases/download/14.0/MacOSX14.0.sdk.tar.xz",
-    ],
-)
-osx.frameworks(names = [
-    "CoreFoundation",
-    "Foundation",
-])
-use_repo(osx, "macos_sdk")
 
 # Import from uv
 lock_import.import_uv(
