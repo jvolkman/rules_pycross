@@ -32,7 +32,7 @@ def get_wrapper_flags(cflags: str) -> List[str]:
 
 
 def wrap_compiler(
-    lang: str, cc_exe: str, cflags: str, python_exe: Path, bin_dir: Path, *, strip_unwindlib: bool = False
+    lang: str, cc_exe: str, cflags: str, python_exe: Path, bin_dir: Path
 ) -> Path:
     """Generate custom compiler wrapper scripts to filter incompatible linker flags."""
     assert lang in ("cc", "cxx")
@@ -67,7 +67,6 @@ def wrap_compiler(
                     "-Wl,--allow-shlib-undefined",
                     "-Wl,-O1",
                 }}
-                {"skip_flags.add('--unwindlib=none')" if strip_unwindlib else "# --unwindlib=none not stripped (non-LLVM-Linux toolchain)"}
 
                 filtered_args = []
                 for arg in sys.argv[1:]:
@@ -103,27 +102,8 @@ def setup_cc_mixin(ctx: BuildContext, cc_config: Dict[str, Any]) -> None:
     orig_cxx = replace_placeholder(ctx.prefix, cc_config["CXX"])
     cflags = replace_placeholder(ctx.prefix, cc_config["CFLAGS"])
 
-    # Detect LLVM-on-Linux: Rust/rustc hardcodes -lgcc_s on Linux, but hermetic
-    # LLVM toolchains use compiler-rt and lack libgcc_s. When this combination is
-    # detected, we (a) write dummy libgcc_s linker scripts that redirect to
-    # libunwind, and (b) strip --unwindlib=none from compiler invocations so that
-    # the unwinder symbols are actually resolved.
-    cc_name = Path(orig_cc).name
-    is_linux = cc_config.get("target_os") == "linux"
-    is_llvm = "clang" in cc_name or "zig" in cc_name
-    needs_libgcc_s_redirect = is_linux and is_llvm
-
-    if needs_libgcc_s_redirect:
-        for ext in ("so", "a"):
-            with open(mixin_lib_dir / f"libgcc_s.{ext}", "w") as f:
-                f.write("INPUT(-lunwind)\n")
-
-    wrapped_cc = wrap_compiler(
-        "cc", orig_cc, cflags, ctx.exec_python, mixin_bin_dir, strip_unwindlib=needs_libgcc_s_redirect
-    )
-    wrapped_cxx = wrap_compiler(
-        "cxx", orig_cxx, cflags, ctx.exec_python, mixin_bin_dir, strip_unwindlib=needs_libgcc_s_redirect
-    )
+    wrapped_cc = wrap_compiler("cc", orig_cc, cflags, ctx.exec_python, mixin_bin_dir)
+    wrapped_cxx = wrap_compiler("cxx", orig_cxx, cflags, ctx.exec_python, mixin_bin_dir)
 
     # When the toolchain already handles C++ header hermeticity (indicated by
     # -nostdlibinc in flags), it provides libc++ headers via -isystem. We must
@@ -143,23 +123,11 @@ def setup_cc_mixin(ctx: BuildContext, cc_config: Dict[str, Any]) -> None:
         extra_includes.append(f"-I{inc_dir.absolute()}")
     extra_includes_str = " ".join(extra_includes)
 
-    # Filter out empty standard C++ library stub directories from LDFLAGS and LDSHAREDFLAGS
-    def filter_cxx_stub_paths(flags_str: str) -> str:
-        parts = flags_str.split()
-        filtered = []
-        for p in parts:
-            if p.startswith("-L") and (
-                "libcxx_library_search_directory" in p or "libunwind_library_search_directory" in p
-            ):
-                continue
-            filtered.append(p)
-        return " ".join(filtered)
-
     ldflags = (
-        filter_cxx_stub_paths(replace_placeholder(ctx.prefix, cc_config["LDFLAGS"])) + f" -L{mixin_lib_dir.absolute()}"
+        replace_placeholder(ctx.prefix, cc_config["LDFLAGS"]) + f" -L{mixin_lib_dir.absolute()}"
     )
     ldsharedflags = (
-        filter_cxx_stub_paths(replace_placeholder(ctx.prefix, cc_config["LDSHAREDFLAGS"]))
+        replace_placeholder(ctx.prefix, cc_config["LDSHAREDFLAGS"])
         + f" -L{mixin_lib_dir.absolute()}"
     )
 
