@@ -61,6 +61,15 @@ configure_make(
     ],
     env = {
         "ZIC": "/usr/sbin/zic",
+        # Alignment cache variables for cross-compilation. AC_CHECK_ALIGNOF
+        # uses AC_RUN_IFELSE which can't execute target binaries on the host,
+        # causing it to fall back to 0 (invalid, not a power of 2).
+        "ac_cv_alignof_short": "2",
+        "ac_cv_alignof_int": "4",
+        "ac_cv_alignof_long": "8",
+        "ac_cv_alignof_int64_t": "8",
+        "ac_cv_alignof_double": "8",
+        "ac_cv_alignof_PG_INT128_TYPE": "16",
     },
     lib_source = ":all_srcs",
     out_bin_dir = "usr/bin",
