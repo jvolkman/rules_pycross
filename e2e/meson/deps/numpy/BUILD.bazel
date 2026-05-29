@@ -27,6 +27,7 @@ meson_build(
     name = "numpy",
     config_settings = {
         "setup-args": [],
+        "compile-args": ["-v"],
     },
     copts = ["-Wl,-s"],
     native_deps = [
