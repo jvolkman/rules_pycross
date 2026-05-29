@@ -1,0 +1,9 @@
+import %workspace%/../shared/.bazelrc.common
+try-import %workspace%/../shared/buildbuddy.bazelrc
+
+# For Rust (maturin) builds
+build --@llvm//config:experimental_stub_libgcc_s=True
+
+common --disk_cache .cache
+try-import %workspace%/.bazelrc.user
+try-import %workspace%/../shared/.bazelrc.user

@@ -1,0 +1,4 @@
+alias(
+    name = "rpds_py",
+    actual = "@uv//:rpds_py",
+)

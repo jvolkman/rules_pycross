@@ -1,0 +1,16 @@
+[project]
+name = "rules-pycross-e2e-pure-python"
+version = "0.1.0"
+description = "E2E tests for pure-Python wheel builds"
+authors = []
+dependencies = [
+    "tomli==2.2.1",
+    "pyproject-metadata==0.8.1",
+    "filelock==3.17.0",
+]
+requires-python = "~=3.14.0"
+license = {text = "MIT"}
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
