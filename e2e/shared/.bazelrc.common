@@ -1,8 +1,13 @@
 # Common flags for all e2e workspaces
-build --action_env=BAZEL_DO_NOT_DETECT_CPP_TOOLCHAIN=1
-build --incompatible_enable_cc_toolchain_resolution
-build --incompatible_strict_action_env
-build --nolegacy_external_runfiles
-build -c opt
-build --strip=always
-build --@rules_cc//cc/toolchains/args/archiver_flags:use_libtool_on_macos=False
+common --repo_env=BAZEL_NO_APPLE_CPP_TOOLCHAIN=1
+common --repo_env=BAZEL_DO_NOT_DETECT_CPP_TOOLCHAIN=1
+common --repo_env=BAZEL_DO_NOT_DETECT_SWIFT_TOOLCHAIN=1
+common --action_env=BAZEL_DO_NOT_DETECT_CPP_TOOLCHAIN=1
+
+common --incompatible_enable_cc_toolchain_resolution
+common --incompatible_strict_action_env
+common --nolegacy_external_runfiles
+
+common -c opt
+common --strip=always
+common --@rules_cc//cc/toolchains/args/archiver_flags:use_libtool_on_macos=False
