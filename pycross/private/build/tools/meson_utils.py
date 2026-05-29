@@ -28,22 +28,41 @@ def generate_cross_ini(ctx: BuildContext, cc_config: Optional[Dict[str, Any]] = 
             return replace_placeholder(ctx.prefix, cc_config[name])
         return default_fallback
 
-    cc = get_var("CC", "gcc")
-    cxx = get_var("CXX", "g++")
+    cc = get_var("CC")
+    cxx = get_var("CXX")
+    if not cc or not cxx:
+        raise ValueError(
+            "CC and CXX must be provided by the Bazel CC toolchain. "
+            "Ensure a cc_mixin is configured for this build."
+        )
     cflags = get_var("CFLAGS", "")
     cxxflags = get_var("CXXFLAGS", "")
-    ldsharedflags = get_var("LDSHAREDFLAGS", "")
 
     # Parse arguments for Meson cross file
     c_args = shlex.split(cflags) if cflags else []
     cxx_args = shlex.split(cxxflags) if cxxflags else []
-    c_link_args = shlex.split(ldsharedflags) if ldsharedflags else []
 
-    # Add C++ static runtime libraries directly by full path, replicating
-    # Bazel's static_link_cpp_runtimes behavior. The toolchain provides these
-    # .a files (e.g., libc++, libc++abi, libunwind) when the feature is
-    # enabled, and Bazel passes them as positional linker inputs — not via
-    # -l flags. We do the same here.
+    # Use LDFLAGS (not LDSHAREDFLAGS) for Meson's c_link_args.
+    #
+    # LDSHAREDFLAGS comes from Bazel's cpp_link_dynamic_library action with
+    # is_linking_dynamic_library=True, which includes -shared. On macOS,
+    # clang maps -shared to -dynamiclib (MH_DYLIB). But Meson builds Python
+    # extensions as shared_module targets using -bundle (MH_BUNDLE) — which
+    # is the correct Mach-O type (verified against official PyPI wheels).
+    # Passing both -shared and -bundle to clang is a fatal error.
+    #
+    # LDFLAGS comes from cpp_link_executable with is_linking_dynamic_library=
+    # False. It contains all the same toolchain configuration flags (sysroot,
+    # -fuse-ld=lld, -rtlib=compiler-rt, framework flags, library paths) but
+    # without -shared. This lets Meson add its own link-type flag as needed.
+    #
+    # We can't remove -shared from LDSHAREDFLAGS itself because setuptools
+    # uses LDSHARED (CC + LDSHAREDFLAGS) directly and needs it.
+    ldflags = get_var("LDFLAGS", "")
+    c_link_args = shlex.split(ldflags) if ldflags else []
+
+    # Add C++ static runtime libraries by full path, replicating Bazel's
+    # static_link_cpp_runtimes behavior.
     if cc_config:
         for lib_path_str in cc_config.get("runtime_libs", []):
             lib_path = replace_placeholder(ctx.prefix, lib_path_str)
@@ -62,15 +81,6 @@ def generate_cross_ini(ctx: BuildContext, cc_config: Optional[Dict[str, Any]] = 
     if target_python_lib_dir.exists():
         c_link_args.append(f"-L{target_python_lib_dir.absolute()}")
 
-    # Ensure critical linker options are carried over
-    for i, flag in enumerate(cxx_args):
-        if flag.startswith("--sysroot=") or flag.startswith("-target=") or flag.startswith("--target="):
-            if flag not in c_link_args:
-                c_link_args.append(flag)
-        elif flag in ("--sysroot", "-target", "--target") and i + 1 < len(cxx_args):
-            if flag not in c_link_args:
-                c_link_args.extend([flag, cxx_args[i + 1]])
-
     # Determine target operating system and CPU family strictly from cc_config.
     if not cc_config or not cc_config.get("target_os"):
         raise ValueError(
@@ -83,11 +93,6 @@ def generate_cross_ini(ctx: BuildContext, cc_config: Optional[Dict[str, Any]] = 
 
     target_system = cc_config["target_os"]
     target_cpu = cc_config["target_cpu"]
-
-    # If compiling for Darwin (macOS), C extensions must not link libpython
-    # directly and instead rely on runtime dynamic lookup of Python symbols.
-    if ctx.sysconfig_vars.get("MACHDEP") == "darwin" or target_system == "darwin":
-        c_link_args.append("-Wl,-undefined,dynamic_lookup")
 
     # Locate or create pkgconfig directory inside the build environment
     pkgconfig_dir = ctx.sdist_dir / "pkgconfig"
@@ -129,6 +134,8 @@ def generate_cross_ini(ctx: BuildContext, cc_config: Optional[Dict[str, Any]] = 
         f"c = {format_meson_list(cc_list)}",
         f"cpp = {format_meson_list(cxx_list)}",
     ]
+
+
 
     # Cython: only inject if present in the build virtualenv.
     # Meson does NOT inherently require Cython; it is only needed for
