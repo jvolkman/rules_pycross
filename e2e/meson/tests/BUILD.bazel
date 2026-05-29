@@ -1,0 +1,34 @@
+load("@rules_python//python:defs.bzl", "py_test")
+
+py_test(
+    name = "test_numpy",
+    srcs = ["test_numpy.py"],
+    deps = ["@uv//:numpy"],
+)
+
+py_test(
+    name = "test_pandas",
+    srcs = ["test_pandas.py"],
+    deps = [
+        "@uv//:numpy",
+        "@uv//:pandas",
+    ],
+)
+
+py_test(
+    name = "test_contourpy",
+    srcs = ["test_contourpy.py"],
+    deps = [
+        "@uv//:contourpy",
+        "@uv//:numpy",
+    ],
+)
+
+py_test(
+    name = "test_pywavelets",
+    srcs = ["test_pywavelets.py"],
+    deps = [
+        "@uv//:numpy",
+        "@uv//:pywavelets",
+    ],
+)

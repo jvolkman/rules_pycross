@@ -1,0 +1,12 @@
+# BuildBuddy remote cache configuration.
+# The BUILDBUDDY_API_KEY environment variable should be set in your CI environment
+# or local environment, and written to a .bazelrc file that is try-imported.
+build:remote --bes_results_url=https://app.buildbuddy.io/invocation/
+build:remote --bes_backend=grpcs://remote.buildbuddy.io
+build:remote --remote_cache=grpcs://remote.buildbuddy.io
+build:remote --remote_timeout=3600
+
+# Remote execution (extends remote cache config)
+build:rbe --config=remote
+build:rbe --remote_executor=grpcs://remote.buildbuddy.io
+build:rbe --jobs=100

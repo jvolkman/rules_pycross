@@ -1,0 +1,12 @@
+alias(
+    name = "tomli",
+    actual = "@uv//:tomli",
+)
+alias(
+    name = "filelock",
+    actual = "@uv//:filelock",
+)
+alias(
+    name = "pyproject_metadata",
+    actual = "@uv//:pyproject_metadata",
+)

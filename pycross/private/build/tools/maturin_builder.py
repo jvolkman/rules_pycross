@@ -60,6 +60,7 @@ def pre_build(ctx):
 
     is_darwin = "apple-darwin" in target_triple
     is_linux = "linux" in target_triple
+    ext_suffix = ctx.sysconfig_vars.get("EXT_SUFFIX")
     pyo3_config_lines = [
         "implementation=CPython",
         f"version={version}",
@@ -69,6 +70,8 @@ def pre_build(ctx):
         f"executable={ctx.target_python.absolute()}",
         "suppress_build_script_link_lines=true",
     ]
+    if ext_suffix:
+        pyo3_config_lines.append(f"ext_suffix={ext_suffix}")
     if not is_darwin and not is_linux:
         pyo3_config_lines.append(f"extra_build_script_line=cargo:rustc-link-lib={lib_name}")
     if not is_darwin:
