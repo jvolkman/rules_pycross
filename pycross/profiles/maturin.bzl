@@ -12,7 +12,7 @@ load(
 load("//pycross/private/build:rust_tool_wrapper.bzl", "pycross_rust_tool_wrapper")
 load("//pycross/profiles:util.bzl", "glean_repo_name")
 
-def maturin_build(name, sdist = None, build_deps = None, tool_deps = {}, repo = None, **kwargs):
+def maturin_build(name, sdist = None, build_deps = None, tool_deps = {}, repo = None, repair_wheel = True, **kwargs):
     """Build profile for maturin-based packages.
 
     Args:
@@ -21,6 +21,7 @@ def maturin_build(name, sdist = None, build_deps = None, tool_deps = {}, repo = 
         build_deps: Build dependencies required for PEP 517 package.
         tool_deps: Overrides for standard build tools.
         repo: Optional central lock repository name.
+        repair_wheel: If True (default), pass the built wheel through repairwheel to bundle native deps and apply manylinux tags.
         **kwargs: Additional arguments passed to pycross_wheel_build.
     """
     deps = kwargs.pop("deps", [])
@@ -129,8 +130,10 @@ def maturin_build(name, sdist = None, build_deps = None, tool_deps = {}, repo = 
     )
     mixins.append(":" + rust_mixin_name)
 
-    needs_repair = bool(cc_deps)
-    build_name = name + "_build"
+    if repair_wheel:
+        build_name = name + "_raw"
+    else:
+        build_name = name
 
     # Stage 2: Build wheel via PEP 517 and pluggable maturin_builder
     pycross_pep517_build(
@@ -140,13 +143,13 @@ def maturin_build(name, sdist = None, build_deps = None, tool_deps = {}, repo = 
         mixins = mixins,
         deps = merged_deps,
         path_tools = actual_path_tools,
-        visibility = ["//visibility:private" if needs_repair else "//visibility:public"],
+        visibility = ["//visibility:private" if repair_wheel else "//visibility:public"],
         tags = tags,
         **kwargs
     )
 
     # Stage 3: Repair wheel if C++ dependencies are linked
-    if needs_repair:
+    if repair_wheel:
         repaired_wheel_name = name + "_repaired"
         pycross_repaired_wheel(
             name = repaired_wheel_name,

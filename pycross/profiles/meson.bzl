@@ -33,6 +33,7 @@ def meson_build(
         repo = None,
         config_settings = {},
         pkg_config_files = [],
+        repair_wheel = True,
         visibility = None,
         tags = []):
     """Build profile for Meson-based Python packages.
@@ -58,6 +59,7 @@ def meson_build(
       repo: Optional central lock repository name.
       config_settings: Meson setup configuration arguments.
       pkg_config_files: Pkg-config files to copy to package directory.
+      repair_wheel: If True (default), pass the built wheel through repairwheel to bundle native deps and apply manylinux tags.
       visibility: Target visibility.
       tags: Target tags.
     """
@@ -193,6 +195,11 @@ def meson_build(
             seen[d] = True
             merged_deps.append(d)
 
+    if repair_wheel:
+        build_name = name + "_raw"
+    else:
+        build_name = name
+
     # Stage 2: Build wheel via PEP 517
     pycross_pep517_build(
         name = build_name,
@@ -204,12 +211,11 @@ def meson_build(
         site_hooks = site_hooks,
         pkg_config_files = pkg_config_files,
         path_tools = actual_path_tools,
-        visibility = ["//visibility:private" if native_deps else "//visibility:public"],
+        visibility = ["//visibility:private" if repair_wheel else "//visibility:public"],
         tags = tags,
     )
 
-    needs_repair = bool(native_deps)
-    if needs_repair:
+    if repair_wheel:
         # Stage 3: Repair wheel (bundle native shared libraries)
         repaired_wheel_name = name + "_repaired"
         pycross_repaired_wheel(
