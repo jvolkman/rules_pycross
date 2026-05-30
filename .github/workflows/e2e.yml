@@ -30,23 +30,16 @@ jobs:
         run: |
           echo "build:remote --remote_header=x-buildbuddy-api-key=${{ secrets.BUILDBUDDY_API_KEY }}" > e2e/${{ matrix.workspace }}/.bazelrc.user
 
-      - name: Build native wheels
-        run: cd e2e/${{ matrix.workspace }} && bazel build --config=remote -- //... -//tests/...
-
-      - name: Build cross wheels
-        run: |
-          if [ "${{ matrix.host }}" = "ubuntu" ]; then
-            PLATFORM="@llvm//platforms:macos_aarch64"
-          else
-            PLATFORM="@llvm//platforms:linux_x86_64"
-          fi
-          cd e2e/${{ matrix.workspace }} && bazel build --platforms=$PLATFORM --config=remote -- //... -//tests/...
+      - name: Build all wheels (native + cross)
+        run: cd e2e/${{ matrix.workspace }} && bazel build --config=remote //:all_wheels
 
       - name: Collect wheels
         run: |
           mkdir -p ${{ runner.temp }}/wheels
-          find e2e/${{ matrix.workspace }}/bazel-bin/ -path '*_build_wheel/*.whl' \
-            -exec cp {} ${{ runner.temp }}/wheels/ \;
+          cd e2e/${{ matrix.workspace }}
+          for f in $(bazel cquery 'deps(//:all_wheels, 1)' --output=files 2>/dev/null | grep '\.whl$'); do
+            cp -L "$f" ${{ runner.temp }}/wheels/
+          done
 
       - uses: actions/upload-artifact@v4
         with:

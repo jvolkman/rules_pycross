@@ -1,12 +1,14 @@
-alias(
-    name = "tomli",
-    actual = "@uv//:tomli",
-)
-alias(
-    name = "filelock",
-    actual = "@uv//:filelock",
-)
-alias(
-    name = "pyproject_metadata",
-    actual = "@uv//:pyproject_metadata",
+load("//shared:collect_wheels.bzl", "collect_wheels")
+
+collect_wheels(
+    name = "all_wheels",
+    platforms = [
+        "@llvm//platforms:linux_x86_64",
+        "@llvm//platforms:macos_aarch64",
+    ],
+    wheels = [
+        "@uv//_wheel:filelock",
+        "@uv//_wheel:pyproject_metadata",
+        "@uv//_wheel:tomli",
+    ],
 )
