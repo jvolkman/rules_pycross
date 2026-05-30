@@ -39,7 +39,6 @@ jobs:
       folders: |
         [
           "e2e/always_build",
-          "e2e/build_wheel",
           "e2e/generate_lock",
           "e2e/local_wheel",
           "e2e/requirements"
@@ -49,9 +48,7 @@ jobs:
           {"os": "windows-latest"},
           {"bazelversion": "9.1.0", "bzlmodEnabled": false},
           {"folder": "e2e/always_build", "bzlmodEnabled": false},
-          {"folder": "e2e/always_build", "bazelversion": "7.7.1"},
-          {"folder": "e2e/build_wheel", "bzlmodEnabled": false},
-          {"folder": "e2e/build_wheel", "bazelversion": "7.7.1"}
+          {"folder": "e2e/always_build", "bazelversion": "7.7.1"}
         ]
   # For branch protection settings, this job provides a "stable" name that can be used to gate PR merges
   # on "all matrix jobs were successful".
