@@ -4,6 +4,17 @@ bazel_dep(name = "rules_cc", version = "0.2.18")
 bazel_dep(name = "rules_python", version = "2.0.0")
 bazel_dep(name = "rules_pycross", version = "0.0.0")
 bazel_dep(name = "bazel_lib", version = "3.1.0")
+bazel_dep(name = "rules_rust", version = "0.68.0")
+
+rust = use_extension("@rules_rust//rust:extensions.bzl", "rust")
+rust.toolchain(
+    edition = "2021",
+    extra_target_triples = [
+        "aarch64-apple-darwin",
+        "aarch64-unknown-linux-gnu",
+        "x86_64-unknown-linux-gnu",
+    ],
+)
 
 local_path_override(
     module_name = "rules_pycross",
@@ -41,8 +52,17 @@ lock_import.import_uv(
     project_file = "//:pyproject.toml",
     repo = "uv",
 )
+lock_import.maturin_override(
+    name = "rpds-py",
+    always_build = True,
+    build_dependencies = [
+        "maturin",
+    ],
+    repo = "uv",
+)
 
 lock_repos = use_extension("@rules_pycross//pycross/extensions:lock_repos.bzl", "lock_repos")
 use_repo(lock_repos, "uv")
 
 register_toolchains("@llvm//toolchain:all")
+

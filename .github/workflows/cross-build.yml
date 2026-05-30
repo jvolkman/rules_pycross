@@ -1,4 +1,4 @@
-name: e2e
+name: cross-build
 
 on:
   push:
@@ -18,7 +18,7 @@ jobs:
       fail-fast: false
       matrix:
         host: [ubuntu, macos]
-        workspace: [meson, setuptools, maturin, pure_python]
+        workspace: [build_meson, build_setuptools, build_maturin, build_pure_python]
     steps:
       - uses: actions/checkout@v4
 
@@ -47,21 +47,21 @@ jobs:
       matrix:
         include:
           # Native builds tested on same platform
-          - { workspace: meson,       builder: ubuntu, runner: ubuntu }
-          - { workspace: meson,       builder: macos,  runner: macos  }
-          - { workspace: setuptools,  builder: ubuntu, runner: ubuntu }
-          - { workspace: setuptools,  builder: macos,  runner: macos  }
-          - { workspace: maturin,     builder: ubuntu, runner: ubuntu }
-          - { workspace: maturin,     builder: macos,  runner: macos  }
-          - { workspace: pure_python, builder: ubuntu, runner: ubuntu }
-          - { workspace: pure_python, builder: macos,  runner: macos  }
+          - { workspace: build_meson,       builder: ubuntu, runner: ubuntu }
+          - { workspace: build_meson,       builder: macos,  runner: macos  }
+          - { workspace: build_setuptools,  builder: ubuntu, runner: ubuntu }
+          - { workspace: build_setuptools,  builder: macos,  runner: macos  }
+          - { workspace: build_maturin,     builder: ubuntu, runner: ubuntu }
+          - { workspace: build_maturin,     builder: macos,  runner: macos  }
+          - { workspace: build_pure_python, builder: ubuntu, runner: ubuntu }
+          - { workspace: build_pure_python, builder: macos,  runner: macos  }
           # Cross builds tested on target platform
-          - { workspace: meson,       builder: ubuntu, runner: macos  }
-          - { workspace: meson,       builder: macos,  runner: ubuntu }
-          - { workspace: setuptools,  builder: ubuntu, runner: macos  }
-          - { workspace: setuptools,  builder: macos,  runner: ubuntu }
-          - { workspace: maturin,     builder: ubuntu, runner: macos  }
-          - { workspace: maturin,     builder: macos,  runner: ubuntu }
+          - { workspace: build_meson,       builder: ubuntu, runner: macos  }
+          - { workspace: build_meson,       builder: macos,  runner: ubuntu }
+          - { workspace: build_setuptools,  builder: ubuntu, runner: macos  }
+          - { workspace: build_setuptools,  builder: macos,  runner: ubuntu }
+          - { workspace: build_maturin,     builder: ubuntu, runner: macos  }
+          - { workspace: build_maturin,     builder: macos,  runner: ubuntu }
     steps:
       - uses: actions/checkout@v4
 
@@ -101,7 +101,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        workspace: [meson, setuptools, maturin]
+        workspace: [build_meson, build_setuptools, build_maturin]
     steps:
       - uses: actions/checkout@v4
 
