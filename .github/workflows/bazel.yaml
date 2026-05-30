@@ -120,7 +120,6 @@ jobs:
             "${{ fromJSON(inputs.bazelversions) }}",
           ]
         folder: ${{ fromJSON(inputs.folders) }}
-        bzlmodEnabled: [true, false]
         exclude: ${{ fromJSON(inputs.exclude) }}
 
     # Steps represent a sequence of tasks that will be executed as part of the job
@@ -134,14 +133,14 @@ jobs:
           bazelrc: |
             common --announce_rc
             common --color=yes
-            common --enable_bzlmod=${{ matrix.bzlmodEnabled }}
+            common --enable_bzlmod=true
             test --test_output=errors
 
       - name: Configure bazelrc --enable_workspace (bazelversion >= 7.1.0)
         working-directory: ${{ matrix.folder }}
         if: ${{ !startsWith(matrix.bazelversion, '6.') && !startsWith(matrix.bazelversion, '7.0.') }}
         run: |
-          echo "common --enable_workspace=${{ ! matrix.bzlmodEnabled }}" >> .bazelrc
+          echo "common --enable_workspace=false" >> .bazelrc
 
       - name: Configure Bazel version
         working-directory: ${{ matrix.folder }}
@@ -159,7 +158,7 @@ jobs:
 
       # See https://github.com/bazel-contrib/publish-to-bcr#including-patches
       - name: verify bcr patches
-        if: matrix.bzlmodEnabled && hashFiles('.bcr/patches/*.patch') != '' && ! startsWith(matrix.os, 'windows')
+        if: hashFiles('.bcr/patches/*.patch') != '' && ! startsWith(matrix.os, 'windows')
         run: patch --dry-run -p1 < .bcr/patches/*.patch
 
       - name: Test
@@ -171,7 +170,8 @@ jobs:
         # Don't run integration tests on Windows since they are bash scripts and Windows runs Powershell
         if: steps.has_test_sh.outputs.files_exists == 'true' && ! startsWith(matrix.os, 'windows')
         working-directory: ${{ matrix.folder }}
+
         shell: bash
         # Run the script potentially setting BZLMOD_FLAG=--enable_bzlmod. All test.sh
         # scripts that run bazel directly should make use of this variable.
-        run: BZLMOD_FLAG=--enable_bzlmod=${{ matrix.bzlmodEnabled }} ./test.sh
+        run: BZLMOD_FLAG=--enable_bzlmod=true ./test.sh

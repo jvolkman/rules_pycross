@@ -4,9 +4,9 @@ name: CI
 on:
   # Triggers the workflow on push or pull request events but only for the main branch
   push:
-    branches: [main]
+    branches: [main, dev/v2]
   pull_request:
-    branches: [main]
+    branches: [main, dev/v2]
   # Allows you to run this workflow manually from the Actions tab
   workflow_dispatch:
 
@@ -46,8 +46,6 @@ jobs:
       exclude: |
         [
           {"os": "windows-latest"},
-          {"bazelversion": "9.1.0", "bzlmodEnabled": false},
-          {"folder": "e2e/always_build", "bzlmodEnabled": false},
           {"folder": "e2e/always_build", "bazelversion": "7.7.1"}
         ]
   # For branch protection settings, this job provides a "stable" name that can be used to gate PR merges
