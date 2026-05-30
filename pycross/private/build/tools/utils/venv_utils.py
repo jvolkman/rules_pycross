@@ -173,7 +173,7 @@ def inject_python_wrapper(ctx: BuildContext) -> None:
             existing_pp = os.environ.get("PYTHONPATH")
             os.environ["PYTHONPATH"] = os.pathsep.join(paths_to_add) + (os.pathsep + existing_pp if existing_pp else "")
 
-            os.execv({repr(str(real_python))}, [{repr(str(real_python))}] + sys.argv[1:])
+            os.execv({repr(str(real_python))}, [{repr(str(python_exe.absolute()))}] + sys.argv[1:])
             """)
         )
     python_exe.chmod(0o755)
