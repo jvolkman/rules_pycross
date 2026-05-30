@@ -151,10 +151,15 @@ def pre_build(ctx):
 
     wrapper_path = ctx.temp_dir / "rustc_wrapper"
 
+    from pycross.private.build.tools.utils.cc_toolchain import _python_wrapper_shebang
+
+    shebang = _python_wrapper_shebang(ctx.exec_python)
+
     ldflags = ctx.sysconfig_vars.get("LDFLAGS", "")
     ldflags_args = shlex.split(ldflags)
 
-    wrapper_content = textwrap.dedent(f"""    #!{ctx.exec_python.absolute()} -S
+    wrapper_content = textwrap.dedent(f"""\
+    {shebang}
     import os, sys
 
     real_rustc = sys.argv[1]
