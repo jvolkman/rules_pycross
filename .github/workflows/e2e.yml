@@ -90,7 +90,7 @@ jobs:
 
       - name: Install and test
         run: |
-          pip install ${{ runner.temp }}/install-wheels/*.whl
+          pip install pytest ${{ runner.temp }}/install-wheels/*.whl
           cd e2e/${{ matrix.workspace }} && python -m pytest tests/ -v
 
   reproducibility:
