@@ -42,6 +42,21 @@ def build_standard_venv(ctx: BuildContext) -> None:
             rel_dep_path = os.path.relpath(dep_path, site_dir)
             f.write(f"import os, site; site.addsitedir(os.path.join(sitedir, {rel_dep_path!r}))\n")
 
+    # Write site_hooks to a file and .pth entry.
+    # The hooks file is loaded by the python wrapper's -c handler and by
+    # non-intercepted Python invocations via the .pth file.
+    if ctx.site_hooks:
+        hooks_file = ctx.env_dir / "_pycross_hooks.py"
+        with open(hooks_file, "w") as f:
+            for hook in ctx.site_hooks:
+                f.write(hook + "\n")
+        with open(site_dir / "_pycross_hooks.pth", "w") as f:
+            f.write(
+                f"import importlib.util; "
+                f"_s = importlib.util.spec_from_file_location('_pycross_hooks', '{hooks_file.absolute()}'); "
+                f"_m = importlib.util.module_from_spec(_s); _s.loader.exec_module(_m)\n"
+            )
+
     inject_python_wrapper(ctx)
 
 
@@ -103,6 +118,7 @@ def inject_python_wrapper(ctx: BuildContext) -> None:
     site_dir = find_site_dir(ctx.env_dir)
     python_paths_list = [str(p.absolute()) for p in ctx.python_paths]
     sdist_paths = [str(ctx.sdist_dir.absolute())]
+    hooks_file_path = str((ctx.env_dir / "_pycross_hooks.py").absolute())
 
     with open(python_exe, "w") as f:
         f.write(
@@ -139,6 +155,12 @@ def inject_python_wrapper(ctx: BuildContext) -> None:
                             res["SOABI"] = {repr(ctx.sysconfig_vars.get("SOABI"))}
                     return res
                 sysconfig.get_config_vars = _get_config_vars
+
+                # Execute site_hooks if present.
+                _hooks_file = {repr(hooks_file_path)}
+                if os.path.exists(_hooks_file):
+                    with open(_hooks_file) as _hf:
+                        exec(compile(_hf.read(), _hooks_file, 'exec'))
 
                 # Execute the Meson/packaging command string cleanly inside our monkey-patched wrapper process
                 exec(sys.argv[c_index + 1])

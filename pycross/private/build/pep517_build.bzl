@@ -89,6 +89,15 @@ def _pep517_build_impl(ctx):
 
         ctx.actions.write(config_settings_file, json.encode(expanded_settings))
 
+    make_vars = {}
+    for dep in ctx.attr.mixins:
+        if platform_common.TemplateVariableInfo in dep:
+            make_vars.update(dep[platform_common.TemplateVariableInfo].variables)
+
+    expanded_site_hooks = []
+    for hook in ctx.attr.site_hooks:
+        expanded_site_hooks.append(ctx.expand_make_variables("site_hooks", hook, make_vars))
+
     # 4.1. Resolve pkg_config_files
     pkg_config_paths = []
     for f in ctx.files.pkg_config_files:
@@ -130,6 +139,7 @@ def _pep517_build_impl(ctx):
         "python_paths": python_paths,
         "mixins": mixin_jsons,
         "config_settings_raw": config_settings_file.path if config_settings_file else None,
+        "site_hooks": expanded_site_hooks,
         "pkg_config_files": pkg_config_paths,
         "path_tools": path_tools_list,
         "wheel_file": out_wheel.path,
@@ -186,6 +196,9 @@ pycross_pep517_build = rule(
         "builder": attr.label(mandatory = True, executable = True, cfg = "exec"),
         "mixins": attr.label_list(providers = [PycrossBuildMixinInfo]),
         "config_settings": attr.string_list_dict(),
+        "site_hooks": attr.string_list(
+            doc = "Python snippets to execute at interpreter startup during the build. Each snippet is written as a .pth file entry and also executed before intercepted -c commands. Values may contain location references expanded from native_deps.",
+        ),
         "pkg_config_files": attr.label_list(allow_files = True),
         "path_tools": attr.label_list(
             cfg = pycross_exec_platform_transition,

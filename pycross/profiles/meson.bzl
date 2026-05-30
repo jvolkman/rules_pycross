@@ -25,6 +25,7 @@ def meson_build(
         copts = [],
         linkopts = [],
         meson_properties = {},
+        site_hooks = [],
         build_deps = None,
         deps = [],
         path_tools = [],
@@ -47,6 +48,9 @@ def meson_build(
       linkopts: Extra linker options.
       meson_properties: Meson cross-file properties to inject into [properties] section.
           Values may contain $(MAKE_VAR) references that will be expanded from native_deps.
+      site_hooks: Python snippets to execute at interpreter startup during the build.
+          Each snippet is written as a .pth file entry. Values may contain location
+          references that will be expanded from native_deps.
       build_deps: Build dependencies required for PEP 517 package.
       deps: Additional Python runtime dependencies.
       path_tools: Executable tools to put on PATH during build.
@@ -197,6 +201,7 @@ def meson_build(
         mixins = mixins,
         deps = merged_deps,
         config_settings = config_settings,
+        site_hooks = site_hooks,
         pkg_config_files = pkg_config_files,
         path_tools = actual_path_tools,
         visibility = ["//visibility:private" if native_deps else "//visibility:public"],

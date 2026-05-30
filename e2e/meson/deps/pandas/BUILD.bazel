@@ -1,0 +1,30 @@
+"""BUILD target for pandas."""
+
+load("@rules_pycross//pycross/profiles:meson.bzl", "meson_build")
+
+package(default_visibility = ["//visibility:public"])
+
+meson_build(
+    name = "pandas",
+    build_deps = [
+        "@uv//:meson_python",
+        "@uv//:meson",
+        "@uv//:ninja",
+        "@uv//:cython",
+        "@uv//:versioneer",
+        "@uv//:numpy",
+    ],
+    meson_properties = {
+        "numpy-include-dir": "$(NUMPY_INCLUDE_DIR)",
+    },
+    native_deps = [
+        "//deps/numpy:numpy_headers",
+    ],
+    sdist = "@uv//pandas:sdist",
+    site_hooks = [
+        "import numpy; numpy.get_include = lambda: '$(NUMPY_INCLUDE_DIR)'",
+    ],
+    deps = [
+        "@uv//:numpy",
+    ],
+)
