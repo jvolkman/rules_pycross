@@ -11,3 +11,9 @@ py_test(
     srcs = ["test_setproctitle.py"],
     deps = ["@uv//:setproctitle"],
 )
+
+py_test(
+    name = "test_zstandard",
+    srcs = ["test_zstandard.py"],
+    deps = ["//:zstandard"],
+)
