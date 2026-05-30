@@ -31,9 +31,7 @@ def get_wrapper_flags(cflags: str) -> List[str]:
     return result
 
 
-def wrap_compiler(
-    lang: str, cc_exe: str, cflags: str, python_exe: Path, bin_dir: Path
-) -> Path:
+def wrap_compiler(lang: str, cc_exe: str, cflags: str, python_exe: Path, bin_dir: Path) -> Path:
     """Generate custom compiler wrapper scripts to filter incompatible linker flags."""
     assert lang in ("cc", "cxx")
 
@@ -116,20 +114,13 @@ def setup_cc_mixin(ctx: BuildContext, cc_config: Dict[str, Any]) -> None:
     extra_includes = []
     for inc_dir_str in cc_config.get("include_dirs", []):
         inc_dir = Path(replace_placeholder(ctx.prefix, inc_dir_str))
-        if toolchain_provides_cxx_headers and (
-            "libcxx" in str(inc_dir) or "libcxxabi" in str(inc_dir)
-        ):
+        if toolchain_provides_cxx_headers and ("libcxx" in str(inc_dir) or "libcxxabi" in str(inc_dir)):
             continue
         extra_includes.append(f"-I{inc_dir.absolute()}")
     extra_includes_str = " ".join(extra_includes)
 
-    ldflags = (
-        replace_placeholder(ctx.prefix, cc_config["LDFLAGS"]) + f" -L{mixin_lib_dir.absolute()}"
-    )
-    ldsharedflags = (
-        replace_placeholder(ctx.prefix, cc_config["LDSHAREDFLAGS"])
-        + f" -L{mixin_lib_dir.absolute()}"
-    )
+    ldflags = replace_placeholder(ctx.prefix, cc_config["LDFLAGS"]) + f" -L{mixin_lib_dir.absolute()}"
+    ldsharedflags = replace_placeholder(ctx.prefix, cc_config["LDSHAREDFLAGS"]) + f" -L{mixin_lib_dir.absolute()}"
 
     # Append C++ static runtime libraries directly by full path to LDFLAGS and
     # LDSHAREDFLAGS. This replicates Bazel's static_link_cpp_runtimes behavior
@@ -137,10 +128,7 @@ def setup_cc_mixin(ctx: BuildContext, cc_config: Dict[str, Any]) -> None:
     # runtime without needing -l flags or specific library naming conventions.
     runtime_libs = cc_config.get("runtime_libs", [])
     if runtime_libs:
-        runtime_lib_flags = " ".join(
-            str(Path(replace_placeholder(ctx.prefix, lib)).absolute())
-            for lib in runtime_libs
-        )
+        runtime_lib_flags = " ".join(str(Path(replace_placeholder(ctx.prefix, lib)).absolute()) for lib in runtime_libs)
         ldflags += f" {runtime_lib_flags}"
         ldsharedflags += f" {runtime_lib_flags}"
 

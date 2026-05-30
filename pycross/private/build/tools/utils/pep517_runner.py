@@ -24,17 +24,17 @@ def run_pep517_build(ctx: BuildContext) -> str:
     is_debug = os.environ.get("RULES_PYCROSS_DEBUG", "false").lower() in ("1", "true", "yes", "y")
 
     if is_debug:
-        print(f"==================================================", file=sys.stderr)
-        print(f"RULES_PYCROSS_DEBUG is set.", file=sys.stderr)
+        print("==================================================", file=sys.stderr)
+        print("RULES_PYCROSS_DEBUG is set.", file=sys.stderr)
         print(f"Build environment is located at: {ctx.temp_dir.absolute()}", file=sys.stderr)
-        print(f"To preserve this directory after the build, use Bazel's --sandbox_debug flag.", file=sys.stderr)
-        print(f"==================================================", file=sys.stderr)
+        print("To preserve this directory after the build, use Bazel's --sandbox_debug flag.", file=sys.stderr)
+        print("==================================================", file=sys.stderr)
 
     def _subprocess_runner(cmd, cwd=None, extra_environ=None):
         env = ctx.build_env.copy()
         if extra_environ:
             env.update(extra_environ)
-            
+
         if is_debug:
             print(f"\n[DEBUG] Running command: {' '.join(cmd)}", file=sys.stderr)
             print(f"[DEBUG] Working directory: {cwd or ctx.sdist_dir}", file=sys.stderr)

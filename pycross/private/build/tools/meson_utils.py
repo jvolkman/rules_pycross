@@ -3,12 +3,12 @@
 import shlex
 import shutil
 import textwrap
+from pathlib import Path
 from typing import Any
 from typing import Dict
 from typing import List
 from typing import Optional
 
-from pathlib import Path
 from pycross.private.build.tools.utils.context import BuildContext
 from pycross.private.build.tools.utils.context import replace_placeholder
 
@@ -32,8 +32,7 @@ def generate_cross_ini(ctx: BuildContext, cc_config: Optional[Dict[str, Any]] = 
     cxx = get_var("CXX")
     if not cc or not cxx:
         raise ValueError(
-            "CC and CXX must be provided by the Bazel CC toolchain. "
-            "Ensure a cc_mixin is configured for this build."
+            "CC and CXX must be provided by the Bazel CC toolchain. Ensure a cc_mixin is configured for this build."
         )
     cflags = get_var("CFLAGS", "")
     cxxflags = get_var("CXXFLAGS", "")
@@ -134,8 +133,6 @@ def generate_cross_ini(ctx: BuildContext, cc_config: Optional[Dict[str, Any]] = 
         f"c = {format_meson_list(cc_list)}",
         f"cpp = {format_meson_list(cxx_list)}",
     ]
-
-
 
     # Cython: only inject if present in the build virtualenv.
     # Meson does NOT inherently require Cython; it is only needed for

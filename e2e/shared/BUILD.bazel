@@ -1,3 +1,5 @@
+load("@rules_python//python:defs.bzl", "py_binary")
+
 package(default_visibility = ["//visibility:public"])
 
 exports_files([
@@ -9,3 +11,10 @@ exports_files([
     "test_regex.py",
     "test_zstandard.py",
 ])
+
+py_binary(
+    name = "collect_wheels_tool",
+    srcs = ["collect_wheels.py"],
+    main = "collect_wheels.py",
+    visibility = ["//visibility:public"],
+)

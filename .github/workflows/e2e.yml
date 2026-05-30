@@ -33,18 +33,10 @@ jobs:
       - name: Build all wheels (native + cross)
         run: cd e2e/${{ matrix.workspace }} && bazel build --config=remote //:all_wheels
 
-      - name: Collect wheels
-        run: |
-          mkdir -p ${{ runner.temp }}/wheels
-          cd e2e/${{ matrix.workspace }}
-          for f in $(bazel cquery 'deps(//:all_wheels, 1)' --output=files 2>/dev/null | grep '\.whl$'); do
-            cp -L "$f" ${{ runner.temp }}/wheels/
-          done
-
       - uses: actions/upload-artifact@v4
         with:
           name: wheels-${{ matrix.host }}-${{ matrix.workspace }}
-          path: ${{ runner.temp }}/wheels/
+          path: e2e/${{ matrix.workspace }}/bazel-bin/all_wheels/
 
   test:
     name: Test - ${{ matrix.workspace }} (${{ matrix.builder }}→${{ matrix.runner }})

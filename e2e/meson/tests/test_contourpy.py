@@ -1,6 +1,8 @@
 import unittest
+
 import contourpy
 import numpy as np
+
 
 class TestContourPy(unittest.TestCase):
     def test_contour_generator(self):
@@ -10,6 +12,7 @@ class TestContourPy(unittest.TestCase):
         gen = contourpy.contour_generator(x, y, z)
         lines = gen.lines(1.0)
         self.assertIsNotNone(lines)
+
 
 if __name__ == "__main__":
     unittest.main()

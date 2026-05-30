@@ -13,12 +13,12 @@ meson_build(
         "@uv//:cython",
         "@uv//:numpy",
     ],
-    native_deps = [
-        "//deps/numpy:numpy_headers",
-    ],
     meson_properties = {
         "numpy-include-dir": "$(NUMPY_INCLUDE_DIR)",
     },
+    native_deps = [
+        "//deps/numpy:numpy_headers",
+    ],
     sdist = "@uv//pywavelets:sdist",
     deps = [
         "@uv//:numpy",

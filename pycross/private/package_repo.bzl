@@ -87,7 +87,6 @@ def _package_repo_impl(rctx):
     lock = json.decode(rctx.read(lock_json_path))
     packages = lock["packages"]
     pins = lock["pins"]
-    environments = lock.get("environments", {})
 
     rctx.file("REPO.bazel", "")
     rctx.file("defs.bzl", "")  # Empty file for compatibility
@@ -140,7 +139,7 @@ def _package_repo_impl(rctx):
                 ")",
                 "",
             ])
-            
+
         wheel_build_lines.extend([
             "alias(",
             '    name = "{}",'.format(pkg_key),

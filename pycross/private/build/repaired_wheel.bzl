@@ -93,7 +93,7 @@ def _pycross_repaired_wheel_impl(ctx):
             wheel_directory = out_wheel_directory,
         ),
         DefaultInfo(
-            files = depset([out_wheel]),
+            files = depset([out_wheel, out_wheel_directory]),
         ),
     ]
 

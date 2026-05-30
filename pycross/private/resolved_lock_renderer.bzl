@@ -67,7 +67,7 @@ def render_lock_bzl(lock, repo_map, rctx_name):
                 _ind(")"),
                 "",
             ])
-            
+
         target_env_cases['":{}"'.format(env_target)] = '"{}"'.format(env_ref["environment_label"])
 
     lines.extend([
@@ -83,9 +83,9 @@ def render_lock_bzl(lock, repo_map, rctx_name):
 
     for pkg_key, pkg in sorted(packages.items()):
         pkg_key_sanitized = _sanitize_name(pkg_key)
-        
+
         has_runtime_deps = bool(pkg.get("common_dependencies") or pkg.get("environment_dependencies"))
-        
+
         sdist_file = pkg.get("sdist_file")
         sdist_label = None
         if sdist_file:
@@ -101,7 +101,7 @@ def render_lock_bzl(lock, repo_map, rctx_name):
             for dep in sorted(pkg.get("common_dependencies", [])):
                 lines.append(_ind('":{}",'.format(dep), 2))
             lines.append(_ind("]"))
-            
+
             if pkg.get("environment_dependencies"):
                 lines[-1] = lines[-1] + " + select({"
                 for env_name, deps in sorted(pkg.get("environment_dependencies").items()):
@@ -128,12 +128,12 @@ def render_lock_bzl(lock, repo_map, rctx_name):
             _ind("native.alias("),
             _ind('name = "_wheel_{}",'.format(pkg_key), 2),
         ])
-        
+
         distinct_file_refs = []
         for env_ref in pkg.get("environment_files", {}).values():
             if env_ref not in distinct_file_refs:
                 distinct_file_refs.append(env_ref)
-                
+
         def wheel_target(file_ref):
             if file_ref.get("label"):
                 return file_ref["label"]
@@ -144,15 +144,15 @@ def render_lock_bzl(lock, repo_map, rctx_name):
                 else:
                     repo_name = "{}_sdist_{}".format(rctx_name, pkg_key_sanitized)
                     target = "@@{}//:pkg".format(repo_name)
-                
+
                 parts = target.rsplit(":", 1)
                 if len(parts) == 2:
                     return parts[0] + ":wheel"
                 else:
                     return target + ":wheel"
-                    
+
             return repo_map.get(key)
-                
+
         if len(distinct_file_refs) == 1:
             lines.append(_ind('actual = "{}",'.format(wheel_target(distinct_file_refs[0])), 2))
         else:
@@ -173,13 +173,13 @@ def render_lock_bzl(lock, repo_map, rctx_name):
         ])
         if has_runtime_deps:
             lines.append(_ind("deps = {},".format(deps_name), 2))
-        
+
         if pkg.get("install_exclude_globs"):
             lines.append(_ind("install_exclude_globs = [", 2))
             for glob in pkg["install_exclude_globs"]:
                 lines.append(_ind('"{}",'.format(glob), 3))
             lines.append(_ind("],", 2))
-            
+
         if pkg.get("post_install_patches"):
             lines.append(_ind("post_install_patches = [", 2))
             for patch in pkg["post_install_patches"]:
