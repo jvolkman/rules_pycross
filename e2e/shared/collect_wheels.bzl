@@ -38,6 +38,11 @@ def collect_wheels(name, wheels, platforms, **kwargs):
     """
     all_srcs = []
 
+    native.filegroup(
+        name = name + "_wheels_filegroup",
+        srcs = wheels,
+    )
+
     for platform in platforms:
         # Derive a short suffix from the platform label for target naming.
         # e.g., "@llvm//platforms:linux_x86_64" -> "linux_x86_64"
@@ -46,7 +51,7 @@ def collect_wheels(name, wheels, platforms, **kwargs):
 
         platform_transition_filegroup(
             name = transition_name,
-            srcs = wheels,
+            srcs = [name + "_wheels_filegroup"],
             target_platform = platform,
         )
         all_srcs.append(":{}".format(transition_name))

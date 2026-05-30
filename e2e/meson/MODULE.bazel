@@ -69,9 +69,6 @@ lock_import.meson_override(
         "ninja",
         "versioneer",
     ],
-    copts = [
-        "-D__JETS_DUMMY__=8",
-    ],
     repo = "uv",
 )
 lock_import.package(
