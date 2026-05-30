@@ -45,7 +45,7 @@ jobs:
       - name: Collect wheels
         run: |
           mkdir -p ${{ runner.temp }}/wheels
-          find e2e/${{ matrix.workspace }}/bazel-bin -name '*.whl' \
+          find e2e/${{ matrix.workspace }}/bazel-bin/ -path '*_build_wheel/*.whl' \
             -exec cp {} ${{ runner.temp }}/wheels/ \;
 
       - uses: actions/upload-artifact@v4
