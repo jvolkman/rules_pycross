@@ -39,29 +39,14 @@ jobs:
           path: e2e/${{ matrix.workspace }}/bazel-bin/all_wheels/
 
   test:
-    name: Test - ${{ matrix.workspace }} (${{ matrix.builder }}→${{ matrix.runner }})
+    name: Test - (${{ matrix.builder }}→${{ matrix.runner }})
     needs: build
     runs-on: ${{ format('{0}-latest', matrix.runner) }}
     strategy:
       fail-fast: false
       matrix:
-        include:
-          # Native builds tested on same platform
-          - { workspace: build_meson,       builder: ubuntu, runner: ubuntu }
-          - { workspace: build_meson,       builder: macos,  runner: macos  }
-          - { workspace: build_setuptools,  builder: ubuntu, runner: ubuntu }
-          - { workspace: build_setuptools,  builder: macos,  runner: macos  }
-          - { workspace: build_maturin,     builder: ubuntu, runner: ubuntu }
-          - { workspace: build_maturin,     builder: macos,  runner: macos  }
-          - { workspace: build_pure_python, builder: ubuntu, runner: ubuntu }
-          - { workspace: build_pure_python, builder: macos,  runner: macos  }
-          # Cross builds tested on target platform
-          - { workspace: build_meson,       builder: ubuntu, runner: macos  }
-          - { workspace: build_meson,       builder: macos,  runner: ubuntu }
-          - { workspace: build_setuptools,  builder: ubuntu, runner: macos  }
-          - { workspace: build_setuptools,  builder: macos,  runner: ubuntu }
-          - { workspace: build_maturin,     builder: ubuntu, runner: macos  }
-          - { workspace: build_maturin,     builder: macos,  runner: ubuntu }
+        builder: [ubuntu, macos]
+        runner: [ubuntu, macos]
     steps:
       - uses: actions/checkout@v4
 
@@ -75,33 +60,44 @@ jobs:
 
       - uses: actions/download-artifact@v4
         with:
-          name: wheels-${{ matrix.builder }}-${{ matrix.workspace }}
-          path: ${{ runner.temp }}/wheels
+          pattern: wheels-${{ matrix.builder }}-*
+          path: ${{ runner.temp }}/artifacts
 
-      - name: Filter wheels for this platform
+      - name: Test workspaces
         run: |
-          mkdir -p ${{ runner.temp }}/install-wheels
-          if [ "${{ matrix.runner }}" = "ubuntu" ]; then
-            cp ${{ runner.temp }}/wheels/*linux*.whl ${{ runner.temp }}/install-wheels/ 2>/dev/null || true
-          else
-            cp ${{ runner.temp }}/wheels/*macosx*.whl ${{ runner.temp }}/install-wheels/ 2>/dev/null || true
-          fi
-          cp ${{ runner.temp }}/wheels/*none-any*.whl ${{ runner.temp }}/install-wheels/ 2>/dev/null || true
+          for ws in build_meson build_setuptools build_maturin build_pure_python; do
+            echo "::group::Testing $ws"
+            
+            # Setup a fresh virtual environment for this workspace
+            python -m venv ${{ runner.temp }}/venv-$ws
+            source ${{ runner.temp }}/venv-$ws/bin/activate
+            
+            # Filter wheels for this platform from this workspace's artifact
+            mkdir -p ${{ runner.temp }}/install-wheels-$ws
+            artifact_dir="${{ runner.temp }}/artifacts/wheels-${{ matrix.builder }}-$ws"
+            
+            if [ "${{ matrix.runner }}" = "ubuntu" ]; then
+              cp $artifact_dir/*linux*.whl ${{ runner.temp }}/install-wheels-$ws/ 2>/dev/null || true
+            else
+              cp $artifact_dir/*macosx*.whl ${{ runner.temp }}/install-wheels-$ws/ 2>/dev/null || true
+            fi
+            cp $artifact_dir/*none-any*.whl ${{ runner.temp }}/install-wheels-$ws/ 2>/dev/null || true
 
-      - name: Install and test
-        run: |
-          pip install pytest ${{ runner.temp }}/install-wheels/*.whl
-          cd e2e/${{ matrix.workspace }} && python -m pytest tests/ -v
+            # Install and test
+            pip install pytest ${{ runner.temp }}/install-wheels-$ws/*.whl
+            cd e2e/$ws
+            python -m pytest tests/ -v
+            cd ../..
+            
+            deactivate
+            echo "::endgroup::"
+          done
 
   reproducibility:
-    name: Repro check - ${{ matrix.workspace }}
+    name: Repro check
     needs: build
     runs-on: ubuntu-latest
     continue-on-error: true
-    strategy:
-      fail-fast: false
-      matrix:
-        workspace: [build_meson, build_setuptools, build_maturin]
     steps:
       - uses: actions/checkout@v4
 
@@ -114,13 +110,15 @@ jobs:
 
       - uses: actions/download-artifact@v4
         with:
-          name: wheels-ubuntu-${{ matrix.workspace }}
+          pattern: wheels-ubuntu-*
           path: ${{ runner.temp }}/linux-wheels
+          merge-multiple: true
 
       - uses: actions/download-artifact@v4
         with:
-          name: wheels-macos-${{ matrix.workspace }}
+          pattern: wheels-macos-*
           path: ${{ runner.temp }}/macos-wheels
+          merge-multiple: true
 
       - name: Compare wheels
         run: python e2e/tools/compare_wheels.py ${{ runner.temp }}/linux-wheels ${{ runner.temp }}/macos-wheels
