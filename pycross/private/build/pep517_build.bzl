@@ -170,7 +170,7 @@ def _pep517_build_impl(ctx):
 
     return [
         DefaultInfo(
-            files = depset([out_wheel]),
+            files = depset([out_wheel, out_wheel_directory]),
         ),
         PycrossWheelInfo(
             wheel_file = out_wheel,

@@ -12,7 +12,8 @@ def _pycross_wheel_library_impl(ctx):
         wheel_file = wheel_target[PycrossWheelInfo].wheel_file
         name_file = wheel_target[PycrossWheelInfo].name_file
     else:
-        wheel_file = ctx.file.wheel
+        # We assume the first file is the wheel if PycrossWheelInfo is not present
+        wheel_file = ctx.files.wheel[0]
         name_file = None
 
     args = ctx.actions.args().use_param_file("--flagfile=%s")
@@ -46,7 +47,7 @@ def _pycross_wheel_library_impl(ctx):
             "PYTHONHASHSEED": "0",
         },
         mnemonic = "WheelInstall",
-        progress_message = "Installing %s" % ctx.file.wheel.basename,
+        progress_message = "Installing %s" % wheel_file.basename,
     )
 
     has_py2_only_sources = ctx.attr.python_version == "PY2"
@@ -105,7 +106,7 @@ pycross_wheel_library = rule(
         ),
         "wheel": attr.label(
             doc = "The wheel file.",
-            allow_single_file = [".whl"],
+            allow_files = True,
             mandatory = True,
         ),
         "install_exclude_globs": attr.string_list(

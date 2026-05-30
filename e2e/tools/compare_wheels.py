@@ -29,11 +29,15 @@ def compare_binaries(file_a: Path, file_b: Path, name: str):
         try:
             out_a = subprocess.run(
                 [tool] + args + [str(file_a)],
-                capture_output=True, text=True, timeout=10,
+                capture_output=True,
+                text=True,
+                timeout=10,
             )
             out_b = subprocess.run(
                 [tool] + args + [str(file_b)],
-                capture_output=True, text=True, timeout=10,
+                capture_output=True,
+                text=True,
+                timeout=10,
             )
             if out_a.returncode == 0 and out_b.returncode == 0:
                 if out_a.stdout != out_b.stdout:
