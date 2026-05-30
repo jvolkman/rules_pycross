@@ -193,6 +193,7 @@ def _cc_mixin_impl(ctx):
             config_json = config_json,
             files = depset([config_json], transitive = transitive_files),
         ),
+        platform_common.TemplateVariableInfo(make_vars),
     ]
 
 pycross_cc_mixin = rule(

@@ -61,7 +61,7 @@ lock_import.package(
     build_target = "@//deps/numpy",
     repo = "uv",
 )
-lock_import.meson_override(
+lock_import.package(
     name = "pandas",
     always_build = True,
     build_dependencies = [
@@ -70,7 +70,9 @@ lock_import.meson_override(
         "meson",
         "ninja",
         "versioneer",
+        "numpy",
     ],
+    build_target = "@//deps/pandas",
     repo = "uv",
 )
 lock_import.package(
