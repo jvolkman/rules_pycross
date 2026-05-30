@@ -70,6 +70,5 @@ use_repo(lock_repos, "uv")
 
 register_toolchains("@llvm//toolchain:all")
 
-
 zstd = use_extension("//:zstd.bzl", "zstd")
 use_repo(zstd, "zstd")
