@@ -5,7 +5,7 @@ load("//pycross/private/build:transitions.bzl", "pycross_exec_platform_transitio
 load("//pycross/private/build/actions:cc_layer.bzl", "extract_cc_layer")
 load("//pycross/private/build/actions:pep517_action.bzl", "register_pep517_action")
 load("//pycross/private/build/actions:repair_action.bzl", "register_repair_action")
-load(":common_attrs.bzl", "CC_BUILD_ATTRS", "CC_FRAGMENTS", "CC_TOOLCHAINS", "CC_TOOLCHAIN_ATTRS", "COMMON_BUILD_ATTRS")
+load(":common_attrs.bzl", "CC_BUILD_ATTRS", "CC_FRAGMENTS", "CC_TOOLCHAINS", "CC_TOOLCHAIN_ATTRS", "COMMON_BUILD_ATTRS", "group_tool_deps")
 
 def _setuptools_build_impl(ctx):
     cc_layer = extract_cc_layer(
@@ -21,11 +21,16 @@ def _setuptools_build_impl(ctx):
         name = exe.basename
         tool_executables.append(struct(name = name, file = exe, files_to_run = target[DefaultInfo].files_to_run))
 
+    tool_deps = group_tool_deps(ctx.attr.tool_deps)
+
+    # setuptools and wheel are injected as build deps when present, but are not
+    # strictly required — they may already be available in the build environment
+    # (e.g. bundled with the Python interpreter).
     build_deps = list(ctx.attr.build_deps)
-    if hasattr(ctx.attr, "setuptools_wheel"):
-        build_deps.extend(ctx.attr.setuptools_wheel)
-    if hasattr(ctx.attr, "wheel_wheel"):
-        build_deps.extend(ctx.attr.wheel_wheel)
+    if "setuptools" in tool_deps:
+        build_deps.extend(tool_deps["setuptools"])
+    if "wheel" in tool_deps:
+        build_deps.extend(tool_deps["wheel"])
 
     build_result = register_pep517_action(
         ctx,
@@ -69,12 +74,7 @@ def _setuptools_build_impl(ctx):
 setuptools_build = rule(
     implementation = _setuptools_build_impl,
     attrs = COMMON_BUILD_ATTRS | CC_BUILD_ATTRS | CC_TOOLCHAIN_ATTRS | {
-        "setuptools_wheel": attr.label(
-            mandatory = True,
-            cfg = pycross_exec_platform_transition,
-        ),
-        "wheel_wheel": attr.label(
-            mandatory = True,
+        "tool_deps": attr.label_list(
             cfg = pycross_exec_platform_transition,
         ),
         "_builder": attr.label(

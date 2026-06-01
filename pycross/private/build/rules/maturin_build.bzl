@@ -1,13 +1,13 @@
 """Implementation of the maturin_build rule."""
 
-load("//pycross/private:providers.bzl", "PycrossExtractedWheelInfo", "PycrossWheelInfo")
+load("//pycross/private:providers.bzl", "PycrossWheelInfo")
 load("//pycross/private/build:transitions.bzl", "pycross_exec_platform_transition")
 load("//pycross/private/build/actions:cc_layer.bzl", "extract_cc_layer")
 load("//pycross/private/build/actions:pep517_action.bzl", "register_pep517_action")
 load("//pycross/private/build/actions:repair_action.bzl", "register_repair_action")
 load("//pycross/private/build/actions:rust_layer.bzl", "extract_rust_layer")
 load("//pycross/private/build/actions:tool_extract.bzl", "register_bin_extract_action")
-load(":common_attrs.bzl", "CC_BUILD_ATTRS", "CC_FRAGMENTS", "CC_TOOLCHAINS", "CC_TOOLCHAIN_ATTRS", "COMMON_BUILD_ATTRS")
+load(":common_attrs.bzl", "CC_BUILD_ATTRS", "CC_FRAGMENTS", "CC_TOOLCHAINS", "CC_TOOLCHAIN_ATTRS", "COMMON_BUILD_ATTRS", "get_unzipped_wheel", "group_tool_deps")
 
 def _get_executable_file(val):
     if not val or type(val) == "File":
@@ -15,11 +15,6 @@ def _get_executable_file(val):
     if DefaultInfo in val:
         return val[DefaultInfo].files_to_run.executable
     return None
-
-def _get_unzipped_wheel(target):
-    if PycrossExtractedWheelInfo in target:
-        return target[PycrossExtractedWheelInfo].site_packages
-    fail("Target {} does not provide a site_packages directory. Make sure it is wrapped in a pycross_wheel_library.".format(target.label))
 
 def _maturin_build_impl(ctx):
     # 1. Extract tools
@@ -32,9 +27,12 @@ def _maturin_build_impl(ctx):
             has_maturin = True
         tool_executables.append(struct(name = name, file = exe, files_to_run = target[DefaultInfo].files_to_run))
 
+    tool_deps = group_tool_deps(ctx.attr.tool_deps)
+
     if not has_maturin:
-        maturin_wheel_target = ctx.attr.maturin_wheel[0] if type(ctx.attr.maturin_wheel) == "list" else ctx.attr.maturin_wheel
-        maturin_wheel = _get_unzipped_wheel(maturin_wheel_target)
+        if "maturin" not in tool_deps:
+            fail("Missing 'maturin' in tool_deps")
+        maturin_wheel = get_unzipped_wheel(tool_deps["maturin"][0])
         tool_executables.append(register_bin_extract_action(
             ctx,
             wheel_dir = maturin_wheel,
@@ -60,8 +58,8 @@ def _maturin_build_impl(ctx):
     rust_layer = extract_rust_layer(ctx)
 
     build_deps = list(ctx.attr.build_deps)
-    if hasattr(ctx.attr, "maturin_wheel"):
-        build_deps.extend(ctx.attr.maturin_wheel)
+    if "maturin" in tool_deps:
+        build_deps.extend(tool_deps["maturin"])
 
     # 3. Build wheel
     build_result = register_pep517_action(
@@ -107,8 +105,7 @@ def _maturin_build_impl(ctx):
 maturin_build = rule(
     implementation = _maturin_build_impl,
     attrs = COMMON_BUILD_ATTRS | CC_BUILD_ATTRS | CC_TOOLCHAIN_ATTRS | {
-        "maturin_wheel": attr.label(
-            mandatory = True,
+        "tool_deps": attr.label_list(
             cfg = pycross_exec_platform_transition,
         ),
         "repair_wheel": attr.bool(

@@ -5,6 +5,7 @@ load("@rules_python//python:py_info.bzl", "PyInfo")
 load(
     ":providers.bzl",
     "PycrossExtractedWheelInfo",
+    "PycrossPackageInfo",
     "PycrossWheelInfo",
 )
 
@@ -88,7 +89,7 @@ def _pycross_wheel_library_impl(ctx):
     for d in ctx.attr.deps:
         runfiles = runfiles.merge(d[DefaultInfo].default_runfiles)
 
-    return [
+    providers = [
         DefaultInfo(
             files = depset(direct = [out]),
             runfiles = runfiles,
@@ -109,6 +110,16 @@ def _pycross_wheel_library_impl(ctx):
             wheel_directory = wheel_dir,
         ),
     ]
+
+    if ctx.attr.package_name:
+        providers.append(
+            PycrossPackageInfo(
+                package_name = ctx.attr.package_name,
+                package_version = ctx.attr.package_version,
+            ),
+        )
+
+    return providers
 
 pycross_wheel_library = rule(
     implementation = _pycross_wheel_library_impl,
@@ -141,6 +152,12 @@ This option is required to support some packages which cannot handle the convers
         "python_version": attr.string(
             doc = "The python version required for this wheel ('PY2' or 'PY3')",
             values = ["PY2", "PY3", ""],
+        ),
+        "package_name": attr.string(
+            doc = "The name of the package. Used for providing PycrossPackageInfo.",
+        ),
+        "package_version": attr.string(
+            doc = "The version of the package. Used for providing PycrossPackageInfo.",
         ),
         "_tool": attr.label(
             default = Label("//pycross/private/tools:wheel_installer"),

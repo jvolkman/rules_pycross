@@ -166,9 +166,12 @@ def render_lock_bzl(lock, repo_map, rctx_name):
         ])
 
         # Library
+        package_name, package_version = pkg_key.split("@", 1)
         lines.extend([
             _ind("pycross_wheel_library("),
             _ind('name = "{}",'.format(pkg_key), 2),
+            _ind('package_name = "{}",'.format(package_name), 2),
+            _ind('package_version = "{}",'.format(package_version), 2),
             _ind('wheel = ":_wheel_{}",'.format(pkg_key), 2),
         ])
         if has_runtime_deps:
