@@ -8,6 +8,10 @@ BACKEND_CONFIGS = {
         "rule_bzl": "meson_build",
         "tool_packages": ["meson", "ninja", "meson-python"],
     },
+    "cmake_build": {
+        "rule_bzl": "cmake_build",
+        "tool_packages": ["cmake", "ninja", "scikit-build-core"],
+    },
     "maturin_build": {
         "rule_bzl": "maturin_build",
         "tool_packages": ["maturin"],
