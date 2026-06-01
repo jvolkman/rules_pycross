@@ -198,3 +198,12 @@ py_binary(
         "@patch-ng",
     ],
 )
+
+py_test(
+    name = "wheel_installer_pth_test",
+    size = "small",
+    srcs = ["wheel_installer_pth_test.py"],
+    imports = ["../../.."],
+    tags = ["unit"],
+    deps = [":wheel_installer"],
+)

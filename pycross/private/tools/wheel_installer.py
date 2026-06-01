@@ -86,6 +86,31 @@ def apply_patches(lib_dir: Path, patches: List[str]) -> None:
             raise SystemExit(f"error: failed to apply patch file: {patch}")
 
 
+def process_pth_files(lib_dir: Path) -> None:
+    """Symlink content of entries found in .pth files into lib_dir, so that they
+    become importable as if the .pth file was processed  by the site module.
+
+    Code-executing entries and absolute paths are ignored because they cannot
+    be represented as a static import root.
+    """
+    for pth_file in sorted(lib_dir.glob("*.pth")):
+        for raw_line in pth_file.read_text(encoding="utf-8").splitlines():
+            line = raw_line.strip()
+            if not line or line.startswith("#") or line.startswith("import "):
+                continue
+            if os.path.isabs(line):
+                continue
+            target_dir = lib_dir / line
+            if not target_dir.is_dir():
+                continue
+            for entry in target_dir.iterdir():
+                if entry.name.endswith(".dist-info") or entry.name == "__pycache__":
+                    continue
+                link = lib_dir / entry.name
+                if not link.exists() and not link.is_symlink():
+                    os.symlink(os.path.join(line, entry.name), link)
+
+
 def main(args: Any) -> None:
     dest_dir = args.directory
     lib_dir = dest_dir / "site-packages"
@@ -127,6 +152,7 @@ def main(args: Any) -> None:
 
     setup_namespace_pkg_compatibility(lib_dir)
     apply_patches(lib_dir, args.patches)
+    process_pth_files(lib_dir)
 
 
 def parse_flags() -> Any:
