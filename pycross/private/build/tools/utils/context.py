@@ -40,7 +40,7 @@ class BuildContext:
     # Shared build environment state
     sysconfig_vars: Dict[str, Any] = field(default_factory=dict)
     build_env: Dict[str, str] = field(default_factory=dict)
-    _mixins: Optional[List[Dict[str, Any]]] = None
+    _layers: Optional[List[Dict[str, Any]]] = None
     config_settings: Dict[str, Any] = field(default_factory=dict)
 
 
@@ -146,17 +146,17 @@ def replace_path_placeholders(data: Dict[str, Any], prefix: Path) -> Dict[str, A
     return result
 
 
-def load_mixins(ctx: BuildContext) -> List[Dict[str, Any]]:
-    """Yield deserialized JSON build mixin target configurations."""
-    if ctx._mixins is not None:
-        return ctx._mixins
+def load_layers(ctx: BuildContext) -> List[Dict[str, Any]]:
+    """Yield deserialized JSON build env target configurations."""
+    if ctx._layers is not None:
+        return ctx._layers
 
-    mixins = ctx.bazel_config.get("mixins", [])
+    envs = ctx.bazel_config.get("layers", [])
     result = []
-    for mixin_json_path_str in mixins:
-        mixin_json_path = (ctx.prefix / Path(mixin_json_path_str)).absolute()
-        with open(mixin_json_path, "r") as f:
+    for layer_json_path_str in envs:
+        layer_json_path = (ctx.prefix / Path(layer_json_path_str)).absolute()
+        with open(layer_json_path, "r") as f:
             result.append(json.load(f))
 
-    ctx._mixins = result
+    ctx._layers = result
     return result

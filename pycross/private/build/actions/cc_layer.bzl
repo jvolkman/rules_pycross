@@ -84,7 +84,7 @@ def _get_target_os_and_cpu(ctx):
 
     return target_os, target_cpu
 
-def extract_cc_environment(ctx, native_deps, copts, linkopts, meson_properties = {}):
+def extract_cc_layer(ctx, native_deps, copts, linkopts, meson_properties = {}):
     """Extracts CC toolchain info, headers, and libraries from native deps.
 
     Requires the calling rule to declare:

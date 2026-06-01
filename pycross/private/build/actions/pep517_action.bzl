@@ -35,7 +35,7 @@ def register_pep517_action(
         config_settings = {},
         site_hooks = [],
         tool_executables = [],
-        envs = [],
+        layers = [],
         pkg_config_files = []):
     """Registers the PEP 517 wheel build action.
 
@@ -48,7 +48,7 @@ def register_pep517_action(
         config_settings: dict, PEP 517 config settings.
         site_hooks: list[str], Python snippets for interpreter startup.
         tool_executables: list[struct(name, file)], executables to place on PATH.
-        envs: list[struct], CC/Rust environment from extract_*_environment().
+        layers: list[struct], CC/Rust environment from extract_*_layer().
         pkg_config_files: list[File], pkg-config .pc files.
 
     Returns:
@@ -116,9 +116,9 @@ def register_pep517_action(
     # Resolve pkg-config and hooks
     expanded_site_hooks = []
     make_vars = {}
-    for env in envs:
-        if env and hasattr(env, "make_vars"):
-            make_vars.update(env.make_vars)
+    for layer in layers:
+        if layer and hasattr(layer, "make_vars"):
+            make_vars.update(layer.make_vars)
     for hook in site_hooks:
         expanded_site_hooks.append(ctx.expand_make_variables("site_hooks", hook, make_vars))
 
@@ -139,12 +139,12 @@ def register_pep517_action(
             tools.append(tool.files_to_run)
 
     # Include environments
-    mixin_jsons = []
-    for env in envs:
-        if env:
-            mixin_jsons.append(env.config_json.path)
-            inputs.append(env.config_json)
-            transitive_inputs.append(env.transitive_files)
+    layer_jsons = []
+    for layer in layers:
+        if layer:
+            layer_jsons.append(layer.config_json.path)
+            inputs.append(layer.config_json)
+            transitive_inputs.append(layer.transitive_files)
 
     # Declare output files
     sdist_name = sdist.basename
@@ -164,7 +164,7 @@ def register_pep517_action(
         "target_python": target_python,
         "target_sys_path": target_sys_path,
         "python_paths": python_paths,
-        "mixins": mixin_jsons,
+        "layers": layer_jsons,
         "config_settings_raw": config_settings_file.path if config_settings_file else None,
         "site_hooks": expanded_site_hooks,
         "pkg_config_files": pkg_config_paths,

@@ -2,13 +2,13 @@
 
 load("//pycross/private:providers.bzl", "PycrossWheelInfo")
 load("//pycross/private/build:transitions.bzl", "pycross_exec_platform_transition")
-load("//pycross/private/build/actions:cc_env.bzl", "extract_cc_environment")
+load("//pycross/private/build/actions:cc_layer.bzl", "extract_cc_layer")
 load("//pycross/private/build/actions:pep517_action.bzl", "register_pep517_action")
 load("//pycross/private/build/actions:repair_action.bzl", "register_repair_action")
 load(":common_attrs.bzl", "CC_BUILD_ATTRS", "CC_FRAGMENTS", "CC_TOOLCHAINS", "CC_TOOLCHAIN_ATTRS", "COMMON_BUILD_ATTRS")
 
 def _setuptools_build_impl(ctx):
-    cc_env = extract_cc_environment(
+    cc_layer = extract_cc_layer(
         ctx,
         native_deps = ctx.attr.native_deps,
         copts = ctx.attr.copts,
@@ -36,7 +36,7 @@ def _setuptools_build_impl(ctx):
         config_settings = ctx.attr.config_settings,
         site_hooks = ctx.attr.site_hooks,
         tool_executables = tool_executables,
-        envs = [cc_env],
+        layers = [cc_layer],
         pkg_config_files = ctx.files.pkg_config_files,
     )
 

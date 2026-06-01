@@ -98,18 +98,18 @@ def wrap_compiler(lang: str, cc_exe: str, cflags: str, python_exe: Path, bin_dir
     return wrapper_path
 
 
-def setup_cc_mixin(ctx: BuildContext, cc_config: Dict[str, Any]) -> None:
+def setup_cc_layer(ctx: BuildContext, cc_config: Dict[str, Any]) -> None:
     """Populate environment parameters and wrappers for Bazel CC Toolchains."""
-    mixin_bin_dir = ctx.temp_dir / "cc_mixin" / "bin"
-    mixin_include_dir = ctx.temp_dir / "cc_mixin" / "include"
-    mixin_lib_dir = ctx.temp_dir / "cc_mixin" / "lib"
-    mixin_bin_dir.mkdir(parents=True, exist_ok=True)
-    mixin_include_dir.mkdir(parents=True, exist_ok=True)
-    mixin_lib_dir.mkdir(parents=True, exist_ok=True)
+    layer_bin_dir = ctx.temp_dir / "cc_layer" / "bin"
+    layer_include_dir = ctx.temp_dir / "cc_layer" / "include"
+    layer_lib_dir = ctx.temp_dir / "cc_layer" / "lib"
+    layer_bin_dir.mkdir(parents=True, exist_ok=True)
+    layer_include_dir.mkdir(parents=True, exist_ok=True)
+    layer_lib_dir.mkdir(parents=True, exist_ok=True)
 
     for lib_path_str in cc_config.get("static_libs", []) + cc_config.get("shared_libs", []):
         lib_path = Path(replace_placeholder(ctx.prefix, lib_path_str))
-        dest = mixin_lib_dir / lib_path.name
+        dest = layer_lib_dir / lib_path.name
         if not dest.exists():
             dest.symlink_to(lib_path.absolute())
 
@@ -117,8 +117,8 @@ def setup_cc_mixin(ctx: BuildContext, cc_config: Dict[str, Any]) -> None:
     orig_cxx = replace_placeholder(ctx.prefix, cc_config["CXX"])
     cflags = replace_placeholder(ctx.prefix, cc_config["CFLAGS"])
 
-    wrapped_cc = wrap_compiler("cc", orig_cc, cflags, ctx.exec_python, mixin_bin_dir)
-    wrapped_cxx = wrap_compiler("cxx", orig_cxx, cflags, ctx.exec_python, mixin_bin_dir)
+    wrapped_cc = wrap_compiler("cc", orig_cc, cflags, ctx.exec_python, layer_bin_dir)
+    wrapped_cxx = wrap_compiler("cxx", orig_cxx, cflags, ctx.exec_python, layer_bin_dir)
 
     # When the toolchain already handles C++ header hermeticity (indicated by
     # -nostdlibinc in flags), it provides libc++ headers via -isystem. We must
@@ -136,8 +136,8 @@ def setup_cc_mixin(ctx: BuildContext, cc_config: Dict[str, Any]) -> None:
         extra_includes.append(f"-I{inc_dir.absolute()}")
     extra_includes_str = " ".join(extra_includes)
 
-    ldflags = replace_placeholder(ctx.prefix, cc_config["LDFLAGS"]) + f" -L{mixin_lib_dir.absolute()}"
-    ldsharedflags = replace_placeholder(ctx.prefix, cc_config["LDSHAREDFLAGS"]) + f" -L{mixin_lib_dir.absolute()}"
+    ldflags = replace_placeholder(ctx.prefix, cc_config["LDFLAGS"]) + f" -L{layer_lib_dir.absolute()}"
+    ldsharedflags = replace_placeholder(ctx.prefix, cc_config["LDSHAREDFLAGS"]) + f" -L{layer_lib_dir.absolute()}"
 
     # Append C++ static runtime libraries directly by full path to LDFLAGS and
     # LDSHAREDFLAGS. This replicates Bazel's static_link_cpp_runtimes behavior
@@ -154,10 +154,10 @@ def setup_cc_mixin(ctx: BuildContext, cc_config: Dict[str, Any]) -> None:
             "CC": str(wrapped_cc.absolute()),
             "CXX": str(wrapped_cxx.absolute()),
             "CFLAGS": cflags
-            + f" -I{mixin_include_dir.absolute()}"
+            + f" -I{layer_include_dir.absolute()}"
             + (f" {extra_includes_str}" if extra_includes_str else ""),
             "CXXFLAGS": replace_placeholder(ctx.prefix, cc_config["CXXFLAGS"])
-            + f" -I{mixin_include_dir.absolute()}"
+            + f" -I{layer_include_dir.absolute()}"
             + (f" {extra_includes_str}" if extra_includes_str else ""),
             "LDFLAGS": ldflags,
             "LDSHAREDFLAGS": ldsharedflags,
@@ -176,13 +176,13 @@ def setup_cc_mixin(ctx: BuildContext, cc_config: Dict[str, Any]) -> None:
         ctx.sysconfig_vars["LDSHARED"] += " -Wl,-undefined,dynamic_lookup"
     ctx.sysconfig_vars["LDCXXSHARED"] = ctx.sysconfig_vars["LDSHARED"]
 
-    include_paths = [str(mixin_include_dir.absolute())] + [
+    include_paths = [str(layer_include_dir.absolute())] + [
         str(Path(replace_placeholder(ctx.prefix, p)).absolute()) for p in cc_config.get("include_dirs", [])
     ]
     ctx.build_env.update(
         {
-            "PATH": f"{mixin_bin_dir.absolute()}:{ctx.build_env.get('PATH', '')}",
-            "PYCROSS_LIBRARY_PATH": str(mixin_lib_dir.absolute()),
+            "PATH": f"{layer_bin_dir.absolute()}:{ctx.build_env.get('PATH', '')}",
+            "PYCROSS_LIBRARY_PATH": str(layer_lib_dir.absolute()),
             "PYCROSS_INCLUDE_PATH": ":".join(include_paths),
             "CC": ctx.sysconfig_vars["CC"],
             "CXX": ctx.sysconfig_vars["CXX"],

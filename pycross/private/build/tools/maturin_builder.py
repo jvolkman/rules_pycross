@@ -8,7 +8,7 @@ import sys
 import textwrap
 from pathlib import Path
 
-from pycross.private.build.tools.utils.context import load_mixins
+from pycross.private.build.tools.utils.context import load_layers
 from pycross.private.build.tools.utils.context import resolve_sandbox_path
 from pycross.private.build.tools.utils.lifecycle import BackendStrategy
 from pycross.private.build.tools.utils.lifecycle import run_standard_build_lifecycle
@@ -26,9 +26,9 @@ def setup_venv(ctx):
 
 def pre_build(ctx):
     rust_config = None
-    for mixin_config in load_mixins(ctx):
-        if "target_triple" in mixin_config or "rustc" in mixin_config:
-            rust_config = mixin_config
+    for layer_config in load_layers(ctx):
+        if "target_triple" in layer_config or "rustc" in layer_config:
+            rust_config = layer_config
             break
 
     if not rust_config:
@@ -49,10 +49,10 @@ def pre_build(ctx):
     sizeof_void_p = int(ctx.sysconfig_vars.get("SIZEOF_VOID_P", 8))
     pointer_width = str(sizeof_void_p * 8)
 
-    mixin_lib_dir = ctx.temp_dir / "cc_mixin" / "lib"
+    layer_lib_dir = ctx.temp_dir / "cc_layer" / "lib"
     lib_name = f"python{version}"
-    if mixin_lib_dir.exists():
-        for f in mixin_lib_dir.glob("libpython*"):
+    if layer_lib_dir.exists():
+        for f in layer_lib_dir.glob("libpython*"):
             m = re.match(r"libpython(.*)\.(a|so|dylib)", f.name)
             if m:
                 lib_name = f"python{m.group(1)}"
@@ -75,7 +75,7 @@ def pre_build(ctx):
     if not is_darwin and not is_linux:
         pyo3_config_lines.append(f"extra_build_script_line=cargo:rustc-link-lib={lib_name}")
     if not is_darwin:
-        pyo3_config_lines.append(f"extra_build_script_line=cargo:rustc-link-search=native={mixin_lib_dir.absolute()}")
+        pyo3_config_lines.append(f"extra_build_script_line=cargo:rustc-link-search=native={layer_lib_dir.absolute()}")
     pyo3_config_path = ctx.temp_dir / "pyo3_config.txt"
     pyo3_config_path.write_text("\n".join(pyo3_config_lines) + "\n")
 

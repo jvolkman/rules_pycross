@@ -27,7 +27,7 @@ def _pycross_wheel_headers_impl(ctx):
 
     if ctx.attr.make_variable:
         # Double-escape $$ so the value survives ctx.expand_make_variables()
-        # in cc_mixin.bzl (which collapses $$ → $). After expansion the value
+        # in cc_layer.bzl (which collapses $$ → $). After expansion the value
         # will contain $$EXT_BUILD_ROOT$$ for replace_placeholder().
         value = absolutize_path_in_str(
             ctx.workspace_name,
