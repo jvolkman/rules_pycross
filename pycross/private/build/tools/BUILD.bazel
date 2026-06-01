@@ -36,6 +36,19 @@ py_binary(
 )
 
 py_binary(
+    name = "cmake_builder",
+    srcs = ["cmake_builder.py"],
+    imports = ["../../../.."],
+    visibility = ["//visibility:public"],
+    deps = [
+        ":utils",
+        "//pycross/private/build/tools/crossenv",
+        "@rules_pycross_internal//deps:build",
+        "@rules_pycross_internal//deps:packaging",
+    ],
+)
+
+py_binary(
     name = "pep517_builder",
     srcs = ["pep517_builder.py"],
     imports = ["../../../.."],

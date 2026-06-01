@@ -6,7 +6,7 @@ load("//pycross/private:util.bzl", "extract_pep508_name")
 _BACKEND_TO_PROFILE = {
     "mesonpy": "meson_build",
     "mesonbuild": "meson_build",
-    "scikit_build_core.build": "setuptools_build",
+    "scikit_build_core.build": "cmake_build",
     "setuptools.build_meta": "setuptools_build",
     "setuptools.build_meta:__legacy__": "setuptools_build",
     "maturin": "maturin_build",
