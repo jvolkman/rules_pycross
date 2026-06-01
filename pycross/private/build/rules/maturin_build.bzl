@@ -2,10 +2,10 @@
 
 load("//pycross/private:providers.bzl", "PycrossExtractedWheelInfo", "PycrossWheelInfo")
 load("//pycross/private/build:transitions.bzl", "pycross_exec_platform_transition")
-load("//pycross/private/build/actions:cc_env.bzl", "extract_cc_environment")
+load("//pycross/private/build/actions:cc_layer.bzl", "extract_cc_layer")
 load("//pycross/private/build/actions:pep517_action.bzl", "register_pep517_action")
 load("//pycross/private/build/actions:repair_action.bzl", "register_repair_action")
-load("//pycross/private/build/actions:rust_env.bzl", "extract_rust_environment")
+load("//pycross/private/build/actions:rust_layer.bzl", "extract_rust_layer")
 load("//pycross/private/build/actions:tool_extract.bzl", "register_bin_extract_action")
 load(":common_attrs.bzl", "CC_BUILD_ATTRS", "CC_FRAGMENTS", "CC_TOOLCHAINS", "CC_TOOLCHAIN_ATTRS", "COMMON_BUILD_ATTRS")
 
@@ -51,13 +51,13 @@ def _maturin_build_impl(ctx):
         tool_executables.append(struct(name = "cargo", file = cargo_exe))
 
     # 2. Extract CC and Rust environments
-    cc_env = extract_cc_environment(
+    cc_layer = extract_cc_layer(
         ctx,
         native_deps = ctx.attr.native_deps,
         copts = ctx.attr.copts,
         linkopts = ctx.attr.linkopts,
     )
-    rust_env = extract_rust_environment(ctx)
+    rust_layer = extract_rust_layer(ctx)
 
     build_deps = list(ctx.attr.build_deps)
     if hasattr(ctx.attr, "maturin_wheel"):
@@ -73,7 +73,7 @@ def _maturin_build_impl(ctx):
         config_settings = ctx.attr.config_settings,
         site_hooks = ctx.attr.site_hooks,
         tool_executables = tool_executables,
-        envs = [cc_env, rust_env],
+        layers = [cc_layer, rust_layer],
         pkg_config_files = ctx.files.pkg_config_files,
     )
 

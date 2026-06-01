@@ -8,7 +8,7 @@ def _get_executable_file(val):
         return val[DefaultInfo].files_to_run.executable
     return None
 
-def extract_rust_environment(ctx):
+def extract_rust_layer(ctx):
     """Extracts Rust toolchain info into a JSON file.
 
     Requires the calling rule to declare:
@@ -77,13 +77,13 @@ def extract_rust_environment(ctx):
     config_json = ctx.actions.declare_file(ctx.label.name + "_rust_config.json")
     ctx.actions.write(config_json, json.encode(rust_config))
 
-    mixin_direct_files = [config_json]
+    env_direct_files = [config_json]
     if rustc_file:
-        mixin_direct_files.append(rustc_file)
+        env_direct_files.append(rustc_file)
     if cargo_file:
-        mixin_direct_files.append(cargo_file)
+        env_direct_files.append(cargo_file)
 
     return struct(
         config_json = config_json,
-        transitive_files = depset(mixin_direct_files, transitive = transitive_files),
+        transitive_files = depset(env_direct_files, transitive = transitive_files),
     )

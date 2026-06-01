@@ -3,14 +3,14 @@
 import sys
 
 from pycross.private.build.tools.meson_utils import generate_cross_ini
-from pycross.private.build.tools.utils.context import load_mixins
+from pycross.private.build.tools.utils.context import load_layers
 from pycross.private.build.tools.utils.lifecycle import BackendStrategy
 from pycross.private.build.tools.utils.lifecycle import run_standard_build_lifecycle
 
 
 def pre_build(ctx):
-    cc_mixin_config = next((m for m in load_mixins(ctx) if "CC" in m), None)
-    generate_cross_ini(ctx, cc_mixin_config)
+    cc_layer_config = next((m for m in load_layers(ctx) if "CC" in m), None)
+    generate_cross_ini(ctx, cc_layer_config)
 
 
 def prepare_env(ctx):

@@ -18,7 +18,7 @@ def format_meson_list(items: List[str]) -> str:
 
 
 def generate_cross_ini(ctx: BuildContext, cc_config: Optional[Dict[str, Any]] = None) -> None:
-    """Generates the Meson cross.ini file dynamically from BuildContext and mixin configuration."""
+    """Generates the Meson cross.ini file dynamically from BuildContext and env configuration."""
 
     def get_var(name: str, default_fallback: str = "") -> str:
         val = ctx.sysconfig_vars.get(name)
@@ -32,7 +32,7 @@ def generate_cross_ini(ctx: BuildContext, cc_config: Optional[Dict[str, Any]] = 
     cxx = get_var("CXX")
     if not cc or not cxx:
         raise ValueError(
-            "CC and CXX must be provided by the Bazel CC toolchain. Ensure a cc_mixin is configured for this build."
+            "CC and CXX must be provided by the Bazel CC toolchain. Ensure a cc_layer is configured for this build."
         )
     cflags = get_var("CFLAGS", "")
     cxxflags = get_var("CXXFLAGS", "")
@@ -83,11 +83,11 @@ def generate_cross_ini(ctx: BuildContext, cc_config: Optional[Dict[str, Any]] = 
     # Determine target operating system and CPU family strictly from cc_config.
     if not cc_config or not cc_config.get("target_os"):
         raise ValueError(
-            "target_os is missing from cc_config. Ensure the CC mixin provides target_os in its configuration."
+            "target_os is missing from cc_config. Ensure the CC env provides target_os in its configuration."
         )
     if not cc_config.get("target_cpu"):
         raise ValueError(
-            "target_cpu is missing from cc_config. Ensure the CC mixin provides target_cpu in its configuration."
+            "target_cpu is missing from cc_config. Ensure the CC env provides target_cpu in its configuration."
         )
 
     target_system = cc_config["target_os"]
@@ -191,8 +191,8 @@ cpu = '{target_cpu}'
 endian = 'little'
 """
 
-    # Write the cross file into the cc_mixin directory
-    cross_ini_path = ctx.temp_dir / "cc_mixin" / "cross.ini"
+    # Write the cross file into the cc_layer directory
+    cross_ini_path = ctx.temp_dir / "cc_layer" / "cross.ini"
     cross_ini_path.parent.mkdir(parents=True, exist_ok=True)
     with open(cross_ini_path, "w") as f:
         f.write(textwrap.dedent(cross_ini))
