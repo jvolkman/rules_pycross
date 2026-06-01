@@ -1,4 +1,4 @@
-"""Setuptools / Standard PEP 517 builder."""
+"""Generic PEP 517 builder (used by setuptools, hatchling, flit-core, etc.)."""
 
 import sys
 
