@@ -2,7 +2,11 @@
 
 load("@bazel_skylib//lib:paths.bzl", "paths")
 load("@rules_python//python:py_info.bzl", "PyInfo")
-load(":providers.bzl", "PycrossWheelInfo")
+load(
+    ":providers.bzl",
+    "PycrossExtractedWheelInfo",
+    "PycrossWheelInfo",
+)
 
 def _pycross_wheel_library_impl(ctx):
     out = ctx.actions.declare_directory(ctx.attr.name)
@@ -22,6 +26,7 @@ def _pycross_wheel_library_impl(ctx):
     args.add_all(ctx.files.post_install_patches, format_each = "--patch=%s")
 
     inputs = [wheel_file] + ctx.files.post_install_patches
+    wheel_dir = None
     if PycrossWheelInfo in wheel_target:
         wheel_dir = getattr(wheel_target[PycrossWheelInfo], "wheel_directory", None)
         if wheel_dir:
@@ -94,6 +99,14 @@ def _pycross_wheel_library_impl(ctx):
             imports = imports,
             transitive_sources = transitive_sources,
             uses_shared_libraries = True,  # Docs say this is unused
+        ),
+        PycrossExtractedWheelInfo(
+            site_packages = out,
+        ),
+        PycrossWheelInfo(
+            wheel_file = wheel_file,
+            name_file = name_file,
+            wheel_directory = wheel_dir,
         ),
     ]
 

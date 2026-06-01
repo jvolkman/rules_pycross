@@ -1,4 +1,4 @@
-"""Rule for compiling C++ toolchain & dependency info into a PycrossBuildMixinInfo."""
+"""Action logic for CC environment extraction."""
 
 load("@bazel_tools//tools/cpp:toolchain_utils.bzl", "find_cpp_toolchain")
 load("@rules_cc//cc/common:cc_common.bzl", "cc_common")
@@ -12,7 +12,6 @@ load(
     "get_libraries",
     "get_tools_info",
 )
-load("//pycross/private:providers.bzl", "PycrossBuildMixinInfo")
 
 def _absolute_tool_value(workspace_name, value):
     if value:
@@ -47,23 +46,18 @@ def _get_sysconfig_data(workspace_name, tools, flags):
     }
     return vars
 
-def _expand_locations_and_vars(attribute_name, ctx, val):
+def _expand_locations_and_vars(attribute_name, ctx, val, deps):
     rule_dir = ctx.bin_dir.path + "/" + ctx.label.workspace_root + "/" + ctx.label.package
     additional_substitutions = {
         "RULEDIR": rule_dir,
         "WORKSPACE": ctx.workspace_name,
     }
     val = val.replace("$(abspath ", "$$$$EXT_BUILD_ROOT$$$$/$(execpath ")
-    val = ctx.expand_location(val, ctx.attr.deps)
+    val = ctx.expand_location(val, deps)
     val = ctx.expand_make_variables(attribute_name, val, additional_substitutions)
     return val
 
 def _get_target_os_and_cpu(ctx):
-    """Extracts target OS and CPU by querying the target platform constraints.
-
-    Uses `@platforms` constraint values as the single source of truth for determinism.
-    Fails explicitly if OS or CPU cannot be determined.
-    """
     target_os = None
     target_cpu = None
 
@@ -90,14 +84,35 @@ def _get_target_os_and_cpu(ctx):
 
     return target_os, target_cpu
 
-def _cc_mixin_impl(ctx):
-    copts = [_expand_locations_and_vars("copts", ctx, copt) for copt in ctx.attr.copts]
-    linkopts = [_expand_locations_and_vars("linkopts", ctx, linkopt) for linkopt in ctx.attr.linkopts]
+def extract_cc_environment(ctx, native_deps, copts, linkopts, meson_properties = {}):
+    """Extracts CC toolchain info, headers, and libraries from native deps.
+
+    Requires the calling rule to declare:
+        - fragments = ["cpp"]
+        - toolchains = ["@bazel_tools//tools/cpp:toolchain_type"]
+        - _cc_toolchain attr
+        - _os_* and _cpu_* constraint attrs
+
+    Args:
+        ctx: The rule context.
+        native_deps: list[Target], targets providing CcInfo.
+        copts: list[str], extra compiler flags.
+        linkopts: list[str], extra linker flags.
+        meson_properties: dict, meson cross-file properties.
+
+    Returns:
+        struct(
+            config_json = File,      # the serialized CC config
+            transitive_files = depset, # all files needed at build time
+            make_vars = dict,        # template variables from deps
+        )
+    """
+    copts = [_expand_locations_and_vars("copts", ctx, copt, native_deps) for copt in copts]
+    linkopts = [_expand_locations_and_vars("linkopts", ctx, linkopt, native_deps) for linkopt in linkopts]
     flags = get_flags_info(ctx, copts, linkopts)
     tools = get_tools_info(ctx)
     sysconfig_vars = _get_sysconfig_data(ctx.workspace_name, tools, flags)
 
-    # Extract include dirs and libraries from CcInfo
     include_dirs = []
     static_libs = []
     shared_libs = []
@@ -108,18 +123,16 @@ def _cc_mixin_impl(ctx):
     if cpp_toolchain.all_files:
         transitive_files.append(cpp_toolchain.all_files)
 
-    for dep in ctx.attr.deps:
+    for dep in native_deps:
         if CcInfo not in dep:
             continue
         ccinfo = dep[CcInfo]
 
-        # Extract compilation context (headers & include paths)
         headers_and_includes = get_headers(ccinfo)
         transitive_files.append(ccinfo.compilation_context.headers)
         for inc in headers_and_includes.include_dirs:
             include_dirs.append(absolutize_path_in_str(ctx.workspace_name, "$$EXT_BUILD_ROOT$$/", inc))
 
-        # Extract linking context (static & shared libs)
         libraries = get_libraries(ccinfo)
         transitive_files.append(depset(libraries))
         for lib in libraries:
@@ -129,22 +142,15 @@ def _cc_mixin_impl(ctx):
             elif lib.path.endswith(".so") or lib.path.endswith(".dylib"):
                 shared_libs.append(lib_path)
 
-    # Collect TemplateVariableInfo from deps for make variable expansion.
     make_vars = {}
-    for dep in ctx.attr.deps:
+    for dep in native_deps:
         if platform_common.TemplateVariableInfo in dep:
             make_vars.update(dep[platform_common.TemplateVariableInfo].variables)
 
-    # Expand make variables in meson_properties.
-    meson_properties = {}
-    for key, value in ctx.attr.meson_properties.items():
-        meson_properties[key] = ctx.expand_make_variables("meson_properties", value, make_vars)
+    expanded_meson_properties = {}
+    for key, value in meson_properties.items():
+        expanded_meson_properties[key] = ctx.expand_make_variables("meson_properties", value, make_vars)
 
-    # Extract C++ static runtime libraries from the CC toolchain.
-    # When the static_link_cpp_runtimes feature is enabled (Linux/Windows),
-    # the toolchain provides the C++ runtime .a files (libc++, libc++abi,
-    # libunwind). We extract them so Meson can link against them directly
-    # by full path, replicating what Bazel does for cc_binary targets.
     runtime_libs = []
     disabled_features = ctx.disabled_features + CC_DISABLED_FEATURES
     if not ctx.coverage_instrumented():
@@ -165,7 +171,6 @@ def _cc_mixin_impl(ctx):
             )
         transitive_files.append(runtime_depset)
 
-    # Combine everything into the unified config dictionary
     cc_config = {
         "CC": sysconfig_vars["CC"],
         "CXX": sysconfig_vars["CXX"],
@@ -182,40 +187,14 @@ def _cc_mixin_impl(ctx):
         "runtime_libs": runtime_libs,
         "target_os": target_os,
         "target_cpu": target_cpu,
-        "meson_properties": meson_properties,
+        "meson_properties": expanded_meson_properties,
     }
 
-    config_json = ctx.actions.declare_file(ctx.label.name + "_config.json")
+    config_json = ctx.actions.declare_file(ctx.label.name + "_cc_config.json")
     ctx.actions.write(config_json, json.encode(cc_config))
 
-    return [
-        PycrossBuildMixinInfo(
-            config_json = config_json,
-            files = depset([config_json], transitive = transitive_files),
-        ),
-        platform_common.TemplateVariableInfo(make_vars),
-    ]
-
-pycross_cc_mixin = rule(
-    implementation = _cc_mixin_impl,
-    attrs = {
-        "deps": attr.label_list(providers = [CcInfo]),
-        "copts": attr.string_list(),
-        "linkopts": attr.string_list(),
-        "meson_properties": attr.string_dict(
-            doc = "Meson cross-file properties to inject into [properties] section. Values may contain $(MAKE_VAR) references that will be expanded from native_deps.",
-        ),
-        "_cc_toolchain": attr.label(
-            default = Label("@bazel_tools//tools/cpp:current_cc_toolchain"),
-        ),
-        "_os_linux": attr.label(default = "@platforms//os:linux"),
-        "_os_macos": attr.label(default = "@platforms//os:macos"),
-        "_os_windows": attr.label(default = "@platforms//os:windows"),
-        "_cpu_x86_64": attr.label(default = "@platforms//cpu:x86_64"),
-        "_cpu_aarch64": attr.label(default = "@platforms//cpu:aarch64"),
-        "_cpu_arm": attr.label(default = "@platforms//cpu:arm"),
-        "_cpu_x86_32": attr.label(default = "@platforms//cpu:x86_32"),
-    },
-    toolchains = ["@bazel_tools//tools/cpp:toolchain_type"],
-    fragments = ["cpp"],
-)
+    return struct(
+        config_json = config_json,
+        transitive_files = depset(transitive = transitive_files),
+        make_vars = make_vars,
+    )

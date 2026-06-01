@@ -1,14 +1,13 @@
-"""Implementation of the pycross_pep517_build rule."""
+"""Action logic for PEP 517 wheel building."""
 
 load("@bazel_skylib//lib:paths.bzl", "paths")
 load("@rules_python//python:py_info.bzl", "PyInfo")
-load("//pycross/private:providers.bzl", "PycrossBuildMixinInfo", "PycrossWheelInfo")
-load(":transitions.bzl", "pycross_exec_platform_transition")
 
 PYTHON_TOOLCHAIN_TYPE = Label("@rules_python//python:toolchain_type")
 PYCROSS_TOOLCHAIN_TYPE = Label("//pycross:toolchain_type")
 
 def _is_sibling_repository_layout_enabled():
+    # This checks if sibling repository layout is enabled.
     test = Label("@rules_pycross_internal//:BUILD.bazel")
     return test.workspace_root.startswith("..")
 
@@ -27,12 +26,43 @@ def _resolve_import_path_fn_inner(workspace_name, bin_dir, sibling_layout):
 
     return fn
 
-def _pep517_build_impl(ctx):
-    inputs = [ctx.file.sdist]
+def register_pep517_action(
+        ctx,
+        sdist,
+        builder,
+        deps,
+        build_deps,
+        config_settings = {},
+        site_hooks = [],
+        tool_executables = [],
+        envs = [],
+        pkg_config_files = []):
+    """Registers the PEP 517 wheel build action.
+
+    Args:
+        ctx: The rule context.
+        sdist: File, the source distribution archive.
+        builder: Target, the builder executable.
+        deps: list[Target], runtime Python deps (PyInfo).
+        build_deps: list[Target], build-time Python deps (PyInfo).
+        config_settings: dict, PEP 517 config settings.
+        site_hooks: list[str], Python snippets for interpreter startup.
+        tool_executables: list[struct(name, file)], executables to place on PATH.
+        envs: list[struct], CC/Rust environment from extract_*_environment().
+        pkg_config_files: list[File], pkg-config .pc files.
+
+    Returns:
+        struct(
+            wheel = File,
+            name_file = File,
+            wheel_directory = File,
+        )
+    """
+    inputs = [sdist]
     transitive_inputs = []
     tools = []
 
-    # 1. Resolve Exec & Target Python interpreters
+    # Resolve interpreters
     exec_python = None
     target_python = None
     target_sys_path = []
@@ -57,70 +87,67 @@ def _pep517_build_impl(ctx):
         exec_python = interpreter
         target_python = interpreter
 
-    # 2. Resolve site-packages python paths for build dependencies
+    # Resolve site-packages python paths for dependencies
     dummy_target = ctx.attr._dummy_bin_file[0] if type(ctx.attr._dummy_bin_file) == "list" else ctx.attr._dummy_bin_file
     deps_bin_dir = dummy_target[DefaultInfo].files.to_list()[0].root.path
 
-    imports = depset(transitive = [d[PyInfo].imports for d in ctx.attr.deps])
+    all_deps = deps + build_deps
+    imports = depset(transitive = [d[PyInfo].imports for d in all_deps])
     map_fn = _resolve_import_path_fn_inner(
         ctx.workspace_name,
         deps_bin_dir,
         _is_sibling_repository_layout_enabled(),
     )
     python_paths = [map_fn(imp) for imp in imports.to_list()]
-    transitive_inputs.extend([dep[PyInfo].transitive_sources for dep in ctx.attr.deps])
+    transitive_inputs.extend([dep[PyInfo].transitive_sources for dep in all_deps])
 
-    # 3. Resolve and merge pluggable Mixins (e.g., CC compiler JSONs)
-    mixin_jsons = []
-    for mixin_target in ctx.attr.mixins:
-        mixin_info = mixin_target[PycrossBuildMixinInfo]
-        mixin_jsons.append(mixin_info.config_json.path)
-        transitive_inputs.append(mixin_info.files)
-
-    # 4. Resolve user-provided config settings (expand location variables and write to json)
+    # Resolve user-provided config settings
     config_settings_file = None
-    if ctx.attr.config_settings:
+    if config_settings != None and type(config_settings) == "dict" and len(config_settings) > 0:
         config_settings_file = ctx.actions.declare_file(paths.join(ctx.attr.name, "config_settings.json"))
         inputs.append(config_settings_file)
 
         expanded_settings = {}
-        for key, value in ctx.attr.config_settings.items():
-            expanded_settings[key] = [ctx.expand_location(vi, ctx.attr.deps) for vi in value]
+        for key, value in config_settings.items():
+            expanded_settings[key] = [ctx.expand_location(vi, deps + build_deps) for vi in value]
 
         ctx.actions.write(config_settings_file, json.encode(expanded_settings))
 
-    make_vars = {}
-    for dep in ctx.attr.mixins:
-        if platform_common.TemplateVariableInfo in dep:
-            make_vars.update(dep[platform_common.TemplateVariableInfo].variables)
-
+    # Resolve pkg-config and hooks
     expanded_site_hooks = []
-    for hook in ctx.attr.site_hooks:
+    make_vars = {}
+    for env in envs:
+        if env and hasattr(env, "make_vars"):
+            make_vars.update(env.make_vars)
+    for hook in site_hooks:
         expanded_site_hooks.append(ctx.expand_make_variables("site_hooks", hook, make_vars))
 
-    # 4.1. Resolve pkg_config_files
     pkg_config_paths = []
-    for f in ctx.files.pkg_config_files:
+    for f in pkg_config_files:
         pkg_config_paths.append(f.path)
         inputs.append(f)
 
-    # 4.2. Resolve path_tools (list of executable labels)
+    # Resolve path tools
     path_tools_list = []
-    for target in ctx.attr.path_tools:
-        exe = target[DefaultInfo].files_to_run.executable
-        if not exe:
-            fail("%s is not executable" % target.label)
+    for tool in tool_executables:
         path_tools_list.append({
-            "name": exe.basename,
-            "path": exe.path,
+            "name": tool.name,
+            "path": tool.file.path,
         })
-        inputs.append(exe)
-        tools.append(target[DefaultInfo].files_to_run)
-        if target[DefaultInfo].default_runfiles:
-            transitive_inputs.append(target[DefaultInfo].default_runfiles.files)
+        inputs.append(tool.file)
+        if hasattr(tool, "files_to_run"):
+            tools.append(tool.files_to_run)
 
-    # 5. Declare output files
-    sdist_name = ctx.file.sdist.basename
+    # Include environments
+    mixin_jsons = []
+    for env in envs:
+        if env:
+            mixin_jsons.append(env.config_json.path)
+            inputs.append(env.config_json)
+            transitive_inputs.append(env.transitive_files)
+
+    # Declare output files
+    sdist_name = sdist.basename
     if sdist_name.lower().endswith(".tar.gz"):
         wheel_name = sdist_name[:-7]
     else:
@@ -130,9 +157,9 @@ def _pep517_build_impl(ctx):
     out_wheel_name = ctx.actions.declare_file(paths.join(ctx.attr.name, wheel_name + ".whl.name"))
     out_wheel_directory = ctx.actions.declare_directory(paths.join(ctx.attr.name, "wheel"))
 
-    # 6. Write main `bazel_config.json` configuration file
+    # Write main config file
     main_config = {
-        "sdist": ctx.file.sdist.path,
+        "sdist": sdist.path,
         "exec_python": exec_python,
         "target_python": target_python,
         "target_sys_path": target_sys_path,
@@ -151,15 +178,14 @@ def _pep517_build_impl(ctx):
     ctx.actions.write(config_json, json.encode(main_config))
     inputs.append(config_json)
 
-    # 7. Execute pluggable Python builder tool
-    # Inject builder runfiles
-    tools.append(ctx.attr.builder[DefaultInfo].files_to_run)
-    if ctx.attr.builder[DefaultInfo].default_runfiles:
-        transitive_inputs.append(ctx.attr.builder[DefaultInfo].default_runfiles.files)
+    # Execute action
+    tools.append(builder[DefaultInfo].files_to_run)
+    if builder[DefaultInfo].default_runfiles:
+        transitive_inputs.append(builder[DefaultInfo].default_runfiles.files)
 
     sdist_root = out_wheel.dirname + "/sdist"
-
     build_root = ctx.bin_dir.path + "/" + ctx.label.package + "/" + ctx.label.name + "_tmp"
+
     action_env = dict(ctx.configuration.default_shell_env)
     action_env.update({
         "PYCROSS_BUILD_ROOT": build_root,
@@ -170,7 +196,7 @@ def _pep517_build_impl(ctx):
     ctx.actions.run(
         inputs = depset(inputs, transitive = transitive_inputs),
         outputs = [out_wheel, out_wheel_name, out_wheel_directory],
-        executable = ctx.executable.builder,
+        executable = builder[DefaultInfo].files_to_run.executable,
         arguments = [config_json.path],
         env = action_env,
         tools = tools,
@@ -178,43 +204,8 @@ def _pep517_build_impl(ctx):
         progress_message = "Building wheel %s" % sdist_name,
     )
 
-    return [
-        DefaultInfo(
-            files = depset([out_wheel, out_wheel_directory]),
-        ),
-        PycrossWheelInfo(
-            wheel_file = out_wheel,
-            name_file = out_wheel_name,
-            wheel_directory = out_wheel_directory,
-        ),
-    ]
-
-pycross_pep517_build = rule(
-    implementation = _pep517_build_impl,
-    attrs = {
-        "sdist": attr.label(mandatory = True, allow_single_file = True),
-        "builder": attr.label(mandatory = True, executable = True, cfg = "exec"),
-        "mixins": attr.label_list(providers = [PycrossBuildMixinInfo]),
-        "config_settings": attr.string_list_dict(),
-        "site_hooks": attr.string_list(
-            doc = "Python snippets to execute at interpreter startup during the build. Each snippet is written as a .pth file entry and also executed before intercepted -c commands. Values may contain location references expanded from native_deps.",
-        ),
-        "pkg_config_files": attr.label_list(allow_files = True),
-        "path_tools": attr.label_list(
-            cfg = pycross_exec_platform_transition,
-        ),
-        "deps": attr.label_list(
-            providers = [PyInfo],
-            cfg = pycross_exec_platform_transition,
-        ),
-        "_dummy_bin_file": attr.label(
-            default = Label("//pycross/private:dummy_bin_file"),
-            allow_single_file = True,
-            cfg = pycross_exec_platform_transition,
-        ),
-    },
-    toolchains = [
-        PYTHON_TOOLCHAIN_TYPE,
-        config_common.toolchain_type(PYCROSS_TOOLCHAIN_TYPE, mandatory = False),
-    ],
-)
+    return struct(
+        wheel = out_wheel,
+        name_file = out_wheel_name,
+        wheel_directory = out_wheel_directory,
+    )

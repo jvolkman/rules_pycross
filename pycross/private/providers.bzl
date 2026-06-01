@@ -9,6 +9,13 @@ PycrossWheelInfo = provider(
     },
 )
 
+PycrossExtractedWheelInfo = provider(
+    doc = "Information about an extracted (installed) Python wheel.",
+    fields = {
+        "site_packages": "File (TreeArtifact): The unzipped site-packages directory containing the wheel's installed files.",
+    },
+)
+
 PycrossBuildMixinInfo = provider(
     doc = "Standardized representation of a compilation/execution build mixin (e.g. C++, Rust, crossenv).",
     fields = {

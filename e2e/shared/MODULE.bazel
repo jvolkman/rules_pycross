@@ -1,2 +1,3 @@
 module(name = "rules_pycross_e2e_shared")
+
 bazel_dep(name = "rules_python", version = "2.0.0")

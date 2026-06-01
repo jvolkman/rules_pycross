@@ -24,6 +24,9 @@ def main():
         pre_build=pre_build,
         prepare_env=prepare_env,
     )
+    import os
+
+    print("PYTHONPATH:", os.environ.get("PYTHONPATH"))
     run_standard_build_lifecycle(sys.argv[1], strategy)
 
 

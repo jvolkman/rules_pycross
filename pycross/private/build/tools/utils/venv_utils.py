@@ -123,7 +123,14 @@ def inject_python_wrapper(ctx: BuildContext) -> None:
     with open(python_exe, "w") as f:
         f.write(
             textwrap.dedent(f"""\
-            #!{ctx.exec_python.absolute()} -S
+            #!/bin/sh
+            # POLYGLOT BASH/PYTHON WRAPPER
+            # We use /bin/sh because Bazel's absolute paths can exceed the Linux 127-character shebang limit.
+            # Shell evaluates "exec" as a command and replaces the process with the real Python interpreter,
+            # passing -S to disable site-packages, $0 (this file) as the script, and $@ as the arguments.
+            # Python evaluates "exec" as a string literal and discards it, then runs the rest of the script.
+            "exec" "{ctx.exec_python.absolute()}" "-S" "$0" "$@"
+
             import os, sys
 
             # Intercept and execute all -c commands internally inside the wrapper process with target sysconfig overrides

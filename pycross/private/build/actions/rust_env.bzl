@@ -1,6 +1,4 @@
-"""Rule for compiling Rust toolchain info into a PycrossBuildMixinInfo."""
-
-load("//pycross/private:providers.bzl", "PycrossBuildMixinInfo")
+"""Action logic for Rust environment extraction."""
 
 def _get_executable_file(val):
     """Extract a File from a toolchain value, trying multiple access patterns."""
@@ -10,8 +8,22 @@ def _get_executable_file(val):
         return val[DefaultInfo].files_to_run.executable
     return None
 
-def _rust_mixin_impl(ctx):
-    # Query the resolved Rust toolchain
+def extract_rust_environment(ctx):
+    """Extracts Rust toolchain info into a JSON file.
+
+    Requires the calling rule to declare:
+        - toolchains = ["@rules_rust//rust:toolchain_type"]
+        - _exec_rust_toolchain attr
+
+    Args:
+        ctx: The rule context.
+
+    Returns:
+        struct(
+            config_json = File,      # the serialized Rust config
+            transitive_files = depset, # all files needed at build time
+        )
+    """
     rust_toolchain = ctx.toolchains["@rules_rust//rust:toolchain_type"]
 
     rustc_file = _get_executable_file(rust_toolchain.rustc)
@@ -62,7 +74,7 @@ def _rust_mixin_impl(ctx):
         "target_triple": target_triple_str,
     }
 
-    config_json = ctx.actions.declare_file(ctx.label.name + "_config.json")
+    config_json = ctx.actions.declare_file(ctx.label.name + "_rust_config.json")
     ctx.actions.write(config_json, json.encode(rust_config))
 
     mixin_direct_files = [config_json]
@@ -71,20 +83,7 @@ def _rust_mixin_impl(ctx):
     if cargo_file:
         mixin_direct_files.append(cargo_file)
 
-    return [
-        PycrossBuildMixinInfo(
-            config_json = config_json,
-            files = depset(mixin_direct_files, transitive = transitive_files),
-        ),
-    ]
-
-pycross_rust_mixin = rule(
-    implementation = _rust_mixin_impl,
-    attrs = {
-        "_exec_rust_toolchain": attr.label(
-            default = Label("@rules_rust//rust/toolchain:current_rust_toolchain"),
-            cfg = "exec",
-        ),
-    },
-    toolchains = ["@rules_rust//rust:toolchain_type"],
-)
+    return struct(
+        config_json = config_json,
+        transitive_files = depset(mixin_direct_files, transitive = transitive_files),
+    )

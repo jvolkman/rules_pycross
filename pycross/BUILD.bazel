@@ -22,15 +22,10 @@ bzl_library(
         "//pycross/private:target_environment",
         "//pycross/private:uv_lock_model",
         "//pycross/private:wheel_library",
-        "//pycross/private/build:cc_mixin",
         "//pycross/private/build:cc_pkg_config",
         "//pycross/private/build:missing_dependency",
-        "//pycross/private/build:pep517_build",
         "//pycross/private/build:repaired_wheel",
-        "//pycross/private/build:rust_mixin",
-        "//pycross/private/build:rust_tool_wrapper",
-        "//pycross/private/build:wheel_bin_tool",
-        "//pycross/private/build:wheel_build",
+        "//pycross/private/build:wheel_headers",
     ],
 )
 
