@@ -49,19 +49,19 @@ def sanitize_name(val):
 _PEP508_NAME_CHARS = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_."
 
 def extract_pep508_name(spec):
-    """Extract the normalized package name from a PEP508 requirement line.
+    """Extract the PEP 503 normalized package name from a PEP508 requirement line.
 
     Args:
         spec: The PEP508 requirement string to parse.
 
     Returns:
-        The normalized package name (with underscores) as a string.
+        The PEP 503 normalized package name (with hyphens) as a string.
     """
     spec = spec.strip()
     stripped = spec.lstrip(_PEP508_NAME_CHARS)
     name_len = len(spec) - len(stripped)
     name = spec[:name_len]
-    normalized = name.lower().replace("-", "_").replace(".", "_")
+    normalized = name.lower().replace("_", "-").replace(".", "-")
 
-    # Dedup underscores (standard PEP 503 name normalization helper)
-    return "_".join([part for part in normalized.split("_") if part])
+    # Dedup hyphens (PEP 503 normalization)
+    return "-".join([part for part in normalized.split("-") if part])

@@ -36,8 +36,8 @@ py_binary(
 )
 
 py_binary(
-    name = "setuptools_builder",
-    srcs = ["setuptools_builder.py"],
+    name = "pep517_builder",
+    srcs = ["pep517_builder.py"],
     imports = ["../../../.."],
     visibility = ["//visibility:public"],
     deps = [

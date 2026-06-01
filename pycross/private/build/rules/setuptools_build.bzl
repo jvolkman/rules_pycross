@@ -78,7 +78,7 @@ setuptools_build = rule(
             cfg = pycross_exec_platform_transition,
         ),
         "_builder": attr.label(
-            default = "//pycross/private/build/tools:setuptools_builder",
+            default = "//pycross/private/build/tools:pep517_builder",
             executable = True,
             cfg = "exec",
         ),

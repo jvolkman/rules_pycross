@@ -80,7 +80,7 @@ def _lock_repos_impl(module_ctx):
             all_remote_files[key] = remote_file_label
 
         # Pre-calculate known packages in this lock file to filter sdist build_requires
-        known_packages = [sanitize_name(key.split("@")[0]) for key in resolved_lock.get("packages", {})]
+        known_packages = [key.split("@")[0] for key in resolved_lock.get("packages", {})]
 
         # Instantiate sdist repos for packages requiring source builds.
         # Sdist repos are environment-agnostic (the same source archive is
@@ -114,14 +114,14 @@ def _lock_repos_impl(module_ctx):
             deps_set = {}
             for dep in pkg.get("common_dependencies", []):
                 dep_name = dep.split("@")[0]
-                dep_label = "@{}//:{}".format(repo_name, sanitize_name(dep_name))
+                dep_label = "@{}//:{}".format(repo_name, dep_name)
                 deps_set[dep_label] = True
             for env_name, env_file_ref in pkg.get("environment_files", {}).items():
                 if env_file_ref.get("key") != sdist_file_key:
                     continue
                 for dep in pkg.get("environment_dependencies", {}).get(env_name, []):
                     dep_name = dep.split("@")[0]
-                    dep_label = "@{}//:{}".format(repo_name, sanitize_name(dep_name))
+                    dep_label = "@{}//:{}".format(repo_name, dep_name)
                     deps_set[dep_label] = True
 
             sdist_repo_name = "{}_sdist_{}".format(

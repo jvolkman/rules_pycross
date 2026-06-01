@@ -1,7 +1,7 @@
 """Repository rule for auto-generating a BUILD file for an sdist package."""
 
 load("//pycross/private:internal_repo.bzl", "exec_internal_tool")
-load("//pycross/private:util.bzl", "extract_pep508_name", "sanitize_name")
+load("//pycross/private:util.bzl", "extract_pep508_name")
 
 _BACKEND_TO_PROFILE = {
     "mesonpy": "meson_build",
@@ -32,7 +32,7 @@ def _sdist_repo_impl(rctx):
             build_deps = []
             for dep in rctx.attr.build_dependencies:
                 dep_name = dep.split("@")[0]
-                build_deps.append("@{}//:{}".format(rctx.attr.lock_repo, sanitize_name(dep_name)))
+                build_deps.append("@{}//:{}".format(rctx.attr.lock_repo, dep_name))
             macro_attrs["build_deps"] = str(build_deps)
     else:
         sdist_path = rctx.path(rctx.attr.sdist)
@@ -60,10 +60,13 @@ def _sdist_repo_impl(rctx):
 
         # Map build requires to targets in the hub repo
         build_deps = []
+        required_build_packages = []
         for req in requires:
             req_name = extract_pep508_name(req)
-            if req_name == "oldest_supported_numpy":
+            if req_name == "oldest-supported-numpy":
                 req_name = "numpy"
+
+            required_build_packages.append(req_name)
 
             # We only add it if it's in the known lock repo mapping.
             # (This will be passed in via rctx.attr.known_packages)
@@ -71,6 +74,10 @@ def _sdist_repo_impl(rctx):
                 build_deps.append("@{}//:{}".format(rctx.attr.lock_repo, req_name))
 
         macro_attrs["build_deps"] = str(build_deps)
+
+        # For pep517_build, pass the required package names for validation.
+        if profile_macro == "pep517_build":
+            macro_attrs["required_build_packages"] = str(required_build_packages)
 
     # Add optional overrides if they are set/non-empty
     if rctx.attr.copts:
@@ -91,8 +98,7 @@ def _sdist_repo_impl(rctx):
 
     # Load the backend macro from this lock repo's _backend directory.
     # The macro inherits attrs from the underlying rule and pre-fills
-    # tool wheel defaults (meson_wheel, ninja_wheel, etc.) from
-    # //_backend/deps, so we don't need to specify them here.
+    # tool_deps defaults from packages present in the lockfile.
     profile_bzl = "_backend:{}.bzl".format(profile_macro)
 
     build_content = """\nload("@{lock_repo}//{profile_bzl}", "{profile_macro}")
