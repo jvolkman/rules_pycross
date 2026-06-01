@@ -16,13 +16,6 @@ _BACKEND_TO_PROFILE = {
     "poetry.core.masonry.api": "pep517_build",
 }
 
-_PROFILE_TO_BZL = {
-    "meson_build": "pycross/backends:meson.bzl",
-    "setuptools_build": "pycross/backends:setuptools.bzl",
-    "maturin_build": "pycross/backends:maturin.bzl",
-    "pep517_build": "pycross/backends:pep517.bzl",
-}
-
 def _sdist_repo_impl(rctx):
     macro_attrs = {
         "name": "\"wheel\"",
@@ -32,9 +25,8 @@ def _sdist_repo_impl(rctx):
 
     if rctx.attr.build_profile:
         profile_macro = rctx.attr.build_profile
-        if profile_macro not in _PROFILE_TO_BZL:
+        if profile_macro not in _BACKEND_TO_PROFILE.values():
             fail("Unknown build profile: " + profile_macro)
-        profile_bzl = _PROFILE_TO_BZL[profile_macro]
 
         if rctx.attr.build_dependencies:
             build_deps = []
@@ -42,12 +34,6 @@ def _sdist_repo_impl(rctx):
                 dep_name = dep.split("@")[0]
                 build_deps.append("@{}//:{}".format(rctx.attr.lock_repo, sanitize_name(dep_name)))
             macro_attrs["build_deps"] = str(build_deps)
-
-        if profile_macro == "meson_build":
-            macro_attrs["meson_wheel"] = "\"@{}//_builtins:meson\"".format(rctx.attr.lock_repo)
-            macro_attrs["ninja_wheel"] = "\"@{}//_builtins:ninja\"".format(rctx.attr.lock_repo)
-        elif profile_macro == "maturin_build":
-            macro_attrs["maturin_wheel"] = "\"@{}//_builtins:maturin\"".format(rctx.attr.lock_repo)
     else:
         sdist_path = rctx.path(rctx.attr.sdist)
         output_json = rctx.path("build_metadata.json")
@@ -71,7 +57,6 @@ def _sdist_repo_impl(rctx):
         # Map backend to profile
         # If not in the dictionary, we fall back to setuptools_build as the generic PEP 517 builder
         profile_macro = _BACKEND_TO_PROFILE.get(backend, "setuptools_build")
-        profile_bzl = _PROFILE_TO_BZL.get(profile_macro, "setuptools.bzl")
 
         # Map build requires to targets in the hub repo
         build_deps = []
@@ -85,21 +70,7 @@ def _sdist_repo_impl(rctx):
             if req_name in rctx.attr.known_packages:
                 build_deps.append("@{}//:{}".format(rctx.attr.lock_repo, req_name))
 
-        if not build_deps and (not backend or backend.startswith("setuptools.build_meta")):
-            build_deps.append("@{}//_builtins:setuptools".format(rctx.attr.lock_repo))
-            build_deps.append("@{}//_builtins:wheel".format(rctx.attr.lock_repo))
-        elif not build_deps and backend in ("mesonpy", "mesonbuild"):
-            build_deps.append("@{}//_builtins:meson-python".format(rctx.attr.lock_repo))
-        elif not build_deps and backend == "maturin":
-            build_deps.append("@{}//_builtins:maturin".format(rctx.attr.lock_repo))
-
         macro_attrs["build_deps"] = str(build_deps)
-
-        if backend in ("mesonpy", "mesonbuild"):
-            macro_attrs["meson_wheel"] = "\"@{}//_builtins:meson\"".format(rctx.attr.lock_repo)
-            macro_attrs["ninja_wheel"] = "\"@{}//_builtins:ninja\"".format(rctx.attr.lock_repo)
-        elif backend == "maturin":
-            macro_attrs["maturin_wheel"] = "\"@{}//_builtins:maturin\"".format(rctx.attr.lock_repo)
 
     # Add optional overrides if they are set/non-empty
     if rctx.attr.copts:
@@ -118,7 +89,13 @@ def _sdist_repo_impl(rctx):
     for key, val in sorted(macro_attrs.items()):
         attr_lines.append("    {} = {},".format(key, val))
 
-    build_content = """\nload("@rules_pycross//{profile_bzl}", "{profile_macro}")
+    # Load the backend macro from this lock repo's _backend directory.
+    # The macro inherits attrs from the underlying rule and pre-fills
+    # tool wheel defaults (meson_wheel, ninja_wheel, etc.) from
+    # //_backend/deps, so we don't need to specify them here.
+    profile_bzl = "_backend:{}.bzl".format(profile_macro)
+
+    build_content = """\nload("@{lock_repo}//{profile_bzl}", "{profile_macro}")
 
 package(default_visibility = ["//visibility:public"])
 
@@ -126,6 +103,7 @@ package(default_visibility = ["//visibility:public"])
 {attrs}
 )
 """.format(
+        lock_repo = rctx.attr.lock_repo,
         profile_bzl = profile_bzl,
         profile_macro = profile_macro,
         attrs = "\n".join(attr_lines),

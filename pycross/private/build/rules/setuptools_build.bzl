@@ -1,6 +1,7 @@
 """Implementation of the setuptools_build rule."""
 
 load("//pycross/private:providers.bzl", "PycrossWheelInfo")
+load("//pycross/private/build:transitions.bzl", "pycross_exec_platform_transition")
 load("//pycross/private/build/actions:cc_env.bzl", "extract_cc_environment")
 load("//pycross/private/build/actions:pep517_action.bzl", "register_pep517_action")
 load("//pycross/private/build/actions:repair_action.bzl", "register_repair_action")
@@ -20,12 +21,18 @@ def _setuptools_build_impl(ctx):
         name = exe.basename
         tool_executables.append(struct(name = name, file = exe, files_to_run = target[DefaultInfo].files_to_run))
 
+    build_deps = list(ctx.attr.build_deps)
+    if hasattr(ctx.attr, "setuptools_wheel"):
+        build_deps.extend(ctx.attr.setuptools_wheel)
+    if hasattr(ctx.attr, "wheel_wheel"):
+        build_deps.extend(ctx.attr.wheel_wheel)
+
     build_result = register_pep517_action(
         ctx,
         sdist = ctx.file.sdist,
         builder = ctx.attr._builder,
         deps = ctx.attr.deps,
-        build_deps = ctx.attr.build_deps,
+        build_deps = build_deps,
         config_settings = ctx.attr.config_settings,
         site_hooks = ctx.attr.site_hooks,
         tool_executables = tool_executables,
@@ -62,6 +69,14 @@ def _setuptools_build_impl(ctx):
 setuptools_build = rule(
     implementation = _setuptools_build_impl,
     attrs = COMMON_BUILD_ATTRS | CC_BUILD_ATTRS | CC_TOOLCHAIN_ATTRS | {
+        "setuptools_wheel": attr.label(
+            mandatory = True,
+            cfg = pycross_exec_platform_transition,
+        ),
+        "wheel_wheel": attr.label(
+            mandatory = True,
+            cfg = pycross_exec_platform_transition,
+        ),
         "_builder": attr.label(
             default = "//pycross/private/build/tools:setuptools_builder",
             executable = True,

@@ -1,5 +1,5 @@
 load("@rules_pycross//pycross:defs.bzl", "pycross_console_script_binary")
-load("@rules_pycross//pycross/backends:meson.bzl", "meson_build")
+load("@uv//_backend:meson_build.bzl", "meson_build")
 
 package(default_visibility = ["//visibility:public"])
 
@@ -12,17 +12,14 @@ pycross_console_script_binary(
 meson_build(
     name = "wheel",
     build_deps = [
-        "@uv//:meson_python",
         "@uv//:meson",
         "@uv//:ninja",
         "@uv//:cython",
         "@uv//:versioneer",
     ],
-    meson_wheel = "@uv//:meson",
     native_deps = [
         "//deps/numpy:numpy_headers",
     ],
-    ninja_wheel = "@uv//:ninja",
     path_tools = [":cython"],
     sdist = "@uv//pandas:sdist",
     site_hooks = [

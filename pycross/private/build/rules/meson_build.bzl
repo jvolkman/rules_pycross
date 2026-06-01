@@ -55,13 +55,17 @@ def _meson_build_impl(ctx):
         meson_properties = ctx.attr.meson_properties,
     )
 
+    build_deps = list(ctx.attr.build_deps)
+    if hasattr(ctx.attr, "meson_python_wheel"):
+        build_deps.extend(ctx.attr.meson_python_wheel)
+
     # 3. Build wheel
     build_result = register_pep517_action(
         ctx,
         sdist = ctx.file.sdist,
         builder = ctx.attr._builder,
         deps = ctx.attr.deps,
-        build_deps = ctx.attr.build_deps,
+        build_deps = build_deps,
         config_settings = ctx.attr.config_settings,
         site_hooks = ctx.attr.site_hooks,
         tool_executables = tool_executables,
@@ -104,6 +108,10 @@ meson_build = rule(
             cfg = pycross_exec_platform_transition,
         ),
         "ninja_wheel": attr.label(
+            mandatory = True,
+            cfg = pycross_exec_platform_transition,
+        ),
+        "meson_python_wheel": attr.label(
             mandatory = True,
             cfg = pycross_exec_platform_transition,
         ),

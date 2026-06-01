@@ -1,5 +1,5 @@
 load("@rules_pycross//pycross:defs.bzl", "pycross_cc_pkg_config", "pycross_console_script_binary", "pycross_wheel_library")
-load("@rules_pycross//pycross/backends:meson.bzl", "meson_build")
+load("@uv//_backend:meson_build.bzl", "meson_build")
 load(":numpy_headers.bzl", "numpy_cc_library")
 
 package(default_visibility = ["//visibility:public"])
@@ -20,7 +20,6 @@ pycross_console_script_binary(
 meson_build(
     name = "wheel",
     build_deps = [
-        "@uv//:meson_python",
         "@uv//:meson",
         "@uv//:ninja",
         "@uv//:cython",
@@ -30,11 +29,9 @@ meson_build(
         "compile-args": ["-v"],
     },
     copts = ["-Wl,-s"],
-    meson_wheel = "@uv//:meson",
     native_deps = [
         "//third_party/openblas",
     ],
-    ninja_wheel = "@uv//:ninja",
     path_tools = [":cython"],
     pkg_config_files = [":gen_openblas_pc_file"],
     sdist = "@uv//numpy:sdist",
