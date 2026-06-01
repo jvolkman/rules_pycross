@@ -1,17 +1,16 @@
 """CMake / scikit-build-core PEP 517 builder."""
 
 import os
-import shlex
 import sys
 import textwrap
 
 from pycross.private.build.tools.utils.context import BuildContext
 from pycross.private.build.tools.utils.context import load_layers
+from pycross.private.build.tools.utils.context import replace_placeholder
 from pycross.private.build.tools.utils.lifecycle import BackendStrategy
 from pycross.private.build.tools.utils.lifecycle import run_standard_build_lifecycle
 from pycross.private.build.tools.utils.venv_utils import build_crossenv_venv
 from pycross.private.build.tools.utils.venv_utils import build_standard_venv
-from pycross.private.build.tools.utils.context import replace_placeholder
 
 
 def setup_venv(ctx: BuildContext) -> None:
@@ -46,7 +45,7 @@ def generate_toolchain_file(ctx: BuildContext, cc_config: dict) -> None:
     if cc_config:
         for lib_path_str in cc_config.get("runtime_libs", []):
             runtime_libs.append(replace_placeholder(ctx.prefix, lib_path_str))
-    
+
     if runtime_libs:
         ldflags = ldflags + " " + " ".join(runtime_libs)
 
@@ -107,12 +106,12 @@ def pre_build(ctx: BuildContext) -> None:
     if cc_layer_config:
         generate_toolchain_file(ctx, cc_layer_config)
 
-    # 2. Setup CMAKE_PREFIX_PATH so CMake's find_package() can locate packages 
-    # installed in build_deps (like pybind11). 
-    # scikit-build-core auto-adds sysconfig site-packages, but our build_deps 
+    # 2. Setup CMAKE_PREFIX_PATH so CMake's find_package() can locate packages
+    # installed in build_deps (like pybind11).
+    # scikit-build-core auto-adds sysconfig site-packages, but our build_deps
     # are unzipped wheels dynamically added to PYTHONPATH.
     prefix_paths = [str(p.absolute()) for p in ctx.python_paths]
-    
+
     # Also add the individual package directories, as CMake packages are often
     # stored in `<site-packages>/<pkg_name>/share/cmake`
     for p in ctx.python_paths:
@@ -124,7 +123,7 @@ def pre_build(ctx: BuildContext) -> None:
     all_prefix_paths = prefix_paths
     if existing_prefix_path:
         all_prefix_paths.append(existing_prefix_path)
-    
+
     ctx.build_env["CMAKE_PREFIX_PATH"] = os.pathsep.join(all_prefix_paths)
 
 

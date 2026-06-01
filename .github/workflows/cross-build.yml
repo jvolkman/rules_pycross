@@ -18,7 +18,7 @@ jobs:
       fail-fast: false
       matrix:
         host: [ubuntu, macos]
-        workspace: [build_meson, build_setuptools, build_maturin, build_pure_python]
+        workspace: [build_meson, build_setuptools, build_maturin, build_pure_python, build_cmake]
     steps:
       - uses: actions/checkout@v4
 
@@ -65,7 +65,7 @@ jobs:
 
       - name: Test workspaces
         run: |
-          for ws in build_meson build_setuptools build_maturin build_pure_python; do
+          for ws in build_meson build_setuptools build_maturin build_pure_python build_cmake; do
             echo "::group::Testing $ws"
             
             # Setup a fresh virtual environment for this workspace
