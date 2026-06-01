@@ -70,6 +70,7 @@ bzl_library(
     deps = [
         ":internal_repo",
         ":resolved_lock_renderer",
+        "//pycross/private/build/rules:backend_config",
         "@bazel_skylib//lib:paths",
     ],
 )

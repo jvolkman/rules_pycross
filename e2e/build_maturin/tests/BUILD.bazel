@@ -3,5 +3,5 @@ load("@rules_python//python:defs.bzl", "py_test")
 py_test(
     name = "test_rpds",
     srcs = ["test_rpds.py"],
-    deps = ["@uv//:rpds_py"],
+    deps = ["@uv//:rpds-py"],
 )

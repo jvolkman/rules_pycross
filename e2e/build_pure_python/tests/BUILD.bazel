@@ -15,5 +15,5 @@ py_test(
 py_test(
     name = "test_pyproject_metadata",
     srcs = ["test_pyproject_metadata.py"],
-    deps = ["@uv//:pyproject_metadata"],
+    deps = ["@uv//:pyproject-metadata"],
 )

@@ -1,33 +1,24 @@
 """Implementation of the meson_build rule."""
 
-load("//pycross/private:providers.bzl", "PycrossExtractedWheelInfo", "PycrossWheelInfo")
+load("//pycross/private:providers.bzl", "PycrossWheelInfo")
 load("//pycross/private/build:transitions.bzl", "pycross_exec_platform_transition")
 load("//pycross/private/build/actions:cc_layer.bzl", "extract_cc_layer")
 load("//pycross/private/build/actions:pep517_action.bzl", "register_pep517_action")
 load("//pycross/private/build/actions:repair_action.bzl", "register_repair_action")
 load("//pycross/private/build/actions:tool_extract.bzl", "register_bin_extract_action", "register_console_script_extract_action")
-load(":common_attrs.bzl", "CC_BUILD_ATTRS", "CC_FRAGMENTS", "CC_TOOLCHAINS", "CC_TOOLCHAIN_ATTRS", "COMMON_BUILD_ATTRS")
-
-def _get_wheel_file(target):
-    if PycrossWheelInfo in target:
-        return target[PycrossWheelInfo].wheel_file
-    files = target[DefaultInfo].files.to_list()
-    for f in files:
-        if f.path.endswith(".whl"):
-            return f
-    return files[0]
-
-def _get_unzipped_wheel(target):
-    if PycrossExtractedWheelInfo in target:
-        return target[PycrossExtractedWheelInfo].site_packages
-    fail("Target {} does not provide a site_packages directory. Make sure it is wrapped in a pycross_wheel_library.".format(target.label))
+load(":common_attrs.bzl", "CC_BUILD_ATTRS", "CC_FRAGMENTS", "CC_TOOLCHAINS", "CC_TOOLCHAIN_ATTRS", "COMMON_BUILD_ATTRS", "get_unzipped_wheel", "get_wheel_file", "group_tool_deps")
 
 def _meson_build_impl(ctx):
     # 1. Extract tools
-    meson_wheel_target = ctx.attr.meson_wheel[0] if type(ctx.attr.meson_wheel) == "list" else ctx.attr.meson_wheel
-    ninja_wheel_target = ctx.attr.ninja_wheel[0] if type(ctx.attr.ninja_wheel) == "list" else ctx.attr.ninja_wheel
-    meson_wheel = _get_wheel_file(meson_wheel_target)
-    ninja_wheel = _get_unzipped_wheel(ninja_wheel_target)
+    tool_deps = group_tool_deps(ctx.attr.tool_deps)
+
+    if "meson" not in tool_deps:
+        fail("Missing 'meson' in tool_deps")
+    if "ninja" not in tool_deps:
+        fail("Missing 'ninja' in tool_deps")
+
+    meson_wheel = get_wheel_file(tool_deps["meson"][0])
+    ninja_wheel = get_unzipped_wheel(tool_deps["ninja"][0])
 
     tool_executables = []
     tool_executables.append(register_console_script_extract_action(
@@ -56,8 +47,8 @@ def _meson_build_impl(ctx):
     )
 
     build_deps = list(ctx.attr.build_deps)
-    if hasattr(ctx.attr, "meson_python_wheel"):
-        build_deps.extend(ctx.attr.meson_python_wheel)
+    if "meson-python" in tool_deps:
+        build_deps.extend(tool_deps["meson-python"])
 
     # 3. Build wheel
     build_result = register_pep517_action(
@@ -103,16 +94,7 @@ def _meson_build_impl(ctx):
 meson_build = rule(
     implementation = _meson_build_impl,
     attrs = COMMON_BUILD_ATTRS | CC_BUILD_ATTRS | CC_TOOLCHAIN_ATTRS | {
-        "meson_wheel": attr.label(
-            mandatory = True,
-            cfg = pycross_exec_platform_transition,
-        ),
-        "ninja_wheel": attr.label(
-            mandatory = True,
-            cfg = pycross_exec_platform_transition,
-        ),
-        "meson_python_wheel": attr.label(
-            mandatory = True,
+        "tool_deps": attr.label_list(
             cfg = pycross_exec_platform_transition,
         ),
         "meson_properties": attr.string_dict(),

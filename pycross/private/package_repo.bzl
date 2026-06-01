@@ -25,8 +25,8 @@ https://packaging.python.org/en/latest/specifications/name-normalization.
 """
 
 load("@bazel_skylib//lib:paths.bzl", "paths")
+load("//pycross/private/build/rules:backend_config.bzl", "BACKEND_CONFIGS")
 load(":resolved_lock_renderer.bzl", "render_lock_bzl")
-load(":util.bzl", "sanitize_name")
 
 _requirement_func = """\
 def requirement(pkg):
@@ -117,7 +117,7 @@ def _package_repo_impl(rctx):
     for pin_name, pin_target in sorted(pins.items()):
         root_build_lines.extend([
             "alias(",
-            '    name = "{}",'.format(sanitize_name(pin_name)),
+            '    name = "{}",'.format(pin_name),
             '    actual = "//_lock:{}",'.format(pin_target),
             ")",
             "",
@@ -150,13 +150,11 @@ def _package_repo_impl(rctx):
 
     rctx.file("_sdist/BUILD.bazel", "\n".join(sdist_build_lines))
 
-    # Also add unversioned convenience aliases from pins (e.g., "numpy" -> "numpy@2.0.0")
     for pin_name, pin_target in sorted(pins.items()):
-        pin_sanitized = sanitize_name(pin_name)
-        if pin_sanitized != pin_target:
+        if pin_name != pin_target:
             wheel_build_lines.extend([
                 "alias(",
-                '    name = "{}",'.format(pin_sanitized),
+                '    name = "{}",'.format(pin_name),
                 '    actual = ":{}",'.format(pin_target),
                 ")",
                 "",
@@ -173,90 +171,27 @@ def _package_repo_impl(rctx):
 
     # 5. Write _backend/ directory
     #
-    # _backend/BUILD.bazel       — package root, exports .bzl files
+    # _backend/BUILD.bazel       — package root
     # _backend/<profile>.bzl     — symbolic macros wrapping backend rules with
     #                              tool defaults pre-filled from this lock repo
-    # _backend/deps/BUILD.bazel  — alias targets for standard build tools
-    #                              (meson, ninja, setuptools, etc.)
 
-    _STANDARD_TOOLS = ["meson", "ninja", "setuptools", "wheel", "meson-python", "scikit-build-core", "maturin", "hatchling", "flit-core"]
-
-    # Get a dict of all sanitized package names
-    locked_sanitized_names = {}
+    # Build a set of PEP 503 normalized package names present in the lockfile.
+    locked_package_names = {}
     for pkg_key in packages.keys():
         pkg_name = pkg_key.split("@")[0]
-        locked_sanitized_names[sanitize_name(pkg_name)] = True
+        locked_package_names[pkg_name] = True
 
-    # _backend/BUILD.bazel
     rctx.file("_backend/BUILD.bazel", 'package(default_visibility = ["//visibility:public"])\n')
 
-    # _backend/deps/BUILD.bazel — tool aliases or missing dependency stubs
-    deps_lines = [
-        'load("@rules_pycross//pycross/private/build:missing_dependency.bzl", "pycross_missing_dependency")',
-        "",
-        'package(default_visibility = ["//visibility:public"])',
-        "",
-    ]
-
-    for tool in _STANDARD_TOOLS:
-        sanitized_tool = sanitize_name(tool)
-        if sanitized_tool in locked_sanitized_names:
-            deps_lines.extend([
-                "alias(",
-                '    name = "{}",'.format(tool),
-                '    actual = "//:{}",'.format(sanitized_tool),
-                ")",
-                "",
-            ])
-        else:
-            deps_lines.extend([
-                "pycross_missing_dependency(",
-                '    name = "{}",'.format(tool),
-                '    tool_name = "{}",'.format(tool),
-                '    lock_repo = "@{}",'.format(rctx.name),
-                ")",
-                "",
-            ])
-
-    rctx.file("_backend/deps/BUILD.bazel", "\n".join(deps_lines))
-
-    # _backend/<profile>.bzl — symbolic macro wrappers
-    #
-    # Each macro uses inherit_attrs to pick up the full attribute schema
-    # from the underlying rule, then overrides tool-wheel attrs with
-    # defaults pointing at //_backend/deps targets in this lock repo.
-
-    _BACKEND_MACROS = {
-        "meson_build": {
-            "rule_bzl": "meson_build",
-            "attrs": {
-                "meson_wheel": "//_backend/deps:meson",
-                "ninja_wheel": "//_backend/deps:ninja",
-                "meson_python_wheel": "//_backend/deps:meson-python",
-            },
-        },
-        "maturin_build": {
-            "rule_bzl": "maturin_build",
-            "attrs": {
-                "maturin_wheel": "//_backend/deps:maturin",
-            },
-        },
-        "setuptools_build": {
-            "rule_bzl": "setuptools_build",
-            "attrs": {
-                "setuptools_wheel": "//_backend/deps:setuptools",
-                "wheel_wheel": "//_backend/deps:wheel",
-            },
-        },
-        "pep517_build": {
-            "rule_bzl": "pep517_build",
-            "attrs": {},
-        },
-    }
-
-    for macro_name, config in _BACKEND_MACROS.items():
+    for macro_name, config in BACKEND_CONFIGS.items():
         rule_bzl = config["rule_bzl"]
-        attrs = config["attrs"]
+
+        # Resolve tool package names to lock-repo labels, keeping only
+        # packages that actually exist in the lockfile.
+        tool_deps_labels = []
+        for pkg in config["tool_packages"]:
+            if pkg in locked_package_names:
+                tool_deps_labels.append("//:{}".format(pkg))
 
         lines = [
             '"""Backend macro with pre-configured tool defaults for this lock repo."""',
@@ -271,10 +206,11 @@ def _package_repo_impl(rctx):
             "",
         ]
 
-        if attrs:
-            attr_lines = []
-            for attr_name, default_target in sorted(attrs.items()):
-                attr_lines.append('        "{}": attr.label(default = Label("{}")),'.format(attr_name, default_target))
+        if tool_deps_labels:
+            attr_lines = ["        \"tool_deps\": attr.label_list(default = ["]
+            for label in tool_deps_labels:
+                attr_lines.append("            Label(\"{}\"),".format(label))
+            attr_lines.append("        ]),")
 
             lines.extend([
                 "{macro_name} = macro(".format(macro_name = macro_name),

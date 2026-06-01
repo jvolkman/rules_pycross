@@ -1,7 +1,13 @@
-"""Shared attribute dictionaries for pycross build rules."""
+"""Shared attribute dictionaries and utilities for pycross build rules."""
 
 load("@rules_cc//cc/common:cc_info.bzl", "CcInfo")
 load("@rules_python//python:py_info.bzl", "PyInfo")
+load(
+    "//pycross/private:providers.bzl",
+    "PycrossExtractedWheelInfo",
+    "PycrossPackageInfo",
+    "PycrossWheelInfo",
+)
 load("//pycross/private/build:transitions.bzl", "pycross_exec_platform_transition")
 
 COMMON_BUILD_ATTRS = {
@@ -44,3 +50,51 @@ CC_TOOLCHAIN_ATTRS = {
 
 CC_TOOLCHAINS = ["@bazel_tools//tools/cpp:toolchain_type"]
 CC_FRAGMENTS = ["cpp"]
+
+def group_tool_deps(tool_deps_list):
+    """Groups tool_deps by PycrossPackageInfo.package_name.
+
+    Args:
+        tool_deps_list: list[Target], targets that may carry PycrossPackageInfo.
+
+    Returns:
+        dict[str, list[Target]]: targets keyed by normalized package name.
+    """
+    result = {}
+    for dep in tool_deps_list:
+        if PycrossPackageInfo in dep:
+            name = dep[PycrossPackageInfo].package_name
+            if name not in result:
+                result[name] = []
+            result[name].append(dep)
+    return result
+
+def get_wheel_file(target):
+    """Extracts the .whl File from a target.
+
+    Args:
+        target: Target, a wheel target (with or without PycrossWheelInfo).
+
+    Returns:
+        File: the wheel file.
+    """
+    if PycrossWheelInfo in target:
+        return target[PycrossWheelInfo].wheel_file
+    files = target[DefaultInfo].files.to_list()
+    for f in files:
+        if f.path.endswith(".whl"):
+            return f
+    return files[0]
+
+def get_unzipped_wheel(target):
+    """Extracts the site_packages TreeArtifact from a target.
+
+    Args:
+        target: Target, must provide PycrossExtractedWheelInfo.
+
+    Returns:
+        File (TreeArtifact): the installed site-packages directory.
+    """
+    if PycrossExtractedWheelInfo in target:
+        return target[PycrossExtractedWheelInfo].site_packages
+    fail("Target {} does not provide a site_packages directory. Make sure it is wrapped in a pycross_wheel_library.".format(target.label))
