@@ -45,6 +45,10 @@ def _cmake_build_impl(ctx):
         linkopts = ctx.attr.linkopts,
     )
 
+    # cmake and ninja are registered as tool_executables (so they appear on
+    # PATH inside the sandbox) AND as build_deps (so scikit-build-core can
+    # `import cmake` / `import ninja` to discover their binary paths via
+    # cmake.CMAKE_BIN_DIR and ninja.BIN_DIR).
     build_deps = list(ctx.attr.build_deps)
     if "scikit-build-core" in tool_deps:
         build_deps.extend(tool_deps["scikit-build-core"])
@@ -69,20 +73,17 @@ def _cmake_build_impl(ctx):
         pkg_config_files = ctx.files.pkg_config_files,
     )
 
-    # 4. Repair wheel
-    if ctx.attr.native_deps or True:  # CMake builds usually contain native code
-        target_environment = ctx.files.target_environment[0] if ctx.files.target_environment else None
-        repair_result = register_repair_action(
-            ctx,
-            input_wheel = build_result.wheel,
-            input_name_file = build_result.name_file,
-            input_wheel_directory = build_result.wheel_directory,
-            native_deps = ctx.attr.native_deps,
-            repair_tool = ctx.executable._repair_tool,
-            target_environment = target_environment,
-        )
-    else:
-        repair_result = build_result
+    # 4. Repair wheel — CMake builds always produce native code.
+    target_environment = ctx.files.target_environment[0] if ctx.files.target_environment else None
+    repair_result = register_repair_action(
+        ctx,
+        input_wheel = build_result.wheel,
+        input_name_file = build_result.name_file,
+        input_wheel_directory = build_result.wheel_directory,
+        native_deps = ctx.attr.native_deps,
+        repair_tool = ctx.executable._repair_tool,
+        target_environment = target_environment,
+    )
 
     return [
         DefaultInfo(files = depset([repair_result.wheel, repair_result.wheel_directory])),

@@ -9,16 +9,15 @@ from pycross.private.build.tools.utils.context import load_layers
 from pycross.private.build.tools.utils.context import replace_placeholder
 from pycross.private.build.tools.utils.lifecycle import BackendStrategy
 from pycross.private.build.tools.utils.lifecycle import run_standard_build_lifecycle
-from pycross.private.build.tools.utils.venv_utils import build_crossenv_venv
-from pycross.private.build.tools.utils.venv_utils import build_standard_venv
 
 
-def setup_venv(ctx: BuildContext) -> None:
-    is_cross = ctx.exec_python != ctx.target_python
-    if is_cross or ctx.bazel_config.get("always_use_crossenv"):
-        build_crossenv_venv(ctx)
-    else:
-        build_standard_venv(ctx)
+def _cmake_escape(value: str) -> str:
+    """Escape a string for use inside CMake's set() double-quoted arguments.
+
+    CMake interprets backslashes and semicolons specially inside quoted strings.
+    Semicolons are CMake list separators and must be escaped.
+    """
+    return value.replace("\\", "\\\\").replace('"', '\\"').replace(";", "\\;")
 
 
 def generate_toolchain_file(ctx: BuildContext, cc_config: dict) -> None:
@@ -36,29 +35,23 @@ def generate_toolchain_file(ctx: BuildContext, cc_config: dict) -> None:
         raise ValueError(
             "CC and CXX must be provided by the Bazel CC toolchain. Ensure a cc_layer is configured for this build."
         )
-    cflags = get_var("CFLAGS", "").replace('"', '\\"')
-    cxxflags = get_var("CXXFLAGS", "").replace('"', '\\"')
-    ldflags = get_var("LDFLAGS", "").replace('"', '\\"')
+    cflags = _cmake_escape(get_var("CFLAGS", ""))
+    cxxflags = _cmake_escape(get_var("CXXFLAGS", ""))
+    ldflags = _cmake_escape(get_var("LDFLAGS", ""))
 
     # Add runtime libs to ldflags
-    runtime_libs = []
     if cc_config:
-        for lib_path_str in cc_config.get("runtime_libs", []):
-            runtime_libs.append(replace_placeholder(ctx.prefix, lib_path_str))
-
-    if runtime_libs:
-        ldflags = ldflags + " " + " ".join(runtime_libs)
+        runtime_libs = [replace_placeholder(ctx.prefix, p) for p in cc_config.get("runtime_libs", [])]
+        if runtime_libs:
+            ldflags = ldflags + " " + " ".join(runtime_libs)
 
     # Determine system and processor
     target_system = cc_config.get("target_os", "Linux")
-    if target_system == "darwin":
-        cmake_system_name = "Darwin"
-    elif target_system == "linux":
-        cmake_system_name = "Linux"
-    elif target_system == "windows":
-        cmake_system_name = "Windows"
-    else:
-        cmake_system_name = target_system.capitalize()
+    cmake_system_name = {
+        "darwin": "Darwin",
+        "linux": "Linux",
+        "windows": "Windows",
+    }.get(target_system, target_system.capitalize())
 
     cmake_system_processor = cc_config.get("target_cpu", "x86_64")
 
@@ -72,11 +65,11 @@ def generate_toolchain_file(ctx: BuildContext, cc_config: dict) -> None:
 
         set(CMAKE_C_FLAGS "{cflags}" CACHE STRING "" FORCE)
         set(CMAKE_CXX_FLAGS "{cxxflags}" CACHE STRING "" FORCE)
-        
+
         set(CMAKE_EXE_LINKER_FLAGS "{ldflags}" CACHE STRING "" FORCE)
         set(CMAKE_SHARED_LINKER_FLAGS "{ldflags}" CACHE STRING "" FORCE)
         set(CMAKE_MODULE_LINKER_FLAGS "{ldflags}" CACHE STRING "" FORCE)
-        
+
         # Disable stripping during CMake installation step because the host
         # strip utility cannot handle cross-compiled binaries (e.g. Mach-O).
         # Bazel/rules_pycross handles stripping separately if needed.
@@ -87,15 +80,14 @@ def generate_toolchain_file(ctx: BuildContext, cc_config: dict) -> None:
     toolchain_path.parent.mkdir(parents=True, exist_ok=True)
     toolchain_path.write_text(toolchain_content)
 
-    # Pass the toolchain file to scikit-build-core (or scikit-build)
-    # We can use SKBUILD_CMAKE_ARGS environment variable, or pass it via config_settings.
-    # scikit-build-core accepts CMAKE_ARGS env var as well.
+    # scikit-build-core respects the CMAKE_ARGS env var and forwards its
+    # contents to every cmake invocation it makes.
     existing_cmake_args = ctx.build_env.get("CMAKE_ARGS", "")
     new_cmake_args = f"-DCMAKE_TOOLCHAIN_FILE={toolchain_path.absolute()}"
     ctx.build_env["CMAKE_ARGS"] = f"{existing_cmake_args} {new_cmake_args}".strip()
 
-    # We also need to strip CC/CXX/CFLAGS etc from the environment so CMake doesn't
-    # mix toolchain file settings with environment overrides.
+    # Strip compiler env vars so CMake exclusively uses the toolchain file
+    # rather than mixing in environment overrides.
     for key in ["CC", "CXX", "CFLAGS", "CXXFLAGS", "LDFLAGS", "LDSHAREDFLAGS", "AR", "ARFLAGS"]:
         ctx.build_env.pop(key, None)
 
@@ -109,27 +101,35 @@ def pre_build(ctx: BuildContext) -> None:
     # 2. Setup CMAKE_PREFIX_PATH so CMake's find_package() can locate packages
     # installed in build_deps (like pybind11).
     # scikit-build-core auto-adds sysconfig site-packages, but our build_deps
-    # are unzipped wheels dynamically added to PYTHONPATH.
-    prefix_paths = [str(p.absolute()) for p in ctx.python_paths]
-
-    # Also add the individual package directories, as CMake packages are often
-    # stored in `<site-packages>/<pkg_name>/share/cmake`
+    # are unzipped wheel directories added to PYTHONPATH — not real installs.
+    #
+    # We add both the site-packages directories AND the individual package
+    # subdirectories as prefixes.  CMake's find_package() searches for config
+    # files at <prefix>/<name>*/ and <prefix>/share/<name>*/ — but only when
+    # <prefix> is the package root, not the site-packages parent.  For example
+    # pybind11 ships its cmake config at:
+    #   <site-packages>/pybind11/share/cmake/pybind11/pybind11Config.cmake
+    # so we need <site-packages>/pybind11 on CMAKE_PREFIX_PATH.
+    prefix_paths = []
     for p in ctx.python_paths:
-        for child in p.iterdir():
-            if child.is_dir() and not child.name.endswith(".dist-info"):
-                prefix_paths.append(str(child.absolute()))
+        prefix_paths.append(str(p.absolute()))
+        # Add top-level package directories (skip dist-info metadata dirs).
+        if p.is_dir():
+            for child in p.iterdir():
+                if child.is_dir() and not child.name.endswith(".dist-info"):
+                    prefix_paths.append(str(child.absolute()))
 
     existing_prefix_path = ctx.build_env.get("CMAKE_PREFIX_PATH", "")
-    all_prefix_paths = prefix_paths
     if existing_prefix_path:
-        all_prefix_paths.append(existing_prefix_path)
+        prefix_paths.append(existing_prefix_path)
 
-    ctx.build_env["CMAKE_PREFIX_PATH"] = os.pathsep.join(all_prefix_paths)
+    # When CMAKE_PREFIX_PATH is set as an environment variable, CMake reads it
+    # using the platform-native path separator (: on Unix, ; on Windows).
+    ctx.build_env["CMAKE_PREFIX_PATH"] = os.pathsep.join(prefix_paths)
 
 
 def main():
     strategy = BackendStrategy(
-        setup_venv=setup_venv,
         pre_build=pre_build,
     )
     run_standard_build_lifecycle(sys.argv[1], strategy)

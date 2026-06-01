@@ -42,7 +42,6 @@ py_binary(
     visibility = ["//visibility:public"],
     deps = [
         ":utils",
-        "//pycross/private/build/tools/crossenv",
         "@rules_pycross_internal//deps:build",
         "@rules_pycross_internal//deps:packaging",
     ],
