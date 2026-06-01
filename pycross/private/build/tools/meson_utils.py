@@ -137,15 +137,19 @@ def generate_cross_ini(ctx: BuildContext, cc_config: Optional[Dict[str, Any]] = 
     # Cython: only inject if present in the build virtualenv.
     # Meson does NOT inherently require Cython; it is only needed for
     # packages that contain .pyx sources.
-    cython_path = ctx.env_dir / "bin" / "cython"
+    cython_path = ctx.tools_dir / "cython"
     if cython_path.exists():
         binaries_lines.append(f"cython = '{cython_path.as_posix()}'")
 
-    # pkg-config: use the virtualenv copy if available. If not present,
+    # pkg-config: use the tools_dir copy if available. If not present,
     # omit it and let Meson fall back to its built-in dependency lookup.
-    pkgconfig_path = ctx.env_dir / "bin" / "pkg-config"
+    pkgconfig_path = ctx.tools_dir / "pkg-config"
     if pkgconfig_path.exists():
         binaries_lines.append(f"pkgconfig = '{pkgconfig_path.as_posix()}'")
+
+    pybind11_config_path = ctx.tools_dir / "pybind11-config"
+    if pybind11_config_path.exists():
+        binaries_lines.append(f"pybind11-config = '{pybind11_config_path.as_posix()}'")
 
     binaries_lines.append(f"python = '{(ctx.env_dir / 'bin' / 'python').as_posix()}'")
 

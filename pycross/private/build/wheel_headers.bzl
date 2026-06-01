@@ -6,18 +6,22 @@ load(
     "//pycross/private:cc_toolchain_util.bzl",
     "absolutize_path_in_str",
 )
+load("//pycross/private:providers.bzl", "PycrossExtractedWheelInfo")
 
 def _pycross_wheel_headers_impl(ctx):
-    wheel_dir = ctx.attr.wheel[DefaultInfo].files.to_list()[0]
-    include_dir_path = wheel_dir.path + "/site-packages/" + ctx.attr.include_dir
+    unzipped_wheel = getattr(ctx.attr.wheel[PycrossExtractedWheelInfo], "site_packages", None)
+    if not unzipped_wheel:
+        fail("The target provided to `wheel` does not provide an extracted site-packages directory. Make sure to use a `pycross_wheel_library` target.")
+
+    include_dir_path = unzipped_wheel.path + "/site-packages/" + ctx.attr.include_dir
 
     compilation_context = cc_common.create_compilation_context(
-        headers = depset([wheel_dir]),
+        headers = depset([unzipped_wheel]),
         includes = depset([include_dir_path]),
     )
 
     providers = [
-        DefaultInfo(files = depset([wheel_dir])),
+        DefaultInfo(files = depset([unzipped_wheel])),
         CcInfo(compilation_context = compilation_context),
     ]
 

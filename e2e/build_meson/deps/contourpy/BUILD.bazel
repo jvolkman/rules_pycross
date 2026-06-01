@@ -1,20 +1,16 @@
-"""BUILD target for contourpy."""
-
 load("@rules_pycross//pycross:defs.bzl", "pycross_console_script_binary")
-load("@rules_pycross//pycross/profiles:meson.bzl", "meson_build")
+load("@rules_pycross//pycross/backends:meson.bzl", "meson_build")
 
 package(default_visibility = ["//visibility:public"])
 
-# Expose pybind11-config on PATH hermetically for meson.build checks if needed
 pycross_console_script_binary(
     name = "pybind11-config",
     script = "pybind11-config",
     wheel = "@uv//pybind11:wheel",
-    deps = ["@uv//:pybind11"],
 )
 
 meson_build(
-    name = "contourpy",
+    name = "wheel",
     build_deps = [
         "@uv//:meson_python",
         "@uv//:meson",
@@ -22,12 +18,15 @@ meson_build(
         "@uv//:pybind11",
         "@uv//:numpy",
     ],
+    meson_properties = {
+        "numpy-include-dir": "$(NUMPY_INCLUDE_DIR)",
+    },
+    meson_wheel = "@uv//:meson",
     native_deps = [
         "//deps/numpy:numpy_headers",
     ],
-    path_tools = [
-        ":pybind11-config",
-    ],
+    ninja_wheel = "@uv//:ninja",
+    path_tools = [":pybind11-config"],
     sdist = "@uv//contourpy:sdist",
     deps = [
         "@uv//:numpy",

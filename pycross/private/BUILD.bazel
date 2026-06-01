@@ -87,10 +87,10 @@ bzl_library(
     srcs = ["resolved_lock_repo.bzl"],
     deps = [
         ":internal_repo",
-        ":resolved_lock_renderer",
         ":lock_attrs",
         ":pdm_lock_model",
         ":poetry_lock_model",
+        ":resolved_lock_renderer",
     ],
 )
 
@@ -101,6 +101,12 @@ bzl_library(
         ":internal_repo",
         ":resolved_lock_renderer",
     ],
+)
+
+# keep
+bzl_library(
+    name = "rules_python_bzl",
+    srcs = ["@rules_python//:bzl"],
 )
 
 bzl_library(
@@ -220,17 +226,11 @@ bzl_library(
 )
 
 bzl_library(
-    name = "util",
-    srcs = ["util.bzl"],
-)
-
-bzl_library(
-    name = "rules_python_bzl",
-    srcs = ["@rules_python//:bzl"],
-)
-
-bzl_library(
     name = "resolved_lock_renderer",
     srcs = ["resolved_lock_renderer.bzl"],
-    visibility = ["//visibility:public"],
+)
+
+bzl_library(
+    name = "util",
+    srcs = ["util.bzl"],
 )

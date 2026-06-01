@@ -27,12 +27,21 @@ def setup_path_tools(ctx: BuildContext) -> None:
 
             if is_python_tool:
                 venv_python = ctx.env_dir / "bin" / "python"
-                script_content = textwrap.dedent(f"""\
-                #!{ctx.exec_python.absolute()} -S
-                import os, sys
-                os.execv({repr(str(venv_python.absolute()))}, [{repr(str(venv_python.absolute()))}, {repr(str(abs_tool_path))}] + sys.argv[1:])
-                """)
-                dest_path.write_text(script_content)
+                py_script_path = ctx.tools_dir / (name + ".py")
+                # We use a 4-hop chain (bash -> python wrapper -> execv -> venv python -> tool script)
+                # to execute tools. This bypasses Linux's 127 character shebang limit while
+                # ensuring the tool is executed hermetically using the venv's python environment.
+                script_content = textwrap.dedent(f"""
+                    import os, sys
+                    os.execv({repr(str(venv_python.absolute()))}, [{repr(str(venv_python.absolute()))}, {repr(str(abs_tool_path))}] + sys.argv[1:])
+                """).lstrip()
+                py_script_path.write_text(script_content)
+
+                bash_wrapper = textwrap.dedent(f"""
+                    #!/bin/sh
+                    exec "{ctx.exec_python.absolute()}" "{py_script_path.absolute()}" "$@"
+                """).lstrip()
+                dest_path.write_text(bash_wrapper)
                 dest_path.chmod(0o755)
             else:
                 dest_path.symlink_to(abs_tool_path)

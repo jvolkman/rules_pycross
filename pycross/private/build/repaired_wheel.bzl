@@ -1,8 +1,8 @@
 """Rule for repairing wheels by bundling native shared libraries."""
 
 load("@rules_cc//cc/common:cc_info.bzl", "CcInfo")
-load("//pycross/private:cc_toolchain_util.bzl", "get_libraries")
 load("//pycross/private:providers.bzl", "PycrossWheelInfo")
+load("//pycross/private/build/actions:repair_action.bzl", "register_repair_action")
 
 def _pycross_repaired_wheel_impl(ctx):
     # Resolve input wheel file and name file.
@@ -20,80 +20,28 @@ def _pycross_repaired_wheel_impl(ctx):
         name_files = [f for f in ctx.files.wheel if f.path.endswith(".whl.name")]
         input_name_file = name_files[0] if name_files else None
 
-    # Declare outputs.
-    out_wheel = ctx.actions.declare_symlink(ctx.attr.name + ".whl")
-    out_wheel_name = ctx.actions.declare_file(ctx.attr.name + ".whl.name")
-    out_wheel_directory = ctx.actions.declare_directory(ctx.attr.name + "_wheel")
-
-    staging_dir = None
-    if not input_wheel_directory:
-        staging_dir = ctx.actions.declare_directory(ctx.attr.name + "_staging")
-
-    # Extract library paths from CcInfo.
-    lib_dirs = []
-    data_inputs = []
-    for dep in ctx.attr.native_deps:
-        if CcInfo in dep:
-            for lib in get_libraries(dep[CcInfo]):
-                lib_dirs.append(lib.dirname)
-                data_inputs.append(depset([lib]))
-
-    # Collect inputs.
-    input_files = [input_wheel]
-    if input_name_file:
-        input_files.append(input_name_file)
-    if input_wheel_directory:
-        input_files.append(input_wheel_directory)
-
-    # Resolve optional target environment config JSON for name compatibility safety check
-    target_env_file = None
+    target_environment = None
     if ctx.files.target_environment:
-        target_env_file = ctx.files.target_environment[0]
-        input_files.append(target_env_file)
+        target_environment = ctx.files.target_environment[0]
 
-    # Build arguments for the repair tool.
-    args = ctx.actions.args()
-    args.add("--wheel-file", input_wheel)
-    args.add("--output-dir", out_wheel_directory.path)
-    args.add("--out-wheel-file", out_wheel.path)
-    args.add("--out-wheel-name-file", out_wheel_name.path)
-    args.add("--out-wheel-dir-basename", out_wheel_directory.basename)
-
-    if input_wheel_directory:
-        args.add("--wheel-directory", input_wheel_directory.path)
-    elif input_name_file:
-        args.add("--wheel-name-file", input_name_file.path)
-        args.add("--staging-dir", staging_dir.path)
-    else:
-        args.add("--staging-dir", staging_dir.path)
-
-    for d in depset(lib_dirs).to_list():
-        args.add("--lib-dir", d)
-
-    if target_env_file:
-        args.add("--target-environment", target_env_file.path)
-
-    outputs = [out_wheel_directory, out_wheel, out_wheel_name]
-    if staging_dir:
-        outputs.append(staging_dir)
-
-    ctx.actions.run(
-        executable = ctx.executable._repair_tool,
-        arguments = [args],
-        inputs = depset(input_files, transitive = data_inputs),
-        outputs = outputs,
-        mnemonic = "RepairWheel",
-        progress_message = "Repairing %s" % input_wheel.basename,
+    repair_result = register_repair_action(
+        ctx,
+        input_wheel = input_wheel,
+        input_name_file = input_name_file,
+        input_wheel_directory = input_wheel_directory,
+        native_deps = ctx.attr.native_deps,
+        repair_tool = ctx.executable._repair_tool,
+        target_environment = target_environment,
     )
 
     return [
         PycrossWheelInfo(
-            wheel_file = out_wheel,
-            name_file = out_wheel_name,
-            wheel_directory = out_wheel_directory,
+            wheel_file = repair_result.wheel,
+            name_file = repair_result.name_file,
+            wheel_directory = repair_result.wheel_directory,
         ),
         DefaultInfo(
-            files = depset([out_wheel, out_wheel_directory]),
+            files = depset([repair_result.wheel, repair_result.wheel_directory]),
         ),
     ]
 

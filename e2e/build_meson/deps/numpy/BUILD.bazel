@@ -1,10 +1,9 @@
-load("@rules_pycross//pycross:defs.bzl", "pycross_cc_pkg_config", "pycross_console_script_binary")
-load("@rules_pycross//pycross/profiles:meson.bzl", "meson_build")
+load("@rules_pycross//pycross:defs.bzl", "pycross_cc_pkg_config", "pycross_console_script_binary", "pycross_wheel_library")
+load("@rules_pycross//pycross/backends:meson.bzl", "meson_build")
 load(":numpy_headers.bzl", "numpy_cc_library")
 
 package(default_visibility = ["//visibility:public"])
 
-# Generate scipy-openblas.pc from native OpenBLAS CcInfo
 pycross_cc_pkg_config(
     name = "gen_openblas_pc_file",
     dep = "//third_party/openblas",
@@ -12,33 +11,41 @@ pycross_cc_pkg_config(
     version = "0.3.20",
 )
 
-# Cython is a Python console script. We compile a clean hermetic
-# py_binary wrapper using the pycross_console_script_binary rule.
-# We name it 'cython' so that it is placed on PATH as 'cython' inside the sandbox!
 pycross_console_script_binary(
     name = "cython",
     script = "cython",
-    wheel = "@uv//cython:wheel",  # Correctly resolves to the raw wheel file!
-    deps = ["@uv//:cython"],  # Links to cython site-packages library
+    wheel = "@uv//cython:wheel",
 )
 
-# Build NumPy utilizing the Meson profile macro.
 meson_build(
-    name = "numpy",
+    name = "wheel",
+    build_deps = [
+        "@uv//:meson_python",
+        "@uv//:meson",
+        "@uv//:ninja",
+        "@uv//:cython",
+    ],
     config_settings = {
         "setup-args": [],
         "compile-args": ["-v"],
     },
     copts = ["-Wl,-s"],
+    meson_wheel = "@uv//:meson",
     native_deps = [
         "//third_party/openblas",
     ],
+    ninja_wheel = "@uv//:ninja",
     path_tools = [":cython"],
     pkg_config_files = [":gen_openblas_pc_file"],
     sdist = "@uv//numpy:sdist",
 )
 
-# Expose numpy headers to downstream C/C++ packages
+# Unzip the wheel for downstream header extraction.
+pycross_wheel_library(
+    name = "numpy",
+    wheel = ":wheel",
+)
+
 numpy_cc_library(
     name = "numpy_headers",
     numpy_wheel_dep = ":numpy",

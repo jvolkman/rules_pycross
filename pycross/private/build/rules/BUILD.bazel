@@ -1,0 +1,66 @@
+load("@bazel_skylib//:bzl_library.bzl", "bzl_library")
+
+bzl_library(
+    name = "common_attrs",
+    srcs = ["common_attrs.bzl"],
+    visibility = ["//pycross:__subpackages__"],
+    deps = [
+        "//pycross/private/build:transitions",
+        "@rules_python//python:py_info_bzl",
+    ],
+)
+
+bzl_library(
+    name = "maturin_build",
+    srcs = ["maturin_build.bzl"],
+    visibility = ["//pycross:__subpackages__"],
+    deps = [
+        ":common_attrs",
+        "//pycross/private:providers",
+        "//pycross/private/build:transitions",
+        "//pycross/private/build/actions:cc_env",
+        "//pycross/private/build/actions:pep517_action",
+        "//pycross/private/build/actions:repair_action",
+        "//pycross/private/build/actions:rust_env",
+        "//pycross/private/build/actions:tool_extract",
+    ],
+)
+
+bzl_library(
+    name = "meson_build",
+    srcs = ["meson_build.bzl"],
+    visibility = ["//pycross:__subpackages__"],
+    deps = [
+        ":common_attrs",
+        "//pycross/private:providers",
+        "//pycross/private/build:transitions",
+        "//pycross/private/build/actions:cc_env",
+        "//pycross/private/build/actions:pep517_action",
+        "//pycross/private/build/actions:repair_action",
+        "//pycross/private/build/actions:tool_extract",
+    ],
+)
+
+bzl_library(
+    name = "pep517_build",
+    srcs = ["pep517_build.bzl"],
+    visibility = ["//pycross:__subpackages__"],
+    deps = [
+        ":common_attrs",
+        "//pycross/private:providers",
+        "//pycross/private/build/actions:pep517_action",
+    ],
+)
+
+bzl_library(
+    name = "setuptools_build",
+    srcs = ["setuptools_build.bzl"],
+    visibility = ["//pycross:__subpackages__"],
+    deps = [
+        ":common_attrs",
+        "//pycross/private:providers",
+        "//pycross/private/build/actions:cc_env",
+        "//pycross/private/build/actions:pep517_action",
+        "//pycross/private/build/actions:repair_action",
+    ],
+)

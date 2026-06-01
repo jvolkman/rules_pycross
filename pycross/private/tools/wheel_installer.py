@@ -110,7 +110,7 @@ def main(args: Any) -> None:
         wheel_name = os.path.basename(args.wheel)
 
     link_path = link_dir / wheel_name
-    os.symlink(os.path.join(os.getcwd(), args.wheel), link_path)
+    os.symlink(os.path.abspath(args.wheel), link_path)
 
     try:
         with FilteredWheelFile.open_filtered(link_path, args.install_exclude_globs) as source:

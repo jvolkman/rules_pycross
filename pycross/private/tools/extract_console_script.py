@@ -46,11 +46,16 @@ def main():
     module, function = entry_point.split(":")
 
     with open(out_path, "w") as f:
+        f.write("#!/usr/bin/env python3\n")
         f.write(f"# Auto-generated console script for {script_name}\n")
         f.write("import sys\n")
         f.write(f"import {module}\n")
         f.write("if __name__ == '__main__':\n")
         f.write(f"    sys.exit({module}.{function}())\n")
+
+    import os
+
+    os.chmod(out_path, 0o755)
 
 
 if __name__ == "__main__":
