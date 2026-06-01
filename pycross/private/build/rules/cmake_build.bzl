@@ -70,7 +70,7 @@ def _cmake_build_impl(ctx):
     )
 
     # 4. Repair wheel
-    if ctx.attr.native_deps or True: # CMake builds usually contain native code
+    if ctx.attr.native_deps or True:  # CMake builds usually contain native code
         target_environment = ctx.files.target_environment[0] if ctx.files.target_environment else None
         repair_result = register_repair_action(
             ctx,

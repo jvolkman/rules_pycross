@@ -71,3 +71,18 @@ bzl_library(
         "//pycross/private/build/actions:repair_action",
     ],
 )
+
+bzl_library(
+    name = "cmake_build",
+    srcs = ["cmake_build.bzl"],
+    visibility = ["//pycross:__subpackages__"],
+    deps = [
+        ":common_attrs",
+        "//pycross/private:providers",
+        "//pycross/private/build:transitions",
+        "//pycross/private/build/actions:cc_layer",
+        "//pycross/private/build/actions:pep517_action",
+        "//pycross/private/build/actions:repair_action",
+        "//pycross/private/build/actions:tool_extract",
+    ],
+)

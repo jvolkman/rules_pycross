@@ -1,0 +1,18 @@
+[project]
+name = "rules-pycross-e2e-cmake"
+version = "0.1.0"
+description = "E2E tests for CMake/scikit-build-core wheel builds"
+authors = []
+dependencies = [
+    "iminuit==2.30.1",
+    "cmake",
+    "ninja",
+    "scikit-build-core",
+    "pybind11",
+]
+requires-python = "~=3.14.0"
+license = {text = "MIT"}
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"

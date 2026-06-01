@@ -4,7 +4,7 @@
 set -e
 cd "$(dirname "$0")"
 
-WORKSPACES=(build_meson build_setuptools build_maturin build_pure_python)
+WORKSPACES=(build_meson build_setuptools build_maturin build_pure_python build_cmake)
 for ws in "${WORKSPACES[@]}"; do
   echo "═══ Building $ws ═══"
   (cd "$ws" && bazel build "$@" -- //... -//tests/...)
