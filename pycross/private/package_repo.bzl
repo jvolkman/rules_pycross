@@ -171,14 +171,15 @@ def _package_repo_impl(rctx):
         actual_sdist = "//_lock:_sdist_{}".format(pin_target) if sdist_file else None
         rctx.file(paths.join(pin, "BUILD.bazel"), _pin_build(pin_target, actual_sdist))
 
-    # 5. Write _builtins/BUILD.bazel
+    # 5. Write _backend/ directory
+    #
+    # _backend/BUILD.bazel       — package root, exports .bzl files
+    # _backend/<profile>.bzl     — symbolic macros wrapping backend rules with
+    #                              tool defaults pre-filled from this lock repo
+    # _backend/deps/BUILD.bazel  — alias targets for standard build tools
+    #                              (meson, ninja, setuptools, etc.)
+
     _STANDARD_TOOLS = ["meson", "ninja", "setuptools", "wheel", "meson-python", "scikit-build-core", "maturin", "hatchling", "flit-core"]
-    builtins_build_lines = [
-        'load("@rules_pycross//pycross/private/build:missing_dependency.bzl", "pycross_missing_dependency")',
-        "",
-        'package(default_visibility = ["//visibility:public"])',
-        "",
-    ]
 
     # Get a dict of all sanitized package names
     locked_sanitized_names = {}
@@ -186,10 +187,21 @@ def _package_repo_impl(rctx):
         pkg_name = pkg_key.split("@")[0]
         locked_sanitized_names[sanitize_name(pkg_name)] = True
 
+    # _backend/BUILD.bazel
+    rctx.file("_backend/BUILD.bazel", 'package(default_visibility = ["//visibility:public"])\n')
+
+    # _backend/deps/BUILD.bazel — tool aliases or missing dependency stubs
+    deps_lines = [
+        'load("@rules_pycross//pycross/private/build:missing_dependency.bzl", "pycross_missing_dependency")',
+        "",
+        'package(default_visibility = ["//visibility:public"])',
+        "",
+    ]
+
     for tool in _STANDARD_TOOLS:
         sanitized_tool = sanitize_name(tool)
         if sanitized_tool in locked_sanitized_names:
-            builtins_build_lines.extend([
+            deps_lines.extend([
                 "alias(",
                 '    name = "{}",'.format(tool),
                 '    actual = "//:{}",'.format(sanitized_tool),
@@ -197,7 +209,7 @@ def _package_repo_impl(rctx):
                 "",
             ])
         else:
-            builtins_build_lines.extend([
+            deps_lines.extend([
                 "pycross_missing_dependency(",
                 '    name = "{}",'.format(tool),
                 '    tool_name = "{}",'.format(tool),
@@ -206,7 +218,84 @@ def _package_repo_impl(rctx):
                 "",
             ])
 
-    rctx.file("_builtins/BUILD.bazel", "\n".join(builtins_build_lines))
+    rctx.file("_backend/deps/BUILD.bazel", "\n".join(deps_lines))
+
+    # _backend/<profile>.bzl — symbolic macro wrappers
+    #
+    # Each macro uses inherit_attrs to pick up the full attribute schema
+    # from the underlying rule, then overrides tool-wheel attrs with
+    # defaults pointing at //_backend/deps targets in this lock repo.
+
+    _BACKEND_MACROS = {
+        "meson_build": {
+            "rule_bzl": "meson_build",
+            "attrs": {
+                "meson_wheel": "//_backend/deps:meson",
+                "ninja_wheel": "//_backend/deps:ninja",
+                "meson_python_wheel": "//_backend/deps:meson-python",
+            },
+        },
+        "maturin_build": {
+            "rule_bzl": "maturin_build",
+            "attrs": {
+                "maturin_wheel": "//_backend/deps:maturin",
+            },
+        },
+        "setuptools_build": {
+            "rule_bzl": "setuptools_build",
+            "attrs": {
+                "setuptools_wheel": "//_backend/deps:setuptools",
+                "wheel_wheel": "//_backend/deps:wheel",
+            },
+        },
+        "pep517_build": {
+            "rule_bzl": "pep517_build",
+            "attrs": {},
+        },
+    }
+
+    for macro_name, config in _BACKEND_MACROS.items():
+        rule_bzl = config["rule_bzl"]
+        attrs = config["attrs"]
+
+        lines = [
+            '"""Backend macro with pre-configured tool defaults for this lock repo."""',
+            "",
+            'load("@rules_pycross//pycross/private/build/rules:{rule_bzl}.bzl", _{macro_name} = "{macro_name}")'.format(
+                rule_bzl = rule_bzl,
+                macro_name = macro_name,
+            ),
+            "",
+            "def _impl(name, visibility, **kwargs):",
+            "    _{macro_name}(name = name, visibility = visibility, **kwargs)".format(macro_name = macro_name),
+            "",
+        ]
+
+        if attrs:
+            attr_lines = []
+            for attr_name, default_target in sorted(attrs.items()):
+                attr_lines.append('        "{}": attr.label(default = Label("{}")),'.format(attr_name, default_target))
+
+            lines.extend([
+                "{macro_name} = macro(".format(macro_name = macro_name),
+                "    implementation = _impl,",
+                "    inherit_attrs = _{macro_name},".format(macro_name = macro_name),
+                "    attrs = {",
+            ] + attr_lines + [
+                "    },",
+                ")",
+                "",
+            ])
+        else:
+            lines.extend([
+                "{macro_name} = macro(".format(macro_name = macro_name),
+                "    implementation = _impl,",
+                "    inherit_attrs = _{macro_name},".format(macro_name = macro_name),
+                ")",
+                "",
+            ])
+
+        rctx.file("_backend/{}.bzl".format(macro_name), "\n".join(lines))
 
 package_repo = repository_rule(
     implementation = _package_repo_impl,

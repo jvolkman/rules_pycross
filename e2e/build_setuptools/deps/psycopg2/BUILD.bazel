@@ -1,5 +1,5 @@
-load("@rules_pycross//pycross/backends:setuptools.bzl", "setuptools_build")
 load("@rules_python//python:defs.bzl", "py_binary")
+load("@uv//_backend:setuptools_build.bzl", "setuptools_build")
 
 package(default_visibility = ["//visibility:public"])
 
@@ -14,10 +14,6 @@ py_binary(
 # build_deps default to locked [setuptools, wheel].
 setuptools_build(
     name = "wheel",
-    build_deps = [
-        "@uv//:setuptools",
-        "@uv//:wheel",
-    ],
     native_deps = [
         "//third_party/postgresql",
     ],
