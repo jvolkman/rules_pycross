@@ -188,7 +188,7 @@ def _package_repo_impl(rctx):
 
     has_cargo_lock_targets = False
     for pkg_key, pkg in sorted(packages.items()):
-        if pkg.get("build_profile") != "maturin_build":
+        if pkg.get("build_backend") != "maturin_build":
             continue
         sdist_file = pkg.get("sdist_file")
         if not sdist_file:
@@ -223,7 +223,7 @@ def _package_repo_impl(rctx):
     # 5. Write _backend/ directory
     #
     # _backend/BUILD.bazel       — package root
-    # _backend/<profile>.bzl     — symbolic macros wrapping backend rules with
+    # _backend/<backend>.bzl     — symbolic macros wrapping backend rules with
     #                              tool defaults pre-filled from this lock repo
 
     # Build a set of PEP 503 normalized package names present in the lockfile.

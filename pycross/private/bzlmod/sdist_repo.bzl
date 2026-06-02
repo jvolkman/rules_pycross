@@ -4,7 +4,7 @@ load("//pycross/private:internal_repo.bzl", "exec_internal_tool")
 load("//pycross/private:util.bzl", "extract_pep508_name")
 load(":cargo.bzl", "find_cargo_lock_in_sdist", "vendor_crates_from_lock")
 
-_BACKEND_TO_PROFILE = {
+_BACKEND_TO_RULE = {
     "mesonpy": "meson_build",
     "mesonbuild": "meson_build",
     "scikit_build_core.build": "cmake_build",
@@ -24,10 +24,10 @@ def _sdist_repo_impl(rctx):
         "deps": str(rctx.attr.deps),
     }
 
-    if rctx.attr.build_profile:
-        profile_macro = rctx.attr.build_profile
-        if profile_macro not in _BACKEND_TO_PROFILE.values():
-            fail("Unknown build profile: " + profile_macro)
+    if rctx.attr.build_backend:
+        backend_macro = rctx.attr.build_backend
+        if backend_macro not in _BACKEND_TO_RULE.values():
+            fail("Unknown build backend: " + backend_macro)
 
         if rctx.attr.build_dependencies:
             build_deps = []
@@ -55,9 +55,9 @@ def _sdist_repo_impl(rctx):
         backend = metadata.get("build_backend", "")
         requires = metadata.get("build_requires", [])
 
-        # Map backend to profile
+        # Map backend to rule
         # If not in the dictionary, we fall back to setuptools_build as the generic PEP 517 builder
-        profile_macro = _BACKEND_TO_PROFILE.get(backend, "setuptools_build")
+        backend_macro = _BACKEND_TO_RULE.get(backend, "setuptools_build")
 
         # Map build requires to targets in the hub repo
         build_deps = []
@@ -77,7 +77,7 @@ def _sdist_repo_impl(rctx):
         macro_attrs["build_deps"] = str(build_deps)
 
         # For pep517_build, pass the required package names for validation.
-        if profile_macro == "pep517_build":
+        if backend_macro == "pep517_build":
             macro_attrs["required_build_packages"] = str(required_build_packages)
 
     # Add optional overrides if they are set/non-empty
@@ -95,7 +95,7 @@ def _sdist_repo_impl(rctx):
         macro_attrs["cargo_lock"] = "\"{}\"".format(rctx.attr.cargo_lock)
 
     has_vendored = False
-    if profile_macro == "maturin_build":
+    if backend_macro == "maturin_build":
         cargo_lock_path = None
         if rctx.attr.cargo_lock:
             cargo_lock_path = rctx.path(rctx.attr.cargo_lock)
@@ -141,19 +141,19 @@ def _sdist_repo_impl(rctx):
     # Load the backend macro from this lock repo's _backend directory.
     # The macro inherits attrs from the underlying rule and pre-fills
     # tool_deps defaults from packages present in the lockfile.
-    profile_bzl = "_backend:{}.bzl".format(profile_macro)
+    backend_bzl = "_backend:{}.bzl".format(backend_macro)
 
-    build_content = """\nload("@{lock_repo}//{profile_bzl}", "{profile_macro}")
+    build_content = """\nload("@{lock_repo}//{backend_bzl}", "{backend_macro}")
 
 package(default_visibility = ["//visibility:public"])
 
-{profile_macro}(
+{backend_macro}(
 {attrs}
 )
 """.format(
         lock_repo = rctx.attr.lock_repo,
-        profile_bzl = profile_bzl,
-        profile_macro = profile_macro,
+        backend_bzl = backend_bzl,
+        backend_macro = backend_macro,
         attrs = "\n".join(attr_lines),
     )
 
@@ -175,7 +175,7 @@ pycross_sdist_repo = repository_rule(
         "deps": attr.string_list(doc = "Runtime dependencies from lock file."),
         "known_packages": attr.string_list(doc = "List of packages present in the lock file to filter build_requires."),
         "lock_repo": attr.string(doc = "Name of the lock hub repo (e.g. 'uv').", mandatory = True),
-        "build_profile": attr.string(doc = "The build profile to use."),
+        "build_backend": attr.string(doc = "The build backend to use."),
         "copts": attr.string_list(doc = "C compiler options."),
         "linkopts": attr.string_list(doc = "Linker options."),
         "native_deps": attr.string_list(doc = "Labels of native C/C++ dependencies."),

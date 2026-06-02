@@ -231,7 +231,7 @@ class ResolvedPackage:
     sdist_file: Optional[FileReference] = None
     install_exclude_globs: List[str] = field(default_factory=list)
     post_install_patches: List[str] = field(default_factory=list)
-    build_profile: Optional[str] = None
+    build_backend: Optional[str] = None
     copts: List[str] = field(default_factory=list)
     linkopts: List[str] = field(default_factory=list)
     native_deps: List[str] = field(default_factory=list)

@@ -193,7 +193,7 @@ class PackageAnnotations:
     ignore_dependencies: Set[str] = field(default_factory=set)
     install_exclude_globs: Set[str] = field(default_factory=set)
     post_install_patches: List[str] = field(default_factory=list)
-    build_profile: Optional[str] = None
+    build_backend: Optional[str] = None
     copts: List[str] = field(default_factory=list)
     linkopts: List[str] = field(default_factory=list)
     native_deps: List[str] = field(default_factory=list)
@@ -224,7 +224,7 @@ class PackageResolver:
         self._build_target = annotations.build_target
         self._install_exclude_globs = annotations.install_exclude_globs
         self._post_install_patches = annotations.post_install_patches
-        self._build_profile = annotations.build_profile
+        self._build_backend = annotations.build_backend
         self._copts = annotations.copts
         self._linkopts = annotations.linkopts
         self._native_deps = annotations.native_deps
@@ -286,7 +286,7 @@ class PackageResolver:
             sdist_file=self.sdist_file,
             install_exclude_globs=list(self._install_exclude_globs),
             post_install_patches=self._post_install_patches,
-            build_profile=self._build_profile,
+            build_backend=self._build_backend,
             copts=self._copts,
             linkopts=self._linkopts,
             native_deps=self._native_deps,
@@ -377,7 +377,7 @@ def collect_package_annotations(args: Any, lock_model: RawLockSet) -> Dict[Packa
         for patch in annotation.get("post_install_patches", []):
             annotations[resolved_pkg].post_install_patches.append(patch)
 
-        for attr in ("build_profile", "copts", "linkopts", "native_deps", "config_settings", "tool_deps"):
+        for attr in ("build_backend", "copts", "linkopts", "native_deps", "config_settings", "tool_deps"):
             if annotation.get(attr) is not None:
                 setattr(annotations[resolved_pkg], attr, annotation[attr])
 
