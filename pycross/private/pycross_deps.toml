@@ -6,6 +6,7 @@ build = "build@1.5.0"
 dacite = "dacite@1.9.2"
 installer = "installer@1.0.0"
 packaging = "packaging@26.2"
+patch-ng = "patch-ng@1.19.1"
 pip = "pip@26.1.1"
 poetry-core = "poetry-core@2.4.0"
 repairwheel = "repairwheel@0.4.1"
@@ -76,6 +77,14 @@ repo_name = "pypi_packaging_26_2_py3_none_any_whl_5fc45236"
 url = "https://files.pythonhosted.org/packages/df/b2/87e62e8c3e2f4b32e5fe99e0b86d576da1312593b39f47d8ceef365e95ed/packaging-26.2-py3-none-any.whl"
 sha256 = "5fc45236b9446107ff2415ce77c807cee2862cb6fac22b8a73826d0693b0980e"
 filename = "packaging-26.2-py3-none-any.whl"
+
+[packages."patch-ng@1.19.1"]
+name = "patch-ng"
+version = "1.19.1"
+repo_name = "pypi_patch_ng_1_19_1_py3_none_any_whl_d45fd47b"
+url = "https://files.pythonhosted.org/packages/2c/ef/c60c07b2f9d973672608815e4c176943146c353d3b60fdab914a6dcd44e8/patch_ng-1.19.1-py3-none-any.whl"
+sha256 = "d45fd47b3f74b48c3e336690341876bb26244a077a06f5f7e6e47c19c15c1ca4"
+filename = "patch_ng-1.19.1-py3-none-any.whl"
 
 [packages."pefile@2024.8.26"]
 name = "pefile"
