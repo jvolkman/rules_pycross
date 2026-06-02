@@ -1,6 +1,7 @@
 """Action logic for repairing wheels (bundling native libraries)."""
 
 load("@rules_cc//cc/common:cc_info.bzl", "CcInfo")
+load("@rules_python//python:py_info.bzl", "PyInfo")
 load("//pycross/private:cc_toolchain_util.bzl", "get_libraries")
 
 def register_repair_action(
@@ -10,7 +11,8 @@ def register_repair_action(
         input_wheel_directory,
         native_deps,
         repair_tool,
-        target_environment = None):
+        target_environment = None,
+        repair_deps = []):
     """Registers the repairwheel action to bundle native shared libs.
 
     Args:
@@ -21,6 +23,9 @@ def register_repair_action(
         native_deps: list[Target], CcInfo deps whose shared libs to bundle.
         repair_tool: Target, the repair_wheel executable.
         target_environment: File (optional), the target environment JSON.
+        repair_deps: list[Target], optional PyInfo targets (e.g. user-provided
+            repairwheel) whose site-packages are prepended to PYTHONPATH,
+            shadowing the bundled version.
 
     Returns:
         struct(
@@ -47,6 +52,15 @@ def register_repair_action(
             for lib in get_libraries(dep[CcInfo]):
                 lib_dirs.append(lib.dirname)
                 data_inputs.append(depset([lib]))
+
+    # Collect user-provided repair deps (e.g. repairwheel override).
+    repair_dep_paths = []
+    for dep in repair_deps:
+        if PyInfo in dep:
+            py_info = dep[PyInfo]
+            data_inputs.append(py_info.transitive_sources)
+            for imp in py_info.imports.to_list():
+                repair_dep_paths.append(imp)
 
     # Collect inputs.
     input_files = [input_wheel]
@@ -83,11 +97,17 @@ def register_repair_action(
     if staging_dir:
         outputs.append(staging_dir)
 
+    # Build environment: inject user repair deps into PYTHONPATH if provided.
+    env = {}
+    if repair_dep_paths:
+        env["REPAIRWHEEL_PYTHONPATH"] = ":".join(repair_dep_paths)
+
     ctx.actions.run(
         executable = repair_tool,
         arguments = [args],
         inputs = depset(input_files, transitive = data_inputs),
         outputs = outputs,
+        env = env,
         mnemonic = "RepairWheel",
         progress_message = "Repairing %s" % input_wheel.basename,
     )
