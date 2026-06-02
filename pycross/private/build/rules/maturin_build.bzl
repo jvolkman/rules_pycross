@@ -102,6 +102,7 @@ def _maturin_build_impl(ctx):
             native_deps = ctx.attr.native_deps,
             repair_tool = ctx.executable._repair_tool,
             target_environment = target_environment,
+            repair_deps = tool_deps.get("repairwheel", []),
         )
     else:
         repair_result = build_result

@@ -83,6 +83,7 @@ def _cmake_build_impl(ctx):
         native_deps = ctx.attr.native_deps,
         repair_tool = ctx.executable._repair_tool,
         target_environment = target_environment,
+        repair_deps = tool_deps.get("repairwheel", []),
     )
 
     return [

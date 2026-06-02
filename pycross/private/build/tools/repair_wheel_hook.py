@@ -67,7 +67,12 @@ def main() -> None:
         cmd.extend(["--lib-dir", lp])
 
     env = os.environ.copy()
-    env["PYTHONPATH"] = os.pathsep.join(sys.path)
+    python_path = list(sys.path)
+    # Prepend user-provided repairwheel paths so they shadow the bundled version.
+    extra = os.environ.get("REPAIRWHEEL_PYTHONPATH", "")
+    if extra:
+        python_path = extra.split(os.pathsep) + python_path
+    env["PYTHONPATH"] = os.pathsep.join(python_path)
     subprocess.check_call(cmd, env=env)
 
     # Perform target environment tag compatibility verification if specified.
