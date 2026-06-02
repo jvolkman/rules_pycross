@@ -1,5 +1,5 @@
 #!/bin/sh
 set -e
 
-pdm lock
+uv lock
 bazel run //pycross/private:update_pycross_deps
