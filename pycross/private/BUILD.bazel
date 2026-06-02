@@ -222,6 +222,11 @@ write_file(
 )
 
 bzl_library(
+    name = "generate_cargo_lock",
+    srcs = ["generate_cargo_lock.bzl"],
+)
+
+bzl_library(
     name = "providers",
     srcs = ["providers.bzl"],
 )

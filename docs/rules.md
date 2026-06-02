@@ -26,6 +26,28 @@ pycross_cc_pkg_config(<a href="#pycross_cc_pkg_config-name">name</a>, <a href="#
 | <a id="pycross_cc_pkg_config-version"></a>version |  The version of the pkg-config package   | String | required |  |
 
 
+<a id="pycross_generate_cargo_lock"></a>
+
+## pycross_generate_cargo_lock
+
+<pre>
+load("@rules_pycross//pycross:defs.bzl", "pycross_generate_cargo_lock")
+
+pycross_generate_cargo_lock(<a href="#pycross_generate_cargo_lock-name">name</a>, <a href="#pycross_generate_cargo_lock-output">output</a>, <a href="#pycross_generate_cargo_lock-sdist">sdist</a>)
+</pre>
+
+
+
+**ATTRIBUTES**
+
+
+| Name  | Description | Type | Mandatory | Default |
+| :------------- | :------------- | :------------- | :------------- | :------------- |
+| <a id="pycross_generate_cargo_lock-name"></a>name |  A unique name for this target.   | <a href="https://bazel.build/concepts/labels#target-names">Name</a> | required |  |
+| <a id="pycross_generate_cargo_lock-output"></a>output |  -   | String | optional |  `""`  |
+| <a id="pycross_generate_cargo_lock-sdist"></a>sdist |  -   | <a href="https://bazel.build/concepts/labels">Label</a> | required |  |
+
+
 <a id="pycross_pdm_lock_model"></a>
 
 ## pycross_pdm_lock_model
