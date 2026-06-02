@@ -3,6 +3,7 @@
 import os
 import re
 import shlex
+import shutil
 import stat
 import sys
 import textwrap
@@ -22,6 +23,43 @@ def setup_venv(ctx):
         build_crossenv_venv(ctx)
     else:
         build_standard_venv(ctx)
+
+
+def _get_cargo_dir() -> Path:
+    """Find the directory containing Cargo.toml based on [tool.maturin].manifest-path."""
+    pyproject = Path("pyproject.toml")
+    if pyproject.exists():
+        try:
+            import tomllib
+
+            with open(pyproject, "rb") as f:
+                data = tomllib.load(f)
+            manifest_path = data.get("tool", {}).get("maturin", {}).get("manifest-path", "Cargo.toml")
+            return Path(manifest_path).parent
+        except Exception as e:
+            print(f"WARNING: Failed to parse pyproject.toml for manifest-path: {e}", file=sys.stderr)
+    return Path(".")
+
+
+def get_pyo3_version(cargo_dir: Path = None):
+    """Parse Cargo.lock to find the pyo3 version, if present."""
+    if cargo_dir is None:
+        cargo_dir = _get_cargo_dir()
+    lock_path = cargo_dir / "Cargo.lock"
+    if not lock_path.exists():
+        return None
+
+    try:
+        import tomllib
+
+        with open(lock_path, "rb") as f:
+            lock_data = tomllib.load(f)
+        for pkg in lock_data.get("package", []):
+            if pkg.get("name") == "pyo3":
+                return pkg.get("version")
+    except Exception as e:
+        print(f"WARNING: Failed to parse Cargo.lock: {e}", file=sys.stderr)
+    return None
 
 
 def pre_build(ctx):
@@ -61,26 +99,65 @@ def pre_build(ctx):
     is_darwin = "apple-darwin" in target_triple
     is_linux = "linux" in target_triple
     ext_suffix = ctx.sysconfig_vars.get("EXT_SUFFIX")
-    pyo3_config_lines = [
-        "implementation=CPython",
-        f"version={version}",
-        "shared=true",
-        "abi3=false",
-        f"pointer_width={pointer_width}",
-        f"executable={ctx.target_python.absolute()}",
-        "suppress_build_script_link_lines=true",
-    ]
-    if ext_suffix:
-        pyo3_config_lines.append(f"ext_suffix={ext_suffix}")
-    if not is_darwin and not is_linux:
-        pyo3_config_lines.append(f"extra_build_script_line=cargo:rustc-link-lib={lib_name}")
-    if not is_darwin:
-        pyo3_config_lines.append(f"extra_build_script_line=cargo:rustc-link-search=native={layer_lib_dir.absolute()}")
-    pyo3_config_path = ctx.temp_dir / "pyo3_config.txt"
-    pyo3_config_path.write_text("\n".join(pyo3_config_lines) + "\n")
 
-    ctx.build_env["PYO3_CONFIG_FILE"] = str(pyo3_config_path.absolute())
-    ctx.build_env["PYO3_NO_PYTHON"] = "1"
+    # Relocate injected Cargo.lock to manifest directory if needed
+    cargo_dir = _get_cargo_dir()
+    root_lock = Path("Cargo.lock")
+    target_lock = cargo_dir / "Cargo.lock"
+    if cargo_dir != Path(".") and root_lock.exists() and not target_lock.exists():
+        target_lock.parent.mkdir(parents=True, exist_ok=True)
+        shutil.move(str(root_lock), str(target_lock))
+        print(f"Relocated Cargo.lock to {target_lock}", file=sys.stderr)
+
+    pyo3_version = get_pyo3_version(cargo_dir)
+    supports_ext_suffix = True
+    if pyo3_version:
+        try:
+            # Strip pre-release suffixes (e.g. "0.18.0-rc1" -> "0.18.0")
+            version_core = pyo3_version.split("-")[0].split("+")[0]
+            parts = [int(x) for x in version_core.split(".")[:3]]
+            if len(parts) >= 2 and (parts[0] == 0 and parts[1] < 18):
+                supports_ext_suffix = False
+        except ValueError:
+            pass
+
+    if supports_ext_suffix:
+        pyo3_config_lines = [
+            "implementation=CPython",
+            f"version={version}",
+            "shared=true",
+            "abi3=false",
+            f"pointer_width={pointer_width}",
+            f"executable={ctx.target_python.absolute()}",
+            "suppress_build_script_link_lines=true",
+        ]
+        if ext_suffix:
+            pyo3_config_lines.append(f"ext_suffix={ext_suffix}")
+        if not is_darwin and not is_linux:
+            pyo3_config_lines.append(f"extra_build_script_line=cargo:rustc-link-lib={lib_name}")
+        if not is_darwin:
+            pyo3_config_lines.append(
+                f"extra_build_script_line=cargo:rustc-link-search=native={layer_lib_dir.absolute()}"
+            )
+        pyo3_config_path = ctx.temp_dir / "pyo3_config.txt"
+        pyo3_config_path.write_text("\n".join(pyo3_config_lines) + "\n")
+
+        ctx.build_env["PYO3_CONFIG_FILE"] = str(pyo3_config_path.absolute())
+        ctx.build_env["PYO3_NO_PYTHON"] = "1"
+    else:
+        # Old PyO3 (< 0.18): let it query the crossenv Python directly,
+        # but provide cross-compilation hints via environment variables.
+        ctx.build_env["PYO3_CROSS_PYTHON_VERSION"] = version
+        if layer_lib_dir.exists():
+            ctx.build_env["PYO3_CROSS_LIB_DIR"] = str(layer_lib_dir.absolute())
+
+            # Older PyO3 also looks for _sysconfigdata*.py in PYO3_CROSS_LIB_DIR.
+            # Since rules_pycross sets _PYTHON_SYSCONFIGDATA_NAME to _sysconfigdata_pycross,
+            # we write the target sysconfig variables to that name in the lib dir.
+            sysconfigdata_path = layer_lib_dir / "_sysconfigdata_pycross.py"
+            with open(sysconfigdata_path, "w") as f:
+                f.write(f"build_time_vars = {repr(ctx.sysconfig_vars)}\n")
+            print(f"Wrote target sysconfigdata to {sysconfigdata_path}", file=sys.stderr)
 
     rustc_bin = resolve_sandbox_path(ctx.prefix, rust_config["rustc"])
     ctx.build_env["RUSTC"] = rustc_bin
@@ -188,6 +265,22 @@ def pre_build(ctx):
     cargo_home.mkdir(parents=True, exist_ok=True)
 
     cargo_config_lines = ["[build]", f'rustc-wrapper = "{wrapper_path.absolute()}"']
+
+    cargo_vendored_sources = ctx.bazel_config.get("cargo_vendored_sources")
+    if cargo_vendored_sources:
+        abs_vendor_path = (ctx.prefix / cargo_vendored_sources).absolute()
+        cargo_config_lines.extend(
+            [
+                "",
+                "[source.crates-io]",
+                'replace-with = "vendored-sources"',
+                "",
+                "[source.vendored-sources]",
+                f'directory = "{abs_vendor_path}"',
+            ]
+        )
+        ctx.build_env["CARGO_NET_OFFLINE"] = "true"
+
     (cargo_home / "config.toml").write_text("\n".join(cargo_config_lines) + "\n")
 
     ctx.build_env["CARGO_HOME"] = str(cargo_home.absolute())

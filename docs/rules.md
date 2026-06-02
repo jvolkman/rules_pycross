@@ -271,7 +271,7 @@ load("@rules_pycross//pycross:defs.bzl", "package_annotation")
 
 package_annotation(<a href="#package_annotation-always_build">always_build</a>, <a href="#package_annotation-build_dependencies">build_dependencies</a>, <a href="#package_annotation-build_target">build_target</a>, <a href="#package_annotation-ignore_dependencies">ignore_dependencies</a>,
                    <a href="#package_annotation-install_exclude_globs">install_exclude_globs</a>, <a href="#package_annotation-post_install_patches">post_install_patches</a>, <a href="#package_annotation-build_profile">build_profile</a>, <a href="#package_annotation-copts">copts</a>, <a href="#package_annotation-linkopts">linkopts</a>,
-                   <a href="#package_annotation-native_deps">native_deps</a>, <a href="#package_annotation-config_settings">config_settings</a>, <a href="#package_annotation-tool_deps">tool_deps</a>)
+                   <a href="#package_annotation-native_deps">native_deps</a>, <a href="#package_annotation-config_settings">config_settings</a>, <a href="#package_annotation-tool_deps">tool_deps</a>, <a href="#package_annotation-cargo_lock">cargo_lock</a>)
 </pre>
 
 Annotations to apply to individual packages.
@@ -293,6 +293,7 @@ Annotations to apply to individual packages.
 | <a id="package_annotation-native_deps"></a>native_deps |  CC dependencies to link against.   |  `[]` |
 | <a id="package_annotation-config_settings"></a>config_settings |  Setup configuration arguments.   |  `{}` |
 | <a id="package_annotation-tool_deps"></a>tool_deps |  Overrides for built-in dependencies.   |  `{}` |
+| <a id="package_annotation-cargo_lock"></a>cargo_lock |  A Cargo.lock file to use.   |  `None` |
 
 **RETURNS**
 

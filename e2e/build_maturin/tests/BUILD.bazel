@@ -5,3 +5,9 @@ py_test(
     srcs = ["test_rpds.py"],
     deps = ["@uv//:rpds-py"],
 )
+
+py_test(
+    name = "test_captcha",
+    srcs = ["test_captcha.py"],
+    deps = ["@uv//:captcha-rs"],
+)

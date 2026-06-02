@@ -3,9 +3,15 @@ revision = 3
 requires-python = "==3.14.*"
 
 [[package]]
+name = "captcha-rs"
+version = "0.1.1"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/a2/82/b0d2d543f36b54f1236fad228a6225874d0f3abdf6ed587ac5b61fcebd71/captcha_rs-0.1.1.tar.gz", hash = "sha256:be7fd17e8395c4cc763c8bfd8553f1b628b19a46f94956a811984c0a1a594cef", size = 12159060, upload-time = "2022-06-04T04:01:54.706Z" }
+
+[[package]]
 name = "maturin"
 version = "1.13.3"
-source = { registry = "https://pypi.org/simple/" }
+source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/9c/1c/612d23d33ec21b9ae7ece7b3f0dd5f9dfd57b4009e9d2938165869ebd6ae/maturin-1.13.3.tar.gz", hash = "sha256:771e1e9e71a278e56db01552e0d1acfd1464259f9575b6e72842f893cd299079", size = 357934, upload-time = "2026-05-11T07:43:39.027Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/71/66/18c2aaac0b2a5dea9f1db5984ce83b905ad205cfc7c02d0091e707c0c2e7/maturin-1.13.3-py3-none-linux_armv6l.whl", hash = "sha256:3cc13929ca82aefa4adbf0f2c35419369796213c6fb0eb24e914945f50ef5d8c", size = 10190971, upload-time = "2026-05-11T07:43:10.431Z" },
@@ -26,7 +32,7 @@ wheels = [
 [[package]]
 name = "rpds-py"
 version = "0.23.0"
-source = { registry = "https://pypi.org/simple/" }
+source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/ca/0e/4c797078d00dbf1f63af96e4b3beffb67f71230f58442272b4b1962a61c8/rpds_py-0.23.0.tar.gz", hash = "sha256:ffac3b13182dc1bf648cde2982148dc9caf60f3eedec7ae639e05636389ebf5d", size = 26808, upload-time = "2025-02-20T17:12:19.15Z" }
 
 [[package]]
@@ -34,12 +40,14 @@ name = "rules-pycross-e2e-maturin"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [
+    { name = "captcha-rs" },
     { name = "maturin" },
     { name = "rpds-py" },
 ]
 
 [package.metadata]
 requires-dist = [
+    { name = "captcha-rs", specifier = "==0.1.1" },
     { name = "maturin" },
     { name = "rpds-py", specifier = "==0.23.0" },
 ]

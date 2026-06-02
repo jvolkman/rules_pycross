@@ -1,4 +1,5 @@
 import os
+import shutil
 import sys
 from dataclasses import dataclass
 from typing import Callable
@@ -16,6 +17,21 @@ from pycross.private.build.tools.utils.sysconfig_utils import load_target_syscon
 from pycross.private.build.tools.utils.venv_utils import build_standard_venv
 
 
+def _inject_extra_files(ctx: BuildContext) -> None:
+    """Copy extra files from the Bazel config into the sdist directory.
+
+    This handles files like user-provided Cargo.lock that need to be present
+    in the source tree before the build backend runs.
+    """
+    extra_files = ctx.bazel_config.get("extra_files", {})
+    for target_name, source_path in extra_files.items():
+        src = ctx.prefix / source_path
+        dst = ctx.sdist_dir / target_name
+        print(f"Injecting {target_name} from {src}", file=sys.stderr)
+        dst.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(str(src), str(dst))
+
+
 @dataclass
 class BackendStrategy:
     setup_toolchains: Callable[[BuildContext], None] = lambda ctx: None
@@ -28,6 +44,7 @@ def run_standard_build_lifecycle(config_path: str, strategy: BackendStrategy) ->
     ctx = load_build_context(config_path)
     extract_sdist(ctx)
     os.chdir(ctx.sdist_dir)
+    _inject_extra_files(ctx)
 
     ctx.sysconfig_vars = load_target_sysconfig(ctx)
     setup_path_tools(ctx)

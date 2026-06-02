@@ -1,5 +1,6 @@
 """Repository rule for auto-generating a BUILD file for an sdist package."""
 
+load("@toml.bzl//toml:toml.bzl", "decode")
 load("//pycross/private:internal_repo.bzl", "exec_internal_tool")
 load("//pycross/private:util.bzl", "extract_pep508_name")
 
@@ -15,6 +16,71 @@ _BACKEND_TO_PROFILE = {
     "pdm.backend": "pep517_build",
     "poetry.core.masonry.api": "pep517_build",
 }
+
+_CRATES_IO = "registry+https://github.com/rust-lang/crates.io-index"
+
+def _find_cargo_lock_in_sdist(rctx, sdist_root):
+    """Find Cargo.lock by reading [tool.maturin].manifest-path from pyproject.toml."""
+    pyproject_path = sdist_root.get_child("pyproject.toml")
+    cargo_dir = sdist_root
+    if pyproject_path.exists:
+        pyproject = decode(rctx.read(pyproject_path))
+        manifest_path = pyproject.get("tool", {}).get("maturin", {}).get("manifest-path", "Cargo.toml")
+        parts = manifest_path.split("/")
+
+        # Navigate to the directory containing Cargo.toml (all parts except the last)
+        for part in parts[:-1]:
+            cargo_dir = cargo_dir.get_child(part)
+    return cargo_dir.get_child("Cargo.lock")
+
+def _vendor_crates_from_lock(rctx, cargo_lock_path):
+    """Download and vendor crates listed in a Cargo.lock file using Bazel's downloader."""
+    rctx.report_progress("Vendoring cargo dependencies for " + rctx.name)
+    lock_data = decode(rctx.read(cargo_lock_path))
+
+    downloads = []
+    for pkg in lock_data.get("package", []):
+        source = pkg.get("source", "")
+        checksum = pkg.get("checksum", "")
+        if source != _CRATES_IO or not checksum:
+            continue
+
+        name = pkg["name"]
+        version = pkg["version"]
+
+        archive_name = "{}-{}.tar.gz".format(name, version)
+        archive_path = "_cargo_download/" + archive_name
+
+        token = rctx.download(
+            url = "https://static.crates.io/crates/{name}/{name}-{version}.crate".format(
+                name = name,
+                version = version,
+            ),
+            output = archive_path,
+            sha256 = checksum,
+            block = False,
+        )
+        downloads.append((token, name, version, archive_path, checksum))
+
+    for token, name, version, archive_path, checksum in downloads:
+        res = token.wait()
+        if not res.success:
+            fail("Failed to download crate {}-{}".format(name, version))
+
+        crate_dir = "vendor/{}-{}".format(name, version)
+        rctx.extract(
+            archive = archive_path,
+            output = crate_dir,
+            stripPrefix = "{}-{}".format(name, version),
+        )
+
+        rctx.file(
+            crate_dir + "/.cargo-checksum.json",
+            json.encode({"package": checksum, "files": {}}),
+        )
+
+    # Clean up downloads
+    rctx.delete("_cargo_download")
 
 def _sdist_repo_impl(rctx):
     macro_attrs = {
@@ -90,6 +156,47 @@ def _sdist_repo_impl(rctx):
         macro_attrs["config_settings"] = str(rctx.attr.config_settings)
     if rctx.attr.tool_deps:
         macro_attrs["tool_deps"] = str(rctx.attr.tool_deps)
+    if rctx.attr.cargo_lock:
+        macro_attrs["cargo_lock"] = "\"{}\"".format(rctx.attr.cargo_lock)
+
+    has_vendored = False
+    if profile_macro == "maturin_build":
+        cargo_lock_path = None
+        if rctx.attr.cargo_lock:
+            cargo_lock_path = rctx.path(rctx.attr.cargo_lock)
+        else:
+            # Extract sdist to find Cargo.lock
+            tmp_dir = "cargo_lock_check_tmp"
+            rctx.extract(archive = rctx.attr.sdist, output = tmp_dir)
+
+            sdist_root = None
+            for child in rctx.path(tmp_dir).readdir():
+                if child.is_dir:
+                    sdist_root = child
+                    break
+            if not sdist_root:
+                sdist_root = rctx.path(tmp_dir)
+
+            lock_candidate = _find_cargo_lock_in_sdist(rctx, sdist_root)
+            if lock_candidate.exists:
+                # Copy it out before deleting tmp
+                extracted_lock = rctx.path("Cargo.lock.extracted")
+                rctx.file(extracted_lock, rctx.read(lock_candidate))
+                cargo_lock_path = extracted_lock
+
+            rctx.delete(tmp_dir)
+
+        if cargo_lock_path:
+            _vendor_crates_from_lock(rctx, cargo_lock_path)
+            has_vendored = True
+
+            # Clean up temporary extracted lock
+            extracted = rctx.path("Cargo.lock.extracted")
+            if extracted.exists:
+                rctx.delete("Cargo.lock.extracted")
+
+    if has_vendored:
+        macro_attrs["vendored_crates"] = "\":vendored_crates\""
 
     # Now render the macro attributes in BUILD.bazel format
     attr_lines = []
@@ -115,6 +222,14 @@ package(default_visibility = ["//visibility:public"])
         attrs = "\n".join(attr_lines),
     )
 
+    if has_vendored:
+        build_content += """
+filegroup(
+    name = "vendored_crates",
+    srcs = glob(["vendor/**"]),
+)
+"""
+
     rctx.file("BUILD.bazel", build_content)
     rctx.file("REPO.bazel", "")
 
@@ -132,5 +247,6 @@ pycross_sdist_repo = repository_rule(
         "config_settings": attr.string_list_dict(doc = "Build configuration settings passed to backend."),
         "tool_deps": attr.string_dict(doc = "Overridden tool dependencies."),
         "build_dependencies": attr.string_list(doc = "Overridden build-time dependencies."),
+        "cargo_lock": attr.label(allow_single_file = [".lock"], doc = "A Cargo.lock file to use."),
     },
 )

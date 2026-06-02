@@ -36,7 +36,10 @@ def register_pep517_action(
         site_hooks = [],
         tool_executables = [],
         layers = [],
-        pkg_config_files = []):
+        pkg_config_files = [],
+        extra_files = {},
+        extra_inputs = [],
+        cargo_vendored_sources = None):
     """Registers the PEP 517 wheel build action.
 
     Args:
@@ -50,6 +53,10 @@ def register_pep517_action(
         tool_executables: list[struct(name, file)], executables to place on PATH.
         layers: list[struct], CC/Rust environment from extract_*_layer().
         pkg_config_files: list[File], pkg-config .pc files.
+        extra_files: dict[str, File], files to inject into the sdist directory
+            before building, keyed by their target filename (e.g. "Cargo.lock").
+        extra_inputs: list[File], extra inputs to the action.
+        cargo_vendored_sources: str, path to the vendored cargo sources relative to the execution root.
 
     Returns:
         struct(
@@ -58,7 +65,7 @@ def register_pep517_action(
             wheel_directory = File,
         )
     """
-    inputs = [sdist]
+    inputs = [sdist] + extra_inputs
     transitive_inputs = []
     tools = []
 
@@ -173,6 +180,16 @@ def register_pep517_action(
         "wheel_name_file": out_wheel_name.path,
         "wheel_directory": out_wheel_directory.path,
     }
+    if cargo_vendored_sources:
+        main_config["cargo_vendored_sources"] = cargo_vendored_sources
+
+    # Extra files to inject into the sdist before building.
+    if extra_files:
+        extra_files_config = {}
+        for name, f in extra_files.items():
+            extra_files_config[name] = f.path
+            inputs.append(f)
+        main_config["extra_files"] = extra_files_config
 
     config_json = ctx.actions.declare_file(ctx.label.name + "_config.json")
     ctx.actions.write(config_json, json.encode(main_config))

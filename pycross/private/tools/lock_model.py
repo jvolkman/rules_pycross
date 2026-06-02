@@ -237,6 +237,7 @@ class ResolvedPackage:
     native_deps: List[str] = field(default_factory=list)
     config_settings: Dict[str, List[str]] = field(default_factory=dict)
     tool_deps: Dict[str, str] = field(default_factory=dict)
+    passthrough_attrs: Dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
