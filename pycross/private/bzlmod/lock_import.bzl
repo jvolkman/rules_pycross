@@ -30,7 +30,7 @@ def _generate_resolved_lock_repo(lock_info, serialized_lock_model):
             ignore_dependencies = package.ignore_dependencies,
             install_exclude_globs = package.install_exclude_globs,
             post_install_patches = package.post_install_patches,
-            build_profile = package.build_profile,
+            build_backend = package.build_backend,
             copts = package.copts,
             linkopts = package.linkopts,
             native_deps = package.native_deps,
@@ -103,7 +103,7 @@ def _lock_struct(mctx, tag):
         packages = {},
     )
 
-def _normalize_package_tag(tag, build_profile = None):
+def _normalize_package_tag(tag, build_backend = None):
     return struct(
         always_build = tag.always_build,
         build_dependencies = tag.build_dependencies,
@@ -111,7 +111,7 @@ def _normalize_package_tag(tag, build_profile = None):
         ignore_dependencies = tag.ignore_dependencies,
         install_exclude_globs = tag.install_exclude_globs,
         post_install_patches = tag.post_install_patches,
-        build_profile = build_profile,
+        build_backend = build_backend,
         copts = getattr(tag, "copts", []),
         linkopts = getattr(tag, "linkopts", []),
         native_deps = getattr(tag, "native_deps", []),
@@ -153,19 +153,19 @@ def _lock_import_impl(module_ctx):
             _check_proper_package_repo(lock_owners, module, tag)
             repo_info = lock_repos[tag.repo]
             _check_package_entry_not_set(lock_owners, repo_info, tag)
-            repo_info.packages[tag.name] = _normalize_package_tag(tag, build_profile = "meson_build")
+            repo_info.packages[tag.name] = _normalize_package_tag(tag, build_backend = "meson_build")
 
         for tag in module.tags.setuptools_override:
             _check_proper_package_repo(lock_owners, module, tag)
             repo_info = lock_repos[tag.repo]
             _check_package_entry_not_set(lock_owners, repo_info, tag)
-            repo_info.packages[tag.name] = _normalize_package_tag(tag, build_profile = "setuptools_build")
+            repo_info.packages[tag.name] = _normalize_package_tag(tag, build_backend = "setuptools_build")
 
         for tag in module.tags.maturin_override:
             _check_proper_package_repo(lock_owners, module, tag)
             repo_info = lock_repos[tag.repo]
             _check_package_entry_not_set(lock_owners, repo_info, tag)
-            repo_info.packages[tag.name] = _normalize_package_tag(tag, build_profile = "maturin_build")
+            repo_info.packages[tag.name] = _normalize_package_tag(tag, build_backend = "maturin_build")
 
     # Generate the resolved lock repos
     for repo_name, repo_info in lock_repos.items():

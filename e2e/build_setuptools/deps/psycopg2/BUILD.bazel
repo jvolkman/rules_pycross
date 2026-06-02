@@ -10,7 +10,7 @@ py_binary(
     srcs = ["pg_config.py"],
 )
 
-# Build psycopg2 utilizing the Setuptools build profile macro.
+# Build psycopg2 utilizing the Setuptools build backend macro.
 # build_deps default to locked [setuptools, wheel].
 setuptools_build(
     name = "wheel",
