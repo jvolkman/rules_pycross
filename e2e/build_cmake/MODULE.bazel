@@ -43,9 +43,8 @@ lock_import.import_uv(
     project_file = "//:pyproject.toml",
     repo = "uv",
 )
-lock_import.package(
+lock_import.cmake_override(
     name = "iminuit",
-    always_build = True,
     build_dependencies = [
         "scikit-build-core",
         "cmake",

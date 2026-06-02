@@ -55,9 +55,8 @@ lock_import.package(
     build_target = "@//deps/psycopg2",
     repo = "uv",
 )
-lock_import.package(
+lock_import.setuptools_override(
     name = "setproctitle",
-    always_build = True,
     build_dependencies = [
         "setuptools",
         "wheel",
