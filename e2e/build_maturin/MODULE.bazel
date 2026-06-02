@@ -55,18 +55,11 @@ lock_import.import_uv(
 lock_import.maturin_override(
     name = "rpds-py",
     always_build = True,
-    build_dependencies = [
-        "maturin",
-    ],
-    cargo_lock = "//:rpds_py.lock",
     repo = "uv",
 )
 lock_import.maturin_override(
     name = "captcha-rs",
     always_build = True,
-    build_dependencies = [
-        "maturin",
-    ],
     cargo_lock = "//:captcha_rs.lock",
     repo = "uv",
 )
