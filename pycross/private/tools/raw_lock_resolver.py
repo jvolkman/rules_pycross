@@ -199,6 +199,7 @@ class PackageAnnotations:
     native_deps: List[str] = field(default_factory=list)
     config_settings: Dict[str, List[str]] = field(default_factory=dict)
     tool_deps: Dict[str, str] = field(default_factory=dict)
+    passthrough_attrs: Dict[str, Any] = field(default_factory=dict)
 
 
 class PackageResolver:
@@ -229,6 +230,7 @@ class PackageResolver:
         self._native_deps = annotations.native_deps
         self._config_settings = annotations.config_settings
         self._tool_deps = annotations.tool_deps
+        self._passthrough_attrs = annotations.passthrough_attrs
 
         deps_by_env = context.get_dependencies_by_environment(
             package,
@@ -290,6 +292,7 @@ class PackageResolver:
             native_deps=self._native_deps,
             config_settings=self._config_settings,
             tool_deps=self._tool_deps,
+            passthrough_attrs=self._passthrough_attrs,
         )
 
 
@@ -374,23 +377,13 @@ def collect_package_annotations(args: Any, lock_model: RawLockSet) -> Dict[Packa
         for patch in annotation.get("post_install_patches", []):
             annotations[resolved_pkg].post_install_patches.append(patch)
 
-        if annotation.get("build_profile"):
-            annotations[resolved_pkg].build_profile = annotation["build_profile"]
+        for attr in ("build_profile", "copts", "linkopts", "native_deps", "config_settings", "tool_deps"):
+            if annotation.get(attr) is not None:
+                setattr(annotations[resolved_pkg], attr, annotation[attr])
 
-        if annotation.get("copts"):
-            annotations[resolved_pkg].copts = annotation["copts"]
-
-        if annotation.get("linkopts"):
-            annotations[resolved_pkg].linkopts = annotation["linkopts"]
-
-        if annotation.get("native_deps"):
-            annotations[resolved_pkg].native_deps = annotation["native_deps"]
-
-        if annotation.get("config_settings"):
-            annotations[resolved_pkg].config_settings = annotation["config_settings"]
-
-        if annotation.get("tool_deps"):
-            annotations[resolved_pkg].tool_deps = annotation["tool_deps"]
+        for attr in ("cargo_lock",):
+            if annotation.get(attr) is not None:
+                annotations[resolved_pkg].passthrough_attrs[attr] = annotation[attr]
 
     # Return as a non-default dict
     return dict(annotations)

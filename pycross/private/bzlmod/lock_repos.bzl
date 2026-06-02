@@ -136,9 +136,17 @@ def _lock_repos_impl(module_ctx):
                 "known_packages": known_packages,
                 "lock_repo": repo_name,
             }
-            for attr_name in ("build_profile", "copts", "linkopts", "native_deps", "config_settings", "tool_deps", "build_dependencies"):
+            if "build_dependencies" in pkg and pkg["build_dependencies"] != None:
+                sdist_repo_attrs["build_dependencies"] = pkg["build_dependencies"]
+
+            for attr_name in ("build_profile", "copts", "linkopts", "native_deps", "config_settings", "tool_deps"):
                 if attr_name in pkg and pkg[attr_name] != None:
                     sdist_repo_attrs[attr_name] = pkg[attr_name]
+
+            for attr_name, attr_val in pkg.get("passthrough_attrs", {}).items():
+                if attr_val != None:
+                    sdist_repo_attrs[attr_name] = attr_val
+
             pycross_sdist_repo(**sdist_repo_attrs)
 
         package_repo(

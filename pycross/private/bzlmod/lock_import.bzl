@@ -36,6 +36,7 @@ def _generate_resolved_lock_repo(lock_info, serialized_lock_model):
             native_deps = package.native_deps,
             config_settings = package.config_settings,
             tool_deps = package.tool_deps,
+            cargo_lock = package.cargo_lock,
         )
 
     resolved_lock_repo(**args)
@@ -116,6 +117,7 @@ def _normalize_package_tag(tag, build_profile = None):
         native_deps = getattr(tag, "native_deps", []),
         config_settings = getattr(tag, "config_settings", {}),
         tool_deps = getattr(tag, "tool_deps", {}),
+        cargo_lock = getattr(tag, "cargo_lock", None),
     )
 
 def _lock_import_impl(module_ctx):

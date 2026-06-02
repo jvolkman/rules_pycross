@@ -264,7 +264,8 @@ def package_annotation(
         linkopts = [],
         native_deps = [],
         config_settings = {},
-        tool_deps = {}):
+        tool_deps = {},
+        cargo_lock = None):
     """Annotations to apply to individual packages.
 
     Args:
@@ -280,6 +281,7 @@ def package_annotation(
       native_deps (list, optional): CC dependencies to link against.
       config_settings (dict, optional): Setup configuration arguments.
       tool_deps (dict, optional): Overrides for built-in dependencies.
+      cargo_lock (Label, optional): A Cargo.lock file to use.
 
     Returns:
       str: A json encoded string of the provided content.
@@ -297,6 +299,7 @@ def package_annotation(
         native_deps = [str(dep) for dep in native_deps],
         config_settings = config_settings,
         tool_deps = tool_deps,
+        cargo_lock = str(cargo_lock) if cargo_lock else None,
     ))
 
 PDM_IMPORT_ATTRS = _IMPORT_ATTRS

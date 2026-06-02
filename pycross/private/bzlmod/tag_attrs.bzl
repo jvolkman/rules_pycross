@@ -105,4 +105,11 @@ MESON_OVERRIDE_ATTRS = dict(_BASE_OVERRIDE_ATTRS, **_BUILD_SYSTEM_ATTRS)
 
 SETUPTOOLS_OVERRIDE_ATTRS = dict(_BASE_OVERRIDE_ATTRS, **_BUILD_SYSTEM_ATTRS)
 
-MATURIN_OVERRIDE_ATTRS = dict(_BASE_OVERRIDE_ATTRS, **_BUILD_SYSTEM_ATTRS)
+MATURIN_OVERRIDE_ATTRS = dict(
+    _BASE_OVERRIDE_ATTRS,
+    cargo_lock = attr.label(
+        doc = "A Cargo.lock file to use. If not provided, the sdist's own Cargo.lock is used.",
+        allow_single_file = [".lock"],
+    ),
+    **_BUILD_SYSTEM_ATTRS
+)

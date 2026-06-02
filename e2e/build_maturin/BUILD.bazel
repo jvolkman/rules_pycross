@@ -1,5 +1,10 @@
 load("//shared:collect_wheels.bzl", "collect_wheels")
 
+exports_files([
+    "rpds_py.lock",
+    "captcha_rs.lock",
+])
+
 collect_wheels(
     name = "all_wheels",
     platforms = [
@@ -8,5 +13,6 @@ collect_wheels(
     ],
     wheels = [
         "@uv//_wheel:rpds-py",
+        "@uv//_wheel:captcha-rs",
     ],
 )

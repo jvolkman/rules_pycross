@@ -61,6 +61,19 @@ def _maturin_build_impl(ctx):
     if "maturin" in tool_deps:
         build_deps.extend(tool_deps["maturin"])
 
+    # Collect extra files to inject into the sdist before building.
+    extra_files = {}
+    if ctx.file.cargo_lock:
+        extra_files["Cargo.lock"] = ctx.file.cargo_lock
+
+    cargo_vendored_sources = None
+    if ctx.attr.vendored_crates:
+        workspace_name = ctx.label.workspace_name
+        if workspace_name:
+            cargo_vendored_sources = "external/{}/vendor".format(workspace_name)
+        else:
+            cargo_vendored_sources = "vendor"
+
     # 3. Build wheel
     build_result = register_pep517_action(
         ctx,
@@ -73,6 +86,9 @@ def _maturin_build_impl(ctx):
         tool_executables = tool_executables,
         layers = [cc_layer, rust_layer],
         pkg_config_files = ctx.files.pkg_config_files,
+        extra_files = extra_files,
+        extra_inputs = ctx.files.vendored_crates if ctx.attr.vendored_crates else [],
+        cargo_vendored_sources = cargo_vendored_sources,
     )
 
     # 4. Repair wheel
@@ -107,6 +123,13 @@ maturin_build = rule(
     attrs = COMMON_BUILD_ATTRS | CC_BUILD_ATTRS | CC_TOOLCHAIN_ATTRS | {
         "tool_deps": attr.label_list(
             cfg = pycross_exec_platform_transition,
+        ),
+        "cargo_lock": attr.label(
+            doc = "A Cargo.lock file to inject into the source tree before building. If not provided, the sdist's own Cargo.lock is used (if present).",
+            allow_single_file = [".lock"],
+        ),
+        "vendored_crates": attr.label(
+            doc = "A filegroup containing vendored crates.",
         ),
         "repair_wheel": attr.bool(
             default = True,
