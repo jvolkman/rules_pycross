@@ -74,7 +74,18 @@ bzl_library(
 bzl_library(
     name = "sdist_repo",
     srcs = ["sdist_repo.bzl"],
-    deps = ["//pycross/private:internal_repo"],
+    deps = [
+        ":cargo",
+        "//pycross/private:internal_repo",
+    ],
+)
+
+bzl_library(
+    name = "cargo",
+    srcs = ["cargo.bzl"],
+    deps = [
+        "@toml.bzl//:toml",
+    ],
 )
 
 bzl_library(

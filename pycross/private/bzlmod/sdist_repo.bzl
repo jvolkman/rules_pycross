@@ -1,8 +1,8 @@
 """Repository rule for auto-generating a BUILD file for an sdist package."""
 
-load("@toml.bzl//toml:toml.bzl", "decode")
 load("//pycross/private:internal_repo.bzl", "exec_internal_tool")
 load("//pycross/private:util.bzl", "extract_pep508_name")
+load(":cargo.bzl", "find_cargo_lock_in_sdist", "vendor_crates_from_lock")
 
 _BACKEND_TO_PROFILE = {
     "mesonpy": "meson_build",
@@ -16,71 +16,6 @@ _BACKEND_TO_PROFILE = {
     "pdm.backend": "pep517_build",
     "poetry.core.masonry.api": "pep517_build",
 }
-
-_CRATES_IO = "registry+https://github.com/rust-lang/crates.io-index"
-
-def _find_cargo_lock_in_sdist(rctx, sdist_root):
-    """Find Cargo.lock by reading [tool.maturin].manifest-path from pyproject.toml."""
-    pyproject_path = sdist_root.get_child("pyproject.toml")
-    cargo_dir = sdist_root
-    if pyproject_path.exists:
-        pyproject = decode(rctx.read(pyproject_path))
-        manifest_path = pyproject.get("tool", {}).get("maturin", {}).get("manifest-path", "Cargo.toml")
-        parts = manifest_path.split("/")
-
-        # Navigate to the directory containing Cargo.toml (all parts except the last)
-        for part in parts[:-1]:
-            cargo_dir = cargo_dir.get_child(part)
-    return cargo_dir.get_child("Cargo.lock")
-
-def _vendor_crates_from_lock(rctx, cargo_lock_path):
-    """Download and vendor crates listed in a Cargo.lock file using Bazel's downloader."""
-    rctx.report_progress("Vendoring cargo dependencies for " + rctx.name)
-    lock_data = decode(rctx.read(cargo_lock_path))
-
-    downloads = []
-    for pkg in lock_data.get("package", []):
-        source = pkg.get("source", "")
-        checksum = pkg.get("checksum", "")
-        if source != _CRATES_IO or not checksum:
-            continue
-
-        name = pkg["name"]
-        version = pkg["version"]
-
-        archive_name = "{}-{}.tar.gz".format(name, version)
-        archive_path = "_cargo_download/" + archive_name
-
-        token = rctx.download(
-            url = "https://static.crates.io/crates/{name}/{name}-{version}.crate".format(
-                name = name,
-                version = version,
-            ),
-            output = archive_path,
-            sha256 = checksum,
-            block = False,
-        )
-        downloads.append((token, name, version, archive_path, checksum))
-
-    for token, name, version, archive_path, checksum in downloads:
-        res = token.wait()
-        if not res.success:
-            fail("Failed to download crate {}-{}".format(name, version))
-
-        crate_dir = "vendor/{}-{}".format(name, version)
-        rctx.extract(
-            archive = archive_path,
-            output = crate_dir,
-            stripPrefix = "{}-{}".format(name, version),
-        )
-
-        rctx.file(
-            crate_dir + "/.cargo-checksum.json",
-            json.encode({"package": checksum, "files": {}}),
-        )
-
-    # Clean up downloads
-    rctx.delete("_cargo_download")
 
 def _sdist_repo_impl(rctx):
     macro_attrs = {
@@ -177,7 +112,7 @@ def _sdist_repo_impl(rctx):
             if not sdist_root:
                 sdist_root = rctx.path(tmp_dir)
 
-            lock_candidate = _find_cargo_lock_in_sdist(rctx, sdist_root)
+            lock_candidate = find_cargo_lock_in_sdist(rctx, sdist_root)
             if lock_candidate.exists:
                 # Copy it out before deleting tmp
                 extracted_lock = rctx.path("Cargo.lock.extracted")
@@ -187,7 +122,7 @@ def _sdist_repo_impl(rctx):
             rctx.delete(tmp_dir)
 
         if cargo_lock_path:
-            _vendor_crates_from_lock(rctx, cargo_lock_path)
+            vendor_crates_from_lock(rctx, cargo_lock_path)
             has_vendored = True
 
             # Clean up temporary extracted lock

@@ -151,3 +151,13 @@ py_binary(
     imports = ["../../.."],
     visibility = ["//visibility:public"],
 )
+
+py_binary(
+    name = "generate_cargo_lock",
+    srcs = ["generate_cargo_lock.py"],
+    imports = ["../../.."],
+    visibility = ["//visibility:public"],
+    deps = [
+        ":args",
+    ],
+)
