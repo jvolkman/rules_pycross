@@ -89,11 +89,10 @@ def load_target_sysconfig(ctx: BuildContext) -> Dict[str, Any]:
             print(cpe.output.decode(), file=sys.stderr)
             raise
 
-    target_sys_path = ctx.target_sys_path
-    if not target_sys_path:
-        target_sys_path = determine_target_path_from_exec(ctx.exec_python, ctx.target_python)
+    if not ctx.target_sys_path:
+        ctx.target_sys_path = determine_target_path_from_exec(ctx.exec_python, ctx.target_python)
 
-    return find_sysconfig_data(target_sys_path)
+    return find_sysconfig_data(ctx.target_sys_path)
 
 
 def derive_platform_overrides(sysconfig_vars: Dict[str, Any]) -> tuple[Optional[str], Optional[str]]:
@@ -171,10 +170,10 @@ def apply_sysconfig_overrides(ctx: BuildContext) -> None:
        In that case, this step is skipped.
     """
     site_dir = find_site_dir(ctx.env_dir)
-    with open(site_dir / "_pycross_sysconfigdata.py", "w") as f:
+    with open(site_dir / "_sysconfigdata_pycross.py", "w") as f:
         f.write(f"build_time_vars = {repr(ctx.sysconfig_vars)}\n")
-    with open(site_dir / "_pycross_sysconfigdata.pth", "w") as f:
-        f.write('import os; os.environ["_PYTHON_SYSCONFIGDATA_NAME"] = "_pycross_sysconfigdata"\n')
+    with open(site_dir / "_sysconfigdata_pycross.pth", "w") as f:
+        f.write('import os; os.environ["_PYTHON_SYSCONFIGDATA_NAME"] = "_sysconfigdata_pycross"\n')
 
     target_platform, macosx_deployment_target = derive_platform_overrides(ctx.sysconfig_vars)
     target_sys_platform = ctx.sysconfig_vars.get("MACHDEP")
