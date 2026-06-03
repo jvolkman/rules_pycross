@@ -25,7 +25,6 @@ https://packaging.python.org/en/latest/specifications/name-normalization.
 """
 
 load("@bazel_skylib//lib:paths.bzl", "paths")
-load("//pycross/private/build/rules:backend_config.bzl", "BACKEND_CONFIGS")
 load(":resolved_lock_renderer.bzl", "render_lock_bzl")
 
 def _label_to_workspace_path(label_str):
@@ -195,7 +194,8 @@ def _package_repo_impl(rctx):
             continue
 
         has_cargo_lock_targets = True
-        cargo_lock_val = pkg.get("passthrough_attrs", {}).get("cargo_lock")
+        cargo_lock_json = pkg.get("backend_attrs", {}).get("cargo_lock")
+        cargo_lock_val = json.decode(cargo_lock_json) if cargo_lock_json else None
         output_path = _label_to_workspace_path(cargo_lock_val)
 
         cargo_lock_build_lines.extend([
@@ -234,7 +234,12 @@ def _package_repo_impl(rctx):
 
     rctx.file("_backend/BUILD.bazel", 'package(default_visibility = ["//visibility:public"])\n')
 
-    for macro_name, config in BACKEND_CONFIGS.items():
+    # Decode backend configs from the JSON-encoded attr.
+    backend_configs = {}
+    for name, config_json in rctx.attr.backend_configs.items():
+        backend_configs[name] = json.decode(config_json)
+
+    for macro_name, config in backend_configs.items():
         rule_bzl = config["rule_bzl"]
 
         # Resolve tool package names to lock-repo labels, keeping only
@@ -247,7 +252,7 @@ def _package_repo_impl(rctx):
         lines = [
             '"""Backend macro with pre-configured tool defaults for this lock repo."""',
             "",
-            'load("@rules_pycross//pycross/private/build/rules:{rule_bzl}.bzl", _{macro_name} = "{macro_name}")'.format(
+            'load("{rule_bzl}", _{macro_name} = "{macro_name}")'.format(
                 rule_bzl = rule_bzl,
                 macro_name = macro_name,
             ),
@@ -289,6 +294,9 @@ package_repo = repository_rule(
     attrs = {
         "resolved_lock_file": attr.label(mandatory = True),
         "repo_map": attr.string_dict(),
+        "backend_configs": attr.string_dict(
+            doc = "Maps pycross rule names to JSON-encoded config dicts with 'rule_bzl' and 'tool_packages'.",
+        ),
         "write_install_deps": attr.bool(),
     },
 )

@@ -31,12 +31,7 @@ def _generate_resolved_lock_repo(lock_info, serialized_lock_model):
             install_exclude_globs = package.install_exclude_globs,
             post_install_patches = package.post_install_patches,
             build_backend = package.build_backend,
-            copts = package.copts,
-            linkopts = package.linkopts,
-            native_deps = package.native_deps,
-            config_settings = package.config_settings,
-            tool_deps = package.tool_deps,
-            cargo_lock = package.cargo_lock,
+            backend_attrs = package.backend_attrs,
         )
 
     resolved_lock_repo(**args)
@@ -104,6 +99,20 @@ def _lock_struct(mctx, tag):
     )
 
 def _normalize_package_tag(tag, build_backend = None):
+    backend_attrs = dict(getattr(tag, "backend_attrs", {}))
+    if getattr(tag, "copts", []):
+        backend_attrs["copts"] = json.encode(tag.copts)
+    if getattr(tag, "linkopts", []):
+        backend_attrs["linkopts"] = json.encode(tag.linkopts)
+    if getattr(tag, "native_deps", []):
+        backend_attrs["native_deps"] = json.encode([str(dep) for dep in tag.native_deps])
+    if getattr(tag, "config_settings", {}):
+        backend_attrs["config_settings"] = json.encode(tag.config_settings)
+    if getattr(tag, "tool_deps", {}):
+        backend_attrs["tool_deps"] = json.encode(tag.tool_deps)
+    if getattr(tag, "cargo_lock", None):
+        backend_attrs["cargo_lock"] = json.encode(str(tag.cargo_lock))
+
     return struct(
         always_build = tag.always_build,
         build_dependencies = tag.build_dependencies,
@@ -112,12 +121,7 @@ def _normalize_package_tag(tag, build_backend = None):
         install_exclude_globs = tag.install_exclude_globs,
         post_install_patches = tag.post_install_patches,
         build_backend = build_backend,
-        copts = getattr(tag, "copts", []),
-        linkopts = getattr(tag, "linkopts", []),
-        native_deps = getattr(tag, "native_deps", []),
-        config_settings = getattr(tag, "config_settings", {}),
-        tool_deps = getattr(tag, "tool_deps", {}),
-        cargo_lock = getattr(tag, "cargo_lock", None),
+        backend_attrs = backend_attrs,
     )
 
 def _lock_import_impl(module_ctx):

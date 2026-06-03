@@ -3,6 +3,7 @@
 load("@bazel_features//:features.bzl", "bazel_features")
 load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_file")
 load("@lock_import_repos_hub//:locks.bzl", lock_import_locks = "locks")
+load("@pycross_backends//:registry.bzl", "BACKEND_CONFIGS", "BACKEND_TO_RULE", "DEFAULT_BACKEND")
 load("//pycross/private:package_repo.bzl", "package_repo")
 load("//pycross/private:pypi_file.bzl", "pypi_file")
 load("//pycross/private:util.bzl", "sanitize_name")
@@ -35,6 +36,9 @@ def _lock_repos_impl(module_ctx):
     if create_tag == None:
         # This shouldn't happen since rules_pycross registers a default tag.
         fail("BUG: no repos.create tag found!")
+
+    # Serialize backend configs for passing to package_repo.
+    backend_configs_json = {name: json.encode(config) for name, config in BACKEND_CONFIGS.items()}
 
     # Generate the lock repos and any remote package repos
     for repo_name, lock_file in all_locks.items():
@@ -114,14 +118,14 @@ def _lock_repos_impl(module_ctx):
             deps_set = {}
             for dep in pkg.get("common_dependencies", []):
                 dep_name = dep.split("@")[0]
-                dep_label = "@{}//:{}".format(repo_name, dep_name)
+                dep_label = "@{}//:{}" .format(repo_name, dep_name)
                 deps_set[dep_label] = True
             for env_name, env_file_ref in pkg.get("environment_files", {}).items():
                 if env_file_ref.get("key") != sdist_file_key:
                     continue
                 for dep in pkg.get("environment_dependencies", {}).get(env_name, []):
                     dep_name = dep.split("@")[0]
-                    dep_label = "@{}//:{}".format(repo_name, dep_name)
+                    dep_label = "@{}//:{}" .format(repo_name, dep_name)
                     deps_set[dep_label] = True
 
             sdist_repo_name = "{}_sdist_{}".format(
@@ -135,17 +139,15 @@ def _lock_repos_impl(module_ctx):
                 "deps": sorted(deps_set.keys()),
                 "known_packages": known_packages,
                 "lock_repo": repo_name,
+                "backend_to_rule": BACKEND_TO_RULE,
+                "default_backend": DEFAULT_BACKEND,
             }
             if "build_dependencies" in pkg and pkg["build_dependencies"] != None:
                 sdist_repo_attrs["build_dependencies"] = pkg["build_dependencies"]
 
-            for attr_name in ("build_backend", "copts", "linkopts", "native_deps", "config_settings", "tool_deps"):
+            for attr_name in ("build_backend", "backend_attrs"):
                 if attr_name in pkg and pkg[attr_name] != None:
                     sdist_repo_attrs[attr_name] = pkg[attr_name]
-
-            for attr_name, attr_val in pkg.get("passthrough_attrs", {}).items():
-                if attr_val != None:
-                    sdist_repo_attrs[attr_name] = attr_val
 
             pycross_sdist_repo(**sdist_repo_attrs)
 
@@ -153,6 +155,7 @@ def _lock_repos_impl(module_ctx):
             name = repo_name,
             resolved_lock_file = lock_file,
             repo_map = repo_remote_files,
+            backend_configs = backend_configs_json,
         )
 
     if bazel_features.external_deps.extension_metadata_has_reproducible:

@@ -18,6 +18,7 @@ bzl_library(
     name = "pycross",
     srcs = ["pycross.bzl"],
     deps = [
+        ":backend_registry_repo",
         ":tag_attrs",
         "//pycross/private:internal_repo",
         "@bazel_features//:features",
@@ -68,6 +69,7 @@ bzl_library(
         "//pycross/private:pypi_file",
         "@bazel_features//:features",
         "@lock_import_repos_hub//:locks.bzl",
+        "@pycross_backends//:registry.bzl",
     ] + REPO_HTTP_DEPS,
 )
 
@@ -91,4 +93,9 @@ bzl_library(
 bzl_library(
     name = "lock_hub_repo",
     srcs = ["lock_hub_repo.bzl"],
+)
+
+bzl_library(
+    name = "backend_registry_repo",
+    srcs = ["backend_registry_repo.bzl"],
 )
