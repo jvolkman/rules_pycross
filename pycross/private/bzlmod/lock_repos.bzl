@@ -4,10 +4,10 @@ load("@bazel_features//:features.bzl", "bazel_features")
 load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_file")
 load("@lock_import_repos_hub//:locks.bzl", lock_import_locks = "locks")
 load("@pycross_backends//:registry.bzl", "BACKEND_CONFIGS", "BACKEND_TO_RULE", "DEFAULT_BACKEND")
+load("@pycross_backends//:sdist_dispatch.bzl", "DEFAULT_SDIST_REPO", "SDIST_REPO_RULES")
 load("//pycross/private:package_repo.bzl", "package_repo")
 load("//pycross/private:pypi_file.bzl", "pypi_file")
 load("//pycross/private:util.bzl", "sanitize_name")
-load("//pycross/private/bzlmod:sdist_repo.bzl", "pycross_sdist_repo")
 load(":tag_attrs.bzl", "CREATE_REPOS_ATTRS")
 
 # buildifier: disable=print
@@ -118,14 +118,14 @@ def _lock_repos_impl(module_ctx):
             deps_set = {}
             for dep in pkg.get("common_dependencies", []):
                 dep_name = dep.split("@")[0]
-                dep_label = "@{}//:{}" .format(repo_name, dep_name)
+                dep_label = "@{}//:{}".format(repo_name, dep_name)
                 deps_set[dep_label] = True
             for env_name, env_file_ref in pkg.get("environment_files", {}).items():
                 if env_file_ref.get("key") != sdist_file_key:
                     continue
                 for dep in pkg.get("environment_dependencies", {}).get(env_name, []):
                     dep_name = dep.split("@")[0]
-                    dep_label = "@{}//:{}" .format(repo_name, dep_name)
+                    dep_label = "@{}//:{}".format(repo_name, dep_name)
                     deps_set[dep_label] = True
 
             sdist_repo_name = "{}_sdist_{}".format(
@@ -149,7 +149,10 @@ def _lock_repos_impl(module_ctx):
                 if attr_name in pkg and pkg[attr_name] != None:
                     sdist_repo_attrs[attr_name] = pkg[attr_name]
 
-            pycross_sdist_repo(**sdist_repo_attrs)
+            # Dispatch to the appropriate sdist repo rule based on backend.
+            backend_macro = pkg.get("build_backend")
+            sdist_repo_fn = SDIST_REPO_RULES.get(backend_macro, DEFAULT_SDIST_REPO) if backend_macro else DEFAULT_SDIST_REPO
+            sdist_repo_fn(**sdist_repo_attrs)
 
         package_repo(
             name = repo_name,
