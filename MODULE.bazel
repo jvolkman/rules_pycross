@@ -56,6 +56,8 @@ pycross.register_backend(
     rule_bzl = "@rules_pycross//pycross/private/build/rules:maturin_build.bzl",
     pyproject_backends = ["maturin"],
     tool_packages = ["maturin"],
+    sdist_repo_bzl = "@rules_pycross//pycross/private/bzlmod:maturin_sdist_repo.bzl",
+    sdist_repo_fn = "maturin_sdist_repo",
 )
 pycross.register_backend(
     name = "setuptools_build",

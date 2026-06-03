@@ -178,6 +178,10 @@ def _package_repo_impl(rctx):
     rctx.file("_wheel/BUILD.bazel", "\n".join(wheel_build_lines))
 
     # 3c. Write _cargo_lock/BUILD.bazel
+    # TODO: This section hardcodes "maturin_build" knowledge into the hub repo.
+    # Ideally, backends would register their own helper target generators, but
+    # _cargo_lock is inherently a Rust/maturin concept and the practical benefit
+    # of generalizing this is low.
     cargo_lock_build_lines = [
         'package(default_visibility = ["//visibility:public"])',
         "",
