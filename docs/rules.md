@@ -292,8 +292,7 @@ Information about a Python wheel.
 load("@rules_pycross//pycross:defs.bzl", "package_annotation")
 
 package_annotation(<a href="#package_annotation-always_build">always_build</a>, <a href="#package_annotation-build_dependencies">build_dependencies</a>, <a href="#package_annotation-build_target">build_target</a>, <a href="#package_annotation-ignore_dependencies">ignore_dependencies</a>,
-                   <a href="#package_annotation-install_exclude_globs">install_exclude_globs</a>, <a href="#package_annotation-post_install_patches">post_install_patches</a>, <a href="#package_annotation-build_backend">build_backend</a>, <a href="#package_annotation-copts">copts</a>, <a href="#package_annotation-linkopts">linkopts</a>,
-                   <a href="#package_annotation-native_deps">native_deps</a>, <a href="#package_annotation-config_settings">config_settings</a>, <a href="#package_annotation-tool_deps">tool_deps</a>, <a href="#package_annotation-cargo_lock">cargo_lock</a>)
+                   <a href="#package_annotation-install_exclude_globs">install_exclude_globs</a>, <a href="#package_annotation-post_install_patches">post_install_patches</a>, <a href="#package_annotation-build_backend">build_backend</a>, <a href="#package_annotation-backend_attrs">backend_attrs</a>)
 </pre>
 
 Annotations to apply to individual packages.
@@ -310,12 +309,7 @@ Annotations to apply to individual packages.
 | <a id="package_annotation-install_exclude_globs"></a>install_exclude_globs |  A list of globs for files to exclude during installation.   |  `[]` |
 | <a id="package_annotation-post_install_patches"></a>post_install_patches |  A list of patches to apply after wheel installation.   |  `[]` |
 | <a id="package_annotation-build_backend"></a>build_backend |  The build backend macro to use (e.g., "meson_build" or "setuptools_build").   |  `None` |
-| <a id="package_annotation-copts"></a>copts |  Extra C++ compiler options.   |  `[]` |
-| <a id="package_annotation-linkopts"></a>linkopts |  Extra linker options.   |  `[]` |
-| <a id="package_annotation-native_deps"></a>native_deps |  CC dependencies to link against.   |  `[]` |
-| <a id="package_annotation-config_settings"></a>config_settings |  Setup configuration arguments.   |  `{}` |
-| <a id="package_annotation-tool_deps"></a>tool_deps |  Overrides for built-in dependencies.   |  `{}` |
-| <a id="package_annotation-cargo_lock"></a>cargo_lock |  A Cargo.lock file to use.   |  `None` |
+| <a id="package_annotation-backend_attrs"></a>backend_attrs |  Arbitrary backend-specific attributes (JSON-encoded values).   |  `{}` |
 
 **RETURNS**
 

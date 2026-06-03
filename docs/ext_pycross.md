@@ -12,6 +12,8 @@ pycross.configure_environments(<a href="#pycross.configure_environments-glibc_ve
                                <a href="#pycross.configure_environments-python_versions">python_versions</a>)
 pycross.configure_interpreter(<a href="#pycross.configure_interpreter-python_defs_file">python_defs_file</a>, <a href="#pycross.configure_interpreter-python_interpreter_target">python_interpreter_target</a>)
 pycross.configure_toolchains(<a href="#pycross.configure_toolchains-register_toolchains">register_toolchains</a>)
+pycross.register_backend(<a href="#pycross.register_backend-name">name</a>, <a href="#pycross.register_backend-default">default</a>, <a href="#pycross.register_backend-pyproject_backends">pyproject_backends</a>, <a href="#pycross.register_backend-rule_bzl">rule_bzl</a>, <a href="#pycross.register_backend-sdist_repo_bzl">sdist_repo_bzl</a>, <a href="#pycross.register_backend-sdist_repo_fn">sdist_repo_fn</a>,
+                         <a href="#pycross.register_backend-tool_packages">tool_packages</a>)
 </pre>
 
 Configure rules_pycross.
@@ -53,5 +55,23 @@ Configure rules_pycross.
 | Name  | Description | Type | Mandatory | Default |
 | :------------- | :------------- | :------------- | :------------- | :------------- |
 | <a id="pycross.configure_toolchains-register_toolchains"></a>register_toolchains |  Register toolchains for all rules_python-registered interpreters.   | Boolean | optional |  `True`  |
+
+<a id="pycross.register_backend"></a>
+
+### register_backend
+
+Register a build backend for pycross sdist builds.
+
+**Attributes**
+
+| Name  | Description | Type | Mandatory | Default |
+| :------------- | :------------- | :------------- | :------------- | :------------- |
+| <a id="pycross.register_backend-name"></a>name |  Pycross rule name (e.g. 'meson_build').   | <a href="https://bazel.build/concepts/labels#target-names">Name</a> | required |  |
+| <a id="pycross.register_backend-default"></a>default |  If True, this backend is used when no pyproject_backends entry matches. Only one backend may be the default. Root module wins if multiple are set.   | Boolean | optional |  `False`  |
+| <a id="pycross.register_backend-pyproject_backends"></a>pyproject_backends |  pyproject.toml build-system.build-backend values that map to this backend (e.g. ['mesonpy', 'mesonbuild']).   | List of strings | optional |  `[]`  |
+| <a id="pycross.register_backend-rule_bzl"></a>rule_bzl |  Label of the .bzl file containing the rule, e.g. '@rules_pycross//pycross/private/build/rules:meson_build.bzl'.   | String | required |  |
+| <a id="pycross.register_backend-sdist_repo_bzl"></a>sdist_repo_bzl |  Optional label of a .bzl file providing a custom sdist repository_rule for this backend.   | String | optional |  `""`  |
+| <a id="pycross.register_backend-sdist_repo_fn"></a>sdist_repo_fn |  Optional function name in sdist_repo_bzl. Defaults to '<name>_sdist_repo' (replacing '_build' suffix).   | String | optional |  `""`  |
+| <a id="pycross.register_backend-tool_packages"></a>tool_packages |  PEP 503 normalized PyPI package names of tools this backend needs at build time (e.g. ['meson', 'ninja', 'meson-python']).   | List of strings | optional |  `[]`  |
 
 
