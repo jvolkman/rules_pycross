@@ -260,12 +260,7 @@ def package_annotation(
         install_exclude_globs = [],
         post_install_patches = [],
         build_backend = None,
-        copts = [],
-        linkopts = [],
-        native_deps = [],
-        config_settings = {},
-        tool_deps = {},
-        cargo_lock = None):
+        backend_attrs = {}):
     """Annotations to apply to individual packages.
 
     Args:
@@ -276,12 +271,7 @@ def package_annotation(
       install_exclude_globs (list, optional): A list of globs for files to exclude during installation.
       post_install_patches (list, optional): A list of patches to apply after wheel installation.
       build_backend (str, optional): The build backend macro to use (e.g., "meson_build" or "setuptools_build").
-      copts (list, optional): Extra C++ compiler options.
-      linkopts (list, optional): Extra linker options.
-      native_deps (list, optional): CC dependencies to link against.
-      config_settings (dict, optional): Setup configuration arguments.
-      tool_deps (dict, optional): Overrides for built-in dependencies.
-      cargo_lock (Label, optional): A Cargo.lock file to use.
+      backend_attrs (dict, optional): Arbitrary backend-specific attributes (JSON-encoded values).
 
     Returns:
       str: A json encoded string of the provided content.
@@ -294,12 +284,7 @@ def package_annotation(
         install_exclude_globs = install_exclude_globs,
         post_install_patches = post_install_patches,
         build_backend = build_backend,
-        copts = copts,
-        linkopts = linkopts,
-        native_deps = [str(dep) for dep in native_deps],
-        config_settings = config_settings,
-        tool_deps = tool_deps,
-        cargo_lock = str(cargo_lock) if cargo_lock else None,
+        backend_attrs = backend_attrs,
     ))
 
 PDM_IMPORT_ATTRS = _IMPORT_ATTRS

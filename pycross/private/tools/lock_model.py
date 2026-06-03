@@ -232,12 +232,7 @@ class ResolvedPackage:
     install_exclude_globs: List[str] = field(default_factory=list)
     post_install_patches: List[str] = field(default_factory=list)
     build_backend: Optional[str] = None
-    copts: List[str] = field(default_factory=list)
-    linkopts: List[str] = field(default_factory=list)
-    native_deps: List[str] = field(default_factory=list)
-    config_settings: Dict[str, List[str]] = field(default_factory=dict)
-    tool_deps: Dict[str, str] = field(default_factory=dict)
-    passthrough_attrs: Dict[str, Any] = field(default_factory=dict)
+    backend_attrs: Dict[str, str] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)

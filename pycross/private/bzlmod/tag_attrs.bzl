@@ -65,6 +65,11 @@ PACKAGE_ATTRS = dict(
     post_install_patches = attr.string_list(
         doc = "A list of patches to apply after wheel installation.",
     ),
+    backend_attrs = attr.string_dict(
+        doc = "Arbitrary backend-specific attributes. Keys are attr names on the backend rule; " +
+              "values are JSON-encoded Starlark literals (e.g. '[\"a\", \"b\"]' for a list, " +
+              "'{\"k\": \"v\"}' for a dict, '\"hello\"' for a string, 'true' for a bool).",
+    ),
 )
 
 # Attrs specific to build-system overrides (meson, setuptools, etc.).
@@ -88,7 +93,7 @@ REGISTER_TOOLCHAINS_ATTRS = _REGISTER_TOOLCHAINS_ATTRS
 def _derive_override_attrs():
     attrs = {}
     for k, v in PACKAGE_ATTRS.items():
-        if k == "build_target":
+        if k in ("build_target", "backend_attrs"):
             continue
         elif k == "always_build":
             attrs[k] = attr.bool(

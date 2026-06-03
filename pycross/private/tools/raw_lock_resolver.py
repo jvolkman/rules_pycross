@@ -194,12 +194,7 @@ class PackageAnnotations:
     install_exclude_globs: Set[str] = field(default_factory=set)
     post_install_patches: List[str] = field(default_factory=list)
     build_backend: Optional[str] = None
-    copts: List[str] = field(default_factory=list)
-    linkopts: List[str] = field(default_factory=list)
-    native_deps: List[str] = field(default_factory=list)
-    config_settings: Dict[str, List[str]] = field(default_factory=dict)
-    tool_deps: Dict[str, str] = field(default_factory=dict)
-    passthrough_attrs: Dict[str, Any] = field(default_factory=dict)
+    backend_attrs: Dict[str, str] = field(default_factory=dict)
 
 
 class PackageResolver:
@@ -225,12 +220,7 @@ class PackageResolver:
         self._install_exclude_globs = annotations.install_exclude_globs
         self._post_install_patches = annotations.post_install_patches
         self._build_backend = annotations.build_backend
-        self._copts = annotations.copts
-        self._linkopts = annotations.linkopts
-        self._native_deps = annotations.native_deps
-        self._config_settings = annotations.config_settings
-        self._tool_deps = annotations.tool_deps
-        self._passthrough_attrs = annotations.passthrough_attrs
+        self._backend_attrs = annotations.backend_attrs
 
         deps_by_env = context.get_dependencies_by_environment(
             package,
@@ -287,12 +277,7 @@ class PackageResolver:
             install_exclude_globs=list(self._install_exclude_globs),
             post_install_patches=self._post_install_patches,
             build_backend=self._build_backend,
-            copts=self._copts,
-            linkopts=self._linkopts,
-            native_deps=self._native_deps,
-            config_settings=self._config_settings,
-            tool_deps=self._tool_deps,
-            passthrough_attrs=self._passthrough_attrs,
+            backend_attrs=self._backend_attrs,
         )
 
 
@@ -377,13 +362,11 @@ def collect_package_annotations(args: Any, lock_model: RawLockSet) -> Dict[Packa
         for patch in annotation.get("post_install_patches", []):
             annotations[resolved_pkg].post_install_patches.append(patch)
 
-        for attr in ("build_backend", "copts", "linkopts", "native_deps", "config_settings", "tool_deps"):
-            if annotation.get(attr) is not None:
-                setattr(annotations[resolved_pkg], attr, annotation[attr])
+        if annotation.get("build_backend") is not None:
+            annotations[resolved_pkg].build_backend = annotation["build_backend"]
 
-        for attr in ("cargo_lock",):
-            if annotation.get(attr) is not None:
-                annotations[resolved_pkg].passthrough_attrs[attr] = annotation[attr]
+        for k, v in annotation.get("backend_attrs", {}).items():
+            annotations[resolved_pkg].backend_attrs[k] = v
 
     # Return as a non-default dict
     return dict(annotations)

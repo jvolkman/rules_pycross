@@ -4,20 +4,12 @@ load("//pycross/private:internal_repo.bzl", "exec_internal_tool")
 load("//pycross/private:util.bzl", "extract_pep508_name")
 load(":cargo.bzl", "find_cargo_lock_in_sdist", "vendor_crates_from_lock")
 
-_BACKEND_TO_RULE = {
-    "mesonpy": "meson_build",
-    "mesonbuild": "meson_build",
-    "scikit_build_core.build": "cmake_build",
-    "setuptools.build_meta": "setuptools_build",
-    "setuptools.build_meta:__legacy__": "setuptools_build",
-    "maturin": "maturin_build",
-    "hatchling.build": "pep517_build",
-    "flit_core.buildapi": "pep517_build",
-    "pdm.backend": "pep517_build",
-    "poetry.core.masonry.api": "pep517_build",
-}
-
 def _sdist_repo_impl(rctx):
+    # Build the backend-to-rule mapping from the registry attrs.
+    backend_to_rule = rctx.attr.backend_to_rule
+    default_backend = rctx.attr.default_backend
+    known_backends = {v: True for v in backend_to_rule.values()}
+
     macro_attrs = {
         "name": "\"wheel\"",
         "sdist": "\"{}\"".format(rctx.attr.sdist),
@@ -26,14 +18,17 @@ def _sdist_repo_impl(rctx):
 
     if rctx.attr.build_backend:
         backend_macro = rctx.attr.build_backend
-        if backend_macro not in _BACKEND_TO_RULE.values():
-            fail("Unknown build backend: " + backend_macro)
+
+        # Validate that the explicitly-set backend is a registered rule name.
+        if backend_macro not in known_backends and backend_macro != default_backend:
+            fail("Unknown build backend: " + backend_macro +
+                 ". Registered backends: " + ", ".join(sorted(known_backends.keys())))
 
         if rctx.attr.build_dependencies:
             build_deps = []
             for dep in rctx.attr.build_dependencies:
                 dep_name = dep.split("@")[0]
-                build_deps.append("@{}//:{}".format(rctx.attr.lock_repo, dep_name))
+                build_deps.append("@{}//:{}" .format(rctx.attr.lock_repo, dep_name))
             macro_attrs["build_deps"] = str(build_deps)
     else:
         sdist_path = rctx.path(rctx.attr.sdist)
@@ -55,9 +50,9 @@ def _sdist_repo_impl(rctx):
         backend = metadata.get("build_backend", "")
         requires = metadata.get("build_requires", [])
 
-        # Map backend to rule
-        # If not in the dictionary, we fall back to setuptools_build as the generic PEP 517 builder
-        backend_macro = _BACKEND_TO_RULE.get(backend, "setuptools_build")
+        # Map pyproject backend to pycross rule name via the registry.
+        # Falls back to the registered default backend.
+        backend_macro = backend_to_rule.get(backend, default_backend)
 
         # Map build requires to targets in the hub repo
         build_deps = []
@@ -72,7 +67,7 @@ def _sdist_repo_impl(rctx):
             # We only add it if it's in the known lock repo mapping.
             # (This will be passed in via rctx.attr.known_packages)
             if req_name in rctx.attr.known_packages:
-                build_deps.append("@{}//:{}".format(rctx.attr.lock_repo, req_name))
+                build_deps.append("@{}//:{}" .format(rctx.attr.lock_repo, req_name))
 
         macro_attrs["build_deps"] = str(build_deps)
 
@@ -80,25 +75,24 @@ def _sdist_repo_impl(rctx):
         if backend_macro == "pep517_build":
             macro_attrs["required_build_packages"] = str(required_build_packages)
 
-    # Add optional overrides if they are set/non-empty
-    if rctx.attr.copts:
-        macro_attrs["copts"] = str(rctx.attr.copts)
-    if rctx.attr.linkopts:
-        macro_attrs["linkopts"] = str(rctx.attr.linkopts)
-    if rctx.attr.native_deps:
-        macro_attrs["native_deps"] = str(rctx.attr.native_deps)
-    if rctx.attr.config_settings:
-        macro_attrs["config_settings"] = str(rctx.attr.config_settings)
-    if rctx.attr.tool_deps:
-        macro_attrs["tool_deps"] = str(rctx.attr.tool_deps)
-    if rctx.attr.cargo_lock:
-        macro_attrs["cargo_lock"] = "\"{}\"".format(rctx.attr.cargo_lock)
+    # Render backend_attrs: each key becomes a macro attr, each value is
+    # a JSON-encoded Starlark literal that we decode and render.
+    cargo_lock_label = None
+    for attr_name, json_val in sorted(rctx.attr.backend_attrs.items()):
+        decoded = json.decode(json_val)
+        if attr_name == "cargo_lock":
+            # Stash the label string for maturin vendoring below.
+            cargo_lock_label = decoded
+        if type(decoded) == "string":
+            macro_attrs[attr_name] = "\"{}\"".format(decoded)
+        else:
+            macro_attrs[attr_name] = str(decoded)
 
     has_vendored = False
     if backend_macro == "maturin_build":
         cargo_lock_path = None
-        if rctx.attr.cargo_lock:
-            cargo_lock_path = rctx.path(rctx.attr.cargo_lock)
+        if cargo_lock_label:
+            cargo_lock_path = rctx.path(Label(cargo_lock_label))
         else:
             # Extract sdist to find Cargo.lock
             tmp_dir = "cargo_lock_check_tmp"
@@ -176,12 +170,13 @@ pycross_sdist_repo = repository_rule(
         "known_packages": attr.string_list(doc = "List of packages present in the lock file to filter build_requires."),
         "lock_repo": attr.string(doc = "Name of the lock hub repo (e.g. 'uv').", mandatory = True),
         "build_backend": attr.string(doc = "The build backend to use."),
-        "copts": attr.string_list(doc = "C compiler options."),
-        "linkopts": attr.string_list(doc = "Linker options."),
-        "native_deps": attr.string_list(doc = "Labels of native C/C++ dependencies."),
-        "config_settings": attr.string_list_dict(doc = "Build configuration settings passed to backend."),
-        "tool_deps": attr.string_dict(doc = "Overridden tool dependencies."),
+        "backend_to_rule": attr.string_dict(
+            doc = "Registry mapping pyproject backend names to pycross rule names.",
+        ),
+        "default_backend": attr.string(
+            doc = "The rule name used when no pyproject backend name matches.",
+        ),
         "build_dependencies": attr.string_list(doc = "Overridden build-time dependencies."),
-        "cargo_lock": attr.label(allow_single_file = [".lock"], doc = "A Cargo.lock file to use."),
+        "backend_attrs": attr.string_dict(doc = "Arbitrary backend-specific attrs. Keys are attr names; values are JSON-encoded Starlark literals."),
     },
 )

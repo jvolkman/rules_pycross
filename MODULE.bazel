@@ -39,8 +39,48 @@ pycross.configure_interpreter(
     python_interpreter_target = "@python_%s_host//:python" % py_underscore_version,
 )
 pycross.configure_toolchains()
+pycross.register_backend(
+    name = "meson_build",
+    rule_bzl = "@rules_pycross//pycross/private/build/rules:meson_build.bzl",
+    pyproject_backends = ["mesonpy", "mesonbuild"],
+    tool_packages = ["meson", "ninja", "meson-python"],
+)
+pycross.register_backend(
+    name = "cmake_build",
+    rule_bzl = "@rules_pycross//pycross/private/build/rules:cmake_build.bzl",
+    pyproject_backends = ["scikit_build_core.build"],
+    tool_packages = ["cmake", "ninja", "scikit-build-core"],
+)
+pycross.register_backend(
+    name = "maturin_build",
+    rule_bzl = "@rules_pycross//pycross/private/build/rules:maturin_build.bzl",
+    pyproject_backends = ["maturin"],
+    tool_packages = ["maturin"],
+)
+pycross.register_backend(
+    name = "setuptools_build",
+    rule_bzl = "@rules_pycross//pycross/private/build/rules:setuptools_build.bzl",
+    pyproject_backends = [
+        "setuptools.build_meta",
+        "setuptools.build_meta:__legacy__",
+    ],
+    tool_packages = ["setuptools", "wheel"],
+)
+pycross.register_backend(
+    name = "pep517_build",
+    rule_bzl = "@rules_pycross//pycross/private/build/rules:pep517_build.bzl",
+    pyproject_backends = [
+        "hatchling.build",
+        "flit_core.buildapi",
+        "pdm.backend",
+        "poetry.core.masonry.api",
+    ],
+    tool_packages = [],
+    default = True,
+)
 use_repo(
     pycross,
+    "pycross_backends",
     "rules_pycross_internal",
 )
 
