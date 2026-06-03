@@ -1,6 +1,6 @@
 """Repository rule that generates a build backend registry.
 
-This is created by the pycross module extension from `register_backend` tags.
+This is created by the backends module extension from `backends.register` tags.
 It produces:
   - `registry.bzl`: exports BACKEND_TO_RULE, DEFAULT_BACKEND, BACKEND_CONFIGS
   - `sdist_dispatch.bzl`: exports SDIST_REPO_RULES mapping backend names to repo rule functions

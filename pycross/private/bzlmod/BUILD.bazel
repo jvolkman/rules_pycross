@@ -1,7 +1,7 @@
 load("@bazel_skylib//:bzl_library.bzl", "bzl_library")
 load("//pycross/private:util.bzl", "REPO_HTTP_DEPS")
 
-package(default_visibility = ["//pycross:__subpackages__"])
+package(default_visibility = ["//visibility:public"])
 
 bzl_library(
     name = "environments",
@@ -18,12 +18,20 @@ bzl_library(
     name = "pycross",
     srcs = ["pycross.bzl"],
     deps = [
-        ":backend_registry_repo",
         ":tag_attrs",
         "//pycross/private:internal_repo",
         "@bazel_features//:features",
         "@toml.bzl//:toml",
     ] + REPO_HTTP_DEPS,
+)
+
+bzl_library(
+    name = "backends",
+    srcs = ["backends.bzl"],
+    deps = [
+        ":backend_registry_repo",
+        "@bazel_features//:features",
+    ],
 )
 
 bzl_library(

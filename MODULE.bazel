@@ -39,7 +39,13 @@ pycross.configure_interpreter(
     python_interpreter_target = "@python_%s_host//:python" % py_underscore_version,
 )
 pycross.configure_toolchains()
-pycross.register_backend(
+use_repo(
+    pycross,
+    "rules_pycross_internal",
+)
+
+backends = use_extension("@rules_pycross//pycross/extensions:backends.bzl", "backends")
+backends.register(
     name = "meson_build",
     pyproject_backends = [
         "mesonpy",
@@ -52,7 +58,7 @@ pycross.register_backend(
         "meson-python",
     ],
 )
-pycross.register_backend(
+backends.register(
     name = "cmake_build",
     pyproject_backends = ["scikit_build_core.build"],
     rule_bzl = "@rules_pycross//pycross/private/build/rules:cmake_build.bzl",
@@ -62,7 +68,7 @@ pycross.register_backend(
         "scikit-build-core",
     ],
 )
-pycross.register_backend(
+backends.register(
     name = "maturin_build",
     pyproject_backends = ["maturin"],
     rule_bzl = "@rules_pycross//pycross/private/build/rules:maturin_build.bzl",
@@ -70,7 +76,7 @@ pycross.register_backend(
     sdist_repo_fn = "maturin_sdist_repo",
     tool_packages = ["maturin"],
 )
-pycross.register_backend(
+backends.register(
     name = "setuptools_build",
     pyproject_backends = [
         "setuptools.build_meta",
@@ -82,7 +88,7 @@ pycross.register_backend(
         "wheel",
     ],
 )
-pycross.register_backend(
+backends.register(
     name = "pep517_build",
     default = True,
     pyproject_backends = [
@@ -95,9 +101,8 @@ pycross.register_backend(
     tool_packages = [],
 )
 use_repo(
-    pycross,
+    backends,
     "pycross_backends",
-    "rules_pycross_internal",
 )
 
 toolchains = use_extension("@rules_pycross//pycross/private/bzlmod:toolchains.bzl", "toolchains")

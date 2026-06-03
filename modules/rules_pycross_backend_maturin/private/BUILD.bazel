@@ -1,0 +1,25 @@
+load("@bazel_skylib//:bzl_library.bzl", "bzl_library")
+
+package(default_visibility = ["//visibility:public"])
+
+bzl_library(
+    name = "rust_layer",
+    srcs = ["rust_layer.bzl"],
+)
+
+bzl_library(
+    name = "cargo",
+    srcs = ["cargo.bzl"],
+    deps = [
+        "@toml.bzl//toml:toml",
+    ],
+)
+
+bzl_library(
+    name = "maturin_sdist_repo",
+    srcs = ["maturin_sdist_repo.bzl"],
+    deps = [
+        ":cargo",
+        "@rules_pycross//pycross/private/bzlmod:sdist_repo",
+    ],
+)

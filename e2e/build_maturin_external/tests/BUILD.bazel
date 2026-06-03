@@ -1,0 +1,13 @@
+load("@rules_python//python:defs.bzl", "py_test")
+
+py_test(
+    name = "test_rpds",
+    srcs = ["test_rpds.py"],
+    deps = ["@uv//:rpds-py"],
+)
+
+py_test(
+    name = "test_captcha",
+    srcs = ["test_captcha.py"],
+    deps = ["@uv//:captcha-rs"],
+)

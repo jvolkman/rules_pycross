@@ -1,4 +1,4 @@
-"""The lock_import extension."""
+"""The pycross extension."""
 
 load("//pycross/private/bzlmod:pycross.bzl", _pycross = "pycross")
 

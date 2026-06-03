@@ -4,7 +4,7 @@ load("@bazel_skylib//rules:write_file.bzl", "write_file")
 load(":target_environment.bzl", "pycross_target_environment")
 load(":uv_lock_model.bzl", "pycross_uv_lock_model")
 
-package(default_visibility = ["//pycross:__subpackages__"])
+package(default_visibility = ["//visibility:public"])
 
 bzl_library(
     name = "cc_toolchain_util",
@@ -32,9 +32,6 @@ bzl_library(
 bzl_library(
     name = "interpreter_version",
     srcs = ["interpreter_version.bzl"],
-    # This isn't a public API, but it's publicly accessible because generated
-    # toolchain and environment BUILD rules load from it.
-    visibility = ["//visibility:public"],
     deps = [
         ":rules_python_bzl",
     ],
@@ -153,7 +150,6 @@ pycross_target_environment(
     name = "rules_pycross_deps_target_env",
     python_compatible_with = [],
     version = "3.13.0",
-    visibility = ["//visibility:public"],
 )
 
 # NB: pdm.lock and pyproject.toml are symlinked into this directory from
@@ -183,7 +179,6 @@ $(location //pycross/private/tools:toml_lock_generator) \\
     --output $@
 """,
     tools = ["//pycross/private/tools:toml_lock_generator"],
-    visibility = ["//visibility:public"],
 )
 
 write_source_files(
@@ -217,7 +212,6 @@ write_file(
     name = "dummy_bin_file",
     out = "dummy.txt",
     content = [""],
-    visibility = ["//visibility:public"],
 )
 
 bzl_library(

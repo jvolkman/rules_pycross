@@ -1,12 +1,11 @@
 load("@rules_pycross_internal//:python.bzl", "py_binary", "py_library")
 
-package(default_visibility = ["//pycross:__subpackages__"])
+package(default_visibility = ["//visibility:public"])
 
 py_library(
     name = "utils",
     srcs = glob(["utils/*.py"]),
     imports = ["../../../.."],
-    visibility = ["//visibility:public"],
     deps = [
         "@rules_pycross_internal//deps:build",
         "@rules_pycross_internal//deps:packaging",
@@ -26,7 +25,6 @@ py_binary(
     name = "meson_builder",
     srcs = ["meson_builder.py"],
     imports = ["../../../.."],
-    visibility = ["//visibility:public"],
     deps = [
         ":meson_utils",
         ":utils",
@@ -39,7 +37,6 @@ py_binary(
     name = "cmake_builder",
     srcs = ["cmake_builder.py"],
     imports = ["../../../.."],
-    visibility = ["//visibility:public"],
     deps = [
         ":utils",
         "@rules_pycross_internal//deps:build",
@@ -51,7 +48,6 @@ py_binary(
     name = "pep517_builder",
     srcs = ["pep517_builder.py"],
     imports = ["../../../.."],
-    visibility = ["//visibility:public"],
     deps = [
         ":utils",
         "//pycross/private/build/tools/crossenv",
@@ -64,7 +60,6 @@ py_binary(
     name = "maturin_builder",
     srcs = ["maturin_builder.py"],
     imports = ["../../../.."],
-    visibility = ["//visibility:public"],
     deps = [
         ":utils",
         "//pycross/private/build/tools/crossenv",
@@ -78,7 +73,6 @@ py_binary(
     srcs = [
         "repair_wheel_hook.py",
     ],
-    visibility = ["//visibility:public"],
     deps = [
         "@rules_pycross_internal//deps:packaging",
         "@rules_pycross_internal//deps:repairwheel",
@@ -90,5 +84,4 @@ py_binary(
     srcs = [
         "wheel_transformer.py",
     ],
-    visibility = ["//visibility:public"],
 )
