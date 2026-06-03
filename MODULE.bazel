@@ -41,44 +41,58 @@ pycross.configure_interpreter(
 pycross.configure_toolchains()
 pycross.register_backend(
     name = "meson_build",
+    pyproject_backends = [
+        "mesonpy",
+        "mesonbuild",
+    ],
     rule_bzl = "@rules_pycross//pycross/private/build/rules:meson_build.bzl",
-    pyproject_backends = ["mesonpy", "mesonbuild"],
-    tool_packages = ["meson", "ninja", "meson-python"],
+    tool_packages = [
+        "meson",
+        "ninja",
+        "meson-python",
+    ],
 )
 pycross.register_backend(
     name = "cmake_build",
-    rule_bzl = "@rules_pycross//pycross/private/build/rules:cmake_build.bzl",
     pyproject_backends = ["scikit_build_core.build"],
-    tool_packages = ["cmake", "ninja", "scikit-build-core"],
+    rule_bzl = "@rules_pycross//pycross/private/build/rules:cmake_build.bzl",
+    tool_packages = [
+        "cmake",
+        "ninja",
+        "scikit-build-core",
+    ],
 )
 pycross.register_backend(
     name = "maturin_build",
-    rule_bzl = "@rules_pycross//pycross/private/build/rules:maturin_build.bzl",
     pyproject_backends = ["maturin"],
-    tool_packages = ["maturin"],
+    rule_bzl = "@rules_pycross//pycross/private/build/rules:maturin_build.bzl",
     sdist_repo_bzl = "@rules_pycross//pycross/private/bzlmod:maturin_sdist_repo.bzl",
     sdist_repo_fn = "maturin_sdist_repo",
+    tool_packages = ["maturin"],
 )
 pycross.register_backend(
     name = "setuptools_build",
-    rule_bzl = "@rules_pycross//pycross/private/build/rules:setuptools_build.bzl",
     pyproject_backends = [
         "setuptools.build_meta",
         "setuptools.build_meta:__legacy__",
     ],
-    tool_packages = ["setuptools", "wheel"],
+    rule_bzl = "@rules_pycross//pycross/private/build/rules:setuptools_build.bzl",
+    tool_packages = [
+        "setuptools",
+        "wheel",
+    ],
 )
 pycross.register_backend(
     name = "pep517_build",
-    rule_bzl = "@rules_pycross//pycross/private/build/rules:pep517_build.bzl",
+    default = True,
     pyproject_backends = [
         "hatchling.build",
         "flit_core.buildapi",
         "pdm.backend",
         "poetry.core.masonry.api",
     ],
+    rule_bzl = "@rules_pycross//pycross/private/build/rules:pep517_build.bzl",
     tool_packages = [],
-    default = True,
 )
 use_repo(
     pycross,

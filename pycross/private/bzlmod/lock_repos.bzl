@@ -118,14 +118,14 @@ def _lock_repos_impl(module_ctx):
             deps_set = {}
             for dep in pkg.get("common_dependencies", []):
                 dep_name = dep.split("@")[0]
-                dep_label = "@{}//:{}" .format(repo_name, dep_name)
+                dep_label = "@{}//:{}".format(repo_name, dep_name)
                 deps_set[dep_label] = True
             for env_name, env_file_ref in pkg.get("environment_files", {}).items():
                 if env_file_ref.get("key") != sdist_file_key:
                     continue
                 for dep in pkg.get("environment_dependencies", {}).get(env_name, []):
                     dep_name = dep.split("@")[0]
-                    dep_label = "@{}//:{}" .format(repo_name, dep_name)
+                    dep_label = "@{}//:{}".format(repo_name, dep_name)
                     deps_set[dep_label] = True
 
             sdist_repo_name = "{}_sdist_{}".format(

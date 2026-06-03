@@ -51,8 +51,7 @@ filegroup(
     rctx.file("REPO.bazel", "")
 
 def sdist_repo_common(rctx):
-    """Shared logic for all sdist repo rules: inspect metadata, resolve backend,
-    build macro_attrs, and decode backend_attrs.
+    """Shared sdist repo logic: inspect metadata, resolve backend, decode backend_attrs.
 
     Args:
         rctx: The repository context.

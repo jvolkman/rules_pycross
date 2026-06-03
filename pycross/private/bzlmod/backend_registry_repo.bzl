@@ -76,7 +76,23 @@ def _backend_registry_repo_impl(rctx):
     ])
 
     rctx.file("sdist_dispatch.bzl", "\n".join(dispatch_lines))
-    rctx.file("BUILD.bazel", 'exports_files(["registry.bzl", "sdist_dispatch.bzl"])\n')
+    rctx.file("BUILD.bazel", """\
+load("@bazel_skylib//:bzl_library.bzl", "bzl_library")
+
+exports_files(["registry.bzl", "sdist_dispatch.bzl"])
+
+bzl_library(
+    name = "registry",
+    srcs = ["registry.bzl"],
+    visibility = ["//visibility:public"],
+)
+
+bzl_library(
+    name = "sdist_dispatch",
+    srcs = ["sdist_dispatch.bzl"],
+    visibility = ["//visibility:public"],
+)
+""")
     rctx.file("REPO.bazel", "")
 
 backend_registry_repo = repository_rule(
