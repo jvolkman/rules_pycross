@@ -98,31 +98,42 @@ def _lock_struct(mctx, tag):
         packages = {},
     )
 
-def _normalize_package_tag(tag, build_backend = None):
-    backend_attrs = dict(getattr(tag, "backend_attrs", {}))
-    if getattr(tag, "copts", []):
-        backend_attrs["copts"] = json.encode(tag.copts)
-    if getattr(tag, "linkopts", []):
-        backend_attrs["linkopts"] = json.encode(tag.linkopts)
-    if getattr(tag, "native_deps", []):
-        backend_attrs["native_deps"] = json.encode([str(dep) for dep in tag.native_deps])
-    if getattr(tag, "config_settings", {}):
-        backend_attrs["config_settings"] = json.encode(tag.config_settings)
-    if getattr(tag, "tool_deps", {}):
-        backend_attrs["tool_deps"] = json.encode(tag.tool_deps)
-    if getattr(tag, "cargo_lock", None):
-        backend_attrs["cargo_lock"] = json.encode(str(tag.cargo_lock))
-
+def _make_package_info(tag, build_backend, build_target, backend_attrs):
+    """Build a normalized package info struct from common tag attrs."""
     return struct(
         always_build = tag.always_build,
         build_dependencies = tag.build_dependencies,
-        build_target = getattr(tag, "build_target", None),
+        build_target = build_target,
         ignore_dependencies = tag.ignore_dependencies,
         install_exclude_globs = tag.install_exclude_globs,
         post_install_patches = tag.post_install_patches,
         build_backend = build_backend,
         backend_attrs = backend_attrs,
     )
+
+def _normalize_package_tag(tag):
+    """Normalize a generic package tag (has build_target and backend_attrs)."""
+    return _make_package_info(tag, None, tag.build_target, dict(tag.backend_attrs))
+
+def _normalize_override_tag(tag, build_backend):
+    """Normalize a backend-specific override tag (has typed build-system attrs)."""
+    backend_attrs = {}
+    if tag.copts:
+        backend_attrs["copts"] = json.encode(tag.copts)
+    if tag.linkopts:
+        backend_attrs["linkopts"] = json.encode(tag.linkopts)
+    if tag.native_deps:
+        backend_attrs["native_deps"] = json.encode([str(dep) for dep in tag.native_deps])
+    if tag.config_settings:
+        backend_attrs["config_settings"] = json.encode(tag.config_settings)
+    if tag.tool_deps:
+        backend_attrs["tool_deps"] = json.encode(tag.tool_deps)
+
+    # cargo_lock is maturin-specific; other override tags don't have it.
+    if hasattr(tag, "cargo_lock") and tag.cargo_lock:
+        backend_attrs["cargo_lock"] = json.encode(str(tag.cargo_lock))
+
+    return _make_package_info(tag, build_backend, None, backend_attrs)
 
 def _lock_import_impl(module_ctx):
     lock_owners = {}
@@ -157,25 +168,25 @@ def _lock_import_impl(module_ctx):
             _check_proper_package_repo(lock_owners, module, tag)
             repo_info = lock_repos[tag.repo]
             _check_package_entry_not_set(lock_owners, repo_info, tag)
-            repo_info.packages[tag.name] = _normalize_package_tag(tag, build_backend = "meson_build")
+            repo_info.packages[tag.name] = _normalize_override_tag(tag, "meson_build")
 
         for tag in module.tags.setuptools_override:
             _check_proper_package_repo(lock_owners, module, tag)
             repo_info = lock_repos[tag.repo]
             _check_package_entry_not_set(lock_owners, repo_info, tag)
-            repo_info.packages[tag.name] = _normalize_package_tag(tag, build_backend = "setuptools_build")
+            repo_info.packages[tag.name] = _normalize_override_tag(tag, "setuptools_build")
 
         for tag in module.tags.cmake_override:
             _check_proper_package_repo(lock_owners, module, tag)
             repo_info = lock_repos[tag.repo]
             _check_package_entry_not_set(lock_owners, repo_info, tag)
-            repo_info.packages[tag.name] = _normalize_package_tag(tag, build_backend = "cmake_build")
+            repo_info.packages[tag.name] = _normalize_override_tag(tag, "cmake_build")
 
         for tag in module.tags.maturin_override:
             _check_proper_package_repo(lock_owners, module, tag)
             repo_info = lock_repos[tag.repo]
             _check_package_entry_not_set(lock_owners, repo_info, tag)
-            repo_info.packages[tag.name] = _normalize_package_tag(tag, build_backend = "maturin_build")
+            repo_info.packages[tag.name] = _normalize_override_tag(tag, "maturin_build")
 
     # Generate the resolved lock repos
     for repo_name, repo_info in lock_repos.items():
