@@ -7,9 +7,9 @@ package(default_visibility = ["//visibility:private"])
 stardoc(
     name = "rules_gen",
     out = "rules.gen.md",
-    input = "//pycross:defs.bzl",
+    input = "@rules_pycross//pycross:defs.bzl",
     deps = [
-        "//pycross:defs",
+        "@rules_pycross//pycross:defs",
         "@rules_cc//cc:find_cc_toolchain_bzl",
     ],
 )
@@ -18,9 +18,9 @@ stardoc(
 stardoc(
     name = "ext_environments_gen",
     out = "ext_environments.gen.md",
-    input = "//pycross/extensions:environments.bzl",
+    input = "@rules_pycross//pycross/extensions:environments.bzl",
     deps = [
-        "//pycross/extensions:environments",
+        "@rules_pycross//pycross/extensions:environments",
         "@rules_cc//cc:find_cc_toolchain_bzl",
     ],
 )
@@ -29,9 +29,9 @@ stardoc(
 stardoc(
     name = "ext_lock_import_gen",
     out = "ext_lock_import.gen.md",
-    input = "//pycross/extensions:lock_import.bzl",
+    input = "@rules_pycross//pycross/extensions:lock_import.bzl",
     deps = [
-        "//pycross/extensions:lock_import",
+        "@rules_pycross//pycross/extensions:lock_import",
         "@rules_cc//cc:find_cc_toolchain_bzl",
     ],
 )
@@ -40,13 +40,13 @@ stardoc(
 stardoc(
     name = "ext_lock_repos_gen",
     out = "ext_lock_repos.gen.md",
-    input = "//pycross/extensions:lock_repos.bzl",
+    input = "@rules_pycross//pycross/extensions:lock_repos.bzl",
     deps = [
-        "//pycross/extensions:lock_repos",
+        "@rules_pycross//pycross/extensions:lock_repos",
         "@rules_cc//cc:find_cc_toolchain_bzl",
         "@rules_pycross_backend_maturin//private:maturin_sdist_repo",
-        "//pycross:backend",
-        "//pycross:backend_repo",
+        "@rules_pycross//pycross:backend",
+        "@rules_pycross//pycross:backend_repo",
     ],
 )
 
@@ -54,9 +54,9 @@ stardoc(
 stardoc(
     name = "ext_pycross_gen",
     out = "ext_pycross.gen.md",
-    input = "//pycross/extensions:pycross.bzl",
+    input = "@rules_pycross//pycross/extensions:pycross.bzl",
     deps = [
-        "//pycross/extensions:pycross",
+        "@rules_pycross//pycross/extensions:pycross",
         "@rules_cc//cc:find_cc_toolchain_bzl",
     ],
 )

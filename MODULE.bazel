@@ -134,13 +134,5 @@ py_library(
 
 # Currently development-only
 bazel_dep(name = "gazelle", version = "0.50.0", dev_dependency = True)
-bazel_dep(name = "stardoc", version = "0.6.2", dev_dependency = True)
 bazel_dep(name = "bazel_skylib_gazelle_plugin", version = "1.5.0", dev_dependency = True)
 bazel_dep(name = "buildifier_prebuilt", version = "8.2.1", dev_dependency = True)
-
-# Include for docs generation
-bazel_dep(name = "rules_pycross_backend_maturin", version = "0.0.0", dev_dependency = True)
-local_path_override(
-    module_name = "rules_pycross_backend_maturin",
-    path = "modules/backend_maturin",
-)

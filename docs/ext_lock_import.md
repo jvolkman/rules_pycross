@@ -59,7 +59,7 @@ Import a PDM lock file.
 | <a id="lock_import.import_pdm-project_file"></a>project_file |  The pyproject.toml file.   | <a href="https://bazel.build/concepts/labels">Label</a> | required |  |
 | <a id="lock_import.import_pdm-repo"></a>repo |  The repository name   | String | required |  |
 | <a id="lock_import.import_pdm-require_static_urls"></a>require_static_urls |  Require that the lock file is created with --static-urls.   | Boolean | optional |  `True`  |
-| <a id="lock_import.import_pdm-target_environments"></a>target_environments |  A list of target environment descriptors.   | <a href="https://bazel.build/concepts/labels">List of labels</a> | optional |  `["@pycross_environments//:environments"]`  |
+| <a id="lock_import.import_pdm-target_environments"></a>target_environments |  A list of target environment descriptors.   | <a href="https://bazel.build/concepts/labels">List of labels</a> | optional |  `["@@rules_pycross++environments+pycross_environments//:environments"]`  |
 
 <a id="lock_import.import_poetry"></a>
 
@@ -81,7 +81,7 @@ Import a Poetry lock file.
 | <a id="lock_import.import_poetry-optional_groups"></a>optional_groups |  List of optional dependency groups to install.   | List of strings | optional |  `[]`  |
 | <a id="lock_import.import_poetry-project_file"></a>project_file |  The pyproject.toml file.   | <a href="https://bazel.build/concepts/labels">Label</a> | required |  |
 | <a id="lock_import.import_poetry-repo"></a>repo |  The repository name   | String | required |  |
-| <a id="lock_import.import_poetry-target_environments"></a>target_environments |  A list of target environment descriptors.   | <a href="https://bazel.build/concepts/labels">List of labels</a> | optional |  `["@pycross_environments//:environments"]`  |
+| <a id="lock_import.import_poetry-target_environments"></a>target_environments |  A list of target environment descriptors.   | <a href="https://bazel.build/concepts/labels">List of labels</a> | optional |  `["@@rules_pycross++environments+pycross_environments//:environments"]`  |
 
 <a id="lock_import.import_uv"></a>
 
@@ -106,7 +106,7 @@ Import a uv lock file.
 | <a id="lock_import.import_uv-project_file"></a>project_file |  The pyproject.toml file.   | <a href="https://bazel.build/concepts/labels">Label</a> | required |  |
 | <a id="lock_import.import_uv-repo"></a>repo |  The repository name   | String | required |  |
 | <a id="lock_import.import_uv-require_static_urls"></a>require_static_urls |  Require that the lock file is created with --static-urls.   | Boolean | optional |  `True`  |
-| <a id="lock_import.import_uv-target_environments"></a>target_environments |  A list of target environment descriptors.   | <a href="https://bazel.build/concepts/labels">List of labels</a> | optional |  `["@pycross_environments//:environments"]`  |
+| <a id="lock_import.import_uv-target_environments"></a>target_environments |  A list of target environment descriptors.   | <a href="https://bazel.build/concepts/labels">List of labels</a> | optional |  `["@@rules_pycross++environments+pycross_environments//:environments"]`  |
 
 <a id="lock_import.package"></a>
 
