@@ -10,7 +10,8 @@ Meson build backend for rules_pycross.
 load("@rules_pycross//pycross/backends:meson.bzl", "meson_build")
 
 meson_build(<a href="#meson_build-name">name</a>, <a href="#meson_build-deps">deps</a>, <a href="#meson_build-build_deps">build_deps</a>, <a href="#meson_build-config_settings">config_settings</a>, <a href="#meson_build-copts">copts</a>, <a href="#meson_build-linkopts">linkopts</a>, <a href="#meson_build-meson_properties">meson_properties</a>, <a href="#meson_build-native_deps">native_deps</a>,
-            <a href="#meson_build-path_tools">path_tools</a>, <a href="#meson_build-pkg_config_files">pkg_config_files</a>, <a href="#meson_build-sdist">sdist</a>, <a href="#meson_build-site_hooks">site_hooks</a>, <a href="#meson_build-target_environment">target_environment</a>, <a href="#meson_build-tool_deps">tool_deps</a>)
+            <a href="#meson_build-path_tools">path_tools</a>, <a href="#meson_build-pkg_config_files">pkg_config_files</a>, <a href="#meson_build-pre_build_patches">pre_build_patches</a>, <a href="#meson_build-sdist">sdist</a>, <a href="#meson_build-site_hooks">site_hooks</a>, <a href="#meson_build-target_environment">target_environment</a>,
+            <a href="#meson_build-tool_deps">tool_deps</a>)
 </pre>
 
 
@@ -30,6 +31,7 @@ meson_build(<a href="#meson_build-name">name</a>, <a href="#meson_build-deps">de
 | <a id="meson_build-native_deps"></a>native_deps |  -   | <a href="https://bazel.build/concepts/labels">List of labels</a> | optional |  `[]`  |
 | <a id="meson_build-path_tools"></a>path_tools |  -   | <a href="https://bazel.build/concepts/labels">List of labels</a> | optional |  `[]`  |
 | <a id="meson_build-pkg_config_files"></a>pkg_config_files |  -   | <a href="https://bazel.build/concepts/labels">List of labels</a> | optional |  `[]`  |
+| <a id="meson_build-pre_build_patches"></a>pre_build_patches |  Patch files to apply to the sdist source tree before building.   | <a href="https://bazel.build/concepts/labels">List of labels</a> | optional |  `[]`  |
 | <a id="meson_build-sdist"></a>sdist |  -   | <a href="https://bazel.build/concepts/labels">Label</a> | required |  |
 | <a id="meson_build-site_hooks"></a>site_hooks |  -   | List of strings | optional |  `[]`  |
 | <a id="meson_build-target_environment"></a>target_environment |  The target environment mapping JSON (resolved dynamically via alias filegroup).   | <a href="https://bazel.build/concepts/labels">Label</a> | optional |  `"@@rules_pycross++environments+pycross_environments//:current"`  |

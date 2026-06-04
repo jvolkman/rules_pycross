@@ -20,6 +20,10 @@ COMMON_BUILD_ATTRS = {
         providers = [PyInfo],
         cfg = pycross_exec_platform_transition,
     ),
+    "pre_build_patches": attr.label_list(
+        doc = "Patch files to apply to the sdist source tree before building.",
+        allow_files = [".patch", ".diff"],
+    ),
     "_dummy_bin_file": attr.label(
         default = Label("//pycross/private:dummy_bin_file"),
         allow_single_file = True,

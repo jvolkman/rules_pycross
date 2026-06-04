@@ -193,6 +193,7 @@ class PackageAnnotations:
     ignore_dependencies: Set[str] = field(default_factory=set)
     install_exclude_globs: Set[str] = field(default_factory=set)
     post_install_patches: List[str] = field(default_factory=list)
+    pre_build_patches: List[str] = field(default_factory=list)
     build_backend: Optional[str] = None
     backend_attrs: Dict[str, str] = field(default_factory=dict)
 
@@ -219,6 +220,7 @@ class PackageResolver:
         self._build_target = annotations.build_target
         self._install_exclude_globs = annotations.install_exclude_globs
         self._post_install_patches = annotations.post_install_patches
+        self._pre_build_patches = annotations.pre_build_patches
         self._build_backend = annotations.build_backend
         self._backend_attrs = annotations.backend_attrs
 
@@ -276,6 +278,7 @@ class PackageResolver:
             sdist_file=self.sdist_file,
             install_exclude_globs=list(self._install_exclude_globs),
             post_install_patches=self._post_install_patches,
+            pre_build_patches=self._pre_build_patches,
             build_backend=self._build_backend,
             backend_attrs=self._backend_attrs,
         )
@@ -361,6 +364,9 @@ def collect_package_annotations(args: Any, lock_model: RawLockSet) -> Dict[Packa
 
         for patch in annotation.get("post_install_patches", []):
             annotations[resolved_pkg].post_install_patches.append(patch)
+
+        for patch in annotation.get("pre_build_patches", []):
+            annotations[resolved_pkg].pre_build_patches.append(patch)
 
         if annotation.get("build_backend") is not None:
             annotations[resolved_pkg].build_backend = annotation["build_backend"]

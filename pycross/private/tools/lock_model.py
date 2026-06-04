@@ -231,6 +231,7 @@ class ResolvedPackage:
     sdist_file: Optional[FileReference] = None
     install_exclude_globs: List[str] = field(default_factory=list)
     post_install_patches: List[str] = field(default_factory=list)
+    pre_build_patches: List[str] = field(default_factory=list)
     build_backend: Optional[str] = None
     backend_attrs: Dict[str, str] = field(default_factory=dict)
 

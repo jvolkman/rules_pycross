@@ -98,6 +98,7 @@ def _maturin_build_impl(ctx):
         extra_files = extra_files,
         extra_inputs = ctx.files.vendored_crates if ctx.attr.vendored_crates else [],
         cargo_vendored_sources = cargo_vendored_sources,
+        pre_build_patches = ctx.files.pre_build_patches,
     )
 
     # 4. Repair wheel

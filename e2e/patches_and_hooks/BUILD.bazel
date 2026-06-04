@@ -1,0 +1,39 @@
+load("@rules_pycross//pycross:defs.bzl", "pycross_wheel_library")
+load("@uv//_backend:setuptools_build.bzl", "setuptools_build")
+load("//shared:collect_wheels.bzl", "collect_wheels")
+
+package(default_visibility = ["//visibility:public"])
+
+collect_wheels(
+    name = "all_wheels",
+    platforms = [
+        "@llvm//platforms:linux_x86_64",
+        "@llvm//platforms:macos_aarch64",
+    ],
+    wheels = [
+        "@uv//_wheel:psycopg2",
+        "@uv//_wheel:setproctitle",
+        ":zstandard_build",
+    ],
+)
+
+setuptools_build(
+    name = "zstandard_build",
+    config_settings = {
+        "--build-option": [
+            "--no-cffi-backend",
+            "--system-zstd",
+        ],
+    },
+    copts = ["-Wl,-s"],
+    native_deps = [
+        "//third_party/zstd",
+    ],
+    sdist = "@uv//zstandard:sdist",
+    tags = ["manual"],
+)
+
+pycross_wheel_library(
+    name = "zstandard",
+    wheel = ":zstandard_build",
+)

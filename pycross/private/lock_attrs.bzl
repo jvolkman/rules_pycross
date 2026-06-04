@@ -259,6 +259,7 @@ def package_annotation(
         ignore_dependencies = [],
         install_exclude_globs = [],
         post_install_patches = [],
+        pre_build_patches = [],
         build_backend = None,
         backend_attrs = {}):
     """Annotations to apply to individual packages.
@@ -270,6 +271,7 @@ def package_annotation(
       ignore_dependencies (list, optional): A list of package keys (name or name@version) to drop from this package's set of declared dependencies.
       install_exclude_globs (list, optional): A list of globs for files to exclude during installation.
       post_install_patches (list, optional): A list of patches to apply after wheel installation.
+      pre_build_patches (list, optional): A list of patches to apply to the sdist source tree before building.
       build_backend (str, optional): The build backend macro to use (e.g., "meson_build" or "setuptools_build").
       backend_attrs (dict, optional): Arbitrary backend-specific attributes (JSON-encoded values).
 
@@ -283,6 +285,7 @@ def package_annotation(
         ignore_dependencies = ignore_dependencies,
         install_exclude_globs = install_exclude_globs,
         post_install_patches = post_install_patches,
+        pre_build_patches = pre_build_patches,
         build_backend = build_backend,
         backend_attrs = backend_attrs,
     ))

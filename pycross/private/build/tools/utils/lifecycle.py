@@ -40,11 +40,29 @@ class BackendStrategy:
     prepare_env: Callable[[BuildContext], None] = lambda ctx: None
 
 
+def _apply_pre_build_patches(ctx: BuildContext) -> None:
+    """Apply pre-build patches to the extracted sdist directory."""
+    patches = ctx.bazel_config.get("pre_build_patches", [])
+    if not patches:
+        return
+    import patch_ng
+
+    for patch_path in patches:
+        abs_path = ctx.prefix / patch_path
+        print(f"Applying pre-build patch: {abs_path}", file=sys.stderr)
+        patch_file = patch_ng.fromfile(str(abs_path))
+        if not patch_file:
+            raise SystemExit(f"error: failed to parse patch file: {abs_path}")
+        if not patch_file.apply(root=ctx.sdist_dir):
+            raise SystemExit(f"error: failed to apply patch file: {abs_path}")
+
+
 def run_standard_build_lifecycle(config_path: str, strategy: BackendStrategy) -> None:
     ctx = load_build_context(config_path)
     extract_sdist(ctx)
     os.chdir(ctx.sdist_dir)
     _inject_extra_files(ctx)
+    _apply_pre_build_patches(ctx)
 
     ctx.sysconfig_vars = load_target_sysconfig(ctx)
     setup_path_tools(ctx)

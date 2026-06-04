@@ -1,0 +1,4 @@
+shared/bazel-shared
+shared/bazel-out
+shared/bazel-bin
+shared/bazel-testlogs

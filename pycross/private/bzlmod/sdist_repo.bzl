@@ -140,6 +140,10 @@ def sdist_repo_common(rctx):
         else:
             macro_attrs[attr_name] = str(decoded)
 
+    # Pass through pre_build_patches if specified.
+    if rctx.attr.pre_build_patches:
+        macro_attrs["pre_build_patches"] = str(rctx.attr.pre_build_patches)
+
     return struct(
         macro_attrs = macro_attrs,
         backend_macro = backend_macro,
@@ -166,6 +170,7 @@ _SDIST_REPO_ATTRS = {
     ),
     "build_dependencies": attr.string_list(doc = "Overridden build-time dependencies."),
     "backend_attrs": attr.string_dict(doc = "Arbitrary backend-specific attrs. Keys are attr names; values are JSON-encoded Starlark literals."),
+    "pre_build_patches": attr.string_list(doc = "Patches to apply to the sdist source tree before building."),
 }
 
 pycross_sdist_repo = repository_rule(

@@ -41,6 +41,7 @@ jobs:
           "e2e/always_build",
           "e2e/generate_lock",
           "e2e/local_wheel",
+          "e2e/patches_and_hooks",
           "e2e/requirements"
         ]
       exclude: |

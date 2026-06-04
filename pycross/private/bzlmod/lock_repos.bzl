@@ -145,7 +145,7 @@ def _lock_repos_impl(module_ctx):
             if "build_dependencies" in pkg and pkg["build_dependencies"] != None:
                 sdist_repo_attrs["build_dependencies"] = pkg["build_dependencies"]
 
-            for attr_name in ("build_backend", "backend_attrs"):
+            for attr_name in ("build_backend", "backend_attrs", "pre_build_patches"):
                 if attr_name in pkg and pkg[attr_name] != None:
                     sdist_repo_attrs[attr_name] = pkg[attr_name]
 

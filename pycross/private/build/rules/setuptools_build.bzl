@@ -43,6 +43,7 @@ def _setuptools_build_impl(ctx):
         tool_executables = tool_executables,
         layers = [cc_layer],
         pkg_config_files = ctx.files.pkg_config_files,
+        pre_build_patches = ctx.files.pre_build_patches,
     )
 
     if ctx.attr.native_deps:

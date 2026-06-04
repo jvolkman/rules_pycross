@@ -39,6 +39,7 @@ def register_pep517_action(
         pkg_config_files = [],
         extra_files = {},
         extra_inputs = [],
+        pre_build_patches = [],
         cargo_vendored_sources = None):
     """Registers the PEP 517 wheel build action.
 
@@ -56,6 +57,7 @@ def register_pep517_action(
         extra_files: dict[str, File], files to inject into the sdist directory
             before building, keyed by their target filename (e.g. "Cargo.lock").
         extra_inputs: list[File], extra inputs to the action.
+        pre_build_patches: list[File], patch files to apply to the sdist before building.
         cargo_vendored_sources: str, path to the vendored cargo sources relative to the execution root.
 
     Returns:
@@ -190,6 +192,13 @@ def register_pep517_action(
             extra_files_config[name] = f.path
             inputs.append(f)
         main_config["extra_files"] = extra_files_config
+
+    if pre_build_patches:
+        patch_paths = []
+        for f in pre_build_patches:
+            patch_paths.append(f.path)
+            inputs.append(f)
+        main_config["pre_build_patches"] = patch_paths
 
     config_json = ctx.actions.declare_file(ctx.label.name + "_config.json")
     ctx.actions.write(config_json, json.encode(main_config))

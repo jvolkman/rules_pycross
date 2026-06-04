@@ -65,6 +65,9 @@ PACKAGE_ATTRS = dict(
     post_install_patches = attr.string_list(
         doc = "A list of patches to apply after wheel installation.",
     ),
+    pre_build_patches = attr.string_list(
+        doc = "A list of patches to apply to the sdist source tree before building.",
+    ),
     backend_attrs = attr.string_dict(
         doc = "Arbitrary backend-specific attributes. Keys are attr names on the backend rule; " +
               "values are JSON-encoded Starlark literals (e.g. '[\"a\", \"b\"]' for a list, " +

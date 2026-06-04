@@ -30,6 +30,7 @@ def _generate_resolved_lock_repo(lock_info, serialized_lock_model):
             ignore_dependencies = package.ignore_dependencies,
             install_exclude_globs = package.install_exclude_globs,
             post_install_patches = package.post_install_patches,
+            pre_build_patches = package.pre_build_patches,
             build_backend = package.build_backend,
             backend_attrs = package.backend_attrs,
         )
@@ -107,6 +108,7 @@ def _normalize_package_tag(tag):
         ignore_dependencies = tag.ignore_dependencies,
         install_exclude_globs = tag.install_exclude_globs,
         post_install_patches = tag.post_install_patches,
+        pre_build_patches = tag.pre_build_patches,
         build_backend = None,
         backend_attrs = dict(tag.backend_attrs),
     )
@@ -171,6 +173,7 @@ def _lock_import_impl(module_ctx):
                 ignore_dependencies = override.get("ignore_dependencies", getattr(existing, "ignore_dependencies", [])),
                 install_exclude_globs = override.get("install_exclude_globs", getattr(existing, "install_exclude_globs", [])),
                 post_install_patches = override.get("post_install_patches", getattr(existing, "post_install_patches", [])),
+                pre_build_patches = override.get("pre_build_patches", getattr(existing, "pre_build_patches", [])),
                 build_backend = override.get("build_backend", getattr(existing, "build_backend", None)),
                 backend_attrs = merged_backend_attrs,
             )
@@ -182,6 +185,7 @@ def _lock_import_impl(module_ctx):
                 ignore_dependencies = override.get("ignore_dependencies", []),
                 install_exclude_globs = override.get("install_exclude_globs", []),
                 post_install_patches = override.get("post_install_patches", []),
+                pre_build_patches = override.get("pre_build_patches", []),
                 build_backend = override.get("build_backend"),
                 backend_attrs = override.get("backend_attrs", {}),
             )

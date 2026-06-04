@@ -71,6 +71,7 @@ def _cmake_build_impl(ctx):
         tool_executables = tool_executables,
         layers = [cc_layer],
         pkg_config_files = ctx.files.pkg_config_files,
+        pre_build_patches = ctx.files.pre_build_patches,
     )
 
     # 4. Repair wheel — CMake builds always produce native code.

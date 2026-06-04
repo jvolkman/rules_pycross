@@ -7,6 +7,7 @@ py_library(
     srcs = glob(["utils/*.py"]),
     imports = ["../../../.."],
     deps = [
+        "//pycross/private/tools:patch_ng",
         "@rules_pycross_internal//deps:build",
         "@rules_pycross_internal//deps:packaging",
     ],

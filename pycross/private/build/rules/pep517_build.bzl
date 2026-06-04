@@ -26,6 +26,7 @@ def _pep517_build_impl(ctx):
         builder = ctx.attr._builder,
         deps = ctx.attr.deps,
         build_deps = ctx.attr.build_deps,
+        pre_build_patches = ctx.files.pre_build_patches,
     )
 
     return [
