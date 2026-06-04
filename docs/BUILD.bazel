@@ -44,6 +44,9 @@ stardoc(
     deps = [
         "//pycross/extensions:lock_repos",
         "@rules_cc//cc:find_cc_toolchain_bzl",
+        "@rules_pycross_backend_maturin//private:maturin_sdist_repo",
+        "//pycross:backend",
+        "//pycross:backend_repo",
     ],
 )
 
@@ -58,6 +61,26 @@ stardoc(
     ],
 )
 
+# backend_maturin rules
+stardoc(
+    name = "maturin_rules_gen",
+    out = "maturin_rules.gen.md",
+    input = "@rules_pycross_backend_maturin//:defs.bzl",
+    deps = [
+        "@rules_pycross_backend_maturin//:defs",
+    ],
+)
+
+# backend_maturin extension
+stardoc(
+    name = "ext_maturin_gen",
+    out = "ext_maturin.gen.md",
+    input = "@rules_pycross_backend_maturin//extensions:overrides.bzl",
+    deps = [
+        "@rules_pycross_backend_maturin//extensions:overrides",
+    ],
+)
+
 # Update and test checked-in docs
 write_source_files(
     name = "update",
@@ -67,5 +90,7 @@ write_source_files(
         "ext_lock_import.md": ":ext_lock_import_gen",
         "ext_lock_repos.md": ":ext_lock_repos_gen",
         "ext_pycross.md": ":ext_pycross_gen",
+        "maturin_rules.md": ":maturin_rules_gen",
+        "ext_maturin.md": ":ext_maturin_gen",
     },
 )

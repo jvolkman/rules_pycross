@@ -15,6 +15,11 @@ bazel_dep(name = "rules_python", version = "1.0.0")
 bazel_dep(name = "toml.bzl", version = "0.4.1")
 
 bazel_dep(name = "buildifier_prebuilt", version = "8.2.1", dev_dependency = True)
+bazel_dep(name = "rules_pycross_backend_maturin", version = "0.0.0", dev_dependency = True)
+local_path_override(
+    module_name = "rules_pycross_backend_maturin",
+    path = "modules/backend_maturin",
+)
 
 # Change this value to set the Python version we use in our repo venv.
 PYTHON_VERSION = "3.13"
