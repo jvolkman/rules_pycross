@@ -81,6 +81,36 @@ stardoc(
     ],
 )
 
+# setuptools extension
+stardoc(
+    name = "ext_setuptools_gen",
+    out = "ext_setuptools.gen.md",
+    input = "@rules_pycross//pycross/extensions:setuptools.bzl",
+    deps = [
+        "@rules_pycross//pycross/extensions:setuptools",
+    ],
+)
+
+# meson extension
+stardoc(
+    name = "ext_meson_gen",
+    out = "ext_meson.gen.md",
+    input = "@rules_pycross//pycross/extensions:meson.bzl",
+    deps = [
+        "@rules_pycross//pycross/extensions:meson",
+    ],
+)
+
+# cmake extension
+stardoc(
+    name = "ext_cmake_gen",
+    out = "ext_cmake.gen.md",
+    input = "@rules_pycross//pycross/extensions:cmake.bzl",
+    deps = [
+        "@rules_pycross//pycross/extensions:cmake",
+    ],
+)
+
 # Update and test checked-in docs
 write_source_files(
     name = "update",
@@ -92,5 +122,8 @@ write_source_files(
         "ext_pycross.md": ":ext_pycross_gen",
         "maturin_rules.md": ":maturin_rules_gen",
         "ext_maturin.md": ":ext_maturin_gen",
+        "ext_setuptools.md": ":ext_setuptools_gen",
+        "ext_meson.md": ":ext_meson_gen",
+        "ext_cmake.md": ":ext_cmake_gen",
     },
 )

@@ -7,7 +7,7 @@ load("//pycross/private:poetry_lock_model.bzl", "lock_repo_model_poetry")
 load("//pycross/private:resolved_lock_repo.bzl", "resolved_lock_repo")
 load("//pycross/private:uv_lock_model.bzl", "lock_repo_model_uv")
 load(":lock_hub_repo.bzl", "lock_hub_repo")
-load(":tag_attrs.bzl", "CMAKE_OVERRIDE_ATTRS", "COMMON_ATTRS", "COMMON_IMPORT_ATTRS", "MESON_OVERRIDE_ATTRS", "PACKAGE_ATTRS", "PDM_IMPORT_ATTRS", "POETRY_IMPORT_ATTRS", "SETUPTOOLS_OVERRIDE_ATTRS", "UV_IMPORT_ATTRS")
+load(":tag_attrs.bzl", "COMMON_ATTRS", "COMMON_IMPORT_ATTRS", "PACKAGE_ATTRS", "PDM_IMPORT_ATTRS", "POETRY_IMPORT_ATTRS", "UV_IMPORT_ATTRS")
 
 def _generate_resolved_lock_repo(lock_info, serialized_lock_model):
     repo_name = lock_info.repo_name
@@ -115,25 +115,6 @@ def _normalize_package_tag(tag):
     """Normalize a generic package tag (has build_target and backend_attrs)."""
     return _make_package_info(tag, None, tag.build_target, dict(tag.backend_attrs))
 
-def _normalize_override_tag(tag, build_backend):
-    """Normalize a backend-specific override tag (has typed build-system attrs)."""
-    backend_attrs = {}
-    if tag.copts:
-        backend_attrs["copts"] = json.encode(tag.copts)
-    if tag.linkopts:
-        backend_attrs["linkopts"] = json.encode(tag.linkopts)
-    if tag.native_deps:
-        backend_attrs["native_deps"] = json.encode([str(dep) for dep in tag.native_deps])
-    if tag.config_settings:
-        backend_attrs["config_settings"] = json.encode(tag.config_settings)
-    if tag.tool_deps:
-        backend_attrs["tool_deps"] = json.encode(tag.tool_deps)
-
-    return {
-        "build_backend": build_backend,
-        "backend_attrs": backend_attrs,
-    }
-
 def _lock_import_impl(module_ctx):
     lock_owners = {}
     lock_repos = {}
@@ -167,21 +148,6 @@ def _lock_import_impl(module_ctx):
     all_overrides = {}
 
     for module in module_ctx.modules:
-        for tag in module.tags.meson_override:
-            _check_proper_package_repo(lock_owners, module, tag)
-            key = "{}:{}".format(tag.repo, tag.name)
-            all_overrides[key] = _normalize_override_tag(tag, "meson_build")
-
-        for tag in module.tags.setuptools_override:
-            _check_proper_package_repo(lock_owners, module, tag)
-            key = "{}:{}".format(tag.repo, tag.name)
-            all_overrides[key] = _normalize_override_tag(tag, "setuptools_build")
-
-        for tag in module.tags.cmake_override:
-            _check_proper_package_repo(lock_owners, module, tag)
-            key = "{}:{}".format(tag.repo, tag.name)
-            all_overrides[key] = _normalize_override_tag(tag, "cmake_build")
-
         for tag in module.tags.override_source:
             overrides_json = module_ctx.read(tag.file)
             external_overrides = json.decode(overrides_json)
@@ -196,12 +162,12 @@ def _lock_import_impl(module_ctx):
         if repo_name not in lock_repos:
             fail("Override references unknown lock repo '{}'".format(repo_name))
         repo_info = lock_repos[repo_name]
-        
+
         if pkg_name in repo_info.packages:
             existing = repo_info.packages[pkg_name]
             merged_backend_attrs = dict(getattr(existing, "backend_attrs", {}))
             merged_backend_attrs.update(override.get("backend_attrs", {}))
-            
+
             repo_info.packages[pkg_name] = struct(
                 always_build = override.get("always_build", getattr(existing, "always_build", False)),
                 build_dependencies = override.get("build_dependencies", getattr(existing, "build_dependencies", [])),
@@ -255,18 +221,6 @@ _package_tag = tag_class(
     doc = "Specify package-specific settings.",
     attrs = PACKAGE_ATTRS | COMMON_ATTRS,
 )
-_meson_override_tag = tag_class(
-    doc = "Specify meson-specific overrides.",
-    attrs = MESON_OVERRIDE_ATTRS | COMMON_ATTRS,
-)
-_setuptools_override_tag = tag_class(
-    doc = "Specify setuptools-specific overrides.",
-    attrs = SETUPTOOLS_OVERRIDE_ATTRS | COMMON_ATTRS,
-)
-_cmake_override_tag = tag_class(
-    doc = "Specify cmake-specific overrides.",
-    attrs = CMAKE_OVERRIDE_ATTRS | COMMON_ATTRS,
-)
 
 _override_source_tag = tag_class(
     doc = "Register an external override source (JSON file from a backend extension).",
@@ -287,8 +241,5 @@ lock_import = module_extension(
         import_uv = _import_uv_tag,
         package = _package_tag,
         override_source = _override_source_tag,
-        meson_override = _meson_override_tag,
-        setuptools_override = _setuptools_override_tag,
-        cmake_override = _cmake_override_tag,
     ),
 )

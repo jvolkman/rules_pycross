@@ -74,7 +74,7 @@ PACKAGE_ATTRS = dict(
 
 # Attrs specific to build-system overrides (meson, setuptools, etc.).
 # These do not belong on the generic package() tag.
-_BUILD_SYSTEM_ATTRS = dict(
+BUILD_SYSTEM_ATTRS = dict(
     copts = attr.string_list(doc = "Extra C++ compiler options."),
     linkopts = attr.string_list(doc = "Extra linker options."),
     native_deps = attr.label_list(doc = "CC dependencies to link against."),
@@ -89,7 +89,7 @@ UV_IMPORT_ATTRS = _UV_IMPORT_ATTRS
 POETRY_IMPORT_ATTRS = _POETRY_IMPORT_ATTRS
 REGISTER_TOOLCHAINS_ATTRS = _REGISTER_TOOLCHAINS_ATTRS
 
-_CORE_OVERRIDE_ATTRS = dict(
+CORE_OVERRIDE_ATTRS = dict(
     name = attr.string(
         doc = "The package key (name or name@version).",
         mandatory = True,
@@ -100,8 +100,8 @@ _CORE_OVERRIDE_ATTRS = dict(
     ),
 )
 
-MESON_OVERRIDE_ATTRS = dict(_CORE_OVERRIDE_ATTRS, **_BUILD_SYSTEM_ATTRS)
+MESON_OVERRIDE_ATTRS = dict(CORE_OVERRIDE_ATTRS, **BUILD_SYSTEM_ATTRS)
 
-SETUPTOOLS_OVERRIDE_ATTRS = dict(_CORE_OVERRIDE_ATTRS, **_BUILD_SYSTEM_ATTRS)
+SETUPTOOLS_OVERRIDE_ATTRS = dict(CORE_OVERRIDE_ATTRS, **BUILD_SYSTEM_ATTRS)
 
-CMAKE_OVERRIDE_ATTRS = dict(_CORE_OVERRIDE_ATTRS, **_BUILD_SYSTEM_ATTRS)
+CMAKE_OVERRIDE_ATTRS = dict(CORE_OVERRIDE_ATTRS, **BUILD_SYSTEM_ATTRS)
