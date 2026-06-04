@@ -54,6 +54,7 @@ backends.register(
         "ninja",
         "meson-python",
     ],
+    override_json = "@meson_overrides//:overrides.json",
 )
 backends.register(
     name = "cmake_build",
@@ -64,6 +65,7 @@ backends.register(
         "ninja",
         "scikit-build-core",
     ],
+    override_json = "@cmake_overrides//:overrides.json",
 )
 backends.register(
     name = "setuptools_build",
@@ -76,7 +78,10 @@ backends.register(
         "setuptools",
         "wheel",
     ],
+    override_json = "@setuptools_overrides//:overrides.json",
 )
+# Generic PEP 517 fallback backend. Does not need override_json since it has
+# no backend-specific build system attributes to inject.
 backends.register(
     name = "pep517_build",
     default = True,
@@ -117,10 +122,6 @@ cmake = use_extension("@rules_pycross//pycross/backends:cmake.bzl", "cmake")
 use_repo(cmake, "cmake_overrides")
 meson = use_extension("@rules_pycross//pycross/backends:meson.bzl", "meson")
 use_repo(meson, "meson_overrides")
-
-lock_import.override_source(file = "@setuptools_overrides//:overrides.json")
-lock_import.override_source(file = "@cmake_overrides//:overrides.json")
-lock_import.override_source(file = "@meson_overrides//:overrides.json")
 
 # Currently development-only
 bazel_dep(name = "gazelle", version = "0.50.0", dev_dependency = True)

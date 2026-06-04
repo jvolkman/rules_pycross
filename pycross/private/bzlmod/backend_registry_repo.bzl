@@ -35,6 +35,13 @@ def _backend_registry_repo_impl(rctx):
     lines.extend([
         "}",
         "",
+        "OVERRIDE_FILES = [",
+    ])
+    for f in rctx.attr.override_files:
+        lines.append('    Label("{}"),'.format(f))
+    lines.extend([
+        "]",
+        "",
     ])
 
     rctx.file("registry.bzl", "\n".join(lines))
@@ -112,6 +119,9 @@ backend_registry_repo = repository_rule(
         ),
         "sdist_repo_fn": attr.string_dict(
             doc = "Maps backend rule names to the function name in the sdist repo .bzl file.",
+        ),
+        "override_files": attr.string_list(
+            doc = "Labels of JSON files containing backend overrides.",
         ),
     },
 )

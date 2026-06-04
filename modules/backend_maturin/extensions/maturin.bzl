@@ -63,8 +63,7 @@ def _maturin_overrides_impl(module_ctx):
             if tag.cargo_lock:
                 backend_attrs["cargo_lock"] = json.encode(str(tag.cargo_lock))
 
-            key = tag.repo + ":" + tag.name
-            overrides[key] = {
+            overrides.setdefault(tag.repo, {})[tag.name] = {
                 "build_backend": "maturin_build",
                 "backend_attrs": backend_attrs,
             }

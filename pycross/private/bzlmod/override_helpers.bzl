@@ -3,9 +3,10 @@
 Provides a factory function that eliminates boilerplate when defining
 backend-specific override extensions (setuptools, meson, cmake, etc.).
 Each backend extension follows the same pattern:
-  1. Collect override tags into a JSON dict keyed by "repo:package".
+  1. Collect override tags into a JSON dict keyed by repo, then package name.
   2. Write that dict to a generated `@<backend>_overrides//:overrides.json` repo.
-  3. The user wires it into lock_import via `override_source(file = ...)`.
+  3. The backends extension aggregates these into OVERRIDE_FILES for
+     resolved_lock_repo to consume.
 """
 
 def _overrides_repo_impl(rctx):
@@ -60,8 +61,7 @@ def make_override_extension(backend_name, build_backend, override_attrs):
         for module in module_ctx.modules:
             for tag in module.tags.override:
                 backend_attrs = encode_build_system_attrs(tag)
-                key = tag.repo + ":" + tag.name
-                overrides[key] = {
+                overrides.setdefault(tag.repo, {})[tag.name] = {
                     "build_backend": build_backend,
                     "backend_attrs": backend_attrs,
                 }

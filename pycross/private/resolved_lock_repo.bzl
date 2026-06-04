@@ -12,6 +12,7 @@ load(":lock_attrs.bzl", "RESOLVE_ATTRS", "handle_resolve_attrs")
 load(":pdm_lock_model.bzl", "repo_create_pdm_model", PDM_TRANSLATOR_TOOL = "TRANSLATOR_TOOL")
 load(":poetry_lock_model.bzl", "repo_create_poetry_model", POETRY_TRANSLATOR_TOOL = "TRANSLATOR_TOOL")
 load(":uv_lock_model.bzl", "repo_create_uv_model", UV_TRANSLATOR_TOOL = "TRANSLATOR_TOOL")
+load("@pycross_backends//:registry.bzl", "OVERRIDE_FILES")
 
 _RESOLVER_TOOL = Label("//pycross/private/tools:raw_lock_resolver.py")
 
@@ -50,6 +51,24 @@ def _generate_lock_model_file(rctx):
 
 def _generate_annotations_file(rctx):
     annotations = {p: json.decode(a) for p, a in rctx.attr.annotations.items()}
+
+    for f in rctx.attr.override_files:
+        all_overrides = json.decode(rctx.read(f))
+        repo_overrides = all_overrides.get(rctx.attr.lock_repo_name, {})
+        for pkg_name, override in repo_overrides.items():
+            if pkg_name in annotations:
+                existing = annotations[pkg_name]
+                merged_backend_attrs = dict(existing.get("backend_attrs", {}))
+                merged_backend_attrs.update(override.get("backend_attrs", {}))
+
+                # Override replaces existing values; backend_attrs are merged.
+                new_annotation = dict(existing)
+                new_annotation.update(override)
+                new_annotation["backend_attrs"] = merged_backend_attrs
+                annotations[pkg_name] = new_annotation
+            else:
+                annotations[pkg_name] = override
+
     rctx.file("annotations.json", json.encode(annotations))
 
 def _generate_lock_file(rctx):
@@ -83,6 +102,10 @@ resolved_lock_repo = repository_rule(
         lock_model = attr.string(
             mandatory = True,
         ),
+        lock_repo_name = attr.string(
+            doc = "The user-facing lock repo name (e.g. 'uv'). Used to match override entries.",
+            mandatory = True,
+        ),
         # For pre-pathifying labels
         _tools = attr.label_list(default = [
             _RESOLVER_TOOL,
@@ -90,5 +113,6 @@ resolved_lock_repo = repository_rule(
             POETRY_TRANSLATOR_TOOL,
             UV_TRANSLATOR_TOOL,
         ]),
+        override_files = attr.label_list(default = OVERRIDE_FILES),
     ) | RESOLVE_ATTRS,
 )

@@ -31,6 +31,7 @@ backends.register(
     sdist_repo_bzl = "@rules_pycross_backend_maturin//private:maturin_sdist_repo.bzl",
     sdist_repo_fn = "maturin_sdist_repo",
     tool_packages = ["maturin"],
+    override_json = "@maturin_overrides//:overrides.json",
 )
 
 environments = use_extension("@rules_pycross//pycross/extensions:environments.bzl", "environments")
@@ -38,6 +39,3 @@ use_repo(environments, "pycross_environments")
 
 maturin = use_extension("//extensions:maturin.bzl", "maturin")
 use_repo(maturin, "maturin_overrides")
-
-lock_import = use_extension("@rules_pycross//pycross/extensions:lock_import.bzl", "lock_import")
-lock_import.override_source(file = "@maturin_overrides//:overrides.json")

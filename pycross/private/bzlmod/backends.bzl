@@ -20,10 +20,14 @@ def _backends_impl(module_ctx):
     sdist_repo_fn = {}  # rule name -> custom sdist repo function name
     default_backend = None
     default_backend_module = None
+    override_files = []
 
     for module in module_ctx.modules:
         for tag in module.tags.register:
             name = tag.name
+
+            if tag.override_json:
+                override_files.append(str(tag.override_json))
 
             # Duplicate rule name: root module wins, otherwise first-registered wins.
             if name in backend_configs:
@@ -82,6 +86,7 @@ def _backends_impl(module_ctx):
         backend_configs = backend_configs,
         sdist_repo_bzl = sdist_repo_bzl,
         sdist_repo_fn = sdist_repo_fn,
+        override_files = override_files,
     )
 
     if bazel_features.external_deps.extension_metadata_has_reproducible:
@@ -124,6 +129,9 @@ backends = module_extension(
                 "sdist_repo_fn": attr.string(
                     doc = "Optional function name in sdist_repo_bzl. Defaults to " +
                           "'<name>_sdist_repo' (replacing '_build' suffix).",
+                ),
+                "override_json": attr.label(
+                    doc = "Optional label of a generated JSON file containing overrides for this backend.",
                 ),
             },
         ),
