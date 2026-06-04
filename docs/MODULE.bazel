@@ -1,10 +1,19 @@
-module(name = "docs", version = "0.0.0")
+module(
+    name = "docs",
+    version = "0.0.0",
+)
 
 bazel_dep(name = "rules_pycross", version = "0.0.0")
-local_path_override(module_name = "rules_pycross", path = "..")
+local_path_override(
+    module_name = "rules_pycross",
+    path = "..",
+)
 
 bazel_dep(name = "rules_pycross_backend_maturin", version = "0.0.0")
-local_path_override(module_name = "rules_pycross_backend_maturin", path = "../modules/backend_maturin")
+local_path_override(
+    module_name = "rules_pycross_backend_maturin",
+    path = "../modules/backend_maturin",
+)
 
 bazel_dep(name = "bazel_lib", version = "3.1.0")
 bazel_dep(name = "stardoc", version = "0.6.2")
