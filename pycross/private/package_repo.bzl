@@ -205,35 +205,20 @@ def _package_repo_impl(rctx):
                 macro_name = macro_name,
             ),
             "",
-            "def _impl(name, visibility, **kwargs):",
-            "    _{macro_name}(name = name, visibility = visibility, **kwargs)".format(macro_name = macro_name),
-            "",
+            "def {macro_name}(name, **kwargs):".format(macro_name = macro_name),
         ]
 
         if tool_deps_labels:
-            attr_lines = ["        \"tool_deps\": attr.label_list(default = ["]
+            lines.append("    if \"tool_deps\" not in kwargs:")
+            lines.append("        kwargs[\"tool_deps\"] = [")
             for label in tool_deps_labels:
-                attr_lines.append("            Label(\"{}\"),".format(label))
-            attr_lines.append("        ]),")
+                lines.append("            Label(\"{}\"),".format(label))
+            lines.append("        ]")
 
-            lines.extend([
-                "{macro_name} = macro(".format(macro_name = macro_name),
-                "    implementation = _impl,",
-                "    inherit_attrs = _{macro_name},".format(macro_name = macro_name),
-                "    attrs = {",
-            ] + attr_lines + [
-                "    },",
-                ")",
-                "",
-            ])
-        else:
-            lines.extend([
-                "{macro_name} = macro(".format(macro_name = macro_name),
-                "    implementation = _impl,",
-                "    inherit_attrs = _{macro_name},".format(macro_name = macro_name),
-                ")",
-                "",
-            ])
+        lines.extend([
+            "    _{macro_name}(name = name, **kwargs)".format(macro_name = macro_name),
+            "",
+        ])
 
         rctx.file("_backend/{}.bzl".format(macro_name), "\n".join(lines))
 
