@@ -58,17 +58,25 @@ lock_import.import_uv(
     project_file = "//:pyproject.toml",
     repo = "uv",
 )
-lock_import.override_source(file = "@maturin_overrides//:overrides.json")
-
-maturin = use_extension("@rules_pycross_backend_maturin//extensions:overrides.bzl", "maturin_overrides")
-maturin.override(
+lock_import.package(
     name = "rpds-py",
     always_build = True,
     repo = "uv",
 )
-maturin.override(
+lock_import.package(
     name = "captcha-rs",
     always_build = True,
+    repo = "uv",
+)
+lock_import.override_source(file = "@maturin_overrides//:overrides.json")
+
+maturin = use_extension("@rules_pycross_backend_maturin//extensions:maturin.bzl", "maturin")
+maturin.override(
+    name = "rpds-py",
+    repo = "uv",
+)
+maturin.override(
+    name = "captcha-rs",
     cargo_lock = "//:captcha_rs.lock",
     repo = "uv",
 )

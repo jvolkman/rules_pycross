@@ -81,13 +81,7 @@ def _maturin_overrides_impl(module_ctx):
 
             key = tag.repo + ":" + tag.name
             overrides[key] = {
-                "always_build": tag.always_build,
                 "build_backend": "maturin_build",
-                "build_dependencies": tag.build_dependencies,
-                "ignore_dependencies": tag.ignore_dependencies,
-                "install_exclude_globs": tag.install_exclude_globs,
-                "post_install_patches": tag.post_install_patches,
-                "build_target": None,
                 "backend_attrs": backend_attrs,
             }
 
@@ -110,7 +104,7 @@ def _maturin_overrides_impl(module_ctx):
             packages = json.encode(pkgs),
         )
 
-maturin_overrides = module_extension(
+maturin = module_extension(
     implementation = _maturin_overrides_impl,
     tag_classes = dict(
         override = tag_class(
@@ -124,22 +118,7 @@ maturin_overrides = module_extension(
                     doc = "The lock repo this override applies to.",
                     mandatory = True,
                 ),
-                "always_build": attr.bool(
-                    doc = "If True, don't use pre-built wheels for this package.",
-                    default = True,
-                ),
-                "build_dependencies": attr.string_list(
-                    doc = "Additional build-time dependencies.",
-                ),
-                "ignore_dependencies": attr.string_list(
-                    doc = "Dependencies to drop from this package.",
-                ),
-                "install_exclude_globs": attr.string_list(
-                    doc = "Globs for files to exclude during installation.",
-                ),
-                "post_install_patches": attr.string_list(
-                    doc = "Patches to apply after wheel installation.",
-                ),
+
                 # Maturin-specific typed attrs:
                 "cargo_lock": attr.label(
                     doc = "A Cargo.lock file to use. If not provided, the sdist's own Cargo.lock is used.",

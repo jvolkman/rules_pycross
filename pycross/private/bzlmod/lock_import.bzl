@@ -189,17 +189,31 @@ def _lock_import_impl(module_ctx):
                     fail("Override source references unknown lock repo '{}'".format(repo_name))
                 repo_info = lock_repos[repo_name]
                 if pkg_name in repo_info.packages:
-                    fail("Duplicate package override for '{}' in lock repo '{}'".format(pkg_name, repo_name))
-                repo_info.packages[pkg_name] = struct(
-                    always_build = override.get("always_build", False),
-                    build_dependencies = override.get("build_dependencies", []),
-                    build_target = override.get("build_target"),
-                    ignore_dependencies = override.get("ignore_dependencies", []),
-                    install_exclude_globs = override.get("install_exclude_globs", []),
-                    post_install_patches = override.get("post_install_patches", []),
-                    build_backend = override.get("build_backend"),
-                    backend_attrs = override.get("backend_attrs", {}),
-                )
+                    existing = repo_info.packages[pkg_name]
+                    merged_backend_attrs = dict(getattr(existing, "backend_attrs", {}))
+                    merged_backend_attrs.update(override.get("backend_attrs", {}))
+
+                    repo_info.packages[pkg_name] = struct(
+                        always_build = override.get("always_build", getattr(existing, "always_build", False)),
+                        build_dependencies = override.get("build_dependencies", getattr(existing, "build_dependencies", [])),
+                        build_target = override.get("build_target", getattr(existing, "build_target", None)),
+                        ignore_dependencies = override.get("ignore_dependencies", getattr(existing, "ignore_dependencies", [])),
+                        install_exclude_globs = override.get("install_exclude_globs", getattr(existing, "install_exclude_globs", [])),
+                        post_install_patches = override.get("post_install_patches", getattr(existing, "post_install_patches", [])),
+                        build_backend = override.get("build_backend", getattr(existing, "build_backend", None)),
+                        backend_attrs = merged_backend_attrs,
+                    )
+                else:
+                    repo_info.packages[pkg_name] = struct(
+                        always_build = override.get("always_build", False),
+                        build_dependencies = override.get("build_dependencies", []),
+                        build_target = override.get("build_target"),
+                        ignore_dependencies = override.get("ignore_dependencies", []),
+                        install_exclude_globs = override.get("install_exclude_globs", []),
+                        post_install_patches = override.get("post_install_patches", []),
+                        build_backend = override.get("build_backend"),
+                        backend_attrs = override.get("backend_attrs", {}),
+                    )
 
     # Generate the resolved lock repos
     for repo_name, repo_info in lock_repos.items():

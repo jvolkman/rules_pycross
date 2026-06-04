@@ -3,8 +3,8 @@ load("@bazel_skylib//:bzl_library.bzl", "bzl_library")
 package(default_visibility = ["//visibility:public"])
 
 bzl_library(
-    name = "overrides",
-    srcs = ["overrides.bzl"],
+    name = "maturin",
+    srcs = ["maturin.bzl"],
     deps = [
         "//rules:generate_cargo_lock",
     ],

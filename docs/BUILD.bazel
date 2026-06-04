@@ -75,9 +75,9 @@ stardoc(
 stardoc(
     name = "ext_maturin_gen",
     out = "ext_maturin.gen.md",
-    input = "@rules_pycross_backend_maturin//extensions:overrides.bzl",
+    input = "@rules_pycross_backend_maturin//extensions:maturin.bzl",
     deps = [
-        "@rules_pycross_backend_maturin//extensions:overrides",
+        "@rules_pycross_backend_maturin//extensions:maturin",
     ],
 )
 

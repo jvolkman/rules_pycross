@@ -3,11 +3,6 @@ load("@bazel_skylib//:bzl_library.bzl", "bzl_library")
 package(default_visibility = ["//visibility:public"])
 
 bzl_library(
-    name = "rust_layer",
-    srcs = ["rust_layer.bzl"],
-)
-
-bzl_library(
     name = "cargo",
     srcs = ["cargo.bzl"],
     deps = [
@@ -22,4 +17,9 @@ bzl_library(
         ":cargo",
         "@rules_pycross//pycross/private/bzlmod:sdist_repo",
     ],
+)
+
+bzl_library(
+    name = "rust_layer",
+    srcs = ["rust_layer.bzl"],
 )

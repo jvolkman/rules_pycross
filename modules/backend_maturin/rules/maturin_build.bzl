@@ -18,8 +18,6 @@ load(
 )
 load("//private:rust_layer.bzl", "extract_rust_layer")
 
-
-
 def _get_executable_file(val):
     if not val or type(val) == "File":
         return val
