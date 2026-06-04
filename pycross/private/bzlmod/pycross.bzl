@@ -6,7 +6,7 @@ load("@toml.bzl//toml:toml.bzl", "decode")
 load("//pycross/private:internal_repo.bzl", "create_internal_repo")
 load(":tag_attrs.bzl", "CREATE_ENVIRONMENTS_ATTRS", "REGISTER_TOOLCHAINS_ATTRS")
 
-_CORE_PACKAGES = ["dacite", "installer", "packaging", "pip", "poetry-core"]
+_CORE_PACKAGES = ["dacite", "installer", "packaging", "patch-ng", "pip", "poetry-core"]
 
 def _pycross_impl(module_ctx):
     environments_tag = None

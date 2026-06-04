@@ -42,6 +42,10 @@ def _pycross_wheel_library_impl(ctx):
     for install_exclude_glob in ctx.attr.install_exclude_globs:
         args.add("--install-exclude-glob", install_exclude_glob)
 
+    for patch in ctx.files.post_install_patches:
+        inputs.append(patch)
+        args.add("--patch", patch)
+
     ctx.actions.run(
         inputs = inputs,
         outputs = [out],

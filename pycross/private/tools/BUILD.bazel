@@ -42,6 +42,11 @@ pycross_wheel_zipimport_library(
     wheel = "@rules_pycross_internal//:installer_whl",
 )
 
+pycross_wheel_zipimport_library(
+    name = "patch_ng",
+    wheel = "@rules_pycross_internal//:patch_ng_whl",
+)
+
 py_library(
     name = "target_environment",
     srcs = [
@@ -141,7 +146,7 @@ py_binary(
         ":args",
         ":installer",
         ":namespace_pkgs",
-        "@patch-ng",
+        ":patch_ng",
     ],
 )
 

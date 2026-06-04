@@ -15,6 +15,11 @@ alias(
     actual = "{installer_whl}",
 )
 
+alias(
+    name = "patch_ng_whl",
+    actual = "{patch_ng_whl}",
+)
+
 exports_files([
     "defaults.bzl",
     "python.bzl",
@@ -118,6 +123,12 @@ def _installer_whl(wheels, prefix):
             return Label("@@" + prefix + repo_name + "//file:" + filename)
     fail("Unable to find `installer` wheel in lock file.")
 
+def _patch_ng_whl(wheels, prefix):
+    for repo_name, filename in wheels.items():
+        if filename.startswith("patch_ng-") or filename.startswith("patch-ng-"):
+            return Label("@@" + prefix + repo_name + "//file:" + filename)
+    fail("Unable to find `patch-ng` wheel in lock file.")
+
 def _pip_whl(wheels, prefix):
     for repo_name, filename in wheels.items():
         if filename.startswith("pip-"):
@@ -219,7 +230,10 @@ def _pycross_internal_repo_impl(rctx):
     rctx.file("defaults.bzl", _defaults_bzl(rctx))
 
     # Root build file
-    rctx.file("BUILD.bazel", _root_build.format(installer_whl = _installer_whl(rctx.attr.wheels, prefix)))
+    rctx.file("BUILD.bazel", _root_build.format(
+        installer_whl = _installer_whl(rctx.attr.wheels, prefix),
+        patch_ng_whl = _patch_ng_whl(rctx.attr.wheels, prefix),
+    ))
 
 pycross_internal_repo = repository_rule(
     implementation = _pycross_internal_repo_impl,
