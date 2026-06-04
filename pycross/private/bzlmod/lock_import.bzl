@@ -129,7 +129,10 @@ def _normalize_override_tag(tag, build_backend):
     if tag.tool_deps:
         backend_attrs["tool_deps"] = json.encode(tag.tool_deps)
 
-    return _make_package_info(tag, build_backend, None, backend_attrs)
+    return {
+        "build_backend": build_backend,
+        "backend_attrs": backend_attrs,
+    }
 
 def _lock_import_impl(module_ctx):
     lock_owners = {}
@@ -160,60 +163,66 @@ def _lock_import_impl(module_ctx):
             _check_package_entry_not_set(lock_owners, repo_info, tag)
             repo_info.packages[tag.name] = _normalize_package_tag(tag)
 
+        # Collect all overrides (built-in and external)
+    all_overrides = {}
+
+    for module in module_ctx.modules:
         for tag in module.tags.meson_override:
             _check_proper_package_repo(lock_owners, module, tag)
-            repo_info = lock_repos[tag.repo]
-            _check_package_entry_not_set(lock_owners, repo_info, tag)
-            repo_info.packages[tag.name] = _normalize_override_tag(tag, "meson_build")
+            key = "{}:{}".format(tag.repo, tag.name)
+            all_overrides[key] = _normalize_override_tag(tag, "meson_build")
 
         for tag in module.tags.setuptools_override:
             _check_proper_package_repo(lock_owners, module, tag)
-            repo_info = lock_repos[tag.repo]
-            _check_package_entry_not_set(lock_owners, repo_info, tag)
-            repo_info.packages[tag.name] = _normalize_override_tag(tag, "setuptools_build")
+            key = "{}:{}".format(tag.repo, tag.name)
+            all_overrides[key] = _normalize_override_tag(tag, "setuptools_build")
 
         for tag in module.tags.cmake_override:
             _check_proper_package_repo(lock_owners, module, tag)
-            repo_info = lock_repos[tag.repo]
-            _check_package_entry_not_set(lock_owners, repo_info, tag)
-            repo_info.packages[tag.name] = _normalize_override_tag(tag, "cmake_build")
+            key = "{}:{}".format(tag.repo, tag.name)
+            all_overrides[key] = _normalize_override_tag(tag, "cmake_build")
 
-    # Read external override sources (from backend extensions)
-    for module in module_ctx.modules:
         for tag in module.tags.override_source:
             overrides_json = module_ctx.read(tag.file)
             external_overrides = json.decode(overrides_json)
             for key, override in external_overrides.items():
-                repo_name, _, pkg_name = key.partition(":")
-                if repo_name not in lock_repos:
-                    fail("Override source references unknown lock repo '{}'".format(repo_name))
-                repo_info = lock_repos[repo_name]
-                if pkg_name in repo_info.packages:
-                    existing = repo_info.packages[pkg_name]
-                    merged_backend_attrs = dict(getattr(existing, "backend_attrs", {}))
-                    merged_backend_attrs.update(override.get("backend_attrs", {}))
+                if key in all_overrides:
+                    fail("Duplicate override for package '{}'".format(key))
+                all_overrides[key] = override
 
-                    repo_info.packages[pkg_name] = struct(
-                        always_build = override.get("always_build", getattr(existing, "always_build", False)),
-                        build_dependencies = override.get("build_dependencies", getattr(existing, "build_dependencies", [])),
-                        build_target = override.get("build_target", getattr(existing, "build_target", None)),
-                        ignore_dependencies = override.get("ignore_dependencies", getattr(existing, "ignore_dependencies", [])),
-                        install_exclude_globs = override.get("install_exclude_globs", getattr(existing, "install_exclude_globs", [])),
-                        post_install_patches = override.get("post_install_patches", getattr(existing, "post_install_patches", [])),
-                        build_backend = override.get("build_backend", getattr(existing, "build_backend", None)),
-                        backend_attrs = merged_backend_attrs,
-                    )
-                else:
-                    repo_info.packages[pkg_name] = struct(
-                        always_build = override.get("always_build", False),
-                        build_dependencies = override.get("build_dependencies", []),
-                        build_target = override.get("build_target"),
-                        ignore_dependencies = override.get("ignore_dependencies", []),
-                        install_exclude_globs = override.get("install_exclude_globs", []),
-                        post_install_patches = override.get("post_install_patches", []),
-                        build_backend = override.get("build_backend"),
-                        backend_attrs = override.get("backend_attrs", {}),
-                    )
+    # Apply overrides to packages
+    for key, override in all_overrides.items():
+        repo_name, _, pkg_name = key.partition(":")
+        if repo_name not in lock_repos:
+            fail("Override references unknown lock repo '{}'".format(repo_name))
+        repo_info = lock_repos[repo_name]
+        
+        if pkg_name in repo_info.packages:
+            existing = repo_info.packages[pkg_name]
+            merged_backend_attrs = dict(getattr(existing, "backend_attrs", {}))
+            merged_backend_attrs.update(override.get("backend_attrs", {}))
+            
+            repo_info.packages[pkg_name] = struct(
+                always_build = override.get("always_build", getattr(existing, "always_build", False)),
+                build_dependencies = override.get("build_dependencies", getattr(existing, "build_dependencies", [])),
+                build_target = override.get("build_target", getattr(existing, "build_target", None)),
+                ignore_dependencies = override.get("ignore_dependencies", getattr(existing, "ignore_dependencies", [])),
+                install_exclude_globs = override.get("install_exclude_globs", getattr(existing, "install_exclude_globs", [])),
+                post_install_patches = override.get("post_install_patches", getattr(existing, "post_install_patches", [])),
+                build_backend = override.get("build_backend", getattr(existing, "build_backend", None)),
+                backend_attrs = merged_backend_attrs,
+            )
+        else:
+            repo_info.packages[pkg_name] = struct(
+                always_build = override.get("always_build", False),
+                build_dependencies = override.get("build_dependencies", []),
+                build_target = override.get("build_target"),
+                ignore_dependencies = override.get("ignore_dependencies", []),
+                install_exclude_globs = override.get("install_exclude_globs", []),
+                post_install_patches = override.get("post_install_patches", []),
+                build_backend = override.get("build_backend"),
+                backend_attrs = override.get("backend_attrs", {}),
+            )
 
     # Generate the resolved lock repos
     for repo_name, repo_info in lock_repos.items():

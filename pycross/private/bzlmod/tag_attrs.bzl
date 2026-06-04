@@ -89,25 +89,19 @@ UV_IMPORT_ATTRS = _UV_IMPORT_ATTRS
 POETRY_IMPORT_ATTRS = _POETRY_IMPORT_ATTRS
 REGISTER_TOOLCHAINS_ATTRS = _REGISTER_TOOLCHAINS_ATTRS
 
-# A helper to derive attributes for build-system overrides
-def _derive_override_attrs():
-    attrs = {}
-    for k, v in PACKAGE_ATTRS.items():
-        if k in ("build_target", "backend_attrs"):
-            continue
-        elif k == "always_build":
-            attrs[k] = attr.bool(
-                doc = "If True, don't use pre-built wheels for this package.",
-                default = True,
-            )
-        else:
-            attrs[k] = v
-    return attrs
+_CORE_OVERRIDE_ATTRS = dict(
+    name = attr.string(
+        doc = "The package key (name or name@version).",
+        mandatory = True,
+    ),
+    repo = attr.string(
+        doc = "The repository name",
+        mandatory = True,
+    ),
+)
 
-_BASE_OVERRIDE_ATTRS = _derive_override_attrs()
+MESON_OVERRIDE_ATTRS = dict(_CORE_OVERRIDE_ATTRS, **_BUILD_SYSTEM_ATTRS)
 
-MESON_OVERRIDE_ATTRS = dict(_BASE_OVERRIDE_ATTRS, **_BUILD_SYSTEM_ATTRS)
+SETUPTOOLS_OVERRIDE_ATTRS = dict(_CORE_OVERRIDE_ATTRS, **_BUILD_SYSTEM_ATTRS)
 
-SETUPTOOLS_OVERRIDE_ATTRS = dict(_BASE_OVERRIDE_ATTRS, **_BUILD_SYSTEM_ATTRS)
-
-CMAKE_OVERRIDE_ATTRS = dict(_BASE_OVERRIDE_ATTRS, **_BUILD_SYSTEM_ATTRS)
+CMAKE_OVERRIDE_ATTRS = dict(_CORE_OVERRIDE_ATTRS, **_BUILD_SYSTEM_ATTRS)
