@@ -68,8 +68,6 @@ lock_import.package(
     always_build = True,
     repo = "uv",
 )
-lock_import.override_source(file = "@maturin_overrides//:overrides.json")
-
 maturin = use_extension("@rules_pycross_backend_maturin//extensions:maturin.bzl", "maturin")
 maturin.override(
     name = "rpds-py",
@@ -80,7 +78,7 @@ maturin.override(
     cargo_lock = "//:captcha_rs.lock",
     repo = "uv",
 )
-use_repo(maturin, "maturin_overrides", "uv_cargo")
+use_repo(maturin, "uv_cargo")
 
 lock_repos = use_extension("@rules_pycross//pycross/extensions:lock_repos.bzl", "lock_repos")
 use_repo(lock_repos, "uv")

@@ -64,14 +64,21 @@ lock_import.package(
     ],
     repo = "uv",
 )
-lock_import.override_source(file = "@setuptools_overrides//:overrides.json")
-
 setuptools = use_extension("@rules_pycross//pycross/backends:setuptools.bzl", "setuptools")
 setuptools.override(
     name = "setproctitle",
     repo = "uv",
 )
-use_repo(setuptools, "setuptools_overrides")
+setuptools.override(
+    name = "psycopg2",
+    repo = "uv",
+    tool_deps = {"pg_config": "@@//deps/psycopg2:pg_config"},
+)
+setuptools.override(
+    name = "zstandard",
+    copts = ["-O2"],
+    repo = "uv",
+)
 
 lock_repos = use_extension("@rules_pycross//pycross/extensions:lock_repos.bzl", "lock_repos")
 use_repo(lock_repos, "uv")

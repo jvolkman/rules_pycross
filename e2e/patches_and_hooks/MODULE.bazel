@@ -55,14 +55,11 @@ lock_import.package(
     pre_build_patches = ["@@//patches:setproctitle-prebuild.patch"],
     repo = "uv",
 )
-lock_import.override_source(file = "@setuptools_overrides//:overrides.json")
-
 setuptools = use_extension("@rules_pycross//pycross/backends:setuptools.bzl", "setuptools")
 setuptools.override(
     name = "setproctitle",
     repo = "uv",
 )
-use_repo(setuptools, "setuptools_overrides")
 
 lock_repos = use_extension("@rules_pycross//pycross/extensions:lock_repos.bzl", "lock_repos")
 use_repo(lock_repos, "uv")

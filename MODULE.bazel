@@ -110,6 +110,18 @@ use_repo(lock_import, "lock_import_repos_hub")
 lock_repos = use_extension("@rules_pycross//pycross/extensions:lock_repos.bzl", "lock_repos")
 lock_repos.create()
 
+# Auto-wire the first-party backend overrides so users don't have to
+setuptools = use_extension("@rules_pycross//pycross/backends:setuptools.bzl", "setuptools")
+use_repo(setuptools, "setuptools_overrides")
+cmake = use_extension("@rules_pycross//pycross/backends:cmake.bzl", "cmake")
+use_repo(cmake, "cmake_overrides")
+meson = use_extension("@rules_pycross//pycross/backends:meson.bzl", "meson")
+use_repo(meson, "meson_overrides")
+
+lock_import.override_source(file = "@setuptools_overrides//:overrides.json")
+lock_import.override_source(file = "@cmake_overrides//:overrides.json")
+lock_import.override_source(file = "@meson_overrides//:overrides.json")
+
 # Currently development-only
 bazel_dep(name = "gazelle", version = "0.50.0", dev_dependency = True)
 bazel_dep(name = "bazel_skylib_gazelle_plugin", version = "1.5.0", dev_dependency = True)
