@@ -1,7 +1,8 @@
 """Public API for pycross backend module authors.
 
 This module provides the building blocks needed to implement custom
-wheel-building rules that integrate with rules_pycross.
+wheel-building rules and override extensions that integrate with
+rules_pycross.
 """
 
 load(
@@ -41,6 +42,17 @@ load(
     _get_wheel_file = "get_wheel_file",
     _group_tool_deps = "group_tool_deps",
 )
+load(
+    "//pycross/private/bzlmod:override_helpers.bzl",
+    _create_overrides_repo = "create_overrides_repo",
+    _encode_build_system_attrs = "encode_build_system_attrs",
+    _make_override_extension = "make_override_extension",
+)
+load(
+    "//pycross/private/bzlmod:sdist_repo.bzl",
+    _SDIST_REPO_ATTRS = "SDIST_REPO_ATTRS",
+    _sdist_repo_common = "sdist_repo_common",
+)
 
 # Providers
 PycrossWheelInfo = _PycrossWheelInfo
@@ -67,3 +79,12 @@ CC_FRAGMENTS = _CC_FRAGMENTS
 get_unzipped_wheel = _get_unzipped_wheel
 get_wheel_file = _get_wheel_file
 group_tool_deps = _group_tool_deps
+
+# Sdist repo helpers
+SDIST_REPO_ATTRS = _SDIST_REPO_ATTRS
+sdist_repo_common = _sdist_repo_common
+
+# Override extension helpers
+make_override_extension = _make_override_extension
+create_overrides_repo = _create_overrides_repo
+encode_build_system_attrs = _encode_build_system_attrs

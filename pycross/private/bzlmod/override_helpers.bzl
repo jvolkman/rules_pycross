@@ -13,13 +13,21 @@ def _overrides_repo_impl(rctx):
     rctx.file("overrides.json", rctx.attr.content)
     rctx.file("BUILD.bazel", 'exports_files(["overrides.json"])')
 
-_overrides_repo = repository_rule(
+create_overrides_repo = repository_rule(
     implementation = _overrides_repo_impl,
     attrs = {"content": attr.string()},
 )
 
-def _encode_build_system_attrs(tag):
-    """Encode BUILD_SYSTEM_ATTRS from a tag into a backend_attrs dict."""
+def encode_build_system_attrs(tag):
+    """Encode BUILD_SYSTEM_ATTRS from a tag into a backend_attrs dict.
+
+    Args:
+        tag: A module tag with optional copts, linkopts, native_deps,
+            config_settings, and tool_deps attributes.
+
+    Returns:
+        A dict of JSON-encoded backend attribute values.
+    """
     backend_attrs = {}
     if tag.copts:
         backend_attrs["copts"] = json.encode(tag.copts)
@@ -51,14 +59,14 @@ def make_override_extension(backend_name, build_backend, override_attrs):
         overrides = {}
         for module in module_ctx.modules:
             for tag in module.tags.override:
-                backend_attrs = _encode_build_system_attrs(tag)
+                backend_attrs = encode_build_system_attrs(tag)
                 key = tag.repo + ":" + tag.name
                 overrides[key] = {
                     "build_backend": build_backend,
                     "backend_attrs": backend_attrs,
                 }
 
-        _overrides_repo(
+        create_overrides_repo(
             name = backend_name + "_overrides",
             content = json.encode(overrides),
         )

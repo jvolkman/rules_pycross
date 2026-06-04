@@ -1,11 +1,7 @@
-"""Public API for pycross backend repository rules.
-
-This module provides the building blocks needed to implement custom
-sdist repository rules that integrate with rules_pycross lock import.
-"""
+"""Backwards-compatible re-export. Use //pycross:backend.bzl instead."""
 
 load(
-    "//pycross/private/bzlmod:sdist_repo.bzl",
+    "//pycross:backend.bzl",
     _SDIST_REPO_ATTRS = "SDIST_REPO_ATTRS",
     _sdist_repo_common = "sdist_repo_common",
 )

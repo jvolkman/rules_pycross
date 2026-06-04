@@ -42,6 +42,8 @@ bzl_library(
         "//pycross/private/build/actions:repair_action",
         "//pycross/private/build/actions:tool_extract",
         "//pycross/private/build/rules:common_attrs",
+        "//pycross/private/bzlmod:override_helpers",
+        "//pycross/private/bzlmod:sdist_repo",
     ],
 )
 
@@ -50,7 +52,7 @@ bzl_library(
     srcs = ["backend_repo.bzl"],
     visibility = ["//visibility:public"],
     deps = [
-        "//pycross/private/bzlmod:sdist_repo",
+        ":backend",
     ],
 )
 

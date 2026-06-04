@@ -10,14 +10,10 @@ for declaring maturin-specific package overrides. Generates:
      for each maturin-overridden package.
 """
 
-def _overrides_repo_impl(rctx):
-    """Simple repo that exports an overrides.json file."""
-    rctx.file("overrides.json", rctx.attr.content)
-    rctx.file("BUILD.bazel", 'exports_files(["overrides.json"])')
-
-_overrides_repo = repository_rule(
-    implementation = _overrides_repo_impl,
-    attrs = {"content": attr.string()},
+load(
+    "@rules_pycross//pycross:backend.bzl",
+    "create_overrides_repo",
+    "encode_build_system_attrs",
 )
 
 def _cargo_lock_repo_impl(rctx):
@@ -63,19 +59,7 @@ def _maturin_overrides_impl(module_ctx):
 
     for module in module_ctx.modules:
         for tag in module.tags.override:
-            backend_attrs = {}
-            if tag.copts:
-                backend_attrs["copts"] = json.encode(tag.copts)
-            if tag.linkopts:
-                backend_attrs["linkopts"] = json.encode(tag.linkopts)
-            if tag.native_deps:
-                backend_attrs["native_deps"] = json.encode(
-                    [str(dep) for dep in tag.native_deps],
-                )
-            if tag.config_settings:
-                backend_attrs["config_settings"] = json.encode(tag.config_settings)
-            if tag.tool_deps:
-                backend_attrs["tool_deps"] = json.encode(tag.tool_deps)
+            backend_attrs = encode_build_system_attrs(tag)
             if tag.cargo_lock:
                 backend_attrs["cargo_lock"] = json.encode(str(tag.cargo_lock))
 
@@ -91,7 +75,7 @@ def _maturin_overrides_impl(module_ctx):
             }
 
     # Write overrides JSON
-    _overrides_repo(
+    create_overrides_repo(
         name = "maturin_overrides",
         content = json.encode(overrides),
     )
