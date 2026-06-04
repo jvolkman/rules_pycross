@@ -1,6 +1,5 @@
 import %workspace%/../shared/.bazelrc.common
 try-import %workspace%/../shared/buildbuddy.bazelrc
 build --action_env=RULES_PYCROSS_DEBUG=1
-common --disk_cache .cache
 try-import %workspace%/.bazelrc.user
 try-import %workspace%/../shared/.bazelrc.user
