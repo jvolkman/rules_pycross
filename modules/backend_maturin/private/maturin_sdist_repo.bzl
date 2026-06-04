@@ -1,7 +1,7 @@
 """Maturin-specific sdist repository rule with cargo crate vendoring."""
 
+load("@rules_pycross//pycross:backend_repo.bzl", "SDIST_REPO_ATTRS", "sdist_repo_common")
 load(":cargo.bzl", "find_cargo_lock_in_sdist", "vendor_crates_from_lock")
-load(":sdist_repo.bzl", "SDIST_REPO_ATTRS", "sdist_repo_common")
 
 def _maturin_sdist_repo_impl(rctx):
     result = sdist_repo_common(rctx)

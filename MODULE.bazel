@@ -12,7 +12,6 @@ bazel_dep(name = "rules_cc", version = "0.2.18")
 bazel_dep(name = "bazel_skylib", version = "1.9.0")
 bazel_dep(name = "platforms", version = "0.0.4")
 bazel_dep(name = "rules_python", version = "1.0.0")
-bazel_dep(name = "rules_rust", version = "0.68.0")
 bazel_dep(name = "toml.bzl", version = "0.4.1")
 
 bazel_dep(name = "buildifier_prebuilt", version = "8.2.1", dev_dependency = True)
@@ -67,14 +66,6 @@ backends.register(
         "ninja",
         "scikit-build-core",
     ],
-)
-backends.register(
-    name = "maturin_build",
-    pyproject_backends = ["maturin"],
-    rule_bzl = "@rules_pycross//pycross/private/build/rules:maturin_build.bzl",
-    sdist_repo_bzl = "@rules_pycross//pycross/private/bzlmod:maturin_sdist_repo.bzl",
-    sdist_repo_fn = "maturin_sdist_repo",
-    tool_packages = ["maturin"],
 )
 backends.register(
     name = "setuptools_build",

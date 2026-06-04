@@ -71,7 +71,6 @@ bzl_library(
     name = "lock_repos",
     srcs = ["lock_repos.bzl"],
     deps = [
-        ":maturin_sdist_repo",
         ":sdist_repo",
         ":tag_attrs",
         "//pycross/private:package_repo",
@@ -88,23 +87,6 @@ bzl_library(
     srcs = ["sdist_repo.bzl"],
     deps = [
         "//pycross/private:internal_repo",
-    ],
-)
-
-bzl_library(
-    name = "cargo",
-    srcs = ["cargo.bzl"],
-    deps = [
-        "@toml.bzl//:toml",
-    ],
-)
-
-bzl_library(
-    name = "maturin_sdist_repo",
-    srcs = ["maturin_sdist_repo.bzl"],
-    deps = [
-        ":cargo",
-        ":sdist_repo",
     ],
 )
 

@@ -7,7 +7,7 @@ load("//pycross/private:poetry_lock_model.bzl", "lock_repo_model_poetry")
 load("//pycross/private:resolved_lock_repo.bzl", "resolved_lock_repo")
 load("//pycross/private:uv_lock_model.bzl", "lock_repo_model_uv")
 load(":lock_hub_repo.bzl", "lock_hub_repo")
-load(":tag_attrs.bzl", "CMAKE_OVERRIDE_ATTRS", "COMMON_ATTRS", "COMMON_IMPORT_ATTRS", "MATURIN_OVERRIDE_ATTRS", "MESON_OVERRIDE_ATTRS", "PACKAGE_ATTRS", "PDM_IMPORT_ATTRS", "POETRY_IMPORT_ATTRS", "SETUPTOOLS_OVERRIDE_ATTRS", "UV_IMPORT_ATTRS")
+load(":tag_attrs.bzl", "CMAKE_OVERRIDE_ATTRS", "COMMON_ATTRS", "COMMON_IMPORT_ATTRS", "MESON_OVERRIDE_ATTRS", "PACKAGE_ATTRS", "PDM_IMPORT_ATTRS", "POETRY_IMPORT_ATTRS", "SETUPTOOLS_OVERRIDE_ATTRS", "UV_IMPORT_ATTRS")
 
 def _generate_resolved_lock_repo(lock_info, serialized_lock_model):
     repo_name = lock_info.repo_name
@@ -129,10 +129,6 @@ def _normalize_override_tag(tag, build_backend):
     if tag.tool_deps:
         backend_attrs["tool_deps"] = json.encode(tag.tool_deps)
 
-    # cargo_lock is maturin-specific; other override tags don't have it.
-    if hasattr(tag, "cargo_lock") and tag.cargo_lock:
-        backend_attrs["cargo_lock"] = json.encode(str(tag.cargo_lock))
-
     return _make_package_info(tag, build_backend, None, backend_attrs)
 
 def _lock_import_impl(module_ctx):
@@ -181,12 +177,6 @@ def _lock_import_impl(module_ctx):
             repo_info = lock_repos[tag.repo]
             _check_package_entry_not_set(lock_owners, repo_info, tag)
             repo_info.packages[tag.name] = _normalize_override_tag(tag, "cmake_build")
-
-        for tag in module.tags.maturin_override:
-            _check_proper_package_repo(lock_owners, module, tag)
-            repo_info = lock_repos[tag.repo]
-            _check_package_entry_not_set(lock_owners, repo_info, tag)
-            repo_info.packages[tag.name] = _normalize_override_tag(tag, "maturin_build")
 
     # Read external override sources (from backend extensions)
     for module in module_ctx.modules:
@@ -254,10 +244,7 @@ _cmake_override_tag = tag_class(
     doc = "Specify cmake-specific overrides.",
     attrs = CMAKE_OVERRIDE_ATTRS | COMMON_ATTRS,
 )
-_maturin_override_tag = tag_class(
-    doc = "Specify maturin-specific overrides.",
-    attrs = MATURIN_OVERRIDE_ATTRS | COMMON_ATTRS,
-)
+
 _override_source_tag = tag_class(
     doc = "Register an external override source (JSON file from a backend extension).",
     attrs = {
@@ -280,6 +267,5 @@ lock_import = module_extension(
         meson_override = _meson_override_tag,
         setuptools_override = _setuptools_override_tag,
         cmake_override = _cmake_override_tag,
-        maturin_override = _maturin_override_tag,
     ),
 )

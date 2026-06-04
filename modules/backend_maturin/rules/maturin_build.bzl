@@ -1,26 +1,24 @@
 """Implementation of the maturin_build rule."""
 
-# buildifier: disable=bzl-visibility
-load("@rules_pycross//pycross/private:providers.bzl", "PycrossWheelInfo")
-
-# buildifier: disable=bzl-visibility
-load("@rules_pycross//pycross/private/build:transitions.bzl", "pycross_exec_platform_transition")
-
-# buildifier: disable=bzl-visibility
-load("@rules_pycross//pycross/private/build/actions:cc_layer.bzl", "extract_cc_layer")
-
-# buildifier: disable=bzl-visibility
-load("@rules_pycross//pycross/private/build/actions:pep517_action.bzl", "register_pep517_action")
-
-# buildifier: disable=bzl-visibility
-load("@rules_pycross//pycross/private/build/actions:repair_action.bzl", "register_repair_action")
-
-# buildifier: disable=bzl-visibility
-load("@rules_pycross//pycross/private/build/actions:tool_extract.bzl", "register_bin_extract_action")
-
-# buildifier: disable=bzl-visibility
-load("@rules_pycross//pycross/private/build/rules:common_attrs.bzl", "CC_BUILD_ATTRS", "CC_FRAGMENTS", "CC_TOOLCHAINS", "CC_TOOLCHAIN_ATTRS", "COMMON_BUILD_ATTRS", "get_unzipped_wheel", "group_tool_deps")
+load(
+    "@rules_pycross//pycross:backend.bzl",
+    "CC_BUILD_ATTRS",
+    "CC_FRAGMENTS",
+    "CC_TOOLCHAINS",
+    "CC_TOOLCHAIN_ATTRS",
+    "COMMON_BUILD_ATTRS",
+    "PycrossWheelInfo",
+    "extract_cc_layer",
+    "get_unzipped_wheel",
+    "group_tool_deps",
+    "pycross_exec_platform_transition",
+    "register_bin_extract_action",
+    "register_pep517_action",
+    "register_repair_action",
+)
 load("//private:rust_layer.bzl", "extract_rust_layer")
+
+
 
 def _get_executable_file(val):
     if not val or type(val) == "File":

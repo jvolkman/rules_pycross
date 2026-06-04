@@ -1,13 +1,6 @@
 load("@bazel_skylib//:bzl_library.bzl", "bzl_library")
 
 bzl_library(
-    name = "maturin",
-    srcs = ["maturin.bzl"],
-    visibility = ["//visibility:public"],
-    deps = ["//pycross/private/build/rules:maturin_build"],
-)
-
-bzl_library(
     name = "meson",
     srcs = ["meson.bzl"],
     visibility = ["//visibility:public"],

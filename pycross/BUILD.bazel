@@ -3,6 +3,8 @@ load("@bazel_skylib//:bzl_library.bzl", "bzl_library")
 # For stardoc to reference the files
 exports_files([
     "defs.bzl",
+    "backend.bzl",
+    "backend_repo.bzl",
 ])
 
 toolchain_type(
@@ -16,7 +18,6 @@ bzl_library(
     visibility = ["//visibility:public"],
     deps = [
         "//pycross/private:console_script",
-        "//pycross/private:generate_cargo_lock",
         "//pycross/private:pdm_lock_model",
         "//pycross/private:poetry_lock_model",
         "//pycross/private:pypi_file",
@@ -30,6 +31,30 @@ bzl_library(
 )
 
 bzl_library(
+    name = "backend",
+    srcs = ["backend.bzl"],
+    visibility = ["//visibility:public"],
+    deps = [
+        "//pycross/private:providers",
+        "//pycross/private/build:transitions",
+        "//pycross/private/build/actions:cc_layer",
+        "//pycross/private/build/actions:pep517_action",
+        "//pycross/private/build/actions:repair_action",
+        "//pycross/private/build/actions:tool_extract",
+        "//pycross/private/build/rules:common_attrs",
+    ],
+)
+
+bzl_library(
+    name = "backend_repo",
+    srcs = ["backend_repo.bzl"],
+    visibility = ["//visibility:public"],
+    deps = [
+        "//pycross/private/bzlmod:sdist_repo",
+    ],
+)
+
+bzl_library(
     name = "toolchain",
     srcs = ["toolchain.bzl"],
     visibility = ["//visibility:public"],
@@ -37,10 +62,4 @@ bzl_library(
         "//pycross/private:providers",
         "@bazel_skylib//lib:paths",
     ],
-)
-
-alias(
-    name = "generate_cargo_lock",
-    actual = "//pycross/private/tools:generate_cargo_lock",
-    visibility = ["//visibility:public"],
 )

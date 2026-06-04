@@ -3,6 +3,7 @@ bazel_dep(name = "platforms", version = "1.0.0")
 bazel_dep(name = "rules_cc", version = "0.2.18")
 bazel_dep(name = "rules_python", version = "2.0.0")
 bazel_dep(name = "rules_pycross", version = "0.0.0")
+bazel_dep(name = "rules_pycross_backend_maturin", version = "0.0.0")
 bazel_dep(name = "bazel_lib", version = "3.1.0")
 bazel_dep(name = "rules_rust", version = "0.68.0")
 
@@ -19,6 +20,11 @@ rust.toolchain(
 local_path_override(
     module_name = "rules_pycross",
     path = "../..",
+)
+
+local_path_override(
+    module_name = "rules_pycross_backend_maturin",
+    path = "../../modules/backend_maturin",
 )
 
 python = use_extension("@rules_python//python/extensions:python.bzl", "python")
@@ -52,17 +58,21 @@ lock_import.import_uv(
     project_file = "//:pyproject.toml",
     repo = "uv",
 )
-lock_import.maturin_override(
+lock_import.override_source(file = "@maturin_overrides//:overrides.json")
+
+maturin = use_extension("@rules_pycross_backend_maturin//extensions:overrides.bzl", "maturin_overrides")
+maturin.override(
     name = "rpds-py",
     always_build = True,
     repo = "uv",
 )
-lock_import.maturin_override(
+maturin.override(
     name = "captcha-rs",
     always_build = True,
     cargo_lock = "//:captcha_rs.lock",
     repo = "uv",
 )
+use_repo(maturin, "maturin_overrides", "uv_cargo")
 
 lock_repos = use_extension("@rules_pycross//pycross/extensions:lock_repos.bzl", "lock_repos")
 use_repo(lock_repos, "uv")

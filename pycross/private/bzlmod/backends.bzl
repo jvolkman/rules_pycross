@@ -35,13 +35,13 @@ def _backends_impl(module_ctx):
                     continue
 
             config = {
-                "rule_bzl": tag.rule_bzl,
+                "rule_bzl": str(tag.rule_bzl),
                 "tool_packages": tag.tool_packages,
             }
             backend_configs[name] = json.encode(config)
 
             if tag.sdist_repo_bzl:
-                sdist_repo_bzl[name] = tag.sdist_repo_bzl
+                sdist_repo_bzl[name] = str(tag.sdist_repo_bzl)
             if tag.sdist_repo_fn:
                 sdist_repo_fn[name] = tag.sdist_repo_fn
 
@@ -99,7 +99,7 @@ backends = module_extension(
                     mandatory = True,
                     doc = "Pycross rule name (e.g. 'meson_build').",
                 ),
-                "rule_bzl": attr.string(
+                "rule_bzl": attr.label(
                     mandatory = True,
                     doc = "Label of the .bzl file containing the rule, e.g. " +
                           "'@rules_pycross//pycross/private/build/rules:meson_build.bzl'.",
@@ -117,7 +117,7 @@ backends = module_extension(
                           "matches. Only one backend may be the default. Root module wins " +
                           "if multiple are set.",
                 ),
-                "sdist_repo_bzl": attr.string(
+                "sdist_repo_bzl": attr.label(
                     doc = "Optional label of a .bzl file providing a custom sdist " +
                           "repository_rule for this backend.",
                 ),

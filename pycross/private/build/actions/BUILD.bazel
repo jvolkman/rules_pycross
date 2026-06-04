@@ -33,8 +33,3 @@ bzl_library(
     srcs = ["tool_extract.bzl"],
     deps = ["@bazel_skylib//lib:paths"],
 )
-
-bzl_library(
-    name = "rust_layer",
-    srcs = ["rust_layer.bzl"],
-)

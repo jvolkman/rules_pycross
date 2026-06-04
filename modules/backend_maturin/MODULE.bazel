@@ -24,3 +24,6 @@ backends.register(
     sdist_repo_fn = "maturin_sdist_repo",
     tool_packages = ["maturin"],
 )
+
+environments = use_extension("@rules_pycross//pycross/extensions:environments.bzl", "environments")
+use_repo(environments, "pycross_environments")

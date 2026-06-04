@@ -27,22 +27,6 @@ https://packaging.python.org/en/latest/specifications/name-normalization.
 load("@bazel_skylib//lib:paths.bzl", "paths")
 load(":resolved_lock_renderer.bzl", "render_lock_bzl")
 
-def _label_to_workspace_path(label_str):
-    if not label_str:
-        return None
-    if label_str.startswith("@@//"):
-        label_str = label_str[4:]
-    elif label_str.startswith("@//"):
-        label_str = label_str[3:]
-    elif label_str.startswith("//"):
-        label_str = label_str[2:]
-    elif label_str.startswith("@"):
-        # External repo label, we can't write to it.
-        return None
-    if label_str.startswith(":"):
-        return label_str[1:]
-    return label_str.replace(":", "/")
-
 _requirement_func = """\
 def requirement(pkg):
     # Convert given name into normalized package name.
@@ -176,46 +160,6 @@ def _package_repo_impl(rctx):
             ])
 
     rctx.file("_wheel/BUILD.bazel", "\n".join(wheel_build_lines))
-
-    # 3c. Write _cargo_lock/BUILD.bazel
-    # TODO: This section hardcodes "maturin_build" knowledge into the hub repo.
-    # Ideally, backends would register their own helper target generators, but
-    # _cargo_lock is inherently a Rust/maturin concept and the practical benefit
-    # of generalizing this is low.
-    cargo_lock_build_lines = [
-        'package(default_visibility = ["//visibility:public"])',
-        "",
-        'load("@rules_pycross//pycross:defs.bzl", "pycross_generate_cargo_lock")',
-        "",
-    ]
-
-    has_cargo_lock_targets = False
-    for pkg_key, pkg in sorted(packages.items()):
-        if pkg.get("build_backend") != "maturin_build":
-            continue
-        sdist_file = pkg.get("sdist_file")
-        if not sdist_file:
-            continue
-
-        has_cargo_lock_targets = True
-        cargo_lock_json = pkg.get("backend_attrs", {}).get("cargo_lock")
-        cargo_lock_val = json.decode(cargo_lock_json) if cargo_lock_json else None
-        output_path = _label_to_workspace_path(cargo_lock_val)
-
-        cargo_lock_build_lines.extend([
-            "pycross_generate_cargo_lock(",
-            '    name = "{}",'.format(pkg_key),
-            '    sdist = "//_sdist:{}",'.format(pkg_key),
-        ])
-        if output_path:
-            cargo_lock_build_lines.append('    output = "{}",'.format(output_path))
-        cargo_lock_build_lines.extend([
-            ")",
-            "",
-        ])
-
-    if has_cargo_lock_targets:
-        rctx.file("_cargo_lock/BUILD.bazel", "\n".join(cargo_lock_build_lines))
 
     # 4. Write package BUILD subdirectories containing aliases for wheel/sdist
     for pin, pin_target in sorted(pins.items()):
