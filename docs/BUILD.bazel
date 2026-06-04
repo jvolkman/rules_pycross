@@ -85,9 +85,10 @@ stardoc(
 stardoc(
     name = "ext_setuptools_gen",
     out = "ext_setuptools.gen.md",
-    input = "@rules_pycross//pycross/extensions:setuptools.bzl",
+    input = "@rules_pycross//pycross/backends:setuptools.bzl",
     deps = [
-        "@rules_pycross//pycross/extensions:setuptools",
+        "@rules_cc//cc:find_cc_toolchain_bzl",
+        "@rules_pycross//pycross/backends:setuptools",
     ],
 )
 
@@ -95,9 +96,10 @@ stardoc(
 stardoc(
     name = "ext_meson_gen",
     out = "ext_meson.gen.md",
-    input = "@rules_pycross//pycross/extensions:meson.bzl",
+    input = "@rules_pycross//pycross/backends:meson.bzl",
     deps = [
-        "@rules_pycross//pycross/extensions:meson",
+        "@rules_cc//cc:find_cc_toolchain_bzl",
+        "@rules_pycross//pycross/backends:meson",
     ],
 )
 
@@ -105,9 +107,10 @@ stardoc(
 stardoc(
     name = "ext_cmake_gen",
     out = "ext_cmake.gen.md",
-    input = "@rules_pycross//pycross/extensions:cmake.bzl",
+    input = "@rules_pycross//pycross/backends:cmake.bzl",
     deps = [
-        "@rules_pycross//pycross/extensions:cmake",
+        "@rules_cc//cc:find_cc_toolchain_bzl",
+        "@rules_pycross//pycross/backends:cmake",
     ],
 )
 

@@ -6,9 +6,6 @@ exports_files([
     "lock_import.bzl",
     "lock_repos.bzl",
     "pycross.bzl",
-    "setuptools.bzl",
-    "meson.bzl",
-    "cmake.bzl",
 ])
 
 bzl_library(
@@ -44,34 +41,4 @@ bzl_library(
     srcs = ["backends.bzl"],
     visibility = ["//visibility:public"],
     deps = ["//pycross/private/bzlmod:backends"],
-)
-
-bzl_library(
-    name = "setuptools",
-    srcs = ["setuptools.bzl"],
-    visibility = ["//visibility:public"],
-    deps = [
-        "//pycross/private/bzlmod:override_helpers",
-        "//pycross/private/bzlmod:tag_attrs",
-    ],
-)
-
-bzl_library(
-    name = "meson",
-    srcs = ["meson.bzl"],
-    visibility = ["//visibility:public"],
-    deps = [
-        "//pycross/private/bzlmod:override_helpers",
-        "//pycross/private/bzlmod:tag_attrs",
-    ],
-)
-
-bzl_library(
-    name = "cmake",
-    srcs = ["cmake.bzl"],
-    visibility = ["//visibility:public"],
-    deps = [
-        "//pycross/private/bzlmod:override_helpers",
-        "//pycross/private/bzlmod:tag_attrs",
-    ],
 )

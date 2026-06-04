@@ -1,10 +1,32 @@
 load("@bazel_skylib//:bzl_library.bzl", "bzl_library")
 
+exports_files([
+    "cmake.bzl",
+    "meson.bzl",
+    "pep517.bzl",
+    "setuptools.bzl",
+])
+
+bzl_library(
+    name = "cmake",
+    srcs = ["cmake.bzl"],
+    visibility = ["//visibility:public"],
+    deps = [
+        "//pycross/private/build/rules:cmake_build",
+        "//pycross/private/bzlmod:override_helpers",
+        "//pycross/private/bzlmod:tag_attrs",
+    ],
+)
+
 bzl_library(
     name = "meson",
     srcs = ["meson.bzl"],
     visibility = ["//visibility:public"],
-    deps = ["//pycross/private/build/rules:meson_build"],
+    deps = [
+        "//pycross/private/build/rules:meson_build",
+        "//pycross/private/bzlmod:override_helpers",
+        "//pycross/private/bzlmod:tag_attrs",
+    ],
 )
 
 bzl_library(
@@ -18,5 +40,9 @@ bzl_library(
     name = "setuptools",
     srcs = ["setuptools.bzl"],
     visibility = ["//visibility:public"],
-    deps = ["//pycross/private/build/rules:setuptools_build"],
+    deps = [
+        "//pycross/private/build/rules:setuptools_build",
+        "//pycross/private/bzlmod:override_helpers",
+        "//pycross/private/bzlmod:tag_attrs",
+    ],
 )

@@ -57,7 +57,7 @@ lock_import.package(
 )
 lock_import.override_source(file = "@cmake_overrides//:overrides.json")
 
-cmake = use_extension("@rules_pycross//pycross/extensions:cmake.bzl", "cmake")
+cmake = use_extension("@rules_pycross//pycross/backends:cmake.bzl", "cmake")
 cmake.override(
     name = "iminuit",
     repo = "uv",

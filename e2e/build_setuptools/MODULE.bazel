@@ -66,7 +66,7 @@ lock_import.package(
 )
 lock_import.override_source(file = "@setuptools_overrides//:overrides.json")
 
-setuptools = use_extension("@rules_pycross//pycross/extensions:setuptools.bzl", "setuptools")
+setuptools = use_extension("@rules_pycross//pycross/backends:setuptools.bzl", "setuptools")
 setuptools.override(
     name = "setproctitle",
     repo = "uv",
