@@ -50,19 +50,28 @@ bzl_library(
     name = "setuptools",
     srcs = ["setuptools.bzl"],
     visibility = ["//visibility:public"],
-    deps = ["//pycross/private/bzlmod:tag_attrs"],
+    deps = [
+        "//pycross/private/bzlmod:override_helpers",
+        "//pycross/private/bzlmod:tag_attrs",
+    ],
 )
 
 bzl_library(
     name = "meson",
     srcs = ["meson.bzl"],
     visibility = ["//visibility:public"],
-    deps = ["//pycross/private/bzlmod:tag_attrs"],
+    deps = [
+        "//pycross/private/bzlmod:override_helpers",
+        "//pycross/private/bzlmod:tag_attrs",
+    ],
 )
 
 bzl_library(
     name = "cmake",
     srcs = ["cmake.bzl"],
     visibility = ["//visibility:public"],
-    deps = ["//pycross/private/bzlmod:tag_attrs"],
+    deps = [
+        "//pycross/private/bzlmod:override_helpers",
+        "//pycross/private/bzlmod:tag_attrs",
+    ],
 )

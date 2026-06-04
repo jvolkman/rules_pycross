@@ -98,22 +98,18 @@ def _lock_struct(mctx, tag):
         packages = {},
     )
 
-def _make_package_info(tag, build_backend, build_target, backend_attrs):
-    """Build a normalized package info struct from common tag attrs."""
+def _normalize_package_tag(tag):
+    """Normalize a generic package tag into a struct."""
     return struct(
         always_build = tag.always_build,
         build_dependencies = tag.build_dependencies,
-        build_target = build_target,
+        build_target = tag.build_target,
         ignore_dependencies = tag.ignore_dependencies,
         install_exclude_globs = tag.install_exclude_globs,
         post_install_patches = tag.post_install_patches,
-        build_backend = build_backend,
-        backend_attrs = backend_attrs,
+        build_backend = None,
+        backend_attrs = dict(tag.backend_attrs),
     )
-
-def _normalize_package_tag(tag):
-    """Normalize a generic package tag (has build_target and backend_attrs)."""
-    return _make_package_info(tag, None, tag.build_target, dict(tag.backend_attrs))
 
 def _lock_import_impl(module_ctx):
     lock_owners = {}
@@ -144,7 +140,7 @@ def _lock_import_impl(module_ctx):
             _check_package_entry_not_set(lock_owners, repo_info, tag)
             repo_info.packages[tag.name] = _normalize_package_tag(tag)
 
-        # Collect all overrides (built-in and external)
+    # Collect external overrides
     all_overrides = {}
 
     for module in module_ctx.modules:

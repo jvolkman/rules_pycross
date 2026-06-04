@@ -99,3 +99,8 @@ bzl_library(
     name = "lock_hub_repo",
     srcs = ["lock_hub_repo.bzl"],
 )
+
+bzl_library(
+    name = "override_helpers",
+    srcs = ["override_helpers.bzl"],
+)

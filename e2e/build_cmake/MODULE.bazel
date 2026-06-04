@@ -43,8 +43,9 @@ lock_import.import_uv(
     project_file = "//:pyproject.toml",
     repo = "uv",
 )
-lock_import.cmake_override(
+lock_import.package(
     name = "iminuit",
+    always_build = True,
     build_dependencies = [
         "scikit-build-core",
         "cmake",
@@ -54,6 +55,14 @@ lock_import.cmake_override(
     ],
     repo = "uv",
 )
+lock_import.override_source(file = "@cmake_overrides//:overrides.json")
+
+cmake = use_extension("@rules_pycross//pycross/extensions:cmake.bzl", "cmake")
+cmake.override(
+    name = "iminuit",
+    repo = "uv",
+)
+use_repo(cmake, "cmake_overrides")
 
 lock_repos = use_extension("@rules_pycross//pycross/extensions:lock_repos.bzl", "lock_repos")
 use_repo(lock_repos, "uv")

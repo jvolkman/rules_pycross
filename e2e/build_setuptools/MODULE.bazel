@@ -55,14 +55,23 @@ lock_import.package(
     build_target = "@//deps/psycopg2",
     repo = "uv",
 )
-lock_import.setuptools_override(
+lock_import.package(
     name = "setproctitle",
+    always_build = True,
     build_dependencies = [
         "setuptools",
         "wheel",
     ],
     repo = "uv",
 )
+lock_import.override_source(file = "@setuptools_overrides//:overrides.json")
+
+setuptools = use_extension("@rules_pycross//pycross/extensions:setuptools.bzl", "setuptools")
+setuptools.override(
+    name = "setproctitle",
+    repo = "uv",
+)
+use_repo(setuptools, "setuptools_overrides")
 
 lock_repos = use_extension("@rules_pycross//pycross/extensions:lock_repos.bzl", "lock_repos")
 use_repo(lock_repos, "uv")
