@@ -43,16 +43,10 @@ lock_import.import_uv(
 lock_import.package(
     name = "setproctitle",
     always_build = True,
-    backend_attrs = {
-        "site_hooks": "[\"with open('pkg/setproctitle/__init__.py', 'a') as f: f.write('SITE_HOOK_RAN = True\\\\n')\"]",
-    },
-    build_dependencies = [
-        "setuptools",
-        "wheel",
-    ],
     post_install_patches = ["@@//patches:setproctitle-postinstall.patch"],
     pre_build_patches = ["@@//patches:setproctitle-prebuild.patch"],
     repo = "uv",
+    site_hooks = ["with open('pkg/setproctitle/__init__.py', 'a') as f: f.write('SITE_HOOK_RAN = True\\n')"],
 )
 
 setuptools = use_extension("@rules_pycross//pycross/backends:setuptools.bzl", "setuptools")

@@ -71,10 +71,6 @@ lock_import.package(
 
 maturin = use_extension("@rules_pycross_backend_maturin//extensions:maturin.bzl", "maturin")
 maturin.override(
-    name = "rpds-py",
-    repo = "uv",
-)
-maturin.override(
     name = "captcha-rs",
     cargo_lock = "//:captcha_rs.lock",
     repo = "uv",

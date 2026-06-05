@@ -58,10 +58,6 @@ lock_import.package(
 lock_import.package(
     name = "setproctitle",
     always_build = True,
-    build_dependencies = [
-        "setuptools",
-        "wheel",
-    ],
     repo = "uv",
 )
 lock_import.package(
@@ -71,10 +67,6 @@ lock_import.package(
 )
 
 setuptools = use_extension("@rules_pycross//pycross/backends:setuptools.bzl", "setuptools")
-setuptools.override(
-    name = "setproctitle",
-    repo = "uv",
-)
 setuptools.override(
     name = "psycopg2",
     repo = "uv",

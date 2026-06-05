@@ -52,52 +52,24 @@ lock_import.import_uv(
 lock_import.package(
     name = "numpy",
     always_build = True,
-    build_dependencies = [
-        "cython",
-        "meson-python",
-        "meson",
-        "ninja",
-    ],
     build_target = "@//deps/numpy",
     repo = "uv",
 )
 lock_import.package(
     name = "pandas",
     always_build = True,
-    build_dependencies = [
-        "cython",
-        "meson-python",
-        "meson",
-        "ninja",
-        "versioneer",
-        "numpy",
-    ],
     build_target = "@//deps/pandas",
     repo = "uv",
 )
 lock_import.package(
     name = "contourpy",
     always_build = True,
-    build_dependencies = [
-        "meson-python",
-        "meson",
-        "ninja",
-        "pybind11",
-        "numpy",
-    ],
     build_target = "@//deps/contourpy",
     repo = "uv",
 )
 lock_import.package(
     name = "pywavelets",
     always_build = True,
-    build_dependencies = [
-        "meson-python",
-        "meson",
-        "ninja",
-        "numpy",
-        "cython",
-    ],
     build_target = "@//deps/pywavelets",
     repo = "uv",
 )

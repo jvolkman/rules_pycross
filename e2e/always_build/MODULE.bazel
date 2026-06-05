@@ -52,10 +52,6 @@ lock_import.import_uv(
 lock_import.package(
     name = "regex",
     always_build = True,
-    build_dependencies = [
-        "setuptools",
-        "wheel",
-    ],
     repo = "uv",
 )
 

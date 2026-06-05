@@ -46,23 +46,6 @@ lock_import.import_uv(
 lock_import.package(
     name = "iminuit",
     always_build = True,
-    build_dependencies = [
-        "scikit-build-core",
-        "cmake",
-        "ninja",
-        "pybind11",
-        "numpy",
-    ],
-    repo = "uv",
-)
-
-cmake = use_extension("@rules_pycross//pycross/backends:cmake.bzl", "cmake")
-cmake.override(
-    name = "iminuit",
-    repo = "uv",
-)
-cmake.override(
-    name = "ninja",
     repo = "uv",
 )
 
