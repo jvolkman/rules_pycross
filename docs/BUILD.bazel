@@ -44,9 +44,8 @@ stardoc(
     deps = [
         "@rules_cc//cc:find_cc_toolchain_bzl",
         "@rules_pycross//pycross:backend",
-        "@rules_pycross//pycross:backend_repo",
         "@rules_pycross//pycross/extensions:lock_repos",
-        "@rules_pycross_backend_maturin//private:maturin_sdist_repo",
+        "@rules_pycross_backend_maturin//private:maturin_sdist_hook",
     ],
 )
 

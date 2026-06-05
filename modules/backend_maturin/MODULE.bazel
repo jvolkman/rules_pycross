@@ -26,12 +26,12 @@ bazel_dep(name = "bazel_skylib_gazelle_plugin", version = "1.5.0", dev_dependenc
 backends = use_extension("@rules_pycross//pycross/extensions:backends.bzl", "backends")
 backends.register(
     name = "maturin_build",
+    override_json = "@maturin_overrides//:overrides.json",
     pyproject_backends = ["maturin"],
     rule_bzl = "@rules_pycross_backend_maturin//rules:maturin_build.bzl",
-    sdist_repo_bzl = "@rules_pycross_backend_maturin//private:maturin_sdist_repo.bzl",
-    sdist_repo_fn = "maturin_sdist_repo",
+    sdist_hook_bzl = "@rules_pycross_backend_maturin//private:maturin_sdist_hook.bzl",
+    sdist_hook_fn = "maturin_sdist_hook",
     tool_packages = ["maturin"],
-    override_json = "@maturin_overrides//:overrides.json",
 )
 
 environments = use_extension("@rules_pycross//pycross/extensions:environments.bzl", "environments")

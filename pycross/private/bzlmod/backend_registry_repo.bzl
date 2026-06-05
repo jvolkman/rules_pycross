@@ -3,7 +3,7 @@
 This is created by the backends module extension from `backends.register` tags.
 It produces:
   - `registry.bzl`: exports BACKEND_TO_RULE, DEFAULT_BACKEND, BACKEND_CONFIGS
-  - `sdist_dispatch.bzl`: exports SDIST_REPO_RULES mapping backend names to repo rule functions
+  - `sdist_dispatch.bzl`: exports SDIST_HOOKS mapping backend names to sdist hook functions
 """
 
 def _backend_registry_repo_impl(rctx):
@@ -50,35 +50,29 @@ def _backend_registry_repo_impl(rctx):
     dispatch_lines = [
         '"""Generated sdist repo rule dispatch table. Do not edit."""',
         "",
-        'load("@rules_pycross//pycross/private/bzlmod:sdist_repo.bzl", _default_sdist_repo = "pycross_sdist_repo")',
     ]
 
-    # Collect unique (bzl_file, symbol) pairs for backends that have custom sdist repos.
+    # Collect unique (bzl_file, symbol) pairs for backends that have custom sdist hooks.
     load_aliases = {}  # rule_name -> alias symbol
-    for rule_name in sorted(rctx.attr.sdist_repo_bzl.keys()):
-        bzl_file = rctx.attr.sdist_repo_bzl[rule_name]
-        fn_name = rctx.attr.sdist_repo_fn.get(rule_name, rule_name.replace("_build", "_sdist_repo"))
-        alias = "_sdist_repo_{}".format(rule_name)
+    for rule_name in sorted(rctx.attr.sdist_hook_bzl.keys()):
+        bzl_file = rctx.attr.sdist_hook_bzl[rule_name]
+        fn_name = rctx.attr.sdist_hook_fn.get(rule_name, rule_name.replace("_build", "_sdist_hook"))
+        alias = "_sdist_hook_{}".format(rule_name)
         dispatch_lines.append('load("{}", {} = "{}")'.format(bzl_file, alias, fn_name))
         load_aliases[rule_name] = alias
 
     dispatch_lines.extend([
         "",
-        "# Maps backend rule names to their sdist repository_rule functions.",
-        "# Backends without a custom sdist repo use the generic default.",
-        "SDIST_REPO_RULES = {",
+        "# Maps backend rule names to their sdist hook functions.",
+        "SDIST_HOOKS = {",
     ])
 
     for rule_name in sorted(rctx.attr.backend_configs.keys()):
         if rule_name in load_aliases:
             dispatch_lines.append('    "{}": {},'.format(rule_name, load_aliases[rule_name]))
-        else:
-            dispatch_lines.append('    "{}": _default_sdist_repo,'.format(rule_name))
 
     dispatch_lines.extend([
         "}",
-        "",
-        "DEFAULT_SDIST_REPO = _default_sdist_repo",
         "",
     ])
 
@@ -114,11 +108,11 @@ backend_registry_repo = repository_rule(
         "backend_configs": attr.string_dict(
             doc = "Maps pycross rule names to JSON-encoded config dicts with 'rule_bzl' and 'tool_packages'.",
         ),
-        "sdist_repo_bzl": attr.string_dict(
-            doc = "Maps backend rule names to their custom sdist repo .bzl file labels.",
+        "sdist_hook_bzl": attr.string_dict(
+            doc = "Maps backend rule names to their custom sdist hook .bzl file labels.",
         ),
-        "sdist_repo_fn": attr.string_dict(
-            doc = "Maps backend rule names to the function name in the sdist repo .bzl file.",
+        "sdist_hook_fn": attr.string_dict(
+            doc = "Maps backend rule names to the function name in the sdist hook .bzl file.",
         ),
         "override_files": attr.string_list(
             doc = "Labels of JSON files containing backend overrides.",

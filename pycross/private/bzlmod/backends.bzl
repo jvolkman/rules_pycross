@@ -16,8 +16,8 @@ def _print_warn(msg):
 def _backends_impl(module_ctx):
     backend_to_rule = {}  # pyproject backend name -> rule name
     backend_configs = {}  # rule name -> JSON config string
-    sdist_repo_bzl = {}  # rule name -> custom sdist repo .bzl file
-    sdist_repo_fn = {}  # rule name -> custom sdist repo function name
+    sdist_hook_bzl = {}  # rule name -> custom sdist hook .bzl file
+    sdist_hook_fn = {}  # rule name -> custom sdist hook function name
     default_backend = None
     default_backend_module = None
     override_files = []
@@ -44,10 +44,10 @@ def _backends_impl(module_ctx):
             }
             backend_configs[name] = json.encode(config)
 
-            if tag.sdist_repo_bzl:
-                sdist_repo_bzl[name] = str(tag.sdist_repo_bzl)
-            if tag.sdist_repo_fn:
-                sdist_repo_fn[name] = tag.sdist_repo_fn
+            if tag.sdist_hook_bzl:
+                sdist_hook_bzl[name] = str(tag.sdist_hook_bzl)
+            if tag.sdist_hook_fn:
+                sdist_hook_fn[name] = tag.sdist_hook_fn
 
             for pyproject_backend in tag.pyproject_backends:
                 if pyproject_backend in backend_to_rule and not module.is_root:
@@ -84,8 +84,8 @@ def _backends_impl(module_ctx):
         backend_to_rule = backend_to_rule,
         default_backend = default_backend,
         backend_configs = backend_configs,
-        sdist_repo_bzl = sdist_repo_bzl,
-        sdist_repo_fn = sdist_repo_fn,
+        sdist_hook_bzl = sdist_hook_bzl,
+        sdist_hook_fn = sdist_hook_fn,
         override_files = override_files,
     )
 
@@ -122,13 +122,13 @@ backends = module_extension(
                           "matches. Only one backend may be the default. Root module wins " +
                           "if multiple are set.",
                 ),
-                "sdist_repo_bzl": attr.label(
-                    doc = "Optional label of a .bzl file providing a custom sdist " +
-                          "repository_rule for this backend.",
+                "sdist_hook_bzl": attr.label(
+                    doc = "Optional label of a .bzl file providing a hook for " +
+                          "sdist repo execution.",
                 ),
-                "sdist_repo_fn": attr.string(
-                    doc = "Optional function name in sdist_repo_bzl. Defaults to " +
-                          "'<name>_sdist_repo' (replacing '_build' suffix).",
+                "sdist_hook_fn": attr.string(
+                    doc = "Optional function name in sdist_hook_bzl. Defaults to " +
+                          "'<name>_sdist_hook' (replacing '_build' suffix).",
                 ),
                 "override_json": attr.label(
                     doc = "Optional label of a generated JSON file containing overrides for this backend.",

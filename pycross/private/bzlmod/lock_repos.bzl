@@ -3,8 +3,8 @@
 load("@bazel_features//:features.bzl", "bazel_features")
 load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_file")
 load("@lock_import_repos_hub//:locks.bzl", lock_import_locks = "locks")
-load("@pycross_backends//:registry.bzl", "BACKEND_CONFIGS", "BACKEND_TO_RULE", "DEFAULT_BACKEND")
-load("@pycross_backends//:sdist_dispatch.bzl", "DEFAULT_SDIST_REPO", "SDIST_REPO_RULES")
+load("@pycross_backends//:registry.bzl", "BACKEND_CONFIGS", "BACKEND_TO_RULE", "DEFAULT_BACKEND", "OVERRIDE_FILES")
+load("@rules_pycross//pycross/private/bzlmod:sdist_repo.bzl", "pycross_sdist_repo")
 load("//pycross/private:package_repo.bzl", "package_repo")
 load("//pycross/private:pypi_file.bzl", "pypi_file")
 load("//pycross/private:util.bzl", "sanitize_name")
@@ -17,6 +17,17 @@ def _print_warn(msg):
 def _lock_repos_impl(module_ctx):
     all_locks = lock_import_locks  # Some day there may be others.
     all_remote_files = {}
+
+    # Build per-repo, per-package override configs from registered override files.
+    # override_configs[repo_name][pkg_name][backend_name] = {backend_attrs dict}
+    override_configs = {}
+    for f in OVERRIDE_FILES:
+        data = json.decode(module_ctx.read(f))
+        for repo, packages in data.items():
+            for pkg_name, entry in packages.items():
+                backend_name = entry.get("build_backend", "")
+                backend_attrs = entry.get("backend_attrs", {})
+                override_configs.setdefault(repo, {}).setdefault(pkg_name, {})[backend_name] = backend_attrs
 
     # Pre-pathify all lock files to minimize restart time.
     for lock_file in all_locks.values():
@@ -149,10 +160,14 @@ def _lock_repos_impl(module_ctx):
                 if attr_name in pkg and pkg[attr_name] != None:
                     sdist_repo_attrs[attr_name] = pkg[attr_name]
 
-            # Dispatch to the appropriate sdist repo rule based on backend.
-            backend_macro = pkg.get("build_backend")
-            sdist_repo_fn = SDIST_REPO_RULES.get(backend_macro, DEFAULT_SDIST_REPO) if backend_macro else DEFAULT_SDIST_REPO
-            sdist_repo_fn(**sdist_repo_attrs)
+            # Pass per-package override configs keyed by backend name.
+            pkg_name = pkg_key.split("@")[0]
+            pkg_overrides = override_configs.get(repo_name, {}).get(pkg_name, {})
+            if pkg_overrides:
+                sdist_repo_attrs["override_backend_configs"] = json.encode(pkg_overrides)
+
+            # Invoke the generic sdist repo rule. Hooks will be applied dynamically inside it.
+            pycross_sdist_repo(**sdist_repo_attrs)
 
         package_repo(
             name = repo_name,

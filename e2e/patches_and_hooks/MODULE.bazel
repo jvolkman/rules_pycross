@@ -6,7 +6,6 @@ bazel_dep(name = "rules_python", version = "2.0.0")
 include("//shared:overrides.MODULE.bazel")
 
 bazel_dep(name = "rules_pycross", version = "0.0.0")
-
 local_path_override(
     module_name = "rules_pycross",
     path = "../..",
@@ -55,6 +54,7 @@ lock_import.package(
     pre_build_patches = ["@@//patches:setproctitle-prebuild.patch"],
     repo = "uv",
 )
+
 setuptools = use_extension("@rules_pycross//pycross/backends:setuptools.bzl", "setuptools")
 setuptools.override(
     name = "setproctitle",

@@ -4,7 +4,6 @@ load("@bazel_skylib//:bzl_library.bzl", "bzl_library")
 exports_files([
     "defs.bzl",
     "backend.bzl",
-    "backend_repo.bzl",
 ])
 
 toolchain_type(
@@ -44,15 +43,6 @@ bzl_library(
         "//pycross/private/build/rules:common_attrs",
         "//pycross/private/bzlmod:override_helpers",
         "//pycross/private/bzlmod:sdist_repo",
-    ],
-)
-
-bzl_library(
-    name = "backend_repo",
-    srcs = ["backend_repo.bzl"],
-    visibility = ["//visibility:public"],
-    deps = [
-        ":backend",
     ],
 )
 

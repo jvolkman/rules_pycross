@@ -1,20 +1,20 @@
 """Repository rule for auto-generating a BUILD file for an sdist package.
 
-The common logic is factored into sdist_repo_common() so that backend-specific
-repo rules (e.g. maturin_sdist_repo) can reuse it.
+The common logic is factored into _sdist_repo_common() so it can be called before hooks are invoked.
 """
 
+load("@pycross_backends//:sdist_dispatch.bzl", "SDIST_HOOKS")
 load("//pycross/private:internal_repo.bzl", "exec_internal_tool")
 load("//pycross/private:util.bzl", "extract_pep508_name")
 
-def _render_build_file(rctx, macro_attrs, backend_macro, has_vendored = False):
+def _render_build_file(rctx, macro_attrs, backend_macro, extra_build_snippets = None):
     """Render the BUILD.bazel file for an sdist repo.
 
     Args:
         rctx: The repository context.
         macro_attrs: Dict of macro attribute name -> Starlark literal string.
         backend_macro: The backend macro name (e.g. 'meson_build').
-        has_vendored: Whether cargo crates were vendored (adds filegroup).
+        extra_build_snippets: Optional list of raw BUILD file content strings.
     """
     attr_lines = []
     for key, val in sorted(macro_attrs.items()):
@@ -39,18 +39,14 @@ package(default_visibility = ["//visibility:public"])
         attrs = "\n".join(attr_lines),
     )
 
-    if has_vendored:
-        build_content += """
-filegroup(
-    name = "vendored_crates",
-    srcs = glob(["vendor/**"]),
-)
-"""
+    if extra_build_snippets:
+        for snippet in extra_build_snippets:
+            build_content += "\n" + snippet + "\n"
 
     rctx.file("BUILD.bazel", build_content)
     rctx.file("REPO.bazel", "")
 
-def sdist_repo_common(rctx):
+def _sdist_repo_common(rctx):
     """Shared sdist repo logic: inspect metadata, resolve backend, decode backend_attrs.
 
     Args:
@@ -140,6 +136,24 @@ def sdist_repo_common(rctx):
         else:
             macro_attrs[attr_name] = str(decoded)
 
+    # Apply override backend configs: only use the entry matching the resolved backend.
+    matching_config = {}
+    if rctx.attr.override_backend_configs:
+        all_configs = json.decode(rctx.attr.override_backend_configs)
+        matching_config = all_configs.pop(backend_macro, {})
+        for attr_name, json_val in sorted(matching_config.items()):
+            decoded = json.decode(json_val)
+            if type(decoded) == "string":
+                macro_attrs[attr_name] = "\"{}\"".format(decoded)
+            else:
+                macro_attrs[attr_name] = str(decoded)
+        if all_configs:
+            # buildifier: disable=print
+            print("WARNING: package '{}' has override configs for non-matching backends: {}".format(
+                rctx.attr.sdist,
+                ", ".join(sorted(all_configs.keys())),
+            ))
+
     # Pass through pre_build_patches if specified.
     if rctx.attr.pre_build_patches:
         macro_attrs["pre_build_patches"] = str(rctx.attr.pre_build_patches)
@@ -147,14 +161,23 @@ def sdist_repo_common(rctx):
     return struct(
         macro_attrs = macro_attrs,
         backend_macro = backend_macro,
-        render = lambda macro_attrs, backend_macro, has_vendored = False: _render_build_file(rctx, macro_attrs, backend_macro, has_vendored),
+        applied_override_config = matching_config,
+        render = lambda macro_attrs, backend_macro, extra_build_snippets = None: _render_build_file(rctx, macro_attrs, backend_macro, extra_build_snippets),
     )
 
 # -- Default (generic) sdist repo rule --
 
 def _sdist_repo_impl(rctx):
-    result = sdist_repo_common(rctx)
-    result.render(result.macro_attrs, result.backend_macro)
+    result = _sdist_repo_common(rctx)
+    macro_attrs = result.macro_attrs
+    backend_macro = result.backend_macro
+    extra_build_snippets = None
+
+    hook = SDIST_HOOKS.get(backend_macro)
+    if hook:
+        extra_build_snippets = hook(rctx, result)
+
+    result.render(macro_attrs, backend_macro, extra_build_snippets)
 
 _SDIST_REPO_ATTRS = {
     "sdist": attr.label(mandatory = True),
@@ -170,6 +193,10 @@ _SDIST_REPO_ATTRS = {
     ),
     "build_dependencies": attr.string_list(doc = "Overridden build-time dependencies."),
     "backend_attrs": attr.string_dict(doc = "Arbitrary backend-specific attrs. Keys are attr names; values are JSON-encoded Starlark literals."),
+    "override_backend_configs": attr.string(
+        doc = "JSON-encoded dict mapping backend rule names to their backend_attrs for this package. " +
+              "Populated from backend override extensions. Only the entry matching the resolved backend is applied.",
+    ),
     "pre_build_patches": attr.string_list(doc = "Patches to apply to the sdist source tree before building."),
 }
 
@@ -177,6 +204,3 @@ pycross_sdist_repo = repository_rule(
     implementation = _sdist_repo_impl,
     attrs = _SDIST_REPO_ATTRS,
 )
-
-# Exported for backend-specific repo rules to reuse.
-SDIST_REPO_ATTRS = _SDIST_REPO_ATTRS

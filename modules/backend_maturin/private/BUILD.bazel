@@ -11,12 +11,9 @@ bzl_library(
 )
 
 bzl_library(
-    name = "maturin_sdist_repo",
-    srcs = ["maturin_sdist_repo.bzl"],
-    deps = [
-        ":cargo",
-        "@rules_pycross//pycross/private/bzlmod:sdist_repo",
-    ],
+    name = "maturin_sdist_hook",
+    srcs = ["maturin_sdist_hook.bzl"],
+    deps = [":cargo"],
 )
 
 bzl_library(

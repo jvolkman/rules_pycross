@@ -48,11 +48,6 @@ load(
     _encode_build_system_attrs = "encode_build_system_attrs",
     _make_override_extension = "make_override_extension",
 )
-load(
-    "//pycross/private/bzlmod:sdist_repo.bzl",
-    _SDIST_REPO_ATTRS = "SDIST_REPO_ATTRS",
-    _sdist_repo_common = "sdist_repo_common",
-)
 
 # Providers
 PycrossWheelInfo = _PycrossWheelInfo
@@ -81,8 +76,6 @@ get_wheel_file = _get_wheel_file
 group_tool_deps = _group_tool_deps
 
 # Sdist repo helpers
-SDIST_REPO_ATTRS = _SDIST_REPO_ATTRS
-sdist_repo_common = _sdist_repo_common
 
 # Override extension helpers
 make_override_extension = _make_override_extension

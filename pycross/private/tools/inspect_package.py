@@ -7,6 +7,9 @@ import tomllib
 import zipfile
 from pathlib import Path
 
+PEP517_DEFAULT_BACKEND = "setuptools.build_meta:__legacy__"
+PEP517_DEFAULT_REQUIRES = ["setuptools>=40.8.0", "wheel"]
+
 
 def _get_archive_file_content(archive_path: Path, target_filename: str) -> str:
     """Reads a specific file from a tar.gz or zip archive without extracting it to disk."""
@@ -34,8 +37,8 @@ def inspect_sdist(sdist_path: Path) -> dict:
 
     build_system = pyproject.get("build-system", {})
     return {
-        "build_backend": build_system.get("build-backend", ""),
-        "build_requires": build_system.get("requires", []),
+        "build_backend": build_system.get("build-backend", PEP517_DEFAULT_BACKEND),
+        "build_requires": build_system.get("requires", PEP517_DEFAULT_REQUIRES),
     }
 
 

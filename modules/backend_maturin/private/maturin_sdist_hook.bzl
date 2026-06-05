@@ -1,14 +1,20 @@
-"""Maturin-specific sdist repository rule with cargo crate vendoring."""
+"""Maturin-specific sdist hook with cargo crate vendoring."""
 
-load("@rules_pycross//pycross:backend_repo.bzl", "SDIST_REPO_ATTRS", "sdist_repo_common")
 load(":cargo.bzl", "find_cargo_lock_in_sdist", "vendor_crates_from_lock")
 
-def _maturin_sdist_repo_impl(rctx):
-    result = sdist_repo_common(rctx)
-    macro_attrs = result.macro_attrs
+def maturin_sdist_hook(rctx, result):
+    """Maturin sdist hook that vendors cargo crates.
 
-    # Extract cargo_lock label from backend_attrs if present.
-    cargo_lock_json = rctx.attr.backend_attrs.get("cargo_lock")
+    Args:
+        rctx: The repository context.
+        result: The struct returned by _sdist_repo_common containing package metadata.
+
+    Returns:
+        A list of extra BUILD file snippet strings (e.g. for vendored_crates filegroup).
+    """
+
+    # Extract cargo_lock label from applied override config or backend_attrs.
+    cargo_lock_json = result.applied_override_config.get("cargo_lock") or rctx.attr.backend_attrs.get("cargo_lock")
     cargo_lock_label = json.decode(cargo_lock_json) if cargo_lock_json else None
 
     has_vendored = False
@@ -46,12 +52,16 @@ def _maturin_sdist_repo_impl(rctx):
         if extracted.exists:
             rctx.delete("Cargo.lock.extracted")
 
+    extra_build_snippets = None
     if has_vendored:
-        macro_attrs["vendored_crates"] = "\":vendored_crates\""
-
-    result.render(macro_attrs, result.backend_macro, has_vendored)
-
-maturin_sdist_repo = repository_rule(
-    implementation = _maturin_sdist_repo_impl,
-    attrs = SDIST_REPO_ATTRS,
+        result.macro_attrs["vendored_crates"] = "\":vendored_crates\""
+        extra_build_snippets = [
+            """
+filegroup(
+    name = "vendored_crates",
+    srcs = glob(["vendor/**"]),
 )
+""",
+        ]
+
+    return extra_build_snippets

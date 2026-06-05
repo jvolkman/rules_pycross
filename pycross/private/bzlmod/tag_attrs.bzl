@@ -47,6 +47,9 @@ PACKAGE_ATTRS = dict(
         doc = "The package key (name or name@version).",
         mandatory = True,
     ),
+    build_backend = attr.string(
+        doc = "An explicit build backend rule name to use for this package (e.g. 'maturin_build'). Overrides pyproject.toml detection.",
+    ),
     build_target = attr.label(
         doc = "An optional override build target to use when and if this package needs to be built from source.",
     ),

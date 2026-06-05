@@ -13,7 +13,6 @@ def _generate_resolved_lock_repo(lock_info, serialized_lock_model):
     repo_name = lock_info.repo_name
     args = {
         "name": repo_name,
-        "lock_repo_name": repo_name,
         "lock_model": serialized_lock_model,
         "target_environments": lock_info.environments,
         "default_alias_single_version": lock_info.default_alias_single_version,
@@ -110,7 +109,7 @@ def _normalize_package_tag(tag):
         install_exclude_globs = tag.install_exclude_globs,
         post_install_patches = tag.post_install_patches,
         pre_build_patches = tag.pre_build_patches,
-        build_backend = None,
+        build_backend = tag.build_backend if tag.build_backend else None,
         backend_attrs = dict(tag.backend_attrs),
     )
 

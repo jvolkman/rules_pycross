@@ -64,6 +64,7 @@ lock_import.package(
     ],
     repo = "uv",
 )
+
 setuptools = use_extension("@rules_pycross//pycross/backends:setuptools.bzl", "setuptools")
 setuptools.override(
     name = "setproctitle",
