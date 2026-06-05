@@ -195,7 +195,6 @@ class PackageAnnotations:
     post_install_patches: List[str] = field(default_factory=list)
     pre_build_patches: List[str] = field(default_factory=list)
     build_backend: Optional[str] = None
-    backend_attrs: Dict[str, str] = field(default_factory=dict)
 
 
 class PackageResolver:
@@ -222,7 +221,6 @@ class PackageResolver:
         self._post_install_patches = annotations.post_install_patches
         self._pre_build_patches = annotations.pre_build_patches
         self._build_backend = annotations.build_backend
-        self._backend_attrs = annotations.backend_attrs
 
         deps_by_env = context.get_dependencies_by_environment(
             package,
@@ -280,7 +278,6 @@ class PackageResolver:
             post_install_patches=self._post_install_patches,
             pre_build_patches=self._pre_build_patches,
             build_backend=self._build_backend,
-            backend_attrs=self._backend_attrs,
         )
 
 
@@ -370,9 +367,6 @@ def collect_package_annotations(args: Any, lock_model: RawLockSet) -> Dict[Packa
 
         if annotation.get("build_backend") is not None:
             annotations[resolved_pkg].build_backend = annotation["build_backend"]
-
-        for k, v in annotation.get("backend_attrs", {}).items():
-            annotations[resolved_pkg].backend_attrs[k] = v
 
     # Return as a non-default dict
     return dict(annotations)

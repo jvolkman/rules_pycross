@@ -32,7 +32,6 @@ def _generate_resolved_lock_repo(lock_info, serialized_lock_model):
             post_install_patches = package.post_install_patches,
             pre_build_patches = package.pre_build_patches,
             build_backend = package.build_backend,
-            backend_attrs = package.backend_attrs,
         )
 
     resolved_lock_repo(**args)
@@ -110,7 +109,6 @@ def _normalize_package_tag(tag):
         post_install_patches = tag.post_install_patches,
         pre_build_patches = tag.pre_build_patches,
         build_backend = tag.build_backend if tag.build_backend else None,
-        backend_attrs = dict(tag.backend_attrs),
     )
 
 def _lock_import_impl(module_ctx):

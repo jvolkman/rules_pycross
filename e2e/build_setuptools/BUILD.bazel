@@ -12,6 +12,7 @@ collect_wheels(
     ],
     wheels = [
         "@uv//_wheel:psycopg2",
+        "@uv//_wheel:pyyaml",
         "@uv//_wheel:setproctitle",
         ":zstandard_build",
     ],

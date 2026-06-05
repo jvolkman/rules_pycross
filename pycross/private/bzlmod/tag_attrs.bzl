@@ -71,11 +71,6 @@ PACKAGE_ATTRS = dict(
     pre_build_patches = attr.string_list(
         doc = "A list of patches to apply to the sdist source tree before building.",
     ),
-    backend_attrs = attr.string_dict(
-        doc = "Arbitrary backend-specific attributes. Keys are attr names on the backend rule; " +
-              "values are JSON-encoded Starlark literals (e.g. '[\"a\", \"b\"]' for a list, " +
-              "'{\"k\": \"v\"}' for a dict, '\"hello\"' for a string, 'true' for a bool).",
-    ),
 )
 
 # Attrs specific to build-system overrides (meson, setuptools, etc.).

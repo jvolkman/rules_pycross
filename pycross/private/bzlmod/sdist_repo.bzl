@@ -95,12 +95,19 @@ def _sdist_repo_common(rctx):
                 str(sdist_path),
                 "--output",
                 str(output_json),
+                "--lock-json",
+                str(rctx.path(rctx.attr.lock_json)),
             ],
         )
 
         metadata = json.decode(rctx.read(output_json))
         backend = metadata.get("build_backend", "")
         requires = metadata.get("build_requires", [])
+
+        # Print any warnings from the package inspector
+        for warning in metadata.get("warnings", []):
+            # buildifier: disable=print
+            print(warning)
 
         # Map pyproject backend to pycross rule name via the registry.
         # Falls back to the registered default backend.
@@ -126,15 +133,6 @@ def _sdist_repo_common(rctx):
         # For pep517_build, pass the required package names for validation.
         if backend_macro == "pep517_build":
             macro_attrs["required_build_packages"] = str(required_build_packages)
-
-    # Render backend_attrs: each key becomes a macro attr, each value is
-    # a JSON-encoded Starlark literal that we decode and render.
-    for attr_name, json_val in sorted(rctx.attr.backend_attrs.items()):
-        decoded = json.decode(json_val)
-        if type(decoded) == "string":
-            macro_attrs[attr_name] = "\"{}\"".format(decoded)
-        else:
-            macro_attrs[attr_name] = str(decoded)
 
     # Apply override backend configs: only use the entry matching the resolved backend.
     matching_config = {}
@@ -183,6 +181,7 @@ _SDIST_REPO_ATTRS = {
     "sdist": attr.label(mandatory = True),
     "deps": attr.string_list(doc = "Runtime dependencies from lock file."),
     "known_packages": attr.string_list(doc = "List of packages present in the lock file to filter build_requires."),
+    "lock_json": attr.label(doc = "The lock.json file from the resolved lock repo."),
     "lock_repo": attr.string(doc = "Name of the lock hub repo (e.g. 'uv').", mandatory = True),
     "build_backend": attr.string(doc = "The build backend to use."),
     "backend_to_rule": attr.string_dict(
@@ -192,7 +191,6 @@ _SDIST_REPO_ATTRS = {
         doc = "The rule name used when no pyproject backend name matches.",
     ),
     "build_dependencies": attr.string_list(doc = "Overridden build-time dependencies."),
-    "backend_attrs": attr.string_dict(doc = "Arbitrary backend-specific attrs. Keys are attr names; values are JSON-encoded Starlark literals."),
     "override_backend_configs": attr.string(
         doc = "JSON-encoded dict mapping backend rule names to their backend_attrs for this package. " +
               "Populated from backend override extensions. Only the entry matching the resolved backend is applied.",

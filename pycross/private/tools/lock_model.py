@@ -233,7 +233,6 @@ class ResolvedPackage:
     post_install_patches: List[str] = field(default_factory=list)
     pre_build_patches: List[str] = field(default_factory=list)
     build_backend: Optional[str] = None
-    backend_attrs: Dict[str, str] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)

@@ -149,6 +149,7 @@ def _lock_repos_impl(module_ctx):
                 "sdist": sdist_label,
                 "deps": sorted(deps_set.keys()),
                 "known_packages": known_packages,
+                "lock_json": lock_file,
                 "lock_repo": repo_name,
                 "backend_to_rule": BACKEND_TO_RULE,
                 "default_backend": DEFAULT_BACKEND,
@@ -156,7 +157,7 @@ def _lock_repos_impl(module_ctx):
             if "build_dependencies" in pkg and pkg["build_dependencies"] != None:
                 sdist_repo_attrs["build_dependencies"] = pkg["build_dependencies"]
 
-            for attr_name in ("build_backend", "backend_attrs", "pre_build_patches"):
+            for attr_name in ("build_backend", "pre_build_patches"):
                 if attr_name in pkg and pkg[attr_name] != None:
                     sdist_repo_attrs[attr_name] = pkg[attr_name]
 

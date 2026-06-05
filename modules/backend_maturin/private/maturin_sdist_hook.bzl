@@ -13,8 +13,8 @@ def maturin_sdist_hook(rctx, result):
         A list of extra BUILD file snippet strings (e.g. for vendored_crates filegroup).
     """
 
-    # Extract cargo_lock label from applied override config or backend_attrs.
-    cargo_lock_json = result.applied_override_config.get("cargo_lock") or rctx.attr.backend_attrs.get("cargo_lock")
+    # Extract cargo_lock label from applied override config.
+    cargo_lock_json = result.applied_override_config.get("cargo_lock")
     cargo_lock_label = json.decode(cargo_lock_json) if cargo_lock_json else None
 
     has_vendored = False

@@ -260,8 +260,7 @@ def package_annotation(
         install_exclude_globs = [],
         post_install_patches = [],
         pre_build_patches = [],
-        build_backend = None,
-        backend_attrs = {}):
+        build_backend = None):
     """Annotations to apply to individual packages.
 
     Args:
@@ -273,7 +272,6 @@ def package_annotation(
       post_install_patches (list, optional): A list of patches to apply after wheel installation.
       pre_build_patches (list, optional): A list of patches to apply to the sdist source tree before building.
       build_backend (str, optional): The build backend macro to use (e.g., "meson_build" or "setuptools_build").
-      backend_attrs (dict, optional): Arbitrary backend-specific attributes (JSON-encoded values).
 
     Returns:
       str: A json encoded string of the provided content.
@@ -287,7 +285,6 @@ def package_annotation(
         post_install_patches = post_install_patches,
         pre_build_patches = pre_build_patches,
         build_backend = build_backend,
-        backend_attrs = backend_attrs,
     ))
 
 PDM_IMPORT_ATTRS = _IMPORT_ATTRS

@@ -17,3 +17,9 @@ py_test(
     srcs = ["test_zstandard.py"],
     deps = ["//:zstandard"],
 )
+
+py_test(
+    name = "test_pyyaml",
+    srcs = ["test_pyyaml.py"],
+    deps = ["@uv//:pyyaml"],
+)

@@ -56,15 +56,61 @@ def inspect_wheel(wheel_path: Path) -> dict:
     }
 
 
+def validate_requirements(requires: list[str], package_versions: dict[str, str], pkg_name: str) -> list[str]:
+    warnings = []
+    try:
+        from packaging.requirements import Requirement
+        from packaging.utils import canonicalize_name
+    except ImportError:
+        # Skip validation if packaging is not available in the host python
+        return warnings
+
+    for req_str in requires:
+        try:
+            req = Requirement(req_str)
+        except Exception:
+            continue
+
+        req_name = canonicalize_name(req.name)
+        if req_name == "oldest-supported-numpy":
+            req_name = "numpy"
+
+        # Check if the lock file has a version for this package
+        # Sometimes lock files use un-canonicalized names, so check lowercased
+        normalized_versions = {canonicalize_name(k): v for k, v in package_versions.items()}
+
+        if req_name in normalized_versions:
+            provided_version = normalized_versions[req_name]
+            if not req.specifier.contains(provided_version, prereleases=True):
+                warnings.append(
+                    f"WARNING: The lock file provides '{req_name}=={provided_version}', "
+                    f"but '{pkg_name}' requires '{req_str}' in pyproject.toml."
+                )
+
+    return warnings
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--sdist", type=Path)
     parser.add_argument("--wheel", type=Path)
     parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument("--lock-json", type=Path)
     args = parser.parse_args()
 
     if args.sdist:
         data = inspect_sdist(args.sdist)
+        if args.lock_json:
+            with open(args.lock_json, "r") as f:
+                lock_data = json.load(f)
+
+            package_versions = {}
+            for key in lock_data.get("packages", {}):
+                parts = key.split("@", 1)
+                if len(parts) == 2:
+                    package_versions[parts[0]] = parts[1]
+
+            data["warnings"] = validate_requirements(data["build_requires"], package_versions, args.sdist.name)
     elif args.wheel:
         data = inspect_wheel(args.wheel)
     else:
