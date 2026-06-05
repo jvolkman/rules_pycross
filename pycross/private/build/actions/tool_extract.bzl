@@ -2,12 +2,12 @@
 
 load("@bazel_skylib//lib:paths.bzl", "paths")
 
-def register_console_script_extract_action(ctx, wheel, script_name):
+def register_console_script_extract_action(ctx, site_packages, script_name):
     """Extracts a console script from a wheel as an executable file.
 
     Args:
         ctx: The rule context.
-        wheel: File, the tree artifact of the unzipped wheel.
+        site_packages: File, the tree artifact of the extracted site_packages directory.
         script_name: str, name of the console script.
 
     Returns:
@@ -19,14 +19,14 @@ def register_console_script_extract_action(ctx, wheel, script_name):
     out_file = ctx.actions.declare_file(paths.join(ctx.attr.name + "_tools", script_name))
 
     args = ctx.actions.args()
-    args.add(wheel.path)
-    args.add(script_name)
-    args.add(out_file.path)
+    args.add("--site-packages", site_packages.path)
+    args.add("--script", script_name)
+    args.add("--out", out_file.path)
 
     ctx.actions.run(
         executable = ctx.executable._extract_console_script,
         arguments = [args],
-        inputs = [wheel],
+        inputs = [site_packages],
         outputs = [out_file],
         mnemonic = "PycrossExtractConsoleScript",
         progress_message = "Extracting console script %s" % script_name,

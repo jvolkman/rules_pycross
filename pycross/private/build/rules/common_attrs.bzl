@@ -24,6 +24,9 @@ COMMON_BUILD_ATTRS = {
         doc = "Patch files to apply to the sdist source tree before building.",
         allow_files = [".patch", ".diff"],
     ),
+    "site_hooks": attr.string_list(
+        doc = "Python code snippets to execute on interpreter startup during builds.",
+    ),
     "_dummy_bin_file": attr.label(
         default = Label("//pycross/private:dummy_bin_file"),
         allow_single_file = True,
@@ -36,7 +39,6 @@ CC_BUILD_ATTRS = {
     "copts": attr.string_list(),
     "linkopts": attr.string_list(),
     "config_settings": attr.string_list_dict(),
-    "site_hooks": attr.string_list(),
     "pkg_config_files": attr.label_list(allow_files = True),
     "path_tools": attr.label_list(cfg = pycross_exec_platform_transition),
 }

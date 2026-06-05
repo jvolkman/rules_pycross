@@ -1,44 +1,51 @@
+import argparse
 import configparser
 import sys
-import zipfile
 from pathlib import Path
 
 
 def main():
-    if len(sys.argv) != 4:
-        print("Usage: extract_console_script.py <wheel_path> <script_name> <out_path>", file=sys.stderr)
+    parser = argparse.ArgumentParser(description="Extract a console script.")
+    parser.add_argument(
+        "--site-packages", type=Path, required=True, help="Path to the extracted site-packages directory"
+    )
+    parser.add_argument("--script", required=True, help="Name of the console script")
+    parser.add_argument("--out", type=Path, required=True, help="Output path for the script")
+
+    args = parser.parse_args()
+
+    script_name = args.script
+    out_path = args.out
+
+    entry_points_path = None
+    for p in args.site_packages.glob("site-packages/*.dist-info/entry_points.txt"):
+        entry_points_path = p
+        break
+
+    if not entry_points_path:
+        # Maybe it's directly in the root (if the path actually is the site-packages dir)
+        for p in args.site_packages.glob("*.dist-info/entry_points.txt"):
+            entry_points_path = p
+            break
+
+    if not entry_points_path:
+        print(f"Error: No entry_points.txt found in {args.site_packages}", file=sys.stderr)
         sys.exit(1)
 
-    wheel_path = Path(sys.argv[1])
-    script_name = sys.argv[2]
-    out_path = Path(sys.argv[3])
+    content = entry_points_path.read_text(encoding="utf-8")
 
-    with zipfile.ZipFile(wheel_path) as z:
-        # Find entry_points.txt
-        entry_points_path = None
-        for name in z.namelist():
-            if name.endswith(".dist-info/entry_points.txt"):
-                entry_points_path = name
-                break
+    config = configparser.ConfigParser()
+    config.read_string(content)
 
-        if not entry_points_path:
-            print(f"Error: No entry_points.txt found in {wheel_path}", file=sys.stderr)
-            sys.exit(1)
-
-        content = z.read(entry_points_path).decode("utf-8")
-
-    parser = configparser.ConfigParser()
-    parser.read_string(content)
-
-    if "console_scripts" not in parser:
-        print(f"Error: No [console_scripts] section in {wheel_path}", file=sys.stderr)
+    if "console_scripts" not in config:
+        print("Error: No [console_scripts] section in entry_points.txt", file=sys.stderr)
         sys.exit(1)
 
-    if script_name not in parser["console_scripts"]:
-        print(f"Error: Script '{script_name}' not found in [console_scripts] in {wheel_path}", file=sys.stderr)
+    if script_name not in config["console_scripts"]:
+        print(f"Error: Script '{script_name}' not found in [console_scripts]", file=sys.stderr)
         sys.exit(1)
 
-    entry_point = parser["console_scripts"][script_name]
+    entry_point = config["console_scripts"][script_name]
 
     # entry_point format is usually: module:function [extras]
     # We strip any extras or trailing whitespace

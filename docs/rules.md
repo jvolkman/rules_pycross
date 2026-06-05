@@ -270,7 +270,8 @@ Information about a Python wheel.
 load("@rules_pycross//pycross:defs.bzl", "package_annotation")
 
 package_annotation(<a href="#package_annotation-always_build">always_build</a>, <a href="#package_annotation-build_dependencies">build_dependencies</a>, <a href="#package_annotation-build_target">build_target</a>, <a href="#package_annotation-ignore_dependencies">ignore_dependencies</a>,
-                   <a href="#package_annotation-install_exclude_globs">install_exclude_globs</a>, <a href="#package_annotation-post_install_patches">post_install_patches</a>, <a href="#package_annotation-pre_build_patches">pre_build_patches</a>, <a href="#package_annotation-build_backend">build_backend</a>)
+                   <a href="#package_annotation-install_exclude_globs">install_exclude_globs</a>, <a href="#package_annotation-post_install_patches">post_install_patches</a>, <a href="#package_annotation-pre_build_patches">pre_build_patches</a>, <a href="#package_annotation-site_hooks">site_hooks</a>,
+                   <a href="#package_annotation-build_backend">build_backend</a>)
 </pre>
 
 Annotations to apply to individual packages.
@@ -287,6 +288,7 @@ Annotations to apply to individual packages.
 | <a id="package_annotation-install_exclude_globs"></a>install_exclude_globs |  A list of globs for files to exclude during installation.   |  `[]` |
 | <a id="package_annotation-post_install_patches"></a>post_install_patches |  A list of patches to apply after wheel installation.   |  `[]` |
 | <a id="package_annotation-pre_build_patches"></a>pre_build_patches |  A list of patches to apply to the sdist source tree before building.   |  `[]` |
+| <a id="package_annotation-site_hooks"></a>site_hooks |  A list of Python code snippets to execute on interpreter startup during builds.   |  `[]` |
 | <a id="package_annotation-build_backend"></a>build_backend |  The build backend macro to use (e.g., "meson_build" or "setuptools_build").   |  `None` |
 
 **RETURNS**
@@ -301,7 +303,7 @@ str: A json encoded string of the provided content.
 <pre>
 load("@rules_pycross//pycross:defs.bzl", "pycross_console_script_binary")
 
-pycross_console_script_binary(<a href="#pycross_console_script_binary-name">name</a>, <a href="#pycross_console_script_binary-wheel">wheel</a>, <a href="#pycross_console_script_binary-script">script</a>, <a href="#pycross_console_script_binary-kwargs">**kwargs</a>)
+pycross_console_script_binary(<a href="#pycross_console_script_binary-name">name</a>, <a href="#pycross_console_script_binary-script">script</a>, <a href="#pycross_console_script_binary-pkg">pkg</a>, <a href="#pycross_console_script_binary-deps">deps</a>, <a href="#pycross_console_script_binary-kwargs">**kwargs</a>)
 </pre>
 
 Exposes a console script from a wheel as an executable target.
@@ -312,8 +314,9 @@ Exposes a console script from a wheel as an executable target.
 | Name  | Description | Default Value |
 | :------------- | :------------- | :------------- |
 | <a id="pycross_console_script_binary-name"></a>name |  Name of the resulting target.   |  none |
-| <a id="pycross_console_script_binary-wheel"></a>wheel |  Label of the wheel target.   |  none |
 | <a id="pycross_console_script_binary-script"></a>script |  The name of the console script to expose.   |  none |
+| <a id="pycross_console_script_binary-pkg"></a>pkg |  Label of the wheel library target.   |  none |
+| <a id="pycross_console_script_binary-deps"></a>deps |  Additional dependencies to pass to the binary.   |  `None` |
 | <a id="pycross_console_script_binary-kwargs"></a>kwargs |  Additional arguments like visibility or tags.   |  none |
 
 

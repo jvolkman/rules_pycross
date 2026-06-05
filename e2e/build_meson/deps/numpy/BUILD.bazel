@@ -13,8 +13,8 @@ pycross_cc_pkg_config(
 
 pycross_console_script_binary(
     name = "cython",
+    pkg = "@uv//:cython",
     script = "cython",
-    wheel = "@uv//cython:wheel",
 )
 
 meson_build(

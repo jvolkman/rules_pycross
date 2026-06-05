@@ -6,7 +6,7 @@ load("//pycross/private/build/actions:cc_layer.bzl", "extract_cc_layer")
 load("//pycross/private/build/actions:pep517_action.bzl", "register_pep517_action")
 load("//pycross/private/build/actions:repair_action.bzl", "register_repair_action")
 load("//pycross/private/build/actions:tool_extract.bzl", "register_bin_extract_action", "register_console_script_extract_action")
-load(":common_attrs.bzl", "CC_BUILD_ATTRS", "CC_FRAGMENTS", "CC_TOOLCHAINS", "CC_TOOLCHAIN_ATTRS", "COMMON_BUILD_ATTRS", "get_unzipped_wheel", "get_wheel_file", "group_tool_deps")
+load(":common_attrs.bzl", "CC_BUILD_ATTRS", "CC_FRAGMENTS", "CC_TOOLCHAINS", "CC_TOOLCHAIN_ATTRS", "COMMON_BUILD_ATTRS", "get_unzipped_wheel", "group_tool_deps")
 
 def _cmake_build_impl(ctx):
     # 1. Extract tools
@@ -17,13 +17,13 @@ def _cmake_build_impl(ctx):
     if "ninja" not in tool_deps:
         fail("Missing 'ninja' in tool_deps")
 
-    cmake_wheel = get_wheel_file(tool_deps["cmake"][0])
+    cmake_site_packages = get_unzipped_wheel(tool_deps["cmake"][0])
     ninja_wheel = get_unzipped_wheel(tool_deps["ninja"][0])
 
     tool_executables = []
     tool_executables.append(register_console_script_extract_action(
         ctx,
-        wheel = cmake_wheel,
+        site_packages = cmake_site_packages,
         script_name = "cmake",
     ))
     tool_executables.append(register_bin_extract_action(

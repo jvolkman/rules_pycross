@@ -108,11 +108,6 @@ def _pycross_wheel_library_impl(ctx):
         PycrossExtractedWheelInfo(
             site_packages = out,
         ),
-        PycrossWheelInfo(
-            wheel_file = wheel_file,
-            name_file = name_file,
-            wheel_directory = wheel_dir,
-        ),
     ]
 
     if ctx.attr.package_name:
