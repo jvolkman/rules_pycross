@@ -20,6 +20,7 @@ bazel_dep(name = "toml.bzl", version = "0.4.1")
 
 bazel_dep(name = "gazelle", version = "0.50.0", dev_dependency = True)
 bazel_dep(name = "bazel_skylib_gazelle_plugin", version = "1.5.0", dev_dependency = True)
+bazel_dep(name = "rules_testing", version = "0.9.0", dev_dependency = True)
 
 # Self-register the maturin backend so auto-detection of maturin pyproject
 # backends works just by adding the bazel_dep.

@@ -1,8 +1,15 @@
-load("@rules_python//python:defs.bzl", "py_binary")
+load("@rules_python//python:defs.bzl", "py_binary", "py_library")
 
 package(default_visibility = ["//visibility:public"])
+
+py_library(
+    name = "generate_cargo_lock_lib",
+    srcs = ["generate_cargo_lock.py"],
+    imports = [".."],
+)
 
 py_binary(
     name = "generate_cargo_lock",
     srcs = ["generate_cargo_lock.py"],
+    deps = [":generate_cargo_lock_lib"],
 )

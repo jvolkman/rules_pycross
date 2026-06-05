@@ -1,0 +1,17 @@
+load("@rules_python//python:defs.bzl", "py_test")
+
+py_test(
+    name = "inspect_package_test",
+    srcs = ["inspect_package_test.py"],
+    deps = [
+        "//pycross/private/tools:inspect_package",
+        "@rules_pycross_internal//deps:packaging",
+    ],
+    main = "inspect_package_test.py",
+)
+
+load(":test_common_attrs.bzl", "common_attrs_test_suite")
+
+common_attrs_test_suite(
+    name = "test_common_attrs",
+)

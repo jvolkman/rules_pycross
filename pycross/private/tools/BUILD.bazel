@@ -11,6 +11,12 @@ py_library(
     imports = ["../../.."],
 )
 
+py_library(
+    name = "inspect_package",
+    srcs = ["inspect_package.py"],
+    visibility = ["//visibility:public"],
+)
+
 py_binary(
     name = "toml_lock_generator",
     srcs = ["toml_lock_generator.py"],

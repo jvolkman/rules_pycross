@@ -1,0 +1,3 @@
+load(":generate_cargo_lock_test.bzl", "generate_cargo_lock_test_suite")
+
+generate_cargo_lock_test_suite(name = "generate_cargo_lock_test")

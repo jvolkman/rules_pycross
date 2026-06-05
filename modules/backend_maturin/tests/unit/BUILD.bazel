@@ -1,0 +1,10 @@
+load("@rules_python//python:defs.bzl", "py_test")
+
+py_test(
+    name = "generate_cargo_lock_test",
+    srcs = ["generate_cargo_lock_test.py"],
+    deps = [
+        "//tools:generate_cargo_lock_lib",
+    ],
+    main = "generate_cargo_lock_test.py",
+)
