@@ -17,7 +17,8 @@ for declaring maturin-specific package overrides. Generates:
 
 <pre>
 maturin = use_extension("@rules_pycross_backend_maturin//extensions:maturin.bzl", "maturin")
-maturin.override(<a href="#maturin.override-name">name</a>, <a href="#maturin.override-cargo_lock">cargo_lock</a>, <a href="#maturin.override-config_settings">config_settings</a>, <a href="#maturin.override-copts">copts</a>, <a href="#maturin.override-linkopts">linkopts</a>, <a href="#maturin.override-native_deps">native_deps</a>, <a href="#maturin.override-repo">repo</a>, <a href="#maturin.override-tool_deps">tool_deps</a>)
+maturin.override(<a href="#maturin.override-name">name</a>, <a href="#maturin.override-cargo_lock">cargo_lock</a>, <a href="#maturin.override-config_settings">config_settings</a>, <a href="#maturin.override-copts">copts</a>, <a href="#maturin.override-linkopts">linkopts</a>, <a href="#maturin.override-native_deps">native_deps</a>, <a href="#maturin.override-repo">repo</a>, <a href="#maturin.override-sdist">sdist</a>,
+                 <a href="#maturin.override-tool_deps">tool_deps</a>)
 </pre>
 
 
@@ -40,6 +41,7 @@ Specify maturin-specific package overrides.
 | <a id="maturin.override-linkopts"></a>linkopts |  Extra linker options.   | List of strings | optional |  `[]`  |
 | <a id="maturin.override-native_deps"></a>native_deps |  CC dependencies to link against.   | <a href="https://bazel.build/concepts/labels">List of labels</a> | optional |  `[]`  |
 | <a id="maturin.override-repo"></a>repo |  The lock repo this override applies to.   | String | required |  |
+| <a id="maturin.override-sdist"></a>sdist |  Label to the sdist target (e.g. @uv//_sdist:pkg). Used to resolve repository visibility in the generated _cargo repo.   | <a href="https://bazel.build/concepts/labels">Label</a> | optional |  `None`  |
 | <a id="maturin.override-tool_deps"></a>tool_deps |  Overrides for built-in dependencies.   | <a href="https://bazel.build/rules/lib/dict">Dictionary: String -> String</a> | optional |  `{}`  |
 
 

@@ -52,16 +52,21 @@ def maturin_sdist_hook(rctx, result):
         if extracted.exists:
             rctx.delete("Cargo.lock.extracted")
 
-    extra_build_snippets = None
+    extra_attrs = {}
+    extra_build_snippets = []
     if has_vendored:
-        result.macro_attrs["vendored_crates"] = "\":vendored_crates\""
-        extra_build_snippets = [
-            """
+        extra_attrs["vendored_crates"] = "\":vendored_crates\""
+        extra_build_snippets.append("""
 filegroup(
     name = "vendored_crates",
     srcs = glob(["vendor/**"]),
 )
-""",
-        ]
+""")
 
-    return extra_build_snippets
+    if not extra_attrs and not extra_build_snippets:
+        return None
+
+    return struct(
+        extra_attrs = extra_attrs,
+        extra_build_snippets = extra_build_snippets,
+    )

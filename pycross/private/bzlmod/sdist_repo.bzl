@@ -47,7 +47,7 @@ package(default_visibility = ["//visibility:public"])
     rctx.file("REPO.bazel", "")
 
 def _sdist_repo_common(rctx):
-    """Shared sdist repo logic: inspect metadata, resolve backend, decode backend_attrs.
+    """Shared sdist repo logic: inspect metadata, resolve backend, apply override configs.
 
     Args:
         rctx: The repository context.
@@ -56,7 +56,8 @@ def _sdist_repo_common(rctx):
         A struct with:
             macro_attrs: Dict of macro attribute name -> Starlark literal string.
             backend_macro: The resolved backend macro name.
-            render: A function(macro_attrs, backend_macro, has_vendored) to write BUILD.bazel.
+            applied_override_config: Dict of override config entries that matched the resolved backend.
+            render: A function(macro_attrs, backend_macro, extra_build_snippets) to write BUILD.bazel.
     """
     backend_to_rule = rctx.attr.backend_to_rule
     default_backend = rctx.attr.default_backend
@@ -167,13 +168,16 @@ def _sdist_repo_common(rctx):
 
 def _sdist_repo_impl(rctx):
     result = _sdist_repo_common(rctx)
-    macro_attrs = result.macro_attrs
+    macro_attrs = dict(result.macro_attrs)
     backend_macro = result.backend_macro
     extra_build_snippets = None
 
     hook = SDIST_HOOKS.get(backend_macro)
     if hook:
-        extra_build_snippets = hook(rctx, result)
+        hook_result = hook(rctx, result)
+        if hook_result:
+            macro_attrs.update(hook_result.extra_attrs)
+            extra_build_snippets = hook_result.extra_build_snippets
 
     result.render(macro_attrs, backend_macro, extra_build_snippets)
 
@@ -181,7 +185,7 @@ _SDIST_REPO_ATTRS = {
     "sdist": attr.label(mandatory = True),
     "deps": attr.string_list(doc = "Runtime dependencies from lock file."),
     "known_packages": attr.string_list(doc = "List of packages present in the lock file to filter build_requires."),
-    "lock_json": attr.label(doc = "The lock.json file from the resolved lock repo."),
+    "lock_json": attr.label(doc = "The lock.json file from the resolved lock repo.", mandatory = True),
     "lock_repo": attr.string(doc = "Name of the lock hub repo (e.g. 'uv').", mandatory = True),
     "build_backend": attr.string(doc = "The build backend to use."),
     "backend_to_rule": attr.string_dict(

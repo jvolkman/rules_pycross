@@ -78,6 +78,7 @@ maturin.override(
     name = "captcha-rs",
     cargo_lock = "//:captcha_rs.lock",
     repo = "uv",
+    sdist = "@uv//_sdist:captcha-rs",
 )
 use_repo(maturin, "uv_cargo")
 

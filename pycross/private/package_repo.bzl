@@ -147,18 +147,31 @@ def _package_repo_impl(rctx):
             "",
         ])
 
-    rctx.file("_sdist/BUILD.bazel", "\n".join(sdist_build_lines))
-
+    # Add unversioned pin aliases (e.g. "foo" -> "foo@1.0.0").
+    # Skip pins whose name already matches a package key to avoid duplicates.
     for pin_name, pin_target in sorted(pins.items()):
-        if pin_name != pin_target:
-            wheel_build_lines.extend([
+        if pin_name in packages:
+            continue
+
+        sdist_file = packages.get(pin_target, {}).get("sdist_file")
+        if sdist_file:
+            sdist_build_lines.extend([
                 "alias(",
                 '    name = "{}",'.format(pin_name),
-                '    actual = ":{}",'.format(pin_target),
+                '    actual = "//_lock:_sdist_{}",'.format(pin_target),
                 ")",
                 "",
             ])
 
+        wheel_build_lines.extend([
+            "alias(",
+            '    name = "{}",'.format(pin_name),
+            '    actual = "//_lock:_wheel_{}",'.format(pin_target),
+            ")",
+            "",
+        ])
+
+    rctx.file("_sdist/BUILD.bazel", "\n".join(sdist_build_lines))
     rctx.file("_wheel/BUILD.bazel", "\n".join(wheel_build_lines))
 
     # 4. Write package BUILD subdirectories containing aliases for wheel/sdist

@@ -29,16 +29,18 @@ def _cargo_lock_repo_impl(rctx):
     for pkg_name, info in sorted(pkgs.items()):
         lines.append("pycross_generate_cargo_lock(")
         lines.append('    name = "%s",' % pkg_name)
-        lines.append('    sdist = "@%s//_sdist:%s",' % (repo_name, pkg_name))
+        if info.get("sdist"):
+            lines.append('    sdist = "%s",' % info["sdist"])
+        else:
+            lines.append('    sdist = "@%s//_sdist:%s",' % (repo_name, pkg_name))
         if info.get("cargo_lock"):
             # Convert label string to workspace-relative path for the output attr.
             cargo_lock_label = info["cargo_lock"]
-            if cargo_lock_label.startswith("//"):
-                output_path = cargo_lock_label.lstrip("/").lstrip(":")
-            elif cargo_lock_label.startswith(":"):
-                output_path = cargo_lock_label.lstrip(":")
-            else:
-                output_path = cargo_lock_label
+
+            # Parse the string into a Label object
+            lbl = Label(cargo_lock_label)
+            output_path = lbl.package + "/" + lbl.name if lbl.package else lbl.name
+
             lines.append('    output = "%s",' % output_path)
         lines.append(")")
         lines.append("")
@@ -71,6 +73,7 @@ def _maturin_overrides_impl(module_ctx):
             # Track for cargo repo generation
             cargo_targets.setdefault(tag.repo, {})[tag.name] = {
                 "cargo_lock": str(tag.cargo_lock) if tag.cargo_lock else None,
+                "sdist": str(tag.sdist) if tag.sdist else None,
             }
 
     # Write overrides JSON
@@ -103,6 +106,9 @@ maturin = module_extension(
                 ),
 
                 # Maturin-specific typed attrs:
+                "sdist": attr.label(
+                    doc = "Label to the sdist target (e.g. @uv//_sdist:pkg). Used to resolve repository visibility in the generated _cargo repo.",
+                ),
                 "cargo_lock": attr.label(
                     doc = "A Cargo.lock file to use. If not provided, the sdist's own Cargo.lock is used.",
                     allow_single_file = [".lock"],
