@@ -232,6 +232,7 @@ class ResolvedPackage:
     install_exclude_globs: List[str] = field(default_factory=list)
     post_install_patches: List[str] = field(default_factory=list)
     pre_build_patches: List[str] = field(default_factory=list)
+    site_hooks: List[str] = field(default_factory=list)
     build_backend: Optional[str] = None
 
 

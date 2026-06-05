@@ -157,6 +157,10 @@ def _sdist_repo_common(rctx):
     if rctx.attr.pre_build_patches:
         macro_attrs["pre_build_patches"] = str(rctx.attr.pre_build_patches)
 
+    # Pass through site_hooks if specified.
+    if rctx.attr.site_hooks:
+        macro_attrs["site_hooks"] = str(rctx.attr.site_hooks)
+
     return struct(
         macro_attrs = macro_attrs,
         backend_macro = backend_macro,
@@ -200,6 +204,7 @@ _SDIST_REPO_ATTRS = {
               "Populated from backend override extensions. Only the entry matching the resolved backend is applied.",
     ),
     "pre_build_patches": attr.string_list(doc = "Patches to apply to the sdist source tree before building."),
+    "site_hooks": attr.string_list(doc = "Python code snippets to execute on interpreter startup during builds."),
 }
 
 pycross_sdist_repo = repository_rule(

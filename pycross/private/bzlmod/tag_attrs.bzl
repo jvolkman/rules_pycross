@@ -71,6 +71,9 @@ PACKAGE_ATTRS = dict(
     pre_build_patches = attr.string_list(
         doc = "A list of patches to apply to the sdist source tree before building.",
     ),
+    site_hooks = attr.string_list(
+        doc = "A list of Python code snippets to execute on interpreter startup during builds.",
+    ),
 )
 
 # Attrs specific to build-system overrides (meson, setuptools, etc.).

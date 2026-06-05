@@ -31,6 +31,7 @@ def _generate_resolved_lock_repo(lock_info, serialized_lock_model):
             install_exclude_globs = package.install_exclude_globs,
             post_install_patches = package.post_install_patches,
             pre_build_patches = package.pre_build_patches,
+            site_hooks = package.site_hooks,
             build_backend = package.build_backend,
         )
 
@@ -108,6 +109,7 @@ def _normalize_package_tag(tag):
         install_exclude_globs = tag.install_exclude_globs,
         post_install_patches = tag.post_install_patches,
         pre_build_patches = tag.pre_build_patches,
+        site_hooks = tag.site_hooks,
         build_backend = tag.build_backend if tag.build_backend else None,
     )
 

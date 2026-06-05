@@ -260,6 +260,7 @@ def package_annotation(
         install_exclude_globs = [],
         post_install_patches = [],
         pre_build_patches = [],
+        site_hooks = [],
         build_backend = None):
     """Annotations to apply to individual packages.
 
@@ -271,6 +272,7 @@ def package_annotation(
       install_exclude_globs (list, optional): A list of globs for files to exclude during installation.
       post_install_patches (list, optional): A list of patches to apply after wheel installation.
       pre_build_patches (list, optional): A list of patches to apply to the sdist source tree before building.
+      site_hooks (list, optional): A list of Python code snippets to execute on interpreter startup during builds.
       build_backend (str, optional): The build backend macro to use (e.g., "meson_build" or "setuptools_build").
 
     Returns:
@@ -284,6 +286,7 @@ def package_annotation(
         install_exclude_globs = install_exclude_globs,
         post_install_patches = post_install_patches,
         pre_build_patches = pre_build_patches,
+        site_hooks = site_hooks,
         build_backend = build_backend,
     ))
 
