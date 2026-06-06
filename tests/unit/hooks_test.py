@@ -30,7 +30,7 @@ class HooksTest(unittest.TestCase):
         hook_exe = self.temp_path / "hook.sh"
         with open(hook_exe, "w") as f:
             f.write("""#!/bin/sh
-            jq '.modified = "yes"' "$PYCROSS_CONFIG_SETTINGS_FILE" > tmp.json && mv tmp.json "$PYCROSS_CONFIG_SETTINGS_FILE"
+            echo '{"modified": "yes"}' > "$PYCROSS_CONFIG_SETTINGS_FILE"
             """)
         hook_exe.chmod(0o755)
 

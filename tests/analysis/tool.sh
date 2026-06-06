@@ -1,1 +1,2 @@
-#!/bin/sh\nexit 0
+#!/bin/sh
+exit 0

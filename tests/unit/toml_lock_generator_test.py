@@ -34,18 +34,18 @@ class TomlLockGeneratorTest(unittest.TestCase):
         mock_resolve.return_value = lock
 
         import tempfile
+        import os
 
-        with tempfile.NamedTemporaryFile("w+", delete=False) as f:
-            out_file = f.name
+        with tempfile.TemporaryDirectory() as td:
+            out_file = os.path.join(td, "out.toml")
+            args = MagicMock()
+            args.lock_model_file = "lock_model.json"
+            args.output = out_file
 
-        args = MagicMock()
-        args.lock_model_file = "lock_model.json"
-        args.output = out_file
+            main(args)
 
-        main(args)
-
-        with open(out_file, "r") as f:
-            content = f.read()
+            with open(out_file, "r") as f:
+                content = f.read()
 
         self.assertIn("[pins]", content)
         self.assertIn('mypkg = "mypkg@1.0"', content)

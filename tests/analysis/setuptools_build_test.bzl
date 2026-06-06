@@ -25,7 +25,7 @@ def _test_setuptools_build_no_repair(name):
 
 def _test_setuptools_build_no_repair_impl(env, target):
     wheel_file = target[PycrossWheelInfo].wheel_file
-    actions = env.expect.that_target(target).action_generating(wheel_file.short_path)
+    _actions = env.expect.that_target(target).action_generating(wheel_file.short_path)
     # The action that generates the wheel should be the main build action, meaning no repair action
 
 def _test_setuptools_build_with_repair(name):

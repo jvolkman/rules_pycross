@@ -38,11 +38,11 @@ def _test_wheel_transform_basic(name):
 def _test_wheel_transform_basic_impl(env, target):
     env.expect.that_target(target).has_provider(PycrossWheelInfo)
     wheel_file = target[PycrossWheelInfo].wheel_file
-    action = env.expect.that_target(target).action_generating(wheel_file.short_path)
+    env.expect.that_target(target).action_generating(wheel_file.short_path)
 
     # The action executable should be the transform tool
-    action = env.expect.that_target(target).action_generating(wheel_file.short_path)
-    env.expect.that_str(str(target.actions[0].argv)).contains("_transform_tool")
+    raw_action = [a for a in target.actions if wheel_file in a.outputs.to_list()][0]
+    env.expect.that_str(str(raw_action.argv)).contains("_transform_tool")
 
 def wheel_transform_test_suite(name):
     test_suite(
