@@ -1,18 +1,71 @@
-name: cross-build
+name: CI
 
 on:
   push:
     branches: [main, dev/v2]
   pull_request:
-    branches: [main]
+    branches: [main, dev/v2]
+  workflow_dispatch:
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.sha }}
+  group: ci-${{ github.event.pull_request.number || github.sha }}
   cancel-in-progress: true
 
 jobs:
-  build:
+  # Stage 1: Fast gate (~2 min)
+  unit:
+    name: Unit + Analysis + Golden
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure BuildBuddy
+        run: |
+          echo "build:remote --remote_header=x-buildbuddy-api-key=${{ secrets.BUILDBUDDY_API_KEY }}" > .bazelrc.user
+      - name: Test
+        run: |
+          bazel \
+            --bazelrc=.github/workflows/ci.bazelrc \
+            test --config=remote \
+            -- //pycross/... //docs/... //tests/... -//tests/e2e/...
+
+  # Stage 2: E2E integration tests (~5 min)
+  e2e:
+    name: E2E - ${{ matrix.workspace }} (Bazel ${{ matrix.bazel }})
+    needs: [unit]
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        bazel: ["8.7.0", "9.1.0"]
+        workspace:
+          - tests/e2e/always_build
+          - tests/e2e/generate_lock
+          - tests/e2e/local_wheel
+          - tests/e2e/patches_and_hooks
+          - tests/e2e/requirements
+          - tests/e2e/bzlmod_flags
+          - tests/e2e/sdist_repo
+    steps:
+      - uses: actions/checkout@v4
+      - uses: bazel-contrib/setup-bazel@0.8.0
+        with:
+          bazelrc: |
+            common --announce_rc
+            common --color=yes
+            test --test_output=errors
+      - name: Configure
+        working-directory: ${{ matrix.workspace }}
+        run: |
+          echo "${{ matrix.bazel }}" > .bazelversion
+          echo "build:remote --remote_header=x-buildbuddy-api-key=${{ secrets.BUILDBUDDY_API_KEY }}" > .bazelrc.user
+      - name: Test
+        working-directory: ${{ matrix.workspace }}
+        run: bazel test --config=remote //...
+
+  # Stage 3: Cross-platform builds (~10 min)
+  cross-build:
     name: Build - ${{ matrix.workspace }} on ${{ matrix.host }}
+    needs: [unit]
     runs-on: ${{ format('{0}-latest', matrix.host) }}
     strategy:
       fail-fast: false
@@ -21,26 +74,23 @@ jobs:
         workspace: [build_meson, build_setuptools, build_maturin, build_pure_python, build_cmake]
     steps:
       - uses: actions/checkout@v4
-
-      - name: Enable unprivileged user namespaces for Bazel linux-sandbox
+      - name: Enable unprivileged user namespaces
         if: matrix.host == 'ubuntu'
         run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
-
       - name: Configure BuildBuddy
         run: |
           echo "build:remote --remote_header=x-buildbuddy-api-key=${{ secrets.BUILDBUDDY_API_KEY }}" > tests/e2e/${{ matrix.workspace }}/.bazelrc.user
-
-      - name: Build all wheels (native + cross)
+      - name: Build all wheels
         run: cd tests/e2e/${{ matrix.workspace }} && bazel build --config=remote //:all_wheels
-
       - uses: actions/upload-artifact@v4
         with:
           name: wheels-${{ matrix.host }}-${{ matrix.workspace }}
           path: tests/e2e/${{ matrix.workspace }}/bazel-bin/all_wheels/
 
-  test:
+  # Stage 3b: Test built wheels on target platforms
+  cross-test:
     name: Test - (${{ matrix.builder }}→${{ matrix.runner }})
-    needs: build
+    needs: [cross-build]
     runs-on: ${{ format('{0}-latest', matrix.runner) }}
     strategy:
       fail-fast: false
@@ -49,33 +99,27 @@ jobs:
         runner: [ubuntu, macos]
     steps:
       - uses: actions/checkout@v4
-
-      - name: Enable unprivileged user namespaces for Bazel linux-sandbox
+      - name: Enable unprivileged user namespaces
         if: matrix.runner == 'ubuntu'
         run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
-
       - uses: actions/setup-python@v5
         with:
           python-version: "3.14"
-
       - uses: actions/download-artifact@v4
         with:
           pattern: wheels-${{ matrix.builder }}-*
           path: ${{ runner.temp }}/artifacts
-
       - name: Test workspaces
         run: |
           for ws in build_meson build_setuptools build_maturin build_pure_python build_cmake; do
             echo "::group::Testing $ws"
-            
-            # Setup a fresh virtual environment for this workspace
+
             python -m venv ${{ runner.temp }}/venv-$ws
             source ${{ runner.temp }}/venv-$ws/bin/activate
-            
-            # Filter wheels for this platform from this workspace's artifact
+
             mkdir -p ${{ runner.temp }}/install-wheels-$ws
             artifact_dir="${{ runner.temp }}/artifacts/wheels-${{ matrix.builder }}-$ws"
-            
+
             if [ "${{ matrix.runner }}" = "ubuntu" ]; then
               cp $artifact_dir/*linux*.whl ${{ runner.temp }}/install-wheels-$ws/ 2>/dev/null || true
             else
@@ -83,42 +127,47 @@ jobs:
             fi
             cp $artifact_dir/*none-any*.whl ${{ runner.temp }}/install-wheels-$ws/ 2>/dev/null || true
 
-            # Install and test
             pip install pytest ${{ runner.temp }}/install-wheels-$ws/*.whl
             cd tests/e2e/$ws
             python -m pytest tests/ -v
             cd ../../..
-            
+
             deactivate
             echo "::endgroup::"
           done
 
+  # Stage 3c: Reproducibility check
   reproducibility:
     name: Repro check
-    needs: build
+    needs: [cross-build]
     runs-on: ubuntu-latest
     continue-on-error: true
     steps:
       - uses: actions/checkout@v4
-
-      - name: Enable unprivileged user namespaces for Bazel linux-sandbox
-        run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
-
       - uses: actions/setup-python@v5
         with:
           python-version: "3.14"
-
       - uses: actions/download-artifact@v4
         with:
           pattern: wheels-ubuntu-*
           path: ${{ runner.temp }}/linux-wheels
           merge-multiple: true
-
       - uses: actions/download-artifact@v4
         with:
           pattern: wheels-macos-*
           path: ${{ runner.temp }}/macos-wheels
           merge-multiple: true
-
       - name: Compare wheels
         run: python tests/e2e/tools/compare_wheels.py ${{ runner.temp }}/linux-wheels ${{ runner.temp }}/macos-wheels
+
+  # Gate for branch protection
+  conclusion:
+    needs: [unit, e2e, cross-test, reproducibility]
+    runs-on: ubuntu-latest
+    if: always()
+    steps:
+      - uses: technote-space/workflow-conclusion-action@45ce8e0eb155657ab8ccf346ade734257fd196a5  # v3.0.3
+      - name: Report
+        run: |
+          echo "Workflow conclusion: $WORKFLOW_CONCLUSION"
+          [ "$WORKFLOW_CONCLUSION" = "success" ] && exit 0 || exit 1

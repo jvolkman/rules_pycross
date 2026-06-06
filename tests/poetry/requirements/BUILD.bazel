@@ -19,4 +19,5 @@ diff_test(
     name = "test",
     file1 = ":lock",
     file2 = "expected.json",
+    tags = ["golden"],
 )

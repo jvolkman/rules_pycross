@@ -7,6 +7,7 @@ py_test(
     name = "inspect_package_test",
     srcs = ["inspect_package_test.py"],
     main = "inspect_package_test.py",
+    tags = ["unit"],
     deps = [
         "//pycross/private/tools:inspect_package",
         "@rules_pycross_internal//deps:packaging",
@@ -21,6 +22,7 @@ py_test(
     name = "meson_utils_test",
     srcs = ["meson_utils_test.py"],
     main = "meson_utils_test.py",
+    tags = ["unit"],
     deps = [
         "//pycross/private/build/tools:meson_utils",
         "//pycross/private/build/tools:utils",
@@ -31,6 +33,7 @@ py_test(
     name = "cc_toolchain_test",
     srcs = ["cc_toolchain_test.py"],
     main = "cc_toolchain_test.py",
+    tags = ["unit"],
     deps = [
         "//pycross/private/build/tools:utils",
     ],
@@ -40,6 +43,7 @@ py_test(
     name = "toml_lock_generator_test",
     srcs = ["toml_lock_generator_test.py"],
     main = "toml_lock_generator_test.py",
+    tags = ["unit"],
     deps = [
         "//pycross/private/tools:lock_model",
         "//pycross/private/tools:raw_lock_resolver",
@@ -51,6 +55,7 @@ py_test(
     name = "resolved_lock_renderer_test",
     srcs = ["resolved_lock_renderer_test.py"],
     main = "resolved_lock_renderer_test.py",
+    tags = ["unit"],
     deps = [
         "//pycross/private/tools:lock_model",
         "//pycross/private/tools:resolved_lock_renderer",
@@ -61,6 +66,7 @@ py_test(
     name = "lifecycle_test",
     srcs = ["lifecycle_test.py"],
     main = "lifecycle_test.py",
+    tags = ["unit"],
     deps = [
         "//pycross/private/build/tools:utils",
     ],
@@ -70,6 +76,7 @@ py_test(
     name = "hooks_test",
     srcs = ["hooks_test.py"],
     main = "hooks_test.py",
+    tags = ["unit"],
     deps = [
         "//pycross/private/build/tools:utils",
     ],
@@ -79,6 +86,7 @@ py_test(
     name = "venv_utils_test",
     srcs = ["venv_utils_test.py"],
     main = "venv_utils_test.py",
+    tags = ["unit"],
     deps = [
         "//pycross/private/build/tools:utils",
     ],
@@ -92,6 +100,7 @@ py_test(
     name = "raw_lock_resolver_test",
     srcs = ["raw_lock_resolver_test.py"],
     main = "raw_lock_resolver_test.py",
+    tags = ["unit"],
     deps = [
         "//pycross/private/tools:lock_model",
         "//pycross/private/tools:raw_lock_resolver",
@@ -105,6 +114,7 @@ py_test(
     name = "uv_translator_test",
     srcs = ["uv_translator_test.py"],
     main = "uv_translator_test.py",
+    tags = ["unit"],
     deps = [
         "//pycross/private/tools:lock_model",
         "//pycross/private/tools:uv_translator",
@@ -116,6 +126,7 @@ py_test(
     name = "pdm_translator_test",
     srcs = ["pdm_translator_test.py"],
     main = "pdm_translator_test.py",
+    tags = ["unit"],
     deps = [
         "//pycross/private/tools:lock_model",
         "//pycross/private/tools:pdm_translator",
@@ -127,6 +138,7 @@ py_test(
     name = "poetry_translator_test",
     srcs = ["poetry_translator_test.py"],
     main = "poetry_translator_test.py",
+    tags = ["unit"],
     deps = [
         "//pycross/private/tools:lock_model",
         "//pycross/private/tools:poetry_translator",
