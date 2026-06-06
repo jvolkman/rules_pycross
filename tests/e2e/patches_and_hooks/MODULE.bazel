@@ -1,0 +1,61 @@
+bazel_dep(name = "llvm", version = "0.8.3")
+bazel_dep(name = "platforms", version = "1.0.0")
+bazel_dep(name = "rules_cc", version = "0.2.18")
+bazel_dep(name = "rules_python", version = "2.0.0")
+
+include("//shared:overrides.MODULE.bazel")
+
+bazel_dep(name = "rules_pycross", version = "0.0.0")
+local_path_override(
+    module_name = "rules_pycross",
+    path = "../../..",
+)
+
+python = use_extension("@rules_python//python/extensions:python.bzl", "python")
+python.toolchain(
+    is_default = True,
+    python_version = "3.14.2",
+)
+use_repo(python, "python_versions")
+
+pycross = use_extension("@rules_pycross//pycross/extensions:pycross.bzl", "pycross")
+pycross.configure_environments(
+    glibc_version = "2.35",
+    platforms = [
+        "aarch64-apple-darwin",
+        "x86_64-unknown-linux-gnu",
+    ],
+    python_versions = [
+        "3.14.2",
+    ],
+)
+
+# Use the lock_import extension to import external lock files.
+lock_import = use_extension("@rules_pycross//pycross/extensions:lock_import.bzl", "lock_import")
+
+# Import from uv
+lock_import.import_uv(
+    default_alias_single_version = True,
+    lock_file = "//:uv.lock",
+    project_file = "//:pyproject.toml",
+    repo = "uv",
+)
+lock_import.package(
+    name = "setproctitle",
+    always_build = True,
+    post_install_patches = ["@@//patches:setproctitle-postinstall.patch"],
+    pre_build_patches = ["@@//patches:setproctitle-prebuild.patch"],
+    repo = "uv",
+    site_hooks = ["with open('pkg/setproctitle/__init__.py', 'a') as f: f.write('SITE_HOOK_RAN = True\\n')"],
+)
+
+setuptools = use_extension("@rules_pycross//pycross/backends:setuptools.bzl", "setuptools")
+setuptools.override(
+    name = "setproctitle",
+    repo = "uv",
+)
+
+lock_repos = use_extension("@rules_pycross//pycross/extensions:lock_repos.bzl", "lock_repos")
+use_repo(lock_repos, "uv")
+
+register_toolchains("@llvm//toolchain:all")

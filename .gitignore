@@ -9,6 +9,7 @@ env
 bazel-*
 MODULE.bazel.lock
 .bazelrc.user
+.cache
 
 # python
 __pycache__
