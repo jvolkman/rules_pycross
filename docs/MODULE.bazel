@@ -16,5 +16,6 @@ local_path_override(
 )
 
 bazel_dep(name = "bazel_lib", version = "3.1.0")
-bazel_dep(name = "stardoc", version = "0.6.2")
+bazel_dep(name = "protobuf", version = "35.0")
 bazel_dep(name = "rules_cc", version = "0.2.18")
+bazel_dep(name = "stardoc", version = "0.6.2")
