@@ -20,14 +20,14 @@ unset TEST_TMPDIR
 unset TEST_WORKSPACE
 unset TEST_SRCDIR
 
-# Setup a clean output base to avoid collision with the outer Bazel server.
-OUTPUT_BASE=$(mktemp -d)
-trap 'cd "${WORKSPACE_DIR}" && bazel --output_base="${OUTPUT_BASE}" shutdown; chmod -R u+w "${OUTPUT_BASE}" && rm -rf "${OUTPUT_BASE}"' EXIT
+# Use the default output base (usually ~/.cache/bazel) to persist caches across runs,
+# which avoids re-downloading toolchains and improves performance.
+# We also leave the daemon running as requested to preserve the in-memory graph.
 cd "${WORKSPACE_DIR}"
 echo "Running bazel build //..."
-bazel --output_base="${OUTPUT_BASE}" build //...
+bazel build //...
 echo "Running bazel test //..."
-bazel --output_base="${OUTPUT_BASE}" test //... || exit_code=$?
+bazel test //... || exit_code=$?
 
 if [[ -n "${exit_code:-}" && "${exit_code}" != 4 ]]; then
   exit $exit_code
