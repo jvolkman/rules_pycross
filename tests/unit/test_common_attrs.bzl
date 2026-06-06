@@ -36,7 +36,7 @@ def _test_rule_impl(ctx):
     dep3 = ctx.attr.dep3
     other = ctx.attr.other
 
-    result = group_tool_deps([dep1, dep2, dep3, other])
+    result = group_tool_deps([d for d in [dep1, dep2, dep3, other] if d != None])
 
     # Store result to be accessed by the test
     return [TestingInfo(result = result)]
@@ -84,10 +84,66 @@ def group_tool_deps_test(name):
         impl = _group_tool_deps_test_impl,
     )
 
+def _group_tool_deps_empty_impl(env, target):
+    res = group_tool_deps([])
+    env.expect.that_dict(res).contains_exactly({})
+
+def _group_tool_deps_empty_test(name):
+    group_tool_deps_subject(name = name + "_subject")
+    analysis_test(name = name, target = ":" + name + "_subject", impl = _group_tool_deps_empty_impl)
+
+def _group_tool_deps_no_pkg_impl(env, target):
+    res = target[TestingInfo].result
+    env.expect.that_dict(res).contains_exactly({})
+
+def _group_tool_deps_no_pkg_test(name):
+    mock_other(name = name + "_other1")
+    mock_other(name = name + "_other2")
+    group_tool_deps_subject(
+        name = name + "_subject",
+        other = ":" + name + "_other1",
+        dep1 = ":" + name + "_other2",
+    )
+    analysis_test(name = name, target = ":" + name + "_subject", impl = _group_tool_deps_no_pkg_impl)
+
+def _group_tool_deps_single_impl(env, target):
+    res = target[TestingInfo].result
+    env.expect.that_int(len(res)).equals(1)
+    env.expect.that_int(len(res.get("pkg_a", []))).equals(1)
+
+def _group_tool_deps_single_test(name):
+    mock_pkg(name = name + "_dep1", package_name = "pkg_a")
+    group_tool_deps_subject(
+        name = name + "_subject",
+        dep1 = ":" + name + "_dep1",
+    )
+    analysis_test(name = name, target = ":" + name + "_subject", impl = _group_tool_deps_single_impl)
+
+def _group_tool_deps_same_impl(env, target):
+    res = target[TestingInfo].result
+    env.expect.that_int(len(res)).equals(1)
+    env.expect.that_int(len(res.get("pkg_a", []))).equals(3)
+
+def _group_tool_deps_same_test(name):
+    mock_pkg(name = name + "_dep1", package_name = "pkg_a")
+    mock_pkg(name = name + "_dep2", package_name = "pkg_a")
+    mock_pkg(name = name + "_dep3", package_name = "pkg_a")
+    group_tool_deps_subject(
+        name = name + "_subject",
+        dep1 = ":" + name + "_dep1",
+        dep2 = ":" + name + "_dep2",
+        dep3 = ":" + name + "_dep3",
+    )
+    analysis_test(name = name, target = ":" + name + "_subject", impl = _group_tool_deps_same_impl)
+
 def common_attrs_test_suite(name):
     test_suite(
         name = name,
         tests = [
             group_tool_deps_test,
+            _group_tool_deps_empty_test,
+            _group_tool_deps_no_pkg_test,
+            _group_tool_deps_single_test,
+            _group_tool_deps_same_test,
         ],
     )

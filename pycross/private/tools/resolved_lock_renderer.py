@@ -355,8 +355,8 @@ class PackageTarget:
         lines = [
             "pycross_wheel_library(",
             ind(f'name = "{self.naming.package(self.package.key).target}",'),
-            ind(f'package_name = "{self.package.name}",'),
-            ind(f'package_version = "{self.package.version}",'),
+            ind(f'package_name = "{self.package.key.name}",'),
+            ind(f'package_version = "{self.package.key.version}",'),
         ]
         if self._has_runtime_deps:
             lines.append(ind(f"deps = {self._deps_name},"))

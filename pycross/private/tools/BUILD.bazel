@@ -162,3 +162,14 @@ py_binary(
     imports = ["../../.."],
     visibility = ["//visibility:public"],
 )
+
+py_binary(
+    name = "resolved_lock_renderer",
+    srcs = ["resolved_lock_renderer.py"],
+    imports = ["../../.."],
+    visibility = ["//visibility:public"],
+    deps = [
+        ":args",
+        ":lock_model",
+    ],
+)

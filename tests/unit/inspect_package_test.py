@@ -53,6 +53,31 @@ class InspectPackageTest(unittest.TestCase):
         self.assertEqual(result["build_backend"], "flit_core.buildapi")
         self.assertEqual(result["build_requires"], ["flit_core >=3.2,<4"])
 
+    def test_inspect_sdist_no_pyproject_and_no_setup(self):
+        sdist_path = self.create_tarball("pkg-1.0.tar.gz", {"pkg-1.0/": ""})
+        result = inspect_sdist(sdist_path)
+        self.assertEqual(result["build_backend"], PEP517_DEFAULT_BACKEND)
+        self.assertEqual(result["build_requires"], PEP517_DEFAULT_REQUIRES)
+
+    def test_inspect_sdist_no_build_backend(self):
+        toml_content = """
+        [build-system]
+        requires = ["setuptools>=40"]
+        """
+        sdist_path = self.create_tarball("pkg-1.0.tar.gz", {"pkg-1.0/pyproject.toml": toml_content})
+        result = inspect_sdist(sdist_path)
+        self.assertEqual(result["build_backend"], PEP517_DEFAULT_BACKEND)
+        self.assertEqual(result["build_requires"], ["setuptools>=40"])
+
+    def test_inspect_sdist_requires_extras(self):
+        toml_content = """
+        [build-system]
+        requires = ["setuptools[ssl]>=40"]
+        """
+        sdist_path = self.create_tarball("pkg-1.0.tar.gz", {"pkg-1.0/pyproject.toml": toml_content})
+        result = inspect_sdist(sdist_path)
+        self.assertEqual(result["build_requires"], ["setuptools[ssl]>=40"])
+
     def test_inspect_wheel_with_entry_points(self):
         entry_points = """
         [console_scripts]
@@ -62,6 +87,11 @@ class InspectPackageTest(unittest.TestCase):
         wheel_path = self.create_zip("pkg-1.0-py3-none-any.whl", {"pkg-1.0.dist-info/entry_points.txt": entry_points})
         result = inspect_wheel(wheel_path)
         self.assertEqual(result["console_scripts"], ["foo", "bar"])
+
+    def test_inspect_wheel_no_entry_points(self):
+        wheel_path = self.create_zip("pkg-1.0-py3-none-any.whl", {"pkg-1.0.dist-info/WHEEL": ""})
+        result = inspect_wheel(wheel_path)
+        self.assertEqual(result["console_scripts"], [])
 
     def test_validate_requirements(self):
         # Mismatched version
@@ -77,6 +107,14 @@ class InspectPackageTest(unittest.TestCase):
         warnings = validate_requirements(
             requires=["numpy>=1.20"],
             package_versions={"numpy": "1.21.0"},
+            pkg_name="my_pkg",
+        )
+        self.assertEqual(len(warnings), 0)
+
+        # Extra markers ignored or parsed gracefully
+        warnings = validate_requirements(
+            requires=["foo; python_version >= '3.8'"],
+            package_versions={"foo": "1.0"},
             pkg_name="my_pkg",
         )
         self.assertEqual(len(warnings), 0)

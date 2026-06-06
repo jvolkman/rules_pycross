@@ -53,11 +53,17 @@ def _test_extract_cc_layer_flags_impl(env, target):
 
     action = env.expect.that_target(target).action_generating("{}/{}_cc_config.json".format(target.label.package, target.label.name))
 
-    # Action write content is not easily exposed in Starlark, but we check action mnemonic.
     action.mnemonic().equals("FileWrite")
 
-    # Alternatively we can inspect the content of the FileWrite action in newer rules_testing
-    # if content() is exposed, but we'll stick to asserting the file is properly registered.
+    content = action.content()
+    content.contains('"CC"')
+    content.contains('"CXX"')
+    content.contains('"AR"')
+    content.contains('"CFLAGS"')
+    content.contains('"LDFLAGS"')
+    content.contains("-O3")
+    content.contains("-fno-strict-aliasing")
+    content.contains("-Wl,-strip-all")
 
 def extract_cc_layer_test_suite(name):
     test_suite(

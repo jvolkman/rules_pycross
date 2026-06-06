@@ -33,22 +33,50 @@ def _test_pycross_wheel_library_basic(name):
 
 def _test_pycross_wheel_library_basic_impl(env, target):
     # Check that it returns PycrossExtractedWheelInfo
-    # buildifier: disable=unused-variable
-    extracted_info = env.expect.that_target(target).has_provider(PycrossExtractedWheelInfo)
+    env.expect.that_target(target).has_provider(PycrossExtractedWheelInfo)
+
+    extracted_info = target[PycrossExtractedWheelInfo]
+
+    # Assert site_packages is a TreeArtifact. We can check if it's a directory.
+    env.expect.that_bool(extracted_info.site_packages.is_directory).equals(True)
 
     # Check that it returns PycrossPackageInfo
-    # buildifier: disable=unused-variable
-    pkg_info = env.expect.that_target(target).has_provider(PycrossPackageInfo)
+    env.expect.that_target(target).has_provider(PycrossPackageInfo)
 
     # Assert package details
     if PycrossPackageInfo in target:
         env.expect.that_str(target[PycrossPackageInfo].package_name).equals("test")
         env.expect.that_str(target[PycrossPackageInfo].package_version).equals("1.0")
 
+def _test_pycross_wheel_library_no_package_name(name):
+    util.helper_target(
+        native.filegroup,
+        name = name + "_wheel",
+        srcs = ["test-1.0-py3-none-any.whl"],
+    )
+    util.helper_target(
+        pycross_wheel_library,
+        name = name + "_subject",
+        wheel = name + "_wheel",
+    )
+
+    analysis_test(
+        name = name,
+        target = name + "_subject",
+        impl = _test_pycross_wheel_library_no_package_name_impl,
+    )
+
+def _test_pycross_wheel_library_no_package_name_impl(env, target):
+    env.expect.that_target(target).has_provider(PycrossExtractedWheelInfo)
+
+    # PycrossPackageInfo should not be present
+    env.expect.that_bool(PycrossPackageInfo in target).equals(False)
+
 def pycross_wheel_library_test_suite(name):
     test_suite(
         name = name,
         tests = [
             _test_pycross_wheel_library_basic,
+            _test_pycross_wheel_library_no_package_name,
         ],
     )

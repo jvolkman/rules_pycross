@@ -27,9 +27,13 @@ def _test_generate_cargo_lock_basic(name):
 def _test_generate_cargo_lock_basic_impl(env, target):
     # Check that it returns an executable default info
     env.expect.that_target(target).has_provider(DefaultInfo)
-    env.expect.that_target(target).default_outputs().contains_exactly([
-        "{}/{}_runner.sh".format(target.label.package, target.label.name),
-    ])
+    out_file = "{}/{}_runner.sh".format(target.label.package, target.label.name)
+    env.expect.that_target(target).default_outputs().contains_exactly([out_file])
+
+    # Check action content
+    action = env.expect.that_target(target).action_generating(out_file)
+    action.content().contains("TOOL_PATH")
+    action.content().contains("SDIST_PATH")
 
 def generate_cargo_lock_test_suite(name):
     test_suite(
