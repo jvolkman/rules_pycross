@@ -36,15 +36,15 @@ class CcToolchainTest(unittest.TestCase):
         self.assertTrue(os.access(wrapper, os.X_OK))
 
         content = wrapper.read_text()
-        self.assertTrue(content.startswith("#!/usr/bin/python3 -S") or content.startswith("#!/usr/bin/env "))
+        self.assertTrue(content.startswith("#!/bin/sh"))
 
         self.assertIn("'-target'", content)
         self.assertIn("'x86_64-linux-gnu'", content)
         self.assertIn("'--sysroot=/tmp/sysroot'", content)
 
-        self.assertIn('"-Wl,--start-group"', content)
-        self.assertIn('"-Wl,--end-group"', content)
-        self.assertIn('"-Wl,--as-needed"', content)
+        self.assertIn("-Wl,--start-group", content)
+        self.assertIn("-Wl,--end-group", content)
+        self.assertIn("-Wl,--as-needed", content)
 
     def test_setup_cc_layer(self):
         ctx = MockBuildContext(self.temp_path)

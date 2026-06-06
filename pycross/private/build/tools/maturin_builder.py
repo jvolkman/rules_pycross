@@ -228,30 +228,42 @@ def pre_build(ctx):
 
     wrapper_path = ctx.temp_dir / "rustc_wrapper"
 
-    from pycross.private.build.tools.utils.cc_toolchain import _python_wrapper_shebang
-
-    shebang = _python_wrapper_shebang(ctx.exec_python)
-
     ldflags = ctx.sysconfig_vars.get("LDFLAGS", "")
     ldflags_args = shlex.split(ldflags)
 
+    sysroot_dir_str = str(sysroot_dir.absolute())
+
     wrapper_content = textwrap.dedent(f"""\
-    {shebang}
-    import os, sys
+    #!/bin/sh
+    "exec" "{ctx.exec_python.absolute()}" "-S" "$0" "$@"
+    import os
+    import sys
 
     real_rustc = sys.argv[1]
     args = sys.argv[2:]
 
+    sysroot_dir = {repr(sysroot_dir_str)}
+    target_triple = {repr(target_triple)}
+    is_native = {repr(is_native)}
+    ldflags_args = {repr(ldflags_args)}
+
     has_sysroot = any(arg.startswith("--sysroot") for arg in args)
-    if not has_sysroot and os.path.isdir({repr(str(sysroot_dir.absolute()))}):
-        args = ["--sysroot", {repr(str(sysroot_dir.absolute()))}] + args
+    is_target = any(target_triple in arg for arg in args)
 
-    is_target = any({repr(target_triple)} in arg for arg in args) or {repr(is_native)}
+    if is_native:
+        is_target = True
+
+    final_args = []
+    if not has_sysroot and os.path.isdir(sysroot_dir):
+        final_args.extend(["--sysroot", sysroot_dir])
+
+    final_args.extend(args)
+
     if is_target:
-        for arg in {repr(ldflags_args)}:
-            args.extend(["-C", f"link-arg={{arg}}"])
+        for link_arg in ldflags_args:
+            final_args.extend(["-C", f"link-arg={{link_arg}}"])
 
-    os.execv(real_rustc, [real_rustc] + args)
+    os.execv(real_rustc, [real_rustc] + final_args)
     """)
 
     wrapper_path.write_text(wrapper_content)
