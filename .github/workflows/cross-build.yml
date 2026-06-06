@@ -28,15 +28,15 @@ jobs:
 
       - name: Configure BuildBuddy
         run: |
-          echo "build:remote --remote_header=x-buildbuddy-api-key=${{ secrets.BUILDBUDDY_API_KEY }}" > e2e/${{ matrix.workspace }}/.bazelrc.user
+          echo "build:remote --remote_header=x-buildbuddy-api-key=${{ secrets.BUILDBUDDY_API_KEY }}" > tests/e2e/${{ matrix.workspace }}/.bazelrc.user
 
       - name: Build all wheels (native + cross)
-        run: cd e2e/${{ matrix.workspace }} && bazel build --config=remote //:all_wheels
+        run: cd tests/e2e/${{ matrix.workspace }} && bazel build --config=remote //:all_wheels
 
       - uses: actions/upload-artifact@v4
         with:
           name: wheels-${{ matrix.host }}-${{ matrix.workspace }}
-          path: e2e/${{ matrix.workspace }}/bazel-bin/all_wheels/
+          path: tests/e2e/${{ matrix.workspace }}/bazel-bin/all_wheels/
 
   test:
     name: Test - (${{ matrix.builder }}→${{ matrix.runner }})
@@ -85,9 +85,9 @@ jobs:
 
             # Install and test
             pip install pytest ${{ runner.temp }}/install-wheels-$ws/*.whl
-            cd e2e/$ws
+            cd tests/e2e/$ws
             python -m pytest tests/ -v
-            cd ../..
+            cd ../../..
             
             deactivate
             echo "::endgroup::"
@@ -121,4 +121,4 @@ jobs:
           merge-multiple: true
 
       - name: Compare wheels
-        run: python e2e/tools/compare_wheels.py ${{ runner.temp }}/linux-wheels ${{ runner.temp }}/macos-wheels
+        run: python tests/e2e/tools/compare_wheels.py ${{ runner.temp }}/linux-wheels ${{ runner.temp }}/macos-wheels

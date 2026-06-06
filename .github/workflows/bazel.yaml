@@ -15,6 +15,9 @@ on:
   # Make this workflow reusable, see
   # https://github.blog/2022-02-10-using-reusable-workflows-github-actions
   workflow_call:
+    secrets:
+      BUILDBUDDY_API_KEY:
+        required: false
     inputs:
       folders:
         required: true
@@ -160,6 +163,11 @@ jobs:
       - name: verify bcr patches
         if: hashFiles('.bcr/patches/*.patch') != '' && ! startsWith(matrix.os, 'windows')
         run: patch --dry-run -p1 < .bcr/patches/*.patch
+
+      - name: Configure BuildBuddy
+        working-directory: ${{ matrix.folder }}
+        run: |
+          echo "build:remote --remote_header=x-buildbuddy-api-key=${{ secrets.BUILDBUDDY_API_KEY }}" > .bazelrc.user
 
       - name: Test
         working-directory: ${{ matrix.folder }}

@@ -21,15 +21,21 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
 
-      - name: Test //pycross/... and //docs/...
+      - name: Configure BuildBuddy
         run: |
-          bazel --bazelrc .github/workflows/ci.bazelrc test -- //pycross/... //docs/...
+          echo "build:remote --remote_header=x-buildbuddy-api-key=${{ secrets.BUILDBUDDY_API_KEY }}" > .bazelrc.user
+
+      - name: Test //pycross/... //docs/... //tests/... -//tests/e2e/...
+        run: |
+          bazel --bazelrc .github/workflows/ci.bazelrc test --config=remote -- //pycross/... //docs/... //tests/... -//tests/e2e/...
 
   test:
     uses: ./.github/workflows/bazel.yaml
+    secrets: inherit
     with:
+      bazel_test_command: "bazel test --config=remote //..."
       bazelversions: |
         [
           "7.7.1",
@@ -38,17 +44,19 @@ jobs:
         ]
       folders: |
         [
-          "e2e/always_build",
-          "e2e/generate_lock",
-          "e2e/local_wheel",
-          "e2e/patches_and_hooks",
-          "e2e/requirements"
+          "tests/e2e/always_build",
+          "tests/e2e/generate_lock",
+          "tests/e2e/local_wheel",
+          "tests/e2e/patches_and_hooks",
+          "tests/e2e/requirements",
+          "tests/e2e/bzlmod_flags"
         ]
       exclude: |
         [
           {"os": "windows-latest"},
-          {"folder": "e2e/always_build", "bazelversion": "7.7.1"},
-          {"folder": "e2e/patches_and_hooks", "bazelversion": "7.7.1"}
+          {"folder": "tests/e2e/always_build", "bazelversion": "7.7.1"},
+          {"folder": "tests/e2e/patches_and_hooks", "bazelversion": "7.7.1"},
+          {"folder": "tests/e2e/bzlmod_flags", "bazelversion": "7.7.1"}
         ]
   # For branch protection settings, this job provides a "stable" name that can be used to gate PR merges
   # on "all matrix jobs were successful".
