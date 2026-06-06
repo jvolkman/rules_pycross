@@ -5,7 +5,7 @@ description = "E2E tests for Maturin/Rust wheel builds"
 authors = []
 dependencies = [
     "rpds-py==0.23.0",
-    "captcha-rs==0.1.1",
+    "jiter==0.5.0",
     "maturin",
 ]
 requires-python = "~=3.14.0"

@@ -1,0 +1,16 @@
+module(
+    name = "test_sdist_repo",
+    version = "0.0.0",
+)
+
+bazel_dep(name = "rules_pycross", version = "0.0.0")
+local_path_override(
+    module_name = "rules_pycross",
+    path = "../../..",
+)
+
+# Create a dummy extension to instantiate pycross_sdist_repo
+test_ext = use_extension("//:test_ext.bzl", "test_ext")
+use_repo(test_ext, "dummy_lock_repo", "repo_basic", "repo_legacy", "repo_with_pyproject", "repo_with_setuptools")
+
+bazel_dep(name = "rules_shell", version = "0.3.0")

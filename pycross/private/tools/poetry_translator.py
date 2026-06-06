@@ -59,6 +59,7 @@ class PoetryPackage:
     dependencies: List[PoetryDependency]
     files: List[PackageFile]
     resolved_dependencies: List[PackageDependency]
+    is_local: bool = False
 
     @property
     def key(self) -> PackageKey:
@@ -191,12 +192,12 @@ def translate(
 
                 dependencies.append(PoetryDependency(name=name, spec=spec, marker=marker))
 
-        # In older versions of poetry the list of files was held in a metadata section at the bottom of the poetry.lock file
-        # The lock file format now (as of 2022-12-16), has the files specified local to each dependency as another field.
-        # Here we will check for the files being present in the new location, and if not there we fall back to the older one.
+        source_type = lock_pkg.get("source", {}).get("type")
+        is_local = source_type in ("directory", "git", "url")
+
         files = [parse_file_info(f) for f in lock_pkg.get("files", [])]
         if len(files) == 0:
-            files = files_by_package_name[package_listed_name]
+            files = files_by_package_name.get(package_listed_name, [])
 
         poetry_packages.append(
             PoetryPackage(
@@ -210,6 +211,7 @@ def translate(
                     package_version,
                 ),
                 resolved_dependencies=[],
+                is_local=is_local,
             )
         )
 
@@ -251,8 +253,17 @@ def translate(
         else:
             raise MismatchedVersionException(f"Found no packages to satisfy pin (name={pin}, spec={pin_spec})")
 
+    packages_by_key = {p.key: p for p in poetry_packages}
+    while local_pins := [key for key in pinned_keys.values() if packages_by_key[key].is_local]:
+        for pin_key in local_pins:
+            pin_pkg = packages_by_key[pin_key]
+            pinned_keys.update({dep.name: dep.key for dep in pin_pkg.resolved_dependencies})
+            del pinned_keys[pin_key.name]
+
     lock_packages = {}
     for package in poetry_packages:
+        if package.is_local:
+            continue
         lock_package = package.to_lock_package()
         lock_packages[lock_package.key] = lock_package
 

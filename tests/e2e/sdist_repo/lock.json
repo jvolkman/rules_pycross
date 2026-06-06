@@ -1,0 +1,41 @@
+{
+  "packages": {
+    "basic": [
+      {
+        "dependencies": [],
+        "version": "0.1.0"
+      }
+    ],
+    "hatchling": [
+      {
+        "dependencies": [],
+        "version": "1.0.0"
+      }
+    ],
+    "legacy": [
+      {
+        "dependencies": [],
+        "version": "0.1.0"
+      }
+    ],
+    "setuptools": [
+      {
+        "dependencies": [],
+        "version": "60.0.0"
+      }
+    ],
+    "with-pyproject": [
+      {
+        "dependencies": [],
+        "version": "0.1.0"
+      }
+    ],
+    "with-setuptools": [
+      {
+        "dependencies": [],
+        "version": "0.1.0"
+      }
+    ]
+  },
+  "version": 1
+}

@@ -2,8 +2,11 @@
 
 load("@rules_testing//lib:analysis_test.bzl", "analysis_test", "test_suite")
 load("@rules_testing//lib:util.bzl", "util")
+
+# buildifier: disable=bzl-visibility
 load("//pycross/private/bzlmod:override_helpers.bzl", "encode_build_system_attrs")
 
+# buildifier: disable=unused-variable
 def _test_encode_build_system_attrs_impl(env, target):
     mock_tag = struct(
         copts = ["-O3"],

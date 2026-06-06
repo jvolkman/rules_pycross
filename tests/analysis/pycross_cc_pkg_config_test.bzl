@@ -31,6 +31,7 @@ def _test_pycross_cc_pkg_config(name):
         impl = _test_pycross_cc_pkg_config_impl,
     )
 
+# buildifier: disable=unused-variable
 def _test_pycross_cc_pkg_config_impl(env, target):
     action = env.expect.that_target(target).action_generating("tests/analysis/mock_lib.pc")
 
@@ -67,6 +68,7 @@ def _test_pycross_cc_pkg_config_libprefix(name):
         impl = _test_pycross_cc_pkg_config_libprefix_impl,
     )
 
+# buildifier: disable=unused-variable
 def _test_pycross_cc_pkg_config_libprefix_impl(env, target):
     action = env.expect.that_target(target).action_generating("tests/analysis/libfoo.pc")
     content = action.content()

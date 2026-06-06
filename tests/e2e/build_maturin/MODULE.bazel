@@ -64,17 +64,16 @@ lock_import.package(
     repo = "uv",
 )
 lock_import.package(
-    name = "captcha-rs",
+    name = "jiter",
     always_build = True,
     repo = "uv",
 )
 
 maturin = use_extension("@rules_pycross_backend_maturin//extensions:maturin.bzl", "maturin")
 maturin.override(
-    name = "captcha-rs",
-    cargo_lock = "//:captcha_rs.lock",
+    name = "jiter",
+    cargo_lock = "//:jiter.lock",
     repo = "uv",
-    sdist = "@uv//_sdist:captcha-rs",
 )
 use_repo(maturin, "uv_cargo")
 

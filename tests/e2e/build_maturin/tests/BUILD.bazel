@@ -7,7 +7,7 @@ py_test(
 )
 
 py_test(
-    name = "test_captcha",
-    srcs = ["test_captcha.py"],
-    deps = ["@uv//:captcha-rs"],
+    name = "test_jiter",
+    srcs = ["test_jiter.py"],
+    deps = ["@uv//:jiter"],
 )

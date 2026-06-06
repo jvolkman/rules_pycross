@@ -4,7 +4,11 @@ load("@rules_python//python:defs.bzl", "PyInfo")
 load("@rules_testing//lib:analysis_test.bzl", "analysis_test", "test_suite")
 load("@rules_testing//lib:truth.bzl", "matching")
 load("@rules_testing//lib:util.bzl", "util")
+
+# buildifier: disable=bzl-visibility
 load("//pycross/private:providers.bzl", "PycrossPackageInfo", "PycrossWheelInfo")
+
+# buildifier: disable=bzl-visibility
 load("//pycross/private/build/rules:pep517_build.bzl", "pep517_build")
 
 def _mock_pkg_impl(ctx):
@@ -38,6 +42,7 @@ def _test_pep517_build_valid_deps(name):
     )
     analysis_test(name = name, target = name + "_subject", impl = _test_pep517_build_valid_deps_impl)
 
+# buildifier: disable=unused-variable
 def _test_pep517_build_valid_deps_impl(env, target):
     env.expect.that_target(target).has_provider(PycrossWheelInfo)
 
@@ -53,6 +58,7 @@ def _test_pep517_build_invalid_deps(name):
     )
     analysis_test(name = name, target = name + "_subject", expect_failure = True, impl = _test_pep517_build_invalid_deps_impl)
 
+# buildifier: disable=unused-variable
 def _test_pep517_build_invalid_deps_impl(env, target):
     env.expect.that_target(target).failures().contains_predicate(matching.contains("Missing required build-system packages: hatchling."))
 
@@ -65,6 +71,7 @@ def _test_pep517_build_basic(name):
     )
     analysis_test(name = name, target = name + "_subject", impl = _test_pep517_build_basic_impl)
 
+# buildifier: disable=unused-variable
 def _test_pep517_build_basic_impl(env, target):
     env.expect.that_target(target).has_provider(PycrossWheelInfo)
     env.expect.that_target(target).has_provider(DefaultInfo)

@@ -15,3 +15,4 @@ tests/e2e/requirements
 tests/e2e/bzlmod_flags
 tests/e2e/shared
 tests/e2e/tools
+tests/e2e/sdist_repo

@@ -33,8 +33,8 @@ class TomlLockGeneratorTest(unittest.TestCase):
         )
         mock_resolve.return_value = lock
 
-        import tempfile
         import os
+        import tempfile
 
         with tempfile.TemporaryDirectory() as td:
             out_file = os.path.join(td, "out.toml")

@@ -51,6 +51,7 @@ group_tool_deps_subject = rule(
     },
 )
 
+# buildifier: disable=unused-variable
 def _group_tool_deps_test_impl(env, target):
     result = target[TestingInfo].result
 
@@ -84,6 +85,7 @@ def group_tool_deps_test(name):
         impl = _group_tool_deps_test_impl,
     )
 
+# buildifier: disable=unused-variable
 def _group_tool_deps_empty_impl(env, target):
     res = group_tool_deps([])
     env.expect.that_dict(res).contains_exactly({})
@@ -92,6 +94,7 @@ def _group_tool_deps_empty_test(name):
     group_tool_deps_subject(name = name + "_subject")
     analysis_test(name = name, target = ":" + name + "_subject", impl = _group_tool_deps_empty_impl)
 
+# buildifier: disable=unused-variable
 def _group_tool_deps_no_pkg_impl(env, target):
     res = target[TestingInfo].result
     env.expect.that_dict(res).contains_exactly({})
@@ -106,6 +109,7 @@ def _group_tool_deps_no_pkg_test(name):
     )
     analysis_test(name = name, target = ":" + name + "_subject", impl = _group_tool_deps_no_pkg_impl)
 
+# buildifier: disable=unused-variable
 def _group_tool_deps_single_impl(env, target):
     res = target[TestingInfo].result
     env.expect.that_int(len(res)).equals(1)
@@ -119,6 +123,7 @@ def _group_tool_deps_single_test(name):
     )
     analysis_test(name = name, target = ":" + name + "_subject", impl = _group_tool_deps_single_impl)
 
+# buildifier: disable=unused-variable
 def _group_tool_deps_same_impl(env, target):
     res = target[TestingInfo].result
     env.expect.that_int(len(res)).equals(1)

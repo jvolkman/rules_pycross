@@ -2,7 +2,11 @@
 
 load("@rules_testing//lib:analysis_test.bzl", "analysis_test", "test_suite")
 load("@rules_testing//lib:util.bzl", "util")
+
+# buildifier: disable=bzl-visibility
 load("//pycross/private:providers.bzl", "PycrossWheelInfo")
+
+# buildifier: disable=bzl-visibility
 load("//pycross/private:wheel_transform.bzl", "pycross_wheel_transform")
 
 def _mock_exe_impl(ctx):
@@ -35,6 +39,7 @@ def _test_wheel_transform_basic(name):
     )
     analysis_test(name = name, target = name + "_subject", impl = _test_wheel_transform_basic_impl)
 
+# buildifier: disable=unused-variable
 def _test_wheel_transform_basic_impl(env, target):
     env.expect.that_target(target).has_provider(PycrossWheelInfo)
     wheel_file = target[PycrossWheelInfo].wheel_file

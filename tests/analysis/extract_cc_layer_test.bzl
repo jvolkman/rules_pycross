@@ -46,6 +46,7 @@ def _test_extract_cc_layer_flags(name):
         impl = _test_extract_cc_layer_flags_impl,
     )
 
+# buildifier: disable=unused-variable
 def _test_extract_cc_layer_flags_impl(env, target):
     env.expect.that_target(target).default_outputs().contains_exactly([
         "{}/{}_cc_config.json".format(target.label.package, target.label.name),

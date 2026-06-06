@@ -1,0 +1,6 @@
+exports_files([
+    "basic.tar.gz",
+    "with_pyproject.tar.gz",
+    "with_setuptools.tar.gz",
+    "legacy.tar.gz",
+])

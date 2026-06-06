@@ -2,8 +2,11 @@
 
 load("@rules_testing//lib:analysis_test.bzl", "analysis_test", "test_suite")
 load("@rules_testing//lib:util.bzl", "util")
+
+# buildifier: disable=bzl-visibility
 load("//pycross/private:resolved_lock_renderer.bzl", "render_lock_bzl")
 
+# buildifier: disable=unused-variable
 def _test_render_lock_impl(env, target):
     lock = {
         "environments": {

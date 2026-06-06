@@ -87,3 +87,50 @@ py_test(
 resolved_lock_renderer_test_suite(name = "test_resolved_lock_renderer")
 
 override_helpers_test_suite(name = "test_override_helpers")
+
+py_test(
+    name = "raw_lock_resolver_test",
+    srcs = ["raw_lock_resolver_test.py"],
+    main = "raw_lock_resolver_test.py",
+    deps = [
+        "//pycross/private/tools:lock_model",
+        "//pycross/private/tools:raw_lock_resolver",
+        "//pycross/private/tools:target_environment",
+        "@rules_pycross_internal//deps:packaging",
+        "@rules_pycross_internal//deps:pip",
+    ],
+)
+
+py_test(
+    name = "uv_translator_test",
+    srcs = ["uv_translator_test.py"],
+    main = "uv_translator_test.py",
+    deps = [
+        "//pycross/private/tools:lock_model",
+        "//pycross/private/tools:uv_translator",
+        "@rules_pycross_internal//deps:packaging",
+    ],
+)
+
+py_test(
+    name = "pdm_translator_test",
+    srcs = ["pdm_translator_test.py"],
+    main = "pdm_translator_test.py",
+    deps = [
+        "//pycross/private/tools:lock_model",
+        "//pycross/private/tools:pdm_translator",
+        "@rules_pycross_internal//deps:packaging",
+    ],
+)
+
+py_test(
+    name = "poetry_translator_test",
+    srcs = ["poetry_translator_test.py"],
+    main = "poetry_translator_test.py",
+    deps = [
+        "//pycross/private/tools:lock_model",
+        "//pycross/private/tools:poetry_translator",
+        "@rules_pycross_internal//deps:packaging",
+        "@rules_pycross_internal//deps:poetry-core",
+    ],
+)

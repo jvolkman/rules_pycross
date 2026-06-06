@@ -45,6 +45,7 @@ def _test_pycross_wheel_headers_basic(name):
         impl = _test_pycross_wheel_headers_basic_impl,
     )
 
+# buildifier: disable=unused-variable
 def _test_pycross_wheel_headers_basic_impl(env, target):
     # Check that it returns CcInfo
     env.expect.that_target(target).has_provider(CcInfo)
@@ -82,6 +83,7 @@ def _test_pycross_wheel_headers_no_make_variable(name):
         impl = _test_pycross_wheel_headers_no_make_variable_impl,
     )
 
+# buildifier: disable=unused-variable
 def _test_pycross_wheel_headers_no_make_variable_impl(env, target):
     env.expect.that_bool(platform_common.TemplateVariableInfo in target).equals(False)
 

@@ -14,6 +14,7 @@ def define_e2e_tests():
         "local_wheel",
         "patches_and_hooks",
         "requirements",
+        "sdist_repo",
         "bzlmod_flags",
     ]:
         sh_test(

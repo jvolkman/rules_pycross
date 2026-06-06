@@ -31,6 +31,7 @@ def _test_pycross_wheel_library_basic(name):
         impl = _test_pycross_wheel_library_basic_impl,
     )
 
+# buildifier: disable=unused-variable
 def _test_pycross_wheel_library_basic_impl(env, target):
     # Check that it returns PycrossExtractedWheelInfo
     env.expect.that_target(target).has_provider(PycrossExtractedWheelInfo)
@@ -66,6 +67,7 @@ def _test_pycross_wheel_library_no_package_name(name):
         impl = _test_pycross_wheel_library_no_package_name_impl,
     )
 
+# buildifier: disable=unused-variable
 def _test_pycross_wheel_library_no_package_name_impl(env, target):
     env.expect.that_target(target).has_provider(PycrossExtractedWheelInfo)
 

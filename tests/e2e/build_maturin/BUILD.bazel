@@ -2,7 +2,7 @@ load("//shared:collect_wheels.bzl", "collect_wheels")
 
 exports_files([
     "rpds_py.lock",
-    "captcha_rs.lock",
+    "jiter.lock",
 ])
 
 collect_wheels(
@@ -13,6 +13,6 @@ collect_wheels(
     ],
     wheels = [
         "@uv//_wheel:rpds-py",
-        "@uv//_wheel:captcha-rs",
+        "@uv//_wheel:jiter",
     ],
 )

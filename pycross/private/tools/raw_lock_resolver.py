@@ -92,7 +92,7 @@ class GenerationContext:
     def get_dependencies_by_environment(
         self, package: RawPackage, ignore_dependency_names: Set[str]
     ) -> Dict[Optional[str], Set[PackageKey]]:
-        env_deps = defaultdict(set)
+        env_deps = {target.name: set() for target in self.target_environments}
         # We sort deps by version in descending order. In case the list of dependencies
         # has multiple entries for the same name that match an environment, we prefer the
         # latest version.
