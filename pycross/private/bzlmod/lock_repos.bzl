@@ -51,6 +51,9 @@ def _lock_repos_impl(module_ctx):
     # Serialize backend configs for passing to package_repo.
     backend_configs_json = {name: json.encode(config) for name, config in BACKEND_CONFIGS.items()}
 
+    # Track patches per package to ensure they don't conflict across lock files.
+    pkg_patches = {}
+
     # Generate the lock repos and any remote package repos
     for repo_name, lock_file in all_locks.items():
         resolved_lock_file = module_ctx.path(lock_file)
@@ -160,6 +163,13 @@ def _lock_repos_impl(module_ctx):
             for attr_name in ("build_backend", "pre_build_patches", "site_hooks"):
                 if attr_name in pkg and pkg[attr_name] != None:
                     sdist_repo_attrs[attr_name] = pkg[attr_name]
+
+            pre_build_patches = pkg.get("pre_build_patches") or []
+            if pkg_key in pkg_patches:
+                if pkg_patches[pkg_key] != pre_build_patches:
+                    fail("Configuration error: Conflicting patches for package {} across lock imports".format(pkg_key))
+            else:
+                pkg_patches[pkg_key] = pre_build_patches
 
             # Pass per-package override configs keyed by backend name.
             pkg_name = pkg_key.split("@")[0]
