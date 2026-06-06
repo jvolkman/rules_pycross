@@ -116,9 +116,16 @@ def register_pep517_action(
         config_settings_file = ctx.actions.declare_file(paths.join(ctx.attr.name, "config_settings.json"))
         inputs.append(config_settings_file)
 
+        unique_deps = []
+        seen_labels = {}
+        for dep in deps + build_deps:
+            if dep.label not in seen_labels:
+                seen_labels[dep.label] = True
+                unique_deps.append(dep)
+
         expanded_settings = {}
         for key, value in config_settings.items():
-            expanded_settings[key] = [ctx.expand_location(vi, deps + build_deps) for vi in value]
+            expanded_settings[key] = [ctx.expand_location(vi, unique_deps) for vi in value]
 
         ctx.actions.write(config_settings_file, json.encode(expanded_settings))
 

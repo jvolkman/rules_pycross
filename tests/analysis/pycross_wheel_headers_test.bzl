@@ -1,8 +1,14 @@
+"""Module docstring for tests."""
+
+load("@rules_cc//cc/common:cc_info.bzl", "CcInfo")
 load("@rules_testing//lib:analysis_test.bzl", "analysis_test", "test_suite")
 load("@rules_testing//lib:util.bzl", "util")
-load("@rules_cc//cc/common:cc_info.bzl", "CcInfo")
-load("//pycross/private/build:wheel_headers.bzl", "pycross_wheel_headers")
+
+# buildifier: disable=bzl-visibility
 load("//pycross/private:providers.bzl", "PycrossExtractedWheelInfo")
+
+# buildifier: disable=bzl-visibility
+load("//pycross/private/build:wheel_headers.bzl", "pycross_wheel_headers")
 
 def _mock_wheel_impl(ctx):
     out = ctx.actions.declare_directory(ctx.label.name + "_dir")
@@ -42,7 +48,7 @@ def _test_pycross_wheel_headers_basic(name):
 def _test_pycross_wheel_headers_basic_impl(env, target):
     # Check that it returns CcInfo
     env.expect.that_target(target).has_provider(CcInfo)
-    
+
     # Check TemplateVariableInfo
     env.expect.that_target(target).has_provider(platform_common.TemplateVariableInfo)
 

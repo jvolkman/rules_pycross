@@ -1,7 +1,13 @@
+"""Module docstring for tests."""
+
 load("@rules_testing//lib:analysis_test.bzl", "analysis_test", "test_suite")
 load("@rules_testing//lib:util.bzl", "util")
-load("//pycross/private:wheel_library.bzl", "pycross_wheel_library")
+
+# buildifier: disable=bzl-visibility
 load("//pycross/private:providers.bzl", "PycrossExtractedWheelInfo", "PycrossPackageInfo")
+
+# buildifier: disable=bzl-visibility
+load("//pycross/private:wheel_library.bzl", "pycross_wheel_library")
 
 def _test_pycross_wheel_library_basic(name):
     # Dummy wheel file
@@ -27,11 +33,13 @@ def _test_pycross_wheel_library_basic(name):
 
 def _test_pycross_wheel_library_basic_impl(env, target):
     # Check that it returns PycrossExtractedWheelInfo
+    # buildifier: disable=unused-variable
     extracted_info = env.expect.that_target(target).has_provider(PycrossExtractedWheelInfo)
-    
+
     # Check that it returns PycrossPackageInfo
+    # buildifier: disable=unused-variable
     pkg_info = env.expect.that_target(target).has_provider(PycrossPackageInfo)
-    
+
     # Assert package details
     if PycrossPackageInfo in target:
         env.expect.that_str(target[PycrossPackageInfo].package_name).equals("test")

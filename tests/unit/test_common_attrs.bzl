@@ -1,8 +1,16 @@
-load("//pycross/private:providers.bzl", "PycrossPackageInfo")
-load("//pycross/private/build/rules:common_attrs.bzl", "group_tool_deps")
+"""Module docstring for tests."""
+
 load("@rules_testing//lib:analysis_test.bzl", "analysis_test", "test_suite")
 
-TestingInfo = provider(fields=["result"])
+# buildifier: disable=bzl-visibility
+# buildifier: disable=bzl-visibility
+load("//pycross/private:providers.bzl", "PycrossPackageInfo")
+
+# buildifier: disable=bzl-visibility
+# buildifier: disable=bzl-visibility
+load("//pycross/private/build/rules:common_attrs.bzl", "group_tool_deps")
+
+TestingInfo = provider(doc = "TestingInfo", fields = ["result"])
 
 def _mock_pkg_impl(ctx):
     return [PycrossPackageInfo(package_name = ctx.attr.package_name)]
@@ -14,6 +22,7 @@ mock_pkg = rule(
     },
 )
 
+# buildifier: disable=unused-variable
 def _mock_other_impl(ctx):
     return []
 
@@ -28,9 +37,9 @@ def _test_rule_impl(ctx):
     other = ctx.attr.other
 
     result = group_tool_deps([dep1, dep2, dep3, other])
-    
+
     # Store result to be accessed by the test
-    return [TestingInfo(result=result)]
+    return [TestingInfo(result = result)]
 
 group_tool_deps_subject = rule(
     implementation = _test_rule_impl,
@@ -44,13 +53,18 @@ group_tool_deps_subject = rule(
 
 def _group_tool_deps_test_impl(env, target):
     result = target[TestingInfo].result
-    
+
     env.expect.that_int(len(result)).equals(2)
-    
+
     env.expect.that_int(len(result.get("pkg_a", []))).equals(2)
     env.expect.that_int(len(result.get("pkg_b", []))).equals(1)
 
 def group_tool_deps_test(name):
+    """Test group_tool_deps.
+
+    Args:
+        name: Name of the test
+    """
     mock_pkg(name = name + "_dep1", package_name = "pkg_a")
     mock_pkg(name = name + "_dep2", package_name = "pkg_b")
     mock_pkg(name = name + "_dep3", package_name = "pkg_a")
@@ -75,5 +89,5 @@ def common_attrs_test_suite(name):
         name = name,
         tests = [
             group_tool_deps_test,
-        ]
+        ],
     )

@@ -1,17 +1,14 @@
-import json
 import tarfile
 import unittest
 import zipfile
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
-from pycross.private.tools.inspect_package import (
-    PEP517_DEFAULT_BACKEND,
-    PEP517_DEFAULT_REQUIRES,
-    inspect_sdist,
-    inspect_wheel,
-    validate_requirements,
-)
+from pycross.private.tools.inspect_package import PEP517_DEFAULT_BACKEND
+from pycross.private.tools.inspect_package import PEP517_DEFAULT_REQUIRES
+from pycross.private.tools.inspect_package import inspect_sdist
+from pycross.private.tools.inspect_package import inspect_wheel
+from pycross.private.tools.inspect_package import validate_requirements
 
 
 class InspectPackageTest(unittest.TestCase):
@@ -83,6 +80,7 @@ class InspectPackageTest(unittest.TestCase):
             pkg_name="my_pkg",
         )
         self.assertEqual(len(warnings), 0)
+
 
 if __name__ == "__main__":
     unittest.main()

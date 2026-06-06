@@ -1,7 +1,13 @@
+"""Module docstring for tests."""
+
 load("@rules_testing//lib:analysis_test.bzl", "analysis_test", "test_suite")
 load("@rules_testing//lib:util.bzl", "util")
+
+# buildifier: disable=bzl-visibility
 load("//pycross/private/build/actions:cc_layer.bzl", "extract_cc_layer")
-load("//pycross/private/build/rules:common_attrs.bzl", "CC_TOOLCHAIN_ATTRS", "CC_TOOLCHAINS", "CC_FRAGMENTS")
+
+# buildifier: disable=bzl-visibility
+load("//pycross/private/build/rules:common_attrs.bzl", "CC_FRAGMENTS", "CC_TOOLCHAINS", "CC_TOOLCHAIN_ATTRS")
 
 def _mock_cc_layer_impl(ctx):
     cc_layer = extract_cc_layer(
@@ -42,14 +48,14 @@ def _test_extract_cc_layer_flags(name):
 
 def _test_extract_cc_layer_flags_impl(env, target):
     env.expect.that_target(target).default_outputs().contains_exactly([
-        "{}/{}_cc_config.json".format(target.label.package, target.label.name)
+        "{}/{}_cc_config.json".format(target.label.package, target.label.name),
     ])
-    
+
     action = env.expect.that_target(target).action_generating("{}/{}_cc_config.json".format(target.label.package, target.label.name))
-    
+
     # Action write content is not easily exposed in Starlark, but we check action mnemonic.
     action.mnemonic().equals("FileWrite")
-    
+
     # Alternatively we can inspect the content of the FileWrite action in newer rules_testing
     # if content() is exposed, but we'll stick to asserting the file is properly registered.
 

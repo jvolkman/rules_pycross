@@ -1,12 +1,13 @@
-import subprocess
 import sys
 import tarfile
 import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
+from unittest.mock import patch
 
-from tools.generate_cargo_lock import derive_default_output, main
+from tools.generate_cargo_lock import derive_default_output
+from tools.generate_cargo_lock import main
 
 
 class GenerateCargoLockTest(unittest.TestCase):
@@ -48,7 +49,7 @@ class GenerateCargoLockTest(unittest.TestCase):
                 "mypkg-1.0/src/lib.rs": "...",
             },
         )
-        
+
         output_lock = self.temp_path / "mypkg@1.0.lock"
 
         test_args = [
