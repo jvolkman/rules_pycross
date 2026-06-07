@@ -34,10 +34,20 @@ def _find_top_level_packages_sdist(sdist_path: Path) -> list[str]:
     Looks for directories containing __init__.py at depth 2 (root/pkg/__init__.py)
     or depth 3 for src-layout (root/src/pkg/__init__.py).
     """
-    _EXCLUDED_DIRS = frozenset({
-        "bin", "benchmarks", "docs", "examples", "scripts",
-        "src", "test", "tests", "testing", "tools",
-    })
+    _EXCLUDED_DIRS = frozenset(
+        {
+            "bin",
+            "benchmarks",
+            "docs",
+            "examples",
+            "scripts",
+            "src",
+            "test",
+            "tests",
+            "testing",
+            "tools",
+        }
+    )
 
     packages = set()
     init_files = set()

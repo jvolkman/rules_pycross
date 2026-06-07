@@ -1,24 +1,28 @@
 """A pure-Starlark hub repository rule that wraps a pycross lock structure.
 
 The file structure is as follows:
-- REPO.bazel            - The repository root marker.
-- BUILD.bazel           - The root build file.
-- defs.bzl              - A defs file that provides an `install_deps` macro in some contexts. May be empty.
-- requirements.bzl      - A defs file that provides the traditional `requirement` and `all_requirements`.
-- _lock/BUILD.bazel     - Contains pure-Starlark instantiations of all package targets.
-- _sdist/BUILD.bazel    - Version-aware aliases to package sdist targets.
-- _wheel/BUILD.bazel    - Version-aware aliases to package wheel targets.
-- <package>/BUILD.bazel - Contains aliases to targets under //_lock. Most notably, an alias named <package>
-                          is what most people will want to import.
+- REPO.bazel               - The repository root marker.
+- BUILD.bazel              - The root build file with pin aliases.
+- defs.bzl                 - Compatibility file (may be empty).
+- requirements.bzl         - Provides `requirement()` and `all_requirements`.
+- _env/BUILD.bazel         - Environment config_settings.
+- _cycles/BUILD.bazel      - Cycle group py_libraries (if any).
+- _backend/<rule>.bzl      - Backend macros with pre-configured tool deps.
+- <package>/BUILD.bazel    - Pin aliases pointing to the active version.
+- <package>/v<ver>/BUILD.bazel - Actual pycross_wheel_library and file aliases.
 
 From a target perspective:
-- //:package               - The pycross_wheel_library target.
-- //package:sdist          - The package's sdist file.
-- //package:wheel          - The package's wheel file.
-- //_sdist:package@version - The sdist for a specific version of package.
-- //_wheel:package@version - The wheel for a specific version of package.
+- //:package             - Alias to //package:package.
+- //package:pkg          - The pycross_wheel_library target (pinned version).
+- //package:whl          - The wheel file (pinned version).
+- //package:sdist        - The sdist file (pinned version, if available).
+- //package:[extra]      - Extra dependency group (pinned version).
 
-The idea is that, for a repo named "pypi", something will depend on e.g. `@pypi//:numpy` or `@pypi//:pandas`.
+When `legacy_naming = True`, the following additional directories are generated:
+- _wheel/BUILD.bazel     - Aliases: :package -> //package:whl, :package@ver -> //package/vN:whl
+- _sdist/BUILD.bazel     - Aliases: :package -> //package:sdist, :package@ver -> //package/vN:sdist
+
+The idea is that, for a repo named "pypi", something will depend on e.g. `@pypi//:numpy` or `@pypi//numpy:pkg`.
 
 The package names in the root of the repo are all normalized per
 https://packaging.python.org/en/latest/specifications/name-normalization.
@@ -158,7 +162,73 @@ def _package_repo_impl(rctx):
         sdist_file = package.get("sdist_file")
         rctx.file(paths.join(pin, "BUILD.bazel"), _pin_build(pin, pin_target, package, sdist_file))
 
-    # 5. Write _backend/ directory
+    # 5. Legacy naming: _wheel/ and _sdist/ directories
+    if rctx.attr.legacy_naming:
+        wheel_lines = [
+            'package(default_visibility = ["//visibility:public"])',
+            "",
+        ]
+        sdist_lines = [
+            'package(default_visibility = ["//visibility:public"])',
+            "",
+        ]
+
+        for pkg_key in sorted(packages.keys()):
+            pkg_name = pkg_key.split("@")[0]
+            pkg_version = pkg_key.split("@")[1]
+
+            # Normalize name
+            norm_name = pkg_name.replace("_", "-").replace(".", "-").lower()
+            for _i in range(len(norm_name)):
+                if "--" in norm_name:
+                    norm_name = norm_name.replace("--", "-")
+                else:
+                    break
+
+            # Versioned alias: _wheel:name@version -> //name/vN:whl
+            wheel_lines.extend([
+                "alias(",
+                '    name = "{}@{}",'.format(norm_name, pkg_version),
+                '    actual = "//{}/v{}:whl",'.format(norm_name, pkg_version),
+                ")",
+                "",
+            ])
+
+            sdist_file = packages[pkg_key].get("sdist_file")
+            if sdist_file:
+                sdist_lines.extend([
+                    "alias(",
+                    '    name = "{}@{}",'.format(norm_name, pkg_version),
+                    '    actual = "//{}/v{}:sdist",'.format(norm_name, pkg_version),
+                    ")",
+                    "",
+                ])
+
+        # Unversioned pin aliases: _wheel:name -> //name:whl
+        for pin in sorted(pins.keys()):
+            wheel_lines.extend([
+                "alias(",
+                '    name = "{}",'.format(pin),
+                '    actual = "//{}:whl",'.format(pin),
+                ")",
+                "",
+            ])
+
+            pin_target = pins[pin]
+            sdist_file = packages[pin_target].get("sdist_file")
+            if sdist_file:
+                sdist_lines.extend([
+                    "alias(",
+                    '    name = "{}",'.format(pin),
+                    '    actual = "//{}:sdist",'.format(pin),
+                    ")",
+                    "",
+                ])
+
+        rctx.file("_wheel/BUILD.bazel", "\n".join(wheel_lines) + "\n")
+        rctx.file("_sdist/BUILD.bazel", "\n".join(sdist_lines) + "\n")
+
+    # 6. Write _backend/ directory
     #
     # _backend/BUILD.bazel       — package root
     # _backend/<backend>.bzl     — symbolic macros wrapping backend rules with
@@ -236,5 +306,8 @@ package_repo = repository_rule(
             doc = "Maps pycross rule names to JSON-encoded config dicts with 'rule_bzl' and 'tool_packages'.",
         ),
         "write_install_deps": attr.bool(),
+        "legacy_naming": attr.bool(
+            doc = "Generate _wheel/ and _sdist/ directories with legacy versioned aliases.",
+        ),
     },
 )

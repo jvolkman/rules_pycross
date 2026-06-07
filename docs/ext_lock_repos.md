@@ -8,7 +8,7 @@ The lock_repos extension.
 
 <pre>
 lock_repos = use_extension("@rules_pycross//pycross/extensions:lock_repos.bzl", "lock_repos")
-lock_repos.create(<a href="#lock_repos.create-pypi_index">pypi_index</a>)
+lock_repos.create(<a href="#lock_repos.create-legacy_naming">legacy_naming</a>, <a href="#lock_repos.create-pypi_index">pypi_index</a>)
 </pre>
 
 
@@ -24,6 +24,7 @@ Create declared Pycross repos.
 
 | Name  | Description | Type | Mandatory | Default |
 | :------------- | :------------- | :------------- | :------------- | :------------- |
+| <a id="lock_repos.create-legacy_naming"></a>legacy_naming |  Generate _wheel/ and _sdist/ directories with legacy versioned aliases for backward compatibility.   | Boolean | optional |  `False`  |
 | <a id="lock_repos.create-pypi_index"></a>pypi_index |  The PyPI-compatible index to use (must support the JSON API).   | String | optional |  `""`  |
 
 

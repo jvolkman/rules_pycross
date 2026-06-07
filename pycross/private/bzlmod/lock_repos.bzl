@@ -185,6 +185,7 @@ def _lock_repos_impl(module_ctx):
             resolved_lock_file = lock_file,
             repo_map = repo_remote_files,
             backend_configs = backend_configs_json,
+            legacy_naming = create_tag.legacy_naming,
         )
 
     if bazel_features.external_deps.extension_metadata_has_reproducible:

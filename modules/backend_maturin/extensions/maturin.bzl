@@ -32,7 +32,7 @@ def _cargo_lock_repo_impl(rctx):
         if info.get("sdist"):
             lines.append('    sdist = "%s",' % info["sdist"])
         else:
-            lines.append('    sdist = "@%s//_sdist:%s",' % (repo_name, pkg_name))
+            lines.append('    sdist = "@%s//%s:sdist",' % (repo_name, pkg_name))
         if info.get("cargo_lock"):
             # Convert label string to workspace-relative path for the output attr.
             cargo_lock_label = info["cargo_lock"]
@@ -107,7 +107,7 @@ maturin = module_extension(
 
                 # Maturin-specific typed attrs:
                 "sdist": attr.label(
-                    doc = "Label to the sdist target (e.g. @uv//_sdist:pkg). Used to resolve repository visibility in the generated _cargo repo.",
+                    doc = "Label to the sdist target (e.g. @uv//pkg:sdist). Used to resolve repository visibility in the generated _cargo repo.",
                 ),
                 "cargo_lock": attr.label(
                     doc = "A Cargo.lock file to use. If not provided, the sdist's own Cargo.lock is used.",
