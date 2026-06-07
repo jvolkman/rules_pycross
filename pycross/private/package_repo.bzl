@@ -12,16 +12,19 @@ The file structure is as follows:
 - <package>/v<ver>/BUILD.bazel - Actual pycross_wheel_library and file aliases.
 
 From a target perspective:
-- //:package             - Alias to //package:package.
+- //package              - Alias to //package:package (the library target).
 - //package:pkg          - The pycross_wheel_library target (pinned version).
 - //package:whl          - The wheel file (pinned version).
 - //package:sdist        - The sdist file (pinned version, if available).
 - //package:dist_info    - The dist-info files (for py_console_script_binary compat).
 - //package:[extra]      - Extra dependency group (pinned version).
+- //_wheel:package       - Pinned wheel file.
+- //_wheel:package@ver   - Specific version wheel file.
+- //_sdist:package       - Pinned sdist file.
+- //_sdist:package@ver   - Specific version sdist file.
 
-When `legacy_naming = True`, the following additional directories are generated:
-- _wheel/BUILD.bazel     - Aliases: :package -> //package:whl, :package@ver -> //package/vN:whl
-- _sdist/BUILD.bazel     - Aliases: :package -> //package:sdist, :package@ver -> //package/vN:sdist
+When `legacy_naming = True`, the following additional targets are generated:
+- //:package             - Root alias to //package:package (v1 pattern).
 
 The idea is that, for a repo named "pypi", something will depend on e.g. `@pypi//:numpy` or `@pypi//numpy:pkg`.
 
@@ -93,6 +96,7 @@ def _pin_build(pkg_name, pkg_key, package, sdist_file = None):
         ")",
         "",
     ]
+
     if sdist_file:
         lines.extend([
             "alias(",
@@ -126,40 +130,25 @@ def _package_repo_impl(rctx):
     for path, build_content in build_files.items():
         rctx.file(path, build_content)
 
-    # 2. Write the root BUILD.bazel with the user-facing pin aliases.
+    # 2. Write the root BUILD.bazel.
     root_build_lines = [
         'package(default_visibility = ["//visibility:public"])',
         "",
         'exports_files(["defs.bzl", "requirements.bzl"])',
         "",
     ]
-    for pin, pin_target in sorted(pins.items()):
-        package = lock["packages"][pin_target]
-        root_build_lines.extend([
-            "alias(",
-            '    name = "{}",'.format(pin),
-            '    actual = "//{}:{}",'.format(pin, pin),
-            ")",
-            "",
-            "alias(",
-            '    name = "{}_pkg",'.format(pin),
-            '    actual = "//{}:pkg",'.format(pin),
-            ")",
-            "",
-            "alias(",
-            '    name = "{}_whl",'.format(pin),
-            '    actual = "//{}:whl",'.format(pin),
-            ")",
-            "",
-        ])
-        if package.get("sdist_file"):
+
+    # Legacy naming: add //:package root aliases (v1 pattern).
+    if rctx.attr.legacy_naming:
+        for pin, pin_target in sorted(pins.items()):
             root_build_lines.extend([
                 "alias(",
-                '    name = "{}_sdist",'.format(pin),
-                '    actual = "//{}:sdist",'.format(pin),
+                '    name = "{}",'.format(pin),
+                '    actual = "//{}:{}",'.format(pin, pin),
                 ")",
                 "",
             ])
+
     rctx.file("BUILD.bazel", "\n".join(root_build_lines))
 
     # 4. Write package BUILD subdirectories containing aliases for wheel/sdist
@@ -168,71 +157,70 @@ def _package_repo_impl(rctx):
         sdist_file = package.get("sdist_file")
         rctx.file(paths.join(pin, "BUILD.bazel"), _pin_build(pin, pin_target, package, sdist_file))
 
-    # 5. Legacy naming: _wheel/ and _sdist/ directories
-    if rctx.attr.legacy_naming:
-        wheel_lines = [
-            'package(default_visibility = ["//visibility:public"])',
+    # 5. _wheel/ and _sdist/ directories for versioned artifact access
+    wheel_lines = [
+        'package(default_visibility = ["//visibility:public"])',
+        "",
+    ]
+    sdist_lines = [
+        'package(default_visibility = ["//visibility:public"])',
+        "",
+    ]
+
+    for pkg_key in sorted(packages.keys()):
+        pkg_name = pkg_key.split("@")[0]
+        pkg_version = pkg_key.split("@")[1]
+
+        # Normalize name
+        norm_name = pkg_name.replace("_", "-").replace(".", "-").lower()
+        for _i in range(len(norm_name)):
+            if "--" in norm_name:
+                norm_name = norm_name.replace("--", "-")
+            else:
+                break
+
+        # Versioned alias: _wheel:name@version -> //name/vN:whl
+        wheel_lines.extend([
+            "alias(",
+            '    name = "{}@{}",'.format(norm_name, pkg_version),
+            '    actual = "//{}/v{}:whl",'.format(norm_name, pkg_version),
+            ")",
             "",
-        ]
-        sdist_lines = [
-            'package(default_visibility = ["//visibility:public"])',
-            "",
-        ]
+        ])
 
-        for pkg_key in sorted(packages.keys()):
-            pkg_name = pkg_key.split("@")[0]
-            pkg_version = pkg_key.split("@")[1]
-
-            # Normalize name
-            norm_name = pkg_name.replace("_", "-").replace(".", "-").lower()
-            for _i in range(len(norm_name)):
-                if "--" in norm_name:
-                    norm_name = norm_name.replace("--", "-")
-                else:
-                    break
-
-            # Versioned alias: _wheel:name@version -> //name/vN:whl
-            wheel_lines.extend([
+        sdist_file = packages[pkg_key].get("sdist_file")
+        if sdist_file:
+            sdist_lines.extend([
                 "alias(",
                 '    name = "{}@{}",'.format(norm_name, pkg_version),
-                '    actual = "//{}/v{}:whl",'.format(norm_name, pkg_version),
+                '    actual = "//{}/v{}:sdist",'.format(norm_name, pkg_version),
                 ")",
                 "",
             ])
 
-            sdist_file = packages[pkg_key].get("sdist_file")
-            if sdist_file:
-                sdist_lines.extend([
-                    "alias(",
-                    '    name = "{}@{}",'.format(norm_name, pkg_version),
-                    '    actual = "//{}/v{}:sdist",'.format(norm_name, pkg_version),
-                    ")",
-                    "",
-                ])
+    # Unversioned pin aliases: _wheel:name -> //name:whl
+    for pin in sorted(pins.keys()):
+        wheel_lines.extend([
+            "alias(",
+            '    name = "{}",'.format(pin),
+            '    actual = "//{}:whl",'.format(pin),
+            ")",
+            "",
+        ])
 
-        # Unversioned pin aliases: _wheel:name -> //name:whl
-        for pin in sorted(pins.keys()):
-            wheel_lines.extend([
+        pin_target = pins[pin]
+        sdist_file = packages[pin_target].get("sdist_file")
+        if sdist_file:
+            sdist_lines.extend([
                 "alias(",
                 '    name = "{}",'.format(pin),
-                '    actual = "//{}:whl",'.format(pin),
+                '    actual = "//{}:sdist",'.format(pin),
                 ")",
                 "",
             ])
 
-            pin_target = pins[pin]
-            sdist_file = packages[pin_target].get("sdist_file")
-            if sdist_file:
-                sdist_lines.extend([
-                    "alias(",
-                    '    name = "{}",'.format(pin),
-                    '    actual = "//{}:sdist",'.format(pin),
-                    ")",
-                    "",
-                ])
-
-        rctx.file("_wheel/BUILD.bazel", "\n".join(wheel_lines) + "\n")
-        rctx.file("_sdist/BUILD.bazel", "\n".join(sdist_lines) + "\n")
+    rctx.file("_wheel/BUILD.bazel", "\n".join(wheel_lines) + "\n")
+    rctx.file("_sdist/BUILD.bazel", "\n".join(sdist_lines) + "\n")
 
     # 6. Write _backend/ directory
     #
