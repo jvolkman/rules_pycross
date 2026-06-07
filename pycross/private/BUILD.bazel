@@ -215,6 +215,15 @@ write_file(
 )
 
 bzl_library(
+    name = "pylock_lock_model",
+    srcs = ["pylock_lock_model.bzl"],
+    deps = [
+        ":internal_repo",
+        ":lock_attrs",
+    ],
+)
+
+bzl_library(
     name = "providers",
     srcs = ["providers.bzl"],
 )

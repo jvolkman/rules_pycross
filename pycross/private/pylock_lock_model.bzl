@@ -5,7 +5,7 @@ load(":lock_attrs.bzl", "PYLOCK_IMPORT_ATTRS")
 
 TRANSLATOR_TOOL = Label("//pycross/private/tools:pylock_translator.py")
 
-def _handle_args(attrs, project_file, lock_file, output):
+def _handle_args(project_file, lock_file, output):
     args = []
     if project_file:
         args.extend(["--project-file", project_file])
@@ -18,12 +18,11 @@ def _pycross_pylock_lock_model_impl(ctx):
     out = ctx.actions.declare_file(ctx.attr.name + ".json")
 
     args = ctx.actions.args().use_param_file("--flagfile=%s")
-    
+
     project_file_path = ctx.file.project_file.path if getattr(ctx.file, "project_file", None) else None
-    
+
     args.add_all(
         _handle_args(
-            ctx.attr,
             project_file_path,
             ctx.file.lock_file.path,
             out.path,
@@ -58,7 +57,7 @@ pycross_pylock_lock_model = rule(
     } | PYLOCK_IMPORT_ATTRS,
 )
 
-def lock_repo_model_pylock(*, lock_file, project_file = None, **kwargs):
+def lock_repo_model_pylock(*, lock_file, project_file = None, **_kwargs):
     return json.encode(dict(
         model_type = "pylock",
         lock_file = str(lock_file),
@@ -79,7 +78,6 @@ def repo_create_pylock_model(rctx, project_file, lock_file, lock_model, output):
     project_file_path = str(rctx.path(project_file)) if project_file else None
 
     args = _handle_args(
-        lock_model,
         project_file_path,
         str(rctx.path(lock_file)),
         output,

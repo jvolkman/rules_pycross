@@ -320,4 +320,3 @@ PYLOCK_IMPORT_ATTRS = dict(
         doc = "Install all dev dependencies (ignored by pylock).",
     ),
 )
-

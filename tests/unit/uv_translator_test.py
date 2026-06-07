@@ -445,17 +445,15 @@ resolution-markers = ["python_full_version >= '3.10'"]
         pkg_a = result.packages[PackageKey.from_parts("a", "1.0")]
         self.assertEqual(str(pkg_a.python_versions), ">=3.10")
 
-
-
     def test_uv_0_9_5(self):
-        project = '''
+        project = """
 [project]
 name = "my-app"
 version = "0.1.0"
 requires-python = ">=3.9"
 dependencies = ["requests"]
-'''
-        lock = '''version = 1
+"""
+        lock = """version = 1
 revision = 3
 requires-python = ">=3.9"
 resolution-markers = [
@@ -673,7 +671,7 @@ sdist = { url = "https://files.pythonhosted.org/packages/53/0c/06f8b233b8fd13b9e
 wheels = [
     { url = "https://files.pythonhosted.org/packages/7f/3e/5db95bcf282c52709639744ca2a8b149baccf648e39c8cc87553df9eae0c/urllib3-2.7.0-py3-none-any.whl", hash = "sha256:9fb4c81ebbb1ce9531cce37674bbc6f1360472bc18ca9a553ede278ef7276897", size = 131087, upload-time = "2026-05-07T16:13:17.151Z" },
 ]
-'''
+"""
         result = run_translator(project, lock)
         self.assertIn(PackageKey.from_parts("requests", "2.34.2"), result.packages)
         self.assertIn(PackageKey.from_parts("requests", "2.32.5"), result.packages)

@@ -8,7 +8,7 @@ load("//pycross/private:pylock_lock_model.bzl", "lock_repo_model_pylock")
 load("//pycross/private:resolved_lock_repo.bzl", "resolved_lock_repo")
 load("//pycross/private:uv_lock_model.bzl", "lock_repo_model_uv")
 load(":lock_hub_repo.bzl", "lock_hub_repo")
-load(":tag_attrs.bzl", "COMMON_ATTRS", "COMMON_IMPORT_ATTRS", "PACKAGE_ATTRS", "PDM_IMPORT_ATTRS", "POETRY_IMPORT_ATTRS", "UV_IMPORT_ATTRS", "PYLOCK_IMPORT_ATTRS")
+load(":tag_attrs.bzl", "COMMON_ATTRS", "COMMON_IMPORT_ATTRS", "PACKAGE_ATTRS", "PDM_IMPORT_ATTRS", "POETRY_IMPORT_ATTRS", "PYLOCK_IMPORT_ATTRS", "UV_IMPORT_ATTRS")
 
 def _generate_resolved_lock_repo(lock_info, serialized_lock_model):
     repo_name = lock_info.repo_name

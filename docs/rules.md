@@ -201,7 +201,8 @@ configuration (e.g., Meson cross files).
 load("@rules_pycross//pycross:defs.bzl", "pycross_wheel_library")
 
 pycross_wheel_library(<a href="#pycross_wheel_library-name">name</a>, <a href="#pycross_wheel_library-deps">deps</a>, <a href="#pycross_wheel_library-enable_implicit_namespace_pkgs">enable_implicit_namespace_pkgs</a>, <a href="#pycross_wheel_library-install_exclude_globs">install_exclude_globs</a>,
-                      <a href="#pycross_wheel_library-package_name">package_name</a>, <a href="#pycross_wheel_library-package_version">package_version</a>, <a href="#pycross_wheel_library-post_install_patches">post_install_patches</a>, <a href="#pycross_wheel_library-python_version">python_version</a>, <a href="#pycross_wheel_library-wheel">wheel</a>)
+                      <a href="#pycross_wheel_library-package_name">package_name</a>, <a href="#pycross_wheel_library-package_version">package_version</a>, <a href="#pycross_wheel_library-post_install_patches">post_install_patches</a>, <a href="#pycross_wheel_library-python_version">python_version</a>,
+                      <a href="#pycross_wheel_library-top_level_packages">top_level_packages</a>, <a href="#pycross_wheel_library-wheel">wheel</a>)
 </pre>
 
 
@@ -219,6 +220,7 @@ pycross_wheel_library(<a href="#pycross_wheel_library-name">name</a>, <a href="#
 | <a id="pycross_wheel_library-package_version"></a>package_version |  The version of the package. Used for providing PycrossPackageInfo.   | String | optional |  `""`  |
 | <a id="pycross_wheel_library-post_install_patches"></a>post_install_patches |  A list of patches to apply after installation.   | <a href="https://bazel.build/concepts/labels">List of labels</a> | optional |  `[]`  |
 | <a id="pycross_wheel_library-python_version"></a>python_version |  The python version required for this wheel ('PY2' or 'PY3')   | String | optional |  `""`  |
+| <a id="pycross_wheel_library-top_level_packages"></a>top_level_packages |  The list of top-level Python packages provided by this wheel.   | List of strings | optional |  `[]`  |
 | <a id="pycross_wheel_library-wheel"></a>wheel |  The wheel file.   | <a href="https://bazel.build/concepts/labels">Label</a> | required |  |
 
 

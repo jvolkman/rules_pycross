@@ -16,7 +16,6 @@ from packaging.utils import parse_wheel_filename
 from packaging.version import Version
 from poetry.core.constraints.version import Version as PoetryVersion
 from poetry.core.constraints.version import parse_constraint
-from poetry.core.version import markers
 from pycross.private.tools.args import FlagFileArgumentParser
 from pycross.private.tools.lock_model import PackageDependency
 from pycross.private.tools.lock_model import PackageFile
@@ -39,8 +38,6 @@ class PoetryDependency:
     @property
     def constraint(self):
         return parse_constraint(self.spec)
-
-
 
     def matches(self, other: "PoetryPackage") -> bool:
         if package_canonical_name(self.name) != package_canonical_name(other.name):

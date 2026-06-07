@@ -63,7 +63,7 @@ def _requirements_bzl(rctx, pins):
 
 def _pin_build(pkg_name, pkg_key, package, sdist_file = None):
     _, package_version = pkg_key.split("@", 1)
-    
+
     lines = [
         'package(default_visibility = ["//visibility:public"])',
         "",

@@ -1,22 +1,20 @@
 import tomllib
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from packaging.specifiers import SpecifierSet
 from packaging.version import Version
-
 from pycross.private.tools.args import FlagFileArgumentParser
-from pycross.private.tools.lock_model import (
-    PackageDependency,
-    PackageFile,
-    PackageKey,
-    RawLockSet,
-    RawPackage,
-    package_canonical_name,
-)
+from pycross.private.tools.lock_model import PackageDependency
+from pycross.private.tools.lock_model import PackageFile
+from pycross.private.tools.lock_model import RawLockSet
+from pycross.private.tools.lock_model import RawPackage
+from pycross.private.tools.lock_model import package_canonical_name
+
 
 class LockfileIncompatibleException(Exception):
     pass
+
 
 def parse_flags() -> Any:
     parser = FlagFileArgumentParser(description="Generate pycross dependency json file from pylock.toml.")
@@ -69,20 +67,18 @@ def translate(lock_file: Path) -> RawLockSet:
     for pkg in packages_list:
         name = package_canonical_name(pkg["name"])
         version = pkg["version"]
-        
+
         dependencies = []
         for dep in pkg.get("dependencies", []):
             dep_name = package_canonical_name(dep["name"])
             dep_version = versions.get(dep_name)
             if not dep_version:
-                continue # Skip if missing from lock file
-                
-            dependencies.append(PackageDependency(
-                name=dep_name,
-                version=Version(dep_version),
-                marker=str(dep.get("marker", ""))
-            ))
-            
+                continue  # Skip if missing from lock file
+
+            dependencies.append(
+                PackageDependency(name=dep_name, version=Version(dep_version), marker=str(dep.get("marker", "")))
+            )
+
         files = []
         for wheel in pkg.get("wheels", pkg.get("wheel", [])):
             if not isinstance(wheel, dict):
@@ -99,7 +95,7 @@ def translate(lock_file: Path) -> RawLockSet:
                 hashes = wheel.get("hashes", {})
                 hash_val = hashes.get("sha256", "")
             files.append(PackageFile(name=filename, sha256=hash_val, urls=urls))
-            
+
         sdist_list = pkg.get("sdists", pkg.get("sdist", []))
         if isinstance(sdist_list, dict):
             sdist_list = [sdist_list]
@@ -130,18 +126,20 @@ def translate(lock_file: Path) -> RawLockSet:
         )
         lock_packages[raw_package.key] = raw_package
         pins[name] = raw_package.key
-        
+
     return RawLockSet(
         python_versions=requires_python,
         packages=lock_packages,
         pins=pins,
     )
 
+
 def main(args: Any) -> None:
     output = args.output
     lock_set = translate(args.lock_file)
     with open(output, "w") as f:
         f.write(lock_set.to_json(indent=2))
+
 
 if __name__ == "__main__":
     main(parse_flags())

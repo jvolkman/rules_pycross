@@ -95,10 +95,13 @@ class GenerationContext:
         self, package: RawPackage, ignore_dependency_names: Set[str]
     ) -> tuple[Dict[Optional[str], Set[PackageKey]], Dict[str, Dict[Optional[str], Set[PackageKey]]]]:
         import re
+
         EXTRA_PATTERN = re.compile(r"extra\s*==\s*['\"]([^'\"]+)['\"]")
 
         base_env_deps = {target.name: set() for target in self.target_environments}
-        extra_env_deps: Dict[str, Dict[str, Set[PackageKey]]] = defaultdict(lambda: {target.name: set() for target in self.target_environments})
+        extra_env_deps: Dict[str, Dict[str, Set[PackageKey]]] = defaultdict(
+            lambda: {target.name: set() for target in self.target_environments}
+        )
 
         ordered_deps = sorted(package.dependencies, key=operator.attrgetter("version"), reverse=True)
         if ignore_dependency_names:
@@ -245,8 +248,9 @@ class PackageResolver:
         )
         self._common_deps = deps_by_env.get(None, set())
         self._env_deps = {k: v for k, v in deps_by_env.items() if k is not None}
-        
+
         from pycross.private.tools.lock_model import ExtraDependencies
+
         self._extra_dependencies = {}
         for extra, edeps in extra_deps_by_env.items():
             common = sorted(edeps.get(None, set()))

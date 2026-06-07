@@ -34,24 +34,29 @@ def _find_top_level_packages_sdist(sdist_path: Path) -> list[str]:
         with tarfile.open(sdist_path) as t:
             for member in t.getmembers():
                 if member.isdir():
-                    parts = member.name.split('/')
-                    if len(parts) == 2 and parts[1] and parts[0] != parts[1] and parts[1] not in ('src', 'tests', 'docs'):
-                        if parts[0].endswith('.egg-info') or parts[1].endswith('.egg-info'):
+                    parts = member.name.split("/")
+                    if (
+                        len(parts) == 2
+                        and parts[1]
+                        and parts[0] != parts[1]
+                        and parts[1] not in ("src", "tests", "docs")
+                    ):
+                        if parts[0].endswith(".egg-info") or parts[1].endswith(".egg-info"):
                             continue
-                        if parts[0] == 'src' and len(parts) == 2:
+                        if parts[0] == "src" and len(parts) == 2:
                             packages.add(parts[1])
-                        elif len(parts) == 2 and '-' in parts[0]:
+                        elif len(parts) == 2 and "-" in parts[0]:
                             packages.add(parts[1])
     elif sdist_path.name.endswith(".zip"):
         with zipfile.ZipFile(sdist_path) as z:
             for name in z.namelist():
-                parts = name.strip('/').split('/')
-                if len(parts) == 2 and parts[1] and parts[0] != parts[1] and parts[1] not in ('src', 'tests', 'docs'):
-                    if parts[0].endswith('.egg-info') or parts[1].endswith('.egg-info'):
+                parts = name.strip("/").split("/")
+                if len(parts) == 2 and parts[1] and parts[0] != parts[1] and parts[1] not in ("src", "tests", "docs"):
+                    if parts[0].endswith(".egg-info") or parts[1].endswith(".egg-info"):
                         continue
-                    if parts[0] == 'src' and len(parts) == 2:
+                    if parts[0] == "src" and len(parts) == 2:
                         packages.add(parts[1])
-                    elif len(parts) == 2 and '-' in parts[0]:
+                    elif len(parts) == 2 and "-" in parts[0]:
                         packages.add(parts[1])
     return sorted(list(packages))
 
@@ -60,8 +65,8 @@ def _find_top_level_packages_wheel(wheel_path: Path) -> list[str]:
     packages = set()
     with zipfile.ZipFile(wheel_path) as z:
         for name in z.namelist():
-            parts = name.split('/')
-            if len(parts) >= 2 and not parts[0].endswith('.dist-info') and not parts[0].endswith('.data'):
+            parts = name.split("/")
+            if len(parts) >= 2 and not parts[0].endswith(".dist-info") and not parts[0].endswith(".data"):
                 packages.add(parts[0])
     return sorted(list(packages))
 
