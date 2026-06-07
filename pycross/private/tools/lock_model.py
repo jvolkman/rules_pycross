@@ -221,11 +221,18 @@ class RawPackage:
 
 
 @dataclass
+class ExtraDependencies:
+    common_dependencies: List[PackageKey] = field(default_factory=list)
+    environment_dependencies: Dict[str, List[PackageKey]] = field(default_factory=dict)
+
+
+@dataclass
 class ResolvedPackage:
     key: PackageKey
     build_dependencies: List[PackageKey] = field(default_factory=list)
     common_dependencies: List[PackageKey] = field(default_factory=list)
     environment_dependencies: Dict[str, List[PackageKey]] = field(default_factory=dict)
+    extra_dependencies: Dict[str, ExtraDependencies] = field(default_factory=dict)
     build_target: Optional[str] = None
     environment_files: Dict[str, FileReference] = field(default_factory=dict)
     sdist_file: Optional[FileReference] = None

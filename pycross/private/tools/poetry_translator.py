@@ -40,10 +40,7 @@ class PoetryDependency:
     def constraint(self):
         return parse_constraint(self.spec)
 
-    @property
-    def marker_without_extra(self) -> Optional[str]:
-        parsed = markers.parse_marker(self.marker)
-        return str(parsed.without_extras())
+
 
     def matches(self, other: "PoetryPackage") -> bool:
         if package_canonical_name(self.name) != package_canonical_name(other.name):
@@ -234,7 +231,7 @@ def translate(
                     resolved = PackageDependency(
                         name=dep_pkg.name,
                         version=dep_pkg.pypa_version,
-                        marker=dep.marker_without_extra or "",
+                        marker=str(dep.marker or ""),
                     )
                     package.resolved_dependencies.append(resolved)
                     break

@@ -73,12 +73,14 @@ class GenerationContext:
         local_wheels: Dict[str, str],
         remote_wheels: Dict[str, PackageFile],
         always_include_sdist: bool,
+        lock_package_keys: Optional[AbstractSet[PackageKey]] = None,
     ):
         self.target_environments = target_environments
         self.local_wheels = local_wheels
         self.remote_wheels = remote_wheels
         self.target_environments_by_name = {tenv.name: tenv for tenv in target_environments}
         self.always_include_sdist = always_include_sdist
+        self.lock_package_keys = lock_package_keys
 
     def check_package_compatibility(self, package: RawPackage) -> None:
         """Sanity check to make sure the requires_python attribute on each package matches our environments."""
@@ -91,47 +93,60 @@ class GenerationContext:
 
     def get_dependencies_by_environment(
         self, package: RawPackage, ignore_dependency_names: Set[str]
-    ) -> Dict[Optional[str], Set[PackageKey]]:
-        env_deps = {target.name: set() for target in self.target_environments}
-        # We sort deps by version in descending order. In case the list of dependencies
-        # has multiple entries for the same name that match an environment, we prefer the
-        # latest version.
+    ) -> tuple[Dict[Optional[str], Set[PackageKey]], Dict[str, Dict[Optional[str], Set[PackageKey]]]]:
+        import re
+        EXTRA_PATTERN = re.compile(r"extra\s*==\s*['\"]([^'\"]+)['\"]")
+
+        base_env_deps = {target.name: set() for target in self.target_environments}
+        extra_env_deps: Dict[str, Dict[str, Set[PackageKey]]] = defaultdict(lambda: {target.name: set() for target in self.target_environments})
+
         ordered_deps = sorted(package.dependencies, key=operator.attrgetter("version"), reverse=True)
-        # Filter out dependencies that we've been told to ignore
         if ignore_dependency_names:
             ordered_deps = [d for d in ordered_deps if d.name not in ignore_dependency_names]
 
         for target in self.target_environments:
-            added_for_target = set()
-            for dep in ordered_deps:
-                # Only add each dependency once per target.
-                if dep.name in added_for_target:
-                    continue
-                # If the dependency has no marker, just add it for each environment.
-                if not dep.marker:
-                    env_deps[target.name].add(dep.key)
-                    added_for_target.add(dep.name)
+            added_base_for_target = set()
+            added_extra_for_target = defaultdict(set)
 
-                # Otherwise, only add dependencies whose markers evaluate to the current target.
+            for dep in ordered_deps:
+                if self.lock_package_keys is not None and dep.key not in self.lock_package_keys:
+                    continue
+
+                if not dep.marker:
+                    if dep.name not in added_base_for_target:
+                        base_env_deps[target.name].add(dep.key)
+                        added_base_for_target.add(dep.name)
                 else:
                     marker = Marker(dep.marker)
-                    if marker.evaluate(target.markers):
-                        env_deps[target.name].add(dep.key)
-                        added_for_target.add(dep.name)
+                    # Evaluate for base (extra="")
+                    target_markers_base = dict(target.markers)
+                    target_markers_base["extra"] = ""
+                    if marker.evaluate(target_markers_base) and dep.name not in added_base_for_target:
+                        base_env_deps[target.name].add(dep.key)
+                        added_base_for_target.add(dep.name)
 
-        if env_deps:
-            # Pull out deps common to all environments
-            common_deps = set.intersection(*env_deps.values())
-            env_deps_deduped = {}
-            for env, deps in env_deps.items():
+                    # Evaluate for any extras mentioned in the marker
+                    extras_mentioned = set(EXTRA_PATTERN.findall(dep.marker))
+                    for extra in extras_mentioned:
+                        target_markers_extra = dict(target.markers)
+                        target_markers_extra["extra"] = extra
+                        if marker.evaluate(target_markers_extra) and dep.name not in added_extra_for_target[extra]:
+                            extra_env_deps[extra][target.name].add(dep.key)
+                            added_extra_for_target[extra].add(dep.name)
+
+        def _dedup_env_deps(edeps: Dict[str, Set[PackageKey]]) -> Dict[Optional[str], Set[PackageKey]]:
+            if not edeps:
+                return {}
+            common_deps = set.intersection(*edeps.values()) if edeps else set()
+            edeps_deduped = {}
+            for env, deps in edeps.items():
                 deps = deps - common_deps
                 if deps:
-                    env_deps_deduped[env] = deps
+                    edeps_deduped[env] = deps
+            edeps_deduped[None] = common_deps
+            return edeps_deduped
 
-            env_deps_deduped[None] = common_deps
-            return env_deps_deduped
-
-        return {}
+        return _dedup_env_deps(base_env_deps), {extra: _dedup_env_deps(deps) for extra, deps in extra_env_deps.items()}
 
     def get_package_sources_by_environment(
         self, package: RawPackage, source_only: bool = False
@@ -224,12 +239,22 @@ class PackageResolver:
         self._site_hooks = annotations.site_hooks
         self._build_backend = annotations.build_backend
 
-        deps_by_env = context.get_dependencies_by_environment(
+        deps_by_env, extra_deps_by_env = context.get_dependencies_by_environment(
             package,
             annotations.ignore_dependencies,
         )
         self._common_deps = deps_by_env.get(None, set())
         self._env_deps = {k: v for k, v in deps_by_env.items() if k is not None}
+        
+        from pycross.private.tools.lock_model import ExtraDependencies
+        self._extra_dependencies = {}
+        for extra, edeps in extra_deps_by_env.items():
+            common = sorted(edeps.get(None, set()))
+            envs = {env: sorted(deps) for env, deps in edeps.items() if env is not None}
+            self._extra_dependencies[extra] = ExtraDependencies(
+                common_dependencies=common,
+                environment_dependencies=envs,
+            )
 
         self._package_sources_by_env = context.get_package_sources_by_environment(
             package,
@@ -264,6 +289,10 @@ class PackageResolver:
         keys = set(self._common_deps)
         for env_deps in self._env_deps.values():
             keys |= env_deps
+        for extra_deps in self._extra_dependencies.values():
+            keys |= set(extra_deps.common_dependencies)
+            for env_deps in extra_deps.environment_dependencies.values():
+                keys |= set(env_deps)
         keys |= set(self._build_deps)
         return keys
 
@@ -273,6 +302,7 @@ class PackageResolver:
             build_dependencies=sorted(self._build_deps),
             common_dependencies=sorted(self._common_deps),
             environment_dependencies={env: sorted(deps) for env, deps in sorted(self._env_deps.items())},
+            extra_dependencies=self._extra_dependencies,
             environment_files={env: ps.file_reference for env, ps in sorted(self._package_sources_by_env.items())},
             build_target=self._build_target,
             sdist_file=self.sdist_file,
@@ -437,6 +467,7 @@ def resolve(args: Any) -> ResolvedLockSet:
         local_wheels=local_wheels,
         remote_wheels=remote_wheels,
         always_include_sdist=args.always_include_sdist,
+        lock_package_keys=set(lock_model.packages.keys()),
     )
 
     # Collect package "annotations"

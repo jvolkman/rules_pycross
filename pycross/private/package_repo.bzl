@@ -61,7 +61,7 @@ def _requirements_bzl(rctx, pins):
 
     return "\n".join(lines) + "\n"
 
-def _pin_build(pkg_name, pkg_key, sdist_file = None):
+def _pin_build(pkg_name, pkg_key, package, sdist_file = None):
     _, package_version = pkg_key.split("@", 1)
     
     lines = [
@@ -88,6 +88,14 @@ def _pin_build(pkg_name, pkg_key, sdist_file = None):
             "alias(",
             '    name = "sdist",',
             '    actual = "//{}/v{}:sdist",'.format(pkg_name, package_version),
+            ")",
+            "",
+        ])
+    for extra_name in sorted(package.get("extra_dependencies", {}).keys()):
+        lines.extend([
+            "alias(",
+            '    name = "[{}]",'.format(extra_name),
+            '    actual = "//{}/v{}:[{}]",'.format(pkg_name, package_version, extra_name),
             ")",
             "",
         ])
@@ -144,7 +152,7 @@ def _package_repo_impl(rctx):
     for pin, pin_target in sorted(pins.items()):
         package = lock["packages"][pin_target]
         sdist_file = package.get("sdist_file")
-        rctx.file(paths.join(pin, "BUILD.bazel"), _pin_build(pin, pin_target, sdist_file))
+        rctx.file(paths.join(pin, "BUILD.bazel"), _pin_build(pin, pin_target, package, sdist_file))
 
     # 5. Write _backend/ directory
     #

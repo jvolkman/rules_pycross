@@ -351,8 +351,17 @@ def collect_and_process_packages(packages_list: list[Dict[str, Any]]) -> Dict[Pa
         package_extras = lock_pkg.get("extras", [])
 
         optional_deps = []
-        for dep in lock_pkg.get("optional-dependencies", {}).values():
-            optional_deps.extend(dep)
+        for extra_name, deps in lock_pkg.get("optional-dependencies", {}).items():
+            for dep in deps:
+                dep_copy = dict(dep)
+                existing_marker = dep_copy.get("marker")
+                extra_marker = f"extra == '{extra_name}'"
+                if existing_marker:
+                    dep_copy["marker"] = f"({existing_marker}) and {extra_marker}"
+                else:
+                    dep_copy["marker"] = extra_marker
+                optional_deps.append(dep_copy)
+                
         dependencies = set()
         for dep in lock_pkg.get("dependencies", []) + optional_deps:
             name = dep.get("name")

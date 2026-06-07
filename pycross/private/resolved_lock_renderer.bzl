@@ -102,6 +102,9 @@ def render_lock_bzl(lock, repo_map, rctx_name):
         lines.append("")
         lines.append('load("@rules_pycross//pycross:defs.bzl", "pycross_wheel_library")')
         lines.append("")
+        if pkg.get("extra_dependencies"):
+            lines.append('load("@rules_python//python:defs.bzl", "py_library")')
+            lines.append("")
 
         has_runtime_deps = bool(pkg.get("common_dependencies") or pkg.get("environment_dependencies"))
 
@@ -226,6 +229,50 @@ def render_lock_bzl(lock, repo_map, rctx_name):
         lines.append(")")
         lines.append("")
         
+        # Extras
+        for extra_name, extra_deps in sorted(pkg.get("extra_dependencies", {}).items()):
+            deps_name = "_deps_{}".format(extra_name.replace("-", "_").replace(".", "_"))
+            lines.append("{} = [".format(deps_name))
+            lines.append('    ":{}",'.format(target_name_pkg))
+            for dep_key in sorted(extra_deps.get("common_dependencies", [])):
+                dep_parts = dep_key.split("@", 1)
+                dep_pkg = dep_parts[0]
+                dep_ver = dep_parts[1]
+                dep_norm = dep_pkg.replace("_", "-").replace(".", "-").lower()
+                for _i in range(len(dep_norm)):
+                    if "--" in dep_norm:
+                        dep_norm = dep_norm.replace("--", "-")
+                    else:
+                        break
+                lines.append('    "//{}/v{}:pkg",'.format(dep_norm, dep_ver))
+            lines.append("]")
+            
+            if extra_deps.get("environment_dependencies"):
+                lines[-1] = lines[-1] + " + select({"
+                for env_name, env_deps in sorted(extra_deps.get("environment_dependencies").items()):
+                    lines.append('    "//_env:{}": ['.format(env_name))
+                    for dep_key in sorted(env_deps):
+                        dep_parts = dep_key.split("@", 1)
+                        dep_pkg = dep_parts[0]
+                        dep_ver = dep_parts[1]
+                        dep_norm = dep_pkg.replace("_", "-").replace(".", "-").lower()
+                        for _i in range(len(dep_norm)):
+                            if "--" in dep_norm:
+                                dep_norm = dep_norm.replace("--", "-")
+                            else:
+                                break
+                        lines.append('        "//{}/v{}:pkg",'.format(dep_norm, dep_ver))
+                    lines.append("    ],")
+                lines.append('    "//conditions:default": [],')
+                lines.append("})")
+            lines.append("")
+            
+            lines.append("py_library(")
+            lines.append('    name = "[{}]",'.format(extra_name))
+            lines.append('    deps = {},'.format(deps_name))
+            lines.append(")")
+            lines.append("")
+
         # Finally, the package alias
         if norm_package_name != target_name_pkg:
             lines.append("alias(")

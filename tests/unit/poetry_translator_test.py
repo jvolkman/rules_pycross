@@ -202,7 +202,7 @@ files = [{ file = "b-2.0-py3-none-any.whl", hash = "sha256:b" }]
         self.assertEqual(len(pkg_a.dependencies), 1)
         dep_b = pkg_a.dependencies[0]
         self.assertEqual(dep_b.name, "b")
-        self.assertEqual(dep_b.marker, "")
+        self.assertEqual(dep_b.marker, "extra == 'testing'")
 
 
 if __name__ == "__main__":
