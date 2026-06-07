@@ -202,6 +202,12 @@ def render_lock_bzl(lock, repo_map, rctx_name):
         lines.append('    wheel = ":{}",'.format(target_name_whl))
         
 
+        if pkg.get("top_level_packages"):
+            lines.append("    top_level_packages = [")
+            for tlp in pkg["top_level_packages"]:
+                lines.append('        "{}",'.format(tlp))
+            lines.append("    ],")
+
         if has_runtime_deps:
             lines.append("    deps = {},".format(deps_name))
 

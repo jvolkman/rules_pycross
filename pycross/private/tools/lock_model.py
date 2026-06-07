@@ -234,6 +234,7 @@ class ResolvedPackage:
     pre_build_patches: List[str] = field(default_factory=list)
     site_hooks: List[str] = field(default_factory=list)
     build_backend: Optional[str] = None
+    top_level_packages: List[str] = field(default_factory=list)
 
 
 @dataclass(frozen=True)

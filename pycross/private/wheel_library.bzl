@@ -81,8 +81,13 @@ def _pycross_wheel_library_impl(ctx):
         "site-packages",  # we put lib files in this subdirectory.
     )
 
+    direct_imports = [imp]
+    if ctx.attr.top_level_packages:
+        for tlp in ctx.attr.top_level_packages:
+            direct_imports.append(paths.join(imp, tlp))
+
     imports = depset(
-        direct = [imp],
+        direct = direct_imports,
         transitive = [d[PyInfo].imports for d in ctx.attr.deps],
     )
     transitive_sources = depset(
@@ -157,6 +162,9 @@ This option is required to support some packages which cannot handle the convers
         ),
         "package_version": attr.string(
             doc = "The version of the package. Used for providing PycrossPackageInfo.",
+        ),
+        "top_level_packages": attr.string_list(
+            doc = "The list of top-level Python packages provided by this wheel.",
         ),
         "_tool": attr.label(
             default = Label("//pycross/private/tools:wheel_installer"),

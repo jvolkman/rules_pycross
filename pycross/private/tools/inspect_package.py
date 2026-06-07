@@ -28,6 +28,44 @@ def _get_archive_file_content(archive_path: Path, target_filename: str) -> str:
     return ""
 
 
+def _find_top_level_packages_sdist(sdist_path: Path) -> list[str]:
+    packages = set()
+    if sdist_path.name.endswith((".tar.gz", ".tgz", ".tar.bz2", ".tar")):
+        with tarfile.open(sdist_path) as t:
+            for member in t.getmembers():
+                if member.isdir():
+                    parts = member.name.split('/')
+                    if len(parts) == 2 and parts[1] and parts[0] != parts[1] and parts[1] not in ('src', 'tests', 'docs'):
+                        if parts[0].endswith('.egg-info') or parts[1].endswith('.egg-info'):
+                            continue
+                        if parts[0] == 'src' and len(parts) == 2:
+                            packages.add(parts[1])
+                        elif len(parts) == 2 and '-' in parts[0]:
+                            packages.add(parts[1])
+    elif sdist_path.name.endswith(".zip"):
+        with zipfile.ZipFile(sdist_path) as z:
+            for name in z.namelist():
+                parts = name.strip('/').split('/')
+                if len(parts) == 2 and parts[1] and parts[0] != parts[1] and parts[1] not in ('src', 'tests', 'docs'):
+                    if parts[0].endswith('.egg-info') or parts[1].endswith('.egg-info'):
+                        continue
+                    if parts[0] == 'src' and len(parts) == 2:
+                        packages.add(parts[1])
+                    elif len(parts) == 2 and '-' in parts[0]:
+                        packages.add(parts[1])
+    return sorted(list(packages))
+
+
+def _find_top_level_packages_wheel(wheel_path: Path) -> list[str]:
+    packages = set()
+    with zipfile.ZipFile(wheel_path) as z:
+        for name in z.namelist():
+            parts = name.split('/')
+            if len(parts) >= 2 and not parts[0].endswith('.dist-info') and not parts[0].endswith('.data'):
+                packages.add(parts[0])
+    return sorted(list(packages))
+
+
 def inspect_sdist(sdist_path: Path) -> dict:
     content = _get_archive_file_content(sdist_path, "pyproject.toml")
     if content:
@@ -39,6 +77,7 @@ def inspect_sdist(sdist_path: Path) -> dict:
     return {
         "build_backend": build_system.get("build-backend", PEP517_DEFAULT_BACKEND),
         "build_requires": build_system.get("requires", PEP517_DEFAULT_REQUIRES),
+        "top_level_packages": _find_top_level_packages_sdist(sdist_path),
     }
 
 
@@ -53,6 +92,7 @@ def inspect_wheel(wheel_path: Path) -> dict:
 
     return {
         "console_scripts": scripts,
+        "top_level_packages": _find_top_level_packages_wheel(wheel_path),
     }
 
 
