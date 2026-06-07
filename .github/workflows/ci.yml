@@ -12,12 +12,12 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  # Stage 1: Fast gate (~2 min)
+  # Stage 1: Fast gate
   unit:
     name: Unit + Analysis + Golden
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: Configure BuildBuddy
         run: |
           echo "build:remote --remote_header=x-buildbuddy-api-key=${{ secrets.BUILDBUDDY_API_KEY }}" > .bazelrc.user
@@ -28,7 +28,7 @@ jobs:
             test --config=remote \
             -- //pycross/... //docs/... //tests/... -//tests/e2e/...
 
-  # Stage 2: E2E integration tests (~5 min)
+  # Stage 2: E2E integration tests
   e2e:
     name: E2E - ${{ matrix.workspace }} (Bazel ${{ matrix.bazel }})
     needs: [unit]
@@ -46,8 +46,8 @@ jobs:
           - tests/e2e/bzlmod_flags
           - tests/e2e/sdist_repo
     steps:
-      - uses: actions/checkout@v4
-      - uses: bazel-contrib/setup-bazel@0.8.0
+      - uses: actions/checkout@v6
+      - uses: bazel-contrib/setup-bazel@0.19.0
         with:
           bazelrc: |
             common --announce_rc
@@ -62,7 +62,7 @@ jobs:
         working-directory: ${{ matrix.workspace }}
         run: bazel test --config=remote //...
 
-  # Stage 3: Cross-platform builds (~10 min)
+  # Stage 3: Cross-platform builds
   cross-build:
     name: Build - ${{ matrix.workspace }} on ${{ matrix.host }}
     needs: [unit]
@@ -73,7 +73,7 @@ jobs:
         host: [ubuntu, macos]
         workspace: [build_meson, build_setuptools, build_maturin, build_pure_python, build_cmake]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: Enable unprivileged user namespaces
         if: matrix.host == 'ubuntu'
         run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
@@ -82,7 +82,7 @@ jobs:
           echo "build:remote --remote_header=x-buildbuddy-api-key=${{ secrets.BUILDBUDDY_API_KEY }}" > tests/e2e/${{ matrix.workspace }}/.bazelrc.user
       - name: Build all wheels
         run: cd tests/e2e/${{ matrix.workspace }} && bazel build --config=remote //:all_wheels
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v6
         with:
           name: wheels-${{ matrix.host }}-${{ matrix.workspace }}
           path: tests/e2e/${{ matrix.workspace }}/bazel-bin/all_wheels/
@@ -98,14 +98,14 @@ jobs:
         builder: [ubuntu, macos]
         runner: [ubuntu, macos]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: Enable unprivileged user namespaces
         if: matrix.runner == 'ubuntu'
         run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.14"
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v6
         with:
           pattern: wheels-${{ matrix.builder }}-*
           path: ${{ runner.temp }}/artifacts
@@ -143,16 +143,16 @@ jobs:
     runs-on: ubuntu-latest
     continue-on-error: true
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.14"
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v6
         with:
           pattern: wheels-ubuntu-*
           path: ${{ runner.temp }}/linux-wheels
           merge-multiple: true
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v6
         with:
           pattern: wheels-macos-*
           path: ${{ runner.temp }}/macos-wheels
