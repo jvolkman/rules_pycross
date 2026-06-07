@@ -5,6 +5,17 @@ from pycross.private.tools.pylock_translator import LockfileIncompatibleExceptio
 from pycross.private.tools.pylock_translator import translate
 
 
+class MockArgs:
+    def __init__(self, lock_file):
+        self.lock_file = lock_file
+        self.project_file = None
+        self.default = True
+        self.optional_group = []
+        self.all_optional_groups = False
+        self.development_group = []
+        self.all_development_groups = False
+
+
 class PylockTranslatorTest(unittest.TestCase):
     def test_minimal_lock(self):
         lock = """
@@ -29,7 +40,7 @@ wheels = [
         with open("test_pylock.toml", "w") as f:
             f.write(lock)
 
-        result = translate("test_pylock.toml")
+        result = translate(MockArgs("test_pylock.toml"))
         self.assertEqual(len(result.packages), 2)
         req_key = PackageKey.from_parts("requests", "2.31.0")
         pkg = result.packages[req_key]
@@ -42,7 +53,7 @@ wheels = [
         with open("test_pylock_v2.toml", "w") as f:
             f.write(lock)
         with self.assertRaises(LockfileIncompatibleException):
-            translate("test_pylock_v2.toml")
+            translate(MockArgs("test_pylock_v2.toml"))
 
     def test_dependencies(self):
         lock = """
@@ -69,7 +80,7 @@ wheels = [{ file = "b-2.0-py3-none-any.whl", hash = "sha256:b" }]
         with open("test_pylock_deps.toml", "w") as f:
             f.write(lock)
 
-        result = translate("test_pylock_deps.toml")
+        result = translate(MockArgs("test_pylock_deps.toml"))
         self.assertEqual(len(result.packages), 3)
         key_a = PackageKey.from_parts("a", "1.0")
         pkg_a = result.packages[key_a]
@@ -101,7 +112,7 @@ wheels = [{ file = "b-2.0-py3-none-any.whl", hash = "sha256:b" }]
         with open("test_pylock_plat.toml", "w") as f:
             f.write(lock)
 
-        result = translate("test_pylock_plat.toml")
+        result = translate(MockArgs("test_pylock_plat.toml"))
         key_a = PackageKey.from_parts("a", "1.0")
         pkg_a = result.packages[key_a]
         dep_b = pkg_a.dependencies[0]
@@ -126,7 +137,7 @@ wheels = [{ file = "a-1.0-py3-none-any.whl", url = "https://example.com/a-1.0-py
         with open("test_pylock_urls.toml", "w") as f:
             f.write(lock)
 
-        result = translate("test_pylock_urls.toml")
+        result = translate(MockArgs("test_pylock_urls.toml"))
         pkg = result.packages[PackageKey.from_parts("a", "1.0")]
         self.assertEqual(pkg.files[0].urls, ("https://example.com/a-1.0-py3-none-any.whl",))
 
@@ -143,7 +154,7 @@ wheels = [{ file = "a-1.0-py3-none-any.whl", hashes = { "sha256" = "deadbeef" } 
         with open("test_pylock_hashes.toml", "w") as f:
             f.write(lock)
 
-        result = translate("test_pylock_hashes.toml")
+        result = translate(MockArgs("test_pylock_hashes.toml"))
         pkg = result.packages[PackageKey.from_parts("a", "1.0")]
         self.assertEqual(pkg.files[0].sha256, "deadbeef")
 

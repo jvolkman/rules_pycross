@@ -5,12 +5,29 @@ load(":lock_attrs.bzl", "PYLOCK_IMPORT_ATTRS")
 
 TRANSLATOR_TOOL = Label("//pycross/private/tools:pylock_translator.py")
 
-def _handle_args(project_file, lock_file, output):
+def _handle_args(lock_model, project_file, lock_file, output):
     args = []
     if project_file:
         args.extend(["--project-file", project_file])
     args.extend(["--lock-file", lock_file])
     args.extend(["--output", output])
+
+    if lock_model.default:
+        args.append("--default")
+    else:
+        args.append("--no-default")
+
+    if lock_model.all_optional_groups:
+        args.append("--all-optional-groups")
+    else:
+        for group in lock_model.optional_groups:
+            args.extend(["--optional-group", group])
+
+    if getattr(lock_model, "all_development_groups", False):
+        args.append("--all-development-groups")
+    else:
+        for group in getattr(lock_model, "development_groups", []):
+            args.extend(["--development-group", group])
 
     return args
 
@@ -23,6 +40,7 @@ def _pycross_pylock_lock_model_impl(ctx):
 
     args.add_all(
         _handle_args(
+            ctx.attr,
             project_file_path,
             ctx.file.lock_file.path,
             out.path,
@@ -57,27 +75,33 @@ pycross_pylock_lock_model = rule(
     } | PYLOCK_IMPORT_ATTRS,
 )
 
-def lock_repo_model_pylock(*, lock_file, project_file = None, **_kwargs):
+def lock_repo_model_pylock(*, project_file = None, lock_file, default = True, optional_groups = [], all_optional_groups = False, development_groups = [], all_development_groups = False, **_kwargs):
     return json.encode(dict(
         model_type = "pylock",
-        lock_file = str(lock_file),
         project_file = str(project_file) if project_file else None,
+        lock_file = str(lock_file),
+        default = default,
+        optional_groups = optional_groups,
+        all_optional_groups = all_optional_groups,
+        development_groups = development_groups,
+        all_development_groups = all_development_groups,
     ))
 
-def repo_create_pylock_model(rctx, project_file, lock_file, _lock_model, output):
+def repo_create_pylock_model(rctx, project_file, lock_file, lock_model, output):
     """Run the pylock translator.
 
     Args:
         rctx: The repository_ctx or module_ctx object.
         project_file: The pyproject.toml file (optional).
         lock_file: The lock file.
-        _lock_model: a struct containing the same attrs as the pycross_pylock_lock_model rule.
+        lock_model: a struct containing the same attrs as the pycross_pylock_lock_model rule.
         output: the output file.
     """
 
     project_file_path = str(rctx.path(project_file)) if project_file else None
 
     args = _handle_args(
+        lock_model,
         project_file_path,
         str(rctx.path(lock_file)),
         output,

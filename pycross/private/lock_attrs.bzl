@@ -303,23 +303,23 @@ PYLOCK_IMPORT_ATTRS = dict(
         mandatory = True,
     ),
     project_file = attr.label(
-        doc = "Optional pyproject.toml file (ignored by pylock).",
+        doc = "Optional pyproject.toml file.",
         allow_single_file = True,
     ),
     default = attr.bool(
-        doc = "Whether to install dependencies from the default group (ignored by pylock).",
+        doc = "Whether to install dependencies from the default group.",
         default = True,
     ),
     optional_groups = attr.string_list(
-        doc = "List of optional dependency groups to install (ignored by pylock).",
+        doc = "List of optional dependency groups to install.",
     ),
     all_optional_groups = attr.bool(
-        doc = "Install all optional dependencies (ignored by pylock).",
+        doc = "Install all optional dependencies.",
     ),
     development_groups = attr.string_list(
-        doc = "List of development dependency groups to install (ignored by pylock).",
+        doc = "List of development dependency groups to install.",
     ),
     all_development_groups = attr.bool(
-        doc = "Install all dev dependencies (ignored by pylock).",
+        doc = "Install all dev dependencies.",
     ),
 )

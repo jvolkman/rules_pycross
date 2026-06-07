@@ -113,17 +113,17 @@ Import a pylock.toml lock file.
 
 | Name  | Description | Type | Mandatory | Default |
 | :------------- | :------------- | :------------- | :------------- | :------------- |
-| <a id="lock_import.import_pylock-all_development_groups"></a>all_development_groups |  Install all dev dependencies (ignored by pylock).   | Boolean | optional |  `False`  |
-| <a id="lock_import.import_pylock-all_optional_groups"></a>all_optional_groups |  Install all optional dependencies (ignored by pylock).   | Boolean | optional |  `False`  |
-| <a id="lock_import.import_pylock-default"></a>default |  Whether to install dependencies from the default group (ignored by pylock).   | Boolean | optional |  `True`  |
+| <a id="lock_import.import_pylock-all_development_groups"></a>all_development_groups |  Install all dev dependencies.   | Boolean | optional |  `False`  |
+| <a id="lock_import.import_pylock-all_optional_groups"></a>all_optional_groups |  Install all optional dependencies.   | Boolean | optional |  `False`  |
+| <a id="lock_import.import_pylock-default"></a>default |  Whether to install dependencies from the default group.   | Boolean | optional |  `True`  |
 | <a id="lock_import.import_pylock-default_alias_single_version"></a>default_alias_single_version |  Generate aliases for all packages that have a single version in the lock file.   | Boolean | optional |  `False`  |
 | <a id="lock_import.import_pylock-default_build_dependencies"></a>default_build_dependencies |  A list of package keys (name or name@version) that will be used as default build dependencies.   | List of strings | optional |  `[]`  |
-| <a id="lock_import.import_pylock-development_groups"></a>development_groups |  List of development dependency groups to install (ignored by pylock).   | List of strings | optional |  `[]`  |
+| <a id="lock_import.import_pylock-development_groups"></a>development_groups |  List of development dependency groups to install.   | List of strings | optional |  `[]`  |
 | <a id="lock_import.import_pylock-disallow_builds"></a>disallow_builds |  If True, only pre-built wheels are allowed.   | Boolean | optional |  `False`  |
 | <a id="lock_import.import_pylock-local_wheels"></a>local_wheels |  A list of local .whl files to consider when processing lock files.   | <a href="https://bazel.build/concepts/labels">List of labels</a> | optional |  `[]`  |
 | <a id="lock_import.import_pylock-lock_file"></a>lock_file |  The pylock.toml file.   | <a href="https://bazel.build/concepts/labels">Label</a> | required |  |
-| <a id="lock_import.import_pylock-optional_groups"></a>optional_groups |  List of optional dependency groups to install (ignored by pylock).   | List of strings | optional |  `[]`  |
-| <a id="lock_import.import_pylock-project_file"></a>project_file |  Optional pyproject.toml file (ignored by pylock).   | <a href="https://bazel.build/concepts/labels">Label</a> | optional |  `None`  |
+| <a id="lock_import.import_pylock-optional_groups"></a>optional_groups |  List of optional dependency groups to install.   | List of strings | optional |  `[]`  |
+| <a id="lock_import.import_pylock-project_file"></a>project_file |  Optional pyproject.toml file.   | <a href="https://bazel.build/concepts/labels">Label</a> | optional |  `None`  |
 | <a id="lock_import.import_pylock-repo"></a>repo |  The repository name   | String | required |  |
 | <a id="lock_import.import_pylock-target_environments"></a>target_environments |  A list of target environment descriptors.   | <a href="https://bazel.build/concepts/labels">List of labels</a> | optional |  `["@@rules_pycross++environments+pycross_environments//:environments"]`  |
 
