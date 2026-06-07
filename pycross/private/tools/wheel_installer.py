@@ -128,6 +128,20 @@ def main(args: Any) -> None:
     setup_namespace_pkg_compatibility(lib_dir)
     apply_patches(lib_dir, args.patches)
 
+    # Extract entry_points.txt for rules_python compatibility.
+    if args.entry_points_output:
+        entry_points_output = Path(args.entry_points_output)
+        entry_points_output.parent.mkdir(parents=True, exist_ok=True)
+        found = False
+        for dist_info_dir in lib_dir.glob("*.dist-info"):
+            ep_file = dist_info_dir / "entry_points.txt"
+            if ep_file.exists():
+                shutil.copy2(ep_file, entry_points_output)
+                found = True
+                break
+        if not found:
+            entry_points_output.touch()
+
 
 def parse_flags() -> Any:
     parser = FlagFileArgumentParser(description="Extract a Python wheel.")
@@ -166,6 +180,13 @@ def parse_flags() -> Any:
         dest="patches",
         default=[],
         help="A list of patches to apply after installation.",
+    )
+
+    parser.add_argument(
+        "--entry-points-output",
+        type=Path,
+        required=False,
+        help="Path to write the entry_points.txt file for rules_python compatibility.",
     )
 
     parser.add_argument(

@@ -16,6 +16,7 @@ From a target perspective:
 - //package:pkg          - The pycross_wheel_library target (pinned version).
 - //package:whl          - The wheel file (pinned version).
 - //package:sdist        - The sdist file (pinned version, if available).
+- //package:dist_info    - The dist-info files (for py_console_script_binary compat).
 - //package:[extra]      - Extra dependency group (pinned version).
 
 When `legacy_naming = True`, the following additional directories are generated:
@@ -84,6 +85,11 @@ def _pin_build(pkg_name, pkg_key, package, sdist_file = None):
         "alias(",
         '    name = "whl",',
         '    actual = "//{}/v{}:whl",'.format(pkg_name, package_version),
+        ")",
+        "",
+        "alias(",
+        '    name = "dist_info",',
+        '    actual = "//{}/v{}:dist_info",'.format(pkg_name, package_version),
         ")",
         "",
     ]

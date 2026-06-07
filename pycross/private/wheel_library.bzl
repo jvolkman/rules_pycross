@@ -11,6 +11,7 @@ load(
 
 def _pycross_wheel_library_impl(ctx):
     out = ctx.actions.declare_directory(ctx.attr.name)
+    entry_points = ctx.actions.declare_file(ctx.attr.name + ".dist_info/entry_points.txt")
 
     wheel_target = ctx.attr.wheel
     if PycrossWheelInfo in wheel_target:
@@ -42,13 +43,15 @@ def _pycross_wheel_library_impl(ctx):
     for install_exclude_glob in ctx.attr.install_exclude_globs:
         args.add("--install-exclude-glob", install_exclude_glob)
 
+    args.add("--entry-points-output", entry_points)
+
     for patch in ctx.files.post_install_patches:
         inputs.append(patch)
         args.add("--patch", patch)
 
     ctx.actions.run(
         inputs = inputs,
-        outputs = [out],
+        outputs = [out, entry_points],
         executable = ctx.executable._tool,
         arguments = [args],
         # Set environment variables to make generated .pyc files reproducible.
@@ -112,6 +115,9 @@ def _pycross_wheel_library_impl(ctx):
         ),
         PycrossExtractedWheelInfo(
             site_packages = out,
+        ),
+        OutputGroupInfo(
+            dist_info = depset([entry_points]),
         ),
     ]
 

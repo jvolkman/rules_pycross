@@ -1,6 +1,7 @@
 "Public build rule API re-exports"
 
 load("//pycross/private:console_script.bzl", _pycross_console_script_binary = "pycross_console_script_binary")
+load("//pycross/private:dist_info.bzl", _pycross_dist_info = "pycross_dist_info")
 load("//pycross/private:lock_attrs.bzl", _package_annotation = "package_annotation")
 load("//pycross/private:pdm_lock_model.bzl", _pycross_pdm_lock_model = "pycross_pdm_lock_model")
 load("//pycross/private:poetry_lock_model.bzl", _pycross_poetry_lock_model = "pycross_poetry_lock_model")
@@ -24,6 +25,7 @@ pycross_poetry_lock_model = _pycross_poetry_lock_model
 pycross_target_environment = _pycross_target_environment
 pycross_uv_lock_model = _pycross_uv_lock_model
 pycross_console_script_binary = _pycross_console_script_binary
+pycross_dist_info = _pycross_dist_info
 
 pycross_wheel_headers = _pycross_wheel_headers
 pycross_wheel_library = _pycross_wheel_library

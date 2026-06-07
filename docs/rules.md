@@ -26,6 +26,31 @@ pycross_cc_pkg_config(<a href="#pycross_cc_pkg_config-name">name</a>, <a href="#
 | <a id="pycross_cc_pkg_config-version"></a>version |  The version of the pkg-config package   | String | required |  |
 
 
+<a id="pycross_dist_info"></a>
+
+## pycross_dist_info
+
+<pre>
+load("@rules_pycross//pycross:defs.bzl", "pycross_dist_info")
+
+pycross_dist_info(<a href="#pycross_dist_info-name">name</a>, <a href="#pycross_dist_info-pkg">pkg</a>)
+</pre>
+
+Exposes the dist-info files (entry_points.txt) from a pycross_wheel_library target.
+
+This rule forwards the dist_info output group from a pycross_wheel_library
+target as DefaultInfo, making it compatible with rules_python's
+py_console_script_binary which expects a :dist_info filegroup.
+
+**ATTRIBUTES**
+
+
+| Name  | Description | Type | Mandatory | Default |
+| :------------- | :------------- | :------------- | :------------- | :------------- |
+| <a id="pycross_dist_info-name"></a>name |  A unique name for this target.   | <a href="https://bazel.build/concepts/labels#target-names">Name</a> | required |  |
+| <a id="pycross_dist_info-pkg"></a>pkg |  A pycross_wheel_library target.   | <a href="https://bazel.build/concepts/labels">Label</a> | required |  |
+
+
 <a id="pycross_pdm_lock_model"></a>
 
 ## pycross_pdm_lock_model
