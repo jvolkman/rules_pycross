@@ -242,6 +242,7 @@ class ResolvedPackage:
     site_hooks: List[str] = field(default_factory=list)
     build_backend: Optional[str] = None
     top_level_packages: List[str] = field(default_factory=list)
+    cycle_group: Optional[str] = None
 
 
 @dataclass(frozen=True)
@@ -276,6 +277,7 @@ class ResolvedLockSet:
     packages: Dict[PackageKey, ResolvedPackage] = field(default_factory=dict)
     pins: Dict[NormalizedName, PackageKey] = field(default_factory=dict)
     remote_files: Dict[FileKey, PackageFile] = field(default_factory=dict)
+    cycle_groups: Dict[str, List[PackageKey]] = field(default_factory=dict)
 
     @property
     def __dict__(self) -> Dict[str, Any]:

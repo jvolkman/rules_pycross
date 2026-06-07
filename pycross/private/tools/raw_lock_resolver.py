@@ -283,6 +283,17 @@ class PackageResolver:
         self.package_sources = frozenset(used_package_sources)
 
     @cached_property
+    def runtime_dependency_keys(self) -> Set[PackageKey]:
+        keys = set(self._common_deps)
+        for env_deps in self._env_deps.values():
+            keys |= env_deps
+        for extra_deps in self._extra_dependencies.values():
+            keys |= set(extra_deps.common_dependencies)
+            for env_deps in extra_deps.environment_dependencies.values():
+                keys |= set(env_deps)
+        return keys
+
+    @cached_property
     def all_dependency_keys(self) -> Set[PackageKey]:
         """Returns all package keys (name-version) that this target depends on,
         including platform-specific and build dependencies."""
@@ -541,14 +552,66 @@ def resolve(args: Any) -> ResolvedLockSet:
                 continue
             pins[package_pin_name] = packages[0]
 
+    graph = {pkg_key: list(resolver.runtime_dependency_keys) for pkg_key, resolver in packages_by_package_key.items()}
+
+    index = 0
+    stack = []
+    indices = {}
+    lowlink = {}
+    on_stack = set()
+    sccs = []
+
+    def strongconnect(v):
+        nonlocal index
+        indices[v] = index
+        lowlink[v] = index
+        index += 1
+        stack.append(v)
+        on_stack.add(v)
+
+        for w in graph.get(v, []):
+            if w not in indices:
+                strongconnect(w)
+                lowlink[v] = min(lowlink[v], lowlink[w])
+            elif w in on_stack:
+                lowlink[v] = min(lowlink[v], indices[w])
+
+        if lowlink[v] == indices[v]:
+            scc = []
+            while True:
+                w = stack.pop()
+                on_stack.remove(w)
+                scc.append(w)
+                if w == v:
+                    break
+            sccs.append(scc)
+
+    for v in graph:
+        if v not in indices:
+            strongconnect(v)
+
+    cycle_groups_list = [sorted(scc) for scc in sccs if len(scc) > 1]
+    cycle_groups_list.sort(key=lambda x: str(x[0]))
+
+    cycle_groups = {}
+    for i, scc in enumerate(cycle_groups_list, 1):
+        group_name = f"cycle_group_{i}"
+        cycle_groups[group_name] = scc
+
     resolved_environments = {env.target_environment.name: env.to_environment_reference() for env in environment_pairs}
     resolved_packages = {pkg.key: pkg.to_resolved_package() for pkg in resolved_packages}
+
+    for group_name, scc in cycle_groups.items():
+        for pkg_key in scc:
+            if pkg_key in resolved_packages:
+                resolved_packages[pkg_key].cycle_group = group_name
 
     return ResolvedLockSet(
         environments=resolved_environments,
         packages=resolved_packages,
         pins=pins,
         remote_files=repos,
+        cycle_groups=cycle_groups,
     )
 
 
