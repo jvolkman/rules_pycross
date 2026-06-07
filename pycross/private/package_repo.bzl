@@ -124,6 +124,7 @@ def _package_repo_impl(rctx):
         "",
     ]
     for pin, pin_target in sorted(pins.items()):
+        package = lock["packages"][pin_target]
         root_build_lines.extend([
             "alias(",
             '    name = "{}",'.format(pin),
@@ -140,12 +141,15 @@ def _package_repo_impl(rctx):
             '    actual = "//{}:whl",'.format(pin),
             ")",
             "",
-            "alias(",
-            '    name = "{}_sdist",'.format(pin),
-            '    actual = "//{}:sdist",'.format(pin),
-            ")",
-            "",
         ])
+        if package.get("sdist_file"):
+            root_build_lines.extend([
+                "alias(",
+                '    name = "{}_sdist",'.format(pin),
+                '    actual = "//{}:sdist",'.format(pin),
+                ")",
+                "",
+            ])
     rctx.file("BUILD.bazel", "\n".join(root_build_lines))
 
     # 4. Write package BUILD subdirectories containing aliases for wheel/sdist

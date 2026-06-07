@@ -29,36 +29,68 @@ def _get_archive_file_content(archive_path: Path, target_filename: str) -> str:
 
 
 def _find_top_level_packages_sdist(sdist_path: Path) -> list[str]:
+    """Find top-level Python packages in an sdist archive.
+
+    Looks for directories containing __init__.py at depth 2 (root/pkg/__init__.py)
+    or depth 3 for src-layout (root/src/pkg/__init__.py).
+    """
+    _EXCLUDED_DIRS = frozenset({
+        "bin", "benchmarks", "docs", "examples", "scripts",
+        "src", "test", "tests", "testing", "tools",
+    })
+
     packages = set()
+    init_files = set()
+
     if sdist_path.name.endswith((".tar.gz", ".tgz", ".tar.bz2", ".tar")):
         with tarfile.open(sdist_path) as t:
+            # First pass: collect all __init__.py locations
             for member in t.getmembers():
-                if member.isdir():
-                    parts = member.name.split("/")
-                    if (
-                        len(parts) == 2
-                        and parts[1]
-                        and parts[0] != parts[1]
-                        and parts[1] not in ("src", "tests", "docs")
-                    ):
-                        if parts[0].endswith(".egg-info") or parts[1].endswith(".egg-info"):
-                            continue
-                        if parts[0] == "src" and len(parts) == 2:
-                            packages.add(parts[1])
-                        elif len(parts) == 2 and "-" in parts[0]:
-                            packages.add(parts[1])
+                if member.isfile() and member.name.endswith("/__init__.py"):
+                    init_files.add(member.name)
+
+            for member in t.getmembers():
+                if not member.isdir():
+                    continue
+                parts = member.name.split("/")
+                if len(parts) < 2 or not parts[-1]:
+                    continue
+                if parts[-1].endswith(".egg-info"):
+                    continue
+
+                # src-layout: root/src/pkg/__init__.py
+                if len(parts) == 3 and parts[1] == "src":
+                    init_path = member.name + "/__init__.py"
+                    if init_path in init_files:
+                        packages.add(parts[2])
+                # standard layout: root/pkg/__init__.py
+                elif len(parts) == 2 and parts[1] not in _EXCLUDED_DIRS:
+                    init_path = member.name + "/__init__.py"
+                    if init_path in init_files:
+                        packages.add(parts[1])
+
     elif sdist_path.name.endswith(".zip"):
         with zipfile.ZipFile(sdist_path) as z:
-            for name in z.namelist():
-                parts = name.strip("/").split("/")
-                if len(parts) == 2 and parts[1] and parts[0] != parts[1] and parts[1] not in ("src", "tests", "docs"):
-                    if parts[0].endswith(".egg-info") or parts[1].endswith(".egg-info"):
-                        continue
-                    if parts[0] == "src" and len(parts) == 2:
+            names = z.namelist()
+            init_files = {n for n in names if n.endswith("/__init__.py")}
+
+            for name in names:
+                parts = name.rstrip("/").split("/")
+                if not name.endswith("/") or not parts[-1]:
+                    continue
+                if parts[-1].endswith(".egg-info"):
+                    continue
+
+                if len(parts) == 3 and parts[1] == "src":
+                    init_path = name.rstrip("/") + "/__init__.py"
+                    if init_path in init_files:
+                        packages.add(parts[2])
+                elif len(parts) == 2 and parts[1] not in _EXCLUDED_DIRS:
+                    init_path = name.rstrip("/") + "/__init__.py"
+                    if init_path in init_files:
                         packages.add(parts[1])
-                    elif len(parts) == 2 and "-" in parts[0]:
-                        packages.add(parts[1])
-    return sorted(list(packages))
+
+    return sorted(packages)
 
 
 def _find_top_level_packages_wheel(wheel_path: Path) -> list[str]:

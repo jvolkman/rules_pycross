@@ -1,6 +1,7 @@
 import json
 import operator
 import os
+import re
 from argparse import ArgumentParser
 from collections import defaultdict
 from dataclasses import dataclass
@@ -37,6 +38,8 @@ from pycross.private.tools.lock_model import ResolvedPackage
 from pycross.private.tools.lock_model import is_wheel
 from pycross.private.tools.lock_model import package_canonical_name
 from pycross.private.tools.target_environment import TargetEnv
+
+EXTRA_PATTERN = re.compile(r"extra\s*==\s*['\"]([^'\"]+)['\"]")
 
 
 @dataclass(frozen=True)
@@ -94,9 +97,6 @@ class GenerationContext:
     def get_dependencies_by_environment(
         self, package: RawPackage, ignore_dependency_names: Set[str]
     ) -> tuple[Dict[Optional[str], Set[PackageKey]], Dict[str, Dict[Optional[str], Set[PackageKey]]]]:
-        import re
-
-        EXTRA_PATTERN = re.compile(r"extra\s*==\s*['\"]([^'\"]+)['\"]")
 
         base_env_deps = {target.name: set() for target in self.target_environments}
         extra_env_deps: Dict[str, Dict[str, Set[PackageKey]]] = defaultdict(
