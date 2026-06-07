@@ -173,3 +173,22 @@ py_binary(
         ":lock_model",
     ],
 )
+
+py_library(
+    name = "pylock_translator_lib",
+    srcs = ["pylock_translator.py"],
+    deps = [
+        ":args",
+        ":lock_model",
+        "@rules_pycross_internal//deps:packaging",
+    ],
+)
+
+py_binary(
+    name = "pylock_translator",
+    srcs = ["pylock_translator.py"],
+    visibility = ["//visibility:public"],
+    deps = [
+        ":pylock_translator_lib",
+    ],
+)

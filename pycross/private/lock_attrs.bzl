@@ -292,3 +292,32 @@ def package_annotation(
 
 PDM_IMPORT_ATTRS = _IMPORT_ATTRS
 UV_IMPORT_ATTRS = _IMPORT_ATTRS
+
+PYLOCK_IMPORT_ATTRS = dict(
+    lock_file = attr.label(
+        doc = "The pylock.toml file.",
+        allow_single_file = True,
+        mandatory = True,
+    ),
+    project_file = attr.label(
+        doc = "Optional pyproject.toml file (ignored by pylock).",
+        allow_single_file = True,
+    ),
+    default = attr.bool(
+        doc = "Whether to install dependencies from the default group (ignored by pylock).",
+        default = True,
+    ),
+    optional_groups = attr.string_list(
+        doc = "List of optional dependency groups to install (ignored by pylock).",
+    ),
+    all_optional_groups = attr.bool(
+        doc = "Install all optional dependencies (ignored by pylock).",
+    ),
+    development_groups = attr.string_list(
+        doc = "List of development dependency groups to install (ignored by pylock).",
+    ),
+    all_development_groups = attr.bool(
+        doc = "Install all dev dependencies (ignored by pylock).",
+    ),
+)
+

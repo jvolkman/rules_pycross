@@ -4,10 +4,11 @@ load("@bazel_features//:features.bzl", "bazel_features")
 load("//pycross/private:lock_attrs.bzl", "package_annotation")
 load("//pycross/private:pdm_lock_model.bzl", "lock_repo_model_pdm")
 load("//pycross/private:poetry_lock_model.bzl", "lock_repo_model_poetry")
+load("//pycross/private:pylock_lock_model.bzl", "lock_repo_model_pylock")
 load("//pycross/private:resolved_lock_repo.bzl", "resolved_lock_repo")
 load("//pycross/private:uv_lock_model.bzl", "lock_repo_model_uv")
 load(":lock_hub_repo.bzl", "lock_hub_repo")
-load(":tag_attrs.bzl", "COMMON_ATTRS", "COMMON_IMPORT_ATTRS", "PACKAGE_ATTRS", "PDM_IMPORT_ATTRS", "POETRY_IMPORT_ATTRS", "UV_IMPORT_ATTRS")
+load(":tag_attrs.bzl", "COMMON_ATTRS", "COMMON_IMPORT_ATTRS", "PACKAGE_ATTRS", "PDM_IMPORT_ATTRS", "POETRY_IMPORT_ATTRS", "UV_IMPORT_ATTRS", "PYLOCK_IMPORT_ATTRS")
 
 def _generate_resolved_lock_repo(lock_info, serialized_lock_model):
     repo_name = lock_info.repo_name
@@ -121,7 +122,7 @@ def _lock_import_impl(module_ctx):
 
     # A first pass initialize lock structures and make sure none of the repo names are duplicated.
     for module in module_ctx.modules:
-        for tag in module.tags.import_pdm + module.tags.import_poetry + module.tags.import_uv:
+        for tag in module.tags.import_pdm + module.tags.import_poetry + module.tags.import_uv + module.tags.import_pylock:
             _check_unique_lock_repo(lock_owners, module, tag)
             lock_repos[tag.repo] = _lock_struct(module_ctx, tag)
 
@@ -133,6 +134,8 @@ def _lock_import_impl(module_ctx):
             lock_model_structs[tag.repo] = lock_repo_model_poetry(**{attr: getattr(tag, attr) for attr in POETRY_IMPORT_ATTRS})
         for tag in module.tags.import_uv:
             lock_model_structs[tag.repo] = lock_repo_model_uv(**{attr: getattr(tag, attr) for attr in UV_IMPORT_ATTRS})
+        for tag in module.tags.import_pylock:
+            lock_model_structs[tag.repo] = lock_repo_model_pylock(**{attr: getattr(tag, attr) for attr in PYLOCK_IMPORT_ATTRS})
 
     # Add package attributes
     for module in module_ctx.modules:
@@ -169,6 +172,10 @@ _import_uv_tag = tag_class(
     doc = "Import a uv lock file.",
     attrs = UV_IMPORT_ATTRS | COMMON_IMPORT_ATTRS | COMMON_ATTRS,
 )
+_import_pylock_tag = tag_class(
+    doc = "Import a pylock.toml lock file.",
+    attrs = PYLOCK_IMPORT_ATTRS | COMMON_IMPORT_ATTRS | COMMON_ATTRS,
+)
 _package_tag = tag_class(
     doc = "Specify package-specific settings.",
     attrs = PACKAGE_ATTRS | COMMON_ATTRS,
@@ -180,6 +187,7 @@ lock_import = module_extension(
         import_pdm = _import_pdm_tag,
         import_poetry = _import_poetry_tag,
         import_uv = _import_uv_tag,
+        import_pylock = _import_pylock_tag,
         package = _package_tag,
     ),
 )

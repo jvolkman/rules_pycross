@@ -146,3 +146,13 @@ py_test(
         "@rules_pycross_internal//deps:poetry-core",
     ],
 )
+
+py_test(
+    name = "pylock_translator_test",
+    srcs = ["pylock_translator_test.py"],
+    deps = [
+        "//pycross/private/tools:lock_model",
+        "//pycross/private/tools:pylock_translator_lib",
+        "@rules_pycross_internal//deps:packaging",
+    ],
+)
