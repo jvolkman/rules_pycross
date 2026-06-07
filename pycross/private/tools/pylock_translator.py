@@ -1,3 +1,4 @@
+import sys
 import tomllib
 from pathlib import Path
 from typing import Any
@@ -73,7 +74,11 @@ def translate(lock_file: Path) -> RawLockSet:
             dep_name = package_canonical_name(dep["name"])
             dep_version = versions.get(dep_name)
             if not dep_version:
-                continue  # Skip if missing from lock file
+                print(
+                    f"WARNING: dependency '{dep_name}' of '{name}' not found in lockfile, skipping",
+                    file=sys.stderr,
+                )
+                continue
 
             dependencies.append(
                 PackageDependency(name=dep_name, version=Version(dep_version), marker=str(dep.get("marker", "")))

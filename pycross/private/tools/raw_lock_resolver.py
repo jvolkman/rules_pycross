@@ -1,3 +1,4 @@
+import hashlib
 import json
 import operator
 import os
@@ -558,49 +559,66 @@ def resolve(args: Any) -> ResolvedLockSet:
 
     graph = {pkg_key: list(resolver.runtime_dependency_keys) for pkg_key, resolver in packages_by_package_key.items()}
 
-    index = 0
-    stack = []
+    # Iterative Tarjan's SCC to avoid stack overflow on large dependency graphs
+    index_counter = 0
     indices = {}
     lowlink = {}
     on_stack = set()
+    stack = []
     sccs = []
 
-    def strongconnect(v):
-        nonlocal index
-        indices[v] = index
-        lowlink[v] = index
-        index += 1
-        stack.append(v)
-        on_stack.add(v)
+    for root in graph:
+        if root in indices:
+            continue
+        # Each frame: (node, neighbor_iterator, is_initial_visit)
+        work_stack = [(root, iter(graph.get(root, [])), True)]
+        while work_stack:
+            v, neighbors, initial = work_stack[-1]
+            if initial:
+                indices[v] = index_counter
+                lowlink[v] = index_counter
+                index_counter += 1
+                stack.append(v)
+                on_stack.add(v)
+                work_stack[-1] = (v, neighbors, False)
 
-        for w in graph.get(v, []):
-            if w not in indices:
-                strongconnect(w)
-                lowlink[v] = min(lowlink[v], lowlink[w])
-            elif w in on_stack:
-                lowlink[v] = min(lowlink[v], indices[w])
-
-        if lowlink[v] == indices[v]:
-            scc = []
-            while True:
-                w = stack.pop()
-                on_stack.remove(w)
-                scc.append(w)
-                if w == v:
+            recurse = False
+            for w in neighbors:
+                if w not in indices:
+                    work_stack.append((w, iter(graph.get(w, [])), True))
+                    recurse = True
                     break
-            sccs.append(scc)
+                elif w in on_stack:
+                    lowlink[v] = min(lowlink[v], indices[w])
 
-    for v in graph:
-        if v not in indices:
-            strongconnect(v)
+            if recurse:
+                continue
 
-    cycle_groups_list = [sorted(scc) for scc in sccs if len(scc) > 1]
-    cycle_groups_list.sort(key=lambda x: str(x[0]))
+            if lowlink[v] == indices[v]:
+                scc = []
+                while True:
+                    w = stack.pop()
+                    on_stack.remove(w)
+                    scc.append(w)
+                    if w == v:
+                        break
+                sccs.append(scc)
 
+            work_stack.pop()
+            if work_stack:
+                parent = work_stack[-1][0]
+                lowlink[parent] = min(lowlink[parent], lowlink[v])
+
+    # Build cycle groups with content-based stable names
     cycle_groups = {}
-    for i, scc in enumerate(cycle_groups_list, 1):
-        group_name = f"cycle_group_{i}"
-        cycle_groups[group_name] = scc
+    for scc in sccs:
+        if len(scc) <= 1:
+            continue
+        members = sorted(scc)
+        # Short hash of sorted member keys for a stable, compact name
+        digest = hashlib.sha256("\n".join(str(m) for m in members).encode()).hexdigest()[:8]
+        group_name = f"cycle_group_{digest}"
+        cycle_groups[group_name] = members
 
     resolved_environments = {env.target_environment.name: env.to_environment_reference() for env in environment_pairs}
     resolved_packages = {pkg.key: pkg.to_resolved_package() for pkg in resolved_packages}
