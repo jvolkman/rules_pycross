@@ -6,5 +6,5 @@ py_test(
     name = "test_cowsay",
     srcs = ["@rules_pycross_e2e_shared//:test_cowsay.py"],
     main = "test_cowsay.py",
-    deps = ["@uv//cowsay:cowsay"],
+    deps = ["@uv//cowsay:pkg"],
 )

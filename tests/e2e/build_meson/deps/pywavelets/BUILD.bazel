@@ -12,10 +12,10 @@ pycross_console_script_binary(
 meson_build(
     name = "wheel",
     build_deps = [
-        "@uv//meson:meson",
-        "@uv//ninja:ninja",
-        "@uv//cython:cython",
-        "@uv//numpy:numpy",
+        "@uv//meson:pkg",
+        "@uv//ninja:pkg",
+        "@uv//cython:pkg",
+        "@uv//numpy:pkg",
     ],
     meson_properties = {
         "numpy-include-dir": "$(NUMPY_INCLUDE_DIR)",
@@ -26,6 +26,6 @@ meson_build(
     path_tools = [":cython"],
     sdist = "@uv//pywavelets:sdist",
     deps = [
-        "@uv//numpy:numpy",
+        "@uv//numpy:pkg",
     ],
 )

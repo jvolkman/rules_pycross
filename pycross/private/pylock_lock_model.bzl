@@ -64,14 +64,14 @@ def lock_repo_model_pylock(*, lock_file, project_file = None, **_kwargs):
         project_file = str(project_file) if project_file else None,
     ))
 
-def repo_create_pylock_model(rctx, project_file, lock_file, lock_model, output):
+def repo_create_pylock_model(rctx, project_file, lock_file, _lock_model, output):
     """Run the pylock translator.
 
     Args:
         rctx: The repository_ctx or module_ctx object.
         project_file: The pyproject.toml file (optional).
         lock_file: The lock file.
-        lock_model: a struct containing the same attrs as the pycross_pylock_lock_model rule.
+        _lock_model: a struct containing the same attrs as the pycross_pylock_lock_model rule.
         output: the output file.
     """
 

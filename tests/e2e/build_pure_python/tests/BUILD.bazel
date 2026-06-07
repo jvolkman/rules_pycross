@@ -3,17 +3,17 @@ load("@rules_python//python:defs.bzl", "py_test")
 py_test(
     name = "test_tomli",
     srcs = ["test_tomli.py"],
-    deps = ["@uv//tomli:tomli"],
+    deps = ["@uv//tomli:pkg"],
 )
 
 py_test(
     name = "test_filelock",
     srcs = ["test_filelock.py"],
-    deps = ["@uv//filelock:filelock"],
+    deps = ["@uv//filelock:pkg"],
 )
 
 py_test(
     name = "test_pyproject_metadata",
     srcs = ["test_pyproject_metadata.py"],
-    deps = ["@uv//pyproject-metadata:pyproject-metadata"],
+    deps = ["@uv//pyproject-metadata:pkg"],
 )

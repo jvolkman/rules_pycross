@@ -3,15 +3,15 @@ load("@rules_python//python:defs.bzl", "py_test")
 py_test(
     name = "test_numpy",
     srcs = ["test_numpy.py"],
-    deps = ["@uv//numpy:numpy"],
+    deps = ["@uv//numpy:pkg"],
 )
 
 py_test(
     name = "test_pandas",
     srcs = ["test_pandas.py"],
     deps = [
-        "@uv//numpy:numpy",
-        "@uv//pandas:pandas",
+        "@uv//numpy:pkg",
+        "@uv//pandas:pkg",
     ],
 )
 
@@ -19,8 +19,8 @@ py_test(
     name = "test_contourpy",
     srcs = ["test_contourpy.py"],
     deps = [
-        "@uv//contourpy:contourpy",
-        "@uv//numpy:numpy",
+        "@uv//contourpy:pkg",
+        "@uv//numpy:pkg",
     ],
 )
 
@@ -28,7 +28,7 @@ py_test(
     name = "test_pywavelets",
     srcs = ["test_pywavelets.py"],
     deps = [
-        "@uv//numpy:numpy",
-        "@uv//pywavelets:pywavelets",
+        "@uv//numpy:pkg",
+        "@uv//pywavelets:pkg",
     ],
 )

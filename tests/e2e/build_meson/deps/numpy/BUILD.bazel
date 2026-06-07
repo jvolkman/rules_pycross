@@ -20,9 +20,9 @@ pycross_console_script_binary(
 meson_build(
     name = "wheel",
     build_deps = [
-        "@uv//meson:meson",
-        "@uv//ninja:ninja",
-        "@uv//cython:cython",
+        "@uv//meson:pkg",
+        "@uv//ninja:pkg",
+        "@uv//cython:pkg",
     ],
     config_settings = {
         "setup-args": [],
