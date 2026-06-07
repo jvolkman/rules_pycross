@@ -25,13 +25,12 @@ def _test_render_lock_impl(env, target):
         },
     }
     repo_map = {"foo_wheel": "@my_repo//foo:wheel", "foo_wheel_mac": "@my_repo//foo:mac_wheel"}
-    res_dict = render_lock_bzl(lock, repo_map, "my_rctx")
-    res = "\n".join(res_dict.values())
+    res = render_lock_bzl(lock, repo_map, "my_rctx")
 
     env.expect.that_bool("pycross_wheel_library(" in res).equals(True)
-    env.expect.that_bool("name = \"whl\"" in res).equals(True)
-    env.expect.that_bool("actual = select({" in res).equals(True)
-    env.expect.that_bool("\"//_env:linux\": \"@my_repo//foo:wheel\"" in res).equals(True)
+    env.expect.that_bool("_wheel_foo@1.0" in res).equals(True)
+    env.expect.that_bool("select({" in res).equals(True)
+    env.expect.that_bool('":linux": "@my_repo//foo:wheel"' in res).equals(True)
 
 def _test_render_lock(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
@@ -39,7 +38,7 @@ def _test_render_lock(name):
 
 # buildifier: disable=unused-variable
 def _test_cycle_group_rendering_impl(env, target):
-    """Verify cycle groups generate _cycles/BUILD.bazel and cycled packages use pkg_raw naming."""
+    """Verify cycle groups generate cycle py_libraries and cycled packages use _raw naming."""
     lock = {
         "environments": {
             "linux": {
@@ -71,31 +70,27 @@ def _test_cycle_group_rendering_impl(env, target):
         "alpha_wheel": "@repo//alpha:wheel",
         "beta_wheel": "@repo//beta:wheel",
     }
-    res_dict = render_lock_bzl(lock, repo_map, "my_rctx")
+    res = render_lock_bzl(lock, repo_map, "my_rctx")
 
-    # _cycles/BUILD.bazel should exist
-    env.expect.that_bool("_cycles/BUILD.bazel" in res_dict).equals(True)
+    # Should have a py_library named _cycle_cycle_group_abc123
+    env.expect.that_bool('"_cycle_cycle_group_abc123"' in res).equals(True)
 
-    cycles_build = res_dict["_cycles/BUILD.bazel"]
+    # Should reference _raw_ targets for both cycle members
+    env.expect.that_bool('"_raw_alpha_1_0"' in res).equals(True)
+    env.expect.that_bool('"_raw_beta_2_0"' in res).equals(True)
 
-    # Should have a py_library named cycle_group_abc123
-    env.expect.that_bool("name = \"cycle_group_abc123\"" in cycles_build).equals(True)
+    # alpha's pycross_wheel_library should use _raw_ name
+    env.expect.that_bool('"_raw_alpha_1_0"' in res).equals(True)
 
-    # Should reference pkg_raw targets for both cycle members
-    env.expect.that_bool("//alpha/v1.0:pkg_raw" in cycles_build).equals(True)
-    env.expect.that_bool("//beta/v2.0:pkg_raw" in cycles_build).equals(True)
+    # Should have a wrapping py_library named "alpha@1.0" that depends on _raw + cycle group
+    env.expect.that_bool('"alpha@1.0"' in res).equals(True)
+    env.expect.that_bool('"_cycle_cycle_group_abc123"' in res).equals(True)
 
-    # Check alpha's package BUILD — should use pkg_raw for the wheel_library name
-    alpha_build = res_dict.get("alpha/v1.0/BUILD.bazel", "")
-    env.expect.that_bool("name = \"pkg_raw\"" in alpha_build).equals(True)
-
-    # Should have a wrapping py_library named "pkg" that depends on pkg_raw + cycle group
-    env.expect.that_bool("name = \"pkg\"" in alpha_build).equals(True)
-    env.expect.that_bool("//_cycles:cycle_group_abc123" in alpha_build).equals(True)
-
-    # Cycled package deps should exclude same-cycle members from their dep list
-    # alpha depends on beta, but beta is in the same cycle, so it should NOT appear in alpha's deps
-    env.expect.that_bool("//beta/v2.0:pkg" not in alpha_build.split("pycross_wheel_library")[0]).equals(True)
+    # Cycled package deps should exclude same-cycle members
+    # Split at the pycross_wheel_library for alpha to check its deps
+    # alpha depends on beta, but beta is in the same cycle, so beta should NOT appear in alpha's deps list
+    alpha_section = res.split('name = "_raw_alpha_1_0"')[0].rsplit("_alpha_1_0_deps", 1)[-1] if "_alpha_1_0_deps" in res else ""
+    env.expect.that_bool('"beta@2.0"' not in alpha_section).equals(True)
 
 def _test_cycle_group_rendering(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
@@ -151,37 +146,34 @@ def _test_extras_rendering_impl(env, target):
         "black_wheel": "@repo//black:wheel",
         "mypy_wheel": "@repo//mypy:wheel",
     }
-    res_dict = render_lock_bzl(lock, repo_map, "my_rctx")
-
-    mylib_build = res_dict.get("mylib/v1.0/BUILD.bazel", "")
+    res = render_lock_bzl(lock, repo_map, "my_rctx")
 
     # Should have py_library for [test] extra
-    env.expect.that_bool("name = \"[test]\"" in mylib_build).equals(True)
+    env.expect.that_bool('"mylib@1.0[test]"' in res).equals(True)
 
     # [test] deps should include pytest
-    env.expect.that_bool("//pytest/v7.0:pkg" in mylib_build).equals(True)
+    env.expect.that_bool('":pytest@7.0"' in res).equals(True)
 
     # Should have py_library for [dev] extra
-    env.expect.that_bool("name = \"[dev]\"" in mylib_build).equals(True)
+    env.expect.that_bool('"mylib@1.0[dev]"' in res).equals(True)
 
     # [dev] deps should include black (common) and mypy (linux-specific via select)
-    env.expect.that_bool("//black/v23.0:pkg" in mylib_build).equals(True)
-    env.expect.that_bool("//mypy/v1.5:pkg" in mylib_build).equals(True)
+    env.expect.that_bool('":black@23.0"' in res).equals(True)
+    env.expect.that_bool('":mypy@1.5"' in res).equals(True)
 
     # [dev] should use select for env-specific deps
-    # The select should reference _env:linux
-    env.expect.that_bool("select({" in mylib_build).equals(True)
+    env.expect.that_bool("select({" in res).equals(True)
 
     # loads py_library since we have extras
-    env.expect.that_bool("py_library" in mylib_build).equals(True)
+    env.expect.that_bool("py_library" in res).equals(True)
 
 def _test_extras_rendering(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
     analysis_test(name = name, target = name + "_subject", impl = _test_extras_rendering_impl)
 
 # buildifier: disable=unused-variable
-def _test_versioned_paths_impl(env, target):
-    """Verify the renderer produces versioned path keys like pkg/vN/BUILD.bazel."""
+def _test_lock_bzl_format_impl(env, target):
+    """Verify the renderer produces a single lock.bzl string with targets() function."""
     lock = {
         "environments": {},
         "packages": {
@@ -193,24 +185,30 @@ def _test_versioned_paths_impl(env, target):
             },
         },
     }
-    res_dict = render_lock_bzl(lock, {}, "my_rctx")
+    res = render_lock_bzl(lock, {}, "my_rctx")
 
-    # Should have versioned BUILD file paths
-    env.expect.that_bool("numpy/v1.26.4/BUILD.bazel" in res_dict).equals(True)
-    env.expect.that_bool("pandas/v2.1.0/BUILD.bazel" in res_dict).equals(True)
+    # Should be a string, not a dict
+    env.expect.that_bool(type(res) == "string").equals(True)
 
-    # Check package_name and package_version in rendered content
-    numpy_build = res_dict["numpy/v1.26.4/BUILD.bazel"]
-    env.expect.that_bool("package_name = \"numpy\"" in numpy_build).equals(True)
-    env.expect.that_bool("package_version = \"1.26.4\"" in numpy_build).equals(True)
+    # Should have targets() function
+    env.expect.that_bool("def targets():" in res).equals(True)
 
-def _test_versioned_paths(name):
+    # Should have pycross_wheel_library for both packages
+    env.expect.that_bool('package_name = "numpy"' in res).equals(True)
+    env.expect.that_bool('package_version = "1.26.4"' in res).equals(True)
+    env.expect.that_bool('package_name = "pandas"' in res).equals(True)
+    env.expect.that_bool('package_version = "2.1.0"' in res).equals(True)
+
+    # Should have dist_info targets
+    env.expect.that_bool("pycross_dist_info(" in res).equals(True)
+
+def _test_lock_bzl_format(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
-    analysis_test(name = name, target = name + "_subject", impl = _test_versioned_paths_impl)
+    analysis_test(name = name, target = name + "_subject", impl = _test_lock_bzl_format_impl)
 
 # buildifier: disable=unused-variable
-def _test_no_cycles_no_cycles_dir_impl(env, target):
-    """Verify that when there are no cycles, _cycles/BUILD.bazel is not generated."""
+def _test_no_cycles_no_cycle_targets_impl(env, target):
+    """Verify that when there are no cycles, no _cycle_ targets are generated."""
     lock = {
         "environments": {},
         "packages": {
@@ -223,17 +221,16 @@ def _test_no_cycles_no_cycles_dir_impl(env, target):
             },
         },
     }
-    res_dict = render_lock_bzl(lock, {}, "my_rctx")
-    env.expect.that_bool("_cycles/BUILD.bazel" in res_dict).equals(False)
+    res = render_lock_bzl(lock, {}, "my_rctx")
+    env.expect.that_bool("_cycle_" not in res).equals(True)
 
-    # a should use "pkg" not "pkg_raw"
-    a_build = res_dict.get("a/v1.0/BUILD.bazel", "")
-    env.expect.that_bool("name = \"pkg\"" in a_build).equals(True)
-    env.expect.that_bool("pkg_raw" not in a_build).equals(True)
+    # a should use "a@1.0" not "_raw_"
+    env.expect.that_bool('name = "a@1.0"' in res).equals(True)
+    env.expect.that_bool("_raw_" not in res).equals(True)
 
-def _test_no_cycles_no_cycles_dir(name):
+def _test_no_cycles_no_cycle_targets(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
-    analysis_test(name = name, target = name + "_subject", impl = _test_no_cycles_no_cycles_dir_impl)
+    analysis_test(name = name, target = name + "_subject", impl = _test_no_cycles_no_cycle_targets_impl)
 
 def resolved_lock_renderer_test_suite(name):
     test_suite(
@@ -242,7 +239,7 @@ def resolved_lock_renderer_test_suite(name):
             _test_render_lock,
             _test_cycle_group_rendering,
             _test_extras_rendering,
-            _test_versioned_paths,
-            _test_no_cycles_no_cycles_dir,
+            _test_lock_bzl_format,
+            _test_no_cycles_no_cycle_targets,
         ],
     )

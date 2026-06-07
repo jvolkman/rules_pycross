@@ -217,6 +217,12 @@ bzl_library(
     ],
 )
 
+filegroup(
+    name = "no_match_error",
+    target_compatible_with = ["@platforms//:incompatible"],
+    visibility = ["//visibility:public"],
+)
+
 bzl_library(
     name = "dist_info",
     srcs = ["dist_info.bzl"],
