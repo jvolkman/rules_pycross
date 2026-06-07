@@ -5,17 +5,17 @@ package(default_visibility = ["//visibility:public"])
 
 pycross_console_script_binary(
     name = "cython",
-    pkg = "@uv//:cython",
+    pkg = "@uv//cython:cython",
     script = "cython",
 )
 
 meson_build(
     name = "wheel",
     build_deps = [
-        "@uv//:meson",
-        "@uv//:ninja",
-        "@uv//:cython",
-        "@uv//:numpy",
+        "@uv//meson:meson",
+        "@uv//ninja:ninja",
+        "@uv//cython:cython",
+        "@uv//numpy:numpy",
     ],
     meson_properties = {
         "numpy-include-dir": "$(NUMPY_INCLUDE_DIR)",
@@ -26,6 +26,6 @@ meson_build(
     path_tools = [":cython"],
     sdist = "@uv//pywavelets:sdist",
     deps = [
-        "@uv//:numpy",
+        "@uv//numpy:numpy",
     ],
 )

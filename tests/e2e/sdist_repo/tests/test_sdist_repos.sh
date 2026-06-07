@@ -32,11 +32,11 @@ check_content "$REPO_BASIC_BUILD" 'sdist = "@@//sdists:basic.tar.gz"'
 
 echo "Checking with_pyproject repo..."
 check_content "$REPO_PYPROJECT_BUILD" "pep517_build("
-check_content "$REPO_PYPROJECT_BUILD" '"@dummy_lock_repo//:hatchling"'
+check_content "$REPO_PYPROJECT_BUILD" '"@dummy_lock_repo//hatchling:pkg"'
 
 echo "Checking with_setuptools repo..."
 check_content "$REPO_SETUPTOOLS_BUILD" "setuptools_build("
-check_content "$REPO_SETUPTOOLS_BUILD" '"@dummy_lock_repo//:setuptools"'
+check_content "$REPO_SETUPTOOLS_BUILD" '"@dummy_lock_repo//setuptools:pkg"'
 check_not_content "$REPO_SETUPTOOLS_BUILD" "unknown_dep"
 
 echo "Checking legacy repo..."

@@ -37,7 +37,7 @@ def requirement(pkg):
             pkg = pkg.replace("--", "-")
         else:
             break
-    return "@@{repo_name}//:%s" % pkg
+    return "@@{repo_name}//%s:pkg" % pkg
 """
 
 def _requirements_bzl(rctx, pins):
@@ -48,7 +48,7 @@ def _requirements_bzl(rctx, pins):
         "all_requirements = [",
     ]
     for pin in sorted(pins.keys()):
-        lines.append('    "@@{repo_name}//:{pin}",'.format(repo_name = rctx.name, pin = pin))
+        lines.append('    "@@{repo_name}//{pin}:pkg",'.format(repo_name = rctx.name, pin = pin))
     lines.append("]")
     lines.extend([
         "",
@@ -56,26 +56,38 @@ def _requirements_bzl(rctx, pins):
         "all_whl_requirements = [",
     ])
     for pin in sorted(pins.keys()):
-        lines.append('    "@@{repo_name}//_wheel:{pin}",'.format(repo_name = rctx.name, pin = pin))
+        lines.append('    "@@{repo_name}//{pin}:whl",'.format(repo_name = rctx.name, pin = pin))
     lines.append("]")
 
     return "\n".join(lines) + "\n"
 
-def _pin_build(pkg_key, sdist_label = None):
+def _pin_build(pkg_name, pkg_key, sdist_file = None):
+    _, package_version = pkg_key.split("@", 1)
+    
     lines = [
         'package(default_visibility = ["//visibility:public"])',
         "",
         "alias(",
-        '    name = "wheel",',
-        '    actual = "//_lock:_wheel_{}",'.format(pkg_key),
+        '    name = "{}",'.format(pkg_name),
+        '    actual = "//{}/v{}:{}",'.format(pkg_name, package_version, pkg_name),
+        ")",
+        "",
+        "alias(",
+        '    name = "pkg",',
+        '    actual = "//{}/v{}:pkg",'.format(pkg_name, package_version),
+        ")",
+        "",
+        "alias(",
+        '    name = "whl",',
+        '    actual = "//{}/v{}:whl",'.format(pkg_name, package_version),
         ")",
         "",
     ]
-    if sdist_label:
+    if sdist_file:
         lines.extend([
             "alias(",
             '    name = "sdist",',
-            '    actual = "{}",'.format(sdist_label),
+            '    actual = "//{}/v{}:sdist",'.format(pkg_name, package_version),
             ")",
             "",
         ])
@@ -91,19 +103,10 @@ def _package_repo_impl(rctx):
     rctx.file("defs.bzl", "")  # Empty file for compatibility
     rctx.file("requirements.bzl", _requirements_bzl(rctx, pins))
 
-    # 1. Render the lock.bzl file
-    rctx.file("_lock/lock.bzl", render_lock_bzl(lock, rctx.attr.repo_map, rctx.name))
-
-    # 1b. Write _lock/BUILD.bazel that calls the generated targets macro
-    lock_build = [
-        'package(default_visibility = ["//:__subpackages__"])',
-        "",
-        'load(":lock.bzl", "targets")',
-        "",
-        "targets()",
-        "",
-    ]
-    rctx.file("_lock/BUILD.bazel", "\n".join(lock_build))
+    # 1. Render the lock files
+    build_files = render_lock_bzl(lock, rctx.attr.repo_map, rctx.name)
+    for path, build_content in build_files.items():
+        rctx.file(path, build_content)
 
     # 2. Write the root BUILD.bazel with the user-facing pin aliases.
     root_build_lines = [
@@ -112,74 +115,36 @@ def _package_repo_impl(rctx):
         'exports_files(["defs.bzl", "requirements.bzl"])',
         "",
     ]
-
-    for pin_name, pin_target in sorted(pins.items()):
+    for pin, pin_target in sorted(pins.items()):
         root_build_lines.extend([
             "alias(",
-            '    name = "{}",'.format(pin_name),
-            '    actual = "//_lock:{}",'.format(pin_target),
+            '    name = "{}",'.format(pin),
+            '    actual = "//{}:{}",'.format(pin, pin),
+            ")",
+            "",
+            "alias(",
+            '    name = "{}_pkg",'.format(pin),
+            '    actual = "//{}:pkg",'.format(pin),
+            ")",
+            "",
+            "alias(",
+            '    name = "{}_whl",'.format(pin),
+            '    actual = "//{}:whl",'.format(pin),
+            ")",
+            "",
+            "alias(",
+            '    name = "{}_sdist",'.format(pin),
+            '    actual = "//{}:sdist",'.format(pin),
             ")",
             "",
         ])
-
     rctx.file("BUILD.bazel", "\n".join(root_build_lines))
-
-    # 3. Write helper _sdist and _wheel directories for compatibility/clean aliases
-    sdist_build_lines = ['package(default_visibility = ["//visibility:public"])', ""]
-    wheel_build_lines = ['package(default_visibility = ["//visibility:public"])', ""]
-
-    for pkg_key, pkg in sorted(packages.items()):
-        sdist_file = pkg.get("sdist_file")
-        if sdist_file:
-            sdist_build_lines.extend([
-                "alias(",
-                '    name = "{}",'.format(pkg_key),
-                '    actual = "//_lock:_sdist_{}",'.format(pkg_key),
-                ")",
-                "",
-            ])
-
-        wheel_build_lines.extend([
-            "alias(",
-            '    name = "{}",'.format(pkg_key),
-            '    actual = "//_lock:_wheel_{}",'.format(pkg_key),
-            ")",
-            "",
-        ])
-
-    # Add unversioned pin aliases (e.g. "foo" -> "foo@1.0.0").
-    # Skip pins whose name already matches a package key to avoid duplicates.
-    for pin_name, pin_target in sorted(pins.items()):
-        if pin_name in packages:
-            continue
-
-        sdist_file = packages.get(pin_target, {}).get("sdist_file")
-        if sdist_file:
-            sdist_build_lines.extend([
-                "alias(",
-                '    name = "{}",'.format(pin_name),
-                '    actual = "//_lock:_sdist_{}",'.format(pin_target),
-                ")",
-                "",
-            ])
-
-        wheel_build_lines.extend([
-            "alias(",
-            '    name = "{}",'.format(pin_name),
-            '    actual = "//_lock:_wheel_{}",'.format(pin_target),
-            ")",
-            "",
-        ])
-
-    rctx.file("_sdist/BUILD.bazel", "\n".join(sdist_build_lines))
-    rctx.file("_wheel/BUILD.bazel", "\n".join(wheel_build_lines))
 
     # 4. Write package BUILD subdirectories containing aliases for wheel/sdist
     for pin, pin_target in sorted(pins.items()):
         package = lock["packages"][pin_target]
         sdist_file = package.get("sdist_file")
-        actual_sdist = "//_lock:_sdist_{}".format(pin_target) if sdist_file else None
-        rctx.file(paths.join(pin, "BUILD.bazel"), _pin_build(pin_target, actual_sdist))
+        rctx.file(paths.join(pin, "BUILD.bazel"), _pin_build(pin, pin_target, sdist_file))
 
     # 5. Write _backend/ directory
     #
@@ -188,10 +153,16 @@ def _package_repo_impl(rctx):
     #                              tool defaults pre-filled from this lock repo
 
     # Build a set of PEP 503 normalized package names present in the lockfile.
-    locked_package_names = {}
+    normalized_locked_package_names = {}
     for pkg_key in packages.keys():
         pkg_name = pkg_key.split("@")[0]
-        locked_package_names[pkg_name] = True
+        norm_pkg = pkg_name.replace("_", "-").replace(".", "-").lower()
+        for _i in range(len(norm_pkg)):
+            if "--" in norm_pkg:
+                norm_pkg = norm_pkg.replace("--", "-")
+            else:
+                break
+        normalized_locked_package_names[norm_pkg] = True
 
     rctx.file("_backend/BUILD.bazel", 'package(default_visibility = ["//visibility:public"])\n')
 
@@ -207,8 +178,17 @@ def _package_repo_impl(rctx):
         # packages that actually exist in the lockfile.
         tool_deps_labels = []
         for pkg in config["tool_packages"]:
-            if pkg in locked_package_names:
-                tool_deps_labels.append("//:{}".format(pkg))
+            norm_pkg = pkg.replace("_", "-").replace(".", "-").lower()
+            for _i in range(len(norm_pkg)):
+                if "--" in norm_pkg:
+                    norm_pkg = norm_pkg.replace("--", "-")
+                else:
+                    break
+
+            # Need to check locked_package_names. Wait, locked_package_names contains the names exactly as they are in pkg_key.
+            # So let's build normalized locked names.
+            if norm_pkg in normalized_locked_package_names:
+                tool_deps_labels.append("//{}:pkg".format(norm_pkg))
 
         lines = [
             '"""Backend macro with pre-configured tool defaults for this lock repo."""',

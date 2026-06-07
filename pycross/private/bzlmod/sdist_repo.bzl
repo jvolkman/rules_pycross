@@ -81,7 +81,7 @@ def _sdist_repo_common(rctx):
             build_deps = []
             for dep in rctx.attr.build_dependencies:
                 dep_name = dep.split("@")[0]
-                build_deps.append("@{}//:{}".format(rctx.attr.lock_repo, dep_name))
+                build_deps.append("@{}//{}:pkg".format(rctx.attr.lock_repo, dep_name))
             macro_attrs["build_deps"] = str(build_deps)
     else:
         sdist_path = rctx.path(rctx.attr.sdist)
@@ -127,7 +127,7 @@ def _sdist_repo_common(rctx):
             # We only add it if it's in the known lock repo mapping.
             # (This will be passed in via rctx.attr.known_packages)
             if req_name in rctx.attr.known_packages:
-                build_deps.append("@{}//:{}".format(rctx.attr.lock_repo, req_name))
+                build_deps.append("@{}//{}:pkg".format(rctx.attr.lock_repo, req_name))
 
         macro_attrs["build_deps"] = str(build_deps)
 

@@ -24,6 +24,8 @@ unset TEST_SRCDIR
 # which avoids re-downloading toolchains and improves performance.
 # We also leave the daemon running as requested to preserve the in-memory graph.
 cd "${WORKSPACE_DIR}"
+echo "Running bazel clean --expunge..."
+bazel clean --expunge
 echo "Running bazel build //..."
 bazel build //...
 echo "Running bazel test //..."

@@ -5,17 +5,17 @@ package(default_visibility = ["//visibility:public"])
 
 pycross_console_script_binary(
     name = "pybind11-config",
-    pkg = "@uv//:pybind11",
+    pkg = "@uv//pybind11:pybind11",
     script = "pybind11-config",
 )
 
 meson_build(
     name = "wheel",
     build_deps = [
-        "@uv//:meson",
-        "@uv//:ninja",
-        "@uv//:pybind11",
-        "@uv//:numpy",
+        "@uv//meson:meson",
+        "@uv//ninja:ninja",
+        "@uv//pybind11:pybind11",
+        "@uv//numpy:numpy",
     ],
     meson_properties = {
         "numpy-include-dir": "$(NUMPY_INCLUDE_DIR)",
@@ -26,6 +26,6 @@ meson_build(
     path_tools = [":pybind11-config"],
     sdist = "@uv//contourpy:sdist",
     deps = [
-        "@uv//:numpy",
+        "@uv//numpy:numpy",
     ],
 )

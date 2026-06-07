@@ -13,16 +13,16 @@ pycross_cc_pkg_config(
 
 pycross_console_script_binary(
     name = "cython",
-    pkg = "@uv//:cython",
+    pkg = "@uv//cython:cython",
     script = "cython",
 )
 
 meson_build(
     name = "wheel",
     build_deps = [
-        "@uv//:meson",
-        "@uv//:ninja",
-        "@uv//:cython",
+        "@uv//meson:meson",
+        "@uv//ninja:ninja",
+        "@uv//cython:cython",
     ],
     config_settings = {
         "setup-args": [],

@@ -11,7 +11,7 @@ def _test_encode_build_system_attrs_impl(env, target):
     mock_tag = struct(
         copts = ["-O3"],
         linkopts = ["-lfoo"],
-        native_deps = ["@bar//:lib"],
+        native_deps = ["@bar//lib:lib"],
         config_settings = {"//:my_setting": "1"},
         tool_deps = ["pkg1", "pkg2"],
     )
@@ -22,7 +22,7 @@ def _test_encode_build_system_attrs_impl(env, target):
     env.expect.that_dict(res).contains_exactly({
         "copts": json.encode(["-O3"]),
         "linkopts": json.encode(["-lfoo"]),
-        "native_deps": json.encode(["@bar//:lib"]),
+        "native_deps": json.encode(["@bar//lib:lib"]),
         "config_settings": json.encode({"//:my_setting": "1"}),
         "tool_deps": json.encode(["pkg1", "pkg2"]),
     })

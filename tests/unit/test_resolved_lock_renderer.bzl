@@ -25,12 +25,13 @@ def _test_render_lock_impl(env, target):
         },
     }
     repo_map = {"foo_wheel": "@my_repo//foo:wheel", "foo_wheel_mac": "@my_repo//foo:mac_wheel"}
-    res = render_lock_bzl(lock, repo_map, "my_rctx")
+    res_dict = render_lock_bzl(lock, repo_map, "my_rctx")
+    res = "\n".join(res_dict.values())
 
     env.expect.that_bool("pycross_wheel_library(" in res).equals(True)
-    env.expect.that_bool("name = \"_wheel_foo@1.0\"" in res).equals(True)
+    env.expect.that_bool("name = \"whl\"" in res).equals(True)
     env.expect.that_bool("actual = select({" in res).equals(True)
-    env.expect.that_bool("\":_env_linux\": \"@my_repo//foo:wheel\"" in res).equals(True)
+    env.expect.that_bool("\"//_env:linux\": \"@my_repo//foo:wheel\"" in res).equals(True)
 
 def _test_render_lock(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
