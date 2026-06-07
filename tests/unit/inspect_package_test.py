@@ -1,3 +1,4 @@
+import io
 import tarfile
 import unittest
 import zipfile
@@ -118,6 +119,109 @@ class InspectPackageTest(unittest.TestCase):
             pkg_name="my_pkg",
         )
         self.assertEqual(len(warnings), 0)
+
+    def _create_tarball_with_dirs(self, filename, files):
+        """Create a tarball with proper directory entries.
+
+        Args:
+            filename: Name of the tar.gz file.
+            files: Dict of {arcname: content_or_None}. If content is None,
+                   a directory entry is created.
+        """
+        path = self.temp_path / filename
+        with tarfile.open(path, "w:gz") as tar:
+            # Collect directories implicitly from file paths
+            dirs_added = set()
+            for name, content in files.items():
+                if content is None:
+                    # Explicit directory entry
+                    info = tarfile.TarInfo(name=name.rstrip("/") + "/")
+                    info.type = tarfile.DIRTYPE
+                    tar.addfile(info)
+                    dirs_added.add(name.rstrip("/") + "/")
+                else:
+                    # Add implicit parent directories
+                    parts = name.split("/")
+                    for i in range(1, len(parts)):
+                        dir_name = "/".join(parts[:i]) + "/"
+                        if dir_name not in dirs_added:
+                            info = tarfile.TarInfo(name=dir_name)
+                            info.type = tarfile.DIRTYPE
+                            tar.addfile(info)
+                            dirs_added.add(dir_name)
+                    # Add the file
+                    data = content.encode("utf-8")
+                    info = tarfile.TarInfo(name=name)
+                    info.size = len(data)
+                    tar.addfile(info, io.BytesIO(data))
+        return path
+
+    def test_wheel_top_level_packages(self):
+        wheel_path = self.create_zip(
+            "numpy-1.0-py3-none-any.whl",
+            {
+                "numpy/__init__.py": "",
+                "numpy/core.py": "# core module",
+                "numpy-1.0.dist-info/METADATA": "Name: numpy",
+            },
+        )
+        result = inspect_wheel(wheel_path)
+        self.assertEqual(result["top_level_packages"], ["numpy"])
+
+    def test_sdist_standard_layout(self):
+        sdist_path = self._create_tarball_with_dirs(
+            "mypackage-1.0.tar.gz",
+            {
+                "mypackage-1.0/mypackage/__init__.py": "",
+            },
+        )
+        result = inspect_sdist(sdist_path)
+        self.assertEqual(result["top_level_packages"], ["mypackage"])
+
+    def test_sdist_src_layout(self):
+        sdist_path = self._create_tarball_with_dirs(
+            "mypackage-1.0.tar.gz",
+            {
+                "mypackage-1.0/src/mypackage/__init__.py": "",
+            },
+        )
+        result = inspect_sdist(sdist_path)
+        self.assertEqual(result["top_level_packages"], ["mypackage"])
+
+    def test_sdist_excluded_dirs(self):
+        sdist_path = self._create_tarball_with_dirs(
+            "pkg-1.0.tar.gz",
+            {
+                "pkg-1.0/tests/__init__.py": "",
+                "pkg-1.0/docs/__init__.py": "",
+                "pkg-1.0/mylib/__init__.py": "",
+            },
+        )
+        result = inspect_sdist(sdist_path)
+        self.assertEqual(result["top_level_packages"], ["mylib"])
+
+    def test_sdist_no_init_py(self):
+        sdist_path = self._create_tarball_with_dirs(
+            "pkg-1.0.tar.gz",
+            {
+                "pkg-1.0/nopackage/": None,  # directory only, no __init__.py
+            },
+        )
+        result = inspect_sdist(sdist_path)
+        self.assertEqual(result["top_level_packages"], [])
+
+    def test_wheel_excludes_dist_info(self):
+        wheel_path = self.create_zip(
+            "pkg-1.0-py3-none-any.whl",
+            {
+                "pkg-1.0.dist-info/METADATA": "Name: pkg",
+                "pkg-1.0.dist-info/RECORD": "",
+                "pkg/__init__.py": "",
+                "pkg/module.py": "",
+            },
+        )
+        result = inspect_wheel(wheel_path)
+        self.assertEqual(result["top_level_packages"], ["pkg"])
 
 
 if __name__ == "__main__":

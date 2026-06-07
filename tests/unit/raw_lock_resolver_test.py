@@ -451,5 +451,335 @@ class TestResolveFunction(unittest.TestCase):
             resolve(args)
 
 
+class TestExtras(unittest.TestCase):
+    def setUp(self):
+        self.linux_env = make_env(
+            "linux", ["manylinux_2_17_x86_64", "manylinux2014_x86_64"], markers={"sys_platform": "linux"}
+        )
+        self.mac_env = make_env("mac", ["macosx_10_9_x86_64"], markers={"sys_platform": "darwin"})
+
+    def test_extras_basic(self):
+        """Deps gated on extra == 'test' appear in extra_dependencies."""
+        pkg = make_pkg(
+            "foo",
+            "1.0",
+            [make_file("foo-1.0.tar.gz")],
+            deps=[
+                make_dep("depA", "1.0"),
+                make_dep("depB", "2.0", marker="extra == 'test'"),
+            ],
+        )
+        ctx = GenerationContext(
+            target_environments=[self.linux_env],
+            local_wheels={},
+            remote_wheels={},
+            always_include_sdist=False,
+        )
+        resolver = PackageResolver(pkg, ctx, None, [])
+        resolved = resolver.to_resolved_package()
+
+        # depA is a base dep, not an extra dep
+        self.assertEqual(len(resolved.common_dependencies), 1)
+        self.assertEqual(resolved.common_dependencies[0].name, "depa")
+
+        # depB should appear under extra_dependencies["test"]
+        self.assertIn("test", resolved.extra_dependencies)
+        extra_test = resolved.extra_dependencies["test"]
+        extra_keys = set(extra_test.common_dependencies)
+        for env_deps in extra_test.environment_dependencies.values():
+            extra_keys |= set(env_deps)
+        dep_names = {k.name for k in extra_keys}
+        self.assertIn("depb", dep_names)
+
+    def test_extras_with_env_markers(self):
+        """A dep with both extra and platform markers is env-specific within the extra."""
+        pkg = make_pkg(
+            "foo",
+            "1.0",
+            [make_file("foo-1.0.tar.gz")],
+            deps=[
+                make_dep("depC", "1.0", marker="extra == 'test' and sys_platform == 'linux'"),
+            ],
+        )
+        ctx = GenerationContext(
+            target_environments=[self.linux_env, self.mac_env],
+            local_wheels={},
+            remote_wheels={},
+            always_include_sdist=False,
+        )
+        resolver = PackageResolver(pkg, ctx, None, [])
+        resolved = resolver.to_resolved_package()
+
+        # No base deps
+        self.assertEqual(len(resolved.common_dependencies), 0)
+
+        # depC should be under extra "test"
+        self.assertIn("test", resolved.extra_dependencies)
+        extra_test = resolved.extra_dependencies["test"]
+
+        # Collect all dep keys from the extra
+        all_extra_keys = set(extra_test.common_dependencies)
+        for env_deps in extra_test.environment_dependencies.values():
+            all_extra_keys |= set(env_deps)
+        dep_names = {k.name for k in all_extra_keys}
+        self.assertIn("depc", dep_names)
+
+        # Because it only matches linux (not mac), it should be env-specific, not common
+        common_names = {k.name for k in extra_test.common_dependencies}
+        self.assertNotIn("depc", common_names)
+
+        # It should appear under the linux env specifically
+        self.assertIn("linux", extra_test.environment_dependencies)
+        linux_names = {k.name for k in extra_test.environment_dependencies["linux"]}
+        self.assertIn("depc", linux_names)
+
+    def test_extras_no_extras(self):
+        """Packages without extra markers have empty extra_dependencies."""
+        pkg = make_pkg(
+            "foo",
+            "1.0",
+            [make_file("foo-1.0.tar.gz")],
+            deps=[make_dep("depA", "1.0")],
+        )
+        ctx = GenerationContext(
+            target_environments=[self.linux_env],
+            local_wheels={},
+            remote_wheels={},
+            always_include_sdist=False,
+        )
+        resolver = PackageResolver(pkg, ctx, None, [])
+        resolved = resolver.to_resolved_package()
+
+        self.assertEqual(len(resolved.extra_dependencies), 0)
+
+    def test_extras_multiple(self):
+        """Multiple extras ('test', 'dev') each pull different deps."""
+        pkg = make_pkg(
+            "foo",
+            "1.0",
+            [make_file("foo-1.0.tar.gz")],
+            deps=[
+                make_dep("depA", "1.0"),
+                make_dep("pytest", "7.0", marker="extra == 'test'"),
+                make_dep("black", "22.0", marker="extra == 'dev'"),
+            ],
+        )
+        ctx = GenerationContext(
+            target_environments=[self.linux_env],
+            local_wheels={},
+            remote_wheels={},
+            always_include_sdist=False,
+        )
+        resolver = PackageResolver(pkg, ctx, None, [])
+        resolved = resolver.to_resolved_package()
+
+        # Base dep
+        self.assertEqual(len(resolved.common_dependencies), 1)
+        self.assertEqual(resolved.common_dependencies[0].name, "depa")
+
+        # Two extras should be present
+        self.assertIn("test", resolved.extra_dependencies)
+        self.assertIn("dev", resolved.extra_dependencies)
+
+        # Check "test" extra has pytest
+        test_keys = set(resolved.extra_dependencies["test"].common_dependencies)
+        for env_deps in resolved.extra_dependencies["test"].environment_dependencies.values():
+            test_keys |= set(env_deps)
+        test_dep_names = {k.name for k in test_keys}
+        self.assertIn("pytest", test_dep_names)
+        self.assertNotIn("black", test_dep_names)
+
+        # Check "dev" extra has black
+        dev_keys = set(resolved.extra_dependencies["dev"].common_dependencies)
+        for env_deps in resolved.extra_dependencies["dev"].environment_dependencies.values():
+            dev_keys |= set(env_deps)
+        dev_dep_names = {k.name for k in dev_keys}
+        self.assertIn("black", dev_dep_names)
+        self.assertNotIn("pytest", dev_dep_names)
+
+
+class TestCycleDetection(unittest.TestCase):
+    """Tests for Tarjan's SCC-based cycle detection in resolve()."""
+
+    def setUp(self):
+        import tempfile
+
+        self.td = tempfile.TemporaryDirectory()
+        self.td_path = self.td.name
+
+        self.linux_env = make_env(
+            "linux", ["manylinux_2_17_x86_64", "manylinux2014_x86_64"], markers={"sys_platform": "linux"}
+        )
+
+    def tearDown(self):
+        self.td.cleanup()
+
+    def _resolve_with_packages(self, packages, pins):
+        """Helper to set up files and call resolve() with the given packages and pins."""
+        import json
+        import os
+        from unittest.mock import MagicMock
+
+        pkg_dict = {}
+        for pkg in packages:
+            pkg_dict[pkg.key] = pkg
+
+        lock_model = RawLockSet(
+            python_versions=SpecifierSet(">=3.8"),
+            packages=pkg_dict,
+            pins=pins,
+        )
+        lock_model_file = os.path.join(self.td_path, "lock.json")
+        with open(lock_model_file, "w") as f:
+            f.write(lock_model.to_json())
+
+        env_file = os.path.join(self.td_path, "env.json")
+        with open(env_file, "w") as f:
+            json.dump(self.linux_env.to_dict(), f)
+
+        args = MagicMock()
+        args.lock_model_file = lock_model_file
+        args.target_environment = [(env_file, "@//env:linux")]
+        args.local_wheel = []
+        args.remote_wheel = []
+        args.always_include_sdist = False
+        args.annotations_file = None
+        args.default_build_dependencies = []
+        args.disallow_builds = False
+        args.default_alias_single_version = False
+
+        return resolve(args)
+
+    def test_cycle_two_nodes(self):
+        """A depends on B, B depends on A. Both should have the same cycle_group."""
+        pkg_a = make_pkg("a", "1.0", [make_file("a-1.0.tar.gz")], deps=[make_dep("b", "1.0")])
+        pkg_b = make_pkg("b", "1.0", [make_file("b-1.0.tar.gz")], deps=[make_dep("a", "1.0")])
+        pins = {
+            canonicalize_name("a"): PackageKey.from_parts(canonicalize_name("a"), Version("1.0")),
+            canonicalize_name("b"): PackageKey.from_parts(canonicalize_name("b"), Version("1.0")),
+        }
+
+        resolved = self._resolve_with_packages([pkg_a, pkg_b], pins)
+
+        key_a = PackageKey.from_parts(canonicalize_name("a"), Version("1.0"))
+        key_b = PackageKey.from_parts(canonicalize_name("b"), Version("1.0"))
+
+        self.assertIsNotNone(resolved.packages[key_a].cycle_group)
+        self.assertIsNotNone(resolved.packages[key_b].cycle_group)
+        self.assertEqual(resolved.packages[key_a].cycle_group, resolved.packages[key_b].cycle_group)
+
+        # The cycle group should exist in the top-level mapping
+        group_name = resolved.packages[key_a].cycle_group
+        self.assertIn(group_name, resolved.cycle_groups)
+        self.assertEqual(len(resolved.cycle_groups[group_name]), 2)
+
+    def test_cycle_three_nodes(self):
+        """A→B→C→A. All three in the same cycle group."""
+        pkg_a = make_pkg("a", "1.0", [make_file("a-1.0.tar.gz")], deps=[make_dep("b", "1.0")])
+        pkg_b = make_pkg("b", "1.0", [make_file("b-1.0.tar.gz")], deps=[make_dep("c", "1.0")])
+        pkg_c = make_pkg("c", "1.0", [make_file("c-1.0.tar.gz")], deps=[make_dep("a", "1.0")])
+        pins = {
+            canonicalize_name("a"): PackageKey.from_parts(canonicalize_name("a"), Version("1.0")),
+            canonicalize_name("b"): PackageKey.from_parts(canonicalize_name("b"), Version("1.0")),
+            canonicalize_name("c"): PackageKey.from_parts(canonicalize_name("c"), Version("1.0")),
+        }
+
+        resolved = self._resolve_with_packages([pkg_a, pkg_b, pkg_c], pins)
+
+        key_a = PackageKey.from_parts(canonicalize_name("a"), Version("1.0"))
+        key_b = PackageKey.from_parts(canonicalize_name("b"), Version("1.0"))
+        key_c = PackageKey.from_parts(canonicalize_name("c"), Version("1.0"))
+
+        group = resolved.packages[key_a].cycle_group
+        self.assertIsNotNone(group)
+        self.assertEqual(resolved.packages[key_b].cycle_group, group)
+        self.assertEqual(resolved.packages[key_c].cycle_group, group)
+        self.assertEqual(len(resolved.cycle_groups[group]), 3)
+
+    def test_no_cycles(self):
+        """Simple A→B→C chain. No cycle_group should be assigned."""
+        pkg_c = make_pkg("c", "1.0", [make_file("c-1.0.tar.gz")])
+        pkg_b = make_pkg("b", "1.0", [make_file("b-1.0.tar.gz")], deps=[make_dep("c", "1.0")])
+        pkg_a = make_pkg("a", "1.0", [make_file("a-1.0.tar.gz")], deps=[make_dep("b", "1.0")])
+        pins = {
+            canonicalize_name("a"): PackageKey.from_parts(canonicalize_name("a"), Version("1.0")),
+        }
+
+        resolved = self._resolve_with_packages([pkg_a, pkg_b, pkg_c], pins)
+
+        for pkg in resolved.packages.values():
+            self.assertIsNone(pkg.cycle_group)
+        self.assertEqual(len(resolved.cycle_groups), 0)
+
+    def test_cycle_group_naming_stable(self):
+        """Same cycle members should always produce the same hash-based name."""
+        import hashlib
+
+        pkg_a = make_pkg("a", "1.0", [make_file("a-1.0.tar.gz")], deps=[make_dep("b", "1.0")])
+        pkg_b = make_pkg("b", "1.0", [make_file("b-1.0.tar.gz")], deps=[make_dep("a", "1.0")])
+        pins = {
+            canonicalize_name("a"): PackageKey.from_parts(canonicalize_name("a"), Version("1.0")),
+            canonicalize_name("b"): PackageKey.from_parts(canonicalize_name("b"), Version("1.0")),
+        }
+
+        resolved1 = self._resolve_with_packages([pkg_a, pkg_b], pins)
+        resolved2 = self._resolve_with_packages([pkg_a, pkg_b], pins)
+
+        key_a = PackageKey.from_parts(canonicalize_name("a"), Version("1.0"))
+        group1 = resolved1.packages[key_a].cycle_group
+        group2 = resolved2.packages[key_a].cycle_group
+        self.assertEqual(group1, group2)
+
+        # Verify it matches the expected format: cycle_group_<sha256[:8]>
+        members = sorted(
+            [
+                PackageKey.from_parts(canonicalize_name("a"), Version("1.0")),
+                PackageKey.from_parts(canonicalize_name("b"), Version("1.0")),
+            ]
+        )
+        expected_digest = hashlib.sha256("\n".join(str(m) for m in members).encode()).hexdigest()[:8]
+        expected_name = f"cycle_group_{expected_digest}"
+        self.assertEqual(group1, expected_name)
+
+    def test_multiple_disconnected_cycles(self):
+        """Two independent cycles should produce two separate groups."""
+        # Cycle 1: A <-> B
+        pkg_a = make_pkg("a", "1.0", [make_file("a-1.0.tar.gz")], deps=[make_dep("b", "1.0")])
+        pkg_b = make_pkg("b", "1.0", [make_file("b-1.0.tar.gz")], deps=[make_dep("a", "1.0")])
+        # Cycle 2: X <-> Y
+        pkg_x = make_pkg("x", "1.0", [make_file("x-1.0.tar.gz")], deps=[make_dep("y", "1.0")])
+        pkg_y = make_pkg("y", "1.0", [make_file("y-1.0.tar.gz")], deps=[make_dep("x", "1.0")])
+        pins = {
+            canonicalize_name("a"): PackageKey.from_parts(canonicalize_name("a"), Version("1.0")),
+            canonicalize_name("b"): PackageKey.from_parts(canonicalize_name("b"), Version("1.0")),
+            canonicalize_name("x"): PackageKey.from_parts(canonicalize_name("x"), Version("1.0")),
+            canonicalize_name("y"): PackageKey.from_parts(canonicalize_name("y"), Version("1.0")),
+        }
+
+        resolved = self._resolve_with_packages([pkg_a, pkg_b, pkg_x, pkg_y], pins)
+
+        key_a = PackageKey.from_parts(canonicalize_name("a"), Version("1.0"))
+        key_b = PackageKey.from_parts(canonicalize_name("b"), Version("1.0"))
+        key_x = PackageKey.from_parts(canonicalize_name("x"), Version("1.0"))
+        key_y = PackageKey.from_parts(canonicalize_name("y"), Version("1.0"))
+
+        group_ab = resolved.packages[key_a].cycle_group
+        group_xy = resolved.packages[key_x].cycle_group
+
+        # Both cycles should be detected
+        self.assertIsNotNone(group_ab)
+        self.assertIsNotNone(group_xy)
+
+        # Members within each cycle share the same group
+        self.assertEqual(resolved.packages[key_a].cycle_group, resolved.packages[key_b].cycle_group)
+        self.assertEqual(resolved.packages[key_x].cycle_group, resolved.packages[key_y].cycle_group)
+
+        # The two cycles should have different group names
+        self.assertNotEqual(group_ab, group_xy)
+
+        # Two distinct cycle groups
+        self.assertEqual(len(resolved.cycle_groups), 2)
+
+
 if __name__ == "__main__":
     unittest.main()

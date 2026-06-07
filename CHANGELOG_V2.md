@@ -1,7 +1,6 @@
 # rules_pycross v2 — Changelog
 
 > Comprehensive feature list for the `dev/v2` branch compared to `main`.
-> 97 commits, 326 files changed, +11,289 / −5,891 lines.
 
 ---
 
@@ -15,7 +14,7 @@
 
 ### Removed: `pycross_wheel_build` rule
 
-- The monolithic `pycross_wheel_build` rule ([wheel_build.bzl](file:///usr/local/google/home/volkman/repos/rules_pycross/pycross/private/wheel_build.bzl)) and its backing `wheel_builder.py` (1,087 lines) have been deleted.
+- The monolithic `pycross_wheel_build` rule and its backing `wheel_builder.py` (1,087 lines) have been deleted.
 - Replaced by the new pluggable backend architecture (see below).
 
 ### Removed: `pycross_lock_file` rule
@@ -41,8 +40,97 @@
 
 ### Changed: Internal dependency format
 
-- Replaced the generated `.lock.bzl` files (`pycross_deps.lock.bzl`, `pycross_deps_core.lock.bzl`) with a human-readable TOML lock file ([pycross_deps.toml](file:///usr/local/google/home/volkman/repos/rules_pycross/pycross/private/pycross_deps.toml)).
+- Replaced the generated `.lock.bzl` files (`pycross_deps.lock.bzl`, `pycross_deps_core.lock.bzl`) with a human-readable TOML lock file (`pycross/private/pycross_deps.toml`).
 - Internal `http_file` repos are now created dynamically from the TOML at module extension time using `@toml.bzl`.
+
+### Changed: Package repo layout
+
+- Packages are now under versioned subdirectories: `<package>/v<version>/BUILD.bazel`.
+- Canonical target names changed: `:pkg` (library), `:whl` (wheel file), `:sdist` (sdist file).
+- Root aliases (`@repo//:numpy`) still work.
+- Old `_wheel/` and `_sdist/` directories available via `legacy_naming = True` flag.
+
+---
+
+## New: Extras Support
+
+Extras (optional dependency groups) are now first-class in the resolver and renderer.
+
+- `EXTRA_PATTERN` regex in the resolver extracts `extra == '...'` from PEP 508 markers.
+- `get_dependencies_by_environment()` splits dependencies into base deps and per-extra deps, with per-environment granularity.
+- The renderer emits `py_library(name = "[extra_name]")` targets for each extra, with the package itself as a dep plus the extra-specific deps.
+- Extra deps support `select()` for environment-specific resolution.
+- Example: `@pypi//requests:[security]` pulls in `pyOpenSSL`, `cryptography`, etc.
+
+---
+
+## New: Automatic Cycle Resolution
+
+Circular dependency detection and resolution is now automatic via Tarjan's SCC algorithm.
+
+- **Iterative Tarjan's SCC** — avoids stack overflow on large dependency graphs (replaced recursive version).
+- **Content-based cycle group naming** — group names use `cycle_group_{sha256[:8]}` for stability across lockfile changes. Adding/removing an unrelated package won't renumber existing groups.
+- **Renderer integration** — generates `_cycles/BUILD.bazel` containing `py_library` targets for each cycle group. Cycled packages use `pkg_raw` naming for `pycross_wheel_library` and a wrapping `py_library(name = "pkg")` that depends on both `pkg_raw` and the cycle group.
+- Same-cycle dependencies are excluded from individual package dep lists to break the circular reference.
+
+---
+
+## New: pylock.toml Support (PEP 751)
+
+Full translator for the PEP 751 `pylock.toml` lockfile format.
+
+### Basic Translation
+
+- Parses `lock-version = "1.0"` files.
+- Extracts packages, versions, dependencies, markers, wheels (with URLs/hashes), and sdists.
+- Supports both `hash = "sha256:..."` and `hashes = { sha256 = "..." }` formats.
+
+### Dependency Group Filtering
+
+- `--default / --no-default` — include/exclude `[project.dependencies]`.
+- `--optional-group <name>` — include specific `[project.optional-dependencies]` groups.
+- `--all-optional-groups` — include all optional dependency groups.
+- `--development-group <name>` — include specific `[dependency-groups]` (PEP 735).
+- `--all-development-groups` — include all development groups.
+- `include-group` support — resolves `{include-group = "typing"}` references in dependency groups (one level).
+- **Graph traversal** — BFS from selected root packages to include only transitive dependencies, pruning unreachable packages from the lockfile.
+- Warnings on stderr for missing dependencies and unknown group names.
+
+### Bzlmod Integration
+
+- `pycross_pylock_lock_model` rule for build-time translation.
+- `repo_create_pylock_model()` for repository-rule-time translation.
+- `lock_repo_model_pylock()` for bzlmod tag encoding.
+- All filtering flags plumbed through `PYLOCK_IMPORT_ATTRS` → `lock_import` tag → translator CLI.
+
+---
+
+## New: Venv Compatibility (`top_level_packages`)
+
+Packages now declare their importable top-level packages for correct `PyInfo.imports` paths.
+
+### Wheel Detection
+
+- `_find_top_level_packages_wheel()` — lists directories in the wheel that are not `.dist-info` or `.data`, giving the actual importable package names.
+
+### Sdist Detection
+
+- `_find_top_level_packages_sdist()` — scans sdist archives for directories containing `__init__.py` at depth 2 (standard layout) or depth 3 (src-layout).
+- Expanded exclusion list: `bin`, `benchmarks`, `docs`, `examples`, `scripts`, `src`, `test`, `tests`, `testing`, `tools`.
+- Requires `__init__.py` presence (not just directory existence) to avoid false positives.
+
+---
+
+## New: Legacy Naming Flag
+
+Backward-compatible `_wheel/` and `_sdist/` directories for users migrating from v1-style target paths.
+
+- `lock_repos.create(legacy_naming = True)` in MODULE.bazel.
+- Generates `_wheel/BUILD.bazel` with:
+  - Versioned aliases: `:numpy@1.2.3` → `//numpy/v1.2.3:whl`
+  - Unversioned pin aliases: `:numpy` → `//numpy:whl`
+- Generates `_sdist/BUILD.bazel` with same pattern (only for packages with sdists).
+- Maturin extension updated to use canonical `@repo//pkg:sdist` path (no longer requires legacy naming).
 
 ---
 
@@ -61,7 +149,6 @@ The most significant change in v2. The old monolithic `pycross_wheel_build` rule
   - `default` — whether this is the fallback backend
   - `override_json` — per-backend override configuration
   - `sdist_hook_bzl` / `sdist_hook_fn` — hooks for sdist repository generation
-
 - Creates `@pycross_backends` hub repository with the full registry.
 - Root module registrations always win for duplicate backend names.
 
@@ -110,7 +197,7 @@ The most significant change in v2. The old monolithic `pycross_wheel_build` rule
 
 ### Public Backend Authoring API
 
-- New file: [pycross/backend.bzl](file:///usr/local/google/home/volkman/repos/rules_pycross/pycross/backend.bzl)
+- New file: `pycross/backend.bzl`
 - Exports all building blocks for implementing custom backends:
   - Providers: `PycrossWheelInfo`, `PycrossExtractedWheelInfo`, `PycrossPackageInfo`
   - Actions: `extract_cc_layer`, `register_pep517_action`, `register_repair_action`, `register_bin_extract_action`
@@ -192,7 +279,7 @@ The build pipeline is decomposed into composable, reusable actions:
 
 ### Exec/Target Platform Transition
 
-- New `pycross_exec_platform_transition` ([transitions.bzl](file:///usr/local/google/home/volkman/repos/rules_pycross/pycross/private/build/transitions.bzl)).
+- New `pycross_exec_platform_transition` (`pycross/private/build/transitions.bzl`).
 - Solves: build deps need TARGET Python version but EXEC platform.
 - Switches `--platforms` to host while preserving Python version settings.
 
@@ -326,6 +413,12 @@ The build pipeline is decomposed into composable, reusable actions:
 
 - `resolved_lock_renderer.bzl` renders lock structures in pure Starlark (no Python tool invocation at repo time).
 - `package_repo.bzl` rewritten as a pure-Starlark hub repository rule.
+- Versioned subdirectory layout: `<package>/v<version>/BUILD.bazel`.
+
+### Package repo deduplication
+
+- Audited and verified that wheel/sdist repo rules are correctly deduplicated across multiple lock imports.
+- Root-level `_sdist` aliases only generated when package actually has an sdist file.
 
 ### `patch-ng` bootstrapping
 
@@ -335,27 +428,12 @@ The build pipeline is decomposed into composable, reusable actions:
 
 ---
 
-## New: E2E Test Suite
+## New: uv Lock Format Freshness (0.9.5)
 
-### Reorganized test structure
-
-- Old `e2e/build_wheel/` replaced by focused test directories:
-  - `e2e/build_cmake/` — iminuit (scikit-build-core)
-  - `e2e/build_maturin/` — rpds-py, captcha-rs (Rust)
-  - `e2e/build_meson/` — numpy, pandas, contourpy, pywavelets
-  - `e2e/build_pure_python/` — tomli, filelock, pyproject-metadata
-  - `e2e/build_setuptools/` — psycopg2, setproctitle, pyyaml, zstandard
-  - `e2e/patches_and_hooks/` — setproctitle with pre/post patches and site_hooks
-
-- Shared configuration via `e2e/shared/` with common `.bazelrc`, overrides, and utilities.
-- `collect_wheels.bzl` macro for cross-platform wheel collection.
-- `compare_wheels.py` tool for wheel comparison.
-
-### CI improvements
-
-- New `cross-build.yml` workflow for cross-compilation CI.
-- Collapsed e2e test and repro matrices.
-- Removed WORKSPACE-mode testing.
+- Test coverage for uv lock format version 0.9.5.
+- Support for top-level `resolution-markers` (forked resolution).
+- Handling of `revision` field in lock metadata.
+- Tested: forked dependencies (same package, different versions per Python version).
 
 ---
 
@@ -366,6 +444,7 @@ The build pipeline is decomposed into composable, reusable actions:
 - Returns `PycrossExtractedWheelInfo` (site-packages tree artifact).
 - Returns `PycrossPackageInfo` when `package_name`/`package_version` attrs are set.
 - No longer returns `PycrossWheelInfo` (separation of concerns: installed vs. raw).
+- New `top_level_packages` attribute for explicit importable package declaration.
 
 ---
 
@@ -377,6 +456,53 @@ The build pipeline is decomposed into composable, reusable actions:
 
 ---
 
+## New: E2E Test Suite
+
+### Reorganized test structure
+
+- Old `e2e/build_wheel/` replaced by focused test directories:
+  - `e2e/build_cmake/` — iminuit (scikit-build-core)
+  - `e2e/build_maturin/` — rpds-py, jiter (Rust)
+  - `e2e/build_meson/` — numpy, pandas, contourpy, pywavelets
+  - `e2e/build_pure_python/` — tomli, filelock, pyproject-metadata
+  - `e2e/build_setuptools/` — psycopg2, setproctitle, pyyaml, zstandard
+  - `e2e/patches_and_hooks/` — setproctitle with pre/post patches and site_hooks
+  - `e2e/sdist_repo/` — sdist repository rule e2e test
+- Shared configuration via `e2e/shared/` with common `.bazelrc`, overrides, and utilities.
+- `collect_wheels.bzl` macro for cross-platform wheel collection.
+- `compare_wheels.py` tool for wheel comparison.
+
+---
+
+## New: Unit Test Coverage
+
+### 101 Python unit tests + 5 Starlark analysis tests = 106 total
+
+| Area | Tests | Files |
+|------|-------|-------|
+| uv translator | 15 | `uv_translator_test.py` |
+| pdm translator | 2 | `pdm_translator_test.py` |
+| poetry translator | 5 | `poetry_translator_test.py` |
+| pylock translator | 15 | `pylock_translator_test.py` |
+| Raw lock resolver | 23 | `raw_lock_resolver_test.py` |
+| Resolved lock renderer (Python) | 4 | `resolved_lock_renderer_test.py` |
+| Resolved lock renderer (Starlark) | 5 | `test_resolved_lock_renderer.bzl` |
+| inspect_package | 14 | `inspect_package_test.py` |
+| Build utils (cc_toolchain, hooks, lifecycle, meson, venv) | 14 | various `*_test.py` |
+| TOML lock generator | 1 | `toml_lock_generator_test.py` |
+| Starlark unit tests | 8 | `test_common_attrs.bzl`, `test_override_helpers.bzl` |
+| Starlark analysis tests | 11 | `tests/analysis/*.bzl` |
+
+### Key coverage areas
+
+- **Extras support** — regex parsing, per-env deps, renderer `[extra]` targets
+- **Cycle detection** — 2-node, 3-node, multi-cycle, stable naming, no-cycle case
+- **pylock group filtering** — `--no-default`, optional/dev groups, `include-group`, graph traversal
+- **top_level_packages** — wheel/sdist detection, src-layout, excluded dirs, `__init__.py` requirement
+- **Renderer layout** — versioned paths, env config_settings, cycle `_cycles/` dir, extras targets
+
+---
+
 ## Internal / Infrastructure
 
 - Added `@toml.bzl` dependency for TOML parsing in Starlark.
@@ -384,3 +510,5 @@ The build pipeline is decomposed into composable, reusable actions:
 - Added gazelle setup for `backend_maturin` submodule.
 - Pre-commit hooks: added `gazelle`, `docs-update`, bumped `buildifier`.
 - Removed `stardoc` dev dep from root MODULE (moved to docs module).
+- `EXTRA_PATTERN` regex and `import re` moved to module level in resolver.
+- Missing dependency warnings in pylock translator (instead of silent skip).

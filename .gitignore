@@ -17,3 +17,6 @@ __pycache__
 
 # pdm
 .pdm-python
+
+# test artifacts
+test_pylock*.toml
