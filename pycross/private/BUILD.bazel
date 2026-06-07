@@ -202,12 +202,6 @@ exports_files(
     visibility = ["//:__subpackages__"],
 )
 
-bzl_library(
-    name = "console_script",
-    srcs = ["console_script.bzl"],
-    deps = ["@rules_python//python:defs_bzl"],
-)
-
 write_file(
     name = "dummy_bin_file",
     out = "dummy.txt",

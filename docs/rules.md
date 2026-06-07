@@ -323,30 +323,6 @@ Annotations to apply to individual packages.
 str: A json encoded string of the provided content.
 
 
-<a id="pycross_console_script_binary"></a>
-
-## pycross_console_script_binary
-
-<pre>
-load("@rules_pycross//pycross:defs.bzl", "pycross_console_script_binary")
-
-pycross_console_script_binary(<a href="#pycross_console_script_binary-name">name</a>, <a href="#pycross_console_script_binary-script">script</a>, <a href="#pycross_console_script_binary-pkg">pkg</a>, <a href="#pycross_console_script_binary-deps">deps</a>, <a href="#pycross_console_script_binary-kwargs">**kwargs</a>)
-</pre>
-
-Exposes a console script from a wheel as an executable target.
-
-**PARAMETERS**
-
-
-| Name  | Description | Default Value |
-| :------------- | :------------- | :------------- |
-| <a id="pycross_console_script_binary-name"></a>name |  Name of the resulting target.   |  none |
-| <a id="pycross_console_script_binary-script"></a>script |  The name of the console script to expose.   |  none |
-| <a id="pycross_console_script_binary-pkg"></a>pkg |  Label of the wheel library target.   |  none |
-| <a id="pycross_console_script_binary-deps"></a>deps |  Additional dependencies to pass to the binary.   |  `None` |
-| <a id="pycross_console_script_binary-kwargs"></a>kwargs |  Additional arguments like visibility or tags.   |  none |
-
-
 <a id="pypi_file"></a>
 
 ## pypi_file

@@ -1,5 +1,4 @@
 load(":cmake_build_test.bzl", "cmake_build_test_suite")
-load(":console_script_test.bzl", "console_script_test_suite")
 load(":extract_cc_layer_test.bzl", "extract_cc_layer_test_suite")
 load(":meson_build_test.bzl", "meson_build_test_suite")
 load(":pep517_build_test.bzl", "pep517_build_test_suite")
@@ -25,8 +24,6 @@ meson_build_test_suite(name = "meson_build_test")
 cmake_build_test_suite(name = "cmake_build_test")
 
 setuptools_build_test_suite(name = "setuptools_build_test")
-
-console_script_test_suite(name = "console_script_test")
 
 wheel_transform_test_suite(name = "wheel_transform_test")
 
