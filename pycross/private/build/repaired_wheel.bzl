@@ -1,16 +1,10 @@
 """Rule for repairing wheels by bundling native shared libraries."""
 
 load("@rules_cc//cc/common:cc_info.bzl", "CcInfo")
-load("//pycross/private:providers.bzl", "PycrossWheelInfo")
 load("//pycross/private/build/actions:repair_action.bzl", "register_repair_action")
 
 def _pycross_repaired_wheel_impl(ctx):
-    # Resolve input wheelhouse.
-    if PycrossWheelInfo in ctx.attr.wheel:
-        input_wheelhouse = ctx.attr.wheel[PycrossWheelInfo].wheelhouse
-    else:
-        # Fallback: assume the input is a wheelhouse filegroup
-        input_wheelhouse = ctx.files.wheel[0]
+    input_wheelhouse = ctx.files.wheel[0]
 
     target_environment = None
     if ctx.files.target_environment:
@@ -24,14 +18,7 @@ def _pycross_repaired_wheel_impl(ctx):
         target_environment = target_environment,
     )
 
-    return [
-        PycrossWheelInfo(
-            wheelhouse = repair_result.wheelhouse,
-        ),
-        DefaultInfo(
-            files = depset([repair_result.wheelhouse]),
-        ),
-    ]
+    return [DefaultInfo(files = depset([repair_result.wheelhouse]))]
 
 pycross_repaired_wheel = rule(
     implementation = _pycross_repaired_wheel_impl,

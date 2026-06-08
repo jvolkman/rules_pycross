@@ -4,9 +4,6 @@ load("@rules_testing//lib:analysis_test.bzl", "analysis_test", "test_suite")
 load("@rules_testing//lib:util.bzl", "util")
 
 # buildifier: disable=bzl-visibility
-load("//pycross/private:providers.bzl", "PycrossWheelInfo")
-
-# buildifier: disable=bzl-visibility
 load("//pycross/private:wheel_transform.bzl", "pycross_wheel_transform")
 
 def _mock_exe_impl(ctx):
@@ -24,7 +21,6 @@ def _mock_wheel_impl(ctx):
     )
     return [
         DefaultInfo(files = depset([out])),
-        PycrossWheelInfo(wheelhouse = out),
     ]
 
 _mock_wheel = rule(implementation = _mock_wheel_impl)
@@ -42,8 +38,7 @@ def _test_wheel_transform_basic(name):
 
 # buildifier: disable=unused-variable
 def _test_wheel_transform_basic_impl(env, target):
-    env.expect.that_target(target).has_provider(PycrossWheelInfo)
-    wheelhouse = target[PycrossWheelInfo].wheelhouse
+    wheelhouse = target[DefaultInfo].files.to_list()[0]
     env.expect.that_target(target).action_generating(wheelhouse.short_path)
 
     # The action executable should be the transform tool

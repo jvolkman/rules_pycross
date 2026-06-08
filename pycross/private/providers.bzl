@@ -1,12 +1,5 @@
 """Pycross providers."""
 
-PycrossWheelInfo = provider(
-    doc = "Information about a built or downloaded Python wheel.",
-    fields = {
-        "wheelhouse": "File (TreeArtifact): A directory containing exactly one .whl file with its proper name.",
-    },
-)
-
 PycrossExtractedWheelInfo = provider(
     doc = "Information about an extracted (installed) Python wheel.",
     fields = {

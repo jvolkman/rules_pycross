@@ -5,9 +5,6 @@ load("@rules_testing//lib:analysis_test.bzl", "analysis_test", "test_suite")
 load("@rules_testing//lib:util.bzl", "util")
 
 # buildifier: disable=bzl-visibility
-load("//pycross/private:providers.bzl", "PycrossWheelInfo")
-
-# buildifier: disable=bzl-visibility
 load("//pycross/private/build:repaired_wheel.bzl", "pycross_repaired_wheel")
 
 def _mock_wheel_impl(ctx):
@@ -18,7 +15,6 @@ def _mock_wheel_impl(ctx):
     )
     return [
         DefaultInfo(files = depset([out])),
-        PycrossWheelInfo(wheelhouse = out),
     ]
 
 _mock_wheel = rule(implementation = _mock_wheel_impl)
@@ -34,8 +30,7 @@ def _test_repaired_wheel_basic(name):
 
 # buildifier: disable=unused-variable
 def _test_repaired_wheel_basic_impl(env, target):
-    env.expect.that_target(target).has_provider(PycrossWheelInfo)
-    wheelhouse = target[PycrossWheelInfo].wheelhouse
+    wheelhouse = target[DefaultInfo].files.to_list()[0]
     env.expect.that_bool(wheelhouse.is_directory).equals(True)
     env.expect.that_str(wheelhouse.basename).contains(".wheelhouse")
 
@@ -56,8 +51,7 @@ def _test_repaired_wheel_with_native_deps(name):
 
 # buildifier: disable=unused-variable
 def _test_repaired_wheel_with_native_deps_impl(env, target):
-    env.expect.that_target(target).has_provider(PycrossWheelInfo)
-    wheelhouse = target[PycrossWheelInfo].wheelhouse
+    wheelhouse = target[DefaultInfo].files.to_list()[0]
     env.expect.that_bool(wheelhouse.is_directory).equals(True)
 
 def repaired_wheel_test_suite(name):

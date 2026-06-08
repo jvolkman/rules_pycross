@@ -1,6 +1,5 @@
 """Implementation of the setuptools_build rule."""
 
-load("//pycross/private:providers.bzl", "PycrossWheelInfo")
 load("//pycross/private/build:transitions.bzl", "pycross_exec_platform_transition")
 load("//pycross/private/build/actions:cc_layer.bzl", "extract_cc_layer")
 load("//pycross/private/build/actions:pep517_action.bzl", "register_pep517_action")
@@ -61,9 +60,6 @@ def _setuptools_build_impl(ctx):
 
     return [
         DefaultInfo(files = depset([repair_result.wheelhouse])),
-        PycrossWheelInfo(
-            wheelhouse = repair_result.wheelhouse,
-        ),
         OutputGroupInfo(
             raw_wheel = depset([build_result.wheelhouse]),
         ),

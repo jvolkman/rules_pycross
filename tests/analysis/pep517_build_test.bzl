@@ -6,7 +6,7 @@ load("@rules_testing//lib:truth.bzl", "matching")
 load("@rules_testing//lib:util.bzl", "util")
 
 # buildifier: disable=bzl-visibility
-load("//pycross/private:providers.bzl", "PycrossPackageInfo", "PycrossWheelInfo")
+load("//pycross/private:providers.bzl", "PycrossPackageInfo")
 
 # buildifier: disable=bzl-visibility
 load("//pycross/private/build/rules:pep517_build.bzl", "pep517_build")
@@ -44,7 +44,7 @@ def _test_pep517_build_valid_deps(name):
 
 # buildifier: disable=unused-variable
 def _test_pep517_build_valid_deps_impl(env, target):
-    env.expect.that_target(target).has_provider(PycrossWheelInfo)
+    pass
 
 def _test_pep517_build_invalid_deps(name):
     util.helper_target(_mock_sdist, name = name + "_sdist")
@@ -73,12 +73,11 @@ def _test_pep517_build_basic(name):
 
 # buildifier: disable=unused-variable
 def _test_pep517_build_basic_impl(env, target):
-    env.expect.that_target(target).has_provider(PycrossWheelInfo)
     env.expect.that_target(target).has_provider(DefaultInfo)
     env.expect.that_target(target).has_provider(OutputGroupInfo)
 
-    wheel_info = target[PycrossWheelInfo]
-    env.expect.that_bool(wheel_info.wheelhouse.is_directory).equals(True)
+    wheelhouse = target[DefaultInfo].files.to_list()[0]
+    env.expect.that_bool(wheelhouse.is_directory).equals(True)
 
 def pep517_build_test_suite(name):
     test_suite(

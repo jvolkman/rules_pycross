@@ -2,17 +2,11 @@
 
 load("@bazel_skylib//lib:paths.bzl", "paths")
 load("@rules_python//python:py_info.bzl", "PyInfo")
-load(":providers.bzl", "PycrossWheelInfo")
 
 def _pycross_wheel_zipimport_library_impl(ctx):
     wheel_label = ctx.file.wheel.owner or ctx.attr.wheel.label
     wheel_file = ctx.file.wheel
-    wheel_target = ctx.attr.wheel
     extra_files = []
-    if PycrossWheelInfo in wheel_target:
-        wheelhouse = getattr(wheel_target[PycrossWheelInfo], "wheelhouse", None)
-        if wheelhouse:
-            extra_files.append(wheelhouse)
 
     has_py2_only_sources = False
     has_py3_only_sources = True

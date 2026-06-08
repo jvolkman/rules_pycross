@@ -5,9 +5,6 @@ load("@rules_testing//lib:analysis_test.bzl", "analysis_test", "test_suite")
 load("@rules_testing//lib:util.bzl", "util")
 
 # buildifier: disable=bzl-visibility
-load("//pycross/private:providers.bzl", "PycrossWheelInfo")
-
-# buildifier: disable=bzl-visibility
 load("//pycross/private/build/rules:setuptools_build.bzl", "setuptools_build")
 
 def _mock_sdist_impl(ctx):
@@ -29,7 +26,7 @@ def _test_setuptools_build_no_repair(name):
 
 # buildifier: disable=unused-variable
 def _test_setuptools_build_no_repair_impl(env, target):
-    wheelhouse = target[PycrossWheelInfo].wheelhouse
+    wheelhouse = target[DefaultInfo].files.to_list()[0]
     env.expect.that_target(target).action_generating(wheelhouse.short_path)
     # The action that generates the wheel should be the main build action, meaning no repair action
 
@@ -46,7 +43,7 @@ def _test_setuptools_build_with_repair(name):
 
 # buildifier: disable=unused-variable
 def _test_setuptools_build_with_repair_impl(env, target):
-    wheelhouse = target[PycrossWheelInfo].wheelhouse
+    wheelhouse = target[DefaultInfo].files.to_list()[0]
     action = env.expect.that_target(target).action_generating(wheelhouse.short_path)
     action.mnemonic().equals("RepairWheel")
 

@@ -6,7 +6,6 @@ load(
     "//pycross/private:providers.bzl",
     "PycrossExtractedWheelInfo",
     "PycrossPackageInfo",
-    "PycrossWheelInfo",
 )
 load("//pycross/private/build:transitions.bzl", "pycross_exec_platform_transition")
 
@@ -79,17 +78,12 @@ def get_wheelhouse(target):
     """Extracts the .whl File from a target.
 
     Args:
-        target: Target, a wheel target (with or without PycrossWheelInfo).
+        target: Target, a wheel target.
 
     Returns:
         File: the wheelhouse directory.
     """
-    if PycrossWheelInfo in target:
-        return target[PycrossWheelInfo].wheelhouse
     files = target[DefaultInfo].files.to_list()
-    for f in files:
-        if f.path.endswith(".whl"):
-            return f
     return files[0]
 
 def get_unzipped_wheel(target):

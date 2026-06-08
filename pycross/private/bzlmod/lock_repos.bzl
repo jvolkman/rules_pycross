@@ -71,7 +71,7 @@ def _lock_repos_impl(module_ctx):
             # Use the key as our repo name, but replace its / with _ and sanitize for Bazel
             remote_file_repo = "pypi_{}".format(sanitize_name(key.replace("/", "_")))
             if file["name"].endswith(".whl"):
-                remote_file_label = "@{}//:wheelhouse".format(remote_file_repo)
+                remote_file_label = "@{}//:wheel".format(remote_file_repo)
             else:
                 remote_file_label = "@{}//file:{}".format(remote_file_repo, file["name"])
 

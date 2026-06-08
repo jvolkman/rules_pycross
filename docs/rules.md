@@ -268,25 +268,6 @@ Information about an extracted (installed) Python wheel.
 | <a id="PycrossExtractedWheelInfo-site_packages"></a>site_packages |  File (TreeArtifact): The unzipped site-packages directory containing the wheel's installed files.    |
 
 
-<a id="PycrossWheelInfo"></a>
-
-## PycrossWheelInfo
-
-<pre>
-load("@rules_pycross//pycross:defs.bzl", "PycrossWheelInfo")
-
-PycrossWheelInfo(<a href="#PycrossWheelInfo-wheelhouse">wheelhouse</a>)
-</pre>
-
-Information about a built or downloaded Python wheel.
-
-**FIELDS**
-
-| Name  | Description |
-| :------------- | :------------- |
-| <a id="PycrossWheelInfo-wheelhouse"></a>wheelhouse |  File (TreeArtifact): A directory containing exactly one .whl file with its proper name.    |
-
-
 <a id="package_annotation"></a>
 
 ## package_annotation

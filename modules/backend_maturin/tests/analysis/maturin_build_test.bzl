@@ -1,6 +1,5 @@
 """Tests for maturin_build.bzl."""
 
-load("@rules_pycross//pycross:backend.bzl", "PycrossWheelInfo")
 load("@rules_testing//lib:analysis_test.bzl", "analysis_test", "test_suite")
 load("@rules_testing//lib:util.bzl", "util")
 load("//rules:maturin_build.bzl", "maturin_build")
@@ -41,7 +40,6 @@ def _test_maturin_build_basic(name):
     )
 
 def _test_maturin_build_basic_impl(env, target):
-    env.expect.that_target(target).has_provider(PycrossWheelInfo)
     env.expect.that_target(target).has_provider(DefaultInfo)
     env.expect.that_target(target).has_provider(OutputGroupInfo)
 

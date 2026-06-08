@@ -1,16 +1,7 @@
 """Implementation of the pycross_wheel_transform rule."""
 
-load(":providers.bzl", "PycrossWheelInfo")
-
 def _pycross_wheel_transform_impl(ctx):
-    # Resolve input wheel file and name file from PycrossWheelInfo or dynamically from files
-    input_wheelhouse = None
-    if PycrossWheelInfo in ctx.attr.wheel:
-        wheel_info = ctx.attr.wheel[PycrossWheelInfo]
-        input_wheelhouse = wheel_info.wheelhouse
-    else:
-        # Assuming the fallback is the wheelhouse filegroup
-        input_wheelhouse = ctx.files.wheel[0]
+    input_wheelhouse = ctx.files.wheel[0]
 
     # Declare outputs.
     out_wheelhouse = ctx.actions.declare_directory(ctx.attr.name + ".wheelhouse")
@@ -49,14 +40,7 @@ def _pycross_wheel_transform_impl(ctx):
         progress_message = "Transforming %s" % input_wheelhouse.basename,
     )
 
-    return [
-        PycrossWheelInfo(
-            wheelhouse = out_wheelhouse,
-        ),
-        DefaultInfo(
-            files = depset([out_wheelhouse]),
-        ),
-    ]
+    return [DefaultInfo(files = depset([out_wheelhouse]))]
 
 pycross_wheel_transform = rule(
     implementation = _pycross_wheel_transform_impl,

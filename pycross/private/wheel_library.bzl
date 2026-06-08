@@ -6,19 +6,13 @@ load(
     ":providers.bzl",
     "PycrossExtractedWheelInfo",
     "PycrossPackageInfo",
-    "PycrossWheelInfo",
 )
 
 def _pycross_wheel_library_impl(ctx):
     out = ctx.actions.declare_directory(ctx.attr.name)
     entry_points = ctx.actions.declare_file(ctx.attr.name + ".dist_info/entry_points.txt")
 
-    wheel_target = ctx.attr.wheel
-    if PycrossWheelInfo in wheel_target:
-        wheelhouse = wheel_target[PycrossWheelInfo].wheelhouse
-    else:
-        # We assume the first file is the wheel if PycrossWheelInfo is not present
-        wheelhouse = ctx.files.wheel[0]
+    wheelhouse = ctx.files.wheel[0]
 
     args = ctx.actions.args().use_param_file("--flagfile=%s")
     if type(wheelhouse) == "File" and wheelhouse.is_directory:

@@ -7,7 +7,6 @@ load(
     "CC_TOOLCHAINS",
     "CC_TOOLCHAIN_ATTRS",
     "COMMON_BUILD_ATTRS",
-    "PycrossWheelInfo",
     "extract_cc_layer",
     "get_unzipped_wheel",
     "group_tool_deps",
@@ -117,9 +116,6 @@ def _maturin_build_impl(ctx):
 
     return [
         DefaultInfo(files = depset([repair_result.wheelhouse])),
-        PycrossWheelInfo(
-            wheelhouse = repair_result.wheelhouse,
-        ),
         OutputGroupInfo(
             raw_wheel = depset([build_result.wheelhouse]),
         ),

@@ -28,7 +28,7 @@ def _test_render_lock_impl(env, target):
     res = render_lock_bzl(lock, repo_map, "my_rctx")
 
     env.expect.that_bool("pycross_wheel_library(" in res).equals(True)
-    env.expect.that_bool("_wheelhouse_foo@1.0" in res).equals(True)
+    env.expect.that_bool("_wheel_foo@1.0" in res).equals(True)
     env.expect.that_bool("select({" in res).equals(True)
     env.expect.that_bool('":linux": "@my_repo//foo:wheel"' in res).equals(True)
 

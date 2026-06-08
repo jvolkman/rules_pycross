@@ -1,6 +1,6 @@
 """Implementation of the pep517_build rule."""
 
-load("//pycross/private:providers.bzl", "PycrossPackageInfo", "PycrossWheelInfo")
+load("//pycross/private:providers.bzl", "PycrossPackageInfo")
 load("//pycross/private/build/actions:pep517_action.bzl", "register_pep517_action")
 load(":common_attrs.bzl", "COMMON_BUILD_ATTRS")
 
@@ -32,9 +32,6 @@ def _pep517_build_impl(ctx):
 
     return [
         DefaultInfo(files = depset([build_result.wheelhouse])),
-        PycrossWheelInfo(
-            wheelhouse = build_result.wheelhouse,
-        ),
     ]
 
 pep517_build = rule(

@@ -11,9 +11,9 @@ collect_wheels(
         "@llvm//platforms:macos_aarch64",
     ],
     wheels = [
-        "@uv//psycopg2:wheelhouse",
-        "@uv//pyyaml:wheelhouse",
-        "@uv//setproctitle:wheelhouse",
+        "@uv//psycopg2:wheel",
+        "@uv//pyyaml:wheel",
+        "@uv//setproctitle:wheel",
         ":zstandard_build",
     ],
 )

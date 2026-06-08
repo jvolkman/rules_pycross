@@ -6,7 +6,7 @@ load("@rules_testing//lib:analysis_test.bzl", "analysis_test", "test_suite")
 load("@rules_testing//lib:util.bzl", "util")
 
 # buildifier: disable=bzl-visibility
-load("//pycross/private:providers.bzl", "PycrossExtractedWheelInfo", "PycrossPackageInfo", "PycrossWheelInfo")
+load("//pycross/private:providers.bzl", "PycrossExtractedWheelInfo", "PycrossPackageInfo")
 
 # buildifier: disable=bzl-visibility
 load("//pycross/private/build/rules:meson_build.bzl", "meson_build")
@@ -49,7 +49,6 @@ def _test_meson_build_basic(name):
 
 # buildifier: disable=unused-variable
 def _test_meson_build_basic_impl(env, target):
-    env.expect.that_target(target).has_provider(PycrossWheelInfo)
     env.expect.that_target(target).has_provider(DefaultInfo)
     env.expect.that_target(target).has_provider(OutputGroupInfo)
     out_group = target[OutputGroupInfo]

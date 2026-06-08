@@ -8,7 +8,7 @@ def collect_wheels(name, wheels, platforms, **kwargs):
 
     Args:
         name: Name of the resulting target.
-        wheels: List of wheel labels (e.g., ["@uv//numpy:wheelhouse"]).
+        wheels: List of wheel labels (e.g., ["@uv//numpy:wheel"]).
         platforms: List of platform labels to build for.
         **kwargs: Additional arguments forwarded to the filegroup.
     """

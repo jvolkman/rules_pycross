@@ -9,7 +9,6 @@ load(
     "//pycross/private:providers.bzl",
     _PycrossExtractedWheelInfo = "PycrossExtractedWheelInfo",
     _PycrossPackageInfo = "PycrossPackageInfo",
-    _PycrossWheelInfo = "PycrossWheelInfo",
 )
 load(
     "//pycross/private/build:transitions.bzl",
@@ -50,7 +49,6 @@ load(
 )
 
 # Providers
-PycrossWheelInfo = _PycrossWheelInfo
 PycrossExtractedWheelInfo = _PycrossExtractedWheelInfo
 PycrossPackageInfo = _PycrossPackageInfo
 

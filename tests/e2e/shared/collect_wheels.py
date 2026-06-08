@@ -15,6 +15,16 @@ def main():
     for wheel_str in args.wheel:
         for p in wheel_str.split(" "):
             wheel_path = Path(p)
+
+            # TreeArtifact: a directory containing .whl files
+            if wheel_path.is_dir():
+                for whl in wheel_path.glob("*.whl"):
+                    real_path = whl.resolve()
+                    target_path = out_dir / real_path.name
+                    if not target_path.exists():
+                        shutil.copy2(real_path, target_path)
+                continue
+
             if not wheel_path.name.endswith(".whl"):
                 continue
 

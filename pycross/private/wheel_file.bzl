@@ -7,7 +7,7 @@ _BUILD_TEMPLATE = """\
 package(default_visibility = ["//visibility:public"])
 
 filegroup(
-    name = "wheelhouse",
+    name = "wheel",
     srcs = glob(["*.wheelhouse/*.whl"]),
 )
 """
