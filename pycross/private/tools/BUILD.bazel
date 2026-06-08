@@ -156,6 +156,12 @@ py_binary(
     ],
 )
 
+sh_binary(
+    name = "wheel_installer_fast",
+    srcs = ["wheel_installer.sh"],
+    visibility = ["//visibility:public"],
+)
+
 py_binary(
     name = "extract_console_script",
     srcs = ["extract_console_script.py"],
