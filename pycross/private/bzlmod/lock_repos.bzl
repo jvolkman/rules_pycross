@@ -8,6 +8,7 @@ load("@rules_pycross//pycross/private/bzlmod:sdist_repo.bzl", "pycross_sdist_rep
 load("//pycross/private:package_repo.bzl", "package_repo")
 load("//pycross/private:pypi_file.bzl", "pypi_file")
 load("//pycross/private:util.bzl", "sanitize_name")
+load("//pycross/private:wheel_file.bzl", "pycross_wheel_file")
 load(":tag_attrs.bzl", "CREATE_REPOS_ATTRS")
 
 # buildifier: disable=print
@@ -69,19 +70,28 @@ def _lock_repos_impl(module_ctx):
 
             # Use the key as our repo name, but replace its / with _ and sanitize for Bazel
             remote_file_repo = "pypi_{}".format(sanitize_name(key.replace("/", "_")))
-            remote_file_label = "@{}//file:{}".format(remote_file_repo, file["name"])
+            if file["name"].endswith(".whl"):
+                remote_file_label = "@{}//:wheelhouse".format(remote_file_repo)
+            else:
+                remote_file_label = "@{}//file:{}".format(remote_file_repo, file["name"])
 
             urls = file.get("urls", [])
             if urls:
-                # We have URLs so we'll use an http_file repo.
-                http_file(
-                    name = remote_file_repo,
-                    urls = urls,
-                    sha256 = file["sha256"],
-                    downloaded_file_path = file["name"],
-                )
+                if file["name"].endswith(".whl"):
+                    pycross_wheel_file(
+                        name = remote_file_repo,
+                        urls = urls,
+                        sha256 = file["sha256"],
+                        filename = file["name"],
+                    )
+                else:
+                    http_file(
+                        name = remote_file_repo,
+                        urls = urls,
+                        sha256 = file["sha256"],
+                        downloaded_file_path = file["name"],
+                    )
             else:
-                # No URLs; use a pypi_file repo.
                 pypi_file_attrs = dict(
                     name = remote_file_repo,
                     package_name = file["package_name"],
@@ -92,7 +102,10 @@ def _lock_repos_impl(module_ctx):
                 if create_tag.pypi_index:
                     pypi_file_attrs["index"] = create_tag.pypi_index
 
-                pypi_file(**pypi_file_attrs)
+                if file["name"].endswith(".whl"):
+                    pycross_wheel_file(**pypi_file_attrs)
+                else:
+                    pypi_file(**pypi_file_attrs)
 
             repo_remote_files[key] = remote_file_label
             all_remote_files[key] = remote_file_label

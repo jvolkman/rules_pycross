@@ -17,13 +17,14 @@ def _mock_exe_impl(ctx):
 _mock_exe = rule(implementation = _mock_exe_impl, executable = True)
 
 def _mock_wheel_impl(ctx):
-    out = ctx.actions.declare_file(ctx.label.name + ".whl")
-    ctx.actions.write(out, "dummy")
-    name_file = ctx.actions.declare_file(ctx.label.name + "_name.txt")
-    ctx.actions.write(name_file, "dummy")
+    out = ctx.actions.declare_directory(ctx.label.name + "_wheelhouse")
+    ctx.actions.run_shell(
+        outputs = [out],
+        command = "touch %s/dummy.whl" % out.path,
+    )
     return [
         DefaultInfo(files = depset([out])),
-        PycrossWheelInfo(wheel_file = out, name_file = name_file, wheel_directory = None),
+        PycrossWheelInfo(wheelhouse = out),
     ]
 
 _mock_wheel = rule(implementation = _mock_wheel_impl)
@@ -42,11 +43,11 @@ def _test_wheel_transform_basic(name):
 # buildifier: disable=unused-variable
 def _test_wheel_transform_basic_impl(env, target):
     env.expect.that_target(target).has_provider(PycrossWheelInfo)
-    wheel_file = target[PycrossWheelInfo].wheel_file
-    env.expect.that_target(target).action_generating(wheel_file.short_path)
+    wheelhouse = target[PycrossWheelInfo].wheelhouse
+    env.expect.that_target(target).action_generating(wheelhouse.short_path)
 
     # The action executable should be the transform tool
-    raw_action = [a for a in target.actions if wheel_file in a.outputs.to_list()][0]
+    raw_action = [a for a in target.actions if wheelhouse in a.outputs.to_list()][0]
     env.expect.that_str(str(raw_action.argv)).contains("_transform_tool")
 
 def wheel_transform_test_suite(name):

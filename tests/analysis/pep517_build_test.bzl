@@ -78,9 +78,7 @@ def _test_pep517_build_basic_impl(env, target):
     env.expect.that_target(target).has_provider(OutputGroupInfo)
 
     wheel_info = target[PycrossWheelInfo]
-    env.expect.that_str(wheel_info.wheel_file.basename).contains(".whl")
-    env.expect.that_str(wheel_info.name_file.basename).contains("name")
-    env.expect.that_bool(wheel_info.wheel_directory.is_directory).equals(True)
+    env.expect.that_bool(wheel_info.wheelhouse.is_directory).equals(True)
 
 def pep517_build_test_suite(name):
     test_suite(

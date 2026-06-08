@@ -70,9 +70,7 @@ def _meson_build_impl(ctx):
         target_environment = ctx.files.target_environment[0] if ctx.files.target_environment else None
         repair_result = register_repair_action(
             ctx,
-            input_wheel = build_result.wheel,
-            input_name_file = build_result.name_file,
-            input_wheel_directory = build_result.wheel_directory,
+            input_wheelhouse = build_result.wheelhouse,
             native_deps = ctx.attr.native_deps,
             repair_tool = ctx.executable._repair_tool,
             target_environment = target_environment,
@@ -82,14 +80,12 @@ def _meson_build_impl(ctx):
         repair_result = build_result
 
     return [
-        DefaultInfo(files = depset([repair_result.wheel, repair_result.wheel_directory])),
+        DefaultInfo(files = depset([repair_result.wheelhouse])),
         PycrossWheelInfo(
-            wheel_file = repair_result.wheel,
-            name_file = repair_result.name_file,
-            wheel_directory = repair_result.wheel_directory,
+            wheelhouse = repair_result.wheelhouse,
         ),
         OutputGroupInfo(
-            raw_wheel = depset([build_result.wheel, build_result.wheel_directory]),
+            raw_wheel = depset([build_result.wheelhouse]),
         ),
     ]
 

@@ -275,18 +275,16 @@ Information about an extracted (installed) Python wheel.
 <pre>
 load("@rules_pycross//pycross:defs.bzl", "PycrossWheelInfo")
 
-PycrossWheelInfo(<a href="#PycrossWheelInfo-name_file">name_file</a>, <a href="#PycrossWheelInfo-wheel_file">wheel_file</a>, <a href="#PycrossWheelInfo-wheel_directory">wheel_directory</a>)
+PycrossWheelInfo(<a href="#PycrossWheelInfo-wheelhouse">wheelhouse</a>)
 </pre>
 
-Information about a Python wheel.
+Information about a built or downloaded Python wheel.
 
 **FIELDS**
 
 | Name  | Description |
 | :------------- | :------------- |
-| <a id="PycrossWheelInfo-name_file"></a>name_file |  File: A file containing the canonical name of the wheel.    |
-| <a id="PycrossWheelInfo-wheel_file"></a>wheel_file |  File: The wheel file itself.    |
-| <a id="PycrossWheelInfo-wheel_directory"></a>wheel_directory |  File (TreeArtifact, optional): A directory containing the wheel file under its proper name.    |
+| <a id="PycrossWheelInfo-wheelhouse"></a>wheelhouse |  File (TreeArtifact): A directory containing exactly one .whl file with its proper name.    |
 
 
 <a id="package_annotation"></a>

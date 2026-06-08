@@ -15,27 +15,20 @@ def _pycross_wheel_library_impl(ctx):
 
     wheel_target = ctx.attr.wheel
     if PycrossWheelInfo in wheel_target:
-        wheel_file = wheel_target[PycrossWheelInfo].wheel_file
-        name_file = wheel_target[PycrossWheelInfo].name_file
+        wheelhouse = wheel_target[PycrossWheelInfo].wheelhouse
     else:
         # We assume the first file is the wheel if PycrossWheelInfo is not present
-        wheel_file = ctx.files.wheel[0]
-        name_file = None
+        wheelhouse = ctx.files.wheel[0]
 
     args = ctx.actions.args().use_param_file("--flagfile=%s")
-    args.add("--wheel", wheel_file)
+    if type(wheelhouse) == "File" and wheelhouse.is_directory:
+        args.add("--wheelhouse", wheelhouse.path)
+    else:
+        args.add("--wheelhouse", wheelhouse.dirname)
     args.add("--directory", out.path)
     args.add_all(ctx.files.post_install_patches, format_each = "--patch=%s")
 
-    inputs = [wheel_file] + ctx.files.post_install_patches
-    wheel_dir = None
-    if PycrossWheelInfo in wheel_target:
-        wheel_dir = getattr(wheel_target[PycrossWheelInfo], "wheel_directory", None)
-        if wheel_dir:
-            inputs.append(wheel_dir)
-    if name_file:
-        inputs.append(name_file)
-        args.add("--wheel-name-file", name_file)
+    inputs = [wheelhouse] + ctx.files.post_install_patches
 
     if ctx.attr.enable_implicit_namespace_pkgs:
         args.add("--enable-implicit-namespace-pkgs")
@@ -46,7 +39,6 @@ def _pycross_wheel_library_impl(ctx):
     args.add("--entry-points-output", entry_points)
 
     for patch in ctx.files.post_install_patches:
-        inputs.append(patch)
         args.add("--patch", patch)
 
     ctx.actions.run(
@@ -60,7 +52,7 @@ def _pycross_wheel_library_impl(ctx):
             "PYTHONHASHSEED": "0",
         },
         mnemonic = "WheelInstall",
-        progress_message = "Installing %s" % wheel_file.basename,
+        progress_message = "Installing %s" % wheelhouse.basename,
     )
 
     has_py2_only_sources = ctx.attr.python_version == "PY2"

@@ -7,8 +7,8 @@ collect_wheels(
         "@llvm//platforms:macos_aarch64",
     ],
     wheels = [
-        "@uv//filelock:whl",
-        "@uv//pyproject-metadata:whl",
-        "@uv//tomli:whl",
+        "@uv//filelock:wheelhouse",
+        "@uv//pyproject-metadata:wheelhouse",
+        "@uv//tomli:wheelhouse",
     ],
 )

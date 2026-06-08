@@ -7,6 +7,6 @@ collect_wheels(
         "@llvm//platforms:macos_aarch64",
     ],
     wheels = [
-        "@uv//iminuit:whl",
+        "@uv//iminuit:wheelhouse",
     ],
 )

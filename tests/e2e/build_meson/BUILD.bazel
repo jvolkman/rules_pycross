@@ -7,9 +7,9 @@ collect_wheels(
         "@llvm//platforms:macos_aarch64",
     ],
     wheels = [
-        "@uv//contourpy:whl",
-        "@uv//numpy:whl",
-        "@uv//pandas:whl",
-        "@uv//pywavelets:whl",
+        "@uv//contourpy:wheelhouse",
+        "@uv//numpy:wheelhouse",
+        "@uv//pandas:wheelhouse",
+        "@uv//pywavelets:wheelhouse",
     ],
 )

@@ -5,20 +5,12 @@ load("//pycross/private:providers.bzl", "PycrossWheelInfo")
 load("//pycross/private/build/actions:repair_action.bzl", "register_repair_action")
 
 def _pycross_repaired_wheel_impl(ctx):
-    # Resolve input wheel file and name file.
-    input_wheel_directory = None
+    # Resolve input wheelhouse.
     if PycrossWheelInfo in ctx.attr.wheel:
-        wheel_info = ctx.attr.wheel[PycrossWheelInfo]
-        input_wheel = wheel_info.wheel_file
-        input_name_file = wheel_info.name_file
-        input_wheel_directory = getattr(wheel_info, "wheel_directory", None)
+        input_wheelhouse = ctx.attr.wheel[PycrossWheelInfo].wheelhouse
     else:
-        whl_files = [f for f in ctx.files.wheel if f.path.endswith(".whl")]
-        if len(whl_files) != 1:
-            fail("wheel target must produce exactly one .whl file, got: %s" % [f.path for f in ctx.files.wheel])
-        input_wheel = whl_files[0]
-        name_files = [f for f in ctx.files.wheel if f.path.endswith(".whl.name")]
-        input_name_file = name_files[0] if name_files else None
+        # Fallback: assume the input is a wheelhouse filegroup
+        input_wheelhouse = ctx.files.wheel[0]
 
     target_environment = None
     if ctx.files.target_environment:
@@ -26,9 +18,7 @@ def _pycross_repaired_wheel_impl(ctx):
 
     repair_result = register_repair_action(
         ctx,
-        input_wheel = input_wheel,
-        input_name_file = input_name_file,
-        input_wheel_directory = input_wheel_directory,
+        input_wheelhouse = input_wheelhouse,
         native_deps = ctx.attr.native_deps,
         repair_tool = ctx.executable._repair_tool,
         target_environment = target_environment,
@@ -36,12 +26,10 @@ def _pycross_repaired_wheel_impl(ctx):
 
     return [
         PycrossWheelInfo(
-            wheel_file = repair_result.wheel,
-            name_file = repair_result.name_file,
-            wheel_directory = repair_result.wheel_directory,
+            wheelhouse = repair_result.wheelhouse,
         ),
         DefaultInfo(
-            files = depset([repair_result.wheel, repair_result.wheel_directory]),
+            files = depset([repair_result.wheelhouse]),
         ),
     ]
 

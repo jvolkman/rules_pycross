@@ -224,6 +224,15 @@ filegroup(
 )
 
 bzl_library(
+    name = "wheel_file",
+    srcs = ["wheel_file.bzl"],
+    deps = [
+        ":internal_repo",
+        "@bazel_tools//tools/build_defs/repo:utils.bzl",
+    ],
+)
+
+bzl_library(
     name = "dist_info",
     srcs = ["dist_info.bzl"],
 )

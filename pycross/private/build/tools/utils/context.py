@@ -26,9 +26,7 @@ class BuildContext:
     sdist_path: Path
     exec_python: Path
     target_python: Path
-    wheel_file: Path
-    wheel_name_file: Path
-    wheel_directory: Path
+    wheelhouse: Path
 
     # Build dependencies and tools
     pkg_config_files: List[Path]
@@ -90,9 +88,7 @@ def load_build_context(config_path: str) -> BuildContext:
             if os.path.isabs(bazel_config["target_python"])
             else (prefix / Path(bazel_config["target_python"])).absolute()
         ),
-        wheel_file=(prefix / Path(bazel_config["wheel_file"])).absolute(),
-        wheel_name_file=(prefix / Path(bazel_config["wheel_name_file"])).absolute(),
-        wheel_directory=(prefix / Path(bazel_config["wheel_directory"])).absolute(),
+        wheelhouse=(prefix / Path(bazel_config["wheelhouse"])).absolute(),
         pkg_config_files=[(prefix / Path(f)).absolute() for f in bazel_config.get("pkg_config_files", [])],
         path_tools=[
             {

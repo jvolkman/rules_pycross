@@ -10,9 +10,9 @@ def _pycross_wheel_zipimport_library_impl(ctx):
     wheel_target = ctx.attr.wheel
     extra_files = []
     if PycrossWheelInfo in wheel_target:
-        wheel_dir = getattr(wheel_target[PycrossWheelInfo], "wheel_directory", None)
-        if wheel_dir:
-            extra_files.append(wheel_dir)
+        wheelhouse = getattr(wheel_target[PycrossWheelInfo], "wheelhouse", None)
+        if wheelhouse:
+            extra_files.append(wheelhouse)
 
     has_py2_only_sources = False
     has_py3_only_sources = True

@@ -31,11 +31,9 @@ def _pep517_build_impl(ctx):
     )
 
     return [
-        DefaultInfo(files = depset([build_result.wheel, build_result.wheel_directory])),
+        DefaultInfo(files = depset([build_result.wheelhouse])),
         PycrossWheelInfo(
-            wheel_file = build_result.wheel,
-            name_file = build_result.name_file,
-            wheel_directory = build_result.wheel_directory,
+            wheelhouse = build_result.wheelhouse,
         ),
     ]
 

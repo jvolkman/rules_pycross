@@ -7,7 +7,7 @@ The file structure is as follows:
 - requirements.bzl         - Provides `requirement()` and `all_requirements`.
 - _lock/lock.bzl           - Generated Starlark with all package targets.
 - _lock/BUILD.bazel        - Loads lock.bzl and calls targets().
-- _wheel/BUILD.bazel       - Versioned wheel aliases.
+- _wheelhouse/BUILD.bazel    - Versioned wheelhouse aliases.
 - _sdist/BUILD.bazel       - Versioned sdist aliases.
 - _backend/<rule>.bzl      - Backend macros with pre-configured tool deps.
 - <package>/BUILD.bazel    - Pin aliases pointing to //_lock targets.
@@ -15,13 +15,13 @@ The file structure is as follows:
 From a target perspective:
 - //:package             - Alias to the pycross_wheel_library target.
 - //package:pkg          - The pycross_wheel_library target (pinned version).
-- //package:whl          - The wheel file (pinned version).
+- //package:wheelhouse   - The wheel TreeArtifact target (pinned version).
 - //package:sdist        - The sdist file (pinned version, if available).
 - //package:dist_info    - The dist-info files (for py_console_script_binary).
 - //package:data         - The package data (alias for :pkg, rules_python compat).
 - //package:[extra]      - Extra dependency group (pinned version).
-- //_wheel:package       - Pinned wheel file.
-- //_wheel:package@ver   - Specific version wheel file.
+- //_wheelhouse:package       - Pinned wheelhouse directory.
+- //_wheelhouse:package@ver   - Specific version wheelhouse directory.
 - //_sdist:package       - Pinned sdist file.
 - //_sdist:package@ver   - Specific version sdist file.
 
@@ -85,7 +85,7 @@ def _requirements_bzl(rctx, pins):
         "all_whl_requirements = [",
     ])
     for pin in sorted(pins.keys()):
-        lines.append('    "@@{repo_name}//_wheel:{pin}",'.format(repo_name = rctx.name, pin = pin))
+        lines.append('    "@@{repo_name}//_wheelhouse:{pin}",'.format(repo_name = rctx.name, pin = pin))
     lines.append("]")
 
     return "\n".join(lines) + "\n"
@@ -107,10 +107,10 @@ def _pin_build(pin_name, pin_target, package):
         '    actual = "//_lock:{}",'.format(pin_target),
         ")",
         "",
-        # //package:whl -> //_lock:_wheel_<pin_target>
+        # //package:wheelhouse -> //_lock:_wheelhouse_<pin_target>
         "alias(",
-        '    name = "whl",',
-        '    actual = "//_lock:_wheel_{}",'.format(pin_target),
+        '    name = "wheelhouse",',
+        '    actual = "//_lock:_wheelhouse_{}",'.format(pin_target),
         ")",
         "",
         # //package:dist_info -> //_lock:_dist_info_<pin_target>
@@ -154,6 +154,22 @@ def _package_repo_impl(rctx):
     packages = lock["packages"]
     pins = lock["pins"]
 
+    # 0. Read inspection.json for wheel files to populate top_level_packages
+    for pkg_key, pkg in packages.items():
+        for _, file_ref in pkg.get("environment_files", {}).items():
+            key = file_ref.get("key")
+            if not key:
+                continue
+            repo_label = rctx.attr.repo_map.get(key)
+            if repo_label and repo_label.endswith("//:wheelhouse"):
+                repo_name = repo_label.split("//")[0].lstrip("@")
+                inspection_path = rctx.path(".").dirname.get_child(repo_name).get_child("inspection.json")
+                if inspection_path.exists:
+                    inspection_data = json.decode(rctx.read(inspection_path))
+                    if "top_level_packages" in inspection_data:
+                        pkg["top_level_packages"] = inspection_data["top_level_packages"]
+                break
+
     rctx.file("REPO.bazel", "")
     rctx.file("defs.bzl", "")  # Empty file for compatibility
     rctx.file("requirements.bzl", _requirements_bzl(rctx, pins))
@@ -196,7 +212,7 @@ def _package_repo_impl(rctx):
         if underscore_name != pin_name:
             rctx.file("{}/BUILD.bazel".format(underscore_name), _pin_build(underscore_name, pin_target, package))
 
-    # 4. _wheel/ and _sdist/ directories for versioned artifact access
+    # 4. _wheelhouse/ and _sdist/ directories for versioned artifact access
     wheel_lines = [
         'package(default_visibility = ["//visibility:public"])',
         "",
@@ -210,11 +226,11 @@ def _package_repo_impl(rctx):
         norm_name = _normalize_name(pkg_key.split("@")[0])
         pkg_version = pkg_key.split("@")[1]
 
-        # Versioned alias: _wheel:name@version -> //_lock:_wheel_<key>
+        # Versioned alias: _wheelhouse:name@version -> //_lock:_wheelhouse_<key>
         wheel_lines.extend([
             "alias(",
             '    name = "{}@{}",'.format(norm_name, pkg_version),
-            '    actual = "//_lock:_wheel_{}",'.format(pkg_key),
+            '    actual = "//_lock:_wheelhouse_{}",'.format(pkg_key),
             ")",
             "",
         ])
@@ -229,12 +245,12 @@ def _package_repo_impl(rctx):
                 "",
             ])
 
-    # Unversioned pin aliases: _wheel:name -> //name:whl
+    # Unversioned pin aliases: _wheelhouse:name -> //name:wheelhouse
     for pin_name in sorted(pins.keys()):
         wheel_lines.extend([
             "alias(",
             '    name = "{}",'.format(pin_name),
-            '    actual = "//{}:whl",'.format(pin_name),
+            '    actual = "//{}:wheelhouse",'.format(pin_name),
             ")",
             "",
         ])
@@ -250,7 +266,7 @@ def _package_repo_impl(rctx):
                 "",
             ])
 
-    rctx.file("_wheel/BUILD.bazel", "\n".join(wheel_lines) + "\n")
+    rctx.file("_wheelhouse/BUILD.bazel", "\n".join(wheel_lines) + "\n")
     rctx.file("_sdist/BUILD.bazel", "\n".join(sdist_lines) + "\n")
 
     # 5. _backend/ directory

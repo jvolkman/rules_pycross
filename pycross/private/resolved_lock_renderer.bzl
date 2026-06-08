@@ -158,7 +158,7 @@ def render_lock_bzl(lock, repo_map, rctx_name):
         # Wheel alias (with select for multi-environment)
         lines.extend([
             _ind("native.alias("),
-            _ind('name = "_wheel_{}",'.format(pkg_key), 2),
+            _ind('name = "_wheelhouse_{}",'.format(pkg_key), 2),
         ])
         lines.append(_ind("actual = select({", 2))
         for env_name, env_ref in sorted(pkg.get("environment_files", {}).items()):
@@ -183,7 +183,7 @@ def render_lock_bzl(lock, repo_map, rctx_name):
             _ind('name = "{}",'.format(lib_name), 2),
             _ind('package_name = "{}",'.format(package_name), 2),
             _ind('package_version = "{}",'.format(package_version), 2),
-            _ind('wheel = ":_wheel_{}",'.format(pkg_key), 2),
+            _ind('wheel = ":_wheelhouse_{}",'.format(pkg_key), 2),
         ])
 
         if pkg.get("top_level_packages"):

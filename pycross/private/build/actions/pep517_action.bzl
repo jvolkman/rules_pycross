@@ -62,9 +62,7 @@ def register_pep517_action(
 
     Returns:
         struct(
-            wheel = File,
-            name_file = File,
-            wheel_directory = File,
+            wheelhouse = File,  # TreeArtifact containing one .whl file
         )
     """
     inputs = [sdist] + extra_inputs
@@ -163,15 +161,7 @@ def register_pep517_action(
             transitive_inputs.append(layer.transitive_files)
 
     # Declare output files
-    sdist_name = sdist.basename
-    if sdist_name.lower().endswith(".tar.gz"):
-        wheel_name = sdist_name[:-7]
-    else:
-        wheel_name = sdist_name.rsplit(".", 1)[0]
-
-    out_wheel = ctx.actions.declare_symlink(paths.join(ctx.attr.name, wheel_name + ".whl"))
-    out_wheel_name = ctx.actions.declare_file(paths.join(ctx.attr.name, wheel_name + ".whl.name"))
-    out_wheel_directory = ctx.actions.declare_directory(paths.join(ctx.attr.name, "wheel"))
+    out_wheelhouse = ctx.actions.declare_directory(paths.join(ctx.attr.name, "wheelhouse"))
 
     # Write main config file
     main_config = {
@@ -185,9 +175,7 @@ def register_pep517_action(
         "site_hooks": expanded_site_hooks,
         "pkg_config_files": pkg_config_paths,
         "path_tools": path_tools_list,
-        "wheel_file": out_wheel.path,
-        "wheel_name_file": out_wheel_name.path,
-        "wheel_directory": out_wheel_directory.path,
+        "wheelhouse": out_wheelhouse.path,
     }
     if cargo_vendored_sources:
         main_config["cargo_vendored_sources"] = cargo_vendored_sources
@@ -216,7 +204,7 @@ def register_pep517_action(
     if builder[DefaultInfo].default_runfiles:
         transitive_inputs.append(builder[DefaultInfo].default_runfiles.files)
 
-    sdist_root = out_wheel.dirname + "/sdist"
+    sdist_root = out_wheelhouse.dirname + "/sdist"
     build_root = ctx.bin_dir.path + "/" + ctx.label.package + "/" + ctx.label.name + "_tmp"
 
     action_env = dict(ctx.configuration.default_shell_env)
@@ -228,17 +216,15 @@ def register_pep517_action(
 
     ctx.actions.run(
         inputs = depset(inputs, transitive = transitive_inputs),
-        outputs = [out_wheel, out_wheel_name, out_wheel_directory],
+        outputs = [out_wheelhouse],
         executable = builder[DefaultInfo].files_to_run.executable,
         arguments = [config_json.path],
         env = action_env,
         tools = tools,
         mnemonic = "Pep517Build",
-        progress_message = "Building wheel %s" % sdist_name,
+        progress_message = "Building wheel %s" % sdist.basename,
     )
 
     return struct(
-        wheel = out_wheel,
-        name_file = out_wheel_name,
-        wheel_directory = out_wheel_directory,
+        wheelhouse = out_wheelhouse,
     )

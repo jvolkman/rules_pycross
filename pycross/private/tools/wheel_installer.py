@@ -103,14 +103,22 @@ def main(args: Any) -> None:
     )
 
     link_dir = Path(tempfile.mkdtemp())
-    if args.wheel_name_file:
-        with open(args.wheel_name_file, "r") as f:
-            wheel_name = f.read().strip()
+    if args.wheelhouse:
+        whl_files = list(Path(args.wheelhouse).glob("*.whl"))
+        if len(whl_files) != 1:
+            raise SystemExit(f"error: Expected 1 wheel in wheelhouse, found {len(whl_files)}")
+        wheel_path = whl_files[0]
+        wheel_name = wheel_path.name
     else:
-        wheel_name = os.path.basename(args.wheel)
+        wheel_path = Path(args.wheel)
+        if args.wheel_name_file:
+            with open(args.wheel_name_file, "r") as f:
+                wheel_name = f.read().strip()
+        else:
+            wheel_name = wheel_path.name
 
     link_path = link_dir / wheel_name
-    os.symlink(os.path.abspath(args.wheel), link_path)
+    os.symlink(wheel_path.absolute(), link_path)
 
     try:
         with FilteredWheelFile.open_filtered(link_path, args.install_exclude_globs) as source:
@@ -149,8 +157,15 @@ def parse_flags() -> Any:
     parser.add_argument(
         "--wheel",
         type=Path,
-        required=True,
+        required=False,
         help="The wheel file path.",
+    )
+
+    parser.add_argument(
+        "--wheelhouse",
+        type=Path,
+        required=False,
+        help="The wheelhouse directory.",
     )
 
     parser.add_argument(

@@ -5,6 +5,7 @@ load(":pep517_build_test.bzl", "pep517_build_test_suite")
 load(":pycross_cc_pkg_config_test.bzl", "pycross_cc_pkg_config_test_suite")
 load(":pycross_wheel_headers_test.bzl", "pycross_wheel_headers_test_suite")
 load(":pycross_wheel_library_test.bzl", "pycross_wheel_library_test_suite")
+load(":repaired_wheel_test.bzl", "repaired_wheel_test_suite")
 load(":setuptools_build_test.bzl", "setuptools_build_test_suite")
 load(":transitions_test.bzl", "transitions_test_suite")
 load(":wheel_transform_test.bzl", "wheel_transform_test_suite")
@@ -28,3 +29,5 @@ setuptools_build_test_suite(name = "setuptools_build_test")
 wheel_transform_test_suite(name = "wheel_transform_test")
 
 transitions_test_suite(name = "transitions_test")
+
+repaired_wheel_test_suite(name = "repaired_wheel_test")

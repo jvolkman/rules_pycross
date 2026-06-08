@@ -75,17 +75,17 @@ def group_tool_deps(tool_deps_list):
             result[name].append(dep)
     return result
 
-def get_wheel_file(target):
+def get_wheelhouse(target):
     """Extracts the .whl File from a target.
 
     Args:
         target: Target, a wheel target (with or without PycrossWheelInfo).
 
     Returns:
-        File: the wheel file.
+        File: the wheelhouse directory.
     """
     if PycrossWheelInfo in target:
-        return target[PycrossWheelInfo].wheel_file
+        return target[PycrossWheelInfo].wheelhouse
     files = target[DefaultInfo].files.to_list()
     for f in files:
         if f.path.endswith(".whl"):

@@ -2,7 +2,6 @@ import os
 import subprocess
 import sys
 import traceback
-from pathlib import Path
 
 from pycross.private.build.tools.utils.context import BuildContext
 
@@ -60,7 +59,7 @@ def run_pep517_build(ctx: BuildContext) -> str:
         runner=_subprocess_runner,
     )
 
-    ctx.wheel_directory.mkdir(parents=True, exist_ok=True)
+    ctx.wheelhouse.mkdir(parents=True, exist_ok=True)
 
     is_cross = ctx.exec_python != ctx.target_python
     if is_cross or ctx.bazel_config.get("always_use_crossenv"):
@@ -96,19 +95,11 @@ def run_pep517_build(ctx: BuildContext) -> str:
     try:
         wheel_file = builder.build(
             distribution="wheel",
-            output_directory=ctx.wheel_directory,
+            output_directory=ctx.wheelhouse,
             config_settings=ctx.config_settings,
         )
 
-        if ctx.wheel_file.exists() or ctx.wheel_file.is_symlink():
-            ctx.wheel_file.unlink()
-
-        os.symlink("wheel/" + Path(wheel_file).name, ctx.wheel_file)
-
-        with open(ctx.wheel_name_file, "w") as f:
-            f.write(Path(wheel_file).name)
-
-        return str(ctx.wheel_file)
+        return wheel_file
     except Exception:
         ctx.temp_dir.mkdir(parents=True, exist_ok=True)
         with open(ctx.temp_dir / "build_failed.log", "w") as f:

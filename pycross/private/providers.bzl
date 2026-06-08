@@ -1,11 +1,9 @@
 """Pycross providers."""
 
 PycrossWheelInfo = provider(
-    doc = "Information about a Python wheel.",
+    doc = "Information about a built or downloaded Python wheel.",
     fields = {
-        "name_file": "File: A file containing the canonical name of the wheel.",
-        "wheel_file": "File: The wheel file itself.",
-        "wheel_directory": "File (TreeArtifact, optional): A directory containing the wheel file under its proper name.",
+        "wheelhouse": "File (TreeArtifact): A directory containing exactly one .whl file with its proper name.",
     },
 )
 
