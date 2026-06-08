@@ -738,7 +738,7 @@ class TestCycleDetection(unittest.TestCase):
             ]
         )
         expected_digest = hashlib.sha256("\n".join(str(m) for m in members).encode()).hexdigest()[:8]
-        expected_name = f"cycle_group_{expected_digest}"
+        expected_name = f"group_{expected_digest}"
         self.assertEqual(group1, expected_name)
 
     def test_multiple_disconnected_cycles(self):

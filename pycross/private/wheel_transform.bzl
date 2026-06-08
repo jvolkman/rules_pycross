@@ -13,7 +13,7 @@ def _pycross_wheel_transform_impl(ctx):
         input_wheelhouse = ctx.files.wheel[0]
 
     # Declare outputs.
-    out_wheelhouse = ctx.actions.declare_directory(ctx.attr.name + "_wheelhouse")
+    out_wheelhouse = ctx.actions.declare_directory(ctx.attr.name + ".wheelhouse")
 
     # Build env vars with make variable expansion.
     env = {}
@@ -26,8 +26,12 @@ def _pycross_wheel_transform_impl(ctx):
 
     # Build arguments for the wheel transformer wrapper.
     args = ctx.actions.args()
-    args.add("--wheelhouse", input_wheelhouse.path)
-    args.add("--output-dir", out_wheelhouse.path)
+    if type(input_wheelhouse) == "File" and input_wheelhouse.is_directory:
+        args.add("--in-wheelhouse", input_wheelhouse.path)
+    else:
+        # Plain file (e.g., local override wheel) — pass its directory
+        args.add("--in-wheelhouse", input_wheelhouse.dirname)
+    args.add("--out-wheelhouse", out_wheelhouse.path)
     args.add("--tool", ctx.executable.transform)
 
     for key, value in env.items():

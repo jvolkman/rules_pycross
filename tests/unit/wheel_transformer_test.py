@@ -1,13 +1,11 @@
 """Tests for wheel_transformer.py wheelhouse support."""
 
-import os
 import shutil
-import subprocess
 import tempfile
 import unittest
 import zipfile
 from pathlib import Path
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 
 
 class WheelTransformerArgsTest(unittest.TestCase):
@@ -37,12 +35,19 @@ class WheelTransformerArgsTest(unittest.TestCase):
         self._create_dummy_wheel(self.in_wheelhouse)
 
         from pycross.private.build.tools.wheel_transformer import main
-        with patch("sys.argv", [
-            "wheel_transformer",
-            "--in-wheelhouse", str(self.in_wheelhouse),
-            "--out-wheelhouse", str(self.out_wheelhouse),
-            "--tool", "/bin/true",
-        ]):
+
+        with patch(
+            "sys.argv",
+            [
+                "wheel_transformer",
+                "--in-wheelhouse",
+                str(self.in_wheelhouse),
+                "--out-wheelhouse",
+                str(self.out_wheelhouse),
+                "--tool",
+                "/bin/true",
+            ],
+        ):
             # main() will call subprocess.check_call then look for output
             # We need to create output in out_wheelhouse before glob runs
             def create_output(*args, **kwargs):
@@ -62,11 +67,17 @@ class WheelTransformerArgsTest(unittest.TestCase):
     def test_missing_in_wheelhouse_errors(self):
         """--in-wheelhouse is required; missing it should error."""
         from pycross.private.build.tools.wheel_transformer import main
-        with patch("sys.argv", [
-            "wheel_transformer",
-            "--out-wheelhouse", str(self.out_wheelhouse),
-            "--tool", "/bin/true",
-        ]):
+
+        with patch(
+            "sys.argv",
+            [
+                "wheel_transformer",
+                "--out-wheelhouse",
+                str(self.out_wheelhouse),
+                "--tool",
+                "/bin/true",
+            ],
+        ):
             with self.assertRaises(SystemExit) as cm:
                 main()
             self.assertNotEqual(cm.exception.code, 0)
@@ -74,12 +85,19 @@ class WheelTransformerArgsTest(unittest.TestCase):
     def test_empty_wheelhouse_errors(self):
         """--in-wheelhouse with no .whl files should error."""
         from pycross.private.build.tools.wheel_transformer import main
-        with patch("sys.argv", [
-            "wheel_transformer",
-            "--in-wheelhouse", str(self.in_wheelhouse),
-            "--out-wheelhouse", str(self.out_wheelhouse),
-            "--tool", "/bin/true",
-        ]):
+
+        with patch(
+            "sys.argv",
+            [
+                "wheel_transformer",
+                "--in-wheelhouse",
+                str(self.in_wheelhouse),
+                "--out-wheelhouse",
+                str(self.out_wheelhouse),
+                "--tool",
+                "/bin/true",
+            ],
+        ):
             with self.assertRaises(SystemExit) as cm:
                 main()
             self.assertNotEqual(cm.exception.code, 0)

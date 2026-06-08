@@ -37,7 +37,7 @@ def _test_repaired_wheel_basic_impl(env, target):
     env.expect.that_target(target).has_provider(PycrossWheelInfo)
     wheelhouse = target[PycrossWheelInfo].wheelhouse
     env.expect.that_bool(wheelhouse.is_directory).equals(True)
-    env.expect.that_str(wheelhouse.basename).contains("repaired_wheelhouse")
+    env.expect.that_str(wheelhouse.basename).contains(".wheelhouse")
 
     # The action generating the wheelhouse should be RepairWheel
     action = env.expect.that_target(target).action_generating(wheelhouse.short_path)

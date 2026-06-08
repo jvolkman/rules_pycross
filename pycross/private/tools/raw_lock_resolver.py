@@ -617,7 +617,7 @@ def resolve(args: Any) -> ResolvedLockSet:
         members = sorted(scc)
         # Short hash of sorted member keys for a stable, compact name
         digest = hashlib.sha256("\n".join(str(m) for m in members).encode()).hexdigest()[:8]
-        group_name = f"cycle_group_{digest}"
+        group_name = f"group_{digest}"
         cycle_groups[group_name] = members
 
     resolved_environments = {env.target_environment.name: env.to_environment_reference() for env in environment_pairs}

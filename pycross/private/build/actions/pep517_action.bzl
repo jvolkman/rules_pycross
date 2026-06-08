@@ -161,7 +161,7 @@ def register_pep517_action(
             transitive_inputs.append(layer.transitive_files)
 
     # Declare output files
-    out_wheelhouse = ctx.actions.declare_directory(paths.join(ctx.attr.name, "wheelhouse"))
+    out_wheelhouse = ctx.actions.declare_directory(paths.join(ctx.attr.name, ctx.attr.name + ".wheelhouse"))
 
     # Write main config file
     main_config = {

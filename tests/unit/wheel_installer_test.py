@@ -1,10 +1,8 @@
 """Tests for wheel_installer.py wheelhouse support."""
 
-import os
 import tempfile
 import unittest
 from pathlib import Path
-from unittest.mock import MagicMock, patch
 
 
 class WheelInstallerWheelhouseTest(unittest.TestCase):
@@ -19,16 +17,21 @@ class WheelInstallerWheelhouseTest(unittest.TestCase):
 
     def tearDown(self):
         import shutil
+
         shutil.rmtree(self.temp_dir)
 
     def _create_dummy_wheel(self, name="foo-1.0-py3-none-any.whl"):
         """Create a minimal valid wheel file in the wheelhouse."""
         import zipfile
+
         wheel_path = self.wheelhouse / name
         with zipfile.ZipFile(wheel_path, "w") as zf:
             # Minimal METADATA
             zf.writestr("foo-1.0.dist-info/METADATA", "Metadata-Version: 2.1\nName: foo\nVersion: 1.0\n")
-            zf.writestr("foo-1.0.dist-info/WHEEL", "Wheel-Version: 1.0\nGenerator: test\nRoot-Is-Purelib: true\nTag: py3-none-any\n")
+            zf.writestr(
+                "foo-1.0.dist-info/WHEEL",
+                "Wheel-Version: 1.0\nGenerator: test\nRoot-Is-Purelib: true\nTag: py3-none-any\n",
+            )
             zf.writestr("foo-1.0.dist-info/RECORD", "")
             zf.writestr("foo/__init__.py", "")
         return wheel_path
@@ -37,11 +40,15 @@ class WheelInstallerWheelhouseTest(unittest.TestCase):
         """--wheelhouse should find the single .whl file in the directory."""
         from pycross.private.tools.wheel_installer import _parse_args
 
-        wheel_path = self._create_dummy_wheel()
-        args = _parse_args([
-            "--wheelhouse", str(self.wheelhouse),
-            "--directory", str(self.output_dir),
-        ])
+        self._create_dummy_wheel()
+        args = _parse_args(
+            [
+                "--wheelhouse",
+                str(self.wheelhouse),
+                "--directory",
+                str(self.output_dir),
+            ]
+        )
         self.assertEqual(args.wheelhouse, self.wheelhouse)
         self.assertIsNone(args.wheel)
 
@@ -87,10 +94,9 @@ class WheelInstallerArgParsingTest(unittest.TestCase):
 def _parse_args(argv):
     """Helper to import and call the argument parser."""
     import argparse
+
     # We need to replicate or import the parser. Since wheel_installer doesn't
     # expose a parse_args function, we test the arg definitions.
-    from pycross.private.tools.wheel_installer import main
-    import sys
 
     parser = argparse.ArgumentParser()
     parser.add_argument("--wheel", type=Path, required=False)

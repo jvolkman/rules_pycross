@@ -8,7 +8,7 @@ package(default_visibility = ["//visibility:public"])
 
 filegroup(
     name = "wheelhouse",
-    srcs = glob(["wheelhouse/*.whl"]),
+    srcs = glob(["*.wheelhouse/*.whl"]),
 )
 """
 
@@ -50,10 +50,12 @@ def _pycross_wheel_file_impl(rctx):
         if not urls:
             fail("File {} not found in PyPI index".format(rctx.attr.filename))
 
-    # Download directly into wheelhouse/ — no copies needed later
+    wheelhouse_dir = rctx.attr.filename + ".wheelhouse"
+
+    # Download directly into {filename}.wheelhouse/ — no copies needed later
     rctx.download(
         urls,
-        "wheelhouse/" + rctx.attr.filename,
+        wheelhouse_dir + "/" + rctx.attr.filename,
         rctx.attr.sha256,
         auth = use_netrc(netrc, urls, {}),
     )
@@ -65,7 +67,7 @@ def _pycross_wheel_file_impl(rctx):
         rctx.attr._inspect_tool,
         [
             "--wheel",
-            "wheelhouse/" + rctx.attr.filename,
+            wheelhouse_dir + "/" + rctx.attr.filename,
             "--output",
             "inspection.json",
         ],

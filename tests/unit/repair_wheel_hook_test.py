@@ -1,14 +1,11 @@
 """Tests for repair_wheel_hook.py wheelhouse support."""
 
-import glob
-import os
 import shutil
-import subprocess
 import tempfile
 import unittest
 import zipfile
 from pathlib import Path
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 
 
 class RepairWheelHookArgsTest(unittest.TestCase):
@@ -52,11 +49,17 @@ class RepairWheelHookArgsTest(unittest.TestCase):
         mock_check_call.side_effect = fake_repair
 
         from pycross.private.build.tools.repair_wheel_hook import main
-        with patch("sys.argv", [
-            "repair_wheel_hook",
-            "--wheelhouse", str(self.wheelhouse),
-            "--out-wheelhouse", str(self.out_wheelhouse),
-        ]):
+
+        with patch(
+            "sys.argv",
+            [
+                "repair_wheel_hook",
+                "--wheelhouse",
+                str(self.wheelhouse),
+                "--out-wheelhouse",
+                str(self.out_wheelhouse),
+            ],
+        ):
             main()
 
         # Verify repairwheel was called with the wheel file
@@ -67,11 +70,17 @@ class RepairWheelHookArgsTest(unittest.TestCase):
     def test_empty_wheelhouse_errors(self):
         """--wheelhouse with no .whl files should exit with error."""
         from pycross.private.build.tools.repair_wheel_hook import main
-        with patch("sys.argv", [
-            "repair_wheel_hook",
-            "--wheelhouse", str(self.wheelhouse),
-            "--out-wheelhouse", str(self.out_wheelhouse),
-        ]):
+
+        with patch(
+            "sys.argv",
+            [
+                "repair_wheel_hook",
+                "--wheelhouse",
+                str(self.wheelhouse),
+                "--out-wheelhouse",
+                str(self.out_wheelhouse),
+            ],
+        ):
             with self.assertRaises(SystemExit) as cm:
                 main()
             self.assertNotEqual(cm.exception.code, 0)
@@ -93,13 +102,21 @@ class RepairWheelHookArgsTest(unittest.TestCase):
         mock_check_call.side_effect = fake_repair
 
         from pycross.private.build.tools.repair_wheel_hook import main
-        with patch("sys.argv", [
-            "repair_wheel_hook",
-            "--wheelhouse", str(self.wheelhouse),
-            "--out-wheelhouse", str(self.out_wheelhouse),
-            "--lib-dir", "/usr/lib",
-            "--lib-dir", "/opt/lib",
-        ]):
+
+        with patch(
+            "sys.argv",
+            [
+                "repair_wheel_hook",
+                "--wheelhouse",
+                str(self.wheelhouse),
+                "--out-wheelhouse",
+                str(self.out_wheelhouse),
+                "--lib-dir",
+                "/usr/lib",
+                "--lib-dir",
+                "/opt/lib",
+            ],
+        ):
             main()
 
         call_args = mock_check_call.call_args[0][0]

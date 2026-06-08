@@ -24,7 +24,8 @@ def _pycross_wheel_library_impl(ctx):
     if type(wheelhouse) == "File" and wheelhouse.is_directory:
         args.add("--wheelhouse", wheelhouse.path)
     else:
-        args.add("--wheelhouse", wheelhouse.dirname)
+        # Plain file (e.g., local override wheel) — pass directly as --wheel
+        args.add("--wheel", wheelhouse.path)
     args.add("--directory", out.path)
     args.add_all(ctx.files.post_install_patches, format_each = "--patch=%s")
 

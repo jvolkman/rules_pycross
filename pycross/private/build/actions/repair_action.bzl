@@ -30,7 +30,7 @@ def register_repair_action(
     """
 
     # Declare outputs.
-    out_wheelhouse = ctx.actions.declare_directory(ctx.attr.name + "_repaired_wheelhouse")
+    out_wheelhouse = ctx.actions.declare_directory(ctx.attr.name + ".wheelhouse")
 
     # Extract library paths from CcInfo.
     lib_dirs = []
