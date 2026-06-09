@@ -217,6 +217,8 @@ def _package_repo_impl(rctx):
 
     # 4. _wheel/ and _sdist/ directories for versioned artifact access
     wheel_lines = [
+        'load("@rules_pycross//pycross/private:wheel_dir.bzl", "pycross_wheel_dir")',
+        "",
         'package(default_visibility = ["//visibility:public"])',
         "",
     ]
@@ -227,13 +229,16 @@ def _package_repo_impl(rctx):
 
     for pkg_key in sorted(packages.keys()):
         norm_name = _normalize_name(pkg_key.split("@")[0])
+        underscore_name = _underscore_name(pkg_key.split("@")[0])
         pkg_version = pkg_key.split("@")[1]
+        whldir_name = "{}-{}.whldir".format(underscore_name, pkg_version)
 
-        # Versioned alias: _wheel:name@version -> //_lock:_wheel_<key>
+        # Versioned target: _wheel:name@version -> pycross_wheel_dir wrapping //_lock:_wheel_{key}
         wheel_lines.extend([
-            "alias(",
+            "pycross_wheel_dir(",
             '    name = "{}@{}",'.format(norm_name, pkg_version),
-            '    actual = "//_lock:_wheel_{}",'.format(pkg_key),
+            '    src = "//_lock:_wheel_{}",'.format(pkg_key),
+            '    whldir_name = "{}",'.format(whldir_name),
             ")",
             "",
         ])
@@ -248,13 +253,15 @@ def _package_repo_impl(rctx):
                 "",
             ])
 
-    # Unversioned pin aliases: _wheel:name -> //_lock:_wheel_<pin_target>
+    # Unversioned pin aliases: _wheel:name -> _wheel:name@version
     for pin_name in sorted(pins.keys()):
         pin_target = pins[pin_name]
+        pin_norm_name = _normalize_name(pin_target.split("@")[0])
+        pin_version = pin_target.split("@")[1]
         wheel_lines.extend([
             "alias(",
             '    name = "{}",'.format(pin_name),
-            '    actual = "//_lock:_wheel_{}",'.format(pin_target),
+            '    actual = ":{}@{}",'.format(pin_norm_name, pin_version),
             ")",
             "",
         ])

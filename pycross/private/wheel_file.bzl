@@ -4,27 +4,13 @@ load("@bazel_tools//tools/build_defs/repo:utils.bzl", "read_user_netrc", "use_ne
 load("//pycross/private:internal_repo.bzl", "exec_internal_tool")
 
 _BUILD_TEMPLATE = """\
-load("@rules_pycross//pycross/private:wheel_dir.bzl", "pycross_wheel_dir")
-
 package(default_visibility = ["//visibility:public"])
 
-pycross_wheel_dir(
+filegroup(
     name = "wheel",
-    src = "{whl_file}",
-    whldir_name = "{whldir_name}",
+    srcs = ["{filename}"],
 )
 """
-
-def _whldir_name_from_filename(filename):
-    """Extracts normalized name and version from a wheel filename.
-
-    Wheel filenames follow: {name}-{version}(-{build})?-{python}-{abi}-{platform}.whl
-    Returns: "{normalized_name}-{version}.whldir"
-    """
-    parts = filename.split("-")
-    name = parts[0].lower().replace("-", "_")
-    version = parts[1]
-    return "{}-{}.whldir".format(name, version)
 
 def _pycross_wheel_file_impl(rctx):
     netrc = read_user_netrc(rctx)
@@ -90,11 +76,7 @@ def _pycross_wheel_file_impl(rctx):
         # but if we somehow bypass it or change it, we write a fallback.
         rctx.file("inspection.json", json.encode({"top_level_packages": []}))
 
-    whldir_name = _whldir_name_from_filename(rctx.attr.filename)
-    rctx.file("BUILD.bazel", _BUILD_TEMPLATE.format(
-        whl_file = rctx.attr.filename,
-        whldir_name = whldir_name,
-    ))
+    rctx.file("BUILD.bazel", _BUILD_TEMPLATE.format(filename = rctx.attr.filename))
 
 pycross_wheel_file = repository_rule(
     implementation = _pycross_wheel_file_impl,

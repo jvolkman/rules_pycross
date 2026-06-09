@@ -114,7 +114,7 @@ pycross_poetry_lock_model(<a href="#pycross_poetry_lock_model-name">name</a>, <a
 <pre>
 load("@rules_pycross//pycross:defs.bzl", "pycross_repaired_wheel")
 
-pycross_repaired_wheel(<a href="#pycross_repaired_wheel-name">name</a>, <a href="#pycross_repaired_wheel-native_deps">native_deps</a>, <a href="#pycross_repaired_wheel-target_environment">target_environment</a>, <a href="#pycross_repaired_wheel-wheel">wheel</a>)
+pycross_repaired_wheel(<a href="#pycross_repaired_wheel-name">name</a>, <a href="#pycross_repaired_wheel-native_deps">native_deps</a>, <a href="#pycross_repaired_wheel-target_environment">target_environment</a>, <a href="#pycross_repaired_wheel-wheel">wheel</a>, <a href="#pycross_repaired_wheel-whldir_name">whldir_name</a>)
 </pre>
 
 
@@ -128,6 +128,7 @@ pycross_repaired_wheel(<a href="#pycross_repaired_wheel-name">name</a>, <a href=
 | <a id="pycross_repaired_wheel-native_deps"></a>native_deps |  Native dependencies providing shared libraries to bundle.   | <a href="https://bazel.build/concepts/labels">List of labels</a> | optional |  `[]`  |
 | <a id="pycross_repaired_wheel-target_environment"></a>target_environment |  The target environment mapping JSON (resolved dynamically via alias filegroup).   | <a href="https://bazel.build/concepts/labels">Label</a> | optional |  `"@@rules_pycross++environments+pycross_environments//:current"`  |
 | <a id="pycross_repaired_wheel-wheel"></a>wheel |  The input wheel to repair.   | <a href="https://bazel.build/concepts/labels">Label</a> | required |  |
+| <a id="pycross_repaired_wheel-whldir_name"></a>whldir_name |  Name for the output .whldir TreeArtifact directory. If empty, defaults to '{name}.whldir'.   | String | optional |  `""`  |
 
 
 <a id="pycross_target_environment"></a>

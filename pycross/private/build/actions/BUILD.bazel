@@ -25,8 +25,6 @@ bzl_library(
     srcs = ["repair_action.bzl"],
     deps = [
         "//pycross/private:cc_toolchain_util",
-        "@rules_cc//cc/common:cc_info",
-        "@rules_python//python:py_info_bzl",
     ],
 )
 

@@ -10,7 +10,8 @@ CMake build backend for rules_pycross.
 load("@rules_pycross//pycross/backends:cmake.bzl", "cmake_build")
 
 cmake_build(<a href="#cmake_build-name">name</a>, <a href="#cmake_build-deps">deps</a>, <a href="#cmake_build-build_deps">build_deps</a>, <a href="#cmake_build-config_settings">config_settings</a>, <a href="#cmake_build-copts">copts</a>, <a href="#cmake_build-linkopts">linkopts</a>, <a href="#cmake_build-native_deps">native_deps</a>, <a href="#cmake_build-path_tools">path_tools</a>,
-            <a href="#cmake_build-pkg_config_files">pkg_config_files</a>, <a href="#cmake_build-pre_build_patches">pre_build_patches</a>, <a href="#cmake_build-sdist">sdist</a>, <a href="#cmake_build-site_hooks">site_hooks</a>, <a href="#cmake_build-target_environment">target_environment</a>, <a href="#cmake_build-tool_deps">tool_deps</a>)
+            <a href="#cmake_build-pkg_config_files">pkg_config_files</a>, <a href="#cmake_build-pre_build_patches">pre_build_patches</a>, <a href="#cmake_build-sdist">sdist</a>, <a href="#cmake_build-site_hooks">site_hooks</a>, <a href="#cmake_build-target_environment">target_environment</a>, <a href="#cmake_build-tool_deps">tool_deps</a>,
+            <a href="#cmake_build-whldir_name">whldir_name</a>)
 </pre>
 
 
@@ -34,6 +35,7 @@ cmake_build(<a href="#cmake_build-name">name</a>, <a href="#cmake_build-deps">de
 | <a id="cmake_build-site_hooks"></a>site_hooks |  Python code snippets to execute on interpreter startup during builds.   | List of strings | optional |  `[]`  |
 | <a id="cmake_build-target_environment"></a>target_environment |  The target environment mapping JSON (resolved dynamically via alias filegroup).   | <a href="https://bazel.build/concepts/labels">Label</a> | optional |  `"@@rules_pycross++environments+pycross_environments//:current"`  |
 | <a id="cmake_build-tool_deps"></a>tool_deps |  -   | <a href="https://bazel.build/concepts/labels">List of labels</a> | optional |  `[]`  |
+| <a id="cmake_build-whldir_name"></a>whldir_name |  Name for the output .whldir TreeArtifact directory (e.g., 'numpy-1.24.0.whldir'). If empty, defaults to '{name}.whldir'.   | String | optional |  `""`  |
 
 
 <a id="cmake"></a>
