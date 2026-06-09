@@ -38,6 +38,7 @@ load(
     _CC_TOOLCHAIN_ATTRS = "CC_TOOLCHAIN_ATTRS",
     _COMMON_BUILD_ATTRS = "COMMON_BUILD_ATTRS",
     _get_unzipped_wheel = "get_unzipped_wheel",
+    _get_wheel = "get_wheel",
     _get_wheelhouse = "get_wheelhouse",
     _group_tool_deps = "group_tool_deps",
 )
@@ -70,10 +71,9 @@ CC_FRAGMENTS = _CC_FRAGMENTS
 
 # Utilities
 get_unzipped_wheel = _get_unzipped_wheel
+get_wheel = _get_wheel
 get_wheelhouse = _get_wheelhouse
 group_tool_deps = _group_tool_deps
-
-# Sdist repo helpers
 
 # Override extension helpers
 make_override_extension = _make_override_extension

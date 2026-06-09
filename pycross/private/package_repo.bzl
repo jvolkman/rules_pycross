@@ -90,38 +90,41 @@ def _requirements_bzl(rctx, pins):
 
     return "\n".join(lines) + "\n"
 
-def _pin_build(pin_name, pin_target, package):
+def _safe_name(pin_name, name):
+    return name + "_" if pin_name == name else name
+
+def _pin_build(target_name, original_pin_name, pin_target, package):
     """Generates the BUILD file for a pin directory (//package/)."""
     lines = [
         'package(default_visibility = ["//visibility:public"])',
         "",
         # //package -> //package:package -> //_lock:<pin_target>
         "alias(",
-        '    name = "{}",'.format(pin_name),
+        '    name = "{}",'.format(target_name),
         '    actual = "//_lock:{}",'.format(pin_target),
         ")",
         "",
         # //package:pkg -> //_lock:<pin_target>
         "alias(",
-        '    name = "pkg",',
+        '    name = "{}",'.format(_safe_name(target_name, "pkg")),
         '    actual = "//_lock:{}",'.format(pin_target),
         ")",
         "",
-        # //package:wheel -> //_lock:_wheel_<pin_target>
+        # //package:wheel -> //_wheel:<original_pin_name>
         "alias(",
-        '    name = "wheel",',
-        '    actual = "//_lock:_wheel_{}",'.format(pin_target),
+        '    name = "{}",'.format(_safe_name(target_name, "wheel")),
+        '    actual = "//_wheel:{}",'.format(original_pin_name),
         ")",
         "",
         # //package:dist_info -> //_lock:_dist_info_<pin_target>
         "alias(",
-        '    name = "dist_info",',
+        '    name = "{}",'.format(_safe_name(target_name, "dist_info")),
         '    actual = "//_lock:_dist_info_{}",'.format(pin_target),
         ")",
         "",
         # //package:data -> //_lock:<pin_target> (rules_python compat)
         "alias(",
-        '    name = "data",',
+        '    name = "{}",'.format(_safe_name(target_name, "data")),
         '    actual = "//_lock:{}",'.format(pin_target),
         ")",
         "",
@@ -131,8 +134,8 @@ def _pin_build(pin_name, pin_target, package):
     if sdist_file:
         lines.extend([
             "alias(",
-            '    name = "sdist",',
-            '    actual = "//_lock:_sdist_{}",'.format(pin_target),
+            '    name = "{}",'.format(_safe_name(target_name, "sdist")),
+            '    actual = "//_sdist:{}",'.format(original_pin_name),
             ")",
             "",
         ])
@@ -205,12 +208,12 @@ def _package_repo_impl(rctx):
     # 3. Pin directories: //package/ with aliases to //_lock targets
     for pin_name, pin_target in sorted(pins.items()):
         package = packages[pin_target]
-        rctx.file("{}/BUILD.bazel".format(pin_name), _pin_build(pin_name, pin_target, package))
+        rctx.file("{}/BUILD.bazel".format(pin_name), _pin_build(pin_name, pin_name, pin_target, package))
 
         # Also create a rules_python-compatible underscore directory if different
         underscore_name = _underscore_name(pin_name)
         if underscore_name != pin_name:
-            rctx.file("{}/BUILD.bazel".format(underscore_name), _pin_build(underscore_name, pin_target, package))
+            rctx.file("{}/BUILD.bazel".format(underscore_name), _pin_build(underscore_name, pin_name, pin_target, package))
 
     # 4. _wheel/ and _sdist/ directories for versioned artifact access
     wheel_lines = [
@@ -245,23 +248,23 @@ def _package_repo_impl(rctx):
                 "",
             ])
 
-    # Unversioned pin aliases: _wheel:name -> //name:wheel
+    # Unversioned pin aliases: _wheel:name -> //_lock:_wheel_<pin_target>
     for pin_name in sorted(pins.keys()):
+        pin_target = pins[pin_name]
         wheel_lines.extend([
             "alias(",
             '    name = "{}",'.format(pin_name),
-            '    actual = "//{}:wheel",'.format(pin_name),
+            '    actual = "//_lock:_wheel_{}",'.format(pin_target),
             ")",
             "",
         ])
 
-        pin_target = pins[pin_name]
         sdist_file = packages[pin_target].get("sdist_file")
         if sdist_file:
             sdist_lines.extend([
                 "alias(",
                 '    name = "{}",'.format(pin_name),
-                '    actual = "//{}:sdist",'.format(pin_name),
+                '    actual = "//_lock:_sdist_{}",'.format(pin_target),
                 ")",
                 "",
             ])
@@ -322,10 +325,6 @@ package_repo = repository_rule(
         "repo_map": attr.string_dict(),
         "backend_configs": attr.string_dict(
             doc = "Maps pycross rule names to JSON-encoded config dicts with 'rule_bzl' and 'tool_packages'.",
-        ),
-        "write_install_deps": attr.bool(),
-        "legacy_naming": attr.bool(
-            doc = "Unused, kept for compatibility.",
         ),
     },
 )

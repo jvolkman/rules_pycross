@@ -33,9 +33,6 @@ def _pycross_wheel_library_impl(ctx):
 
     args.add("--entry-points-output", entry_points)
 
-    for patch in ctx.files.post_install_patches:
-        args.add("--patch", patch)
-
     ctx.actions.run(
         inputs = inputs,
         outputs = [out, entry_points],

@@ -46,7 +46,7 @@ pycross_wheel_transform = rule(
     implementation = _pycross_wheel_transform_impl,
     attrs = {
         "wheel": attr.label(
-            doc = "The input wheel target. Can produce multiple files (.whl and .whl.name).",
+            doc = "The input wheel file or TreeArtifact directory containing a .whl file.",
             mandatory = True,
             allow_files = True,
         ),

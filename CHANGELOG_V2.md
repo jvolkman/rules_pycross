@@ -26,17 +26,16 @@
 
 - No longer re-exported from `pycross/defs.bzl`.
 
-### Removed: `PycrossWheelInfo` from `pycross_wheel_library` outputs
+### Removed: `PycrossWheelInfo` provider
 
-- `pycross_wheel_library` no longer returns `PycrossWheelInfo` in its providers list.
-- It now strictly represents an *installed* wheel and returns `PycrossExtractedWheelInfo`, `DefaultInfo`, `PyInfo`, and optionally `PycrossPackageInfo`.
-- Upstream builder rules (e.g. `pep517_build`, `meson_build`) still return `PycrossWheelInfo` for the raw `.whl` file.
+- `PycrossWheelInfo` has been removed entirely from all rules and the providers module.
+- Builder rules now return `DefaultInfo` with the wheel TreeArtifact as their default output.
+- Consumers use `ctx.files.wheel[0]` and branch on `is_directory` for the fast path.
 
-### Changed: `pycross_console_script_binary` API
+### Removed: `pycross_console_script_binary`
 
-- The `wheel` attribute has been removed. The rule now requires `pkg` (a target providing `PycrossExtractedWheelInfo`).
-- The macro now wraps the extracted script in a real `py_binary`, inheriting all deps from the package.
-- New optional `deps` argument for injecting additional dependencies (e.g., plugins).
+- This rule has been deleted. Use `py_console_script_binary` from `@rules_python//python/entry_points:py_console_script_binary.bzl` instead.
+- `pycross_wheel_library` now produces a `:dist_info` output group for compatibility with rules_python's entry point discovery.
 
 ### Changed: Internal dependency format
 
@@ -46,7 +45,7 @@
 ### Changed: Package repo layout
 
 - Packages are now under versioned subdirectories: `<package>/v<version>/BUILD.bazel`.
-- Canonical target names changed: `:pkg` (library), `:whl` (wheel file), `:sdist` (sdist file).
+- Canonical target names changed: `:pkg` (library), `:wheel` (wheel artifact), `:sdist` (sdist file). (Appends `_` on conflict with package name).
 - Root aliases (`@repo//:numpy`) still work.
 - Old `_wheel/` and `_sdist/` directories available via `legacy_naming = True` flag.
 
@@ -350,12 +349,10 @@ The build pipeline is decomposed into composable, reusable actions:
 - Takes a user-provided transform tool executable.
 - Supports environment variable expansion with make variables and `$(location)`.
 
-### `pycross_console_script_binary` (rewritten)
+### `pycross_console_script_binary` (removed)
 
-- Now wraps extracted scripts in a proper `py_binary`.
-- Inherits all dependencies from the source package.
-- New `deps` argument for additional dependencies (plugin discovery).
-- Usable directly via `bazel run`.
+- This rule has been removed. Use `py_console_script_binary` from rules_python instead.
+- See `@rules_python//python/entry_points:py_console_script_binary.bzl`.
 
 ---
 

@@ -92,9 +92,6 @@ CREATE_REPOS_ATTRS = dict(
     pypi_index = attr.string(
         doc = "The PyPI-compatible index to use (must support the JSON API).",
     ),
-    legacy_naming = attr.bool(
-        doc = "Generate _wheel/ and _sdist/ directories with legacy versioned aliases for backward compatibility.",
-    ),
 )
 
 RENDER_ATTRS = dict(

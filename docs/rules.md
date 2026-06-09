@@ -249,6 +249,30 @@ pycross_wheel_library(<a href="#pycross_wheel_library-name">name</a>, <a href="#
 | <a id="pycross_wheel_library-wheel"></a>wheel |  The wheel file.   | <a href="https://bazel.build/concepts/labels">Label</a> | required |  |
 
 
+<a id="pycross_wheel_transform"></a>
+
+## pycross_wheel_transform
+
+<pre>
+load("@rules_pycross//pycross:defs.bzl", "pycross_wheel_transform")
+
+pycross_wheel_transform(<a href="#pycross_wheel_transform-name">name</a>, <a href="#pycross_wheel_transform-data">data</a>, <a href="#pycross_wheel_transform-env">env</a>, <a href="#pycross_wheel_transform-transform">transform</a>, <a href="#pycross_wheel_transform-wheel">wheel</a>)
+</pre>
+
+
+
+**ATTRIBUTES**
+
+
+| Name  | Description | Type | Mandatory | Default |
+| :------------- | :------------- | :------------- | :------------- | :------------- |
+| <a id="pycross_wheel_transform-name"></a>name |  A unique name for this target.   | <a href="https://bazel.build/concepts/labels#target-names">Name</a> | required |  |
+| <a id="pycross_wheel_transform-data"></a>data |  Additional data dependencies available to the tool.   | <a href="https://bazel.build/concepts/labels">List of labels</a> | optional |  `[]`  |
+| <a id="pycross_wheel_transform-env"></a>env |  Environment variables passed to the tool. Values are subject to make variable and location expansion.   | <a href="https://bazel.build/rules/lib/dict">Dictionary: String -> String</a> | optional |  `{}`  |
+| <a id="pycross_wheel_transform-transform"></a>transform |  The transform tool to execute.   | <a href="https://bazel.build/concepts/labels">Label</a> | required |  |
+| <a id="pycross_wheel_transform-wheel"></a>wheel |  The input wheel file or TreeArtifact directory containing a .whl file.   | <a href="https://bazel.build/concepts/labels">Label</a> | required |  |
+
+
 <a id="PycrossExtractedWheelInfo"></a>
 
 ## PycrossExtractedWheelInfo

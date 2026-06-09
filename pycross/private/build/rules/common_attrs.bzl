@@ -74,17 +74,20 @@ def group_tool_deps(tool_deps_list):
             result[name].append(dep)
     return result
 
-def get_wheelhouse(target):
-    """Extracts the .whl File from a target.
+def get_wheel(target):
+    """Extracts the wheel output from a target.
 
     Args:
-        target: Target, a wheel target.
+        target: Target, a wheel build target.
 
     Returns:
-        File: the wheelhouse directory.
+        File: the wheel file or TreeArtifact directory containing a .whl file.
     """
     files = target[DefaultInfo].files.to_list()
     return files[0]
+
+# Backward-compatible alias.
+get_wheelhouse = get_wheel
 
 def get_unzipped_wheel(target):
     """Extracts the site_packages TreeArtifact from a target.
