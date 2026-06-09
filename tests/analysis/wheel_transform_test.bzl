@@ -14,7 +14,7 @@ def _mock_exe_impl(ctx):
 _mock_exe = rule(implementation = _mock_exe_impl, executable = True)
 
 def _mock_wheel_impl(ctx):
-    out = ctx.actions.declare_directory(ctx.label.name + "_wheelhouse")
+    out = ctx.actions.declare_directory(ctx.label.name + "_whldir")
     ctx.actions.run_shell(
         outputs = [out],
         command = "touch %s/dummy.whl" % out.path,
@@ -38,11 +38,11 @@ def _test_wheel_transform_basic(name):
 
 # buildifier: disable=unused-variable
 def _test_wheel_transform_basic_impl(env, target):
-    wheelhouse = target[DefaultInfo].files.to_list()[0]
-    env.expect.that_target(target).action_generating(wheelhouse.short_path)
+    wheel_dir = target[DefaultInfo].files.to_list()[0]
+    env.expect.that_target(target).action_generating(wheel_dir.short_path)
 
     # The action executable should be the transform tool
-    raw_action = [a for a in target.actions if wheelhouse in a.outputs.to_list()][0]
+    raw_action = [a for a in target.actions if wheel_dir in a.outputs.to_list()][0]
     env.expect.that_str(str(raw_action.argv)).contains("_transform_tool")
 
 def wheel_transform_test_suite(name):

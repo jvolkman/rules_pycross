@@ -160,6 +160,12 @@ def _lock_repos_impl(module_ctx):
                 sanitize_name(pkg_key),
             )
 
+            # Compute the output whldir name: {normalized_name}-{version}.whldir
+            pkg_name_part = pkg_key.split("@")[0]
+            pkg_version = pkg_key.split("@")[1]
+            whldir_norm_name = sanitize_name(pkg_name_part)
+            whldir_name = "{}-{}.whldir".format(whldir_norm_name, pkg_version)
+
             sdist_repo_attrs = {
                 "name": sdist_repo_name,
                 "sdist": sdist_label,
@@ -169,6 +175,7 @@ def _lock_repos_impl(module_ctx):
                 "lock_repo": repo_name,
                 "backend_to_rule": BACKEND_TO_RULE,
                 "default_backend": DEFAULT_BACKEND,
+                "whldir_name": whldir_name,
             }
             if "build_dependencies" in pkg and pkg["build_dependencies"] != None:
                 sdist_repo_attrs["build_dependencies"] = pkg["build_dependencies"]

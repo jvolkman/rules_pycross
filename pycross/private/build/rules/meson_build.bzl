@@ -45,23 +45,17 @@ def _meson_build_impl(ctx):
         meson_properties = ctx.attr.meson_properties,
     )
 
-    build_deps = list(ctx.attr.build_deps)
+    additional_build_deps = []
     if "meson-python" in tool_deps:
-        build_deps.extend(tool_deps["meson-python"])
+        additional_build_deps.extend(tool_deps["meson-python"])
 
     # 3. Build wheel
     build_result = register_pep517_action(
         ctx,
-        sdist = ctx.file.sdist,
         builder = ctx.attr._builder,
-        deps = ctx.attr.deps,
-        build_deps = build_deps,
-        config_settings = ctx.attr.config_settings,
-        site_hooks = ctx.attr.site_hooks,
+        additional_build_deps = additional_build_deps,
         tool_executables = tool_executables,
         layers = [cc_layer],
-        pkg_config_files = ctx.files.pkg_config_files,
-        pre_build_patches = ctx.files.pre_build_patches,
     )
 
     # 4. Repair wheel
@@ -69,7 +63,7 @@ def _meson_build_impl(ctx):
         target_environment = ctx.files.target_environment[0] if ctx.files.target_environment else None
         repair_result = register_repair_action(
             ctx,
-            input_wheelhouse = build_result.wheelhouse,
+            input_wheel_dir = build_result.wheel_dir,
             native_deps = ctx.attr.native_deps,
             repair_tool = ctx.executable._repair_tool,
             target_environment = target_environment,
@@ -79,9 +73,9 @@ def _meson_build_impl(ctx):
         repair_result = build_result
 
     return [
-        DefaultInfo(files = depset([repair_result.wheelhouse])),
+        DefaultInfo(files = depset([repair_result.wheel_dir])),
         OutputGroupInfo(
-            raw_wheel = depset([build_result.wheelhouse]),
+            raw_wheel = depset([build_result.wheel_dir]),
         ),
     ]
 

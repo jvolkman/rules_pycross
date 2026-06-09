@@ -4,7 +4,7 @@ load("@rules_cc//cc/common:cc_info.bzl", "CcInfo")
 load("//pycross/private/build/actions:repair_action.bzl", "register_repair_action")
 
 def _pycross_repaired_wheel_impl(ctx):
-    input_wheelhouse = ctx.files.wheel[0]
+    input_wheel_dir = ctx.files.wheel[0]
 
     target_environment = None
     if ctx.files.target_environment:
@@ -12,13 +12,13 @@ def _pycross_repaired_wheel_impl(ctx):
 
     repair_result = register_repair_action(
         ctx,
-        input_wheelhouse = input_wheelhouse,
+        input_wheel_dir = input_wheel_dir,
         native_deps = ctx.attr.native_deps,
         repair_tool = ctx.executable._repair_tool,
         target_environment = target_environment,
     )
 
-    return [DefaultInfo(files = depset([repair_result.wheelhouse]))]
+    return [DefaultInfo(files = depset([repair_result.wheel_dir]))]
 
 pycross_repaired_wheel = rule(
     implementation = _pycross_repaired_wheel_impl,
@@ -36,6 +36,9 @@ pycross_repaired_wheel = rule(
             doc = "The target environment mapping JSON (resolved dynamically via alias filegroup).",
             default = Label("@pycross_environments//:current"),
             allow_files = True,
+        ),
+        "whldir_name": attr.string(
+            doc = "Name for the output .whldir TreeArtifact directory. If empty, defaults to '{name}.whldir'.",
         ),
         "_repair_tool": attr.label(
             default = Label("//pycross/private/build/tools:repair_wheel_hook"),

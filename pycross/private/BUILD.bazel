@@ -216,10 +216,17 @@ filegroup(
 )
 
 bzl_library(
+    name = "wheel_dir",
+    srcs = ["wheel_dir.bzl"],
+    visibility = ["//visibility:public"],
+)
+
+bzl_library(
     name = "wheel_file",
     srcs = ["wheel_file.bzl"],
     deps = [
         ":internal_repo",
+        ":wheel_dir",
         "@bazel_tools//tools/build_defs/repo:utils.bzl",
     ],
 )

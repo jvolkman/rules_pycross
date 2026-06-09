@@ -12,18 +12,18 @@ def _pycross_wheel_library_impl(ctx):
     out = ctx.actions.declare_directory(ctx.attr.name)
     entry_points = ctx.actions.declare_file(ctx.attr.name + ".dist_info/entry_points.txt")
 
-    wheelhouse = ctx.files.wheel[0]
+    wheel_input = ctx.files.wheel[0]
 
     args = ctx.actions.args().use_param_file("--flagfile=%s")
-    if type(wheelhouse) == "File" and wheelhouse.is_directory:
-        args.add("--wheelhouse", wheelhouse.path)
+    if type(wheel_input) == "File" and wheel_input.is_directory:
+        args.add("--wheel-dir", wheel_input.path)
     else:
         # Plain file (e.g., local override wheel) — pass directly as --wheel
-        args.add("--wheel", wheelhouse.path)
+        args.add("--wheel", wheel_input.path)
     args.add("--directory", out.path)
     args.add_all(ctx.files.post_install_patches, format_each = "--patch=%s")
 
-    inputs = [wheelhouse] + ctx.files.post_install_patches
+    inputs = [wheel_input] + ctx.files.post_install_patches
 
     if ctx.attr.enable_implicit_namespace_pkgs:
         args.add("--enable-implicit-namespace-pkgs")
@@ -44,7 +44,7 @@ def _pycross_wheel_library_impl(ctx):
             "PYTHONHASHSEED": "0",
         },
         mnemonic = "WheelInstall",
-        progress_message = "Installing %s" % wheelhouse.basename,
+        progress_message = "Installing %s" % wheel_input.basename,
     )
 
     has_py2_only_sources = ctx.attr.python_version == "PY2"

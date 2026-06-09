@@ -25,31 +25,25 @@ def _setuptools_build_impl(ctx):
     # setuptools and wheel are injected as build deps when present, but are not
     # strictly required — they may already be available in the build environment
     # (e.g. bundled with the Python interpreter).
-    build_deps = list(ctx.attr.build_deps)
+    additional_build_deps = []
     if "setuptools" in tool_deps:
-        build_deps.extend(tool_deps["setuptools"])
+        additional_build_deps.extend(tool_deps["setuptools"])
     if "wheel" in tool_deps:
-        build_deps.extend(tool_deps["wheel"])
+        additional_build_deps.extend(tool_deps["wheel"])
 
     build_result = register_pep517_action(
         ctx,
-        sdist = ctx.file.sdist,
         builder = ctx.attr._builder,
-        deps = ctx.attr.deps,
-        build_deps = build_deps,
-        config_settings = ctx.attr.config_settings,
-        site_hooks = ctx.attr.site_hooks,
+        additional_build_deps = additional_build_deps,
         tool_executables = tool_executables,
         layers = [cc_layer],
-        pkg_config_files = ctx.files.pkg_config_files,
-        pre_build_patches = ctx.files.pre_build_patches,
     )
 
     if ctx.attr.native_deps:
         target_environment = ctx.files.target_environment[0] if ctx.files.target_environment else None
         repair_result = register_repair_action(
             ctx,
-            input_wheelhouse = build_result.wheelhouse,
+            input_wheel_dir = build_result.wheel_dir,
             native_deps = ctx.attr.native_deps,
             repair_tool = ctx.executable._repair_tool,
             target_environment = target_environment,
@@ -59,9 +53,9 @@ def _setuptools_build_impl(ctx):
         repair_result = build_result
 
     return [
-        DefaultInfo(files = depset([repair_result.wheelhouse])),
+        DefaultInfo(files = depset([repair_result.wheel_dir])),
         OutputGroupInfo(
-            raw_wheel = depset([build_result.wheelhouse]),
+            raw_wheel = depset([build_result.wheel_dir]),
         ),
     ]
 

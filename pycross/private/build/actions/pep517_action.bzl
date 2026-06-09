@@ -28,43 +28,46 @@ def _resolve_import_path_fn_inner(workspace_name, bin_dir, sibling_layout):
 
 def register_pep517_action(
         ctx,
-        sdist,
         builder,
-        deps,
-        build_deps,
-        config_settings = {},
-        site_hooks = [],
-        tool_executables = [],
+        additional_build_deps = [],
         layers = [],
-        pkg_config_files = [],
+        tool_executables = [],
         extra_files = {},
         extra_inputs = [],
-        pre_build_patches = [],
         cargo_vendored_sources = None):
     """Registers the PEP 517 wheel build action.
 
+    Common attributes (sdist, deps, build_deps, site_hooks, pre_build_patches,
+    config_settings, pkg_config_files) are extracted directly from ctx.attr/ctx.file/ctx.files.
+    This avoids repetitive plumbing in each build rule implementation.
+
     Args:
         ctx: The rule context.
-        sdist: File, the source distribution archive.
         builder: Target, the builder executable.
-        deps: list[Target], runtime Python deps (PyInfo).
-        build_deps: list[Target], build-time Python deps (PyInfo).
-        config_settings: dict, PEP 517 config settings.
-        site_hooks: list[str], Python snippets for interpreter startup.
-        tool_executables: list[struct(name, file)], executables to place on PATH.
+        additional_build_deps: list[Target], extra build-time deps to merge with ctx.attr.build_deps.
         layers: list[struct], CC/Rust environment from extract_*_layer().
-        pkg_config_files: list[File], pkg-config .pc files.
+        tool_executables: list[struct(name, file)], executables to place on PATH.
         extra_files: dict[str, File], files to inject into the sdist directory
             before building, keyed by their target filename (e.g. "Cargo.lock").
         extra_inputs: list[File], extra inputs to the action.
-        pre_build_patches: list[File], patch files to apply to the sdist before building.
         cargo_vendored_sources: str, path to the vendored cargo sources relative to the execution root.
 
     Returns:
         struct(
-            wheelhouse = File,  # TreeArtifact containing one .whl file
+            wheel_dir = File,  # TreeArtifact containing one .whl file
         )
     """
+
+    # Extract common attributes from ctx
+    sdist = ctx.file.sdist
+    deps = list(ctx.attr.deps)
+    build_deps = list(ctx.attr.build_deps) + list(additional_build_deps)
+    site_hooks = list(ctx.attr.site_hooks)
+    pre_build_patches = list(ctx.files.pre_build_patches)
+    config_settings = dict(getattr(ctx.attr, "config_settings", {}))
+    pkg_config_files = list(getattr(ctx.files, "pkg_config_files", []))
+    whldir_name = getattr(ctx.attr, "whldir_name", "") or (ctx.attr.name + ".whldir")
+
     inputs = [sdist] + extra_inputs
     transitive_inputs = []
     tools = []
@@ -161,7 +164,7 @@ def register_pep517_action(
             transitive_inputs.append(layer.transitive_files)
 
     # Declare output files
-    out_wheelhouse = ctx.actions.declare_directory(paths.join(ctx.attr.name, ctx.attr.name + ".wheelhouse"))
+    out_wheel_dir = ctx.actions.declare_directory(paths.join(ctx.attr.name, whldir_name))
 
     # Write main config file
     main_config = {
@@ -175,7 +178,7 @@ def register_pep517_action(
         "site_hooks": expanded_site_hooks,
         "pkg_config_files": pkg_config_paths,
         "path_tools": path_tools_list,
-        "wheelhouse": out_wheelhouse.path,
+        "wheel_dir": out_wheel_dir.path,
     }
     if cargo_vendored_sources:
         main_config["cargo_vendored_sources"] = cargo_vendored_sources
@@ -204,7 +207,7 @@ def register_pep517_action(
     if builder[DefaultInfo].default_runfiles:
         transitive_inputs.append(builder[DefaultInfo].default_runfiles.files)
 
-    sdist_root = out_wheelhouse.dirname + "/sdist"
+    sdist_root = out_wheel_dir.dirname + "/sdist"
     build_root = ctx.bin_dir.path + "/" + ctx.label.package + "/" + ctx.label.name + "_tmp"
 
     action_env = dict(ctx.configuration.default_shell_env)
@@ -216,7 +219,7 @@ def register_pep517_action(
 
     ctx.actions.run(
         inputs = depset(inputs, transitive = transitive_inputs),
-        outputs = [out_wheelhouse],
+        outputs = [out_wheel_dir],
         executable = builder[DefaultInfo].files_to_run.executable,
         arguments = [config_json.path],
         env = action_env,
@@ -226,5 +229,5 @@ def register_pep517_action(
     )
 
     return struct(
-        wheelhouse = out_wheelhouse,
+        wheel_dir = out_wheel_dir,
     )

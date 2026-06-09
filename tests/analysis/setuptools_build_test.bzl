@@ -26,8 +26,8 @@ def _test_setuptools_build_no_repair(name):
 
 # buildifier: disable=unused-variable
 def _test_setuptools_build_no_repair_impl(env, target):
-    wheelhouse = target[DefaultInfo].files.to_list()[0]
-    env.expect.that_target(target).action_generating(wheelhouse.short_path)
+    wheel_dir = target[DefaultInfo].files.to_list()[0]
+    env.expect.that_target(target).action_generating(wheel_dir.short_path)
     # The action that generates the wheel should be the main build action, meaning no repair action
 
 def _test_setuptools_build_with_repair(name):
@@ -43,8 +43,8 @@ def _test_setuptools_build_with_repair(name):
 
 # buildifier: disable=unused-variable
 def _test_setuptools_build_with_repair_impl(env, target):
-    wheelhouse = target[DefaultInfo].files.to_list()[0]
-    action = env.expect.that_target(target).action_generating(wheelhouse.short_path)
+    wheel_dir = target[DefaultInfo].files.to_list()[0]
+    action = env.expect.that_target(target).action_generating(wheel_dir.short_path)
     action.mnemonic().equals("RepairWheel")
 
 def setuptools_build_test_suite(name):

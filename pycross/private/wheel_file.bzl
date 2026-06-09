@@ -4,13 +4,27 @@ load("@bazel_tools//tools/build_defs/repo:utils.bzl", "read_user_netrc", "use_ne
 load("//pycross/private:internal_repo.bzl", "exec_internal_tool")
 
 _BUILD_TEMPLATE = """\
+load("@rules_pycross//pycross/private:wheel_dir.bzl", "pycross_wheel_dir")
+
 package(default_visibility = ["//visibility:public"])
 
-filegroup(
+pycross_wheel_dir(
     name = "wheel",
-    srcs = glob(["*.wheelhouse/*.whl"]),
+    src = "{whl_file}",
+    whldir_name = "{whldir_name}",
 )
 """
+
+def _whldir_name_from_filename(filename):
+    """Extracts normalized name and version from a wheel filename.
+
+    Wheel filenames follow: {name}-{version}(-{build})?-{python}-{abi}-{platform}.whl
+    Returns: "{normalized_name}-{version}.whldir"
+    """
+    parts = filename.split("-")
+    name = parts[0].lower().replace("-", "_")
+    version = parts[1]
+    return "{}-{}.whldir".format(name, version)
 
 def _pycross_wheel_file_impl(rctx):
     netrc = read_user_netrc(rctx)
@@ -50,24 +64,21 @@ def _pycross_wheel_file_impl(rctx):
         if not urls:
             fail("File {} not found in PyPI index".format(rctx.attr.filename))
 
-    wheelhouse_dir = rctx.attr.filename + ".wheelhouse"
-
-    # Download directly into {filename}.wheelhouse/ — no copies needed later
+    # Download the wheel file directly
     rctx.download(
         urls,
-        wheelhouse_dir + "/" + rctx.attr.filename,
+        rctx.attr.filename,
         rctx.attr.sha256,
         auth = use_netrc(netrc, urls, {}),
     )
 
     # Inspect the wheel for top_level_packages
-    # Uses the same exec_internal_tool from //pycross/private:internal_repo.bzl
     result = exec_internal_tool(
         rctx,
         rctx.attr._inspect_tool,
         [
             "--wheel",
-            wheelhouse_dir + "/" + rctx.attr.filename,
+            rctx.attr.filename,
             "--output",
             "inspection.json",
         ],
@@ -79,7 +90,11 @@ def _pycross_wheel_file_impl(rctx):
         # but if we somehow bypass it or change it, we write a fallback.
         rctx.file("inspection.json", json.encode({"top_level_packages": []}))
 
-    rctx.file("BUILD.bazel", _BUILD_TEMPLATE)
+    whldir_name = _whldir_name_from_filename(rctx.attr.filename)
+    rctx.file("BUILD.bazel", _BUILD_TEMPLATE.format(
+        whl_file = rctx.attr.filename,
+        whldir_name = whldir_name,
+    ))
 
 pycross_wheel_file = repository_rule(
     implementation = _pycross_wheel_file_impl,

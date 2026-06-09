@@ -103,10 +103,10 @@ def main(args: Any) -> None:
     )
 
     link_dir = Path(tempfile.mkdtemp())
-    if args.wheelhouse:
-        whl_files = list(Path(args.wheelhouse).glob("*.whl"))
+    if args.wheel_dir:
+        whl_files = list(Path(args.wheel_dir).glob("*.whl"))
         if len(whl_files) != 1:
-            raise SystemExit(f"error: Expected 1 wheel in wheelhouse, found {len(whl_files)}")
+            raise SystemExit(f"error: Expected 1 wheel in wheel directory, found {len(whl_files)}")
         wheel_path = whl_files[0]
         wheel_name = wheel_path.name
     else:
@@ -162,10 +162,10 @@ def parse_flags() -> Any:
     )
 
     parser.add_argument(
-        "--wheelhouse",
+        "--wheel-dir",
         type=Path,
         required=False,
-        help="The wheelhouse directory.",
+        help="The wheel directory.",
     )
 
     parser.add_argument(

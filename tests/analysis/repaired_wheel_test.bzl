@@ -8,7 +8,7 @@ load("@rules_testing//lib:util.bzl", "util")
 load("//pycross/private/build:repaired_wheel.bzl", "pycross_repaired_wheel")
 
 def _mock_wheel_impl(ctx):
-    out = ctx.actions.declare_directory(ctx.label.name + "_wheelhouse")
+    out = ctx.actions.declare_directory(ctx.label.name + "_whldir")
     ctx.actions.run_shell(
         outputs = [out],
         command = "mkdir -p %s && touch %s/dummy-1.0-py3-none-any.whl" % (out.path, out.path),
@@ -30,12 +30,12 @@ def _test_repaired_wheel_basic(name):
 
 # buildifier: disable=unused-variable
 def _test_repaired_wheel_basic_impl(env, target):
-    wheelhouse = target[DefaultInfo].files.to_list()[0]
-    env.expect.that_bool(wheelhouse.is_directory).equals(True)
-    env.expect.that_str(wheelhouse.basename).contains(".wheelhouse")
+    wheel_dir = target[DefaultInfo].files.to_list()[0]
+    env.expect.that_bool(wheel_dir.is_directory).equals(True)
+    env.expect.that_str(wheel_dir.basename).contains(".whldir")
 
-    # The action generating the wheelhouse should be RepairWheel
-    action = env.expect.that_target(target).action_generating(wheelhouse.short_path)
+    # The action generating the wheel_dir should be RepairWheel
+    action = env.expect.that_target(target).action_generating(wheel_dir.short_path)
     action.mnemonic().equals("RepairWheel")
 
 def _test_repaired_wheel_with_native_deps(name):
@@ -51,8 +51,8 @@ def _test_repaired_wheel_with_native_deps(name):
 
 # buildifier: disable=unused-variable
 def _test_repaired_wheel_with_native_deps_impl(env, target):
-    wheelhouse = target[DefaultInfo].files.to_list()[0]
-    env.expect.that_bool(wheelhouse.is_directory).equals(True)
+    wheel_dir = target[DefaultInfo].files.to_list()[0]
+    env.expect.that_bool(wheel_dir.is_directory).equals(True)
 
 def repaired_wheel_test_suite(name):
     test_suite(

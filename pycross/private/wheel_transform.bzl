@@ -1,10 +1,10 @@
 """Implementation of the pycross_wheel_transform rule."""
 
 def _pycross_wheel_transform_impl(ctx):
-    input_wheelhouse = ctx.files.wheel[0]
+    wheel_input = ctx.files.wheel[0]
 
     # Declare outputs.
-    out_wheelhouse = ctx.actions.declare_directory(ctx.attr.name + ".wheelhouse")
+    out_wheel_dir = ctx.actions.declare_directory(ctx.attr.name + ".whldir")
 
     # Build env vars with make variable expansion.
     env = {}
@@ -12,23 +12,23 @@ def _pycross_wheel_transform_impl(ctx):
         env[key] = ctx.expand_make_variables("env", ctx.expand_location(value, ctx.attr.data), {})
 
     # Collect inputs.
-    input_files = [input_wheelhouse]
+    input_files = [wheel_input]
     data_inputs = [dep[DefaultInfo].files for dep in ctx.attr.data]
 
     # Build arguments for the wheel transformer wrapper.
     args = ctx.actions.args()
-    if type(input_wheelhouse) == "File" and input_wheelhouse.is_directory:
-        args.add("--in-wheelhouse", input_wheelhouse.path)
+    if type(wheel_input) == "File" and wheel_input.is_directory:
+        args.add("--in-wheel-dir", wheel_input.path)
     else:
         # Plain file (e.g., local override wheel) — pass its directory
-        args.add("--in-wheelhouse", input_wheelhouse.dirname)
-    args.add("--out-wheelhouse", out_wheelhouse.path)
+        args.add("--in-wheel-dir", wheel_input.dirname)
+    args.add("--out-wheel-dir", out_wheel_dir.path)
     args.add("--tool", ctx.executable.transform)
 
     for key, value in env.items():
         args.add("--env", "%s=%s" % (key, value))
 
-    outputs = [out_wheelhouse]
+    outputs = [out_wheel_dir]
 
     ctx.actions.run(
         executable = ctx.executable._wheel_transformer,
@@ -37,10 +37,10 @@ def _pycross_wheel_transform_impl(ctx):
         outputs = outputs,
         tools = [ctx.attr.transform[DefaultInfo].files_to_run],
         mnemonic = "WheelTransform",
-        progress_message = "Transforming %s" % input_wheelhouse.basename,
+        progress_message = "Transforming %s" % wheel_input.basename,
     )
 
-    return [DefaultInfo(files = depset([out_wheelhouse]))]
+    return [DefaultInfo(files = depset([out_wheel_dir]))]
 
 pycross_wheel_transform = rule(
     implementation = _pycross_wheel_transform_impl,

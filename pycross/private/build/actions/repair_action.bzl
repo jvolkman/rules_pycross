@@ -6,7 +6,7 @@ load("//pycross/private:cc_toolchain_util.bzl", "get_libraries")
 
 def register_repair_action(
         ctx,
-        input_wheelhouse,
+        input_wheel_dir,
         native_deps,
         repair_tool,
         target_environment = None,
@@ -15,7 +15,7 @@ def register_repair_action(
 
     Args:
         ctx: The rule context.
-        input_wheelhouse: File, the input wheelhouse directory.
+        input_wheel_dir: File, the input wheel directory TreeArtifact.
         native_deps: list[Target], CcInfo deps whose shared libs to bundle.
         repair_tool: Target, the repair_wheel executable.
         target_environment: File (optional), the target environment JSON.
@@ -25,12 +25,15 @@ def register_repair_action(
 
     Returns:
         struct(
-            wheelhouse = File,      # tree artifact of repaired wheel contents
+            wheel_dir = File,      # tree artifact of repaired wheel contents
         )
     """
 
+    # Use the same whldir_name as the build action for consistency.
+    whldir_name = getattr(ctx.attr, "whldir_name", "") or (ctx.attr.name + ".whldir")
+
     # Declare outputs.
-    out_wheelhouse = ctx.actions.declare_directory(ctx.attr.name + ".wheelhouse")
+    out_wheel_dir = ctx.actions.declare_directory(whldir_name)
 
     # Extract library paths from CcInfo.
     lib_dirs = []
@@ -51,14 +54,14 @@ def register_repair_action(
                 repair_dep_paths.append(imp)
 
     # Collect inputs.
-    input_files = [input_wheelhouse]
+    input_files = [input_wheel_dir]
     if target_environment:
         input_files.append(target_environment)
 
     # Build arguments for the repair tool.
     args = ctx.actions.args()
-    args.add("--wheelhouse", input_wheelhouse.path)
-    args.add("--out-wheelhouse", out_wheelhouse.path)
+    args.add("--wheel-dir", input_wheel_dir.path)
+    args.add("--out-wheel-dir", out_wheel_dir.path)
 
     for d in depset(lib_dirs).to_list():
         args.add("--lib-dir", d)
@@ -66,7 +69,7 @@ def register_repair_action(
     if target_environment:
         args.add("--target-environment", target_environment.path)
 
-    outputs = [out_wheelhouse]
+    outputs = [out_wheel_dir]
 
     # Build environment: inject user repair deps into PYTHONPATH if provided.
     env = {}
@@ -80,9 +83,9 @@ def register_repair_action(
         outputs = outputs,
         env = env,
         mnemonic = "RepairWheel",
-        progress_message = "Repairing %s" % input_wheelhouse.basename,
+        progress_message = "Repairing %s" % input_wheel_dir.basename,
     )
 
     return struct(
-        wheelhouse = out_wheelhouse,
+        wheel_dir = out_wheel_dir,
     )

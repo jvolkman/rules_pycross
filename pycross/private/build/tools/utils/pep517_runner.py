@@ -59,7 +59,7 @@ def run_pep517_build(ctx: BuildContext) -> str:
         runner=_subprocess_runner,
     )
 
-    ctx.wheelhouse.mkdir(parents=True, exist_ok=True)
+    ctx.wheel_dir.mkdir(parents=True, exist_ok=True)
 
     is_cross = ctx.exec_python != ctx.target_python
     if is_cross or ctx.bazel_config.get("always_use_crossenv"):
@@ -95,7 +95,7 @@ def run_pep517_build(ctx: BuildContext) -> str:
     try:
         wheel_file = builder.build(
             distribution="wheel",
-            output_directory=ctx.wheelhouse,
+            output_directory=ctx.wheel_dir,
             config_settings=ctx.config_settings,
         )
 

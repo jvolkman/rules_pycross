@@ -26,6 +26,10 @@ COMMON_BUILD_ATTRS = {
     "site_hooks": attr.string_list(
         doc = "Python code snippets to execute on interpreter startup during builds.",
     ),
+    "whldir_name": attr.string(
+        doc = "Name for the output .whldir TreeArtifact directory (e.g., 'numpy-1.24.0.whldir'). " +
+              "If empty, defaults to '{name}.whldir'.",
+    ),
     "_dummy_bin_file": attr.label(
         default = Label("//pycross/private:dummy_bin_file"),
         allow_single_file = True,
@@ -85,9 +89,6 @@ def get_wheel(target):
     """
     files = target[DefaultInfo].files.to_list()
     return files[0]
-
-# Backward-compatible alias.
-get_wheelhouse = get_wheel
 
 def get_unzipped_wheel(target):
     """Extracts the site_packages TreeArtifact from a target.

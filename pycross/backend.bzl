@@ -39,7 +39,6 @@ load(
     _COMMON_BUILD_ATTRS = "COMMON_BUILD_ATTRS",
     _get_unzipped_wheel = "get_unzipped_wheel",
     _get_wheel = "get_wheel",
-    _get_wheelhouse = "get_wheelhouse",
     _group_tool_deps = "group_tool_deps",
 )
 load(
@@ -72,7 +71,6 @@ CC_FRAGMENTS = _CC_FRAGMENTS
 # Utilities
 get_unzipped_wheel = _get_unzipped_wheel
 get_wheel = _get_wheel
-get_wheelhouse = _get_wheelhouse
 group_tool_deps = _group_tool_deps
 
 # Override extension helpers

@@ -8,8 +8,8 @@ from pathlib import Path
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Repair a Python wheel by bundling native shared libraries.")
-    parser.add_argument("--wheelhouse", required=True, help="Path to input wheelhouse.")
-    parser.add_argument("--out-wheelhouse", required=True, help="Path to output wheelhouse.")
+    parser.add_argument("--wheel-dir", required=True, help="Path to input wheel directory.")
+    parser.add_argument("--out-wheel-dir", required=True, help="Path to output wheel directory.")
     parser.add_argument(
         "--lib-dir", action="append", default=[], help="Library directory for repairwheel (can be repeated)."
     )
@@ -17,9 +17,9 @@ def main() -> None:
 
     args = parser.parse_args()
 
-    whl_files = glob.glob(os.path.join(args.wheelhouse, "*.whl"))
+    whl_files = glob.glob(os.path.join(args.wheel_dir, "*.whl"))
     if not whl_files:
-        print("ERROR: No .whl file found in wheelhouse: " + args.wheelhouse, file=sys.stderr)
+        print("ERROR: No .whl file found in wheel directory: " + args.wheel_dir, file=sys.stderr)
         sys.exit(1)
     wheel_file = whl_files[0]
 
@@ -31,7 +31,7 @@ def main() -> None:
         "repairwheel",
         wheel_file,
         "--output-dir",
-        args.out_wheelhouse,
+        args.out_wheel_dir,
         "--no-sys-paths",
     ]
 
@@ -57,7 +57,7 @@ def main() -> None:
                 target_env_data = json.load(f)
             compatibility_tags = set(target_env_data.get("compatibility_tags", []))
 
-            repaired_wheels = list(Path(args.out_wheelhouse).glob("*.whl"))
+            repaired_wheels = list(Path(args.out_wheel_dir).glob("*.whl"))
             if not repaired_wheels:
                 print("ERROR: No output wheel found in repaired output directory", file=sys.stderr)
                 sys.exit(1)

@@ -69,6 +69,9 @@ def _sdist_repo_common(rctx):
         "deps": str(rctx.attr.deps),
     }
 
+    if rctx.attr.whldir_name:
+        macro_attrs["whldir_name"] = "\"{}\"".format(rctx.attr.whldir_name)
+
     if rctx.attr.build_backend:
         backend_macro = rctx.attr.build_backend
 
@@ -205,6 +208,7 @@ _SDIST_REPO_ATTRS = {
     ),
     "pre_build_patches": attr.string_list(doc = "Patches to apply to the sdist source tree before building."),
     "site_hooks": attr.string_list(doc = "Python code snippets to execute on interpreter startup during builds."),
+    "whldir_name": attr.string(doc = "Name for the output .whldir TreeArtifact directory."),
 }
 
 pycross_sdist_repo = repository_rule(

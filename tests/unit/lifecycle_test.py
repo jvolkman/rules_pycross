@@ -22,7 +22,7 @@ class LifecycleTest(unittest.TestCase):
                     "sdist": "dummy_sdist.tar.gz",
                     "exec_python": "python3",
                     "target_python": "python3",
-                    "wheelhouse": "out_wheelhouse",
+                    "wheel_dir": "out_wheel_dir",
                     "layers": [],
                 },
                 f,

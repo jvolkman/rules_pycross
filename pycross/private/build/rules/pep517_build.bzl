@@ -22,16 +22,11 @@ def _pep517_build_impl(ctx):
 
     build_result = register_pep517_action(
         ctx,
-        sdist = ctx.file.sdist,
         builder = ctx.attr._builder,
-        deps = ctx.attr.deps,
-        build_deps = ctx.attr.build_deps,
-        site_hooks = ctx.attr.site_hooks,
-        pre_build_patches = ctx.files.pre_build_patches,
     )
 
     return [
-        DefaultInfo(files = depset([build_result.wheelhouse])),
+        DefaultInfo(files = depset([build_result.wheel_dir])),
     ]
 
 pep517_build = rule(

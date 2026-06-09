@@ -76,8 +76,8 @@ def _test_pep517_build_basic_impl(env, target):
     env.expect.that_target(target).has_provider(DefaultInfo)
     env.expect.that_target(target).has_provider(OutputGroupInfo)
 
-    wheelhouse = target[DefaultInfo].files.to_list()[0]
-    env.expect.that_bool(wheelhouse.is_directory).equals(True)
+    wheel_dir = target[DefaultInfo].files.to_list()[0]
+    env.expect.that_bool(wheel_dir.is_directory).equals(True)
 
 def pep517_build_test_suite(name):
     test_suite(

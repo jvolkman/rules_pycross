@@ -1,4 +1,4 @@
-"""Tests for repair_wheel_hook.py wheelhouse support."""
+"""Tests for repair_wheel_hook.py wheel directory support."""
 
 import shutil
 import tempfile
@@ -9,14 +9,14 @@ from unittest.mock import patch
 
 
 class RepairWheelHookArgsTest(unittest.TestCase):
-    """Test the wheelhouse-based repair_wheel_hook."""
+    """Test the wheel_dir-based repair_wheel_hook."""
 
     def setUp(self):
         self.temp_dir = tempfile.mkdtemp()
-        self.wheelhouse = Path(self.temp_dir) / "wheelhouse"
-        self.wheelhouse.mkdir()
-        self.out_wheelhouse = Path(self.temp_dir) / "out_wheelhouse"
-        self.out_wheelhouse.mkdir()
+        self.wheel_dir = Path(self.temp_dir) / "wheel_dir"
+        self.wheel_dir.mkdir()
+        self.out_wheel_dir = Path(self.temp_dir) / "out_wheel_dir"
+        self.out_wheel_dir.mkdir()
 
     def tearDown(self):
         shutil.rmtree(self.temp_dir)
@@ -31,9 +31,9 @@ class RepairWheelHookArgsTest(unittest.TestCase):
         return wheel_path
 
     @patch("subprocess.check_call")
-    def test_wheelhouse_input_finds_wheel(self, mock_check_call):
-        """--wheelhouse should find the .whl file and pass it to repairwheel."""
-        self._create_dummy_wheel(self.wheelhouse)
+    def test_wheel_dir_input_finds_wheel(self, mock_check_call):
+        """--wheel-dir should find the .whl file and pass it to repairwheel."""
+        self._create_dummy_wheel(self.wheel_dir)
 
         # repairwheel creates output in --output-dir
         def fake_repair(*args, **kwargs):
@@ -54,10 +54,10 @@ class RepairWheelHookArgsTest(unittest.TestCase):
             "sys.argv",
             [
                 "repair_wheel_hook",
-                "--wheelhouse",
-                str(self.wheelhouse),
-                "--out-wheelhouse",
-                str(self.out_wheelhouse),
+                "--wheel-dir",
+                str(self.wheel_dir),
+                "--out-wheel-dir",
+                str(self.out_wheel_dir),
             ],
         ):
             main()
@@ -67,18 +67,18 @@ class RepairWheelHookArgsTest(unittest.TestCase):
         wheel_arg = call_args[3]  # repairwheel <wheel_file> --output-dir ...
         self.assertTrue(wheel_arg.endswith(".whl"))
 
-    def test_empty_wheelhouse_errors(self):
-        """--wheelhouse with no .whl files should exit with error."""
+    def test_empty_wheel_dir_errors(self):
+        """--wheel-dir with no .whl files should exit with error."""
         from pycross.private.build.tools.repair_wheel_hook import main
 
         with patch(
             "sys.argv",
             [
                 "repair_wheel_hook",
-                "--wheelhouse",
-                str(self.wheelhouse),
-                "--out-wheelhouse",
-                str(self.out_wheelhouse),
+                "--wheel-dir",
+                str(self.wheel_dir),
+                "--out-wheel-dir",
+                str(self.out_wheel_dir),
             ],
         ):
             with self.assertRaises(SystemExit) as cm:
@@ -88,7 +88,7 @@ class RepairWheelHookArgsTest(unittest.TestCase):
     @patch("subprocess.check_call")
     def test_lib_dirs_passed_through(self, mock_check_call):
         """--lib-dir arguments should be passed to repairwheel."""
-        self._create_dummy_wheel(self.wheelhouse)
+        self._create_dummy_wheel(self.wheel_dir)
 
         def fake_repair(*args, **kwargs):
             cmd = args[0]
@@ -107,10 +107,10 @@ class RepairWheelHookArgsTest(unittest.TestCase):
             "sys.argv",
             [
                 "repair_wheel_hook",
-                "--wheelhouse",
-                str(self.wheelhouse),
-                "--out-wheelhouse",
-                str(self.out_wheelhouse),
+                "--wheel-dir",
+                str(self.wheel_dir),
+                "--out-wheel-dir",
+                str(self.out_wheel_dir),
                 "--lib-dir",
                 "/usr/lib",
                 "--lib-dir",
