@@ -367,14 +367,36 @@ def collect_and_process_packages(packages_list: list[Dict[str, Any]]) -> Dict[Pa
 
             dependencies.add(Requirement(dep_string))
 
-        files = lock_pkg.get("wheels", [])
-        if lock_pkg.get("sdist"):
-            files.append(lock_pkg.get("sdist"))
-
-        files = {parse_file_info(f) for f in files}
-
         source = lock_pkg.get("source", {})
         sdist = lock_pkg.get("sdist", {})
+
+        files = {parse_file_info(f) for f in lock_pkg.get("wheels", [])}
+        if sdist:
+            if "url" in sdist or "file" in sdist:
+                files.add(parse_file_info(sdist))
+            elif "url" in source:
+                # URL-based sources (e.g. an archive referenced with a
+                # `#subdirectory=` fragment) put the download URL on the
+                # `source` entry rather than the `sdist` entry. The archive
+                # file name (e.g. a git ref tarball) is not a PEP 503 sdist
+                # name, which both PackageFile and pip's link evaluator
+                # reject, so synthesise a canonical `{name}-{version}.tar.gz`
+                # file name while keeping the real download URL.
+                url = source["url"]
+                file_hash = sdist["hash"]
+                assert file_hash.startswith("sha256:")
+                file_name = f"{package_name}-{package_version}.tar.gz"
+                files.add(
+                    PackageFile(
+                        name=file_name,
+                        sha256=file_hash[7:],
+                        urls=(url,),
+                        package_name=package_name,
+                        package_version=Version(package_version),
+                    )
+                )
+            else:
+                files.add(parse_file_info(sdist))
 
         # Check for editable source (any path value)
         is_local_editable = "editable" in source and isinstance(source.get("editable"), str)
