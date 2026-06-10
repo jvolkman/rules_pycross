@@ -810,6 +810,18 @@ def main(args: Any, temp_dir: Path, is_debug: bool) -> None:
     # Extract the sdist and rename it to 'sdist'
     sdist_dir = temp_dir / "sdist"
     _sdist_extracted_dir = extract_sdist(args.sdist, temp_dir)
+    if args.sdist_subdirectory:
+        # The sdist is an archive whose buildable package lives in a
+        # subdirectory (e.g. a monorepo referenced via a `#subdirectory=`
+        # URL dep). Descend into it before the rename so the subdirectory
+        # becomes the build root and all the `..`-relative path handling
+        # below is unchanged.
+        subdirectory = Path(args.sdist_subdirectory)
+        if subdirectory.is_absolute() or ".." in subdirectory.parts:
+            _error(f"sdist subdirectory must be a relative path within the sdist: {args.sdist_subdirectory}")
+        _sdist_extracted_dir = _sdist_extracted_dir / subdirectory
+        if not _sdist_extracted_dir.is_dir():
+            _error(f"sdist subdirectory does not exist: {args.sdist_subdirectory}")
     _sdist_extracted_dir.rename(sdist_dir)
 
     # Change into the new directory
@@ -1016,6 +1028,13 @@ def parse_flags() -> Any:
         type=Path,
         required=True,
         help="The sdist path.",
+    )
+
+    parser.add_argument(
+        "--sdist-subdirectory",
+        type=str,
+        default=None,
+        help="A subdirectory within the extracted sdist to build from.",
     )
 
     parser.add_argument(
