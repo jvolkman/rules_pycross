@@ -212,6 +212,9 @@ def _handle_sdist(ctx, args, inputs):  # -> PycrossWheelInfo
     inputs.append(ctx.file.sdist)
     args.add("--sdist", ctx.file.sdist)
 
+    if ctx.attr.sdist_subdirectory:
+        args.add("--sdist-subdirectory", ctx.attr.sdist_subdirectory)
+
     sdist_name = ctx.file.sdist.basename
     if sdist_name.lower().endswith(".tar.gz"):
         wheel_name = sdist_name[:-7]
@@ -373,6 +376,13 @@ pycross_wheel_build = rule(
             doc = "The sdist file.",
             allow_single_file = [".tar.gz", ".zip"],
             mandatory = True,
+        ),
+        "sdist_subdirectory": attr.string(
+            doc = (
+                "An optional subdirectory within the extracted sdist to build " +
+                "from. Use for archives (e.g. monorepos referenced via a " +
+                "`#subdirectory=` URL dep) whose buildable package is nested."
+            ),
         ),
         "deps": attr.label_list(
             doc = "A list of Python build dependencies for the wheel.",
