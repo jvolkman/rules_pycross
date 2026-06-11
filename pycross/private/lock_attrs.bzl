@@ -261,7 +261,8 @@ def package_annotation(
         post_install_patches = [],
         pre_build_patches = [],
         site_hooks = [],
-        build_backend = None):
+        build_backend = None,
+        top_level_packages = []):
     """Annotations to apply to individual packages.
 
     Args:
@@ -274,6 +275,7 @@ def package_annotation(
       pre_build_patches (list, optional): A list of patches to apply to the sdist source tree before building.
       site_hooks (list, optional): A list of Python code snippets to execute on interpreter startup during builds.
       build_backend (str, optional): The build backend macro to use (e.g., "meson_build" or "setuptools_build").
+      top_level_packages (list, optional): Override the auto-detected top-level importable package paths. Use forward slashes for namespace packages (e.g. "google/cloud/storage").
 
     Returns:
       str: A json encoded string of the provided content.
@@ -288,6 +290,7 @@ def package_annotation(
         pre_build_patches = pre_build_patches,
         site_hooks = site_hooks,
         build_backend = build_backend,
+        top_level_packages = top_level_packages,
     ))
 
 PDM_IMPORT_ATTRS = _IMPORT_ATTRS

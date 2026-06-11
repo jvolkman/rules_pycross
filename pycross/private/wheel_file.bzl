@@ -6,6 +6,8 @@ load("//pycross/private:internal_repo.bzl", "exec_internal_tool")
 _BUILD_TEMPLATE = """\
 package(default_visibility = ["//visibility:public"])
 
+exports_files(["inspection.json"])
+
 filegroup(
     name = "wheel",
     srcs = ["{filename}"],

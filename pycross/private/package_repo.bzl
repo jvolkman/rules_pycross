@@ -157,16 +157,33 @@ def _package_repo_impl(rctx):
     packages = lock["packages"]
     pins = lock["pins"]
 
-    # 0. Read inspection.json for wheel files to populate top_level_packages
+    # 0. Read inspection.json from wheel repos to populate top_level_packages.
+    # repo_map is a label_keyed_string_dict: Label -> file_key.
+    # Labels are resolved by Bazel from the extension context, so we can use
+    # label.repo_name to construct inspection labels without string splitting.
+    # Only the wheel repos we actually call rctx.path() on get fetched (lazy).
+
+    # Build a reverse map (file_key -> label_string) for the renderer and
+    # other downstream consumers that need forward string lookups.
+    repo_map = {}  # file_key -> label_string
+    wheel_labels = {}  # file_key -> Label (only wheel entries)
+    for label, file_key in rctx.attr.repo_map.items():
+        repo_map[file_key] = str(label)
+        if label.name == "wheel":
+            wheel_labels[file_key] = label
+
     for pkg_key, pkg in packages.items():
+        # Skip if the user explicitly overrode top_level_packages via annotation.
+        if pkg.get("top_level_packages"):
+            continue
         for _, file_ref in pkg.get("environment_files", {}).items():
             key = file_ref.get("key")
             if not key:
                 continue
-            repo_label = rctx.attr.repo_map.get(key)
-            if repo_label and repo_label.endswith("//:wheel"):
-                repo_name = repo_label.split("//")[0].lstrip("@")
-                inspection_path = rctx.path(".").dirname.get_child(repo_name).get_child("inspection.json")
+            wheel_label = wheel_labels.get(key)
+            if wheel_label:
+                inspection_label = Label("@@{}//:inspection.json".format(wheel_label.repo_name))
+                inspection_path = rctx.path(inspection_label)
                 if inspection_path.exists:
                     inspection_data = json.decode(rctx.read(inspection_path))
                     if "top_level_packages" in inspection_data:
@@ -178,7 +195,7 @@ def _package_repo_impl(rctx):
     rctx.file("requirements.bzl", _requirements_bzl(rctx, pins))
 
     # 1. Render _lock/lock.bzl and _lock/BUILD.bazel
-    rctx.file("_lock/lock.bzl", render_lock_bzl(lock, rctx.attr.repo_map, rctx.name))
+    rctx.file("_lock/lock.bzl", render_lock_bzl(lock, repo_map, rctx.name))
     rctx.file("_lock/BUILD.bazel", "\n".join([
         'package(default_visibility = ["//:__subpackages__"])',
         "",
@@ -329,7 +346,7 @@ package_repo = repository_rule(
     implementation = _package_repo_impl,
     attrs = {
         "resolved_lock_file": attr.label(mandatory = True),
-        "repo_map": attr.string_dict(),
+        "repo_map": attr.label_keyed_string_dict(),
         "backend_configs": attr.string_dict(
             doc = "Maps pycross rule names to JSON-encoded config dicts with 'rule_bzl' and 'tool_packages'.",
         ),

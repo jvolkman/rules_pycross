@@ -25,7 +25,7 @@ lock_import.import_pylock(<a href="#lock_import.import_pylock-all_development_gr
                           <a href="#lock_import.import_pylock-optional_groups">optional_groups</a>, <a href="#lock_import.import_pylock-project_file">project_file</a>, <a href="#lock_import.import_pylock-repo">repo</a>, <a href="#lock_import.import_pylock-target_environments">target_environments</a>)
 lock_import.package(<a href="#lock_import.package-name">name</a>, <a href="#lock_import.package-always_build">always_build</a>, <a href="#lock_import.package-build_backend">build_backend</a>, <a href="#lock_import.package-build_dependencies">build_dependencies</a>, <a href="#lock_import.package-build_target">build_target</a>,
                     <a href="#lock_import.package-ignore_dependencies">ignore_dependencies</a>, <a href="#lock_import.package-install_exclude_globs">install_exclude_globs</a>, <a href="#lock_import.package-post_install_patches">post_install_patches</a>,
-                    <a href="#lock_import.package-pre_build_patches">pre_build_patches</a>, <a href="#lock_import.package-repo">repo</a>, <a href="#lock_import.package-site_hooks">site_hooks</a>)
+                    <a href="#lock_import.package-pre_build_patches">pre_build_patches</a>, <a href="#lock_import.package-repo">repo</a>, <a href="#lock_import.package-site_hooks">site_hooks</a>, <a href="#lock_import.package-top_level_packages">top_level_packages</a>)
 </pre>
 
 
@@ -148,5 +148,6 @@ Specify package-specific settings.
 | <a id="lock_import.package-pre_build_patches"></a>pre_build_patches |  A list of patches to apply to the sdist source tree before building.   | List of strings | optional |  `[]`  |
 | <a id="lock_import.package-repo"></a>repo |  The repository name   | String | required |  |
 | <a id="lock_import.package-site_hooks"></a>site_hooks |  A list of Python code snippets to execute on interpreter startup during builds.   | List of strings | optional |  `[]`  |
+| <a id="lock_import.package-top_level_packages"></a>top_level_packages |  Override the auto-detected top-level importable package paths. Use this for namespace packages or when auto-detection is wrong. Paths use forward slashes for nested namespaces (e.g. 'google/cloud/storage').   | List of strings | optional |  `[]`  |
 
 

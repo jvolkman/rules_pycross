@@ -75,6 +75,11 @@ PACKAGE_ATTRS = dict(
     site_hooks = attr.string_list(
         doc = "A list of Python code snippets to execute on interpreter startup during builds.",
     ),
+    top_level_packages = attr.string_list(
+        doc = "Override the auto-detected top-level importable package paths. " +
+              "Use this for namespace packages or when auto-detection is wrong. " +
+              "Paths use forward slashes for nested namespaces (e.g. 'google/cloud/storage').",
+    ),
 )
 
 # Attrs specific to build-system overrides (meson, setuptools, etc.).

@@ -200,10 +200,16 @@ def _lock_repos_impl(module_ctx):
             # Invoke the generic sdist repo rule. Hooks will be applied dynamically inside it.
             pycross_sdist_repo(**sdist_repo_attrs)
 
+        # Flip repo_remote_files (file_key -> label_str) to (label_str -> file_key)
+        # for package_repo's label_keyed_string_dict attr. Bazel resolves the
+        # label-string keys from the extension context, giving package_repo
+        # proper Label objects instead of raw strings.
+        repo_map = {label_str: file_key for file_key, label_str in repo_remote_files.items()}
+
         package_repo(
             name = repo_name,
             resolved_lock_file = lock_file,
-            repo_map = repo_remote_files,
+            repo_map = repo_map,
             backend_configs = backend_configs_json,
         )
 

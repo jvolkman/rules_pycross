@@ -2,6 +2,13 @@
 
 load("@bazel_skylib//lib:paths.bzl", "paths")
 load("@rules_python//python:py_info.bzl", "PyInfo")
+
+# buildifier: disable=bzl-visibility
+load(
+    "@rules_python//python/private:py_info.bzl",
+    "VenvSymlinkEntry",
+    "VenvSymlinkKind",
+)
 load(
     ":providers.bzl",
     "PycrossExtractedWheelInfo",
@@ -68,13 +75,8 @@ def _pycross_wheel_library_impl(ctx):
         "site-packages",  # we put lib files in this subdirectory.
     )
 
-    direct_imports = [imp]
-    if ctx.attr.top_level_packages:
-        for tlp in ctx.attr.top_level_packages:
-            direct_imports.append(paths.join(imp, tlp))
-
     imports = depset(
-        direct = direct_imports,
+        direct = [imp],
         transitive = [d[PyInfo].imports for d in ctx.attr.deps],
     )
     transitive_sources = depset(
@@ -85,18 +87,59 @@ def _pycross_wheel_library_impl(ctx):
     for d in ctx.attr.deps:
         runfiles = runfiles.merge(d[DefaultInfo].default_runfiles)
 
+    # Build venv symlink entries for rules_python's venvs_site_packages support.
+    # Each top-level package gets a symlink from the venv's site-packages/<tlp>
+    # to the runfiles location <repo>/<pkg>/<name>/site-packages/<tlp>.
+    venv_symlinks = []
+    package_name = ctx.attr.package_name or ctx.label.name
+    package_version = ctx.attr.package_version or ""
+
+    if ctx.attr.top_level_packages:
+        for tlp in ctx.attr.top_level_packages:
+            venv_symlinks.append(VenvSymlinkEntry(
+                kind = VenvSymlinkKind.LIB,
+                link_to_path = paths.join(imp, tlp),
+                package = package_name,
+                version = package_version,
+                venv_path = tlp,
+                files = depset([out]),
+            ))
+
+        # Also add .dist-info directory symlink so metadata is accessible.
+        dist_info_candidates = [
+            "{}-{}.dist-info".format(package_name.replace("-", "_"), package_version),
+            "{}-{}.dist-info".format(package_name, package_version),
+        ]
+        for dist_info_dir in dist_info_candidates:
+            venv_symlinks.append(VenvSymlinkEntry(
+                kind = VenvSymlinkKind.LIB,
+                link_to_path = paths.join(imp, dist_info_dir),
+                package = package_name,
+                version = package_version,
+                venv_path = dist_info_dir,
+                files = depset([out]),
+            ))
+            break  # Only need one
+
+    py_info_kwargs = dict(
+        has_py2_only_sources = has_py2_only_sources,
+        has_py3_only_sources = has_py3_only_sources,
+        imports = imports,
+        transitive_sources = transitive_sources,
+        uses_shared_libraries = True,  # Docs say this is unused
+    )
+    if venv_symlinks:
+        py_info_kwargs["venv_symlinks"] = depset(
+            direct = venv_symlinks,
+            transitive = [d[PyInfo].venv_symlinks for d in ctx.attr.deps],
+        )
+
     providers = [
         DefaultInfo(
             files = depset(direct = [out]),
             runfiles = runfiles,
         ),
-        PyInfo(
-            has_py2_only_sources = has_py2_only_sources,
-            has_py3_only_sources = has_py3_only_sources,
-            imports = imports,
-            transitive_sources = transitive_sources,
-            uses_shared_libraries = True,  # Docs say this is unused
-        ),
+        PyInfo(**py_info_kwargs),
         PycrossExtractedWheelInfo(
             site_packages = out,
         ),

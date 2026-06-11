@@ -28,11 +28,70 @@ def _get_archive_file_content(archive_path: Path, target_filename: str) -> str:
     return ""
 
 
+def _resolve_namespace_packages(all_files: set[str], top_level_dirs: set[str]) -> set[str]:
+    """Resolve namespace packages to their concrete sub-packages.
+
+    For regular packages (directories with __init__.py), returns the directory
+    name as-is. For implicit namespace packages (PEP 420 — directories without
+    __init__.py), descends to find the shallowest concrete sub-packages.
+
+    This is critical for venv symlink support: if two distributions share a
+    namespace (e.g. google-cloud-storage and google-cloud-bigquery both install
+    under google/), we must symlink at the concrete package level
+    (google/cloud/storage, google/cloud/bigquery) rather than the namespace
+    root (google/) to avoid one distribution shadowing the other.
+
+    Args:
+        all_files: Set of all file paths in the archive (forward-slash separated).
+        top_level_dirs: Set of top-level directory names to classify.
+
+    Returns:
+        Set of package paths — either top-level names for regular packages, or
+        deeper paths for namespace packages (using forward slashes).
+    """
+    init_files = {f for f in all_files if f.endswith("/__init__.py")}
+
+    result = set()
+    for dir_name in top_level_dirs:
+        if f"{dir_name}/__init__.py" in init_files:
+            # Regular package — can be linked directly.
+            result.add(dir_name)
+        else:
+            # Namespace package — find the shallowest concrete sub-packages.
+            prefix = dir_name + "/"
+            candidates = []
+            for init in init_files:
+                if init.startswith(prefix):
+                    # e.g. "google/cloud/storage/__init__.py" -> "google/cloud/storage"
+                    pkg_path = init.rsplit("/", 1)[0]
+                    candidates.append(pkg_path)
+
+            # Sort by depth (shallowest first) so we can skip sub-packages
+            # of already-selected packages.
+            candidates.sort(key=lambda p: p.count("/"))
+
+            kept = []
+            for candidate in candidates:
+                # Skip if this is a sub-package of an already-kept package.
+                if any(candidate.startswith(k + "/") for k in kept):
+                    continue
+                kept.append(candidate)
+
+            if kept:
+                result.update(kept)
+            # else: namespace dir with no concrete sub-packages — skip.
+
+    return result
+
+
 def _find_top_level_packages_sdist(sdist_path: Path) -> list[str]:
     """Find top-level Python packages in an sdist archive.
 
     Looks for directories containing __init__.py at depth 2 (root/pkg/__init__.py)
     or depth 3 for src-layout (root/src/pkg/__init__.py).
+
+    Handles namespace packages (PEP 420) by descending to find the shallowest
+    concrete sub-packages when a top-level directory lacks __init__.py.
     """
     _EXCLUDED_DIRS = frozenset(
         {
@@ -49,68 +108,83 @@ def _find_top_level_packages_sdist(sdist_path: Path) -> list[str]:
         }
     )
 
-    packages = set()
-    init_files = set()
+    # Collect all file paths and candidate top-level directories.
+    all_files: set[str] = set()
+    top_level_dirs: set[str] = set()
+    src_layout = False
 
     if sdist_path.name.endswith((".tar.gz", ".tgz", ".tar.bz2", ".tar")):
         with tarfile.open(sdist_path) as t:
-            # First pass: collect all __init__.py locations
             for member in t.getmembers():
-                if member.isfile() and member.name.endswith("/__init__.py"):
-                    init_files.add(member.name)
-
-            for member in t.getmembers():
-                if not member.isdir():
-                    continue
                 parts = member.name.split("/")
-                if len(parts) < 2 or not parts[-1]:
-                    continue
-                if parts[-1].endswith(".egg-info"):
-                    continue
-
-                # src-layout: root/src/pkg/__init__.py
-                if len(parts) == 3 and parts[1] == "src":
-                    init_path = member.name + "/__init__.py"
-                    if init_path in init_files:
-                        packages.add(parts[2])
-                # standard layout: root/pkg/__init__.py
-                elif len(parts) == 2 and parts[1] not in _EXCLUDED_DIRS:
-                    init_path = member.name + "/__init__.py"
-                    if init_path in init_files:
-                        packages.add(parts[1])
+                if member.isfile():
+                    # Strip the root dir prefix (e.g. "pkg-1.0/") for normalization.
+                    if len(parts) >= 2:
+                        relative = "/".join(parts[1:])
+                        all_files.add(relative)
+                if member.isdir() and len(parts) >= 2:
+                    if (
+                        len(parts) == 2
+                        and parts[1]
+                        and parts[1] not in _EXCLUDED_DIRS
+                        and not parts[1].endswith(".egg-info")
+                    ):
+                        top_level_dirs.add(parts[1])
+                    elif len(parts) == 3 and parts[1] == "src" and parts[2]:
+                        src_layout = True
+                        top_level_dirs.add(parts[2])
 
     elif sdist_path.name.endswith(".zip"):
         with zipfile.ZipFile(sdist_path) as z:
-            names = z.namelist()
-            init_files = {n for n in names if n.endswith("/__init__.py")}
-
-            for name in names:
+            for name in z.namelist():
                 parts = name.rstrip("/").split("/")
-                if not name.endswith("/") or not parts[-1]:
-                    continue
-                if parts[-1].endswith(".egg-info"):
-                    continue
+                if not name.endswith("/") and len(parts) >= 2:
+                    relative = "/".join(parts[1:])
+                    all_files.add(relative)
+                if name.endswith("/") and len(parts) >= 2:
+                    if (
+                        len(parts) == 2
+                        and parts[1]
+                        and parts[1] not in _EXCLUDED_DIRS
+                        and not parts[1].endswith(".egg-info")
+                    ):
+                        top_level_dirs.add(parts[1])
+                    elif len(parts) == 3 and parts[1] == "src" and parts[2]:
+                        src_layout = True
+                        top_level_dirs.add(parts[2])
 
-                if len(parts) == 3 and parts[1] == "src":
-                    init_path = name.rstrip("/") + "/__init__.py"
-                    if init_path in init_files:
-                        packages.add(parts[2])
-                elif len(parts) == 2 and parts[1] not in _EXCLUDED_DIRS:
-                    init_path = name.rstrip("/") + "/__init__.py"
-                    if init_path in init_files:
-                        packages.add(parts[1])
+    # For src-layout, adjust file paths to be relative to src/
+    if src_layout:
+        adjusted_files = set()
+        for f in all_files:
+            if f.startswith("src/"):
+                adjusted_files.add(f[4:])  # strip "src/"
+            else:
+                adjusted_files.add(f)
+        all_files = adjusted_files
 
-    return sorted(packages)
+    return sorted(_resolve_namespace_packages(all_files, top_level_dirs))
 
 
 def _find_top_level_packages_wheel(wheel_path: Path) -> list[str]:
-    packages = set()
+    """Find top-level Python packages in a wheel archive.
+
+    Handles namespace packages (PEP 420) by descending to find the shallowest
+    concrete sub-packages when a top-level directory lacks __init__.py.
+    """
+    all_files: set[str] = set()
+    top_level_dirs: set[str] = set()
+
     with zipfile.ZipFile(wheel_path) as z:
         for name in z.namelist():
             parts = name.split("/")
-            if len(parts) >= 2 and not parts[0].endswith(".dist-info") and not parts[0].endswith(".data"):
-                packages.add(parts[0])
-    return sorted(list(packages))
+            if parts[0].endswith((".dist-info", ".data")):
+                continue
+            all_files.add(name)
+            if len(parts) >= 2:
+                top_level_dirs.add(parts[0])
+
+    return sorted(_resolve_namespace_packages(all_files, top_level_dirs))
 
 
 def inspect_sdist(sdist_path: Path) -> dict:

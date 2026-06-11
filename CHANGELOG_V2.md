@@ -106,7 +106,7 @@ Full translator for the PEP 751 `pylock.toml` lockfile format.
 
 ## New: Venv Compatibility (`top_level_packages`)
 
-Packages now declare their importable top-level packages for correct `PyInfo.imports` paths.
+Packages now declare their importable top-level packages for correct venv site-packages layout with `rules_python`.
 
 ### Wheel Detection
 
@@ -117,6 +117,33 @@ Packages now declare their importable top-level packages for correct `PyInfo.imp
 - `_find_top_level_packages_sdist()` — scans sdist archives for directories containing `__init__.py` at depth 2 (standard layout) or depth 3 (src-layout).
 - Expanded exclusion list: `bin`, `benchmarks`, `docs`, `examples`, `scripts`, `src`, `test`, `tests`, `testing`, `tools`.
 - Requires `__init__.py` presence (not just directory existence) to avoid false positives.
+
+### Namespace Package Detection (PEP 420)
+
+- `_resolve_namespace_packages()` — shared helper used by both wheel and sdist inspection.
+- When a top-level directory lacks `__init__.py` (implicit namespace package), descends to find the shallowest concrete sub-packages and reports those instead.
+- Prevents venv symlink conflicts when multiple distributions share a namespace root (e.g. `google-cloud-storage` and `google-cloud-bigquery` both installing under `google/`).
+
+### `top_level_packages` Override
+
+- New `top_level_packages` attribute on `pycross.package()` / `lock_import.package()` for user-specified overrides.
+- Takes precedence over auto-detection from `inspection.json`.
+- Threaded through the full annotation pipeline: `tag_attrs.bzl` → `lock_import.bzl` → `raw_lock_resolver.py` → `package_repo.bzl`.
+- Example:
+
+  ```python
+  lock_import.package(
+      name = "google-cloud-storage",
+      top_level_packages = ["google/cloud/storage"],
+  )
+  ```
+
+### Venv Symlinks (`VenvSymlinkEntry`)
+
+- `pycross_wheel_library` now populates `PyInfo.venv_symlinks` with `VenvSymlinkEntry` objects from `rules_python`.
+- Each top-level package and `.dist-info` directory gets a symlink entry.
+- Enables `py_binary`/`py_test` targets using `venvs_site_packages=yes` to get proper site-packages symlinks.
+- `package_repo.bzl` reads `inspection.json` at fetch time to populate `top_level_packages` in the generated BUILD.
 
 ---
 
@@ -198,7 +225,7 @@ The most significant change in v2. The old monolithic `pycross_wheel_build` rule
 
 - New file: `pycross/backend.bzl`
 - Exports all building blocks for implementing custom backends:
-  - Providers: `PycrossWheelInfo`, `PycrossExtractedWheelInfo`, `PycrossPackageInfo`
+  - Providers: `PycrossExtractedWheelInfo`, `PycrossPackageInfo`
   - Actions: `extract_cc_layer`, `register_pep517_action`, `register_repair_action`, `register_bin_extract_action`
   - Attributes: `COMMON_BUILD_ATTRS`, `CC_BUILD_ATTRS`, `CC_TOOLCHAIN_ATTRS`
   - Transition: `pycross_exec_platform_transition`
@@ -318,10 +345,6 @@ The build pipeline is decomposed into composable, reusable actions:
 - Returned by `pycross_wheel_library` when `package_name` is set.
 - Used by `pep517_build` to validate `build-system.requires`.
 
-### `PycrossWheelInfo` (enhanced)
-
-- Added `wheel_directory` field — TreeArtifact containing the wheel file under its proper name.
-
 ---
 
 ## New: Utility Rules
@@ -436,12 +459,12 @@ The build pipeline is decomposed into composable, reusable actions:
 
 ## Changed: `pycross_wheel_library` Enhancements
 
-- Now accepts wheels from `PycrossWheelInfo` targets *or* raw `.whl` files (via `allow_files = True`).
-- Supports `wheel_directory` TreeArtifact from `PycrossWheelInfo`.
+- Now accepts wheels as raw `.whl` files or TreeArtifact directories (auto-detected via `is_directory`).
 - Returns `PycrossExtractedWheelInfo` (site-packages tree artifact).
 - Returns `PycrossPackageInfo` when `package_name`/`package_version` attrs are set.
-- No longer returns `PycrossWheelInfo` (separation of concerns: installed vs. raw).
+- Populates `PyInfo.venv_symlinks` with `VenvSymlinkEntry` objects for rules_python venv compatibility.
 - New `top_level_packages` attribute for explicit importable package declaration.
+- `:dist_info` output group for compatibility with rules_python's entry point discovery.
 
 ---
 
@@ -450,6 +473,16 @@ The build pipeline is decomposed into composable, reusable actions:
 - `configure_environments` now supports `macos_version` (default 15.0).
 - Default `glibc_version` is now 2.28 (was unspecified).
 - Default Python version for internal tooling bumped to 3.13.
+
+---
+
+## New: `pycross_wheel_dir` Rule & Whldir Convention
+
+- New `pycross_wheel_dir` rule wraps a `.whl` file into a TreeArtifact directory named `{name}-{version}.whldir`.
+- Pre-built wheels now get consistent TreeArtifact output like sdist-built wheels.
+- Hub repo `_wheel/` package uses `pycross_wheel_dir` to wrap on demand; `pycross_wheel_file` exposes the raw `.whl` again (no unnecessary copy actions).
+- Renamed `wheelhouse` → `whldir` globally: CLI args, Python fields, Starlark variables, struct fields, and config JSON keys.
+- New `whldir_name` attribute in `COMMON_BUILD_ATTRS`.
 
 ---
 
@@ -465,9 +498,11 @@ The build pipeline is decomposed into composable, reusable actions:
   - `e2e/build_setuptools/` — psycopg2, setproctitle, pyyaml, zstandard
   - `e2e/patches_and_hooks/` — setproctitle with pre/post patches and site_hooks
   - `e2e/sdist_repo/` — sdist repository rule e2e test
+  - `e2e/requirements/` — top-level package imports, `all_whl_requirements`, `requirement()` macro
 - Shared configuration via `e2e/shared/` with common `.bazelrc`, overrides, and utilities.
 - `collect_wheels.bzl` macro for cross-platform wheel collection.
 - `compare_wheels.py` tool for wheel comparison.
+- `test_top_level_packages.py` — verifies dist→import name mapping, importability, and site-packages layout.
 
 ---
 
