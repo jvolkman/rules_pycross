@@ -95,18 +95,15 @@ def _maturin_build_impl(ctx):
     )
 
     # 4. Repair wheel
-    if ctx.attr.repair_wheel:
-        target_environment = ctx.files.target_environment[0] if ctx.files.target_environment else None
-        repair_result = register_repair_action(
-            ctx,
-            input_wheel_dir = build_result.wheel_dir,
-            native_deps = ctx.attr.native_deps,
-            repair_tool = ctx.executable._repair_tool,
-            target_environment = target_environment,
-            repair_deps = tool_deps.get("repairwheel", []),
-        )
-    else:
-        repair_result = build_result
+    target_environment = ctx.files.target_environment[0] if ctx.files.target_environment else None
+    repair_result = register_repair_action(
+        ctx,
+        input_wheel_dir = build_result.wheel_dir,
+        native_deps = ctx.attr.native_deps,
+        repair_tool = ctx.executable._repair_tool,
+        target_environment = target_environment,
+        repair_deps = tool_deps.get("repairwheel", []),
+    )
 
     return [
         DefaultInfo(files = depset([repair_result.wheel_dir])),
@@ -127,9 +124,6 @@ maturin_build = rule(
         ),
         "vendored_crates": attr.label(
             doc = "A filegroup containing vendored crates.",
-        ),
-        "repair_wheel": attr.bool(
-            default = True,
         ),
         "_builder": attr.label(
             default = "@rules_pycross//pycross/private/build/tools:maturin_builder",

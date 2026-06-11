@@ -2,6 +2,7 @@
 
 load("//pycross/private:providers.bzl", "PycrossPackageInfo")
 load("//pycross/private/build/actions:pep517_action.bzl", "register_pep517_action")
+load("//pycross/private/build/actions:repair_action.bzl", "register_repair_action")
 load(":common_attrs.bzl", "COMMON_BUILD_ATTRS")
 
 def _pep517_build_impl(ctx):
@@ -25,8 +26,19 @@ def _pep517_build_impl(ctx):
         builder = ctx.attr._builder,
     )
 
+    target_environment = ctx.files.target_environment[0] if ctx.files.target_environment else None
+    repair_result = register_repair_action(
+        ctx,
+        input_wheel_dir = build_result.wheel_dir,
+        repair_tool = ctx.executable._repair_tool,
+        target_environment = target_environment,
+    )
+
     return [
-        DefaultInfo(files = depset([build_result.wheel_dir])),
+        DefaultInfo(files = depset([repair_result.wheel_dir])),
+        OutputGroupInfo(
+            raw_wheel = depset([build_result.wheel_dir]),
+        ),
     ]
 
 pep517_build = rule(
@@ -36,8 +48,18 @@ pep517_build = rule(
             doc = "PEP 503 normalized names of packages required by build-system.requires. " +
                   "Used to validate that all needed build tools are present in build_deps.",
         ),
+        "target_environment": attr.label(
+            doc = "The target environment mapping JSON (resolved dynamically via alias filegroup).",
+            default = Label("@pycross_environments//:current"),
+            allow_files = True,
+        ),
         "_builder": attr.label(
             default = "//pycross/private/build/tools:pep517_builder",
+            executable = True,
+            cfg = "exec",
+        ),
+        "_repair_tool": attr.label(
+            default = Label("//pycross/private/build/tools:repair_wheel_hook"),
             executable = True,
             cfg = "exec",
         ),

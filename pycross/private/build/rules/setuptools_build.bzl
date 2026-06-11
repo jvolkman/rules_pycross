@@ -39,18 +39,15 @@ def _setuptools_build_impl(ctx):
         layers = [cc_layer],
     )
 
-    if ctx.attr.native_deps:
-        target_environment = ctx.files.target_environment[0] if ctx.files.target_environment else None
-        repair_result = register_repair_action(
-            ctx,
-            input_wheel_dir = build_result.wheel_dir,
-            native_deps = ctx.attr.native_deps,
-            repair_tool = ctx.executable._repair_tool,
-            target_environment = target_environment,
-            repair_deps = tool_deps.get("repairwheel", []),
-        )
-    else:
-        repair_result = build_result
+    target_environment = ctx.files.target_environment[0] if ctx.files.target_environment else None
+    repair_result = register_repair_action(
+        ctx,
+        input_wheel_dir = build_result.wheel_dir,
+        native_deps = ctx.attr.native_deps,
+        repair_tool = ctx.executable._repair_tool,
+        target_environment = target_environment,
+        repair_deps = tool_deps.get("repairwheel", []),
+    )
 
     return [
         DefaultInfo(files = depset([repair_result.wheel_dir])),
