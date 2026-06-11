@@ -328,6 +328,47 @@ Annotations to apply to individual packages.
 str: A json encoded string of the provided content.
 
 
+<a id="pycross_wheel_build"></a>
+
+## pycross_wheel_build
+
+<pre>
+load("@rules_pycross//pycross:defs.bzl", "pycross_wheel_build")
+
+pycross_wheel_build(<a href="#pycross_wheel_build-name">name</a>, <a href="#pycross_wheel_build-sdist">sdist</a>, <a href="#pycross_wheel_build-deps">deps</a>, <a href="#pycross_wheel_build-native_deps">native_deps</a>, <a href="#pycross_wheel_build-data">data</a>, <a href="#pycross_wheel_build-copts">copts</a>, <a href="#pycross_wheel_build-linkopts">linkopts</a>, <a href="#pycross_wheel_build-config_settings">config_settings</a>,
+                    <a href="#pycross_wheel_build-path_tools">path_tools</a>, <a href="#pycross_wheel_build-target_environment">target_environment</a>, <a href="#pycross_wheel_build-build_env">build_env</a>, <a href="#pycross_wheel_build-pre_build_hooks">pre_build_hooks</a>, <a href="#pycross_wheel_build-post_build_hooks">post_build_hooks</a>,
+                    <a href="#pycross_wheel_build-whldir_name">whldir_name</a>, <a href="#pycross_wheel_build-kwargs">**kwargs</a>)
+</pre>
+
+Builds a Python wheel from a source distribution.
+
+This is a backward-compatible wrapper around setuptools_build.
+It accepts the v1 pycross_wheel_build arguments and delegates
+to the v2 backend.
+
+
+**PARAMETERS**
+
+
+| Name  | Description | Default Value |
+| :------------- | :------------- | :------------- |
+| <a id="pycross_wheel_build-name"></a>name |  The target name.   |  none |
+| <a id="pycross_wheel_build-sdist"></a>sdist |  The sdist file label.   |  none |
+| <a id="pycross_wheel_build-deps"></a>deps |  Python build dependencies.   |  `[]` |
+| <a id="pycross_wheel_build-native_deps"></a>native_deps |  Native dependencies (CcInfo).   |  `[]` |
+| <a id="pycross_wheel_build-data"></a>data |  Additional data files. Note: in v2 these should be added via backend-specific override attrs instead.   |  `[]` |
+| <a id="pycross_wheel_build-copts"></a>copts |  Additional C compiler options.   |  `[]` |
+| <a id="pycross_wheel_build-linkopts"></a>linkopts |  Additional C linker options.   |  `[]` |
+| <a id="pycross_wheel_build-config_settings"></a>config_settings |  PEP 517 config settings.   |  `{}` |
+| <a id="pycross_wheel_build-path_tools"></a>path_tools |  Tools to place on PATH during build.   |  `[]` |
+| <a id="pycross_wheel_build-target_environment"></a>target_environment |  The target environment JSON label.   |  `None` |
+| <a id="pycross_wheel_build-build_env"></a>build_env |  Environment variables for the build. Note: in v2 use config_settings or site_hooks instead.   |  `None` |
+| <a id="pycross_wheel_build-pre_build_hooks"></a>pre_build_hooks |  Pre-build hook executables. Note: in v2 use pre_build_patches or site_hooks instead.   |  `None` |
+| <a id="pycross_wheel_build-post_build_hooks"></a>post_build_hooks |  Post-build hook executables. Note: not directly supported in v2; use pycross_wheel_transform as a post step.   |  `None` |
+| <a id="pycross_wheel_build-whldir_name"></a>whldir_name |  Name for the output .whldir TreeArtifact.   |  `None` |
+| <a id="pycross_wheel_build-kwargs"></a>kwargs |  Additional arguments passed to setuptools_build.   |  none |
+
+
 <a id="pypi_file"></a>
 
 ## pypi_file

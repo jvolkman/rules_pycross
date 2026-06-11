@@ -31,6 +31,14 @@ bzl_library(
 )
 
 bzl_library(
+    name = "wheel_build",
+    srcs = ["wheel_build.bzl"],
+    deps = [
+        "//pycross/private/build/rules:setuptools_build",
+    ],
+)
+
+bzl_library(
     name = "transitions",
     srcs = ["transitions.bzl"],
 )
