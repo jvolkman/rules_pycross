@@ -30,8 +30,12 @@ py_test(
     env = {
         "ALL_WHL_REQUIREMENTS": ",".join(all_whl_requirements),
         "EXPECTED_WHL_REQUIREMENTS": ",".join([
+            "attrs",
+            "beautifulsoup4",
             "ipython",
+            "python-dateutil",
             "regex",
+            "six",
         ]),
     },
     main = "test_all_whl_requirements.py",
@@ -48,5 +52,24 @@ py_test(
     deps = [
         "@uv//ipython:pkg",
         "@uv//regex:pkg",
+    ],
+)
+
+py_test(
+    name = "test_top_level_packages",
+    srcs = ["@rules_pycross_e2e_shared//:test_top_level_packages.py"],
+    env = {
+        # Tests that top-level package names differ from dist names:
+        # regex, IPython, bs4 (beautifulsoup4), six, dateutil (python-dateutil), attr (attrs)
+        "PYCROSS_TEST_PACKAGES": "regex,IPython,bs4,six,dateutil,attr",
+    },
+    main = "test_top_level_packages.py",
+    deps = [
+        "@uv//attrs:pkg",
+        "@uv//beautifulsoup4:pkg",
+        "@uv//ipython:pkg",
+        "@uv//python-dateutil:pkg",
+        "@uv//regex:pkg",
+        "@uv//six:pkg",
     ],
 )

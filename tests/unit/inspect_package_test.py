@@ -223,6 +223,113 @@ class InspectPackageTest(unittest.TestCase):
         result = inspect_wheel(wheel_path)
         self.assertEqual(result["top_level_packages"], ["pkg"])
 
+    # -- Namespace package (PEP 420) tests --
+
+    def test_wheel_namespace_package(self):
+        """google-cloud-storage style: google/ has no __init__.py."""
+        wheel_path = self.create_zip(
+            "google_cloud_storage-2.0-py3-none-any.whl",
+            {
+                "google/cloud/storage/__init__.py": "",
+                "google/cloud/storage/blob.py": "",
+                "google/cloud/storage/bucket.py": "",
+                "google_cloud_storage-2.0.dist-info/METADATA": "Name: google-cloud-storage",
+            },
+        )
+        result = inspect_wheel(wheel_path)
+        self.assertEqual(result["top_level_packages"], ["google/cloud/storage"])
+
+    def test_wheel_namespace_package_multiple_concrete(self):
+        """A wheel that provides multiple concrete packages under one namespace."""
+        wheel_path = self.create_zip(
+            "google_cloud_all-1.0-py3-none-any.whl",
+            {
+                "google/cloud/storage/__init__.py": "",
+                "google/cloud/storage/blob.py": "",
+                "google/cloud/bigquery/__init__.py": "",
+                "google/cloud/bigquery/client.py": "",
+                "google_cloud_all-1.0.dist-info/METADATA": "Name: google-cloud-all",
+            },
+        )
+        result = inspect_wheel(wheel_path)
+        self.assertEqual(
+            result["top_level_packages"],
+            ["google/cloud/bigquery", "google/cloud/storage"],
+        )
+
+    def test_wheel_namespace_with_mid_level_init(self):
+        """google/cloud has __init__.py but google/ does not."""
+        wheel_path = self.create_zip(
+            "google_cloud_core-1.0-py3-none-any.whl",
+            {
+                "google/cloud/__init__.py": "",
+                "google/cloud/client.py": "",
+                "google_cloud_core-1.0.dist-info/METADATA": "Name: google-cloud-core",
+            },
+        )
+        result = inspect_wheel(wheel_path)
+        # Should stop at google/cloud since it has __init__.py
+        self.assertEqual(result["top_level_packages"], ["google/cloud"])
+
+    def test_wheel_mixed_regular_and_namespace(self):
+        """A wheel with both a regular package and a namespace package."""
+        wheel_path = self.create_zip(
+            "mixed-1.0-py3-none-any.whl",
+            {
+                "regular_pkg/__init__.py": "",
+                "regular_pkg/module.py": "",
+                "namespace/sub/concrete/__init__.py": "",
+                "namespace/sub/concrete/stuff.py": "",
+                "mixed-1.0.dist-info/METADATA": "Name: mixed",
+            },
+        )
+        result = inspect_wheel(wheel_path)
+        self.assertEqual(
+            result["top_level_packages"],
+            ["namespace/sub/concrete", "regular_pkg"],
+        )
+
+    def test_wheel_namespace_skips_subpackages(self):
+        """Shallowest concrete package should subsume deeper ones."""
+        wheel_path = self.create_zip(
+            "deep-1.0-py3-none-any.whl",
+            {
+                "ns/mid/__init__.py": "",
+                "ns/mid/deep/__init__.py": "",
+                "ns/mid/deep/deeper/__init__.py": "",
+                "deep-1.0.dist-info/METADATA": "Name: deep",
+            },
+        )
+        result = inspect_wheel(wheel_path)
+        # ns/mid has __init__.py, so it's the shallowest — deeper ones are subpackages
+        self.assertEqual(result["top_level_packages"], ["ns/mid"])
+
+    def test_sdist_namespace_package(self):
+        """Namespace package in an sdist (standard layout)."""
+        sdist_path = self._create_tarball_with_dirs(
+            "google-cloud-storage-2.0.tar.gz",
+            {
+                "google-cloud-storage-2.0/google/cloud/storage/__init__.py": "",
+                "google-cloud-storage-2.0/google/cloud/storage/blob.py": "",
+                "google-cloud-storage-2.0/pyproject.toml": '[build-system]\nrequires = ["setuptools"]\nbuild-backend = "setuptools.build_meta"',
+            },
+        )
+        result = inspect_sdist(sdist_path)
+        self.assertEqual(result["top_level_packages"], ["google/cloud/storage"])
+
+    def test_sdist_namespace_src_layout(self):
+        """Namespace package in an sdist with src-layout."""
+        sdist_path = self._create_tarball_with_dirs(
+            "google-cloud-storage-2.0.tar.gz",
+            {
+                "google-cloud-storage-2.0/src/google/cloud/storage/__init__.py": "",
+                "google-cloud-storage-2.0/src/google/cloud/storage/blob.py": "",
+                "google-cloud-storage-2.0/pyproject.toml": '[build-system]\nrequires = ["setuptools"]\nbuild-backend = "setuptools.build_meta"',
+            },
+        )
+        result = inspect_sdist(sdist_path)
+        self.assertEqual(result["top_level_packages"], ["google/cloud/storage"])
+
 
 if __name__ == "__main__":
     unittest.main()

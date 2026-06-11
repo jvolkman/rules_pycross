@@ -4,8 +4,12 @@ version = "0.1.0"
 description = ""
 requires-python = ">=3.9, <3.13"
 dependencies = [
+    "attrs>=24.2.0",
+    "beautifulsoup4>=4.12.3",
     "ipython>=8.18.1",
+    "python-dateutil>=2.9.0",
     "regex>=2024.11.6",
+    "six>=1.17.0",
 ]
 
 [build-system]

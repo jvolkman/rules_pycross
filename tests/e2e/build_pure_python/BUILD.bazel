@@ -1,3 +1,4 @@
+load("@rules_python//python:defs.bzl", "py_test")
 load("//shared:collect_wheels.bzl", "collect_wheels")
 
 collect_wheels(
@@ -10,5 +11,19 @@ collect_wheels(
         "@uv//filelock:wheel",
         "@uv//pyproject-metadata:wheel",
         "@uv//tomli:wheel",
+    ],
+)
+
+py_test(
+    name = "test_top_level_packages",
+    srcs = ["@rules_pycross_e2e_shared//:test_top_level_packages.py"],
+    env = {
+        # Tell the test which packages to check (sdist-built pure Python)
+        "PYCROSS_TEST_PACKAGES": "tomli,filelock",
+    },
+    main = "test_top_level_packages.py",
+    deps = [
+        "@uv//filelock:pkg",
+        "@uv//tomli:pkg",
     ],
 )
