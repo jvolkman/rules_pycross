@@ -1,0 +1,38 @@
+"""
+uv records a dependency on a URL archive referenced with a
+`#subdirectory=` fragment by putting the download URL on the `source`
+entry and leaving the `sdist` entry with only a `hash` (no `url`/`file`):
+
+  [[package]]
+  name = "uv-build"
+  version = "0.11.18"
+  source = { url = "https://github.com/astral-sh/uv/archive/refs/tags/0.11.18.tar.gz", subdirectory = "crates/uv-build" }
+  sdist = { hash = "sha256:..." }
+
+The translator falls back to the `source` URL for such sdists and
+synthesises a canonical `{name}-{version}.tar.gz` file name, since the
+archive file name is not a valid PEP 503 sdist name.
+"""
+
+load("@bazel_lib//lib:write_source_files.bzl", "write_source_file")
+load("@bazel_skylib//rules:diff_test.bzl", "diff_test")
+load("//pycross:defs.bzl", "pycross_uv_lock_model")
+
+pycross_uv_lock_model(
+    name = "lock",
+    lock_file = "uv.lock",
+    project_file = "pyproject.toml",
+)
+
+write_source_file(
+    name = "update_expected",
+    diff_test = False,
+    in_file = ":lock",
+    out_file = "expected.json",
+)
+
+diff_test(
+    name = "test",
+    file1 = ":lock",
+    file2 = "expected.json",
+)

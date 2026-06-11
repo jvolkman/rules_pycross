@@ -1,0 +1,24 @@
+{
+  "packages": {
+    "uv-build@0.11.18": {
+      "files": [
+        {
+          "name": "uv-build-0.11.18.tar.gz",
+          "package_name": "uv-build",
+          "package_version": "0.11.18",
+          "sha256": "0034799d786c2c4ded3c59c7327e6607ad802c85e814200d5719463aee490741",
+          "urls": [
+            "https://github.com/astral-sh/uv/archive/refs/tags/0.11.18.tar.gz"
+          ]
+        }
+      ],
+      "name": "uv-build",
+      "python_versions": "",
+      "version": "0.11.18"
+    }
+  },
+  "pins": {
+    "uv-build": "uv-build@0.11.18"
+  },
+  "python_versions": "<3.13,>=3.9"
+}

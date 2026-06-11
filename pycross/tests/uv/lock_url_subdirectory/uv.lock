@@ -1,0 +1,20 @@
+version = 1
+revision = 3
+requires-python = ">=3.9, <3.13"
+
+[[package]]
+name = "rules-pycross-test"
+version = "0.1.0"
+source = { editable = "." }
+dependencies = [
+    { name = "uv-build" },
+]
+
+[package.metadata]
+requires-dist = [{ name = "uv-build", url = "https://github.com/astral-sh/uv/archive/refs/tags/0.11.18.tar.gz", subdirectory = "crates/uv-build" }]
+
+[[package]]
+name = "uv-build"
+version = "0.11.18"
+source = { url = "https://github.com/astral-sh/uv/archive/refs/tags/0.11.18.tar.gz", subdirectory = "crates/uv-build" }
+sdist = { hash = "sha256:0034799d786c2c4ded3c59c7327e6607ad802c85e814200d5719463aee490741" }
