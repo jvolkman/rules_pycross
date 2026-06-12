@@ -10,6 +10,31 @@ from pathlib import Path
 PEP517_DEFAULT_BACKEND = "setuptools.build_meta:__legacy__"
 PEP517_DEFAULT_REQUIRES = ["setuptools>=40.8.0", "wheel"]
 
+_EXCLUDED_DIRS = frozenset(
+    {
+        "bin",
+        "benchmarks",
+        "docs",
+        "examples",
+        "scripts",
+        "src",
+        "test",
+        "tests",
+        "testing",
+        "tools",
+    }
+)
+
+_EXCLUDED_ROOT_MODULES = frozenset({"setup", "conftest"})
+
+
+def _extract_module_name(filename: str) -> str | None:
+    suffixes = Path(filename).suffixes
+    if suffixes and suffixes[-1] in (".py", ".so"):
+        ext = "".join(suffixes)
+        return filename[: -len(ext)]
+    return None
+
 
 def _get_archive_file_content(archive_path: Path, target_filename: str) -> str:
     """Reads a specific file from a tar.gz or zip archive without extracting it to disk."""
@@ -93,65 +118,42 @@ def _find_top_level_packages_sdist(sdist_path: Path) -> list[str]:
     Handles namespace packages (PEP 420) by descending to find the shallowest
     concrete sub-packages when a top-level directory lacks __init__.py.
     """
-    _EXCLUDED_DIRS = frozenset(
-        {
-            "bin",
-            "benchmarks",
-            "docs",
-            "examples",
-            "scripts",
-            "src",
-            "test",
-            "tests",
-            "testing",
-            "tools",
-        }
-    )
-
     # Collect all file paths and candidate top-level directories.
     all_files: set[str] = set()
     top_level_dirs: set[str] = set()
+    root_files: set[str] = set()
     src_layout = False
 
+    # List of (name, is_dir, is_file)
+    items = []
     if sdist_path.name.endswith((".tar.gz", ".tgz", ".tar.bz2", ".tar")):
         with tarfile.open(sdist_path) as t:
             for member in t.getmembers():
-                parts = member.name.split("/")
-                if member.isfile():
-                    # Strip the root dir prefix (e.g. "pkg-1.0/") for normalization.
-                    if len(parts) >= 2:
-                        relative = "/".join(parts[1:])
-                        all_files.add(relative)
-                if member.isdir() and len(parts) >= 2:
-                    if (
-                        len(parts) == 2
-                        and parts[1]
-                        and parts[1] not in _EXCLUDED_DIRS
-                        and not parts[1].endswith(".egg-info")
-                    ):
-                        top_level_dirs.add(parts[1])
-                    elif len(parts) == 3 and parts[1] == "src" and parts[2]:
-                        src_layout = True
-                        top_level_dirs.add(parts[2])
-
+                items.append((member.name, member.isdir(), member.isfile()))
     elif sdist_path.name.endswith(".zip"):
         with zipfile.ZipFile(sdist_path) as z:
             for name in z.namelist():
-                parts = name.rstrip("/").split("/")
-                if not name.endswith("/") and len(parts) >= 2:
-                    relative = "/".join(parts[1:])
-                    all_files.add(relative)
-                if name.endswith("/") and len(parts) >= 2:
-                    if (
-                        len(parts) == 2
-                        and parts[1]
-                        and parts[1] not in _EXCLUDED_DIRS
-                        and not parts[1].endswith(".egg-info")
-                    ):
-                        top_level_dirs.add(parts[1])
-                    elif len(parts) == 3 and parts[1] == "src" and parts[2]:
-                        src_layout = True
-                        top_level_dirs.add(parts[2])
+                is_dir = name.endswith("/")
+                items.append((name, is_dir, not is_dir))
+
+    for name, is_dir, is_file in items:
+        name = name.rstrip("/")
+        parts = name.split("/")
+        if is_file:
+            # Strip the root dir prefix (e.g. "pkg-1.0/") for normalization.
+            if len(parts) >= 2:
+                relative = "/".join(parts[1:])
+                all_files.add(relative)
+            if len(parts) == 2 and parts[1]:
+                root_files.add(parts[1])
+            elif len(parts) == 3 and parts[1] == "src" and parts[2]:
+                root_files.add(parts[2])
+        elif is_dir and len(parts) >= 2:
+            if len(parts) == 2 and parts[1] and parts[1] not in _EXCLUDED_DIRS and not parts[1].endswith(".egg-info"):
+                top_level_dirs.add(parts[1])
+            elif len(parts) == 3 and parts[1] == "src" and parts[2]:
+                src_layout = True
+                top_level_dirs.add(parts[2])
 
     # For src-layout, adjust file paths to be relative to src/
     if src_layout:
@@ -163,7 +165,18 @@ def _find_top_level_packages_sdist(sdist_path: Path) -> list[str]:
                 adjusted_files.add(f)
         all_files = adjusted_files
 
-    return sorted(_resolve_namespace_packages(all_files, top_level_dirs))
+    pkgs = _resolve_namespace_packages(all_files, top_level_dirs)
+    for f in root_files:
+        name = _extract_module_name(f)
+        if (
+            name
+            and name not in _EXCLUDED_DIRS
+            and name not in _EXCLUDED_ROOT_MODULES
+            and not name.endswith(".egg-info")
+        ):
+            pkgs.add(name)
+
+    return sorted(pkgs)
 
 
 def _find_top_level_packages_wheel(wheel_path: Path) -> list[str]:
@@ -174,6 +187,7 @@ def _find_top_level_packages_wheel(wheel_path: Path) -> list[str]:
     """
     all_files: set[str] = set()
     top_level_dirs: set[str] = set()
+    root_files: set[str] = set()
 
     with zipfile.ZipFile(wheel_path) as z:
         for name in z.namelist():
@@ -183,8 +197,17 @@ def _find_top_level_packages_wheel(wheel_path: Path) -> list[str]:
             all_files.add(name)
             if len(parts) >= 2:
                 top_level_dirs.add(parts[0])
+            elif len(parts) == 1 and parts[0] and not name.endswith("/"):
+                root_files.add(parts[0])
 
-    return sorted(_resolve_namespace_packages(all_files, top_level_dirs))
+    pkgs = _resolve_namespace_packages(all_files, top_level_dirs)
+
+    for f in root_files:
+        name = _extract_module_name(f)
+        if name and name not in _EXCLUDED_ROOT_MODULES:
+            pkgs.add(name)
+
+    return sorted(pkgs)
 
 
 def inspect_sdist(sdist_path: Path) -> dict:
