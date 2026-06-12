@@ -12,7 +12,7 @@ collect_wheels(
         "@llvm//platforms:macos_aarch64",
     ],
     wheels = [
-        "@uv//rpds-py:wheel",
+        "@uv//rpds_py:wheel",
         "@uv//jiter:wheel",
     ],
 )

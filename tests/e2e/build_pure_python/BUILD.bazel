@@ -9,7 +9,7 @@ collect_wheels(
     ],
     wheels = [
         "@uv//filelock:wheel",
-        "@uv//pyproject-metadata:wheel",
+        "@uv//pyproject_metadata:wheel",
         "@uv//tomli:wheel",
     ],
 )
