@@ -90,6 +90,8 @@ class GenerationContext:
 
     def check_package_compatibility(self, package: RawPackage) -> None:
         """Sanity check to make sure the requires_python attribute on each package matches our environments."""
+        if package.python_version_specifiers:
+            return
         for environment in self.target_environments:
             if not package.python_versions.contains(environment.version):
                 raise Exception(
@@ -217,7 +219,7 @@ class PackageAnnotations:
     pre_build_patches: List[str] = field(default_factory=list)
     site_hooks: List[str] = field(default_factory=list)
     build_backend: Optional[str] = None
-    top_level_packages: List[str] = field(default_factory=list)
+    top_level_paths: List[str] = field(default_factory=list)
 
 
 class PackageResolver:
@@ -245,7 +247,7 @@ class PackageResolver:
         self._pre_build_patches = annotations.pre_build_patches
         self._site_hooks = annotations.site_hooks
         self._build_backend = annotations.build_backend
-        self._top_level_packages = annotations.top_level_packages
+        self._top_level_paths = annotations.top_level_paths
 
         deps_by_env, extra_deps_by_env = context.get_dependencies_by_environment(
             package,
@@ -337,7 +339,7 @@ class PackageResolver:
             pre_build_patches=self._pre_build_patches,
             site_hooks=self._site_hooks,
             build_backend=self._build_backend,
-            top_level_packages=self._top_level_packages,
+            top_level_paths=self._top_level_paths,
         )
 
 
@@ -431,9 +433,9 @@ def collect_package_annotations(args: Any, lock_model: RawLockSet) -> Dict[Packa
         if annotation.get("build_backend") is not None:
             annotations[resolved_pkg].build_backend = annotation["build_backend"]
 
-        top_level_packages = annotation.get("top_level_packages", [])
-        if top_level_packages:
-            annotations[resolved_pkg].top_level_packages = top_level_packages
+        top_level_paths = annotation.get("top_level_paths", [])
+        if top_level_paths:
+            annotations[resolved_pkg].top_level_paths = top_level_paths
 
     # Return as a non-default dict
     return dict(annotations)

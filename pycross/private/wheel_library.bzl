@@ -94,8 +94,8 @@ def _pycross_wheel_library_impl(ctx):
     package_name = ctx.attr.package_name or ctx.label.name
     package_version = ctx.attr.package_version or ""
 
-    if ctx.attr.top_level_packages:
-        for tlp in ctx.attr.top_level_packages:
+    if ctx.attr.top_level_paths:
+        for tlp in ctx.attr.top_level_paths:
             venv_symlinks.append(VenvSymlinkEntry(
                 kind = VenvSymlinkKind.LIB,
                 link_to_path = paths.join(imp, tlp),
@@ -196,8 +196,8 @@ This option is required to support some packages which cannot handle the convers
         "package_version": attr.string(
             doc = "The version of the package. Used for providing PycrossPackageInfo.",
         ),
-        "top_level_packages": attr.string_list(
-            doc = "The list of top-level Python packages provided by this wheel.",
+        "top_level_paths": attr.string_list(
+            doc = "The list of top-level importable paths (packages, .pth files, standalone modules) provided by this wheel.",
         ),
         "_tool": attr.label(
             default = Label("//pycross/private/tools:wheel_installer"),

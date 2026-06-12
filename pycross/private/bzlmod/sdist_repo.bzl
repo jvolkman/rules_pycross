@@ -86,6 +86,8 @@ def _sdist_repo_common(rctx):
                 dep_name = dep.split("@")[0]
                 build_deps.append("@{}//{}:pkg".format(rctx.attr.lock_repo, underscore_name(dep_name)))
             macro_attrs["build_deps"] = str(build_deps)
+
+        rctx.file("inspection.json", json.encode({"top_level_paths": []}))
     else:
         sdist_path = rctx.path(rctx.attr.sdist)
         output_json = rctx.path("build_metadata.json")
@@ -107,6 +109,9 @@ def _sdist_repo_common(rctx):
         metadata = json.decode(rctx.read(output_json))
         backend = metadata.get("build_backend", "")
         requires = metadata.get("build_requires", [])
+
+        top_level_paths = metadata.get("top_level_paths", [])
+        rctx.file("inspection.json", json.encode({"top_level_paths": top_level_paths}))
 
         # Print any warnings from the package inspector
         for warning in metadata.get("warnings", []):

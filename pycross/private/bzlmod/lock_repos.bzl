@@ -52,8 +52,6 @@ def _lock_repos_impl(module_ctx):
     # Serialize backend configs for passing to package_repo.
     backend_configs_json = {name: json.encode(config) for name, config in BACKEND_CONFIGS.items()}
 
-
-
     # Generate the lock repos and any remote package repos
     for repo_name, lock_file in all_locks.items():
         resolved_lock_file = module_ctx.path(lock_file)
@@ -112,6 +110,8 @@ def _lock_repos_impl(module_ctx):
         # Pre-calculate known packages in this lock file to filter sdist build_requires
         known_packages = [key.split("@")[0] for key in resolved_lock.get("packages", {})]
 
+        sdist_map = {}
+
         # Instantiate sdist repos for packages requiring source builds.
         # Sdist repos are environment-agnostic (the same source archive is
         # used regardless of target platform), so we create one per package
@@ -158,6 +158,8 @@ def _lock_repos_impl(module_ctx):
                 repo_name,
                 sanitize_name(pkg_key),
             )
+            sdist_label_str = "@{}//:inspection.json".format(sdist_repo_name)
+            sdist_map[sdist_label_str] = sdist_file_key
 
             # Compute the output whldir name: {normalized_name}-{version}.whldir
             pkg_name_part = pkg_key.split("@")[0]
@@ -183,8 +185,6 @@ def _lock_repos_impl(module_ctx):
                 if attr_name in pkg and pkg[attr_name] != None:
                     sdist_repo_attrs[attr_name] = pkg[attr_name]
 
-
-
             # Pass per-package override configs keyed by backend name.
             pkg_name = pkg_key.split("@")[0]
             pkg_overrides = override_configs.get(repo_name, {}).get(pkg_name, {})
@@ -204,6 +204,7 @@ def _lock_repos_impl(module_ctx):
             name = repo_name,
             resolved_lock_file = lock_file,
             repo_map = repo_map,
+            sdist_map = sdist_map,
             backend_configs = backend_configs_json,
         )
 

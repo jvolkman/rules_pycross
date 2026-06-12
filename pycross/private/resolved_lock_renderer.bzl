@@ -179,9 +179,9 @@ def render_lock_bzl(lock, repo_map, rctx_name):
             _ind('wheel = ":_wheel_{}",'.format(pkg_key), 2),
         ])
 
-        if pkg.get("top_level_packages"):
-            lines.append(_ind("top_level_packages = [", 2))
-            for tlp in pkg["top_level_packages"]:
+        if pkg.get("top_level_paths"):
+            lines.append(_ind("top_level_paths = [", 2))
+            for tlp in pkg["top_level_paths"]:
                 lines.append(_ind('"{}",'.format(tlp), 3))
             lines.append(_ind("],", 2))
 

@@ -30,7 +30,7 @@ _EXCLUDED_ROOT_MODULES = frozenset({"setup", "conftest"})
 
 def _extract_module_name(filename: str) -> str | None:
     suffixes = Path(filename).suffixes
-    if suffixes and suffixes[-1] in (".py", ".so"):
+    if suffixes and suffixes[-1] in (".py", ".so", ".pth"):
         ext = "".join(suffixes)
         return filename[: -len(ext)]
     return None
@@ -109,7 +109,7 @@ def _resolve_namespace_packages(all_files: set[str], top_level_dirs: set[str]) -
     return result
 
 
-def _find_top_level_packages_sdist(sdist_path: Path) -> list[str]:
+def _find_top_level_paths_sdist(sdist_path: Path) -> list[str]:
     """Find top-level Python packages in an sdist archive.
 
     Looks for directories containing __init__.py at depth 2 (root/pkg/__init__.py)
@@ -179,7 +179,7 @@ def _find_top_level_packages_sdist(sdist_path: Path) -> list[str]:
     return sorted(pkgs)
 
 
-def _find_top_level_packages_wheel(wheel_path: Path) -> list[str]:
+def _find_top_level_paths_wheel(wheel_path: Path) -> list[str]:
     """Find top-level Python packages in a wheel archive.
 
     Handles namespace packages (PEP 420) by descending to find the shallowest
@@ -221,7 +221,7 @@ def inspect_sdist(sdist_path: Path) -> dict:
     return {
         "build_backend": build_system.get("build-backend", PEP517_DEFAULT_BACKEND),
         "build_requires": build_system.get("requires", PEP517_DEFAULT_REQUIRES),
-        "top_level_packages": _find_top_level_packages_sdist(sdist_path),
+        "top_level_paths": _find_top_level_paths_sdist(sdist_path),
     }
 
 
@@ -236,7 +236,7 @@ def inspect_wheel(wheel_path: Path) -> dict:
 
     return {
         "console_scripts": scripts,
-        "top_level_packages": _find_top_level_packages_wheel(wheel_path),
+        "top_level_paths": _find_top_level_paths_wheel(wheel_path),
     }
 
 

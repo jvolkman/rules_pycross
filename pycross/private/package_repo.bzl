@@ -148,7 +148,7 @@ def _package_repo_impl(rctx):
     packages = lock["packages"]
     pins = lock["pins"]
 
-    # 0. Read inspection.json from wheel repos to populate top_level_packages.
+    # 0. Read inspection.json from wheel repos to populate top_level_paths.
     # repo_map is a label_keyed_string_dict: Label -> file_key.
     # Labels are resolved by Bazel from the extension context, so we can use
     # label.repo_name to construct inspection labels without string splitting.
@@ -163,9 +163,13 @@ def _package_repo_impl(rctx):
         if label.name == "wheel":
             wheel_labels[file_key] = label
 
+    sdist_labels = {}  # file_key -> Label
+    for label, file_key in getattr(rctx.attr, "sdist_map", {}).items():
+        sdist_labels[file_key] = label
+
     for pkg_key, pkg in packages.items():
-        # Skip if the user explicitly overrode top_level_packages via annotation.
-        if pkg.get("top_level_packages"):
+        # Skip if the user explicitly overrode top_level_paths via annotation.
+        if pkg.get("top_level_paths"):
             continue
         for _, file_ref in pkg.get("environment_files", {}).items():
             key = file_ref.get("key")
@@ -177,25 +181,39 @@ def _package_repo_impl(rctx):
                 inspection_path = rctx.path(inspection_label)
                 if inspection_path.exists:
                     inspection_data = json.decode(rctx.read(inspection_path))
-                    if "top_level_packages" in inspection_data:
-                        pkg["top_level_packages"] = inspection_data["top_level_packages"]
+                    if "top_level_paths" in inspection_data:
+                        pkg["top_level_paths"] = inspection_data["top_level_paths"]
+                break
+
+            sdist_label = sdist_labels.get(key)
+            if sdist_label:
+                inspection_label = Label("@@{}//:inspection.json".format(sdist_label.repo_name))
+                inspection_path = rctx.path(inspection_label)
+                if inspection_path.exists:
+                    inspection_data = json.decode(rctx.read(inspection_path))
+                    if "top_level_paths" in inspection_data:
+                        pkg["top_level_paths"] = inspection_data["top_level_paths"]
                 break
 
     # 0.5. Generate modules_mapping.json
+    # Known file extensions that should be stripped to derive the module name.
+    _MODULE_EXTENSIONS = [".pth", ".so", ".py"]
+
     modules_mapping = {}
     for pin_name, pin_target in pins.items():
         pkg = packages.get(pin_target)
         if pkg:
-            tlps = pkg.get("top_level_packages", [])
-            for tlp in tlps:
-                if "/" not in tlp:
-                    parts = tlp.split(".")
-                    if len(parts) > 1:
-                        module_name = parts[0]
-                    else:
-                        module_name = tlp
-                else:
-                    module_name = tlp.replace("/", ".")
+            for tlp in pkg.get("top_level_paths", []):
+                # Strip known file extensions to derive the importable module name.
+                module_name = tlp
+                for ext in _MODULE_EXTENSIONS:
+                    if module_name.endswith(ext):
+                        module_name = module_name[:-len(ext)]
+                        break
+
+                # Convert path separators to dots for namespace packages.
+                if "/" in module_name:
+                    module_name = module_name.replace("/", ".")
                 modules_mapping[module_name] = pin_name
 
     rctx.file("modules_mapping.json", json.encode(modules_mapping))
@@ -368,6 +386,7 @@ package_repo = repository_rule(
     attrs = {
         "resolved_lock_file": attr.label(mandatory = True),
         "repo_map": attr.label_keyed_string_dict(),
+        "sdist_map": attr.label_keyed_string_dict(),
         "backend_configs": attr.string_dict(
             doc = "Maps pycross rule names to JSON-encoded config dicts with 'rule_bzl' and 'tool_packages'.",
         ),

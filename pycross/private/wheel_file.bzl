@@ -60,7 +60,7 @@ def _pycross_wheel_file_impl(rctx):
         auth = use_netrc(netrc, urls, {}),
     )
 
-    # Inspect the wheel for top_level_packages
+    # Inspect the wheel for top_level_paths
     result = exec_internal_tool(
         rctx,
         rctx.attr._inspect_tool,
@@ -76,7 +76,7 @@ def _pycross_wheel_file_impl(rctx):
         # Non-fatal: if inspection fails, write empty result
         # Note: exec_internal_tool will actually fail() if return_code != 0,
         # but if we somehow bypass it or change it, we write a fallback.
-        rctx.file("inspection.json", json.encode({"top_level_packages": []}))
+        rctx.file("inspection.json", json.encode({"top_level_paths": []}))
 
     rctx.file("BUILD.bazel", _BUILD_TEMPLATE.format(filename = rctx.attr.filename))
 

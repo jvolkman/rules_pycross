@@ -202,6 +202,7 @@ class RawPackage:
     name: NormalizedName
     version: Version
     python_versions: SpecifierSet
+    python_version_specifiers: List[SpecifierSet] = field(default_factory=list)
     dependencies: List[PackageDependency] = field(default_factory=list)
     files: List[PackageFile] = field(default_factory=list)
 
@@ -212,6 +213,7 @@ class RawPackage:
 
         assert self.version, "The version field must be specified."
         assert self.python_versions is not None, "The python_versions field must be specified."
+        assert self.python_version_specifiers is not None, "The python_version_specifiers field must be specified."
         assert self.dependencies is not None, "The dependencies field must be specified as a list."
         assert self.files, "The files field must not be empty."
 
@@ -241,7 +243,7 @@ class ResolvedPackage:
     pre_build_patches: List[str] = field(default_factory=list)
     site_hooks: List[str] = field(default_factory=list)
     build_backend: Optional[str] = None
-    top_level_packages: List[str] = field(default_factory=list)
+    top_level_paths: List[str] = field(default_factory=list)
     cycle_group: Optional[str] = None
 
 

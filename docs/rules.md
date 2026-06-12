@@ -250,7 +250,7 @@ load("@rules_pycross//pycross:defs.bzl", "pycross_wheel_library")
 
 pycross_wheel_library(<a href="#pycross_wheel_library-name">name</a>, <a href="#pycross_wheel_library-deps">deps</a>, <a href="#pycross_wheel_library-enable_implicit_namespace_pkgs">enable_implicit_namespace_pkgs</a>, <a href="#pycross_wheel_library-install_exclude_globs">install_exclude_globs</a>,
                       <a href="#pycross_wheel_library-package_name">package_name</a>, <a href="#pycross_wheel_library-package_version">package_version</a>, <a href="#pycross_wheel_library-post_install_patches">post_install_patches</a>, <a href="#pycross_wheel_library-python_version">python_version</a>,
-                      <a href="#pycross_wheel_library-top_level_packages">top_level_packages</a>, <a href="#pycross_wheel_library-wheel">wheel</a>)
+                      <a href="#pycross_wheel_library-top_level_paths">top_level_paths</a>, <a href="#pycross_wheel_library-wheel">wheel</a>)
 </pre>
 
 
@@ -268,7 +268,7 @@ pycross_wheel_library(<a href="#pycross_wheel_library-name">name</a>, <a href="#
 | <a id="pycross_wheel_library-package_version"></a>package_version |  The version of the package. Used for providing PycrossPackageInfo.   | String | optional |  `""`  |
 | <a id="pycross_wheel_library-post_install_patches"></a>post_install_patches |  A list of patches to apply after installation.   | <a href="https://bazel.build/concepts/labels">List of labels</a> | optional |  `[]`  |
 | <a id="pycross_wheel_library-python_version"></a>python_version |  The python version required for this wheel ('PY2' or 'PY3')   | String | optional |  `""`  |
-| <a id="pycross_wheel_library-top_level_packages"></a>top_level_packages |  The list of top-level Python packages provided by this wheel.   | List of strings | optional |  `[]`  |
+| <a id="pycross_wheel_library-top_level_paths"></a>top_level_paths |  The list of top-level importable paths (packages, .pth files, standalone modules) provided by this wheel.   | List of strings | optional |  `[]`  |
 | <a id="pycross_wheel_library-wheel"></a>wheel |  The wheel file.   | <a href="https://bazel.build/concepts/labels">Label</a> | required |  |
 
 
@@ -346,7 +346,7 @@ load("@rules_pycross//pycross:defs.bzl", "package_annotation")
 
 package_annotation(<a href="#package_annotation-always_build">always_build</a>, <a href="#package_annotation-build_dependencies">build_dependencies</a>, <a href="#package_annotation-build_target">build_target</a>, <a href="#package_annotation-ignore_dependencies">ignore_dependencies</a>,
                    <a href="#package_annotation-install_exclude_globs">install_exclude_globs</a>, <a href="#package_annotation-post_install_patches">post_install_patches</a>, <a href="#package_annotation-pre_build_patches">pre_build_patches</a>, <a href="#package_annotation-site_hooks">site_hooks</a>,
-                   <a href="#package_annotation-build_backend">build_backend</a>, <a href="#package_annotation-top_level_packages">top_level_packages</a>)
+                   <a href="#package_annotation-build_backend">build_backend</a>, <a href="#package_annotation-top_level_paths">top_level_paths</a>)
 </pre>
 
 Annotations to apply to individual packages.
@@ -365,7 +365,7 @@ Annotations to apply to individual packages.
 | <a id="package_annotation-pre_build_patches"></a>pre_build_patches |  A list of patches to apply to the sdist source tree before building.   |  `[]` |
 | <a id="package_annotation-site_hooks"></a>site_hooks |  A list of Python code snippets to execute on interpreter startup during builds.   |  `[]` |
 | <a id="package_annotation-build_backend"></a>build_backend |  The build backend macro to use (e.g., "meson_build" or "setuptools_build").   |  `None` |
-| <a id="package_annotation-top_level_packages"></a>top_level_packages |  Override the auto-detected top-level importable package paths. Use forward slashes for namespace packages (e.g. "google/cloud/storage").   |  `[]` |
+| <a id="package_annotation-top_level_paths"></a>top_level_paths |  Override the auto-detected top-level importable paths (packages, .pth files, standalone modules). Use forward slashes for namespace packages (e.g. 'google/cloud/storage').   |  `[]` |
 
 **RETURNS**
 

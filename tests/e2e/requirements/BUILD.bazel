@@ -42,9 +42,8 @@ py_test(
     name = "test_top_level_packages",
     srcs = ["@rules_pycross_e2e_shared//:test_top_level_packages.py"],
     env = {
-        # Tests that top-level package names differ from dist names:
-        # regex, IPython, bs4 (beautifulsoup4), six, dateutil (python-dateutil), attr (attrs)
-        "PYCROSS_TEST_PACKAGES": "regex,IPython,bs4,six,dateutil,attr",
+        # regex, IPython, bs4 (beautifulsoup4), six, dateutil (python-dateutil), attr (attrs), rerun (rerun-sdk)
+        "PYCROSS_TEST_PACKAGES": "regex,IPython,bs4,six,dateutil,attr,rerun",
     },
     main = "test_top_level_packages.py",
     deps = [
@@ -53,6 +52,7 @@ py_test(
         "@uv//ipython:pkg",
         "@uv//python_dateutil:pkg",
         "@uv//regex:pkg",
+        "@uv//rerun_sdk:pkg",
         "@uv//six:pkg",
     ],
 )

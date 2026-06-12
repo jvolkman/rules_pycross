@@ -46,7 +46,7 @@ def _print_warn(msg):
 class Package:
     name: NormalizedName
     version: Version
-    python_versions: SpecifierSet
+    python_versions: List[SpecifierSet]
     dependencies: Set[Requirement]
     files: Set[PackageFile]
     is_local: bool
@@ -77,7 +77,8 @@ class Package:
         return RawPackage(
             name=self.name,
             version=self.version,
-            python_versions=self.python_versions,
+            python_versions=self.python_versions[0] if self.python_versions else SpecifierSet(),
+            python_version_specifiers=self.python_versions,
             dependencies=dependencies_without_self,
             files=sorted(self.files, key=lambda f: f.name),
         )
@@ -416,14 +417,14 @@ def collect_and_process_packages(packages_list: list[Dict[str, Any]]) -> Dict[Pa
     return distinct_packages
 
 
-def resolve_package_requires_python(markers: list[str]) -> SpecifierSet:
+def resolve_package_requires_python(markers: list[str]) -> List[SpecifierSet]:
+    specifiers = []
     for marker in markers:
         # Use Marker implementation details to parse marker
         match Marker(marker)._markers:
             case [(l, op, r)] if l.value == "python_full_version":
-                return SpecifierSet(f"{op.value} {r.value}")
-
-    return SpecifierSet()
+                specifiers.append(SpecifierSet(f"{op.value} {r.value}"))
+    return specifiers
 
 
 def validate_lockfile_version(lock_dict: Dict[str, Any]) -> None:

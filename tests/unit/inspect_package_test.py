@@ -156,7 +156,7 @@ class InspectPackageTest(unittest.TestCase):
                     tar.addfile(info, io.BytesIO(data))
         return path
 
-    def test_wheel_top_level_packages(self):
+    def test_wheel_top_level_paths(self):
         wheel_path = self.create_zip(
             "numpy-1.0-py3-none-any.whl",
             {
@@ -166,9 +166,9 @@ class InspectPackageTest(unittest.TestCase):
             },
         )
         result = inspect_wheel(wheel_path)
-        self.assertEqual(result["top_level_packages"], ["numpy"])
+        self.assertEqual(result["top_level_paths"], ["numpy"])
 
-    def test_wheel_top_level_packages_single_file(self):
+    def test_wheel_top_level_paths_single_file(self):
         wheel_path = self.create_zip(
             "six-1.0-py3-none-any.whl",
             {
@@ -177,7 +177,19 @@ class InspectPackageTest(unittest.TestCase):
             },
         )
         result = inspect_wheel(wheel_path)
-        self.assertEqual(result["top_level_packages"], ["six.py"])
+        self.assertEqual(result["top_level_paths"], ["six.py"])
+
+    def test_wheel_top_level_paths_pth(self):
+        wheel_path = self.create_zip(
+            "rerun_sdk-1.0-py3-none-any.whl",
+            {
+                "rerun_sdk.pth": "import rerun_sdk",
+                "rerun_sdk/__init__.py": "",
+                "rerun_sdk-1.0.dist-info/METADATA": "Name: rerun-sdk",
+            },
+        )
+        result = inspect_wheel(wheel_path)
+        self.assertEqual(result["top_level_paths"], ["rerun_sdk", "rerun_sdk.pth"])
 
     def test_sdist_standard_layout(self):
         sdist_path = self._create_tarball_with_dirs(
@@ -187,7 +199,7 @@ class InspectPackageTest(unittest.TestCase):
             },
         )
         result = inspect_sdist(sdist_path)
-        self.assertEqual(result["top_level_packages"], ["mypackage"])
+        self.assertEqual(result["top_level_paths"], ["mypackage"])
 
     def test_sdist_src_layout(self):
         sdist_path = self._create_tarball_with_dirs(
@@ -197,7 +209,7 @@ class InspectPackageTest(unittest.TestCase):
             },
         )
         result = inspect_sdist(sdist_path)
-        self.assertEqual(result["top_level_packages"], ["mypackage"])
+        self.assertEqual(result["top_level_paths"], ["mypackage"])
 
     def test_sdist_excluded_dirs(self):
         sdist_path = self._create_tarball_with_dirs(
@@ -209,7 +221,7 @@ class InspectPackageTest(unittest.TestCase):
             },
         )
         result = inspect_sdist(sdist_path)
-        self.assertEqual(result["top_level_packages"], ["mylib"])
+        self.assertEqual(result["top_level_paths"], ["mylib"])
 
     def test_sdist_no_init_py(self):
         sdist_path = self._create_tarball_with_dirs(
@@ -219,7 +231,19 @@ class InspectPackageTest(unittest.TestCase):
             },
         )
         result = inspect_sdist(sdist_path)
-        self.assertEqual(result["top_level_packages"], [])
+        self.assertEqual(result["top_level_paths"], [])
+
+    def test_sdist_top_level_paths_pth(self):
+        sdist_path = self._create_tarball_with_dirs(
+            "rerun_sdk-1.0.tar.gz",
+            {
+                "rerun_sdk-1.0/rerun_sdk.pth": "import rerun_sdk",
+                "rerun_sdk-1.0/rerun_sdk/__init__.py": "",
+                "rerun_sdk-1.0/pyproject.toml": '[build-system]\nrequires = ["setuptools"]\nbuild-backend = "setuptools.build_meta"',
+            },
+        )
+        result = inspect_sdist(sdist_path)
+        self.assertEqual(result["top_level_paths"], ["rerun_sdk", "rerun_sdk.pth"])
 
     def test_wheel_excludes_dist_info(self):
         wheel_path = self.create_zip(
@@ -232,7 +256,7 @@ class InspectPackageTest(unittest.TestCase):
             },
         )
         result = inspect_wheel(wheel_path)
-        self.assertEqual(result["top_level_packages"], ["pkg"])
+        self.assertEqual(result["top_level_paths"], ["pkg"])
 
     # -- Namespace package (PEP 420) tests --
 
@@ -248,7 +272,7 @@ class InspectPackageTest(unittest.TestCase):
             },
         )
         result = inspect_wheel(wheel_path)
-        self.assertEqual(result["top_level_packages"], ["google/cloud/storage"])
+        self.assertEqual(result["top_level_paths"], ["google/cloud/storage"])
 
     def test_wheel_namespace_package_multiple_concrete(self):
         """A wheel that provides multiple concrete packages under one namespace."""
@@ -264,7 +288,7 @@ class InspectPackageTest(unittest.TestCase):
         )
         result = inspect_wheel(wheel_path)
         self.assertEqual(
-            result["top_level_packages"],
+            result["top_level_paths"],
             ["google/cloud/bigquery", "google/cloud/storage"],
         )
 
@@ -280,7 +304,7 @@ class InspectPackageTest(unittest.TestCase):
         )
         result = inspect_wheel(wheel_path)
         # Should stop at google/cloud since it has __init__.py
-        self.assertEqual(result["top_level_packages"], ["google/cloud"])
+        self.assertEqual(result["top_level_paths"], ["google/cloud"])
 
     def test_wheel_mixed_regular_and_namespace(self):
         """A wheel with both a regular package and a namespace package."""
@@ -296,7 +320,7 @@ class InspectPackageTest(unittest.TestCase):
         )
         result = inspect_wheel(wheel_path)
         self.assertEqual(
-            result["top_level_packages"],
+            result["top_level_paths"],
             ["namespace/sub/concrete", "regular_pkg"],
         )
 
@@ -313,7 +337,7 @@ class InspectPackageTest(unittest.TestCase):
         )
         result = inspect_wheel(wheel_path)
         # ns/mid has __init__.py, so it's the shallowest — deeper ones are subpackages
-        self.assertEqual(result["top_level_packages"], ["ns/mid"])
+        self.assertEqual(result["top_level_paths"], ["ns/mid"])
 
     def test_sdist_namespace_package(self):
         """Namespace package in an sdist (standard layout)."""
@@ -326,7 +350,7 @@ class InspectPackageTest(unittest.TestCase):
             },
         )
         result = inspect_sdist(sdist_path)
-        self.assertEqual(result["top_level_packages"], ["google/cloud/storage"])
+        self.assertEqual(result["top_level_paths"], ["google/cloud/storage"])
 
     def test_sdist_namespace_src_layout(self):
         """Namespace package in an sdist with src-layout."""
@@ -339,7 +363,7 @@ class InspectPackageTest(unittest.TestCase):
             },
         )
         result = inspect_sdist(sdist_path)
-        self.assertEqual(result["top_level_packages"], ["google/cloud/storage"])
+        self.assertEqual(result["top_level_paths"], ["google/cloud/storage"])
 
 
 if __name__ == "__main__":
