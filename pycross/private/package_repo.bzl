@@ -188,7 +188,14 @@ def _package_repo_impl(rctx):
         if pkg:
             tlps = pkg.get("top_level_packages", [])
             for tlp in tlps:
-                module_name = tlp.replace("/", ".")
+                if "/" not in tlp:
+                    parts = tlp.split(".")
+                    if len(parts) > 1:
+                        module_name = parts[0]
+                    else:
+                        module_name = tlp
+                else:
+                    module_name = tlp.replace("/", ".")
                 modules_mapping[module_name] = pin_name
 
     rctx.file("modules_mapping.json", json.encode(modules_mapping))

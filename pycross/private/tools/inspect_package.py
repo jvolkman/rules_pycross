@@ -174,7 +174,7 @@ def _find_top_level_packages_sdist(sdist_path: Path) -> list[str]:
             and name not in _EXCLUDED_ROOT_MODULES
             and not name.endswith(".egg-info")
         ):
-            pkgs.add(name)
+            pkgs.add(f)
 
     return sorted(pkgs)
 
@@ -205,7 +205,7 @@ def _find_top_level_packages_wheel(wheel_path: Path) -> list[str]:
     for f in root_files:
         name = _extract_module_name(f)
         if name and name not in _EXCLUDED_ROOT_MODULES:
-            pkgs.add(name)
+            pkgs.add(f)
 
     return sorted(pkgs)
 

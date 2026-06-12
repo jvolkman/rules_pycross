@@ -168,6 +168,17 @@ class InspectPackageTest(unittest.TestCase):
         result = inspect_wheel(wheel_path)
         self.assertEqual(result["top_level_packages"], ["numpy"])
 
+    def test_wheel_top_level_packages_single_file(self):
+        wheel_path = self.create_zip(
+            "six-1.0-py3-none-any.whl",
+            {
+                "six.py": "# six module",
+                "six-1.0.dist-info/METADATA": "Name: six",
+            },
+        )
+        result = inspect_wheel(wheel_path)
+        self.assertEqual(result["top_level_packages"], ["six.py"])
+
     def test_sdist_standard_layout(self):
         sdist_path = self._create_tarball_with_dirs(
             "mypackage-1.0.tar.gz",
