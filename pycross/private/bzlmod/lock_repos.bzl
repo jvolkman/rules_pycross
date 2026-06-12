@@ -7,7 +7,7 @@ load("@pycross_backends//:registry.bzl", "BACKEND_CONFIGS", "BACKEND_TO_RULE", "
 load("@rules_pycross//pycross/private/bzlmod:sdist_repo.bzl", "pycross_sdist_repo")
 load("//pycross/private:package_repo.bzl", "package_repo")
 load("//pycross/private:pypi_file.bzl", "pypi_file")
-load("//pycross/private:util.bzl", "sanitize_name")
+load("//pycross/private:util.bzl", "sanitize_name", "underscore_name")
 load("//pycross/private:wheel_file.bzl", "pycross_wheel_file")
 load(":tag_attrs.bzl", "CREATE_REPOS_ATTRS")
 
@@ -145,7 +145,7 @@ def _lock_repos_impl(module_ctx):
             deps_set = {}
             for dep in pkg.get("common_dependencies", []):
                 dep_name = dep.split("@")[0]
-                dep_label = "@{}//{}:pkg".format(repo_name, dep_name)
+                dep_label = "@{}//{}:pkg".format(repo_name, underscore_name(dep_name))
                 deps_set[dep_label] = True
             for env_name, env_file_ref in pkg.get("environment_files", {}).items():
                 if env_file_ref.get("key") != sdist_file_key:

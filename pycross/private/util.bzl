@@ -46,6 +46,27 @@ def sanitize_name(val):
     """Sanitize a string into a valid Bazel repository and target name identifier."""
     return val.lower().replace("-", "_").replace(".", "_").replace("+", "_").replace("@", "_").replace("!", "_")
 
+def normalize_pep503_name(name):
+    """PEP 503 normalization: lowercase, replace [_-.] with -, collapse runs.
+
+    Args:
+      name: The string to normalize.
+
+    Returns:
+      The PEP 503 normalized string.
+    """
+    name = name.replace("_", "-").replace(".", "-").lower()
+    for _i in range(len(name)):
+        if "--" in name:
+            name = name.replace("--", "-")
+        else:
+            break
+    return name
+
+def underscore_name(name):
+    """rules_python-style normalization: lowercase, replace [-. ] with _."""
+    return normalize_pep503_name(name).replace("-", "_")
+
 _PEP508_NAME_CHARS = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_."
 
 def extract_pep508_name(spec):

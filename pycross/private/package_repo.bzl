@@ -38,20 +38,13 @@ Root alias names use PEP 503 dashes (pycross convention).
 """
 
 load(":resolved_lock_renderer.bzl", "render_lock_bzl")
+load(":util.bzl", "normalize_pep503_name", "underscore_name")
 
 def _normalize_name(name):
-    """PEP 503 normalization: lowercase, replace [_-.] with -, collapse runs."""
-    name = name.replace("_", "-").replace(".", "-").lower()
-    for _i in range(len(name)):
-        if "--" in name:
-            name = name.replace("--", "-")
-        else:
-            break
-    return name
+    return normalize_pep503_name(name)
 
 def _underscore_name(name):
-    """rules_python-style normalization: lowercase, replace [-. ] with _."""
-    return _normalize_name(name).replace("-", "_")
+    return underscore_name(name)
 
 _requirement_func = """\
 def requirement(pkg):
