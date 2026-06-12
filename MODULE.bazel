@@ -11,7 +11,7 @@ bazel_dep(name = "bazel_features", version = "1.11.0")
 bazel_dep(name = "rules_cc", version = "0.2.18")
 bazel_dep(name = "bazel_skylib", version = "1.9.0")
 bazel_dep(name = "platforms", version = "0.0.4")
-bazel_dep(name = "rules_python", version = "1.0.0")
+bazel_dep(name = "rules_python", version = "1.7.0")
 bazel_dep(name = "toml.bzl", version = "0.4.1")
 
 bazel_dep(name = "rules_testing", version = "0.9.0", dev_dependency = True)
@@ -118,7 +118,10 @@ use_repo(lock_import, "lock_import_repos_hub")
 lock_repos = use_extension("@rules_pycross//pycross/extensions:lock_repos.bzl", "lock_repos")
 lock_repos.create()
 
-# Auto-wire the first-party backend overrides so users don't have to
+# Create the default (empty) override repos for first-party backends.
+# These are referenced by the backends.register tags above.
+# Users who want to add package-specific overrides (e.g., setuptools.override())
+# must also use_extension the relevant backend in their own MODULE.bazel.
 setuptools = use_extension("@rules_pycross//pycross/backends:setuptools.bzl", "setuptools")
 use_repo(setuptools, "setuptools_overrides")
 

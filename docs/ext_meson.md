@@ -9,9 +9,10 @@ Meson build backend for rules_pycross.
 <pre>
 load("@rules_pycross//pycross/backends:meson.bzl", "meson_build")
 
-meson_build(<a href="#meson_build-name">name</a>, <a href="#meson_build-deps">deps</a>, <a href="#meson_build-build_deps">build_deps</a>, <a href="#meson_build-config_settings">config_settings</a>, <a href="#meson_build-copts">copts</a>, <a href="#meson_build-linkopts">linkopts</a>, <a href="#meson_build-meson_properties">meson_properties</a>, <a href="#meson_build-native_deps">native_deps</a>,
-            <a href="#meson_build-path_tools">path_tools</a>, <a href="#meson_build-pkg_config_files">pkg_config_files</a>, <a href="#meson_build-pre_build_patches">pre_build_patches</a>, <a href="#meson_build-sdist">sdist</a>, <a href="#meson_build-site_hooks">site_hooks</a>, <a href="#meson_build-target_environment">target_environment</a>,
-            <a href="#meson_build-tool_deps">tool_deps</a>, <a href="#meson_build-whldir_name">whldir_name</a>)
+meson_build(<a href="#meson_build-name">name</a>, <a href="#meson_build-deps">deps</a>, <a href="#meson_build-data">data</a>, <a href="#meson_build-build_deps">build_deps</a>, <a href="#meson_build-build_env">build_env</a>, <a href="#meson_build-config_settings">config_settings</a>, <a href="#meson_build-copts">copts</a>, <a href="#meson_build-linkopts">linkopts</a>,
+            <a href="#meson_build-meson_properties">meson_properties</a>, <a href="#meson_build-native_deps">native_deps</a>, <a href="#meson_build-path_tools">path_tools</a>, <a href="#meson_build-pkg_config_files">pkg_config_files</a>, <a href="#meson_build-post_build_hooks">post_build_hooks</a>,
+            <a href="#meson_build-pre_build_hooks">pre_build_hooks</a>, <a href="#meson_build-pre_build_patches">pre_build_patches</a>, <a href="#meson_build-sdist">sdist</a>, <a href="#meson_build-site_hooks">site_hooks</a>, <a href="#meson_build-target_environment">target_environment</a>, <a href="#meson_build-tool_deps">tool_deps</a>,
+            <a href="#meson_build-whldir_name">whldir_name</a>)
 </pre>
 
 
@@ -23,14 +24,18 @@ meson_build(<a href="#meson_build-name">name</a>, <a href="#meson_build-deps">de
 | :------------- | :------------- | :------------- | :------------- | :------------- |
 | <a id="meson_build-name"></a>name |  A unique name for this target.   | <a href="https://bazel.build/concepts/labels#target-names">Name</a> | required |  |
 | <a id="meson_build-deps"></a>deps |  -   | <a href="https://bazel.build/concepts/labels">List of labels</a> | optional |  `[]`  |
+| <a id="meson_build-data"></a>data |  Additional data and dependencies used by the build. These files are made available in the sandbox and can be referenced via $(location) in build_env and config_settings values.   | <a href="https://bazel.build/concepts/labels">List of labels</a> | optional |  `[]`  |
 | <a id="meson_build-build_deps"></a>build_deps |  -   | <a href="https://bazel.build/concepts/labels">List of labels</a> | optional |  `[]`  |
+| <a id="meson_build-build_env"></a>build_env |  Environment variables passed to the sdist build. Values are subject to 'Make variable' and $(location) expansion.   | <a href="https://bazel.build/rules/lib/dict">Dictionary: String -> String</a> | optional |  `{}`  |
 | <a id="meson_build-config_settings"></a>config_settings |  -   | <a href="https://bazel.build/rules/lib/dict">Dictionary: String -> List of strings</a> | optional |  `{}`  |
 | <a id="meson_build-copts"></a>copts |  -   | List of strings | optional |  `[]`  |
 | <a id="meson_build-linkopts"></a>linkopts |  -   | List of strings | optional |  `[]`  |
 | <a id="meson_build-meson_properties"></a>meson_properties |  -   | <a href="https://bazel.build/rules/lib/dict">Dictionary: String -> String</a> | optional |  `{}`  |
 | <a id="meson_build-native_deps"></a>native_deps |  -   | <a href="https://bazel.build/concepts/labels">List of labels</a> | optional |  `[]`  |
-| <a id="meson_build-path_tools"></a>path_tools |  -   | <a href="https://bazel.build/concepts/labels">List of labels</a> | optional |  `[]`  |
+| <a id="meson_build-path_tools"></a>path_tools |  A mapping of binary targets to names placed on PATH during the build. If the name (value) is empty, the executable's basename is used.   | <a href="https://bazel.build/rules/lib/dict">Dictionary: Label -> String</a> | optional |  `{}`  |
 | <a id="meson_build-pkg_config_files"></a>pkg_config_files |  -   | <a href="https://bazel.build/concepts/labels">List of labels</a> | optional |  `[]`  |
+| <a id="meson_build-post_build_hooks"></a>post_build_hooks |  Executables to run after the wheel is built. Each hook receives PYCROSS_WHEEL_FILE pointing to the built wheel.   | <a href="https://bazel.build/concepts/labels">List of labels</a> | optional |  `[]`  |
+| <a id="meson_build-pre_build_hooks"></a>pre_build_hooks |  Executables to run before building the wheel. Each hook receives PYCROSS_CONFIG_SETTINGS_FILE and PYCROSS_ENV_VARS_FILE environment variables pointing to JSON files it may read and modify.   | <a href="https://bazel.build/concepts/labels">List of labels</a> | optional |  `[]`  |
 | <a id="meson_build-pre_build_patches"></a>pre_build_patches |  Patch files to apply to the sdist source tree before building.   | <a href="https://bazel.build/concepts/labels">List of labels</a> | optional |  `[]`  |
 | <a id="meson_build-sdist"></a>sdist |  -   | <a href="https://bazel.build/concepts/labels">Label</a> | required |  |
 | <a id="meson_build-site_hooks"></a>site_hooks |  Python code snippets to execute on interpreter startup during builds.   | List of strings | optional |  `[]`  |

@@ -24,6 +24,7 @@ bzl_library(
         "//pycross/private:uv_lock_model",
         "//pycross/private:wheel_library",
         "//pycross/private:wheel_transform",
+        "//pycross/private:wheel_zipimport_library",
         "//pycross/private/build:cc_pkg_config",
         "//pycross/private/build:repaired_wheel",
         "//pycross/private/build:wheel_build",

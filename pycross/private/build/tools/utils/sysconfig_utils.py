@@ -258,7 +258,7 @@ def apply_sysconfig_overrides(ctx: BuildContext) -> None:
                     if fullname in ("setuptools._distutils.util", "distutils.util"):
                         sys.meta_path.remove(self)
                         try:
-                            import importlib
+                            import importlib.util
                             spec = importlib.util.find_spec(fullname)
                             if spec:
                                 class PatchedLoader(spec.loader.__class__):

@@ -65,6 +65,10 @@ def register_pep517_action(
     site_hooks = list(ctx.attr.site_hooks)
     pre_build_patches = list(ctx.files.pre_build_patches)
     config_settings = dict(getattr(ctx.attr, "config_settings", {}))
+    build_env = dict(getattr(ctx.attr, "build_env", {}))
+    data = list(getattr(ctx.attr, "data", []))
+    pre_build_hooks = list(getattr(ctx.attr, "pre_build_hooks", []))
+    post_build_hooks = list(getattr(ctx.attr, "post_build_hooks", []))
     pkg_config_files = list(getattr(ctx.files, "pkg_config_files", []))
     whldir_name = getattr(ctx.attr, "whldir_name", "") or (ctx.attr.name + ".whldir")
 
@@ -180,6 +184,43 @@ def register_pep517_action(
         "path_tools": path_tools_list,
         "wheel_dir": out_wheel_dir.path,
     }
+
+    # Expand locations in build_env values and add to config.
+    # Include data targets in the location expansion scope.
+    if build_env:
+        unique_deps = []
+        seen_labels = {}
+        for dep in deps + build_deps + data:
+            if dep.label not in seen_labels:
+                seen_labels[dep.label] = True
+                unique_deps.append(dep)
+        expanded_env = {}
+        for key, value in build_env.items():
+            expanded_env[key] = ctx.expand_location(value, unique_deps)
+        main_config["build_env"] = expanded_env
+
+    # Data files: make available in the sandbox.
+    for d in data:
+        transitive_inputs.append(d[DefaultInfo].files)
+
+    # Pre-build hooks: executables run before the PEP 517 build.
+    if pre_build_hooks:
+        hook_paths = []
+        for hook in pre_build_hooks:
+            exe = hook[DefaultInfo].files_to_run.executable
+            hook_paths.append(exe.path)
+            tools.append(hook[DefaultInfo].files_to_run)
+        main_config["pre_build_hooks"] = hook_paths
+
+    # Post-build hooks: executables run after the wheel is built.
+    if post_build_hooks:
+        hook_paths = []
+        for hook in post_build_hooks:
+            exe = hook[DefaultInfo].files_to_run.executable
+            hook_paths.append(exe.path)
+            tools.append(hook[DefaultInfo].files_to_run)
+        main_config["post_build_hooks"] = hook_paths
+
     if cargo_vendored_sources:
         main_config["cargo_vendored_sources"] = cargo_vendored_sources
 

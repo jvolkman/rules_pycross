@@ -142,6 +142,10 @@ def inject_python_wrapper(ctx: BuildContext) -> None:
 
             if c_index != -1 and len(sys.argv) > c_index + 1:
                 import sysconfig
+                import site
+
+                for p in [{repr(str(site_dir.absolute()))}] + {repr(python_paths_list)} + {repr(sdist_paths)}:
+                    site.addsitedir(p)
 
                 _real_get_config_var = sysconfig.get_config_var
                 def _get_config_var(name):

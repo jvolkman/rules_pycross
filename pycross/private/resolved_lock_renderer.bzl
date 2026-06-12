@@ -23,16 +23,9 @@ def _wheel_target(file_ref, sdist_file, pkg_key, pkg, repo_map, rctx_name):
     key = file_ref.get("key")
     if sdist_file and key == sdist_file.get("key"):
         if pkg.get("build_target"):
-            target = pkg["build_target"]
-        else:
-            repo_name = "{}_sdist_{}".format(rctx_name, _sanitize_name(pkg_key))
-            target = "@@{}//:pkg".format(repo_name)
-
-        parts = target.rsplit(":", 1)
-        if len(parts) == 2:
-            return parts[0] + ":wheel"
-        else:
-            return target + ":wheel"
+            return pkg["build_target"]
+        repo_name = "{}_sdist_{}".format(rctx_name, _sanitize_name(pkg_key))
+        return "@@{}//:wheel".format(repo_name)
 
     return repo_map.get(key)
 

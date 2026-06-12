@@ -30,6 +30,27 @@ COMMON_BUILD_ATTRS = {
         doc = "Name for the output .whldir TreeArtifact directory (e.g., 'numpy-1.24.0.whldir'). " +
               "If empty, defaults to '{name}.whldir'.",
     ),
+    "build_env": attr.string_dict(
+        doc = "Environment variables passed to the sdist build. " +
+              "Values are subject to 'Make variable' and $(location) expansion.",
+    ),
+    "data": attr.label_list(
+        doc = "Additional data and dependencies used by the build. " +
+              "These files are made available in the sandbox and can be referenced " +
+              "via $(location) in build_env and config_settings values.",
+        allow_files = True,
+    ),
+    "pre_build_hooks": attr.label_list(
+        doc = "Executables to run before building the wheel. " +
+              "Each hook receives PYCROSS_CONFIG_SETTINGS_FILE and PYCROSS_ENV_VARS_FILE " +
+              "environment variables pointing to JSON files it may read and modify.",
+        cfg = pycross_exec_platform_transition,
+    ),
+    "post_build_hooks": attr.label_list(
+        doc = "Executables to run after the wheel is built. " +
+              "Each hook receives PYCROSS_WHEEL_FILE pointing to the built wheel.",
+        cfg = pycross_exec_platform_transition,
+    ),
     "_dummy_bin_file": attr.label(
         default = Label("//pycross/private:dummy_bin_file"),
         allow_single_file = True,
@@ -43,7 +64,11 @@ CC_BUILD_ATTRS = {
     "linkopts": attr.string_list(),
     "config_settings": attr.string_list_dict(),
     "pkg_config_files": attr.label_list(allow_files = True),
-    "path_tools": attr.label_list(cfg = pycross_exec_platform_transition),
+    "path_tools": attr.label_keyed_string_dict(
+        doc = "A mapping of binary targets to names placed on PATH during the build. " +
+              "If the name (value) is empty, the executable's basename is used.",
+        cfg = pycross_exec_platform_transition,
+    ),
 }
 
 CC_TOOLCHAIN_ATTRS = {

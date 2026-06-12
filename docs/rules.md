@@ -274,6 +274,28 @@ pycross_wheel_transform(<a href="#pycross_wheel_transform-name">name</a>, <a hre
 | <a id="pycross_wheel_transform-wheel"></a>wheel |  The input wheel file or TreeArtifact directory containing a .whl file.   | <a href="https://bazel.build/concepts/labels">Label</a> | required |  |
 
 
+<a id="pycross_wheel_zipimport_library"></a>
+
+## pycross_wheel_zipimport_library
+
+<pre>
+load("@rules_pycross//pycross:defs.bzl", "pycross_wheel_zipimport_library")
+
+pycross_wheel_zipimport_library(<a href="#pycross_wheel_zipimport_library-name">name</a>, <a href="#pycross_wheel_zipimport_library-deps">deps</a>, <a href="#pycross_wheel_zipimport_library-wheel">wheel</a>)
+</pre>
+
+
+
+**ATTRIBUTES**
+
+
+| Name  | Description | Type | Mandatory | Default |
+| :------------- | :------------- | :------------- | :------------- | :------------- |
+| <a id="pycross_wheel_zipimport_library-name"></a>name |  A unique name for this target.   | <a href="https://bazel.build/concepts/labels#target-names">Name</a> | required |  |
+| <a id="pycross_wheel_zipimport_library-deps"></a>deps |  A list of this wheel's Python library dependencies.   | <a href="https://bazel.build/concepts/labels">List of labels</a> | optional |  `[]`  |
+| <a id="pycross_wheel_zipimport_library-wheel"></a>wheel |  The wheel file.   | <a href="https://bazel.build/concepts/labels">Label</a> | required |  |
+
+
 <a id="PycrossExtractedWheelInfo"></a>
 
 ## PycrossExtractedWheelInfo
@@ -356,15 +378,15 @@ to the v2 backend.
 | <a id="pycross_wheel_build-sdist"></a>sdist |  The sdist file label.   |  none |
 | <a id="pycross_wheel_build-deps"></a>deps |  Python build dependencies.   |  `[]` |
 | <a id="pycross_wheel_build-native_deps"></a>native_deps |  Native dependencies (CcInfo).   |  `[]` |
-| <a id="pycross_wheel_build-data"></a>data |  Additional data files. Note: in v2 these should be added via backend-specific override attrs instead.   |  `[]` |
+| <a id="pycross_wheel_build-data"></a>data |  Additional data and dependencies used by the build.   |  `[]` |
 | <a id="pycross_wheel_build-copts"></a>copts |  Additional C compiler options.   |  `[]` |
 | <a id="pycross_wheel_build-linkopts"></a>linkopts |  Additional C linker options.   |  `[]` |
 | <a id="pycross_wheel_build-config_settings"></a>config_settings |  PEP 517 config settings.   |  `{}` |
-| <a id="pycross_wheel_build-path_tools"></a>path_tools |  Tools to place on PATH during build.   |  `[]` |
+| <a id="pycross_wheel_build-path_tools"></a>path_tools |  A mapping of binary targets to names placed on PATH during the build. Use {"//tools:cmake3": "cmake"} to rename, or {"//tools:cmake": ""} to use the executable's basename.   |  `{}` |
 | <a id="pycross_wheel_build-target_environment"></a>target_environment |  The target environment JSON label.   |  `None` |
-| <a id="pycross_wheel_build-build_env"></a>build_env |  Environment variables for the build. Note: in v2 use config_settings or site_hooks instead.   |  `None` |
-| <a id="pycross_wheel_build-pre_build_hooks"></a>pre_build_hooks |  Pre-build hook executables. Note: in v2 use pre_build_patches or site_hooks instead.   |  `None` |
-| <a id="pycross_wheel_build-post_build_hooks"></a>post_build_hooks |  Post-build hook executables. Note: not directly supported in v2; use pycross_wheel_transform as a post step.   |  `None` |
+| <a id="pycross_wheel_build-build_env"></a>build_env |  Environment variables passed to the sdist build. Values are subject to $(location) expansion.   |  `{}` |
+| <a id="pycross_wheel_build-pre_build_hooks"></a>pre_build_hooks |  Executables to run before building the wheel.   |  `[]` |
+| <a id="pycross_wheel_build-post_build_hooks"></a>post_build_hooks |  Executables to run after the wheel is built.   |  `[]` |
 | <a id="pycross_wheel_build-whldir_name"></a>whldir_name |  Name for the output .whldir TreeArtifact.   |  `None` |
 | <a id="pycross_wheel_build-kwargs"></a>kwargs |  Additional arguments passed to setuptools_build.   |  none |
 

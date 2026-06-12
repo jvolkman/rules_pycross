@@ -69,6 +69,12 @@ def load_build_context(config_path: str) -> BuildContext:
     # builds that rely on sys.path[0] being the script directory. Strip it.
     build_env.pop("PYTHONSAFEPATH", None)
 
+    # Merge user-supplied environment variables from the build_env attribute.
+    # User vars take precedence over inherited environment.
+    user_build_env = bazel_config.get("build_env", {})
+    if user_build_env:
+        build_env.update(user_build_env)
+
     return BuildContext(
         bazel_config=bazel_config,
         prefix=prefix,

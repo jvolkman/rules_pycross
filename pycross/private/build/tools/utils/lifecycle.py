@@ -8,7 +8,9 @@ from pycross.private.build.tools.utils.cc_toolchain import setup_cc_layer
 from pycross.private.build.tools.utils.context import BuildContext
 from pycross.private.build.tools.utils.context import load_build_context
 from pycross.private.build.tools.utils.context import load_layers
+from pycross.private.build.tools.utils.hooks import run_post_build_hooks
 from pycross.private.build.tools.utils.hooks import run_pre_build_hook
+from pycross.private.build.tools.utils.hooks import run_pre_build_hooks_from_config
 from pycross.private.build.tools.utils.path_tools import setup_path_tools
 from pycross.private.build.tools.utils.pep517_runner import run_pep517_build
 from pycross.private.build.tools.utils.sdist import extract_sdist
@@ -92,6 +94,9 @@ def run_standard_build_lifecycle(config_path: str, strategy: BackendStrategy) ->
         if layer_config.get("type") == "pre_build_hook":
             run_pre_build_hook(ctx, layer_config)
 
+    # Run pre-build hooks from the pre_build_hooks attribute.
+    run_pre_build_hooks_from_config(ctx)
+
     strategy.pre_build(ctx)
 
     apply_sysconfig_overrides(ctx)
@@ -99,4 +104,5 @@ def run_standard_build_lifecycle(config_path: str, strategy: BackendStrategy) ->
     strategy.prepare_env(ctx)
 
     wheel_file = run_pep517_build(ctx)
+    wheel_file = run_post_build_hooks(ctx, wheel_file)
     print(f"Successfully built wheel: {wheel_file}")

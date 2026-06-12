@@ -1,4 +1,5 @@
 import json
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -57,3 +58,69 @@ def run_pre_build_hook(ctx: BuildContext, hook_config: Dict[str, Any]) -> None:
     if config_settings_file.exists():
         with open(config_settings_file, "r") as f:
             ctx.config_settings = json.load(f)
+
+
+def run_pre_build_hooks_from_config(ctx: BuildContext) -> None:
+    """Run pre-build hooks specified directly in the build config."""
+    hook_paths = ctx.bazel_config.get("pre_build_hooks", [])
+    for hook_path in hook_paths:
+        run_pre_build_hook(ctx, {"executable": hook_path})
+
+
+def run_post_build_hooks(ctx: BuildContext, wheel_file: Path) -> Path:
+    """Run post-build hooks after the wheel is built.
+
+    Each hook receives PYCROSS_WHEEL_FILE pointing to the current wheel.
+    The hook may modify the wheel in place or write a new wheel to
+    PYCROSS_WHEEL_OUTPUT_DIR.
+
+    Returns the final wheel file path.
+    """
+    hook_paths = ctx.bazel_config.get("post_build_hooks", [])
+    if not hook_paths:
+        return wheel_file
+
+    wheel_staging = ctx.temp_dir / "post_wheel_staging"
+    wheel_output = ctx.temp_dir / "post_wheel_output"
+
+    for hook_path in hook_paths:
+        hook_exe = (ctx.prefix / Path(hook_path)).absolute()
+
+        # Set up staging directories
+        wheel_staging.mkdir(parents=True, exist_ok=True)
+        wheel_output.mkdir(parents=True, exist_ok=True)
+
+        # Move wheel to staging
+        staged_wheel = wheel_staging / wheel_file.name
+        shutil.move(str(wheel_file), str(staged_wheel))
+
+        hook_env = dict(ctx.build_env)
+        hook_env["PYCROSS_BAZEL_ROOT"] = str(ctx.prefix)
+        hook_env["PYCROSS_WHEEL_FILE"] = str(staged_wheel)
+        hook_env["PYCROSS_WHEEL_OUTPUT_DIR"] = str(wheel_output)
+
+        try:
+            subprocess.check_output(
+                args=[str(hook_exe)],
+                env=hook_env,
+                cwd=str(ctx.sdist_dir),
+                stderr=subprocess.STDOUT,
+            )
+        except subprocess.CalledProcessError as cpe:
+            print("===== POST-BUILD HOOK FAILED =====", file=sys.stderr)
+            if cpe.output:
+                print(cpe.output.decode("utf-8", "replace"), file=sys.stderr)
+            raise
+
+        # Check for output wheel
+        output_wheels = list(wheel_output.glob("*.whl"))
+        if output_wheels:
+            wheel_file = output_wheels[0]
+        else:
+            # Hook modified in place
+            wheel_file = staged_wheel
+
+        # Clean up for next iteration
+        shutil.rmtree(str(wheel_staging), ignore_errors=True)
+
+    return wheel_file

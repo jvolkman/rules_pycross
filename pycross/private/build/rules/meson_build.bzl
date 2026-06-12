@@ -31,9 +31,9 @@ def _meson_build_impl(ctx):
         binary_name = "ninja",
     ))
 
-    for target in ctx.attr.path_tools:
+    for target, tool_name in ctx.attr.path_tools.items():
         exe = target[DefaultInfo].files_to_run.executable
-        name = exe.basename
+        name = tool_name if tool_name else exe.basename
         tool_executables.append(struct(name = name, file = exe, files_to_run = target[DefaultInfo].files_to_run))
 
     # 2. Extract CC environment

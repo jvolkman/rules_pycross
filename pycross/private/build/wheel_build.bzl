@@ -16,11 +16,11 @@ def pycross_wheel_build(
         copts = [],
         linkopts = [],
         config_settings = {},
-        path_tools = [],
+        path_tools = {},
         target_environment = None,
-        build_env = None,
-        pre_build_hooks = None,
-        post_build_hooks = None,
+        build_env = {},
+        pre_build_hooks = [],
+        post_build_hooks = [],
         whldir_name = None,
         **kwargs):
     """Builds a Python wheel from a source distribution.
@@ -34,51 +34,35 @@ def pycross_wheel_build(
         sdist: The sdist file label.
         deps: Python build dependencies.
         native_deps: Native dependencies (CcInfo).
-        data: Additional data files. Note: in v2 these should be added
-            via backend-specific override attrs instead.
+        data: Additional data and dependencies used by the build.
         copts: Additional C compiler options.
         linkopts: Additional C linker options.
         config_settings: PEP 517 config settings.
-        path_tools: Tools to place on PATH during build.
+        path_tools: A mapping of binary targets to names placed on PATH
+            during the build. Use {"//tools:cmake3": "cmake"} to rename,
+            or {"//tools:cmake": ""} to use the executable's basename.
         target_environment: The target environment JSON label.
-        build_env: Environment variables for the build. Note: in v2 use
-            config_settings or site_hooks instead.
-        pre_build_hooks: Pre-build hook executables. Note: in v2 use
-            pre_build_patches or site_hooks instead.
-        post_build_hooks: Post-build hook executables. Note: not directly
-            supported in v2; use pycross_wheel_transform as a post step.
+        build_env: Environment variables passed to the sdist build.
+            Values are subject to $(location) expansion.
+        pre_build_hooks: Executables to run before building the wheel.
+        post_build_hooks: Executables to run after the wheel is built.
         whldir_name: Name for the output .whldir TreeArtifact.
         **kwargs: Additional arguments passed to setuptools_build.
     """
-
-    if build_env:
-        # buildifier: disable=print
-        print("WARNING: pycross_wheel_build build_env is deprecated in v2. " +
-              "Use config_settings or site_hooks instead.")
-
-    if pre_build_hooks:
-        # buildifier: disable=print
-        print("WARNING: pycross_wheel_build pre_build_hooks is deprecated in v2. " +
-              "Use pre_build_patches or site_hooks instead.")
-
-    if post_build_hooks:
-        # buildifier: disable=print
-        print("WARNING: pycross_wheel_build post_build_hooks is deprecated in v2. " +
-              "Use pycross_wheel_transform instead.")
-
-    if data:
-        # buildifier: disable=print
-        print("WARNING: pycross_wheel_build data is deprecated in v2.")
 
     build_kwargs = dict(
         name = name,
         sdist = sdist,
         deps = deps,
         native_deps = native_deps,
+        data = data,
         copts = copts,
         linkopts = linkopts,
         config_settings = config_settings,
         path_tools = path_tools,
+        build_env = build_env,
+        pre_build_hooks = pre_build_hooks,
+        post_build_hooks = post_build_hooks,
     )
 
     if target_environment:
