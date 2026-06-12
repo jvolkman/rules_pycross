@@ -33,9 +33,52 @@ def build_standard_venv(ctx: BuildContext) -> None:
     with open(site_dir / "_pycross_sys_prefix.pth", "w") as f:
         f.write(f'import sys; sys.prefix = sys.exec_prefix = "{ctx.env_dir}"\n')
 
-    if ctx.prefix in ctx.target_python.parents:
+    # Resolve base_prefix from queried sysconfig, falling back to the old
+    # target_python.parent.parent heuristic.  ctx.prefix is the sandbox execroot.
+    base_prefix = ctx.sysconfig_vars.get("installed_base")
+    if base_prefix:
+        base_prefix = Path(base_prefix)
+    elif ctx.prefix in ctx.target_python.parents:
+        base_prefix = ctx.target_python.parent.parent
+    else:
+        base_prefix = None
+
+    platbase_prefix = ctx.sysconfig_vars.get("installed_platbase")
+    if platbase_prefix:
+        platbase_prefix = Path(platbase_prefix)
+    elif ctx.prefix in ctx.target_python.parents:
+        platbase_prefix = ctx.target_python.parent.parent
+    else:
+        platbase_prefix = None
+
+    if base_prefix or platbase_prefix:
+        parts = []
+        need_os = False
+
+        if base_prefix:
+            # If the base_prefix is inside the sandbox execroot, write it as a
+            # relative path from site-packages (using the .pth 'sitedir' variable)
+            # so it resolves correctly regardless of the absolute execroot path.
+            if ctx.prefix in base_prefix.parents or base_prefix == ctx.prefix:
+                rel_base = os.path.relpath(base_prefix, site_dir)
+                parts.append(f'sys.base_prefix = os.path.abspath(os.path.join(sitedir, "{rel_base}"))')
+                need_os = True
+            else:
+                parts.append(f'sys.base_prefix = "{base_prefix}"')
+
+        if platbase_prefix:
+            if ctx.prefix in platbase_prefix.parents or platbase_prefix == ctx.prefix:
+                rel_platbase = os.path.relpath(platbase_prefix, site_dir)
+                parts.append(f'sys.base_exec_prefix = os.path.abspath(os.path.join(sitedir, "{rel_platbase}"))')
+                need_os = True
+            else:
+                parts.append(f'sys.base_exec_prefix = "{platbase_prefix}"')
+
+        imports = "import os, sys; " if need_os else "import sys; "
+        pth_line = imports + "; ".join(parts) + "\n"
+
         with open(site_dir / "_pycross_sys_base_prefix.pth", "w") as f:
-            f.write(f'import sys; sys.base_prefix = sys.base_exec_prefix = "{ctx.target_python.parent.parent}"\n')
+            f.write(pth_line)
 
     with open(site_dir / "deps.pth", "w") as f:
         for dep_path in ctx.python_paths:

@@ -63,32 +63,47 @@ def find_sysconfig_data(search_paths: List[Path]) -> Dict[str, Any]:
     return {}
 
 
+def _query_interpreter(python_exe: Path) -> Optional[Dict[str, Any]]:
+    query_args = (
+        python_exe,
+        "-c",
+        textwrap.dedent(
+            """\
+        import importlib, json, sysconfig, sys
+        sysconfigdata_name = sysconfig._get_sysconfigdata_name()
+        if sysconfigdata_name:
+            try:
+                result = dict(importlib.import_module(sysconfigdata_name).build_time_vars)
+            except ImportError:
+                result = {}
+        else:
+            result = {}
+        result["installed_base"] = sysconfig.get_config_var("installed_base") or sys.base_prefix
+        result["installed_platbase"] = sysconfig.get_config_var("installed_platbase") or sys.base_exec_prefix
+        print(json.dumps(result))
+        """
+        ),
+    )
+    try:
+        out_json = subprocess.check_output(args=query_args, timeout=5, stderr=subprocess.DEVNULL)
+        return json.loads(out_json)
+    except Exception as e:
+        print(
+            f"WARNING: Could not query interpreter {python_exe} (expected for cross-compilation): {e}", file=sys.stderr
+        )
+        return None
+
+
 def load_target_sysconfig(ctx: BuildContext) -> Dict[str, Any]:
     """Load target environment sysconfig build variables."""
-    if ctx.exec_python == ctx.target_python:
-        query_args = (
-            ctx.exec_python,
-            "-c",
-            textwrap.dedent(
-                """\
-            import importlib, json, sysconfig
-            sysconfigdata_name = sysconfig._get_sysconfigdata_name()
-            if sysconfigdata_name:
-                vars = importlib.import_module(sysconfigdata_name).build_time_vars
-                print(json.dumps(vars))
-            else:
-                print("{}")
-            """
-            ),
-        )
-        try:
-            vars_json = subprocess.check_output(args=query_args)
-            return json.loads(vars_json)
-        except subprocess.CalledProcessError as cpe:
-            print("Failed to query exec_python for sysconfig vars", file=sys.stderr)
-            print(cpe.output.decode(), file=sys.stderr)
-            raise
+    # Try to query the target python directly first (works for host and same-arch target toolchains).
+    # Falls back to static _sysconfigdata for cross-compilation where the target
+    # interpreter cannot be executed on the host.
+    result = _query_interpreter(ctx.target_python)
+    if result is not None:
+        return result
 
+    # Fallback for cross-compilation: load static _sysconfigdata
     if not ctx.target_sys_path:
         ctx.target_sys_path = determine_target_path_from_exec(ctx.exec_python, ctx.target_python)
 
