@@ -40,6 +40,12 @@ COMMON_IMPORT_ATTRS = dict(
     default_build_dependencies = attr.string_list(
         doc = "A list of package keys (name or name@version) that will be used as default build dependencies.",
     ),
+    squash_extras = attr.bool(
+        doc = "Merge extra dependencies into base dependencies. " +
+              "Produces a flat dependency graph without [extra] targets, " +
+              "matching V1 behavior.",
+        default = False,
+    ),
 )
 
 # Attrs for the package tag

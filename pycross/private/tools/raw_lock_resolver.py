@@ -77,6 +77,7 @@ class GenerationContext:
         local_wheels: Dict[str, str],
         remote_wheels: Dict[str, PackageFile],
         always_include_sdist: bool,
+        squash_extras: bool = False,
         lock_package_keys: Optional[AbstractSet[PackageKey]] = None,
     ):
         self.target_environments = target_environments
@@ -84,6 +85,7 @@ class GenerationContext:
         self.remote_wheels = remote_wheels
         self.target_environments_by_name = {tenv.name: tenv for tenv in target_environments}
         self.always_include_sdist = always_include_sdist
+        self.squash_extras = squash_extras
         self.lock_package_keys = lock_package_keys
 
     def check_package_compatibility(self, package: RawPackage) -> None:
@@ -249,6 +251,12 @@ class PackageResolver:
             package,
             annotations.ignore_dependencies,
         )
+        if context.squash_extras:
+            for extra, edeps in extra_deps_by_env.items():
+                for env, deps in edeps.items():
+                    deps_by_env.setdefault(env, set()).update(deps)
+            extra_deps_by_env = {}
+
         self._common_deps = deps_by_env.get(None, set())
         self._env_deps = {k: v for k, v in deps_by_env.items() if k is not None}
 
@@ -490,6 +498,7 @@ def resolve(args: Any) -> ResolvedLockSet:
         local_wheels=local_wheels,
         remote_wheels=remote_wheels,
         always_include_sdist=args.always_include_sdist,
+        squash_extras=args.squash_extras,
         lock_package_keys=set(lock_model.packages.keys()),
     )
 
@@ -689,6 +698,12 @@ def add_shared_flags(parser: ArgumentParser) -> None:
         "--always-include-sdist",
         action="store_true",
         help="If set, always include a package's sdist if one exists.",
+    )
+
+    parser.add_argument(
+        "--squash-extras",
+        action="store_true",
+        help="Merge extra dependencies into base dependencies (v1 compat).",
     )
 
     parser.add_argument(
