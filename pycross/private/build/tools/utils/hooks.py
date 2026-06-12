@@ -91,7 +91,7 @@ def run_post_build_hooks(ctx: BuildContext, wheel_file: Path) -> Path:
         wheel_staging.mkdir(parents=True, exist_ok=True)
         wheel_output.mkdir(parents=True, exist_ok=True)
 
-        # Move wheel to staging
+        # Move wheel to staging for the hook to process
         staged_wheel = wheel_staging / wheel_file.name
         shutil.move(str(wheel_file), str(staged_wheel))
 
@@ -121,12 +121,11 @@ def run_post_build_hooks(ctx: BuildContext, wheel_file: Path) -> Path:
             # Hook modified in place
             wheel_file = staged_wheel
 
-        # Clean up for next iteration
+        # Clean up staging for next iteration (output kept — wheel_file may point there)
         shutil.rmtree(str(wheel_staging), ignore_errors=True)
 
     # Move final wheel back to ctx.wheel_dir
     final_dest = ctx.wheel_dir / wheel_file.name
-    # Ensure dest doesn't exist (if it was somehow left over)
     if final_dest.exists():
         final_dest.unlink()
     shutil.move(str(wheel_file), str(final_dest))

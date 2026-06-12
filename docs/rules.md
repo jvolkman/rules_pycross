@@ -61,7 +61,7 @@ load("@rules_pycross//pycross:defs.bzl", "pycross_path_tool")
 pycross_path_tool(<a href="#pycross_path_tool-name">name</a>, <a href="#pycross_path_tool-executable_name">executable_name</a>, <a href="#pycross_path_tool-tool">tool</a>)
 </pre>
 
-
+Wraps an executable target with a custom PATH name. Used internally by pycross_wheel_build; not intended for standalone use.
 
 **ATTRIBUTES**
 

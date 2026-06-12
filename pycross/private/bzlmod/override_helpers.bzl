@@ -32,43 +32,43 @@ def encode_build_system_attrs(tag):
     backend_attrs = {}
 
     copts = getattr(tag, "copts", None)
-    if copts:
+    if copts != None and copts:
         backend_attrs["copts"] = json.encode(copts)
 
     linkopts = getattr(tag, "linkopts", None)
-    if linkopts:
+    if linkopts != None and linkopts:
         backend_attrs["linkopts"] = json.encode(linkopts)
 
     native_deps = getattr(tag, "native_deps", None)
-    if native_deps:
+    if native_deps != None and native_deps:
         backend_attrs["native_deps"] = json.encode([str(dep) for dep in native_deps])
 
     config_settings = getattr(tag, "config_settings", None)
-    if config_settings:
+    if config_settings != None and config_settings:
         backend_attrs["config_settings"] = json.encode(config_settings)
 
     tool_deps = getattr(tag, "tool_deps", None)
-    if tool_deps:
+    if tool_deps != None and tool_deps:
         backend_attrs["tool_deps"] = json.encode(tool_deps)
 
     build_env = getattr(tag, "build_env", None)
-    if build_env:
+    if build_env != None and build_env:
         backend_attrs["build_env"] = json.encode(build_env)
 
     data = getattr(tag, "data", None)
-    if data:
+    if data != None and data:
         backend_attrs["data"] = json.encode([str(dep) for dep in data])
 
     pre_build_hooks = getattr(tag, "pre_build_hooks", None)
-    if pre_build_hooks:
+    if pre_build_hooks != None and pre_build_hooks:
         backend_attrs["pre_build_hooks"] = json.encode([str(dep) for dep in pre_build_hooks])
 
     post_build_hooks = getattr(tag, "post_build_hooks", None)
-    if post_build_hooks:
+    if post_build_hooks != None and post_build_hooks:
         backend_attrs["post_build_hooks"] = json.encode([str(dep) for dep in post_build_hooks])
 
     path_tools = getattr(tag, "path_tools", None)
-    if path_tools:
+    if path_tools != None and path_tools:
         backend_attrs["path_tools"] = json.encode([str(dep) for dep in path_tools])
 
     return backend_attrs

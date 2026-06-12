@@ -29,8 +29,7 @@ bazel clean --expunge
 echo "Running bazel build //..."
 bazel build //...
 # Query if there are any test targets in the workspace
-test_targets=$(bazel query "tests(//...)" 2>/dev/null || true)
-if [[ -n "${test_targets}" ]]; then
+if bazel query "tests(//...)" --output=label 2>/dev/null | grep -q .; then
   echo "Running bazel test //..."
   bazel test //...
 else
