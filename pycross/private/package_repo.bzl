@@ -12,8 +12,13 @@ The file structure is as follows:
 - _backend/<rule>.bzl      - Backend macros with pre-configured tool deps.
 - <package>/BUILD.bazel    - Pin aliases pointing to //_lock targets.
 
+Naming conventions:
+- Root aliases (//:name) use PEP 503 dashes (pycross convention).
+- Pin directories (//name/) use underscores (rules_python convention).
+
 From a target perspective:
 - //:package             - Alias to the pycross_wheel_library target.
+- //:package[extra]      - Alias to the extra dependency group.
 - //package:pkg          - The pycross_wheel_library target (pinned version).
 - //package:wheel        - The wheel target (pinned version).
 - //package:sdist        - The sdist file (pinned version, if available).
@@ -28,8 +33,8 @@ From a target perspective:
 The idea is that, for a repo named "pypi", something will depend on
 e.g. `@pypi//:numpy`, `@pypi//numpy:pkg`, or `@pypi//numpy`.
 
-The package names in the root of the repo are all normalized per
-https://packaging.python.org/en/latest/specifications/name-normalization.
+Pin directory names use underscores (rules_python convention).
+Root alias names use PEP 503 dashes (pycross convention).
 """
 
 load(":resolved_lock_renderer.bzl", "render_lock_bzl")
@@ -55,7 +60,8 @@ def requirement(pkg):
         pkg, extra = pkg.split("[", 1)
         extra = extra.rstrip("]")
 
-    # Convert given name into normalized package name.
+    # Convert given name into PEP 503 normalized form (dashes).
+    # Root aliases use this form (pycross convention).
     # https://packaging.python.org/en/latest/specifications/name-normalization/#name-normalization
     pkg = pkg.replace("_", "-").replace(".", "-").lower()
     for i in range(len(pkg)):
@@ -65,8 +71,8 @@ def requirement(pkg):
             break
 
     if extra:
-        return "@@{repo_name}//%s:[%s]" % (pkg, extra)
-    return "@@{repo_name}//%s:pkg" % pkg
+        return "@@{repo_name}//:%s[%s]" % (pkg, extra)
+    return "@@{repo_name}//:%s" % pkg
 """
 
 def _requirements_bzl(rctx, pins):
@@ -79,8 +85,6 @@ def _requirements_bzl(rctx, pins):
     for pin in sorted(pins.keys()):
         lines.append('    "@@{repo_name}//:{pin}",'.format(repo_name = rctx.name, pin = pin))
     lines.append("]")
-    lines.append("")
-    lines.append("all_whl_requirements = all_requirements")
 
     return "\n".join(lines) + "\n"
 
@@ -184,6 +188,18 @@ def _package_repo_impl(rctx):
                         pkg["top_level_packages"] = inspection_data["top_level_packages"]
                 break
 
+    # 0.5. Generate modules_mapping.json
+    modules_mapping = {}
+    for pin_name, pin_target in pins.items():
+        pkg = packages.get(pin_target)
+        if pkg:
+            tlps = pkg.get("top_level_packages", [])
+            for tlp in tlps:
+                module_name = tlp.replace("/", ".")
+                modules_mapping[module_name] = pin_name
+
+    rctx.file("modules_mapping.json", json.encode(modules_mapping))
+
     rctx.file("REPO.bazel", "")
     rctx.file("defs.bzl", "")  # Empty file for compatibility
     rctx.file("requirements.bzl", _requirements_bzl(rctx, pins))
@@ -199,32 +215,43 @@ def _package_repo_impl(rctx):
         "",
     ]))
 
-    # 2. Root BUILD.bazel with //:package aliases
+    # 2. Root BUILD.bazel with //:package aliases (PEP 503 dash-form names)
     root_build_lines = [
         'package(default_visibility = ["//visibility:public"])',
         "",
-        'exports_files(["defs.bzl", "requirements.bzl"])',
+        'exports_files(["defs.bzl", "requirements.bzl", "modules_mapping.json"])',
         "",
     ]
     for pin_name in sorted(pins.keys()):
+        us_name = _underscore_name(pin_name)
+        package = packages[pins[pin_name]]
+
+        # //:pin-name -> //pin_name:pkg
         root_build_lines.extend([
             "alias(",
             '    name = "{}",'.format(pin_name),
-            '    actual = "//{}:pkg",'.format(pin_name),
+            '    actual = "//{}:pkg",'.format(us_name),
             ")",
             "",
         ])
+
+        # //:pin-name[extra] -> //pin_name:[extra]
+        for extra_name in sorted(package.get("extra_dependencies", {}).keys()):
+            root_build_lines.extend([
+                "alias(",
+                '    name = "{}[{}]",'.format(pin_name, extra_name),
+                '    actual = "//{}:[{}]",'.format(us_name, extra_name),
+                ")",
+                "",
+            ])
     rctx.file("BUILD.bazel", "\n".join(root_build_lines))
 
     # 3. Pin directories: //package/ with aliases to //_lock targets
+    # Directory names use underscores (rules_python convention).
     for pin_name, pin_target in sorted(pins.items()):
         package = packages[pin_target]
-        rctx.file("{}/BUILD.bazel".format(pin_name), _pin_build(pin_name, pin_name, pin_target, package))
-
-        # Also create a rules_python-compatible underscore directory if different
         underscore_name = _underscore_name(pin_name)
-        if underscore_name != pin_name:
-            rctx.file("{}/BUILD.bazel".format(underscore_name), _pin_build(underscore_name, pin_name, pin_target, package))
+        rctx.file("{}/BUILD.bazel".format(underscore_name), _pin_build(underscore_name, pin_name, pin_target, package))
 
     # 4. _wheel/ and _sdist/ directories for versioned artifact access
     wheel_lines = [
@@ -309,7 +336,7 @@ def _package_repo_impl(rctx):
         for pkg in config["tool_packages"]:
             norm_pkg = _normalize_name(pkg)
             if norm_pkg in normalized_locked_package_names:
-                tool_deps_labels.append("//{}:pkg".format(norm_pkg))
+                tool_deps_labels.append("//{}:pkg".format(_underscore_name(pkg)))
 
         lines = [
             '"""Backend macro with pre-configured tool defaults for this lock repo."""',
