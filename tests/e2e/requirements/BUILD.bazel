@@ -51,8 +51,17 @@ py_test(
         "@uv//attrs:pkg",
         "@uv//beautifulsoup4:pkg",
         "@uv//ipython:pkg",
-        "@uv//python-dateutil:pkg",
+        "@uv//python_dateutil:pkg",
         "@uv//regex:pkg",
         "@uv//six:pkg",
     ],
+)
+
+py_test(
+    name = "test_modules_mapping",
+    srcs = ["test_modules_mapping.py"],
+    data = ["@uv//:modules_mapping.json"],
+    env = {
+        "MAPPING_JSON": "$(location @uv//:modules_mapping.json)",
+    },
 )

@@ -1,4 +1,5 @@
 load("@rules_pycross//pycross:defs.bzl", "pycross_wheel_build", "pycross_wheel_library")
+load("@rules_python//python:defs.bzl", "py_binary", "py_library")
 load("@rules_shell//shell:sh_binary.bzl", "sh_binary")
 
 package(default_visibility = ["//visibility:public"])
@@ -40,4 +41,39 @@ pycross_wheel_build(
 pycross_wheel_library(
     name = "setproctitle_v1",
     wheel = ":setproctitle_v1_compat",
+)
+
+# ====== Python hooks and repair_wheel test ======
+
+py_library(
+    name = "hook_dep",
+    srcs = ["hooks/hook_dep.py"],
+)
+
+py_binary(
+    name = "py_pre_build_hook",
+    srcs = ["hooks/pre_build_hook.py"],
+    main = "hooks/pre_build_hook.py",
+    deps = [":hook_dep"],
+)
+
+pycross_wheel_build(
+    name = "setproctitle_v1_compat_with_repair",
+    build_deps = [
+        "@uv//setuptools:pkg",
+        "@uv//wheel:pkg",
+    ],
+    post_build_hooks = [
+        "@rules_pycross//pycross/hooks:repair_wheel",
+    ],
+    pre_build_hooks = [
+        ":py_pre_build_hook",
+    ],
+    sdist = "@uv//setproctitle:sdist",
+    tags = ["manual"],
+)
+
+pycross_wheel_library(
+    name = "setproctitle_v1_repaired",
+    wheel = ":setproctitle_v1_compat_with_repair",
 )
