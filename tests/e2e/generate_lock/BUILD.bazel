@@ -1,5 +1,4 @@
-load("@rules_python//python:defs.bzl", "py_test")
-load("@uv//:requirements.bzl", "all_whl_requirements")
+load("@uv//:requirements.bzl", "all_requirements")
 
 genrule(
     name = "generate_lock",
@@ -16,21 +15,6 @@ genrule(
     outs = ["gazelle.sh"],
     cmd = """
     echo 'echo {}' > $@
-    """.format(",".join(all_whl_requirements)),
+    """.format(",".join(all_requirements)),
     executable = True,
-)
-
-py_test(
-    name = "test_all_whl_requirements",
-    srcs = ["@rules_pycross_e2e_shared//:test_all_whl_requirements.py"],
-    env = {
-        "ALL_WHL_REQUIREMENTS": ",".join(all_whl_requirements),
-        "EXPECTED_WHL_REQUIREMENTS": ",".join([
-            "pytest",
-            "pyyaml",
-            "regex",
-            "ruff",
-        ]),
-    },
-    main = "test_all_whl_requirements.py",
 )

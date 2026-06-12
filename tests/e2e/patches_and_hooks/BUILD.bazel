@@ -1,1 +1,40 @@
+load("@rules_pycross//pycross:defs.bzl", "pycross_wheel_build", "pycross_wheel_library")
+load("@rules_shell//shell:sh_binary.bzl", "sh_binary")
+
 package(default_visibility = ["//visibility:public"])
+
+# ====== V1 compat regression test ======
+# Tests pycross_wheel_build with build_env, data, pre_build_hooks, post_build_hooks.
+# Uses setproctitle sdist from the lock repo and setuptools/wheel as build deps.
+
+sh_binary(
+    name = "pre_build_hook",
+    srcs = ["hooks/pre_build_hook.sh"],
+)
+
+sh_binary(
+    name = "post_build_hook",
+    srcs = ["hooks/post_build_hook.sh"],
+)
+
+pycross_wheel_build(
+    name = "setproctitle_v1_compat",
+    build_deps = [
+        "@uv//setuptools:pkg",
+        "@uv//wheel:pkg",
+    ],
+    build_env = {
+        "MY_CUSTOM_VAR": "hello_from_build_env",
+        "MY_DATA_FILE": "$(location hooks/build_data.txt)",
+    },
+    data = ["hooks/build_data.txt"],
+    post_build_hooks = [":post_build_hook"],
+    pre_build_hooks = [":pre_build_hook"],
+    sdist = "@uv//setproctitle:sdist",
+    tags = ["manual"],
+)
+
+pycross_wheel_library(
+    name = "setproctitle_v1",
+    wheel = ":setproctitle_v1_compat",
+)

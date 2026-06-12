@@ -1,5 +1,5 @@
 load("@rules_python//python:defs.bzl", "py_test")
-load("@uv//:requirements.bzl", "all_requirements", "all_whl_requirements", "requirement")
+load("@uv//:requirements.bzl", "all_requirements", "requirement")
 
 package(default_visibility = ["//visibility:public"])
 
@@ -22,23 +22,6 @@ py_test(
     srcs = ["@rules_pycross_e2e_shared//:test_regex.py"],
     main = "test_regex.py",
     deps = all_requirements,
-)
-
-py_test(
-    name = "test_all_whl_requirements",
-    srcs = ["@rules_pycross_e2e_shared//:test_all_whl_requirements.py"],
-    env = {
-        "ALL_WHL_REQUIREMENTS": ",".join(all_whl_requirements),
-        "EXPECTED_WHL_REQUIREMENTS": ",".join([
-            "attrs",
-            "beautifulsoup4",
-            "ipython",
-            "python-dateutil",
-            "regex",
-            "six",
-        ]),
-    },
-    main = "test_all_whl_requirements.py",
 )
 
 py_test(

@@ -5,3 +5,9 @@ py_test(
     srcs = ["test_setproctitle.py"],
     deps = ["@uv//setproctitle:pkg"],
 )
+
+py_test(
+    name = "test_setproctitle_v1",
+    srcs = ["test_setproctitle_v1.py"],
+    deps = ["//:setproctitle_v1"],
+)

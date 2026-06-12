@@ -77,6 +77,7 @@ def run_post_build_hooks(ctx: BuildContext, wheel_file: Path) -> Path:
     Returns the final wheel file path.
     """
     hook_paths = ctx.bazel_config.get("post_build_hooks", [])
+    wheel_file = Path(wheel_file)
     if not hook_paths:
         return wheel_file
 
@@ -123,4 +124,14 @@ def run_post_build_hooks(ctx: BuildContext, wheel_file: Path) -> Path:
         # Clean up for next iteration
         shutil.rmtree(str(wheel_staging), ignore_errors=True)
 
-    return wheel_file
+    # Move final wheel back to ctx.wheel_dir
+    final_dest = ctx.wheel_dir / wheel_file.name
+    # Ensure dest doesn't exist (if it was somehow left over)
+    if final_dest.exists():
+        final_dest.unlink()
+    shutil.move(str(wheel_file), str(final_dest))
+    
+    # Clean up output dir
+    shutil.rmtree(str(wheel_output), ignore_errors=True)
+
+    return final_dest
