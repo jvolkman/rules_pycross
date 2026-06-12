@@ -10,6 +10,12 @@ from pycross.private.build.tools.utils.context import BuildContext
 from pycross.private.build.tools.utils.context import replace_placeholder
 
 
+def _clear_stale_runfiles_env(env: Dict[str, str]) -> None:
+    """Clear parent process runfiles env vars so hook subprocesses derive their own."""
+    for var in ("RUNFILES_DIR", "RUNFILES_MANIFEST_FILE", "RUNFILES_MANIFEST_ONLY"):
+        env.pop(var, None)
+
+
 def run_pre_build_hook(ctx: BuildContext, hook_config: Dict[str, Any]) -> None:
     """Execute a pre-build hook inside the build sandbox.
 
@@ -35,6 +41,8 @@ def run_pre_build_hook(ctx: BuildContext, hook_config: Dict[str, Any]) -> None:
     # Merge hook-specific env vars
     for key, value in hook_config.get("env", {}).items():
         hook_env[key] = replace_placeholder(ctx.prefix, value)
+
+    _clear_stale_runfiles_env(hook_env)
 
     try:
         subprocess.check_output(
@@ -99,6 +107,8 @@ def run_post_build_hooks(ctx: BuildContext, wheel_file: Path) -> Path:
         hook_env["PYCROSS_BAZEL_ROOT"] = str(ctx.prefix)
         hook_env["PYCROSS_WHEEL_FILE"] = str(staged_wheel)
         hook_env["PYCROSS_WHEEL_OUTPUT_DIR"] = str(wheel_output)
+
+        _clear_stale_runfiles_env(hook_env)
 
         try:
             subprocess.check_output(

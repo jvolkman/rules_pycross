@@ -84,6 +84,16 @@ def _get_target_os_and_cpu(ctx):
 
     return target_os, target_cpu
 
+def _is_shared_library(path):
+    filename = path.split("/")[-1]
+    if filename.endswith(".dylib"):
+        return True
+    if filename.endswith(".so"):
+        return True
+    if ".so." in filename:
+        return True
+    return False
+
 def extract_cc_layer(ctx, native_deps, copts, linkopts, meson_properties = {}):
     """Extracts CC toolchain info, headers, and libraries from native deps.
 
@@ -139,7 +149,7 @@ def extract_cc_layer(ctx, native_deps, copts, linkopts, meson_properties = {}):
             lib_path = absolutize_path_in_str(ctx.workspace_name, "$$EXT_BUILD_ROOT$$/", lib.path)
             if lib.path.endswith(".a"):
                 static_libs.append(lib_path)
-            elif lib.path.endswith(".so") or lib.path.endswith(".dylib"):
+            elif _is_shared_library(lib.path):
                 shared_libs.append(lib_path)
 
     make_vars = {}

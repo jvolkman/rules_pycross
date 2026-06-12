@@ -77,8 +77,10 @@ def _requirements_bzl(rctx, pins):
         "all_requirements = [",
     ]
     for pin in sorted(pins.keys()):
-        lines.append('    "@@{repo_name}//{pin}:pkg",'.format(repo_name = rctx.name, pin = pin))
+        lines.append('    "@@{repo_name}//:{pin}",'.format(repo_name = rctx.name, pin = pin))
     lines.append("]")
+    lines.append("")
+    lines.append("all_whl_requirements = all_requirements")
 
     return "\n".join(lines) + "\n"
 

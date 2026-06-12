@@ -8,8 +8,8 @@ from pathlib import Path
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Repair a Python wheel by bundling native shared libraries.")
-    parser.add_argument("--wheel-dir", required=True, help="Path to input wheel directory.")
-    parser.add_argument("--out-wheel-dir", required=True, help="Path to output wheel directory.")
+    parser.add_argument("--wheel-dir", required=False, help="Path to input wheel directory.")
+    parser.add_argument("--out-wheel-dir", required=False, help="Path to output wheel directory.")
     parser.add_argument(
         "--lib-dir", action="append", default=[], help="Library directory for repairwheel (can be repeated)."
     )
@@ -17,21 +17,47 @@ def main() -> None:
 
     args = parser.parse_args()
 
-    whl_files = glob.glob(os.path.join(args.wheel_dir, "*.whl"))
-    if not whl_files:
-        print("ERROR: No .whl file found in wheel directory: " + args.wheel_dir, file=sys.stderr)
-        sys.exit(1)
-    wheel_file = whl_files[0]
+    wheel_dir = args.wheel_dir
+    out_wheel_dir = args.out_wheel_dir
+    wheel_file = None
 
-    lib_paths = [str(Path(p).absolute()) for p in args.lib_dir]
+    if not wheel_dir:
+        wheel_file_env = os.environ.get("PYCROSS_WHEEL_FILE")
+        if wheel_file_env:
+            wheel_file = Path(wheel_file_env)
+            wheel_dir = str(wheel_file.parent)
+        else:
+            print("ERROR: --wheel-dir is required if PYCROSS_WHEEL_FILE is not set", file=sys.stderr)
+            sys.exit(1)
+
+    if not out_wheel_dir:
+        out_wheel_dir = os.environ.get("PYCROSS_WHEEL_OUTPUT_DIR") or os.environ.get("PYCROSS_WHEEL_OUTPUT_ROOT")
+        if not out_wheel_dir:
+            print("ERROR: --out-wheel-dir is required if PYCROSS_WHEEL_OUTPUT_DIR is not set", file=sys.stderr)
+            sys.exit(1)
+
+    if not wheel_file:
+        whl_files = glob.glob(os.path.join(wheel_dir, "*.whl"))
+        if not whl_files:
+            print("ERROR: No .whl file found in wheel directory: " + wheel_dir, file=sys.stderr)
+            sys.exit(1)
+        wheel_file = Path(whl_files[0])
+
+    lib_dirs = args.lib_dir
+    if not lib_dirs:
+        lib_path_env = os.environ.get("PYCROSS_LIBRARY_PATH")
+        if lib_path_env:
+            lib_dirs = lib_path_env.split(os.pathsep)
+
+    lib_paths = [str(Path(p).absolute()) for p in lib_dirs]
 
     cmd = [
         sys.executable,
         "-m",
         "repairwheel",
-        wheel_file,
+        str(wheel_file),
         "--output-dir",
-        args.out_wheel_dir,
+        out_wheel_dir,
         "--no-sys-paths",
     ]
 
@@ -57,7 +83,7 @@ def main() -> None:
                 target_env_data = json.load(f)
             compatibility_tags = set(target_env_data.get("compatibility_tags", []))
 
-            repaired_wheels = list(Path(args.out_wheel_dir).glob("*.whl"))
+            repaired_wheels = list(Path(out_wheel_dir).glob("*.whl"))
             if not repaired_wheels:
                 print("ERROR: No output wheel found in repaired output directory", file=sys.stderr)
                 sys.exit(1)
