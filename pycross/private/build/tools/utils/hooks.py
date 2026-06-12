@@ -130,7 +130,7 @@ def run_post_build_hooks(ctx: BuildContext, wheel_file: Path) -> Path:
     if final_dest.exists():
         final_dest.unlink()
     shutil.move(str(wheel_file), str(final_dest))
-    
+
     # Clean up output dir
     shutil.rmtree(str(wheel_output), ignore_errors=True)
 

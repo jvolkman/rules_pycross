@@ -51,6 +51,28 @@ py_console_script_binary which expects a :dist_info filegroup.
 | <a id="pycross_dist_info-pkg"></a>pkg |  A pycross_wheel_library target.   | <a href="https://bazel.build/concepts/labels">Label</a> | required |  |
 
 
+<a id="pycross_path_tool"></a>
+
+## pycross_path_tool
+
+<pre>
+load("@rules_pycross//pycross:defs.bzl", "pycross_path_tool")
+
+pycross_path_tool(<a href="#pycross_path_tool-name">name</a>, <a href="#pycross_path_tool-executable_name">executable_name</a>, <a href="#pycross_path_tool-tool">tool</a>)
+</pre>
+
+
+
+**ATTRIBUTES**
+
+
+| Name  | Description | Type | Mandatory | Default |
+| :------------- | :------------- | :------------- | :------------- | :------------- |
+| <a id="pycross_path_tool-name"></a>name |  A unique name for this target.   | <a href="https://bazel.build/concepts/labels#target-names">Name</a> | required |  |
+| <a id="pycross_path_tool-executable_name"></a>executable_name |  -   | String | required |  |
+| <a id="pycross_path_tool-tool"></a>tool |  -   | <a href="https://bazel.build/concepts/labels">Label</a> | required |  |
+
+
 <a id="pycross_pdm_lock_model"></a>
 
 ## pycross_pdm_lock_model
@@ -382,7 +404,7 @@ to the v2 backend.
 | <a id="pycross_wheel_build-copts"></a>copts |  Additional C compiler options.   |  `[]` |
 | <a id="pycross_wheel_build-linkopts"></a>linkopts |  Additional C linker options.   |  `[]` |
 | <a id="pycross_wheel_build-config_settings"></a>config_settings |  PEP 517 config settings.   |  `{}` |
-| <a id="pycross_wheel_build-path_tools"></a>path_tools |  A mapping of binary targets to names placed on PATH during the build. Use {"//tools:cmake3": "cmake"} to rename, or {"//tools:cmake": ""} to use the executable's basename.   |  `{}` |
+| <a id="pycross_wheel_build-path_tools"></a>path_tools |  A mapping of binary targets to names placed on PATH during the build. Use {"//tools:cmake3": "cmake"} to rename, or {"//tools:cmake": ""} to use the executable's basename. Can also be passed as a list of targets directly.   |  `{}` |
 | <a id="pycross_wheel_build-target_environment"></a>target_environment |  The target environment JSON label.   |  `None` |
 | <a id="pycross_wheel_build-build_env"></a>build_env |  Environment variables passed to the sdist build. Values are subject to $(location) expansion.   |  `{}` |
 | <a id="pycross_wheel_build-pre_build_hooks"></a>pre_build_hooks |  Executables to run before building the wheel.   |  `[]` |

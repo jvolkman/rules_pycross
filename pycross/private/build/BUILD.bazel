@@ -34,6 +34,7 @@ bzl_library(
     name = "wheel_build",
     srcs = ["wheel_build.bzl"],
     deps = [
+        "//pycross/private/build/rules:path_tool",
         "//pycross/private/build/rules:setuptools_build",
     ],
 )

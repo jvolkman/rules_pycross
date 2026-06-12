@@ -7,8 +7,8 @@ load("//pycross/private:cc_toolchain_util.bzl", "get_libraries")
 def register_repair_action(
         ctx,
         input_wheel_dir,
-        native_deps,
         repair_tool,
+        native_deps = [],
         target_environment = None,
         repair_deps = []):
     """Registers the repairwheel action to bundle native shared libs.

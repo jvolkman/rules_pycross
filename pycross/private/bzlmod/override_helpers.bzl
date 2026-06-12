@@ -30,16 +30,47 @@ def encode_build_system_attrs(tag):
         A dict of JSON-encoded backend attribute values.
     """
     backend_attrs = {}
-    if tag.copts:
-        backend_attrs["copts"] = json.encode(tag.copts)
-    if tag.linkopts:
-        backend_attrs["linkopts"] = json.encode(tag.linkopts)
-    if tag.native_deps:
-        backend_attrs["native_deps"] = json.encode([str(dep) for dep in tag.native_deps])
-    if tag.config_settings:
-        backend_attrs["config_settings"] = json.encode(tag.config_settings)
-    if tag.tool_deps:
-        backend_attrs["tool_deps"] = json.encode(tag.tool_deps)
+
+    copts = getattr(tag, "copts", None)
+    if copts:
+        backend_attrs["copts"] = json.encode(copts)
+
+    linkopts = getattr(tag, "linkopts", None)
+    if linkopts:
+        backend_attrs["linkopts"] = json.encode(linkopts)
+
+    native_deps = getattr(tag, "native_deps", None)
+    if native_deps:
+        backend_attrs["native_deps"] = json.encode([str(dep) for dep in native_deps])
+
+    config_settings = getattr(tag, "config_settings", None)
+    if config_settings:
+        backend_attrs["config_settings"] = json.encode(config_settings)
+
+    tool_deps = getattr(tag, "tool_deps", None)
+    if tool_deps:
+        backend_attrs["tool_deps"] = json.encode(tool_deps)
+
+    build_env = getattr(tag, "build_env", None)
+    if build_env:
+        backend_attrs["build_env"] = json.encode(build_env)
+
+    data = getattr(tag, "data", None)
+    if data:
+        backend_attrs["data"] = json.encode([str(dep) for dep in data])
+
+    pre_build_hooks = getattr(tag, "pre_build_hooks", None)
+    if pre_build_hooks:
+        backend_attrs["pre_build_hooks"] = json.encode([str(dep) for dep in pre_build_hooks])
+
+    post_build_hooks = getattr(tag, "post_build_hooks", None)
+    if post_build_hooks:
+        backend_attrs["post_build_hooks"] = json.encode([str(dep) for dep in post_build_hooks])
+
+    path_tools = getattr(tag, "path_tools", None)
+    if path_tools:
+        backend_attrs["path_tools"] = json.encode([str(dep) for dep in path_tools])
+
     return backend_attrs
 
 def make_override_extension(backend_name, build_backend, override_attrs):

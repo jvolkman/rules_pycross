@@ -90,6 +90,11 @@ BUILD_SYSTEM_ATTRS = dict(
     native_deps = attr.label_list(doc = "CC dependencies to link against."),
     config_settings = attr.string_list_dict(doc = "Setup configuration arguments."),
     tool_deps = attr.string_dict(doc = "Overrides for built-in dependencies."),
+    build_env = attr.string_dict(doc = "Extra environment variables passed to the sdist build."),
+    data = attr.label_list(doc = "Additional data and dependencies used by the build."),
+    pre_build_hooks = attr.label_list(doc = "Executables to run before building the wheel."),
+    post_build_hooks = attr.label_list(doc = "Executables to run after the wheel is built."),
+    path_tools = attr.label_list(doc = "A list of binary targets placed on PATH during the build."),
 )
 
 CREATE_ENVIRONMENTS_ATTRS = _CREATE_ENVIRONMENTS_ATTRS

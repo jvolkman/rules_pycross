@@ -63,6 +63,14 @@ bzl_library(
 )
 
 bzl_library(
+    name = "path_tool",
+    srcs = ["path_tool.bzl"],
+    deps = [
+        "//pycross/private:providers",
+    ],
+)
+
+bzl_library(
     name = "backend_config",
     srcs = ["backend_config.bzl"],
 )

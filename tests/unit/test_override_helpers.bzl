@@ -14,6 +14,11 @@ def _test_encode_build_system_attrs_impl(env, target):
         native_deps = ["@bar//lib:lib"],
         config_settings = {"//:my_setting": "1"},
         tool_deps = ["pkg1", "pkg2"],
+        build_env = {"MY_VAR": "val"},
+        data = ["//pkg:data"],
+        pre_build_hooks = ["//pkg:pre_hook"],
+        post_build_hooks = ["//pkg:post_hook"],
+        path_tools = ["//pkg:path_tool"],
     )
     res = encode_build_system_attrs(mock_tag)
 
@@ -25,6 +30,11 @@ def _test_encode_build_system_attrs_impl(env, target):
         "native_deps": json.encode(["@bar//lib:lib"]),
         "config_settings": json.encode({"//:my_setting": "1"}),
         "tool_deps": json.encode(["pkg1", "pkg2"]),
+        "build_env": json.encode({"MY_VAR": "val"}),
+        "data": json.encode(["//pkg:data"]),
+        "pre_build_hooks": json.encode(["//pkg:pre_hook"]),
+        "post_build_hooks": json.encode(["//pkg:post_hook"]),
+        "path_tools": json.encode(["//pkg:path_tool"]),
     })
 
 def _test_encode_build_system_attrs(name):

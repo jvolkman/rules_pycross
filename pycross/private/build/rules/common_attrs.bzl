@@ -64,9 +64,9 @@ CC_BUILD_ATTRS = {
     "linkopts": attr.string_list(),
     "config_settings": attr.string_list_dict(),
     "pkg_config_files": attr.label_list(allow_files = True),
-    "path_tools": attr.label_keyed_string_dict(
-        doc = "A mapping of binary targets to names placed on PATH during the build. " +
-              "If the name (value) is empty, the executable's basename is used.",
+    "path_tools": attr.label_list(
+        doc = "A list of binary targets placed on PATH during the build. " +
+              "Targets can be raw executables or pycross_path_tool targets.",
         cfg = pycross_exec_platform_transition,
     ),
 }

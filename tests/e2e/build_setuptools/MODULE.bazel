@@ -52,7 +52,7 @@ lock_import.import_uv(
 )
 lock_import.package(
     name = "psycopg2",
-    build_target = "@//deps/psycopg2",
+    build_target = "@//deps/psycopg2:wheel",
     repo = "uv",
 )
 lock_import.package(
@@ -75,6 +75,13 @@ setuptools.override(
 setuptools.override(
     name = "zstandard",
     copts = ["-O2"],
+    repo = "uv",
+)
+setuptools.override(
+    name = "pyyaml",
+    build_env = {
+        "PYYAML_FORCE_LIBYAML": "0",
+    },
     repo = "uv",
 )
 

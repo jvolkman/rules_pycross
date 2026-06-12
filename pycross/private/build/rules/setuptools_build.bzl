@@ -1,5 +1,6 @@
 """Implementation of the setuptools_build rule."""
 
+load("//pycross/private:providers.bzl", "PycrossPathToolInfo")
 load("//pycross/private/build:transitions.bzl", "pycross_exec_platform_transition")
 load("//pycross/private/build/actions:cc_layer.bzl", "extract_cc_layer")
 load("//pycross/private/build/actions:pep517_action.bzl", "register_pep517_action")
@@ -15,10 +16,27 @@ def _setuptools_build_impl(ctx):
     )
 
     tool_executables = []
-    for target, tool_name in ctx.attr.path_tools.items():
-        exe = target[DefaultInfo].files_to_run.executable
-        name = tool_name if tool_name else exe.basename
-        tool_executables.append(struct(name = name, file = exe, files_to_run = target[DefaultInfo].files_to_run))
+    for target in ctx.attr.path_tools:
+        if PycrossPathToolInfo in target:
+            tool_info = target[PycrossPathToolInfo]
+            tool_executables.append(struct(
+                name = tool_info.name,
+                file = tool_info.executable,
+                files_to_run = target[DefaultInfo].files_to_run,
+            ))
+        else:
+            exe = target[DefaultInfo].files_to_run.executable
+            if not exe:
+                files = target[DefaultInfo].files.to_list()
+                if files:
+                    exe = files[0]
+            if not exe:
+                fail("Tool target must provide an executable: " + str(target.label))
+            tool_executables.append(struct(
+                name = exe.basename,
+                file = exe,
+                files_to_run = target[DefaultInfo].files_to_run,
+            ))
 
     tool_deps = group_tool_deps(ctx.attr.tool_deps)
 

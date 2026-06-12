@@ -12,6 +12,7 @@ for declaring maturin-specific package overrides. Generates:
 
 load(
     "@rules_pycross//pycross:backend.bzl",
+    "BUILD_SYSTEM_ATTRS",
     "create_overrides_repo",
     "encode_build_system_attrs",
 )
@@ -95,40 +96,26 @@ maturin = module_extension(
     tag_classes = dict(
         override = tag_class(
             doc = "Specify maturin-specific package overrides.",
-            attrs = {
-                "name": attr.string(
+            attrs = dict(
+                name = attr.string(
                     doc = "The package name.",
                     mandatory = True,
                 ),
-                "repo": attr.string(
+                repo = attr.string(
                     doc = "The lock repo this override applies to.",
                     mandatory = True,
                 ),
 
                 # Maturin-specific typed attrs:
-                "sdist": attr.label(
+                sdist = attr.label(
                     doc = "Label to the sdist target (e.g. @uv//pkg:sdist). Used to resolve repository visibility in the generated _cargo repo.",
                 ),
-                "cargo_lock": attr.label(
+                cargo_lock = attr.label(
                     doc = "A Cargo.lock file to use. If not provided, the sdist's own Cargo.lock is used.",
                     allow_single_file = [".lock"],
                 ),
-                "copts": attr.string_list(
-                    doc = "Extra C++ compiler options.",
-                ),
-                "linkopts": attr.string_list(
-                    doc = "Extra linker options.",
-                ),
-                "native_deps": attr.label_list(
-                    doc = "CC dependencies to link against.",
-                ),
-                "config_settings": attr.string_list_dict(
-                    doc = "Setup configuration arguments.",
-                ),
-                "tool_deps": attr.string_dict(
-                    doc = "Overrides for built-in dependencies.",
-                ),
-            },
+                **BUILD_SYSTEM_ATTRS
+            ),
         ),
     ),
 )

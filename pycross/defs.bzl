@@ -15,6 +15,7 @@ load("//pycross/private/build:cc_pkg_config.bzl", _pycross_cc_pkg_config = "pycr
 load("//pycross/private/build:repaired_wheel.bzl", _pycross_repaired_wheel = "pycross_repaired_wheel")
 load("//pycross/private/build:wheel_build.bzl", _pycross_wheel_build = "pycross_wheel_build")
 load("//pycross/private/build:wheel_headers.bzl", _pycross_wheel_headers = "pycross_wheel_headers")
+load("//pycross/private/build/rules:path_tool.bzl", _pycross_path_tool = "pycross_path_tool")
 
 PycrossExtractedWheelInfo = _PycrossExtractedWheelInfo
 
@@ -34,5 +35,6 @@ pycross_repaired_wheel = _pycross_repaired_wheel
 pycross_wheel_build = _pycross_wheel_build
 pycross_wheel_transform = _pycross_wheel_transform
 pycross_wheel_zipimport_library = _pycross_wheel_zipimport_library
+pycross_path_tool = _pycross_path_tool
 
 pypi_file = _pypi_file

@@ -9,7 +9,7 @@ packaging = "packaging@26.2"
 patch-ng = "patch-ng@1.19.1"
 pip = "pip@26.1.1"
 poetry-core = "poetry-core@2.4.0"
-repairwheel = "repairwheel@0.4.1"
+repairwheel = "repairwheel@0.6.1"
 tomli-w = "tomli-w@1.1.0"
 
 [packages."altgraph@0.17.5"]
@@ -126,13 +126,13 @@ url = "https://files.pythonhosted.org/packages/bd/24/12818598c362d7f300f18e74db4
 sha256 = "9e5c6bfa8dcc30091c74b0cf803c81fdd29d94f01992a7707bc97babb1141913"
 filename = "pyproject_hooks-1.2.0-py3-none-any.whl"
 
-[packages."repairwheel@0.4.1"]
+[packages."repairwheel@0.6.1"]
 name = "repairwheel"
-version = "0.4.1"
-repo_name = "pypi_repairwheel_0_4_1_py3_none_any_whl_50b895e1"
-url = "https://files.pythonhosted.org/packages/60/81/ac2ace1a8d274fca050d8694d69e6e89cd45debfa3e8b81bd6d8572eff7d/repairwheel-0.4.1-py3-none-any.whl"
-sha256 = "50b895e13962c708305ac8cbd5739e6b35c629cab56a1f8e68c66b177cab8ee8"
-filename = "repairwheel-0.4.1-py3-none-any.whl"
+version = "0.6.1"
+repo_name = "pypi_repairwheel_0_6_1_py3_none_any_whl_4752fd8e"
+url = "https://files.pythonhosted.org/packages/08/f1/dca3c12dd51be728930835b19012370e958f4c62ef363a6f338185684668/repairwheel-0.6.1-py3-none-any.whl"
+sha256 = "4752fd8e24a0f332b3b42c43bf5373971517588bbf4130d8483e84c227d09016"
+filename = "repairwheel-0.6.1-py3-none-any.whl"
 deps = [
     "delvewheel@1.12.1",
     "macholib@1.16.4",

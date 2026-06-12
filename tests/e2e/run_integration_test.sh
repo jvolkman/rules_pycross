@@ -28,9 +28,11 @@ echo "Running bazel clean --expunge..."
 bazel clean --expunge
 echo "Running bazel build //..."
 bazel build //...
-echo "Running bazel test //..."
-bazel test //... || exit_code=$?
-
-if [[ -n "${exit_code:-}" && "${exit_code}" != 4 ]]; then
-  exit $exit_code
+# Query if there are any test targets in the workspace
+test_targets=$(bazel query "tests(//...)" 2>/dev/null || true)
+if [[ -n "${test_targets}" ]]; then
+  echo "Running bazel test //..."
+  bazel test //...
+else
+  echo "No test targets found, skipping bazel test."
 fi

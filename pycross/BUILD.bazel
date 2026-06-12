@@ -45,6 +45,7 @@ bzl_library(
         "//pycross/private/build/actions:tool_extract",
         "//pycross/private/build/rules:common_attrs",
         "//pycross/private/bzlmod:override_helpers",
+        "//pycross/private/bzlmod:tag_attrs",
     ],
 )
 

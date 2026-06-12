@@ -47,6 +47,10 @@ load(
     _encode_build_system_attrs = "encode_build_system_attrs",
     _make_override_extension = "make_override_extension",
 )
+load(
+    "//pycross/private/bzlmod:tag_attrs.bzl",
+    _BUILD_SYSTEM_ATTRS = "BUILD_SYSTEM_ATTRS",
+)
 
 # Providers
 PycrossExtractedWheelInfo = _PycrossExtractedWheelInfo
@@ -77,3 +81,4 @@ group_tool_deps = _group_tool_deps
 make_override_extension = _make_override_extension
 create_overrides_repo = _create_overrides_repo
 encode_build_system_attrs = _encode_build_system_attrs
+BUILD_SYSTEM_ATTRS = _BUILD_SYSTEM_ATTRS

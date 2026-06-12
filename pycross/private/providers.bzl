@@ -14,3 +14,11 @@ PycrossPackageInfo = provider(
         "package_version": "string: The package version.",
     },
 )
+
+PycrossPathToolInfo = provider(
+    doc = "Information about a tool placed on PATH with a custom name.",
+    fields = {
+        "executable": "File: The executable file.",
+        "name": "string: The name to use on PATH.",
+    },
+)

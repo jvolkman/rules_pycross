@@ -28,6 +28,9 @@ pycross_wheel_build(
         "MY_DATA_FILE": "$(location hooks/build_data.txt)",
     },
     data = ["hooks/build_data.txt"],
+    path_tools = {
+        ":pre_build_hook": "my_pre_hook_on_path",
+    },
     post_build_hooks = [":post_build_hook"],
     pre_build_hooks = [":pre_build_hook"],
     sdist = "@uv//setproctitle:sdist",

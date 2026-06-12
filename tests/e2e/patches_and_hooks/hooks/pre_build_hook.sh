@@ -24,17 +24,24 @@ if [ -f "$INIT_PY" ]; then
 fi
 
 # Prepend code to setup.py so it runs BEFORE setup() is called.
-# This verifies that the PEP 517 build subprocess environment has PRE_HOOK_MARKER.
+# This verifies that the PEP 517 build subprocess environment has PRE_HOOK_MARKER,
+# and that the renamed path tool is available on PATH.
 SETUP_PY="setup.py"
 if [ -f "$SETUP_PY" ]; then
     echo "Found $SETUP_PY, prepending verification code" >&2
     cat << 'EOF' > setup.py.tmp
 import os
+import shutil
 init_py = "pkg/setproctitle/__init__.py"
 if os.path.exists(init_py):
     with open(init_py, "a") as f:
+        # Check PRE_HOOK_MARKER
         val = os.environ.get("PRE_HOOK_MARKER", "NOT_FOUND_IN_ENV")
         f.write(f"V1_PRE_HOOK_MARKER = \"{val}\"\n")
+        
+        # Check if my_pre_hook_on_path is on PATH
+        has_tool = shutil.which("my_pre_hook_on_path") is not None
+        f.write(f"V1_HAS_PATH_TOOL = {has_tool}\n")
 EOF
     cat "$SETUP_PY" >> setup.py.tmp
     mv setup.py.tmp "$SETUP_PY"

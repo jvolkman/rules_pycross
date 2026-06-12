@@ -52,25 +52,25 @@ lock_import.import_uv(
 lock_import.package(
     name = "numpy",
     always_build = True,
-    build_target = "@//deps/numpy",
+    build_target = "@//deps/numpy:wheel",
     repo = "uv",
 )
 lock_import.package(
     name = "pandas",
     always_build = True,
-    build_target = "@//deps/pandas",
+    build_target = "@//deps/pandas:wheel",
     repo = "uv",
 )
 lock_import.package(
     name = "contourpy",
     always_build = True,
-    build_target = "@//deps/contourpy",
+    build_target = "@//deps/contourpy:wheel",
     repo = "uv",
 )
 lock_import.package(
     name = "pywavelets",
     always_build = True,
-    build_target = "@//deps/pywavelets",
+    build_target = "@//deps/pywavelets:wheel",
     repo = "uv",
 )
 
