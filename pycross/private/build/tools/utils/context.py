@@ -71,16 +71,10 @@ def load_build_context(config_path: str) -> BuildContext:
 
     build_env = os.environ.copy()
 
-    # Bazel py_binary launcher adds variables that shouldn't leak into the build env.
-    for key in [
-        "PYTHONSAFEPATH",
-        "PYTHONPATH",
-        "PYTHONHOME",
-        "RUNFILES_DIR",
-        "RUNFILES_MANIFEST_FILE",
-        "RUNFILES_MANIFEST_ONLY",
-    ]:
-        build_env.pop(key, None)
+    # Remove Bazel py_binary launcher variables that shouldn't leak into builds.
+    from pycross.private.build.tools.utils.env import scrub_bazel_env
+
+    scrub_bazel_env(build_env)
 
     # Merge user-supplied environment variables from the build_env attribute.
     # User vars take precedence over inherited environment.

@@ -64,14 +64,9 @@ def main() -> None:
     for lp in lib_paths:
         cmd.extend(["--lib-dir", lp])
 
-    env = os.environ.copy()
-    for key in [
-        "PYTHONSAFEPATH",
-        "RUNFILES_DIR",
-        "RUNFILES_MANIFEST_FILE",
-        "RUNFILES_MANIFEST_ONLY",
-    ]:
-        env.pop(key, None)
+    from pycross.private.build.tools.utils.env import make_clean_env
+
+    env = make_clean_env()
     python_path = list(sys.path)
     extra = os.environ.get("REPAIRWHEEL_PYTHONPATH", "")
     if extra:

@@ -25,21 +25,21 @@ def _pycross_git_file_impl(rctx):
     if res.return_code != 0:
         fail("Failed to checkout commit " + commit + ": " + res.stderr)
 
-    # Archive
+    # Archive into the file/ subdirectory.
     filename = rctx.attr.filename
-    rctx.execute(["mkdir", "-p", "file"])
+
+    # Ensure file/ directory exists by writing the BUILD file first.
+    rctx.file("file/BUILD.bazel", """\
+package(default_visibility = ["//visibility:public"])
+exports_files(["{filename}"])
+""".format(filename = filename))
+
     res = rctx.execute(["git", "-C", "checkout", "archive", "--format=tar.gz", "--prefix=repo/", "-o", "../file/" + filename, "HEAD"], quiet = False)
     if res.return_code != 0:
         fail("Failed to create archive: " + res.stderr)
 
-    # Clean up
-    rctx.execute(["rm", "-rf", "checkout"])
-
-    # Create BUILD
-    rctx.file("file/BUILD.bazel", """
-package(default_visibility = ["//visibility:public"])
-exports_files(["{filename}"])
-""".format(filename = filename))
+    # Clean up the git clone.
+    rctx.delete("checkout")
 
 pycross_git_file = repository_rule(
     implementation = _pycross_git_file_impl,

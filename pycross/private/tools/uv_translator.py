@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import tomllib
 from collections import defaultdict
 from collections.abc import Callable
@@ -417,14 +418,13 @@ def collect_and_process_packages(packages_list: list[Dict[str, Any]]) -> Dict[Pa
             else:
                 files.add(parse_file_info(sdist))
         elif "git" in source:
-            import hashlib
-            from urllib.parse import urlparse
-
             git_url = source["git"]
             parsed = urlparse(git_url)
             commit = parsed.fragment
             if not commit:
                 raise Exception(f"Git source must specify a commit hash in the fragment: {git_url}")
+            # Synthetic hash derived from the commit string, NOT a content hash.
+            # Used as a stable cache key — if the commit changes, the hash changes.
             synthetic_hash = hashlib.sha256(commit.encode("utf-8")).hexdigest()
             file_name = f"{package_name}-{package_version}.tar.gz"
             files.add(

@@ -9,10 +9,10 @@ def _pycross_modules_mapping_impl(ctx):
         if PycrossPackageInfo in dep:
             pkg_info = dep[PycrossPackageInfo]
             for tlp in pkg_info.top_level_paths:
-                # Normalize top level path back to import style (e.g. google/cloud -> google.cloud)
-                # Wait, modules_mapping.json usually expects top level modules, maybe not nested?
-                # Actually, rules_python Gazelle uses `module_name` exactly as it appears in import.
-                # If tlp is "google/cloud/storage", the import is "google.cloud.storage".
+                # Convert filesystem paths to Python import names:
+                #   "google/cloud/storage" -> "google.cloud.storage"
+                #   "requests" -> "requests"
+                #   "six.py" -> "six"
                 module_name = tlp.replace("/", ".").removesuffix(".py")
                 mapping[module_name] = pkg_info.package_name
 

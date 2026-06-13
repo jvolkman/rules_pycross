@@ -1,3 +1,11 @@
+"""Extract a native binary from a wheel's bin/ directory.
+
+Used by tool_extract.bzl to pull executables (e.g. ninja) out of
+wheel TreeArtifacts so they can be placed on PATH during builds.
+
+Usage: extract_wheel_bin.py <wheel_dir> <binary_name> <out_file>
+"""
+
 import os
 import shutil
 import sys

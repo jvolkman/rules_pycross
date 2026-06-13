@@ -3,6 +3,12 @@ load("@rules_pycross_internal//:python.bzl", "py_binary", "py_library")
 package(default_visibility = ["//visibility:public"])
 
 py_library(
+    name = "env_utils",
+    srcs = ["utils/env.py"],
+    imports = ["../../../.."],
+)
+
+py_library(
     name = "utils",
     srcs = glob(["utils/*.py"]),
     imports = ["../../../.."],
@@ -74,7 +80,9 @@ py_binary(
     srcs = [
         "repair_wheel_hook.py",
     ],
+    imports = ["../../../.."],
     deps = [
+        ":env_utils",
         "@rules_pycross_internal//deps:packaging",
         "@rules_pycross_internal//deps:repairwheel",
     ],
@@ -84,5 +92,9 @@ py_binary(
     name = "wheel_transformer",
     srcs = [
         "wheel_transformer.py",
+    ],
+    imports = ["../../../.."],
+    deps = [
+        ":env_utils",
     ],
 )
