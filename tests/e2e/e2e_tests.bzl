@@ -19,6 +19,7 @@ def define_e2e_tests():
         "requirements",
         "sdist_repo",
         "bzlmod_flags",
+        "namespace_pkgs",
     ]:
         extra_tags = ["build"] if ws in _BUILD_WORKSPACES else []
         sh_test(

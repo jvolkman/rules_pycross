@@ -1,0 +1,22 @@
+load("@rules_python//python:defs.bzl", "py_test")
+load("@uv//:requirements.bzl", "all_requirements", "requirement")
+
+package(default_visibility = ["//visibility:public"])
+
+py_test(
+    name = "test_namespace",
+    srcs = ["test_namespace.py"],
+    deps = all_requirements,
+)
+
+py_test(
+    name = "test_namespace_direct",
+    srcs = ["test_namespace.py"],
+    main = "test_namespace.py",
+    deps = [
+        requirement("google-cloud-storage"),
+        requirement("google-cloud-pubsub"),
+        requirement("zope.interface"),
+        requirement("zope.event"),
+    ],
+)
