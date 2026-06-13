@@ -219,15 +219,9 @@ def _lock_repos_impl(module_ctx):
             lock_file = lock_file,
         )
 
-        # For hub members, use thin_package_repo; otherwise use full package_repo
+        # For non-hub members, create package_repo immediately.
         hub_name = hub_memberships.get(repo_name, "")
-        if hub_name:
-            thin_package_repo(
-                name = repo_name,
-                resolved_lock_file = lock_file,
-                hub_repo = "pycross_hub_{}".format(hub_name),
-            )
-        else:
+        if not hub_name:
             package_repo(
                 name = repo_name,
                 resolved_lock_file = lock_file,
@@ -236,10 +230,15 @@ def _lock_repos_impl(module_ctx):
                 backend_configs = backend_configs_json,
             )
 
-    # Create hub package repos for shared resources
+    # Create hub package repos and thin repos for hub members.
+    # We need to detect annotation conflicts before creating thin repos,
+    # so hubs are processed first.
     hub_groups = {}  # hub_name -> [repo_name, ...]
     for repo_name, hub_name in hub_memberships.items():
         hub_groups.setdefault(hub_name, []).append(repo_name)
+
+    # Annotation fields that affect pycross_wheel_library targets.
+    _ANNOTATION_FIELDS = ["post_install_patches", "install_exclude_globs"]
 
     for hub_name, member_repos in hub_groups.items():
         hub_repo_name = "pycross_hub_{}".format(hub_name)
@@ -253,13 +252,37 @@ def _lock_repos_impl(module_ctx):
             merged_repo_map.update(data.repo_map)
             merged_sdist_map.update(data.sdist_map)
 
-        # Use the first member's lock file as the "primary" for the hub.
-        # The hub package_repo will read all member locks via member_lock_files.
-        # For now, pass a merged set of lock files as a string_dict.
         member_lock_files = {
             member: str(per_repo_data[member].lock_file)
             for member in member_repos
         }
+
+        # Detect annotation conflicts by reading the resolved lock JSON
+        # for each member and comparing annotation fields.
+        member_packages = {}  # member -> {pkg_key -> pkg_data}
+        for member in member_repos:
+            lock_label = per_repo_data[member].lock_file
+            member_lock = json.decode(module_ctx.read(lock_label))
+            member_packages[member] = member_lock.get("packages", {})
+
+        # Build a map of pkg_key -> [member, ...] for conflicting packages.
+        all_pkg_keys = {}  # pkg_key -> list of (member, pkg_data)
+        for member, pkgs in member_packages.items():
+            for pkg_key, pkg_data in pkgs.items():
+                all_pkg_keys.setdefault(pkg_key, []).append((member, pkg_data))
+
+        conflicts = {}  # pkg_key -> [member_name, ...]
+        for pkg_key, entries in all_pkg_keys.items():
+            if len(entries) <= 1:
+                continue
+            _, first_data = entries[0]
+            for _, other_data in entries[1:]:
+                for field in _ANNOTATION_FIELDS:
+                    if first_data.get(field, []) != other_data.get(field, []):
+                        conflicts[pkg_key] = [m for m, _ in entries]
+                        break
+                if pkg_key in conflicts:
+                    break
 
         package_repo(
             name = hub_repo_name,
@@ -269,6 +292,16 @@ def _lock_repos_impl(module_ctx):
             backend_configs = backend_configs_json,
             member_lock_files = member_lock_files,
         )
+
+        # Create thin repos for each hub member, passing conflict info.
+        for member in member_repos:
+            thin_package_repo(
+                name = member,
+                resolved_lock_file = per_repo_data[member].lock_file,
+                hub_repo = hub_repo_name,
+                member_name = member,
+                conflicts = conflicts,
+            )
 
     if bazel_features.external_deps.extension_metadata_has_reproducible:
         return module_ctx.extension_metadata(reproducible = True)

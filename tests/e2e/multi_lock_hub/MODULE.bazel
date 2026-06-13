@@ -52,6 +52,14 @@ lock_import.import_uv(
     repo = "lock_b",
     target_environments = ["@multi_lock_hub_envs//:environments"],
 )
+
+# Annotation conflict: exclude a test file from regex in lock_a only.
+# This triggers per-member variant targets in the hub.
+lock_import.package(
+    name = "regex",
+    install_exclude_globs = ["test_regex.py"],
+    repo = "lock_a",
+)
 use_repo(lock_import, "lock_import_repos_hub")
 
 # The actual repos are loaded from the lock_repos extension.

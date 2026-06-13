@@ -56,8 +56,19 @@ def _requirements_bzl(rctx, pins):
 def _safe_name(pin_name, name):
     return name + "_" if pin_name == name else name
 
-def _pin_build(target_name, original_pin_name, pin_target, package, hub_repo):
-    """Generates the BUILD file for a pin directory, pointing to the hub."""
+def _pin_build(target_name, original_pin_name, pin_target, package, hub_repo, hub_lock_target = None):
+    """Generates the BUILD file for a pin directory, pointing to the hub.
+
+    Args:
+        target_name: The underscore-normalized directory/target name.
+        original_pin_name: The original pin name (e.g., "regex").
+        pin_target: The package key in the hub's _lock/ (e.g., "regex@2026.5.9").
+        package: The package data dict from the lock.
+        hub_repo: The hub repo name.
+        hub_lock_target: If set, use this as the _lock target instead of pin_target.
+            Used for conflicting packages that have member-specific variants.
+    """
+    lock_target = hub_lock_target if hub_lock_target else pin_target
     lock_ref = "@{}//_lock:".format(hub_repo)
     wheel_ref = "@{}//_wheel:".format(hub_repo)
     sdist_ref = "@{}//_sdist:".format(hub_repo)
@@ -67,12 +78,12 @@ def _pin_build(target_name, original_pin_name, pin_target, package, hub_repo):
         "",
         "alias(",
         '    name = "{}",'.format(target_name),
-        '    actual = "{}{}",'.format(lock_ref, pin_target),
+        '    actual = "{}{}",'.format(lock_ref, lock_target),
         ")",
         "",
         "alias(",
         '    name = "{}",'.format(_safe_name(target_name, "pkg")),
-        '    actual = "{}{}",'.format(lock_ref, pin_target),
+        '    actual = "{}{}",'.format(lock_ref, lock_target),
         ")",
         "",
         "alias(",
@@ -82,7 +93,7 @@ def _pin_build(target_name, original_pin_name, pin_target, package, hub_repo):
         "",
         "alias(",
         '    name = "{}",'.format(_safe_name(target_name, "dist_info")),
-        '    actual = "{}_dist_info_{}",'.format(lock_ref, pin_target),
+        '    actual = "{}_dist_info_{}",'.format(lock_ref, lock_target),
         ")",
         "",
     ]
@@ -101,7 +112,7 @@ def _pin_build(target_name, original_pin_name, pin_target, package, hub_repo):
         lines.extend([
             "alias(",
             '    name = "[{}]",'.format(extra_name),
-            '    actual = "{}{}[{}]",'.format(lock_ref, pin_target, extra_name),
+            '    actual = "{}{}[{}]",'.format(lock_ref, lock_target, extra_name),
             ")",
             "",
         ])
@@ -114,6 +125,10 @@ def _thin_package_repo_impl(rctx):
     lock = json.decode(rctx.read(lock_json_path))
     packages = lock["packages"]
     pins = lock["pins"]
+
+    # Conflicts dict: pkg_key -> [member_names...] for packages with
+    # differing annotations across hub members.
+    conflicts = rctx.attr.conflicts
 
     # Generate a basic modules_mapping.json from top_level_paths.
     # The hub package_repo handles the full inspection.json lookup;
@@ -171,9 +186,15 @@ def _thin_package_repo_impl(rctx):
     for pin_name, pin_target in sorted(pins.items()):
         package = packages[pin_target]
         us_name = _underscore_name(pin_name)
+
+        # For conflicting packages, use the member-specific variant target.
+        hub_lock_target = None
+        if pin_target in conflicts:
+            hub_lock_target = "{}__via_{}".format(pin_target, rctx.attr.member_name)
+
         rctx.file(
             "{}/BUILD.bazel".format(us_name),
-            _pin_build(us_name, pin_name, pin_target, package, hub_repo),
+            _pin_build(us_name, pin_name, pin_target, package, hub_repo, hub_lock_target),
         )
 
 thin_package_repo = repository_rule(
@@ -183,6 +204,14 @@ thin_package_repo = repository_rule(
         "hub_repo": attr.string(
             mandatory = True,
             doc = "Name of the hub package_repo that contains the shared _lock/ targets.",
+        ),
+        "member_name": attr.string(
+            mandatory = True,
+            doc = "User-facing repo name for this member (used in variant target naming).",
+        ),
+        "conflicts": attr.string_list_dict(
+            default = {},
+            doc = "Map of pkg_key -> [member_names...] for packages with conflicting annotations.",
         ),
     },
 )

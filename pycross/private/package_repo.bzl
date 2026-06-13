@@ -147,10 +147,19 @@ def _package_repo_impl(rctx):
 
     if is_hub:
         # Hub mode: merge packages and environments from all member lock files.
+        # Detect annotation conflicts and generate per-member variants.
         packages = {}
         environments = {}
         pins = {}  # Hub has no pins; each thin repo has its own.
-        for _member, lock_label in rctx.attr.member_lock_files.items():
+
+        # Annotation fields that affect pycross_wheel_library targets.
+        # If these differ between members for the same pkg_key, the package
+        # is "conflicting" and gets per-member variant targets.
+        _ANNOTATION_FIELDS = ["post_install_patches", "install_exclude_globs"]
+
+        # First pass: collect per-member package data for conflict detection.
+        member_packages = {}  # member_name -> {pkg_key -> pkg_data}
+        for member, lock_label in rctx.attr.member_lock_files.items():
             member_lock = json.decode(rctx.read(rctx.path(Label(lock_label))))
 
             # Merge environments (union across members).
@@ -158,22 +167,79 @@ def _package_repo_impl(rctx):
                 if env_name not in environments:
                     environments[env_name] = env_ref
 
-            for pkg_key, pkg_data in member_lock.get("packages", {}).items():
-                if pkg_key not in packages:
-                    packages[pkg_key] = dict(pkg_data)
-                else:
-                    # Same package@version from another member: merge environments.
+            member_packages[member] = member_lock.get("packages", {})
+
+        # Second pass: detect conflicts and build merged package set.
+        # conflicts maps pkg_key -> [member_name, ...] for packages with
+        # differing annotations across members.
+        conflicts = {}
+        all_pkg_keys = {}  # pkg_key -> list of (member, pkg_data)
+        for member, pkgs in member_packages.items():
+            for pkg_key, pkg_data in pkgs.items():
+                all_pkg_keys.setdefault(pkg_key, []).append((member, pkg_data))
+
+        for pkg_key, entries in all_pkg_keys.items():
+            if len(entries) <= 1:
+                # Only in one member — no conflict possible.
+                packages[pkg_key] = dict(entries[0][1])
+                continue
+
+            # Check annotation fields for differences.
+            _, first_data = entries[0]
+            has_conflict = False
+            for _, other_data in entries[1:]:
+                for field in _ANNOTATION_FIELDS:
+                    if first_data.get(field, []) != other_data.get(field, []):
+                        has_conflict = True
+                        break
+                if has_conflict:
+                    break
+
+            if has_conflict:
+                # Conflicting: create per-member variant packages.
+                conflicts[pkg_key] = [member for member, _ in entries]
+                for member, pkg_data in entries:
+                    variant_key = "{}__via_{}".format(pkg_key, member)
+                    packages[variant_key] = dict(pkg_data)
+            else:
+                # Non-conflicting: merge as before.
+                packages[pkg_key] = dict(first_data)
+                for _, pkg_data in entries[1:]:
                     existing = packages[pkg_key]
                     for env_name, env_ref in pkg_data.get("environment_files", {}).items():
                         existing.setdefault("environment_files", {})[env_name] = env_ref
                     for env_name, env_deps in pkg_data.get("environment_dependencies", {}).items():
-                        existing.setdefault("environment_dependencies", {})[env_name] = env_deps
+                        ed = existing.setdefault("environment_dependencies", {})
+                        if env_name not in ed:
+                            ed[env_name] = list(env_deps)
+                        else:
+                            for dep in env_deps:
+                                if dep not in ed[env_name]:
+                                    ed[env_name].append(dep)
                     for dep in pkg_data.get("common_dependencies", []):
                         cd = existing.setdefault("common_dependencies", [])
                         if dep not in cd:
                             cd.append(dep)
                     for extra, extra_deps in pkg_data.get("extra_dependencies", {}).items():
-                        existing.setdefault("extra_dependencies", {})[extra] = extra_deps
+                        ex = existing.setdefault("extra_dependencies", {})
+                        if extra not in ex:
+                            ex[extra] = dict(extra_deps)
+                        else:
+                            # Union common_dependencies within the extra.
+                            for dep in extra_deps.get("common_dependencies", []):
+                                ecd = ex[extra].setdefault("common_dependencies", [])
+                                if dep not in ecd:
+                                    ecd.append(dep)
+
+                            # Union environment_dependencies within the extra.
+                            for env_name, env_deps in extra_deps.get("environment_dependencies", {}).items():
+                                eed = ex[extra].setdefault("environment_dependencies", {})
+                                if env_name not in eed:
+                                    eed[env_name] = list(env_deps)
+                                else:
+                                    for dep in env_deps:
+                                        if dep not in eed[env_name]:
+                                            eed[env_name].append(dep)
                     if not existing.get("top_level_paths") and pkg_data.get("top_level_paths"):
                         existing["top_level_paths"] = pkg_data["top_level_paths"]
                     if not existing.get("sdist_file") and pkg_data.get("sdist_file"):
