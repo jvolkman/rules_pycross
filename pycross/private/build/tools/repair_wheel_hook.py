@@ -65,6 +65,13 @@ def main() -> None:
         cmd.extend(["--lib-dir", lp])
 
     env = os.environ.copy()
+    for key in [
+        "PYTHONSAFEPATH",
+        "RUNFILES_DIR",
+        "RUNFILES_MANIFEST_FILE",
+        "RUNFILES_MANIFEST_ONLY",
+    ]:
+        env.pop(key, None)
     python_path = list(sys.path)
     extra = os.environ.get("REPAIRWHEEL_PYTHONPATH", "")
     if extra:

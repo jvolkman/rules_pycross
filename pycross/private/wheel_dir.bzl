@@ -14,11 +14,16 @@ def _pycross_wheel_dir_impl(ctx):
 
     # Plain .whl file — wrap it into a TreeArtifact directory.
     out = ctx.actions.declare_directory(ctx.attr.whldir_name)
-    ctx.actions.run_shell(
+
+    args = ctx.actions.args()
+    args.add(src.path)
+    args.add(out.path)
+
+    ctx.actions.run(
         inputs = [src],
         outputs = [out],
-        command = 'cp "$1" "$2/"',
-        arguments = [src.path, out.path],
+        executable = ctx.executable._copy_file,
+        arguments = [args],
         mnemonic = "PycrossWheelDir",
         execution_requirements = {"supports-path-mapping": "1"},
         progress_message = "Creating wheel directory %s" % ctx.attr.whldir_name,
@@ -36,6 +41,11 @@ pycross_wheel_dir = rule(
         "whldir_name": attr.string(
             doc = "Name for the output TreeArtifact directory (e.g., 'numpy-1.24.0.whldir').",
             mandatory = True,
+        ),
+        "_copy_file": attr.label(
+            default = Label("//pycross/private/tools:copy_file"),
+            cfg = "exec",
+            executable = True,
         ),
     },
 )

@@ -27,7 +27,7 @@ def build_standard_venv(ctx: BuildContext) -> None:
         "--without-pip",
         str(ctx.env_dir),
     ]
-    subprocess.check_output(args=venv_args, env=os.environ, stderr=subprocess.STDOUT)
+    subprocess.check_output(args=venv_args, env=ctx.build_env, stderr=subprocess.STDOUT)
 
     site_dir = find_site_dir(ctx.env_dir)
     with open(site_dir / "_pycross_sys_prefix.pth", "w") as f:

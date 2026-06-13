@@ -164,6 +164,18 @@ py_binary(
 )
 
 py_binary(
+    name = "extract_wheel_bin",
+    srcs = ["extract_wheel_bin.py"],
+    visibility = ["//visibility:public"],
+)
+
+py_binary(
+    name = "copy_file",
+    srcs = ["copy_file.py"],
+    visibility = ["//visibility:public"],
+)
+
+py_binary(
     name = "resolved_lock_renderer",
     srcs = ["resolved_lock_renderer.py"],
     imports = ["../../.."],

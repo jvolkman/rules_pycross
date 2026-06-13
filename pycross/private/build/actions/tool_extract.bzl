@@ -54,11 +54,16 @@ def register_bin_extract_action(ctx, wheel_dir, binary_name):
     """
     out_file = ctx.actions.declare_file(paths.join(ctx.attr.name + "_tools", binary_name))
 
-    ctx.actions.run_shell(
+    args = ctx.actions.args()
+    args.add(wheel_dir.path)
+    args.add(binary_name)
+    args.add(out_file.path)
+
+    ctx.actions.run(
         inputs = [wheel_dir],
         outputs = [out_file],
-        command = "cp \"$1/bin/$2\" \"$3\" && chmod +x \"$3\"",
-        arguments = [wheel_dir.path, binary_name, out_file.path],
+        executable = ctx.executable._extract_wheel_bin,
+        arguments = [args],
         mnemonic = "PycrossExtractWheelBin",
         execution_requirements = {"supports-path-mapping": "1"},
         progress_message = "Extracting binary %s" % binary_name,

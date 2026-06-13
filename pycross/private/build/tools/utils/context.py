@@ -71,9 +71,16 @@ def load_build_context(config_path: str) -> BuildContext:
 
     build_env = os.environ.copy()
 
-    # Bazel py_binary launcher adds PYTHONSAFEPATH=1. This breaks numpy and other
-    # builds that rely on sys.path[0] being the script directory. Strip it.
-    build_env.pop("PYTHONSAFEPATH", None)
+    # Bazel py_binary launcher adds variables that shouldn't leak into the build env.
+    for key in [
+        "PYTHONSAFEPATH",
+        "PYTHONPATH",
+        "PYTHONHOME",
+        "RUNFILES_DIR",
+        "RUNFILES_MANIFEST_FILE",
+        "RUNFILES_MANIFEST_ONLY",
+    ]:
+        build_env.pop(key, None)
 
     # Merge user-supplied environment variables from the build_env attribute.
     # User vars take precedence over inherited environment.

@@ -32,6 +32,13 @@ def main() -> None:
 
     # Build the environment for the transform tool.
     env = os.environ.copy()
+    for key in [
+        "PYTHONSAFEPATH",
+        "RUNFILES_DIR",
+        "RUNFILES_MANIFEST_FILE",
+        "RUNFILES_MANIFEST_ONLY",
+    ]:
+        env.pop(key, None)
     env["PYCROSS_WHEEL_FILE"] = wheel_file
     # The transform tool should write its output to args.out_wheel_dir
     os.makedirs(args.out_wheel_dir, exist_ok=True)

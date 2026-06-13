@@ -121,6 +121,11 @@ meson_build = rule(
             executable = True,
             cfg = "exec",
         ),
+        "_extract_wheel_bin": attr.label(
+            default = "//pycross/private/tools:extract_wheel_bin",
+            executable = True,
+            cfg = "exec",
+        ),
     },
     toolchains = [
         "@rules_python//python:toolchain_type",
