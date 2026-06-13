@@ -51,71 +51,47 @@ See the [generated docs](docs).
 ### Gazelle Plugin
 
 `rules_pycross` is compatible with `rules_python_gazelle_plugin`, a plugin for [Gazelle](https://github.com/bazelbuild/bazel-gazelle)
-that generates BUILD files content for `rules_python` rules, but requires additional configuration.
+that generates BUILD files content for `rules_python` rules.
 
-`rules_python_gazelle_plugin` is originally designed for `rules_python` rules that uses custom name normalization, whereas
-`rules_pycross` uses the Python [name normalization](https://packaging.python.org/en/latest/specifications/name-normalization/).
+To resolve third-party imports, the plugin requires a `modules_mapping.json` file. `rules_pycross` provides a `pycross_modules_mapping` rule that aggregates the top-level imports from all your downloaded packages without needing to extract the wheels during execution.
 
-To switch name normalization, use the following Gazelle [directives](https://github.com/bazelbuild/rules_python/blob/main/gazelle/README.md#directives):
-
-```
-# gazelle:python_label_convention :$distribution_name$
-# gazelle:python_label_normalization pep503
-```
-
-Other than these options, the configuration is identical to a setup with `rules_python`.
-Read more [here](https://github.com/bazelbuild/rules_python/blob/main/gazelle/README.md#directives).
+Furthermore, `rules_pycross` V2 uses a target layout that aligns perfectly with the plugin's default label conventions (`@<pip_repository_name>//<package_name>`), so no custom `gazelle:python_label_convention` directives are needed!
 
 <details>
   <summary>Example BUILD.bazel</summary>
 
-```
-load("@gazelle//:def.bzl", "DEFAULT_LANGUAGES", "gazelle", "gazelle_binary")
-load("@pip//:requirements.bzl", "all_whl_requirements")
+```bzl
+load("@gazelle//:def.bzl", "gazelle")
+load("@rules_pycross//pycross:defs.bzl", "pycross_modules_mapping")
 load("@rules_python_gazelle_plugin//manifest:defs.bzl", "gazelle_python_manifest")
-load("@rules_python_gazelle_plugin//modules_mapping:def.bzl", "modules_mapping")
+load("@uv//:requirements.bzl", "all_requirements")
 
-# gazelle:python_root
-# gazelle:python_label_convention :$distribution_name$
-# gazelle:python_label_normalization pep503
-gazelle_binary(
-    name = "gazelle_bin",
-    languages = DEFAULT_LANGUAGES + [
-        "@rules_python_gazelle_plugin//python",
-    ],
+# Aggregate Pycross module mapping
+pycross_modules_mapping(
+    name = "modules_map",
+    deps = all_requirements,
 )
 
-gazelle(
-    name = "gazelle.update",
-    gazelle = ":gazelle_bin",
-)
-
-gazelle(
-    name = "gazelle.check",
-    args = ["-mode=diff"],
-    gazelle = ":gazelle_bin",
-)
-
-modules_mapping(
-    name = "gazelle.metadata",
-    tags = ["manual"],
-    wheels = all_whl_requirements,
-)
-
+# Tell gazelle about python packages
 gazelle_python_manifest(
-    name = "gazelle.mapping",
-    modules_mapping = ":gazelle.metadata",
-    pip_repository_name = "pip",
-    tags = ["manual"],
+    name = "gazelle_python_manifest",
+    modules_mapping = ":modules_map",
+    pip_repository_name = "uv",
+)
+
+# gazelle:python_extension enabled
+# gazelle:python_root //
+gazelle(
+    name = "gazelle",
+    gazelle = "@rules_python_gazelle_plugin//python:gazelle_binary",
 )
 ```
 
 ###### Useful Commands
 
-```
-> bazel run //:gazelle.update    # Update gazelle_python.yaml used by Gazelle
-> bazel run //:gazelle.check     # Show changes needed to build scripts per Gazelle
-> bazel run //:gazelle.update    # Apply changes needed to build scripts per Gazelle
+```bash
+> bazel run //:gazelle_python_manifest.update # Update gazelle_python.yaml used by Gazelle
+> bazel run //:gazelle                         # Apply changes needed to build scripts per Gazelle
 ```
 
 </details>
