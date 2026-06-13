@@ -44,13 +44,14 @@ def _pycross_wheel_library_impl(ctx):
         inputs = inputs,
         outputs = [out, entry_points],
         executable = ctx.executable._tool,
+        mnemonic = "PycrossWheelInstall",
+        execution_requirements = {"supports-path-mapping": "1"},
         arguments = [args],
         # Set environment variables to make generated .pyc files reproducible.
         env = {
             "SOURCE_DATE_EPOCH": "315532800",
             "PYTHONHASHSEED": "0",
         },
-        mnemonic = "WheelInstall",
         progress_message = "Installing %s" % wheel_input.basename,
     )
 
@@ -153,6 +154,7 @@ def _pycross_wheel_library_impl(ctx):
             PycrossPackageInfo(
                 package_name = ctx.attr.package_name,
                 package_version = ctx.attr.package_version,
+                top_level_paths = ctx.attr.top_level_paths,
             ),
         )
 

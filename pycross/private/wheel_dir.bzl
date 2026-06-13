@@ -19,7 +19,8 @@ def _pycross_wheel_dir_impl(ctx):
         outputs = [out],
         command = 'cp "$1" "$2/"',
         arguments = [src.path, out.path],
-        mnemonic = "WheelDir",
+        mnemonic = "PycrossWheelDir",
+        execution_requirements = {"supports-path-mapping": "1"},
         progress_message = "Creating wheel directory %s" % ctx.attr.whldir_name,
     )
     return [DefaultInfo(files = depset([out]))]

@@ -11,6 +11,9 @@ load("//pycross/private/build:transitions.bzl", "pycross_exec_platform_transitio
 
 COMMON_BUILD_ATTRS = {
     "sdist": attr.label(mandatory = True, allow_single_file = True),
+    "source_dir": attr.string(
+        doc = "Subdirectory within the sdist source tree to build.",
+    ),
     "deps": attr.label_list(
         providers = [PyInfo],
         cfg = pycross_exec_platform_transition,

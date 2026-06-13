@@ -82,7 +82,7 @@ def register_repair_action(
         inputs = depset(input_files, transitive = data_inputs),
         outputs = outputs,
         env = env,
-        mnemonic = "RepairWheel",
+        mnemonic = "PycrossRepairWheel",
         progress_message = "Repairing %s" % input_wheel_dir.basename,
     )
 

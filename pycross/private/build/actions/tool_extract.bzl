@@ -29,6 +29,7 @@ def register_console_script_extract_action(ctx, site_packages, script_name):
         inputs = [site_packages],
         outputs = [out_file],
         mnemonic = "PycrossExtractConsoleScript",
+        execution_requirements = {"supports-path-mapping": "1"},
         progress_message = "Extracting console script %s" % script_name,
     )
 
@@ -59,6 +60,7 @@ def register_bin_extract_action(ctx, wheel_dir, binary_name):
         command = "cp \"$1/bin/$2\" \"$3\" && chmod +x \"$3\"",
         arguments = [wheel_dir.path, binary_name, out_file.path],
         mnemonic = "PycrossExtractWheelBin",
+        execution_requirements = {"supports-path-mapping": "1"},
         progress_message = "Extracting binary %s" % binary_name,
     )
 

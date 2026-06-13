@@ -173,6 +173,7 @@ def register_pep517_action(
     # Write main config file
     main_config = {
         "sdist": sdist.path,
+        "source_dir": getattr(ctx.attr, "source_dir", ""),
         "exec_python": exec_python,
         "target_python": target_python,
         "target_sys_path": target_sys_path,
@@ -265,7 +266,7 @@ def register_pep517_action(
         arguments = [config_json.path],
         env = action_env,
         tools = tools,
-        mnemonic = "Pep517Build",
+        mnemonic = "PycrossPep517Build",
         progress_message = "Building wheel %s" % sdist.basename,
     )
 
