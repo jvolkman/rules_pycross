@@ -255,4 +255,20 @@ def render_lock_bzl(lock, repo_map, rctx_name):
                 "",
             ])
 
+        # Squashed variant: base package + all extras
+        if pkg.get("extra_dependencies"):
+            lines.extend([
+                _ind("py_library("),
+                _ind('name = "{}__squashed",'.format(pkg_key), 2),
+                _ind("deps = [", 2),
+                _ind('":{}",'.format(pkg_key), 3),
+            ])
+            for extra_name in sorted(pkg.get("extra_dependencies", {}).keys()):
+                lines.append(_ind('":{}[{}]",'.format(pkg_key, extra_name), 3))
+            lines.extend([
+                _ind("],", 2),
+                _ind(")"),
+                "",
+            ])
+
     return "\n".join(lines) + "\n"

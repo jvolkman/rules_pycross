@@ -12,6 +12,7 @@ tests/e2e/generate_lock
 tests/e2e/local_wheel
 tests/e2e/patches_and_hooks
 tests/e2e/requirements
+tests/e2e/squash_extras
 tests/e2e/bzlmod_flags
 tests/e2e/shared
 tests/e2e/tools

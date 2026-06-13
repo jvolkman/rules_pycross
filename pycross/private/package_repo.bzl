@@ -84,21 +84,22 @@ def _requirements_bzl(rctx, pins):
 def _safe_name(pin_name, name):
     return name + "_" if pin_name == name else name
 
-def _pin_build(target_name, original_pin_name, pin_target, package):
+def _pin_build(target_name, original_pin_name, pin_target, package, squash_extras = False):
     """Generates the BUILD file for a pin directory (//package/)."""
+    pin_target_base = (pin_target + "__squashed") if (squash_extras and package.get("extra_dependencies")) else pin_target
     lines = [
         'package(default_visibility = ["//visibility:public"])',
         "",
         # //package -> //package:package -> //_lock:<pin_target>
         "alias(",
         '    name = "{}",'.format(target_name),
-        '    actual = "//_lock:{}",'.format(pin_target),
+        '    actual = "//_lock:{}",'.format(pin_target_base),
         ")",
         "",
         # //package:pkg -> //_lock:<pin_target>
         "alias(",
         '    name = "{}",'.format(_safe_name(target_name, "pkg")),
-        '    actual = "//_lock:{}",'.format(pin_target),
+        '    actual = "//_lock:{}",'.format(pin_target_base),
         ")",
         "",
         # //package:wheel -> //_wheel:<original_pin_name>
@@ -116,7 +117,7 @@ def _pin_build(target_name, original_pin_name, pin_target, package):
         # //package:data -> //_lock:<pin_target> (rules_python compat)
         "alias(",
         '    name = "{}",'.format(_safe_name(target_name, "data")),
-        '    actual = "//_lock:{}",'.format(pin_target),
+        '    actual = "//_lock:{}",'.format(pin_target_base),
         ")",
         "",
     ]
@@ -135,7 +136,7 @@ def _pin_build(target_name, original_pin_name, pin_target, package):
         lines.extend([
             "alias(",
             '    name = "[{}]",'.format(extra_name),
-            '    actual = "//_lock:{}[{}]",'.format(pin_target, extra_name),
+            '    actual = "//_lock:{}",'.format(pin_target_base if squash_extras else "{}[{}]".format(pin_target, extra_name)),
             ")",
             "",
         ])
@@ -143,10 +144,12 @@ def _pin_build(target_name, original_pin_name, pin_target, package):
     return "\n".join(lines) + "\n"
 
 def _package_repo_impl(rctx):
+    squash_extras = False
     is_hub = bool(rctx.attr.member_lock_files)
 
     if is_hub:
-        # Hub mode: merge packages and environments from all member lock files.
+        # Hub mode does not squash. Hub contains canonical un-squashed graphs.
+        # Thin repos decide whether to squash via their aliases.
         # Detect annotation conflicts and generate per-member variants.
         packages = {}
         environments = {}
@@ -250,6 +253,7 @@ def _package_repo_impl(rctx):
     else:
         lock_json_path = rctx.path(rctx.attr.resolved_lock_file)
         lock = json.decode(rctx.read(lock_json_path))
+        squash_extras = lock.get("squash_extras", False)
         packages = lock["packages"]
         pins = lock["pins"]
 
@@ -347,7 +351,8 @@ def _package_repo_impl(rctx):
     ]
     for pin_name in sorted(pins.keys()):
         us_name = _underscore_name(pin_name)
-        package = packages[pins[pin_name]]
+        pin_target = pins[pin_name]
+        package = packages[pin_target]
 
         # //:pin-name -> //pin_name:pkg
         root_build_lines.extend([
@@ -374,7 +379,7 @@ def _package_repo_impl(rctx):
     for pin_name, pin_target in sorted(pins.items()):
         package = packages[pin_target]
         underscore_name = _underscore_name(pin_name)
-        rctx.file("{}/BUILD.bazel".format(underscore_name), _pin_build(underscore_name, pin_name, pin_target, package))
+        rctx.file("{}/BUILD.bazel".format(underscore_name), _pin_build(underscore_name, pin_name, pin_target, package, squash_extras))
 
     # 4. _wheel/ and _sdist/ directories for versioned artifact access
     wheel_lines = [

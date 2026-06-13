@@ -597,70 +597,6 @@ class TestExtras(unittest.TestCase):
         self.assertIn("black", dev_dep_names)
         self.assertNotIn("pytest", dev_dep_names)
 
-    def test_squash_extras_basic(self):
-        """When squash_extras is True, extra deps are merged into common deps."""
-        pkg = make_pkg(
-            "foo",
-            "1.0",
-            [make_file("foo-1.0.tar.gz")],
-            deps=[
-                make_dep("depA", "1.0"),
-                make_dep("depB", "2.0", marker="extra == 'test'"),
-            ],
-        )
-        ctx = GenerationContext(
-            target_environments=[self.linux_env],
-            local_wheels={},
-            remote_wheels={},
-            always_include_sdist=False,
-            squash_extras=True,
-        )
-        resolver = PackageResolver(pkg, ctx, None, [])
-        resolved = resolver.to_resolved_package()
-
-        # Both depA and depB should appear under common_dependencies
-        self.assertEqual(len(resolved.common_dependencies), 2)
-        dep_names = {k.name for k in resolved.common_dependencies}
-        self.assertEqual(dep_names, {"depa", "depb"})
-
-        # extra_dependencies should be empty
-        self.assertEqual(len(resolved.extra_dependencies), 0)
-
-    def test_squash_extras_with_env_markers(self):
-        """When squash_extras is True, extra deps with env markers are merged into env_deps."""
-        pkg = make_pkg(
-            "foo",
-            "1.0",
-            [make_file("foo-1.0.tar.gz")],
-            deps=[
-                make_dep("depC", "1.0", marker="extra == 'test' and sys_platform == 'linux'"),
-            ],
-        )
-        ctx = GenerationContext(
-            target_environments=[self.linux_env, self.mac_env],
-            local_wheels={},
-            remote_wheels={},
-            always_include_sdist=False,
-            squash_extras=True,
-        )
-        resolver = PackageResolver(pkg, ctx, None, [])
-        resolved = resolver.to_resolved_package()
-
-        # No base deps in common_dependencies
-        self.assertEqual(len(resolved.common_dependencies), 0)
-
-        # depC should appear under the linux env specifically
-        self.assertIn("linux", resolved.environment_dependencies)
-        linux_names = {k.name for k in resolved.environment_dependencies["linux"]}
-        self.assertIn("depc", linux_names)
-
-        # depC should NOT appear under the mac env
-        mac_names = {k.name for k in resolved.environment_dependencies.get("mac", [])}
-        self.assertNotIn("depc", mac_names)
-
-        # extra_dependencies should be empty
-        self.assertEqual(len(resolved.extra_dependencies), 0)
-
 
 class TestCycleDetection(unittest.TestCase):
     """Tests for Tarjan's SCC-based cycle detection in resolve()."""
@@ -878,7 +814,7 @@ class TestCycleDetection(unittest.TestCase):
             canonicalize_name("foo"): PackageKey.from_parts(canonicalize_name("foo"), Version("1.0")),
         }
 
-        # Resolve with squash_extras = False (default)
+        # Resolve packages
         resolved = self._resolve_with_packages([pkg_foo, pkg_dep_a, pkg_dep_b], pins)
 
         key_a = PackageKey.from_parts(canonicalize_name("depA"), Version("1.0"))
@@ -890,107 +826,6 @@ class TestCycleDetection(unittest.TestCase):
         self.assertIsNotNone(res_a.cycle_group)
         self.assertIsNotNone(res_b.cycle_group)
         self.assertEqual(res_a.cycle_group, res_b.cycle_group)
-
-
-class TestSquashExtrasTransitive(unittest.TestCase):
-    def setUp(self):
-        import tempfile
-
-        self.td = tempfile.TemporaryDirectory()
-        self.td_path = self.td.name
-
-        self.linux_env = make_env(
-            "linux", ["manylinux_2_17_x86_64", "manylinux2014_x86_64"], markers={"sys_platform": "linux"}
-        )
-
-    def tearDown(self):
-        self.td.cleanup()
-
-    def _resolve_with_packages(self, packages, pins, squash_extras=False):
-        import json
-        import os
-        from unittest.mock import MagicMock
-
-        pkg_dict = {}
-        for pkg in packages:
-            pkg_dict[pkg.key] = pkg
-
-        lock_model = RawLockSet(
-            python_versions=SpecifierSet(">=3.8"),
-            packages=pkg_dict,
-            pins=pins,
-        )
-        lock_model_file = os.path.join(self.td_path, "lock.json")
-        with open(lock_model_file, "w") as f:
-            f.write(lock_model.to_json())
-
-        env_file = os.path.join(self.td_path, "env.json")
-        with open(env_file, "w") as f:
-            json.dump(self.linux_env.to_dict(), f)
-
-        args = MagicMock()
-        args.lock_model_file = lock_model_file
-        args.target_environment = [(env_file, "@//env:linux")]
-        args.local_wheel = []
-        args.remote_wheel = []
-        args.always_include_sdist = False
-        args.annotations_file = None
-        args.default_build_dependencies = []
-        args.disallow_builds = False
-        args.default_alias_single_version = False
-        args.squash_extras = squash_extras
-
-        return resolve(args)
-
-    def test_transitive_squash_with_cycle(self):
-        # foo -> depA (base)
-        # foo -> depB (extra test)
-        # depB -> depC (base of depB)
-        # depC -> depB (base of depC) - cycle B <-> C
-        pkg_foo = make_pkg(
-            "foo",
-            "1.0",
-            [make_file("foo-1.0.tar.gz")],
-            deps=[
-                make_dep("depA", "1.0"),
-                make_dep("depB", "1.0", marker="extra == 'test'"),
-            ],
-        )
-        pkg_dep_a = make_pkg("depA", "1.0", [make_file("depA-1.0.tar.gz")])
-        pkg_dep_b = make_pkg("depB", "1.0", [make_file("depB-1.0.tar.gz")], deps=[make_dep("depC", "1.0")])
-        pkg_dep_c = make_pkg("depC", "1.0", [make_file("depC-1.0.tar.gz")], deps=[make_dep("depB", "1.0")])
-
-        pins = {
-            canonicalize_name("foo"): PackageKey.from_parts(canonicalize_name("foo"), Version("1.0")),
-        }
-
-        # Resolve with squash_extras = True
-        resolved = self._resolve_with_packages([pkg_foo, pkg_dep_a, pkg_dep_b, pkg_dep_c], pins, squash_extras=True)
-
-        key_foo = PackageKey.from_parts(canonicalize_name("foo"), Version("1.0"))
-        key_a = PackageKey.from_parts(canonicalize_name("depA"), Version("1.0"))
-        key_b = PackageKey.from_parts(canonicalize_name("depB"), Version("1.0"))
-        key_c = PackageKey.from_parts(canonicalize_name("depC"), Version("1.0"))
-
-        res_foo = resolved.packages[key_foo]
-
-        # depA and depB should be in common_dependencies of foo
-        self.assertEqual(len(res_foo.common_dependencies), 2)
-        common_names = {k.name for k in res_foo.common_dependencies}
-        self.assertEqual(common_names, {"depa", "depb"})
-        self.assertEqual(len(res_foo.extra_dependencies), 0)
-
-        # depA, depB and depC should be resolved
-        self.assertIn(key_a, resolved.packages)
-        self.assertIn(key_b, resolved.packages)
-        self.assertIn(key_c, resolved.packages)
-
-        # depB and depC should be in a cycle group
-        res_b = resolved.packages[key_b]
-        res_c = resolved.packages[key_c]
-        self.assertIsNotNone(res_b.cycle_group)
-        self.assertIsNotNone(res_c.cycle_group)
-        self.assertEqual(res_b.cycle_group, res_c.cycle_group)
 
 
 if __name__ == "__main__":

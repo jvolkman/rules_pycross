@@ -19,6 +19,7 @@ def define_e2e_tests():
         "patches_and_hooks",
         "requirements",
         "sdist_repo",
+        "squash_extras",
         "bzlmod_flags",
         "namespace_pkgs",
         "gazelle_integration",

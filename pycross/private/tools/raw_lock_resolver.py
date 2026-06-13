@@ -254,11 +254,6 @@ class PackageResolver:
             package,
             annotations.ignore_dependencies,
         )
-        if context.squash_extras:
-            for extra, edeps in extra_deps_by_env.items():
-                for env, deps in edeps.items():
-                    deps_by_env.setdefault(env, set()).update(deps)
-            extra_deps_by_env = {}
 
         self._common_deps = deps_by_env.get(None, set())
         self._env_deps = {k: v for k, v in deps_by_env.items() if k is not None}
@@ -649,6 +644,7 @@ def resolve(args: Any) -> ResolvedLockSet:
                 resolved_packages[pkg_key].cycle_group = group_name
 
     return ResolvedLockSet(
+        squash_extras=context.squash_extras,
         environments=resolved_environments,
         packages=resolved_packages,
         pins=pins,
@@ -709,7 +705,6 @@ def add_shared_flags(parser: ArgumentParser) -> None:
         action="store_true",
         help="Merge extra dependencies into base dependencies (v1 compat).",
     )
-
     parser.add_argument(
         "--annotations-file",
         type=Path,

@@ -498,7 +498,7 @@ The build pipeline is decomposed into composable, reusable actions:
   - `e2e/build_setuptools/` — psycopg2, setproctitle, pyyaml, zstandard
   - `e2e/patches_and_hooks/` — setproctitle with pre/post patches and site_hooks
   - `e2e/sdist_repo/` — sdist repository rule e2e test
-  - `e2e/requirements/` — top-level package imports, `all_whl_requirements`, `requirement()` macro
+  - `e2e/requirements/` — top-level package imports, `requirement()` macro
 - Shared configuration via `e2e/shared/` with common `.bazelrc`, overrides, and utilities.
 - `collect_wheels.bzl` macro for cross-platform wheel collection.
 - `compare_wheels.py` tool for wheel comparison.
@@ -551,7 +551,7 @@ The build pipeline is decomposed into composable, reusable actions:
 
 - `pycross_wheel_build` has been restored as a backward-compatible wrapper macro (defaulting to `setuptools_build`).
 - V1 compatibility attributes are now fully supported across all V2 build backends: `build_env`, `data`, `pre_build_hooks`, `post_build_hooks`, and `path_tools`.
-- Backward-compatible macros `requirement()` and `all_whl_requirements` are provided in generated hub repositories.
+- Backward-compatible macro `requirement()` is provided in generated hub repositories. The legacy `all_whl_requirements` list has been removed because rules_pycross compiles source distributions and cannot guarantee a homogeneous list of raw `.whl` files.
 - E2E tests guarantee V1 attribute compatibility under the V2 architecture.
 
 ---

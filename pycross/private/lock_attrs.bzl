@@ -84,9 +84,7 @@ RESOLVE_ATTRS = dict(
         doc = "Always include an entry for a package's sdist if one exists.",
     ),
     squash_extras = attr.bool(
-        doc = "Merge extra dependencies into base dependencies. " +
-              "Produces a flat dependency graph without [extra] targets, " +
-              "matching V1 behavior.",
+        doc = "If True, aliases to packages will include all of their extra dependencies by default.",
         default = False,
     ),
     default_build_dependencies = attr.string_list(
