@@ -544,3 +544,65 @@ The build pipeline is decomposed into composable, reusable actions:
 - Removed `stardoc` dev dep from root MODULE (moved to docs module).
 - `EXTRA_PATTERN` regex and `import re` moved to module level in resolver.
 - Missing dependency warnings in pylock translator (instead of silent skip).
+
+---
+
+## New: V1 Backward Compatibility
+
+- `pycross_wheel_build` has been restored as a backward-compatible wrapper macro (defaulting to `setuptools_build`).
+- V1 compatibility attributes are now fully supported across all V2 build backends: `build_env`, `data`, `pre_build_hooks`, `post_build_hooks`, and `path_tools`.
+- Backward-compatible macros `requirement()` and `all_whl_requirements` are provided in generated hub repositories.
+- E2E tests guarantee V1 attribute compatibility under the V2 architecture.
+
+---
+
+## Changed: Always-Repair Wheels
+
+- Wheel repair (`repairwheel` wrapper over `auditwheel`/`delocate`) is now run unconditionally across all build backends (`pep517_build`, `setuptools_build`, `meson_build`, `cmake_build`, `maturin_build`), rather than only when `native_deps` are present.
+- This ensures maximum reproducibility (consistent timestamps, compression, ordering) for all built wheels, even pure-Python ones.
+
+---
+
+## New: Git Packages and URL Subdirectory Sources
+
+- **Git sources**: Full support for packages installed directly from git repositories in `uv.lock`. Handled via a new `pycross_git_file` repository rule that natively creates deterministic `.tar.gz` source distributions.
+- **URL subdirectories**: Support for URL-based sdists that use a `#subdirectory=` fragment (common in monorepos where the buildable package is not at the repo root).
+- Supported transparently via translation in the lock model, threading the `source_dir` down to the PEP 517 build context.
+
+---
+
+## Changed: Lock Repo Layout and Extras
+
+- **Underscore naming**: Generated package pin directories now strictly replace dashes with underscores, avoiding Bazel label validation issues in certain configurations.
+- **Root extras aliases**: Generated hub repositories now expose aliases for extras directly at the root (e.g., `@repo//:pkg[extra]`).
+- **`--squash-extras`**: A new flag has been added to the lock resolver and model generation. This allows users to squash all extra dependencies into the base package target, providing a flatter dependency graph for environments migrating from V1.
+
+---
+
+## Changed: Sysconfig Base Prefix Resolution
+
+- Fixed an issue where `sys.base_prefix` resolved incorrectly when using `rules_python` hermetic interpreter wrappers (pointing to the wrapper directory instead of the actual python installation root).
+- Pycross now interrogates the target interpreter directly for its `installed_base` and `installed_platbase` sysconfig variables, ensuring C extensions and native builds correctly locate Python headers (`Python.h`).
+
+---
+
+## New: Gazelle Integration Improvements
+
+- **`pycross_modules_mapping`**: A new rule that aggregates `modules_mapping.json` for `rules_python_gazelle_plugin`. It reads directly from the `PycrossPackageInfo.top_level_paths` metadata, completely eliminating the need to extract wheels at analysis time.
+- V2 target layout aligns perfectly with `rules_python_gazelle_plugin`'s default label conventions, removing the need for custom `gazelle:python_label_convention` directives.
+
+---
+
+## Changed: Hermeticity, Mnemonics, and Path Mapping
+
+- **Strict Hermeticity**: Replaced all non-hermetic `run_shell` actions (which used host `cp`, `mkdir`, `chmod`) with pure-Python tooling scripts (`copy_file.py`, `extract_wheel_bin.py`).
+- **Environment Scrubbing**: Systematically scrubbed Bazel's `py_binary` launcher variables (`PYTHONSAFEPATH`, `PYTHONPATH`, `PYTHONHOME`, `RUNFILES_DIR`, etc.) from all subprocess environments (`pep517_build`, `repairwheel`) to prevent host environment leaks.
+- **Action Mnemonics**: Renamed all action mnemonics to use a standard `Pycross*` prefix (e.g., `PycrossPep517Build`, `PycrossWheelInstall`) for better cache filtering and profiling readability.
+- **Path Mapping**: Opted all executing actions into `execution_requirements = {"supports-path-mapping": "1"}` to improve caching hit rates across differently-named execution environments.
+
+---
+
+## New: `.pth` Files and Namespace Packages Support
+
+- **`.pth` files**: `inspect_package.py` now recognizes root-level `.pth` files in wheels/sdists and includes them in `top_level_packages`, ensuring `rules_python` symlinks them into the venv `site-packages`.
+- **Implicit Namespace Packages**: Expanded E2E test coverage validating that packages sharing implicit PEP 420 namespace packages (e.g., `google-cloud-storage` and `google-cloud-bigquery`) resolve seamlessly in `rules_python` venvs without symlink collisions.
