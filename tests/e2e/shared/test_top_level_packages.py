@@ -15,7 +15,7 @@ import unittest
 
 
 class TopLevelPackagesTest(unittest.TestCase):
-    """Check that top_level_packages from wheel inspection actually show up."""
+    """Check that top_level_paths from wheel inspection actually show up."""
 
     def _get_packages(self):
         return [p.strip() for p in os.environ.get("PYCROSS_TEST_PACKAGES", "regex,IPython").split(",") if p.strip()]

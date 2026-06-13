@@ -55,6 +55,8 @@ def _pycross_pylock_lock_model_impl(ctx):
         inputs = inputs,
         outputs = [out],
         executable = ctx.executable._tool,
+        mnemonic = "PycrossPylockTranslate",
+        execution_requirements = {"supports-path-mapping": "1"},
         arguments = [args],
     )
 

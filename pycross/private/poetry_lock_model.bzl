@@ -42,6 +42,8 @@ def _pycross_poetry_lock_model_impl(ctx):
         ),
         outputs = [out],
         executable = ctx.executable._tool,
+        mnemonic = "PycrossPoetryTranslate",
+        execution_requirements = {"supports-path-mapping": "1"},
         arguments = [args],
     )
 

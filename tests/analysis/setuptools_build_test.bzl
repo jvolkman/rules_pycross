@@ -45,7 +45,7 @@ def _test_setuptools_build_with_repair(name):
 def _test_setuptools_build_with_repair_impl(env, target):
     wheel_dir = target[DefaultInfo].files.to_list()[0]
     action = env.expect.that_target(target).action_generating(wheel_dir.short_path)
-    action.mnemonic().equals("RepairWheel")
+    action.mnemonic().equals("PycrossRepairWheel")
 
 def setuptools_build_test_suite(name):
     test_suite(

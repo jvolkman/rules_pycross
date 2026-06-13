@@ -51,6 +51,8 @@ def _pycross_pdm_lock_model_impl(ctx):
         ),
         outputs = [out],
         executable = ctx.executable._tool,
+        mnemonic = "PycrossPdmTranslate",
+        execution_requirements = {"supports-path-mapping": "1"},
         arguments = [args],
     )
 

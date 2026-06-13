@@ -25,6 +25,6 @@ def extract_sdist(ctx: BuildContext) -> None:
     if len(extracted_dirs) != 1:
         raise ValueError(f"Expected exactly one directory in sdist archive, got: {extracted_dirs}")
 
-    ctx.sdist_dir.parent.mkdir(parents=True, exist_ok=True)
-    shutil.move(str(extracted_dirs[0]), str(ctx.sdist_dir))
+    ctx.sdist_root_dir.parent.mkdir(parents=True, exist_ok=True)
+    shutil.move(str(extracted_dirs[0]), str(ctx.sdist_root_dir))
     shutil.rmtree(extract_parent)

@@ -225,7 +225,7 @@ def _package_repo_impl(rctx):
     # 1. Render _lock/lock.bzl and _lock/BUILD.bazel
     rctx.file("_lock/lock.bzl", render_lock_bzl(lock, repo_map, rctx.name))
     rctx.file("_lock/BUILD.bazel", "\n".join([
-        'package(default_visibility = ["//:__subpackages__"])',
+        'package(default_visibility = ["//visibility:public"])',
         "",
         'load(":lock.bzl", "targets")',
         "",

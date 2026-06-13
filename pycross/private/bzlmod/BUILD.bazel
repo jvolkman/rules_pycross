@@ -72,6 +72,7 @@ bzl_library(
     name = "lock_repos",
     srcs = ["lock_repos.bzl"],
     deps = [
+        ":git_file",
         ":sdist_repo",
         ":tag_attrs",
         "//pycross/private:package_repo",
@@ -95,6 +96,11 @@ bzl_library(
 bzl_library(
     name = "backend_registry_repo",
     srcs = ["backend_registry_repo.bzl"],
+)
+
+bzl_library(
+    name = "git_file",
+    srcs = ["git_file.bzl"],
 )
 
 bzl_library(

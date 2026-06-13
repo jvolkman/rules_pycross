@@ -17,6 +17,7 @@ class BuildContext:
     # Absolute sandbox paths
     prefix: Path
     temp_dir: Path
+    sdist_root_dir: Path
     sdist_dir: Path
     env_dir: Path
     bin_dir: Path
@@ -49,7 +50,12 @@ def load_build_context(config_path: str) -> BuildContext:
 
     prefix = Path.cwd().absolute()
     temp_dir = (prefix / Path(os.environ["PYCROSS_BUILD_ROOT"])).absolute()
-    sdist_dir = (prefix / Path(os.environ["PYCROSS_SDIST_DIR"])).absolute()
+    sdist_root_dir = (prefix / Path(os.environ["PYCROSS_SDIST_DIR"])).absolute()
+    source_dir = bazel_config.get("source_dir")
+    if source_dir:
+        sdist_dir = sdist_root_dir / source_dir
+    else:
+        sdist_dir = sdist_root_dir
 
     # Resolve configuration settings from file or dictionary
     config_settings_raw_path = bazel_config.get("config_settings_raw")
@@ -79,6 +85,7 @@ def load_build_context(config_path: str) -> BuildContext:
         bazel_config=bazel_config,
         prefix=prefix,
         temp_dir=temp_dir,
+        sdist_root_dir=sdist_root_dir,
         sdist_dir=sdist_dir,
         env_dir=temp_dir / "env",
         bin_dir=temp_dir / "bin",

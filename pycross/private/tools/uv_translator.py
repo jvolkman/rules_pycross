@@ -52,6 +52,7 @@ class Package:
     is_local: bool
     resolved_dependencies: Set[PackageDependency]
     extras: Set[str]
+    source_dir: str | None = None
 
     def __post_init__(self):
         self.extras = set(e.lower() for e in self.extras)
@@ -81,6 +82,7 @@ class Package:
             python_version_specifiers=self.python_versions,
             dependencies=dependencies_without_self,
             files=sorted(self.files, key=lambda f: f.name),
+            source_dir=self.source_dir,
         )
 
     def merge(self, other: Package) -> Package:
@@ -106,6 +108,7 @@ class Package:
             is_local=merged_is_local,
             resolved_dependencies=merged_resolved_dependencies,
             extras=merged_extras,
+            source_dir=self.source_dir or other.source_dir,
         )
 
 
@@ -386,6 +389,57 @@ def collect_and_process_packages(packages_list: list[Dict[str, Any]]) -> Dict[Pa
         source = lock_pkg.get("source", {})
         sdist = lock_pkg.get("sdist", {})
 
+        files = {parse_file_info(f) for f in lock_pkg.get("wheels", [])}
+        if sdist:
+            if "url" in sdist or "file" in sdist:
+                files.add(parse_file_info(sdist))
+            elif "url" in source:
+                # URL-based sources (e.g. an archive referenced with a
+                # `#subdirectory=` fragment) put the download URL on the
+                # `source` entry rather than the `sdist` entry. The archive
+                # file name (e.g. a git ref tarball) is not a PEP 503 sdist
+                # name, which both PackageFile and pip's link evaluator
+                # reject, so synthesise a canonical `{name}-{version}.tar.gz`
+                # file name while keeping the real download URL.
+                url = source["url"]
+                file_hash = sdist["hash"]
+                assert file_hash.startswith("sha256:")
+                file_name = f"{package_name}-{package_version}.tar.gz"
+                files.add(
+                    PackageFile(
+                        name=file_name,
+                        sha256=file_hash[7:],
+                        urls=(url,),
+                        package_name=package_name,
+                        package_version=Version(package_version),
+                    )
+                )
+            else:
+                files.add(parse_file_info(sdist))
+        elif "git" in source:
+            import hashlib
+            from urllib.parse import urlparse
+
+            git_url = source["git"]
+            parsed = urlparse(git_url)
+            commit = parsed.fragment
+            if not commit:
+                raise Exception(f"Git source must specify a commit hash in the fragment: {git_url}")
+            synthetic_hash = hashlib.sha256(commit.encode("utf-8")).hexdigest()
+            file_name = f"{package_name}-{package_version}.tar.gz"
+            files.add(
+                PackageFile(
+                    name=file_name,
+                    sha256=synthetic_hash,
+                    urls=(f"git+{git_url}",),
+                    package_name=package_name,
+                    package_version=Version(package_version),
+                )
+            )
+
+        # Extract source_dir if present
+        source_dir = source.get("subdirectory")
+
         # Check for editable source (any path value)
         is_local_editable = "editable" in source and isinstance(source.get("editable"), str)
 
@@ -409,6 +463,7 @@ def collect_and_process_packages(packages_list: list[Dict[str, Any]]) -> Dict[Pa
             is_local=is_local,
             resolved_dependencies=set(),
             extras=set(package_extras),
+            source_dir=source_dir,
         )
         if package.key in distinct_packages:
             distinct_packages[package.key] = package.merge(distinct_packages[package.key])

@@ -36,7 +36,7 @@ def _test_repaired_wheel_basic_impl(env, target):
 
     # The action generating the wheel_dir should be RepairWheel
     action = env.expect.that_target(target).action_generating(wheel_dir.short_path)
-    action.mnemonic().equals("RepairWheel")
+    action.mnemonic().equals("PycrossRepairWheel")
 
 def _test_repaired_wheel_with_native_deps(name):
     util.helper_target(_mock_wheel, name = name + "_wheel")

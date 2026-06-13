@@ -235,6 +235,7 @@ class PackageResolver:
         self.key = package.key
         self.package_name = package.name
         self.uses_sdist = False
+        self.source_dir = package.source_dir
 
         build_dependencies = annotations.build_dependencies or default_build_dependencies
 
@@ -340,6 +341,7 @@ class PackageResolver:
             site_hooks=self._site_hooks,
             build_backend=self._build_backend,
             top_level_paths=self._top_level_paths,
+            source_dir=self.source_dir,
         )
 
 

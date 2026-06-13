@@ -205,6 +205,7 @@ class RawPackage:
     python_version_specifiers: List[SpecifierSet] = field(default_factory=list)
     dependencies: List[PackageDependency] = field(default_factory=list)
     files: List[PackageFile] = field(default_factory=list)
+    source_dir: Optional[str] = None
 
     def __post_init__(self):
         normalized_name = package_canonical_name(self.name)
@@ -245,6 +246,7 @@ class ResolvedPackage:
     build_backend: Optional[str] = None
     top_level_paths: List[str] = field(default_factory=list)
     cycle_group: Optional[str] = None
+    source_dir: Optional[str] = None
 
 
 @dataclass(frozen=True)

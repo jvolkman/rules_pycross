@@ -75,6 +75,15 @@ wheels = [
 ]
 
 [[package]]
+name = "flit-core"
+version = "3.12.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/69/59/b6fc2188dfc7ea4f936cd12b49d707f66a1cb7a1d2c16172963534db741b/flit_core-3.12.0.tar.gz", hash = "sha256:18f63100d6f94385c6ed57a72073443e1a71a4acb4339491615d0f16d6ff01b2", size = 53690, upload-time = "2025-03-25T08:03:23.969Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/f2/65/b6ba90634c984a4fcc02c7e3afe523fef500c4980fec67cc27536ee50acf/flit_core-3.12.0-py3-none-any.whl", hash = "sha256:e7a0304069ea895172e3c7bb703292e992c5d1555dd1233ab7b5621b5b69e62c", size = 45594, upload-time = "2025-03-25T08:03:20.772Z" },
+]
+
+[[package]]
 name = "ipython"
 version = "8.18.1"
 source = { registry = "https://pypi.org/simple" }
@@ -259,6 +268,11 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/1a/b0/413077f6b1153ed3cba361401c6783bbad6114804a000cc22eb71c13e190/numpy-2.4.6-pp311-pypy311_pp73-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:8ad03c0965fb3c692200e74d458ca28c1dbb4ce96f9a479a8aa041ad5fabca02", size = 16747286, upload-time = "2026-05-18T23:37:06.327Z" },
     { url = "https://files.pythonhosted.org/packages/15/ce/e5ec180bc41812edcd8daeb8639d205622c0e8c02259d8ab25a0201b3c2a/numpy-2.4.6-pp311-pypy311_pp73-win_amd64.whl", hash = "sha256:2803abfebfc990042cd494d8ce2d5f82e9d847af6d35ec486923aa19dbad5e73", size = 12504263, upload-time = "2026-05-18T23:37:09.715Z" },
 ]
+
+[[package]]
+name = "packaging"
+version = "23.2"
+source = { git = "https://github.com/pypa/packaging.git?rev=23.2#b3a5d7d68991c040615d5345bb55f61de53ba176" }
 
 [[package]]
 name = "parso"
@@ -664,7 +678,9 @@ source = { editable = "." }
 dependencies = [
     { name = "attrs" },
     { name = "beautifulsoup4" },
+    { name = "flit-core" },
     { name = "ipython" },
+    { name = "packaging" },
     { name = "python-dateutil" },
     { name = "regex" },
     { name = "rerun-sdk", version = "0.26.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.10'" },
@@ -676,7 +692,9 @@ dependencies = [
 requires-dist = [
     { name = "attrs", specifier = ">=24.2.0" },
     { name = "beautifulsoup4", specifier = ">=4.12.3" },
+    { name = "flit-core" },
     { name = "ipython", specifier = ">=8.18.1" },
+    { name = "packaging", git = "https://github.com/pypa/packaging.git?rev=23.2" },
     { name = "python-dateutil", specifier = ">=2.9.0" },
     { name = "regex", specifier = ">=2024.11.6" },
     { name = "rerun-sdk" },
