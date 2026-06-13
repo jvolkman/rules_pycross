@@ -132,36 +132,29 @@ def _thin_package_repo_impl(rctx):
     # differing annotations across hub members.
     conflicts = rctx.attr.conflicts
 
-    # Generate a basic modules_mapping.json from top_level_paths.
-    # The hub package_repo handles the full inspection.json lookup;
-    # we just use whatever top_level_paths are already in the lock.
-    modules_mapping = {}
-    _MODULE_EXTENSIONS = [".pth", ".so", ".py"]
-    for pin_name, pin_target in pins.items():
-        pkg = packages.get(pin_target)
-        if pkg:
-            for tlp in pkg.get("top_level_paths", []):
-                module_name = tlp
-                for ext in _MODULE_EXTENSIONS:
-                    if module_name.endswith(ext):
-                        module_name = module_name[:-len(ext)]
-                        break
-                if "/" in module_name:
-                    module_name = module_name.replace("/", ".")
-                modules_mapping[module_name] = pin_name
-
-    rctx.file("modules_mapping.json", json.encode(modules_mapping))
+    # modules_mapping.json is generated via pycross_modules_mapping in BUILD.bazel
     rctx.file("REPO.bazel", "")
     rctx.file("defs.bzl", "")
     rctx.file("requirements.bzl", _requirements_bzl(rctx, pins))
 
     # Root BUILD.bazel with //:package aliases
     root_build_lines = [
+        'load("@rules_pycross//pycross/private:modules_mapping.bzl", "pycross_modules_mapping")',
         'package(default_visibility = ["//visibility:public"])',
         "",
-        'exports_files(["defs.bzl", "requirements.bzl", "modules_mapping.json"])',
+        'exports_files(["defs.bzl", "requirements.bzl"])',
         "",
+        "pycross_modules_mapping(",
+        '    name = "modules_mapping",',
+        "    deps = [",
     ]
+    for pin_name in sorted(pins.keys()):
+        root_build_lines.append('        "//%s:pkg",' % _underscore_name(pin_name))
+    root_build_lines.extend([
+        "    ],",
+        ")",
+        "",
+    ])
     for pin_name in sorted(pins.keys()):
         us_name = _underscore_name(pin_name)
         package = packages[pins[pin_name]]

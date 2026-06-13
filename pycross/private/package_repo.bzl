@@ -257,75 +257,12 @@ def _package_repo_impl(rctx):
         packages = lock["packages"]
         pins = lock["pins"]
 
-    # 0. Read inspection.json from wheel repos to populate top_level_paths.
-    # repo_map is a label_keyed_string_dict: Label -> file_key.
-    # Labels are resolved by Bazel from the extension context, so we can use
-    # label.repo_name to construct inspection labels without string splitting.
-    # Only the wheel repos we actually call rctx.path() on get fetched (lazy).
-
-    # Build a reverse map (file_key -> label_string) for the renderer and
-    # other downstream consumers that need forward string lookups.
-    repo_map = {}  # file_key -> label_string
-    wheel_labels = {}  # file_key -> Label (only wheel entries)
+    repo_map = {}
     for label, file_key in rctx.attr.repo_map.items():
         repo_map[file_key] = str(label)
-        if label.name == "wheel":
-            wheel_labels[file_key] = label
 
-    sdist_labels = {}  # file_key -> Label
-    for label, file_key in getattr(rctx.attr, "sdist_map", {}).items():
-        sdist_labels[file_key] = label
-
-    for pkg_key, pkg in packages.items():
-        # Skip if the user explicitly overrode top_level_paths via annotation.
-        if pkg.get("top_level_paths"):
-            continue
-        for _, file_ref in pkg.get("environment_files", {}).items():
-            key = file_ref.get("key")
-            if not key:
-                continue
-            wheel_label = wheel_labels.get(key)
-            if wheel_label:
-                inspection_label = Label("@@{}//:inspection.json".format(wheel_label.repo_name))
-                inspection_path = rctx.path(inspection_label)
-                if inspection_path.exists:
-                    inspection_data = json.decode(rctx.read(inspection_path))
-                    if "top_level_paths" in inspection_data:
-                        pkg["top_level_paths"] = inspection_data["top_level_paths"]
-                break
-
-            sdist_label = sdist_labels.get(key)
-            if sdist_label:
-                inspection_label = Label("@@{}//:inspection.json".format(sdist_label.repo_name))
-                inspection_path = rctx.path(inspection_label)
-                if inspection_path.exists:
-                    inspection_data = json.decode(rctx.read(inspection_path))
-                    if "top_level_paths" in inspection_data:
-                        pkg["top_level_paths"] = inspection_data["top_level_paths"]
-                break
-
-    # 0.5. Generate modules_mapping.json
-    # Known file extensions that should be stripped to derive the module name.
-    _MODULE_EXTENSIONS = [".pth", ".so", ".py"]
-
-    modules_mapping = {}
-    for pin_name, pin_target in pins.items():
-        pkg = packages.get(pin_target)
-        if pkg:
-            for tlp in pkg.get("top_level_paths", []):
-                # Strip known file extensions to derive the importable module name.
-                module_name = tlp
-                for ext in _MODULE_EXTENSIONS:
-                    if module_name.endswith(ext):
-                        module_name = module_name[:-len(ext)]
-                        break
-
-                # Convert path separators to dots for namespace packages.
-                if "/" in module_name:
-                    module_name = module_name.replace("/", ".")
-                modules_mapping[module_name] = pin_name
-
-    rctx.file("modules_mapping.json", json.encode(modules_mapping))
+    # Eager inspection reading removed!
+    # modules_mapping.json is now generated via pycross_modules_mapping in BUILD.bazel
 
     rctx.file("REPO.bazel", "")
     rctx.file("defs.bzl", "")  # Empty file for compatibility
@@ -344,11 +281,22 @@ def _package_repo_impl(rctx):
 
     # 2. Root BUILD.bazel with //:package aliases (PEP 503 dash-form names)
     root_build_lines = [
+        'load("@rules_pycross//pycross/private:modules_mapping.bzl", "pycross_modules_mapping")',
         'package(default_visibility = ["//visibility:public"])',
         "",
-        'exports_files(["defs.bzl", "requirements.bzl", "modules_mapping.json"])',
+        'exports_files(["defs.bzl", "requirements.bzl"])',
         "",
+        "pycross_modules_mapping(",
+        '    name = "modules_mapping",',
+        "    deps = [",
     ]
+    for pin_name in sorted(pins.keys()):
+        root_build_lines.append('        "//%s:pkg",' % _underscore_name(pin_name))
+    root_build_lines.extend([
+        "    ],",
+        ")",
+        "",
+    ])
     for pin_name in sorted(pins.keys()):
         us_name = _underscore_name(pin_name)
         pin_target = pins[pin_name]

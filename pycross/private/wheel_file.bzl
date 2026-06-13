@@ -4,13 +4,18 @@ load("@bazel_tools//tools/build_defs/repo:utils.bzl", "read_user_netrc", "use_ne
 load("//pycross/private:internal_repo.bzl", "exec_internal_tool")
 
 _BUILD_TEMPLATE = """\
+load("@rules_pycross//pycross/private:wheel_library.bzl", "pycross_wheel_metadata")
+
 package(default_visibility = ["//visibility:public"])
 
 exports_files(["inspection.json"])
 
-filegroup(
+pycross_wheel_metadata(
     name = "wheel",
-    srcs = ["{filename}"],
+    wheel = "{filename}",
+    package_name = "{package_name}",
+    package_version = "{package_version}",
+    top_level_paths = {top_level_paths},
 )
 """
 
@@ -77,8 +82,17 @@ def _pycross_wheel_file_impl(rctx):
         # Note: exec_internal_tool will actually fail() if return_code != 0,
         # but if we somehow bypass it or change it, we write a fallback.
         rctx.file("inspection.json", json.encode({"top_level_paths": []}))
+        top_level_paths = []
+    else:
+        inspection_data = json.decode(rctx.read("inspection.json"))
+        top_level_paths = inspection_data.get("top_level_paths", [])
 
-    rctx.file("BUILD.bazel", _BUILD_TEMPLATE.format(filename = rctx.attr.filename))
+    rctx.file("BUILD.bazel", _BUILD_TEMPLATE.format(
+        filename = rctx.attr.filename,
+        package_name = rctx.attr.package_name or "",
+        package_version = rctx.attr.package_version or "",
+        top_level_paths = top_level_paths,
+    ))
 
 pycross_wheel_file = repository_rule(
     implementation = _pycross_wheel_file_impl,

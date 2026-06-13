@@ -7,13 +7,14 @@ load("@pycross_backends//:sdist_dispatch.bzl", "SDIST_HOOKS")
 load("//pycross/private:internal_repo.bzl", "exec_internal_tool")
 load("//pycross/private:util.bzl", "extract_pep508_name", "underscore_name")
 
-def _render_build_file(rctx, macro_attrs, backend_macro, extra_build_snippets = None):
+def _render_build_file(rctx, macro_attrs, backend_macro, top_level_paths, extra_build_snippets = None):
     """Render the BUILD.bazel file for an sdist repo.
 
     Args:
         rctx: The repository context.
         macro_attrs: Dict of macro attribute name -> Starlark literal string.
         backend_macro: The backend macro name (e.g. 'meson_build').
+        top_level_paths: The top level paths for the package.
         extra_build_snippets: Optional list of raw BUILD file content strings.
     """
     attr_lines = []
@@ -26,17 +27,25 @@ def _render_build_file(rctx, macro_attrs, backend_macro, extra_build_snippets = 
     backend_bzl = "_backend:{}.bzl".format(backend_macro)
 
     build_content = """\nload("@{lock_repo}//{backend_bzl}", "{backend_macro}")
+load("@rules_pycross//pycross/private:wheel_library.bzl", "pycross_wheel_metadata")
 
 package(default_visibility = ["//visibility:public"])
 
 {backend_macro}(
 {attrs}
 )
+
+pycross_wheel_metadata(
+    name = "wheel",
+    wheel = ":wheel_build",
+    top_level_paths = {top_level_paths},
+)
 """.format(
         lock_repo = rctx.attr.lock_repo,
         backend_bzl = backend_bzl,
         backend_macro = backend_macro,
         attrs = "\n".join(attr_lines),
+        top_level_paths = top_level_paths,
     )
 
     if extra_build_snippets:
@@ -64,7 +73,7 @@ def _sdist_repo_common(rctx):
     known_backends = {v: True for v in backend_to_rule.values()}
 
     macro_attrs = {
-        "name": "\"wheel\"",
+        "name": "\"wheel_build\"",
         "sdist": "\"{}\"".format(rctx.attr.sdist),
         "deps": str(rctx.attr.deps),
     }
@@ -90,6 +99,7 @@ def _sdist_repo_common(rctx):
                 build_deps.append("@{}//{}:pkg".format(rctx.attr.lock_repo, underscore_name(dep_name)))
             macro_attrs["build_deps"] = str(build_deps)
 
+        top_level_paths = []
         rctx.file("inspection.json", json.encode({"top_level_paths": []}))
     else:
         sdist_path = rctx.path(rctx.attr.sdist)
@@ -175,8 +185,9 @@ def _sdist_repo_common(rctx):
     return struct(
         macro_attrs = macro_attrs,
         backend_macro = backend_macro,
+        top_level_paths = top_level_paths,
         applied_override_config = matching_config,
-        render = lambda macro_attrs, backend_macro, extra_build_snippets = None: _render_build_file(rctx, macro_attrs, backend_macro, extra_build_snippets),
+        render = lambda macro_attrs, backend_macro, extra_build_snippets = None: _render_build_file(rctx, macro_attrs, backend_macro, top_level_paths, extra_build_snippets),
     )
 
 # -- Default (generic) sdist repo rule --

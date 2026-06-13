@@ -13,7 +13,12 @@ def _pycross_modules_mapping_impl(ctx):
                 #   "google/cloud/storage" -> "google.cloud.storage"
                 #   "requests" -> "requests"
                 #   "six.py" -> "six"
-                module_name = tlp.replace("/", ".").removesuffix(".py")
+                module_name = tlp
+                for ext in [".pth", ".so", ".py"]:
+                    if module_name.endswith(ext):
+                        module_name = module_name[:-len(ext)]
+                        break
+                module_name = module_name.replace("/", ".")
                 mapping[module_name] = pkg_info.package_name
 
     out = ctx.actions.declare_file(ctx.attr.name + ".json")

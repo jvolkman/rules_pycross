@@ -95,8 +95,12 @@ def _pycross_wheel_library_impl(ctx):
     package_name = ctx.attr.package_name or ctx.label.name
     package_version = ctx.attr.package_version or ""
 
-    if ctx.attr.top_level_paths:
-        for tlp in ctx.attr.top_level_paths:
+    top_level_paths = ctx.attr.top_level_paths
+    if not top_level_paths and PycrossPackageInfo in ctx.attr.wheel:
+        top_level_paths = ctx.attr.wheel[PycrossPackageInfo].top_level_paths
+
+    if top_level_paths:
+        for tlp in top_level_paths:
             venv_symlinks.append(VenvSymlinkEntry(
                 kind = VenvSymlinkKind.LIB,
                 link_to_path = paths.join(imp, tlp),
@@ -154,7 +158,7 @@ def _pycross_wheel_library_impl(ctx):
             PycrossPackageInfo(
                 package_name = ctx.attr.package_name,
                 package_version = ctx.attr.package_version,
-                top_level_paths = ctx.attr.top_level_paths,
+                top_level_paths = top_level_paths,
             ),
         )
 
@@ -206,5 +210,25 @@ This option is required to support some packages which cannot handle the convers
             cfg = "exec",
             executable = True,
         ),
+    },
+)
+
+def _pycross_wheel_metadata_impl(ctx):
+    return [
+        DefaultInfo(files = depset(ctx.files.wheel)),
+        PycrossPackageInfo(
+            package_name = ctx.attr.package_name,
+            package_version = ctx.attr.package_version,
+            top_level_paths = ctx.attr.top_level_paths,
+        ),
+    ]
+
+pycross_wheel_metadata = rule(
+    implementation = _pycross_wheel_metadata_impl,
+    attrs = {
+        "wheel": attr.label(allow_files = True, mandatory = True),
+        "package_name": attr.string(),
+        "package_version": attr.string(),
+        "top_level_paths": attr.string_list(),
     },
 )
