@@ -83,6 +83,18 @@ py_library(
     imports = ["../../.."],
 )
 
+py_library(
+    name = "translator_utils",
+    srcs = [
+        "translator_utils.py",
+    ],
+    imports = ["../../.."],
+    deps = [
+        ":lock_model",
+        "@rules_pycross_internal//deps:packaging",
+    ],
+)
+
 py_test(
     name = "namespace_pkgs_test",
     size = "small",
@@ -103,6 +115,7 @@ py_binary(
     deps = [
         ":args",
         ":lock_model",
+        ":translator_utils",
     ],
 )
 
@@ -114,6 +127,7 @@ py_binary(
     deps = [
         ":args",
         ":lock_model",
+        ":translator_utils",
     ],
 )
 
@@ -125,6 +139,7 @@ py_binary(
     deps = [
         ":args",
         ":lock_model",
+        ":translator_utils",
         "@rules_pycross_internal//deps:poetry-core",
     ],
 )
