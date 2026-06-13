@@ -1,0 +1,13 @@
+[project]
+name = "rules-pycross-gazelle"
+version = "0.1.0"
+description = ""
+requires-python = ">=3.9, <3.13"
+dependencies = [
+    "requests",
+    "python-dateutil",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"

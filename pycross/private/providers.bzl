@@ -12,6 +12,7 @@ PycrossPackageInfo = provider(
     fields = {
         "package_name": "string: The normalized package name.",
         "package_version": "string: The package version.",
+        "top_level_paths": "list of strings: The top-level import paths provided by this package.",
     },
 )
 

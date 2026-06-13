@@ -20,6 +20,7 @@ def define_e2e_tests():
         "sdist_repo",
         "bzlmod_flags",
         "namespace_pkgs",
+        "gazelle_integration",
     ]:
         extra_tags = ["build"] if ws in _BUILD_WORKSPACES else []
         sh_test(

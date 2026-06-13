@@ -33,6 +33,8 @@ def _target_python_impl(ctx):
     ctx.actions.run(
         outputs = [f],
         executable = ctx.executable._tool,
+        mnemonic = "PycrossTargetEnv",
+        execution_requirements = {"supports-path-mapping": "1"},
         arguments = [args],
     )
 

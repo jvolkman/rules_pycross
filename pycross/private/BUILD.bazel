@@ -121,6 +121,7 @@ bzl_library(
     name = "wheel_library",
     srcs = ["wheel_library.bzl"],
     deps = [
+        ":modules_mapping",
         ":providers",
         "@bazel_skylib//lib:paths",
         "@rules_python//python:py_info_bzl",
@@ -222,6 +223,12 @@ bzl_library(
         ":internal_repo",
         "@bazel_tools//tools/build_defs/repo:utils.bzl",
     ],
+)
+
+bzl_library(
+    name = "modules_mapping",
+    srcs = ["modules_mapping.bzl"],
+    deps = [":providers"],
 )
 
 bzl_library(

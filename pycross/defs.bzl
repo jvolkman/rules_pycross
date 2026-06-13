@@ -2,6 +2,7 @@
 
 load("//pycross/private:dist_info.bzl", _pycross_dist_info = "pycross_dist_info")
 load("//pycross/private:lock_attrs.bzl", _package_annotation = "package_annotation")
+load("//pycross/private:modules_mapping.bzl", _pycross_modules_mapping = "pycross_modules_mapping")
 load("//pycross/private:pdm_lock_model.bzl", _pycross_pdm_lock_model = "pycross_pdm_lock_model")
 load("//pycross/private:poetry_lock_model.bzl", _pycross_poetry_lock_model = "pycross_poetry_lock_model")
 load("//pycross/private:providers.bzl", _PycrossExtractedWheelInfo = "PycrossExtractedWheelInfo")
@@ -26,6 +27,7 @@ pycross_pdm_lock_model = _pycross_pdm_lock_model
 pycross_poetry_lock_model = _pycross_poetry_lock_model
 pycross_target_environment = _pycross_target_environment
 pycross_uv_lock_model = _pycross_uv_lock_model
+pycross_modules_mapping = _pycross_modules_mapping
 
 pycross_dist_info = _pycross_dist_info
 

@@ -51,6 +51,28 @@ py_console_script_binary which expects a :dist_info filegroup.
 | <a id="pycross_dist_info-pkg"></a>pkg |  A pycross_wheel_library target.   | <a href="https://bazel.build/concepts/labels">Label</a> | required |  |
 
 
+<a id="pycross_modules_mapping"></a>
+
+## pycross_modules_mapping
+
+<pre>
+load("@rules_pycross//pycross:defs.bzl", "pycross_modules_mapping")
+
+pycross_modules_mapping(<a href="#pycross_modules_mapping-name">name</a>, <a href="#pycross_modules_mapping-deps">deps</a>)
+</pre>
+
+Generates a modules_mapping.json file mapping top-level Python import paths to package names.
+This is intended to be used with rules_python_gazelle_plugin to resolve third-party imports.
+
+**ATTRIBUTES**
+
+
+| Name  | Description | Type | Mandatory | Default |
+| :------------- | :------------- | :------------- | :------------- | :------------- |
+| <a id="pycross_modules_mapping-name"></a>name |  A unique name for this target.   | <a href="https://bazel.build/concepts/labels#target-names">Name</a> | required |  |
+| <a id="pycross_modules_mapping-deps"></a>deps |  A list of pycross_wheel_library targets.   | <a href="https://bazel.build/concepts/labels">List of labels</a> | optional |  `[]`  |
+
+
 <a id="pycross_path_tool"></a>
 
 ## pycross_path_tool

@@ -17,6 +17,7 @@ bzl_library(
     visibility = ["//visibility:public"],
     deps = [
         "//pycross/private:dist_info",
+        "//pycross/private:modules_mapping",
         "//pycross/private:pdm_lock_model",
         "//pycross/private:poetry_lock_model",
         "//pycross/private:pypi_file",

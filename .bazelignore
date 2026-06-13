@@ -17,3 +17,4 @@ tests/e2e/shared
 tests/e2e/tools
 tests/e2e/sdist_repo
 tests/e2e/namespace_pkgs
+tests/e2e/gazelle_integration
