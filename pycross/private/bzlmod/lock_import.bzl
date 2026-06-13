@@ -94,6 +94,7 @@ def _lock_struct(mctx, tag):
 
     return struct(
         repo_name = tag.repo,
+        hub = tag.hub,
         default_alias_single_version = tag.default_alias_single_version,
         environments = environment_files,
         local_wheels = tag.local_wheels,
@@ -150,13 +151,17 @@ def _lock_import_impl(module_ctx):
             repo_info.packages[tag.name] = _normalize_package_tag(tag)
 
     # Generate the resolved lock repos
+    hub_memberships = {}
     for repo_name, repo_info in lock_repos.items():
         resolved_lock_repo_file = _generate_resolved_lock_repo(repo_info, lock_model_structs[repo_name])
         resolved_lock_files[repo_info.repo_name] = resolved_lock_repo_file
+        if repo_info.hub:
+            hub_memberships[repo_info.repo_name] = repo_info.hub
 
     lock_hub_repo(
         name = "lock_import_repos_hub",
         repo_files = resolved_lock_files,
+        hub_memberships = hub_memberships,
     )
 
     if bazel_features.external_deps.extension_metadata_has_reproducible:

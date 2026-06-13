@@ -232,6 +232,12 @@ bzl_library(
 )
 
 bzl_library(
+    name = "thin_package_repo",
+    srcs = ["thin_package_repo.bzl"],
+    deps = [":util"],
+)
+
+bzl_library(
     name = "dist_info",
     srcs = ["dist_info.bzl"],
 )

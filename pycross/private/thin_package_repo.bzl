@@ -1,0 +1,188 @@
+"""A thin package repo that delegates to a hub for shared resources.
+
+When multiple lock imports share a hub, each user-facing repo is "thin":
+it only contains pin aliases, requirements.bzl, and modules_mapping.json.
+The actual pycross_wheel_library targets live in the shared hub repo.
+
+The file structure is:
+- BUILD.bazel              - Root aliases (//:package).
+- requirements.bzl         - Provides requirement() and all_requirements.
+- modules_mapping.json     - Import-to-package mapping for Gazelle.
+- <package>/BUILD.bazel    - Pin aliases pointing to @hub//_lock targets.
+"""
+
+load(":util.bzl", "underscore_name")
+
+def _underscore_name(name):
+    return underscore_name(name)
+
+_requirement_func = """\
+def requirement(pkg):
+    extra = None
+    if "[" in pkg:
+        pkg, extra = pkg.split("[", 1)
+        extra = extra.rstrip("]")
+
+    pkg = pkg.replace("_", "-").replace(".", "-").lower()
+    for i in range(len(pkg)):
+        if "--" in pkg:
+            pkg = pkg.replace("--", "-")
+        else:
+            break
+
+    if extra:
+        return "@@{repo_name}//:%s[%s]" % (pkg, extra)
+    return "@@{repo_name}//:%s" % pkg
+"""
+
+def _requirements_bzl(rctx, pins):
+    lines = [
+        _requirement_func.format(repo_name = rctx.name),
+        "",
+        "# All pinned requirements",
+        "all_requirements = [",
+    ]
+    for pin in sorted(pins.keys()):
+        lines.append('    "@@{repo_name}//:{pin}",'.format(repo_name = rctx.name, pin = pin))
+    lines.append("]")
+
+    lines.extend([
+        "",
+        "all_whl_requirements = all_requirements",
+    ])
+
+    return "\n".join(lines) + "\n"
+
+def _safe_name(pin_name, name):
+    return name + "_" if pin_name == name else name
+
+def _pin_build(target_name, original_pin_name, pin_target, package, hub_repo):
+    """Generates the BUILD file for a pin directory, pointing to the hub."""
+    lock_ref = "@{}//_lock:".format(hub_repo)
+    wheel_ref = "@{}//_wheel:".format(hub_repo)
+    sdist_ref = "@{}//_sdist:".format(hub_repo)
+
+    lines = [
+        'package(default_visibility = ["//visibility:public"])',
+        "",
+        "alias(",
+        '    name = "{}",'.format(target_name),
+        '    actual = "{}{}",'.format(lock_ref, pin_target),
+        ")",
+        "",
+        "alias(",
+        '    name = "{}",'.format(_safe_name(target_name, "pkg")),
+        '    actual = "{}{}",'.format(lock_ref, pin_target),
+        ")",
+        "",
+        "alias(",
+        '    name = "{}",'.format(_safe_name(target_name, "wheel")),
+        '    actual = "{}{}",'.format(wheel_ref, original_pin_name),
+        ")",
+        "",
+        "alias(",
+        '    name = "{}",'.format(_safe_name(target_name, "dist_info")),
+        '    actual = "{}_dist_info_{}",'.format(lock_ref, pin_target),
+        ")",
+        "",
+    ]
+
+    sdist_file = package.get("sdist_file")
+    if sdist_file:
+        lines.extend([
+            "alias(",
+            '    name = "{}",'.format(_safe_name(target_name, "sdist")),
+            '    actual = "{}{}",'.format(sdist_ref, original_pin_name),
+            ")",
+            "",
+        ])
+
+    for extra_name in sorted(package.get("extra_dependencies", {}).keys()):
+        lines.extend([
+            "alias(",
+            '    name = "[{}]",'.format(extra_name),
+            '    actual = "{}{}[{}]",'.format(lock_ref, pin_target, extra_name),
+            ")",
+            "",
+        ])
+
+    return "\n".join(lines) + "\n"
+
+def _thin_package_repo_impl(rctx):
+    hub_repo = rctx.attr.hub_repo
+    lock_json_path = rctx.path(rctx.attr.resolved_lock_file)
+    lock = json.decode(rctx.read(lock_json_path))
+    packages = lock["packages"]
+    pins = lock["pins"]
+
+    # Generate a basic modules_mapping.json from top_level_paths.
+    # The hub package_repo handles the full inspection.json lookup;
+    # we just use whatever top_level_paths are already in the lock.
+    modules_mapping = {}
+    _MODULE_EXTENSIONS = [".pth", ".so", ".py"]
+    for pin_name, pin_target in pins.items():
+        pkg = packages.get(pin_target)
+        if pkg:
+            for tlp in pkg.get("top_level_paths", []):
+                module_name = tlp
+                for ext in _MODULE_EXTENSIONS:
+                    if module_name.endswith(ext):
+                        module_name = module_name[:-len(ext)]
+                        break
+                if "/" in module_name:
+                    module_name = module_name.replace("/", ".")
+                modules_mapping[module_name] = pin_name
+
+    rctx.file("modules_mapping.json", json.encode(modules_mapping))
+    rctx.file("REPO.bazel", "")
+    rctx.file("defs.bzl", "")
+    rctx.file("requirements.bzl", _requirements_bzl(rctx, pins))
+
+    # Root BUILD.bazel with //:package aliases
+    root_build_lines = [
+        'package(default_visibility = ["//visibility:public"])',
+        "",
+        'exports_files(["defs.bzl", "requirements.bzl", "modules_mapping.json"])',
+        "",
+    ]
+    for pin_name in sorted(pins.keys()):
+        us_name = _underscore_name(pin_name)
+        package = packages[pins[pin_name]]
+
+        root_build_lines.extend([
+            "alias(",
+            '    name = "{}",'.format(pin_name),
+            '    actual = "//{}:pkg",'.format(us_name),
+            ")",
+            "",
+        ])
+
+        for extra_name in sorted(package.get("extra_dependencies", {}).keys()):
+            root_build_lines.extend([
+                "alias(",
+                '    name = "{}[{}]",'.format(pin_name, extra_name),
+                '    actual = "//{}:[{}]",'.format(us_name, extra_name),
+                ")",
+                "",
+            ])
+    rctx.file("BUILD.bazel", "\n".join(root_build_lines))
+
+    # Pin directories: aliases pointing to @hub//_lock targets
+    for pin_name, pin_target in sorted(pins.items()):
+        package = packages[pin_target]
+        us_name = _underscore_name(pin_name)
+        rctx.file(
+            "{}/BUILD.bazel".format(us_name),
+            _pin_build(us_name, pin_name, pin_target, package, hub_repo),
+        )
+
+thin_package_repo = repository_rule(
+    implementation = _thin_package_repo_impl,
+    attrs = {
+        "resolved_lock_file": attr.label(mandatory = True),
+        "hub_repo": attr.string(
+            mandatory = True,
+            doc = "Name of the hub package_repo that contains the shared _lock/ targets.",
+        ),
+    },
+)

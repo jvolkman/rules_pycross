@@ -606,3 +606,48 @@ The build pipeline is decomposed into composable, reusable actions:
 
 - **`.pth` files**: `inspect_package.py` now recognizes root-level `.pth` files in wheels/sdists and includes them in `top_level_packages`, ensuring `rules_python` symlinks them into the venv `site-packages`.
 - **Implicit Namespace Packages**: Expanded E2E test coverage validating that packages sharing implicit PEP 420 namespace packages (e.g., `google-cloud-storage` and `google-cloud-bigquery`) resolve seamlessly in `rules_python` venvs without symlink collisions.
+
+---
+
+## New: Multi-Lock Hub Support
+
+Support for importing multiple lock files into a shared "hub", enabling monorepos where different subprojects use different dependencies while benefiting from shared wheel/sdist caching.
+
+### Hub Architecture
+
+- New optional `hub` attribute on all `lock_import` tag classes (`import_uv`, `import_pdm`, `import_poetry`, `import_pylock`).
+- Lock imports sharing the same `hub` name share a single backing `package_repo` (the hub) containing the merged set of `pycross_wheel_library` targets.
+- Each user-facing repo becomes a lightweight `thin_package_repo` facade with its own `requirements.bzl`, `modules_mapping.json`, and pin aliases pointing to the hub's `_lock/` targets.
+- When `hub` is not set, behavior is identical to before — fully backward compatible.
+
+### Example Usage
+
+```python
+lock_import.import_uv(
+    lock_file = "//frontend:uv.lock",
+    project_file = "//frontend:pyproject.toml",
+    repo = "frontend",
+    hub = "shared",
+    target_environments = ["@envs//:environments"],
+)
+
+lock_import.import_uv(
+    lock_file = "//ml:uv.lock",
+    project_file = "//ml:pyproject.toml",
+    repo = "ml",
+    hub = "shared",
+    target_environments = ["@envs//:environments"],
+)
+```
+
+Both `@frontend` and `@ml` repos work independently with their own pins, but overlapping packages (e.g., `regex`) are downloaded and built only once in the shared hub.
+
+### Conflict Detection
+
+- New `pycross_conflict_check` aspect (`pycross/aspects.bzl`) detects transitive version conflicts at `py_binary`/`py_test` boundaries.
+- Collects `PycrossPackageInfo` providers across the transitive dep graph and reports clear errors when the same package appears at different versions.
+- Opt-in via `--aspects=@rules_pycross//pycross:aspects.bzl%pycross_conflict_check`.
+
+### E2E Test
+
+- New `multi_lock_hub` E2E test with two uv projects sharing a hub, verifying cross-repo imports and shared dependency resolution.

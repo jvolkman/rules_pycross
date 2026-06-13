@@ -2,11 +2,13 @@
 
 load("@bazel_features//:features.bzl", "bazel_features")
 load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_file")
+load("@lock_import_repos_hub//:hubs.bzl", "hub_memberships")
 load("@lock_import_repos_hub//:locks.bzl", lock_import_locks = "locks")
 load("@pycross_backends//:registry.bzl", "BACKEND_CONFIGS", "BACKEND_TO_RULE", "DEFAULT_BACKEND", "OVERRIDE_FILES")
 load("@rules_pycross//pycross/private/bzlmod:sdist_repo.bzl", "pycross_sdist_repo")
 load("//pycross/private:package_repo.bzl", "package_repo")
 load("//pycross/private:pypi_file.bzl", "pypi_file")
+load("//pycross/private:thin_package_repo.bzl", "thin_package_repo")
 load("//pycross/private:util.bzl", "sanitize_name")
 load("//pycross/private:wheel_file.bzl", "pycross_wheel_file")
 load(":git_file.bzl", "pycross_git_file")
@@ -54,6 +56,7 @@ def _lock_repos_impl(module_ctx):
     backend_configs_json = {name: json.encode(config) for name, config in BACKEND_CONFIGS.items()}
 
     # Generate the lock repos and any remote package repos
+    per_repo_data = {}  # repo_name -> struct(repo_map, sdist_map)
     for repo_name, lock_file in all_locks.items():
         resolved_lock_file = module_ctx.path(lock_file)
         resolved_lock = json.decode(module_ctx.read(resolved_lock_file))
@@ -119,6 +122,10 @@ def _lock_repos_impl(module_ctx):
 
         sdist_map = {}
 
+        # For hub members, sdist build deps point to the hub's _lock/ targets.
+        hub_name = hub_memberships.get(repo_name, "")
+        lock_repo_for_deps = "pycross_hub_{}".format(hub_name) if hub_name else repo_name
+
         # Instantiate sdist repos for packages requiring source builds.
         # Sdist repos are environment-agnostic (the same source archive is
         # used regardless of target platform), so we create one per package
@@ -150,13 +157,13 @@ def _lock_repos_impl(module_ctx):
             # that resolve to the sdist.
             deps_set = {}
             for dep in pkg.get("common_dependencies", []):
-                dep_label = "@{}//_lock:{}".format(repo_name, dep)
+                dep_label = "@{}//_lock:{}".format(lock_repo_for_deps, dep)
                 deps_set[dep_label] = True
             for env_name, env_file_ref in pkg.get("environment_files", {}).items():
                 if env_file_ref.get("key") != sdist_file_key:
                     continue
                 for dep in pkg.get("environment_dependencies", {}).get(env_name, []):
-                    dep_label = "@{}//_lock:{}".format(repo_name, dep)
+                    dep_label = "@{}//_lock:{}".format(lock_repo_for_deps, dep)
                     deps_set[dep_label] = True
 
             sdist_repo_name = "{}_sdist_{}".format(
@@ -178,7 +185,7 @@ def _lock_repos_impl(module_ctx):
                 "deps": sorted(deps_set.keys()),
                 "known_packages": known_packages,
                 "lock_json": lock_file,
-                "lock_repo": repo_name,
+                "lock_repo": lock_repo_for_deps,
                 "backend_to_rule": BACKEND_TO_RULE,
                 "default_backend": DEFAULT_BACKEND,
                 "whldir_name": whldir_name,
@@ -205,12 +212,62 @@ def _lock_repos_impl(module_ctx):
         # proper Label objects instead of raw strings.
         repo_map = {label_str: file_key for file_key, label_str in repo_remote_files.items()}
 
-        package_repo(
-            name = repo_name,
-            resolved_lock_file = lock_file,
+        # Save per-repo data for hub processing
+        per_repo_data[repo_name] = struct(
             repo_map = repo_map,
             sdist_map = sdist_map,
+            lock_file = lock_file,
+        )
+
+        # For hub members, use thin_package_repo; otherwise use full package_repo
+        hub_name = hub_memberships.get(repo_name, "")
+        if hub_name:
+            thin_package_repo(
+                name = repo_name,
+                resolved_lock_file = lock_file,
+                hub_repo = "pycross_hub_{}".format(hub_name),
+            )
+        else:
+            package_repo(
+                name = repo_name,
+                resolved_lock_file = lock_file,
+                repo_map = repo_map,
+                sdist_map = sdist_map,
+                backend_configs = backend_configs_json,
+            )
+
+    # Create hub package repos for shared resources
+    hub_groups = {}  # hub_name -> [repo_name, ...]
+    for repo_name, hub_name in hub_memberships.items():
+        hub_groups.setdefault(hub_name, []).append(repo_name)
+
+    for hub_name, member_repos in hub_groups.items():
+        hub_repo_name = "pycross_hub_{}".format(hub_name)
+
+        # Merge repo_maps and sdist_maps from all members
+        merged_repo_map = {}
+        merged_sdist_map = {}
+
+        for member in member_repos:
+            data = per_repo_data[member]
+            merged_repo_map.update(data.repo_map)
+            merged_sdist_map.update(data.sdist_map)
+
+        # Use the first member's lock file as the "primary" for the hub.
+        # The hub package_repo will read all member locks via member_lock_files.
+        # For now, pass a merged set of lock files as a string_dict.
+        member_lock_files = {
+            member: str(per_repo_data[member].lock_file)
+            for member in member_repos
+        }
+
+        package_repo(
+            name = hub_repo_name,
+            resolved_lock_file = per_repo_data[member_repos[0]].lock_file,
+            repo_map = merged_repo_map,
+            sdist_map = merged_sdist_map,
             backend_configs = backend_configs_json,
+            member_lock_files = member_lock_files,
         )
 
     if bazel_features.external_deps.extension_metadata_has_reproducible:

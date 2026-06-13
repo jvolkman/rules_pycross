@@ -1,0 +1,50 @@
+load("@lock_a//:requirements.bzl", requirement_a = "requirement")
+load("@lock_b//:requirements.bzl", requirement_b = "requirement")
+load("@rules_python//python:defs.bzl", "py_test")
+
+package(default_visibility = ["//visibility:public"])
+
+# Test: import regex from lock_a
+py_test(
+    name = "test_regex_from_a",
+    srcs = ["@rules_pycross_e2e_shared//:test_regex.py"],
+    main = "test_regex.py",
+    deps = [requirement_a("regex")],
+)
+
+# Test: import regex from lock_b
+py_test(
+    name = "test_regex_from_b",
+    srcs = ["@rules_pycross_e2e_shared//:test_regex.py"],
+    main = "test_regex.py",
+    deps = [requirement_b("regex")],
+)
+
+# Test: import six (only in lock_a)
+py_test(
+    name = "test_six",
+    srcs = ["test_import.py"],
+    args = ["six"],
+    main = "test_import.py",
+    deps = [requirement_a("six")],
+)
+
+# Test: import attrs (only in lock_b)
+py_test(
+    name = "test_attrs",
+    srcs = ["test_import.py"],
+    args = ["attrs"],
+    main = "test_import.py",
+    deps = [requirement_b("attrs")],
+)
+
+# Test: cross-repo deps — both regex should resolve to the same hub target
+py_test(
+    name = "test_cross_repo",
+    srcs = ["test_cross_repo.py"],
+    deps = [
+        requirement_a("regex"),
+        requirement_a("six"),
+        requirement_b("attrs"),
+    ],
+)

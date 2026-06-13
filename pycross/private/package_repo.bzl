@@ -143,10 +143,49 @@ def _pin_build(target_name, original_pin_name, pin_target, package):
     return "\n".join(lines) + "\n"
 
 def _package_repo_impl(rctx):
-    lock_json_path = rctx.path(rctx.attr.resolved_lock_file)
-    lock = json.decode(rctx.read(lock_json_path))
-    packages = lock["packages"]
-    pins = lock["pins"]
+    is_hub = bool(rctx.attr.member_lock_files)
+
+    if is_hub:
+        # Hub mode: merge packages and environments from all member lock files.
+        packages = {}
+        environments = {}
+        pins = {}  # Hub has no pins; each thin repo has its own.
+        for _member, lock_label in rctx.attr.member_lock_files.items():
+            member_lock = json.decode(rctx.read(rctx.path(Label(lock_label))))
+
+            # Merge environments (union across members).
+            for env_name, env_ref in member_lock.get("environments", {}).items():
+                if env_name not in environments:
+                    environments[env_name] = env_ref
+
+            for pkg_key, pkg_data in member_lock.get("packages", {}).items():
+                if pkg_key not in packages:
+                    packages[pkg_key] = dict(pkg_data)
+                else:
+                    # Same package@version from another member: merge environments.
+                    existing = packages[pkg_key]
+                    for env_name, env_ref in pkg_data.get("environment_files", {}).items():
+                        existing.setdefault("environment_files", {})[env_name] = env_ref
+                    for env_name, env_deps in pkg_data.get("environment_dependencies", {}).items():
+                        existing.setdefault("environment_dependencies", {})[env_name] = env_deps
+                    for dep in pkg_data.get("common_dependencies", []):
+                        cd = existing.setdefault("common_dependencies", [])
+                        if dep not in cd:
+                            cd.append(dep)
+                    for extra, extra_deps in pkg_data.get("extra_dependencies", {}).items():
+                        existing.setdefault("extra_dependencies", {})[extra] = extra_deps
+                    if not existing.get("top_level_paths") and pkg_data.get("top_level_paths"):
+                        existing["top_level_paths"] = pkg_data["top_level_paths"]
+                    if not existing.get("sdist_file") and pkg_data.get("sdist_file"):
+                        existing["sdist_file"] = pkg_data["sdist_file"]
+
+        # Build a synthetic lock dict for the renderer.
+        lock = {"packages": packages, "pins": pins, "environments": environments}
+    else:
+        lock_json_path = rctx.path(rctx.attr.resolved_lock_file)
+        lock = json.decode(rctx.read(lock_json_path))
+        packages = lock["packages"]
+        pins = lock["pins"]
 
     # 0. Read inspection.json from wheel repos to populate top_level_paths.
     # repo_map is a label_keyed_string_dict: Label -> file_key.
@@ -389,6 +428,10 @@ package_repo = repository_rule(
         "sdist_map": attr.label_keyed_string_dict(),
         "backend_configs": attr.string_dict(
             doc = "Maps pycross rule names to JSON-encoded config dicts with 'rule_bzl' and 'tool_packages'.",
+        ),
+        "member_lock_files": attr.string_dict(
+            doc = "For hub repos: maps member repo names to their resolved lock file labels.",
+            default = {},
         ),
     },
 )

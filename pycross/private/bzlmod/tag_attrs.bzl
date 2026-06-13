@@ -46,6 +46,11 @@ COMMON_IMPORT_ATTRS = dict(
               "matching V1 behavior.",
         default = False,
     ),
+    hub = attr.string(
+        doc = "Optional hub name. Repos sharing the same hub name will share underlying " +
+              "wheel library and sdist build targets, improving cache efficiency in monorepos.",
+        default = "",
+    ),
 )
 
 # Attrs for the package tag
