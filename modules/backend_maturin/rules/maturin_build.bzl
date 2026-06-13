@@ -145,6 +145,11 @@ maturin_build = rule(
             executable = True,
             cfg = "exec",
         ),
+        "_extract_wheel_bin": attr.label(
+            default = "@rules_pycross//pycross/private/tools:extract_wheel_bin",
+            executable = True,
+            cfg = "exec",
+        ),
         "_exec_rust_toolchain": attr.label(
             default = Label("@rules_rust//rust/toolchain:current_rust_toolchain"),
             cfg = "exec",
