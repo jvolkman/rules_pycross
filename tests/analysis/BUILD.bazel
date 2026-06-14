@@ -1,4 +1,5 @@
 load(":cmake_build_test.bzl", "cmake_build_test_suite")
+load(":conflict_check_aspect_test.bzl", "conflict_check_aspect_test_suite")
 load(":extract_cc_layer_test.bzl", "extract_cc_layer_test_suite")
 load(":meson_build_test.bzl", "meson_build_test_suite")
 load(":pep517_build_test.bzl", "pep517_build_test_suite")
@@ -31,3 +32,5 @@ wheel_transform_test_suite(name = "wheel_transform_test")
 transitions_test_suite(name = "transitions_test")
 
 repaired_wheel_test_suite(name = "repaired_wheel_test")
+
+conflict_check_aspect_test_suite(name = "conflict_check_aspect_test")

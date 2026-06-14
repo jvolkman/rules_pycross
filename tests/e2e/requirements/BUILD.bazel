@@ -60,8 +60,8 @@ py_test(
 py_test(
     name = "test_modules_mapping",
     srcs = ["test_modules_mapping.py"],
-    data = ["@uv//:modules_mapping.json"],
+    data = ["@uv//:modules_mapping"],
     env = {
-        "MAPPING_JSON": "$(location @uv//:modules_mapping.json)",
+        "MAPPING_JSON": "$(location @uv//:modules_mapping)",
     },
 )

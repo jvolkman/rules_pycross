@@ -13,9 +13,6 @@ The file structure is:
 
 load(":util.bzl", "underscore_name")
 
-def _underscore_name(name):
-    return underscore_name(name)
-
 _requirement_func = """\
 def requirement(pkg):
     extra = None
@@ -149,14 +146,14 @@ def _thin_package_repo_impl(rctx):
         "    deps = [",
     ]
     for pin_name in sorted(pins.keys()):
-        root_build_lines.append('        "//%s:pkg",' % _underscore_name(pin_name))
+        root_build_lines.append('        "//%s:pkg",' % underscore_name(pin_name))
     root_build_lines.extend([
         "    ],",
         ")",
         "",
     ])
     for pin_name in sorted(pins.keys()):
-        us_name = _underscore_name(pin_name)
+        us_name = underscore_name(pin_name)
         package = packages[pins[pin_name]]
 
         root_build_lines.extend([
@@ -180,7 +177,7 @@ def _thin_package_repo_impl(rctx):
     # Pin directories: aliases pointing to @hub//_lock targets
     for pin_name, pin_target in sorted(pins.items()):
         package = packages[pin_target]
-        us_name = _underscore_name(pin_name)
+        us_name = underscore_name(pin_name)
 
         # For conflicting packages, use the member-specific variant target.
         hub_lock_target = None

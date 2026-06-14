@@ -166,3 +166,15 @@ py_test(
         "@rules_pycross_internal//deps:packaging",
     ],
 )
+
+py_test(
+    name = "translator_utils_test",
+    srcs = ["translator_utils_test.py"],
+    main = "translator_utils_test.py",
+    tags = ["unit"],
+    deps = [
+        "//pycross/private/tools:lock_model",
+        "//pycross/private/tools:translator_utils",
+        "@rules_pycross_internal//deps:packaging",
+    ],
+)

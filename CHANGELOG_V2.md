@@ -516,6 +516,7 @@ The build pipeline is decomposed into composable, reusable actions:
 | pdm translator | 2 | `pdm_translator_test.py` |
 | poetry translator | 5 | `poetry_translator_test.py` |
 | pylock translator | 15 | `pylock_translator_test.py` |
+| translator_utils | 12 | `translator_utils_test.py` |
 | Raw lock resolver | 23 | `raw_lock_resolver_test.py` |
 | Resolved lock renderer (Python) | 4 | `resolved_lock_renderer_test.py` |
 | Resolved lock renderer (Starlark) | 5 | `test_resolved_lock_renderer.bzl` |
@@ -523,7 +524,7 @@ The build pipeline is decomposed into composable, reusable actions:
 | Build utils (cc_toolchain, hooks, lifecycle, meson, venv) | 14 | various `*_test.py` |
 | TOML lock generator | 1 | `toml_lock_generator_test.py` |
 | Starlark unit tests | 8 | `test_common_attrs.bzl`, `test_override_helpers.bzl` |
-| Starlark analysis tests | 11 | `tests/analysis/*.bzl` |
+| Starlark analysis tests | 15 | `tests/analysis/*.bzl` (including conflict_check_aspect) |
 
 ### Key coverage areas
 
@@ -651,3 +652,85 @@ Both `@frontend` and `@ml` repos work independently with their own pins, but ove
 ### E2E Test
 
 - New `multi_lock_hub` E2E test with two uv projects sharing a hub, verifying cross-repo imports and shared dependency resolution.
+
+---
+
+## Changed: Lazy Wheel Metadata and Modules Mapping
+
+Eliminated a major repository fetching bottleneck. Previously, `package_repo` eagerly fetched every wheel repository at repo generation time to read `inspection.json` for `top_level_paths` and to generate `modules_mapping.json`. This caused sequential fetching of all wheels.
+
+### New Architecture
+
+- **`pycross_wheel_metadata` rule**: A lightweight Starlark rule that wraps a wheel file and provides `PycrossPackageInfo` (including `top_level_paths`) without requiring the wheel to be fetched at repo generation time.
+- **Provider-based metadata**: `pycross_wheel_library` now reads `top_level_paths` from the wheel's `PycrossPackageInfo` provider at build time, falling back to the explicit `top_level_paths` attribute.
+- **Build-time `modules_mapping`**: The `pycross_modules_mapping` rule generates `modules_mapping.json` lazily during Gazelle builds instead of eagerly at repo generation time.
+- **Wheel repos**: `pycross_wheel_file` now instantiates `pycross_wheel_metadata` in its BUILD file, embedding `top_level_paths` from the local `inspection.json`.
+- **Sdist repos**: `pycross_sdist_repo` wraps the backend build output with `pycross_wheel_metadata` for consistent provider propagation.
+
+### Impact
+
+- Wheel repositories are now fetched on-demand (in parallel) rather than sequentially during repo generation.
+- `modules_mapping.json` is only computed when a Gazelle target is built, not on every `bazel build`.
+
+---
+
+## Changed: Extra Squashing at the Alias Layer
+
+Previously, `--squash-extras` was applied at translation time, mutating the lock data to merge all extra dependencies into the base package. This made the resolved lock non-canonical and complicated hub merging.
+
+### New Approach
+
+- The lock resolver now emits a `squash_extras` boolean flag alongside the canonical (un-squashed) dependency graph.
+- The lock renderer generates `py_library(name = "<pkg_key>__squashed")` targets that aggregate the base package and all its extras.
+- `package_repo.bzl` and `thin_package_repo.bzl` read `squash_extras` and point their aliases to the `__squashed` variant when enabled.
+- Extra aliases (`[extra_name]`) also point to the squashed target when squashing is active.
+
+This preserves the canonical dependency graph in the lock, enabling correct hub merging while letting each repo decide its squashing policy at the alias layer.
+
+---
+
+## New: Shared Translator Logic (`translator_utils`)
+
+Extracted the common dependency graph resolution algorithm from the uv, pdm, and poetry translators into `translator_utils.py`.
+
+- **`PackageProtocol`**: A `runtime_checkable` Protocol defining the interface each translator's `Package` class must implement (`satisfies_dependency`, `satisfies_pin`, `add_resolved_dependency`, `to_lock_package`).
+- **`resolve_lock_graph()`**: The shared function that groups packages by name, resolves dependencies (newest-first), pins packages, elides local packages, and produces the final `RawLockSet`.
+- Net reduction of ~22 lines despite adding a new module.
+- Dedicated unit tests in `translator_utils_test.py`.
+
+---
+
+## Tips: Extracting Files from Wheel TreeArtifacts
+
+The `:pkg` target for each package produces a TreeArtifact containing the full extracted wheel layout:
+
+```
+<pkg>/
+├── site-packages/      # Python modules (purelib + platlib)
+├── bin/                # Console scripts and entry points
+├── include/            # C/C++ headers
+└── data/               # Data files
+```
+
+To extract individual files (e.g., a binary like `ruff`), use [`@aspect_bazel_lib`](https://github.com/bazel-contrib/bazel-lib)'s `directory_path` and `copy_file`:
+
+```python
+load("@aspect_bazel_lib//lib:directory_path.bzl", "directory_path")
+load("@aspect_bazel_lib//lib:copy_file.bzl", "copy_file")
+
+directory_path(
+    name = "_ruff_binary_path",
+    directory = "@pypi//ruff:pkg",
+    path = "bin/ruff",
+)
+
+copy_file(
+    name = "_ruff_exe",
+    src = ":_ruff_binary_path",
+    out = "ruff_exe",
+    is_executable = True,
+    visibility = ["//visibility:public"],
+)
+```
+
+This is the pycross equivalent of rules_python's `select_file` + `extracted_whl_files` pattern.
