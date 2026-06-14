@@ -70,7 +70,7 @@ This is intended to be used with rules_python_gazelle_plugin to resolve third-pa
 | Name  | Description | Type | Mandatory | Default |
 | :------------- | :------------- | :------------- | :------------- | :------------- |
 | <a id="pycross_modules_mapping-name"></a>name |  A unique name for this target.   | <a href="https://bazel.build/concepts/labels#target-names">Name</a> | required |  |
-| <a id="pycross_modules_mapping-deps"></a>deps |  A list of pycross_wheel_library targets.   | <a href="https://bazel.build/concepts/labels">List of labels</a> | optional |  `[]`  |
+| <a id="pycross_modules_mapping-deps"></a>deps |  A list of package targets. Targets providing PycrossPackageInfo will be included in the mapping; others are silently skipped.   | <a href="https://bazel.build/concepts/labels">List of labels</a> | optional |  `[]`  |
 
 
 <a id="pycross_path_tool"></a>

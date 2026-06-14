@@ -19,7 +19,7 @@ def _pycross_modules_mapping_impl(ctx):
                         module_name = module_name[:-len(ext)]
                         break
                 module_name = module_name.replace("/", ".")
-                mapping[module_name] = pkg_info.package_name
+                mapping[module_name] = pkg_info.package_name.replace("-", "_")
 
     out = ctx.actions.declare_file(ctx.attr.name + ".json")
     ctx.actions.write(out, json.encode(mapping))
@@ -33,8 +33,7 @@ pycross_modules_mapping = rule(
     """,
     attrs = {
         "deps": attr.label_list(
-            doc = "A list of pycross_wheel_library targets.",
-            providers = [PycrossPackageInfo],
+            doc = "A list of package targets. Targets providing PycrossPackageInfo will be included in the mapping; others are silently skipped.",
         ),
     },
 )

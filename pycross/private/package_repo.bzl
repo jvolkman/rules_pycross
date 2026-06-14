@@ -291,7 +291,17 @@ def _package_repo_impl(rctx):
         "    deps = [",
     ]
     for pin_name in sorted(pins.keys()):
-        root_build_lines.append('        "//%s:pkg",' % _underscore_name(pin_name))
+        pin_target = pins[pin_name]
+        package = packages.get(pin_target, {})
+
+        # Point directly at the pycross_wheel_library target in _lock.
+        # For cycle group packages, the wheel_library is named _raw_<sanitized>;
+        # the bare name is a py_library wrapper that lacks PycrossPackageInfo.
+        if package.get("cycle_group"):
+            san = pin_target.lower().replace("-", "_").replace("@", "_").replace("+", "_").replace(".", "_")
+            root_build_lines.append('        "//_lock:_raw_%s",' % san)
+        else:
+            root_build_lines.append('        "//_lock:%s",' % pin_target)
     root_build_lines.extend([
         "    ],",
         ")",

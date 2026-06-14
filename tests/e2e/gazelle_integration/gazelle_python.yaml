@@ -5,7 +5,7 @@
 
 manifest:
   modules_mapping:
-    dateutil: python-dateutil
+    dateutil: python_dateutil
     requests: requests
   pip_repository:
     name: uv

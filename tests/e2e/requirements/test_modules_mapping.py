@@ -16,7 +16,7 @@ class TestModulesMapping(unittest.TestCase):
             "attrs": "attrs",
             "bs4": "beautifulsoup4",
             "IPython": "ipython",
-            "dateutil": "python-dateutil",
+            "dateutil": "python_dateutil",
             "regex": "regex",
             "six": "six",
         }
