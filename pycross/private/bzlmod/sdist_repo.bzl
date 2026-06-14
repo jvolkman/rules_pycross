@@ -106,17 +106,21 @@ def _sdist_repo_common(rctx):
         output_json = rctx.path("build_metadata.json")
 
         # Run the Python inspector tool
+        inspect_args = [
+            "--sdist",
+            str(sdist_path),
+            "--output",
+            str(output_json),
+            "--lock-json",
+            str(rctx.path(rctx.attr.lock_json)),
+        ]
+        if rctx.attr.source_dir:
+            inspect_args.extend(["--source-dir", rctx.attr.source_dir])
+
         exec_internal_tool(
             rctx,
             Label("//pycross/private/tools:inspect_package.py"),
-            [
-                "--sdist",
-                str(sdist_path),
-                "--output",
-                str(output_json),
-                "--lock-json",
-                str(rctx.path(rctx.attr.lock_json)),
-            ],
+            inspect_args,
         )
 
         metadata = json.decode(rctx.read(output_json))

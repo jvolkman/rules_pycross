@@ -365,6 +365,111 @@ class InspectPackageTest(unittest.TestCase):
         result = inspect_sdist(sdist_path)
         self.assertEqual(result["top_level_paths"], ["google/cloud/storage"])
 
+    # -- source_dir tests --
+
+    def test_sdist_source_dir_basic(self):
+        """Source subdirectory: package is nested under packages/mylib/."""
+        sdist_path = self._create_tarball_with_dirs(
+            "monorepo-1.0.tar.gz",
+            {
+                "monorepo-1.0/README.md": "# monorepo",
+                "monorepo-1.0/packages/mylib/pyproject.toml": '[build-system]\nrequires = ["setuptools"]\nbuild-backend = "setuptools.build_meta"',
+                "monorepo-1.0/packages/mylib/mylib/__init__.py": "",
+                "monorepo-1.0/packages/mylib/mylib/core.py": "# core",
+                "monorepo-1.0/packages/otherlib/otherlib/__init__.py": "",
+            },
+        )
+        result = inspect_sdist(sdist_path, source_dir="packages/mylib")
+        self.assertEqual(result["top_level_paths"], ["mylib"])
+        self.assertEqual(result["build_backend"], "setuptools.build_meta")
+        self.assertEqual(result["build_requires"], ["setuptools"])
+
+    def test_sdist_source_dir_src_layout(self):
+        """Source subdirectory with src-layout inside the subdirectory."""
+        sdist_path = self._create_tarball_with_dirs(
+            "monorepo-1.0.tar.gz",
+            {
+                "monorepo-1.0/packages/mylib/pyproject.toml": '[build-system]\nrequires = ["flit_core"]\nbuild-backend = "flit_core.buildapi"',
+                "monorepo-1.0/packages/mylib/src/mylib/__init__.py": "",
+                "monorepo-1.0/packages/mylib/src/mylib/utils.py": "# utils",
+            },
+        )
+        result = inspect_sdist(sdist_path, source_dir="packages/mylib")
+        self.assertEqual(result["top_level_paths"], ["mylib"])
+        self.assertEqual(result["build_backend"], "flit_core.buildapi")
+
+    def test_sdist_source_dir_ignores_sibling_packages(self):
+        """Source subdirectory should not pick up packages from sibling directories."""
+        sdist_path = self._create_tarball_with_dirs(
+            "monorepo-1.0.tar.gz",
+            {
+                "monorepo-1.0/packages/lib_a/pyproject.toml": '[build-system]\nrequires = ["setuptools"]\nbuild-backend = "setuptools.build_meta"',
+                "monorepo-1.0/packages/lib_a/lib_a/__init__.py": "",
+                "monorepo-1.0/packages/lib_b/pyproject.toml": '[build-system]\nrequires = ["hatchling"]\nbuild-backend = "hatchling.build"',
+                "monorepo-1.0/packages/lib_b/lib_b/__init__.py": "",
+            },
+        )
+        result_a = inspect_sdist(sdist_path, source_dir="packages/lib_a")
+        result_b = inspect_sdist(sdist_path, source_dir="packages/lib_b")
+        self.assertEqual(result_a["top_level_paths"], ["lib_a"])
+        self.assertEqual(result_a["build_backend"], "setuptools.build_meta")
+        self.assertEqual(result_b["top_level_paths"], ["lib_b"])
+        self.assertEqual(result_b["build_backend"], "hatchling.build")
+
+    def test_sdist_source_dir_pyproject_scoping(self):
+        """With source_dir, the correct pyproject.toml is read (not the root one)."""
+        sdist_path = self._create_tarball_with_dirs(
+            "monorepo-1.0.tar.gz",
+            {
+                # Root has a different pyproject.toml
+                "monorepo-1.0/pyproject.toml": '[build-system]\nrequires = ["poetry-core"]\nbuild-backend = "poetry.core.masonry.api"',
+                "monorepo-1.0/packages/mylib/pyproject.toml": '[build-system]\nrequires = ["meson-python"]\nbuild-backend = "mesonpy"',
+                "monorepo-1.0/packages/mylib/mylib/__init__.py": "",
+            },
+        )
+        result = inspect_sdist(sdist_path, source_dir="packages/mylib")
+        self.assertEqual(result["build_backend"], "mesonpy")
+        self.assertEqual(result["build_requires"], ["meson-python"])
+
+    def test_sdist_source_dir_namespace_package(self):
+        """Namespace package within a source subdirectory."""
+        sdist_path = self._create_tarball_with_dirs(
+            "monorepo-1.0.tar.gz",
+            {
+                "monorepo-1.0/packages/gcs/pyproject.toml": '[build-system]\nrequires = ["setuptools"]\nbuild-backend = "setuptools.build_meta"',
+                "monorepo-1.0/packages/gcs/google/cloud/storage/__init__.py": "",
+                "monorepo-1.0/packages/gcs/google/cloud/storage/blob.py": "",
+            },
+        )
+        result = inspect_sdist(sdist_path, source_dir="packages/gcs")
+        self.assertEqual(result["top_level_paths"], ["google/cloud/storage"])
+
+    def test_sdist_source_dir_single_level(self):
+        """Source subdirectory at a single level deep."""
+        sdist_path = self._create_tarball_with_dirs(
+            "repo-1.0.tar.gz",
+            {
+                "repo-1.0/subpkg/pyproject.toml": '[build-system]\nrequires = ["setuptools"]\nbuild-backend = "setuptools.build_meta"',
+                "repo-1.0/subpkg/mypkg/__init__.py": "",
+            },
+        )
+        result = inspect_sdist(sdist_path, source_dir="subpkg")
+        self.assertEqual(result["top_level_paths"], ["mypkg"])
+
+    def test_sdist_no_source_dir_unchanged(self):
+        """Without source_dir, behavior is unchanged (regression test)."""
+        sdist_path = self._create_tarball_with_dirs(
+            "pkg-1.0.tar.gz",
+            {
+                "pkg-1.0/pyproject.toml": '[build-system]\nrequires = ["setuptools"]\nbuild-backend = "setuptools.build_meta"',
+                "pkg-1.0/mypkg/__init__.py": "",
+                "pkg-1.0/mypkg/core.py": "# core",
+            },
+        )
+        result = inspect_sdist(sdist_path, source_dir="")
+        self.assertEqual(result["top_level_paths"], ["mypkg"])
+        self.assertEqual(result["build_backend"], "setuptools.build_meta")
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -6,6 +6,7 @@ import tarfile
 import tomllib
 import zipfile
 from pathlib import Path
+from pathlib import PurePosixPath
 
 PEP517_DEFAULT_BACKEND = "setuptools.build_meta:__legacy__"
 PEP517_DEFAULT_REQUIRES = ["setuptools>=40.8.0", "wheel"]
@@ -36,17 +37,41 @@ def _extract_module_name(filename: str) -> str | None:
     return None
 
 
-def _get_archive_file_content(archive_path: Path, target_filename: str) -> str:
-    """Reads a specific file from a tar.gz or zip archive without extracting it to disk."""
+def _get_archive_file_content(archive_path: Path, target_filename: str, source_dir: str = "") -> str:
+    """Reads a specific file from a tar.gz or zip archive without extracting it to disk.
+
+    Args:
+        archive_path: Path to the archive.
+        target_filename: The filename to search for (e.g., "pyproject.toml").
+        source_dir: Optional subdirectory within the archive to scope the search.
+            When set, only matches files within that subdirectory (relative to
+            the archive root dir). This handles git/URL packages with
+            #subdirectory= fragments.
+    """
+    # Build the expected suffix path. For source_dir="packages/mylib" and
+    # target_filename="pyproject.toml", we match "<root>/packages/mylib/pyproject.toml".
+    if source_dir:
+        target_suffix = PurePosixPath(source_dir.strip("/")) / target_filename
+    else:
+        target_suffix = PurePosixPath(target_filename)
+
+    def _matches(name: str) -> bool:
+        p = PurePosixPath(name)
+        # With source_dir: match <root>/<source_dir>/<target>
+        # Without: match <root>/<target> or bare <target>
+        if source_dir:
+            return len(p.parts) >= 2 and p.is_relative_to(PurePosixPath(p.parts[0]) / target_suffix)
+        return p == target_suffix or (len(p.parts) >= 2 and PurePosixPath(*p.parts[1:]) == target_suffix)
+
     if archive_path.name.endswith(".zip") or archive_path.name.endswith(".whl"):
         with zipfile.ZipFile(archive_path) as z:
             for name in z.namelist():
-                if name.endswith(f"/{target_filename}") or name == target_filename:
+                if _matches(name):
                     return z.read(name).decode("utf-8")
     elif archive_path.name.endswith((".tar.gz", ".tgz", ".tar.bz2", ".tar")):
         with tarfile.open(archive_path) as t:
             for member in t.getmembers():
-                if member.isfile() and (member.name.endswith(f"/{target_filename}") or member.name == target_filename):
+                if member.isfile() and _matches(member.name):
                     f = t.extractfile(member)
                     if f:
                         return f.read().decode("utf-8")
@@ -109,7 +134,7 @@ def _resolve_namespace_packages(all_files: set[str], top_level_dirs: set[str]) -
     return result
 
 
-def _find_top_level_paths_sdist(sdist_path: Path) -> list[str]:
+def _find_top_level_paths_sdist(sdist_path: Path, source_dir: str = "") -> list[str]:
     """Find top-level Python packages in an sdist archive.
 
     Looks for directories containing __init__.py at depth 2 (root/pkg/__init__.py)
@@ -117,7 +142,15 @@ def _find_top_level_paths_sdist(sdist_path: Path) -> list[str]:
 
     Handles namespace packages (PEP 420) by descending to find the shallowest
     concrete sub-packages when a top-level directory lacks __init__.py.
+
+    Args:
+        sdist_path: Path to the sdist archive.
+        source_dir: Optional subdirectory within the archive root that contains
+            the actual package. When set, only files under this subdirectory are
+            considered. This handles git/URL packages with #subdirectory= fragments.
     """
+    source_dir_path = PurePosixPath(source_dir.strip("/")) if source_dir else None
+
     # Collect all file paths and candidate top-level directories.
     all_files: set[str] = set()
     top_level_dirs: set[str] = set()
@@ -138,22 +171,42 @@ def _find_top_level_paths_sdist(sdist_path: Path) -> list[str]:
 
     for name, is_dir, is_file in items:
         name = name.rstrip("/")
-        parts = name.split("/")
+        p = PurePosixPath(name)
+
+        # Every archive entry starts with an archive root dir (e.g., "pkg-1.0").
+        if len(p.parts) < 2:
+            continue
+
+        # Compute the effective root: <archive_root> / <source_dir>
+        effective_root = PurePosixPath(p.parts[0]) / source_dir_path if source_dir_path else PurePosixPath(p.parts[0])
+
+        # Filter: only process entries under the effective root.
+        if not p.is_relative_to(effective_root):
+            continue
+
+        # Get the path relative to the effective root.
+        try:
+            rel = p.relative_to(effective_root)
+        except ValueError:
+            continue
+
+        if not rel.parts:
+            continue
+
         if is_file:
-            # Strip the root dir prefix (e.g. "pkg-1.0/") for normalization.
-            if len(parts) >= 2:
-                relative = "/".join(parts[1:])
-                all_files.add(relative)
-            if len(parts) == 2 and parts[1]:
-                root_files.add(parts[1])
-            elif len(parts) == 3 and parts[1] == "src" and parts[2]:
-                root_files.add(parts[2])
-        elif is_dir and len(parts) >= 2:
-            if len(parts) == 2 and parts[1] and parts[1] not in _EXCLUDED_DIRS and not parts[1].endswith(".egg-info"):
-                top_level_dirs.add(parts[1])
-            elif len(parts) == 3 and parts[1] == "src" and parts[2]:
+            # Collect all relative file paths for namespace package resolution.
+            all_files.add(str(rel))
+
+            if len(rel.parts) == 1:
+                root_files.add(rel.parts[0])
+            elif len(rel.parts) == 2 and rel.parts[0] == "src":
+                root_files.add(rel.parts[1])
+        elif is_dir:
+            if len(rel.parts) == 1 and rel.parts[0] not in _EXCLUDED_DIRS and not rel.parts[0].endswith(".egg-info"):
+                top_level_dirs.add(rel.parts[0])
+            elif len(rel.parts) == 2 and rel.parts[0] == "src":
                 src_layout = True
-                top_level_dirs.add(parts[2])
+                top_level_dirs.add(rel.parts[1])
 
     # For src-layout, adjust file paths to be relative to src/
     if src_layout:
@@ -210,8 +263,8 @@ def _find_top_level_paths_wheel(wheel_path: Path) -> list[str]:
     return sorted(pkgs)
 
 
-def inspect_sdist(sdist_path: Path) -> dict:
-    content = _get_archive_file_content(sdist_path, "pyproject.toml")
+def inspect_sdist(sdist_path: Path, source_dir: str = "") -> dict:
+    content = _get_archive_file_content(sdist_path, "pyproject.toml", source_dir=source_dir)
     if content:
         pyproject = tomllib.loads(content)
     else:
@@ -221,7 +274,7 @@ def inspect_sdist(sdist_path: Path) -> dict:
     return {
         "build_backend": build_system.get("build-backend", PEP517_DEFAULT_BACKEND),
         "build_requires": build_system.get("requires", PEP517_DEFAULT_REQUIRES),
-        "top_level_paths": _find_top_level_paths_sdist(sdist_path),
+        "top_level_paths": _find_top_level_paths_sdist(sdist_path, source_dir=source_dir),
     }
 
 
@@ -280,10 +333,13 @@ def main():
     parser.add_argument("--wheel", type=Path)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--lock-json", type=Path)
+    parser.add_argument(
+        "--source-dir", type=str, default="", help="Subdirectory within the sdist archive containing the package."
+    )
     args = parser.parse_args()
 
     if args.sdist:
-        data = inspect_sdist(args.sdist)
+        data = inspect_sdist(args.sdist, source_dir=args.source_dir)
         if args.lock_json:
             with open(args.lock_json, "r") as f:
                 lock_data = json.load(f)
