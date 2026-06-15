@@ -2,6 +2,19 @@
 
 load(":providers.bzl", "PycrossPackageInfo")
 
+def _is_valid_identifier(s):
+    if not s:
+        return False
+    is_first = True
+    for c in s.elems():
+        if is_first:
+            if not (c.isalpha() or c == "_"):
+                return False
+            is_first = False
+        elif not (c.isalnum() or c == "_"):
+            return False
+    return True
+
 def _pycross_modules_mapping_impl(ctx):
     mapping = {}
     extras_mapping = ctx.attr.extras_mapping
@@ -22,8 +35,21 @@ def _pycross_modules_mapping_impl(ctx):
                             module_name = module_name.split(".cpython-")[0]
                         elif ".abi3-" in module_name:
                             module_name = module_name.split(".abi3-")[0]
+                        elif module_name.endswith(".abi3"):
+                            module_name = module_name[:-5]
                         break
                 module_name = module_name.replace("/", ".")
+
+                # Filter out invalid Python identifiers (e.g. shared libraries with dashes)
+                components = module_name.split(".")
+                valid = True
+                for c in components:
+                    if not _is_valid_identifier(c):
+                        valid = False
+                        break
+                if not valid:
+                    continue
+
                 base_name = pkg_info.package_name.replace("-", "_")
 
                 # If this package has an extras override (e.g. foo -> foo[grpc]),
