@@ -127,9 +127,8 @@ def _resolve_namespace_packages(all_files: set[str], top_level_dirs: set[str]) -
 
             for f in code_files:
                 if f.startswith(prefix) and not f.endswith("/__init__.py"):
-                    pkg_path = _extract_module_name(f)
-                    if pkg_path:
-                        candidates.append(pkg_path)
+                    if _extract_module_name(f):
+                        candidates.append(f)
 
             # Sort by depth (shallowest first) so we can skip sub-packages/files
             # of already-selected packages.

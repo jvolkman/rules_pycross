@@ -556,7 +556,7 @@ class InspectPackageTest(unittest.TestCase):
             },
         )
         result = inspect_wheel(wheel_path)
-        self.assertEqual(result["top_level_paths"], ["PyQt5/sip"])
+        self.assertEqual(result["top_level_paths"], ["PyQt5/sip.cpython-313-x86_64-linux-gnu.so"])
 
     def test_wheel_namespace_standalone_py(self):
         """A standalone .py file under a namespace directory.
@@ -571,7 +571,7 @@ class InspectPackageTest(unittest.TestCase):
             },
         )
         result = inspect_wheel(wheel_path)
-        self.assertEqual(result["top_level_paths"], ["mynamespace/helper"])
+        self.assertEqual(result["top_level_paths"], ["mynamespace/helper.py"])
 
     def test_wheel_namespace_standalone_and_subpackage(self):
         """Mix of standalone files and concrete sub-packages in a namespace.
@@ -591,7 +591,7 @@ class InspectPackageTest(unittest.TestCase):
         result = inspect_wheel(wheel_path)
         self.assertEqual(
             result["top_level_paths"],
-            ["google/auth", "google/cloud/storage"],
+            ["google/auth.py", "google/cloud/storage"],
         )
 
 
