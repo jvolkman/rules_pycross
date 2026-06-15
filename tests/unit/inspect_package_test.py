@@ -470,6 +470,76 @@ class InspectPackageTest(unittest.TestCase):
         self.assertEqual(result["top_level_paths"], ["mypkg"])
         self.assertEqual(result["build_backend"], "setuptools.build_meta")
 
+    # -- egg-info/top_level.txt tests --
+
+    def test_sdist_egg_info_top_level_txt(self):
+        """When egg-info/top_level.txt is present, it should be the authoritative source."""
+        sdist_path = self._create_tarball_with_dirs(
+            "netifaces-0.11.0.tar.gz",
+            {
+                "netifaces-0.11.0/setup.py": "",
+                "netifaces-0.11.0/netifaces.c": "/* C source */",
+                "netifaces-0.11.0/netifaces.egg-info/top_level.txt": "netifaces\n",
+            },
+        )
+        result = inspect_sdist(sdist_path)
+        self.assertEqual(result["top_level_paths"], ["netifaces"])
+
+    def test_sdist_egg_info_multiple_modules(self):
+        """top_level.txt with multiple entries."""
+        sdist_path = self._create_tarball_with_dirs(
+            "pkg-1.0.tar.gz",
+            {
+                "pkg-1.0/setup.py": "",
+                "pkg-1.0/foo/__init__.py": "",
+                "pkg-1.0/bar/__init__.py": "",
+                "pkg-1.0/pkg.egg-info/top_level.txt": "foo\nbar\n",
+            },
+        )
+        result = inspect_sdist(sdist_path)
+        self.assertEqual(result["top_level_paths"], ["bar", "foo"])
+
+    def test_sdist_egg_info_ignored_with_source_dir(self):
+        """When source_dir is set, egg-info should be skipped (it may belong to the root)."""
+        sdist_path = self._create_tarball_with_dirs(
+            "monorepo-1.0.tar.gz",
+            {
+                "monorepo-1.0/pyproject.toml": '[build-system]\nrequires = ["setuptools"]\nbuild-backend = "setuptools.build_meta"',
+                "monorepo-1.0/monorepo.egg-info/top_level.txt": "wrong_package\n",
+                "monorepo-1.0/packages/mylib/pyproject.toml": '[build-system]\nrequires = ["setuptools"]\nbuild-backend = "setuptools.build_meta"',
+                "monorepo-1.0/packages/mylib/mylib/__init__.py": "",
+            },
+        )
+        result = inspect_sdist(sdist_path, source_dir="packages/mylib")
+        # Should use heuristic scan, not the root's egg-info
+        self.assertEqual(result["top_level_paths"], ["mylib"])
+
+    def test_sdist_fallback_without_egg_info(self):
+        """Without egg-info, falls back to heuristic scanning (regression test)."""
+        sdist_path = self._create_tarball_with_dirs(
+            "pkg-1.0.tar.gz",
+            {
+                "pkg-1.0/pyproject.toml": '[build-system]\nrequires = ["flit_core"]\nbuild-backend = "flit_core.buildapi"',
+                "pkg-1.0/mypkg/__init__.py": "",
+                "pkg-1.0/mypkg/utils.py": "# utils",
+            },
+        )
+        result = inspect_sdist(sdist_path)
+        self.assertEqual(result["top_level_paths"], ["mypkg"])
+
+    def test_sdist_egg_info_zip(self):
+        """top_level.txt in a zip-format sdist."""
+        sdist_path = self.create_zip(
+            "netifaces-0.11.0.zip",
+            {
+                "netifaces-0.11.0/setup.py": "",
+                "netifaces-0.11.0/netifaces.c": "/* C source */",
+                "netifaces-0.11.0/netifaces.egg-info/top_level.txt": "netifaces\n",
+            },
+        )
+        result = inspect_sdist(sdist_path)
+        self.assertEqual(result["top_level_paths"], ["netifaces"])
+
 
 if __name__ == "__main__":
     unittest.main()

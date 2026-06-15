@@ -148,7 +148,7 @@ def _resolve_namespace_packages(all_files: set[str], top_level_dirs: set[str]) -
     return result
 
 
-def _read_top_level_txt(sdist_path: Path, source_dir: str = "") -> list[str] | None:
+def _read_top_level_txt(sdist_path: Path) -> list[str] | None:
     """Try to read top_level.txt from the egg-info directory inside an sdist.
 
     This is the authoritative source for importable top-level module names,
@@ -201,7 +201,7 @@ def _find_top_level_paths_sdist(sdist_path: Path, source_dir: str = "") -> list[
             considered. This handles git/URL packages with #subdirectory= fragments.
     """
     # Prefer the authoritative top_level.txt if present.
-    top_level_names = _read_top_level_txt(sdist_path, source_dir=source_dir)
+    top_level_names = _read_top_level_txt(sdist_path) if not source_dir else None
     if top_level_names is not None:
         return sorted(top_level_names)
 
