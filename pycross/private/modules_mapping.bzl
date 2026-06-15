@@ -15,9 +15,13 @@ def _pycross_modules_mapping_impl(ctx):
                 #   "requests" -> "requests"
                 #   "six.py" -> "six"
                 module_name = tlp
-                for ext in [".pth", ".so", ".py"]:
+                for ext in [".pth", ".so", ".py", ".pyd"]:
                     if module_name.endswith(ext):
                         module_name = module_name[:-len(ext)]
+                        if ".cpython-" in module_name:
+                            module_name = module_name.split(".cpython-")[0]
+                        elif ".abi3-" in module_name:
+                            module_name = module_name.split(".abi3-")[0]
                         break
                 module_name = module_name.replace("/", ".")
                 base_name = pkg_info.package_name.replace("-", "_")

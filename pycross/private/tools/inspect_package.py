@@ -118,19 +118,19 @@ def _resolve_namespace_packages(all_files: set[str], top_level_dirs: set[str]) -
             # Namespace package — find the shallowest concrete sub-packages.
             prefix = dir_name + "/"
             candidates = []
+
             for init in init_files:
                 if init.startswith(prefix):
                     # e.g. "google/cloud/storage/__init__.py" -> "google/cloud/storage"
                     pkg_path = init.rsplit("/", 1)[0]
                     candidates.append(pkg_path)
 
-            if not candidates:
-                for f in code_files:
-                    if f.startswith(prefix):
-                        pkg_path = f.rsplit("/", 1)[0]
-                        candidates.append(pkg_path)
+            for f in code_files:
+                if f.startswith(prefix) and not f.endswith("/__init__.py"):
+                    pkg_path = f.rsplit("/", 1)[0]
+                    candidates.append(pkg_path)
 
-            # Sort by depth (shallowest first) so we can skip sub-packages
+            # Sort by depth (shallowest first) so we can skip sub-packages/files
             # of already-selected packages.
             candidates.sort(key=lambda p: p.count("/"))
 
