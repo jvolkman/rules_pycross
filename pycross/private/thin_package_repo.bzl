@@ -128,6 +128,21 @@ def _thin_package_repo_impl(rctx):
     rctx.file("requirements.bzl", _requirements_bzl(rctx, pins))
 
     # Root BUILD.bazel with //:package aliases
+
+    # Group pins by base package name to identify extras.
+    grouped_pins = {}
+    for pin_name, pin_target in pins.items():
+        if "[" in pin_name:
+            base, extra = pin_name.split("[", 1)
+            extra = extra[:-1]
+            if base not in grouped_pins:
+                grouped_pins[base] = {"base_target": None, "extras": {}}
+            grouped_pins[base]["extras"][extra] = pin_target
+        else:
+            if pin_name not in grouped_pins:
+                grouped_pins[pin_name] = {"base_target": None, "extras": {}}
+            grouped_pins[pin_name]["base_target"] = pin_target
+
     root_build_lines = [
         'load("@rules_pycross//pycross/private:modules_mapping.bzl", "pycross_modules_mapping")',
         'package(default_visibility = ["//visibility:public"])',
@@ -151,21 +166,27 @@ def _thin_package_repo_impl(rctx):
             root_build_lines.append('        "@%s//_lock:%s",' % (hub_repo, pin_target))
     root_build_lines.extend([
         "    ],",
+    ])
+
+    # When squash_extras is off, tell Gazelle to map imports from packages
+    # that are only pinned via a single extra to the extra-qualified name.
+    if not squash_extras:
+        extras_mapping = {}
+        for base_name, group in grouped_pins.items():
+            if not group["base_target"] and len(group["extras"]) == 1:
+                extra_name = list(group["extras"].keys())[0]
+                us_base = base_name.replace("-", "_")
+                extras_mapping[us_base] = "{}[{}]".format(us_base, extra_name)
+        if extras_mapping:
+            root_build_lines.append("    extras_mapping = {")
+            for base, qualified in sorted(extras_mapping.items()):
+                root_build_lines.append('        "{}": "{}",'.format(base, qualified))
+            root_build_lines.append("    },")
+
+    root_build_lines.extend([
         ")",
         "",
     ])
-    grouped_pins = {}
-    for pin_name, pin_target in pins.items():
-        if "[" in pin_name:
-            base, extra = pin_name.split("[", 1)
-            extra = extra[:-1]
-            if base not in grouped_pins:
-                grouped_pins[base] = {"base_target": None, "extras": {}}
-            grouped_pins[base]["extras"][extra] = pin_target
-        else:
-            if pin_name not in grouped_pins:
-                grouped_pins[pin_name] = {"base_target": None, "extras": {}}
-            grouped_pins[pin_name]["base_target"] = pin_target
 
     for base_pin_name in sorted(grouped_pins.keys()):
         group = grouped_pins[base_pin_name]

@@ -58,7 +58,7 @@ py_console_script_binary which expects a :dist_info filegroup.
 <pre>
 load("@rules_pycross//pycross:defs.bzl", "pycross_modules_mapping")
 
-pycross_modules_mapping(<a href="#pycross_modules_mapping-name">name</a>, <a href="#pycross_modules_mapping-deps">deps</a>)
+pycross_modules_mapping(<a href="#pycross_modules_mapping-name">name</a>, <a href="#pycross_modules_mapping-deps">deps</a>, <a href="#pycross_modules_mapping-extras_mapping">extras_mapping</a>)
 </pre>
 
 Generates a modules_mapping.json file mapping top-level Python import paths to package names.
@@ -71,6 +71,7 @@ This is intended to be used with rules_python_gazelle_plugin to resolve third-pa
 | :------------- | :------------- | :------------- | :------------- | :------------- |
 | <a id="pycross_modules_mapping-name"></a>name |  A unique name for this target.   | <a href="https://bazel.build/concepts/labels#target-names">Name</a> | required |  |
 | <a id="pycross_modules_mapping-deps"></a>deps |  A list of package targets. Targets providing PycrossPackageInfo will be included in the mapping; others are silently skipped.   | <a href="https://bazel.build/concepts/labels">List of labels</a> | optional |  `[]`  |
+| <a id="pycross_modules_mapping-extras_mapping"></a>extras_mapping |  A mapping from base package name to extra-qualified name (e.g. {'foo': 'foo[grpc]'}). When set, Gazelle will resolve imports from these packages to the extra-qualified target.   | <a href="https://bazel.build/rules/lib/dict">Dictionary: String -> String</a> | optional |  `{}`  |
 
 
 <a id="pycross_path_tool"></a>
