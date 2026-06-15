@@ -110,10 +110,14 @@ def _package_repo_impl(rctx):
     for label, file_key in rctx.attr.repo_map.items():
         repo_map[file_key] = str(label)
 
+    sdist_map = {}
+    for label, file_key in rctx.attr.sdist_map.items():
+        sdist_map[file_key] = str(label)
+
     rctx.file("REPO.bazel", "")
 
     # 1. Render _lock/lock.bzl and _lock/BUILD.bazel
-    rctx.file("_lock/lock.bzl", render_lock_bzl(lock, repo_map, rctx.name))
+    rctx.file("_lock/lock.bzl", render_lock_bzl(lock, repo_map, sdist_map, rctx.name))
     rctx.file("_lock/BUILD.bazel", "\n".join([
         'package(default_visibility = ["//visibility:public"])',
         "",
@@ -178,48 +182,6 @@ def _package_repo_impl(rctx):
     for pkg_key in packages.keys():
         norm_pkg = _normalize_name(pkg_key.split("@")[0])
         normalized_locked_package_names[norm_pkg] = True
-
-    rctx.file("_backend/BUILD.bazel", 'package(default_visibility = ["//visibility:public"])\n')
-
-    backend_configs = {}
-    for name, config_json in rctx.attr.backend_configs.items():
-        backend_configs[name] = json.decode(config_json)
-
-    for macro_name, config in backend_configs.items():
-        rule_bzl = config["rule_bzl"]
-
-        tool_deps_labels = []
-        for pkg in config["tool_packages"]:
-            norm_pkg = _normalize_name(pkg)
-            if norm_pkg in normalized_locked_package_names:
-                matching = [k for k in packages.keys() if "__via_" not in k and _normalize_name(k.split("@")[0]) == norm_pkg]
-                if matching:
-                    tool_deps_labels.append("//_lock:{}".format(matching[0]))
-
-        lines = [
-            '"""Backend macro with pre-configured tool defaults for this lock repo."""',
-            "",
-            'load("{rule_bzl}", _{macro_name} = "{macro_name}")'.format(
-                rule_bzl = rule_bzl,
-                macro_name = macro_name,
-            ),
-            "",
-            "def {macro_name}(name, **kwargs):".format(macro_name = macro_name),
-        ]
-
-        if tool_deps_labels:
-            lines.append("    if \"tool_deps\" not in kwargs:")
-            lines.append("        kwargs[\"tool_deps\"] = [")
-            for label in tool_deps_labels:
-                lines.append("            Label(\"{}\"),".format(label))
-            lines.append("        ]")
-
-        lines.extend([
-            "    _{macro_name}(name = name, **kwargs)".format(macro_name = macro_name),
-            "",
-        ])
-
-        rctx.file("_backend/{}.bzl".format(macro_name), "\n".join(lines))
 
 package_repo = repository_rule(
     implementation = _package_repo_impl,

@@ -26,7 +26,7 @@ def _render_build_file(rctx, macro_attrs, backend_macro, top_level_paths, extra_
     # tool_deps defaults from packages present in the lockfile.
     backend_bzl = "_backend:{}.bzl".format(backend_macro)
 
-    build_content = """\nload("@{lock_repo}//{backend_bzl}", "{backend_macro}")
+    build_content = """\nload("@{thin_repo}//{backend_bzl}", "{backend_macro}")
 load("@rules_pycross//pycross/private:wheel_library.bzl", "pycross_wheel_metadata")
 
 package(default_visibility = ["//visibility:public"])
@@ -41,6 +41,7 @@ pycross_wheel_metadata(
     top_level_paths = {top_level_paths},
 )
 """.format(
+        thin_repo = rctx.attr.thin_repo,
         lock_repo = rctx.attr.lock_repo,
         backend_bzl = backend_bzl,
         backend_macro = backend_macro,
@@ -152,7 +153,7 @@ def _sdist_repo_common(rctx):
             # We only add it if it's in the known lock repo mapping.
             # (This will be passed in via rctx.attr.known_packages)
             if req_name in rctx.attr.known_packages:
-                build_deps.append("@{}//{}:pkg".format(rctx.attr.lock_repo, underscore_name(req_name)))
+                build_deps.append("@{}//{}:pkg".format(rctx.attr.thin_repo, underscore_name(req_name)))
 
         macro_attrs["build_deps"] = str(build_deps)
 
@@ -220,6 +221,10 @@ _SDIST_REPO_ATTRS = {
     "build_backend": attr.string(doc = "The build backend to use."),
     "backend_to_rule": attr.string_dict(
         doc = "Registry mapping pyproject backend names to pycross rule names.",
+    ),
+    "thin_repo": attr.string(
+        doc = "Name of the thin universe repo.",
+        mandatory = True,
     ),
     "default_backend": attr.string(
         doc = "The rule name used when no pyproject backend name matches.",

@@ -170,7 +170,7 @@ def _lock_repos_impl(module_ctx):
                 repo_name,
                 sanitize_name(pkg_key),
             )
-            sdist_label_str = "@{}//:inspection.json".format(sdist_repo_name)
+            sdist_label_str = "@{}//:wheel".format(sdist_repo_name)
             sdist_map[sdist_label_str] = sdist_file_key
 
             # Compute the output whldir name: {normalized_name}-{version}.whldir
@@ -186,6 +186,7 @@ def _lock_repos_impl(module_ctx):
                 "known_packages": known_packages,
                 "lock_json": lock_file,
                 "lock_repo": lock_repo_for_deps,
+                "thin_repo": repo_name,
                 "backend_to_rule": BACKEND_TO_RULE,
                 "default_backend": DEFAULT_BACKEND,
                 "whldir_name": whldir_name,
@@ -289,6 +290,7 @@ def _lock_repos_impl(module_ctx):
                 universe_repo = universe_repo_name,
                 member_name = member,
                 conflicts = conflicts,
+                backend_configs = backend_configs_json,
             )
 
     if bazel_features.external_deps.extension_metadata_has_reproducible:

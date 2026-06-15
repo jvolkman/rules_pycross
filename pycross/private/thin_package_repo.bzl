@@ -13,6 +13,9 @@ The file structure is:
 
 load(":util.bzl", "underscore_name")
 
+def _normalize_name(name):
+    return name.lower().replace("_", "-").replace(".", "-")
+
 _requirement_func = """\
 def requirement(pkg):
     extra = None
@@ -114,7 +117,6 @@ def _thin_package_repo_impl(rctx):
     universe_repo = rctx.attr.universe_repo
     lock_json_path = rctx.path(rctx.attr.resolved_lock_file)
     lock = json.decode(rctx.read(lock_json_path))
-    squash_extras = lock.get("squash_extras", False)
     packages = lock["packages"]
     pins = lock["pins"]
 
@@ -157,30 +159,28 @@ def _thin_package_repo_impl(rctx):
         package = packages.get(pin_target, {})
 
         # Point directly at the pycross_wheel_library target in the universe's _lock.
-        # For cycle group packages, the wheel_library is named _raw_<sanitized>.
+        # For cycle group packages, the wheel_library is named _raw_<pkg_key>.
         if package.get("cycle_group"):
-            san = pin_target.lower().replace("-", "_").replace("@", "_").replace("+", "_").replace(".", "_")
-            root_build_lines.append('        "@%s//_lock:_raw_%s",' % (universe_repo, san))
+            root_build_lines.append('        "@%s//_lock:_raw_%s",' % (universe_repo, pin_target))
         else:
             root_build_lines.append('        "@%s//_lock:%s",' % (universe_repo, pin_target))
     root_build_lines.extend([
         "    ],",
     ])
 
-    # When squash_extras is off, tell Gazelle to map imports from packages
+    # Tell Gazelle to map imports from packages
     # that are only pinned via a single extra to the extra-qualified name.
-    if not squash_extras:
-        extras_mapping = {}
-        for base_name, group in grouped_pins.items():
-            if not group["base_target"] and len(group["extras"]) == 1:
-                extra_name = list(group["extras"].keys())[0]
-                us_base = base_name.replace("-", "_")
-                extras_mapping[us_base] = "{}[{}]".format(us_base, extra_name)
-        if extras_mapping:
-            root_build_lines.append("    extras_mapping = {")
-            for base, qualified in sorted(extras_mapping.items()):
-                root_build_lines.append('        "{}": "{}",'.format(base, qualified))
-            root_build_lines.append("    },")
+    extras_mapping = {}
+    for base_name, group in grouped_pins.items():
+        if not group["base_target"] and len(group["extras"]) == 1:
+            extra_name = list(group["extras"].keys())[0]
+            us_base = base_name.replace("-", "_")
+            extras_mapping[us_base] = "{}[{}]".format(us_base, extra_name)
+    if extras_mapping:
+        root_build_lines.append("    extras_mapping = {")
+        for base, qualified in sorted(extras_mapping.items()):
+            root_build_lines.append('        "{}": "{}",'.format(base, qualified))
+        root_build_lines.append("    },")
 
     root_build_lines.extend([
         ")",
@@ -230,7 +230,7 @@ def _thin_package_repo_impl(rctx):
         if base_target and base_target in conflicts:
             universe_lock_target = "{}__via_{}".format(base_target, rctx.attr.member_name)
 
-        has_squashed_variant = squash_extras and base_target and base_target in base_packages_with_extras
+        has_squashed_variant = base_target and base_target in base_packages_with_extras
 
         # Handle extras variants
         extras_dict = {}
@@ -244,6 +244,50 @@ def _thin_package_repo_impl(rctx):
             "{}/BUILD.bazel".format(us_name),
             _pin_build(us_name, base_target, package, universe_repo, universe_lock_target, has_squashed_variant, extras_dict),
         )
+
+    # _backend/ BUILD and macros
+    rctx.file("_backend/BUILD.bazel", 'package(default_visibility = ["//visibility:public"])\n')
+
+    backend_configs = {}
+    for name, config_json in rctx.attr.backend_configs.items():
+        backend_configs[name] = json.decode(config_json)
+    normalized_pinned_package_names = {_normalize_name(p): True for p in pins.keys() if "[" not in p}
+
+    for macro_name, config in backend_configs.items():
+        rule_bzl = config["rule_bzl"]
+
+        tool_deps_labels = []
+        for pkg in config["tool_packages"]:
+            norm_pkg = _normalize_name(pkg)
+            if norm_pkg in normalized_pinned_package_names:
+                matching = [k for k in pins.keys() if "[" not in k and _normalize_name(k) == norm_pkg]
+                if matching:
+                    tool_deps_labels.append("//{}:pkg".format(underscore_name(matching[0])))
+
+        lines = [
+            '"""Backend macro with pre-configured tool defaults for this lock repo."""',
+            "",
+            'load("{rule_bzl}", _{macro_name} = "{macro_name}")'.format(
+                rule_bzl = rule_bzl,
+                macro_name = macro_name,
+            ),
+            "",
+            "def {macro_name}(name, **kwargs):".format(macro_name = macro_name),
+        ]
+
+        if tool_deps_labels:
+            lines.append("    if \"tool_deps\" not in kwargs:")
+            lines.append("        kwargs[\"tool_deps\"] = [")
+            for label in tool_deps_labels:
+                lines.append("            Label(\"{}\"),".format(label))
+            lines.append("        ]")
+
+        lines.extend([
+            "    _{macro_name}(name = name, **kwargs)".format(macro_name = macro_name),
+            "",
+        ])
+
+        rctx.file("_backend/{}.bzl".format(macro_name), "\n".join(lines))
 
 thin_package_repo = repository_rule(
     implementation = _thin_package_repo_impl,
@@ -260,6 +304,10 @@ thin_package_repo = repository_rule(
         "conflicts": attr.string_list_dict(
             default = {},
             doc = "Map of pkg_key -> [member_names...] for packages with conflicting annotations.",
+        ),
+        "backend_configs": attr.string_dict(
+            default = {},
+            doc = "Dict mapping pycross rule names to backend tool configs (JSON).",
         ),
     },
 )

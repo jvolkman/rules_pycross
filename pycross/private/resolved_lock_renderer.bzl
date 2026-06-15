@@ -17,24 +17,27 @@ def _is_in_same_cycle(dep_key, pkg, packages):
         return False
     return dep_pkg.get("cycle_group") == cycle_group
 
-def _wheel_target(file_ref, sdist_file, pkg_key, pkg, repo_map, rctx_name):
+def _wheel_target(file_ref, sdist_file, pkg_key, pkg, repo_map, sdist_map, rctx_name):
     if file_ref.get("label"):
         return file_ref["label"]
     key = file_ref.get("key")
     if sdist_file and key == sdist_file.get("key"):
         if pkg.get("build_target"):
             return pkg["build_target"]
+        if sdist_map and key in sdist_map:
+            return sdist_map[key]
         repo_name = "{}_sdist_{}".format(rctx_name, _sanitize_name(pkg_key))
         return "@@{}//:wheel".format(repo_name)
 
     return repo_map.get(key)
 
-def render_lock_bzl(lock, repo_map, rctx_name):
+def render_lock_bzl(lock, repo_map, sdist_map = None, rctx_name = ""):
     """Renders a lock.bzl file from a resolved lock structure.
 
     Args:
         lock: The parsed lock.json dict.
         repo_map: A dict mapping file keys to repo labels.
+        sdist_map: A dict mapping sdist package keys to their wheel target labels.
         rctx_name: The name of the package repository.
 
     Returns:
@@ -57,7 +60,6 @@ def render_lock_bzl(lock, repo_map, rctx_name):
     environments = lock.get("environments", {})
     packages = lock.get("packages", {})
     cycle_groups = lock.get("cycle_groups", {})
-    squash_extras = lock.get("squash_extras", False)
 
     # 1. Environment config_settings
     for env_name, env_ref in sorted(environments.items()):
@@ -169,7 +171,7 @@ def render_lock_bzl(lock, repo_map, rctx_name):
         for env_name, env_ref in sorted(pkg.get("environment_files", {}).items()):
             lines.append(_ind('":{env}": "{target}",'.format(
                 env = env_name,
-                target = _wheel_target(env_ref, sdist_file, pkg_key, pkg, repo_map, rctx_name),
+                target = _wheel_target(env_ref, sdist_file, pkg_key, pkg, repo_map, sdist_map, rctx_name),
             ), 3))
         lines.append(_ind('"//conditions:default": "@rules_pycross//pycross/private:no_match_error",', 3))
         lines.append(_ind("}),", 2))
@@ -234,30 +236,29 @@ def render_lock_bzl(lock, repo_map, rctx_name):
             "",
         ])
 
-    if squash_extras:
-        base_packages_with_extras = {}
-        for pkg_key in packages.keys():
-            if "[" in pkg_key:
-                base_name, extra_and_version = pkg_key.split("[", 1)
-                _, version = extra_and_version.split("]@", 1)
-                base_pkg_key = "{}@{}".format(base_name, version)
-                if base_pkg_key not in base_packages_with_extras:
-                    base_packages_with_extras[base_pkg_key] = []
-                base_packages_with_extras[base_pkg_key].append(pkg_key)
+    base_packages_with_extras = {}
+    for pkg_key in packages.keys():
+        if "[" in pkg_key:
+            base_name, extra_and_version = pkg_key.split("[", 1)
+            _, version = extra_and_version.split("]@", 1)
+            base_pkg_key = "{}@{}".format(base_name, version)
+            if base_pkg_key not in base_packages_with_extras:
+                base_packages_with_extras[base_pkg_key] = []
+            base_packages_with_extras[base_pkg_key].append(pkg_key)
 
-        for base_pkg_key, extra_keys in sorted(base_packages_with_extras.items()):
-            lines.extend([
-                _ind("py_library("),
-                _ind('name = "{}__squashed",'.format(base_pkg_key), 2),
-                _ind("deps = [", 2),
-                _ind('":{}",'.format(base_pkg_key), 3),
-            ])
-            for extra_key in sorted(extra_keys):
-                lines.append(_ind('":{}",'.format(extra_key), 3))
-            lines.extend([
-                _ind("],", 2),
-                _ind(")"),
-                "",
-            ])
+    for base_pkg_key, extra_keys in sorted(base_packages_with_extras.items()):
+        lines.extend([
+            _ind("py_library("),
+            _ind('name = "{}__squashed",'.format(base_pkg_key), 2),
+            _ind("deps = [", 2),
+            _ind('":{}",'.format(base_pkg_key), 3),
+        ])
+        for extra_key in sorted(extra_keys):
+            lines.append(_ind('":{}",'.format(extra_key), 3))
+        lines.extend([
+            _ind("],", 2),
+            _ind(")"),
+            "",
+        ])
 
     return "\n".join(lines) + "\n"
