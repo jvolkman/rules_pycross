@@ -65,7 +65,14 @@ def exec_internal_tool(rctx, tool, args, *, flagfile_param = "--flagfile", flagf
     else:
         tool_args = args
 
-    all_args = [str(python_exe), str(rctx.path(tool))] + tool_args
+    tool_path = rctx.path(tool)
+
+    # Watch the tool script so Bazel invalidates the cached repo when it changes.
+    # Without this, edits to tools like inspect_package.py require `bazel clean --expunge`.
+    if hasattr(rctx, "watch"):
+        rctx.watch(tool_path)
+
+    all_args = [str(python_exe), str(tool_path)] + tool_args
     result = rctx.execute(all_args, quiet = quiet)
 
     # Clean up the flagfile
