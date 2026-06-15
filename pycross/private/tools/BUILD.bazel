@@ -168,11 +168,11 @@ py_binary(
 )
 
 py_test(
-    name = "wheel_builder_shebang_test",
+    name = "wheel_builder_test",
     size = "small",
     srcs = [
         "wheel_builder.py",
-        "wheel_builder_shebang_test.py",
+        "wheel_builder_test.py",
     ],
     imports = ["../../.."],
     tags = ["unit"],

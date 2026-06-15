@@ -130,6 +130,10 @@ def get_target_sysconfig(
             sysconfigdata_name = sysconfig._get_sysconfigdata_name()
             if sysconfigdata_name:
                 vars = importlib.import_module(sysconfigdata_name).build_time_vars
+                config_vars = sysconfig.get_config_vars()
+                for name in ("installed_base", "installed_platbase"):
+                    if config_vars.get(name):
+                        vars[name] = config_vars[name]
                 print(json.dumps(vars))
             else:
                 print("{}")
@@ -636,6 +640,8 @@ def build_venv(
     env_dir: Path,
     exec_python_exe: Path,
     target_python_exe: Path,
+    target_base_prefix: Path,
+    target_base_exec_prefix: Path,
     sysconfig_vars: Dict[str, Any],
     path: List[Path],
     target_env: Optional[TargetEnv],
@@ -655,11 +661,12 @@ def build_venv(
     # If we're using a Bazel-provided python (i.e., not system python), set sys.base_prefix to a path
     # relative to the sdist root in an attempt to keep non-reproducible paths out of binaries.
     if bazel_root in target_python_exe.parents:
-        # base_prefix and base_exec_prefix are the grandparent directory of the executable.
-        # E.g., if the executable is at python310/bin/python3, python310 is base_prefix.
-        # target_python_exe should already be a relative path.
         with open(site_dir / "_pycross_sys_base_prefix.pth", "w") as f:
-            f.write(f'import sys; sys.base_prefix = sys.base_exec_prefix = "{target_python_exe.parent.parent}"\n')
+            f.write(
+                "import sys; "
+                f'sys.base_prefix = "{target_base_prefix}"; '
+                f'sys.base_exec_prefix = "{target_base_exec_prefix}"\n'
+            )
 
     # Add build dependencies as site directories so nested .pth files from those
     # dependencies are processed when Python initializes the build venv.
@@ -795,6 +802,38 @@ def execroot_prefix(workspace_name: str) -> Path:
     return Path("..") / "bazel-execroot" / workspace_name
 
 
+def execroot_relative_path(path: Union[str, Path], execroot: Path, prefix: Path) -> Optional[Path]:
+    path = Path(path)
+    if not path.is_absolute():
+        return path
+
+    marker = f"/execroot/{prefix.name}/"
+    path_str = str(path)
+    if marker not in path_str:
+        return None
+
+    return prefix / path_str.split(marker, 1)[1]
+
+
+def target_base_prefixes(
+    target_sysconfig_vars: Dict[str, Any],
+    target_python_exe: Path,
+    execroot: Path,
+    prefix: Path,
+) -> Tuple[Path, Path]:
+    installed_base = target_sysconfig_vars.get("installed_base")
+    installed_platbase = target_sysconfig_vars.get("installed_platbase") or installed_base
+
+    if installed_base:
+        base_prefix = execroot_relative_path(installed_base, execroot, prefix)
+        base_exec_prefix = execroot_relative_path(installed_platbase, execroot, prefix)
+        if base_prefix and base_exec_prefix:
+            return base_prefix, base_exec_prefix
+
+    fallback = target_python_exe.parent.parent
+    return fallback, fallback
+
+
 def main(args: Any, temp_dir: Path, is_debug: bool) -> None:
     # Paths passed into this action will be relative to bazel's execroot.
     # But we need to build the wheel from within the extracted sdist directory.
@@ -863,6 +902,12 @@ def main(args: Any, temp_dir: Path, is_debug: bool) -> None:
         exec_python_exe=args.exec_python_executable,
         target_python_exe=args.target_python_executable,
     )
+    target_base_prefix, target_base_exec_prefix = target_base_prefixes(
+        target_sysconfig_vars=target_sysconfig_vars,
+        target_python_exe=args.target_python_executable,
+        execroot=cwd,
+        prefix=prefix,
+    )
     sysconfig_vars = generate_cross_sysconfig_vars(
         toolchain_vars=toolchain_sysconfig_vars,
         target_vars=target_sysconfig_vars,
@@ -876,6 +921,8 @@ def main(args: Any, temp_dir: Path, is_debug: bool) -> None:
         env_dir=build_env_dir,
         exec_python_exe=args.exec_python_executable,
         target_python_exe=args.target_python_executable,
+        target_base_prefix=target_base_prefix,
+        target_base_exec_prefix=target_base_exec_prefix,
         sysconfig_vars=sysconfig_vars,
         path=args.python_path,
         target_env=target_environment,
