@@ -32,9 +32,6 @@ def _pycross_wheel_library_impl(ctx):
 
     inputs = [wheel_input] + ctx.files.post_install_patches
 
-    if ctx.attr.enable_implicit_namespace_pkgs:
-        args.add("--enable-implicit-namespace-pkgs")
-
     for install_exclude_glob in ctx.attr.install_exclude_globs:
         args.add("--install-exclude-glob", install_exclude_glob)
 
@@ -182,15 +179,6 @@ pycross_wheel_library = rule(
         "post_install_patches": attr.label_list(
             doc = "A list of patches to apply after installation.",
             allow_files = True,
-        ),
-        "enable_implicit_namespace_pkgs": attr.bool(
-            default = True,
-            doc = """
-If true, disables conversion of native namespace packages into pkg-util style namespace packages. When set all py_binary
-and py_test targets must specify either `legacy_create_init=False` or the global Bazel option
-`--incompatible_default_to_explicit_init_py` to prevent `__init__.py` being automatically generated in every directory.
-This option is required to support some packages which cannot handle the conversion to pkg-util style.
-            """,
         ),
         "python_version": attr.string(
             doc = "The python version required for this wheel ('PY2' or 'PY3')",

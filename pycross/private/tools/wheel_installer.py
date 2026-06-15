@@ -23,32 +23,7 @@ from installer import install
 from installer.destinations import SchemeDictionaryDestination
 from installer.sources import WheelContentElement
 from installer.sources import WheelFile
-from pycross.private.tools import namespace_pkgs
 from pycross.private.tools.args import FlagFileArgumentParser
-
-
-def setup_namespace_pkg_compatibility(wheel_dir: Path) -> None:
-    """Converts native namespace packages to pkgutil-style packages
-
-    Namespace packages can be created in one of three ways. They are detailed here:
-    https://packaging.python.org/guides/packaging-namespace-packages/#creating-a-namespace-package
-
-    'pkgutil-style namespace packages' (2) and 'pkg_resources-style namespace packages' (3) works in Bazel, but
-    'native namespace packages' (1) do not.
-
-    We ensure compatibility with Bazel of method 1 by converting them into method 2.
-
-    Args:
-        wheel_dir: the directory of the wheel to convert
-    """
-
-    namespace_pkg_dirs = namespace_pkgs.implicit_namespace_packages(
-        str(wheel_dir),
-        ignored_dirnames=["%s/bin" % wheel_dir],
-    )
-
-    for ns_pkg_dir in namespace_pkg_dirs:
-        namespace_pkgs.add_pkgutil_style_namespace_pkg_init(ns_pkg_dir)
 
 
 class FilteredWheelFile(WheelFile):
@@ -133,7 +108,6 @@ def main(args: Any) -> None:
     finally:
         shutil.rmtree(link_dir, ignore_errors=True)
 
-    setup_namespace_pkg_compatibility(lib_dir)
     apply_patches(lib_dir, args.patches)
 
     # Extract entry_points.txt for rules_python compatibility.
@@ -173,12 +147,6 @@ def parse_flags() -> Any:
         type=Path,
         required=False,
         help="A file containing the canonical name of the wheel.",
-    )
-
-    parser.add_argument(
-        "--enable-implicit-namespace-pkgs",
-        action="store_true",
-        help="If true, disables conversion of implicit namespace packages and will unzip as-is.",
     )
 
     parser.add_argument(

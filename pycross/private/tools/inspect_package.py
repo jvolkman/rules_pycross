@@ -30,6 +30,13 @@ _EXCLUDED_ROOT_MODULES = frozenset({"setup", "conftest"})
 
 
 def _extract_module_name(filename: str) -> str | None:
+    # Skip legacy setuptools "-nspkg.pth" files. These are pkg_resources-style
+    # namespace package declarations (e.g., google_cloud_aiplatform-1.156.0-py3.12-nspkg.pth)
+    # that call pkg_resources.declare_namespace() at startup via site.py.
+    # They are unnecessary with PEP 420 native namespace packages (Python 3.3+)
+    # and cause AttributeError on Python 3.13.
+    if filename.endswith("-nspkg.pth"):
+        return None
     suffixes = Path(filename).suffixes
     if suffixes and suffixes[-1] in (".py", ".so", ".pth"):
         ext = "".join(suffixes)
@@ -100,6 +107,7 @@ def _resolve_namespace_packages(all_files: set[str], top_level_dirs: set[str]) -
         deeper paths for namespace packages (using forward slashes).
     """
     init_files = {f for f in all_files if f.endswith("/__init__.py")}
+    code_files = {f for f in all_files if f.endswith(".py") or f.endswith(".so")}
 
     result = set()
     for dir_name in top_level_dirs:
@@ -115,6 +123,12 @@ def _resolve_namespace_packages(all_files: set[str], top_level_dirs: set[str]) -
                     # e.g. "google/cloud/storage/__init__.py" -> "google/cloud/storage"
                     pkg_path = init.rsplit("/", 1)[0]
                     candidates.append(pkg_path)
+
+            if not candidates:
+                for f in code_files:
+                    if f.startswith(prefix):
+                        pkg_path = f.rsplit("/", 1)[0]
+                        candidates.append(pkg_path)
 
             # Sort by depth (shallowest first) so we can skip sub-packages
             # of already-selected packages.

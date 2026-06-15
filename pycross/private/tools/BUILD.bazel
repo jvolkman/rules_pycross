@@ -1,4 +1,4 @@
-load("@rules_pycross_internal//:python.bzl", "py_binary", "py_library", "py_test")
+load("@rules_pycross_internal//:python.bzl", "py_binary", "py_library")
 load("//pycross/private:wheel_zipimport_library.bzl", "pycross_wheel_zipimport_library")
 
 package(default_visibility = ["//visibility:public"])
@@ -76,14 +76,6 @@ py_library(
 )
 
 py_library(
-    name = "namespace_pkgs",
-    srcs = [
-        "namespace_pkgs.py",
-    ],
-    imports = ["../../.."],
-)
-
-py_library(
     name = "translator_utils",
     srcs = [
         "translator_utils.py",
@@ -92,18 +84,6 @@ py_library(
     deps = [
         ":lock_model",
         "@rules_pycross_internal//deps:packaging",
-    ],
-)
-
-py_test(
-    name = "namespace_pkgs_test",
-    size = "small",
-    srcs = [
-        "namespace_pkgs_test.py",
-    ],
-    tags = ["unit"],
-    deps = [
-        ":namespace_pkgs",
     ],
 )
 
@@ -166,7 +146,6 @@ py_binary(
     deps = [
         ":args",
         ":installer",
-        ":namespace_pkgs",
         ":patch_ng",
     ],
 )
