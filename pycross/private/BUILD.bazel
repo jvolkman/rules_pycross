@@ -65,9 +65,8 @@ bzl_library(
     name = "package_repo",
     srcs = ["package_repo.bzl"],
     deps = [
-        ":internal_repo",
         ":resolved_lock_renderer",
-        "@bazel_skylib//lib:paths",
+        ":util",
     ],
 )
 

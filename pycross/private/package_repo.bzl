@@ -1,40 +1,18 @@
-"""A pure-Starlark hub repository rule that wraps a pycross lock structure.
+"""A pure-Starlark universe repository rule that wraps a pycross lock structure.
+
+A universe repo is the shared backing store for one or more user-facing
+"thin" package repos. It contains the actual pycross_wheel_library targets
+and artifact references, while thin repos provide pin aliases and
+user-facing convenience targets.
 
 The file structure is as follows:
 - REPO.bazel               - The repository root marker.
-- BUILD.bazel              - The root build file with //:package aliases.
-- defs.bzl                 - Compatibility file (may be empty).
-- requirements.bzl         - Provides `requirement()` and `all_requirements`.
+- BUILD.bazel              - Minimal root build file.
 - _lock/lock.bzl           - Generated Starlark with all package targets.
 - _lock/BUILD.bazel        - Loads lock.bzl and calls targets().
-- _wheel/BUILD.bazel         - Versioned wheel aliases.
+- _wheel/BUILD.bazel       - Versioned wheel aliases.
 - _sdist/BUILD.bazel       - Versioned sdist aliases.
 - _backend/<rule>.bzl      - Backend macros with pre-configured tool deps.
-- <package>/BUILD.bazel    - Pin aliases pointing to //_lock targets.
-
-Naming conventions:
-- Root aliases (//:name) use PEP 503 dashes (pycross convention).
-- Pin directories (//name/) use underscores (rules_python convention).
-
-From a target perspective:
-- //:package             - Alias to the pycross_wheel_library target.
-- //:package[extra]      - Alias to the extra dependency group.
-- //package:pkg          - The pycross_wheel_library target (pinned version).
-- //package:wheel        - The wheel target (pinned version).
-- //package:sdist        - The sdist file (pinned version, if available).
-- //package:dist_info    - The dist-info files (for py_console_script_binary).
-- //package:data         - The package data (alias for :pkg, rules_python compat).
-- //package:[extra]      - Extra dependency group (pinned version).
-- //_wheel:package            - Pinned wheel target.
-- //_wheel:package@ver        - Specific version wheel target.
-- //_sdist:package       - Pinned sdist file.
-- //_sdist:package@ver   - Specific version sdist file.
-
-The idea is that, for a repo named "pypi", something will depend on
-e.g. `@pypi//:numpy`, `@pypi//numpy:pkg`, or `@pypi//numpy`.
-
-Pin directory names use underscores (rules_python convention).
-Root alias names use PEP 503 dashes (pycross convention).
 """
 
 load(":resolved_lock_renderer.bzl", "render_lock_bzl")
@@ -46,211 +24,93 @@ def _normalize_name(name):
 def _underscore_name(name):
     return underscore_name(name)
 
-_requirement_func = """\
-def requirement(pkg):
-    extra = None
-    if "[" in pkg:
-        pkg, extra = pkg.split("[", 1)
-        extra = extra.rstrip("]")
-
-    # Convert given name into PEP 503 normalized form (dashes).
-    # Root aliases use this form (pycross convention).
-    # https://packaging.python.org/en/latest/specifications/name-normalization/#name-normalization
-    pkg = pkg.replace("_", "-").replace(".", "-").lower()
-    for i in range(len(pkg)):
-        if "--" in pkg:
-            pkg = pkg.replace("--", "-")
-        else:
-            break
-
-    if extra:
-        return "@@{repo_name}//:%s[%s]" % (pkg, extra)
-    return "@@{repo_name}//:%s" % pkg
-"""
-
-def _requirements_bzl(rctx, pins):
-    lines = [
-        _requirement_func.format(repo_name = rctx.name),
-        "",
-        "# All pinned requirements",
-        "all_requirements = [",
-    ]
-    for pin in sorted(pins.keys()):
-        lines.append('    "@@{repo_name}//:{pin}",'.format(repo_name = rctx.name, pin = pin))
-    lines.append("]")
-
-    return "\n".join(lines) + "\n"
-
-def _safe_name(pin_name, name):
-    return name + "_" if pin_name == name else name
-
-def _pin_build(target_name, original_pin_name, pin_target, package, extras_dict, has_squashed_variant = False):
-    """Generates the BUILD file for a pin directory (//package/)."""
-    pin_target_base = (pin_target + "__squashed") if has_squashed_variant else pin_target
-    lines = [
-        'package(default_visibility = ["//visibility:public"])',
-        "",
-    ]
-
-    if pin_target:
-        lines.extend([
-            # //package -> //package:package -> //_lock:<pin_target>
-            "alias(",
-            '    name = "{}",'.format(target_name),
-            '    actual = "//_lock:{}",'.format(pin_target_base),
-            ")",
-            "",
-            # //package:pkg -> //_lock:<pin_target>
-            "alias(",
-            '    name = "{}",'.format(_safe_name(target_name, "pkg")),
-            '    actual = "//_lock:{}",'.format(pin_target_base),
-            ")",
-            "",
-            # //package:wheel -> //_wheel:<original_pin_name>
-            "alias(",
-            '    name = "{}",'.format(_safe_name(target_name, "wheel")),
-            '    actual = "//_wheel:{}",'.format(original_pin_name),
-            ")",
-            "",
-            # //package:dist_info -> //_lock:_dist_info_<pin_target>
-            "alias(",
-            '    name = "{}",'.format(_safe_name(target_name, "dist_info")),
-            '    actual = "//_lock:_dist_info_{}",'.format(pin_target),
-            ")",
-            "",
-            # //package:data -> //_lock:<pin_target> (rules_python compat)
-            "alias(",
-            '    name = "{}",'.format(_safe_name(target_name, "data")),
-            '    actual = "//_lock:{}",'.format(pin_target_base),
-            ")",
-            "",
-        ])
-
-        sdist_file = package.get("sdist_file")
-        if sdist_file:
-            lines.extend([
-                "alias(",
-                '    name = "{}",'.format(_safe_name(target_name, "sdist")),
-                '    actual = "//_sdist:{}",'.format(original_pin_name),
-                ")",
-                "",
-            ])
-
-    for extra_name, extra_target in sorted(extras_dict.items()):
-        lines.extend([
-            "alias(",
-            '    name = "[{}]",'.format(extra_name),
-            '    actual = "//_lock:{}",'.format(pin_target_base if has_squashed_variant else extra_target),
-            ")",
-            "",
-        ])
-
-    return "\n".join(lines) + "\n"
-
 def _package_repo_impl(rctx):
-    squash_extras = False
-    is_hub = bool(rctx.attr.member_lock_files)
+    # Universe repos always have member_lock_files — even single-lock repos
+    # are wrapped in a universe with one member.
+    packages = {}
+    environments = {}
 
-    if is_hub:
-        # Hub mode does not squash. Hub contains canonical un-squashed graphs.
-        # Thin repos decide whether to squash via their aliases.
-        # Detect annotation conflicts and generate per-member variants.
-        packages = {}
-        environments = {}
-        pins = {}  # Hub has no pins; each thin repo has its own.
+    # Annotation fields that affect pycross_wheel_library targets.
+    # If these differ between members for the same pkg_key, the package
+    # is "conflicting" and gets per-member variant targets.
+    _ANNOTATION_FIELDS = ["post_install_patches", "install_exclude_globs"]
 
-        # Annotation fields that affect pycross_wheel_library targets.
-        # If these differ between members for the same pkg_key, the package
-        # is "conflicting" and gets per-member variant targets.
-        _ANNOTATION_FIELDS = ["post_install_patches", "install_exclude_globs"]
+    # First pass: collect per-member package data for conflict detection.
+    member_packages = {}  # member_name -> {pkg_key -> pkg_data}
+    for member, lock_label in rctx.attr.member_lock_files.items():
+        member_lock = json.decode(rctx.read(rctx.path(Label(lock_label))))
 
-        # First pass: collect per-member package data for conflict detection.
-        member_packages = {}  # member_name -> {pkg_key -> pkg_data}
-        for member, lock_label in rctx.attr.member_lock_files.items():
-            member_lock = json.decode(rctx.read(rctx.path(Label(lock_label))))
+        # Merge environments (union across members).
+        for env_name, env_ref in member_lock.get("environments", {}).items():
+            if env_name not in environments:
+                environments[env_name] = env_ref
 
-            # Merge environments (union across members).
-            for env_name, env_ref in member_lock.get("environments", {}).items():
-                if env_name not in environments:
-                    environments[env_name] = env_ref
+        member_packages[member] = member_lock.get("packages", {})
 
-            member_packages[member] = member_lock.get("packages", {})
+    # Second pass: detect conflicts and build merged package set.
+    # conflicts maps pkg_key -> [member_name, ...] for packages with
+    # differing annotations across members.
+    conflicts = {}
+    all_pkg_keys = {}  # pkg_key -> list of (member, pkg_data)
+    for member, pkgs in member_packages.items():
+        for pkg_key, pkg_data in pkgs.items():
+            all_pkg_keys.setdefault(pkg_key, []).append((member, pkg_data))
 
-        # Second pass: detect conflicts and build merged package set.
-        # conflicts maps pkg_key -> [member_name, ...] for packages with
-        # differing annotations across members.
-        conflicts = {}
-        all_pkg_keys = {}  # pkg_key -> list of (member, pkg_data)
-        for member, pkgs in member_packages.items():
-            for pkg_key, pkg_data in pkgs.items():
-                all_pkg_keys.setdefault(pkg_key, []).append((member, pkg_data))
+    for pkg_key, entries in all_pkg_keys.items():
+        if len(entries) <= 1:
+            # Only in one member — no conflict possible.
+            packages[pkg_key] = dict(entries[0][1])
+            continue
 
-        for pkg_key, entries in all_pkg_keys.items():
-            if len(entries) <= 1:
-                # Only in one member — no conflict possible.
-                packages[pkg_key] = dict(entries[0][1])
-                continue
-
-            # Check annotation fields for differences.
-            _, first_data = entries[0]
-            has_conflict = False
-            for _, other_data in entries[1:]:
-                for field in _ANNOTATION_FIELDS:
-                    if first_data.get(field, []) != other_data.get(field, []):
-                        has_conflict = True
-                        break
-                if has_conflict:
+        # Check annotation fields for differences.
+        _, first_data = entries[0]
+        has_conflict = False
+        for _, other_data in entries[1:]:
+            for field in _ANNOTATION_FIELDS:
+                if first_data.get(field, []) != other_data.get(field, []):
+                    has_conflict = True
                     break
-
             if has_conflict:
-                # Conflicting: create per-member variant packages.
-                conflicts[pkg_key] = [member for member, _ in entries]
-                for member, pkg_data in entries:
-                    variant_key = "{}__via_{}".format(pkg_key, member)
-                    packages[variant_key] = dict(pkg_data)
-            else:
-                # Non-conflicting: merge as before.
-                packages[pkg_key] = dict(first_data)
-                for _, pkg_data in entries[1:]:
-                    existing = packages[pkg_key]
-                    for env_name, env_ref in pkg_data.get("environment_files", {}).items():
-                        existing.setdefault("environment_files", {})[env_name] = env_ref
-                    for env_name, env_deps in pkg_data.get("environment_dependencies", {}).items():
-                        ed = existing.setdefault("environment_dependencies", {})
-                        if env_name not in ed:
-                            ed[env_name] = list(env_deps)
-                        else:
-                            for dep in env_deps:
-                                if dep not in ed[env_name]:
-                                    ed[env_name].append(dep)
-                    for dep in pkg_data.get("common_dependencies", []):
-                        cd = existing.setdefault("common_dependencies", [])
-                        if dep not in cd:
-                            cd.append(dep)
-                    if not existing.get("top_level_paths") and pkg_data.get("top_level_paths"):
-                        existing["top_level_paths"] = pkg_data["top_level_paths"]
-                    if not existing.get("sdist_file") and pkg_data.get("sdist_file"):
-                        existing["sdist_file"] = pkg_data["sdist_file"]
+                break
 
-        # Build a synthetic lock dict for the renderer.
-        lock = {"packages": packages, "pins": pins, "environments": environments}
-    else:
-        lock_json_path = rctx.path(rctx.attr.resolved_lock_file)
-        lock = json.decode(rctx.read(lock_json_path))
-        squash_extras = lock.get("squash_extras", False)
-        packages = lock["packages"]
-        pins = lock["pins"]
+        if has_conflict:
+            # Conflicting: create per-member variant packages.
+            conflicts[pkg_key] = [member for member, _ in entries]
+            for member, pkg_data in entries:
+                variant_key = "{}__via_{}".format(pkg_key, member)
+                packages[variant_key] = dict(pkg_data)
+        else:
+            # Non-conflicting: merge as before.
+            packages[pkg_key] = dict(first_data)
+            for _, pkg_data in entries[1:]:
+                existing = packages[pkg_key]
+                for env_name, env_ref in pkg_data.get("environment_files", {}).items():
+                    existing.setdefault("environment_files", {})[env_name] = env_ref
+                for env_name, env_deps in pkg_data.get("environment_dependencies", {}).items():
+                    ed = existing.setdefault("environment_dependencies", {})
+                    if env_name not in ed:
+                        ed[env_name] = list(env_deps)
+                    else:
+                        for dep in env_deps:
+                            if dep not in ed[env_name]:
+                                ed[env_name].append(dep)
+                for dep in pkg_data.get("common_dependencies", []):
+                    cd = existing.setdefault("common_dependencies", [])
+                    if dep not in cd:
+                        cd.append(dep)
+                if not existing.get("top_level_paths") and pkg_data.get("top_level_paths"):
+                    existing["top_level_paths"] = pkg_data["top_level_paths"]
+                if not existing.get("sdist_file") and pkg_data.get("sdist_file"):
+                    existing["sdist_file"] = pkg_data["sdist_file"]
+
+    # Universe repos have no pins — each thin repo has its own.
+    lock = {"packages": packages, "pins": {}, "environments": environments}
 
     repo_map = {}
     for label, file_key in rctx.attr.repo_map.items():
         repo_map[file_key] = str(label)
 
-    # Eager inspection reading removed!
-    # modules_mapping.json is now generated via pycross_modules_mapping in BUILD.bazel
-
     rctx.file("REPO.bazel", "")
-    rctx.file("defs.bzl", "")  # Empty file for compatibility
-    rctx.file("requirements.bzl", _requirements_bzl(rctx, pins))
 
     # 1. Render _lock/lock.bzl and _lock/BUILD.bazel
     rctx.file("_lock/lock.bzl", render_lock_bzl(lock, repo_map, rctx.name))
@@ -263,118 +123,13 @@ def _package_repo_impl(rctx):
         "",
     ]))
 
-    # 2. Root BUILD.bazel with //:package aliases (PEP 503 dash-form names)
-
-    # Group pins by base package name to identify extras.
-    grouped_pins = {}
-    for pin_name, pin_target in pins.items():
-        if "[" in pin_name:
-            base, extra = pin_name.split("[", 1)
-            extra = extra[:-1]
-            if base not in grouped_pins:
-                grouped_pins[base] = {"base_target": None, "extras": {}}
-            grouped_pins[base]["extras"][extra] = pin_target
-        else:
-            if pin_name not in grouped_pins:
-                grouped_pins[pin_name] = {"base_target": None, "extras": {}}
-            grouped_pins[pin_name]["base_target"] = pin_target
-
-    root_build_lines = [
-        'load("@rules_pycross//pycross/private:modules_mapping.bzl", "pycross_modules_mapping")',
+    # 2. Minimal root BUILD.bazel
+    rctx.file("BUILD.bazel", "\n".join([
         'package(default_visibility = ["//visibility:public"])',
         "",
-        'exports_files(["defs.bzl", "requirements.bzl"])',
-        "",
-        "pycross_modules_mapping(",
-        '    name = "modules_mapping",',
-        "    deps = [",
-    ]
-    for pin_name in sorted(pins.keys()):
-        pin_target = pins[pin_name]
-        package = packages.get(pin_target, {})
+    ]))
 
-        # Point directly at the pycross_wheel_library target in _lock.
-        # For cycle group packages, the wheel_library is named _raw_<sanitized>;
-        # the bare name is a py_library wrapper that lacks PycrossPackageInfo.
-        if package.get("cycle_group"):
-            san = pin_target.lower().replace("-", "_").replace("@", "_").replace("+", "_").replace(".", "_")
-            root_build_lines.append('        "//_lock:_raw_%s",' % san)
-        else:
-            root_build_lines.append('        "//_lock:%s",' % pin_target)
-    root_build_lines.extend([
-        "    ],",
-    ])
-
-    # When squash_extras is off, tell Gazelle to map imports from packages
-    # that are only pinned via a single extra to the extra-qualified name.
-    # e.g. if the user depends on foo[grpc] but not bare foo, Gazelle should
-    # emit @pypi//foo[grpc] instead of @pypi//foo.
-    if not squash_extras:
-        extras_mapping = {}
-        for base_name, group in grouped_pins.items():
-            if not group["base_target"] and len(group["extras"]) == 1:
-                extra_name = list(group["extras"].keys())[0]
-                us_base = base_name.replace("-", "_")
-                extras_mapping[us_base] = "{}[{}]".format(us_base, extra_name)
-        if extras_mapping:
-            root_build_lines.append("    extras_mapping = {")
-            for base, qualified in sorted(extras_mapping.items()):
-                root_build_lines.append('        "{}": "{}",'.format(base, qualified))
-            root_build_lines.append("    },")
-
-    root_build_lines.extend([
-        ")",
-        "",
-    ])
-
-    for base_pin_name in sorted(grouped_pins.keys()):
-        group = grouped_pins[base_pin_name]
-        us_name = _underscore_name(base_pin_name)
-        base_target = group["base_target"]
-
-        if base_target:
-            # //:pin-name -> //pin_name:pkg
-            root_build_lines.extend([
-                "alias(",
-                '    name = "{}",'.format(base_pin_name),
-                '    actual = "//{}:pkg",'.format(us_name),
-                ")",
-                "",
-            ])
-
-        for extra_name, _ in sorted(group["extras"].items()):
-            # //:pin-name[extra] -> //pin_name:[extra]
-            root_build_lines.extend([
-                "alias(",
-                '    name = "{}[{}]",'.format(base_pin_name, extra_name),
-                '    actual = "//{}:[{}]",'.format(us_name, extra_name),
-                ")",
-                "",
-            ])
-    rctx.file("BUILD.bazel", "\n".join(root_build_lines))
-
-    # 3. Pin directories: //package/ with aliases to //_lock targets
-    # Directory names use underscores (rules_python convention).
-    base_packages_with_extras = {}
-    for pkg_key in packages.keys():
-        if "[" in pkg_key:
-            base_name, extra_and_version = pkg_key.split("[", 1)
-            extra_name, version = extra_and_version.split("]@", 1)
-            base_pkg_key = "{}@{}".format(base_name, version)
-            base_packages_with_extras[base_pkg_key] = True
-
-    for base_pin_name, group in sorted(grouped_pins.items()):
-        base_target = group["base_target"]
-        package = packages.get(base_target) if base_target else {}
-        underscore_name = _underscore_name(base_pin_name)
-        has_squashed_variant = squash_extras and base_target and base_target in base_packages_with_extras
-
-        rctx.file(
-            "{}/BUILD.bazel".format(underscore_name),
-            _pin_build(underscore_name, base_pin_name, base_target, package, group["extras"], has_squashed_variant),
-        )
-
-    # 4. _wheel/ and _sdist/ directories for versioned artifact access
+    # 3. _wheel/ and _sdist/ directories for versioned artifact access
     wheel_lines = [
         'load("@rules_pycross//pycross/private:wheel_dir.bzl", "pycross_wheel_dir")',
         "",
@@ -387,10 +142,13 @@ def _package_repo_impl(rctx):
     ]
 
     for pkg_key in sorted(packages.keys()):
+        # Skip variant packages (they use __via_ suffix for conflict resolution)
+        if "__via_" in pkg_key:
+            continue
         norm_name = _normalize_name(pkg_key.split("@")[0])
-        underscore_name = _underscore_name(pkg_key.split("@")[0])
+        us_name = _underscore_name(pkg_key.split("@")[0])
         pkg_version = pkg_key.split("@")[1]
-        whldir_name = "{}-{}.whldir".format(underscore_name, pkg_version)
+        whldir_name = "{}-{}.whldir".format(us_name, pkg_version)
 
         # Versioned target: _wheel:name@version -> pycross_wheel_dir wrapping //_lock:_wheel_{key}
         wheel_lines.extend([
@@ -412,33 +170,10 @@ def _package_repo_impl(rctx):
                 "",
             ])
 
-    # Unversioned pin aliases: _wheel:name -> _wheel:name@version
-    for pin_name in sorted(pins.keys()):
-        pin_target = pins[pin_name]
-        pin_norm_name = _normalize_name(pin_target.split("@")[0])
-        pin_version = pin_target.split("@")[1]
-        wheel_lines.extend([
-            "alias(",
-            '    name = "{}",'.format(pin_name),
-            '    actual = ":{}@{}",'.format(pin_norm_name, pin_version),
-            ")",
-            "",
-        ])
-
-        sdist_file = packages[pin_target].get("sdist_file")
-        if sdist_file:
-            sdist_lines.extend([
-                "alias(",
-                '    name = "{}",'.format(pin_name),
-                '    actual = "//_lock:_sdist_{}",'.format(pin_target),
-                ")",
-                "",
-            ])
-
     rctx.file("_wheel/BUILD.bazel", "\n".join(wheel_lines) + "\n")
     rctx.file("_sdist/BUILD.bazel", "\n".join(sdist_lines) + "\n")
 
-    # 5. _backend/ directory
+    # 4. _backend/ directory
     normalized_locked_package_names = {}
     for pkg_key in packages.keys():
         norm_pkg = _normalize_name(pkg_key.split("@")[0])
@@ -457,7 +192,9 @@ def _package_repo_impl(rctx):
         for pkg in config["tool_packages"]:
             norm_pkg = _normalize_name(pkg)
             if norm_pkg in normalized_locked_package_names:
-                tool_deps_labels.append("//{}:pkg".format(_underscore_name(pkg)))
+                matching = [k for k in packages.keys() if "__via_" not in k and _normalize_name(k.split("@")[0]) == norm_pkg]
+                if matching:
+                    tool_deps_labels.append("//_lock:{}".format(matching[0]))
 
         lines = [
             '"""Backend macro with pre-configured tool defaults for this lock repo."""',
@@ -494,8 +231,8 @@ package_repo = repository_rule(
             doc = "Maps pycross rule names to JSON-encoded config dicts with 'rule_bzl' and 'tool_packages'.",
         ),
         "member_lock_files": attr.string_dict(
-            doc = "For hub repos: maps member repo names to their resolved lock file labels.",
-            default = {},
+            doc = "Maps member repo names to their resolved lock file labels.",
+            mandatory = True,
         ),
     },
 )

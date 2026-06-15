@@ -2,8 +2,8 @@
 
 load("@bazel_features//:features.bzl", "bazel_features")
 load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_file")
-load("@lock_import_repos_hub//:hubs.bzl", "hub_memberships")
 load("@lock_import_repos_hub//:locks.bzl", lock_import_locks = "locks")
+load("@lock_import_repos_hub//:universes.bzl", "universe_memberships")
 load("@pycross_backends//:registry.bzl", "BACKEND_CONFIGS", "BACKEND_TO_RULE", "DEFAULT_BACKEND", "OVERRIDE_FILES")
 load("@rules_pycross//pycross/private/bzlmod:sdist_repo.bzl", "pycross_sdist_repo")
 load("//pycross/private:package_repo.bzl", "package_repo")
@@ -122,9 +122,9 @@ def _lock_repos_impl(module_ctx):
 
         sdist_map = {}
 
-        # For hub members, sdist build deps point to the hub's _lock/ targets.
-        hub_name = hub_memberships.get(repo_name, "")
-        lock_repo_for_deps = "pycross_hub_{}".format(hub_name) if hub_name else repo_name
+        # Every repo has a universe; sdist build deps point to the universe's _lock/ targets.
+        universe_name = universe_memberships.get(repo_name, repo_name)
+        lock_repo_for_deps = "pycross_universe_{}".format(universe_name)
 
         # Instantiate sdist repos for packages requiring source builds.
         # Sdist repos are environment-agnostic (the same source archive is
@@ -212,36 +212,24 @@ def _lock_repos_impl(module_ctx):
         # proper Label objects instead of raw strings.
         repo_map = {label_str: file_key for file_key, label_str in repo_remote_files.items()}
 
-        # Save per-repo data for hub processing
+        # Save per-repo data for universe processing
         per_repo_data[repo_name] = struct(
             repo_map = repo_map,
             sdist_map = sdist_map,
             lock_file = lock_file,
         )
 
-        # For non-hub members, create package_repo immediately.
-        hub_name = hub_memberships.get(repo_name, "")
-        if not hub_name:
-            package_repo(
-                name = repo_name,
-                resolved_lock_file = lock_file,
-                repo_map = repo_map,
-                sdist_map = sdist_map,
-                backend_configs = backend_configs_json,
-            )
-
-    # Create hub package repos and thin repos for hub members.
-    # We need to detect annotation conflicts before creating thin repos,
-    # so hubs are processed first.
-    hub_groups = {}  # hub_name -> [repo_name, ...]
-    for repo_name, hub_name in hub_memberships.items():
-        hub_groups.setdefault(hub_name, []).append(repo_name)
+    # Create universe package repos and thin repos for all members.
+    # Every repo belongs to a universe (defaulting to its own name).
+    universe_groups = {}  # universe_name -> [repo_name, ...]
+    for repo_name, uname in universe_memberships.items():
+        universe_groups.setdefault(uname, []).append(repo_name)
 
     # Annotation fields that affect pycross_wheel_library targets.
     _ANNOTATION_FIELDS = ["post_install_patches", "install_exclude_globs"]
 
-    for hub_name, member_repos in hub_groups.items():
-        hub_repo_name = "pycross_hub_{}".format(hub_name)
+    for universe_name, member_repos in universe_groups.items():
+        universe_repo_name = "pycross_universe_{}".format(universe_name)
 
         # Merge repo_maps and sdist_maps from all members
         merged_repo_map = {}
@@ -285,7 +273,7 @@ def _lock_repos_impl(module_ctx):
                     break
 
         package_repo(
-            name = hub_repo_name,
+            name = universe_repo_name,
             resolved_lock_file = per_repo_data[member_repos[0]].lock_file,
             repo_map = merged_repo_map,
             sdist_map = merged_sdist_map,
@@ -293,12 +281,12 @@ def _lock_repos_impl(module_ctx):
             member_lock_files = member_lock_files,
         )
 
-        # Create thin repos for each hub member, passing conflict info.
+        # Create thin repos for each universe member, passing conflict info.
         for member in member_repos:
             thin_package_repo(
                 name = member,
                 resolved_lock_file = per_repo_data[member].lock_file,
-                hub_repo = hub_repo_name,
+                universe_repo = universe_repo_name,
                 member_name = member,
                 conflicts = conflicts,
             )

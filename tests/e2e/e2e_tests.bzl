@@ -15,7 +15,7 @@ def define_e2e_tests():
     ] + _BUILD_WORKSPACES + [
         "generate_lock",
         "local_wheel",
-        "multi_lock_hub",
+        "multi_lock_universe",
         "patches_and_hooks",
         "requirements",
         "sdist_repo",

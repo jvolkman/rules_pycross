@@ -7,7 +7,7 @@ import six
 
 def test_cross_repo():
     """Verify all packages are importable and functional."""
-    # regex (shared between lock_a and lock_b via hub)
+    # regex (shared between lock_a and lock_b via universe)
     m = regex.match(r"\w+", "hello")
     assert m is not None, "regex match failed"
 

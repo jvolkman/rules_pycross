@@ -7,7 +7,7 @@ load("//pycross/private:poetry_lock_model.bzl", "lock_repo_model_poetry")
 load("//pycross/private:pylock_lock_model.bzl", "lock_repo_model_pylock")
 load("//pycross/private:resolved_lock_repo.bzl", "resolved_lock_repo")
 load("//pycross/private:uv_lock_model.bzl", "lock_repo_model_uv")
-load(":lock_hub_repo.bzl", "lock_hub_repo")
+load(":lock_universe_repo.bzl", "lock_universe_repo")
 load(":tag_attrs.bzl", "COMMON_ATTRS", "COMMON_IMPORT_ATTRS", "PACKAGE_ATTRS", "PDM_IMPORT_ATTRS", "POETRY_IMPORT_ATTRS", "PYLOCK_IMPORT_ATTRS", "UV_IMPORT_ATTRS")
 
 def _generate_resolved_lock_repo(lock_info, serialized_lock_model):
@@ -94,7 +94,7 @@ def _lock_struct(mctx, tag):
 
     return struct(
         repo_name = tag.repo,
-        hub = tag.hub,
+        universe = tag.universe,
         default_alias_single_version = tag.default_alias_single_version,
         environments = environment_files,
         local_wheels = tag.local_wheels,
@@ -151,17 +151,16 @@ def _lock_import_impl(module_ctx):
             repo_info.packages[tag.name] = _normalize_package_tag(tag)
 
     # Generate the resolved lock repos
-    hub_memberships = {}
+    universe_memberships = {}
     for repo_name, repo_info in lock_repos.items():
         resolved_lock_repo_file = _generate_resolved_lock_repo(repo_info, lock_model_structs[repo_name])
         resolved_lock_files[repo_info.repo_name] = resolved_lock_repo_file
-        if repo_info.hub:
-            hub_memberships[repo_info.repo_name] = repo_info.hub
+        universe_memberships[repo_info.repo_name] = repo_info.universe if repo_info.universe else repo_info.repo_name
 
-    lock_hub_repo(
+    lock_universe_repo(
         name = "lock_import_repos_hub",
         repo_files = resolved_lock_files,
-        hub_memberships = hub_memberships,
+        universe_memberships = universe_memberships,
     )
 
     if bazel_features.external_deps.extension_metadata_has_reproducible:

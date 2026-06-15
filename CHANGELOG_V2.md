@@ -410,7 +410,7 @@ The build pipeline is decomposed into composable, reusable actions:
 
 - Auto-generates BUILD files for sdist packages.
 - Maps pyproject.toml `build-backend` to pycross rules via the backend registry.
-- Maps `build-system.requires` to hub repo targets.
+- Maps `build-system.requires` to universe repo targets.
 - Applies backend-specific override configs.
 - Supports `SDIST_HOOKS` for backend-specific repo generation (e.g., maturin Cargo.lock).
 
@@ -432,7 +432,7 @@ The build pipeline is decomposed into composable, reusable actions:
 ### Pure-Starlark lock rendering
 
 - `resolved_lock_renderer.bzl` renders lock structures in pure Starlark (no Python tool invocation at repo time).
-- `package_repo.bzl` rewritten as a pure-Starlark hub repository rule.
+- `package_repo.bzl` rewritten as a pure-Starlark universe repository rule.
 - Versioned subdirectory layout: `<package>/v<version>/BUILD.bazel`.
 
 ### Package repo deduplication
@@ -552,7 +552,7 @@ The build pipeline is decomposed into composable, reusable actions:
 
 - `pycross_wheel_build` has been restored as a backward-compatible wrapper macro (defaulting to `setuptools_build`).
 - V1 compatibility attributes are now fully supported across all V2 build backends: `build_env`, `data`, `pre_build_hooks`, `post_build_hooks`, and `path_tools`.
-- Backward-compatible macro `requirement()` is provided in generated hub repositories. The legacy `all_whl_requirements` list has been removed because rules_pycross compiles source distributions and cannot guarantee a homogeneous list of raw `.whl` files.
+- Backward-compatible macro `requirement()` is provided in generated repositories. The legacy `all_whl_requirements` list has been removed because rules_pycross compiles source distributions and cannot guarantee a homogeneous list of raw `.whl` files.
 - E2E tests guarantee V1 attribute compatibility under the V2 architecture.
 
 ---
@@ -575,7 +575,7 @@ The build pipeline is decomposed into composable, reusable actions:
 ## Changed: Lock Repo Layout and Extras
 
 - **Underscore naming**: Generated package pin directories now strictly replace dashes with underscores, avoiding Bazel label validation issues in certain configurations.
-- **Root extras aliases**: Generated hub repositories now expose aliases for extras directly at the root (e.g., `@repo//:pkg[extra]`).
+- **Root extras aliases**: Generated repositories now expose aliases for extras directly at the root (e.g., `@repo//:pkg[extra]`).
 - **`--squash-extras`**: A new flag has been added to the lock resolver and model generation. This allows users to squash all extra dependencies into the base package target, providing a flatter dependency graph for environments migrating from V1.
 
 ---
@@ -610,16 +610,16 @@ The build pipeline is decomposed into composable, reusable actions:
 
 ---
 
-## New: Multi-Lock Hub Support
+## New: Multi-Lock Universe Support
 
-Support for importing multiple lock files into a shared "hub", enabling monorepos where different subprojects use different dependencies while benefiting from shared wheel/sdist caching.
+Support for importing multiple lock files into a shared "universe", enabling monorepos where different subprojects use different dependencies while benefiting from shared wheel/sdist caching.
 
-### Hub Architecture
+### Universe Architecture
 
-- New optional `hub` attribute on all `lock_import` tag classes (`import_uv`, `import_pdm`, `import_poetry`, `import_pylock`).
-- Lock imports sharing the same `hub` name share a single backing `package_repo` (the hub) containing the merged set of `pycross_wheel_library` targets.
-- Each user-facing repo becomes a lightweight `thin_package_repo` facade with its own `requirements.bzl`, `modules_mapping.json`, and pin aliases pointing to the hub's `_lock/` targets.
-- When `hub` is not set, behavior is identical to before — fully backward compatible.
+- New optional `universe` attribute on all `lock_import` tag classes (`import_uv`, `import_pdm`, `import_poetry`, `import_pylock`).
+- Lock imports sharing the same `universe` name share a single backing `package_repo` (the universe) containing the merged set of `pycross_wheel_library` targets.
+- Each user-facing repo becomes a lightweight `thin_package_repo` facade with its own `requirements.bzl`, `modules_mapping.json`, and pin aliases pointing to the universe's `_lock/` targets.
+- When `universe` is not set, the repo implicitly gets its own single-member universe (named after the repo).
 
 ### Example Usage
 
@@ -628,7 +628,7 @@ lock_import.import_uv(
     lock_file = "//frontend:uv.lock",
     project_file = "//frontend:pyproject.toml",
     repo = "frontend",
-    hub = "shared",
+    universe = "shared",
     target_environments = ["@envs//:environments"],
 )
 
@@ -636,12 +636,12 @@ lock_import.import_uv(
     lock_file = "//ml:uv.lock",
     project_file = "//ml:pyproject.toml",
     repo = "ml",
-    hub = "shared",
+    universe = "shared",
     target_environments = ["@envs//:environments"],
 )
 ```
 
-Both `@frontend` and `@ml` repos work independently with their own pins, but overlapping packages (e.g., `regex`) are downloaded and built only once in the shared hub.
+Both `@frontend` and `@ml` repos work independently with their own pins, but overlapping packages (e.g., `regex`) are downloaded and built only once in the shared universe.
 
 ### Conflict Detection
 
@@ -651,7 +651,7 @@ Both `@frontend` and `@ml` repos work independently with their own pins, but ove
 
 ### E2E Test
 
-- New `multi_lock_hub` E2E test with two uv projects sharing a hub, verifying cross-repo imports and shared dependency resolution.
+- New `multi_lock_universe` E2E test with two uv projects sharing a universe, verifying cross-repo imports and shared dependency resolution.
 
 ---
 
@@ -676,7 +676,7 @@ Eliminated a major repository fetching bottleneck. Previously, `package_repo` ea
 
 ## Changed: Extra Squashing at the Alias Layer
 
-Previously, `--squash-extras` was applied at translation time, mutating the lock data to merge all extra dependencies into the base package. This made the resolved lock non-canonical and complicated hub merging.
+Previously, `--squash-extras` was applied at translation time, mutating the lock data to merge all extra dependencies into the base package. This made the resolved lock non-canonical and complicated universe merging.
 
 ### New Approach
 
@@ -685,7 +685,7 @@ Previously, `--squash-extras` was applied at translation time, mutating the lock
 - `package_repo.bzl` and `thin_package_repo.bzl` read `squash_extras` and point their aliases to the `__squashed` variant when enabled.
 - Extra aliases (`[extra_name]`) also point to the squashed target when squashing is active.
 
-This preserves the canonical dependency graph in the lock, enabling correct hub merging while letting each repo decide its squashing policy at the alias layer.
+This preserves the canonical dependency graph in the lock, enabling correct universe merging while letting each repo decide its squashing policy at the alias layer.
 
 ---
 

@@ -54,7 +54,7 @@ def _conflict_check_impl(target, ctx):
                         "'{name}' has multiple versions in the dependency graph:\n" +
                         "  {name}=={v1} (from {l1})\n" +
                         "  {name}=={v2} (from {l2})\n\n" +
-                        "This typically happens when two hub-linked repos " +
+                        "This typically happens when two universe-linked repos " +
                         "pin different versions and a target depends on both.\n" +
                         "Align the versions in your lock files."
                     ).format(

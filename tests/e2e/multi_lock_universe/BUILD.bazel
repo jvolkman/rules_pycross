@@ -38,7 +38,7 @@ py_test(
     deps = [requirement_b("attrs")],
 )
 
-# Test: cross-repo deps — both regex should resolve to the same hub target
+# Test: cross-repo deps — both regex should resolve to the same universe target
 py_test(
     name = "test_cross_repo",
     srcs = ["test_cross_repo.py"],

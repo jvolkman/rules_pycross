@@ -139,7 +139,7 @@ def _sdist_repo_common(rctx):
         # Falls back to the registered default backend.
         backend_macro = backend_to_rule.get(backend, default_backend)
 
-        # Map build requires to targets in the hub repo
+        # Map build requires to targets in the universe repo
         build_deps = []
         required_build_packages = []
         for req in requires:
@@ -216,7 +216,7 @@ _SDIST_REPO_ATTRS = {
     "deps": attr.string_list(doc = "Runtime dependencies from lock file."),
     "known_packages": attr.string_list(doc = "List of packages present in the lock file to filter build_requires."),
     "lock_json": attr.label(doc = "The lock.json file from the resolved lock repo.", mandatory = True),
-    "lock_repo": attr.string(doc = "Name of the lock hub repo (e.g. 'uv').", mandatory = True),
+    "lock_repo": attr.string(doc = "Name of the lock universe repo (e.g. 'pycross_universe_uv').", mandatory = True),
     "build_backend": attr.string(doc = "The build backend to use."),
     "backend_to_rule": attr.string_dict(
         doc = "Registry mapping pyproject backend names to pycross rule names.",

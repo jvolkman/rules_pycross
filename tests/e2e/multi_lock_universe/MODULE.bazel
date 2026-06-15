@@ -24,37 +24,37 @@ use_repo(python, "python_versions")
 # rules_pycross
 environments = use_extension("@rules_pycross//pycross/extensions:environments.bzl", "environments")
 environments.create_for_python_toolchains(
-    name = "multi_lock_hub_envs",
+    name = "multi_lock_universe_envs",
     platforms = [
         "aarch64-apple-darwin",
         "x86_64-unknown-linux-gnu",
     ],
 )
-use_repo(environments, "multi_lock_hub_envs")
+use_repo(environments, "multi_lock_universe_envs")
 
-# Use the lock_import extension to import two lock files sharing a hub.
+# Use the lock_import extension to import two lock files sharing a universe.
 lock_import = use_extension("@rules_pycross//pycross/extensions:lock_import.bzl", "lock_import")
 
 # Project A: regex + six
 lock_import.import_uv(
-    hub = "shared",
     lock_file = "//project_a:uv.lock",
     project_file = "//project_a:pyproject.toml",
     repo = "lock_a",
-    target_environments = ["@multi_lock_hub_envs//:environments"],
+    target_environments = ["@multi_lock_universe_envs//:environments"],
+    universe = "shared",
 )
 
 # Project B: regex + attrs
 lock_import.import_uv(
-    hub = "shared",
     lock_file = "//project_b:uv.lock",
     project_file = "//project_b:pyproject.toml",
     repo = "lock_b",
-    target_environments = ["@multi_lock_hub_envs//:environments"],
+    target_environments = ["@multi_lock_universe_envs//:environments"],
+    universe = "shared",
 )
 
 # Annotation conflict: exclude a test file from regex in lock_a only.
-# This triggers per-member variant targets in the hub.
+# This triggers per-member variant targets in the universe.
 lock_import.package(
     name = "regex",
     install_exclude_globs = ["test_regex.py"],
