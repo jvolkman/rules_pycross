@@ -540,6 +540,60 @@ class InspectPackageTest(unittest.TestCase):
         result = inspect_sdist(sdist_path)
         self.assertEqual(result["top_level_paths"], ["netifaces"])
 
+    # -- Standalone files in namespace packages --
+
+    def test_wheel_namespace_standalone_so(self):
+        """PyQt5-sip style: a single .so file under a namespace directory.
+
+        PyQt5/sip.cpython-313-x86_64-linux-gnu.so should resolve to PyQt5/sip,
+        NOT claim the entire PyQt5 namespace.
+        """
+        wheel_path = self.create_zip(
+            "PyQt5_sip-12.15.0-cp313-cp313-linux_x86_64.whl",
+            {
+                "PyQt5/sip.cpython-313-x86_64-linux-gnu.so": b"",
+                "PyQt5_sip-12.15.0.dist-info/METADATA": "Name: PyQt5-sip",
+            },
+        )
+        result = inspect_wheel(wheel_path)
+        self.assertEqual(result["top_level_paths"], ["PyQt5/sip"])
+
+    def test_wheel_namespace_standalone_py(self):
+        """A standalone .py file under a namespace directory.
+
+        Should resolve to the module path, not the namespace root.
+        """
+        wheel_path = self.create_zip(
+            "ns_helper-1.0-py3-none-any.whl",
+            {
+                "mynamespace/helper.py": "# helper",
+                "ns_helper-1.0.dist-info/METADATA": "Name: ns-helper",
+            },
+        )
+        result = inspect_wheel(wheel_path)
+        self.assertEqual(result["top_level_paths"], ["mynamespace/helper"])
+
+    def test_wheel_namespace_standalone_and_subpackage(self):
+        """Mix of standalone files and concrete sub-packages in a namespace.
+
+        The standalone file should be kept alongside the sub-package, not
+        subsumed by or overclaiming the namespace.
+        """
+        wheel_path = self.create_zip(
+            "google_stuff-1.0-py3-none-any.whl",
+            {
+                "google/cloud/storage/__init__.py": "",
+                "google/cloud/storage/blob.py": "",
+                "google/auth.py": "# auth module",
+                "google_stuff-1.0.dist-info/METADATA": "Name: google-stuff",
+            },
+        )
+        result = inspect_wheel(wheel_path)
+        self.assertEqual(
+            result["top_level_paths"],
+            ["google/auth", "google/cloud/storage"],
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
