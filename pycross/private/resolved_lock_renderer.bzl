@@ -6,7 +6,7 @@ def _ind(text, tabs = 1):
     return ("    " * tabs) + text
 
 def _sanitize_name(name):
-    return name.lower().replace("-", "_").replace("@", "_").replace("+", "_").replace(".", "_")
+    return name.lower().replace("-", "_").replace("@", "_").replace("+", "_").replace(".", "_").replace("[", "_").replace("]", "_")
 
 def _is_in_same_cycle(dep_key, pkg, packages):
     cycle_group = pkg.get("cycle_group")
@@ -57,6 +57,7 @@ def render_lock_bzl(lock, repo_map, rctx_name):
     environments = lock.get("environments", {})
     packages = lock.get("packages", {})
     cycle_groups = lock.get("cycle_groups", {})
+    squash_extras = lock.get("squash_extras", False)
 
     # 1. Environment config_settings
     for env_name, env_ref in sorted(environments.items()):
@@ -95,7 +96,7 @@ def render_lock_bzl(lock, repo_map, rctx_name):
         lines.append(_ind('name = "_cycle_{}",'.format(group_name), 2))
         lines.append(_ind("deps = [", 2))
         for pkg_key in sorted(scc):
-            lines.append(_ind('":_raw_{}",'.format(_sanitize_name(pkg_key)), 3))
+            lines.append(_ind('":_raw_{}",'.format(pkg_key), 3))
         lines.append(_ind("],", 2))
         lines.append(_ind(")"))
         lines.append("")
@@ -138,6 +139,17 @@ def render_lock_bzl(lock, repo_map, rctx_name):
                 lines.append(_ind("})", 1))
             lines.append("")
 
+        if not pkg.get("environment_files") and "[" in pkg_key:
+            # Extra packages just wrap their dependencies
+            lines.extend([
+                _ind("py_library("),
+                _ind('name = "{}",'.format(pkg_key), 2),
+                _ind("deps = _{}_deps,".format(pkg_key_san) if has_runtime_deps else "deps = [],", 2),
+                _ind(")"),
+                "",
+            ])
+            continue
+
         # Sdist alias
         if sdist_label:
             lines.extend([
@@ -169,7 +181,7 @@ def render_lock_bzl(lock, repo_map, rctx_name):
         # Library
         lib_name = pkg_key
         if pkg.get("cycle_group"):
-            lib_name = "_raw_{}".format(pkg_key_san)
+            lib_name = "_raw_{}".format(pkg_key)
 
         lines.extend([
             _ind("pycross_wheel_library("),
@@ -209,7 +221,7 @@ def render_lock_bzl(lock, repo_map, rctx_name):
         if pkg.get("cycle_group"):
             lines.append(_ind("py_library("))
             lines.append(_ind('name = "{}",'.format(pkg_key), 2))
-            lines.append(_ind('deps = [":_raw_{}", ":_cycle_{}"],'.format(pkg_key_san, pkg["cycle_group"]), 2))
+            lines.append(_ind('deps = [":_raw_{}", ":_cycle_{}"],'.format(pkg_key, pkg["cycle_group"]), 2))
             lines.append(_ind(")"))
             lines.append("")
 
@@ -222,49 +234,26 @@ def render_lock_bzl(lock, repo_map, rctx_name):
             "",
         ])
 
-        # Extras
-        for extra_name, extra_deps in sorted(pkg.get("extra_dependencies", {}).items()):
-            safe_extra = extra_name.replace("-", "_").replace(".", "_")
-            deps_var = "_{}_extra_{}_deps".format(pkg_key_san, safe_extra)
-            lines.append(_ind("{} = [".format(deps_var)))
-            lines.append(_ind('":{lib}",'.format(lib = pkg_key), 2))
-            for dep_key in sorted(extra_deps.get("common_dependencies", [])):
-                if _is_in_same_cycle(dep_key, pkg, packages):
-                    continue
-                lines.append(_ind('":{dep}",'.format(dep = dep_key), 2))
-            lines.append(_ind("]"))
+    if squash_extras:
+        base_packages_with_extras = {}
+        for pkg_key in packages.keys():
+            if "[" in pkg_key:
+                base_name, extra_and_version = pkg_key.split("[", 1)
+                _, version = extra_and_version.split("]@", 1)
+                base_pkg_key = "{}@{}".format(base_name, version)
+                if base_pkg_key not in base_packages_with_extras:
+                    base_packages_with_extras[base_pkg_key] = []
+                base_packages_with_extras[base_pkg_key].append(pkg_key)
 
-            if extra_deps.get("environment_dependencies"):
-                lines[-1] = lines[-1] + " + select({"
-                for env_name, env_deps in sorted(extra_deps.get("environment_dependencies").items()):
-                    lines.append(_ind('":{env}": ['.format(env = env_name), 2))
-                    for dep_key in sorted(env_deps):
-                        if _is_in_same_cycle(dep_key, pkg, packages):
-                            continue
-                        lines.append(_ind('":{dep}",'.format(dep = dep_key), 3))
-                    lines.append(_ind("],", 2))
-                lines.append(_ind('"//conditions:default": [],', 2))
-                lines.append(_ind("})", 1))
-            lines.append("")
-
+        for base_pkg_key, extra_keys in sorted(base_packages_with_extras.items()):
             lines.extend([
                 _ind("py_library("),
-                _ind('name = "{pkg_key}[{extra}]",'.format(pkg_key = pkg_key, extra = extra_name), 2),
-                _ind("deps = {},".format(deps_var), 2),
-                _ind(")"),
-                "",
-            ])
-
-        # Squashed variant: base package + all extras
-        if pkg.get("extra_dependencies"):
-            lines.extend([
-                _ind("py_library("),
-                _ind('name = "{}__squashed",'.format(pkg_key), 2),
+                _ind('name = "{}__squashed",'.format(base_pkg_key), 2),
                 _ind("deps = [", 2),
-                _ind('":{}",'.format(pkg_key), 3),
+                _ind('":{}",'.format(base_pkg_key), 3),
             ])
-            for extra_name in sorted(pkg.get("extra_dependencies", {}).keys()):
-                lines.append(_ind('":{}[{}]",'.format(pkg_key, extra_name), 3))
+            for extra_key in sorted(extra_keys):
+                lines.append(_ind('":{}",'.format(extra_key), 3))
             lines.extend([
                 _ind("],", 2),
                 _ind(")"),

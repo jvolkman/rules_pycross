@@ -41,7 +41,7 @@ class FakePackage:
         self.resolved_dependencies.add(dep)
 
     def satisfies_dependency(self, dep: Any) -> bool:
-        return dep.name == self.name and dep.specifier.contains(self.version, prereleases=True)
+        return str(dep.name) == str(self.name.package) and dep.specifier.contains(self.version, prereleases=True)
 
     def satisfies_pin(self, pin: Any) -> bool:
         return pin.specifier.contains(self.version, prereleases=True)
@@ -49,7 +49,7 @@ class FakePackage:
     def to_lock_package(self) -> RawPackage:
         files = self._files or [
             PackageFile(
-                name=f"{self.name}-{self.version}-py3-none-any.whl",
+                name=f"{self.name.package}-{self.version}-py3-none-any.whl",
                 sha256="a" * 64,
             )
         ]
@@ -57,7 +57,7 @@ class FakePackage:
             name=self.name,
             version=self.version,
             python_versions=SpecifierSet(">=3.8"),
-            dependencies=sorted(self.resolved_dependencies, key=lambda d: d.name),
+            dependencies=sorted(self.resolved_dependencies, key=lambda d: d.name.package),
             files=files,
             source_dir=self.source_dir,
         )
@@ -70,6 +70,7 @@ class FakeDependency:
     name: str
     specifier: SpecifierSet
     marker: str | None = None
+    extras: set[str] = field(default_factory=set)
 
 
 @dataclass(frozen=True)
@@ -85,15 +86,30 @@ def _make_pkg(
     """Helper to create a FakePackage with optional dependencies."""
     dep_list = []
     if deps:
-        for dep_name, dep_spec in deps:
+        for dep_item in deps:
+            if len(dep_item) == 3:
+                dep_name, dep_spec, dep_extras = dep_item
+            else:
+                dep_name, dep_spec = dep_item
+                dep_extras = None
             dep_list.append(
                 FakeDependency(
                     name=dep_name,
                     specifier=SpecifierSet(dep_spec),
+                    extras=set(dep_extras) if dep_extras else set(),
                 )
             )
+    from pycross.private.tools.lock_model import DependencyName
+
+    if "[" in name:
+        base, extra = name.split("[", 1)
+        extra = extra.rstrip("]")
+        dname = DependencyName.from_parts(base, extra)
+    else:
+        dname = DependencyName.from_parts(name, None)
+
     return FakePackage(
-        name=canonicalize_name(name),
+        name=dname,
         version=Version(version),
         dependencies=dep_list,
         is_local=is_local,
@@ -301,6 +317,35 @@ class TestResolveLockGraph(unittest.TestCase):
 
         result = resolve_lock_graph(packages, pins, SpecifierSet(">=3.8"))
         self.assertEqual(len(result.packages), 1)
+
+    def test_dependency_with_extras(self):
+        """When a dependency requests an extra, the exact extra package should be resolved."""
+        from pycross.private.tools.lock_model import DependencyName
+
+        packages = [
+            _make_pkg("myapp", "0.1.0", deps=[("lib", ">=1.0", ["grpc"])]),
+            _make_pkg("lib", "1.0.0"),
+            _make_pkg("lib[grpc]", "1.0.0"),
+            _make_pkg("lib", "1.1.0"),
+            _make_pkg("lib[grpc]", "1.1.0"),
+        ]
+        pins = {
+            DependencyName.from_parts("myapp", None): _make_pin("0.1.0"),
+            DependencyName.from_parts("lib", None): _make_pin("1.0.0"),
+            DependencyName.from_parts("lib", "grpc"): _make_pin("1.0.0"),
+        }
+
+        result = resolve_lock_graph(packages, pins, SpecifierSet(">=3.8"))
+
+        my_app_key = PackageKey.from_parts(DependencyName.from_parts("myapp", None), Version("0.1.0"))
+        my_app_pkg = result.packages[my_app_key]
+
+        dep_names = {d.name for d in my_app_pkg.dependencies}
+        self.assertIn(DependencyName.from_parts("lib", "grpc"), dep_names)
+
+        # Ensure the extra variant is in the final graph
+        lib_grpc_key = PackageKey.from_parts(DependencyName.from_parts("lib", "grpc"), Version("1.0.0"))
+        self.assertIn(lib_grpc_key, result.packages)
 
 
 if __name__ == "__main__":

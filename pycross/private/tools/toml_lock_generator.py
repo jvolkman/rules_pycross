@@ -31,7 +31,7 @@ def main(args: Any) -> None:
     lock_dict = {"pins": {}, "packages": {}}
 
     # Sort pins deterministically
-    lock_dict["pins"] = {k: str(v) for k, v in sorted(resolved_lock.pins.items())}
+    lock_dict["pins"] = {str(k): str(v) for k, v in sorted(resolved_lock.pins.items())}
 
     packages_dict = {}
     for pkg_key, pkg in sorted(resolved_lock.packages.items()):
@@ -64,7 +64,7 @@ def main(args: Any) -> None:
             all_deps.update(env_deps)
 
         pkg_dict = {
-            "name": pkg.key.name,
+            "name": str(pkg.key.name),
             "version": str(pkg.key.version),
             "repo_name": repo_name,
             "url": url,

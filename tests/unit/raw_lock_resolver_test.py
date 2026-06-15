@@ -6,6 +6,7 @@ from packaging.specifiers import SpecifierSet
 from packaging.utils import canonicalize_name
 from packaging.version import Version
 
+from pycross.private.tools.lock_model import DependencyName
 from pycross.private.tools.lock_model import PackageDependency
 from pycross.private.tools.lock_model import PackageFile
 from pycross.private.tools.lock_model import PackageKey
@@ -37,7 +38,7 @@ def make_file(name: str, sha256: str = "1234") -> PackageFile:
 
 
 def make_dep(name: str, version: str, marker: str = "") -> PackageDependency:
-    return PackageDependency(name=canonicalize_name(name), version=Version(version), marker=marker)
+    return PackageDependency(name=DependencyName(name), version=Version(version), marker=marker)
 
 
 def make_pkg(
@@ -48,7 +49,7 @@ def make_pkg(
     python_versions: str = ">=3.8",
 ) -> RawPackage:
     return RawPackage(
-        name=canonicalize_name(name),
+        name=DependencyName(name),
         version=Version(version),
         python_versions=SpecifierSet(python_versions),
         dependencies=deps or [],
@@ -459,14 +460,14 @@ class TestExtras(unittest.TestCase):
         self.mac_env = make_env("mac", ["macosx_10_9_x86_64"], markers={"sys_platform": "darwin"})
 
     def test_extras_basic(self):
-        """Deps gated on extra == 'test' appear in extra_dependencies."""
+        """Deps gated on extra == 'test' appear when resolving for that extra."""
         pkg = make_pkg(
-            "foo",
+            "foo[test]",
             "1.0",
             [make_file("foo-1.0.tar.gz")],
             deps=[
                 make_dep("depA", "1.0"),
-                make_dep("depB", "2.0", marker="extra == 'test'"),
+                make_dep("depB", "1.0", marker="extra == 'test'"),
             ],
         )
         ctx = GenerationContext(
@@ -478,23 +479,16 @@ class TestExtras(unittest.TestCase):
         resolver = PackageResolver(pkg, ctx, None, [])
         resolved = resolver.to_resolved_package()
 
-        # depA is a base dep, not an extra dep
-        self.assertEqual(len(resolved.common_dependencies), 1)
-        self.assertEqual(resolved.common_dependencies[0].name, "depa")
-
-        # depB should appear under extra_dependencies["test"]
-        self.assertIn("test", resolved.extra_dependencies)
-        extra_test = resolved.extra_dependencies["test"]
-        extra_keys = set(extra_test.common_dependencies)
-        for env_deps in extra_test.environment_dependencies.values():
-            extra_keys |= set(env_deps)
-        dep_names = {k.name for k in extra_keys}
+        # Both deps should appear
+        self.assertEqual(len(resolved.common_dependencies), 2)
+        dep_names = {k.name.package for k in resolved.common_dependencies}
+        self.assertIn("depa", dep_names)
         self.assertIn("depb", dep_names)
 
     def test_extras_with_env_markers(self):
         """A dep with both extra and platform markers is env-specific within the extra."""
         pkg = make_pkg(
-            "foo",
+            "foo[test]",
             "1.0",
             [make_file("foo-1.0.tar.gz")],
             deps=[
@@ -513,28 +507,15 @@ class TestExtras(unittest.TestCase):
         # No base deps
         self.assertEqual(len(resolved.common_dependencies), 0)
 
-        # depC should be under extra "test"
-        self.assertIn("test", resolved.extra_dependencies)
-        extra_test = resolved.extra_dependencies["test"]
-
-        # Collect all dep keys from the extra
-        all_extra_keys = set(extra_test.common_dependencies)
-        for env_deps in extra_test.environment_dependencies.values():
-            all_extra_keys |= set(env_deps)
-        dep_names = {k.name for k in all_extra_keys}
-        self.assertIn("depc", dep_names)
-
-        # Because it only matches linux (not mac), it should be env-specific, not common
-        common_names = {k.name for k in extra_test.common_dependencies}
-        self.assertNotIn("depc", common_names)
-
         # It should appear under the linux env specifically
-        self.assertIn("linux", extra_test.environment_dependencies)
-        linux_names = {k.name for k in extra_test.environment_dependencies["linux"]}
+        self.assertIn("linux", resolved.environment_dependencies)
+        linux_names = {k.name.package for k in resolved.environment_dependencies["linux"]}
         self.assertIn("depc", linux_names)
 
+        self.assertNotIn("mac", resolved.environment_dependencies)
+
     def test_extras_no_extras(self):
-        """Packages without extra markers have empty extra_dependencies."""
+        """Packages without extra markers have no extras."""
         pkg = make_pkg(
             "foo",
             "1.0",
@@ -550,50 +531,40 @@ class TestExtras(unittest.TestCase):
         resolver = PackageResolver(pkg, ctx, None, [])
         resolved = resolver.to_resolved_package()
 
-        self.assertEqual(len(resolved.extra_dependencies), 0)
+        self.assertEqual(len(resolved.common_dependencies), 1)
 
     def test_extras_multiple(self):
         """Multiple extras ('test', 'dev') each pull different deps."""
-        pkg = make_pkg(
-            "foo",
-            "1.0",
-            [make_file("foo-1.0.tar.gz")],
-            deps=[
-                make_dep("depA", "1.0"),
-                make_dep("pytest", "7.0", marker="extra == 'test'"),
-                make_dep("black", "22.0", marker="extra == 'dev'"),
-            ],
-        )
+        deps = [
+            make_dep("depA", "1.0"),
+            make_dep("pytest", "7.0", marker="extra == 'test'"),
+            make_dep("black", "22.0", marker="extra == 'dev'"),
+        ]
+
         ctx = GenerationContext(
             target_environments=[self.linux_env],
             local_wheels={},
             remote_wheels={},
             always_include_sdist=False,
         )
-        resolver = PackageResolver(pkg, ctx, None, [])
-        resolved = resolver.to_resolved_package()
 
-        # Base dep
-        self.assertEqual(len(resolved.common_dependencies), 1)
-        self.assertEqual(resolved.common_dependencies[0].name, "depa")
+        pkg_test = make_pkg("foo[test]", "1.0", [make_file("foo-1.0.tar.gz")], deps=deps)
+        resolver_test = PackageResolver(pkg_test, ctx, None, [])
+        resolved_test = resolver_test.to_resolved_package()
 
-        # Two extras should be present
-        self.assertIn("test", resolved.extra_dependencies)
-        self.assertIn("dev", resolved.extra_dependencies)
+        pkg_dev = make_pkg("foo[dev]", "1.0", [make_file("foo-1.0.tar.gz")], deps=deps)
+        resolver_dev = PackageResolver(pkg_dev, ctx, None, [])
+        resolved_dev = resolver_dev.to_resolved_package()
 
         # Check "test" extra has pytest
-        test_keys = set(resolved.extra_dependencies["test"].common_dependencies)
-        for env_deps in resolved.extra_dependencies["test"].environment_dependencies.values():
-            test_keys |= set(env_deps)
-        test_dep_names = {k.name for k in test_keys}
+        test_dep_names = {k.name.package for k in resolved_test.common_dependencies}
+        self.assertIn("depa", test_dep_names)
         self.assertIn("pytest", test_dep_names)
         self.assertNotIn("black", test_dep_names)
 
         # Check "dev" extra has black
-        dev_keys = set(resolved.extra_dependencies["dev"].common_dependencies)
-        for env_deps in resolved.extra_dependencies["dev"].environment_dependencies.values():
-            dev_keys |= set(env_deps)
-        dev_dep_names = {k.name for k in dev_keys}
+        dev_dep_names = {k.name.package for k in resolved_dev.common_dependencies}
+        self.assertIn("depa", dev_dep_names)
         self.assertIn("black", dev_dep_names)
         self.assertNotIn("pytest", dev_dep_names)
 
@@ -790,7 +761,7 @@ class TestCycleDetection(unittest.TestCase):
             "1.0",
             [make_file("foo-1.0.tar.gz")],
             deps=[
-                make_dep("depA", "1.0"),
+                make_dep("depA[test]", "1.0"),
             ],
         )
         pkg_dep_a = make_pkg(
@@ -806,7 +777,7 @@ class TestCycleDetection(unittest.TestCase):
             "1.0",
             [make_file("depB-1.0.tar.gz")],
             deps=[
-                make_dep("depA", "1.0"),
+                make_dep("depA[test]", "1.0"),
             ],
         )
 
@@ -817,15 +788,15 @@ class TestCycleDetection(unittest.TestCase):
         # Resolve packages
         resolved = self._resolve_with_packages([pkg_foo, pkg_dep_a, pkg_dep_b], pins)
 
-        key_a = PackageKey.from_parts(canonicalize_name("depA"), Version("1.0"))
+        key_a_test = PackageKey.from_parts(DependencyName("depA[test]"), Version("1.0"))
         key_b = PackageKey.from_parts(canonicalize_name("depB"), Version("1.0"))
 
-        # depA and depB should be in a cycle group
-        res_a = resolved.packages[key_a]
+        # depA[test] and depB should be in a cycle group
+        res_a_test = resolved.packages[key_a_test]
         res_b = resolved.packages[key_b]
-        self.assertIsNotNone(res_a.cycle_group)
+        self.assertIsNotNone(res_a_test.cycle_group)
         self.assertIsNotNone(res_b.cycle_group)
-        self.assertEqual(res_a.cycle_group, res_b.cycle_group)
+        self.assertEqual(res_a_test.cycle_group, res_b.cycle_group)
 
 
 if __name__ == "__main__":

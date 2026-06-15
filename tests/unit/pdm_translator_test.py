@@ -213,6 +213,34 @@ files = [{ file = "b-2.0-py3-none-any.whl", hash = "sha256:b" }]
         dep_b = pkg_a.dependencies[0]
         self.assertEqual(dep_b.marker, 'extra == "testing"')
 
+    def test_extra_dependency(self):
+        project = """
+[project]
+name = "my-app"
+version = "0.1.0"
+dependencies = ["a==1.0"]
+"""
+        lock = """
+[metadata]
+lock_version = "4.3"
+
+[[package]]
+name = "a"
+version = "1.0"
+files = [{ file = "a-1.0-py3-none-any.whl", hash = "sha256:a" }]
+dependencies = ["b[test]==2.0"]
+
+[[package]]
+name = "b"
+version = "2.0"
+extras = ["test"]
+files = [{ file = "b-2.0-py3-none-any.whl", hash = "sha256:b" }]
+"""
+        result = self.run_translator(project, lock)
+        pkg_a = result.packages[PackageKey.from_parts("a", "1.0")]
+        dep_b = pkg_a.dependencies[0]
+        self.assertEqual(dep_b.name, "b[test]")
+
 
 if __name__ == "__main__":
     unittest.main()

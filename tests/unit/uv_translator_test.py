@@ -76,7 +76,7 @@ wheels = [
         self.assertEqual(len(result.packages), 1)
         req_key = PackageKey.from_parts("requests", "2.31.0")
         pkg = result.packages[req_key]
-        self.assertEqual(pkg.name, "requests")
+        self.assertEqual(pkg.name.package, "requests")
         self.assertEqual(len(pkg.files), 1)
 
     def test_version_check(self):
@@ -147,7 +147,7 @@ wheels = [{ file = "b-2.0-py3-none-any.whl", hash = "sha256:b" }]
         key_a = PackageKey.from_parts("a", "1.0")
         pkg_a = result.packages[key_a]
         self.assertEqual(len(pkg_a.dependencies), 1)
-        self.assertEqual(pkg_a.dependencies[0].name, "b")
+        self.assertEqual(pkg_a.dependencies[0].name.package, "b")
 
     def test_platform_specific_deps(self):
         project = """
@@ -215,8 +215,49 @@ wheels = [{ file = "b-2.0-py3-none-any.whl", hash = "sha256:b" }]
         result = run_translator(project, lock)
         key_a = PackageKey.from_parts("a", "1.0")
         pkg_a = result.packages[key_a]
-        self.assertEqual(len(pkg_a.dependencies), 1)
-        self.assertEqual(pkg_a.dependencies[0].name, "b")
+        self.assertEqual(len(pkg_a.dependencies), 0)
+
+        key_a_test = PackageKey.from_parts("a[test]", "1.0")
+        pkg_a_test = result.packages[key_a_test]
+        self.assertEqual(len(pkg_a_test.dependencies), 2)
+        deps = sorted([dep.name.package for dep in pkg_a_test.dependencies])
+        self.assertEqual(deps, ["a", "b"])
+
+    def test_dependencies_with_extra(self):
+        project = """
+[project]
+name = "my-app"
+version = "0.1.0"
+dependencies = []
+"""
+        lock = """
+version = 1
+requires-python = ">=3.8"
+
+[[package]]
+name = "my-app"
+version = "0.1.0"
+source = { virtual = "." }
+dependencies = [{ name = "a", extra = ["test"] }]
+
+[[package]]
+name = "a"
+version = "1.0"
+wheels = [{ file = "a-1.0-py3-none-any.whl", hash = "sha256:a" }]
+[package.optional-dependencies]
+test = [{ name = "b" }]
+
+[[package]]
+name = "b"
+version = "2.0"
+wheels = [{ file = "b-2.0-py3-none-any.whl", hash = "sha256:b" }]
+"""
+        result = run_translator(project, lock)
+
+        # If the `extra` field was successfully parsed, `a[test]` will have been
+        # requested by `my-app` and retained in the final package graph.
+        key_a_test = PackageKey.from_parts("a[test]", "1.0")
+        self.assertIn(key_a_test, result.packages)
 
     def test_dev_dependencies_pep735(self):
         project = """

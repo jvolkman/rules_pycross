@@ -8,6 +8,7 @@ from packaging.requirements import Requirement
 from packaging.specifiers import SpecifierSet
 from packaging.version import Version
 from pycross.private.tools.args import FlagFileArgumentParser
+from pycross.private.tools.lock_model import DependencyName
 from pycross.private.tools.lock_model import PackageDependency
 from pycross.private.tools.lock_model import PackageFile
 from pycross.private.tools.lock_model import RawLockSet
@@ -109,8 +110,8 @@ def translate(args: Any) -> RawLockSet:
 
         dependencies = []
         for dep in pkg.get("dependencies", []):
-            dep_name = package_canonical_name(dep["name"])
-            dep_version = versions.get(dep_name)
+            dep_name = DependencyName(dep["name"])
+            dep_version = versions.get(dep_name.package)
             if not dep_version:
                 print(
                     f"WARNING: dependency '{dep_name}' of '{name}' not found in lockfile, skipping",
@@ -161,7 +162,7 @@ def translate(args: Any) -> RawLockSet:
         package_requires_python = SpecifierSet(pkg.get("requires-python", ""))
 
         raw_package = RawPackage(
-            name=name,
+            name=DependencyName(name),
             version=Version(version),
             python_versions=package_requires_python,
             dependencies=sorted(dependencies, key=lambda d: d.name),

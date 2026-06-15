@@ -27,9 +27,11 @@ from pip._internal.index.package_finder import LinkType
 from pip._internal.models.candidate import InstallationCandidate
 from pip._internal.models.link import Link
 from pycross.private.tools.args import FlagFileArgumentParser
+from pycross.private.tools.lock_model import DependencyName
 from pycross.private.tools.lock_model import EnvironmentReference
 from pycross.private.tools.lock_model import FileKey
 from pycross.private.tools.lock_model import FileReference
+from pycross.private.tools.lock_model import PackageDependency
 from pycross.private.tools.lock_model import PackageFile
 from pycross.private.tools.lock_model import PackageKey
 from pycross.private.tools.lock_model import RawLockSet
@@ -101,23 +103,20 @@ class GenerationContext:
 
     def get_dependencies_by_environment(
         self, package: RawPackage, ignore_dependency_names: Set[str]
-    ) -> tuple[Dict[Optional[str], Set[PackageKey]], Dict[str, Dict[Optional[str], Set[PackageKey]]]]:
+    ) -> Dict[Optional[str], Set[PackageKey]]:
 
         base_env_deps = {target.name: set() for target in self.target_environments}
-        extra_env_deps: Dict[str, Dict[str, Set[PackageKey]]] = defaultdict(
-            lambda: {target.name: set() for target in self.target_environments}
-        )
 
         ordered_deps = sorted(package.dependencies, key=operator.attrgetter("version"), reverse=True)
         if ignore_dependency_names:
-            ordered_deps = [d for d in ordered_deps if d.name not in ignore_dependency_names]
+            ordered_deps = [d for d in ordered_deps if d.name.package not in ignore_dependency_names]
 
         for target in self.target_environments:
             added_base_for_target = set()
-            added_extra_for_target = defaultdict(set)
 
             for dep in ordered_deps:
-                if self.lock_package_keys is not None and dep.key not in self.lock_package_keys:
+                dep_base_key = PackageKey.from_parts(DependencyName(dep.name.package), dep.version)
+                if self.lock_package_keys is not None and dep_base_key not in self.lock_package_keys:
                     continue
 
                 if not dep.marker:
@@ -126,35 +125,22 @@ class GenerationContext:
                         added_base_for_target.add(dep.name)
                 else:
                     marker = Marker(dep.marker)
-                    # Evaluate for base (extra="")
                     target_markers_base = dict(target.markers)
-                    target_markers_base["extra"] = ""
+                    target_markers_base["extra"] = str(package.name.extra) if package.name.extra else ""
                     if marker.evaluate(target_markers_base) and dep.name not in added_base_for_target:
                         base_env_deps[target.name].add(dep.key)
                         added_base_for_target.add(dep.name)
 
-                    # Evaluate for any extras mentioned in the marker
-                    extras_mentioned = set(EXTRA_PATTERN.findall(dep.marker))
-                    for extra in extras_mentioned:
-                        target_markers_extra = dict(target.markers)
-                        target_markers_extra["extra"] = extra
-                        if marker.evaluate(target_markers_extra) and dep.name not in added_extra_for_target[extra]:
-                            extra_env_deps[extra][target.name].add(dep.key)
-                            added_extra_for_target[extra].add(dep.name)
-
-        def _dedup_env_deps(edeps: Dict[str, Set[PackageKey]]) -> Dict[Optional[str], Set[PackageKey]]:
-            if not edeps:
-                return {}
-            common_deps = set.intersection(*edeps.values()) if edeps else set()
-            edeps_deduped = {}
-            for env, deps in edeps.items():
-                deps = deps - common_deps
-                if deps:
-                    edeps_deduped[env] = deps
-            edeps_deduped[None] = common_deps
-            return edeps_deduped
-
-        return _dedup_env_deps(base_env_deps), {extra: _dedup_env_deps(deps) for extra, deps in extra_env_deps.items()}
+        if not base_env_deps:
+            return {}
+        common_deps = set.intersection(*base_env_deps.values()) if base_env_deps else set()
+        edeps_deduped = {}
+        for env, deps in base_env_deps.items():
+            deps = deps - common_deps
+            if deps:
+                edeps_deduped[env] = deps
+        edeps_deduped[None] = common_deps
+        return edeps_deduped
 
     def get_package_sources_by_environment(
         self, package: RawPackage, source_only: bool = False
@@ -250,24 +236,13 @@ class PackageResolver:
         self._build_backend = annotations.build_backend
         self._top_level_paths = annotations.top_level_paths
 
-        deps_by_env, extra_deps_by_env = context.get_dependencies_by_environment(
+        deps_by_env = context.get_dependencies_by_environment(
             package,
             annotations.ignore_dependencies,
         )
 
         self._common_deps = deps_by_env.get(None, set())
         self._env_deps = {k: v for k, v in deps_by_env.items() if k is not None}
-
-        from pycross.private.tools.lock_model import ExtraDependencies
-
-        self._extra_dependencies = {}
-        for extra, edeps in extra_deps_by_env.items():
-            common = sorted(edeps.get(None, set()))
-            envs = {env: sorted(deps) for env, deps in edeps.items() if env is not None}
-            self._extra_dependencies[extra] = ExtraDependencies(
-                common_dependencies=common,
-                environment_dependencies=envs,
-            )
 
         self._package_sources_by_env = context.get_package_sources_by_environment(
             package,
@@ -300,10 +275,6 @@ class PackageResolver:
         keys = set(self._common_deps)
         for env_deps in self._env_deps.values():
             keys |= env_deps
-        for extra_deps in self._extra_dependencies.values():
-            keys |= set(extra_deps.common_dependencies)
-            for env_deps in extra_deps.environment_dependencies.values():
-                keys |= set(env_deps)
         return keys
 
     @cached_property
@@ -313,10 +284,6 @@ class PackageResolver:
         keys = set(self._common_deps)
         for env_deps in self._env_deps.values():
             keys |= env_deps
-        for extra_deps in self._extra_dependencies.values():
-            keys |= set(extra_deps.common_dependencies)
-            for env_deps in extra_deps.environment_dependencies.values():
-                keys |= set(env_deps)
         keys |= set(self._build_deps)
         return keys
 
@@ -326,7 +293,6 @@ class PackageResolver:
             build_dependencies=sorted(self._build_deps),
             common_dependencies=sorted(self._common_deps),
             environment_dependencies={env: sorted(deps) for env, deps in sorted(self._env_deps.items())},
-            extra_dependencies=self._extra_dependencies,
             environment_files={env: ps.file_reference for env, ps in sorted(self._package_sources_by_env.items())},
             build_target=self._build_target,
             sdist_file=self.sdist_file,
@@ -351,19 +317,19 @@ def url_wheel_name(url: str) -> str:
 
 def resolve_single_version(
     name: str,
-    versions_by_name: Dict[NormalizedName, List[PackageKey]],
+    versions_by_name: Dict[DependencyName, List[PackageKey]],
     all_versions: AbstractSet[PackageKey],
     attr_name: str,
 ) -> PackageKey:
     # Handle the case of an exact version being specified.
     if "@" in name:
         name_part, version_part = name.split("@", maxsplit=1)
-        key = PackageKey.from_parts(package_canonical_name(name_part), Version(version_part))
+        key = PackageKey.from_parts(DependencyName(name_part), Version(version_part))
         if key not in all_versions:
             raise Exception(f'{attr_name} entry "{name}" matches no packages')
         return key
 
-    options = versions_by_name.get(package_canonical_name(name))
+    options = versions_by_name.get(DependencyName(name))
     if not options:
         raise Exception(f'{attr_name} entry "{name}" matches no packages')
 
@@ -378,7 +344,7 @@ def collect_package_annotations(args: Any, lock_model: RawLockSet) -> Dict[Packa
         return {}
 
     annotations: Dict[PackageKey, PackageAnnotations] = defaultdict(PackageAnnotations)
-    all_package_keys_by_canonical_name: Dict[NormalizedName, List[PackageKey]] = defaultdict(list)
+    all_package_keys_by_canonical_name: Dict[DependencyName, List[PackageKey]] = defaultdict(list)
     for package in lock_model.packages.values():
         all_package_keys_by_canonical_name[package.name].append(package.key)
 
@@ -439,7 +405,7 @@ def collect_package_annotations(args: Any, lock_model: RawLockSet) -> Dict[Packa
 
 
 def collect_default_build_dependencies(lock_model: RawLockSet, build_dependencies: list[str]) -> list[PackageKey]:
-    all_package_keys_by_canonical_name: Dict[NormalizedName, List[PackageKey]] = defaultdict(list)
+    all_package_keys_by_canonical_name: Dict[DependencyName, List[PackageKey]] = defaultdict(list)
     resolved_build_dependencies = []
     for package in lock_model.packages.values():
         all_package_keys_by_canonical_name[package.name].append(package.key)
@@ -515,7 +481,35 @@ def resolve(args: Any) -> ResolvedLockSet:
         next_package_key = work.pop()
         if next_package_key in packages_by_package_key:
             continue
-        package = lock_model.packages[next_package_key]
+
+        if next_package_key not in lock_model.packages:
+            if next_package_key.name.extra:
+                base_key = PackageKey.from_parts(
+                    DependencyName(next_package_key.name.package), next_package_key.version
+                )
+                if base_key not in lock_model.packages:
+                    raise KeyError(f"Missing base package {base_key} for extra {next_package_key}")
+                base_package = lock_model.packages[base_key]
+                package = RawPackage(
+                    name=next_package_key.name,
+                    version=next_package_key.version,
+                    python_versions=base_package.python_versions,
+                    dependencies=list(base_package.dependencies)
+                    + [
+                        PackageDependency(
+                            name=DependencyName(next_package_key.name.package),
+                            version=next_package_key.version,
+                            marker="",
+                        )
+                    ],
+                    files=[],
+                )
+                lock_model.packages[next_package_key] = package
+            else:
+                raise KeyError(f"Missing package {next_package_key}")
+        else:
+            package = lock_model.packages[next_package_key]
+
         context.check_package_compatibility(package)
         entry = PackageResolver(
             package,

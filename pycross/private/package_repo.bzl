@@ -84,59 +84,63 @@ def _requirements_bzl(rctx, pins):
 def _safe_name(pin_name, name):
     return name + "_" if pin_name == name else name
 
-def _pin_build(target_name, original_pin_name, pin_target, package, squash_extras = False):
+def _pin_build(target_name, original_pin_name, pin_target, package, extras_dict, has_squashed_variant = False):
     """Generates the BUILD file for a pin directory (//package/)."""
-    pin_target_base = (pin_target + "__squashed") if (squash_extras and package.get("extra_dependencies")) else pin_target
+    pin_target_base = (pin_target + "__squashed") if has_squashed_variant else pin_target
     lines = [
         'package(default_visibility = ["//visibility:public"])',
         "",
-        # //package -> //package:package -> //_lock:<pin_target>
-        "alias(",
-        '    name = "{}",'.format(target_name),
-        '    actual = "//_lock:{}",'.format(pin_target_base),
-        ")",
-        "",
-        # //package:pkg -> //_lock:<pin_target>
-        "alias(",
-        '    name = "{}",'.format(_safe_name(target_name, "pkg")),
-        '    actual = "//_lock:{}",'.format(pin_target_base),
-        ")",
-        "",
-        # //package:wheel -> //_wheel:<original_pin_name>
-        "alias(",
-        '    name = "{}",'.format(_safe_name(target_name, "wheel")),
-        '    actual = "//_wheel:{}",'.format(original_pin_name),
-        ")",
-        "",
-        # //package:dist_info -> //_lock:_dist_info_<pin_target>
-        "alias(",
-        '    name = "{}",'.format(_safe_name(target_name, "dist_info")),
-        '    actual = "//_lock:_dist_info_{}",'.format(pin_target),
-        ")",
-        "",
-        # //package:data -> //_lock:<pin_target> (rules_python compat)
-        "alias(",
-        '    name = "{}",'.format(_safe_name(target_name, "data")),
-        '    actual = "//_lock:{}",'.format(pin_target_base),
-        ")",
-        "",
     ]
 
-    sdist_file = package.get("sdist_file")
-    if sdist_file:
+    if pin_target:
         lines.extend([
+            # //package -> //package:package -> //_lock:<pin_target>
             "alias(",
-            '    name = "{}",'.format(_safe_name(target_name, "sdist")),
-            '    actual = "//_sdist:{}",'.format(original_pin_name),
+            '    name = "{}",'.format(target_name),
+            '    actual = "//_lock:{}",'.format(pin_target_base),
+            ")",
+            "",
+            # //package:pkg -> //_lock:<pin_target>
+            "alias(",
+            '    name = "{}",'.format(_safe_name(target_name, "pkg")),
+            '    actual = "//_lock:{}",'.format(pin_target_base),
+            ")",
+            "",
+            # //package:wheel -> //_wheel:<original_pin_name>
+            "alias(",
+            '    name = "{}",'.format(_safe_name(target_name, "wheel")),
+            '    actual = "//_wheel:{}",'.format(original_pin_name),
+            ")",
+            "",
+            # //package:dist_info -> //_lock:_dist_info_<pin_target>
+            "alias(",
+            '    name = "{}",'.format(_safe_name(target_name, "dist_info")),
+            '    actual = "//_lock:_dist_info_{}",'.format(pin_target),
+            ")",
+            "",
+            # //package:data -> //_lock:<pin_target> (rules_python compat)
+            "alias(",
+            '    name = "{}",'.format(_safe_name(target_name, "data")),
+            '    actual = "//_lock:{}",'.format(pin_target_base),
             ")",
             "",
         ])
 
-    for extra_name in sorted(package.get("extra_dependencies", {}).keys()):
+        sdist_file = package.get("sdist_file")
+        if sdist_file:
+            lines.extend([
+                "alias(",
+                '    name = "{}",'.format(_safe_name(target_name, "sdist")),
+                '    actual = "//_sdist:{}",'.format(original_pin_name),
+                ")",
+                "",
+            ])
+
+    for extra_name, extra_target in sorted(extras_dict.items()):
         lines.extend([
             "alias(",
             '    name = "[{}]",'.format(extra_name),
-            '    actual = "//_lock:{}",'.format(pin_target_base if squash_extras else "{}[{}]".format(pin_target, extra_name)),
+            '    actual = "//_lock:{}",'.format(pin_target_base if has_squashed_variant else extra_target),
             ")",
             "",
         ])
@@ -223,26 +227,6 @@ def _package_repo_impl(rctx):
                         cd = existing.setdefault("common_dependencies", [])
                         if dep not in cd:
                             cd.append(dep)
-                    for extra, extra_deps in pkg_data.get("extra_dependencies", {}).items():
-                        ex = existing.setdefault("extra_dependencies", {})
-                        if extra not in ex:
-                            ex[extra] = dict(extra_deps)
-                        else:
-                            # Union common_dependencies within the extra.
-                            for dep in extra_deps.get("common_dependencies", []):
-                                ecd = ex[extra].setdefault("common_dependencies", [])
-                                if dep not in ecd:
-                                    ecd.append(dep)
-
-                            # Union environment_dependencies within the extra.
-                            for env_name, env_deps in extra_deps.get("environment_dependencies", {}).items():
-                                eed = ex[extra].setdefault("environment_dependencies", {})
-                                if env_name not in eed:
-                                    eed[env_name] = list(env_deps)
-                                else:
-                                    for dep in env_deps:
-                                        if dep not in eed[env_name]:
-                                            eed[env_name].append(dep)
                     if not existing.get("top_level_paths") and pkg_data.get("top_level_paths"):
                         existing["top_level_paths"] = pkg_data["top_level_paths"]
                     if not existing.get("sdist_file") and pkg_data.get("sdist_file"):
@@ -307,25 +291,39 @@ def _package_repo_impl(rctx):
         ")",
         "",
     ])
-    for pin_name in sorted(pins.keys()):
-        us_name = _underscore_name(pin_name)
-        pin_target = pins[pin_name]
-        package = packages[pin_target]
+    grouped_pins = {}
+    for pin_name, pin_target in pins.items():
+        if "[" in pin_name:
+            base, extra = pin_name.split("[", 1)
+            extra = extra[:-1]
+            if base not in grouped_pins:
+                grouped_pins[base] = {"base_target": None, "extras": {}}
+            grouped_pins[base]["extras"][extra] = pin_target
+        else:
+            if pin_name not in grouped_pins:
+                grouped_pins[pin_name] = {"base_target": None, "extras": {}}
+            grouped_pins[pin_name]["base_target"] = pin_target
 
-        # //:pin-name -> //pin_name:pkg
-        root_build_lines.extend([
-            "alias(",
-            '    name = "{}",'.format(pin_name),
-            '    actual = "//{}:pkg",'.format(us_name),
-            ")",
-            "",
-        ])
+    for base_pin_name in sorted(grouped_pins.keys()):
+        group = grouped_pins[base_pin_name]
+        us_name = _underscore_name(base_pin_name)
+        base_target = group["base_target"]
 
-        # //:pin-name[extra] -> //pin_name:[extra]
-        for extra_name in sorted(package.get("extra_dependencies", {}).keys()):
+        if base_target:
+            # //:pin-name -> //pin_name:pkg
             root_build_lines.extend([
                 "alias(",
-                '    name = "{}[{}]",'.format(pin_name, extra_name),
+                '    name = "{}",'.format(base_pin_name),
+                '    actual = "//{}:pkg",'.format(us_name),
+                ")",
+                "",
+            ])
+
+        for extra_name, _ in sorted(group["extras"].items()):
+            # //:pin-name[extra] -> //pin_name:[extra]
+            root_build_lines.extend([
+                "alias(",
+                '    name = "{}[{}]",'.format(base_pin_name, extra_name),
                 '    actual = "//{}:[{}]",'.format(us_name, extra_name),
                 ")",
                 "",
@@ -334,10 +332,24 @@ def _package_repo_impl(rctx):
 
     # 3. Pin directories: //package/ with aliases to //_lock targets
     # Directory names use underscores (rules_python convention).
-    for pin_name, pin_target in sorted(pins.items()):
-        package = packages[pin_target]
-        underscore_name = _underscore_name(pin_name)
-        rctx.file("{}/BUILD.bazel".format(underscore_name), _pin_build(underscore_name, pin_name, pin_target, package, squash_extras))
+    base_packages_with_extras = {}
+    for pkg_key in packages.keys():
+        if "[" in pkg_key:
+            base_name, extra_and_version = pkg_key.split("[", 1)
+            extra_name, version = extra_and_version.split("]@", 1)
+            base_pkg_key = "{}@{}".format(base_name, version)
+            base_packages_with_extras[base_pkg_key] = True
+
+    for base_pin_name, group in sorted(grouped_pins.items()):
+        base_target = group["base_target"]
+        package = packages.get(base_target) if base_target else {}
+        underscore_name = _underscore_name(base_pin_name)
+        has_squashed_variant = squash_extras and base_target and base_target in base_packages_with_extras
+
+        rctx.file(
+            "{}/BUILD.bazel".format(underscore_name),
+            _pin_build(underscore_name, base_pin_name, base_target, package, group["extras"], has_squashed_variant),
+        )
 
     # 4. _wheel/ and _sdist/ directories for versioned artifact access
     wheel_lines = [

@@ -15,9 +15,9 @@ from urllib.parse import urlparse
 from packaging.markers import Marker
 from packaging.requirements import Requirement
 from packaging.specifiers import SpecifierSet
-from packaging.utils import NormalizedName
 from packaging.version import Version
 from pycross.private.tools.args import FlagFileArgumentParser
+from pycross.private.tools.lock_model import DependencyName
 from pycross.private.tools.lock_model import PackageDependency
 from pycross.private.tools.lock_model import PackageFile
 from pycross.private.tools.lock_model import PackageKey
@@ -37,7 +37,7 @@ class LockfileNotStaticException(Exception):
 
 @dataclass
 class Package:
-    name: NormalizedName
+    name: DependencyName
     version: Version
     python_versions: List[SpecifierSet]
     dependencies: Set[Requirement]
@@ -55,11 +55,9 @@ class Package:
         return PackageKey.from_parts(self.name, self.version)
 
     def satisfies(self, req: Requirement) -> bool:
-        # The left side is already canonicalized.
-        if self.name != package_canonical_name(req.name):
-            return False
-        # Extras are case-insensitive. The left side is already lower-cased.
-        if not self.extras.issuperset(set(r.lower() for r in req.extras)):
+        req_extra = list(req.extras)[0] if req.extras else None
+        req_name = DependencyName.from_parts(req.name, req_extra)
+        if self.name != req_name:
             return False
         return req.specifier.contains(self.version, prereleases=True)
 
@@ -181,14 +179,22 @@ def translate(
 ) -> RawLockSet:
     requirements: List[Requirement] = []
 
-    project_info = next(pkg for pkg in packages_list if pkg["name"] == project_name)
-    default_dependencies = [Requirement(dep["name"]) for dep in project_info.get("dependencies", {})]
+    project_info = next(pkg for pkg in packages_list if package_canonical_name(pkg["name"]) == project_name)
+
+    def parse_dependency(dep: Dict[str, Any]) -> Requirement:
+        name = dep["name"]
+        extras = dep.get("extra") or dep.get("extras", [])
+        if extras:
+            return Requirement(f"{name}[{','.join(extras)}]")
+        return Requirement(name)
+
+    default_dependencies = [parse_dependency(dep) for dep in project_info.get("dependencies", {})]
     optional_dependencies = {
-        group: [Requirement(dep["name"]) for dep in deps]
+        group: [parse_dependency(dep) for dep in deps]
         for group, deps in project_info.get("optional-dependencies", {}).items()
     }
     development_dependencies = {
-        group: [Requirement(dep["name"]) for dep in deps]
+        group: [parse_dependency(dep) for dep in deps]
         for group, deps in project_info.get("dev-dependencies", {}).items()
     }
 
@@ -211,10 +217,18 @@ def translate(
             raise Exception(f"Non-existent development dependency group: {group_name}")
         requirements.extend(development_dependencies[group_name])
 
-    pinned_package_specs: Dict[NormalizedName, Requirement] = {}
+    pinned_package_specs: Dict[DependencyName, Requirement] = {}
     for req in requirements:
-        pin = package_canonical_name(req.name)
-        pinned_package_specs[pin] = req
+        if req.extras:
+            for extra in req.extras:
+                pin = DependencyName.from_parts(req.name, extra)
+                req_string = f"{req.name}[{extra}]{req.specifier}" if req.specifier else f"{req.name}[{extra}]"
+                if req.marker:
+                    req_string += f";{req.marker}"
+                pinned_package_specs[pin] = Requirement(req_string)
+        else:
+            pin = package_canonical_name(req.name)
+            pinned_package_specs[pin] = req
 
     distinct_packages = package_processor(packages_list)
     return resolve_lock_graph(
@@ -300,31 +314,48 @@ def collect_and_process_packages(packages_list: list[Dict[str, Any]]) -> Dict[Pa
         package_requires_python = resolve_package_requires_python(lock_pkg.get("resolution-markers", []))
         package_extras = lock_pkg.get("extras", [])
 
-        optional_deps = []
-        for extra_name, deps in lock_pkg.get("optional-dependencies", {}).items():
-            for dep in deps:
-                dep_copy = dict(dep)
-                existing_marker = dep_copy.get("marker")
-                extra_marker = f"extra == '{extra_name}'"
-                if existing_marker:
-                    dep_copy["marker"] = f"({existing_marker}) and {extra_marker}"
-                else:
-                    dep_copy["marker"] = extra_marker
-                optional_deps.append(dep_copy)
-
-        dependencies = set()
-        for dep in lock_pkg.get("dependencies", []) + optional_deps:
+        base_dependencies = set()
+        for dep in lock_pkg.get("dependencies", []):
             name = dep.get("name")
             version = dep.get("version")
             marker = dep.get("marker")
-            if version:
-                dep_string = f"{name}=={version}"
+            extras = dep.get("extra") or dep.get("extras", [])
+            if extras:
+                for extra in extras:
+                    dep_string = f"{name}[{extra}]"
+                    if version:
+                        dep_string += f"=={version}"
+                    if marker:
+                        dep_string += f";{marker}"
+                    base_dependencies.add(Requirement(dep_string))
             else:
-                dep_string = name
-            if marker:
-                dep_string += f";{marker}"
+                dep_string = f"{name}=={version}" if version else name
+                if marker:
+                    dep_string += f";{marker}"
+                base_dependencies.add(Requirement(dep_string))
 
-            dependencies.add(Requirement(dep_string))
+        extra_dependencies = {}
+        for extra_name, deps in lock_pkg.get("optional-dependencies", {}).items():
+            parsed_deps = set()
+            for dep in deps:
+                name = dep.get("name")
+                version = dep.get("version")
+                marker = dep.get("marker")
+                extras = dep.get("extra") or dep.get("extras", [])
+                if extras:
+                    for extra in extras:
+                        dep_string = f"{name}[{extra}]"
+                        if version:
+                            dep_string += f"=={version}"
+                        if marker:
+                            dep_string += f";{marker}"
+                        parsed_deps.add(Requirement(dep_string))
+                else:
+                    dep_string = f"{name}=={version}" if version else name
+                    if marker:
+                        dep_string += f";{marker}"
+                    parsed_deps.add(Requirement(dep_string))
+            extra_dependencies[extra_name] = parsed_deps
 
         files = lock_pkg.get("wheels", [])
         if lock_pkg.get("sdist"):
@@ -399,21 +430,41 @@ def collect_and_process_packages(packages_list: list[Dict[str, Any]]) -> Dict[Pa
         if not files and not is_local:
             raise Exception(lock_pkg, is_local)
 
-        package = Package(
+        base_package = Package(
             name=package_name,
             version=Version(package_version),
             python_versions=package_requires_python,
-            dependencies=dependencies,
+            dependencies=base_dependencies,
             files=files,
             is_local=is_local,
             resolved_dependencies=set(),
             extras=set(package_extras),
             source_dir=source_dir,
         )
-        if package.key in distinct_packages:
-            distinct_packages[package.key] = package.merge(distinct_packages[package.key])
+        if base_package.key in distinct_packages:
+            distinct_packages[base_package.key] = base_package.merge(distinct_packages[base_package.key])
         else:
-            distinct_packages[package.key] = package
+            distinct_packages[base_package.key] = base_package
+
+        for extra_name, deps in extra_dependencies.items():
+            extra_deps = set(deps)
+            extra_deps.add(Requirement(f"{package_listed_name}=={package_version}"))
+
+            extra_package = Package(
+                name=DependencyName.from_parts(package_listed_name, extra_name),
+                version=Version(package_version),
+                python_versions=package_requires_python,
+                dependencies=extra_deps,
+                files=set(),
+                is_local=is_local,
+                resolved_dependencies=set(),
+                extras=set(),
+                source_dir=source_dir,
+            )
+            if extra_package.key in distinct_packages:
+                distinct_packages[extra_package.key] = extra_package.merge(distinct_packages[extra_package.key])
+            else:
+                distinct_packages[extra_package.key] = extra_package
     return distinct_packages
 
 

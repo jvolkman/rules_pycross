@@ -29,6 +29,7 @@ class PoetryDependency:
     name: str
     spec: str
     marker: Optional[str]
+    extras: List[str]
 
     @property
     def constraint(self):
@@ -184,11 +185,13 @@ def translate(
                 if isinstance(dep, str):
                     marker = None
                     spec = dep
+                    extras = []
                 else:
                     marker = dep.get("markers")
                     spec = dep.get("version")
+                    extras = dep.get("extras", [])
 
-                dependencies.append(PoetryDependency(name=name, spec=spec, marker=marker))
+                dependencies.append(PoetryDependency(name=name, spec=spec, marker=marker, extras=extras))
 
         source_type = lock_pkg.get("source", {}).get("type")
         is_local = source_type in ("directory", "git", "url")

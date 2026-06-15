@@ -76,11 +76,11 @@ def _test_cycle_group_rendering_impl(env, target):
     env.expect.that_bool('"_cycle_cycle_group_abc123"' in res).equals(True)
 
     # Should reference _raw_ targets for both cycle members
-    env.expect.that_bool('"_raw_alpha_1_0"' in res).equals(True)
-    env.expect.that_bool('"_raw_beta_2_0"' in res).equals(True)
+    env.expect.that_bool('"_raw_alpha@1.0"' in res).equals(True)
+    env.expect.that_bool('"_raw_beta@2.0"' in res).equals(True)
 
     # alpha's pycross_wheel_library should use _raw_ name
-    env.expect.that_bool('"_raw_alpha_1_0"' in res).equals(True)
+    env.expect.that_bool('"_raw_alpha@1.0"' in res).equals(True)
 
     # Should have a wrapping py_library named "alpha@1.0" that depends on _raw + cycle group
     env.expect.that_bool('"alpha@1.0"' in res).equals(True)
@@ -89,7 +89,7 @@ def _test_cycle_group_rendering_impl(env, target):
     # Cycled package deps should exclude same-cycle members
     # Split at the pycross_wheel_library for alpha to check its deps
     # alpha depends on beta, but beta is in the same cycle, so beta should NOT appear in alpha's deps list
-    alpha_section = res.split('name = "_raw_alpha_1_0"')[0].rsplit("_alpha_1_0_deps", 1)[-1] if "_alpha_1_0_deps" in res else ""
+    alpha_section = res.split('name = "_raw_alpha@1.0"')[0].rsplit("_alpha_1_0_deps", 1)[-1] if "_alpha_1_0_deps" in res else ""
     env.expect.that_bool('"beta@2.0"' not in alpha_section).equals(True)
 
 def _test_cycle_group_rendering(name):
@@ -111,16 +111,16 @@ def _test_extras_rendering_impl(env, target):
                 "environment_files": {
                     "linux": {"key": "mylib_wheel"},
                 },
-                "extra_dependencies": {
-                    "test": {
-                        "common_dependencies": ["pytest@7.0"],
-                    },
-                    "dev": {
-                        "common_dependencies": ["black@23.0"],
-                        "environment_dependencies": {
-                            "linux": ["mypy@1.5"],
-                        },
-                    },
+            },
+            "mylib[test]@1.0": {
+                "environment_files": {},
+                "common_dependencies": ["pytest@7.0"],
+            },
+            "mylib[dev]@1.0": {
+                "environment_files": {},
+                "common_dependencies": ["black@23.0"],
+                "environment_dependencies": {
+                    "linux": ["mypy@1.5"],
                 },
             },
             "pytest@7.0": {
@@ -149,13 +149,13 @@ def _test_extras_rendering_impl(env, target):
     res = render_lock_bzl(lock, repo_map, "my_rctx")
 
     # Should have py_library for [test] extra
-    env.expect.that_bool('"mylib@1.0[test]"' in res).equals(True)
+    env.expect.that_bool('"mylib[test]@1.0"' in res).equals(True)
 
     # [test] deps should include pytest
     env.expect.that_bool('":pytest@7.0"' in res).equals(True)
 
     # Should have py_library for [dev] extra
-    env.expect.that_bool('"mylib@1.0[dev]"' in res).equals(True)
+    env.expect.that_bool('"mylib[dev]@1.0"' in res).equals(True)
 
     # [dev] deps should include black (common) and mypy (linux-specific via select)
     env.expect.that_bool('":black@23.0"' in res).equals(True)

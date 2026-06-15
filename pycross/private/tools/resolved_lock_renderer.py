@@ -561,9 +561,13 @@ def render(resolved_lock: ResolvedLockSet, args: Any, output: TextIO) -> None:
     if not args.no_pins:
         if pins:
             w("PINS = {")
-            for pinned_package_name in sorted(pins.keys()):
+            for pinned_package_name in sorted(pins.keys(), key=str):
                 pinned_package_key = pins[pinned_package_name]
-                w(ind(f"{quoted_str(pinned_package_name)}: {quoted_str(naming.package(pinned_package_key).target)},"))
+                w(
+                    ind(
+                        f"{quoted_str(str(pinned_package_name))}: {quoted_str(naming.package(pinned_package_key).target)},"
+                    )
+                )
             w("}")
             w()
         else:

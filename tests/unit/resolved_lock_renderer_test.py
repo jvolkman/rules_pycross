@@ -5,7 +5,6 @@ from types import SimpleNamespace
 
 from pycross.private.tools import resolved_lock_renderer
 from pycross.private.tools.lock_model import EnvironmentReference
-from pycross.private.tools.lock_model import ExtraDependencies
 from pycross.private.tools.lock_model import FileKey
 from pycross.private.tools.lock_model import FileReference
 from pycross.private.tools.lock_model import PackageFile
@@ -168,11 +167,13 @@ class ResolvedLockRendererTest(unittest.TestCase):
             environment_files={
                 "env1": FileReference(key=file_key),
             },
-            extra_dependencies={
-                "test": ExtraDependencies(
-                    common_dependencies=[dep_key],
-                ),
-            },
+        )
+
+        test_pkg_key = PackageKey.from_parts("mylib[test]", "1.0")
+        resolved_test_pkg = ResolvedPackage(
+            key=test_pkg_key,
+            environment_files={},
+            common_dependencies=[dep_key],
         )
 
         dep_pkg = ResolvedPackage(
@@ -186,16 +187,14 @@ class ResolvedLockRendererTest(unittest.TestCase):
             environments={
                 "env1": EnvironmentReference(environment_label="@//:env1", config_setting_label="@//:env1_setting"),
             },
-            packages={pkg_key: resolved_pkg, dep_key: dep_pkg},
+            packages={pkg_key: resolved_pkg, dep_key: dep_pkg, test_pkg_key: resolved_test_pkg},
             remote_files={file_key: pkg_file, dep_file_key: dep_pkg_file},
             pins={"mylib": pkg_key},
         )
 
         content = self._render(resolved_lock)
-        # The old Python renderer doesn't use "[test]" naming — check for the extra target reference
-        # Extra deps list should reference the dep
         self.assertIn("extra-dep@2.0", content)
-        # The main package library should still be present
+        self.assertIn('"mylib[test]@1.0"', content)
         self.assertIn('package_name = "mylib"', content)
 
 

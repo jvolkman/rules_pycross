@@ -12,6 +12,7 @@ from typing import Iterator
 from typing import List
 from typing import Optional
 from typing import Tuple
+from typing import Union
 
 from dacite.config import Config
 from dacite.core import from_dict
@@ -33,7 +34,7 @@ class _Encoder(JSONEncoder):
                 return len(val) == 0
             return False
 
-        if isinstance(o, (FileKey, PackageKey, SpecifierSet, Version)):
+        if isinstance(o, (DependencyName, FileKey, PackageKey, SpecifierSet, Version)):
             return str(o)
         if dataclasses.is_dataclass(o):
             # Omit None values from serialized output.
@@ -57,9 +58,65 @@ def _dataclass_items(dc) -> Iterator[Tuple[str, Any]]:
         yield item.name, getattr(dc, item.name)
 
 
+@dataclass(frozen=True)
+class DependencyName:
+    package: NormalizedName
+    extra: Optional[NormalizedName]
+
+    def __init__(self, val: Union[str, DependencyName]) -> None:
+        val = str(val)
+        package_name, bracket, extra_name = val.partition("[")
+
+        if bracket:
+            if not extra_name.endswith("]"):
+                raise ValueError(f"Invalid format for package with extra: {val}")
+            extra_name = extra_name[:-1]
+            object.__setattr__(self, "extra", canonicalize_name(extra_name))
+        else:
+            object.__setattr__(self, "extra", None)
+
+        object.__setattr__(self, "package", canonicalize_name(package_name))
+
+    @staticmethod
+    def from_parts(package: str, extra: Optional[str] = None) -> DependencyName:
+        if extra:
+            return DependencyName(f"{package}[{extra}]")
+        else:
+            return DependencyName(package)
+
+    def __str__(self) -> str:
+        if self.extra:
+            return f"{self.package}[{self.extra}]"
+        else:
+            return str(self.package)
+
+    def __eq__(self, other: Any) -> bool:
+        if isinstance(other, str):
+            return str(self) == other
+        if isinstance(other, DependencyName):
+            return self.package == other.package and self.extra == other.extra
+        return False
+
+    def __lt__(self, other: Any) -> bool:
+        if not isinstance(other, DependencyName):
+            return NotImplemented
+        if self.package != other.package:
+            return self.package < other.package
+        if self.extra == other.extra:
+            return False
+        if self.extra is None:
+            return True
+        if other.extra is None:
+            return False
+        return self.extra < other.extra
+
+    def __hash__(self) -> int:
+        return hash(str(self))
+
+
 @dataclass(frozen=True, order=True)
 class PackageKey:
-    name: NormalizedName
+    name: DependencyName
     version: Version
 
     def __init__(self, val) -> None:
@@ -68,7 +125,7 @@ class PackageKey:
         object.__setattr__(self, "version", Version(version))
 
     @staticmethod
-    def from_parts(name: NormalizedName, version: Version) -> PackageKey:
+    def from_parts(name: Union[str, DependencyName], version: Version) -> "PackageKey":
         return PackageKey(f"{name}@{version}")
 
     def __str__(self) -> str:
@@ -183,7 +240,7 @@ class PackageFile:
 
 @dataclass(frozen=True)
 class PackageDependency:
-    name: NormalizedName
+    name: DependencyName
     version: Version
     marker: str
 
@@ -199,7 +256,7 @@ class PackageDependency:
 
 @dataclass(frozen=True)
 class RawPackage:
-    name: NormalizedName
+    name: DependencyName
     version: Version
     python_versions: SpecifierSet
     python_version_specifiers: List[SpecifierSet] = field(default_factory=list)
@@ -208,7 +265,7 @@ class RawPackage:
     source_dir: Optional[str] = None
 
     def __post_init__(self):
-        normalized_name = package_canonical_name(self.name)
+        normalized_name = DependencyName(self.name)
         assert str(self.name) == str(normalized_name), "The name field should be normalized per PEP 503."
         object.__setattr__(self, "name", normalized_name)
 
@@ -216,17 +273,12 @@ class RawPackage:
         assert self.python_versions is not None, "The python_versions field must be specified."
         assert self.python_version_specifiers is not None, "The python_version_specifiers field must be specified."
         assert self.dependencies is not None, "The dependencies field must be specified as a list."
-        assert self.files, "The files field must not be empty."
+        if not self.name.extra:
+            assert self.files, "The files field must not be empty."
 
     @property
     def key(self) -> PackageKey:
         return PackageKey.from_parts(self.name, self.version)
-
-
-@dataclass
-class ExtraDependencies:
-    common_dependencies: List[PackageKey] = field(default_factory=list)
-    environment_dependencies: Dict[str, List[PackageKey]] = field(default_factory=dict)
 
 
 @dataclass
@@ -235,7 +287,6 @@ class ResolvedPackage:
     build_dependencies: List[PackageKey] = field(default_factory=list)
     common_dependencies: List[PackageKey] = field(default_factory=list)
     environment_dependencies: Dict[str, List[PackageKey]] = field(default_factory=dict)
-    extra_dependencies: Dict[str, ExtraDependencies] = field(default_factory=dict)
     build_target: Optional[str] = None
     environment_files: Dict[str, FileReference] = field(default_factory=dict)
     sdist_file: Optional[FileReference] = None
@@ -253,14 +304,18 @@ class ResolvedPackage:
 class RawLockSet:
     python_versions: SpecifierSet
     packages: Dict[PackageKey, RawPackage] = field(default_factory=dict)
-    pins: Dict[NormalizedName, PackageKey] = field(default_factory=dict)
+    pins: Dict[DependencyName, PackageKey] = field(default_factory=dict)
 
     def __post_init__(self):
         assert self.python_versions is not None, "The python_versions field must be specified."
 
     @property
     def __dict__(self) -> Dict[str, Any]:
-        return dict(_dataclass_items(self), packages=_stringify_keys(self.packages))
+        return dict(
+            _dataclass_items(self),
+            packages=_stringify_keys(self.packages),
+            pins=_stringify_keys(self.pins),
+        )
 
     def to_json(self, indent=None) -> str:
         return json.dumps(self, sort_keys=True, indent=indent, cls=_Encoder) + "\n"
@@ -272,7 +327,19 @@ class RawLockSet:
             parsed["packages"] = {
                 k if isinstance(k, PackageKey) else PackageKey(k): v for k, v in parsed["packages"].items()
             }
-        return from_dict(RawLockSet, parsed, config=Config(cast=[Tuple, Version, PackageKey, SpecifierSet]))
+        if "pins" in parsed:
+            parsed["pins"] = {
+                (k if isinstance(k, DependencyName) else package_canonical_name(k)): v
+                for k, v in parsed["pins"].items()
+            }
+        return from_dict(
+            RawLockSet,
+            parsed,
+            config=Config(
+                cast=[Tuple, Version, PackageKey, SpecifierSet],
+                type_hooks={DependencyName: package_canonical_name},
+            ),
+        )
 
 
 @dataclass(frozen=True)
@@ -280,7 +347,7 @@ class ResolvedLockSet:
     squash_extras: bool = False
     environments: Dict[str, EnvironmentReference] = field(default_factory=dict)
     packages: Dict[PackageKey, ResolvedPackage] = field(default_factory=dict)
-    pins: Dict[NormalizedName, PackageKey] = field(default_factory=dict)
+    pins: Dict[DependencyName, PackageKey] = field(default_factory=dict)
     remote_files: Dict[FileKey, PackageFile] = field(default_factory=dict)
     cycle_groups: Dict[str, List[PackageKey]] = field(default_factory=dict)
 
@@ -289,6 +356,7 @@ class ResolvedLockSet:
         return dict(
             _dataclass_items(self),
             packages=_stringify_keys(self.packages),
+            pins=_stringify_keys(self.pins),
             remote_files=_stringify_keys(self.remote_files),
         )
 
@@ -306,11 +374,23 @@ class ResolvedLockSet:
             parsed["remote_files"] = {
                 k if isinstance(k, FileKey) else FileKey(k): v for k, v in parsed["remote_files"].items()
             }
-        return from_dict(ResolvedLockSet, parsed, config=Config(cast=[Tuple, Version, FileKey, PackageKey]))
+        if "pins" in parsed:
+            parsed["pins"] = {
+                (k if isinstance(k, DependencyName) else package_canonical_name(k)): v
+                for k, v in parsed["pins"].items()
+            }
+        return from_dict(
+            ResolvedLockSet,
+            parsed,
+            config=Config(
+                cast=[Tuple, Version, FileKey, PackageKey],
+                type_hooks={DependencyName: package_canonical_name},
+            ),
+        )
 
 
-def package_canonical_name(name: str) -> NormalizedName:
-    return canonicalize_name(name)
+def package_canonical_name(name: str) -> DependencyName:
+    return DependencyName(name)
 
 
 def is_wheel(filename: str) -> bool:

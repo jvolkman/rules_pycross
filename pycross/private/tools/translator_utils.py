@@ -7,8 +7,8 @@ from typing import List
 from typing import Protocol
 
 from packaging.utils import NormalizedName
-from packaging.utils import canonicalize_name
 from packaging.version import Version
+from pycross.private.tools.lock_model import DependencyName
 from pycross.private.tools.lock_model import PackageDependency
 from pycross.private.tools.lock_model import PackageKey
 from pycross.private.tools.lock_model import RawLockSet
@@ -49,7 +49,7 @@ class PackageProtocol(Protocol):
 
 def resolve_lock_graph(
     packages: Iterable[PackageProtocol],
-    pinned_package_specs: Dict[NormalizedName, Any],
+    pinned_package_specs: Dict[DependencyName, Any],
     requires_python: Any,
     strict_dependencies: bool = True,
 ) -> RawLockSet:
@@ -60,8 +60,9 @@ def resolve_lock_graph(
     all_packages = list(distinct_packages.values())
 
     # Group packages by their canonical name
-    packages_by_canonical_name: Dict[str, List[PackageProtocol]] = defaultdict(list)
+    packages_by_canonical_name: Dict[NormalizedName, List[PackageProtocol]] = defaultdict(list)
     for package in all_packages:
+        # PDM and Poetry translators provide package.name as NormalizedName
         packages_by_canonical_name[package.name].append(package)
 
     # Sort the packages by version in descending order (newest first)
@@ -71,23 +72,28 @@ def resolve_lock_graph(
     # Iterate through each package's dependencies and find the newest one that matches.
     for package in all_packages:
         for dep in package.dependencies:
-            dependency_packages = packages_by_canonical_name[canonicalize_name(dep.name)]
-            for dep_pkg in dependency_packages:
-                if dep_pkg.satisfies_dependency(dep):
-                    resolved = PackageDependency(
-                        name=dep_pkg.name,
-                        version=dep_pkg.pypa_version,
-                        marker=str(dep.marker or ""),
-                    )
-                    package.add_resolved_dependency(resolved)
-                    break
-            else:
-                if strict_dependencies:
-                    raise MismatchedVersionException(
-                        f"Found no packages to satisfy dependency (name={dep.name}, spec={dep})"
-                    )
+            extras = list(dep.extras) if getattr(dep, "extras", None) else [None]
+            for req_extra in extras:
+                dep_name = DependencyName.from_parts(dep.name, req_extra)
+                dependency_packages = packages_by_canonical_name.get(
+                    dep_name, packages_by_canonical_name.get(dep_name.package, [])
+                )
+                for dep_pkg in dependency_packages:
+                    if dep_pkg.satisfies_dependency(dep):
+                        resolved = PackageDependency(
+                            name=dep_name,
+                            version=dep_pkg.pypa_version,
+                            marker=str(dep.marker or ""),
+                        )
+                        package.add_resolved_dependency(resolved)
+                        break
+                else:
+                    if strict_dependencies:
+                        raise MismatchedVersionException(
+                            f"Found no packages to satisfy dependency (name={dep.name}, spec={dep})"
+                        )
 
-    pinned_keys: Dict[NormalizedName, PackageKey] = {}
+    pinned_keys: Dict[DependencyName, PackageKey] = {}
 
     for pin, pin_spec in pinned_package_specs.items():
         pin_packages = packages_by_canonical_name[pin]
