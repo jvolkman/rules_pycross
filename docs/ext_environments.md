@@ -10,6 +10,9 @@ The environments extension.
 environments = use_extension("@rules_pycross//pycross/extensions:environments.bzl", "environments")
 environments.create_for_python_toolchains(<a href="#environments.create_for_python_toolchains-name">name</a>, <a href="#environments.create_for_python_toolchains-glibc_version">glibc_version</a>, <a href="#environments.create_for_python_toolchains-macos_version">macos_version</a>, <a href="#environments.create_for_python_toolchains-musl_version">musl_version</a>,
                                           <a href="#environments.create_for_python_toolchains-platforms">platforms</a>, <a href="#environments.create_for_python_toolchains-python_versions">python_versions</a>)
+environments.create(<a href="#environments.create-name">name</a>, <a href="#environments.create-glibc_version">glibc_version</a>, <a href="#environments.create-macos_version">macos_version</a>, <a href="#environments.create-musl_version">musl_version</a>)
+environments.python(<a href="#environments.python-envs">envs</a>, <a href="#environments.python-version">version</a>)
+environments.platform(<a href="#environments.platform-envs">envs</a>, <a href="#environments.platform-glibc_version">glibc_version</a>, <a href="#environments.platform-macos_version">macos_version</a>, <a href="#environments.platform-musl_version">musl_version</a>, <a href="#environments.platform-target">target</a>)
 </pre>
 
 Create target environments.
@@ -21,15 +24,61 @@ Create target environments.
 
 ### create_for_python_toolchains
 
+Create an environments repo using Python versions discovered from rules_python.
+
 **Attributes**
 
 | Name  | Description | Type | Mandatory | Default |
 | :------------- | :------------- | :------------- | :------------- | :------------- |
-| <a id="environments.create_for_python_toolchains-name"></a>name |  -   | <a href="https://bazel.build/concepts/labels#target-names">Name</a> | required |  |
-| <a id="environments.create_for_python_toolchains-glibc_version"></a>glibc_version |  The maximum glibc version to accept for Bazel platforms that match the @platforms//os:linux constraint. Must be in the format '2.X', and greater than 2.5. All versions from 2.5 through this version will be supported. For example, if this value is set to 2.15, wheels tagged manylinux_2_5, manylinux_2_6, ..., manylinux_2_15 will be accepted. Defaults to '2.28' if unspecified.   | String | optional |  `""`  |
-| <a id="environments.create_for_python_toolchains-macos_version"></a>macos_version |  The maximum macOS version to accept for Bazel platforms that match the @platforms//os:osx constraint. Must be in the format 'X.Y' with X >= 10. All versions from 10.4 through this version will be supported. For example, if this value is set to 12.0, wheels tagged macosx_10_4, macosx_10_5, ..., macosx_11_0, macosx_12_0 will be accepted. Defaults to '15.0' if unspecified.   | String | optional |  `""`  |
-| <a id="environments.create_for_python_toolchains-musl_version"></a>musl_version |  The musl version to accept for Bazel platforms that match the @platforms//os:linux constraint when @rules_python//python/config_settings:py_linux_libc is set to 'musl'. Defaults to '1.2' if unspecified.   | String | optional |  `""`  |
-| <a id="environments.create_for_python_toolchains-platforms"></a>platforms |  The list of Python platforms to support in by default in Pycross builds. See https://github.com/bazelbuild/rules_python/blob/main/python/versions.bzl for the list of supported platforms per Python version. By default all supported platforms for each registered version are supported.   | List of strings | optional |  `[]`  |
-| <a id="environments.create_for_python_toolchains-python_versions"></a>python_versions |  The list of Python versions to support in by default in Pycross builds. These strings will be X.Y or X.Y.Z depending on how versions were registered with rules_python. By default all registered versions are supported.   | List of strings | optional |  `[]`  |
+| <a id="environments.create_for_python_toolchains-name"></a>name |  The environments repo name.   | <a href="https://bazel.build/concepts/labels#target-names">Name</a> | optional |  `"pycross_environments"`  |
+| <a id="environments.create_for_python_toolchains-glibc_version"></a>glibc_version |  Default glibc version for Linux platforms.   | String | optional |  `""`  |
+| <a id="environments.create_for_python_toolchains-macos_version"></a>macos_version |  Default macOS version for Darwin platforms.   | String | optional |  `""`  |
+| <a id="environments.create_for_python_toolchains-musl_version"></a>musl_version |  Default musl version for Linux musl platforms.   | String | optional |  `""`  |
+| <a id="environments.create_for_python_toolchains-platforms"></a>platforms |  The list of Python platforms to support. Mutually exclusive with platform() tags for this environments repo. By default all supported platforms are included.   | List of strings | optional |  `[]`  |
+| <a id="environments.create_for_python_toolchains-python_versions"></a>python_versions |  The list of Python versions to support. By default all registered versions are supported.   | List of strings | optional |  `[]`  |
+
+<a id="environments.create"></a>
+
+### create
+
+Create an environments repo with explicit Python versions (BYOT).
+
+**Attributes**
+
+| Name  | Description | Type | Mandatory | Default |
+| :------------- | :------------- | :------------- | :------------- | :------------- |
+| <a id="environments.create-name"></a>name |  The environments repo name.   | <a href="https://bazel.build/concepts/labels#target-names">Name</a> | required |  |
+| <a id="environments.create-glibc_version"></a>glibc_version |  Default glibc version for Linux platforms.   | String | optional |  `""`  |
+| <a id="environments.create-macos_version"></a>macos_version |  Default macOS version for Darwin platforms.   | String | optional |  `""`  |
+| <a id="environments.create-musl_version"></a>musl_version |  Default musl version for Linux musl platforms.   | String | optional |  `""`  |
+
+<a id="environments.python"></a>
+
+### python
+
+Declare a Python version for a create() environments repo.
+
+**Attributes**
+
+| Name  | Description | Type | Mandatory | Default |
+| :------------- | :------------- | :------------- | :------------- | :------------- |
+| <a id="environments.python-envs"></a>envs |  Name of the environments repo. Defaults to 'pycross_environments'.   | String | optional |  `"pycross_environments"`  |
+| <a id="environments.python-version"></a>version |  Python version (e.g. '3.11.6' or '3.12').   | String | required |  |
+
+<a id="environments.platform"></a>
+
+### platform
+
+Declare a target platform with optional per-platform version overrides.
+
+**Attributes**
+
+| Name  | Description | Type | Mandatory | Default |
+| :------------- | :------------- | :------------- | :------------- | :------------- |
+| <a id="environments.platform-envs"></a>envs |  Name of the environments repo. Defaults to 'pycross_environments'.   | String | optional |  `"pycross_environments"`  |
+| <a id="environments.platform-glibc_version"></a>glibc_version |  Override glibc version for this platform.   | String | optional |  `""`  |
+| <a id="environments.platform-macos_version"></a>macos_version |  Override macOS version for this platform.   | String | optional |  `""`  |
+| <a id="environments.platform-musl_version"></a>musl_version |  Override musl version for this platform.   | String | optional |  `""`  |
+| <a id="environments.platform-target"></a>target |  Platform triple (e.g. 'x86_64-unknown-linux-gnu').   | String | required |  |
 
 

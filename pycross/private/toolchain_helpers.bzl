@@ -101,21 +101,57 @@ def _compute_environments(
         platforms,
         glibc_version,
         musl_version,
-        macos_version):
+        macos_version,
+        platform_configs = None):
+    """Compute pycross target environments.
+
+    Args:
+        repo_name: the repository name.
+        python_versions: list of Python versions.
+        platforms: list of platform triples (used when platform_configs is None).
+        glibc_version: default glibc version.
+        musl_version: default musl version.
+        macos_version: default macOS version.
+        platform_configs: optional list of structs with per-platform overrides.
+            Each struct has: target (str), glibc_version (str or None),
+            musl_version (str or None), macos_version (str or None).
+            When provided, 'platforms' must be empty.
+
+    Returns:
+        list of environment dicts.
+    """
     environments = []
 
-    if not platforms:
-        platforms = sorted(PLATFORMS.keys())
+    # Build the list of (platform_triple, glibc, musl, macos) tuples.
+    if platform_configs:
+        platform_entries = [
+            (
+                pc["target"],
+                pc.get("glibc_version") or glibc_version,
+                pc.get("musl_version") or musl_version,
+                pc.get("macos_version") or macos_version,
+            )
+            for pc in platform_configs
+        ]
+    else:
+        if not platforms:
+            platforms = sorted(PLATFORMS.keys())
+        platform_entries = [
+            (p, glibc_version, musl_version, macos_version)
+            for p in platforms
+        ]
 
     for version in _dedupe_versions(python_versions):
         micro_version = _get_micro_version(version)
 
         version_info = TOOL_VERSIONS[micro_version]
         available_version_platforms = version_info["sha256"].keys()
-        selected_platforms = [p for p in platforms if p in available_version_platforms]
 
-        for target_platform in selected_platforms:
-            env_platforms = _get_env_platforms(target_platform, glibc_version, musl_version, macos_version)
+        for target_platform, plat_glibc, plat_musl, plat_macos in platform_entries:
+            if target_platform not in available_version_platforms:
+                continue
+
+            env_platforms = _get_env_platforms(target_platform, plat_glibc, plat_musl, plat_macos)
             target_env_name = "python_{}_{}".format(version, target_platform)
             target_env_json = target_env_name + ".json"
 
@@ -419,6 +455,7 @@ pycross_toolchains_repo = repository_rule(
 
 def _pycross_environment_repo_impl(rctx):
     version_info = _get_python_version_info(rctx)
+    platform_configs = json.decode(rctx.attr.platform_configs) if rctx.attr.platform_configs else None
     computed_environments = _compute_environments(
         repo_name = rctx.name,
         python_versions = version_info.python_versions,
@@ -426,6 +463,7 @@ def _pycross_environment_repo_impl(rctx):
         glibc_version = rctx.attr.glibc_version or DEFAULT_GLIBC_VERSION,
         musl_version = rctx.attr.musl_version or DEFAULT_MUSL_VERSION,
         macos_version = rctx.attr.macos_version or DEFAULT_MACOS_VERSION,
+        platform_configs = platform_configs,
     )
 
     repo_batch_create_target_environments(rctx, computed_environments)
@@ -491,6 +529,9 @@ pycross_environments_repo = repository_rule(
         "glibc_version": attr.string(),
         "musl_version": attr.string(),
         "macos_version": attr.string(),
+        "platform_configs": attr.string(
+            doc = "JSON-encoded list of per-platform version overrides.",
+        ),
     },
 )
 
