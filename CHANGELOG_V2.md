@@ -37,6 +37,10 @@
 - This rule has been deleted. Use `py_console_script_binary` from `@rules_python//python/entry_points:py_console_script_binary.bzl` instead.
 - `pycross_wheel_library` now produces a `:dist_info` output group for compatibility with rules_python's entry point discovery.
 
+### Removed: Conflict check aspect
+
+- The `pycross_conflict_check` aspect has been removed. Cross-workspace version conflicts are now prevented structurally: workspaces share a single backing `package_repo` containing the merged set of `pycross_wheel_library` targets, so conflicting versions cannot exist.
+
 ### Changed: Internal dependency format
 
 - Replaced the generated `.lock.bzl` files (`pycross_deps.lock.bzl`, `pycross_deps_core.lock.bzl`) with a human-readable TOML lock file (`pycross/private/pycross_deps.toml`).
@@ -48,6 +52,76 @@
 - Canonical target names changed: `:pkg` (library), `:wheel` (wheel artifact), `:sdist` (sdist file). (Appends `_` on conflict with package name).
 - Root aliases (`@repo//:numpy`) still work.
 - Old `_wheel/` and `_sdist/` directories available via `legacy_naming = True` flag.
+
+---
+
+## New: Multi-Lock Workspace Support
+
+Support for importing multiple lock files into a shared "workspace", enabling monorepos where different subprojects use different dependencies while benefiting from shared wheel/sdist caching.
+
+### Workspace Architecture
+
+- Lock imports sharing the same `workspace` name (via `import_uv_workspace`, or implicitly from the `repo` name on regular imports) share a single backing `package_repo` (the workspace) containing the merged set of `pycross_wheel_library` targets.
+- Each user-facing repo becomes a lightweight `thin_package_repo` facade with its own `requirements.bzl`, `modules_mapping.json`, and pin aliases pointing to the workspace's `_lock/` targets.
+- When no explicit workspace is set, each repo implicitly gets its own single-member workspace (named after the repo).
+
+### Example Usage (explicit workspace)
+
+```python
+lock_import.import_uv(
+    lock_file = "//frontend:uv.lock",
+    project_file = "//frontend:pyproject.toml",
+    repo = "frontend",
+    target_environments = ["@envs//:environments"],
+)
+
+lock_import.import_uv(
+    lock_file = "//ml:uv.lock",
+    project_file = "//ml:pyproject.toml",
+    repo = "ml",
+    target_environments = ["@envs//:environments"],
+)
+```
+
+Each repo becomes its own workspace with an isolated `package_repo`. Overlapping packages within a workspace are downloaded and built only once.
+
+---
+
+## New: First-Class UV Workspace Import
+
+A three-tier API for importing UV workspaces that use a single `uv.lock` with multiple workspace members.
+
+### API
+
+```python
+# 1. Declare the workspace (shared lock file and settings).
+lock_import.import_uv_workspace(
+    name = "shared",
+    lock_file = "//:uv.lock",
+    target_environments = ["@envs//:environments"],
+)
+
+# 2. Declare members with a repo naming pattern.
+lock_import.uv_workspace_members(
+    workspace = "shared",
+    repo_pattern = "lock_{member}",  # {member} is replaced with normalized member name
+)
+
+# 3. Optionally override individual member settings.
+lock_import.uv_workspace_member(
+    workspace = "shared",
+    project = "project-a",
+    repo = "lock_a",  # Override the pattern-generated name
+)
+```
+
+### Features
+
+- **Shared workspace**: All members share a single `package_repo` for deduplication — overlapping dependencies are resolved once.
+- **`repo_pattern`**: A `string.format` pattern with a `{member}` parameter. The member name is normalized for Bazel repo name usage (lowercase, dashes→underscores).
+- **Unique name enforcement**: Errors if multiple repos (across any lock/member) would generate the same repo name.
+- **Per-member annotations**: `lock_import.package()` tags target a specific member via the `repo` attribute.
+- **Settings inheritance**: Members inherit `target_environments`, `default_alias_single_version`, `squash_extras`, etc. from the workspace tag.
 
 ---
 
@@ -104,9 +178,18 @@ Full translator for the PEP 751 `pylock.toml` lockfile format.
 
 ---
 
-## New: Venv Compatibility (`top_level_packages`)
+## New: Venv Compatibility (`site_paths`)
 
-Packages now declare their importable top-level packages for correct venv site-packages layout with `rules_python`.
+Packages now declare their importable top-level packages and additional installed paths for correct venv site-packages layout with `rules_python`.
+
+### Path Categories
+
+- **`site_paths`** — importable top-level packages, `.pth` files, and standalone modules in `site-packages/`. Formerly called `top_level_packages`.
+- **`bin_paths`** — console scripts and executables in `bin/`.
+- **`data_paths`** — data files in `data/`.
+- **`include_paths`** — C/C++ headers in `include/`.
+
+All four path types are tracked through `PycrossPackageInfo` and populated as `VenvSymlinkEntry` objects when `rules_python` venv support is enabled.
 
 ### Wheel Detection
 
@@ -124,9 +207,9 @@ Packages now declare their importable top-level packages for correct venv site-p
 - When a top-level directory lacks `__init__.py` (implicit namespace package), descends to find the shallowest concrete sub-packages and reports those instead.
 - Prevents venv symlink conflicts when multiple distributions share a namespace root (e.g. `google-cloud-storage` and `google-cloud-bigquery` both installing under `google/`).
 
-### `top_level_packages` Override
+### `site_paths` Override
 
-- New `top_level_packages` attribute on `pycross.package()` / `lock_import.package()` for user-specified overrides.
+- New `site_paths` attribute on `lock_import.package()` and `package_annotation()` for user-specified overrides.
 - Takes precedence over auto-detection from `inspection.json`.
 - Threaded through the full annotation pipeline: `tag_attrs.bzl` → `lock_import.bzl` → `raw_lock_resolver.py` → `package_repo.bzl`.
 - Example:
@@ -134,16 +217,14 @@ Packages now declare their importable top-level packages for correct venv site-p
   ```python
   lock_import.package(
       name = "google-cloud-storage",
-      top_level_packages = ["google/cloud/storage"],
+      site_paths = ["google/cloud/storage"],
   )
   ```
 
-### Venv Symlinks (`VenvSymlinkEntry`)
+### Conditional Venv Symlinks
 
-- `pycross_wheel_library` now populates `PyInfo.venv_symlinks` with `VenvSymlinkEntry` objects from `rules_python`.
-- Each top-level package and `.dist-info` directory gets a symlink entry.
-- Enables `py_binary`/`py_test` targets using `venvs_site_packages=yes` to get proper site-packages symlinks.
-- `package_repo.bzl` reads `inspection.json` at fetch time to populate `top_level_packages` in the generated BUILD.
+- `pycross_wheel_library` only populates `PyInfo.venv_symlinks` when `rules_python`'s `VenvsSitePackages` config setting is enabled.
+- `bin_paths`, `data_paths`, and `include_paths` symlinks are gated behind `hasattr(VenvSymlinkKind, "BIN")` / `"DATA"` / `"INCLUDE"` checks for forward-compatible rules_python support.
 
 ---
 
@@ -227,16 +308,26 @@ The most significant change in v2. The old monolithic `pycross_wheel_build` rule
 - Exports all building blocks for implementing custom backends:
   - Providers: `PycrossExtractedWheelInfo`, `PycrossPackageInfo`
   - Actions: `extract_cc_layer`, `register_pep517_action`, `register_repair_action`, `register_bin_extract_action`
-  - Attributes: `COMMON_BUILD_ATTRS`, `CC_BUILD_ATTRS`, `CC_TOOLCHAIN_ATTRS`
+  - Attributes: `COMMON_BUILD_ATTRS`, `CC_BUILD_ATTRS`, `CC_TOOLCHAIN_ATTRS`, `BUILD_SYSTEM_ATTRS`, `CC_BUILD_SYSTEM_ATTRS`
   - Transition: `pycross_exec_platform_transition`
   - Utilities: `get_unzipped_wheel`, `get_wheel_file`, `group_tool_deps`
   - Override helpers: `make_override_extension`, `create_overrides_repo`, `encode_build_system_attrs`
 
-### Override Extensions (per-backend)
+### Override Extension Attributes
 
-- Factory pattern via `make_override_extension()` — each backend creates its override extension with minimal boilerplate.
-- Override tags: `name`, `repo`, plus backend-specific build system attrs (`copts`, `linkopts`, `native_deps`, `config_settings`, `tool_deps`).
-- Overrides stored as JSON, applied at sdist repo resolution time.
+Override attrs are organized into composable dictionaries for documentation clarity:
+
+| Dict | Attrs | Purpose |
+|---|---|---|
+| `BUILD_SYSTEM_ATTRS` | `config_settings`, `tool_deps`, `build_env`, `data`, `pre_build_hooks`, `post_build_hooks` | General build attrs (any backend) |
+| `CC_BUILD_SYSTEM_ATTRS` | `copts`, `linkopts`, `native_deps`, `path_tools` | Native/CC compilation attrs |
+
+All four backend override dicts (meson, setuptools, cmake, maturin) compose `CORE_OVERRIDE_ATTRS | BUILD_SYSTEM_ATTRS | CC_BUILD_SYSTEM_ATTRS`.
+
+### Patch Attributes
+
+- `post_install_patches` and `pre_build_patches` are `label_list` attributes.
+- Labels are resolved relative to the user's workspace (e.g., `//build:my.patch` works directly without requiring `@//` prefix).
 
 ---
 
@@ -342,8 +433,18 @@ The build pipeline is decomposed into composable, reusable actions:
 
 - `package_name` — normalized package name.
 - `package_version` — package version string.
+- `site_paths` — list of importable site-packages paths.
+- `bin_paths` — list of bin paths.
+- `data_paths` — list of data paths.
+- `include_paths` — list of include paths.
 - Returned by `pycross_wheel_library` when `package_name` is set.
 - Used by `pep517_build` to validate `build-system.requires`.
+
+### `PycrossPathToolInfo`
+
+- `executable` — the executable file.
+- `name` — the name to use on PATH.
+- Returned by `pycross_wheel_library` path tool targets.
 
 ---
 
@@ -385,6 +486,7 @@ The build pipeline is decomposed into composable, reusable actions:
 
 - Patches applied to the sdist source tree *before* the PEP 517 build.
 - Available on `lock_import.package()` and `package_annotation()`.
+- Uses `label_list` type — labels resolve relative to the user's workspace.
 
 ### `site_hooks`
 
@@ -410,7 +512,7 @@ The build pipeline is decomposed into composable, reusable actions:
 
 - Auto-generates BUILD files for sdist packages.
 - Maps pyproject.toml `build-backend` to pycross rules via the backend registry.
-- Maps `build-system.requires` to universe repo targets.
+- Maps `build-system.requires` to workspace repo targets.
 - Applies backend-specific override configs.
 - Supports `SDIST_HOOKS` for backend-specific repo generation (e.g., maturin Cargo.lock).
 
@@ -432,7 +534,7 @@ The build pipeline is decomposed into composable, reusable actions:
 ### Pure-Starlark lock rendering
 
 - `resolved_lock_renderer.bzl` renders lock structures in pure Starlark (no Python tool invocation at repo time).
-- `package_repo.bzl` rewritten as a pure-Starlark universe repository rule.
+- `package_repo.bzl` rewritten as a pure-Starlark workspace repository rule.
 - Versioned subdirectory layout: `<package>/v<version>/BUILD.bazel`.
 
 ### Package repo deduplication
@@ -462,13 +564,62 @@ The build pipeline is decomposed into composable, reusable actions:
 - Now accepts wheels as raw `.whl` files or TreeArtifact directories (auto-detected via `is_directory`).
 - Returns `PycrossExtractedWheelInfo` (site-packages tree artifact).
 - Returns `PycrossPackageInfo` when `package_name`/`package_version` attrs are set.
-- Populates `PyInfo.venv_symlinks` with `VenvSymlinkEntry` objects for rules_python venv compatibility.
-- New `top_level_packages` attribute for explicit importable package declaration.
+- Conditionally populates `PyInfo.venv_symlinks` with `VenvSymlinkEntry` objects when `VenvsSitePackages` is enabled.
+- New `site_paths` attribute for explicit importable package declaration (renamed from `top_level_packages`).
+- New `bin_paths`, `data_paths`, `include_paths` attributes for additional venv symlink categories.
 - `:dist_info` output group for compatibility with rules_python's entry point discovery.
 
 ---
 
 ## Changed: Environment Configuration
+
+### Environments V2: Per-Platform Version Configuration
+
+New `platform()` and `python()` tag classes on the `environments` extension, inspired by llvm's `exec()`/`target()` tag pattern.
+
+#### Auto-discover Python versions (common case)
+
+```python
+environments = use_extension("@rules_pycross//pycross/extensions:environments.bzl", "environments")
+
+environments.create_for_python_toolchains(
+    glibc_version = "2.28",   # default
+    macos_version = "15.0",   # default
+)
+
+# Per-platform overrides — cross-product with discovered Python versions is generated.
+environments.platform(target = "x86_64-unknown-linux-gnu", glibc_version = "2.35")
+environments.platform(target = "aarch64-unknown-linux-gnu")  # inherits glibc 2.28
+environments.platform(target = "aarch64-apple-darwin")
+
+use_repo(environments, "pycross_environments")
+```
+
+#### Explicit Python versions (BYOT)
+
+```python
+environments.create(
+    name = "my_envs",
+    glibc_version = "2.28",
+)
+
+environments.python(envs = "my_envs", version = "3.11.6")
+environments.python(envs = "my_envs", version = "3.12.0")
+
+environments.platform(envs = "my_envs", target = "x86_64-unknown-linux-gnu", glibc_version = "2.35")
+environments.platform(envs = "my_envs", target = "aarch64-apple-darwin")
+
+use_repo(environments, "my_envs")
+```
+
+#### Key Design Points
+
+- `platform()` tags are mutually exclusive with the `platforms` list on `create_for_python_toolchains` — use one or the other.
+- `envs` attribute defaults to `"pycross_environments"` — optional for the common single-repo case.
+- `create()` with `python()` tags supports BYOT (bring your own toolchain) scenarios.
+- Backwards compatible: existing `create_for_python_toolchains` with `platforms` list continues to work.
+
+### Other Environment Changes
 
 - `configure_environments` now supports `macos_version` (default 15.0).
 - Default `glibc_version` is now 2.28 (was unspecified).
@@ -499,6 +650,13 @@ The build pipeline is decomposed into composable, reusable actions:
   - `e2e/patches_and_hooks/` — setproctitle with pre/post patches and site_hooks
   - `e2e/sdist_repo/` — sdist repository rule e2e test
   - `e2e/requirements/` — top-level package imports, `requirement()` macro
+  - `e2e/uv_workspace/` — UV workspace import with multi-member lock, per-member overrides
+  - `e2e/namespace_pkgs/` — namespace package resolution across multiple packages
+  - `e2e/squash_extras/` — extras squashing behavior
+  - `e2e/always_build/` — always-build flag behavior
+  - `e2e/gazelle_integration/` — Gazelle modules_mapping integration
+  - `e2e/local_wheel/` — local wheel files
+  - `e2e/generate_lock/` — lock file generation
 - Shared configuration via `e2e/shared/` with common `.bazelrc`, overrides, and utilities.
 - `collect_wheels.bzl` macro for cross-platform wheel collection.
 - `compare_wheels.py` tool for wheel comparison.
@@ -531,7 +689,7 @@ The build pipeline is decomposed into composable, reusable actions:
 - **Extras support** — regex parsing, per-env deps, renderer `[extra]` targets
 - **Cycle detection** — 2-node, 3-node, multi-cycle, stable naming, no-cycle case
 - **pylock group filtering** — `--no-default`, optional/dev groups, `include-group`, graph traversal
-- **top_level_packages** — wheel/sdist detection, src-layout, excluded dirs, `__init__.py` requirement
+- **site_paths** — wheel/sdist detection, src-layout, excluded dirs, `__init__.py` requirement
 - **Renderer layout** — versioned paths, env config_settings, cycle `_cycles/` dir, extras targets
 
 ---
@@ -589,7 +747,7 @@ The build pipeline is decomposed into composable, reusable actions:
 
 ## New: Gazelle Integration Improvements
 
-- **`pycross_modules_mapping`**: A new rule that aggregates `modules_mapping.json` for `rules_python_gazelle_plugin`. It reads directly from the `PycrossPackageInfo.top_level_paths` metadata, completely eliminating the need to extract wheels at analysis time.
+- **`pycross_modules_mapping`**: A new rule that aggregates `modules_mapping.json` for `rules_python_gazelle_plugin`. It reads directly from the `PycrossPackageInfo.site_paths` metadata, completely eliminating the need to extract wheels at analysis time.
 - V2 target layout aligns perfectly with `rules_python_gazelle_plugin`'s default label conventions, removing the need for custom `gazelle:python_label_convention` directives.
 
 ---
@@ -605,66 +763,21 @@ The build pipeline is decomposed into composable, reusable actions:
 
 ## New: `.pth` Files and Namespace Packages Support
 
-- **`.pth` files**: `inspect_package.py` now recognizes root-level `.pth` files in wheels/sdists and includes them in `top_level_packages`, ensuring `rules_python` symlinks them into the venv `site-packages`.
+- **`.pth` files**: `inspect_package.py` now recognizes root-level `.pth` files in wheels/sdists and includes them in `site_paths`, ensuring `rules_python` symlinks them into the venv `site-packages`.
 - **Implicit Namespace Packages**: Expanded E2E test coverage validating that packages sharing implicit PEP 420 namespace packages (e.g., `google-cloud-storage` and `google-cloud-bigquery`) resolve seamlessly in `rules_python` venvs without symlink collisions.
-
----
-
-## New: Multi-Lock Universe Support
-
-Support for importing multiple lock files into a shared "universe", enabling monorepos where different subprojects use different dependencies while benefiting from shared wheel/sdist caching.
-
-### Universe Architecture
-
-- New optional `universe` attribute on all `lock_import` tag classes (`import_uv`, `import_pdm`, `import_poetry`, `import_pylock`).
-- Lock imports sharing the same `universe` name share a single backing `package_repo` (the universe) containing the merged set of `pycross_wheel_library` targets.
-- Each user-facing repo becomes a lightweight `thin_package_repo` facade with its own `requirements.bzl`, `modules_mapping.json`, and pin aliases pointing to the universe's `_lock/` targets.
-- When `universe` is not set, the repo implicitly gets its own single-member universe (named after the repo).
-
-### Example Usage
-
-```python
-lock_import.import_uv(
-    lock_file = "//frontend:uv.lock",
-    project_file = "//frontend:pyproject.toml",
-    repo = "frontend",
-    universe = "shared",
-    target_environments = ["@envs//:environments"],
-)
-
-lock_import.import_uv(
-    lock_file = "//ml:uv.lock",
-    project_file = "//ml:pyproject.toml",
-    repo = "ml",
-    universe = "shared",
-    target_environments = ["@envs//:environments"],
-)
-```
-
-Both `@frontend` and `@ml` repos work independently with their own pins, but overlapping packages (e.g., `regex`) are downloaded and built only once in the shared universe.
-
-### Conflict Detection
-
-- New `pycross_conflict_check` aspect (`pycross/aspects.bzl`) detects transitive version conflicts at `py_binary`/`py_test` boundaries.
-- Collects `PycrossPackageInfo` providers across the transitive dep graph and reports clear errors when the same package appears at different versions.
-- Opt-in via `--aspects=@rules_pycross//pycross:aspects.bzl%pycross_conflict_check`.
-
-### E2E Test
-
-- New `multi_lock_universe` E2E test with two uv projects sharing a universe, verifying cross-repo imports and shared dependency resolution.
 
 ---
 
 ## Changed: Lazy Wheel Metadata and Modules Mapping
 
-Eliminated a major repository fetching bottleneck. Previously, `package_repo` eagerly fetched every wheel repository at repo generation time to read `inspection.json` for `top_level_paths` and to generate `modules_mapping.json`. This caused sequential fetching of all wheels.
+Eliminated a major repository fetching bottleneck. Previously, `package_repo` eagerly fetched every wheel repository at repo generation time to read `inspection.json` for `site_paths` and to generate `modules_mapping.json`. This caused sequential fetching of all wheels.
 
 ### New Architecture
 
-- **`pycross_wheel_metadata` rule**: A lightweight Starlark rule that wraps a wheel file and provides `PycrossPackageInfo` (including `top_level_paths`) without requiring the wheel to be fetched at repo generation time.
-- **Provider-based metadata**: `pycross_wheel_library` now reads `top_level_paths` from the wheel's `PycrossPackageInfo` provider at build time, falling back to the explicit `top_level_paths` attribute.
+- **`pycross_wheel_metadata` rule**: A lightweight Starlark rule that wraps a wheel file and provides `PycrossPackageInfo` (including `site_paths`) without requiring the wheel to be fetched at repo generation time.
+- **Provider-based metadata**: `pycross_wheel_library` now reads `site_paths` from the wheel's `PycrossPackageInfo` provider at build time, falling back to the explicit `site_paths` attribute.
 - **Build-time `modules_mapping`**: The `pycross_modules_mapping` rule generates `modules_mapping.json` lazily during Gazelle builds instead of eagerly at repo generation time.
-- **Wheel repos**: `pycross_wheel_file` now instantiates `pycross_wheel_metadata` in its BUILD file, embedding `top_level_paths` from the local `inspection.json`.
+- **Wheel repos**: `pycross_wheel_file` now instantiates `pycross_wheel_metadata` in its BUILD file, embedding `site_paths` from the local `inspection.json`.
 - **Sdist repos**: `pycross_sdist_repo` wraps the backend build output with `pycross_wheel_metadata` for consistent provider propagation.
 
 ### Impact
@@ -676,7 +789,7 @@ Eliminated a major repository fetching bottleneck. Previously, `package_repo` ea
 
 ## Changed: Extra Squashing at the Alias Layer
 
-Previously, `--squash-extras` was applied at translation time, mutating the lock data to merge all extra dependencies into the base package. This made the resolved lock non-canonical and complicated universe merging.
+Previously, `--squash-extras` was applied at translation time, mutating the lock data to merge all extra dependencies into the base package. This made the resolved lock non-canonical and complicated workspace merging.
 
 ### New Approach
 
@@ -685,7 +798,7 @@ Previously, `--squash-extras` was applied at translation time, mutating the lock
 - `package_repo.bzl` and `thin_package_repo.bzl` read `squash_extras` and point their aliases to the `__squashed` variant when enabled.
 - Extra aliases (`[extra_name]`) also point to the squashed target when squashing is active.
 
-This preserves the canonical dependency graph in the lock, enabling correct universe merging while letting each repo decide its squashing policy at the alias layer.
+This preserves the canonical dependency graph in the lock, enabling correct workspace merging while letting each repo decide its squashing policy at the alias layer.
 
 ---
 
