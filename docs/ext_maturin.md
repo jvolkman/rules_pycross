@@ -34,7 +34,7 @@ Specify maturin-specific package overrides.
 
 | Name  | Description | Type | Mandatory | Default |
 | :------------- | :------------- | :------------- | :------------- | :------------- |
-| <a id="maturin.override-name"></a>name |  The package name.   | <a href="https://bazel.build/concepts/labels#target-names">Name</a> | required |  |
+| <a id="maturin.override-name"></a>name |  The package key (name or name@version).   | <a href="https://bazel.build/concepts/labels#target-names">Name</a> | required |  |
 | <a id="maturin.override-data"></a>data |  Additional data and dependencies used by the build.   | <a href="https://bazel.build/concepts/labels">List of labels</a> | optional |  `[]`  |
 | <a id="maturin.override-build_env"></a>build_env |  Extra environment variables passed to the sdist build.   | <a href="https://bazel.build/rules/lib/dict">Dictionary: String -> String</a> | optional |  `{}`  |
 | <a id="maturin.override-cargo_lock"></a>cargo_lock |  A Cargo.lock file to use. If not provided, the sdist's own Cargo.lock is used.   | <a href="https://bazel.build/concepts/labels">Label</a> | optional |  `None`  |
@@ -45,7 +45,7 @@ Specify maturin-specific package overrides.
 | <a id="maturin.override-path_tools"></a>path_tools |  A list of binary targets placed on PATH during the build.   | <a href="https://bazel.build/concepts/labels">List of labels</a> | optional |  `[]`  |
 | <a id="maturin.override-post_build_hooks"></a>post_build_hooks |  Executables to run after the wheel is built.   | <a href="https://bazel.build/concepts/labels">List of labels</a> | optional |  `[]`  |
 | <a id="maturin.override-pre_build_hooks"></a>pre_build_hooks |  Executables to run before building the wheel.   | <a href="https://bazel.build/concepts/labels">List of labels</a> | optional |  `[]`  |
-| <a id="maturin.override-repo"></a>repo |  The lock repo this override applies to.   | String | required |  |
+| <a id="maturin.override-repo"></a>repo |  The repository name   | String | required |  |
 | <a id="maturin.override-sdist"></a>sdist |  Label to the sdist target (e.g. @uv//pkg:sdist). Used to resolve repository visibility in the generated _cargo repo.   | <a href="https://bazel.build/concepts/labels">Label</a> | optional |  `None`  |
 | <a id="maturin.override-tool_deps"></a>tool_deps |  Overrides for built-in dependencies.   | <a href="https://bazel.build/rules/lib/dict">Dictionary: String -> String</a> | optional |  `{}`  |
 

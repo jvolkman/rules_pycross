@@ -50,6 +50,8 @@ load(
 load(
     "//pycross/private/bzlmod:tag_attrs.bzl",
     _BUILD_SYSTEM_ATTRS = "BUILD_SYSTEM_ATTRS",
+    _CC_BUILD_SYSTEM_ATTRS = "CC_BUILD_SYSTEM_ATTRS",
+    _MATURIN_OVERRIDE_ATTRS = "MATURIN_OVERRIDE_ATTRS",
 )
 
 # Providers
@@ -82,3 +84,5 @@ make_override_extension = _make_override_extension
 create_overrides_repo = _create_overrides_repo
 encode_build_system_attrs = _encode_build_system_attrs
 BUILD_SYSTEM_ATTRS = _BUILD_SYSTEM_ATTRS
+CC_BUILD_SYSTEM_ATTRS = _CC_BUILD_SYSTEM_ATTRS
+MATURIN_OVERRIDE_ATTRS = _MATURIN_OVERRIDE_ATTRS

@@ -12,7 +12,7 @@ for declaring maturin-specific package overrides. Generates:
 
 load(
     "@rules_pycross//pycross:backend.bzl",
-    "BUILD_SYSTEM_ATTRS",
+    "MATURIN_OVERRIDE_ATTRS",
     "create_overrides_repo",
     "encode_build_system_attrs",
 )
@@ -97,15 +97,6 @@ maturin = module_extension(
         override = tag_class(
             doc = "Specify maturin-specific package overrides.",
             attrs = dict(
-                name = attr.string(
-                    doc = "The package name.",
-                    mandatory = True,
-                ),
-                repo = attr.string(
-                    doc = "The lock repo this override applies to.",
-                    mandatory = True,
-                ),
-
                 # Maturin-specific typed attrs:
                 sdist = attr.label(
                     doc = "Label to the sdist target (e.g. @uv//pkg:sdist). Used to resolve repository visibility in the generated _cargo repo.",
@@ -114,7 +105,7 @@ maturin = module_extension(
                     doc = "A Cargo.lock file to use. If not provided, the sdist's own Cargo.lock is used.",
                     allow_single_file = [".lock"],
                 ),
-                **BUILD_SYSTEM_ATTRS
+                **MATURIN_OVERRIDE_ATTRS
             ),
         ),
     ),

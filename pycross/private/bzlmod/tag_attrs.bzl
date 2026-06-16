@@ -145,15 +145,19 @@ PACKAGE_ATTRS = dict(
 # Attrs specific to build-system overrides (meson, setuptools, etc.).
 # These do not belong on the generic package() tag.
 BUILD_SYSTEM_ATTRS = dict(
-    copts = attr.string_list(doc = "Extra C++ compiler options."),
-    linkopts = attr.string_list(doc = "Extra linker options."),
-    native_deps = attr.label_list(doc = "CC dependencies to link against."),
     config_settings = attr.string_list_dict(doc = "Setup configuration arguments."),
     tool_deps = attr.string_dict(doc = "Overrides for built-in dependencies."),
     build_env = attr.string_dict(doc = "Extra environment variables passed to the sdist build."),
     data = attr.label_list(doc = "Additional data and dependencies used by the build."),
     pre_build_hooks = attr.label_list(doc = "Executables to run before building the wheel."),
     post_build_hooks = attr.label_list(doc = "Executables to run after the wheel is built."),
+)
+
+# Attrs for build backends that compile native (C/C++) code.
+CC_BUILD_SYSTEM_ATTRS = dict(
+    copts = attr.string_list(doc = "Extra C++ compiler options."),
+    linkopts = attr.string_list(doc = "Extra linker options."),
+    native_deps = attr.label_list(doc = "CC dependencies to link against."),
     path_tools = attr.label_list(doc = "A list of binary targets placed on PATH during the build."),
 )
 
@@ -179,8 +183,10 @@ CORE_OVERRIDE_ATTRS = dict(
     ),
 )
 
-MESON_OVERRIDE_ATTRS = dict(CORE_OVERRIDE_ATTRS, **BUILD_SYSTEM_ATTRS)
+MESON_OVERRIDE_ATTRS = CORE_OVERRIDE_ATTRS | BUILD_SYSTEM_ATTRS | CC_BUILD_SYSTEM_ATTRS
 
-SETUPTOOLS_OVERRIDE_ATTRS = dict(CORE_OVERRIDE_ATTRS, **BUILD_SYSTEM_ATTRS)
+SETUPTOOLS_OVERRIDE_ATTRS = CORE_OVERRIDE_ATTRS | BUILD_SYSTEM_ATTRS | CC_BUILD_SYSTEM_ATTRS
 
-CMAKE_OVERRIDE_ATTRS = dict(CORE_OVERRIDE_ATTRS, **BUILD_SYSTEM_ATTRS)
+CMAKE_OVERRIDE_ATTRS = CORE_OVERRIDE_ATTRS | BUILD_SYSTEM_ATTRS | CC_BUILD_SYSTEM_ATTRS
+
+MATURIN_OVERRIDE_ATTRS = CORE_OVERRIDE_ATTRS | BUILD_SYSTEM_ATTRS | CC_BUILD_SYSTEM_ATTRS
