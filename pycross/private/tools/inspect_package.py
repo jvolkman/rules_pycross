@@ -37,27 +37,27 @@ def _extract_module_name(filename: str) -> str | None:
     # and cause AttributeError on Python 3.13.
     if filename.endswith("-nspkg.pth"):
         return None
-    
+
     path = Path(filename)
     suffixes = path.suffixes
     if not suffixes:
         return None
-        
+
     if suffixes[-1] in (".py", ".pth"):
         return filename[: -len(suffixes[-1])]
-        
+
     if ".so" in suffixes:
         idx = suffixes.index(".so")
         # Verify all suffixes after .so are numeric (dashes are not allowed, only dots followed by digits)
         all_numeric = True
-        for s in suffixes[idx+1:]:
+        for s in suffixes[idx + 1 :]:
             if not s[1:].isdigit():
                 all_numeric = False
                 break
         if all_numeric:
             ext = "".join(suffixes[idx:])
             return filename[: -len(ext)]
-            
+
     return None
 
 
@@ -197,7 +197,7 @@ def _read_top_level_txt(sdist_path: Path) -> list[str] | None:
     return names if names else None
 
 
-def _find_top_level_paths_sdist(sdist_path: Path, source_dir: str = "") -> list[str]:
+def _find_site_paths_sdist(sdist_path: Path, source_dir: str = "") -> list[str]:
     """Find top-level Python packages in an sdist archive.
 
     First checks for an egg-info/top_level.txt, which is the most reliable
@@ -305,26 +305,44 @@ def _find_top_level_paths_sdist(sdist_path: Path, source_dir: str = "") -> list[
     return sorted(pkgs)
 
 
-def _find_top_level_paths_wheel(wheel_path: Path) -> list[str]:
-    """Find top-level Python packages in a wheel archive.
-
-    Handles namespace packages (PEP 420) by descending to find the shallowest
-    concrete sub-packages when a top-level directory lacks __init__.py.
-    """
+def _find_wheel_paths(wheel_path: Path) -> tuple[list[str], list[str], list[str], list[str]]:
     all_files: set[str] = set()
     top_level_dirs: set[str] = set()
     root_files: set[str] = set()
 
+    bin_paths = set()
+    data_paths = set()
+    include_paths = set()
+
     with zipfile.ZipFile(wheel_path) as z:
         for name in z.namelist():
             parts = name.split("/")
-            if parts[0].endswith((".dist-info", ".data")):
+            if parts[0].endswith(".dist-info"):
                 continue
-            all_files.add(name)
-            if len(parts) >= 2:
-                top_level_dirs.add(parts[0])
-            elif len(parts) == 1 and parts[0] and not name.endswith("/"):
-                root_files.add(parts[0])
+            if parts[0].endswith(".data") and len(parts) > 2:
+                scheme = parts[1]
+                top_level_name = parts[2]
+                if scheme == "scripts":
+                    bin_paths.add(top_level_name)
+                elif scheme == "data":
+                    data_paths.add(top_level_name)
+                elif scheme == "headers":
+                    include_paths.add(top_level_name)
+                elif scheme in ("purelib", "platlib"):
+                    adjusted_name = "/".join(parts[2:])
+                    all_files.add(adjusted_name)
+                    if len(parts) >= 4:
+                        top_level_dirs.add(parts[2])
+                    elif len(parts) == 3 and parts[2] and not name.endswith("/"):
+                        root_files.add(parts[2])
+                continue
+
+            if not parts[0].endswith(".data"):
+                all_files.add(name)
+                if len(parts) >= 2:
+                    top_level_dirs.add(parts[0])
+                elif len(parts) == 1 and parts[0] and not name.endswith("/"):
+                    root_files.add(parts[0])
 
     pkgs = _resolve_namespace_packages(all_files, top_level_dirs)
 
@@ -333,7 +351,17 @@ def _find_top_level_paths_wheel(wheel_path: Path) -> list[str]:
         if name and name not in _EXCLUDED_ROOT_MODULES:
             pkgs.add(f)
 
-    return sorted(pkgs)
+    site_paths = sorted(pkgs)
+
+    content = _get_archive_file_content(wheel_path, "entry_points.txt")
+    if content:
+        parser = configparser.ConfigParser()
+        parser.read_string(content)
+        if "console_scripts" in parser:
+            for script in parser["console_scripts"].keys():
+                bin_paths.add(script)
+
+    return site_paths, sorted(bin_paths), sorted(data_paths), sorted(include_paths)
 
 
 def inspect_sdist(sdist_path: Path, source_dir: str = "") -> dict:
@@ -347,22 +375,21 @@ def inspect_sdist(sdist_path: Path, source_dir: str = "") -> dict:
     return {
         "build_backend": build_system.get("build-backend", PEP517_DEFAULT_BACKEND),
         "build_requires": build_system.get("requires", PEP517_DEFAULT_REQUIRES),
-        "top_level_paths": _find_top_level_paths_sdist(sdist_path, source_dir=source_dir),
+        "site_paths": _find_site_paths_sdist(sdist_path, source_dir=source_dir),
+        "bin_paths": [],
+        "data_paths": [],
+        "include_paths": [],
     }
 
 
 def inspect_wheel(wheel_path: Path) -> dict:
-    content = _get_archive_file_content(wheel_path, "entry_points.txt")
-    scripts = []
-    if content:
-        parser = configparser.ConfigParser()
-        parser.read_string(content)
-        if "console_scripts" in parser:
-            scripts = list(parser["console_scripts"].keys())
+    site_paths, bin_paths, data_paths, include_paths = _find_wheel_paths(wheel_path)
 
     return {
-        "console_scripts": scripts,
-        "top_level_paths": _find_top_level_paths_wheel(wheel_path),
+        "site_paths": site_paths,
+        "bin_paths": bin_paths,
+        "data_paths": data_paths,
+        "include_paths": include_paths,
     }
 
 

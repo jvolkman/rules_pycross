@@ -205,7 +205,10 @@ class PackageAnnotations:
     pre_build_patches: List[str] = field(default_factory=list)
     site_hooks: List[str] = field(default_factory=list)
     build_backend: Optional[str] = None
-    top_level_paths: List[str] = field(default_factory=list)
+    site_paths: List[str] = field(default_factory=list)
+    bin_paths: List[str] = field(default_factory=list)
+    data_paths: List[str] = field(default_factory=list)
+    include_paths: List[str] = field(default_factory=list)
 
 
 class PackageResolver:
@@ -234,7 +237,10 @@ class PackageResolver:
         self._pre_build_patches = annotations.pre_build_patches
         self._site_hooks = annotations.site_hooks
         self._build_backend = annotations.build_backend
-        self._top_level_paths = annotations.top_level_paths
+        self._site_paths = annotations.site_paths
+        self._bin_paths = annotations.bin_paths
+        self._data_paths = annotations.data_paths
+        self._include_paths = annotations.include_paths
 
         deps_by_env = context.get_dependencies_by_environment(
             package,
@@ -301,7 +307,10 @@ class PackageResolver:
             pre_build_patches=self._pre_build_patches,
             site_hooks=self._site_hooks,
             build_backend=self._build_backend,
-            top_level_paths=self._top_level_paths,
+            site_paths=self._site_paths,
+            bin_paths=self._bin_paths,
+            data_paths=self._data_paths,
+            include_paths=self._include_paths,
             source_dir=self.source_dir,
         )
 
@@ -396,9 +405,18 @@ def collect_package_annotations(args: Any, lock_model: RawLockSet) -> Dict[Packa
         if annotation.get("build_backend") is not None:
             annotations[resolved_pkg].build_backend = annotation["build_backend"]
 
-        top_level_paths = annotation.get("top_level_paths", [])
-        if top_level_paths:
-            annotations[resolved_pkg].top_level_paths = top_level_paths
+        site_paths = annotation.get("site_paths", [])
+        if site_paths:
+            annotations[resolved_pkg].site_paths = site_paths
+        bin_paths = annotation.get("bin_paths", [])
+        if bin_paths:
+            annotations[resolved_pkg].bin_paths = bin_paths
+        data_paths = annotation.get("data_paths", [])
+        if data_paths:
+            annotations[resolved_pkg].data_paths = data_paths
+        include_paths = annotation.get("include_paths", [])
+        if include_paths:
+            annotations[resolved_pkg].include_paths = include_paths
 
     # Return as a non-default dict
     return dict(annotations)

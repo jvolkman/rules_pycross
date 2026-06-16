@@ -87,12 +87,12 @@ class InspectPackageTest(unittest.TestCase):
         """
         wheel_path = self.create_zip("pkg-1.0-py3-none-any.whl", {"pkg-1.0.dist-info/entry_points.txt": entry_points})
         result = inspect_wheel(wheel_path)
-        self.assertEqual(result["console_scripts"], ["foo", "bar"])
+        self.assertEqual(result["bin_paths"], ["bar", "foo"])
 
     def test_inspect_wheel_no_entry_points(self):
         wheel_path = self.create_zip("pkg-1.0-py3-none-any.whl", {"pkg-1.0.dist-info/WHEEL": ""})
         result = inspect_wheel(wheel_path)
-        self.assertEqual(result["console_scripts"], [])
+        self.assertEqual(result["bin_paths"], [])
 
     def test_validate_requirements(self):
         # Mismatched version
@@ -166,7 +166,7 @@ class InspectPackageTest(unittest.TestCase):
             },
         )
         result = inspect_wheel(wheel_path)
-        self.assertEqual(result["top_level_paths"], ["numpy"])
+        self.assertEqual(result["site_paths"], ["numpy"])
 
     def test_wheel_top_level_paths_single_file(self):
         wheel_path = self.create_zip(
@@ -177,7 +177,7 @@ class InspectPackageTest(unittest.TestCase):
             },
         )
         result = inspect_wheel(wheel_path)
-        self.assertEqual(result["top_level_paths"], ["six.py"])
+        self.assertEqual(result["site_paths"], ["six.py"])
 
     def test_wheel_top_level_paths_pth(self):
         wheel_path = self.create_zip(
@@ -189,7 +189,7 @@ class InspectPackageTest(unittest.TestCase):
             },
         )
         result = inspect_wheel(wheel_path)
-        self.assertEqual(result["top_level_paths"], ["rerun_sdk", "rerun_sdk.pth"])
+        self.assertEqual(result["site_paths"], ["rerun_sdk", "rerun_sdk.pth"])
 
     def test_sdist_standard_layout(self):
         sdist_path = self._create_tarball_with_dirs(
@@ -199,7 +199,7 @@ class InspectPackageTest(unittest.TestCase):
             },
         )
         result = inspect_sdist(sdist_path)
-        self.assertEqual(result["top_level_paths"], ["mypackage"])
+        self.assertEqual(result["site_paths"], ["mypackage"])
 
     def test_sdist_src_layout(self):
         sdist_path = self._create_tarball_with_dirs(
@@ -209,7 +209,7 @@ class InspectPackageTest(unittest.TestCase):
             },
         )
         result = inspect_sdist(sdist_path)
-        self.assertEqual(result["top_level_paths"], ["mypackage"])
+        self.assertEqual(result["site_paths"], ["mypackage"])
 
     def test_sdist_excluded_dirs(self):
         sdist_path = self._create_tarball_with_dirs(
@@ -221,7 +221,7 @@ class InspectPackageTest(unittest.TestCase):
             },
         )
         result = inspect_sdist(sdist_path)
-        self.assertEqual(result["top_level_paths"], ["mylib"])
+        self.assertEqual(result["site_paths"], ["mylib"])
 
     def test_sdist_no_init_py(self):
         sdist_path = self._create_tarball_with_dirs(
@@ -231,7 +231,7 @@ class InspectPackageTest(unittest.TestCase):
             },
         )
         result = inspect_sdist(sdist_path)
-        self.assertEqual(result["top_level_paths"], [])
+        self.assertEqual(result["site_paths"], [])
 
     def test_sdist_top_level_paths_pth(self):
         sdist_path = self._create_tarball_with_dirs(
@@ -243,7 +243,7 @@ class InspectPackageTest(unittest.TestCase):
             },
         )
         result = inspect_sdist(sdist_path)
-        self.assertEqual(result["top_level_paths"], ["rerun_sdk", "rerun_sdk.pth"])
+        self.assertEqual(result["site_paths"], ["rerun_sdk", "rerun_sdk.pth"])
 
     def test_wheel_excludes_dist_info(self):
         wheel_path = self.create_zip(
@@ -256,7 +256,7 @@ class InspectPackageTest(unittest.TestCase):
             },
         )
         result = inspect_wheel(wheel_path)
-        self.assertEqual(result["top_level_paths"], ["pkg"])
+        self.assertEqual(result["site_paths"], ["pkg"])
 
     # -- Namespace package (PEP 420) tests --
 
@@ -272,7 +272,7 @@ class InspectPackageTest(unittest.TestCase):
             },
         )
         result = inspect_wheel(wheel_path)
-        self.assertEqual(result["top_level_paths"], ["google/cloud/storage"])
+        self.assertEqual(result["site_paths"], ["google/cloud/storage"])
 
     def test_wheel_namespace_package_multiple_concrete(self):
         """A wheel that provides multiple concrete packages under one namespace."""
@@ -288,7 +288,7 @@ class InspectPackageTest(unittest.TestCase):
         )
         result = inspect_wheel(wheel_path)
         self.assertEqual(
-            result["top_level_paths"],
+            result["site_paths"],
             ["google/cloud/bigquery", "google/cloud/storage"],
         )
 
@@ -304,7 +304,7 @@ class InspectPackageTest(unittest.TestCase):
         )
         result = inspect_wheel(wheel_path)
         # Should stop at google/cloud since it has __init__.py
-        self.assertEqual(result["top_level_paths"], ["google/cloud"])
+        self.assertEqual(result["site_paths"], ["google/cloud"])
 
     def test_wheel_mixed_regular_and_namespace(self):
         """A wheel with both a regular package and a namespace package."""
@@ -320,7 +320,7 @@ class InspectPackageTest(unittest.TestCase):
         )
         result = inspect_wheel(wheel_path)
         self.assertEqual(
-            result["top_level_paths"],
+            result["site_paths"],
             ["namespace/sub/concrete", "regular_pkg"],
         )
 
@@ -337,7 +337,7 @@ class InspectPackageTest(unittest.TestCase):
         )
         result = inspect_wheel(wheel_path)
         # ns/mid has __init__.py, so it's the shallowest — deeper ones are subpackages
-        self.assertEqual(result["top_level_paths"], ["ns/mid"])
+        self.assertEqual(result["site_paths"], ["ns/mid"])
 
     def test_sdist_namespace_package(self):
         """Namespace package in an sdist (standard layout)."""
@@ -350,7 +350,7 @@ class InspectPackageTest(unittest.TestCase):
             },
         )
         result = inspect_sdist(sdist_path)
-        self.assertEqual(result["top_level_paths"], ["google/cloud/storage"])
+        self.assertEqual(result["site_paths"], ["google/cloud/storage"])
 
     def test_sdist_namespace_src_layout(self):
         """Namespace package in an sdist with src-layout."""
@@ -363,7 +363,7 @@ class InspectPackageTest(unittest.TestCase):
             },
         )
         result = inspect_sdist(sdist_path)
-        self.assertEqual(result["top_level_paths"], ["google/cloud/storage"])
+        self.assertEqual(result["site_paths"], ["google/cloud/storage"])
 
     # -- source_dir tests --
 
@@ -380,7 +380,7 @@ class InspectPackageTest(unittest.TestCase):
             },
         )
         result = inspect_sdist(sdist_path, source_dir="packages/mylib")
-        self.assertEqual(result["top_level_paths"], ["mylib"])
+        self.assertEqual(result["site_paths"], ["mylib"])
         self.assertEqual(result["build_backend"], "setuptools.build_meta")
         self.assertEqual(result["build_requires"], ["setuptools"])
 
@@ -395,7 +395,7 @@ class InspectPackageTest(unittest.TestCase):
             },
         )
         result = inspect_sdist(sdist_path, source_dir="packages/mylib")
-        self.assertEqual(result["top_level_paths"], ["mylib"])
+        self.assertEqual(result["site_paths"], ["mylib"])
         self.assertEqual(result["build_backend"], "flit_core.buildapi")
 
     def test_sdist_source_dir_ignores_sibling_packages(self):
@@ -411,9 +411,9 @@ class InspectPackageTest(unittest.TestCase):
         )
         result_a = inspect_sdist(sdist_path, source_dir="packages/lib_a")
         result_b = inspect_sdist(sdist_path, source_dir="packages/lib_b")
-        self.assertEqual(result_a["top_level_paths"], ["lib_a"])
+        self.assertEqual(result_a["site_paths"], ["lib_a"])
         self.assertEqual(result_a["build_backend"], "setuptools.build_meta")
-        self.assertEqual(result_b["top_level_paths"], ["lib_b"])
+        self.assertEqual(result_b["site_paths"], ["lib_b"])
         self.assertEqual(result_b["build_backend"], "hatchling.build")
 
     def test_sdist_source_dir_pyproject_scoping(self):
@@ -442,7 +442,7 @@ class InspectPackageTest(unittest.TestCase):
             },
         )
         result = inspect_sdist(sdist_path, source_dir="packages/gcs")
-        self.assertEqual(result["top_level_paths"], ["google/cloud/storage"])
+        self.assertEqual(result["site_paths"], ["google/cloud/storage"])
 
     def test_sdist_source_dir_single_level(self):
         """Source subdirectory at a single level deep."""
@@ -454,7 +454,7 @@ class InspectPackageTest(unittest.TestCase):
             },
         )
         result = inspect_sdist(sdist_path, source_dir="subpkg")
-        self.assertEqual(result["top_level_paths"], ["mypkg"])
+        self.assertEqual(result["site_paths"], ["mypkg"])
 
     def test_sdist_no_source_dir_unchanged(self):
         """Without source_dir, behavior is unchanged (regression test)."""
@@ -467,7 +467,7 @@ class InspectPackageTest(unittest.TestCase):
             },
         )
         result = inspect_sdist(sdist_path, source_dir="")
-        self.assertEqual(result["top_level_paths"], ["mypkg"])
+        self.assertEqual(result["site_paths"], ["mypkg"])
         self.assertEqual(result["build_backend"], "setuptools.build_meta")
 
     # -- egg-info/top_level.txt tests --
@@ -483,7 +483,7 @@ class InspectPackageTest(unittest.TestCase):
             },
         )
         result = inspect_sdist(sdist_path)
-        self.assertEqual(result["top_level_paths"], ["netifaces"])
+        self.assertEqual(result["site_paths"], ["netifaces"])
 
     def test_sdist_egg_info_multiple_modules(self):
         """top_level.txt with multiple entries."""
@@ -497,7 +497,7 @@ class InspectPackageTest(unittest.TestCase):
             },
         )
         result = inspect_sdist(sdist_path)
-        self.assertEqual(result["top_level_paths"], ["bar", "foo"])
+        self.assertEqual(result["site_paths"], ["bar", "foo"])
 
     def test_sdist_egg_info_ignored_with_source_dir(self):
         """When source_dir is set, egg-info should be skipped (it may belong to the root)."""
@@ -512,7 +512,7 @@ class InspectPackageTest(unittest.TestCase):
         )
         result = inspect_sdist(sdist_path, source_dir="packages/mylib")
         # Should use heuristic scan, not the root's egg-info
-        self.assertEqual(result["top_level_paths"], ["mylib"])
+        self.assertEqual(result["site_paths"], ["mylib"])
 
     def test_sdist_fallback_without_egg_info(self):
         """Without egg-info, falls back to heuristic scanning (regression test)."""
@@ -525,7 +525,7 @@ class InspectPackageTest(unittest.TestCase):
             },
         )
         result = inspect_sdist(sdist_path)
-        self.assertEqual(result["top_level_paths"], ["mypkg"])
+        self.assertEqual(result["site_paths"], ["mypkg"])
 
     def test_sdist_egg_info_zip(self):
         """top_level.txt in a zip-format sdist."""
@@ -538,7 +538,7 @@ class InspectPackageTest(unittest.TestCase):
             },
         )
         result = inspect_sdist(sdist_path)
-        self.assertEqual(result["top_level_paths"], ["netifaces"])
+        self.assertEqual(result["site_paths"], ["netifaces"])
 
     # -- Standalone files in namespace packages --
 
@@ -556,7 +556,7 @@ class InspectPackageTest(unittest.TestCase):
             },
         )
         result = inspect_wheel(wheel_path)
-        self.assertEqual(result["top_level_paths"], ["PyQt5/sip.cpython-313-x86_64-linux-gnu.so"])
+        self.assertEqual(result["site_paths"], ["PyQt5/sip.cpython-313-x86_64-linux-gnu.so"])
 
     def test_wheel_namespace_versioned_so(self):
         """hidapi style: a versioned .so file under a namespace directory.
@@ -571,7 +571,7 @@ class InspectPackageTest(unittest.TestCase):
             },
         )
         result = inspect_wheel(wheel_path)
-        self.assertEqual(result["top_level_paths"], ["hidapi.libs/libusb-1-150b88da.0.so.0.1.0"])
+        self.assertEqual(result["site_paths"], ["hidapi.libs/libusb-1-150b88da.0.so.0.1.0"])
 
     def test_wheel_namespace_standalone_py(self):
         """A standalone .py file under a namespace directory.
@@ -586,7 +586,7 @@ class InspectPackageTest(unittest.TestCase):
             },
         )
         result = inspect_wheel(wheel_path)
-        self.assertEqual(result["top_level_paths"], ["mynamespace/helper.py"])
+        self.assertEqual(result["site_paths"], ["mynamespace/helper.py"])
 
     def test_wheel_namespace_standalone_and_subpackage(self):
         """Mix of standalone files and concrete sub-packages in a namespace.
@@ -605,7 +605,7 @@ class InspectPackageTest(unittest.TestCase):
         )
         result = inspect_wheel(wheel_path)
         self.assertEqual(
-            result["top_level_paths"],
+            result["site_paths"],
             ["google/auth.py", "google/cloud/storage"],
         )
 

@@ -2,7 +2,12 @@
 
 load("@bazel_skylib//lib:paths.bzl", "paths")
 load("@rules_python//python:py_info.bzl", "PyInfo")
-load("@rules_python//python/private:flags.bzl", "VenvsSitePackages")
+
+# buildifier: disable=bzl-visibility
+load(
+    "@rules_python//python/private:flags.bzl",
+    "VenvsSitePackages",
+)
 
 # buildifier: disable=bzl-visibility
 load(
@@ -93,14 +98,23 @@ def _pycross_wheel_library_impl(ctx):
     package_name = ctx.attr.package_name or ctx.label.name
     package_version = ctx.attr.package_version or ""
 
-    top_level_paths = ctx.attr.top_level_paths
-    if not top_level_paths and PycrossPackageInfo in ctx.attr.wheel:
-        top_level_paths = ctx.attr.wheel[PycrossPackageInfo].top_level_paths
+    site_paths = ctx.attr.site_paths
+    bin_paths = ctx.attr.bin_paths
+    data_paths = ctx.attr.data_paths
+    include_paths = ctx.attr.include_paths
+    if not site_paths and PycrossPackageInfo in ctx.attr.wheel:
+        site_paths = ctx.attr.wheel[PycrossPackageInfo].site_paths
+    if not bin_paths and PycrossPackageInfo in ctx.attr.wheel:
+        bin_paths = ctx.attr.wheel[PycrossPackageInfo].bin_paths
+    if not data_paths and PycrossPackageInfo in ctx.attr.wheel:
+        data_paths = ctx.attr.wheel[PycrossPackageInfo].data_paths
+    if not include_paths and PycrossPackageInfo in ctx.attr.wheel:
+        include_paths = ctx.attr.wheel[PycrossPackageInfo].include_paths
 
     venvs_site_packages_enabled = VenvsSitePackages.is_enabled(ctx)
 
-    if venvs_site_packages_enabled and top_level_paths:
-        for tlp in top_level_paths:
+    if venvs_site_packages_enabled and site_paths:
+        for tlp in site_paths:
             venv_symlinks.append(VenvSymlinkEntry(
                 kind = VenvSymlinkKind.LIB,
                 link_to_path = paths.join(imp, tlp),
@@ -128,38 +142,41 @@ def _pycross_wheel_library_impl(ctx):
 
         # Add other directory symlinks if supported by the rules_python version.
         base_dir = paths.dirname(imp)
-        
+
         if hasattr(VenvSymlinkKind, "BIN"):
-            venv_symlinks.append(VenvSymlinkEntry(
-                kind = getattr(VenvSymlinkKind, "BIN"),
-                link_to_path = paths.join(base_dir, "bin"),
-                package = package_name,
-                version = package_version,
-                venv_path = "",
-                files = depset([out]),
-            ))
-            
+            for p in bin_paths:
+                venv_symlinks.append(VenvSymlinkEntry(
+                    kind = getattr(VenvSymlinkKind, "BIN"),
+                    link_to_path = paths.join(base_dir, "bin", p),
+                    package = package_name,
+                    version = package_version,
+                    venv_path = p,
+                    files = depset([out]),
+                ))
+
         if hasattr(VenvSymlinkKind, "DATA"):
-            venv_symlinks.append(VenvSymlinkEntry(
-                kind = getattr(VenvSymlinkKind, "DATA"),
-                link_to_path = paths.join(base_dir, "data"),
-                package = package_name,
-                version = package_version,
-                venv_path = "",
-                files = depset([out]),
-            ))
-            
+            for p in data_paths:
+                venv_symlinks.append(VenvSymlinkEntry(
+                    kind = getattr(VenvSymlinkKind, "DATA"),
+                    link_to_path = paths.join(base_dir, "data", p),
+                    package = package_name,
+                    version = package_version,
+                    venv_path = p,
+                    files = depset([out]),
+                ))
+
             # VenvSymlinkKind.INCLUDE existed in earlier versions of rules_python but was missing from venv_dir_map.
             # It was properly added in the same commit that introduced VenvSymlinkKind.DATA.
             if hasattr(VenvSymlinkKind, "INCLUDE"):
-                venv_symlinks.append(VenvSymlinkEntry(
-                    kind = getattr(VenvSymlinkKind, "INCLUDE"),
-                    link_to_path = paths.join(base_dir, "include"),
-                    package = package_name,
-                    version = package_version,
-                    venv_path = "",
-                    files = depset([out]),
-                ))
+                for p in include_paths:
+                    venv_symlinks.append(VenvSymlinkEntry(
+                        kind = getattr(VenvSymlinkKind, "INCLUDE"),
+                        link_to_path = paths.join(base_dir, "include", p),
+                        package = package_name,
+                        version = package_version,
+                        venv_path = p,
+                        files = depset([out]),
+                    ))
 
     py_info_kwargs = dict(
         has_py2_only_sources = has_py2_only_sources,
@@ -198,7 +215,10 @@ def _pycross_wheel_library_impl(ctx):
             PycrossPackageInfo(
                 package_name = ctx.attr.package_name,
                 package_version = ctx.attr.package_version,
-                top_level_paths = top_level_paths,
+                site_paths = site_paths,
+                bin_paths = bin_paths,
+                data_paths = data_paths,
+                include_paths = include_paths,
             ),
         )
 
@@ -233,9 +253,10 @@ pycross_wheel_library = rule(
         "package_version": attr.string(
             doc = "The version of the package. Used for providing PycrossPackageInfo.",
         ),
-        "top_level_paths": attr.string_list(
-            doc = "The list of top-level importable paths (packages, .pth files, standalone modules) provided by this wheel.",
-        ),
+        "site_paths": attr.string_list(doc = "The list of site-packages paths provided by this wheel."),
+        "bin_paths": attr.string_list(doc = "The list of bin paths provided by this wheel."),
+        "data_paths": attr.string_list(doc = "The list of data paths provided by this wheel."),
+        "include_paths": attr.string_list(doc = "The list of include paths provided by this wheel."),
         "_tool": attr.label(
             default = Label("//pycross/private/tools:wheel_installer"),
             cfg = "exec",
@@ -253,7 +274,10 @@ def _pycross_wheel_metadata_impl(ctx):
         PycrossPackageInfo(
             package_name = ctx.attr.package_name,
             package_version = ctx.attr.package_version,
-            top_level_paths = ctx.attr.top_level_paths,
+            site_paths = ctx.attr.site_paths,
+            bin_paths = ctx.attr.bin_paths,
+            data_paths = ctx.attr.data_paths,
+            include_paths = ctx.attr.include_paths,
         ),
     ]
 
@@ -263,6 +287,9 @@ pycross_wheel_metadata = rule(
         "wheel": attr.label(allow_files = True, mandatory = True),
         "package_name": attr.string(),
         "package_version": attr.string(),
-        "top_level_paths": attr.string_list(),
+        "site_paths": attr.string_list(doc = "The list of site-packages paths provided by this wheel."),
+        "bin_paths": attr.string_list(doc = "The list of bin paths provided by this wheel."),
+        "data_paths": attr.string_list(doc = "The list of data paths provided by this wheel."),
+        "include_paths": attr.string_list(doc = "The list of include paths provided by this wheel."),
     },
 )

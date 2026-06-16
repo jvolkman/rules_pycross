@@ -22,7 +22,7 @@ def _pycross_modules_mapping_impl(ctx):
     for dep in ctx.attr.deps:
         if PycrossPackageInfo in dep:
             pkg_info = dep[PycrossPackageInfo]
-            for tlp in pkg_info.top_level_paths:
+            for tlp in pkg_info.site_paths:
                 # Convert filesystem paths to Python import names:
                 #   "google/cloud/storage" -> "google.cloud.storage"
                 #   "requests" -> "requests"

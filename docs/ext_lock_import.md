@@ -25,9 +25,9 @@ lock_import.import_pylock(<a href="#lock_import.import_pylock-all_development_gr
                           <a href="#lock_import.import_pylock-development_groups">development_groups</a>, <a href="#lock_import.import_pylock-disallow_builds">disallow_builds</a>, <a href="#lock_import.import_pylock-local_wheels">local_wheels</a>, <a href="#lock_import.import_pylock-lock_file">lock_file</a>,
                           <a href="#lock_import.import_pylock-optional_groups">optional_groups</a>, <a href="#lock_import.import_pylock-project_file">project_file</a>, <a href="#lock_import.import_pylock-repo">repo</a>, <a href="#lock_import.import_pylock-squash_extras">squash_extras</a>, <a href="#lock_import.import_pylock-target_environments">target_environments</a>,
                           <a href="#lock_import.import_pylock-workspace">workspace</a>)
-lock_import.package(<a href="#lock_import.package-name">name</a>, <a href="#lock_import.package-always_build">always_build</a>, <a href="#lock_import.package-build_backend">build_backend</a>, <a href="#lock_import.package-build_dependencies">build_dependencies</a>, <a href="#lock_import.package-build_target">build_target</a>,
-                    <a href="#lock_import.package-ignore_dependencies">ignore_dependencies</a>, <a href="#lock_import.package-install_exclude_globs">install_exclude_globs</a>, <a href="#lock_import.package-post_install_patches">post_install_patches</a>,
-                    <a href="#lock_import.package-pre_build_patches">pre_build_patches</a>, <a href="#lock_import.package-repo">repo</a>, <a href="#lock_import.package-site_hooks">site_hooks</a>, <a href="#lock_import.package-top_level_paths">top_level_paths</a>)
+lock_import.package(<a href="#lock_import.package-name">name</a>, <a href="#lock_import.package-always_build">always_build</a>, <a href="#lock_import.package-bin_paths">bin_paths</a>, <a href="#lock_import.package-build_backend">build_backend</a>, <a href="#lock_import.package-build_dependencies">build_dependencies</a>, <a href="#lock_import.package-build_target">build_target</a>,
+                    <a href="#lock_import.package-data_paths">data_paths</a>, <a href="#lock_import.package-ignore_dependencies">ignore_dependencies</a>, <a href="#lock_import.package-include_paths">include_paths</a>, <a href="#lock_import.package-install_exclude_globs">install_exclude_globs</a>,
+                    <a href="#lock_import.package-post_install_patches">post_install_patches</a>, <a href="#lock_import.package-pre_build_patches">pre_build_patches</a>, <a href="#lock_import.package-repo">repo</a>, <a href="#lock_import.package-site_hooks">site_hooks</a>, <a href="#lock_import.package-site_paths">site_paths</a>)
 </pre>
 
 
@@ -149,15 +149,18 @@ Specify package-specific settings.
 | :------------- | :------------- | :------------- | :------------- | :------------- |
 | <a id="lock_import.package-name"></a>name |  The package key (name or name@version).   | <a href="https://bazel.build/concepts/labels#target-names">Name</a> | required |  |
 | <a id="lock_import.package-always_build"></a>always_build |  If True, don't use pre-built wheels for this package.   | Boolean | optional |  `False`  |
+| <a id="lock_import.package-bin_paths"></a>bin_paths |  Override the auto-detected bin paths.   | List of strings | optional |  `[]`  |
 | <a id="lock_import.package-build_backend"></a>build_backend |  An explicit build backend rule name to use for this package (e.g. 'maturin_build'). Overrides pyproject.toml detection.   | String | optional |  `""`  |
 | <a id="lock_import.package-build_dependencies"></a>build_dependencies |  A list of additional package keys (name or name@version) to use when building this package from source.   | List of strings | optional |  `[]`  |
 | <a id="lock_import.package-build_target"></a>build_target |  An optional override build target to use when and if this package needs to be built from source.   | <a href="https://bazel.build/concepts/labels">Label</a> | optional |  `None`  |
+| <a id="lock_import.package-data_paths"></a>data_paths |  Override the auto-detected data paths.   | List of strings | optional |  `[]`  |
 | <a id="lock_import.package-ignore_dependencies"></a>ignore_dependencies |  A list of package keys (name or name@version) to drop from this package's set of declared dependencies.   | List of strings | optional |  `[]`  |
+| <a id="lock_import.package-include_paths"></a>include_paths |  Override the auto-detected include paths.   | List of strings | optional |  `[]`  |
 | <a id="lock_import.package-install_exclude_globs"></a>install_exclude_globs |  A list of globs for files to exclude during installation.   | List of strings | optional |  `[]`  |
 | <a id="lock_import.package-post_install_patches"></a>post_install_patches |  A list of patches to apply after wheel installation.   | List of strings | optional |  `[]`  |
 | <a id="lock_import.package-pre_build_patches"></a>pre_build_patches |  A list of patches to apply to the sdist source tree before building.   | List of strings | optional |  `[]`  |
 | <a id="lock_import.package-repo"></a>repo |  The repository name   | String | required |  |
 | <a id="lock_import.package-site_hooks"></a>site_hooks |  A list of Python code snippets to execute on interpreter startup during builds.   | List of strings | optional |  `[]`  |
-| <a id="lock_import.package-top_level_paths"></a>top_level_paths |  Override the auto-detected top-level importable paths (packages, .pth files, standalone modules). Use forward slashes for nested namespaces (e.g. 'google/cloud/storage').   | List of strings | optional |  `[]`  |
+| <a id="lock_import.package-site_paths"></a>site_paths |  Override the auto-detected top-level importable paths (packages, .pth files, standalone modules). Use forward slashes for nested namespaces (e.g. 'google/cloud/storage').   | List of strings | optional |  `[]`  |
 
 

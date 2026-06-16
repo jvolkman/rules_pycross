@@ -89,8 +89,8 @@ def _package_repo_impl(rctx):
             for _, pkg_data in entries[1:]:
                 for env_name, env_ref in pkg_data.get("environment_files", {}).items():
                     merged.setdefault("environment_files", {})[env_name] = env_ref
-                if not merged.get("top_level_paths") and pkg_data.get("top_level_paths"):
-                    merged["top_level_paths"] = pkg_data["top_level_paths"]
+                if not merged.get("site_paths") and pkg_data.get("site_paths"):
+                    merged["site_paths"] = pkg_data["site_paths"]
                 if not merged.get("data_level_paths") and pkg_data.get("data_level_paths"):
                     merged["data_level_paths"] = pkg_data["data_level_paths"]
                 if not merged.get("sdist_file") and pkg_data.get("sdist_file"):

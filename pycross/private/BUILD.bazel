@@ -34,6 +34,7 @@ bzl_library(
     srcs = ["interpreter_version.bzl"],
     deps = [
         ":rules_python_bzl",
+        "@bazel_skylib//rules:common_settings",
     ],
 )
 
@@ -122,6 +123,7 @@ bzl_library(
     deps = [
         ":modules_mapping",
         ":providers",
+        ":rules_python_bzl",
         "@bazel_skylib//lib:paths",
         "@rules_python//python:py_info_bzl",
     ],

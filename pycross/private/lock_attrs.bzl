@@ -269,7 +269,10 @@ def package_annotation(
         pre_build_patches = [],
         site_hooks = [],
         build_backend = None,
-        top_level_paths = []):
+        site_paths = [],
+        bin_paths = [],
+        data_paths = [],
+        include_paths = []):
     """Annotations to apply to individual packages.
 
     Args:
@@ -282,7 +285,10 @@ def package_annotation(
       pre_build_patches (list, optional): A list of patches to apply to the sdist source tree before building.
       site_hooks (list, optional): A list of Python code snippets to execute on interpreter startup during builds.
       build_backend (str, optional): The build backend macro to use (e.g., "meson_build" or "setuptools_build").
-      top_level_paths (list, optional): Override the auto-detected top-level importable paths (packages, .pth files, standalone modules). Use forward slashes for namespace packages (e.g. 'google/cloud/storage').
+      site_paths (list, optional): Override the auto-detected top-level importable paths (packages, .pth files, standalone modules). Use forward slashes for namespace packages (e.g. 'google/cloud/storage').
+      bin_paths (list, optional): Override the auto-detected bin paths.
+      data_paths (list, optional): Override the auto-detected data paths.
+      include_paths (list, optional): Override the auto-detected include paths.
 
     Returns:
       str: A json encoded string of the provided content.
@@ -297,7 +303,10 @@ def package_annotation(
         pre_build_patches = pre_build_patches,
         site_hooks = site_hooks,
         build_backend = build_backend,
-        top_level_paths = top_level_paths,
+        site_paths = site_paths,
+        bin_paths = bin_paths,
+        data_paths = data_paths,
+        include_paths = include_paths,
     ))
 
 PDM_IMPORT_ATTRS = _IMPORT_ATTRS

@@ -15,7 +15,7 @@ pycross_wheel_metadata(
     wheel = "{filename}",
     package_name = "{package_name}",
     package_version = "{package_version}",
-    top_level_paths = {top_level_paths},
+    site_paths = {site_paths},
 )
 """
 
@@ -65,7 +65,7 @@ def _pycross_wheel_file_impl(rctx):
         auth = use_netrc(netrc, urls, {}),
     )
 
-    # Inspect the wheel for top_level_paths
+    # Inspect the wheel for site_paths
     result = exec_internal_tool(
         rctx,
         rctx.attr._inspect_tool,
@@ -81,17 +81,17 @@ def _pycross_wheel_file_impl(rctx):
         # Non-fatal: if inspection fails, write empty result
         # Note: exec_internal_tool will actually fail() if return_code != 0,
         # but if we somehow bypass it or change it, we write a fallback.
-        rctx.file("inspection.json", json.encode({"top_level_paths": []}))
-        top_level_paths = []
+        rctx.file("inspection.json", json.encode({"site_paths": []}))
+        site_paths = []
     else:
         inspection_data = json.decode(rctx.read("inspection.json"))
-        top_level_paths = inspection_data.get("top_level_paths", [])
+        site_paths = inspection_data.get("site_paths", [])
 
     rctx.file("BUILD.bazel", _BUILD_TEMPLATE.format(
         filename = rctx.attr.filename,
         package_name = rctx.attr.package_name or "",
         package_version = rctx.attr.package_version or "",
-        top_level_paths = top_level_paths,
+        site_paths = site_paths,
     ))
 
 pycross_wheel_file = repository_rule(

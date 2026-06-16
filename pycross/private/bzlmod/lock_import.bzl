@@ -35,7 +35,10 @@ def _generate_resolved_lock_repo(lock_info, serialized_lock_model):
             pre_build_patches = package.pre_build_patches,
             site_hooks = package.site_hooks,
             build_backend = package.build_backend,
-            top_level_paths = package.top_level_paths,
+            site_paths = package.site_paths,
+            bin_paths = package.bin_paths,
+            data_paths = package.data_paths,
+            include_paths = package.include_paths,
         )
 
     resolved_lock_repo(**args)
@@ -116,7 +119,10 @@ def _normalize_package_tag(tag):
         pre_build_patches = tag.pre_build_patches,
         site_hooks = tag.site_hooks,
         build_backend = tag.build_backend if tag.build_backend else None,
-        top_level_paths = tag.top_level_paths,
+        site_paths = tag.site_paths,
+        bin_paths = tag.bin_paths,
+        data_paths = tag.data_paths,
+        include_paths = tag.include_paths,
     )
 
 def _lock_import_impl(module_ctx):

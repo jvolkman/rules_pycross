@@ -86,9 +86,18 @@ PACKAGE_ATTRS = dict(
     site_hooks = attr.string_list(
         doc = "A list of Python code snippets to execute on interpreter startup during builds.",
     ),
-    top_level_paths = attr.string_list(
+    site_paths = attr.string_list(
         doc = "Override the auto-detected top-level importable paths (packages, .pth files, standalone modules). " +
               "Use forward slashes for nested namespaces (e.g. 'google/cloud/storage').",
+    ),
+    bin_paths = attr.string_list(
+        doc = "Override the auto-detected bin paths.",
+    ),
+    data_paths = attr.string_list(
+        doc = "Override the auto-detected data paths.",
+    ),
+    include_paths = attr.string_list(
+        doc = "Override the auto-detected include paths.",
     ),
 )
 

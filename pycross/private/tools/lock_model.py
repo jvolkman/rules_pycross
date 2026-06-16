@@ -295,7 +295,10 @@ class ResolvedPackage:
     pre_build_patches: List[str] = field(default_factory=list)
     site_hooks: List[str] = field(default_factory=list)
     build_backend: Optional[str] = None
-    top_level_paths: List[str] = field(default_factory=list)
+    site_paths: List[str] = field(default_factory=list)
+    bin_paths: List[str] = field(default_factory=list)
+    data_paths: List[str] = field(default_factory=list)
+    include_paths: List[str] = field(default_factory=list)
     cycle_group: Optional[str] = None
     source_dir: Optional[str] = None
 
