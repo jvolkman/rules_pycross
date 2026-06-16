@@ -126,6 +126,29 @@ def _pycross_wheel_library_impl(ctx):
             ))
             break  # Only need one
 
+        # Add other directory symlinks if supported by the rules_python version.
+        base_dir = paths.dirname(imp)
+        
+        if hasattr(VenvSymlinkKind, "BIN"):
+            venv_symlinks.append(VenvSymlinkEntry(
+                kind = getattr(VenvSymlinkKind, "BIN"),
+                link_to_path = paths.join(base_dir, "bin"),
+                package = package_name,
+                version = package_version,
+                venv_path = "",
+                files = depset([out]),
+            ))
+            
+        if hasattr(VenvSymlinkKind, "DATA"):
+            venv_symlinks.append(VenvSymlinkEntry(
+                kind = getattr(VenvSymlinkKind, "DATA"),
+                link_to_path = paths.join(base_dir, "data"),
+                package = package_name,
+                version = package_version,
+                venv_path = "",
+                files = depset([out]),
+            ))
+
     py_info_kwargs = dict(
         has_py2_only_sources = has_py2_only_sources,
         has_py3_only_sources = has_py3_only_sources,
