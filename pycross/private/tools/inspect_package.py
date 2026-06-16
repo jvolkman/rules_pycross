@@ -102,12 +102,13 @@ def _get_archive_file_content(archive_path: Path, target_filename: str, source_d
     return ""
 
 
-def _resolve_namespace_packages(all_files: set[str], top_level_dirs: set[str]) -> set[str]:
-    """Resolve namespace packages to their concrete sub-packages.
+def _resolve_top_level_paths(all_files: set[str], top_level_dirs: set[str]) -> set[str]:
+    """Resolve top-level directories to their concrete importable paths.
 
     For regular packages (directories with __init__.py), returns the directory
     name as-is. For implicit namespace packages (PEP 420 — directories without
-    __init__.py), descends to find the shallowest concrete sub-packages.
+    __init__.py), descends to find the shallowest concrete sub-packages or
+    standalone module files (preserving their extensions).
 
     This is critical for venv symlink support: if two distributions share a
     namespace (e.g. google-cloud-storage and google-cloud-bigquery both install
@@ -120,8 +121,9 @@ def _resolve_namespace_packages(all_files: set[str], top_level_dirs: set[str]) -
         top_level_dirs: Set of top-level directory names to classify.
 
     Returns:
-        Set of package paths — either top-level names for regular packages, or
-        deeper paths for namespace packages (using forward slashes).
+        Set of concrete paths — either top-level names for regular packages, or
+        deeper paths for namespace packages (using forward slashes). Standalone
+        module files retain their extensions (e.g. 'ns/helper.py').
     """
     init_files = {f for f in all_files if f.endswith("/__init__.py")}
     code_files = {f for f in all_files if _extract_module_name(f) is not None}
@@ -291,7 +293,7 @@ def _find_site_paths_sdist(sdist_path: Path, source_dir: str = "") -> list[str]:
                 adjusted_files.add(f)
         all_files = adjusted_files
 
-    pkgs = _resolve_namespace_packages(all_files, top_level_dirs)
+    pkgs = _resolve_top_level_paths(all_files, top_level_dirs)
     for f in root_files:
         name = _extract_module_name(f)
         if (
@@ -344,7 +346,7 @@ def _find_wheel_paths(wheel_path: Path) -> tuple[list[str], list[str], list[str]
                 elif len(parts) == 1 and parts[0] and not name.endswith("/"):
                     root_files.add(parts[0])
 
-    pkgs = _resolve_namespace_packages(all_files, top_level_dirs)
+    pkgs = _resolve_top_level_paths(all_files, top_level_dirs)
 
     for f in root_files:
         name = _extract_module_name(f)

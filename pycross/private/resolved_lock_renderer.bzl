@@ -199,10 +199,22 @@ def render_lock_bzl(lock, repo_map, sdist_map = None, rctx_name = ""):
                 lines.append(_ind('"{}",'.format(tlp), 3))
             lines.append(_ind("],", 2))
 
-        if pkg.get("data_level_paths"):
-            lines.append(_ind("data_level_paths = [", 2))
-            for dlp in pkg["data_level_paths"]:
-                lines.append(_ind('"{}",'.format(dlp), 3))
+        if pkg.get("bin_paths"):
+            lines.append(_ind("bin_paths = [", 2))
+            for bp in pkg["bin_paths"]:
+                lines.append(_ind('"{}",'.format(bp), 3))
+            lines.append(_ind("],", 2))
+
+        if pkg.get("data_paths"):
+            lines.append(_ind("data_paths = [", 2))
+            for dp in pkg["data_paths"]:
+                lines.append(_ind('"{}",'.format(dp), 3))
+            lines.append(_ind("],", 2))
+
+        if pkg.get("include_paths"):
+            lines.append(_ind("include_paths = [", 2))
+            for ip in pkg["include_paths"]:
+                lines.append(_ind('"{}",'.format(ip), 3))
             lines.append(_ind("],", 2))
 
         if has_runtime_deps:
