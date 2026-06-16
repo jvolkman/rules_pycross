@@ -199,6 +199,12 @@ def render_lock_bzl(lock, repo_map, sdist_map = None, rctx_name = ""):
                 lines.append(_ind('"{}",'.format(tlp), 3))
             lines.append(_ind("],", 2))
 
+        if pkg.get("data_level_paths"):
+            lines.append(_ind("data_level_paths = [", 2))
+            for dlp in pkg["data_level_paths"]:
+                lines.append(_ind('"{}",'.format(dlp), 3))
+            lines.append(_ind("],", 2))
+
         if has_runtime_deps:
             lines.append(_ind("deps = _{}_deps,".format(pkg_key_san), 2))
 
@@ -251,10 +257,10 @@ def render_lock_bzl(lock, repo_map, sdist_map = None, rctx_name = ""):
             _ind("py_library("),
             _ind('name = "{}__squashed",'.format(base_pkg_key), 2),
             _ind("deps = [", 2),
-            _ind('":{}",'.format(base_pkg_key), 3),
+            _ind('":{}\",'.format(base_pkg_key), 3),
         ])
         for extra_key in sorted(extra_keys):
-            lines.append(_ind('":{}",'.format(extra_key), 3))
+            lines.append(_ind('":{}\",'.format(extra_key), 3))
         lines.extend([
             _ind("],", 2),
             _ind(")"),

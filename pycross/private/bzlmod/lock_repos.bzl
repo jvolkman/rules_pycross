@@ -3,7 +3,7 @@
 load("@bazel_features//:features.bzl", "bazel_features")
 load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_file")
 load("@lock_import_repos_hub//:locks.bzl", lock_import_locks = "locks")
-load("@lock_import_repos_hub//:universes.bzl", "universe_memberships")
+load("@lock_import_repos_hub//:workspaces.bzl", "workspace_memberships")
 load("@pycross_backends//:registry.bzl", "BACKEND_CONFIGS", "BACKEND_TO_RULE", "DEFAULT_BACKEND", "OVERRIDE_FILES")
 load("@rules_pycross//pycross/private/bzlmod:sdist_repo.bzl", "pycross_sdist_repo")
 load("//pycross/private:package_repo.bzl", "package_repo")
@@ -57,6 +57,7 @@ def _lock_repos_impl(module_ctx):
 
     # Generate the lock repos and any remote package repos
     per_repo_data = {}  # repo_name -> struct(repo_map, sdist_map)
+    created_sdist_repos = {}  # sdist_repo_name -> True, for workspace-level dedup
     for repo_name, lock_file in all_locks.items():
         resolved_lock_file = module_ctx.path(lock_file)
         resolved_lock = json.decode(module_ctx.read(resolved_lock_file))
@@ -122,15 +123,13 @@ def _lock_repos_impl(module_ctx):
 
         sdist_map = {}
 
-        # Every repo has a universe; sdist build deps point to the universe's _lock/ targets.
-        universe_name = universe_memberships.get(repo_name, repo_name)
-        lock_repo_for_deps = "pycross_universe_{}".format(universe_name)
+        # Every repo has a workspace; sdist build deps point to the workspace's _lock/ targets.
+        workspace_name = workspace_memberships.get(repo_name, repo_name)
+        lock_repo_for_deps = "pycross_workspace_{}".format(workspace_name)
 
         # Instantiate sdist repos for packages requiring source builds.
-        # Sdist repos are environment-agnostic (the same source archive is
-        # used regardless of target platform), so we create one per package
-        # with the union of dependencies across all environments that resolve
-        # to an sdist.
+        # Sdist repos are shared at the workspace level: all members in the
+        # same workspace share a single sdist build per package@version.
         for pkg_key, pkg in resolved_lock.get("packages", {}).items():
             if pkg.get("build_target"):
                 # User provided a custom build target; skip auto-generating an sdist repo.
@@ -153,6 +152,19 @@ def _lock_repos_impl(module_ctx):
             if not needs_sdist:
                 continue
 
+            # Name sdist repos at the workspace level for deduplication.
+            sdist_repo_name = "{}_sdist_{}".format(
+                lock_repo_for_deps,
+                sanitize_name(pkg_key),
+            )
+            sdist_label_str = "@{}//:wheel".format(sdist_repo_name)
+            sdist_map[sdist_label_str] = sdist_file_key
+
+            # Skip if another member in this workspace already created this sdist repo.
+            if sdist_repo_name in created_sdist_repos:
+                continue
+            created_sdist_repos[sdist_repo_name] = True
+
             # Collect the union of dependencies across all environments
             # that resolve to the sdist.
             deps_set = {}
@@ -165,13 +177,6 @@ def _lock_repos_impl(module_ctx):
                 for dep in pkg.get("environment_dependencies", {}).get(env_name, []):
                     dep_label = "@{}//_lock:{}".format(lock_repo_for_deps, dep)
                     deps_set[dep_label] = True
-
-            sdist_repo_name = "{}_sdist_{}".format(
-                repo_name,
-                sanitize_name(pkg_key),
-            )
-            sdist_label_str = "@{}//:wheel".format(sdist_repo_name)
-            sdist_map[sdist_label_str] = sdist_file_key
 
             # Compute the output whldir name: {normalized_name}-{version}.whldir
             pkg_name_part = pkg_key.split("@")[0]
@@ -213,24 +218,24 @@ def _lock_repos_impl(module_ctx):
         # proper Label objects instead of raw strings.
         repo_map = {label_str: file_key for file_key, label_str in repo_remote_files.items()}
 
-        # Save per-repo data for universe processing
+        # Save per-repo data for workspace processing
         per_repo_data[repo_name] = struct(
             repo_map = repo_map,
             sdist_map = sdist_map,
             lock_file = lock_file,
         )
 
-    # Create universe package repos and thin repos for all members.
-    # Every repo belongs to a universe (defaulting to its own name).
-    universe_groups = {}  # universe_name -> [repo_name, ...]
-    for repo_name, uname in universe_memberships.items():
-        universe_groups.setdefault(uname, []).append(repo_name)
+    # Create workspace package repos and thin repos for all members.
+    # Every repo belongs to a workspace (defaulting to its own name).
+    workspace_groups = {}  # workspace_name -> [repo_name, ...]
+    for repo_name, uname in workspace_memberships.items():
+        workspace_groups.setdefault(uname, []).append(repo_name)
 
     # Annotation fields that affect pycross_wheel_library targets.
     _ANNOTATION_FIELDS = ["post_install_patches", "install_exclude_globs"]
 
-    for universe_name, member_repos in universe_groups.items():
-        universe_repo_name = "pycross_universe_{}".format(universe_name)
+    for workspace_name, member_repos in workspace_groups.items():
+        workspace_repo_name = "pycross_workspace_{}".format(workspace_name)
 
         # Merge repo_maps and sdist_maps from all members
         merged_repo_map = {}
@@ -274,7 +279,7 @@ def _lock_repos_impl(module_ctx):
                     break
 
         package_repo(
-            name = universe_repo_name,
+            name = workspace_repo_name,
             resolved_lock_file = per_repo_data[member_repos[0]].lock_file,
             repo_map = merged_repo_map,
             sdist_map = merged_sdist_map,
@@ -282,12 +287,12 @@ def _lock_repos_impl(module_ctx):
             member_lock_files = member_lock_files,
         )
 
-        # Create thin repos for each universe member, passing conflict info.
+        # Create thin repos for each workspace member, passing conflict info.
         for member in member_repos:
             thin_package_repo(
                 name = member,
                 resolved_lock_file = per_repo_data[member].lock_file,
-                universe_repo = universe_repo_name,
+                workspace_repo = workspace_repo_name,
                 member_name = member,
                 conflicts = conflicts,
                 backend_configs = backend_configs_json,

@@ -1,6 +1,6 @@
-"""A pure-Starlark universe repository rule that wraps a pycross lock structure.
+"""A pure-Starlark workspace repository rule that wraps a pycross lock structure.
 
-A universe repo is the shared backing store for one or more user-facing
+A workspace repo is the shared backing store for one or more user-facing
 "thin" package repos. It contains the actual pycross_wheel_library targets
 and artifact references, while thin repos provide pin aliases and
 user-facing convenience targets.
@@ -25,8 +25,8 @@ def _underscore_name(name):
     return underscore_name(name)
 
 def _package_repo_impl(rctx):
-    # Universe repos always have member_lock_files — even single-lock repos
-    # are wrapped in a universe with one member.
+    # Workspace repos always have member_lock_files — even single-lock repos
+    # are wrapped in a workspace with one member.
     packages = {}
     environments = {}
 
@@ -35,16 +35,20 @@ def _package_repo_impl(rctx):
     # is "conflicting" and gets per-member variant targets.
     _ANNOTATION_FIELDS = ["post_install_patches", "install_exclude_globs"]
 
-    # First pass: collect per-member package data for conflict detection.
+    # First pass: collect per-member package data and environment names.
     member_packages = {}  # member_name -> {pkg_key -> pkg_data}
+    member_envs = {}  # member_name -> [env_name, ...]
     for member, lock_label in rctx.attr.member_lock_files.items():
         member_lock = json.decode(rctx.read(rctx.path(Label(lock_label))))
 
         # Merge environments (union across members).
+        member_env_names = []
         for env_name, env_ref in member_lock.get("environments", {}).items():
+            member_env_names.append(env_name)
             if env_name not in environments:
                 environments[env_name] = env_ref
 
+        member_envs[member] = sorted(member_env_names)
         member_packages[member] = member_lock.get("packages", {})
 
     # Second pass: detect conflicts and build merged package set.
@@ -64,46 +68,110 @@ def _package_repo_impl(rctx):
 
         # Check annotation fields for differences.
         _, first_data = entries[0]
-        has_conflict = False
+        has_annotation_conflict = False
         for _, other_data in entries[1:]:
             for field in _ANNOTATION_FIELDS:
                 if first_data.get(field, []) != other_data.get(field, []):
-                    has_conflict = True
+                    has_annotation_conflict = True
                     break
-            if has_conflict:
+            if has_annotation_conflict:
                 break
 
-        if has_conflict:
-            # Conflicting: create per-member variant packages.
+        if has_annotation_conflict:
+            # Conflicting annotations: create per-member variant packages.
             conflicts[pkg_key] = [member for member, _ in entries]
             for member, pkg_data in entries:
                 variant_key = "{}__via_{}".format(pkg_key, member)
                 packages[variant_key] = dict(pkg_data)
         else:
-            # Non-conflicting: merge as before.
-            packages[pkg_key] = dict(first_data)
+            # Merge environment_files (union — the wheel binaries are shared).
+            merged = dict(first_data)
             for _, pkg_data in entries[1:]:
-                existing = packages[pkg_key]
                 for env_name, env_ref in pkg_data.get("environment_files", {}).items():
-                    existing.setdefault("environment_files", {})[env_name] = env_ref
-                for env_name, env_deps in pkg_data.get("environment_dependencies", {}).items():
-                    ed = existing.setdefault("environment_dependencies", {})
-                    if env_name not in ed:
-                        ed[env_name] = list(env_deps)
-                    else:
-                        for dep in env_deps:
-                            if dep not in ed[env_name]:
-                                ed[env_name].append(dep)
-                for dep in pkg_data.get("common_dependencies", []):
-                    cd = existing.setdefault("common_dependencies", [])
-                    if dep not in cd:
-                        cd.append(dep)
-                if not existing.get("top_level_paths") and pkg_data.get("top_level_paths"):
-                    existing["top_level_paths"] = pkg_data["top_level_paths"]
-                if not existing.get("sdist_file") and pkg_data.get("sdist_file"):
-                    existing["sdist_file"] = pkg_data["sdist_file"]
+                    merged.setdefault("environment_files", {})[env_name] = env_ref
+                if not merged.get("top_level_paths") and pkg_data.get("top_level_paths"):
+                    merged["top_level_paths"] = pkg_data["top_level_paths"]
+                if not merged.get("data_level_paths") and pkg_data.get("data_level_paths"):
+                    merged["data_level_paths"] = pkg_data["data_level_paths"]
+                if not merged.get("sdist_file") and pkg_data.get("sdist_file"):
+                    merged["sdist_file"] = pkg_data["sdist_file"]
 
-    # Universe repos have no pins — each thin repo has its own.
+            # Check whether common_dependencies differ between members.
+            has_common_dep_conflict = False
+            for _, other_data in entries[1:]:
+                if sorted(first_data.get("common_dependencies", [])) != sorted(other_data.get("common_dependencies", [])):
+                    has_common_dep_conflict = True
+                    break
+
+            if has_common_dep_conflict:
+                # Validate: members with overlapping environments must agree on deps.
+                env_to_member = {}  # env_name -> (member, common_deps)
+                for member, pkg_data in entries:
+                    member_common = sorted(pkg_data.get("common_dependencies", []))
+                    for env_name in member_envs.get(member, []):
+                        if env_name in env_to_member:
+                            prev_member, prev_deps = env_to_member[env_name]
+                            if prev_deps != member_common:
+                                fail(
+                                    "Workspace conflict for package '{}': members '{}' and '{}' " +
+                                    "share environment '{}' but have different dependencies.\n" +
+                                    "  {}: {}\n  {}: {}\n\n" +
+                                    "Members sharing the same workspace must resolve compatible " +
+                                    "dependency versions for overlapping environments.".format(
+                                        pkg_key,
+                                        prev_member,
+                                        member,
+                                        env_name,
+                                        prev_member,
+                                        prev_deps,
+                                        member,
+                                        member_common,
+                                    ),
+                                )
+                        env_to_member[env_name] = (member, member_common)
+
+                # Promote differing common_dependencies to environment_dependencies.
+                # Each member's environments are disjoint, so the environment
+                # select() naturally routes to the correct deps.
+                ed = merged.setdefault("environment_dependencies", {})
+                for member, pkg_data in entries:
+                    member_common = pkg_data.get("common_dependencies", [])
+                    for env_name in member_envs.get(member, []):
+                        env_deps = list(ed.get(env_name, []))
+                        for dep in member_common:
+                            if dep not in env_deps:
+                                env_deps.append(dep)
+                        ed[env_name] = env_deps
+
+                    # Also merge this member's environment_dependencies.
+                    for env_name, deps in pkg_data.get("environment_dependencies", {}).items():
+                        env_deps = list(ed.get(env_name, []))
+                        for dep in deps:
+                            if dep not in env_deps:
+                                env_deps.append(dep)
+                        ed[env_name] = env_deps
+
+                # Clear common_dependencies since they've been promoted.
+                merged.pop("common_dependencies", None)
+            else:
+                # Common deps agree — merge as union.
+                for _, pkg_data in entries[1:]:
+                    for dep in pkg_data.get("common_dependencies", []):
+                        cd = merged.setdefault("common_dependencies", [])
+                        if dep not in cd:
+                            cd.append(dep)
+                    for env_name, env_deps in pkg_data.get("environment_dependencies", {}).items():
+                        ed = merged.setdefault("environment_dependencies", {})
+                        if env_name not in ed:
+                            ed[env_name] = list(env_deps)
+                        else:
+                            for dep in env_deps:
+                                if dep not in ed[env_name]:
+                                    ed[env_name].append(dep)
+
+            packages[pkg_key] = merged
+
+    # Workspace repos have no pins — each thin repo has its own.
     lock = {"packages": packages, "pins": {}, "environments": environments}
 
     repo_map = {}

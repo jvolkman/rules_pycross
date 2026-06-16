@@ -1,14 +1,14 @@
-"""A thin package repo that delegates to a universe for shared resources.
+"""A thin package repo that delegates to a workspace for shared resources.
 
 Each user-facing repo is "thin": it only contains pin aliases,
 requirements.bzl, and modules_mapping.json. The actual
-pycross_wheel_library targets live in the shared universe repo.
+pycross_wheel_library targets live in the shared workspace repo.
 
 The file structure is:
 - BUILD.bazel              - Root aliases (//:package).
 - requirements.bzl         - Provides requirement() and all_requirements.
 - modules_mapping.json     - Import-to-package mapping for Gazelle.
-- <package>/BUILD.bazel    - Pin aliases pointing to @universe//_lock targets.
+- <package>/BUILD.bazel    - Pin aliases pointing to @workspace//_lock targets.
 """
 
 load(":util.bzl", "underscore_name")
@@ -50,13 +50,13 @@ def _requirements_bzl(rctx, pins):
 def _safe_name(pin_name, name):
     return name + "_" if pin_name == name else name
 
-def _pin_build(target_name, pin_target, package, universe_repo, universe_lock_target = None, has_squashed_variant = False, extras_dict = None):
-    """Generates the BUILD file for a pin directory, pointing to the universe."""
-    lock_target = universe_lock_target if universe_lock_target else pin_target
+def _pin_build(target_name, pin_target, package, workspace_repo, workspace_lock_target = None, has_squashed_variant = False, extras_dict = None):
+    """Generates the BUILD file for a pin directory, pointing to the workspace."""
+    lock_target = workspace_lock_target if workspace_lock_target else pin_target
     lock_target_base = (lock_target + "__squashed") if has_squashed_variant else lock_target
-    lock_ref = "@{}//_lock:".format(universe_repo)
-    wheel_ref = "@{}//_wheel:".format(universe_repo)
-    sdist_ref = "@{}//_sdist:".format(universe_repo)
+    lock_ref = "@{}//_lock:".format(workspace_repo)
+    wheel_ref = "@{}//_wheel:".format(workspace_repo)
+    sdist_ref = "@{}//_sdist:".format(workspace_repo)
 
     lines = [
         'package(default_visibility = ["//visibility:public"])',
@@ -114,14 +114,14 @@ def _pin_build(target_name, pin_target, package, universe_repo, universe_lock_ta
     return "\n".join(lines) + "\n"
 
 def _thin_package_repo_impl(rctx):
-    universe_repo = rctx.attr.universe_repo
+    workspace_repo = rctx.attr.workspace_repo
     lock_json_path = rctx.path(rctx.attr.resolved_lock_file)
     lock = json.decode(rctx.read(lock_json_path))
     packages = lock["packages"]
     pins = lock["pins"]
 
     # Conflicts dict: pkg_key -> [member_names...] for packages with
-    # differing annotations across universe members.
+    # differing annotations across workspace members.
     conflicts = rctx.attr.conflicts
 
     rctx.file("REPO.bazel", "")
@@ -158,12 +158,12 @@ def _thin_package_repo_impl(rctx):
         pin_target = pins[pin_name]
         package = packages.get(pin_target, {})
 
-        # Point directly at the pycross_wheel_library target in the universe's _lock.
+        # Point directly at the pycross_wheel_library target in the workspace's _lock.
         # For cycle group packages, the wheel_library is named _raw_<pkg_key>.
         if package.get("cycle_group"):
-            root_build_lines.append('        "@%s//_lock:_raw_%s",' % (universe_repo, pin_target))
+            root_build_lines.append('        "@%s//_lock:_raw_%s",' % (workspace_repo, pin_target))
         else:
-            root_build_lines.append('        "@%s//_lock:%s",' % (universe_repo, pin_target))
+            root_build_lines.append('        "@%s//_lock:%s",' % (workspace_repo, pin_target))
     root_build_lines.extend([
         "    ],",
     ])
@@ -219,16 +219,16 @@ def _thin_package_repo_impl(rctx):
             base_pkg_key = "{}@{}".format(base_name, version)
             base_packages_with_extras[base_pkg_key] = True
 
-    # Pin directories: aliases pointing to @universe//_lock targets
+    # Pin directories: aliases pointing to @workspace//_lock targets
     for base_pin_name, group in sorted(grouped_pins.items()):
         base_target = group["base_target"]
         package = packages.get(base_target) if base_target else {}
         us_name = underscore_name(base_pin_name)
 
         # For conflicting packages, use the member-specific variant target.
-        universe_lock_target = None
+        workspace_lock_target = None
         if base_target and base_target in conflicts:
-            universe_lock_target = "{}__via_{}".format(base_target, rctx.attr.member_name)
+            workspace_lock_target = "{}__via_{}".format(base_target, rctx.attr.member_name)
 
         has_squashed_variant = base_target and base_target in base_packages_with_extras
 
@@ -242,7 +242,7 @@ def _thin_package_repo_impl(rctx):
 
         rctx.file(
             "{}/BUILD.bazel".format(us_name),
-            _pin_build(us_name, base_target, package, universe_repo, universe_lock_target, has_squashed_variant, extras_dict),
+            _pin_build(us_name, base_target, package, workspace_repo, workspace_lock_target, has_squashed_variant, extras_dict),
         )
 
     # _backend/ BUILD and macros
@@ -293,9 +293,9 @@ thin_package_repo = repository_rule(
     implementation = _thin_package_repo_impl,
     attrs = {
         "resolved_lock_file": attr.label(mandatory = True),
-        "universe_repo": attr.string(
+        "workspace_repo": attr.string(
             mandatory = True,
-            doc = "Name of the universe package_repo that contains the shared _lock/ targets.",
+            doc = "Name of the workspace package_repo that contains the shared _lock/ targets.",
         ),
         "member_name": attr.string(
             mandatory = True,

@@ -19,4 +19,4 @@ tests/e2e/tools
 tests/e2e/sdist_repo
 tests/e2e/namespace_pkgs
 tests/e2e/gazelle_integration
-tests/e2e/multi_lock_universe
+tests/e2e/multi_lock_workspace

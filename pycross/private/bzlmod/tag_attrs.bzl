@@ -46,8 +46,8 @@ COMMON_IMPORT_ATTRS = dict(
               "matching V1 behavior.",
         default = False,
     ),
-    universe = attr.string(
-        doc = "Optional universe name. Repos sharing the same universe name will share underlying " +
+    workspace = attr.string(
+        doc = "Optional workspace name. Repos sharing the same workspace name will share underlying " +
               "wheel library and sdist build targets, improving cache efficiency in monorepos.",
         default = "",
     ),

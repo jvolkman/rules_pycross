@@ -32,7 +32,7 @@ environments.create_for_python_toolchains(
 )
 use_repo(environments, "multi_lock_universe_envs")
 
-# Use the lock_import extension to import two lock files sharing a universe.
+# Use the lock_import extension to import two lock files sharing a workspace.
 lock_import = use_extension("@rules_pycross//pycross/extensions:lock_import.bzl", "lock_import")
 
 # Project A: regex + six
@@ -41,7 +41,7 @@ lock_import.import_uv(
     project_file = "//project_a:pyproject.toml",
     repo = "lock_a",
     target_environments = ["@multi_lock_universe_envs//:environments"],
-    universe = "shared",
+    workspace = "shared",
 )
 
 # Project B: regex + attrs
@@ -50,11 +50,11 @@ lock_import.import_uv(
     project_file = "//project_b:pyproject.toml",
     repo = "lock_b",
     target_environments = ["@multi_lock_universe_envs//:environments"],
-    universe = "shared",
+    workspace = "shared",
 )
 
 # Annotation conflict: exclude a test file from regex in lock_a only.
-# This triggers per-member variant targets in the universe.
+# This triggers per-member variant targets in the workspace.
 lock_import.package(
     name = "regex",
     install_exclude_globs = ["test_regex.py"],

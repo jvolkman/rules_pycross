@@ -232,6 +232,68 @@ def _test_no_cycles_no_cycle_targets(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
     analysis_test(name = name, target = name + "_subject", impl = _test_no_cycles_no_cycle_targets_impl)
 
+# buildifier: disable=unused-variable
+def _test_promoted_env_deps_rendering_impl(env, target):
+    """Verify promoted environment deps render correctly.
+
+    When common_dependencies differ between workspace members, package_repo
+    promotes them to environment_dependencies. The renderer should handle
+    this as a standard environment select with no common deps.
+    """
+    lock = {
+        "environments": {
+            "linux_3_11": {
+                "config_setting_label": "//:linux_3_11_env",
+            },
+            "macos_3_12": {
+                "config_setting_label": "//:macos_3_12_env",
+            },
+        },
+        "packages": {
+            "urllib3@2.0": {
+                "environment_files": {
+                    "linux_3_11": {"key": "urllib3_wheel"},
+                    "macos_3_12": {"key": "urllib3_wheel"},
+                },
+                # After promotion: no common_dependencies, all in environment_dependencies.
+                "environment_dependencies": {
+                    "linux_3_11": ["certifi@2023.7.22"],
+                    "macos_3_12": ["certifi@2024.2.2"],
+                },
+            },
+            "certifi@2023.7.22": {
+                "environment_files": {
+                    "linux_3_11": {"key": "certifi_2023_wheel"},
+                },
+            },
+            "certifi@2024.2.2": {
+                "environment_files": {
+                    "macos_3_12": {"key": "certifi_2024_wheel"},
+                },
+            },
+        },
+    }
+    repo_map = {
+        "urllib3_wheel": "@repo//urllib3:wheel",
+        "certifi_2023_wheel": "@repo//certifi:wheel2023",
+        "certifi_2024_wheel": "@repo//certifi:wheel2024",
+    }
+    res = render_lock_bzl(lock, repo_map, "my_rctx")
+
+    # Should have environment select for urllib3's deps.
+    env.expect.that_bool("select({" in res).equals(True)
+    env.expect.that_bool('":linux_3_11": [' in res).equals(True)
+    env.expect.that_bool('":macos_3_12": [' in res).equals(True)
+    env.expect.that_bool('":certifi@2023.7.22"' in res).equals(True)
+    env.expect.that_bool('":certifi@2024.2.2"' in res).equals(True)
+
+    # Should NOT have member config_settings (no members key).
+    env.expect.that_bool("_member_" not in res).equals(True)
+
+def _test_promoted_env_deps_rendering(name):
+    util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
+    analysis_test(name = name, target = name + "_subject", impl = _test_promoted_env_deps_rendering_impl)
+
 def resolved_lock_renderer_test_suite(name):
     test_suite(
         name = name,
@@ -241,5 +303,6 @@ def resolved_lock_renderer_test_suite(name):
             _test_extras_rendering,
             _test_lock_bzl_format,
             _test_no_cycles_no_cycle_targets,
+            _test_promoted_env_deps_rendering,
         ],
     )

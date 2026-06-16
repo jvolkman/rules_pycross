@@ -1,0 +1,38 @@
+"""A simple workspace repo that stores a list of resolved lock files and workspace memberships."""
+
+_root_build = """\
+package(default_visibility = ["//visibility:public"])
+
+exports_files([
+    "locks.bzl",
+    "workspaces.bzl",
+])
+"""
+
+def _lock_workspace_repo_impl(rctx):
+    bzl_lines = ["locks = {"]
+    for repo_name in sorted(rctx.attr.repo_files):
+        repo_file = rctx.attr.repo_files[repo_name]
+        bzl_lines.append('    "{}": Label("{}"),'.format(repo_name, repo_file))
+    bzl_lines.append("}")
+
+    workspace_lines = ["workspace_memberships = {"]
+    for repo_name in sorted(rctx.attr.workspace_memberships):
+        workspace_name = rctx.attr.workspace_memberships[repo_name]
+        workspace_lines.append('    "{}": "{}",'.format(repo_name, workspace_name))
+    workspace_lines.append("}")
+
+    rctx.file("locks.bzl", "\n".join(bzl_lines) + "\n")
+    rctx.file("workspaces.bzl", "\n".join(workspace_lines) + "\n")
+    rctx.file("BUILD.bazel", _root_build)
+
+lock_workspace_repo = repository_rule(
+    implementation = _lock_workspace_repo_impl,
+    attrs = {
+        "repo_files": attr.string_dict(),
+        "workspace_memberships": attr.string_dict(
+            doc = "Maps repo_name to workspace_name for repos that share a workspace.",
+            default = {},
+        ),
+    },
+)

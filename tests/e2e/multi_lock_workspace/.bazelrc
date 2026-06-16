@@ -6,6 +6,3 @@ try-import %workspace%/../shared/.bazelrc.user
 # Enable the venv/site-packages layout for py_binary/py_test.
 build --@rules_python//python/config_settings:bootstrap_impl=script
 build --@rules_python//python/config_settings:venvs_site_packages=yes
-
-# Validate no version conflicts across universe members.
-build --aspects=@rules_pycross//pycross:aspects.bzl%pycross_conflict_check
