@@ -9,6 +9,9 @@ load(
     _PYLOCK_IMPORT_ATTRS = "PYLOCK_IMPORT_ATTRS",
     _REGISTER_TOOLCHAINS_ATTRS = "REGISTER_TOOLCHAINS_ATTRS",
     _UV_IMPORT_ATTRS = "UV_IMPORT_ATTRS",
+    _UV_WORKSPACE_ATTRS = "UV_WORKSPACE_ATTRS",
+    _UV_WORKSPACE_MEMBERS_ATTRS = "UV_WORKSPACE_MEMBERS_ATTRS",
+    _UV_WORKSPACE_MEMBER_ATTRS = "UV_WORKSPACE_MEMBER_ATTRS",
 )
 
 # Attrs common to all tags
@@ -46,10 +49,46 @@ COMMON_IMPORT_ATTRS = dict(
               "matching V1 behavior.",
         default = False,
     ),
+)
+
+# Attrs common to import_uv_workspace (workspace-level settings inherited by all members).
+# Same as COMMON_IMPORT_ATTRS but without 'workspace' (implied by name) and 'repo' (per-member).
+WORKSPACE_COMMON_ATTRS = dict(
+    name = attr.string(
+        doc = "Workspace name. Used to link members to this workspace.",
+        mandatory = True,
+    ),
+    default_alias_single_version = attr.bool(
+        doc = "Generate aliases for all packages that have a single version in the lock file.",
+    ),
+    target_environments = attr.label_list(
+        doc = "A list of target environment descriptors.",
+        default = [
+            "@pycross_environments//:environments",
+        ],
+    ),
+    local_wheels = attr.label_list(
+        doc = "A list of local .whl files to consider when processing lock files.",
+    ),
+    disallow_builds = attr.bool(
+        doc = "If True, only pre-built wheels are allowed.",
+    ),
+    default_build_dependencies = attr.string_list(
+        doc = "A list of package keys (name or name@version) that will be used as default build dependencies.",
+    ),
+    squash_extras = attr.bool(
+        doc = "Merge extra dependencies into base dependencies. " +
+              "Produces a flat dependency graph without [extra] targets, " +
+              "matching V1 behavior.",
+        default = False,
+    ),
+)
+
+# Attrs for uv_workspace_member that link it to a workspace.
+WORKSPACE_MEMBER_COMMON_ATTRS = dict(
     workspace = attr.string(
-        doc = "Optional workspace name. Repos sharing the same workspace name will share underlying " +
-              "wheel library and sdist build targets, improving cache efficiency in monorepos.",
-        default = "",
+        doc = "Name of the workspace (matches import_uv_workspace.name).",
+        mandatory = True,
     ),
 )
 
@@ -120,6 +159,9 @@ CREATE_ENVIRONMENTS_ATTRS = _CREATE_ENVIRONMENTS_ATTRS
 CREATE_REPOS_ATTRS = _CREATE_REPOS_ATTRS
 PDM_IMPORT_ATTRS = _PDM_IMPORT_ATTRS
 UV_IMPORT_ATTRS = _UV_IMPORT_ATTRS
+UV_WORKSPACE_ATTRS = _UV_WORKSPACE_ATTRS
+UV_WORKSPACE_MEMBERS_ATTRS = _UV_WORKSPACE_MEMBERS_ATTRS
+UV_WORKSPACE_MEMBER_ATTRS = _UV_WORKSPACE_MEMBER_ATTRS
 PYLOCK_IMPORT_ATTRS = _PYLOCK_IMPORT_ATTRS
 POETRY_IMPORT_ATTRS = _POETRY_IMPORT_ATTRS
 REGISTER_TOOLCHAINS_ATTRS = _REGISTER_TOOLCHAINS_ATTRS

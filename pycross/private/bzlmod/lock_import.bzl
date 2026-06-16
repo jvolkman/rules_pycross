@@ -1,14 +1,30 @@
 """The lock_import extension."""
 
 load("@bazel_features//:features.bzl", "bazel_features")
+load("@toml.bzl//toml:toml.bzl", "decode")
 load("//pycross/private:lock_attrs.bzl", "package_annotation")
 load("//pycross/private:pdm_lock_model.bzl", "lock_repo_model_pdm")
 load("//pycross/private:poetry_lock_model.bzl", "lock_repo_model_poetry")
 load("//pycross/private:pylock_lock_model.bzl", "lock_repo_model_pylock")
 load("//pycross/private:resolved_lock_repo.bzl", "resolved_lock_repo")
+load("//pycross/private:util.bzl", "sanitize_name")
 load("//pycross/private:uv_lock_model.bzl", "lock_repo_model_uv")
 load(":lock_workspace_repo.bzl", "lock_workspace_repo")
-load(":tag_attrs.bzl", "COMMON_ATTRS", "COMMON_IMPORT_ATTRS", "PACKAGE_ATTRS", "PDM_IMPORT_ATTRS", "POETRY_IMPORT_ATTRS", "PYLOCK_IMPORT_ATTRS", "UV_IMPORT_ATTRS")
+load(
+    ":tag_attrs.bzl",
+    "COMMON_ATTRS",
+    "COMMON_IMPORT_ATTRS",
+    "PACKAGE_ATTRS",
+    "PDM_IMPORT_ATTRS",
+    "POETRY_IMPORT_ATTRS",
+    "PYLOCK_IMPORT_ATTRS",
+    "UV_IMPORT_ATTRS",
+    "UV_WORKSPACE_ATTRS",
+    "UV_WORKSPACE_MEMBERS_ATTRS",
+    "UV_WORKSPACE_MEMBER_ATTRS",
+    "WORKSPACE_COMMON_ATTRS",
+    "WORKSPACE_MEMBER_COMMON_ATTRS",
+)
 
 def _generate_resolved_lock_repo(lock_info, serialized_lock_model):
     repo_name = lock_info.repo_name
@@ -53,6 +69,16 @@ def _check_unique_lock_repo(owners, module, tag):
         ))
     owners[tag.repo] = module.name
 
+def _check_unique_repo_name(owners, module_name, repo_name):
+    """Check uniqueness using a repo name string instead of a tag."""
+    if repo_name in owners:
+        fail("lock repo '{}' wanted by module '{}' already created by module '{}'".format(
+            repo_name,
+            module_name,
+            owners[repo_name],
+        ))
+    owners[repo_name] = module_name
+
 def _check_proper_tag_repo(owners, module, tag, tag_desc):
     owner = owners.get(tag.repo)
     if owner == None:
@@ -65,7 +91,7 @@ def _check_proper_tag_repo(owners, module, tag, tag_desc):
         )
     elif owner != module.name:
         fail(
-            "{} declared by module '{}' attached to lock repo '{}' owned by other module '{}".format(
+            "{} declared by module '{}' attached to lock repo '{}' owned by other module '{}'".format(
                 tag_desc,
                 module.name,
                 tag.repo,
@@ -97,13 +123,39 @@ def _lock_struct(mctx, tag):
 
     return struct(
         repo_name = tag.repo,
-        workspace = tag.workspace,
+        workspace = tag.repo,
         default_alias_single_version = tag.default_alias_single_version,
         environments = environment_files,
         local_wheels = tag.local_wheels,
         disallow_builds = tag.disallow_builds,
         default_build_dependencies = tag.default_build_dependencies,
         squash_extras = tag.squash_extras,
+        packages = {},
+    )
+
+def _workspace_lock_struct(mctx, ws_tag, repo_name, workspace_name):
+    """Create a lock struct for a workspace member, inheriting workspace-level settings."""
+    environment_files = []
+    for env_file in ws_tag.target_environments:
+        data = json.decode(mctx.read(env_file))
+        if "environments" in data:
+            environment_files.extend([env_file.relative(entry) for entry in data["environments"]])
+        else:
+            environment_files.append(env_file)
+        environment_files = sorted(environment_files)
+
+    for env_file in environment_files:
+        mctx.path(env_file)
+
+    return struct(
+        repo_name = repo_name,
+        workspace = workspace_name,
+        default_alias_single_version = ws_tag.default_alias_single_version,
+        environments = environment_files,
+        local_wheels = ws_tag.local_wheels,
+        disallow_builds = ws_tag.disallow_builds,
+        default_build_dependencies = ws_tag.default_build_dependencies,
+        squash_extras = ws_tag.squash_extras,
         packages = {},
     )
 
@@ -123,6 +175,72 @@ def _normalize_package_tag(tag):
         bin_paths = tag.bin_paths,
         data_paths = tag.data_paths,
         include_paths = tag.include_paths,
+    )
+
+def _discover_workspace_members(mctx, lock_file_label):
+    """Parse uv.lock and return workspace members (editable packages).
+
+    Args:
+        mctx: The module_ctx object.
+        lock_file_label: Label of the uv.lock file.
+
+    Returns:
+        A list of structs with 'name' and 'path' fields.
+    """
+    lock_content = mctx.read(lock_file_label)
+    lock_data = decode(lock_content)
+
+    # uv.lock uses "package" (newer) or "distribution" (older) for the package list.
+    packages_list = lock_data.get("package", lock_data.get("distribution", []))
+
+    members = []
+    for pkg in packages_list:
+        source = pkg.get("source", {})
+        if "editable" in source:
+            members.append(struct(
+                name = pkg["name"],
+                path = source["editable"],
+            ))
+
+        # Skip virtual entries (workspace roots with package = false)
+    return members
+
+def _resolve_member_project_file(lock_file_label, member_path):
+    """Resolve a member's pyproject.toml label relative to the lock file.
+
+    Args:
+        lock_file_label: Label of the uv.lock file.
+        member_path: Relative path from lock file to member directory (e.g. "./packages/lib-a").
+
+    Returns:
+        A Label pointing to the member's pyproject.toml.
+    """
+
+    # Strip leading "./" if present
+    clean_path = member_path
+    if clean_path.startswith("./"):
+        clean_path = clean_path[2:]
+
+    # Build the package path relative to the lock file's package
+    lock_package = lock_file_label.package
+    if lock_package:
+        member_package = lock_package + "/" + clean_path
+    else:
+        member_package = clean_path
+
+    return lock_file_label.relative("//{}:pyproject.toml".format(member_package))
+
+def _get_member_group_attrs(members_tag, override_tag):
+    """Merge group attrs from a uv_workspace_members default and optional uv_workspace_member override.
+
+    The override tag wins for any attr it explicitly sets.
+    """
+    return dict(
+        default = override_tag.default if override_tag else members_tag.default,
+        optional_groups = override_tag.optional_groups if (override_tag and override_tag.optional_groups) else members_tag.optional_groups if hasattr(members_tag, "optional_groups") else [],
+        all_optional_groups = override_tag.all_optional_groups if override_tag else members_tag.all_optional_groups if hasattr(members_tag, "all_optional_groups") else False,
+        development_groups = override_tag.development_groups if (override_tag and override_tag.development_groups) else members_tag.development_groups if hasattr(members_tag, "development_groups") else [],
+        all_development_groups = override_tag.all_development_groups if override_tag else members_tag.all_development_groups if hasattr(members_tag, "all_development_groups") else False,
     )
 
 def _lock_import_impl(module_ctx):
@@ -148,6 +266,78 @@ def _lock_import_impl(module_ctx):
         for tag in module.tags.import_pylock:
             lock_model_structs[tag.repo] = lock_repo_model_pylock(**{attr: getattr(tag, attr) for attr in PYLOCK_IMPORT_ATTRS})
 
+    # --- UV workspace handling ---
+
+    # Collect workspace definitions
+    uv_workspaces = {}
+    for module in module_ctx.modules:
+        for tag in module.tags.import_uv_workspace:
+            if tag.name in uv_workspaces:
+                fail("Duplicate uv workspace name: '{}'".format(tag.name))
+            uv_workspaces[tag.name] = struct(
+                tag = tag,
+                module = module,
+            )
+
+    # Collect per-member overrides indexed by (workspace, project)
+    member_overrides = {}
+    for module in module_ctx.modules:
+        for tag in module.tags.uv_workspace_member:
+            if tag.workspace not in uv_workspaces:
+                fail("uv_workspace_member references non-existent workspace: '{}'".format(tag.workspace))
+            key = (tag.workspace, tag.project)
+            if key in member_overrides:
+                fail("Duplicate uv_workspace_member for project '{}' in workspace '{}'".format(tag.project, tag.workspace))
+            member_overrides[key] = tag
+
+    # Process bulk member imports
+    for module in module_ctx.modules:
+        for tag in module.tags.uv_workspace_members:
+            if tag.workspace not in uv_workspaces:
+                fail("uv_workspace_members references non-existent workspace: '{}'".format(tag.workspace))
+
+            ws_info = uv_workspaces[tag.workspace]
+            ws_tag = ws_info.tag
+
+            # Auto-discover members from uv.lock
+            discovered = _discover_workspace_members(module_ctx, ws_tag.lock_file)
+            excluded = {p: True for p in tag.excluded_projects}
+
+            for member in discovered:
+                if member.name in excluded:
+                    continue
+
+                override = member_overrides.get((tag.workspace, member.name))
+
+                # Determine repo name
+                normalized_name = sanitize_name(member.name)
+                if override and override.repo:
+                    repo_name = override.repo
+                else:
+                    repo_name = tag.repo_pattern.format(member = normalized_name)
+
+                # Determine project_file
+                if override and override.project_file:
+                    project_file = override.project_file
+                else:
+                    project_file = _resolve_member_project_file(ws_tag.lock_file, member.path)
+
+                # Get group attrs (override wins)
+                group_attrs = _get_member_group_attrs(tag, override)
+
+                # Register as a lock repo
+                _check_unique_repo_name(lock_owners, module.name, repo_name)
+                lock_repos[repo_name] = _workspace_lock_struct(module_ctx, ws_tag, repo_name, tag.workspace)
+
+                lock_model_structs[repo_name] = lock_repo_model_uv(
+                    project_file = project_file,
+                    lock_file = ws_tag.lock_file,
+                    require_static_urls = ws_tag.require_static_urls,
+                    **group_attrs
+                )
+
+    # --- End UV workspace handling ---
+
     # Add package attributes
     for module in module_ctx.modules:
         for tag in module.tags.package:
@@ -161,7 +351,7 @@ def _lock_import_impl(module_ctx):
     for repo_name, repo_info in lock_repos.items():
         resolved_lock_repo_file = _generate_resolved_lock_repo(repo_info, lock_model_structs[repo_name])
         resolved_lock_files[repo_info.repo_name] = resolved_lock_repo_file
-        workspace_memberships[repo_info.repo_name] = repo_info.workspace if repo_info.workspace else repo_info.repo_name
+        workspace_memberships[repo_info.repo_name] = repo_info.workspace
 
     lock_workspace_repo(
         name = "lock_import_repos_hub",
@@ -190,6 +380,18 @@ _import_pylock_tag = tag_class(
     doc = "Import a pylock.toml lock file.",
     attrs = PYLOCK_IMPORT_ATTRS | COMMON_IMPORT_ATTRS | COMMON_ATTRS,
 )
+_import_uv_workspace_tag = tag_class(
+    doc = "Import a uv workspace. Define members with uv_workspace_members and uv_workspace_member.",
+    attrs = UV_WORKSPACE_ATTRS | WORKSPACE_COMMON_ATTRS,
+)
+_uv_workspace_members_tag = tag_class(
+    doc = "Auto-discover and import all workspace members from a uv.lock file.",
+    attrs = UV_WORKSPACE_MEMBERS_ATTRS | WORKSPACE_MEMBER_COMMON_ATTRS,
+)
+_uv_workspace_member_tag = tag_class(
+    doc = "Override settings for a specific workspace member.",
+    attrs = UV_WORKSPACE_MEMBER_ATTRS | WORKSPACE_MEMBER_COMMON_ATTRS,
+)
 _package_tag = tag_class(
     doc = "Specify package-specific settings.",
     attrs = PACKAGE_ATTRS | COMMON_ATTRS,
@@ -202,6 +404,9 @@ lock_import = module_extension(
         import_poetry = _import_poetry_tag,
         import_uv = _import_uv_tag,
         import_pylock = _import_pylock_tag,
+        import_uv_workspace = _import_uv_workspace_tag,
+        uv_workspace_members = _uv_workspace_members_tag,
+        uv_workspace_member = _uv_workspace_member_tag,
         package = _package_tag,
     ),
 )

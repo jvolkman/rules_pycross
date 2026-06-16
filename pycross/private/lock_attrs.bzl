@@ -312,6 +312,64 @@ def package_annotation(
 PDM_IMPORT_ATTRS = _IMPORT_ATTRS
 UV_IMPORT_ATTRS = _IMPORT_ATTRS
 
+# Group-selection attrs shared between uv_workspace_members (defaults) and uv_workspace_member (overrides).
+_UV_GROUP_ATTRS = dict(
+    default = attr.bool(
+        doc = "Whether to install dependencies from the default group.",
+        default = True,
+    ),
+    optional_groups = attr.string_list(
+        doc = "List of optional dependency groups to install.",
+    ),
+    all_optional_groups = attr.bool(
+        doc = "Install all optional dependencies.",
+    ),
+    development_groups = attr.string_list(
+        doc = "List of development dependency groups to install.",
+    ),
+    all_development_groups = attr.bool(
+        doc = "Install all dev dependencies.",
+    ),
+)
+
+UV_WORKSPACE_ATTRS = dict(
+    lock_file = attr.label(
+        doc = "The shared uv.lock file for the workspace.",
+        allow_single_file = True,
+        mandatory = True,
+    ),
+    require_static_urls = attr.bool(
+        doc = "Require that the lock file is created with --static-urls.",
+        default = True,
+    ),
+)
+
+UV_WORKSPACE_MEMBERS_ATTRS = dict(
+    repo_pattern = attr.string(
+        doc = "Pattern for auto-generated repo names. Use '{member}' as a placeholder " +
+              "for the normalized project name. For example, 'ws_{member}' produces " +
+              "'ws_lib_a' for a project named 'lib-a'. Default is '{member}'.",
+        default = "{member}",
+    ),
+    excluded_projects = attr.string_list(
+        doc = "Project names to skip during auto-discovery.",
+    ),
+) | _UV_GROUP_ATTRS
+
+UV_WORKSPACE_MEMBER_ATTRS = dict(
+    project = attr.string(
+        doc = "The project name as it appears in uv.lock.",
+        mandatory = True,
+    ),
+    repo = attr.string(
+        doc = "Override the repo name (default: {prefix}{normalized_project_name}).",
+    ),
+    project_file = attr.label(
+        doc = "Override auto-discovered pyproject.toml path.",
+        allow_single_file = True,
+    ),
+) | _UV_GROUP_ATTRS
+
 PYLOCK_IMPORT_ATTRS = dict(
     lock_file = attr.label(
         doc = "The pylock.toml file.",

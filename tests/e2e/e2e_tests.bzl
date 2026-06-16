@@ -15,7 +15,6 @@ def define_e2e_tests():
     ] + _BUILD_WORKSPACES + [
         "generate_lock",
         "local_wheel",
-        "multi_lock_workspace",
         "patches_and_hooks",
         "requirements",
         "sdist_repo",
@@ -23,6 +22,7 @@ def define_e2e_tests():
         "bzlmod_flags",
         "namespace_pkgs",
         "gazelle_integration",
+        "uv_workspace",
     ]:
         extra_tags = ["build"] if ws in _BUILD_WORKSPACES else []
         sh_test(

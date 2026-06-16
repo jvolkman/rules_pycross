@@ -24,37 +24,34 @@ use_repo(python, "python_versions")
 # rules_pycross
 environments = use_extension("@rules_pycross//pycross/extensions:environments.bzl", "environments")
 environments.create_for_python_toolchains(
-    name = "multi_lock_universe_envs",
+    name = "uv_workspace_envs",
     platforms = [
         "aarch64-apple-darwin",
         "x86_64-unknown-linux-gnu",
     ],
 )
-use_repo(environments, "multi_lock_universe_envs")
+use_repo(environments, "uv_workspace_envs")
 
-# Use the lock_import extension to import two lock files sharing a workspace.
+# Use the new import_uv_workspace API: single lock file, auto-discovered members.
 lock_import = use_extension("@rules_pycross//pycross/extensions:lock_import.bzl", "lock_import")
-
-# Project A: regex + six
-lock_import.import_uv(
-    lock_file = "//project_a:uv.lock",
-    project_file = "//project_a:pyproject.toml",
-    repo = "lock_a",
-    target_environments = ["@multi_lock_universe_envs//:environments"],
+lock_import.import_uv_workspace(
+    name = "shared",
+    lock_file = "//:uv.lock",
+    target_environments = ["@uv_workspace_envs//:environments"],
+)
+lock_import.uv_workspace_members(
+    repo_pattern = "lock_{member}",
     workspace = "shared",
 )
 
-# Project B: regex + attrs
-lock_import.import_uv(
-    lock_file = "//project_b:uv.lock",
-    project_file = "//project_b:pyproject.toml",
-    repo = "lock_b",
-    target_environments = ["@multi_lock_universe_envs//:environments"],
+# Override project-a's repo name; project-b uses the pattern default (lock_project_b).
+lock_import.uv_workspace_member(
+    project = "project-a",
+    repo = "lock_a",
     workspace = "shared",
 )
 
 # Annotation conflict: exclude a test file from regex in lock_a only.
-# This triggers per-member variant targets in the workspace.
 lock_import.package(
     name = "regex",
     install_exclude_globs = ["test_regex.py"],
@@ -64,4 +61,4 @@ use_repo(lock_import, "lock_import_repos_hub")
 
 # The actual repos are loaded from the lock_repos extension.
 lock_repos = use_extension("@rules_pycross//pycross/extensions:lock_repos.bzl", "lock_repos")
-use_repo(lock_repos, "lock_a", "lock_b")
+use_repo(lock_repos, "lock_a", "lock_project_b")
