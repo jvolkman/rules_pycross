@@ -2,6 +2,7 @@
 
 load("@bazel_skylib//lib:paths.bzl", "paths")
 load("@rules_python//python:py_info.bzl", "PyInfo")
+load("@rules_python//python/private:flags.bzl", "VenvsSitePackages")
 
 # buildifier: disable=bzl-visibility
 load(
@@ -96,7 +97,9 @@ def _pycross_wheel_library_impl(ctx):
     if not top_level_paths and PycrossPackageInfo in ctx.attr.wheel:
         top_level_paths = ctx.attr.wheel[PycrossPackageInfo].top_level_paths
 
-    if top_level_paths:
+    venvs_site_packages_enabled = VenvsSitePackages.is_enabled(ctx)
+
+    if venvs_site_packages_enabled and top_level_paths:
         for tlp in top_level_paths:
             venv_symlinks.append(VenvSymlinkEntry(
                 kind = VenvSymlinkKind.LIB,
@@ -130,10 +133,15 @@ def _pycross_wheel_library_impl(ctx):
         transitive_sources = transitive_sources,
         uses_shared_libraries = True,  # Docs say this is unused
     )
-    if venv_symlinks:
+    if venvs_site_packages_enabled:
+        transitive_venv_symlinks = []
+        for d in ctx.attr.deps:
+            if hasattr(d[PyInfo], "venv_symlinks"):
+                transitive_venv_symlinks.append(d[PyInfo].venv_symlinks)
+
         py_info_kwargs["venv_symlinks"] = depset(
             direct = venv_symlinks,
-            transitive = [d[PyInfo].venv_symlinks for d in ctx.attr.deps],
+            transitive = transitive_venv_symlinks,
         )
 
     providers = [
@@ -197,6 +205,9 @@ pycross_wheel_library = rule(
             default = Label("//pycross/private/tools:wheel_installer"),
             cfg = "exec",
             executable = True,
+        ),
+        "experimental_venvs_site_packages": attr.label(
+            default = Label("@rules_python//python/config_settings:venvs_site_packages"),
         ),
     },
 )
