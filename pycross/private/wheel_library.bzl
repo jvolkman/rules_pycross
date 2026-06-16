@@ -148,6 +148,18 @@ def _pycross_wheel_library_impl(ctx):
                 venv_path = "",
                 files = depset([out]),
             ))
+            
+            # VenvSymlinkKind.INCLUDE existed in earlier versions of rules_python but was missing from venv_dir_map.
+            # It was properly added in the same commit that introduced VenvSymlinkKind.DATA.
+            if hasattr(VenvSymlinkKind, "INCLUDE"):
+                venv_symlinks.append(VenvSymlinkEntry(
+                    kind = getattr(VenvSymlinkKind, "INCLUDE"),
+                    link_to_path = paths.join(base_dir, "include"),
+                    package = package_name,
+                    version = package_version,
+                    venv_path = "",
+                    files = depset([out]),
+                ))
 
     py_info_kwargs = dict(
         has_py2_only_sources = has_py2_only_sources,
