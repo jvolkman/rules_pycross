@@ -1,3 +1,4 @@
+import os
 import tempfile
 import unittest
 from pathlib import Path
@@ -78,22 +79,33 @@ class WheelBuilderPathTest(unittest.TestCase):
         )
 
     def test_target_base_prefixes_use_installed_base(self) -> None:
-        execroot = Path("/tmp/sandbox/execroot/_main")
-        prefix = Path("..") / "bazel-execroot" / "_main"
-        target_python_exe = prefix / "bazel-out/k8-fastbuild/bin/pkg/python_wrapper"
-        target_sysconfig_vars = {
-            "installed_base": ("/tmp/sandbox/execroot/_main/bazel-out/k8-fastbuild/bin/pkg/python_root"),
-            "installed_platbase": ("/tmp/sandbox/execroot/_main/bazel-out/k8-fastbuild/bin/pkg/python_root"),
-        }
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            execroot = tmp_path / "sandbox/execroot/_main"
+            sdist_dir = tmp_path / "sdist"
+            sdist_dir.mkdir()
+            prefix = Path("..") / "bazel-execroot" / "_main"
+            installed_base = "bazel-out/k8-fastbuild/bin/pkg/python_root"
+            (sdist_dir / prefix / installed_base).mkdir(parents=True)
+            target_python_exe = prefix / "bazel-out/k8-fastbuild/bin/pkg/python_wrapper"
+            target_sysconfig_vars = {
+                "installed_base": str(execroot / installed_base),
+                "installed_platbase": str(execroot / installed_base),
+            }
 
-        base_prefix, base_exec_prefix = wheel_builder.target_base_prefixes(
-            target_sysconfig_vars,
-            target_python_exe,
-            execroot,
-            prefix,
-        )
+            cwd = Path.cwd()
+            try:
+                os.chdir(sdist_dir)
+                base_prefix, base_exec_prefix = wheel_builder.target_base_prefixes(
+                    target_sysconfig_vars,
+                    target_python_exe,
+                    execroot,
+                    prefix,
+                )
+            finally:
+                os.chdir(cwd)
 
-        expected = Path("../bazel-execroot/_main/bazel-out/k8-fastbuild/bin/pkg/python_root")
+        expected = Path("../bazel-execroot/_main") / installed_base
         self.assertEqual(base_prefix, expected)
         self.assertEqual(base_exec_prefix, expected)
 

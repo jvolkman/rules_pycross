@@ -640,8 +640,8 @@ def build_venv(
     env_dir: Path,
     exec_python_exe: Path,
     target_python_exe: Path,
-    target_base_prefix: Path,
-    target_base_exec_prefix: Path,
+    target_sysconfig_vars: Dict[str, Any],
+    execroot: Path,
     sysconfig_vars: Dict[str, Any],
     path: List[Path],
     target_env: Optional[TargetEnv],
@@ -661,6 +661,12 @@ def build_venv(
     # If we're using a Bazel-provided python (i.e., not system python), set sys.base_prefix to a path
     # relative to the sdist root in an attempt to keep non-reproducible paths out of binaries.
     if bazel_root in target_python_exe.parents:
+        target_base_prefix, target_base_exec_prefix = target_base_prefixes(
+            target_sysconfig_vars=target_sysconfig_vars,
+            target_python_exe=target_python_exe,
+            execroot=execroot,
+            prefix=bazel_root,
+        )
         with open(site_dir / "_pycross_sys_base_prefix.pth", "w") as f:
             f.write(
                 "import sys; "
@@ -821,15 +827,19 @@ def target_base_prefixes(
     execroot: Path,
     prefix: Path,
 ) -> Tuple[Path, Path]:
+    # For Bazel-provided Python, prefer installed_base from the Python if it exists in the runfiles tree.
+    # E.g. target_python_exe may be a wrapper script that is not adjacent to the real Python, so its
+    # relative location to the base_prefix will be obscure.
     installed_base = target_sysconfig_vars.get("installed_base")
     installed_platbase = target_sysconfig_vars.get("installed_platbase") or installed_base
 
     if installed_base:
         base_prefix = execroot_relative_path(installed_base, execroot, prefix)
         base_exec_prefix = execroot_relative_path(installed_platbase, execroot, prefix)
-        if base_prefix and base_exec_prefix:
+        if base_prefix and base_prefix.exists() and base_exec_prefix and base_exec_prefix.exists():
             return base_prefix, base_exec_prefix
 
+    # If nothing is found, try using the grandparent.
     fallback = target_python_exe.parent.parent
     return fallback, fallback
 
@@ -902,12 +912,6 @@ def main(args: Any, temp_dir: Path, is_debug: bool) -> None:
         exec_python_exe=args.exec_python_executable,
         target_python_exe=args.target_python_executable,
     )
-    target_base_prefix, target_base_exec_prefix = target_base_prefixes(
-        target_sysconfig_vars=target_sysconfig_vars,
-        target_python_exe=args.target_python_executable,
-        execroot=cwd,
-        prefix=prefix,
-    )
     sysconfig_vars = generate_cross_sysconfig_vars(
         toolchain_vars=toolchain_sysconfig_vars,
         target_vars=target_sysconfig_vars,
@@ -921,8 +925,8 @@ def main(args: Any, temp_dir: Path, is_debug: bool) -> None:
         env_dir=build_env_dir,
         exec_python_exe=args.exec_python_executable,
         target_python_exe=args.target_python_executable,
-        target_base_prefix=target_base_prefix,
-        target_base_exec_prefix=target_base_exec_prefix,
+        target_sysconfig_vars=target_sysconfig_vars,
+        execroot=cwd,
         sysconfig_vars=sysconfig_vars,
         path=args.python_path,
         target_env=target_environment,
