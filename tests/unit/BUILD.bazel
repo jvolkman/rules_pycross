@@ -52,17 +52,6 @@ py_test(
 )
 
 py_test(
-    name = "resolved_lock_renderer_test",
-    srcs = ["resolved_lock_renderer_test.py"],
-    main = "resolved_lock_renderer_test.py",
-    tags = ["unit"],
-    deps = [
-        "//pycross/private/tools:lock_model",
-        "//pycross/private/tools:resolved_lock_renderer",
-    ],
-)
-
-py_test(
     name = "lifecycle_test",
     srcs = ["lifecycle_test.py"],
     main = "lifecycle_test.py",

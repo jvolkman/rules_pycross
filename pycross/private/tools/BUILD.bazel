@@ -169,17 +169,6 @@ py_binary(
     visibility = ["//visibility:public"],
 )
 
-py_binary(
-    name = "resolved_lock_renderer",
-    srcs = ["resolved_lock_renderer.py"],
-    imports = ["../../.."],
-    visibility = ["//visibility:public"],
-    deps = [
-        ":args",
-        ":lock_model",
-    ],
-)
-
 py_library(
     name = "pylock_translator_lib",
     srcs = ["pylock_translator.py"],
