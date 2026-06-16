@@ -37,10 +37,27 @@ def _extract_module_name(filename: str) -> str | None:
     # and cause AttributeError on Python 3.13.
     if filename.endswith("-nspkg.pth"):
         return None
-    suffixes = Path(filename).suffixes
-    if suffixes and suffixes[-1] in (".py", ".so", ".pth"):
-        ext = "".join(suffixes)
-        return filename[: -len(ext)]
+    
+    path = Path(filename)
+    suffixes = path.suffixes
+    if not suffixes:
+        return None
+        
+    if suffixes[-1] in (".py", ".pth"):
+        return filename[: -len(suffixes[-1])]
+        
+    if ".so" in suffixes:
+        idx = suffixes.index(".so")
+        # Verify all suffixes after .so are numeric (dashes are not allowed, only dots followed by digits)
+        all_numeric = True
+        for s in suffixes[idx+1:]:
+            if not s[1:].isdigit():
+                all_numeric = False
+                break
+        if all_numeric:
+            ext = "".join(suffixes[idx:])
+            return filename[: -len(ext)]
+            
     return None
 
 
@@ -107,7 +124,7 @@ def _resolve_namespace_packages(all_files: set[str], top_level_dirs: set[str]) -
         deeper paths for namespace packages (using forward slashes).
     """
     init_files = {f for f in all_files if f.endswith("/__init__.py")}
-    code_files = {f for f in all_files if f.endswith((".py", ".so"))}
+    code_files = {f for f in all_files if _extract_module_name(f) is not None}
 
     result = set()
     for dir_name in top_level_dirs:

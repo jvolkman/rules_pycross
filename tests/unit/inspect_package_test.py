@@ -558,6 +558,21 @@ class InspectPackageTest(unittest.TestCase):
         result = inspect_wheel(wheel_path)
         self.assertEqual(result["top_level_paths"], ["PyQt5/sip.cpython-313-x86_64-linux-gnu.so"])
 
+    def test_wheel_namespace_versioned_so(self):
+        """hidapi style: a versioned .so file under a namespace directory.
+
+        hidapi.libs/libusb-1-150b88da.0.so.0.1.0 should be preserved with extension.
+        """
+        wheel_path = self.create_zip(
+            "hidapi-0.14.0.post4-cp313-cp313-linux_x86_64.whl",
+            {
+                "hidapi.libs/libusb-1-150b88da.0.so.0.1.0": b"",
+                "hidapi-0.14.0.post4.dist-info/METADATA": "Name: hidapi",
+            },
+        )
+        result = inspect_wheel(wheel_path)
+        self.assertEqual(result["top_level_paths"], ["hidapi.libs/libusb-1-150b88da.0.so.0.1.0"])
+
     def test_wheel_namespace_standalone_py(self):
         """A standalone .py file under a namespace directory.
 
