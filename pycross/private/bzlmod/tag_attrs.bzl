@@ -116,11 +116,13 @@ PACKAGE_ATTRS = dict(
     install_exclude_globs = attr.string_list(
         doc = "A list of globs for files to exclude during installation.",
     ),
-    post_install_patches = attr.string_list(
+    post_install_patches = attr.label_list(
         doc = "A list of patches to apply after wheel installation.",
+        allow_files = True,
     ),
-    pre_build_patches = attr.string_list(
+    pre_build_patches = attr.label_list(
         doc = "A list of patches to apply to the sdist source tree before building.",
+        allow_files = True,
     ),
     site_hooks = attr.string_list(
         doc = "A list of Python code snippets to execute on interpreter startup during builds.",

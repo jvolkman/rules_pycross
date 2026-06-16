@@ -219,8 +219,8 @@ Specify package-specific settings.
 | <a id="lock_import.package-ignore_dependencies"></a>ignore_dependencies |  A list of package keys (name or name@version) to drop from this package's set of declared dependencies.   | List of strings | optional |  `[]`  |
 | <a id="lock_import.package-include_paths"></a>include_paths |  Override the auto-detected include paths.   | List of strings | optional |  `[]`  |
 | <a id="lock_import.package-install_exclude_globs"></a>install_exclude_globs |  A list of globs for files to exclude during installation.   | List of strings | optional |  `[]`  |
-| <a id="lock_import.package-post_install_patches"></a>post_install_patches |  A list of patches to apply after wheel installation.   | List of strings | optional |  `[]`  |
-| <a id="lock_import.package-pre_build_patches"></a>pre_build_patches |  A list of patches to apply to the sdist source tree before building.   | List of strings | optional |  `[]`  |
+| <a id="lock_import.package-post_install_patches"></a>post_install_patches |  A list of patches to apply after wheel installation.   | <a href="https://bazel.build/concepts/labels">List of labels</a> | optional |  `[]`  |
+| <a id="lock_import.package-pre_build_patches"></a>pre_build_patches |  A list of patches to apply to the sdist source tree before building.   | <a href="https://bazel.build/concepts/labels">List of labels</a> | optional |  `[]`  |
 | <a id="lock_import.package-repo"></a>repo |  The repository name   | String | required |  |
 | <a id="lock_import.package-site_hooks"></a>site_hooks |  A list of Python code snippets to execute on interpreter startup during builds.   | List of strings | optional |  `[]`  |
 | <a id="lock_import.package-site_paths"></a>site_paths |  Override the auto-detected top-level importable paths (packages, .pth files, standalone modules). Use forward slashes for nested namespaces (e.g. 'google/cloud/storage').   | List of strings | optional |  `[]`  |
