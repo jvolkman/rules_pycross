@@ -20,13 +20,25 @@ from pycross.private.tools.target_environment import TargetEnv
 
 
 def make_env(name: str, platforms: List[str], version: str = "3.10", markers: Dict[str, str] = None) -> TargetEnv:
+    from pip._internal.models.target_python import TargetPython
+    version_info = tuple(int(p) for p in version.split(".")[:3])
+    if len(version_info) == 2:
+        version_info = version_info + (0,)
+    tp = TargetPython(
+        platforms=platforms,
+        py_version_info=version_info,
+        abis=[f"cp{version.replace('.', '')}"],
+        implementation="cp",
+    )
+    compatibility_tags = [str(t) for t in tp.get_sorted_tags()]
+
     return TargetEnv(
         name=name,
         implementation="cp",
         version=version,
         abis=[f"cp{version.replace('.', '')}"],
         platforms=platforms,
-        compatibility_tags=[],
+        compatibility_tags=compatibility_tags,
         markers=markers or {},
         python_compatible_with=[],
         flag_values={},
@@ -116,7 +128,138 @@ class RawLockResolverTest(unittest.TestCase):
         resolved = resolver.to_resolved_package()
 
         self.assertIn("linux", resolved.environment_files)
-        self.assertTrue(resolved.environment_files["linux"].key.name.endswith(".whl"))
+        self.assertEqual(resolved.environment_files["linux"].key.name, "foo-1.0-cp310-cp310-manylinux_2_17_x86_64.whl")
+
+    def test_wheel_selection_build_tag_tie_breaker(self):
+        pkg = make_pkg(
+            "foo",
+            "1.0",
+            [
+                make_file("foo-1.0-1-cp310-cp310-manylinux_2_17_x86_64.whl"),
+                make_file("foo-1.0-2-cp310-cp310-manylinux_2_17_x86_64.whl"),
+                make_file("foo-1.0-cp310-cp310-manylinux_2_17_x86_64.whl"),
+            ],
+        )
+        ctx = GenerationContext(
+            target_environments=[self.linux_env],
+            local_wheels={},
+            remote_wheels={},
+            always_include_sdist=False,
+        )
+        resolver = PackageResolver(pkg, ctx, None, [])
+        resolved = resolver.to_resolved_package()
+
+        self.assertIn("linux", resolved.environment_files)
+        self.assertEqual(resolved.environment_files["linux"].key.name, "foo-1.0-2-cp310-cp310-manylinux_2_17_x86_64.whl")
+
+    def test_wheel_preferred_over_sdist(self):
+        """When both a compatible wheel and sdist exist, the wheel is selected."""
+        pkg = make_pkg(
+            "foo",
+            "1.0",
+            [
+                make_file("foo-1.0-cp310-cp310-manylinux_2_17_x86_64.whl"),
+                make_file("foo-1.0.tar.gz"),
+            ],
+        )
+        ctx = GenerationContext(
+            target_environments=[self.linux_env],
+            local_wheels={},
+            remote_wheels={},
+            always_include_sdist=False,
+        )
+        resolver = PackageResolver(pkg, ctx, None, [])
+        resolved = resolver.to_resolved_package()
+
+        self.assertIn("linux", resolved.environment_files)
+        self.assertEqual(resolved.environment_files["linux"].key.name, "foo-1.0-cp310-cp310-manylinux_2_17_x86_64.whl")
+        self.assertFalse(resolver.uses_sdist)
+
+    def test_incompatible_wheel_skipped(self):
+        """A wheel for a different platform is skipped; sdist is used instead."""
+        pkg = make_pkg(
+            "foo",
+            "1.0",
+            [
+                make_file("foo-1.0-cp310-cp310-macosx_10_9_x86_64.whl"),
+                make_file("foo-1.0.tar.gz"),
+            ],
+        )
+        ctx = GenerationContext(
+            target_environments=[self.linux_env],
+            local_wheels={},
+            remote_wheels={},
+            always_include_sdist=False,
+        )
+        resolver = PackageResolver(pkg, ctx, None, [])
+        resolved = resolver.to_resolved_package()
+
+        self.assertIn("linux", resolved.environment_files)
+        self.assertEqual(resolved.environment_files["linux"].key.name, "foo-1.0.tar.gz")
+        self.assertTrue(resolver.uses_sdist)
+
+    def test_source_only_forces_sdist(self):
+        """With always_build annotation, sdist is selected even when a compatible wheel exists."""
+        pkg = make_pkg(
+            "foo",
+            "1.0",
+            [
+                make_file("foo-1.0-cp310-cp310-manylinux_2_17_x86_64.whl"),
+                make_file("foo-1.0.tar.gz"),
+            ],
+        )
+        ctx = GenerationContext(
+            target_environments=[self.linux_env],
+            local_wheels={},
+            remote_wheels={},
+            always_include_sdist=False,
+        )
+        annotations = PackageAnnotations(always_build=True)
+        resolver = PackageResolver(pkg, ctx, annotations, [])
+        resolved = resolver.to_resolved_package()
+
+        self.assertIn("linux", resolved.environment_files)
+        self.assertEqual(resolved.environment_files["linux"].key.name, "foo-1.0.tar.gz")
+        self.assertTrue(resolver.uses_sdist)
+
+    def test_no_matching_files_no_env_entry(self):
+        """When no wheel matches and no sdist exists, the environment gets no entry."""
+        pkg = make_pkg(
+            "foo",
+            "1.0",
+            [make_file("foo-1.0-cp310-cp310-macosx_10_9_x86_64.whl")],
+        )
+        ctx = GenerationContext(
+            target_environments=[self.linux_env],
+            local_wheels={},
+            remote_wheels={},
+            always_include_sdist=False,
+        )
+        resolver = PackageResolver(pkg, ctx, None, [])
+        resolved = resolver.to_resolved_package()
+
+        self.assertNotIn("linux", resolved.environment_files)
+
+    def test_pure_python_wheel_matches_any_env(self):
+        """A py3-none-any wheel is compatible with any environment."""
+        pkg = make_pkg(
+            "foo",
+            "1.0",
+            [make_file("foo-1.0-py3-none-any.whl")],
+        )
+        ctx = GenerationContext(
+            target_environments=[self.linux_env, self.mac_env],
+            local_wheels={},
+            remote_wheels={},
+            always_include_sdist=False,
+        )
+        resolver = PackageResolver(pkg, ctx, None, [])
+        resolved = resolver.to_resolved_package()
+
+        self.assertIn("linux", resolved.environment_files)
+        self.assertEqual(resolved.environment_files["linux"].key.name, "foo-1.0-py3-none-any.whl")
+        self.assertIn("mac", resolved.environment_files)
+        self.assertEqual(resolved.environment_files["mac"].key.name, "foo-1.0-py3-none-any.whl")
 
     def test_multi_env_resolution(self):
         pkg = make_pkg(

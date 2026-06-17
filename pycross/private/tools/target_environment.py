@@ -4,14 +4,20 @@ Stuff to define a target Python environment.
 See https://peps.python.org/pep-0508/#environment-markers
 """
 
+from __future__ import annotations
+
 from dataclasses import asdict
 from dataclasses import dataclass
+from functools import cached_property
 from typing import Any
 from typing import Dict
 from typing import List
 from typing import Optional
+from typing import Set
+from typing import TYPE_CHECKING
 
-from pip._internal.models.target_python import TargetPython
+if TYPE_CHECKING:
+    from pip._internal.models.target_python import TargetPython
 
 
 @dataclass(frozen=True)
@@ -55,7 +61,7 @@ class TargetEnv:
             config_setting_target=config_setting_target,
         )
 
-    @property
+    @cached_property
     def target_python(self) -> TargetPython:
         return TargetPython(
             platforms=self.platforms,
@@ -63,6 +69,18 @@ class TargetEnv:
             abis=self.abis,
             implementation=self.implementation,
         )
+
+    @cached_property
+    def tag_to_index(self) -> Dict[Any, int]:
+        from packaging.tags import parse_tag
+        tags = []
+        for tag_str in self.compatibility_tags:
+            tags.extend(parse_tag(tag_str))
+        return {tag: idx for idx, tag in enumerate(tags)}
+
+    @cached_property
+    def supported_tags_set(self) -> Set[Any]:
+        return set(self.tag_to_index.keys())
 
     @staticmethod
     def from_dict(data: Dict[str, Any]) -> "TargetEnv":

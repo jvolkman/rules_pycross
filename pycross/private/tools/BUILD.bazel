@@ -39,7 +39,6 @@ py_binary(
         ":lock_model",
         ":target_environment",
         "@rules_pycross_internal//deps:packaging",
-        "@rules_pycross_internal//deps:pip",
     ],
 )
 
@@ -60,7 +59,7 @@ py_library(
     ],
     imports = ["../../.."],
     deps = [
-        "@rules_pycross_internal//deps:pip",
+        "@rules_pycross_internal//deps:packaging",
     ],
 )
 

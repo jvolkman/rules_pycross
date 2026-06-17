@@ -21,11 +21,6 @@ from packaging.markers import Marker
 from packaging.utils import NormalizedName
 from packaging.utils import parse_wheel_filename
 from packaging.version import Version
-from pip._internal.index.package_finder import CandidateEvaluator
-from pip._internal.index.package_finder import LinkEvaluator
-from pip._internal.index.package_finder import LinkType
-from pip._internal.models.candidate import InstallationCandidate
-from pip._internal.models.link import Link
 from pycross.private.tools.args import FlagFileArgumentParser
 from pycross.private.tools.lock_model import DependencyName
 from pycross.private.tools.lock_model import EnvironmentReference
@@ -90,6 +85,16 @@ class GenerationContext:
         self.squash_extras = squash_extras
         self.lock_package_keys = lock_package_keys
 
+        self.local_wheels_by_pkg = defaultdict(list)
+        for filename, label in local_wheels.items():
+            name, version, _, _ = parse_wheel_filename(filename)
+            self.local_wheels_by_pkg[(name, version)].append((filename, label))
+
+        self.remote_wheels_by_pkg = defaultdict(list)
+        for filename, remote_file in remote_wheels.items():
+            name, version, _, _ = parse_wheel_filename(filename)
+            self.remote_wheels_by_pkg[(name, version)].append((filename, remote_file))
+
     def check_package_compatibility(self, package: RawPackage) -> None:
         """Sanity check to make sure the requires_python attribute on each package matches our environments."""
         if package.python_version_specifiers:
@@ -111,23 +116,34 @@ class GenerationContext:
         if ignore_dependency_names:
             ordered_deps = [d for d in ordered_deps if d.name.package not in ignore_dependency_names]
 
+        # Pre-process dependencies
+        prepared_deps = []
+        for dep in ordered_deps:
+            dep_base_key = PackageKey.from_parts(DependencyName(dep.name.package), dep.version)
+            if self.lock_package_keys is not None and dep_base_key not in self.lock_package_keys:
+                continue
+            marker = Marker(dep.marker) if dep.marker else None
+            prepared_deps.append((dep, marker))
+
+        # Pre-create environment markers with extra
+        extra_val = str(package.name.extra) if package.name.extra else ""
+        env_markers = {}
+        for target in self.target_environments:
+            markers = dict(target.markers)
+            markers["extra"] = extra_val
+            env_markers[target.name] = markers
+
         for target in self.target_environments:
             added_base_for_target = set()
+            markers = env_markers[target.name]
 
-            for dep in ordered_deps:
-                dep_base_key = PackageKey.from_parts(DependencyName(dep.name.package), dep.version)
-                if self.lock_package_keys is not None and dep_base_key not in self.lock_package_keys:
-                    continue
-
-                if not dep.marker:
+            for dep, marker in prepared_deps:
+                if not marker:
                     if dep.name not in added_base_for_target:
                         base_env_deps[target.name].add(dep.key)
                         added_base_for_target.add(dep.name)
                 else:
-                    marker = Marker(dep.marker)
-                    target_markers_base = dict(target.markers)
-                    target_markers_base["extra"] = str(package.name.extra) if package.name.extra else ""
-                    if marker.evaluate(target_markers_base) and dep.name not in added_base_for_target:
+                    if marker.evaluate(markers) and dep.name not in added_base_for_target:
                         base_env_deps[target.name].add(dep.key)
                         added_base_for_target.add(dep.name)
 
@@ -145,51 +161,67 @@ class GenerationContext:
     def get_package_sources_by_environment(
         self, package: RawPackage, source_only: bool = False
     ) -> Dict[str, PackageSource]:
-        formats = frozenset(["source"]) if source_only else frozenset(["source", "binary"])
+
+        package_sources = {}
+        # Start with the files defined in the input lock model
+        for file in package.files:
+            package_sources[file.name] = PackageSource(file=file)
+
+        # Override per-file with given remote wheel URLs
+        for filename, remote_file in self.remote_wheels_by_pkg.get((package.name, package.version), []):
+            package_sources[filename] = PackageSource(file=remote_file)
+
+        # Override per-file with given local wheel labels
+        for filename, local_label in self.local_wheels_by_pkg.get((package.name, package.version), []):
+            package_sources[filename] = PackageSource(label=local_label)
+
+        # Pre-parse wheel filenames and separate sdist sources (invariant across environments).
+        parsed_wheels = []  # List of (build_tag, file_tags, package_source)
+        sdist_source = None
+        for filename, package_source in package_sources.items():
+            if is_wheel(filename):
+                if source_only:
+                    continue
+                try:
+                    _, _, build_tag, file_tags = parse_wheel_filename(filename)
+                except Exception:
+                    continue
+                parsed_wheels.append((build_tag, file_tags, package_source))
+            else:
+                sdist_source = package_source
+
         environment_sources = {}
         for environment in sorted(self.target_environments, key=lambda tenv: tenv.name.lower()):
-            link_evaluator = LinkEvaluator(
-                project_name=package.name,
-                canonical_name=package.name,
-                formats=formats,
-                target_python=environment.target_python,
-                allow_yanked=True,
-                ignore_requires_python=True,
-            )
+            best_source = None
+            best_priority = None  # Lower is better
+            best_build_tag = ()
 
-            package_sources = {}
+            for build_tag, file_tags, package_source in parsed_wheels:
+                compatible_tags = file_tags.intersection(environment.supported_tags_set)
+                if not compatible_tags:
+                    continue
 
-            # Start with the files defined in the input lock model
-            for file in package.files:
-                package_sources[file.name] = PackageSource(file=file)
+                priority = min(environment.tag_to_index[tag] for tag in compatible_tags)
 
-            # Override per-file with given remote wheel URLs
-            for filename, remote_file in self.remote_wheels.items():
-                name, version, _, _ = parse_wheel_filename(filename)
-                if (package.name, package.version) == (name, version):
-                    package_sources[filename] = PackageSource(file=remote_file)
+                is_better = False
+                if best_priority is None:
+                    is_better = True
+                elif priority < best_priority:
+                    is_better = True
+                elif priority == best_priority:
+                    is_better = build_tag > best_build_tag
 
-            # Override per-file with given local wheel labels
-            for filename, local_label in self.local_wheels.items():
-                name, version, _, _ = parse_wheel_filename(filename)
-                if (package.name, package.version) == (name, version):
-                    package_sources[filename] = PackageSource(label=local_label)
+                if is_better:
+                    best_priority = priority
+                    best_build_tag = build_tag
+                    best_source = package_source
 
-            candidates_to_package_sources = {}
-            for filename, package_source in package_sources.items():
-                candidate = InstallationCandidate(package.name, str(package.version), Link(filename))
-                candidates_to_package_sources[candidate] = package_source
+            # Fall back to sdist if no compatible wheel was found.
+            if best_source is None and sdist_source is not None:
+                best_source = sdist_source
 
-            candidates = []
-            for candidate in candidates_to_package_sources:
-                link_type, _ = link_evaluator.evaluate_link(candidate.link)
-                if link_type == LinkType.candidate:
-                    candidates.append(candidate)
-
-            candidate_evaluator = CandidateEvaluator.create(package.name, environment.target_python)
-            compute_result = candidate_evaluator.compute_best_candidate(candidates)
-            if compute_result.best_candidate:
-                environment_sources[environment.name] = candidates_to_package_sources[compute_result.best_candidate]
+            if best_source:
+                environment_sources[environment.name] = best_source
 
         return environment_sources
 
