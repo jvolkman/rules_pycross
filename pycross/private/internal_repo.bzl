@@ -12,18 +12,18 @@ package(default_visibility = ["//visibility:public"])
 
 alias(
     name = "installer_whl",
-    actual = "{installer_whl}",
+    actual = ":{installer_whl}",
 )
 
 alias(
     name = "patch_ng_whl",
-    actual = "{patch_ng_whl}",
+    actual = ":{patch_ng_whl}",
 )
 
 exports_files([
     "defaults.bzl",
     "python.bzl",
-])
+] + {wheel_exports})
 """
 
 _python_bzl = """\
@@ -124,23 +124,17 @@ def _resolve_python_interpreter(rctx):
 
     return python_interpreter.realpath
 
-def _installer_whl(wheels, prefix):
-    for repo_name, filename in wheels.items():
+def _installer_whl(wheels):
+    for filename in wheels:
         if filename.startswith("installer-"):
-            return Label("@@" + prefix + repo_name + "//file:" + filename)
+            return filename
     fail("Unable to find `installer` wheel in lock file.")
 
-def _patch_ng_whl(wheels, prefix):
-    for repo_name, filename in wheels.items():
+def _patch_ng_whl(wheels):
+    for filename in wheels:
         if filename.startswith("patch_ng-") or filename.startswith("patch-ng-"):
-            return Label("@@" + prefix + repo_name + "//file:" + filename)
+            return filename
     fail("Unable to find `patch-ng` wheel in lock file.")
-
-def _pip_whl(wheels, prefix):
-    for repo_name, filename in wheels.items():
-        if filename.startswith("pip-"):
-            return Label("@@" + prefix + repo_name + "//file:" + filename)
-    fail("Unable to find `pip` wheel in lock file.")
 
 def _defaults_bzl(rctx):
     lines = []
@@ -152,25 +146,40 @@ def _defaults_bzl(rctx):
     return "\n".join(lines) + "\n"
 
 def _pycross_internal_repo_impl(rctx):
-    # Extract Bzlmod extension repository prefix from rctx.name
-    # (e.g., "rules_pycross++pycross+" or "rules_pycross~1.0.0~pycross~")
-    prefix = rctx.name.split("rules_pycross_internal")[0]
-
-    python_executable = _resolve_python_interpreter(rctx)
-    wheel_paths = sorted([rctx.path(Label("@@" + prefix + repo + "//file:" + file)) for repo, file in rctx.attr.wheels.items()], key = lambda k: str(k))
-    pycross_path = rctx.path(Label("//:BUILD.bazel")).dirname
-
-    venv_path = rctx.path("exec_venv")
-    pip_whl = _pip_whl(rctx.attr.wheels, prefix)
-    if rctx.attr.install_wheels:
-        create_venv(rctx, python_executable, venv_path, [pycross_path])
-        install_venv_wheels(rctx, venv_path, pip_whl, wheel_paths)
-    else:
-        create_venv(rctx, python_executable, venv_path, [pycross_path] + wheel_paths)
-
     # 1. Read and parse the TOML lock
     deps_toml_path = rctx.path(Label("//pycross/private:pycross_deps.toml"))
     deps_data = toml.decode(rctx.read(deps_toml_path))
+
+    # 2. Download all the wheels
+    wheel_paths = []
+    wheel_filenames = []
+    download_handles = []
+    for pkg in deps_data["packages"].values():
+        filename = pkg["filename"]
+        out_path = rctx.path(filename)
+        handle = rctx.download(
+            url = pkg["url"],
+            output = out_path,
+            sha256 = pkg["sha256"],
+            block = False,
+        )
+        download_handles.append(handle)
+        wheel_filenames.append(filename)
+        wheel_paths.append(out_path)
+
+    rctx.report_progress("Downloading {} internal wheels".format(len(deps_data["packages"])))
+    for handle in download_handles:
+        handle.wait()
+
+    python_executable = _resolve_python_interpreter(rctx)
+    pycross_path = rctx.path(Label("//:BUILD.bazel")).dirname
+
+    venv_path = rctx.path("exec_venv")
+    installer_whl = _installer_whl(wheel_filenames)
+    rctx.report_progress("Creating internal virtual environment")
+    create_venv(rctx, python_executable, venv_path, [pycross_path])
+    rctx.report_progress("Installing {} internal wheels".format(len(wheel_paths)))
+    install_venv_wheels(rctx, venv_path, installer_whl, wheel_paths)
 
     # 2. Write the target definitions
     deps_build_lines = [
@@ -205,7 +214,7 @@ def _pycross_internal_repo_impl(rctx):
         deps_build_lines.extend([
             "alias(",
             '    name = "{}",'.format(wheel_target_name),
-            '    actual = "@{}//file",'.format(pkg["repo_name"]),
+            '    actual = "//:{}",'.format(pkg["filename"]),
             ")",
             "",
         ])
@@ -238,8 +247,9 @@ def _pycross_internal_repo_impl(rctx):
 
     # Root build file
     rctx.file("BUILD.bazel", _root_build.format(
-        installer_whl = _installer_whl(rctx.attr.wheels, prefix),
-        patch_ng_whl = _patch_ng_whl(rctx.attr.wheels, prefix),
+        installer_whl = _installer_whl(wheel_filenames),
+        patch_ng_whl = _patch_ng_whl(wheel_filenames),
+        wheel_exports = repr(wheel_filenames),
     ))
 
 pycross_internal_repo = repository_rule(
@@ -252,18 +262,11 @@ pycross_internal_repo = repository_rule(
             allow_single_file = True,
         ),
         "python_interpreter": attr.string(),
-        "wheels": attr.string_dict(
-            mandatory = True,
-        ),
-        "install_wheels": attr.bool(
-            default = True,
-        ),
     } | CREATE_ENVIRONMENTS_ATTRS | REGISTER_TOOLCHAINS_ATTRS,
 )
 
-def create_internal_repo(wheels = {}, **kwargs):
+def create_internal_repo(**kwargs):
     pycross_internal_repo(
         name = INTERNAL_REPO_NAME,
-        wheels = {wheel_label: wheel_name for wheel_name, wheel_label in wheels.items()},
         **kwargs
     )
