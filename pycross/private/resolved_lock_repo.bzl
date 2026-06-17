@@ -31,7 +31,7 @@ def _generate_lock_model_file(rctx):
     if type(lock_model) == "dict":
         lock_model = struct(**lock_model)
 
-    project_file = Label(lock_model.project_file)
+    project_file = Label(lock_model.project_file) if getattr(lock_model, "project_file", "") else None
     lock_file = Label(lock_model.lock_file)
 
     if project_file and hasattr(rctx, "watch"):
