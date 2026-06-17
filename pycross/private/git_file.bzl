@@ -1,6 +1,10 @@
 """A repository rule to fetch a git repository and create a tar.gz archive."""
 
 def _pycross_git_file_impl(rctx):
+    git_path = rctx.which("git")
+    if not git_path:
+        fail("git executable not found in PATH")
+
     url = rctx.attr.url
     if url.startswith("git+"):
         url = url[4:]
@@ -16,12 +20,12 @@ def _pycross_git_file_impl(rctx):
         url, _ = url.split("?", 1)
 
     # Note: we clone into a temporary directory
-    res = rctx.execute(["git", "clone", url, "checkout"], quiet = False)
+    res = rctx.execute([git_path, "clone", url, "checkout"], quiet = False)
     if res.return_code != 0:
         fail("Failed to clone git repository: " + res.stderr)
 
     # We must explicitly checkout the commit if it's not the default branch.
-    res = rctx.execute(["git", "-C", "checkout", "checkout", commit], quiet = False)
+    res = rctx.execute([git_path, "-C", "checkout", "checkout", commit], quiet = False)
     if res.return_code != 0:
         fail("Failed to checkout commit " + commit + ": " + res.stderr)
 
@@ -34,7 +38,7 @@ package(default_visibility = ["//visibility:public"])
 exports_files(["{filename}"])
 """.format(filename = filename))
 
-    res = rctx.execute(["git", "-C", "checkout", "archive", "--format=tar.gz", "--prefix=repo/", "-o", "../file/" + filename, "HEAD"], quiet = False)
+    res = rctx.execute([git_path, "-C", "checkout", "archive", "--format=tar.gz", "--prefix=repo/", "-o", "../file/" + filename, "HEAD"], quiet = False)
     if res.return_code != 0:
         fail("Failed to create archive: " + res.stderr)
 
