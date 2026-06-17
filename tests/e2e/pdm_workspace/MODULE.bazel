@@ -55,11 +55,11 @@ lock_import.pdm_workspace_member(
     workspace = "shared",
 )
 
-# Annotation conflict: exclude a test file from regex in lock_a only.
+# Annotation conflict: exclude a test file from regex across the whole workspace.
 lock_import.package(
     name = "regex",
     install_exclude_globs = ["test_regex.py"],
-    repo = "lock_a",
+    workspace = "shared",
 )
 use_repo(lock_import, "lock_import_repos_hub")
 

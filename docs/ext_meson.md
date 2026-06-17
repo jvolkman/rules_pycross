@@ -52,7 +52,7 @@ meson_build(<a href="#meson_build-name">name</a>, <a href="#meson_build-deps">de
 <pre>
 meson = use_extension("@rules_pycross//pycross/backends:meson.bzl", "meson")
 meson.override(<a href="#meson.override-name">name</a>, <a href="#meson.override-data">data</a>, <a href="#meson.override-build_env">build_env</a>, <a href="#meson.override-config_settings">config_settings</a>, <a href="#meson.override-copts">copts</a>, <a href="#meson.override-linkopts">linkopts</a>, <a href="#meson.override-native_deps">native_deps</a>, <a href="#meson.override-path_tools">path_tools</a>,
-               <a href="#meson.override-post_build_hooks">post_build_hooks</a>, <a href="#meson.override-pre_build_hooks">pre_build_hooks</a>, <a href="#meson.override-repo">repo</a>, <a href="#meson.override-tool_deps">tool_deps</a>)
+               <a href="#meson.override-post_build_hooks">post_build_hooks</a>, <a href="#meson.override-pre_build_hooks">pre_build_hooks</a>, <a href="#meson.override-repo">repo</a>, <a href="#meson.override-tool_deps">tool_deps</a>, <a href="#meson.override-workspace">workspace</a>)
 </pre>
 
 
@@ -78,7 +78,8 @@ Specify meson-specific package overrides.
 | <a id="meson.override-path_tools"></a>path_tools |  A list of binary targets placed on PATH during the build.   | <a href="https://bazel.build/concepts/labels">List of labels</a> | optional |  `[]`  |
 | <a id="meson.override-post_build_hooks"></a>post_build_hooks |  Executables to run after the wheel is built.   | <a href="https://bazel.build/concepts/labels">List of labels</a> | optional |  `[]`  |
 | <a id="meson.override-pre_build_hooks"></a>pre_build_hooks |  Executables to run before building the wheel.   | <a href="https://bazel.build/concepts/labels">List of labels</a> | optional |  `[]`  |
-| <a id="meson.override-repo"></a>repo |  The repository name   | String | required |  |
+| <a id="meson.override-repo"></a>repo |  The repository name (if applying to a specific lock file).   | String | optional |  `""`  |
 | <a id="meson.override-tool_deps"></a>tool_deps |  Overrides for built-in dependencies.   | <a href="https://bazel.build/rules/lib/dict">Dictionary: String -> String</a> | optional |  `{}`  |
+| <a id="meson.override-workspace"></a>workspace |  The workspace name (if applying to all members of a workspace).   | String | optional |  `""`  |
 
 

@@ -23,15 +23,27 @@ def _lock_repos_impl(module_ctx):
     all_remote_files = {}
 
     # Build per-repo, per-package override configs from registered override files.
-    # override_configs[repo_name][pkg_name][backend_name] = {backend_attrs dict}
+    # override_configs[key][pkg_name][backend_name] = {backend_attrs dict}
+    # Keys are prefixed with "repo:" or "workspace:" to distinguish scope.
     override_configs = {}
     for f in OVERRIDE_FILES:
         data = json.decode(module_ctx.read(f))
-        for repo, packages in data.items():
+        for key, packages in data.items():
             for pkg_name, entry in packages.items():
                 backend_name = entry.get("build_backend", "")
                 backend_attrs = entry.get("backend_attrs", {})
-                override_configs.setdefault(repo, {}).setdefault(pkg_name, {})[backend_name] = backend_attrs
+                override_configs.setdefault(key, {}).setdefault(pkg_name, {})[backend_name] = backend_attrs
+
+    # Validate that repo: overrides don't target workspace members.
+    for key in override_configs:
+        if key.startswith("repo:"):
+            repo_name = key[len("repo:"):]
+            ws = workspace_memberships.get(repo_name)
+            if ws and ws != repo_name:
+                fail(
+                    "Build system override targets repo '{}' which is a member of workspace '{}'. ".format(repo_name, ws) +
+                    "Use workspace = '{}' instead.".format(ws),
+                )
 
     # Pre-pathify all lock files to minimize restart time.
     for lock_file in all_locks.values():
@@ -204,7 +216,20 @@ def _lock_repos_impl(module_ctx):
 
             # Pass per-package override configs keyed by backend name.
             pkg_name = key_name(pkg_key)
-            pkg_overrides = override_configs.get(repo_name, {}).get(pkg_name, {})
+            pkg_overrides = {}
+
+            # Inherit workspace overrides if any
+            ws_key = "workspace:" + workspace_name
+            if ws_key in override_configs:
+                for b_name, b_attrs in override_configs[ws_key].get(pkg_name, {}).items():
+                    pkg_overrides[b_name] = b_attrs
+
+            # Repo overrides take precedence
+            repo_key = "repo:" + repo_name
+            if repo_key in override_configs:
+                for b_name, b_attrs in override_configs[repo_key].get(pkg_name, {}).items():
+                    pkg_overrides[b_name] = b_attrs
+
             if pkg_overrides:
                 sdist_repo_attrs["override_backend_configs"] = json.encode(pkg_overrides)
 

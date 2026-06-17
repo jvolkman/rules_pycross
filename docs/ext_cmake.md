@@ -50,7 +50,7 @@ cmake_build(<a href="#cmake_build-name">name</a>, <a href="#cmake_build-deps">de
 <pre>
 cmake = use_extension("@rules_pycross//pycross/backends:cmake.bzl", "cmake")
 cmake.override(<a href="#cmake.override-name">name</a>, <a href="#cmake.override-data">data</a>, <a href="#cmake.override-build_env">build_env</a>, <a href="#cmake.override-config_settings">config_settings</a>, <a href="#cmake.override-copts">copts</a>, <a href="#cmake.override-linkopts">linkopts</a>, <a href="#cmake.override-native_deps">native_deps</a>, <a href="#cmake.override-path_tools">path_tools</a>,
-               <a href="#cmake.override-post_build_hooks">post_build_hooks</a>, <a href="#cmake.override-pre_build_hooks">pre_build_hooks</a>, <a href="#cmake.override-repo">repo</a>, <a href="#cmake.override-tool_deps">tool_deps</a>)
+               <a href="#cmake.override-post_build_hooks">post_build_hooks</a>, <a href="#cmake.override-pre_build_hooks">pre_build_hooks</a>, <a href="#cmake.override-repo">repo</a>, <a href="#cmake.override-tool_deps">tool_deps</a>, <a href="#cmake.override-workspace">workspace</a>)
 </pre>
 
 
@@ -76,7 +76,8 @@ Specify cmake-specific package overrides.
 | <a id="cmake.override-path_tools"></a>path_tools |  A list of binary targets placed on PATH during the build.   | <a href="https://bazel.build/concepts/labels">List of labels</a> | optional |  `[]`  |
 | <a id="cmake.override-post_build_hooks"></a>post_build_hooks |  Executables to run after the wheel is built.   | <a href="https://bazel.build/concepts/labels">List of labels</a> | optional |  `[]`  |
 | <a id="cmake.override-pre_build_hooks"></a>pre_build_hooks |  Executables to run before building the wheel.   | <a href="https://bazel.build/concepts/labels">List of labels</a> | optional |  `[]`  |
-| <a id="cmake.override-repo"></a>repo |  The repository name   | String | required |  |
+| <a id="cmake.override-repo"></a>repo |  The repository name (if applying to a specific lock file).   | String | optional |  `""`  |
 | <a id="cmake.override-tool_deps"></a>tool_deps |  Overrides for built-in dependencies.   | <a href="https://bazel.build/rules/lib/dict">Dictionary: String -> String</a> | optional |  `{}`  |
+| <a id="cmake.override-workspace"></a>workspace |  The workspace name (if applying to all members of a workspace).   | String | optional |  `""`  |
 
 

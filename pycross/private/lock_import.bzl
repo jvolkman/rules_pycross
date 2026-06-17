@@ -8,8 +8,8 @@ load("//pycross/private:util.bzl", "sanitize_name")
 load(":lock_workspace_repo.bzl", "lock_workspace_repo")
 load(
     ":tag_attrs.bzl",
-    "COMMON_ATTRS",
     "COMMON_IMPORT_ATTRS",
+    "OVERRIDE_TARGET_ATTRS",
     "PACKAGE_ATTRS",
     "PDM_IMPORT_ATTRS",
     "PDM_WORKSPACE_ATTRS",
@@ -17,6 +17,7 @@ load(
     "PDM_WORKSPACE_MEMBER_ATTRS",
     "POETRY_IMPORT_ATTRS",
     "PYLOCK_IMPORT_ATTRS",
+    "REPO_ATTR",
     "UV_IMPORT_ATTRS",
     "UV_WORKSPACE_ATTRS",
     "UV_WORKSPACE_MEMBERS_ATTRS",
@@ -25,7 +26,7 @@ load(
     "WORKSPACE_MEMBER_COMMON_ATTRS",
 )
 
-def _generate_resolved_lock_repo(lock_info, serialized_lock_model):
+def _generate_resolved_lock_repo(lock_info, serialized_lock_model, workspace_packages):
     repo_name = lock_info.repo_name
     args = {
         "name": repo_name,
@@ -39,7 +40,14 @@ def _generate_resolved_lock_repo(lock_info, serialized_lock_model):
         "annotations": {},
     }
 
+    # Workspace-level packages first, then repo-level packages override.
+    all_packages = {}
+    for package_name, package in workspace_packages.get(lock_info.workspace, {}).items():
+        all_packages[package_name] = package
     for package_name, package in lock_info.packages.items():
+        all_packages[package_name] = package
+
+    for package_name, package in all_packages.items():
         args["annotations"][package_name] = package_annotation(
             always_build = package.always_build,
             build_dependencies = package.build_dependencies,
@@ -100,10 +108,6 @@ def _check_proper_tag_repo(owners, module, tag, tag_desc):
 
 def _check_proper_package_repo(owners, module, tag):
     _check_proper_tag_repo(owners, module, tag, "package '{}'".format(tag.name))
-
-def _check_package_entry_not_set(owners, lock_info, tag):
-    if tag.name in lock_info.packages:
-        fail("Multiple package entries for package '{}' in lock repo '{}' owned by module '{}'".format(tag.name, tag.repo, owners[tag.repo]))
 
 def _lock_struct(mctx, tag):
     environment_files = []
@@ -205,7 +209,7 @@ def _discover_uv_workspace_members(mctx, lock_file_label):
     return members
 
 def _discover_pdm_workspace_members(mctx, lock_file_label):
-    """Parse pdm.lock and return workspace members (local packages)."""
+    """Parse pdm.lock and return workspace members (editable local packages)."""
     lock_content = mctx.read(lock_file_label)
     lock_data = decode(lock_content)
 
@@ -213,8 +217,8 @@ def _discover_pdm_workspace_members(mctx, lock_file_label):
 
     members = []
     for pkg in packages_list:
-        # PDM workspaces represent local members with a "path" attribute and no "files"
-        if "path" in pkg and "files" not in pkg:
+        # PDM marks workspace members with editable = true and a path.
+        if pkg.get("editable") and "path" in pkg:
             members.append(struct(
                 name = pkg["name"],
                 path = pkg["path"],
@@ -335,9 +339,10 @@ def _process_workspaces(
                     model_type = model_type,
                     project_file = str(project_file),
                     lock_file = str(ws_tag.lock_file),
-                    require_static_urls = getattr(ws_tag, "require_static_urls", False),
                     **group_attrs
                 )
+                if hasattr(ws_tag, "require_static_urls"):
+                    model["require_static_urls"] = ws_tag.require_static_urls
                 lock_model_structs[repo_name] = json.encode(model)
 
 def _lock_import_impl(module_ctx):
@@ -397,18 +402,38 @@ def _lock_import_impl(module_ctx):
         model_type = "pdm",
     )
 
+    workspace_packages = {}  # workspace_name -> {pkg_name -> normalized_tag}
+
     # Add package attributes
     for module in module_ctx.modules:
         for tag in module.tags.package:
-            _check_proper_package_repo(lock_owners, module, tag)
-            repo_info = lock_repos[tag.repo]
-            _check_package_entry_not_set(lock_owners, repo_info, tag)
-            repo_info.packages[tag.name] = _normalize_package_tag(tag)
+            if tag.repo and tag.workspace:
+                fail("package '{}' specifies both repo and workspace".format(tag.name))
+            if not tag.repo and not tag.workspace:
+                fail("package '{}' must specify either repo or workspace".format(tag.name))
+
+            normalized = _normalize_package_tag(tag)
+            if tag.repo:
+                _check_proper_package_repo(lock_owners, module, tag)
+                repo_info = lock_repos[tag.repo]
+                if repo_info.workspace != repo_info.repo_name:
+                    fail(
+                        "package '{}' targets repo '{}' which is a member of workspace '{}'. ".format(tag.name, tag.repo, repo_info.workspace) +
+                        "Use workspace = '{}' instead.".format(repo_info.workspace),
+                    )
+                if tag.name in repo_info.packages:
+                    fail("Multiple package entries for package '{}' in repo '{}'".format(tag.name, tag.repo))
+                repo_info.packages[tag.name] = normalized
+            elif tag.workspace:
+                ws_pkgs = workspace_packages.setdefault(tag.workspace, {})
+                if tag.name in ws_pkgs:
+                    fail("Multiple package entries for package '{}' in workspace '{}'".format(tag.name, tag.workspace))
+                ws_pkgs[tag.name] = normalized
 
     # Generate the resolved lock repos
     workspace_memberships = {}
     for repo_name, repo_info in lock_repos.items():
-        resolved_lock_repo_file = _generate_resolved_lock_repo(repo_info, lock_model_structs[repo_name])
+        resolved_lock_repo_file = _generate_resolved_lock_repo(repo_info, lock_model_structs[repo_name], workspace_packages)
         resolved_lock_files[repo_info.repo_name] = resolved_lock_repo_file
         workspace_memberships[repo_info.repo_name] = repo_info.workspace
 
@@ -425,19 +450,19 @@ def _lock_import_impl(module_ctx):
 # Tag classes
 _import_pdm_tag = tag_class(
     doc = "Import a PDM lock file.",
-    attrs = PDM_IMPORT_ATTRS | COMMON_IMPORT_ATTRS | COMMON_ATTRS,
+    attrs = PDM_IMPORT_ATTRS | COMMON_IMPORT_ATTRS | REPO_ATTR,
 )
 _import_poetry_tag = tag_class(
     doc = "Import a Poetry lock file.",
-    attrs = POETRY_IMPORT_ATTRS | COMMON_IMPORT_ATTRS | COMMON_ATTRS,
+    attrs = POETRY_IMPORT_ATTRS | COMMON_IMPORT_ATTRS | REPO_ATTR,
 )
 _import_uv_tag = tag_class(
     doc = "Import a uv lock file.",
-    attrs = UV_IMPORT_ATTRS | COMMON_IMPORT_ATTRS | COMMON_ATTRS,
+    attrs = UV_IMPORT_ATTRS | COMMON_IMPORT_ATTRS | REPO_ATTR,
 )
 _import_pylock_tag = tag_class(
     doc = "Import a pylock.toml lock file.",
-    attrs = PYLOCK_IMPORT_ATTRS | COMMON_IMPORT_ATTRS | COMMON_ATTRS,
+    attrs = PYLOCK_IMPORT_ATTRS | COMMON_IMPORT_ATTRS | REPO_ATTR,
 )
 _import_pdm_workspace_tag = tag_class(
     doc = "Import a PDM workspace.",
@@ -465,7 +490,7 @@ _uv_workspace_member_tag = tag_class(
 )
 _package_tag = tag_class(
     doc = "Specify package-specific settings.",
-    attrs = PACKAGE_ATTRS | COMMON_ATTRS,
+    attrs = PACKAGE_ATTRS | OVERRIDE_TARGET_ATTRS,
 )
 
 lock_import = module_extension(

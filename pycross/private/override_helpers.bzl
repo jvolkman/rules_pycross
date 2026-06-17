@@ -93,8 +93,14 @@ def make_override_extension(backend_name, build_backend, override_attrs):
         overrides = {}
         for module in module_ctx.modules:
             for tag in module.tags.override:
+                if tag.repo and tag.workspace:
+                    fail("override for '{}' specifies both repo and workspace".format(tag.name))
+                if not tag.repo and not tag.workspace:
+                    fail("override for '{}' must specify either repo or workspace".format(tag.name))
+
                 backend_attrs = encode_build_system_attrs(tag)
-                overrides.setdefault(tag.repo, {})[tag.name] = {
+                key = "repo:" + tag.repo if tag.repo else "workspace:" + tag.workspace
+                overrides.setdefault(key, {})[tag.name] = {
                     "build_backend": build_backend,
                     "backend_attrs": backend_attrs,
                 }

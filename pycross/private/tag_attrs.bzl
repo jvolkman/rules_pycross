@@ -17,11 +17,21 @@ load(
     _UV_WORKSPACE_MEMBER_ATTRS = "UV_WORKSPACE_MEMBER_ATTRS",
 )
 
-# Attrs common to all tags
-COMMON_ATTRS = dict(
+# Attrs common to lock repos
+REPO_ATTR = dict(
     repo = attr.string(
         doc = "The repository name",
         mandatory = True,
+    ),
+)
+
+# Attrs for applying overrides to specific repos or workspaces.
+OVERRIDE_TARGET_ATTRS = dict(
+    repo = attr.string(
+        doc = "The repository name (if applying to a specific lock file).",
+    ),
+    workspace = attr.string(
+        doc = "The workspace name (if applying to all members of a workspace).",
     ),
 )
 
@@ -87,10 +97,10 @@ WORKSPACE_COMMON_ATTRS = dict(
     ),
 )
 
-# Attrs for uv_workspace_member that link it to a workspace.
+# Attrs that link a workspace member or members tag to its parent workspace.
 WORKSPACE_MEMBER_COMMON_ATTRS = dict(
     workspace = attr.string(
-        doc = "Name of the workspace (matches import_uv_workspace.name).",
+        doc = "Name of the workspace this member belongs to.",
         mandatory = True,
     ),
 )
@@ -183,11 +193,7 @@ CORE_OVERRIDE_ATTRS = dict(
         doc = "The package key (name or name@version).",
         mandatory = True,
     ),
-    repo = attr.string(
-        doc = "The repository name",
-        mandatory = True,
-    ),
-)
+) | OVERRIDE_TARGET_ATTRS
 
 MESON_OVERRIDE_ATTRS = CORE_OVERRIDE_ATTRS | BUILD_SYSTEM_ATTRS | CC_BUILD_SYSTEM_ATTRS
 

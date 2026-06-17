@@ -36,7 +36,7 @@ def handle_args(attrs, project_file, lock_file, output):
     if attrs.all_development_groups:
         args.append("--all-development-groups")
 
-    if attrs.require_static_urls:
+    if getattr(attrs, "require_static_urls", False):
         args.append("--require-static-urls")
 
     return args

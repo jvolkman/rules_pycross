@@ -43,7 +43,7 @@ lock_import.uv_workspace_member(<a href="#lock_import.uv_workspace_member-all_de
                                 <a href="#lock_import.uv_workspace_member-workspace">workspace</a>)
 lock_import.package(<a href="#lock_import.package-name">name</a>, <a href="#lock_import.package-always_build">always_build</a>, <a href="#lock_import.package-bin_paths">bin_paths</a>, <a href="#lock_import.package-build_backend">build_backend</a>, <a href="#lock_import.package-build_dependencies">build_dependencies</a>, <a href="#lock_import.package-build_target">build_target</a>,
                     <a href="#lock_import.package-data_paths">data_paths</a>, <a href="#lock_import.package-ignore_dependencies">ignore_dependencies</a>, <a href="#lock_import.package-include_paths">include_paths</a>, <a href="#lock_import.package-install_exclude_globs">install_exclude_globs</a>,
-                    <a href="#lock_import.package-post_install_patches">post_install_patches</a>, <a href="#lock_import.package-pre_build_patches">pre_build_patches</a>, <a href="#lock_import.package-repo">repo</a>, <a href="#lock_import.package-site_hooks">site_hooks</a>, <a href="#lock_import.package-site_paths">site_paths</a>)
+                    <a href="#lock_import.package-post_install_patches">post_install_patches</a>, <a href="#lock_import.package-pre_build_patches">pre_build_patches</a>, <a href="#lock_import.package-repo">repo</a>, <a href="#lock_import.package-site_hooks">site_hooks</a>, <a href="#lock_import.package-site_paths">site_paths</a>, <a href="#lock_import.package-workspace">workspace</a>)
 </pre>
 
 
@@ -185,7 +185,7 @@ Auto-discover and import all workspace members from a pdm.lock file.
 | <a id="lock_import.pdm_workspace_members-excluded_projects"></a>excluded_projects |  Project names to skip during auto-discovery.   | List of strings | optional |  `[]`  |
 | <a id="lock_import.pdm_workspace_members-optional_groups"></a>optional_groups |  List of optional dependency groups to install.   | List of strings | optional |  `[]`  |
 | <a id="lock_import.pdm_workspace_members-repo_pattern"></a>repo_pattern |  Pattern for auto-generated repo names. Use '{member}' as a placeholder for the normalized project name. For example, 'ws_{member}' produces 'ws_lib_a' for a project named 'lib-a'. Default is '{member}'.   | String | optional |  `"{member}"`  |
-| <a id="lock_import.pdm_workspace_members-workspace"></a>workspace |  Name of the workspace (matches import_uv_workspace.name).   | String | required |  |
+| <a id="lock_import.pdm_workspace_members-workspace"></a>workspace |  Name of the workspace this member belongs to.   | String | required |  |
 
 <a id="lock_import.pdm_workspace_member"></a>
 
@@ -205,7 +205,7 @@ Override settings for a specific PDM workspace member.
 | <a id="lock_import.pdm_workspace_member-project"></a>project |  The project name as it appears in pdm.lock.   | String | required |  |
 | <a id="lock_import.pdm_workspace_member-project_file"></a>project_file |  Override auto-discovered pyproject.toml path.   | <a href="https://bazel.build/concepts/labels">Label</a> | optional |  `None`  |
 | <a id="lock_import.pdm_workspace_member-repo"></a>repo |  Override the repo name (default: {prefix}{normalized_project_name}).   | String | optional |  `""`  |
-| <a id="lock_import.pdm_workspace_member-workspace"></a>workspace |  Name of the workspace (matches import_uv_workspace.name).   | String | required |  |
+| <a id="lock_import.pdm_workspace_member-workspace"></a>workspace |  Name of the workspace this member belongs to.   | String | required |  |
 
 <a id="lock_import.import_uv_workspace"></a>
 
@@ -244,7 +244,7 @@ Auto-discover and import all workspace members from a uv.lock file.
 | <a id="lock_import.uv_workspace_members-excluded_projects"></a>excluded_projects |  Project names to skip during auto-discovery.   | List of strings | optional |  `[]`  |
 | <a id="lock_import.uv_workspace_members-optional_groups"></a>optional_groups |  List of optional dependency groups to install.   | List of strings | optional |  `[]`  |
 | <a id="lock_import.uv_workspace_members-repo_pattern"></a>repo_pattern |  Pattern for auto-generated repo names. Use '{member}' as a placeholder for the normalized project name. For example, 'ws_{member}' produces 'ws_lib_a' for a project named 'lib-a'. Default is '{member}'.   | String | optional |  `"{member}"`  |
-| <a id="lock_import.uv_workspace_members-workspace"></a>workspace |  Name of the workspace (matches import_uv_workspace.name).   | String | required |  |
+| <a id="lock_import.uv_workspace_members-workspace"></a>workspace |  Name of the workspace this member belongs to.   | String | required |  |
 
 <a id="lock_import.uv_workspace_member"></a>
 
@@ -264,7 +264,7 @@ Override settings for a specific workspace member.
 | <a id="lock_import.uv_workspace_member-project"></a>project |  The project name as it appears in uv.lock.   | String | required |  |
 | <a id="lock_import.uv_workspace_member-project_file"></a>project_file |  Override auto-discovered pyproject.toml path.   | <a href="https://bazel.build/concepts/labels">Label</a> | optional |  `None`  |
 | <a id="lock_import.uv_workspace_member-repo"></a>repo |  Override the repo name (default: {prefix}{normalized_project_name}).   | String | optional |  `""`  |
-| <a id="lock_import.uv_workspace_member-workspace"></a>workspace |  Name of the workspace (matches import_uv_workspace.name).   | String | required |  |
+| <a id="lock_import.uv_workspace_member-workspace"></a>workspace |  Name of the workspace this member belongs to.   | String | required |  |
 
 <a id="lock_import.package"></a>
 
@@ -288,8 +288,9 @@ Specify package-specific settings.
 | <a id="lock_import.package-install_exclude_globs"></a>install_exclude_globs |  A list of globs for files to exclude during installation.   | List of strings | optional |  `[]`  |
 | <a id="lock_import.package-post_install_patches"></a>post_install_patches |  A list of patches to apply after wheel installation.   | <a href="https://bazel.build/concepts/labels">List of labels</a> | optional |  `[]`  |
 | <a id="lock_import.package-pre_build_patches"></a>pre_build_patches |  A list of patches to apply to the sdist source tree before building.   | <a href="https://bazel.build/concepts/labels">List of labels</a> | optional |  `[]`  |
-| <a id="lock_import.package-repo"></a>repo |  The repository name   | String | required |  |
+| <a id="lock_import.package-repo"></a>repo |  The repository name (if applying to a specific lock file).   | String | optional |  `""`  |
 | <a id="lock_import.package-site_hooks"></a>site_hooks |  A list of Python code snippets to execute on interpreter startup during builds.   | List of strings | optional |  `[]`  |
 | <a id="lock_import.package-site_paths"></a>site_paths |  Override the auto-detected top-level importable paths (packages, .pth files, standalone modules). Use forward slashes for nested namespaces (e.g. 'google/cloud/storage').   | List of strings | optional |  `[]`  |
+| <a id="lock_import.package-workspace"></a>workspace |  The workspace name (if applying to all members of a workspace).   | String | optional |  `""`  |
 
 

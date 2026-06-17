@@ -59,21 +59,27 @@ _cargo_lock_repo = repository_rule(
 
 def _maturin_overrides_impl(module_ctx):
     overrides = {}
-    cargo_targets = {}  # repo_name -> {pkg_name -> {cargo_lock}}
+    cargo_targets = {}  # key -> {pkg_name -> {cargo_lock}}
 
     for module in module_ctx.modules:
         for tag in module.tags.override:
+            if tag.repo and tag.workspace:
+                fail("override for '{}' specifies both repo and workspace".format(tag.name))
+            if not tag.repo and not tag.workspace:
+                fail("override for '{}' must specify either repo or workspace".format(tag.name))
+
             backend_attrs = encode_build_system_attrs(tag)
             if tag.cargo_lock:
                 backend_attrs["cargo_lock"] = json.encode(str(tag.cargo_lock))
 
-            overrides.setdefault(tag.repo, {})[tag.name] = {
+            key = "repo:" + tag.repo if tag.repo else "workspace:" + tag.workspace
+            overrides.setdefault(key, {})[tag.name] = {
                 "build_backend": "maturin_build",
                 "backend_attrs": backend_attrs,
             }
 
             # Track for cargo repo generation
-            cargo_targets.setdefault(tag.repo, {})[tag.name] = {
+            cargo_targets.setdefault(key, {})[tag.name] = {
                 "cargo_lock": str(tag.cargo_lock) if tag.cargo_lock else None,
                 "sdist": str(tag.sdist) if tag.sdist else None,
             }
@@ -85,10 +91,17 @@ def _maturin_overrides_impl(module_ctx):
     )
 
     # Generate <repo>_cargo repos with pycross_generate_cargo_lock targets
-    for repo_name, pkgs in cargo_targets.items():
+    for key, pkgs in cargo_targets.items():
+        # Strip the "repo:" or "workspace:" prefix for the repo name.
+        if key.startswith("repo:"):
+            bare_name = key[len("repo:"):]
+        elif key.startswith("workspace:"):
+            bare_name = key[len("workspace:"):]
+        else:
+            bare_name = key
         _cargo_lock_repo(
-            name = repo_name + "_cargo",
-            repo_name = repo_name,
+            name = bare_name + "_cargo",
+            repo_name = bare_name,
             packages = json.encode(pkgs),
         )
 
