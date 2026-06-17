@@ -40,6 +40,7 @@ pycross.configure_toolchains()
 use_repo(
     pycross,
     "rules_pycross_internal",
+    "rules_pycross_internal_config",
 )
 
 backends = use_extension("@rules_pycross//pycross/extensions:backends.bzl", "backends")

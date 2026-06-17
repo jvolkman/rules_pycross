@@ -2,7 +2,7 @@
 
 load("@bazel_features//:features.bzl", "bazel_features")
 load(
-    "@rules_pycross_internal//:defaults.bzl",
+    "@rules_pycross_internal_config//:defaults.bzl",
     default_glibc_version = "glibc_version",
     default_macos_version = "macos_version",
     default_musl_version = "musl_version",

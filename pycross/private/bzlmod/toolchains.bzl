@@ -2,7 +2,7 @@
 
 load("@bazel_features//:features.bzl", "bazel_features")
 load(
-    "@rules_pycross_internal//:defaults.bzl",
+    "@rules_pycross_internal_config//:defaults.bzl",
     "register_toolchains",
     default_platforms = "platforms",
     default_python_versions = "python_versions",

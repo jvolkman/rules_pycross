@@ -21,7 +21,6 @@ alias(
 )
 
 exports_files([
-    "defaults.bzl",
     "python.bzl",
 ] + {wheel_exports})
 """
@@ -242,8 +241,7 @@ def _pycross_internal_repo_impl(rctx):
         python_defs = Label("@rules_python//python:defs.bzl")
     rctx.file("python.bzl", _python_bzl.format(python_defs = python_defs))
 
-    # defaults.bzl
-    rctx.file("defaults.bzl", _defaults_bzl(rctx))
+    # defaults.bzl has been moved to rules_pycross_internal_config
 
     # Root build file
     rctx.file("BUILD.bazel", _root_build.format(
@@ -262,11 +260,24 @@ pycross_internal_repo = repository_rule(
             allow_single_file = True,
         ),
         "python_interpreter": attr.string(),
-    } | CREATE_ENVIRONMENTS_ATTRS | REGISTER_TOOLCHAINS_ATTRS,
+    },
 )
 
-def create_internal_repo(**kwargs):
+def _pycross_internal_config_repo_impl(rctx):
+    rctx.file("BUILD.bazel", 'exports_files(["defaults.bzl"])')
+    rctx.file("defaults.bzl", _defaults_bzl(rctx))
+
+pycross_internal_config_repo = repository_rule(
+    implementation = _pycross_internal_config_repo_impl,
+    attrs = CREATE_ENVIRONMENTS_ATTRS | REGISTER_TOOLCHAINS_ATTRS,
+)
+
+def create_internal_repo(environments_attrs, toolchains_attrs, **kwargs):
     pycross_internal_repo(
         name = INTERNAL_REPO_NAME,
         **kwargs
+    )
+    pycross_internal_config_repo(
+        name = "rules_pycross_internal_config",
+        **(environments_attrs | toolchains_attrs)
     )

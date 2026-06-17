@@ -52,9 +52,10 @@ def _pycross_impl(module_ctx):
     }
 
     create_internal_repo(
+        environments_attrs = environments_attrs,
+        toolchains_attrs = toolchains_attrs,
         python_interpreter_target = python_interpreter_target,
         python_defs_file = python_defs_file,
-        **(environments_attrs | toolchains_attrs)
     )
 
     if bazel_features.external_deps.extension_metadata_has_reproducible:

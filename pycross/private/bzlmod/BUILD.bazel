@@ -10,7 +10,7 @@ bzl_library(
         ":tag_attrs",
         "//pycross/private:toolchain_helpers",
         "@bazel_features//:features",
-        "@rules_pycross_internal//:defaults.bzl",
+        "@rules_pycross_internal_config//:defaults.bzl",
     ],
 )
 
