@@ -91,6 +91,16 @@ py_test(
     ],
 )
 
+py_test(
+    name = "resolve_base_prefix_test",
+    srcs = ["resolve_base_prefix_test.py"],
+    main = "resolve_base_prefix_test.py",
+    tags = ["unit"],
+    deps = [
+        "//pycross/private/build/tools:utils",
+    ],
+)
+
 resolved_lock_renderer_test_suite(name = "test_resolved_lock_renderer")
 
 override_helpers_test_suite(name = "test_override_helpers")

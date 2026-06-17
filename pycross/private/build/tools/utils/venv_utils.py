@@ -4,6 +4,7 @@ import subprocess
 import sys
 import textwrap
 from pathlib import Path
+from typing import Optional
 
 from pycross.private.build.tools.utils.context import BuildContext
 
@@ -15,6 +16,48 @@ def find_site_dir(env_dir: Path) -> Path:
         return next(lib_dir.glob("python*/site-packages"))
     except StopIteration:
         raise ValueError(f"Cannot find site-packages under {env_dir}")
+
+
+def resolve_base_prefix(
+    installed_value: Optional[str],
+    target_python: Path,
+    prefix: Path,
+) -> Optional[Path]:
+    """Resolve a base prefix (base_prefix or base_exec_prefix) for the build venv.
+
+    Prefers ``installed_base`` / ``installed_platbase`` from sysconfig when the
+    path actually exists on disk.  Falls back to the ``target_python``
+    grandparent heuristic when:
+
+    * The sysconfig value is missing, OR
+    * The sysconfig value points to a directory that doesn't exist — this
+      happens when Python outputs are copied through additional Bazel rules
+      (e.g., rpath correction on macOS) but sysconfig still references the
+      original location.
+
+    Args:
+        installed_value: The raw ``installed_base`` or ``installed_platbase``
+            string from sysconfig, or ``None``.
+        target_python: Absolute path to the target Python executable.
+        prefix: The sandbox execroot path (``ctx.prefix``).
+
+    Returns:
+        Resolved :class:`Path` or ``None`` (when the target python is not
+        under ``prefix`` and no sysconfig value is usable).
+    """
+    if installed_value:
+        candidate = Path(installed_value)
+        if candidate.exists():
+            return candidate
+        # installed_base is stale — fall back to grandparent if possible.
+        if prefix in target_python.parents:
+            return target_python.parent.parent
+        return None
+
+    # No sysconfig value at all — use the grandparent heuristic.
+    if prefix in target_python.parents:
+        return target_python.parent.parent
+    return None
 
 
 def build_standard_venv(ctx: BuildContext) -> None:
@@ -33,35 +76,16 @@ def build_standard_venv(ctx: BuildContext) -> None:
     with open(site_dir / "_pycross_sys_prefix.pth", "w") as f:
         f.write(f'import sys; sys.prefix = sys.exec_prefix = "{ctx.env_dir}"\n')
 
-    # Resolve base_prefix from queried sysconfig, falling back to the old
-    # target_python.parent.parent heuristic.  ctx.prefix is the sandbox execroot.
-    base_prefix = ctx.sysconfig_vars.get("installed_base")
-    if base_prefix:
-        base_prefix = Path(base_prefix)
-        if not base_prefix.exists():
-            # installed_base can be stale when Python outputs are copied
-            # through additional Bazel rules (e.g., rpath correction on macOS).
-            if ctx.prefix in ctx.target_python.parents:
-                base_prefix = ctx.target_python.parent.parent
-            else:
-                base_prefix = None
-    elif ctx.prefix in ctx.target_python.parents:
-        base_prefix = ctx.target_python.parent.parent
-    else:
-        base_prefix = None
-
-    platbase_prefix = ctx.sysconfig_vars.get("installed_platbase")
-    if platbase_prefix:
-        platbase_prefix = Path(platbase_prefix)
-        if not platbase_prefix.exists():
-            if ctx.prefix in ctx.target_python.parents:
-                platbase_prefix = ctx.target_python.parent.parent
-            else:
-                platbase_prefix = None
-    elif ctx.prefix in ctx.target_python.parents:
-        platbase_prefix = ctx.target_python.parent.parent
-    else:
-        platbase_prefix = None
+    base_prefix = resolve_base_prefix(
+        ctx.sysconfig_vars.get("installed_base"),
+        ctx.target_python,
+        ctx.prefix,
+    )
+    platbase_prefix = resolve_base_prefix(
+        ctx.sysconfig_vars.get("installed_platbase"),
+        ctx.target_python,
+        ctx.prefix,
+    )
 
     if base_prefix or platbase_prefix:
         parts = []
