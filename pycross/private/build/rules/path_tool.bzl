@@ -56,7 +56,7 @@ pycross_path_tool = rule(
             doc = "The executable target to wrap.",
             mandatory = True,
             executable = True,
-            cfg = "target",
+            cfg = "exec",
         ),
         "executable_name": attr.string(
             doc = "The name this tool should have on PATH during builds.",

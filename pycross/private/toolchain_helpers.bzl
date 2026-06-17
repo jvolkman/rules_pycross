@@ -225,6 +225,9 @@ def _get_registered_python_versions(rctx, python_toolchain_repo):
     return versions
 
 def _get_default_python_version_bzlmod(rctx, pythons_hub_repo):
+    if not pythons_hub_repo:
+        # Fallback for WORKSPACE mode
+        return "3.11.6"
     versions_bzl_file = Label("@@{}//:versions.bzl".format(pythons_hub_repo.workspace_name))
     content = rctx.read(versions_bzl_file)
     for line in content.splitlines():

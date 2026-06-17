@@ -1,7 +1,3 @@
-load(
-    "@rules_pycross//pycross:defs.bzl",
-    "pycross_uv_lock_model",
-)
 load("@rules_python//python:defs.bzl", "py_binary")
 
 py_binary(
@@ -11,12 +7,6 @@ py_binary(
         "@uv_deps//:amqp-mock",
         "@uv_deps//:ipython",
     ],
-)
-
-pycross_uv_lock_model(
-    name = "example_lock_model",
-    lock_file = "//:uv.lock",
-    project_file = "//:pyproject.toml",
 )
 
 exports_files(["matplotlib.patch"])

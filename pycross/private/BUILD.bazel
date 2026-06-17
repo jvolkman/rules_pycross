@@ -7,16 +7,6 @@ load(":util.bzl", "REPO_HTTP_DEPS")
 package(default_visibility = ["//visibility:public"])
 
 bzl_library(
-    name = "cc_toolchain_util",
-    deps = [
-        "@bazel_skylib//lib:collections",
-        "@bazel_tools//tools/build_defs/cc:action_names.bzl",
-        "@bazel_tools//tools/cpp:toolchain_utils.bzl",
-        "@rules_cc//cc/common",
-    ],
-)
-
-bzl_library(
     name = "internal_repo",
     srcs = ["internal_repo.bzl"],
     deps = [

@@ -99,7 +99,7 @@ def _pycross_wheel_library_impl(ctx):
     package_version = ctx.attr.package_version or ""
 
     site_paths = ctx.attr.site_paths
-    bin_paths = ctx.attr.bin_paths
+    bin_paths = ctx.attr.bin_paths + ctx.attr.console_scripts
     data_paths = ctx.attr.data_paths
     include_paths = ctx.attr.include_paths
     if not site_paths and PycrossPackageInfo in ctx.attr.wheel:
@@ -255,6 +255,7 @@ pycross_wheel_library = rule(
         ),
         "site_paths": attr.string_list(doc = "The list of site-packages paths provided by this wheel."),
         "bin_paths": attr.string_list(doc = "The list of bin paths provided by this wheel."),
+        "console_scripts": attr.string_list(doc = "Deprecated: Use bin_paths instead."),
         "data_paths": attr.string_list(doc = "The list of data paths provided by this wheel."),
         "include_paths": attr.string_list(doc = "The list of include paths provided by this wheel."),
         "_tool": attr.label(
@@ -275,7 +276,7 @@ def _pycross_wheel_metadata_impl(ctx):
             package_name = ctx.attr.package_name,
             package_version = ctx.attr.package_version,
             site_paths = ctx.attr.site_paths,
-            bin_paths = ctx.attr.bin_paths,
+            bin_paths = ctx.attr.bin_paths + ctx.attr.console_scripts,
             data_paths = ctx.attr.data_paths,
             include_paths = ctx.attr.include_paths,
         ),
@@ -289,6 +290,7 @@ pycross_wheel_metadata = rule(
         "package_version": attr.string(),
         "site_paths": attr.string_list(doc = "The list of site-packages paths provided by this wheel."),
         "bin_paths": attr.string_list(doc = "The list of bin paths provided by this wheel."),
+        "console_scripts": attr.string_list(doc = "Deprecated: Use bin_paths instead."),
         "data_paths": attr.string_list(doc = "The list of data paths provided by this wheel."),
         "include_paths": attr.string_list(doc = "The list of include paths provided by this wheel."),
     },

@@ -185,9 +185,10 @@ configuration (e.g., Meson cross files).
 <pre>
 load("@rules_pycross//pycross:defs.bzl", "pycross_wheel_library")
 
-pycross_wheel_library(<a href="#pycross_wheel_library-name">name</a>, <a href="#pycross_wheel_library-deps">deps</a>, <a href="#pycross_wheel_library-bin_paths">bin_paths</a>, <a href="#pycross_wheel_library-data_paths">data_paths</a>, <a href="#pycross_wheel_library-experimental_venvs_site_packages">experimental_venvs_site_packages</a>,
-                      <a href="#pycross_wheel_library-include_paths">include_paths</a>, <a href="#pycross_wheel_library-install_exclude_globs">install_exclude_globs</a>, <a href="#pycross_wheel_library-package_name">package_name</a>, <a href="#pycross_wheel_library-package_version">package_version</a>,
-                      <a href="#pycross_wheel_library-post_install_patches">post_install_patches</a>, <a href="#pycross_wheel_library-python_version">python_version</a>, <a href="#pycross_wheel_library-site_paths">site_paths</a>, <a href="#pycross_wheel_library-wheel">wheel</a>)
+pycross_wheel_library(<a href="#pycross_wheel_library-name">name</a>, <a href="#pycross_wheel_library-deps">deps</a>, <a href="#pycross_wheel_library-bin_paths">bin_paths</a>, <a href="#pycross_wheel_library-console_scripts">console_scripts</a>, <a href="#pycross_wheel_library-data_paths">data_paths</a>,
+                      <a href="#pycross_wheel_library-experimental_venvs_site_packages">experimental_venvs_site_packages</a>, <a href="#pycross_wheel_library-include_paths">include_paths</a>, <a href="#pycross_wheel_library-install_exclude_globs">install_exclude_globs</a>,
+                      <a href="#pycross_wheel_library-package_name">package_name</a>, <a href="#pycross_wheel_library-package_version">package_version</a>, <a href="#pycross_wheel_library-post_install_patches">post_install_patches</a>, <a href="#pycross_wheel_library-python_version">python_version</a>, <a href="#pycross_wheel_library-site_paths">site_paths</a>,
+                      <a href="#pycross_wheel_library-wheel">wheel</a>)
 </pre>
 
 
@@ -200,6 +201,7 @@ pycross_wheel_library(<a href="#pycross_wheel_library-name">name</a>, <a href="#
 | <a id="pycross_wheel_library-name"></a>name |  A unique name for this target.   | <a href="https://bazel.build/concepts/labels#target-names">Name</a> | required |  |
 | <a id="pycross_wheel_library-deps"></a>deps |  A list of this wheel's Python library dependencies.   | <a href="https://bazel.build/concepts/labels">List of labels</a> | optional |  `[]`  |
 | <a id="pycross_wheel_library-bin_paths"></a>bin_paths |  The list of bin paths provided by this wheel.   | List of strings | optional |  `[]`  |
+| <a id="pycross_wheel_library-console_scripts"></a>console_scripts |  Deprecated: Use bin_paths instead.   | List of strings | optional |  `[]`  |
 | <a id="pycross_wheel_library-data_paths"></a>data_paths |  The list of data paths provided by this wheel.   | List of strings | optional |  `[]`  |
 | <a id="pycross_wheel_library-experimental_venvs_site_packages"></a>experimental_venvs_site_packages |  -   | <a href="https://bazel.build/concepts/labels">Label</a> | optional |  `"@@rules_python+//python/config_settings:venvs_site_packages"`  |
 | <a id="pycross_wheel_library-include_paths"></a>include_paths |  The list of include paths provided by this wheel.   | List of strings | optional |  `[]`  |
