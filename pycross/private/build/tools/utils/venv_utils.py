@@ -38,6 +38,13 @@ def build_standard_venv(ctx: BuildContext) -> None:
     base_prefix = ctx.sysconfig_vars.get("installed_base")
     if base_prefix:
         base_prefix = Path(base_prefix)
+        if not base_prefix.exists():
+            # installed_base can be stale when Python outputs are copied
+            # through additional Bazel rules (e.g., rpath correction on macOS).
+            if ctx.prefix in ctx.target_python.parents:
+                base_prefix = ctx.target_python.parent.parent
+            else:
+                base_prefix = None
     elif ctx.prefix in ctx.target_python.parents:
         base_prefix = ctx.target_python.parent.parent
     else:
@@ -46,6 +53,11 @@ def build_standard_venv(ctx: BuildContext) -> None:
     platbase_prefix = ctx.sysconfig_vars.get("installed_platbase")
     if platbase_prefix:
         platbase_prefix = Path(platbase_prefix)
+        if not platbase_prefix.exists():
+            if ctx.prefix in ctx.target_python.parents:
+                platbase_prefix = ctx.target_python.parent.parent
+            else:
+                platbase_prefix = None
     elif ctx.prefix in ctx.target_python.parents:
         platbase_prefix = ctx.target_python.parent.parent
     else:
