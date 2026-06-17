@@ -251,32 +251,26 @@ def _lock_import_impl(module_ctx):
             _check_unique_lock_repo(lock_owners, module, tag)
             lock_repos[tag.repo] = _lock_struct(module_ctx, tag)
 
-    # Iterate over the various from_pdm and from_poetry tags and create lock models
+    # Iterate over the various import tags and create lock models
     for module in module_ctx.modules:
-        for tag in module.tags.import_pdm:
-            model = {attr: getattr(tag, attr) for attr in PDM_IMPORT_ATTRS}
-            model["model_type"] = "pdm"
-            model["project_file"] = str(model["project_file"])
-            model["lock_file"] = str(model["lock_file"])
-            lock_model_structs[tag.repo] = json.encode(model)
-        for tag in module.tags.import_poetry:
-            model = {attr: getattr(tag, attr) for attr in POETRY_IMPORT_ATTRS}
-            model["model_type"] = "poetry"
-            model["project_file"] = str(model["project_file"])
-            model["lock_file"] = str(model["lock_file"])
-            lock_model_structs[tag.repo] = json.encode(model)
-        for tag in module.tags.import_uv:
-            model = {attr: getattr(tag, attr) for attr in UV_IMPORT_ATTRS}
-            model["model_type"] = "uv"
-            model["project_file"] = str(model["project_file"])
-            model["lock_file"] = str(model["lock_file"])
-            lock_model_structs[tag.repo] = json.encode(model)
-        for tag in module.tags.import_pylock:
-            model = {attr: getattr(tag, attr) for attr in PYLOCK_IMPORT_ATTRS}
-            model["model_type"] = "pylock"
-            model["project_file"] = str(model["project_file"])
-            model["lock_file"] = str(model["lock_file"])
-            lock_model_structs[tag.repo] = json.encode(model)
+        for tags, model_type, attrs in [
+            (module.tags.import_pdm, "pdm", PDM_IMPORT_ATTRS),
+            (module.tags.import_poetry, "poetry", POETRY_IMPORT_ATTRS),
+            (module.tags.import_uv, "uv", UV_IMPORT_ATTRS),
+            (module.tags.import_pylock, "pylock", PYLOCK_IMPORT_ATTRS),
+        ]:
+            for tag in tags:
+                model = {attr: getattr(tag, attr) for attr in attrs}
+                model["model_type"] = model_type
+
+                # These are labels, so we need to convert them to strings
+                if "project_file" in model and model["project_file"] != None:
+                    model["project_file"] = str(model["project_file"])
+                else:
+                    model["project_file"] = ""
+                model["lock_file"] = str(model["lock_file"])
+
+                lock_model_structs[tag.repo] = json.encode(model)
 
     # --- UV workspace handling ---
 
