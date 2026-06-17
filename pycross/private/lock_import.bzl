@@ -12,6 +12,9 @@ load(
     "COMMON_IMPORT_ATTRS",
     "PACKAGE_ATTRS",
     "PDM_IMPORT_ATTRS",
+    "PDM_WORKSPACE_ATTRS",
+    "PDM_WORKSPACE_MEMBERS_ATTRS",
+    "PDM_WORKSPACE_MEMBER_ATTRS",
     "POETRY_IMPORT_ATTRS",
     "PYLOCK_IMPORT_ATTRS",
     "UV_IMPORT_ATTRS",
@@ -173,7 +176,7 @@ def _normalize_package_tag(tag):
         include_paths = tag.include_paths,
     )
 
-def _discover_workspace_members(mctx, lock_file_label):
+def _discover_uv_workspace_members(mctx, lock_file_label):
     """Parse uv.lock and return workspace members (editable packages).
 
     Args:
@@ -199,6 +202,24 @@ def _discover_workspace_members(mctx, lock_file_label):
             ))
 
         # Skip virtual entries (workspace roots with package = false)
+    return members
+
+def _discover_pdm_workspace_members(mctx, lock_file_label):
+    """Parse pdm.lock and return workspace members (local packages)."""
+    lock_content = mctx.read(lock_file_label)
+    lock_data = decode(lock_content)
+
+    packages_list = lock_data.get("package", [])
+
+    members = []
+    for pkg in packages_list:
+        # PDM workspaces represent local members with a "path" attribute and no "files"
+        if "path" in pkg and "files" not in pkg:
+            members.append(struct(
+                name = pkg["name"],
+                path = pkg["path"],
+            ))
+
     return members
 
 def _resolve_member_project_file(lock_file_label, member_path):
@@ -239,6 +260,86 @@ def _get_member_group_attrs(members_tag, override_tag):
         all_development_groups = override_tag.all_development_groups if override_tag else members_tag.all_development_groups if hasattr(members_tag, "all_development_groups") else False,
     )
 
+def _process_workspaces(
+        module_ctx,
+        lock_owners,
+        lock_repos,
+        lock_model_structs,
+        workspace_tag_name,
+        member_tag_name,
+        members_tag_name,
+        discover_members_fn,
+        model_type):
+    # Collect workspace definitions
+    workspaces = {}
+    for module in module_ctx.modules:
+        for tag in getattr(module.tags, workspace_tag_name):
+            if tag.name in workspaces:
+                fail("Duplicate workspace name: '{}'".format(tag.name))
+            workspaces[tag.name] = struct(
+                tag = tag,
+                module = module,
+            )
+
+    # Collect per-member overrides indexed by (workspace, project)
+    member_overrides = {}
+    for module in module_ctx.modules:
+        for tag in getattr(module.tags, member_tag_name):
+            if tag.workspace not in workspaces:
+                fail("{} references non-existent workspace: '{}'".format(member_tag_name, tag.workspace))
+            key = (tag.workspace, tag.project)
+            if key in member_overrides:
+                fail("Duplicate {} for project '{}' in workspace '{}'".format(member_tag_name, tag.project, tag.workspace))
+            member_overrides[key] = tag
+
+    # Process bulk member imports
+    for module in module_ctx.modules:
+        for tag in getattr(module.tags, members_tag_name):
+            if tag.workspace not in workspaces:
+                fail("{} references non-existent workspace: '{}'".format(members_tag_name, tag.workspace))
+
+            ws_info = workspaces[tag.workspace]
+            ws_tag = ws_info.tag
+
+            # Auto-discover members from lock file
+            discovered = discover_members_fn(module_ctx, ws_tag.lock_file)
+            excluded = {p: True for p in tag.excluded_projects}
+
+            for member in discovered:
+                if member.name in excluded:
+                    continue
+
+                override = member_overrides.get((tag.workspace, member.name))
+
+                # Determine repo name
+                normalized_name = sanitize_name(member.name)
+                if override and override.repo:
+                    repo_name = override.repo
+                else:
+                    repo_name = tag.repo_pattern.format(member = normalized_name)
+
+                # Determine project_file
+                if override and override.project_file:
+                    project_file = override.project_file
+                else:
+                    project_file = _resolve_member_project_file(ws_tag.lock_file, member.path)
+
+                # Get group attrs (override wins)
+                group_attrs = _get_member_group_attrs(tag, override)
+
+                # Register as a lock repo
+                _check_unique_repo_name(lock_owners, module.name, repo_name)
+                lock_repos[repo_name] = _workspace_lock_struct(module_ctx, ws_tag, repo_name, tag.workspace)
+
+                model = dict(
+                    model_type = model_type,
+                    project_file = str(project_file),
+                    lock_file = str(ws_tag.lock_file),
+                    require_static_urls = getattr(ws_tag, "require_static_urls", False),
+                    **group_attrs
+                )
+                lock_model_structs[repo_name] = json.encode(model)
+
 def _lock_import_impl(module_ctx):
     lock_owners = {}
     lock_repos = {}
@@ -272,79 +373,29 @@ def _lock_import_impl(module_ctx):
 
                 lock_model_structs[tag.repo] = json.encode(model)
 
-    # --- UV workspace handling ---
+    _process_workspaces(
+        module_ctx,
+        lock_owners,
+        lock_repos,
+        lock_model_structs,
+        workspace_tag_name = "import_uv_workspace",
+        member_tag_name = "uv_workspace_member",
+        members_tag_name = "uv_workspace_members",
+        discover_members_fn = _discover_uv_workspace_members,
+        model_type = "uv",
+    )
 
-    # Collect workspace definitions
-    uv_workspaces = {}
-    for module in module_ctx.modules:
-        for tag in module.tags.import_uv_workspace:
-            if tag.name in uv_workspaces:
-                fail("Duplicate uv workspace name: '{}'".format(tag.name))
-            uv_workspaces[tag.name] = struct(
-                tag = tag,
-                module = module,
-            )
-
-    # Collect per-member overrides indexed by (workspace, project)
-    member_overrides = {}
-    for module in module_ctx.modules:
-        for tag in module.tags.uv_workspace_member:
-            if tag.workspace not in uv_workspaces:
-                fail("uv_workspace_member references non-existent workspace: '{}'".format(tag.workspace))
-            key = (tag.workspace, tag.project)
-            if key in member_overrides:
-                fail("Duplicate uv_workspace_member for project '{}' in workspace '{}'".format(tag.project, tag.workspace))
-            member_overrides[key] = tag
-
-    # Process bulk member imports
-    for module in module_ctx.modules:
-        for tag in module.tags.uv_workspace_members:
-            if tag.workspace not in uv_workspaces:
-                fail("uv_workspace_members references non-existent workspace: '{}'".format(tag.workspace))
-
-            ws_info = uv_workspaces[tag.workspace]
-            ws_tag = ws_info.tag
-
-            # Auto-discover members from uv.lock
-            discovered = _discover_workspace_members(module_ctx, ws_tag.lock_file)
-            excluded = {p: True for p in tag.excluded_projects}
-
-            for member in discovered:
-                if member.name in excluded:
-                    continue
-
-                override = member_overrides.get((tag.workspace, member.name))
-
-                # Determine repo name
-                normalized_name = sanitize_name(member.name)
-                if override and override.repo:
-                    repo_name = override.repo
-                else:
-                    repo_name = tag.repo_pattern.format(member = normalized_name)
-
-                # Determine project_file
-                if override and override.project_file:
-                    project_file = override.project_file
-                else:
-                    project_file = _resolve_member_project_file(ws_tag.lock_file, member.path)
-
-                # Get group attrs (override wins)
-                group_attrs = _get_member_group_attrs(tag, override)
-
-                # Register as a lock repo
-                _check_unique_repo_name(lock_owners, module.name, repo_name)
-                lock_repos[repo_name] = _workspace_lock_struct(module_ctx, ws_tag, repo_name, tag.workspace)
-
-                model = dict(
-                    model_type = "uv",
-                    project_file = str(project_file),
-                    lock_file = str(ws_tag.lock_file),
-                    require_static_urls = ws_tag.require_static_urls,
-                    **group_attrs
-                )
-                lock_model_structs[repo_name] = json.encode(model)
-
-    # --- End UV workspace handling ---
+    _process_workspaces(
+        module_ctx,
+        lock_owners,
+        lock_repos,
+        lock_model_structs,
+        workspace_tag_name = "import_pdm_workspace",
+        member_tag_name = "pdm_workspace_member",
+        members_tag_name = "pdm_workspace_members",
+        discover_members_fn = _discover_pdm_workspace_members,
+        model_type = "pdm",
+    )
 
     # Add package attributes
     for module in module_ctx.modules:
@@ -388,6 +439,18 @@ _import_pylock_tag = tag_class(
     doc = "Import a pylock.toml lock file.",
     attrs = PYLOCK_IMPORT_ATTRS | COMMON_IMPORT_ATTRS | COMMON_ATTRS,
 )
+_import_pdm_workspace_tag = tag_class(
+    doc = "Import a PDM workspace.",
+    attrs = PDM_WORKSPACE_ATTRS | WORKSPACE_COMMON_ATTRS,
+)
+_pdm_workspace_members_tag = tag_class(
+    doc = "Auto-discover and import all workspace members from a pdm.lock file.",
+    attrs = PDM_WORKSPACE_MEMBERS_ATTRS | WORKSPACE_MEMBER_COMMON_ATTRS,
+)
+_pdm_workspace_member_tag = tag_class(
+    doc = "Override settings for a specific PDM workspace member.",
+    attrs = PDM_WORKSPACE_MEMBER_ATTRS | WORKSPACE_MEMBER_COMMON_ATTRS,
+)
 _import_uv_workspace_tag = tag_class(
     doc = "Import a uv workspace. Define members with uv_workspace_members and uv_workspace_member.",
     attrs = UV_WORKSPACE_ATTRS | WORKSPACE_COMMON_ATTRS,
@@ -412,6 +475,9 @@ lock_import = module_extension(
         import_poetry = _import_poetry_tag,
         import_uv = _import_uv_tag,
         import_pylock = _import_pylock_tag,
+        import_pdm_workspace = _import_pdm_workspace_tag,
+        pdm_workspace_members = _pdm_workspace_members_tag,
+        pdm_workspace_member = _pdm_workspace_member_tag,
         import_uv_workspace = _import_uv_workspace_tag,
         uv_workspace_members = _uv_workspace_members_tag,
         uv_workspace_member = _uv_workspace_member_tag,

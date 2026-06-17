@@ -1,0 +1,16 @@
+[project]
+name = "workspace-root"
+version = "0.1.0"
+description = "Test workspace with multiple members"
+requires-python = ">=3.10, <3.13"
+[tool.pdm]
+distribution = false
+
+[tool.pdm.dev-dependencies]
+dev = [
+    "-e project-a @ file:///${PROJECT_ROOT}/project_a",
+    "-e project-b @ file:///${PROJECT_ROOT}/project_b",
+]
+
+[tool.pdm.workspace]
+members = ["project_a", "project_b"]

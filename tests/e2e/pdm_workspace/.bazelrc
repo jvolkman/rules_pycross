@@ -1,0 +1,8 @@
+try-import %workspace%/../../../.bazelrc
+common --disk_cache .cache
+try-import %workspace%/.bazelrc.user
+try-import %workspace%/../shared/.bazelrc.user
+
+# Enable the venv/site-packages layout for py_binary/py_test.
+build --@rules_python//python/config_settings:bootstrap_impl=script
+build --@rules_python//python/config_settings:venvs_site_packages=yes

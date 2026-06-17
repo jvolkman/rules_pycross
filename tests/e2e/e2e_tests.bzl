@@ -23,6 +23,7 @@ def define_e2e_tests():
         "namespace_pkgs",
         "gazelle_integration",
         "uv_workspace",
+        "pdm_workspace",
     ]:
         extra_tags = ["build"] if ws in _BUILD_WORKSPACES else []
         sh_test(
