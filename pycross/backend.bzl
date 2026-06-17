@@ -49,9 +49,12 @@ load(
     _CC_TOOLCHAINS = "CC_TOOLCHAINS",
     _CC_TOOLCHAIN_ATTRS = "CC_TOOLCHAIN_ATTRS",
     _COMMON_BUILD_ATTRS = "COMMON_BUILD_ATTRS",
+    _REPAIR_BUILD_ATTRS = "REPAIR_BUILD_ATTRS",
+    _TOOL_EXTRACT_ATTRS = "TOOL_EXTRACT_ATTRS",
     _get_unzipped_wheel = "get_unzipped_wheel",
     _get_wheel = "get_wheel",
     _group_tool_deps = "group_tool_deps",
+    _resolve_path_tools = "resolve_path_tools",
 )
 
 # Providers
@@ -73,11 +76,14 @@ CC_BUILD_ATTRS = _CC_BUILD_ATTRS
 CC_TOOLCHAIN_ATTRS = _CC_TOOLCHAIN_ATTRS
 CC_TOOLCHAINS = _CC_TOOLCHAINS
 CC_FRAGMENTS = _CC_FRAGMENTS
+REPAIR_BUILD_ATTRS = _REPAIR_BUILD_ATTRS
+TOOL_EXTRACT_ATTRS = _TOOL_EXTRACT_ATTRS
 
 # Utilities
 get_unzipped_wheel = _get_unzipped_wheel
 get_wheel = _get_wheel
 group_tool_deps = _group_tool_deps
+resolve_path_tools = _resolve_path_tools
 
 # Override extension helpers
 make_override_extension = _make_override_extension

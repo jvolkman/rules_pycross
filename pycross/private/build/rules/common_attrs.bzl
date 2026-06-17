@@ -6,8 +6,47 @@ load(
     "//pycross/private:providers.bzl",
     "PycrossExtractedWheelInfo",
     "PycrossPackageInfo",
+    "PycrossPathToolInfo",
 )
 load("//pycross/private/build:transitions.bzl", "pycross_exec_platform_transition")
+
+def resolve_path_tools(ctx):
+    """Resolve path_tools attr into a list of tool executable structs.
+
+    Each entry in ``ctx.attr.path_tools`` is either:
+    - A ``pycross_path_tool`` target (carries ``PycrossPathToolInfo``) — uses
+      the custom name from the provider.
+    - A plain executable target — uses the executable's basename.
+
+    Args:
+        ctx: Rule context with a ``path_tools`` label_list attr.
+
+    Returns:
+        list[struct]: Each struct has ``name``, ``file``, and ``files_to_run``.
+    """
+    result = []
+    for target in ctx.attr.path_tools:
+        if PycrossPathToolInfo in target:
+            info = target[PycrossPathToolInfo]
+            result.append(struct(
+                name = info.name,
+                file = info.executable,
+                files_to_run = target[DefaultInfo].files_to_run,
+            ))
+        else:
+            exe = target[DefaultInfo].files_to_run.executable
+            if not exe:
+                files = target[DefaultInfo].files.to_list()
+                if files:
+                    exe = files[0]
+            if not exe:
+                fail("Tool target must provide an executable: " + str(target.label))
+            result.append(struct(
+                name = exe.basename,
+                file = exe,
+                files_to_run = target[DefaultInfo].files_to_run,
+            ))
+    return result
 
 COMMON_BUILD_ATTRS = {
     "sdist": attr.label(mandatory = True, allow_single_file = True),
@@ -71,6 +110,32 @@ CC_BUILD_ATTRS = {
         doc = "A list of binary targets placed on PATH during the build. " +
               "Targets can be raw executables or pycross_path_tool targets.",
         cfg = pycross_exec_platform_transition,
+    ),
+}
+
+REPAIR_BUILD_ATTRS = {
+    "target_environment": attr.label(
+        doc = "The target environment mapping JSON (resolved dynamically via alias filegroup).",
+        default = Label("@pycross_environments//:current"),
+        allow_files = True,
+    ),
+    "_repair_tool": attr.label(
+        default = Label("//pycross/private/build/tools:repair_wheel_hook"),
+        executable = True,
+        cfg = "exec",
+    ),
+}
+
+TOOL_EXTRACT_ATTRS = {
+    "_extract_console_script": attr.label(
+        default = Label("//pycross/private/tools:extract_console_script"),
+        executable = True,
+        cfg = "exec",
+    ),
+    "_extract_wheel_bin": attr.label(
+        default = Label("//pycross/private/tools:extract_wheel_bin"),
+        executable = True,
+        cfg = "exec",
     ),
 }
 

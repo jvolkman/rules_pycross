@@ -7,6 +7,8 @@ load(
     "CC_TOOLCHAINS",
     "CC_TOOLCHAIN_ATTRS",
     "COMMON_BUILD_ATTRS",
+    "REPAIR_BUILD_ATTRS",
+    "TOOL_EXTRACT_ATTRS",
     "extract_cc_layer",
     "get_unzipped_wheel",
     "group_tool_deps",
@@ -14,6 +16,7 @@ load(
     "register_bin_extract_action",
     "register_pep517_action",
     "register_repair_action",
+    "resolve_path_tools",
 )
 load("//private:rust_layer.bzl", "extract_rust_layer")
 
@@ -26,14 +29,8 @@ def _get_executable_file(val):
 
 def _maturin_build_impl(ctx):
     # 1. Extract tools
-    tool_executables = []
-    has_maturin = False
-    for target in ctx.attr.path_tools:
-        exe = target[DefaultInfo].files_to_run.executable
-        name = exe.basename
-        if "maturin" in name.lower():
-            has_maturin = True
-        tool_executables.append(struct(name = name, file = exe, files_to_run = target[DefaultInfo].files_to_run))
+    tool_executables = resolve_path_tools(ctx)
+    has_maturin = any(["maturin" in t.name.lower() for t in tool_executables])
 
     tool_deps = group_tool_deps(ctx.attr.tool_deps)
 
@@ -114,7 +111,7 @@ def _maturin_build_impl(ctx):
 
 maturin_build = rule(
     implementation = _maturin_build_impl,
-    attrs = COMMON_BUILD_ATTRS | CC_BUILD_ATTRS | CC_TOOLCHAIN_ATTRS | {
+    attrs = COMMON_BUILD_ATTRS | CC_BUILD_ATTRS | CC_TOOLCHAIN_ATTRS | REPAIR_BUILD_ATTRS | TOOL_EXTRACT_ATTRS | {
         "tool_deps": attr.label_list(
             cfg = pycross_exec_platform_transition,
         ),
@@ -127,26 +124,6 @@ maturin_build = rule(
         ),
         "_builder": attr.label(
             default = "@rules_pycross//pycross/private/build/tools:maturin_builder",
-            executable = True,
-            cfg = "exec",
-        ),
-        "_repair_tool": attr.label(
-            default = Label("@rules_pycross//pycross/private/build/tools:repair_wheel_hook"),
-            executable = True,
-            cfg = "exec",
-        ),
-        "target_environment": attr.label(
-            doc = "The target environment mapping JSON (resolved dynamically via alias filegroup).",
-            default = Label("@pycross_environments//:current"),
-            allow_files = True,
-        ),
-        "_extract_console_script": attr.label(
-            default = "@rules_pycross//pycross/private/tools:extract_console_script",
-            executable = True,
-            cfg = "exec",
-        ),
-        "_extract_wheel_bin": attr.label(
-            default = "@rules_pycross//pycross/private/tools:extract_wheel_bin",
             executable = True,
             cfg = "exec",
         ),

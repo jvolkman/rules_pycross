@@ -1,12 +1,11 @@
 """Implementation of the cmake_build rule."""
 
-load("//pycross/private:providers.bzl", "PycrossPathToolInfo")
 load("//pycross/private/build:transitions.bzl", "pycross_exec_platform_transition")
 load("//pycross/private/build/actions:cc_layer.bzl", "extract_cc_layer")
 load("//pycross/private/build/actions:pep517_action.bzl", "register_pep517_action")
 load("//pycross/private/build/actions:repair_action.bzl", "register_repair_action")
 load("//pycross/private/build/actions:tool_extract.bzl", "register_bin_extract_action", "register_console_script_extract_action")
-load(":common_attrs.bzl", "CC_BUILD_ATTRS", "CC_FRAGMENTS", "CC_TOOLCHAINS", "CC_TOOLCHAIN_ATTRS", "COMMON_BUILD_ATTRS", "get_unzipped_wheel", "group_tool_deps")
+load(":common_attrs.bzl", "CC_BUILD_ATTRS", "CC_FRAGMENTS", "CC_TOOLCHAINS", "CC_TOOLCHAIN_ATTRS", "COMMON_BUILD_ATTRS", "REPAIR_BUILD_ATTRS", "TOOL_EXTRACT_ATTRS", "get_unzipped_wheel", "group_tool_deps", "resolve_path_tools")
 
 def _cmake_build_impl(ctx):
     # 1. Extract tools
@@ -32,27 +31,7 @@ def _cmake_build_impl(ctx):
         binary_name = "ninja",
     ))
 
-    for target in ctx.attr.path_tools:
-        if PycrossPathToolInfo in target:
-            tool_info = target[PycrossPathToolInfo]
-            tool_executables.append(struct(
-                name = tool_info.name,
-                file = tool_info.executable,
-                files_to_run = target[DefaultInfo].files_to_run,
-            ))
-        else:
-            exe = target[DefaultInfo].files_to_run.executable
-            if not exe:
-                files = target[DefaultInfo].files.to_list()
-                if files:
-                    exe = files[0]
-            if not exe:
-                fail("Tool target must provide an executable: " + str(target.label))
-            tool_executables.append(struct(
-                name = exe.basename,
-                file = exe,
-                files_to_run = target[DefaultInfo].files_to_run,
-            ))
+    tool_executables.extend(resolve_path_tools(ctx))
 
     # 2. Extract CC environment
     cc_layer = extract_cc_layer(
@@ -105,32 +84,12 @@ def _cmake_build_impl(ctx):
 
 cmake_build = rule(
     implementation = _cmake_build_impl,
-    attrs = COMMON_BUILD_ATTRS | CC_BUILD_ATTRS | CC_TOOLCHAIN_ATTRS | {
+    attrs = COMMON_BUILD_ATTRS | CC_BUILD_ATTRS | CC_TOOLCHAIN_ATTRS | REPAIR_BUILD_ATTRS | TOOL_EXTRACT_ATTRS | {
         "tool_deps": attr.label_list(
             cfg = pycross_exec_platform_transition,
         ),
         "_builder": attr.label(
             default = "//pycross/private/build/tools:cmake_builder",
-            executable = True,
-            cfg = "exec",
-        ),
-        "_repair_tool": attr.label(
-            default = Label("//pycross/private/build/tools:repair_wheel_hook"),
-            executable = True,
-            cfg = "exec",
-        ),
-        "target_environment": attr.label(
-            doc = "The target environment mapping JSON (resolved dynamically via alias filegroup).",
-            default = Label("@pycross_environments//:current"),
-            allow_files = True,
-        ),
-        "_extract_console_script": attr.label(
-            default = "//pycross/private/tools:extract_console_script",
-            executable = True,
-            cfg = "exec",
-        ),
-        "_extract_wheel_bin": attr.label(
-            default = "//pycross/private/tools:extract_wheel_bin",
             executable = True,
             cfg = "exec",
         ),

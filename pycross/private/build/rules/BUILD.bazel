@@ -69,8 +69,3 @@ bzl_library(
         "//pycross/private:providers",
     ],
 )
-
-bzl_library(
-    name = "backend_config",
-    srcs = ["backend_config.bzl"],
-)
