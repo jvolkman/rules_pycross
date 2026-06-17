@@ -2,6 +2,7 @@
 
 load("@bazel_tools//tools/build_defs/repo:utils.bzl", "read_user_netrc", "use_netrc")
 load("//pycross/private:internal_repo.bzl", "exec_internal_tool")
+load("//pycross/private:pypi_file.bzl", "get_pypi_file_url")
 
 _BUILD_TEMPLATE = """\
 load("@rules_pycross//pycross/private:wheel_library.bzl", "pycross_wheel_metadata")
@@ -24,38 +25,14 @@ def _pycross_wheel_file_impl(rctx):
 
     urls = rctx.attr.urls
     if not urls:
-        # PyPI JSON API mode (replaces pypi_file logic)
-        index_url = rctx.attr.index.rstrip("/")
-        api_url = "{}/pypi/{}/{}/json".format(
-            index_url,
+        urls = [get_pypi_file_url(
+            rctx,
+            netrc,
+            rctx.attr.index,
             rctx.attr.package_name,
             rctx.attr.package_version,
-        )
-        rctx.download(
-            api_url,
-            "pypi_metadata.json",
-            auth = use_netrc(netrc, [api_url], {}),
-        )
-        metadata = json.decode(rctx.read("pypi_metadata.json"))
-        rctx.delete("pypi_metadata.json")
-
-        for release_file in metadata.get("urls", []):
-            if release_file["filename"] == rctx.attr.filename:
-                url = release_file["url"]
-
-                # Handle relative URLs
-                if not url.startswith("http"):
-                    simple_base = index_url + "/simple/" + rctx.attr.package_name
-                    if url.startswith("../../"):
-                        url = index_url + "/" + url[6:]
-                    elif url.startswith("/"):
-                        url = index_url + url
-                    else:
-                        url = simple_base + "/" + url
-                urls = [url]
-                break
-        if not urls:
-            fail("File {} not found in PyPI index".format(rctx.attr.filename))
+            rctx.attr.filename,
+        )]
 
     # Download the wheel file directly
     rctx.download(
