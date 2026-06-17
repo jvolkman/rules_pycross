@@ -9,7 +9,6 @@ package(default_visibility = ["//visibility:public"])
 
 bzl_library(
     name = "cc_toolchain_util",
-    srcs = ["cc_toolchain_util.bzl"],
     deps = [
         "@bazel_skylib//lib:collections",
         "@bazel_tools//tools/build_defs/cc:action_names.bzl",

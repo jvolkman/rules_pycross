@@ -4,7 +4,7 @@ load("@bazel_tools//tools/cpp:toolchain_utils.bzl", "find_cpp_toolchain")
 load("@rules_cc//cc/common:cc_common.bzl", "cc_common")
 load("@rules_cc//cc/common:cc_info.bzl", "CcInfo")
 load(
-    "//pycross/private:cc_toolchain_util.bzl",
+    "//pycross/private/build:cc_toolchain_util.bzl",
     "CC_DISABLED_FEATURES",
     "absolutize_path_in_str",
     "get_flags_info",

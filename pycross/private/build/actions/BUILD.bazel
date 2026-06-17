@@ -6,7 +6,7 @@ bzl_library(
     name = "cc_layer",
     srcs = ["cc_layer.bzl"],
     deps = [
-        "//pycross/private:cc_toolchain_util",
+        "//pycross/private/build:cc_toolchain_util",
         "@bazel_tools//tools/cpp:toolchain_utils.bzl",
     ],
 )
@@ -24,7 +24,7 @@ bzl_library(
     name = "repair_action",
     srcs = ["repair_action.bzl"],
     deps = [
-        "//pycross/private:cc_toolchain_util",
+        "//pycross/private/build:cc_toolchain_util",
     ],
 )
 

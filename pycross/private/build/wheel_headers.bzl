@@ -2,11 +2,11 @@
 
 load("@rules_cc//cc/common:cc_common.bzl", "cc_common")
 load("@rules_cc//cc/common:cc_info.bzl", "CcInfo")
+load("//pycross/private:providers.bzl", "PycrossExtractedWheelInfo")
 load(
-    "//pycross/private:cc_toolchain_util.bzl",
+    "//pycross/private/build:cc_toolchain_util.bzl",
     "absolutize_path_in_str",
 )
-load("//pycross/private:providers.bzl", "PycrossExtractedWheelInfo")
 
 def _pycross_wheel_headers_impl(ctx):
     unzipped_wheel = getattr(ctx.attr.wheel[PycrossExtractedWheelInfo], "site_packages", None)

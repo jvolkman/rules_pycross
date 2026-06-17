@@ -2,7 +2,7 @@
 
 load("@rules_cc//cc/common:cc_info.bzl", "CcInfo")
 load("@rules_python//python:py_info.bzl", "PyInfo")
-load("//pycross/private:cc_toolchain_util.bzl", "get_libraries")
+load("//pycross/private/build:cc_toolchain_util.bzl", "get_libraries")
 
 def register_repair_action(
         ctx,

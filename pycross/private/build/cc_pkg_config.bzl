@@ -1,7 +1,7 @@
 """A rule that generates a pkg-config (.pc) file dynamically from a CcInfo provider target."""
 
 load("@rules_cc//cc/common:cc_info.bzl", "CcInfo")
-load("//pycross/private:cc_toolchain_util.bzl", "absolutize_path_in_str", "get_libraries")
+load("//pycross/private/build:cc_toolchain_util.bzl", "absolutize_path_in_str", "get_libraries")
 
 def _uniq(lst):
     res = []
