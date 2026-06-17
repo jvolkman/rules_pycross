@@ -9,6 +9,8 @@ Each backend extension follows the same pattern:
      resolved_lock_repo to consume.
 """
 
+load("@bazel_features//:features.bzl", "bazel_features")
+
 def _overrides_repo_impl(rctx):
     """Simple repo that exports an overrides.json file."""
     rctx.file("overrides.json", rctx.attr.content)
@@ -101,6 +103,10 @@ def make_override_extension(backend_name, build_backend, override_attrs):
             name = backend_name + "_overrides",
             content = json.encode(overrides),
         )
+
+        if bazel_features.external_deps.extension_metadata_has_reproducible:
+            return module_ctx.extension_metadata(reproducible = True)
+        return module_ctx.extension_metadata()
 
     return module_extension(
         implementation = _impl,

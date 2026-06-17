@@ -13,8 +13,8 @@ bzl_library(
     visibility = ["//visibility:public"],
     deps = [
         "//pycross:backend",
+        "//pycross/private:tag_attrs",
         "//pycross/private/build/rules:cmake_build",
-        "//pycross/private/bzlmod:tag_attrs",
     ],
 )
 
@@ -24,8 +24,8 @@ bzl_library(
     visibility = ["//visibility:public"],
     deps = [
         "//pycross:backend",
+        "//pycross/private:tag_attrs",
         "//pycross/private/build/rules:meson_build",
-        "//pycross/private/bzlmod:tag_attrs",
     ],
 )
 
@@ -42,7 +42,7 @@ bzl_library(
     visibility = ["//visibility:public"],
     deps = [
         "//pycross:backend",
+        "//pycross/private:tag_attrs",
         "//pycross/private/build/rules:setuptools_build",
-        "//pycross/private/bzlmod:tag_attrs",
     ],
 )

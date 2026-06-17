@@ -39,15 +39,15 @@ bzl_library(
     srcs = ["backend.bzl"],
     visibility = ["//visibility:public"],
     deps = [
+        "//pycross/private:override_helpers",
         "//pycross/private:providers",
+        "//pycross/private:tag_attrs",
         "//pycross/private/build:transitions",
         "//pycross/private/build/actions:cc_layer",
         "//pycross/private/build/actions:pep517_action",
         "//pycross/private/build/actions:repair_action",
         "//pycross/private/build/actions:tool_extract",
         "//pycross/private/build/rules:common_attrs",
-        "//pycross/private/bzlmod:override_helpers",
-        "//pycross/private/bzlmod:tag_attrs",
     ],
 )
 

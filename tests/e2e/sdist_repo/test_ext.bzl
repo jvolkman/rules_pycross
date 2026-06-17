@@ -1,7 +1,7 @@
 """Test extension."""
 
 # buildifier: disable=bzl-visibility
-load("@rules_pycross//pycross/private/bzlmod:sdist_repo.bzl", "pycross_sdist_repo")
+load("@rules_pycross//pycross/private:sdist_repo.bzl", "pycross_sdist_repo")
 
 def _dummy_lock_repo_impl(rctx):
     rctx.file("BUILD.bazel", "")

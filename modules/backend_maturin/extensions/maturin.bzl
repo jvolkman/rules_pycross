@@ -10,6 +10,7 @@ for declaring maturin-specific package overrides. Generates:
      for each maturin-overridden package.
 """
 
+load("@bazel_features//:features.bzl", "bazel_features")
 load(
     "@rules_pycross//pycross:backend.bzl",
     "MATURIN_OVERRIDE_ATTRS",
@@ -90,6 +91,10 @@ def _maturin_overrides_impl(module_ctx):
             repo_name = repo_name,
             packages = json.encode(pkgs),
         )
+
+    if bazel_features.external_deps.extension_metadata_has_reproducible:
+        return module_ctx.extension_metadata(reproducible = True)
+    return module_ctx.extension_metadata()
 
 maturin = module_extension(
     implementation = _maturin_overrides_impl,

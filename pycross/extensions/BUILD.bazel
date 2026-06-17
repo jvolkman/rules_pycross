@@ -12,33 +12,33 @@ bzl_library(
     name = "environments",
     srcs = ["environments.bzl"],
     visibility = ["//visibility:public"],
-    deps = ["//pycross/private/bzlmod:environments"],
+    deps = ["//pycross/private:environments"],
 )
 
 bzl_library(
     name = "lock_import",
     srcs = ["lock_import.bzl"],
     visibility = ["//visibility:public"],
-    deps = ["//pycross/private/bzlmod:lock_import"],
+    deps = ["//pycross/private:lock_import"],
 )
 
 bzl_library(
     name = "lock_repos",
     srcs = ["lock_repos.bzl"],
     visibility = ["//visibility:public"],
-    deps = ["//pycross/private/bzlmod:lock_repos"],
+    deps = ["//pycross/private:lock_repos"],
 )
 
 bzl_library(
     name = "pycross",
     srcs = ["pycross.bzl"],
     visibility = ["//visibility:public"],
-    deps = ["//pycross/private/bzlmod:pycross"],
+    deps = ["//pycross/private:pycross"],
 )
 
 bzl_library(
     name = "backends",
     srcs = ["backends.bzl"],
     visibility = ["//visibility:public"],
-    deps = ["//pycross/private/bzlmod:backends"],
+    deps = ["//pycross/private:backends"],
 )

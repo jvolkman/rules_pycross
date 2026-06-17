@@ -42,13 +42,13 @@ load(
     _group_tool_deps = "group_tool_deps",
 )
 load(
-    "//pycross/private/bzlmod:override_helpers.bzl",
+    "//pycross/private:override_helpers.bzl",
     _create_overrides_repo = "create_overrides_repo",
     _encode_build_system_attrs = "encode_build_system_attrs",
     _make_override_extension = "make_override_extension",
 )
 load(
-    "//pycross/private/bzlmod:tag_attrs.bzl",
+    "//pycross/private:tag_attrs.bzl",
     _BUILD_SYSTEM_ATTRS = "BUILD_SYSTEM_ATTRS",
     _CC_BUILD_SYSTEM_ATTRS = "CC_BUILD_SYSTEM_ATTRS",
     _MATURIN_OVERRIDE_ATTRS = "MATURIN_OVERRIDE_ATTRS",

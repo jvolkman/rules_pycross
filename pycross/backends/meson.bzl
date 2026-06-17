@@ -2,7 +2,7 @@
 
 load("//pycross:backend.bzl", "make_override_extension")
 load("//pycross/private/build/rules:meson_build.bzl", _meson_build = "meson_build")
-load("//pycross/private/bzlmod:tag_attrs.bzl", "MESON_OVERRIDE_ATTRS")
+load("//pycross/private:tag_attrs.bzl", "MESON_OVERRIDE_ATTRS")
 
 meson_build = _meson_build
 
