@@ -1,7 +1,5 @@
 """Common attr handling for things that generate lock files."""
 
-load(":util.bzl", "BZLMOD")
-
 DEFAULT_MACOS_VERSION = "15.0"
 
 # Use https://github.com/mayeut/pep600_compliance to keep this reasonable.
@@ -223,10 +221,8 @@ def handle_render_attrs(attrs):
     # generated .bzl file. We can figure that out by comparing our workspace against the root workspace.
     if Label("@@//:invalid").workspace_name == Label("//:invalid").workspace_name:
         pycross_repo_name = ""
-    elif BZLMOD:
-        pycross_repo_name = "@@" + Label("//:invalid").workspace_name
     else:
-        pycross_repo_name = "@" + Label("//:invalid").workspace_name
+        pycross_repo_name = "@@" + Label("//:invalid").workspace_name
 
     args = ["--pycross-repo-name", pycross_repo_name]
 

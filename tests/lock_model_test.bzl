@@ -1,15 +1,19 @@
 """Test rules for lock models."""
 
 # buildifier: disable=bzl-visibility
+load("//pycross/private:lock_attrs.bzl", "PDM_IMPORT_ATTRS", "POETRY_IMPORT_ATTRS", "PYLOCK_IMPORT_ATTRS", "UV_IMPORT_ATTRS")
+
+# buildifier: disable=bzl-visibility
 load("//pycross/private:pdm_lock_model.bzl", handle_pdm_args = "handle_args")
+
 # buildifier: disable=bzl-visibility
 load("//pycross/private:poetry_lock_model.bzl", handle_poetry_args = "handle_args")
+
 # buildifier: disable=bzl-visibility
 load("//pycross/private:pylock_lock_model.bzl", handle_pylock_args = "handle_args")
+
 # buildifier: disable=bzl-visibility
 load("//pycross/private:uv_lock_model.bzl", handle_uv_args = "handle_args")
-# buildifier: disable=bzl-visibility
-load("//pycross/private:lock_attrs.bzl", "PDM_IMPORT_ATTRS", "POETRY_IMPORT_ATTRS", "PYLOCK_IMPORT_ATTRS", "UV_IMPORT_ATTRS")
 
 def _pycross_pdm_lock_model_impl(ctx):
     out = ctx.actions.declare_file(ctx.attr.name + ".json")
