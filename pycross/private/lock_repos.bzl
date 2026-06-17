@@ -125,7 +125,7 @@ def _lock_repos_impl(module_ctx):
 
         # Every repo has a workspace; sdist build deps point to the workspace's _lock/ targets.
         workspace_name = workspace_memberships.get(repo_name, repo_name)
-        lock_repo_for_deps = "pycross_workspace_{}".format(workspace_name)
+        lock_repo_for_deps = "pycross_ws_{}".format(workspace_name)
 
         # Instantiate sdist repos for packages requiring source builds.
         # Sdist repos are shared at the workspace level: all members in the
@@ -234,7 +234,7 @@ def _lock_repos_impl(module_ctx):
     _ANNOTATION_FIELDS = ["post_install_patches", "install_exclude_globs"]
 
     for workspace_name, member_repos in workspace_groups.items():
-        workspace_repo_name = "pycross_workspace_{}".format(workspace_name)
+        workspace_repo_name = "pycross_ws_{}".format(workspace_name)
 
         # Merge repo_maps and sdist_maps from all members
         merged_repo_map = {}

@@ -240,7 +240,7 @@ _SDIST_REPO_ATTRS = {
     "deps": attr.string_list(doc = "Runtime dependencies from lock file."),
     "known_packages": attr.string_list(doc = "List of packages present in the lock file to filter build_requires."),
     "lock_json": attr.label(doc = "The lock.json file from the resolved lock repo.", mandatory = True),
-    "lock_repo": attr.string(doc = "Name of the lock workspace repo (e.g. 'pycross_workspace_uv').", mandatory = True),
+    "lock_repo": attr.string(doc = "Name of the lock workspace repo (e.g. 'pycross_ws_uv').", mandatory = True),
     "build_backend": attr.string(doc = "The build backend to use."),
     "backend_to_rule": attr.string_dict(
         doc = "Registry mapping pyproject backend names to pycross rule names.",
