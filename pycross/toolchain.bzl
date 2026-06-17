@@ -17,6 +17,12 @@ PycrossBuildExecRuntimeInfo = provider(
 )
 
 def _python_executable(runtime):
+    """Resolve the Python executable path from a PyRuntimeInfo.
+
+    Prefers interpreter_files_to_run (rules_python >= 1.x) over
+    interpreter_path and interpreter.path for runtimes that expose
+    a launcher or wrapper executable.
+    """
     files_to_run = getattr(runtime, "interpreter_files_to_run", None)
     if files_to_run and files_to_run.executable:
         return files_to_run.executable.path

@@ -94,9 +94,18 @@ def register_pep517_action(
             transitive_inputs.append(pycross_info.exec_python_files)
         if pycross_info.target_python_files:
             transitive_inputs.append(pycross_info.target_python_files)
+        if pycross_info.exec_python_files_to_run:
+            tools.append(pycross_info.exec_python_files_to_run)
+        if pycross_info.target_python_files_to_run:
+            tools.append(pycross_info.target_python_files_to_run)
     else:
-        interpreter = py_toolchain.interpreter_path
-        if not interpreter:
+        files_to_run = getattr(py_toolchain, "interpreter_files_to_run", None)
+        if files_to_run and files_to_run.executable:
+            interpreter = files_to_run.executable.path
+            tools.append(files_to_run)
+        elif py_toolchain.interpreter_path:
+            interpreter = py_toolchain.interpreter_path
+        else:
             interpreter = py_toolchain.interpreter.path
         exec_python = interpreter
         target_python = interpreter
