@@ -26,6 +26,32 @@ def _is_valid_identifier(s):
             return False
     return True
 
+def _strip_extensions(module_name):
+    for ext in [".pth", ".so", ".py", ".pyd"]:
+        if module_name.endswith(ext):
+            module_name = module_name[:-len(ext)]
+            if ".cpython-" in module_name:
+                module_name = module_name.split(".cpython-")[0]
+            elif ".abi3-" in module_name:
+                module_name = module_name.split(".abi3-")[0]
+            elif module_name.endswith(".abi3"):
+                module_name = module_name[:-5]
+            break
+    return module_name
+
+def _is_valid_module_name(module_name):
+    for c in module_name.split("."):
+        if not _is_valid_identifier(c):
+            return False
+    return True
+
+def _get_module_name(tlp):
+    """Converts a top-level path (from site_paths) to a Python import name."""
+    module_name = _strip_extensions(tlp).replace("/", ".")
+    if not _is_valid_module_name(module_name):
+        return None
+    return module_name
+
 def _pycross_modules_mapping_impl(ctx):
     mapping = {}
     extras_mapping = ctx.attr.extras_mapping
@@ -34,31 +60,8 @@ def _pycross_modules_mapping_impl(ctx):
         if PycrossPackageInfo in dep:
             pkg_info = dep[PycrossPackageInfo]
             for tlp in pkg_info.site_paths:
-                # Convert filesystem paths to Python import names:
-                #   "google/cloud/storage" -> "google.cloud.storage"
-                #   "requests" -> "requests"
-                #   "six.py" -> "six"
-                module_name = tlp
-                for ext in [".pth", ".so", ".py", ".pyd"]:
-                    if module_name.endswith(ext):
-                        module_name = module_name[:-len(ext)]
-                        if ".cpython-" in module_name:
-                            module_name = module_name.split(".cpython-")[0]
-                        elif ".abi3-" in module_name:
-                            module_name = module_name.split(".abi3-")[0]
-                        elif module_name.endswith(".abi3"):
-                            module_name = module_name[:-5]
-                        break
-                module_name = module_name.replace("/", ".")
-
-                # Filter out invalid Python identifiers (e.g. shared libraries with dashes)
-                components = module_name.split(".")
-                valid = True
-                for c in components:
-                    if not _is_valid_identifier(c):
-                        valid = False
-                        break
-                if not valid:
+                module_name = _get_module_name(tlp)
+                if not module_name:
                     continue
 
                 base_name = pkg_info.package_name.replace("-", "_")
