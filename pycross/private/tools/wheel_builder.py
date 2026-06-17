@@ -813,12 +813,18 @@ def execroot_relative_path(path: Union[str, Path], execroot: Path, prefix: Path)
     if not path.is_absolute():
         return path
 
-    marker = f"/execroot/{prefix.name}/"
     path_str = str(path)
-    if marker not in path_str:
-        return None
+    for marker in (
+        # For a bazel provided python, path from sysconfigdata like 'installed_base'
+        # can have the regular bazel execroot (/execroot/) shape, or the shape pycross
+        # assumes for execroot (/bazel-execroot/) under the the temp_dir.
+        f"/execroot/{prefix.name}/",
+        f"/bazel-execroot/{prefix.name}/",
+    ):
+        if marker in path_str:
+            return prefix / path_str.split(marker, 1)[1]
 
-    return prefix / path_str.split(marker, 1)[1]
+    return None
 
 
 def target_base_prefixes(
