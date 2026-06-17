@@ -9,12 +9,12 @@ from __future__ import annotations
 from dataclasses import asdict
 from dataclasses import dataclass
 from functools import cached_property
+from typing import TYPE_CHECKING
 from typing import Any
 from typing import Dict
 from typing import List
 from typing import Optional
 from typing import Set
-from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from pip._internal.models.target_python import TargetPython
@@ -73,6 +73,7 @@ class TargetEnv:
     @cached_property
     def tag_to_index(self) -> Dict[Any, int]:
         from packaging.tags import parse_tag
+
         tags = []
         for tag_str in self.compatibility_tags:
             tags.extend(parse_tag(tag_str))

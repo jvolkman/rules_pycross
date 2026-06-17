@@ -21,6 +21,7 @@ from pycross.private.tools.target_environment import TargetEnv
 
 def make_env(name: str, platforms: List[str], version: str = "3.10", markers: Dict[str, str] = None) -> TargetEnv:
     from pip._internal.models.target_python import TargetPython
+
     version_info = tuple(int(p) for p in version.split(".")[:3])
     if len(version_info) == 2:
         version_info = version_info + (0,)
@@ -150,7 +151,9 @@ class RawLockResolverTest(unittest.TestCase):
         resolved = resolver.to_resolved_package()
 
         self.assertIn("linux", resolved.environment_files)
-        self.assertEqual(resolved.environment_files["linux"].key.name, "foo-1.0-2-cp310-cp310-manylinux_2_17_x86_64.whl")
+        self.assertEqual(
+            resolved.environment_files["linux"].key.name, "foo-1.0-2-cp310-cp310-manylinux_2_17_x86_64.whl"
+        )
 
     def test_wheel_preferred_over_sdist(self):
         """When both a compatible wheel and sdist exist, the wheel is selected."""
