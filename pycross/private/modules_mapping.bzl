@@ -3,6 +3,17 @@
 load(":providers.bzl", "PycrossPackageInfo")
 
 def _is_valid_identifier(s):
+    """Checks if a given string is a valid Python identifier.
+
+    A valid identifier must start with a letter or an underscore, followed by
+    zero or more letters, underscores, and digits.
+
+    Args:
+        s: The string to check.
+
+    Returns:
+        True if the string is a valid identifier, False otherwise.
+    """
     if not s:
         return False
     is_first = True
