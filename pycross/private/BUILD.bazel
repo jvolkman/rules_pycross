@@ -3,7 +3,6 @@ load("@bazel_skylib//:bzl_library.bzl", "bzl_library")
 load("@bazel_skylib//rules:write_file.bzl", "write_file")
 load(":target_environment.bzl", "pycross_target_environment")
 load(":util.bzl", "REPO_HTTP_DEPS")
-load(":uv_lock_model.bzl", "pycross_uv_lock_model")
 
 package(default_visibility = ["//visibility:public"])
 
@@ -146,15 +145,15 @@ pycross_target_environment(
     version = "3.13.0",
 )
 
-# NB: pdm.lock and pyproject.toml are symlinked into this directory from
-# the root. This is so that this package does not need to depend on the
-# root package, since the root utilizes dev dependencies which are not
-# always present.
-pycross_uv_lock_model(
+genrule(
     name = "rules_pycross_all_deps_lock_model",
-    all_optional_groups = True,
-    lock_file = ":uv.lock",
-    project_file = ":pyproject.toml",
+    srcs = [
+        ":uv.lock",
+        ":pyproject.toml",
+    ],
+    outs = ["rules_pycross_all_deps_lock_model.json"],
+    cmd = "$(location //pycross/private/tools:uv_translator) --project-file $(location :pyproject.toml) --lock-file $(location :uv.lock) --output $@ --all-optional-groups",
+    tools = ["//pycross/private/tools:uv_translator"],
 )
 
 genrule(

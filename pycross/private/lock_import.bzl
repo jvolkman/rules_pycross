@@ -3,12 +3,8 @@
 load("@bazel_features//:features.bzl", "bazel_features")
 load("@toml.bzl//toml:toml.bzl", "decode")
 load("//pycross/private:lock_attrs.bzl", "package_annotation")
-load("//pycross/private:pdm_lock_model.bzl", "lock_repo_model_pdm")
-load("//pycross/private:poetry_lock_model.bzl", "lock_repo_model_poetry")
-load("//pycross/private:pylock_lock_model.bzl", "lock_repo_model_pylock")
 load("//pycross/private:resolved_lock_repo.bzl", "resolved_lock_repo")
 load("//pycross/private:util.bzl", "sanitize_name")
-load("//pycross/private:uv_lock_model.bzl", "lock_repo_model_uv")
 load(":lock_workspace_repo.bzl", "lock_workspace_repo")
 load(
     ":tag_attrs.bzl",
@@ -258,13 +254,29 @@ def _lock_import_impl(module_ctx):
     # Iterate over the various from_pdm and from_poetry tags and create lock models
     for module in module_ctx.modules:
         for tag in module.tags.import_pdm:
-            lock_model_structs[tag.repo] = lock_repo_model_pdm(**{attr: getattr(tag, attr) for attr in PDM_IMPORT_ATTRS})
+            model = {attr: getattr(tag, attr) for attr in PDM_IMPORT_ATTRS}
+            model["model_type"] = "pdm"
+            model["project_file"] = str(model["project_file"])
+            model["lock_file"] = str(model["lock_file"])
+            lock_model_structs[tag.repo] = json.encode(model)
         for tag in module.tags.import_poetry:
-            lock_model_structs[tag.repo] = lock_repo_model_poetry(**{attr: getattr(tag, attr) for attr in POETRY_IMPORT_ATTRS})
+            model = {attr: getattr(tag, attr) for attr in POETRY_IMPORT_ATTRS}
+            model["model_type"] = "poetry"
+            model["project_file"] = str(model["project_file"])
+            model["lock_file"] = str(model["lock_file"])
+            lock_model_structs[tag.repo] = json.encode(model)
         for tag in module.tags.import_uv:
-            lock_model_structs[tag.repo] = lock_repo_model_uv(**{attr: getattr(tag, attr) for attr in UV_IMPORT_ATTRS})
+            model = {attr: getattr(tag, attr) for attr in UV_IMPORT_ATTRS}
+            model["model_type"] = "uv"
+            model["project_file"] = str(model["project_file"])
+            model["lock_file"] = str(model["lock_file"])
+            lock_model_structs[tag.repo] = json.encode(model)
         for tag in module.tags.import_pylock:
-            lock_model_structs[tag.repo] = lock_repo_model_pylock(**{attr: getattr(tag, attr) for attr in PYLOCK_IMPORT_ATTRS})
+            model = {attr: getattr(tag, attr) for attr in PYLOCK_IMPORT_ATTRS}
+            model["model_type"] = "pylock"
+            model["project_file"] = str(model["project_file"])
+            model["lock_file"] = str(model["lock_file"])
+            lock_model_structs[tag.repo] = json.encode(model)
 
     # --- UV workspace handling ---
 
@@ -329,12 +341,14 @@ def _lock_import_impl(module_ctx):
                 _check_unique_repo_name(lock_owners, module.name, repo_name)
                 lock_repos[repo_name] = _workspace_lock_struct(module_ctx, ws_tag, repo_name, tag.workspace)
 
-                lock_model_structs[repo_name] = lock_repo_model_uv(
-                    project_file = project_file,
-                    lock_file = ws_tag.lock_file,
+                model = dict(
+                    model_type = "uv",
+                    project_file = str(project_file),
+                    lock_file = str(ws_tag.lock_file),
                     require_static_urls = ws_tag.require_static_urls,
                     **group_attrs
                 )
+                lock_model_structs[repo_name] = json.encode(model)
 
     # --- End UV workspace handling ---
 

@@ -96,62 +96,6 @@ Wraps an executable target with a custom PATH name. Used internally by pycross_w
 | <a id="pycross_path_tool-tool"></a>tool |  -   | <a href="https://bazel.build/concepts/labels">Label</a> | required |  |
 
 
-<a id="pycross_pdm_lock_model"></a>
-
-## pycross_pdm_lock_model
-
-<pre>
-load("@rules_pycross//pycross:defs.bzl", "pycross_pdm_lock_model")
-
-pycross_pdm_lock_model(<a href="#pycross_pdm_lock_model-name">name</a>, <a href="#pycross_pdm_lock_model-all_development_groups">all_development_groups</a>, <a href="#pycross_pdm_lock_model-all_optional_groups">all_optional_groups</a>, <a href="#pycross_pdm_lock_model-default">default</a>,
-                       <a href="#pycross_pdm_lock_model-development_groups">development_groups</a>, <a href="#pycross_pdm_lock_model-lock_file">lock_file</a>, <a href="#pycross_pdm_lock_model-optional_groups">optional_groups</a>, <a href="#pycross_pdm_lock_model-project_file">project_file</a>,
-                       <a href="#pycross_pdm_lock_model-require_static_urls">require_static_urls</a>)
-</pre>
-
-
-
-**ATTRIBUTES**
-
-
-| Name  | Description | Type | Mandatory | Default |
-| :------------- | :------------- | :------------- | :------------- | :------------- |
-| <a id="pycross_pdm_lock_model-name"></a>name |  A unique name for this target.   | <a href="https://bazel.build/concepts/labels#target-names">Name</a> | required |  |
-| <a id="pycross_pdm_lock_model-all_development_groups"></a>all_development_groups |  Install all dev dependencies.   | Boolean | optional |  `False`  |
-| <a id="pycross_pdm_lock_model-all_optional_groups"></a>all_optional_groups |  Install all optional dependencies.   | Boolean | optional |  `False`  |
-| <a id="pycross_pdm_lock_model-default"></a>default |  Whether to install dependencies from the default group.   | Boolean | optional |  `True`  |
-| <a id="pycross_pdm_lock_model-development_groups"></a>development_groups |  List of development dependency groups to install.   | List of strings | optional |  `[]`  |
-| <a id="pycross_pdm_lock_model-lock_file"></a>lock_file |  The lock file.   | <a href="https://bazel.build/concepts/labels">Label</a> | required |  |
-| <a id="pycross_pdm_lock_model-optional_groups"></a>optional_groups |  List of optional dependency groups to install.   | List of strings | optional |  `[]`  |
-| <a id="pycross_pdm_lock_model-project_file"></a>project_file |  The pyproject.toml file.   | <a href="https://bazel.build/concepts/labels">Label</a> | required |  |
-| <a id="pycross_pdm_lock_model-require_static_urls"></a>require_static_urls |  Require that the lock file is created with --static-urls.   | Boolean | optional |  `True`  |
-
-
-<a id="pycross_poetry_lock_model"></a>
-
-## pycross_poetry_lock_model
-
-<pre>
-load("@rules_pycross//pycross:defs.bzl", "pycross_poetry_lock_model")
-
-pycross_poetry_lock_model(<a href="#pycross_poetry_lock_model-name">name</a>, <a href="#pycross_poetry_lock_model-all_optional_groups">all_optional_groups</a>, <a href="#pycross_poetry_lock_model-default">default</a>, <a href="#pycross_poetry_lock_model-lock_file">lock_file</a>, <a href="#pycross_poetry_lock_model-optional_groups">optional_groups</a>,
-                          <a href="#pycross_poetry_lock_model-project_file">project_file</a>)
-</pre>
-
-
-
-**ATTRIBUTES**
-
-
-| Name  | Description | Type | Mandatory | Default |
-| :------------- | :------------- | :------------- | :------------- | :------------- |
-| <a id="pycross_poetry_lock_model-name"></a>name |  A unique name for this target.   | <a href="https://bazel.build/concepts/labels#target-names">Name</a> | required |  |
-| <a id="pycross_poetry_lock_model-all_optional_groups"></a>all_optional_groups |  Install all optional dependencies.   | Boolean | optional |  `False`  |
-| <a id="pycross_poetry_lock_model-default"></a>default |  Whether to install dependencies from the default group.   | Boolean | optional |  `True`  |
-| <a id="pycross_poetry_lock_model-lock_file"></a>lock_file |  The poetry.lock file.   | <a href="https://bazel.build/concepts/labels">Label</a> | required |  |
-| <a id="pycross_poetry_lock_model-optional_groups"></a>optional_groups |  List of optional dependency groups to install.   | List of strings | optional |  `[]`  |
-| <a id="pycross_poetry_lock_model-project_file"></a>project_file |  The pyproject.toml file.   | <a href="https://bazel.build/concepts/labels">Label</a> | required |  |
-
-
 <a id="pycross_repaired_wheel"></a>
 
 ## pycross_repaired_wheel
@@ -203,36 +147,6 @@ pycross_target_environment(<a href="#pycross_target_environment-name">name</a>, 
 | <a id="pycross_target_environment-platforms"></a>platforms |  A list of PEP 425 platform tags. Defaults to ['any'].   | List of strings | optional |  `["any"]`  |
 | <a id="pycross_target_environment-python_compatible_with"></a>python_compatible_with |  A list of constraints that, when satisfied, indicates this target_platform should be selected (together with flag_values).   | <a href="https://bazel.build/concepts/labels">List of labels</a> | optional |  `[]`  |
 | <a id="pycross_target_environment-version"></a>version |  The python version.   | String | required |  |
-
-
-<a id="pycross_uv_lock_model"></a>
-
-## pycross_uv_lock_model
-
-<pre>
-load("@rules_pycross//pycross:defs.bzl", "pycross_uv_lock_model")
-
-pycross_uv_lock_model(<a href="#pycross_uv_lock_model-name">name</a>, <a href="#pycross_uv_lock_model-all_development_groups">all_development_groups</a>, <a href="#pycross_uv_lock_model-all_optional_groups">all_optional_groups</a>, <a href="#pycross_uv_lock_model-default">default</a>,
-                      <a href="#pycross_uv_lock_model-development_groups">development_groups</a>, <a href="#pycross_uv_lock_model-lock_file">lock_file</a>, <a href="#pycross_uv_lock_model-optional_groups">optional_groups</a>, <a href="#pycross_uv_lock_model-project_file">project_file</a>,
-                      <a href="#pycross_uv_lock_model-require_static_urls">require_static_urls</a>)
-</pre>
-
-
-
-**ATTRIBUTES**
-
-
-| Name  | Description | Type | Mandatory | Default |
-| :------------- | :------------- | :------------- | :------------- | :------------- |
-| <a id="pycross_uv_lock_model-name"></a>name |  A unique name for this target.   | <a href="https://bazel.build/concepts/labels#target-names">Name</a> | required |  |
-| <a id="pycross_uv_lock_model-all_development_groups"></a>all_development_groups |  Install all dev dependencies.   | Boolean | optional |  `False`  |
-| <a id="pycross_uv_lock_model-all_optional_groups"></a>all_optional_groups |  Install all optional dependencies.   | Boolean | optional |  `False`  |
-| <a id="pycross_uv_lock_model-default"></a>default |  Whether to install dependencies from the default group.   | Boolean | optional |  `True`  |
-| <a id="pycross_uv_lock_model-development_groups"></a>development_groups |  List of development dependency groups to install.   | List of strings | optional |  `[]`  |
-| <a id="pycross_uv_lock_model-lock_file"></a>lock_file |  The lock file.   | <a href="https://bazel.build/concepts/labels">Label</a> | required |  |
-| <a id="pycross_uv_lock_model-optional_groups"></a>optional_groups |  List of optional dependency groups to install.   | List of strings | optional |  `[]`  |
-| <a id="pycross_uv_lock_model-project_file"></a>project_file |  The pyproject.toml file.   | <a href="https://bazel.build/concepts/labels">Label</a> | required |  |
-| <a id="pycross_uv_lock_model-require_static_urls"></a>require_static_urls |  Require that the lock file is created with --static-urls.   | Boolean | optional |  `True`  |
 
 
 <a id="pycross_wheel_headers"></a>

@@ -1,11 +1,21 @@
-"""Implementation of the pycross_pylock_lock_model rule."""
+"""Translator execution logic for pylock files."""
 
 load(":internal_repo.bzl", "exec_internal_tool")
-load(":lock_attrs.bzl", "PYLOCK_IMPORT_ATTRS")
 
 TRANSLATOR_TOOL = Label("//pycross/private/tools:pylock_translator.py")
 
-def _handle_args(lock_model, project_file, lock_file, output):
+def handle_args(lock_model, project_file, lock_file, output):
+    """Parses pylock specific arguments and returns a list of arguments.
+
+    Args:
+        lock_model: A struct containing the lock model attributes.
+        project_file: The pyproject.toml file path (optional).
+        lock_file: The lock file path.
+        output: The output file path.
+
+    Returns:
+        A list of arguments for the translator tool.
+    """
     args = []
     if project_file:
         args.extend(["--project-file", project_file])
@@ -31,64 +41,6 @@ def _handle_args(lock_model, project_file, lock_file, output):
 
     return args
 
-def _pycross_pylock_lock_model_impl(ctx):
-    out = ctx.actions.declare_file(ctx.attr.name + ".json")
-
-    args = ctx.actions.args().use_param_file("--flagfile=%s")
-
-    project_file_path = ctx.file.project_file.path if getattr(ctx.file, "project_file", None) else None
-
-    args.add_all(
-        _handle_args(
-            ctx.attr,
-            project_file_path,
-            ctx.file.lock_file.path,
-            out.path,
-        ),
-    )
-
-    inputs = [ctx.file.lock_file]
-    if getattr(ctx.file, "project_file", None):
-        inputs.append(ctx.file.project_file)
-
-    ctx.actions.run(
-        inputs = inputs,
-        outputs = [out],
-        executable = ctx.executable._tool,
-        mnemonic = "PycrossPylockTranslate",
-        execution_requirements = {"supports-path-mapping": "1"},
-        arguments = [args],
-    )
-
-    return [
-        DefaultInfo(
-            files = depset([out]),
-        ),
-    ]
-
-pycross_pylock_lock_model = rule(
-    implementation = _pycross_pylock_lock_model_impl,
-    attrs = {
-        "_tool": attr.label(
-            default = Label("//pycross/private/tools:pylock_translator"),
-            cfg = "exec",
-            executable = True,
-        ),
-    } | PYLOCK_IMPORT_ATTRS,
-)
-
-def lock_repo_model_pylock(*, project_file = None, lock_file, default = True, optional_groups = [], all_optional_groups = False, development_groups = [], all_development_groups = False, **_kwargs):
-    return json.encode(dict(
-        model_type = "pylock",
-        project_file = str(project_file) if project_file else None,
-        lock_file = str(lock_file),
-        default = default,
-        optional_groups = optional_groups,
-        all_optional_groups = all_optional_groups,
-        development_groups = development_groups,
-        all_development_groups = all_development_groups,
-    ))
-
 def repo_create_pylock_model(rctx, project_file, lock_file, lock_model, output):
     """Run the pylock translator.
 
@@ -102,7 +54,7 @@ def repo_create_pylock_model(rctx, project_file, lock_file, lock_model, output):
 
     project_file_path = str(rctx.path(project_file)) if project_file else None
 
-    args = _handle_args(
+    args = handle_args(
         lock_model,
         project_file_path,
         str(rctx.path(lock_file)),

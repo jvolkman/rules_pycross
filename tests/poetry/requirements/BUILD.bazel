@@ -1,6 +1,6 @@
 load("@bazel_lib//lib:write_source_files.bzl", "write_source_file")
 load("@bazel_skylib//rules:diff_test.bzl", "diff_test")
-load("//pycross:defs.bzl", "pycross_poetry_lock_model")
+load("//tests:lock_model_test.bzl", "pycross_poetry_lock_model")
 
 pycross_poetry_lock_model(
     name = "lock",
