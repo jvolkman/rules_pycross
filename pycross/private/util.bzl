@@ -86,3 +86,28 @@ def extract_pep508_name(spec):
 
     # Dedup hyphens (PEP 503 normalization)
     return "-".join([part for part in normalized.split("-") if part])
+
+def key_parts(key):
+    """Split a lockfile package key into its name and version parts.
+
+    Args:
+        key: The package key string (e.g. "package@1.0.0").
+
+    Returns:
+        A tuple of (name, version).
+    """
+    parts = key.split("@", 1)
+    if len(parts) != 2:
+        fail("Invalid package key format: " + key)
+    return parts[0], parts[1]
+
+def key_name(key):
+    """Extract the package name part from a lockfile package key.
+
+    Args:
+        key: The package key string.
+
+    Returns:
+        The package name part.
+    """
+    return key.split("@", 1)[0]

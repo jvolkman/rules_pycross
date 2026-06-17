@@ -5,7 +5,7 @@ The common logic is factored into _sdist_repo_common() so it can be called befor
 
 load("@pycross_backends//:sdist_dispatch.bzl", "SDIST_HOOKS")
 load("//pycross/private:internal_repo.bzl", "exec_internal_tool")
-load("//pycross/private:util.bzl", "extract_pep508_name", "underscore_name")
+load("//pycross/private:util.bzl", "extract_pep508_name", "key_name", "underscore_name")
 
 def _render_build_file(rctx, macro_attrs, backend_macro, site_paths, bin_paths, data_paths, include_paths, extra_build_snippets = None):
     """Render the BUILD.bazel file for an sdist repo.
@@ -105,7 +105,7 @@ def _sdist_repo_common(rctx):
         if rctx.attr.build_dependencies:
             build_deps = []
             for dep in rctx.attr.build_dependencies:
-                dep_name = dep.split("@")[0]
+                dep_name = key_name(dep)
                 build_deps.append("@{}//{}:pkg".format(rctx.attr.lock_repo, underscore_name(dep_name)))
             macro_attrs["build_deps"] = str(build_deps)
 

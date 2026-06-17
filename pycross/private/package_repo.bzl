@@ -16,7 +16,7 @@ The file structure is as follows:
 """
 
 load(":resolved_lock_renderer.bzl", "render_lock_bzl")
-load(":util.bzl", "normalize_pep503_name", "underscore_name")
+load(":util.bzl", "key_name", "key_parts", "normalize_pep503_name", "underscore_name")
 
 def _normalize_name(name):
     return normalize_pep503_name(name)
@@ -217,9 +217,9 @@ def _package_repo_impl(rctx):
         # Skip variant packages (they use __via_ suffix for conflict resolution)
         if "__via_" in pkg_key:
             continue
-        norm_name = _normalize_name(pkg_key.split("@")[0])
-        us_name = _underscore_name(pkg_key.split("@")[0])
-        pkg_version = pkg_key.split("@")[1]
+        pkg_name_part, pkg_version = key_parts(pkg_key)
+        norm_name = _normalize_name(pkg_name_part)
+        us_name = _underscore_name(pkg_name_part)
         whldir_name = "{}-{}.whldir".format(us_name, pkg_version)
 
         # Versioned target: _wheel:name@version -> pycross_wheel_dir wrapping //_lock:_wheel_{key}
@@ -248,7 +248,7 @@ def _package_repo_impl(rctx):
     # 4. _backend/ directory
     normalized_locked_package_names = {}
     for pkg_key in packages.keys():
-        norm_pkg = _normalize_name(pkg_key.split("@")[0])
+        norm_pkg = _normalize_name(key_name(pkg_key))
         normalized_locked_package_names[norm_pkg] = True
 
 package_repo = repository_rule(

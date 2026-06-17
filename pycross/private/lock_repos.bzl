@@ -9,7 +9,7 @@ load("@rules_pycross//pycross/private:sdist_repo.bzl", "pycross_sdist_repo")
 load("//pycross/private:package_repo.bzl", "package_repo")
 load("//pycross/private:pypi_file.bzl", "pypi_file")
 load("//pycross/private:thin_package_repo.bzl", "thin_package_repo")
-load("//pycross/private:util.bzl", "sanitize_name")
+load("//pycross/private:util.bzl", "key_name", "key_parts", "sanitize_name")
 load("//pycross/private:wheel_file.bzl", "pycross_wheel_file")
 load(":git_file.bzl", "pycross_git_file")
 load(":tag_attrs.bzl", "CREATE_REPOS_ATTRS")
@@ -119,7 +119,7 @@ def _lock_repos_impl(module_ctx):
             all_remote_files[key] = remote_file_label
 
         # Pre-calculate known packages in this lock file to filter sdist build_requires
-        known_packages = [key.split("@")[0] for key in resolved_lock.get("packages", {})]
+        known_packages = [key_name(key) for key in resolved_lock.get("packages", {})]
 
         sdist_map = {}
 
@@ -179,8 +179,7 @@ def _lock_repos_impl(module_ctx):
                     deps_set[dep_label] = True
 
             # Compute the output whldir name: {normalized_name}-{version}.whldir
-            pkg_name_part = pkg_key.split("@")[0]
-            pkg_version = pkg_key.split("@")[1]
+            pkg_name_part, pkg_version = key_parts(pkg_key)
             whldir_norm_name = sanitize_name(pkg_name_part)
             whldir_name = "{}-{}.whldir".format(whldir_norm_name, pkg_version)
 
@@ -204,7 +203,7 @@ def _lock_repos_impl(module_ctx):
                     sdist_repo_attrs[attr_name] = pkg[attr_name]
 
             # Pass per-package override configs keyed by backend name.
-            pkg_name = pkg_key.split("@")[0]
+            pkg_name = key_name(pkg_key)
             pkg_overrides = override_configs.get(repo_name, {}).get(pkg_name, {})
             if pkg_overrides:
                 sdist_repo_attrs["override_backend_configs"] = json.encode(pkg_overrides)
