@@ -48,7 +48,7 @@ def resolve_base_prefix(
     if installed_value:
         candidate = Path(installed_value)
         if candidate.exists():
-            return candidate
+            return candidate.resolve()
         # installed_base is stale — fall back to grandparent if possible.
         if prefix in target_python.parents:
             return target_python.parent.parent

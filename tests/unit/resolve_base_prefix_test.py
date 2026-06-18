@@ -135,6 +135,32 @@ class ResolveBasePrefixTest(unittest.TestCase):
 
         self.assertEqual(result, real_dir)
 
+    def test_installed_base_via_bazel_execroot_symlink(self):
+        """When installed_base is accessed via a bazel-execroot symlink (as done during wheel builds),
+        it should be resolved to the real absolute path within the prefix."""
+        # Create the actual directory
+        installed_dir = self.prefix / "bazel-out" / "k8" / "bin" / "python_root"
+        installed_dir.mkdir(parents=True)
+
+        # Create a sdist-like temp dir and a bazel-execroot symlink
+        sdist_dir = self.tmp / "sdist"
+        sdist_dir.mkdir(parents=True)
+        bazel_execroot = self.tmp / "bazel-execroot"
+        bazel_execroot.symlink_to(self.prefix.parent)
+
+        # The path from sysconfig might look like this
+        symlink_path = sdist_dir / ".." / "bazel-execroot" / "_main" / "bazel-out" / "k8" / "bin" / "python_root"
+        target_python = self.prefix / "bazel-out" / "k8" / "bin" / "wrapper" / "bin" / "python3"
+
+        result = resolve_base_prefix(
+            installed_value=str(symlink_path),
+            target_python=target_python,
+            prefix=self.prefix,
+        )
+
+        # It should resolve to the real installed_dir
+        self.assertEqual(result, installed_dir)
+
 
 if __name__ == "__main__":
     unittest.main()
