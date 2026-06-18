@@ -160,7 +160,7 @@ Full translator for the PEP 751 `pylock.toml` lockfile format.
 
 ### Dependency Group Filtering
 
-- `--default / --no-default` — include/exclude `[project.dependencies]`.
+- `--default-group / --no-default-group` — include/exclude `[project.dependencies]`.
 - `--optional-group <name>` — include specific `[project.optional-dependencies]` groups.
 - `--all-optional-groups` — include all optional dependency groups.
 - `--development-group <name>` — include specific `[dependency-groups]` (PEP 735).
@@ -688,7 +688,7 @@ use_repo(environments, "my_envs")
 
 - **Extras support** — regex parsing, per-env deps, renderer `[extra]` targets
 - **Cycle detection** — 2-node, 3-node, multi-cycle, stable naming, no-cycle case
-- **pylock group filtering** — `--no-default`, optional/dev groups, `include-group`, graph traversal
+- **pylock group filtering** — `--no-default-group`, optional/dev groups, `include-group`, graph traversal
 - **site_paths** — wheel/sdist detection, src-layout, excluded dirs, `__init__.py` requirement
 - **Renderer layout** — versioned paths, env config_settings, cycle `_cycles/` dir, extras targets
 

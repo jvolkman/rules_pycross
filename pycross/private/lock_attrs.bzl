@@ -113,7 +113,7 @@ _IMPORT_ATTRS = dict(
         allow_single_file = True,
         mandatory = True,
     ),
-    default = attr.bool(
+    default_group = attr.bool(
         doc = "Whether to install dependencies from the default group.",
         default = True,
     ),
@@ -146,7 +146,7 @@ POETRY_IMPORT_ATTRS = dict(
         allow_single_file = True,
         mandatory = True,
     ),
-    default = attr.bool(
+    default_group = attr.bool(
         doc = "Whether to install dependencies from the default group.",
         default = True,
     ),
@@ -301,12 +301,10 @@ def package_annotation(
 PDM_IMPORT_ATTRS = _IMPORT_ATTRS
 UV_IMPORT_ATTRS = _IMPORT_ATTRS
 
-# Group-selection attrs shared between workspace_members (defaults) and workspace_member (overrides).
+# Group-selection attrs for workspace_members tags (group-wide defaults).
+# Boolean flags (all_optional_groups, all_development_groups) live only here;
+# per-member overrides disable them implicitly by specifying explicit lists.
 _WORKSPACE_GROUP_ATTRS = dict(
-    default = attr.bool(
-        doc = "Whether to install dependencies from the default group.",
-        default = True,
-    ),
     optional_groups = attr.string_list(
         doc = "List of optional dependency groups to install.",
     ),
@@ -318,6 +316,23 @@ _WORKSPACE_GROUP_ATTRS = dict(
     ),
     all_development_groups = attr.bool(
         doc = "Install all dev dependencies.",
+    ),
+)
+
+# Group-selection attrs for workspace_member override tags.
+# default_group lives only here (not on members) since disabling default deps
+# is a per-member decision. List attrs override the members-level defaults
+# when non-empty.
+_WORKSPACE_GROUP_OVERRIDE_ATTRS = dict(
+    default_group = attr.bool(
+        doc = "Whether to install dependencies from the default group.",
+        default = True,
+    ),
+    optional_groups = attr.string_list(
+        doc = "List of optional dependency groups to install (overrides workspace_members setting).",
+    ),
+    development_groups = attr.string_list(
+        doc = "List of development dependency groups to install (overrides workspace_members setting).",
     ),
 )
 
@@ -357,7 +372,7 @@ UV_WORKSPACE_MEMBER_ATTRS = dict(
         doc = "Override auto-discovered pyproject.toml path.",
         allow_single_file = True,
     ),
-) | _WORKSPACE_GROUP_ATTRS
+) | _WORKSPACE_GROUP_OVERRIDE_ATTRS
 
 PDM_WORKSPACE_ATTRS = dict(
     lock_file = attr.label(
@@ -391,7 +406,7 @@ PDM_WORKSPACE_MEMBER_ATTRS = dict(
         doc = "Override auto-discovered pyproject.toml path.",
         allow_single_file = True,
     ),
-) | _WORKSPACE_GROUP_ATTRS
+) | _WORKSPACE_GROUP_OVERRIDE_ATTRS
 
 PYLOCK_IMPORT_ATTRS = dict(
     lock_file = attr.label(
@@ -403,7 +418,7 @@ PYLOCK_IMPORT_ATTRS = dict(
         doc = "Optional pyproject.toml file.",
         allow_single_file = True,
     ),
-    default = attr.bool(
+    default_group = attr.bool(
         doc = "Whether to install dependencies from the default group.",
         default = True,
     ),

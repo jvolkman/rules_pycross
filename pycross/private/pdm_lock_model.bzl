@@ -21,8 +21,8 @@ def handle_args(attrs, project_file, lock_file, output):
     args.extend(["--lock-file", lock_file])
     args.extend(["--output", output])
 
-    if attrs.default:
-        args.append("--default")
+    if attrs.default_group:
+        args.append("--default-group")
 
     for group in attrs.optional_groups:
         args.extend(["--optional-group", group])

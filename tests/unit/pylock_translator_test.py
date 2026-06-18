@@ -9,7 +9,7 @@ class MockArgs:
     def __init__(self, lock_file):
         self.lock_file = lock_file
         self.project_file = None
-        self.default = True
+        self.default_group = True
         self.optional_group = []
         self.all_optional_groups = False
         self.development_group = []
@@ -180,7 +180,7 @@ wheels = [{ file = "a-1.0-py3-none-any.whl", hashes = { "sha256" = "deadbeef" } 
     ):
         args = MockArgs(lock_file)
         args.project_file = project_file
-        args.default = default
+        args.default_group = default
         args.optional_group = optional_group or []
         args.all_optional_groups = all_optional_groups
         args.development_group = development_group or []

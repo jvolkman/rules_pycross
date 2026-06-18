@@ -22,10 +22,10 @@ def handle_args(lock_model, project_file, lock_file, output):
     args.extend(["--lock-file", lock_file])
     args.extend(["--output", output])
 
-    if lock_model.default:
-        args.append("--default")
+    if lock_model.default_group:
+        args.append("--default-group")
     else:
-        args.append("--no-default")
+        args.append("--no-default-group")
 
     if lock_model.all_optional_groups:
         args.append("--all-optional-groups")

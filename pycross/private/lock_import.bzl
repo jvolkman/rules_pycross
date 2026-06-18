@@ -249,16 +249,25 @@ def _resolve_member_project_file(lock_file_label, member_path):
     return lock_file_label.relative("//{}:pyproject.toml".format(member_package))
 
 def _get_member_group_attrs(members_tag, override_tag):
-    """Merge group attrs from a uv_workspace_members default and optional uv_workspace_member override.
+    """Merge group attrs from a workspace_members default and optional workspace_member override.
 
-    The override tag wins for any attr it explicitly sets.
+    Design: boolean flags live at exactly one level to avoid clobber issues
+    (Starlark booleans have no None sentinel).
+      - default_group: only on the override tag (per-member decision).
+      - all_optional_groups: only on the members tag (group-wide).
+        If the override specifies an explicit optional_groups list, all_optional_groups
+        is disabled for that member.
+      - all_development_groups: same pattern as all_optional_groups.
     """
+    has_explicit_optional = override_tag and override_tag.optional_groups
+    has_explicit_development = override_tag and override_tag.development_groups
+
     return dict(
-        default = override_tag.default if override_tag else members_tag.default,
-        optional_groups = override_tag.optional_groups if (override_tag and override_tag.optional_groups) else members_tag.optional_groups if hasattr(members_tag, "optional_groups") else [],
-        all_optional_groups = override_tag.all_optional_groups if override_tag else members_tag.all_optional_groups if hasattr(members_tag, "all_optional_groups") else False,
-        development_groups = override_tag.development_groups if (override_tag and override_tag.development_groups) else members_tag.development_groups if hasattr(members_tag, "development_groups") else [],
-        all_development_groups = override_tag.all_development_groups if override_tag else members_tag.all_development_groups if hasattr(members_tag, "all_development_groups") else False,
+        default_group = override_tag.default_group if override_tag else True,
+        optional_groups = override_tag.optional_groups if has_explicit_optional else (members_tag.optional_groups if hasattr(members_tag, "optional_groups") else []),
+        all_optional_groups = (members_tag.all_optional_groups if hasattr(members_tag, "all_optional_groups") else False) and not has_explicit_optional,
+        development_groups = override_tag.development_groups if has_explicit_development else (members_tag.development_groups if hasattr(members_tag, "development_groups") else []),
+        all_development_groups = (members_tag.all_development_groups if hasattr(members_tag, "all_development_groups") else False) and not has_explicit_development,
     )
 
 def _process_workspaces(

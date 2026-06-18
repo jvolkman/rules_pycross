@@ -44,15 +44,15 @@ def parse_flags() -> Any:
     )
 
     parser.add_argument(
-        "--default",
+        "--default-group",
         action="store_true",
         default=True,
         help="Whether to install dependencies from the default group.",
     )
     parser.add_argument(
-        "--no-default",
+        "--no-default-group",
         action="store_false",
-        dest="default",
+        dest="default_group",
         help="Whether to install dependencies from the default group.",
     )
 
@@ -177,7 +177,7 @@ def translate(args: Any) -> RawLockSet:
 
     # If we have a project file and filters are applied, subset the graph.
     has_filter = (
-        not args.default
+        not args.default_group
         or args.optional_group
         or args.all_optional_groups
         or args.development_group
@@ -190,7 +190,7 @@ def translate(args: Any) -> RawLockSet:
         root_reqs: List[Requirement] = []
 
         project_section = project_dict.get("project", {})
-        if args.default:
+        if args.default_group:
             for dep_str in project_section.get("dependencies", []):
                 root_reqs.append(Requirement(dep_str))
 
