@@ -1,0 +1,4 @@
+try-import %workspace%/../../../.bazelrc
+common --disk_cache .cache
+try-import %workspace%/.bazelrc.user
+try-import %workspace%/../shared/.bazelrc.user
