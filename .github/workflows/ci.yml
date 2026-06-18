@@ -16,8 +16,29 @@ jobs:
   unit:
     name: Unit + Analysis + Golden
     runs-on: ubuntu-latest
+    outputs:
+      e2e-workspaces: ${{ steps.set-matrix.outputs.e2e }}
+      cross-workspaces: ${{ steps.set-matrix.outputs.cross }}
     steps:
       - uses: actions/checkout@v6
+      - id: set-matrix
+        run: |
+          e2e_ws=()
+          cross_ws=()
+          for d in tests/e2e/*; do
+            if [ -f "$d/MODULE.bazel" ] || [ -f "$d/WORKSPACE" ] || [ -f "$d/WORKSPACE.bazel" ]; then
+              ws_name=$(basename "$d")
+              if [ "$ws_name" != "shared" ]; then
+                if [[ "$ws_name" == build_* ]]; then
+                  cross_ws+=("\"$ws_name\"")
+                else
+                  e2e_ws+=("\"tests/e2e/$ws_name\"")
+                fi
+              fi
+            fi
+          done
+          echo "e2e=[$(IFS=,; echo "${e2e_ws[*]}")]" >> $GITHUB_OUTPUT
+          echo "cross=[$(IFS=,; echo "${cross_ws[*]}")]" >> $GITHUB_OUTPUT
       - name: Configure BuildBuddy
         run: |
           echo "build:remote --remote_header=x-buildbuddy-api-key=${{ secrets.BUILDBUDDY_API_KEY }}" > .bazelrc.user
@@ -37,14 +58,7 @@ jobs:
       fail-fast: false
       matrix:
         bazel: ["8.7.0", "9.1.0"]
-        workspace:
-          - tests/e2e/always_build
-          - tests/e2e/generate_lock
-          - tests/e2e/local_wheel
-          - tests/e2e/patches_and_hooks
-          - tests/e2e/requirements
-          - tests/e2e/bzlmod_flags
-          - tests/e2e/sdist_repo
+        workspace: ${{ fromJSON(needs.unit.outputs.e2e-workspaces) }}
     steps:
       - uses: actions/checkout@v6
       - uses: bazel-contrib/setup-bazel@0.19.0
@@ -79,7 +93,7 @@ jobs:
       fail-fast: false
       matrix:
         host: [ubuntu, macos]
-        workspace: [build_meson, build_setuptools, build_maturin, build_pure_python, build_cmake]
+        workspace: ${{ fromJSON(needs.unit.outputs.cross-workspaces) }}
     steps:
       - uses: actions/checkout@v6
       - name: Enable unprivileged user namespaces
@@ -98,7 +112,7 @@ jobs:
   # Stage 3b: Test built wheels on target platforms
   cross-test:
     name: Test - (${{ matrix.builder }}→${{ matrix.runner }})
-    needs: [cross-build]
+    needs: [cross-build, unit]
     runs-on: ${{ format('{0}-latest', matrix.runner) }}
     strategy:
       fail-fast: false
@@ -119,7 +133,7 @@ jobs:
           path: ${{ runner.temp }}/artifacts
       - name: Test workspaces
         run: |
-          for ws in build_meson build_setuptools build_maturin build_pure_python build_cmake; do
+          for ws in ${{ join(fromJSON(needs.unit.outputs.cross-workspaces), ' ') }}; do
             echo "::group::Testing $ws"
 
             python -m venv ${{ runner.temp }}/venv-$ws
