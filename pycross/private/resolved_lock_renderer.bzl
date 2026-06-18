@@ -265,9 +265,10 @@ def render_lock_bzl(lock, repo_map, sdist_map = None, rctx_name = ""):
             base_packages_with_extras[base_pkg_key].append(pkg_key)
 
     for base_pkg_key, extra_keys in sorted(base_packages_with_extras.items()):
+        base_name, version = base_pkg_key.split("@", 1)
         lines.extend([
             _ind("py_library("),
-            _ind('name = "{}__squashed",'.format(base_pkg_key), 2),
+            _ind('name = "{}[_all_]@{}",'.format(base_name, version), 2),
             _ind("deps = [", 2),
             _ind('":{}\",'.format(base_pkg_key), 3),
         ])

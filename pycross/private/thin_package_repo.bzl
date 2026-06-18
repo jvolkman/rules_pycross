@@ -53,7 +53,11 @@ def _safe_name(pin_name, name):
 def _pin_build(target_name, pin_target, package, workspace_repo, workspace_lock_target = None, has_squashed_variant = False, extras_dict = None):
     """Generates the BUILD file for a pin directory, pointing to the workspace."""
     lock_target = workspace_lock_target if workspace_lock_target else pin_target
-    lock_target_base = (lock_target + "__squashed") if has_squashed_variant else lock_target
+    if has_squashed_variant:
+        base, version = lock_target.split("@", 1)
+        lock_target_base = "{}[_all_]@{}".format(base, version)
+    else:
+        lock_target_base = lock_target
     lock_ref = "@{}//_lock:".format(workspace_repo)
     wheel_ref = "@{}//_wheel:".format(workspace_repo)
     sdist_ref = "@{}//_sdist:".format(workspace_repo)
