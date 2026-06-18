@@ -270,7 +270,8 @@ def _process_workspaces(
         member_tag_name,
         members_tag_name,
         discover_members_fn,
-        model_type):
+        model_type,
+        root_direct_deps):
     # Collect workspace definitions
     workspaces = {}
     for module in module_ctx.modules:
@@ -331,6 +332,8 @@ def _process_workspaces(
                 # Register as a lock repo
                 _check_unique_repo_name(lock_owners, module.name, repo_name)
                 lock_repos[repo_name] = _workspace_lock_struct(module_ctx, ws_tag, repo_name, tag.workspace)
+                if module.is_root:
+                    root_direct_deps.append(repo_name)
 
                 model = dict(
                     model_type = model_type,
@@ -345,6 +348,7 @@ def _process_workspaces(
 def _lock_import_impl(module_ctx):
     lock_owners = {}
     lock_repos = {}
+    root_direct_deps = []
     lock_model_structs = {}
     resolved_lock_files = {}
 
@@ -353,6 +357,8 @@ def _lock_import_impl(module_ctx):
         for tag in module.tags.import_pdm + module.tags.import_poetry + module.tags.import_uv + module.tags.import_pylock:
             _check_unique_lock_repo(lock_owners, module, tag)
             lock_repos[tag.repo] = _lock_struct(module_ctx, tag)
+            if module.is_root:
+                root_direct_deps.append(tag.repo)
 
     # Iterate over the various import tags and create lock models
     for module in module_ctx.modules:
@@ -385,6 +391,7 @@ def _lock_import_impl(module_ctx):
         members_tag_name = "uv_workspace_members",
         discover_members_fn = _discover_uv_workspace_members,
         model_type = "uv",
+        root_direct_deps = root_direct_deps,
     )
 
     _process_workspaces(
@@ -397,6 +404,7 @@ def _lock_import_impl(module_ctx):
         members_tag_name = "pdm_workspace_members",
         discover_members_fn = _discover_pdm_workspace_members,
         model_type = "pdm",
+        root_direct_deps = root_direct_deps,
     )
 
     workspace_packages = {}  # workspace_name -> {pkg_name -> normalized_tag}
@@ -444,6 +452,7 @@ def _lock_import_impl(module_ctx):
         name = "lock_import_repos_hub",
         repo_files = resolved_lock_files,
         workspace_memberships = workspace_memberships,
+        root_repos = root_direct_deps,
     )
 
     if bazel_features.external_deps.extension_metadata_has_reproducible:
