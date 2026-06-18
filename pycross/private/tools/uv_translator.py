@@ -9,6 +9,7 @@ from typing import Any
 from typing import Dict
 from typing import List
 from typing import Set
+from typing import Tuple
 from urllib.parse import unquote
 from urllib.parse import urlparse
 
@@ -179,8 +180,21 @@ def translate(
     development_groups: List[str],
     all_development_groups: bool,
     package_processor: Callable[[list[Dict[str, Any]]], Dict[PackageKey, Package]],
+    conflicts: List[List[Dict[str, str]]] = None,
 ) -> RawLockSet:
-    requirements: List[Requirement] = []
+    conflicts = conflicts or []
+
+    conflict_settings = {}
+    conflict_values = set()
+    for conflict_list in conflicts:
+        names = [c.get("extra") or c.get("package") for c in conflict_list]
+        setting_name = "conflicts_" + "_".join(names)
+        for val in names:
+            if val:
+                conflict_settings[val] = setting_name
+                conflict_values.add(val)
+
+    requirements: List[Tuple[Requirement, str]] = []
 
     project_info = next(pkg for pkg in packages_list if package_canonical_name(pkg["name"]) == project_name)
 
@@ -188,8 +202,14 @@ def translate(
         name = dep["name"]
         extras = dep.get("extra") or dep.get("extras", [])
         if extras:
-            return Requirement(f"{name}[{','.join(extras)}]")
-        return Requirement(name)
+            req_str = f"{name}[{','.join(extras)}]"
+        else:
+            req_str = name
+        if "version" in dep:
+            req_str += f"=={dep['version']}"
+        if "marker" in dep:
+            req_str += f"; {dep['marker']}"
+        return Requirement(req_str)
 
     default_dependencies = [parse_dependency(dep) for dep in project_info.get("dependencies", {})]
     optional_dependencies = {
@@ -202,7 +222,8 @@ def translate(
     }
 
     if default_group:
-        requirements.extend(default_dependencies)
+        for dep in default_dependencies:
+            requirements.append((dep, ""))
 
     if all_optional_groups:
         optional_groups = list(optional_dependencies)
@@ -213,25 +234,39 @@ def translate(
     for group_name in optional_groups:
         if group_name not in optional_dependencies:
             raise Exception(f"Non-existent optional dependency group: {group_name}")
-        requirements.extend(optional_dependencies[group_name])
+        constraint = group_name if group_name in conflict_values else ""
+        for dep in optional_dependencies[group_name]:
+            requirements.append((dep, constraint))
 
     for group_name in development_groups:
         if group_name not in development_dependencies:
             raise Exception(f"Non-existent development dependency group: {group_name}")
-        requirements.extend(development_dependencies[group_name])
+        constraint = group_name if group_name in conflict_values else ""
+        for dep in development_dependencies[group_name]:
+            requirements.append((dep, constraint))
 
-    pinned_package_specs: Dict[DependencyName, Requirement] = {}
-    for req in requirements:
+    pinned_package_specs: Dict[DependencyName, Dict[str, Requirement]] = {}
+    for req, constraint in requirements:
         if req.extras:
             for extra in req.extras:
                 pin = DependencyName.from_parts(req.name, extra)
                 req_string = f"{req.name}[{extra}]{req.specifier}" if req.specifier else f"{req.name}[{extra}]"
                 if req.marker:
                     req_string += f";{req.marker}"
-                pinned_package_specs[pin] = Requirement(req_string)
+                if pin not in pinned_package_specs:
+                    pinned_package_specs[pin] = {}
+                pinned_package_specs[pin][constraint] = Requirement(req_string)
         else:
             pin = package_canonical_name(req.name)
-            pinned_package_specs[pin] = req
+            if pin not in pinned_package_specs:
+                pinned_package_specs[pin] = {}
+            pinned_package_specs[pin][constraint] = req
+
+    raw_conflicts = {}
+    for conflict_list in conflicts:
+        names = [c.get("extra") or c.get("package") for c in conflict_list]
+        setting_name = "conflicts_" + "_".join(names)
+        raw_conflicts[setting_name] = [n for n in names if n]
 
     distinct_packages = package_processor(packages_list)
     return resolve_lock_graph(
@@ -239,6 +274,7 @@ def translate(
         pinned_package_specs=pinned_package_specs,
         requires_python=requires_python,
         strict_dependencies=True,
+        conflicts=raw_conflicts,
     )
 
 
@@ -517,6 +553,7 @@ def main(args: Any) -> None:
         development_groups=args.development_group,
         all_development_groups=args.all_development_groups,
         package_processor=collect_and_process_packages,
+        conflicts=lock_dict.get("conflicts", []),
     )
 
     with open(output, "w") as f:

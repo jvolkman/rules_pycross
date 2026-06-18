@@ -215,10 +215,10 @@ def translate(
             raise Exception(f"Non-existent development dependency group: {group_name}")
         requirements.extend(development_dependencies[group_name])
 
-    pinned_package_specs: Dict[NormalizedName, Requirement] = {}
+    pinned_package_specs: Dict[NormalizedName, Dict[str, Requirement]] = {}
     for req in requirements:
         pin = package_canonical_name(req.name)
-        pinned_package_specs[pin] = req
+        pinned_package_specs[pin] = {"": req}
 
     distinct_packages: Dict[PackageKey, PDMPackage] = {}
     # Pull out all Package entries in a pdm-specific model.

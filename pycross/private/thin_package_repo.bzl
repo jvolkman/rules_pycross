@@ -50,14 +50,28 @@ def _requirements_bzl(rctx, pins):
 def _safe_name(pin_name, name):
     return name + "_" if pin_name == name else name
 
-def _pin_build(target_name, pin_target, package, workspace_repo, workspace_lock_target = None, has_aggregated_variant = False, extras_dict = None):
+def _target_select(target_dict, prefix, suffix, workspace_repo, is_aggregated = False):
+    if len(target_dict) == 1 and "" in target_dict:
+        t = target_dict[""]
+        if is_aggregated:
+            t = "{}[_all_]@{}".format(t.split("@", 1)[0], t.split("@", 1)[1])
+        return '"{}{}{}"'.format(prefix, t, suffix)
+
+    lines = ["select({"]
+    for constraint, t in target_dict.items():
+        t_base = t
+        if is_aggregated:
+            t_base = "{}[_all_]@{}".format(t.split("@", 1)[0], t.split("@", 1)[1])
+        if constraint == "":
+            lines.append('        "//conditions:default": "{}{}{}",'.format(prefix, t_base, suffix))
+        else:
+            lines.append('        "@{}//_lock:{}": "{}{}{}",'.format(workspace_repo, constraint, prefix, t_base, suffix))
+    lines.append("    })")
+    return "\n".join(lines)
+
+def _pin_build(target_name, pin_target_dict, package, workspace_repo, workspace_lock_target_dict = None, has_aggregated_variant = False, extras_dict = None):
     """Generates the BUILD file for a pin directory, pointing to the workspace."""
-    lock_target = workspace_lock_target if workspace_lock_target else pin_target
-    if has_aggregated_variant:
-        base, version = lock_target.split("@", 1)
-        lock_target_base = "{}[_all_]@{}".format(base, version)
-    else:
-        lock_target_base = lock_target
+    lock_target_dict = workspace_lock_target_dict if workspace_lock_target_dict else pin_target_dict
     lock_ref = "@{}//_lock:".format(workspace_repo)
     wheel_ref = "@{}//_wheel:".format(workspace_repo)
     sdist_ref = "@{}//_sdist:".format(workspace_repo)
@@ -66,31 +80,31 @@ def _pin_build(target_name, pin_target, package, workspace_repo, workspace_lock_
         'package(default_visibility = ["//visibility:public"])',
         "",
     ]
-    if lock_target:
+    if lock_target_dict:
         lines.extend([
             "alias(",
             '    name = "{}",'.format(target_name),
-            '    actual = "{}{}",'.format(lock_ref, lock_target_base),
+            "    actual = {},".format(_target_select(lock_target_dict, lock_ref, "", workspace_repo, is_aggregated = has_aggregated_variant)),
             ")",
             "",
             "alias(",
             '    name = "{}",'.format(_safe_name(target_name, "pkg")),
-            '    actual = "{}{}",'.format(lock_ref, lock_target_base),
+            "    actual = {},".format(_target_select(lock_target_dict, lock_ref, "", workspace_repo, is_aggregated = has_aggregated_variant)),
             ")",
             "",
             "alias(",
             '    name = "{}",'.format(_safe_name(target_name, "wheel")),
-            '    actual = "{}{}",'.format(wheel_ref, pin_target),
+            "    actual = {},".format(_target_select(pin_target_dict, wheel_ref, "", workspace_repo)),
             ")",
             "",
             "alias(",
             '    name = "{}",'.format(_safe_name(target_name, "dist_info")),
-            '    actual = "{}_dist_info_{}",'.format(lock_ref, lock_target),
+            "    actual = {},".format(_target_select(lock_target_dict, lock_ref + "_dist_info_", "", workspace_repo)),
             ")",
             "",
             "alias(",
             '    name = "{}",'.format(_safe_name(target_name, "data")),
-            '    actual = "{}{}",'.format(lock_ref, lock_target_base),
+            "    actual = {},".format(_target_select(lock_target_dict, lock_ref, "", workspace_repo, is_aggregated = has_aggregated_variant)),
             ")",
         ])
 
@@ -98,7 +112,7 @@ def _pin_build(target_name, pin_target, package, workspace_repo, workspace_lock_
             lines.extend([
                 "alias(",
                 '    name = "[]",',
-                '    actual = "{}{}",'.format(lock_ref, lock_target),
+                "    actual = {},".format(_target_select(lock_target_dict, lock_ref, "", workspace_repo)),
                 ")",
                 "",
             ])
@@ -108,17 +122,17 @@ def _pin_build(target_name, pin_target, package, workspace_repo, workspace_lock_
             lines.extend([
                 "alias(",
                 '    name = "{}",'.format(_safe_name(target_name, "sdist")),
-                '    actual = "{}{}",'.format(sdist_ref, pin_target),
+                "    actual = {},".format(_target_select(pin_target_dict, sdist_ref, "", workspace_repo)),
                 ")",
                 "",
             ])
 
     extras_dict = extras_dict or {}
-    for extra_name, extra_target in sorted(extras_dict.items()):
+    for extra_name, extra_target_dict in sorted(extras_dict.items()):
         lines.extend([
             "alias(",
             '    name = "[{}]",'.format(extra_name),
-            '    actual = "{}{}",'.format(lock_ref, extra_target),
+            "    actual = {},".format(_target_select(extra_target_dict, lock_ref, "", workspace_repo)),
             ")",
             "",
         ])
@@ -167,15 +181,16 @@ def _thin_package_repo_impl(rctx):
         "    deps = [",
     ]
     for pin_name in sorted(pins.keys()):
-        pin_target = pins[pin_name]
-        package = packages.get(pin_target, {})
+        pin_target_dict = pins[pin_name]
+        for pin_target in sorted(pin_target_dict.values()):
+            package = packages.get(pin_target, {})
 
-        # Point directly at the pycross_wheel_library target in the workspace's _lock.
-        # For cycle group packages, the wheel_library is named _raw_<pkg_key>.
-        if package.get("cycle_group"):
-            root_build_lines.append('        "@%s//_lock:_raw_%s",' % (workspace_repo, pin_target))
-        else:
-            root_build_lines.append('        "@%s//_lock:%s",' % (workspace_repo, pin_target))
+            # Point directly at the pycross_wheel_library target in the workspace's _lock.
+            # For cycle group packages, the wheel_library is named _raw_<pkg_key>.
+            if package.get("cycle_group"):
+                root_build_lines.append('        "@%s//_lock:_raw_%s",' % (workspace_repo, pin_target))
+            else:
+                root_build_lines.append('        "@%s//_lock:%s",' % (workspace_repo, pin_target))
     root_build_lines.extend([
         "    ],",
     ])
@@ -251,36 +266,53 @@ def _thin_package_repo_impl(rctx):
 
     # Pin directories: aliases pointing to @workspace//_lock targets
     for base_pin_name, group in sorted(grouped_pins.items()):
-        base_target = group["base_target"]
-        if not base_target and group["extras"]:
+        base_target_dict = group["base_target"]
+        if not base_target_dict and group["extras"]:
             # If the user only pinned extras, derive the base target from an extra's lock key.
-            first_extra = list(group["extras"].values())[0]
-            if "[" in first_extra:
-                base_name, extra_and_version = first_extra.split("[", 1)
-                _, version = extra_and_version.split("]@", 1)
-                base_target = "{}@{}".format(base_name, version)
+            first_extra_target_dict = list(group["extras"].values())[0]
+            base_target_dict = {}
+            for constraint, extra_target in first_extra_target_dict.items():
+                if "[" in extra_target:
+                    base_name, extra_and_version = extra_target.split("[", 1)
+                    _, version = extra_and_version.split("]@", 1)
+                    base_target_dict[constraint] = "{}@{}".format(base_name, version)
 
-        package = packages.get(base_target) if base_target else {}
+        package = {}
+        if base_target_dict:
+            first_target = list(base_target_dict.values())[0]
+            package = packages.get(first_target, {})
         us_name = underscore_name(base_pin_name)
 
         # For conflicting packages, use the member-specific variant target.
-        workspace_lock_target = None
-        if base_target and base_target in conflicts:
-            workspace_lock_target = "{}__via_{}".format(base_target, rctx.attr.member_name)
+        workspace_lock_target_dict = None
+        if base_target_dict:
+            workspace_lock_target_dict = {}
+            for constraint, base_target in base_target_dict.items():
+                if base_target in conflicts:
+                    workspace_lock_target_dict[constraint] = "{}__via_{}".format(base_target, rctx.attr.member_name)
+                else:
+                    workspace_lock_target_dict[constraint] = base_target
 
-        has_aggregated_variant = base_target and base_target in base_packages_with_extras
+        has_aggregated_variant = False
+        if base_target_dict:
+            for constraint, base_target in base_target_dict.items():
+                if base_target in base_packages_with_extras:
+                    has_aggregated_variant = True
 
         # Handle extras variants
         extras_dict = {}
-        for extra_name, extra_target in group["extras"].items():
-            if extra_target in conflicts:
-                extras_dict[extra_name] = "{}__via_{}".format(extra_target, rctx.attr.member_name)
-            else:
-                extras_dict[extra_name] = extra_target
+        for extra_name, extra_target_dict in group["extras"].items():
+            new_target_dict = {}
+            for constraint, extra_target in extra_target_dict.items():
+                if extra_target in conflicts:
+                    new_target_dict[constraint] = "{}__via_{}".format(extra_target, rctx.attr.member_name)
+                else:
+                    new_target_dict[constraint] = extra_target
+            extras_dict[extra_name] = new_target_dict
 
         rctx.file(
             "{}/BUILD.bazel".format(us_name),
-            _pin_build(us_name, base_target, package, workspace_repo, workspace_lock_target, has_aggregated_variant, extras_dict),
+            _pin_build(us_name, base_target_dict, package, workspace_repo, workspace_lock_target_dict, has_aggregated_variant, extras_dict),
         )
 
     # _backend/ BUILD and macros
@@ -326,6 +358,33 @@ def _thin_package_repo_impl(rctx):
         ])
 
         rctx.file("_backend/{}.bzl".format(macro_name), "\n".join(lines))
+
+    # _constraints/ BUILD: alias constraint_setting and constraint_value targets
+    # from the workspace repo so users can reference @<thin_repo>//_constraints:<name>
+    # in platforms and target_compatible_with without needing the workspace repo directly.
+    group_conflicts = lock.get("conflicts", {})
+    if group_conflicts:
+        constraint_lines = [
+            'package(default_visibility = ["//visibility:public"])',
+            "",
+        ]
+        for setting_name, values in sorted(group_conflicts.items()):
+            constraint_lines.extend([
+                "alias(",
+                '    name = "{}",'.format(setting_name),
+                '    actual = "@{}//_lock:{}",'.format(workspace_repo, setting_name),
+                ")",
+                "",
+            ])
+            for val in sorted(values):
+                constraint_lines.extend([
+                    "alias(",
+                    '    name = "{}",'.format(val),
+                    '    actual = "@{}//_lock:{}",'.format(workspace_repo, val),
+                    ")",
+                    "",
+                ])
+        rctx.file("_constraints/BUILD.bazel", "\n".join(constraint_lines))
 
 thin_package_repo = repository_rule(
     implementation = _thin_package_repo_impl,

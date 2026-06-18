@@ -127,6 +127,7 @@ def _package_repo_impl(rctx):
     member_packages = {}  # member_name -> {pkg_key -> pkg_data}
     member_envs = {}  # member_name -> [env_name, ...]
     cycle_groups = {}  # group_name -> [pkg_key, ...]
+    group_conflicts = {}  # group_conflicts maps constraint settings to constraint values
     for member, lock_label in rctx.attr.member_lock_files.items():
         member_lock = json.decode(rctx.read(rctx.path(Label(lock_label))))
 
@@ -136,6 +137,9 @@ def _package_repo_impl(rctx):
             member_env_names.append(env_name)
             if env_name not in environments:
                 environments[env_name] = env_ref
+
+        if "conflicts" in member_lock:
+            group_conflicts.update(member_lock["conflicts"])
 
         member_envs[member] = sorted(member_env_names)
         member_packages[member] = member_lock.get("packages", {})
@@ -201,14 +205,32 @@ def _package_repo_impl(rctx):
 
     # 1. Render _lock/lock.bzl and _lock/BUILD.bazel
     rctx.file("_lock/lock.bzl", render_lock_bzl(lock, repo_map, sdist_map, rctx.name))
-    rctx.file("_lock/BUILD.bazel", "\n".join([
+
+    lock_build_lines = [
         'package(default_visibility = ["//visibility:public"])',
         "",
         'load(":lock.bzl", "targets")',
         "",
         "targets()",
         "",
-    ]))
+    ]
+    for setting_name, values in group_conflicts.items():
+        lock_build_lines.extend([
+            "constraint_setting(",
+            '    name = "{}",'.format(setting_name),
+            ")",
+            "",
+        ])
+        for val in values:
+            lock_build_lines.extend([
+                "constraint_value(",
+                '    name = "{}",'.format(val),
+                '    constraint_setting = ":{}",'.format(setting_name),
+                ")",
+                "",
+            ])
+
+    rctx.file("_lock/BUILD.bazel", "\n".join(lock_build_lines))
 
     # 2. Minimal root BUILD.bazel
     rctx.file("BUILD.bazel", "\n".join([

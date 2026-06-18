@@ -29,7 +29,7 @@ class TomlLockGeneratorTest(unittest.TestCase):
                     environment_files={"env1": FileReference(key=FileKey("mypkg-1.0-py3-none-any.whl/12345"))},
                 )
             },
-            pins={"mypkg": PackageKey("mypkg@1.0")},
+            pins={"mypkg": {"": PackageKey("mypkg@1.0")}},
         )
         mock_resolve.return_value = lock
 

@@ -31,7 +31,12 @@ def main(args: Any) -> None:
     lock_dict = {"pins": {}, "packages": {}}
 
     # Sort pins deterministically
-    lock_dict["pins"] = {str(k): str(v) for k, v in sorted(resolved_lock.pins.items())}
+    def _format_pin(v):
+        if "" in v and len(v) == 1:
+            return str(v[""])
+        return {k: str(val) for k, val in v.items()}
+
+    lock_dict["pins"] = {str(k): _format_pin(v) for k, v in sorted(resolved_lock.pins.items())}
 
     packages_dict = {}
     for pkg_key, pkg in sorted(resolved_lock.packages.items()):

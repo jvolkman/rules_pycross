@@ -143,12 +143,12 @@ def translate(
             # Skip the special line indicating python version.
             continue
         if isinstance(pin_info, str):
-            pinned_package_specs[pin] = parse_constraint(pin_info)
+            pinned_package_specs[pin] = {"": parse_constraint(pin_info)}
         else:
             if "path" in pin_info:
                 # Skip path dependencies.
                 continue
-            pinned_package_specs[pin] = parse_constraint(pin_info["version"])
+            pinned_package_specs[pin] = {"": parse_constraint(pin_info["version"])}
 
     def parse_file_info(file_info) -> PackageFile:
         file_name = file_info["file"]

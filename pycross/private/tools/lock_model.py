@@ -120,6 +120,10 @@ class PackageKey:
     version: Version
 
     def __init__(self, val) -> None:
+        if isinstance(val, PackageKey):
+            object.__setattr__(self, "name", val.name)
+            object.__setattr__(self, "version", val.version)
+            return
         name, version = val.split("@", maxsplit=1)
         object.__setattr__(self, "name", package_canonical_name(name))
         object.__setattr__(self, "version", Version(version))
@@ -307,7 +311,8 @@ class ResolvedPackage:
 class RawLockSet:
     python_versions: SpecifierSet
     packages: Dict[PackageKey, RawPackage] = field(default_factory=dict)
-    pins: Dict[DependencyName, PackageKey] = field(default_factory=dict)
+    pins: Dict[DependencyName, Dict[str, PackageKey]] = field(default_factory=dict)
+    conflicts: Dict[str, List[str]] = field(default_factory=dict)
 
     def __post_init__(self):
         assert self.python_versions is not None, "The python_versions field must be specified."
@@ -332,7 +337,11 @@ class RawLockSet:
             }
         if "pins" in parsed:
             parsed["pins"] = {
-                (k if isinstance(k, DependencyName) else package_canonical_name(k)): v
+                (k if isinstance(k, DependencyName) else package_canonical_name(k)): (
+                    {constraint: PackageKey(pkg_str) for constraint, pkg_str in v.items()}
+                    if isinstance(v, dict)
+                    else {"": PackageKey(v)}
+                )
                 for k, v in parsed["pins"].items()
             }
         return from_dict(
@@ -349,9 +358,10 @@ class RawLockSet:
 class ResolvedLockSet:
     environments: Dict[str, EnvironmentReference] = field(default_factory=dict)
     packages: Dict[PackageKey, ResolvedPackage] = field(default_factory=dict)
-    pins: Dict[DependencyName, PackageKey] = field(default_factory=dict)
+    pins: Dict[DependencyName, Dict[str, PackageKey]] = field(default_factory=dict)
     remote_files: Dict[FileKey, PackageFile] = field(default_factory=dict)
     cycle_groups: Dict[str, List[PackageKey]] = field(default_factory=dict)
+    conflicts: Dict[str, List[str]] = field(default_factory=dict)
 
     @property
     def __dict__(self) -> Dict[str, Any]:
@@ -378,7 +388,11 @@ class ResolvedLockSet:
             }
         if "pins" in parsed:
             parsed["pins"] = {
-                (k if isinstance(k, DependencyName) else package_canonical_name(k)): v
+                (k if isinstance(k, DependencyName) else package_canonical_name(k)): (
+                    {constraint: PackageKey(pkg_str) for constraint, pkg_str in v.items()}
+                    if isinstance(v, dict)
+                    else {"": PackageKey(v)}
+                )
                 for k, v in parsed["pins"].items()
             }
         return from_dict(

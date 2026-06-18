@@ -201,8 +201,21 @@ def _discover_uv_workspace_members(mctx, lock_file_label):
                 name = pkg["name"],
                 path = source["editable"],
             ))
+        elif "virtual" in source:
+            # Only include virtual members that have actual dependencies.
+            # A virtual workspace root with no dependencies is just the workspace
+            # definition and shouldn't produce a lock repo.
+            has_deps = (
+                pkg.get("dependencies") or
+                pkg.get("optional-dependencies") or
+                pkg.get("dev-dependencies")
+            )
+            if has_deps:
+                members.append(struct(
+                    name = pkg["name"],
+                    path = source["virtual"],
+                ))
 
-        # Skip virtual entries (workspace roots with package = false)
     return members
 
 def _discover_pdm_workspace_members(mctx, lock_file_label):
@@ -238,15 +251,20 @@ def _resolve_member_project_file(lock_file_label, member_path):
     clean_path = member_path
     if clean_path.startswith("./"):
         clean_path = clean_path[2:]
+    if clean_path == ".":
+        clean_path = ""
 
     # Build the package path relative to the lock file's package
     lock_package = lock_file_label.package
     if lock_package:
-        member_package = lock_package + "/" + clean_path
+        member_package = lock_package + ("/" + clean_path if clean_path else "")
     else:
         member_package = clean_path
 
-    return lock_file_label.relative("//{}:pyproject.toml".format(member_package))
+    if member_package:
+        return lock_file_label.relative("//{}:pyproject.toml".format(member_package))
+    else:
+        return lock_file_label.relative("//:pyproject.toml")
 
 def _get_member_group_attrs(members_tag, override_tag):
     """Merge group attrs from a workspace_members default and optional workspace_member override.
@@ -299,9 +317,15 @@ def _process_workspaces(
             if tag.workspace not in workspaces:
                 fail("{} references non-existent workspace: '{}'".format(member_tag_name, tag.workspace))
             key = (tag.workspace, tag.project)
-            if key in member_overrides:
-                fail("Duplicate {} for project '{}' in workspace '{}'".format(member_tag_name, tag.project, tag.workspace))
-            member_overrides[key] = tag
+            if key not in member_overrides:
+                member_overrides[key] = []
+
+            # Check for duplicate repo names within the same project override
+            for existing in member_overrides[key]:
+                if existing.repo and tag.repo and existing.repo == tag.repo:
+                    fail("Duplicate {} for project '{}' with repo '{}' in workspace '{}'".format(member_tag_name, tag.project, tag.repo, tag.workspace))
+
+            member_overrides[key].append(tag)
 
     # Process bulk member imports
     for module in module_ctx.modules:
@@ -320,39 +344,40 @@ def _process_workspaces(
                 if member.name in excluded:
                     continue
 
-                override = member_overrides.get((tag.workspace, member.name))
+                overrides = member_overrides.get((tag.workspace, member.name), [None])
 
-                # Determine repo name
-                normalized_name = sanitize_name(member.name)
-                if override and override.repo:
-                    repo_name = override.repo
-                else:
-                    repo_name = tag.repo_pattern.format(member = normalized_name)
+                for override in overrides:
+                    # Determine repo name
+                    normalized_name = sanitize_name(member.name)
+                    if override and override.repo:
+                        repo_name = override.repo
+                    else:
+                        repo_name = tag.repo_pattern.format(member = normalized_name)
 
-                # Determine project_file
-                if override and override.project_file:
-                    project_file = override.project_file
-                else:
-                    project_file = _resolve_member_project_file(ws_tag.lock_file, member.path)
+                    # Determine project_file
+                    if override and override.project_file:
+                        project_file = override.project_file
+                    else:
+                        project_file = _resolve_member_project_file(ws_tag.lock_file, member.path)
 
-                # Get group attrs (override wins)
-                group_attrs = _get_member_group_attrs(tag, override)
+                    # Get group attrs (override wins)
+                    group_attrs = _get_member_group_attrs(tag, override)
 
-                # Register as a lock repo
-                _check_unique_repo_name(lock_owners, module.name, repo_name)
-                lock_repos[repo_name] = _workspace_lock_struct(module_ctx, ws_tag, repo_name, tag.workspace)
-                if module.is_root:
-                    root_direct_deps.append(repo_name)
+                    # Register as a lock repo
+                    _check_unique_repo_name(lock_owners, module.name, repo_name)
+                    lock_repos[repo_name] = _workspace_lock_struct(module_ctx, ws_tag, repo_name, tag.workspace)
+                    if module.is_root:
+                        root_direct_deps.append(repo_name)
 
-                model = dict(
-                    model_type = model_type,
-                    project_file = str(project_file),
-                    lock_file = str(ws_tag.lock_file),
-                    **group_attrs
-                )
-                if hasattr(ws_tag, "require_static_urls"):
-                    model["require_static_urls"] = ws_tag.require_static_urls
-                lock_model_structs[repo_name] = json.encode(model)
+                    model = dict(
+                        model_type = model_type,
+                        project_file = str(project_file),
+                        lock_file = str(ws_tag.lock_file),
+                        **group_attrs
+                    )
+                    if hasattr(ws_tag, "require_static_urls"):
+                        model["require_static_urls"] = ws_tag.require_static_urls
+                    lock_model_structs[repo_name] = json.encode(model)
 
 def _lock_import_impl(module_ctx):
     lock_owners = {}

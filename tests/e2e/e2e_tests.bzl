@@ -24,6 +24,7 @@ def define_e2e_tests():
         "uv_workspace",
         "pdm_workspace",
         "uv_cycle",
+        "uv_conflicts",
     ]:
         extra_tags = ["build"] if ws in _BUILD_WORKSPACES else []
         sh_test(

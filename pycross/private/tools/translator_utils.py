@@ -52,10 +52,12 @@ def resolve_lock_graph(
     pinned_package_specs: Dict[DependencyName, Any],
     requires_python: Any,
     strict_dependencies: bool = True,
+    conflicts: Dict[str, List[str]] = None,
 ) -> RawLockSet:
     """
     Resolves a dependency graph of packages by hooking up their dependencies and pins.
     """
+    conflicts = conflicts or {}
     distinct_packages = {p.key: p for p in packages}
     all_packages = list(distinct_packages.values())
 
@@ -93,24 +95,42 @@ def resolve_lock_graph(
                             f"Found no packages to satisfy dependency (name={dep.name}, spec={dep})"
                         )
 
-    pinned_keys: Dict[DependencyName, PackageKey] = {}
+    pinned_keys: Dict[DependencyName, Dict[str, PackageKey]] = {}
 
-    for pin, pin_spec in pinned_package_specs.items():
+    for pin, pin_specs in pinned_package_specs.items():
         pin_packages = packages_by_canonical_name[pin]
-        for pin_pkg in pin_packages:
-            if pin_pkg.satisfies_pin(pin_spec):
-                pinned_keys[pin] = pin_pkg.key
-                break
-        else:
-            raise MismatchedVersionException(f"Found no packages to satisfy pin (name={pin}, spec={pin_spec})")
+        pinned_keys[pin] = {}
+        for constraint, pin_spec in pin_specs.items():
+            for pin_pkg in pin_packages:
+                if pin_pkg.satisfies_pin(pin_spec):
+                    pinned_keys[pin][constraint] = pin_pkg.key
+                    break
+            else:
+                if strict_dependencies:
+                    raise MismatchedVersionException(f"Found no packages to satisfy pin (name={pin}, spec={pin_spec})")
 
     # Replace pins of local packages with pins of their dependencies.
     # We may need to loop multiple times if local packages depend on one another.
-    while local_pins := [key for key in pinned_keys.values() if distinct_packages[key].is_local]:
-        for pin_key in local_pins:
-            pin_pkg = distinct_packages[pin_key]
-            pinned_keys.update({dep.name: dep.key for dep in pin_pkg.resolved_dependencies})
-            del pinned_keys[pin_key.name]
+    while True:
+        local_pins = []
+        for pin_name, constraints in pinned_keys.items():
+            for constraint, key in constraints.items():
+                if distinct_packages[key].is_local:
+                    local_pins.append((pin_name, constraint, key))
+        if not local_pins:
+            break
+        for pin_name, constraint, key in local_pins:
+            pin_pkg = distinct_packages[key]
+            for dep in pin_pkg.resolved_dependencies:
+                if dep.name not in pinned_keys:
+                    pinned_keys[dep.name] = {}
+                pinned_keys[dep.name][constraint] = dep.key
+            del pinned_keys[pin_name][constraint]
+
+        # Cleanup empty dicts
+        keys_to_delete = [k for k, v in pinned_keys.items() if not v]
+        for k in keys_to_delete:
+            del pinned_keys[k]
 
     lock_packages: Dict[PackageKey, RawPackage] = {}
     for package in all_packages:
@@ -127,4 +147,5 @@ def resolve_lock_graph(
         python_versions=requires_python,
         packages=lock_packages,
         pins=pinned_keys,
+        conflicts=conflicts,
     )

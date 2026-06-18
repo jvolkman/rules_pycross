@@ -128,8 +128,8 @@ class TestResolveLockGraph(unittest.TestCase):
             _make_pkg("urllib3", "2.1.0"),
         ]
         pins = {
-            canonicalize_name("requests"): _make_pin("2.31.0"),
-            canonicalize_name("urllib3"): _make_pin("2.1.0"),
+            canonicalize_name("requests"): {"": _make_pin("2.31.0")},
+            canonicalize_name("urllib3"): {"": _make_pin("2.1.0")},
         }
 
         result = resolve_lock_graph(packages, pins, SpecifierSet(">=3.8"))
@@ -142,8 +142,8 @@ class TestResolveLockGraph(unittest.TestCase):
 
         self.assertIn(requests_key, result.packages)
         self.assertIn(urllib3_key, result.packages)
-        self.assertEqual(result.pins[canonicalize_name("requests")], requests_key)
-        self.assertEqual(result.pins[canonicalize_name("urllib3")], urllib3_key)
+        self.assertEqual(result.pins[canonicalize_name("requests")], {"": requests_key})
+        self.assertEqual(result.pins[canonicalize_name("urllib3")], {"": urllib3_key})
 
         # Check that requests has urllib3 as a resolved dependency
         requests_pkg = result.packages[requests_key]
@@ -158,8 +158,8 @@ class TestResolveLockGraph(unittest.TestCase):
             _make_pkg("urllib3", "1.26.18"),
         ]
         pins = {
-            canonicalize_name("requests"): _make_pin("2.31.0"),
-            canonicalize_name("urllib3"): _make_pin("2.1.0"),
+            canonicalize_name("requests"): {"": _make_pin("2.31.0")},
+            canonicalize_name("urllib3"): {"": _make_pin("2.1.0")},
         }
 
         result = resolve_lock_graph(packages, pins, SpecifierSet(">=3.8"))
@@ -177,8 +177,8 @@ class TestResolveLockGraph(unittest.TestCase):
             _make_pkg("urllib3", "1.26.18"),
         ]
         pins = {
-            canonicalize_name("requests"): _make_pin("2.31.0"),
-            canonicalize_name("urllib3"): _make_pin("1.26.18"),
+            canonicalize_name("requests"): {"": _make_pin("2.31.0")},
+            canonicalize_name("urllib3"): {"": _make_pin("1.26.18")},
         }
 
         result = resolve_lock_graph(packages, pins, SpecifierSet(">=3.8"))
@@ -195,7 +195,7 @@ class TestResolveLockGraph(unittest.TestCase):
             _make_pkg("requests", "2.31.0", deps=[("nonexistent", ">=1.0")]),
         ]
         pins = {
-            canonicalize_name("requests"): _make_pin("2.31.0"),
+            canonicalize_name("requests"): {"": _make_pin("2.31.0")},
         }
 
         with self.assertRaises(MismatchedVersionException):
@@ -207,7 +207,7 @@ class TestResolveLockGraph(unittest.TestCase):
             _make_pkg("requests", "2.31.0", deps=[("nonexistent", ">=1.0")]),
         ]
         pins = {
-            canonicalize_name("requests"): _make_pin("2.31.0"),
+            canonicalize_name("requests"): {"": _make_pin("2.31.0")},
         }
 
         result = resolve_lock_graph(packages, pins, SpecifierSet(">=3.8"), strict_dependencies=False)
@@ -219,7 +219,7 @@ class TestResolveLockGraph(unittest.TestCase):
             _make_pkg("requests", "2.31.0"),
         ]
         pins = {
-            canonicalize_name("requests"): _make_pin("9.9.9"),
+            canonicalize_name("requests"): {"": _make_pin("9.9.9")},
         }
 
         with self.assertRaises(MismatchedVersionException):
@@ -232,8 +232,8 @@ class TestResolveLockGraph(unittest.TestCase):
             _make_pkg("requests", "2.31.0"),
         ]
         pins = {
-            canonicalize_name("my-app"): _make_pin("0.1.0"),
-            canonicalize_name("requests"): _make_pin("2.31.0"),
+            canonicalize_name("my-app"): {"": _make_pin("0.1.0")},
+            canonicalize_name("requests"): {"": _make_pin("2.31.0")},
         }
 
         result = resolve_lock_graph(packages, pins, SpecifierSet(">=3.8"))
@@ -253,9 +253,9 @@ class TestResolveLockGraph(unittest.TestCase):
             _make_pkg("requests", "2.31.0"),
         ]
         pins = {
-            canonicalize_name("root"): _make_pin("0.1.0"),
-            canonicalize_name("lib-a"): _make_pin("0.1.0"),
-            canonicalize_name("requests"): _make_pin("2.31.0"),
+            canonicalize_name("root"): {"": _make_pin("0.1.0")},
+            canonicalize_name("lib-a"): {"": _make_pin("0.1.0")},
+            canonicalize_name("requests"): {"": _make_pin("2.31.0")},
         }
 
         result = resolve_lock_graph(packages, pins, SpecifierSet(">=3.8"))
@@ -282,10 +282,10 @@ class TestResolveLockGraph(unittest.TestCase):
             _make_pkg("d", "1.0"),
         ]
         pins = {
-            canonicalize_name("a"): _make_pin("1.0"),
-            canonicalize_name("b"): _make_pin("1.0"),
-            canonicalize_name("c"): _make_pin("1.0"),
-            canonicalize_name("d"): _make_pin("1.0"),
+            canonicalize_name("a"): {"": _make_pin("1.0")},
+            canonicalize_name("b"): {"": _make_pin("1.0")},
+            canonicalize_name("c"): {"": _make_pin("1.0")},
+            canonicalize_name("d"): {"": _make_pin("1.0")},
         }
 
         result = resolve_lock_graph(packages, pins, SpecifierSet(">=3.8"))
@@ -304,7 +304,7 @@ class TestResolveLockGraph(unittest.TestCase):
     def test_python_versions_propagated(self):
         """The requires_python specifier should be propagated to the output."""
         packages = [_make_pkg("requests", "2.31.0")]
-        pins = {canonicalize_name("requests"): _make_pin("2.31.0")}
+        pins = {canonicalize_name("requests"): {"": _make_pin("2.31.0")}}
 
         result = resolve_lock_graph(packages, pins, SpecifierSet(">=3.9,<3.13"))
         self.assertEqual(result.python_versions, SpecifierSet(">=3.9,<3.13"))
@@ -313,7 +313,7 @@ class TestResolveLockGraph(unittest.TestCase):
         """If the same package key appears multiple times, only one should remain."""
         pkg = _make_pkg("requests", "2.31.0")
         packages = [pkg, pkg]  # Duplicate
-        pins = {canonicalize_name("requests"): _make_pin("2.31.0")}
+        pins = {canonicalize_name("requests"): {"": _make_pin("2.31.0")}}
 
         result = resolve_lock_graph(packages, pins, SpecifierSet(">=3.8"))
         self.assertEqual(len(result.packages), 1)
@@ -330,9 +330,9 @@ class TestResolveLockGraph(unittest.TestCase):
             _make_pkg("lib[grpc]", "1.1.0"),
         ]
         pins = {
-            DependencyName.from_parts("myapp", None): _make_pin("0.1.0"),
-            DependencyName.from_parts("lib", None): _make_pin("1.0.0"),
-            DependencyName.from_parts("lib", "grpc"): _make_pin("1.0.0"),
+            DependencyName.from_parts("myapp", None): {"": _make_pin("0.1.0")},
+            DependencyName.from_parts("lib", None): {"": _make_pin("1.0.0")},
+            DependencyName.from_parts("lib", "grpc"): {"": _make_pin("1.0.0")},
         }
 
         result = resolve_lock_graph(packages, pins, SpecifierSet(">=3.8"))

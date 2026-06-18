@@ -1147,8 +1147,12 @@
     }
   },
   "pins": {
-    "ipython": "ipython@8.18.1",
-    "regex": "regex@2024.11.6"
+    "ipython": {
+      "": "ipython@8.18.1"
+    },
+    "regex": {
+      "": "regex@2024.11.6"
+    }
   },
   "python_versions": "<3.13,>=3.9"
 }

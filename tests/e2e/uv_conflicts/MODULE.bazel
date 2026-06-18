@@ -1,0 +1,65 @@
+bazel_dep(name = "rules_pycross", version = "0.0.0")
+bazel_dep(name = "rules_pycross_e2e_shared", version = "0.0.0")
+bazel_dep(name = "rules_python", version = "2.0.0")
+bazel_dep(name = "platforms", version = "0.0.10")
+
+local_path_override(
+    module_name = "rules_pycross",
+    path = "../../..",
+)
+
+local_path_override(
+    module_name = "rules_pycross_e2e_shared",
+    path = "../shared",
+)
+
+# rules_python
+python = use_extension("@rules_python//python/extensions:python.bzl", "python")
+python.toolchain(
+    is_default = True,
+    python_version = "3.11.6",
+)
+python.toolchain(python_version = "3.12.0")
+use_repo(python, "python_versions")
+
+# rules_pycross - use per-platform tag API
+environments = use_extension("@rules_pycross//pycross/extensions:environments.bzl", "environments")
+environments.create_for_python_toolchains(
+    name = "uv_workspace_envs",
+)
+environments.platform(
+    envs = "uv_workspace_envs",
+    target = "aarch64-apple-darwin",
+)
+environments.platform(
+    envs = "uv_workspace_envs",
+    target = "x86_64-unknown-linux-gnu",
+)
+use_repo(environments, "uv_workspace_envs")
+
+# Use the new import_uv_workspace API: single lock file, auto-discovered members.
+lock_import = use_extension("@rules_pycross//pycross/extensions:lock_import.bzl", "lock_import")
+lock_import.import_uv_workspace(
+    name = "shared",
+    lock_file = "//:uv.lock",
+    target_environments = ["@uv_workspace_envs//:environments"],
+)
+lock_import.uv_workspace_members(
+    workspace = "shared",
+)
+lock_import.uv_workspace_member(
+    optional_groups = ["cpu"],
+    project = "project",
+    repo = "cpu",
+    workspace = "shared",
+)
+lock_import.uv_workspace_member(
+    optional_groups = ["cu124"],
+    project = "project",
+    repo = "gpu",
+    workspace = "shared",
+)
+
+# The actual repos are loaded from the lock_repos extension.
+lock_repos = use_extension("@rules_pycross//pycross/extensions:lock_repos.bzl", "lock_repos")
+use_repo(lock_repos, "cpu", "gpu")

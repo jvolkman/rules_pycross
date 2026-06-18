@@ -518,7 +518,9 @@ def _resolve_packages(
     annotations: Dict[PackageKey, PackageAnnotations],
     default_build_dependencies: List[PackageKey],
 ) -> Dict[PackageKey, PackageResolver]:
-    work = list(lock_model.pins.values())
+    work = []
+    for pin_dict in lock_model.pins.values():
+        work.extend(pin_dict.values())
     packages_by_package_key: Dict[PackageKey, PackageResolver] = {}
 
     while work:
@@ -708,7 +710,7 @@ def resolve(args: Any) -> ResolvedLockSet:
                 continue
             if len(packages) > 1:
                 continue
-            pins[package_pin_name] = packages[0]
+            pins[package_pin_name] = {"": packages[0]}
 
     cycle_groups = _compute_cycle_groups(packages_by_package_key)
 
@@ -726,6 +728,7 @@ def resolve(args: Any) -> ResolvedLockSet:
         pins=pins,
         remote_files=repos,
         cycle_groups=cycle_groups,
+        conflicts=lock_model.conflicts,
     )
 
 
