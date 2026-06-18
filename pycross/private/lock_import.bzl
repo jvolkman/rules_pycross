@@ -400,6 +400,7 @@ def _lock_import_impl(module_ctx):
     )
 
     workspace_packages = {}  # workspace_name -> {pkg_name -> normalized_tag}
+    valid_workspaces = {r.workspace: True for r in lock_repos.values()}
 
     # Add package attributes
     for module in module_ctx.modules:
@@ -422,6 +423,11 @@ def _lock_import_impl(module_ctx):
                     fail("Multiple package entries for package '{}' in repo '{}'".format(tag.name, tag.repo))
                 repo_info.packages[tag.name] = normalized
             elif tag.workspace:
+                # We intentionally don't enforce `_check_proper_package_repo` for workspaces.
+                # Workspaces are top-level constructs, and it's acceptable for any module to
+                # inject packages into a shared workspace configuration.
+                if tag.workspace not in valid_workspaces:
+                    fail("Package override specifies workspace '{}' which does not exist".format(tag.workspace))
                 ws_pkgs = workspace_packages.setdefault(tag.workspace, {})
                 if tag.name in ws_pkgs:
                     fail("Multiple package entries for package '{}' in workspace '{}'".format(tag.name, tag.workspace))

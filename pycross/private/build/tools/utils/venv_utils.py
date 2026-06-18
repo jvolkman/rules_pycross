@@ -18,6 +18,38 @@ def find_site_dir(env_dir: Path) -> Path:
         raise ValueError(f"Cannot find site-packages under {env_dir}")
 
 
+def write_base_prefix_pth(
+    site_dir: Path, prefix: Path, base_prefix: Optional[Path], platbase_prefix: Optional[Path]
+) -> None:
+    if not base_prefix and not platbase_prefix:
+        return
+
+    parts = []
+    need_os = False
+
+    if base_prefix:
+        if prefix in base_prefix.parents or base_prefix == prefix:
+            rel_base = os.path.relpath(base_prefix, site_dir)
+            parts.append(f'sys.base_prefix = os.path.abspath(os.path.join(sitedir, "{rel_base}"))')
+            need_os = True
+        else:
+            parts.append(f'sys.base_prefix = "{base_prefix}"')
+
+    if platbase_prefix:
+        if prefix in platbase_prefix.parents or platbase_prefix == prefix:
+            rel_platbase = os.path.relpath(platbase_prefix, site_dir)
+            parts.append(f'sys.base_exec_prefix = os.path.abspath(os.path.join(sitedir, "{rel_platbase}"))')
+            need_os = True
+        else:
+            parts.append(f'sys.base_exec_prefix = "{platbase_prefix}"')
+
+    imports = "import os, sys; " if need_os else "import sys; "
+    pth_line = imports + "; ".join(parts) + "\n"
+
+    with open(site_dir / "_pycross_sys_base_prefix.pth", "w") as f:
+        f.write(pth_line)
+
+
 def resolve_base_prefix(
     installed_value: Optional[str],
     target_python: Path,
@@ -51,12 +83,12 @@ def resolve_base_prefix(
             return candidate.resolve()
         # installed_base is stale — fall back to grandparent if possible.
         if prefix in target_python.parents:
-            return target_python.parent.parent
+            return target_python.parent.parent.resolve()
         return None
 
     # No sysconfig value at all — use the grandparent heuristic.
     if prefix in target_python.parents:
-        return target_python.parent.parent
+        return target_python.parent.parent.resolve()
     return None
 
 
@@ -87,34 +119,7 @@ def build_standard_venv(ctx: BuildContext) -> None:
         ctx.prefix,
     )
 
-    if base_prefix or platbase_prefix:
-        parts = []
-        need_os = False
-
-        if base_prefix:
-            # If the base_prefix is inside the sandbox execroot, write it as a
-            # relative path from site-packages (using the .pth 'sitedir' variable)
-            # so it resolves correctly regardless of the absolute execroot path.
-            if ctx.prefix in base_prefix.parents or base_prefix == ctx.prefix:
-                rel_base = os.path.relpath(base_prefix, site_dir)
-                parts.append(f'sys.base_prefix = os.path.abspath(os.path.join(sitedir, "{rel_base}"))')
-                need_os = True
-            else:
-                parts.append(f'sys.base_prefix = "{base_prefix}"')
-
-        if platbase_prefix:
-            if ctx.prefix in platbase_prefix.parents or platbase_prefix == ctx.prefix:
-                rel_platbase = os.path.relpath(platbase_prefix, site_dir)
-                parts.append(f'sys.base_exec_prefix = os.path.abspath(os.path.join(sitedir, "{rel_platbase}"))')
-                need_os = True
-            else:
-                parts.append(f'sys.base_exec_prefix = "{platbase_prefix}"')
-
-        imports = "import os, sys; " if need_os else "import sys; "
-        pth_line = imports + "; ".join(parts) + "\n"
-
-        with open(site_dir / "_pycross_sys_base_prefix.pth", "w") as f:
-            f.write(pth_line)
+    write_base_prefix_pth(site_dir, ctx.prefix, base_prefix, platbase_prefix)
 
     with open(site_dir / "deps.pth", "w") as f:
         for dep_path in ctx.python_paths:

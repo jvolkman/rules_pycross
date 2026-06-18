@@ -1,10 +1,10 @@
-import os
 import sys
 import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
 from pycross.private.build.tools.utils.sysconfig_utils import _query_interpreter
+from pycross.private.build.tools.utils.venv_utils import write_base_prefix_pth
 
 
 class QueryInterpreterTest(unittest.TestCase):
@@ -47,32 +47,7 @@ class BasePrefixPthTest(unittest.TestCase):
         self.temp_dir.cleanup()
 
     def _write_base_prefix_pth(self, prefix, base_prefix, platbase_prefix, site_dir):
-        """Extracted logic from build_standard_venv for testing the .pth generation."""
-        if base_prefix or platbase_prefix:
-            parts = []
-            need_os = False
-
-            if base_prefix:
-                if prefix in base_prefix.parents or base_prefix == prefix:
-                    rel_base = os.path.relpath(base_prefix, site_dir)
-                    parts.append(f'sys.base_prefix = os.path.abspath(os.path.join(sitedir, "{rel_base}"))')
-                    need_os = True
-                else:
-                    parts.append(f'sys.base_prefix = "{base_prefix}"')
-
-            if platbase_prefix:
-                if prefix in platbase_prefix.parents or platbase_prefix == prefix:
-                    rel_platbase = os.path.relpath(platbase_prefix, site_dir)
-                    parts.append(f'sys.base_exec_prefix = os.path.abspath(os.path.join(sitedir, "{rel_platbase}"))')
-                    need_os = True
-                else:
-                    parts.append(f'sys.base_exec_prefix = "{platbase_prefix}"')
-
-            imports = "import os, sys; " if need_os else "import sys; "
-            pth_line = imports + "; ".join(parts) + "\n"
-
-            with open(self.pth_file, "w") as f:
-                f.write(pth_line)
+        write_base_prefix_pth(site_dir, prefix, base_prefix, platbase_prefix)
 
     def test_base_prefix_inside_execroot_uses_relative_path(self):
         """When base_prefix is inside the execroot, .pth should use relative sitedir paths."""

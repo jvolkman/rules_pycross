@@ -50,10 +50,10 @@ def _requirements_bzl(rctx, pins):
 def _safe_name(pin_name, name):
     return name + "_" if pin_name == name else name
 
-def _pin_build(target_name, pin_target, package, workspace_repo, workspace_lock_target = None, has_squashed_variant = False, extras_dict = None):
+def _pin_build(target_name, pin_target, package, workspace_repo, workspace_lock_target = None, has_aggregated_variant = False, extras_dict = None):
     """Generates the BUILD file for a pin directory, pointing to the workspace."""
     lock_target = workspace_lock_target if workspace_lock_target else pin_target
-    if has_squashed_variant:
+    if has_aggregated_variant:
         base, version = lock_target.split("@", 1)
         lock_target_base = "{}[_all_]@{}".format(base, version)
     else:
@@ -182,6 +182,8 @@ def _thin_package_repo_impl(rctx):
 
     # Tell Gazelle to map imports from packages
     # that are only pinned via a single extra to the extra-qualified name.
+    # Note: If a package is pinned via multiple different extras but has no base
+    # pin (e.g. `foo[a]` and `foo[b]`), we don't pick a winner for Gazelle mapping.
     extras_mapping = {}
     for base_name, group in grouped_pins.items():
         if not group["base_target"] and len(group["extras"]) == 1:
@@ -266,7 +268,7 @@ def _thin_package_repo_impl(rctx):
         if base_target and base_target in conflicts:
             workspace_lock_target = "{}__via_{}".format(base_target, rctx.attr.member_name)
 
-        has_squashed_variant = base_target and base_target in base_packages_with_extras
+        has_aggregated_variant = base_target and base_target in base_packages_with_extras
 
         # Handle extras variants
         extras_dict = {}
@@ -278,7 +280,7 @@ def _thin_package_repo_impl(rctx):
 
         rctx.file(
             "{}/BUILD.bazel".format(us_name),
-            _pin_build(us_name, base_target, package, workspace_repo, workspace_lock_target, has_squashed_variant, extras_dict),
+            _pin_build(us_name, base_target, package, workspace_repo, workspace_lock_target, has_aggregated_variant, extras_dict),
         )
 
     # _backend/ BUILD and macros

@@ -142,6 +142,8 @@ def _package_repo_impl(rctx):
 
         # Merge cycle groups (union across members).
         for group_name, group_members in member_lock.get("cycle_groups", {}).items():
+            if group_name in cycle_groups and sorted(cycle_groups[group_name]) != sorted(group_members):
+                fail("Cycle group {} conflicts between workspace members ({} vs {})".format(group_name, cycle_groups[group_name], group_members))
             cycle_groups[group_name] = group_members
 
     # Second pass: detect conflicts and build merged package set.

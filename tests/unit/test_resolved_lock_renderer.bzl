@@ -167,6 +167,15 @@ def _test_extras_rendering_impl(env, target):
     # loads py_library since we have extras
     env.expect.that_bool("py_library" in res).equals(True)
 
+    # Should generate an [_all_] target that aggregates the base and all extras
+    env.expect.that_bool('name = "mylib[_all_]@1.0"' in res).equals(True)
+
+    # The [_all_] target should depend on the base and all extras
+    all_target_section = res.split('name = "mylib[_all_]@1.0"')[1].split(")", 1)[0]
+    env.expect.that_bool('":mylib@1.0"' in all_target_section).equals(True)
+    env.expect.that_bool('":mylib[test]@1.0"' in all_target_section).equals(True)
+    env.expect.that_bool('":mylib[dev]@1.0"' in all_target_section).equals(True)
+
 def _test_extras_rendering(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
     analysis_test(name = name, target = name + "_subject", impl = _test_extras_rendering_impl)

@@ -142,7 +142,7 @@ Extras (optional dependency groups) are now first-class in the resolver and rend
 Circular dependency detection and resolution is now automatic via Tarjan's SCC algorithm.
 
 - **Iterative Tarjan's SCC** — avoids stack overflow on large dependency graphs (replaced recursive version).
-- **Content-based cycle group naming** — group names use `cycle_group_{sha256[:8]}` for stability across lockfile changes. Adding/removing an unrelated package won't renumber existing groups.
+- **Content-based cycle group naming** — group names use `group_{sha256[:8]}` for stability across lockfile changes. Adding/removing an unrelated package won't renumber existing groups.
 - **Renderer integration** — generates `_cycles/BUILD.bazel` containing `py_library` targets for each cycle group. Cycled packages use `pkg_raw` naming for `pycross_wheel_library` and a wrapping `py_library(name = "pkg")` that depends on both `pkg_raw` and the cycle group.
 - Same-cycle dependencies are excluded from individual package dep lists to break the circular reference.
 
@@ -794,8 +794,8 @@ Previously, `--squash-extras` was applied at translation time, mutating the lock
 ### New Approach
 
 - The lock resolver now emits a `squash_extras` boolean flag alongside the canonical (un-squashed) dependency graph.
-- The lock renderer generates `py_library(name = "<pkg_key>__squashed")` targets that aggregate the base package and all its extras.
-- `package_repo.bzl` and `thin_package_repo.bzl` read `squash_extras` and point their aliases to the `__squashed` variant when enabled.
+- The lock renderer generates `py_library(name = "<pkg_key>[_all_]@<version>")` targets that aggregate the base package and all its extras.
+- `package_repo.bzl` and `thin_package_repo.bzl` read `squash_extras` and point their aliases to the `[_all_]` variant when enabled.
 - Extra aliases (`[extra_name]`) also point to the squashed target when squashing is active.
 
 This preserves the canonical dependency graph in the lock, enabling correct workspace merging while letting each repo decide its squashing policy at the alias layer.

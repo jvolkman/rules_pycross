@@ -1,4 +1,15 @@
-"""Pure Starlark implementation of the resolved_lock_renderer."""
+"""Pure Starlark implementation of the resolved_lock_renderer.
+
+This module generates the BUILD.bazel content for the `_lock` repository.
+It implements the following naming conventions for generated targets:
+  - `_raw_<pkg_key>`: The underlying `pycross_wheel_library` or `pycross_wheel_build` target.
+  - `<pkg_key>`: A `py_library` that wraps the raw target. If the package is part of a cycle,
+    this target depends on both the raw target and the shared cycle group target to break the cycle.
+  - `_cycle_<group_name>`: A `py_library` aggregating all packages in a cycle SCC.
+  - `<pkg_name>[_all_]@<version>`: A synthetic `py_library` that aggregates the base package and
+    all of its parsed extras into a single target. Repos using `squash_extras` point their
+    aliases to this `[_all_]` target to squash the graph at the alias layer.
+"""
 
 def _ind(text, tabs = 1):
     if not text:
