@@ -120,13 +120,16 @@ def parse_file_info(file_info: Dict[str, Any]) -> PackageFile:
     if "file" in file_info:
         file_name = file_info["file"]
         urls = tuple()
+    elif "filename" in file_info:
+        file_name = file_info["filename"]
+        urls = tuple()
     elif "url" in file_info:
         url = file_info["url"]
         _, file_name = urlparse(url).path.rsplit("/", 1)
         file_name = unquote(file_name)
         urls = (url,)
     else:
-        raise AssertionError("file entry has no file or url member")
+        raise AssertionError(f"file entry has no file, filename or url member: {file_info}")
     file_hash = file_info["hash"]
     assert file_hash.startswith("sha256:")
     return PackageFile(name=file_name, sha256=file_hash[7:], urls=urls)

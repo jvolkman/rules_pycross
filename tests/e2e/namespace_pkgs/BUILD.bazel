@@ -20,3 +20,11 @@ py_test(
         requirement("zope.event"),
     ],
 )
+
+py_test(
+    name = "test_extras_aliases",
+    srcs = ["test_extras_aliases.py"],
+    deps = [
+        requirement("google-api-core"),
+    ],
+)

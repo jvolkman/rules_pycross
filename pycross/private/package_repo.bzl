@@ -123,9 +123,10 @@ def _package_repo_impl(rctx):
     # is "conflicting" and gets per-member variant targets.
     _ANNOTATION_FIELDS = ["post_install_patches", "install_exclude_globs"]
 
-    # First pass: collect per-member package data and environment names.
+    # First pass: collect per-member package data, environment names, and cycle groups.
     member_packages = {}  # member_name -> {pkg_key -> pkg_data}
     member_envs = {}  # member_name -> [env_name, ...]
+    cycle_groups = {}  # group_name -> [pkg_key, ...]
     for member, lock_label in rctx.attr.member_lock_files.items():
         member_lock = json.decode(rctx.read(rctx.path(Label(lock_label))))
 
@@ -138,6 +139,10 @@ def _package_repo_impl(rctx):
 
         member_envs[member] = sorted(member_env_names)
         member_packages[member] = member_lock.get("packages", {})
+
+        # Merge cycle groups (union across members).
+        for group_name, group_members in member_lock.get("cycle_groups", {}).items():
+            cycle_groups[group_name] = group_members
 
     # Second pass: detect conflicts and build merged package set.
     # conflicts maps pkg_key -> [member_name, ...] for packages with
@@ -175,7 +180,12 @@ def _package_repo_impl(rctx):
             packages[pkg_key] = _merge_dependencies(pkg_key, first_data, entries, member_envs)
 
     # Workspace repos have no pins — each thin repo has its own.
-    lock = {"packages": packages, "pins": {}, "environments": environments}
+    lock = {
+        "packages": packages,
+        "pins": {},
+        "environments": environments,
+        "cycle_groups": cycle_groups,
+    }
 
     repo_map = {}
     for label, file_key in rctx.attr.repo_map.items():
