@@ -288,6 +288,39 @@ def _get_member_group_attrs(members_tag, override_tag):
         all_development_groups = (members_tag.all_development_groups if hasattr(members_tag, "all_development_groups") else False) and not has_explicit_development,
     )
 
+def _register_workspace_member(
+        module_ctx,
+        lock_owners,
+        lock_repos,
+        lock_model_structs,
+        root_direct_deps,
+        ws_tag,
+        ws_name,
+        model_type,
+        repo_name,
+        project_file,
+        group_attrs,
+        lock_module):
+    """Register a single workspace member as a lock repo with its model.
+
+    This is the shared registration path for both bulk (uv_workspace_members)
+    and standalone (uv_workspace_member) imports.
+    """
+    _check_unique_repo_name(lock_owners, lock_module.name, repo_name)
+    lock_repos[repo_name] = _workspace_lock_struct(module_ctx, ws_tag, repo_name, ws_name)
+    if lock_module.is_root:
+        root_direct_deps.append(repo_name)
+
+    model = dict(
+        model_type = model_type,
+        project_file = str(project_file),
+        lock_file = str(ws_tag.lock_file),
+        **group_attrs
+    )
+    if hasattr(ws_tag, "require_static_urls"):
+        model["require_static_urls"] = ws_tag.require_static_urls
+    lock_model_structs[repo_name] = json.encode(model)
+
 def _process_workspaces(
         module_ctx,
         lock_owners,
@@ -310,6 +343,12 @@ def _process_workspaces(
                 module = module,
             )
 
+    # Auto-discover members for each workspace
+    workspace_discovered_members = {}
+    for name, ws_info in workspaces.items():
+        discovered = discover_members_fn(module_ctx, ws_info.tag.lock_file)
+        workspace_discovered_members[name] = {m.name: m for m in discovered}
+
     # Collect per-member overrides indexed by (workspace, project)
     member_overrides = {}
     for module in module_ctx.modules:
@@ -322,10 +361,12 @@ def _process_workspaces(
 
             # Check for duplicate repo names within the same project override
             for existing in member_overrides[key]:
-                if existing.repo and tag.repo and existing.repo == tag.repo:
+                if existing.tag.repo and tag.repo and existing.tag.repo == tag.repo:
                     fail("Duplicate {} for project '{}' with repo '{}' in workspace '{}'".format(member_tag_name, tag.project, tag.repo, tag.workspace))
 
-            member_overrides[key].append(tag)
+            member_overrides[key].append(struct(tag = tag, module = module))
+
+    processed_members = {}  # (workspace, project) -> True
 
     # Process bulk member imports
     for module in module_ctx.modules:
@@ -336,48 +377,82 @@ def _process_workspaces(
             ws_info = workspaces[tag.workspace]
             ws_tag = ws_info.tag
 
-            # Auto-discover members from lock file
-            discovered = discover_members_fn(module_ctx, ws_tag.lock_file)
+            discovered = workspace_discovered_members[tag.workspace]
             excluded = {p: True for p in tag.excluded_projects}
 
-            for member in discovered:
-                if member.name in excluded:
+            for member_name, member in discovered.items():
+                if member_name in excluded:
                     continue
 
-                overrides = member_overrides.get((tag.workspace, member.name), [None])
+                processed_members[(tag.workspace, member_name)] = True
+
+                overrides = member_overrides.get((tag.workspace, member_name), [None])
 
                 for override in overrides:
                     # Determine repo name
                     normalized_name = sanitize_name(member.name)
-                    if override and override.repo:
-                        repo_name = override.repo
+                    if override and override.tag.repo:
+                        repo_name = override.tag.repo
                     else:
                         repo_name = tag.repo_pattern.format(member = normalized_name)
 
                     # Determine project_file
-                    if override and override.project_file:
-                        project_file = override.project_file
+                    if override and override.tag.project_file:
+                        project_file = override.tag.project_file
                     else:
                         project_file = _resolve_member_project_file(ws_tag.lock_file, member.path)
 
                     # Get group attrs (override wins)
-                    group_attrs = _get_member_group_attrs(tag, override)
+                    group_attrs = _get_member_group_attrs(tag, override.tag if override else None)
 
-                    # Register as a lock repo
-                    _check_unique_repo_name(lock_owners, module.name, repo_name)
-                    lock_repos[repo_name] = _workspace_lock_struct(module_ctx, ws_tag, repo_name, tag.workspace)
-                    if module.is_root:
-                        root_direct_deps.append(repo_name)
+                    lock_module = override.module if override else module
 
-                    model = dict(
-                        model_type = model_type,
-                        project_file = str(project_file),
-                        lock_file = str(ws_tag.lock_file),
-                        **group_attrs
+                    _register_workspace_member(
+                        module_ctx, lock_owners, lock_repos, lock_model_structs,
+                        root_direct_deps, ws_tag, tag.workspace, model_type,
+                        repo_name, project_file, group_attrs, lock_module,
                     )
-                    if hasattr(ws_tag, "require_static_urls"):
-                        model["require_static_urls"] = ws_tag.require_static_urls
-                    lock_model_structs[repo_name] = json.encode(model)
+
+    # Process standalone member imports (those not covered by a bulk import).
+    # These are uv_workspace_member / pdm_workspace_member tags used without a
+    # corresponding uv_workspace_members / pdm_workspace_members bulk import.
+    for key, overrides in member_overrides.items():
+        if key in processed_members:
+            continue
+
+        ws_name, project = key
+        ws_info = workspaces[ws_name]
+        ws_tag = ws_info.tag
+        discovered = workspace_discovered_members[ws_name]
+
+        if project not in discovered:
+            fail("Project '{}' not found in workspace '{}'".format(project, ws_name))
+
+        member = discovered[project]
+
+        for override in overrides:
+            normalized_name = sanitize_name(member.name)
+            if override.tag.repo:
+                repo_name = override.tag.repo
+            else:
+                repo_name = normalized_name
+
+            if override.tag.project_file:
+                project_file = override.tag.project_file
+            else:
+                project_file = _resolve_member_project_file(ws_tag.lock_file, member.path)
+
+            # Standalone members have no bulk members_tag to inherit group
+            # defaults from (e.g. all_development_groups). Pass an empty
+            # struct so _get_member_group_attrs falls back to False/[] for
+            # all bulk-level flags, letting the override tag supply values.
+            group_attrs = _get_member_group_attrs(struct(), override.tag)
+
+            _register_workspace_member(
+                module_ctx, lock_owners, lock_repos, lock_model_structs,
+                root_direct_deps, ws_tag, ws_name, model_type,
+                repo_name, project_file, group_attrs, override.module,
+            )
 
 def _lock_import_impl(module_ctx):
     lock_owners = {}
