@@ -81,10 +81,6 @@ RESOLVE_ATTRS = dict(
     always_include_sdist = attr.bool(
         doc = "Always include an entry for a package's sdist if one exists.",
     ),
-    squash_extras = attr.bool(
-        doc = "If True, aliases to packages will include all of their extra dependencies by default.",
-        default = False,
-    ),
     default_build_dependencies = attr.string_list(
         doc = "A list of package keys (name or name@version) that will be used as default build dependencies.",
     ),
@@ -192,9 +188,6 @@ def handle_resolve_attrs(attrs, environment_files_and_labels, local_wheel_names_
 
     if attrs.always_include_sdist:
         args.append("--always-include-sdist")
-
-    if attrs.squash_extras:
-        args.append("--squash-extras")
 
     for wheel_name, wheel_label in local_wheel_names_and_labels:
         args.extend(["--local-wheel", wheel_name, wheel_label])

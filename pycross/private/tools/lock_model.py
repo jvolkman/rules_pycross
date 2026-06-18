@@ -347,7 +347,6 @@ class RawLockSet:
 
 @dataclass(frozen=True)
 class ResolvedLockSet:
-    squash_extras: bool = False
     environments: Dict[str, EnvironmentReference] = field(default_factory=dict)
     packages: Dict[PackageKey, ResolvedPackage] = field(default_factory=dict)
     pins: Dict[DependencyName, PackageKey] = field(default_factory=dict)

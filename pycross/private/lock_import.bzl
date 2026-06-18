@@ -36,7 +36,6 @@ def _generate_resolved_lock_repo(lock_info, serialized_lock_model, workspace_pac
         "default_build_dependencies": lock_info.default_build_dependencies,
         "disallow_builds": lock_info.disallow_builds,
         "local_wheels": lock_info.local_wheels,
-        "squash_extras": lock_info.squash_extras,
         "annotations": {},
     }
 
@@ -132,7 +131,6 @@ def _lock_struct(mctx, tag):
         local_wheels = tag.local_wheels,
         disallow_builds = tag.disallow_builds,
         default_build_dependencies = tag.default_build_dependencies,
-        squash_extras = tag.squash_extras,
         packages = {},
     )
 
@@ -158,7 +156,6 @@ def _workspace_lock_struct(mctx, ws_tag, repo_name, workspace_name):
         local_wheels = ws_tag.local_wheels,
         disallow_builds = ws_tag.disallow_builds,
         default_build_dependencies = ws_tag.default_build_dependencies,
-        squash_extras = ws_tag.squash_extras,
         packages = {},
     )
 

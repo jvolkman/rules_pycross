@@ -88,8 +88,16 @@ def _pin_build(target_name, pin_target, package, workspace_repo, workspace_lock_
             '    name = "{}",'.format(_safe_name(target_name, "data")),
             '    actual = "{}{}",'.format(lock_ref, lock_target_base),
             ")",
-            "",
         ])
+
+        if extras_dict:
+            lines.extend([
+                "alias(",
+                '    name = "[]",',
+                '    actual = "{}{}",'.format(lock_ref, lock_target),
+                ")",
+                "",
+            ])
 
         sdist_file = package.get("sdist_file")
         if sdist_file:
@@ -106,7 +114,7 @@ def _pin_build(target_name, pin_target, package, workspace_repo, workspace_lock_
         lines.extend([
             "alias(",
             '    name = "[{}]",'.format(extra_name),
-            '    actual = "{}{}",'.format(lock_ref, lock_target_base if has_squashed_variant else extra_target),
+            '    actual = "{}{}",'.format(lock_ref, extra_target),
             ")",
             "",
         ])
@@ -198,6 +206,22 @@ def _thin_package_repo_impl(rctx):
                 '    name = "{}",'.format(base_pin_name),
                 '    actual = "//{}:pkg",'.format(us_name),
                 ")",
+            ])
+            if group["extras"]:
+                root_build_lines.extend([
+                    "alias(",
+                    '    name = "{}[]",'.format(base_pin_name),
+                    '    actual = "//{}:[]",'.format(us_name),
+                    ")",
+                    "",
+                ])
+        elif group["extras"]:
+            # If no base target was pinned, but extras were, point the base name at the extras union.
+            root_build_lines.extend([
+                "alias(",
+                '    name = "{}",'.format(base_pin_name),
+                '    actual = "//{}:pkg",'.format(us_name),
+                ")",
                 "",
             ])
 
@@ -222,6 +246,14 @@ def _thin_package_repo_impl(rctx):
     # Pin directories: aliases pointing to @workspace//_lock targets
     for base_pin_name, group in sorted(grouped_pins.items()):
         base_target = group["base_target"]
+        if not base_target and group["extras"]:
+            # If the user only pinned extras, derive the base target from an extra's lock key.
+            first_extra = list(group["extras"].values())[0]
+            if "[" in first_extra:
+                base_name, extra_and_version = first_extra.split("[", 1)
+                _, version = extra_and_version.split("]@", 1)
+                base_target = "{}@{}".format(base_name, version)
+
         package = packages.get(base_target) if base_target else {}
         us_name = underscore_name(base_pin_name)
 

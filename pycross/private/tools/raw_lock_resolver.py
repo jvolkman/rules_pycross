@@ -74,7 +74,6 @@ class GenerationContext:
         local_wheels: Dict[str, str],
         remote_wheels: Dict[str, PackageFile],
         always_include_sdist: bool,
-        squash_extras: bool = False,
         lock_package_keys: Optional[AbstractSet[PackageKey]] = None,
     ):
         self.target_environments = target_environments
@@ -82,7 +81,6 @@ class GenerationContext:
         self.remote_wheels = remote_wheels
         self.target_environments_by_name = {tenv.name: tenv for tenv in target_environments}
         self.always_include_sdist = always_include_sdist
-        self.squash_extras = squash_extras
         self.lock_package_keys = lock_package_keys
 
         self.local_wheels_by_pkg = defaultdict(list)
@@ -513,7 +511,6 @@ def resolve(args: Any) -> ResolvedLockSet:
         local_wheels=local_wheels,
         remote_wheels=remote_wheels,
         always_include_sdist=args.always_include_sdist,
-        squash_extras=args.squash_extras,
         lock_package_keys=set(lock_model.packages.keys()),
     )
 
@@ -688,7 +685,6 @@ def resolve(args: Any) -> ResolvedLockSet:
                 resolved_packages[pkg_key].cycle_group = group_name
 
     return ResolvedLockSet(
-        squash_extras=context.squash_extras,
         environments=resolved_environments,
         packages=resolved_packages,
         pins=pins,
@@ -744,11 +740,6 @@ def add_shared_flags(parser: ArgumentParser) -> None:
         help="If set, always include a package's sdist if one exists.",
     )
 
-    parser.add_argument(
-        "--squash-extras",
-        action="store_true",
-        help="Merge extra dependencies into base dependencies (v1 compat).",
-    )
     parser.add_argument(
         "--annotations-file",
         type=Path,

@@ -56,12 +56,6 @@ COMMON_IMPORT_ATTRS = dict(
     default_build_dependencies = attr.string_list(
         doc = "A list of package keys (name or name@version) that will be used as default build dependencies.",
     ),
-    squash_extras = attr.bool(
-        doc = "Merge extra dependencies into base dependencies. " +
-              "Produces a flat dependency graph without [extra] targets, " +
-              "matching V1 behavior.",
-        default = False,
-    ),
 )
 
 # Attrs common to import_uv_workspace (workspace-level settings inherited by all members).
@@ -88,12 +82,6 @@ WORKSPACE_COMMON_ATTRS = dict(
     ),
     default_build_dependencies = attr.string_list(
         doc = "A list of package keys (name or name@version) that will be used as default build dependencies.",
-    ),
-    squash_extras = attr.bool(
-        doc = "Merge extra dependencies into base dependencies. " +
-              "Produces a flat dependency graph without [extra] targets, " +
-              "matching V1 behavior.",
-        default = False,
     ),
 )
 
