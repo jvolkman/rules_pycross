@@ -15,6 +15,7 @@ from typing import Dict
 from typing import List
 from typing import Optional
 from typing import Set
+from typing import Tuple
 from urllib.parse import urlparse
 
 from packaging.markers import Marker
@@ -470,13 +471,11 @@ def collect_default_build_dependencies(lock_model: RawLockSet, build_dependencie
     return resolved_build_dependencies
 
 
-def resolve(args: Any) -> ResolvedLockSet:
-    with open(args.lock_model_file, "r") as f:
-        data = f.read()
-    lock_model = RawLockSet.from_json(data)
-
+def _parse_environments(
+    lock_model: RawLockSet, target_environment_args: Optional[List[Any]]
+) -> List[LabelAndTargetEnv]:
     environment_pairs: List[LabelAndTargetEnv] = []
-    for target_environment in args.target_environment or []:
+    for target_environment in target_environment_args or []:
         target_file, target_label = target_environment
         with open(target_file, "r") as f:
             target_env = TargetEnv.from_dict(json.load(f))
@@ -492,35 +491,33 @@ def resolve(args: Any) -> ResolvedLockSet:
             )
         )
     environment_pairs.sort(key=lambda x: x.target_environment.name.lower())
-    environments = [ep.target_environment for ep in environment_pairs]
+    return environment_pairs
 
+
+def _parse_wheels(
+    local_wheel_args: Optional[List[Any]], remote_wheel_args: Optional[List[Any]]
+) -> Tuple[Dict[str, str], Dict[str, PackageFile]]:
     local_wheels = {}
-    for local_wheel in args.local_wheel or []:
+    for local_wheel in local_wheel_args or []:
         filename, label = local_wheel
         assert is_wheel(filename), f"Local label is not a wheel: {label}"
         local_wheels[filename] = label
 
     remote_wheels = {}
-    for remote_wheel in args.remote_wheel or []:
+    for remote_wheel in remote_wheel_args or []:
         url, sha256 = remote_wheel
         filename = url_wheel_name(url)
         remote_wheels[filename] = PackageFile(name=filename, sha256=sha256, urls=(url,))
 
-    context = GenerationContext(
-        target_environments=environments,
-        local_wheels=local_wheels,
-        remote_wheels=remote_wheels,
-        always_include_sdist=args.always_include_sdist,
-        lock_package_keys=set(lock_model.packages.keys()),
-    )
+    return local_wheels, remote_wheels
 
-    # Collect package "annotations"
-    annotations = collect_package_annotations(args, lock_model)
 
-    default_build_dependencies = collect_default_build_dependencies(lock_model, args.default_build_dependencies)
-
-    # Walk the dependency graph starting from the set if pinned packages (in pyproject.toml), computing the
-    # transitive closure.
+def _resolve_packages(
+    lock_model: RawLockSet,
+    context: GenerationContext,
+    annotations: Dict[PackageKey, PackageAnnotations],
+    default_build_dependencies: List[PackageKey],
+) -> Dict[PackageKey, PackageResolver]:
     work = list(lock_model.pins.values())
     packages_by_package_key: Dict[PackageKey, PackageResolver] = {}
 
@@ -575,44 +572,10 @@ def resolve(args: Any) -> ResolvedLockSet:
             f"{', '.join([str(key) for key in sorted(annotations.keys())])}"
         )
 
-    resolved_packages = sorted(packages_by_package_key.values(), key=lambda x: x.key)
-    # If builds are disallowed, ensure that none of the targets include an sdist build
-    if args.disallow_builds:
-        builds = []
-        for package in resolved_packages:
-            if package.uses_sdist:
-                builds.append(package.key)
-        if builds:
-            raise Exception(
-                "Builds are disallowed, but the following would include pycross_wheel_build targets: "
-                f"{', '.join(str(key) for key in builds)}"
-            )
+    return packages_by_package_key
 
-    repos: Dict[FileKey, PackageFile] = {}
-    for package_target in resolved_packages:
-        for source in package_target.package_sources:
-            if not source.file:
-                continue
-            repos[source.file.key] = source.file
 
-    repos = dict(sorted(repos.items()))
-
-    def pin_name(name: str) -> NormalizedName:
-        return package_canonical_name(name)
-
-    pins = {pin_name(k): v for k, v in lock_model.pins.items()}
-    if args.default_alias_single_version:
-        packages_by_pin_name = defaultdict(list)
-        for package_target in resolved_packages:
-            packages_by_pin_name[pin_name(package_target.package_name)].append(package_target.key)
-
-        for package_pin_name, packages in packages_by_pin_name.items():
-            if package_pin_name in pins:
-                continue
-            if len(packages) > 1:
-                continue
-            pins[package_pin_name] = packages[0]
-
+def _compute_cycle_groups(packages_by_package_key: Dict[PackageKey, PackageResolver]) -> Dict[str, List[PackageKey]]:
     graph = {pkg_key: list(resolver.runtime_dependency_keys) for pkg_key, resolver in packages_by_package_key.items()}
 
     # Iterative Tarjan's SCC to avoid stack overflow on large dependency graphs
@@ -676,17 +639,90 @@ def resolve(args: Any) -> ResolvedLockSet:
         group_name = f"group_{digest}"
         cycle_groups[group_name] = members
 
+    return cycle_groups
+
+
+def resolve(args: Any) -> ResolvedLockSet:
+    with open(args.lock_model_file, "r") as f:
+        data = f.read()
+    lock_model = RawLockSet.from_json(data)
+
+    environment_pairs = _parse_environments(lock_model, args.target_environment)
+    environments = [ep.target_environment for ep in environment_pairs]
+
+    local_wheels, remote_wheels = _parse_wheels(args.local_wheel, args.remote_wheel)
+
+    context = GenerationContext(
+        target_environments=environments,
+        local_wheels=local_wheels,
+        remote_wheels=remote_wheels,
+        always_include_sdist=args.always_include_sdist,
+        lock_package_keys=set(lock_model.packages.keys()),
+    )
+
+    # Collect package "annotations"
+    annotations = collect_package_annotations(args, lock_model)
+
+    default_build_dependencies = collect_default_build_dependencies(lock_model, args.default_build_dependencies)
+
+    packages_by_package_key = _resolve_packages(
+        lock_model,
+        context,
+        annotations,
+        default_build_dependencies,
+    )
+
+    resolved_packages = sorted(packages_by_package_key.values(), key=lambda x: x.key)
+    # If builds are disallowed, ensure that none of the targets include an sdist build
+    if args.disallow_builds:
+        builds = []
+        for package in resolved_packages:
+            if package.uses_sdist:
+                builds.append(package.key)
+        if builds:
+            raise Exception(
+                "Builds are disallowed, but the following would include pycross_wheel_build targets: "
+                f"{', '.join(str(key) for key in builds)}"
+            )
+
+    repos: Dict[FileKey, PackageFile] = {}
+    for package_target in resolved_packages:
+        for source in package_target.package_sources:
+            if not source.file:
+                continue
+            repos[source.file.key] = source.file
+
+    repos = dict(sorted(repos.items()))
+
+    def pin_name(name: str) -> NormalizedName:
+        return package_canonical_name(name)
+
+    pins = {pin_name(k): v for k, v in lock_model.pins.items()}
+    if args.default_alias_single_version:
+        packages_by_pin_name = defaultdict(list)
+        for package_target in resolved_packages:
+            packages_by_pin_name[pin_name(package_target.package_name)].append(package_target.key)
+
+        for package_pin_name, packages in packages_by_pin_name.items():
+            if package_pin_name in pins:
+                continue
+            if len(packages) > 1:
+                continue
+            pins[package_pin_name] = packages[0]
+
+    cycle_groups = _compute_cycle_groups(packages_by_package_key)
+
     resolved_environments = {env.target_environment.name: env.to_environment_reference() for env in environment_pairs}
-    resolved_packages = {pkg.key: pkg.to_resolved_package() for pkg in resolved_packages}
+    resolved_packages_dict = {pkg.key: pkg.to_resolved_package() for pkg in resolved_packages}
 
     for group_name, scc in cycle_groups.items():
         for pkg_key in scc:
-            if pkg_key in resolved_packages:
-                resolved_packages[pkg_key].cycle_group = group_name
+            if pkg_key in resolved_packages_dict:
+                resolved_packages_dict[pkg_key].cycle_group = group_name
 
     return ResolvedLockSet(
         environments=resolved_environments,
-        packages=resolved_packages,
+        packages=resolved_packages_dict,
         pins=pins,
         remote_files=repos,
         cycle_groups=cycle_groups,
