@@ -78,6 +78,16 @@ class WheelBuilderPathTest(unittest.TestCase):
             Path("../bazel-execroot/_main/bazel-out/k8-fastbuild/bin/pkg/python_root"),
         )
 
+    def test_execroot_relative_path_rewrites_temp_bazel_execroot_path(self) -> None:
+        execroot = Path("/tmp/sandbox/execroot/_main")
+        prefix = Path("..") / "bazel-execroot" / "_main"
+        path = Path("/tmp/wheelbuild/sdist/../bazel-execroot/_main/bazel-out/k8-fastbuild/bin/pkg/python_root")
+
+        self.assertEqual(
+            wheel_builder.execroot_relative_path(path, execroot, prefix),
+            Path("../bazel-execroot/_main/bazel-out/k8-fastbuild/bin/pkg/python_root"),
+        )
+
     def test_target_base_prefixes_use_installed_base(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             tmp_path = Path(tmp)
