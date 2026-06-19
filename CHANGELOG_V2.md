@@ -102,13 +102,13 @@ lock_import.import_uv_workspace(
 )
 
 # 2. Declare members with a repo naming pattern.
-lock_import.uv_workspace_members(
+lock_import.uv_all_members(
     workspace = "shared",
     repo_pattern = "lock_{member}",  # {member} is replaced with normalized member name
 )
 
 # 3. Optionally override individual member settings.
-lock_import.uv_workspace_member(
+lock_import.uv_member(
     workspace = "shared",
     project = "project-a",
     repo = "lock_a",  # Override the pattern-generated name

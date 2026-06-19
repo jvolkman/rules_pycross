@@ -43,13 +43,13 @@ lock_import.import_pdm_workspace(
     lock_file = "//:pdm.lock",
     target_environments = ["@pdm_workspace_envs//:environments"],
 )
-lock_import.pdm_workspace_members(
+lock_import.pdm_all_members(
     repo_pattern = "lock_{member}",
     workspace = "shared",
 )
 
 # Override project-a's repo name; project-b uses the pattern default (lock_project_b).
-lock_import.pdm_workspace_member(
+lock_import.pdm_member(
     project = "project-a",
     repo = "lock_a",
     workspace = "shared",

@@ -302,7 +302,7 @@ def package_annotation(
 PDM_IMPORT_ATTRS = _IMPORT_ATTRS
 UV_IMPORT_ATTRS = _IMPORT_ATTRS
 
-# Group-selection attrs for workspace_members tags (group-wide defaults).
+# Group-selection attrs for all_members tags (group-wide defaults).
 # Boolean flags (all_optional_groups, all_development_groups) live only here;
 # per-member overrides disable them implicitly by specifying explicit lists.
 _WORKSPACE_GROUP_ATTRS = dict(
@@ -320,7 +320,7 @@ _WORKSPACE_GROUP_ATTRS = dict(
     ),
 )
 
-# Group-selection attrs for workspace_member override tags.
+# Group-selection attrs for member override tags.
 # default_group lives only here (not on members) since disabling default deps
 # is a per-member decision. List attrs override the members-level defaults
 # when non-empty.
@@ -330,10 +330,10 @@ _WORKSPACE_GROUP_OVERRIDE_ATTRS = dict(
         default = True,
     ),
     optional_groups = attr.string_list(
-        doc = "List of optional dependency groups to install (overrides workspace_members setting).",
+        doc = "List of optional dependency groups to install (overrides all_members setting).",
     ),
     development_groups = attr.string_list(
-        doc = "List of development dependency groups to install (overrides workspace_members setting).",
+        doc = "List of development dependency groups to install (overrides all_members setting).",
     ),
 )
 
@@ -349,7 +349,7 @@ UV_WORKSPACE_ATTRS = dict(
     ),
 )
 
-UV_WORKSPACE_MEMBERS_ATTRS = dict(
+UV_ALL_MEMBERS_ATTRS = dict(
     repo_pattern = attr.string(
         doc = "Pattern for auto-generated repo names. Use '{member}' as a placeholder " +
               "for the normalized project name. For example, 'ws_{member}' produces " +
@@ -361,10 +361,9 @@ UV_WORKSPACE_MEMBERS_ATTRS = dict(
     ),
 ) | _WORKSPACE_GROUP_ATTRS
 
-UV_WORKSPACE_MEMBER_ATTRS = dict(
+UV_MEMBER_ATTRS = dict(
     project = attr.string(
-        doc = "The project name as it appears in uv.lock.",
-        mandatory = True,
+        doc = "The project name as it appears in uv.lock. Optional if the workspace has only one member.",
     ),
     repo = attr.string(
         doc = "Override the repo name (default: {prefix}{normalized_project_name}).",
@@ -383,7 +382,7 @@ PDM_WORKSPACE_ATTRS = dict(
     ),
 )
 
-PDM_WORKSPACE_MEMBERS_ATTRS = dict(
+PDM_ALL_MEMBERS_ATTRS = dict(
     repo_pattern = attr.string(
         doc = "Pattern for auto-generated repo names. Use '{member}' as a placeholder " +
               "for the normalized project name. For example, 'ws_{member}' produces " +
@@ -395,10 +394,9 @@ PDM_WORKSPACE_MEMBERS_ATTRS = dict(
     ),
 ) | _WORKSPACE_GROUP_ATTRS
 
-PDM_WORKSPACE_MEMBER_ATTRS = dict(
+PDM_MEMBER_ATTRS = dict(
     project = attr.string(
-        doc = "The project name as it appears in pdm.lock.",
-        mandatory = True,
+        doc = "The project name as it appears in pdm.lock. Optional if the workspace has only one member.",
     ),
     repo = attr.string(
         doc = "Override the repo name (default: {prefix}{normalized_project_name}).",

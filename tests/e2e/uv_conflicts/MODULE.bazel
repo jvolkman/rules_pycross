@@ -43,7 +43,7 @@ lock_import.import_uv_workspace(
     lock_file = "//:uv.lock",
     target_environments = ["@envs//:environments"],
 )
-lock_import.uv_workspace_members(
+lock_import.uv_all_members(
     all_optional_groups = True,
     workspace = "shared",
 )
