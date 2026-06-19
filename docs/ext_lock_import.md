@@ -37,6 +37,10 @@ lock_import.uv_all_members(<a href="#lock_import.uv_all_members-all_development_
                            <a href="#lock_import.uv_all_members-excluded_projects">excluded_projects</a>, <a href="#lock_import.uv_all_members-optional_groups">optional_groups</a>, <a href="#lock_import.uv_all_members-repo_pattern">repo_pattern</a>, <a href="#lock_import.uv_all_members-workspace">workspace</a>)
 lock_import.uv_member(<a href="#lock_import.uv_member-default_group">default_group</a>, <a href="#lock_import.uv_member-development_groups">development_groups</a>, <a href="#lock_import.uv_member-optional_groups">optional_groups</a>, <a href="#lock_import.uv_member-project">project</a>, <a href="#lock_import.uv_member-project_file">project_file</a>,
                       <a href="#lock_import.uv_member-repo">repo</a>, <a href="#lock_import.uv_member-workspace">workspace</a>)
+lock_import.poetry_member(<a href="#lock_import.poetry_member-default_group">default_group</a>, <a href="#lock_import.poetry_member-development_groups">development_groups</a>, <a href="#lock_import.poetry_member-optional_groups">optional_groups</a>, <a href="#lock_import.poetry_member-project">project</a>, <a href="#lock_import.poetry_member-project_file">project_file</a>,
+                          <a href="#lock_import.poetry_member-repo">repo</a>, <a href="#lock_import.poetry_member-workspace">workspace</a>)
+lock_import.pylock_member(<a href="#lock_import.pylock_member-default_group">default_group</a>, <a href="#lock_import.pylock_member-development_groups">development_groups</a>, <a href="#lock_import.pylock_member-optional_groups">optional_groups</a>, <a href="#lock_import.pylock_member-project">project</a>, <a href="#lock_import.pylock_member-project_file">project_file</a>,
+                          <a href="#lock_import.pylock_member-repo">repo</a>, <a href="#lock_import.pylock_member-workspace">workspace</a>)
 lock_import.package(<a href="#lock_import.package-name">name</a>, <a href="#lock_import.package-always_build">always_build</a>, <a href="#lock_import.package-bin_paths">bin_paths</a>, <a href="#lock_import.package-build_backend">build_backend</a>, <a href="#lock_import.package-build_dependencies">build_dependencies</a>, <a href="#lock_import.package-build_repo">build_repo</a>,
                     <a href="#lock_import.package-build_target">build_target</a>, <a href="#lock_import.package-data_paths">data_paths</a>, <a href="#lock_import.package-ignore_dependencies">ignore_dependencies</a>, <a href="#lock_import.package-include_paths">include_paths</a>,
                     <a href="#lock_import.package-install_exclude_globs">install_exclude_globs</a>, <a href="#lock_import.package-post_install_patches">post_install_patches</a>, <a href="#lock_import.package-pre_build_patches">pre_build_patches</a>, <a href="#lock_import.package-repo">repo</a>, <a href="#lock_import.package-site_hooks">site_hooks</a>,
@@ -256,6 +260,42 @@ Override settings for a specific member.
 | <a id="lock_import.uv_member-project_file"></a>project_file |  Override auto-discovered pyproject.toml path.   | <a href="https://bazel.build/concepts/labels">Label</a> | optional |  `None`  |
 | <a id="lock_import.uv_member-repo"></a>repo |  Override the repo name (default: {prefix}{normalized_project_name}).   | String | optional |  `""`  |
 | <a id="lock_import.uv_member-workspace"></a>workspace |  Name of the workspace this member belongs to.   | String | required |  |
+
+<a id="lock_import.poetry_member"></a>
+
+### poetry_member
+
+Override settings for a specific Poetry member.
+
+**Attributes**
+
+| Name  | Description | Type | Mandatory | Default |
+| :------------- | :------------- | :------------- | :------------- | :------------- |
+| <a id="lock_import.poetry_member-default_group"></a>default_group |  Whether to install dependencies from the default group.   | Boolean | optional |  `True`  |
+| <a id="lock_import.poetry_member-development_groups"></a>development_groups |  List of development dependency groups to install (overrides all_members setting).   | List of strings | optional |  `[]`  |
+| <a id="lock_import.poetry_member-optional_groups"></a>optional_groups |  List of optional dependency groups to install (overrides all_members setting).   | List of strings | optional |  `[]`  |
+| <a id="lock_import.poetry_member-project"></a>project |  Optional project name.   | String | optional |  `""`  |
+| <a id="lock_import.poetry_member-project_file"></a>project_file |  Override auto-discovered pyproject.toml path.   | <a href="https://bazel.build/concepts/labels">Label</a> | optional |  `None`  |
+| <a id="lock_import.poetry_member-repo"></a>repo |  Override the repo name.   | String | optional |  `""`  |
+| <a id="lock_import.poetry_member-workspace"></a>workspace |  Name of the workspace this member belongs to.   | String | required |  |
+
+<a id="lock_import.pylock_member"></a>
+
+### pylock_member
+
+Override settings for a specific Pylock member.
+
+**Attributes**
+
+| Name  | Description | Type | Mandatory | Default |
+| :------------- | :------------- | :------------- | :------------- | :------------- |
+| <a id="lock_import.pylock_member-default_group"></a>default_group |  Whether to install dependencies from the default group.   | Boolean | optional |  `True`  |
+| <a id="lock_import.pylock_member-development_groups"></a>development_groups |  List of development dependency groups to install (overrides all_members setting).   | List of strings | optional |  `[]`  |
+| <a id="lock_import.pylock_member-optional_groups"></a>optional_groups |  List of optional dependency groups to install (overrides all_members setting).   | List of strings | optional |  `[]`  |
+| <a id="lock_import.pylock_member-project"></a>project |  Optional project name.   | String | optional |  `""`  |
+| <a id="lock_import.pylock_member-project_file"></a>project_file |  Override auto-discovered pyproject.toml path.   | <a href="https://bazel.build/concepts/labels">Label</a> | optional |  `None`  |
+| <a id="lock_import.pylock_member-repo"></a>repo |  Override the repo name.   | String | optional |  `""`  |
+| <a id="lock_import.pylock_member-workspace"></a>workspace |  Name of the workspace this member belongs to.   | String | required |  |
 
 <a id="lock_import.package"></a>
 

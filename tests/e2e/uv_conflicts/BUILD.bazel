@@ -11,7 +11,7 @@ platform(
         "@platforms//cpu:x86_64",
     ],
     flags = [
-        "--@project//_variants:extra_variant-a",
+        "--@project//_variants:extra_variant-a=True",
     ],
 )
 
@@ -22,7 +22,7 @@ platform(
         "@platforms//cpu:x86_64",
     ],
     flags = [
-        "--@project//_variants:extra_variant-b",
+        "--@project//_variants:extra_variant-b=True",
     ],
 )
 

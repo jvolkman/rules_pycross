@@ -26,12 +26,19 @@ unset TEST_SRCDIR
 cd "${WORKSPACE_DIR}"
 echo "Running bazel clean --expunge..."
 bazel clean --expunge
-echo "Running bazel build //..."
-bazel build //...
-# Query if there are any test targets in the workspace
-if bazel query "tests(//...)" --output=label 2>/dev/null | grep -q .; then
-  echo "Running bazel test //..."
-  bazel test //...
+# If a workspace provides an executable run.sh, use it instead of the default build/test commands.
+# This serves as an escape hatch for tests that require specific bazel invocation flags.
+if [[ -x "run.sh" ]]; then
+  echo "Running custom run.sh..."
+  ./run.sh
 else
-  echo "No test targets found, skipping bazel test."
+  echo "Running bazel build //..."
+  bazel build //...
+  # Query if there are any test targets in the workspace
+  if bazel query "tests(//...)" --output=label 2>/dev/null | grep -q .; then
+    echo "Running bazel test //..."
+    bazel test //...
+  else
+    echo "No test targets found, skipping bazel test."
+  fi
 fi

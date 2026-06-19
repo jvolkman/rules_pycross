@@ -16,9 +16,7 @@
     }
   },
   "pins": {
-    "cowsay": {
-      "": "cowsay@6.1"
-    }
+    "cowsay": "cowsay@6.1"
   },
   "python_versions": "<3.13,>=3.9"
 }

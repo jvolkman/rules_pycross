@@ -709,15 +709,9 @@
     }
   },
   "pins": {
-    "regex": {
-      "": "regex@2024.11.6"
-    },
-    "setuptools": {
-      "": "setuptools@75.6.0"
-    },
-    "wheel": {
-      "": "wheel@0.45.1"
-    }
+    "regex": "regex@2024.11.6",
+    "setuptools": "setuptools@75.6.0",
+    "wheel": "wheel@0.45.1"
   },
   "python_versions": "<3.13,>=3.9"
 }

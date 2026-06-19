@@ -434,3 +434,19 @@ PYLOCK_IMPORT_ATTRS = dict(
         doc = "Install all dev dependencies.",
     ),
 )
+
+_SINGLE_PROJECT_MEMBER_ATTRS = dict(
+    project = attr.string(
+        doc = "Optional project name.",
+    ),
+    repo = attr.string(
+        doc = "Override the repo name.",
+    ),
+    project_file = attr.label(
+        doc = "Override auto-discovered pyproject.toml path.",
+        allow_single_file = True,
+    ),
+) | _WORKSPACE_GROUP_OVERRIDE_ATTRS
+
+POETRY_MEMBER_ATTRS = _SINGLE_PROJECT_MEMBER_ATTRS
+PYLOCK_MEMBER_ATTRS = _SINGLE_PROJECT_MEMBER_ATTRS
