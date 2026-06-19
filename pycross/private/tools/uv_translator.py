@@ -212,7 +212,10 @@ def translate(
             if key not in conflict_items_by_source:
                 is_default = kind == "group" and name in default_groups
                 conflict_items_by_source[key] = ConflictItem(
-                    package=package, kind=kind, name=name, default=is_default,
+                    package=package,
+                    kind=kind,
+                    name=name,
+                    default=is_default,
                 )
             items.append(conflict_items_by_source[key])
         conflict_sets.append(ConflictSet(items=tuple(items)))

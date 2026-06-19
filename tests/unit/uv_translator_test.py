@@ -3,8 +3,6 @@ import unittest
 
 from packaging.specifiers import SpecifierSet
 
-from pycross.private.tools.lock_model import ConflictItem
-from pycross.private.tools.lock_model import ConflictSet
 from pycross.private.tools.lock_model import PackageKey
 from pycross.private.tools.lock_model import package_canonical_name
 from pycross.private.tools.uv_translator import LockfileIncompatibleException
@@ -725,6 +723,7 @@ wheels = [
         self.assertIn(PackageKey.from_parts("requests", "2.34.2"), result.packages)
         self.assertIn(PackageKey.from_parts("requests", "2.32.5"), result.packages)
 
+
 class UvTranslatorConflictTest(unittest.TestCase):
     """Tests for conflict parsing and default-groups support."""
 
@@ -787,8 +786,10 @@ wheels = [
     def test_extra_conflicts_produce_conflict_sets(self):
         """Conflicts from extras create ConflictSet with ConflictItems."""
         result = run_translator(
-            self.CONFLICT_PROJECT, self.CONFLICT_LOCK,
-            default_group=False, all_optional_groups=True,
+            self.CONFLICT_PROJECT,
+            self.CONFLICT_LOCK,
+            default_group=False,
+            all_optional_groups=True,
         )
         self.assertEqual(len(result.conflicts), 1)
         cs = result.conflicts[0]
@@ -799,8 +800,10 @@ wheels = [
     def test_extra_conflicts_produce_constrained_pins(self):
         """Conflicting extras produce pins with constraint keys, not bare keys."""
         result = run_translator(
-            self.CONFLICT_PROJECT, self.CONFLICT_LOCK,
-            default_group=False, all_optional_groups=True,
+            self.CONFLICT_PROJECT,
+            self.CONFLICT_LOCK,
+            default_group=False,
+            all_optional_groups=True,
         )
         torch_pin = result.pins[package_canonical_name("torch")]
         # Should have constraint keys, not ""
@@ -814,8 +817,10 @@ wheels = [
     def test_extra_conflicts_no_defaults(self):
         """Extra conflicts don't produce default items (extras have no default-groups)."""
         result = run_translator(
-            self.CONFLICT_PROJECT, self.CONFLICT_LOCK,
-            default_group=False, all_optional_groups=True,
+            self.CONFLICT_PROJECT,
+            self.CONFLICT_LOCK,
+            default_group=False,
+            all_optional_groups=True,
         )
         for cs in result.conflicts:
             for item in cs.items:
@@ -877,8 +882,10 @@ wheels = [
 ]
 """
         result = run_translator(
-            project, lock,
-            default_group=False, all_development_groups=True,
+            project,
+            lock,
+            default_group=False,
+            all_development_groups=True,
         )
         self.assertEqual(len(result.conflicts), 1)
         cs = result.conflicts[0]
@@ -945,8 +952,10 @@ wheels = [
 ]
 """
         result = run_translator(
-            project, lock,
-            default_group=False, all_development_groups=True,
+            project,
+            lock,
+            default_group=False,
+            all_development_groups=True,
         )
         cs = result.conflicts[0]
         items_by_name = {item.qualified_name: item for item in cs.items}
@@ -997,8 +1006,10 @@ wheels = [
 ]
 """
         result = run_translator(
-            project, lock,
-            default_group=False, all_optional_groups=True,
+            project,
+            lock,
+            default_group=False,
+            all_optional_groups=True,
         )
         # "cpu" is an extra, not a group, so default-groups=["cpu"] should not affect it
         for cs in result.conflicts:
@@ -1071,8 +1082,10 @@ wheels = [
     def test_conflict_serialization_roundtrip(self):
         """Conflicts survive JSON serialization roundtrip."""
         result = run_translator(
-            self.CONFLICT_PROJECT, self.CONFLICT_LOCK,
-            default_group=False, all_optional_groups=True,
+            self.CONFLICT_PROJECT,
+            self.CONFLICT_LOCK,
+            default_group=False,
+            all_optional_groups=True,
         )
         json_str = result.to_json()
         restored = type(result).from_json(json_str)
@@ -1087,6 +1100,7 @@ wheels = [
     def test_pins_simplification_in_json(self):
         """Unconditional pins serialize as bare strings, not {"":...}."""
         import json
+
         project = """
 [project]
 name = "my-app"
@@ -1121,9 +1135,12 @@ wheels = [
     def test_conflicting_pins_stay_as_dicts_in_json(self):
         """Conflicting pins remain as dicts in serialized JSON."""
         import json
+
         result = run_translator(
-            self.CONFLICT_PROJECT, self.CONFLICT_LOCK,
-            default_group=False, all_optional_groups=True,
+            self.CONFLICT_PROJECT,
+            self.CONFLICT_LOCK,
+            default_group=False,
+            all_optional_groups=True,
         )
         json_str = result.to_json()
         parsed = json.loads(json_str)

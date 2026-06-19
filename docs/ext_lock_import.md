@@ -27,16 +27,16 @@ lock_import.import_pdm_workspace(<a href="#lock_import.import_pdm_workspace-name
                                  <a href="#lock_import.import_pdm_workspace-default_build_dependencies">default_build_dependencies</a>, <a href="#lock_import.import_pdm_workspace-disallow_builds">disallow_builds</a>, <a href="#lock_import.import_pdm_workspace-local_wheels">local_wheels</a>, <a href="#lock_import.import_pdm_workspace-lock_file">lock_file</a>,
                                  <a href="#lock_import.import_pdm_workspace-target_environments">target_environments</a>)
 lock_import.pdm_all_members(<a href="#lock_import.pdm_all_members-all_development_groups">all_development_groups</a>, <a href="#lock_import.pdm_all_members-all_optional_groups">all_optional_groups</a>, <a href="#lock_import.pdm_all_members-development_groups">development_groups</a>,
-                                  <a href="#lock_import.pdm_all_members-excluded_projects">excluded_projects</a>, <a href="#lock_import.pdm_all_members-optional_groups">optional_groups</a>, <a href="#lock_import.pdm_all_members-repo_pattern">repo_pattern</a>, <a href="#lock_import.pdm_all_members-workspace">workspace</a>)
-lock_import.pdm_member(<a href="#lock_import.pdm_member-default_group">default_group</a>, <a href="#lock_import.pdm_member-development_groups">development_groups</a>, <a href="#lock_import.pdm_member-optional_groups">optional_groups</a>, <a href="#lock_import.pdm_member-project">project</a>,
-                                 <a href="#lock_import.pdm_member-project_file">project_file</a>, <a href="#lock_import.pdm_member-repo">repo</a>, <a href="#lock_import.pdm_member-workspace">workspace</a>)
+                            <a href="#lock_import.pdm_all_members-excluded_projects">excluded_projects</a>, <a href="#lock_import.pdm_all_members-optional_groups">optional_groups</a>, <a href="#lock_import.pdm_all_members-repo_pattern">repo_pattern</a>, <a href="#lock_import.pdm_all_members-workspace">workspace</a>)
+lock_import.pdm_member(<a href="#lock_import.pdm_member-default_group">default_group</a>, <a href="#lock_import.pdm_member-development_groups">development_groups</a>, <a href="#lock_import.pdm_member-optional_groups">optional_groups</a>, <a href="#lock_import.pdm_member-project">project</a>, <a href="#lock_import.pdm_member-project_file">project_file</a>,
+                       <a href="#lock_import.pdm_member-repo">repo</a>, <a href="#lock_import.pdm_member-workspace">workspace</a>)
 lock_import.import_uv_workspace(<a href="#lock_import.import_uv_workspace-name">name</a>, <a href="#lock_import.import_uv_workspace-build_repo">build_repo</a>, <a href="#lock_import.import_uv_workspace-default_alias_single_version">default_alias_single_version</a>,
                                 <a href="#lock_import.import_uv_workspace-default_build_dependencies">default_build_dependencies</a>, <a href="#lock_import.import_uv_workspace-disallow_builds">disallow_builds</a>, <a href="#lock_import.import_uv_workspace-local_wheels">local_wheels</a>, <a href="#lock_import.import_uv_workspace-lock_file">lock_file</a>,
                                 <a href="#lock_import.import_uv_workspace-require_static_urls">require_static_urls</a>, <a href="#lock_import.import_uv_workspace-target_environments">target_environments</a>)
 lock_import.uv_all_members(<a href="#lock_import.uv_all_members-all_development_groups">all_development_groups</a>, <a href="#lock_import.uv_all_members-all_optional_groups">all_optional_groups</a>, <a href="#lock_import.uv_all_members-development_groups">development_groups</a>,
-                                 <a href="#lock_import.uv_all_members-excluded_projects">excluded_projects</a>, <a href="#lock_import.uv_all_members-optional_groups">optional_groups</a>, <a href="#lock_import.uv_all_members-repo_pattern">repo_pattern</a>, <a href="#lock_import.uv_all_members-workspace">workspace</a>)
-lock_import.uv_member(<a href="#lock_import.uv_member-default_group">default_group</a>, <a href="#lock_import.uv_member-development_groups">development_groups</a>, <a href="#lock_import.uv_member-optional_groups">optional_groups</a>, <a href="#lock_import.uv_member-project">project</a>,
-                                <a href="#lock_import.uv_member-project_file">project_file</a>, <a href="#lock_import.uv_member-repo">repo</a>, <a href="#lock_import.uv_member-workspace">workspace</a>)
+                           <a href="#lock_import.uv_all_members-excluded_projects">excluded_projects</a>, <a href="#lock_import.uv_all_members-optional_groups">optional_groups</a>, <a href="#lock_import.uv_all_members-repo_pattern">repo_pattern</a>, <a href="#lock_import.uv_all_members-workspace">workspace</a>)
+lock_import.uv_member(<a href="#lock_import.uv_member-default_group">default_group</a>, <a href="#lock_import.uv_member-development_groups">development_groups</a>, <a href="#lock_import.uv_member-optional_groups">optional_groups</a>, <a href="#lock_import.uv_member-project">project</a>, <a href="#lock_import.uv_member-project_file">project_file</a>,
+                      <a href="#lock_import.uv_member-repo">repo</a>, <a href="#lock_import.uv_member-workspace">workspace</a>)
 lock_import.package(<a href="#lock_import.package-name">name</a>, <a href="#lock_import.package-always_build">always_build</a>, <a href="#lock_import.package-bin_paths">bin_paths</a>, <a href="#lock_import.package-build_backend">build_backend</a>, <a href="#lock_import.package-build_dependencies">build_dependencies</a>, <a href="#lock_import.package-build_repo">build_repo</a>,
                     <a href="#lock_import.package-build_target">build_target</a>, <a href="#lock_import.package-data_paths">data_paths</a>, <a href="#lock_import.package-ignore_dependencies">ignore_dependencies</a>, <a href="#lock_import.package-include_paths">include_paths</a>,
                     <a href="#lock_import.package-install_exclude_globs">install_exclude_globs</a>, <a href="#lock_import.package-post_install_patches">post_install_patches</a>, <a href="#lock_import.package-pre_build_patches">pre_build_patches</a>, <a href="#lock_import.package-repo">repo</a>, <a href="#lock_import.package-site_hooks">site_hooks</a>,
@@ -196,7 +196,7 @@ Override settings for a specific PDM member.
 | <a id="lock_import.pdm_member-default_group"></a>default_group |  Whether to install dependencies from the default group.   | Boolean | optional |  `True`  |
 | <a id="lock_import.pdm_member-development_groups"></a>development_groups |  List of development dependency groups to install (overrides all_members setting).   | List of strings | optional |  `[]`  |
 | <a id="lock_import.pdm_member-optional_groups"></a>optional_groups |  List of optional dependency groups to install (overrides all_members setting).   | List of strings | optional |  `[]`  |
-| <a id="lock_import.pdm_member-project"></a>project |  The project name as it appears in pdm.lock.   | String | required |  |
+| <a id="lock_import.pdm_member-project"></a>project |  The project name as it appears in pdm.lock. Optional if the workspace has only one member.   | String | optional |  `""`  |
 | <a id="lock_import.pdm_member-project_file"></a>project_file |  Override auto-discovered pyproject.toml path.   | <a href="https://bazel.build/concepts/labels">Label</a> | optional |  `None`  |
 | <a id="lock_import.pdm_member-repo"></a>repo |  Override the repo name (default: {prefix}{normalized_project_name}).   | String | optional |  `""`  |
 | <a id="lock_import.pdm_member-workspace"></a>workspace |  Name of the workspace this member belongs to.   | String | required |  |
@@ -205,7 +205,7 @@ Override settings for a specific PDM member.
 
 ### import_uv_workspace
 
-Import a uv workspace. Define members with uv_all_members and uv_member.
+Import a uv workspace. Define members with uv_all_members and uv_member tags.
 
 **Attributes**
 
@@ -252,7 +252,7 @@ Override settings for a specific member.
 | <a id="lock_import.uv_member-default_group"></a>default_group |  Whether to install dependencies from the default group.   | Boolean | optional |  `True`  |
 | <a id="lock_import.uv_member-development_groups"></a>development_groups |  List of development dependency groups to install (overrides all_members setting).   | List of strings | optional |  `[]`  |
 | <a id="lock_import.uv_member-optional_groups"></a>optional_groups |  List of optional dependency groups to install (overrides all_members setting).   | List of strings | optional |  `[]`  |
-| <a id="lock_import.uv_member-project"></a>project |  The project name as it appears in uv.lock.   | String | required |  |
+| <a id="lock_import.uv_member-project"></a>project |  The project name as it appears in uv.lock. Optional if the workspace has only one member.   | String | optional |  `""`  |
 | <a id="lock_import.uv_member-project_file"></a>project_file |  Override auto-discovered pyproject.toml path.   | <a href="https://bazel.build/concepts/labels">Label</a> | optional |  `None`  |
 | <a id="lock_import.uv_member-repo"></a>repo |  Override the repo name (default: {prefix}{normalized_project_name}).   | String | optional |  `""`  |
 | <a id="lock_import.uv_member-workspace"></a>workspace |  Name of the workspace this member belongs to.   | String | required |  |

@@ -1,4 +1,5 @@
 """Test that the correct typing_extensions version is resolved for each conflict variant."""
+
 import sys
 from importlib.metadata import version
 

@@ -11,17 +11,17 @@ load(
     "COMMON_IMPORT_ATTRS",
     "OVERRIDE_TARGET_ATTRS",
     "PACKAGE_ATTRS",
-    "PDM_IMPORT_ATTRS",
-    "PDM_WORKSPACE_ATTRS",
     "PDM_ALL_MEMBERS_ATTRS",
+    "PDM_IMPORT_ATTRS",
     "PDM_MEMBER_ATTRS",
+    "PDM_WORKSPACE_ATTRS",
     "POETRY_IMPORT_ATTRS",
     "PYLOCK_IMPORT_ATTRS",
     "REPO_ATTR",
-    "UV_IMPORT_ATTRS",
-    "UV_WORKSPACE_ATTRS",
     "UV_ALL_MEMBERS_ATTRS",
+    "UV_IMPORT_ATTRS",
     "UV_MEMBER_ATTRS",
+    "UV_WORKSPACE_ATTRS",
     "WORKSPACE_COMMON_ATTRS",
     "WORKSPACE_MEMBER_COMMON_ATTRS",
 )
@@ -370,7 +370,11 @@ def _process_workspaces(
                     fail("{}: no members discovered in workspace '{}'; cannot infer project".format(member_tag_name, tag.workspace))
                 else:
                     fail("{}: workspace '{}' has {} members ({}); 'project' is required to disambiguate".format(
-                        member_tag_name, tag.workspace, len(discovered), ", ".join(sorted(discovered.keys()))))
+                        member_tag_name,
+                        tag.workspace,
+                        len(discovered),
+                        ", ".join(sorted(discovered.keys())),
+                    ))
 
             key = (tag.workspace, project)
             if key not in member_overrides:

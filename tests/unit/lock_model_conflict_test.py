@@ -7,15 +7,12 @@ import unittest
 
 from packaging.specifiers import SpecifierSet
 
-from pycross.private.tools.lock_model import (
-    ConflictItem,
-    ConflictSet,
-    DependencyName,
-    PackageKey,
-    RawLockSet,
-    ResolvedLockSet,
-    package_canonical_name,
-)
+from pycross.private.tools.lock_model import ConflictItem
+from pycross.private.tools.lock_model import ConflictSet
+from pycross.private.tools.lock_model import PackageKey
+from pycross.private.tools.lock_model import RawLockSet
+from pycross.private.tools.lock_model import ResolvedLockSet
+from pycross.private.tools.lock_model import package_canonical_name
 
 
 class ConflictItemQualifiedNameTest(unittest.TestCase):
@@ -43,23 +40,25 @@ class ConflictSetSettingNameTest(unittest.TestCase):
     """Test ConflictSet.setting_name generation."""
 
     def test_two_extras(self):
-        cs = ConflictSet(items=(
-            ConflictItem(package="proj", kind="extra", name="cpu"),
-            ConflictItem(package="proj", kind="extra", name="cu124"),
-        ))
+        cs = ConflictSet(
+            items=(
+                ConflictItem(package="proj", kind="extra", name="cpu"),
+                ConflictItem(package="proj", kind="extra", name="cu124"),
+            )
+        )
         self.assertEqual(cs.setting_name, "conflicts_extra_cpu_extra_cu124")
 
     def test_mixed_types(self):
-        cs = ConflictSet(items=(
-            ConflictItem(package="proj", kind="extra", name="cpu"),
-            ConflictItem(package="proj", kind="group", name="test"),
-        ))
+        cs = ConflictSet(
+            items=(
+                ConflictItem(package="proj", kind="extra", name="cpu"),
+                ConflictItem(package="proj", kind="group", name="test"),
+            )
+        )
         self.assertEqual(cs.setting_name, "conflicts_extra_cpu_group_test")
 
     def test_single_item(self):
-        cs = ConflictSet(items=(
-            ConflictItem(package="proj", kind="extra", name="gpu"),
-        ))
+        cs = ConflictSet(items=(ConflictItem(package="proj", kind="extra", name="gpu"),))
         self.assertEqual(cs.setting_name, "conflicts_extra_gpu")
 
     def test_empty_items(self):
@@ -91,10 +90,12 @@ class RawLockSetConflictsRoundtripTest(unittest.TestCase):
         lock = RawLockSet(
             python_versions=SpecifierSet(">=3.8"),
             conflicts=[
-                ConflictSet(items=(
-                    ConflictItem(package="proj", kind="extra", name="cpu"),
-                    ConflictItem(package="proj", kind="extra", name="cu124"),
-                )),
+                ConflictSet(
+                    items=(
+                        ConflictItem(package="proj", kind="extra", name="cpu"),
+                        ConflictItem(package="proj", kind="extra", name="cu124"),
+                    )
+                ),
             ],
         )
         json_str = lock.to_json()
@@ -109,10 +110,12 @@ class RawLockSetConflictsRoundtripTest(unittest.TestCase):
         lock = RawLockSet(
             python_versions=SpecifierSet(">=3.8"),
             conflicts=[
-                ConflictSet(items=(
-                    ConflictItem(package="proj", kind="extra", name="cpu", default=True),
-                    ConflictItem(package="proj", kind="extra", name="cu124"),
-                )),
+                ConflictSet(
+                    items=(
+                        ConflictItem(package="proj", kind="extra", name="cpu", default=True),
+                        ConflictItem(package="proj", kind="extra", name="cu124"),
+                    )
+                ),
             ],
         )
         json_str = lock.to_json()
@@ -125,10 +128,12 @@ class RawLockSetConflictsRoundtripTest(unittest.TestCase):
         lock = RawLockSet(
             python_versions=SpecifierSet(">=3.8"),
             conflicts=[
-                ConflictSet(items=(
-                    ConflictItem(package="proj", kind="extra", name="cpu"),
-                    ConflictItem(package="proj", kind="group", name="test"),
-                )),
+                ConflictSet(
+                    items=(
+                        ConflictItem(package="proj", kind="extra", name="cpu"),
+                        ConflictItem(package="proj", kind="group", name="test"),
+                    )
+                ),
             ],
         )
         json_str = lock.to_json()
@@ -155,10 +160,12 @@ class PinsSerializationTest(unittest.TestCase):
         """Pins with multiple constraint keys should remain as dicts."""
         lock = RawLockSet(
             python_versions=SpecifierSet(">=3.8"),
-            pins={"torch": {
-                "extra_cpu": PackageKey("torch@2.12.1"),
-                "extra_cu124": PackageKey("torch@2.6.0"),
-            }},
+            pins={
+                "torch": {
+                    "extra_cpu": PackageKey("torch@2.12.1"),
+                    "extra_cu124": PackageKey("torch@2.6.0"),
+                }
+            },
         )
         json_str = lock.to_json()
         parsed = json.loads(json_str)
@@ -188,10 +195,12 @@ class ResolvedLockSetConflictsRoundtripTest(unittest.TestCase):
     def test_roundtrip(self):
         resolved = ResolvedLockSet(
             conflicts=[
-                ConflictSet(items=(
-                    ConflictItem(package="proj", kind="extra", name="cpu"),
-                    ConflictItem(package="proj", kind="extra", name="cu124"),
-                )),
+                ConflictSet(
+                    items=(
+                        ConflictItem(package="proj", kind="extra", name="cpu"),
+                        ConflictItem(package="proj", kind="extra", name="cu124"),
+                    )
+                ),
             ],
         )
         json_str = resolved.to_json()
@@ -201,10 +210,12 @@ class ResolvedLockSetConflictsRoundtripTest(unittest.TestCase):
     def test_roundtrip_with_default(self):
         resolved = ResolvedLockSet(
             conflicts=[
-                ConflictSet(items=(
-                    ConflictItem(package="proj", kind="extra", name="cpu", default=True),
-                    ConflictItem(package="proj", kind="extra", name="cu124"),
-                )),
+                ConflictSet(
+                    items=(
+                        ConflictItem(package="proj", kind="extra", name="cpu", default=True),
+                        ConflictItem(package="proj", kind="extra", name="cu124"),
+                    )
+                ),
             ],
         )
         json_str = resolved.to_json()
@@ -245,10 +256,12 @@ class ProjectLevelConflictsTest(unittest.TestCase):
     """Test ConflictSet with project-level conflict items."""
 
     def test_project_setting_name(self):
-        cs = ConflictSet(items=(
-            ConflictItem(package="app-a", kind="project"),
-            ConflictItem(package="app-b", kind="project"),
-        ))
+        cs = ConflictSet(
+            items=(
+                ConflictItem(package="app-a", kind="project"),
+                ConflictItem(package="app-b", kind="project"),
+            )
+        )
         self.assertEqual(cs.setting_name, "conflicts_package_app-a_package_app-b")
 
     def test_project_items_have_empty_name(self):
@@ -259,10 +272,12 @@ class ProjectLevelConflictsTest(unittest.TestCase):
         lock = RawLockSet(
             python_versions=SpecifierSet(">=3.8"),
             conflicts=[
-                ConflictSet(items=(
-                    ConflictItem(package="app-a", kind="project"),
-                    ConflictItem(package="app-b", kind="project"),
-                )),
+                ConflictSet(
+                    items=(
+                        ConflictItem(package="app-a", kind="project"),
+                        ConflictItem(package="app-b", kind="project"),
+                    )
+                ),
             ],
         )
         json_str = lock.to_json()

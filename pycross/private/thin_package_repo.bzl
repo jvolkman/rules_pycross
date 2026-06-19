@@ -67,6 +67,7 @@ def _target_select(target_dict, prefix, suffix, workspace_repo, is_aggregated = 
             lines.append('        "//conditions:default": "{}{}{}",'.format(prefix, t_base, suffix))
         else:
             lines.append('        "@{}//_lock:is_{}": "{}{}{}",'.format(workspace_repo, constraint, prefix, t_base, suffix))
+
             # If this constraint is a default variant, also map //conditions:default to it.
             if constraint in default_variants:
                 default_target = t_base
@@ -417,6 +418,7 @@ def _thin_package_repo_impl(rctx):
                 ")",
                 "",
             ])
+
             # Alias the config_setting (for select() references)
             variant_lines.extend([
                 "alias(",
