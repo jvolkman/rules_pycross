@@ -37,7 +37,7 @@ environments.platform(
 )
 use_repo(environments, "uv_workspace_envs")
 
-# Use the new import_uv_workspace API: single lock file, auto-discovered members.
+# Single repo with both conflict groups — select() chooses the variant at build time.
 lock_import = use_extension("@rules_pycross//pycross/extensions:lock_import.bzl", "lock_import")
 lock_import.import_uv_workspace(
     name = "shared",
@@ -45,21 +45,10 @@ lock_import.import_uv_workspace(
     target_environments = ["@uv_workspace_envs//:environments"],
 )
 lock_import.uv_workspace_members(
-    workspace = "shared",
-)
-lock_import.uv_workspace_member(
-    optional_groups = ["cpu"],
-    project = "project",
-    repo = "cpu",
-    workspace = "shared",
-)
-lock_import.uv_workspace_member(
-    optional_groups = ["cu124"],
-    project = "project",
-    repo = "gpu",
+    all_optional_groups = True,
     workspace = "shared",
 )
 
 # The actual repos are loaded from the lock_repos extension.
 lock_repos = use_extension("@rules_pycross//pycross/extensions:lock_repos.bzl", "lock_repos")
-use_repo(lock_repos, "cpu", "gpu")
+use_repo(lock_repos, "project")

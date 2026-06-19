@@ -184,15 +184,22 @@ def translate(
 ) -> RawLockSet:
     conflicts = conflicts or []
 
-    conflict_settings = {}
-    conflict_values = set()
+    # Parse conflict entries into type-qualified constraint values.
+    # Each uv conflict entry has a "package" and either "extra" or "group" key.
+    # We qualify constraint names with the type to avoid namespace collisions
+    # (e.g., an extra "testing" vs a dev group "testing").
+    extra_conflict_values: Dict[str, str] = {}  # extra_name -> qualified constraint value
+    group_conflict_values: Dict[str, str] = {}  # group_name -> qualified constraint value
     for conflict_list in conflicts:
-        names = [c.get("extra") or c.get("package") for c in conflict_list]
-        setting_name = "conflicts_" + "_".join(names)
-        for val in names:
-            if val:
-                conflict_settings[val] = setting_name
-                conflict_values.add(val)
+        for c in conflict_list:
+            if "extra" in c:
+                name = c["extra"]
+                qualified = f"extra_{name}"
+                extra_conflict_values[name] = qualified
+            elif "group" in c:
+                name = c["group"]
+                qualified = f"group_{name}"
+                group_conflict_values[name] = qualified
 
     requirements: List[Tuple[Requirement, str]] = []
 
@@ -234,14 +241,14 @@ def translate(
     for group_name in optional_groups:
         if group_name not in optional_dependencies:
             raise Exception(f"Non-existent optional dependency group: {group_name}")
-        constraint = group_name if group_name in conflict_values else ""
+        constraint = extra_conflict_values.get(group_name, "")
         for dep in optional_dependencies[group_name]:
             requirements.append((dep, constraint))
 
     for group_name in development_groups:
         if group_name not in development_dependencies:
             raise Exception(f"Non-existent development dependency group: {group_name}")
-        constraint = group_name if group_name in conflict_values else ""
+        constraint = group_conflict_values.get(group_name, "")
         for dep in development_dependencies[group_name]:
             requirements.append((dep, constraint))
 
@@ -264,9 +271,14 @@ def translate(
 
     raw_conflicts = {}
     for conflict_list in conflicts:
-        names = [c.get("extra") or c.get("package") for c in conflict_list]
-        setting_name = "conflicts_" + "_".join(names)
-        raw_conflicts[setting_name] = [n for n in names if n]
+        qualified_names = []
+        for c in conflict_list:
+            if "extra" in c:
+                qualified_names.append(extra_conflict_values[c["extra"]])
+            elif "group" in c:
+                qualified_names.append(group_conflict_values[c["group"]])
+        setting_name = "conflicts_" + "_".join(qualified_names)
+        raw_conflicts[setting_name] = qualified_names
 
     distinct_packages = package_processor(packages_list)
     return resolve_lock_graph(
