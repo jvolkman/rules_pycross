@@ -3,6 +3,8 @@ import unittest
 
 from packaging.specifiers import SpecifierSet
 
+from pycross.private.tools.lock_model import ConflictItem
+from pycross.private.tools.lock_model import ConflictSet
 from pycross.private.tools.lock_model import PackageKey
 from pycross.private.tools.lock_model import package_canonical_name
 from pycross.private.tools.uv_translator import LockfileIncompatibleException
@@ -32,6 +34,10 @@ def run_translator(
     packages_list = lock_dict.get("package", distributions_list)
     requires_python = SpecifierSet(lock_dict.get("requires-python", ""))
 
+    # Extract default-groups from [tool.uv] in pyproject.toml.
+    uv_settings = project_dict.get("tool", {}).get("uv", {})
+    uv_default_groups = uv_settings.get("default-groups", [])
+
     return translate(
         project_name,
         packages_list,
@@ -42,6 +48,8 @@ def run_translator(
         development_groups=development_groups or [],
         all_development_groups=all_development_groups,
         package_processor=collect_and_process_packages,
+        conflicts=lock_dict.get("conflicts", []),
+        default_groups=uv_default_groups,
     )
 
 
@@ -716,6 +724,413 @@ wheels = [
         result = run_translator(project, lock)
         self.assertIn(PackageKey.from_parts("requests", "2.34.2"), result.packages)
         self.assertIn(PackageKey.from_parts("requests", "2.32.5"), result.packages)
+
+class UvTranslatorConflictTest(unittest.TestCase):
+    """Tests for conflict parsing and default-groups support."""
+
+    # Minimal project with two conflicting extras (CPU vs CUDA).
+    CONFLICT_PROJECT = """
+[project]
+name = "my-app"
+version = "0.1.0"
+dependencies = []
+
+[project.optional-dependencies]
+cpu = ["torch==2.6.0"]
+cu124 = ["torch==2.7.0"]
+
+[tool.uv]
+conflicts = [
+  [
+    { extra = "cpu" },
+    { extra = "cu124" },
+  ],
+]
+"""
+
+    CONFLICT_LOCK = """
+version = 1
+requires-python = ">=3.8"
+conflicts = [[
+    { package = "my-app", extra = "cpu" },
+    { package = "my-app", extra = "cu124" },
+]]
+
+[[package]]
+name = "my-app"
+version = "0.1.0"
+source = { virtual = "." }
+
+[package.optional-dependencies]
+cpu = [
+    { name = "torch", version = "2.6.0" },
+]
+cu124 = [
+    { name = "torch", version = "2.7.0" },
+]
+
+[[package]]
+name = "torch"
+version = "2.6.0"
+wheels = [
+    { file = "torch-2.6.0-py3-none-any.whl", hash = "sha256:aaa" },
+]
+
+[[package]]
+name = "torch"
+version = "2.7.0"
+wheels = [
+    { file = "torch-2.7.0-py3-none-any.whl", hash = "sha256:bbb" },
+]
+"""
+
+    def test_extra_conflicts_produce_conflict_sets(self):
+        """Conflicts from extras create ConflictSet with ConflictItems."""
+        result = run_translator(
+            self.CONFLICT_PROJECT, self.CONFLICT_LOCK,
+            default_group=False, all_optional_groups=True,
+        )
+        self.assertEqual(len(result.conflicts), 1)
+        cs = result.conflicts[0]
+        self.assertEqual(len(cs.items), 2)
+        names = {item.qualified_name for item in cs.items}
+        self.assertEqual(names, {"extra_cpu", "extra_cu124"})
+
+    def test_extra_conflicts_produce_constrained_pins(self):
+        """Conflicting extras produce pins with constraint keys, not bare keys."""
+        result = run_translator(
+            self.CONFLICT_PROJECT, self.CONFLICT_LOCK,
+            default_group=False, all_optional_groups=True,
+        )
+        torch_pin = result.pins[package_canonical_name("torch")]
+        # Should have constraint keys, not ""
+        self.assertIn("extra_cpu", torch_pin)
+        self.assertIn("extra_cu124", torch_pin)
+        self.assertNotIn("", torch_pin)
+        # Verify correct versions
+        self.assertEqual(str(torch_pin["extra_cpu"]), "torch@2.6.0")
+        self.assertEqual(str(torch_pin["extra_cu124"]), "torch@2.7.0")
+
+    def test_extra_conflicts_no_defaults(self):
+        """Extra conflicts don't produce default items (extras have no default-groups)."""
+        result = run_translator(
+            self.CONFLICT_PROJECT, self.CONFLICT_LOCK,
+            default_group=False, all_optional_groups=True,
+        )
+        for cs in result.conflicts:
+            for item in cs.items:
+                self.assertFalse(item.default)
+
+    def test_group_conflicts(self):
+        """Development group conflicts produce group_ qualified names."""
+        project = """
+[project]
+name = "my-app"
+version = "0.1.0"
+dependencies = []
+
+[dependency-groups]
+test-fast = ["pytest==7.0.0"]
+test-slow = ["pytest==8.0.0"]
+
+[tool.uv]
+conflicts = [
+  [
+    { group = "test-fast" },
+    { group = "test-slow" },
+  ],
+]
+"""
+        lock = """
+version = 1
+requires-python = ">=3.8"
+conflicts = [[
+    { package = "my-app", group = "test-fast" },
+    { package = "my-app", group = "test-slow" },
+]]
+
+[[package]]
+name = "my-app"
+version = "0.1.0"
+source = { virtual = "." }
+
+[package.dev-dependencies]
+test-fast = [
+    { name = "pytest", version = "7.0.0" },
+]
+test-slow = [
+    { name = "pytest", version = "8.0.0" },
+]
+
+[[package]]
+name = "pytest"
+version = "7.0.0"
+wheels = [
+    { file = "pytest-7.0.0-py3-none-any.whl", hash = "sha256:ccc" },
+]
+
+[[package]]
+name = "pytest"
+version = "8.0.0"
+wheels = [
+    { file = "pytest-8.0.0-py3-none-any.whl", hash = "sha256:ddd" },
+]
+"""
+        result = run_translator(
+            project, lock,
+            default_group=False, all_development_groups=True,
+        )
+        self.assertEqual(len(result.conflicts), 1)
+        cs = result.conflicts[0]
+        names = {item.qualified_name for item in cs.items}
+        self.assertEqual(names, {"group_test-fast", "group_test-slow"})
+        # All items should be kind="group"
+        for item in cs.items:
+            self.assertEqual(item.kind, "group")
+
+    def test_default_groups(self):
+        """Items matching default-groups get default=True."""
+        project = """
+[project]
+name = "my-app"
+version = "0.1.0"
+dependencies = []
+
+[dependency-groups]
+test-fast = ["pytest==7.0.0"]
+test-slow = ["pytest==8.0.0"]
+
+[tool.uv]
+default-groups = ["test-fast"]
+conflicts = [
+  [
+    { group = "test-fast" },
+    { group = "test-slow" },
+  ],
+]
+"""
+        lock = """
+version = 1
+requires-python = ">=3.8"
+conflicts = [[
+    { package = "my-app", group = "test-fast" },
+    { package = "my-app", group = "test-slow" },
+]]
+
+[[package]]
+name = "my-app"
+version = "0.1.0"
+source = { virtual = "." }
+
+[package.dev-dependencies]
+test-fast = [
+    { name = "pytest", version = "7.0.0" },
+]
+test-slow = [
+    { name = "pytest", version = "8.0.0" },
+]
+
+[[package]]
+name = "pytest"
+version = "7.0.0"
+wheels = [
+    { file = "pytest-7.0.0-py3-none-any.whl", hash = "sha256:ccc" },
+]
+
+[[package]]
+name = "pytest"
+version = "8.0.0"
+wheels = [
+    { file = "pytest-8.0.0-py3-none-any.whl", hash = "sha256:ddd" },
+]
+"""
+        result = run_translator(
+            project, lock,
+            default_group=False, all_development_groups=True,
+        )
+        cs = result.conflicts[0]
+        items_by_name = {item.qualified_name: item for item in cs.items}
+        self.assertTrue(items_by_name["group_test-fast"].default)
+        self.assertFalse(items_by_name["group_test-slow"].default)
+
+    def test_default_groups_does_not_apply_to_extras(self):
+        """default-groups only affects groups, not extras."""
+        project = """
+[project]
+name = "my-app"
+version = "0.1.0"
+dependencies = []
+
+[project.optional-dependencies]
+cpu = ["torch==2.6.0"]
+
+[tool.uv]
+default-groups = ["cpu"]
+conflicts = [
+  [
+    { extra = "cpu" },
+  ],
+]
+"""
+        lock = """
+version = 1
+requires-python = ">=3.8"
+conflicts = [[
+    { package = "my-app", extra = "cpu" },
+]]
+
+[[package]]
+name = "my-app"
+version = "0.1.0"
+source = { virtual = "." }
+
+[package.optional-dependencies]
+cpu = [
+    { name = "torch", version = "2.6.0" },
+]
+
+[[package]]
+name = "torch"
+version = "2.6.0"
+wheels = [
+    { file = "torch-2.6.0-py3-none-any.whl", hash = "sha256:aaa" },
+]
+"""
+        result = run_translator(
+            project, lock,
+            default_group=False, all_optional_groups=True,
+        )
+        # "cpu" is an extra, not a group, so default-groups=["cpu"] should not affect it
+        for cs in result.conflicts:
+            for item in cs.items:
+                self.assertFalse(item.default)
+
+    def test_no_conflicts_produces_empty_list(self):
+        """When no conflicts exist, conflicts list is empty."""
+        project = """
+[project]
+name = "my-app"
+version = "0.1.0"
+dependencies = ["requests==2.31.0"]
+"""
+        lock = """
+version = 1
+requires-python = ">=3.8"
+
+[[package]]
+name = "my-app"
+version = "0.1.0"
+source = { virtual = "." }
+dependencies = [
+    { name = "requests", version = "2.31.0" },
+]
+
+[[package]]
+name = "requests"
+version = "2.31.0"
+wheels = [
+    { file = "requests-2.31.0-py3-none-any.whl", hash = "sha256:1234567890abcdef" },
+]
+"""
+        result = run_translator(project, lock)
+        self.assertEqual(result.conflicts, [])
+
+    def test_unconditional_pins_are_bare(self):
+        """Non-conflicting pins have {""} key internally."""
+        project = """
+[project]
+name = "my-app"
+version = "0.1.0"
+dependencies = ["requests==2.31.0"]
+"""
+        lock = """
+version = 1
+requires-python = ">=3.8"
+
+[[package]]
+name = "my-app"
+version = "0.1.0"
+source = { virtual = "." }
+dependencies = [
+    { name = "requests", version = "2.31.0" },
+]
+
+[[package]]
+name = "requests"
+version = "2.31.0"
+wheels = [
+    { file = "requests-2.31.0-py3-none-any.whl", hash = "sha256:abc" },
+]
+"""
+        result = run_translator(project, lock)
+        requests_pin = result.pins[package_canonical_name("requests")]
+        # Internally it's {"" : PackageKey(...)}
+        self.assertIn("", requests_pin)
+        self.assertEqual(len(requests_pin), 1)
+
+    def test_conflict_serialization_roundtrip(self):
+        """Conflicts survive JSON serialization roundtrip."""
+        result = run_translator(
+            self.CONFLICT_PROJECT, self.CONFLICT_LOCK,
+            default_group=False, all_optional_groups=True,
+        )
+        json_str = result.to_json()
+        restored = type(result).from_json(json_str)
+        self.assertEqual(len(restored.conflicts), len(result.conflicts))
+        for orig_cs, rest_cs in zip(result.conflicts, restored.conflicts):
+            self.assertEqual(len(orig_cs.items), len(rest_cs.items))
+            for orig_item, rest_item in zip(orig_cs.items, rest_cs.items):
+                self.assertEqual(orig_item.qualified_name, rest_item.qualified_name)
+                self.assertEqual(orig_item.kind, rest_item.kind)
+                self.assertEqual(orig_item.default, rest_item.default)
+
+    def test_pins_simplification_in_json(self):
+        """Unconditional pins serialize as bare strings, not {"":...}."""
+        import json
+        project = """
+[project]
+name = "my-app"
+version = "0.1.0"
+dependencies = ["requests==2.31.0"]
+"""
+        lock = """
+version = 1
+requires-python = ">=3.8"
+
+[[package]]
+name = "my-app"
+version = "0.1.0"
+source = { virtual = "." }
+dependencies = [
+    { name = "requests", version = "2.31.0" },
+]
+
+[[package]]
+name = "requests"
+version = "2.31.0"
+wheels = [
+    { file = "requests-2.31.0-py3-none-any.whl", hash = "sha256:abc" },
+]
+"""
+        result = run_translator(project, lock)
+        json_str = result.to_json()
+        parsed = json.loads(json_str)
+        # Unconditional pin should be a bare string, not {"":"..."}
+        self.assertIsInstance(parsed["pins"]["requests"], str)
+
+    def test_conflicting_pins_stay_as_dicts_in_json(self):
+        """Conflicting pins remain as dicts in serialized JSON."""
+        import json
+        result = run_translator(
+            self.CONFLICT_PROJECT, self.CONFLICT_LOCK,
+            default_group=False, all_optional_groups=True,
+        )
+        json_str = result.to_json()
+        parsed = json.loads(json_str)
+        torch_pin = parsed["pins"]["torch"]
+        self.assertIsInstance(torch_pin, dict)
+        self.assertIn("extra_cpu", torch_pin)
+        self.assertIn("extra_cu124", torch_pin)
 
 
 if __name__ == "__main__":

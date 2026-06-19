@@ -18,6 +18,8 @@ from packaging.requirements import Requirement
 from packaging.specifiers import SpecifierSet
 from packaging.version import Version
 from pycross.private.tools.args import FlagFileArgumentParser
+from pycross.private.tools.lock_model import ConflictItem
+from pycross.private.tools.lock_model import ConflictSet
 from pycross.private.tools.lock_model import DependencyName
 from pycross.private.tools.lock_model import PackageDependency
 from pycross.private.tools.lock_model import PackageFile
@@ -181,25 +183,49 @@ def translate(
     all_development_groups: bool,
     package_processor: Callable[[list[Dict[str, Any]]], Dict[PackageKey, Package]],
     conflicts: List[List[Dict[str, str]]] = None,
+    default_groups: List[str] = None,
 ) -> RawLockSet:
     conflicts = conflicts or []
+    default_groups = set(default_groups or [])
 
-    # Parse conflict entries into type-qualified constraint values.
-    # Each uv conflict entry has a "package" and either "extra" or "group" key.
-    # We qualify constraint names with the type to avoid namespace collisions
-    # (e.g., an extra "testing" vs a dev group "testing").
+    # Parse conflict entries into ConflictItem/ConflictSet objects.
+    # Each uv conflict entry has a "package" and optionally "extra" or "group" key.
+    # When neither extra nor group is present, it's a project-level conflict.
+    # We use ConflictItem.qualified_name as the constraint key for pins.
+    #
+    # Items whose group name appears in default_groups are marked default=True.
+    # On the Bazel side, the default item's target is used for //conditions:default
+    # in the select(), so builds without explicit flags use the default variant.
+    conflict_items_by_source: Dict[Tuple[str, str, str], ConflictItem] = {}  # (package, kind, name) -> ConflictItem
+    conflict_sets: List[ConflictSet] = []
+    for conflict_list in conflicts:
+        items = []
+        for c in conflict_list:
+            package = c["package"]
+            if "extra" in c:
+                kind, name = "extra", c["extra"]
+            elif "group" in c:
+                kind, name = "group", c["group"]
+            else:
+                kind, name = "project", ""
+            key = (package, kind, name)
+            if key not in conflict_items_by_source:
+                is_default = kind == "group" and name in default_groups
+                conflict_items_by_source[key] = ConflictItem(
+                    package=package, kind=kind, name=name, default=is_default,
+                )
+            items.append(conflict_items_by_source[key])
+        conflict_sets.append(ConflictSet(items=tuple(items)))
+
+    # Build a lookup from (kind, name) -> qualified_name for constraint assignment.
+    # This maps optional group names and dev group names to their qualified constraint values.
     extra_conflict_values: Dict[str, str] = {}  # extra_name -> qualified constraint value
     group_conflict_values: Dict[str, str] = {}  # group_name -> qualified constraint value
-    for conflict_list in conflicts:
-        for c in conflict_list:
-            if "extra" in c:
-                name = c["extra"]
-                qualified = f"extra_{name}"
-                extra_conflict_values[name] = qualified
-            elif "group" in c:
-                name = c["group"]
-                qualified = f"group_{name}"
-                group_conflict_values[name] = qualified
+    for item in conflict_items_by_source.values():
+        if item.kind == "extra":
+            extra_conflict_values[item.name] = item.qualified_name
+        elif item.kind == "group":
+            group_conflict_values[item.name] = item.qualified_name
 
     requirements: List[Tuple[Requirement, str]] = []
 
@@ -269,24 +295,13 @@ def translate(
                 pinned_package_specs[pin] = {}
             pinned_package_specs[pin][constraint] = req
 
-    raw_conflicts = {}
-    for conflict_list in conflicts:
-        qualified_names = []
-        for c in conflict_list:
-            if "extra" in c:
-                qualified_names.append(extra_conflict_values[c["extra"]])
-            elif "group" in c:
-                qualified_names.append(group_conflict_values[c["group"]])
-        setting_name = "conflicts_" + "_".join(qualified_names)
-        raw_conflicts[setting_name] = qualified_names
-
     distinct_packages = package_processor(packages_list)
     return resolve_lock_graph(
         packages=distinct_packages.values(),
         pinned_package_specs=pinned_package_specs,
         requires_python=requires_python,
         strict_dependencies=True,
-        conflicts=raw_conflicts,
+        conflicts=conflict_sets,
     )
 
 
@@ -555,6 +570,10 @@ def main(args: Any) -> None:
     packages_list = lock_dict.get("package", distributions_list)
     requires_python = SpecifierSet(lock_dict.get("requires-python", ""))
 
+    # Extract default-groups from [tool.uv] in pyproject.toml.
+    uv_settings = project_dict.get("tool", {}).get("uv", {})
+    uv_default_groups = uv_settings.get("default-groups", [])
+
     lock_set = translate(
         project_name,
         packages_list,
@@ -566,6 +585,7 @@ def main(args: Any) -> None:
         all_development_groups=args.all_development_groups,
         package_processor=collect_and_process_packages,
         conflicts=lock_dict.get("conflicts", []),
+        default_groups=uv_default_groups,
     )
 
     with open(output, "w") as f:

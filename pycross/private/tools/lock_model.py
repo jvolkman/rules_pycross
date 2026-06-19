@@ -36,6 +36,13 @@ class _Encoder(JSONEncoder):
 
         if isinstance(o, (DependencyName, FileKey, PackageKey, SpecifierSet, Version)):
             return str(o)
+        if isinstance(o, ConflictItem):
+            result = {"package": o.package, "kind": o.kind}
+            if o.name:
+                result["name"] = o.name
+            if o.default:
+                result["default"] = o.default
+            return result
         if dataclasses.is_dataclass(o):
             # Omit None values from serialized output.
             return {k: v for k, v in o.__dict__.items() if not _is_empty(v)}
@@ -51,6 +58,22 @@ def _stringify_keys(original: Dict[Any, Any]) -> Dict[str, Any]:
     json.
     """
     return {str(key): val for key, val in original.items()}
+
+
+def _simplify_pins(pins: Dict[Any, Any]) -> Dict[str, Any]:
+    """Simplify pins for serialization.
+
+    Internally, pins always use {"":key} for unconditional entries.
+    This is equivalent to a bare PackageKey and is simplified here.
+    Conflicting pins (multiple constraint keys) remain as dicts.
+    """
+    result = {}
+    for name, value in pins.items():
+        if isinstance(value, dict) and list(value.keys()) == [""]:
+            result[str(name)] = value[""]
+        else:
+            result[str(name)] = value
+    return result
 
 
 def _dataclass_items(dc) -> Iterator[Tuple[str, Any]]:
@@ -160,6 +183,51 @@ class FileKey:
 
     def __str__(self) -> str:
         return f"{self.name}/{self.hash_prefix}"
+
+
+@dataclass(frozen=True)
+class ConflictItem:
+    """A single item in a conflict set.
+
+    Each conflict item identifies a specific dependency source that
+    participates in a mutually exclusive conflict group.
+
+    Attributes:
+        package: The workspace member name this conflict belongs to.
+        kind: One of "extra", "group", or "project".
+        name: The extra or group name. Empty for project-level conflicts.
+        default: True if this item is a default selection (e.g. from
+            uv's default-groups). The Bazel select() maps
+            //conditions:default to the target for the default item.
+    """
+
+    package: str
+    kind: str  # "extra", "group", "project"
+    name: str = ""
+    default: bool = False
+
+    @property
+    def qualified_name(self) -> str:
+        """A unique, Bazel-target-safe name for this conflict item."""
+        if self.kind == "project":
+            return f"package_{self.package}"
+        return f"{self.kind}_{self.name}"
+
+
+@dataclass(frozen=True)
+class ConflictSet:
+    """A set of mutually exclusive conflict items.
+
+    Each ConflictSet maps to a single string_flag in the generated
+    Bazel repo. Users must select exactly one item from each set.
+    """
+
+    items: Tuple[ConflictItem, ...] = field(default_factory=tuple)
+
+    @property
+    def setting_name(self) -> str:
+        """The name of the string_flag for this conflict set."""
+        return "conflicts_" + "_".join(item.qualified_name for item in self.items)
 
 
 @dataclass(frozen=True)
@@ -310,10 +378,19 @@ class ResolvedPackage:
 
 @dataclass(frozen=True)
 class RawLockSet:
+    """The raw lock model produced by a translator.
+
+    Pins map dependency names to package versions. For unconditional
+    dependencies, the pin value is ``{"":PackageKey(...)}`` internally.
+    This is equivalent to a bare ``PackageKey`` and is serialized as
+    a plain string. Conflicting pins use qualified constraint names
+    as dict keys.
+    """
+
     python_versions: SpecifierSet
     packages: Dict[PackageKey, RawPackage] = field(default_factory=dict)
-    pins: Dict[DependencyName, Dict[str, PackageKey]] = field(default_factory=dict)
-    conflicts: Dict[str, List[str]] = field(default_factory=dict)
+    pins: Dict[DependencyName, Union[PackageKey, Dict[str, PackageKey]]] = field(default_factory=dict)
+    conflicts: List[ConflictSet] = field(default_factory=list)
 
     def __post_init__(self):
         assert self.python_versions is not None, "The python_versions field must be specified."
@@ -323,7 +400,7 @@ class RawLockSet:
         return dict(
             _dataclass_items(self),
             packages=_stringify_keys(self.packages),
-            pins=_stringify_keys(self.pins),
+            pins=_simplify_pins(self.pins),
         )
 
     def to_json(self, indent=None) -> str:
@@ -345,6 +422,21 @@ class RawLockSet:
                 )
                 for k, v in parsed["pins"].items()
             }
+        if "conflicts" in parsed:
+            parsed["conflicts"] = [
+                ConflictSet(
+                    items=tuple(
+                        ConflictItem(
+                            package=item["package"],
+                            kind=item["kind"],
+                            name=item.get("name", ""),
+                            default=item.get("default", False),
+                        )
+                        for item in conflict_set["items"]
+                    )
+                )
+                for conflict_set in parsed["conflicts"]
+            ]
         return from_dict(
             RawLockSet,
             parsed,
@@ -359,17 +451,17 @@ class RawLockSet:
 class ResolvedLockSet:
     environments: Dict[str, EnvironmentReference] = field(default_factory=dict)
     packages: Dict[PackageKey, ResolvedPackage] = field(default_factory=dict)
-    pins: Dict[DependencyName, Dict[str, PackageKey]] = field(default_factory=dict)
+    pins: Dict[DependencyName, Union[PackageKey, Dict[str, PackageKey]]] = field(default_factory=dict)
     remote_files: Dict[FileKey, PackageFile] = field(default_factory=dict)
     cycle_groups: Dict[str, List[PackageKey]] = field(default_factory=dict)
-    conflicts: Dict[str, List[str]] = field(default_factory=dict)
+    conflicts: List[ConflictSet] = field(default_factory=list)
 
     @property
     def __dict__(self) -> Dict[str, Any]:
         return dict(
             _dataclass_items(self),
             packages=_stringify_keys(self.packages),
-            pins=_stringify_keys(self.pins),
+            pins=_simplify_pins(self.pins),
             remote_files=_stringify_keys(self.remote_files),
         )
 
@@ -396,6 +488,21 @@ class ResolvedLockSet:
                 )
                 for k, v in parsed["pins"].items()
             }
+        if "conflicts" in parsed:
+            parsed["conflicts"] = [
+                ConflictSet(
+                    items=tuple(
+                        ConflictItem(
+                            package=item["package"],
+                            kind=item["kind"],
+                            name=item.get("name", ""),
+                            default=item.get("default", False),
+                        )
+                        for item in conflict_set["items"]
+                    )
+                )
+                for conflict_set in parsed["conflicts"]
+            ]
         return from_dict(
             ResolvedLockSet,
             parsed,

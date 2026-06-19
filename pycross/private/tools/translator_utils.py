@@ -8,6 +8,7 @@ from typing import Protocol
 
 from packaging.utils import NormalizedName
 from packaging.version import Version
+from pycross.private.tools.lock_model import ConflictSet
 from pycross.private.tools.lock_model import DependencyName
 from pycross.private.tools.lock_model import PackageDependency
 from pycross.private.tools.lock_model import PackageKey
@@ -52,12 +53,12 @@ def resolve_lock_graph(
     pinned_package_specs: Dict[DependencyName, Any],
     requires_python: Any,
     strict_dependencies: bool = True,
-    conflicts: Dict[str, List[str]] = None,
+    conflicts: List[ConflictSet] = None,
 ) -> RawLockSet:
     """
     Resolves a dependency graph of packages by hooking up their dependencies and pins.
     """
-    conflicts = conflicts or {}
+    conflicts = conflicts or []
     distinct_packages = {p.key: p for p in packages}
     all_packages = list(distinct_packages.values())
 

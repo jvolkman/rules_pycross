@@ -1,43 +1,21 @@
 [project]
 name = "project"
 version = "0.1.0"
-requires-python = ">=3.12.0"
+requires-python = ">=3.11.0"
 dependencies = []
 
 [project.optional-dependencies]
-cpu = [
-  "torch>=2.6.0",
-  "torchvision>=0.21.0",
+variant-a = [
+  "typing-extensions==4.11.0",
 ]
-cu124 = [
-  "torch>=2.6.0",
-  "torchvision>=0.21.0",
+variant-b = [
+  "typing-extensions==4.12.2",
 ]
 
 [tool.uv]
 conflicts = [
   [
-    { extra = "cpu" },
-    { extra = "cu124" },
+    { extra = "variant-a" },
+    { extra = "variant-b" },
   ],
 ]
-
-[tool.uv.sources]
-torch = [
-  { index = "pytorch-cpu", extra = "cpu" },
-  { index = "pytorch-cu124", extra = "cu124" },
-]
-torchvision = [
-  { index = "pytorch-cpu", extra = "cpu" },
-  { index = "pytorch-cu124", extra = "cu124" },
-]
-
-[[tool.uv.index]]
-name = "pytorch-cpu"
-url = "https://download.pytorch.org/whl/cpu"
-explicit = true
-
-[[tool.uv.index]]
-name = "pytorch-cu124"
-url = "https://download.pytorch.org/whl/cu124"
-explicit = true

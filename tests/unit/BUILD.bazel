@@ -177,3 +177,14 @@ py_test(
         "@rules_pycross_internal//deps:packaging",
     ],
 )
+
+py_test(
+    name = "lock_model_conflict_test",
+    srcs = ["lock_model_conflict_test.py"],
+    main = "lock_model_conflict_test.py",
+    tags = ["unit"],
+    deps = [
+        "//pycross/private/tools:lock_model",
+        "@rules_pycross_internal//deps:packaging",
+    ],
+)

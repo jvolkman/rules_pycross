@@ -25,30 +25,28 @@ use_repo(python, "python_versions")
 # rules_pycross - use per-platform tag API
 environments = use_extension("@rules_pycross//pycross/extensions:environments.bzl", "environments")
 environments.create_for_python_toolchains(
-    name = "uv_workspace_envs",
+    name = "envs",
 )
 environments.platform(
-    envs = "uv_workspace_envs",
+    envs = "envs",
     target = "aarch64-apple-darwin",
 )
 environments.platform(
-    envs = "uv_workspace_envs",
+    envs = "envs",
     target = "x86_64-unknown-linux-gnu",
 )
-use_repo(environments, "uv_workspace_envs")
+use_repo(environments, "envs")
 
-# Single repo with both conflict groups — select() chooses the variant at build time.
 lock_import = use_extension("@rules_pycross//pycross/extensions:lock_import.bzl", "lock_import")
 lock_import.import_uv_workspace(
     name = "shared",
     lock_file = "//:uv.lock",
-    target_environments = ["@uv_workspace_envs//:environments"],
+    target_environments = ["@envs//:environments"],
 )
 lock_import.uv_workspace_members(
     all_optional_groups = True,
     workspace = "shared",
 )
 
-# The actual repos are loaded from the lock_repos extension.
 lock_repos = use_extension("@rules_pycross//pycross/extensions:lock_repos.bzl", "lock_repos")
 use_repo(lock_repos, "project")

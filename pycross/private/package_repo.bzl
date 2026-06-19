@@ -127,7 +127,7 @@ def _package_repo_impl(rctx):
     member_packages = {}  # member_name -> {pkg_key -> pkg_data}
     member_envs = {}  # member_name -> [env_name, ...]
     cycle_groups = {}  # group_name -> [pkg_key, ...]
-    group_conflicts = {}  # group_conflicts maps constraint settings to constraint values
+    conflict_items = {}  # qualified_name -> True (dedup across members)
     for member, lock_label in rctx.attr.member_lock_files.items():
         member_lock = json.decode(rctx.read(rctx.path(Label(lock_label))))
 
@@ -138,8 +138,13 @@ def _package_repo_impl(rctx):
             if env_name not in environments:
                 environments[env_name] = env_ref
 
-        if "conflicts" in member_lock:
-            group_conflicts.update(member_lock["conflicts"])
+        for conflict_set in member_lock.get("conflicts", []):
+            for item in conflict_set["items"]:
+                if item["kind"] == "project":
+                    qname = "package_{}".format(item["package"])
+                else:
+                    qname = "{}_{}".format(item["kind"], item["name"])
+                conflict_items[qname] = True
 
         member_envs[member] = sorted(member_env_names)
         member_packages[member] = member_lock.get("packages", {})
@@ -211,24 +216,29 @@ def _package_repo_impl(rctx):
         "",
         'load(":lock.bzl", "targets")',
         "",
+    ]
+    if conflict_items:
+        lock_build_lines.extend([
+            'load("@bazel_skylib//rules:common_settings.bzl", "bool_flag")',
+            "",
+        ])
+    lock_build_lines.extend([
         "targets()",
         "",
-    ]
-    for setting_name, values in group_conflicts.items():
+    ])
+    for qname in sorted(conflict_items.keys()):
         lock_build_lines.extend([
-            "constraint_setting(",
-            '    name = "{}",'.format(setting_name),
+            "bool_flag(",
+            '    name = "{}",'.format(qname),
+            "    build_setting_default = False,",
+            ")",
+            "",
+            "config_setting(",
+            '    name = "is_{}",'.format(qname),
+            '    flag_values = {{":{flag}": "True"}},'.format(flag = qname),
             ")",
             "",
         ])
-        for val in values:
-            lock_build_lines.extend([
-                "constraint_value(",
-                '    name = "{}",'.format(val),
-                '    constraint_setting = ":{}",'.format(setting_name),
-                ")",
-                "",
-            ])
 
     rctx.file("_lock/BUILD.bazel", "\n".join(lock_build_lines))
 
