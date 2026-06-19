@@ -56,6 +56,9 @@ COMMON_IMPORT_ATTRS = dict(
     default_build_dependencies = attr.string_list(
         doc = "A list of package keys (name or name@version) that will be used as default build dependencies.",
     ),
+    build_repo = attr.string(
+        doc = "Optional default repo to use for resolving sdist build dependencies.",
+    ),
 )
 
 # Attrs common to import_uv_workspace (workspace-level settings inherited by all members).
@@ -82,6 +85,9 @@ WORKSPACE_COMMON_ATTRS = dict(
     ),
     default_build_dependencies = attr.string_list(
         doc = "A list of package keys (name or name@version) that will be used as default build dependencies.",
+    ),
+    build_repo = attr.string(
+        doc = "Optional default repo to use for resolving sdist build dependencies.",
     ),
 )
 
@@ -110,6 +116,9 @@ PACKAGE_ATTRS = dict(
     ),
     build_dependencies = attr.string_list(
         doc = "A list of additional package keys (name or name@version) to use when building this package from source.",
+    ),
+    build_repo = attr.string(
+        doc = "Optional repo to use for resolving sdist build dependencies for this package.",
     ),
     ignore_dependencies = attr.string_list(
         doc = "A list of package keys (name or name@version) to drop from this package's set of declared dependencies.",

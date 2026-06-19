@@ -289,6 +289,7 @@ class RawPackage:
 class ResolvedPackage:
     key: PackageKey
     build_dependencies: List[PackageKey] = field(default_factory=list)
+    build_repo: Optional[str] = None
     common_dependencies: List[PackageKey] = field(default_factory=list)
     environment_dependencies: Dict[str, List[PackageKey]] = field(default_factory=dict)
     build_target: Optional[str] = None

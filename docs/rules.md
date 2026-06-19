@@ -286,7 +286,7 @@ Information about an extracted (installed) Python wheel.
 <pre>
 load("@rules_pycross//pycross:defs.bzl", "package_annotation")
 
-package_annotation(<a href="#package_annotation-always_build">always_build</a>, <a href="#package_annotation-build_dependencies">build_dependencies</a>, <a href="#package_annotation-build_target">build_target</a>, <a href="#package_annotation-ignore_dependencies">ignore_dependencies</a>,
+package_annotation(<a href="#package_annotation-always_build">always_build</a>, <a href="#package_annotation-build_dependencies">build_dependencies</a>, <a href="#package_annotation-build_repo">build_repo</a>, <a href="#package_annotation-build_target">build_target</a>, <a href="#package_annotation-ignore_dependencies">ignore_dependencies</a>,
                    <a href="#package_annotation-install_exclude_globs">install_exclude_globs</a>, <a href="#package_annotation-post_install_patches">post_install_patches</a>, <a href="#package_annotation-pre_build_patches">pre_build_patches</a>, <a href="#package_annotation-site_hooks">site_hooks</a>,
                    <a href="#package_annotation-build_backend">build_backend</a>, <a href="#package_annotation-site_paths">site_paths</a>, <a href="#package_annotation-bin_paths">bin_paths</a>, <a href="#package_annotation-data_paths">data_paths</a>, <a href="#package_annotation-include_paths">include_paths</a>)
 </pre>
@@ -300,6 +300,7 @@ Annotations to apply to individual packages.
 | :------------- | :------------- | :------------- |
 | <a id="package_annotation-always_build"></a>always_build |  If True, don't use pre-build wheels for this package.   |  `False` |
 | <a id="package_annotation-build_dependencies"></a>build_dependencies |  A list of additional package keys (name or name@version) to use when building this package from source.   |  `[]` |
+| <a id="package_annotation-build_repo"></a>build_repo |  Optional repo to use for resolving sdist build dependencies for this package.   |  `None` |
 | <a id="package_annotation-build_target"></a>build_target |  An optional override build target to use when and if this package needs to be built from source.   |  `None` |
 | <a id="package_annotation-ignore_dependencies"></a>ignore_dependencies |  A list of package keys (name or name@version) to drop from this package's set of declared dependencies.   |  `[]` |
 | <a id="package_annotation-install_exclude_globs"></a>install_exclude_globs |  A list of globs for files to exclude during installation.   |  `[]` |

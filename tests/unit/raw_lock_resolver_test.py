@@ -15,6 +15,7 @@ from pycross.private.tools.lock_model import RawPackage
 from pycross.private.tools.raw_lock_resolver import GenerationContext
 from pycross.private.tools.raw_lock_resolver import PackageAnnotations
 from pycross.private.tools.raw_lock_resolver import PackageResolver
+from pycross.private.tools.raw_lock_resolver import collect_package_annotations
 from pycross.private.tools.raw_lock_resolver import resolve
 from pycross.private.tools.target_environment import TargetEnv
 
@@ -943,6 +944,569 @@ class TestCycleDetection(unittest.TestCase):
         self.assertIsNotNone(res_a_test.cycle_group)
         self.assertIsNotNone(res_b.cycle_group)
         self.assertEqual(res_a_test.cycle_group, res_b.cycle_group)
+
+
+class TestCollectPackageAnnotations(unittest.TestCase):
+    """Tests for collect_package_annotations, including wildcard '*' support."""
+
+    def setUp(self):
+        import tempfile
+
+        self.td = tempfile.TemporaryDirectory()
+        self.td_path = self.td.name
+
+    def tearDown(self):
+        self.td.cleanup()
+
+    def _make_lock_model(self, packages):
+        pkg_dict = {}
+        for pkg in packages:
+            pkg_dict[pkg.key] = pkg
+        return RawLockSet(
+            python_versions=SpecifierSet(">=3.8"),
+            packages=pkg_dict,
+            pins={},
+        )
+
+    def _make_args(self, annotations_data):
+        import json
+        import os
+        from unittest.mock import MagicMock
+
+        args = MagicMock()
+        if annotations_data is not None:
+            annotations_file = os.path.join(self.td_path, "annotations.json")
+            with open(annotations_file, "w") as f:
+                json.dump(annotations_data, f)
+            args.annotations_file = annotations_file
+        else:
+            args.annotations_file = None
+        return args
+
+    def test_no_annotations_file(self):
+        """No annotations file returns empty dict and empty wildcard keys."""
+        lock_model = self._make_lock_model([make_pkg("foo", "1.0", [make_file("foo-1.0.tar.gz")])])
+        args = self._make_args(None)
+
+        annotations, wildcard_keys = collect_package_annotations(args, lock_model)
+        self.assertEqual(annotations, {})
+        self.assertEqual(wildcard_keys, set())
+
+    def test_specific_annotation_only(self):
+        """A specific annotation applies to the named package only."""
+        lock_model = self._make_lock_model(
+            [
+                make_pkg("foo", "1.0", [make_file("foo-1.0.tar.gz")]),
+                make_pkg("bar", "2.0", [make_file("bar-2.0.tar.gz")]),
+            ]
+        )
+        args = self._make_args({"foo": {"always_build": True}})
+
+        annotations, wildcard_keys = collect_package_annotations(args, lock_model)
+
+        foo_key = PackageKey.from_parts("foo", Version("1.0"))
+        self.assertIn(foo_key, annotations)
+        self.assertTrue(annotations[foo_key].always_build)
+
+        bar_key = PackageKey.from_parts("bar", Version("2.0"))
+        self.assertNotIn(bar_key, annotations)
+        self.assertEqual(wildcard_keys, set())
+
+    def test_wildcard_applies_to_all_packages(self):
+        """Wildcard '*' annotation applies to every package in the lock model."""
+        lock_model = self._make_lock_model(
+            [
+                make_pkg("foo", "1.0", [make_file("foo-1.0.tar.gz")]),
+                make_pkg("bar", "2.0", [make_file("bar-2.0.tar.gz")]),
+                make_pkg("baz", "3.0", [make_file("baz-3.0.tar.gz")]),
+            ]
+        )
+        args = self._make_args({"*": {"always_build": True}})
+
+        annotations, wildcard_keys = collect_package_annotations(args, lock_model)
+
+        foo_key = PackageKey.from_parts("foo", Version("1.0"))
+        bar_key = PackageKey.from_parts("bar", Version("2.0"))
+        baz_key = PackageKey.from_parts("baz", Version("3.0"))
+
+        for key in [foo_key, bar_key, baz_key]:
+            self.assertIn(key, annotations)
+            self.assertTrue(annotations[key].always_build)
+
+        self.assertEqual(wildcard_keys, {foo_key, bar_key, baz_key})
+
+    def test_wildcard_scalar_fields(self):
+        """Wildcard correctly sets scalar fields: always_build, build_target, build_repo, build_backend."""
+        lock_model = self._make_lock_model(
+            [
+                make_pkg("foo", "1.0", [make_file("foo-1.0.tar.gz")]),
+            ]
+        )
+        args = self._make_args(
+            {
+                "*": {
+                    "always_build": True,
+                    "build_target": "@//custom:target",
+                    "build_repo": "build_deps",
+                    "build_backend": "meson_build",
+                }
+            }
+        )
+
+        annotations, _ = collect_package_annotations(args, lock_model)
+        foo_key = PackageKey.from_parts("foo", Version("1.0"))
+
+        self.assertTrue(annotations[foo_key].always_build)
+        self.assertEqual(annotations[foo_key].build_target, "@//custom:target")
+        self.assertEqual(annotations[foo_key].build_repo, "build_deps")
+        self.assertEqual(annotations[foo_key].build_backend, "meson_build")
+
+    def test_wildcard_collection_fields(self):
+        """Wildcard correctly sets collection fields: install_exclude_globs, pre_build_patches, etc."""
+        lock_model = self._make_lock_model(
+            [
+                make_pkg("foo", "1.0", [make_file("foo-1.0.tar.gz")]),
+            ]
+        )
+        args = self._make_args(
+            {
+                "*": {
+                    "install_exclude_globs": ["*.pyc", "__pycache__/**"],
+                    "pre_build_patches": ["@//:fix.patch"],
+                    "post_install_patches": ["@//:post.patch"],
+                    "site_hooks": ["import foo"],
+                }
+            }
+        )
+
+        annotations, _ = collect_package_annotations(args, lock_model)
+        foo_key = PackageKey.from_parts("foo", Version("1.0"))
+
+        self.assertEqual(annotations[foo_key].install_exclude_globs, {"*.pyc", "__pycache__/**"})
+        self.assertEqual(annotations[foo_key].pre_build_patches, ["@//:fix.patch"])
+        self.assertEqual(annotations[foo_key].post_install_patches, ["@//:post.patch"])
+        self.assertEqual(annotations[foo_key].site_hooks, ["import foo"])
+
+    # --- Replace Semantics ---
+
+    def test_specific_fully_replaces_wildcard(self):
+        """A specific annotation fully replaces the wildcard for that package."""
+        lock_model = self._make_lock_model(
+            [
+                make_pkg("foo", "1.0", [make_file("foo-1.0.tar.gz")]),
+                make_pkg("bar", "2.0", [make_file("bar-2.0.tar.gz")]),
+            ]
+        )
+        args = self._make_args(
+            {
+                "*": {"always_build": True, "install_exclude_globs": ["*.pyc"]},
+                "foo": {"always_build": False},
+            }
+        )
+
+        annotations, wildcard_keys = collect_package_annotations(args, lock_model)
+
+        foo_key = PackageKey.from_parts("foo", Version("1.0"))
+        bar_key = PackageKey.from_parts("bar", Version("2.0"))
+
+        # foo has specific annotation: wildcard is fully replaced
+        self.assertFalse(annotations[foo_key].always_build)
+        # Crucially, foo does NOT inherit install_exclude_globs from wildcard
+        self.assertEqual(annotations[foo_key].install_exclude_globs, set())
+
+        # bar has no specific annotation: gets wildcard
+        self.assertTrue(annotations[bar_key].always_build)
+        self.assertEqual(annotations[bar_key].install_exclude_globs, {"*.pyc"})
+
+        # foo is not in wildcard_only_keys; bar is
+        self.assertNotIn(foo_key, wildcard_keys)
+        self.assertIn(bar_key, wildcard_keys)
+
+    def test_specific_does_not_merge_collections_from_wildcard(self):
+        """Specific annotations don't merge list/set fields from wildcard — full replace."""
+        lock_model = self._make_lock_model(
+            [
+                make_pkg("foo", "1.0", [make_file("foo-1.0.tar.gz")]),
+            ]
+        )
+        args = self._make_args(
+            {
+                "*": {"pre_build_patches": ["@//:global.patch"], "site_hooks": ["import hook"]},
+                "foo": {"pre_build_patches": ["@//:foo.patch"]},
+            }
+        )
+
+        annotations, _ = collect_package_annotations(args, lock_model)
+        foo_key = PackageKey.from_parts("foo", Version("1.0"))
+
+        # foo should only have its own patch, not the wildcard's
+        self.assertEqual(annotations[foo_key].pre_build_patches, ["@//:foo.patch"])
+        # site_hooks from wildcard should NOT be inherited
+        self.assertEqual(annotations[foo_key].site_hooks, [])
+
+    def test_specific_replaces_wildcard_scalars(self):
+        """Specific scalar values replace wildcard scalars; unmentioned scalars stay default."""
+        lock_model = self._make_lock_model(
+            [
+                make_pkg("foo", "1.0", [make_file("foo-1.0.tar.gz")]),
+            ]
+        )
+        args = self._make_args(
+            {
+                "*": {"build_repo": "global_build", "always_build": True},
+                "foo": {"build_repo": "foo_build"},
+            }
+        )
+
+        annotations, _ = collect_package_annotations(args, lock_model)
+        foo_key = PackageKey.from_parts("foo", Version("1.0"))
+
+        # build_repo replaced
+        self.assertEqual(annotations[foo_key].build_repo, "foo_build")
+        # always_build NOT inherited from wildcard (full replace)
+        self.assertFalse(annotations[foo_key].always_build)
+
+    # --- Wildcard-Only Key Tracking ---
+
+    def test_wildcard_only_keys_exclude_specific(self):
+        """wildcard_only_keys does not include packages with specific annotations."""
+        lock_model = self._make_lock_model(
+            [
+                make_pkg("foo", "1.0", [make_file("foo-1.0.tar.gz")]),
+                make_pkg("bar", "2.0", [make_file("bar-2.0.tar.gz")]),
+                make_pkg("baz", "3.0", [make_file("baz-3.0.tar.gz")]),
+            ]
+        )
+        args = self._make_args(
+            {
+                "*": {"always_build": True},
+                "foo": {"always_build": False},
+                "baz": {"build_target": "@//custom:baz"},
+            }
+        )
+
+        _, wildcard_keys = collect_package_annotations(args, lock_model)
+
+        foo_key = PackageKey.from_parts("foo", Version("1.0"))
+        bar_key = PackageKey.from_parts("bar", Version("2.0"))
+        baz_key = PackageKey.from_parts("baz", Version("3.0"))
+
+        # Only bar is wildcard-only; foo and baz have specific annotations
+        self.assertNotIn(foo_key, wildcard_keys)
+        self.assertIn(bar_key, wildcard_keys)
+        self.assertNotIn(baz_key, wildcard_keys)
+
+    def test_no_wildcard_returns_empty_wildcard_keys(self):
+        """Without wildcard, wildcard_only_keys is empty."""
+        lock_model = self._make_lock_model(
+            [
+                make_pkg("foo", "1.0", [make_file("foo-1.0.tar.gz")]),
+            ]
+        )
+        args = self._make_args({"foo": {"always_build": True}})
+
+        _, wildcard_keys = collect_package_annotations(args, lock_model)
+        self.assertEqual(wildcard_keys, set())
+
+    # --- build_repo ---
+
+    def test_build_repo_specific(self):
+        """build_repo flows through annotation to the resolved data."""
+        lock_model = self._make_lock_model(
+            [
+                make_pkg("foo", "1.0", [make_file("foo-1.0.tar.gz")]),
+            ]
+        )
+        args = self._make_args({"foo": {"build_repo": "my_build_repo"}})
+
+        annotations, _ = collect_package_annotations(args, lock_model)
+        foo_key = PackageKey.from_parts("foo", Version("1.0"))
+
+        self.assertEqual(annotations[foo_key].build_repo, "my_build_repo")
+
+    def test_build_repo_wildcard(self):
+        """build_repo from wildcard applies to all packages."""
+        lock_model = self._make_lock_model(
+            [
+                make_pkg("foo", "1.0", [make_file("foo-1.0.tar.gz")]),
+                make_pkg("bar", "2.0", [make_file("bar-2.0.tar.gz")]),
+            ]
+        )
+        args = self._make_args({"*": {"build_repo": "shared_build"}})
+
+        annotations, _ = collect_package_annotations(args, lock_model)
+
+        for key in annotations:
+            self.assertEqual(annotations[key].build_repo, "shared_build")
+
+    def test_build_repo_default_is_none(self):
+        """build_repo defaults to None when not specified."""
+        lock_model = self._make_lock_model(
+            [
+                make_pkg("foo", "1.0", [make_file("foo-1.0.tar.gz")]),
+            ]
+        )
+        args = self._make_args({"foo": {"always_build": True}})
+
+        annotations, _ = collect_package_annotations(args, lock_model)
+        foo_key = PackageKey.from_parts("foo", Version("1.0"))
+        self.assertIsNone(annotations[foo_key].build_repo)
+
+    # --- Path fields ---
+
+    def test_wildcard_path_fields(self):
+        """Wildcard sets site_paths, bin_paths, data_paths, include_paths."""
+        lock_model = self._make_lock_model(
+            [
+                make_pkg("foo", "1.0", [make_file("foo-1.0.tar.gz")]),
+            ]
+        )
+        args = self._make_args(
+            {
+                "*": {
+                    "site_paths": ["src"],
+                    "bin_paths": ["bin"],
+                    "data_paths": ["data"],
+                    "include_paths": ["include"],
+                }
+            }
+        )
+
+        annotations, _ = collect_package_annotations(args, lock_model)
+        foo_key = PackageKey.from_parts("foo", Version("1.0"))
+
+        self.assertEqual(annotations[foo_key].site_paths, ["src"])
+        self.assertEqual(annotations[foo_key].bin_paths, ["bin"])
+        self.assertEqual(annotations[foo_key].data_paths, ["data"])
+        self.assertEqual(annotations[foo_key].include_paths, ["include"])
+
+
+class TestWildcardEndToEnd(unittest.TestCase):
+    """End-to-end tests for wildcard annotations through resolve()."""
+
+    def setUp(self):
+        import tempfile
+
+        self.td = tempfile.TemporaryDirectory()
+        self.td_path = self.td.name
+
+        self.linux_env = make_env(
+            "linux", ["manylinux_2_17_x86_64", "manylinux2014_x86_64"], markers={"sys_platform": "linux"}
+        )
+
+    def tearDown(self):
+        self.td.cleanup()
+
+    def _resolve_with_annotations(self, packages, pins, annotations_data=None):
+        """Helper to call resolve() with optional annotations."""
+        import json
+        import os
+        from unittest.mock import MagicMock
+
+        pkg_dict = {}
+        for pkg in packages:
+            pkg_dict[pkg.key] = pkg
+
+        lock_model = RawLockSet(
+            python_versions=SpecifierSet(">=3.8"),
+            packages=pkg_dict,
+            pins=pins,
+        )
+        lock_model_file = os.path.join(self.td_path, "lock.json")
+        with open(lock_model_file, "w") as f:
+            f.write(lock_model.to_json())
+
+        env_file = os.path.join(self.td_path, "env.json")
+        with open(env_file, "w") as f:
+            json.dump(self.linux_env.to_dict(), f)
+
+        args = MagicMock()
+        args.lock_model_file = lock_model_file
+        args.target_environment = [(env_file, "@//env:linux")]
+        args.local_wheel = []
+        args.remote_wheel = []
+        args.always_include_sdist = False
+        args.default_build_dependencies = []
+        args.disallow_builds = False
+        args.default_alias_single_version = False
+
+        if annotations_data is not None:
+            annotations_file = os.path.join(self.td_path, "annotations.json")
+            with open(annotations_file, "w") as f:
+                json.dump(annotations_data, f)
+            args.annotations_file = annotations_file
+        else:
+            args.annotations_file = None
+
+        return resolve(args)
+
+    def test_wildcard_always_build_end_to_end(self):
+        """Wildcard always_build forces all packages to use sdist."""
+        pkg_foo = make_pkg(
+            "foo",
+            "1.0",
+            [
+                make_file("foo-1.0-cp310-cp310-manylinux_2_17_x86_64.whl"),
+                make_file("foo-1.0.tar.gz"),
+            ],
+        )
+        pins = {
+            canonicalize_name("foo"): PackageKey.from_parts("foo", Version("1.0")),
+        }
+
+        resolved = self._resolve_with_annotations([pkg_foo], pins, {"*": {"always_build": True}})
+
+        foo_key = PackageKey.from_parts("foo", Version("1.0"))
+        # Should use the sdist, not the wheel
+        self.assertEqual(resolved.packages[foo_key].environment_files["linux"].key.name, "foo-1.0.tar.gz")
+
+    def test_wildcard_with_specific_override_end_to_end(self):
+        """Specific override replaces wildcard: foo gets always_build=False despite wildcard."""
+        pkg_foo = make_pkg(
+            "foo",
+            "1.0",
+            [
+                make_file("foo-1.0-cp310-cp310-manylinux_2_17_x86_64.whl"),
+                make_file("foo-1.0.tar.gz"),
+            ],
+        )
+        pkg_bar = make_pkg(
+            "bar",
+            "2.0",
+            [
+                make_file("bar-2.0-cp310-cp310-manylinux_2_17_x86_64.whl"),
+                make_file("bar-2.0.tar.gz"),
+            ],
+        )
+        pins = {
+            canonicalize_name("foo"): PackageKey.from_parts("foo", Version("1.0")),
+            canonicalize_name("bar"): PackageKey.from_parts("bar", Version("2.0")),
+        }
+
+        resolved = self._resolve_with_annotations(
+            [pkg_foo, pkg_bar],
+            pins,
+            {
+                "*": {"always_build": True},
+                "foo": {"always_build": False},
+            },
+        )
+
+        foo_key = PackageKey.from_parts("foo", Version("1.0"))
+        bar_key = PackageKey.from_parts("bar", Version("2.0"))
+
+        # foo: specific override, should use wheel
+        self.assertEqual(
+            resolved.packages[foo_key].environment_files["linux"].key.name,
+            "foo-1.0-cp310-cp310-manylinux_2_17_x86_64.whl",
+        )
+        # bar: wildcard, should use sdist
+        self.assertEqual(resolved.packages[bar_key].environment_files["linux"].key.name, "bar-2.0.tar.gz")
+
+    def test_unconsumed_wildcard_annotations_no_error(self):
+        """Packages in lock model but not in pins should not cause errors when wildcard is used."""
+        pkg_foo = make_pkg("foo", "1.0", [make_file("foo-1.0.tar.gz")])
+        pkg_unused = make_pkg("unused", "1.0", [make_file("unused-1.0.tar.gz")])
+
+        # Only foo is pinned; unused is in the lock model but not transitively depended on
+        pins = {
+            canonicalize_name("foo"): PackageKey.from_parts("foo", Version("1.0")),
+        }
+
+        # This should NOT raise, even though unused gets a wildcard annotation
+        resolved = self._resolve_with_annotations(
+            [pkg_foo, pkg_unused],
+            pins,
+            {"*": {"always_build": True}},
+        )
+
+        foo_key = PackageKey.from_parts("foo", Version("1.0"))
+        self.assertIn(foo_key, resolved.packages)
+
+    def test_unconsumed_specific_annotation_still_errors(self):
+        """A specific annotation for a package not in the locked set still raises."""
+        pkg_foo = make_pkg("foo", "1.0", [make_file("foo-1.0.tar.gz")])
+        pkg_unused = make_pkg("unused", "1.0", [make_file("unused-1.0.tar.gz")])
+
+        pins = {
+            canonicalize_name("foo"): PackageKey.from_parts("foo", Version("1.0")),
+        }
+
+        with self.assertRaisesRegex(Exception, "not part of the locked set"):
+            self._resolve_with_annotations(
+                [pkg_foo, pkg_unused],
+                pins,
+                {"unused": {"always_build": True}},
+            )
+
+    def test_build_repo_flows_to_resolved_package(self):
+        """build_repo annotation makes it into the resolved package JSON."""
+        pkg_foo = make_pkg("foo", "1.0", [make_file("foo-1.0.tar.gz")])
+        pins = {
+            canonicalize_name("foo"): PackageKey.from_parts("foo", Version("1.0")),
+        }
+
+        resolved = self._resolve_with_annotations([pkg_foo], pins, {"foo": {"build_repo": "build_deps"}})
+
+        foo_key = PackageKey.from_parts("foo", Version("1.0"))
+        self.assertEqual(resolved.packages[foo_key].build_repo, "build_deps")
+
+    def test_wildcard_build_repo_flows_to_resolved_package(self):
+        """Wildcard build_repo applies to all resolved packages."""
+        pkg_foo = make_pkg("foo", "1.0", [make_file("foo-1.0.tar.gz")])
+        pkg_bar = make_pkg("bar", "2.0", [make_file("bar-2.0.tar.gz")])
+        pins = {
+            canonicalize_name("foo"): PackageKey.from_parts("foo", Version("1.0")),
+            canonicalize_name("bar"): PackageKey.from_parts("bar", Version("2.0")),
+        }
+
+        resolved = self._resolve_with_annotations([pkg_foo, pkg_bar], pins, {"*": {"build_repo": "shared_build"}})
+
+        for pkg in resolved.packages.values():
+            self.assertEqual(pkg.build_repo, "shared_build")
+
+    def test_wildcard_install_exclude_globs_end_to_end(self):
+        """Wildcard install_exclude_globs propagate to resolved packages."""
+        pkg_foo = make_pkg("foo", "1.0", [make_file("foo-1.0.tar.gz")])
+        pins = {
+            canonicalize_name("foo"): PackageKey.from_parts("foo", Version("1.0")),
+        }
+
+        resolved = self._resolve_with_annotations(
+            [pkg_foo], pins, {"*": {"install_exclude_globs": ["*.pyc", "__pycache__/**"]}}
+        )
+
+        foo_key = PackageKey.from_parts("foo", Version("1.0"))
+        self.assertIn("*.pyc", resolved.packages[foo_key].install_exclude_globs)
+        self.assertIn("__pycache__/**", resolved.packages[foo_key].install_exclude_globs)
+
+    def test_wildcard_replace_semantics_exclude_globs_end_to_end(self):
+        """Specific package's exclude_globs fully replaces wildcard, not union."""
+        pkg_foo = make_pkg("foo", "1.0", [make_file("foo-1.0.tar.gz")])
+        pkg_bar = make_pkg("bar", "2.0", [make_file("bar-2.0.tar.gz")])
+        pins = {
+            canonicalize_name("foo"): PackageKey.from_parts("foo", Version("1.0")),
+            canonicalize_name("bar"): PackageKey.from_parts("bar", Version("2.0")),
+        }
+
+        resolved = self._resolve_with_annotations(
+            [pkg_foo, pkg_bar],
+            pins,
+            {
+                "*": {"install_exclude_globs": ["*.pyc"]},
+                "foo": {"install_exclude_globs": ["tests/**"]},
+            },
+        )
+
+        foo_key = PackageKey.from_parts("foo", Version("1.0"))
+        bar_key = PackageKey.from_parts("bar", Version("2.0"))
+
+        # foo: specific replaces wildcard entirely
+        self.assertIn("tests/**", resolved.packages[foo_key].install_exclude_globs)
+        self.assertNotIn("*.pyc", resolved.packages[foo_key].install_exclude_globs)
+
+        # bar: wildcard applies
+        self.assertIn("*.pyc", resolved.packages[bar_key].install_exclude_globs)
 
 
 if __name__ == "__main__":

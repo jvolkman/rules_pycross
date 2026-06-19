@@ -228,6 +228,7 @@ class GenerationContext:
 @dataclass
 class PackageAnnotations:
     build_dependencies: List[PackageKey] = field(default_factory=list)
+    build_repo: Optional[str] = None
     build_target: Optional[str] = None
     always_build: bool = False
     ignore_dependencies: Set[str] = field(default_factory=set)
@@ -262,6 +263,7 @@ class PackageResolver:
         # Filter out any dependencies that are already in the package's dependencies
         self._build_deps = [dep for dep in build_dependencies if dep not in (p.key for p in package.dependencies)]
 
+        self._build_repo = annotations.build_repo
         self._build_target = annotations.build_target
         self._install_exclude_globs = annotations.install_exclude_globs
         self._post_install_patches = annotations.post_install_patches
@@ -328,6 +330,7 @@ class PackageResolver:
         return ResolvedPackage(
             key=self.key,
             build_dependencies=sorted(self._build_deps),
+            build_repo=self._build_repo,
             common_dependencies=sorted(self._common_deps),
             environment_dependencies={env: sorted(deps) for env, deps in sorted(self._env_deps.items())},
             environment_files={env: ps.file_reference for env, ps in sorted(self._package_sources_by_env.items())},
@@ -379,9 +382,19 @@ def resolve_single_version(
     return options[0]
 
 
-def collect_package_annotations(args: Any, lock_model: RawLockSet) -> Dict[PackageKey, PackageAnnotations]:
+def collect_package_annotations(
+    args: Any, lock_model: RawLockSet
+) -> Tuple[Dict[PackageKey, PackageAnnotations], Set[PackageKey]]:
+    """Collect package annotations from the annotations file.
+
+    Returns:
+        A tuple of (annotations_dict, wildcard_only_keys). wildcard_only_keys
+        contains package keys that were created solely by wildcard expansion
+        and have no specific override. These should be silently ignored if
+        they go unconsumed during resolution.
+    """
     if not args.annotations_file:
-        return {}
+        return {}, set()
 
     annotations: Dict[PackageKey, PackageAnnotations] = defaultdict(PackageAnnotations)
     all_package_keys_by_canonical_name: Dict[DependencyName, List[PackageKey]] = defaultdict(list)
@@ -391,14 +404,7 @@ def collect_package_annotations(args: Any, lock_model: RawLockSet) -> Dict[Packa
     with open(args.annotations_file, "r") as f:
         annotations_data = json.load(f)
 
-    for pkg, annotation in annotations_data.items():
-        resolved_pkg = resolve_single_version(
-            pkg,
-            all_package_keys_by_canonical_name,
-            lock_model.packages.keys(),
-            "annotations",
-        )
-
+    def apply_annotation(pkg_key: PackageKey, annotation: Dict[str, Any]):
         for dep in annotation.get("build_dependencies", []):
             resolved_dep = resolve_single_version(
                 dep,
@@ -406,51 +412,71 @@ def collect_package_annotations(args: Any, lock_model: RawLockSet) -> Dict[Packa
                 lock_model.packages.keys(),
                 "build_dependencies",
             )
-            annotations[resolved_pkg].build_dependencies.append(resolved_dep)
+            annotations[pkg_key].build_dependencies.append(resolved_dep)
 
-        if annotation.get("build_target"):
-            annotations[resolved_pkg].build_target = annotation["build_target"]
+        if "build_repo" in annotation:
+            annotations[pkg_key].build_repo = annotation["build_repo"]
 
-        if annotation.get("always_build"):
-            annotations[resolved_pkg].always_build = True
+        if "build_target" in annotation:
+            annotations[pkg_key].build_target = annotation["build_target"]
+
+        if "always_build" in annotation:
+            annotations[pkg_key].always_build = annotation["always_build"]
 
         for dep in annotation.get("ignore_dependencies", []):
             if dep not in all_package_keys_by_canonical_name and dep not in lock_model.packages.keys():
                 raise Exception(f'package_ignore_dependencies entry "{dep}" matches no packages')
-
-            # This dependency will be resolved to a single version later
-            annotations[resolved_pkg].ignore_dependencies.add(dep)
+            annotations[pkg_key].ignore_dependencies.add(dep)
 
         for glob in annotation.get("install_exclude_globs", []):
-            annotations[resolved_pkg].install_exclude_globs.add(glob)
+            annotations[pkg_key].install_exclude_globs.add(glob)
 
         for patch in annotation.get("post_install_patches", []):
-            annotations[resolved_pkg].post_install_patches.append(patch)
+            annotations[pkg_key].post_install_patches.append(patch)
 
         for patch in annotation.get("pre_build_patches", []):
-            annotations[resolved_pkg].pre_build_patches.append(patch)
+            annotations[pkg_key].pre_build_patches.append(patch)
 
         for hook in annotation.get("site_hooks", []):
-            annotations[resolved_pkg].site_hooks.append(hook)
+            annotations[pkg_key].site_hooks.append(hook)
 
-        if annotation.get("build_backend") is not None:
-            annotations[resolved_pkg].build_backend = annotation["build_backend"]
+        if "build_backend" in annotation:
+            annotations[pkg_key].build_backend = annotation["build_backend"]
 
-        site_paths = annotation.get("site_paths", [])
-        if site_paths:
-            annotations[resolved_pkg].site_paths = site_paths
-        bin_paths = annotation.get("bin_paths", [])
-        if bin_paths:
-            annotations[resolved_pkg].bin_paths = bin_paths
-        data_paths = annotation.get("data_paths", [])
-        if data_paths:
-            annotations[resolved_pkg].data_paths = data_paths
-        include_paths = annotation.get("include_paths", [])
-        if include_paths:
-            annotations[resolved_pkg].include_paths = include_paths
+        if "site_paths" in annotation:
+            annotations[pkg_key].site_paths.extend(annotation["site_paths"])
+        if "bin_paths" in annotation:
+            annotations[pkg_key].bin_paths.extend(annotation["bin_paths"])
+        if "data_paths" in annotation:
+            annotations[pkg_key].data_paths.extend(annotation["data_paths"])
+        if "include_paths" in annotation:
+            annotations[pkg_key].include_paths.extend(annotation["include_paths"])
+
+    wildcard_only_keys: Set[PackageKey] = set()
+    wildcard_annotation = annotations_data.pop("*", None)
+
+    # Apply specific annotations first.
+    specific_keys: Set[PackageKey] = set()
+    for pkg, annotation in annotations_data.items():
+        resolved_pkg = resolve_single_version(
+            pkg,
+            all_package_keys_by_canonical_name,
+            lock_model.packages.keys(),
+            "annotations",
+        )
+        apply_annotation(resolved_pkg, annotation)
+        specific_keys.add(resolved_pkg)
+
+    # Apply wildcard only to packages that don't have a specific annotation.
+    # A specific annotation fully replaces the wildcard for that package.
+    if wildcard_annotation:
+        for pkg_key in lock_model.packages.keys():
+            if pkg_key not in specific_keys:
+                apply_annotation(pkg_key, wildcard_annotation)
+                wildcard_only_keys.add(pkg_key)
 
     # Return as a non-default dict
-    return dict(annotations)
+    return dict(annotations), wildcard_only_keys
 
 
 def collect_default_build_dependencies(lock_model: RawLockSet, build_dependencies: list[str]) -> list[PackageKey]:
@@ -517,6 +543,7 @@ def _resolve_packages(
     context: GenerationContext,
     annotations: Dict[PackageKey, PackageAnnotations],
     default_build_dependencies: List[PackageKey],
+    wildcard_only_keys: Set[PackageKey] = frozenset(),
 ) -> Dict[PackageKey, PackageResolver]:
     work = []
     for pin_dict in lock_model.pins.values():
@@ -565,6 +592,12 @@ def _resolve_packages(
         )
         packages_by_package_key[next_package_key] = entry
         work.extend(entry.all_dependency_keys)
+
+    # Discard any remaining annotations that came purely from wildcard expansion.
+    # These are packages in the lock model that aren't in the transitive closure
+    # of pins — it's expected that wildcards touch them and they go unconsumed.
+    for key in wildcard_only_keys:
+        annotations.pop(key, None)
 
     # The annotations dict should be empty now; if not, annotations were specified
     # for packages that are not actually part of our final set.
@@ -663,7 +696,7 @@ def resolve(args: Any) -> ResolvedLockSet:
     )
 
     # Collect package "annotations"
-    annotations = collect_package_annotations(args, lock_model)
+    annotations, wildcard_only_keys = collect_package_annotations(args, lock_model)
 
     default_build_dependencies = collect_default_build_dependencies(lock_model, args.default_build_dependencies)
 
@@ -672,6 +705,7 @@ def resolve(args: Any) -> ResolvedLockSet:
         context,
         annotations,
         default_build_dependencies,
+        wildcard_only_keys,
     )
 
     resolved_packages = sorted(packages_by_package_key.values(), key=lambda x: x.key)

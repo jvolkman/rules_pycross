@@ -1,5 +1,7 @@
 load("@lock_a//:requirements.bzl", requirement_a = "requirement")
 load("@lock_project_b//:requirements.bzl", requirement_b = "requirement")
+load("@lock_standalone_a//:requirements.bzl", requirement_standalone_a = "requirement")
+load("@lock_standalone_b//:requirements.bzl", requirement_standalone_b = "requirement")
 load("@rules_python//python:defs.bzl", "py_test")
 
 package(default_visibility = ["//visibility:public"])
@@ -48,9 +50,6 @@ py_test(
         requirement_b("attrs"),
     ],
 )
-
-load("@lock_standalone_a//:requirements.bzl", requirement_standalone_a = "requirement")
-load("@lock_standalone_b//:requirements.bzl", requirement_standalone_b = "requirement")
 
 # Test: standalone member imports
 py_test(

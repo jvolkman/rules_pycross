@@ -329,7 +329,10 @@ def _thin_package_repo_impl(rctx):
         tool_deps_labels = []
         for pkg in config["tool_packages"]:
             norm_pkg = _normalize_name(pkg)
-            if norm_pkg in normalized_pinned_package_names:
+            if rctx.attr.workspace_build_repo:
+                # If a build_repo is specified, always pull build tools from there.
+                tool_deps_labels.append("@{}//_lock:{}".format(rctx.attr.workspace_build_repo, norm_pkg))
+            elif norm_pkg in normalized_pinned_package_names:
                 matching = [k for k in pins.keys() if "[" not in k and _normalize_name(k) == norm_pkg]
                 if matching:
                     tool_deps_labels.append("//{}:pkg".format(underscore_name(matching[0])))
@@ -393,6 +396,9 @@ thin_package_repo = repository_rule(
         "workspace_repo": attr.string(
             mandatory = True,
             doc = "Name of the workspace package_repo that contains the shared _lock/ targets.",
+        ),
+        "workspace_build_repo": attr.string(
+            doc = "Name of the workspace to pull sdist build dependencies from (e.g. pycross_ws_build_deps).",
         ),
         "member_name": attr.string(
             mandatory = True,

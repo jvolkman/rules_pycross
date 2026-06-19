@@ -109,9 +109,8 @@ _IMPORT_ATTRS = dict(
         mandatory = True,
     ),
     project_file = attr.label(
-        doc = "The pyproject.toml file.",
+        doc = "The pyproject.toml file. If not specified, defaults to pyproject.toml next to the lock file.",
         allow_single_file = True,
-        mandatory = True,
     ),
     default_group = attr.bool(
         doc = "Whether to install dependencies from the default group.",
@@ -142,9 +141,8 @@ POETRY_IMPORT_ATTRS = dict(
         mandatory = True,
     ),
     project_file = attr.label(
-        doc = "The pyproject.toml file.",
+        doc = "The pyproject.toml file. If not specified, defaults to pyproject.toml next to the lock file.",
         allow_single_file = True,
-        mandatory = True,
     ),
     default_group = attr.bool(
         doc = "Whether to install dependencies from the default group.",
@@ -251,6 +249,7 @@ def handle_create_repos_attrs(attrs):
 def package_annotation(
         always_build = False,
         build_dependencies = [],
+        build_repo = None,
         build_target = None,
         ignore_dependencies = [],
         install_exclude_globs = [],
@@ -267,6 +266,7 @@ def package_annotation(
     Args:
       always_build (bool, optional): If True, don't use pre-build wheels for this package.
       build_dependencies (list, optional): A list of additional package keys (name or name@version) to use when building this package from source.
+      build_repo (str, optional): Optional repo to use for resolving sdist build dependencies for this package.
       build_target (str, optional): An optional override build target to use when and if this package needs to be built from source.
       ignore_dependencies (list, optional): A list of package keys (name or name@version) to drop from this package's set of declared dependencies.
       install_exclude_globs (list, optional): A list of globs for files to exclude during installation.
@@ -285,6 +285,7 @@ def package_annotation(
     return json.encode(struct(
         always_build = always_build,
         build_dependencies = build_dependencies,
+        build_repo = build_repo,
         build_target = build_target,
         ignore_dependencies = ignore_dependencies,
         install_exclude_globs = install_exclude_globs,

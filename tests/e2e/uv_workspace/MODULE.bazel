@@ -72,13 +72,11 @@ lock_import.import_uv_workspace(
     lock_file = "//:uv.lock",
     target_environments = ["@uv_workspace_envs//:environments"],
 )
-
 lock_import.uv_workspace_member(
     project = "project-a",
     repo = "lock_standalone_a",
     workspace = "standalone",
 )
-
 lock_import.uv_workspace_member(
     project = "project-b",
     repo = "lock_standalone_b",

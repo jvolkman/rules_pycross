@@ -22,6 +22,12 @@ def _lock_workspace_repo_impl(rctx):
         workspace_lines.append('    "{}": "{}",'.format(repo_name, workspace_name))
     workspace_lines.append("}")
 
+    workspace_lines.append("workspace_build_repos = {")
+    for workspace_name in sorted(rctx.attr.workspace_build_repos):
+        build_repo = rctx.attr.workspace_build_repos[workspace_name]
+        workspace_lines.append('    "{}": "{}",'.format(workspace_name, build_repo))
+    workspace_lines.append("}")
+
     workspace_lines.append("root_repos = [")
     for repo_name in sorted(rctx.attr.root_repos):
         workspace_lines.append('    "{}",'.format(repo_name))
@@ -37,6 +43,10 @@ lock_workspace_repo = repository_rule(
         "repo_files": attr.string_dict(),
         "workspace_memberships": attr.string_dict(
             doc = "Maps repo_name to workspace_name for repos that share a workspace.",
+            default = {},
+        ),
+        "workspace_build_repos": attr.string_dict(
+            doc = "Maps workspace_name to build_repo for workspaces that use a different repo for sdist build dependencies.",
             default = {},
         ),
         "root_repos": attr.string_list(

@@ -50,6 +50,7 @@ def _generate_resolved_lock_repo(lock_info, serialized_lock_model, workspace_pac
         args["annotations"][package_name] = package_annotation(
             always_build = package.always_build,
             build_dependencies = package.build_dependencies,
+            build_repo = package.build_repo,
             build_target = str(package.build_target) if package.build_target else None,
             ignore_dependencies = package.ignore_dependencies,
             install_exclude_globs = package.install_exclude_globs,
@@ -126,6 +127,7 @@ def _lock_struct(mctx, tag):
     return struct(
         repo_name = tag.repo,
         workspace = tag.repo,
+        build_repo = tag.build_repo,
         default_alias_single_version = tag.default_alias_single_version,
         environments = environment_files,
         local_wheels = tag.local_wheels,
@@ -151,6 +153,7 @@ def _workspace_lock_struct(mctx, ws_tag, repo_name, workspace_name):
     return struct(
         repo_name = repo_name,
         workspace = workspace_name,
+        build_repo = ws_tag.build_repo,
         default_alias_single_version = ws_tag.default_alias_single_version,
         environments = environment_files,
         local_wheels = ws_tag.local_wheels,
@@ -164,6 +167,7 @@ def _normalize_package_tag(tag):
     return struct(
         always_build = tag.always_build,
         build_dependencies = tag.build_dependencies,
+        build_repo = tag.build_repo,
         build_target = tag.build_target,
         ignore_dependencies = tag.ignore_dependencies,
         install_exclude_globs = tag.install_exclude_globs,
@@ -408,9 +412,18 @@ def _process_workspaces(
                     lock_module = override.module if override else module
 
                     _register_workspace_member(
-                        module_ctx, lock_owners, lock_repos, lock_model_structs,
-                        root_direct_deps, ws_tag, tag.workspace, model_type,
-                        repo_name, project_file, group_attrs, lock_module,
+                        module_ctx,
+                        lock_owners,
+                        lock_repos,
+                        lock_model_structs,
+                        root_direct_deps,
+                        ws_tag,
+                        tag.workspace,
+                        model_type,
+                        repo_name,
+                        project_file,
+                        group_attrs,
+                        lock_module,
                     )
 
     # Process standalone member imports (those not covered by a bulk import).
@@ -449,9 +462,18 @@ def _process_workspaces(
             group_attrs = _get_member_group_attrs(struct(), override.tag)
 
             _register_workspace_member(
-                module_ctx, lock_owners, lock_repos, lock_model_structs,
-                root_direct_deps, ws_tag, ws_name, model_type,
-                repo_name, project_file, group_attrs, override.module,
+                module_ctx,
+                lock_owners,
+                lock_repos,
+                lock_model_structs,
+                root_direct_deps,
+                ws_tag,
+                ws_name,
+                model_type,
+                repo_name,
+                project_file,
+                group_attrs,
+                override.module,
             )
 
 def _lock_import_impl(module_ctx):
@@ -481,11 +503,15 @@ def _lock_import_impl(module_ctx):
                 model = {attr: getattr(tag, attr) for attr in attrs}
                 model["model_type"] = model_type
 
-                # These are labels, so we need to convert them to strings
-                if "project_file" in model and model["project_file"] != None:
-                    model["project_file"] = str(model["project_file"])
-                else:
-                    model["project_file"] = ""
+                # Default project_file to sibling pyproject.toml of lock_file if not specified.
+                # For pylock, project_file is truly optional (no default).
+                if "project_file" in model:
+                    if model["project_file"] != None:
+                        model["project_file"] = str(model["project_file"])
+                    elif model_type != "pylock":
+                        model["project_file"] = str(tag.lock_file.relative(":pyproject.toml"))
+                    else:
+                        model["project_file"] = ""
                 model["lock_file"] = str(model["lock_file"])
 
                 lock_model_structs[tag.repo] = json.encode(model)
@@ -552,15 +578,19 @@ def _lock_import_impl(module_ctx):
 
     # Generate the resolved lock repos
     workspace_memberships = {}
+    workspace_build_repos = {}
     for repo_name, repo_info in lock_repos.items():
         resolved_lock_repo_file = _generate_resolved_lock_repo(repo_info, lock_model_structs[repo_name], workspace_packages)
         resolved_lock_files[repo_info.repo_name] = resolved_lock_repo_file
         workspace_memberships[repo_info.repo_name] = repo_info.workspace
+        if repo_info.build_repo:
+            workspace_build_repos[repo_info.workspace] = repo_info.build_repo
 
     lock_workspace_repo(
         name = "lock_import_repos_hub",
         repo_files = resolved_lock_files,
         workspace_memberships = workspace_memberships,
+        workspace_build_repos = workspace_build_repos,
         root_repos = root_direct_deps,
     )
 

@@ -3,7 +3,7 @@
 load("@bazel_features//:features.bzl", "bazel_features")
 load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_file")
 load("@lock_import_repos_hub//:locks.bzl", lock_import_locks = "locks")
-load("@lock_import_repos_hub//:workspaces.bzl", "root_repos", "workspace_memberships")
+load("@lock_import_repos_hub//:workspaces.bzl", "root_repos", "workspace_build_repos", "workspace_memberships")
 load("@pycross_backends//:registry.bzl", "BACKEND_CONFIGS", "BACKEND_TO_RULE", "DEFAULT_BACKEND", "OVERRIDE_FILES")
 load("@rules_pycross//pycross/private:sdist_repo.bzl", "pycross_sdist_repo")
 load("//pycross/private:package_repo.bzl", "package_repo")
@@ -135,9 +135,17 @@ def _lock_repos_impl(module_ctx):
 
         sdist_map = {}
 
-        # Every repo has a workspace; sdist build deps point to the workspace's _lock/ targets.
+        # Every repo has a workspace.
         workspace_name = workspace_memberships.get(repo_name, repo_name)
-        lock_repo_for_deps = "pycross_ws_{}".format(workspace_name)
+
+        # build_repo is a workspace name (the 'name' param of import_uv_workspace or
+        # import_uv). workspace_memberships maps repo_name -> workspace_name, so if
+        # build_repo isn't found as a repo key we use it directly as a workspace name.
+        ws_build_repo = workspace_build_repos.get(workspace_name)
+        if ws_build_repo:
+            lock_repo_for_deps = "pycross_ws_{}".format(workspace_memberships.get(ws_build_repo, ws_build_repo))
+        else:
+            lock_repo_for_deps = "pycross_ws_{}".format(workspace_name)
 
         # Instantiate sdist repos for packages requiring source builds.
         # Sdist repos are shared at the workspace level: all members in the
@@ -195,13 +203,20 @@ def _lock_repos_impl(module_ctx):
             whldir_norm_name = sanitize_name(pkg_name_part)
             whldir_name = "{}-{}.whldir".format(whldir_norm_name, pkg_version)
 
+            # Recompute lock_repo_for_deps for this specific package if it has an override
+            pkg_build_repo = pkg.get("build_repo") or ws_build_repo
+            if pkg_build_repo:
+                pkg_lock_repo_for_deps = "pycross_ws_{}".format(workspace_memberships.get(pkg_build_repo, pkg_build_repo))
+            else:
+                pkg_lock_repo_for_deps = "pycross_ws_{}".format(workspace_name)
+
             sdist_repo_attrs = {
                 "name": sdist_repo_name,
                 "sdist": sdist_label,
                 "deps": sorted(deps_set.keys()),
                 "known_packages": known_packages,
                 "lock_json": lock_file,
-                "lock_repo": lock_repo_for_deps,
+                "lock_repo": pkg_lock_repo_for_deps,
                 "thin_repo": repo_name,
                 "backend_to_rule": BACKEND_TO_RULE,
                 "default_backend": DEFAULT_BACKEND,
@@ -214,21 +229,26 @@ def _lock_repos_impl(module_ctx):
                 if attr_name in pkg and pkg[attr_name] != None:
                     sdist_repo_attrs[attr_name] = pkg[attr_name]
 
-            # Pass per-package override configs keyed by backend name.
             pkg_name = key_name(pkg_key)
             pkg_overrides = {}
 
-            # Inherit workspace overrides if any
-            ws_key = "workspace:" + workspace_name
-            if ws_key in override_configs:
-                for b_name, b_attrs in override_configs[ws_key].get(pkg_name, {}).items():
-                    pkg_overrides[b_name] = b_attrs
+            # Helper: apply overrides from a scope. A specific package entry
+            # fully replaces the wildcard for that scope.
+            def _apply_scope_overrides(src_key):
+                if src_key not in override_configs:
+                    return
+                scope = override_configs[src_key]
+                source = scope.get(pkg_name, scope.get("*"))
+                if source:
+                    for b_name, b_attrs in source.items():
+                        pkg_overrides[b_name] = dict(b_attrs)
 
-            # Repo overrides take precedence
+            # Workspace overrides first, then repo overrides take precedence.
+            ws_key = "workspace:" + workspace_name
+            _apply_scope_overrides(ws_key)
+
             repo_key = "repo:" + repo_name
-            if repo_key in override_configs:
-                for b_name, b_attrs in override_configs[repo_key].get(pkg_name, {}).items():
-                    pkg_overrides[b_name] = b_attrs
+            _apply_scope_overrides(repo_key)
 
             if pkg_overrides:
                 sdist_repo_attrs["override_backend_configs"] = json.encode(pkg_overrides)
@@ -312,8 +332,9 @@ def _lock_repos_impl(module_ctx):
         )
 
         # Create thin repos for each workspace member, passing conflict info.
+        thin_build_repo = workspace_build_repos.get(workspace_name)
         for member in member_repos:
-            thin_package_repo(
+            thin_repo_attrs = dict(
                 name = member,
                 resolved_lock_file = per_repo_data[member].lock_file,
                 workspace_repo = workspace_repo_name,
@@ -321,6 +342,9 @@ def _lock_repos_impl(module_ctx):
                 conflicts = conflicts,
                 backend_configs = backend_configs_json,
             )
+            if thin_build_repo:
+                thin_repo_attrs["workspace_build_repo"] = "pycross_ws_{}".format(workspace_memberships.get(thin_build_repo, thin_build_repo))
+            thin_package_repo(**thin_repo_attrs)
 
     if bazel_features.external_deps.extension_metadata_has_reproducible:
         return module_ctx.extension_metadata(
