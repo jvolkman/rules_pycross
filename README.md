@@ -73,6 +73,31 @@ Each import function supports selecting which dependency groups to include:
 
 ---
 
+## Extras
+
+When a dependency is used with extras (e.g., `google-api-core[grpc]`), `rules_pycross` generates separate targets for the base package and each extra:
+
+```
+@pypi//google_api_core             # Full package with all requested extras
+@pypi//google_api_core:[]          # Base package only (no extra dependencies)
+@pypi//google_api_core:[grpc]      # Just the grpc extra and its dependencies
+```
+
+The `requirement()` macro supports this syntax directly:
+
+```python
+load("@pypi//:requirements.bzl", "requirement")
+
+py_library(
+    name = "my_lib",
+    deps = [
+        requirement("google-api-core[grpc]"),
+    ],
+)
+```
+
+---
+
 ## Multi-Workspace Lock Import
 
 `rules_pycross` supports importing multiple members of a single workspace lock file into a shared backing repository. This is useful for monorepos where different subprojects need different dependency subsets.
