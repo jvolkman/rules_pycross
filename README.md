@@ -1,3 +1,6 @@
+> [!NOTE]
+> This is the maintenance branch for rules_pycross v1. It only receives critical bug fixes. For new features and the latest improvements, please use v2 on the main branch.
+
 # `rules_pycross` - Python + cross platform
 
 Use your Poetry or PDM or UV lock files with Bazel and enabling cross-platform builds.
