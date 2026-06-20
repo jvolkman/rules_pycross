@@ -53,7 +53,7 @@ _CREATE_ATTRS = dict(
 )
 
 _PYTHON_ATTRS = dict(
-    envs = attr.string(
+    name = attr.string(
         doc = "Name of the environments repo. Defaults to 'pycross_environments'.",
         default = "pycross_environments",
     ),
@@ -64,7 +64,7 @@ _PYTHON_ATTRS = dict(
 )
 
 _PLATFORM_ATTRS = dict(
-    envs = attr.string(
+    name = attr.string(
         doc = "Name of the environments repo. Defaults to 'pycross_environments'.",
         default = "pycross_environments",
     ),
@@ -113,7 +113,7 @@ def _environments_impl(module_ctx):
     # Collect python() tags (only valid for "explicit" repos).
     for module in module_ctx.modules:
         for tag in module.tags.python:
-            name = tag.envs
+            name = tag.name
             if name not in repos:
                 fail("python() tag references unknown environments repo: {}".format(name))
             repo = repos[name]
@@ -127,7 +127,7 @@ def _environments_impl(module_ctx):
     # Collect platform() tags.
     for module in module_ctx.modules:
         for tag in module.tags.platform:
-            name = tag.envs
+            name = tag.name
             if name not in repos:
                 fail("platform() tag references unknown environments repo: {}".format(name))
             repo = repos[name]

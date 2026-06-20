@@ -27,11 +27,11 @@ environments.create_for_python_toolchains(
     name = "pdm_workspace_envs",
 )
 environments.platform(
-    envs = "pdm_workspace_envs",
+    name = "pdm_workspace_envs",
     target = "aarch64-apple-darwin",
 )
 environments.platform(
-    envs = "pdm_workspace_envs",
+    name = "pdm_workspace_envs",
     target = "x86_64-unknown-linux-gnu",
 )
 use_repo(environments, "pdm_workspace_envs")

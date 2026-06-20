@@ -11,8 +11,8 @@ environments = use_extension("@rules_pycross//pycross/extensions:environments.bz
 environments.create_for_python_toolchains(<a href="#environments.create_for_python_toolchains-name">name</a>, <a href="#environments.create_for_python_toolchains-glibc_version">glibc_version</a>, <a href="#environments.create_for_python_toolchains-macos_version">macos_version</a>, <a href="#environments.create_for_python_toolchains-musl_version">musl_version</a>,
                                           <a href="#environments.create_for_python_toolchains-platforms">platforms</a>, <a href="#environments.create_for_python_toolchains-python_versions">python_versions</a>)
 environments.create(<a href="#environments.create-name">name</a>, <a href="#environments.create-glibc_version">glibc_version</a>, <a href="#environments.create-macos_version">macos_version</a>, <a href="#environments.create-musl_version">musl_version</a>)
-environments.python(<a href="#environments.python-envs">envs</a>, <a href="#environments.python-version">version</a>)
-environments.platform(<a href="#environments.platform-envs">envs</a>, <a href="#environments.platform-glibc_version">glibc_version</a>, <a href="#environments.platform-macos_version">macos_version</a>, <a href="#environments.platform-musl_version">musl_version</a>, <a href="#environments.platform-target">target</a>)
+environments.python(<a href="#environments.python-name">name</a>, <a href="#environments.python-version">version</a>)
+environments.platform(<a href="#environments.platform-name">name</a>, <a href="#environments.platform-glibc_version">glibc_version</a>, <a href="#environments.platform-macos_version">macos_version</a>, <a href="#environments.platform-musl_version">musl_version</a>, <a href="#environments.platform-target">target</a>)
 </pre>
 
 Create target environments.
@@ -62,7 +62,7 @@ Declare a Python version for a create() environments repo.
 
 | Name  | Description | Type | Mandatory | Default |
 | :------------- | :------------- | :------------- | :------------- | :------------- |
-| <a id="environments.python-envs"></a>envs |  Name of the environments repo. Defaults to 'pycross_environments'.   | String | optional |  `"pycross_environments"`  |
+| <a id="environments.python-name"></a>name |  Name of the environments repo. Defaults to 'pycross_environments'.   | <a href="https://bazel.build/concepts/labels#target-names">Name</a> | optional |  `"pycross_environments"`  |
 | <a id="environments.python-version"></a>version |  Python version (e.g. '3.11.6' or '3.12').   | String | required |  |
 
 <a id="environments.platform"></a>
@@ -75,7 +75,7 @@ Declare a target platform with optional per-platform version overrides.
 
 | Name  | Description | Type | Mandatory | Default |
 | :------------- | :------------- | :------------- | :------------- | :------------- |
-| <a id="environments.platform-envs"></a>envs |  Name of the environments repo. Defaults to 'pycross_environments'.   | String | optional |  `"pycross_environments"`  |
+| <a id="environments.platform-name"></a>name |  Name of the environments repo. Defaults to 'pycross_environments'.   | <a href="https://bazel.build/concepts/labels#target-names">Name</a> | optional |  `"pycross_environments"`  |
 | <a id="environments.platform-glibc_version"></a>glibc_version |  Override glibc version for this platform.   | String | optional |  `""`  |
 | <a id="environments.platform-macos_version"></a>macos_version |  Override macOS version for this platform.   | String | optional |  `""`  |
 | <a id="environments.platform-musl_version"></a>musl_version |  Override musl version for this platform.   | String | optional |  `""`  |

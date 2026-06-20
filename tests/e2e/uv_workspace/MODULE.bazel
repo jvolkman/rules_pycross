@@ -27,11 +27,11 @@ environments.create_for_python_toolchains(
     name = "uv_workspace_envs",
 )
 environments.platform(
-    envs = "uv_workspace_envs",
+    name = "uv_workspace_envs",
     target = "aarch64-apple-darwin",
 )
 environments.platform(
-    envs = "uv_workspace_envs",
+    name = "uv_workspace_envs",
     target = "x86_64-unknown-linux-gnu",
 )
 use_repo(environments, "uv_workspace_envs")

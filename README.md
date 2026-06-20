@@ -4,56 +4,21 @@
 
 ### Features
 
-*   Import lock files from **uv**, **PDM**, **Poetry**, or **PEP 751 pylock.toml**
-*   Build source distributions inside Bazel build actions, not during workspace initialization
-*   Pluggable build backends: setuptools, meson, cmake, maturin, and generic PEP 517
-*   Cross-platform sdist builds — build wheels for Linux and macOS from either host with an appropriate cross-compilation toolchain (e.g., [toolchains_llvm](https://github.com/bazel-contrib/toolchains_llvm))
-*   Multi-workspace support for monorepos with shared dependency deduplication
-*   Conflict/variant resolution for mutually exclusive dependencies (e.g., torch CPU vs. CUDA)
-*   Compatible with `rules_python` and Gazelle
+* Import lock files from **uv**, **PDM**, **Poetry**, or **PEP 751 pylock.toml**
+* Build source distributions inside Bazel build actions, not during workspace initialization
+* Pluggable build backends: setuptools, meson, cmake, maturin, and generic PEP 517
+* Cross-platform sdist builds — build wheels for Linux and macOS from either host with an appropriate cross-compilation toolchain (e.g., [toolchains_llvm](https://github.com/bazel-contrib/toolchains_llvm))
+* Multi-workspace support for monorepos with shared dependency deduplication
+* Conflict/variant resolution for mutually exclusive dependencies (e.g., torch CPU vs. CUDA)
+* Compatible with `rules_python` and Gazelle
 
 **Platform support:** Linux and macOS are the primary supported platforms. Windows may work for some use cases but is not tested.
 
 See the [CI results](https://github.com/jvolkman/rules_pycross/actions/workflows/ci.yml) for cross-platform build and test evidence.
 
-### How It Works
-
-A `pip install` operation can be broken down into:
-
-1.  Determine the target environment (OS, CPU, Python version)
-2.  Resolve dependencies from a lock file
-3.  Select pre-built wheels or source distributions
-4.  Download and build
-
-`rules_pycross` maps each step to Bazel primitives:
-
-1.  **`environments`** extension — declares target platforms and Python versions ahead of time, tied to Bazel's platform/constraint system.
-2.  **`lock_import`** extension — translates a lock file into Bazel repository rules: `http_file` for downloads, build rules for source distributions.
-3.  **Build backends** (`setuptools_build`, `meson_build`, etc.) — build sdists into wheels inside sandboxed Bazel actions with remote execution support.
-4.  **`pycross_wheel_library`** — extracts a wheel (downloaded or built) and provides it as a `py_library`.
-
----
-
 ## Getting Started
 
-### 1. Set Up Environments
-
-Declare which platforms and Python versions your project targets:
-
-```python
-environments = use_extension("@rules_pycross//pycross/extensions:environments.bzl", "environments")
-environments.create_for_python_toolchains(name = "envs")
-use_repo(environments, "envs")
-```
-
-Python versions are auto-discovered from registered `rules_python` toolchains. You can restrict or customize platforms with `environments.platform()` tags:
-
-```python
-environments.platform(envs = "envs", target = "x86_64-unknown-linux-gnu")
-environments.platform(envs = "envs", target = "aarch64-apple-darwin")
-```
-
-### 2. Import a Lock File
+Add your lock file import to `MODULE.bazel`:
 
 ```python
 lock_import = use_extension("@rules_pycross//pycross/extensions:lock_import.bzl", "lock_import")
@@ -62,7 +27,6 @@ lock_import.import_uv(
     lock_file = "//:uv.lock",
     project_file = "//:pyproject.toml",
     repo = "pypi",
-    target_environments = ["@envs//:environments"],
 )
 
 lock_repos = use_extension("@rules_pycross//pycross/extensions:lock_repos.bzl", "lock_repos")
@@ -73,15 +37,39 @@ After this, packages are available as `@pypi//package_name`. A `requirement()` m
 
 Other lock formats work the same way via `import_pdm`, `import_poetry`, or `import_pylock`.
 
+Python versions are auto-discovered from registered `rules_python` toolchains, and all supported platforms are included by default. To restrict or customize platforms, use `environments.platform()` tags:
+
+```python
+environments = use_extension("@rules_pycross//pycross/extensions:environments.bzl", "environments")
+environments.platform(target = "x86_64-unknown-linux-gnu")
+environments.platform(target = "aarch64-apple-darwin")
+```
+
+### How It Works
+
+A `pip install` operation can be broken down into:
+
+1. Determine the target environment (OS, CPU, Python version)
+2. Resolve dependencies from a lock file
+3. Select pre-built wheels or source distributions
+4. Download and build
+
+`rules_pycross` maps each step to Bazel primitives:
+
+1. **`environments`** extension — declares target platforms and Python versions ahead of time, tied to Bazel's platform/constraint system.
+2. **`lock_import`** extension — translates a lock file into Bazel repository rules: `http_file` for downloads, build rules for source distributions.
+3. **Build backends** (`setuptools_build`, `meson_build`, etc.) — build sdists into wheels inside sandboxed Bazel actions with remote execution support.
+4. **`pycross_wheel_library`** — extracts a wheel (downloaded or built) and provides it as a `py_library`.
+
 ---
 
 ## Dependency Groups
 
 Each import function supports selecting which dependency groups to include:
 
-*   `default_group` — include the project's default dependencies (default: `True`)
-*   `optional_groups` / `all_optional_groups` — include `[project.optional-dependencies]`
-*   `development_groups` / `all_development_groups` — include `[dependency-groups]`
+* `default_group` — include the project's default dependencies (default: `True`)
+* `optional_groups` / `all_optional_groups` — include `[project.optional-dependencies]`
+* `development_groups` / `all_development_groups` — include `[dependency-groups]`
 
 ---
 
@@ -341,9 +329,9 @@ conflicts = [
 
 When `rules_pycross` processes a lock file with conflicts, it generates:
 
-1.  **`bool_flag` targets** under `@<repo>//_variants:` — one per conflict member (e.g., `extra_cpu`, `extra_cu124`).
-2.  **`config_setting` targets** — `@<repo>//_variants:is_extra_cpu`, `@<repo>//_variants:is_extra_cu124`.
-3.  **`select()` expressions** on the package aliases — so `@<repo>//:torch` resolves to the correct version based on which flag is set.
+1. **`bool_flag` targets** under `@<repo>//_variants:` — one per conflict member (e.g., `extra_cpu`, `extra_cu124`).
+2. **`config_setting` targets** — `@<repo>//_variants:is_extra_cpu`, `@<repo>//_variants:is_extra_cu124`.
+3. **`select()` expressions** on the package aliases — so `@<repo>//:torch` resolves to the correct version based on which flag is set.
 
 ### Selecting a Variant
 
@@ -404,8 +392,8 @@ The generated flags follow the pattern `group_<name>` (e.g., `--@pypi//_variants
 
 `rules_pycross` integrates with `rules_python`. The generated target layout (`@<repo>//<package>`) is compatible with `rules_python` conventions.
 
-*   **Venv support** — when `rules_python` venvs are enabled, `pycross_wheel_library` populates the symlinks needed for a correct `site-packages` layout. Auto-detected paths can be overridden via `lock_import.package(site_paths = [...])`, and additional path categories (`bin_paths`, `data_paths`, `include_paths`) are also supported.
-*   **`py_console_script_binary`** — each `pycross_wheel_library` produces a `:dist_info` output group for entry point discovery. Use `py_console_script_binary(pkg = "@pypi//cython", script = "cython")` directly.
+* **Venv support** — when `rules_python` venvs are enabled, `pycross_wheel_library` populates the symlinks needed for a correct `site-packages` layout. Auto-detected paths can be overridden via `lock_import.package(site_paths = [...])`, and additional path categories (`bin_paths`, `data_paths`, `include_paths`) are also supported.
+* **`py_console_script_binary`** — each `pycross_wheel_library` produces a `:dist_info` output group for entry point discovery. Use `py_console_script_binary(pkg = "@pypi//cython", script = "cython")` directly.
 
 ---
 

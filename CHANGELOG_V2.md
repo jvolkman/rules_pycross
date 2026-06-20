@@ -603,11 +603,11 @@ environments.create(
     glibc_version = "2.28",
 )
 
-environments.python(envs = "my_envs", version = "3.11.6")
-environments.python(envs = "my_envs", version = "3.12.0")
+environments.python(name = "my_envs", version = "3.11.6")
+environments.python(name = "my_envs", version = "3.12.0")
 
-environments.platform(envs = "my_envs", target = "x86_64-unknown-linux-gnu", glibc_version = "2.35")
-environments.platform(envs = "my_envs", target = "aarch64-apple-darwin")
+environments.platform(name = "my_envs", target = "x86_64-unknown-linux-gnu", glibc_version = "2.35")
+environments.platform(name = "my_envs", target = "aarch64-apple-darwin")
 
 use_repo(environments, "my_envs")
 ```
