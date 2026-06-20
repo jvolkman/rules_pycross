@@ -2,9 +2,79 @@
 
 All notable changes to this project will be documented in this file.
 
-The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
-
 ## [unreleased]
+
+## [2.0.0-alpha.0]
+
+This is a major release with breaking changes. See the
+[README](README.md) for a usage guide.
+
+### Removed
+
+- **WORKSPACE support.** Bzlmod is now the only supported module system. All
+  WORKSPACE rules have been removed.
+- **lock.bzl vendoring.** It's no longer possible to generate, vendor, and
+  load a pycross lock.bzl file. `pycross_lock_file` is removed. Users should
+  use the bzlmod extensions for importing supported lock formats directly.
+- **`PycrossWheelInfo` provider.** Build rules now return a `TreeArtifact`
+  containing the wheel with an appropriate name.
+
+### Added and Changed
+
+- **Pluggable build backend system.** The monolithic `pycross_wheel_build` is
+  replaced by modular backends that auto-detect from `pyproject.toml`:
+  - `pep517_build` — generic PEP 517 (hatchling, flit_core, pdm.backend,
+    poetry.core); the default fallback
+  - `setuptools_build` — setuptools with native compilation support
+  - `meson_build` — meson-python with cross-compilation via generated
+    `cross.ini`
+  - `cmake_build` — scikit-build-core / scikit-build
+  - `maturin_build` — Rust+Python via maturin (separate
+    `rules_pycross_backend_maturin` module)
+  - All backends provide some amount of cross compilation support between
+    Linux and macOS.
+- **Backend authoring API** (`pycross/backend.bzl`). Public API for
+  implementing custom build backends: providers, actions, attributes,
+  transitions, and override helpers.
+- **Backend override extensions.** Per-package build customization via
+  `setuptools.override()`, `meson.override()`, `cmake.override()`, and
+  `maturin.override()` tags. Supports `copts`, `linkopts`, `native_deps`,
+  `build_env`, `config_settings`, `pre_build_hooks`, `post_build_hooks`, and
+  more.
+- **Automatic build system detection.** `pycross_sdist_repo` reads
+  `pyproject.toml` from sdists to detect the build backend and resolve
+  `build-system.requires` automatically. Explicit `build_dependencies`
+  overrides are no longer necessary for most packages.
+- **`uv` workspace import.** Three-tier API for monorepos with a single
+  `uv.lock` and multiple workspace members: `import_uv_workspace()`,
+  `uv_all_members()`, and `uv_member()`. Members share a single backing
+  repository for deduplication.
+- ** `uv` conflict support.** Auto-generated config settings allowing selection
+  of uv conflict entries. For example, `--@uv_deps//_variants:extra_cu124`,
+  `--@uv_deps//_variants:extra_cpu`.
+- **Multi-workspace lock import.** Multiple lock files can share a workspace
+  for deduplication, or each can get its own isolated workspace.
+- **pylock.toml support (PEP 751).** Adds support for the `pylock.toml`
+  lockfile format.
+- **Extras support.** Extras are first-class: the generated repo exposes
+  `@repo//pkg` (all requested extras), `@repo//pkg:[]` (base only), and
+  `@repo//pkg:[extra]` (specific extra) targets.
+- **Automatic cycle resolution.** Circular dependencies are detected via
+  Tarjan's SCC algorithm and resolved automatically with content-based group
+  naming for stability.
+- **Git package sources.** Full support for packages installed from git
+  repositories in `uv.lock`, via a `pycross_git_file` repository rule.
+- **`pre_build_patches` annotation.** Patches applied to the sdist source tree
+  before the PEP 517 build.
+- **`site_hooks` annotation.** Python code snippets executed on interpreter
+  startup during builds.
+- **`build_backend` annotation.** Explicit backend override per package,
+  bypassing pyproject.toml auto-detection.
+- **`rules_python` layout compatibility.** Pycross lock repos now provide the
+  same (or at least largely compatible) target layout as rules_python.
+- **`rules_python` venv integration.** Pycross targets are now symlinked into
+  rules_python venvs.
+- **Unconditional wheel repair.** `repairwheel` runs on all built wheels.
 
 ## [0.8.2]
 
@@ -180,20 +250,3 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ## [0.1] - 2022-10-18
 
 (No notes - pre-dates this file.)
-
-[unreleased]: https://github.com/jvolkman/rules_pycross/compare/v0.8.2...HEAD
-[0.8.2]: https://github.com/jvolkman/rules_pycross/compare/v0.8.1...v0.8.2
-[0.8.1]: https://github.com/jvolkman/rules_pycross/compare/v0.8.0...v0.8.1
-[0.8.0]: https://github.com/jvolkman/rules_pycross/compare/v0.7.1...v0.8.0
-[0.7.1]: https://github.com/jvolkman/rules_pycross/compare/v0.7.0...v0.7.1
-[0.7.0]: https://github.com/jvolkman/rules_pycross/compare/v0.6.1...v0.7.1
-[0.6.1]: https://github.com/jvolkman/rules_pycross/compare/v0.6.0...v0.6.1
-[0.6.0]: https://github.com/jvolkman/rules_pycross/compare/v0.5.2...v0.6.0
-[0.5.3]: https://github.com/jvolkman/rules_pycross/compare/v0.5.2...v0.5.3
-[0.5.2]: https://github.com/jvolkman/rules_pycross/compare/v0.5.1...v0.5.2
-[0.5.1]: https://github.com/jvolkman/rules_pycross/compare/v0.5.0...v0.5.1
-[0.5.0]: https://github.com/jvolkman/rules_pycross/compare/v0.4...v0.5.0
-[0.4]: https://github.com/jvolkman/rules_pycross/compare/v0.3...v0.4
-[0.3]: https://github.com/jvolkman/rules_pycross/compare/v0.2...v0.3
-[0.2]: https://github.com/jvolkman/rules_pycross/compare/0.1...v0.2
-[0.1]: https://github.com/jvolkman/rules_pycross/releases/tag/0.1
