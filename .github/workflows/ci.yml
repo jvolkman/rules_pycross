@@ -74,14 +74,23 @@ jobs:
           echo "build:remote --remote_header=x-buildbuddy-api-key=${{ secrets.BUILDBUDDY_API_KEY }}" > .bazelrc.user
       - name: Build
         working-directory: ${{ matrix.workspace }}
-        run: bazel build --config=remote //...
+        run: |
+          if [ -f "run.sh" ]; then
+            echo "Skipping default build, run.sh will handle it."
+          else
+            bazel build --config=remote //...
+          fi
       - name: Test
         working-directory: ${{ matrix.workspace }}
         run: |
-          if bazel query "tests(//...)" 2>/dev/null | grep -q .; then
-            bazel test --config=remote //...
+          if [ -f "run.sh" ]; then
+            ./run.sh --config=remote
           else
-            echo "No test targets found, skipping."
+            if bazel query "tests(//...)" 2>/dev/null | grep -q .; then
+              bazel test --config=remote //...
+            else
+              echo "No test targets found, skipping."
+            fi
           fi
 
   # Stage 3: Cross-platform builds
