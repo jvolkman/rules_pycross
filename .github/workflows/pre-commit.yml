@@ -3,7 +3,7 @@ name: Pre-commit checks
 on:
   pull_request:
   push:
-    branches: [main]
+    branches: [v1]
 
 jobs:
   main:

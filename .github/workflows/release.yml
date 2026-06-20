@@ -13,7 +13,8 @@ name: Release
   # Or, developers can manually push a tag from their clone
   push:
     tags:
-      - "v*.*.*"
+      - "v0.*.*"
+      - "v1.*.*"
 permissions:
   id-token: write
   attestations: write
