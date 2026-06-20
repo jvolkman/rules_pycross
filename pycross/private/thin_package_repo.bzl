@@ -380,6 +380,25 @@ def _thin_package_repo_impl(rctx):
             ])
         rctx.file("_variants/BUILD.bazel", "\n".join(variant_lines))
 
+    # _backend/ directory
+    if rctx.attr.backend_configs:
+        rctx.file(
+            "_backend/BUILD.bazel",
+            "exports_files(glob(['*.bzl']))\n",
+        )
+
+        for macro_name in rctx.attr.backend_configs.keys():
+            lines = [
+                '"""Backend macro alias for this thin repo."""',
+                "",
+                'load("@{}//_backend:{}.bzl", _{} = "{}")'.format(workspace_repo, macro_name, macro_name, macro_name),
+                "",
+                "{} = _{}".format(macro_name, macro_name),
+                "",
+            ]
+
+            rctx.file("_backend/{}.bzl".format(macro_name), "\n".join(lines))
+
 thin_package_repo = repository_rule(
     implementation = _thin_package_repo_impl,
     attrs = {
@@ -398,6 +417,9 @@ thin_package_repo = repository_rule(
         "conflicts": attr.string_list_dict(
             default = {},
             doc = "Map of pkg_key -> [member_names...] for packages with conflicting annotations.",
+        ),
+        "backend_configs": attr.string_dict(
+            doc = "Map of rule names to JSON-encoded config dicts.",
         ),
     },
 )

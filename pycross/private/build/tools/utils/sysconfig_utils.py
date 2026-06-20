@@ -189,6 +189,7 @@ def apply_sysconfig_overrides(ctx: BuildContext) -> None:
         f.write(f"build_time_vars = {repr(ctx.sysconfig_vars)}\n")
     with open(site_dir / "_sysconfigdata_pycross.pth", "w") as f:
         f.write('import os; os.environ["_PYTHON_SYSCONFIGDATA_NAME"] = "_sysconfigdata_pycross"\n')
+    ctx.build_env["_PYTHON_SYSCONFIGDATA_NAME"] = "_sysconfigdata_pycross"
 
     target_platform, macosx_deployment_target = derive_platform_overrides(ctx.sysconfig_vars)
     target_sys_platform = ctx.sysconfig_vars.get("MACHDEP")

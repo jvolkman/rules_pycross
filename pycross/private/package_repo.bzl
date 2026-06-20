@@ -291,7 +291,10 @@ def _package_repo_impl(rctx):
     rctx.file("_sdist/BUILD.bazel", "\n".join(sdist_lines) + "\n")
 
     # 4. _backend/ directory
-    rctx.file("_backend/BUILD.bazel", 'package(default_visibility = ["//visibility:public"])\n')
+    rctx.file(
+        "_backend/BUILD.bazel",
+        "exports_files(glob(['*.bzl']))\n",
+    )
 
     backend_configs = {}
     for name, config_json in rctx.attr.backend_configs.items():

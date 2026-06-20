@@ -340,6 +340,7 @@ def _lock_repos_impl(module_ctx):
                 workspace_repo = workspace_repo_name,
                 member_name = member,
                 conflicts = conflicts,
+                backend_configs = backend_configs_json,
             )
             if thin_build_repo:
                 thin_repo_attrs["workspace_build_repo"] = "pycross_ws_{}".format(workspace_memberships.get(thin_build_repo, thin_build_repo))
