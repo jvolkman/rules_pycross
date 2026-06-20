@@ -25,13 +25,13 @@ EXTRACT="$(mktemp -d)"
 tar xzf "${RUNNER_TEMP}/base.tar.gz" -C "${EXTRACT}"
 
 # Run buildozer from the extracted archive root so it finds MODULE.bazel.
-pushd "${EXTRACT}/${PREFIX}"
+pushd "${EXTRACT}/${PREFIX}" > /dev/null
 "${BUILDOZER}" \
     "set version ${VERSION}" \
   "//MODULE.bazel:rules_pycross" \
   "//modules/backend_maturin/MODULE.bazel:rules_pycross_backend_maturin" \
   "//modules/backend_maturin/MODULE.bazel:rules_pycross"
-popd
+popd > /dev/null
 
 tar czf "${ARCHIVE}" -C "${EXTRACT}" "${PREFIX}"
 
