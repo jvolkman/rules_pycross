@@ -1,0 +1,5 @@
+{
+  "integrity": "**leave this alone**",
+  "strip_prefix": "{REPO}-{VERSION}/modules/backend_maturin",
+  "url": "https://github.com/{OWNER}/{REPO}/releases/download/{TAG}/{REPO}-{TAG}.tar.gz"
+}

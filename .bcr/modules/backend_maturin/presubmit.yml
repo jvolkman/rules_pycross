@@ -1,5 +1,5 @@
 bcr_test_module:
-  module_path: tests/e2e/always_build
+  module_path: tests/e2e/build_maturin
   matrix:
     bazel:
       - 8.x
@@ -10,7 +10,7 @@ bcr_test_module:
       - macos_arm64
   tasks:
     run_tests:
-      name: Run test module
+      name: Run maturin build tests
       bazel: ${{ bazel }}
       platform: ${{ platform }}
       test_targets:

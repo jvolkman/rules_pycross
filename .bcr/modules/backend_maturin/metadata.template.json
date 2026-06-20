@@ -1,0 +1,16 @@
+{
+  "homepage": "https://github.com/jvolkman/rules_pycross",
+  "maintainers": [
+    {
+      "email": "jeremy@jvolkman.com",
+      "github": "jvolkman",
+      "github_user_id": 124501,
+      "name": "Jeremy Volkman"
+    }
+  ],
+  "repository": [
+    "github:jvolkman/rules_pycross"
+  ],
+  "versions": [],
+  "yanked_versions": {}
+}

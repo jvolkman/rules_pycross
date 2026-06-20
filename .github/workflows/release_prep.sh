@@ -4,12 +4,37 @@ set -o errexit -o nounset -o pipefail
 
 # Argument provided by reusable workflow caller
 TAG=$1
+VERSION="${TAG#v}"
 # The prefix is chosen to match what GitHub generates for source archives
-PREFIX="rules_pycross-${TAG:1}"
+PREFIX="rules_pycross-${VERSION}"
 ARCHIVE="rules_pycross-$TAG.tar.gz"
 
 # NB: configuration for 'git archive' is in /.gitattributes
-git archive --format=tar --prefix=${PREFIX}/ ${TAG} | gzip > $ARCHIVE
+git archive --format=tar --prefix=${PREFIX}/ ${TAG} | gzip > "${RUNNER_TEMP}/base.tar.gz"
+
+# Stamp module versions using buildozer.
+# This updates module() version and cross-module bazel_dep() references
+# so the release archive contains the correct version strings.
+BUILDOZER="${RUNNER_TEMP}/buildozer"
+curl -fsSL -o "${BUILDOZER}" \
+  "https://github.com/bazelbuild/buildtools/releases/download/v7.3.1/buildozer-linux-amd64"
+chmod +x "${BUILDOZER}"
+
+# Extract archive, stamp MODULE.bazel files, re-tar.
+EXTRACT="$(mktemp -d)"
+tar xzf "${RUNNER_TEMP}/base.tar.gz" -C "${EXTRACT}"
+
+# Run buildozer from the extracted archive root so it finds MODULE.bazel.
+pushd "${EXTRACT}/${PREFIX}"
+"${BUILDOZER}" \
+    "set version ${VERSION}" \
+  "//MODULE.bazel:rules_pycross" \
+  "//modules/backend_maturin/MODULE.bazel:rules_pycross_backend_maturin" \
+  "//modules/backend_maturin/MODULE.bazel:rules_pycross"
+popd
+
+tar czf "${ARCHIVE}" -C "${EXTRACT}" "${PREFIX}"
+
 SHA=$(shasum -a 256 $ARCHIVE | awk '{print $1}')
 
 # Add generated API docs
@@ -28,18 +53,14 @@ See the [changelog](CHANGELOG.md).
 Add to your \`MODULE.bazel\` file:
 
 \`\`\`starlark
-bazel_dep(name = "rules_pycross", version = "${TAG:1}")
+bazel_dep(name = "rules_pycross", version = "${VERSION}")
 \`\`\`
 
-## Using \`WORKSPACE\`:
+### Maturin backend (optional):
 
 \`\`\`starlark
-load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
-http_archive(
-    name = "rules_pycross",
-    sha256 = "${SHA}",
-    strip_prefix = "${PREFIX}",
-    url = "https://github.com/jvolkman/rules_pycross/releases/download/${TAG}/${ARCHIVE}",
-)
+bazel_dep(name = "rules_pycross_backend_maturin", version = "${VERSION}")
 \`\`\`
+
+**SHA-256:** \`${SHA}\`
 EOF
