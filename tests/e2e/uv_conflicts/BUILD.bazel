@@ -30,7 +30,10 @@ platform(
 py_test(
     name = "test_variant_a",
     srcs = ["tests/test_conflict_version.py"],
-    args = ["4.11.0"],
+    args = [
+        "typing-extensions",
+        "4.11.0",
+    ],
     main = "tests/test_conflict_version.py",
     deps = ["@project//:typing-extensions"],
 )
@@ -39,7 +42,23 @@ py_test(
 py_test(
     name = "test_variant_b",
     srcs = ["tests/test_conflict_version.py"],
-    args = ["4.12.2"],
+    args = [
+        "typing-extensions",
+        "4.12.2",
+    ],
     main = "tests/test_conflict_version.py",
     deps = ["@project//:typing-extensions"],
+)
+
+# Test that default-groups makes group-a the default:
+# idna should resolve to 3.7 without any flags because group-a is the default.
+py_test(
+    name = "test_default_group",
+    srcs = ["tests/test_conflict_version.py"],
+    args = [
+        "idna",
+        "3.7",
+    ],
+    main = "tests/test_conflict_version.py",
+    deps = ["@project//:idna"],
 )

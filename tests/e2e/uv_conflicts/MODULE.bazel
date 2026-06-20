@@ -44,6 +44,7 @@ lock_import.import_uv_workspace(
     target_environments = ["@envs//:environments"],
 )
 lock_import.uv_all_members(
+    all_development_groups = True,
     all_optional_groups = True,
     workspace = "shared",
 )
