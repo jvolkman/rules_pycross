@@ -184,6 +184,7 @@ def build_crossenv_venv(ctx: BuildContext) -> None:
         print(cpe.output.decode(), file=sys.stderr)
         raise
 
+    ctx.crossenv_active = True
     inject_python_wrapper(ctx)
 
 

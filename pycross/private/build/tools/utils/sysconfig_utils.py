@@ -139,50 +139,21 @@ def derive_platform_overrides(sysconfig_vars: Dict[str, Any]) -> tuple[Optional[
     return None, None
 
 
-def _is_crossenv_active(env_dir: Path) -> bool:
-    """Check whether crossenv has already been set up in the virtualenv.
-
-    Crossenv writes its own platform-spoofing patches (e.g. sys-patch.py,
-    platform-patch.py, sysconfig-patch.py) into the venv's lib directory.
-    If these files are present, crossenv is handling cross-compilation and
-    additional sitecustomize.py spoofing is unnecessary.
-    """
-    lib_dir = env_dir / "lib"
-    if not lib_dir.exists():
-        return False
-    # crossenv creates these characteristic patch scripts in the lib dir
-    crossenv_markers = ["sys-patch.py", "platform-patch.py", "sysconfig-patch.py"]
-    return all((lib_dir / marker).exists() for marker in crossenv_markers)
-
-
 def apply_sysconfig_overrides(ctx: BuildContext) -> None:
-    """Inject sysconfig configuration and write sitecustomize.py monkeypatches.
+    """Inject sysconfig configuration and environment overrides.
 
     This function serves two purposes:
 
-    1. **Sysconfigdata override** (always applied): Writes a custom
-       ``_pycross_sysconfigdata.py`` module and a ``.pth`` file so that
-       Python's ``sysconfig`` reads target-platform build variables instead
-       of the host's.  This is needed by all builders.
+    1. **Sysconfigdata override**: Writes a custom ``_pycross_sysconfigdata.py``
+       module and a ``.pth`` file so that Python's ``sysconfig`` reads
+       target-platform build variables instead of the host's. This is needed
+       by all builders.
 
-    2. **sitecustomize.py platform spoofing** (conditionally applied): Writes a
-       ``sitecustomize.py`` that monkey-patches ``sys.platform`` and
-       ``sysconfig.get_platform()`` so that callers like ``packaging.tags``
-       and ``mesonpy`` see the *target* platform rather than the host.
-
-       **Why this is necessary:** Meson-based builds (``mesonpy``) bypass
-       ``crossenv`` entirely and manage cross-compilation through their own
-       ``cross.ini``.  Without this spoofing, ``mesonpy`` and
-       ``packaging/tags`` would read the host platform and incorrectly tag
-       the output wheel.
-
-       **When it is redundant:** When ``crossenv`` is already active (e.g.
-       Setuptools or Maturin builds in cross-compilation mode), crossenv
-       installs its own comprehensive platform patches
-       (``sys-patch.py``, ``platform-patch.py``, ``sysconfig-patch.py``, etc.)
-       that handle all platform spoofing.  Injecting ``sitecustomize.py``
-       on top of crossenv's patches is unnecessary and risks conflicts.
-       In that case, this step is skipped.
+    2. **Environment variable overrides**: Sets ``_PYTHON_HOST_PLATFORM`` and
+       ``MACOSX_DEPLOYMENT_TARGET`` directly in the build environment
+       (``ctx.build_env``) so they are naturally inherited by the underlying
+       build backend subprocesses (like setuptools) without needing
+       late-binding monkeypatches.
     """
     site_dir = find_site_dir(ctx.env_dir)
     with open(site_dir / "_sysconfigdata_pycross.py", "w") as f:
@@ -192,112 +163,8 @@ def apply_sysconfig_overrides(ctx: BuildContext) -> None:
     ctx.build_env["_PYTHON_SYSCONFIGDATA_NAME"] = "_sysconfigdata_pycross"
 
     target_platform, macosx_deployment_target = derive_platform_overrides(ctx.sysconfig_vars)
-    target_sys_platform = ctx.sysconfig_vars.get("MACHDEP")
 
     if macosx_deployment_target:
         ctx.build_env["MACOSX_DEPLOYMENT_TARGET"] = macosx_deployment_target
     if target_platform:
         ctx.build_env["_PYTHON_HOST_PLATFORM"] = target_platform
-
-    # Skip sitecustomize.py injection when crossenv is active, since crossenv
-    # already provides its own comprehensive platform-spoofing patches.
-    if _is_crossenv_active(ctx.env_dir):
-        return
-
-    with open(site_dir / "sitecustomize.py", "w") as f:
-        f.write(
-            textwrap.dedent(f"""\
-            import os
-            import sys
-            import sysconfig
-            import types
-
-            class SysWrapper(object):
-                def __init__(self, real_sys):
-                    self.__dict__["_real_sys"] = real_sys
-                def __getattr__(self, name):
-                    return getattr(self._real_sys, name)
-                def __setattr__(self, name, value):
-                    setattr(self._real_sys, name, value)
-                @property
-                def platform(self):
-                    import sys as _sys
-                    try:
-                        f = _sys._getframe(1)
-                        while f:
-                            filename = f.f_code.co_filename
-                            if "packaging/tags" in filename or "mesonpy" in filename:
-                                val = {repr(target_sys_platform)}
-                                if val is not None:
-                                    return val
-                                break
-                            f = f.f_back
-                    except Exception:
-                        pass
-                    return self._real_sys.platform
-
-            sys.modules["sys"] = SysWrapper(sys)
-
-            _real_get_platform = sysconfig.get_platform
-            def _get_platform():
-                import sys as _sys
-                try:
-                    f = _sys._getframe(1)
-                    while f:
-                        filename = f.f_code.co_filename
-                        if "packaging/tags" in filename or "mesonpy" in filename:
-                            val = {repr(target_platform)}
-                            if val is not None:
-                                return val
-                            break
-                        f = f.f_back
-                except Exception:
-                    pass
-                return _real_get_platform()
-
-            sysconfig.get_platform = _get_platform
-
-            scproxy = types.ModuleType("_scproxy")
-            scproxy._get_proxies = lambda: {{}}
-            scproxy._get_proxy_settings = lambda: {{}}
-            sys.modules["_scproxy"] = scproxy
-
-            if {repr(macosx_deployment_target)}:
-                os.environ["MACOSX_DEPLOYMENT_TARGET"] = {repr(macosx_deployment_target)}
-
-            if {repr(target_platform)}:
-                os.environ["_PYTHON_HOST_PLATFORM"] = {repr(target_platform)}
-
-            from importlib.abc import MetaPathFinder
-            class SetuptoolsPatchFinder(MetaPathFinder):
-                def find_spec(self, fullname, path, target=None):
-                    if fullname in ("setuptools._distutils.util", "distutils.util"):
-                        sys.meta_path.remove(self)
-                        try:
-                            import importlib.util
-                            spec = importlib.util.find_spec(fullname)
-                            if spec:
-                                class PatchedLoader(spec.loader.__class__):
-                                    def __init__(self, original_loader):
-                                        self.original_loader = original_loader
-                                    def create_module(self, spec):
-                                        return self.original_loader.create_module(spec)
-                                    def exec_module(self, module):
-                                        self.original_loader.exec_module(module)
-                                        module._syscfg_macosx_ver = None
-                                spec.loader = PatchedLoader(spec.loader)
-                                return spec
-                        finally:
-                            sys.meta_path.insert(0, self)
-                    return None
-
-            sys.meta_path.insert(0, SetuptoolsPatchFinder())
-
-            if sys.version_info >= (3, 12):
-                try:
-                    import _distutils_hack
-                    _distutils_hack.add_shim()
-                except ImportError:
-                    pass
-            """)
-        )
