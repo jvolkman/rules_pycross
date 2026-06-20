@@ -25,6 +25,7 @@ jobs:
       release_files: rules_pycross-*.tar.gz
       prerelease: false
       tag_name: ${{ inputs.tag_name || github.ref_name }}
+      bazel_test_command: bazel test //pycross/... //tests/unit/...
   publish:
     needs: release
     uses: ./.github/workflows/publish.yaml
