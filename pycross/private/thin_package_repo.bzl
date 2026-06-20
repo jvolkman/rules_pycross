@@ -221,22 +221,6 @@ def _thin_package_repo_impl(rctx):
         "    ],",
     ])
 
-    # Tell Gazelle to map imports from packages
-    # that are only pinned via a single extra to the extra-qualified name.
-    # Note: If a package is pinned via multiple different extras but has no base
-    # pin (e.g. `foo[a]` and `foo[b]`), we don't pick a winner for Gazelle mapping.
-    extras_mapping = {}
-    for base_name, group in grouped_pins.items():
-        if not group["base_target"] and len(group["extras"]) == 1:
-            extra_name = list(group["extras"].keys())[0]
-            us_base = base_name.replace("-", "_")
-            extras_mapping[us_base] = "{}[{}]".format(us_base, extra_name)
-    if extras_mapping:
-        root_build_lines.append("    extras_mapping = {")
-        for base, qualified in sorted(extras_mapping.items()):
-            root_build_lines.append('        "{}": "{}",'.format(base, qualified))
-        root_build_lines.append("    },")
-
     root_build_lines.extend([
         ")",
         "",

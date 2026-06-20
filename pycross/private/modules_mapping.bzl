@@ -54,7 +54,6 @@ def _get_module_name(tlp):
 
 def _pycross_modules_mapping_impl(ctx):
     mapping = {}
-    extras_mapping = ctx.attr.extras_mapping
 
     for dep in ctx.attr.deps:
         if PycrossPackageInfo in dep:
@@ -64,11 +63,7 @@ def _pycross_modules_mapping_impl(ctx):
                 if not module_name:
                     continue
 
-                base_name = pkg_info.package_name.replace("-", "_")
-
-                # If this package has an extras override (e.g. foo -> foo[grpc]),
-                # use the extra-qualified name so Gazelle emits the right dep.
-                mapping[module_name] = extras_mapping.get(base_name, base_name)
+                mapping[module_name] = pkg_info.package_name.replace("-", "_")
 
     out = ctx.actions.declare_file(ctx.attr.name + ".json")
     ctx.actions.write(out, json.encode(mapping))
@@ -83,10 +78,6 @@ pycross_modules_mapping = rule(
     attrs = {
         "deps": attr.label_list(
             doc = "A list of package targets. Targets providing PycrossPackageInfo will be included in the mapping; others are silently skipped.",
-        ),
-        "extras_mapping": attr.string_dict(
-            doc = "A mapping from base package name to extra-qualified name (e.g. {'foo': 'foo[grpc]'}). When set, Gazelle will resolve imports from these packages to the extra-qualified target.",
-            default = {},
         ),
     },
 )
