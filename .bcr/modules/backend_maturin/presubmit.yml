@@ -7,9 +7,9 @@ matrix:
     - ubuntu2204
     - macos_arm64
 tasks:
-  run_tests:
-    name: Run maturin build tests
+  verify_targets:
+    name: Verify build targets
     bazel: ${{ bazel }}
     platform: ${{ platform }}
-    test_targets:
+    build_targets:
       - //...
