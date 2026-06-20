@@ -1,5 +1,5 @@
 bcr_test_module:
-  module_path: tests/e2e/build_maturin
+  module_path: .
   matrix:
     bazel:
       - 8.x
