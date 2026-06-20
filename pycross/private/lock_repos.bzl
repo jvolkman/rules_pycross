@@ -12,7 +12,7 @@ load("//pycross/private:thin_package_repo.bzl", "thin_package_repo")
 load("//pycross/private:util.bzl", "key_name", "key_parts", "sanitize_name")
 load("//pycross/private:wheel_file.bzl", "pycross_wheel_file")
 load(":git_file.bzl", "pycross_git_file")
-load(":tag_attrs.bzl", "CREATE_REPOS_ATTRS")
+load(":lock_attrs.bzl", "CREATE_REPOS_ATTRS")
 
 # buildifier: disable=print
 def _print_warn(msg):
@@ -340,7 +340,6 @@ def _lock_repos_impl(module_ctx):
                 workspace_repo = workspace_repo_name,
                 member_name = member,
                 conflicts = conflicts,
-                backend_configs = backend_configs_json,
             )
             if thin_build_repo:
                 thin_repo_attrs["workspace_build_repo"] = "pycross_ws_{}".format(workspace_memberships.get(thin_build_repo, thin_build_repo))

@@ -2,7 +2,7 @@
 
 load("@bazel_features//:features.bzl", "bazel_features")
 load("//pycross/private:internal_repo.bzl", "create_internal_repo")
-load(":tag_attrs.bzl", "CREATE_ENVIRONMENTS_ATTRS", "REGISTER_TOOLCHAINS_ATTRS")
+load(":lock_attrs.bzl", "CREATE_ENVIRONMENTS_ATTRS", "REGISTER_TOOLCHAINS_ATTRS")
 
 def _pycross_impl(module_ctx):
     environments_tag = None

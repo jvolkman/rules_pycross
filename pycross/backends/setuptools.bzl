@@ -1,7 +1,7 @@
 """Setuptools build backend for rules_pycross."""
 
 load("//pycross:backend.bzl", "make_override_extension")
-load("//pycross/private:tag_attrs.bzl", "SETUPTOOLS_OVERRIDE_ATTRS")
+load("//pycross/private:lock_attrs.bzl", "SETUPTOOLS_OVERRIDE_ATTRS")
 load("//pycross/private/build/rules:setuptools_build.bzl", _setuptools_build = "setuptools_build")
 
 setuptools_build = _setuptools_build

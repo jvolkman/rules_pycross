@@ -2,12 +2,10 @@
 
 load("@bazel_features//:features.bzl", "bazel_features")
 load("@toml.bzl//toml:toml.bzl", "decode")
-load("//pycross/private:lock_attrs.bzl", "package_annotation")
 load("//pycross/private:resolved_lock_repo.bzl", "resolved_lock_repo")
 load("//pycross/private:util.bzl", "sanitize_name")
-load(":lock_workspace_repo.bzl", "lock_workspace_repo")
 load(
-    ":tag_attrs.bzl",
+    ":lock_attrs.bzl",
     "COMMON_IMPORT_ATTRS",
     "OVERRIDE_TARGET_ATTRS",
     "PACKAGE_ATTRS",
@@ -27,6 +25,40 @@ load(
     "WORKSPACE_COMMON_ATTRS",
     "WORKSPACE_MEMBER_COMMON_ATTRS",
 )
+load(":lock_workspace_repo.bzl", "lock_workspace_repo")
+
+def _package_annotation(
+        always_build = False,
+        build_dependencies = [],
+        build_repo = None,
+        build_target = None,
+        ignore_dependencies = [],
+        install_exclude_globs = [],
+        post_install_patches = [],
+        pre_build_patches = [],
+        site_hooks = [],
+        build_backend = None,
+        site_paths = [],
+        bin_paths = [],
+        data_paths = [],
+        include_paths = []):
+    """Annotations to apply to individual packages."""
+    return json.encode(struct(
+        always_build = always_build,
+        build_dependencies = build_dependencies,
+        build_repo = build_repo,
+        build_target = build_target,
+        ignore_dependencies = ignore_dependencies,
+        install_exclude_globs = install_exclude_globs,
+        post_install_patches = post_install_patches,
+        pre_build_patches = pre_build_patches,
+        site_hooks = site_hooks,
+        build_backend = build_backend,
+        site_paths = site_paths,
+        bin_paths = bin_paths,
+        data_paths = data_paths,
+        include_paths = include_paths,
+    ))
 
 def _generate_resolved_lock_repo(lock_info, serialized_lock_model, workspace_packages):
     repo_name = lock_info.repo_name
@@ -49,7 +81,7 @@ def _generate_resolved_lock_repo(lock_info, serialized_lock_model, workspace_pac
         all_packages[package_name] = package
 
     for package_name, package in all_packages.items():
-        args["annotations"][package_name] = package_annotation(
+        args["annotations"][package_name] = _package_annotation(
             always_build = package.always_build,
             build_dependencies = package.build_dependencies,
             build_repo = package.build_repo,
@@ -242,6 +274,14 @@ def _resolve_member_project_file(lock_file_label, member_path):
     else:
         return lock_file_label.relative("//:pyproject.toml")
 
+def _determine_project_file(override_tag, model_type, lock_file_label, member_path):
+    if override_tag and override_tag.project_file:
+        return override_tag.project_file
+    elif model_type == "pylock":
+        return ""
+    else:
+        return _resolve_member_project_file(lock_file_label, member_path)
+
 def _get_member_group_attrs(members_tag, override_tag):
     """Merge group attrs from an all_members default and optional member override.
 
@@ -293,9 +333,58 @@ def _register_workspace_member(
         lock_file = str(ws_tag.lock_file),
         **group_attrs
     )
-    if hasattr(ws_tag, "require_static_urls"):
-        model["require_static_urls"] = ws_tag.require_static_urls
+
+    # Handle attributes that are not common across all lock formats
+    for attr_name in ("require_static_urls",):
+        if hasattr(ws_tag, attr_name):
+            model[attr_name] = getattr(ws_tag, attr_name)
     lock_model_structs[repo_name] = json.encode(model)
+
+def _process_member(
+        module_ctx,
+        lock_owners,
+        lock_repos,
+        lock_model_structs,
+        root_direct_deps,
+        ws_tag,
+        ws_name,
+        member,
+        model_type,
+        overrides,
+        default_module,
+        members_tag = None):
+    for override in overrides:
+        # Determine repo name
+        normalized_name = sanitize_name(member.name)
+        if override and override.tag.repo:
+            repo_name = override.tag.repo
+        elif members_tag and hasattr(members_tag, "repo_pattern"):
+            repo_name = members_tag.repo_pattern.format(member = normalized_name)
+        else:
+            repo_name = normalized_name
+
+        # Determine project_file
+        project_file = _determine_project_file(override.tag if override else None, model_type, ws_tag.lock_file, member.path)
+
+        # Get group attrs (override wins)
+        group_attrs = _get_member_group_attrs(members_tag or struct(), override.tag if override else None)
+
+        lock_module = override.module if override else default_module
+
+        _register_workspace_member(
+            module_ctx,
+            lock_owners,
+            lock_repos,
+            lock_model_structs,
+            root_direct_deps,
+            ws_tag,
+            ws_name,
+            model_type,
+            repo_name,
+            project_file,
+            group_attrs,
+            lock_module,
+        )
 
 def _process_workspaces(
         module_ctx,
@@ -378,41 +467,20 @@ def _process_workspaces(
 
             overrides = member_overrides.get((tag.workspace, member_name), [None])
 
-            for override in overrides:
-                # Determine repo name
-                normalized_name = sanitize_name(member.name)
-                if override and override.tag.repo:
-                    repo_name = override.tag.repo
-                else:
-                    repo_name = tag.repo_pattern.format(member = normalized_name)
-
-                # Determine project_file
-                if override and override.tag.project_file:
-                    project_file = override.tag.project_file
-                elif model_type == "pylock":
-                    project_file = ""
-                else:
-                    project_file = _resolve_member_project_file(ws_tag.lock_file, member.path)
-
-                # Get group attrs (override wins)
-                group_attrs = _get_member_group_attrs(tag, override.tag if override else None)
-
-                lock_module = override.module if override else module
-
-                _register_workspace_member(
-                    module_ctx,
-                    lock_owners,
-                    lock_repos,
-                    lock_model_structs,
-                    root_direct_deps,
-                    ws_tag,
-                    tag.workspace,
-                    model_type,
-                    repo_name,
-                    project_file,
-                    group_attrs,
-                    lock_module,
-                )
+            _process_member(
+                module_ctx,
+                lock_owners,
+                lock_repos,
+                lock_model_structs,
+                root_direct_deps,
+                ws_tag,
+                tag.workspace,
+                member,
+                model_type,
+                overrides,
+                module,
+                members_tag = tag,
+            )
 
     # Process standalone member imports
     for key, overrides in member_overrides.items():
@@ -429,36 +497,19 @@ def _process_workspaces(
 
         member = discovered[project]
 
-        for override in overrides:
-            normalized_name = sanitize_name(member.name)
-            if override.tag.repo:
-                repo_name = override.tag.repo
-            else:
-                repo_name = normalized_name
-
-            if override.tag.project_file:
-                project_file = override.tag.project_file
-            elif model_type == "pylock":
-                project_file = ""
-            else:
-                project_file = _resolve_member_project_file(ws_tag.lock_file, member.path)
-
-            group_attrs = _get_member_group_attrs(struct(), override.tag)
-
-            _register_workspace_member(
-                module_ctx,
-                lock_owners,
-                lock_repos,
-                lock_model_structs,
-                root_direct_deps,
-                ws_tag,
-                ws_name,
-                model_type,
-                repo_name,
-                project_file,
-                group_attrs,
-                override.module,
-            )
+        _process_member(
+            module_ctx,
+            lock_owners,
+            lock_repos,
+            lock_model_structs,
+            root_direct_deps,
+            ws_tag,
+            ws_name,
+            member,
+            model_type,
+            overrides,
+            None,
+        )
 
 def _lock_import_impl(module_ctx):
     lock_owners = {}

@@ -50,26 +50,24 @@ def _merge_dependencies(pkg_key, first_data, entries, member_envs):
         for member, pkg_data in entries:
             member_common = sorted(pkg_data.get("common_dependencies", []))
             for env_name in member_envs.get(member, []):
-                if env_name in env_to_member:
-                    prev_member, prev_deps = env_to_member[env_name]
-                    if prev_deps != member_common:
-                        fail(
-                            "Workspace conflict for package '{}': members '{}' and '{}' " +
-                            "share environment '{}' but have different dependencies.\n" +
-                            "  {}: {}\n  {}: {}\n\n" +
-                            "Members sharing the same workspace must resolve compatible " +
-                            "dependency versions for overlapping environments.".format(
-                                pkg_key,
-                                prev_member,
-                                member,
-                                env_name,
-                                prev_member,
-                                prev_deps,
-                                member,
-                                member_common,
-                            ),
-                        )
-                env_to_member[env_name] = (member, member_common)
+                prev_member, prev_deps = env_to_member.setdefault(env_name, (member, member_common))
+                if prev_deps != member_common:
+                    fail(
+                        "Workspace conflict for package '{}': members '{}' and '{}' " +
+                        "share environment '{}' but have different dependencies.\n" +
+                        "  {}: {}\n  {}: {}\n\n" +
+                        "Members sharing the same workspace must resolve compatible " +
+                        "dependency versions for overlapping environments.".format(
+                            pkg_key,
+                            prev_member,
+                            member,
+                            env_name,
+                            prev_member,
+                            prev_deps,
+                            member,
+                            member_common,
+                        ),
+                    )
 
         # Promote differing common_dependencies to environment_dependencies.
         # Each member's environments are disjoint, so the environment
@@ -293,10 +291,50 @@ def _package_repo_impl(rctx):
     rctx.file("_sdist/BUILD.bazel", "\n".join(sdist_lines) + "\n")
 
     # 4. _backend/ directory
-    normalized_locked_package_names = {}
-    for pkg_key in packages.keys():
-        norm_pkg = _normalize_name(key_name(pkg_key))
-        normalized_locked_package_names[norm_pkg] = True
+    rctx.file("_backend/BUILD.bazel", 'package(default_visibility = ["//visibility:public"])\n')
+
+    backend_configs = {}
+    for name, config_json in rctx.attr.backend_configs.items():
+        backend_configs[name] = json.decode(config_json)
+
+    for macro_name, config in backend_configs.items():
+        rule_bzl = config["rule_bzl"]
+
+        tool_deps_labels = []
+        for pkg in config["tool_packages"]:
+            norm_pkg = _normalize_name(pkg)
+
+            # Find a matching package in the lockfile
+            matching = [k for k in packages.keys() if _normalize_name(key_name(k)) == norm_pkg]
+            if matching:
+                # Use the first match. For cycle groups, the name is _raw_{pkg_key}.
+                # But here we just need the dependency, so pointing to //_lock:{pkg_key} is fine.
+                tool_deps_labels.append("//_lock:{}".format(matching[0]))
+
+        lines = [
+            '"""Backend macro with pre-configured tool defaults for this lock repo."""',
+            "",
+            'load("{rule_bzl}", _{macro_name} = "{macro_name}")'.format(
+                rule_bzl = rule_bzl,
+                macro_name = macro_name,
+            ),
+            "",
+            "def {macro_name}(name, **kwargs):".format(macro_name = macro_name),
+        ]
+
+        if tool_deps_labels:
+            lines.append("    if \"tool_deps\" not in kwargs:")
+            lines.append("        kwargs[\"tool_deps\"] = [")
+            for label in tool_deps_labels:
+                lines.append("            Label(\"{}\"),".format(label))
+            lines.append("        ]")
+
+        lines.extend([
+            "    _{macro_name}(name = name, **kwargs)".format(macro_name = macro_name),
+            "",
+        ])
+
+        rctx.file("_backend/{}.bzl".format(macro_name), "\n".join(lines))
 
 package_repo = repository_rule(
     implementation = _package_repo_impl,

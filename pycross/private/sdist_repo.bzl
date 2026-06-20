@@ -29,7 +29,7 @@ def _render_build_file(rctx, macro_attrs, backend_macro, site_paths, bin_paths, 
     # tool_deps defaults from packages present in the lockfile.
     backend_bzl = "_backend:{}.bzl".format(backend_macro)
 
-    build_content = """\nload("@{thin_repo}//{backend_bzl}", "{backend_macro}")
+    build_content = """\nload("@{lock_repo}//{backend_bzl}", "{backend_macro}")
 load("@rules_pycross//pycross/private:wheel_library.bzl", "pycross_wheel_metadata")
 
 package(default_visibility = ["//visibility:public"])

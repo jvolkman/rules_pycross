@@ -231,7 +231,7 @@ bzl_library(
     name = "environments",
     srcs = ["environments.bzl"],
     deps = [
-        ":tag_attrs",
+        ":lock_attrs",
         ":toolchain_helpers",
         "@bazel_features//:features",
         "@rules_pycross_internal_config//:defaults.bzl",
@@ -243,7 +243,7 @@ bzl_library(
     srcs = ["pycross.bzl"],
     deps = [
         ":internal_repo",
-        ":tag_attrs",
+        ":lock_attrs",
         "@bazel_features//:features",
         "@toml.bzl//:toml",
     ] + REPO_HTTP_DEPS,
@@ -263,24 +263,16 @@ bzl_library(
     srcs = ["lock_import.bzl"],
     deps = [
         ":internal_repo",
+        ":lock_attrs",
         ":lock_workspace_repo",
         ":pdm_lock_model",
         ":poetry_lock_model",
         ":pylock_lock_model",
         ":pypi_file",
         ":resolved_lock_repo",
-        ":tag_attrs",
         ":uv_lock_model",
         "@bazel_features//:features",
     ] + REPO_HTTP_DEPS,
-)
-
-bzl_library(
-    name = "tag_attrs",
-    srcs = ["tag_attrs.bzl"],
-    deps = [
-        ":lock_attrs",
-    ],
 )
 
 bzl_library(
@@ -297,10 +289,10 @@ bzl_library(
     srcs = ["lock_repos.bzl"],
     deps = [
         ":git_file",
+        ":lock_attrs",
         ":package_repo",
         ":pypi_file",
         ":sdist_repo",
-        ":tag_attrs",
         ":thin_package_repo",
         ":wheel_file",
         "@bazel_features//:features",

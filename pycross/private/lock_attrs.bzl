@@ -92,16 +92,6 @@ CREATE_REPOS_ATTRS = dict(
     ),
 )
 
-RENDER_ATTRS = dict(
-    repo_prefix = attr.string(
-        doc = "The prefix to apply to repository targets. Defaults to the lock file target name.",
-        default = "",
-    ),
-    generate_file_map = attr.bool(
-        doc = "Generate a FILES dict containing a mapping of filenames to repo labels.",
-    ),
-) | CREATE_REPOS_ATTRS
-
 _IMPORT_ATTRS = dict(
     lock_file = attr.label(
         doc = "The lock file.",
@@ -196,108 +186,6 @@ def handle_resolve_attrs(attrs, environment_files_and_labels, local_wheel_names_
         args.extend(attrs.default_build_dependencies)
 
     return args
-
-def handle_render_attrs(attrs):
-    """
-    Parse render attrs and return a list of arguments.
-
-    Args:
-      attrs: ctx.attr or repository_ctx.attr
-
-    Returns:
-      a list of arguments.
-    """
-
-    # If building locks for pycross itself, we don't want a repo name prefix on labels in the
-    # generated .bzl file. We can figure that out by comparing our workspace against the root workspace.
-    if Label("@@//:invalid").workspace_name == Label("//:invalid").workspace_name:
-        pycross_repo_name = ""
-    else:
-        pycross_repo_name = "@@" + Label("//:invalid").workspace_name
-
-    args = ["--pycross-repo-name", pycross_repo_name]
-
-    if attrs.repo_prefix:
-        repo_prefix = attrs.repo_prefix
-    else:
-        repo_prefix = attrs.name.lower().replace("-", "_")
-
-    args.extend(["--repo-prefix", repo_prefix])
-
-    if attrs.generate_file_map:
-        args.append("--generate-file-map")
-
-    return args + handle_create_repos_attrs(attrs)
-
-def handle_create_repos_attrs(attrs):
-    """
-    Parse repository materializing attrs and return a list of arguments.
-
-    Args:
-      attrs: ctx.attr or repository_ctx.attr
-
-    Returns:
-      a list of arguments.
-    """
-    args = []
-
-    if attrs.pypi_index:
-        args.extend(["--pypi-index", attrs.pypi_index])
-
-    return args
-
-def package_annotation(
-        always_build = False,
-        build_dependencies = [],
-        build_repo = None,
-        build_target = None,
-        ignore_dependencies = [],
-        install_exclude_globs = [],
-        post_install_patches = [],
-        pre_build_patches = [],
-        site_hooks = [],
-        build_backend = None,
-        site_paths = [],
-        bin_paths = [],
-        data_paths = [],
-        include_paths = []):
-    """Annotations to apply to individual packages.
-
-    Args:
-      always_build (bool, optional): If True, don't use pre-build wheels for this package.
-      build_dependencies (list, optional): A list of additional package keys (name or name@version) to use when building this package from source.
-      build_repo (str, optional): Optional repo to use for resolving sdist build dependencies for this package.
-      build_target (str, optional): An optional override build target to use when and if this package needs to be built from source.
-      ignore_dependencies (list, optional): A list of package keys (name or name@version) to drop from this package's set of declared dependencies.
-      install_exclude_globs (list, optional): A list of globs for files to exclude during installation.
-      post_install_patches (list, optional): A list of patches to apply after wheel installation.
-      pre_build_patches (list, optional): A list of patches to apply to the sdist source tree before building.
-      site_hooks (list, optional): A list of Python code snippets to execute on interpreter startup during builds.
-      build_backend (str, optional): The build backend macro to use (e.g., "meson_build" or "setuptools_build").
-      site_paths (list, optional): Override the auto-detected top-level importable paths (packages, .pth files, standalone modules). Use forward slashes for namespace packages (e.g. 'google/cloud/storage').
-      bin_paths (list, optional): Override the auto-detected bin paths.
-      data_paths (list, optional): Override the auto-detected data paths.
-      include_paths (list, optional): Override the auto-detected include paths.
-
-    Returns:
-      str: A json encoded string of the provided content.
-    """
-    return json.encode(struct(
-        always_build = always_build,
-        build_dependencies = build_dependencies,
-        build_repo = build_repo,
-        build_target = build_target,
-        ignore_dependencies = ignore_dependencies,
-        install_exclude_globs = install_exclude_globs,
-        post_install_patches = post_install_patches,
-        pre_build_patches = pre_build_patches,
-        site_hooks = site_hooks,
-        build_backend = build_backend,
-        site_paths = site_paths,
-        bin_paths = bin_paths,
-        data_paths = data_paths,
-        include_paths = include_paths,
-    ))
 
 PDM_IMPORT_ATTRS = _IMPORT_ATTRS
 UV_IMPORT_ATTRS = _IMPORT_ATTRS
@@ -450,3 +338,172 @@ _SINGLE_PROJECT_MEMBER_ATTRS = dict(
 
 POETRY_MEMBER_ATTRS = _SINGLE_PROJECT_MEMBER_ATTRS
 PYLOCK_MEMBER_ATTRS = _SINGLE_PROJECT_MEMBER_ATTRS
+
+# Attrs common to lock repos
+REPO_ATTR = dict(
+    repo = attr.string(
+        doc = "The repository name",
+        mandatory = True,
+    ),
+)
+
+# Attrs for applying overrides to specific repos or workspaces.
+OVERRIDE_TARGET_ATTRS = dict(
+    repo = attr.string(
+        doc = "The repository name (if applying to a specific lock file).",
+    ),
+    workspace = attr.string(
+        doc = "The workspace name (if applying to all members of a workspace).",
+    ),
+)
+
+# Attrs common to the import_* tags
+COMMON_IMPORT_ATTRS = dict(
+    default_alias_single_version = attr.bool(
+        doc = "Generate aliases for all packages that have a single version in the lock file.",
+    ),
+    target_environments = attr.label_list(
+        # TODO: expand doc
+        doc = "A list of target environment descriptors.",
+        default = [
+            "@pycross_environments//:environments",
+        ],
+    ),
+    local_wheels = attr.label_list(
+        doc = "A list of local .whl files to consider when processing lock files.",
+    ),
+    disallow_builds = attr.bool(
+        doc = "If True, only pre-built wheels are allowed.",
+    ),
+    default_build_dependencies = attr.string_list(
+        doc = "A list of package keys (name or name@version) that will be used as default build dependencies.",
+    ),
+    build_repo = attr.string(
+        doc = "Optional default repo to use for resolving sdist build dependencies.",
+    ),
+)
+
+# Attrs common to import_uv_workspace (workspace-level settings inherited by all members).
+# Same as COMMON_IMPORT_ATTRS but without 'workspace' (implied by name) and 'repo' (per-member).
+WORKSPACE_COMMON_ATTRS = dict(
+    name = attr.string(
+        doc = "Workspace name. Used to link members to this workspace.",
+        mandatory = True,
+    ),
+    default_alias_single_version = attr.bool(
+        doc = "Generate aliases for all packages that have a single version in the lock file.",
+    ),
+    target_environments = attr.label_list(
+        doc = "A list of target environment descriptors.",
+        default = [
+            "@pycross_environments//:environments",
+        ],
+    ),
+    local_wheels = attr.label_list(
+        doc = "A list of local .whl files to consider when processing lock files.",
+    ),
+    disallow_builds = attr.bool(
+        doc = "If True, only pre-built wheels are allowed.",
+    ),
+    default_build_dependencies = attr.string_list(
+        doc = "A list of package keys (name or name@version) that will be used as default build dependencies.",
+    ),
+    build_repo = attr.string(
+        doc = "Optional default repo to use for resolving sdist build dependencies.",
+    ),
+)
+
+# Attrs that link a workspace member or members tag to its parent workspace.
+WORKSPACE_MEMBER_COMMON_ATTRS = dict(
+    workspace = attr.string(
+        doc = "Name of the workspace this member belongs to.",
+        mandatory = True,
+    ),
+)
+
+# Attrs for the package tag
+PACKAGE_ATTRS = dict(
+    name = attr.string(
+        doc = "The package key (name or name@version).",
+        mandatory = True,
+    ),
+    build_backend = attr.string(
+        doc = "An explicit build backend rule name to use for this package (e.g. 'maturin_build'). Overrides pyproject.toml detection.",
+    ),
+    build_target = attr.label(
+        doc = "An optional override build target to use when and if this package needs to be built from source.",
+    ),
+    always_build = attr.bool(
+        doc = "If True, don't use pre-built wheels for this package.",
+    ),
+    build_dependencies = attr.string_list(
+        doc = "A list of additional package keys (name or name@version) to use when building this package from source.",
+    ),
+    build_repo = attr.string(
+        doc = "Optional repo to use for resolving sdist build dependencies for this package.",
+    ),
+    ignore_dependencies = attr.string_list(
+        doc = "A list of package keys (name or name@version) to drop from this package's set of declared dependencies.",
+    ),
+    install_exclude_globs = attr.string_list(
+        doc = "A list of globs for files to exclude during installation.",
+    ),
+    post_install_patches = attr.label_list(
+        doc = "A list of patches to apply after wheel installation.",
+        allow_files = True,
+    ),
+    pre_build_patches = attr.label_list(
+        doc = "A list of patches to apply to the sdist source tree before building.",
+        allow_files = True,
+    ),
+    site_hooks = attr.string_list(
+        doc = "A list of Python code snippets to execute on interpreter startup during builds.",
+    ),
+    site_paths = attr.string_list(
+        doc = "Override the auto-detected top-level importable paths (packages, .pth files, standalone modules). " +
+              "Use forward slashes for nested namespaces (e.g. 'google/cloud/storage').",
+    ),
+    bin_paths = attr.string_list(
+        doc = "Override the auto-detected bin paths.",
+    ),
+    data_paths = attr.string_list(
+        doc = "Override the auto-detected data paths.",
+    ),
+    include_paths = attr.string_list(
+        doc = "Override the auto-detected include paths.",
+    ),
+)
+
+# Attrs specific to build-system overrides (meson, setuptools, etc.).
+# These do not belong on the generic package() tag.
+BUILD_SYSTEM_ATTRS = dict(
+    config_settings = attr.string_list_dict(doc = "Setup configuration arguments."),
+    tool_deps = attr.string_dict(doc = "Overrides for built-in dependencies."),
+    build_env = attr.string_dict(doc = "Extra environment variables passed to the sdist build."),
+    data = attr.label_list(doc = "Additional data and dependencies used by the build."),
+    pre_build_hooks = attr.label_list(doc = "Executables to run before building the wheel."),
+    post_build_hooks = attr.label_list(doc = "Executables to run after the wheel is built."),
+)
+
+# Attrs for build backends that compile native (C/C++) code.
+CC_BUILD_SYSTEM_ATTRS = dict(
+    copts = attr.string_list(doc = "Extra C++ compiler options."),
+    linkopts = attr.string_list(doc = "Extra linker options."),
+    native_deps = attr.label_list(doc = "CC dependencies to link against."),
+    path_tools = attr.label_list(doc = "A list of binary targets placed on PATH during the build."),
+)
+
+CORE_OVERRIDE_ATTRS = dict(
+    name = attr.string(
+        doc = "The package key (name or name@version).",
+        mandatory = True,
+    ),
+) | OVERRIDE_TARGET_ATTRS
+
+MESON_OVERRIDE_ATTRS = CORE_OVERRIDE_ATTRS | BUILD_SYSTEM_ATTRS | CC_BUILD_SYSTEM_ATTRS
+
+SETUPTOOLS_OVERRIDE_ATTRS = CORE_OVERRIDE_ATTRS | BUILD_SYSTEM_ATTRS | CC_BUILD_SYSTEM_ATTRS
+
+CMAKE_OVERRIDE_ATTRS = CORE_OVERRIDE_ATTRS | BUILD_SYSTEM_ATTRS | CC_BUILD_SYSTEM_ATTRS
+
+MATURIN_OVERRIDE_ATTRS = CORE_OVERRIDE_ATTRS | BUILD_SYSTEM_ATTRS | CC_BUILD_SYSTEM_ATTRS

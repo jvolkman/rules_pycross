@@ -6,6 +6,12 @@ rules_pycross.
 """
 
 load(
+    "//pycross/private:lock_attrs.bzl",
+    _BUILD_SYSTEM_ATTRS = "BUILD_SYSTEM_ATTRS",
+    _CC_BUILD_SYSTEM_ATTRS = "CC_BUILD_SYSTEM_ATTRS",
+    _MATURIN_OVERRIDE_ATTRS = "MATURIN_OVERRIDE_ATTRS",
+)
+load(
     "//pycross/private:override_helpers.bzl",
     _create_overrides_repo = "create_overrides_repo",
     _encode_build_system_attrs = "encode_build_system_attrs",
@@ -15,12 +21,6 @@ load(
     "//pycross/private:providers.bzl",
     _PycrossExtractedWheelInfo = "PycrossExtractedWheelInfo",
     _PycrossPackageInfo = "PycrossPackageInfo",
-)
-load(
-    "//pycross/private:tag_attrs.bzl",
-    _BUILD_SYSTEM_ATTRS = "BUILD_SYSTEM_ATTRS",
-    _CC_BUILD_SYSTEM_ATTRS = "CC_BUILD_SYSTEM_ATTRS",
-    _MATURIN_OVERRIDE_ATTRS = "MATURIN_OVERRIDE_ATTRS",
 )
 load(
     "//pycross/private/build:transitions.bzl",

@@ -39,9 +39,9 @@ bzl_library(
     srcs = ["backend.bzl"],
     visibility = ["//visibility:public"],
     deps = [
+        "//pycross/private:lock_attrs",
         "//pycross/private:override_helpers",
         "//pycross/private:providers",
-        "//pycross/private:tag_attrs",
         "//pycross/private/build:transitions",
         "//pycross/private/build/actions:cc_layer",
         "//pycross/private/build/actions:pep517_action",

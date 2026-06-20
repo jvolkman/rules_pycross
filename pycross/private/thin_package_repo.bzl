@@ -9,12 +9,10 @@ The file structure is:
 - requirements.bzl         - Provides requirement() and all_requirements.
 - modules_mapping.json     - Import-to-package mapping for Gazelle.
 - <package>/BUILD.bazel    - Pin aliases pointing to @workspace//_lock targets.
+- _variants/BUILD.bazel    - Aliases for bool_flag and config_setting targets for variant selection.
 """
 
 load(":util.bzl", "underscore_name")
-
-def _normalize_name(name):
-    return name.lower().replace("_", "-").replace(".", "-")
 
 _requirement_func = """\
 def requirement(pkg):
@@ -343,53 +341,6 @@ def _thin_package_repo_impl(rctx):
             _pin_build(us_name, base_target_dict, package, workspace_repo, workspace_lock_target_dict, has_aggregated_variant, extras_dict, default_variants = default_variants),
         )
 
-    # _backend/ BUILD and macros
-    rctx.file("_backend/BUILD.bazel", 'package(default_visibility = ["//visibility:public"])\n')
-
-    backend_configs = {}
-    for name, config_json in rctx.attr.backend_configs.items():
-        backend_configs[name] = json.decode(config_json)
-    normalized_pinned_package_names = {_normalize_name(p): True for p in pins.keys() if "[" not in p}
-
-    for macro_name, config in backend_configs.items():
-        rule_bzl = config["rule_bzl"]
-
-        tool_deps_labels = []
-        for pkg in config["tool_packages"]:
-            norm_pkg = _normalize_name(pkg)
-            if rctx.attr.workspace_build_repo:
-                # If a build_repo is specified, always pull build tools from there.
-                tool_deps_labels.append("@{}//_lock:{}".format(rctx.attr.workspace_build_repo, norm_pkg))
-            elif norm_pkg in normalized_pinned_package_names:
-                matching = [k for k in pins.keys() if "[" not in k and _normalize_name(k) == norm_pkg]
-                if matching:
-                    tool_deps_labels.append("//{}:pkg".format(underscore_name(matching[0])))
-
-        lines = [
-            '"""Backend macro with pre-configured tool defaults for this lock repo."""',
-            "",
-            'load("{rule_bzl}", _{macro_name} = "{macro_name}")'.format(
-                rule_bzl = rule_bzl,
-                macro_name = macro_name,
-            ),
-            "",
-            "def {macro_name}(name, **kwargs):".format(macro_name = macro_name),
-        ]
-
-        if tool_deps_labels:
-            lines.append("    if \"tool_deps\" not in kwargs:")
-            lines.append("        kwargs[\"tool_deps\"] = [")
-            for label in tool_deps_labels:
-                lines.append("            Label(\"{}\"),".format(label))
-            lines.append("        ]")
-
-        lines.extend([
-            "    _{macro_name}(name = name, **kwargs)".format(macro_name = macro_name),
-            "",
-        ])
-
-        rctx.file("_backend/{}.bzl".format(macro_name), "\n".join(lines))
-
     # _variants/ BUILD: alias bool_flag and config_setting targets
     # from the workspace repo so users can reference @<thin_repo>//_variants:<name>
     # in platform(flags=[...]) and transitions without needing the workspace repo directly.
@@ -447,10 +398,6 @@ thin_package_repo = repository_rule(
         "conflicts": attr.string_list_dict(
             default = {},
             doc = "Map of pkg_key -> [member_names...] for packages with conflicting annotations.",
-        ),
-        "backend_configs": attr.string_dict(
-            default = {},
-            doc = "Dict mapping pycross rule names to backend tool configs (JSON).",
         ),
     },
 )
