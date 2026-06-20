@@ -8,12 +8,12 @@ from typing import Protocol
 
 from packaging.utils import NormalizedName
 from packaging.version import Version
-from pycross.private.tools.lock_model import ConflictSet
 from pycross.private.tools.lock_model import DependencyName
 from pycross.private.tools.lock_model import PackageDependency
 from pycross.private.tools.lock_model import PackageKey
 from pycross.private.tools.lock_model import RawLockSet
 from pycross.private.tools.lock_model import RawPackage
+from pycross.private.tools.lock_model import VariantSet
 
 
 class MismatchedVersionException(Exception):
@@ -53,12 +53,12 @@ def resolve_lock_graph(
     pinned_package_specs: Dict[DependencyName, Any],
     requires_python: Any,
     strict_dependencies: bool = True,
-    conflicts: List[ConflictSet] = None,
+    variants: List[VariantSet] = None,
 ) -> RawLockSet:
     """
     Resolves a dependency graph of packages by hooking up their dependencies and pins.
     """
-    conflicts = conflicts or []
+    variants = variants or []
     distinct_packages = {p.key: p for p in packages}
     all_packages = list(distinct_packages.values())
 
@@ -148,5 +148,5 @@ def resolve_lock_graph(
         python_versions=requires_python,
         packages=lock_packages,
         pins=pinned_keys,
-        conflicts=conflicts,
+        variants=variants,
     )

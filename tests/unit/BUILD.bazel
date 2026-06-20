@@ -179,9 +179,9 @@ py_test(
 )
 
 py_test(
-    name = "lock_model_conflict_test",
-    srcs = ["lock_model_conflict_test.py"],
-    main = "lock_model_conflict_test.py",
+    name = "lock_model_variant_test",
+    srcs = ["lock_model_variant_test.py"],
+    main = "lock_model_variant_test.py",
     tags = ["unit"],
     deps = [
         "//pycross/private/tools:lock_model",

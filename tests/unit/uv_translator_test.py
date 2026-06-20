@@ -46,7 +46,7 @@ def run_translator(
         development_groups=development_groups or [],
         all_development_groups=all_development_groups,
         package_processor=collect_and_process_packages,
-        conflicts=lock_dict.get("conflicts", []),
+        variants=lock_dict.get("variants", []),
         default_groups=uv_default_groups,
     )
 
@@ -724,10 +724,10 @@ wheels = [
         self.assertIn(PackageKey.from_parts("requests", "2.32.5"), result.packages)
 
 
-class UvTranslatorConflictTest(unittest.TestCase):
-    """Tests for conflict parsing and default-groups support."""
+class UvTranslatorVariantTest(unittest.TestCase):
+    """Tests for variant parsing and default-groups support."""
 
-    # Minimal project with two conflicting extras (CPU vs CUDA).
+    # Minimal project with two varianting extras (CPU vs CUDA).
     CONFLICT_PROJECT = """
 [project]
 name = "my-app"
@@ -739,7 +739,7 @@ cpu = ["torch==2.6.0"]
 cu124 = ["torch==2.7.0"]
 
 [tool.uv]
-conflicts = [
+variants = [
   [
     { extra = "cpu" },
     { extra = "cu124" },
@@ -750,7 +750,7 @@ conflicts = [
     CONFLICT_LOCK = """
 version = 1
 requires-python = ">=3.8"
-conflicts = [[
+variants = [[
     { package = "my-app", extra = "cpu" },
     { package = "my-app", extra = "cu124" },
 ]]
@@ -783,22 +783,22 @@ wheels = [
 ]
 """
 
-    def test_extra_conflicts_produce_conflict_sets(self):
-        """Conflicts from extras create ConflictSet with ConflictItems."""
+    def test_extra_variants_produce_variant_sets(self):
+        """Variants from extras create VariantSet with VariantItems."""
         result = run_translator(
             self.CONFLICT_PROJECT,
             self.CONFLICT_LOCK,
             default_group=False,
             all_optional_groups=True,
         )
-        self.assertEqual(len(result.conflicts), 1)
-        cs = result.conflicts[0]
+        self.assertEqual(len(result.variants), 1)
+        cs = result.variants[0]
         self.assertEqual(len(cs.items), 2)
         names = {item.qualified_name for item in cs.items}
         self.assertEqual(names, {"extra_cpu", "extra_cu124"})
 
-    def test_extra_conflicts_produce_constrained_pins(self):
-        """Conflicting extras produce pins with constraint keys, not bare keys."""
+    def test_extra_variants_produce_constrained_pins(self):
+        """Varianting extras produce pins with constraint keys, not bare keys."""
         result = run_translator(
             self.CONFLICT_PROJECT,
             self.CONFLICT_LOCK,
@@ -814,20 +814,20 @@ wheels = [
         self.assertEqual(str(torch_pin["extra_cpu"]), "torch@2.6.0")
         self.assertEqual(str(torch_pin["extra_cu124"]), "torch@2.7.0")
 
-    def test_extra_conflicts_no_defaults(self):
-        """Extra conflicts don't produce default items (extras have no default-groups)."""
+    def test_extra_variants_no_defaults(self):
+        """Extra variants don't produce default items (extras have no default-groups)."""
         result = run_translator(
             self.CONFLICT_PROJECT,
             self.CONFLICT_LOCK,
             default_group=False,
             all_optional_groups=True,
         )
-        for cs in result.conflicts:
+        for cs in result.variants:
             for item in cs.items:
                 self.assertFalse(item.default)
 
-    def test_group_conflicts(self):
-        """Development group conflicts produce group_ qualified names."""
+    def test_group_variants(self):
+        """Development group variants produce group_ qualified names."""
         project = """
 [project]
 name = "my-app"
@@ -839,7 +839,7 @@ test-fast = ["pytest==7.0.0"]
 test-slow = ["pytest==8.0.0"]
 
 [tool.uv]
-conflicts = [
+variants = [
   [
     { group = "test-fast" },
     { group = "test-slow" },
@@ -849,7 +849,7 @@ conflicts = [
         lock = """
 version = 1
 requires-python = ">=3.8"
-conflicts = [[
+variants = [[
     { package = "my-app", group = "test-fast" },
     { package = "my-app", group = "test-slow" },
 ]]
@@ -887,8 +887,8 @@ wheels = [
             default_group=False,
             all_development_groups=True,
         )
-        self.assertEqual(len(result.conflicts), 1)
-        cs = result.conflicts[0]
+        self.assertEqual(len(result.variants), 1)
+        cs = result.variants[0]
         names = {item.qualified_name for item in cs.items}
         self.assertEqual(names, {"group_test-fast", "group_test-slow"})
         # All items should be kind="group"
@@ -909,7 +909,7 @@ test-slow = ["pytest==8.0.0"]
 
 [tool.uv]
 default-groups = ["test-fast"]
-conflicts = [
+variants = [
   [
     { group = "test-fast" },
     { group = "test-slow" },
@@ -919,7 +919,7 @@ conflicts = [
         lock = """
 version = 1
 requires-python = ">=3.8"
-conflicts = [[
+variants = [[
     { package = "my-app", group = "test-fast" },
     { package = "my-app", group = "test-slow" },
 ]]
@@ -957,7 +957,7 @@ wheels = [
             default_group=False,
             all_development_groups=True,
         )
-        cs = result.conflicts[0]
+        cs = result.variants[0]
         items_by_name = {item.qualified_name: item for item in cs.items}
         self.assertTrue(items_by_name["group_test-fast"].default)
         self.assertFalse(items_by_name["group_test-slow"].default)
@@ -975,7 +975,7 @@ cpu = ["torch==2.6.0"]
 
 [tool.uv]
 default-groups = ["cpu"]
-conflicts = [
+variants = [
   [
     { extra = "cpu" },
   ],
@@ -984,7 +984,7 @@ conflicts = [
         lock = """
 version = 1
 requires-python = ">=3.8"
-conflicts = [[
+variants = [[
     { package = "my-app", extra = "cpu" },
 ]]
 
@@ -1012,12 +1012,12 @@ wheels = [
             all_optional_groups=True,
         )
         # "cpu" is an extra, not a group, so default-groups=["cpu"] should not affect it
-        for cs in result.conflicts:
+        for cs in result.variants:
             for item in cs.items:
                 self.assertFalse(item.default)
 
-    def test_no_conflicts_produces_empty_list(self):
-        """When no conflicts exist, conflicts list is empty."""
+    def test_no_variants_produces_empty_list(self):
+        """When no variants exist, variants list is empty."""
         project = """
 [project]
 name = "my-app"
@@ -1044,10 +1044,10 @@ wheels = [
 ]
 """
         result = run_translator(project, lock)
-        self.assertEqual(result.conflicts, [])
+        self.assertEqual(result.variants, [])
 
     def test_unconditional_pins_are_bare(self):
-        """Non-conflicting pins have {""} key internally."""
+        """Non-varianting pins have {""} key internally."""
         project = """
 [project]
 name = "my-app"
@@ -1079,8 +1079,8 @@ wheels = [
         self.assertIn("", requests_pin)
         self.assertEqual(len(requests_pin), 1)
 
-    def test_conflict_serialization_roundtrip(self):
-        """Conflicts survive JSON serialization roundtrip."""
+    def test_variant_serialization_roundtrip(self):
+        """Variants survive JSON serialization roundtrip."""
         result = run_translator(
             self.CONFLICT_PROJECT,
             self.CONFLICT_LOCK,
@@ -1089,8 +1089,8 @@ wheels = [
         )
         json_str = result.to_json()
         restored = type(result).from_json(json_str)
-        self.assertEqual(len(restored.conflicts), len(result.conflicts))
-        for orig_cs, rest_cs in zip(result.conflicts, restored.conflicts):
+        self.assertEqual(len(restored.variants), len(result.variants))
+        for orig_cs, rest_cs in zip(result.variants, restored.variants):
             self.assertEqual(len(orig_cs.items), len(rest_cs.items))
             for orig_item, rest_item in zip(orig_cs.items, rest_cs.items):
                 self.assertEqual(orig_item.qualified_name, rest_item.qualified_name)
@@ -1132,8 +1132,8 @@ wheels = [
         # Unconditional pin should be a bare string, not {"":"..."}
         self.assertIsInstance(parsed["pins"]["requests"], str)
 
-    def test_conflicting_pins_stay_as_dicts_in_json(self):
-        """Conflicting pins remain as dicts in serialized JSON."""
+    def test_varianting_pins_stay_as_dicts_in_json(self):
+        """Varianting pins remain as dicts in serialized JSON."""
         import json
 
         result = run_translator(

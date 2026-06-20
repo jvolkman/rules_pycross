@@ -762,7 +762,7 @@ def resolve(args: Any) -> ResolvedLockSet:
         pins=pins,
         remote_files=repos,
         cycle_groups=cycle_groups,
-        conflicts=lock_model.conflicts,
+        variants=lock_model.variants,
     )
 
 

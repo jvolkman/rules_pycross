@@ -18,14 +18,14 @@ from packaging.requirements import Requirement
 from packaging.specifiers import SpecifierSet
 from packaging.version import Version
 from pycross.private.tools.args import FlagFileArgumentParser
-from pycross.private.tools.lock_model import ConflictItem
-from pycross.private.tools.lock_model import ConflictSet
 from pycross.private.tools.lock_model import DependencyName
 from pycross.private.tools.lock_model import PackageDependency
 from pycross.private.tools.lock_model import PackageFile
 from pycross.private.tools.lock_model import PackageKey
 from pycross.private.tools.lock_model import RawLockSet
 from pycross.private.tools.lock_model import RawPackage
+from pycross.private.tools.lock_model import VariantItem
+from pycross.private.tools.lock_model import VariantSet
 from pycross.private.tools.lock_model import package_canonical_name
 from pycross.private.tools.translator_utils import resolve_lock_graph
 
@@ -182,25 +182,25 @@ def translate(
     development_groups: List[str],
     all_development_groups: bool,
     package_processor: Callable[[list[Dict[str, Any]]], Dict[PackageKey, Package]],
-    conflicts: List[List[Dict[str, str]]] = None,
+    variants: List[List[Dict[str, str]]] | None = None,
     default_groups: List[str] = None,
 ) -> RawLockSet:
-    conflicts = conflicts or []
+    variants = variants or []
     default_groups = set(default_groups or [])
 
-    # Parse conflict entries into ConflictItem/ConflictSet objects.
+    # Parse conflict entries into VariantItem/VariantSet objects.
     # Each uv conflict entry has a "package" and optionally "extra" or "group" key.
     # When neither extra nor group is present, it's a project-level conflict.
-    # We use ConflictItem.qualified_name as the constraint key for pins.
+    # We use VariantItem.qualified_name as the constraint key for pins.
     #
     # Items whose group name appears in default_groups are marked default=True.
     # On the Bazel side, the default item's target is used for //conditions:default
     # in the select(), so builds without explicit flags use the default variant.
-    conflict_items_by_source: Dict[Tuple[str, str, str], ConflictItem] = {}  # (package, kind, name) -> ConflictItem
-    conflict_sets: List[ConflictSet] = []
-    for conflict_list in conflicts:
+    variant_items_by_source: Dict[Tuple[str, str, str], VariantItem] = {}  # (package, kind, name) -> VariantItem
+    variant_sets: List[VariantSet] = []
+    for variant_list in variants:
         items = []
-        for c in conflict_list:
+        for c in variant_list:
             package = c["package"]
             if "extra" in c:
                 kind, name = "extra", c["extra"]
@@ -209,26 +209,26 @@ def translate(
             else:
                 kind, name = "project", ""
             key = (package, kind, name)
-            if key not in conflict_items_by_source:
+            if key not in variant_items_by_source:
                 is_default = kind == "group" and name in default_groups
-                conflict_items_by_source[key] = ConflictItem(
+                variant_items_by_source[key] = VariantItem(
                     package=package,
                     kind=kind,
                     name=name,
                     default=is_default,
                 )
-            items.append(conflict_items_by_source[key])
-        conflict_sets.append(ConflictSet(items=tuple(items)))
+            items.append(variant_items_by_source[key])
+        variant_sets.append(VariantSet(items=tuple(items)))
 
     # Build a lookup from (kind, name) -> qualified_name for constraint assignment.
     # This maps optional group names and dev group names to their qualified constraint values.
-    extra_conflict_values: Dict[str, str] = {}  # extra_name -> qualified constraint value
-    group_conflict_values: Dict[str, str] = {}  # group_name -> qualified constraint value
-    for item in conflict_items_by_source.values():
+    extra_variant_values: Dict[str, str] = {}  # extra_name -> qualified constraint value
+    group_variant_values: Dict[str, str] = {}  # group_name -> qualified constraint value
+    for item in variant_items_by_source.values():
         if item.kind == "extra":
-            extra_conflict_values[item.name] = item.qualified_name
+            extra_variant_values[item.name] = item.qualified_name
         elif item.kind == "group":
-            group_conflict_values[item.name] = item.qualified_name
+            group_variant_values[item.name] = item.qualified_name
 
     requirements: List[Tuple[Requirement, str]] = []
 
@@ -270,14 +270,14 @@ def translate(
     for group_name in optional_groups:
         if group_name not in optional_dependencies:
             raise Exception(f"Non-existent optional dependency group: {group_name}")
-        constraint = extra_conflict_values.get(group_name, "")
+        constraint = extra_variant_values.get(group_name, "")
         for dep in optional_dependencies[group_name]:
             requirements.append((dep, constraint))
 
     for group_name in development_groups:
         if group_name not in development_dependencies:
             raise Exception(f"Non-existent development dependency group: {group_name}")
-        constraint = group_conflict_values.get(group_name, "")
+        constraint = group_variant_values.get(group_name, "")
         for dep in development_dependencies[group_name]:
             requirements.append((dep, constraint))
 
@@ -304,7 +304,7 @@ def translate(
         pinned_package_specs=pinned_package_specs,
         requires_python=requires_python,
         strict_dependencies=True,
-        conflicts=conflict_sets,
+        variants=variant_sets,
     )
 
 
@@ -587,7 +587,7 @@ def main(args: Any) -> None:
         development_groups=args.development_group,
         all_development_groups=args.all_development_groups,
         package_processor=collect_and_process_packages,
-        conflicts=lock_dict.get("conflicts", []),
+        variants=lock_dict.get("conflicts", []),
         default_groups=uv_default_groups,
     )
 

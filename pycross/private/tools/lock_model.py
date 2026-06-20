@@ -36,7 +36,7 @@ class _Encoder(JSONEncoder):
 
         if isinstance(o, (DependencyName, FileKey, PackageKey, SpecifierSet, Version)):
             return str(o)
-        if isinstance(o, ConflictItem):
+        if isinstance(o, VariantItem):
             result = {"package": o.package, "kind": o.kind}
             if o.name:
                 result["name"] = o.name
@@ -186,16 +186,16 @@ class FileKey:
 
 
 @dataclass(frozen=True)
-class ConflictItem:
-    """A single item in a conflict set.
+class VariantItem:
+    """A single item in a variant set.
 
-    Each conflict item identifies a specific dependency source that
-    participates in a mutually exclusive conflict group.
+    Each variant item identifies a specific dependency source that
+    participates in a mutually exclusive variant set.
 
     Attributes:
-        package: The workspace member name this conflict belongs to.
+        package: The workspace member name this variant belongs to.
         kind: One of "extra", "group", or "project".
-        name: The extra or group name. Empty for project-level conflicts.
+        name: The extra or group name. Empty for project-level variants.
         default: True if this item is a default selection (e.g. from
             uv's default-groups). The Bazel select() maps
             //conditions:default to the target for the default item.
@@ -208,26 +208,26 @@ class ConflictItem:
 
     @property
     def qualified_name(self) -> str:
-        """A unique, Bazel-target-safe name for this conflict item."""
+        """A unique, Bazel-target-safe name for this variant item."""
         if self.kind == "project":
             return f"package_{self.package}"
         return f"{self.kind}_{self.name}"
 
 
 @dataclass(frozen=True)
-class ConflictSet:
-    """A set of mutually exclusive conflict items.
+class VariantSet:
+    """A set of mutually exclusive variant items (uv conflicts).
 
-    Each ConflictSet maps to a single string_flag in the generated
+    Each VariantSet maps to a single string_flag in the generated
     Bazel repo. Users must select exactly one item from each set.
     """
 
-    items: Tuple[ConflictItem, ...] = field(default_factory=tuple)
+    items: Tuple[VariantItem, ...] = field(default_factory=tuple)
 
     @property
     def setting_name(self) -> str:
-        """The name of the string_flag for this conflict set."""
-        return "conflicts_" + "_".join(item.qualified_name for item in self.items)
+        """The name of the string_flag for this variant set."""
+        return "variants_" + "_".join(item.qualified_name for item in self.items)
 
 
 @dataclass(frozen=True)
@@ -390,7 +390,7 @@ class RawLockSet:
     python_versions: SpecifierSet
     packages: Dict[PackageKey, RawPackage] = field(default_factory=dict)
     pins: Dict[DependencyName, Union[PackageKey, Dict[str, PackageKey]]] = field(default_factory=dict)
-    conflicts: List[ConflictSet] = field(default_factory=list)
+    variants: List[VariantSet] = field(default_factory=list)
 
     def __post_init__(self):
         assert self.python_versions is not None, "The python_versions field must be specified."
@@ -422,20 +422,20 @@ class RawLockSet:
                 )
                 for k, v in parsed["pins"].items()
             }
-        if "conflicts" in parsed:
-            parsed["conflicts"] = [
-                ConflictSet(
+        if "variants" in parsed:
+            parsed["variants"] = [
+                VariantSet(
                     items=tuple(
-                        ConflictItem(
+                        VariantItem(
                             package=item["package"],
                             kind=item["kind"],
                             name=item.get("name", ""),
                             default=item.get("default", False),
                         )
-                        for item in conflict_set["items"]
+                        for item in variant_set["items"]
                     )
                 )
-                for conflict_set in parsed["conflicts"]
+                for variant_set in parsed["variants"]
             ]
         return from_dict(
             RawLockSet,
@@ -454,7 +454,7 @@ class ResolvedLockSet:
     pins: Dict[DependencyName, Union[PackageKey, Dict[str, PackageKey]]] = field(default_factory=dict)
     remote_files: Dict[FileKey, PackageFile] = field(default_factory=dict)
     cycle_groups: Dict[str, List[PackageKey]] = field(default_factory=dict)
-    conflicts: List[ConflictSet] = field(default_factory=list)
+    variants: List[VariantSet] = field(default_factory=list)
 
     @property
     def __dict__(self) -> Dict[str, Any]:
@@ -488,20 +488,20 @@ class ResolvedLockSet:
                 )
                 for k, v in parsed["pins"].items()
             }
-        if "conflicts" in parsed:
-            parsed["conflicts"] = [
-                ConflictSet(
+        if "variants" in parsed:
+            parsed["variants"] = [
+                VariantSet(
                     items=tuple(
-                        ConflictItem(
+                        VariantItem(
                             package=item["package"],
                             kind=item["kind"],
                             name=item.get("name", ""),
                             default=item.get("default", False),
                         )
-                        for item in conflict_set["items"]
+                        for item in variant_set["items"]
                     )
                 )
-                for conflict_set in parsed["conflicts"]
+                for variant_set in parsed["variants"]
             ]
         return from_dict(
             ResolvedLockSet,

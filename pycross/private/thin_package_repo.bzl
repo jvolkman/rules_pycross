@@ -344,23 +344,23 @@ def _thin_package_repo_impl(rctx):
     # _variants/ BUILD: alias bool_flag and config_setting targets
     # from the workspace repo so users can reference @<thin_repo>//_variants:<name>
     # in platform(flags=[...]) and transitions without needing the workspace repo directly.
-    raw_conflicts = lock.get("conflicts", [])
-    if raw_conflicts:
-        # Collect unique conflict items across all conflict sets.
-        conflict_items = {}  # qualified_name -> True
-        for conflict_set in raw_conflicts:
-            for item in conflict_set["items"]:
+    raw_variants = lock.get("variants", [])
+    if raw_variants:
+        # Collect unique variant items across all variant sets.
+        variant_items = {}  # qualified_name -> True
+        for variant_set in raw_variants:
+            for item in variant_set["items"]:
                 if item["kind"] == "project":
                     qname = "package_{}".format(item["package"])
                 else:
                     qname = "{}_{}".format(item["kind"], item["name"])
-                conflict_items[qname] = True
+                variant_items[qname] = True
 
         variant_lines = [
             'package(default_visibility = ["//visibility:public"])',
             "",
         ]
-        for qname in sorted(conflict_items.keys()):
+        for qname in sorted(variant_items.keys()):
             # Alias the bool_flag itself (for --@repo//_variants:extra_cpu)
             variant_lines.extend([
                 "alias(",
