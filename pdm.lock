@@ -61,15 +61,15 @@ files = [
 
 [[package]]
 name = "delvewheel"
-version = "1.12.1"
+version = "1.13.0"
 requires_python = ">=3.9"
 summary = "Self-contained wheels for Windows"
 dependencies = [
     "pefile>=2024.8.26",
 ]
 files = [
-    {url = "https://files.pythonhosted.org/packages/11/7a/69d66800a0e266a3b6de812e9a0e3b88730f18918b1e8cdcf806899e31b0/delvewheel-1.12.1-py3-none-any.whl", hash = "sha256:19ce88ba99e47c4fe452d5cc394d371499446b922ea2ae0d13682f636d980915"},
-    {url = "https://files.pythonhosted.org/packages/8a/af/05a9016badc070cf8e282436dd7d4794f154f8d1956a827778ecb6002345/delvewheel-1.12.1.tar.gz", hash = "sha256:e2531715791e55417329749d47cef5ca0924d6a5565d5bbcd2dd0d5d6b1025f2"},
+    {url = "https://files.pythonhosted.org/packages/13/f9/8163f9145012263743dee49333f3a39bf214b83dac0ede7b06bb9ff7287c/delvewheel-1.13.0-py3-none-any.whl", hash = "sha256:eb8c34dee5d8816516befde73bf5cf9ea6142955f41d3baf25381c0136b28608"},
+    {url = "https://files.pythonhosted.org/packages/3c/ba/4ce769b09cdee86c576a35fc17bb954fa22f81037884a028c978a8479fe1/delvewheel-1.13.0.tar.gz", hash = "sha256:440601f289c953d5b60e96af8a8dbe2729584d90b663e39c5eade6b9043b48f6"},
 ]
 
 [[package]]
@@ -149,11 +149,12 @@ files = [
 
 [[package]]
 name = "pyelftools"
-version = "0.32"
+version = "0.33"
+requires_python = ">=3.10"
 summary = "Library for analyzing ELF files and DWARF debugging information"
 files = [
-    {url = "https://files.pythonhosted.org/packages/af/43/700932c4f0638c3421177144a2e86448c0d75dbaee2c7936bda3f9fd0878/pyelftools-0.32-py3-none-any.whl", hash = "sha256:013df952a006db5e138b1edf6d8a68ecc50630adbd0d83a2d41e7f846163d738"},
-    {url = "https://files.pythonhosted.org/packages/b9/ab/33968940b2deb3d92f5b146bc6d4009a5f95d1d06c148ea2f9ee965071af/pyelftools-0.32.tar.gz", hash = "sha256:6de90ee7b8263e740c8715a925382d4099b354f29ac48ea40d840cf7aa14ace5"},
+    {url = "https://files.pythonhosted.org/packages/46/2a/f9697576603dae937727827505a6126a066affb227034e77e6f9068910da/pyelftools-0.33-py3-none-any.whl", hash = "sha256:f215ad5f47d3f1373a21496a6c9e0707c622840d0622f23ff7ce08678b020036"},
+    {url = "https://files.pythonhosted.org/packages/a3/11/767522582afab1b884d277de0e6e011640cb9d7292a38694b4b1a1df1ae8/pyelftools-0.33.tar.gz", hash = "sha256:660d82dcbeb8e83d1702bd97f223f761625da06111c0cc988eac6b8ab0c1b61f"},
 ]
 
 [[package]]
@@ -240,10 +241,10 @@ files = [
 
 [[package]]
 name = "zipp"
-version = "3.23.1"
-requires_python = ">=3.9"
+version = "4.1.0"
+requires_python = ">=3.10"
 summary = "Backport of pathlib-compatible object wrapper for zip files"
 files = [
-    {url = "https://files.pythonhosted.org/packages/08/8a/0861bec20485572fbddf3dfba2910e38fe249796cb73ecdeb74e07eeb8d3/zipp-3.23.1-py3-none-any.whl", hash = "sha256:0b3596c50a5c700c9cb40ba8d86d9f2cc4807e9bedb06bcdf7fac85633e444dc"},
-    {url = "https://files.pythonhosted.org/packages/30/21/093488dfc7cc8964ded15ab726fad40f25fd3d788fd741cc1c5a17d78ee8/zipp-3.23.1.tar.gz", hash = "sha256:32120e378d32cd9714ad503c1d024619063ec28aad2248dc6672ad13edfa5110"},
+    {url = "https://files.pythonhosted.org/packages/3a/13/547360d81e6d88d58492968ffda9f9542854f11310ee556fef14260cc886/zipp-4.1.0-py3-none-any.whl", hash = "sha256:25ad4e16390cd314347dd8f1de67a2ac538ae658ed4ab9db16029c07c188e97f"},
+    {url = "https://files.pythonhosted.org/packages/b9/d8/eab98a517c14134c0b2eb4e2387bc5f457334293ec5d2dd3857ec2966802/zipp-4.1.0.tar.gz", hash = "sha256:4cb57381f544315db7688e976e922a2b18cdb513d21cc194eb42232ba2a3e602"},
 ]
