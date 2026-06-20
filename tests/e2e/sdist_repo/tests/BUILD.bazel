@@ -1,0 +1,18 @@
+load("@rules_shell//shell:sh_test.bzl", "sh_test")
+
+sh_test(
+    name = "test_sdist_repos",
+    srcs = ["test_sdist_repos.sh"],
+    args = [
+        "$(rootpath @repo_basic//:BUILD.bazel)",
+        "$(rootpath @repo_with_pyproject//:BUILD.bazel)",
+        "$(rootpath @repo_with_setuptools//:BUILD.bazel)",
+        "$(rootpath @repo_legacy//:BUILD.bazel)",
+    ],
+    data = [
+        "@repo_basic//:BUILD.bazel",
+        "@repo_legacy//:BUILD.bazel",
+        "@repo_with_pyproject//:BUILD.bazel",
+        "@repo_with_setuptools//:BUILD.bazel",
+    ],
+)

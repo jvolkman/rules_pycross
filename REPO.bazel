@@ -1,0 +1,9 @@
+"""rules_pycross"""
+
+ignore_directories([
+    "env",
+    "examples",
+    "modules",
+    "docs",
+    "tests/e2e/*",
+])

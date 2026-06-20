@@ -1,0 +1,19 @@
+load("@rules_python//python:defs.bzl", "py_test")
+
+py_test(
+    name = "test_setproctitle",
+    srcs = ["test_setproctitle.py"],
+    deps = ["@uv//setproctitle:pkg"],
+)
+
+py_test(
+    name = "test_setproctitle_v1",
+    srcs = ["test_setproctitle_v1.py"],
+    deps = ["//:setproctitle_v1"],
+)
+
+py_test(
+    name = "test_setproctitle_v1_repaired",
+    srcs = ["test_setproctitle_v1_repaired.py"],
+    deps = ["//:setproctitle_v1_repaired"],
+)

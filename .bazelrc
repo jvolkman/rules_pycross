@@ -21,3 +21,9 @@ try-import %workspace%/.bazelrc.user
 
 # Load any settings specific to ci pipelines.
 try-import %workspace%/.bazelrc.ci
+
+# BuildBuddy remote cache configuration
+build:remote --bes_results_url=https://app.buildbuddy.io/invocation/
+build:remote --bes_backend=grpcs://remote.buildbuddy.io
+build:remote --remote_cache=grpcs://remote.buildbuddy.io
+build:remote --remote_timeout=3600

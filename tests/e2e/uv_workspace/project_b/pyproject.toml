@@ -1,0 +1,13 @@
+[project]
+name = "project-b"
+version = "0.1.0"
+description = ""
+requires-python = ">=3.10, <3.13"
+dependencies = [
+    "regex>=2024.11.6",
+    "attrs>=24.2.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"

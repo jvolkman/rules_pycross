@@ -6,7 +6,7 @@
 # but we don't want to run the other hooks on commit messages
 default_stages: [pre-commit]
 
-exclude: (^third_party/.*$|\.lock$|^docs/.*$)
+exclude: (^third_party/.*$|\.lock$|^docs/.*\.md$)
 repos:
   # Check formatting and lint for starlark code
   - repo: https://github.com/keith/pre-commit-buildifier
@@ -63,3 +63,25 @@ repos:
     hooks:
       - id: pymarkdown
         args: ["-d", "MD013,MD033,MD024,MD037,MD041,MD034,MD001,MD026,MD040", "scan"]
+
+  - repo: local
+    hooks:
+      - id: gazelle-root
+        name: gazelle (root)
+        entry: bazel run //:gazelle
+        language: system
+        pass_filenames: false
+        types: [bazel]
+      - id: gazelle-maturin
+        name: gazelle (maturin)
+        entry: bash -c "cd modules/backend_maturin && bazel run //gazelle:gazelle"
+        language: system
+        pass_filenames: false
+        types: [bazel]
+        files: ^modules/backend_maturin/
+      - id: docs-update
+        name: docs update
+        entry: bash -c "cd docs && bazel run //:update"
+        language: system
+        pass_filenames: false
+        types: [bazel]

@@ -1,0 +1,6 @@
+load(":generate_cargo_lock_test.bzl", "generate_cargo_lock_test_suite")
+load(":maturin_build_test.bzl", "maturin_build_test_suite")
+
+generate_cargo_lock_test_suite(name = "generate_cargo_lock_test")
+
+maturin_build_test_suite(name = "maturin_build_test")

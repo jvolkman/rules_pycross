@@ -1,0 +1,23 @@
+load("@bazel_skylib//:bzl_library.bzl", "bzl_library")
+
+package(default_visibility = ["//visibility:public"])
+
+bzl_library(
+    name = "maturin_build",
+    srcs = ["maturin_build.bzl"],
+    deps = [
+        "//private:rust_layer",
+        "@rules_pycross//pycross/private:providers",
+        "@rules_pycross//pycross/private/build:transitions",
+        "@rules_pycross//pycross/private/build/actions:cc_layer",
+        "@rules_pycross//pycross/private/build/actions:pep517_action",
+        "@rules_pycross//pycross/private/build/actions:repair_action",
+        "@rules_pycross//pycross/private/build/actions:tool_extract",
+        "@rules_pycross//pycross/private/build/rules:common_attrs",
+    ],
+)
+
+bzl_library(
+    name = "generate_cargo_lock",
+    srcs = ["generate_cargo_lock.bzl"],
+)

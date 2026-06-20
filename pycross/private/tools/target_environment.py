@@ -4,14 +4,19 @@ Stuff to define a target Python environment.
 See https://peps.python.org/pep-0508/#environment-markers
 """
 
+from __future__ import annotations
+
 from dataclasses import asdict
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
 from typing import Any
 from typing import Dict
 from typing import List
 from typing import Optional
+from typing import Set
 
-from pip._internal.models.target_python import TargetPython
+if TYPE_CHECKING:
+    from pip._internal.models.target_python import TargetPython
 
 
 @dataclass(frozen=True)
@@ -57,12 +62,34 @@ class TargetEnv:
 
     @property
     def target_python(self) -> TargetPython:
-        return TargetPython(
-            platforms=self.platforms,
-            py_version_info=tuple(int(p) for p in self.version.split(".")[:3]),
-            abis=self.abis,
-            implementation=self.implementation,
-        )
+        if not hasattr(self, "_target_python"):
+            from pip._internal.models.target_python import TargetPython
+
+            tp = TargetPython(
+                platforms=self.platforms,
+                py_version_info=tuple(int(p) for p in self.version.split(".")[:3]),
+                abis=self.abis,
+                implementation=self.implementation,
+            )
+            object.__setattr__(self, "_target_python", tp)
+        return self._target_python
+
+    @property
+    def tag_to_index(self) -> Dict[Any, int]:
+        if not hasattr(self, "_tag_to_index"):
+            from packaging.tags import parse_tag
+
+            tags = []
+            for tag_str in self.compatibility_tags:
+                tags.extend(parse_tag(tag_str))
+            object.__setattr__(self, "_tag_to_index", {tag: idx for idx, tag in enumerate(tags)})
+        return self._tag_to_index
+
+    @property
+    def supported_tags_set(self) -> Set[Any]:
+        if not hasattr(self, "_supported_tags_set"):
+            object.__setattr__(self, "_supported_tags_set", set(self.tag_to_index.keys()))
+        return self._supported_tags_set
 
     @staticmethod
     def from_dict(data: Dict[str, Any]) -> "TargetEnv":

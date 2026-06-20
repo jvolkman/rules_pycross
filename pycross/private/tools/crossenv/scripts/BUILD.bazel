@@ -1,7 +1,0 @@
-package(default_visibility = ["//visibility:private"])
-
-filegroup(
-    name = "scripts",
-    srcs = glob(["*.tmpl"]),
-    visibility = ["//pycross/private/tools/crossenv:__subpackages__"],
-)

@@ -1,0 +1,35 @@
+load("@bazel_skylib//:bzl_library.bzl", "bzl_library")
+
+package(default_visibility = ["//visibility:public"])
+
+bzl_library(
+    name = "cc_layer",
+    srcs = ["cc_layer.bzl"],
+    deps = [
+        "//pycross/private/build:cc_toolchain_util",
+        "@bazel_tools//tools/cpp:toolchain_utils.bzl",
+    ],
+)
+
+bzl_library(
+    name = "pep517_action",
+    srcs = ["pep517_action.bzl"],
+    deps = [
+        "@bazel_skylib//lib:paths",
+        "@rules_python//python:py_info_bzl",
+    ],
+)
+
+bzl_library(
+    name = "repair_action",
+    srcs = ["repair_action.bzl"],
+    deps = [
+        "//pycross/private/build:cc_toolchain_util",
+    ],
+)
+
+bzl_library(
+    name = "tool_extract",
+    srcs = ["tool_extract.bzl"],
+    deps = ["@bazel_skylib//lib:paths"],
+)

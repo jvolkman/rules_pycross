@@ -116,25 +116,24 @@ def create_venv(rctx, python_executable, venv_path, path_entries = []):
         site_path = site_path,
     )
 
-def install_venv_wheels(rctx, venv_path, pip_whl, wheels):
+def install_venv_wheels(rctx, venv_path, installer_whl, wheels):
     """
     Install wheels into the virtual env.
 
     Args:
       rctx: the repository_context.
       venv_path: the path to the environment to create, relative to the repository.
-      pip_whl: the path to a `pip` wheel used to install other wheels.
+      installer_whl: the path to the `installer` wheel.
       wheels: the wheels to install.
     """
     venv_path = rctx.path(venv_path)
     python_exe = get_venv_python_executable(venv_path)
-    env = dict(PYTHONPATH = str(rctx.path(pip_whl)))
+    env = dict(PYTHONPATH = str(rctx.path(installer_whl)))
     wheel_paths = [str(rctx.path(wheel)) for wheel in wheels]
     result = rctx.execute([
         str(python_exe),
         "-m",
-        "pip",
-        "install",
+        "installer",
     ] + wheel_paths, environment = env)
     if result.return_code:
         fail("wheel install failed: {}".format(result.stderr))

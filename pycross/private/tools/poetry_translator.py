@@ -1,12 +1,10 @@
-from collections import defaultdict
+import tomllib
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
-from typing import Dict
 from typing import List
 from typing import Optional
 
-import tomli
 from packaging.specifiers import SpecifierSet
 from packaging.utils import InvalidSdistFilename
 from packaging.utils import InvalidWheelFilename
@@ -16,7 +14,6 @@ from packaging.utils import parse_wheel_filename
 from packaging.version import Version
 from poetry.core.constraints.version import Version as PoetryVersion
 from poetry.core.constraints.version import parse_constraint
-from poetry.core.version import markers
 from pycross.private.tools.args import FlagFileArgumentParser
 from pycross.private.tools.lock_model import PackageDependency
 from pycross.private.tools.lock_model import PackageFile
@@ -24,10 +21,7 @@ from pycross.private.tools.lock_model import PackageKey
 from pycross.private.tools.lock_model import RawLockSet
 from pycross.private.tools.lock_model import RawPackage
 from pycross.private.tools.lock_model import package_canonical_name
-
-
-class MismatchedVersionException(Exception):
-    pass
+from pycross.private.tools.translator_utils import resolve_lock_graph
 
 
 @dataclass
@@ -35,15 +29,11 @@ class PoetryDependency:
     name: str
     spec: str
     marker: Optional[str]
+    extras: List[str]
 
     @property
     def constraint(self):
         return parse_constraint(self.spec)
-
-    @property
-    def marker_without_extra(self) -> Optional[str]:
-        parsed = markers.parse_marker(self.marker)
-        return str(parsed.without_extras())
 
     def matches(self, other: "PoetryPackage") -> bool:
         if package_canonical_name(self.name) != package_canonical_name(other.name):
@@ -59,6 +49,7 @@ class PoetryPackage:
     dependencies: List[PoetryDependency]
     files: List[PackageFile]
     resolved_dependencies: List[PackageDependency]
+    is_local: bool = False
 
     @property
     def key(self) -> PackageKey:
@@ -67,6 +58,15 @@ class PoetryPackage:
     @property
     def pypa_version(self) -> Version:
         return Version(str(self.version))
+
+    def add_resolved_dependency(self, dep: PackageDependency) -> None:
+        self.resolved_dependencies.append(dep)
+
+    def satisfies_dependency(self, dep: PoetryDependency) -> bool:
+        return dep.matches(self)
+
+    def satisfies_pin(self, pin: Any) -> bool:
+        return pin.allows(self.version)
 
     def to_lock_package(self) -> RawPackage:
         return RawPackage(
@@ -114,13 +114,13 @@ def translate(
 ) -> RawLockSet:
     try:
         with open(project_file, "rb") as f:
-            project_dict = tomli.load(f)
+            project_dict = tomllib.load(f)
     except Exception as e:
         raise Exception(f"Could not load project file: {project_file}: {e}")
 
     try:
         with open(lock_file, "rb") as f:
-            lock_dict = tomli.load(f)
+            lock_dict = tomllib.load(f)
     except Exception as e:
         raise Exception(f"Could not load lock file: {lock_file}: {e}")
 
@@ -143,12 +143,12 @@ def translate(
             # Skip the special line indicating python version.
             continue
         if isinstance(pin_info, str):
-            pinned_package_specs[pin] = parse_constraint(pin_info)
+            pinned_package_specs[pin] = {"": parse_constraint(pin_info)}
         else:
             if "path" in pin_info:
                 # Skip path dependencies.
                 continue
-            pinned_package_specs[pin] = parse_constraint(pin_info["version"])
+            pinned_package_specs[pin] = {"": parse_constraint(pin_info["version"])}
 
     def parse_file_info(file_info) -> PackageFile:
         file_name = file_info["file"]
@@ -185,18 +185,20 @@ def translate(
                 if isinstance(dep, str):
                     marker = None
                     spec = dep
+                    extras = []
                 else:
                     marker = dep.get("markers")
                     spec = dep.get("version")
+                    extras = dep.get("extras", [])
 
-                dependencies.append(PoetryDependency(name=name, spec=spec, marker=marker))
+                dependencies.append(PoetryDependency(name=name, spec=spec, marker=marker, extras=extras))
 
-        # In older versions of poetry the list of files was held in a metadata section at the bottom of the poetry.lock file
-        # The lock file format now (as of 2022-12-16), has the files specified local to each dependency as another field.
-        # Here we will check for the files being present in the new location, and if not there we fall back to the older one.
+        source_type = lock_pkg.get("source", {}).get("type")
+        is_local = source_type in ("directory", "git", "url")
+
         files = [parse_file_info(f) for f in lock_pkg.get("files", [])]
         if len(files) == 0:
-            files = files_by_package_name[package_listed_name]
+            files = files_by_package_name.get(package_listed_name, [])
 
         poetry_packages.append(
             PoetryPackage(
@@ -210,72 +212,16 @@ def translate(
                     package_version,
                 ),
                 resolved_dependencies=[],
+                is_local=is_local,
             )
         )
 
-    # Next, group poetry packages by their canonical name
-    packages_by_canonical_name: Dict[str, List[PoetryPackage]] = defaultdict(list)
-    for package in poetry_packages:
-        packages_by_canonical_name[package.name].append(package)
-
-    # And sort the packages by version in descending order (newest first)
-    for package_list in packages_by_canonical_name.values():
-        package_list.sort(key=lambda p: p.version, reverse=True)
-
-    # Next, iterate through each package's dependencies and find the newest one that matches.
-    # Construct a PackageDependency and store it.
-    for package in poetry_packages:
-        for dep in package.dependencies:
-            dependency_packages = packages_by_canonical_name[package_canonical_name(dep.name)]
-            for dep_pkg in dependency_packages:
-                if dep.matches(dep_pkg):
-                    resolved = PackageDependency(
-                        name=dep_pkg.name,
-                        version=dep_pkg.pypa_version,
-                        marker=dep.marker_without_extra or "",
-                    )
-                    package.resolved_dependencies.append(resolved)
-                    break
-            else:
-                raise MismatchedVersionException(
-                    f"Found no packages to satisfy dependency (name={dep.name}, spec={dep.spec})"
-                )
-
-    pinned_keys = {}
-    for pin, pin_spec in pinned_package_specs.items():
-        pin_packages = packages_by_canonical_name[pin]
-        for pin_pkg in pin_packages:
-            if pin_spec.allows(pin_pkg.version):
-                pinned_keys[pin] = pin_pkg.key
-                break
-        else:
-            raise MismatchedVersionException(f"Found no packages to satisfy pin (name={pin}, spec={pin_spec})")
-
-    lock_packages = {}
-    for package in poetry_packages:
-        lock_package = package.to_lock_package()
-        lock_packages[lock_package.key] = lock_package
-
-    return RawLockSet(
-        python_versions=lock_python_versions,
-        packages=lock_packages,
-        pins=pinned_keys,
+    return resolve_lock_graph(
+        packages=poetry_packages,
+        pinned_package_specs=pinned_package_specs,
+        requires_python=lock_python_versions,
+        strict_dependencies=True,
     )
-
-
-def main(args: Any) -> None:
-    output = args.output
-
-    lock_set = translate(
-        project_file=args.project_file,
-        lock_file=args.lock_file,
-        default_group=args.default,
-        optional_groups=args.optional_group,
-        all_optional_groups=args.all_optional_groups,
-    )
-
-    with open(output, "w") as f:
-        f.write(lock_set.to_json(indent=2))
 
 
 def parse_flags() -> Any:
@@ -296,7 +242,7 @@ def parse_flags() -> Any:
     )
 
     parser.add_argument(
-        "--default",
+        "--default-group",
         action="store_true",
         help="Whether to install dependencies from the default group.",
     )
@@ -322,6 +268,21 @@ def parse_flags() -> Any:
     )
 
     return parser.parse_args()
+
+
+def main(args: Any) -> None:
+    output = args.output
+
+    lock_set = translate(
+        project_file=args.project_file,
+        lock_file=args.lock_file,
+        default_group=args.default_group,
+        optional_groups=args.optional_group,
+        all_optional_groups=args.all_optional_groups,
+    )
+
+    with open(output, "w") as f:
+        f.write(lock_set.to_json(indent=2))
 
 
 if __name__ == "__main__":

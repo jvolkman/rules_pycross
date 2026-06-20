@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import re
-from collections import defaultdict
+import tomllib
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -11,7 +11,6 @@ from typing import Set
 from urllib.parse import unquote
 from urllib.parse import urlparse
 
-import tomli
 from packaging.requirements import Requirement
 from packaging.specifiers import SpecifierSet
 from packaging.utils import NormalizedName
@@ -23,6 +22,7 @@ from pycross.private.tools.lock_model import PackageKey
 from pycross.private.tools.lock_model import RawLockSet
 from pycross.private.tools.lock_model import RawPackage
 from pycross.private.tools.lock_model import package_canonical_name
+from pycross.private.tools.translator_utils import resolve_lock_graph
 
 
 class LockfileIncompatibleException(Exception):
@@ -30,10 +30,6 @@ class LockfileIncompatibleException(Exception):
 
 
 class LockfileNotStaticException(Exception):
-    pass
-
-
-class MismatchedVersionException(Exception):
     pass
 
 
@@ -69,10 +65,6 @@ def get_requires_python(project: Dict[str, Any]) -> SpecifierSet:
     return SpecifierSet(requires_python)
 
 
-def _print_warn(msg):
-    print("WARNING:", msg)
-
-
 @dataclass
 class PDMPackage:
     name: NormalizedName
@@ -99,6 +91,19 @@ class PDMPackage:
         if not self.extras.issuperset(set(r.lower() for r in req.extras)):
             return False
         return req.specifier.contains(self.version, prereleases=True)
+
+    @property
+    def pypa_version(self) -> Version:
+        return self.version
+
+    def add_resolved_dependency(self, dep: PackageDependency) -> None:
+        self.resolved_dependencies.add(dep)
+
+    def satisfies_dependency(self, dep: Requirement) -> bool:
+        return self.satisfies(dep)
+
+    def satisfies_pin(self, pin: Requirement) -> bool:
+        return pin.specifier.contains(self.version, prereleases=True)
 
     def to_lock_package(self) -> RawPackage:
         assert not self.is_local, "Local packages have no analogue in pycross lockfile"
@@ -166,13 +171,13 @@ def translate(
 ) -> RawLockSet:
     try:
         with open(project_file, "rb") as f:
-            project_dict = tomli.load(f)
+            project_dict = tomllib.load(f)
     except Exception as e:
         raise Exception(f"Could not load project file: {project_file}: {e}")
 
     try:
         with open(lock_file, "rb") as f:
-            lock_dict = tomli.load(f)
+            lock_dict = tomllib.load(f)
     except Exception as e:
         raise Exception(f"Could not load lock file: {lock_file}: {e}")
 
@@ -210,10 +215,10 @@ def translate(
             raise Exception(f"Non-existent development dependency group: {group_name}")
         requirements.extend(development_dependencies[group_name])
 
-    pinned_package_specs: Dict[NormalizedName, Requirement] = {}
+    pinned_package_specs: Dict[NormalizedName, Dict[str, Requirement]] = {}
     for req in requirements:
         pin = package_canonical_name(req.name)
-        pinned_package_specs[pin] = req
+        pinned_package_specs[pin] = {"": req}
 
     distinct_packages: Dict[PackageKey, PDMPackage] = {}
     # Pull out all Package entries in a pdm-specific model.
@@ -247,101 +252,12 @@ def translate(
         else:
             distinct_packages[package.key] = package
 
-    all_packages = distinct_packages.values()
-
-    # Next, group packages by their canonical name
-    packages_by_canonical_name: Dict[str, List[PDMPackage]] = defaultdict(list)
-    for package in all_packages:
-        packages_by_canonical_name[package.name].append(package)
-
-    # And sort the packages by version in descending order (newest first)
-    for package_list in packages_by_canonical_name.values():
-        package_list.sort(key=lambda p: p.version, reverse=True)
-
-    # Next, iterate through each package's dependencies and find the newest one that matches.
-    # Construct a PackageDependency and store it.
-    for package in all_packages:
-        for dep in package.dependencies:
-            # Note: Not all dependencies are actually required for the target environments specified
-            # in the pdm lockfile. Let X the package name of a dependency with a marker that
-            # evaluates to false for every target environment. In that case, if the lockfile has a
-            # package entry for X that is compatible with the version specifier of the dependency,
-            # we will still include the dependency in the pycross lockfile, even though it is not
-            # required by any of the target environments.
-            dependency_packages = packages_by_canonical_name[package_canonical_name(dep.name)]
-            for dep_pkg in dependency_packages:
-                if dep_pkg.satisfies(dep):
-                    resolved = PackageDependency(
-                        name=dep_pkg.name,
-                        version=dep_pkg.version,
-                        marker=str(dep.marker or ""),
-                    )
-                    package.resolved_dependencies.add(resolved)
-                    break
-
-                # Note: If we don't find a match, the dependency is not required by any of the
-                # specified target environments, assuming that pdm creates consistent lockfiles.
-
-    pinned_keys: Dict[NormalizedName, PackageKey] = {}
-    for pin, pin_spec in pinned_package_specs.items():
-        pin_packages = packages_by_canonical_name[pin]
-        for pin_pkg in pin_packages:
-            if pin_spec.specifier.contains(pin_pkg.version, prereleases=True):
-                pinned_keys[pin] = pin_pkg.key
-                break
-        else:
-            raise MismatchedVersionException(f"Found no packages to satisfy pin (name={pin}, spec={pin_spec})")
-
-    # Replace pins of local packages with pins of their dependencies.
-    # We may need to loop multiple times if local packages depend on one another.
-    while local_pins := [key for key in pinned_keys.values() if distinct_packages[key].is_local]:
-        for pin_key in local_pins:
-            pin_pkg = distinct_packages[pin_key]
-            pinned_keys.update({dep.name: dep.key for dep in pin_pkg.resolved_dependencies})
-            del pinned_keys[pin_key.name]
-
-    lock_packages: Dict[PackageKey, RawPackage] = {}
-    for package in all_packages:
-        if package.is_local:
-            _print_warn(
-                "Local package {} elided from pycross repo. It can still be referenced directly from the main repo.".format(
-                    package.key
-                )
-            )
-            continue
-        lock_package = package.to_lock_package()
-        lock_packages[lock_package.key] = lock_package
-
-    return RawLockSet(
-        python_versions=lock_python_versions,
-        packages=lock_packages,
-        pins=pinned_keys,
+    return resolve_lock_graph(
+        packages=distinct_packages.values(),
+        pinned_package_specs=pinned_package_specs,
+        requires_python=lock_python_versions,
+        strict_dependencies=False,
     )
-
-
-def main(args: Any) -> None:
-    output = args.output
-
-    lock_set = translate(
-        project_file=args.project_file,
-        lock_file=args.lock_file,
-        default_group=args.default_group,
-        optional_groups=args.optional_group,
-        all_optional_groups=args.all_optional_groups,
-        development_groups=args.development_group,
-        all_development_groups=args.all_development_groups,
-    )
-
-    if args.require_static_urls:
-        for pkg in lock_set.packages.values():
-            for file in pkg.files:
-                if not file.urls:
-                    raise LockfileNotStaticException(
-                        "Lock file does not contain static urls. Please use --static-urls when creating the lockfile."
-                    )
-
-    with open(output, "w") as f:
-        f.write(lock_set.to_json(indent=2))
 
 
 def parse_flags() -> Any:
@@ -407,6 +323,31 @@ def parse_flags() -> Any:
     )
 
     return parser.parse_args()
+
+
+def main(args: Any) -> None:
+    output = args.output
+
+    lock_set = translate(
+        project_file=args.project_file,
+        lock_file=args.lock_file,
+        default_group=args.default_group,
+        optional_groups=args.optional_group,
+        all_optional_groups=args.all_optional_groups,
+        development_groups=args.development_group,
+        all_development_groups=args.all_development_groups,
+    )
+
+    if args.require_static_urls:
+        for pkg in lock_set.packages.values():
+            for file in pkg.files:
+                if not file.urls:
+                    raise LockfileNotStaticException(
+                        "Lock file does not contain static urls. Please use --static-urls when creating the lockfile."
+                    )
+
+    with open(output, "w") as f:
+        f.write(lock_set.to_json(indent=2))
 
 
 if __name__ == "__main__":

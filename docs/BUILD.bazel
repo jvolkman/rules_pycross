@@ -7,21 +7,10 @@ package(default_visibility = ["//visibility:private"])
 stardoc(
     name = "rules_gen",
     out = "rules.gen.md",
-    input = "//pycross:defs.bzl",
+    input = "@rules_pycross//pycross:defs.bzl",
     deps = [
-        "//pycross:defs",
         "@rules_cc//cc:find_cc_toolchain_bzl",
-    ],
-)
-
-# workspace_rules
-stardoc(
-    name = "workspace_rules_gen",
-    out = "workspace_rules.gen.md",
-    input = "//pycross:workspace.bzl",
-    deps = [
-        "//pycross:workspace",
-        "@rules_cc//cc:find_cc_toolchain_bzl",
+        "@rules_pycross//pycross:defs",
     ],
 )
 
@@ -29,21 +18,10 @@ stardoc(
 stardoc(
     name = "ext_environments_gen",
     out = "ext_environments.gen.md",
-    input = "//pycross/extensions:environments.bzl",
+    input = "@rules_pycross//pycross/extensions:environments.bzl",
     deps = [
-        "//pycross/extensions:environments",
         "@rules_cc//cc:find_cc_toolchain_bzl",
-    ],
-)
-
-# ext_lock_file
-stardoc(
-    name = "ext_lock_file_gen",
-    out = "ext_lock_file.gen.md",
-    input = "//pycross/extensions:lock_file.bzl",
-    deps = [
-        "//pycross/extensions:lock_file",
-        "@rules_cc//cc:find_cc_toolchain_bzl",
+        "@rules_pycross//pycross/extensions:environments",
     ],
 )
 
@@ -51,10 +29,10 @@ stardoc(
 stardoc(
     name = "ext_lock_import_gen",
     out = "ext_lock_import.gen.md",
-    input = "//pycross/extensions:lock_import.bzl",
+    input = "@rules_pycross//pycross/extensions:lock_import.bzl",
     deps = [
-        "//pycross/extensions:lock_import",
         "@rules_cc//cc:find_cc_toolchain_bzl",
+        "@rules_pycross//pycross/extensions:lock_import",
     ],
 )
 
@@ -62,10 +40,12 @@ stardoc(
 stardoc(
     name = "ext_lock_repos_gen",
     out = "ext_lock_repos.gen.md",
-    input = "//pycross/extensions:lock_repos.bzl",
+    input = "@rules_pycross//pycross/extensions:lock_repos.bzl",
     deps = [
-        "//pycross/extensions:lock_repos",
         "@rules_cc//cc:find_cc_toolchain_bzl",
+        "@rules_pycross//pycross:backend",
+        "@rules_pycross//pycross/extensions:lock_repos",
+        "@rules_pycross_backend_maturin//private:maturin_sdist_hook",
     ],
 )
 
@@ -73,10 +53,64 @@ stardoc(
 stardoc(
     name = "ext_pycross_gen",
     out = "ext_pycross.gen.md",
-    input = "//pycross/extensions:pycross.bzl",
+    input = "@rules_pycross//pycross/extensions:pycross.bzl",
     deps = [
-        "//pycross/extensions:pycross",
         "@rules_cc//cc:find_cc_toolchain_bzl",
+        "@rules_pycross//pycross/extensions:pycross",
+    ],
+)
+
+# backend_maturin rules
+stardoc(
+    name = "maturin_rules_gen",
+    out = "maturin_rules.gen.md",
+    input = "@rules_pycross_backend_maturin//:defs.bzl",
+    deps = [
+        "@rules_pycross_backend_maturin//:defs",
+    ],
+)
+
+# backend_maturin extension
+stardoc(
+    name = "ext_maturin_gen",
+    out = "ext_maturin.gen.md",
+    input = "@rules_pycross_backend_maturin//extensions:maturin.bzl",
+    deps = [
+        "@rules_cc//cc:find_cc_toolchain_bzl",
+        "@rules_pycross_backend_maturin//extensions:maturin",
+    ],
+)
+
+# setuptools extension
+stardoc(
+    name = "ext_setuptools_gen",
+    out = "ext_setuptools.gen.md",
+    input = "@rules_pycross//pycross/backends:setuptools.bzl",
+    deps = [
+        "@rules_cc//cc:find_cc_toolchain_bzl",
+        "@rules_pycross//pycross/backends:setuptools",
+    ],
+)
+
+# meson extension
+stardoc(
+    name = "ext_meson_gen",
+    out = "ext_meson.gen.md",
+    input = "@rules_pycross//pycross/backends:meson.bzl",
+    deps = [
+        "@rules_cc//cc:find_cc_toolchain_bzl",
+        "@rules_pycross//pycross/backends:meson",
+    ],
+)
+
+# cmake extension
+stardoc(
+    name = "ext_cmake_gen",
+    out = "ext_cmake.gen.md",
+    input = "@rules_pycross//pycross/backends:cmake.bzl",
+    deps = [
+        "@rules_cc//cc:find_cc_toolchain_bzl",
+        "@rules_pycross//pycross/backends:cmake",
     ],
 )
 
@@ -85,11 +119,14 @@ write_source_files(
     name = "update",
     files = {
         "rules.md": ":rules_gen",
-        "workspace_rules.md": ":workspace_rules_gen",
         "ext_environments.md": ":ext_environments_gen",
-        "ext_lock_file.md": ":ext_lock_file_gen",
         "ext_lock_import.md": ":ext_lock_import_gen",
         "ext_lock_repos.md": ":ext_lock_repos_gen",
         "ext_pycross.md": ":ext_pycross_gen",
+        "maturin_rules.md": ":maturin_rules_gen",
+        "ext_maturin.md": ":ext_maturin_gen",
+        "ext_setuptools.md": ":ext_setuptools_gen",
+        "ext_meson.md": ":ext_meson_gen",
+        "ext_cmake.md": ":ext_cmake_gen",
     },
 )

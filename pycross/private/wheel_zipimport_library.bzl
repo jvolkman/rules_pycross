@@ -6,6 +6,7 @@ load("@rules_python//python:py_info.bzl", "PyInfo")
 def _pycross_wheel_zipimport_library_impl(ctx):
     wheel_label = ctx.file.wheel.owner or ctx.attr.wheel.label
     wheel_file = ctx.file.wheel
+    extra_files = []
 
     has_py2_only_sources = False
     has_py3_only_sources = True
@@ -32,10 +33,10 @@ def _pycross_wheel_zipimport_library_impl(ctx):
         transitive = [d[PyInfo].imports for d in ctx.attr.deps],
     )
     transitive_sources = depset(
-        direct = [wheel_file],
+        direct = [wheel_file] + extra_files,
         transitive = [dep[PyInfo].transitive_sources for dep in ctx.attr.deps if PyInfo in dep],
     )
-    runfiles = ctx.runfiles(files = [wheel_file])
+    runfiles = ctx.runfiles(files = [wheel_file] + extra_files)
     for d in ctx.attr.deps:
         runfiles = runfiles.merge(d[DefaultInfo].default_runfiles)
 

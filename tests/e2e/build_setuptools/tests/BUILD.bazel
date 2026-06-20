@@ -1,0 +1,25 @@
+load("@rules_python//python:defs.bzl", "py_test")
+
+py_test(
+    name = "test_psycopg2",
+    srcs = ["test_psycopg2.py"],
+    deps = ["@uv//psycopg2:pkg"],
+)
+
+py_test(
+    name = "test_setproctitle",
+    srcs = ["test_setproctitle.py"],
+    deps = ["@uv//setproctitle:pkg"],
+)
+
+py_test(
+    name = "test_zstandard",
+    srcs = ["test_zstandard.py"],
+    deps = ["//:zstandard"],
+)
+
+py_test(
+    name = "test_pyyaml",
+    srcs = ["test_pyyaml.py"],
+    deps = ["@uv//pyyaml:pkg"],
+)

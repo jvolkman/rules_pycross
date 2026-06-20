@@ -1,0 +1,46 @@
+version = 1
+revision = 3
+requires-python = ">=3.10"
+
+[[package]]
+name = "cycle-a"
+version = "1.0.0"
+source = { path = "cycle_a-1.0.0-py3-none-any.whl" }
+dependencies = [
+    { name = "cycle-b" },
+]
+wheels = [
+    { filename = "cycle_a-1.0.0-py3-none-any.whl", hash = "sha256:88cd42ced14b9e3b88b7f0d00ade25f62ef1d0594fb73f8bbf34e03cdda497bc" },
+]
+
+[package.metadata]
+requires-dist = [{ name = "cycle-b" }]
+
+[[package]]
+name = "cycle-b"
+version = "1.0.0"
+source = { path = "cycle_b-1.0.0-py3-none-any.whl" }
+dependencies = [
+    { name = "cycle-a" },
+]
+wheels = [
+    { filename = "cycle_b-1.0.0-py3-none-any.whl", hash = "sha256:43b3c1f540db2aea5c651eef28bf12d6a4408e43a9e056cdc39674e1794c0a54" },
+]
+
+[package.metadata]
+requires-dist = [{ name = "cycle-a" }]
+
+[[package]]
+name = "uv-cycle-test"
+version = "0.1.0"
+source = { virtual = "." }
+dependencies = [
+    { name = "cycle-a" },
+    { name = "cycle-b" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "cycle-a", path = "cycle_a-1.0.0-py3-none-any.whl" },
+    { name = "cycle-b", path = "cycle_b-1.0.0-py3-none-any.whl" },
+]

@@ -1,7 +1,7 @@
-load("@rules_pycross_internal//:python.bzl", "py_binary", "py_library", "py_test")
+load("@rules_pycross_internal//:python.bzl", "py_binary", "py_library")
 load("//pycross/private:wheel_zipimport_library.bzl", "pycross_wheel_zipimport_library")
 
-package(default_visibility = ["//pycross:__subpackages__"])
+package(default_visibility = ["//visibility:public"])
 
 py_library(
     name = "args",
@@ -11,22 +11,22 @@ py_library(
     imports = ["../../.."],
 )
 
+py_library(
+    name = "inspect_package",
+    srcs = ["inspect_package.py"],
+    visibility = ["//visibility:public"],
+)
+
 py_binary(
-    name = "bzl_lock_generator",
-    srcs = ["bzl_lock_generator.py"],
+    name = "toml_lock_generator",
+    srcs = ["toml_lock_generator.py"],
     imports = ["../../.."],
     visibility = ["//visibility:public"],
     deps = [
         ":args",
         ":raw_lock_resolver",
-        ":resolved_lock_renderer",
+        "@rules_pycross_internal//deps:tomli-w",
     ],
-)
-
-py_binary(
-    name = "extract_lock_repos",
-    srcs = ["extract_lock_repos.py"],
-    imports = ["../../.."],
 )
 
 py_binary(
@@ -39,24 +39,17 @@ py_binary(
         ":lock_model",
         ":target_environment",
         "@rules_pycross_internal//deps:packaging",
-        "@rules_pycross_internal//deps:pip",
-    ],
-)
-
-py_binary(
-    name = "resolved_lock_renderer",
-    srcs = ["resolved_lock_renderer.py"],
-    imports = ["../../.."],
-    visibility = ["//visibility:public"],
-    deps = [
-        ":args",
-        ":lock_model",
     ],
 )
 
 pycross_wheel_zipimport_library(
     name = "installer",
     wheel = "@rules_pycross_internal//:installer_whl",
+)
+
+pycross_wheel_zipimport_library(
+    name = "patch_ng",
+    wheel = "@rules_pycross_internal//:patch_ng_whl",
 )
 
 py_library(
@@ -66,7 +59,7 @@ py_library(
     ],
     imports = ["../../.."],
     deps = [
-        "@rules_pycross_internal//deps:pip",
+        "@rules_pycross_internal//deps:packaging",
     ],
 )
 
@@ -82,22 +75,14 @@ py_library(
 )
 
 py_library(
-    name = "namespace_pkgs",
+    name = "translator_utils",
     srcs = [
-        "namespace_pkgs.py",
+        "translator_utils.py",
     ],
     imports = ["../../.."],
-)
-
-py_test(
-    name = "namespace_pkgs_test",
-    size = "small",
-    srcs = [
-        "namespace_pkgs_test.py",
-    ],
-    tags = ["unit"],
     deps = [
-        ":namespace_pkgs",
+        ":lock_model",
+        "@rules_pycross_internal//deps:packaging",
     ],
 )
 
@@ -109,7 +94,7 @@ py_binary(
     deps = [
         ":args",
         ":lock_model",
-        "@rules_pycross_internal//deps:tomli",
+        ":translator_utils",
     ],
 )
 
@@ -121,7 +106,7 @@ py_binary(
     deps = [
         ":args",
         ":lock_model",
-        "@rules_pycross_internal//deps:tomli",
+        ":translator_utils",
     ],
 )
 
@@ -133,8 +118,8 @@ py_binary(
     deps = [
         ":args",
         ":lock_model",
+        ":translator_utils",
         "@rules_pycross_internal//deps:poetry-core",
-        "@rules_pycross_internal//deps:tomli",
     ],
 )
 
@@ -153,40 +138,6 @@ py_binary(
 )
 
 py_binary(
-    name = "wheel_builder",
-    srcs = ["wheel_builder.py"],
-    imports = ["../../.."],
-    visibility = ["//visibility:public"],
-    deps = [
-        ":args",
-        ":target_environment",
-        "//pycross/private/tools/crossenv",
-        "@rules_pycross_internal//deps:build",
-        "@rules_pycross_internal//deps:packaging",
-        "@rules_pycross_internal//deps:tomli",
-    ],
-)
-
-py_test(
-    name = "wheel_builder_test",
-    size = "small",
-    srcs = [
-        "wheel_builder.py",
-        "wheel_builder_test.py",
-    ],
-    imports = ["../../.."],
-    tags = ["unit"],
-    deps = [
-        ":args",
-        ":target_environment",
-        "//pycross/private/tools/crossenv",
-        "@rules_pycross_internal//deps:build",
-        "@rules_pycross_internal//deps:packaging",
-        "@rules_pycross_internal//deps:tomli",
-    ],
-)
-
-py_binary(
     name = "wheel_installer",
     srcs = ["wheel_installer.py"],
     imports = ["../../.."],
@@ -194,7 +145,44 @@ py_binary(
     deps = [
         ":args",
         ":installer",
-        ":namespace_pkgs",
-        "@patch-ng",
+        ":patch_ng",
+    ],
+)
+
+py_binary(
+    name = "extract_console_script",
+    srcs = ["extract_console_script.py"],
+    imports = ["../../.."],
+    visibility = ["//visibility:public"],
+)
+
+py_binary(
+    name = "extract_wheel_bin",
+    srcs = ["extract_wheel_bin.py"],
+    visibility = ["//visibility:public"],
+)
+
+py_binary(
+    name = "copy_file",
+    srcs = ["copy_file.py"],
+    visibility = ["//visibility:public"],
+)
+
+py_library(
+    name = "pylock_translator_lib",
+    srcs = ["pylock_translator.py"],
+    deps = [
+        ":args",
+        ":lock_model",
+        "@rules_pycross_internal//deps:packaging",
+    ],
+)
+
+py_binary(
+    name = "pylock_translator",
+    srcs = ["pylock_translator.py"],
+    visibility = ["//visibility:public"],
+    deps = [
+        ":pylock_translator_lib",
     ],
 )

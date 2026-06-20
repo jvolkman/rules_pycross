@@ -1,0 +1,12 @@
+[project]
+name = "uv-cycle-test"
+version = "0.1.0"
+requires-python = ">=3.10"
+dependencies = [
+    "cycle-a",
+    "cycle-b",
+]
+
+[tool.uv.sources]
+cycle-a = { path = "./cycle_a-1.0.0-py3-none-any.whl" }
+cycle-b = { path = "./cycle_b-1.0.0-py3-none-any.whl" }

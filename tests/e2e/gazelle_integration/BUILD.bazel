@@ -1,0 +1,45 @@
+load("@gazelle//:def.bzl", "gazelle")
+load("@rules_pycross//pycross:defs.bzl", "pycross_modules_mapping")
+load("@rules_python//python:defs.bzl", "py_binary", "py_library")
+load("@rules_python_gazelle_plugin//manifest:defs.bzl", "gazelle_python_manifest")
+load("@uv//:requirements.bzl", "all_requirements")
+
+# Aggregate Pycross module mapping
+pycross_modules_mapping(
+    name = "modules_map",
+    deps = all_requirements,
+)
+
+# Tell gazelle about python packages
+gazelle_python_manifest(
+    name = "gazelle_python_manifest",
+    modules_mapping = ":modules_map",
+    pip_repository_name = "uv",
+)
+
+# gazelle:python_extension enabled
+# gazelle:python_root //
+gazelle(
+    name = "gazelle",
+    gazelle = "@rules_python_gazelle_plugin//python:gazelle_binary",
+)
+
+py_binary(
+    name = "test",
+    srcs = ["test.py"],
+    visibility = ["//:__subpackages__"],
+    deps = [
+        "@uv//python_dateutil",
+        "@uv//requests",
+    ],
+)
+
+py_library(
+    name = "gazelle_integration",
+    srcs = ["test.py"],
+    visibility = ["//:__subpackages__"],
+    deps = [
+        "@uv//python_dateutil",
+        "@uv//requests",
+    ],
+)

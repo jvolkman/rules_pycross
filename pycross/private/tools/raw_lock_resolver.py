@@ -1,6 +1,8 @@
+import hashlib
 import json
 import operator
 import os
+import re
 from argparse import ArgumentParser
 from collections import defaultdict
 from dataclasses import dataclass
@@ -13,21 +15,19 @@ from typing import Dict
 from typing import List
 from typing import Optional
 from typing import Set
+from typing import Tuple
 from urllib.parse import urlparse
 
 from packaging.markers import Marker
 from packaging.utils import NormalizedName
 from packaging.utils import parse_wheel_filename
 from packaging.version import Version
-from pip._internal.index.package_finder import CandidateEvaluator
-from pip._internal.index.package_finder import LinkEvaluator
-from pip._internal.index.package_finder import LinkType
-from pip._internal.models.candidate import InstallationCandidate
-from pip._internal.models.link import Link
 from pycross.private.tools.args import FlagFileArgumentParser
+from pycross.private.tools.lock_model import DependencyName
 from pycross.private.tools.lock_model import EnvironmentReference
 from pycross.private.tools.lock_model import FileKey
 from pycross.private.tools.lock_model import FileReference
+from pycross.private.tools.lock_model import PackageDependency
 from pycross.private.tools.lock_model import PackageFile
 from pycross.private.tools.lock_model import PackageKey
 from pycross.private.tools.lock_model import RawLockSet
@@ -37,6 +37,8 @@ from pycross.private.tools.lock_model import ResolvedPackage
 from pycross.private.tools.lock_model import is_wheel
 from pycross.private.tools.lock_model import package_canonical_name
 from pycross.private.tools.target_environment import TargetEnv
+
+EXTRA_PATTERN = re.compile(r"extra\s*==\s*['\"]([^'\"]+)['\"]")
 
 
 @dataclass(frozen=True)
@@ -73,15 +75,29 @@ class GenerationContext:
         local_wheels: Dict[str, str],
         remote_wheels: Dict[str, PackageFile],
         always_include_sdist: bool,
+        lock_package_keys: Optional[AbstractSet[PackageKey]] = None,
     ):
         self.target_environments = target_environments
         self.local_wheels = local_wheels
         self.remote_wheels = remote_wheels
         self.target_environments_by_name = {tenv.name: tenv for tenv in target_environments}
         self.always_include_sdist = always_include_sdist
+        self.lock_package_keys = lock_package_keys
+
+        self.local_wheels_by_pkg = defaultdict(list)
+        for filename, label in local_wheels.items():
+            name, version, _, _ = parse_wheel_filename(filename)
+            self.local_wheels_by_pkg[(name, version)].append((filename, label))
+
+        self.remote_wheels_by_pkg = defaultdict(list)
+        for filename, remote_file in remote_wheels.items():
+            name, version, _, _ = parse_wheel_filename(filename)
+            self.remote_wheels_by_pkg[(name, version)].append((filename, remote_file))
 
     def check_package_compatibility(self, package: RawPackage) -> None:
         """Sanity check to make sure the requires_python attribute on each package matches our environments."""
+        if package.python_version_specifiers:
+            return
         for environment in self.target_environments:
             if not package.python_versions.contains(environment.version):
                 raise Exception(
@@ -92,95 +108,119 @@ class GenerationContext:
     def get_dependencies_by_environment(
         self, package: RawPackage, ignore_dependency_names: Set[str]
     ) -> Dict[Optional[str], Set[PackageKey]]:
-        env_deps = defaultdict(set)
-        # We sort deps by version in descending order. In case the list of dependencies
-        # has multiple entries for the same name that match an environment, we prefer the
-        # latest version.
+
+        base_env_deps = {target.name: set() for target in self.target_environments}
+
         ordered_deps = sorted(package.dependencies, key=operator.attrgetter("version"), reverse=True)
-        # Filter out dependencies that we've been told to ignore
         if ignore_dependency_names:
-            ordered_deps = [d for d in ordered_deps if d.name not in ignore_dependency_names]
+            ordered_deps = [d for d in ordered_deps if d.name.package not in ignore_dependency_names]
+
+        # Pre-process dependencies
+        prepared_deps = []
+        for dep in ordered_deps:
+            dep_base_key = PackageKey.from_parts(DependencyName(dep.name.package), dep.version)
+            if self.lock_package_keys is not None and dep_base_key not in self.lock_package_keys:
+                continue
+            marker = Marker(dep.marker) if dep.marker else None
+            prepared_deps.append((dep, marker))
+
+        # Pre-create environment markers with extra
+        extra_val = str(package.name.extra) if package.name.extra else ""
+        env_markers = {}
+        for target in self.target_environments:
+            markers = dict(target.markers)
+            markers["extra"] = extra_val
+            env_markers[target.name] = markers
 
         for target in self.target_environments:
-            added_for_target = set()
-            for dep in ordered_deps:
-                # Only add each dependency once per target.
-                if dep.name in added_for_target:
-                    continue
-                # If the dependency has no marker, just add it for each environment.
-                if not dep.marker:
-                    env_deps[target.name].add(dep.key)
-                    added_for_target.add(dep.name)
+            added_base_for_target = set()
+            markers = env_markers[target.name]
 
-                # Otherwise, only add dependencies whose markers evaluate to the current target.
+            for dep, marker in prepared_deps:
+                if not marker:
+                    if dep.name not in added_base_for_target:
+                        base_env_deps[target.name].add(dep.key)
+                        added_base_for_target.add(dep.name)
                 else:
-                    marker = Marker(dep.marker)
-                    if marker.evaluate(target.markers):
-                        env_deps[target.name].add(dep.key)
-                        added_for_target.add(dep.name)
+                    if marker.evaluate(markers) and dep.name not in added_base_for_target:
+                        base_env_deps[target.name].add(dep.key)
+                        added_base_for_target.add(dep.name)
 
-        if env_deps:
-            # Pull out deps common to all environments
-            common_deps = set.intersection(*env_deps.values())
-            env_deps_deduped = {}
-            for env, deps in env_deps.items():
-                deps = deps - common_deps
-                if deps:
-                    env_deps_deduped[env] = deps
-
-            env_deps_deduped[None] = common_deps
-            return env_deps_deduped
-
-        return {}
+        if not base_env_deps:
+            return {}
+        common_deps = set.intersection(*base_env_deps.values()) if base_env_deps else set()
+        edeps_deduped = {}
+        for env, deps in base_env_deps.items():
+            deps = deps - common_deps
+            if deps:
+                edeps_deduped[env] = deps
+        edeps_deduped[None] = common_deps
+        return edeps_deduped
 
     def get_package_sources_by_environment(
         self, package: RawPackage, source_only: bool = False
     ) -> Dict[str, PackageSource]:
-        formats = frozenset(["source"]) if source_only else frozenset(["source", "binary"])
+
+        package_sources = {}
+        # Start with the files defined in the input lock model
+        for file in package.files:
+            package_sources[file.name] = PackageSource(file=file)
+
+        # Override per-file with given remote wheel URLs
+        for filename, remote_file in self.remote_wheels_by_pkg.get((package.name, package.version), []):
+            package_sources[filename] = PackageSource(file=remote_file)
+
+        # Override per-file with given local wheel labels
+        for filename, local_label in self.local_wheels_by_pkg.get((package.name, package.version), []):
+            package_sources[filename] = PackageSource(label=local_label)
+
+        # Pre-parse wheel filenames and separate sdist sources (invariant across environments).
+        parsed_wheels = []  # List of (build_tag, file_tags, package_source)
+        sdist_source = None
+        for filename, package_source in package_sources.items():
+            if is_wheel(filename):
+                if source_only:
+                    continue
+                try:
+                    _, _, build_tag, file_tags = parse_wheel_filename(filename)
+                except Exception:
+                    continue
+                parsed_wheels.append((build_tag, file_tags, package_source))
+            else:
+                sdist_source = package_source
+
         environment_sources = {}
         for environment in sorted(self.target_environments, key=lambda tenv: tenv.name.lower()):
-            link_evaluator = LinkEvaluator(
-                project_name=package.name,
-                canonical_name=package.name,
-                formats=formats,
-                target_python=environment.target_python,
-                allow_yanked=True,
-                ignore_requires_python=True,
-            )
+            best_source = None
+            best_priority = None  # Lower is better
+            best_build_tag = ()
 
-            package_sources = {}
+            for build_tag, file_tags, package_source in parsed_wheels:
+                compatible_tags = file_tags.intersection(environment.supported_tags_set)
+                if not compatible_tags:
+                    continue
 
-            # Start with the files defined in the input lock model
-            for file in package.files:
-                package_sources[file.name] = PackageSource(file=file)
+                priority = min(environment.tag_to_index[tag] for tag in compatible_tags)
 
-            # Override per-file with given remote wheel URLs
-            for filename, remote_file in self.remote_wheels.items():
-                name, version, _, _ = parse_wheel_filename(filename)
-                if (package.name, package.version) == (name, version):
-                    package_sources[filename] = PackageSource(file=remote_file)
+                is_better = False
+                if best_priority is None:
+                    is_better = True
+                elif priority < best_priority:
+                    is_better = True
+                elif priority == best_priority:
+                    is_better = build_tag > best_build_tag
 
-            # Override per-file with given local wheel labels
-            for filename, local_label in self.local_wheels.items():
-                name, version, _, _ = parse_wheel_filename(filename)
-                if (package.name, package.version) == (name, version):
-                    package_sources[filename] = PackageSource(label=local_label)
+                if is_better:
+                    best_priority = priority
+                    best_build_tag = build_tag
+                    best_source = package_source
 
-            candidates_to_package_sources = {}
-            for filename, package_source in package_sources.items():
-                candidate = InstallationCandidate(package.name, str(package.version), Link(filename))
-                candidates_to_package_sources[candidate] = package_source
+            # Fall back to sdist if no compatible wheel was found.
+            if best_source is None and sdist_source is not None:
+                best_source = sdist_source
 
-            candidates = []
-            for candidate in candidates_to_package_sources:
-                link_type, _ = link_evaluator.evaluate_link(candidate.link)
-                if link_type == LinkType.candidate:
-                    candidates.append(candidate)
-
-            candidate_evaluator = CandidateEvaluator.create(package.name, environment.target_python)
-            compute_result = candidate_evaluator.compute_best_candidate(candidates)
-            if compute_result.best_candidate:
-                environment_sources[environment.name] = candidates_to_package_sources[compute_result.best_candidate]
+            if best_source:
+                environment_sources[environment.name] = best_source
 
         return environment_sources
 
@@ -188,11 +228,19 @@ class GenerationContext:
 @dataclass
 class PackageAnnotations:
     build_dependencies: List[PackageKey] = field(default_factory=list)
+    build_repo: Optional[str] = None
     build_target: Optional[str] = None
     always_build: bool = False
     ignore_dependencies: Set[str] = field(default_factory=set)
     install_exclude_globs: Set[str] = field(default_factory=set)
     post_install_patches: List[str] = field(default_factory=list)
+    pre_build_patches: List[str] = field(default_factory=list)
+    site_hooks: List[str] = field(default_factory=list)
+    build_backend: Optional[str] = None
+    site_paths: List[str] = field(default_factory=list)
+    bin_paths: List[str] = field(default_factory=list)
+    data_paths: List[str] = field(default_factory=list)
+    include_paths: List[str] = field(default_factory=list)
 
 
 class PackageResolver:
@@ -208,20 +256,30 @@ class PackageResolver:
         self.key = package.key
         self.package_name = package.name
         self.uses_sdist = False
+        self.source_dir = package.source_dir
 
         build_dependencies = annotations.build_dependencies or default_build_dependencies
 
         # Filter out any dependencies that are already in the package's dependencies
         self._build_deps = [dep for dep in build_dependencies if dep not in (p.key for p in package.dependencies)]
 
+        self._build_repo = annotations.build_repo
         self._build_target = annotations.build_target
         self._install_exclude_globs = annotations.install_exclude_globs
         self._post_install_patches = annotations.post_install_patches
+        self._pre_build_patches = annotations.pre_build_patches
+        self._site_hooks = annotations.site_hooks
+        self._build_backend = annotations.build_backend
+        self._site_paths = annotations.site_paths
+        self._bin_paths = annotations.bin_paths
+        self._data_paths = annotations.data_paths
+        self._include_paths = annotations.include_paths
 
         deps_by_env = context.get_dependencies_by_environment(
             package,
             annotations.ignore_dependencies,
         )
+
         self._common_deps = deps_by_env.get(None, set())
         self._env_deps = {k: v for k, v in deps_by_env.items() if k is not None}
 
@@ -252,6 +310,13 @@ class PackageResolver:
         self.package_sources = frozenset(used_package_sources)
 
     @cached_property
+    def runtime_dependency_keys(self) -> Set[PackageKey]:
+        keys = set(self._common_deps)
+        for env_deps in self._env_deps.values():
+            keys |= env_deps
+        return keys
+
+    @cached_property
     def all_dependency_keys(self) -> Set[PackageKey]:
         """Returns all package keys (name-version) that this target depends on,
         including platform-specific and build dependencies."""
@@ -265,6 +330,7 @@ class PackageResolver:
         return ResolvedPackage(
             key=self.key,
             build_dependencies=sorted(self._build_deps),
+            build_repo=self._build_repo,
             common_dependencies=sorted(self._common_deps),
             environment_dependencies={env: sorted(deps) for env, deps in sorted(self._env_deps.items())},
             environment_files={env: ps.file_reference for env, ps in sorted(self._package_sources_by_env.items())},
@@ -272,6 +338,14 @@ class PackageResolver:
             sdist_file=self.sdist_file,
             install_exclude_globs=list(self._install_exclude_globs),
             post_install_patches=self._post_install_patches,
+            pre_build_patches=self._pre_build_patches,
+            site_hooks=self._site_hooks,
+            build_backend=self._build_backend,
+            site_paths=self._site_paths,
+            bin_paths=self._bin_paths,
+            data_paths=self._data_paths,
+            include_paths=self._include_paths,
+            source_dir=self.source_dir,
         )
 
 
@@ -286,19 +360,19 @@ def url_wheel_name(url: str) -> str:
 
 def resolve_single_version(
     name: str,
-    versions_by_name: Dict[NormalizedName, List[PackageKey]],
+    versions_by_name: Dict[DependencyName, List[PackageKey]],
     all_versions: AbstractSet[PackageKey],
     attr_name: str,
 ) -> PackageKey:
     # Handle the case of an exact version being specified.
     if "@" in name:
         name_part, version_part = name.split("@", maxsplit=1)
-        key = PackageKey.from_parts(package_canonical_name(name_part), Version(version_part))
+        key = PackageKey.from_parts(DependencyName(name_part), Version(version_part))
         if key not in all_versions:
             raise Exception(f'{attr_name} entry "{name}" matches no packages')
         return key
 
-    options = versions_by_name.get(package_canonical_name(name))
+    options = versions_by_name.get(DependencyName(name))
     if not options:
         raise Exception(f'{attr_name} entry "{name}" matches no packages')
 
@@ -308,23 +382,29 @@ def resolve_single_version(
     return options[0]
 
 
-def collect_package_annotations(args: Any, lock_model: RawLockSet) -> Dict[PackageKey, PackageAnnotations]:
+def collect_package_annotations(
+    args: Any, lock_model: RawLockSet
+) -> Tuple[Dict[PackageKey, PackageAnnotations], Set[PackageKey]]:
+    """Collect package annotations from the annotations file.
+
+    Returns:
+        A tuple of (annotations_dict, wildcard_only_keys). wildcard_only_keys
+        contains package keys that were created solely by wildcard expansion
+        and have no specific override. These should be silently ignored if
+        they go unconsumed during resolution.
+    """
+    if not args.annotations_file:
+        return {}, set()
+
     annotations: Dict[PackageKey, PackageAnnotations] = defaultdict(PackageAnnotations)
-    all_package_keys_by_canonical_name: Dict[NormalizedName, List[PackageKey]] = defaultdict(list)
+    all_package_keys_by_canonical_name: Dict[DependencyName, List[PackageKey]] = defaultdict(list)
     for package in lock_model.packages.values():
         all_package_keys_by_canonical_name[package.name].append(package.key)
 
     with open(args.annotations_file, "r") as f:
         annotations_data = json.load(f)
 
-    for pkg, annotation in annotations_data.items():
-        resolved_pkg = resolve_single_version(
-            pkg,
-            all_package_keys_by_canonical_name,
-            lock_model.packages.keys(),
-            "annotations",
-        )
-
+    def apply_annotation(pkg_key: PackageKey, annotation: Dict[str, Any]):
         for dep in annotation.get("build_dependencies", []):
             resolved_dep = resolve_single_version(
                 dep,
@@ -332,34 +412,76 @@ def collect_package_annotations(args: Any, lock_model: RawLockSet) -> Dict[Packa
                 lock_model.packages.keys(),
                 "build_dependencies",
             )
-            annotations[resolved_pkg].build_dependencies.append(resolved_dep)
+            annotations[pkg_key].build_dependencies.append(resolved_dep)
 
-        if annotation.get("build_target"):
-            annotations[resolved_pkg].build_target = annotation["build_target"]
+        if "build_repo" in annotation:
+            annotations[pkg_key].build_repo = annotation["build_repo"]
 
-        if annotation.get("always_build"):
-            annotations[resolved_pkg].always_build = True
+        if "build_target" in annotation:
+            annotations[pkg_key].build_target = annotation["build_target"]
+
+        if "always_build" in annotation:
+            annotations[pkg_key].always_build = annotation["always_build"]
 
         for dep in annotation.get("ignore_dependencies", []):
             if dep not in all_package_keys_by_canonical_name and dep not in lock_model.packages.keys():
                 raise Exception(f'package_ignore_dependencies entry "{dep}" matches no packages')
-
-            # This dependency will be resolved to a single version later
-            annotations[resolved_pkg].ignore_dependencies.add(dep)
+            annotations[pkg_key].ignore_dependencies.add(dep)
 
         for glob in annotation.get("install_exclude_globs", []):
-            annotations[resolved_pkg].install_exclude_globs.add(glob)
+            annotations[pkg_key].install_exclude_globs.add(glob)
 
         for patch in annotation.get("post_install_patches", []):
-            annotations[resolved_pkg].post_install_patches.append(patch)
+            annotations[pkg_key].post_install_patches.append(patch)
+
+        for patch in annotation.get("pre_build_patches", []):
+            annotations[pkg_key].pre_build_patches.append(patch)
+
+        for hook in annotation.get("site_hooks", []):
+            annotations[pkg_key].site_hooks.append(hook)
+
+        if "build_backend" in annotation:
+            annotations[pkg_key].build_backend = annotation["build_backend"]
+
+        if "site_paths" in annotation:
+            annotations[pkg_key].site_paths.extend(annotation["site_paths"])
+        if "bin_paths" in annotation:
+            annotations[pkg_key].bin_paths.extend(annotation["bin_paths"])
+        if "data_paths" in annotation:
+            annotations[pkg_key].data_paths.extend(annotation["data_paths"])
+        if "include_paths" in annotation:
+            annotations[pkg_key].include_paths.extend(annotation["include_paths"])
+
+    wildcard_only_keys: Set[PackageKey] = set()
+    wildcard_annotation = annotations_data.pop("*", None)
+
+    # Apply specific annotations first.
+    specific_keys: Set[PackageKey] = set()
+    for pkg, annotation in annotations_data.items():
+        resolved_pkg = resolve_single_version(
+            pkg,
+            all_package_keys_by_canonical_name,
+            lock_model.packages.keys(),
+            "annotations",
+        )
+        apply_annotation(resolved_pkg, annotation)
+        specific_keys.add(resolved_pkg)
+
+    # Apply wildcard only to packages that don't have a specific annotation.
+    # A specific annotation fully replaces the wildcard for that package.
+    if wildcard_annotation:
+        for pkg_key in lock_model.packages.keys():
+            if pkg_key not in specific_keys:
+                apply_annotation(pkg_key, wildcard_annotation)
+                wildcard_only_keys.add(pkg_key)
 
     # Return as a non-default dict
-    return dict(annotations)
+    return dict(annotations), wildcard_only_keys
 
 
 def collect_default_build_dependencies(lock_model: RawLockSet, build_dependencies: list[str]) -> list[PackageKey]:
-    all_package_keys_by_canonical_name: Dict[NormalizedName, List[PackageKey]] = defaultdict(list)
-    resolved_build_penpendencies = []
+    all_package_keys_by_canonical_name: Dict[DependencyName, List[PackageKey]] = defaultdict(list)
+    resolved_build_dependencies = []
     for package in lock_model.packages.values():
         all_package_keys_by_canonical_name[package.name].append(package.key)
 
@@ -370,18 +492,16 @@ def collect_default_build_dependencies(lock_model: RawLockSet, build_dependencie
             lock_model.packages.keys(),
             "build_dependencies",
         )
-        resolved_build_penpendencies.append(resolved_dep)
+        resolved_build_dependencies.append(resolved_dep)
 
-    return resolved_build_penpendencies
+    return resolved_build_dependencies
 
 
-def resolve(args: Any) -> ResolvedLockSet:
-    with open(args.lock_model_file, "r") as f:
-        data = f.read()
-    lock_model = RawLockSet.from_json(data)
-
+def _parse_environments(
+    lock_model: RawLockSet, target_environment_args: Optional[List[Any]]
+) -> List[LabelAndTargetEnv]:
     environment_pairs: List[LabelAndTargetEnv] = []
-    for target_environment in args.target_environment or []:
+    for target_environment in target_environment_args or []:
         target_file, target_label = target_environment
         with open(target_file, "r") as f:
             target_env = TargetEnv.from_dict(json.load(f))
@@ -397,42 +517,72 @@ def resolve(args: Any) -> ResolvedLockSet:
             )
         )
     environment_pairs.sort(key=lambda x: x.target_environment.name.lower())
-    environments = [ep.target_environment for ep in environment_pairs]
+    return environment_pairs
 
+
+def _parse_wheels(
+    local_wheel_args: Optional[List[Any]], remote_wheel_args: Optional[List[Any]]
+) -> Tuple[Dict[str, str], Dict[str, PackageFile]]:
     local_wheels = {}
-    for local_wheel in args.local_wheel or []:
+    for local_wheel in local_wheel_args or []:
         filename, label = local_wheel
         assert is_wheel(filename), f"Local label is not a wheel: {label}"
         local_wheels[filename] = label
 
     remote_wheels = {}
-    for remote_wheel in args.remote_wheel or []:
+    for remote_wheel in remote_wheel_args or []:
         url, sha256 = remote_wheel
         filename = url_wheel_name(url)
         remote_wheels[filename] = PackageFile(name=filename, sha256=sha256, urls=(url,))
 
-    context = GenerationContext(
-        target_environments=environments,
-        local_wheels=local_wheels,
-        remote_wheels=remote_wheels,
-        always_include_sdist=args.always_include_sdist,
-    )
+    return local_wheels, remote_wheels
 
-    # Collect package "annotations"
-    annotations = collect_package_annotations(args, lock_model)
 
-    default_build_dependencies = collect_default_build_dependencies(lock_model, args.default_build_dependencies)
-
-    # Walk the dependency graph starting from the set if pinned packages (in pyproject.toml), computing the
-    # transitive closure.
-    work = list(lock_model.pins.values())
+def _resolve_packages(
+    lock_model: RawLockSet,
+    context: GenerationContext,
+    annotations: Dict[PackageKey, PackageAnnotations],
+    default_build_dependencies: List[PackageKey],
+    wildcard_only_keys: Set[PackageKey] = frozenset(),
+) -> Dict[PackageKey, PackageResolver]:
+    work = []
+    for pin_dict in lock_model.pins.values():
+        work.extend(pin_dict.values())
     packages_by_package_key: Dict[PackageKey, PackageResolver] = {}
 
     while work:
         next_package_key = work.pop()
         if next_package_key in packages_by_package_key:
             continue
-        package = lock_model.packages[next_package_key]
+
+        if next_package_key not in lock_model.packages:
+            if next_package_key.name.extra:
+                base_key = PackageKey.from_parts(
+                    DependencyName(next_package_key.name.package), next_package_key.version
+                )
+                if base_key not in lock_model.packages:
+                    raise KeyError(f"Missing base package {base_key} for extra {next_package_key}")
+                base_package = lock_model.packages[base_key]
+                package = RawPackage(
+                    name=next_package_key.name,
+                    version=next_package_key.version,
+                    python_versions=base_package.python_versions,
+                    dependencies=list(base_package.dependencies)
+                    + [
+                        PackageDependency(
+                            name=DependencyName(next_package_key.name.package),
+                            version=next_package_key.version,
+                            marker="",
+                        )
+                    ],
+                    files=[],
+                )
+                lock_model.packages[next_package_key] = package
+            else:
+                raise KeyError(f"Missing package {next_package_key}")
+        else:
+            package = lock_model.packages[next_package_key]
+
         context.check_package_compatibility(package)
         entry = PackageResolver(
             package,
@@ -443,6 +593,12 @@ def resolve(args: Any) -> ResolvedLockSet:
         packages_by_package_key[next_package_key] = entry
         work.extend(entry.all_dependency_keys)
 
+    # Discard any remaining annotations that came purely from wildcard expansion.
+    # These are packages in the lock model that aren't in the transitive closure
+    # of pins — it's expected that wildcards touch them and they go unconsumed.
+    for key in wildcard_only_keys:
+        annotations.pop(key, None)
+
     # The annotations dict should be empty now; if not, annotations were specified
     # for packages that are not actually part of our final set.
     if annotations:
@@ -450,6 +606,107 @@ def resolve(args: Any) -> ResolvedLockSet:
             f"Annotations specified for packages that are not part of the locked set: "
             f"{', '.join([str(key) for key in sorted(annotations.keys())])}"
         )
+
+    return packages_by_package_key
+
+
+def _compute_cycle_groups(packages_by_package_key: Dict[PackageKey, PackageResolver]) -> Dict[str, List[PackageKey]]:
+    graph = {pkg_key: list(resolver.runtime_dependency_keys) for pkg_key, resolver in packages_by_package_key.items()}
+
+    # Iterative Tarjan's SCC to avoid stack overflow on large dependency graphs
+    index_counter = 0
+    indices = {}
+    lowlink = {}
+    on_stack = set()
+    stack = []
+    sccs = []
+
+    for root in graph:
+        if root in indices:
+            continue
+        # Each frame: (node, neighbor_iterator, is_initial_visit)
+        work_stack = [(root, iter(graph.get(root, [])), True)]
+        while work_stack:
+            v, neighbors, initial = work_stack[-1]
+            if initial:
+                indices[v] = index_counter
+                lowlink[v] = index_counter
+                index_counter += 1
+                stack.append(v)
+                on_stack.add(v)
+                work_stack[-1] = (v, neighbors, False)
+
+            recurse = False
+            for w in neighbors:
+                if w not in indices:
+                    work_stack.append((w, iter(graph.get(w, [])), True))
+                    recurse = True
+                    break
+                elif w in on_stack:
+                    lowlink[v] = min(lowlink[v], indices[w])
+
+            if recurse:
+                continue
+
+            if lowlink[v] == indices[v]:
+                scc = []
+                while True:
+                    w = stack.pop()
+                    on_stack.remove(w)
+                    scc.append(w)
+                    if w == v:
+                        break
+                sccs.append(scc)
+
+            work_stack.pop()
+            if work_stack:
+                parent = work_stack[-1][0]
+                lowlink[parent] = min(lowlink[parent], lowlink[v])
+
+    # Build cycle groups with content-based stable names
+    cycle_groups = {}
+    for scc in sccs:
+        if len(scc) <= 1:
+            continue
+        members = sorted(scc)
+        # Short hash of sorted member keys for a stable, compact name
+        digest = hashlib.sha256("\n".join(str(m) for m in members).encode()).hexdigest()[:8]
+        group_name = f"group_{digest}"
+        cycle_groups[group_name] = members
+
+    return cycle_groups
+
+
+def resolve(args: Any) -> ResolvedLockSet:
+    with open(args.lock_model_file, "r") as f:
+        data = f.read()
+    lock_model = RawLockSet.from_json(data)
+
+    environment_pairs = _parse_environments(lock_model, args.target_environment)
+    environments = [ep.target_environment for ep in environment_pairs]
+
+    local_wheels, remote_wheels = _parse_wheels(args.local_wheel, args.remote_wheel)
+
+    context = GenerationContext(
+        target_environments=environments,
+        local_wheels=local_wheels,
+        remote_wheels=remote_wheels,
+        always_include_sdist=args.always_include_sdist,
+        lock_package_keys=set(lock_model.packages.keys()),
+    )
+
+    # Collect package "annotations"
+    annotations, wildcard_only_keys = collect_package_annotations(args, lock_model)
+
+    default_build_dependencies = collect_default_build_dependencies(lock_model, args.default_build_dependencies)
+
+    packages_by_package_key = _resolve_packages(
+        lock_model,
+        context,
+        annotations,
+        default_build_dependencies,
+        wildcard_only_keys,
+    )
 
     resolved_packages = sorted(packages_by_package_key.values(), key=lambda x: x.key)
     # If builds are disallowed, ensure that none of the targets include an sdist build
@@ -487,16 +744,25 @@ def resolve(args: Any) -> ResolvedLockSet:
                 continue
             if len(packages) > 1:
                 continue
-            pins[package_pin_name] = packages[0]
+            pins[package_pin_name] = {"": packages[0]}
+
+    cycle_groups = _compute_cycle_groups(packages_by_package_key)
 
     resolved_environments = {env.target_environment.name: env.to_environment_reference() for env in environment_pairs}
-    resolved_packages = {pkg.key: pkg.to_resolved_package() for pkg in resolved_packages}
+    resolved_packages_dict = {pkg.key: pkg.to_resolved_package() for pkg in resolved_packages}
+
+    for group_name, scc in cycle_groups.items():
+        for pkg_key in scc:
+            if pkg_key in resolved_packages_dict:
+                resolved_packages_dict[pkg_key].cycle_group = group_name
 
     return ResolvedLockSet(
         environments=resolved_environments,
-        packages=resolved_packages,
+        packages=resolved_packages_dict,
         pins=pins,
         remote_files=repos,
+        cycle_groups=cycle_groups,
+        variants=lock_model.variants,
     )
 
 

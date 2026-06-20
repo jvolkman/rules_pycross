@@ -1,0 +1,1 @@
+common --@protobuf//bazel/toolchains:prefer_prebuilt_protoc

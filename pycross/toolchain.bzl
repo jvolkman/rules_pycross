@@ -17,6 +17,12 @@ PycrossBuildExecRuntimeInfo = provider(
 )
 
 def _python_executable(runtime):
+    """Resolve the Python executable path from a PyRuntimeInfo.
+
+    Prefers interpreter_files_to_run (rules_python >= 1.x) over
+    interpreter_path and interpreter.path for runtimes that expose
+    a launcher or wrapper executable.
+    """
     files_to_run = getattr(runtime, "interpreter_files_to_run", None)
     if files_to_run and files_to_run.executable:
         return files_to_run.executable.path
@@ -25,8 +31,20 @@ def _python_executable(runtime):
     return runtime.interpreter.path
 
 def _pycross_hermetic_toolchain_impl(ctx):
-    exec_py_info = ctx.attr.exec_interpreter[PyRuntimeInfo]
     target_py_info = ctx.attr.target_interpreter[PyRuntimeInfo]
+
+    # Resolve exec interpreter (can be direct PyRuntimeInfo or current_py_toolchain)
+    exec_interpreter = ctx.attr.exec_interpreter
+    if PyRuntimeInfo in exec_interpreter:
+        exec_py_info = exec_interpreter[PyRuntimeInfo]
+    elif platform_common.ToolchainInfo in exec_interpreter:
+        exec_tc = exec_interpreter[platform_common.ToolchainInfo]
+        if hasattr(exec_tc, "py3_runtime") and exec_tc.py3_runtime:
+            exec_py_info = exec_tc.py3_runtime
+        else:
+            fail("exec_interpreter toolchain does not provide py3_runtime")
+    else:
+        fail("exec_interpreter must provide PyRuntimeInfo or ToolchainInfo")
 
     pycross_info = PycrossBuildExecRuntimeInfo(
         exec_python_files = exec_py_info.files,
@@ -54,9 +72,8 @@ pycross_hermetic_toolchain = rule(
             cfg = "target",
         ),
         "exec_interpreter": attr.label(
-            doc = "The execution Python interpreter (PyRuntimeInfo).",
+            doc = "The execution Python interpreter (can be PyRuntimeInfo or a toolchain alias).",
             mandatory = True,
-            providers = [PyRuntimeInfo],
             cfg = "exec",
         ),
     },

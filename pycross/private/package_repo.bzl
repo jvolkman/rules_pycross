@@ -1,225 +1,356 @@
-"""An internal repo rule that wraps a pycross lock structure.
+"""A pure-Starlark workspace repository rule that wraps a pycross lock structure.
+
+A workspace repo is the shared backing store for one or more user-facing
+"thin" package repos. It contains the actual pycross_wheel_library targets
+and artifact references, while thin repos provide pin aliases and
+user-facing convenience targets.
 
 The file structure is as follows:
-- WORKSPACE.bazel       - The workspace root marker.
-- BUILD.bazel           - The root build file.
-- defs.bzl              - A defs file that provides an `install_deps` macro in some contexts. May be empty.
-- requirements.bzl      - A defs file that provides the traditional `requirement` and `all_requirements`.
-- _lock/BUILD.bazel     - Contains instantiations of all of the definitions in `lock.bzl`.
-- _lock/lock.bzl        - The rendered lock file. This is where most of the "meat" is.
-- _sdist/BUILD.bazel    - Version-aware aliases to package sdist targets.
-- _wheel/BUILD.bazel    - Version-aware aliases to package wheel targets.
-- <package>/BUILD.bazel - Contains aliases to targets under //_lock. Most notably, an alias named <package>
-                          is what most people will want to import.
-
-From a target perspective:
-- //:package               - The pycross_wheel_library target.
-- //package:sdist          - The package's sdist file.
-- //package:wheel          - The package's wheel file.
-- //_sdist:package@version - The sdist for a specific version of package.
-- //_wheel:package@version - The wheel for a specific version of package.
-
-The idea is that, for a repo named "pypi", something will depend on e.g. `@pypi//:numpy` or `@pypi//:pandas`.
-
-The package names in the root of the repo are all normalized per
-https://packaging.python.org/en/latest/specifications/name-normalization.
+- REPO.bazel               - The repository root marker.
+- BUILD.bazel              - Minimal root build file.
+- _lock/lock.bzl           - Generated Starlark with all package targets.
+- _lock/BUILD.bazel        - Loads lock.bzl and calls targets().
+- _wheel/BUILD.bazel       - Versioned wheel aliases.
+- _sdist/BUILD.bazel       - Versioned sdist aliases.
+- _backend/<rule>.bzl      - Backend macros with pre-configured tool deps.
 """
 
-load("@bazel_skylib//lib:paths.bzl", "paths")
-load(":internal_repo.bzl", "exec_internal_tool")
-load(":lock_attrs.bzl", "CREATE_REPOS_ATTRS", "handle_create_repos_attrs")
+load(":resolved_lock_renderer.bzl", "render_lock_bzl")
+load(":util.bzl", "key_name", "key_parts", "normalize_pep503_name", "underscore_name")
 
-_install_deps_bzl = """\
-load("//_lock:lock.bzl", _install_deps = "repositories")
+def _normalize_name(name):
+    return normalize_pep503_name(name)
 
-install_deps = _install_deps
-"""
+def _underscore_name(name):
+    return underscore_name(name)
 
-_workspace = """\
-# DO NOT EDIT: automatically generated WORKSPACE file for package_repo rule
-workspace(name = "{repo_name}")
-"""
+def _merge_dependencies(pkg_key, first_data, entries, member_envs):
+    merged = dict(first_data)
 
-_lock_build = """\
-package(default_visibility = ["//:__subpackages__"])
+    for _, pkg_data in entries[1:]:
+        for env_name, env_ref in pkg_data.get("environment_files", {}).items():
+            merged.setdefault("environment_files", {})[env_name] = env_ref
+        if not merged.get("site_paths") and pkg_data.get("site_paths"):
+            merged["site_paths"] = pkg_data["site_paths"]
+        if not merged.get("data_level_paths") and pkg_data.get("data_level_paths"):
+            merged["data_level_paths"] = pkg_data["data_level_paths"]
+        if not merged.get("sdist_file") and pkg_data.get("sdist_file"):
+            merged["sdist_file"] = pkg_data["sdist_file"]
 
-load("//_lock:lock.bzl", "targets")
+    # Check whether common_dependencies differ between members.
+    has_common_dep_conflict = False
+    for _, other_data in entries[1:]:
+        if sorted(first_data.get("common_dependencies", [])) != sorted(other_data.get("common_dependencies", [])):
+            has_common_dep_conflict = True
+            break
 
-targets()
-"""
+    if has_common_dep_conflict:
+        # Validate: members with overlapping environments must agree on deps.
+        env_to_member = {}  # env_name -> (member, common_deps)
+        for member, pkg_data in entries:
+            member_common = sorted(pkg_data.get("common_dependencies", []))
+            for env_name in member_envs.get(member, []):
+                prev_member, prev_deps = env_to_member.setdefault(env_name, (member, member_common))
+                if prev_deps != member_common:
+                    fail(
+                        "Workspace conflict for package '{}': members '{}' and '{}' " +
+                        "share environment '{}' but have different dependencies.\n" +
+                        "  {}: {}\n  {}: {}\n\n" +
+                        "Members sharing the same workspace must resolve compatible " +
+                        "dependency versions for overlapping environments.".format(
+                            pkg_key,
+                            prev_member,
+                            member,
+                            env_name,
+                            prev_member,
+                            prev_deps,
+                            member,
+                            member_common,
+                        ),
+                    )
 
-def _pin_build(package):
-    package_key = package["key"]
-    lines = [
+        # Promote differing common_dependencies to environment_dependencies.
+        # Each member's environments are disjoint, so the environment
+        # select() naturally routes to the correct deps.
+        ed = merged.setdefault("environment_dependencies", {})
+        for member, pkg_data in entries:
+            member_common = pkg_data.get("common_dependencies", [])
+            for env_name in member_envs.get(member, []):
+                env_deps = list(ed.get(env_name, []))
+                for dep in member_common:
+                    if dep not in env_deps:
+                        env_deps.append(dep)
+                ed[env_name] = env_deps
+
+            # Also merge this member's environment_dependencies.
+            for env_name, deps in pkg_data.get("environment_dependencies", {}).items():
+                env_deps = list(ed.get(env_name, []))
+                for dep in deps:
+                    if dep not in env_deps:
+                        env_deps.append(dep)
+                ed[env_name] = env_deps
+
+        # Clear common_dependencies since they've been promoted.
+        merged.pop("common_dependencies", None)
+    else:
+        # Common deps agree — merge as union.
+        for _, pkg_data in entries[1:]:
+            for dep in pkg_data.get("common_dependencies", []):
+                cd = merged.setdefault("common_dependencies", [])
+                if dep not in cd:
+                    cd.append(dep)
+            for env_name, env_deps in pkg_data.get("environment_dependencies", {}).items():
+                ed = merged.setdefault("environment_dependencies", {})
+                if env_name not in ed:
+                    ed[env_name] = list(env_deps)
+                else:
+                    for dep in env_deps:
+                        if dep not in ed[env_name]:
+                            ed[env_name].append(dep)
+
+    return merged
+
+def _package_repo_impl(rctx):
+    # Workspace repos always have member_lock_files — even single-lock repos
+    # are wrapped in a workspace with one member.
+    packages = {}
+    environments = {}
+
+    # Annotation fields that affect pycross_wheel_library targets.
+    # If these differ between members for the same pkg_key, the package
+    # is "conflicting" and gets per-member variant targets.
+    _ANNOTATION_FIELDS = ["post_install_patches", "install_exclude_globs"]
+
+    # First pass: collect per-member package data, environment names, and cycle groups.
+    member_packages = {}  # member_name -> {pkg_key -> pkg_data}
+    member_envs = {}  # member_name -> [env_name, ...]
+    cycle_groups = {}  # group_name -> [pkg_key, ...]
+    variant_items = {}  # qualified_name -> True (dedup across members)
+    for member, lock_label in rctx.attr.member_lock_files.items():
+        member_lock = json.decode(rctx.read(rctx.path(Label(lock_label))))
+
+        # Merge environments (union across members).
+        member_env_names = []
+        for env_name, env_ref in member_lock.get("environments", {}).items():
+            member_env_names.append(env_name)
+            if env_name not in environments:
+                environments[env_name] = env_ref
+
+        for variant_set in member_lock.get("variants", []):
+            for item in variant_set["items"]:
+                if item["kind"] == "project":
+                    qname = "package_{}".format(item["package"])
+                else:
+                    qname = "{}_{}".format(item["kind"], item["name"])
+                variant_items[qname] = True
+
+        member_envs[member] = sorted(member_env_names)
+        member_packages[member] = member_lock.get("packages", {})
+
+        # Merge cycle groups (union across members).
+        for group_name, group_members in member_lock.get("cycle_groups", {}).items():
+            if group_name in cycle_groups and sorted(cycle_groups[group_name]) != sorted(group_members):
+                fail("Cycle group {} conflicts between workspace members ({} vs {})".format(group_name, cycle_groups[group_name], group_members))
+            cycle_groups[group_name] = group_members
+
+    # Second pass: detect conflicts and build merged package set.
+    # conflicts maps pkg_key -> [member_name, ...] for packages with
+    # differing annotations across members.
+    conflicts = {}
+    all_pkg_keys = {}  # pkg_key -> list of (member, pkg_data)
+    for member, pkgs in member_packages.items():
+        for pkg_key, pkg_data in pkgs.items():
+            all_pkg_keys.setdefault(pkg_key, []).append((member, pkg_data))
+
+    for pkg_key, entries in all_pkg_keys.items():
+        if len(entries) <= 1:
+            # Only in one member — no conflict possible.
+            packages[pkg_key] = dict(entries[0][1])
+            continue
+
+        # Check annotation fields for differences.
+        _, first_data = entries[0]
+        has_annotation_conflict = False
+        for _, other_data in entries[1:]:
+            for field in _ANNOTATION_FIELDS:
+                if first_data.get(field, []) != other_data.get(field, []):
+                    has_annotation_conflict = True
+                    break
+            if has_annotation_conflict:
+                break
+
+        if has_annotation_conflict:
+            # Conflicting annotations: create per-member variant packages.
+            conflicts[pkg_key] = [member for member, _ in entries]
+            for member, pkg_data in entries:
+                variant_key = "{}__via_{}".format(pkg_key, member)
+                packages[variant_key] = dict(pkg_data)
+        else:
+            packages[pkg_key] = _merge_dependencies(pkg_key, first_data, entries, member_envs)
+
+    # Workspace repos have no pins — each thin repo has its own.
+    lock = {
+        "packages": packages,
+        "pins": {},
+        "environments": environments,
+        "cycle_groups": cycle_groups,
+    }
+
+    repo_map = {}
+    for label, file_key in rctx.attr.repo_map.items():
+        repo_map[file_key] = str(label)
+
+    sdist_map = {}
+    for label, file_key in rctx.attr.sdist_map.items():
+        sdist_map[file_key] = str(label)
+
+    rctx.file("REPO.bazel", "")
+
+    # 1. Render _lock/lock.bzl and _lock/BUILD.bazel
+    rctx.file("_lock/lock.bzl", render_lock_bzl(lock, repo_map, sdist_map, rctx.name))
+
+    lock_build_lines = [
         'package(default_visibility = ["//visibility:public"])',
         "",
-        "alias(",
-        '    name = "wheel",',
-        '    actual = "//_lock:_wheel_{}",'.format(package_key),
-        ")",
+        'load(":lock.bzl", "targets")',
         "",
     ]
-
-    if package.get("sdist_file", {}).get("key"):
-        lines.extend([
-            "alias(",
-            '    name = "sdist",',
-            '    actual = "//_lock:_sdist_{}",'.format(package_key),
+    if variant_items:
+        lock_build_lines.extend([
+            'load("@bazel_skylib//rules:common_settings.bzl", "bool_flag")',
+            "",
+        ])
+    lock_build_lines.extend([
+        "targets()",
+        "",
+    ])
+    for qname in sorted(variant_items.keys()):
+        lock_build_lines.extend([
+            "bool_flag(",
+            '    name = "{}",'.format(qname),
+            "    build_setting_default = False,",
+            ")",
+            "",
+            "config_setting(",
+            '    name = "is_{}",'.format(qname),
+            '    flag_values = {{":{flag}": "True"}},'.format(flag = qname),
             ")",
             "",
         ])
 
-    return "\n".join(lines) + "\n"
+    rctx.file("_lock/BUILD.bazel", "\n".join(lock_build_lines))
 
-def _wheel_build(packages):
-    lines = [
+    # 2. Minimal root BUILD.bazel
+    rctx.file("BUILD.bazel", "\n".join([
+        'package(default_visibility = ["//visibility:public"])',
+        "",
+    ]))
+
+    # 3. _wheel/ and _sdist/ directories for versioned artifact access
+    wheel_lines = [
+        'load("@rules_pycross//pycross/private:wheel_dir.bzl", "pycross_wheel_dir")',
+        "",
         'package(default_visibility = ["//visibility:public"])',
         "",
     ]
-    for pkg in packages:
-        package_key = pkg["key"]
-        lines.extend([
-            "alias(",
-            '    name = "{}",'.format(package_key),
-            '    actual = "//_lock:_wheel_{}",'.format(package_key),
+    sdist_lines = [
+        'package(default_visibility = ["//visibility:public"])',
+        "",
+    ]
+
+    for pkg_key in sorted(packages.keys()):
+        # Skip variant packages (they use __via_ suffix for conflict resolution)
+        if "__via_" in pkg_key:
+            continue
+        pkg_name_part, pkg_version = key_parts(pkg_key)
+        norm_name = _normalize_name(pkg_name_part)
+        us_name = _underscore_name(pkg_name_part)
+        whldir_name = "{}-{}.whldir".format(us_name, pkg_version)
+
+        # Versioned target: _wheel:name@version -> pycross_wheel_dir wrapping //_lock:_wheel_{key}
+        wheel_lines.extend([
+            "pycross_wheel_dir(",
+            '    name = "{}@{}",'.format(norm_name, pkg_version),
+            '    src = "//_lock:_wheel_{}",'.format(pkg_key),
+            '    whldir_name = "{}",'.format(whldir_name),
             ")",
             "",
         ])
 
-    return "\n".join(lines) + "\n"
-
-def _sdist_build(packages):
-    lines = [
-        'package(default_visibility = ["//visibility:public"])',
-        "",
-    ]
-    for pkg in packages:
-        if pkg.get("sdist_file", {}).get("key"):
-            package_key = pkg["key"]
-            lines.extend([
+        sdist_file = packages[pkg_key].get("sdist_file")
+        if sdist_file:
+            sdist_lines.extend([
                 "alias(",
-                '    name = "{}",'.format(package_key),
-                '    actual = "//_lock:_sdist_{}",'.format(package_key),
+                '    name = "{}@{}",'.format(norm_name, pkg_version),
+                '    actual = "//_lock:_sdist_{}",'.format(pkg_key),
                 ")",
                 "",
             ])
 
-    return "\n".join(lines) + "\n"
+    rctx.file("_wheel/BUILD.bazel", "\n".join(wheel_lines) + "\n")
+    rctx.file("_sdist/BUILD.bazel", "\n".join(sdist_lines) + "\n")
 
-def _root_build(pins):
-    lines = [
-        'package(default_visibility = ["//visibility:public"])',
-        "",
-        'exports_files(["defs.bzl", "requirements.bzl"])',
-        "",
-    ]
+    # 4. _backend/ directory
+    rctx.file(
+        "_backend/BUILD.bazel",
+        "exports_files(glob(['*.bzl']))\n",
+    )
 
-    for pin_name, pin_target in pins.items():
+    backend_configs = {}
+    for name, config_json in rctx.attr.backend_configs.items():
+        backend_configs[name] = json.decode(config_json)
+
+    for macro_name, config in backend_configs.items():
+        rule_bzl = config["rule_bzl"]
+
+        tool_deps_labels = []
+        for pkg in config["tool_packages"]:
+            norm_pkg = _normalize_name(pkg)
+
+            # Find a matching package in the lockfile
+            matching = [k for k in packages.keys() if _normalize_name(key_name(k)) == norm_pkg]
+            if matching:
+                # Use the first match. For cycle groups, the name is _raw_{pkg_key}.
+                # But here we just need the dependency, so pointing to //_lock:{pkg_key} is fine.
+                tool_deps_labels.append("//_lock:{}".format(matching[0]))
+
+        lines = [
+            '"""Backend macro with pre-configured tool defaults for this lock repo."""',
+            "",
+            'load("{rule_bzl}", _{macro_name} = "{macro_name}")'.format(
+                rule_bzl = rule_bzl,
+                macro_name = macro_name,
+            ),
+            "",
+            "def {macro_name}(name, **kwargs):".format(macro_name = macro_name),
+        ]
+
+        if tool_deps_labels:
+            lines.append("    if \"tool_deps\" not in kwargs:")
+            lines.append("        kwargs[\"tool_deps\"] = [")
+            for label in tool_deps_labels:
+                lines.append("            Label(\"{}\"),".format(label))
+            lines.append("        ]")
+
         lines.extend([
-            "alias(",
-            '    name = "{}",'.format(pin_name),
-            '    actual = "//_lock:{}",'.format(pin_target),
-            ")",
+            "    _{macro_name}(name = name, **kwargs)".format(macro_name = macro_name),
             "",
         ])
 
-    return "\n".join(lines) + "\n"
-
-_requirement_func = """\
-def requirement(pkg):
-    # Convert given name into normalized package name.
-    # https://packaging.python.org/en/latest/specifications/name-normalization/#name-normalization
-    pkg = pkg.replace("_", "-").replace(".", "-").lower()
-    for i in range(len(pkg)):
-        if "--" in pkg:
-            pkg = pkg.replace("--", "-")
-        else:
-            break
-    return "@@{repo_name}//:%s" % pkg
-"""
-
-def _requirements_bzl(rctx, pins):
-    lines = [
-        _requirement_func.format(repo_name = rctx.name),
-        "",
-        "# All pinned requirements",
-        "all_requirements = [",
-    ]
-    for pin in pins:
-        lines.append('    "@@{repo_name}//:{pin}",'.format(repo_name = rctx.name, pin = pin))
-    lines.append("]")
-    lines.extend([
-        "",
-        "# All wheel requirements",
-        "all_whl_requirements = [",
-    ])
-    for pin in pins.values():
-        lines.append('    "@@{repo_name}//_wheel:{pin}",'.format(repo_name = rctx.name, pin = pin))
-    lines.append("]")
-
-    return "\n".join(lines) + "\n"
-
-def _generate_lock_bzl(rctx, lock_json_path, lock_bzl_path):
-    args = [
-        "--pycross-repo-name",
-        "@rules_pycross",
-        "--no-pins",
-        "--repo-prefix",
-        rctx.attr.name.lower().replace("-", "_"),
-        "--resolved-lock",
-        lock_json_path,
-        "--output",
-        lock_bzl_path,
-    ] + handle_create_repos_attrs(rctx.attr)
-
-    for file_key, label in rctx.attr.repo_map.items():
-        args.extend(["--repo", file_key, label])
-
-    exec_internal_tool(
-        rctx,
-        Label("//pycross/private/tools:resolved_lock_renderer.py"),
-        args,
-    )
-
-def _package_repo_impl(rctx):
-    # To ensure that none of the extra files and directories in the root conflict with actual packages, they all
-    # either contain a period or start with an underscore. This works because Python package names cannot start
-    # with `_`, and any periods in the name would be replaced with `-` during name normalization. Theoretically
-    # https://pypi.org/project/workspace/ would conflict with the repo's WORKSPACE file on a case-insensitive
-    # filesystem, so we instead write WORKSPACE.bazel. A package named `WORKSPACE.bazel` would be normalized to
-    # `workspace-bazel`.
-
-    lock_json_path = rctx.path(rctx.attr.resolved_lock_file)
-    lock_bzl_path = rctx.path("_lock/lock.bzl")
-
-    lock = json.decode(rctx.read(lock_json_path))
-    packages = lock["packages"].values()
-
-    rctx.file("WORKSPACE.bazel", _workspace.format(repo_name = rctx.name))
-    rctx.file("_lock/BUILD.bazel", _lock_build)
-    rctx.file("_sdist/BUILD.bazel", _sdist_build(packages))
-    rctx.file("_wheel/BUILD.bazel", _wheel_build(packages))
-
-    if rctx.attr.write_install_deps:
-        rctx.file("defs.bzl", _install_deps_bzl)
-    else:
-        rctx.file("defs.bzl")  # Empty file
-
-    rctx.file("requirements.bzl", _requirements_bzl(rctx, lock["pins"]))
-
-    _generate_lock_bzl(rctx, lock_json_path, lock_bzl_path)
-
-    for pin, pin_target in lock["pins"].items():
-        package = lock["packages"][pin_target]
-        rctx.file(paths.join(pin, "BUILD.bazel"), _pin_build(package))
-
-    rctx.file("BUILD.bazel", _root_build(lock["pins"]))
+        rctx.file("_backend/{}.bzl".format(macro_name), "\n".join(lines))
 
 package_repo = repository_rule(
     implementation = _package_repo_impl,
-    attrs = dict(
-        resolved_lock_file = attr.label(mandatory = True),
-        repo_map = attr.string_dict(),
-        write_install_deps = attr.bool(),
-    ) | CREATE_REPOS_ATTRS,
+    attrs = {
+        "resolved_lock_file": attr.label(mandatory = True),
+        "repo_map": attr.label_keyed_string_dict(),
+        "sdist_map": attr.label_keyed_string_dict(),
+        "backend_configs": attr.string_dict(
+            doc = "Maps pycross rule names to JSON-encoded config dicts with 'rule_bzl' and 'tool_packages'.",
+        ),
+        "member_lock_files": attr.string_dict(
+            doc = "Maps member repo names to their resolved lock file labels.",
+            mandatory = True,
+        ),
+    },
 )

@@ -1,0 +1,101 @@
+load("@rules_pycross_internal//:python.bzl", "py_binary", "py_library")
+
+package(default_visibility = ["//visibility:public"])
+
+py_library(
+    name = "env_utils",
+    srcs = ["utils/env.py"],
+    imports = ["../../../.."],
+)
+
+py_library(
+    name = "utils",
+    srcs = glob(["utils/*.py"]),
+    imports = ["../../../.."],
+    deps = [
+        "//pycross/private/tools:patch_ng",
+        "@rules_pycross_internal//deps:build",
+        "@rules_pycross_internal//deps:packaging",
+    ],
+)
+
+py_library(
+    name = "meson_utils",
+    srcs = ["meson_utils.py"],
+    imports = ["../../../.."],
+    deps = [
+        ":utils",
+    ],
+)
+
+py_binary(
+    name = "meson_builder",
+    srcs = ["meson_builder.py"],
+    imports = ["../../../.."],
+    deps = [
+        ":meson_utils",
+        ":utils",
+        "//pycross/private/build/tools/crossenv",
+        "@rules_pycross_internal//deps:build",
+        "@rules_pycross_internal//deps:packaging",
+    ],
+)
+
+py_binary(
+    name = "cmake_builder",
+    srcs = ["cmake_builder.py"],
+    imports = ["../../../.."],
+    deps = [
+        ":utils",
+        "@rules_pycross_internal//deps:build",
+        "@rules_pycross_internal//deps:packaging",
+    ],
+)
+
+py_binary(
+    name = "pep517_builder",
+    srcs = ["pep517_builder.py"],
+    imports = ["../../../.."],
+    deps = [
+        ":utils",
+        "//pycross/private/build/tools/crossenv",
+        "@rules_pycross_internal//deps:build",
+        "@rules_pycross_internal//deps:packaging",
+    ],
+)
+
+py_binary(
+    name = "maturin_builder",
+    srcs = ["maturin_builder.py"],
+    imports = ["../../../.."],
+    deps = [
+        ":utils",
+        "//pycross/private/build/tools/crossenv",
+        "@rules_pycross_internal//deps:build",
+        "@rules_pycross_internal//deps:packaging",
+    ],
+)
+
+py_binary(
+    name = "repair_wheel_hook",
+    srcs = [
+        "repair_wheel_hook.py",
+    ],
+    imports = ["../../../.."],
+    deps = [
+        ":env_utils",
+        "@rules_pycross_internal//deps:packaging",
+        "@rules_pycross_internal//deps:repairwheel",
+    ],
+)
+
+py_binary(
+    name = "wheel_transformer",
+    srcs = [
+        "wheel_transformer.py",
+    ],
+    imports = ["../../../.."],
+    deps = [
+        ":env_utils",
+    ],
+)

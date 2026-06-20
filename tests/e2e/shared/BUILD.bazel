@@ -1,0 +1,19 @@
+load("@rules_python//python:defs.bzl", "py_binary")
+
+package(default_visibility = ["//visibility:public"])
+
+exports_files([
+    "collect_wheels.bzl",
+    "cowsay-6.1-py3-none-any.whl",
+    "ipython.py",
+    "test_cowsay.py",
+    "test_regex.py",
+    "test_top_level_packages.py",
+])
+
+py_binary(
+    name = "collect_wheels_tool",
+    srcs = ["collect_wheels.py"],
+    main = "collect_wheels.py",
+    visibility = ["//visibility:public"],
+)

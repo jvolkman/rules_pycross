@@ -1,0 +1,35 @@
+[project]
+name = "project"
+version = "0.1.0"
+requires-python = ">=3.11.0"
+dependencies = []
+
+[project.optional-dependencies]
+variant-a = [
+  "typing-extensions==4.11.0",
+]
+variant-b = [
+  "typing-extensions==4.12.2",
+]
+
+[dependency-groups]
+group-a = [
+  "idna==3.7",
+]
+group-b = [
+  "idna==3.10",
+]
+
+[tool.uv]
+# variant-a is the default, so builds without explicit flags use variant-a.
+default-groups = ["group-a"]
+conflicts = [
+  [
+    { extra = "variant-a" },
+    { extra = "variant-b" },
+  ],
+  [
+    { group = "group-a" },
+    { group = "group-b" },
+  ],
+]

@@ -1,0 +1,16 @@
+[project]
+name = "workspace-root"
+version = "0.1.0"
+description = "Test workspace with multiple members"
+requires-python = ">=3.10, <3.13"
+dependencies = []
+
+[tool.uv]
+package = false
+
+[tool.uv.workspace]
+members = ["project_a", "project_b"]
+
+[tool.uv.sources]
+project-a = { workspace = true }
+project-b = { workspace = true }

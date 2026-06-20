@@ -1,3 +1,0 @@
-# pkg-core
-
-Core utilities

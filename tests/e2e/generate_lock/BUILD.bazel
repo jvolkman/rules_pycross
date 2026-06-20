@@ -1,0 +1,20 @@
+load("@uv//:requirements.bzl", "all_requirements")
+
+genrule(
+    name = "generate_lock",
+    outs = ["generate_lock.sh"],
+    cmd = """
+    echo 'cd $$BUILD_WORKING_DIRECTORY && uv lock' > $@
+    """,
+    executable = True,
+)
+
+# Simulate some rule that uses requirements.bzl, e.g. Gazelle
+genrule(
+    name = "gazelle",
+    outs = ["gazelle.sh"],
+    cmd = """
+    echo 'echo {}' > $@
+    """.format(",".join(all_requirements)),
+    executable = True,
+)

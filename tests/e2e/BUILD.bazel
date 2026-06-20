@@ -1,0 +1,8 @@
+load(":e2e_tests.bzl", "define_e2e_tests")
+
+exports_files(["run_integration_test.sh"])
+# Expose the integration test workspaces as Bazel targets.
+# They are tagged "manual" so they are excluded from wildcard patterns like `bazel test //...`.
+# They can be run explicitly via `bazel test //tests/e2e/...`
+
+define_e2e_tests()

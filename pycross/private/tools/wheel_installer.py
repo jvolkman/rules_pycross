@@ -23,32 +23,7 @@ from installer import install
 from installer.destinations import SchemeDictionaryDestination
 from installer.sources import WheelContentElement
 from installer.sources import WheelFile
-from pycross.private.tools import namespace_pkgs
 from pycross.private.tools.args import FlagFileArgumentParser
-
-
-def setup_namespace_pkg_compatibility(wheel_dir: Path) -> None:
-    """Converts native namespace packages to pkgutil-style packages
-
-    Namespace packages can be created in one of three ways. They are detailed here:
-    https://packaging.python.org/guides/packaging-namespace-packages/#creating-a-namespace-package
-
-    'pkgutil-style namespace packages' (2) and 'pkg_resources-style namespace packages' (3) works in Bazel, but
-    'native namespace packages' (1) do not.
-
-    We ensure compatibility with Bazel of method 1 by converting them into method 2.
-
-    Args:
-        wheel_dir: the directory of the wheel to convert
-    """
-
-    namespace_pkg_dirs = namespace_pkgs.implicit_namespace_packages(
-        str(wheel_dir),
-        ignored_dirnames=["%s/bin" % wheel_dir],
-    )
-
-    for ns_pkg_dir in namespace_pkg_dirs:
-        namespace_pkgs.add_pkgutil_style_namespace_pkg_init(ns_pkg_dir)
 
 
 class FilteredWheelFile(WheelFile):
@@ -103,14 +78,22 @@ def main(args: Any) -> None:
     )
 
     link_dir = Path(tempfile.mkdtemp())
-    if args.wheel_name_file:
-        with open(args.wheel_name_file, "r") as f:
-            wheel_name = f.read().strip()
+    if args.wheel_dir:
+        whl_files = list(Path(args.wheel_dir).glob("*.whl"))
+        if len(whl_files) != 1:
+            raise SystemExit(f"error: Expected 1 wheel in wheel directory, found {len(whl_files)}")
+        wheel_path = whl_files[0]
+        wheel_name = wheel_path.name
     else:
-        wheel_name = os.path.basename(args.wheel)
+        wheel_path = Path(args.wheel)
+        if args.wheel_name_file:
+            with open(args.wheel_name_file, "r") as f:
+                wheel_name = f.read().strip()
+        else:
+            wheel_name = wheel_path.name
 
     link_path = link_dir / wheel_name
-    os.symlink(os.path.join(os.getcwd(), args.wheel), link_path)
+    os.symlink(wheel_path.absolute(), link_path)
 
     try:
         with FilteredWheelFile.open_filtered(link_path, args.install_exclude_globs) as source:
@@ -125,8 +108,21 @@ def main(args: Any) -> None:
     finally:
         shutil.rmtree(link_dir, ignore_errors=True)
 
-    setup_namespace_pkg_compatibility(lib_dir)
     apply_patches(lib_dir, args.patches)
+
+    # Extract entry_points.txt for rules_python compatibility.
+    if args.entry_points_output:
+        entry_points_output = Path(args.entry_points_output)
+        entry_points_output.parent.mkdir(parents=True, exist_ok=True)
+        found = False
+        for dist_info_dir in lib_dir.glob("*.dist-info"):
+            ep_file = dist_info_dir / "entry_points.txt"
+            if ep_file.exists():
+                shutil.copy2(ep_file, entry_points_output)
+                found = True
+                break
+        if not found:
+            entry_points_output.touch()
 
 
 def parse_flags() -> Any:
@@ -135,8 +131,15 @@ def parse_flags() -> Any:
     parser.add_argument(
         "--wheel",
         type=Path,
-        required=True,
+        required=False,
         help="The wheel file path.",
+    )
+
+    parser.add_argument(
+        "--wheel-dir",
+        type=Path,
+        required=False,
+        help="The wheel directory.",
     )
 
     parser.add_argument(
@@ -144,12 +147,6 @@ def parse_flags() -> Any:
         type=Path,
         required=False,
         help="A file containing the canonical name of the wheel.",
-    )
-
-    parser.add_argument(
-        "--enable-implicit-namespace-pkgs",
-        action="store_true",
-        help="If true, disables conversion of implicit namespace packages and will unzip as-is.",
     )
 
     parser.add_argument(
@@ -166,6 +163,13 @@ def parse_flags() -> Any:
         dest="patches",
         default=[],
         help="A list of patches to apply after installation.",
+    )
+
+    parser.add_argument(
+        "--entry-points-output",
+        type=Path,
+        required=False,
+        help="Path to write the entry_points.txt file for rules_python compatibility.",
     )
 
     parser.add_argument(

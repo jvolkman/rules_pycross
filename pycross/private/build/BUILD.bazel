@@ -1,0 +1,57 @@
+load("@bazel_skylib//:bzl_library.bzl", "bzl_library")
+
+package(default_visibility = ["//visibility:public"])
+
+bzl_library(
+    name = "cc_pkg_config",
+    srcs = ["cc_pkg_config.bzl"],
+    deps = [
+        ":cc_toolchain_util",
+        "@rules_cc//cc/common",
+    ],
+)
+
+bzl_library(
+    name = "repaired_wheel",
+    srcs = ["repaired_wheel.bzl"],
+    deps = [
+        ":cc_toolchain_util",
+        "//pycross/private:providers",
+        "//pycross/private/build/actions:repair_action",
+    ],
+)
+
+bzl_library(
+    name = "wheel_headers",
+    srcs = ["wheel_headers.bzl"],
+    deps = [
+        ":cc_toolchain_util",
+        "//pycross/private:providers",
+    ],
+)
+
+bzl_library(
+    name = "wheel_build",
+    srcs = ["wheel_build.bzl"],
+    deps = [
+        "//pycross/private/build/rules:path_tool",
+        "//pycross/private/build/rules:setuptools_build",
+    ],
+)
+
+bzl_library(
+    name = "cc_toolchain_util",
+    srcs = ["cc_toolchain_util.bzl"],
+    deps = [
+        # keep
+        "@bazel_skylib//lib:collections",
+        "@bazel_tools//tools/build_defs/cc:action_names.bzl",
+        "@bazel_tools//tools/cpp:toolchain_utils.bzl",
+        "@rules_cc//cc/common",
+    ],
+)
+
+bzl_library(
+    name = "transitions",
+    srcs = ["transitions.bzl"],
+)

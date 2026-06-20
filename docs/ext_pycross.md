@@ -1,6 +1,6 @@
 <!-- Generated with Stardoc: http://skydoc.bazel.build -->
 
-The lock_import extension.
+The pycross extension.
 
 <a id="pycross"></a>
 

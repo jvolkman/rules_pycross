@@ -1,0 +1,16 @@
+[project]
+name = "rules-pycross-e2e-maturin"
+version = "0.1.0"
+description = "E2E tests for Maturin/Rust wheel builds"
+authors = []
+dependencies = [
+    "rpds-py==0.23.0",
+    "jiter==0.5.0",
+    "maturin",
+]
+requires-python = "~=3.14.0"
+license = {text = "MIT"}
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"

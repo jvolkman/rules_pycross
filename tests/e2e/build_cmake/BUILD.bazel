@@ -1,0 +1,12 @@
+load("//shared:collect_wheels.bzl", "collect_wheels")
+
+collect_wheels(
+    name = "all_wheels",
+    platforms = [
+        "@llvm//platforms:linux_x86_64",
+        "@llvm//platforms:macos_aarch64",
+    ],
+    wheels = [
+        "@uv//iminuit:wheel",
+    ],
+)

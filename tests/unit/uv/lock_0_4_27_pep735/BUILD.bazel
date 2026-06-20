@@ -1,0 +1,34 @@
+"""
+uv has introduced backwards compatible support for pep735.
+
+This change was introduced in the following PR:
+  https://github.com/astral-sh/uv/pull/8272
+
+This PR was contained in the following release:
+  https://github.com/astral-sh/uv/releases/tag/0.4.27
+"""
+
+load("@bazel_lib//lib:write_source_files.bzl", "write_source_file")
+load("@bazel_skylib//rules:diff_test.bzl", "diff_test")
+load("//tests:lock_model_test.bzl", "pycross_uv_lock_model")
+
+pycross_uv_lock_model(
+    name = "lock",
+    all_development_groups = True,
+    lock_file = "uv.lock",
+    project_file = "pyproject.toml",
+)
+
+write_source_file(
+    name = "update_expected",
+    diff_test = False,
+    in_file = ":lock",
+    out_file = "expected.json",
+)
+
+diff_test(
+    name = "test",
+    file1 = ":lock",
+    file2 = "expected.json",
+    tags = ["golden"],
+)

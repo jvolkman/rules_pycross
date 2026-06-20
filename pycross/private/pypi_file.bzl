@@ -10,44 +10,52 @@ filegroup(
 )
 """
 
-def _pypi_file_impl(ctx):
-    """Implementation of the pypi_file rule."""
+def get_pypi_file_url(rctx, netrc, index_url, package_name, package_version, filename, keep_metadata = False):
+    """Fetches package metadata from the PyPI JSON API and resolves the URL for the specified file.
 
-    netrc = read_user_netrc(ctx)
+    Args:
+        rctx: The repository context.
+        netrc: The parsed netrc file.
+        index_url: The URL of the PyPI index.
+        package_name: The name of the package.
+        package_version: The version of the package.
+        filename: The filename to download.
+        keep_metadata: Whether to keep the downloaded metadata.
 
-    index_url = ctx.attr.index
-    if not index_url.endswith("/"):
-        index_url = index_url + "/"
-
-    index_url += "pypi/{}/{}/json".format(
-        ctx.attr.package_name,
-        ctx.attr.package_version,
-    )
-
-    ctx.download(
+    Returns:
+        The URL to the file.
+    """
+    index_url = index_url.rstrip("/")
+    api_url = "{}/pypi/{}/{}/json".format(
         index_url,
-        "pypi_metadata.json",
-        auth = use_netrc(netrc, [index_url], {}),
+        package_name,
+        package_version,
     )
-    metadata = json.decode(ctx.read("pypi_metadata.json"))
 
-    if not ctx.attr.keep_metadata:
-        ctx.delete("pypi_metadata.json")
+    rctx.download(
+        api_url,
+        "pypi_metadata.json",
+        auth = use_netrc(netrc, [api_url], {}),
+    )
+    metadata = json.decode(rctx.read("pypi_metadata.json"))
+
+    if not keep_metadata:
+        rctx.delete("pypi_metadata.json")
 
     release_files = metadata.get("urls", [])
     url = None
     for release_file in release_files:
-        if release_file["filename"] == ctx.attr.filename:
+        if release_file["filename"] == filename:
             url = release_file["url"]
             break
 
     if not url:
         fail(
             "File {} does not exist for version {} of package {} in index {}".format(
-                ctx.attr.filename,
-                ctx.attr.package_version,
-                ctx.attr.package_name,
-                ctx.attr.index,
+                filename,
+                package_version,
+                package_name,
+                index_url,
             ),
         )
 
@@ -55,7 +63,7 @@ def _pypi_file_impl(ctx):
     # those returned by HTML index paths. So they are relative to the simple index path,
     # not the JSON API path.
     if not url.startswith("http://") and not url.startswith("https://"):
-        simple_base = ctx.attr.index.rstrip("/") + "/simple/" + ctx.attr.package_name
+        simple_base = index_url + "/simple/" + package_name
         base_parts = simple_base.split("/")
         for part in url.split("/"):
             if part == "..":
@@ -63,6 +71,22 @@ def _pypi_file_impl(ctx):
             elif part != ".":
                 base_parts.append(part)
         url = "/".join(base_parts)
+
+    return url
+
+def _pypi_file_impl(ctx):
+    """Implementation of the pypi_file rule."""
+
+    netrc = read_user_netrc(ctx)
+    url = get_pypi_file_url(
+        ctx,
+        netrc,
+        ctx.attr.index,
+        ctx.attr.package_name,
+        ctx.attr.package_version,
+        ctx.attr.filename,
+        keep_metadata = ctx.attr.keep_metadata,
+    )
 
     download_info = ctx.download(
         url,

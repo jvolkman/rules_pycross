@@ -1,0 +1,8 @@
+# Shared overrides for rules_foreign_cc.
+# rules_foreign_cc 0.15.1 does not set CPPFLAGS when bootstrapping GNU Make,
+# causing GNU Autotools configure scripts to fail with hermetic toolchains.
+single_version_override(
+    module_name = "rules_foreign_cc",
+    patch_strip = 1,
+    patches = ["//shared/patches:rules_foreign_cc-cppflags.patch"],
+)

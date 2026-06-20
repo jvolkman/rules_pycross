@@ -1,0 +1,14 @@
+# Common flags for all e2e workspaces
+try-import %workspace%/../../../.bazelrc
+common --repo_env=BAZEL_NO_APPLE_CPP_TOOLCHAIN=1
+common --repo_env=BAZEL_DO_NOT_DETECT_CPP_TOOLCHAIN=1
+common --repo_env=BAZEL_DO_NOT_DETECT_SWIFT_TOOLCHAIN=1
+common --action_env=BAZEL_DO_NOT_DETECT_CPP_TOOLCHAIN=1
+
+common --incompatible_enable_cc_toolchain_resolution
+common --incompatible_strict_action_env
+common --nolegacy_external_runfiles
+common --nosandbox_default_allow_network
+
+common -c opt
+common --strip=always

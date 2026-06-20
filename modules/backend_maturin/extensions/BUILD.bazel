@@ -1,0 +1,12 @@
+load("@bazel_skylib//:bzl_library.bzl", "bzl_library")
+
+package(default_visibility = ["//visibility:public"])
+
+bzl_library(
+    name = "maturin",
+    srcs = ["maturin.bzl"],
+    deps = [
+        "//rules:generate_cargo_lock",
+        "@rules_pycross//pycross:backend",
+    ],
+)

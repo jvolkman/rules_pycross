@@ -3,7 +3,7 @@ load("@bazel_skylib//:bzl_library.bzl", "bzl_library")
 # For stardoc to reference the files
 exports_files([
     "defs.bzl",
-    "workspace.bzl",
+    "backend.bzl",
 ])
 
 toolchain_type(
@@ -12,46 +12,42 @@ toolchain_type(
 )
 
 bzl_library(
-    name = "repositories",
-    srcs = ["repositories.bzl"],
-    visibility = ["//visibility:public"],
-    deps = [
-        "//pycross/private:internal_repo",
-        "//pycross/private:pycross_deps_core_lock",
-        "//pycross/private:pycross_deps_lock",
-        "@bazel_tools//tools/build_defs/repo:http.bzl",
-        "@bazel_tools//tools/build_defs/repo:utils.bzl",
-    ],
-)
-
-bzl_library(
     name = "defs",
     srcs = ["defs.bzl"],
     visibility = ["//visibility:public"],
     deps = [
-        "//pycross/private:lock_file",
+        "//pycross/private:dist_info",
+        "//pycross/private:modules_mapping",
         "//pycross/private:pdm_lock_model",
         "//pycross/private:poetry_lock_model",
         "//pycross/private:pypi_file",
         "//pycross/private:target_environment",
         "//pycross/private:uv_lock_model",
-        "//pycross/private:wheel_build",
         "//pycross/private:wheel_library",
+        "//pycross/private:wheel_transform",
         "//pycross/private:wheel_zipimport_library",
+        "//pycross/private/build:cc_pkg_config",
+        "//pycross/private/build:repaired_wheel",
+        "//pycross/private/build:wheel_build",
+        "//pycross/private/build:wheel_headers",
+        "@bazel_skylib//rules:common_settings",
     ],
 )
 
 bzl_library(
-    name = "workspace",
-    srcs = ["workspace.bzl"],
+    name = "backend",
+    srcs = ["backend.bzl"],
     visibility = ["//visibility:public"],
     deps = [
-        "//pycross/private:lock_file_repo",
-        "//pycross/private:lock_repo",
-        "//pycross/private:pdm_lock_model",
-        "//pycross/private:poetry_lock_model",
-        "//pycross/private:toolchain_helpers",
-        "//pycross/private:uv_lock_model",
+        "//pycross/private:lock_attrs",
+        "//pycross/private:override_helpers",
+        "//pycross/private:providers",
+        "//pycross/private/build:transitions",
+        "//pycross/private/build/actions:cc_layer",
+        "//pycross/private/build/actions:pep517_action",
+        "//pycross/private/build/actions:repair_action",
+        "//pycross/private/build/actions:tool_extract",
+        "//pycross/private/build/rules:common_attrs",
     ],
 )
 

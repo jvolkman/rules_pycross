@@ -1,0 +1,94 @@
+"""Implementation of the meson_build rule."""
+
+load("//pycross/private/build:transitions.bzl", "pycross_exec_platform_transition")
+load("//pycross/private/build/actions:cc_layer.bzl", "extract_cc_layer")
+load("//pycross/private/build/actions:pep517_action.bzl", "register_pep517_action")
+load("//pycross/private/build/actions:repair_action.bzl", "register_repair_action")
+load("//pycross/private/build/actions:tool_extract.bzl", "register_bin_extract_action", "register_console_script_extract_action")
+load(":common_attrs.bzl", "CC_BUILD_ATTRS", "CC_FRAGMENTS", "CC_TOOLCHAINS", "CC_TOOLCHAIN_ATTRS", "COMMON_BUILD_ATTRS", "REPAIR_BUILD_ATTRS", "TOOL_EXTRACT_ATTRS", "get_unzipped_wheel", "group_tool_deps", "resolve_path_tools")
+
+def _meson_build_impl(ctx):
+    # 1. Extract tools
+    tool_deps = group_tool_deps(ctx.attr.tool_deps)
+
+    if "meson" not in tool_deps:
+        fail("Missing 'meson' in tool_deps")
+    if "ninja" not in tool_deps:
+        fail("Missing 'ninja' in tool_deps")
+
+    meson_site_packages = get_unzipped_wheel(tool_deps["meson"][0])
+    ninja_wheel = get_unzipped_wheel(tool_deps["ninja"][0])
+
+    tool_executables = []
+    tool_executables.append(register_console_script_extract_action(
+        ctx,
+        site_packages = meson_site_packages,
+        script_name = "meson",
+    ))
+    tool_executables.append(register_bin_extract_action(
+        ctx,
+        wheel_dir = ninja_wheel,
+        binary_name = "ninja",
+    ))
+
+    tool_executables.extend(resolve_path_tools(ctx))
+
+    # 2. Extract CC environment
+    cc_layer = extract_cc_layer(
+        ctx,
+        native_deps = ctx.attr.native_deps,
+        copts = ctx.attr.copts,
+        linkopts = ctx.attr.linkopts,
+        meson_properties = ctx.attr.meson_properties,
+    )
+
+    additional_build_deps = []
+    if "meson-python" in tool_deps:
+        additional_build_deps.extend(tool_deps["meson-python"])
+
+    # 3. Build wheel
+    build_result = register_pep517_action(
+        ctx,
+        builder = ctx.attr._builder,
+        additional_build_deps = additional_build_deps,
+        tool_executables = tool_executables,
+        layers = [cc_layer],
+    )
+
+    # 4. Repair wheel
+    target_environment = ctx.files.target_environment[0] if ctx.files.target_environment else None
+    repair_result = register_repair_action(
+        ctx,
+        input_wheel_dir = build_result.wheel_dir,
+        native_deps = ctx.attr.native_deps,
+        repair_tool = ctx.executable._repair_tool,
+        target_environment = target_environment,
+        repair_deps = tool_deps.get("repairwheel", []),
+    )
+
+    return [
+        DefaultInfo(files = depset([repair_result.wheel_dir])),
+        OutputGroupInfo(
+            raw_wheel = depset([build_result.wheel_dir]),
+        ),
+    ]
+
+meson_build = rule(
+    implementation = _meson_build_impl,
+    attrs = COMMON_BUILD_ATTRS | CC_BUILD_ATTRS | CC_TOOLCHAIN_ATTRS | REPAIR_BUILD_ATTRS | TOOL_EXTRACT_ATTRS | {
+        "tool_deps": attr.label_list(
+            cfg = pycross_exec_platform_transition,
+        ),
+        "meson_properties": attr.string_dict(),
+        "_builder": attr.label(
+            default = "//pycross/private/build/tools:meson_builder",
+            executable = True,
+            cfg = "exec",
+        ),
+    },
+    toolchains = [
+        "@rules_python//python:toolchain_type",
+        config_common.toolchain_type("//pycross:toolchain_type", mandatory = False),
+    ] + CC_TOOLCHAINS,
+    fragments = CC_FRAGMENTS,
+)
