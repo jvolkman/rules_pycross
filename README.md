@@ -2,6 +2,10 @@
 
 `rules_pycross` lets you use Python lock files with Bazel, enabling cross-platform, hermetic builds of Python dependencies — including native extensions.
 
+> [!NOTE]
+> [#243](https://github.com/jvolkman/rules_pycross/pull/243) merged a major "v2" overhaul. The prior release can be found at
+> the [v1](https://github.com/jvolkman/rules_pycross/tree/v1) branch.
+
 ### Features
 
 * Import lock files from **uv**, **PDM**, **Poetry**, or **PEP 751 pylock.toml**
