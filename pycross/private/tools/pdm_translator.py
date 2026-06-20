@@ -260,31 +260,6 @@ def translate(
     )
 
 
-def main(args: Any) -> None:
-    output = args.output
-
-    lock_set = translate(
-        project_file=args.project_file,
-        lock_file=args.lock_file,
-        default_group=args.default_group,
-        optional_groups=args.optional_group,
-        all_optional_groups=args.all_optional_groups,
-        development_groups=args.development_group,
-        all_development_groups=args.all_development_groups,
-    )
-
-    if args.require_static_urls:
-        for pkg in lock_set.packages.values():
-            for file in pkg.files:
-                if not file.urls:
-                    raise LockfileNotStaticException(
-                        "Lock file does not contain static urls. Please use --static-urls when creating the lockfile."
-                    )
-
-    with open(output, "w") as f:
-        f.write(lock_set.to_json(indent=2))
-
-
 def parse_flags() -> Any:
     parser = FlagFileArgumentParser(description="Generate pycross dependency bzl file.")
 
@@ -348,6 +323,31 @@ def parse_flags() -> Any:
     )
 
     return parser.parse_args()
+
+
+def main(args: Any) -> None:
+    output = args.output
+
+    lock_set = translate(
+        project_file=args.project_file,
+        lock_file=args.lock_file,
+        default_group=args.default_group,
+        optional_groups=args.optional_group,
+        all_optional_groups=args.all_optional_groups,
+        development_groups=args.development_group,
+        all_development_groups=args.all_development_groups,
+    )
+
+    if args.require_static_urls:
+        for pkg in lock_set.packages.values():
+            for file in pkg.files:
+                if not file.urls:
+                    raise LockfileNotStaticException(
+                        "Lock file does not contain static urls. Please use --static-urls when creating the lockfile."
+                    )
+
+    with open(output, "w") as f:
+        f.write(lock_set.to_json(indent=2))
 
 
 if __name__ == "__main__":

@@ -308,71 +308,6 @@ def translate(
     )
 
 
-def parse_flags() -> Any:
-    parser = FlagFileArgumentParser(description="Generate pycross dependency bzl file.")
-
-    parser.add_argument(
-        "--project-file",
-        type=Path,
-        required=True,
-        help="The path to pyproject.toml.",
-    )
-
-    parser.add_argument(
-        "--lock-file",
-        type=Path,
-        required=True,
-        help="The path to uv.lock.",
-    )
-
-    parser.add_argument(
-        "--default-group",
-        action="store_true",
-        help="Whether to install dependencies from the default group.",
-    )
-
-    parser.add_argument(
-        "--optional-group",
-        action="append",
-        default=[],
-        help="Optional dependency groups to install.",
-    )
-
-    parser.add_argument(
-        "--all-optional-groups",
-        action="store_true",
-        help="Install all optional dependency groups.",
-    )
-
-    parser.add_argument(
-        "--development-group",
-        action="append",
-        default=[],
-        help="Development dependency groups to install.",
-    )
-
-    parser.add_argument(
-        "--all-development-groups",
-        action="store_true",
-        help="Install all development dependency groups.",
-    )
-
-    parser.add_argument(
-        "--require-static-urls",
-        action="store_true",
-        help="Require that the lock file provide static URLs.",
-    )
-
-    parser.add_argument(
-        "--output",
-        type=Path,
-        required=True,
-        help="The path to the output bzl file.",
-    )
-
-    return parser.parse_args()
-
-
 def collect_and_process_packages(packages_list: list[Dict[str, Any]]) -> Dict[PackageKey, Package]:
     distinct_packages: Dict[PackageKey, Package] = {}
     # Pull out all Package entries in a uv-specific model.
@@ -553,6 +488,71 @@ def validate_lockfile_version(lock_dict: Dict[str, Any]) -> None:
         raise LockfileIncompatibleException(f"Lock file version {lock_version} is not an integer")
     if lock_version != 1:
         raise LockfileIncompatibleException(f"Lock file version {lock_version} is not supported")
+
+
+def parse_flags() -> Any:
+    parser = FlagFileArgumentParser(description="Generate pycross dependency bzl file.")
+
+    parser.add_argument(
+        "--project-file",
+        type=Path,
+        required=True,
+        help="The path to pyproject.toml.",
+    )
+
+    parser.add_argument(
+        "--lock-file",
+        type=Path,
+        required=True,
+        help="The path to uv.lock.",
+    )
+
+    parser.add_argument(
+        "--default-group",
+        action="store_true",
+        help="Whether to install dependencies from the default group.",
+    )
+
+    parser.add_argument(
+        "--optional-group",
+        action="append",
+        default=[],
+        help="Optional dependency groups to install.",
+    )
+
+    parser.add_argument(
+        "--all-optional-groups",
+        action="store_true",
+        help="Install all optional dependency groups.",
+    )
+
+    parser.add_argument(
+        "--development-group",
+        action="append",
+        default=[],
+        help="Development dependency groups to install.",
+    )
+
+    parser.add_argument(
+        "--all-development-groups",
+        action="store_true",
+        help="Install all development dependency groups.",
+    )
+
+    parser.add_argument(
+        "--require-static-urls",
+        action="store_true",
+        help="Require that the lock file provide static URLs.",
+    )
+
+    parser.add_argument(
+        "--output",
+        type=Path,
+        required=True,
+        help="The path to the output bzl file.",
+    )
+
+    return parser.parse_args()
 
 
 def main(args: Any) -> None:

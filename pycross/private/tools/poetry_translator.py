@@ -224,21 +224,6 @@ def translate(
     )
 
 
-def main(args: Any) -> None:
-    output = args.output
-
-    lock_set = translate(
-        project_file=args.project_file,
-        lock_file=args.lock_file,
-        default_group=args.default_group,
-        optional_groups=args.optional_group,
-        all_optional_groups=args.all_optional_groups,
-    )
-
-    with open(output, "w") as f:
-        f.write(lock_set.to_json(indent=2))
-
-
 def parse_flags() -> Any:
     parser = FlagFileArgumentParser(description="Generate pycross dependency bzl file.")
 
@@ -283,6 +268,21 @@ def parse_flags() -> Any:
     )
 
     return parser.parse_args()
+
+
+def main(args: Any) -> None:
+    output = args.output
+
+    lock_set = translate(
+        project_file=args.project_file,
+        lock_file=args.lock_file,
+        default_group=args.default_group,
+        optional_groups=args.optional_group,
+        all_optional_groups=args.all_optional_groups,
+    )
+
+    with open(output, "w") as f:
+        f.write(lock_set.to_json(indent=2))
 
 
 if __name__ == "__main__":

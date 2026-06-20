@@ -20,69 +20,6 @@ class LockfileIncompatibleException(Exception):
     pass
 
 
-def parse_flags() -> Any:
-    parser = FlagFileArgumentParser(description="Generate pycross dependency json file from pylock.toml.")
-
-    parser.add_argument(
-        "--lock-file",
-        type=Path,
-        required=True,
-        help="The path to pylock.toml.",
-    )
-
-    parser.add_argument(
-        "--project-file",
-        type=Path,
-        help="The path to the project file.",
-    )
-
-    parser.add_argument(
-        "--output",
-        type=Path,
-        required=True,
-        help="The path to the output json file.",
-    )
-
-    parser.add_argument(
-        "--default-group",
-        action="store_true",
-        default=True,
-        help="Whether to install dependencies from the default group.",
-    )
-    parser.add_argument(
-        "--no-default-group",
-        action="store_false",
-        dest="default_group",
-        help="Whether to install dependencies from the default group.",
-    )
-
-    parser.add_argument(
-        "--optional-group",
-        action="append",
-        default=[],
-        help="Optional dependency groups to install.",
-    )
-    parser.add_argument(
-        "--all-optional-groups",
-        action="store_true",
-        help="Install all optional dependencies.",
-    )
-
-    parser.add_argument(
-        "--development-group",
-        action="append",
-        default=[],
-        help="Development dependency groups to install.",
-    )
-    parser.add_argument(
-        "--all-development-groups",
-        action="store_true",
-        help="Install all development dependencies.",
-    )
-
-    return parser.parse_args()
-
-
 def translate(args: Any) -> RawLockSet:
     with open(args.lock_file, "rb") as f:
         lock_dict = tomllib.load(f)
@@ -265,6 +202,69 @@ def translate(args: Any) -> RawLockSet:
         packages=lock_packages,
         pins=pins,
     )
+
+
+def parse_flags() -> Any:
+    parser = FlagFileArgumentParser(description="Generate pycross dependency json file from pylock.toml.")
+
+    parser.add_argument(
+        "--lock-file",
+        type=Path,
+        required=True,
+        help="The path to pylock.toml.",
+    )
+
+    parser.add_argument(
+        "--project-file",
+        type=Path,
+        help="The path to the project file.",
+    )
+
+    parser.add_argument(
+        "--output",
+        type=Path,
+        required=True,
+        help="The path to the output json file.",
+    )
+
+    parser.add_argument(
+        "--default-group",
+        action="store_true",
+        default=True,
+        help="Whether to install dependencies from the default group.",
+    )
+    parser.add_argument(
+        "--no-default-group",
+        action="store_false",
+        dest="default_group",
+        help="Whether to install dependencies from the default group.",
+    )
+
+    parser.add_argument(
+        "--optional-group",
+        action="append",
+        default=[],
+        help="Optional dependency groups to install.",
+    )
+    parser.add_argument(
+        "--all-optional-groups",
+        action="store_true",
+        help="Install all optional dependencies.",
+    )
+
+    parser.add_argument(
+        "--development-group",
+        action="append",
+        default=[],
+        help="Development dependency groups to install.",
+    )
+    parser.add_argument(
+        "--all-development-groups",
+        action="store_true",
+        help="Install all development dependencies.",
+    )
+
+    return parser.parse_args()
 
 
 def main(args: Any) -> None:
