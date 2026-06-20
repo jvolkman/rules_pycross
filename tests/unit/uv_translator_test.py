@@ -46,7 +46,7 @@ def run_translator(
         development_groups=development_groups or [],
         all_development_groups=all_development_groups,
         package_processor=collect_and_process_packages,
-        variants=lock_dict.get("variants", []),
+        variants=lock_dict.get("conflicts", []),
         default_groups=uv_default_groups,
     )
 
@@ -739,7 +739,7 @@ cpu = ["torch==2.6.0"]
 cu124 = ["torch==2.7.0"]
 
 [tool.uv]
-variants = [
+conflicts = [
   [
     { extra = "cpu" },
     { extra = "cu124" },
@@ -750,7 +750,7 @@ variants = [
     CONFLICT_LOCK = """
 version = 1
 requires-python = ">=3.8"
-variants = [[
+conflicts = [[
     { package = "my-app", extra = "cpu" },
     { package = "my-app", extra = "cu124" },
 ]]
@@ -839,7 +839,7 @@ test-fast = ["pytest==7.0.0"]
 test-slow = ["pytest==8.0.0"]
 
 [tool.uv]
-variants = [
+conflicts = [
   [
     { group = "test-fast" },
     { group = "test-slow" },
@@ -849,7 +849,7 @@ variants = [
         lock = """
 version = 1
 requires-python = ">=3.8"
-variants = [[
+conflicts = [[
     { package = "my-app", group = "test-fast" },
     { package = "my-app", group = "test-slow" },
 ]]
@@ -909,7 +909,7 @@ test-slow = ["pytest==8.0.0"]
 
 [tool.uv]
 default-groups = ["test-fast"]
-variants = [
+conflicts = [
   [
     { group = "test-fast" },
     { group = "test-slow" },
@@ -919,7 +919,7 @@ variants = [
         lock = """
 version = 1
 requires-python = ">=3.8"
-variants = [[
+conflicts = [[
     { package = "my-app", group = "test-fast" },
     { package = "my-app", group = "test-slow" },
 ]]
@@ -975,7 +975,7 @@ cpu = ["torch==2.6.0"]
 
 [tool.uv]
 default-groups = ["cpu"]
-variants = [
+conflicts = [
   [
     { extra = "cpu" },
   ],
@@ -984,7 +984,7 @@ variants = [
         lock = """
 version = 1
 requires-python = ">=3.8"
-variants = [[
+conflicts = [[
     { package = "my-app", extra = "cpu" },
 ]]
 

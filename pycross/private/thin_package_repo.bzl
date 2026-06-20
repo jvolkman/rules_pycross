@@ -159,12 +159,12 @@ def _thin_package_repo_impl(rctx):
         if type(pins[pin_name]) == "string":
             pins[pin_name] = {"": pins[pin_name]}
 
-    # Build a set of default conflict item qualified names.
-    # When a ConflictItem has default=True, its target becomes //conditions:default
+    # Build a set of default variant item qualified names.
+    # When a VariantItem has default=True, its target becomes //conditions:default
     # in the select(), so builds without explicit flags use the default variant.
     default_variants = {}  # qualified_name -> True
-    for conflict_set in lock.get("conflicts", []):
-        for item in conflict_set["items"]:
+    for variant_set in lock.get("variants", []):
+        for item in variant_set["items"]:
             if item.get("default", False):
                 if item["kind"] == "project":
                     qname = "package_{}".format(item["package"])
