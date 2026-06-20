@@ -3,6 +3,7 @@
 module(
     name = "rules_pycross",
     version = "0.0.0",
+    compatibility_level = 1,
 )
 
 bazel_dep(name = "bazel_lib", version = "3.1.0")
