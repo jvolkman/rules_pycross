@@ -1,17 +1,15 @@
-bcr_test_module:
-  module_path: .
-  matrix:
-    bazel:
-      - 8.x
-      - 9.x
-    platform:
-      - debian11
-      - ubuntu2204
-      - macos_arm64
-  tasks:
-    run_tests:
-      name: Run maturin build tests
-      bazel: ${{ bazel }}
-      platform: ${{ platform }}
-      test_targets:
-        - //...
+matrix:
+  bazel:
+    - 8.x
+    - 9.x
+  platform:
+    - debian11
+    - ubuntu2204
+    - macos_arm64
+tasks:
+  run_tests:
+    name: Run maturin build tests
+    bazel: ${{ bazel }}
+    platform: ${{ platform }}
+    test_targets:
+      - //...
