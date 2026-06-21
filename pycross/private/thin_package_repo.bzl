@@ -392,7 +392,7 @@ thin_package_repo = repository_rule(
             doc = "Name of the workspace package_repo that contains the shared _lock/ targets.",
         ),
         "workspace_build_repo": attr.string(
-            doc = "Name of the workspace to pull sdist build dependencies from (e.g. pycross_ws_build_deps).",
+            doc = "Name of the workspace to pull sdist build dependencies from (e.g. build_deps__pkgs).",
         ),
         "member_name": attr.string(
             mandatory = True,
