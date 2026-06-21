@@ -143,9 +143,9 @@ def _lock_repos_impl(module_ctx):
         # build_repo isn't found as a repo key we use it directly as a workspace name.
         ws_build_repo = workspace_build_repos.get(workspace_name)
         if ws_build_repo:
-            lock_repo_for_deps = "pycross_ws_{}".format(workspace_memberships.get(ws_build_repo, ws_build_repo))
+            lock_repo_for_deps = "{}__pkgs".format(workspace_memberships.get(ws_build_repo, ws_build_repo))
         else:
-            lock_repo_for_deps = "pycross_ws_{}".format(workspace_name)
+            lock_repo_for_deps = "{}__pkgs".format(workspace_name)
 
         # Instantiate sdist repos for packages requiring source builds.
         # Sdist repos are shared at the workspace level: all members in the
@@ -206,9 +206,9 @@ def _lock_repos_impl(module_ctx):
             # Recompute lock_repo_for_deps for this specific package if it has an override
             pkg_build_repo = pkg.get("build_repo") or ws_build_repo
             if pkg_build_repo:
-                pkg_lock_repo_for_deps = "pycross_ws_{}".format(workspace_memberships.get(pkg_build_repo, pkg_build_repo))
+                pkg_lock_repo_for_deps = "{}__pkgs".format(workspace_memberships.get(pkg_build_repo, pkg_build_repo))
             else:
-                pkg_lock_repo_for_deps = "pycross_ws_{}".format(workspace_name)
+                pkg_lock_repo_for_deps = "{}__pkgs".format(workspace_name)
 
             sdist_repo_attrs = {
                 "name": sdist_repo_name,
@@ -279,7 +279,7 @@ def _lock_repos_impl(module_ctx):
     _ANNOTATION_FIELDS = ["post_install_patches", "install_exclude_globs"]
 
     for workspace_name, member_repos in workspace_groups.items():
-        workspace_repo_name = "pycross_ws_{}".format(workspace_name)
+        workspace_repo_name = "{}__pkgs".format(workspace_name)
 
         # Merge repo_maps and sdist_maps from all members
         merged_repo_map = {}
@@ -343,7 +343,7 @@ def _lock_repos_impl(module_ctx):
                 backend_configs = backend_configs_json,
             )
             if thin_build_repo:
-                thin_repo_attrs["workspace_build_repo"] = "pycross_ws_{}".format(workspace_memberships.get(thin_build_repo, thin_build_repo))
+                thin_repo_attrs["workspace_build_repo"] = "{}__pkgs".format(workspace_memberships.get(thin_build_repo, thin_build_repo))
             thin_package_repo(**thin_repo_attrs)
 
     if bazel_features.external_deps.extension_metadata_has_reproducible:
