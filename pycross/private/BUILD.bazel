@@ -57,6 +57,15 @@ bzl_library(
     deps = [
         ":resolved_lock_renderer",
         ":util",
+        ":variant_resolver",
+    ],
+)
+
+bzl_library(
+    name = "variant_resolver",
+    srcs = ["variant_resolver.bzl"],
+    deps = [
+        "@bazel_skylib//rules:common_settings",
     ],
 )
 
