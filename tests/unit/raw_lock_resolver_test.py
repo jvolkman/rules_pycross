@@ -945,6 +945,220 @@ class TestCycleDetection(unittest.TestCase):
         self.assertIsNotNone(res_b.cycle_group)
         self.assertEqual(res_a_test.cycle_group, res_b.cycle_group)
 
+    def test_cycle_eight_member_hub_and_spoke(self):
+        """Stress test: 8-member hub-and-spoke cycle modeled after Apache Airflow.
+
+        airflow → airflow-core, task-sdk
+        airflow-core → provider-compat, provider-io, provider-sql, provider-smtp, provider-standard, task-sdk
+        provider-compat → airflow  (back-edge)
+        provider-io → airflow  (back-edge)
+        provider-sql → airflow  (back-edge)
+        provider-smtp → airflow, provider-compat  (back-edges)
+        provider-standard → airflow  (back-edge)
+        task-sdk → airflow-core  (back-edge)
+
+        Plus non-cycle leaves: packaging, jinja2, attrs
+        """
+        # Non-cycle leaf packages
+        pkg_packaging = make_pkg("packaging", "1.0", [make_file("packaging-1.0.tar.gz")])
+        pkg_jinja2 = make_pkg("jinja2", "1.0", [make_file("jinja2-1.0.tar.gz")])
+        pkg_attrs = make_pkg("attrs", "1.0", [make_file("attrs-1.0.tar.gz")])
+
+        # Cycle members
+        pkg_airflow = make_pkg(
+            "airflow",
+            "2.0",
+            [make_file("airflow-2.0.tar.gz")],
+            deps=[make_dep("airflow-core", "2.0"), make_dep("task-sdk", "2.0")],
+        )
+        pkg_core = make_pkg(
+            "airflow-core",
+            "2.0",
+            [make_file("airflow_core-2.0.tar.gz")],
+            deps=[
+                make_dep("provider-compat", "2.0"),
+                make_dep("provider-io", "2.0"),
+                make_dep("provider-sql", "2.0"),
+                make_dep("provider-smtp", "2.0"),
+                make_dep("provider-standard", "2.0"),
+                make_dep("task-sdk", "2.0"),
+                make_dep("packaging", "1.0"),
+                make_dep("jinja2", "1.0"),
+            ],
+        )
+        pkg_task_sdk = make_pkg(
+            "task-sdk",
+            "2.0",
+            [make_file("task_sdk-2.0.tar.gz")],
+            deps=[make_dep("airflow-core", "2.0"), make_dep("attrs", "1.0")],
+        )
+        pkg_compat = make_pkg(
+            "provider-compat",
+            "2.0",
+            [make_file("provider_compat-2.0.tar.gz")],
+            deps=[make_dep("airflow", "2.0")],
+        )
+        pkg_io = make_pkg(
+            "provider-io",
+            "2.0",
+            [make_file("provider_io-2.0.tar.gz")],
+            deps=[make_dep("airflow", "2.0")],
+        )
+        pkg_sql = make_pkg(
+            "provider-sql",
+            "2.0",
+            [make_file("provider_sql-2.0.tar.gz")],
+            deps=[make_dep("airflow", "2.0")],
+        )
+        pkg_smtp = make_pkg(
+            "provider-smtp",
+            "2.0",
+            [make_file("provider_smtp-2.0.tar.gz")],
+            deps=[make_dep("airflow", "2.0"), make_dep("provider-compat", "2.0")],
+        )
+        pkg_standard = make_pkg(
+            "provider-standard",
+            "2.0",
+            [make_file("provider_standard-2.0.tar.gz")],
+            deps=[make_dep("airflow", "2.0")],
+        )
+
+        all_packages = [
+            pkg_airflow,
+            pkg_core,
+            pkg_task_sdk,
+            pkg_compat,
+            pkg_io,
+            pkg_sql,
+            pkg_smtp,
+            pkg_standard,
+            pkg_packaging,
+            pkg_jinja2,
+            pkg_attrs,
+        ]
+        pins = {
+            canonicalize_name("airflow"): PackageKey.from_parts(canonicalize_name("airflow"), Version("2.0")),
+        }
+
+        resolved = self._resolve_with_packages(all_packages, pins)
+
+        # All 8 cycle members should share the same cycle group
+        cycle_member_names = [
+            "airflow",
+            "airflow-core",
+            "task-sdk",
+            "provider-compat",
+            "provider-io",
+            "provider-sql",
+            "provider-smtp",
+            "provider-standard",
+        ]
+        cycle_keys = [PackageKey.from_parts(canonicalize_name(n), Version("2.0")) for n in cycle_member_names]
+
+        groups = set()
+        for key in cycle_keys:
+            self.assertIn(key, resolved.packages, f"Package {key} not found in resolved packages")
+            group = resolved.packages[key].cycle_group
+            self.assertIsNotNone(group, f"Package {key} should be in a cycle group")
+            groups.add(group)
+
+        self.assertEqual(len(groups), 1, f"All 8 members should share one cycle group, got {groups}")
+        group_name = groups.pop()
+        self.assertEqual(len(resolved.cycle_groups[group_name]), 8)
+
+        # Non-cycle packages should NOT be in any cycle group
+        for leaf_name in ["packaging", "jinja2", "attrs"]:
+            leaf_key = PackageKey.from_parts(canonicalize_name(leaf_name), Version("1.0"))
+            self.assertIsNone(
+                resolved.packages[leaf_key].cycle_group,
+                f"Leaf {leaf_name} should not be in a cycle group",
+            )
+
+    def test_cycle_with_non_cycle_tail(self):
+        """A 3-member cycle with a long non-cyclic tail: cycle shouldn't leak.
+
+        Cycle: A ↔ B ↔ C ↔ A
+        Tail: C → D → E → F → G (no back-edge)
+        """
+        pkg_a = make_pkg("a", "1.0", [make_file("a-1.0.tar.gz")], deps=[make_dep("b", "1.0")])
+        pkg_b = make_pkg("b", "1.0", [make_file("b-1.0.tar.gz")], deps=[make_dep("c", "1.0")])
+        pkg_c = make_pkg(
+            "c",
+            "1.0",
+            [make_file("c-1.0.tar.gz")],
+            deps=[
+                make_dep("a", "1.0"),
+                make_dep("d", "1.0"),
+            ],
+        )
+        pkg_d = make_pkg("d", "1.0", [make_file("d-1.0.tar.gz")], deps=[make_dep("e", "1.0")])
+        pkg_e = make_pkg("e", "1.0", [make_file("e-1.0.tar.gz")], deps=[make_dep("f", "1.0")])
+        pkg_f = make_pkg("f", "1.0", [make_file("f-1.0.tar.gz")], deps=[make_dep("g", "1.0")])
+        pkg_g = make_pkg("g", "1.0", [make_file("g-1.0.tar.gz")])
+
+        pins = {
+            canonicalize_name("a"): PackageKey.from_parts(canonicalize_name("a"), Version("1.0")),
+        }
+
+        resolved = self._resolve_with_packages([pkg_a, pkg_b, pkg_c, pkg_d, pkg_e, pkg_f, pkg_g], pins)
+
+        # A, B, C should be in one cycle group
+        key_a = PackageKey.from_parts(canonicalize_name("a"), Version("1.0"))
+        key_b = PackageKey.from_parts(canonicalize_name("b"), Version("1.0"))
+        key_c = PackageKey.from_parts(canonicalize_name("c"), Version("1.0"))
+        group = resolved.packages[key_a].cycle_group
+        self.assertIsNotNone(group)
+        self.assertEqual(resolved.packages[key_b].cycle_group, group)
+        self.assertEqual(resolved.packages[key_c].cycle_group, group)
+        self.assertEqual(len(resolved.cycle_groups[group]), 3)
+
+        # D, E, F, G should NOT be in any cycle group
+        for name in ["d", "e", "f", "g"]:
+            key = PackageKey.from_parts(canonicalize_name(name), Version("1.0"))
+            self.assertIsNone(
+                resolved.packages[key].cycle_group,
+                f"Tail package {name} should not be in a cycle group",
+            )
+
+    def test_conditional_cycle_union_semantics(self):
+        """A cycle that only exists on one platform (linux) via markers.
+
+        A → B (unconditional)
+        B → A (only on linux: sys_platform == 'linux')
+
+        Both should still be grouped because the SCC runs on the union graph.
+        """
+        pkg_a = make_pkg(
+            "a",
+            "1.0",
+            [make_file("a-1.0.tar.gz")],
+            deps=[make_dep("b", "1.0")],
+        )
+        pkg_b = make_pkg(
+            "b",
+            "1.0",
+            [make_file("b-1.0.tar.gz")],
+            deps=[make_dep("a", "1.0", marker="sys_platform == 'linux'")],
+        )
+        pins = {
+            canonicalize_name("a"): PackageKey.from_parts(canonicalize_name("a"), Version("1.0")),
+            canonicalize_name("b"): PackageKey.from_parts(canonicalize_name("b"), Version("1.0")),
+        }
+
+        resolved = self._resolve_with_packages([pkg_a, pkg_b], pins)
+
+        key_a = PackageKey.from_parts(canonicalize_name("a"), Version("1.0"))
+        key_b = PackageKey.from_parts(canonicalize_name("b"), Version("1.0"))
+
+        # Under union semantics, both should be in the same cycle group
+        # even though the cycle only exists on linux
+        self.assertIsNotNone(resolved.packages[key_a].cycle_group)
+        self.assertIsNotNone(resolved.packages[key_b].cycle_group)
+        self.assertEqual(
+            resolved.packages[key_a].cycle_group,
+            resolved.packages[key_b].cycle_group,
+        )
+
 
 class TestCollectPackageAnnotations(unittest.TestCase):
     """Tests for collect_package_annotations, including wildcard '*' support."""

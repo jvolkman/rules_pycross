@@ -610,16 +610,45 @@ def _resolve_packages(
     return packages_by_package_key
 
 
-def _compute_cycle_groups(packages_by_package_key: Dict[PackageKey, PackageResolver]) -> Dict[str, List[PackageKey]]:
-    graph = {pkg_key: list(resolver.runtime_dependency_keys) for pkg_key, resolver in packages_by_package_key.items()}
+def _compute_cycle_groups(
+    lock_packages: Dict[PackageKey, RawPackage],
+    resolved_keys: Set[PackageKey],
+) -> Dict[str, List[PackageKey]]:
+    """Compute cycle groups over the full lock model dependency graph.
+
+    We run Tarjan's SCC on ALL packages in the lock model, not just the
+    transitively-reachable subset from pins.  In practice the results are
+    equivalent — if a cycle exists, any pin that reaches one member will
+    transitively reach all members (by definition of an SCC).  But using
+    the full graph makes this property obvious rather than relying on the
+    transitive-reachability argument, and guarantees consistent cycle
+    groups regardless of which optional/development groups are enabled.
+
+    Markers are ignored when building the graph: an edge gated by a
+    platform marker is included unconditionally.  This is conservative
+    (more edges ⇒ superset of SCCs) and matches the union-over-
+    environments semantics already used by ``runtime_dependency_keys``.
+
+    Only SCCs that overlap with *resolved_keys* (the packages actually
+    selected by the current pin set) are emitted.
+    """
+    # Build adjacency list from raw dependencies, ignoring markers.
+    graph: Dict[PackageKey, List[PackageKey]] = {}
+    for pkg_key, pkg in lock_packages.items():
+        deps = []
+        for dep in pkg.dependencies:
+            dep_key = PackageKey.from_parts(dep.name, dep.version)
+            if dep_key in lock_packages:
+                deps.append(dep_key)
+        graph[pkg_key] = deps
 
     # Iterative Tarjan's SCC to avoid stack overflow on large dependency graphs
     index_counter = 0
-    indices = {}
-    lowlink = {}
-    on_stack = set()
-    stack = []
-    sccs = []
+    indices: Dict[PackageKey, int] = {}
+    lowlink: Dict[PackageKey, int] = {}
+    on_stack: Set[PackageKey] = set()
+    stack: List[PackageKey] = []
+    sccs: List[List[PackageKey]] = []
 
     for root in graph:
         if root in indices:
@@ -663,10 +692,13 @@ def _compute_cycle_groups(packages_by_package_key: Dict[PackageKey, PackageResol
                 parent = work_stack[-1][0]
                 lowlink[parent] = min(lowlink[parent], lowlink[v])
 
-    # Build cycle groups with content-based stable names
+    # Build cycle groups with content-based stable names.
+    # Only emit groups whose members overlap with the resolved pin set.
     cycle_groups = {}
     for scc in sccs:
         if len(scc) <= 1:
+            continue
+        if not any(k in resolved_keys for k in scc):
             continue
         members = sorted(scc)
         # Short hash of sorted member keys for a stable, compact name
@@ -746,7 +778,7 @@ def resolve(args: Any) -> ResolvedLockSet:
                 continue
             pins[package_pin_name] = {"": packages[0]}
 
-    cycle_groups = _compute_cycle_groups(packages_by_package_key)
+    cycle_groups = _compute_cycle_groups(lock_model.packages, set(packages_by_package_key.keys()))
 
     resolved_environments = {env.target_environment.name: env.to_environment_reference() for env in environment_pairs}
     resolved_packages_dict = {pkg.key: pkg.to_resolved_package() for pkg in resolved_packages}
