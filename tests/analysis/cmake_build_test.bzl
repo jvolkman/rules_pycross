@@ -54,10 +54,35 @@ def _test_cmake_build_basic_impl(env, target):
     out_group = target[OutputGroupInfo]
     env.expect.that_bool(hasattr(out_group, "raw_wheel")).equals(True)
 
+def _test_cmake_build_resources(name):
+    util.helper_target(_mock_sdist, name = name + "_sdist")
+    util.helper_target(_mock_pkg, name = name + "_cmake", package_name = "cmake")
+    util.helper_target(_mock_pkg, name = name + "_ninja", package_name = "ninja")
+    util.helper_target(cc_library, name = name + "_native_deps", srcs = [])
+    util.helper_target(
+        cmake_build,
+        name = name + "_subject",
+        sdist = name + "_sdist",
+        tool_deps = [name + "_cmake", name + "_ninja"],
+        native_deps = [name + "_native_deps"],
+        resource_size = "medium",
+    )
+    analysis_test(name = name, target = name + "_subject", impl = _test_cmake_build_resources_impl)
+
+# buildifier: disable=unused-variable
+def _test_cmake_build_resources_impl(env, target):
+    action = env.expect.that_target(target).action_named("PycrossPep517Build")
+    action.env().contains_at_least({
+        "CMAKE_BUILD_PARALLEL_LEVEL": "6",
+        "NINJA_JOBS": "6",
+        "MAKEFLAGS": "-j6",
+    })
+
 def cmake_build_test_suite(name):
     test_suite(
         name = name,
         tests = [
             _test_cmake_build_basic,
+            _test_cmake_build_resources,
         ],
     )

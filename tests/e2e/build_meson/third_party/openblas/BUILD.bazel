@@ -14,20 +14,10 @@ cmake(
         "NUM_THREADS": "64",
     } | select({
         "@platforms//cpu:x86_64": {
-            "CMAKE_SYSTEM_PROCESSOR": "x86_64",
             "TARGET": "HASWELL",
         },
         "@platforms//cpu:aarch64": {
-            "CMAKE_SYSTEM_PROCESSOR": "arm64",
             "CMAKE_SIZEOF_VOID_P": "8",  # For some reason this is needed with later versions of zig
-        },
-        "//conditions:default": {},
-    }) | select({
-        "@platforms//os:linux": {
-            "CMAKE_SYSTEM_NAME": "Linux",
-        },
-        "@platforms//os:macos": {
-            "CMAKE_SYSTEM_NAME": "Darwin",
         },
         "//conditions:default": {},
     }),
@@ -38,6 +28,7 @@ cmake(
     ],
     lib_source = "@openblas//:all",
     out_static_libs = ["libopenblas.a"],
+    resource_size = "medium",
 )
 
 select_file(

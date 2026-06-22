@@ -1,6 +1,7 @@
 """Implementation of the pep517_build rule."""
 
 load("//pycross/private:providers.bzl", "PycrossPackageInfo")
+load("//pycross/private/build:resource_sets.bzl", "get_resource_set")
 load("//pycross/private/build/actions:pep517_action.bzl", "register_pep517_action")
 load("//pycross/private/build/actions:repair_action.bzl", "register_repair_action")
 load(":common_attrs.bzl", "COMMON_BUILD_ATTRS", "REPAIR_BUILD_ATTRS")
@@ -21,9 +22,16 @@ def _pep517_build_impl(ctx):
                 "Make sure they are included in your lockfile.",
             )
 
+    resources = get_resource_set(ctx.attr)
+    env = {}
+    if resources.parallelism > 0:
+        env["MAKEFLAGS"] = "-j{}".format(resources.parallelism)
+
     build_result = register_pep517_action(
         ctx,
         builder = ctx.attr._builder,
+        env = env,
+        resource_set = resources.resource_set,
     )
 
     target_environment = ctx.files.target_environment[0] if ctx.files.target_environment else None
@@ -32,6 +40,7 @@ def _pep517_build_impl(ctx):
         input_wheel_dir = build_result.wheel_dir,
         repair_tool = ctx.executable._repair_tool,
         target_environment = target_environment,
+        resource_set = resources.resource_set,
     )
 
     return [

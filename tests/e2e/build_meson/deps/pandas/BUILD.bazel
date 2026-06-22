@@ -21,6 +21,7 @@ meson_build(
         "//deps/numpy:numpy_headers",
     ],
     path_tools = [":cython"],
+    resource_size = "medium",
     sdist = "@uv//pandas:sdist",
     site_hooks = [
         "import numpy; numpy.get_include = lambda: '$(NUMPY_INCLUDE_DIR)'",

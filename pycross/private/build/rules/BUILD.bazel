@@ -7,6 +7,7 @@ bzl_library(
     srcs = ["common_attrs.bzl"],
     deps = [
         "//pycross/private:providers",
+        "//pycross/private/build:resource_sets",
         "//pycross/private/build:transitions",
         "@rules_python//python:py_info_bzl",
     ],

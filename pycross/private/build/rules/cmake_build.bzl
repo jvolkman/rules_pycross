@@ -1,5 +1,6 @@
 """Implementation of the cmake_build rule."""
 
+load("//pycross/private/build:resource_sets.bzl", "get_resource_set")
 load("//pycross/private/build:transitions.bzl", "pycross_exec_platform_transition")
 load("//pycross/private/build/actions:cc_layer.bzl", "extract_cc_layer")
 load("//pycross/private/build/actions:pep517_action.bzl", "register_pep517_action")
@@ -55,6 +56,14 @@ def _cmake_build_impl(ctx):
     if "ninja" in tool_deps:
         additional_build_deps.extend(tool_deps["ninja"])
 
+    resources = get_resource_set(ctx.attr)
+    env = {}
+    if resources.parallelism > 0:
+        sc = str(resources.parallelism)
+        env["CMAKE_BUILD_PARALLEL_LEVEL"] = sc
+        env["NINJA_JOBS"] = sc
+        env["MAKEFLAGS"] = "-j{}".format(sc)
+
     # 3. Build wheel
     build_result = register_pep517_action(
         ctx,
@@ -62,6 +71,8 @@ def _cmake_build_impl(ctx):
         additional_build_deps = additional_build_deps,
         tool_executables = tool_executables,
         layers = [cc_layer],
+        env = env,
+        resource_set = resources.resource_set,
     )
 
     # 4. Repair wheel — CMake builds always produce native code.
@@ -73,6 +84,7 @@ def _cmake_build_impl(ctx):
         repair_tool = ctx.executable._repair_tool,
         target_environment = target_environment,
         repair_deps = tool_deps.get("repairwheel", []),
+        resource_set = resources.resource_set,
     )
 
     return [

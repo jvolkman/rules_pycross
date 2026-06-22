@@ -43,10 +43,44 @@ def _test_maturin_build_basic_impl(env, target):
     env.expect.that_target(target).has_provider(DefaultInfo)
     env.expect.that_target(target).has_provider(OutputGroupInfo)
 
+def _test_maturin_build_resources(name):
+    util.helper_target(
+        native.filegroup,
+        name = name + "_sdist",
+        srcs = ["test-sdist.tar.gz"],
+    )
+
+    util.helper_target(
+        _mock_executable,
+        name = name + "_mock_maturin",
+    )
+
+    util.helper_target(
+        maturin_build,
+        name = name + "_subject",
+        sdist = name + "_sdist",
+        path_tools = [name + "_mock_maturin"],
+        resource_size = "medium",
+    )
+
+    analysis_test(
+        name = name,
+        target = name + "_subject",
+        impl = _test_maturin_build_resources_impl,
+    )
+
+def _test_maturin_build_resources_impl(env, target):
+    action = env.expect.that_target(target).action_named("PycrossPep517Build")
+    action.env().contains_at_least({
+        "CARGO_BUILD_JOBS": "6",
+        "MAKEFLAGS": "-j6",
+    })
+
 def maturin_build_test_suite(name):
     test_suite(
         name = name,
         tests = [
             _test_maturin_build_basic,
+            _test_maturin_build_resources,
         ],
     )

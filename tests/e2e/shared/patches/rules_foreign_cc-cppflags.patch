@@ -1,10 +1,10 @@
 --- a/foreign_cc/built_tools/make_build.bzl
 +++ b/foreign_cc/built_tools/make_build.bzl
-@@ -109,6 +109,7 @@
+@@ -115,6 +115,7 @@ def _make_tool_impl(ctx):
              "ARFLAGS": _join_flags_list(ctx.workspace_name, arflags),
              "CC": absolute_cc,
-             "CFLAGS": _join_flags_list(ctx.workspace_name, non_sysroot_cflags),
-+            "CPPFLAGS": _join_flags_list(ctx.workspace_name, non_sysroot_cflags),
+             "CFLAGS": _join_flags_list(ctx.workspace_name, non_system_include_cflags),
++            "CPPFLAGS": _join_flags_list(ctx.workspace_name, non_system_include_cflags),
              "LD": absolute_ld,
-             "LDFLAGS": _join_flags_list(ctx.workspace_name, non_sysroot_ldflags),
+             "LDFLAGS": _join_flags_list(ctx.workspace_name, non_system_include_ldflags),
          })

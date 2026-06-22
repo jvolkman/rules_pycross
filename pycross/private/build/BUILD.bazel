@@ -3,6 +3,15 @@ load("@bazel_skylib//:bzl_library.bzl", "bzl_library")
 package(default_visibility = ["//visibility:public"])
 
 bzl_library(
+    name = "resource_sets",
+    srcs = ["resource_sets.bzl"],
+    deps = [
+        "@bazel_lib//lib:resource_sets",
+        "@bazel_skylib//rules:common_settings",
+    ],
+)
+
+bzl_library(
     name = "cc_pkg_config",
     srcs = ["cc_pkg_config.bzl"],
     deps = [

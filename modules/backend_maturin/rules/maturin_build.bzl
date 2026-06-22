@@ -10,6 +10,7 @@ load(
     "REPAIR_BUILD_ATTRS",
     "TOOL_EXTRACT_ATTRS",
     "extract_cc_layer",
+    "get_resource_set",
     "get_unzipped_wheel",
     "group_tool_deps",
     "pycross_exec_platform_transition",
@@ -79,6 +80,12 @@ def _maturin_build_impl(ctx):
         else:
             cargo_vendored_sources = "vendor"
 
+    resources = get_resource_set(ctx.attr)
+    env = {}
+    if resources.parallelism > 0:
+        env["CARGO_BUILD_JOBS"] = str(resources.parallelism)
+        env["MAKEFLAGS"] = "-j{}".format(resources.parallelism)
+
     # 3. Build wheel
     build_result = register_pep517_action(
         ctx,
@@ -89,6 +96,8 @@ def _maturin_build_impl(ctx):
         extra_files = extra_files,
         extra_inputs = ctx.files.vendored_crates if ctx.attr.vendored_crates else [],
         cargo_vendored_sources = cargo_vendored_sources,
+        env = env,
+        resource_set = resources.resource_set,
     )
 
     # 4. Repair wheel
@@ -100,6 +109,7 @@ def _maturin_build_impl(ctx):
         repair_tool = ctx.executable._repair_tool,
         target_environment = target_environment,
         repair_deps = tool_deps.get("repairwheel", []),
+        resource_set = resources.resource_set,
     )
 
     return [
