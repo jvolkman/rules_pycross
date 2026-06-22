@@ -34,7 +34,9 @@ def register_pep517_action(
         tool_executables = [],
         extra_files = {},
         extra_inputs = [],
-        cargo_vendored_sources = None):
+        cargo_vendored_sources = None,
+        env = {},
+        resource_set = None):
     """Registers the PEP 517 wheel build action.
 
     Common attributes (sdist, deps, build_deps, site_hooks, pre_build_patches,
@@ -51,6 +53,8 @@ def register_pep517_action(
             before building, keyed by their target filename (e.g. "Cargo.lock").
         extra_inputs: list[File], extra inputs to the action.
         cargo_vendored_sources: str, path to the vendored cargo sources relative to the execution root.
+        env: dict[str, str], extra environment variables to pass to the action.
+        resource_set: function or dict, resource requirements for the action.
 
     Returns:
         struct(
@@ -195,9 +199,11 @@ def register_pep517_action(
         "wheel_dir": out_wheel_dir.path,
     }
 
-    # Expand locations in build_env values and add to config.
-    # Include data targets in the location expansion scope.
-    if build_env:
+    # Merge programmatic env defaults (e.g. parallelism flags from
+    # resource_size) with user-specified build_env.  User values win.
+    merged_env = dict(env)
+    merged_env.update(build_env)
+    if merged_env:
         unique_deps = []
         seen_labels = {}
         for dep in deps + build_deps + data:
@@ -205,7 +211,7 @@ def register_pep517_action(
                 seen_labels[dep.label] = True
                 unique_deps.append(dep)
         expanded_env = {}
-        for key, value in build_env.items():
+        for key, value in merged_env.items():
             expanded_env[key] = ctx.expand_location(value, unique_deps)
         main_config["build_env"] = expanded_env
 
@@ -268,6 +274,10 @@ def register_pep517_action(
         "PYTHONPATH": ":".join([sdist_root] + python_paths),
     })
 
+    # Also set programmatic env on the action so subprocesses inherit
+    # them directly, in addition to build_env in the config JSON.
+    action_env.update(env)
+
     ctx.actions.run(
         inputs = depset(inputs, transitive = transitive_inputs),
         outputs = [out_wheel_dir],
@@ -277,6 +287,7 @@ def register_pep517_action(
         tools = tools,
         mnemonic = "PycrossPep517Build",
         progress_message = "Building wheel %s" % sdist.basename,
+        resource_set = resource_set,
     )
 
     return struct(

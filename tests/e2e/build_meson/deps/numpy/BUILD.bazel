@@ -35,6 +35,7 @@ meson_build(
     ],
     path_tools = [":cython"],
     pkg_config_files = [":gen_openblas_pc_file"],
+    resource_size = "medium",
     sdist = "@uv//numpy:sdist",
 )
 

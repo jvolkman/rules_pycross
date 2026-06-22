@@ -47,11 +47,29 @@ def _test_setuptools_build_with_repair_impl(env, target):
     action = env.expect.that_target(target).action_generating(wheel_dir.short_path)
     action.mnemonic().equals("PycrossRepairWheel")
 
+def _test_setuptools_build_resources(name):
+    util.helper_target(_mock_sdist, name = name + "_sdist")
+    util.helper_target(
+        setuptools_build,
+        name = name + "_subject",
+        sdist = name + "_sdist",
+        resource_size = "medium",
+    )
+    analysis_test(name = name, target = name + "_subject", impl = _test_setuptools_build_resources_impl)
+
+# buildifier: disable=unused-variable
+def _test_setuptools_build_resources_impl(env, target):
+    action = env.expect.that_target(target).action_named("PycrossPep517Build")
+    action.env().contains_at_least({
+        "MAKEFLAGS": "-j6",
+    })
+
 def setuptools_build_test_suite(name):
     test_suite(
         name = name,
         tests = [
             _test_setuptools_build_no_repair,
             _test_setuptools_build_with_repair,
+            _test_setuptools_build_resources,
         ],
     )

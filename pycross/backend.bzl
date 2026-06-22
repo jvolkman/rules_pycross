@@ -23,6 +23,10 @@ load(
     _PycrossPackageInfo = "PycrossPackageInfo",
 )
 load(
+    "//pycross/private/build:resource_sets.bzl",
+    _get_resource_set = "get_resource_set",
+)
+load(
     "//pycross/private/build:transitions.bzl",
     _pycross_exec_platform_transition = "pycross_exec_platform_transition",
 )
@@ -80,6 +84,7 @@ REPAIR_BUILD_ATTRS = _REPAIR_BUILD_ATTRS
 TOOL_EXTRACT_ATTRS = _TOOL_EXTRACT_ATTRS
 
 # Utilities
+get_resource_set = _get_resource_set
 get_unzipped_wheel = _get_unzipped_wheel
 get_wheel = _get_wheel
 group_tool_deps = _group_tool_deps

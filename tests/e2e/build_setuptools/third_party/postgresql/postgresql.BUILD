@@ -88,6 +88,7 @@ configure_make(
             "libpq.so.5",
         ],
     }),
+    resource_size = "medium",
     targets = [
         "-C src/bin/pg_config install DESTDIR=$BUILD_TMPDIR/$INSTALL_PREFIX",
         "-C src/include install DESTDIR=$BUILD_TMPDIR/$INSTALL_PREFIX",

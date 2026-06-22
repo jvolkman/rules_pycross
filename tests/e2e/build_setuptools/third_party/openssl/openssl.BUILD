@@ -118,6 +118,7 @@ configure_make(
             "libcrypto.so.3",
         ],
     }),
+    resource_size = "medium",
     targets = MAKE_TARGETS,
     toolchains = ["@rules_perl//:current_toolchain"],
 )

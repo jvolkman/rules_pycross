@@ -8,6 +8,7 @@ load(
     "PycrossPackageInfo",
     "PycrossPathToolInfo",
 )
+load("//pycross/private/build:resource_sets.bzl", "RESOURCE_SET_ATTRS")
 load("//pycross/private/build:transitions.bzl", "pycross_exec_platform_transition")
 
 def resolve_path_tools(ctx):
@@ -98,7 +99,7 @@ COMMON_BUILD_ATTRS = {
         allow_single_file = True,
         cfg = pycross_exec_platform_transition,
     ),
-}
+} | RESOURCE_SET_ATTRS
 
 CC_BUILD_ATTRS = {
     "native_deps": attr.label_list(providers = [CcInfo]),

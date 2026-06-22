@@ -20,5 +20,6 @@ setuptools_build(
     path_tools = [
         ":pg_config",
     ],
+    resource_size = "medium",
     sdist = "@uv//psycopg2:sdist",
 )

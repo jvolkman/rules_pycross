@@ -10,7 +10,8 @@ def register_repair_action(
         repair_tool,
         native_deps = [],
         target_environment = None,
-        repair_deps = []):
+        repair_deps = [],
+        resource_set = None):
     """Registers the repairwheel action to bundle native shared libs.
 
     Args:
@@ -22,6 +23,7 @@ def register_repair_action(
         repair_deps: list[Target], optional PyInfo targets (e.g. user-provided
             repairwheel) whose site-packages are prepended to PYTHONPATH,
             shadowing the bundled version.
+        resource_set: function or dict, resource requirements for the action.
 
     Returns:
         struct(
@@ -84,6 +86,7 @@ def register_repair_action(
         env = env,
         mnemonic = "PycrossRepairWheel",
         progress_message = "Repairing %s" % input_wheel_dir.basename,
+        resource_set = resource_set,
     )
 
     return struct(

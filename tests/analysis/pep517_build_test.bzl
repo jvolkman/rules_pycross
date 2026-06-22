@@ -79,6 +79,21 @@ def _test_pep517_build_basic_impl(env, target):
     wheel_dir = target[DefaultInfo].files.to_list()[0]
     env.expect.that_bool(wheel_dir.is_directory).equals(True)
 
+def _test_pep517_build_resources(name):
+    util.helper_target(_mock_sdist, name = name + "_sdist")
+    util.helper_target(
+        pep517_build,
+        name = name + "_subject",
+        sdist = name + "_sdist",
+        resource_size = "medium",
+    )
+    analysis_test(name = name, target = name + "_subject", impl = _test_pep517_build_resources_impl)
+
+# buildifier: disable=unused-variable
+def _test_pep517_build_resources_impl(env, target):
+    action = env.expect.that_target(target).action_named("PycrossPep517Build")
+    action.env().contains_at_least({"MAKEFLAGS": "-j6"})
+
 def pep517_build_test_suite(name):
     test_suite(
         name = name,
@@ -86,5 +101,6 @@ def pep517_build_test_suite(name):
             _test_pep517_build_valid_deps,
             _test_pep517_build_invalid_deps,
             _test_pep517_build_basic,
+            _test_pep517_build_resources,
         ],
     )
