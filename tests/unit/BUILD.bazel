@@ -2,6 +2,7 @@ load("@rules_python//python:defs.bzl", "py_test")
 load(":test_common_attrs.bzl", "common_attrs_test_suite")
 load(":test_override_helpers.bzl", "override_helpers_test_suite")
 load(":test_resolved_lock_renderer.bzl", "resolved_lock_renderer_test_suite")
+load(":test_variant_resolver.bzl", "variant_resolver_test_suite")
 
 py_test(
     name = "inspect_package_test",
@@ -188,3 +189,5 @@ py_test(
         "@rules_pycross_internal//deps:packaging",
     ],
 )
+
+variant_resolver_test_suite(name = "test_variant_resolver")

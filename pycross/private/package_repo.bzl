@@ -126,6 +126,8 @@ def _package_repo_impl(rctx):
     member_envs = {}  # member_name -> [env_name, ...]
     cycle_groups = {}  # group_name -> [pkg_key, ...]
     variant_items = {}  # qualified_name -> True (dedup across members)
+    variant_sets = []  # list of {"qnames": [...], "default": "..."}
+    variant_sets_seen = {}  # frozenset key -> True (dedup across members)
     for member, lock_label in rctx.attr.member_lock_files.items():
         member_lock = json.decode(rctx.read(rctx.path(Label(lock_label))))
 
@@ -137,12 +139,21 @@ def _package_repo_impl(rctx):
                 environments[env_name] = env_ref
 
         for variant_set in member_lock.get("variants", []):
+            set_qnames = []
+            set_default = ""
             for item in variant_set["items"]:
                 if item["kind"] == "project":
                     qname = "package_{}".format(item["package"])
                 else:
                     qname = "{}_{}".format(item["kind"], item["name"])
                 variant_items[qname] = True
+                set_qnames.append(qname)
+                if item.get("default", False):
+                    set_default = qname
+            set_key = "|".join(sorted(set_qnames))
+            if set_key not in variant_sets_seen:
+                variant_sets_seen[set_key] = True
+                variant_sets.append({"qnames": set_qnames, "default": set_default})
 
         member_envs[member] = sorted(member_env_names)
         member_packages[member] = member_lock.get("packages", {})
@@ -218,12 +229,37 @@ def _package_repo_impl(rctx):
     if variant_items:
         lock_build_lines.extend([
             'load("@bazel_skylib//rules:common_settings.bzl", "bool_flag")',
+            'load("@rules_pycross//pycross/private:variant_resolver.bzl", "variant_resolver")',
             "",
         ])
+
+    # Map each variant item to the resolver(s) it participates in.
+    qname_to_resolvers = {}  # qname -> [resolver_name, ...]
+    resolver_names = []  # ordered list of resolver target names
+    for vset in variant_sets:
+        resolver_name = "_resolver_" + "_".join(sorted(vset["qnames"]))
+        resolver_names.append(resolver_name)
+        for qname in vset["qnames"]:
+            qname_to_resolvers.setdefault(qname, []).append(resolver_name)
+
+    # Check if we need config_setting_group for items in multiple sets.
+    needs_config_setting_group = False
+    for qname, resolvers in qname_to_resolvers.items():
+        if len(resolvers) > 1:
+            needs_config_setting_group = True
+            break
+    if needs_config_setting_group:
+        lock_build_lines.extend([
+            'load("@bazel_skylib//lib:selects.bzl", "selects")',
+            "",
+        ])
+
     lock_build_lines.extend([
         "targets()",
         "",
     ])
+
+    # Emit bool_flags (user-facing UX, unchanged).
     for qname in sorted(variant_items.keys()):
         lock_build_lines.extend([
             "bool_flag(",
@@ -231,12 +267,74 @@ def _package_repo_impl(rctx):
             "    build_setting_default = False,",
             ")",
             "",
-            "config_setting(",
-            '    name = "is_{}",'.format(qname),
-            '    flag_values = {{":{flag}": "True"}},'.format(flag = qname),
+        ])
+
+    # Emit variant_resolver targets (one per conflict set).
+    for vset in variant_sets:
+        resolver_name = "_resolver_" + "_".join(sorted(vset["qnames"]))
+        lock_build_lines.extend([
+            "variant_resolver(",
+            '    name = "{}",'.format(resolver_name),
+            "    flags = [",
+        ])
+        for qname in vset["qnames"]:
+            lock_build_lines.append('        ":{}",'.format(qname))
+        lock_build_lines.extend([
+            "    ],",
+            "    names = [",
+        ])
+        for qname in vset["qnames"]:
+            lock_build_lines.append('        "{}",'.format(qname))
+        lock_build_lines.extend([
+            "    ],",
+        ])
+        if vset["default"]:
+            lock_build_lines.append('    default = "{}",'.format(vset["default"]))
+        lock_build_lines.extend([
             ")",
             "",
         ])
+
+    # Emit config_settings referencing the resolver(s).
+    for qname in sorted(variant_items.keys()):
+        resolvers = qname_to_resolvers.get(qname, [])
+        if len(resolvers) == 1:
+            # Simple case: item is in exactly one conflict set.
+            lock_build_lines.extend([
+                "config_setting(",
+                '    name = "is_{}",'.format(qname),
+                '    flag_values = {{":{resolver}": "{value}"}},'.format(
+                    resolver = resolvers[0],
+                    value = qname,
+                ),
+                ")",
+                "",
+            ])
+        elif len(resolvers) > 1:
+            # Item appears in multiple conflict sets: OR them together.
+            for j, resolver in enumerate(resolvers):
+                lock_build_lines.extend([
+                    "config_setting(",
+                    '    name = "_is_{}_via_{}",'.format(qname, j),
+                    '    flag_values = {{":{resolver}": "{value}"}},'.format(
+                        resolver = resolver,
+                        value = qname,
+                    ),
+                    ")",
+                    "",
+                ])
+            lock_build_lines.extend([
+                "selects.config_setting_group(",
+                '    name = "is_{}",'.format(qname),
+                "    match_any = [",
+            ])
+            for j in range(len(resolvers)):
+                lock_build_lines.append('        ":_is_{}_via_{}",'.format(qname, j))
+            lock_build_lines.extend([
+                "    ],",
+                ")",
+                "",
+            ])
 
     rctx.file("_lock/BUILD.bazel", "\n".join(lock_build_lines))
 
