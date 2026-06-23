@@ -107,10 +107,38 @@ def render_lock_bzl(lock, repo_map, sdist_map = None, rctx_name = ""):
     for group_name, scc in sorted(cycle_groups.items()):
         lines.append(_ind("py_library("))
         lines.append(_ind('name = "_cycle_{}",'.format(group_name), 2))
-        lines.append(_ind("deps = [", 2))
+
+        common_members = []
+        env_members = {}
         for pkg_key in sorted(scc):
-            lines.append(_ind('":_raw_{}",'.format(pkg_key), 3))
-        lines.append(_ind("],", 2))
+            pkg = packages.get(pkg_key, {})
+            pkg_envs = pkg.get("environment_files", {}).keys()
+            if not pkg_envs or all([env in pkg_envs for env in environments]):
+                common_members.append(pkg_key)
+            else:
+                for env in pkg_envs:
+                    env_members.setdefault(env, []).append(pkg_key)
+
+        if not env_members:
+            lines.append(_ind("deps = [", 2))
+            for pkg_key in common_members:
+                lines.append(_ind('":_raw_{}",'.format(pkg_key), 3))
+            lines.append(_ind("],", 2))
+        else:
+            lines.append(_ind("deps = [", 2))
+            for pkg_key in common_members:
+                lines.append(_ind('":_raw_{}",'.format(pkg_key), 3))
+            lines.append(_ind("] + select({", 2))
+            for env_name in sorted(environments.keys()):
+                deps = env_members.get(env_name, [])
+                if deps:
+                    lines.append(_ind('":{env}": ['.format(env = env_name), 3))
+                    for pkg_key in sorted(deps):
+                        lines.append(_ind('":_raw_{}",'.format(pkg_key), 4))
+                    lines.append(_ind("],", 3))
+            lines.append(_ind('"//conditions:default": [],', 3))
+            lines.append(_ind("}),", 2))
+
         lines.append(_ind(")"))
         lines.append("")
 

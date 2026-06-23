@@ -97,6 +97,69 @@ def _test_cycle_group_rendering(name):
     analysis_test(name = name, target = name + "_subject", impl = _test_cycle_group_rendering_impl)
 
 # buildifier: disable=unused-variable
+def _test_cycle_group_env_specific_rendering_impl(env, target):
+    """Verify cycle groups generate select() for environment-specific members."""
+    lock = {
+        "environments": {
+            "linux": {
+                "environment_label": "@platforms//os:linux",
+                "config_setting_label": "//:linux_env",
+            },
+            "mac": {
+                "environment_label": "@platforms//os:macos",
+                "config_setting_label": "//:mac_env",
+            },
+        },
+        "cycle_groups": {
+            "cycle_group_abc": ["alpha@1.0", "beta@2.0", "appnope@1.0"],
+        },
+        "packages": {
+            "alpha@1.0": {
+                "cycle_group": "cycle_group_abc",
+                "common_dependencies": ["beta@2.0"],
+                "environment_files": {
+                    "linux": {"key": "alpha_wheel"},
+                    "mac": {"key": "alpha_wheel"},
+                },
+            },
+            "beta@2.0": {
+                "cycle_group": "cycle_group_abc",
+                "common_dependencies": ["alpha@1.0"],
+                "environment_files": {
+                    "linux": {"key": "beta_wheel"},
+                    "mac": {"key": "beta_wheel"},
+                },
+            },
+            "appnope@1.0": {
+                "cycle_group": "cycle_group_abc",
+                "common_dependencies": ["alpha@1.0"],
+                "environment_files": {
+                    "mac": {"key": "appnope_wheel"},
+                },
+            },
+        },
+    }
+    repo_map = {
+        "alpha_wheel": "@repo//alpha:wheel",
+        "beta_wheel": "@repo//beta:wheel",
+        "appnope_wheel": "@repo//appnope:wheel",
+    }
+    res = render_lock_bzl(lock, repo_map, "my_rctx")
+
+    # The cycle group should use a select() for appnope
+    cycle_group_section = res.split('name = "_cycle_cycle_group_abc"')[1].split(")", 1)[0]
+    env.expect.that_bool('":_raw_alpha@1.0"' in cycle_group_section).equals(True)
+    env.expect.that_bool('":_raw_beta@2.0"' in cycle_group_section).equals(True)
+    env.expect.that_bool("select({" in cycle_group_section).equals(True)
+    env.expect.that_bool('":mac": [' in cycle_group_section).equals(True)
+    env.expect.that_bool('":_raw_appnope@1.0"' in cycle_group_section).equals(True)
+    env.expect.that_bool('":linux"' not in cycle_group_section).equals(True)
+
+def _test_cycle_group_env_specific_rendering(name):
+    util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
+    analysis_test(name = name, target = name + "_subject", impl = _test_cycle_group_env_specific_rendering_impl)
+
+# buildifier: disable=unused-variable
 def _test_extras_rendering_impl(env, target):
     """Verify extra_dependencies generate py_library targets named [extra_name]."""
     lock = {
@@ -309,6 +372,7 @@ def resolved_lock_renderer_test_suite(name):
         tests = [
             _test_render_lock,
             _test_cycle_group_rendering,
+            _test_cycle_group_env_specific_rendering,
             _test_extras_rendering,
             _test_lock_bzl_format,
             _test_no_cycles_no_cycle_targets,
