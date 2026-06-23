@@ -366,6 +366,128 @@ def _test_promoted_env_deps_rendering(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
     analysis_test(name = name, target = name + "_subject", impl = _test_promoted_env_deps_rendering_impl)
 
+# buildifier: disable=unused-variable
+def _test_marker_deps_rendering_impl(env, target):
+    """Verify marker_dependencies triggers the marker-based rendering path."""
+    lock = {
+        "packages": {
+            "foo@1.0": {
+                "marker_dependencies": [
+                    {"key": "bar@2.0", "marker": None},
+                    {
+                        "key": "baz@3.0",
+                        "marker": "sys_platform == \"linux\"",
+                        "marker_ast": {
+                            "op": "==",
+                            "lhs": {"type": "marker", "value": "sys_platform"},
+                            "rhs": {"type": "string", "value": "linux"},
+                        },
+                    },
+                ],
+                "wheel_candidates": [
+                    {
+                        "filename": "foo-1.0-py3-none-any.whl",
+                        "file_reference": {"key": "foo_wheel"},
+                        "python_tag": "py3",
+                        "abi_tag": "none",
+                        "platform_tag": "any",
+                    },
+                ],
+            },
+            "bar@2.0": {
+                "marker_dependencies": [],
+                "wheel_candidates": [
+                    {
+                        "filename": "bar-2.0-py3-none-any.whl",
+                        "file_reference": {"key": "bar_wheel"},
+                        "python_tag": "py3",
+                        "abi_tag": "none",
+                        "platform_tag": "any",
+                    },
+                ],
+            },
+            "baz@3.0": {
+                "marker_dependencies": [],
+                "wheel_candidates": [
+                    {
+                        "filename": "baz-3.0-py3-none-any.whl",
+                        "file_reference": {"key": "baz_wheel"},
+                        "python_tag": "py3",
+                        "abi_tag": "none",
+                        "platform_tag": "any",
+                    },
+                ],
+            },
+        },
+    }
+    repo_map = {
+        "foo_wheel": "@repo//foo:wheel",
+        "bar_wheel": "@repo//bar:wheel",
+        "baz_wheel": "@repo//baz:wheel",
+    }
+    res = render_lock_bzl(lock, repo_map, rctx_name = "my_rctx")
+
+    # Should load the marker-related symbols
+    env.expect.that_bool("pycross_pep508_evaluator" in res).equals(True)
+    env.expect.that_bool("pycross_wheel_chooser" in res).equals(True)
+    env.expect.that_bool("pep508_marker_values" in res).equals(True)
+
+    # Should have an evaluator target for the sys_platform marker
+    env.expect.that_bool("_marker_eval_" in res).equals(True)
+    env.expect.that_bool("sys_platform" in res).equals(True)
+
+    # Should have a config_setting matching the evaluator
+    env.expect.that_bool("_match" in res).equals(True)
+
+    # bar@2.0 should be an unconditional dep (no marker)
+    env.expect.that_bool('":bar@2.0"' in res).equals(True)
+
+    # baz@3.0 should be a conditional dep behind select
+    env.expect.that_bool('":baz@3.0"' in res).equals(True)
+    env.expect.that_bool("select({" in res).equals(True)
+
+    # Should have wheel chooser for foo
+    env.expect.that_bool("_wheel_chooser_foo@1.0" in res).equals(True)
+
+    # Should NOT have environment config_settings (marker path, not env path)
+    env.expect.that_bool("native.alias(" in res).equals(True)
+
+def _test_marker_deps_rendering(name):
+    util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
+    analysis_test(name = name, target = name + "_subject", impl = _test_marker_deps_rendering_impl)
+
+# buildifier: disable=unused-variable
+def _test_marker_legacy_fallback_impl(env, target):
+    """Verify that packages without marker data use the legacy rendering path."""
+    lock = {
+        "environments": {
+            "linux": {
+                "config_setting_label": "//:linux_env",
+            },
+        },
+        "packages": {
+            "foo@1.0": {
+                "environment_files": {
+                    "linux": {"key": "foo_wheel"},
+                },
+            },
+        },
+    }
+    repo_map = {"foo_wheel": "@repo//foo:wheel"}
+    res = render_lock_bzl(lock, repo_map, rctx_name = "my_rctx")
+
+    # Should NOT have marker-related loads
+    env.expect.that_bool("pycross_pep508_evaluator" not in res).equals(True)
+    env.expect.that_bool("pycross_wheel_chooser" not in res).equals(True)
+
+    # Should have environment config_settings (legacy path)
+    env.expect.that_bool("linux" in res).equals(True)
+    env.expect.that_bool('":linux"' in res).equals(True)
+
+def _test_marker_legacy_fallback(name):
+    util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
+    analysis_test(name = name, target = name + "_subject", impl = _test_marker_legacy_fallback_impl)
+
 def resolved_lock_renderer_test_suite(name):
     test_suite(
         name = name,
@@ -377,5 +499,7 @@ def resolved_lock_renderer_test_suite(name):
             _test_lock_bzl_format,
             _test_no_cycles_no_cycle_targets,
             _test_promoted_env_deps_rendering,
+            _test_marker_deps_rendering,
+            _test_marker_legacy_fallback,
         ],
     )

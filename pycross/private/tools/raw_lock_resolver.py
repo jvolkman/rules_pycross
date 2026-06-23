@@ -20,6 +20,7 @@ from urllib.parse import urlparse
 
 from packaging.markers import Marker
 from packaging.markers import Marker as PkgMarker
+from packaging.markers import Value
 from packaging.markers import Variable
 from packaging.utils import NormalizedName
 from packaging.utils import parse_wheel_filename
@@ -46,6 +47,32 @@ from pycross.private.tools.target_environment import TargetEnv
 EXTRA_PATTERN = re.compile(r"extra\s*==\s*['\"]([^'\"]+)['\"]")
 
 
+def _format_marker_node(node) -> str:
+    """Format a single marker node (Variable, Value, or Op) back to string."""
+    if isinstance(node, Variable):
+        return str(node)
+    if isinstance(node, Value):
+        return '"' + str(node) + '"'
+    return str(node)
+
+
+def _format_markers(markers) -> str:
+    """Reconstruct a PEP 508 marker string from packaging's internal list."""
+    if isinstance(markers, tuple) and len(markers) == 3:
+        return " ".join(_format_marker_node(x) for x in markers)
+    if isinstance(markers, list):
+        if len(markers) == 1:
+            return _format_markers(markers[0])
+        parts = []
+        for item in markers:
+            if isinstance(item, str):
+                parts.append(item)
+            else:
+                parts.append(_format_markers(item))
+        return " ".join(parts)
+    return str(markers)
+
+
 def _strip_extra_markers(marker_str: str) -> str:
     """Remove 'extra == ...' clauses from a marker string.
 
@@ -65,9 +92,7 @@ def _strip_extra_markers(marker_str: str) -> str:
     if not filtered:
         return ""
 
-    # Reconstruct the marker string from the filtered AST.
-    # The simplest approach: rebuild a Marker from the filtered list.
-    return str(PkgMarker._format_marker(filtered))  # type: ignore
+    return _format_markers(filtered)
 
 
 def _filter_extra_nodes(markers) -> list:
@@ -75,8 +100,7 @@ def _filter_extra_nodes(markers) -> list:
     if isinstance(markers, tuple) and len(markers) == 3:
         lhs, op, rhs = markers
         # Check if this is an 'extra' comparison
-        if (isinstance(lhs, Variable) and str(lhs) == "extra") or \
-           (isinstance(rhs, Variable) and str(rhs) == "extra"):
+        if (isinstance(lhs, Variable) and str(lhs) == "extra") or (isinstance(rhs, Variable) and str(rhs) == "extra"):
             return []
         return [markers]
 
@@ -454,11 +478,13 @@ class PackageResolver:
                 marker_str = _strip_extra_markers(marker_str)
 
             marker_ast = marker_to_ast(marker_str) if marker_str else None
-            result.append(MarkerDependency(
-                key=dep.key,
-                marker=marker_str if marker_str else None,
-                marker_ast=marker_ast,
-            ))
+            result.append(
+                MarkerDependency(
+                    key=dep.key,
+                    marker=marker_str if marker_str else None,
+                    marker_ast=marker_ast,
+                )
+            )
 
         return result
 
@@ -478,13 +504,9 @@ class PackageResolver:
         package_sources: Dict[str, PackageSource] = {}
         for file in package.files:
             package_sources[file.name] = PackageSource(file=file)
-        for filename, remote_file in context.remote_wheels_by_pkg.get(
-            (package.name, package.version), []
-        ):
+        for filename, remote_file in context.remote_wheels_by_pkg.get((package.name, package.version), []):
             package_sources[filename] = PackageSource(file=remote_file)
-        for filename, local_label in context.local_wheels_by_pkg.get(
-            (package.name, package.version), []
-        ):
+        for filename, local_label in context.local_wheels_by_pkg.get((package.name, package.version), []):
             package_sources[filename] = PackageSource(label=local_label)
 
         for filename, source in sorted(package_sources.items()):
@@ -503,13 +525,15 @@ class PackageResolver:
                 continue
 
             first_tag = tags_list[0]
-            candidates.append(WheelCandidate(
-                filename=filename,
-                file_reference=source.file_reference,
-                python_tag=str(first_tag.interpreter),
-                abi_tag=str(first_tag.abi),
-                platform_tag=str(first_tag.platform),
-            ))
+            candidates.append(
+                WheelCandidate(
+                    filename=filename,
+                    file_reference=source.file_reference,
+                    python_tag=str(first_tag.interpreter),
+                    abi_tag=str(first_tag.abi),
+                    platform_tag=str(first_tag.platform),
+                )
+            )
 
         return candidates
 

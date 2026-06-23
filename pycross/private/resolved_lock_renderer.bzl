@@ -346,6 +346,304 @@ def _render_extras_aggregates(lines, packages):
             "",
         ])
 
+# ---- Marker-based rendering (Phase 3) --------------------------------------
+
+def _has_marker_data(packages):
+    """Returns True if any package has marker_dependencies or wheel_candidates."""
+    for pkg in packages.values():
+        if pkg.get("marker_dependencies") or pkg.get("wheel_candidates"):
+            return True
+    return False
+
+def _collect_unique_markers(packages):
+    """Collect all unique marker strings across packages, returning a deduped set."""
+    markers = {}
+    for pkg in packages.values():
+        for md in pkg.get("marker_dependencies", []):
+            marker = md.get("marker")
+            if marker:
+                markers[marker] = md.get("marker_ast")
+    return markers
+
+def _marker_evaluator_name(marker_str):
+    """Generate a deterministic target name for a marker evaluator."""
+
+    # Starlark's hash() is deterministic within a build invocation.
+    # We sanitize the marker string for readability and add the hash for uniqueness.
+    san = _sanitize_name(marker_str.replace(" ", "").replace("\"", "").replace("'", ""))
+
+    # Truncate to keep target names reasonable
+    if len(san) > 40:
+        san = san[:40]
+    return "_marker_eval_{}_{}".format(san, hash(marker_str))
+
+def _render_marker_evaluators(lines, unique_markers):
+    """Render deduped pycross_pep508_evaluator and config_setting targets."""
+    for marker_str, marker_ast in sorted(unique_markers.items()):
+        eval_name = _marker_evaluator_name(marker_str)
+        ast_json = json.encode(marker_ast) if marker_ast else "{}"
+
+        # Evaluator rule — returns FeatureFlagInfo("true"/"false")
+        lines.extend([
+            _ind("pycross_pep508_evaluator("),
+            _ind('name = "{}",'.format(eval_name), 2),
+            _ind("expr = '{}',".format(ast_json), 2),
+            _ind("sys_platform = select(_SYS_PLATFORM_VALUES),", 2),
+            _ind("os_name = select(_OS_NAME_VALUES),", 2),
+            _ind("platform_system = select(_PLATFORM_SYSTEM_VALUES),", 2),
+            _ind("platform_machine = select(_PLATFORM_MACHINE_VALUES),", 2),
+            _ind(")"),
+            "",
+        ])
+
+        # Config setting that matches when the evaluator says "true"
+        lines.extend([
+            _ind("native.config_setting("),
+            _ind('name = "{}_match",'.format(eval_name), 2),
+            _ind("flag_values = {", 2),
+            _ind('":{eval}": "true",'.format(eval = eval_name), 3),
+            _ind("},", 2),
+            _ind(")"),
+            "",
+        ])
+
+def _render_marker_wheel_chooser(lines, pkg_key, pkg, repo_map, sdist_map, rctx_name):
+    """Render a wheel chooser target and per-wheel config_settings + alias."""
+    candidates = pkg.get("wheel_candidates", [])
+    if not candidates:
+        return
+
+    candidates_json = json.encode(candidates)
+    chooser_name = "_wheel_chooser_{}".format(pkg_key)
+
+    lines.extend([
+        _ind("pycross_wheel_chooser("),
+        _ind('name = "{}",'.format(chooser_name), 2),
+        _ind("candidates = '{}',".format(candidates_json), 2),
+        _ind("sys_platform = select(_SYS_PLATFORM_VALUES),", 2),
+        _ind("platform_machine = select(_PLATFORM_MACHINE_VALUES),", 2),
+        _ind("# python_version will come from the toolchain in a future iteration.", 2),
+        _ind(")"),
+        "",
+    ])
+
+    # Config setting per wheel candidate
+    for candidate in candidates:
+        filename = candidate["filename"]
+        cs_name = "_wheel_cs_{}_{}".format(pkg_key, _sanitize_name(filename))
+        lines.extend([
+            _ind("native.config_setting("),
+            _ind('name = "{}",'.format(cs_name), 2),
+            _ind("flag_values = {", 2),
+            _ind('":{chooser}": "{filename}",'.format(
+                chooser = chooser_name,
+                filename = filename,
+            ), 3),
+            _ind("},", 2),
+            _ind(")"),
+            "",
+        ])
+
+    # Wheel alias selecting over the config_settings
+    sdist_file = pkg.get("sdist_file")
+    lines.extend([
+        _ind("native.alias("),
+        _ind('name = "_wheel_{}",'.format(pkg_key), 2),
+        _ind("actual = select({", 2),
+    ])
+    for candidate in candidates:
+        filename = candidate["filename"]
+        cs_name = "_wheel_cs_{}_{}".format(pkg_key, _sanitize_name(filename))
+        file_ref = candidate.get("file_reference", {})
+        target = _wheel_target(file_ref, sdist_file, pkg_key, pkg, repo_map, sdist_map, rctx_name)
+        lines.append(_ind('":{cs}": "{target}",'.format(cs = cs_name, target = target), 3))
+    lines.append(_ind('"//conditions:default": "@rules_pycross//pycross/private:no_match_error",', 3))
+    lines.extend([
+        _ind("}),", 2),
+        _ind(")"),
+        "",
+    ])
+
+def _render_marker_package_deps(lines, pkg_key_san, pkg, packages):
+    """Render deps using marker-based select() instead of environment-based."""
+    marker_deps = pkg.get("marker_dependencies", [])
+    if not marker_deps:
+        lines.append(_ind("_{}_deps = []".format(pkg_key_san)))
+        lines.append("")
+        return
+
+    unconditional = []
+    conditional = []
+    for md in marker_deps:
+        dep_key = md["key"]
+        if _is_in_same_cycle(dep_key, pkg, packages):
+            continue
+        if md.get("marker"):
+            conditional.append(md)
+        else:
+            unconditional.append(md)
+
+    lines.append(_ind("_{}_deps = [".format(pkg_key_san)))
+    for md in sorted(unconditional, key = lambda m: m["key"]):
+        lines.append(_ind('":{}",'.format(md["key"]), 2))
+    lines.append(_ind("]"))
+
+    if conditional:
+        # Each conditional dep gets its own select()
+        for md in sorted(conditional, key = lambda m: m["key"]):
+            eval_name = _marker_evaluator_name(md["marker"])
+            lines[-1] = lines[-1] + " + select({"
+            lines.append(_ind('":{}_match": [":{}"],'.format(eval_name, md["key"]), 2))
+            lines.append(_ind('"//conditions:default": [],', 2))
+            lines.append(_ind("})", 1))
+
+    lines.append("")
+
+def _render_marker_package(lines, pkg_key, pkg, packages, repo_map, sdist_map, rctx_name):
+    """Renders all targets for a single package using marker-based deps and wheel selection."""
+    pkg_key_san = _sanitize_name(pkg_key)
+    package_name = pkg_key.split("@", 1)[0]
+    package_version = pkg_key.split("@", 1)[1]
+
+    has_marker_deps = bool(pkg.get("marker_dependencies"))
+    has_wheel_candidates = bool(pkg.get("wheel_candidates"))
+
+    sdist_file = pkg.get("sdist_file")
+    sdist_label = None
+    if sdist_file:
+        if sdist_file.get("label"):
+            sdist_label = sdist_file["label"]
+        elif sdist_file.get("key"):
+            sdist_label = repo_map.get(sdist_file["key"])
+
+    # Runtime deps
+    if has_marker_deps:
+        _render_marker_package_deps(lines, pkg_key_san, pkg, packages)
+    elif pkg.get("common_dependencies") or pkg.get("environment_dependencies"):
+        _render_package_deps(lines, pkg_key_san, pkg, packages)
+
+    if not (has_wheel_candidates or pkg.get("environment_files")) and "[" in pkg_key:
+        # Extra packages just wrap their dependencies
+        has_any_deps = has_marker_deps or pkg.get("common_dependencies") or pkg.get("environment_dependencies")
+        lines.extend([
+            _ind("py_library("),
+            _ind('name = "{}",'.format(pkg_key), 2),
+            _ind("deps = _{}_deps,".format(pkg_key_san) if has_any_deps else "deps = [],", 2),
+            _ind(")"),
+            "",
+        ])
+        return
+
+    # Sdist alias
+    if sdist_label:
+        lines.extend([
+            _ind("native.alias("),
+            _ind('name = "_sdist_{}",'.format(pkg_key), 2),
+            _ind('actual = "{}",'.format(sdist_label), 2),
+            _ind(")"),
+            "",
+        ])
+
+    # Wheel: use chooser if we have candidates, fall back to env-based select
+    if has_wheel_candidates:
+        _render_marker_wheel_chooser(lines, pkg_key, pkg, repo_map, sdist_map, rctx_name)
+    elif pkg.get("environment_files"):
+        # Fall back to environment-based select (same as existing)
+        lines.extend([
+            _ind("native.alias("),
+            _ind('name = "_wheel_{}",'.format(pkg_key), 2),
+        ])
+        lines.append(_ind("actual = select({", 2))
+        for env_name, env_ref in sorted(pkg.get("environment_files", {}).items()):
+            lines.append(_ind('":{env}": "{target}",'.format(
+                env = env_name,
+                target = _wheel_target(env_ref, sdist_file, pkg_key, pkg, repo_map, sdist_map, rctx_name),
+            ), 3))
+        lines.append(_ind('"//conditions:default": "@rules_pycross//pycross/private:no_match_error",', 3))
+        lines.append(_ind("}),", 2))
+        lines.extend([
+            _ind(")"),
+            "",
+        ])
+
+    # Library
+    lib_name = pkg_key
+    if pkg.get("cycle_group"):
+        lib_name = "_raw_{}".format(pkg_key)
+
+    has_any_deps = has_marker_deps or pkg.get("common_dependencies") or pkg.get("environment_dependencies")
+
+    lines.extend([
+        _ind("pycross_wheel_library("),
+        _ind('name = "{}",'.format(lib_name), 2),
+        _ind('package_name = "{}",'.format(package_name), 2),
+        _ind('package_version = "{}",'.format(package_version), 2),
+        _ind('wheel = ":_wheel_{}",'.format(pkg_key), 2),
+    ])
+
+    if pkg.get("site_paths"):
+        lines.append(_ind("site_paths = [", 2))
+        for tlp in pkg["site_paths"]:
+            lines.append(_ind('"{}",'.format(tlp), 3))
+        lines.append(_ind("],", 2))
+
+    if pkg.get("bin_paths"):
+        lines.append(_ind("bin_paths = [", 2))
+        for bp in pkg["bin_paths"]:
+            lines.append(_ind('"{}",'.format(bp), 3))
+        lines.append(_ind("],", 2))
+
+    if pkg.get("data_paths"):
+        lines.append(_ind("data_paths = [", 2))
+        for dp in pkg["data_paths"]:
+            lines.append(_ind('"{}",'.format(dp), 3))
+        lines.append(_ind("],", 2))
+
+    if pkg.get("include_paths"):
+        lines.append(_ind("include_paths = [", 2))
+        for ip in pkg["include_paths"]:
+            lines.append(_ind('"{}",'.format(ip), 3))
+        lines.append(_ind("],", 2))
+
+    if has_any_deps:
+        lines.append(_ind("deps = _{}_deps,".format(pkg_key_san), 2))
+
+    if pkg.get("install_exclude_globs"):
+        lines.append(_ind("install_exclude_globs = [", 2))
+        for glob in pkg["install_exclude_globs"]:
+            lines.append(_ind('"{}",'.format(glob), 3))
+        lines.append(_ind("],", 2))
+
+    if pkg.get("post_install_patches"):
+        lines.append(_ind("post_install_patches = [", 2))
+        for patch in pkg["post_install_patches"]:
+            lines.append(_ind('"{}",'.format(patch), 3))
+        lines.append(_ind("],", 2))
+
+    lines.extend([
+        _ind(")"),
+        "",
+    ])
+
+    # Cycle member wrapper
+    if pkg.get("cycle_group"):
+        lines.append(_ind("py_library("))
+        lines.append(_ind('name = "{}",'.format(pkg_key), 2))
+        lines.append(_ind('deps = [":_raw_{}", ":_cycle_deps_for_{}"],'.format(pkg_key, pkg_key), 2))
+        lines.append(_ind(")"))
+        lines.append("")
+
+    # dist_info
+    lines.extend([
+        _ind("pycross_dist_info("),
+        _ind('name = "_dist_info_{}",'.format(pkg_key), 2),
+        _ind('pkg = ":{lib}",'.format(lib = pkg_key), 2),
+        _ind(")"),
+        "",
+    ])
+
+# ---- Main render function ---------------------------------------------------
+
 def render_lock_bzl(lock, repo_map, sdist_map = None, rctx_name = ""):
     """Renders a lock.bzl file from a resolved lock structure.
 
@@ -361,10 +659,13 @@ def render_lock_bzl(lock, repo_map, sdist_map = None, rctx_name = ""):
     environments = lock.get("environments", {})
     packages = lock.get("packages", {})
     cycle_groups = lock.get("cycle_groups", {})
+    use_markers = _has_marker_data(packages)
 
     pycross_loads = ["pycross_dist_info", "pycross_wheel_library"]
     if cycle_groups:
         pycross_loads.insert(0, "pycross_cycle_member_deps")
+    if use_markers:
+        pycross_loads.extend(["pycross_pep508_evaluator", "pycross_wheel_chooser"])
 
     lines = [
         "# This file is generated by rules_pycross.",
@@ -372,25 +673,52 @@ def render_lock_bzl(lock, repo_map, sdist_map = None, rctx_name = ""):
         '"""Pycross-generated dependency targets."""',
         "",
         'load("@rules_pycross//pycross:defs.bzl", {})'.format(
-            ", ".join(['"{}"'.format(s) for s in pycross_loads]),
+            ", ".join(['"{}"'.format(s) for s in sorted(pycross_loads)]),
         ),
         'load("@rules_python//python:defs.bzl", "py_library")',
+    ]
+
+    if use_markers:
+        lines.extend([
+            'load("@rules_pycross//pycross/private:pep508_marker_values.bzl",',
+            '    "OS_NAME_VALUES" = "_OS_NAME_VALUES",',
+            '    "PLATFORM_MACHINE_VALUES" = "_PLATFORM_MACHINE_VALUES",',
+            '    "PLATFORM_SYSTEM_VALUES" = "_PLATFORM_SYSTEM_VALUES",',
+            '    "SYS_PLATFORM_VALUES" = "_SYS_PLATFORM_VALUES",',
+            ")",
+        ])
+
+    lines.extend([
         "",
         "# buildifier: disable=unnamed-macro",
         "def targets():",
         _ind('"""Generated package targets."""'),
         "",
-    ]
+    ])
 
-    # 1. Environment config_settings
-    _render_environment_config_settings(lines, environments)
+    if use_markers:
+        # 1. Marker evaluators (deduped)
+        unique_markers = _collect_unique_markers(packages)
+        _render_marker_evaluators(lines, unique_markers)
 
-    # 2. Per-member cycle deps
-    _render_cycle_member_deps(lines, cycle_groups, packages, environments)
+        # 2. Per-member cycle deps (still environment-based for now)
+        _render_cycle_member_deps(lines, cycle_groups, packages, environments)
 
-    # 3. Packages
-    for pkg_key, pkg in sorted(packages.items()):
-        _render_package(lines, pkg_key, pkg, packages, repo_map, sdist_map, rctx_name)
+        # 3. Packages (marker-based)
+        for pkg_key, pkg in sorted(packages.items()):
+            _render_marker_package(lines, pkg_key, pkg, packages, repo_map, sdist_map, rctx_name)
+
+    else:
+        # Legacy environment-based path
+        # 1. Environment config_settings
+        _render_environment_config_settings(lines, environments)
+
+        # 2. Per-member cycle deps
+        _render_cycle_member_deps(lines, cycle_groups, packages, environments)
+
+        # 3. Packages
+        for pkg_key, pkg in sorted(packages.items()):
+            _render_package(lines, pkg_key, pkg, packages, repo_map, sdist_map, rctx_name)
 
     # 4. Extras aggregates ([_all_] targets)
     _render_extras_aggregates(lines, packages)

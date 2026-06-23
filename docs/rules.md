@@ -302,6 +302,31 @@ Information about an extracted (installed) Python wheel.
 | <a id="PycrossExtractedWheelInfo-site_packages"></a>site_packages |  File (TreeArtifact): The unzipped site-packages directory containing the wheel's installed files.    |
 
 
+<a id="pycross_pep508_evaluator"></a>
+
+## pycross_pep508_evaluator
+
+<pre>
+load("@rules_pycross//pycross:defs.bzl", "pycross_pep508_evaluator")
+
+pycross_pep508_evaluator(<a href="#pycross_pep508_evaluator-name">name</a>, <a href="#pycross_pep508_evaluator-kwargs">**kwargs</a>)
+</pre>
+
+Evaluate a PEP 508 marker expression at analysis time.
+
+This macro wraps the underlying rule and returns
+config_common.FeatureFlagInfo with value "true" or "false".
+
+
+**PARAMETERS**
+
+
+| Name  | Description | Default Value |
+| :------------- | :------------- | :------------- |
+| <a id="pycross_pep508_evaluator-name"></a>name |  The target name.   |  none |
+| <a id="pycross_pep508_evaluator-kwargs"></a>kwargs |  Forwarded to the underlying rule.  Must include ``expr`` and may include any PEP 508 marker dimension overrides.   |  none |
+
+
 <a id="pycross_wheel_build"></a>
 
 ## pycross_wheel_build
@@ -341,6 +366,34 @@ to the v2 backend.
 | <a id="pycross_wheel_build-post_build_hooks"></a>post_build_hooks |  Executables to run after the wheel is built.   |  `[]` |
 | <a id="pycross_wheel_build-whldir_name"></a>whldir_name |  Name for the output .whldir TreeArtifact.   |  `None` |
 | <a id="pycross_wheel_build-kwargs"></a>kwargs |  Additional arguments passed to setuptools_build.   |  none |
+
+
+<a id="pycross_wheel_chooser"></a>
+
+## pycross_wheel_chooser
+
+<pre>
+load("@rules_pycross//pycross:defs.bzl", "pycross_wheel_chooser")
+
+pycross_wheel_chooser(<a href="#pycross_wheel_chooser-name">name</a>, <a href="#pycross_wheel_chooser-kwargs">**kwargs</a>)
+</pre>
+
+Select the best-matching wheel from a list of candidates.
+
+This macro wraps the private _pycross_wheel_chooser rule. It takes a
+JSON-encoded list of pre-parsed wheel candidates and PEP 508 marker
+dimension values (typically provided via select()), and produces a
+config_common.FeatureFlagInfo whose value is the filename of the best
+matching wheel.
+
+
+**PARAMETERS**
+
+
+| Name  | Description | Default Value |
+| :------------- | :------------- | :------------- |
+| <a id="pycross_wheel_chooser-name"></a>name |  The target name.   |  none |
+| <a id="pycross_wheel_chooser-kwargs"></a>kwargs |  Forwarded to _pycross_wheel_chooser.   |  none |
 
 
 <a id="pypi_file"></a>

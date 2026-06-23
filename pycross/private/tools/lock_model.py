@@ -17,7 +17,6 @@ from typing import Union
 from dacite.config import Config
 from dacite.core import from_dict
 from packaging.markers import Marker as PkgMarker
-from packaging.markers import Op
 from packaging.markers import Value
 from packaging.markers import Variable
 from packaging.specifiers import SpecifierSet
@@ -432,6 +431,7 @@ def _marker_node(node) -> Dict[str, str]:
 @dataclass(frozen=True)
 class MarkerDependency:
     """A dependency annotated with its PEP 508 marker expression."""
+
     key: PackageKey
     marker: Optional[str] = None  # Raw PEP 508 marker string, None = unconditional
     marker_ast: Optional[Dict[str, Any]] = field(default=None, compare=False)
@@ -440,6 +440,7 @@ class MarkerDependency:
 @dataclass(frozen=True)
 class WheelCandidate:
     """A wheel file candidate with pre-parsed compatibility tags."""
+
     filename: str
     file_reference: FileReference
     python_tag: str
