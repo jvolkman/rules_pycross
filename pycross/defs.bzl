@@ -1,6 +1,7 @@
 "Public build rule API re-exports"
 
 load("//pycross/private:cycle_deps.bzl", _pycross_cycle_member_deps = "pycross_cycle_member_deps")
+load("//pycross/private:cycle_member_marker_deps.bzl", _pycross_cycle_member_marker_deps = "pycross_cycle_member_marker_deps")
 load("//pycross/private:dist_info.bzl", _pycross_dist_info = "pycross_dist_info")
 load("//pycross/private:modules_mapping.bzl", _pycross_modules_mapping = "pycross_modules_mapping")
 load("//pycross/private:pep508_evaluator.bzl", _pycross_pep508_evaluator = "pycross_pep508_evaluator")
@@ -24,6 +25,7 @@ pycross_target_environment = _pycross_target_environment
 pycross_modules_mapping = _pycross_modules_mapping
 
 pycross_cycle_member_deps = _pycross_cycle_member_deps
+pycross_cycle_member_marker_deps = _pycross_cycle_member_marker_deps
 pycross_dist_info = _pycross_dist_info
 pycross_pep508_evaluator = _pycross_pep508_evaluator
 

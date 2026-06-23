@@ -407,6 +407,61 @@ def _render_marker_evaluators(lines, unique_markers):
             "",
         ])
 
+def _build_marker_cycle_edges_json(scc, packages):
+    """Builds the JSON-encoded in-cycle edge map for marker mode.
+
+    Returns a JSON string with format:
+      {"pkg": [{"dep": "dep_key", "marker_ast": {...}}, ...], ...}
+    """
+    scc_set = {k: True for k in scc}
+    edges = {}
+    for pkg_key in sorted(scc):
+        pkg = packages.get(pkg_key, {})
+        edge_list = []
+        for md in pkg.get("marker_dependencies", []):
+            dep_key = md["key"]
+            if dep_key in scc_set:
+                entry = {"dep": dep_key}
+                if md.get("marker_ast"):
+                    entry["marker_ast"] = md["marker_ast"]
+                edge_list.append(entry)
+        # Fallback: also check common_dependencies for backward compat
+        for dep in pkg.get("common_dependencies", []):
+            if dep in scc_set and not any([e["dep"] == dep for e in edge_list]):
+                edge_list.append({"dep": dep})
+        edges[pkg_key] = edge_list
+    return json.encode(edges)
+
+def _render_marker_cycle_member_deps(lines, cycle_groups, packages):
+    """Renders per-member pycross_cycle_member_marker_deps targets."""
+    for _group_name, scc in sorted(cycle_groups.items()):
+        edges_json = _build_marker_cycle_edges_json(scc, packages)
+
+        # All members are in raw_members (wheel availability is handled by
+        # the wheel_chooser, not by select on environments).
+        all_members = sorted(scc)
+
+        for pkg_key in all_members:
+            lines.append(_ind("pycross_cycle_member_marker_deps("))
+            lines.append(_ind('name = "_cycle_deps_for_{}",'.format(pkg_key), 2))
+            lines.append(_ind('member = "{}",'.format(pkg_key), 2))
+
+            lines.append(_ind("raw_members = {", 2))
+            for m in all_members:
+                lines.append(_ind('":_raw_{}": "{}",'.format(m, m), 3))
+            lines.append(_ind("},", 2))
+
+            lines.append(_ind("edges = '{}',".format(edges_json), 2))
+
+            # Marker values via select
+            lines.append(_ind("sys_platform = select(_SYS_PLATFORM_VALUES),", 2))
+            lines.append(_ind("os_name = select(_OS_NAME_VALUES),", 2))
+            lines.append(_ind("platform_system = select(_PLATFORM_SYSTEM_VALUES),", 2))
+            lines.append(_ind("platform_machine = select(_PLATFORM_MACHINE_VALUES),", 2))
+
+            lines.append(_ind(")"))
+            lines.append("")
+
 def _render_marker_wheel_chooser(lines, pkg_key, pkg, repo_map, sdist_map, rctx_name):
     """Render a wheel chooser target and per-wheel config_settings + alias."""
     candidates = pkg.get("wheel_candidates", [])
@@ -663,7 +718,10 @@ def render_lock_bzl(lock, repo_map, sdist_map = None, rctx_name = ""):
 
     pycross_loads = ["pycross_dist_info", "pycross_wheel_library"]
     if cycle_groups:
-        pycross_loads.insert(0, "pycross_cycle_member_deps")
+        if use_markers:
+            pycross_loads.insert(0, "pycross_cycle_member_marker_deps")
+        else:
+            pycross_loads.insert(0, "pycross_cycle_member_deps")
     if use_markers:
         pycross_loads.extend(["pycross_pep508_evaluator", "pycross_wheel_chooser"])
 
@@ -701,8 +759,8 @@ def render_lock_bzl(lock, repo_map, sdist_map = None, rctx_name = ""):
         unique_markers = _collect_unique_markers(packages)
         _render_marker_evaluators(lines, unique_markers)
 
-        # 2. Per-member cycle deps (still environment-based for now)
-        _render_cycle_member_deps(lines, cycle_groups, packages, environments)
+        # 2. Per-member cycle deps (marker-aware)
+        _render_marker_cycle_member_deps(lines, cycle_groups, packages)
 
         # 3. Packages (marker-based)
         for pkg_key, pkg in sorted(packages.items()):

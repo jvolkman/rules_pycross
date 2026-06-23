@@ -1,7 +1,10 @@
-"""Tests for pep508_evaluator and wheel_chooser rules."""
+"""Tests for pep508_evaluator, wheel_chooser, and cycle_dep_needed rules."""
 
 load("@rules_testing//lib:analysis_test.bzl", "analysis_test", "test_suite")
 load("@rules_testing//lib:util.bzl", "util")
+
+# buildifier: disable=bzl-visibility
+load("//pycross/private:cycle_dep_needed.bzl", "is_reachable")
 
 # buildifier: disable=bzl-visibility
 load("//pycross/private:pep508_evaluator.bzl", "evaluate_marker_expr", "pycross_pep508_evaluator")
@@ -449,6 +452,63 @@ def _test_chooser_rule(name):
     )
 
 # ============================================================================
+# Cycle dep reachability tests
+# ============================================================================
+
+_CYCLE_EDGES = {
+    "alpha@1.0": [
+        {"dep": "beta@2.0"},
+        {"dep": "gamma@1.0", "marker_ast": {
+            "op": "==",
+            "lhs": {"type": "marker", "value": "sys_platform"},
+            "rhs": {"type": "string", "value": "darwin"},
+        }},
+    ],
+    "beta@2.0": [
+        {"dep": "alpha@1.0"},
+    ],
+    "gamma@1.0": [
+        {"dep": "alpha@1.0"},
+    ],
+}
+
+# buildifier: disable=unused-variable
+def _test_cycle_reachable_impl(env, target):
+    """beta@2.0 is unconditionally reachable from alpha@1.0."""
+    result = is_reachable(_CYCLE_EDGES, "alpha@1.0", "beta@2.0", _LINUX_MARKERS)
+    env.expect.that_bool(result).equals(True)
+
+def _test_cycle_reachable(name):
+    util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
+    analysis_test(name = name, target = name + "_subject", impl = _test_cycle_reachable_impl)
+
+# buildifier: disable=unused-variable
+def _test_cycle_marker_gated_impl(env, target):
+    """gamma@1.0 is only reachable on darwin, not on linux."""
+    # On linux, gamma is NOT reachable (marker says darwin)
+    env.expect.that_bool(is_reachable(_CYCLE_EDGES, "alpha@1.0", "gamma@1.0", _LINUX_MARKERS)).equals(False)
+
+    # On darwin, gamma IS reachable
+    mac_markers = dict(_LINUX_MARKERS)
+    mac_markers["sys_platform"] = "darwin"
+    mac_markers["os_name"] = "posix"
+    mac_markers["platform_system"] = "Darwin"
+    env.expect.that_bool(is_reachable(_CYCLE_EDGES, "alpha@1.0", "gamma@1.0", mac_markers)).equals(True)
+
+def _test_cycle_marker_gated(name):
+    util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
+    analysis_test(name = name, target = name + "_subject", impl = _test_cycle_marker_gated_impl)
+
+# buildifier: disable=unused-variable
+def _test_cycle_self_reachable_impl(env, target):
+    """A node is always reachable from itself."""
+    env.expect.that_bool(is_reachable(_CYCLE_EDGES, "alpha@1.0", "alpha@1.0", _LINUX_MARKERS)).equals(True)
+
+def _test_cycle_self_reachable(name):
+    util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
+    analysis_test(name = name, target = name + "_subject", impl = _test_cycle_self_reachable_impl)
+
+# ============================================================================
 # Test suite
 # ============================================================================
 
@@ -471,5 +531,8 @@ def pep508_test_suite(name):
             _test_wheel_abi3,
             _test_evaluator_rule,
             _test_chooser_rule,
+            _test_cycle_reachable,
+            _test_cycle_marker_gated,
+            _test_cycle_self_reachable,
         ],
     )

@@ -386,6 +386,25 @@ bzl_library(
 )
 
 bzl_library(
+    name = "cycle_dep_needed",
+    srcs = ["cycle_dep_needed.bzl"],
+    deps = [
+        ":pep508_evaluator",
+        ":pep508_marker_values",
+    ],
+)
+
+bzl_library(
+    name = "cycle_member_marker_deps",
+    srcs = ["cycle_member_marker_deps.bzl"],
+    deps = [
+        ":pep508_evaluator",
+        ":pep508_marker_values",
+        ":util",
+    ],
+)
+
+bzl_library(
     name = "pep508_evaluator",
     srcs = ["pep508_evaluator.bzl"],
 )
