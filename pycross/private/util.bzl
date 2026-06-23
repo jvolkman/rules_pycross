@@ -1,5 +1,7 @@
 """Shared utilities"""
 
+load("@rules_python//python:py_info.bzl", "PyInfo")
+
 # The http library seems to depend on cache.bzl as of Bazel 7
 REPO_HTTP_DEPS = [
     "@bazel_tools//tools/build_defs/repo:http.bzl",
@@ -104,3 +106,92 @@ def key_name(key):
         The package name part.
     """
     return key.split("@", 1)[0]
+
+def merge_py_providers(
+        deps,
+        direct_sources = [],
+        direct_imports = [],
+        base_runfiles = None,
+        direct_venv_symlinks = [],
+        has_py2_only_sources = False,
+        has_py3_only_sources = False,
+        uses_shared_libraries = True):
+    """Merges PyInfo and DefaultInfo from deps with optional direct entries.
+
+    This is the central place for constructing merged Python provider info
+    across pycross rules. Update this function when new transitive providers
+    are added to the pycross ecosystem.
+
+    Args:
+        deps: List of Target objects providing PyInfo and DefaultInfo.
+        direct_sources: Files to add as direct entries to transitive_sources.
+        direct_imports: Strings to add as direct entries to imports.
+        base_runfiles: A Runfiles object (e.g. from ctx.runfiles) to merge with dep runfiles.
+        direct_venv_symlinks: VenvSymlinkEntry values to add directly.
+        has_py2_only_sources: Whether this target has PY2-only sources.
+        has_py3_only_sources: Whether this target has PY3-only sources.
+        uses_shared_libraries: Whether to set uses_shared_libraries on PyInfo.
+
+    Returns:
+        A struct with fields:
+          - default_info: A DefaultInfo provider.
+          - py_info: A PyInfo provider.
+          - runfiles: The merged Runfiles object.
+    """
+    transitive_sources_list = []
+    imports_list = []
+    venv_symlinks_list = []
+    has_venv_symlinks = bool(direct_venv_symlinks)
+
+    for dep in deps:
+        if PyInfo in dep:
+            py_info = dep[PyInfo]
+            transitive_sources_list.append(py_info.transitive_sources)
+            imports_list.append(py_info.imports)
+            if not has_py2_only_sources and py_info.has_py2_only_sources:
+                has_py2_only_sources = True
+            if not has_py3_only_sources and py_info.has_py3_only_sources:
+                has_py3_only_sources = True
+            if hasattr(py_info, "venv_symlinks"):
+                has_venv_symlinks = True
+                venv_symlinks_list.append(py_info.venv_symlinks)
+
+    transitive_sources = depset(
+        direct = direct_sources,
+        transitive = transitive_sources_list,
+    )
+    imports = depset(
+        direct = direct_imports,
+        transitive = imports_list,
+    )
+
+    runfiles = base_runfiles
+    for dep in deps:
+        rf = dep[DefaultInfo].default_runfiles
+        if rf:
+            if runfiles == None:
+                runfiles = rf
+            else:
+                runfiles = runfiles.merge(rf)
+
+    py_info_kwargs = dict(
+        has_py2_only_sources = has_py2_only_sources,
+        has_py3_only_sources = has_py3_only_sources,
+        imports = imports,
+        transitive_sources = transitive_sources,
+        uses_shared_libraries = uses_shared_libraries,
+    )
+    if has_venv_symlinks:
+        py_info_kwargs["venv_symlinks"] = depset(
+            direct = direct_venv_symlinks,
+            transitive = venv_symlinks_list,
+        )
+
+    return struct(
+        default_info = DefaultInfo(
+            files = depset(direct = direct_sources) if direct_sources else depset(),
+            runfiles = runfiles,
+        ),
+        py_info = PyInfo(**py_info_kwargs),
+        runfiles = runfiles,
+    )

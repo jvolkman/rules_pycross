@@ -72,23 +72,19 @@ def _test_cycle_group_rendering_impl(env, target):
     }
     res = render_lock_bzl(lock, repo_map, "my_rctx")
 
-    # Should have a py_library named _cycle_cycle_group_abc123
-    env.expect.that_bool('"_cycle_cycle_group_abc123"' in res).equals(True)
+    # Should have per-member pycross_cycle_member_deps targets
+    env.expect.that_bool('"_cycle_deps_for_alpha@1.0"' in res).equals(True)
+    env.expect.that_bool('"_cycle_deps_for_beta@2.0"' in res).equals(True)
 
     # Should reference _raw_ targets for both cycle members
     env.expect.that_bool('"_raw_alpha@1.0"' in res).equals(True)
     env.expect.that_bool('"_raw_beta@2.0"' in res).equals(True)
 
-    # alpha's pycross_wheel_library should use _raw_ name
-    env.expect.that_bool('"_raw_alpha@1.0"' in res).equals(True)
-
-    # Should have a wrapping py_library named "alpha@1.0" that depends on _raw + cycle group
+    # Should have a wrapping py_library named "alpha@1.0" that depends on _raw + per-member cycle deps
     env.expect.that_bool('"alpha@1.0"' in res).equals(True)
-    env.expect.that_bool('"_cycle_cycle_group_abc123"' in res).equals(True)
+    env.expect.that_bool('":_cycle_deps_for_alpha@1.0"' in res).equals(True)
 
     # Cycled package deps should exclude same-cycle members
-    # Split at the pycross_wheel_library for alpha to check its deps
-    # alpha depends on beta, but beta is in the same cycle, so beta should NOT appear in alpha's deps list
     alpha_section = res.split('name = "_raw_alpha@1.0"')[0].rsplit("_alpha_1_0_deps", 1)[-1] if "_alpha_1_0_deps" in res else ""
     env.expect.that_bool('"beta@2.0"' not in alpha_section).equals(True)
 
@@ -149,14 +145,15 @@ def _test_cycle_group_env_specific_rendering_impl(env, target):
     }
     res = render_lock_bzl(lock, repo_map, "my_rctx")
 
-    # The cycle group should use a select() for appnope
-    cycle_group_section = res.split('name = "_cycle_cycle_group_abc"')[1].split(")", 1)[0]
-    env.expect.that_bool('":_raw_alpha@1.0"' in cycle_group_section).equals(True)
-    env.expect.that_bool('":_raw_beta@2.0"' in cycle_group_section).equals(True)
-    env.expect.that_bool("select({" in cycle_group_section).equals(True)
-    env.expect.that_bool('":mac": [' in cycle_group_section).equals(True)
-    env.expect.that_bool('":_raw_appnope@1.0"' in cycle_group_section).equals(True)
-    env.expect.that_bool('":linux"' not in cycle_group_section).equals(True)
+    # Each member should have its own _cycle_deps_for_ target
+    env.expect.that_bool('"_cycle_deps_for_alpha@1.0"' in res).equals(True)
+    env.expect.that_bool('"_cycle_deps_for_beta@2.0"' in res).equals(True)
+    env.expect.that_bool('"_cycle_deps_for_appnope@1.0"' in res).equals(True)
+
+    # appnope's _raw_ target should be gated behind select in raw_members
+    # (because appnope only has a mac wheel)
+    env.expect.that_bool("select({" in res).equals(True)
+    env.expect.that_bool('":_raw_appnope@1.0": "appnope@1.0"' in res).equals(True)
 
 def _test_cycle_group_env_specific_rendering(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])

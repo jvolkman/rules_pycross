@@ -1,5 +1,6 @@
 "Public build rule API re-exports"
 
+load("//pycross/private:cycle_deps.bzl", _pycross_cycle_member_deps = "pycross_cycle_member_deps")
 load("//pycross/private:dist_info.bzl", _pycross_dist_info = "pycross_dist_info")
 load("//pycross/private:modules_mapping.bzl", _pycross_modules_mapping = "pycross_modules_mapping")
 load("//pycross/private:providers.bzl", _PycrossExtractedWheelInfo = "PycrossExtractedWheelInfo")
@@ -20,6 +21,7 @@ pycross_cc_pkg_config = _pycross_cc_pkg_config
 pycross_target_environment = _pycross_target_environment
 pycross_modules_mapping = _pycross_modules_mapping
 
+pycross_cycle_member_deps = _pycross_cycle_member_deps
 pycross_dist_info = _pycross_dist_info
 
 pycross_wheel_headers = _pycross_wheel_headers

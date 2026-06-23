@@ -4,8 +4,9 @@ This module generates the BUILD.bazel content for the `_lock` repository.
 It implements the following naming conventions for generated targets:
   - `_raw_<pkg_key>`: The underlying `pycross_wheel_library` or `pycross_wheel_build` target.
   - `<pkg_key>`: A `py_library` that wraps the raw target. If the package is part of a cycle,
-    this target depends on both the raw target and the shared cycle group target to break the cycle.
-  - `_cycle_<group_name>`: A `py_library` aggregating all packages in a cycle SCC.
+    this target depends on both the raw target and a per-member cycle deps target.
+  - `_cycle_deps_for_<pkg_key>`: A `pycross_cycle_member_deps` target that computes the exact
+    transitive in-cycle dependencies for a specific member at analysis time.
   - `<pkg_name>[_all_]@<version>`: A synthetic `py_library` that aggregates the base package and
     all of its parsed extras into a single target. Repos using `squash_extras` point their
     aliases to this `[_all_]` target to squash the graph at the alias layer.
@@ -74,73 +75,93 @@ def _render_environment_config_settings(lines, environments):
                 "",
             ])
 
-def _compute_cycle_member_partitions(scc, packages, environments):
-    """Partitions cycle group members into common (all envs) and env-specific.
+def _build_cycle_edges_json(scc, packages):
+    """Builds the JSON-encoded in-cycle edge map for a cycle group.
 
-    Members with wheels for all configured environments are included
-    unconditionally. Members with platform-specific wheels are gated
-    behind select() to prevent no_match_error on incompatible platforms.
-
-    Args:
-        scc: List of package keys in the cycle group.
-        packages: The full packages dict from the lock.
-        environments: The environments dict from the lock.
-
-    Returns:
-        A tuple (common_members, env_members) where:
-          - common_members is a sorted list of pkg_keys needed on all envs.
-          - env_members is a dict of env_name → [pkg_key, ...] for env-specific members.
+    Returns a JSON string with format:
+      {"pkg": {"common": ["dep", ...], "env_name": ["dep", ...]}, ...}
     """
-    common_members = []
-    env_members = {}
+    scc_set = {k: True for k in scc}
+    edges = {}
     for pkg_key in sorted(scc):
         pkg = packages.get(pkg_key, {})
-        pkg_envs = pkg.get("environment_files", {}).keys()
-        if not pkg_envs or all([env in pkg_envs for env in environments]):
-            common_members.append(pkg_key)
-        else:
-            for env in pkg_envs:
-                if env in environments:
-                    env_members.setdefault(env, []).append(pkg_key)
+        edge_map = {}
+        common = []
+        for dep in pkg.get("common_dependencies", []):
+            if dep in scc_set:
+                common.append(dep)
+        if common:
+            edge_map["common"] = common
+        for env_name, env_deps in sorted(pkg.get("environment_dependencies", {}).items()):
+            env_cycle_deps = []
+            for dep in env_deps:
+                if dep in scc_set:
+                    env_cycle_deps.append(dep)
+            if env_cycle_deps:
+                edge_map[env_name] = env_cycle_deps
+        edges[pkg_key] = edge_map
+    return json.encode(edges)
 
-    return common_members, env_members
+def _render_cycle_member_deps(lines, cycle_groups, packages, environments):
+    """Renders per-member pycross_cycle_member_deps targets for each cycle SCC.
 
-def _render_cycle_groups(lines, cycle_groups, packages, environments):
-    """Renders _cycle_<group> py_library targets for each cycle SCC.
-
-    Each cycle target aggregates the _raw_ targets for all SCC members.
-    Members are gated by select() based on actual in-cycle dependency
-    edges, so platform-specific members are only included on environments
-    where they are actually needed.
+    Each cycle member gets its own target that computes its exact transitive
+    in-cycle dependencies at analysis time based on the resolved environment.
+    Members with platform-specific wheels are gated with select() in the
+    raw_members attr to prevent analysis failures.
     """
-    for group_name, scc in sorted(cycle_groups.items()):
-        lines.append(_ind("py_library("))
-        lines.append(_ind('name = "_cycle_{}",'.format(group_name), 2))
+    for _group_name, scc in sorted(cycle_groups.items()):
+        edges_json = _build_cycle_edges_json(scc, packages)
 
-        common_members, env_members = _compute_cycle_member_partitions(scc, packages, environments)
+        # Partition members by wheel availability for the raw_members attr.
+        common_members = []
+        env_members = {}  # env_name → [pkg_key, ...]
+        for pkg_key in sorted(scc):
+            pkg = packages.get(pkg_key, {})
+            pkg_envs = pkg.get("environment_files", {}).keys()
+            if not pkg_envs or all([env in pkg_envs for env in environments]):
+                common_members.append(pkg_key)
+            else:
+                for env in pkg_envs:
+                    if env in environments:
+                        env_members.setdefault(env, []).append(pkg_key)
 
-        if not env_members:
-            lines.append(_ind("deps = [", 2))
-            for pkg_key in common_members:
-                lines.append(_ind('":_raw_{}",'.format(pkg_key), 3))
-            lines.append(_ind("],", 2))
-        else:
-            lines.append(_ind("deps = [", 2))
-            for pkg_key in common_members:
-                lines.append(_ind('":_raw_{}",'.format(pkg_key), 3))
-            lines.append(_ind("] + select({", 2))
+        for pkg_key in sorted(scc):
+            lines.append(_ind("pycross_cycle_member_deps("))
+            lines.append(_ind('name = "_cycle_deps_for_{}",'.format(pkg_key), 2))
+            lines.append(_ind('member = "{}",'.format(pkg_key), 2))
+
+            # raw_members: label_keyed_string_dict with select for platform-specific wheels
+            if not env_members:
+                lines.append(_ind("raw_members = {", 2))
+                for m in common_members:
+                    lines.append(_ind('":_raw_{}": "{}",'.format(m, m), 3))
+                lines.append(_ind("},", 2))
+            else:
+                lines.append(_ind("raw_members = {", 2))
+                for m in common_members:
+                    lines.append(_ind('":_raw_{}": "{}",'.format(m, m), 3))
+                lines.append(_ind("} | select({", 2))
+                for env_name in sorted(environments.keys()):
+                    deps = env_members.get(env_name, [])
+                    if deps:
+                        lines.append(_ind('":{env}": {{'.format(env = env_name), 3))
+                        for m in sorted(deps):
+                            lines.append(_ind('":_raw_{}": "{}",'.format(m, m), 4))
+                        lines.append(_ind("},", 3))
+                lines.append(_ind('"//conditions:default": {},', 3))
+                lines.append(_ind("}),", 2))
+
+            lines.append(_ind("edges = '{}',".format(edges_json), 2))
+
+            # env: resolved environment name via select
+            lines.append(_ind("env = select({", 2))
             for env_name in sorted(environments.keys()):
-                deps = env_members.get(env_name, [])
-                if deps:
-                    lines.append(_ind('":{env}": ['.format(env = env_name), 3))
-                    for pkg_key in sorted(deps):
-                        lines.append(_ind('":_raw_{}",'.format(pkg_key), 4))
-                    lines.append(_ind("],", 3))
-            lines.append(_ind('"//conditions:default": [],', 3))
+                lines.append(_ind('":{env}": "{env}",'.format(env = env_name), 3))
             lines.append(_ind("}),", 2))
 
-        lines.append(_ind(")"))
-        lines.append("")
+            lines.append(_ind(")"))
+            lines.append("")
 
 def _render_package_deps(lines, pkg_key_san, pkg, packages):
     """Renders the _<pkg>_deps list and optional select() for a package's runtime deps."""
@@ -280,11 +301,11 @@ def _render_package(lines, pkg_key, pkg, packages, repo_map, sdist_map, rctx_nam
         "",
     ])
 
-    # Cycle group wrapper
+    # Cycle member wrapper
     if pkg.get("cycle_group"):
         lines.append(_ind("py_library("))
         lines.append(_ind('name = "{}",'.format(pkg_key), 2))
-        lines.append(_ind('deps = [":_raw_{}", ":_cycle_{}"],'.format(pkg_key, pkg["cycle_group"]), 2))
+        lines.append(_ind('deps = [":_raw_{}", ":_cycle_deps_for_{}"],'.format(pkg_key, pkg_key), 2))
         lines.append(_ind(")"))
         lines.append("")
 
@@ -337,12 +358,22 @@ def render_lock_bzl(lock, repo_map, sdist_map = None, rctx_name = ""):
     Returns:
         A string containing the rendered lock.bzl file.
     """
+    environments = lock.get("environments", {})
+    packages = lock.get("packages", {})
+    cycle_groups = lock.get("cycle_groups", {})
+
+    pycross_loads = ["pycross_dist_info", "pycross_wheel_library"]
+    if cycle_groups:
+        pycross_loads.insert(0, "pycross_cycle_member_deps")
+
     lines = [
         "# This file is generated by rules_pycross.",
         "# It is not intended for manual editing.",
         '"""Pycross-generated dependency targets."""',
         "",
-        'load("@rules_pycross//pycross:defs.bzl", "pycross_dist_info", "pycross_wheel_library")',
+        'load("@rules_pycross//pycross:defs.bzl", {})'.format(
+            ", ".join(['"{}"'.format(s) for s in pycross_loads]),
+        ),
         'load("@rules_python//python:defs.bzl", "py_library")',
         "",
         "# buildifier: disable=unnamed-macro",
@@ -351,15 +382,11 @@ def render_lock_bzl(lock, repo_map, sdist_map = None, rctx_name = ""):
         "",
     ]
 
-    environments = lock.get("environments", {})
-    packages = lock.get("packages", {})
-    cycle_groups = lock.get("cycle_groups", {})
-
     # 1. Environment config_settings
     _render_environment_config_settings(lines, environments)
 
-    # 2. Cycle groups
-    _render_cycle_groups(lines, cycle_groups, packages, environments)
+    # 2. Per-member cycle deps
+    _render_cycle_member_deps(lines, cycle_groups, packages, environments)
 
     # 3. Packages
     for pkg_key, pkg in sorted(packages.items()):
