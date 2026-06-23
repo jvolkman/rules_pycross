@@ -1159,6 +1159,223 @@ class TestCycleDetection(unittest.TestCase):
             resolved.packages[key_b].cycle_group,
         )
 
+    def test_interconnected_cycles(self):
+        """A more complex graph with multiple interconnected cycles (graph4 in rules_py).
+
+        a -> b
+        b -> c, e
+        c -> d
+        d -> b  (cycle b-c-d)
+        e -> f
+        f -> e, g  (cycle e-f)
+        g (leaf)
+        """
+        pkg_a = make_pkg("a", "1.0", [make_file("a-1.0.tar.gz")], deps=[make_dep("b", "1.0")])
+        pkg_b = make_pkg("b", "1.0", [make_file("b-1.0.tar.gz")], deps=[make_dep("c", "1.0"), make_dep("e", "1.0")])
+        pkg_c = make_pkg("c", "1.0", [make_file("c-1.0.tar.gz")], deps=[make_dep("d", "1.0")])
+        pkg_d = make_pkg("d", "1.0", [make_file("d-1.0.tar.gz")], deps=[make_dep("b", "1.0")])
+        pkg_e = make_pkg("e", "1.0", [make_file("e-1.0.tar.gz")], deps=[make_dep("f", "1.0")])
+        pkg_f = make_pkg("f", "1.0", [make_file("f-1.0.tar.gz")], deps=[make_dep("e", "1.0"), make_dep("g", "1.0")])
+        pkg_g = make_pkg("g", "1.0", [make_file("g-1.0.tar.gz")])
+
+        pins = {
+            canonicalize_name("a"): PackageKey.from_parts(canonicalize_name("a"), Version("1.0")),
+        }
+
+        resolved = self._resolve_with_packages([pkg_a, pkg_b, pkg_c, pkg_d, pkg_e, pkg_f, pkg_g], pins)
+
+        key_a = PackageKey.from_parts(canonicalize_name("a"), Version("1.0"))
+        key_b = PackageKey.from_parts(canonicalize_name("b"), Version("1.0"))
+        key_c = PackageKey.from_parts(canonicalize_name("c"), Version("1.0"))
+        key_d = PackageKey.from_parts(canonicalize_name("d"), Version("1.0"))
+        key_e = PackageKey.from_parts(canonicalize_name("e"), Version("1.0"))
+        key_f = PackageKey.from_parts(canonicalize_name("f"), Version("1.0"))
+        key_g = PackageKey.from_parts(canonicalize_name("g"), Version("1.0"))
+
+        # b, c, d should be in one cycle group
+        group_bcd = resolved.packages[key_b].cycle_group
+        self.assertIsNotNone(group_bcd)
+        self.assertEqual(resolved.packages[key_c].cycle_group, group_bcd)
+        self.assertEqual(resolved.packages[key_d].cycle_group, group_bcd)
+        self.assertEqual(len(resolved.cycle_groups[group_bcd]), 3)
+
+        # e, f should be in another cycle group
+        group_ef = resolved.packages[key_e].cycle_group
+        self.assertIsNotNone(group_ef)
+        self.assertEqual(resolved.packages[key_f].cycle_group, group_ef)
+        self.assertEqual(len(resolved.cycle_groups[group_ef]), 2)
+
+        # They must be different groups
+        self.assertNotEqual(group_bcd, group_ef)
+
+        # a and g should NOT be in any cycle group
+        self.assertIsNone(resolved.packages[key_a].cycle_group)
+        self.assertIsNone(resolved.packages[key_g].cycle_group)
+
+    def test_no_cycles_diamond(self):
+        """A diamond graph with no cycles (graph1 in rules_py).
+
+        a -> b, c
+        b -> d
+        c -> d
+        d (leaf)
+        """
+        pkg_a = make_pkg("a", "1.0", [make_file("a-1.0.tar.gz")], deps=[make_dep("b", "1.0"), make_dep("c", "1.0")])
+        pkg_b = make_pkg("b", "1.0", [make_file("b-1.0.tar.gz")], deps=[make_dep("d", "1.0")])
+        pkg_c = make_pkg("c", "1.0", [make_file("c-1.0.tar.gz")], deps=[make_dep("d", "1.0")])
+        pkg_d = make_pkg("d", "1.0", [make_file("d-1.0.tar.gz")])
+
+        pins = {
+            canonicalize_name("a"): PackageKey.from_parts(canonicalize_name("a"), Version("1.0")),
+        }
+
+        resolved = self._resolve_with_packages([pkg_a, pkg_b, pkg_c, pkg_d], pins)
+
+        for pkg in resolved.packages.values():
+            self.assertIsNone(pkg.cycle_group)
+        self.assertEqual(len(resolved.cycle_groups), 0)
+
+    def test_self_loop(self):
+        """A package depending on itself. Should not be grouped (ignored as size 1)."""
+        pkg_a = make_pkg("a", "1.0", [make_file("a-1.0.tar.gz")], deps=[make_dep("a", "1.0")])
+        pins = {
+            canonicalize_name("a"): PackageKey.from_parts(canonicalize_name("a"), Version("1.0")),
+        }
+        resolved = self._resolve_with_packages([pkg_a], pins)
+        key_a = PackageKey.from_parts(canonicalize_name("a"), Version("1.0"))
+        self.assertIsNone(resolved.packages[key_a].cycle_group)
+        self.assertEqual(len(resolved.cycle_groups), 0)
+
+    def test_unpinned_cycle_not_emitted(self):
+        """A cycle exists in the lock model but none of its members are pinned.
+
+        Packages x, y, z form a cycle but are not reachable from any pin.
+        The full-graph Tarjan detects the SCC, but it should be filtered
+        out because no members overlap with the resolved key set.
+        """
+        # Pinned leaf — completely disconnected from the cycle
+        pkg_a = make_pkg("a", "1.0", [make_file("a-1.0.tar.gz")])
+
+        # Unpinned cycle: x → y → z → x
+        pkg_x = make_pkg("x", "1.0", [make_file("x-1.0.tar.gz")], deps=[make_dep("y", "1.0")])
+        pkg_y = make_pkg("y", "1.0", [make_file("y-1.0.tar.gz")], deps=[make_dep("z", "1.0")])
+        pkg_z = make_pkg("z", "1.0", [make_file("z-1.0.tar.gz")], deps=[make_dep("x", "1.0")])
+
+        pins = {
+            canonicalize_name("a"): PackageKey.from_parts(canonicalize_name("a"), Version("1.0")),
+        }
+
+        resolved = self._resolve_with_packages([pkg_a, pkg_x, pkg_y, pkg_z], pins)
+
+        # a is resolved, x/y/z are not
+        key_a = PackageKey.from_parts(canonicalize_name("a"), Version("1.0"))
+        self.assertIn(key_a, resolved.packages)
+        for name in ["x", "y", "z"]:
+            key = PackageKey.from_parts(canonicalize_name(name), Version("1.0"))
+            self.assertNotIn(key, resolved.packages)
+
+        # The cycle exists in the full graph but should NOT be emitted
+        self.assertEqual(len(resolved.cycle_groups), 0)
+
+    def test_partially_pinned_cycle(self):
+        """A 4-member cycle where only 1 member is directly pinned.
+
+        a → b → c → d → a (cycle)
+        Only 'a' is pinned; b, c, d are reached transitively.
+        All four should still be detected as one cycle group.
+        """
+        pkg_a = make_pkg("a", "1.0", [make_file("a-1.0.tar.gz")], deps=[make_dep("b", "1.0")])
+        pkg_b = make_pkg("b", "1.0", [make_file("b-1.0.tar.gz")], deps=[make_dep("c", "1.0")])
+        pkg_c = make_pkg("c", "1.0", [make_file("c-1.0.tar.gz")], deps=[make_dep("d", "1.0")])
+        pkg_d = make_pkg("d", "1.0", [make_file("d-1.0.tar.gz")], deps=[make_dep("a", "1.0")])
+
+        pins = {
+            canonicalize_name("a"): PackageKey.from_parts(canonicalize_name("a"), Version("1.0")),
+        }
+
+        resolved = self._resolve_with_packages([pkg_a, pkg_b, pkg_c, pkg_d], pins)
+
+        keys = [PackageKey.from_parts(canonicalize_name(n), Version("1.0")) for n in ["a", "b", "c", "d"]]
+        group = resolved.packages[keys[0]].cycle_group
+        self.assertIsNotNone(group)
+        for key in keys[1:]:
+            self.assertEqual(resolved.packages[key].cycle_group, group)
+        self.assertEqual(len(resolved.cycle_groups[group]), 4)
+
+    def test_version_isolation(self):
+        """Different versions of the same package should be independent for cycle detection.
+
+        foo@1.0 → bar@1.0 → foo@1.0  (cycle)
+        foo@2.0 → baz@1.0             (no cycle)
+        """
+        pkg_foo1 = make_pkg("foo", "1.0", [make_file("foo-1.0.tar.gz")], deps=[make_dep("bar", "1.0")])
+        pkg_bar = make_pkg("bar", "1.0", [make_file("bar-1.0.tar.gz")], deps=[make_dep("foo", "1.0")])
+        pkg_foo2 = make_pkg("foo", "2.0", [make_file("foo-2.0.tar.gz")], deps=[make_dep("baz", "1.0")])
+        pkg_baz = make_pkg("baz", "1.0", [make_file("baz-1.0.tar.gz")])
+
+        pins = {
+            canonicalize_name("foo"): {
+                "": PackageKey.from_parts(canonicalize_name("foo"), Version("1.0")),
+                "v2": PackageKey.from_parts(canonicalize_name("foo"), Version("2.0")),
+            },
+        }
+
+        resolved = self._resolve_with_packages([pkg_foo1, pkg_bar, pkg_foo2, pkg_baz], pins)
+
+        key_foo1 = PackageKey.from_parts(canonicalize_name("foo"), Version("1.0"))
+        key_bar = PackageKey.from_parts(canonicalize_name("bar"), Version("1.0"))
+        key_foo2 = PackageKey.from_parts(canonicalize_name("foo"), Version("2.0"))
+        key_baz = PackageKey.from_parts(canonicalize_name("baz"), Version("1.0"))
+
+        # foo@1.0 and bar@1.0 should be in a cycle
+        group = resolved.packages[key_foo1].cycle_group
+        self.assertIsNotNone(group)
+        self.assertEqual(resolved.packages[key_bar].cycle_group, group)
+        self.assertEqual(len(resolved.cycle_groups[group]), 2)
+
+        # foo@2.0 and baz@1.0 should NOT be in any cycle
+        self.assertIsNone(resolved.packages[key_foo2].cycle_group)
+        self.assertIsNone(resolved.packages[key_baz].cycle_group)
+
+    def test_cross_platform_marker_cycle(self):
+        """A cycle where each edge is gated by a different platform marker.
+
+        a → b  (only on linux: sys_platform == 'linux')
+        b → a  (only on windows: sys_platform == 'win32')
+
+        No single platform has this cycle, but the union graph does.
+        Since we ignore markers in cycle detection, both should be grouped.
+        """
+        pkg_a = make_pkg(
+            "a",
+            "1.0",
+            [make_file("a-1.0.tar.gz")],
+            deps=[make_dep("b", "1.0", marker="sys_platform == 'linux'")],
+        )
+        pkg_b = make_pkg(
+            "b",
+            "1.0",
+            [make_file("b-1.0.tar.gz")],
+            deps=[make_dep("a", "1.0", marker="sys_platform == 'win32'")],
+        )
+        pins = {
+            canonicalize_name("a"): PackageKey.from_parts(canonicalize_name("a"), Version("1.0")),
+            canonicalize_name("b"): PackageKey.from_parts(canonicalize_name("b"), Version("1.0")),
+        }
+
+        resolved = self._resolve_with_packages([pkg_a, pkg_b], pins)
+
+        key_a = PackageKey.from_parts(canonicalize_name("a"), Version("1.0"))
+        key_b = PackageKey.from_parts(canonicalize_name("b"), Version("1.0"))
+
+        # Both should be in the same cycle group despite no single
+        # platform having both edges
+        self.assertIsNotNone(resolved.packages[key_a].cycle_group)
+        self.assertEqual(
+            resolved.packages[key_a].cycle_group,
+            resolved.packages[key_b].cycle_group,
+        )
+
 
 class TestCollectPackageAnnotations(unittest.TestCase):
     """Tests for collect_package_annotations, including wildcard '*' support."""

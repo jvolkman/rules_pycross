@@ -117,6 +117,9 @@ def _test_cycle_group_env_specific_rendering_impl(env, target):
             "alpha@1.0": {
                 "cycle_group": "cycle_group_abc",
                 "common_dependencies": ["beta@2.0"],
+                "environment_dependencies": {
+                    "mac": ["appnope@1.0"],
+                },
                 "environment_files": {
                     "linux": {"key": "alpha_wheel"},
                     "mac": {"key": "alpha_wheel"},
