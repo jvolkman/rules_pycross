@@ -19,6 +19,8 @@ from typing import Tuple
 from urllib.parse import urlparse
 
 from packaging.markers import Marker
+from packaging.markers import Marker as PkgMarker
+from packaging.markers import Variable
 from packaging.utils import NormalizedName
 from packaging.utils import parse_wheel_filename
 from packaging.version import Version
@@ -27,6 +29,7 @@ from pycross.private.tools.lock_model import DependencyName
 from pycross.private.tools.lock_model import EnvironmentReference
 from pycross.private.tools.lock_model import FileKey
 from pycross.private.tools.lock_model import FileReference
+from pycross.private.tools.lock_model import MarkerDependency
 from pycross.private.tools.lock_model import PackageDependency
 from pycross.private.tools.lock_model import PackageFile
 from pycross.private.tools.lock_model import PackageKey
@@ -34,11 +37,75 @@ from pycross.private.tools.lock_model import RawLockSet
 from pycross.private.tools.lock_model import RawPackage
 from pycross.private.tools.lock_model import ResolvedLockSet
 from pycross.private.tools.lock_model import ResolvedPackage
+from pycross.private.tools.lock_model import WheelCandidate
 from pycross.private.tools.lock_model import is_wheel
+from pycross.private.tools.lock_model import marker_to_ast
 from pycross.private.tools.lock_model import package_canonical_name
 from pycross.private.tools.target_environment import TargetEnv
 
 EXTRA_PATTERN = re.compile(r"extra\s*==\s*['\"]([^'\"]+)['\"]")
+
+
+def _strip_extra_markers(marker_str: str) -> str:
+    """Remove 'extra == ...' clauses from a marker string.
+
+    Extras are handled by virtual extra nodes in the dependency graph,
+    not by runtime marker evaluation. We strip them so the evaluator
+    only sees platform/version markers.
+    """
+    if "extra" not in marker_str:
+        return marker_str
+
+    try:
+        marker = PkgMarker(marker_str)
+    except Exception:
+        return marker_str
+
+    filtered = _filter_extra_nodes(marker._markers)
+    if not filtered:
+        return ""
+
+    # Reconstruct the marker string from the filtered AST.
+    # The simplest approach: rebuild a Marker from the filtered list.
+    return str(PkgMarker._format_marker(filtered))  # type: ignore
+
+
+def _filter_extra_nodes(markers) -> list:
+    """Recursively remove extra == ... comparisons from the marker tree."""
+    if isinstance(markers, tuple) and len(markers) == 3:
+        lhs, op, rhs = markers
+        # Check if this is an 'extra' comparison
+        if (isinstance(lhs, Variable) and str(lhs) == "extra") or \
+           (isinstance(rhs, Variable) and str(rhs) == "extra"):
+            return []
+        return [markers]
+
+    if isinstance(markers, list):
+        result = []
+        for item in markers:
+            if isinstance(item, str):  # 'and' or 'or'
+                result.append(item)
+            else:
+                filtered = _filter_extra_nodes(item)
+                result.extend(filtered)
+
+        # Clean up: remove leading/trailing/consecutive operators
+        cleaned = []
+        for item in result:
+            if isinstance(item, str):
+                if not cleaned or isinstance(cleaned[-1], str):
+                    continue  # skip leading or consecutive operators
+                cleaned.append(item)
+            else:
+                cleaned.append(item)
+
+        # Remove trailing operator
+        if cleaned and isinstance(cleaned[-1], str):
+            cleaned.pop()
+
+        return cleaned
+
+    return [markers]
 
 
 @dataclass(frozen=True)
@@ -283,6 +350,9 @@ class PackageResolver:
         self._common_deps = deps_by_env.get(None, set())
         self._env_deps = {k: v for k, v in deps_by_env.items() if k is not None}
 
+        # Phase 3: preserve raw marker dependencies.
+        self._marker_deps = self._build_marker_dependencies(package, annotations.ignore_dependencies, context)
+
         self._package_sources_by_env = context.get_package_sources_by_environment(
             package,
             annotations.always_build,
@@ -308,6 +378,9 @@ class PackageResolver:
 
         self.sdist_file = FileReference(key=sdist_file_key) if sdist_file_key else None
         self.package_sources = frozenset(used_package_sources)
+
+        # Phase 3: build wheel candidates from all available wheel files.
+        self._wheel_candidates = self._build_wheel_candidates(package, context)
 
     @cached_property
     def runtime_dependency_keys(self) -> Set[PackageKey]:
@@ -346,7 +419,99 @@ class PackageResolver:
             data_paths=self._data_paths,
             include_paths=self._include_paths,
             source_dir=self.source_dir,
+            marker_dependencies=self._marker_deps,
+            wheel_candidates=self._wheel_candidates,
         )
+
+    @staticmethod
+    def _build_marker_dependencies(
+        package: RawPackage,
+        ignore_dependency_names: Set[str],
+        context: GenerationContext,
+    ) -> List[MarkerDependency]:
+        """Build marker-annotated dependency list preserving raw PEP 508 markers.
+
+        Instead of evaluating markers per-environment, this preserves the original
+        marker strings so the Starlark evaluator can resolve them at analysis time.
+        """
+        result = []
+        seen_names = set()
+        ordered_deps = sorted(package.dependencies, key=lambda d: d.version, reverse=True)
+        if ignore_dependency_names:
+            ordered_deps = [d for d in ordered_deps if d.name.package not in ignore_dependency_names]
+
+        for dep in ordered_deps:
+            dep_base_key = PackageKey.from_parts(DependencyName(dep.name.package), dep.version)
+            if context.lock_package_keys is not None and dep_base_key not in context.lock_package_keys:
+                continue
+            if dep.name in seen_names:
+                continue
+            seen_names.add(dep.name)
+
+            # Strip extra markers — those are handled by virtual extra nodes.
+            marker_str = dep.marker
+            if marker_str:
+                marker_str = _strip_extra_markers(marker_str)
+
+            marker_ast = marker_to_ast(marker_str) if marker_str else None
+            result.append(MarkerDependency(
+                key=dep.key,
+                marker=marker_str if marker_str else None,
+                marker_ast=marker_ast,
+            ))
+
+        return result
+
+    @staticmethod
+    def _build_wheel_candidates(
+        package: RawPackage,
+        context: GenerationContext,
+    ) -> List[WheelCandidate]:
+        """Build a list of all wheel candidates with pre-parsed tags.
+
+        Includes both local and remote wheels. Each candidate carries its
+        filename, file reference, and parsed PEP 425 compatibility tags.
+        """
+        candidates = []
+
+        # Collect all available wheel files (same sources as get_package_sources_by_environment).
+        package_sources: Dict[str, PackageSource] = {}
+        for file in package.files:
+            package_sources[file.name] = PackageSource(file=file)
+        for filename, remote_file in context.remote_wheels_by_pkg.get(
+            (package.name, package.version), []
+        ):
+            package_sources[filename] = PackageSource(file=remote_file)
+        for filename, local_label in context.local_wheels_by_pkg.get(
+            (package.name, package.version), []
+        ):
+            package_sources[filename] = PackageSource(label=local_label)
+
+        for filename, source in sorted(package_sources.items()):
+            if not is_wheel(filename):
+                continue
+            try:
+                _, _, _build_tag, file_tags = parse_wheel_filename(filename)
+            except Exception:
+                continue
+
+            # Extract the most specific tags from the file_tags frozenset.
+            # file_tags is a FrozenSet[Tag] where each Tag has .interpreter, .abi, .platform.
+            # We want the first (most specific) entry.
+            tags_list = sorted(file_tags, key=lambda t: (str(t.interpreter), str(t.abi), str(t.platform)))
+            if not tags_list:
+                continue
+
+            first_tag = tags_list[0]
+            candidates.append(WheelCandidate(
+                filename=filename,
+                file_reference=source.file_reference,
+                python_tag=str(first_tag.interpreter),
+                abi_tag=str(first_tag.abi),
+                platform_tag=str(first_tag.platform),
+            ))
+
+        return candidates
 
 
 def url_wheel_name(url: str) -> str:

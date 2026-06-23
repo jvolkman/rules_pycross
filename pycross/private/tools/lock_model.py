@@ -16,6 +16,10 @@ from typing import Union
 
 from dacite.config import Config
 from dacite.core import from_dict
+from packaging.markers import Marker as PkgMarker
+from packaging.markers import Op
+from packaging.markers import Value
+from packaging.markers import Variable
 from packaging.specifiers import SpecifierSet
 from packaging.utils import NormalizedName
 from packaging.utils import canonicalize_name
@@ -353,6 +357,96 @@ class RawPackage:
         return PackageKey.from_parts(self.name, self.version)
 
 
+def marker_to_ast(marker_str: str) -> Optional[Dict[str, Any]]:
+    """Convert a PEP 508 marker string to a JSON-serializable AST.
+
+    The AST format matches what pycross_pep508_evaluator expects:
+      - Comparison: {"op": "==", "lhs": {"type": "marker", "value": "..."}, "rhs": {"type": "string", "value": "..."}}
+      - Boolean: {"op": "and"|"or", "lhs": <expr>, "rhs": <expr>}
+
+    Returns None if marker_str is empty.
+    """
+    if not marker_str:
+        return None
+    parsed = PkgMarker(marker_str)
+    return _markers_to_ast(parsed._markers)
+
+
+def _markers_to_ast(markers) -> Dict[str, Any]:
+    """Convert packaging's internal marker list to our AST format."""
+    if isinstance(markers, tuple) and len(markers) == 3:
+        # Leaf comparison: (Variable, Op, Value) or (Value, Op, Variable)
+        lhs, op, rhs = markers
+        return {
+            "op": str(op),
+            "lhs": _marker_node(lhs),
+            "rhs": _marker_node(rhs),
+        }
+
+    if isinstance(markers, list):
+        if len(markers) == 1:
+            return _markers_to_ast(markers[0])
+
+        # Infix list: [expr, "and"|"or", expr, "and"|"or", expr, ...]
+        # Process left-to-right with standard precedence: 'and' binds tighter than 'or'.
+        # Split on 'or' first (lowest precedence), then handle 'and' groups.
+        or_groups = []
+        current_group = []
+        for item in markers:
+            if item == "or":
+                or_groups.append(current_group)
+                current_group = []
+            else:
+                current_group.append(item)
+        or_groups.append(current_group)
+
+        or_exprs = [_and_group_to_ast(group) for group in or_groups]
+        result = or_exprs[0]
+        for expr in or_exprs[1:]:
+            result = {"op": "or", "lhs": result, "rhs": expr}
+        return result
+
+    # Single item (shouldn't normally happen but handle gracefully)
+    return _markers_to_ast((markers,)) if not isinstance(markers, (str, dict)) else markers
+
+
+def _and_group_to_ast(group: list) -> Dict[str, Any]:
+    """Convert an 'and'-separated group to an AST node."""
+    exprs = [_markers_to_ast(item) for item in group if item != "and"]
+    result = exprs[0]
+    for expr in exprs[1:]:
+        result = {"op": "and", "lhs": result, "rhs": expr}
+    return result
+
+
+def _marker_node(node) -> Dict[str, str]:
+    """Convert a packaging Variable or Value to an AST node."""
+    if isinstance(node, Variable):
+        return {"type": "marker", "value": str(node)}
+    if isinstance(node, Value):
+        return {"type": "string", "value": str(node)}
+    # Fallback
+    return {"type": "string", "value": str(node)}
+
+
+@dataclass(frozen=True)
+class MarkerDependency:
+    """A dependency annotated with its PEP 508 marker expression."""
+    key: PackageKey
+    marker: Optional[str] = None  # Raw PEP 508 marker string, None = unconditional
+    marker_ast: Optional[Dict[str, Any]] = field(default=None, compare=False)
+
+
+@dataclass(frozen=True)
+class WheelCandidate:
+    """A wheel file candidate with pre-parsed compatibility tags."""
+    filename: str
+    file_reference: FileReference
+    python_tag: str
+    abi_tag: str
+    platform_tag: str
+
+
 @dataclass
 class ResolvedPackage:
     key: PackageKey
@@ -374,6 +468,9 @@ class ResolvedPackage:
     include_paths: List[str] = field(default_factory=list)
     cycle_group: Optional[str] = None
     source_dir: Optional[str] = None
+    # Phase 3: marker-based fields (coexist with environment-based fields)
+    marker_dependencies: List[MarkerDependency] = field(default_factory=list)
+    wheel_candidates: List[WheelCandidate] = field(default_factory=list)
 
 
 @dataclass(frozen=True)
