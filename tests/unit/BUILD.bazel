@@ -1,8 +1,13 @@
 load("@rules_python//python:defs.bzl", "py_test")
 load(":test_common_attrs.bzl", "common_attrs_test_suite")
 load(":test_override_helpers.bzl", "override_helpers_test_suite")
+load(":test_pep508.bzl", "pep508_test_suite")
 load(":test_resolved_lock_renderer.bzl", "resolved_lock_renderer_test_suite")
 load(":test_variant_resolver.bzl", "variant_resolver_test_suite")
+
+pep508_test_suite(
+    name = "test_pep508",
+)
 
 py_test(
     name = "inspect_package_test",

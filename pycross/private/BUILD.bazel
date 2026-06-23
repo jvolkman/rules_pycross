@@ -6,6 +6,33 @@ load(":util.bzl", "REPO_HTTP_DEPS")
 
 package(default_visibility = ["//visibility:public"])
 
+# Compound config_settings for platform_machine values that differ by OS.
+# Python's platform.machine() returns "aarch64" on Linux but "arm64" on macOS
+# for the same @platforms//cpu:aarch64 constraint.
+config_setting(
+    name = "is_linux_aarch64",
+    constraint_values = [
+        "@platforms//os:linux",
+        "@platforms//cpu:aarch64",
+    ],
+)
+
+config_setting(
+    name = "is_macos_aarch64",
+    constraint_values = [
+        "@platforms//os:osx",
+        "@platforms//cpu:aarch64",
+    ],
+)
+
+config_setting(
+    name = "is_windows_aarch64",
+    constraint_values = [
+        "@platforms//os:windows",
+        "@platforms//cpu:aarch64",
+    ],
+)
+
 bzl_library(
     name = "internal_repo",
     srcs = ["internal_repo.bzl"],
@@ -327,14 +354,20 @@ bzl_library(
 )
 
 bzl_library(
-    name = "backend_registry_repo",
-    srcs = ["backend_registry_repo.bzl"],
-)
-
-bzl_library(
     name = "cycle_deps",
     srcs = ["cycle_deps.bzl"],
     deps = [":util"],
+)
+
+bzl_library(
+    name = "util",
+    srcs = ["util.bzl"],
+    deps = ["@rules_python//python:py_info_bzl"],
+)
+
+bzl_library(
+    name = "backend_registry_repo",
+    srcs = ["backend_registry_repo.bzl"],
 )
 
 bzl_library(
@@ -353,6 +386,16 @@ bzl_library(
 )
 
 bzl_library(
+    name = "pep508_evaluator",
+    srcs = ["pep508_evaluator.bzl"],
+)
+
+bzl_library(
+    name = "pep508_marker_values",
+    srcs = ["pep508_marker_values.bzl"],
+)
+
+bzl_library(
     name = "providers",
     srcs = ["providers.bzl"],
 )
@@ -363,9 +406,8 @@ bzl_library(
 )
 
 bzl_library(
-    name = "util",
-    srcs = ["util.bzl"],
-    deps = ["@rules_python//python:py_info_bzl"],
+    name = "wheel_chooser",
+    srcs = ["wheel_chooser.bzl"],
 )
 
 bzl_library(
