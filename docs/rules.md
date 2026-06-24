@@ -26,30 +26,6 @@ pycross_cc_pkg_config(<a href="#pycross_cc_pkg_config-name">name</a>, <a href="#
 | <a id="pycross_cc_pkg_config-version"></a>version |  The version of the pkg-config package   | String | required |  |
 
 
-<a id="pycross_cycle_member_deps"></a>
-
-## pycross_cycle_member_deps
-
-<pre>
-load("@rules_pycross//pycross:defs.bzl", "pycross_cycle_member_deps")
-
-pycross_cycle_member_deps(<a href="#pycross_cycle_member_deps-name">name</a>, <a href="#pycross_cycle_member_deps-edges">edges</a>, <a href="#pycross_cycle_member_deps-env">env</a>, <a href="#pycross_cycle_member_deps-member">member</a>, <a href="#pycross_cycle_member_deps-raw_members">raw_members</a>)
-</pre>
-
-Computes per-member, per-environment transitive cycle dependencies at analysis time.
-
-**ATTRIBUTES**
-
-
-| Name  | Description | Type | Mandatory | Default |
-| :------------- | :------------- | :------------- | :------------- | :------------- |
-| <a id="pycross_cycle_member_deps-name"></a>name |  A unique name for this target.   | <a href="https://bazel.build/concepts/labels#target-names">Name</a> | required |  |
-| <a id="pycross_cycle_member_deps-edges"></a>edges |  JSON-encoded in-cycle edge map. Format: {"pkg": {"common": ["dep", ...], "env_name": ["dep", ...]}}   | String | required |  |
-| <a id="pycross_cycle_member_deps-env"></a>env |  The resolved environment name (passed via select).   | String | required |  |
-| <a id="pycross_cycle_member_deps-member"></a>member |  The package key of the cycle member this target resolves deps for.   | String | required |  |
-| <a id="pycross_cycle_member_deps-raw_members"></a>raw_members |  Map from _raw_<pkg> target labels to their package keys. Platform-specific members should be gated with select().   | <a href="https://bazel.build/rules/lib/dict">Dictionary: Label -> String</a> | optional |  `{}`  |
-
-
 <a id="pycross_dist_info"></a>
 
 ## pycross_dist_info

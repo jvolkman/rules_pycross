@@ -55,6 +55,40 @@ def _platform_tag_matches(platform_tag, sys_platform, platform_machine):
     # Platform tag specifies OS but no recognisable arch — accept any arch.
     return True
 
+def _single_python_tag_matches(tag, python_version):
+    """Check whether a single (non-compound) python tag matches.
+
+    Args:
+        tag: A single python tag like "cp311", "py3", "py2".
+        python_version: The host python version as "X.Y". May be empty.
+
+    Returns:
+        True if the tag is compatible.
+    """
+    if tag == "py3":
+        return not python_version or python_version.startswith("3")
+    if tag == "py2":
+        return python_version.startswith("2") if python_version else False
+
+    if not python_version:
+        return False
+
+    # cpXY / cpXYZ style — e.g. "cp311" for CPython 3.11.
+    if tag.startswith("cp"):
+        tag_digits = tag[2:]
+        if len(tag_digits) >= 2:
+            expected = tag_digits[0] + "." + tag_digits[1:]
+            return python_version == expected
+
+    # pyXY style — e.g. "py311".
+    if tag.startswith("py") and len(tag) > 2:
+        tag_digits = tag[2:]
+        if tag_digits.isdigit() and len(tag_digits) >= 1:
+            expected = tag_digits[0] + "." + tag_digits[1:]
+            return python_version == expected or python_version.startswith(tag_digits[0] + ".")
+
+    return False
+
 def _python_tag_matches(python_tag, python_version):
     """Check whether a wheel's python_tag is compatible with the host Python.
 
@@ -80,36 +114,11 @@ def _python_tag_matches(python_tag, python_version):
                 break
         if is_compound:
             for s in subtags:
-                if _python_tag_matches(s, python_version):
+                if _single_python_tag_matches(s, python_version):
                     return True
             return False
 
-    if python_tag == "py3":
-        # py3 is a universal Python 3 tag — accept when version is unknown
-        # or when it's known to be Python 3.
-        return not python_version or python_version.startswith("3")
-    if python_tag == "py2":
-        return python_version.startswith("2") if python_version else False
-
-    # If python_version is unknown, we can't verify version-specific tags.
-    if not python_version:
-        return False
-
-    # cpXY / cpXYZ style — e.g. "cp311" for CPython 3.11.
-    if python_tag.startswith("cp"):
-        tag_digits = python_tag[2:]
-        if len(tag_digits) >= 2:
-            expected = tag_digits[0] + "." + tag_digits[1:]
-            return python_version == expected
-
-    # pyXY style — e.g. "py311".
-    if python_tag.startswith("py") and len(python_tag) > 2:
-        tag_digits = python_tag[2:]
-        if tag_digits.isdigit() and len(tag_digits) >= 1:
-            expected = tag_digits[0] + "." + tag_digits[1:]
-            return python_version == expected or python_version.startswith(tag_digits[0] + ".")
-
-    return False
+    return _single_python_tag_matches(python_tag, python_version)
 
 def _abi_tag_matches(abi_tag, python_version):
     """Check whether a wheel's abi_tag is compatible.
