@@ -302,6 +302,36 @@ Information about an extracted (installed) Python wheel.
 | <a id="PycrossExtractedWheelInfo-site_packages"></a>site_packages |  File (TreeArtifact): The unzipped site-packages directory containing the wheel's installed files.    |
 
 
+<a id="pycross_cycle_member_marker_deps"></a>
+
+## pycross_cycle_member_marker_deps
+
+<pre>
+load("@rules_pycross//pycross:defs.bzl", "pycross_cycle_member_marker_deps")
+
+pycross_cycle_member_marker_deps(<a href="#pycross_cycle_member_marker_deps-name">name</a>, <a href="#pycross_cycle_member_marker_deps-raw_name">raw_name</a>, <a href="#pycross_cycle_member_marker_deps-member">member</a>, <a href="#pycross_cycle_member_marker_deps-members">members</a>, <a href="#pycross_cycle_member_marker_deps-edges">edges</a>, <a href="#pycross_cycle_member_marker_deps-kwargs">**kwargs</a>)
+</pre>
+
+Creates select()-gated cycle member deps using N² reachability checks.
+
+For each other member in the cycle, creates a pycross_cycle_dep_needed
+rule (returns FeatureFlagInfo true/false) and a config_setting, then
+wraps everything in a py_library with select() per dep.
+
+
+**PARAMETERS**
+
+
+| Name  | Description | Default Value |
+| :------------- | :------------- | :------------- |
+| <a id="pycross_cycle_member_marker_deps-name"></a>name |  The final target name (e.g. "pkg@1.0").   |  none |
+| <a id="pycross_cycle_member_marker_deps-raw_name"></a>raw_name |  The raw package target name (e.g. "_raw_pkg@1.0").   |  none |
+| <a id="pycross_cycle_member_marker_deps-member"></a>member |  The package key of this cycle member.   |  none |
+| <a id="pycross_cycle_member_marker_deps-members"></a>members |  List of all package keys in the cycle group.   |  none |
+| <a id="pycross_cycle_member_marker_deps-edges"></a>edges |  JSON-encoded edge map: {node: [{dep, marker_ast?}, ...]}.   |  none |
+| <a id="pycross_cycle_member_marker_deps-kwargs"></a>kwargs |  Marker value attrs (sys_platform, os_name, etc.) passed through to pycross_cycle_dep_needed.   |  none |
+
+
 <a id="pycross_pep508_evaluator"></a>
 
 ## pycross_pep508_evaluator

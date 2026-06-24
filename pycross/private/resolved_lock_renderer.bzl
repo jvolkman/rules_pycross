@@ -425,6 +425,7 @@ def _build_marker_cycle_edges_json(scc, packages):
                 if md.get("marker_ast"):
                     entry["marker_ast"] = md["marker_ast"]
                 edge_list.append(entry)
+
         # Fallback: also check common_dependencies for backward compat
         for dep in pkg.get("common_dependencies", []):
             if dep in scc_set and not any([e["dep"] == dep for e in edge_list]):
@@ -452,6 +453,7 @@ def _render_marker_cycle_member_deps(lines, cycle_groups, packages):
                 lines.append(_ind('"{}",'.format(m), 3))
             lines.append(_ind("],", 2))
             lines.append(_ind("edges = '{}',".format(edges_json), 2))
+
             # Marker values via select
             lines.append(_ind("sys_platform = select(SYS_PLATFORM_VALUES),", 2))
             lines.append(_ind("os_name = select(OS_NAME_VALUES),", 2))
@@ -459,8 +461,6 @@ def _render_marker_cycle_member_deps(lines, cycle_groups, packages):
             lines.append(_ind("platform_machine = select(PLATFORM_MACHINE_VALUES),", 2))
             lines.append(_ind(")"))
             lines.append("")
-
-
 
 def _render_marker_wheel_chooser(lines, pkg_key, pkg, repo_map, sdist_map, rctx_name):
     """Render a wheel chooser target and per-wheel config_settings + alias."""

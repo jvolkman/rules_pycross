@@ -17,7 +17,7 @@ Supported comparison operators: ==, !=, >=, <=, >, <, in, not in.
 Version operators (>=, <=, >, <) split on '.' and compare numerically.
 """
 
-load(":pep508_marker_values.bzl", "collect_markers", "marker_value_attrs")
+load(":pep508_marker_values.bzl", "PYTHON_TOOLCHAIN_TYPE", "collect_markers", "marker_value_attrs")
 
 # ---- helpers ----------------------------------------------------------------
 
@@ -148,7 +148,6 @@ def evaluate_marker_expr(expr, markers):
 
 # ---- rule implementation ----------------------------------------------------
 
-
 def _pycross_pep508_evaluator_impl(ctx):
     markers = collect_markers(ctx)
 
@@ -166,6 +165,7 @@ _pycross_pep508_evaluator = rule(
         ),
         **marker_value_attrs()
     ),
+    toolchains = [PYTHON_TOOLCHAIN_TYPE],
 )
 
 def pycross_pep508_evaluator(name, **kwargs):

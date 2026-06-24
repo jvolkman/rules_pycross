@@ -485,6 +485,7 @@ def _test_cycle_reachable(name):
 # buildifier: disable=unused-variable
 def _test_cycle_marker_gated_impl(env, target):
     """gamma@1.0 is only reachable on darwin, not on linux."""
+
     # On linux, gamma is NOT reachable (marker says darwin)
     env.expect.that_bool(is_reachable(_CYCLE_EDGES, "alpha@1.0", "gamma@1.0", _LINUX_MARKERS)).equals(False)
 

@@ -54,6 +54,8 @@ PLATFORM_MACHINE_VALUES = {
     "//conditions:default": "",
 }
 
+PYTHON_TOOLCHAIN_TYPE = Label("@rules_python//python:toolchain_type")
+
 def _flag_value(target):
     """Read a flag value from either FeatureFlagInfo or BuildSettingInfo."""
     if config_common.FeatureFlagInfo in target:
@@ -62,14 +64,39 @@ def _flag_value(target):
         return target[BuildSettingInfo].value
     return ""
 
+def _format_full_version(version_info):
+    """Format a full version string from interpreter_version_info.
+
+    Follows the same logic as rules_python's env_marker_setting.
+    """
+    kind = version_info.releaselevel
+    if kind == "final":
+        kind = ""
+        serial = ""
+    else:
+        kind = kind[0] if kind else ""
+        serial = str(version_info.serial) if version_info.serial else ""
+
+    return "{major}.{minor}.{micro}{kind}{serial}".format(
+        major = version_info.major,
+        minor = version_info.minor,
+        micro = version_info.micro,
+        kind = kind,
+        serial = serial,
+    )
+
 def marker_value_attrs():
     """Returns default attr values for PEP 508 marker dimensions.
+
+    Rules using these attrs should also declare:
+        toolchains = [PYTHON_TOOLCHAIN_TYPE]
 
     Usage in a rule definition:
         _my_rule = rule(
             attrs = {
                 "expr": attr.string(),
             } | marker_value_attrs(),
+            toolchains = [PYTHON_TOOLCHAIN_TYPE],
         )
     """
     return {
@@ -84,25 +111,27 @@ def marker_value_attrs():
         "implementation_name": attr.string(default = ""),
         "implementation_version": attr.string(default = ""),
         "platform_python_implementation": attr.string(default = ""),
-        # Private attrs to auto-derive python version from rules_python.
+        # Fallback: read python version from rules_python config flags
+        # when the toolchain doesn't provide interpreter_version_info.
         "_python_version_flag": attr.label(
             default = "@rules_python//python/config_settings:python_version",
-            doc = "rules_python flag providing the full Python version (e.g. 3.12.0).",
         ),
         "_python_version_major_minor_flag": attr.label(
             default = "@rules_python//python/config_settings:python_version_major_minor",
-            doc = "rules_python flag providing major.minor Python version (e.g. 3.12).",
         ),
     }
 
 def collect_markers(ctx):
-    """Collects PEP 508 marker values from rule context attrs.
+    """Collects PEP 508 marker values from rule context attrs and toolchain.
 
-    Explicit attr values take precedence; python_version and python_full_version
-    are derived from the rules_python flags when not set explicitly.
+    Resolution order for python version markers:
+      1. Explicit attr values (if non-empty)
+      2. PyRuntimeInfo from the Python toolchain (interpreter_version_info)
+      3. rules_python config flags (python_version, python_version_major_minor)
 
     Args:
-        ctx: The rule context whose attrs include those from marker_value_attrs().
+        ctx: The rule context whose attrs include those from marker_value_attrs()
+             and whose rule declares toolchains = [PYTHON_TOOLCHAIN_TYPE].
 
     Returns:
         A dict mapping marker name to its string value.
@@ -113,13 +142,34 @@ def collect_markers(ctx):
     implementation_version = ctx.attr.implementation_version
     platform_python_implementation = ctx.attr.platform_python_implementation
 
-    # Auto-derive from rules_python flags when not explicitly provided.
+    # Try PyRuntimeInfo from the toolchain first (most accurate).
+    if (not python_version or not python_full_version or not implementation_name):
+        runtime = None
+        if PYTHON_TOOLCHAIN_TYPE in ctx.toolchains:
+            tc = ctx.toolchains[PYTHON_TOOLCHAIN_TYPE]
+            if hasattr(tc, "py3_runtime"):
+                runtime = tc.py3_runtime
+
+        if runtime:
+            if not implementation_name and hasattr(runtime, "implementation_name") and runtime.implementation_name:
+                implementation_name = runtime.implementation_name
+
+            if hasattr(runtime, "interpreter_version_info") and runtime.interpreter_version_info:
+                vi = runtime.interpreter_version_info
+                if not python_version:
+                    python_version = "{}.{}".format(vi.major, vi.minor)
+                if not python_full_version:
+                    python_full_version = _format_full_version(vi)
+                if not implementation_version:
+                    implementation_version = _format_full_version(vi)
+
+    # Fall back to rules_python config flags.
     if not python_version and hasattr(ctx.attr, "_python_version_major_minor_flag"):
         python_version = _flag_value(ctx.attr._python_version_major_minor_flag)
     if not python_full_version and hasattr(ctx.attr, "_python_version_flag"):
         python_full_version = _flag_value(ctx.attr._python_version_flag)
 
-    # Default implementation_name to cpython (matches rules_python's default).
+    # Defaults (matching rules_python's pep508_env.bzl behavior).
     if not implementation_name:
         implementation_name = "cpython"
     if not implementation_version and python_full_version:

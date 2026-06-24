@@ -12,7 +12,7 @@ The selection algorithm:
      "__no_matching_wheel__" if nothing matches.
 """
 
-load(":pep508_marker_values.bzl", "collect_markers", "marker_value_attrs")
+load(":pep508_marker_values.bzl", "PYTHON_TOOLCHAIN_TYPE", "collect_markers", "marker_value_attrs")
 
 # ---------------------------------------------------------------------------
 # Tag compatibility helpers
@@ -67,9 +67,11 @@ def _python_tag_matches(python_tag, python_version):
     Returns:
         True if the wheel can run on this Python.
     """
+
     # Handle compound tags (e.g. "py2.py3", "cp39.cp310") by checking each subtag.
     if "." in python_tag:
         subtags = python_tag.split(".")
+
         # Only split if it looks like multiple tags (each starts with py/cp).
         is_compound = len(subtags) > 1
         for s in subtags:
@@ -332,6 +334,7 @@ _pycross_wheel_chooser = rule(
         ),
         **marker_value_attrs()
     ),
+    toolchains = [PYTHON_TOOLCHAIN_TYPE],
 )
 
 def pycross_wheel_chooser(name, **kwargs):

@@ -21,7 +21,7 @@ Each edge is either unconditional (no marker_ast) or conditional
 """
 
 load("//pycross/private:pep508_evaluator.bzl", "evaluate_marker_expr")
-load("//pycross/private:pep508_marker_values.bzl", "collect_markers", "marker_value_attrs")
+load("//pycross/private:pep508_marker_values.bzl", "PYTHON_TOOLCHAIN_TYPE", "collect_markers", "marker_value_attrs")
 
 # ---- BFS reachability -------------------------------------------------------
 
@@ -106,6 +106,7 @@ _pycross_cycle_dep_needed = rule(
         ),
     } | marker_value_attrs(),
     provides = [config_common.FeatureFlagInfo],
+    toolchains = [PYTHON_TOOLCHAIN_TYPE],
 )
 
 def pycross_cycle_dep_needed(name, **kwargs):
