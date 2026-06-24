@@ -433,51 +433,33 @@ def _build_marker_cycle_edges_json(scc, packages):
     return json.encode(edges)
 
 def _render_marker_cycle_member_deps(lines, cycle_groups, packages):
-    """Renders N² reachability targets for marker-mode cycle resolution.
+    """Renders pycross_cycle_member_marker_deps macro calls for each cycle member.
 
-    For each (source, target) pair in a cycle, emits:
-      1. A pycross_cycle_dep_needed target (returns FeatureFlagInfo true/false)
-      2. A config_setting matching the "true" value
-
-    The cycle wrapper py_library in _render_marker_package then uses
-    select() per in-cycle dep, so Bazel only downloads/analyzes deps
-    that are actually reachable on the current platform.
+    Each macro call internally creates N reachability evaluators + config_settings
+    and wraps them in a py_library with select() per dep.
     """
     for _group_name, scc in sorted(cycle_groups.items()):
         edges_json = _build_marker_cycle_edges_json(scc, packages)
         all_members = sorted(scc)
 
-        for source in all_members:
-            for target in all_members:
-                if source == target:
-                    continue
+        for pkg_key in all_members:
+            lines.append(_ind("pycross_cycle_member_marker_deps("))
+            lines.append(_ind('name = "{}",'.format(pkg_key), 2))
+            lines.append(_ind('raw_name = "_raw_{}",'.format(pkg_key), 2))
+            lines.append(_ind('member = "{}",'.format(pkg_key), 2))
+            lines.append(_ind("members = [", 2))
+            for m in all_members:
+                lines.append(_ind('"{}",'.format(m), 3))
+            lines.append(_ind("],", 2))
+            lines.append(_ind("edges = '{}',".format(edges_json), 2))
+            # Marker values via select
+            lines.append(_ind("sys_platform = select(SYS_PLATFORM_VALUES),", 2))
+            lines.append(_ind("os_name = select(OS_NAME_VALUES),", 2))
+            lines.append(_ind("platform_system = select(PLATFORM_SYSTEM_VALUES),", 2))
+            lines.append(_ind("platform_machine = select(PLATFORM_MACHINE_VALUES),", 2))
+            lines.append(_ind(")"))
+            lines.append("")
 
-                pair_name = "_cycle_needed_{}_{}".format(
-                    _sanitize_name(source),
-                    _sanitize_name(target),
-                )
-
-                lines.append(_ind("pycross_cycle_dep_needed("))
-                lines.append(_ind('name = "{}",'.format(pair_name), 2))
-                lines.append(_ind('source = "{}",'.format(source), 2))
-                lines.append(_ind('target = "{}",'.format(target), 2))
-                lines.append(_ind("edges = '{}',".format(edges_json), 2))
-                lines.append(_ind("sys_platform = select(SYS_PLATFORM_VALUES),", 2))
-                lines.append(_ind("os_name = select(OS_NAME_VALUES),", 2))
-                lines.append(_ind("platform_system = select(PLATFORM_SYSTEM_VALUES),", 2))
-                lines.append(_ind("platform_machine = select(PLATFORM_MACHINE_VALUES),", 2))
-                lines.append(_ind(")"))
-                lines.append("")
-
-                lines.extend([
-                    _ind("native.config_setting("),
-                    _ind('name = "{}_match",'.format(pair_name), 2),
-                    _ind("flag_values = {", 2),
-                    _ind('":{pair}": "true",'.format(pair = pair_name), 3),
-                    _ind("},", 2),
-                    _ind(")"),
-                    "",
-                ])
 
 
 def _render_marker_wheel_chooser(lines, pkg_key, pkg, repo_map, sdist_map, rctx_name):
@@ -572,7 +554,7 @@ def _render_marker_package_deps(lines, pkg_key_san, pkg, packages):
 
     lines.append("")
 
-def _render_marker_package(lines, pkg_key, pkg, packages, repo_map, sdist_map, rctx_name, cycle_groups = {}):
+def _render_marker_package(lines, pkg_key, pkg, packages, repo_map, sdist_map, rctx_name):
     """Renders all targets for a single package using marker-based deps and wheel selection."""
     pkg_key_san = _sanitize_name(pkg_key)
     package_name = pkg_key.split("@", 1)[0]
@@ -698,33 +680,9 @@ def _render_marker_package(lines, pkg_key, pkg, packages, repo_map, sdist_map, r
         "",
     ])
 
-    # Cycle member wrapper
-    if pkg.get("cycle_group"):
-        cycle_group = pkg["cycle_group"]
-        scc = cycle_groups.get(cycle_group, [])
-        other_members = [m for m in sorted(scc) if m != pkg_key]
-
-        lines.append(_ind("py_library("))
-        lines.append(_ind('name = "{}",'.format(pkg_key), 2))
-
-        if other_members:
-            # N² approach: each in-cycle dep is gated by its reachability flag.
-            lines.append(_ind('deps = [":_raw_{}"]'.format(pkg_key), 2))
-            for m in other_members:
-                pair_name = "_cycle_needed_{}_{}".format(
-                    _sanitize_name(pkg_key),
-                    _sanitize_name(m),
-                )
-                lines[-1] = lines[-1] + " + select({"
-                lines.append(_ind('":{}_match": [":_raw_{}"],'.format(pair_name, m), 3))
-                lines.append(_ind('"//conditions:default": [],', 3))
-                lines.append(_ind("})", 2))
-            lines[-1] = lines[-1] + ","
-        else:
-            lines.append(_ind('deps = [":_raw_{}"],'.format(pkg_key), 2))
-
-        lines.append(_ind(")"))
-        lines.append("")
+    # Note: if this package is in a cycle group, the public target is created
+    # by the pycross_cycle_member_marker_deps macro call (rendered separately).
+    # The pycross_wheel_library above is named _raw_<pkg_key> in that case.
 
     # dist_info
     lines.extend([
@@ -757,7 +715,7 @@ def render_lock_bzl(lock, repo_map, sdist_map = None, rctx_name = ""):
     pycross_loads = ["pycross_dist_info", "pycross_wheel_library"]
     if cycle_groups:
         if use_markers:
-            pycross_loads.insert(0, "pycross_cycle_dep_needed")
+            pycross_loads.insert(0, "pycross_cycle_member_marker_deps")
         else:
             pycross_loads.insert(0, "pycross_cycle_member_deps")
     if use_markers:
@@ -802,7 +760,7 @@ def render_lock_bzl(lock, repo_map, sdist_map = None, rctx_name = ""):
 
         # 3. Packages (marker-based)
         for pkg_key, pkg in sorted(packages.items()):
-            _render_marker_package(lines, pkg_key, pkg, packages, repo_map, sdist_map, rctx_name, cycle_groups)
+            _render_marker_package(lines, pkg_key, pkg, packages, repo_map, sdist_map, rctx_name)
 
     else:
         # Legacy environment-based path

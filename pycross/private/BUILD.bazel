@@ -398,9 +398,8 @@ bzl_library(
     name = "cycle_member_marker_deps",
     srcs = ["cycle_member_marker_deps.bzl"],
     deps = [
-        ":pep508_evaluator",
-        ":pep508_marker_values",
-        ":util",
+        ":cycle_dep_needed",
+        "@rules_python//python:defs_bzl",
     ],
 )
 
