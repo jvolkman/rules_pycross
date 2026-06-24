@@ -8,13 +8,8 @@ load("//pycross/private:resolved_lock_renderer.bzl", "render_lock_bzl")
 
 # buildifier: disable=unused-variable
 def _test_render_lock_impl(env, target):
+    """Verify basic rendering with environment_files (wheel selection via select)."""
     lock = {
-        "environments": {
-            "linux": {
-                "environment_label": "@platforms//os:linux",
-                "config_setting_label": "//:linux_env",
-            },
-        },
         "packages": {
             "foo@1.0": {
                 "environment_files": {
@@ -38,31 +33,41 @@ def _test_render_lock(name):
 
 # buildifier: disable=unused-variable
 def _test_cycle_group_rendering_impl(env, target):
-    """Verify cycle groups generate cycle py_libraries and cycled packages use _raw naming."""
+    """Verify cycle groups generate pycross_cycle_member_marker_deps targets."""
     lock = {
-        "environments": {
-            "linux": {
-                "environment_label": "@platforms//os:linux",
-                "config_setting_label": "//:linux_env",
-            },
-        },
         "cycle_groups": {
             "cycle_group_abc123": ["alpha@1.0", "beta@2.0"],
         },
         "packages": {
             "alpha@1.0": {
                 "cycle_group": "cycle_group_abc123",
-                "common_dependencies": ["beta@2.0"],
-                "environment_files": {
-                    "linux": {"key": "alpha_wheel"},
-                },
+                "marker_dependencies": [
+                    {"key": "beta@2.0", "marker": None},
+                ],
+                "wheel_candidates": [
+                    {
+                        "filename": "alpha-1.0-py3-none-any.whl",
+                        "file_reference": {"key": "alpha_wheel"},
+                        "python_tag": "py3",
+                        "abi_tag": "none",
+                        "platform_tag": "any",
+                    },
+                ],
             },
             "beta@2.0": {
                 "cycle_group": "cycle_group_abc123",
-                "common_dependencies": ["alpha@1.0"],
-                "environment_files": {
-                    "linux": {"key": "beta_wheel"},
-                },
+                "marker_dependencies": [
+                    {"key": "alpha@1.0", "marker": None},
+                ],
+                "wheel_candidates": [
+                    {
+                        "filename": "beta-2.0-py3-none-any.whl",
+                        "file_reference": {"key": "beta_wheel"},
+                        "python_tag": "py3",
+                        "abi_tag": "none",
+                        "platform_tag": "any",
+                    },
+                ],
             },
         },
     }
@@ -72,19 +77,19 @@ def _test_cycle_group_rendering_impl(env, target):
     }
     res = render_lock_bzl(lock, repo_map, "my_rctx")
 
-    # Should have per-member pycross_cycle_member_deps targets
-    env.expect.that_bool('"_cycle_deps_for_alpha@1.0"' in res).equals(True)
-    env.expect.that_bool('"_cycle_deps_for_beta@2.0"' in res).equals(True)
+    # Should use pycross_cycle_member_marker_deps (not legacy pycross_cycle_member_deps)
+    env.expect.that_bool("pycross_cycle_member_marker_deps(" in res).equals(True)
+    env.expect.that_bool("pycross_cycle_member_deps(" not in res).equals(True)
 
     # Should reference _raw_ targets for both cycle members
     env.expect.that_bool('"_raw_alpha@1.0"' in res).equals(True)
     env.expect.that_bool('"_raw_beta@2.0"' in res).equals(True)
 
-    # Should have a wrapping py_library named "alpha@1.0" that depends on _raw + per-member cycle deps
-    env.expect.that_bool('"alpha@1.0"' in res).equals(True)
-    env.expect.that_bool('":_cycle_deps_for_alpha@1.0"' in res).equals(True)
+    # Both cycle members should have marker_deps macro calls
+    env.expect.that_bool('member = "alpha@1.0"' in res).equals(True)
+    env.expect.that_bool('member = "beta@2.0"' in res).equals(True)
 
-    # Cycled package deps should exclude same-cycle members
+    # Cycled package deps should exclude same-cycle members from _deps list
     alpha_section = res.split('name = "_raw_alpha@1.0"')[0].rsplit("_alpha_1_0_deps", 1)[-1] if "_alpha_1_0_deps" in res else ""
     env.expect.that_bool('"beta@2.0"' not in alpha_section).equals(True)
 
@@ -93,48 +98,66 @@ def _test_cycle_group_rendering(name):
     analysis_test(name = name, target = name + "_subject", impl = _test_cycle_group_rendering_impl)
 
 # buildifier: disable=unused-variable
-def _test_cycle_group_env_specific_rendering_impl(env, target):
-    """Verify cycle groups generate select() for environment-specific members."""
+def _test_cycle_group_marker_specific_rendering_impl(env, target):
+    """Verify cycle groups with marker-gated deps generate correct edges JSON."""
     lock = {
-        "environments": {
-            "linux": {
-                "environment_label": "@platforms//os:linux",
-                "config_setting_label": "//:linux_env",
-            },
-            "mac": {
-                "environment_label": "@platforms//os:macos",
-                "config_setting_label": "//:mac_env",
-            },
-        },
         "cycle_groups": {
             "cycle_group_abc": ["alpha@1.0", "beta@2.0", "appnope@1.0"],
         },
         "packages": {
             "alpha@1.0": {
                 "cycle_group": "cycle_group_abc",
-                "common_dependencies": ["beta@2.0"],
-                "environment_dependencies": {
-                    "mac": ["appnope@1.0"],
-                },
-                "environment_files": {
-                    "linux": {"key": "alpha_wheel"},
-                    "mac": {"key": "alpha_wheel"},
-                },
+                "marker_dependencies": [
+                    {"key": "beta@2.0", "marker": None},
+                    {
+                        "key": "appnope@1.0",
+                        "marker": "sys_platform == \"darwin\"",
+                        "marker_ast": {
+                            "op": "==",
+                            "lhs": {"type": "marker", "value": "sys_platform"},
+                            "rhs": {"type": "string", "value": "darwin"},
+                        },
+                    },
+                ],
+                "wheel_candidates": [
+                    {
+                        "filename": "alpha-1.0-py3-none-any.whl",
+                        "file_reference": {"key": "alpha_wheel"},
+                        "python_tag": "py3",
+                        "abi_tag": "none",
+                        "platform_tag": "any",
+                    },
+                ],
             },
             "beta@2.0": {
                 "cycle_group": "cycle_group_abc",
-                "common_dependencies": ["alpha@1.0"],
-                "environment_files": {
-                    "linux": {"key": "beta_wheel"},
-                    "mac": {"key": "beta_wheel"},
-                },
+                "marker_dependencies": [
+                    {"key": "alpha@1.0", "marker": None},
+                ],
+                "wheel_candidates": [
+                    {
+                        "filename": "beta-2.0-py3-none-any.whl",
+                        "file_reference": {"key": "beta_wheel"},
+                        "python_tag": "py3",
+                        "abi_tag": "none",
+                        "platform_tag": "any",
+                    },
+                ],
             },
             "appnope@1.0": {
                 "cycle_group": "cycle_group_abc",
-                "common_dependencies": ["alpha@1.0"],
-                "environment_files": {
-                    "mac": {"key": "appnope_wheel"},
-                },
+                "marker_dependencies": [
+                    {"key": "alpha@1.0", "marker": None},
+                ],
+                "wheel_candidates": [
+                    {
+                        "filename": "appnope-1.0-py3-none-any.whl",
+                        "file_reference": {"key": "appnope_wheel"},
+                        "python_tag": "py3",
+                        "abi_tag": "none",
+                        "platform_tag": "any",
+                    },
+                ],
             },
         },
     }
@@ -145,61 +168,92 @@ def _test_cycle_group_env_specific_rendering_impl(env, target):
     }
     res = render_lock_bzl(lock, repo_map, "my_rctx")
 
-    # Each member should have its own _cycle_deps_for_ target
-    env.expect.that_bool('"_cycle_deps_for_alpha@1.0"' in res).equals(True)
-    env.expect.that_bool('"_cycle_deps_for_beta@2.0"' in res).equals(True)
-    env.expect.that_bool('"_cycle_deps_for_appnope@1.0"' in res).equals(True)
+    # Each member should have its own macro call
+    env.expect.that_bool('member = "alpha@1.0"' in res).equals(True)
+    env.expect.that_bool('member = "beta@2.0"' in res).equals(True)
+    env.expect.that_bool('member = "appnope@1.0"' in res).equals(True)
 
-    # appnope's _raw_ target should be gated behind select in raw_members
-    # (because appnope only has a mac wheel)
-    env.expect.that_bool("select({" in res).equals(True)
-    env.expect.that_bool('":_raw_appnope@1.0": "appnope@1.0"' in res).equals(True)
+    # The edges JSON should include marker_ast for the conditional edge
+    env.expect.that_bool("marker_ast" in res).equals(True)
 
-def _test_cycle_group_env_specific_rendering(name):
+    # Should have marker select values
+    env.expect.that_bool("SYS_PLATFORM_VALUES" in res).equals(True)
+
+def _test_cycle_group_marker_specific_rendering(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
-    analysis_test(name = name, target = name + "_subject", impl = _test_cycle_group_env_specific_rendering_impl)
+    analysis_test(name = name, target = name + "_subject", impl = _test_cycle_group_marker_specific_rendering_impl)
 
 # buildifier: disable=unused-variable
 def _test_extras_rendering_impl(env, target):
     """Verify extra_dependencies generate py_library targets named [extra_name]."""
     lock = {
-        "environments": {
-            "linux": {
-                "environment_label": "@platforms//os:linux",
-                "config_setting_label": "//:linux_env",
-            },
-        },
         "packages": {
             "mylib@1.0": {
-                "environment_files": {
-                    "linux": {"key": "mylib_wheel"},
-                },
+                "marker_dependencies": [],
+                "wheel_candidates": [
+                    {
+                        "filename": "mylib-1.0-py3-none-any.whl",
+                        "file_reference": {"key": "mylib_wheel"},
+                        "python_tag": "py3",
+                        "abi_tag": "none",
+                        "platform_tag": "any",
+                    },
+                ],
             },
             "mylib[test]@1.0": {
-                "environment_files": {},
-                "common_dependencies": ["pytest@7.0"],
+                "marker_dependencies": [
+                    {"key": "pytest@7.0", "marker": None},
+                ],
             },
             "mylib[dev]@1.0": {
-                "environment_files": {},
-                "common_dependencies": ["black@23.0"],
-                "environment_dependencies": {
-                    "linux": ["mypy@1.5"],
-                },
+                "marker_dependencies": [
+                    {"key": "black@23.0", "marker": None},
+                    {
+                        "key": "mypy@1.5",
+                        "marker": "sys_platform == \"linux\"",
+                        "marker_ast": {
+                            "op": "==",
+                            "lhs": {"type": "marker", "value": "sys_platform"},
+                            "rhs": {"type": "string", "value": "linux"},
+                        },
+                    },
+                ],
             },
             "pytest@7.0": {
-                "environment_files": {
-                    "linux": {"key": "pytest_wheel"},
-                },
+                "marker_dependencies": [],
+                "wheel_candidates": [
+                    {
+                        "filename": "pytest-7.0-py3-none-any.whl",
+                        "file_reference": {"key": "pytest_wheel"},
+                        "python_tag": "py3",
+                        "abi_tag": "none",
+                        "platform_tag": "any",
+                    },
+                ],
             },
             "black@23.0": {
-                "environment_files": {
-                    "linux": {"key": "black_wheel"},
-                },
+                "marker_dependencies": [],
+                "wheel_candidates": [
+                    {
+                        "filename": "black-23.0-py3-none-any.whl",
+                        "file_reference": {"key": "black_wheel"},
+                        "python_tag": "py3",
+                        "abi_tag": "none",
+                        "platform_tag": "any",
+                    },
+                ],
             },
             "mypy@1.5": {
-                "environment_files": {
-                    "linux": {"key": "mypy_wheel"},
-                },
+                "marker_dependencies": [],
+                "wheel_candidates": [
+                    {
+                        "filename": "mypy-1.5-py3-none-any.whl",
+                        "file_reference": {"key": "mypy_wheel"},
+                        "python_tag": "py3",
+                        "abi_tag": "none",
+                        "platform_tag": "any",
+                    },
+                ],
             },
         },
     }
@@ -220,11 +274,11 @@ def _test_extras_rendering_impl(env, target):
     # Should have py_library for [dev] extra
     env.expect.that_bool('"mylib[dev]@1.0"' in res).equals(True)
 
-    # [dev] deps should include black (common) and mypy (linux-specific via select)
+    # [dev] deps should include black (unconditional) and mypy (marker-conditional via select)
     env.expect.that_bool('":black@23.0"' in res).equals(True)
     env.expect.that_bool('":mypy@1.5"' in res).equals(True)
 
-    # [dev] should use select for env-specific deps
+    # [dev] should use select for marker-conditional deps
     env.expect.that_bool("select({" in res).equals(True)
 
     # loads py_library since we have extras
@@ -247,17 +301,38 @@ def _test_extras_rendering(name):
 def _test_lock_bzl_format_impl(env, target):
     """Verify the renderer produces a single lock.bzl string with targets() function."""
     lock = {
-        "environments": {},
         "packages": {
             "numpy@1.26.4": {
-                "environment_files": {},
+                "marker_dependencies": [],
+                "wheel_candidates": [
+                    {
+                        "filename": "numpy-1.26.4-py3-none-any.whl",
+                        "file_reference": {"key": "numpy_wheel"},
+                        "python_tag": "py3",
+                        "abi_tag": "none",
+                        "platform_tag": "any",
+                    },
+                ],
             },
             "pandas@2.1.0": {
-                "environment_files": {},
+                "marker_dependencies": [],
+                "wheel_candidates": [
+                    {
+                        "filename": "pandas-2.1.0-py3-none-any.whl",
+                        "file_reference": {"key": "pandas_wheel"},
+                        "python_tag": "py3",
+                        "abi_tag": "none",
+                        "platform_tag": "any",
+                    },
+                ],
             },
         },
     }
-    res = render_lock_bzl(lock, {}, "my_rctx")
+    repo_map = {
+        "numpy_wheel": "@repo//numpy:wheel",
+        "pandas_wheel": "@repo//pandas:wheel",
+    }
+    res = render_lock_bzl(lock, repo_map, "my_rctx")
 
     # Should be a string, not a dict
     env.expect.that_bool(type(res) == "string").equals(True)
@@ -274,6 +349,11 @@ def _test_lock_bzl_format_impl(env, target):
     # Should have dist_info targets
     env.expect.that_bool("pycross_dist_info(" in res).equals(True)
 
+    # Should always have marker-related loads
+    env.expect.that_bool("pycross_pep508_evaluator" in res).equals(True)
+    env.expect.that_bool("pycross_wheel_chooser" in res).equals(True)
+    env.expect.that_bool("pep508_marker_values" in res).equals(True)
+
 def _test_lock_bzl_format(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
     analysis_test(name = name, target = name + "_subject", impl = _test_lock_bzl_format_impl)
@@ -282,18 +362,40 @@ def _test_lock_bzl_format(name):
 def _test_no_cycles_no_cycle_targets_impl(env, target):
     """Verify that when there are no cycles, no _cycle_ targets are generated."""
     lock = {
-        "environments": {},
         "packages": {
             "a@1.0": {
-                "common_dependencies": ["b@2.0"],
-                "environment_files": {},
+                "marker_dependencies": [
+                    {"key": "b@2.0", "marker": None},
+                ],
+                "wheel_candidates": [
+                    {
+                        "filename": "a-1.0-py3-none-any.whl",
+                        "file_reference": {"key": "a_wheel"},
+                        "python_tag": "py3",
+                        "abi_tag": "none",
+                        "platform_tag": "any",
+                    },
+                ],
             },
             "b@2.0": {
-                "environment_files": {},
+                "marker_dependencies": [],
+                "wheel_candidates": [
+                    {
+                        "filename": "b-2.0-py3-none-any.whl",
+                        "file_reference": {"key": "b_wheel"},
+                        "python_tag": "py3",
+                        "abi_tag": "none",
+                        "platform_tag": "any",
+                    },
+                ],
             },
         },
     }
-    res = render_lock_bzl(lock, {}, "my_rctx")
+    repo_map = {
+        "a_wheel": "@repo//a:wheel",
+        "b_wheel": "@repo//b:wheel",
+    }
+    res = render_lock_bzl(lock, repo_map, "my_rctx")
     env.expect.that_bool("_cycle_" not in res).equals(True)
 
     # a should use "a@1.0" not "_raw_"
@@ -305,70 +407,8 @@ def _test_no_cycles_no_cycle_targets(name):
     analysis_test(name = name, target = name + "_subject", impl = _test_no_cycles_no_cycle_targets_impl)
 
 # buildifier: disable=unused-variable
-def _test_promoted_env_deps_rendering_impl(env, target):
-    """Verify promoted environment deps render correctly.
-
-    When common_dependencies differ between workspace members, package_repo
-    promotes them to environment_dependencies. The renderer should handle
-    this as a standard environment select with no common deps.
-    """
-    lock = {
-        "environments": {
-            "linux_3_11": {
-                "config_setting_label": "//:linux_3_11_env",
-            },
-            "macos_3_12": {
-                "config_setting_label": "//:macos_3_12_env",
-            },
-        },
-        "packages": {
-            "urllib3@2.0": {
-                "environment_files": {
-                    "linux_3_11": {"key": "urllib3_wheel"},
-                    "macos_3_12": {"key": "urllib3_wheel"},
-                },
-                # After promotion: no common_dependencies, all in environment_dependencies.
-                "environment_dependencies": {
-                    "linux_3_11": ["certifi@2023.7.22"],
-                    "macos_3_12": ["certifi@2024.2.2"],
-                },
-            },
-            "certifi@2023.7.22": {
-                "environment_files": {
-                    "linux_3_11": {"key": "certifi_2023_wheel"},
-                },
-            },
-            "certifi@2024.2.2": {
-                "environment_files": {
-                    "macos_3_12": {"key": "certifi_2024_wheel"},
-                },
-            },
-        },
-    }
-    repo_map = {
-        "urllib3_wheel": "@repo//urllib3:wheel",
-        "certifi_2023_wheel": "@repo//certifi:wheel2023",
-        "certifi_2024_wheel": "@repo//certifi:wheel2024",
-    }
-    res = render_lock_bzl(lock, repo_map, "my_rctx")
-
-    # Should have environment select for urllib3's deps.
-    env.expect.that_bool("select({" in res).equals(True)
-    env.expect.that_bool('":linux_3_11": [' in res).equals(True)
-    env.expect.that_bool('":macos_3_12": [' in res).equals(True)
-    env.expect.that_bool('":certifi@2023.7.22"' in res).equals(True)
-    env.expect.that_bool('":certifi@2024.2.2"' in res).equals(True)
-
-    # Should NOT have member config_settings (no members key).
-    env.expect.that_bool("_member_" not in res).equals(True)
-
-def _test_promoted_env_deps_rendering(name):
-    util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
-    analysis_test(name = name, target = name + "_subject", impl = _test_promoted_env_deps_rendering_impl)
-
-# buildifier: disable=unused-variable
 def _test_marker_deps_rendering_impl(env, target):
-    """Verify marker_dependencies triggers the marker-based rendering path."""
+    """Verify marker_dependencies renders evaluator + config_setting + select."""
     lock = {
         "packages": {
             "foo@1.0": {
@@ -449,44 +489,12 @@ def _test_marker_deps_rendering_impl(env, target):
     # Should have wheel chooser for foo
     env.expect.that_bool("_wheel_chooser_foo@1.0" in res).equals(True)
 
-    # Should NOT have environment config_settings (marker path, not env path)
+    # Should have alias for wheel selection
     env.expect.that_bool("native.alias(" in res).equals(True)
 
 def _test_marker_deps_rendering(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
     analysis_test(name = name, target = name + "_subject", impl = _test_marker_deps_rendering_impl)
-
-# buildifier: disable=unused-variable
-def _test_marker_legacy_fallback_impl(env, target):
-    """Verify that packages without marker data use the legacy rendering path."""
-    lock = {
-        "environments": {
-            "linux": {
-                "config_setting_label": "//:linux_env",
-            },
-        },
-        "packages": {
-            "foo@1.0": {
-                "environment_files": {
-                    "linux": {"key": "foo_wheel"},
-                },
-            },
-        },
-    }
-    repo_map = {"foo_wheel": "@repo//foo:wheel"}
-    res = render_lock_bzl(lock, repo_map, rctx_name = "my_rctx")
-
-    # Should NOT have marker-related loads
-    env.expect.that_bool("pycross_pep508_evaluator" not in res).equals(True)
-    env.expect.that_bool("pycross_wheel_chooser" not in res).equals(True)
-
-    # Should have environment config_settings (legacy path)
-    env.expect.that_bool("linux" in res).equals(True)
-    env.expect.that_bool('":linux"' in res).equals(True)
-
-def _test_marker_legacy_fallback(name):
-    util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
-    analysis_test(name = name, target = name + "_subject", impl = _test_marker_legacy_fallback_impl)
 
 def resolved_lock_renderer_test_suite(name):
     test_suite(
@@ -494,12 +502,10 @@ def resolved_lock_renderer_test_suite(name):
         tests = [
             _test_render_lock,
             _test_cycle_group_rendering,
-            _test_cycle_group_env_specific_rendering,
+            _test_cycle_group_marker_specific_rendering,
             _test_extras_rendering,
             _test_lock_bzl_format,
             _test_no_cycles_no_cycle_targets,
-            _test_promoted_env_deps_rendering,
             _test_marker_deps_rendering,
-            _test_marker_legacy_fallback,
         ],
     )
