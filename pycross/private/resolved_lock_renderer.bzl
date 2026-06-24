@@ -194,8 +194,16 @@ def _render_marker_wheel_chooser(lines, pkg_key, pkg, repo_map, sdist_map, rctx_
         "",
     ])
 
-    # Config setting per wheel candidate
+    # Config setting per wheel candidate (skip candidates with no target)
+    sdist_file = pkg.get("sdist_file")
+    resolved_candidates = []
     for candidate in candidates:
+        file_ref = candidate.get("file_reference", {})
+        target = _wheel_target(file_ref, sdist_file, pkg_key, pkg, repo_map, sdist_map, rctx_name)
+        if target:
+            resolved_candidates.append((candidate, target))
+
+    for candidate, _target in resolved_candidates:
         filename = candidate["filename"]
         cs_name = "_wheel_cs_{}_{}".format(pkg_key, _sanitize_name(filename))
         lines.extend([
@@ -212,17 +220,14 @@ def _render_marker_wheel_chooser(lines, pkg_key, pkg, repo_map, sdist_map, rctx_
         ])
 
     # Wheel alias selecting over the config_settings
-    sdist_file = pkg.get("sdist_file")
     lines.extend([
         _ind("native.alias("),
         _ind('name = "_wheel_{}",'.format(pkg_key), 2),
         _ind("actual = select({", 2),
     ])
-    for candidate in candidates:
+    for candidate, target in resolved_candidates:
         filename = candidate["filename"]
         cs_name = "_wheel_cs_{}_{}".format(pkg_key, _sanitize_name(filename))
-        file_ref = candidate.get("file_reference", {})
-        target = _wheel_target(file_ref, sdist_file, pkg_key, pkg, repo_map, sdist_map, rctx_name)
         lines.append(_ind('":{cs}": "{target}",'.format(cs = cs_name, target = target), 3))
     lines.append(_ind('"//conditions:default": "@rules_pycross//pycross/private:no_match_error",', 3))
     lines.extend([
