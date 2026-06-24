@@ -58,15 +58,38 @@ def _python_tag_matches(python_tag, python_version):
 
     Args:
         python_tag: The wheel's python tag (e.g. "cp311", "py3", "py2.py3").
+                    May be a compound dot-separated tag.
         python_version: The host python version as "X.Y" (e.g. "3.11").
+                        May be empty if unknown.
 
     Returns:
         True if the wheel can run on this Python.
     """
-    if python_tag == "py2.py3":
-        return True
+    # Handle compound tags (e.g. "py2.py3", "cp39.cp310") by checking each subtag.
+    if "." in python_tag:
+        subtags = python_tag.split(".")
+        # Only split if it looks like multiple tags (each starts with py/cp).
+        is_compound = len(subtags) > 1
+        for s in subtags:
+            if not (s.startswith("py") or s.startswith("cp")):
+                is_compound = False
+                break
+        if is_compound:
+            for s in subtags:
+                if _python_tag_matches(s, python_version):
+                    return True
+            return False
+
     if python_tag == "py3":
-        return python_version.startswith("3")
+        # py3 is a universal Python 3 tag — accept when version is unknown
+        # or when it's known to be Python 3.
+        return not python_version or python_version.startswith("3")
+    if python_tag == "py2":
+        return python_version.startswith("2") if python_version else False
+
+    # If python_version is unknown, we can't verify version-specific tags.
+    if not python_version:
+        return False
 
     # cpXY / cpXYZ style — e.g. "cp311" for CPython 3.11.
     if python_tag.startswith("cp"):
@@ -79,7 +102,6 @@ def _python_tag_matches(python_tag, python_version):
     if python_tag.startswith("py") and len(python_tag) > 2:
         tag_digits = python_tag[2:]
         if tag_digits.isdigit() and len(tag_digits) >= 1:
-            # "py3" already handled above; handle "py311" etc.
             expected = tag_digits[0] + "." + tag_digits[1:]
             return python_version == expected or python_version.startswith(tag_digits[0] + ".")
 
@@ -90,7 +112,7 @@ def _abi_tag_matches(abi_tag, python_version):
 
     Args:
         abi_tag: The wheel's ABI tag (e.g. "cp311", "abi3", "none").
-        python_version: The host python version as "X.Y".
+        python_version: The host python version as "X.Y". May be empty.
 
     Returns:
         True if the ABI is compatible.
@@ -99,7 +121,12 @@ def _abi_tag_matches(abi_tag, python_version):
         return True
     if abi_tag == "abi3":
         # Stable ABI — compatible with any CPython >= 3.2.
-        return python_version.startswith("3")
+        return not python_version or python_version.startswith("3")
+
+    # Version-specific ABI tags require a known python_version.
+    if not python_version:
+        return False
+
     if abi_tag.startswith("cp"):
         tag_digits = abi_tag[2:]
         if len(tag_digits) >= 2:

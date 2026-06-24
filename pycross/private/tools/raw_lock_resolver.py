@@ -416,11 +416,15 @@ class PackageResolver:
     @cached_property
     def all_dependency_keys(self) -> Set[PackageKey]:
         """Returns all package keys (name-version) that this target depends on,
-        including platform-specific and build dependencies."""
+        including platform-specific, marker, and build dependencies."""
         keys = set(self._common_deps)
         for env_deps in self._env_deps.values():
             keys |= env_deps
         keys |= set(self._build_deps)
+        # Include marker-annotated deps so they're in the transitive closure
+        # even if no configured environment matches their markers.
+        for md in self._marker_deps:
+            keys.add(md.key)
         return keys
 
     def to_resolved_package(self) -> ResolvedPackage:
@@ -517,21 +521,35 @@ class PackageResolver:
             except Exception:
                 continue
 
-            # Extract the most specific tags from the file_tags frozenset.
-            # file_tags is a FrozenSet[Tag] where each Tag has .interpreter, .abi, .platform.
-            # We want the first (most specific) entry.
-            tags_list = sorted(file_tags, key=lambda t: (str(t.interpreter), str(t.abi), str(t.platform)))
-            if not tags_list:
-                continue
+            # Extract original compound tags from the filename.
+            # parse_wheel_filename expands "py2.py3-none-any" into individual
+            # Tag(py2, none, any) and Tag(py3, none, any), but the wheel chooser
+            # needs the original compound form for correct matching.
+            # Filename format: {name}-{ver}(-{build})?-{python}-{abi}-{platform}.whl
+            stem = filename[:-4]  # strip .whl
+            parts = stem.split("-")
+            if len(parts) >= 3:
+                # Last three dash-separated parts are python, abi, platform.
+                python_tag = parts[-3]
+                abi_tag = parts[-2]
+                platform_tag = parts[-1]
+            else:
+                # Fallback to expanded tags.
+                tags_list = sorted(file_tags, key=lambda t: (str(t.interpreter), str(t.abi), str(t.platform)))
+                if not tags_list:
+                    continue
+                first_tag = tags_list[0]
+                python_tag = str(first_tag.interpreter)
+                abi_tag = str(first_tag.abi)
+                platform_tag = str(first_tag.platform)
 
-            first_tag = tags_list[0]
             candidates.append(
                 WheelCandidate(
                     filename=filename,
                     file_reference=source.file_reference,
-                    python_tag=str(first_tag.interpreter),
-                    abi_tag=str(first_tag.abi),
-                    platform_tag=str(first_tag.platform),
+                    python_tag=python_tag,
+                    abi_tag=abi_tag,
+                    platform_tag=platform_tag,
                 )
             )
 

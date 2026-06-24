@@ -16,8 +16,8 @@ bzl_library(
     srcs = ["defs.bzl"],
     visibility = ["//visibility:public"],
     deps = [
+        "//pycross/private:cycle_dep_needed",
         "//pycross/private:cycle_deps",
-        "//pycross/private:cycle_member_marker_deps",
         "//pycross/private:dist_info",
         "//pycross/private:modules_mapping",
         "//pycross/private:pdm_lock_model",
