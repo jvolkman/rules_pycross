@@ -1,4 +1,4 @@
-"""Maturin / PEP 517 Rust builder."""
+"""Common Rust toolchain setup for backend builders."""
 
 import os
 import re
@@ -11,46 +11,19 @@ from pathlib import Path
 
 from pycross.private.build.tools.utils.context import load_layers
 from pycross.private.build.tools.utils.context import resolve_sandbox_path
-from pycross.private.build.tools.utils.lifecycle import BackendStrategy
-from pycross.private.build.tools.utils.lifecycle import run_standard_build_lifecycle
-from pycross.private.build.tools.utils.venv_utils import build_crossenv_venv
-from pycross.private.build.tools.utils.venv_utils import build_standard_venv
 
 
-def setup_venv(ctx):
-    is_cross = ctx.exec_python != ctx.target_python
-    if is_cross or ctx.bazel_config.get("always_use_crossenv"):
-        build_crossenv_venv(ctx)
-    else:
-        build_standard_venv(ctx)
-
-
-def _get_cargo_dir() -> Path:
-    """Find the directory containing Cargo.toml based on [tool.maturin].manifest-path."""
-    pyproject = Path("pyproject.toml")
-    if pyproject.exists():
-        try:
-            import tomllib
-
-            with open(pyproject, "rb") as f:
-                data = tomllib.load(f)
-            manifest_path = data.get("tool", {}).get("maturin", {}).get("manifest-path", "Cargo.toml")
-            return Path(manifest_path).parent
-        except Exception as e:
-            print(f"WARNING: Failed to parse pyproject.toml for manifest-path: {e}", file=sys.stderr)
-    return Path(".")
-
-
-def get_pyo3_version(cargo_dir: Path = None):
+def get_pyo3_version(cargo_dir: Path):
     """Parse Cargo.lock to find the pyo3 version, if present."""
-    if cargo_dir is None:
-        cargo_dir = _get_cargo_dir()
     lock_path = cargo_dir / "Cargo.lock"
     if not lock_path.exists():
         return None
 
     try:
-        import tomllib
+        try:
+            import tomllib
+        except ImportError:
+            from pip._vendor import tomli as tomllib
 
         with open(lock_path, "rb") as f:
             lock_data = tomllib.load(f)
@@ -62,7 +35,7 @@ def get_pyo3_version(cargo_dir: Path = None):
     return None
 
 
-def pre_build(ctx):
+def configure_rust_env(ctx, cargo_dir: Path, is_maturin: bool = False):
     rust_config = None
     for layer_config in load_layers(ctx):
         if "target_triple" in layer_config or "rustc" in layer_config:
@@ -101,7 +74,6 @@ def pre_build(ctx):
     ext_suffix = ctx.sysconfig_vars.get("EXT_SUFFIX")
 
     # Relocate injected Cargo.lock to manifest directory if needed
-    cargo_dir = _get_cargo_dir()
     root_lock = Path("Cargo.lock")
     target_lock = cargo_dir / "Cargo.lock"
     if cargo_dir != Path(".") and root_lock.exists() and not target_lock.exists():
@@ -167,8 +139,10 @@ def pre_build(ctx):
         cargo_bin = resolve_sandbox_path(ctx.prefix, rust_config["cargo"])
         ctx.build_env["CARGO"] = cargo_bin
 
-    # Prevent maturin from attempting to auto-bootstrap Rust via puccinialin
-    ctx.build_env["MATURIN_NO_INSTALL_RUST"] = "1"
+    if is_maturin:
+        # Prevent maturin from attempting to auto-bootstrap Rust via puccinialin
+        ctx.build_env["MATURIN_NO_INSTALL_RUST"] = "1"
+
     ctx.build_env["CARGO_BUILD_TARGET"] = target_triple
 
     wrapped_cxx = ctx.sysconfig_vars.get("CXX")
@@ -270,9 +244,6 @@ def pre_build(ctx):
     st = wrapper_path.stat()
     wrapper_path.chmod(st.st_mode | stat.S_IEXEC)
 
-    # Write Cargo config to CARGO_HOME rather than ctx.prefix/.cargo/ to avoid
-    # polluting the shared sandbox execroot. Cargo checks $CARGO_HOME/config.toml
-    # with highest priority, so this is reliable as long as CARGO_HOME is set.
     cargo_home = ctx.temp_dir / "cargo_home"
     cargo_home.mkdir(parents=True, exist_ok=True)
 
@@ -297,22 +268,8 @@ def pre_build(ctx):
 
     ctx.build_env["CARGO_HOME"] = str(cargo_home.absolute())
 
-    # Ensure inherited RUSTFLAGS/CARGO_ENCODED_RUSTFLAGS don't leak into the
-    # build — these conflict with per-target settings in the rustc wrapper.
     for var_name in ("RUSTFLAGS", "CARGO_ENCODED_RUSTFLAGS"):
         ctx.build_env.pop(var_name, None)
 
     ctx.build_env["CARGO_TERM_VERBOSE"] = "true"
     ctx.build_env["PYO3_USE_ABI3_FORWARD_COMPATIBILITY"] = "1"
-
-
-def main():
-    strategy = BackendStrategy(
-        setup_venv=setup_venv,
-        pre_build=pre_build,
-    )
-    run_standard_build_lifecycle(sys.argv[1], strategy)
-
-
-if __name__ == "__main__":
-    main()

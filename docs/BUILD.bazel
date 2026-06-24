@@ -46,6 +46,7 @@ stardoc(
         "@rules_pycross//pycross:backend",
         "@rules_pycross//pycross/extensions:lock_repos",
         "@rules_pycross_backend_maturin//private:maturin_sdist_hook",
+        "@rules_pycross_backend_maturin//private:setuptools_rust_sdist_hook",
     ],
 )
 
@@ -78,6 +79,19 @@ stardoc(
     deps = [
         "@rules_cc//cc:find_cc_toolchain_bzl",
         "@rules_pycross_backend_maturin//extensions:maturin",
+        "@rules_pycross_backend_maturin//private:cargo_lock_repo",
+    ],
+)
+
+# setuptools_rust extension
+stardoc(
+    name = "ext_setuptools_rust_gen",
+    out = "ext_setuptools_rust.gen.md",
+    input = "@rules_pycross_backend_maturin//extensions:setuptools_rust.bzl",
+    deps = [
+        "@rules_cc//cc:find_cc_toolchain_bzl",
+        "@rules_pycross_backend_maturin//extensions:setuptools_rust",
+        "@rules_pycross_backend_maturin//private:cargo_lock_repo",
     ],
 )
 
@@ -125,6 +139,7 @@ write_source_files(
         "ext_pycross.md": ":ext_pycross_gen",
         "maturin_rules.md": ":maturin_rules_gen",
         "ext_maturin.md": ":ext_maturin_gen",
+        "ext_setuptools_rust.md": ":ext_setuptools_rust_gen",
         "ext_setuptools.md": ":ext_setuptools_gen",
         "ext_meson.md": ":ext_meson_gen",
         "ext_cmake.md": ":ext_cmake_gen",

@@ -14,5 +14,6 @@ collect_wheels(
     wheels = [
         "@uv//rpds_py:wheel",
         "@uv//jiter:wheel",
+        "@uv//python_geohash:wheel",
     ],
 )

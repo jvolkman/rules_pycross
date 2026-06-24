@@ -1,14 +1,4 @@
-"""Maturin overrides extension.
-
-Provides the `maturin` module extension with an `override` tag class
-for declaring maturin-specific package overrides. Generates:
-
-  1. `@maturin_overrides//:overrides.json` — consumed by lock_import via
-     `lock_import.override_source(file = ...)`.
-
-  2. `@<repo>_cargo//` repos — containing `pycross_generate_cargo_lock` targets
-     for each maturin-overridden package.
-"""
+"""Setuptools Rust overrides extension."""
 
 load("@bazel_features//:features.bzl", "bazel_features")
 load(
@@ -33,14 +23,13 @@ _CORE_OVERRIDE_ATTRS = dict(
     ),
 )
 
-_MATURIN_OVERRIDE_ATTRS = _CORE_OVERRIDE_ATTRS | BUILD_SYSTEM_ATTRS | CC_BUILD_SYSTEM_ATTRS
+_SETUPTOOLS_RUST_OVERRIDE_ATTRS = _CORE_OVERRIDE_ATTRS | BUILD_SYSTEM_ATTRS | CC_BUILD_SYSTEM_ATTRS
 
-def _maturin_overrides_impl(module_ctx):
-    maturin_overrides = {}
-    cargo_targets = {}  # key -> {pkg_name -> {cargo_lock, sdist}}
+def _setuptools_rust_overrides_impl(module_ctx):
+    overrides = {}
+    cargo_targets = {}
 
     for module in module_ctx.modules:
-        # Process maturin overrides
         for tag in module.tags.override:
             if tag.repo and tag.workspace:
                 fail("override for '{}' specifies both repo and workspace".format(tag.name))
@@ -52,26 +41,22 @@ def _maturin_overrides_impl(module_ctx):
                 backend_attrs["cargo_lock"] = json.encode(str(tag.cargo_lock))
 
             key = "repo:" + tag.repo if tag.repo else "workspace:" + tag.workspace
-            maturin_overrides.setdefault(key, {})[tag.name] = {
-                "build_backend": "maturin_build",
+            overrides.setdefault(key, {})[tag.name] = {
+                "build_backend": "setuptools_rust_build",
                 "backend_attrs": backend_attrs,
             }
 
-            # Track for cargo repo generation
             cargo_targets.setdefault(key, {})[tag.name] = {
                 "cargo_lock": str(tag.cargo_lock) if tag.cargo_lock else None,
                 "sdist": str(tag.sdist) if tag.sdist else None,
             }
 
-    # Write overrides JSON
     create_overrides_repo(
-        name = "maturin_overrides",
-        content = json.encode(maturin_overrides),
+        name = "setuptools_rust_overrides",
+        content = json.encode(overrides),
     )
 
-    # Generate <repo>_cargo repos with pycross_generate_cargo_lock targets
     for key, pkgs in cargo_targets.items():
-        # Strip the "repo:" or "workspace:" prefix for the repo name.
         if key.startswith("repo:"):
             bare_name = key[len("repo:"):]
         elif key.startswith("workspace:"):
@@ -79,7 +64,7 @@ def _maturin_overrides_impl(module_ctx):
         else:
             bare_name = key
         cargo_lock_repo(
-            name = bare_name + "_cargo",
+            name = bare_name + "_cargo_setuptools_rust",
             repo_name = bare_name,
             packages = json.encode(pkgs),
         )
@@ -90,20 +75,20 @@ def _maturin_overrides_impl(module_ctx):
 
 override_attrs = dict(
     sdist = attr.label(
-        doc = "Label to the sdist target (e.g. @uv//pkg:sdist). Used to resolve repository visibility in the generated _cargo repo.",
+        doc = "Label to the sdist target. Used to resolve repository visibility in the generated _cargo repo.",
     ),
     cargo_lock = attr.label(
         doc = "A Cargo.lock file to use. If not provided, the sdist's own Cargo.lock is used.",
         allow_single_file = [".lock"],
     ),
-    **_MATURIN_OVERRIDE_ATTRS
+    **_SETUPTOOLS_RUST_OVERRIDE_ATTRS
 )
 
-maturin = module_extension(
-    implementation = _maturin_overrides_impl,
+setuptools_rust = module_extension(
+    implementation = _setuptools_rust_overrides_impl,
     tag_classes = dict(
         override = tag_class(
-            doc = "Specify maturin-specific package overrides.",
+            doc = "Specify setuptools-rust-specific package overrides.",
             attrs = override_attrs,
         ),
     ),

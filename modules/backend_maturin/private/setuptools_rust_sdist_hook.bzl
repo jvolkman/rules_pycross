@@ -1,9 +1,9 @@
-"""Maturin-specific sdist hook with cargo crate vendoring."""
+"""Setuptools Rust-specific sdist hook with cargo crate vendoring."""
 
 load(":rust_common_sdist_hook.bzl", "rust_common_sdist_hook")
 
-def maturin_sdist_hook(rctx, result):
-    """Maturin sdist hook that vendors cargo crates.
+def setuptools_rust_sdist_hook(rctx, result):
+    """Setuptools Rust sdist hook that vendors cargo crates.
 
     Args:
         rctx: The repository context.

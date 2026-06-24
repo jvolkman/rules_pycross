@@ -32,7 +32,7 @@ def define_e2e_tests():
             size = "enormous",
             srcs = ["run_integration_test.sh"],
             args = ["tests/e2e/" + ws],
-            env_inherit = ["PATH"],
+            env_inherit = ["PATH", "RULES_PYCROSS_DEBUG"],
             tags = [
                 "e2e",
                 "integration",

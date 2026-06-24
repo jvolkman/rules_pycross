@@ -7,6 +7,67 @@ load("@pycross_backends//:sdist_dispatch.bzl", "SDIST_HOOKS")
 load("//pycross/private:internal_repo.bzl", "exec_internal_tool")
 load("//pycross/private:util.bzl", "extract_pep508_name", "key_name", "underscore_name")
 
+def _parse_backend_spec(spec):
+    """Parse a backend spec like 'setuptools.build_meta[setuptools-rust,wheel]'.
+
+    Args:
+        spec: The backend spec string.
+
+    Returns:
+        A tuple of (backend_name, required_packages) where required_packages
+        is a list of PEP 503 normalized package names.
+    """
+    bracket = spec.find("[")
+    if bracket == -1:
+        return (spec, [])
+    backend_name = spec[:bracket]
+    requires_str = spec[bracket + 1:-1]  # strip [ and ]
+    required = [r.strip() for r in requires_str.split(",") if r.strip()]
+    return (backend_name, required)
+
+def _resolve_backend(backend_to_rule, default_backend, pyproject_backend, build_requires_names):
+    """Resolve the best-matching backend rule for a package.
+
+    Entries in backend_to_rule may use bracket notation to specify required
+    build-system.requires packages, e.g. 'setuptools.build_meta[setuptools-rust]'.
+    When multiple entries match the same pyproject backend, the one with the
+    most satisfied build_requires wins (most-specific match).
+
+    Args:
+        backend_to_rule: Dict mapping pyproject backend specs to rule names.
+        default_backend: Fallback rule name when nothing matches.
+        pyproject_backend: The build-backend value from pyproject.toml.
+        build_requires_names: List of normalized package names from build-system.requires.
+
+    Returns:
+        The best-matching rule name.
+    """
+    best_rule = None
+    best_specificity = -1
+
+    for spec, rule_name in backend_to_rule.items():
+        backend_name, required = _parse_backend_spec(spec)
+
+        if backend_name != pyproject_backend:
+            continue
+
+        # Check if all required packages are present in build requires.
+        all_satisfied = True
+        for req in required:
+            if req not in build_requires_names:
+                all_satisfied = False
+                break
+
+        if not all_satisfied:
+            continue
+
+        specificity = len(required)
+        if specificity > best_specificity:
+            best_specificity = specificity
+            best_rule = rule_name
+
+    return best_rule if best_rule else default_backend
+
 def _render_build_file(rctx, macro_attrs, backend_macro, site_paths, bin_paths, data_paths, include_paths, extra_build_snippets = None):
     """Render the BUILD.bazel file for an sdist repo.
 
@@ -157,8 +218,11 @@ def _sdist_repo_common(rctx):
             print(warning)
 
         # Map pyproject backend to pycross rule name via the registry.
+        # Uses bracket-notation matching: entries like 'setuptools.build_meta[setuptools-rust]'
+        # are preferred when the package's build-system.requires includes the bracketed deps.
         # Falls back to the registered default backend.
-        backend_macro = backend_to_rule.get(backend, default_backend)
+        build_requires_names = [extract_pep508_name(r) for r in requires]
+        backend_macro = _resolve_backend(backend_to_rule, default_backend, backend, build_requires_names)
 
         # Map build requires to targets in the workspace repo
         build_deps = []
@@ -185,6 +249,7 @@ def _sdist_repo_common(rctx):
     matching_config = {}
     if rctx.attr.override_backend_configs:
         all_configs = json.decode(rctx.attr.override_backend_configs)
+
         matching_config = all_configs.pop(backend_macro, {})
         for attr_name, json_val in sorted(matching_config.items()):
             decoded = json.decode(json_val)
