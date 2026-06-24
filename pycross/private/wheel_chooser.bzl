@@ -12,6 +12,8 @@ The selection algorithm:
      "__no_matching_wheel__" if nothing matches.
 """
 
+load(":pep508_marker_values.bzl", "collect_markers", "marker_value_attrs")
+
 # ---------------------------------------------------------------------------
 # Tag compatibility helpers
 # ---------------------------------------------------------------------------
@@ -301,12 +303,13 @@ def _score_gt(a, b):
 
 def _pycross_wheel_chooser_impl(ctx):
     candidates = json.decode(ctx.attr.candidates)
+    markers = collect_markers(ctx)
 
     best = select_best_wheel(
         candidates = candidates,
-        sys_platform = ctx.attr.sys_platform,
-        platform_machine = ctx.attr.platform_machine,
-        python_version = ctx.attr.python_version,
+        sys_platform = markers["sys_platform"],
+        platform_machine = markers["platform_machine"],
+        python_version = markers["python_version"],
     )
 
     if best:
@@ -318,8 +321,8 @@ def _pycross_wheel_chooser_impl(ctx):
 
 _pycross_wheel_chooser = rule(
     implementation = _pycross_wheel_chooser_impl,
-    attrs = {
-        "candidates": attr.string(
+    attrs = dict(
+        candidates = attr.string(
             mandatory = True,
             doc = (
                 "JSON-encoded list of wheel candidates. Each candidate is an " +
@@ -327,44 +330,8 @@ _pycross_wheel_chooser = rule(
                 "and optionally requires_python."
             ),
         ),
-        # PEP 508 marker dimensions — populated via select() at the call site.
-        "os_name": attr.string(
-            default = "",
-            doc = "PEP 508 os.name marker value.",
-        ),
-        "sys_platform": attr.string(
-            default = "",
-            doc = "PEP 508 sys.platform marker value (e.g. 'linux', 'darwin', 'win32').",
-        ),
-        "platform_machine": attr.string(
-            default = "",
-            doc = "PEP 508 platform.machine marker value (e.g. 'x86_64', 'aarch64').",
-        ),
-        "platform_system": attr.string(
-            default = "",
-            doc = "PEP 508 platform.system marker value.",
-        ),
-        "python_version": attr.string(
-            default = "",
-            doc = "PEP 508 python_version marker value as 'X.Y' (e.g. '3.11').",
-        ),
-        "python_full_version": attr.string(
-            default = "",
-            doc = "PEP 508 python_full_version marker value (e.g. '3.11.4').",
-        ),
-        "implementation_name": attr.string(
-            default = "",
-            doc = "PEP 508 implementation_name marker value (e.g. 'cpython').",
-        ),
-        "implementation_version": attr.string(
-            default = "",
-            doc = "PEP 508 implementation_version marker value.",
-        ),
-        "platform_python_implementation": attr.string(
-            default = "",
-            doc = "PEP 508 platform.python_implementation marker value (e.g. 'CPython').",
-        ),
-    },
+        **marker_value_attrs()
+    ),
 )
 
 def pycross_wheel_chooser(name, **kwargs):

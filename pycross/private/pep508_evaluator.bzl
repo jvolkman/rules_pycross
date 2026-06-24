@@ -17,6 +17,8 @@ Supported comparison operators: ==, !=, >=, <=, >, <, in, not in.
 Version operators (>=, <=, >, <) split on '.' and compare numerically.
 """
 
+load(":pep508_marker_values.bzl", "collect_markers", "marker_value_attrs")
+
 # ---- helpers ----------------------------------------------------------------
 
 def _parse_int(s):
@@ -146,34 +148,9 @@ def evaluate_marker_expr(expr, markers):
 
 # ---- rule implementation ----------------------------------------------------
 
-_MARKER_ATTRS = {
-    "os_name": attr.string(default = "", doc = "PEP 508 os_name marker (e.g. posix, nt)."),
-    "sys_platform": attr.string(default = "", doc = "PEP 508 sys_platform marker (e.g. linux, darwin, win32)."),
-    "platform_machine": attr.string(default = "", doc = "PEP 508 platform_machine marker (e.g. x86_64, aarch64)."),
-    "platform_system": attr.string(default = "", doc = "PEP 508 platform_system marker (e.g. Linux, Darwin, Windows)."),
-    "platform_release": attr.string(default = "", doc = "PEP 508 platform_release marker."),
-    "platform_version": attr.string(default = "", doc = "PEP 508 platform_version marker."),
-    "python_version": attr.string(default = "", doc = "PEP 508 python_version marker (e.g. 3.11, 3.12)."),
-    "python_full_version": attr.string(default = "", doc = "PEP 508 python_full_version marker (e.g. 3.11.0)."),
-    "implementation_name": attr.string(default = "", doc = "PEP 508 implementation_name marker (e.g. cpython, pypy)."),
-    "implementation_version": attr.string(default = "", doc = "PEP 508 implementation_version marker."),
-    "platform_python_implementation": attr.string(default = "", doc = "PEP 508 platform.python_implementation marker (e.g. CPython, PyPy)."),
-}
 
 def _pycross_pep508_evaluator_impl(ctx):
-    markers = {
-        "os_name": ctx.attr.os_name,
-        "sys_platform": ctx.attr.sys_platform,
-        "platform_machine": ctx.attr.platform_machine,
-        "platform_system": ctx.attr.platform_system,
-        "platform_release": ctx.attr.platform_release,
-        "platform_version": ctx.attr.platform_version,
-        "python_version": ctx.attr.python_version,
-        "python_full_version": ctx.attr.python_full_version,
-        "implementation_name": ctx.attr.implementation_name,
-        "implementation_version": ctx.attr.implementation_version,
-        "platform_python_implementation": ctx.attr.platform_python_implementation,
-    }
+    markers = collect_markers(ctx)
 
     expr = json.decode(ctx.attr.expr)
     result = evaluate_marker_expr(expr, markers)
@@ -187,7 +164,7 @@ _pycross_pep508_evaluator = rule(
             mandatory = True,
             doc = "A JSON-encoded pre-parsed PEP 508 marker expression tree.",
         ),
-        **_MARKER_ATTRS
+        **marker_value_attrs()
     ),
 )
 

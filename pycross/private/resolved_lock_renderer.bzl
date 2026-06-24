@@ -477,7 +477,6 @@ def _render_marker_wheel_chooser(lines, pkg_key, pkg, repo_map, sdist_map, rctx_
         _ind("candidates = '{}',".format(candidates_json), 2),
         _ind("sys_platform = select(SYS_PLATFORM_VALUES),", 2),
         _ind("platform_machine = select(PLATFORM_MACHINE_VALUES),", 2),
-        _ind("# python_version will come from the toolchain in a future iteration.", 2),
         _ind(")"),
         "",
     ])
