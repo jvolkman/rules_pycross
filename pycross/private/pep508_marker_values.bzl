@@ -54,6 +54,22 @@ PLATFORM_MACHINE_VALUES = {
     "//conditions:default": "",
 }
 
+# Maps rules_python libc flag to a libc identifier.
+# Used by the wheel chooser to distinguish manylinux vs musllinux wheels.
+LIBC_VALUES = {
+    "@rules_python//python/config_settings:_is_py_linux_libc_glibc": "glibc",
+    "@rules_python//python/config_settings:_is_py_linux_libc_musl": "musl",
+    "//conditions:default": "",
+}
+
+# Maps rules_python freethreaded flag to a boolean-like string.
+# Used by the wheel chooser to match cp313t (freethreaded) vs cp313 tags.
+FREETHREADED_VALUES = {
+    "@rules_python//python/config_settings:_is_py_freethreaded_yes": "yes",
+    "@rules_python//python/config_settings:_is_py_freethreaded_no": "no",
+    "//conditions:default": "no",
+}
+
 PYTHON_TOOLCHAIN_TYPE = Label("@rules_python//python:toolchain_type")
 
 def _flag_value(target):

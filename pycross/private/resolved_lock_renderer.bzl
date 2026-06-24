@@ -190,6 +190,8 @@ def _render_marker_wheel_chooser(lines, pkg_key, pkg, repo_map, sdist_map, rctx_
         _ind("candidates = '{}',".format(candidates_json), 2),
         _ind("sys_platform = select(SYS_PLATFORM_VALUES),", 2),
         _ind("platform_machine = select(PLATFORM_MACHINE_VALUES),", 2),
+        _ind("libc = select(LIBC_VALUES),", 2),
+        _ind("freethreaded = select(FREETHREADED_VALUES),", 2),
         _ind(")"),
         "",
     ])
@@ -288,16 +290,40 @@ def _render_marker_package(lines, pkg_key, pkg, packages, repo_map, sdist_map, r
         elif sdist_file.get("key"):
             sdist_label = repo_map.get(sdist_file["key"])
 
+    has_env_deps = bool(pkg.get("common_dependencies") or pkg.get("environment_dependencies"))
+    has_runtime_deps = has_marker_deps or has_env_deps
+
     # Runtime deps
     if has_marker_deps:
         _render_marker_package_deps(lines, pkg_key_san, pkg, packages)
+    elif has_env_deps:
+        # Backwards compat: old lock JSON format with common_dependencies / environment_dependencies
+        lines.append(_ind("_{}_deps = [".format(pkg_key_san)))
+        for dep_key in sorted(pkg.get("common_dependencies", [])):
+            if _is_in_same_cycle(dep_key, pkg, packages):
+                continue
+            lines.append(_ind('":{}",'.format(dep_key), 2))
+        lines.append(_ind("]"))
+
+        if pkg.get("environment_dependencies"):
+            lines[-1] = lines[-1] + " + select({"
+            for env_name, deps in sorted(pkg.get("environment_dependencies").items()):
+                lines.append(_ind('":{env}": ['.format(env = env_name), 2))
+                for dep_key in sorted(deps):
+                    if _is_in_same_cycle(dep_key, pkg, packages):
+                        continue
+                    lines.append(_ind('":{}",'.format(dep_key), 3))
+                lines.append(_ind("],", 2))
+            lines.append(_ind('"//conditions:default": [],', 2))
+            lines.append(_ind("})", 1))
+        lines.append("")
 
     if not (has_wheel_candidates or pkg.get("environment_files")) and "[" in pkg_key:
         # Extra packages just wrap their dependencies
         lines.extend([
             _ind("py_library("),
             _ind('name = "{}",'.format(pkg_key), 2),
-            _ind("deps = _{}_deps,".format(pkg_key_san) if has_marker_deps else "deps = [],", 2),
+            _ind("deps = _{}_deps,".format(pkg_key_san) if has_runtime_deps else "deps = [],", 2),
             _ind(")"),
             "",
         ])
@@ -340,7 +366,7 @@ def _render_marker_package(lines, pkg_key, pkg, packages, repo_map, sdist_map, r
     if pkg.get("cycle_group"):
         lib_name = "_raw_{}".format(pkg_key)
 
-    has_any_deps = has_marker_deps
+    has_any_deps = has_runtime_deps
 
     lines.extend([
         _ind("pycross_wheel_library("),
@@ -438,6 +464,8 @@ def render_lock_bzl(lock, repo_map, sdist_map = None, rctx_name = ""):
         ),
         'load("@rules_python//python:defs.bzl", "py_library")',
         'load("@rules_pycross//pycross/private:pep508_marker_values.bzl",',
+        '    "FREETHREADED_VALUES",',
+        '    "LIBC_VALUES",',
         '    "OS_NAME_VALUES",',
         '    "PLATFORM_MACHINE_VALUES",',
         '    "PLATFORM_SYSTEM_VALUES",',
@@ -453,14 +481,28 @@ def render_lock_bzl(lock, repo_map, sdist_map = None, rctx_name = ""):
         "",
     ])
 
-    # 1. Marker evaluators (deduped)
+    # 1. Environment config_settings (backwards compat: only for lock JSONs
+    #    that use the old environment_files format without wheel_candidates).
+    environments = lock.get("environments", {})
+    if environments:
+        for env_name, env_ref in sorted(environments.items()):
+            if env_ref.get("config_setting_label"):
+                lines.extend([
+                    _ind("native.alias("),
+                    _ind('name = "{}",'.format(env_name), 2),
+                    _ind('actual = "{}",'.format(env_ref["config_setting_label"]), 2),
+                    _ind(")"),
+                    "",
+                ])
+
+    # 2. Marker evaluators (deduped)
     unique_markers = _collect_unique_markers(packages)
     _render_marker_evaluators(lines, unique_markers)
 
-    # 2. Per-member cycle deps (marker-aware)
+    # 3. Per-member cycle deps (marker-aware)
     _render_marker_cycle_member_deps(lines, cycle_groups, packages)
 
-    # 3. Packages
+    # 4. Packages
     for pkg_key, pkg in sorted(packages.items()):
         _render_marker_package(lines, pkg_key, pkg, packages, repo_map, sdist_map, rctx_name)
 
