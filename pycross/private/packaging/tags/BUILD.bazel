@@ -1,0 +1,64 @@
+load("@bazel_skylib//:bzl_library.bzl", "bzl_library")
+
+package(default_visibility = ["//visibility:public"])
+
+bzl_library(
+    name = "tags",
+    srcs = ["tags.bzl"],
+    deps = [
+        ":android",
+        ":compatible",
+        ":cpython",
+        ":generic",
+        ":ios",
+        ":macos",
+        ":manylinux",
+        ":musllinux",
+        ":utils",
+    ],
+)
+
+bzl_library(
+    name = "android",
+    srcs = ["android.bzl"],
+)
+
+bzl_library(
+    name = "compatible",
+    srcs = ["compatible.bzl"],
+)
+
+bzl_library(
+    name = "cpython",
+    srcs = ["cpython.bzl"],
+)
+
+bzl_library(
+    name = "generic",
+    srcs = ["generic.bzl"],
+)
+
+bzl_library(
+    name = "ios",
+    srcs = ["ios.bzl"],
+)
+
+bzl_library(
+    name = "macos",
+    srcs = ["macos.bzl"],
+)
+
+bzl_library(
+    name = "manylinux",
+    srcs = ["manylinux.bzl"],
+)
+
+bzl_library(
+    name = "musllinux",
+    srcs = ["musllinux.bzl"],
+)
+
+bzl_library(
+    name = "utils",
+    srcs = ["utils.bzl"],
+)

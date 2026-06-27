@@ -13,6 +13,7 @@ bazel_dep(name = "bazel_skylib", version = "1.9.0")
 bazel_dep(name = "platforms", version = "0.0.4")
 bazel_dep(name = "rules_python", version = "1.7.0")
 bazel_dep(name = "toml.bzl", version = "0.4.1")
+bazel_dep(name = "re.bzl", version = "0.3.1")
 
 bazel_dep(name = "rules_testing", version = "0.9.0", dev_dependency = True)
 
