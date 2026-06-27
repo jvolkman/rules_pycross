@@ -56,12 +56,35 @@ def _platform_tag_matches(platform_tag, sys_platform, platform_machine, libc = "
     if "x86_64" in platform_tag or "amd64" in platform_tag:
         return platform_machine == "x86_64" or platform_machine == "amd64"
     elif "aarch64" in platform_tag or "arm64" in platform_tag:
-        return platform_machine in ("aarch64", "arm64")
-    elif "i686" in platform_tag or "x86" in platform_tag:
-        return platform_machine in ("i686", "x86", "i386")
+        return platform_machine in ("aarch64", "arm64", "ARM64")
+    elif "i686" in platform_tag:
+        return platform_machine in ("i686", "i386", "x86")
+    elif "armv7l" in platform_tag:
+        return platform_machine == "armv7l"
+    elif "ppc64le" in platform_tag:
+        return platform_machine == "ppc64le"
+    elif "s390x" in platform_tag:
+        return platform_machine == "s390x"
+    elif "riscv64" in platform_tag:
+        return platform_machine == "riscv64"
+    elif "universal2" in platform_tag:
+        # macOS universal2 wheels contain both x86_64 and arm64 slices.
+        return sys_platform == "darwin"
+    elif "win32" == platform_tag:
+        # The win32 platform tag (exact match) means 32-bit Windows.
+        return platform_machine in ("x86", "i386", "i686", "x86_64", "amd64", "AMD64")
+    elif "win_amd64" in platform_tag:
+        return platform_machine in ("x86_64", "amd64", "AMD64")
+    elif "win_arm64" in platform_tag:
+        return platform_machine in ("aarch64", "arm64", "ARM64")
 
-    # Platform tag specifies OS but no recognisable arch — accept any arch.
-    return True
+    # If the platform tag embeds an arch we don't recognize, check if the
+    # host's platform_machine appears literally in the tag.
+    if platform_machine and platform_machine in platform_tag:
+        return True
+
+    # OS matched but architecture didn't — reject.
+    return False
 
 def _single_python_tag_matches(tag, python_version, freethreaded = "no"):
     """Check whether a single (non-compound) python tag matches.
