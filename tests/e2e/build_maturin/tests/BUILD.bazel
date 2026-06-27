@@ -11,3 +11,9 @@ py_test(
     srcs = ["test_jiter.py"],
     deps = ["@uv//jiter"],
 )
+
+py_test(
+    name = "test_geohash",
+    srcs = ["test_geohash.py"],
+    deps = ["@uv//python_geohash"],
+)
