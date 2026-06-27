@@ -1,6 +1,7 @@
 """PEP 440 Version handling.
 
 Derived from pypa/packaging: packaging/version.py (Apache 2.0 / BSD).
+Baseline: pypa/packaging 26.2
 """
 
 load("@re.bzl", "re")

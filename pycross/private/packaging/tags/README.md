@@ -3,6 +3,7 @@
 The logic in this directory is derived from the following upstream projects:
 
 1. **[pypa/packaging](https://github.com/pypa/packaging)**
+   * **Baseline**: Derived from release **26.2**.
    * **Purpose**: Core logic for PEP 425 compatibility tags, including platform expansion for macOS, manylinux, musllinux, Android, and iOS.
    * **License**: Dual licensed under the **Apache License, Version 2.0** or the **BSD 2-Clause License**.
 
