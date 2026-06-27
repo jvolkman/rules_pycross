@@ -277,3 +277,8 @@ def evaluate_markers(markers, environment):
             fail("Unexpected marker: {}".format(marker))
 
     fail("Evaluation exceeded iteration limit")
+
+markers = struct(
+    parse = parse_marker,
+    evaluate = evaluate_markers,
+)

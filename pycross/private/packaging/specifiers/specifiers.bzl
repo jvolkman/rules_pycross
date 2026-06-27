@@ -240,3 +240,10 @@ def specifier_set_contains(spec_set, version_str):
         if not specifier_contains(spec, version_str):
             return False
     return True
+
+specifiers = struct(
+    parse = parse_specifier,
+    contains = specifier_contains,
+    parse_set = parse_specifier_set,
+    set_contains = specifier_set_contains,
+)

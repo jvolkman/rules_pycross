@@ -4,10 +4,10 @@ load("@rules_testing//lib:analysis_test.bzl", "analysis_test", "test_suite")
 load("@rules_testing//lib:util.bzl", "util")
 
 # buildifier: disable=bzl-visibility
-load("//pycross/private/packaging/version:version.bzl", "parse_version")
+load("//pycross/private/packaging/version:version.bzl", "version")
 
 def _test_parse_version_basic_impl(env, _target):
-    v = parse_version("1.2.3")
+    v = version.parse("1.2.3")
     env.expect.that_str(v.version_str).equals("1.2.3")
     env.expect.that_int(v.epoch).equals(0)
     env.expect.that_collection(v.release).contains_exactly([1, 2, 3])
@@ -17,7 +17,7 @@ def _test_parse_version_basic(name):
     analysis_test(name = name, target = name + "_subject", impl = _test_parse_version_basic_impl)
 
 def _test_parse_version_parts_impl(env, _target):
-    v = parse_version("1.2.3a1.post2.dev3+local")
+    v = version.parse("1.2.3a1.post2.dev3+local")
     env.expect.that_str(v.version_str).equals("1.2.3a1.post2.dev3+local")
     env.expect.that_int(v.epoch).equals(0)
     env.expect.that_collection(v.release).contains_exactly([1, 2, 3])
@@ -31,12 +31,12 @@ def _test_parse_version_parts(name):
     analysis_test(name = name, target = name + "_subject", impl = _test_parse_version_parts_impl)
 
 def _test_version_cmp_impl(env, _target):
-    v1 = parse_version("1.0")
-    v2 = parse_version("1.1")
-    v1_post = parse_version("1.0.post1")
-    v1_dev = parse_version("1.0.dev1")
-    v1_local = parse_version("1.0+local")
-    v1_alpha = parse_version("1.0a1")
+    v1 = version.parse("1.0")
+    v2 = version.parse("1.1")
+    v1_post = version.parse("1.0.post1")
+    v1_dev = version.parse("1.0.dev1")
+    v1_local = version.parse("1.0+local")
+    v1_alpha = version.parse("1.0a1")
 
     # 1.0 < 1.1
     env.expect.that_bool(v1.key < v2.key).equals(True)
@@ -157,8 +157,8 @@ def _test_version_cmp_upstream_impl(env, _target):
     for i in range(len(_UPSTREAM_VERSIONS) - 1):
         v1_str = _UPSTREAM_VERSIONS[i]
         v2_str = _UPSTREAM_VERSIONS[i + 1]
-        v1 = parse_version(v1_str)
-        v2 = parse_version(v2_str)
+        v1 = version.parse(v1_str)
+        v2 = version.parse(v2_str)
 
         # v1 < v2
         env.expect.that_bool(v1.key < v2.key).equals(True)

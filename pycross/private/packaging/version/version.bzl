@@ -199,3 +199,8 @@ def parse_version(version_str):
     local = _parse_local_version(local_str)
 
     return make_version(epoch, release, pre, post, dev, local, version_str)
+
+version = struct(
+    parse = parse_version,
+    get_public_key = get_public_key,
+)
