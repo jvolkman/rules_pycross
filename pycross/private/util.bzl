@@ -1,6 +1,6 @@
 """Shared utilities"""
 
-load("@rules_python//python:py_info.bzl", "PyInfo")
+load("@rules_python//python/api:api.bzl", "py_common")
 
 # The http library seems to depend on cache.bzl as of Bazel 7
 REPO_HTTP_DEPS = [
@@ -107,7 +107,11 @@ def key_name(key):
     """
     return key.split("@", 1)[0]
 
+# Attrs that consuming rules must include for merge_py_providers to work.
+PY_COMMON_ATTRS = py_common.API_ATTRS
+
 def merge_py_providers(
+        ctx,
         deps,
         direct_sources = [],
         direct_imports = [],
@@ -118,11 +122,13 @@ def merge_py_providers(
         uses_shared_libraries = True):
     """Merges PyInfo and DefaultInfo from deps with optional direct entries.
 
-    This is the central place for constructing merged Python provider info
-    across pycross rules. Update this function when new transitive providers
-    are added to the pycross ecosystem.
+    Uses rules_python's PyInfoBuilder to ensure all PyInfo fields (including
+    pyc files, pyi stubs, and venv symlinks) are properly merged.
+
+    The consuming rule must include PY_COMMON_ATTRS in its attrs dict.
 
     Args:
+        ctx: The rule context (must have PY_COMMON_ATTRS in its rule attrs).
         deps: List of Target objects providing PyInfo and DefaultInfo.
         direct_sources: Files to add as direct entries to transitive_sources.
         direct_imports: Strings to add as direct entries to imports.
@@ -138,33 +144,28 @@ def merge_py_providers(
           - py_info: A PyInfo provider.
           - runfiles: The merged Runfiles object.
     """
-    transitive_sources_list = []
-    imports_list = []
-    venv_symlinks_list = []
-    has_venv_symlinks = bool(direct_venv_symlinks)
+    api = py_common.get(ctx)
+    builder = api.PyInfoBuilder()
 
-    for dep in deps:
-        if PyInfo in dep:
-            py_info = dep[PyInfo]
-            transitive_sources_list.append(py_info.transitive_sources)
-            imports_list.append(py_info.imports)
-            if not has_py2_only_sources and py_info.has_py2_only_sources:
-                has_py2_only_sources = True
-            if not has_py3_only_sources and py_info.has_py3_only_sources:
-                has_py3_only_sources = True
-            if hasattr(py_info, "venv_symlinks"):
-                has_venv_symlinks = True
-                venv_symlinks_list.append(py_info.venv_symlinks)
+    # Merge all dep PyInfos as transitive.
+    builder.merge_targets(deps)
 
-    transitive_sources = depset(
-        direct = direct_sources,
-        transitive = transitive_sources_list,
-    )
-    imports = depset(
-        direct = direct_imports,
-        transitive = imports_list,
-    )
+    # Add our own direct content.
+    builder.transitive_sources.add(direct_sources)
+    builder.imports.add(direct_imports)
+    if direct_venv_symlinks:
+        builder.venv_symlinks.add(direct_venv_symlinks)
 
+    if has_py2_only_sources:
+        builder.set_has_py2_only_sources(True)
+    if has_py3_only_sources:
+        builder.set_has_py3_only_sources(True)
+    if uses_shared_libraries:
+        builder.set_uses_shared_libraries(True)
+
+    py_info = builder.build()
+
+    # Merge runfiles from all deps.
     runfiles = base_runfiles
     for dep in deps:
         rf = dep[DefaultInfo].default_runfiles
@@ -174,24 +175,11 @@ def merge_py_providers(
             else:
                 runfiles = runfiles.merge(rf)
 
-    py_info_kwargs = dict(
-        has_py2_only_sources = has_py2_only_sources,
-        has_py3_only_sources = has_py3_only_sources,
-        imports = imports,
-        transitive_sources = transitive_sources,
-        uses_shared_libraries = uses_shared_libraries,
-    )
-    if has_venv_symlinks:
-        py_info_kwargs["venv_symlinks"] = depset(
-            direct = direct_venv_symlinks,
-            transitive = venv_symlinks_list,
-        )
-
     return struct(
         default_info = DefaultInfo(
             files = depset(direct = direct_sources) if direct_sources else depset(),
             runfiles = runfiles,
         ),
-        py_info = PyInfo(**py_info_kwargs),
+        py_info = py_info,
         runfiles = runfiles,
     )

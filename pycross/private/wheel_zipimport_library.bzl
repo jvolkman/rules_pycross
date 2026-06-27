@@ -2,7 +2,7 @@
 
 load("@bazel_skylib//lib:paths.bzl", "paths")
 load("@rules_python//python:py_info.bzl", "PyInfo")
-load(":util.bzl", "merge_py_providers")
+load(":util.bzl", "PY_COMMON_ATTRS", "merge_py_providers")
 
 def _pycross_wheel_zipimport_library_impl(ctx):
     wheel_label = ctx.file.wheel.owner or ctx.attr.wheel.label
@@ -17,6 +17,7 @@ def _pycross_wheel_zipimport_library_impl(ctx):
     )
 
     merged = merge_py_providers(
+        ctx,
         ctx.attr.deps,
         direct_sources = [wheel_file] + extra_files,
         direct_imports = [imp],
@@ -34,7 +35,7 @@ def _pycross_wheel_zipimport_library_impl(ctx):
 
 pycross_wheel_zipimport_library = rule(
     implementation = _pycross_wheel_zipimport_library_impl,
-    attrs = {
+    attrs = dict({
         "deps": attr.label_list(
             doc = "A list of this wheel's Python library dependencies.",
             providers = [DefaultInfo, PyInfo],
@@ -44,5 +45,5 @@ pycross_wheel_zipimport_library = rule(
             allow_single_file = [".whl"],
             mandatory = True,
         ),
-    },
+    }, **PY_COMMON_ATTRS),
 )

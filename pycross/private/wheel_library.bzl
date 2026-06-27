@@ -20,7 +20,7 @@ load(
     "PycrossExtractedWheelInfo",
     "PycrossPackageInfo",
 )
-load(":util.bzl", "merge_py_providers")
+load(":util.bzl", "PY_COMMON_ATTRS", "merge_py_providers")
 
 def _pycross_wheel_library_impl(ctx):
     out = ctx.actions.declare_directory(ctx.attr.name)
@@ -155,6 +155,7 @@ def _pycross_wheel_library_impl(ctx):
                     ))
 
     merged = merge_py_providers(
+        ctx,
         ctx.attr.deps,
         direct_sources = [out],
         direct_imports = [imp],
@@ -194,7 +195,7 @@ def _pycross_wheel_library_impl(ctx):
 
 pycross_wheel_library = rule(
     implementation = _pycross_wheel_library_impl,
-    attrs = {
+    attrs = dict({
         "deps": attr.label_list(
             doc = "A list of this wheel's Python library dependencies.",
             providers = [DefaultInfo, PyInfo],
@@ -234,7 +235,7 @@ pycross_wheel_library = rule(
         "experimental_venvs_site_packages": attr.label(
             default = Label("@rules_python//python/config_settings:venvs_site_packages"),
         ),
-    },
+    }, **PY_COMMON_ATTRS),
 )
 
 def _pycross_wheel_metadata_impl(ctx):
