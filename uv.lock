@@ -141,7 +141,7 @@ wheels = [
 
 [[package]]
 name = "repairwheel"
-version = "0.6.1"
+version = "0.6.2"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "delvewheel" },
@@ -150,9 +150,9 @@ dependencies = [
     { name = "pefile" },
     { name = "pyelftools" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/fa/62/5f2f0b97c94807f4567549e5e86e57c96efcf3a1cc6c3dbe2cd7ab120792/repairwheel-0.6.1.tar.gz", hash = "sha256:29bf44dbfe7b2f908e9122de0ddb6fbeeab4063c8895e62b8288fd59f251d500", size = 294345, upload-time = "2026-06-12T05:47:30.526Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/d2/74/81f836d2008127c7e946de8a2327f8c0743c971f295916c54e2805a364d7/repairwheel-0.6.2.tar.gz", hash = "sha256:f45873e795e79dc5a2304fda25cf18209734a63c8d431dc6446f87e7e5495c43", size = 294638, upload-time = "2026-06-23T05:22:42.199Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/08/f1/dca3c12dd51be728930835b19012370e958f4c62ef363a6f338185684668/repairwheel-0.6.1-py3-none-any.whl", hash = "sha256:4752fd8e24a0f332b3b42c43bf5373971517588bbf4130d8483e84c227d09016", size = 161040, upload-time = "2026-06-12T05:47:29.257Z" },
+    { url = "https://files.pythonhosted.org/packages/3b/c7/0e9a023f91d54d7d65ccd23681b7f215ee2ca41e77cfcbd1efacd1199158/repairwheel-0.6.2-py3-none-any.whl", hash = "sha256:d0f4e67dc1428a26dceddb3def3bdf66f7deb3e17a87e34e44bb8d9191984b61", size = 161111, upload-time = "2026-06-23T05:22:41.088Z" },
 ]
 
 [[package]]
@@ -186,7 +186,7 @@ requires-dist = [
     { name = "patch-ng", marker = "extra == 'core'", specifier = "==1.19.1" },
     { name = "pip", marker = "extra == 'core'", specifier = "==26.1.1" },
     { name = "poetry-core", marker = "extra == 'core'", specifier = "==2.4.0" },
-    { name = "repairwheel", marker = "extra == 'repairwheel'", specifier = "==0.6.1" },
+    { name = "repairwheel", marker = "extra == 'repairwheel'", specifier = "==0.6.2" },
     { name = "tomli-w", marker = "extra == 'core'", specifier = "==1.1.0" },
 ]
 provides-extras = ["core", "build", "repairwheel"]

@@ -19,7 +19,7 @@ build = [
     "build==1.5.0",
 ]
 repairwheel = [
-    "repairwheel==0.6.1",
+    "repairwheel==0.6.2",
 ]
 
 [tool.black]
