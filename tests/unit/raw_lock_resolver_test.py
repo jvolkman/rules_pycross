@@ -1246,12 +1246,14 @@ class TestCycleDetection(unittest.TestCase):
         self.assertIsNone(resolved.packages[key_a].cycle_group)
         self.assertEqual(len(resolved.cycle_groups), 0)
 
-    def test_unpinned_cycle_not_emitted(self):
+    def test_unpinned_cycle_still_emitted(self):
         """A cycle exists in the lock model but none of its members are pinned.
 
         Packages x, y, z form a cycle but are not reachable from any pin.
-        The full-graph Tarjan detects the SCC, but it should be filtered
-        out because no members overlap with the resolved key set.
+        The full-graph Tarjan detects the SCC and the cycle group IS emitted
+        (cycle groups are a pure property of the graph).  However, no resolved
+        packages receive cycle_group annotations because x/y/z are not part
+        of the resolved set.
         """
         # Pinned leaf — completely disconnected from the cycle
         pkg_a = make_pkg("a", "1.0", [make_file("a-1.0.tar.gz")])
@@ -1274,8 +1276,12 @@ class TestCycleDetection(unittest.TestCase):
             key = PackageKey.from_parts(canonicalize_name(name), Version("1.0"))
             self.assertNotIn(key, resolved.packages)
 
-        # The cycle exists in the full graph but should NOT be emitted
-        self.assertEqual(len(resolved.cycle_groups), 0)
+        # The cycle group IS emitted (it's a graph property, not pin-dependent)
+        self.assertEqual(len(resolved.cycle_groups), 1)
+
+        # But no resolved package has a cycle_group annotation
+        for pkg in resolved.packages.values():
+            self.assertIsNone(pkg.cycle_group)
 
     def test_partially_pinned_cycle(self):
         """A 4-member cycle where only 1 member is directly pinned.

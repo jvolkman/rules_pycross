@@ -151,12 +151,20 @@ def _render_marker_cycle_member_deps(lines, cycle_groups, packages):
 
     Each macro call internally creates N reachability evaluators + config_settings
     and wraps them in a py_library with select() per dep.
+
+    Only cycle group members that appear in ``packages`` are rendered; groups
+    whose members are entirely outside the resolved set are silently skipped.
     """
     for _group_name, scc in sorted(cycle_groups.items()):
+        # Only render members that are part of the resolved package set.
+        resolved_members = [m for m in scc if m in packages]
+        if not resolved_members:
+            continue
+
         edges_json = _build_marker_cycle_edges_json(scc, packages)
         all_members = sorted(scc)
 
-        for pkg_key in all_members:
+        for pkg_key in sorted(resolved_members):
             lines.append(_ind("pycross_cycle_member_marker_deps("))
             lines.append(_ind('name = "{}",'.format(pkg_key), 2))
             lines.append(_ind('raw_name = "_raw_{}",'.format(pkg_key), 2))

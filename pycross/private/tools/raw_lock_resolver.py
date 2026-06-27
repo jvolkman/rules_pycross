@@ -829,25 +829,22 @@ def _resolve_packages(
 
 def _compute_cycle_groups(
     lock_packages: Dict[PackageKey, RawPackage],
-    resolved_keys: Set[PackageKey],
 ) -> Dict[str, List[PackageKey]]:
     """Compute cycle groups over the full lock model dependency graph.
 
-    We run Tarjan's SCC on ALL packages in the lock model, not just the
-    transitively-reachable subset from pins.  In practice the results are
-    equivalent — if a cycle exists, any pin that reaches one member will
-    transitively reach all members (by definition of an SCC).  But using
-    the full graph makes this property obvious rather than relying on the
-    transitive-reachability argument, and guarantees consistent cycle
-    groups regardless of which optional/development groups are enabled.
+    We run Tarjan's SCC on ALL packages in the lock model and emit every
+    non-trivial SCC as a cycle group.  Cycle groups are a pure property
+    of the dependency graph — they do not depend on which pins are active.
+    This guarantees consistent cycle group names across workspace members
+    that select different optional/development groups.
 
     Markers are ignored when building the graph: an edge gated by a
     platform marker is included unconditionally.  This is conservative
     (more edges ⇒ superset of SCCs) and matches the union-over-
     environments semantics already used by ``runtime_dependency_keys``.
 
-    Only SCCs that overlap with *resolved_keys* (the packages actually
-    selected by the current pin set) are emitted.
+    Downstream consumers (the renderer and package_repo) are responsible
+    for skipping cycle group members that fall outside the resolved set.
     """
     # Build adjacency list from raw dependencies, ignoring markers.
     graph: Dict[PackageKey, List[PackageKey]] = {}
@@ -910,12 +907,9 @@ def _compute_cycle_groups(
                 lowlink[parent] = min(lowlink[parent], lowlink[v])
 
     # Build cycle groups with content-based stable names.
-    # Only emit groups whose members overlap with the resolved pin set.
     cycle_groups = {}
     for scc in sccs:
         if len(scc) <= 1:
-            continue
-        if not any(k in resolved_keys for k in scc):
             continue
         members = sorted(scc)
         # Short hash of sorted member keys for a stable, compact name
@@ -1000,7 +994,7 @@ def resolve(args: Any) -> ResolvedLockSet:
                 continue
             pins[package_pin_name] = {"": packages[0]}
 
-    cycle_groups = _compute_cycle_groups(lock_model.packages, set(packages_by_package_key.keys()))
+    cycle_groups = _compute_cycle_groups(lock_model.packages)
 
     resolved_environments = {env.target_environment.name: env.to_environment_reference() for env in environment_pairs}
     resolved_packages_dict = {pkg.key: pkg.to_resolved_package() for pkg in resolved_packages}
