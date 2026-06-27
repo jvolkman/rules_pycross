@@ -80,6 +80,17 @@ def _compute_reachability_groups(member, other_members, edges):
 
     # Step 3: resolve chains.  If C -> B -> A in the collapsible map, C's
     # representative is A (the first non-collapsible ancestor).
+    #
+    # A cycle in the collapsible chain occurs when every node in a sub-cycle
+    # has exactly one unconditional inbound edge from another collapsible node.
+    # For example, with member M and cycle M → A → B → C → A:
+    #
+    #   collapsible = {A: C, B: A, C: B}
+    #        A ← C
+    #        ↓   ↑
+    #        B → ·
+    #
+    # Following the chain A → C → B → A loops forever without cycle detection.
     def _find_representative(node):
         visited = {}
         current = node

@@ -67,6 +67,12 @@ def _expand_platforms(platforms: Iterable[str]) -> List[str]:
 
     for platform in platforms:
         if platform.startswith("macosx_"):
+            # macOS wheels use versioned platform tags (e.g. macosx_14_0_arm64).
+            # A wheel built for macOS 11.0 is compatible with 14.0, but not
+            # vice versa.  We expand the requested platform to all backward-
+            # compatible versions (e.g. macosx_14_0 → macosx_13_0 → ... →
+            # macosx_10_9) so the wheel chooser can match broader-compatible
+            # wheels.  packaging.tags.mac_platforms() handles this expansion.
             parts = platform.split("_")
             if len(parts) >= 4:
                 try:

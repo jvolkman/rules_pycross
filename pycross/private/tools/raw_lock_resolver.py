@@ -374,7 +374,6 @@ class PackageResolver:
         self._common_deps = deps_by_env.get(None, set())
         self._env_deps = {k: v for k, v in deps_by_env.items() if k is not None}
 
-        # Phase 3: preserve raw marker dependencies.
         self._marker_deps = self._build_marker_dependencies(package, annotations.ignore_dependencies, context)
 
         self._package_sources_by_env = context.get_package_sources_by_environment(
@@ -403,7 +402,7 @@ class PackageResolver:
         self.sdist_file = FileReference(key=sdist_file_key) if sdist_file_key else None
         self.package_sources = frozenset(used_package_sources)
 
-        # Phase 3: build wheel candidates from all available wheel files.
+        # Build wheel candidates from all available wheel files.
         self._wheel_candidates, self._wheel_candidate_files = self._build_wheel_candidates(package, context)
 
     @cached_property

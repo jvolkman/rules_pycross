@@ -37,7 +37,7 @@ def _merge_dependencies(first_data, entries):
         if not merged.get("sdist_file") and pkg_data.get("sdist_file"):
             merged["sdist_file"] = pkg_data["sdist_file"]
 
-    # Merge marker_dependencies: union across members, dedup by (key, marker).
+    # Merge marker_dependencies: union across workspace members, dedup by (key, marker).
     seen_marker_deps = {}  # (key, marker) -> entry
     for md in merged.get("marker_dependencies", []):
         seen_marker_deps[(md["key"], md.get("marker"))] = md

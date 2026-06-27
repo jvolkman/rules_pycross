@@ -67,7 +67,7 @@ def is_reachable(edges, source, target, markers):
     # Iterative BFS (Starlark forbids recursion).
     # Use an index into the queue list as a dequeue pointer.
     head = 0
-    for _ in range(10000):  # safety bound
+    for _ in range(len(edges) + 1):  # bounded by number of nodes in the graph
         if head >= len(queue):
             break
         current = queue[head]
