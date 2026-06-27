@@ -472,9 +472,10 @@ class PackageResolver:
             dep_base_key = PackageKey.from_parts(DependencyName(dep.name.package), dep.version)
             if context.lock_package_keys is not None and dep_base_key not in context.lock_package_keys:
                 continue
-            if dep.name in seen_names:
+            dep_key = dep.key
+            if dep_key in seen_names:
                 continue
-            seen_names.add(dep.name)
+            seen_names.add(dep_key)
 
             # Strip extra markers — those are handled by virtual extra nodes.
             marker_str = dep.marker
