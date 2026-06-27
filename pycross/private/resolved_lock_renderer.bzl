@@ -175,7 +175,7 @@ def _render_marker_cycle_member_deps(lines, cycle_groups, packages):
             lines.append(_ind(")"))
             lines.append("")
 
-def _render_marker_wheel_chooser(lines, pkg_key, pkg, repo_map, sdist_map, rctx_name):
+def _render_marker_wheel_chooser(lines, pkg_key, pkg, repo_map, sdist_map, rctx_name, sdist_target = None):
     """Render a wheel chooser target and per-wheel config_settings + alias."""
     candidates = pkg.get("wheel_candidates", [])
     if not candidates:
@@ -231,7 +231,8 @@ def _render_marker_wheel_chooser(lines, pkg_key, pkg, repo_map, sdist_map, rctx_
         filename = candidate["filename"]
         cs_name = "_wheel_cs_{}_{}".format(pkg_key, _sanitize_name(filename))
         lines.append(_ind('":{cs}": "{target}",'.format(cs = cs_name, target = target), 3))
-    lines.append(_ind('"//conditions:default": "@rules_pycross//pycross/private:no_match_error",', 3))
+    no_match_target = sdist_target if sdist_target else "@rules_pycross//pycross/private:no_match_error"
+    lines.append(_ind('"//conditions:default": "{}",'.format(no_match_target), 3))
     lines.extend([
         _ind("}),", 2),
         _ind(")"),
@@ -339,9 +340,17 @@ def _render_marker_package(lines, pkg_key, pkg, packages, repo_map, sdist_map, r
             "",
         ])
 
+    # Compute the sdist build target (if available) for fallback when no wheel matches.
+    sdist_target = None
+    if sdist_file and not pkg.get("build_target"):
+        sdist_file_key = sdist_file.get("key")
+        if sdist_file_key:
+            sdist_repo_name = "{}_sdist_{}".format(rctx_name, _sanitize_name(pkg_key))
+            sdist_target = "@@{}//:wheel".format(sdist_repo_name)
+
     # Wheel: use chooser if we have candidates, fall back to env-based select
     if has_wheel_candidates:
-        _render_marker_wheel_chooser(lines, pkg_key, pkg, repo_map, sdist_map, rctx_name)
+        _render_marker_wheel_chooser(lines, pkg_key, pkg, repo_map, sdist_map, rctx_name, sdist_target = sdist_target)
     elif pkg.get("environment_files"):
         # Fall back to environment_files select (for packages with a single wheel per env)
         lines.extend([

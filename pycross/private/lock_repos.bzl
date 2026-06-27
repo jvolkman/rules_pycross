@@ -162,12 +162,20 @@ def _lock_repos_impl(module_ctx):
             sdist_file_key = sdist_file["key"]
             sdist_label = repo_remote_files[sdist_file_key]
 
-            # Check whether any environment actually uses the sdist.
+            # Check whether this package may need to build from source.
+            # In the marker-based path (wheel_candidates), the sdist serves
+            # as the fallback when no pre-built wheel matches the target
+            # platform. In the env-based path (environment_files), we check
+            # whether any environment explicitly resolves to the sdist.
             needs_sdist = False
-            for _env_name, env_file_ref in pkg.get("environment_files", {}).items():
-                if env_file_ref.get("key") == sdist_file_key:
-                    needs_sdist = True
-                    break
+            if pkg.get("wheel_candidates"):
+                # Marker path: always create sdist repo as a fallback.
+                needs_sdist = True
+            else:
+                for _env_name, env_file_ref in pkg.get("environment_files", {}).items():
+                    if env_file_ref.get("key") == sdist_file_key:
+                        needs_sdist = True
+                        break
 
             if not needs_sdist:
                 continue
@@ -197,6 +205,11 @@ def _lock_repos_impl(module_ctx):
                 for dep in pkg.get("environment_dependencies", {}).get(env_name, []):
                     dep_label = "@{}//_lock:{}".format(lock_repo_for_deps, dep)
                     deps_set[dep_label] = True
+
+            # Marker path: collect all deps from marker_dependencies.
+            for md in pkg.get("marker_dependencies", []):
+                dep_label = "@{}//_lock:{}".format(lock_repo_for_deps, md["key"])
+                deps_set[dep_label] = True
 
             # Compute the output whldir name: {normalized_name}-{version}.whldir
             pkg_name_part, pkg_version = key_parts(pkg_key)

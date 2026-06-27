@@ -56,20 +56,40 @@ class Input:
         return from_dict(Input, data, config=Config(cast=[Path]))
 
 
-def _expand_manylinux_platforms(platforms: Iterable[str]) -> List[str]:
+def _expand_platforms(platforms: Iterable[str]) -> List[str]:
+    import packaging.tags
+
     # Preserve the input order, inserting each platform's legacy alias (if any)
     # immediately after it. Callers (e.g. toolchain_helpers.bzl) are responsible
     # for providing platforms in the desired priority order.
     expanded: List[str] = []
     seen: set = set()
+
     for platform in platforms:
+        if platform.startswith("macosx_"):
+            parts = platform.split("_")
+            if len(parts) >= 4:
+                try:
+                    major = int(parts[1])
+                    minor = int(parts[2])
+                    arch = "_".join(parts[3:])
+                    for compatible in packaging.tags.mac_platforms((major, minor), arch):
+                        if compatible not in seen:
+                            expanded.append(compatible)
+                            seen.add(compatible)
+                    continue
+                except ValueError:
+                    pass
+
         if platform not in seen:
             expanded.append(platform)
             seen.add(platform)
+
         alias = _MANYLINUX_ALIASES.get(platform)
         if alias and alias not in seen:
             expanded.append(alias)
             seen.add(alias)
+
     return expanded
 
 
@@ -82,7 +102,7 @@ def create(input: Input) -> None:
     if len(version_info) != 3:
         raise ValueError("Version must be in the format a.b.c.")
 
-    platforms = _expand_manylinux_platforms(input.platforms)
+    platforms = _expand_platforms(input.platforms)
     target_python = TargetPython(
         platforms=platforms or ["any"],
         py_version_info=version_info,

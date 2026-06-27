@@ -18,18 +18,8 @@ load(":pep508_marker_values.bzl", "PYTHON_TOOLCHAIN_TYPE", "collect_markers", "m
 # Tag compatibility helpers
 # ---------------------------------------------------------------------------
 
-def _platform_tag_matches(platform_tag, sys_platform, platform_machine, libc = ""):
-    """Check whether a wheel's platform_tag is compatible with the host.
-
-    Args:
-        platform_tag: The wheel's platform tag string (e.g. "manylinux_2_28_x86_64").
-        sys_platform: The host sys.platform value (e.g. "linux", "darwin", "win32").
-        platform_machine: The host platform.machine value (e.g. "x86_64", "aarch64").
-        libc: The host libc variant ("glibc", "musl", or "" for unknown/non-Linux).
-
-    Returns:
-        True if the wheel can run on this platform.
-    """
+def _single_platform_tag_matches(platform_tag, sys_platform, platform_machine, libc = ""):
+    """Check whether a single (non-compound) platform_tag is compatible."""
     if platform_tag == "any":
         return True
 
@@ -52,39 +42,45 @@ def _platform_tag_matches(platform_tag, sys_platform, platform_machine, libc = "
         if "musllinux" in platform_tag and libc != "musl":
             return False
 
-    # Architecture match
-    if "x86_64" in platform_tag or "amd64" in platform_tag:
-        return platform_machine == "x86_64" or platform_machine == "amd64"
-    elif "aarch64" in platform_tag or "arm64" in platform_tag:
+    # Architecture match. We check if the tag ends with known architecture strings.
+    if platform_tag.endswith("x86_64") or platform_tag.endswith("amd64"):
+        return platform_machine in ("x86_64", "amd64")
+    elif platform_tag.endswith("aarch64") or platform_tag.endswith("arm64") or platform_tag.endswith("ARM64"):
         return platform_machine in ("aarch64", "arm64", "ARM64")
-    elif "i686" in platform_tag:
+    elif platform_tag.endswith("i686") or platform_tag.endswith("i386") or platform_tag.endswith("x86"):
         return platform_machine in ("i686", "i386", "x86")
-    elif "armv7l" in platform_tag:
+    elif platform_tag.endswith("armv7l"):
         return platform_machine == "armv7l"
-    elif "ppc64le" in platform_tag:
+    elif platform_tag.endswith("ppc64le"):
         return platform_machine == "ppc64le"
-    elif "s390x" in platform_tag:
+    elif platform_tag.endswith("s390x"):
         return platform_machine == "s390x"
-    elif "riscv64" in platform_tag:
+    elif platform_tag.endswith("riscv64"):
         return platform_machine == "riscv64"
-    elif "universal2" in platform_tag:
+    elif platform_tag.endswith("universal2"):
         # macOS universal2 wheels contain both x86_64 and arm64 slices.
-        return sys_platform == "darwin"
-    elif "win32" == platform_tag:
+        return sys_platform == "darwin" and platform_machine in ("x86_64", "arm64")
+    elif platform_tag == "win32":
         # The win32 platform tag (exact match) means 32-bit Windows.
-        return platform_machine in ("x86", "i386", "i686", "x86_64", "amd64", "AMD64")
-    elif "win_amd64" in platform_tag:
-        return platform_machine in ("x86_64", "amd64", "AMD64")
-    elif "win_arm64" in platform_tag:
-        return platform_machine in ("aarch64", "arm64", "ARM64")
+        return platform_machine in ("x86", "i386", "i686")
 
-    # If the platform tag embeds an arch we don't recognize, check if the
-    # host's platform_machine appears literally in the tag.
-    if platform_machine and platform_machine in platform_tag:
+    # Fallback for other known tags or exact matches
+    if platform_machine and platform_tag.endswith(platform_machine):
         return True
 
-    # OS matched but architecture didn't — reject.
     return False
+
+def _platform_tag_matches(platform_tag, sys_platform, platform_machine, libc = ""):
+    """Check whether a wheel's platform_tag is compatible with the host.
+
+    Handles compound dot-separated tags.
+    """
+    if "." in platform_tag:
+        for subtag in platform_tag.split("."):
+            if _single_platform_tag_matches(subtag, sys_platform, platform_machine, libc):
+                return True
+        return False
+    return _single_platform_tag_matches(platform_tag, sys_platform, platform_machine, libc)
 
 def _single_python_tag_matches(tag, python_version, freethreaded = "no"):
     """Check whether a single (non-compound) python tag matches.
