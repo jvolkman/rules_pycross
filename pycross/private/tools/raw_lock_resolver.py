@@ -404,7 +404,7 @@ class PackageResolver:
         self.package_sources = frozenset(used_package_sources)
 
         # Phase 3: build wheel candidates from all available wheel files.
-        self._wheel_candidates = self._build_wheel_candidates(package, context)
+        self._wheel_candidates, self._wheel_candidate_files = self._build_wheel_candidates(package, context)
 
     @cached_property
     def runtime_dependency_keys(self) -> Set[PackageKey]:
@@ -496,13 +496,18 @@ class PackageResolver:
     def _build_wheel_candidates(
         package: RawPackage,
         context: GenerationContext,
-    ) -> List[WheelCandidate]:
+    ) -> Tuple[List[WheelCandidate], Dict]:
         """Build a list of all wheel candidates with pre-parsed tags.
 
         Includes both local and remote wheels. Each candidate carries its
         filename, file reference, and parsed PEP 425 compatibility tags.
+
+        Returns:
+            A tuple of (candidates, candidate_files) where candidate_files
+            maps FileKey -> PackageFile for all candidate wheel files.
         """
         candidates = []
+        candidate_files: Dict = {}
 
         # Collect all available wheel files (same sources as get_package_sources_by_environment).
         package_sources: Dict[str, PackageSource] = {}
@@ -520,6 +525,10 @@ class PackageResolver:
                 _, _, _build_tag, file_tags = parse_wheel_filename(filename)
             except Exception:
                 continue
+
+            # Track the file for remote_files registration.
+            if source.file:
+                candidate_files[source.file.key] = source.file
 
             # Extract original compound tags from the filename.
             # parse_wheel_filename expands "py2.py3-none-any" into individual
@@ -553,7 +562,7 @@ class PackageResolver:
                 )
             )
 
-        return candidates
+        return candidates, candidate_files
 
 
 def url_wheel_name(url: str) -> str:
@@ -966,6 +975,11 @@ def resolve(args: Any) -> ResolvedLockSet:
             if not source.file:
                 continue
             repos[source.file.key] = source.file
+
+        # Wheel candidates include ALL available wheels (not just those
+        # matching configured environments).  The wheel chooser picks at
+        # analysis time, so every candidate must have a repo entry.
+        repos.update(package_target._wheel_candidate_files)
 
     repos = dict(sorted(repos.items()))
 
