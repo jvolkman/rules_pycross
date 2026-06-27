@@ -50,7 +50,7 @@ pycross_generate_cargo_lock = rule(
         "sdist": attr.label(mandatory = True, allow_single_file = True),
         "output": attr.string(),
         "_tool": attr.label(
-            default = Label("//tools:generate_cargo_lock"),
+            default = Label("//private/tools:generate_cargo_lock"),
             executable = True,
             cfg = "exec",
         ),

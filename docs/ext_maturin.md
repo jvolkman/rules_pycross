@@ -2,7 +2,7 @@
 
 Maturin overrides extension.
 
-Provides the `maturin_overrides` module extension with an `override` tag class
+Provides the `maturin` module extension with an `override` tag class
 for declaring maturin-specific package overrides. Generates:
 
   1. `@maturin_overrides//:overrides.json` — consumed by lock_import via

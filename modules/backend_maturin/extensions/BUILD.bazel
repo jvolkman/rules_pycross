@@ -10,3 +10,12 @@ bzl_library(
         "@rules_pycross//pycross:backend",
     ],
 )
+
+bzl_library(
+    name = "setuptools_rust",
+    srcs = ["setuptools_rust.bzl"],
+    deps = [
+        "//rules:generate_cargo_lock",
+        "@rules_pycross//pycross:backend",
+    ],
+)

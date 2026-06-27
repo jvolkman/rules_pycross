@@ -111,7 +111,11 @@ backends = module_extension(
                 ),
                 "pyproject_backends": attr.string_list(
                     doc = "pyproject.toml build-system.build-backend values that map " +
-                          "to this backend (e.g. ['mesonpy', 'mesonbuild']).",
+                          "to this backend. Entries may include a bracketed list of " +
+                          "required build-system.requires package names, e.g. " +
+                          "'setuptools.build_meta[setuptools-rust]'. When multiple " +
+                          "backends match the same build-backend value, the one with " +
+                          "the most satisfied build_requires wins.",
                 ),
                 "tool_packages": attr.string_list(
                     doc = "PEP 503 normalized PyPI package names of tools this backend " +

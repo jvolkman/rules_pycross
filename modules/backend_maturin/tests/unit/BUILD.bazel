@@ -5,6 +5,6 @@ py_test(
     srcs = ["generate_cargo_lock_test.py"],
     main = "generate_cargo_lock_test.py",
     deps = [
-        "//tools:generate_cargo_lock_lib",
+        "//private/tools:generate_cargo_lock_lib",
     ],
 )

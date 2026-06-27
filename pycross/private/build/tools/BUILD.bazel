@@ -65,18 +65,6 @@ py_binary(
 )
 
 py_binary(
-    name = "maturin_builder",
-    srcs = ["maturin_builder.py"],
-    imports = ["../../../.."],
-    deps = [
-        ":utils",
-        "//pycross/private/build/tools/crossenv",
-        "@rules_pycross_internal//deps:build",
-        "@rules_pycross_internal//deps:packaging",
-    ],
-)
-
-py_binary(
     name = "repair_wheel_hook",
     srcs = [
         "repair_wheel_hook.py",

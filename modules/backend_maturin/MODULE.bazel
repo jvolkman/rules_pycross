@@ -35,9 +35,28 @@ backends.register(
     sdist_hook_fn = "maturin_sdist_hook",
     tool_packages = ["maturin"],
 )
+backends.register(
+    name = "setuptools_rust_build",
+    override_json = "@setuptools_rust_overrides//:overrides.json",
+    pyproject_backends = [
+        "setuptools.build_meta[setuptools-rust]",
+        "setuptools.build_meta:__legacy__[setuptools-rust]",
+    ],
+    rule_bzl = "@rules_pycross_backend_maturin//rules:setuptools_rust_build.bzl",
+    sdist_hook_bzl = "@rules_pycross_backend_maturin//private:setuptools_rust_sdist_hook.bzl",
+    sdist_hook_fn = "setuptools_rust_sdist_hook",
+    tool_packages = [
+        "setuptools",
+        "setuptools-rust",
+        "wheel",
+    ],
+)
 
 environments = use_extension("@rules_pycross//pycross/extensions:environments.bzl", "environments")
 use_repo(environments, "pycross_environments")
 
 maturin = use_extension("//extensions:maturin.bzl", "maturin")
 use_repo(maturin, "maturin_overrides")
+
+setuptools_rust = use_extension("//extensions:setuptools_rust.bzl", "setuptools_rust")
+use_repo(setuptools_rust, "setuptools_rust_overrides")

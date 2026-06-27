@@ -1,4 +1,4 @@
-"""Implementation of the maturin_build rule."""
+"""Implementation of the setuptools_rust_build rule."""
 
 load(
     "@rules_pycross//pycross:backend.bzl",
@@ -11,10 +11,8 @@ load(
     "TOOL_EXTRACT_ATTRS",
     "extract_cc_layer",
     "get_resource_set",
-    "get_unzipped_wheel",
     "group_tool_deps",
     "pycross_exec_platform_transition",
-    "register_bin_extract_action",
     "register_pep517_action",
     "register_repair_action",
     "resolve_path_tools",
@@ -28,22 +26,10 @@ def _get_executable_file(val):
         return val[DefaultInfo].files_to_run.executable
     return None
 
-def _maturin_build_impl(ctx):
+def _setuptools_rust_build_impl(ctx):
     # 1. Extract tools
     tool_executables = resolve_path_tools(ctx)
-    has_maturin = any(["maturin" in t.name.lower() for t in tool_executables])
-
     tool_deps = group_tool_deps(ctx.attr.tool_deps)
-
-    if not has_maturin:
-        if "maturin" not in tool_deps:
-            fail("Missing 'maturin' in tool_deps")
-        maturin_wheel = get_unzipped_wheel(tool_deps["maturin"][0])
-        tool_executables.append(register_bin_extract_action(
-            ctx,
-            wheel_dir = maturin_wheel,
-            binary_name = "maturin",
-        ))
 
     # Add rustc and cargo wrappers
     rust_toolchain = ctx.toolchains["@rules_rust//rust:toolchain_type"]
@@ -64,8 +50,12 @@ def _maturin_build_impl(ctx):
     rust_layer = extract_rust_layer(ctx)
 
     additional_build_deps = []
-    if "maturin" in tool_deps:
-        additional_build_deps.extend(tool_deps["maturin"])
+    if "setuptools" in tool_deps:
+        additional_build_deps.extend(tool_deps["setuptools"])
+    if "setuptools-rust" in tool_deps:
+        additional_build_deps.extend(tool_deps["setuptools-rust"])
+    if "wheel" in tool_deps:
+        additional_build_deps.extend(tool_deps["wheel"])
 
     # Collect extra files to inject into the sdist before building.
     extra_files = {}
@@ -119,8 +109,8 @@ def _maturin_build_impl(ctx):
         ),
     ]
 
-maturin_build = rule(
-    implementation = _maturin_build_impl,
+setuptools_rust_build = rule(
+    implementation = _setuptools_rust_build_impl,
     attrs = COMMON_BUILD_ATTRS | CC_BUILD_ATTRS | CC_TOOLCHAIN_ATTRS | REPAIR_BUILD_ATTRS | TOOL_EXTRACT_ATTRS | {
         "tool_deps": attr.label_list(
             cfg = pycross_exec_platform_transition,
@@ -133,7 +123,7 @@ maturin_build = rule(
             doc = "A filegroup containing vendored crates.",
         ),
         "_builder": attr.label(
-            default = "@rules_pycross_backend_maturin//private/tools:maturin_builder",
+            default = "@rules_pycross_backend_maturin//private/tools:setuptools_rust_builder",
             executable = True,
             cfg = "exec",
         ),

@@ -18,6 +18,15 @@ bzl_library(
 )
 
 bzl_library(
+    name = "setuptools_rust_build",
+    srcs = ["setuptools_rust_build.bzl"],
+    deps = [
+        "//private:rust_layer",
+        "@rules_pycross//pycross:backend",
+    ],
+)
+
+bzl_library(
     name = "generate_cargo_lock",
     srcs = ["generate_cargo_lock.bzl"],
 )

@@ -7,6 +7,10 @@ dependencies = [
     "rpds-py==0.23.0",
     "jiter==0.5.0",
     "maturin",
+    "python-geohash==0.9.2",
+    "setuptools-rust",
+    "setuptools",
+    "wheel",
 ]
 requires-python = "~=3.14.0"
 license = {text = "MIT"}

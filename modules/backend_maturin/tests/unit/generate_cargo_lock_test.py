@@ -6,8 +6,8 @@ from tempfile import TemporaryDirectory
 from unittest.mock import MagicMock
 from unittest.mock import patch
 
-from tools.generate_cargo_lock import derive_default_output
-from tools.generate_cargo_lock import main
+from private.tools.generate_cargo_lock import derive_default_output
+from private.tools.generate_cargo_lock import main
 
 
 class GenerateCargoLockTest(unittest.TestCase):

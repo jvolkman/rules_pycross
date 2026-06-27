@@ -68,6 +68,11 @@ lock_import.package(
     always_build = True,
     repo = "uv",
 )
+lock_import.package(
+    name = "python-geohash",
+    always_build = True,
+    repo = "uv",
+)
 
 maturin = use_extension("@rules_pycross_backend_maturin//extensions:maturin.bzl", "maturin")
 maturin.override(

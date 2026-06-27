@@ -5,26 +5,44 @@ load("@toml.bzl//toml:toml.bzl", "decode")
 _CRATES_IO = "registry+https://github.com/rust-lang/crates.io-index"
 
 def find_cargo_lock_in_sdist(rctx, sdist_root):
-    """Find Cargo.lock by reading [tool.maturin].manifest-path from pyproject.toml.
+    """Find Cargo.lock in sdist.
+
+    Checks pyproject.toml (maturin and setuptools-rust config) first,
+    then falls back to recursive search.
 
     Args:
         rctx: The repository context.
         sdist_root: The root directory of the extracted sdist.
 
     Returns:
-        The Path to the Cargo.lock file.
+        The Path to the Cargo.lock file, or None if not found.
     """
     pyproject_path = sdist_root.get_child("pyproject.toml")
     cargo_dir = sdist_root
+    manifest_path = "Cargo.toml"
+
     if pyproject_path.exists:
         pyproject = decode(rctx.read(pyproject_path))
-        manifest_path = pyproject.get("tool", {}).get("maturin", {}).get("manifest-path", "Cargo.toml")
-        parts = manifest_path.split("/")
 
-        # Navigate to the directory containing Cargo.toml (all parts except the last)
+        # Check Maturin
+        maturin_config = pyproject.get("tool", {}).get("maturin", {})
+        if maturin_config:
+            manifest_path = maturin_config.get("manifest-path", "Cargo.toml")
+        else:
+            # Check Setuptools-Rust
+            ext_modules = pyproject.get("tool", {}).get("setuptools-rust", {}).get("ext-modules", [])
+            if ext_modules and type(ext_modules) == "list":
+                manifest_path = ext_modules[0].get("path", "Cargo.toml")
+
+        parts = manifest_path.split("/")
         for part in parts[:-1]:
             cargo_dir = cargo_dir.get_child(part)
-    return cargo_dir.get_child("Cargo.lock")
+
+    lock = cargo_dir.get_child("Cargo.lock")
+    if lock.exists:
+        return lock
+
+    return None
 
 def vendor_crates_from_lock(rctx, cargo_lock_path):
     """Download and vendor crates listed in a Cargo.lock file using Bazel's downloader.
