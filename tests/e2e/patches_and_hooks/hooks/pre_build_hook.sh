@@ -4,7 +4,7 @@ set -euo pipefail
 
 if [ -n "${PYCROSS_ENV_VARS_FILE:-}" ]; then
     # Add PRE_HOOK_MARKER to the build env JSON
-    sed -i 's/}$/, "PRE_HOOK_MARKER": "pre_hook_was_here"}/' "$PYCROSS_ENV_VARS_FILE"
+    sed -i.bak 's/}$/, "PRE_HOOK_MARKER": "pre_hook_was_here"}/' "$PYCROSS_ENV_VARS_FILE"
 fi
 
 # Append build env vars to setproctitle so we can verify them in tests
