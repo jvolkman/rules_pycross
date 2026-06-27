@@ -33,6 +33,7 @@ extend-select = ["I"]
 
 [tool.ruff.lint.isort]
 force-single-line = true
+known-third-party = ["packaging"]
 
 [tool.pylint]
 line-length = 120
