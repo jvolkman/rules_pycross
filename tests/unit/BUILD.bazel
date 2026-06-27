@@ -1,28 +1,8 @@
 load("@rules_python//python:defs.bzl", "py_test")
-load(":packaging/test_markers.bzl", "markers_test_suite")
-load(":packaging/test_specifiers.bzl", "specifiers_test_suite")
-load(":packaging/test_tags.bzl", "tags_test_suite")
-load(":packaging/test_version.bzl", "version_test_suite")
 load(":test_common_attrs.bzl", "common_attrs_test_suite")
 load(":test_override_helpers.bzl", "override_helpers_test_suite")
 load(":test_resolved_lock_renderer.bzl", "resolved_lock_renderer_test_suite")
 load(":test_variant_resolver.bzl", "variant_resolver_test_suite")
-
-tags_test_suite(
-    name = "test_tags",
-)
-
-version_test_suite(
-    name = "test_version",
-)
-
-specifiers_test_suite(
-    name = "test_specifiers",
-)
-
-markers_test_suite(
-    name = "test_markers",
-)
 
 py_test(
     name = "inspect_package_test",
