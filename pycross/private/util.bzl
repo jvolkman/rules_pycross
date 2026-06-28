@@ -42,8 +42,6 @@ def sanitize_name(val):
     """Sanitize a string into a valid Bazel repository and target name identifier."""
     return val.lower().replace("-", "_").replace(".", "_").replace("+", "_").replace("@", "_").replace("!", "_")
 
-
-
 def underscore_name(name):
     """rules_python-style normalization: lowercase, replace [-. ] with _."""
     return canonicalize_name(name).replace("-", "_")

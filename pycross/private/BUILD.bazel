@@ -92,6 +92,7 @@ bzl_library(
         ":resolved_lock_renderer",
         ":util",
         ":variant_resolver",
+        "//pycross/private/pypackaging/utils",
     ],
 )
 
@@ -337,7 +338,10 @@ bzl_library(
 bzl_library(
     name = "util",
     srcs = ["util.bzl"],
-    deps = ["@rules_python//python/api:api_bzl"],
+    deps = [
+        "//pycross/private/pypackaging/utils",
+        "@rules_python//python/api:api_bzl",
+    ],
 )
 
 bzl_library(
