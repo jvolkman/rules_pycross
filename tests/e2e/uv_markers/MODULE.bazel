@@ -35,7 +35,6 @@ lock_import.import_uv(
     lock_file = "//:uv.lock",
     project_file = "//:pyproject.toml",
     repo = "markers_lock",
-    target_environments = ["@markers_envs//:environments"],
 )
 
 lock_repos = use_extension("@rules_pycross//pycross/extensions:lock_repos.bzl", "lock_repos")

@@ -41,7 +41,6 @@ lock_import = use_extension("@rules_pycross//pycross/extensions:lock_import.bzl"
 lock_import.import_uv_workspace(
     name = "shared",
     lock_file = "//:uv.lock",
-    target_environments = ["@envs//:environments"],
 )
 lock_import.uv_all_members(
     all_development_groups = True,

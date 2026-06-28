@@ -163,15 +163,12 @@ def _lock_repos_impl(module_ctx):
             sdist_label = repo_remote_files[sdist_file_key]
 
             # Check whether this package may need to build from source.
-            # In the marker-based path (wheel_candidates), the sdist serves
-            # as the fallback when no pre-built wheel matches the target
-            # platform. In the env-based path (environment_files), we check
-            # whether any environment explicitly resolves to the sdist.
             needs_sdist = False
-            if pkg.get("wheel_candidates"):
-                # Marker path: always create sdist repo as a fallback.
+            if "environment_files" not in pkg:
+                # New model: always create sdist repo as fallback/primary if sdist exists.
                 needs_sdist = True
             else:
+                # Old model
                 for _env_name, env_file_ref in pkg.get("environment_files", {}).items():
                     if env_file_ref.get("key") == sdist_file_key:
                         needs_sdist = True

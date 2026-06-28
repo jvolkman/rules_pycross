@@ -325,7 +325,9 @@ def _render_marker_package(lines, pkg_key, pkg, packages, repo_map, sdist_map, r
 
     # Compute the sdist build target (if available) for fallback when no wheel matches.
     sdist_target = None
-    if sdist_file and not pkg.get("build_target"):
+    if pkg.get("build_target"):
+        sdist_target = pkg["build_target"]
+    elif sdist_file:
         sdist_file_key = sdist_file.get("key")
         if sdist_file_key:
             sdist_repo_name = "{}_sdist_{}".format(rctx_name, _sanitize_name(pkg_key))
@@ -334,6 +336,16 @@ def _render_marker_package(lines, pkg_key, pkg, packages, repo_map, sdist_map, r
     # Wheel chooser
     if has_wheel_candidates:
         _render_marker_wheel_chooser(lines, pkg_key, pkg, repo_map, sdist_map, rctx_name, sdist_target = sdist_target)
+    else:
+        # No wheel candidates, alias directly to sdist_target or no_match_error
+        target = sdist_target if sdist_target else "@rules_pycross//pycross/private:no_match_error"
+        lines.extend([
+            _ind("native.alias("),
+            _ind('name = "_wheel_{}",'.format(pkg_key), 2),
+            _ind('actual = "{}",'.format(target), 2),
+            _ind(")"),
+            "",
+        ])
 
     # Library
     lib_name = pkg_key

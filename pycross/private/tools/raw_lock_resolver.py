@@ -222,19 +222,28 @@ class PackageResolver:
 
         self._marker_deps = self._build_marker_dependencies(package, annotations.ignore_dependencies, context)
 
+        # Build wheel candidates from all available wheel files.
+        self._wheel_candidates, self._wheel_candidate_files = self._build_wheel_candidates(package, context)
+
         # Find sdist file directly from package files.
         sdist_file_key = None
-        if context.always_include_sdist or annotations.always_build:
-            for file in package.files:
-                if file.is_sdist:
-                    sdist_file_key = file.key
-                    self.uses_sdist = True
-                    break
+        self._sdist_file_obj = None
+        for file in package.files:
+            if file.is_sdist:
+                sdist_file_key = file.key
+                self._sdist_file_obj = file
+                break
 
         self.sdist_file = FileReference(key=sdist_file_key) if sdist_file_key else None
 
-        # Build wheel candidates from all available wheel files.
-        self._wheel_candidates, self._wheel_candidate_files = self._build_wheel_candidates(package, context)
+        if context.always_include_sdist or annotations.always_build:
+            if self.sdist_file:
+                self.uses_sdist = True
+        elif not self._wheel_candidates:
+            if self.sdist_file:
+                self.uses_sdist = True
+            else:
+                raise Exception(f"Package {self.key} has no compatible wheels and no sdist found.")
 
     @cached_property
     def all_dependency_keys(self) -> Set[PackageKey]:
@@ -767,6 +776,9 @@ def resolve(args: Any) -> ResolvedLockSet:
         # Wheel candidates include ALL available wheels.  The wheel chooser
         # picks at analysis time, so every candidate must have a repo entry.
         repos.update(package_target._wheel_candidate_files)
+        # Also include the sdist file if it exists.
+        if package_target.sdist_file and package_target._sdist_file_obj:
+            repos[package_target.sdist_file.key] = package_target._sdist_file_obj
 
     repos = dict(sorted(repos.items()))
 
