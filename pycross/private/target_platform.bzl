@@ -1,8 +1,7 @@
 """Supported tags rule and provider."""
 
-load("@bazel_skylib//rules:common_settings.bzl", "BuildSettingInfo")
 load("//pycross/private/pypackaging/tags:tags.bzl", "get_supported")
-load(":pep508_marker_values.bzl", "PYTHON_TOOLCHAIN_TYPE", "collect_markers", "marker_value_attrs")
+load(":pep508_marker_values.bzl", "PYTHON_TOOLCHAIN_TYPE", "collect_markers", "flag_value", "marker_value_attrs")
 
 SupportedTagsInfo = provider(
     doc = "Provides a list of supported PEP 425 tags for the current environment.",
@@ -10,14 +9,6 @@ SupportedTagsInfo = provider(
         "tags": "List of tag strings, ordered by preference (most preferred first).",
     },
 )
-
-def _flag_value(target):
-    """Read a flag value from either FeatureFlagInfo or BuildSettingInfo."""
-    if config_common.FeatureFlagInfo in target:
-        return target[config_common.FeatureFlagInfo].value
-    if BuildSettingInfo in target:
-        return target[BuildSettingInfo].value
-    return ""
 
 def _pycross_supported_tags_impl(ctx):
     markers = collect_markers(ctx)
@@ -62,19 +53,19 @@ def _pycross_supported_tags_impl(ctx):
 
         if sys_platform == "linux":
             if ctx.attr.libc == "glibc":
-                max_glibc = _flag_value(ctx.attr._max_glibc_version) or "2.28"
+                max_glibc = flag_value(ctx.attr._max_glibc_version) or "2.28"
                 version = max_glibc.split(".")
                 minor = version[1] if len(version) > 1 else "17"
                 platforms.append("manylinux_{}_{}_{}".format(version[0], minor, arch))
             elif ctx.attr.libc == "musl":
-                max_musl = _flag_value(ctx.attr._max_musl_version) or "1.2"
+                max_musl = flag_value(ctx.attr._max_musl_version) or "1.2"
                 version = max_musl.split(".")
                 minor = version[1] if len(version) > 1 else "2"
                 platforms.append("musllinux_{}_{}_{}".format(version[0], minor, arch))
             else:
                 platforms.append("linux_" + arch)
         elif sys_platform == "darwin":
-            macos_ver = _flag_value(ctx.attr._max_macos_version) or markers["platform_version"] or "15.0"
+            macos_ver = flag_value(ctx.attr._max_macos_version) or markers["platform_version"] or "15.0"
             version = macos_ver.split(".")
             major = version[0]
             minor = version[1] if len(version) > 1 else "0"

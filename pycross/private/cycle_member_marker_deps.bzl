@@ -40,7 +40,7 @@ def _compute_reachability_groups(member, other_members, edges):
     Args:
         member: The current cycle member (source for reachability).
         other_members: List of other member keys in the cycle.
-        edges: Parsed edge dict: {node: [{dep, marker_ast?}, ...], ...}.
+        edges: Parsed edge dict: {node: [{dep, marker?}, ...], ...}.
 
     Returns:
         A list of (representative, group_members) tuples, where
@@ -60,7 +60,7 @@ def _compute_reachability_groups(member, other_members, edges):
             dep = edge["dep"]
             if dep not in members_set:
                 continue
-            has_marker = bool(edge.get("marker_ast"))
+            has_marker = bool(edge.get("marker"))
             if dep not in inbound:
                 inbound[dep] = []
             inbound[dep].append((src, has_marker))
@@ -133,7 +133,7 @@ def pycross_cycle_member_marker_deps(
         raw_name: The raw package target name (e.g. "_raw_pkg@1.0").
         member: The package key of this cycle member.
         members: List of all package keys in the cycle group.
-        edges: JSON-encoded edge map: {node: [{dep, marker_ast?}, ...], ...}.
+        edges: JSON-encoded edge map: {node: [{dep, marker?}, ...], ...}.
         **kwargs: Marker value attrs (sys_platform, os_name, etc.) passed
                   through to pycross_cycle_dep_needed.
     """

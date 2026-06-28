@@ -37,7 +37,6 @@ from pycross.private.tools.lock_model import ResolvedLockSet
 from pycross.private.tools.lock_model import ResolvedPackage
 from pycross.private.tools.lock_model import WheelCandidate
 from pycross.private.tools.lock_model import is_wheel
-from pycross.private.tools.lock_model import marker_to_ast
 from pycross.private.tools.lock_model import package_canonical_name
 
 EXTRA_PATTERN = re.compile(r"extra\s*==\s*['\"]([^'\"]+)['\"]")
@@ -317,12 +316,10 @@ class PackageResolver:
                 # Strip extra markers — those are handled by virtual extra nodes.
                 marker_str = _strip_extra_markers(marker_str)
 
-            marker_ast = marker_to_ast(marker_str) if marker_str else None
             result.append(
                 MarkerDependency(
                     key=dep.key,
                     marker=marker_str if marker_str else None,
-                    marker_ast=marker_ast,
                 )
             )
 

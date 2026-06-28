@@ -122,7 +122,7 @@ def _build_marker_cycle_edges_json(scc, packages):
     """Builds the JSON-encoded in-cycle edge map for marker mode.
 
     Returns a JSON string with format:
-      {"pkg": [{"dep": "dep_key", "marker_ast": {...}}, ...], ...}
+      {"pkg": [{"dep": "dep_key", "marker": "..."}, ...], ...}
     """
     scc_set = {k: True for k in scc}
     edges = {}

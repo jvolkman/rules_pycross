@@ -72,8 +72,15 @@ FREETHREADED_VALUES = {
 
 PYTHON_TOOLCHAIN_TYPE = Label("@rules_python//python:toolchain_type")
 
-def _flag_value(target):
-    """Read a flag value from either FeatureFlagInfo or BuildSettingInfo."""
+def flag_value(target):
+    """Read a flag value from either FeatureFlagInfo or BuildSettingInfo.
+
+    Args:
+        target: A target providing FeatureFlagInfo or BuildSettingInfo.
+
+    Returns:
+        The string value of the flag, or empty string if neither provider is found.
+    """
     if config_common.FeatureFlagInfo in target:
         return target[config_common.FeatureFlagInfo].value
     if BuildSettingInfo in target:
@@ -159,12 +166,12 @@ def collect_markers(ctx):
     """
 
     # 1. Platform markers (Direct attr or fallback target)
-    os_name = ctx.attr.os_name or _flag_value(ctx.attr._os_name_target)
-    sys_platform = ctx.attr.sys_platform or _flag_value(ctx.attr._sys_platform_target)
-    platform_machine = ctx.attr.platform_machine or _flag_value(ctx.attr._platform_machine_target)
-    platform_system = ctx.attr.platform_system or _flag_value(ctx.attr._platform_system_target)
-    platform_release = ctx.attr.platform_release or _flag_value(ctx.attr._platform_release_target)
-    platform_version = ctx.attr.platform_version or _flag_value(ctx.attr._platform_version_target)
+    os_name = ctx.attr.os_name or flag_value(ctx.attr._os_name_target)
+    sys_platform = ctx.attr.sys_platform or flag_value(ctx.attr._sys_platform_target)
+    platform_machine = ctx.attr.platform_machine or flag_value(ctx.attr._platform_machine_target)
+    platform_system = ctx.attr.platform_system or flag_value(ctx.attr._platform_system_target)
+    platform_release = ctx.attr.platform_release or flag_value(ctx.attr._platform_release_target)
+    platform_version = ctx.attr.platform_version or flag_value(ctx.attr._platform_version_target)
 
     # 2. Python version markers (Direct attr, Toolchain, or fallback target)
     python_version = ctx.attr.python_version
@@ -196,15 +203,15 @@ def collect_markers(ctx):
 
     # Fall back to target flags.
     if not python_version:
-        python_version = _flag_value(ctx.attr._python_version_target)
+        python_version = flag_value(ctx.attr._python_version_target)
     if not python_full_version:
-        python_full_version = _flag_value(ctx.attr._python_full_version_target)
+        python_full_version = flag_value(ctx.attr._python_full_version_target)
     if not implementation_name:
-        implementation_name = _flag_value(ctx.attr._implementation_name_target)
+        implementation_name = flag_value(ctx.attr._implementation_name_target)
     if not implementation_version:
-        implementation_version = _flag_value(ctx.attr._implementation_version_target)
+        implementation_version = flag_value(ctx.attr._implementation_version_target)
     if not platform_python_implementation:
-        platform_python_implementation = _flag_value(ctx.attr._platform_python_implementation_target)
+        platform_python_implementation = flag_value(ctx.attr._platform_python_implementation_target)
 
     # Defaults (matching rules_python's pep508_env.bzl behavior) if still empty.
     if not implementation_name:

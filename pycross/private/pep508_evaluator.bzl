@@ -1,20 +1,12 @@
 """PEP 508 marker expression evaluator rule.
 
-Evaluates a pre-parsed PEP 508 marker expression at Bazel analysis time
+Evaluates a PEP 508 marker expression at Bazel analysis time
 and returns a config_common.FeatureFlagInfo with value "true" or "false".
 
-The expression is supplied as a JSON-encoded tree.  Each node is one of:
+The expression is supplied as a raw PEP 508 marker string, e.g.:
+    sys_platform == 'linux' and python_version >= '3.10'
 
-  Comparison:
-    {"op": "==", "lhs": {"type": "marker", "value": "sys_platform"},
-                 "rhs": {"type": "string", "value": "linux"}}
-
-  Boolean AND / OR:
-    {"op": "and", "lhs": <expr>, "rhs": <expr>}
-    {"op": "or",  "lhs": <expr>, "rhs": <expr>}
-
-Supported comparison operators: ==, !=, >=, <=, >, <, in, not in.
-Version operators (>=, <=, >, <) split on '.' and compare numerically.
+Parsing and evaluation are handled by the pypackaging markers library.
 """
 
 load("//pycross/private/pypackaging/markers:markers.bzl", "markers")

@@ -310,6 +310,85 @@ def _test_cycle_self_reachable(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
     analysis_test(name = name, target = name + "_subject", impl = _test_cycle_self_reachable_impl)
 
+# ── Test: compound (multi) tags match individual supported tags ───────
+
+def _test_wheel_compound_tags_impl(env, _target):
+    candidates = [
+        {
+            "filename": "numpy-1.26.4-cp310.cp311-cp310.cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl",
+            "python_tag": "cp310.cp311",
+            "abi_tag": "cp310.cp311",
+            "platform_tag": "manylinux_2_17_x86_64.manylinux2014_x86_64",
+        },
+    ]
+
+    # cp311 is in the compound python and abi tags; manylinux_2_17_x86_64 is in the compound platform tag
+    best1 = select_best_wheel(candidates, ["cp311-cp311-manylinux_2_17_x86_64"])
+    if best1 == None:
+        env.fail("Expected compound tag match for cp311-cp311-manylinux_2_17_x86_64")
+    elif best1["filename"] != candidates[0]["filename"]:
+        env.fail("Expected numpy compound wheel, got " + best1["filename"])
+
+    # cp310 is in the compound python and abi tags; manylinux2014_x86_64 is in the compound platform tag
+    best2 = select_best_wheel(candidates, ["cp310-cp310-manylinux2014_x86_64"])
+    if best2 == None:
+        env.fail("Expected compound tag match for cp310-cp310-manylinux2014_x86_64")
+    elif best2["filename"] != candidates[0]["filename"]:
+        env.fail("Expected numpy compound wheel, got " + best2["filename"])
+
+def _test_wheel_compound_tags(name):
+    util.helper_target(
+        native.filegroup,
+        name = name + "_subject",
+    )
+    analysis_test(
+        name = name,
+        target = name + "_subject",
+        impl = _test_wheel_compound_tags_impl,
+    )
+
+# ── Test: multi-hop marker-gated cycle reachability ──────────────────
+
+_WIN_MARKERS = {
+    "os_name": "nt",
+    "sys_platform": "win32",
+    "platform_machine": "x86_64",
+    "platform_system": "Windows",
+    "platform_release": "",
+    "platform_version": "",
+    "python_version": "3.11",
+    "python_full_version": "3.11.0",
+    "implementation_name": "cpython",
+    "implementation_version": "3.11.0",
+    "platform_python_implementation": "CPython",
+}
+
+_MULTI_HOP_EDGES = {
+    "a@1.0": [
+        {"dep": "b@1.0", "marker": "sys_platform == 'linux'"},
+    ],
+    "b@1.0": [
+        {"dep": "c@1.0", "marker": "sys_platform == 'linux'"},
+    ],
+    "c@1.0": [
+        {"dep": "a@1.0"},
+    ],
+}
+
+# buildifier: disable=unused-variable
+def _test_cycle_multi_hop_marker_impl(env, target):
+    """c@1.0 is reachable from a@1.0 on linux (both gates pass), but not on windows."""
+
+    # On linux, both marker gates pass so c is reachable
+    env.expect.that_bool(is_reachable(_MULTI_HOP_EDGES, "a@1.0", "c@1.0", _LINUX_MARKERS)).equals(True)
+
+    # On windows, the first gate blocks so c is NOT reachable
+    env.expect.that_bool(is_reachable(_MULTI_HOP_EDGES, "a@1.0", "c@1.0", _WIN_MARKERS)).equals(False)
+
+def _test_cycle_multi_hop_marker(name):
+    util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
+    analysis_test(name = name, target = name + "_subject", impl = _test_cycle_multi_hop_marker_impl)
+
 # ============================================================================
 # Test suite
 # ============================================================================
@@ -323,10 +402,12 @@ def pep508_test_suite(name):
             _test_wheel_fallback_any,
             _test_wheel_no_match,
             _test_wheel_abi3,
+            _test_wheel_compound_tags,
             _test_evaluator_rule,
             _test_chooser_rule,
             _test_cycle_reachable,
             _test_cycle_marker_gated,
             _test_cycle_self_reachable,
+            _test_cycle_multi_hop_marker,
         ],
     )

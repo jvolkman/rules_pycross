@@ -275,7 +275,7 @@ config_setting, then gates all members of the group behind that check.
 | <a id="pycross_cycle_member_marker_deps-raw_name"></a>raw_name |  The raw package target name (e.g. "_raw_pkg@1.0").   |  none |
 | <a id="pycross_cycle_member_marker_deps-member"></a>member |  The package key of this cycle member.   |  none |
 | <a id="pycross_cycle_member_marker_deps-members"></a>members |  List of all package keys in the cycle group.   |  none |
-| <a id="pycross_cycle_member_marker_deps-edges"></a>edges |  JSON-encoded edge map: {node: [{dep, marker_ast?}, ...], ...}.   |  none |
+| <a id="pycross_cycle_member_marker_deps-edges"></a>edges |  JSON-encoded edge map: {node: [{dep, marker?}, ...], ...}.   |  none |
 | <a id="pycross_cycle_member_marker_deps-kwargs"></a>kwargs |  Marker value attrs (sys_platform, os_name, etc.) passed through to pycross_cycle_dep_needed.   |  none |
 
 

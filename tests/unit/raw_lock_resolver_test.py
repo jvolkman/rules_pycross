@@ -468,6 +468,81 @@ class RawLockResolverTest(unittest.TestCase):
         self.assertEqual(resolved.pre_build_patches, ["@//:pre.patch"])
         self.assertEqual(resolved.post_install_patches, ["@//:post.patch"])
 
+    def test_multi_tag_wheel_candidates(self):
+        """A wheel with compound (multi-value) python/abi/platform tags is parsed correctly."""
+        pkg = make_pkg(
+            "numpy",
+            "1.26.4",
+            [make_file("numpy-1.26.4-cp310.cp311-cp310.cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl")],
+        )
+        ctx = GenerationContext(
+            local_wheels={},
+            remote_wheels={},
+            always_include_sdist=False,
+        )
+        resolver = PackageResolver(pkg, ctx, None, [])
+        resolved = resolver.to_resolved_package()
+
+        self.assertEqual(len(resolved.wheel_candidates), 1)
+        candidate = resolved.wheel_candidates[0]
+        self.assertEqual(candidate.python_tag, "cp310.cp311")
+        self.assertEqual(candidate.abi_tag, "cp310.cp311")
+        self.assertEqual(candidate.platform_tag, "manylinux2014_x86_64.manylinux_2_17_x86_64")
+
+    def test_sdist_only_package(self):
+        """A package with only a .tar.gz file and no wheels uses sdist."""
+        pkg = make_pkg("mylib", "1.0", [make_file("mylib-1.0.tar.gz")])
+        ctx = GenerationContext(
+            local_wheels={},
+            remote_wheels={},
+            always_include_sdist=False,
+        )
+        resolver = PackageResolver(pkg, ctx, None, [])
+        resolved = resolver.to_resolved_package()
+
+        self.assertTrue(resolver.uses_sdist)
+        self.assertEqual(len(resolved.wheel_candidates), 0)
+        self.assertIsNotNone(resolved.sdist_file)
+
+    def test_no_files_raises_error(self):
+        """A package with no files is rejected at the model level."""
+        with self.assertRaises(AssertionError):
+            make_pkg("mylib", "1.0", [])
+
+    def test_disallow_builds_raises_when_sdist_used(self):
+        """With disallow_builds=True, resolve() raises if any package uses sdist."""
+        import os
+        import tempfile
+        from unittest.mock import MagicMock
+
+        pkg = make_pkg("mylib", "1.0", [make_file("mylib-1.0.tar.gz")])
+        lock_model = RawLockSet(
+            python_versions=SpecifierSet(">=3.8"),
+            packages={pkg.key: pkg},
+            pins={canonicalize_name("mylib"): {"": PackageKey.from_parts("mylib", Version("1.0"))}},
+        )
+
+        td = tempfile.TemporaryDirectory()
+        try:
+            lock_model_file = os.path.join(td.name, "lock.json")
+            with open(lock_model_file, "w") as f:
+                f.write(lock_model.to_json())
+
+            args = MagicMock()
+            args.lock_model_file = lock_model_file
+            args.local_wheel = []
+            args.remote_wheel = []
+            args.always_include_sdist = False
+            args.annotations_file = None
+            args.default_build_dependencies = []
+            args.disallow_builds = True
+            args.default_alias_single_version = False
+
+            with self.assertRaises(Exception):
+                resolve(args)
+        finally:
+            td.cleanup()
+
     # Edge Cases (python_version_incompatibility test removed — check_package_compatibility no longer exists)
 
 

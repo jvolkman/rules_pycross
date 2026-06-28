@@ -11,13 +11,13 @@ Edge format (JSON):
   {
     "alpha@1.0": [
       {"dep": "beta@2.0"},
-      {"dep": "gamma@1.0", "marker_ast": {"op": "==", ...}}
+      {"dep": "gamma@1.0", "marker": "sys_platform == 'linux'"}
     ],
     ...
   }
 
-Each edge is either unconditional (no marker_ast) or conditional
-(marker_ast is evaluated against the current platform).
+Each edge is either unconditional (no marker) or conditional
+(marker is evaluated against the current platform).
 """
 
 load("//pycross/private:pep508_marker_values.bzl", "PYTHON_TOOLCHAIN_TYPE", "collect_markers", "marker_value_attrs")
@@ -51,7 +51,7 @@ def is_reachable(edges, source, target, markers):
     """BFS to determine if `target` is reachable from `source`.
 
     Args:
-        edges: Dict mapping node -> list of {"dep": str, "marker_ast": optional dict}.
+        edges: Dict mapping node -> list of {"dep": str, "marker": optional str}.
         source: Starting node name.
         target: Target node name to search for.
         markers: Dict of PEP 508 marker values for the current platform.
@@ -103,7 +103,7 @@ _pycross_cycle_dep_needed = rule(
         ),
         "edges": attr.string(
             mandatory = True,
-            doc = "JSON-encoded edge map: {node: [{dep, marker_ast?}, ...]}.",
+            doc = "JSON-encoded edge map: {node: [{dep, marker?}, ...]}.",
         ),
     } | marker_value_attrs(),
     provides = [config_common.FeatureFlagInfo],
