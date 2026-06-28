@@ -58,9 +58,9 @@ pycross.configure_toolchains(
         "3.11",
         "3.12",
     ],
-    # Set default target environment constraints
+    # Set platform version constraints
     glibc_version = "2.28",
-    macos_version = "14.0",
+    macos_version = "15.0",
     musl_version = "1.2",
 )
 ```
@@ -226,9 +226,10 @@ lock_import.import_uv(
 |---|---|---|
 | `pep517_build` | `hatchling`, `flit_core`, `pdm.backend`, `poetry.core.masonry.api` | Pure-Python packages (default fallback) |
 | `setuptools_build` | `setuptools.build_meta` | C extension packages using setuptools |
+| `setuptools_rust_build` | `setuptools.build_meta` (when `setuptools-rust` is in `build-system.requires`) | Rust+Python packages using setuptools-rust |
 | `meson_build` | `mesonpy` | Scientific packages (numpy, pandas, etc.) |
 | `cmake_build` | `scikit_build_core.build`, `skbuild` | Packages using CMake/scikit-build |
-| `maturin_build` | `maturin` | Rust+Python packages |
+| `maturin_build` | `maturin` | Rust+Python packages via maturin |
 
 ### Forcing a Package to Build from Source
 
