@@ -53,11 +53,14 @@ def _pycross_supported_tags_impl(ctx):
 
         if sys_platform == "linux":
             if ctx.attr.libc == "glibc":
+                # Defensive fallback; should not be needed since the string_flag
+                # default is populated from configure_toolchains().
                 max_glibc = flag_value(ctx.attr._max_glibc_version) or "2.28"
                 version = max_glibc.split(".")
                 minor = version[1] if len(version) > 1 else "17"
                 platforms.append("manylinux_{}_{}_{}".format(version[0], minor, arch))
             elif ctx.attr.libc == "musl":
+                # Defensive fallback; see comment above.
                 max_musl = flag_value(ctx.attr._max_musl_version) or "1.2"
                 version = max_musl.split(".")
                 minor = version[1] if len(version) > 1 else "2"
@@ -65,6 +68,7 @@ def _pycross_supported_tags_impl(ctx):
             else:
                 platforms.append("linux_" + arch)
         elif sys_platform == "darwin":
+            # Defensive fallback chain; flag default comes from configure_toolchains().
             macos_ver = flag_value(ctx.attr._max_macos_version) or markers["platform_version"] or "15.0"
             version = macos_ver.split(".")
             major = version[0]

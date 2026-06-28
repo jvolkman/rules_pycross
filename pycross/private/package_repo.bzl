@@ -374,8 +374,12 @@ package_repo = repository_rule(
     implementation = _package_repo_impl,
     attrs = {
         "resolved_lock_file": attr.label(mandatory = True),
-        "repo_map": attr.string_dict(),
-        "sdist_map": attr.string_dict(),
+        "repo_map": attr.string_dict(
+            doc = "Maps file keys to their repository label strings (e.g. 'foo_wheel' -> '@pypi_foo//:wheel').",
+        ),
+        "sdist_map": attr.string_dict(
+            doc = "Maps sdist file keys to their built wheel label strings (e.g. 'foo_sdist' -> '@foo_sdist_repo//:wheel').",
+        ),
         "backend_configs": attr.string_dict(
             doc = "Maps pycross rule names to JSON-encoded config dicts with 'rule_bzl' and 'tool_packages'.",
         ),

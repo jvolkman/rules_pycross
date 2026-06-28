@@ -240,7 +240,6 @@ def _lock_repos_impl(module_ctx):
             # Invoke the generic sdist repo rule. Hooks will be applied dynamically inside it.
             pycross_sdist_repo(**sdist_repo_attrs)
 
-
         # Save per-repo data for workspace processing
         per_repo_data[repo_name] = struct(
             repo_map = repo_remote_files,

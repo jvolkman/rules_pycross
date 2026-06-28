@@ -497,6 +497,72 @@ def _test_marker_deps_rendering(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
     analysis_test(name = name, target = name + "_subject", impl = _test_marker_deps_rendering_impl)
 
+# buildifier: disable=unused-variable
+def _test_multi_platform_repo_map_impl(env, target):
+    """Verify multi-platform repo_map entries render correctly as string references."""
+    lock = {
+        "packages": {
+            "crypto@1.0": {
+                "wheel_candidates": [
+                    {
+                        "filename": "crypto-1.0-cp311-cp311-manylinux_2_17_x86_64.whl",
+                        "file_reference": {"key": "crypto_linux_x86"},
+                        "python_tag": "cp311",
+                        "abi_tag": "cp311",
+                        "platform_tag": "manylinux_2_17_x86_64",
+                    },
+                    {
+                        "filename": "crypto-1.0-cp311-cp311-win_amd64.whl",
+                        "file_reference": {"key": "crypto_win"},
+                        "python_tag": "cp311",
+                        "abi_tag": "cp311",
+                        "platform_tag": "win_amd64",
+                    },
+                    {
+                        "filename": "crypto-1.0-cp311-cp311-win32.whl",
+                        "file_reference": {"key": "crypto_win32"},
+                        "python_tag": "cp311",
+                        "abi_tag": "cp311",
+                        "platform_tag": "win32",
+                    },
+                    {
+                        "filename": "crypto-1.0-cp311-cp311-macosx_11_0_arm64.whl",
+                        "file_reference": {"key": "crypto_macos"},
+                        "python_tag": "cp311",
+                        "abi_tag": "cp311",
+                        "platform_tag": "macosx_11_0_arm64",
+                    },
+                ],
+            },
+        },
+    }
+
+    # repo_map uses string keys (file_key -> label), not label keys.
+    # This mirrors the fix in ea1480c where we switched from
+    # label_keyed_string_dict to string_dict.
+    repo_map = {
+        "crypto_linux_x86": "@pypi_crypto_linux//:wheel",
+        "crypto_win": "@pypi_crypto_win//:wheel",
+        "crypto_win32": "@pypi_crypto_win32//:wheel",
+        "crypto_macos": "@pypi_crypto_macos//:wheel",
+    }
+    res = render_lock_bzl(lock, repo_map, rctx_name = "my_rctx")
+
+    # All platform-specific labels should appear as string references
+    # in the rendered output.
+    env.expect.that_bool("@pypi_crypto_linux//:wheel" in res).equals(True)
+    env.expect.that_bool("@pypi_crypto_win//:wheel" in res).equals(True)
+    env.expect.that_bool("@pypi_crypto_win32//:wheel" in res).equals(True)
+    env.expect.that_bool("@pypi_crypto_macos//:wheel" in res).equals(True)
+
+    # Should have a wheel chooser for the multi-platform package
+    env.expect.that_bool("pycross_wheel_chooser(" in res).equals(True)
+    env.expect.that_bool("_wheel_chooser_crypto@1.0" in res).equals(True)
+
+def _test_multi_platform_repo_map(name):
+    util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
+    analysis_test(name = name, target = name + "_subject", impl = _test_multi_platform_repo_map_impl)
+
 def resolved_lock_renderer_test_suite(name):
     test_suite(
         name = name,
@@ -508,5 +574,6 @@ def resolved_lock_renderer_test_suite(name):
             _test_lock_bzl_format,
             _test_no_cycles_no_cycle_targets,
             _test_marker_deps_rendering,
+            _test_multi_platform_repo_map,
         ],
     )

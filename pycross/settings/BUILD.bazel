@@ -1,6 +1,6 @@
 load("@bazel_skylib//rules:common_settings.bzl", "string_flag")
-load("//pycross/private/build:resource_sets.bzl", _create_settings = "create_resource_set_settings")
 load("@rules_pycross_internal_config//:defaults.bzl", "glibc_version", "macos_version", "musl_version")
+load("//pycross/private/build:resource_sets.bzl", _create_settings = "create_resource_set_settings")
 
 package(default_visibility = ["//visibility:public"])
 
