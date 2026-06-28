@@ -1,0 +1,204 @@
+version = 1
+revision = 3
+requires-python = ">=3.10"
+resolution-markers = [
+    "python_full_version >= '3.11'",
+    "python_full_version < '3.11'",
+]
+
+[[package]]
+name = "stress-airflow"
+version = "1.0.0"
+source = { path = "stress_airflow-1.0.0-py3-none-any.whl" }
+dependencies = [
+    { name = "stress-airflow-core" },
+    { name = "stress-task-sdk" },
+]
+wheels = [
+    { filename = "stress_airflow-1.0.0-py3-none-any.whl", hash = "sha256:d8e28196e9aa3532b3f5f56a71b778dc0e4fa80d78c7e3478c3ab25e855ad4cd" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "stress-airflow-core" },
+    { name = "stress-task-sdk" },
+]
+
+[[package]]
+name = "stress-airflow-core"
+version = "1.0.0"
+source = { path = "stress_airflow_core-1.0.0-py3-none-any.whl" }
+dependencies = [
+    { name = "stress-jinja2" },
+    { name = "stress-packaging" },
+    { name = "stress-provider-compat" },
+    { name = "stress-provider-io" },
+    { name = "stress-provider-smtp" },
+    { name = "stress-provider-sql" },
+    { name = "stress-provider-standard" },
+    { name = "stress-task-sdk" },
+]
+wheels = [
+    { filename = "stress_airflow_core-1.0.0-py3-none-any.whl", hash = "sha256:396a2a27b928bb0f938d39436730bb6964c5e4f808e12ea510c3fce04d3b4cda" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "stress-jinja2" },
+    { name = "stress-packaging" },
+    { name = "stress-provider-compat" },
+    { name = "stress-provider-io" },
+    { name = "stress-provider-smtp" },
+    { name = "stress-provider-sql" },
+    { name = "stress-provider-standard" },
+    { name = "stress-task-sdk" },
+]
+
+[[package]]
+name = "stress-attrs"
+version = "1.0.0"
+source = { path = "stress_attrs-1.0.0-py3-none-any.whl" }
+wheels = [
+    { filename = "stress_attrs-1.0.0-py3-none-any.whl", hash = "sha256:656fd14742bdef45bff05424b572cd95ef4689f04fa869a5e0d80b343e0c0d6d" },
+]
+
+[[package]]
+name = "stress-jinja2"
+version = "1.0.0"
+source = { path = "stress_jinja2-1.0.0-py3-none-any.whl" }
+wheels = [
+    { filename = "stress_jinja2-1.0.0-py3-none-any.whl", hash = "sha256:36ab971bbf8b34f03bbf6e1b11360fb8ff55dcb474eb007137e2a59055104a82" },
+]
+
+[[package]]
+name = "stress-packaging"
+version = "1.0.0"
+source = { path = "stress_packaging-1.0.0-py3-none-any.whl" }
+wheels = [
+    { filename = "stress_packaging-1.0.0-py3-none-any.whl", hash = "sha256:059d555aa7067dece916b176fdbdb79ffe9164aab02629051da5555bd6026114" },
+]
+
+[[package]]
+name = "stress-provider-compat"
+version = "1.0.0"
+source = { path = "stress_provider_compat-1.0.0-py3-none-any.whl" }
+dependencies = [
+    { name = "stress-airflow" },
+]
+wheels = [
+    { filename = "stress_provider_compat-1.0.0-py3-none-any.whl", hash = "sha256:7ff95d97dbe5f21913f44649075752bb0a6f4bca3a464e27eb210b4637f3e47a" },
+]
+
+[package.metadata]
+requires-dist = [{ name = "stress-airflow" }]
+
+[[package]]
+name = "stress-provider-io"
+version = "1.0.0"
+source = { path = "stress_provider_io-1.0.0-py3-none-any.whl" }
+dependencies = [
+    { name = "stress-airflow", marker = "python_full_version >= '3.11'" },
+]
+wheels = [
+    { filename = "stress_provider_io-1.0.0-py3-none-any.whl", hash = "sha256:7ca6f24f7f1661a295cab397c0fd3ea4797ffe50626a1ba062e2999e496426f8" },
+]
+
+[package.metadata]
+requires-dist = [{ name = "stress-airflow", marker = "python_full_version >= '3.11'" }]
+
+[[package]]
+name = "stress-provider-smtp"
+version = "1.0.0"
+source = { path = "stress_provider_smtp-1.0.0-py3-none-any.whl" }
+dependencies = [
+    { name = "stress-airflow", marker = "sys_platform == 'win32'" },
+    { name = "stress-provider-compat" },
+]
+wheels = [
+    { filename = "stress_provider_smtp-1.0.0-py3-none-any.whl", hash = "sha256:425050b14141922334f5059e47d6815292ba86066b4d33b3b18f9568e3fb7b7f" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "stress-airflow", marker = "sys_platform == 'win32'" },
+    { name = "stress-provider-compat" },
+]
+
+[[package]]
+name = "stress-provider-sql"
+version = "1.0.0"
+source = { path = "stress_provider_sql-1.0.0-py3-none-any.whl" }
+dependencies = [
+    { name = "stress-airflow", marker = "sys_platform == 'linux'" },
+]
+wheels = [
+    { filename = "stress_provider_sql-1.0.0-py3-none-any.whl", hash = "sha256:a54f7df70ae99826e3977595dd09ab74e9b30bb471eef06d7cc2a4a786b11c89" },
+]
+
+[package.metadata]
+requires-dist = [{ name = "stress-airflow", marker = "sys_platform == 'linux'" }]
+
+[[package]]
+name = "stress-provider-standard"
+version = "1.0.0"
+source = { path = "stress_provider_standard-1.0.0-py3-none-any.whl" }
+dependencies = [
+    { name = "stress-airflow" },
+]
+wheels = [
+    { filename = "stress_provider_standard-1.0.0-py3-none-any.whl", hash = "sha256:404bda53d3e41bf70ca6dec8242d2ac869d17f8c972c2e6e2dbb5b75c3e83593" },
+]
+
+[package.metadata]
+requires-dist = [{ name = "stress-airflow" }]
+
+[[package]]
+name = "stress-task-sdk"
+version = "1.0.0"
+source = { path = "stress_task_sdk-1.0.0-py3-none-any.whl" }
+dependencies = [
+    { name = "stress-airflow-core" },
+    { name = "stress-attrs" },
+]
+wheels = [
+    { filename = "stress_task_sdk-1.0.0-py3-none-any.whl", hash = "sha256:1f9a8d2aa617c162bd909908ded05e2c59bb4f8e794f313c624719d8d111d80f" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "stress-airflow-core" },
+    { name = "stress-attrs" },
+]
+
+[[package]]
+name = "uv-cycle-stress-test"
+version = "0.1.0"
+source = { virtual = "." }
+dependencies = [
+    { name = "stress-airflow" },
+    { name = "stress-airflow-core" },
+    { name = "stress-attrs" },
+    { name = "stress-jinja2" },
+    { name = "stress-packaging" },
+    { name = "stress-provider-compat" },
+    { name = "stress-provider-io" },
+    { name = "stress-provider-smtp" },
+    { name = "stress-provider-sql" },
+    { name = "stress-provider-standard" },
+    { name = "stress-task-sdk" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "stress-airflow", path = "stress_airflow-1.0.0-py3-none-any.whl" },
+    { name = "stress-airflow-core", path = "stress_airflow_core-1.0.0-py3-none-any.whl" },
+    { name = "stress-attrs", path = "stress_attrs-1.0.0-py3-none-any.whl" },
+    { name = "stress-jinja2", path = "stress_jinja2-1.0.0-py3-none-any.whl" },
+    { name = "stress-packaging", path = "stress_packaging-1.0.0-py3-none-any.whl" },
+    { name = "stress-provider-compat", path = "stress_provider_compat-1.0.0-py3-none-any.whl" },
+    { name = "stress-provider-io", path = "stress_provider_io-1.0.0-py3-none-any.whl" },
+    { name = "stress-provider-smtp", path = "stress_provider_smtp-1.0.0-py3-none-any.whl" },
+    { name = "stress-provider-sql", path = "stress_provider_sql-1.0.0-py3-none-any.whl" },
+    { name = "stress-provider-standard", path = "stress_provider_standard-1.0.0-py3-none-any.whl" },
+    { name = "stress-task-sdk", path = "stress_task_sdk-1.0.0-py3-none-any.whl" },
+]

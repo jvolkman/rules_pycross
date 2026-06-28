@@ -1,0 +1,21 @@
+load("@rules_python//python:defs.bzl", "py_test")
+
+exports_files(glob(["*.whl"]))
+
+py_test(
+    name = "test_cycle_stress",
+    srcs = ["test_cycle_stress.py"],
+    deps = [
+        "@cycle_stress_lock//:stress-airflow",
+        "@cycle_stress_lock//:stress-airflow-core",
+        "@cycle_stress_lock//:stress-attrs",
+        "@cycle_stress_lock//:stress-jinja2",
+        "@cycle_stress_lock//:stress-packaging",
+        "@cycle_stress_lock//:stress-provider-compat",
+        "@cycle_stress_lock//:stress-provider-io",
+        "@cycle_stress_lock//:stress-provider-smtp",
+        "@cycle_stress_lock//:stress-provider-sql",
+        "@cycle_stress_lock//:stress-provider-standard",
+        "@cycle_stress_lock//:stress-task-sdk",
+    ],
+)
