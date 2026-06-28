@@ -7,7 +7,6 @@ dacite = "dacite@1.9.2"
 installer = "installer@1.0.0"
 packaging = "packaging@26.2"
 patch-ng = "patch-ng@1.19.1"
-pip = "pip@26.1.1"
 poetry-core = "poetry-core@2.4.0"
 repairwheel = "repairwheel@0.6.2"
 tomli-w = "tomli-w@1.1.0"
@@ -102,14 +101,6 @@ repo_name = "pypi_pefile_2024_8_26_py3_none_any_whl_76f8b485"
 url = "https://files.pythonhosted.org/packages/54/16/12b82f791c7f50ddec566873d5bdd245baa1491bac11d15ffb98aecc8f8b/pefile-2024.8.26-py3-none-any.whl"
 sha256 = "76f8b485dcd3b1bb8166f1128d395fa3d87af26360c2358fb75b80019b957c6f"
 filename = "pefile-2024.8.26-py3-none-any.whl"
-
-[packages."pip@26.1.1"]
-name = "pip"
-version = "26.1.1"
-repo_name = "pypi_pip_26_1_1_py3_none_any_whl_99cb1c28"
-url = "https://files.pythonhosted.org/packages/3a/eb/fea4d1d51c49832120f7f285d07306db3960f423a2612c6057caf3e8196f/pip-26.1.1-py3-none-any.whl"
-sha256 = "99cb1c2899893b075ff56e4ed0af55669a955b49ad7fb8d8603ecdaf4ed653fb"
-filename = "pip-26.1.1-py3-none-any.whl"
 
 [packages."poetry-core@2.4.0"]
 name = "poetry-core"

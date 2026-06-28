@@ -11,7 +11,6 @@ core = [
     "installer==1.0.0",
     "packaging==26.2",
     "patch-ng==1.19.1",
-    "pip==26.1.1",
     "poetry-core==2.4.0",
     "tomli-w==1.1.0",
 ]

@@ -121,7 +121,6 @@ py_test(
         "//pycross/private/tools:lock_model",
         "//pycross/private/tools:raw_lock_resolver",
         "@rules_pycross_internal//deps:packaging",
-        "@rules_pycross_internal//deps:pip",
     ],
 )
 
