@@ -366,27 +366,11 @@ class PackageResolver:
             if source.file:
                 candidate_files[source.file.key] = source.file
 
-            # Extract original compound tags from the filename.
-            # parse_wheel_filename expands "py2.py3-none-any" into individual
-            # Tag(py2, none, any) and Tag(py3, none, any), but the wheel chooser
-            # needs the original compound form for correct matching.
-            # Filename format: {name}-{ver}(-{build})?-{python}-{abi}-{platform}.whl
-            stem = filename[:-4]  # strip .whl
-            parts = stem.split("-")
-            if len(parts) >= 3:
-                # Last three dash-separated parts are python, abi, platform.
-                python_tag = parts[-3]
-                abi_tag = parts[-2]
-                platform_tag = parts[-1]
-            else:
-                # Fallback to expanded tags.
-                tags_list = sorted(file_tags, key=lambda t: (str(t.interpreter), str(t.abi), str(t.platform)))
-                if not tags_list:
-                    continue
-                first_tag = tags_list[0]
-                python_tag = str(first_tag.interpreter)
-                abi_tag = str(first_tag.abi)
-                platform_tag = str(first_tag.platform)
+            # Reconstruct compound tags from the expanded set returned by parse_wheel_filename.
+            # The wheel chooser expects dot-separated strings containing all compatible tags for each dimension.
+            python_tag = ".".join(sorted(set(str(t.interpreter) for t in file_tags)))
+            abi_tag = ".".join(sorted(set(str(t.abi) for t in file_tags)))
+            platform_tag = ".".join(sorted(set(str(t.platform) for t in file_tags)))
 
             candidates.append(
                 WheelCandidate(
