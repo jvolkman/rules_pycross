@@ -58,10 +58,6 @@ REGISTER_TOOLCHAINS_ATTRS = dict(
 )
 
 RESOLVE_ATTRS = dict(
-    target_environments = attr.label_list(
-        doc = "A list of pycross_target_environment labels.",
-        allow_files = [".json"],
-    ),
     local_wheels = attr.label_list(
         doc = "A list of wheel files.",
         allow_files = [".whl"],
@@ -146,14 +142,12 @@ POETRY_IMPORT_ATTRS = dict(
     ),
 )
 
-def handle_resolve_attrs(attrs, environment_files_and_labels, local_wheel_names_and_labels):
+def handle_resolve_attrs(attrs, local_wheel_names_and_labels):
     """
     Parse resolve attrs and return a list of arguments.
 
     Args:
       attrs: ctx.attr or repository_ctx.attr
-      environment_files_and_labels: a list of 2-tuples, each containing an
-        environment file and its corresponding label.
       local_wheel_names_and_labels: a list of 2-tuples, each containing an
         wheel name and its corresponding label.
 
@@ -161,9 +155,6 @@ def handle_resolve_attrs(attrs, environment_files_and_labels, local_wheel_names_
       a list of arguments.
     """
     args = []
-
-    for env_file, env_label in environment_files_and_labels:
-        args.extend(["--target-environment", env_file, env_label])
 
     for remote_wheel_url, sha256 in attrs.remote_wheels.items():
         args.extend(["--remote-wheel", remote_wheel_url, sha256])
@@ -362,13 +353,6 @@ COMMON_IMPORT_ATTRS = dict(
     default_alias_single_version = attr.bool(
         doc = "Generate aliases for all packages that have a single version in the lock file.",
     ),
-    target_environments = attr.label_list(
-        # TODO: expand doc
-        doc = "A list of target environment descriptors.",
-        default = [
-            "@pycross_environments//:environments",
-        ],
-    ),
     local_wheels = attr.label_list(
         doc = "A list of local .whl files to consider when processing lock files.",
     ),
@@ -392,12 +376,6 @@ WORKSPACE_COMMON_ATTRS = dict(
     ),
     default_alias_single_version = attr.bool(
         doc = "Generate aliases for all packages that have a single version in the lock file.",
-    ),
-    target_environments = attr.label_list(
-        doc = "A list of target environment descriptors.",
-        default = [
-            "@pycross_environments//:environments",
-        ],
     ),
     local_wheels = attr.label_list(
         doc = "A list of local .whl files to consider when processing lock files.",

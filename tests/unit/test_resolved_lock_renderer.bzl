@@ -8,24 +8,27 @@ load("//pycross/private:resolved_lock_renderer.bzl", "render_lock_bzl")
 
 # buildifier: disable=unused-variable
 def _test_render_lock_impl(env, target):
-    """Verify basic rendering with environment_files (wheel selection via select)."""
+    """Verify basic rendering with wheel_candidates (wheel selection via pycross_wheel_chooser)."""
     lock = {
         "packages": {
             "foo@1.0": {
-                "environment_files": {
-                    "linux": {"key": "foo_wheel"},
-                    "mac": {"key": "foo_wheel_mac"},
-                },
+                "wheel_candidates": [
+                    {
+                        "filename": "foo-1.0-cp310-cp310-manylinux_2_17_x86_64.whl",
+                        "file_reference": {"key": "foo_wheel"},
+                        "python_tag": "cp310",
+                        "abi_tag": "cp310",
+                        "platform_tag": "manylinux_2_17_x86_64",
+                    },
+                ],
             },
         },
     }
-    repo_map = {"foo_wheel": "@my_repo//foo:wheel", "foo_wheel_mac": "@my_repo//foo:mac_wheel"}
+    repo_map = {"foo_wheel": "@my_repo//foo:wheel"}
     res = render_lock_bzl(lock, repo_map, "my_rctx")
 
     env.expect.that_bool("pycross_wheel_library(" in res).equals(True)
-    env.expect.that_bool("_wheel_foo@1.0" in res).equals(True)
-    env.expect.that_bool("select({" in res).equals(True)
-    env.expect.that_bool('":linux": "@my_repo//foo:wheel"' in res).equals(True)
+    env.expect.that_bool("pycross_wheel_chooser(" in res).equals(True)
 
 def _test_render_lock(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])

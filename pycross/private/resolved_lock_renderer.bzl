@@ -71,8 +71,6 @@ def _render_extras_aggregates(lines, packages):
             "",
         ])
 
-# ---- Marker-based rendering -------------------------------------------------
-
 def _collect_unique_markers(packages):
     """Collect all unique marker strings across packages, returning a deduped set."""
     markers = {}
@@ -299,35 +297,13 @@ def _render_marker_package(lines, pkg_key, pkg, packages, repo_map, sdist_map, r
         elif sdist_file.get("key"):
             sdist_label = repo_map.get(sdist_file["key"])
 
-    has_env_deps = bool(pkg.get("common_dependencies") or pkg.get("environment_dependencies"))
-    has_runtime_deps = has_marker_deps or has_env_deps
+    has_runtime_deps = has_marker_deps
 
     # Runtime deps
     if has_marker_deps:
         _render_marker_package_deps(lines, pkg_key_san, pkg, packages)
-    elif has_env_deps:
-        # Backwards compat: old lock JSON format with common_dependencies / environment_dependencies
-        lines.append(_ind("_{}_deps = [".format(pkg_key_san)))
-        for dep_key in sorted(pkg.get("common_dependencies", [])):
-            if _is_in_same_cycle(dep_key, pkg, packages):
-                continue
-            lines.append(_ind('":{}",'.format(dep_key), 2))
-        lines.append(_ind("]"))
 
-        if pkg.get("environment_dependencies"):
-            lines[-1] = lines[-1] + " + select({"
-            for env_name, deps in sorted(pkg.get("environment_dependencies").items()):
-                lines.append(_ind('":{env}": ['.format(env = env_name), 2))
-                for dep_key in sorted(deps):
-                    if _is_in_same_cycle(dep_key, pkg, packages):
-                        continue
-                    lines.append(_ind('":{}",'.format(dep_key), 3))
-                lines.append(_ind("],", 2))
-            lines.append(_ind('"//conditions:default": [],', 2))
-            lines.append(_ind("})", 1))
-        lines.append("")
-
-    if not (has_wheel_candidates or pkg.get("environment_files")) and "[" in pkg_key:
+    if not has_wheel_candidates and "[" in pkg_key:
         # Extra packages just wrap their dependencies
         lines.extend([
             _ind("py_library("),
@@ -356,27 +332,9 @@ def _render_marker_package(lines, pkg_key, pkg, packages, repo_map, sdist_map, r
             sdist_repo_name = "{}_sdist_{}".format(rctx_name, _sanitize_name(pkg_key))
             sdist_target = "@@{}//:wheel".format(sdist_repo_name)
 
-    # Wheel: use chooser if we have candidates, fall back to env-based select
+    # Wheel chooser
     if has_wheel_candidates:
         _render_marker_wheel_chooser(lines, pkg_key, pkg, repo_map, sdist_map, rctx_name, sdist_target = sdist_target)
-    elif pkg.get("environment_files"):
-        # Fall back to environment_files select (for packages with a single wheel per env)
-        lines.extend([
-            _ind("native.alias("),
-            _ind('name = "_wheel_{}",'.format(pkg_key), 2),
-        ])
-        lines.append(_ind("actual = select({", 2))
-        for env_name, env_ref in sorted(pkg.get("environment_files", {}).items()):
-            lines.append(_ind('":{env}": "{target}",'.format(
-                env = env_name,
-                target = _wheel_target(env_ref, sdist_file, pkg_key, pkg, repo_map, sdist_map, rctx_name),
-            ), 3))
-        lines.append(_ind('"//conditions:default": "@rules_pycross//pycross/private:no_match_error",', 3))
-        lines.extend([
-            _ind("}),", 2),
-            _ind(")"),
-            "",
-        ])
 
     # Library
     lib_name = pkg_key
@@ -498,28 +456,14 @@ def render_lock_bzl(lock, repo_map, sdist_map = None, rctx_name = ""):
         "",
     ])
 
-    # 1. Environment config_settings (backwards compat: only for lock JSONs
-    #    that use the old environment_files format without wheel_candidates).
-    environments = lock.get("environments", {})
-    if environments:
-        for env_name, env_ref in sorted(environments.items()):
-            if env_ref.get("config_setting_label"):
-                lines.extend([
-                    _ind("native.alias("),
-                    _ind('name = "{}",'.format(env_name), 2),
-                    _ind('actual = "{}",'.format(env_ref["config_setting_label"]), 2),
-                    _ind(")"),
-                    "",
-                ])
-
-    # 2. Marker evaluators (deduped)
+    # 1. Marker evaluators (deduped)
     unique_markers = _collect_unique_markers(packages)
     _render_marker_evaluators(lines, unique_markers)
 
-    # 3. Per-member cycle deps (marker-aware)
+    # 2. Per-member cycle deps (marker-aware)
     _render_marker_cycle_member_deps(lines, cycle_groups, packages)
 
-    # 4. Packages
+    # 3. Packages
     for pkg_key, pkg in sorted(packages.items()):
         _render_marker_package(lines, pkg_key, pkg, packages, repo_map, sdist_map, rctx_name)
 

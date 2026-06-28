@@ -1,6 +1,5 @@
 import hashlib
 import json
-import operator
 import os
 import re
 from argparse import ArgumentParser
@@ -18,7 +17,6 @@ from typing import Set
 from typing import Tuple
 from urllib.parse import urlparse
 
-from packaging.markers import Marker
 from packaging.markers import Marker as PkgMarker
 from packaging.markers import Value
 from packaging.markers import Variable
@@ -27,7 +25,6 @@ from packaging.utils import parse_wheel_filename
 from packaging.version import Version
 from pycross.private.tools.args import FlagFileArgumentParser
 from pycross.private.tools.lock_model import DependencyName
-from pycross.private.tools.lock_model import EnvironmentReference
 from pycross.private.tools.lock_model import FileKey
 from pycross.private.tools.lock_model import FileReference
 from pycross.private.tools.lock_model import MarkerDependency
@@ -42,7 +39,6 @@ from pycross.private.tools.lock_model import WheelCandidate
 from pycross.private.tools.lock_model import is_wheel
 from pycross.private.tools.lock_model import marker_to_ast
 from pycross.private.tools.lock_model import package_canonical_name
-from pycross.private.tools.target_environment import TargetEnv
 
 EXTRA_PATTERN = re.compile(r"extra\s*==\s*['\"]([^'\"]+)['\"]")
 
@@ -150,28 +146,16 @@ class PackageSource:
         )
 
 
-@dataclass
-class LabelAndTargetEnv:
-    label: str
-    target_environment: TargetEnv
-
-    def to_environment_reference(self) -> EnvironmentReference:
-        return EnvironmentReference.from_target_env(self.label, self.target_environment)
-
-
 class GenerationContext:
     def __init__(
         self,
-        target_environments: List[TargetEnv],
         local_wheels: Dict[str, str],
         remote_wheels: Dict[str, PackageFile],
         always_include_sdist: bool,
         lock_package_keys: Optional[AbstractSet[PackageKey]] = None,
     ):
-        self.target_environments = target_environments
         self.local_wheels = local_wheels
         self.remote_wheels = remote_wheels
-        self.target_environments_by_name = {tenv.name: tenv for tenv in target_environments}
         self.always_include_sdist = always_include_sdist
         self.lock_package_keys = lock_package_keys
 
@@ -184,136 +168,6 @@ class GenerationContext:
         for filename, remote_file in remote_wheels.items():
             name, version, _, _ = parse_wheel_filename(filename)
             self.remote_wheels_by_pkg[(name, version)].append((filename, remote_file))
-
-    def check_package_compatibility(self, package: RawPackage) -> None:
-        """Sanity check to make sure the requires_python attribute on each package matches our environments."""
-        if package.python_version_specifiers:
-            return
-        for environment in self.target_environments:
-            if not package.python_versions.contains(environment.version):
-                raise Exception(
-                    f"Package {package.name} does not support Python version {environment.version} "
-                    f"in environment {environment.name}"
-                )
-
-    def get_dependencies_by_environment(
-        self, package: RawPackage, ignore_dependency_names: Set[str]
-    ) -> Dict[Optional[str], Set[PackageKey]]:
-
-        base_env_deps = {target.name: set() for target in self.target_environments}
-
-        ordered_deps = sorted(package.dependencies, key=operator.attrgetter("version"), reverse=True)
-        if ignore_dependency_names:
-            ordered_deps = [d for d in ordered_deps if d.name.package not in ignore_dependency_names]
-
-        # Pre-process dependencies
-        prepared_deps = []
-        for dep in ordered_deps:
-            dep_base_key = PackageKey.from_parts(DependencyName(dep.name.package), dep.version)
-            if self.lock_package_keys is not None and dep_base_key not in self.lock_package_keys:
-                continue
-            marker = Marker(dep.marker) if dep.marker else None
-            prepared_deps.append((dep, marker))
-
-        # Pre-create environment markers with extra
-        extra_val = str(package.name.extra) if package.name.extra else ""
-        env_markers = {}
-        for target in self.target_environments:
-            markers = dict(target.markers)
-            markers["extra"] = extra_val
-            env_markers[target.name] = markers
-
-        for target in self.target_environments:
-            added_base_for_target = set()
-            markers = env_markers[target.name]
-
-            for dep, marker in prepared_deps:
-                if not marker:
-                    if dep.name not in added_base_for_target:
-                        base_env_deps[target.name].add(dep.key)
-                        added_base_for_target.add(dep.name)
-                else:
-                    if marker.evaluate(markers) and dep.name not in added_base_for_target:
-                        base_env_deps[target.name].add(dep.key)
-                        added_base_for_target.add(dep.name)
-
-        if not base_env_deps:
-            return {}
-        common_deps = set.intersection(*base_env_deps.values()) if base_env_deps else set()
-        edeps_deduped = {}
-        for env, deps in base_env_deps.items():
-            deps = deps - common_deps
-            if deps:
-                edeps_deduped[env] = deps
-        edeps_deduped[None] = common_deps
-        return edeps_deduped
-
-    def get_package_sources_by_environment(
-        self, package: RawPackage, source_only: bool = False
-    ) -> Dict[str, PackageSource]:
-
-        package_sources = {}
-        # Start with the files defined in the input lock model
-        for file in package.files:
-            package_sources[file.name] = PackageSource(file=file)
-
-        # Override per-file with given remote wheel URLs
-        for filename, remote_file in self.remote_wheels_by_pkg.get((package.name, package.version), []):
-            package_sources[filename] = PackageSource(file=remote_file)
-
-        # Override per-file with given local wheel labels
-        for filename, local_label in self.local_wheels_by_pkg.get((package.name, package.version), []):
-            package_sources[filename] = PackageSource(label=local_label)
-
-        # Pre-parse wheel filenames and separate sdist sources (invariant across environments).
-        parsed_wheels = []  # List of (build_tag, file_tags, package_source)
-        sdist_source = None
-        for filename, package_source in package_sources.items():
-            if is_wheel(filename):
-                if source_only:
-                    continue
-                try:
-                    _, _, build_tag, file_tags = parse_wheel_filename(filename)
-                except Exception:
-                    continue
-                parsed_wheels.append((build_tag, file_tags, package_source))
-            else:
-                sdist_source = package_source
-
-        environment_sources = {}
-        for environment in sorted(self.target_environments, key=lambda tenv: tenv.name.lower()):
-            best_source = None
-            best_priority = None  # Lower is better
-            best_build_tag = ()
-
-            for build_tag, file_tags, package_source in parsed_wheels:
-                compatible_tags = file_tags.intersection(environment.supported_tags_set)
-                if not compatible_tags:
-                    continue
-
-                priority = min(environment.tag_to_index[tag] for tag in compatible_tags)
-
-                is_better = False
-                if best_priority is None:
-                    is_better = True
-                elif priority < best_priority:
-                    is_better = True
-                elif priority == best_priority:
-                    is_better = build_tag > best_build_tag
-
-                if is_better:
-                    best_priority = priority
-                    best_build_tag = build_tag
-                    best_source = package_source
-
-            # Fall back to sdist if no compatible wheel was found.
-            if best_source is None and sdist_source is not None:
-                best_source = sdist_source
-
-            if best_source:
-                environment_sources[environment.name] = best_source
-
-        return environment_sources
 
 
 @dataclass
@@ -366,62 +220,27 @@ class PackageResolver:
         self._data_paths = annotations.data_paths
         self._include_paths = annotations.include_paths
 
-        deps_by_env = context.get_dependencies_by_environment(
-            package,
-            annotations.ignore_dependencies,
-        )
-
-        self._common_deps = deps_by_env.get(None, set())
-        self._env_deps = {k: v for k, v in deps_by_env.items() if k is not None}
-
         self._marker_deps = self._build_marker_dependencies(package, annotations.ignore_dependencies, context)
 
-        self._package_sources_by_env = context.get_package_sources_by_environment(
-            package,
-            annotations.always_build,
-        )
-
-        used_package_sources = set(self._package_sources_by_env.values())
-
-        # Figure out if environments require an sdist (build from source).
+        # Find sdist file directly from package files.
         sdist_file_key = None
-        for package_source in used_package_sources:
-            if package_source.file and package_source.file.is_sdist:
-                sdist_file_key = package_source.file.key
-                self.uses_sdist = True
-                break
-
-        # If we didn't find an sdist in environment sources but
-        # always_include_sdist is enabled, search all of the package's files.
-        if not sdist_file_key and context.always_include_sdist:
+        if context.always_include_sdist or annotations.always_build:
             for file in package.files:
                 if file.is_sdist:
                     sdist_file_key = file.key
-                    used_package_sources.add(PackageSource(file=file))
+                    self.uses_sdist = True
+                    break
 
         self.sdist_file = FileReference(key=sdist_file_key) if sdist_file_key else None
-        self.package_sources = frozenset(used_package_sources)
 
         # Build wheel candidates from all available wheel files.
         self._wheel_candidates, self._wheel_candidate_files = self._build_wheel_candidates(package, context)
 
     @cached_property
-    def runtime_dependency_keys(self) -> Set[PackageKey]:
-        keys = set(self._common_deps)
-        for env_deps in self._env_deps.values():
-            keys |= env_deps
-        return keys
-
-    @cached_property
     def all_dependency_keys(self) -> Set[PackageKey]:
         """Returns all package keys (name-version) that this target depends on,
-        including platform-specific, marker, and build dependencies."""
-        keys = set(self._common_deps)
-        for env_deps in self._env_deps.values():
-            keys |= env_deps
-        keys |= set(self._build_deps)
-        # Include marker-annotated deps so they're in the transitive closure
-        # even if no configured environment matches their markers.
+        including marker-annotated and build dependencies."""
+        keys = set(self._build_deps)
         for md in self._marker_deps:
             keys.add(md.key)
         return keys
@@ -431,9 +250,6 @@ class PackageResolver:
             key=self.key,
             build_dependencies=sorted(self._build_deps),
             build_repo=self._build_repo,
-            common_dependencies=sorted(self._common_deps),
-            environment_dependencies={env: sorted(deps) for env, deps in sorted(self._env_deps.items())},
-            environment_files={env: ps.file_reference for env, ps in sorted(self._package_sources_by_env.items())},
             build_target=self._build_target,
             sdist_file=self.sdist_file,
             install_exclude_globs=list(self._install_exclude_globs),
@@ -467,6 +283,9 @@ class PackageResolver:
         if ignore_dependency_names:
             ordered_deps = [d for d in ordered_deps if d.name.package not in ignore_dependency_names]
 
+        # The package's own extra (if any), e.g. "test" for "foo[test]".
+        package_extra = package.name.extra
+
         for dep in ordered_deps:
             dep_base_key = PackageKey.from_parts(DependencyName(dep.name.package), dep.version)
             if context.lock_package_keys is not None and dep_base_key not in context.lock_package_keys:
@@ -476,9 +295,17 @@ class PackageResolver:
                 continue
             seen_names.add(dep_key)
 
-            # Strip extra markers — those are handled by virtual extra nodes.
             marker_str = dep.marker
             if marker_str:
+                # Check if the dep requires a specific extra.
+                extra_match = EXTRA_PATTERN.search(marker_str)
+                if extra_match:
+                    dep_extra = extra_match.group(1)
+                    # Only include this dep if the package's extra matches.
+                    if package_extra != dep_extra:
+                        continue
+
+                # Strip extra markers — those are handled by virtual extra nodes.
                 marker_str = _strip_extra_markers(marker_str)
 
             marker_ast = marker_to_ast(marker_str) if marker_str else None
@@ -713,29 +540,6 @@ def collect_default_build_dependencies(lock_model: RawLockSet, build_dependencie
     return resolved_build_dependencies
 
 
-def _parse_environments(
-    lock_model: RawLockSet, target_environment_args: Optional[List[Any]]
-) -> List[LabelAndTargetEnv]:
-    environment_pairs: List[LabelAndTargetEnv] = []
-    for target_environment in target_environment_args or []:
-        target_file, target_label = target_environment
-        with open(target_file, "r") as f:
-            target_env = TargetEnv.from_dict(json.load(f))
-
-        # Only consider Python versions that the lock file targets.
-        if not lock_model.python_versions.contains(target_env.version):
-            continue
-
-        environment_pairs.append(
-            LabelAndTargetEnv(
-                label=target_label,
-                target_environment=target_env,
-            )
-        )
-    environment_pairs.sort(key=lambda x: x.target_environment.name.lower())
-    return environment_pairs
-
-
 def _parse_wheels(
     local_wheel_args: Optional[List[Any]], remote_wheel_args: Optional[List[Any]]
 ) -> Tuple[Dict[str, str], Dict[str, PackageFile]]:
@@ -799,7 +603,6 @@ def _resolve_packages(
         else:
             package = lock_model.packages[next_package_key]
 
-        context.check_package_compatibility(package)
         entry = PackageResolver(
             package,
             context,
@@ -924,13 +727,9 @@ def resolve(args: Any) -> ResolvedLockSet:
         data = f.read()
     lock_model = RawLockSet.from_json(data)
 
-    environment_pairs = _parse_environments(lock_model, args.target_environment)
-    environments = [ep.target_environment for ep in environment_pairs]
-
     local_wheels, remote_wheels = _parse_wheels(args.local_wheel, args.remote_wheel)
 
     context = GenerationContext(
-        target_environments=environments,
         local_wheels=local_wheels,
         remote_wheels=remote_wheels,
         always_include_sdist=args.always_include_sdist,
@@ -965,14 +764,8 @@ def resolve(args: Any) -> ResolvedLockSet:
 
     repos: Dict[FileKey, PackageFile] = {}
     for package_target in resolved_packages:
-        for source in package_target.package_sources:
-            if not source.file:
-                continue
-            repos[source.file.key] = source.file
-
-        # Wheel candidates include ALL available wheels (not just those
-        # matching configured environments).  The wheel chooser picks at
-        # analysis time, so every candidate must have a repo entry.
+        # Wheel candidates include ALL available wheels.  The wheel chooser
+        # picks at analysis time, so every candidate must have a repo entry.
         repos.update(package_target._wheel_candidate_files)
 
     repos = dict(sorted(repos.items()))
@@ -995,7 +788,6 @@ def resolve(args: Any) -> ResolvedLockSet:
 
     cycle_groups = _compute_cycle_groups(lock_model.packages)
 
-    resolved_environments = {env.target_environment.name: env.to_environment_reference() for env in environment_pairs}
     resolved_packages_dict = {pkg.key: pkg.to_resolved_package() for pkg in resolved_packages}
 
     for group_name, scc in cycle_groups.items():
@@ -1004,7 +796,6 @@ def resolve(args: Any) -> ResolvedLockSet:
                 resolved_packages_dict[pkg_key].cycle_group = group_name
 
     return ResolvedLockSet(
-        environments=resolved_environments,
         packages=resolved_packages_dict,
         pins=pins,
         remote_files=repos,
@@ -1019,13 +810,6 @@ def add_shared_flags(parser: ArgumentParser) -> None:
         type=Path,
         required=True,
         help="The path to the lock model JSON file.",
-    )
-
-    parser.add_argument(
-        "--target-environment",
-        nargs=2,
-        action="append",
-        help="A (file, label) parameter that maps a pycross_target_environment label to its JSON output file.",
     )
 
     parser.add_argument(

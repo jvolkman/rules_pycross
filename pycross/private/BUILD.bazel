@@ -187,14 +187,12 @@ genrule(
     srcs = [
         ":uv.lock",
         ":pyproject.toml",
-        ":rules_pycross_deps_target_env",
         ":rules_pycross_all_deps_lock_model",
     ],
     outs = ["updated-pycross_deps.toml"],
     cmd = """
 $(location //pycross/private/tools:toml_lock_generator) \\
     --lock-model-file $(location :rules_pycross_all_deps_lock_model) \\
-    --target-environment $(location :rules_pycross_deps_target_env) "@rules_pycross//pycross/private:rules_pycross_deps_target_env" \\
     --output $@
 """,
     tools = ["//pycross/private/tools:toml_lock_generator"],
