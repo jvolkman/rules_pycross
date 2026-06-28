@@ -3,13 +3,15 @@
 Derived from pypa/packaging: packaging/utils.py (Apache 2.0 / BSD).
 """
 
-load("@re.bzl", "re")
 load("//pycross/private/packaging/tags:tags.bzl", "tags")
 load("//pycross/private/packaging/version:version.bzl", "version")
 
-_NORMALIZED_RE = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
-_BUILD_TAG_RE = re.compile(r"^(\d+)(.*)$")
-_WHEEL_NAME_RE = re.compile(r"^[\w._]*$")
+_LOWER = "abcdefghijklmnopqrstuvwxyz"
+_UPPER = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+_DIGITS = "0123456789"
+_VALID_NORMALIZED_START = _LOWER + _DIGITS
+_VALID_NORMALIZED_CHAR = _VALID_NORMALIZED_START + "-"
+_VALID_WHEEL_NAME_CHARS = _LOWER + _UPPER + _DIGITS + "._"
 
 def canonicalize_name(name, validate = False):
     """Takes a valid Python package or extra name, and returns the normalized form of it.
@@ -37,7 +39,26 @@ def canonicalize_name(name, validate = False):
 
 def is_normalized_name(name):
     """Check if a name is already normalized."""
-    return _NORMALIZED_RE.fullmatch(name) != None
+    
+    # Equivalent to regex: ^[a-z0-9]+(?:-[a-z0-9]+)*$
+    if not name:
+        return False
+    
+    if name[0] not in _VALID_NORMALIZED_START:
+        return False
+        
+    if name[-1] not in _VALID_NORMALIZED_START:
+        return False
+
+    if "--" in name:
+        return False
+
+    # buildifier: disable=string-iteration
+    for c in name.elems():
+        if c not in _VALID_NORMALIZED_CHAR:
+            return False
+            
+    return True
 
 def canonicalize_version(version_input, strip_trailing_zero = True):
     """Return a canonical form of a version as a string.
@@ -104,7 +125,15 @@ def parse_wheel_filename(filename, validate_order = False):
     parts = filename.split("-", dashes - 2)
     name_part = parts[0]
 
-    if "__" in name_part or _WHEEL_NAME_RE.match(name_part) == None:
+    # Equivalent to regex: ^[\w._]*$
+    is_valid_wheel_name = True
+    # buildifier: disable=string-iteration
+    for c in name_part.elems():
+        if c not in _VALID_WHEEL_NAME_CHARS:
+            is_valid_wheel_name = False
+            break
+
+    if "__" in name_part or not is_valid_wheel_name:
         fail("Invalid project name in filename: {}".format(filename))
 
     name = canonicalize_name(name_part)
@@ -114,10 +143,20 @@ def parse_wheel_filename(filename, validate_order = False):
 
     if dashes == 5:
         build_part = parts[2]
-        build_match = _BUILD_TAG_RE.match(build_part)
-        if build_match == None:
+        
+        # Equivalent to regex: ^(\d+)(.*)$
+        if not build_part or build_part[0] not in _DIGITS:
             fail("Invalid build number: {} in {}".format(build_part, filename))
-        build = (int(build_match.group(1)), build_match.group(2))
+        
+        i = 0
+        # buildifier: disable=string-iteration
+        for c in build_part.elems():
+            if c in _DIGITS:
+                i += 1
+            else:
+                break
+        
+        build = (int(build_part[:i]), build_part[i:])
     else:
         build = ()
 
