@@ -2,13 +2,13 @@ load("@bazel_lib//lib:write_source_files.bzl", "write_source_files")
 load("@bazel_skylib//:bzl_library.bzl", "bzl_library")
 load("@bazel_skylib//rules:write_file.bzl", "write_file")
 load(":pep508_marker_values.bzl", "FREETHREADED_VALUES", "LIBC_VALUES")
-load(":supported_tags.bzl", "pycross_supported_tags")
+load(":target_platform.bzl", "pycross_supported_tags")
 load(":util.bzl", "REPO_HTTP_DEPS")
 
 package(default_visibility = ["//visibility:public"])
 
 pycross_supported_tags(
-    name = "default_supported_tags",
+    name = "default_target_platform",
     freethreaded = select(FREETHREADED_VALUES),
     libc = select(LIBC_VALUES),
 )
@@ -378,13 +378,13 @@ bzl_library(
     srcs = ["wheel_chooser.bzl"],
     deps = [
         ":pep508_marker_values",
-        ":supported_tags",
+        ":target_platform",
     ],
 )
 
 bzl_library(
-    name = "supported_tags",
-    srcs = ["supported_tags.bzl"],
+    name = "target_platform",
+    srcs = ["target_platform.bzl"],
     deps = [
         ":pep508_marker_values",
         "//pycross/private/pypackaging/tags",

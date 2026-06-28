@@ -12,7 +12,7 @@ The selection algorithm:
      "__no_matching_wheel__" if nothing matches.
 """
 
-load(":supported_tags.bzl", "SupportedTagsInfo")
+load(":target_platform.bzl", "SupportedTagsInfo")
 
 # ---------------------------------------------------------------------------
 # Pure-function helpers
@@ -81,7 +81,7 @@ _pycross_wheel_chooser = rule(
             ),
         ),
         "supported_tags": attr.label(
-            default = Label("@rules_pycross//pycross/private:default_supported_tags"),
+            default = Label("@rules_pycross//pycross/private:default_target_platform"),
             providers = [SupportedTagsInfo],
             doc = "The supported tags for the current environment.",
         ),

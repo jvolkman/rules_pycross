@@ -10,7 +10,7 @@ load("//pycross/private:cycle_dep_needed.bzl", "is_reachable")
 load("//pycross/private:pep508_evaluator.bzl", "pycross_pep508_evaluator")
 
 # buildifier: disable=bzl-visibility
-load("//pycross/private:supported_tags.bzl", "pycross_supported_tags")
+load("//pycross/private:target_platform.bzl", "pycross_supported_tags")
 
 # buildifier: disable=bzl-visibility
 load("//pycross/private:wheel_chooser.bzl", "pycross_wheel_chooser", "select_best_wheel")
