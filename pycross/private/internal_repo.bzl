@@ -144,6 +144,15 @@ def _defaults_bzl(rctx):
 
     return "\n".join(lines) + "\n"
 
+def _sanitize_name(name):
+    return name.lower().replace("-", "_").replace("@", "_").replace("+", "_").replace(".", "_").replace("[", "_").replace("]", "_")
+
+def _marker_evaluator_name(marker_str):
+    san = _sanitize_name(marker_str.replace(" ", "").replace("\"", "").replace("'", ""))
+    if len(san) > 40:
+        san = san[:40]
+    return "_marker_eval_{}_{}".format(san, hash(marker_str))
+
 def _pycross_internal_repo_impl(rctx):
     # 1. Read and parse the TOML lock
     deps_toml_path = rctx.path(Label("//pycross/private:pycross_deps.toml"))
@@ -176,17 +185,62 @@ def _pycross_internal_repo_impl(rctx):
     venv_path = rctx.path("exec_venv")
     installer_whl = _installer_whl(wheel_filenames)
     rctx.report_progress("Creating internal virtual environment")
-    create_venv(rctx, python_executable, venv_path, [pycross_path])
+    create_venv(rctx, python_executable, venv_path, [pycross_path, pycross_path.get_child("pycross", "private", "tools")])
     rctx.report_progress("Installing {} internal wheels".format(len(wheel_paths)))
     install_venv_wheels(rctx, venv_path, installer_whl, wheel_paths)
 
     # 2. Write the target definitions
     deps_build_lines = [
-        'load("@rules_pycross//pycross:defs.bzl", "pycross_wheel_library")',
+        'load("@rules_pycross//pycross:defs.bzl", "pycross_pep508_evaluator", "pycross_wheel_library")',
+        'load("@rules_pycross//pycross/private:pep508_marker_values.bzl", "OS_NAME_VALUES", "SYS_PLATFORM_VALUES", "PLATFORM_SYSTEM_VALUES", "PLATFORM_MACHINE_VALUES")',
         "",
         'package(default_visibility = ["//visibility:public"])',
         "",
     ]
+
+    # Collect unique markers
+    unique_markers = {}
+    for pkg in deps_data["packages"].values():
+        for dep in pkg.get("deps", []):
+            if "marker" in dep:
+                unique_markers[dep["marker"]] = None
+
+    # Compute ASTs on the fly
+    venv_python = get_venv_python_executable(venv_path)
+    for marker_str in unique_markers.keys():
+        res = rctx.execute([
+            str(venv_python),
+            "-c",
+            "import json; import lock_model; import sys; print(json.dumps(lock_model.marker_to_ast(sys.argv[1])))",
+            marker_str,
+        ])
+        if res.return_code:
+            fail("Failed to parse marker '{}':\n{}".format(marker_str, res.stderr))
+        unique_markers[marker_str] = json.decode(res.stdout)
+
+    # Write marker evaluators
+    for marker_str, marker_ast in sorted(unique_markers.items()):
+        eval_name = _marker_evaluator_name(marker_str)
+        ast_json = json.encode(marker_ast) if marker_ast else "{}"
+
+        deps_build_lines.extend([
+            "pycross_pep508_evaluator(",
+            '    name = "{}",'.format(eval_name),
+            "    expr = '{}',".format(ast_json),
+            "    sys_platform = select(SYS_PLATFORM_VALUES),",
+            "    os_name = select(OS_NAME_VALUES),",
+            "    platform_system = select(PLATFORM_SYSTEM_VALUES),",
+            "    platform_machine = select(PLATFORM_MACHINE_VALUES),",
+            ")",
+            "",
+            "config_setting(",
+            '    name = "{}_match",'.format(eval_name),
+            "    flag_values = {",
+            '        ":{}": "true",'.format(eval_name),
+            "    },",
+            ")",
+            "",
+        ])
 
     # Config setting
     deps_build_lines.extend([
@@ -218,17 +272,33 @@ def _pycross_internal_repo_impl(rctx):
             "",
         ])
 
-        deps = []
+        unconditional = []
+        conditional = []
         for dep in pkg.get("deps", []):
-            deps.append(":{}".format(dep))
+            if "marker" in dep:
+                conditional.append(dep)
+            else:
+                unconditional.append(dep["key"])
+
+        deps_val = []
+        for dep_key in sorted(unconditional):
+            deps_val.append('":{}"'.format(dep_key))
+
+        deps_expr = "[]"
+        if unconditional:
+            deps_expr = "[{}]".format(", ".join(deps_val))
+
+        for dep in sorted(conditional, key = lambda x: x["key"]):
+            eval_name = _marker_evaluator_name(dep["marker"])
+            deps_expr += " + select({{\":{}_match\": [\":{}\"], \"//conditions:default\": []}})".format(eval_name, dep["key"])
 
         deps_build_lines.extend([
             "pycross_wheel_library(",
             '    name = "{}",'.format(pkg_version),
             '    wheel = ":{}",'.format(wheel_target_name),
         ])
-        if deps:
-            deps_build_lines.append("    deps = {},".format(deps))
+        if unconditional or conditional:
+            deps_build_lines.append("    deps = {},".format(deps_expr))
         deps_build_lines.append(")")
         deps_build_lines.append("")
 

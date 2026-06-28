@@ -75,9 +75,12 @@ def main(args: Any) -> None:
             continue
 
         # Collect all dependency keys from marker_dependencies
-        all_deps = set()
+        deps = []
         for md in pkg.marker_dependencies:
-            all_deps.add(md.key)
+            dep_dict = {"key": str(md.key)}
+            if md.marker:
+                dep_dict["marker"] = md.marker
+            deps.append(dep_dict)
 
         pkg_dict = {
             "name": str(pkg.key.name),
@@ -88,8 +91,8 @@ def main(args: Any) -> None:
             "filename": filename,
         }
 
-        if all_deps:
-            pkg_dict["deps"] = sorted([str(d) for d in all_deps])
+        if deps:
+            pkg_dict["deps"] = sorted(deps, key=lambda x: x["key"])
 
         packages_dict[str(pkg_key)] = pkg_dict
 

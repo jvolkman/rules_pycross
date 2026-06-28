@@ -28,9 +28,18 @@ url = "https://files.pythonhosted.org/packages/0d/fe/6bea5c9162869c5beba5d9c8abb
 sha256 = "13f3eecb844759ab66efec90ca17639bbf14dc06cb2fdf37a9010322d9c50a6f"
 filename = "build-1.5.0-py3-none-any.whl"
 deps = [
-    "packaging@26.2",
-    "pyproject-hooks@1.2.0",
+    { key = "colorama@0.4.6", marker = "os_name == \"nt\"" },
+    { key = "packaging@26.2" },
+    { key = "pyproject-hooks@1.2.0" },
 ]
+
+[packages."colorama@0.4.6"]
+name = "colorama"
+version = "0.4.6"
+repo_name = "pypi_colorama_0_4_6_py2_py3_none_any_whl_4f1d9991"
+url = "https://files.pythonhosted.org/packages/d1/d6/3965ed04c63042e047cb6a3e6ed1a63a35087b6a609aa3a15ed8ac56c221/colorama-0.4.6-py2.py3-none-any.whl"
+sha256 = "4f1d9991f5acc0ca119f9d443620b77f9d6b33703e51011c16baf57afb285fc6"
+filename = "colorama-0.4.6-py2.py3-none-any.whl"
 
 [packages."dacite@1.9.2"]
 name = "dacite"
@@ -48,7 +57,7 @@ url = "https://files.pythonhosted.org/packages/11/7a/69d66800a0e266a3b6de812e9a0
 sha256 = "19ce88ba99e47c4fe452d5cc394d371499446b922ea2ae0d13682f636d980915"
 filename = "delvewheel-1.12.1-py3-none-any.whl"
 deps = [
-    "pefile@2024.8.26",
+    { key = "pefile@2024.8.26" },
 ]
 
 [packages."installer@1.0.0"]
@@ -67,7 +76,7 @@ url = "https://files.pythonhosted.org/packages/c7/d1/a9f36f8ecdf0fb7c9b1e78c8d7a
 sha256 = "da1a3fa8266e30f0ce7e97c6a54eefaae8edd1e5f86f3eb8b95457cae90265ea"
 filename = "macholib-1.16.4-py2.py3-none-any.whl"
 deps = [
-    "altgraph@0.17.5",
+    { key = "altgraph@0.17.5" },
 ]
 
 [packages."packaging@26.2"]
@@ -134,11 +143,11 @@ url = "https://files.pythonhosted.org/packages/3b/c7/0e9a023f91d54d7d65ccd23681b
 sha256 = "d0f4e67dc1428a26dceddb3def3bdf66f7deb3e17a87e34e44bb8d9191984b61"
 filename = "repairwheel-0.6.2-py3-none-any.whl"
 deps = [
-    "delvewheel@1.12.1",
-    "macholib@1.16.4",
-    "packaging@26.2",
-    "pefile@2024.8.26",
-    "pyelftools@0.32",
+    { key = "delvewheel@1.12.1" },
+    { key = "macholib@1.16.4" },
+    { key = "packaging@26.2" },
+    { key = "pefile@2024.8.26" },
+    { key = "pyelftools@0.32" },
 ]
 
 [packages."tomli-w@1.1.0"]
