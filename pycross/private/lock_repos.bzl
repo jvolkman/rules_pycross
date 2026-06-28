@@ -162,21 +162,6 @@ def _lock_repos_impl(module_ctx):
             sdist_file_key = sdist_file["key"]
             sdist_label = repo_remote_files[sdist_file_key]
 
-            # Check whether this package may need to build from source.
-            needs_sdist = False
-            if "environment_files" not in pkg:
-                # New model: always create sdist repo as fallback/primary if sdist exists.
-                needs_sdist = True
-            else:
-                # Old model
-                for _env_name, env_file_ref in pkg.get("environment_files", {}).items():
-                    if env_file_ref.get("key") == sdist_file_key:
-                        needs_sdist = True
-                        break
-
-            if not needs_sdist:
-                continue
-
             # Name sdist repos at the workspace level for deduplication.
             sdist_repo_name = "{}_sdist_{}".format(
                 lock_repo_for_deps,
@@ -190,18 +175,7 @@ def _lock_repos_impl(module_ctx):
                 continue
             created_sdist_repos[sdist_repo_name] = True
 
-            # Collect the union of dependencies across all environments
-            # that resolve to the sdist.
             deps_set = {}
-            for dep in pkg.get("common_dependencies", []):
-                dep_label = "@{}//_lock:{}".format(lock_repo_for_deps, dep)
-                deps_set[dep_label] = True
-            for env_name, env_file_ref in pkg.get("environment_files", {}).items():
-                if env_file_ref.get("key") != sdist_file_key:
-                    continue
-                for dep in pkg.get("environment_dependencies", {}).get(env_name, []):
-                    dep_label = "@{}//_lock:{}".format(lock_repo_for_deps, dep)
-                    deps_set[dep_label] = True
 
             # Marker path: collect all deps from marker_dependencies.
             for md in pkg.get("marker_dependencies", []):

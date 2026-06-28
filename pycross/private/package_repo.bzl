@@ -28,8 +28,6 @@ def _merge_dependencies(first_data, entries):
     merged = dict(first_data)
 
     for _, pkg_data in entries[1:]:
-        for env_name, env_ref in pkg_data.get("environment_files", {}).items():
-            merged.setdefault("environment_files", {})[env_name] = env_ref
         if not merged.get("site_paths") and pkg_data.get("site_paths"):
             merged["site_paths"] = pkg_data["site_paths"]
         if not merged.get("data_level_paths") and pkg_data.get("data_level_paths"):
@@ -64,7 +62,7 @@ def _package_repo_impl(rctx):
     # Workspace repos always have member_lock_files — even single-lock repos
     # are wrapped in a workspace with one member.
     packages = {}
-    environments = {}
+    packages = {}
 
     # Annotation fields that affect pycross_wheel_library targets.
     # If these differ between members for the same pkg_key, the package
@@ -73,20 +71,12 @@ def _package_repo_impl(rctx):
 
     # First pass: collect per-member package data, environment names, and cycle groups.
     member_packages = {}  # member_name -> {pkg_key -> pkg_data}
-    member_envs = {}  # member_name -> [env_name, ...]
     cycle_groups = {}  # group_name -> [pkg_key, ...]
     variant_items = {}  # qualified_name -> True (dedup across members)
     variant_sets = []  # list of {"qnames": [...], "default": "..."}
     variant_sets_seen = {}  # frozenset key -> True (dedup across members)
     for member, lock_label in rctx.attr.member_lock_files.items():
         member_lock = json.decode(rctx.read(rctx.path(Label(lock_label))))
-
-        # Merge environments (union across members).
-        member_env_names = []
-        for env_name, env_ref in member_lock.get("environments", {}).items():
-            member_env_names.append(env_name)
-            if env_name not in environments:
-                environments[env_name] = env_ref
 
         for variant_set in member_lock.get("variants", []):
             set_qnames = []
@@ -105,7 +95,6 @@ def _package_repo_impl(rctx):
                 variant_sets_seen[set_key] = True
                 variant_sets.append({"qnames": set_qnames, "default": set_default})
 
-        member_envs[member] = sorted(member_env_names)
         member_packages[member] = member_lock.get("packages", {})
 
         # Merge cycle groups (union across members).
@@ -153,7 +142,6 @@ def _package_repo_impl(rctx):
     lock = {
         "packages": packages,
         "pins": {},
-        "environments": environments,
         "cycle_groups": cycle_groups,
     }
 

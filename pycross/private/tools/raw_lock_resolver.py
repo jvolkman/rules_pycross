@@ -239,7 +239,7 @@ class PackageResolver:
         if context.always_include_sdist or annotations.always_build:
             if self.sdist_file:
                 self.uses_sdist = True
-        elif not self._wheel_candidates:
+        elif not self.key.name.extra and not self._wheel_candidates:
             if self.sdist_file:
                 self.uses_sdist = True
             else:
