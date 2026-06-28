@@ -164,24 +164,52 @@ _MARKERS_REQUIRING_VERSION = {
     "python_version": True,
 }
 
+def _canonicalize_name(name):
+    name = name.lower().replace("_", "-").replace(".", "-")
+
+    # Collapse runs of hyphens
+    for _i in range(1000):
+        if "--" in name:
+            name = name.replace("--", "-")
+        else:
+            break
+    return name
+
 def _eval_item(item, environment):
     lhs, op, rhs = item
 
     if lhs.type == "variable":
-        lhs_val = environment.get(lhs.value)
-        if lhs_val == None:
-            fail("Undefined environment variable: {}".format(lhs.value))
-        rhs_val = rhs.value
         key = lhs.value
+        lhs_val = environment.get(key)
+        if lhs_val == None:
+            if key == "extra":
+                lhs_val = ""
+            else:
+                fail("Undefined environment variable: {}".format(key))
+        rhs_val = rhs.value
     else:
-        lhs_val = lhs.value
-        rhs_val = environment.get(rhs.value)
-        if rhs_val == None:
-            fail("Undefined environment variable: {}".format(rhs.value))
         key = rhs.value
+        lhs_val = lhs.value
+        rhs_val = environment.get(key)
+        if rhs_val == None:
+            if key == "extra":
+                rhs_val = ""
+            else:
+                fail("Undefined environment variable: {}".format(key))
 
-    # Upstream normalizes 'extra' and 'MARKERS_ALLOWING_SET'.
-    # For now, assume environment values are already normalized or handle basic cases.
+    # Apply canonicalization for PEP 685 / PEP 735
+    if key in ("extra", "extras", "dependency_groups"):
+        if type(lhs_val) == "list":
+            # buildifier: disable=string-iteration
+            lhs_val = [_canonicalize_name(v) for v in lhs_val]
+        elif type(lhs_val) == "string":
+            lhs_val = _canonicalize_name(lhs_val)
+
+        if type(rhs_val) == "list":
+            # buildifier: disable=string-iteration
+            rhs_val = [_canonicalize_name(v) for v in rhs_val]
+        elif type(rhs_val) == "string":
+            rhs_val = _canonicalize_name(rhs_val)
 
     if key in _MARKERS_REQUIRING_VERSION and op not in ("in", "not in"):
         # Use specifier_contains
