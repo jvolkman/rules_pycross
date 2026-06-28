@@ -167,9 +167,7 @@ def _render_marker_cycle_member_deps(lines, cycle_groups, packages):
                 lines.append(_ind('"{}",'.format(m), 3))
             lines.append(_ind("],", 2))
 
-            # Escape backslashes and single quotes for Starlark string literal
-            escaped_edges_json = edges_json.replace("\\", "\\\\").replace("'", "\\'")
-            lines.append(_ind("edges = '{}',".format(escaped_edges_json), 2))
+            lines.append(_ind("edges = {},".format(repr(edges_json)), 2))
             lines.append(_ind(")"))
             lines.append("")
 
@@ -182,12 +180,10 @@ def _render_marker_wheel_chooser(lines, pkg_key, pkg, repo_map, sdist_map, rctx_
     candidates_json = json.encode(candidates)
     chooser_name = "_wheel_chooser_{}".format(pkg_key)
 
-    # Escape backslashes and single quotes for Starlark string literal
-    escaped_candidates_json = candidates_json.replace("\\", "\\\\").replace("'", "\\'")
     lines.extend([
         _ind("pycross_wheel_chooser("),
         _ind('name = "{}",'.format(chooser_name), 2),
-        _ind("candidates = '{}',".format(escaped_candidates_json), 2),
+        _ind("candidates = {},".format(repr(candidates_json)), 2),
         _ind(")"),
         "",
     ])
