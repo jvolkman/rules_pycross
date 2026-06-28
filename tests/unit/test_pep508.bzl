@@ -7,14 +7,10 @@ load("@rules_testing//lib:util.bzl", "util")
 load("//pycross/private:cycle_dep_needed.bzl", "is_reachable")
 
 # buildifier: disable=bzl-visibility
-load("//pycross/private:pep508_evaluator.bzl", "evaluate_marker_expr", "pycross_pep508_evaluator")
+load("//pycross/private:pep508_evaluator.bzl", "pycross_pep508_evaluator")
 
 # buildifier: disable=bzl-visibility
 load("//pycross/private:wheel_chooser.bzl", "pycross_wheel_chooser", "select_best_wheel")
-
-# ============================================================================
-# Pure-function tests for evaluate_marker_expr
-# ============================================================================
 
 _LINUX_MARKERS = {
     "os_name": "posix",
@@ -29,223 +25,6 @@ _LINUX_MARKERS = {
     "implementation_version": "3.11.0",
     "platform_python_implementation": "CPython",
 }
-
-def _assert_eval(env, expr, markers, expected):
-    result = evaluate_marker_expr(expr, markers)
-    if result != expected:
-        env.fail("Expected {} for expr {} with markers, got {}".format(
-            expected,
-            expr,
-            result,
-        ))
-
-# ── Test: simple equality ────────────────────────────────────────────
-
-def _test_simple_eq_true_impl(env, _target):
-    _assert_eval(env, {
-        "op": "==",
-        "lhs": {"type": "marker", "value": "sys_platform"},
-        "rhs": {"type": "string", "value": "linux"},
-    }, _LINUX_MARKERS, True)
-
-def _test_simple_eq_true(name):
-    util.helper_target(
-        native.filegroup,
-        name = name + "_subject",
-    )
-    analysis_test(
-        name = name,
-        target = name + "_subject",
-        impl = _test_simple_eq_true_impl,
-    )
-
-# ── Test: simple equality false ──────────────────────────────────────
-
-def _test_simple_eq_false_impl(env, _target):
-    _assert_eval(env, {
-        "op": "==",
-        "lhs": {"type": "marker", "value": "sys_platform"},
-        "rhs": {"type": "string", "value": "win32"},
-    }, _LINUX_MARKERS, False)
-
-def _test_simple_eq_false(name):
-    util.helper_target(
-        native.filegroup,
-        name = name + "_subject",
-    )
-    analysis_test(
-        name = name,
-        target = name + "_subject",
-        impl = _test_simple_eq_false_impl,
-    )
-
-# ── Test: not equal ──────────────────────────────────────────────────
-
-def _test_neq_impl(env, _target):
-    _assert_eval(env, {
-        "op": "!=",
-        "lhs": {"type": "marker", "value": "sys_platform"},
-        "rhs": {"type": "string", "value": "win32"},
-    }, _LINUX_MARKERS, True)
-
-def _test_neq(name):
-    util.helper_target(
-        native.filegroup,
-        name = name + "_subject",
-    )
-    analysis_test(
-        name = name,
-        target = name + "_subject",
-        impl = _test_neq_impl,
-    )
-
-# ── Test: version comparison >= ──────────────────────────────────────
-
-def _test_version_gte_impl(env, _target):
-    _assert_eval(env, {
-        "op": ">=",
-        "lhs": {"type": "marker", "value": "python_version"},
-        "rhs": {"type": "string", "value": "3.10"},
-    }, _LINUX_MARKERS, True)  # 3.11 >= 3.10
-
-    _assert_eval(env, {
-        "op": ">=",
-        "lhs": {"type": "marker", "value": "python_version"},
-        "rhs": {"type": "string", "value": "3.12"},
-    }, _LINUX_MARKERS, False)  # 3.11 >= 3.12
-
-def _test_version_gte(name):
-    util.helper_target(
-        native.filegroup,
-        name = name + "_subject",
-    )
-    analysis_test(
-        name = name,
-        target = name + "_subject",
-        impl = _test_version_gte_impl,
-    )
-
-# ── Test: version comparison < ───────────────────────────────────────
-
-def _test_version_lt_impl(env, _target):
-    _assert_eval(env, {
-        "op": "<",
-        "lhs": {"type": "marker", "value": "python_version"},
-        "rhs": {"type": "string", "value": "3.12"},
-    }, _LINUX_MARKERS, True)  # 3.11 < 3.12
-
-    _assert_eval(env, {
-        "op": "<",
-        "lhs": {"type": "marker", "value": "python_version"},
-        "rhs": {"type": "string", "value": "3.11"},
-    }, _LINUX_MARKERS, False)  # 3.11 < 3.11
-
-def _test_version_lt(name):
-    util.helper_target(
-        native.filegroup,
-        name = name + "_subject",
-    )
-    analysis_test(
-        name = name,
-        target = name + "_subject",
-        impl = _test_version_lt_impl,
-    )
-
-# ── Test: boolean AND ────────────────────────────────────────────────
-
-def _test_and_impl(env, _target):
-    _assert_eval(env, {
-        "op": "and",
-        "lhs": {
-            "op": "==",
-            "lhs": {"type": "marker", "value": "sys_platform"},
-            "rhs": {"type": "string", "value": "linux"},
-        },
-        "rhs": {
-            "op": ">=",
-            "lhs": {"type": "marker", "value": "python_version"},
-            "rhs": {"type": "string", "value": "3.10"},
-        },
-    }, _LINUX_MARKERS, True)
-
-    _assert_eval(env, {
-        "op": "and",
-        "lhs": {
-            "op": "==",
-            "lhs": {"type": "marker", "value": "sys_platform"},
-            "rhs": {"type": "string", "value": "darwin"},
-        },
-        "rhs": {
-            "op": ">=",
-            "lhs": {"type": "marker", "value": "python_version"},
-            "rhs": {"type": "string", "value": "3.10"},
-        },
-    }, _LINUX_MARKERS, False)
-
-def _test_and(name):
-    util.helper_target(
-        native.filegroup,
-        name = name + "_subject",
-    )
-    analysis_test(
-        name = name,
-        target = name + "_subject",
-        impl = _test_and_impl,
-    )
-
-# ── Test: boolean OR ─────────────────────────────────────────────────
-
-def _test_or_impl(env, _target):
-    _assert_eval(env, {
-        "op": "or",
-        "lhs": {
-            "op": "==",
-            "lhs": {"type": "marker", "value": "sys_platform"},
-            "rhs": {"type": "string", "value": "linux"},
-        },
-        "rhs": {
-            "op": "==",
-            "lhs": {"type": "marker", "value": "sys_platform"},
-            "rhs": {"type": "string", "value": "darwin"},
-        },
-    }, _LINUX_MARKERS, True)
-
-def _test_or(name):
-    util.helper_target(
-        native.filegroup,
-        name = name + "_subject",
-    )
-    analysis_test(
-        name = name,
-        target = name + "_subject",
-        impl = _test_or_impl,
-    )
-
-# ── Test: 'in' operator ─────────────────────────────────────────────
-
-def _test_in_operator_impl(env, _target):
-    _assert_eval(env, {
-        "op": "in",
-        "lhs": {"type": "string", "value": "x86"},
-        "rhs": {"type": "marker", "value": "platform_machine"},
-    }, _LINUX_MARKERS, True)  # "x86" in "x86_64"
-
-    _assert_eval(env, {
-        "op": "not in",
-        "lhs": {"type": "string", "value": "arm"},
-        "rhs": {"type": "marker", "value": "platform_machine"},
-    }, _LINUX_MARKERS, True)  # "arm" not in "x86_64"
-
-def _test_in_operator(name):
-    util.helper_target(
-        native.filegroup,
-        name = name + "_subject",
-    )
-    analysis_test(
-        name = name,
-        target = name + "_subject",
-        impl = _test_in_operator_impl,
-    )
 
 # ============================================================================
 # Pure-function tests for select_best_wheel
@@ -414,7 +193,7 @@ def _test_evaluator_rule_impl(env, target):
 def _test_evaluator_rule(name):
     pycross_pep508_evaluator(
         name = name + "_evaluator",
-        expr = '{"op": "==", "lhs": {"type": "marker", "value": "sys_platform"}, "rhs": {"type": "string", "value": "linux"}}',
+        expr = "sys_platform == 'linux'",
         sys_platform = "linux",
         tags = ["manual"],
     )
@@ -458,11 +237,7 @@ def _test_chooser_rule(name):
 _CYCLE_EDGES = {
     "alpha@1.0": [
         {"dep": "beta@2.0"},
-        {"dep": "gamma@1.0", "marker_ast": {
-            "op": "==",
-            "lhs": {"type": "marker", "value": "sys_platform"},
-            "rhs": {"type": "string", "value": "darwin"},
-        }},
+        {"dep": "gamma@1.0", "marker": "sys_platform == 'darwin'"},
     ],
     "beta@2.0": [
         {"dep": "alpha@1.0"},
@@ -517,14 +292,6 @@ def pep508_test_suite(name):
     test_suite(
         name = name,
         tests = [
-            _test_simple_eq_true,
-            _test_simple_eq_false,
-            _test_neq,
-            _test_version_gte,
-            _test_version_lt,
-            _test_and,
-            _test_or,
-            _test_in_operator,
             _test_wheel_linux_x86,
             _test_wheel_mac_arm64,
             _test_wheel_fallback_any,

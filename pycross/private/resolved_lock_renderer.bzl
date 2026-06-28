@@ -78,8 +78,8 @@ def _collect_unique_markers(packages):
         for md in pkg.get("marker_dependencies", []):
             marker = md.get("marker")
             if marker:
-                markers[marker] = md.get("marker_ast")
-    return markers
+                markers[marker] = True
+    return markers.keys()
 
 def _marker_evaluator_name(marker_str):
     """Generate a deterministic target name for a marker evaluator."""
@@ -95,15 +95,14 @@ def _marker_evaluator_name(marker_str):
 
 def _render_marker_evaluators(lines, unique_markers):
     """Render deduped pycross_pep508_evaluator and config_setting targets."""
-    for marker_str, marker_ast in sorted(unique_markers.items()):
+    for marker_str in sorted(unique_markers):
         eval_name = _marker_evaluator_name(marker_str)
-        ast_json = json.encode(marker_ast) if marker_ast else "{}"
 
         # Evaluator rule — returns FeatureFlagInfo("true"/"false")
         lines.extend([
             _ind("pycross_pep508_evaluator("),
             _ind('name = "{}",'.format(eval_name), 2),
-            _ind("expr = '{}',".format(ast_json), 2),
+            _ind('expr = "{}",'.format(marker_str.replace('"', '\\"')), 2),
             _ind("sys_platform = select(SYS_PLATFORM_VALUES),", 2),
             _ind("os_name = select(OS_NAME_VALUES),", 2),
             _ind("platform_system = select(PLATFORM_SYSTEM_VALUES),", 2),
@@ -138,8 +137,8 @@ def _build_marker_cycle_edges_json(scc, packages):
             dep_key = md["key"]
             if dep_key in scc_set:
                 entry = {"dep": dep_key}
-                if md.get("marker_ast"):
-                    entry["marker_ast"] = md["marker_ast"]
+                if md.get("marker"):
+                    entry["marker"] = md["marker"]
                 edge_list.append(entry)
         edges[pkg_key] = edge_list
     return json.encode(edges)

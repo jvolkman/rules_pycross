@@ -176,8 +176,9 @@ def _test_cycle_group_marker_specific_rendering_impl(env, target):
     env.expect.that_bool('member = "beta@2.0"' in res).equals(True)
     env.expect.that_bool('member = "appnope@1.0"' in res).equals(True)
 
-    # The edges JSON should include marker_ast for the conditional edge
-    env.expect.that_bool("marker_ast" in res).equals(True)
+    # The edges JSON should include marker for the conditional edge
+    env.expect.that_bool('"marker":' in res).equals(True)
+    env.expect.that_bool("marker_ast" in res).equals(False)
 
     # Should have marker select values
     env.expect.that_bool("SYS_PLATFORM_VALUES" in res).equals(True)

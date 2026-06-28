@@ -361,8 +361,8 @@ bzl_library(
     name = "cycle_dep_needed",
     srcs = ["cycle_dep_needed.bzl"],
     deps = [
-        ":pep508_evaluator",
         ":pep508_marker_values",
+        "//pycross/private/pypackaging/markers",
     ],
 )
 
@@ -378,7 +378,10 @@ bzl_library(
 bzl_library(
     name = "pep508_evaluator",
     srcs = ["pep508_evaluator.bzl"],
-    deps = [":pep508_marker_values"],
+    deps = [
+        ":pep508_marker_values",
+        "//pycross/private/pypackaging/markers",
+    ],
 )
 
 bzl_library(

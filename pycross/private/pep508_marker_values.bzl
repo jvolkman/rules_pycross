@@ -200,14 +200,20 @@ def collect_markers(ctx):
 
     return {
         "os_name": ctx.attr.os_name,
+        "os.name": ctx.attr.os_name,
         "sys_platform": ctx.attr.sys_platform,
+        "sys.platform": ctx.attr.sys_platform,
         "platform_machine": ctx.attr.platform_machine,
+        "platform.machine": ctx.attr.platform_machine,
         "platform_system": ctx.attr.platform_system,
         "platform_release": ctx.attr.platform_release,
         "platform_version": ctx.attr.platform_version,
+        "platform.version": ctx.attr.platform_version,
         "python_version": python_version,
         "python_full_version": python_full_version,
         "implementation_name": implementation_name,
         "implementation_version": implementation_version,
         "platform_python_implementation": platform_python_implementation,
+        "platform.python_implementation": platform_python_implementation,
+        "python_implementation": platform_python_implementation,
     }

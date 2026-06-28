@@ -6,6 +6,6 @@ bzl_library(
     name = "version",
     srcs = ["version.bzl"],
     deps = [
-        "@re.bzl//re",
+        "@re.bzl//:re",
     ],
 )

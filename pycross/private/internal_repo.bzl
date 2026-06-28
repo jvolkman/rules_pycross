@@ -203,30 +203,16 @@ def _pycross_internal_repo_impl(rctx):
     for pkg in deps_data["packages"].values():
         for dep in pkg.get("deps", []):
             if "marker" in dep:
-                unique_markers[dep["marker"]] = None
-
-    # Compute ASTs on the fly
-    venv_python = get_venv_python_executable(venv_path)
-    for marker_str in unique_markers.keys():
-        res = rctx.execute([
-            str(venv_python),
-            "-c",
-            "import json; import lock_model; import sys; print(json.dumps(lock_model.marker_to_ast(sys.argv[1])))",
-            marker_str,
-        ])
-        if res.return_code:
-            fail("Failed to parse marker '{}':\n{}".format(marker_str, res.stderr))
-        unique_markers[marker_str] = json.decode(res.stdout)
+                unique_markers[dep["marker"]] = True
 
     # Write marker evaluators
-    for marker_str, marker_ast in sorted(unique_markers.items()):
+    for marker_str in sorted(unique_markers.keys()):
         eval_name = _marker_evaluator_name(marker_str)
-        ast_json = json.encode(marker_ast) if marker_ast else "{}"
 
         deps_build_lines.extend([
             "pycross_pep508_evaluator(",
             '    name = "{}",'.format(eval_name),
-            "    expr = '{}',".format(ast_json),
+            '    expr = "{}",'.format(marker_str.replace('"', '\\"')),
             "    sys_platform = select(SYS_PLATFORM_VALUES),",
             "    os_name = select(OS_NAME_VALUES),",
             "    platform_system = select(PLATFORM_SYSTEM_VALUES),",
