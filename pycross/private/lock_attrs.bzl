@@ -7,7 +7,7 @@ DEFAULT_GLIBC_VERSION = "2.28"
 
 DEFAULT_MUSL_VERSION = "1.2"
 
-CREATE_ENVIRONMENTS_ATTRS = dict(
+CONFIGURE_TOOLCHAINS_ATTRS = dict(
     python_versions = attr.string_list(
         doc = (
             "The list of Python versions to support in by default in Pycross builds. " +
@@ -23,34 +23,6 @@ CREATE_ENVIRONMENTS_ATTRS = dict(
             "platforms for each registered version are supported."
         ),
     ),
-    glibc_version = attr.string(
-        doc = (
-            "The maximum glibc version to accept for Bazel platforms that match the " +
-            "@platforms//os:linux constraint. Must be in the format '2.X', and greater than 2.5. " +
-            "All versions from 2.5 through this version will be supported. For example, if this " +
-            "value is set to 2.15, wheels tagged manylinux_2_5, manylinux_2_6, ..., " +
-            "manylinux_2_15 will be accepted. Defaults to '{}' if unspecified.".format(DEFAULT_GLIBC_VERSION)
-        ),
-    ),
-    musl_version = attr.string(
-        doc = (
-            "The musl version to accept for Bazel platforms that match the " +
-            "@platforms//os:linux constraint when @rules_python//python/config_settings:py_linux_libc " +
-            "is set to 'musl'. Defaults to '{}' if unspecified.".format(DEFAULT_MUSL_VERSION)
-        ),
-    ),
-    macos_version = attr.string(
-        doc = (
-            "The maximum macOS version to accept for Bazel platforms that match the " +
-            "@platforms//os:osx constraint. Must be in the format 'X.Y' with X >= 10. " +
-            "All versions from 10.4 through this version will be supported. For example, if this " +
-            "value is set to 12.0, wheels tagged macosx_10_4, macosx_10_5, ..., macosx_11_0, " +
-            "macosx_12_0 will be accepted. Defaults to '{}' if unspecified.".format(DEFAULT_MACOS_VERSION)
-        ),
-    ),
-)
-
-REGISTER_TOOLCHAINS_ATTRS = dict(
     register_toolchains = attr.bool(
         doc = "Register toolchains for all rules_python-registered interpreters.",
         default = True,

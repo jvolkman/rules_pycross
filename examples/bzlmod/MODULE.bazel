@@ -21,7 +21,7 @@ local_path_override(
 )
 
 pycross = use_extension("@rules_pycross//pycross/extensions:pycross.bzl", "pycross")
-pycross.configure_environments(
+pycross.configure_toolchains(
     platforms = [
         "aarch64-apple-darwin",
         "aarch64-unknown-linux-gnu",

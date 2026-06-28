@@ -2,7 +2,7 @@
 
 load("@bazel_skylib//lib:shell.bzl", "shell")
 load("@toml.bzl", "toml")
-load(":lock_attrs.bzl", "CREATE_ENVIRONMENTS_ATTRS", "REGISTER_TOOLCHAINS_ATTRS")
+load(":lock_attrs.bzl", "CONFIGURE_TOOLCHAINS_ATTRS")
 load(":repo_venv_utils.bzl", "create_venv", "get_venv_python_executable", "install_venv_wheels")
 
 INTERNAL_REPO_NAME = "rules_pycross_internal"
@@ -137,7 +137,7 @@ def _patch_ng_whl(wheels):
 
 def _defaults_bzl(rctx):
     lines = []
-    for key in CREATE_ENVIRONMENTS_ATTRS | REGISTER_TOOLCHAINS_ATTRS:
+    for key in CONFIGURE_TOOLCHAINS_ATTRS:
         val = getattr(rctx.attr, key)
 
         lines.append("{} = {}".format(key, repr(val)))
@@ -325,15 +325,15 @@ def _pycross_internal_config_repo_impl(rctx):
 
 pycross_internal_config_repo = repository_rule(
     implementation = _pycross_internal_config_repo_impl,
-    attrs = CREATE_ENVIRONMENTS_ATTRS | REGISTER_TOOLCHAINS_ATTRS,
+    attrs = CONFIGURE_TOOLCHAINS_ATTRS,
 )
 
-def create_internal_repo(environments_attrs, toolchains_attrs, **kwargs):
+def create_internal_repo(toolchains_attrs, **kwargs):
     pycross_internal_repo(
         name = INTERNAL_REPO_NAME,
         **kwargs
     )
     pycross_internal_config_repo(
         name = "rules_pycross_internal_config",
-        **(environments_attrs | toolchains_attrs)
+        **toolchains_attrs
     )

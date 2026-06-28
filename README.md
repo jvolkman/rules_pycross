@@ -41,12 +41,16 @@ After this, packages are available as `@pypi//package_name`. A `requirement()` m
 
 Other lock formats work the same way via `import_pdm`, `import_poetry`, or `import_pylock`.
 
-Python versions are auto-discovered from registered `rules_python` toolchains, and all supported platforms are included by default. To restrict or customize platforms, use `environments.platform()` tags:
+Python versions are auto-discovered from registered `rules_python` toolchains, and all supported platforms are included by default. To restrict or customize platforms, use `pycross.configure_toolchains()`:
 
 ```python
-environments = use_extension("@rules_pycross//pycross/extensions:environments.bzl", "environments")
-environments.platform(target = "x86_64-unknown-linux-gnu")
-environments.platform(target = "aarch64-apple-darwin")
+pycross = use_extension("@rules_pycross//pycross/extensions:pycross.bzl", "pycross")
+pycross.configure_toolchains(
+    platforms = [
+        "x86_64-unknown-linux-gnu",
+        "aarch64-apple-darwin",
+    ],
+)
 ```
 
 ### How It Works
@@ -60,7 +64,7 @@ A `pip install` operation can be broken down into:
 
 `rules_pycross` maps each step to Bazel primitives:
 
-1. **`environments`** extension — declares target platforms and Python versions ahead of time, tied to Bazel's platform/constraint system.
+1. **Native Bazel Platforms** — target environments are determined by standard Bazel `@platforms` constraints and `rules_python` toolchain flags, mapped directly to PEP 508 markers at analysis time.
 2. **`lock_import`** extension — translates a lock file into Bazel repository rules: `http_file` for downloads, build rules for source distributions.
 3. **Build backends** (`setuptools_build`, `meson_build`, etc.) — build sdists into wheels inside sandboxed Bazel actions with remote execution support.
 4. **`pycross_wheel_library`** — extracts a wheel (downloaded or built) and provides it as a `py_library`.
@@ -114,7 +118,6 @@ py_library(
 lock_import.import_uv_workspace(
     name = "shared",
     lock_file = "//:uv.lock",
-    target_environments = ["@envs//:environments"],
 )
 
 # 2. Auto-discover all members; generate repos with a naming pattern
