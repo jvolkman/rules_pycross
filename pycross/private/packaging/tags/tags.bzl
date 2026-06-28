@@ -127,3 +127,50 @@ def get_supported(version = None, platforms = None, impl = None, abis = None):
     supported.extend(compatible_tags(python_version, interpreter, expanded_platforms))
 
     return supported
+
+def _make_tag(interpreter, abi, platform):
+    return struct(
+        interpreter = interpreter.lower(),
+        abi = abi.lower(),
+        platform = platform.lower(),
+    )
+
+def parse_tag(tag, validate_order = False):
+    """Parses the provided tag into a list of Tag structs.
+
+    Args:
+        tag: The tag to parse (e.g., "py3-none-any").
+        validate_order: Whether to check if compressed tag set components are in sorted order.
+
+    Returns:
+        A list of Tag structs.
+    """
+    component_parts = [component.split(".") for component in tag.split("-")]
+
+    if len(component_parts) != 3:
+        fail("Invalid tag: {}".format(tag))
+
+    for parts in component_parts:
+        if "" in parts:
+            fail("Tag {} has an empty component".format(tag))
+
+        # Starlark doesn't have sorted() that works on arbitrary lists easily without mutability?
+        # Actually sorted() exists.
+        if validate_order and parts != sorted(parts):
+            fail("Tag component {} is not in sorted order".format(".".join(parts)))
+
+    interpreters, abis, platforms = component_parts
+
+    result = []
+    for interpreter in interpreters:
+        for abi in abis:
+            for platform_ in platforms:
+                result.append(_make_tag(interpreter, abi, platform_))
+
+    return result
+
+# Exported struct
+tags = struct(
+    get_supported = get_supported,
+    parse_tag = parse_tag,
+)

@@ -6,6 +6,7 @@ Baseline: pypa/packaging 26.2
 
 load("@re.bzl", "re")
 load("//pycross/private/packaging/specifiers:specifiers.bzl", "parse_specifier", "specifier_contains")
+load("//pycross/private/packaging/utils:utils.bzl", "utils")
 
 _MARKER_RULES = {
     "LEFT_PARENTHESIS": re.compile(r"\("),
@@ -164,17 +165,6 @@ _MARKERS_REQUIRING_VERSION = {
     "python_version": True,
 }
 
-def _canonicalize_name(name):
-    name = name.lower().replace("_", "-").replace(".", "-")
-
-    # Collapse runs of hyphens
-    for _i in range(1000):
-        if "--" in name:
-            name = name.replace("--", "-")
-        else:
-            break
-    return name
-
 def _eval_item(item, environment):
     lhs, op, rhs = item
 
@@ -201,15 +191,15 @@ def _eval_item(item, environment):
     if key in ("extra", "extras", "dependency_groups"):
         if type(lhs_val) == "list":
             # buildifier: disable=string-iteration
-            lhs_val = [_canonicalize_name(v) for v in lhs_val]
+            lhs_val = [utils.canonicalize_name(v) for v in lhs_val]
         elif type(lhs_val) == "string":
-            lhs_val = _canonicalize_name(lhs_val)
+            lhs_val = utils.canonicalize_name(lhs_val)
 
         if type(rhs_val) == "list":
             # buildifier: disable=string-iteration
-            rhs_val = [_canonicalize_name(v) for v in rhs_val]
+            rhs_val = [utils.canonicalize_name(v) for v in rhs_val]
         elif type(rhs_val) == "string":
-            rhs_val = _canonicalize_name(rhs_val)
+            rhs_val = utils.canonicalize_name(rhs_val)
 
     if key in _MARKERS_REQUIRING_VERSION and op not in ("in", "not in"):
         # Use specifier_contains

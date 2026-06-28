@@ -1,6 +1,7 @@
 load(":test_markers.bzl", "markers_test_suite")
 load(":test_specifiers.bzl", "specifiers_test_suite")
 load(":test_tags.bzl", "tags_test_suite")
+load(":test_utils.bzl", "utils_test_suite")
 load(":test_version.bzl", "version_test_suite")
 
 package(default_visibility = ["//visibility:private"])
@@ -21,12 +22,17 @@ markers_test_suite(
     name = "test_markers",
 )
 
+utils_test_suite(
+    name = "test_utils",
+)
+
 test_suite(
     name = "packaging",
     tests = [
         ":test_markers",
         ":test_specifiers",
         ":test_tags",
+        ":test_utils",
         ":test_version",
     ],
 )

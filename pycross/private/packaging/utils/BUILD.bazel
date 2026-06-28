@@ -3,11 +3,10 @@ load("@bazel_skylib//:bzl_library.bzl", "bzl_library")
 package(default_visibility = ["//visibility:public"])
 
 bzl_library(
-    name = "markers",
-    srcs = ["markers.bzl"],
+    name = "utils",
+    srcs = ["utils.bzl"],
     deps = [
-        "//pycross/private/packaging/specifiers",
-        "//pycross/private/packaging/utils",
+        "//pycross/private/packaging/tags",
         "//pycross/private/packaging/version",
         "@re.bzl//re",
     ],
