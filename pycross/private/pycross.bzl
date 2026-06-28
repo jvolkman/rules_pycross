@@ -12,8 +12,6 @@ def _pycross_impl(module_ctx):
         if module.name != "rules_pycross" and not module.is_root:
             continue
 
-
-
         if not interpreter_tag:
             for tag in module.tags.configure_interpreter:
                 interpreter_tag = tag
@@ -21,6 +19,14 @@ def _pycross_impl(module_ctx):
 
         if not toolchains_tag:
             for tag in module.tags.configure_toolchains:
+                toolchains_tag = tag
+                break
+
+        # Deprecated alias: configure_environments -> configure_toolchains
+        if not toolchains_tag:
+            for tag in module.tags.configure_environments:
+                # buildifier: disable=print
+                print("WARNING: pycross.configure_environments() is deprecated. Use pycross.configure_toolchains() instead.")
                 toolchains_tag = tag
                 break
 
@@ -57,7 +63,10 @@ pycross = module_extension(
     doc = "Configure rules_pycross.",
     implementation = _pycross_impl,
     tag_classes = {
-
+        "configure_environments": tag_class(
+            doc = "Deprecated: use configure_toolchains instead.",
+            attrs = CONFIGURE_TOOLCHAINS_ATTRS,
+        ),
         "configure_interpreter": tag_class(
             attrs = {
                 "python_interpreter_target": attr.label(
