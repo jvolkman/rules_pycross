@@ -9,6 +9,5 @@ bzl_library(
         "//pycross/private/packaging/specifiers",
         "//pycross/private/packaging/utils",
         "//pycross/private/packaging/version",
-        "@re.bzl//re",
     ],
 )

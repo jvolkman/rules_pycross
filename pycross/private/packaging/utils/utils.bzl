@@ -38,15 +38,22 @@ def canonicalize_name(name, validate = False):
     return value
 
 def is_normalized_name(name):
-    """Check if a name is already normalized."""
-    
+    """Check if a name is already normalized.
+
+    Args:
+        name: The name to check.
+
+    Returns:
+        True if normalized, False otherwise.
+    """
+
     # Equivalent to regex: ^[a-z0-9]+(?:-[a-z0-9]+)*$
     if not name:
         return False
-    
+
     if name[0] not in _VALID_NORMALIZED_START:
         return False
-        
+
     if name[-1] not in _VALID_NORMALIZED_START:
         return False
 
@@ -57,7 +64,7 @@ def is_normalized_name(name):
     for c in name.elems():
         if c not in _VALID_NORMALIZED_CHAR:
             return False
-            
+
     return True
 
 def canonicalize_version(version_input, strip_trailing_zero = True):
@@ -127,6 +134,7 @@ def parse_wheel_filename(filename, validate_order = False):
 
     # Equivalent to regex: ^[\w._]*$
     is_valid_wheel_name = True
+
     # buildifier: disable=string-iteration
     for c in name_part.elems():
         if c not in _VALID_WHEEL_NAME_CHARS:
@@ -143,19 +151,20 @@ def parse_wheel_filename(filename, validate_order = False):
 
     if dashes == 5:
         build_part = parts[2]
-        
+
         # Equivalent to regex: ^(\d+)(.*)$
         if not build_part or build_part[0] not in _DIGITS:
             fail("Invalid build number: {} in {}".format(build_part, filename))
-        
+
         i = 0
+
         # buildifier: disable=string-iteration
         for c in build_part.elems():
             if c in _DIGITS:
                 i += 1
             else:
                 break
-        
+
         build = (int(build_part[:i]), build_part[i:])
     else:
         build = ()
