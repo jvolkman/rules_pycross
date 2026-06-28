@@ -58,6 +58,10 @@ pycross.configure_toolchains(
         "3.11",
         "3.12",
     ],
+    # Set default target environment constraints
+    glibc_version = "2.28",
+    macos_version = "14.0",
+    musl_version = "1.2",
 )
 ```
 
