@@ -16,10 +16,11 @@ The file structure is as follows:
 """
 
 load(":resolved_lock_renderer.bzl", "render_lock_bzl")
-load(":util.bzl", "key_name", "key_parts", "normalize_pep503_name", "underscore_name")
+load(":util.bzl", "key_name", "key_parts", "underscore_name")
+load("//pycross/private/pypackaging/utils:utils.bzl", "canonicalize_name")
 
 def _normalize_name(name):
-    return normalize_pep503_name(name)
+    return canonicalize_name(name)
 
 def _underscore_name(name):
     return underscore_name(name)
