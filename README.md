@@ -41,17 +41,27 @@ After this, packages are available as `@pypi//package_name`. A `requirement()` m
 
 Other lock formats work the same way via `import_pdm`, `import_poetry`, or `import_pylock`.
 
-Python versions are auto-discovered from registered `rules_python` toolchains, and all supported platforms are included by default. To restrict or customize platforms, use `pycross.configure_toolchains()`:
+### Toolchain Configuration
+
+Python versions are auto-discovered from registered `rules_python` toolchains, and all supported platforms are included by default. You can restrict or customize this behavior using `pycross.configure_toolchains()` in your `MODULE.bazel`:
 
 ```python
 pycross = use_extension("@rules_pycross//pycross/extensions:pycross.bzl", "pycross")
 pycross.configure_toolchains(
+    # Restrict supported platforms
     platforms = [
         "x86_64-unknown-linux-gnu",
         "aarch64-apple-darwin",
     ],
+    # Restrict supported Python versions
+    python_versions = [
+        "3.11",
+        "3.12",
+    ],
 )
 ```
+
+By default, `rules_pycross` will automatically register toolchains for all configured platforms and versions. You can disable this by setting `register_toolchains = False` if you prefer to register them manually.
 
 ### How It Works
 
