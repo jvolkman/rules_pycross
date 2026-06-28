@@ -3,7 +3,6 @@ load("@bazel_skylib//:bzl_library.bzl", "bzl_library")
 load("@bazel_skylib//rules:write_file.bzl", "write_file")
 load(":pep508_marker_values.bzl", "FREETHREADED_VALUES", "LIBC_VALUES")
 load(":supported_tags.bzl", "pycross_supported_tags")
-load(":target_environment.bzl", "pycross_target_environment")
 load(":util.bzl", "REPO_HTTP_DEPS")
 
 package(default_visibility = ["//visibility:public"])
@@ -124,15 +123,6 @@ bzl_library(
     ],
 )
 
-bzl_library(
-    name = "target_environment",
-    srcs = ["target_environment.bzl"],
-    deps = [
-        ":internal_repo",
-        ":resolved_lock_renderer",
-    ],
-)
-
 # keep
 bzl_library(
     name = "rules_python_bzl",
@@ -143,10 +133,7 @@ bzl_library(
     name = "toolchain_helpers",
     srcs = ["toolchain_helpers.bzl"],
     deps = [
-        ":lock_attrs",
         ":rules_python_bzl",
-        ":target_environment",
-        ":util",
     ],
 )
 
@@ -173,10 +160,9 @@ bzl_library(
 
 # This is the environment we advertise for what should be pure-python
 # dependencies used by Pycross
-pycross_target_environment(
+pycross_supported_tags(
     name = "rules_pycross_deps_target_env",
-    python_compatible_with = [],
-    version = "3.13.0",
+    python_version = "3.13",
 )
 
 genrule(
@@ -267,17 +253,6 @@ bzl_library(
     name = "thin_package_repo",
     srcs = ["thin_package_repo.bzl"],
     deps = [":util"],
-)
-
-bzl_library(
-    name = "environments",
-    srcs = ["environments.bzl"],
-    deps = [
-        ":lock_attrs",
-        ":toolchain_helpers",
-        "@bazel_features//:features",
-        "@rules_pycross_internal_config//:defaults.bzl",
-    ],
 )
 
 bzl_library(

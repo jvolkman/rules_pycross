@@ -117,7 +117,7 @@ CC_BUILD_ATTRS = {
 REPAIR_BUILD_ATTRS = {
     "target_environment": attr.label(
         doc = "The target environment mapping JSON (resolved dynamically via alias filegroup).",
-        default = Label("@pycross_environments//:current"),
+        default = Label("@rules_pycross//pycross/private:default_supported_tags"),
         allow_files = True,
     ),
     "_repair_tool": attr.label(

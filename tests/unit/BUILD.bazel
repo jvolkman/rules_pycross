@@ -119,7 +119,6 @@ py_test(
     deps = [
         "//pycross/private/tools:lock_model",
         "//pycross/private/tools:raw_lock_resolver",
-        "//pycross/private/tools:target_environment",
         "@rules_pycross_internal//deps:packaging",
         "@rules_pycross_internal//deps:pip",
     ],

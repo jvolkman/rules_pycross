@@ -37,7 +37,6 @@ py_binary(
     deps = [
         ":args",
         ":lock_model",
-        ":target_environment",
         "@rules_pycross_internal//deps:packaging",
     ],
 )
@@ -53,22 +52,10 @@ pycross_wheel_zipimport_library(
 )
 
 py_library(
-    name = "target_environment",
-    srcs = [
-        "target_environment.py",
-    ],
-    imports = ["../../.."],
-    deps = [
-        "@rules_pycross_internal//deps:packaging",
-    ],
-)
-
-py_library(
     name = "lock_model",
     srcs = ["lock_model.py"],
     imports = ["../../.."],
     deps = [
-        ":target_environment",
         "@rules_pycross_internal//deps:dacite",
         "@rules_pycross_internal//deps:packaging",
     ],
@@ -120,20 +107,6 @@ py_binary(
         ":lock_model",
         ":translator_utils",
         "@rules_pycross_internal//deps:poetry-core",
-    ],
-)
-
-py_binary(
-    name = "target_environment_generator",
-    srcs = ["target_environment_generator.py"],
-    imports = ["../../.."],
-    visibility = ["//visibility:public"],
-    deps = [
-        ":args",
-        ":target_environment",
-        "@rules_pycross_internal//deps:dacite",
-        "@rules_pycross_internal//deps:packaging",
-        "@rules_pycross_internal//deps:pip",
     ],
 )
 

@@ -56,38 +56,40 @@ def _pycross_supported_tags_impl(ctx):
     elif sys_platform == "linux" and arch == "arm64":
         arch = "aarch64"
 
-    platforms = []
+    platforms = ctx.attr.platforms
+    if not platforms:
+        platforms = []
 
-    if sys_platform == "linux":
-        if ctx.attr.libc == "glibc":
-            max_glibc = _flag_value(ctx.attr._max_glibc_version) or "2.17"
-            version = max_glibc.split(".")
-            minor = version[1] if len(version) > 1 else "17"
-            platforms.append("manylinux_{}_{}_{}".format(version[0], minor, arch))
-        elif ctx.attr.libc == "musl":
-            max_musl = _flag_value(ctx.attr._max_musl_version) or "1.2"
-            version = max_musl.split(".")
-            minor = version[1] if len(version) > 1 else "2"
-            platforms.append("musllinux_{}_{}_{}".format(version[0], minor, arch))
+        if sys_platform == "linux":
+            if ctx.attr.libc == "glibc":
+                max_glibc = _flag_value(ctx.attr._max_glibc_version) or "2.17"
+                version = max_glibc.split(".")
+                minor = version[1] if len(version) > 1 else "17"
+                platforms.append("manylinux_{}_{}_{}".format(version[0], minor, arch))
+            elif ctx.attr.libc == "musl":
+                max_musl = _flag_value(ctx.attr._max_musl_version) or "1.2"
+                version = max_musl.split(".")
+                minor = version[1] if len(version) > 1 else "2"
+                platforms.append("musllinux_{}_{}_{}".format(version[0], minor, arch))
+            else:
+                platforms.append("linux_" + arch)
+        elif sys_platform == "darwin":
+            macos_ver = _flag_value(ctx.attr._max_macos_version) or markers["platform_version"] or "11.0"
+            version = macos_ver.split(".")
+            major = version[0]
+            minor = version[1] if len(version) > 1 else "0"
+            platforms.append("macosx_{}_{}_{}".format(major, minor, arch))
+        elif sys_platform == "win32":
+            if arch in ("x86_64", "amd64"):
+                platforms.append("win_amd64")
+            elif arch in ("x86", "i386", "i686"):
+                platforms.append("win32")
+            elif arch == "arm64":
+                platforms.append("win_arm64")
+            else:
+                platforms.append(arch)
         else:
-            platforms.append("linux_" + arch)
-    elif sys_platform == "darwin":
-        macos_ver = _flag_value(ctx.attr._max_macos_version) or markers["platform_version"] or "11.0"
-        version = macos_ver.split(".")
-        major = version[0]
-        minor = version[1] if len(version) > 1 else "0"
-        platforms.append("macosx_{}_{}_{}".format(major, minor, arch))
-    elif sys_platform == "win32":
-        if arch in ("x86_64", "amd64"):
-            platforms.append("win_amd64")
-        elif arch in ("x86", "i386", "i686"):
-            platforms.append("win32")
-        elif arch == "arm64":
-            platforms.append("win_arm64")
-        else:
-            platforms.append(arch)
-    else:
-        platforms.append("any")
+            platforms.append("any")
 
     tags = get_supported(
         version = version_nodot,
@@ -123,6 +125,9 @@ def _pycross_supported_tags_impl(ctx):
 _pycross_supported_tags = rule(
     implementation = _pycross_supported_tags_impl,
     attrs = {
+        "platforms": attr.string_list(
+            doc = "Explicit list of PEP 425 platform tags. If set, libc and freethreaded are ignored for platform derivation.",
+        ),
         "libc": attr.string(
             default = "",
             doc = "The host libc variant: 'glibc', 'musl', or '' (unknown/non-Linux).",

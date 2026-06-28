@@ -34,7 +34,7 @@ pycross_repaired_wheel = rule(
         ),
         "target_environment": attr.label(
             doc = "The target environment mapping JSON (resolved dynamically via alias filegroup).",
-            default = Label("@pycross_environments//:current"),
+            default = Label("@rules_pycross//pycross/private:default_supported_tags"),
             allow_files = True,
         ),
         "whldir_name": attr.string(

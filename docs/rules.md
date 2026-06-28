@@ -114,38 +114,9 @@ pycross_repaired_wheel(<a href="#pycross_repaired_wheel-name">name</a>, <a href=
 | :------------- | :------------- | :------------- | :------------- | :------------- |
 | <a id="pycross_repaired_wheel-name"></a>name |  A unique name for this target.   | <a href="https://bazel.build/concepts/labels#target-names">Name</a> | required |  |
 | <a id="pycross_repaired_wheel-native_deps"></a>native_deps |  Native dependencies providing shared libraries to bundle.   | <a href="https://bazel.build/concepts/labels">List of labels</a> | optional |  `[]`  |
-| <a id="pycross_repaired_wheel-target_environment"></a>target_environment |  The target environment mapping JSON (resolved dynamically via alias filegroup).   | <a href="https://bazel.build/concepts/labels">Label</a> | optional |  `"@@rules_pycross++environments+pycross_environments//:current"`  |
+| <a id="pycross_repaired_wheel-target_environment"></a>target_environment |  The target environment mapping JSON (resolved dynamically via alias filegroup).   | <a href="https://bazel.build/concepts/labels">Label</a> | optional |  `"@rules_pycross//pycross/private:default_supported_tags"`  |
 | <a id="pycross_repaired_wheel-wheel"></a>wheel |  The input wheel to repair.   | <a href="https://bazel.build/concepts/labels">Label</a> | required |  |
 | <a id="pycross_repaired_wheel-whldir_name"></a>whldir_name |  Name for the output .whldir TreeArtifact directory. If empty, defaults to '{name}.whldir'.   | String | optional |  `""`  |
-
-
-<a id="pycross_target_environment"></a>
-
-## pycross_target_environment
-
-<pre>
-load("@rules_pycross//pycross:defs.bzl", "pycross_target_environment")
-
-pycross_target_environment(<a href="#pycross_target_environment-name">name</a>, <a href="#pycross_target_environment-abis">abis</a>, <a href="#pycross_target_environment-config_setting">config_setting</a>, <a href="#pycross_target_environment-envornment_markers">envornment_markers</a>, <a href="#pycross_target_environment-flag_values">flag_values</a>,
-                           <a href="#pycross_target_environment-implementation">implementation</a>, <a href="#pycross_target_environment-platforms">platforms</a>, <a href="#pycross_target_environment-python_compatible_with">python_compatible_with</a>, <a href="#pycross_target_environment-version">version</a>)
-</pre>
-
-
-
-**ATTRIBUTES**
-
-
-| Name  | Description | Type | Mandatory | Default |
-| :------------- | :------------- | :------------- | :------------- | :------------- |
-| <a id="pycross_target_environment-name"></a>name |  A unique name for this target.   | <a href="https://bazel.build/concepts/labels#target-names">Name</a> | required |  |
-| <a id="pycross_target_environment-abis"></a>abis |  A list of PEP 425 abi tags. Defaults to ['none'].   | List of strings | optional |  `["none"]`  |
-| <a id="pycross_target_environment-config_setting"></a>config_setting |  Optional config_setting target to select this environment.   | <a href="https://bazel.build/concepts/labels">Label</a> | optional |  `None`  |
-| <a id="pycross_target_environment-envornment_markers"></a>envornment_markers |  Environment marker overrides.   | <a href="https://bazel.build/rules/lib/dict">Dictionary: String -> String</a> | optional |  `{}`  |
-| <a id="pycross_target_environment-flag_values"></a>flag_values |  A list of flag values that, when satisfied, indicates this target_platform should be selected (together with python_compatible_with).   | <a href="https://bazel.build/rules/lib/dict">Dictionary: Label -> String</a> | optional |  `{}`  |
-| <a id="pycross_target_environment-implementation"></a>implementation |  The PEP 425 implementation abbreviation. Defaults to 'cp' for CPython.   | String | optional |  `"cp"`  |
-| <a id="pycross_target_environment-platforms"></a>platforms |  A list of PEP 425 platform tags. Defaults to ['any'].   | List of strings | optional |  `["any"]`  |
-| <a id="pycross_target_environment-python_compatible_with"></a>python_compatible_with |  A list of constraints that, when satisfied, indicates this target_platform should be selected (together with flag_values).   | <a href="https://bazel.build/concepts/labels">List of labels</a> | optional |  `[]`  |
-| <a id="pycross_target_environment-version"></a>version |  The python version.   | String | required |  |
 
 
 <a id="pycross_wheel_headers"></a>
