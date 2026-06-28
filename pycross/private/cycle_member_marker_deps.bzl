@@ -30,7 +30,51 @@ def _sanitize(name):
     """Sanitize a package key for use in target names."""
     return name.replace("@", "_").replace(".", "_").replace("-", "_").replace("[", "_").replace("]", "_")
 
-def _compute_reachability_groups(member, other_members, edges):
+def find_unconditional_deps(member, other_members, edges):
+    """Finds all members unconditionally reachable from member within the cycle.
+
+    Uses a simple BFS traversal following only unconditional edges (no markers).
+
+    Args:
+        member: The starting cycle member.
+        other_members: List of other member keys in the cycle.
+        edges: Parsed edge dict: {node: [{dep, marker?}, ...], ...}.
+
+    Returns:
+        A list of package keys that are unconditionally reachable from `member`.
+    """
+    cycle_members = {m: True for m in other_members}
+    cycle_members[member] = True
+
+    unconditional = {}
+    queue = [member]
+    visited = {member: True}
+
+    # Bounded BFS
+    for _ in range(len(other_members) + 1):
+        if not queue:
+            break
+
+        # Starlark doesn't have pop(0), simulate it or use a pointer if list grows big.
+        # But here queue is small (cycle members).
+        curr = queue[0]
+        queue = queue[1:]
+
+        curr_edges = edges.get(curr, [])
+        for edge in curr_edges:
+            dep = edge["dep"]
+            if dep not in cycle_members:
+                continue
+            has_marker = bool(edge.get("marker"))
+            if not has_marker and dep not in visited:
+                visited[dep] = True
+                if dep != member:
+                    unconditional[dep] = True
+                queue.append(dep)
+
+    return sorted(unconditional.keys())
+
+def compute_reachability_groups(member, other_members, edges):
     """Compute groups of cycle members that share identical reachability.
 
     Uses the conservative single-inbound-edge rule: a node is collapsed into
@@ -148,9 +192,21 @@ def pycross_cycle_member_marker_deps(
         return
 
     parsed_edges = json.decode(edges)
-    groups = _compute_reachability_groups(member, other_members, parsed_edges)
 
+    # 1. Find unconditionally reachable deps
+    unconditional_deps = find_unconditional_deps(member, other_members, parsed_edges)
+
+    # 2. Add them to unconditional deps list directly
     deps = [":" + raw_name]
+    for u_dep in unconditional_deps:
+        deps.append(":_raw_" + u_dep)
+
+    # 3. Filter other_members to only include those NOT unconditionally reachable
+    unconditional_set = {u: True for u in unconditional_deps}
+    conditional_members = [m for m in other_members if m not in unconditional_set]
+
+    # 4. Compute groups for conditional members only
+    groups = compute_reachability_groups(member, conditional_members, parsed_edges)
 
     for representative, group_members in groups:
         pair_name = "_cycle_needed_{}_{}".format(
