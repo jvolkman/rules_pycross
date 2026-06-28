@@ -183,8 +183,6 @@ def _render_marker_wheel_chooser(lines, pkg_key, pkg, repo_map, sdist_map, rctx_
         _ind("pycross_wheel_chooser("),
         _ind('name = "{}",'.format(chooser_name), 2),
         _ind("candidates = '{}',".format(candidates_json), 2),
-        _ind("libc = select(LIBC_VALUES),", 2),
-        _ind("freethreaded = select(FREETHREADED_VALUES),", 2),
         _ind(")"),
         "",
     ])

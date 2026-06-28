@@ -10,6 +10,9 @@ load("//pycross/private:cycle_dep_needed.bzl", "is_reachable")
 load("//pycross/private:pep508_evaluator.bzl", "pycross_pep508_evaluator")
 
 # buildifier: disable=bzl-visibility
+load("//pycross/private:supported_tags.bzl", "pycross_supported_tags")
+
+# buildifier: disable=bzl-visibility
 load("//pycross/private:wheel_chooser.bzl", "pycross_wheel_chooser", "select_best_wheel")
 
 _LINUX_MARKERS = {
@@ -66,7 +69,12 @@ _WHEEL_CANDIDATES = [
 # ── Test: linux x86_64 picks manylinux_2_28 (highest priority) ───────
 
 def _test_wheel_linux_x86_impl(env, _target):
-    best = select_best_wheel(_WHEEL_CANDIDATES, "linux", "x86_64", "3.11")
+    supported_tags = [
+        "cp311-cp311-manylinux_2_28_x86_64",
+        "cp311-cp311-manylinux_2_17_x86_64",
+        "py3-none-any",
+    ]
+    best = select_best_wheel(_WHEEL_CANDIDATES, supported_tags)
     if best == None:
         env.fail("Expected a wheel match for linux x86_64")
     elif best["filename"] != "pkg-1.0-cp311-cp311-manylinux_2_28_x86_64.whl":
@@ -86,7 +94,11 @@ def _test_wheel_linux_x86(name):
 # ── Test: mac arm64 picks macosx wheel ───────────────────────────────
 
 def _test_wheel_mac_arm64_impl(env, _target):
-    best = select_best_wheel(_WHEEL_CANDIDATES, "darwin", "arm64", "3.11")
+    supported_tags = [
+        "cp311-cp311-macosx_11_0_arm64",
+        "py3-none-any",
+    ]
+    best = select_best_wheel(_WHEEL_CANDIDATES, supported_tags)
     if best == None:
         env.fail("Expected a wheel match for darwin arm64")
     elif best["filename"] != "pkg-1.0-cp311-cp311-macosx_11_0_arm64.whl":
@@ -106,7 +118,10 @@ def _test_wheel_mac_arm64(name):
 # ── Test: falls back to py3-none-any on unknown platform ─────────────
 
 def _test_wheel_fallback_any_impl(env, _target):
-    best = select_best_wheel(_WHEEL_CANDIDATES, "freebsd", "x86_64", "3.11")
+    supported_tags = [
+        "py3-none-any",
+    ]
+    best = select_best_wheel(_WHEEL_CANDIDATES, supported_tags)
     if best == None:
         env.fail("Expected py3-none-any fallback")
     elif best["filename"] != "pkg-1.0-py3-none-any.whl":
@@ -134,7 +149,10 @@ def _test_wheel_no_match_impl(env, _target):
             "platform_tag": "manylinux_2_28_x86_64",
         },
     ]
-    best = select_best_wheel(candidates, "linux", "x86_64", "3.11")
+    supported_tags = [
+        "cp311-cp311-manylinux_2_17_x86_64",
+    ]
+    best = select_best_wheel(candidates, supported_tags)
     if best != None:
         env.fail("Expected no match for wrong python version, got " + best["filename"])
 
@@ -166,7 +184,11 @@ def _test_wheel_abi3_impl(env, _target):
             "platform_tag": "any",
         },
     ]
-    best = select_best_wheel(candidates, "linux", "x86_64", "3.11")
+    supported_tags = [
+        "cp311-abi3-manylinux_2_17_x86_64",
+        "py3-none-any",
+    ]
+    best = select_best_wheel(candidates, supported_tags)
     if best == None:
         env.fail("Expected abi3 wheel match")
     elif best["filename"] != "pkg-1.0-cp311-abi3-manylinux_2_17_x86_64.whl":
@@ -211,6 +233,12 @@ def _test_chooser_rule_impl(env, target):
     env.expect.that_target(target).default_outputs().contains_at_least([])
 
 def _test_chooser_rule(name):
+    pycross_supported_tags(
+        name = name + "_tags",
+        libc = "glibc",
+        tags = ["manual"],
+    )
+
     pycross_wheel_chooser(
         name = name + "_chooser",
         candidates = json.encode([{
@@ -219,9 +247,7 @@ def _test_chooser_rule(name):
             "abi_tag": "none",
             "platform_tag": "any",
         }]),
-        sys_platform = "linux",
-        platform_machine = "x86_64",
-        python_version = "3.11",
+        supported_tags = ":" + name + "_tags",
         tags = ["manual"],
     )
     analysis_test(

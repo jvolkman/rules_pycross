@@ -6,6 +6,7 @@ load("//pycross/private:modules_mapping.bzl", _pycross_modules_mapping = "pycros
 load("//pycross/private:pep508_evaluator.bzl", _pycross_pep508_evaluator = "pycross_pep508_evaluator")
 load("//pycross/private:providers.bzl", _PycrossExtractedWheelInfo = "PycrossExtractedWheelInfo")
 load("//pycross/private:pypi_file.bzl", _pypi_file = "pypi_file")
+load("//pycross/private:supported_tags.bzl", _pycross_supported_tags = "pycross_supported_tags")
 load("//pycross/private:target_environment.bzl", _pycross_target_environment = "pycross_target_environment")
 load("//pycross/private:wheel_chooser.bzl", _pycross_wheel_chooser = "pycross_wheel_chooser")
 load("//pycross/private:wheel_library.bzl", _pycross_wheel_library = "pycross_wheel_library")
@@ -26,6 +27,7 @@ pycross_modules_mapping = _pycross_modules_mapping
 pycross_cycle_member_marker_deps = _pycross_cycle_member_marker_deps
 pycross_dist_info = _pycross_dist_info
 pycross_pep508_evaluator = _pycross_pep508_evaluator
+pycross_supported_tags = _pycross_supported_tags
 
 pycross_wheel_headers = _pycross_wheel_headers
 pycross_wheel_library = _pycross_wheel_library

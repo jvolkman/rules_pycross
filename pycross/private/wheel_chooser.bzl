@@ -12,349 +12,46 @@ The selection algorithm:
      "__no_matching_wheel__" if nothing matches.
 """
 
-load(":pep508_marker_values.bzl", "PYTHON_TOOLCHAIN_TYPE", "collect_markers", "marker_value_attrs")
+load(":supported_tags.bzl", "SupportedTagsInfo")
 
 # ---------------------------------------------------------------------------
-# Tag compatibility helpers
+# Pure-function helpers
 # ---------------------------------------------------------------------------
 
-def _single_platform_tag_matches(platform_tag, sys_platform, platform_machine, libc = ""):
-    """Check whether a single (non-compound) platform_tag is compatible."""
-    if platform_tag == "any":
-        return True
-
-    # OS match
-    os_ok = False
-    if "linux" in platform_tag and sys_platform == "linux":
-        os_ok = True
-    elif "macosx" in platform_tag and sys_platform == "darwin":
-        os_ok = True
-    elif "win" in platform_tag and sys_platform == "win32":
-        os_ok = True
-
-    if not os_ok:
-        return False
-
-    # Libc match: manylinux wheels require glibc, musllinux wheels require musl.
-    if libc:
-        if "manylinux" in platform_tag and libc != "glibc":
-            return False
-        if "musllinux" in platform_tag and libc != "musl":
-            return False
-
-    # Architecture match. We check if the tag ends with known architecture strings.
-    if platform_tag.endswith("x86_64") or platform_tag.endswith("amd64"):
-        return platform_machine in ("x86_64", "amd64")
-    elif platform_tag.endswith("aarch64") or platform_tag.endswith("arm64") or platform_tag.endswith("ARM64"):
-        return platform_machine in ("aarch64", "arm64", "ARM64")
-    elif platform_tag.endswith("i686") or platform_tag.endswith("i386") or platform_tag.endswith("x86"):
-        return platform_machine in ("i686", "i386", "x86")
-    elif platform_tag.endswith("armv7l"):
-        return platform_machine == "armv7l"
-    elif platform_tag.endswith("ppc64le"):
-        return platform_machine == "ppc64le"
-    elif platform_tag.endswith("s390x"):
-        return platform_machine == "s390x"
-    elif platform_tag.endswith("riscv64"):
-        return platform_machine == "riscv64"
-    elif platform_tag.endswith("universal2"):
-        # macOS universal2 wheels contain both x86_64 and arm64 slices.
-        return sys_platform == "darwin" and platform_machine in ("x86_64", "arm64")
-    elif platform_tag == "win32":
-        # The win32 platform tag (exact match) means 32-bit Windows.
-        return platform_machine in ("x86", "i386", "i686")
-
-    # Fallback for other known tags or exact matches
-    if platform_machine and platform_tag.endswith(platform_machine):
-        return True
-
-    return False
-
-def _platform_tag_matches(platform_tag, sys_platform, platform_machine, libc = ""):
-    """Check whether a wheel's platform_tag is compatible with the host.
-
-    Handles compound dot-separated tags.
-    """
-    if "." in platform_tag:
-        for subtag in platform_tag.split("."):
-            if _single_platform_tag_matches(subtag, sys_platform, platform_machine, libc):
-                return True
-        return False
-    return _single_platform_tag_matches(platform_tag, sys_platform, platform_machine, libc)
-
-def _single_python_tag_matches(tag, python_version, freethreaded = "no"):
-    """Check whether a single (non-compound) python tag matches.
-
-    Args:
-        tag: A single python tag like "cp311", "py3", "py2", "cp313t".
-        python_version: The host python version as "X.Y". May be empty.
-        freethreaded: "yes" if the host Python is freethreaded, "no" otherwise.
-
-    Returns:
-        True if the tag is compatible.
-    """
-    if tag == "py3":
-        return not python_version or python_version.startswith("3")
-    if tag == "py2":
-        return python_version.startswith("2") if python_version else False
-
-    if not python_version:
-        return False
-
-    # cpXY / cpXYZ style — e.g. "cp311" for CPython 3.11, "cp313t" for freethreaded.
-    if tag.startswith("cp"):
-        tag_rest = tag[2:]
-        is_free = tag_rest.endswith("t")
-        tag_digits = tag_rest[:-1] if is_free else tag_rest
-
-        # Freethreaded tags only match freethreaded builds and vice versa.
-        if is_free and freethreaded != "yes":
-            return False
-        if not is_free and freethreaded == "yes":
-            # Non-freethreaded cpXYZ tags don't match freethreaded builds
-            # (freethreaded builds need cp313t, not cp313).
-            # Exception: "cp3" without version digits is a generic tag.
-            if tag_digits.isdigit() and len(tag_digits) >= 2:
-                return False
-
-        if len(tag_digits) >= 2:
-            expected = tag_digits[0] + "." + tag_digits[1:]
-            return python_version == expected
-
-    # pyXY style — e.g. "py311". These are version-generic, never freethreaded.
-    if tag.startswith("py") and len(tag) > 2:
-        tag_digits = tag[2:]
-        if tag_digits.isdigit() and len(tag_digits) >= 1:
-            expected = tag_digits[0] + "." + tag_digits[1:]
-            return python_version == expected or python_version.startswith(tag_digits[0] + ".")
-
-    return False
-
-def _python_tag_matches(python_tag, python_version, freethreaded = "no"):
-    """Check whether a wheel's python_tag is compatible with the host Python.
-
-    Args:
-        python_tag: The wheel's python tag (e.g. "cp311", "py3", "py2.py3").
-                    May be a compound dot-separated tag.
-        python_version: The host python version as "X.Y" (e.g. "3.11").
-                        May be empty if unknown.
-        freethreaded: "yes" if the host Python is freethreaded, "no" otherwise.
-
-    Returns:
-        True if the wheel can run on this Python.
-    """
-
-    # Handle compound tags (e.g. "py2.py3", "cp39.cp310") by checking each subtag.
-    if "." in python_tag:
-        subtags = python_tag.split(".")
-
-        # Only split if it looks like multiple tags (each starts with py/cp).
-        is_compound = len(subtags) > 1
-        for s in subtags:
-            if not (s.startswith("py") or s.startswith("cp")):
-                is_compound = False
-                break
-        if is_compound:
-            for s in subtags:
-                if _single_python_tag_matches(s, python_version, freethreaded):
-                    return True
-            return False
-
-    return _single_python_tag_matches(python_tag, python_version, freethreaded)
-
-def _abi_tag_matches(abi_tag, python_version, freethreaded = "no"):
-    """Check whether a wheel's abi_tag is compatible.
-
-    Args:
-        abi_tag: The wheel's ABI tag (e.g. "cp311", "abi3", "none", "cp313t").
-        python_version: The host python version as "X.Y". May be empty.
-        freethreaded: "yes" if the host Python is freethreaded, "no" otherwise.
-
-    Returns:
-        True if the ABI is compatible.
-    """
-    if abi_tag == "none":
-        return True
-    if abi_tag == "abi3":
-        # Stable ABI — compatible with any non-freethreaded CPython >= 3.2.
-        # Freethreaded builds don't support the stable ABI yet.
-        if freethreaded == "yes":
-            return False
-        return not python_version or python_version.startswith("3")
-
-    # Version-specific ABI tags require a known python_version.
-    if not python_version:
-        return False
-
-    if abi_tag.startswith("cp"):
-        tag_digits = abi_tag[2:]
-        if len(tag_digits) >= 2:
-            expected = tag_digits[0] + "." + tag_digits[1:]
-            return python_version == expected
-    return False
-
-# ---------------------------------------------------------------------------
-# Scoring helpers
-# ---------------------------------------------------------------------------
-
-def _python_tag_score(python_tag):
-    """Score a python tag by specificity (higher = more specific).
-
-    Args:
-        python_tag: The wheel's python tag string.
-
-    Returns:
-        Integer score.
-    """
-    if python_tag == "py2.py3":
-        return 0
-    if python_tag == "py3":
-        return 1
-    if python_tag.startswith("cp") and len(python_tag) == 3:
-        # e.g. "cp3" — version-major only.
-        return 2
-    if python_tag.startswith("cp"):
-        # e.g. "cp311" — fully pinned.
-        return 3
-    return 1
-
-def _abi_tag_score(abi_tag):
-    """Score an ABI tag by specificity.
-
-    Args:
-        abi_tag: The wheel's ABI tag string.
-
-    Returns:
-        Integer score.
-    """
-    if abi_tag == "none":
-        return 1
-    if abi_tag == "abi3":
-        return 2
-    if abi_tag.startswith("cp"):
-        return 3
-    return 1
-
-def _manylinux_version(platform_tag):
-    """Extract a (major, minor) version tuple from a manylinux tag.
-
-    Args:
-        platform_tag: A platform tag string.
-
-    Returns:
-        A (major, minor) tuple, or None if not a manylinux tag.
-    """
-    prefix = "manylinux_"
-    idx = platform_tag.find(prefix)
-    if idx == -1:
-        return None
-
-    rest = platform_tag[idx + len(prefix):]
-
-    # rest is e.g. "2_28_x86_64"; we want the first two _-separated parts.
-    parts = rest.split("_")
-    if len(parts) >= 2:
-        major = parts[0]
-        minor = parts[1]
-        if major.isdigit() and minor.isdigit():
-            return (int(major), int(minor))
-    return None
-
-def _platform_tag_score(platform_tag):
-    """Score a platform tag by specificity.
-
-    Args:
-        platform_tag: The wheel's platform tag string.
-
-    Returns:
-        Integer score.
-    """
-    if platform_tag == "any":
-        return 0
-
-    base_score = 2
-    ml = _manylinux_version(platform_tag)
-    if ml != None:
-        # Higher manylinux version = higher score.
-        # e.g. manylinux_2_28 scores higher than manylinux_2_17.
-        base_score = 2 + ml[0] * 100 + ml[1]
-    return base_score
-
-def _candidate_score(candidate):
-    """Compute an overall priority score for a candidate.
-
-    Args:
-        candidate: A candidate dict with "python_tag", "abi_tag", "platform_tag".
-
-    Returns:
-        A list of integers suitable for comparison (higher = better).
-    """
-    return [
-        _python_tag_score(candidate["python_tag"]),
-        _platform_tag_score(candidate["platform_tag"]),
-        _abi_tag_score(candidate["abi_tag"]),
-    ]
-
-# ---------------------------------------------------------------------------
-# Public selection entry point
-# ---------------------------------------------------------------------------
-
-def select_best_wheel(candidates, sys_platform, platform_machine, python_version, libc = "", freethreaded = "no"):
+def select_best_wheel(candidates, supported_tags):
     """Select the best-matching wheel from a list of candidates.
 
     Args:
         candidates: List of candidate dicts, each with keys "filename",
-            "python_tag", "abi_tag", "platform_tag", and optionally
-            "requires_python".
-        sys_platform: The host sys.platform value (e.g. "linux").
-        platform_machine: The host platform.machine (e.g. "x86_64").
-        python_version: The host Python version as "X.Y" (e.g. "3.11").
-        libc: The host libc variant ("glibc", "musl", or "").
-        freethreaded: "yes" if the host Python is freethreaded, "no" otherwise.
+            "python_tag", "abi_tag", "platform_tag".
+        supported_tags: List of compatible tag strings, ordered by preference.
 
     Returns:
         The best candidate dict, or None if no candidate is compatible.
     """
-    best = None
-    best_score = None
 
-    for candidate in candidates:
-        ptag = candidate.get("platform_tag", "any")
-        pytag = candidate.get("python_tag", "py3")
-        atag = candidate.get("abi_tag", "none")
+    # Pre-process candidates to split compound tags
+    processed = []
+    for c in candidates:
+        processed.append({
+            "filename": c["filename"],
+            "py_tags": c.get("python_tag", "py3").split("."),
+            "abi_tags": c.get("abi_tag", "none").split("."),
+            "plat_tags": c.get("platform_tag", "any").split("."),
+            "raw": c,
+        })
 
-        if not _platform_tag_matches(ptag, sys_platform, platform_machine, libc):
+    for tag_str in supported_tags:
+        parts = tag_str.split("-", 2)
+        if len(parts) < 3:
             continue
-        if not _python_tag_matches(pytag, python_version, freethreaded):
-            continue
-        if not _abi_tag_matches(atag, python_version, freethreaded):
-            continue
+        py, abi, plat = parts
 
-        score = _candidate_score(candidate)
-        if best == None or _score_gt(score, best_score):
-            best = candidate
-            best_score = score
+        for c in processed:
+            if py in c["py_tags"] and abi in c["abi_tags"] and plat in c["plat_tags"]:
+                return c["raw"]
 
-    return best
-
-def _score_gt(a, b):
-    """Return True if score list `a` is strictly greater than `b`.
-
-    Compares element-by-element from most significant to least.
-
-    Args:
-        a: A list of integers.
-        b: A list of integers.
-
-    Returns:
-        True if a > b lexicographically.
-    """
-    for i in range(len(a)):
-        if a[i] > b[i]:
-            return True
-        if a[i] < b[i]:
-            return False
-    return False
+    return None
 
 # ---------------------------------------------------------------------------
 # Rule implementation
@@ -362,16 +59,9 @@ def _score_gt(a, b):
 
 def _pycross_wheel_chooser_impl(ctx):
     candidates = json.decode(ctx.attr.candidates)
-    markers = collect_markers(ctx)
+    supported_tags = ctx.attr.supported_tags[SupportedTagsInfo].tags
 
-    best = select_best_wheel(
-        candidates = candidates,
-        sys_platform = markers["sys_platform"],
-        platform_machine = markers["platform_machine"],
-        python_version = markers["python_version"],
-        libc = ctx.attr.libc,
-        freethreaded = ctx.attr.freethreaded,
-    )
+    best = select_best_wheel(candidates, supported_tags)
 
     if best:
         value = best["filename"]
@@ -382,26 +72,20 @@ def _pycross_wheel_chooser_impl(ctx):
 
 _pycross_wheel_chooser = rule(
     implementation = _pycross_wheel_chooser_impl,
-    attrs = dict(
-        candidates = attr.string(
+    attrs = {
+        "candidates": attr.string(
             mandatory = True,
             doc = (
                 "JSON-encoded list of wheel candidates. Each candidate is an " +
-                "object with keys: filename, python_tag, abi_tag, platform_tag, " +
-                "and optionally requires_python."
+                "object with keys: filename, python_tag, abi_tag, platform_tag."
             ),
         ),
-        libc = attr.string(
-            default = "",
-            doc = "The host libc variant: 'glibc', 'musl', or '' (unknown/non-Linux).",
+        "supported_tags": attr.label(
+            default = Label("@rules_pycross//pycross/private:default_supported_tags"),
+            providers = [SupportedTagsInfo],
+            doc = "The supported tags for the current environment.",
         ),
-        freethreaded = attr.string(
-            default = "no",
-            doc = "'yes' if the host Python is freethreaded, 'no' otherwise.",
-        ),
-        **marker_value_attrs()
-    ),
-    toolchains = [PYTHON_TOOLCHAIN_TYPE],
+    },
 )
 
 def pycross_wheel_chooser(name, **kwargs):
