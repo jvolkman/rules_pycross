@@ -41,7 +41,6 @@ lock_import = use_extension("@rules_pycross//pycross/extensions:lock_import.bzl"
 lock_import.import_pdm_workspace(
     name = "shared",
     lock_file = "//:pdm.lock",
-    target_environments = ["@pdm_workspace_envs//:environments"],
 )
 lock_import.pdm_all_members(
     repo_pattern = "lock_{member}",

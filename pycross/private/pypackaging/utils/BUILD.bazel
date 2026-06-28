@@ -8,6 +8,5 @@ bzl_library(
     deps = [
         "//pycross/private/pypackaging/tags",
         "//pycross/private/pypackaging/version",
-        "@re.bzl//re",
     ],
 )

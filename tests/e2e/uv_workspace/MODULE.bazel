@@ -41,7 +41,6 @@ lock_import = use_extension("@rules_pycross//pycross/extensions:lock_import.bzl"
 lock_import.import_uv_workspace(
     name = "shared",
     lock_file = "//:uv.lock",
-    target_environments = ["@uv_workspace_envs//:environments"],
 )
 lock_import.uv_all_members(
     repo_pattern = "lock_{member}",
@@ -70,7 +69,6 @@ use_repo(lock_repos, "lock_a", "lock_project_b")
 lock_import.import_uv_workspace(
     name = "standalone",
     lock_file = "//:uv.lock",
-    target_environments = ["@uv_workspace_envs//:environments"],
 )
 lock_import.uv_member(
     project = "project-a",

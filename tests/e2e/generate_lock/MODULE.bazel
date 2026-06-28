@@ -47,7 +47,6 @@ lock_import.import_uv(
     optional_groups = ["yaml"],
     project_file = "//:pyproject.toml",
     repo = "uv",
-    target_environments = ["@rules_pycross_e2e_environments//:environments"],
 )
 
 # The actual repos are loaded from the lock_repos extension.

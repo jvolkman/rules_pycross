@@ -2,24 +2,12 @@
 
 load("@bazel_skylib//lib:paths.bzl", "paths")
 load("@rules_python//python:py_info.bzl", "PyInfo")
+load(":util.bzl", "PY_COMMON_ATTRS", "merge_py_providers")
 
 def _pycross_wheel_zipimport_library_impl(ctx):
     wheel_label = ctx.file.wheel.owner or ctx.attr.wheel.label
     wheel_file = ctx.file.wheel
     extra_files = []
-
-    has_py2_only_sources = False
-    has_py3_only_sources = True
-    if not has_py2_only_sources:
-        for d in ctx.attr.deps:
-            if d[PyInfo].has_py2_only_sources:
-                has_py2_only_sources = True
-                break
-    if not has_py3_only_sources:
-        for d in ctx.attr.deps:
-            if d[PyInfo].has_py3_only_sources:
-                has_py3_only_sources = True
-                break
 
     # TODO: Is there a more correct way to get this runfiles-relative import path?
     imp = paths.join(
@@ -28,35 +16,26 @@ def _pycross_wheel_zipimport_library_impl(ctx):
         wheel_label.name,
     )
 
-    imports = depset(
-        direct = [imp],
-        transitive = [d[PyInfo].imports for d in ctx.attr.deps],
+    merged = merge_py_providers(
+        ctx,
+        ctx.attr.deps,
+        direct_sources = [wheel_file] + extra_files,
+        direct_imports = [imp],
+        base_runfiles = ctx.runfiles(files = [wheel_file] + extra_files),
+        has_py3_only_sources = True,
     )
-    transitive_sources = depset(
-        direct = [wheel_file] + extra_files,
-        transitive = [dep[PyInfo].transitive_sources for dep in ctx.attr.deps if PyInfo in dep],
-    )
-    runfiles = ctx.runfiles(files = [wheel_file] + extra_files)
-    for d in ctx.attr.deps:
-        runfiles = runfiles.merge(d[DefaultInfo].default_runfiles)
 
     return [
         DefaultInfo(
             files = depset(direct = [wheel_file]),
-            runfiles = runfiles,
+            runfiles = merged.runfiles,
         ),
-        PyInfo(
-            has_py2_only_sources = has_py2_only_sources,
-            has_py3_only_sources = has_py3_only_sources,
-            imports = imports,
-            transitive_sources = transitive_sources,
-            uses_shared_libraries = True,  # Docs say this is unused
-        ),
+        merged.py_info,
     ]
 
 pycross_wheel_zipimport_library = rule(
     implementation = _pycross_wheel_zipimport_library_impl,
-    attrs = {
+    attrs = dict({
         "deps": attr.label_list(
             doc = "A list of this wheel's Python library dependencies.",
             providers = [DefaultInfo, PyInfo],
@@ -66,5 +45,5 @@ pycross_wheel_zipimport_library = rule(
             allow_single_file = [".whl"],
             mandatory = True,
         ),
-    },
+    }, **PY_COMMON_ATTRS),
 )

@@ -15,21 +15,20 @@ The file structure is as follows:
 - _backend/<rule>.bzl      - Backend macros with pre-configured tool deps.
 """
 
+load("//pycross/private/pypackaging/utils:utils.bzl", "canonicalize_name")
 load(":resolved_lock_renderer.bzl", "render_lock_bzl")
-load(":util.bzl", "key_name", "key_parts", "normalize_pep503_name", "underscore_name")
+load(":util.bzl", "key_name", "key_parts", "underscore_name")
 
 def _normalize_name(name):
-    return normalize_pep503_name(name)
+    return canonicalize_name(name)
 
 def _underscore_name(name):
     return underscore_name(name)
 
-def _merge_dependencies(pkg_key, first_data, entries, member_envs):
+def _merge_dependencies(first_data, entries):
     merged = dict(first_data)
 
     for _, pkg_data in entries[1:]:
-        for env_name, env_ref in pkg_data.get("environment_files", {}).items():
-            merged.setdefault("environment_files", {})[env_name] = env_ref
         if not merged.get("site_paths") and pkg_data.get("site_paths"):
             merged["site_paths"] = pkg_data["site_paths"]
         if not merged.get("data_level_paths") and pkg_data.get("data_level_paths"):
@@ -37,76 +36,26 @@ def _merge_dependencies(pkg_key, first_data, entries, member_envs):
         if not merged.get("sdist_file") and pkg_data.get("sdist_file"):
             merged["sdist_file"] = pkg_data["sdist_file"]
 
-    # Check whether common_dependencies differ between members.
-    has_common_dep_conflict = False
-    for _, other_data in entries[1:]:
-        if sorted(first_data.get("common_dependencies", [])) != sorted(other_data.get("common_dependencies", [])):
-            has_common_dep_conflict = True
-            break
+    # Merge marker_dependencies: union across workspace members, dedup by (key, marker).
+    seen_marker_deps = {}  # (key, marker) -> entry
+    for md in merged.get("marker_dependencies", []):
+        seen_marker_deps[(md["key"], md.get("marker"))] = md
+    for _, pkg_data in entries[1:]:
+        for md in pkg_data.get("marker_dependencies", []):
+            dedupe_key = (md["key"], md.get("marker"))
+            if dedupe_key not in seen_marker_deps:
+                seen_marker_deps[dedupe_key] = md
+    merged["marker_dependencies"] = sorted(seen_marker_deps.values(), key = lambda m: (m["key"], m.get("marker", "")))
 
-    if has_common_dep_conflict:
-        # Validate: members with overlapping environments must agree on deps.
-        env_to_member = {}  # env_name -> (member, common_deps)
-        for member, pkg_data in entries:
-            member_common = sorted(pkg_data.get("common_dependencies", []))
-            for env_name in member_envs.get(member, []):
-                prev_member, prev_deps = env_to_member.setdefault(env_name, (member, member_common))
-                if prev_deps != member_common:
-                    fail(
-                        "Workspace conflict for package '{}': members '{}' and '{}' " +
-                        "share environment '{}' but have different dependencies.\n" +
-                        "  {}: {}\n  {}: {}\n\n" +
-                        "Members sharing the same workspace must resolve compatible " +
-                        "dependency versions for overlapping environments.".format(
-                            pkg_key,
-                            prev_member,
-                            member,
-                            env_name,
-                            prev_member,
-                            prev_deps,
-                            member,
-                            member_common,
-                        ),
-                    )
-
-        # Promote differing common_dependencies to environment_dependencies.
-        # Each member's environments are disjoint, so the environment
-        # select() naturally routes to the correct deps.
-        ed = merged.setdefault("environment_dependencies", {})
-        for member, pkg_data in entries:
-            member_common = pkg_data.get("common_dependencies", [])
-            for env_name in member_envs.get(member, []):
-                env_deps = list(ed.get(env_name, []))
-                for dep in member_common:
-                    if dep not in env_deps:
-                        env_deps.append(dep)
-                ed[env_name] = env_deps
-
-            # Also merge this member's environment_dependencies.
-            for env_name, deps in pkg_data.get("environment_dependencies", {}).items():
-                env_deps = list(ed.get(env_name, []))
-                for dep in deps:
-                    if dep not in env_deps:
-                        env_deps.append(dep)
-                ed[env_name] = env_deps
-
-        # Clear common_dependencies since they've been promoted.
-        merged.pop("common_dependencies", None)
-    else:
-        # Common deps agree — merge as union.
-        for _, pkg_data in entries[1:]:
-            for dep in pkg_data.get("common_dependencies", []):
-                cd = merged.setdefault("common_dependencies", [])
-                if dep not in cd:
-                    cd.append(dep)
-            for env_name, env_deps in pkg_data.get("environment_dependencies", {}).items():
-                ed = merged.setdefault("environment_dependencies", {})
-                if env_name not in ed:
-                    ed[env_name] = list(env_deps)
-                else:
-                    for dep in env_deps:
-                        if dep not in ed[env_name]:
-                            ed[env_name].append(dep)
+    # Merge wheel_candidates: union across members, dedup by filename.
+    seen_candidates = {}  # filename -> entry
+    for wc in merged.get("wheel_candidates", []):
+        seen_candidates[wc["filename"]] = wc
+    for _, pkg_data in entries[1:]:
+        for wc in pkg_data.get("wheel_candidates", []):
+            if wc["filename"] not in seen_candidates:
+                seen_candidates[wc["filename"]] = wc
+    merged["wheel_candidates"] = sorted(seen_candidates.values(), key = lambda w: w["filename"])
 
     return merged
 
@@ -114,7 +63,7 @@ def _package_repo_impl(rctx):
     # Workspace repos always have member_lock_files — even single-lock repos
     # are wrapped in a workspace with one member.
     packages = {}
-    environments = {}
+    packages = {}
 
     # Annotation fields that affect pycross_wheel_library targets.
     # If these differ between members for the same pkg_key, the package
@@ -123,20 +72,12 @@ def _package_repo_impl(rctx):
 
     # First pass: collect per-member package data, environment names, and cycle groups.
     member_packages = {}  # member_name -> {pkg_key -> pkg_data}
-    member_envs = {}  # member_name -> [env_name, ...]
     cycle_groups = {}  # group_name -> [pkg_key, ...]
     variant_items = {}  # qualified_name -> True (dedup across members)
     variant_sets = []  # list of {"qnames": [...], "default": "..."}
     variant_sets_seen = {}  # frozenset key -> True (dedup across members)
     for member, lock_label in rctx.attr.member_lock_files.items():
         member_lock = json.decode(rctx.read(rctx.path(Label(lock_label))))
-
-        # Merge environments (union across members).
-        member_env_names = []
-        for env_name, env_ref in member_lock.get("environments", {}).items():
-            member_env_names.append(env_name)
-            if env_name not in environments:
-                environments[env_name] = env_ref
 
         for variant_set in member_lock.get("variants", []):
             set_qnames = []
@@ -155,7 +96,6 @@ def _package_repo_impl(rctx):
                 variant_sets_seen[set_key] = True
                 variant_sets.append({"qnames": set_qnames, "default": set_default})
 
-        member_envs[member] = sorted(member_env_names)
         member_packages[member] = member_lock.get("packages", {})
 
         # Merge cycle groups (union across members).
@@ -197,23 +137,17 @@ def _package_repo_impl(rctx):
                 variant_key = "{}__via_{}".format(pkg_key, member)
                 packages[variant_key] = dict(pkg_data)
         else:
-            packages[pkg_key] = _merge_dependencies(pkg_key, first_data, entries, member_envs)
+            packages[pkg_key] = _merge_dependencies(first_data, entries)
 
     # Workspace repos have no pins — each thin repo has its own.
     lock = {
         "packages": packages,
         "pins": {},
-        "environments": environments,
         "cycle_groups": cycle_groups,
     }
 
-    repo_map = {}
-    for label, file_key in rctx.attr.repo_map.items():
-        repo_map[file_key] = str(label)
-
-    sdist_map = {}
-    for label, file_key in rctx.attr.sdist_map.items():
-        sdist_map[file_key] = str(label)
+    repo_map = rctx.attr.repo_map
+    sdist_map = rctx.attr.sdist_map
 
     rctx.file("REPO.bazel", "")
 
@@ -441,8 +375,12 @@ package_repo = repository_rule(
     implementation = _package_repo_impl,
     attrs = {
         "resolved_lock_file": attr.label(mandatory = True),
-        "repo_map": attr.label_keyed_string_dict(),
-        "sdist_map": attr.label_keyed_string_dict(),
+        "repo_map": attr.string_dict(
+            doc = "Maps file keys to their repository label strings (e.g. 'foo_wheel' -> '@pypi_foo//:wheel').",
+        ),
+        "sdist_map": attr.string_dict(
+            doc = "Maps sdist file keys to their built wheel label strings (e.g. 'foo_sdist' -> '@foo_sdist_repo//:wheel').",
+        ),
         "backend_configs": attr.string_dict(
             doc = "Maps pycross rule names to JSON-encoded config dicts with 'rule_bzl' and 'tool_packages'.",
         ),

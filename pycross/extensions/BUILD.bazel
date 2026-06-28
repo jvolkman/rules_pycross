@@ -2,18 +2,10 @@ load("@bazel_skylib//:bzl_library.bzl", "bzl_library")
 
 exports_files([
     "backends.bzl",
-    "environments.bzl",
     "lock_import.bzl",
     "lock_repos.bzl",
     "pycross.bzl",
 ])
-
-bzl_library(
-    name = "environments",
-    srcs = ["environments.bzl"],
-    visibility = ["//visibility:public"],
-    deps = ["//pycross/private:environments"],
-)
 
 bzl_library(
     name = "lock_import",

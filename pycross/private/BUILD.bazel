@@ -1,10 +1,44 @@
 load("@bazel_lib//lib:write_source_files.bzl", "write_source_files")
 load("@bazel_skylib//:bzl_library.bzl", "bzl_library")
 load("@bazel_skylib//rules:write_file.bzl", "write_file")
-load(":target_environment.bzl", "pycross_target_environment")
+load(":pep508_marker_values.bzl", "FREETHREADED_VALUES", "LIBC_VALUES")
+load(":target_platform.bzl", "pycross_target_platform")
 load(":util.bzl", "REPO_HTTP_DEPS")
 
 package(default_visibility = ["//visibility:public"])
+
+pycross_target_platform(
+    name = "default_target_platform",
+    freethreaded = select(FREETHREADED_VALUES),
+    libc = select(LIBC_VALUES),
+)
+
+# Compound config_settings for platform_machine values that differ by OS.
+# Python's platform.machine() returns "aarch64" on Linux but "arm64" on macOS
+# for the same @platforms//cpu:aarch64 constraint.
+config_setting(
+    name = "is_linux_aarch64",
+    constraint_values = [
+        "@platforms//os:linux",
+        "@platforms//cpu:aarch64",
+    ],
+)
+
+config_setting(
+    name = "is_macos_aarch64",
+    constraint_values = [
+        "@platforms//os:osx",
+        "@platforms//cpu:aarch64",
+    ],
+)
+
+config_setting(
+    name = "is_windows_aarch64",
+    constraint_values = [
+        "@platforms//os:windows",
+        "@platforms//cpu:aarch64",
+    ],
+)
 
 bzl_library(
     name = "internal_repo",
@@ -58,6 +92,7 @@ bzl_library(
         ":resolved_lock_renderer",
         ":util",
         ":variant_resolver",
+        "//pycross/private/pypackaging/utils",
     ],
 )
 
@@ -89,15 +124,6 @@ bzl_library(
     ],
 )
 
-bzl_library(
-    name = "target_environment",
-    srcs = ["target_environment.bzl"],
-    deps = [
-        ":internal_repo",
-        ":resolved_lock_renderer",
-    ],
-)
-
 # keep
 bzl_library(
     name = "rules_python_bzl",
@@ -108,10 +134,7 @@ bzl_library(
     name = "toolchain_helpers",
     srcs = ["toolchain_helpers.bzl"],
     deps = [
-        ":lock_attrs",
         ":rules_python_bzl",
-        ":target_environment",
-        ":util",
     ],
 )
 
@@ -138,10 +161,9 @@ bzl_library(
 
 # This is the environment we advertise for what should be pure-python
 # dependencies used by Pycross
-pycross_target_environment(
+pycross_target_platform(
     name = "rules_pycross_deps_target_env",
-    python_compatible_with = [],
-    version = "3.13.0",
+    python_version = "3.13",
 )
 
 genrule(
@@ -160,14 +182,12 @@ genrule(
     srcs = [
         ":uv.lock",
         ":pyproject.toml",
-        ":rules_pycross_deps_target_env",
         ":rules_pycross_all_deps_lock_model",
     ],
     outs = ["updated-pycross_deps.toml"],
     cmd = """
 $(location //pycross/private/tools:toml_lock_generator) \\
     --lock-model-file $(location :rules_pycross_all_deps_lock_model) \\
-    --target-environment $(location :rules_pycross_deps_target_env) "@rules_pycross//pycross/private:rules_pycross_deps_target_env" \\
     --output $@
 """,
     tools = ["//pycross/private/tools:toml_lock_generator"],
@@ -234,17 +254,6 @@ bzl_library(
     name = "thin_package_repo",
     srcs = ["thin_package_repo.bzl"],
     deps = [":util"],
-)
-
-bzl_library(
-    name = "environments",
-    srcs = ["environments.bzl"],
-    deps = [
-        ":lock_attrs",
-        ":toolchain_helpers",
-        "@bazel_features//:features",
-        "@rules_pycross_internal_config//:defaults.bzl",
-    ],
 )
 
 bzl_library(
@@ -327,6 +336,67 @@ bzl_library(
 )
 
 bzl_library(
+    name = "util",
+    srcs = ["util.bzl"],
+    deps = [
+        "//pycross/private/pypackaging/utils",
+        "@rules_python//python/api:api_bzl",
+    ],
+)
+
+bzl_library(
+    name = "cycle_dep_needed",
+    srcs = ["cycle_dep_needed.bzl"],
+    deps = [
+        ":pep508_marker_values",
+        "//pycross/private/pypackaging/markers",
+    ],
+)
+
+bzl_library(
+    name = "cycle_member_marker_deps",
+    srcs = ["cycle_member_marker_deps.bzl"],
+    deps = [
+        ":cycle_dep_needed",
+        "@rules_python//python:defs_bzl",
+    ],
+)
+
+bzl_library(
+    name = "pep508_evaluator",
+    srcs = ["pep508_evaluator.bzl"],
+    deps = [
+        ":pep508_marker_values",
+        "//pycross/private/pypackaging/markers",
+    ],
+)
+
+bzl_library(
+    name = "pep508_marker_values",
+    srcs = ["pep508_marker_values.bzl"],
+    deps = ["@bazel_skylib//rules:common_settings"],
+)
+
+bzl_library(
+    name = "wheel_chooser",
+    srcs = ["wheel_chooser.bzl"],
+    deps = [
+        ":pep508_marker_values",
+        ":target_platform",
+    ],
+)
+
+bzl_library(
+    name = "target_platform",
+    srcs = ["target_platform.bzl"],
+    deps = [
+        ":pep508_marker_values",
+        "//pycross/private/pypackaging/tags",
+        "@bazel_skylib//rules:common_settings",
+    ],
+)
+
+bzl_library(
     name = "backend_registry_repo",
     srcs = ["backend_registry_repo.bzl"],
 )
@@ -354,11 +424,6 @@ bzl_library(
 bzl_library(
     name = "resolved_lock_renderer",
     srcs = ["resolved_lock_renderer.bzl"],
-)
-
-bzl_library(
-    name = "util",
-    srcs = ["util.bzl"],
 )
 
 bzl_library(

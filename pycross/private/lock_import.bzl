@@ -65,7 +65,6 @@ def _generate_resolved_lock_repo(lock_info, serialized_lock_model, workspace_pac
     args = {
         "name": repo_name,
         "lock_model": serialized_lock_model,
-        "target_environments": lock_info.environments,
         "default_alias_single_version": lock_info.default_alias_single_version,
         "default_build_dependencies": lock_info.default_build_dependencies,
         "disallow_builds": lock_info.disallow_builds,
@@ -134,26 +133,13 @@ def _check_proper_tag_repo(owners, module, tag, tag_desc):
 def _check_proper_package_repo(owners, module, tag):
     _check_proper_tag_repo(owners, module, tag, "package '{}'".format(tag.name))
 
-def _workspace_lock_struct(mctx, ws_tag, repo_name, workspace_name):
+def _workspace_lock_struct(ws_tag, repo_name, workspace_name):
     """Create a lock struct for a workspace member, inheriting workspace-level settings."""
-    environment_files = []
-    for env_file in ws_tag.target_environments:
-        data = json.decode(mctx.read(env_file))
-        if "environments" in data:
-            environment_files.extend([env_file.relative(entry) for entry in data["environments"]])
-        else:
-            environment_files.append(env_file)
-        environment_files = sorted(environment_files)
-
-    for env_file in environment_files:
-        mctx.path(env_file)
-
     return struct(
         repo_name = repo_name,
         workspace = workspace_name,
         build_repo = ws_tag.build_repo,
         default_alias_single_version = ws_tag.default_alias_single_version,
-        environments = environment_files,
         local_wheels = ws_tag.local_wheels,
         disallow_builds = ws_tag.disallow_builds,
         default_build_dependencies = ws_tag.default_build_dependencies,
@@ -305,7 +291,6 @@ def _get_member_group_attrs(members_tag, override_tag):
     )
 
 def _register_workspace_member(
-        module_ctx,
         lock_owners,
         lock_repos,
         lock_model_structs,
@@ -323,7 +308,7 @@ def _register_workspace_member(
     and standalone (uv_member) imports.
     """
     _check_unique_repo_name(lock_owners, lock_module.name, repo_name)
-    lock_repos[repo_name] = _workspace_lock_struct(module_ctx, ws_tag, repo_name, ws_name)
+    lock_repos[repo_name] = _workspace_lock_struct(ws_tag, repo_name, ws_name)
     if lock_module.is_root:
         root_direct_deps.append(repo_name)
 
@@ -341,7 +326,6 @@ def _register_workspace_member(
     lock_model_structs[repo_name] = json.encode(model)
 
 def _process_member(
-        module_ctx,
         lock_owners,
         lock_repos,
         lock_model_structs,
@@ -372,7 +356,6 @@ def _process_member(
         lock_module = override.module if override else default_module
 
         _register_workspace_member(
-            module_ctx,
             lock_owners,
             lock_repos,
             lock_model_structs,
@@ -468,7 +451,6 @@ def _process_workspaces(
             overrides = member_overrides.get((tag.workspace, member_name), [None])
 
             _process_member(
-                module_ctx,
                 lock_owners,
                 lock_repos,
                 lock_model_structs,
@@ -498,7 +480,6 @@ def _process_workspaces(
         member = discovered[project]
 
         _process_member(
-            module_ctx,
             lock_owners,
             lock_repos,
             lock_model_structs,

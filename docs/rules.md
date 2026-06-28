@@ -114,38 +114,9 @@ pycross_repaired_wheel(<a href="#pycross_repaired_wheel-name">name</a>, <a href=
 | :------------- | :------------- | :------------- | :------------- | :------------- |
 | <a id="pycross_repaired_wheel-name"></a>name |  A unique name for this target.   | <a href="https://bazel.build/concepts/labels#target-names">Name</a> | required |  |
 | <a id="pycross_repaired_wheel-native_deps"></a>native_deps |  Native dependencies providing shared libraries to bundle.   | <a href="https://bazel.build/concepts/labels">List of labels</a> | optional |  `[]`  |
-| <a id="pycross_repaired_wheel-target_environment"></a>target_environment |  The target environment mapping JSON (resolved dynamically via alias filegroup).   | <a href="https://bazel.build/concepts/labels">Label</a> | optional |  `"@@rules_pycross++environments+pycross_environments//:current"`  |
+| <a id="pycross_repaired_wheel-target_environment"></a>target_environment |  The target environment mapping JSON (resolved dynamically via alias filegroup).   | <a href="https://bazel.build/concepts/labels">Label</a> | optional |  `"@rules_pycross//pycross/private:default_target_platform"`  |
 | <a id="pycross_repaired_wheel-wheel"></a>wheel |  The input wheel to repair.   | <a href="https://bazel.build/concepts/labels">Label</a> | required |  |
 | <a id="pycross_repaired_wheel-whldir_name"></a>whldir_name |  Name for the output .whldir TreeArtifact directory. If empty, defaults to '{name}.whldir'.   | String | optional |  `""`  |
-
-
-<a id="pycross_target_environment"></a>
-
-## pycross_target_environment
-
-<pre>
-load("@rules_pycross//pycross:defs.bzl", "pycross_target_environment")
-
-pycross_target_environment(<a href="#pycross_target_environment-name">name</a>, <a href="#pycross_target_environment-abis">abis</a>, <a href="#pycross_target_environment-config_setting">config_setting</a>, <a href="#pycross_target_environment-envornment_markers">envornment_markers</a>, <a href="#pycross_target_environment-flag_values">flag_values</a>,
-                           <a href="#pycross_target_environment-implementation">implementation</a>, <a href="#pycross_target_environment-platforms">platforms</a>, <a href="#pycross_target_environment-python_compatible_with">python_compatible_with</a>, <a href="#pycross_target_environment-version">version</a>)
-</pre>
-
-
-
-**ATTRIBUTES**
-
-
-| Name  | Description | Type | Mandatory | Default |
-| :------------- | :------------- | :------------- | :------------- | :------------- |
-| <a id="pycross_target_environment-name"></a>name |  A unique name for this target.   | <a href="https://bazel.build/concepts/labels#target-names">Name</a> | required |  |
-| <a id="pycross_target_environment-abis"></a>abis |  A list of PEP 425 abi tags. Defaults to ['none'].   | List of strings | optional |  `["none"]`  |
-| <a id="pycross_target_environment-config_setting"></a>config_setting |  Optional config_setting target to select this environment.   | <a href="https://bazel.build/concepts/labels">Label</a> | optional |  `None`  |
-| <a id="pycross_target_environment-envornment_markers"></a>envornment_markers |  Environment marker overrides.   | <a href="https://bazel.build/rules/lib/dict">Dictionary: String -> String</a> | optional |  `{}`  |
-| <a id="pycross_target_environment-flag_values"></a>flag_values |  A list of flag values that, when satisfied, indicates this target_platform should be selected (together with python_compatible_with).   | <a href="https://bazel.build/rules/lib/dict">Dictionary: Label -> String</a> | optional |  `{}`  |
-| <a id="pycross_target_environment-implementation"></a>implementation |  The PEP 425 implementation abbreviation. Defaults to 'cp' for CPython.   | String | optional |  `"cp"`  |
-| <a id="pycross_target_environment-platforms"></a>platforms |  A list of PEP 425 platform tags. Defaults to ['any'].   | List of strings | optional |  `["any"]`  |
-| <a id="pycross_target_environment-python_compatible_with"></a>python_compatible_with |  A list of constraints that, when satisfied, indicates this target_platform should be selected (together with flag_values).   | <a href="https://bazel.build/concepts/labels">List of labels</a> | optional |  `[]`  |
-| <a id="pycross_target_environment-version"></a>version |  The python version.   | String | required |  |
 
 
 <a id="pycross_wheel_headers"></a>
@@ -278,6 +249,82 @@ Information about an extracted (installed) Python wheel.
 | <a id="PycrossExtractedWheelInfo-site_packages"></a>site_packages |  File (TreeArtifact): The unzipped site-packages directory containing the wheel's installed files.    |
 
 
+<a id="pycross_cycle_member_marker_deps"></a>
+
+## pycross_cycle_member_marker_deps
+
+<pre>
+load("@rules_pycross//pycross:defs.bzl", "pycross_cycle_member_marker_deps")
+
+pycross_cycle_member_marker_deps(<a href="#pycross_cycle_member_marker_deps-name">name</a>, <a href="#pycross_cycle_member_marker_deps-raw_name">raw_name</a>, <a href="#pycross_cycle_member_marker_deps-member">member</a>, <a href="#pycross_cycle_member_marker_deps-members">members</a>, <a href="#pycross_cycle_member_marker_deps-edges">edges</a>, <a href="#pycross_cycle_member_marker_deps-kwargs">**kwargs</a>)
+</pre>
+
+Creates select()-gated cycle member deps with grouped reachability checks.
+
+For each reachability group (set of members with identical reachability
+from this member), creates a single pycross_cycle_dep_needed rule and
+config_setting, then gates all members of the group behind that check.
+
+
+**PARAMETERS**
+
+
+| Name  | Description | Default Value |
+| :------------- | :------------- | :------------- |
+| <a id="pycross_cycle_member_marker_deps-name"></a>name |  The final target name (e.g. "pkg@1.0").   |  none |
+| <a id="pycross_cycle_member_marker_deps-raw_name"></a>raw_name |  The raw package target name (e.g. "_raw_pkg@1.0").   |  none |
+| <a id="pycross_cycle_member_marker_deps-member"></a>member |  The package key of this cycle member.   |  none |
+| <a id="pycross_cycle_member_marker_deps-members"></a>members |  List of all package keys in the cycle group.   |  none |
+| <a id="pycross_cycle_member_marker_deps-edges"></a>edges |  JSON-encoded edge map: {node: [{dep, marker?}, ...], ...}.   |  none |
+| <a id="pycross_cycle_member_marker_deps-kwargs"></a>kwargs |  Marker value attrs (sys_platform, os_name, etc.) passed through to pycross_cycle_dep_needed.   |  none |
+
+
+<a id="pycross_pep508_evaluator"></a>
+
+## pycross_pep508_evaluator
+
+<pre>
+load("@rules_pycross//pycross:defs.bzl", "pycross_pep508_evaluator")
+
+pycross_pep508_evaluator(<a href="#pycross_pep508_evaluator-name">name</a>, <a href="#pycross_pep508_evaluator-kwargs">**kwargs</a>)
+</pre>
+
+Evaluate a PEP 508 marker expression at analysis time.
+
+This macro wraps the underlying rule and returns
+config_common.FeatureFlagInfo with value "true" or "false".
+
+
+**PARAMETERS**
+
+
+| Name  | Description | Default Value |
+| :------------- | :------------- | :------------- |
+| <a id="pycross_pep508_evaluator-name"></a>name |  The target name.   |  none |
+| <a id="pycross_pep508_evaluator-kwargs"></a>kwargs |  Forwarded to the underlying rule.  Must include ``expr`` and may include any PEP 508 marker dimension overrides.   |  none |
+
+
+<a id="pycross_target_platform"></a>
+
+## pycross_target_platform
+
+<pre>
+load("@rules_pycross//pycross:defs.bzl", "pycross_target_platform")
+
+pycross_target_platform(<a href="#pycross_target_platform-name">name</a>, <a href="#pycross_target_platform-kwargs">**kwargs</a>)
+</pre>
+
+
+
+**PARAMETERS**
+
+
+| Name  | Description | Default Value |
+| :------------- | :------------- | :------------- |
+| <a id="pycross_target_platform-name"></a>name |  <p align="center"> - </p>   |  none |
+| <a id="pycross_target_platform-kwargs"></a>kwargs |  <p align="center"> - </p>   |  none |
+
+
 <a id="pycross_wheel_build"></a>
 
 ## pycross_wheel_build
@@ -317,6 +364,34 @@ to the v2 backend.
 | <a id="pycross_wheel_build-post_build_hooks"></a>post_build_hooks |  Executables to run after the wheel is built.   |  `[]` |
 | <a id="pycross_wheel_build-whldir_name"></a>whldir_name |  Name for the output .whldir TreeArtifact.   |  `None` |
 | <a id="pycross_wheel_build-kwargs"></a>kwargs |  Additional arguments passed to setuptools_build.   |  none |
+
+
+<a id="pycross_wheel_chooser"></a>
+
+## pycross_wheel_chooser
+
+<pre>
+load("@rules_pycross//pycross:defs.bzl", "pycross_wheel_chooser")
+
+pycross_wheel_chooser(<a href="#pycross_wheel_chooser-name">name</a>, <a href="#pycross_wheel_chooser-kwargs">**kwargs</a>)
+</pre>
+
+Select the best-matching wheel from a list of candidates.
+
+This macro wraps the private _pycross_wheel_chooser rule. It takes a
+JSON-encoded list of pre-parsed wheel candidates and PEP 508 marker
+dimension values (typically provided via select()), and produces a
+config_common.FeatureFlagInfo whose value is the filename of the best
+matching wheel.
+
+
+**PARAMETERS**
+
+
+| Name  | Description | Default Value |
+| :------------- | :------------- | :------------- |
+| <a id="pycross_wheel_chooser-name"></a>name |  The target name.   |  none |
+| <a id="pycross_wheel_chooser-kwargs"></a>kwargs |  Forwarded to _pycross_wheel_chooser.   |  none |
 
 
 <a id="pypi_file"></a>

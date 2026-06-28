@@ -2,21 +2,15 @@
 
 load("@bazel_features//:features.bzl", "bazel_features")
 load("//pycross/private:internal_repo.bzl", "create_internal_repo")
-load(":lock_attrs.bzl", "CREATE_ENVIRONMENTS_ATTRS", "REGISTER_TOOLCHAINS_ATTRS")
+load(":lock_attrs.bzl", "CONFIGURE_TOOLCHAINS_ATTRS")
 
 def _pycross_impl(module_ctx):
-    environments_tag = None
     interpreter_tag = None
     toolchains_tag = None
 
     for module in module_ctx.modules:
         if module.name != "rules_pycross" and not module.is_root:
             continue
-
-        if not environments_tag:
-            for tag in module.tags.configure_environments:
-                environments_tag = tag
-                break
 
         if not interpreter_tag:
             for tag in module.tags.configure_interpreter:
@@ -25,6 +19,14 @@ def _pycross_impl(module_ctx):
 
         if not toolchains_tag:
             for tag in module.tags.configure_toolchains:
+                toolchains_tag = tag
+                break
+
+        # Deprecated alias: configure_environments -> configure_toolchains
+        if not toolchains_tag:
+            for tag in module.tags.configure_environments:
+                # buildifier: disable=print
+                print("WARNING: pycross.configure_environments() is deprecated. Use pycross.configure_toolchains() instead.")
                 toolchains_tag = tag
                 break
 
@@ -42,17 +44,12 @@ def _pycross_impl(module_ctx):
             "Both python_interpreter_target and python_defs_file must be set",
         )
 
-    environments_attrs = {
-        k: getattr(environments_tag, k)
-        for k in CREATE_ENVIRONMENTS_ATTRS.keys()
-    }
     toolchains_attrs = {
         k: getattr(toolchains_tag, k)
-        for k in REGISTER_TOOLCHAINS_ATTRS.keys()
+        for k in CONFIGURE_TOOLCHAINS_ATTRS.keys()
     }
 
     create_internal_repo(
-        environments_attrs = environments_attrs,
         toolchains_attrs = toolchains_attrs,
         python_interpreter_target = python_interpreter_target,
         python_defs_file = python_defs_file,
@@ -67,7 +64,8 @@ pycross = module_extension(
     implementation = _pycross_impl,
     tag_classes = {
         "configure_environments": tag_class(
-            attrs = CREATE_ENVIRONMENTS_ATTRS,
+            doc = "Deprecated: use configure_toolchains instead.",
+            attrs = CONFIGURE_TOOLCHAINS_ATTRS,
         ),
         "configure_interpreter": tag_class(
             attrs = {
@@ -80,7 +78,7 @@ pycross = module_extension(
             },
         ),
         "configure_toolchains": tag_class(
-            attrs = REGISTER_TOOLCHAINS_ATTRS,
+            attrs = CONFIGURE_TOOLCHAINS_ATTRS,
         ),
     },
 )

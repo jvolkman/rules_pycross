@@ -164,11 +164,11 @@ def _sdist_repo_common(rctx):
                  ". Registered backends: " + ", ".join(sorted(known_backends.keys())))
 
         if rctx.attr.build_dependencies:
-            build_deps = []
+            build_deps = {}
             for dep in rctx.attr.build_dependencies:
                 dep_name = key_name(dep)
-                build_deps.append("@{}//{}:pkg".format(rctx.attr.lock_repo, underscore_name(dep_name)))
-            macro_attrs["build_deps"] = str(build_deps)
+                build_deps["@{}//{}:pkg".format(rctx.attr.lock_repo, underscore_name(dep_name))] = True
+            macro_attrs["build_deps"] = str(sorted(build_deps.keys()))
 
         site_paths = []
         bin_paths = []
@@ -225,25 +225,25 @@ def _sdist_repo_common(rctx):
         backend_macro = _resolve_backend(backend_to_rule, default_backend, backend, build_requires_names)
 
         # Map build requires to targets in the workspace repo
-        build_deps = []
-        required_build_packages = []
+        build_deps = {}
+        required_build_packages = {}
         for req in requires:
             req_name = extract_pep508_name(req)
             if req_name == "oldest-supported-numpy":
                 req_name = "numpy"
 
-            required_build_packages.append(req_name)
+            required_build_packages[req_name] = True
 
             # We only add it if it's in the known lock repo mapping.
             # (This will be passed in via rctx.attr.known_packages)
             if req_name in rctx.attr.known_packages:
-                build_deps.append("@{}//{}:pkg".format(rctx.attr.thin_repo, underscore_name(req_name)))
+                build_deps["@{}//{}:pkg".format(rctx.attr.thin_repo, underscore_name(req_name))] = True
 
-        macro_attrs["build_deps"] = str(build_deps)
+        macro_attrs["build_deps"] = str(sorted(build_deps.keys()))
 
         # For pep517_build, pass the required package names for validation.
         if backend_macro == "pep517_build":
-            macro_attrs["required_build_packages"] = str(required_build_packages)
+            macro_attrs["required_build_packages"] = str(sorted(required_build_packages.keys()))
 
     # Apply override backend configs: only use the entry matching the resolved backend.
     matching_config = {}

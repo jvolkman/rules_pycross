@@ -27,8 +27,7 @@ python.toolchain(
 use_repo(python, "python_versions")
 
 pycross = use_extension("@rules_pycross//pycross/extensions:pycross.bzl", "pycross")
-pycross.configure_environments(
-    glibc_version = "2.35",
+pycross.configure_toolchains(
     platforms = [
         "aarch64-apple-darwin",
         "aarch64-unknown-linux-gnu",

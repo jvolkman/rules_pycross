@@ -162,41 +162,25 @@ def _lock_repos_impl(module_ctx):
             sdist_file_key = sdist_file["key"]
             sdist_label = repo_remote_files[sdist_file_key]
 
-            # Check whether any environment actually uses the sdist.
-            needs_sdist = False
-            for _env_name, env_file_ref in pkg.get("environment_files", {}).items():
-                if env_file_ref.get("key") == sdist_file_key:
-                    needs_sdist = True
-                    break
-
-            if not needs_sdist:
-                continue
-
             # Name sdist repos at the workspace level for deduplication.
             sdist_repo_name = "{}_sdist_{}".format(
                 lock_repo_for_deps,
                 sanitize_name(pkg_key),
             )
             sdist_label_str = "@{}//:wheel".format(sdist_repo_name)
-            sdist_map[sdist_label_str] = sdist_file_key
+            sdist_map[sdist_file_key] = sdist_label_str
 
             # Skip if another member in this workspace already created this sdist repo.
             if sdist_repo_name in created_sdist_repos:
                 continue
             created_sdist_repos[sdist_repo_name] = True
 
-            # Collect the union of dependencies across all environments
-            # that resolve to the sdist.
             deps_set = {}
-            for dep in pkg.get("common_dependencies", []):
-                dep_label = "@{}//_lock:{}".format(lock_repo_for_deps, dep)
+
+            # Marker path: collect all deps from marker_dependencies.
+            for md in pkg.get("marker_dependencies", []):
+                dep_label = "@{}//_lock:{}".format(lock_repo_for_deps, md["key"])
                 deps_set[dep_label] = True
-            for env_name, env_file_ref in pkg.get("environment_files", {}).items():
-                if env_file_ref.get("key") != sdist_file_key:
-                    continue
-                for dep in pkg.get("environment_dependencies", {}).get(env_name, []):
-                    dep_label = "@{}//_lock:{}".format(lock_repo_for_deps, dep)
-                    deps_set[dep_label] = True
 
             # Compute the output whldir name: {normalized_name}-{version}.whldir
             pkg_name_part, pkg_version = key_parts(pkg_key)
@@ -256,15 +240,9 @@ def _lock_repos_impl(module_ctx):
             # Invoke the generic sdist repo rule. Hooks will be applied dynamically inside it.
             pycross_sdist_repo(**sdist_repo_attrs)
 
-        # Flip repo_remote_files (file_key -> label_str) to (label_str -> file_key)
-        # for package_repo's label_keyed_string_dict attr. Bazel resolves the
-        # label-string keys from the extension context, giving package_repo
-        # proper Label objects instead of raw strings.
-        repo_map = {label_str: file_key for file_key, label_str in repo_remote_files.items()}
-
         # Save per-repo data for workspace processing
         per_repo_data[repo_name] = struct(
-            repo_map = repo_map,
+            repo_map = repo_remote_files,
             sdist_map = sdist_map,
             lock_file = lock_file,
         )

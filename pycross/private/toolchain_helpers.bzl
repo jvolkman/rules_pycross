@@ -1,11 +1,6 @@
 """Helpers for creating Pycross environments and toolchains"""
 
-load("@rules_python//python:versions.bzl", "MINOR_MAPPING", "PLATFORMS", "TOOL_VERSIONS")
-load(":lock_attrs.bzl", "DEFAULT_GLIBC_VERSION", "DEFAULT_MACOS_VERSION", "DEFAULT_MUSL_VERSION")
-load(":target_environment.bzl", "repo_batch_create_target_environments")
-
-def _repo_label(repo_name, label):
-    return "@@{}{}".format(repo_name, label)
+load("@rules_python//python:versions.bzl", "MINOR_MAPPING", "TOOL_VERSIONS")
 
 def _get_micro_version(version):
     if version in MINOR_MAPPING:
@@ -14,51 +9,6 @@ def _get_micro_version(version):
         return version
 
     fail("Unknown Python version: {}".format(version))
-
-def _get_version_components(version):
-    parts = version.split(".")
-    if len(parts) < 2:
-        fail("Invalid Python version; must be format X.Y or X.Y.Z: %s" % str(version))
-
-    return int(parts[0]), int(parts[1])
-
-def _get_abi(version):
-    major, micro = _get_version_components(version)
-    return "cp{}{}".format(major, micro)
-
-def _get_env_platforms(py_platform, glibc_version, musl_version, macos_version):
-    glibc_major, glibc_micro = _get_version_components(glibc_version)
-    musl_major, musl_micro = _get_version_components(musl_version)
-    macos_major, macos_micro = _get_version_components(macos_version)
-
-    if macos_major < 10:
-        fail("macos version must be >= 10")
-    if (glibc_major, glibc_micro) < (2, 5) or (glibc_major, glibc_micro) >= (3, 0):
-        fail("glibc version must be >= 2.5 and < 3.0")
-
-    platform_info = PLATFORMS[py_platform]
-    arch = platform_info.arch
-    if py_platform.endswith("linux-gnu") or py_platform.endswith("linux-gnu-freethreaded"):
-        # Emit modern manylinux tags newest-first; the target environment
-        # generator will insert legacy aliases (e.g. manylinux2014_x86_64)
-        # immediately after their modern equivalents.
-        return ["linux_{}".format(arch)] + [
-            "manylinux_2_{}_{}".format(i, arch)
-            for i in range(glibc_micro, 4, -1)
-        ]
-    elif py_platform.endswith("linux-musl"):
-        return [
-            "musllinux_{}_{}_{}".format(musl_major, micro, arch)
-            for micro in range(musl_micro, -1, -1)
-        ]
-    elif py_platform.endswith("darwin") or py_platform.endswith("darwin-freethreaded"):
-        if arch == "aarch64":
-            arch = "arm64"
-        return ["macosx_{}_{}_{}".format(macos_major, macos_micro, arch)]
-    elif py_platform.endswith("windows-msvc") or py_platform.endswith("windows-msvc-freethreaded"):
-        return ["win_amd64"]
-
-    fail("Unknown platform: {}".format(py_platform))
 
 def _dedupe_versions(versions):
     """Returns a list of versions deduped by resolved minor version."""
@@ -90,85 +40,6 @@ def _canonical_prefix(python_toolchains_repo_name):
             "but it does not: " + python_toolchains_repo_name,
         )
     return python_toolchains_repo_name[:-len("python_versions")]
-
-def _compute_environments(
-        repo_name,
-        python_versions,
-        platforms,
-        glibc_version,
-        musl_version,
-        macos_version,
-        platform_configs = None):
-    """Compute pycross target environments.
-
-    Args:
-        repo_name: the repository name.
-        python_versions: list of Python versions.
-        platforms: list of platform triples (used when platform_configs is None).
-        glibc_version: default glibc version.
-        musl_version: default musl version.
-        macos_version: default macOS version.
-        platform_configs: optional list of structs with per-platform overrides.
-            Each struct has: target (str), glibc_version (str or None),
-            musl_version (str or None), macos_version (str or None).
-            When provided, 'platforms' must be empty.
-
-    Returns:
-        list of environment dicts.
-    """
-    environments = []
-
-    # Build the list of (platform_triple, glibc, musl, macos) tuples.
-    if platform_configs:
-        platform_entries = [
-            (
-                pc["target"],
-                pc.get("glibc_version") or glibc_version,
-                pc.get("musl_version") or musl_version,
-                pc.get("macos_version") or macos_version,
-            )
-            for pc in platform_configs
-        ]
-    else:
-        if not platforms:
-            platforms = sorted(PLATFORMS.keys())
-        platform_entries = [
-            (p, glibc_version, musl_version, macos_version)
-            for p in platforms
-        ]
-
-    for version in _dedupe_versions(python_versions):
-        micro_version = _get_micro_version(version)
-
-        version_info = TOOL_VERSIONS[micro_version]
-        available_version_platforms = version_info["sha256"].keys()
-
-        for target_platform, plat_glibc, plat_musl, plat_macos in platform_entries:
-            if target_platform not in available_version_platforms:
-                continue
-
-            env_platforms = _get_env_platforms(target_platform, plat_glibc, plat_musl, plat_macos)
-            target_env_name = "python_{}_{}".format(version, target_platform)
-            target_env_json = target_env_name + ".json"
-
-            config_setting_name = "{}_config".format(target_env_name)
-            environments.append(
-                dict(
-                    name = target_env_name,
-                    output = target_env_json,
-                    implementation = "cp",
-                    config_setting_name = config_setting_name,
-                    config_setting_target = _repo_label(repo_name, "//:{}".format(config_setting_name)),
-                    target_compatible_with = list(PLATFORMS[target_platform].compatible_with),
-                    target_flag_values = {str(key): val for key, val in PLATFORMS[target_platform].flag_values.items()},
-                    target_settings = getattr(PLATFORMS[target_platform], "target_settings", []),
-                    version = micro_version,
-                    abis = [_get_abi(micro_version)],
-                    platforms = env_platforms,
-                ),
-            )
-
-    return environments
 
 def _compute_toolchains(
         python_toolchains_repo_name,
@@ -238,25 +109,6 @@ def _get_default_python_version(rctx, pythons_hub_repo):
     fail("Unable to determine default version for python hub repo '{}'".format(pythons_hub_repo))
 
 # This requires the user to provide a `default_version` value.
-_ENVIRONMENTS_BUILD_HEADER = """\
-load("{defs}", "pycross_target_environment")
-load("{ver}", "rules_python_interpreter_version")
-load("{skylib_selects}", "selects")
-
-package(default_visibility = ["//visibility:public"])
-
-rules_python_interpreter_version(
-    name = "_interpreter_version",
-    default_version = "{{default_version}}",
-    visibility = ["//visibility:private"],
-)
-""".format(
-    defs = Label("//pycross:defs.bzl"),
-    ver = Label("//pycross/private:interpreter_version.bzl"),
-    skylib_selects = Label("@bazel_skylib//lib:selects.bzl"),
-)
-
-# This requires the user to provide a `default_version` value.
 _TOOLCHAINS_BUILD_HEADER = """\
 load("{toolchain}", "pycross_hermetic_toolchain")
 load("{ver}", "rules_python_interpreter_version")
@@ -272,19 +124,6 @@ rules_python_interpreter_version(
     toolchain = Label("//pycross:toolchain.bzl"),
     ver = Label("//pycross/private:interpreter_version.bzl"),
 )
-
-_ENVIRONMENT_TEMPLATE = """\
-config_setting(
-    name = {config_setting_name} + "_inner",
-    constraint_values = {target_compatible_with},
-    flag_values = {{":_interpreter_version": {version}}} | {target_flag_values},
-)
-
-selects.config_setting_group(
-    name = {config_setting_name},
-    match_all = [{config_setting_name} + "_inner"] + {target_settings},
-)
-"""
 
 # exec_interpreter and target_interpreter below are both set to the same
 # target. We rely on `cfg = 'exec'` and `cfg = 'target'` in the
@@ -365,87 +204,5 @@ pycross_toolchains_repo = repository_rule(
         "pythons_hub_repo": attr.label(),
         "requested_python_versions": attr.string_list(),
         "platforms": attr.string_list(),
-    },
-)
-
-def _pycross_environment_repo_impl(rctx):
-    version_info = _get_python_version_info(rctx)
-    platform_configs = json.decode(rctx.attr.platform_configs) if rctx.attr.platform_configs else None
-    computed_environments = _compute_environments(
-        repo_name = rctx.name,
-        python_versions = version_info.python_versions,
-        platforms = rctx.attr.platforms,
-        glibc_version = rctx.attr.glibc_version or DEFAULT_GLIBC_VERSION,
-        musl_version = rctx.attr.musl_version or DEFAULT_MUSL_VERSION,
-        macos_version = rctx.attr.macos_version or DEFAULT_MACOS_VERSION,
-        platform_configs = platform_configs,
-    )
-
-    repo_batch_create_target_environments(rctx, computed_environments)
-
-    root_build_sections = [_ENVIRONMENTS_BUILD_HEADER.format(default_version = version_info.default_micro_version)]
-    for env in computed_environments:
-        root_build_sections.append(_ENVIRONMENT_TEMPLATE.format(**{k: repr(v) for k, v in env.items()}))
-
-    root_build_sections.append("# A convenience config_setting_group to allow users to declare compatibility with")
-    root_build_sections.append("# any platform with a pycross environment configured.")
-    root_build_sections.append("selects.config_setting_group(")
-    root_build_sections.append('    name = "any_environment",')
-    root_build_sections.append("    match_any = [")
-    for env in computed_environments:
-        root_build_sections.append("        {},".format(repr(env["config_setting_name"])))
-    root_build_sections.append("    ],")
-    root_build_sections.append(")")
-
-    root_build_sections.append("filegroup(")
-    root_build_sections.append('    name = "environments",')
-    root_build_sections.append("    srcs = [")
-    for env in computed_environments:
-        root_build_sections.append("        {},".format(repr(env["output"])))
-    root_build_sections.append("    ]")
-    root_build_sections.append(")")
-
-    root_build_sections.append("# Automatically resolves to the target environment JSON based on target config.")
-    root_build_sections.append("filegroup(")
-    root_build_sections.append('    name = "current",')
-    root_build_sections.append("    srcs = select({")
-    for env in computed_environments:
-        root_build_sections.append("        {}: [{}],".format(repr(":" + env["config_setting_name"]), repr(":" + env["output"])))
-    root_build_sections.append('        "//conditions:default": [],')
-    root_build_sections.append("    }),")
-    root_build_sections.append("    visibility = [\"//visibility:public\"],")
-    root_build_sections.append(")")
-    root_build_sections.append("exports_files(glob([\"*.json\"]))")
-
-    rctx.file(rctx.path("BUILD.bazel"), "\n".join(root_build_sections))
-
-    defs_lines = ["environments = ["]
-    for env in computed_environments:
-        defs_lines.append('    Label("//:{}"),'.format(env["output"]))
-    defs_lines.append("]")
-
-    rctx.file(rctx.path("defs.bzl"), "\n".join(defs_lines))
-
-    index_struct = {
-        "environments": [
-            "//:{}".format(env["output"])
-            for env in computed_environments
-        ],
-    }
-    rctx.file(rctx.path("environments"), json.encode_indent(index_struct, indent = "  ") + "\n")
-
-pycross_environments_repo = repository_rule(
-    implementation = _pycross_environment_repo_impl,
-    attrs = {
-        "python_toolchains_repo": attr.label(),
-        "pythons_hub_repo": attr.label(),
-        "requested_python_versions": attr.string_list(),
-        "platforms": attr.string_list(),
-        "glibc_version": attr.string(),
-        "musl_version": attr.string(),
-        "macos_version": attr.string(),
-        "platform_configs": attr.string(
-            doc = "JSON-encoded list of per-platform version overrides.",
-        ),
     },
 )

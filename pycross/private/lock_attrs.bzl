@@ -7,7 +7,7 @@ DEFAULT_GLIBC_VERSION = "2.28"
 
 DEFAULT_MUSL_VERSION = "1.2"
 
-CREATE_ENVIRONMENTS_ATTRS = dict(
+CONFIGURE_TOOLCHAINS_ATTRS = dict(
     python_versions = attr.string_list(
         doc = (
             "The list of Python versions to support in by default in Pycross builds. " +
@@ -24,33 +24,33 @@ CREATE_ENVIRONMENTS_ATTRS = dict(
         ),
     ),
     glibc_version = attr.string(
+        default = DEFAULT_GLIBC_VERSION,
         doc = (
             "The maximum glibc version to accept for Bazel platforms that match the " +
             "@platforms//os:linux constraint. Must be in the format '2.X', and greater than 2.5. " +
             "All versions from 2.5 through this version will be supported. For example, if this " +
             "value is set to 2.15, wheels tagged manylinux_2_5, manylinux_2_6, ..., " +
-            "manylinux_2_15 will be accepted. Defaults to '{}' if unspecified.".format(DEFAULT_GLIBC_VERSION)
+            "manylinux_2_15 will be accepted."
         ),
     ),
     musl_version = attr.string(
+        default = DEFAULT_MUSL_VERSION,
         doc = (
             "The musl version to accept for Bazel platforms that match the " +
             "@platforms//os:linux constraint when @rules_python//python/config_settings:py_linux_libc " +
-            "is set to 'musl'. Defaults to '{}' if unspecified.".format(DEFAULT_MUSL_VERSION)
+            "is set to 'musl'."
         ),
     ),
     macos_version = attr.string(
+        default = DEFAULT_MACOS_VERSION,
         doc = (
             "The maximum macOS version to accept for Bazel platforms that match the " +
             "@platforms//os:osx constraint. Must be in the format 'X.Y' with X >= 10. " +
             "All versions from 10.4 through this version will be supported. For example, if this " +
             "value is set to 12.0, wheels tagged macosx_10_4, macosx_10_5, ..., macosx_11_0, " +
-            "macosx_12_0 will be accepted. Defaults to '{}' if unspecified.".format(DEFAULT_MACOS_VERSION)
+            "macosx_12_0 will be accepted."
         ),
     ),
-)
-
-REGISTER_TOOLCHAINS_ATTRS = dict(
     register_toolchains = attr.bool(
         doc = "Register toolchains for all rules_python-registered interpreters.",
         default = True,
@@ -58,10 +58,6 @@ REGISTER_TOOLCHAINS_ATTRS = dict(
 )
 
 RESOLVE_ATTRS = dict(
-    target_environments = attr.label_list(
-        doc = "A list of pycross_target_environment labels.",
-        allow_files = [".json"],
-    ),
     local_wheels = attr.label_list(
         doc = "A list of wheel files.",
         allow_files = [".whl"],
@@ -146,14 +142,12 @@ POETRY_IMPORT_ATTRS = dict(
     ),
 )
 
-def handle_resolve_attrs(attrs, environment_files_and_labels, local_wheel_names_and_labels):
+def handle_resolve_attrs(attrs, local_wheel_names_and_labels):
     """
     Parse resolve attrs and return a list of arguments.
 
     Args:
       attrs: ctx.attr or repository_ctx.attr
-      environment_files_and_labels: a list of 2-tuples, each containing an
-        environment file and its corresponding label.
       local_wheel_names_and_labels: a list of 2-tuples, each containing an
         wheel name and its corresponding label.
 
@@ -161,9 +155,6 @@ def handle_resolve_attrs(attrs, environment_files_and_labels, local_wheel_names_
       a list of arguments.
     """
     args = []
-
-    for env_file, env_label in environment_files_and_labels:
-        args.extend(["--target-environment", env_file, env_label])
 
     for remote_wheel_url, sha256 in attrs.remote_wheels.items():
         args.extend(["--remote-wheel", remote_wheel_url, sha256])
@@ -362,13 +353,6 @@ COMMON_IMPORT_ATTRS = dict(
     default_alias_single_version = attr.bool(
         doc = "Generate aliases for all packages that have a single version in the lock file.",
     ),
-    target_environments = attr.label_list(
-        # TODO: expand doc
-        doc = "A list of target environment descriptors.",
-        default = [
-            "@pycross_environments//:environments",
-        ],
-    ),
     local_wheels = attr.label_list(
         doc = "A list of local .whl files to consider when processing lock files.",
     ),
@@ -392,12 +376,6 @@ WORKSPACE_COMMON_ATTRS = dict(
     ),
     default_alias_single_version = attr.bool(
         doc = "Generate aliases for all packages that have a single version in the lock file.",
-    ),
-    target_environments = attr.label_list(
-        doc = "A list of target environment descriptors.",
-        default = [
-            "@pycross_environments//:environments",
-        ],
     ),
     local_wheels = attr.label_list(
         doc = "A list of local .whl files to consider when processing lock files.",

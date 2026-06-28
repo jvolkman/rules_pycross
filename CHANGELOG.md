@@ -4,6 +4,67 @@ All notable changes to this project will be documented in this file.
 
 ## [unreleased]
 
+### Breaking
+
+- **`configure_environments` is deprecated.** Use `configure_toolchains` instead.
+  The old name still works but prints a deprecation warning.
+- **`pycross_target_environment` rule removed.** Replaced by
+  `pycross_target_platform`, which derives platform tags from the active
+  `rules_python` toolchain at analysis time.
+- **`environments` extension removed.** Platform configuration is now handled
+  entirely by `configure_toolchains` and Bazel's native `@platforms` constraints.
+- **`pip` is no longer a dependency.** The Python-based target environment
+  generator that required pip has been removed.
+- **Workspace repo names changed** from `foo_pkgs` to `foo__pkgs` (#245).
+
+### Added
+
+- **PEP 508 marker evaluation at analysis time.** Conditional dependencies
+  (e.g., `colorama; sys_platform == "win32"`) now generate `select()`
+  expressions in the lock file, enabling true cross-platform builds without
+  re-running lock import.
+- **PEP 425 wheel tag matching.** New `pycross_wheel_chooser` rule selects
+  the best-matching wheel at analysis time based on the active Python toolchain,
+  with automatic sdist fallback.
+- **`pycross_target_platform` rule.** Generates PEP 425-compatible tags
+  (interpreter, ABI, platform) from `rules_python` toolchain configuration,
+  including libc variant and freethreaded support.
+- **`pycross_pep508_evaluator` rule.** Evaluates PEP 508 marker expressions
+  against Bazel config settings, producing match/no-match flags for `select()`.
+- **Marker-aware cycle resolution.** Cycle group dependencies are now gated
+  behind `select()` so platform-specific deps don't trigger eager repo fetches.
+  Tarjan's SCC algorithm runs over the full dependency graph for correct
+  detection of all cycles.
+- **Starlark port of `pypa/packaging`.** Pure-Starlark implementations of
+  PEP 440 versions, PEP 508 markers, PEP 425 tags, and specifiers under
+  `//pycross/private/pypackaging` (#251, #252).
+- **`setuptools-rust` build backend.** Auto-detected via bracket-notation
+  matching when `setuptools-rust` appears in `build-system.requires` (#249).
+- **Variant resolver layer** for conflict set enforcement (#246).
+- **`resource_sets` support** in sdist build rules for better resource
+  management during parallel builds (#247).
+
+### Changed
+
+- Python version, libc variant, and freethreaded status are now read from
+  the `rules_python` toolchain at analysis time instead of being pre-declared.
+- `configure_toolchains` versions pipe through to `build_setting_default` on
+  `string_flag` settings, unifying flag defaults.
+- Package name normalization consolidated on `pypackaging.canonicalize_name`.
+- Default macOS version bumped to 15.0.
+- Updated `repairwheel` to 0.6.2.
+
+### Fixed
+
+- **Eager fetching of cross-platform repos.** Switched `repo_map` from
+  `label_keyed_string_dict` to `string_dict` to prevent Bazel from fetching
+  all platform-specific wheel repos at analysis time.
+- **Duplicate `build_deps` in sdist builds.** Switched to dict-as-set pattern
+  to deduplicate when the same package appears via different requirement
+  specifiers.
+- **Multi-tag wheel handling.** Fixed resolver to correctly handle compound
+  platform tags like `manylinux_2_17_x86_64.manylinux2014_x86_64`.
+
 ## [2.0.0-alpha.0]
 
 This is a major release with breaking changes. See the

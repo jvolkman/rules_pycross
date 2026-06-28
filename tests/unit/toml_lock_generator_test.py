@@ -8,6 +8,7 @@ from pycross.private.tools.lock_model import PackageFile
 from pycross.private.tools.lock_model import PackageKey
 from pycross.private.tools.lock_model import ResolvedLockSet
 from pycross.private.tools.lock_model import ResolvedPackage
+from pycross.private.tools.lock_model import WheelCandidate
 from pycross.private.tools.toml_lock_generator import main
 
 
@@ -15,7 +16,6 @@ class TomlLockGeneratorTest(unittest.TestCase):
     @patch("pycross.private.tools.raw_lock_resolver.resolve")
     def test_toml_output(self, mock_resolve):
         lock = ResolvedLockSet(
-            environments={},
             remote_files={
                 FileKey("mypkg-1.0-py3-none-any.whl/12345"): PackageFile(
                     name="mypkg-1.0-py3-none-any.whl",
@@ -26,7 +26,15 @@ class TomlLockGeneratorTest(unittest.TestCase):
             packages={
                 PackageKey("mypkg@1.0"): ResolvedPackage(
                     key=PackageKey("mypkg@1.0"),
-                    environment_files={"env1": FileReference(key=FileKey("mypkg-1.0-py3-none-any.whl/12345"))},
+                    wheel_candidates=[
+                        WheelCandidate(
+                            filename="mypkg-1.0-py3-none-any.whl",
+                            file_reference=FileReference(key=FileKey("mypkg-1.0-py3-none-any.whl/12345")),
+                            python_tag="py3",
+                            abi_tag="none",
+                            platform_tag="any",
+                        ),
+                    ],
                 )
             },
             pins={"mypkg": {"": PackageKey("mypkg@1.0")}},

@@ -46,8 +46,9 @@ def main(args: Any) -> None:
         sha256 = None
         url = None
 
-        # Collect all remote files referenced by this package's environments
-        for file_ref in pkg.environment_files.values():
+        # Collect remote files from wheel candidates
+        for candidate in pkg.wheel_candidates:
+            file_ref = candidate.file_reference
             if file_ref.key:
                 file_info = resolved_lock.remote_files.get(file_ref.key)
                 if file_info:
@@ -60,13 +61,26 @@ def main(args: Any) -> None:
                     repo_name = "pypi_{}".format(sanitize_name(key_str.replace("/", "_")))
                     break
 
+        # Also check sdist_file if no wheel candidate matched
+        if not repo_name and pkg.sdist_file and pkg.sdist_file.key:
+            file_info = resolved_lock.remote_files.get(pkg.sdist_file.key)
+            if file_info:
+                filename = file_info.name
+                sha256 = file_info.sha256
+                url = file_info.urls[0]
+                key_str = str(pkg.sdist_file.key)
+                repo_name = "pypi_{}".format(sanitize_name(key_str.replace("/", "_")))
+
         if not repo_name:
             continue
 
-        # Merge common and environment deps
-        all_deps = set(pkg.common_dependencies)
-        for env_deps in pkg.environment_dependencies.values():
-            all_deps.update(env_deps)
+        # Collect all dependency keys from marker_dependencies
+        deps = []
+        for md in pkg.marker_dependencies:
+            dep_dict = {"key": str(md.key)}
+            if md.marker:
+                dep_dict["marker"] = md.marker
+            deps.append(dep_dict)
 
         pkg_dict = {
             "name": str(pkg.key.name),
@@ -77,8 +91,8 @@ def main(args: Any) -> None:
             "filename": filename,
         }
 
-        if all_deps:
-            pkg_dict["deps"] = sorted([str(d) for d in all_deps])
+        if deps:
+            pkg_dict["deps"] = sorted(deps, key=lambda x: x["key"])
 
         packages_dict[str(pkg_key)] = pkg_dict
 

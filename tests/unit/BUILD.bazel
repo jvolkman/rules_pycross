@@ -1,8 +1,14 @@
 load("@rules_python//python:defs.bzl", "py_test")
 load(":test_common_attrs.bzl", "common_attrs_test_suite")
 load(":test_override_helpers.bzl", "override_helpers_test_suite")
+load(":test_pep508.bzl", "pep508_test_suite")
 load(":test_resolved_lock_renderer.bzl", "resolved_lock_renderer_test_suite")
+load(":test_sdist_dedup.bzl", "sdist_dedup_test_suite")
 load(":test_variant_resolver.bzl", "variant_resolver_test_suite")
+
+pep508_test_suite(
+    name = "test_pep508",
+)
 
 py_test(
     name = "inspect_package_test",
@@ -114,9 +120,7 @@ py_test(
     deps = [
         "//pycross/private/tools:lock_model",
         "//pycross/private/tools:raw_lock_resolver",
-        "//pycross/private/tools:target_environment",
         "@rules_pycross_internal//deps:packaging",
-        "@rules_pycross_internal//deps:pip",
     ],
 )
 
@@ -191,3 +195,5 @@ py_test(
 )
 
 variant_resolver_test_suite(name = "test_variant_resolver")
+
+sdist_dedup_test_suite(name = "test_sdist_dedup")

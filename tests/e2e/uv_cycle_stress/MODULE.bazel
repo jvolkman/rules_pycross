@@ -1,0 +1,55 @@
+bazel_dep(name = "rules_pycross", version = "0.0.0")
+bazel_dep(name = "rules_pycross_e2e_shared", version = "0.0.0")
+bazel_dep(name = "rules_python", version = "2.0.0")
+
+local_path_override(
+    module_name = "rules_pycross",
+    path = "../../..",
+)
+
+local_path_override(
+    module_name = "rules_pycross_e2e_shared",
+    path = "../shared",
+)
+
+python = use_extension("@rules_python//python/extensions:python.bzl", "python")
+python.toolchain(
+    is_default = True,
+    python_version = "3.11.6",
+)
+python.toolchain(python_version = "3.12.0")
+use_repo(python, "python_versions")
+
+environments = use_extension("@rules_pycross//pycross/extensions:environments.bzl", "environments")
+environments.create_for_python_toolchains(
+    name = "uv_cycle_stress_envs",
+    platforms = [
+        "aarch64-apple-darwin",
+        "aarch64-unknown-linux-gnu",
+        "x86_64-unknown-linux-gnu",
+    ],
+)
+use_repo(environments, "uv_cycle_stress_envs")
+
+lock_import = use_extension("@rules_pycross//pycross/extensions:lock_import.bzl", "lock_import")
+lock_import.import_uv(
+    local_wheels = [
+        "//:stress_airflow-1.0.0-py3-none-any.whl",
+        "//:stress_airflow_core-1.0.0-py3-none-any.whl",
+        "//:stress_task_sdk-1.0.0-py3-none-any.whl",
+        "//:stress_provider_compat-1.0.0-py3-none-any.whl",
+        "//:stress_provider_io-1.0.0-py3-none-any.whl",
+        "//:stress_provider_sql-1.0.0-py3-none-any.whl",
+        "//:stress_provider_smtp-1.0.0-py3-none-any.whl",
+        "//:stress_provider_standard-1.0.0-py3-none-any.whl",
+        "//:stress_packaging-1.0.0-py3-none-any.whl",
+        "//:stress_jinja2-1.0.0-py3-none-any.whl",
+        "//:stress_attrs-1.0.0-py3-none-any.whl",
+    ],
+    lock_file = "//:uv.lock",
+    project_file = "//:pyproject.toml",
+    repo = "cycle_stress_lock",
+)
+
+lock_repos = use_extension("@rules_pycross//pycross/extensions:lock_repos.bzl", "lock_repos")
+use_repo(lock_repos, "cycle_stress_lock")

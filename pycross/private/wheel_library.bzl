@@ -20,6 +20,7 @@ load(
     "PycrossExtractedWheelInfo",
     "PycrossPackageInfo",
 )
+load(":util.bzl", "PY_COMMON_ATTRS", "merge_py_providers")
 
 def _pycross_wheel_library_impl(ctx):
     out = ctx.actions.declare_directory(ctx.attr.name)
@@ -58,19 +59,6 @@ def _pycross_wheel_library_impl(ctx):
         progress_message = "Installing %s" % wheel_input.basename,
     )
 
-    has_py2_only_sources = ctx.attr.python_version == "PY2"
-    has_py3_only_sources = ctx.attr.python_version == "PY3"
-    if not has_py2_only_sources:
-        for d in ctx.attr.deps:
-            if d[PyInfo].has_py2_only_sources:
-                has_py2_only_sources = True
-                break
-    if not has_py3_only_sources:
-        for d in ctx.attr.deps:
-            if d[PyInfo].has_py3_only_sources:
-                has_py3_only_sources = True
-                break
-
     # TODO: Is there a more correct way to get this runfiles-relative import path?
     imp = paths.join(
         ctx.label.workspace_name or ctx.workspace_name,  # Default to the local workspace.
@@ -78,18 +66,6 @@ def _pycross_wheel_library_impl(ctx):
         ctx.label.name,
         "site-packages",  # we put lib files in this subdirectory.
     )
-
-    imports = depset(
-        direct = [imp],
-        transitive = [d[PyInfo].imports for d in ctx.attr.deps],
-    )
-    transitive_sources = depset(
-        direct = [out],
-        transitive = [dep[PyInfo].transitive_sources for dep in ctx.attr.deps if PyInfo in dep],
-    )
-    runfiles = ctx.runfiles(files = [out])
-    for d in ctx.attr.deps:
-        runfiles = runfiles.merge(d[DefaultInfo].default_runfiles)
 
     # Build venv symlink entries for rules_python's venvs_site_packages support.
     # Each top-level package gets a symlink from the venv's site-packages/<tlp>
@@ -178,30 +154,23 @@ def _pycross_wheel_library_impl(ctx):
                         files = depset([out]),
                     ))
 
-    py_info_kwargs = dict(
-        has_py2_only_sources = has_py2_only_sources,
-        has_py3_only_sources = has_py3_only_sources,
-        imports = imports,
-        transitive_sources = transitive_sources,
-        uses_shared_libraries = True,  # Docs say this is unused
+    merged = merge_py_providers(
+        ctx,
+        ctx.attr.deps,
+        direct_sources = [out],
+        direct_imports = [imp],
+        base_runfiles = ctx.runfiles(files = [out]),
+        direct_venv_symlinks = venv_symlinks,
+        has_py2_only_sources = ctx.attr.python_version == "PY2",
+        has_py3_only_sources = ctx.attr.python_version == "PY3",
     )
-    if venvs_site_packages_enabled:
-        transitive_venv_symlinks = []
-        for d in ctx.attr.deps:
-            if hasattr(d[PyInfo], "venv_symlinks"):
-                transitive_venv_symlinks.append(d[PyInfo].venv_symlinks)
-
-        py_info_kwargs["venv_symlinks"] = depset(
-            direct = venv_symlinks,
-            transitive = transitive_venv_symlinks,
-        )
 
     providers = [
         DefaultInfo(
             files = depset(direct = [out]),
-            runfiles = runfiles,
+            runfiles = merged.runfiles,
         ),
-        PyInfo(**py_info_kwargs),
+        merged.py_info,
         PycrossExtractedWheelInfo(
             site_packages = out,
         ),
@@ -226,7 +195,7 @@ def _pycross_wheel_library_impl(ctx):
 
 pycross_wheel_library = rule(
     implementation = _pycross_wheel_library_impl,
-    attrs = {
+    attrs = dict({
         "deps": attr.label_list(
             doc = "A list of this wheel's Python library dependencies.",
             providers = [DefaultInfo, PyInfo],
@@ -266,7 +235,7 @@ pycross_wheel_library = rule(
         "experimental_venvs_site_packages": attr.label(
             default = Label("@rules_python//python/config_settings:venvs_site_packages"),
         ),
-    },
+    }, **PY_COMMON_ATTRS),
 )
 
 def _pycross_wheel_metadata_impl(ctx):

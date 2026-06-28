@@ -14,17 +14,6 @@ stardoc(
     ],
 )
 
-# ext_environments
-stardoc(
-    name = "ext_environments_gen",
-    out = "ext_environments.gen.md",
-    input = "@rules_pycross//pycross/extensions:environments.bzl",
-    deps = [
-        "@rules_cc//cc:find_cc_toolchain_bzl",
-        "@rules_pycross//pycross/extensions:environments",
-    ],
-)
-
 # ext_lock_import
 stardoc(
     name = "ext_lock_import_gen",
@@ -133,7 +122,6 @@ write_source_files(
     name = "update",
     files = {
         "rules.md": ":rules_gen",
-        "ext_environments.md": ":ext_environments_gen",
         "ext_lock_import.md": ":ext_lock_import_gen",
         "ext_lock_repos.md": ":ext_lock_repos_gen",
         "ext_pycross.md": ":ext_pycross_gen",

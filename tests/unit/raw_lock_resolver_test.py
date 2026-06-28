@@ -1,5 +1,4 @@
 import unittest
-from typing import Dict
 from typing import List
 
 from packaging.specifiers import SpecifierSet
@@ -17,34 +16,6 @@ from pycross.private.tools.raw_lock_resolver import PackageAnnotations
 from pycross.private.tools.raw_lock_resolver import PackageResolver
 from pycross.private.tools.raw_lock_resolver import collect_package_annotations
 from pycross.private.tools.raw_lock_resolver import resolve
-from pycross.private.tools.target_environment import TargetEnv
-
-
-def make_env(name: str, platforms: List[str], version: str = "3.10", markers: Dict[str, str] = None) -> TargetEnv:
-    from pip._internal.models.target_python import TargetPython
-
-    version_info = tuple(int(p) for p in version.split(".")[:3])
-    if len(version_info) == 2:
-        version_info = version_info + (0,)
-    tp = TargetPython(
-        platforms=platforms,
-        py_version_info=version_info,
-        abis=[f"cp{version.replace('.', '')}"],
-        implementation="cp",
-    )
-    compatibility_tags = [str(t) for t in tp.get_sorted_tags()]
-
-    return TargetEnv(
-        name=name,
-        implementation="cp",
-        version=version,
-        abis=[f"cp{version.replace('.', '')}"],
-        platforms=platforms,
-        compatibility_tags=compatibility_tags,
-        markers=markers or {},
-        python_compatible_with=[],
-        flag_values={},
-    )
 
 
 def make_file(name: str, sha256: str = "1234") -> PackageFile:
@@ -72,17 +43,10 @@ def make_pkg(
 
 
 class RawLockResolverTest(unittest.TestCase):
-    def setUp(self):
-        self.linux_env = make_env(
-            "linux", ["manylinux_2_17_x86_64", "manylinux2014_x86_64"], markers={"sys_platform": "linux"}
-        )
-        self.mac_env = make_env("mac", ["macosx_10_9_x86_64"], markers={"sys_platform": "darwin"})
-
     # Core Resolution
     def test_single_package_single_env(self):
         pkg = make_pkg("foo", "1.0", [make_file("foo-1.0-cp310-cp310-manylinux_2_17_x86_64.whl")])
         ctx = GenerationContext(
-            target_environments=[self.linux_env],
             local_wheels={},
             remote_wheels={},
             always_include_sdist=False,
@@ -90,28 +54,29 @@ class RawLockResolverTest(unittest.TestCase):
         resolver = PackageResolver(pkg, ctx, None, [])
         resolved = resolver.to_resolved_package()
 
-        self.assertIn("linux", resolved.environment_files)
-        self.assertEqual(resolved.environment_files["linux"].key.name, "foo-1.0-cp310-cp310-manylinux_2_17_x86_64.whl")
+        self.assertEqual(len(resolved.wheel_candidates), 1)
+        self.assertEqual(resolved.wheel_candidates[0].filename, "foo-1.0-cp310-cp310-manylinux_2_17_x86_64.whl")
 
-    def test_single_package_no_matching_wheel_fallback_sdist(self):
+    def test_single_package_with_sdist_and_wheel(self):
+        """Both wheels and sdist are available; wheel is a candidate, sdist found separately."""
         pkg = make_pkg(
             "foo", "1.0", [make_file("foo-1.0-cp310-cp310-manylinux_2_17_x86_64.whl"), make_file("foo-1.0.tar.gz")]
         )
         ctx = GenerationContext(
-            target_environments=[self.mac_env],
             local_wheels={},
             remote_wheels={},
-            always_include_sdist=False,
+            always_include_sdist=True,
         )
         resolver = PackageResolver(pkg, ctx, None, [])
         resolved = resolver.to_resolved_package()
 
-        self.assertIn("mac", resolved.environment_files)
-        self.assertEqual(resolved.environment_files["mac"].key.name, "foo-1.0.tar.gz")
+        self.assertEqual(len(resolved.wheel_candidates), 1)
+        self.assertEqual(resolved.wheel_candidates[0].filename, "foo-1.0-cp310-cp310-manylinux_2_17_x86_64.whl")
         self.assertTrue(resolver.uses_sdist)
         self.assertIsNotNone(resolved.sdist_file)
 
-    def test_wheel_selection_priority(self):
+    def test_wheel_candidates_include_all_wheels(self):
+        """All wheel files become candidates; selection happens at Starlark analysis time."""
         pkg = make_pkg(
             "foo",
             "1.0",
@@ -121,7 +86,6 @@ class RawLockResolverTest(unittest.TestCase):
             ],
         )
         ctx = GenerationContext(
-            target_environments=[self.linux_env],
             local_wheels={},
             remote_wheels={},
             always_include_sdist=False,
@@ -129,10 +93,13 @@ class RawLockResolverTest(unittest.TestCase):
         resolver = PackageResolver(pkg, ctx, None, [])
         resolved = resolver.to_resolved_package()
 
-        self.assertIn("linux", resolved.environment_files)
-        self.assertEqual(resolved.environment_files["linux"].key.name, "foo-1.0-cp310-cp310-manylinux_2_17_x86_64.whl")
+        self.assertEqual(len(resolved.wheel_candidates), 2)
+        filenames = {c.filename for c in resolved.wheel_candidates}
+        self.assertIn("foo-1.0-cp310-cp310-manylinux2014_x86_64.whl", filenames)
+        self.assertIn("foo-1.0-cp310-cp310-manylinux_2_17_x86_64.whl", filenames)
 
-    def test_wheel_selection_build_tag_tie_breaker(self):
+    def test_wheel_candidates_with_build_tags(self):
+        """Wheels with build tags are all included as candidates."""
         pkg = make_pkg(
             "foo",
             "1.0",
@@ -143,7 +110,6 @@ class RawLockResolverTest(unittest.TestCase):
             ],
         )
         ctx = GenerationContext(
-            target_environments=[self.linux_env],
             local_wheels={},
             remote_wheels={},
             always_include_sdist=False,
@@ -151,13 +117,12 @@ class RawLockResolverTest(unittest.TestCase):
         resolver = PackageResolver(pkg, ctx, None, [])
         resolved = resolver.to_resolved_package()
 
-        self.assertIn("linux", resolved.environment_files)
-        self.assertEqual(
-            resolved.environment_files["linux"].key.name, "foo-1.0-2-cp310-cp310-manylinux_2_17_x86_64.whl"
-        )
+        self.assertEqual(len(resolved.wheel_candidates), 3)
+        filenames = {c.filename for c in resolved.wheel_candidates}
+        self.assertIn("foo-1.0-2-cp310-cp310-manylinux_2_17_x86_64.whl", filenames)
 
     def test_wheel_preferred_over_sdist(self):
-        """When both a compatible wheel and sdist exist, the wheel is selected."""
+        """When both a wheel and sdist exist, sdist is NOT included unless always_include_sdist."""
         pkg = make_pkg(
             "foo",
             "1.0",
@@ -167,7 +132,6 @@ class RawLockResolverTest(unittest.TestCase):
             ],
         )
         ctx = GenerationContext(
-            target_environments=[self.linux_env],
             local_wheels={},
             remote_wheels={},
             always_include_sdist=False,
@@ -175,12 +139,12 @@ class RawLockResolverTest(unittest.TestCase):
         resolver = PackageResolver(pkg, ctx, None, [])
         resolved = resolver.to_resolved_package()
 
-        self.assertIn("linux", resolved.environment_files)
-        self.assertEqual(resolved.environment_files["linux"].key.name, "foo-1.0-cp310-cp310-manylinux_2_17_x86_64.whl")
+        self.assertEqual(len(resolved.wheel_candidates), 1)
+        self.assertEqual(resolved.wheel_candidates[0].filename, "foo-1.0-cp310-cp310-manylinux_2_17_x86_64.whl")
         self.assertFalse(resolver.uses_sdist)
 
-    def test_incompatible_wheel_skipped(self):
-        """A wheel for a different platform is skipped; sdist is used instead."""
+    def test_all_wheels_become_candidates(self):
+        """All wheels become candidates regardless of platform compatibility."""
         pkg = make_pkg(
             "foo",
             "1.0",
@@ -190,7 +154,6 @@ class RawLockResolverTest(unittest.TestCase):
             ],
         )
         ctx = GenerationContext(
-            target_environments=[self.linux_env],
             local_wheels={},
             remote_wheels={},
             always_include_sdist=False,
@@ -198,12 +161,12 @@ class RawLockResolverTest(unittest.TestCase):
         resolver = PackageResolver(pkg, ctx, None, [])
         resolved = resolver.to_resolved_package()
 
-        self.assertIn("linux", resolved.environment_files)
-        self.assertEqual(resolved.environment_files["linux"].key.name, "foo-1.0.tar.gz")
-        self.assertTrue(resolver.uses_sdist)
+        # The macos wheel is still a candidate (selection is at analysis time)
+        self.assertEqual(len(resolved.wheel_candidates), 1)
+        self.assertEqual(resolved.wheel_candidates[0].filename, "foo-1.0-cp310-cp310-macosx_10_9_x86_64.whl")
 
-    def test_source_only_forces_sdist(self):
-        """With always_build annotation, sdist is selected even when a compatible wheel exists."""
+    def test_always_include_sdist_flag(self):
+        """With always_include_sdist, sdist file is set alongside wheel candidates."""
         pkg = make_pkg(
             "foo",
             "1.0",
@@ -213,28 +176,28 @@ class RawLockResolverTest(unittest.TestCase):
             ],
         )
         ctx = GenerationContext(
-            target_environments=[self.linux_env],
             local_wheels={},
             remote_wheels={},
-            always_include_sdist=False,
+            always_include_sdist=True,
         )
-        annotations = PackageAnnotations(always_build=True)
-        resolver = PackageResolver(pkg, ctx, annotations, [])
+        resolver = PackageResolver(pkg, ctx, None, [])
         resolved = resolver.to_resolved_package()
 
-        self.assertIn("linux", resolved.environment_files)
-        self.assertEqual(resolved.environment_files["linux"].key.name, "foo-1.0.tar.gz")
+        # Wheel is still a candidate
+        self.assertEqual(len(resolved.wheel_candidates), 1)
+        # But sdist is also included
         self.assertTrue(resolver.uses_sdist)
+        self.assertIsNotNone(resolved.sdist_file)
+        self.assertEqual(resolved.sdist_file.key.name, "foo-1.0.tar.gz")
 
-    def test_no_matching_files_no_env_entry(self):
-        """When no wheel matches and no sdist exists, the environment gets no entry."""
+    def test_wheel_only_no_sdist(self):
+        """When only a wheel exists and no sdist, no sdist is set."""
         pkg = make_pkg(
             "foo",
             "1.0",
             [make_file("foo-1.0-cp310-cp310-macosx_10_9_x86_64.whl")],
         )
         ctx = GenerationContext(
-            target_environments=[self.linux_env],
             local_wheels={},
             remote_wheels={},
             always_include_sdist=False,
@@ -242,17 +205,17 @@ class RawLockResolverTest(unittest.TestCase):
         resolver = PackageResolver(pkg, ctx, None, [])
         resolved = resolver.to_resolved_package()
 
-        self.assertNotIn("linux", resolved.environment_files)
+        self.assertEqual(len(resolved.wheel_candidates), 1)
+        self.assertIsNone(resolved.sdist_file)
 
-    def test_pure_python_wheel_matches_any_env(self):
-        """A py3-none-any wheel is compatible with any environment."""
+    def test_pure_python_wheel_is_candidate(self):
+        """A py3-none-any wheel becomes a wheel candidate."""
         pkg = make_pkg(
             "foo",
             "1.0",
             [make_file("foo-1.0-py3-none-any.whl")],
         )
         ctx = GenerationContext(
-            target_environments=[self.linux_env, self.mac_env],
             local_wheels={},
             remote_wheels={},
             always_include_sdist=False,
@@ -260,12 +223,11 @@ class RawLockResolverTest(unittest.TestCase):
         resolver = PackageResolver(pkg, ctx, None, [])
         resolved = resolver.to_resolved_package()
 
-        self.assertIn("linux", resolved.environment_files)
-        self.assertEqual(resolved.environment_files["linux"].key.name, "foo-1.0-py3-none-any.whl")
-        self.assertIn("mac", resolved.environment_files)
-        self.assertEqual(resolved.environment_files["mac"].key.name, "foo-1.0-py3-none-any.whl")
+        self.assertEqual(len(resolved.wheel_candidates), 1)
+        self.assertEqual(resolved.wheel_candidates[0].filename, "foo-1.0-py3-none-any.whl")
 
-    def test_multi_env_resolution(self):
+    def test_multi_platform_wheels_all_candidates(self):
+        """Multiple platform-specific wheels all become candidates."""
         pkg = make_pkg(
             "foo",
             "1.0",
@@ -275,7 +237,6 @@ class RawLockResolverTest(unittest.TestCase):
             ],
         )
         ctx = GenerationContext(
-            target_environments=[self.linux_env, self.mac_env],
             local_wheels={},
             remote_wheels={},
             always_include_sdist=False,
@@ -283,12 +244,13 @@ class RawLockResolverTest(unittest.TestCase):
         resolver = PackageResolver(pkg, ctx, None, [])
         resolved = resolver.to_resolved_package()
 
-        self.assertIn("linux", resolved.environment_files)
-        self.assertEqual(resolved.environment_files["linux"].key.name, "foo-1.0-cp310-cp310-manylinux_2_17_x86_64.whl")
-        self.assertIn("mac", resolved.environment_files)
-        self.assertEqual(resolved.environment_files["mac"].key.name, "foo-1.0-cp310-cp310-macosx_10_9_x86_64.whl")
+        self.assertEqual(len(resolved.wheel_candidates), 2)
+        filenames = {c.filename for c in resolved.wheel_candidates}
+        self.assertIn("foo-1.0-cp310-cp310-manylinux_2_17_x86_64.whl", filenames)
+        self.assertIn("foo-1.0-cp310-cp310-macosx_10_9_x86_64.whl", filenames)
 
-    def test_common_vs_env_specific_deps(self):
+    def test_unconditional_and_conditional_deps(self):
+        """Unconditional deps have no marker; conditional deps preserve their marker."""
         pkg = make_pkg(
             "foo",
             "1.0",
@@ -296,7 +258,6 @@ class RawLockResolverTest(unittest.TestCase):
             deps=[make_dep("depA", "1.0"), make_dep("depB", "1.0", marker="sys_platform == 'linux'")],
         )
         ctx = GenerationContext(
-            target_environments=[self.linux_env, self.mac_env],
             local_wheels={},
             remote_wheels={},
             always_include_sdist=False,
@@ -304,17 +265,18 @@ class RawLockResolverTest(unittest.TestCase):
         resolver = PackageResolver(pkg, ctx, None, [])
         resolved = resolver.to_resolved_package()
 
-        self.assertEqual(len(resolved.common_dependencies), 1)
-        self.assertEqual(resolved.common_dependencies[0].name, "depa")
-
-        self.assertIn("linux", resolved.environment_dependencies)
-        self.assertEqual(len(resolved.environment_dependencies["linux"]), 1)
-        self.assertEqual(resolved.environment_dependencies["linux"][0].name, "depb")
-
-        self.assertNotIn("mac", resolved.environment_dependencies)
+        self.assertEqual(len(resolved.marker_dependencies), 2)
+        unconditional = [md for md in resolved.marker_dependencies if not md.marker]
+        conditional = [md for md in resolved.marker_dependencies if md.marker]
+        self.assertEqual(len(unconditional), 1)
+        self.assertEqual(unconditional[0].key.name.package, "depa")
+        self.assertEqual(len(conditional), 1)
+        self.assertEqual(conditional[0].key.name.package, "depb")
+        self.assertIn("sys_platform", conditional[0].marker)
 
     # Dependency Handling
-    def test_marker_evaluation(self):
+    def test_marker_preserved(self):
+        """Marker strings are preserved as-is in marker_dependencies."""
         pkg = make_pkg(
             "foo",
             "1.0",
@@ -322,7 +284,6 @@ class RawLockResolverTest(unittest.TestCase):
             deps=[make_dep("depA", "1.0", marker="sys_platform == 'linux'")],
         )
         ctx = GenerationContext(
-            target_environments=[self.linux_env, self.mac_env],
             local_wheels={},
             remote_wheels={},
             always_include_sdist=False,
@@ -330,15 +291,13 @@ class RawLockResolverTest(unittest.TestCase):
         resolver = PackageResolver(pkg, ctx, None, [])
         resolved = resolver.to_resolved_package()
 
-        self.assertEqual(len(resolved.common_dependencies), 0)
-        self.assertIn("linux", resolved.environment_dependencies)
-        self.assertEqual(len(resolved.environment_dependencies["linux"]), 1)
-        self.assertNotIn("mac", resolved.environment_dependencies)
+        self.assertEqual(len(resolved.marker_dependencies), 1)
+        self.assertEqual(resolved.marker_dependencies[0].key.name.package, "depa")
+        self.assertIn("sys_platform", resolved.marker_dependencies[0].marker)
 
     def test_ignore_dependencies(self):
         pkg = make_pkg("foo", "1.0", [make_file("foo-1.0.tar.gz")], deps=[make_dep("depA", "1.0")])
         ctx = GenerationContext(
-            target_environments=[self.linux_env],
             local_wheels={},
             remote_wheels={},
             always_include_sdist=False,
@@ -347,10 +306,10 @@ class RawLockResolverTest(unittest.TestCase):
         resolver = PackageResolver(pkg, ctx, annotations, [])
         resolved = resolver.to_resolved_package()
 
-        self.assertEqual(len(resolved.common_dependencies), 0)
-        self.assertEqual(len(resolved.environment_dependencies), 0)
+        self.assertEqual(len(resolved.marker_dependencies), 0)
 
     def test_multi_version_dep_resolution(self):
+        """Multiple versions of the same dep with different markers are preserved."""
         pkg = make_pkg(
             "foo",
             "1.0",
@@ -361,7 +320,6 @@ class RawLockResolverTest(unittest.TestCase):
             ],
         )
         ctx = GenerationContext(
-            target_environments=[self.linux_env, self.mac_env],
             local_wheels={},
             remote_wheels={},
             always_include_sdist=False,
@@ -369,14 +327,14 @@ class RawLockResolverTest(unittest.TestCase):
         resolver = PackageResolver(pkg, ctx, None, [])
         resolved = resolver.to_resolved_package()
 
-        self.assertEqual(len(resolved.common_dependencies), 0)
-        self.assertEqual(resolved.environment_dependencies["linux"][0].version, Version("1.0"))
-        self.assertEqual(resolved.environment_dependencies["mac"][0].version, Version("2.0"))
+        self.assertEqual(len(resolved.marker_dependencies), 2)
+        versions = {md.key.version for md in resolved.marker_dependencies}
+        self.assertIn(Version("1.0"), versions)
+        self.assertIn(Version("2.0"), versions)
 
     def test_build_dependencies(self):
         pkg = make_pkg("foo", "1.0", [make_file("foo-1.0.tar.gz")])
         ctx = GenerationContext(
-            target_environments=[self.linux_env],
             local_wheels={},
             remote_wheels={},
             always_include_sdist=False,
@@ -391,7 +349,6 @@ class RawLockResolverTest(unittest.TestCase):
     def test_build_deps_not_duplicated(self):
         pkg = make_pkg("foo", "1.0", [make_file("foo-1.0.tar.gz")], deps=[make_dep("setuptools", "60.0")])
         ctx = GenerationContext(
-            target_environments=[self.linux_env],
             local_wheels={},
             remote_wheels={},
             always_include_sdist=False,
@@ -406,7 +363,6 @@ class RawLockResolverTest(unittest.TestCase):
     def test_local_wheel_override(self):
         pkg = make_pkg("foo", "1.0", [make_file("foo-1.0-cp310-cp310-manylinux_2_17_x86_64.whl")])
         ctx = GenerationContext(
-            target_environments=[self.linux_env],
             local_wheels={"foo-1.0-cp310-cp310-manylinux_2_17_x86_64.whl": "@//path:wheel"},
             remote_wheels={},
             always_include_sdist=False,
@@ -414,9 +370,9 @@ class RawLockResolverTest(unittest.TestCase):
         resolver = PackageResolver(pkg, ctx, None, [])
         resolved = resolver.to_resolved_package()
 
-        self.assertIn("linux", resolved.environment_files)
-        self.assertEqual(resolved.environment_files["linux"].label, "@//path:wheel")
-        self.assertIsNone(resolved.environment_files["linux"].key)
+        self.assertEqual(len(resolved.wheel_candidates), 1)
+        self.assertEqual(resolved.wheel_candidates[0].file_reference.label, "@//path:wheel")
+        self.assertIsNone(resolved.wheel_candidates[0].file_reference.key)
 
     def test_remote_wheel_override(self):
         pkg = make_pkg("foo", "1.0", [make_file("foo-1.0-cp310-cp310-manylinux_2_17_x86_64.whl")])
@@ -426,7 +382,6 @@ class RawLockResolverTest(unittest.TestCase):
             urls=("https://remote.com/foo.whl",),
         )
         ctx = GenerationContext(
-            target_environments=[self.linux_env],
             local_wheels={},
             remote_wheels={"foo-1.0-cp310-cp310-manylinux_2_17_x86_64.whl": remote_wheel},
             always_include_sdist=False,
@@ -434,15 +389,14 @@ class RawLockResolverTest(unittest.TestCase):
         resolver = PackageResolver(pkg, ctx, None, [])
         resolved = resolver.to_resolved_package()
 
-        self.assertIn("linux", resolved.environment_files)
-        self.assertEqual(resolved.environment_files["linux"].key.hash_prefix, "remote_s")
+        self.assertEqual(len(resolved.wheel_candidates), 1)
+        self.assertEqual(resolved.wheel_candidates[0].file_reference.key.hash_prefix, "remote_s")
 
     def test_always_include_sdist(self):
         pkg = make_pkg(
             "foo", "1.0", [make_file("foo-1.0-cp310-cp310-manylinux_2_17_x86_64.whl"), make_file("foo-1.0.tar.gz")]
         )
         ctx = GenerationContext(
-            target_environments=[self.linux_env],
             local_wheels={},
             remote_wheels={},
             always_include_sdist=True,
@@ -450,35 +404,33 @@ class RawLockResolverTest(unittest.TestCase):
         resolver = PackageResolver(pkg, ctx, None, [])
         resolved = resolver.to_resolved_package()
 
-        self.assertIn("linux", resolved.environment_files)
-        self.assertEqual(resolved.environment_files["linux"].key.name, "foo-1.0-cp310-cp310-manylinux_2_17_x86_64.whl")
+        self.assertEqual(len(resolved.wheel_candidates), 1)
+        self.assertEqual(resolved.wheel_candidates[0].filename, "foo-1.0-cp310-cp310-manylinux_2_17_x86_64.whl")
         self.assertIsNotNone(resolved.sdist_file)
         self.assertEqual(resolved.sdist_file.key.name, "foo-1.0.tar.gz")
 
     def test_always_build_annotation(self):
+        """With always_build, sdist is not auto-included unless always_include_sdist is set."""
         pkg = make_pkg(
             "foo", "1.0", [make_file("foo-1.0-cp310-cp310-manylinux_2_17_x86_64.whl"), make_file("foo-1.0.tar.gz")]
         )
         ctx = GenerationContext(
-            target_environments=[self.linux_env],
             local_wheels={},
             remote_wheels={},
-            always_include_sdist=False,
+            always_include_sdist=True,
         )
         annotations = PackageAnnotations(always_build=True)
         resolver = PackageResolver(pkg, ctx, annotations, [])
         resolved = resolver.to_resolved_package()
 
-        self.assertIn("linux", resolved.environment_files)
-        self.assertEqual(resolved.environment_files["linux"].key.name, "foo-1.0.tar.gz")
         self.assertTrue(resolver.uses_sdist)
         self.assertIsNotNone(resolved.sdist_file)
+        self.assertEqual(resolved.sdist_file.key.name, "foo-1.0.tar.gz")
 
     # Annotations
     def test_build_target_override(self):
         pkg = make_pkg("foo", "1.0", [make_file("foo-1.0.tar.gz")])
         ctx = GenerationContext(
-            target_environments=[self.linux_env],
             local_wheels={},
             remote_wheels={},
             always_include_sdist=False,
@@ -492,7 +444,6 @@ class RawLockResolverTest(unittest.TestCase):
     def test_install_exclude_globs(self):
         pkg = make_pkg("foo", "1.0", [make_file("foo-1.0.tar.gz")])
         ctx = GenerationContext(
-            target_environments=[self.linux_env],
             local_wheels={},
             remote_wheels={},
             always_include_sdist=False,
@@ -506,7 +457,6 @@ class RawLockResolverTest(unittest.TestCase):
     def test_pre_post_install_patches(self):
         pkg = make_pkg("foo", "1.0", [make_file("foo-1.0.tar.gz")])
         ctx = GenerationContext(
-            target_environments=[self.linux_env],
             local_wheels={},
             remote_wheels={},
             always_include_sdist=False,
@@ -518,17 +468,82 @@ class RawLockResolverTest(unittest.TestCase):
         self.assertEqual(resolved.pre_build_patches, ["@//:pre.patch"])
         self.assertEqual(resolved.post_install_patches, ["@//:post.patch"])
 
-    # Edge Cases
-    def test_python_version_incompatibility(self):
-        pkg = make_pkg("foo", "1.0", [make_file("foo-1.0.tar.gz")], python_versions=">=3.12")
+    def test_multi_tag_wheel_candidates(self):
+        """A wheel with compound (multi-value) python/abi/platform tags is parsed correctly."""
+        pkg = make_pkg(
+            "numpy",
+            "1.26.4",
+            [make_file("numpy-1.26.4-cp310.cp311-cp310.cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl")],
+        )
         ctx = GenerationContext(
-            target_environments=[self.linux_env],  # 3.10
             local_wheels={},
             remote_wheels={},
             always_include_sdist=False,
         )
-        with self.assertRaisesRegex(Exception, "does not support Python version"):
-            ctx.check_package_compatibility(pkg)
+        resolver = PackageResolver(pkg, ctx, None, [])
+        resolved = resolver.to_resolved_package()
+
+        self.assertEqual(len(resolved.wheel_candidates), 1)
+        candidate = resolved.wheel_candidates[0]
+        self.assertEqual(candidate.python_tag, "cp310.cp311")
+        self.assertEqual(candidate.abi_tag, "cp310.cp311")
+        self.assertEqual(candidate.platform_tag, "manylinux2014_x86_64.manylinux_2_17_x86_64")
+
+    def test_sdist_only_package(self):
+        """A package with only a .tar.gz file and no wheels uses sdist."""
+        pkg = make_pkg("mylib", "1.0", [make_file("mylib-1.0.tar.gz")])
+        ctx = GenerationContext(
+            local_wheels={},
+            remote_wheels={},
+            always_include_sdist=False,
+        )
+        resolver = PackageResolver(pkg, ctx, None, [])
+        resolved = resolver.to_resolved_package()
+
+        self.assertTrue(resolver.uses_sdist)
+        self.assertEqual(len(resolved.wheel_candidates), 0)
+        self.assertIsNotNone(resolved.sdist_file)
+
+    def test_no_files_raises_error(self):
+        """A package with no files is rejected at the model level."""
+        with self.assertRaises(AssertionError):
+            make_pkg("mylib", "1.0", [])
+
+    def test_disallow_builds_raises_when_sdist_used(self):
+        """With disallow_builds=True, resolve() raises if any package uses sdist."""
+        import os
+        import tempfile
+        from unittest.mock import MagicMock
+
+        pkg = make_pkg("mylib", "1.0", [make_file("mylib-1.0.tar.gz")])
+        lock_model = RawLockSet(
+            python_versions=SpecifierSet(">=3.8"),
+            packages={pkg.key: pkg},
+            pins={canonicalize_name("mylib"): {"": PackageKey.from_parts("mylib", Version("1.0"))}},
+        )
+
+        td = tempfile.TemporaryDirectory()
+        try:
+            lock_model_file = os.path.join(td.name, "lock.json")
+            with open(lock_model_file, "w") as f:
+                f.write(lock_model.to_json())
+
+            args = MagicMock()
+            args.lock_model_file = lock_model_file
+            args.local_wheel = []
+            args.remote_wheel = []
+            args.always_include_sdist = False
+            args.annotations_file = None
+            args.default_build_dependencies = []
+            args.disallow_builds = True
+            args.default_alias_single_version = False
+
+            with self.assertRaises(Exception):
+                resolve(args)
+        finally:
+            td.cleanup()
+
+    # Edge Cases (python_version_incompatibility test removed — check_package_compatibility no longer exists)
 
 
 class TestResolveFunction(unittest.TestCase):
@@ -549,16 +564,8 @@ class TestResolveFunction(unittest.TestCase):
         with open(lock_model_file, "w") as f:
             f.write(RawLockSet(python_versions=SpecifierSet(">=3.8"), packages={}, pins={}).to_json())
 
-        env_file = os.path.join(self.td_path, "env.json")
-        linux_env = make_env("linux", ["manylinux2014_x86_64"])
-        with open(env_file, "w") as f:
-            import json
-
-            json.dump(linux_env.to_dict(), f)
-
         args = MagicMock()
         args.lock_model_file = lock_model_file
-        args.target_environment = [(env_file, "@//env:linux")]
         args.local_wheel = []
         args.remote_wheel = []
         args.always_include_sdist = False
@@ -586,7 +593,6 @@ class TestResolveFunction(unittest.TestCase):
 
         args = MagicMock()
         args.lock_model_file = lock_model_file
-        args.target_environment = []
         args.local_wheel = []
         args.remote_wheel = []
         args.always_include_sdist = False
@@ -600,14 +606,8 @@ class TestResolveFunction(unittest.TestCase):
 
 
 class TestExtras(unittest.TestCase):
-    def setUp(self):
-        self.linux_env = make_env(
-            "linux", ["manylinux_2_17_x86_64", "manylinux2014_x86_64"], markers={"sys_platform": "linux"}
-        )
-        self.mac_env = make_env("mac", ["macosx_10_9_x86_64"], markers={"sys_platform": "darwin"})
-
     def test_extras_basic(self):
-        """Deps gated on extra == 'test' appear when resolving for that extra."""
+        """Deps gated on extra == 'test' appear as marker_dependencies."""
         pkg = make_pkg(
             "foo[test]",
             "1.0",
@@ -618,7 +618,6 @@ class TestExtras(unittest.TestCase):
             ],
         )
         ctx = GenerationContext(
-            target_environments=[self.linux_env],
             local_wheels={},
             remote_wheels={},
             always_include_sdist=False,
@@ -626,14 +625,14 @@ class TestExtras(unittest.TestCase):
         resolver = PackageResolver(pkg, ctx, None, [])
         resolved = resolver.to_resolved_package()
 
-        # Both deps should appear
-        self.assertEqual(len(resolved.common_dependencies), 2)
-        dep_names = {k.name.package for k in resolved.common_dependencies}
+        # Both deps should appear as marker_dependencies
+        self.assertEqual(len(resolved.marker_dependencies), 2)
+        dep_names = {md.key.name.package for md in resolved.marker_dependencies}
         self.assertIn("depa", dep_names)
         self.assertIn("depb", dep_names)
 
     def test_extras_with_env_markers(self):
-        """A dep with both extra and platform markers is env-specific within the extra."""
+        """A dep with both extra and platform markers preserves the combined marker."""
         pkg = make_pkg(
             "foo[test]",
             "1.0",
@@ -643,7 +642,6 @@ class TestExtras(unittest.TestCase):
             ],
         )
         ctx = GenerationContext(
-            target_environments=[self.linux_env, self.mac_env],
             local_wheels={},
             remote_wheels={},
             always_include_sdist=False,
@@ -651,18 +649,13 @@ class TestExtras(unittest.TestCase):
         resolver = PackageResolver(pkg, ctx, None, [])
         resolved = resolver.to_resolved_package()
 
-        # No base deps
-        self.assertEqual(len(resolved.common_dependencies), 0)
-
-        # It should appear under the linux env specifically
-        self.assertIn("linux", resolved.environment_dependencies)
-        linux_names = {k.name.package for k in resolved.environment_dependencies["linux"]}
-        self.assertIn("depc", linux_names)
-
-        self.assertNotIn("mac", resolved.environment_dependencies)
+        # The dep should appear with its marker (extra stripped, platform marker preserved)
+        self.assertEqual(len(resolved.marker_dependencies), 1)
+        self.assertEqual(resolved.marker_dependencies[0].key.name.package, "depc")
+        self.assertIn("sys_platform", resolved.marker_dependencies[0].marker)
 
     def test_extras_no_extras(self):
-        """Packages without extra markers have no extras."""
+        """Packages without extra markers have normal deps."""
         pkg = make_pkg(
             "foo",
             "1.0",
@@ -670,7 +663,6 @@ class TestExtras(unittest.TestCase):
             deps=[make_dep("depA", "1.0")],
         )
         ctx = GenerationContext(
-            target_environments=[self.linux_env],
             local_wheels={},
             remote_wheels={},
             always_include_sdist=False,
@@ -678,7 +670,7 @@ class TestExtras(unittest.TestCase):
         resolver = PackageResolver(pkg, ctx, None, [])
         resolved = resolver.to_resolved_package()
 
-        self.assertEqual(len(resolved.common_dependencies), 1)
+        self.assertEqual(len(resolved.marker_dependencies), 1)
 
     def test_extras_multiple(self):
         """Multiple extras ('test', 'dev') each pull different deps."""
@@ -689,7 +681,6 @@ class TestExtras(unittest.TestCase):
         ]
 
         ctx = GenerationContext(
-            target_environments=[self.linux_env],
             local_wheels={},
             remote_wheels={},
             always_include_sdist=False,
@@ -704,13 +695,13 @@ class TestExtras(unittest.TestCase):
         resolved_dev = resolver_dev.to_resolved_package()
 
         # Check "test" extra has pytest
-        test_dep_names = {k.name.package for k in resolved_test.common_dependencies}
+        test_dep_names = {md.key.name.package for md in resolved_test.marker_dependencies}
         self.assertIn("depa", test_dep_names)
         self.assertIn("pytest", test_dep_names)
         self.assertNotIn("black", test_dep_names)
 
         # Check "dev" extra has black
-        dev_dep_names = {k.name.package for k in resolved_dev.common_dependencies}
+        dev_dep_names = {md.key.name.package for md in resolved_dev.marker_dependencies}
         self.assertIn("depa", dev_dep_names)
         self.assertIn("black", dev_dep_names)
         self.assertNotIn("pytest", dev_dep_names)
@@ -725,16 +716,11 @@ class TestCycleDetection(unittest.TestCase):
         self.td = tempfile.TemporaryDirectory()
         self.td_path = self.td.name
 
-        self.linux_env = make_env(
-            "linux", ["manylinux_2_17_x86_64", "manylinux2014_x86_64"], markers={"sys_platform": "linux"}
-        )
-
     def tearDown(self):
         self.td.cleanup()
 
     def _resolve_with_packages(self, packages, pins):
         """Helper to set up files and call resolve() with the given packages and pins."""
-        import json
         import os
         from unittest.mock import MagicMock
 
@@ -751,13 +737,8 @@ class TestCycleDetection(unittest.TestCase):
         with open(lock_model_file, "w") as f:
             f.write(lock_model.to_json())
 
-        env_file = os.path.join(self.td_path, "env.json")
-        with open(env_file, "w") as f:
-            json.dump(self.linux_env.to_dict(), f)
-
         args = MagicMock()
         args.lock_model_file = lock_model_file
-        args.target_environment = [(env_file, "@//env:linux")]
         args.local_wheel = []
         args.remote_wheel = []
         args.always_include_sdist = False
@@ -944,6 +925,443 @@ class TestCycleDetection(unittest.TestCase):
         self.assertIsNotNone(res_a_test.cycle_group)
         self.assertIsNotNone(res_b.cycle_group)
         self.assertEqual(res_a_test.cycle_group, res_b.cycle_group)
+
+    def test_cycle_eight_member_hub_and_spoke(self):
+        """Stress test: 8-member hub-and-spoke cycle modeled after Apache Airflow.
+
+        airflow → airflow-core, task-sdk
+        airflow-core → provider-compat, provider-io, provider-sql, provider-smtp, provider-standard, task-sdk
+        provider-compat → airflow  (back-edge)
+        provider-io → airflow  (back-edge)
+        provider-sql → airflow  (back-edge)
+        provider-smtp → airflow, provider-compat  (back-edges)
+        provider-standard → airflow  (back-edge)
+        task-sdk → airflow-core  (back-edge)
+
+        Plus non-cycle leaves: packaging, jinja2, attrs
+        """
+        # Non-cycle leaf packages
+        pkg_packaging = make_pkg("packaging", "1.0", [make_file("packaging-1.0.tar.gz")])
+        pkg_jinja2 = make_pkg("jinja2", "1.0", [make_file("jinja2-1.0.tar.gz")])
+        pkg_attrs = make_pkg("attrs", "1.0", [make_file("attrs-1.0.tar.gz")])
+
+        # Cycle members
+        pkg_airflow = make_pkg(
+            "airflow",
+            "2.0",
+            [make_file("airflow-2.0.tar.gz")],
+            deps=[make_dep("airflow-core", "2.0"), make_dep("task-sdk", "2.0")],
+        )
+        pkg_core = make_pkg(
+            "airflow-core",
+            "2.0",
+            [make_file("airflow_core-2.0.tar.gz")],
+            deps=[
+                make_dep("provider-compat", "2.0"),
+                make_dep("provider-io", "2.0"),
+                make_dep("provider-sql", "2.0"),
+                make_dep("provider-smtp", "2.0"),
+                make_dep("provider-standard", "2.0"),
+                make_dep("task-sdk", "2.0"),
+                make_dep("packaging", "1.0"),
+                make_dep("jinja2", "1.0"),
+            ],
+        )
+        pkg_task_sdk = make_pkg(
+            "task-sdk",
+            "2.0",
+            [make_file("task_sdk-2.0.tar.gz")],
+            deps=[make_dep("airflow-core", "2.0"), make_dep("attrs", "1.0")],
+        )
+        pkg_compat = make_pkg(
+            "provider-compat",
+            "2.0",
+            [make_file("provider_compat-2.0.tar.gz")],
+            deps=[make_dep("airflow", "2.0")],
+        )
+        pkg_io = make_pkg(
+            "provider-io",
+            "2.0",
+            [make_file("provider_io-2.0.tar.gz")],
+            deps=[make_dep("airflow", "2.0")],
+        )
+        pkg_sql = make_pkg(
+            "provider-sql",
+            "2.0",
+            [make_file("provider_sql-2.0.tar.gz")],
+            deps=[make_dep("airflow", "2.0")],
+        )
+        pkg_smtp = make_pkg(
+            "provider-smtp",
+            "2.0",
+            [make_file("provider_smtp-2.0.tar.gz")],
+            deps=[make_dep("airflow", "2.0"), make_dep("provider-compat", "2.0")],
+        )
+        pkg_standard = make_pkg(
+            "provider-standard",
+            "2.0",
+            [make_file("provider_standard-2.0.tar.gz")],
+            deps=[make_dep("airflow", "2.0")],
+        )
+
+        all_packages = [
+            pkg_airflow,
+            pkg_core,
+            pkg_task_sdk,
+            pkg_compat,
+            pkg_io,
+            pkg_sql,
+            pkg_smtp,
+            pkg_standard,
+            pkg_packaging,
+            pkg_jinja2,
+            pkg_attrs,
+        ]
+        pins = {
+            canonicalize_name("airflow"): PackageKey.from_parts(canonicalize_name("airflow"), Version("2.0")),
+        }
+
+        resolved = self._resolve_with_packages(all_packages, pins)
+
+        # All 8 cycle members should share the same cycle group
+        cycle_member_names = [
+            "airflow",
+            "airflow-core",
+            "task-sdk",
+            "provider-compat",
+            "provider-io",
+            "provider-sql",
+            "provider-smtp",
+            "provider-standard",
+        ]
+        cycle_keys = [PackageKey.from_parts(canonicalize_name(n), Version("2.0")) for n in cycle_member_names]
+
+        groups = set()
+        for key in cycle_keys:
+            self.assertIn(key, resolved.packages, f"Package {key} not found in resolved packages")
+            group = resolved.packages[key].cycle_group
+            self.assertIsNotNone(group, f"Package {key} should be in a cycle group")
+            groups.add(group)
+
+        self.assertEqual(len(groups), 1, f"All 8 members should share one cycle group, got {groups}")
+        group_name = groups.pop()
+        self.assertEqual(len(resolved.cycle_groups[group_name]), 8)
+
+        # Non-cycle packages should NOT be in any cycle group
+        for leaf_name in ["packaging", "jinja2", "attrs"]:
+            leaf_key = PackageKey.from_parts(canonicalize_name(leaf_name), Version("1.0"))
+            self.assertIsNone(
+                resolved.packages[leaf_key].cycle_group,
+                f"Leaf {leaf_name} should not be in a cycle group",
+            )
+
+    def test_cycle_with_non_cycle_tail(self):
+        """A 3-member cycle with a long non-cyclic tail: cycle shouldn't leak.
+
+        Cycle: A ↔ B ↔ C ↔ A
+        Tail: C → D → E → F → G (no back-edge)
+        """
+        pkg_a = make_pkg("a", "1.0", [make_file("a-1.0.tar.gz")], deps=[make_dep("b", "1.0")])
+        pkg_b = make_pkg("b", "1.0", [make_file("b-1.0.tar.gz")], deps=[make_dep("c", "1.0")])
+        pkg_c = make_pkg(
+            "c",
+            "1.0",
+            [make_file("c-1.0.tar.gz")],
+            deps=[
+                make_dep("a", "1.0"),
+                make_dep("d", "1.0"),
+            ],
+        )
+        pkg_d = make_pkg("d", "1.0", [make_file("d-1.0.tar.gz")], deps=[make_dep("e", "1.0")])
+        pkg_e = make_pkg("e", "1.0", [make_file("e-1.0.tar.gz")], deps=[make_dep("f", "1.0")])
+        pkg_f = make_pkg("f", "1.0", [make_file("f-1.0.tar.gz")], deps=[make_dep("g", "1.0")])
+        pkg_g = make_pkg("g", "1.0", [make_file("g-1.0.tar.gz")])
+
+        pins = {
+            canonicalize_name("a"): PackageKey.from_parts(canonicalize_name("a"), Version("1.0")),
+        }
+
+        resolved = self._resolve_with_packages([pkg_a, pkg_b, pkg_c, pkg_d, pkg_e, pkg_f, pkg_g], pins)
+
+        # A, B, C should be in one cycle group
+        key_a = PackageKey.from_parts(canonicalize_name("a"), Version("1.0"))
+        key_b = PackageKey.from_parts(canonicalize_name("b"), Version("1.0"))
+        key_c = PackageKey.from_parts(canonicalize_name("c"), Version("1.0"))
+        group = resolved.packages[key_a].cycle_group
+        self.assertIsNotNone(group)
+        self.assertEqual(resolved.packages[key_b].cycle_group, group)
+        self.assertEqual(resolved.packages[key_c].cycle_group, group)
+        self.assertEqual(len(resolved.cycle_groups[group]), 3)
+
+        # D, E, F, G should NOT be in any cycle group
+        for name in ["d", "e", "f", "g"]:
+            key = PackageKey.from_parts(canonicalize_name(name), Version("1.0"))
+            self.assertIsNone(
+                resolved.packages[key].cycle_group,
+                f"Tail package {name} should not be in a cycle group",
+            )
+
+    def test_conditional_cycle_union_semantics(self):
+        """A cycle that only exists on one platform (linux) via markers.
+
+        A → B (unconditional)
+        B → A (only on linux: sys_platform == 'linux')
+
+        Both should still be grouped because the SCC runs on the union graph.
+        """
+        pkg_a = make_pkg(
+            "a",
+            "1.0",
+            [make_file("a-1.0.tar.gz")],
+            deps=[make_dep("b", "1.0")],
+        )
+        pkg_b = make_pkg(
+            "b",
+            "1.0",
+            [make_file("b-1.0.tar.gz")],
+            deps=[make_dep("a", "1.0", marker="sys_platform == 'linux'")],
+        )
+        pins = {
+            canonicalize_name("a"): PackageKey.from_parts(canonicalize_name("a"), Version("1.0")),
+            canonicalize_name("b"): PackageKey.from_parts(canonicalize_name("b"), Version("1.0")),
+        }
+
+        resolved = self._resolve_with_packages([pkg_a, pkg_b], pins)
+
+        key_a = PackageKey.from_parts(canonicalize_name("a"), Version("1.0"))
+        key_b = PackageKey.from_parts(canonicalize_name("b"), Version("1.0"))
+
+        # Under union semantics, both should be in the same cycle group
+        # even though the cycle only exists on linux
+        self.assertIsNotNone(resolved.packages[key_a].cycle_group)
+        self.assertIsNotNone(resolved.packages[key_b].cycle_group)
+        self.assertEqual(
+            resolved.packages[key_a].cycle_group,
+            resolved.packages[key_b].cycle_group,
+        )
+
+    def test_interconnected_cycles(self):
+        """A more complex graph with multiple interconnected cycles (graph4 in rules_py).
+
+        a -> b
+        b -> c, e
+        c -> d
+        d -> b  (cycle b-c-d)
+        e -> f
+        f -> e, g  (cycle e-f)
+        g (leaf)
+        """
+        pkg_a = make_pkg("a", "1.0", [make_file("a-1.0.tar.gz")], deps=[make_dep("b", "1.0")])
+        pkg_b = make_pkg("b", "1.0", [make_file("b-1.0.tar.gz")], deps=[make_dep("c", "1.0"), make_dep("e", "1.0")])
+        pkg_c = make_pkg("c", "1.0", [make_file("c-1.0.tar.gz")], deps=[make_dep("d", "1.0")])
+        pkg_d = make_pkg("d", "1.0", [make_file("d-1.0.tar.gz")], deps=[make_dep("b", "1.0")])
+        pkg_e = make_pkg("e", "1.0", [make_file("e-1.0.tar.gz")], deps=[make_dep("f", "1.0")])
+        pkg_f = make_pkg("f", "1.0", [make_file("f-1.0.tar.gz")], deps=[make_dep("e", "1.0"), make_dep("g", "1.0")])
+        pkg_g = make_pkg("g", "1.0", [make_file("g-1.0.tar.gz")])
+
+        pins = {
+            canonicalize_name("a"): PackageKey.from_parts(canonicalize_name("a"), Version("1.0")),
+        }
+
+        resolved = self._resolve_with_packages([pkg_a, pkg_b, pkg_c, pkg_d, pkg_e, pkg_f, pkg_g], pins)
+
+        key_a = PackageKey.from_parts(canonicalize_name("a"), Version("1.0"))
+        key_b = PackageKey.from_parts(canonicalize_name("b"), Version("1.0"))
+        key_c = PackageKey.from_parts(canonicalize_name("c"), Version("1.0"))
+        key_d = PackageKey.from_parts(canonicalize_name("d"), Version("1.0"))
+        key_e = PackageKey.from_parts(canonicalize_name("e"), Version("1.0"))
+        key_f = PackageKey.from_parts(canonicalize_name("f"), Version("1.0"))
+        key_g = PackageKey.from_parts(canonicalize_name("g"), Version("1.0"))
+
+        # b, c, d should be in one cycle group
+        group_bcd = resolved.packages[key_b].cycle_group
+        self.assertIsNotNone(group_bcd)
+        self.assertEqual(resolved.packages[key_c].cycle_group, group_bcd)
+        self.assertEqual(resolved.packages[key_d].cycle_group, group_bcd)
+        self.assertEqual(len(resolved.cycle_groups[group_bcd]), 3)
+
+        # e, f should be in another cycle group
+        group_ef = resolved.packages[key_e].cycle_group
+        self.assertIsNotNone(group_ef)
+        self.assertEqual(resolved.packages[key_f].cycle_group, group_ef)
+        self.assertEqual(len(resolved.cycle_groups[group_ef]), 2)
+
+        # They must be different groups
+        self.assertNotEqual(group_bcd, group_ef)
+
+        # a and g should NOT be in any cycle group
+        self.assertIsNone(resolved.packages[key_a].cycle_group)
+        self.assertIsNone(resolved.packages[key_g].cycle_group)
+
+    def test_no_cycles_diamond(self):
+        """A diamond graph with no cycles (graph1 in rules_py).
+
+        a -> b, c
+        b -> d
+        c -> d
+        d (leaf)
+        """
+        pkg_a = make_pkg("a", "1.0", [make_file("a-1.0.tar.gz")], deps=[make_dep("b", "1.0"), make_dep("c", "1.0")])
+        pkg_b = make_pkg("b", "1.0", [make_file("b-1.0.tar.gz")], deps=[make_dep("d", "1.0")])
+        pkg_c = make_pkg("c", "1.0", [make_file("c-1.0.tar.gz")], deps=[make_dep("d", "1.0")])
+        pkg_d = make_pkg("d", "1.0", [make_file("d-1.0.tar.gz")])
+
+        pins = {
+            canonicalize_name("a"): PackageKey.from_parts(canonicalize_name("a"), Version("1.0")),
+        }
+
+        resolved = self._resolve_with_packages([pkg_a, pkg_b, pkg_c, pkg_d], pins)
+
+        for pkg in resolved.packages.values():
+            self.assertIsNone(pkg.cycle_group)
+        self.assertEqual(len(resolved.cycle_groups), 0)
+
+    def test_self_loop(self):
+        """A package depending on itself. Should not be grouped (ignored as size 1)."""
+        pkg_a = make_pkg("a", "1.0", [make_file("a-1.0.tar.gz")], deps=[make_dep("a", "1.0")])
+        pins = {
+            canonicalize_name("a"): PackageKey.from_parts(canonicalize_name("a"), Version("1.0")),
+        }
+        resolved = self._resolve_with_packages([pkg_a], pins)
+        key_a = PackageKey.from_parts(canonicalize_name("a"), Version("1.0"))
+        self.assertIsNone(resolved.packages[key_a].cycle_group)
+        self.assertEqual(len(resolved.cycle_groups), 0)
+
+    def test_unpinned_cycle_still_emitted(self):
+        """A cycle exists in the lock model but none of its members are pinned.
+
+        Packages x, y, z form a cycle but are not reachable from any pin.
+        The full-graph Tarjan detects the SCC and the cycle group IS emitted
+        (cycle groups are a pure property of the graph).  However, no resolved
+        packages receive cycle_group annotations because x/y/z are not part
+        of the resolved set.
+        """
+        # Pinned leaf — completely disconnected from the cycle
+        pkg_a = make_pkg("a", "1.0", [make_file("a-1.0.tar.gz")])
+
+        # Unpinned cycle: x → y → z → x
+        pkg_x = make_pkg("x", "1.0", [make_file("x-1.0.tar.gz")], deps=[make_dep("y", "1.0")])
+        pkg_y = make_pkg("y", "1.0", [make_file("y-1.0.tar.gz")], deps=[make_dep("z", "1.0")])
+        pkg_z = make_pkg("z", "1.0", [make_file("z-1.0.tar.gz")], deps=[make_dep("x", "1.0")])
+
+        pins = {
+            canonicalize_name("a"): PackageKey.from_parts(canonicalize_name("a"), Version("1.0")),
+        }
+
+        resolved = self._resolve_with_packages([pkg_a, pkg_x, pkg_y, pkg_z], pins)
+
+        # a is resolved, x/y/z are not
+        key_a = PackageKey.from_parts(canonicalize_name("a"), Version("1.0"))
+        self.assertIn(key_a, resolved.packages)
+        for name in ["x", "y", "z"]:
+            key = PackageKey.from_parts(canonicalize_name(name), Version("1.0"))
+            self.assertNotIn(key, resolved.packages)
+
+        # The cycle group IS emitted (it's a graph property, not pin-dependent)
+        self.assertEqual(len(resolved.cycle_groups), 1)
+
+        # But no resolved package has a cycle_group annotation
+        for pkg in resolved.packages.values():
+            self.assertIsNone(pkg.cycle_group)
+
+    def test_partially_pinned_cycle(self):
+        """A 4-member cycle where only 1 member is directly pinned.
+
+        a → b → c → d → a (cycle)
+        Only 'a' is pinned; b, c, d are reached transitively.
+        All four should still be detected as one cycle group.
+        """
+        pkg_a = make_pkg("a", "1.0", [make_file("a-1.0.tar.gz")], deps=[make_dep("b", "1.0")])
+        pkg_b = make_pkg("b", "1.0", [make_file("b-1.0.tar.gz")], deps=[make_dep("c", "1.0")])
+        pkg_c = make_pkg("c", "1.0", [make_file("c-1.0.tar.gz")], deps=[make_dep("d", "1.0")])
+        pkg_d = make_pkg("d", "1.0", [make_file("d-1.0.tar.gz")], deps=[make_dep("a", "1.0")])
+
+        pins = {
+            canonicalize_name("a"): PackageKey.from_parts(canonicalize_name("a"), Version("1.0")),
+        }
+
+        resolved = self._resolve_with_packages([pkg_a, pkg_b, pkg_c, pkg_d], pins)
+
+        keys = [PackageKey.from_parts(canonicalize_name(n), Version("1.0")) for n in ["a", "b", "c", "d"]]
+        group = resolved.packages[keys[0]].cycle_group
+        self.assertIsNotNone(group)
+        for key in keys[1:]:
+            self.assertEqual(resolved.packages[key].cycle_group, group)
+        self.assertEqual(len(resolved.cycle_groups[group]), 4)
+
+    def test_version_isolation(self):
+        """Different versions of the same package should be independent for cycle detection.
+
+        foo@1.0 → bar@1.0 → foo@1.0  (cycle)
+        foo@2.0 → baz@1.0             (no cycle)
+        """
+        pkg_foo1 = make_pkg("foo", "1.0", [make_file("foo-1.0.tar.gz")], deps=[make_dep("bar", "1.0")])
+        pkg_bar = make_pkg("bar", "1.0", [make_file("bar-1.0.tar.gz")], deps=[make_dep("foo", "1.0")])
+        pkg_foo2 = make_pkg("foo", "2.0", [make_file("foo-2.0.tar.gz")], deps=[make_dep("baz", "1.0")])
+        pkg_baz = make_pkg("baz", "1.0", [make_file("baz-1.0.tar.gz")])
+
+        pins = {
+            canonicalize_name("foo"): {
+                "": PackageKey.from_parts(canonicalize_name("foo"), Version("1.0")),
+                "v2": PackageKey.from_parts(canonicalize_name("foo"), Version("2.0")),
+            },
+        }
+
+        resolved = self._resolve_with_packages([pkg_foo1, pkg_bar, pkg_foo2, pkg_baz], pins)
+
+        key_foo1 = PackageKey.from_parts(canonicalize_name("foo"), Version("1.0"))
+        key_bar = PackageKey.from_parts(canonicalize_name("bar"), Version("1.0"))
+        key_foo2 = PackageKey.from_parts(canonicalize_name("foo"), Version("2.0"))
+        key_baz = PackageKey.from_parts(canonicalize_name("baz"), Version("1.0"))
+
+        # foo@1.0 and bar@1.0 should be in a cycle
+        group = resolved.packages[key_foo1].cycle_group
+        self.assertIsNotNone(group)
+        self.assertEqual(resolved.packages[key_bar].cycle_group, group)
+        self.assertEqual(len(resolved.cycle_groups[group]), 2)
+
+        # foo@2.0 and baz@1.0 should NOT be in any cycle
+        self.assertIsNone(resolved.packages[key_foo2].cycle_group)
+        self.assertIsNone(resolved.packages[key_baz].cycle_group)
+
+    def test_cross_platform_marker_cycle(self):
+        """A cycle where each edge is gated by a different platform marker.
+
+        a → b  (only on linux: sys_platform == 'linux')
+        b → a  (only on windows: sys_platform == 'win32')
+
+        No single platform has this cycle, but the union graph does.
+        Since we ignore markers in cycle detection, both should be grouped.
+        """
+        pkg_a = make_pkg(
+            "a",
+            "1.0",
+            [make_file("a-1.0.tar.gz")],
+            deps=[make_dep("b", "1.0", marker="sys_platform == 'linux'")],
+        )
+        pkg_b = make_pkg(
+            "b",
+            "1.0",
+            [make_file("b-1.0.tar.gz")],
+            deps=[make_dep("a", "1.0", marker="sys_platform == 'win32'")],
+        )
+        pins = {
+            canonicalize_name("a"): PackageKey.from_parts(canonicalize_name("a"), Version("1.0")),
+            canonicalize_name("b"): PackageKey.from_parts(canonicalize_name("b"), Version("1.0")),
+        }
+
+        resolved = self._resolve_with_packages([pkg_a, pkg_b], pins)
+
+        key_a = PackageKey.from_parts(canonicalize_name("a"), Version("1.0"))
+        key_b = PackageKey.from_parts(canonicalize_name("b"), Version("1.0"))
+
+        # Both should be in the same cycle group despite no single
+        # platform having both edges
+        self.assertIsNotNone(resolved.packages[key_a].cycle_group)
+        self.assertEqual(
+            resolved.packages[key_a].cycle_group,
+            resolved.packages[key_b].cycle_group,
+        )
 
 
 class TestCollectPackageAnnotations(unittest.TestCase):
@@ -1290,10 +1708,6 @@ class TestWildcardEndToEnd(unittest.TestCase):
         self.td = tempfile.TemporaryDirectory()
         self.td_path = self.td.name
 
-        self.linux_env = make_env(
-            "linux", ["manylinux_2_17_x86_64", "manylinux2014_x86_64"], markers={"sys_platform": "linux"}
-        )
-
     def tearDown(self):
         self.td.cleanup()
 
@@ -1316,13 +1730,8 @@ class TestWildcardEndToEnd(unittest.TestCase):
         with open(lock_model_file, "w") as f:
             f.write(lock_model.to_json())
 
-        env_file = os.path.join(self.td_path, "env.json")
-        with open(env_file, "w") as f:
-            json.dump(self.linux_env.to_dict(), f)
-
         args = MagicMock()
         args.lock_model_file = lock_model_file
-        args.target_environment = [(env_file, "@//env:linux")]
         args.local_wheel = []
         args.remote_wheel = []
         args.always_include_sdist = False
@@ -1357,8 +1766,9 @@ class TestWildcardEndToEnd(unittest.TestCase):
         resolved = self._resolve_with_annotations([pkg_foo], pins, {"*": {"always_build": True}})
 
         foo_key = PackageKey.from_parts("foo", Version("1.0"))
-        # Should use the sdist, not the wheel
-        self.assertEqual(resolved.packages[foo_key].environment_files["linux"].key.name, "foo-1.0.tar.gz")
+        # With always_build, sdist should be present
+        self.assertIsNotNone(resolved.packages[foo_key].sdist_file)
+        self.assertEqual(resolved.packages[foo_key].sdist_file.key.name, "foo-1.0.tar.gz")
 
     def test_wildcard_with_specific_override_end_to_end(self):
         """Specific override replaces wildcard: foo gets always_build=False despite wildcard."""
@@ -1395,13 +1805,13 @@ class TestWildcardEndToEnd(unittest.TestCase):
         foo_key = PackageKey.from_parts("foo", Version("1.0"))
         bar_key = PackageKey.from_parts("bar", Version("2.0"))
 
-        # foo: specific override, should use wheel
-        self.assertEqual(
-            resolved.packages[foo_key].environment_files["linux"].key.name,
-            "foo-1.0-cp310-cp310-manylinux_2_17_x86_64.whl",
-        )
-        # bar: wildcard, should use sdist
-        self.assertEqual(resolved.packages[bar_key].environment_files["linux"].key.name, "bar-2.0.tar.gz")
+        # foo: specific override (always_build=False), should have wheel candidates
+        foo_whl_names = {c.filename for c in resolved.packages[foo_key].wheel_candidates}
+        self.assertIn("foo-1.0-cp310-cp310-manylinux_2_17_x86_64.whl", foo_whl_names)
+
+        # bar: wildcard (always_build=True), should have sdist
+        self.assertIsNotNone(resolved.packages[bar_key].sdist_file)
+        self.assertEqual(resolved.packages[bar_key].sdist_file.key.name, "bar-2.0.tar.gz")
 
     def test_unconsumed_wildcard_annotations_no_error(self):
         """Packages in lock model but not in pins should not cause errors when wildcard is used."""

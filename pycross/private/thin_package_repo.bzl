@@ -15,18 +15,15 @@ The file structure is:
 load(":util.bzl", "underscore_name")
 
 _requirement_func = """\
+load("@rules_pycross//pycross/private/pypackaging/utils:utils.bzl", "canonicalize_name")
+
 def requirement(pkg):
     extra = None
     if "[" in pkg:
         pkg, extra = pkg.split("[", 1)
         extra = extra.rstrip("]")
 
-    pkg = pkg.replace("_", "-").replace(".", "-").lower()
-    for i in range(len(pkg)):
-        if "--" in pkg:
-            pkg = pkg.replace("--", "-")
-        else:
-            break
+    pkg = canonicalize_name(pkg)
 
     if extra:
         return "@@{repo_name}//:%s[%s]" % (pkg, extra)

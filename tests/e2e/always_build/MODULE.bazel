@@ -47,7 +47,6 @@ lock_import.import_uv(
     lock_file = "//:uv.lock",
     project_file = "//:pyproject.toml",
     repo = "uv",
-    target_environments = ["@rules_pycross_e2e_environments//:environments"],
 )
 lock_import.package(
     name = "regex",

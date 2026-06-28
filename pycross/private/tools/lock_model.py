@@ -22,7 +22,6 @@ from packaging.utils import canonicalize_name
 from packaging.utils import parse_sdist_filename
 from packaging.utils import parse_wheel_filename
 from packaging.version import Version
-from pycross.private.tools.target_environment import TargetEnv
 
 
 class _Encoder(JSONEncoder):
@@ -241,40 +240,6 @@ class FileReference:
         )
 
 
-@dataclass
-class ConfigSetting:
-    constraint_values: List[str] = field(default_factory=list)
-    flag_values: Dict[str, str] = field(default_factory=dict)
-
-
-@dataclass(frozen=True)
-class EnvironmentReference:
-    environment_label: str
-    config_setting: Optional[ConfigSetting] = None
-    config_setting_label: Optional[str] = None
-
-    def __post_init__(self):
-        assert int(self.config_setting is not None) + int(self.config_setting_label is not None) == 1, (
-            "Exactly one of config_setting or config_setting_label must be specified."
-        )
-
-    @classmethod
-    def from_target_env(cls, environment_label: str, target_env: TargetEnv) -> EnvironmentReference:
-        if target_env.config_setting_target:
-            return cls(
-                environment_label=environment_label,
-                config_setting_label=target_env.config_setting_target,
-            )
-        else:
-            return cls(
-                environment_label=environment_label,
-                config_setting=ConfigSetting(
-                    constraint_values=target_env.python_compatible_with,
-                    flag_values=target_env.flag_values,
-                ),
-            )
-
-
 @dataclass(frozen=True)
 class PackageFile:
     name: str
@@ -353,15 +318,31 @@ class RawPackage:
         return PackageKey.from_parts(self.name, self.version)
 
 
+@dataclass(frozen=True)
+class MarkerDependency:
+    """A dependency annotated with its PEP 508 marker expression."""
+
+    key: PackageKey
+    marker: Optional[str] = None  # Raw PEP 508 marker string, None = unconditional
+
+
+@dataclass(frozen=True)
+class WheelCandidate:
+    """A wheel file candidate with pre-parsed compatibility tags."""
+
+    filename: str
+    file_reference: FileReference
+    python_tag: str
+    abi_tag: str
+    platform_tag: str
+
+
 @dataclass
 class ResolvedPackage:
     key: PackageKey
     build_dependencies: List[PackageKey] = field(default_factory=list)
     build_repo: Optional[str] = None
-    common_dependencies: List[PackageKey] = field(default_factory=list)
-    environment_dependencies: Dict[str, List[PackageKey]] = field(default_factory=dict)
     build_target: Optional[str] = None
-    environment_files: Dict[str, FileReference] = field(default_factory=dict)
     sdist_file: Optional[FileReference] = None
     install_exclude_globs: List[str] = field(default_factory=list)
     post_install_patches: List[str] = field(default_factory=list)
@@ -374,6 +355,8 @@ class ResolvedPackage:
     include_paths: List[str] = field(default_factory=list)
     cycle_group: Optional[str] = None
     source_dir: Optional[str] = None
+    marker_dependencies: List[MarkerDependency] = field(default_factory=list)
+    wheel_candidates: List[WheelCandidate] = field(default_factory=list)
 
 
 @dataclass(frozen=True)
@@ -449,7 +432,6 @@ class RawLockSet:
 
 @dataclass(frozen=True)
 class ResolvedLockSet:
-    environments: Dict[str, EnvironmentReference] = field(default_factory=dict)
     packages: Dict[PackageKey, ResolvedPackage] = field(default_factory=dict)
     pins: Dict[DependencyName, Union[PackageKey, Dict[str, PackageKey]]] = field(default_factory=dict)
     remote_files: Dict[FileKey, PackageFile] = field(default_factory=dict)
