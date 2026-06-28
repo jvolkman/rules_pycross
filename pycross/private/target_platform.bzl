@@ -3,14 +3,20 @@
 load("//pycross/private/pypackaging/tags:tags.bzl", "get_supported")
 load(":pep508_marker_values.bzl", "PYTHON_TOOLCHAIN_TYPE", "collect_markers", "flag_value", "marker_value_attrs")
 
-SupportedTagsInfo = provider(
-    doc = "Provides a list of supported PEP 425 tags for the current environment.",
+PycrossTargetPlatformInfo = provider(
+    doc = "Provides information about the target platform.",
     fields = {
-        "tags": "List of tag strings, ordered by preference (most preferred first).",
+        "name": "The name of the target platform.",
+        "implementation": "The Python implementation prefix (e.g., 'cp', 'pp').",
+        "version": "The Python version string.",
+        "abis": "List of compatible ABIs.",
+        "platforms": "List of compatible platforms.",
+        "compatibility_tags": "List of compatible PEP 425 tags, ordered by preference.",
+        "markers": "Dict of PEP 508 markers.",
     },
 )
 
-def _pycross_supported_tags_impl(ctx):
+def _pycross_target_platform_impl(ctx):
     markers = collect_markers(ctx)
     python_version = markers["python_version"]
     if not python_version:
@@ -102,8 +108,6 @@ def _pycross_supported_tags_impl(ctx):
         "platforms": platforms,
         "compatibility_tags": tags,
         "markers": markers,
-        "python_compatible_with": [],
-        "flag_values": {},
     }
 
     out_json = ctx.actions.declare_file(ctx.label.name + ".json")
@@ -113,12 +117,20 @@ def _pycross_supported_tags_impl(ctx):
     )
 
     return [
-        SupportedTagsInfo(tags = tags),
+        PycrossTargetPlatformInfo(
+            name = ctx.label.name,
+            implementation = impl_prefix,
+            version = python_version,
+            abis = abis,
+            platforms = platforms,
+            compatibility_tags = tags,
+            markers = markers,
+        ),
         DefaultInfo(files = depset([out_json])),
     ]
 
-_pycross_supported_tags = rule(
-    implementation = _pycross_supported_tags_impl,
+_pycross_target_platform = rule(
+    implementation = _pycross_target_platform_impl,
     attrs = {
         "platforms": attr.string_list(
             doc = "Explicit list of PEP 425 platform tags. If set, libc and freethreaded are ignored for platform derivation.",
@@ -135,9 +147,9 @@ _pycross_supported_tags = rule(
         "_max_macos_version": attr.label(default = "@rules_pycross//pycross/settings:max_macos_version"),
         "_max_musl_version": attr.label(default = "@rules_pycross//pycross/settings:max_musl_version"),
     } | marker_value_attrs(),
-    provides = [SupportedTagsInfo],
+    provides = [PycrossTargetPlatformInfo],
     toolchains = [PYTHON_TOOLCHAIN_TYPE],
 )
 
-def pycross_supported_tags(name, **kwargs):
-    _pycross_supported_tags(name = name, **kwargs)
+def pycross_target_platform(name, **kwargs):
+    _pycross_target_platform(name = name, **kwargs)

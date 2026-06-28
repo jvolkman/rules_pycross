@@ -304,14 +304,14 @@ config_common.FeatureFlagInfo with value "true" or "false".
 | <a id="pycross_pep508_evaluator-kwargs"></a>kwargs |  Forwarded to the underlying rule.  Must include ``expr`` and may include any PEP 508 marker dimension overrides.   |  none |
 
 
-<a id="pycross_supported_tags"></a>
+<a id="pycross_target_platform"></a>
 
-## pycross_supported_tags
+## pycross_target_platform
 
 <pre>
-load("@rules_pycross//pycross:defs.bzl", "pycross_supported_tags")
+load("@rules_pycross//pycross:defs.bzl", "pycross_target_platform")
 
-pycross_supported_tags(<a href="#pycross_supported_tags-name">name</a>, <a href="#pycross_supported_tags-kwargs">**kwargs</a>)
+pycross_target_platform(<a href="#pycross_target_platform-name">name</a>, <a href="#pycross_target_platform-kwargs">**kwargs</a>)
 </pre>
 
 
@@ -321,8 +321,8 @@ pycross_supported_tags(<a href="#pycross_supported_tags-name">name</a>, <a href=
 
 | Name  | Description | Default Value |
 | :------------- | :------------- | :------------- |
-| <a id="pycross_supported_tags-name"></a>name |  <p align="center"> - </p>   |  none |
-| <a id="pycross_supported_tags-kwargs"></a>kwargs |  <p align="center"> - </p>   |  none |
+| <a id="pycross_target_platform-name"></a>name |  <p align="center"> - </p>   |  none |
+| <a id="pycross_target_platform-kwargs"></a>kwargs |  <p align="center"> - </p>   |  none |
 
 
 <a id="pycross_wheel_build"></a>

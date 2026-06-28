@@ -10,7 +10,7 @@ load("//pycross/private:cycle_dep_needed.bzl", "is_reachable")
 load("//pycross/private:pep508_evaluator.bzl", "pycross_pep508_evaluator")
 
 # buildifier: disable=bzl-visibility
-load("//pycross/private:target_platform.bzl", "pycross_supported_tags")
+load("//pycross/private:target_platform.bzl", "pycross_target_platform")
 
 # buildifier: disable=bzl-visibility
 load("//pycross/private:wheel_chooser.bzl", "pycross_wheel_chooser", "select_best_wheel")
@@ -233,7 +233,7 @@ def _test_chooser_rule_impl(env, target):
     env.expect.that_target(target).default_outputs().contains_at_least([])
 
 def _test_chooser_rule(name):
-    pycross_supported_tags(
+    pycross_target_platform(
         name = name + "_tags",
         libc = "glibc",
         tags = ["manual"],

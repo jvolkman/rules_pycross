@@ -2,12 +2,12 @@ load("@bazel_lib//lib:write_source_files.bzl", "write_source_files")
 load("@bazel_skylib//:bzl_library.bzl", "bzl_library")
 load("@bazel_skylib//rules:write_file.bzl", "write_file")
 load(":pep508_marker_values.bzl", "FREETHREADED_VALUES", "LIBC_VALUES")
-load(":target_platform.bzl", "pycross_supported_tags")
+load(":target_platform.bzl", "pycross_target_platform")
 load(":util.bzl", "REPO_HTTP_DEPS")
 
 package(default_visibility = ["//visibility:public"])
 
-pycross_supported_tags(
+pycross_target_platform(
     name = "default_target_platform",
     freethreaded = select(FREETHREADED_VALUES),
     libc = select(LIBC_VALUES),
@@ -161,7 +161,7 @@ bzl_library(
 
 # This is the environment we advertise for what should be pure-python
 # dependencies used by Pycross
-pycross_supported_tags(
+pycross_target_platform(
     name = "rules_pycross_deps_target_env",
     python_version = "3.13",
 )

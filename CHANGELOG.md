@@ -9,7 +9,7 @@ All notable changes to this project will be documented in this file.
 - **`configure_environments` is deprecated.** Use `configure_toolchains` instead.
   The old name still works but prints a deprecation warning.
 - **`pycross_target_environment` rule removed.** Replaced by
-  `pycross_supported_tags`, which derives platform tags from the active
+  `pycross_target_platform`, which derives platform tags from the active
   `rules_python` toolchain at analysis time.
 - **`environments` extension removed.** Platform configuration is now handled
   entirely by `configure_toolchains` and Bazel's native `@platforms` constraints.
@@ -26,7 +26,7 @@ All notable changes to this project will be documented in this file.
 - **PEP 425 wheel tag matching.** New `pycross_wheel_chooser` rule selects
   the best-matching wheel at analysis time based on the active Python toolchain,
   with automatic sdist fallback.
-- **`pycross_supported_tags` rule.** Generates PEP 425-compatible tags
+- **`pycross_target_platform` rule.** Generates PEP 425-compatible tags
   (interpreter, ABI, platform) from `rules_python` toolchain configuration,
   including libc variant and freethreaded support.
 - **`pycross_pep508_evaluator` rule.** Evaluates PEP 508 marker expressions
