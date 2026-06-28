@@ -145,13 +145,8 @@ def _package_repo_impl(rctx):
         "cycle_groups": cycle_groups,
     }
 
-    repo_map = {}
-    for label, file_key in rctx.attr.repo_map.items():
-        repo_map[file_key] = str(label)
-
-    sdist_map = {}
-    for label, file_key in rctx.attr.sdist_map.items():
-        sdist_map[file_key] = str(label)
+    repo_map = rctx.attr.repo_map
+    sdist_map = rctx.attr.sdist_map
 
     rctx.file("REPO.bazel", "")
 
@@ -379,8 +374,8 @@ package_repo = repository_rule(
     implementation = _package_repo_impl,
     attrs = {
         "resolved_lock_file": attr.label(mandatory = True),
-        "repo_map": attr.label_keyed_string_dict(),
-        "sdist_map": attr.label_keyed_string_dict(),
+        "repo_map": attr.string_dict(),
+        "sdist_map": attr.string_dict(),
         "backend_configs": attr.string_dict(
             doc = "Maps pycross rule names to JSON-encoded config dicts with 'rule_bzl' and 'tool_packages'.",
         ),

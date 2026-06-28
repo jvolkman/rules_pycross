@@ -168,7 +168,7 @@ def _lock_repos_impl(module_ctx):
                 sanitize_name(pkg_key),
             )
             sdist_label_str = "@{}//:wheel".format(sdist_repo_name)
-            sdist_map[sdist_label_str] = sdist_file_key
+            sdist_map[sdist_file_key] = sdist_label_str
 
             # Skip if another member in this workspace already created this sdist repo.
             if sdist_repo_name in created_sdist_repos:
@@ -244,11 +244,11 @@ def _lock_repos_impl(module_ctx):
         # for package_repo's label_keyed_string_dict attr. Bazel resolves the
         # label-string keys from the extension context, giving package_repo
         # proper Label objects instead of raw strings.
-        repo_map = {label_str: file_key for file_key, label_str in repo_remote_files.items()}
+
 
         # Save per-repo data for workspace processing
         per_repo_data[repo_name] = struct(
-            repo_map = repo_map,
+            repo_map = repo_remote_files,
             sdist_map = sdist_map,
             lock_file = lock_file,
         )
