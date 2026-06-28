@@ -4,7 +4,7 @@ load("@rules_testing//lib:analysis_test.bzl", "analysis_test", "test_suite")
 load("@rules_testing//lib:util.bzl", "util")
 
 # buildifier: disable=bzl-visibility
-load("//pycross/private/packaging/markers:markers.bzl", "markers")
+load("//pycross/private/pypackaging/markers:markers.bzl", "markers")
 
 def _test_marker_parser_impl(env, _target):
     # Simple
@@ -52,7 +52,51 @@ def _test_marker_evaluation_impl(env, _target):
         "os_name": "posix",
         "sys_platform": "linux",
         "platform_python_implementation": "CPython",
+        "dependency_groups": ["dev", "test"],
+        "extras": ["foo", "Bar"],  # Mixed case to test normalization
     }
+
+    # Dependency Groups
+    m = markers.parse("'dev' in dependency_groups")
+    env.expect.that_bool(markers.evaluate(m, env_vars)).equals(True)
+
+    m = markers.parse("'docs' in dependency_groups")
+    env.expect.that_bool(markers.evaluate(m, env_vars)).equals(False)
+
+    # Extras plural
+    m = markers.parse("'foo' in extras")
+    env.expect.that_bool(markers.evaluate(m, env_vars)).equals(True)
+
+    m = markers.parse("'bar' in extras")  # Should match 'Bar' due to normalization
+    env.expect.that_bool(markers.evaluate(m, env_vars)).equals(True)
+
+    m = markers.parse("'baz' in extras")
+    env.expect.that_bool(markers.evaluate(m, env_vars)).equals(False)
+
+    # Normalization tests
+    m = markers.parse("'dev-group' in dependency_groups")
+    env_vars_norm = dict(env_vars)
+    env_vars_norm["dependency_groups"] = ["dev_group"]  # Underscore should match hyphen
+    env.expect.that_bool(markers.evaluate(m, env_vars_norm)).equals(True)
+
+    # Extra singular
+    m = markers.parse("extra == 'dev'")
+    env_vars_extra = dict(env_vars)
+    env_vars_extra["extra"] = "dev"
+    env.expect.that_bool(markers.evaluate(m, env_vars_extra)).equals(True)
+
+    # Extra missing (treated as empty string)
+    m = markers.parse("extra == ''")
+    env_vars_no_extra = dict(env_vars)
+
+    # Don't set "extra"
+    env.expect.that_bool(markers.evaluate(m, env_vars_no_extra)).equals(True)
+
+    # Extra normalization
+    m = markers.parse("extra == 'dev-group'")
+    env_vars_extra_norm = dict(env_vars)
+    env_vars_extra_norm["extra"] = "dev_group"
+    env.expect.that_bool(markers.evaluate(m, env_vars_extra_norm)).equals(True)
 
     # Simple True
     m = markers.parse("python_version >= '3.6'")

@@ -4,21 +4,46 @@ Derived from pypa/packaging: packaging/markers.py (Apache 2.0 / BSD).
 Baseline: pypa/packaging 26.2
 """
 
-load("@re.bzl", "re")
-load("//pycross/private/packaging/specifiers:specifiers.bzl", "parse_specifier", "specifier_contains")
+load("//pycross/private/pypackaging/specifiers:specifiers.bzl", "parse_specifier", "specifier_contains")
+load("//pycross/private/pypackaging/utils:utils.bzl", "utils")
 
-_MARKER_RULES = {
-    "LEFT_PARENTHESIS": re.compile(r"\("),
-    "RIGHT_PARENTHESIS": re.compile(r"\)"),
-    "QUOTED_STRING": re.compile(r"('[^']*'|\"[^\"]*\")"),
-    "OP": re.compile(r"(===|==|~=|!=|<=|>=|<|>)"),
-    "BOOLOP": re.compile(r"\b(or|and)\b"),
-    "IN": re.compile(r"\bin\b"),
-    "NOT": re.compile(r"\bnot\b"),
-    "VARIABLE": re.compile(r"\b(python_version|python_full_version|os[._]name|sys[._]platform|platform_(release|system)|platform[._](version|machine|python_implementation)|python_implementation|implementation_(name|version)|extras?|dependency_groups)\b"),
-    "WS": re.compile(r"[ \t]+"),
-    "END": re.compile(r"$"),
-}
+_WS = " \t"
+_IDENT_CHARS = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_."
+
+# Longest first to avoid prefix matching issues
+_VALID_VARS = (
+    "platform.python_implementation",
+    "platform_python_implementation",
+    "python_full_version",
+    "implementation_version",
+    "python_implementation",
+    "implementation_name",
+    "dependency_groups",
+    "platform_release",
+    "platform_system",
+    "platform.machine",
+    "platform_machine",
+    "platform.version",
+    "platform_version",
+    "python_version",
+    "sys.platform",
+    "sys_platform",
+    "extras",
+    "extra",
+    "os.name",
+    "os_name",
+)
+
+def _is_word_char(c):
+    return c in _IDENT_CHARS
+
+def _check_word_boundary(source, start, length):
+    end = start + length
+    if start > 0 and _is_word_char(source[start - 1]):
+        return False
+    if end < len(source) and _is_word_char(source[end]):
+        return False
+    return True
 
 def _make_tokenizer(source):
     # Use a dict to allow mutation in Starlark
@@ -32,22 +57,107 @@ def _tokenizer_check(tokenizer, name, peek = False):
     if tokenizer["next_token"] != None:
         fail("Cannot check for {}, already have {}".format(name, tokenizer["next_token"]))
 
-    pattern = _MARKER_RULES.get(name)
-    if not pattern:
-        fail("Unknown token name: {}".format(name))
+    pos = tokenizer["position"]
+    source = tokenizer["source"]
 
-    # Use slicing since we don't know if re.bzl supports offset
-    m = pattern.match(tokenizer["source"][tokenizer["position"]:])
-    if not m:
+    if pos >= len(source):
+        if name == "END":
+            if not peek:
+                tokenizer["next_token"] = struct(name = "END", text = "", position = pos)
+            return True
         return False
 
-    if not peek:
-        tokenizer["next_token"] = struct(
-            name = name,
-            text = m.group(0),
-            position = tokenizer["position"],
-        )
-    return True
+    if name == "WS":
+        if source[pos] not in _WS:
+            return False
+        i = pos
+        for _ in range(len(source) - pos):
+            if i < len(source) and source[i] in _WS:
+                i += 1
+            else:
+                break
+        if not peek:
+            tokenizer["next_token"] = struct(name = "WS", text = source[pos:i], position = pos)
+        return True
+
+    if name == "LEFT_PARENTHESIS":
+        if source[pos] == "(":
+            if not peek:
+                tokenizer["next_token"] = struct(name = "LEFT_PARENTHESIS", text = "(", position = pos)
+            return True
+        return False
+
+    if name == "RIGHT_PARENTHESIS":
+        if source[pos] == ")":
+            if not peek:
+                tokenizer["next_token"] = struct(name = "RIGHT_PARENTHESIS", text = ")", position = pos)
+            return True
+        return False
+
+    if name == "QUOTED_STRING":
+        q = source[pos]
+        if q not in ("'", '"'):
+            return False
+        i = pos + 1
+        found = False
+        for _ in range(len(source) - i):
+            if i < len(source):
+                if source[i] == q:
+                    found = True
+                    i += 1
+                    break
+                i += 1
+        if not found:
+            return False
+        if not peek:
+            tokenizer["next_token"] = struct(name = "QUOTED_STRING", text = source[pos:i], position = pos)
+        return True
+
+    if name == "OP":
+        # Longest first
+        valid_ops = ("===", "==", "~=", "!=", "<=", ">=", "<", ">")
+        for op in valid_ops:
+            if source.startswith(op, pos):
+                if not peek:
+                    tokenizer["next_token"] = struct(name = "OP", text = op, position = pos)
+                return True
+        return False
+
+    if name == "BOOLOP":
+        for op in ("or", "and"):
+            if source.startswith(op, pos) and _check_word_boundary(source, pos, len(op)):
+                if not peek:
+                    tokenizer["next_token"] = struct(name = "BOOLOP", text = op, position = pos)
+                return True
+        return False
+
+    if name == "IN":
+        if source.startswith("in", pos) and _check_word_boundary(source, pos, 2):
+            if not peek:
+                tokenizer["next_token"] = struct(name = "IN", text = "in", position = pos)
+            return True
+        return False
+
+    if name == "NOT":
+        if source.startswith("not", pos) and _check_word_boundary(source, pos, 3):
+            if not peek:
+                tokenizer["next_token"] = struct(name = "NOT", text = "not", position = pos)
+            return True
+        return False
+
+    if name == "VARIABLE":
+        for v in _VALID_VARS:
+            if source.startswith(v, pos) and _check_word_boundary(source, pos, len(v)):
+                if not peek:
+                    tokenizer["next_token"] = struct(name = "VARIABLE", text = v, position = pos)
+                return True
+        return False
+
+    if name == "END":
+        # Handled at start if pos >= len(source)
+        return False
+
+    fail("Unknown token name: {}".format(name))
 
 def _tokenizer_read(tokenizer):
     token = tokenizer["next_token"]
@@ -168,20 +278,37 @@ def _eval_item(item, environment):
     lhs, op, rhs = item
 
     if lhs.type == "variable":
-        lhs_val = environment.get(lhs.value)
-        if lhs_val == None:
-            fail("Undefined environment variable: {}".format(lhs.value))
-        rhs_val = rhs.value
         key = lhs.value
+        lhs_val = environment.get(key)
+        if lhs_val == None:
+            if key == "extra":
+                lhs_val = ""
+            else:
+                fail("Undefined environment variable: {}".format(key))
+        rhs_val = rhs.value
     else:
-        lhs_val = lhs.value
-        rhs_val = environment.get(rhs.value)
-        if rhs_val == None:
-            fail("Undefined environment variable: {}".format(rhs.value))
         key = rhs.value
+        lhs_val = lhs.value
+        rhs_val = environment.get(key)
+        if rhs_val == None:
+            if key == "extra":
+                rhs_val = ""
+            else:
+                fail("Undefined environment variable: {}".format(key))
 
-    # Upstream normalizes 'extra' and 'MARKERS_ALLOWING_SET'.
-    # For now, assume environment values are already normalized or handle basic cases.
+    # Apply canonicalization for PEP 685 / PEP 735
+    if key in ("extra", "extras", "dependency_groups"):
+        if type(lhs_val) == "list":
+            # buildifier: disable=string-iteration
+            lhs_val = [utils.canonicalize_name(v) for v in lhs_val]
+        elif type(lhs_val) == "string":
+            lhs_val = utils.canonicalize_name(lhs_val)
+
+        if type(rhs_val) == "list":
+            # buildifier: disable=string-iteration
+            rhs_val = [utils.canonicalize_name(v) for v in rhs_val]
+        elif type(rhs_val) == "string":
+            rhs_val = utils.canonicalize_name(rhs_val)
 
     if key in _MARKERS_REQUIRING_VERSION and op not in ("in", "not in"):
         # Use specifier_contains

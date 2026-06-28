@@ -6,8 +6,8 @@ bzl_library(
     name = "markers",
     srcs = ["markers.bzl"],
     deps = [
-        "//pycross/private/packaging/specifiers",
-        "//pycross/private/packaging/version",
-        "@re.bzl//re",
+        "//pycross/private/pypackaging/specifiers",
+        "//pycross/private/pypackaging/utils",
+        "//pycross/private/pypackaging/version",
     ],
 )

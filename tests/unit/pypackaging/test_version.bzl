@@ -4,7 +4,7 @@ load("@rules_testing//lib:analysis_test.bzl", "analysis_test", "test_suite")
 load("@rules_testing//lib:util.bzl", "util")
 
 # buildifier: disable=bzl-visibility
-load("//pycross/private/packaging/version:version.bzl", "version")
+load("//pycross/private/pypackaging/version:version.bzl", "version")
 
 def _test_parse_version_basic_impl(env, _target):
     v = version.parse("1.2.3")

@@ -4,7 +4,7 @@ load("@rules_testing//lib:analysis_test.bzl", "analysis_test", "test_suite")
 load("@rules_testing//lib:util.bzl", "util")
 
 # buildifier: disable=bzl-visibility
-load("//pycross/private/packaging/specifiers:specifiers.bzl", "specifiers")
+load("//pycross/private/pypackaging/specifiers:specifiers.bzl", "specifiers")
 
 def _test_specifier_basic_impl(env, _target):
     spec = specifiers.parse(">=1.0")

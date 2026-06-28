@@ -6,7 +6,7 @@ bzl_library(
     name = "specifiers",
     srcs = ["specifiers.bzl"],
     deps = [
-        "//pycross/private/packaging/version",
+        "//pycross/private/pypackaging/version",
         "@re.bzl//re",
     ],
 )

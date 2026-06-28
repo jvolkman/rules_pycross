@@ -4,7 +4,7 @@ load("@rules_testing//lib:analysis_test.bzl", "analysis_test", "test_suite")
 load("@rules_testing//lib:util.bzl", "util")
 
 # buildifier: disable=bzl-visibility
-load("//pycross/private/packaging/tags:tags.bzl", "get_supported")
+load("//pycross/private/pypackaging/tags:tags.bzl", "get_supported")
 
 def _test_get_supported_basic_impl(env, _target):
     tags = get_supported(version = "311", platforms = ["any"], impl = "cp", abis = ["none"])

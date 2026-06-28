@@ -5,7 +5,7 @@ Baseline: pypa/packaging 26.2
 """
 
 load("@re.bzl", "re")
-load("//pycross/private/packaging/version:version.bzl", "get_public_key", "make_version", "parse_version")
+load("//pycross/private/pypackaging/version:version.bzl", "get_public_key", "make_version", "parse_version")
 
 def _fail_invalid_specifier(spec):
     fail("Invalid specifier: {}".format(spec))
