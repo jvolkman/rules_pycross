@@ -93,8 +93,8 @@ def _test_cycle_group_rendering_impl(env, target):
     env.expect.that_bool('member = "beta@2.0"' in res).equals(True)
 
     # Cycled package deps should exclude same-cycle members from _deps list
-    alpha_section = res.split('name = "_raw_alpha@1.0"')[0].rsplit("_alpha_1_0_deps", 1)[-1] if "_alpha_1_0_deps" in res else ""
-    env.expect.that_bool('"beta@2.0"' not in alpha_section).equals(True)
+    alpha_deps_section = res.split('_alpha_1_0_deps = [')[1].split(']')[0] if "_alpha_1_0_deps = [" in res else ""
+    env.expect.that_bool('"beta@2.0"' not in alpha_deps_section).equals(True)
 
 def _test_cycle_group_rendering(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])

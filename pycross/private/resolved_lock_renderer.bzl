@@ -148,7 +148,7 @@ def _render_marker_cycle_member_deps(lines, cycle_groups, packages):
     Only cycle group members that appear in ``packages`` are rendered; groups
     whose members are entirely outside the resolved set are silently skipped.
     """
-    for _group_name, scc in sorted(cycle_groups.items()):
+    for group_name, scc in sorted(cycle_groups.items()):
         # Only render members that are part of the resolved package set.
         resolved_members = [m for m in scc if m in packages]
         if not resolved_members:
@@ -157,17 +157,25 @@ def _render_marker_cycle_member_deps(lines, cycle_groups, packages):
         edges_json = _build_marker_cycle_edges_json(scc, packages)
         all_members = sorted(scc)
 
+        sanitized_group_name = _sanitize_name(group_name).upper()
+        members_var_name = "_{}_MEMBERS".format(sanitized_group_name)
+        edges_var_name = "_{}_EDGES".format(sanitized_group_name)
+
+        lines.append(_ind("{} = [".format(members_var_name)))
+        for m in all_members:
+            lines.append(_ind('"{}",'.format(m), 2))
+        lines.append(_ind("]"))
+        lines.append("")
+        lines.append(_ind("{} = {}".format(edges_var_name, repr(edges_json))))
+        lines.append("")
+
         for pkg_key in sorted(resolved_members):
             lines.append(_ind("pycross_cycle_member_marker_deps("))
             lines.append(_ind('name = "{}",'.format(pkg_key), 2))
             lines.append(_ind('raw_name = "_raw_{}",'.format(pkg_key), 2))
             lines.append(_ind('member = "{}",'.format(pkg_key), 2))
-            lines.append(_ind("members = [", 2))
-            for m in all_members:
-                lines.append(_ind('"{}",'.format(m), 3))
-            lines.append(_ind("],", 2))
-
-            lines.append(_ind("edges = {},".format(repr(edges_json)), 2))
+            lines.append(_ind("members = {},".format(members_var_name), 2))
+            lines.append(_ind("edges = {},".format(edges_var_name), 2))
             lines.append(_ind(")"))
             lines.append("")
 
