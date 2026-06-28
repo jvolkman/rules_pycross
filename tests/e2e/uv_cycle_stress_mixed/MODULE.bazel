@@ -1,4 +1,3 @@
-# Force re-evaluation
 bazel_dep(name = "rules_pycross", version = "0.0.0")
 bazel_dep(name = "rules_pycross_e2e_shared", version = "0.0.0")
 bazel_dep(name = "rules_python", version = "2.0.0")
@@ -21,14 +20,16 @@ python.toolchain(
 python.toolchain(python_version = "3.12.0")
 use_repo(python, "python_versions")
 
-pycross = use_extension("@rules_pycross//pycross/extensions:pycross.bzl", "pycross")
-pycross.configure_toolchains(
+environments = use_extension("@rules_pycross//pycross/extensions:environments.bzl", "environments")
+environments.create_for_python_toolchains(
+    name = "uv_cycle_stress_mixed_envs",
     platforms = [
         "aarch64-apple-darwin",
         "aarch64-unknown-linux-gnu",
         "x86_64-unknown-linux-gnu",
     ],
 )
+use_repo(environments, "uv_cycle_stress_mixed_envs")
 
 lock_import = use_extension("@rules_pycross//pycross/extensions:lock_import.bzl", "lock_import")
 lock_import.import_uv(

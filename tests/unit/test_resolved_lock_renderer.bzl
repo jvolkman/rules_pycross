@@ -177,7 +177,7 @@ def _test_cycle_group_marker_specific_rendering_impl(env, target):
     env.expect.that_bool('member = "appnope@1.0"' in res).equals(True)
 
     # The edges JSON should include marker for the conditional edge
-    env.expect.that_bool('"marker":' in res).equals(True)
+    env.expect.that_bool('\\"marker\\":' in res).equals(True)
     env.expect.that_bool("marker_ast" in res).equals(False)
 
 def _test_cycle_group_marker_specific_rendering(name):

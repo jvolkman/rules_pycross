@@ -50,13 +50,13 @@ def find_unconditional_deps(member, other_members, edges):
     queue = [member]
     visited = {member: True}
 
-    # Bounded BFS
+    # Bounded BFS — each node is enqueued at most once (guarded by `visited`),
+    # so the queue length never exceeds len(cycle_members).
     for _ in range(len(other_members) + 1):
         if not queue:
             break
 
-        # Starlark doesn't have pop(0), simulate it or use a pointer if list grows big.
-        # But here queue is small (cycle members).
+        # Starlark lacks list.pop(0); slice instead (queue is small).
         curr = queue[0]
         queue = queue[1:]
 
@@ -201,7 +201,13 @@ def pycross_cycle_member_marker_deps(
     for u_dep in unconditional_deps:
         deps.append(":_raw_" + u_dep)
 
-    # 3. Filter other_members to only include those NOT unconditionally reachable
+    # 3. Filter other_members to only include those NOT unconditionally reachable.
+    # This is safe to pass as the reduced member set to compute_reachability_groups:
+    # any edge from an unconditional member to a conditional member must carry a
+    # marker (otherwise the BFS above would have reached the conditional member
+    # unconditionally). Since collapsibility requires unmarked edges, removing
+    # unconditional members from the inbound-edge calculation cannot introduce
+    # false collapses.
     unconditional_set = {u: True for u in unconditional_deps}
     conditional_members = [m for m in other_members if m not in unconditional_set]
 
