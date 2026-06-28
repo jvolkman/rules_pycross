@@ -23,6 +23,34 @@ CONFIGURE_TOOLCHAINS_ATTRS = dict(
             "platforms for each registered version are supported."
         ),
     ),
+    glibc_version = attr.string(
+        default = DEFAULT_GLIBC_VERSION,
+        doc = (
+            "The maximum glibc version to accept for Bazel platforms that match the " +
+            "@platforms//os:linux constraint. Must be in the format '2.X', and greater than 2.5. " +
+            "All versions from 2.5 through this version will be supported. For example, if this " +
+            "value is set to 2.15, wheels tagged manylinux_2_5, manylinux_2_6, ..., " +
+            "manylinux_2_15 will be accepted."
+        ),
+    ),
+    musl_version = attr.string(
+        default = DEFAULT_MUSL_VERSION,
+        doc = (
+            "The musl version to accept for Bazel platforms that match the " +
+            "@platforms//os:linux constraint when @rules_python//python/config_settings:py_linux_libc " +
+            "is set to 'musl'."
+        ),
+    ),
+    macos_version = attr.string(
+        default = DEFAULT_MACOS_VERSION,
+        doc = (
+            "The maximum macOS version to accept for Bazel platforms that match the " +
+            "@platforms//os:osx constraint. Must be in the format 'X.Y' with X >= 10. " +
+            "All versions from 10.4 through this version will be supported. For example, if this " +
+            "value is set to 12.0, wheels tagged macosx_10_4, macosx_10_5, ..., macosx_11_0, " +
+            "macosx_12_0 will be accepted."
+        ),
+    ),
     register_toolchains = attr.bool(
         doc = "Register toolchains for all rules_python-registered interpreters.",
         default = True,
