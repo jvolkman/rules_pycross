@@ -4,7 +4,7 @@ load("@rules_testing//lib:analysis_test.bzl", "analysis_test", "test_suite")
 load("@rules_testing//lib:util.bzl", "util")
 
 # buildifier: disable=bzl-visibility
-load("//pycross/private/packaging/markers:markers.bzl", "markers")
+load("//pycross/private/pypackaging/markers:markers.bzl", "markers")
 
 def _test_marker_parser_impl(env, _target):
     # Simple

@@ -4,8 +4,8 @@ Derived from pypa/packaging: packaging/markers.py (Apache 2.0 / BSD).
 Baseline: pypa/packaging 26.2
 """
 
-load("//pycross/private/packaging/specifiers:specifiers.bzl", "parse_specifier", "specifier_contains")
-load("//pycross/private/packaging/utils:utils.bzl", "utils")
+load("//pycross/private/pypackaging/specifiers:specifiers.bzl", "parse_specifier", "specifier_contains")
+load("//pycross/private/pypackaging/utils:utils.bzl", "utils")
 
 _WS = " \t"
 _IDENT_CHARS = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_."

@@ -3,8 +3,8 @@
 Derived from pypa/packaging: packaging/utils.py (Apache 2.0 / BSD).
 """
 
-load("//pycross/private/packaging/tags:tags.bzl", "tags")
-load("//pycross/private/packaging/version:version.bzl", "version")
+load("//pycross/private/pypackaging/tags:tags.bzl", "tags")
+load("//pycross/private/pypackaging/version:version.bzl", "version")
 
 _LOWER = "abcdefghijklmnopqrstuvwxyz"
 _UPPER = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"

@@ -27,7 +27,7 @@ utils_test_suite(
 )
 
 test_suite(
-    name = "packaging",
+    name = "pypackaging",
     tests = [
         ":test_markers",
         ":test_specifiers",

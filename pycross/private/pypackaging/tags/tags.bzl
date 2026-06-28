@@ -5,15 +5,15 @@ and pypa/packaging: packaging/tags.py (Apache 2.0 / BSD).
 See README.md for details.
 """
 
-load("//pycross/private/packaging/tags:android.bzl", "android_platforms")
-load("//pycross/private/packaging/tags:compatible.bzl", "compatible_tags")
-load("//pycross/private/packaging/tags:cpython.bzl", "cpython_tags")
-load("//pycross/private/packaging/tags:generic.bzl", "generic_tags")
-load("//pycross/private/packaging/tags:ios.bzl", "ios_platforms")
-load("//pycross/private/packaging/tags:macos.bzl", "mac_platforms")
-load("//pycross/private/packaging/tags:manylinux.bzl", "manylinux_platforms")
-load("//pycross/private/packaging/tags:musllinux.bzl", "musllinux_platforms")
-load("//pycross/private/packaging/tags:utils.bzl", "get_python_version")
+load("//pycross/private/pypackaging/tags:android.bzl", "android_platforms")
+load("//pycross/private/pypackaging/tags:compatible.bzl", "compatible_tags")
+load("//pycross/private/pypackaging/tags:cpython.bzl", "cpython_tags")
+load("//pycross/private/pypackaging/tags:generic.bzl", "generic_tags")
+load("//pycross/private/pypackaging/tags:ios.bzl", "ios_platforms")
+load("//pycross/private/pypackaging/tags:macos.bzl", "mac_platforms")
+load("//pycross/private/pypackaging/tags:manylinux.bzl", "manylinux_platforms")
+load("//pycross/private/pypackaging/tags:musllinux.bzl", "musllinux_platforms")
+load("//pycross/private/pypackaging/tags:utils.bzl", "get_python_version")
 
 def _expand_platform(platform):
     if platform.startswith("macosx_"):

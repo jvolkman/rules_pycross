@@ -4,7 +4,7 @@ load("@rules_testing//lib:analysis_test.bzl", "analysis_test", "test_suite")
 load("@rules_testing//lib:util.bzl", "util")
 
 # buildifier: disable=bzl-visibility
-load("//pycross/private/packaging/utils:utils.bzl", "utils")
+load("//pycross/private/pypackaging/utils:utils.bzl", "utils")
 
 def _test_canonicalize_version_impl(env, _target):
     env.expect.that_str(utils.canonicalize_version("1.0.0")).equals("1")
