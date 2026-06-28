@@ -118,11 +118,11 @@ def _render_marker_evaluators(lines, unique_markers):
             "",
         ])
 
-def _build_marker_cycle_edges_json(scc, packages):
-    """Builds the JSON-encoded in-cycle edge map for marker mode.
+def _build_cycle_edges_dict(scc, packages):
+    """Builds the in-cycle edge map for marker mode.
 
-    Returns a JSON string with format:
-      {"pkg": [{"dep": "dep_key", "marker": "..."}, ...], ...}
+    Returns a dict with format:
+      {pkg: [{"dep": dep_key, "marker": "..."}, ...], ...}
     """
     scc_set = {k: True for k in scc}
     edges = {}
@@ -137,7 +137,33 @@ def _build_marker_cycle_edges_json(scc, packages):
                     entry["marker"] = md["marker"]
                 edge_list.append(entry)
         edges[pkg_key] = edge_list
-    return json.encode(edges)
+    return edges
+
+def _render_edges_dict(edges, base_indent = 1):
+    """Renders an edges dict as pretty-printed Starlark dict literal lines.
+
+    Args:
+        edges: Dict of {node: [{dep, marker?}, ...], ...}.
+        base_indent: Number of indent levels for the outer braces.
+
+    Returns:
+        A list of indented lines forming a valid Starlark dict literal.
+    """
+    lines = [_ind("{", base_indent)]
+    for pkg_key in sorted(edges.keys()):
+        edge_list = edges[pkg_key]
+        if not edge_list:
+            lines.append(_ind('"{}": [],'.format(pkg_key), base_indent + 1))
+        else:
+            lines.append(_ind('"{}": ['.format(pkg_key), base_indent + 1))
+            for entry in edge_list:
+                parts = ['"dep": {}'.format(repr(entry["dep"]))]
+                if entry.get("marker"):
+                    parts.append('"marker": {}'.format(repr(entry["marker"])))
+                lines.append(_ind("{{{}}},".format(", ".join(parts)), base_indent + 2))
+            lines.append(_ind("],", base_indent + 1))
+    lines.append(_ind("}", base_indent))
+    return lines
 
 def _render_marker_cycle_member_deps(lines, cycle_groups, packages):
     """Renders pycross_cycle_member_marker_deps macro calls for each cycle member.
@@ -154,19 +180,16 @@ def _render_marker_cycle_member_deps(lines, cycle_groups, packages):
         if not resolved_members:
             continue
 
-        edges_json = _build_marker_cycle_edges_json(scc, packages)
-        all_members = sorted(scc)
+        edges = _build_cycle_edges_dict(scc, packages)
 
         sanitized_group_name = _sanitize_name(group_name).upper()
-        members_var_name = "_{}_MEMBERS".format(sanitized_group_name)
         edges_var_name = "_{}_EDGES".format(sanitized_group_name)
 
-        lines.append(_ind("{} = [".format(members_var_name)))
-        for m in all_members:
-            lines.append(_ind('"{}",'.format(m), 2))
-        lines.append(_ind("]"))
-        lines.append("")
-        lines.append(_ind("{} = {}".format(edges_var_name, repr(edges_json))))
+        edges_lines = _render_edges_dict(edges, base_indent = 1)
+
+        # Attach the variable assignment to the first line of the dict literal.
+        edges_lines[0] = _ind("{} = ".format(edges_var_name)) + edges_lines[0].lstrip()
+        lines.extend(edges_lines)
         lines.append("")
 
         for pkg_key in sorted(resolved_members):
@@ -174,7 +197,6 @@ def _render_marker_cycle_member_deps(lines, cycle_groups, packages):
             lines.append(_ind('name = "{}",'.format(pkg_key), 2))
             lines.append(_ind('raw_name = "_raw_{}",'.format(pkg_key), 2))
             lines.append(_ind('member = "{}",'.format(pkg_key), 2))
-            lines.append(_ind("members = {},".format(members_var_name), 2))
             lines.append(_ind("edges = {},".format(edges_var_name), 2))
             lines.append(_ind(")"))
             lines.append("")
