@@ -103,10 +103,6 @@ def _render_marker_evaluators(lines, unique_markers):
             _ind("pycross_pep508_evaluator("),
             _ind('name = "{}",'.format(eval_name), 2),
             _ind('expr = "{}",'.format(marker_str.replace('"', '\\"')), 2),
-            _ind("sys_platform = select(SYS_PLATFORM_VALUES),", 2),
-            _ind("os_name = select(OS_NAME_VALUES),", 2),
-            _ind("platform_system = select(PLATFORM_SYSTEM_VALUES),", 2),
-            _ind("platform_machine = select(PLATFORM_MACHINE_VALUES),", 2),
             _ind(")"),
             "",
         ])
@@ -171,12 +167,6 @@ def _render_marker_cycle_member_deps(lines, cycle_groups, packages):
                 lines.append(_ind('"{}",'.format(m), 3))
             lines.append(_ind("],", 2))
             lines.append(_ind("edges = '{}',".format(edges_json), 2))
-
-            # Marker values via select
-            lines.append(_ind("sys_platform = select(SYS_PLATFORM_VALUES),", 2))
-            lines.append(_ind("os_name = select(OS_NAME_VALUES),", 2))
-            lines.append(_ind("platform_system = select(PLATFORM_SYSTEM_VALUES),", 2))
-            lines.append(_ind("platform_machine = select(PLATFORM_MACHINE_VALUES),", 2))
             lines.append(_ind(")"))
             lines.append("")
 
@@ -193,8 +183,6 @@ def _render_marker_wheel_chooser(lines, pkg_key, pkg, repo_map, sdist_map, rctx_
         _ind("pycross_wheel_chooser("),
         _ind('name = "{}",'.format(chooser_name), 2),
         _ind("candidates = '{}',".format(candidates_json), 2),
-        _ind("sys_platform = select(SYS_PLATFORM_VALUES),", 2),
-        _ind("platform_machine = select(PLATFORM_MACHINE_VALUES),", 2),
         _ind("libc = select(LIBC_VALUES),", 2),
         _ind("freethreaded = select(FREETHREADED_VALUES),", 2),
         _ind(")"),
@@ -452,10 +440,6 @@ def render_lock_bzl(lock, repo_map, sdist_map = None, rctx_name = ""):
         'load("@rules_pycross//pycross/private:pep508_marker_values.bzl",',
         '    "FREETHREADED_VALUES",',
         '    "LIBC_VALUES",',
-        '    "OS_NAME_VALUES",',
-        '    "PLATFORM_MACHINE_VALUES",',
-        '    "PLATFORM_SYSTEM_VALUES",',
-        '    "SYS_PLATFORM_VALUES",',
         ")",
     ]
 

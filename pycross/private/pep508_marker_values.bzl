@@ -127,14 +127,19 @@ def marker_value_attrs():
         "implementation_name": attr.string(default = ""),
         "implementation_version": attr.string(default = ""),
         "platform_python_implementation": attr.string(default = ""),
-        # Fallback: read python version from rules_python config flags
-        # when the toolchain doesn't provide interpreter_version_info.
-        "_python_version_flag": attr.label(
-            default = "@rules_python//python/config_settings:python_version",
-        ),
-        "_python_version_major_minor_flag": attr.label(
-            default = "@rules_python//python/config_settings:python_version_major_minor",
-        ),
+
+        # Hidden fallback targets pointing to standard marker definitions.
+        "_os_name_target": attr.label(default = "@rules_pycross//pycross/private/markers:os_name"),
+        "_sys_platform_target": attr.label(default = "@rules_pycross//pycross/private/markers:sys_platform"),
+        "_platform_machine_target": attr.label(default = "@rules_pycross//pycross/private/markers:platform_machine"),
+        "_platform_system_target": attr.label(default = "@rules_pycross//pycross/private/markers:platform_system"),
+        "_platform_release_target": attr.label(default = "@rules_pycross//pycross/settings:pep508_platform_release"),
+        "_platform_version_target": attr.label(default = "@rules_pycross//pycross/settings:pep508_platform_version"),
+        "_python_version_target": attr.label(default = "@rules_pycross//pycross/private/markers:python_version"),
+        "_python_full_version_target": attr.label(default = "@rules_pycross//pycross/private/markers:python_full_version"),
+        "_implementation_name_target": attr.label(default = "@rules_pycross//pycross/settings:pep508_implementation_name"),
+        "_implementation_version_target": attr.label(default = "@rules_pycross//pycross/private/markers:implementation_version"),
+        "_platform_python_implementation_target": attr.label(default = "@rules_pycross//pycross/settings:pep508_platform_python_implementation"),
     }
 
 def collect_markers(ctx):
@@ -152,6 +157,16 @@ def collect_markers(ctx):
     Returns:
         A dict mapping marker name to its string value.
     """
+
+    # 1. Platform markers (Direct attr or fallback target)
+    os_name = ctx.attr.os_name or _flag_value(ctx.attr._os_name_target)
+    sys_platform = ctx.attr.sys_platform or _flag_value(ctx.attr._sys_platform_target)
+    platform_machine = ctx.attr.platform_machine or _flag_value(ctx.attr._platform_machine_target)
+    platform_system = ctx.attr.platform_system or _flag_value(ctx.attr._platform_system_target)
+    platform_release = ctx.attr.platform_release or _flag_value(ctx.attr._platform_release_target)
+    platform_version = ctx.attr.platform_version or _flag_value(ctx.attr._platform_version_target)
+
+    # 2. Python version markers (Direct attr, Toolchain, or fallback target)
     python_version = ctx.attr.python_version
     python_full_version = ctx.attr.python_full_version
     implementation_name = ctx.attr.implementation_name
@@ -179,13 +194,19 @@ def collect_markers(ctx):
                 if not implementation_version:
                     implementation_version = _format_full_version(vi)
 
-    # Fall back to rules_python config flags.
-    if not python_version and hasattr(ctx.attr, "_python_version_major_minor_flag"):
-        python_version = _flag_value(ctx.attr._python_version_major_minor_flag)
-    if not python_full_version and hasattr(ctx.attr, "_python_version_flag"):
-        python_full_version = _flag_value(ctx.attr._python_version_flag)
+    # Fall back to target flags.
+    if not python_version:
+        python_version = _flag_value(ctx.attr._python_version_target)
+    if not python_full_version:
+        python_full_version = _flag_value(ctx.attr._python_full_version_target)
+    if not implementation_name:
+        implementation_name = _flag_value(ctx.attr._implementation_name_target)
+    if not implementation_version:
+        implementation_version = _flag_value(ctx.attr._implementation_version_target)
+    if not platform_python_implementation:
+        platform_python_implementation = _flag_value(ctx.attr._platform_python_implementation_target)
 
-    # Defaults (matching rules_python's pep508_env.bzl behavior).
+    # Defaults (matching rules_python's pep508_env.bzl behavior) if still empty.
     if not implementation_name:
         implementation_name = "cpython"
     if not implementation_version and python_full_version:
@@ -199,16 +220,16 @@ def collect_markers(ctx):
             platform_python_implementation = implementation_name
 
     return {
-        "os_name": ctx.attr.os_name,
-        "os.name": ctx.attr.os_name,
-        "sys_platform": ctx.attr.sys_platform,
-        "sys.platform": ctx.attr.sys_platform,
-        "platform_machine": ctx.attr.platform_machine,
-        "platform.machine": ctx.attr.platform_machine,
-        "platform_system": ctx.attr.platform_system,
-        "platform_release": ctx.attr.platform_release,
-        "platform_version": ctx.attr.platform_version,
-        "platform.version": ctx.attr.platform_version,
+        "os_name": os_name,
+        "os.name": os_name,
+        "sys_platform": sys_platform,
+        "sys.platform": sys_platform,
+        "platform_machine": platform_machine,
+        "platform.machine": platform_machine,
+        "platform_system": platform_system,
+        "platform_release": platform_release,
+        "platform_version": platform_version,
+        "platform.version": platform_version,
         "python_version": python_version,
         "python_full_version": python_full_version,
         "implementation_name": implementation_name,
@@ -217,3 +238,16 @@ def collect_markers(ctx):
         "platform.python_implementation": platform_python_implementation,
         "python_implementation": platform_python_implementation,
     }
+
+def _marker_value_impl(ctx):
+    return [
+        config_common.FeatureFlagInfo(value = ctx.attr.value),
+    ]
+
+marker_value = rule(
+    implementation = _marker_value_impl,
+    attrs = {
+        "value": attr.string(),
+    },
+    doc = """Converts a string (possibly configurable via select()) into a FeatureFlagInfo provider.""",
+)

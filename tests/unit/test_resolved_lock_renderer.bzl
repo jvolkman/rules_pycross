@@ -180,9 +180,6 @@ def _test_cycle_group_marker_specific_rendering_impl(env, target):
     env.expect.that_bool('"marker":' in res).equals(True)
     env.expect.that_bool("marker_ast" in res).equals(False)
 
-    # Should have marker select values
-    env.expect.that_bool("SYS_PLATFORM_VALUES" in res).equals(True)
-
 def _test_cycle_group_marker_specific_rendering(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
     analysis_test(name = name, target = name + "_subject", impl = _test_cycle_group_marker_specific_rendering_impl)

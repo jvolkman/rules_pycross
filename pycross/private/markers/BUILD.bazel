@@ -1,0 +1,40 @@
+load("//pycross/private:pep508_marker_values.bzl", "OS_NAME_VALUES", "PLATFORM_MACHINE_VALUES", "PLATFORM_SYSTEM_VALUES", "SYS_PLATFORM_VALUES", "marker_value")
+
+package(default_visibility = ["//pycross:__subpackages__"])
+
+# 1. Platform-derived Markers
+marker_value(
+    name = "os_name",
+    value = select(OS_NAME_VALUES),
+)
+
+marker_value(
+    name = "sys_platform",
+    value = select(SYS_PLATFORM_VALUES),
+)
+
+marker_value(
+    name = "platform_system",
+    value = select(PLATFORM_SYSTEM_VALUES),
+)
+
+marker_value(
+    name = "platform_machine",
+    value = select(PLATFORM_MACHINE_VALUES),
+)
+
+# 2. Python Version Markers (Aliases)
+alias(
+    name = "python_version",
+    actual = "@rules_python//python/config_settings:python_version_major_minor",
+)
+
+alias(
+    name = "python_full_version",
+    actual = "@rules_python//python/config_settings:python_version",
+)
+
+alias(
+    name = "implementation_version",
+    actual = ":python_full_version",
+)
