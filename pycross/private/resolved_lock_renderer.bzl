@@ -6,10 +6,11 @@ and a wheel chooser for platform-specific wheel selection.
 
 Naming conventions for generated targets:
   - `_raw_<pkg_key>`: The underlying `pycross_wheel_library` or `pycross_wheel_build` target.
-  - `<pkg_key>`: A `py_library` that wraps the raw target. If the package is part of a cycle,
-    the public target is created by `pycross_cycle_member_marker_deps`.
-  - `<pkg_name>[_all_]@<version>`: A synthetic `py_library` that aggregates the base package and
-    all of its parsed extras into a single target.
+  - `<pkg_key>`: For cycle members, this is a `pycross_library_proxy` (created by
+    `pycross_cycle_member_marker_deps`) that wraps the raw target and adds conditional deps.
+    For extras-only packages, this is a `py_library` wrapping dependencies.
+  - `<pkg_name>[_all_]@<version>`: A synthetic `pycross_library_proxy` that aggregates the
+    base package and all of its parsed extras into a single target.
 """
 
 def _ind(text, tabs = 1):
@@ -58,10 +59,10 @@ def _render_extras_aggregates(lines, packages):
     for base_pkg_key, extra_keys in sorted(base_packages_with_extras.items()):
         base_name, version = base_pkg_key.split("@", 1)
         lines.extend([
-            _ind("py_library("),
+            _ind("pycross_library_proxy("),
             _ind('name = "{}[_all_]@{}",'.format(base_name, version), 2),
+            _ind('actual = ":{}",'.format(base_pkg_key), 2),
             _ind("deps = [", 2),
-            _ind('":{}\",'.format(base_pkg_key), 3),
         ])
         for extra_key in sorted(extra_keys):
             lines.append(_ind('":{}\",'.format(extra_key), 3))
@@ -453,7 +454,7 @@ def render_lock_bzl(lock, repo_map, sdist_map = None, rctx_name = ""):
     packages = lock.get("packages", {})
     cycle_groups = lock.get("cycle_groups", {})
 
-    pycross_loads = ["pycross_dist_info", "pycross_pep508_evaluator", "pycross_wheel_chooser", "pycross_wheel_library"]
+    pycross_loads = ["pycross_dist_info", "pycross_library_proxy", "pycross_pep508_evaluator", "pycross_wheel_chooser", "pycross_wheel_library"]
     if cycle_groups:
         pycross_loads.insert(0, "pycross_cycle_member_marker_deps")
 
