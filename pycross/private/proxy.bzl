@@ -162,3 +162,7 @@ pycross_transitioning_file_proxy = rule(
         ),
     },
 )
+
+# Exported for generated _transition.bzl in thin repos with custom flag transitions.
+pycross_library_proxy_impl = _pycross_library_proxy_impl
+pycross_file_proxy_impl = _pycross_file_proxy_impl

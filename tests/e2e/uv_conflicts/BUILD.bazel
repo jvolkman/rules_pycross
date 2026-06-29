@@ -62,3 +62,18 @@ py_test(
     main = "tests/test_conflict_version.py",
     deps = ["@project//:idna"],
 )
+
+# Test that @project_pinned resolves variant-a via platform transition.
+# This repo has flags = ["--@project_pinned//_variants:extra_variant-a=True"]
+# in its member import, so it should resolve typing-extensions 4.11.0
+# without any CLI --flag arguments.
+py_test(
+    name = "test_transition_pinned",
+    srcs = ["tests/test_conflict_version.py"],
+    args = [
+        "typing-extensions",
+        "4.11.0",
+    ],
+    main = "tests/test_conflict_version.py",
+    deps = ["@project_pinned//:typing-extensions"],
+)

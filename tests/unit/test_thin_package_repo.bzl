@@ -243,6 +243,41 @@ def _test_pin_build_basic_structure(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
     analysis_test(name = name, target = name + "_subject", impl = _test_pin_build_basic_structure_impl)
 
+# ── Test: transition_bzl → per-package uses non-transitioning rules ─
+
+# buildifier: disable=unused-variable
+def _test_pin_build_with_transition_bzl_impl(env, target):
+    """When transition_bzl is set, per-package BUILD uses non-transitioning rules (transition applied at root)."""
+    res = pin_build_for_testing(
+        target_name = "numpy",
+        pin_target_dict = {"": "numpy@1.26.0"},
+        package = {"sdist_file": {"key": "numpy_sdist"}},
+        workspace_repo = "my_workspace",
+        extras_dict = {"gpu": {"": "numpy[gpu]@1.26.0"}},
+        target_platform = "//:_internal_platform",
+        transition_bzl = "//:_transition.bzl",
+    )
+
+    # Should load non-transitioning rules (transition is at root, not here)
+    load_line = [line for line in res.split("\n") if line.startswith("load(")][0]
+    env.expect.that_bool('"pycross_library_proxy"' in load_line).equals(True)
+    env.expect.that_bool('"pycross_file_proxy"' in load_line).equals(True)
+    env.expect.that_bool("transitioning" not in load_line).equals(True)
+
+    # Should NOT have any platform = lines (non-transitioning rules don't have platform attr)
+    env.expect.that_bool("platform =" not in res).equals(True)
+
+    # Should still have the expected targets
+    env.expect.that_bool('name = "pkg"' in res).equals(True)
+    env.expect.that_bool('name = "wheel"' in res).equals(True)
+    env.expect.that_bool('name = "dist_info"' in res).equals(True)
+    env.expect.that_bool('name = "sdist"' in res).equals(True)
+    env.expect.that_bool('name = "[gpu]"' in res).equals(True)
+
+def _test_pin_build_with_transition_bzl(name):
+    util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
+    analysis_test(name = name, target = name + "_subject", impl = _test_pin_build_with_transition_bzl_impl)
+
 # ── Test suite ─────────────────────────────────────────────────────
 
 def thin_package_repo_test_suite(name):
@@ -256,5 +291,6 @@ def thin_package_repo_test_suite(name):
             _test_pin_build_sdist_with_platform,
             _test_pin_build_variants_with_platform,
             _test_pin_build_basic_structure,
+            _test_pin_build_with_transition_bzl,
         ],
     )
