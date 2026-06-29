@@ -17,7 +17,7 @@ The file structure is as follows:
 
 load("@pypackaging.bzl", "pypackaging")
 load(":resolved_lock_renderer.bzl", "render_lock_bzl")
-load(":util.bzl", "key_name", "key_parts", "underscore_name")
+load(":util.bzl", "key_name", "parse_package_key", "underscore_name")
 
 def _normalize_name(name):
     return pypackaging.utils.canonicalize_name(name)
@@ -294,7 +294,14 @@ def _package_repo_impl(rctx):
         # Skip variant packages (they use __via_ suffix for conflict resolution)
         if "__via_" in pkg_key:
             continue
-        pkg_name_part, pkg_version = key_parts(pkg_key)
+        parts = parse_package_key(pkg_key)
+
+        # Skip extra packages (e.g. foo[test]@1.0.0). They do not have their
+        # own wheels or sdists; they share the base package's artifacts.
+        if parts.extra:
+            continue
+        pkg_name_part = parts.name
+        pkg_version = parts.version
         norm_name = _normalize_name(pkg_name_part)
         us_name = _underscore_name(pkg_name_part)
         whldir_name = "{}-{}.whldir".format(us_name, pkg_version)

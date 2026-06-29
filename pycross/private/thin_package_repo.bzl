@@ -12,7 +12,7 @@ The file structure is:
 - _variants/BUILD.bazel    - Aliases for bool_flag and config_setting targets for variant selection.
 """
 
-load(":util.bzl", "underscore_name")
+load(":util.bzl", "parse_package_key", "underscore_name")
 
 _requirement_func = """\
 load("@pypackaging.bzl", "pypackaging")
@@ -49,7 +49,8 @@ def _target_select(target_dict, prefix, suffix, workspace_repo, is_aggregated = 
     if len(target_dict) == 1 and "" in target_dict:
         t = target_dict[""]
         if is_aggregated:
-            t = "{}[_all_]@{}".format(t.split("@", 1)[0], t.split("@", 1)[1])
+            parts = parse_package_key(t)
+            t = "{}[_all_]@{}".format(parts.name, parts.version)
         return '"{}{}{}"'.format(prefix, t, suffix)
 
     lines = ["select({"]
@@ -57,7 +58,8 @@ def _target_select(target_dict, prefix, suffix, workspace_repo, is_aggregated = 
     for constraint, t in target_dict.items():
         t_base = t
         if is_aggregated:
-            t_base = "{}[_all_]@{}".format(t.split("@", 1)[0], t.split("@", 1)[1])
+            parts = parse_package_key(t)
+            t_base = "{}[_all_]@{}".format(parts.name, parts.version)
         if constraint == "":
             lines.append('        "//conditions:default": "{}{}{}",'.format(prefix, t_base, suffix))
         else:
@@ -232,16 +234,15 @@ def _thin_package_repo_impl(rctx):
     # Group pins by base package name to identify extras.
     grouped_pins = {}
     for pin_name, pin_target in pins.items():
-        if "[" in pin_name:
-            base, extra = pin_name.split("[", 1)
-            extra = extra[:-1]
-            if base not in grouped_pins:
-                grouped_pins[base] = {"base_target": None, "extras": {}}
-            grouped_pins[base]["extras"][extra] = pin_target
+        parts = parse_package_key(pin_name)
+        if parts.extra:
+            if parts.name not in grouped_pins:
+                grouped_pins[parts.name] = {"base_target": None, "extras": {}}
+            grouped_pins[parts.name]["extras"][parts.extra] = pin_target
         else:
-            if pin_name not in grouped_pins:
-                grouped_pins[pin_name] = {"base_target": None, "extras": {}}
-            grouped_pins[pin_name]["base_target"] = pin_target
+            if parts.name not in grouped_pins:
+                grouped_pins[parts.name] = {"base_target": None, "extras": {}}
+            grouped_pins[parts.name]["base_target"] = pin_target
 
     root_build_lines = [
         'load("@rules_pycross//pycross/private:modules_mapping.bzl", "pycross_modules_mapping")',
@@ -456,10 +457,9 @@ pycross_transitioning_file_proxy = rule(
 
     base_packages_with_extras = {}
     for pkg_key in packages.keys():
-        if "[" in pkg_key:
-            base_name, extra_and_version = pkg_key.split("[", 1)
-            extra_name, version = extra_and_version.split("]@", 1)
-            base_pkg_key = "{}@{}".format(base_name, version)
+        parts = parse_package_key(pkg_key)
+        if parts.extra:
+            base_pkg_key = "{}@{}".format(parts.name, parts.version)
             base_packages_with_extras[base_pkg_key] = True
 
     # Pin directories: proxies pointing to @workspace//_lock targets
@@ -470,10 +470,9 @@ pycross_transitioning_file_proxy = rule(
             first_extra_target_dict = list(group["extras"].values())[0]
             base_target_dict = {}
             for constraint, extra_target in first_extra_target_dict.items():
-                if "[" in extra_target:
-                    base_name, extra_and_version = extra_target.split("[", 1)
-                    _, version = extra_and_version.split("]@", 1)
-                    base_target_dict[constraint] = "{}@{}".format(base_name, version)
+                parts = parse_package_key(extra_target)
+                if parts.extra:
+                    base_target_dict[constraint] = "{}@{}".format(parts.name, parts.version)
 
         package = {}
         if base_target_dict:

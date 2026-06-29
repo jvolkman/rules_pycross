@@ -14,6 +14,8 @@ Naming conventions for generated targets:
     base package and all of its parsed extras into a single target.
 """
 
+load(":util.bzl", "parse_package_key")
+
 def _ind(text, tabs = 1):
     if not text:
         return ""
@@ -21,12 +23,6 @@ def _ind(text, tabs = 1):
 
 def _sanitize_name(name):
     return name.lower().replace("-", "_").replace("@", "_").replace("+", "_").replace(".", "_").replace("[", "_").replace("]", "_")
-
-def _pkg_key_extra(pkg_key):
-    """Extract the extra name from a pkg_key like 'foo[test]@1.0', or '' if none."""
-    if "[" not in pkg_key:
-        return ""
-    return pkg_key.split("[", 1)[1].split("]", 1)[0]
 
 def _is_in_same_cycle(dep_key, pkg, packages):
     cycle_group = pkg.get("cycle_group")
@@ -55,16 +51,15 @@ def _render_extras_aggregates(lines, packages):
     """Renders [_all_] pycross_library_proxy targets that aggregate a base package and all its extras."""
     base_packages_with_extras = {}
     for pkg_key in packages.keys():
-        if "[" in pkg_key:
-            base_name, extra_and_version = pkg_key.split("[", 1)
-            _, version = extra_and_version.split("]@", 1)
-            base_pkg_key = "{}@{}".format(base_name, version)
-            if base_pkg_key not in base_packages_with_extras:
-                base_packages_with_extras[base_pkg_key] = []
-            base_packages_with_extras[base_pkg_key].append(pkg_key)
+        parts = parse_package_key(pkg_key)
+        if parts.extra:
+            base_key = (parts.name, parts.version)
+            if base_key not in base_packages_with_extras:
+                base_packages_with_extras[base_key] = []
+            base_packages_with_extras[base_key].append(pkg_key)
 
-    for base_pkg_key, extra_keys in sorted(base_packages_with_extras.items()):
-        base_name, version = base_pkg_key.split("@", 1)
+    for (base_name, version), extra_keys in sorted(base_packages_with_extras.items()):
+        base_pkg_key = "{}@{}".format(base_name, version)
         lines.extend([
             _ind("pycross_library_proxy("),
             _ind('name = "{}[_all_]@{}",'.format(base_name, version), 2),
@@ -87,7 +82,7 @@ def _collect_unique_markers(packages):
     """
     markers = {}
     for pkg_key, pkg in packages.items():
-        extra = _pkg_key_extra(pkg_key)
+        extra = parse_package_key(pkg_key).extra
         for md in pkg.get("marker_dependencies", []):
             marker = md.get("marker")
             if marker:
@@ -224,7 +219,7 @@ def _render_marker_cycle_member_deps(lines, cycle_groups, packages):
         lines.append("")
 
         for pkg_key in sorted(resolved_members):
-            extra = _pkg_key_extra(pkg_key)
+            extra = parse_package_key(pkg_key).extra
             lines.append(_ind("pycross_cycle_member_marker_deps("))
             lines.append(_ind('name = "{}",'.format(pkg_key), 2))
             lines.append(_ind('raw_name = "_raw_{}",'.format(pkg_key), 2))
@@ -303,7 +298,7 @@ def _render_marker_package_deps(lines, pkg_key, pkg_key_san, pkg, packages):
         lines.append("")
         return
 
-    extra = _pkg_key_extra(pkg_key)
+    extra = parse_package_key(pkg_key).extra
 
     unconditional = []
     conditional = []
@@ -336,8 +331,10 @@ def _render_marker_package_deps(lines, pkg_key, pkg_key_san, pkg, packages):
 def _render_marker_package(lines, pkg_key, pkg, packages, repo_map, sdist_map, rctx_name):
     """Renders all targets for a single package using marker-based deps and wheel selection."""
     pkg_key_san = _sanitize_name(pkg_key)
-    package_name = pkg_key.split("@", 1)[0]
-    package_version = pkg_key.split("@", 1)[1]
+    parts = parse_package_key(pkg_key)
+    package_name = parts.name
+    package_version = parts.version
+    extra = parts.extra
 
     has_marker_deps = bool(pkg.get("marker_dependencies"))
     has_wheel_candidates = bool(pkg.get("wheel_candidates"))
@@ -356,12 +353,9 @@ def _render_marker_package(lines, pkg_key, pkg, packages, repo_map, sdist_map, r
     if has_marker_deps:
         _render_marker_package_deps(lines, pkg_key, pkg_key_san, pkg, packages)
 
-    if not has_wheel_candidates and "[" in pkg_key:
+    if not has_wheel_candidates and extra:
         # Extras packages wrap the base package plus their own deps.
-        base_name = pkg_key.split("[", 1)[0]
-        _, version = pkg_key.split("]", 1)
-        version = version.lstrip("@")
-        base_pkg_key = "{}@{}".format(base_name, version)
+        base_pkg_key = "{}@{}".format(package_name, package_version)
         lines.extend([
             _ind("pycross_library_proxy("),
             _ind('name = "{}",'.format(pkg_key), 2),
