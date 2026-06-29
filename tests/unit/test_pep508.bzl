@@ -34,36 +34,11 @@ _LINUX_MARKERS = {
 # ============================================================================
 
 _WHEEL_CANDIDATES = [
-    {
-        "filename": "pkg-1.0-py3-none-any.whl",
-        "python_tag": "py3",
-        "abi_tag": "none",
-        "platform_tag": "any",
-    },
-    {
-        "filename": "pkg-1.0-cp311-cp311-manylinux_2_17_x86_64.whl",
-        "python_tag": "cp311",
-        "abi_tag": "cp311",
-        "platform_tag": "manylinux_2_17_x86_64",
-    },
-    {
-        "filename": "pkg-1.0-cp311-cp311-manylinux_2_28_x86_64.whl",
-        "python_tag": "cp311",
-        "abi_tag": "cp311",
-        "platform_tag": "manylinux_2_28_x86_64",
-    },
-    {
-        "filename": "pkg-1.0-cp311-cp311-macosx_11_0_arm64.whl",
-        "python_tag": "cp311",
-        "abi_tag": "cp311",
-        "platform_tag": "macosx_11_0_arm64",
-    },
-    {
-        "filename": "pkg-1.0-cp311-cp311-win_amd64.whl",
-        "python_tag": "cp311",
-        "abi_tag": "cp311",
-        "platform_tag": "win_amd64",
-    },
+    "pkg-1.0-py3-none-any.whl",
+    "pkg-1.0-cp311-cp311-manylinux_2_17_x86_64.whl",
+    "pkg-1.0-cp311-cp311-manylinux_2_28_x86_64.whl",
+    "pkg-1.0-cp311-cp311-macosx_11_0_arm64.whl",
+    "pkg-1.0-cp311-cp311-win_amd64.whl",
 ]
 
 # ── Test: linux x86_64 picks manylinux_2_28 (highest priority) ───────
@@ -77,8 +52,8 @@ def _test_wheel_linux_x86_impl(env, _target):
     best = select_best_wheel(_WHEEL_CANDIDATES, supported_tags)
     if best == None:
         env.fail("Expected a wheel match for linux x86_64")
-    elif best["filename"] != "pkg-1.0-cp311-cp311-manylinux_2_28_x86_64.whl":
-        env.fail("Expected manylinux_2_28, got " + best["filename"])
+    elif best != "pkg-1.0-cp311-cp311-manylinux_2_28_x86_64.whl":
+        env.fail("Expected manylinux_2_28, got " + best)
 
 def _test_wheel_linux_x86(name):
     util.helper_target(
@@ -101,8 +76,8 @@ def _test_wheel_mac_arm64_impl(env, _target):
     best = select_best_wheel(_WHEEL_CANDIDATES, supported_tags)
     if best == None:
         env.fail("Expected a wheel match for darwin arm64")
-    elif best["filename"] != "pkg-1.0-cp311-cp311-macosx_11_0_arm64.whl":
-        env.fail("Expected macosx_11_0_arm64, got " + best["filename"])
+    elif best != "pkg-1.0-cp311-cp311-macosx_11_0_arm64.whl":
+        env.fail("Expected macosx_11_0_arm64, got " + best)
 
 def _test_wheel_mac_arm64(name):
     util.helper_target(
@@ -124,8 +99,8 @@ def _test_wheel_fallback_any_impl(env, _target):
     best = select_best_wheel(_WHEEL_CANDIDATES, supported_tags)
     if best == None:
         env.fail("Expected py3-none-any fallback")
-    elif best["filename"] != "pkg-1.0-py3-none-any.whl":
-        env.fail("Expected py3-none-any fallback, got " + best["filename"])
+    elif best != "pkg-1.0-py3-none-any.whl":
+        env.fail("Expected py3-none-any fallback, got " + best)
 
 def _test_wheel_fallback_any(name):
     util.helper_target(
@@ -142,19 +117,14 @@ def _test_wheel_fallback_any(name):
 
 def _test_wheel_no_match_impl(env, _target):
     candidates = [
-        {
-            "filename": "pkg-1.0-cp312-cp312-manylinux_2_28_x86_64.whl",
-            "python_tag": "cp312",
-            "abi_tag": "cp312",
-            "platform_tag": "manylinux_2_28_x86_64",
-        },
+        "pkg-1.0-cp312-cp312-manylinux_2_28_x86_64.whl",
     ]
     supported_tags = [
         "cp311-cp311-manylinux_2_17_x86_64",
     ]
     best = select_best_wheel(candidates, supported_tags)
     if best != None:
-        env.fail("Expected no match for wrong python version, got " + best["filename"])
+        env.fail("Expected no match for wrong python version, got " + best)
 
 def _test_wheel_no_match(name):
     util.helper_target(
@@ -171,18 +141,8 @@ def _test_wheel_no_match(name):
 
 def _test_wheel_abi3_impl(env, _target):
     candidates = [
-        {
-            "filename": "pkg-1.0-cp311-abi3-manylinux_2_17_x86_64.whl",
-            "python_tag": "cp311",
-            "abi_tag": "abi3",
-            "platform_tag": "manylinux_2_17_x86_64",
-        },
-        {
-            "filename": "pkg-1.0-py3-none-any.whl",
-            "python_tag": "py3",
-            "abi_tag": "none",
-            "platform_tag": "any",
-        },
+        "pkg-1.0-cp311-abi3-manylinux_2_17_x86_64.whl",
+        "pkg-1.0-py3-none-any.whl",
     ]
     supported_tags = [
         "cp311-abi3-manylinux_2_17_x86_64",
@@ -191,8 +151,8 @@ def _test_wheel_abi3_impl(env, _target):
     best = select_best_wheel(candidates, supported_tags)
     if best == None:
         env.fail("Expected abi3 wheel match")
-    elif best["filename"] != "pkg-1.0-cp311-abi3-manylinux_2_17_x86_64.whl":
-        env.fail("Expected abi3 wheel, got " + best["filename"])
+    elif best != "pkg-1.0-cp311-abi3-manylinux_2_17_x86_64.whl":
+        env.fail("Expected abi3 wheel, got " + best)
 
 def _test_wheel_abi3(name):
     util.helper_target(
@@ -241,12 +201,7 @@ def _test_chooser_rule(name):
 
     pycross_wheel_chooser(
         name = name + "_chooser",
-        candidates = json.encode([{
-            "filename": "pkg-1.0-py3-none-any.whl",
-            "python_tag": "py3",
-            "abi_tag": "none",
-            "platform_tag": "any",
-        }]),
+        candidates = ["pkg-1.0-py3-none-any.whl"],
         supported_tags = ":" + name + "_tags",
         tags = ["manual"],
     )
@@ -314,27 +269,22 @@ def _test_cycle_self_reachable(name):
 
 def _test_wheel_compound_tags_impl(env, _target):
     candidates = [
-        {
-            "filename": "numpy-1.26.4-cp310.cp311-cp310.cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl",
-            "python_tag": "cp310.cp311",
-            "abi_tag": "cp310.cp311",
-            "platform_tag": "manylinux_2_17_x86_64.manylinux2014_x86_64",
-        },
+        "numpy-1.26.4-cp310.cp311-cp310.cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl",
     ]
 
     # cp311 is in the compound python and abi tags; manylinux_2_17_x86_64 is in the compound platform tag
     best1 = select_best_wheel(candidates, ["cp311-cp311-manylinux_2_17_x86_64"])
     if best1 == None:
         env.fail("Expected compound tag match for cp311-cp311-manylinux_2_17_x86_64")
-    elif best1["filename"] != candidates[0]["filename"]:
-        env.fail("Expected numpy compound wheel, got " + best1["filename"])
+    elif best1 != candidates[0]:
+        env.fail("Expected numpy compound wheel, got " + best1)
 
     # cp310 is in the compound python and abi tags; manylinux2014_x86_64 is in the compound platform tag
     best2 = select_best_wheel(candidates, ["cp310-cp310-manylinux2014_x86_64"])
     if best2 == None:
         env.fail("Expected compound tag match for cp310-cp310-manylinux2014_x86_64")
-    elif best2["filename"] != candidates[0]["filename"]:
-        env.fail("Expected numpy compound wheel, got " + best2["filename"])
+    elif best2 != candidates[0]:
+        env.fail("Expected numpy compound wheel, got " + best2)
 
 def _test_wheel_compound_tags(name):
     util.helper_target(

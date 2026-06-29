@@ -30,9 +30,6 @@ class TomlLockGeneratorTest(unittest.TestCase):
                         WheelCandidate(
                             filename="mypkg-1.0-py3-none-any.whl",
                             file_reference=FileReference(key=FileKey("mypkg-1.0-py3-none-any.whl/12345")),
-                            python_tag="py3",
-                            abi_tag="none",
-                            platform_tag="any",
                         ),
                     ],
                 )
