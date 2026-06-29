@@ -484,10 +484,6 @@ class RawLockResolverTest(unittest.TestCase):
         resolved = resolver.to_resolved_package()
 
         self.assertEqual(len(resolved.wheel_candidates), 1)
-        candidate = resolved.wheel_candidates[0]
-        self.assertEqual(candidate.python_tag, "cp310.cp311")
-        self.assertEqual(candidate.abi_tag, "cp310.cp311")
-        self.assertEqual(candidate.platform_tag, "manylinux2014_x86_64.manylinux_2_17_x86_64")
 
     def test_sdist_only_package(self):
         """A package with only a .tar.gz file and no wheels uses sdist."""

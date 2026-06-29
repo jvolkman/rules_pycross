@@ -332,9 +332,6 @@ class WheelCandidate:
 
     filename: str
     file_reference: FileReference
-    python_tag: str
-    abi_tag: str
-    platform_tag: str
 
 
 @dataclass

@@ -207,13 +207,13 @@ def _render_marker_wheel_chooser(lines, pkg_key, pkg, repo_map, sdist_map, rctx_
     if not candidates:
         return
 
-    candidates_json = json.encode(candidates)
+    filenames = [c["filename"] for c in candidates]
     chooser_name = "_wheel_chooser_{}".format(pkg_key)
 
     lines.extend([
         _ind("pycross_wheel_chooser("),
         _ind('name = "{}",'.format(chooser_name), 2),
-        _ind("candidates = {},".format(repr(candidates_json)), 2),
+        _ind("candidates = {},".format(filenames), 2),
         _ind(")"),
         "",
     ])

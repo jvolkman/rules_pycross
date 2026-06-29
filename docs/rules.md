@@ -378,10 +378,9 @@ pycross_wheel_chooser(<a href="#pycross_wheel_chooser-name">name</a>, <a href="#
 Select the best-matching wheel from a list of candidates.
 
 This macro wraps the private _pycross_wheel_chooser rule. It takes a
-JSON-encoded list of pre-parsed wheel candidates and a target platform
-(which provides ordered compatibility tags), and produces a
-config_common.FeatureFlagInfo whose value is the filename of the best
-matching wheel.
+list of candidate wheel filenames and a target platform (which provides
+ordered compatibility tags), and produces a config_common.FeatureFlagInfo
+whose value is the filename of the best matching wheel.
 
 
 **PARAMETERS**

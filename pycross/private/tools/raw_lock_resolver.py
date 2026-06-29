@@ -363,19 +363,10 @@ class PackageResolver:
             if source.file:
                 candidate_files[source.file.key] = source.file
 
-            # Reconstruct compound tags from the expanded set returned by parse_wheel_filename.
-            # The wheel chooser expects dot-separated strings containing all compatible tags for each dimension.
-            python_tag = ".".join(sorted(set(str(t.interpreter) for t in file_tags)))
-            abi_tag = ".".join(sorted(set(str(t.abi) for t in file_tags)))
-            platform_tag = ".".join(sorted(set(str(t.platform) for t in file_tags)))
-
             candidates.append(
                 WheelCandidate(
                     filename=filename,
                     file_reference=source.file_reference,
-                    python_tag=python_tag,
-                    abi_tag=abi_tag,
-                    platform_tag=platform_tag,
                 )
             )
 
