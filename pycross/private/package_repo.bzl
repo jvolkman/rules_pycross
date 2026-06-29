@@ -15,12 +15,12 @@ The file structure is as follows:
 - _backend/<rule>.bzl      - Backend macros with pre-configured tool deps.
 """
 
-load("//pycross/private/pypackaging/utils:utils.bzl", "canonicalize_name")
+load("@pypackaging.bzl", "pypackaging")
 load(":resolved_lock_renderer.bzl", "render_lock_bzl")
 load(":util.bzl", "key_name", "key_parts", "underscore_name")
 
 def _normalize_name(name):
-    return canonicalize_name(name)
+    return pypackaging.utils.canonicalize_name(name)
 
 def _underscore_name(name):
     return underscore_name(name)
