@@ -1,5 +1,5 @@
-bazel_dep(name = "llvm", version = "0.8.11")
-bazel_dep(name = "platforms", version = "1.0.0")
+include("//shared:llvm.MODULE.bazel")
+
 bazel_dep(name = "rules_cc", version = "0.2.18")
 bazel_dep(name = "rules_python", version = "2.0.0")
 bazel_dep(name = "rules_foreign_cc", version = "0.15.1")
@@ -86,8 +86,6 @@ setuptools.override(
 
 lock_repos = use_extension("@rules_pycross//pycross/extensions:lock_repos.bzl", "lock_repos")
 use_repo(lock_repos, "uv")
-
-register_toolchains("@llvm//toolchain:all")
 
 zstd = use_extension("//:zstd.bzl", "zstd")
 use_repo(zstd, "zstd")

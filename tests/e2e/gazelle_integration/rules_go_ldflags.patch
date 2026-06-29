@@ -1,0 +1,23 @@
+--- go/tools/builders/cgo2.go
++++ go/tools/builders/cgo2.go
+@@ -118,7 +118,7 @@
+ 			return "", nil, nil, fmt.Errorf("failed to create temporary file for ldflags: %w", err)
+ 		}
+ 		defer os.Remove(ldflagsFile.Name())
+-		if _, err := ldflagsFile.WriteString(combinedLdFlagsStr); err != nil {
++		if _, err := ldflagsFile.WriteString(formatLdFlagsFileContent(combinedLdFlagsStr)); err != nil {
+ 			ldflagsFile.Close()
+ 			return "", nil, nil, fmt.Errorf("failed to write ldflags to temporary file: %w", err)
+ 		}
+@@ -481,3 +481,8 @@
+ 
+ 	return mv >= version, nil
+ }
++
++func formatLdFlagsFileContent(flags string) string {
++	escaped := strings.NewReplacer(`\`, `\\`, `"`, `\"`).Replace(flags)
++	return `"` + escaped + `"` + "\n"
++}
+
+
+
