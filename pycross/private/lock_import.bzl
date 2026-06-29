@@ -27,6 +27,14 @@ load(
 )
 load(":lock_workspace_repo.bzl", "lock_workspace_repo")
 
+def _validate_transition_attrs(tag, tag_name):
+    has_platform = bool(getattr(tag, "platform", None))
+    has_flags = bool(getattr(tag, "flags", []))
+    has_constraints = bool(getattr(tag, "constraint_values", []))
+
+    if has_platform and (has_flags or has_constraints):
+        fail("Tag '{}' cannot specify both 'platform' and ('flags' or 'constraint_values')".format(tag_name))
+
 def _package_annotation(
         always_build = False,
         build_dependencies = [],
@@ -133,7 +141,7 @@ def _check_proper_tag_repo(owners, module, tag, tag_desc):
 def _check_proper_package_repo(owners, module, tag):
     _check_proper_tag_repo(owners, module, tag, "package '{}'".format(tag.name))
 
-def _workspace_lock_struct(ws_tag, repo_name, workspace_name):
+def _workspace_lock_struct(ws_tag, repo_name, workspace_name, transition_attrs):
     """Create a lock struct for a workspace member, inheriting workspace-level settings."""
     return struct(
         repo_name = repo_name,
@@ -144,6 +152,9 @@ def _workspace_lock_struct(ws_tag, repo_name, workspace_name):
         disallow_builds = ws_tag.disallow_builds,
         default_build_dependencies = ws_tag.default_build_dependencies,
         packages = {},
+        flags = transition_attrs.get("flags", []),
+        constraint_values = transition_attrs.get("constraint_values", []),
+        platform = transition_attrs.get("platform"),
     )
 
 def _normalize_package_tag(tag):
@@ -290,6 +301,25 @@ def _get_member_group_attrs(members_tag, override_tag):
         all_development_groups = (members_tag.all_development_groups if hasattr(members_tag, "all_development_groups") else False) and not has_explicit_development,
     )
 
+def _get_member_transition_attrs(members_tag, override_tag):
+    """Merge transition attrs from an all_members default and optional member override."""
+    has_explicit_flags = override_tag and getattr(override_tag, "flags", [])
+    has_explicit_constraints = override_tag and getattr(override_tag, "constraint_values", [])
+    has_explicit_platform = override_tag and getattr(override_tag, "platform", None)
+
+    if override_tag and (has_explicit_flags or has_explicit_constraints or has_explicit_platform):
+        return dict(
+            flags = getattr(override_tag, "flags", []),
+            constraint_values = [str(c) for c in getattr(override_tag, "constraint_values", [])],
+            platform = str(override_tag.platform) if override_tag.platform else None,
+        )
+
+    return dict(
+        flags = getattr(members_tag, "flags", []) if members_tag else [],
+        constraint_values = [str(c) for c in getattr(members_tag, "constraint_values", [])] if members_tag else [],
+        platform = str(members_tag.platform) if members_tag and getattr(members_tag, "platform", None) else None,
+    )
+
 def _register_workspace_member(
         lock_owners,
         lock_repos,
@@ -301,6 +331,7 @@ def _register_workspace_member(
         repo_name,
         project_file,
         group_attrs,
+        transition_attrs,
         lock_module):
     """Register a single workspace member as a lock repo with its model.
 
@@ -308,7 +339,7 @@ def _register_workspace_member(
     and standalone (uv_member) imports.
     """
     _check_unique_repo_name(lock_owners, lock_module.name, repo_name)
-    lock_repos[repo_name] = _workspace_lock_struct(ws_tag, repo_name, ws_name)
+    lock_repos[repo_name] = _workspace_lock_struct(ws_tag, repo_name, ws_name, transition_attrs)
     if lock_module.is_root:
         root_direct_deps.append(repo_name)
 
@@ -353,6 +384,9 @@ def _process_member(
         # Get group attrs (override wins)
         group_attrs = _get_member_group_attrs(members_tag or struct(), override.tag if override else None)
 
+        # Get transition attrs (override wins)
+        transition_attrs = _get_member_transition_attrs(members_tag or struct(), override.tag if override else None)
+
         lock_module = override.module if override else default_module
 
         _register_workspace_member(
@@ -366,6 +400,7 @@ def _process_member(
             repo_name,
             project_file,
             group_attrs,
+            transition_attrs,
             lock_module,
         )
 
@@ -518,13 +553,17 @@ def _lock_import_impl(module_ctx):
                 for tag in getattr(module.tags, import_ws_tag_name):
                     workspace_tags.append(struct(tag = tag, module = module, ws_name = tag.name))
                 for tag in getattr(module.tags, name + "_all_members"):
+                    _validate_transition_attrs(tag, name + "_all_members")
                     all_members_tags.append(struct(tag = tag, module = module))
 
             for tag in getattr(module.tags, name + "_member"):
+                _validate_transition_attrs(tag, name + "_member")
                 member_tags.append(struct(tag = tag, module = module))
 
             # 2. Process legacy/standalone import tags (desugar)
             for tag in getattr(module.tags, import_tag_name):
+                _validate_transition_attrs(tag, import_tag_name)
+
                 # Synthesis workspace
                 workspace_tags.append(struct(tag = tag, module = module, ws_name = tag.repo))
 
@@ -539,6 +578,9 @@ def _lock_import_impl(module_ctx):
                     all_optional_groups = getattr(tag, "all_optional_groups", False),
                     development_groups = getattr(tag, "development_groups", []),
                     all_development_groups = getattr(tag, "all_development_groups", False),
+                    flags = getattr(tag, "flags", []),
+                    constraint_values = getattr(tag, "constraint_values", []),
+                    platform = getattr(tag, "platform", None),
                 )
                 member_tags.append(struct(tag = member_tag, module = module))
 
@@ -592,6 +634,10 @@ def _lock_import_impl(module_ctx):
     # Generate the resolved lock repos
     workspace_memberships = {}
     workspace_build_repos = {}
+    repo_flags = {}
+    repo_constraint_values = {}
+    repo_platforms = {}
+
     for repo_name, repo_info in lock_repos.items():
         resolved_lock_repo_file = _generate_resolved_lock_repo(repo_info, lock_model_structs[repo_name], workspace_packages)
         resolved_lock_files[repo_info.repo_name] = resolved_lock_repo_file
@@ -599,12 +645,22 @@ def _lock_import_impl(module_ctx):
         if repo_info.build_repo:
             workspace_build_repos[repo_info.workspace] = repo_info.build_repo
 
+        if repo_info.flags:
+            repo_flags[repo_info.repo_name] = ",".join(repo_info.flags)
+        if repo_info.constraint_values:
+            repo_constraint_values[repo_info.repo_name] = ",".join(repo_info.constraint_values)
+        if repo_info.platform:
+            repo_platforms[repo_info.repo_name] = repo_info.platform
+
     lock_workspace_repo(
         name = "lock_import_repos_hub",
         repo_files = resolved_lock_files,
         workspace_memberships = workspace_memberships,
         workspace_build_repos = workspace_build_repos,
         root_repos = root_direct_deps,
+        repo_flags = repo_flags,
+        repo_constraint_values = repo_constraint_values,
+        repo_platforms = repo_platforms,
     )
 
     if bazel_features.external_deps.extension_metadata_has_reproducible:

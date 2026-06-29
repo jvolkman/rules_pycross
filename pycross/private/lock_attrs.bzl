@@ -7,6 +7,18 @@ DEFAULT_GLIBC_VERSION = "2.28"
 
 DEFAULT_MUSL_VERSION = "1.2"
 
+TRANSITION_ATTRS = dict(
+    constraint_values = attr.label_list(
+        doc = "A list of constraint values to apply to the generated platform.",
+    ),
+    flags = attr.string_list(
+        doc = "A list of flags to apply to the generated platform (e.g., '--@flag=value').",
+    ),
+    platform = attr.label(
+        doc = "An existing platform target to use directly.",
+    ),
+)
+
 CONFIGURE_TOOLCHAINS_ATTRS = dict(
     python_versions = attr.string_list(
         doc = (
@@ -365,7 +377,7 @@ COMMON_IMPORT_ATTRS = dict(
     build_repo = attr.string(
         doc = "Optional default repo to use for resolving sdist build dependencies.",
     ),
-)
+) | TRANSITION_ATTRS
 
 # Attrs common to import_uv_workspace (workspace-level settings inherited by all members).
 # Same as COMMON_IMPORT_ATTRS but without 'workspace' (implied by name) and 'repo' (per-member).
@@ -397,7 +409,7 @@ WORKSPACE_MEMBER_COMMON_ATTRS = dict(
         doc = "Name of the workspace this member belongs to.",
         mandatory = True,
     ),
-)
+) | TRANSITION_ATTRS
 
 # Attrs for the package tag
 PACKAGE_ATTRS = dict(

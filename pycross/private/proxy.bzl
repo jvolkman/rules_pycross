@@ -126,7 +126,14 @@ Used in thin package repos when a uv_member specifies a target platform.""",
 
 def _pycross_file_proxy_impl(ctx):
     actual = ctx.attr.actual[0] if type(ctx.attr.actual) == "list" else ctx.attr.actual
-    return [actual[DefaultInfo]]
+
+    # Return a new DefaultInfo to avoid carrying over executable status if not intended,
+    # or just forward files/runfiles.
+    return [DefaultInfo(
+        files = actual[DefaultInfo].files,
+        data_runfiles = actual[DefaultInfo].data_runfiles,
+        default_runfiles = actual[DefaultInfo].default_runfiles,
+    )]
 
 # Non-transitioning variant.
 pycross_file_proxy = rule(
@@ -135,6 +142,7 @@ pycross_file_proxy = rule(
     attrs = {
         "actual": attr.label(
             mandatory = True,
+            allow_single_file = True,
             doc = "The target to forward DefaultInfo from.",
         ),
         "platform": attr.label(
@@ -152,6 +160,7 @@ pycross_transitioning_file_proxy = rule(
         "actual": attr.label(
             mandatory = True,
             cfg = _platform_transition,
+            allow_single_file = True,
             doc = "The target to forward DefaultInfo from (analyzed under the target platform).",
         ),
         "platform": attr.label(

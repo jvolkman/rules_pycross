@@ -8,7 +8,7 @@ The file structure is:
 - BUILD.bazel              - Root aliases (//:package).
 - requirements.bzl         - Provides requirement() and all_requirements.
 - modules_mapping.json     - Import-to-package mapping for Gazelle.
-- <package>/BUILD.bazel    - Pin aliases pointing to @workspace//_lock targets.
+- <package>/BUILD.bazel    - Pin proxies pointing to @workspace//_lock targets.
 - _variants/BUILD.bazel    - Aliases for bool_flag and config_setting targets for variant selection.
 """
 
@@ -74,7 +74,7 @@ def _target_select(target_dict, prefix, suffix, workspace_repo, is_aggregated = 
     lines.append("    })")
     return "\n".join(lines)
 
-def _pin_build(target_name, pin_target_dict, package, workspace_repo, workspace_lock_target_dict = None, has_aggregated_variant = False, extras_dict = None, default_variants = {}):
+def _pin_build(target_name, pin_target_dict, package, workspace_repo, workspace_lock_target_dict = None, has_aggregated_variant = False, extras_dict = None, default_variants = {}, target_platform = None):
     """Generates the BUILD file for a pin directory, pointing to the workspace."""
     lock_target_dict = workspace_lock_target_dict if workspace_lock_target_dict else pin_target_dict
     lock_ref = "@{}//_lock:".format(workspace_repo)
@@ -85,49 +85,89 @@ def _pin_build(target_name, pin_target_dict, package, workspace_repo, workspace_
         'package(default_visibility = ["//visibility:public"])',
         "",
     ]
+
+    if target_platform:
+        lines.append('load("@rules_pycross//pycross:defs.bzl", "pycross_transitioning_file_proxy", "pycross_transitioning_library_proxy")')
+        lib_rule = "pycross_transitioning_library_proxy"
+        file_rule = "pycross_transitioning_file_proxy"
+    else:
+        lines.append('load("@rules_pycross//pycross:defs.bzl", "pycross_file_proxy", "pycross_library_proxy")')
+        lib_rule = "pycross_library_proxy"
+        file_rule = "pycross_file_proxy"
+    lines.append("")
+
     if lock_target_dict:
         lines.extend([
             "alias(",
             '    name = "{}",'.format(target_name),
-            "    actual = {},".format(_target_select(lock_target_dict, lock_ref, "", workspace_repo, is_aggregated = has_aggregated_variant, default_variants = default_variants)),
+            '    actual = ":{}",'.format(_safe_name(target_name, "pkg")),
             ")",
             "",
-            "alias(",
+            lib_rule + "(",
             '    name = "{}",'.format(_safe_name(target_name, "pkg")),
             "    actual = {},".format(_target_select(lock_target_dict, lock_ref, "", workspace_repo, is_aggregated = has_aggregated_variant, default_variants = default_variants)),
+        ])
+        if target_platform:
+            lines.append('    platform = "{}",'.format(target_platform))
+        lines.extend([
             ")",
             "",
-            "alias(",
+            file_rule + "(",
             '    name = "{}",'.format(_safe_name(target_name, "wheel")),
             "    actual = {},".format(_target_select(pin_target_dict, wheel_ref, "", workspace_repo, default_variants = default_variants)),
+        ])
+        if target_platform:
+            lines.append('    platform = "{}",'.format(target_platform))
+        lines.extend([
             ")",
             "",
-            "alias(",
+            file_rule + "(",
             '    name = "{}",'.format(_safe_name(target_name, "dist_info")),
             "    actual = {},".format(_target_select(lock_target_dict, lock_ref + "_dist_info_", "", workspace_repo, default_variants = default_variants)),
+        ])
+        if target_platform:
+            lines.append('    platform = "{}",'.format(target_platform))
+        lines.extend([
             ")",
             "",
             "alias(",
             '    name = "{}",'.format(_safe_name(target_name, "data")),
-            "    actual = {},".format(_target_select(lock_target_dict, lock_ref, "", workspace_repo, is_aggregated = has_aggregated_variant, default_variants = default_variants)),
+            '    actual = ":{}",'.format(_safe_name(target_name, "pkg")),
             ")",
         ])
 
         if extras_dict:
-            lines.extend([
-                "alias(",
-                '    name = "[]",',
-                "    actual = {},".format(_target_select(lock_target_dict, lock_ref, "", workspace_repo, default_variants = default_variants)),
-                ")",
-                "",
-            ])
+            if not has_aggregated_variant:
+                lines.extend([
+                    "alias(",
+                    '    name = "[]",',
+                    '    actual = ":{}",'.format(_safe_name(target_name, "pkg")),
+                    ")",
+                    "",
+                ])
+            else:
+                lines.extend([
+                    lib_rule + "(",
+                    '    name = "[]",',
+                    "    actual = {},".format(_target_select(lock_target_dict, lock_ref, "", workspace_repo, default_variants = default_variants)),
+                ])
+                if target_platform:
+                    lines.append('    platform = "{}",'.format(target_platform))
+                lines.extend([
+                    ")",
+                    "",
+                ])
 
         sdist_file = package.get("sdist_file")
         if sdist_file:
             lines.extend([
-                "alias(",
+                file_rule + "(",
                 '    name = "{}",'.format(_safe_name(target_name, "sdist")),
                 "    actual = {},".format(_target_select(pin_target_dict, sdist_ref, "", workspace_repo, default_variants = default_variants)),
+            ])
+            if target_platform:
+                lines.append('    platform = "{}",'.format(target_platform))
+            lines.extend([
                 ")",
                 "",
             ])
@@ -135,9 +175,13 @@ def _pin_build(target_name, pin_target_dict, package, workspace_repo, workspace_
     extras_dict = extras_dict or {}
     for extra_name, extra_target_dict in sorted(extras_dict.items()):
         lines.extend([
-            "alias(",
+            lib_rule + "(",
             '    name = "[{}]",'.format(extra_name),
             "    actual = {},".format(_target_select(extra_target_dict, lock_ref, "", workspace_repo, default_variants = default_variants)),
+        ])
+        if target_platform:
+            lines.append('    platform = "{}",'.format(target_platform))
+        lines.extend([
             ")",
             "",
         ])
@@ -197,12 +241,38 @@ def _thin_package_repo_impl(rctx):
         'load("@rules_pycross//pycross/private:modules_mapping.bzl", "pycross_modules_mapping")',
         'package(default_visibility = ["//visibility:public"])',
         "",
+    ]
+
+    # Generate internal platform if needed
+    target_platform = rctx.attr.platform
+    if not target_platform and (rctx.attr.flags or rctx.attr.constraint_values):
+        target_platform = ":_internal_platform"
+        root_build_lines.extend([
+            "platform(",
+            '    name = "_internal_platform",',
+        ])
+        if rctx.attr.constraint_values:
+            root_build_lines.append("    constraint_values = [")
+            for cv in rctx.attr.constraint_values:
+                root_build_lines.append('        "{}",'.format(cv))
+            root_build_lines.append("    ],")
+        if rctx.attr.flags:
+            root_build_lines.append("    flags = [")
+            for f in rctx.attr.flags:
+                root_build_lines.append('        "{}",'.format(f))
+            root_build_lines.append("    ],")
+        root_build_lines.extend([
+            ")",
+            "",
+        ])
+
+    root_build_lines.extend([
         'exports_files(["defs.bzl", "requirements.bzl"])',
         "",
         "pycross_modules_mapping(",
         '    name = "modules_mapping",',
         "    deps = [",
-    ]
+    ])
     for pin_name in sorted(pins.keys()):
         pin_target_dict = pins[pin_name]
         for pin_target in sorted(pin_target_dict.values()):
@@ -271,7 +341,7 @@ def _thin_package_repo_impl(rctx):
             base_pkg_key = "{}@{}".format(base_name, version)
             base_packages_with_extras[base_pkg_key] = True
 
-    # Pin directories: aliases pointing to @workspace//_lock targets
+    # Pin directories: proxies pointing to @workspace//_lock targets
     for base_pin_name, group in sorted(grouped_pins.items()):
         base_target_dict = group["base_target"]
         if not base_target_dict and group["extras"]:
@@ -319,7 +389,7 @@ def _thin_package_repo_impl(rctx):
 
         rctx.file(
             "{}/BUILD.bazel".format(us_name),
-            _pin_build(us_name, base_target_dict, package, workspace_repo, workspace_lock_target_dict, has_aggregated_variant, extras_dict, default_variants = default_variants),
+            _pin_build(us_name, base_target_dict, package, workspace_repo, workspace_lock_target_dict, has_aggregated_variant, extras_dict, default_variants = default_variants, target_platform = target_platform),
         )
 
     # _variants/ BUILD: alias bool_flag and config_setting targets
@@ -401,6 +471,17 @@ thin_package_repo = repository_rule(
         ),
         "backend_configs": attr.string_dict(
             doc = "Map of rule names to JSON-encoded config dicts.",
+        ),
+        "flags": attr.string_list(
+            doc = "List of flags to apply to the generated platform.",
+            default = [],
+        ),
+        "constraint_values": attr.string_list(
+            doc = "List of constraint values to apply to the generated platform.",
+            default = [],
+        ),
+        "platform": attr.string(
+            doc = "Existing platform target to use directly.",
         ),
     },
 )

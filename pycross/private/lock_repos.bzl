@@ -3,7 +3,7 @@
 load("@bazel_features//:features.bzl", "bazel_features")
 load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_file")
 load("@lock_import_repos_hub//:locks.bzl", lock_import_locks = "locks")
-load("@lock_import_repos_hub//:workspaces.bzl", "root_repos", "workspace_build_repos", "workspace_memberships")
+load("@lock_import_repos_hub//:workspaces.bzl", "repo_constraint_values", "repo_flags", "repo_platforms", "root_repos", "workspace_build_repos", "workspace_memberships")
 load("@pycross_backends//:registry.bzl", "BACKEND_CONFIGS", "BACKEND_TO_RULE", "DEFAULT_BACKEND", "OVERRIDE_FILES")
 load("@rules_pycross//pycross/private:sdist_repo.bzl", "pycross_sdist_repo")
 load("//pycross/private:package_repo.bzl", "package_repo")
@@ -322,6 +322,14 @@ def _lock_repos_impl(module_ctx):
             )
             if thin_build_repo:
                 thin_repo_attrs["workspace_build_repo"] = "{}__pkgs".format(workspace_memberships.get(thin_build_repo, thin_build_repo))
+
+            if member in repo_flags:
+                thin_repo_attrs["flags"] = repo_flags[member]
+            if member in repo_constraint_values:
+                thin_repo_attrs["constraint_values"] = repo_constraint_values[member]
+            if member in repo_platforms:
+                thin_repo_attrs["platform"] = repo_platforms[member]
+
             thin_package_repo(**thin_repo_attrs)
 
     if bazel_features.external_deps.extension_metadata_has_reproducible:
