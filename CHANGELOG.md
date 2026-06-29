@@ -51,9 +51,13 @@ All notable changes to this project will be documented in this file.
 - **Platform transitions for thin package repos.** New `flags`,
   `constraint_values`, and `platform` attributes on `uv_member`,
   `uv_all_members`, `import_uv`, and equivalent PDM/Poetry/Pylock tags.
-  When specified, all proxy targets in the thin repo apply a `--platforms`
+  When specified, proxy targets in the thin repo apply a `--platforms`
   transition, enabling variant flags or architecture constraints to be
   locked to a workspace member without per-invocation `--flag` arguments.
+  When `flags` are used, a custom `_transition.bzl` is generated in the
+  thin repo that sets both `--platforms` and individual flag values directly
+  in the transition (since Bazel's `platform(flags=[...])` does not apply
+  via Starlark transitions).
 
 ### Changed
 

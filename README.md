@@ -480,7 +480,9 @@ lock_import.uv_member(
 
 These attributes are available on `uv_member`, `uv_all_members`, `import_uv`, and their PDM/Poetry/Pylock equivalents.
 
-When `flags` or `constraint_values` are specified, `rules_pycross` generates an internal `platform()` target in the thin repo's root BUILD file. All package proxy targets then use `pycross_transitioning_library_proxy` and `pycross_transitioning_file_proxy` instead of their non-transitioning counterparts, applying the platform transition to every backing target reference.
+When `constraint_values` alone are specified, `rules_pycross` generates an internal `platform()` target and uses `pycross_transitioning_library_proxy` / `pycross_transitioning_file_proxy` at each package level to apply the `--platforms` transition.
+
+When `flags` are specified (with or without `constraint_values`), `rules_pycross` additionally generates a custom `_transition.bzl` in the thin repo. This is necessary because Bazel's `platform(flags=[...])` mechanism only applies during top-level platform mapping — it does **not** take effect when `--platforms` is set via a Starlark transition. The generated transition directly sets both `--platforms` and the individual flag values. Root-level targets become transitioning proxies so that `select()` expressions in per-package BUILD files resolve in the transitioned configuration where the flags are set.
 
 This is particularly useful for locking variant selections to a member without requiring `--flag` arguments on every `bazel build` invocation.
 
