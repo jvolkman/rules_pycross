@@ -51,6 +51,54 @@ py_console_script_binary which expects a :dist_info filegroup.
 | <a id="pycross_dist_info-pkg"></a>pkg |  A pycross_wheel_library target.   | <a href="https://bazel.build/concepts/labels">Label</a> | required |  |
 
 
+<a id="pycross_file_proxy"></a>
+
+## pycross_file_proxy
+
+<pre>
+load("@rules_pycross//pycross:defs.bzl", "pycross_file_proxy")
+
+pycross_file_proxy(<a href="#pycross_file_proxy-name">name</a>, <a href="#pycross_file_proxy-actual">actual</a>, <a href="#pycross_file_proxy-platform">platform</a>)
+</pre>
+
+Forwards DefaultInfo from a target. Used for raw file targets (wheels, sdists, dist_info).
+
+**ATTRIBUTES**
+
+
+| Name  | Description | Type | Mandatory | Default |
+| :------------- | :------------- | :------------- | :------------- | :------------- |
+| <a id="pycross_file_proxy-name"></a>name |  A unique name for this target.   | <a href="https://bazel.build/concepts/labels#target-names">Name</a> | required |  |
+| <a id="pycross_file_proxy-actual"></a>actual |  The target to forward DefaultInfo from.   | <a href="https://bazel.build/concepts/labels">Label</a> | required |  |
+| <a id="pycross_file_proxy-platform"></a>platform |  Unused in the non-transitioning variant. Use pycross_transitioning_file_proxy for platform transitions.   | <a href="https://bazel.build/concepts/labels">Label</a> | optional |  `None`  |
+
+
+<a id="pycross_library_proxy"></a>
+
+## pycross_library_proxy
+
+<pre>
+load("@rules_pycross//pycross:defs.bzl", "pycross_library_proxy")
+
+pycross_library_proxy(<a href="#pycross_library_proxy-name">name</a>, <a href="#pycross_library_proxy-deps">deps</a>, <a href="#pycross_library_proxy-actual">actual</a>, <a href="#pycross_library_proxy-platform">platform</a>)
+</pre>
+
+Forwards PyInfo and pycross-specific providers from a target, optionally merging additional deps.
+
+Replaces py_library wrappers in generated lock repos, preserving PycrossExtractedWheelInfo,
+PycrossPackageInfo, and OutputGroupInfo that py_library would drop.
+
+**ATTRIBUTES**
+
+
+| Name  | Description | Type | Mandatory | Default |
+| :------------- | :------------- | :------------- | :------------- | :------------- |
+| <a id="pycross_library_proxy-name"></a>name |  A unique name for this target.   | <a href="https://bazel.build/concepts/labels#target-names">Name</a> | required |  |
+| <a id="pycross_library_proxy-deps"></a>deps |  Additional dependencies to merge into the PyInfo provider.   | <a href="https://bazel.build/concepts/labels">List of labels</a> | optional |  `[]`  |
+| <a id="pycross_library_proxy-actual"></a>actual |  The primary target to forward providers from.   | <a href="https://bazel.build/concepts/labels">Label</a> | required |  |
+| <a id="pycross_library_proxy-platform"></a>platform |  Unused in the non-transitioning variant. Use pycross_transitioning_library_proxy for platform transitions.   | <a href="https://bazel.build/concepts/labels">Label</a> | optional |  `None`  |
+
+
 <a id="pycross_modules_mapping"></a>
 
 ## pycross_modules_mapping
@@ -117,6 +165,53 @@ pycross_repaired_wheel(<a href="#pycross_repaired_wheel-name">name</a>, <a href=
 | <a id="pycross_repaired_wheel-target_environment"></a>target_environment |  The target environment mapping JSON (resolved dynamically via alias filegroup).   | <a href="https://bazel.build/concepts/labels">Label</a> | optional |  `"@rules_pycross//pycross/private:default_target_platform"`  |
 | <a id="pycross_repaired_wheel-wheel"></a>wheel |  The input wheel to repair.   | <a href="https://bazel.build/concepts/labels">Label</a> | required |  |
 | <a id="pycross_repaired_wheel-whldir_name"></a>whldir_name |  Name for the output .whldir TreeArtifact directory. If empty, defaults to '{name}.whldir'.   | String | optional |  `""`  |
+
+
+<a id="pycross_transitioning_file_proxy"></a>
+
+## pycross_transitioning_file_proxy
+
+<pre>
+load("@rules_pycross//pycross:defs.bzl", "pycross_transitioning_file_proxy")
+
+pycross_transitioning_file_proxy(<a href="#pycross_transitioning_file_proxy-name">name</a>, <a href="#pycross_transitioning_file_proxy-actual">actual</a>, <a href="#pycross_transitioning_file_proxy-platform">platform</a>)
+</pre>
+
+Like pycross_file_proxy, but applies a platform transition to the actual target.
+
+**ATTRIBUTES**
+
+
+| Name  | Description | Type | Mandatory | Default |
+| :------------- | :------------- | :------------- | :------------- | :------------- |
+| <a id="pycross_transitioning_file_proxy-name"></a>name |  A unique name for this target.   | <a href="https://bazel.build/concepts/labels#target-names">Name</a> | required |  |
+| <a id="pycross_transitioning_file_proxy-actual"></a>actual |  The target to forward DefaultInfo from (analyzed under the target platform).   | <a href="https://bazel.build/concepts/labels">Label</a> | required |  |
+| <a id="pycross_transitioning_file_proxy-platform"></a>platform |  The target platform to transition to.   | <a href="https://bazel.build/concepts/labels">Label</a> | required |  |
+
+
+<a id="pycross_transitioning_library_proxy"></a>
+
+## pycross_transitioning_library_proxy
+
+<pre>
+load("@rules_pycross//pycross:defs.bzl", "pycross_transitioning_library_proxy")
+
+pycross_transitioning_library_proxy(<a href="#pycross_transitioning_library_proxy-name">name</a>, <a href="#pycross_transitioning_library_proxy-deps">deps</a>, <a href="#pycross_transitioning_library_proxy-actual">actual</a>, <a href="#pycross_transitioning_library_proxy-platform">platform</a>)
+</pre>
+
+Like pycross_library_proxy, but applies a platform transition to the actual target.
+
+Used in thin package repos when a uv_member specifies a target platform.
+
+**ATTRIBUTES**
+
+
+| Name  | Description | Type | Mandatory | Default |
+| :------------- | :------------- | :------------- | :------------- | :------------- |
+| <a id="pycross_transitioning_library_proxy-name"></a>name |  A unique name for this target.   | <a href="https://bazel.build/concepts/labels#target-names">Name</a> | required |  |
+| <a id="pycross_transitioning_library_proxy-deps"></a>deps |  Additional dependencies to merge into the PyInfo provider.   | <a href="https://bazel.build/concepts/labels">List of labels</a> | optional |  `[]`  |
+| <a id="pycross_transitioning_library_proxy-actual"></a>actual |  The primary target to forward providers from (analyzed under the target platform).   | <a href="https://bazel.build/concepts/labels">Label</a> | required |  |
+| <a id="pycross_transitioning_library_proxy-platform"></a>platform |  The target platform to transition to.   | <a href="https://bazel.build/concepts/labels">Label</a> | required |  |
 
 
 <a id="pycross_wheel_headers"></a>
