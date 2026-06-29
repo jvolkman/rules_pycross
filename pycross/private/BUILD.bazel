@@ -92,7 +92,7 @@ bzl_library(
         ":resolved_lock_renderer",
         ":util",
         ":variant_resolver",
-        "//pycross/private/pypackaging/utils",
+        "@pypackaging.bzl//:pypackaging",
     ],
 )
 
@@ -339,7 +339,7 @@ bzl_library(
     name = "util",
     srcs = ["util.bzl"],
     deps = [
-        "//pycross/private/pypackaging/utils",
+        "@pypackaging.bzl//:pypackaging",
         "@rules_python//python/api:api_bzl",
     ],
 )
@@ -349,7 +349,7 @@ bzl_library(
     srcs = ["cycle_dep_needed.bzl"],
     deps = [
         ":pep508_marker_values",
-        "//pycross/private/pypackaging/markers",
+        "@pypackaging.bzl//:pypackaging",
     ],
 )
 
@@ -367,7 +367,7 @@ bzl_library(
     srcs = ["pep508_evaluator.bzl"],
     deps = [
         ":pep508_marker_values",
-        "//pycross/private/pypackaging/markers",
+        "@pypackaging.bzl//:pypackaging",
     ],
 )
 
@@ -391,8 +391,8 @@ bzl_library(
     srcs = ["target_platform.bzl"],
     deps = [
         ":pep508_marker_values",
-        "//pycross/private/pypackaging/tags",
         "@bazel_skylib//rules:common_settings",
+        "@pypackaging.bzl//:pypackaging",
     ],
 )
 

@@ -9,15 +9,15 @@ The expression is supplied as a raw PEP 508 marker string, e.g.:
 Parsing and evaluation are handled by the pypackaging markers library.
 """
 
-load("//pycross/private/pypackaging/markers:markers.bzl", "markers")
+load("@pypackaging.bzl", "pypackaging")
 load(":pep508_marker_values.bzl", "PYTHON_TOOLCHAIN_TYPE", "collect_markers", "marker_value_attrs")
 
 # ---- rule implementation ----------------------------------------------------
 
 def _pycross_pep508_evaluator_impl(ctx):
     markers_env = collect_markers(ctx)
-    parsed_marker = markers.parse(ctx.attr.expr)
-    result = markers.evaluate(parsed_marker, markers_env)
+    parsed_marker = pypackaging.markers.parse(ctx.attr.expr)
+    result = pypackaging.markers.evaluate(parsed_marker, markers_env)
 
     return [config_common.FeatureFlagInfo(value = "true" if result else "false")]
 

@@ -15,7 +15,7 @@ The file structure is:
 load(":util.bzl", "underscore_name")
 
 _requirement_func = """\
-load("@rules_pycross//pycross/private/pypackaging/utils:utils.bzl", "canonicalize_name")
+load("@pypackaging.bzl", "pypackaging")
 
 def requirement(pkg):
     extra = None
@@ -23,7 +23,7 @@ def requirement(pkg):
         pkg, extra = pkg.split("[", 1)
         extra = extra.rstrip("]")
 
-    pkg = canonicalize_name(pkg)
+    pkg = pypackaging.utils.canonicalize_name(pkg)
 
     if extra:
         return "@@{repo_name}//:%s[%s]" % (pkg, extra)

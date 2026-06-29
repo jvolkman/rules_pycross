@@ -1,6 +1,6 @@
 """Supported tags rule and provider."""
 
-load("//pycross/private/pypackaging/tags:tags.bzl", "get_supported")
+load("@pypackaging.bzl", "pypackaging")
 load(":pep508_marker_values.bzl", "PYTHON_TOOLCHAIN_TYPE", "collect_markers", "flag_value", "marker_value_attrs")
 
 PycrossTargetPlatformInfo = provider(
@@ -92,7 +92,7 @@ def _pycross_target_platform_impl(ctx):
         else:
             platforms.append("any")
 
-    tags = get_supported(
+    tags = pypackaging.tags.get_supported(
         version = version_nodot,
         platforms = platforms,
         impl = impl_prefix,

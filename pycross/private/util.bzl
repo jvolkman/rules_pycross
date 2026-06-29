@@ -1,7 +1,7 @@
 """Shared utilities"""
 
+load("@pypackaging.bzl", "pypackaging")
 load("@rules_python//python/api:api.bzl", "py_common")
-load("//pycross/private/pypackaging/utils:utils.bzl", "canonicalize_name")
 
 # The http library seems to depend on cache.bzl as of Bazel 7
 REPO_HTTP_DEPS = [
@@ -44,7 +44,7 @@ def sanitize_name(val):
 
 def underscore_name(name):
     """rules_python-style normalization: lowercase, replace [-. ] with _."""
-    return canonicalize_name(name).replace("-", "_")
+    return pypackaging.utils.canonicalize_name(name).replace("-", "_")
 
 _PEP508_NAME_CHARS = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_."
 
@@ -61,7 +61,7 @@ def extract_pep508_name(spec):
     stripped = spec.lstrip(_PEP508_NAME_CHARS)
     name_len = len(spec) - len(stripped)
     name = spec[:name_len]
-    return canonicalize_name(name)
+    return pypackaging.utils.canonicalize_name(name)
 
 def key_parts(key):
     """Split a lockfile package key into its name and version parts.

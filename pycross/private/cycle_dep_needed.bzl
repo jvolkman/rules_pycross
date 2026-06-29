@@ -20,8 +20,8 @@ Each edge is either unconditional (no marker) or conditional
 (marker is evaluated against the current platform).
 """
 
+load("@pypackaging.bzl", "pypackaging")
 load("//pycross/private:pep508_marker_values.bzl", "PYTHON_TOOLCHAIN_TYPE", "collect_markers", "marker_value_attrs")
-load("//pycross/private/pypackaging/markers:markers.bzl", pypackaging_markers = "markers")
 
 # ---- BFS reachability -------------------------------------------------------
 
@@ -41,8 +41,8 @@ def _active_neighbors(edges, node, markers_env):
     for edge in node_edges:
         marker_str = edge.get("marker")
         if marker_str:
-            parsed_marker = pypackaging_markers.parse(marker_str)
-            if not pypackaging_markers.evaluate(parsed_marker, markers_env):
+            parsed_marker = pypackaging.markers.parse(marker_str)
+            if not pypackaging.markers.evaluate(parsed_marker, markers_env):
                 continue
         result.append(edge["dep"])
     return result
