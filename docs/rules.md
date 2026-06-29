@@ -58,7 +58,7 @@ py_console_script_binary which expects a :dist_info filegroup.
 <pre>
 load("@rules_pycross//pycross:defs.bzl", "pycross_file_proxy")
 
-pycross_file_proxy(<a href="#pycross_file_proxy-name">name</a>, <a href="#pycross_file_proxy-actual">actual</a>, <a href="#pycross_file_proxy-platform">platform</a>)
+pycross_file_proxy(<a href="#pycross_file_proxy-name">name</a>, <a href="#pycross_file_proxy-actual">actual</a>)
 </pre>
 
 Forwards DefaultInfo from a target. Used for raw file targets (wheels, sdists, dist_info).
@@ -70,7 +70,6 @@ Forwards DefaultInfo from a target. Used for raw file targets (wheels, sdists, d
 | :------------- | :------------- | :------------- | :------------- | :------------- |
 | <a id="pycross_file_proxy-name"></a>name |  A unique name for this target.   | <a href="https://bazel.build/concepts/labels#target-names">Name</a> | required |  |
 | <a id="pycross_file_proxy-actual"></a>actual |  The target to forward DefaultInfo from.   | <a href="https://bazel.build/concepts/labels">Label</a> | required |  |
-| <a id="pycross_file_proxy-platform"></a>platform |  Unused in the non-transitioning variant. Use pycross_transitioning_file_proxy for platform transitions.   | <a href="https://bazel.build/concepts/labels">Label</a> | optional |  `None`  |
 
 
 <a id="pycross_library_proxy"></a>
@@ -80,7 +79,7 @@ Forwards DefaultInfo from a target. Used for raw file targets (wheels, sdists, d
 <pre>
 load("@rules_pycross//pycross:defs.bzl", "pycross_library_proxy")
 
-pycross_library_proxy(<a href="#pycross_library_proxy-name">name</a>, <a href="#pycross_library_proxy-deps">deps</a>, <a href="#pycross_library_proxy-actual">actual</a>, <a href="#pycross_library_proxy-platform">platform</a>)
+pycross_library_proxy(<a href="#pycross_library_proxy-name">name</a>, <a href="#pycross_library_proxy-deps">deps</a>, <a href="#pycross_library_proxy-actual">actual</a>)
 </pre>
 
 Forwards PyInfo and pycross-specific providers from a target, optionally merging additional deps.
@@ -96,7 +95,6 @@ PycrossPackageInfo, and OutputGroupInfo that py_library would drop.
 | <a id="pycross_library_proxy-name"></a>name |  A unique name for this target.   | <a href="https://bazel.build/concepts/labels#target-names">Name</a> | required |  |
 | <a id="pycross_library_proxy-deps"></a>deps |  Additional dependencies to merge into the PyInfo provider.   | <a href="https://bazel.build/concepts/labels">List of labels</a> | optional |  `[]`  |
 | <a id="pycross_library_proxy-actual"></a>actual |  The primary target to forward providers from.   | <a href="https://bazel.build/concepts/labels">Label</a> | required |  |
-| <a id="pycross_library_proxy-platform"></a>platform |  Unused in the non-transitioning variant. Use pycross_transitioning_library_proxy for platform transitions.   | <a href="https://bazel.build/concepts/labels">Label</a> | optional |  `None`  |
 
 
 <a id="pycross_modules_mapping"></a>

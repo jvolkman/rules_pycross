@@ -33,18 +33,20 @@ def _lock_workspace_repo_impl(rctx):
         workspace_lines.append('    "{}",'.format(repo_name))
     workspace_lines.append("]")
 
+    # Flags and constraint_values are JSON-encoded lists passed through string_dict attrs.
+    # constraint_values are stored as strings (not labels) because repository rules cannot
+    # accept label attrs across repo boundaries; labels are resolved to strings at lock_import
+    # time via str(label).
     workspace_lines.append("repo_flags = {")
     for repo_name in sorted(rctx.attr.repo_flags):
-        flags_str = rctx.attr.repo_flags[repo_name]
-        flags_list = flags_str.split(",") if flags_str else []
-        workspace_lines.append('    "{}": {},'.format(repo_name, flags_list))
+        flags_json = rctx.attr.repo_flags[repo_name]
+        workspace_lines.append('    "{}": {},'.format(repo_name, flags_json))
     workspace_lines.append("}")
 
     workspace_lines.append("repo_constraint_values = {")
     for repo_name in sorted(rctx.attr.repo_constraint_values):
-        constraints_str = rctx.attr.repo_constraint_values[repo_name]
-        constraints_list = constraints_str.split(",") if constraints_str else []
-        workspace_lines.append('    "{}": {},'.format(repo_name, constraints_list))
+        constraints_json = rctx.attr.repo_constraint_values[repo_name]
+        workspace_lines.append('    "{}": {},'.format(repo_name, constraints_json))
     workspace_lines.append("}")
 
     workspace_lines.append("repo_platforms = {")
@@ -74,11 +76,11 @@ lock_workspace_repo = repository_rule(
             default = [],
         ),
         "repo_flags": attr.string_dict(
-            doc = "Maps repo_name to comma-separated list of flags.",
+            doc = "Maps repo_name to JSON-encoded list of flags.",
             default = {},
         ),
         "repo_constraint_values": attr.string_dict(
-            doc = "Maps repo_name to comma-separated list of constraint values.",
+            doc = "Maps repo_name to JSON-encoded list of constraint values.",
             default = {},
         ),
         "repo_platforms": attr.string_dict(

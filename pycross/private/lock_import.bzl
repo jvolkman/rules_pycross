@@ -646,9 +646,9 @@ def _lock_import_impl(module_ctx):
             workspace_build_repos[repo_info.workspace] = repo_info.build_repo
 
         if repo_info.flags:
-            repo_flags[repo_info.repo_name] = ",".join(repo_info.flags)
+            repo_flags[repo_info.repo_name] = json.encode(repo_info.flags)
         if repo_info.constraint_values:
-            repo_constraint_values[repo_info.repo_name] = ",".join(repo_info.constraint_values)
+            repo_constraint_values[repo_info.repo_name] = json.encode(repo_info.constraint_values)
         if repo_info.platform:
             repo_platforms[repo_info.repo_name] = repo_info.platform
 

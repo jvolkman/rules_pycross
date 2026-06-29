@@ -246,7 +246,7 @@ def _thin_package_repo_impl(rctx):
     # Generate internal platform if needed
     target_platform = rctx.attr.platform
     if not target_platform and (rctx.attr.flags or rctx.attr.constraint_values):
-        target_platform = ":_internal_platform"
+        target_platform = "//:_internal_platform"
         root_build_lines.extend([
             "platform(",
             '    name = "_internal_platform",',

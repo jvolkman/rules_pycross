@@ -85,10 +85,6 @@ PycrossPackageInfo, and OutputGroupInfo that py_library would drop.""",
             providers = [PyInfo],
             doc = "Additional dependencies to merge into the PyInfo provider.",
         ),
-        "platform": attr.label(
-            default = None,
-            doc = "Unused in the non-transitioning variant. Use pycross_transitioning_library_proxy for platform transitions.",
-        ),
     }, **PY_COMMON_ATTRS),
     provides = [DefaultInfo, PyInfo],
 )
@@ -127,12 +123,10 @@ Used in thin package repos when a uv_member specifies a target platform.""",
 def _pycross_file_proxy_impl(ctx):
     actual = ctx.attr.actual[0] if type(ctx.attr.actual) == "list" else ctx.attr.actual
 
-    # Return a new DefaultInfo to avoid carrying over executable status if not intended,
-    # or just forward files/runfiles.
+    # Return a new DefaultInfo to avoid carrying over executable status if not intended.
     return [DefaultInfo(
         files = actual[DefaultInfo].files,
-        data_runfiles = actual[DefaultInfo].data_runfiles,
-        default_runfiles = actual[DefaultInfo].default_runfiles,
+        runfiles = actual[DefaultInfo].default_runfiles,
     )]
 
 # Non-transitioning variant.
@@ -144,10 +138,6 @@ pycross_file_proxy = rule(
             mandatory = True,
             allow_single_file = True,
             doc = "The target to forward DefaultInfo from.",
-        ),
-        "platform": attr.label(
-            default = None,
-            doc = "Unused in the non-transitioning variant. Use pycross_transitioning_file_proxy for platform transitions.",
         ),
     },
 )
