@@ -87,6 +87,7 @@ def register_repair_action(
         mnemonic = "PycrossRepairWheel",
         progress_message = "Repairing %s" % input_wheel_dir.basename,
         resource_set = resource_set,
+        execution_requirements = {"supports-path-mapping": "1"},
     )
 
     return struct(
