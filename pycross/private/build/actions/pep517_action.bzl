@@ -288,6 +288,7 @@ def register_pep517_action(
         mnemonic = "PycrossPep517Build",
         progress_message = "Building wheel %s" % sdist.basename,
         resource_set = resource_set,
+        execution_requirements = {"supports-path-mapping": "1"},
     )
 
     return struct(
