@@ -12,3 +12,6 @@ common --nosandbox_default_allow_network
 
 common -c opt
 common --strip=always
+
+# Disable lockfiles for e2e tests
+common --lockfile_mode=off

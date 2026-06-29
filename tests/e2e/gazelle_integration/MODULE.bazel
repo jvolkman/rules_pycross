@@ -3,16 +3,37 @@ module(
     version = "0.0.0",
 )
 
+bazel_dep(name = "rules_pycross_e2e_shared", version = "0.0.0")
+local_path_override(
+    module_name = "rules_pycross_e2e_shared",
+    path = "../shared",
+)
+
 bazel_dep(name = "rules_pycross", version = "0.0.0")
 local_path_override(
     module_name = "rules_pycross",
     path = "../../..",
 )
 
+# Patched locally until https://github.com/bazel-contrib/rules_go/pull/4641 lands.
+single_version_override(
+    module_name = "rules_go",
+    patches = ["//:rules_go_ldflags.patch"],
+)
+
 bazel_dep(name = "rules_python", version = "2.0.0")
-bazel_dep(name = "rules_go", version = "0.60.0", repo_name = "io_bazel_rules_go")
+bazel_dep(name = "rules_go", version = "0.61.1", repo_name = "io_bazel_rules_go")
 bazel_dep(name = "gazelle", version = "0.40.0")
 bazel_dep(name = "rules_python_gazelle_plugin", version = "0.36.0")
+
+go_sdk = use_extension("@io_bazel_rules_go//go:extensions.bzl", "go_sdk")
+go_sdk.download(
+    name = "go_sdk",
+    version = "1.27rc1",
+)
+use_repo(go_sdk, "go_sdk")
+
+register_toolchains("@go_sdk//:all")
 
 python = use_extension("@rules_python//python/extensions:python.bzl", "python")
 python.toolchain(

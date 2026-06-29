@@ -3,6 +3,12 @@ module(
     version = "0.0.0",
 )
 
+bazel_dep(name = "rules_pycross_e2e_shared", version = "0.0.0")
+local_path_override(
+    module_name = "rules_pycross_e2e_shared",
+    path = "../shared",
+)
+
 bazel_dep(name = "rules_pycross", version = "0.0.0")
 local_path_override(
     module_name = "rules_pycross",

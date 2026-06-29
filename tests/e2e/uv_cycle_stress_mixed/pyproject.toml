@@ -1,0 +1,30 @@
+[project]
+name = "uv-cycle-stress-test"
+version = "0.1.0"
+requires-python = ">=3.10"
+dependencies = [
+    "stress-airflow",
+    "stress-airflow-core",
+    "stress-task-sdk",
+    "stress-provider-compat",
+    "stress-provider-io",
+    "stress-provider-sql",
+    "stress-provider-smtp",
+    "stress-provider-standard",
+    "stress-packaging",
+    "stress-jinja2",
+    "stress-attrs",
+]
+
+[tool.uv.sources]
+stress-airflow = { path = "./stress_airflow-1.0.0-py3-none-any.whl" }
+stress-airflow-core = { path = "./stress_airflow_core-1.0.0-py3-none-any.whl" }
+stress-task-sdk = { path = "./stress_task_sdk-1.0.0-py3-none-any.whl" }
+stress-provider-compat = { path = "./stress_provider_compat-1.0.0-py3-none-any.whl" }
+stress-provider-io = { path = "./stress_provider_io-1.0.0-py3-none-any.whl" }
+stress-provider-sql = { path = "./stress_provider_sql-1.0.0-py3-none-any.whl" }
+stress-provider-smtp = { path = "./stress_provider_smtp-1.0.0-py3-none-any.whl" }
+stress-provider-standard = { path = "./stress_provider_standard-1.0.0-py3-none-any.whl" }
+stress-packaging = { path = "./stress_packaging-1.0.0-py3-none-any.whl" }
+stress-jinja2 = { path = "./stress_jinja2-1.0.0-py3-none-any.whl" }
+stress-attrs = { path = "./stress_attrs-1.0.0-py3-none-any.whl" }

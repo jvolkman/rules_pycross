@@ -39,6 +39,7 @@ else
     BAZEL_ARGS+=("--remote_accept_cached=false")
     BAZEL_ARGS+=("--nouse_action_cache")
   fi
+  BAZEL_ARGS+=("--experimental_convenience_symlinks=ignore")
   echo "Running bazel build //..."
   bazel build "${BAZEL_ARGS[@]}" //...
   # Query if there are any test targets in the workspace

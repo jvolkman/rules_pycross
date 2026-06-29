@@ -78,7 +78,7 @@ jobs:
           if [ -f "run.sh" ]; then
             echo "Skipping default build, run.sh will handle it."
           else
-            bazel build --config=remote //...
+            bazel build --config=remote --experimental_convenience_symlinks=ignore //...
           fi
       - name: Test
         working-directory: ${{ matrix.workspace }}
@@ -87,7 +87,7 @@ jobs:
             ./run.sh --config=remote
           else
             if bazel query "tests(//...)" 2>/dev/null | grep -q .; then
-              bazel test --config=remote //...
+              bazel test --config=remote --experimental_convenience_symlinks=ignore //...
             else
               echo "No test targets found, skipping."
             fi
@@ -157,6 +157,10 @@ jobs:
               cp $artifact_dir/*macosx*.whl ${{ runner.temp }}/install-wheels-$ws/ 2>/dev/null || true
             fi
             cp $artifact_dir/*none-any*.whl ${{ runner.temp }}/install-wheels-$ws/ 2>/dev/null || true
+            if ! ls ${{ runner.temp }}/install-wheels-$ws/*.whl 1> /dev/null 2>&1; then
+              echo "Error: No wheels found to install for $ws"
+              exit 1
+            fi
 
             pip install pytest ${{ runner.temp }}/install-wheels-$ws/*.whl
             cd tests/e2e/$ws

@@ -16,8 +16,7 @@ Usage in generated lock.bzl:
         name = "pkg@1.0",
         raw_name = "_raw_pkg@1.0",
         member = "pkg@1.0",
-        members = ["pkg@1.0", "other@2.0", ...],
-        edges = '{...}',  # JSON edge map
+        edges = {...},  # dict edge map
         sys_platform = select(SYS_PLATFORM_VALUES),
         ...
     )
@@ -30,7 +29,51 @@ def _sanitize(name):
     """Sanitize a package key for use in target names."""
     return name.replace("@", "_").replace(".", "_").replace("-", "_").replace("[", "_").replace("]", "_")
 
-def _compute_reachability_groups(member, other_members, edges):
+def find_unconditional_deps(member, other_members, edges):
+    """Finds all members unconditionally reachable from member within the cycle.
+
+    Uses a simple BFS traversal following only unconditional edges (no markers).
+
+    Args:
+        member: The starting cycle member.
+        other_members: List of other member keys in the cycle.
+        edges: Parsed edge dict: {node: [{dep, marker?}, ...], ...}.
+
+    Returns:
+        A list of package keys that are unconditionally reachable from `member`.
+    """
+    cycle_members = {m: True for m in other_members}
+    cycle_members[member] = True
+
+    unconditional = {}
+    queue = [member]
+    visited = {member: True}
+
+    # Bounded BFS — each node is enqueued at most once (guarded by `visited`),
+    # so the queue length never exceeds len(cycle_members).
+    for _ in range(len(other_members) + 1):
+        if not queue:
+            break
+
+        # Starlark lacks list.pop(0); slice instead (queue is small).
+        curr = queue[0]
+        queue = queue[1:]
+
+        curr_edges = edges.get(curr, [])
+        for edge in curr_edges:
+            dep = edge["dep"]
+            if dep not in cycle_members:
+                continue
+            has_marker = bool(edge.get("marker"))
+            if not has_marker and dep not in visited:
+                visited[dep] = True
+                if dep != member:
+                    unconditional[dep] = True
+                queue.append(dep)
+
+    return sorted(unconditional.keys())
+
+def compute_reachability_groups(member, other_members, edges):
     """Compute groups of cycle members that share identical reachability.
 
     Uses the conservative single-inbound-edge rule: a node is collapsed into
@@ -119,7 +162,6 @@ def pycross_cycle_member_marker_deps(
         name,
         raw_name,
         member,
-        members,
         edges,
         **kwargs):
     """Creates select()-gated cycle member deps with grouped reachability checks.
@@ -132,12 +174,12 @@ def pycross_cycle_member_marker_deps(
         name: The final target name (e.g. "pkg@1.0").
         raw_name: The raw package target name (e.g. "_raw_pkg@1.0").
         member: The package key of this cycle member.
-        members: List of all package keys in the cycle group.
-        edges: JSON-encoded edge map: {node: [{dep, marker?}, ...], ...}.
+        edges: Dict edge map: {node: [{"dep": key, "marker": expr}, ...], ...}.
+            The keys of this dict are the full set of cycle members.
         **kwargs: Marker value attrs (sys_platform, os_name, etc.) passed
                   through to pycross_cycle_dep_needed.
     """
-    other_members = [m for m in sorted(members) if m != member]
+    other_members = [m for m in sorted(edges.keys()) if m != member]
 
     if not other_members:
         # Single-member cycle (shouldn't happen, but handle gracefully).
@@ -147,10 +189,28 @@ def pycross_cycle_member_marker_deps(
         )
         return
 
-    parsed_edges = json.decode(edges)
-    groups = _compute_reachability_groups(member, other_members, parsed_edges)
+    # 1. Find unconditionally reachable deps
+    unconditional_deps = find_unconditional_deps(member, other_members, edges)
 
+    # 2. Add them to unconditional deps list directly
     deps = [":" + raw_name]
+    for u_dep in unconditional_deps:
+        deps.append(":_raw_" + u_dep)
+
+    # 3. Filter other_members to only include those NOT unconditionally reachable.
+    # This is safe to pass as the reduced member set to compute_reachability_groups:
+    # any edge from an unconditional member to a conditional member must carry a
+    # marker (otherwise the BFS above would have reached the conditional member
+    # unconditionally). Since collapsibility requires unmarked edges, removing
+    # unconditional members from the inbound-edge calculation cannot introduce
+    # false collapses.
+    unconditional_set = {u: True for u in unconditional_deps}
+    conditional_members = [m for m in other_members if m not in unconditional_set]
+
+    # 4. Compute groups for conditional members only
+    groups = compute_reachability_groups(member, conditional_members, edges)
+
+    edges_json = json.encode(edges)
 
     for representative, group_members in groups:
         pair_name = "_cycle_needed_{}_{}".format(
@@ -163,7 +223,7 @@ def pycross_cycle_member_marker_deps(
             name = pair_name,
             source = member,
             target = representative,
-            edges = edges,
+            edges = edges_json,
             **kwargs
         )
 
