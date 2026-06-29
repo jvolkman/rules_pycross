@@ -12,45 +12,70 @@ not explicitly provided.
 load("@bazel_skylib//rules:common_settings.bzl", "BuildSettingInfo")
 
 # Maps @platforms//os constraint values to PEP 508 sys_platform values.
+# Synced with rules_python's pep508_env.bzl sys_platform_select_map.
 SYS_PLATFORM_VALUES = {
+    "@platforms//os:android": "android",
+    "@platforms//os:emscripten": "emscripten",
+    "@platforms//os:freebsd": "freebsd",
+    "@platforms//os:ios": "ios",
     "@platforms//os:linux": "linux",
+    "@platforms//os:openbsd": "openbsd",
     "@platforms//os:osx": "darwin",
+    "@platforms//os:wasi": "wasi",
     "@platforms//os:windows": "win32",
     "//conditions:default": "",
 }
 
 # Maps @platforms//os constraint values to PEP 508 os_name values.
+# Synced with rules_python's pep508_env.bzl os_name_select_map.
+# Everything non-Windows is "posix" (including the default).
 OS_NAME_VALUES = {
-    "@platforms//os:linux": "posix",
-    "@platforms//os:osx": "posix",
     "@platforms//os:windows": "nt",
-    "//conditions:default": "",
+    "//conditions:default": "posix",
 }
 
 # Maps @platforms//os constraint values to PEP 508 platform_system values.
+# Synced with rules_python's pep508_env.bzl platform_system_select_map.
 PLATFORM_SYSTEM_VALUES = {
+    "@platforms//os:android": "Android",
+    "@platforms//os:freebsd": "FreeBSD",
+    "@platforms//os:ios": "iOS",
     "@platforms//os:linux": "Linux",
+    "@platforms//os:netbsd": "NetBSD",
+    "@platforms//os:openbsd": "OpenBSD",
     "@platforms//os:osx": "Darwin",
     "@platforms//os:windows": "Windows",
     "//conditions:default": "",
 }
 
 # Maps platform constraints to PEP 508 platform_machine values.
+# Synced with rules_python's pep508_env.bzl platform_machine_select_map,
+# with one important difference: aarch64 handling.
 #
-# The aarch64 CPU reports different platform.machine() values depending
-# on the OS: "aarch64" on Linux, "arm64" on macOS, "ARM64" on Windows.
-# We use compound config_settings (OS + CPU) from
+# Python's platform.machine() reports different values for aarch64 depending
+# on the OS: "aarch64" on Linux/Android, "arm64" on macOS/iOS, "ARM64" on
+# Windows. We use compound config_settings (OS + CPU) from
 # //pycross/private:BUILD.bazel to resolve the correct value.
+# rules_python maps aarch64 uniformly to "aarch64" regardless of OS.
 #
 # All other architectures have consistent names across OSes.
 PLATFORM_MACHINE_VALUES = {
+    # OS-specific aarch64 handling (more correct than rules_python).
     "@rules_pycross//pycross/private:is_linux_aarch64": "aarch64",
     "@rules_pycross//pycross/private:is_macos_aarch64": "arm64",
     "@rules_pycross//pycross/private:is_windows_aarch64": "ARM64",
-    "@platforms//cpu:x86_64": "x86_64",
-    "@platforms//cpu:s390x": "s390x",
-    "@platforms//cpu:ppc64le": "ppc64le",
+    # All other CPUs.
+    "@platforms//cpu:aarch32": "aarch32",
+    "@platforms//cpu:armv7": "armv7",
     "@platforms//cpu:i386": "i386",
+    "@platforms//cpu:ppc": "ppc",
+    "@platforms//cpu:ppc64le": "ppc64le",
+    "@platforms//cpu:riscv64": "riscv64",
+    "@platforms//cpu:s390x": "s390x",
+    "@platforms//cpu:wasm32": "wasm32",
+    "@platforms//cpu:wasm64": "wasm64",
+    "@platforms//cpu:x86_32": "x86_32",
+    "@platforms//cpu:x86_64": "x86_64",
     "//conditions:default": "",
 }
 
