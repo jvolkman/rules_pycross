@@ -383,6 +383,7 @@ bzl_library(
     deps = [
         ":pep508_marker_values",
         ":target_platform",
+        "@pypackaging.bzl//:pypackaging",
     ],
 )
 

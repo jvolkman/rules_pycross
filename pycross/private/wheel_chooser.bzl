@@ -1,17 +1,17 @@
 """Wheel chooser rule for selecting the best-matching wheel at analysis time.
 
-Given a JSON-encoded list of pre-parsed wheel candidates and the current
-platform's PEP 508 marker values (provided via select() on @platforms
-constraints), this rule picks the best compatible wheel and returns its
-filename through config_common.FeatureFlagInfo.
+Given a JSON-encoded list of pre-parsed wheel candidates and a target platform
+providing compatible PEP 425 tags (ordered by preference), this rule picks the
+best compatible wheel and returns its filename through config_common.FeatureFlagInfo.
 
 The selection algorithm:
-  1. Filter candidates by platform, python, and ABI tag compatibility.
-  2. Score remaining candidates by specificity (more specific = higher).
-  3. Return the highest-scoring candidate's filename, or
+  1. Iterate through the target platform's supported tags in order of preference.
+  2. For each tag, check if any candidate matches.
+  3. Return the first matching candidate's filename, or
      "__no_matching_wheel__" if nothing matches.
 """
 
+load("@pypackaging.bzl", "pypackaging")
 load(":target_platform.bzl", "PycrossTargetPlatformInfo")
 
 # ---------------------------------------------------------------------------
@@ -42,14 +42,14 @@ def select_best_wheel(candidates, supported_tags):
         })
 
     for tag_str in supported_tags:
-        parts = tag_str.split("-", 2)
-        if len(parts) < 3:
-            continue
-        py, abi, plat = parts
+        for pt in pypackaging.tags.parse_tag(tag_str):
+            py = pt.interpreter
+            abi = pt.abi
+            plat = pt.platform
 
-        for c in processed:
-            if py in c["py_tags"] and abi in c["abi_tags"] and plat in c["plat_tags"]:
-                return c["raw"]
+            for c in processed:
+                if py in c["py_tags"] and abi in c["abi_tags"] and plat in c["plat_tags"]:
+                    return c["raw"]
 
     return None
 
@@ -92,8 +92,8 @@ def pycross_wheel_chooser(name, **kwargs):
     """Select the best-matching wheel from a list of candidates.
 
     This macro wraps the private _pycross_wheel_chooser rule. It takes a
-    JSON-encoded list of pre-parsed wheel candidates and PEP 508 marker
-    dimension values (typically provided via select()), and produces a
+    JSON-encoded list of pre-parsed wheel candidates and a target platform
+    (which provides ordered compatibility tags), and produces a
     config_common.FeatureFlagInfo whose value is the filename of the best
     matching wheel.
 
