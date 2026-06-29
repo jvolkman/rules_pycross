@@ -22,6 +22,12 @@ def _ind(text, tabs = 1):
 def _sanitize_name(name):
     return name.lower().replace("-", "_").replace("@", "_").replace("+", "_").replace(".", "_").replace("[", "_").replace("]", "_")
 
+def _pkg_key_extra(pkg_key):
+    """Extract the extra name from a pkg_key like 'foo[test]@1.0', or '' if none."""
+    if "[" not in pkg_key:
+        return ""
+    return pkg_key.split("[", 1)[1].split("]", 1)[0]
+
 def _is_in_same_cycle(dep_key, pkg, packages):
     cycle_group = pkg.get("cycle_group")
     if not cycle_group:
@@ -74,37 +80,60 @@ def _render_extras_aggregates(lines, packages):
         ])
 
 def _collect_unique_markers(packages):
-    """Collect all unique marker strings across packages, returning a deduped set."""
+    """Collect all unique (marker, extra) pairs across packages.
+
+    Returns a dict mapping (marker_string, extra_value) to True.
+    The extra is derived from the package key (e.g. 'foo[test]@1.0' -> 'test').
+    """
     markers = {}
-    for pkg in packages.values():
+    for pkg_key, pkg in packages.items():
+        extra = _pkg_key_extra(pkg_key)
         for md in pkg.get("marker_dependencies", []):
             marker = md.get("marker")
             if marker:
-                markers[marker] = True
+                # Optimization: if "extra" is not in the marker string, it doesn't reference the extra variable.
+                # We can share a single evaluator by setting extra to "".
+                effective_extra = extra if "extra" in marker else ""
+                markers[(marker, effective_extra)] = True
     return markers.keys()
 
-def _marker_evaluator_name(marker_str):
-    """Generate a deterministic target name for a marker evaluator."""
+def _marker_evaluator_name(marker_str, extra = ""):
+    """Generate a deterministic target name for a marker evaluator.
+
+    Args:
+        marker_str: The PEP 508 marker expression.
+        extra: The PEP 508 extra value (e.g. 'test'), or '' for no extra.
+    """
 
     # Starlark's hash() is deterministic within a build invocation.
     # We sanitize the marker string for readability and add the hash for uniqueness.
-    san = _sanitize_name(marker_str.replace(" ", "").replace("\"", "").replace("'", ""))
+    key = marker_str if not extra else "{}|extra={}".format(marker_str, extra)
+    san = _sanitize_name(key.replace(" ", "").replace("\"", "").replace("'", ""))
 
     # Truncate to keep target names reasonable
     if len(san) > 40:
         san = san[:40]
-    return "_marker_eval_{}_{}".format(san, hash(marker_str))
+    return "_marker_eval_{}_{}".format(san, hash(key))
 
 def _render_marker_evaluators(lines, unique_markers):
-    """Render deduped pycross_pep508_evaluator and config_setting targets."""
-    for marker_str in sorted(unique_markers):
-        eval_name = _marker_evaluator_name(marker_str)
+    """Render deduped pycross_pep508_evaluator and config_setting targets.
+
+    Args:
+        lines: Output lines list.
+        unique_markers: Iterable of (marker_str, extra) tuples.
+    """
+    for marker_str, extra in sorted(unique_markers):
+        eval_name = _marker_evaluator_name(marker_str, extra)
 
         # Evaluator rule — returns FeatureFlagInfo("true"/"false")
         lines.extend([
             _ind("pycross_pep508_evaluator("),
             _ind('name = "{}",'.format(eval_name), 2),
             _ind('expr = "{}",'.format(marker_str.replace('"', '\\"')), 2),
+        ])
+        if extra:
+            lines.append(_ind('extra = "{}",'.format(extra), 2))
+        lines.extend([
             _ind(")"),
             "",
         ])
@@ -195,11 +224,14 @@ def _render_marker_cycle_member_deps(lines, cycle_groups, packages):
         lines.append("")
 
         for pkg_key in sorted(resolved_members):
+            extra = _pkg_key_extra(pkg_key)
             lines.append(_ind("pycross_cycle_member_marker_deps("))
             lines.append(_ind('name = "{}",'.format(pkg_key), 2))
             lines.append(_ind('raw_name = "_raw_{}",'.format(pkg_key), 2))
             lines.append(_ind('member = "{}",'.format(pkg_key), 2))
             lines.append(_ind("edges = {},".format(edges_var_name), 2))
+            if extra:
+                lines.append(_ind('extra = "{}",'.format(extra), 2))
             lines.append(_ind(")"))
             lines.append("")
 
@@ -263,13 +295,15 @@ def _render_marker_wheel_chooser(lines, pkg_key, pkg, repo_map, sdist_map, rctx_
         "",
     ])
 
-def _render_marker_package_deps(lines, pkg_key_san, pkg, packages):
+def _render_marker_package_deps(lines, pkg_key, pkg_key_san, pkg, packages):
     """Render deps using marker-based select() instead of environment-based."""
     marker_deps = pkg.get("marker_dependencies", [])
     if not marker_deps:
         lines.append(_ind("_{}_deps = []".format(pkg_key_san)))
         lines.append("")
         return
+
+    extra = _pkg_key_extra(pkg_key)
 
     unconditional = []
     conditional = []
@@ -290,7 +324,8 @@ def _render_marker_package_deps(lines, pkg_key_san, pkg, packages):
     if conditional:
         # Each conditional dep gets its own select()
         for md in sorted(conditional, key = lambda m: m["key"]):
-            eval_name = _marker_evaluator_name(md["marker"])
+            effective_extra = extra if "extra" in md["marker"] else ""
+            eval_name = _marker_evaluator_name(md["marker"], effective_extra)
             lines[-1] = lines[-1] + " + select({"
             lines.append(_ind('":{}_match": [":{}"],'.format(eval_name, md["key"]), 2))
             lines.append(_ind('"//conditions:default": [],', 2))
@@ -319,7 +354,7 @@ def _render_marker_package(lines, pkg_key, pkg, packages, repo_map, sdist_map, r
 
     # Runtime deps
     if has_marker_deps:
-        _render_marker_package_deps(lines, pkg_key_san, pkg, packages)
+        _render_marker_package_deps(lines, pkg_key, pkg_key_san, pkg, packages)
 
     if not has_wheel_candidates and "[" in pkg_key:
         # Extras packages wrap the base package plus their own deps.

@@ -645,10 +645,11 @@ class TestExtras(unittest.TestCase):
         resolver = PackageResolver(pkg, ctx, None, [])
         resolved = resolver.to_resolved_package()
 
-        # The dep should appear with its marker (extra stripped, platform marker preserved)
+        # The dep should appear with its marker preserved (both extra and platform markers).
         self.assertEqual(len(resolved.marker_dependencies), 1)
         self.assertEqual(resolved.marker_dependencies[0].key.name.package, "depc")
         self.assertIn("sys_platform", resolved.marker_dependencies[0].marker)
+        self.assertIn("extra == 'test'", resolved.marker_dependencies[0].marker)
 
     def test_extras_no_extras(self):
         """Packages without extra markers have normal deps."""
@@ -690,17 +691,24 @@ class TestExtras(unittest.TestCase):
         resolver_dev = PackageResolver(pkg_dev, ctx, None, [])
         resolved_dev = resolver_dev.to_resolved_package()
 
-        # Check "test" extra has pytest
+        # With analysis-time extra evaluation, both extras get ALL deps.
+        # The extra-gated markers are preserved so the evaluator handles them at analysis time.
         test_dep_names = {md.key.name.package for md in resolved_test.marker_dependencies}
         self.assertIn("depa", test_dep_names)
         self.assertIn("pytest", test_dep_names)
-        self.assertNotIn("black", test_dep_names)
+        self.assertIn("black", test_dep_names)
 
-        # Check "dev" extra has black
+        # Verify markers are preserved (not stripped)
+        test_markers = {md.key.name.package: md.marker for md in resolved_test.marker_dependencies}
+        self.assertIsNone(test_markers["depa"])  # unconditional
+        self.assertEqual(test_markers["pytest"], "extra == 'test'")
+        self.assertEqual(test_markers["black"], "extra == 'dev'")
+
+        # Same for dev extra — all deps present with markers
         dev_dep_names = {md.key.name.package for md in resolved_dev.marker_dependencies}
         self.assertIn("depa", dev_dep_names)
         self.assertIn("black", dev_dep_names)
-        self.assertNotIn("pytest", dev_dep_names)
+        self.assertIn("pytest", dev_dep_names)
 
 
 class TestCycleDetection(unittest.TestCase):
