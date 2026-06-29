@@ -43,6 +43,17 @@ All notable changes to this project will be documented in this file.
 - **Variant resolver layer** for conflict set enforcement (#246).
 - **`resource_sets` support** in sdist build rules for better resource
   management during parallel builds (#247).
+- **`pycross_library_proxy` and `pycross_file_proxy` rules.** Proxy rules
+  that forward Python package providers (PyInfo, PycrossExtractedWheelInfo,
+  PycrossPackageInfo, OutputGroupInfo) from a primary target, optionally
+  merging additional deps. Replaces `py_library` wrappers in generated lock
+  repos to preserve pycross-specific providers.
+- **Platform transitions for thin package repos.** New `flags`,
+  `constraint_values`, and `platform` attributes on `uv_member`,
+  `uv_all_members`, `import_uv`, and equivalent PDM/Poetry/Pylock tags.
+  When specified, all proxy targets in the thin repo apply a `--platforms`
+  transition, enabling variant flags or architecture constraints to be
+  locked to a workspace member without per-invocation `--flag` arguments.
 
 ### Changed
 
@@ -53,6 +64,12 @@ All notable changes to this project will be documented in this file.
 - Package name normalization consolidated on `pypackaging.canonicalize_name`.
 - Default macOS version bumped to 15.0.
 - Updated `repairwheel` to 0.6.2.
+- Extras-only packages in the lock repo (e.g., `package[extra]@version`)
+  now use `pycross_library_proxy` with `actual` pointing to the base
+  package, instead of `py_library`. This preserves pycross-specific
+  providers through extra targets.
+- Cycle member wrappers and extras aggregate (`[_all_]`) targets in the
+  lock repo now use `pycross_library_proxy` instead of `py_library`.
 
 ### Fixed
 

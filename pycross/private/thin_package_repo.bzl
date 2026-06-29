@@ -485,3 +485,6 @@ thin_package_repo = repository_rule(
         ),
     },
 )
+
+# Visible for testing
+pin_build_for_testing = _pin_build
