@@ -27,3 +27,9 @@ if bazel build "$@" //:test_variant_a >/dev/null 2>&1; then
   exit 1
 fi
 echo "Failed as expected."
+
+# Test platform transition: @project_pinned has variant-a pinned via flags on the member import.
+# This should resolve typing-extensions 4.11.0 without any --flag arguments.
+echo "Testing platform transition (variant-a pinned via flags)..."
+bazel test "$@" //:test_transition_pinned --test_output=errors
+echo "Platform transition test passed."

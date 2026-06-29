@@ -8,7 +8,7 @@ The file structure is:
 - BUILD.bazel              - Root aliases (//:package).
 - requirements.bzl         - Provides requirement() and all_requirements.
 - modules_mapping.json     - Import-to-package mapping for Gazelle.
-- <package>/BUILD.bazel    - Pin aliases pointing to @workspace//_lock targets.
+- <package>/BUILD.bazel    - Pin proxies pointing to @workspace//_lock targets.
 - _variants/BUILD.bazel    - Aliases for bool_flag and config_setting targets for variant selection.
 """
 
@@ -74,7 +74,7 @@ def _target_select(target_dict, prefix, suffix, workspace_repo, is_aggregated = 
     lines.append("    })")
     return "\n".join(lines)
 
-def _pin_build(target_name, pin_target_dict, package, workspace_repo, workspace_lock_target_dict = None, has_aggregated_variant = False, extras_dict = None, default_variants = {}):
+def _pin_build(target_name, pin_target_dict, package, workspace_repo, workspace_lock_target_dict = None, has_aggregated_variant = False, extras_dict = None, default_variants = {}, target_platform = None, transition_bzl = None):
     """Generates the BUILD file for a pin directory, pointing to the workspace."""
     lock_target_dict = workspace_lock_target_dict if workspace_lock_target_dict else pin_target_dict
     lock_ref = "@{}//_lock:".format(workspace_repo)
@@ -85,49 +85,95 @@ def _pin_build(target_name, pin_target_dict, package, workspace_repo, workspace_
         'package(default_visibility = ["//visibility:public"])',
         "",
     ]
+
+    if target_platform and not transition_bzl:
+        # Platform-only transition (no flags): transition at the per-package level.
+        lines.append('load("@rules_pycross//pycross:defs.bzl", "pycross_transitioning_file_proxy", "pycross_transitioning_library_proxy")')
+        lib_rule = "pycross_transitioning_library_proxy"
+        file_rule = "pycross_transitioning_file_proxy"
+    else:
+        # No transition, or flags-based transition (applied at root level).
+        lines.append('load("@rules_pycross//pycross:defs.bzl", "pycross_file_proxy", "pycross_library_proxy")')
+        lib_rule = "pycross_library_proxy"
+        file_rule = "pycross_file_proxy"
+    lines.append("")
+
+    # Only emit the platform attr when using transitioning rules at per-package level.
+    # When transition_bzl is set, flags are applied at root level instead.
+    emit_platform = target_platform and not transition_bzl
+
     if lock_target_dict:
         lines.extend([
             "alias(",
             '    name = "{}",'.format(target_name),
-            "    actual = {},".format(_target_select(lock_target_dict, lock_ref, "", workspace_repo, is_aggregated = has_aggregated_variant, default_variants = default_variants)),
+            '    actual = ":{}",'.format(_safe_name(target_name, "pkg")),
             ")",
             "",
-            "alias(",
+            lib_rule + "(",
             '    name = "{}",'.format(_safe_name(target_name, "pkg")),
             "    actual = {},".format(_target_select(lock_target_dict, lock_ref, "", workspace_repo, is_aggregated = has_aggregated_variant, default_variants = default_variants)),
+        ])
+        if emit_platform:
+            lines.append('    platform = "{}",'.format(target_platform))
+        lines.extend([
             ")",
             "",
-            "alias(",
+            file_rule + "(",
             '    name = "{}",'.format(_safe_name(target_name, "wheel")),
             "    actual = {},".format(_target_select(pin_target_dict, wheel_ref, "", workspace_repo, default_variants = default_variants)),
+        ])
+        if emit_platform:
+            lines.append('    platform = "{}",'.format(target_platform))
+        lines.extend([
             ")",
             "",
-            "alias(",
+            file_rule + "(",
             '    name = "{}",'.format(_safe_name(target_name, "dist_info")),
             "    actual = {},".format(_target_select(lock_target_dict, lock_ref + "_dist_info_", "", workspace_repo, default_variants = default_variants)),
+        ])
+        if emit_platform:
+            lines.append('    platform = "{}",'.format(target_platform))
+        lines.extend([
             ")",
             "",
             "alias(",
             '    name = "{}",'.format(_safe_name(target_name, "data")),
-            "    actual = {},".format(_target_select(lock_target_dict, lock_ref, "", workspace_repo, is_aggregated = has_aggregated_variant, default_variants = default_variants)),
+            '    actual = ":{}",'.format(_safe_name(target_name, "pkg")),
             ")",
         ])
 
         if extras_dict:
-            lines.extend([
-                "alias(",
-                '    name = "[]",',
-                "    actual = {},".format(_target_select(lock_target_dict, lock_ref, "", workspace_repo, default_variants = default_variants)),
-                ")",
-                "",
-            ])
+            if not has_aggregated_variant:
+                lines.extend([
+                    "alias(",
+                    '    name = "[]",',
+                    '    actual = ":{}",'.format(_safe_name(target_name, "pkg")),
+                    ")",
+                    "",
+                ])
+            else:
+                lines.extend([
+                    lib_rule + "(",
+                    '    name = "[]",',
+                    "    actual = {},".format(_target_select(lock_target_dict, lock_ref, "", workspace_repo, default_variants = default_variants)),
+                ])
+                if emit_platform:
+                    lines.append('    platform = "{}",'.format(target_platform))
+                lines.extend([
+                    ")",
+                    "",
+                ])
 
         sdist_file = package.get("sdist_file")
         if sdist_file:
             lines.extend([
-                "alias(",
+                file_rule + "(",
                 '    name = "{}",'.format(_safe_name(target_name, "sdist")),
                 "    actual = {},".format(_target_select(pin_target_dict, sdist_ref, "", workspace_repo, default_variants = default_variants)),
+            ])
+            if emit_platform:
+                lines.append('    platform = "{}",'.format(target_platform))
+            lines.extend([
                 ")",
                 "",
             ])
@@ -135,9 +181,13 @@ def _pin_build(target_name, pin_target_dict, package, workspace_repo, workspace_
     extras_dict = extras_dict or {}
     for extra_name, extra_target_dict in sorted(extras_dict.items()):
         lines.extend([
-            "alias(",
+            lib_rule + "(",
             '    name = "[{}]",'.format(extra_name),
             "    actual = {},".format(_target_select(extra_target_dict, lock_ref, "", workspace_repo, default_variants = default_variants)),
+        ])
+        if emit_platform:
+            lines.append('    platform = "{}",'.format(target_platform))
+        lines.extend([
             ")",
             "",
         ])
@@ -197,12 +247,135 @@ def _thin_package_repo_impl(rctx):
         'load("@rules_pycross//pycross/private:modules_mapping.bzl", "pycross_modules_mapping")',
         'package(default_visibility = ["//visibility:public"])',
         "",
+    ]
+
+    # Generate internal platform + transition if needed
+    target_platform = rctx.attr.platform
+    has_flags = bool(rctx.attr.flags)
+    has_constraints = bool(rctx.attr.constraint_values)
+
+    if not target_platform and (has_flags or has_constraints):
+        target_platform = "//:_internal_platform"
+
+        # Generate the platform target (for constraint_values / toolchain resolution).
+        root_build_lines.extend([
+            "platform(",
+            '    name = "_internal_platform",',
+        ])
+        if has_constraints:
+            root_build_lines.append("    constraint_values = [")
+            for cv in rctx.attr.constraint_values:
+                root_build_lines.append('        "{}",'.format(cv))
+            root_build_lines.append("    ],")
+        root_build_lines.extend([
+            ")",
+            "",
+        ])
+
+    if has_flags and target_platform:
+        # Bazel's platform(flags=[...]) only applies during top-level platform
+        # mapping, NOT when --platforms is set via a Starlark transition.
+        # So we generate a _transition.bzl with custom proxy rules whose
+        # transition sets both --platforms and the individual flag values.
+
+        # Parse flags: extract label and value from "--label=value" strings.
+        flag_settings = {}  # label -> value
+        for f in rctx.attr.flags:
+            stripped = f.lstrip("-")
+            if "=" in stripped:
+                label_part, value = stripped.split("=", 1)
+            else:
+                label_part, value = stripped, "True"
+            flag_settings[label_part] = value
+
+        # Build the transition outputs list and return dict
+        outputs_lines = []
+        return_lines = []
+        for label, value in sorted(flag_settings.items()):
+            outputs_lines.append('    "{}",'.format(label))
+
+            # bool_flag expects actual booleans, not strings.
+            if value in ("True", "true", "1"):
+                py_value = "True"
+            elif value in ("False", "false", "0"):
+                py_value = "False"
+            else:
+                py_value = repr(value)
+            return_lines.append('        "{}": {},'.format(label, py_value))
+
+        transition_bzl = """\
+\"\"\"Generated transition rules for {repo} with pinned flag values.\"\"\"
+
+load("@rules_python//python:py_info.bzl", "PyInfo")
+load("@rules_pycross//pycross/private:proxy.bzl",
+    _file_proxy_impl = "pycross_file_proxy_impl",
+    _library_proxy_impl = "pycross_library_proxy_impl",
+)
+load("@rules_pycross//pycross/private:util.bzl", "PY_COMMON_ATTRS")
+
+def _transition_impl(settings, attr):
+    return {{
+        "//command_line_option:platforms": [str(attr.platform)],
+{return_dict}
+    }}
+
+_repo_transition = transition(
+    implementation = _transition_impl,
+    inputs = ["//command_line_option:platforms"],
+    outputs = [
+        "//command_line_option:platforms",
+{outputs}
+    ],
+)
+
+pycross_transitioning_library_proxy = rule(
+    implementation = _library_proxy_impl,
+    attrs = dict({{
+        "actual": attr.label(
+            mandatory = True,
+            providers = [PyInfo],
+            cfg = _repo_transition,
+        ),
+        "deps": attr.label_list(
+            default = [],
+            providers = [PyInfo],
+        ),
+        "platform": attr.label(mandatory = True),
+        "_allowlist_function_transition": attr.label(
+            default = "@bazel_tools//tools/allowlists/function_transition_allowlist",
+        ),
+    }}, **PY_COMMON_ATTRS),
+    provides = [DefaultInfo, PyInfo],
+)
+
+pycross_transitioning_file_proxy = rule(
+    implementation = _file_proxy_impl,
+    attrs = dict({{
+        "actual": attr.label(
+            mandatory = True,
+            cfg = _repo_transition,
+        ),
+        "platform": attr.label(mandatory = True),
+        "_allowlist_function_transition": attr.label(
+            default = "@bazel_tools//tools/allowlists/function_transition_allowlist",
+        ),
+    }}),
+    provides = [DefaultInfo],
+)
+""".format(
+            repo = rctx.attr.member_name,
+            return_dict = "\n".join(return_lines),
+            outputs = "\n".join(outputs_lines),
+        )
+        rctx.file("_transition.bzl", transition_bzl)
+
+    root_build_lines.extend([
         'exports_files(["defs.bzl", "requirements.bzl"])',
         "",
         "pycross_modules_mapping(",
         '    name = "modules_mapping",',
         "    deps = [",
-    ]
+    ])
     for pin_name in sorted(pins.keys()):
         pin_target_dict = pins[pin_name]
         for pin_target in sorted(pin_target_dict.values()):
@@ -223,18 +396,36 @@ def _thin_package_repo_impl(rctx):
         "",
     ])
 
+    # When flags are set, root-level targets must be transitioning proxies
+    # (not aliases) so the transition is applied BEFORE select() resolution
+    # in per-package BUILD files.
+    if has_flags and target_platform:
+        root_build_lines.extend([
+            'load("//:_transition.bzl", "pycross_transitioning_file_proxy", "pycross_transitioning_library_proxy")',
+            "",
+        ])
+
     for base_pin_name in sorted(grouped_pins.keys()):
         group = grouped_pins[base_pin_name]
         us_name = underscore_name(base_pin_name)
         base_target = group["base_target"]
 
         if base_target:
-            root_build_lines.extend([
-                "alias(",
-                '    name = "{}",'.format(base_pin_name),
-                '    actual = "//{}:pkg",'.format(us_name),
-                ")",
-            ])
+            if has_flags and target_platform:
+                root_build_lines.extend([
+                    "pycross_transitioning_library_proxy(",
+                    '    name = "{}",'.format(base_pin_name),
+                    '    actual = "//{}:pkg",'.format(us_name),
+                    '    platform = "{}",'.format(target_platform),
+                    ")",
+                ])
+            else:
+                root_build_lines.extend([
+                    "alias(",
+                    '    name = "{}",'.format(base_pin_name),
+                    '    actual = "//{}:pkg",'.format(us_name),
+                    ")",
+                ])
             if group["extras"]:
                 root_build_lines.extend([
                     "alias(",
@@ -271,7 +462,7 @@ def _thin_package_repo_impl(rctx):
             base_pkg_key = "{}@{}".format(base_name, version)
             base_packages_with_extras[base_pkg_key] = True
 
-    # Pin directories: aliases pointing to @workspace//_lock targets
+    # Pin directories: proxies pointing to @workspace//_lock targets
     for base_pin_name, group in sorted(grouped_pins.items()):
         base_target_dict = group["base_target"]
         if not base_target_dict and group["extras"]:
@@ -319,7 +510,7 @@ def _thin_package_repo_impl(rctx):
 
         rctx.file(
             "{}/BUILD.bazel".format(us_name),
-            _pin_build(us_name, base_target_dict, package, workspace_repo, workspace_lock_target_dict, has_aggregated_variant, extras_dict, default_variants = default_variants),
+            _pin_build(us_name, base_target_dict, package, workspace_repo, workspace_lock_target_dict, has_aggregated_variant, extras_dict, default_variants = default_variants, target_platform = target_platform, transition_bzl = "//:_transition.bzl" if has_flags else None),
         )
 
     # _variants/ BUILD: alias bool_flag and config_setting targets
@@ -402,5 +593,19 @@ thin_package_repo = repository_rule(
         "backend_configs": attr.string_dict(
             doc = "Map of rule names to JSON-encoded config dicts.",
         ),
+        "flags": attr.string_list(
+            doc = "List of flags to apply to the generated platform.",
+            default = [],
+        ),
+        "constraint_values": attr.string_list(
+            doc = "List of constraint values to apply to the generated platform.",
+            default = [],
+        ),
+        "platform": attr.string(
+            doc = "Existing platform target to use directly.",
+        ),
     },
 )
+
+# Visible for testing
+pin_build_for_testing = _pin_build

@@ -22,8 +22,8 @@ Usage in generated lock.bzl:
     )
 """
 
-load("@rules_python//python:defs.bzl", "py_library")
 load("//pycross/private:cycle_dep_needed.bzl", "pycross_cycle_dep_needed")
+load("//pycross/private:proxy.bzl", "pycross_library_proxy")
 
 def _sanitize(name):
     """Sanitize a package key for use in target names."""
@@ -193,9 +193,9 @@ def pycross_cycle_member_marker_deps(
     unconditional_deps = find_unconditional_deps(member, other_members, edges)
 
     # 2. Add them to unconditional deps list directly
-    deps = [":" + raw_name]
+    other_deps = []
     for u_dep in unconditional_deps:
-        deps.append(":_raw_" + u_dep)
+        other_deps.append(":_raw_" + u_dep)
 
     # 3. Filter other_members to only include those NOT unconditionally reachable.
     # This is safe to pass as the reduced member set to compute_reachability_groups:
@@ -237,12 +237,13 @@ def pycross_cycle_member_marker_deps(
 
         # Gate ALL members of this group behind the representative's check
         group_deps = [":_raw_" + m for m in group_members]
-        deps = deps + select({
+        other_deps = other_deps + select({
             ":" + pair_name + "_match": group_deps,
             "//conditions:default": [],
         })
 
-    py_library(
+    pycross_library_proxy(
         name = name,
-        deps = deps,
+        actual = ":" + raw_name,
+        deps = other_deps,
     )

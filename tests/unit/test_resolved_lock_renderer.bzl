@@ -168,7 +168,7 @@ def _test_cycle_group_marker_specific_rendering(name):
 
 # buildifier: disable=unused-variable
 def _test_extras_rendering_impl(env, target):
-    """Verify extra_dependencies generate py_library targets named [extra_name]."""
+    """Verify extra_dependencies generate pycross_library_proxy targets named [extra_name]."""
     lock = {
         "packages": {
             "mylib@1.0": {
@@ -252,8 +252,8 @@ def _test_extras_rendering_impl(env, target):
     # [dev] should use select for marker-conditional deps
     env.expect.that_bool("select({" in res).equals(True)
 
-    # loads py_library since we have extras
-    env.expect.that_bool("py_library" in res).equals(True)
+    # extras use pycross_library_proxy
+    env.expect.that_bool("pycross_library_proxy" in res).equals(True)
 
     # Should generate an [_all_] target that aggregates the base and all extras
     env.expect.that_bool('name = "mylib[_all_]@1.0"' in res).equals(True)

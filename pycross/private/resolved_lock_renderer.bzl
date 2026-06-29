@@ -6,10 +6,12 @@ and a wheel chooser for platform-specific wheel selection.
 
 Naming conventions for generated targets:
   - `_raw_<pkg_key>`: The underlying `pycross_wheel_library` or `pycross_wheel_build` target.
-  - `<pkg_key>`: A `py_library` that wraps the raw target. If the package is part of a cycle,
-    the public target is created by `pycross_cycle_member_marker_deps`.
-  - `<pkg_name>[_all_]@<version>`: A synthetic `py_library` that aggregates the base package and
-    all of its parsed extras into a single target.
+  - `<pkg_key>`: For cycle members, this is a `pycross_library_proxy` (created by
+    `pycross_cycle_member_marker_deps`) that wraps the raw target and adds conditional deps.
+    For extras-only packages (e.g., `name[extra]@version`), this is a `pycross_library_proxy`
+    with `actual` pointing to the base package and extra-specific deps in `deps`.
+  - `<pkg_name>[_all_]@<version>`: A synthetic `pycross_library_proxy` that aggregates the
+    base package and all of its parsed extras into a single target.
 """
 
 def _ind(text, tabs = 1):
@@ -44,7 +46,7 @@ def _wheel_target(file_ref, sdist_file, pkg_key, pkg, repo_map, sdist_map, rctx_
     return repo_map.get(key)
 
 def _render_extras_aggregates(lines, packages):
-    """Renders [_all_] py_library targets that aggregate a base package and all its extras."""
+    """Renders [_all_] pycross_library_proxy targets that aggregate a base package and all its extras."""
     base_packages_with_extras = {}
     for pkg_key in packages.keys():
         if "[" in pkg_key:
@@ -58,10 +60,10 @@ def _render_extras_aggregates(lines, packages):
     for base_pkg_key, extra_keys in sorted(base_packages_with_extras.items()):
         base_name, version = base_pkg_key.split("@", 1)
         lines.extend([
-            _ind("py_library("),
+            _ind("pycross_library_proxy("),
             _ind('name = "{}[_all_]@{}",'.format(base_name, version), 2),
+            _ind('actual = ":{}",'.format(base_pkg_key), 2),
             _ind("deps = [", 2),
-            _ind('":{}\",'.format(base_pkg_key), 3),
         ])
         for extra_key in sorted(extra_keys):
             lines.append(_ind('":{}\",'.format(extra_key), 3))
@@ -169,7 +171,7 @@ def _render_marker_cycle_member_deps(lines, cycle_groups, packages):
     """Renders pycross_cycle_member_marker_deps macro calls for each cycle member.
 
     Each macro call internally creates N reachability evaluators + config_settings
-    and wraps them in a py_library with select() per dep.
+    and wraps them in a pycross_library_proxy with select() per dep.
 
     Only cycle group members that appear in ``packages`` are rendered; groups
     whose members are entirely outside the resolved set are silently skipped.
@@ -320,10 +322,15 @@ def _render_marker_package(lines, pkg_key, pkg, packages, repo_map, sdist_map, r
         _render_marker_package_deps(lines, pkg_key_san, pkg, packages)
 
     if not has_wheel_candidates and "[" in pkg_key:
-        # Extra packages just wrap their dependencies
+        # Extras packages wrap the base package plus their own deps.
+        base_name = pkg_key.split("[", 1)[0]
+        _, version = pkg_key.split("]", 1)
+        version = version.lstrip("@")
+        base_pkg_key = "{}@{}".format(base_name, version)
         lines.extend([
-            _ind("py_library("),
+            _ind("pycross_library_proxy("),
             _ind('name = "{}",'.format(pkg_key), 2),
+            _ind('actual = ":{}",'.format(base_pkg_key), 2),
             _ind("deps = _{}_deps,".format(pkg_key_san) if has_runtime_deps else "deps = [],", 2),
             _ind(")"),
             "",
@@ -453,7 +460,7 @@ def render_lock_bzl(lock, repo_map, sdist_map = None, rctx_name = ""):
     packages = lock.get("packages", {})
     cycle_groups = lock.get("cycle_groups", {})
 
-    pycross_loads = ["pycross_dist_info", "pycross_pep508_evaluator", "pycross_wheel_chooser", "pycross_wheel_library"]
+    pycross_loads = ["pycross_dist_info", "pycross_library_proxy", "pycross_pep508_evaluator", "pycross_wheel_chooser", "pycross_wheel_library"]
     if cycle_groups:
         pycross_loads.insert(0, "pycross_cycle_member_marker_deps")
 
@@ -465,7 +472,6 @@ def render_lock_bzl(lock, repo_map, sdist_map = None, rctx_name = ""):
         'load("@rules_pycross//pycross:defs.bzl", {})'.format(
             ", ".join(['"{}"'.format(s) for s in sorted(pycross_loads)]),
         ),
-        'load("@rules_python//python:defs.bzl", "py_library")',
         'load("@rules_pycross//pycross/private:pep508_marker_values.bzl",',
         '    "FREETHREADED_VALUES",',
         '    "LIBC_VALUES",',

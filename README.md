@@ -434,6 +434,58 @@ conflicts = [
 
 The generated flags follow the pattern `group_<name>` (e.g., `--@pypi//_variants:group_test-fast=True`).
 
+### Platform Transitions
+
+When a workspace member needs to be built under a specific platform configuration—for example, to pin a variant flag or target a particular architecture—you can declare a platform transition on the member import. This causes all proxy targets in the thin repo to apply a Bazel `--platforms` transition, ensuring the backing `_lock` targets are analyzed under the specified platform.
+
+There are three ways to specify the transition:
+
+**1. Using `flags` — embed `--flag=value` settings into a generated platform:**
+
+```python
+lock_import.uv_member(
+    workspace = "shared",
+    project = "ml-pipeline",
+    flags = [
+        "--@pypi//_variants:extra_cu124=True",
+    ],
+)
+```
+
+**2. Using `constraint_values` — generate a platform with specific constraints:**
+
+```python
+lock_import.uv_member(
+    workspace = "shared",
+    project = "ml-pipeline",
+    constraint_values = [
+        "@platforms//os:linux",
+        "@platforms//cpu:x86_64",
+    ],
+)
+```
+
+**3. Using `platform` — reference an existing platform target directly:**
+
+```python
+lock_import.uv_member(
+    workspace = "shared",
+    project = "ml-pipeline",
+    platform = "@//platforms:linux_cuda",
+)
+```
+
+> [!NOTE]
+> `flags` and `constraint_values` can be combined (they are merged into a single generated platform), but `platform` is mutually exclusive with both.
+
+These attributes are available on `uv_member`, `uv_all_members`, `import_uv`, and their PDM/Poetry/Pylock equivalents.
+
+When `constraint_values` alone are specified, `rules_pycross` generates an internal `platform()` target and uses `pycross_transitioning_library_proxy` / `pycross_transitioning_file_proxy` at each package level to apply the `--platforms` transition.
+
+When `flags` are specified (with or without `constraint_values`), `rules_pycross` additionally generates a custom `_transition.bzl` in the thin repo. This is necessary because Bazel's `platform(flags=[...])` mechanism only applies during top-level platform mapping — it does **not** take effect when `--platforms` is set via a Starlark transition. The generated transition directly sets both `--platforms` and the individual flag values. Root-level targets become transitioning proxies so that `select()` expressions in per-package BUILD files resolve in the transitioned configuration where the flags are set.
+
+This is particularly useful for locking variant selections to a member without requiring `--flag` arguments on every `bazel build` invocation.
+
 ---
 
 ## rules_python Compatibility

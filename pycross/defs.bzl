@@ -5,6 +5,13 @@ load("//pycross/private:dist_info.bzl", _pycross_dist_info = "pycross_dist_info"
 load("//pycross/private:modules_mapping.bzl", _pycross_modules_mapping = "pycross_modules_mapping")
 load("//pycross/private:pep508_evaluator.bzl", _pycross_pep508_evaluator = "pycross_pep508_evaluator")
 load("//pycross/private:providers.bzl", _PycrossExtractedWheelInfo = "PycrossExtractedWheelInfo")
+load(
+    "//pycross/private:proxy.bzl",
+    _pycross_file_proxy = "pycross_file_proxy",
+    _pycross_library_proxy = "pycross_library_proxy",
+    _pycross_transitioning_file_proxy = "pycross_transitioning_file_proxy",
+    _pycross_transitioning_library_proxy = "pycross_transitioning_library_proxy",
+)
 load("//pycross/private:pypi_file.bzl", _pypi_file = "pypi_file")
 load("//pycross/private:target_platform.bzl", _pycross_target_platform = "pycross_target_platform")
 load("//pycross/private:wheel_chooser.bzl", _pycross_wheel_chooser = "pycross_wheel_chooser")
@@ -35,5 +42,10 @@ pycross_wheel_chooser = _pycross_wheel_chooser
 pycross_wheel_transform = _pycross_wheel_transform
 pycross_wheel_zipimport_library = _pycross_wheel_zipimport_library
 pycross_path_tool = _pycross_path_tool
+
+pycross_file_proxy = _pycross_file_proxy
+pycross_library_proxy = _pycross_library_proxy
+pycross_transitioning_file_proxy = _pycross_transitioning_file_proxy
+pycross_transitioning_library_proxy = _pycross_transitioning_library_proxy
 
 pypi_file = _pypi_file
