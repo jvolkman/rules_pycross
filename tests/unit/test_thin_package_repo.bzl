@@ -4,7 +4,7 @@ load("@rules_testing//lib:analysis_test.bzl", "analysis_test", "test_suite")
 load("@rules_testing//lib:util.bzl", "util")
 
 # buildifier: disable=bzl-visibility
-load("//pycross/private:thin_package_repo.bzl", "pin_build_for_testing")
+load("//pycross/private:thin_package_repo.bzl", "is_platform_specific_for_testing", "pin_build_for_testing", "requirements_bzl_for_testing")
 
 # ── Test: no platform → non-transitioning proxies ──────────────────
 
@@ -280,6 +280,102 @@ def _test_pin_build_with_transition_bzl(name):
 
 # ── Test suite ─────────────────────────────────────────────────────
 
+# ── Test: _is_platform_specific ────────────────────────────────────
+
+# buildifier: disable=unused-variable
+def _test_is_platform_specific_impl(env, target):
+    """Verify _is_platform_specific correctly classifies packages."""
+
+    # Package with wheels but no sdist → platform-specific
+    env.expect.that_bool(is_platform_specific_for_testing({
+        "wheel_candidates": [{"filename": "pkg-1.0-cp310-win_amd64.whl"}],
+    })).equals(True)
+
+    # Package with wheels AND sdist → NOT platform-specific
+    env.expect.that_bool(is_platform_specific_for_testing({
+        "wheel_candidates": [{"filename": "pkg-1.0-cp310-win_amd64.whl"}],
+        "sdist_file": {"key": "sdist_key"},
+    })).equals(False)
+
+    # Package with wheels AND build_target → NOT platform-specific
+    env.expect.that_bool(is_platform_specific_for_testing({
+        "wheel_candidates": [{"filename": "pkg-1.0-cp310-win_amd64.whl"}],
+        "build_target": "@some//:target",
+    })).equals(False)
+
+    # Package with no wheel_candidates (extras wrapper) → NOT platform-specific
+    env.expect.that_bool(is_platform_specific_for_testing({})).equals(False)
+
+def _test_is_platform_specific(name):
+    util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
+    analysis_test(name = name, target = name + "_subject", impl = _test_is_platform_specific_impl)
+
+# ── Test: _requirements_bzl with maybe aliases ─────────────────────
+
+# buildifier: disable=unused-variable
+def _test_requirements_bzl_maybe_aliases_impl(env, target):
+    """Verify all_requirements uses _maybe_ entries for platform-specific packages."""
+    mock_rctx = struct(name = "my_repo")
+    pins = {
+        "numpy": {"": "numpy@1.26.0"},
+        "pywin32": {"": "pywin32@312"},
+    }
+    packages = {
+        "numpy@1.26.0": {
+            "wheel_candidates": [{"filename": "numpy-1.26.0-cp310-manylinux.whl"}],
+            "sdist_file": {"key": "numpy_sdist"},
+        },
+        "pywin32@312": {
+            "wheel_candidates": [{"filename": "pywin32-312-cp310-win_amd64.whl"}],
+            # No sdist → platform-specific
+        },
+    }
+    res = requirements_bzl_for_testing(mock_rctx, pins, packages)
+
+    # numpy has sdist → should be unconditional
+    env.expect.that_bool("@@my_repo//:numpy" in res).equals(True)
+    env.expect.that_bool("@@my_repo//:_maybe_numpy" in res).equals(False)
+
+    # pywin32 has no sdist → should use _maybe_ prefix
+    env.expect.that_bool("@@my_repo//:_maybe_pywin32" in res).equals(True)
+    env.expect.that_bool("@@my_repo//:pywin32" not in res or "@@my_repo//:_maybe_pywin32" in res).equals(True)
+
+def _test_requirements_bzl_maybe_aliases(name):
+    util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
+    analysis_test(name = name, target = name + "_subject", impl = _test_requirements_bzl_maybe_aliases_impl)
+
+# ── Test: _requirements_bzl all unconditional ──────────────────────
+
+# buildifier: disable=unused-variable
+def _test_requirements_bzl_all_unconditional_impl(env, target):
+    """When all packages have sdist, no _maybe_ entries should appear."""
+    mock_rctx = struct(name = "my_repo")
+    pins = {
+        "foo": {"": "foo@1.0"},
+        "bar": {"": "bar@2.0"},
+    }
+    packages = {
+        "foo@1.0": {
+            "wheel_candidates": [{"filename": "foo-1.0-py3-none-any.whl"}],
+            "sdist_file": {"key": "foo_sdist"},
+        },
+        "bar@2.0": {
+            "wheel_candidates": [{"filename": "bar-2.0-py3-none-any.whl"}],
+            "sdist_file": {"key": "bar_sdist"},
+        },
+    }
+    res = requirements_bzl_for_testing(mock_rctx, pins, packages)
+
+    env.expect.that_bool("_maybe_" in res).equals(False)
+    env.expect.that_bool("@@my_repo//:foo" in res).equals(True)
+    env.expect.that_bool("@@my_repo//:bar" in res).equals(True)
+
+def _test_requirements_bzl_all_unconditional(name):
+    util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
+    analysis_test(name = name, target = name + "_subject", impl = _test_requirements_bzl_all_unconditional_impl)
+
+# ── Test suite ─────────────────────────────────────────────────────
+
 def thin_package_repo_test_suite(name):
     test_suite(
         name = name,
@@ -292,5 +388,8 @@ def thin_package_repo_test_suite(name):
             _test_pin_build_variants_with_platform,
             _test_pin_build_basic_structure,
             _test_pin_build_with_transition_bzl,
+            _test_is_platform_specific,
+            _test_requirements_bzl_maybe_aliases,
+            _test_requirements_bzl_all_unconditional,
         ],
     )
