@@ -38,6 +38,10 @@ pycross.configure_interpreter(
     python_defs_file = "@python_%s//:defs.bzl" % py_underscore_version,
     python_interpreter_target = "@python_%s_host//:python" % py_underscore_version,
 )
+
+pycross_dev = use_extension("@rules_pycross//pycross/extensions:pycross.bzl", "pycross_dev", dev_dependency = True)
+use_repo(pycross_dev, "rules_pycross_deps")
+
 pycross.configure_toolchains()
 use_repo(
     pycross,

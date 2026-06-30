@@ -1,0 +1,561 @@
+"""Starlark implementation of the raw lock resolver."""
+
+load("@pypackaging.bzl", "pypackaging")
+load(":util.bzl", "parse_package_key")
+
+def _file_key(f):
+    if not f.get("sha256"):
+        fail("PackageFile missing sha256: " + str(f))
+    return "{}/{}".format(f["name"], f["sha256"])
+
+def _resolve_single_version(name, versions_by_name, all_versions, attr_name):
+    if "@" in name:
+        parts = parse_package_key(name)
+        canonical_key = "{}@{}".format(parts.name, parts.version)
+        if parts.extra:
+            canonical_key = "{}[{}]@{}".format(parts.name, parts.extra, parts.version)
+
+        if canonical_key not in all_versions:
+            fail('{} entry "{}" matches no packages'.format(attr_name, name))
+        return canonical_key
+
+    parts = parse_package_key(name)
+    dep_name = parts.name
+    if parts.extra:
+        dep_name = "{}[{}]".format(parts.name, parts.extra)
+
+    options = versions_by_name.get(dep_name, [])
+    if not options:
+        fail('{} entry "{}" matches no packages'.format(attr_name, name))
+
+    if len(options) > 1:
+        fail('{} entry "{}" matches multiple packages (choose one): {}'.format(attr_name, name, sorted(options)))
+
+    return options[0]
+
+def _apply_annotation(ann, versions_by_name, all_package_keys):
+    build_deps = None
+    if "build_dependencies" in ann:
+        build_deps = []
+        for dep in ann["build_dependencies"]:
+            resolved_dep = _resolve_single_version(
+                dep,
+                versions_by_name,
+                all_package_keys,
+                "build_dependencies",
+            )
+            build_deps.append(resolved_dep)
+
+    ignore_deps = {}
+    for dep in ann.get("ignore_dependencies", []):
+        parts = parse_package_key(dep)
+        dep_name = parts.name
+        if parts.extra:
+            dep_name = "{}[{}]".format(parts.name, parts.extra)
+        if dep_name not in versions_by_name and dep not in all_package_keys:
+            fail('package_ignore_dependencies entry "{}" matches no packages'.format(dep))
+        ignore_deps[dep] = True
+
+    return struct(
+        build_dependencies = build_deps,
+        build_repo = ann.get("build_repo"),
+        build_target = ann.get("build_target"),
+        always_build = ann.get("always_build", False),
+        ignore_dependencies = ignore_deps,
+        install_exclude_globs = {g: True for g in ann.get("install_exclude_globs", [])},
+        post_install_patches = ann.get("post_install_patches", []),
+        pre_build_patches = ann.get("pre_build_patches", []),
+        site_hooks = ann.get("site_hooks", []),
+        build_backend = ann.get("build_backend"),
+        site_paths = ann.get("site_paths", []),
+        bin_paths = ann.get("bin_paths", []),
+        data_paths = ann.get("data_paths", []),
+        include_paths = ann.get("include_paths", []),
+    )
+
+def _collect_package_annotations(annotations_data, versions_by_name, all_package_keys):
+    annotations = {}
+
+    wildcard_annotation = annotations_data.get("*")
+    specific_annotations = {}
+    for k, v in annotations_data.items():
+        if k != "*":
+            specific_annotations[k] = v
+
+    specific_keys = {}
+    for pkg, ann in specific_annotations.items():
+        resolved_pkg = _resolve_single_version(
+            pkg,
+            versions_by_name,
+            all_package_keys,
+            "annotations",
+        )
+        annotations[resolved_pkg] = _apply_annotation(ann, versions_by_name, all_package_keys)
+        specific_keys[resolved_pkg] = True
+
+    wildcard_only_keys = {}
+    if wildcard_annotation:
+        for pkg_key in all_package_keys:
+            if pkg_key not in specific_keys:
+                annotations[pkg_key] = _apply_annotation(wildcard_annotation, versions_by_name, all_package_keys)
+                wildcard_only_keys[pkg_key] = True
+
+    return annotations, wildcard_only_keys
+
+def _create_package_resolver(pkg_key, pkg, ann, default_build_dependencies, context):
+    parts = parse_package_key(pkg_key)
+    pkg_name = parts.name
+    pkg_version = parts.version
+    pkg_extra = parts.extra
+
+    package_sources = {}
+    for f in pkg.get("files", []):
+        package_sources[f["name"]] = {"file": f}
+
+    pkg_key_no_extra = "{}@{}".format(pkg_name, pkg_version)
+    for filename, f in context.remote_wheels.get(pkg_key_no_extra, {}).items():
+        package_sources[filename] = {"file": f}
+
+    for filename, label in context.local_wheels.get(pkg_key_no_extra, {}).items():
+        package_sources[filename] = {"label": label}
+
+    wheel_candidates = []
+    wheel_candidate_files = {}
+    for filename, source in sorted(package_sources.items()):
+        if not filename.endswith(".whl"):
+            continue
+
+        file_ref = None
+        if "label" in source:
+            file_ref = {"label": source["label"]}
+        elif "file" in source:
+            f = source["file"]
+            fk = _file_key(f)
+            file_ref = {"key": fk}
+            wheel_candidate_files[fk] = f
+
+        wheel_candidates.append({
+            "filename": filename,
+            "file_reference": file_ref,
+        })
+
+    sdist_file = None
+    sdist_file_obj = None
+    for f in pkg.get("files", []):
+        if not f["name"].endswith(".whl"):
+            sdist_file = {"key": _file_key(f)}
+            sdist_file_obj = f
+            break
+
+    build_dependencies = []
+    all_dependency_keys = []
+    ann_build_deps = ann.build_dependencies if ann else None
+    ann_ignore_deps = ann.ignore_dependencies if ann else {}
+
+    normal_deps = {"{}@{}".format(d["name"], d["version"]): True for d in pkg.get("dependencies", [])}
+
+    if ann_build_deps != None:
+        for dep_key in ann_build_deps:
+            if dep_key not in normal_deps:
+                build_dependencies.append(dep_key)
+                all_dependency_keys.append(dep_key)
+    else:
+        for dep_key in default_build_dependencies:
+            parts = parse_package_key(dep_key)
+            dep_name = parts.name
+            if parts.extra:
+                dep_name = "{}[{}]".format(parts.name, parts.extra)
+            if dep_name not in ann_ignore_deps and dep_key not in normal_deps:
+                build_dependencies.append(dep_key)
+                all_dependency_keys.append(dep_key)
+
+    dependencies = []
+    marker_dependencies = []
+    for dep in pkg.get("dependencies", []):
+        dep_key = "{}@{}".format(dep["name"], dep["version"])
+        parts = parse_package_key(dep_key)
+        dep_name = parts.name
+        if parts.extra:
+            dep_name = "{}[{}]".format(parts.name, parts.extra)
+        if dep_name not in ann_ignore_deps:
+            dependencies.append(dep)
+            marker_dependencies.append({
+                "key": dep_key,
+                "marker": dep.get("marker", ""),
+            })
+            all_dependency_keys.append(dep_key)
+
+    always_build = ann.always_build if ann else False
+    uses_sdist = always_build or (context.always_include_sdist and sdist_file != None) or not wheel_candidates
+
+    if not pkg_extra and not wheel_candidates and sdist_file == None:
+        fail("Package {} has no compatible wheels and no sdist found.".format(pkg_key))
+
+    resolved_pkg = {
+        "key": pkg_key,
+        "name": pkg_name,
+        "version": pkg_version,
+        "extra": pkg_extra,
+        "python_versions": pkg.get("python_versions", ""),
+        "dependencies": dependencies,
+        "marker_dependencies": marker_dependencies,
+        "files": pkg.get("files", []),
+        "sdist_file": sdist_file,
+        "build_target": ann.build_target if ann else None,
+        "build_repo": ann.build_repo if ann else None,
+        "always_build": always_build,
+        "build_dependencies": build_dependencies,
+        "install_exclude_globs": list(ann.install_exclude_globs.keys()) if ann else [],
+        "post_install_patches": ann.post_install_patches if ann else [],
+        "pre_build_patches": ann.pre_build_patches if ann else [],
+        "site_hooks": ann.site_hooks if ann else [],
+        "build_backend": ann.build_backend if ann else None,
+        "site_paths": ann.site_paths if ann else [],
+        "bin_paths": ann.bin_paths if ann else [],
+        "data_paths": ann.data_paths if ann else [],
+        "include_paths": ann.include_paths if ann else [],
+        "wheel_candidates": wheel_candidates,
+        "uses_sdist": uses_sdist,
+    }
+
+    return struct(
+        resolved_package = resolved_pkg,
+        all_dependency_keys = all_dependency_keys,
+        wheel_candidate_files = wheel_candidate_files,
+        sdist_file_obj = sdist_file_obj,
+        uses_sdist = uses_sdist,
+        key = pkg_key,
+    )
+
+def _resolve_packages(
+        lock_model_packages,
+        pins,
+        context,
+        annotations,
+        default_build_dependencies,
+        wildcard_only_keys):
+    work = []
+    for pin_dict in pins.values():
+        work.extend(pin_dict.values())
+
+    packages_by_package_key = {}
+    synthesized_packages = {}
+
+    # Starlark has no while loops, so we simulate one with for+range+break.
+    # Each package key is processed at most once; duplicates are skipped.
+    # Total iterations = initial worklist items + edges traversed.
+    # Synthesized extra packages duplicate their base package's edges,
+    # so the graph traversal portion can be up to 2 * (V + E).
+    num_edges = 0
+    for pkg in lock_model_packages.values():
+        num_edges += len(pkg.get("dependencies", []))
+    max_iters = len(work) + 2 * (len(lock_model_packages) + num_edges)
+
+    for _ in range(max_iters):
+        if len(work) == 0:
+            break
+        next_package_key = work.pop()
+        if next_package_key in packages_by_package_key:
+            continue
+
+        raw_pkg = lock_model_packages.get(next_package_key) or synthesized_packages.get(next_package_key)
+        if not raw_pkg:
+            parts = parse_package_key(next_package_key)
+            if parts.extra:
+                base_key = "{}@{}".format(parts.name, parts.version)
+                base_package = lock_model_packages.get(base_key) or synthesized_packages.get(base_key)
+                if not base_package:
+                    fail("Missing base package {} for extra {}".format(base_key, next_package_key))
+
+                base_deps = base_package.get("dependencies", [])
+                synthesized_deps = list(base_deps) + [{
+                    "name": parts.name,
+                    "version": parts.version,
+                    "marker": "",
+                }]
+                raw_pkg = {
+                    "name": parts.name,
+                    "version": parts.version,
+                    "python_versions": base_package.get("python_versions", ""),
+                    "dependencies": synthesized_deps,
+                    "files": [],
+                }
+                synthesized_packages[next_package_key] = raw_pkg
+            else:
+                fail("Missing package {}".format(next_package_key))
+
+        ann = annotations.pop(next_package_key, None)
+        entry = _create_package_resolver(
+            next_package_key,
+            raw_pkg,
+            ann,
+            default_build_dependencies,
+            context,
+        )
+        packages_by_package_key[next_package_key] = entry
+        work.extend(entry.all_dependency_keys)
+
+    for key in wildcard_only_keys.keys():
+        annotations.pop(key, None)
+
+    if annotations:
+        fail("Annotations specified for packages that are not part of the locked set: {}".format(
+            ", ".join(sorted(annotations.keys())),
+        ))
+
+    for k, v in synthesized_packages.items():
+        lock_model_packages[k] = v
+
+    return packages_by_package_key
+
+def _compute_cycle_groups(packages):
+    graph = {}
+    for pkg_key, pkg in packages.items():
+        deps = []
+        for dep in pkg.get("dependencies", []):
+            dep_key = "{}@{}".format(dep["name"], dep["version"])
+            if dep_key in packages:
+                deps.append(dep_key)
+        graph[pkg_key] = deps
+
+    index_counter = 0
+    indices = {}
+    lowlink = {}
+    on_stack = {}
+    stack = []
+    sccs = []
+
+    # Starlark has no while loops, so we simulate one with for+range+break.
+    # Each iteration either advances an edge index or pops a finished node,
+    # so the maximum iterations per DFS traversal is V + E.
+    num_edges = 0
+    for deps in graph.values():
+        num_edges += len(deps)
+    max_iters = len(graph) + num_edges
+
+    for root in graph.keys():
+        if root in indices:
+            continue
+
+        work_stack = [[root, graph.get(root, []), 0]]
+        indices[root] = index_counter
+        lowlink[root] = index_counter
+        index_counter += 1
+        stack.append(root)
+        on_stack[root] = True
+
+        for _ in range(max_iters):
+            if len(work_stack) == 0:
+                break
+            frame = work_stack[-1]
+            v = frame[0]
+            neighbors = frame[1]
+            idx = frame[2]
+
+            if idx < len(neighbors):
+                w = neighbors[idx]
+                frame[2] = idx + 1
+
+                if w not in indices:
+                    indices[w] = index_counter
+                    lowlink[w] = index_counter
+                    index_counter += 1
+                    stack.append(w)
+                    on_stack[w] = True
+                    work_stack.append([w, graph.get(w, []), 0])
+                elif w in on_stack:
+                    lowlink[v] = min(lowlink[v], indices[w])
+            else:
+                if lowlink[v] == indices[v]:
+                    scc = []
+
+                    # We also need to simulate this while True loop
+                    # It runs at most len(stack) times.
+                    for _ in range(len(stack) + 1):
+                        w = stack.pop()
+                        on_stack.pop(w)
+                        scc.append(w)
+                        if w == v:
+                            break
+                    sccs.append(scc)
+
+                work_stack.pop()
+                if len(work_stack) > 0:
+                    parent = work_stack[-1][0]
+                    lowlink[parent] = min(lowlink[parent], lowlink[v])
+
+    cycle_groups = {}
+    for scc in sccs:
+        if len(scc) <= 1:
+            continue
+        members = sorted(scc)
+        h = hash("\n".join(members))
+        group_name = "group_%x" % (h & 0xffffffff)
+        cycle_groups[group_name] = members
+
+    return cycle_groups
+
+def resolve(
+        lock_model_data,
+        local_wheels = None,
+        remote_wheels = None,
+        always_include_sdist = False,
+        disallow_builds = False,
+        annotations_data = None,
+        default_build_dependencies_args = None,
+        default_alias_single_version = False):
+    """Resolves dependencies from lock model data.
+
+    Args:
+        lock_model_data: The lock model data.
+        local_wheels: Dictionary of local wheels.
+        remote_wheels: Dictionary of remote wheels.
+        always_include_sdist: Whether to always include sdist.
+        disallow_builds: Whether to disallow builds.
+        annotations_data: Annotations data.
+        default_build_dependencies_args: Default build dependencies args.
+        default_alias_single_version: Whether to default alias single version.
+
+    Returns:
+        Dictionary of resolved packages.
+    """
+    local_wheels = local_wheels or {}
+    remote_wheels = remote_wheels or {}
+    default_build_dependencies_args = default_build_dependencies_args or []
+    local_wheels_by_pkg = {}
+    for filename, label in local_wheels.items():
+        parsed = pypackaging.utils.parse_wheel_filename(filename)
+        name = pypackaging.utils.canonicalize_name(parsed.name)
+        version = parsed.version.version_str
+        pkg_key = "{}@{}".format(name, version)
+        if pkg_key not in local_wheels_by_pkg:
+            local_wheels_by_pkg[pkg_key] = {}
+        local_wheels_by_pkg[pkg_key][filename] = label
+
+    remote_wheels_by_pkg = {}
+    for url, sha256 in remote_wheels.items():
+        filename = url.split("/")[-1]
+        parsed = pypackaging.utils.parse_wheel_filename(filename)
+        name = pypackaging.utils.canonicalize_name(parsed.name)
+        version = parsed.version.version_str
+        pkg_key = "{}@{}".format(name, version)
+        if pkg_key not in remote_wheels_by_pkg:
+            remote_wheels_by_pkg[pkg_key] = {}
+        remote_wheels_by_pkg[pkg_key][filename] = {
+            "name": filename,
+            "sha256": sha256,
+            "urls": [url],
+        }
+
+    context = struct(
+        local_wheels = local_wheels_by_pkg,
+        remote_wheels = remote_wheels_by_pkg,
+        always_include_sdist = always_include_sdist,
+    )
+
+    lock_model_packages = lock_model_data.get("packages", {})
+    all_package_keys = lock_model_packages.keys()
+
+    versions_by_name = {}
+    for pkg_key in all_package_keys:
+        parts = parse_package_key(pkg_key)
+        dep_name = parts.name
+        if parts.extra:
+            dep_name = "{}[{}]".format(parts.name, parts.extra)
+        if dep_name not in versions_by_name:
+            versions_by_name[dep_name] = []
+        versions_by_name[dep_name].append(pkg_key)
+
+    annotations = {}
+    wildcard_only_keys = {}
+    if annotations_data:
+        annotations, wildcard_only_keys = _collect_package_annotations(
+            annotations_data,
+            versions_by_name,
+            all_package_keys,
+        )
+
+    default_build_dependencies = []
+    for dep in default_build_dependencies_args:
+        resolved_dep = _resolve_single_version(
+            dep,
+            versions_by_name,
+            all_package_keys,
+            "build_dependencies",
+        )
+        default_build_dependencies.append(resolved_dep)
+
+    raw_pins = lock_model_data.get("pins", {})
+    pins = {}
+    for k, v in raw_pins.items():
+        name = parse_package_key(k).name
+        if type(v) == "string":
+            pins[name] = {"": v}
+        else:
+            pins[name] = v
+
+    packages_by_package_key = _resolve_packages(
+        lock_model_packages,
+        pins,
+        context,
+        annotations,
+        default_build_dependencies,
+        wildcard_only_keys,
+    )
+
+    resolved_keys = sorted(packages_by_package_key.keys())
+    resolved_packages = [packages_by_package_key[k] for k in resolved_keys]
+
+    if disallow_builds:
+        builds = []
+        for entry in resolved_packages:
+            if entry.uses_sdist:
+                builds.append(entry.key)
+        if builds:
+            fail("Builds are disallowed, but the following would include pycross_wheel_build targets: {}".format(
+                ", ".join(builds),
+            ))
+
+    repos = {}
+    for entry in resolved_packages:
+        repos.update(entry.wheel_candidate_files)
+        if entry.resolved_package["sdist_file"] and entry.sdist_file_obj:
+            repos[entry.resolved_package["sdist_file"]["key"]] = entry.sdist_file_obj
+
+    sorted_repo_keys = sorted(repos.keys())
+    repos = {k: repos[k] for k in sorted_repo_keys}
+
+    if default_alias_single_version:
+        resolved_versions_by_name = {}
+        for entry in resolved_packages:
+            pkg_name = entry.resolved_package["name"]
+            pkg_version = entry.resolved_package["version"]
+            if pkg_name not in resolved_versions_by_name:
+                resolved_versions_by_name[pkg_name] = {}
+            resolved_versions_by_name[pkg_name][pkg_version] = True
+
+        for package_pin_name, versions in resolved_versions_by_name.items():
+            if package_pin_name in pins:
+                continue
+            if len(versions) > 1:
+                continue
+            version = versions.keys()[0]
+            base_key = "{}@{}".format(package_pin_name, version)
+            if base_key in packages_by_package_key:
+                pins[package_pin_name] = {"": base_key}
+
+    cycle_groups = _compute_cycle_groups(lock_model_packages)
+
+    resolved_packages_dict = {pkg.key: pkg.resolved_package for pkg in resolved_packages}
+    for group_name, scc in cycle_groups.items():
+        for pkg_key in scc:
+            if pkg_key in resolved_packages_dict:
+                resolved_packages_dict[pkg_key]["cycle_group"] = group_name
+
+    return struct(
+        packages = resolved_packages_dict,
+        pins = pins,
+        remote_files = repos,
+        cycle_groups = cycle_groups,
+        variants = lock_model_data.get("variants", []),
+    )
