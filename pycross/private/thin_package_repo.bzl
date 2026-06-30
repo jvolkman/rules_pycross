@@ -30,7 +30,13 @@ def requirement(pkg):
     return "@@{repo_name}//:%s" % pkg
 """
 
-def _requirements_bzl(rctx, pins):
+def _is_platform_specific(pkg):
+    """Check if a package is platform-specific (would be incompatible on some platforms)."""
+    has_wheels = bool(pkg.get("wheel_candidates"))
+    has_sdist = bool(pkg.get("sdist_file")) or bool(pkg.get("build_target"))
+    return has_wheels and not has_sdist
+
+def _requirements_bzl(rctx, pins, packages):
     lines = [
         _requirement_func.format(repo_name = rctx.name),
         "",
@@ -38,7 +44,20 @@ def _requirements_bzl(rctx, pins):
         "all_requirements = [",
     ]
     for pin in sorted(pins.keys()):
-        lines.append('    "@@{repo_name}//:{pin}",'.format(repo_name = rctx.name, pin = pin))
+        pin_target_dict = pins[pin]
+
+        # Check if ANY variant of this pin is platform-specific.
+        is_conditional = False
+        for pkg_key in pin_target_dict.values():
+            pkg = packages.get(pkg_key, {})
+            if _is_platform_specific(pkg):
+                is_conditional = True
+                break
+
+        if is_conditional:
+            lines.append('    "@@{repo_name}//:{pin}",'.format(repo_name = rctx.name, pin = "_maybe_" + pin))
+        else:
+            lines.append('    "@@{repo_name}//:{pin}",'.format(repo_name = rctx.name, pin = pin))
     lines.append("]")
     return "\n".join(lines) + "\n"
 
@@ -227,7 +246,7 @@ def _thin_package_repo_impl(rctx):
 
     rctx.file("REPO.bazel", "")
     rctx.file("defs.bzl", "")
-    rctx.file("requirements.bzl", _requirements_bzl(rctx, pins))
+    rctx.file("requirements.bzl", _requirements_bzl(rctx, pins, packages))
 
     # Root BUILD.bazel with //:package aliases
 
@@ -246,7 +265,11 @@ def _thin_package_repo_impl(rctx):
 
     root_build_lines = [
         'load("@rules_pycross//pycross/private:modules_mapping.bzl", "pycross_modules_mapping")',
+        'load("@rules_python//python:defs.bzl", "py_library")',
         'package(default_visibility = ["//visibility:public"])',
+        "",
+        "# Empty library for _maybe_ targets on incompatible platforms.",
+        'py_library(name = "_empty_library")',
         "",
     ]
 
@@ -370,6 +393,10 @@ pycross_transitioning_file_proxy = rule(
         )
         rctx.file("_transition.bzl", transition_bzl)
 
+    # Collect platform-specific packages for _maybe_ aliases.
+    maybe_mapping_targets = {}  # pkg_key -> lock_label (for modules_mapping _maybe_ aliases)
+    maybe_pin_targets = {}  # pin_name -> {pkg_key, pin_proxy_label} (for all_requirements _maybe_ aliases)
+
     root_build_lines.extend([
         'exports_files(["defs.bzl", "requirements.bzl"])',
         "",
@@ -382,20 +409,58 @@ pycross_transitioning_file_proxy = rule(
         for pin_target in sorted(pin_target_dict.values()):
             package = packages.get(pin_target, {})
 
-            # Point directly at the pycross_wheel_library target in the workspace's _lock.
-            # For cycle group packages, the wheel_library is named _raw_<pkg_key>.
+            # Determine the lock-level label for this package.
             if package.get("cycle_group"):
-                root_build_lines.append('        "@%s//_lock:_raw_%s",' % (workspace_repo, pin_target))
+                lock_label = "@%s//_lock:_raw_%s" % (workspace_repo, pin_target)
             else:
-                root_build_lines.append('        "@%s//_lock:%s",' % (workspace_repo, pin_target))
-    root_build_lines.extend([
-        "    ],",
-    ])
+                lock_label = "@%s//_lock:%s" % (workspace_repo, pin_target)
+
+            if _is_platform_specific(package):
+                maybe_name = "_maybe_mapping_%s" % pin_target.replace("@", "_").replace("[", "_").replace("]", "_")
+                maybe_mapping_targets[maybe_name] = (pin_target, lock_label)
+                root_build_lines.append('        ":%s",' % maybe_name)
+            else:
+                root_build_lines.append('        "%s",' % lock_label)
+
+        # Track platform-specific pins for all_requirements _maybe_ aliases.
+        for pkg_key in pin_target_dict.values():
+            pkg = packages.get(pkg_key, {})
+            if _is_platform_specific(pkg):
+                maybe_pin_targets[pin_name] = pkg_key
+                break
 
     root_build_lines.extend([
+        "    ],",
         ")",
         "",
     ])
+
+    # Generate _maybe_mapping_ aliases for modules_mapping (pointing at _lock targets).
+    for maybe_name, (pkg_key, lock_label) in sorted(maybe_mapping_targets.items()):
+        root_build_lines.extend([
+            "alias(",
+            '    name = "%s",' % maybe_name,
+            "    actual = select({",
+            '        "@%s//_lock:_available_%s": "%s",' % (workspace_repo, pkg_key, lock_label),
+            '        "//conditions:default": ":_empty_library",',
+            "    }),",
+            ")",
+            "",
+        ])
+
+    # Generate _maybe_<pin> aliases for all_requirements (pointing at pin proxies).
+    for pin_name, pkg_key in sorted(maybe_pin_targets.items()):
+        us_name = underscore_name(pin_name)
+        root_build_lines.extend([
+            "alias(",
+            '    name = "_maybe_%s",' % pin_name,
+            "    actual = select({",
+            '        "@%s//_lock:_available_%s": "//%s:pkg",' % (workspace_repo, pkg_key, us_name),
+            '        "//conditions:default": ":_empty_library",',
+            "    }),",
+            ")",
+            "",
+        ])
 
     # When flags are set, root-level targets must be transitioning proxies
     # (not aliases) so the transition is applied BEFORE select() resolution
@@ -608,3 +673,5 @@ thin_package_repo = repository_rule(
 
 # Visible for testing
 pin_build_for_testing = _pin_build
+is_platform_specific_for_testing = _is_platform_specific
+requirements_bzl_for_testing = _requirements_bzl

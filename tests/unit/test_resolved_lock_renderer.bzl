@@ -500,6 +500,89 @@ def _test_multi_platform_repo_map(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
     analysis_test(name = name, target = name + "_subject", impl = _test_multi_platform_repo_map_impl)
 
+# ── Test: _available_ config_setting_group ─────────────────────────
+
+# buildifier: disable=unused-variable
+def _test_available_config_setting_group_impl(env, target):
+    """Verify _available_ config_setting_group is emitted for packages without sdist."""
+    lock = {
+        "packages": {
+            "platform_pkg@1.0": {
+                "wheel_candidates": [
+                    {
+                        "filename": "platform_pkg-1.0-cp310-cp310-manylinux_2_17_x86_64.whl",
+                        "file_reference": {"key": "plat_linux"},
+                    },
+                    {
+                        "filename": "platform_pkg-1.0-cp310-cp310-win_amd64.whl",
+                        "file_reference": {"key": "plat_win"},
+                    },
+                ],
+            },
+            "sdist_pkg@2.0": {
+                "sdist_file": {"key": "sdist_key"},
+                "wheel_candidates": [
+                    {
+                        "filename": "sdist_pkg-2.0-cp310-cp310-manylinux_2_17_x86_64.whl",
+                        "file_reference": {"key": "sdist_linux"},
+                    },
+                ],
+            },
+        },
+    }
+    repo_map = {
+        "plat_linux": "@repo//plat:linux_wheel",
+        "plat_win": "@repo//plat:win_wheel",
+        "sdist_linux": "@repo//sdist:linux_wheel",
+        "sdist_key": "@repo//sdist:sdist",
+    }
+    res = render_lock_bzl(lock, repo_map, "my_rctx")
+
+    # Platform-specific package (no sdist) should get _available_ group.
+    env.expect.that_bool("_available_platform_pkg@1.0" in res).equals(True)
+    env.expect.that_bool("config_setting_group(" in res).equals(True)
+
+    # Package with sdist should NOT get _available_ group.
+    env.expect.that_bool("_available_sdist_pkg@2.0" in res).equals(False)
+
+    # Selects load should be present (at least one platform-specific package).
+    env.expect.that_bool("selects" in res).equals(True)
+
+def _test_available_config_setting_group(name):
+    util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
+    analysis_test(name = name, target = name + "_subject", impl = _test_available_config_setting_group_impl)
+
+# ── Test: no _available_ when all have sdist ──────────────────────
+
+# buildifier: disable=unused-variable
+def _test_no_available_when_all_have_sdist_impl(env, target):
+    """Verify no selects load and no _available_ when all packages have sdist."""
+    lock = {
+        "packages": {
+            "pkg@1.0": {
+                "sdist_file": {"key": "sdist_key"},
+                "wheel_candidates": [
+                    {
+                        "filename": "pkg-1.0-cp310-cp310-manylinux_2_17_x86_64.whl",
+                        "file_reference": {"key": "pkg_wheel"},
+                    },
+                ],
+            },
+        },
+    }
+    repo_map = {
+        "pkg_wheel": "@repo//pkg:wheel",
+        "sdist_key": "@repo//pkg:sdist",
+    }
+    res = render_lock_bzl(lock, repo_map, "my_rctx")
+
+    env.expect.that_bool("_available_" in res).equals(False)
+    env.expect.that_bool("selects" in res).equals(False)
+
+def _test_no_available_when_all_have_sdist(name):
+    util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
+    analysis_test(name = name, target = name + "_subject", impl = _test_no_available_when_all_have_sdist_impl)
+
 def resolved_lock_renderer_test_suite(name):
     test_suite(
         name = name,
@@ -512,5 +595,7 @@ def resolved_lock_renderer_test_suite(name):
             _test_no_cycles_no_cycle_targets,
             _test_marker_deps_rendering,
             _test_multi_platform_repo_map,
+            _test_available_config_setting_group,
+            _test_no_available_when_all_have_sdist,
         ],
     )
