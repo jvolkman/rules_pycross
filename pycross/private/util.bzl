@@ -63,20 +63,6 @@ def extract_pep508_name(spec):
     name = spec[:name_len]
     return pypackaging.utils.canonicalize_name(name)
 
-def key_parts(key):
-    """Split a lockfile package key into its name and version parts.
-
-    Args:
-        key: The package key string (e.g. "package@1.0.0").
-
-    Returns:
-        A tuple of (name, version).
-    """
-    parts = key.split("@", 1)
-    if len(parts) != 2:
-        fail("Invalid package key format: " + key)
-    return parts[0], parts[1]
-
 def key_name(key):
     """Extract the package name part from a lockfile package key.
 
@@ -87,6 +73,44 @@ def key_name(key):
         The package name part.
     """
     return key.split("@", 1)[0]
+
+def parse_package_key(key):
+    """Parses a package key or pin name into (name, extra, version).
+
+    Supports formats:
+      - name@version
+      - name[extra]@version
+      - name
+      - name[extra]
+
+    Args:
+        key: The package key or pin name string.
+
+    Returns:
+        A tuple of (name, extra, version). name is always present.
+        extra and version are strings, and will be empty if not present.
+    """
+    name_and_extra = key
+    version = ""
+    if "@" in key:
+        parts = key.split("@", 1)
+        name_and_extra = parts[0]
+        version = parts[1]
+
+    name = name_and_extra
+    extra = ""
+    if "[" in name_and_extra:
+        if not name_and_extra.endswith("]"):
+            fail("Invalid package key format: " + key)
+        parts = name_and_extra.split("[", 1)
+        name = parts[0]
+        extra = parts[1][:-1]
+
+    return struct(
+        name = name,
+        extra = extra,
+        version = version,
+    )
 
 # Attrs that consuming rules must include for merge_py_providers to work.
 PY_COMMON_ATTRS = py_common.API_ATTRS

@@ -14,6 +14,8 @@ Naming conventions for generated targets:
     base package and all of its parsed extras into a single target.
 """
 
+load(":util.bzl", "parse_package_key")
+
 def _ind(text, tabs = 1):
     if not text:
         return ""
@@ -49,16 +51,15 @@ def _render_extras_aggregates(lines, packages):
     """Renders [_all_] pycross_library_proxy targets that aggregate a base package and all its extras."""
     base_packages_with_extras = {}
     for pkg_key in packages.keys():
-        if "[" in pkg_key:
-            base_name, extra_and_version = pkg_key.split("[", 1)
-            _, version = extra_and_version.split("]@", 1)
-            base_pkg_key = "{}@{}".format(base_name, version)
-            if base_pkg_key not in base_packages_with_extras:
-                base_packages_with_extras[base_pkg_key] = []
-            base_packages_with_extras[base_pkg_key].append(pkg_key)
+        parts = parse_package_key(pkg_key)
+        if parts.extra:
+            base_key = (parts.name, parts.version)
+            if base_key not in base_packages_with_extras:
+                base_packages_with_extras[base_key] = []
+            base_packages_with_extras[base_key].append(pkg_key)
 
-    for base_pkg_key, extra_keys in sorted(base_packages_with_extras.items()):
-        base_name, version = base_pkg_key.split("@", 1)
+    for (base_name, version), extra_keys in sorted(base_packages_with_extras.items()):
+        base_pkg_key = "{}@{}".format(base_name, version)
         lines.extend([
             _ind("pycross_library_proxy("),
             _ind('name = "{}[_all_]@{}",'.format(base_name, version), 2),
@@ -74,37 +75,60 @@ def _render_extras_aggregates(lines, packages):
         ])
 
 def _collect_unique_markers(packages):
-    """Collect all unique marker strings across packages, returning a deduped set."""
+    """Collect all unique (marker, extra) pairs across packages.
+
+    Returns a dict mapping (marker_string, extra_value) to True.
+    The extra is derived from the package key (e.g. 'foo[test]@1.0' -> 'test').
+    """
     markers = {}
-    for pkg in packages.values():
+    for pkg_key, pkg in packages.items():
+        extra = parse_package_key(pkg_key).extra
         for md in pkg.get("marker_dependencies", []):
             marker = md.get("marker")
             if marker:
-                markers[marker] = True
+                # Optimization: if "extra" is not in the marker string, it doesn't reference the extra variable.
+                # We can share a single evaluator by setting extra to "".
+                effective_extra = extra if "extra" in marker else ""
+                markers[(marker, effective_extra)] = True
     return markers.keys()
 
-def _marker_evaluator_name(marker_str):
-    """Generate a deterministic target name for a marker evaluator."""
+def _marker_evaluator_name(marker_str, extra = ""):
+    """Generate a deterministic target name for a marker evaluator.
+
+    Args:
+        marker_str: The PEP 508 marker expression.
+        extra: The PEP 508 extra value (e.g. 'test'), or '' for no extra.
+    """
 
     # Starlark's hash() is deterministic within a build invocation.
     # We sanitize the marker string for readability and add the hash for uniqueness.
-    san = _sanitize_name(marker_str.replace(" ", "").replace("\"", "").replace("'", ""))
+    key = marker_str if not extra else "{}|extra={}".format(marker_str, extra)
+    san = _sanitize_name(key.replace(" ", "").replace("\"", "").replace("'", ""))
 
     # Truncate to keep target names reasonable
     if len(san) > 40:
         san = san[:40]
-    return "_marker_eval_{}_{}".format(san, hash(marker_str))
+    return "_marker_eval_{}_{}".format(san, hash(key))
 
 def _render_marker_evaluators(lines, unique_markers):
-    """Render deduped pycross_pep508_evaluator and config_setting targets."""
-    for marker_str in sorted(unique_markers):
-        eval_name = _marker_evaluator_name(marker_str)
+    """Render deduped pycross_pep508_evaluator and config_setting targets.
+
+    Args:
+        lines: Output lines list.
+        unique_markers: Iterable of (marker_str, extra) tuples.
+    """
+    for marker_str, extra in sorted(unique_markers):
+        eval_name = _marker_evaluator_name(marker_str, extra)
 
         # Evaluator rule — returns FeatureFlagInfo("true"/"false")
         lines.extend([
             _ind("pycross_pep508_evaluator("),
             _ind('name = "{}",'.format(eval_name), 2),
             _ind('expr = "{}",'.format(marker_str.replace('"', '\\"')), 2),
+        ])
+        if extra:
+            lines.append(_ind('extra = "{}",'.format(extra), 2))
+        lines.extend([
             _ind(")"),
             "",
         ])
@@ -195,11 +219,14 @@ def _render_marker_cycle_member_deps(lines, cycle_groups, packages):
         lines.append("")
 
         for pkg_key in sorted(resolved_members):
+            extra = parse_package_key(pkg_key).extra
             lines.append(_ind("pycross_cycle_member_marker_deps("))
             lines.append(_ind('name = "{}",'.format(pkg_key), 2))
             lines.append(_ind('raw_name = "_raw_{}",'.format(pkg_key), 2))
             lines.append(_ind('member = "{}",'.format(pkg_key), 2))
             lines.append(_ind("edges = {},".format(edges_var_name), 2))
+            if extra:
+                lines.append(_ind('extra = "{}",'.format(extra), 2))
             lines.append(_ind(")"))
             lines.append("")
 
@@ -263,13 +290,15 @@ def _render_marker_wheel_chooser(lines, pkg_key, pkg, repo_map, sdist_map, rctx_
         "",
     ])
 
-def _render_marker_package_deps(lines, pkg_key_san, pkg, packages):
+def _render_marker_package_deps(lines, pkg_key, pkg_key_san, pkg, packages):
     """Render deps using marker-based select() instead of environment-based."""
     marker_deps = pkg.get("marker_dependencies", [])
     if not marker_deps:
         lines.append(_ind("_{}_deps = []".format(pkg_key_san)))
         lines.append("")
         return
+
+    extra = parse_package_key(pkg_key).extra
 
     unconditional = []
     conditional = []
@@ -290,7 +319,8 @@ def _render_marker_package_deps(lines, pkg_key_san, pkg, packages):
     if conditional:
         # Each conditional dep gets its own select()
         for md in sorted(conditional, key = lambda m: m["key"]):
-            eval_name = _marker_evaluator_name(md["marker"])
+            effective_extra = extra if "extra" in md["marker"] else ""
+            eval_name = _marker_evaluator_name(md["marker"], effective_extra)
             lines[-1] = lines[-1] + " + select({"
             lines.append(_ind('":{}_match": [":{}"],'.format(eval_name, md["key"]), 2))
             lines.append(_ind('"//conditions:default": [],', 2))
@@ -301,8 +331,10 @@ def _render_marker_package_deps(lines, pkg_key_san, pkg, packages):
 def _render_marker_package(lines, pkg_key, pkg, packages, repo_map, sdist_map, rctx_name):
     """Renders all targets for a single package using marker-based deps and wheel selection."""
     pkg_key_san = _sanitize_name(pkg_key)
-    package_name = pkg_key.split("@", 1)[0]
-    package_version = pkg_key.split("@", 1)[1]
+    parts = parse_package_key(pkg_key)
+    package_name = parts.name
+    package_version = parts.version
+    extra = parts.extra
 
     has_marker_deps = bool(pkg.get("marker_dependencies"))
     has_wheel_candidates = bool(pkg.get("wheel_candidates"))
@@ -319,14 +351,11 @@ def _render_marker_package(lines, pkg_key, pkg, packages, repo_map, sdist_map, r
 
     # Runtime deps
     if has_marker_deps:
-        _render_marker_package_deps(lines, pkg_key_san, pkg, packages)
+        _render_marker_package_deps(lines, pkg_key, pkg_key_san, pkg, packages)
 
-    if not has_wheel_candidates and "[" in pkg_key:
+    if not has_wheel_candidates and extra:
         # Extras packages wrap the base package plus their own deps.
-        base_name = pkg_key.split("[", 1)[0]
-        _, version = pkg_key.split("]", 1)
-        version = version.lstrip("@")
-        base_pkg_key = "{}@{}".format(base_name, version)
+        base_pkg_key = "{}@{}".format(package_name, package_version)
         lines.extend([
             _ind("pycross_library_proxy("),
             _ind('name = "{}",'.format(pkg_key), 2),

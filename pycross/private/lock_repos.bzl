@@ -9,7 +9,7 @@ load("@rules_pycross//pycross/private:sdist_repo.bzl", "pycross_sdist_repo")
 load("//pycross/private:package_repo.bzl", "package_repo")
 load("//pycross/private:pypi_file.bzl", "pypi_file")
 load("//pycross/private:thin_package_repo.bzl", "thin_package_repo")
-load("//pycross/private:util.bzl", "key_name", "key_parts", "sanitize_name")
+load("//pycross/private:util.bzl", "key_name", "parse_package_key", "sanitize_name")
 load("//pycross/private:wheel_file.bzl", "pycross_wheel_file")
 load(":git_file.bzl", "pycross_git_file")
 load(":lock_attrs.bzl", "CREATE_REPOS_ATTRS")
@@ -183,7 +183,9 @@ def _lock_repos_impl(module_ctx):
                 deps_set[dep_label] = True
 
             # Compute the output whldir name: {normalized_name}-{version}.whldir
-            pkg_name_part, pkg_version = key_parts(pkg_key)
+            parts = parse_package_key(pkg_key)
+            pkg_name_part = parts.name
+            pkg_version = parts.version
             whldir_norm_name = sanitize_name(pkg_name_part)
             whldir_name = "{}-{}.whldir".format(whldir_norm_name, pkg_version)
 

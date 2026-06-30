@@ -1,7 +1,6 @@
 import hashlib
 import json
 import os
-import re
 from argparse import ArgumentParser
 from collections import defaultdict
 from dataclasses import dataclass
@@ -17,9 +16,6 @@ from typing import Set
 from typing import Tuple
 from urllib.parse import urlparse
 
-from packaging.markers import Marker as PkgMarker
-from packaging.markers import Value
-from packaging.markers import Variable
 from packaging.utils import NormalizedName
 from packaging.utils import parse_wheel_filename
 from packaging.version import Version
@@ -38,93 +34,6 @@ from pycross.private.tools.lock_model import ResolvedPackage
 from pycross.private.tools.lock_model import WheelCandidate
 from pycross.private.tools.lock_model import is_wheel
 from pycross.private.tools.lock_model import package_canonical_name
-
-EXTRA_PATTERN = re.compile(r"extra\s*==\s*['\"]([^'\"]+)['\"]")
-
-
-def _format_marker_node(node) -> str:
-    """Format a single marker node (Variable, Value, or Op) back to string."""
-    if isinstance(node, Variable):
-        return str(node)
-    if isinstance(node, Value):
-        return '"' + str(node) + '"'
-    return str(node)
-
-
-def _format_markers(markers) -> str:
-    """Reconstruct a PEP 508 marker string from packaging's internal list."""
-    if isinstance(markers, tuple) and len(markers) == 3:
-        return " ".join(_format_marker_node(x) for x in markers)
-    if isinstance(markers, list):
-        if len(markers) == 1:
-            return _format_markers(markers[0])
-        parts = []
-        for item in markers:
-            if isinstance(item, str):
-                parts.append(item)
-            else:
-                parts.append(_format_markers(item))
-        return " ".join(parts)
-    return str(markers)
-
-
-def _strip_extra_markers(marker_str: str) -> str:
-    """Remove 'extra == ...' clauses from a marker string.
-
-    Extras are handled by virtual extra nodes in the dependency graph,
-    not by runtime marker evaluation. We strip them so the evaluator
-    only sees platform/version markers.
-    """
-    if "extra" not in marker_str:
-        return marker_str
-
-    try:
-        marker = PkgMarker(marker_str)
-    except Exception:
-        return marker_str
-
-    filtered = _filter_extra_nodes(marker._markers)
-    if not filtered:
-        return ""
-
-    return _format_markers(filtered)
-
-
-def _filter_extra_nodes(markers) -> list:
-    """Recursively remove extra == ... comparisons from the marker tree."""
-    if isinstance(markers, tuple) and len(markers) == 3:
-        lhs, op, rhs = markers
-        # Check if this is an 'extra' comparison
-        if (isinstance(lhs, Variable) and str(lhs) == "extra") or (isinstance(rhs, Variable) and str(rhs) == "extra"):
-            return []
-        return [markers]
-
-    if isinstance(markers, list):
-        result = []
-        for item in markers:
-            if isinstance(item, str):  # 'and' or 'or'
-                result.append(item)
-            else:
-                filtered = _filter_extra_nodes(item)
-                result.extend(filtered)
-
-        # Clean up: remove leading/trailing/consecutive operators
-        cleaned = []
-        for item in result:
-            if isinstance(item, str):
-                if not cleaned or isinstance(cleaned[-1], str):
-                    continue  # skip leading or consecutive operators
-                cleaned.append(item)
-            else:
-                cleaned.append(item)
-
-        # Remove trailing operator
-        if cleaned and isinstance(cleaned[-1], str):
-            cleaned.pop()
-
-        return cleaned
-
-    return [markers]
 
 
 @dataclass(frozen=True)
@@ -291,9 +200,6 @@ class PackageResolver:
         if ignore_dependency_names:
             ordered_deps = [d for d in ordered_deps if d.name.package not in ignore_dependency_names]
 
-        # The package's own extra (if any), e.g. "test" for "foo[test]".
-        package_extra = package.name.extra
-
         for dep in ordered_deps:
             dep_base_key = PackageKey.from_parts(DependencyName(dep.name.package), dep.version)
             if context.lock_package_keys is not None and dep_base_key not in context.lock_package_keys:
@@ -304,17 +210,6 @@ class PackageResolver:
             seen_names.add(dep_key)
 
             marker_str = dep.marker
-            if marker_str:
-                # Check if the dep requires a specific extra.
-                extra_match = EXTRA_PATTERN.search(marker_str)
-                if extra_match:
-                    dep_extra = extra_match.group(1)
-                    # Only include this dep if the package's extra matches.
-                    if package_extra != dep_extra:
-                        continue
-
-                # Strip extra markers — those are handled by virtual extra nodes.
-                marker_str = _strip_extra_markers(marker_str)
 
             result.append(
                 MarkerDependency(
