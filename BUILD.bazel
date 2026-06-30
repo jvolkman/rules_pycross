@@ -30,6 +30,6 @@ bzl_library(
 diff_test(
     name = "test_pycross_deps_toml_diff",
     failure_message = "Please run `bazel run //pycross/private:update_pycross_deps`",
-    file1 = "//pycross/private:updated-pycross_deps.toml",
+    file1 = "@rules_pycross_deps//:pycross_deps.toml",
     file2 = "//pycross/private:pycross_deps.toml",
 )

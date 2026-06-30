@@ -118,6 +118,7 @@ bzl_library(
     deps = [
         ":internal_repo",
         ":lock_attrs",
+        ":lock_resolver",
         ":pdm_lock_model",
         ":poetry_lock_model",
         ":resolved_lock_renderer",
@@ -166,38 +167,11 @@ pycross_target_platform(
     python_version = "3.13",
 )
 
-genrule(
-    name = "rules_pycross_all_deps_lock_model",
-    srcs = [
-        ":uv.lock",
-        ":pyproject.toml",
-    ],
-    outs = ["rules_pycross_all_deps_lock_model.json"],
-    cmd = "$(location //pycross/private/tools:uv_translator) --project-file $(location :pyproject.toml) --lock-file $(location :uv.lock) --output $@ --all-optional-groups",
-    tools = ["//pycross/private/tools:uv_translator"],
-)
-
-genrule(
-    name = "rules_pycross_deps_toml_gen",
-    srcs = [
-        ":uv.lock",
-        ":pyproject.toml",
-        ":rules_pycross_all_deps_lock_model",
-    ],
-    outs = ["updated-pycross_deps.toml"],
-    cmd = """
-$(location //pycross/private/tools:toml_lock_generator) \\
-    --lock-model-file $(location :rules_pycross_all_deps_lock_model) \\
-    --output $@
-""",
-    tools = ["//pycross/private/tools:toml_lock_generator"],
-)
-
 write_source_files(
     name = "update_pycross_deps",
     diff_test = False,
     files = {
-        "pycross_deps.toml": ":updated-pycross_deps.toml",
+        "pycross_deps.toml": "@rules_pycross_deps//:pycross_deps.toml",
     },
 )
 
@@ -270,6 +244,7 @@ bzl_library(
     name = "pycross",
     srcs = ["pycross.bzl"],
     deps = [
+        ":deps_toml_repo",
         ":internal_repo",
         ":lock_attrs",
         "@bazel_features//:features",
@@ -411,6 +386,26 @@ bzl_library(
     name = "resolved_lock_renderer",
     srcs = ["resolved_lock_renderer.bzl"],
     deps = [":util"],
+)
+
+bzl_library(
+    name = "lock_resolver",
+    srcs = ["lock_resolver.bzl"],
+    deps = [
+        ":util",
+        "@pypackaging.bzl//:pypackaging",
+    ],
+)
+
+bzl_library(
+    name = "deps_toml_repo",
+    srcs = ["deps_toml_repo.bzl"],
+    deps = [
+        ":internal_repo",
+        ":lock_resolver",
+        ":uv_lock_model",
+        "@toml.bzl//:toml",
+    ],
 )
 
 bzl_library(

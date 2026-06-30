@@ -17,30 +17,6 @@ py_library(
     visibility = ["//visibility:public"],
 )
 
-py_binary(
-    name = "toml_lock_generator",
-    srcs = ["toml_lock_generator.py"],
-    imports = ["../../.."],
-    visibility = ["//visibility:public"],
-    deps = [
-        ":args",
-        ":raw_lock_resolver",
-        "@rules_pycross_internal//deps:tomli-w",
-    ],
-)
-
-py_binary(
-    name = "raw_lock_resolver",
-    srcs = ["raw_lock_resolver.py"],
-    imports = ["../../.."],
-    visibility = ["//visibility:public"],
-    deps = [
-        ":args",
-        ":lock_model",
-        "@rules_pycross_internal//deps:packaging",
-    ],
-)
-
 pycross_wheel_zipimport_library(
     name = "installer",
     wheel = "@rules_pycross_internal//:installer_whl",
