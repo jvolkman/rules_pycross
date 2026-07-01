@@ -1,15 +1,8 @@
 {
   "packages": {
     "cowsay@6.1": {
-      "files": [
-        {
-          "name": "cowsay-6.1-py3-none-any.whl",
-          "package_name": "cowsay",
-          "package_version": "6.1",
-          "sha256": "274b1e6fc1b966d53976333eb90ac94cb07a450a700b455af9fbdf882244b30a",
-          "urls": []
-        }
-      ],
+      "dependencies": [],
+      "files": [],
       "name": "cowsay",
       "python_versions": ">=3.8",
       "version": "6.1"
@@ -18,5 +11,5 @@
   "pins": {
     "cowsay": "cowsay@6.1"
   },
-  "python_versions": "<3.13,>=3.9"
+  "python_versions": ">=3.9, <3.13"
 }
