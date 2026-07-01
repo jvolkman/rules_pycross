@@ -409,6 +409,48 @@ bzl_library(
 )
 
 bzl_library(
+    name = "lock_common",
+    srcs = ["lock_common.bzl"],
+    deps = [
+        ":lock_attrs",
+        ":util",
+        "@toml.bzl//toml:toml",
+    ],
+)
+
+bzl_library(
+    name = "lock_repo_creation",
+    srcs = ["lock_repo_creation.bzl"],
+    deps = [
+        ":git_file",
+        ":package_repo",
+        ":pypi_file",
+        ":thin_package_repo",
+        ":util",
+        ":wheel_file",
+        "@bazel_tools//tools/build_defs/repo:http.bzl",
+        "@pycross_backends//:registry",
+        "@rules_pycross//pycross/private:sdist_repo",
+    ],
+)
+
+bzl_library(
+    name = "lock",
+    srcs = ["lock.bzl"],
+    deps = [
+        ":json_file_repo",
+        ":lock_common",
+        ":lock_repo_creation",
+        ":lock_resolver",
+        ":pdm_lock_model",
+        ":poetry_lock_model",
+        ":pylock_lock_model",
+        ":uv_lock_model",
+        "@bazel_features//:features",
+    ],
+)
+
+bzl_library(
     name = "backend_registry_repo",
     srcs = ["backend_registry_repo.bzl"],
 )
@@ -421,6 +463,11 @@ bzl_library(
 bzl_library(
     name = "git_file",
     srcs = ["git_file.bzl"],
+)
+
+bzl_library(
+    name = "json_file_repo",
+    srcs = ["json_file_repo.bzl"],
 )
 
 bzl_library(

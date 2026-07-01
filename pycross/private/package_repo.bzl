@@ -76,8 +76,12 @@ def _package_repo_impl(rctx):
     variant_items = {}  # qualified_name -> True (dedup across members)
     variant_sets = []  # list of {"qnames": [...], "default": "..."}
     variant_sets_seen = {}  # frozenset key -> True (dedup across members)
-    for member, lock_label in rctx.attr.member_lock_files.items():
-        member_lock = json.decode(rctx.read(rctx.path(Label(lock_label))))
+    for member in rctx.attr.member_lock_files.keys():
+        if hasattr(rctx.attr, "member_lock_data") and rctx.attr.member_lock_data and member in rctx.attr.member_lock_data:
+            member_lock = json.decode(rctx.attr.member_lock_data[member])
+        else:
+            lock_label = rctx.attr.member_lock_files[member]
+            member_lock = json.decode(rctx.read(rctx.path(Label(lock_label))))
 
         for variant_set in member_lock.get("variants", []):
             set_qnames = []
@@ -394,6 +398,9 @@ package_repo = repository_rule(
         "member_lock_files": attr.string_dict(
             doc = "Maps member repo names to their resolved lock file labels.",
             mandatory = True,
+        ),
+        "member_lock_data": attr.string_dict(
+            doc = "Maps member repo names to their lock JSON content directly. When set, bypasses file reads for those members.",
         ),
     },
 )

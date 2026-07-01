@@ -124,6 +124,9 @@ use_repo(lock_import, "lock_import_repos_hub")
 lock_repos = use_extension("@rules_pycross//pycross/extensions:lock_repos.bzl", "lock_repos")
 lock_repos.create()
 
+lock = use_extension("@rules_pycross//pycross/extensions:lock.bzl", "lock")
+lock.create()
+
 # Create the default (empty) override repos for first-party backends.
 # These are referenced by the backends.register tags above.
 # Users who want to add package-specific overrides (e.g., setuptools.override())
