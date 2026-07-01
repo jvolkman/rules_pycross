@@ -13,9 +13,9 @@ py_library(
     srcs = glob(["utils/*.py"]),
     imports = ["../../../.."],
     deps = [
-        "//pycross/private/tools:patch_ng",
-        "@rules_pycross_internal//deps:build",
-        "@rules_pycross_internal//deps:packaging",
+        "@pycross_internal_deps//build:pkg",
+        "@pycross_internal_deps//packaging:pkg",
+        "@pycross_internal_deps//patch_ng:pkg",
     ],
 )
 
@@ -36,8 +36,8 @@ py_binary(
         ":meson_utils",
         ":utils",
         "//pycross/private/build/tools/crossenv",
-        "@rules_pycross_internal//deps:build",
-        "@rules_pycross_internal//deps:packaging",
+        "@pycross_internal_deps//build:pkg",
+        "@pycross_internal_deps//packaging:pkg",
     ],
 )
 
@@ -47,8 +47,8 @@ py_binary(
     imports = ["../../../.."],
     deps = [
         ":utils",
-        "@rules_pycross_internal//deps:build",
-        "@rules_pycross_internal//deps:packaging",
+        "@pycross_internal_deps//build:pkg",
+        "@pycross_internal_deps//packaging:pkg",
     ],
 )
 
@@ -59,8 +59,8 @@ py_binary(
     deps = [
         ":utils",
         "//pycross/private/build/tools/crossenv",
-        "@rules_pycross_internal//deps:build",
-        "@rules_pycross_internal//deps:packaging",
+        "@pycross_internal_deps//build:pkg",
+        "@pycross_internal_deps//packaging:pkg",
     ],
 )
 
@@ -72,8 +72,8 @@ py_binary(
     imports = ["../../../.."],
     deps = [
         ":env_utils",
-        "@rules_pycross_internal//deps:packaging",
-        "@rules_pycross_internal//deps:repairwheel",
+        "@pycross_internal_deps//packaging:pkg",
+        "@pycross_internal_deps//repairwheel:pkg",
     ],
 )
 

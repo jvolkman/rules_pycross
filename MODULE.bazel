@@ -38,10 +38,6 @@ pycross.configure_interpreter(
     python_defs_file = "@python_%s//:defs.bzl" % py_underscore_version,
     python_interpreter_target = "@python_%s_host//:python" % py_underscore_version,
 )
-
-pycross_dev = use_extension("@rules_pycross//pycross/extensions:pycross.bzl", "pycross_dev", dev_dependency = True)
-use_repo(pycross_dev, "rules_pycross_deps")
-
 pycross.configure_toolchains()
 use_repo(
     pycross,
@@ -114,10 +110,6 @@ use_repo(toolchains, "pycross_toolchains")
 
 register_toolchains("@pycross_toolchains//...")
 
-environments = use_extension("@rules_pycross//pycross/extensions:environments.bzl", "environments")
-environments.create_for_python_toolchains(name = "pycross_environments")
-use_repo(environments, "pycross_environments")
-
 lock_import = use_extension("@rules_pycross//pycross/extensions:lock_import.bzl", "lock_import")
 use_repo(lock_import, "lock_import_repos_hub")
 
@@ -125,7 +117,18 @@ lock_repos = use_extension("@rules_pycross//pycross/extensions:lock_repos.bzl", 
 lock_repos.create()
 
 lock = use_extension("@rules_pycross//pycross/extensions:lock.bzl", "lock")
+lock.import_uv(
+    lock_file = "//:uv.lock",
+    optional_groups = [
+        "core",
+        "build",
+        "repairwheel",
+    ],
+    project_file = "//:pyproject.toml",
+    repo = "pycross_internal_deps",
+)
 lock.create()
+use_repo(lock, "pycross_internal_deps")
 
 # Create the default (empty) override repos for first-party backends.
 # These are referenced by the backends.register tags above.

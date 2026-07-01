@@ -1,7 +1,6 @@
 """Pycross internal deps."""
 
 load("@bazel_features//:features.bzl", "bazel_features")
-load("//pycross/private:deps_toml_repo.bzl", "pycross_deps_toml_repo")
 load("//pycross/private:internal_repo.bzl", "create_internal_repo")
 load(":lock_attrs.bzl", "CONFIGURE_TOOLCHAINS_ATTRS")
 
@@ -82,17 +81,4 @@ pycross = module_extension(
             attrs = CONFIGURE_TOOLCHAINS_ATTRS,
         ),
     },
-)
-
-def _pycross_dev_impl(module_ctx):
-    pycross_deps_toml_repo(
-        name = "rules_pycross_deps",
-        project_file = Label("//:pyproject.toml"),
-        lock_file = Label("//:uv.lock"),
-    )
-    return module_ctx.extension_metadata(reproducible = True)
-
-pycross_dev = module_extension(
-    doc = "Development-only extension for rules_pycross.",
-    implementation = _pycross_dev_impl,
 )

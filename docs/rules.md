@@ -320,7 +320,7 @@ pycross_wheel_zipimport_library(<a href="#pycross_wheel_zipimport_library-name">
 | :------------- | :------------- | :------------- | :------------- | :------------- |
 | <a id="pycross_wheel_zipimport_library-name"></a>name |  A unique name for this target.   | <a href="https://bazel.build/concepts/labels#target-names">Name</a> | required |  |
 | <a id="pycross_wheel_zipimport_library-deps"></a>deps |  A list of this wheel's Python library dependencies.   | <a href="https://bazel.build/concepts/labels">List of labels</a> | optional |  `[]`  |
-| <a id="pycross_wheel_zipimport_library-wheel"></a>wheel |  The wheel file.   | <a href="https://bazel.build/concepts/labels">Label</a> | required |  |
+| <a id="pycross_wheel_zipimport_library-wheel"></a>wheel |  The wheel file or directory.   | <a href="https://bazel.build/concepts/labels">Label</a> | required |  |
 
 
 <a id="PycrossExtractedWheelInfo"></a>

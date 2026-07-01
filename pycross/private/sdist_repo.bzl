@@ -195,6 +195,7 @@ def _sdist_repo_common(rctx):
             rctx,
             Label("//pycross/private/tools:inspect_package.py"),
             inspect_args,
+            extra_wheels = [Label("@pycross_internal_deps//packaging:wheel")],
         )
 
         metadata = json.decode(rctx.read(output_json))

@@ -72,6 +72,7 @@ Top-level pins identify the root dependencies of the project.
   - Example: `"requests": "requests@2.31.0"`
 - For **conditional/conflicting** dependencies (variants), the pin value is an Object mapping constraint names to Package Keys.
   - Example:
+
     ```json
     "torch": {
       "extra_cpu": "torch@2.6.0",

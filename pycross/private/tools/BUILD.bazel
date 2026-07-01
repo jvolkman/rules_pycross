@@ -19,14 +19,13 @@ py_library(
 
 pycross_wheel_zipimport_library(
     name = "installer",
-    wheel = "@rules_pycross_internal//:installer_whl",
+    wheel = "@pycross_internal_deps//installer:wheel",
 )
 
 pycross_wheel_zipimport_library(
     name = "patch_ng",
-    wheel = "@rules_pycross_internal//:patch_ng_whl",
+    wheel = "@pycross_internal_deps//patch_ng:wheel",
 )
-
 
 py_binary(
     name = "wheel_installer",
@@ -59,3 +58,8 @@ py_binary(
     visibility = ["//visibility:public"],
 )
 
+py_binary(
+    name = "link_wheel",
+    srcs = ["link_wheel.py"],
+    visibility = ["//visibility:public"],
+)

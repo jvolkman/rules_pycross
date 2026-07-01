@@ -24,7 +24,7 @@ py_test(
     tags = ["unit"],
     deps = [
         "//pycross/private/tools:inspect_package",
-        "@rules_pycross_internal//deps:packaging",
+        "@pycross_internal_deps//packaging:pkg",
     ],
 )
 
@@ -106,7 +106,6 @@ py_test(
 resolved_lock_renderer_test_suite(name = "test_resolved_lock_renderer")
 
 override_helpers_test_suite(name = "test_override_helpers")
-
 
 variant_resolver_test_suite(name = "test_variant_resolver")
 
