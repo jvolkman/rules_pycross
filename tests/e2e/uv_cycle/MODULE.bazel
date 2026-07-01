@@ -31,8 +31,8 @@ environments.create_for_python_toolchains(
 )
 use_repo(environments, "uv_cycle_envs")
 
-lock_import = use_extension("@rules_pycross//pycross/extensions:lock_import.bzl", "lock_import")
-lock_import.import_uv(
+lock = use_extension("@rules_pycross//pycross/extensions:lock.bzl", "lock")
+lock.import_uv(
     local_wheels = [
         "//:cycle_a-1.0.0-py3-none-any.whl",
         "//:cycle_b-1.0.0-py3-none-any.whl",
@@ -41,6 +41,4 @@ lock_import.import_uv(
     project_file = "//:pyproject.toml",
     repo = "cycle_lock",
 )
-
-lock_repos = use_extension("@rules_pycross//pycross/extensions:lock_repos.bzl", "lock_repos")
-use_repo(lock_repos, "cycle_lock")
+use_repo(lock, "cycle_lock")

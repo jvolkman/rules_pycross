@@ -37,11 +37,8 @@ environments.create_for_python_toolchains(
 )
 use_repo(environments, "rules_pycross_e2e_environments")
 
-# Use the lock_import extension to import external lock files.
-lock_import = use_extension("@rules_pycross//pycross/extensions:lock_import.bzl", "lock_import")
-
-# lock_repo with uv and some package overrides
-lock_import.import_uv(
+lock = use_extension("@rules_pycross//pycross/extensions:lock.bzl", "lock")
+lock.import_uv(
     local_wheels = [
         "@rules_pycross_e2e_shared//:cowsay-6.1-py3-none-any.whl",
     ],
@@ -49,7 +46,4 @@ lock_import.import_uv(
     project_file = "//:pyproject.toml",
     repo = "uv",
 )
-
-# The actual repos are loaded from the lock_repos extension.
-lock_repos = use_extension("@rules_pycross//pycross/extensions:lock_repos.bzl", "lock_repos")
-use_repo(lock_repos, "uv")
+use_repo(lock, "uv")

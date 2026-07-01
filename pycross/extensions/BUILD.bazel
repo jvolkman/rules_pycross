@@ -34,3 +34,10 @@ bzl_library(
     visibility = ["//visibility:public"],
     deps = ["//pycross/private:backends"],
 )
+
+bzl_library(
+    name = "lock",
+    srcs = ["lock.bzl"],
+    visibility = ["//visibility:public"],
+    deps = ["//pycross/private:lock"],
+)
