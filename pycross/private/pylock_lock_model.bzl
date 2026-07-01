@@ -96,7 +96,12 @@ def translate_pylock(lock_dict, project_dict, lock_model):
             else:
                 hashes = wheel.get("hashes", {})
                 hash_val = hashes.get("sha256", "")
-            file_entry = {"name": filename, "sha256": hash_val}
+            file_entry = {
+                "name": filename,
+                "sha256": hash_val,
+                "package_name": name,
+                "package_version": version,
+            }
             if urls:
                 file_entry["urls"] = urls
             files.append(file_entry)
@@ -119,7 +124,12 @@ def translate_pylock(lock_dict, project_dict, lock_model):
             else:
                 hashes = sdist.get("hashes", {})
                 hash_val = hashes.get("sha256", "")
-            file_entry = {"name": filename, "sha256": hash_val}
+            file_entry = {
+                "name": filename,
+                "sha256": hash_val,
+                "package_name": name,
+                "package_version": version,
+            }
             if urls:
                 file_entry["urls"] = urls
             files.append(file_entry)

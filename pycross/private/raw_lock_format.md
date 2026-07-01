@@ -60,6 +60,8 @@ Represents a file (wheel or sdist) associated with a package.
 
 - `name`: (String) The filename (e.g., `requests-2.31.0-py3-none-any.whl`).
 - `sha256`: (String) The SHA256 hash of the file (without `sha256:` prefix).
+- `package_name`: (String) The canonicalized name of the package this file belongs to.
+- `package_version`: (String) The version of the package this file belongs to.
 - `urls`: (Array of Strings, Optional) List of URLs where the file can be downloaded.
 
 ---

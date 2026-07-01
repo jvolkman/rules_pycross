@@ -14,14 +14,16 @@ load(
 )
 load(":util.bzl", "url_decode_filename")
 
-def _parse_file_info(file_info):
+def _parse_file_info(file_info, package_name, package_version):
     """Parse a PDM lock file entry into a file dict.
 
     Args:
         file_info: A dict with "file" or "url" and "hash" keys.
+        package_name: The name of the package.
+        package_version: The version of the package.
 
     Returns:
-        A dict with name, sha256, and optionally urls.
+        A dict with name, sha256, package_name, package_version, and optionally urls.
     """
     if "file" in file_info:
         filename = file_info["file"]
@@ -46,7 +48,12 @@ def _parse_file_info(file_info):
     if not file_hash.startswith("sha256:"):
         fail("Expected sha256: prefix on hash: {}".format(file_hash))
 
-    result = {"name": filename, "sha256": file_hash[7:]}
+    result = {
+        "name": filename,
+        "sha256": file_hash[7:],
+        "package_name": package_name,
+        "package_version": package_version,
+    }
     if urls:
         result["urls"] = urls
     return result
@@ -157,7 +164,7 @@ def translate_pdm(project_dict, lock_dict, lock_model):
         # Parse files
         files = []
         for f in lock_pkg.get("files", []):
-            files.append(_parse_file_info(f))
+            files.append(_parse_file_info(f, name, version))
 
         is_local = "path" in lock_pkg and "files" not in lock_pkg
 

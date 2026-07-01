@@ -97,6 +97,12 @@ def _test_uv_minimal_lock_impl(env, target):
     ])
     result = translate_uv(project, lock, _lock_model())
     env.expect.that_collection(result["packages"].keys()).contains_exactly(["requests@2.31.0"])
+    pkg = result["packages"]["requests@2.31.0"]
+
+    files = pkg["files"]
+    env.expect.that_collection(files).has_size(1)
+    env.expect.that_str(files[0]["package_name"]).equals("requests")
+    env.expect.that_str(files[0]["package_version"]).equals("2.31.0")
 
 def _test_uv_minimal_lock(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])

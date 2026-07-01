@@ -15,14 +15,16 @@ load(
     "resolve_lock_graph",
 )
 
-def _parse_file_info(file_info):
+def _parse_file_info(file_info, package_name, package_version):
     """Parse a UV lock file entry into a file dict.
 
     Args:
         file_info: A dict with "file", "filename", or "url" and "hash" keys.
+        package_name: The name of the package.
+        package_version: The version of the package.
 
     Returns:
-        A dict with name, sha256, and optionally urls.
+        A dict with name, sha256, package_name, package_version, and optionally urls.
     """
     if "file" in file_info:
         filename = file_info["file"]
@@ -48,7 +50,12 @@ def _parse_file_info(file_info):
     if not file_hash.startswith("sha256:"):
         fail("Expected sha256: prefix on hash: {}".format(file_hash))
 
-    result = {"name": filename, "sha256": file_hash[7:]}
+    result = {
+        "name": filename,
+        "sha256": file_hash[7:],
+        "package_name": package_name,
+        "package_version": package_version,
+    }
     if urls:
         result["urls"] = urls
     return result
@@ -315,14 +322,14 @@ def translate_uv(project_dict, lock_dict, lock_model):
         # Parse files: wheels + sdist
         files = []
         for w in lock_pkg.get("wheels", []):
-            files.append(_parse_file_info(w))
+            files.append(_parse_file_info(w, package_name, package_version))
 
         sdist = lock_pkg.get("sdist", {})
         source = lock_pkg.get("source", {})
 
         if sdist:
             if "url" in sdist or "file" in sdist:
-                files.append(_parse_file_info(sdist))
+                files.append(_parse_file_info(sdist, package_name, package_version))
             elif "url" in source:
                 # URL-based source with subdirectory
                 url = source["url"]
@@ -334,11 +341,13 @@ def translate_uv(project_dict, lock_dict, lock_model):
                     "name": filename,
                     "sha256": file_hash[7:],
                     "urls": [url],
+                    "package_name": package_name,
+                    "package_version": package_version,
                 })
             elif "git" in source:
                 pass  # handled below
             else:
-                files.append(_parse_file_info(sdist))
+                files.append(_parse_file_info(sdist, package_name, package_version))
 
         # Handle git sources
         if "git" in source and not files:
@@ -355,6 +364,8 @@ def translate_uv(project_dict, lock_dict, lock_model):
                     "name": filename,
                     "sha256": synthetic_hash,
                     "urls": ["git+" + git_url],
+                    "package_name": package_name,
+                    "package_version": package_version,
                 })
 
         # Source dir

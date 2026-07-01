@@ -135,6 +135,8 @@ def _test_pylock_minimal_lock_impl(env, target):
     env.expect.that_collection(result["packages"].keys()).contains("requests@2.31.0")
     pkg = result["packages"]["requests@2.31.0"]
     env.expect.that_str(pkg["files"][0]["sha256"]).equals("1234567890abcdef")
+    env.expect.that_str(pkg["files"][0]["package_name"]).equals("requests")
+    env.expect.that_str(pkg["files"][0]["package_version"]).equals("2.31.0")
 
 def _test_pylock_minimal_lock(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])

@@ -183,11 +183,11 @@ def _get_files_for_package(files, package_name, package_version):
         if filename.endswith(".whl"):
             # Parse wheel filename to check name and version
             parsed = pypackaging.utils.parse_wheel_filename(filename)
-            if parsed.name == package_name and str(parsed.version) == package_version:
+            if parsed.name == package_name and parsed.version.version_str == package_version:
                 result.append(f)
         elif filename.endswith(".tar.gz") or filename.endswith(".zip"):
             parsed = pypackaging.utils.parse_sdist_filename(filename)
-            if parsed.name == package_name and str(parsed.version) == package_version:
+            if parsed.name == package_name and parsed.version.version_str == package_version:
                 result.append(f)
         else:
             # Unknown format, include it
@@ -350,6 +350,15 @@ def translate_poetry(project_dict, lock_dict, lock_model):
         files = [parse_file_info(f) for f in lock_pkg.get("files", [])]
         if not files:
             files = lock_files_by_name.get(package_listed_name, [])
+
+        # Add package name and version to files
+        updated_files = []
+        for f in files:
+            updated_f = dict(f)
+            updated_f["package_name"] = package_name
+            updated_f["package_version"] = package_version
+            updated_files.append(updated_f)
+        files = updated_files
 
         # Filter to only matching files
         files = _get_files_for_package(files, package_name, package_version)

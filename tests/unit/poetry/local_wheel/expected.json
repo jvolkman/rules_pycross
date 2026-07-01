@@ -2,7 +2,14 @@
   "packages": {
     "cowsay@6.1": {
       "dependencies": [],
-      "files": [],
+      "files": [
+        {
+          "name": "cowsay-6.1-py3-none-any.whl",
+          "package_name": "cowsay",
+          "package_version": "6.1",
+          "sha256": "274b1e6fc1b966d53976333eb90ac94cb07a450a700b455af9fbdf882244b30a"
+        }
+      ],
       "name": "cowsay",
       "python_versions": ">=3.8",
       "version": "6.1"
