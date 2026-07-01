@@ -37,12 +37,12 @@ environments.platform(
 )
 use_repo(environments, "envs")
 
-lock_import = use_extension("@rules_pycross//pycross/extensions:lock_import.bzl", "lock_import")
-lock_import.import_uv_workspace(
+lock = use_extension("@rules_pycross//pycross/extensions:lock.bzl", "lock")
+lock.import_uv_workspace(
     name = "shared",
     lock_file = "//:uv.lock",
 )
-lock_import.uv_member(
+lock.uv_member(
     development_groups = [
         "group-a",
         "group-b",
@@ -55,12 +55,7 @@ lock_import.uv_member(
     repo = "project",
     workspace = "shared",
 )
-
-# A second member repo with variant-a pinned via platform transition.
-# This exercises the flags/platform transition codepath: the thin repo
-# generates an internal platform with the flag embedded, so builds
-# resolve variant-a without any CLI --flag arguments.
-lock_import.uv_member(
+lock.uv_member(
     constraint_values = [
         "@platforms//os:linux",
         "@platforms//cpu:x86_64",
@@ -80,6 +75,4 @@ lock_import.uv_member(
     repo = "project_pinned",
     workspace = "shared",
 )
-
-lock_repos = use_extension("@rules_pycross//pycross/extensions:lock_repos.bzl", "lock_repos")
-use_repo(lock_repos, "project", "project_pinned")
+use_repo(lock, "project", "project_pinned")

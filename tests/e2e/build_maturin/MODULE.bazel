@@ -47,27 +47,24 @@ pycross.configure_toolchains(
     ],
 )
 
-# Use the lock_import extension to import external lock files.
-lock_import = use_extension("@rules_pycross//pycross/extensions:lock_import.bzl", "lock_import")
-
-# Import from uv
-lock_import.import_uv(
+lock = use_extension("@rules_pycross//pycross/extensions:lock.bzl", "lock")
+lock.import_uv(
     default_alias_single_version = True,
     lock_file = "//:uv.lock",
     project_file = "//:pyproject.toml",
     repo = "uv",
 )
-lock_import.package(
+lock.package(
     name = "rpds-py",
     always_build = True,
     repo = "uv",
 )
-lock_import.package(
+lock.package(
     name = "jiter",
     always_build = True,
     repo = "uv",
 )
-lock_import.package(
+lock.package(
     name = "python-geohash",
     always_build = True,
     repo = "uv",
@@ -81,5 +78,4 @@ maturin.override(
 )
 use_repo(maturin, "uv_cargo")
 
-lock_repos = use_extension("@rules_pycross//pycross/extensions:lock_repos.bzl", "lock_repos")
-use_repo(lock_repos, "uv")
+use_repo(lock, "uv")
