@@ -1,12 +1,54 @@
 import shlex
+import shutil
 import textwrap
 from pathlib import Path
 from typing import Any
 from typing import Dict
 from typing import List
+from typing import Tuple
 
 from pycross.private.build.tools.utils.context import BuildContext
 from pycross.private.build.tools.utils.context import replace_placeholder
+
+
+# NOTE: A simplified copy of the ranlib-guessing logic lives in
+# modules/backend_maturin/private/tools/rust_common.py (guess_ranlib_path)
+# to avoid a cross-module import. Keep both copies in sync.
+def parse_ar_and_guess_ranlib(ar: str | None) -> Tuple[List[str], Path | None]:
+    """Parse AR path and flags, and guess ranlib path.
+
+    Returns:
+        A tuple of (ar_list, ranlib_path). If the AR path was a bare name
+        resolved via $PATH, ar_list[0] is updated to the absolute path.
+    """
+    if not ar:
+        return [], None
+    ar_list = shlex.split(ar)
+    if not ar_list:
+        return [], None
+
+    ar_path = Path(ar_list[0])
+    if not ar_path.is_absolute():
+        resolved_ar = shutil.which(str(ar_path))
+        if resolved_ar:
+            ar_path = Path(resolved_ar)
+            ar_list[0] = resolved_ar
+
+    stem = ar_path.stem
+    if stem == "ar" or stem.endswith(("-ar", "_ar")):
+        ranlib_stem = stem[:-2] + "ranlib"
+        ranlib_name = ranlib_stem + ar_path.suffix
+
+        if ar_path.is_absolute():
+            guessed_ranlib_path = ar_path.parent / ranlib_name
+            if guessed_ranlib_path.exists():
+                return ar_list, guessed_ranlib_path
+        else:
+            resolved_ranlib = shutil.which(ranlib_name)
+            if resolved_ranlib:
+                return ar_list, Path(resolved_ranlib)
+
+    return ar_list, None
 
 
 def get_wrapper_flags(cflags: str) -> List[str]:

@@ -9,6 +9,7 @@ from typing import Dict
 from typing import List
 from typing import Optional
 
+from pycross.private.build.tools.utils.cc_toolchain import parse_ar_and_guess_ranlib
 from pycross.private.build.tools.utils.context import BuildContext
 from pycross.private.build.tools.utils.context import replace_placeholder
 
@@ -133,6 +134,13 @@ def generate_cross_ini(ctx: BuildContext, cc_config: Optional[Dict[str, Any]] = 
         f"c = {format_meson_list(cc_list)}",
         f"cpp = {format_meson_list(cxx_list)}",
     ]
+
+    ar = get_var("AR")
+    if ar:
+        ar_list, ranlib_path = parse_ar_and_guess_ranlib(ar)
+        binaries_lines.append(f"ar = {format_meson_list(ar_list)}")
+        if ranlib_path:
+            binaries_lines.append(f"ranlib = '{ranlib_path.as_posix()}'")
 
     # Cython: only inject if present in the build virtualenv.
     # Meson does NOT inherently require Cython; it is only needed for
