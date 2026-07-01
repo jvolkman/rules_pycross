@@ -25,6 +25,26 @@ See the [CI results](https://github.com/jvolkman/rules_pycross/actions/workflows
 Add your lock file import to `MODULE.bazel`:
 
 ```python
+lock = use_extension("@rules_pycross//pycross/extensions:lock.bzl", "lock")
+
+lock.import_uv(
+    lock_file = "//:uv.lock",
+    project_file = "//:pyproject.toml",
+    repo = "pypi",
+)
+use_repo(lock, "pypi")
+```
+
+After this, packages are available as `@pypi//package_name`. A `requirement()` macro is generated in `@pypi//:requirements.bzl`.
+
+Other lock formats work the same way via `import_pdm`, `import_poetry`, or `import_pylock`.
+
+<details>
+<summary>Legacy two-extension pattern (deprecated)</summary>
+
+The previous approach used two separate extensions. This still works but is deprecated:
+
+```python
 lock_import = use_extension("@rules_pycross//pycross/extensions:lock_import.bzl", "lock_import")
 
 lock_import.import_uv(
@@ -37,9 +57,7 @@ lock_repos = use_extension("@rules_pycross//pycross/extensions:lock_repos.bzl", 
 use_repo(lock_repos, "pypi")
 ```
 
-After this, packages are available as `@pypi//package_name`. A `requirement()` macro is generated in `@pypi//:requirements.bzl`.
-
-Other lock formats work the same way via `import_pdm`, `import_poetry`, or `import_pylock`.
+</details>
 
 ### Toolchain Configuration
 
@@ -79,7 +97,7 @@ A `pip install` operation can be broken down into:
 `rules_pycross` maps each step to Bazel primitives:
 
 1. **Native Bazel Platforms** — target environments are determined by standard Bazel `@platforms` constraints and `rules_python` toolchain flags, mapped directly to PEP 508 markers at analysis time.
-2. **`lock_import`** extension — translates a lock file into Bazel repository rules: `http_file` for downloads, build rules for source distributions.
+2. **`lock`** extension — translates a lock file and resolves dependencies into Bazel repository rules: `http_file` for downloads, build rules for source distributions.
 3. **Build backends** (`setuptools_build`, `meson_build`, etc.) — build sdists into wheels inside sandboxed Bazel actions with remote execution support.
 4. **`pycross_wheel_library`** — extracts a wheel (downloaded or built) and provides it as a `py_library`.
 
@@ -128,20 +146,20 @@ py_library(
 ### UV Workspace (Single Lock, Multiple Members)
 
 ```python
+lock = use_extension("@rules_pycross//pycross/extensions:lock.bzl", "lock")
+
 # 1. Declare the workspace (shared lock file and settings)
-lock_import.import_uv_workspace(
+lock.import_uv_workspace(
     name = "shared",
     lock_file = "//:uv.lock",
 )
 
 # 2. Auto-discover all members; generate repos with a naming pattern
-lock_import.uv_all_members(
+lock.uv_all_members(
     workspace = "shared",
     repo_pattern = "lock_{member}",  # e.g., 'project-a' -> '@lock_project_a'
 )
-
-lock_repos = use_extension("@rules_pycross//pycross/extensions:lock_repos.bzl", "lock_repos")
-use_repo(lock_repos, "lock_project_a", "lock_project_b")
+use_repo(lock, "lock_project_a", "lock_project_b")
 ```
 
 All members share a single backing `package_repo` — overlapping packages are downloaded and built only once.
@@ -152,14 +170,14 @@ Individual members can override the repo name or dependency groups using `uv_mem
 
 ```python
 # Override project-a's repo name (instead of the pattern-generated 'lock_project_a')
-lock_import.uv_member(
+lock.uv_member(
     workspace = "shared",
     project = "project-a",
     repo = "lock_a",
 )
 
 # Include specific optional groups only for project-b
-lock_import.uv_member(
+lock.uv_member(
     workspace = "shared",
     project = "project-b",
     optional_groups = ["grpc", "testing"],
@@ -168,11 +186,11 @@ lock_import.uv_member(
 
 ### Package Annotations in a Workspace
 
-`lock_import.package()` annotations in a workspace must use the `workspace` attribute (not `repo`):
+`lock.package()` annotations in a workspace must use the `workspace` attribute (not `repo`):
 
 ```python
 # Apply to all members of the "shared" workspace
-lock_import.package(
+lock.package(
     name = "regex",
     install_exclude_globs = ["test_regex.py"],
     workspace = "shared",
@@ -183,14 +201,14 @@ Use `name = "*"` to set defaults for all packages. A specific annotation for a p
 
 ```python
 # Force all packages to build from source by default
-lock_import.package(
+lock.package(
     name = "*",
     always_build = True,
     workspace = "shared",
 )
 
 # Override the wildcard for a specific package
-lock_import.package(
+lock.package(
     name = "requests",
     always_build = False,
     workspace = "shared",
@@ -202,16 +220,17 @@ lock_import.package(
 If your projects use separate lock files (not a shared workspace lock), each `import_uv` call creates its own isolated workspace:
 
 ```python
-lock_import.import_uv(
+lock.import_uv(
     lock_file = "//frontend:uv.lock",
     project_file = "//frontend:pyproject.toml",
     repo = "frontend_deps",
 )
-lock_import.import_uv(
+lock.import_uv(
     lock_file = "//ml:uv.lock",
     project_file = "//ml:pyproject.toml",
     repo = "ml_deps",
 )
+use_repo(lock, "frontend_deps", "ml_deps")
 ```
 
 ---
@@ -236,7 +255,7 @@ lock_import.import_uv(
 By default, `rules_pycross` uses pre-built wheels when available. To force building from source, set `always_build = True`:
 
 ```python
-lock_import.package(
+lock.package(
     name = "numpy",
     always_build = True,
     repo = "pypi",
@@ -316,12 +335,12 @@ rust.toolchain(
 )
 
 # Mark packages for source build
-lock_import.package(
+lock.package(
     name = "rpds-py",
     always_build = True,
     repo = "pypi",
 )
-lock_import.package(
+lock.package(
     name = "jiter",
     always_build = True,
     repo = "pypi",
@@ -342,7 +361,7 @@ use_repo(maturin, "pypi_cargo")
 For full control, provide your own build target:
 
 ```python
-lock_import.package(
+lock.package(
     name = "psycopg2",
     build_target = "@//deps/psycopg2:wheel",
     repo = "pypi",
@@ -443,7 +462,7 @@ There are three ways to specify the transition:
 **1. Using `flags` — embed `--flag=value` settings into a generated platform:**
 
 ```python
-lock_import.uv_member(
+lock.uv_member(
     workspace = "shared",
     project = "ml-pipeline",
     flags = [
@@ -455,7 +474,7 @@ lock_import.uv_member(
 **2. Using `constraint_values` — generate a platform with specific constraints:**
 
 ```python
-lock_import.uv_member(
+lock.uv_member(
     workspace = "shared",
     project = "ml-pipeline",
     constraint_values = [
@@ -468,7 +487,7 @@ lock_import.uv_member(
 **3. Using `platform` — reference an existing platform target directly:**
 
 ```python
-lock_import.uv_member(
+lock.uv_member(
     workspace = "shared",
     project = "ml-pipeline",
     platform = "@//platforms:linux_cuda",
@@ -492,7 +511,7 @@ This is particularly useful for locking variant selections to a member without r
 
 `rules_pycross` integrates with `rules_python`. The generated target layout (`@<repo>//<package>`) is compatible with `rules_python` conventions.
 
-* **Venv support** — when `rules_python` venvs are enabled, `pycross_wheel_library` populates the symlinks needed for a correct `site-packages` layout. Auto-detected paths can be overridden via `lock_import.package(site_paths = [...])`, and additional path categories (`bin_paths`, `data_paths`, `include_paths`) are also supported.
+* **Venv support** — when `rules_python` venvs are enabled, `pycross_wheel_library` populates the symlinks needed for a correct `site-packages` layout. Auto-detected paths can be overridden via `lock.package(site_paths = [...])`, and additional path categories (`bin_paths`, `data_paths`, `include_paths`) are also supported.
 * **`py_console_script_binary`** — each `pycross_wheel_library` produces a `:dist_info` output group for entry point discovery. Use `py_console_script_binary(pkg = "@pypi//cython", script = "cython")` directly.
 
 ---
