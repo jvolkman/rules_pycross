@@ -27,64 +27,6 @@ pycross_wheel_zipimport_library(
     wheel = "@rules_pycross_internal//:patch_ng_whl",
 )
 
-py_library(
-    name = "lock_model",
-    srcs = ["lock_model.py"],
-    imports = ["../../.."],
-    deps = [
-        "@rules_pycross_internal//deps:dacite",
-        "@rules_pycross_internal//deps:packaging",
-    ],
-)
-
-py_library(
-    name = "translator_utils",
-    srcs = [
-        "translator_utils.py",
-    ],
-    imports = ["../../.."],
-    deps = [
-        ":lock_model",
-        "@rules_pycross_internal//deps:packaging",
-    ],
-)
-
-py_binary(
-    name = "pdm_translator",
-    srcs = ["pdm_translator.py"],
-    imports = ["../../.."],
-    visibility = ["//visibility:public"],
-    deps = [
-        ":args",
-        ":lock_model",
-        ":translator_utils",
-    ],
-)
-
-py_binary(
-    name = "uv_translator",
-    srcs = ["uv_translator.py"],
-    imports = ["../../.."],
-    visibility = ["//visibility:public"],
-    deps = [
-        ":args",
-        ":lock_model",
-        ":translator_utils",
-    ],
-)
-
-py_binary(
-    name = "poetry_translator",
-    srcs = ["poetry_translator.py"],
-    imports = ["../../.."],
-    visibility = ["//visibility:public"],
-    deps = [
-        ":args",
-        ":lock_model",
-        ":translator_utils",
-        "@rules_pycross_internal//deps:poetry-core",
-    ],
-)
 
 py_binary(
     name = "wheel_installer",
@@ -117,21 +59,3 @@ py_binary(
     visibility = ["//visibility:public"],
 )
 
-py_library(
-    name = "pylock_translator_lib",
-    srcs = ["pylock_translator.py"],
-    deps = [
-        ":args",
-        ":lock_model",
-        "@rules_pycross_internal//deps:packaging",
-    ],
-)
-
-py_binary(
-    name = "pylock_translator",
-    srcs = ["pylock_translator.py"],
-    visibility = ["//visibility:public"],
-    deps = [
-        ":pylock_translator_lib",
-    ],
-)
