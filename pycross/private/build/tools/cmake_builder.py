@@ -2,8 +2,9 @@
 
 import os
 import sys
-import textwrap
+from pathlib import Path
 
+from pycross.private.build.tools.utils.cc_toolchain import parse_ar_and_guess_ranlib
 from pycross.private.build.tools.utils.context import BuildContext
 from pycross.private.build.tools.utils.context import load_layers
 from pycross.private.build.tools.utils.context import replace_placeholder
@@ -55,26 +56,46 @@ def generate_toolchain_file(ctx: BuildContext, cc_config: dict) -> None:
 
     cmake_system_processor = cc_config.get("target_cpu", "x86_64")
 
+    # Detect AR and guess RANLIB
+    ar = get_var("AR")
+    ar_list, ranlib_path = parse_ar_and_guess_ranlib(ar)
+
+    # CMake does not support passing flags in CMAKE_AR directly without
+    # additional workarounds. We extract just the binary path and drop flags.
+    ar_path = Path(ar_list[0]) if ar_list else None
+
     # Write the toolchain file
-    toolchain_content = textwrap.dedent(f"""\
-        set(CMAKE_SYSTEM_NAME {cmake_system_name})
-        set(CMAKE_SYSTEM_PROCESSOR {cmake_system_processor})
+    toolchain_lines = [
+        f"set(CMAKE_SYSTEM_NAME {cmake_system_name})",
+        f"set(CMAKE_SYSTEM_PROCESSOR {cmake_system_processor})",
+        "",
+        f'set(CMAKE_C_COMPILER "{cc}")',
+        f'set(CMAKE_CXX_COMPILER "{cxx}")',
+    ]
 
-        set(CMAKE_C_COMPILER "{cc}")
-        set(CMAKE_CXX_COMPILER "{cxx}")
+    if ar_path:
+        toolchain_lines.append(f'set(CMAKE_AR "{ar_path.as_posix()}" CACHE STRING "" FORCE)')
+    if ranlib_path:
+        toolchain_lines.append(f'set(CMAKE_RANLIB "{ranlib_path.as_posix()}" CACHE STRING "" FORCE)')
 
-        set(CMAKE_C_FLAGS "{cflags}" CACHE STRING "" FORCE)
-        set(CMAKE_CXX_FLAGS "{cxxflags}" CACHE STRING "" FORCE)
+    toolchain_lines.extend(
+        [
+            "",
+            f'set(CMAKE_C_FLAGS "{cflags}" CACHE STRING "" FORCE)',
+            f'set(CMAKE_CXX_FLAGS "{cxxflags}" CACHE STRING "" FORCE)',
+            "",
+            f'set(CMAKE_EXE_LINKER_FLAGS "{ldflags}" CACHE STRING "" FORCE)',
+            f'set(CMAKE_SHARED_LINKER_FLAGS "{ldflags}" CACHE STRING "" FORCE)',
+            f'set(CMAKE_MODULE_LINKER_FLAGS "{ldflags}" CACHE STRING "" FORCE)',
+            "",
+            "# Disable stripping during CMake installation step because the host",
+            "# strip utility cannot handle cross-compiled binaries (e.g. Mach-O).",
+            "# Bazel/rules_pycross handles stripping separately if needed.",
+            'set(CMAKE_STRIP "true" CACHE STRING "" FORCE)',
+        ]
+    )
 
-        set(CMAKE_EXE_LINKER_FLAGS "{ldflags}" CACHE STRING "" FORCE)
-        set(CMAKE_SHARED_LINKER_FLAGS "{ldflags}" CACHE STRING "" FORCE)
-        set(CMAKE_MODULE_LINKER_FLAGS "{ldflags}" CACHE STRING "" FORCE)
-
-        # Disable stripping during CMake installation step because the host
-        # strip utility cannot handle cross-compiled binaries (e.g. Mach-O).
-        # Bazel/rules_pycross handles stripping separately if needed.
-        set(CMAKE_STRIP "true" CACHE STRING "" FORCE)
-        """)
+    toolchain_content = "\n".join(toolchain_lines) + "\n"
 
     toolchain_path = ctx.temp_dir / "cc_layer" / "CMakeToolchain.txt"
     toolchain_path.parent.mkdir(parents=True, exist_ok=True)
