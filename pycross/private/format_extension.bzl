@@ -553,6 +553,7 @@ def make_format_extension(
     # We merge all attrs into a single tag_class since Bazel tag_class doesn't
     # support conditional attrs. The _impl validates mutual exclusivity.
     project_tag_attrs = {}
+    project_tag_attrs.update(STANDALONE_PROJECT_ATTRS)
     project_tag_attrs.update(standalone_project_attrs)
     if member_project_attrs:
         project_tag_attrs.update(member_project_attrs)
