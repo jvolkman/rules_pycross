@@ -465,6 +465,10 @@ def resolve(
     """
     local_wheels = local_wheels or {}
     remote_wheels = remote_wheels or {}
+    if type(local_wheels) != "dict":
+        fail("local_wheels must be a dict (filename -> label), got {}".format(type(local_wheels)))
+    if type(remote_wheels) != "dict":
+        fail("remote_wheels must be a dict (url -> sha256), got {}".format(type(remote_wheels)))
     default_build_dependencies_args = default_build_dependencies_args or []
     local_wheels_by_pkg = {}
     for filename, label in local_wheels.items():

@@ -273,9 +273,15 @@ def repo_create_pylock_model(rctx, project_file, lock_file, lock_model, output):
         lock_model: a struct containing the same attrs as the pycross_pylock_lock_model rule.
         output: the output file.
     """
-    lock_dict = decode(rctx.read(rctx.path(lock_file)))
+    lock_path = rctx.path(lock_file)
+    if not lock_path.exists:
+        fail("Lock file not found: {}. Ensure the pylock file exists at the expected location.".format(lock_file))
+    lock_dict = decode(rctx.read(lock_path))
     project_dict = None
     if project_file:
-        project_dict = decode(rctx.read(rctx.path(project_file)))
+        project_path = rctx.path(project_file)
+        if not project_path.exists:
+            fail("Project file not found: {}. Ensure pyproject.toml exists at the expected location.".format(project_file))
+        project_dict = decode(rctx.read(project_path))
     raw_lock_data = translate_pylock(lock_dict, project_dict, lock_model)
     rctx.file(output, json.encode(raw_lock_data))
