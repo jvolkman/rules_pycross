@@ -9,7 +9,7 @@ py_test(
     name = "test_cycle",
     srcs = ["test_cycle.py"],
     deps = [
-        "@cycle_lock//:cycle-a",
-        "@cycle_lock//:cycle-b",
+        "@cycle_lock//cycle_a",
+        "@cycle_lock//cycle_b",
     ],
 )

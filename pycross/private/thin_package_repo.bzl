@@ -24,10 +24,11 @@ def requirement(pkg):
         extra = extra.rstrip("]")
 
     pkg = pypackaging.utils.canonicalize_name(pkg)
+    pkg_dir = pkg.replace("-", "_")
 
     if extra:
-        return "@@{repo_name}//:%s[%s]" % (pkg, extra)
-    return "@@{repo_name}//:%s" % pkg
+        return "@@{repo_name}//%s:[%s]" % (pkg_dir, extra)
+    return "@@{repo_name}//%s" % (pkg_dir)
 """
 
 def _is_platform_specific(pkg):
@@ -57,7 +58,7 @@ def _requirements_bzl(rctx, pins, packages):
         if is_conditional:
             lines.append('    "@@{repo_name}//:{pin}",'.format(repo_name = rctx.name, pin = "_maybe_" + pin))
         else:
-            lines.append('    "@@{repo_name}//:{pin}",'.format(repo_name = rctx.name, pin = pin))
+            lines.append('    "@@{repo_name}//{pin}",'.format(repo_name = rctx.name, pin = underscore_name(pin)))
     lines.append("]")
     return "\n".join(lines) + "\n"
 
@@ -95,6 +96,25 @@ def _target_select(target_dict, prefix, suffix, workspace_repo, is_aggregated = 
     lines.append("    })")
     return "\n".join(lines)
 
+def _proxy_actual(actual_lines, target_dict, prefix, suffix, workspace_repo, alias_name, actual_pkg_ref, transition_bzl, is_aggregated = False, default_variants = {}):
+    """Emit an intermediate select alias if needed, return the actual expression for the proxy.
+
+    When transition_bzl is set and target_dict has variants (would generate a select()),
+    we emit an intermediate alias in the __actual/<pkg> package so the select() is
+    evaluated in the transitioned configuration rather than before the transition applies.
+    """
+    actual = _target_select(target_dict, prefix, suffix, workspace_repo, is_aggregated = is_aggregated, default_variants = default_variants)
+    if transition_bzl and not (len(target_dict) == 1 and "" in target_dict):
+        actual_lines.extend([
+            "alias(",
+            '    name = "{}",'.format(alias_name),
+            "    actual = {},".format(actual),
+            ")",
+            "",
+        ])
+        return '"{}:{}",'.format(actual_pkg_ref, alias_name)
+    return "{},".format(actual)
+
 def _pin_build(target_name, pin_target_dict, package, workspace_repo, workspace_lock_target_dict = None, has_aggregated_variant = False, extras_dict = None, default_variants = {}, target_platform = None, transition_bzl = None):
     """Generates the BUILD file for a pin directory, pointing to the workspace."""
     lock_target_dict = workspace_lock_target_dict if workspace_lock_target_dict else pin_target_dict
@@ -102,26 +122,33 @@ def _pin_build(target_name, pin_target_dict, package, workspace_repo, workspace_
     wheel_ref = "@{}//_wheel:".format(workspace_repo)
     sdist_ref = "@{}//_sdist:".format(workspace_repo)
 
+    actual_lines = []
+    actual_pkg_ref = "//__actual/{}".format(target_name)
+
     lines = [
         'package(default_visibility = ["//visibility:public"])',
         "",
     ]
 
-    if target_platform and not transition_bzl:
-        # Platform-only transition (no flags): transition at the per-package level.
+    if transition_bzl:
+        # Flags-based transition: use generated transitioning rules.
+        lines.append('load("{}", "pycross_transitioning_file_proxy", "pycross_transitioning_library_proxy")'.format(transition_bzl))
+        lib_rule = "pycross_transitioning_library_proxy"
+        file_rule = "pycross_transitioning_file_proxy"
+    elif target_platform:
+        # Platform-only transition: use built-in transitioning rules.
         lines.append('load("@rules_pycross//pycross:defs.bzl", "pycross_transitioning_file_proxy", "pycross_transitioning_library_proxy")')
         lib_rule = "pycross_transitioning_library_proxy"
         file_rule = "pycross_transitioning_file_proxy"
     else:
-        # No transition, or flags-based transition (applied at root level).
+        # No transition.
         lines.append('load("@rules_pycross//pycross:defs.bzl", "pycross_file_proxy", "pycross_library_proxy")')
         lib_rule = "pycross_library_proxy"
         file_rule = "pycross_file_proxy"
     lines.append("")
 
-    # Only emit the platform attr when using transitioning rules at per-package level.
-    # When transition_bzl is set, flags are applied at root level instead.
-    emit_platform = target_platform and not transition_bzl
+    # Emit the platform attr whenever using transitioning rules.
+    emit_platform = bool(target_platform)
 
     if lock_target_dict:
         lines.extend([
@@ -130,27 +157,36 @@ def _pin_build(target_name, pin_target_dict, package, workspace_repo, workspace_
             '    actual = ":{}",'.format(_safe_name(target_name, "pkg")),
             ")",
             "",
+        ])
+        actual_pkg = _proxy_actual(actual_lines, lock_target_dict, lock_ref, "", workspace_repo, "pkg", actual_pkg_ref, transition_bzl, is_aggregated = has_aggregated_variant, default_variants = default_variants)
+        lines.extend([
             lib_rule + "(",
             '    name = "{}",'.format(_safe_name(target_name, "pkg")),
-            "    actual = {},".format(_target_select(lock_target_dict, lock_ref, "", workspace_repo, is_aggregated = has_aggregated_variant, default_variants = default_variants)),
+            "    actual = {}".format(actual_pkg),
         ])
         if emit_platform:
             lines.append('    platform = "{}",'.format(target_platform))
         lines.extend([
             ")",
             "",
+        ])
+        actual_wheel = _proxy_actual(actual_lines, pin_target_dict, wheel_ref, "", workspace_repo, "wheel", actual_pkg_ref, transition_bzl, default_variants = default_variants)
+        lines.extend([
             file_rule + "(",
             '    name = "{}",'.format(_safe_name(target_name, "wheel")),
-            "    actual = {},".format(_target_select(pin_target_dict, wheel_ref, "", workspace_repo, default_variants = default_variants)),
+            "    actual = {}".format(actual_wheel),
         ])
         if emit_platform:
             lines.append('    platform = "{}",'.format(target_platform))
         lines.extend([
             ")",
             "",
+        ])
+        actual_dist_info = _proxy_actual(actual_lines, lock_target_dict, lock_ref + "_dist_info_", "", workspace_repo, "dist_info", actual_pkg_ref, transition_bzl, default_variants = default_variants)
+        lines.extend([
             file_rule + "(",
             '    name = "{}",'.format(_safe_name(target_name, "dist_info")),
-            "    actual = {},".format(_target_select(lock_target_dict, lock_ref + "_dist_info_", "", workspace_repo, default_variants = default_variants)),
+            "    actual = {}".format(actual_dist_info),
         ])
         if emit_platform:
             lines.append('    platform = "{}",'.format(target_platform))
@@ -173,10 +209,11 @@ def _pin_build(target_name, pin_target_dict, package, workspace_repo, workspace_
                     "",
                 ])
             else:
+                actual_all = _proxy_actual(actual_lines, lock_target_dict, lock_ref, "", workspace_repo, "all", actual_pkg_ref, transition_bzl, default_variants = default_variants)
                 lines.extend([
                     lib_rule + "(",
                     '    name = "[]",',
-                    "    actual = {},".format(_target_select(lock_target_dict, lock_ref, "", workspace_repo, default_variants = default_variants)),
+                    "    actual = {}".format(actual_all),
                 ])
                 if emit_platform:
                     lines.append('    platform = "{}",'.format(target_platform))
@@ -187,10 +224,11 @@ def _pin_build(target_name, pin_target_dict, package, workspace_repo, workspace_
 
         sdist_file = package.get("sdist_file")
         if sdist_file:
+            actual_sdist = _proxy_actual(actual_lines, pin_target_dict, sdist_ref, "", workspace_repo, "sdist", actual_pkg_ref, transition_bzl, default_variants = default_variants)
             lines.extend([
                 file_rule + "(",
                 '    name = "{}",'.format(_safe_name(target_name, "sdist")),
-                "    actual = {},".format(_target_select(pin_target_dict, sdist_ref, "", workspace_repo, default_variants = default_variants)),
+                "    actual = {}".format(actual_sdist),
             ])
             if emit_platform:
                 lines.append('    platform = "{}",'.format(target_platform))
@@ -201,10 +239,11 @@ def _pin_build(target_name, pin_target_dict, package, workspace_repo, workspace_
 
     extras_dict = extras_dict or {}
     for extra_name, extra_target_dict in sorted(extras_dict.items()):
+        actual_extra = _proxy_actual(actual_lines, extra_target_dict, lock_ref, "", workspace_repo, "extra_{}".format(extra_name), actual_pkg_ref, transition_bzl, default_variants = default_variants)
         lines.extend([
             lib_rule + "(",
             '    name = "[{}]",'.format(extra_name),
-            "    actual = {},".format(_target_select(extra_target_dict, lock_ref, "", workspace_repo, default_variants = default_variants)),
+            "    actual = {}".format(actual_extra),
         ])
         if emit_platform:
             lines.append('    platform = "{}",'.format(target_platform))
@@ -213,7 +252,18 @@ def _pin_build(target_name, pin_target_dict, package, workspace_repo, workspace_
             "",
         ])
 
-    return "\n".join(lines) + "\n"
+    actual_build = None
+    if actual_lines:
+        actual_header = [
+            'package(default_visibility = ["//{}:__pkg__"])'.format(target_name),
+            "",
+        ]
+        actual_build = "\n".join(actual_header + actual_lines) + "\n"
+
+    return struct(
+        build = "\n".join(lines) + "\n",
+        actual_build = actual_build,
+    )
 
 def _thin_package_repo_impl(rctx):
     workspace_repo = rctx.attr.workspace_repo
@@ -462,62 +512,45 @@ pycross_transitioning_file_proxy = rule(
             "",
         ])
 
-    # When flags are set, root-level targets must be transitioning proxies
-    # (not aliases) so the transition is applied BEFORE select() resolution
-    # in per-package BUILD files.
-    if has_flags and target_platform:
-        root_build_lines.extend([
-            'load("//:_transition.bzl", "pycross_transitioning_file_proxy", "pycross_transitioning_library_proxy")',
-            "",
-        ])
+    if rctx.attr.generate_root_aliases:
+        for base_pin_name in sorted(grouped_pins.keys()):
+            group = grouped_pins[base_pin_name]
+            us_name = underscore_name(base_pin_name)
+            base_target = group["base_target"]
 
-    for base_pin_name in sorted(grouped_pins.keys()):
-        group = grouped_pins[base_pin_name]
-        us_name = underscore_name(base_pin_name)
-        base_target = group["base_target"]
-
-        if base_target:
-            if has_flags and target_platform:
-                root_build_lines.extend([
-                    "pycross_transitioning_library_proxy(",
-                    '    name = "{}",'.format(base_pin_name),
-                    '    actual = "//{}:pkg",'.format(us_name),
-                    '    platform = "{}",'.format(target_platform),
-                    ")",
-                ])
-            else:
+            if base_target:
                 root_build_lines.extend([
                     "alias(",
                     '    name = "{}",'.format(base_pin_name),
                     '    actual = "//{}:pkg",'.format(us_name),
                     ")",
                 ])
-            if group["extras"]:
+                if group["extras"]:
+                    root_build_lines.extend([
+                        "alias(",
+                        '    name = "{}[]",'.format(base_pin_name),
+                        '    actual = "//{}:[]",'.format(us_name),
+                        ")",
+                        "",
+                    ])
+            elif group["extras"]:
+                # If no base target was pinned, but extras were, point the base name at the extras union.
                 root_build_lines.extend([
                     "alias(",
-                    '    name = "{}[]",'.format(base_pin_name),
-                    '    actual = "//{}:[]",'.format(us_name),
+                    '    name = "{}",'.format(base_pin_name),
+                    '    actual = "//{}:pkg",'.format(us_name),
                     ")",
                     "",
                 ])
-        elif group["extras"]:
-            # If no base target was pinned, but extras were, point the base name at the extras union.
-            root_build_lines.extend([
-                "alias(",
-                '    name = "{}",'.format(base_pin_name),
-                '    actual = "//{}:pkg",'.format(us_name),
-                ")",
-                "",
-            ])
 
-        for extra_name, extra_target in sorted(group["extras"].items()):
-            root_build_lines.extend([
-                "alias(",
-                '    name = "{}[{}]",'.format(base_pin_name, extra_name),
-                '    actual = "//{}:[{}]",'.format(us_name, extra_name),
-                ")",
-                "",
-            ])
+            for extra_name, extra_target in sorted(group["extras"].items()):
+                root_build_lines.extend([
+                    "alias(",
+                    '    name = "{}[{}]",'.format(base_pin_name, extra_name),
+                    '    actual = "//{}:[{}]",'.format(us_name, extra_name),
+                    ")",
+                    "",
+                ])
     rctx.file("BUILD.bazel", "\n".join(root_build_lines))
 
     base_packages_with_extras = {}
@@ -572,10 +605,16 @@ pycross_transitioning_file_proxy = rule(
                     new_target_dict[constraint] = extra_target
             extras_dict[extra_name] = new_target_dict
 
+        result = _pin_build(us_name, base_target_dict, package, workspace_repo, workspace_lock_target_dict, has_aggregated_variant, extras_dict, default_variants = default_variants, target_platform = target_platform, transition_bzl = "//:_transition.bzl" if has_flags else None)
         rctx.file(
             "{}/BUILD.bazel".format(us_name),
-            _pin_build(us_name, base_target_dict, package, workspace_repo, workspace_lock_target_dict, has_aggregated_variant, extras_dict, default_variants = default_variants, target_platform = target_platform, transition_bzl = "//:_transition.bzl" if has_flags else None),
+            result.build,
         )
+        if result.actual_build:
+            rctx.file(
+                "__actual/{}/BUILD.bazel".format(us_name),
+                result.actual_build,
+            )
 
     # _variants/ BUILD: alias bool_flag and config_setting targets
     # from the workspace repo so users can reference @<thin_repo>//_variants:<name>
@@ -639,6 +678,10 @@ thin_package_repo = repository_rule(
     implementation = _thin_package_repo_impl,
     attrs = {
         "resolved_lock_file": attr.label(mandatory = True),
+        "generate_root_aliases": attr.bool(
+            doc = "Whether to generate aliases like @uv//:numpy.",
+            default = False,
+        ),
         "workspace_repo": attr.string(
             mandatory = True,
             doc = "Name of the workspace package_repo that contains the shared _lock/ targets.",

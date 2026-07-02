@@ -75,6 +75,7 @@ maturin.override(
     name = "jiter",
     cargo_lock = "//:jiter.lock",
     repo = "uv",
+    sdist = "@uv//jiter:sdist",
 )
 use_repo(maturin, "uv_cargo")
 

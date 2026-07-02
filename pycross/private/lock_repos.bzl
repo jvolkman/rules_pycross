@@ -331,6 +331,7 @@ def _lock_repos_impl(module_ctx):
                 thin_repo_attrs["constraint_values"] = repo_constraint_values[member]
             if member in repo_platforms:
                 thin_repo_attrs["platform"] = repo_platforms[member]
+            thin_repo_attrs["generate_root_aliases"] = True
 
             thin_package_repo(**thin_repo_attrs)
 

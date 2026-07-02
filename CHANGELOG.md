@@ -19,10 +19,7 @@ All notable changes to this project will be documented in this file.
 
 ### Added
 
-- **Unified `lock` extension.** Added a single `lock` module extension that
-  replaces the two-step `lock_import` + `lock_repos` pattern. The new extension
-  handles lock file translation, dependency resolution, and repo creation in one
-  pass. Legacy extensions are deprecated but remain functional.
+- **Per-format lock extensions.** Added format-specific module extensions (`uv`, `pdm`, `poetry`, `pylock`) that replace the legacy two-step `lock_import` + `lock_repos` pattern. The new extensions handle lock file translation, dependency resolution, and repo creation in one pass. Legacy extensions are deprecated but remain functional.
 - **PEP 508 marker evaluation at analysis time.** Conditional dependencies
   (e.g., `colorama; sys_platform == "win32"`) now generate `select()`
   expressions in the lock file, enabling true cross-platform builds without

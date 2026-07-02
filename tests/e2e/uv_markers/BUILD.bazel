@@ -4,6 +4,6 @@ py_test(
     name = "test_markers",
     srcs = ["test_markers.py"],
     deps = [
-        "@markers_lock//:click",
+        "@markers_lock//click",
     ],
 )
