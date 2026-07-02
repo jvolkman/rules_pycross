@@ -114,10 +114,27 @@ def main():
             print(f"Error: cargo binary '{args.cargo}' not found.", file=sys.stderr)
             sys.exit(1)
 
-        generated_lock = cargo_toml_dir / "Cargo.lock"
+        try:
+            locate_output = subprocess.check_output(
+                [args.cargo, "locate-project", "--workspace", "--message-format", "plain"],
+                cwd=cargo_toml_dir,
+                text=True,
+            ).strip()
+            workspace_toml = Path(locate_output)
+            generated_lock = workspace_toml.parent / "Cargo.lock"
+        except subprocess.CalledProcessError as e:
+            print(f"Warning: 'cargo locate-project' failed: {e}. Falling back to cargo_toml_dir.", file=sys.stderr)
+            generated_lock = cargo_toml_dir / "Cargo.lock"
+
         if not generated_lock.exists():
-            print("Error: Cargo.lock was not generated.", file=sys.stderr)
-            sys.exit(1)
+            print(f"Warning: Cargo.lock not found at {generated_lock}. Searching...", file=sys.stderr)
+            locks = list(sdist_root.glob("**/Cargo.lock"))
+            if not locks:
+                print("Error: Cargo.lock was not generated.", file=sys.stderr)
+                sys.exit(1)
+            generated_lock = locks[0]
+            if len(locks) > 1:
+                print(f"Warning: Found multiple Cargo.lock files, using {generated_lock}", file=sys.stderr)
 
         print(f"Writing Cargo.lock to {output_path}...")
         output_path.parent.mkdir(parents=True, exist_ok=True)

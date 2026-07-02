@@ -4,6 +4,7 @@ This is created by the backends module extension from `backends.register` tags.
 It produces:
   - `registry.bzl`: exports BACKEND_TO_RULE, DEFAULT_BACKEND, BACKEND_CONFIGS
   - `sdist_dispatch.bzl`: exports SDIST_HOOKS mapping backend names to sdist hook functions
+  - `package_repo_dispatch.bzl`: exports PACKAGE_REPO_HOOKS mapping backend names to package repo hook functions
 """
 
 def _backend_registry_repo_impl(rctx):
@@ -77,10 +78,41 @@ def _backend_registry_repo_impl(rctx):
     ])
 
     rctx.file("sdist_dispatch.bzl", "\n".join(dispatch_lines))
+
+    # Emit package_repo_dispatch.bzl with per-backend package repo hook mappings.
+    package_dispatch_lines = [
+        '"""Generated package repo hook dispatch table. Do not edit."""',
+        "",
+    ]
+
+    package_load_aliases = {}  # rule_name -> alias symbol
+    for rule_name in sorted(rctx.attr.package_repo_hook_bzl.keys()):
+        bzl_file = rctx.attr.package_repo_hook_bzl[rule_name]
+        fn_name = rctx.attr.package_repo_hook_fn.get(rule_name, rule_name.replace("_build", "_package_repo_hook"))
+        alias = "_package_repo_hook_{}".format(rule_name)
+        package_dispatch_lines.append('load("{}", {} = "{}")'.format(bzl_file, alias, fn_name))
+        package_load_aliases[rule_name] = alias
+
+    package_dispatch_lines.extend([
+        "",
+        "# Maps backend rule names to their package repo hook functions.",
+        "PACKAGE_REPO_HOOKS = {",
+    ])
+
+    for rule_name in sorted(rctx.attr.backend_configs.keys()):
+        if rule_name in package_load_aliases:
+            package_dispatch_lines.append('    "{}": {},'.format(rule_name, package_load_aliases[rule_name]))
+
+    package_dispatch_lines.extend([
+        "}",
+        "",
+    ])
+
+    rctx.file("package_repo_dispatch.bzl", "\n".join(package_dispatch_lines))
     rctx.file("BUILD.bazel", """\
 load("@bazel_skylib//:bzl_library.bzl", "bzl_library")
 
-exports_files(["registry.bzl", "sdist_dispatch.bzl"])
+exports_files(["registry.bzl", "sdist_dispatch.bzl", "package_repo_dispatch.bzl"])
 
 bzl_library(
     name = "registry",
@@ -91,6 +123,12 @@ bzl_library(
 bzl_library(
     name = "sdist_dispatch",
     srcs = ["sdist_dispatch.bzl"],
+    visibility = ["//visibility:public"],
+)
+
+bzl_library(
+    name = "package_repo_dispatch",
+    srcs = ["package_repo_dispatch.bzl"],
     visibility = ["//visibility:public"],
 )
 """)
@@ -116,6 +154,12 @@ backend_registry_repo = repository_rule(
         ),
         "override_files": attr.string_list(
             doc = "Labels of JSON files containing backend overrides.",
+        ),
+        "package_repo_hook_bzl": attr.string_dict(
+            doc = "Maps backend rule names to their custom package repo hook .bzl file labels.",
+        ),
+        "package_repo_hook_fn": attr.string_dict(
+            doc = "Maps backend rule names to the function name in the package repo hook .bzl file.",
         ),
     },
 )

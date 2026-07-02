@@ -15,6 +15,7 @@ The file structure is as follows:
 - _backend/<rule>.bzl      - Backend macros with pre-configured tool deps.
 """
 
+load("@pycross_backends//:package_repo_dispatch.bzl", "PACKAGE_REPO_HOOKS")
 load("@pypackaging.bzl", "pypackaging")
 load(":resolved_lock_renderer.bzl", "render_lock_bzl")
 load(":util.bzl", "key_name", "parse_package_key", "underscore_name")
@@ -382,6 +383,52 @@ def _package_repo_impl(rctx):
 
         rctx.file("_backend/{}.bzl".format(macro_name), "\n".join(lines))
 
+    # Package repo hooks: let backends contribute sub-directories.
+    if PACKAGE_REPO_HOOKS:
+        override_configs = {}
+        if rctx.attr.override_configs:
+            override_configs = json.decode(rctx.attr.override_configs)
+
+        # Build the packages info dict for hooks, keyed by normalized name.
+        # Include version and sdist info so hooks can generate versioned targets.
+        packages_info = {}
+        for pkg_key in sorted(packages.keys()):
+            if "__via_" in pkg_key:
+                continue
+            parts = parse_package_key(pkg_key)
+            if parts.extra:
+                continue
+            norm_name = _normalize_name(parts.name)
+            has_sdist = bool(packages[pkg_key].get("sdist_file"))
+            versions = packages_info.get(norm_name, {"versions": []})
+            versions["versions"].append(struct(
+                version = parts.version,
+                package_key = pkg_key,
+                has_sdist = has_sdist,
+            ))
+            packages_info[norm_name] = versions
+
+        # Collect all hook results, merging files for the same path.
+        hook_files = {}  # "dir/filename" -> [content, ...]
+        for backend_name, hook_fn in PACKAGE_REPO_HOOKS.items():
+            # Filter overrides for this backend.
+            backend_overrides = {}
+            for pkg_name, backends in override_configs.items():
+                if backend_name in backends:
+                    backend_overrides[pkg_name] = backends[backend_name]
+
+            if not backend_overrides:
+                continue
+
+            results = hook_fn(packages_info, backend_overrides)
+            for result in results:
+                for filename, content in result.files.items():
+                    path = "{}/{}".format(result.dir, filename)
+                    hook_files.setdefault(path, []).append(content)
+
+        for path, contents in hook_files.items():
+            rctx.file(path, "\n".join(contents))
+
 package_repo = repository_rule(
     implementation = _package_repo_impl,
     attrs = {
@@ -401,6 +448,9 @@ package_repo = repository_rule(
         ),
         "member_lock_data": attr.string_dict(
             doc = "Maps member repo names to their lock JSON content directly. When set, bypasses file reads for those members.",
+        ),
+        "override_configs": attr.string(
+            doc = "JSON-encoded dict of pkg_name -> {backend_name -> backend_attrs} for package repo hooks.",
         ),
     },
 )

@@ -7,6 +7,7 @@ Used by both the legacy lock_repos extension and the unified locks extension.
 
 load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_file")
 load("@pycross_backends//:registry.bzl", "BACKEND_CONFIGS", "BACKEND_TO_RULE", "DEFAULT_BACKEND", "OVERRIDE_FILES")
+load("@pypackaging.bzl", "pypackaging")
 load("@rules_pycross//pycross/private:sdist_repo.bzl", "pycross_sdist_repo")
 load("//pycross/private:package_repo.bzl", "package_repo")
 load("//pycross/private:pypi_file.bzl", "pypi_file")
@@ -73,7 +74,8 @@ def create_repos(
             for pkg_name, entry in packages.items():
                 backend_name = entry.get("build_backend", "")
                 backend_attrs = entry.get("backend_attrs", {})
-                override_configs.setdefault(key, {}).setdefault(pkg_name, {})[backend_name] = backend_attrs
+                norm_pkg = pypackaging.utils.canonicalize_name(pkg_name)
+                override_configs.setdefault(key, {}).setdefault(norm_pkg, {})[backend_name] = backend_attrs
 
     # Validate that repo: overrides don't target workspace members.
     for key in override_configs:
@@ -316,6 +318,15 @@ def create_repos(
                 if pkg_key in conflicts:
                     break
 
+        # Compute per-package override configs for package repo hooks.
+        ws_overrides = {}  # pkg_name -> {backend_name -> backend_attrs}
+        keys = ["workspace:" + workspace_name] + ["repo:" + member for member in member_repos]
+        for key in keys:
+            if key in override_configs:
+                for pkg_name, backends in override_configs[key].items():
+                    for b_name, b_attrs in backends.items():
+                        ws_overrides.setdefault(pkg_name, {})[b_name] = dict(b_attrs)
+
         package_repo_attrs = dict(
             name = workspace_repo_name,
             resolved_lock_file = per_repo_data[member_repos[0]].lock_file,
@@ -324,6 +335,8 @@ def create_repos(
             backend_configs = backend_configs_json,
             member_lock_files = member_lock_files,
         )
+        if ws_overrides:
+            package_repo_attrs["override_configs"] = json.encode(ws_overrides)
         if resolved_locks:
             package_repo_attrs["member_lock_data"] = {
                 member: json.encode(per_repo_data[member].resolved_lock)
@@ -353,5 +366,20 @@ def create_repos(
                 thin_repo_attrs["constraint_values"] = json.decode(constraints) if type(constraints) == "string" else constraints
             if member in repo_platforms:
                 thin_repo_attrs["platform"] = repo_platforms[member]
+
+            # Compute per-member override configs for thin repo hooks.
+            member_overrides = {}  # pkg_name -> {backend_name -> backend_attrs}
+            ws_key = "workspace:" + workspace_name
+            if ws_key in override_configs:
+                for pkg_name, backends in override_configs[ws_key].items():
+                    for b_name, b_attrs in backends.items():
+                        member_overrides.setdefault(pkg_name, {})[b_name] = dict(b_attrs)
+            repo_key = "repo:" + member
+            if repo_key in override_configs:
+                for pkg_name, backends in override_configs[repo_key].items():
+                    for b_name, b_attrs in backends.items():
+                        member_overrides.setdefault(pkg_name, {})[b_name] = dict(b_attrs)
+            if member_overrides:
+                thin_repo_attrs["override_configs"] = json.encode(member_overrides)
 
             thin_package_repo(**thin_repo_attrs)

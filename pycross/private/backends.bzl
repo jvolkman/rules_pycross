@@ -18,6 +18,8 @@ def _backends_impl(module_ctx):
     backend_configs = {}  # rule name -> JSON config string
     sdist_hook_bzl = {}  # rule name -> custom sdist hook .bzl file
     sdist_hook_fn = {}  # rule name -> custom sdist hook function name
+    package_repo_hook_bzl = {}  # rule name -> custom package repo hook .bzl file
+    package_repo_hook_fn = {}  # rule name -> custom package repo hook function name
     default_backend = None
     default_backend_module = None
     override_files = []
@@ -48,6 +50,10 @@ def _backends_impl(module_ctx):
                 sdist_hook_bzl[name] = str(tag.sdist_hook_bzl)
             if tag.sdist_hook_fn:
                 sdist_hook_fn[name] = tag.sdist_hook_fn
+            if tag.package_repo_hook_bzl:
+                package_repo_hook_bzl[name] = str(tag.package_repo_hook_bzl)
+            if tag.package_repo_hook_fn:
+                package_repo_hook_fn[name] = tag.package_repo_hook_fn
 
             for pyproject_backend in tag.pyproject_backends:
                 if pyproject_backend in backend_to_rule and not module.is_root:
@@ -86,6 +92,8 @@ def _backends_impl(module_ctx):
         backend_configs = backend_configs,
         sdist_hook_bzl = sdist_hook_bzl,
         sdist_hook_fn = sdist_hook_fn,
+        package_repo_hook_bzl = package_repo_hook_bzl,
+        package_repo_hook_fn = package_repo_hook_fn,
         override_files = override_files,
     )
 
@@ -133,6 +141,14 @@ backends = module_extension(
                 "sdist_hook_fn": attr.string(
                     doc = "Optional function name in sdist_hook_bzl. Defaults to " +
                           "'<name>_sdist_hook' (replacing '_build' suffix).",
+                ),
+                "package_repo_hook_bzl": attr.label(
+                    doc = "Optional label of a .bzl file providing a hook for " +
+                          "thin repo generation.",
+                ),
+                "package_repo_hook_fn": attr.string(
+                    doc = "Optional function name in package_repo_hook_bzl. Defaults to " +
+                          "'<name>_package_repo_hook' (replacing '_build' suffix).",
                 ),
                 "override_json": attr.label(
                     doc = "Optional label of a generated JSON file containing overrides for this backend.",
