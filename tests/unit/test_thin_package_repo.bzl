@@ -392,11 +392,10 @@ def _test_requirements_bzl_maybe_aliases_impl(env, target):
 
     # numpy has sdist → should be unconditional
     env.expect.that_bool("@@my_repo//numpy" in res).equals(True)
-    env.expect.that_bool("@@my_repo//:_maybe_numpy" in res).equals(False)
+    env.expect.that_bool("@@my_repo//numpy:maybe" not in res).equals(True)
 
-    # pywin32 has no sdist → should use _maybe_ prefix
-    env.expect.that_bool("@@my_repo//:_maybe_pywin32" in res).equals(True)
-    env.expect.that_bool("@@my_repo//pywin32" not in res or "@@my_repo//:_maybe_pywin32" in res).equals(True)
+    # pywin32 has no sdist → should use per-package :maybe target
+    env.expect.that_bool("@@my_repo//pywin32:maybe" in res).equals(True)
 
 def _test_requirements_bzl_maybe_aliases(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
