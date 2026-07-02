@@ -262,6 +262,7 @@ bzl_library(
     srcs = ["lock_import.bzl"],
     deps = [
         ":lock_attrs",
+        ":lock_common",
         ":lock_workspace_repo",
         ":resolved_lock_repo",
         "@bazel_features//:features",

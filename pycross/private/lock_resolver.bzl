@@ -306,6 +306,9 @@ def _resolve_packages(
         packages_by_package_key[next_package_key] = entry
         work.extend(entry.all_dependency_keys)
 
+    if len(work) > 0:
+        fail("Package resolution exceeded max iterations. Remaining work: {}".format(work))
+
     for key in wildcard_only_keys.keys():
         annotations.pop(key, None)
 
@@ -342,7 +345,7 @@ def _compute_cycle_groups(packages):
     num_edges = 0
     for deps in graph.values():
         num_edges += len(deps)
-    max_iters = len(graph) + num_edges
+    max_iters = 2 * len(graph) + num_edges
 
     for root in graph.keys():
         if root in indices:
@@ -395,6 +398,9 @@ def _compute_cycle_groups(packages):
                     parent = work_stack[-1][0]
                     lowlink[parent] = min(lowlink[parent], lowlink[v])
 
+        if len(work_stack) > 0:
+            fail("DFS traversal for SCC exceeded max iterations. Remaining stack: {}".format(work_stack))
+
     cycle_groups = {}
     for scc in sccs:
         if len(scc) <= 1:
@@ -429,6 +435,10 @@ def _compute_reachable_keys(pins, packages_by_package_key):
         entry = packages_by_package_key.get(key)
         if entry:
             work.extend(entry.all_dependency_keys)
+
+    if len(work) > 0:
+        fail("Reachable keys traversal exceeded max iterations. Remaining work: {}".format(work))
+
     return reachable
 
 def resolve(

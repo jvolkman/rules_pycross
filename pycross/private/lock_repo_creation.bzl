@@ -43,7 +43,7 @@ def create_repos(
         repo_constraint_values,
         repo_platforms,
         repo_disallow_builds = {},
-        pypi_index = None,
+        workspace_pypi_indexes = {},
         resolved_locks = None):
     """Create all Bazel repos from resolved lock data.
 
@@ -56,7 +56,7 @@ def create_repos(
         repo_constraint_values: Dict of repo_name -> JSON-encoded constraint_values list.
         repo_platforms: Dict of repo_name -> platform string.
         repo_disallow_builds: Dict of repo_name -> boolean indicating if builds are disallowed.
-        pypi_index: Optional PyPI index URL.
+        workspace_pypi_indexes: Dict of workspace_name -> list of string index URLs.
         resolved_locks: Optional dict of repo_name -> parsed lock JSON dict. When provided,
             lock data is taken from this dict instead of reading from all_locks file labels.
             all_locks is still used for passing labels to package_repo/thin_package_repo.
@@ -107,6 +107,10 @@ def create_repos(
             resolved_lock = json.decode(module_ctx.read(resolved_lock_file))
 
         repo_remote_files = {}
+        workspace_name = workspace_memberships.get(repo_name)
+        indexes = workspace_pypi_indexes.get(workspace_name, []) if workspace_name else []
+        pypi_index = indexes[0] if indexes else None
+
         for key, file in resolved_lock.get("remote_files", {}).items():
             if key in all_remote_files:
                 repo_remote_files[key] = all_remote_files[key]

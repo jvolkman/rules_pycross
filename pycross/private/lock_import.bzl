@@ -17,40 +17,15 @@ load(
     "REPO_ATTR",
     "UV_IMPORT_ATTRS",
 )
+load(
+    ":lock_common.bzl",
+    "check_proper_package_repo",
+    "check_unique_repo_name",
+    "normalize_package_tag",
+    "package_annotation",
+    "validate_transition_attrs",
+)
 load(":lock_workspace_repo.bzl", "lock_workspace_repo")
-
-def _package_annotation(
-        always_build = False,
-        build_dependencies = [],
-        build_repo = None,
-        build_target = None,
-        ignore_dependencies = [],
-        install_exclude_globs = [],
-        post_install_patches = [],
-        pre_build_patches = [],
-        site_hooks = [],
-        build_backend = None,
-        site_paths = [],
-        bin_paths = [],
-        data_paths = [],
-        include_paths = []):
-    """Annotations to apply to individual packages."""
-    return json.encode(struct(
-        always_build = always_build,
-        build_dependencies = build_dependencies,
-        build_repo = build_repo,
-        build_target = build_target,
-        ignore_dependencies = ignore_dependencies,
-        install_exclude_globs = install_exclude_globs,
-        post_install_patches = post_install_patches,
-        pre_build_patches = pre_build_patches,
-        site_hooks = site_hooks,
-        build_backend = build_backend,
-        site_paths = site_paths,
-        bin_paths = bin_paths,
-        data_paths = data_paths,
-        include_paths = include_paths,
-    ))
 
 def _generate_resolved_lock_repo(lock_info, serialized_lock_model):
     repo_name = lock_info.repo_name
@@ -65,7 +40,7 @@ def _generate_resolved_lock_repo(lock_info, serialized_lock_model):
     }
 
     for package_name, package in lock_info.packages.items():
-        args["annotations"][package_name] = _package_annotation(
+        args["annotations"][package_name] = package_annotation(
             always_build = package.always_build,
             build_dependencies = package.build_dependencies,
             build_repo = package.build_repo,
@@ -85,46 +60,6 @@ def _generate_resolved_lock_repo(lock_info, serialized_lock_model):
     resolved_lock_repo(**args)
     return "@{}//:lock.json".format(repo_name)
 
-def _check_unique_lock_repo(owners, module, tag):
-    if tag.repo in owners:
-        fail("lock repo '{}' wanted by module '{}' already created by module '{}'".format(
-            tag.repo,
-            module.name,
-            owners[tag.repo],
-        ))
-    owners[tag.repo] = module.name
-
-def _check_proper_tag_repo(owners, module, tag, tag_desc):
-    owner = owners.get(tag.repo)
-    if owner == None:
-        fail(
-            "{} declared by module '{}' attached to non-existent lock repo '{}'".format(
-                tag_desc,
-                module.name,
-                tag.repo,
-            ),
-        )
-    elif owner != module.name:
-        fail(
-            "{} declared by module '{}' attached to lock repo '{}' owned by other module '{}'".format(
-                tag_desc,
-                module.name,
-                tag.repo,
-                owner,
-            ),
-        )
-
-def _check_proper_package_repo(owners, module, tag):
-    _check_proper_tag_repo(owners, module, tag, "package '{}'".format(tag.name))
-
-def _validate_transition_attrs(tag, tag_name):
-    has_platform = bool(getattr(tag, "platform", None))
-    has_flags = bool(getattr(tag, "flags", []))
-    has_constraints = bool(getattr(tag, "constraint_values", []))
-
-    if has_platform and (has_flags or has_constraints):
-        fail("Tag '{}' cannot specify both 'platform' and ('flags' or 'constraint_values')".format(tag_name))
-
 def _lock_struct(tag):
     return struct(
         repo_name = tag.repo,
@@ -139,25 +74,6 @@ def _lock_struct(tag):
         platform = getattr(tag, "platform", None),
     )
 
-def _normalize_package_tag(tag):
-    """Normalize a generic package tag into a struct."""
-    return struct(
-        always_build = tag.always_build,
-        build_dependencies = tag.build_dependencies,
-        build_repo = tag.build_repo,
-        build_target = tag.build_target,
-        ignore_dependencies = tag.ignore_dependencies,
-        install_exclude_globs = tag.install_exclude_globs,
-        post_install_patches = [str(label) for label in tag.post_install_patches],
-        pre_build_patches = [str(label) for label in tag.pre_build_patches],
-        site_hooks = tag.site_hooks,
-        build_backend = tag.build_backend if tag.build_backend else None,
-        site_paths = tag.site_paths,
-        bin_paths = tag.bin_paths,
-        data_paths = tag.data_paths,
-        include_paths = tag.include_paths,
-    )
-
 def _lock_import_impl(module_ctx):
     lock_owners = {}
     lock_repos = {}
@@ -169,8 +85,8 @@ def _lock_import_impl(module_ctx):
     for module in module_ctx.modules:
         for tag_name in ("import_uv", "import_pdm", "import_poetry", "import_pylock"):
             for tag in getattr(module.tags, tag_name):
-                _validate_transition_attrs(tag, tag_name)
-                _check_unique_lock_repo(lock_owners, module, tag)
+                validate_transition_attrs(tag, tag_name)
+                check_unique_repo_name(lock_owners, module.name, tag.repo)
                 lock_repos[tag.repo] = _lock_struct(tag)
                 if module.is_root:
                     root_direct_deps.append(tag.repo)
@@ -224,11 +140,11 @@ def _lock_import_impl(module_ctx):
     # Add package attributes.
     for module in module_ctx.modules:
         for tag in module.tags.package:
-            _check_proper_package_repo(lock_owners, module, tag)
+            check_proper_package_repo(lock_owners, module, tag)
             repo_info = lock_repos[tag.repo]
             if tag.name in repo_info.packages:
                 fail("Multiple package entries for package '{}' in repo '{}'".format(tag.name, tag.repo))
-            repo_info.packages[tag.name] = _normalize_package_tag(tag)
+            repo_info.packages[tag.name] = normalize_package_tag(tag)
 
     # Generate the resolved lock repos.
     workspace_memberships = {}

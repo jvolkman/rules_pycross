@@ -512,14 +512,6 @@ def make_format_extension(
             if repo_info.disallow_builds:
                 repo_disallow_builds[repo_info.repo_name] = True
 
-        # Determine the pypi_index to pass (use the first from any repo for now).
-        # TODO: Support per-repo pypi_indexes in create_repos.
-        pypi_index = None
-        for _repo_name, indexes in repo_pypi_indexes.items():
-            if indexes:
-                pypi_index = indexes[0]
-                break
-
         create_repos(
             module_ctx = module_ctx,
             all_locks = all_locks,
@@ -529,7 +521,7 @@ def make_format_extension(
             repo_constraint_values = repo_constraint_values,
             repo_platforms = repo_platforms,
             repo_disallow_builds = repo_disallow_builds,
-            pypi_index = pypi_index,
+            workspace_pypi_indexes = workspace_pypi_indexes,
             resolved_locks = resolved_locks,
         )
 

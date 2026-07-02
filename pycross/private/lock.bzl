@@ -149,6 +149,11 @@ def _lock_impl(module_ctx):
     if create_tag == None:
         fail("BUG: no repos.create tag found!")
 
+    workspace_pypi_indexes = {}
+    if create_tag.pypi_index:
+        for ws in result.workspace_memberships.values():
+            workspace_pypi_indexes[ws] = [create_tag.pypi_index]
+
     # Create all the actual repos.
     create_repos(
         module_ctx = module_ctx,
@@ -159,7 +164,7 @@ def _lock_impl(module_ctx):
         repo_constraint_values = result.repo_constraint_values,
         repo_platforms = result.repo_platforms,
         repo_disallow_builds = result.repo_disallow_builds,
-        pypi_index = create_tag.pypi_index,
+        workspace_pypi_indexes = workspace_pypi_indexes,
         resolved_locks = resolved_locks,
     )
 
