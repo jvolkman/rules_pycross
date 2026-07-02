@@ -297,7 +297,7 @@ def translate_poetry(project_dict, lock_dict, lock_model):
     )
 
     # Parse file info helper
-    def parse_file_info(file_info, registry=None):
+    def parse_file_info(file_info, registry = None):
         filename = file_info["file"]
         file_hash = file_info["hash"]
         if not file_hash.startswith("sha256:"):

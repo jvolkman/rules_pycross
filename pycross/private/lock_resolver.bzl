@@ -6,7 +6,7 @@ load(":util.bzl", "parse_package_key")
 def _file_key(f):
     if not f.get("sha256"):
         fail("PackageFile missing sha256: " + str(f))
-    key = "{}/{}".format(f["name"], f["sha256"])
+    key = "{}/{}".format(f["name"], f["sha256"][:8])
     extra = ""
     if f.get("urls"):
         extra += ",".join(f["urls"])
