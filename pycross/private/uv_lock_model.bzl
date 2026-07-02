@@ -15,16 +15,17 @@ load(
     "resolve_lock_graph",
 )
 
-def _parse_file_info(file_info, package_name, package_version):
+def _parse_file_info(file_info, package_name, package_version, registry = None):
     """Parse a UV lock file entry into a file dict.
 
     Args:
         file_info: A dict with "file", "filename", or "url" and "hash" keys.
         package_name: The name of the package.
         package_version: The version of the package.
+        registry: An optional string representing the index URL.
 
     Returns:
-        A dict with name, sha256, package_name, package_version, and optionally urls.
+        A dict with name, sha256, package_name, package_version, and optionally urls/index.
     """
     if "file" in file_info:
         filename = file_info["file"]
@@ -58,6 +59,8 @@ def _parse_file_info(file_info, package_name, package_version):
     }
     if urls:
         result["urls"] = urls
+    if registry:
+        result["index"] = registry
     return result
 
 def _sha256_from_string(s):
@@ -321,15 +324,17 @@ def translate_uv(project_dict, lock_dict, lock_model):
 
         # Parse files: wheels + sdist
         files = []
+        source = lock_pkg.get("source", {})
+        registry = source.get("registry")
+
         for w in lock_pkg.get("wheels", []):
-            files.append(_parse_file_info(w, package_name, package_version))
+            files.append(_parse_file_info(w, package_name, package_version, registry))
 
         sdist = lock_pkg.get("sdist", {})
-        source = lock_pkg.get("source", {})
 
         if sdist:
             if "url" in sdist or "file" in sdist:
-                files.append(_parse_file_info(sdist, package_name, package_version))
+                files.append(_parse_file_info(sdist, package_name, package_version, registry))
             elif "url" in source:
                 # URL-based source with subdirectory
                 url = source["url"]
@@ -337,17 +342,20 @@ def translate_uv(project_dict, lock_dict, lock_model):
                 if not file_hash.startswith("sha256:"):
                     fail("Expected sha256: prefix on hash")
                 filename = "{}-{}.tar.gz".format(package_name, package_version)
-                files.append({
+                f = {
                     "name": filename,
                     "sha256": file_hash[7:],
                     "urls": [url],
                     "package_name": package_name,
                     "package_version": package_version,
-                })
+                }
+                if registry:
+                    f["index"] = registry
+                files.append(f)
             elif "git" in source:
                 pass  # handled below
             else:
-                files.append(_parse_file_info(sdist, package_name, package_version))
+                files.append(_parse_file_info(sdist, package_name, package_version, registry))
 
         # Handle git sources
         if "git" in source and not files:

@@ -297,12 +297,15 @@ def translate_poetry(project_dict, lock_dict, lock_model):
     )
 
     # Parse file info helper
-    def parse_file_info(file_info):
+    def parse_file_info(file_info, registry=None):
         filename = file_info["file"]
         file_hash = file_info["hash"]
         if not file_hash.startswith("sha256:"):
             fail("Expected sha256: prefix on hash: {}".format(file_hash))
-        return {"name": filename, "sha256": file_hash[7:]}
+        res = {"name": filename, "sha256": file_hash[7:]}
+        if registry:
+            res["index"] = registry
+        return res
 
     # In Poetry 2.0, files are per-package (not in [metadata.files])
     # But we still support [metadata.files] as fallback for edge cases
@@ -343,13 +346,22 @@ def translate_poetry(project_dict, lock_dict, lock_model):
                 })
 
         # Source type check for local packages
-        source_type = lock_pkg.get("source", {}).get("type", "")
+        source = lock_pkg.get("source", {})
+        source_type = source.get("type", "")
         is_local = source_type in ("directory", "git", "url")
+        registry = source.get("url") if source_type == "legacy" else None
 
         # Parse files (inline in Poetry 2.0)
-        files = [parse_file_info(f) for f in lock_pkg.get("files", [])]
+        files = [parse_file_info(f, registry) for f in lock_pkg.get("files", [])]
         if not files:
             files = lock_files_by_name.get(package_listed_name, [])
+            if registry:
+                new_files = []
+                for f in files:
+                    nf = dict(f)
+                    nf["index"] = registry
+                    new_files.append(nf)
+                files = new_files
 
         # Add package name and version to files
         updated_files = []

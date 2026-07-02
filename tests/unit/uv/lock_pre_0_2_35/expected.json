@@ -4,6 +4,7 @@
       "dependencies": [],
       "files": [
         {
+          "index": "https://pypi.org/simple",
           "name": "regex-2024.11.6-cp310-cp310-macosx_10_9_universal2.whl",
           "package_name": "regex",
           "package_version": "2024.11.6",
@@ -13,6 +14,7 @@
           ]
         },
         {
+          "index": "https://pypi.org/simple",
           "name": "regex-2024.11.6-cp310-cp310-macosx_10_9_x86_64.whl",
           "package_name": "regex",
           "package_version": "2024.11.6",
@@ -22,6 +24,7 @@
           ]
         },
         {
+          "index": "https://pypi.org/simple",
           "name": "regex-2024.11.6-cp310-cp310-macosx_11_0_arm64.whl",
           "package_name": "regex",
           "package_version": "2024.11.6",
@@ -31,6 +34,7 @@
           ]
         },
         {
+          "index": "https://pypi.org/simple",
           "name": "regex-2024.11.6-cp310-cp310-manylinux_2_17_aarch64.manylinux2014_aarch64.whl",
           "package_name": "regex",
           "package_version": "2024.11.6",
@@ -40,6 +44,7 @@
           ]
         },
         {
+          "index": "https://pypi.org/simple",
           "name": "regex-2024.11.6-cp310-cp310-manylinux_2_17_ppc64le.manylinux2014_ppc64le.whl",
           "package_name": "regex",
           "package_version": "2024.11.6",
@@ -49,6 +54,7 @@
           ]
         },
         {
+          "index": "https://pypi.org/simple",
           "name": "regex-2024.11.6-cp310-cp310-manylinux_2_17_s390x.manylinux2014_s390x.whl",
           "package_name": "regex",
           "package_version": "2024.11.6",
@@ -58,6 +64,7 @@
           ]
         },
         {
+          "index": "https://pypi.org/simple",
           "name": "regex-2024.11.6-cp310-cp310-manylinux_2_17_x86_64.manylinux2014_x86_64.whl",
           "package_name": "regex",
           "package_version": "2024.11.6",
@@ -67,6 +74,7 @@
           ]
         },
         {
+          "index": "https://pypi.org/simple",
           "name": "regex-2024.11.6-cp310-cp310-manylinux_2_5_i686.manylinux1_i686.manylinux_2_17_i686.manylinux2014_i686.whl",
           "package_name": "regex",
           "package_version": "2024.11.6",
@@ -76,6 +84,7 @@
           ]
         },
         {
+          "index": "https://pypi.org/simple",
           "name": "regex-2024.11.6-cp310-cp310-manylinux_2_5_x86_64.manylinux1_x86_64.manylinux_2_12_x86_64.manylinux2010_x86_64.whl",
           "package_name": "regex",
           "package_version": "2024.11.6",
@@ -85,6 +94,7 @@
           ]
         },
         {
+          "index": "https://pypi.org/simple",
           "name": "regex-2024.11.6-cp310-cp310-musllinux_1_2_aarch64.whl",
           "package_name": "regex",
           "package_version": "2024.11.6",
@@ -94,6 +104,7 @@
           ]
         },
         {
+          "index": "https://pypi.org/simple",
           "name": "regex-2024.11.6-cp310-cp310-musllinux_1_2_i686.whl",
           "package_name": "regex",
           "package_version": "2024.11.6",
@@ -103,6 +114,7 @@
           ]
         },
         {
+          "index": "https://pypi.org/simple",
           "name": "regex-2024.11.6-cp310-cp310-musllinux_1_2_ppc64le.whl",
           "package_name": "regex",
           "package_version": "2024.11.6",
@@ -112,6 +124,7 @@
           ]
         },
         {
+          "index": "https://pypi.org/simple",
           "name": "regex-2024.11.6-cp310-cp310-musllinux_1_2_s390x.whl",
           "package_name": "regex",
           "package_version": "2024.11.6",
@@ -121,6 +134,7 @@
           ]
         },
         {
+          "index": "https://pypi.org/simple",
           "name": "regex-2024.11.6-cp310-cp310-musllinux_1_2_x86_64.whl",
           "package_name": "regex",
           "package_version": "2024.11.6",
@@ -130,6 +144,7 @@
           ]
         },
         {
+          "index": "https://pypi.org/simple",
           "name": "regex-2024.11.6-cp310-cp310-win32.whl",
           "package_name": "regex",
           "package_version": "2024.11.6",
@@ -139,6 +154,7 @@
           ]
         },
         {
+          "index": "https://pypi.org/simple",
           "name": "regex-2024.11.6-cp310-cp310-win_amd64.whl",
           "package_name": "regex",
           "package_version": "2024.11.6",
@@ -148,6 +164,7 @@
           ]
         },
         {
+          "index": "https://pypi.org/simple",
           "name": "regex-2024.11.6-cp311-cp311-macosx_10_9_universal2.whl",
           "package_name": "regex",
           "package_version": "2024.11.6",
@@ -157,6 +174,7 @@
           ]
         },
         {
+          "index": "https://pypi.org/simple",
           "name": "regex-2024.11.6-cp311-cp311-macosx_10_9_x86_64.whl",
           "package_name": "regex",
           "package_version": "2024.11.6",
@@ -166,6 +184,7 @@
           ]
         },
         {
+          "index": "https://pypi.org/simple",
           "name": "regex-2024.11.6-cp311-cp311-macosx_11_0_arm64.whl",
           "package_name": "regex",
           "package_version": "2024.11.6",
@@ -175,6 +194,7 @@
           ]
         },
         {
+          "index": "https://pypi.org/simple",
           "name": "regex-2024.11.6-cp311-cp311-manylinux_2_17_aarch64.manylinux2014_aarch64.whl",
           "package_name": "regex",
           "package_version": "2024.11.6",
@@ -184,6 +204,7 @@
           ]
         },
         {
+          "index": "https://pypi.org/simple",
           "name": "regex-2024.11.6-cp311-cp311-manylinux_2_17_ppc64le.manylinux2014_ppc64le.whl",
           "package_name": "regex",
           "package_version": "2024.11.6",
@@ -193,6 +214,7 @@
           ]
         },
         {
+          "index": "https://pypi.org/simple",
           "name": "regex-2024.11.6-cp311-cp311-manylinux_2_17_s390x.manylinux2014_s390x.whl",
           "package_name": "regex",
           "package_version": "2024.11.6",
@@ -202,6 +224,7 @@
           ]
         },
         {
+          "index": "https://pypi.org/simple",
           "name": "regex-2024.11.6-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl",
           "package_name": "regex",
           "package_version": "2024.11.6",
@@ -211,6 +234,7 @@
           ]
         },
         {
+          "index": "https://pypi.org/simple",
           "name": "regex-2024.11.6-cp311-cp311-manylinux_2_5_i686.manylinux1_i686.manylinux_2_17_i686.manylinux2014_i686.whl",
           "package_name": "regex",
           "package_version": "2024.11.6",
@@ -220,6 +244,7 @@
           ]
         },
         {
+          "index": "https://pypi.org/simple",
           "name": "regex-2024.11.6-cp311-cp311-musllinux_1_2_aarch64.whl",
           "package_name": "regex",
           "package_version": "2024.11.6",
@@ -229,6 +254,7 @@
           ]
         },
         {
+          "index": "https://pypi.org/simple",
           "name": "regex-2024.11.6-cp311-cp311-musllinux_1_2_i686.whl",
           "package_name": "regex",
           "package_version": "2024.11.6",
@@ -238,6 +264,7 @@
           ]
         },
         {
+          "index": "https://pypi.org/simple",
           "name": "regex-2024.11.6-cp311-cp311-musllinux_1_2_ppc64le.whl",
           "package_name": "regex",
           "package_version": "2024.11.6",
@@ -247,6 +274,7 @@
           ]
         },
         {
+          "index": "https://pypi.org/simple",
           "name": "regex-2024.11.6-cp311-cp311-musllinux_1_2_s390x.whl",
           "package_name": "regex",
           "package_version": "2024.11.6",
@@ -256,6 +284,7 @@
           ]
         },
         {
+          "index": "https://pypi.org/simple",
           "name": "regex-2024.11.6-cp311-cp311-musllinux_1_2_x86_64.whl",
           "package_name": "regex",
           "package_version": "2024.11.6",
@@ -265,6 +294,7 @@
           ]
         },
         {
+          "index": "https://pypi.org/simple",
           "name": "regex-2024.11.6-cp311-cp311-win32.whl",
           "package_name": "regex",
           "package_version": "2024.11.6",
@@ -274,6 +304,7 @@
           ]
         },
         {
+          "index": "https://pypi.org/simple",
           "name": "regex-2024.11.6-cp311-cp311-win_amd64.whl",
           "package_name": "regex",
           "package_version": "2024.11.6",
@@ -283,6 +314,7 @@
           ]
         },
         {
+          "index": "https://pypi.org/simple",
           "name": "regex-2024.11.6-cp312-cp312-macosx_10_13_universal2.whl",
           "package_name": "regex",
           "package_version": "2024.11.6",
@@ -292,6 +324,7 @@
           ]
         },
         {
+          "index": "https://pypi.org/simple",
           "name": "regex-2024.11.6-cp312-cp312-macosx_10_13_x86_64.whl",
           "package_name": "regex",
           "package_version": "2024.11.6",
@@ -301,6 +334,7 @@
           ]
         },
         {
+          "index": "https://pypi.org/simple",
           "name": "regex-2024.11.6-cp312-cp312-macosx_11_0_arm64.whl",
           "package_name": "regex",
           "package_version": "2024.11.6",
@@ -310,6 +344,7 @@
           ]
         },
         {
+          "index": "https://pypi.org/simple",
           "name": "regex-2024.11.6-cp312-cp312-manylinux_2_17_aarch64.manylinux2014_aarch64.whl",
           "package_name": "regex",
           "package_version": "2024.11.6",
@@ -319,6 +354,7 @@
           ]
         },
         {
+          "index": "https://pypi.org/simple",
           "name": "regex-2024.11.6-cp312-cp312-manylinux_2_17_ppc64le.manylinux2014_ppc64le.whl",
           "package_name": "regex",
           "package_version": "2024.11.6",
@@ -328,6 +364,7 @@
           ]
         },
         {
+          "index": "https://pypi.org/simple",
           "name": "regex-2024.11.6-cp312-cp312-manylinux_2_17_s390x.manylinux2014_s390x.whl",
           "package_name": "regex",
           "package_version": "2024.11.6",
@@ -337,6 +374,7 @@
           ]
         },
         {
+          "index": "https://pypi.org/simple",
           "name": "regex-2024.11.6-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl",
           "package_name": "regex",
           "package_version": "2024.11.6",
@@ -346,6 +384,7 @@
           ]
         },
         {
+          "index": "https://pypi.org/simple",
           "name": "regex-2024.11.6-cp312-cp312-manylinux_2_5_i686.manylinux1_i686.manylinux_2_17_i686.manylinux2014_i686.whl",
           "package_name": "regex",
           "package_version": "2024.11.6",
@@ -355,6 +394,7 @@
           ]
         },
         {
+          "index": "https://pypi.org/simple",
           "name": "regex-2024.11.6-cp312-cp312-musllinux_1_2_aarch64.whl",
           "package_name": "regex",
           "package_version": "2024.11.6",
@@ -364,6 +404,7 @@
           ]
         },
         {
+          "index": "https://pypi.org/simple",
           "name": "regex-2024.11.6-cp312-cp312-musllinux_1_2_i686.whl",
           "package_name": "regex",
           "package_version": "2024.11.6",
@@ -373,6 +414,7 @@
           ]
         },
         {
+          "index": "https://pypi.org/simple",
           "name": "regex-2024.11.6-cp312-cp312-musllinux_1_2_ppc64le.whl",
           "package_name": "regex",
           "package_version": "2024.11.6",
@@ -382,6 +424,7 @@
           ]
         },
         {
+          "index": "https://pypi.org/simple",
           "name": "regex-2024.11.6-cp312-cp312-musllinux_1_2_s390x.whl",
           "package_name": "regex",
           "package_version": "2024.11.6",
@@ -391,6 +434,7 @@
           ]
         },
         {
+          "index": "https://pypi.org/simple",
           "name": "regex-2024.11.6-cp312-cp312-musllinux_1_2_x86_64.whl",
           "package_name": "regex",
           "package_version": "2024.11.6",
@@ -400,6 +444,7 @@
           ]
         },
         {
+          "index": "https://pypi.org/simple",
           "name": "regex-2024.11.6-cp312-cp312-win32.whl",
           "package_name": "regex",
           "package_version": "2024.11.6",
@@ -409,6 +454,7 @@
           ]
         },
         {
+          "index": "https://pypi.org/simple",
           "name": "regex-2024.11.6-cp312-cp312-win_amd64.whl",
           "package_name": "regex",
           "package_version": "2024.11.6",
@@ -418,6 +464,7 @@
           ]
         },
         {
+          "index": "https://pypi.org/simple",
           "name": "regex-2024.11.6-cp313-cp313-macosx_10_13_universal2.whl",
           "package_name": "regex",
           "package_version": "2024.11.6",
@@ -427,6 +474,7 @@
           ]
         },
         {
+          "index": "https://pypi.org/simple",
           "name": "regex-2024.11.6-cp313-cp313-macosx_10_13_x86_64.whl",
           "package_name": "regex",
           "package_version": "2024.11.6",
@@ -436,6 +484,7 @@
           ]
         },
         {
+          "index": "https://pypi.org/simple",
           "name": "regex-2024.11.6-cp313-cp313-macosx_11_0_arm64.whl",
           "package_name": "regex",
           "package_version": "2024.11.6",
@@ -445,6 +494,7 @@
           ]
         },
         {
+          "index": "https://pypi.org/simple",
           "name": "regex-2024.11.6-cp313-cp313-manylinux_2_17_aarch64.manylinux2014_aarch64.whl",
           "package_name": "regex",
           "package_version": "2024.11.6",
@@ -454,6 +504,7 @@
           ]
         },
         {
+          "index": "https://pypi.org/simple",
           "name": "regex-2024.11.6-cp313-cp313-manylinux_2_17_ppc64le.manylinux2014_ppc64le.whl",
           "package_name": "regex",
           "package_version": "2024.11.6",
@@ -463,6 +514,7 @@
           ]
         },
         {
+          "index": "https://pypi.org/simple",
           "name": "regex-2024.11.6-cp313-cp313-manylinux_2_17_s390x.manylinux2014_s390x.whl",
           "package_name": "regex",
           "package_version": "2024.11.6",
@@ -472,6 +524,7 @@
           ]
         },
         {
+          "index": "https://pypi.org/simple",
           "name": "regex-2024.11.6-cp313-cp313-manylinux_2_17_x86_64.manylinux2014_x86_64.whl",
           "package_name": "regex",
           "package_version": "2024.11.6",
@@ -481,6 +534,7 @@
           ]
         },
         {
+          "index": "https://pypi.org/simple",
           "name": "regex-2024.11.6-cp313-cp313-manylinux_2_5_i686.manylinux1_i686.manylinux_2_17_i686.manylinux2014_i686.whl",
           "package_name": "regex",
           "package_version": "2024.11.6",
@@ -490,6 +544,7 @@
           ]
         },
         {
+          "index": "https://pypi.org/simple",
           "name": "regex-2024.11.6-cp313-cp313-musllinux_1_2_aarch64.whl",
           "package_name": "regex",
           "package_version": "2024.11.6",
@@ -499,6 +554,7 @@
           ]
         },
         {
+          "index": "https://pypi.org/simple",
           "name": "regex-2024.11.6-cp313-cp313-musllinux_1_2_i686.whl",
           "package_name": "regex",
           "package_version": "2024.11.6",
@@ -508,6 +564,7 @@
           ]
         },
         {
+          "index": "https://pypi.org/simple",
           "name": "regex-2024.11.6-cp313-cp313-musllinux_1_2_ppc64le.whl",
           "package_name": "regex",
           "package_version": "2024.11.6",
@@ -517,6 +574,7 @@
           ]
         },
         {
+          "index": "https://pypi.org/simple",
           "name": "regex-2024.11.6-cp313-cp313-musllinux_1_2_s390x.whl",
           "package_name": "regex",
           "package_version": "2024.11.6",
@@ -526,6 +584,7 @@
           ]
         },
         {
+          "index": "https://pypi.org/simple",
           "name": "regex-2024.11.6-cp313-cp313-musllinux_1_2_x86_64.whl",
           "package_name": "regex",
           "package_version": "2024.11.6",
@@ -535,6 +594,7 @@
           ]
         },
         {
+          "index": "https://pypi.org/simple",
           "name": "regex-2024.11.6-cp313-cp313-win32.whl",
           "package_name": "regex",
           "package_version": "2024.11.6",
@@ -544,6 +604,7 @@
           ]
         },
         {
+          "index": "https://pypi.org/simple",
           "name": "regex-2024.11.6-cp313-cp313-win_amd64.whl",
           "package_name": "regex",
           "package_version": "2024.11.6",
@@ -553,6 +614,7 @@
           ]
         },
         {
+          "index": "https://pypi.org/simple",
           "name": "regex-2024.11.6-cp39-cp39-macosx_10_9_universal2.whl",
           "package_name": "regex",
           "package_version": "2024.11.6",
@@ -562,6 +624,7 @@
           ]
         },
         {
+          "index": "https://pypi.org/simple",
           "name": "regex-2024.11.6-cp39-cp39-macosx_10_9_x86_64.whl",
           "package_name": "regex",
           "package_version": "2024.11.6",
@@ -571,6 +634,7 @@
           ]
         },
         {
+          "index": "https://pypi.org/simple",
           "name": "regex-2024.11.6-cp39-cp39-macosx_11_0_arm64.whl",
           "package_name": "regex",
           "package_version": "2024.11.6",
@@ -580,6 +644,7 @@
           ]
         },
         {
+          "index": "https://pypi.org/simple",
           "name": "regex-2024.11.6-cp39-cp39-manylinux_2_17_aarch64.manylinux2014_aarch64.whl",
           "package_name": "regex",
           "package_version": "2024.11.6",
@@ -589,6 +654,7 @@
           ]
         },
         {
+          "index": "https://pypi.org/simple",
           "name": "regex-2024.11.6-cp39-cp39-manylinux_2_17_ppc64le.manylinux2014_ppc64le.whl",
           "package_name": "regex",
           "package_version": "2024.11.6",
@@ -598,6 +664,7 @@
           ]
         },
         {
+          "index": "https://pypi.org/simple",
           "name": "regex-2024.11.6-cp39-cp39-manylinux_2_17_s390x.manylinux2014_s390x.whl",
           "package_name": "regex",
           "package_version": "2024.11.6",
@@ -607,6 +674,7 @@
           ]
         },
         {
+          "index": "https://pypi.org/simple",
           "name": "regex-2024.11.6-cp39-cp39-manylinux_2_17_x86_64.manylinux2014_x86_64.whl",
           "package_name": "regex",
           "package_version": "2024.11.6",
@@ -616,6 +684,7 @@
           ]
         },
         {
+          "index": "https://pypi.org/simple",
           "name": "regex-2024.11.6-cp39-cp39-manylinux_2_5_i686.manylinux1_i686.manylinux_2_17_i686.manylinux2014_i686.whl",
           "package_name": "regex",
           "package_version": "2024.11.6",
@@ -625,6 +694,7 @@
           ]
         },
         {
+          "index": "https://pypi.org/simple",
           "name": "regex-2024.11.6-cp39-cp39-manylinux_2_5_x86_64.manylinux1_x86_64.manylinux_2_12_x86_64.manylinux2010_x86_64.whl",
           "package_name": "regex",
           "package_version": "2024.11.6",
@@ -634,6 +704,7 @@
           ]
         },
         {
+          "index": "https://pypi.org/simple",
           "name": "regex-2024.11.6-cp39-cp39-musllinux_1_2_aarch64.whl",
           "package_name": "regex",
           "package_version": "2024.11.6",
@@ -643,6 +714,7 @@
           ]
         },
         {
+          "index": "https://pypi.org/simple",
           "name": "regex-2024.11.6-cp39-cp39-musllinux_1_2_i686.whl",
           "package_name": "regex",
           "package_version": "2024.11.6",
@@ -652,6 +724,7 @@
           ]
         },
         {
+          "index": "https://pypi.org/simple",
           "name": "regex-2024.11.6-cp39-cp39-musllinux_1_2_ppc64le.whl",
           "package_name": "regex",
           "package_version": "2024.11.6",
@@ -661,6 +734,7 @@
           ]
         },
         {
+          "index": "https://pypi.org/simple",
           "name": "regex-2024.11.6-cp39-cp39-musllinux_1_2_s390x.whl",
           "package_name": "regex",
           "package_version": "2024.11.6",
@@ -670,6 +744,7 @@
           ]
         },
         {
+          "index": "https://pypi.org/simple",
           "name": "regex-2024.11.6-cp39-cp39-musllinux_1_2_x86_64.whl",
           "package_name": "regex",
           "package_version": "2024.11.6",
@@ -679,6 +754,7 @@
           ]
         },
         {
+          "index": "https://pypi.org/simple",
           "name": "regex-2024.11.6-cp39-cp39-win32.whl",
           "package_name": "regex",
           "package_version": "2024.11.6",
@@ -688,6 +764,7 @@
           ]
         },
         {
+          "index": "https://pypi.org/simple",
           "name": "regex-2024.11.6-cp39-cp39-win_amd64.whl",
           "package_name": "regex",
           "package_version": "2024.11.6",
@@ -697,6 +774,7 @@
           ]
         },
         {
+          "index": "https://pypi.org/simple",
           "name": "regex-2024.11.6.tar.gz",
           "package_name": "regex",
           "package_version": "2024.11.6",

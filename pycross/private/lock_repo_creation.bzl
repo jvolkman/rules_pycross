@@ -148,7 +148,8 @@ def create_repos(
                 )
                 if pypi_index:
                     pypi_file_attrs["index"] = pypi_index
-
+                elif file.get("index"):
+                    pypi_file_attrs["index"] = file["index"]
                 if file["name"].endswith(".whl"):
                     pycross_wheel_file(**pypi_file_attrs)
                 else:
