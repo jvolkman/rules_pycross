@@ -30,10 +30,10 @@ environments.create_for_python_toolchains(
 )
 use_repo(environments, "markers_envs")
 
-lock = use_extension("@rules_pycross//pycross/extensions:lock.bzl", "lock")
-lock.import_uv(
+uv = use_extension("@rules_pycross//pycross/extensions:uv.bzl", "uv")
+uv.project(
     lock_file = "//:uv.lock",
     project_file = "//:pyproject.toml",
     repo = "markers_lock",
 )
-use_repo(lock, "markers_lock")
+use_repo(uv, "markers_lock")

@@ -36,44 +36,44 @@ environments.platform(
 )
 use_repo(environments, "uv_workspace_envs")
 
-lock = use_extension("@rules_pycross//pycross/extensions:lock.bzl", "lock")
-lock.import_uv_workspace(
+uv = use_extension("@rules_pycross//pycross/extensions:uv.bzl", "uv")
+uv.workspace(
     name = "shared",
     lock_file = "//:uv.lock",
 )
-lock.uv_all_members(
+uv.all_projects(
     repo_pattern = "lock_{member}",
     workspace = "shared",
 )
 
 # Override project-a's repo name; project-b uses the pattern default (lock_project_b).
-lock.uv_member(
-    project = "project-a",
+uv.project(
+    name = "project-a",
     repo = "lock_a",
     workspace = "shared",
 )
 
 # Annotation conflict: exclude a test file from regex across the whole workspace.
-lock.package(
+uv.package(
     name = "regex",
     install_exclude_globs = ["test_regex.py"],
     workspace = "shared",
 )
-use_repo(lock, "lock_a", "lock_project_b")
+use_repo(uv, "lock_a", "lock_project_b")
 
 # Test standalone members (no uv_all_members)
-lock.import_uv_workspace(
+uv.workspace(
     name = "standalone",
     lock_file = "//:uv.lock",
 )
-lock.uv_member(
-    project = "project-a",
+uv.project(
+    name = "project-a",
     repo = "lock_standalone_a",
     workspace = "standalone",
 )
-lock.uv_member(
-    project = "project-b",
+uv.project(
+    name = "project-b",
     repo = "lock_standalone_b",
     workspace = "standalone",
 )
-use_repo(lock, "lock_standalone_a", "lock_standalone_b")
+use_repo(uv, "lock_standalone_a", "lock_standalone_b")

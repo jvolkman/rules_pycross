@@ -38,15 +38,15 @@ environments.create_for_python_toolchains(
 )
 use_repo(environments, "rules_pycross_e2e_environments")
 
-lock = use_extension("@rules_pycross//pycross/extensions:lock.bzl", "lock")
-lock.import_uv(
+uv = use_extension("@rules_pycross//pycross/extensions:uv.bzl", "uv")
+uv.project(
     lock_file = "//:uv.lock",
     project_file = "//:pyproject.toml",
     repo = "uv",
 )
-lock.package(
+uv.package(
     name = "regex",
     always_build = True,
     repo = "uv",
 )
-use_repo(lock, "uv")
+use_repo(uv, "uv")

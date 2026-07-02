@@ -37,12 +37,13 @@ environments.platform(
 )
 use_repo(environments, "envs")
 
-lock = use_extension("@rules_pycross//pycross/extensions:lock.bzl", "lock")
-lock.import_uv_workspace(
+uv = use_extension("@rules_pycross//pycross/extensions:uv.bzl", "uv")
+uv.workspace(
     name = "shared",
     lock_file = "//:uv.lock",
 )
-lock.uv_member(
+uv.project(
+    name = "project",
     development_groups = [
         "group-a",
         "group-b",
@@ -51,11 +52,11 @@ lock.uv_member(
         "variant-a",
         "variant-b",
     ],
-    project = "project",
     repo = "project",
     workspace = "shared",
 )
-lock.uv_member(
+uv.project(
+    name = "project",
     constraint_values = [
         "@platforms//os:linux",
         "@platforms//cpu:x86_64",
@@ -71,8 +72,7 @@ lock.uv_member(
         "variant-a",
         "variant-b",
     ],
-    project = "project",
     repo = "project_pinned",
     workspace = "shared",
 )
-use_repo(lock, "project", "project_pinned")
+use_repo(uv, "project", "project_pinned")

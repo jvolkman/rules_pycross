@@ -29,14 +29,14 @@ pycross.configure_toolchains(
     ],
 )
 
-lock = use_extension("@rules_pycross//pycross/extensions:lock.bzl", "lock")
-lock.import_uv(
+uv = use_extension("@rules_pycross//pycross/extensions:uv.bzl", "uv")
+uv.project(
     default_alias_single_version = True,
     lock_file = "//:uv.lock",
     project_file = "//:pyproject.toml",
     repo = "uv",
 )
-lock.package(
+uv.package(
     name = "setproctitle",
     always_build = True,
     build_dependencies = ["wheel"],  # Test build_dependencies override
@@ -55,4 +55,4 @@ setuptools.override(
     repo = "uv",
 )
 
-use_repo(lock, "uv")
+use_repo(uv, "uv")
