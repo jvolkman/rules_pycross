@@ -213,7 +213,8 @@ def resolve_lock_graph(packages, pinned_package_specs, requires_python, strict_d
                             "marker": dep_marker,
                         })
                         found = True
-                        break
+                        if dep_specifier:
+                            break
 
                 if not found and strict_dependencies:
                     fail("Found no packages to satisfy dependency (name={}, spec={})".format(dep_name, dep_specifier))
