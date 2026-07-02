@@ -39,7 +39,14 @@ def trace_ctx(ctx, display_name = "ctx"):
     return struct(**{field_name: wrap(field_name) for field_name in dir(ctx)})
 
 def sanitize_name(val):
-    """Sanitize a string into a valid Bazel repository and target name identifier."""
+    """Sanitize a string into a valid Bazel repository and target name identifier.
+
+    Args:
+        val: The string to sanitize.
+
+    Returns:
+        The sanitized string.
+    """
     res = val.lower()
     for c in "-.+@!:/?=&%,~".elems():
         res = res.replace(c, "_")
