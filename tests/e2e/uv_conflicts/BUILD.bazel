@@ -35,7 +35,7 @@ py_test(
         "4.11.0",
     ],
     main = "tests/test_conflict_version.py",
-    deps = ["@project//:typing-extensions"],
+    deps = ["@project//typing_extensions"],
 )
 
 # Test that variant-b resolves typing_extensions 4.12.2.
@@ -47,7 +47,7 @@ py_test(
         "4.12.2",
     ],
     main = "tests/test_conflict_version.py",
-    deps = ["@project//:typing-extensions"],
+    deps = ["@project//typing_extensions"],
 )
 
 # Test that default-groups makes group-a the default:
@@ -60,7 +60,7 @@ py_test(
         "3.7",
     ],
     main = "tests/test_conflict_version.py",
-    deps = ["@project//:idna"],
+    deps = ["@project//idna"],
 )
 
 # Test that @project_pinned resolves variant-a via platform transition.
@@ -75,5 +75,5 @@ py_test(
         "4.11.0",
     ],
     main = "tests/test_conflict_version.py",
-    deps = ["@project_pinned//:typing-extensions"],
+    deps = ["@project_pinned//typing_extensions"],
 )

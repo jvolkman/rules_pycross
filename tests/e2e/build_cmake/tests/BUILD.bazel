@@ -4,6 +4,6 @@ py_test(
     name = "test_iminuit",
     srcs = ["test_iminuit.py"],
     deps = [
-        "@uv//:iminuit",
+        "@uv//iminuit",
     ],
 )

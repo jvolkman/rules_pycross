@@ -16,7 +16,7 @@ def _test_pin_build_no_transition_impl(env, target):
         pin_target_dict = {"": "numpy@1.26.0"},
         package = {},
         workspace_repo = "my_workspace",
-    )
+    ).build
 
     # Should load the non-transitioning rules
     env.expect.that_bool("pycross_library_proxy" in res).equals(True)
@@ -47,7 +47,7 @@ def _test_pin_build_with_platform_impl(env, target):
         package = {},
         workspace_repo = "my_workspace",
         target_platform = "@my//platform:linux",
-    )
+    ).build
 
     # Should load the transitioning rules
     env.expect.that_bool("pycross_transitioning_library_proxy" in res).equals(True)
@@ -76,14 +76,14 @@ def _test_pin_build_transition_loads_impl(env, target):
         pin_target_dict = {"": "foo@1.0"},
         package = {},
         workspace_repo = "ws",
-    )
+    ).build
     res_with_platform = pin_build_for_testing(
         target_name = "foo",
         pin_target_dict = {"": "foo@1.0"},
         package = {},
         workspace_repo = "ws",
         target_platform = "//:my_platform",
-    )
+    ).build
 
     # Without platform: load should have non-transitioning
     load_no = [line for line in res_no_platform.split("\n") if line.startswith("load(")][0]
@@ -112,7 +112,7 @@ def _test_pin_build_extras_with_platform_impl(env, target):
         workspace_repo = "my_workspace",
         extras_dict = {"gpu": {"": "numpy[gpu]@1.26.0"}},
         target_platform = "@my//platform:linux",
-    )
+    ).build
 
     # Extra target should exist
     env.expect.that_bool('name = "[gpu]"' in res).equals(True)
@@ -140,7 +140,7 @@ def _test_pin_build_sdist_with_platform_impl(env, target):
         package = {"sdist_file": {"key": "numpy_sdist"}},
         workspace_repo = "my_workspace",
         target_platform = "@my//platform:linux",
-    )
+    ).build
 
     # Should have the sdist target
     env.expect.that_bool('name = "sdist"' in res).equals(True)
@@ -173,7 +173,7 @@ def _test_pin_build_variants_with_platform_impl(env, target):
         extras_dict = {"extra1": {"cpu": "numpy[extra1]@1.26.0", "gpu": "numpy[extra1]@1.26.0+gpu"}},
         default_variants = {"cpu": True},
         target_platform = "@my//platform:linux",
-    )
+    ).build
 
     # Should use select for variants
     env.expect.that_bool("select({" in res).equals(True)
@@ -215,7 +215,7 @@ def _test_pin_build_basic_structure_impl(env, target):
         pin_target_dict = {"": "requests@2.31.0"},
         package = {},
         workspace_repo = "ws",
-    )
+    ).build
 
     # Should have the top-level alias
     env.expect.that_bool('name = "requests"' in res).equals(True)
@@ -243,12 +243,12 @@ def _test_pin_build_basic_structure(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
     analysis_test(name = name, target = name + "_subject", impl = _test_pin_build_basic_structure_impl)
 
-# ── Test: transition_bzl → per-package uses non-transitioning rules ─
+# ── Test: transition_bzl → per-package uses transitioning rules from generated bzl ─
 
 # buildifier: disable=unused-variable
 def _test_pin_build_with_transition_bzl_impl(env, target):
-    """When transition_bzl is set, per-package BUILD uses non-transitioning rules (transition applied at root)."""
-    res = pin_build_for_testing(
+    """When transition_bzl is set, per-package BUILD uses transitioning rules loaded from the generated file."""
+    result = pin_build_for_testing(
         target_name = "numpy",
         pin_target_dict = {"": "numpy@1.26.0"},
         package = {"sdist_file": {"key": "numpy_sdist"}},
@@ -257,15 +257,16 @@ def _test_pin_build_with_transition_bzl_impl(env, target):
         target_platform = "//:_internal_platform",
         transition_bzl = "//:_transition.bzl",
     )
+    res = result.build
 
-    # Should load non-transitioning rules (transition is at root, not here)
+    # Should load transitioning rules from the generated _transition.bzl
     load_line = [line for line in res.split("\n") if line.startswith("load(")][0]
-    env.expect.that_bool('"pycross_library_proxy"' in load_line).equals(True)
-    env.expect.that_bool('"pycross_file_proxy"' in load_line).equals(True)
-    env.expect.that_bool("transitioning" not in load_line).equals(True)
+    env.expect.that_bool('"//:_transition.bzl"' in load_line).equals(True)
+    env.expect.that_bool('"pycross_transitioning_library_proxy"' in load_line).equals(True)
+    env.expect.that_bool('"pycross_transitioning_file_proxy"' in load_line).equals(True)
 
-    # Should NOT have any platform = lines (non-transitioning rules don't have platform attr)
-    env.expect.that_bool("platform =" not in res).equals(True)
+    # Should have platform = lines (transitioning rules require platform)
+    env.expect.that_bool('platform = "//:_internal_platform"' in res).equals(True)
 
     # Should still have the expected targets
     env.expect.that_bool('name = "pkg"' in res).equals(True)
@@ -274,9 +275,66 @@ def _test_pin_build_with_transition_bzl_impl(env, target):
     env.expect.that_bool('name = "sdist"' in res).equals(True)
     env.expect.that_bool('name = "[gpu]"' in res).equals(True)
 
+    # With single-entry target dicts, there should be no __actual package
+    env.expect.that_bool(result.actual_build == None).equals(True)
+
 def _test_pin_build_with_transition_bzl(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
     analysis_test(name = name, target = name + "_subject", impl = _test_pin_build_with_transition_bzl_impl)
+
+# ── Test: transition_bzl with variants → intermediate select aliases ─
+
+# buildifier: disable=unused-variable
+def _test_pin_build_transition_bzl_variants_impl(env, target):
+    """When transition_bzl is set and pins have variants, intermediate alias targets are emitted for select()."""
+    result = pin_build_for_testing(
+        target_name = "numpy",
+        pin_target_dict = {
+            "cpu": "numpy@1.26.0",
+            "gpu": "numpy@1.26.0+gpu",
+        },
+        package = {},
+        workspace_repo = "my_workspace",
+        has_aggregated_variant = True,
+        extras_dict = {"extra1": {"cpu": "numpy[extra1]@1.26.0", "gpu": "numpy[extra1]@1.26.0+gpu"}},
+        default_variants = {"cpu": True},
+        target_platform = "//:_internal_platform",
+        transition_bzl = "//:_transition.bzl",
+    )
+    res = result.build
+    actual = result.actual_build
+
+    # Should load from _transition.bzl
+    load_line = [line for line in res.split("\n") if line.startswith("load(")][0]
+    env.expect.that_bool('"//:_transition.bzl"' in load_line).equals(True)
+
+    # Should use transitioning proxies
+    env.expect.that_bool("pycross_transitioning_library_proxy" in res).equals(True)
+
+    # Main BUILD should NOT contain the select aliases (they live in __actual package)
+    env.expect.that_bool("select({" not in res).equals(True)
+
+    # Main BUILD proxy targets should reference __actual package
+    env.expect.that_bool('//__actual/numpy:pkg",' in res).equals(True)
+
+    # __actual package should exist and contain the select aliases
+    env.expect.that_bool(actual != None).equals(True)
+    env.expect.that_bool('name = "pkg"' in actual).equals(True)
+    env.expect.that_bool('name = "wheel"' in actual).equals(True)
+    env.expect.that_bool('name = "dist_info"' in actual).equals(True)
+    env.expect.that_bool('name = "all"' in actual).equals(True)
+    env.expect.that_bool('name = "extra_extra1"' in actual).equals(True)
+    env.expect.that_bool("select({" in actual).equals(True)
+
+    # __actual package should have restricted visibility
+    env.expect.that_bool('"//numpy:__pkg__"' in actual).equals(True)
+
+    # Should have platform on proxy targets in main BUILD
+    env.expect.that_bool('platform = "//:_internal_platform"' in res).equals(True)
+
+def _test_pin_build_transition_bzl_variants(name):
+    util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
+    analysis_test(name = name, target = name + "_subject", impl = _test_pin_build_transition_bzl_variants_impl)
 
 # ── Test suite ─────────────────────────────────────────────────────
 
@@ -333,12 +391,12 @@ def _test_requirements_bzl_maybe_aliases_impl(env, target):
     res = requirements_bzl_for_testing(mock_rctx, pins, packages)
 
     # numpy has sdist → should be unconditional
-    env.expect.that_bool("@@my_repo//:numpy" in res).equals(True)
+    env.expect.that_bool("@@my_repo//numpy" in res).equals(True)
     env.expect.that_bool("@@my_repo//:_maybe_numpy" in res).equals(False)
 
     # pywin32 has no sdist → should use _maybe_ prefix
     env.expect.that_bool("@@my_repo//:_maybe_pywin32" in res).equals(True)
-    env.expect.that_bool("@@my_repo//:pywin32" not in res or "@@my_repo//:_maybe_pywin32" in res).equals(True)
+    env.expect.that_bool("@@my_repo//pywin32" not in res or "@@my_repo//:_maybe_pywin32" in res).equals(True)
 
 def _test_requirements_bzl_maybe_aliases(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
@@ -367,8 +425,8 @@ def _test_requirements_bzl_all_unconditional_impl(env, target):
     res = requirements_bzl_for_testing(mock_rctx, pins, packages)
 
     env.expect.that_bool("_maybe_" in res).equals(False)
-    env.expect.that_bool("@@my_repo//:foo" in res).equals(True)
-    env.expect.that_bool("@@my_repo//:bar" in res).equals(True)
+    env.expect.that_bool("@@my_repo//foo" in res).equals(True)
+    env.expect.that_bool("@@my_repo//bar" in res).equals(True)
 
 def _test_requirements_bzl_all_unconditional(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
@@ -388,6 +446,7 @@ def thin_package_repo_test_suite(name):
             _test_pin_build_variants_with_platform,
             _test_pin_build_basic_structure,
             _test_pin_build_with_transition_bzl,
+            _test_pin_build_transition_bzl_variants,
             _test_is_platform_specific,
             _test_requirements_bzl_maybe_aliases,
             _test_requirements_bzl_all_unconditional,
