@@ -1,6 +1,7 @@
 {
   "packages": {
     "asttokens@3.0.0": {
+      "dependencies": [],
       "files": [
         {
           "name": "asttokens-3.0.0-py3-none-any.whl",
@@ -26,6 +27,7 @@
       "version": "3.0.0"
     },
     "colorama@0.4.6": {
+      "dependencies": [],
       "files": [
         {
           "name": "colorama-0.4.6-py2.py3-none-any.whl",
@@ -51,6 +53,7 @@
       "version": "0.4.6"
     },
     "decorator@5.1.1": {
+      "dependencies": [],
       "files": [
         {
           "name": "decorator-5.1.1-py3-none-any.whl",
@@ -76,6 +79,7 @@
       "version": "5.1.1"
     },
     "exceptiongroup@1.2.2": {
+      "dependencies": [],
       "files": [
         {
           "name": "exceptiongroup-1.2.2-py3-none-any.whl",
@@ -101,6 +105,7 @@
       "version": "1.2.2"
     },
     "executing@2.1.0": {
+      "dependencies": [],
       "files": [
         {
           "name": "executing-2.1.0-py2.py3-none-any.whl",
@@ -272,6 +277,7 @@
       "version": "0.1.7"
     },
     "parso@0.8.4": {
+      "dependencies": [],
       "files": [
         {
           "name": "parso-0.8.4-py2.py3-none-any.whl",
@@ -361,6 +367,7 @@
       "version": "3.0.48"
     },
     "ptyprocess@0.7.0": {
+      "dependencies": [],
       "files": [
         {
           "name": "ptyprocess-0.7.0-py2.py3-none-any.whl",
@@ -386,6 +393,7 @@
       "version": "0.7.0"
     },
     "pure-eval@0.2.3": {
+      "dependencies": [],
       "files": [
         {
           "name": "pure_eval-0.2.3-py3-none-any.whl",
@@ -411,6 +419,7 @@
       "version": "0.2.3"
     },
     "pygments@2.18.0": {
+      "dependencies": [],
       "files": [
         {
           "name": "pygments-2.18.0-py3-none-any.whl",
@@ -436,6 +445,7 @@
       "version": "2.18.0"
     },
     "regex@2024.11.6": {
+      "dependencies": [],
       "files": [
         {
           "name": "regex-2024.11.6-cp310-cp310-macosx_10_9_universal2.whl",
@@ -1052,6 +1062,7 @@
       "version": "0.6.3"
     },
     "traitlets@5.14.3": {
+      "dependencies": [],
       "files": [
         {
           "name": "traitlets-5.14.3-py3-none-any.whl",
@@ -1077,6 +1088,7 @@
       "version": "5.14.3"
     },
     "typing-extensions@4.12.2": {
+      "dependencies": [],
       "files": [
         {
           "name": "typing_extensions-4.12.2-py3-none-any.whl",
@@ -1102,6 +1114,7 @@
       "version": "4.12.2"
     },
     "wcwidth@0.2.13": {
+      "dependencies": [],
       "files": [
         {
           "name": "wcwidth-0.2.13-py2.py3-none-any.whl",
@@ -1131,5 +1144,5 @@
     "ipython": "ipython@8.18.1",
     "regex": "regex@2024.11.6"
   },
-  "python_versions": "<3.13,>=3.9"
+  "python_versions": ">=3.9, <3.13"
 }

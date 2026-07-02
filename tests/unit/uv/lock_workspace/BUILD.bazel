@@ -10,24 +10,17 @@ This test covers:
 
 load("@bazel_lib//lib:write_source_files.bzl", "write_source_file")
 load("@bazel_skylib//rules:diff_test.bzl", "diff_test")
-load("//tests:lock_model_test.bzl", "pycross_uv_lock_model")
-
-pycross_uv_lock_model(
-    name = "lock",
-    lock_file = "uv.lock",
-    project_file = "pyproject.toml",
-)
 
 write_source_file(
     name = "update_expected",
     diff_test = False,
-    in_file = ":lock",
+    in_file = "@starlark_uv_lock_workspace//:raw_lock.json",
     out_file = "expected.json",
 )
 
 diff_test(
     name = "test",
-    file1 = ":lock",
+    file1 = "@starlark_uv_lock_workspace//:raw_lock.json",
     file2 = "expected.json",
     tags = ["golden"],
 )

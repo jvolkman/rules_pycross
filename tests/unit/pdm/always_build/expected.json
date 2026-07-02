@@ -1,6 +1,7 @@
 {
   "packages": {
     "regex@2024.11.6": {
+      "dependencies": [],
       "files": [
         {
           "name": "regex-2024.11.6-cp310-cp310-macosx_10_9_universal2.whl",
@@ -575,6 +576,7 @@
       "version": "2024.11.6"
     },
     "setuptools@75.6.0": {
+      "dependencies": [],
       "files": [
         {
           "name": "setuptools-75.6.0-py3-none-any.whl",
@@ -600,6 +602,7 @@
       "version": "75.6.0"
     },
     "wheel@0.45.1": {
+      "dependencies": [],
       "files": [
         {
           "name": "wheel-0.45.1-py3-none-any.whl",
@@ -630,5 +633,5 @@
     "setuptools": "setuptools@75.6.0",
     "wheel": "wheel@0.45.1"
   },
-  "python_versions": "<3.13,>=3.9"
+  "python_versions": ">=3.9, <3.13"
 }

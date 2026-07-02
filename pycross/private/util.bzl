@@ -46,8 +46,6 @@ def underscore_name(name):
     """rules_python-style normalization: lowercase, replace [-. ] with _."""
     return pypackaging.utils.canonicalize_name(name).replace("-", "_")
 
-_PEP508_NAME_CHARS = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_."
-
 def extract_pep508_name(spec):
     """Extract the PEP 503 normalized package name from a PEP508 requirement line.
 
@@ -57,11 +55,7 @@ def extract_pep508_name(spec):
     Returns:
         The PEP 503 normalized package name (with hyphens) as a string.
     """
-    spec = spec.strip()
-    stripped = spec.lstrip(_PEP508_NAME_CHARS)
-    name_len = len(spec) - len(stripped)
-    name = spec[:name_len]
-    return pypackaging.utils.canonicalize_name(name)
+    return pypackaging.requirements.parse(spec).name
 
 def key_name(key):
     """Extract the package name part from a lockfile package key.
@@ -188,3 +182,59 @@ def merge_py_providers(
         py_info = py_info,
         runfiles = runfiles,
     )
+
+# Mapping of common URL percent-encoded characters.
+_URL_HEX_MAP = {
+    "20": " ",
+    "21": "!",
+    "23": "#",
+    "24": "$",
+    "25": "%",
+    "26": "&",
+    "27": "'",
+    "28": "(",
+    "29": ")",
+    "2B": "+",
+    "2C": ",",
+    "2D": "-",
+    "2E": ".",
+    "2F": "/",
+    "3A": ":",
+    "3B": ";",
+    "3D": "=",
+    "3F": "?",
+    "40": "@",
+    "5B": "[",
+    "5D": "]",
+    "5F": "_",
+    "7E": "~",
+}
+
+def url_decode_filename(filename):
+    """Decode percent-encoded characters in a URL-derived filename.
+
+    Args:
+        filename: A filename string potentially containing %XX sequences.
+
+    Returns:
+        The decoded filename string.
+    """
+    result = ""
+    i = 0
+    for _ in range(len(filename)):
+        if i >= len(filename):
+            break
+        if filename[i] == "%" and i + 2 < len(filename):
+            hex_str = filename[i + 1:i + 3].upper()
+            replacement = _URL_HEX_MAP.get(hex_str)
+            if replacement:
+                result += replacement
+                i += 3
+            else:
+                # Unknown %XX sequence, keep literal
+                result += filename[i]
+                i += 1
+        else:
+            result += filename[i]
+            i += 1
+    return result

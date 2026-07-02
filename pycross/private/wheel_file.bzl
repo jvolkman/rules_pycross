@@ -52,6 +52,7 @@ def _pycross_wheel_file_impl(rctx):
             "--output",
             "inspection.json",
         ],
+        extra_wheels = [Label("@pycross_internal_deps//packaging:wheel")],
     )
 
     if result.return_code != 0:

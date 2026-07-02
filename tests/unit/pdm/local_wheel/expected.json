@@ -1,6 +1,7 @@
 {
   "packages": {
     "cowsay@6.1": {
+      "dependencies": [],
       "files": [
         {
           "name": "cowsay-6.1-py3-none-any.whl",
@@ -20,5 +21,5 @@
   "pins": {
     "cowsay": "cowsay@6.1"
   },
-  "python_versions": "<3.13,>=3.9"
+  "python_versions": ">=3.9, <3.13"
 }

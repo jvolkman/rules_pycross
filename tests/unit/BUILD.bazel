@@ -3,10 +3,14 @@ load(":test_common_attrs.bzl", "common_attrs_test_suite")
 load(":test_cycle_member_marker_deps.bzl", "cycle_member_marker_deps_test_suite")
 load(":test_lock_resolver.bzl", "lock_resolver_test_suite")
 load(":test_override_helpers.bzl", "override_helpers_test_suite")
+load(":test_pdm_translator.bzl", "pdm_translator_test_suite")
 load(":test_pep508.bzl", "pep508_test_suite")
+load(":test_poetry_translator.bzl", "poetry_translator_test_suite")
+load(":test_pylock_translator.bzl", "pylock_translator_test_suite")
 load(":test_resolved_lock_renderer.bzl", "resolved_lock_renderer_test_suite")
 load(":test_sdist_dedup.bzl", "sdist_dedup_test_suite")
 load(":test_thin_package_repo.bzl", "thin_package_repo_test_suite")
+load(":test_uv_translator.bzl", "uv_translator_test_suite")
 load(":test_variant_resolver.bzl", "variant_resolver_test_suite")
 
 pep508_test_suite(
@@ -20,7 +24,7 @@ py_test(
     tags = ["unit"],
     deps = [
         "//pycross/private/tools:inspect_package",
-        "@rules_pycross_internal//deps:packaging",
+        "@pycross_internal_deps//packaging:pkg",
     ],
 )
 
@@ -103,76 +107,6 @@ resolved_lock_renderer_test_suite(name = "test_resolved_lock_renderer")
 
 override_helpers_test_suite(name = "test_override_helpers")
 
-py_test(
-    name = "uv_translator_test",
-    srcs = ["uv_translator_test.py"],
-    main = "uv_translator_test.py",
-    tags = ["unit"],
-    deps = [
-        "//pycross/private/tools:lock_model",
-        "//pycross/private/tools:uv_translator",
-        "@rules_pycross_internal//deps:packaging",
-    ],
-)
-
-py_test(
-    name = "pdm_translator_test",
-    srcs = ["pdm_translator_test.py"],
-    main = "pdm_translator_test.py",
-    tags = ["unit"],
-    deps = [
-        "//pycross/private/tools:lock_model",
-        "//pycross/private/tools:pdm_translator",
-        "@rules_pycross_internal//deps:packaging",
-    ],
-)
-
-py_test(
-    name = "poetry_translator_test",
-    srcs = ["poetry_translator_test.py"],
-    main = "poetry_translator_test.py",
-    tags = ["unit"],
-    deps = [
-        "//pycross/private/tools:lock_model",
-        "//pycross/private/tools:poetry_translator",
-        "@rules_pycross_internal//deps:packaging",
-        "@rules_pycross_internal//deps:poetry-core",
-    ],
-)
-
-py_test(
-    name = "pylock_translator_test",
-    srcs = ["pylock_translator_test.py"],
-    deps = [
-        "//pycross/private/tools:lock_model",
-        "//pycross/private/tools:pylock_translator_lib",
-        "@rules_pycross_internal//deps:packaging",
-    ],
-)
-
-py_test(
-    name = "translator_utils_test",
-    srcs = ["translator_utils_test.py"],
-    main = "translator_utils_test.py",
-    tags = ["unit"],
-    deps = [
-        "//pycross/private/tools:lock_model",
-        "//pycross/private/tools:translator_utils",
-        "@rules_pycross_internal//deps:packaging",
-    ],
-)
-
-py_test(
-    name = "lock_model_variant_test",
-    srcs = ["lock_model_variant_test.py"],
-    main = "lock_model_variant_test.py",
-    tags = ["unit"],
-    deps = [
-        "//pycross/private/tools:lock_model",
-        "@rules_pycross_internal//deps:packaging",
-    ],
-)
-
 variant_resolver_test_suite(name = "test_variant_resolver")
 
 sdist_dedup_test_suite(name = "test_sdist_dedup")
@@ -182,3 +116,11 @@ cycle_member_marker_deps_test_suite(name = "test_cycle_member_marker_deps")
 thin_package_repo_test_suite(name = "test_thin_package_repo")
 
 lock_resolver_test_suite(name = "test_lock_resolver")
+
+pdm_translator_test_suite(name = "test_pdm_translator")
+
+poetry_translator_test_suite(name = "test_poetry_translator")
+
+pylock_translator_test_suite(name = "test_pylock_translator")
+
+uv_translator_test_suite(name = "test_uv_translator")

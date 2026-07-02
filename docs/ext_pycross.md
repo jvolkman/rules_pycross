@@ -64,15 +64,3 @@ Deprecated: use configure_toolchains instead.
 | <a id="pycross.configure_toolchains-register_toolchains"></a>register_toolchains |  Register toolchains for all rules_python-registered interpreters.   | Boolean | optional |  `True`  |
 
 
-<a id="pycross_dev"></a>
-
-## pycross_dev
-
-<pre>
-pycross_dev = use_extension("@rules_pycross//pycross/extensions:pycross.bzl", "pycross_dev")
-</pre>
-
-Development-only extension for rules_pycross.
-
-
-

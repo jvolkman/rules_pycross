@@ -51,7 +51,12 @@ def _test_basic_resolution_impl(env, target):
                 "version": "1.0",
                 "dependencies": [],
                 "files": [
-                    {"name": "foo-1.0.tar.gz", "sha256": "12345"},
+                    {
+                        "name": "foo-1.0.tar.gz",
+                        "sha256": "12345",
+                        "package_name": "foo",
+                        "package_version": "1.0",
+                    },
                 ],
             },
         },
@@ -64,6 +69,13 @@ def _test_basic_resolution_impl(env, target):
 
     env.expect.that_collection(res.pins.keys()).contains_exactly(["foo"])
     env.expect.that_collection(res.packages.keys()).contains_exactly(["foo@1.0"])
+
+    # Verify file metadata is preserved in remote_files
+    file_key = "foo-1.0.tar.gz/12345"
+    env.expect.that_collection(res.remote_files.keys()).contains_exactly([file_key])
+    f = res.remote_files[file_key]
+    env.expect.that_str(f["package_name"]).equals("foo")
+    env.expect.that_str(f["package_version"]).equals("1.0")
 
 def _test_basic_resolution(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])

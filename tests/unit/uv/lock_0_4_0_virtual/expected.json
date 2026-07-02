@@ -1,6 +1,7 @@
 {
   "packages": {
     "regex@2024.11.6": {
+      "dependencies": [],
       "files": [
         {
           "name": "regex-2024.11.6-cp310-cp310-macosx_10_9_universal2.whl",
@@ -713,5 +714,5 @@
   "pins": {
     "regex": "regex@2024.11.6"
   },
-  "python_versions": "<3.13,>=3.9"
+  "python_versions": ">=3.9, <3.13"
 }

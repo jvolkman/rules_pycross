@@ -8,7 +8,7 @@ PYCROSS_TOOLCHAIN_TYPE = Label("//pycross:toolchain_type")
 
 def _is_sibling_repository_layout_enabled():
     # This checks if sibling repository layout is enabled.
-    test = Label("@rules_pycross_internal//:BUILD.bazel")
+    test = Label("@pycross_internal_deps//:BUILD.bazel")
     return test.workspace_root.startswith("..")
 
 def _resolve_import_path_fn_inner(workspace_name, bin_dir, sibling_layout):
