@@ -59,7 +59,6 @@ def _generate_lock_file(rctx):
         local_wheels = local_wheels,
         remote_wheels = rctx.attr.remote_wheels,
         always_include_sdist = rctx.attr.always_include_sdist,
-        disallow_builds = rctx.attr.disallow_builds,
         annotations_data = annotations_data,
         default_build_dependencies_args = rctx.attr.default_build_dependencies,
         default_alias_single_version = rctx.attr.default_alias_single_version,
