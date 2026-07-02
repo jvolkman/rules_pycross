@@ -288,7 +288,7 @@ def configure_rust_env(ctx, cargo_dir: Path, is_maturin: bool = False):
 
     cargo_config_lines = ["[build]", f'rustc-wrapper = "{wrapper_path.absolute()}"']
 
-    cargo_vendored_sources = ctx.bazel_config.get("cargo_vendored_sources")
+    cargo_vendored_sources = ctx.build_env.get("CARGO_VENDORED_SOURCES")
     if cargo_vendored_sources:
         abs_vendor_path = (ctx.prefix / cargo_vendored_sources).absolute()
         cargo_config_lines.extend(

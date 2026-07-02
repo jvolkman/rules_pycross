@@ -85,6 +85,8 @@ def _maturin_build_impl(ctx):
     if resources.parallelism > 0:
         env["CARGO_BUILD_JOBS"] = str(resources.parallelism)
         env["MAKEFLAGS"] = "-j{}".format(resources.parallelism)
+    if cargo_vendored_sources:
+        env["CARGO_VENDORED_SOURCES"] = cargo_vendored_sources
 
     # 3. Build wheel
     build_result = register_pep517_action(
@@ -95,7 +97,6 @@ def _maturin_build_impl(ctx):
         layers = [cc_layer, rust_layer],
         extra_files = extra_files,
         extra_inputs = ctx.files.vendored_crates if ctx.attr.vendored_crates else [],
-        cargo_vendored_sources = cargo_vendored_sources,
         env = env,
         resource_set = resources.resource_set,
     )
