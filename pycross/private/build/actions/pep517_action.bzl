@@ -34,7 +34,6 @@ def register_pep517_action(
         tool_executables = [],
         extra_files = {},
         extra_inputs = [],
-        cargo_vendored_sources = None,
         env = {},
         resource_set = None):
     """Registers the PEP 517 wheel build action.
@@ -50,9 +49,8 @@ def register_pep517_action(
         layers: list[struct], CC/Rust environment from extract_*_layer().
         tool_executables: list[struct(name, file)], executables to place on PATH.
         extra_files: dict[str, File], files to inject into the sdist directory
-            before building, keyed by their target filename (e.g. "Cargo.lock").
+            before building, keyed by their target filename (e.g. "package.json").
         extra_inputs: list[File], extra inputs to the action.
-        cargo_vendored_sources: str, path to the vendored cargo sources relative to the execution root.
         env: dict[str, str], extra environment variables to pass to the action.
         resource_set: function or dict, resource requirements for the action.
 
@@ -236,9 +234,6 @@ def register_pep517_action(
             hook_paths.append(exe.path)
             tools.append(hook[DefaultInfo].files_to_run)
         main_config["post_build_hooks"] = hook_paths
-
-    if cargo_vendored_sources:
-        main_config["cargo_vendored_sources"] = cargo_vendored_sources
 
     # Extra files to inject into the sdist before building.
     if extra_files:

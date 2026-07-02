@@ -22,7 +22,7 @@ from pycross.private.build.tools.utils.venv_utils import build_standard_venv
 def _inject_extra_files(ctx: BuildContext) -> None:
     """Copy extra files from the Bazel config into the sdist directory.
 
-    This handles files like user-provided Cargo.lock that need to be present
+    This handles files like user-provided lockfiles that need to be present
     in the source tree before the build backend runs.
     """
     extra_files = ctx.bazel_config.get("extra_files", {})
