@@ -4,7 +4,11 @@ exports_files([
     "backends.bzl",
     "lock_import.bzl",
     "lock_repos.bzl",
+    "pdm.bzl",
+    "poetry.bzl",
     "pycross.bzl",
+    "pylock.bzl",
+    "uv.bzl",
 ])
 
 bzl_library(
@@ -40,4 +44,32 @@ bzl_library(
     srcs = ["lock.bzl"],
     visibility = ["//visibility:public"],
     deps = ["//pycross/private:lock"],
+)
+
+bzl_library(
+    name = "uv",
+    srcs = ["uv.bzl"],
+    visibility = ["//visibility:public"],
+    deps = ["//pycross/private:uv_extension"],
+)
+
+bzl_library(
+    name = "pdm",
+    srcs = ["pdm.bzl"],
+    visibility = ["//visibility:public"],
+    deps = ["//pycross/private:pdm_extension"],
+)
+
+bzl_library(
+    name = "poetry",
+    srcs = ["poetry.bzl"],
+    visibility = ["//visibility:public"],
+    deps = ["//pycross/private:poetry_extension"],
+)
+
+bzl_library(
+    name = "pylock",
+    srcs = ["pylock.bzl"],
+    visibility = ["//visibility:public"],
+    deps = ["//pycross/private:pylock_extension"],
 )

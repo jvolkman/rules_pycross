@@ -31,8 +31,8 @@ environments.create_for_python_toolchains(
 )
 use_repo(environments, "uv_cycle_stress_envs")
 
-lock = use_extension("@rules_pycross//pycross/extensions:lock.bzl", "lock")
-lock.import_uv(
+uv = use_extension("@rules_pycross//pycross/extensions:uv.bzl", "uv")
+uv.project(
     local_wheels = [
         "//:stress_airflow-1.0.0-py3-none-any.whl",
         "//:stress_airflow_core-1.0.0-py3-none-any.whl",
@@ -50,4 +50,4 @@ lock.import_uv(
     project_file = "//:pyproject.toml",
     repo = "cycle_stress_lock",
 )
-use_repo(lock, "cycle_stress_lock")
+use_repo(uv, "cycle_stress_lock")

@@ -36,27 +36,27 @@ environments.platform(
 )
 use_repo(environments, "pdm_workspace_envs")
 
-lock = use_extension("@rules_pycross//pycross/extensions:lock.bzl", "lock")
-lock.import_pdm_workspace(
+pdm = use_extension("@rules_pycross//pycross/extensions:pdm.bzl", "pdm")
+pdm.workspace(
     name = "shared",
     lock_file = "//:pdm.lock",
 )
-lock.pdm_all_members(
+pdm.all_projects(
     repo_pattern = "lock_{member}",
     workspace = "shared",
 )
 
 # Override project-a's repo name; project-b uses the pattern default (lock_project_b).
-lock.pdm_member(
-    project = "project-a",
+pdm.project(
+    name = "project-a",
     repo = "lock_a",
     workspace = "shared",
 )
 
 # Annotation conflict: exclude a test file from regex across the whole workspace.
-lock.package(
+pdm.package(
     name = "regex",
     install_exclude_globs = ["test_regex.py"],
     workspace = "shared",
 )
-use_repo(lock, "lock_a", "lock_project_b")
+use_repo(pdm, "lock_a", "lock_project_b")

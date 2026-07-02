@@ -128,7 +128,9 @@ bzl_library(
         ":lock_resolver",
         ":pdm_lock_model",
         ":poetry_lock_model",
+        ":pylock_lock_model",
         ":resolved_lock_renderer",
+        ":uv_lock_model",
     ],
 )
 
@@ -256,17 +258,11 @@ bzl_library(
     name = "lock_import",
     srcs = ["lock_import.bzl"],
     deps = [
-        ":internal_repo",
         ":lock_attrs",
         ":lock_workspace_repo",
-        ":pdm_lock_model",
-        ":poetry_lock_model",
-        ":pylock_lock_model",
-        ":pypi_file",
         ":resolved_lock_repo",
-        ":uv_lock_model",
         "@bazel_features//:features",
-    ] + REPO_HTTP_DEPS,
+    ],
 )
 
 bzl_library(
@@ -427,6 +423,58 @@ bzl_library(
         ":pylock_lock_model",
         ":uv_lock_model",
         "@bazel_features//:features",
+    ],
+)
+
+bzl_library(
+    name = "format_extension",
+    srcs = ["format_extension.bzl"],
+    deps = [
+        ":json_file_repo",
+        ":lock_common",
+        ":lock_repo_creation",
+        ":lock_resolver",
+        "@bazel_features//:features",
+    ],
+)
+
+bzl_library(
+    name = "uv_extension",
+    srcs = ["uv_extension.bzl"],
+    deps = [
+        ":format_extension",
+        ":lock_common",
+        ":uv_lock_model",
+    ],
+)
+
+bzl_library(
+    name = "pdm_extension",
+    srcs = ["pdm_extension.bzl"],
+    deps = [
+        ":format_extension",
+        ":lock_common",
+        ":pdm_lock_model",
+    ],
+)
+
+bzl_library(
+    name = "poetry_extension",
+    srcs = ["poetry_extension.bzl"],
+    deps = [
+        ":format_extension",
+        ":lock_common",
+        ":poetry_lock_model",
+    ],
+)
+
+bzl_library(
+    name = "pylock_extension",
+    srcs = ["pylock_extension.bzl"],
+    deps = [
+        ":format_extension",
+        ":lock_common",
+        ":pylock_lock_model",
     ],
 )
 
