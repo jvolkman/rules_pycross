@@ -1381,7 +1381,7 @@ def _test_remote_wheel_override_impl(env, target):
     pkg = res.packages["foo@1.0"]
 
     env.expect.that_collection(pkg["wheel_candidates"]).has_size(1)
-    expected_key = "foo-1.0-cp310-cp310-manylinux_2_17_x86_64.whl/remote_sha"
+    expected_key = "foo-1.0-cp310-cp310-manylinux_2_17_x86_64.whl/remote_sha/edfe9b3e"
     env.expect.that_str(pkg["wheel_candidates"][0]["file_reference"]["key"]).equals(expected_key)
 
 def _test_remote_wheel_override(name):

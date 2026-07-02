@@ -40,7 +40,10 @@ def trace_ctx(ctx, display_name = "ctx"):
 
 def sanitize_name(val):
     """Sanitize a string into a valid Bazel repository and target name identifier."""
-    return val.lower().replace("-", "_").replace(".", "_").replace("+", "_").replace("@", "_").replace("!", "_")
+    res = val.lower()
+    for c in "-.+@!:/?=&%,~".elems():
+        res = res.replace(c, "_")
+    return res
 
 def underscore_name(name):
     """rules_python-style normalization: lowercase, replace [-. ] with _."""
