@@ -8,7 +8,6 @@ load(
     "create_overrides_repo",
     "encode_build_system_attrs",
 )
-load("//private:cargo_lock_repo.bzl", "cargo_lock_repo")
 
 _CORE_OVERRIDE_ATTRS = dict(
     name = attr.string(
@@ -27,7 +26,6 @@ _SETUPTOOLS_RUST_OVERRIDE_ATTRS = _CORE_OVERRIDE_ATTRS | BUILD_SYSTEM_ATTRS | CC
 
 def _setuptools_rust_overrides_impl(module_ctx):
     overrides = {}
-    cargo_targets = {}
 
     for module in module_ctx.modules:
         for tag in module.tags.override:
@@ -39,6 +37,8 @@ def _setuptools_rust_overrides_impl(module_ctx):
             backend_attrs = encode_build_system_attrs(tag)
             if tag.cargo_lock:
                 backend_attrs["cargo_lock"] = json.encode(str(tag.cargo_lock))
+            if tag.sdist:
+                backend_attrs["sdist"] = json.encode(str(tag.sdist))
 
             key = "repo:" + tag.repo if tag.repo else "workspace:" + tag.workspace
             overrides.setdefault(key, {})[tag.name] = {
@@ -46,28 +46,10 @@ def _setuptools_rust_overrides_impl(module_ctx):
                 "backend_attrs": backend_attrs,
             }
 
-            cargo_targets.setdefault(key, {})[tag.name] = {
-                "cargo_lock": str(tag.cargo_lock) if tag.cargo_lock else None,
-                "sdist": str(tag.sdist) if tag.sdist else None,
-            }
-
     create_overrides_repo(
         name = "setuptools_rust_overrides",
         content = json.encode(overrides),
     )
-
-    for key, pkgs in cargo_targets.items():
-        if key.startswith("repo:"):
-            bare_name = key[len("repo:"):]
-        elif key.startswith("workspace:"):
-            bare_name = key[len("workspace:"):]
-        else:
-            bare_name = key
-        cargo_lock_repo(
-            name = bare_name + "_cargo_setuptools_rust",
-            repo_name = bare_name,
-            packages = json.encode(pkgs),
-        )
 
     if bazel_features.external_deps.extension_metadata_has_reproducible:
         return module_ctx.extension_metadata(reproducible = True)

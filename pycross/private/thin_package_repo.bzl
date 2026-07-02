@@ -460,7 +460,7 @@ pycross_transitioning_file_proxy = rule(
     maybe_mapping_targets = {}  # pkg_key -> lock_label (for modules_mapping _maybe_ aliases)
 
     root_build_lines.extend([
-        'exports_files(["defs.bzl", "requirements.bzl"])',
+        'exports_files(["defs.bzl", "requirements.bzl", "_packages.bzl"])',
         "",
         "pycross_modules_mapping(",
         '    name = "modules_mapping",',
@@ -674,6 +674,72 @@ pycross_transitioning_file_proxy = rule(
 
             rctx.file("_backend/{}.bzl".format(macro_name), "\n".join(lines))
 
+    # _packages.bzl: metadata about all packages in this thin repo.
+    packages_lines = [
+        '"""Generated package metadata. Do not edit."""',
+        "",
+        "PACKAGES = {",
+    ]
+    for base_pin_name in sorted(grouped_pins.keys()):
+        group = grouped_pins[base_pin_name]
+        us_name = underscore_name(base_pin_name)
+
+        base_target_dict = group["base_target"]
+        has_sdist = False
+        if base_target_dict:
+            first_target = list(base_target_dict.values())[0]
+            pkg = packages.get(first_target, {})
+            has_sdist = bool(pkg.get("sdist_file"))
+
+        packages_lines.extend([
+            '    "{}": struct('.format(us_name),
+            "        has_sdist = {},".format(has_sdist),
+            "    ),",
+        ])
+    packages_lines.extend([
+        "}",
+        "",
+    ])
+    rctx.file("_packages.bzl", "\n".join(packages_lines))
+
+    # _cargo/ aliases: if any packages have cargo lock overrides, create
+    # aliases from unversioned names to versioned targets in the package repo.
+    if rctx.attr.override_configs:
+        override_configs = json.decode(rctx.attr.override_configs)
+
+        cargo_lines = [
+            'package(default_visibility = ["//visibility:public"])',
+            "",
+        ]
+
+        has_cargo_targets = False
+        for base_pin_name in sorted(grouped_pins.keys()):
+            us_name = underscore_name(base_pin_name)
+            if base_pin_name not in override_configs:
+                continue
+
+            group = grouped_pins[base_pin_name]
+            base_target_dict = group["base_target"]
+            if not base_target_dict:
+                continue
+
+            # Get the versioned package key from the pin.
+            first_target = list(base_target_dict.values())[0]
+            parts = parse_package_key(first_target)
+            versioned_name = "{}@{}".format(parts.name, parts.version)
+
+            cargo_lines.extend([
+                "alias(",
+                '    name = "{}",'.format(us_name),
+                '    actual = "@{}//_cargo:{}",'.format(workspace_repo, versioned_name),
+                ")",
+                "",
+            ])
+            has_cargo_targets = True
+
+        if has_cargo_targets:
+            rctx.file("_cargo/BUILD.bazel", "\n".join(cargo_lines))
+
 thin_package_repo = repository_rule(
     implementation = _thin_package_repo_impl,
     attrs = {
@@ -710,6 +776,9 @@ thin_package_repo = repository_rule(
         ),
         "platform": attr.string(
             doc = "Existing platform target to use directly.",
+        ),
+        "override_configs": attr.string(
+            doc = "JSON-encoded dict of pkg_name -> {backend_name -> backend_attrs} for package repo hooks.",
         ),
     },
 )

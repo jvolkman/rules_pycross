@@ -18,7 +18,6 @@ load(
     "create_overrides_repo",
     "encode_build_system_attrs",
 )
-load("//private:cargo_lock_repo.bzl", "cargo_lock_repo")
 
 _CORE_OVERRIDE_ATTRS = dict(
     name = attr.string(
@@ -37,7 +36,6 @@ _MATURIN_OVERRIDE_ATTRS = _CORE_OVERRIDE_ATTRS | BUILD_SYSTEM_ATTRS | CC_BUILD_S
 
 def _maturin_overrides_impl(module_ctx):
     maturin_overrides = {}
-    cargo_targets = {}  # key -> {pkg_name -> {cargo_lock, sdist}}
 
     for module in module_ctx.modules:
         # Process maturin overrides
@@ -50,6 +48,8 @@ def _maturin_overrides_impl(module_ctx):
             backend_attrs = encode_build_system_attrs(tag)
             if tag.cargo_lock:
                 backend_attrs["cargo_lock"] = json.encode(str(tag.cargo_lock))
+            if tag.sdist:
+                backend_attrs["sdist"] = json.encode(str(tag.sdist))
 
             key = "repo:" + tag.repo if tag.repo else "workspace:" + tag.workspace
             maturin_overrides.setdefault(key, {})[tag.name] = {
@@ -57,32 +57,11 @@ def _maturin_overrides_impl(module_ctx):
                 "backend_attrs": backend_attrs,
             }
 
-            # Track for cargo repo generation
-            cargo_targets.setdefault(key, {})[tag.name] = {
-                "cargo_lock": str(tag.cargo_lock) if tag.cargo_lock else None,
-                "sdist": str(tag.sdist) if tag.sdist else None,
-            }
-
     # Write overrides JSON
     create_overrides_repo(
         name = "maturin_overrides",
         content = json.encode(maturin_overrides),
     )
-
-    # Generate <repo>_cargo repos with pycross_generate_cargo_lock targets
-    for key, pkgs in cargo_targets.items():
-        # Strip the "repo:" or "workspace:" prefix for the repo name.
-        if key.startswith("repo:"):
-            bare_name = key[len("repo:"):]
-        elif key.startswith("workspace:"):
-            bare_name = key[len("workspace:"):]
-        else:
-            bare_name = key
-        cargo_lock_repo(
-            name = bare_name + "_cargo",
-            repo_name = bare_name,
-            packages = json.encode(pkgs),
-        )
 
     if bazel_features.external_deps.extension_metadata_has_reproducible:
         return module_ctx.extension_metadata(reproducible = True)

@@ -36,7 +36,16 @@ class GenerateCargoLockTest(unittest.TestCase):
     @patch("subprocess.run")
     def test_main(self, mock_run):
         # We simulate cargo generate-lockfile creating the lockfile.
-        def side_effect(args, cwd, check):
+        def side_effect(*args, **kwargs):
+            cwd = kwargs.get("cwd")
+
+            # check_output calls run and passes stdout.
+            # If it's a locate-project call, mock the output.
+            if len(args) > 0 and "locate-project" in args[0]:
+                mock = MagicMock()
+                mock.stdout = str(cwd / "Cargo.toml")
+                return mock
+
             (cwd / "Cargo.lock").write_text("lockfile contents")
             return MagicMock()
 
@@ -71,7 +80,14 @@ class GenerateCargoLockTest(unittest.TestCase):
     @patch("subprocess.run")
     def test_main_pyproject_manifest_path(self, mock_run):
         # We simulate cargo generate-lockfile creating the lockfile.
-        def side_effect(args, cwd, check):
+        def side_effect(*args, **kwargs):
+            cwd = kwargs.get("cwd")
+
+            if len(args) > 0 and "locate-project" in args[0]:
+                mock = MagicMock()
+                mock.stdout = str(cwd / "Cargo.toml")
+                return mock
+
             (cwd / "Cargo.lock").write_text("lockfile contents")
             return MagicMock()
 

@@ -34,6 +34,7 @@ stardoc(
         "@rules_cc//cc:find_cc_toolchain_bzl",
         "@rules_pycross//pycross:backend",
         "@rules_pycross//pycross/extensions:lock_repos",
+        "@rules_pycross_backend_maturin//private:cargo_lock_package_repo_hook",
         "@rules_pycross_backend_maturin//private:maturin_sdist_hook",
         "@rules_pycross_backend_maturin//private:setuptools_rust_sdist_hook",
     ],

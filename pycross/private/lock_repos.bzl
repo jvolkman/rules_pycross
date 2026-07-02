@@ -5,6 +5,7 @@ load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_file")
 load("@lock_import_repos_hub//:locks.bzl", lock_import_locks = "locks")
 load("@lock_import_repos_hub//:workspaces.bzl", "repo_constraint_values", "repo_flags", "repo_platforms", "root_repos", "workspace_build_repos", "workspace_memberships")
 load("@pycross_backends//:registry.bzl", "BACKEND_CONFIGS", "BACKEND_TO_RULE", "DEFAULT_BACKEND", "OVERRIDE_FILES")
+load("@pypackaging.bzl", "pypackaging")
 load("@rules_pycross//pycross/private:sdist_repo.bzl", "pycross_sdist_repo")
 load("//pycross/private:package_repo.bzl", "package_repo")
 load("//pycross/private:pypi_file.bzl", "pypi_file")
@@ -23,7 +24,7 @@ def _lock_repos_impl(module_ctx):
     all_remote_files = {}
 
     # Build per-repo, per-package override configs from registered override files.
-    # override_configs[key][pkg_name][backend_name] = {backend_attrs dict}
+    # override_configs[key][norm_pkg_name][backend_name] = {backend_attrs dict}
     # Keys are prefixed with "repo:" or "workspace:" to distinguish scope.
     override_configs = {}
     for f in OVERRIDE_FILES:
@@ -32,7 +33,8 @@ def _lock_repos_impl(module_ctx):
             for pkg_name, entry in packages.items():
                 backend_name = entry.get("build_backend", "")
                 backend_attrs = entry.get("backend_attrs", {})
-                override_configs.setdefault(key, {}).setdefault(pkg_name, {})[backend_name] = backend_attrs
+                norm_pkg = pypackaging.utils.canonicalize_name(pkg_name)
+                override_configs.setdefault(key, {}).setdefault(norm_pkg, {})[backend_name] = backend_attrs
 
     # Validate that repo: overrides don't target workspace members.
     for key in override_configs:
