@@ -234,9 +234,11 @@ def _resolve_packages(
         annotations,
         default_build_dependencies,
         wildcard_only_keys):
-    work = []
+    work_set = {k: True for k in lock_model_packages.keys()}
     for pin_dict in pins.values():
-        work.extend(pin_dict.values())
+        for pkg_key in pin_dict.values():
+            work_set[pkg_key] = True
+    work = work_set.keys()
 
     packages_by_package_key = {}
     synthesized_packages = {}
@@ -395,12 +397,36 @@ def _compute_cycle_groups(packages):
 
     return cycle_groups
 
+def _compute_reachable_keys(pins, packages_by_package_key):
+    """Compute the set of package keys transitively reachable from pins."""
+    work = []
+    for pin_dict in pins.values():
+        work.extend(pin_dict.values())
+
+    num_edges = 0
+    for entry in packages_by_package_key.values():
+        num_edges += len(entry.all_dependency_keys)
+
+    max_iters = len(work) + num_edges + len(packages_by_package_key)
+
+    reachable = {}
+    for _ in range(max_iters):
+        if not work:
+            break
+        key = work.pop()
+        if key in reachable:
+            continue
+        reachable[key] = True
+        entry = packages_by_package_key.get(key)
+        if entry:
+            work.extend(entry.all_dependency_keys)
+    return reachable
+
 def resolve(
         lock_model_data,
         local_wheels = None,
         remote_wheels = None,
         always_include_sdist = False,
-        disallow_builds = False,
         annotations_data = None,
         default_build_dependencies_args = None,
         default_alias_single_version = False):
@@ -411,7 +437,6 @@ def resolve(
         local_wheels: Dictionary of local wheels.
         remote_wheels: Dictionary of remote wheels.
         always_include_sdist: Whether to always include sdist.
-        disallow_builds: Whether to disallow builds.
         annotations_data: Annotations data.
         default_build_dependencies_args: Default build dependencies args.
         default_alias_single_version: Whether to default alias single version.
@@ -506,16 +531,6 @@ def resolve(
     resolved_keys = sorted(packages_by_package_key.keys())
     resolved_packages = [packages_by_package_key[k] for k in resolved_keys]
 
-    if disallow_builds:
-        builds = []
-        for entry in resolved_packages:
-            if entry.uses_sdist:
-                builds.append(entry.key)
-        if builds:
-            fail("Builds are disallowed, but the following would include pycross_wheel_build targets: {}".format(
-                ", ".join(builds),
-            ))
-
     repos = {}
     for entry in resolved_packages:
         repos.update(entry.wheel_candidate_files)
@@ -526,8 +541,11 @@ def resolve(
     repos = {k: repos[k] for k in sorted_repo_keys}
 
     if default_alias_single_version:
+        reachable_keys = _compute_reachable_keys(pins, packages_by_package_key)
         resolved_versions_by_name = {}
         for entry in resolved_packages:
+            if entry.key not in reachable_keys:
+                continue
             pkg_name = entry.resolved_package["name"]
             pkg_version = entry.resolved_package["version"]
             if pkg_name not in resolved_versions_by_name:

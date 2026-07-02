@@ -18,6 +18,21 @@ load(":git_file.bzl", "pycross_git_file")
 # Annotation fields that affect pycross_wheel_library targets.
 _ANNOTATION_FIELDS = ["post_install_patches", "install_exclude_globs"]
 
+def _disallowed_sdist_repo_impl(rctx):
+    fail(
+        "Package '{}' requires building from source (sdist), ".format(rctx.attr.package_name) +
+        "but builds are disallowed for lock import '{}'. ".format(rctx.attr.lock_name) +
+        "Provide a pre-built wheel or remove disallow_builds.",
+    )
+
+pycross_disallowed_sdist_repo = repository_rule(
+    implementation = _disallowed_sdist_repo_impl,
+    attrs = {
+        "package_name": attr.string(mandatory = True),
+        "lock_name": attr.string(mandatory = True),
+    },
+)
+
 def create_repos(
         module_ctx,
         all_locks,
@@ -26,6 +41,7 @@ def create_repos(
         repo_flags,
         repo_constraint_values,
         repo_platforms,
+        repo_disallow_builds = {},
         pypi_index = None,
         resolved_locks = None):
     """Create all Bazel repos from resolved lock data.
@@ -38,6 +54,7 @@ def create_repos(
         repo_flags: Dict of repo_name -> JSON-encoded flags list.
         repo_constraint_values: Dict of repo_name -> JSON-encoded constraint_values list.
         repo_platforms: Dict of repo_name -> platform string.
+        repo_disallow_builds: Dict of repo_name -> boolean indicating if builds are disallowed.
         pypi_index: Optional PyPI index URL.
         resolved_locks: Optional dict of repo_name -> parsed lock JSON dict. When provided,
             lock data is taken from this dict instead of reading from all_locks file labels.
@@ -235,7 +252,14 @@ def create_repos(
             if pkg_overrides:
                 sdist_repo_attrs["override_backend_configs"] = json.encode(pkg_overrides)
 
-            pycross_sdist_repo(**sdist_repo_attrs)
+            if repo_disallow_builds.get(repo_name, False):
+                pycross_disallowed_sdist_repo(
+                    name = sdist_repo_name,
+                    package_name = pkg_key,
+                    lock_name = repo_name,
+                )
+            else:
+                pycross_sdist_repo(**sdist_repo_attrs)
 
         # Save per-repo data for workspace processing
         per_repo_data[repo_name] = struct(

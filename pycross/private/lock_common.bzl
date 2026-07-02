@@ -687,6 +687,7 @@ def process_import_tags(module_ctx):
     repo_flags = {}
     repo_constraint_values = {}
     repo_platforms = {}
+    repo_disallow_builds = {}
 
     for repo_info in lock_repos.values():
         workspace_memberships[repo_info.repo_name] = repo_info.workspace
@@ -699,6 +700,8 @@ def process_import_tags(module_ctx):
             repo_constraint_values[repo_info.repo_name] = json.encode(repo_info.constraint_values)
         if repo_info.platform:
             repo_platforms[repo_info.repo_name] = repo_info.platform
+        if repo_info.disallow_builds:
+            repo_disallow_builds[repo_info.repo_name] = True
 
     return struct(
         lock_repos = lock_repos,
@@ -710,6 +713,7 @@ def process_import_tags(module_ctx):
         repo_flags = repo_flags,
         repo_constraint_values = repo_constraint_values,
         repo_platforms = repo_platforms,
+        repo_disallow_builds = repo_disallow_builds,
     )
 
 IMPORT_TAG_CLASSES = dict(

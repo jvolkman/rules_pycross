@@ -29,7 +29,6 @@ def _resolve_failure_subject_impl(ctx):
     resolve(
         lock_model_data = lock_model_data,
         annotations_data = annotations_data,
-        disallow_builds = ctx.attr.disallow_builds,
     )
     return []
 
@@ -38,7 +37,6 @@ _resolve_failure_subject = rule(
     attrs = {
         "lock_model_data": attr.string(),
         "annotations_data": attr.string(default = ""),
-        "disallow_builds": attr.bool(default = False),
     },
 )
 
@@ -664,12 +662,15 @@ def _test_unpinned_cycle_still_emitted_impl(env, target):
     res = resolve(lock_model_data)
 
     env.expect.that_collection(res.packages.keys()).contains("a@1.0")
-    env.expect.that_collection(res.packages.keys()).contains_none_of(["x@1.0", "y@1.0", "z@1.0"])
+    env.expect.that_collection(res.packages.keys()).contains_at_least(["x@1.0", "y@1.0", "z@1.0"])
 
     env.expect.that_collection(res.cycle_groups.keys()).has_size(1)
 
-    for pkg in res.packages.values():
-        env.expect.that_bool(pkg.get("cycle_group") == None).equals(True)
+    for pkg_key, pkg in res.packages.items():
+        if pkg_key in ["x@1.0", "y@1.0", "z@1.0"]:
+            env.expect.that_bool(pkg.get("cycle_group") != None).equals(True)
+        else:
+            env.expect.that_bool(pkg.get("cycle_group") == None).equals(True)
 
 def _test_unpinned_cycle_still_emitted(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
@@ -1558,33 +1559,6 @@ def _test_no_files_raises_error(name):
         expect_failure = True,
     )
 
-def _test_disallow_builds_raises_when_sdist_used_impl(env, target):
-    env.expect.that_target(target).failures().contains_predicate(
-        matching.contains("Builds are disallowed, but the following would include pycross_wheel_build targets"),
-    )
-
-def _test_disallow_builds_raises_when_sdist_used(name):
-    lock_model_data = {
-        "packages": {
-            "mylib@1.0": _make_pkg("mylib", "1.0", [_make_file("mylib-1.0.tar.gz")]),
-        },
-        "pins": {"mylib": "mylib@1.0"},
-    }
-
-    util.helper_target(
-        _resolve_failure_subject,
-        name = name + "_subject",
-        lock_model_data = json.encode(lock_model_data),
-        disallow_builds = True,
-    )
-
-    analysis_test(
-        name = name,
-        target = name + "_subject",
-        impl = _test_disallow_builds_raises_when_sdist_used_impl,
-        expect_failure = True,
-    )
-
 # buildifier: disable=unused-variable
 def _test_empty_lock_impl(env, target):
     lock_model_data = {
@@ -1722,37 +1696,6 @@ def _test_unconsumed_wildcard_annotations_no_error_impl(env, target):
 def _test_unconsumed_wildcard_annotations_no_error(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
     analysis_test(name = name, target = name + "_subject", impl = _test_unconsumed_wildcard_annotations_no_error_impl)
-
-def _test_unconsumed_specific_annotation_still_errors_impl(env, target):
-    env.expect.that_target(target).failures().contains_predicate(
-        matching.contains("not part of the locked set"),
-    )
-
-def _test_unconsumed_specific_annotation_still_errors(name):
-    lock_model_data = {
-        "packages": {
-            "foo@1.0": _make_pkg("foo", "1.0", [_make_file("foo-1.0.tar.gz")]),
-            "unused@1.0": _make_pkg("unused", "1.0", [_make_file("unused-1.0.tar.gz")]),
-        },
-        "pins": {"foo": "foo@1.0"},
-    }
-    annotations_data = {
-        "unused": {"always_build": True},
-    }
-
-    util.helper_target(
-        _resolve_failure_subject,
-        name = name + "_subject",
-        lock_model_data = json.encode(lock_model_data),
-        annotations_data = json.encode(annotations_data),
-    )
-
-    analysis_test(
-        name = name,
-        target = name + "_subject",
-        impl = _test_unconsumed_specific_annotation_still_errors_impl,
-        expect_failure = True,
-    )
 
 # buildifier: disable=unused-variable
 def _test_build_repo_flows_to_resolved_package_impl(env, target):
@@ -1905,13 +1848,11 @@ def lock_resolver_test_suite(name):
             _test_multi_tag_wheel_candidates,
             _test_sdist_only_package,
             _test_no_files_raises_error,
-            _test_disallow_builds_raises_when_sdist_used,
             _test_empty_lock,
             _test_pinned_package_not_in_packages,
             _test_wildcard_always_build_end_to_end,
             _test_wildcard_with_specific_override_end_to_end,
             _test_unconsumed_wildcard_annotations_no_error,
-            _test_unconsumed_specific_annotation_still_errors,
             _test_build_repo_flows_to_resolved_package,
             _test_wildcard_build_repo_flows_to_resolved_package,
             _test_wildcard_install_exclude_globs_end_to_end,

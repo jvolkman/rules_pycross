@@ -89,7 +89,6 @@ def _resolve_lock_inline(module_ctx, lock_info, serialized_lock_model, workspace
         local_wheels = local_wheels,
         remote_wheels = {},
         always_include_sdist = False,
-        disallow_builds = lock_info.disallow_builds,
         annotations_data = annotations_data,
         default_build_dependencies_args = lock_info.default_build_dependencies,
         default_alias_single_version = lock_info.default_alias_single_version,
@@ -159,6 +158,7 @@ def _lock_impl(module_ctx):
         repo_flags = result.repo_flags,
         repo_constraint_values = result.repo_constraint_values,
         repo_platforms = result.repo_platforms,
+        repo_disallow_builds = result.repo_disallow_builds,
         pypi_index = create_tag.pypi_index,
         resolved_locks = resolved_locks,
     )
