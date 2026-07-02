@@ -6,7 +6,16 @@ load(":util.bzl", "parse_package_key")
 def _file_key(f):
     if not f.get("sha256"):
         fail("PackageFile missing sha256: " + str(f))
-    return "{}/{}".format(f["name"], f["sha256"])
+    key = "{}/{}".format(f["name"], f["sha256"][:8])
+    extra = ""
+    if f.get("urls"):
+        extra += ",".join(f["urls"])
+    if f.get("index"):
+        extra += "|" + f["index"]
+    if extra:
+        h = hash(extra)
+        key += "/%x" % (h & 0xffffffff)
+    return key
 
 def _resolve_single_version(name, versions_by_name, all_versions, attr_name):
     if "@" in name:

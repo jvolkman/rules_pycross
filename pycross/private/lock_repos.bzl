@@ -121,7 +121,8 @@ def _lock_repos_impl(module_ctx):
                 )
                 if create_tag.pypi_index:
                     pypi_file_attrs["index"] = create_tag.pypi_index
-
+                elif file.get("index"):
+                    pypi_file_attrs["index"] = file["index"]
                 if file["name"].endswith(".whl"):
                     pycross_wheel_file(**pypi_file_attrs)
                 else:
