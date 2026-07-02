@@ -46,8 +46,6 @@ def underscore_name(name):
     """rules_python-style normalization: lowercase, replace [-. ] with _."""
     return pypackaging.utils.canonicalize_name(name).replace("-", "_")
 
-_PEP508_NAME_CHARS = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_."
-
 def extract_pep508_name(spec):
     """Extract the PEP 503 normalized package name from a PEP508 requirement line.
 
@@ -57,11 +55,7 @@ def extract_pep508_name(spec):
     Returns:
         The PEP 503 normalized package name (with hyphens) as a string.
     """
-    spec = spec.strip()
-    stripped = spec.lstrip(_PEP508_NAME_CHARS)
-    name_len = len(spec) - len(stripped)
-    name = spec[:name_len]
-    return pypackaging.utils.canonicalize_name(name)
+    return pypackaging.requirements.parse(spec).name
 
 def key_name(key):
     """Extract the package name part from a lockfile package key.

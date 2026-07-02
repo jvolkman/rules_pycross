@@ -31,47 +31,42 @@ def parse_pep508_requirement(req_str):
     if req_str.startswith("-e "):
         req_str = req_str[3:].strip()
 
-    # Extract marker (after ";")
-    marker = ""
-    if ";" in req_str:
-        parts = req_str.split(";", 1)
-        req_str = parts[0].strip()
-        marker = parts[1].strip()
+    parsed = pypackaging.requirements.parse(req_str)
 
-    # Extract name (letters, digits, -, _, .)
-    name_chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_."
-    i = 0
-    for c in req_str.elems():
-        if c in name_chars:
-            i += 1
-        else:
-            break
-    name = req_str[:i]
-    rest = req_str[i:].strip()
+    # Reconstruct specifier string
+    specifier_str = ""
+    if parsed.specifier and parsed.specifier.specs:
+        specifier_str = ",".join(["{}{}".format(s.operator, s.version) for s in parsed.specifier.specs])
 
-    # Extract extras (in square brackets)
-    extras = []
-    if rest.startswith("["):
-        end = rest.index("]")
-        extras_str = rest[1:end]
-        extras = [e.strip() for e in extras_str.split(",")]
-        rest = rest[end + 1:].strip()
+    # Replicate pypackaging logic to extract marker_str to maintain compatible interface
+    at_idx = req_str.find("@")
+    semi_idx = req_str.find(";")
+    marker_str = ""
 
-    # Strip optional parens around version spec
-    if rest.startswith("(") and rest.endswith(")"):
-        rest = rest[1:-1].strip()
+    if at_idx != -1 and (semi_idx == -1 or at_idx < semi_idx):
+        # URL requirement
+        right = req_str[at_idx + 1:].strip()
+        ws_idx = -1
 
-    # Skip URL deps (@ marker)
-    if rest.startswith("@"):
-        rest = ""
-
-    specifier = rest
+        # buildifier: disable=string-iteration
+        for i in range(len(right)):
+            if right[i] in " \t":
+                ws_idx = i
+                break
+        if ws_idx != -1:
+            rest = right[ws_idx:].strip()
+            if rest.startswith(";"):
+                marker_str = rest[1:].strip()
+    else:
+        # Specifier requirement
+        if semi_idx != -1:
+            marker_str = req_str[semi_idx + 1:].strip()
 
     return struct(
-        name = canonicalize_name(name),
-        extras = extras,
-        specifier = specifier,
-        marker = marker,
+        name = parsed.name,
+        extras = parsed.extras,
+        specifier = specifier_str,
+        marker = marker_str,
     )
 
 def _dependency_name_str(name, extra = ""):
