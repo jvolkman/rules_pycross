@@ -277,11 +277,31 @@ def _package_repo_impl(rctx):
 
     rctx.file("_lock/BUILD.bazel", "\n".join(lock_build_lines))
 
-    # 2. Minimal root BUILD.bazel
-    rctx.file("BUILD.bazel", "\n".join([
+    # 2. Root BUILD.bazel
+    root_build_lines = [
         'package(default_visibility = ["//visibility:public"])',
         "",
-    ]))
+    ]
+    if lock.get("legacy_create_root_aliases"):
+        for pkg_key in sorted(packages.keys()):
+            if "__via_" in pkg_key:
+                continue
+            parts = parse_package_key(pkg_key)
+            if parts.extra:
+                continue
+            pkg_name = _normalize_name(parts.name)
+
+            # The canonical name is the user-facing name for the root alias (e.g. 'absl-py')
+            canonical = parts.name
+            root_build_lines.extend([
+                "alias(",
+                '    name = "{}",'.format(canonical),
+                '    actual = "//{}:pkg",'.format(pkg_name),
+                ")",
+                "",
+            ])
+
+    rctx.file("BUILD.bazel", "\n".join(root_build_lines))
 
     # 3. _wheel/ and _sdist/ directories for versioned artifact access
     wheel_lines = [

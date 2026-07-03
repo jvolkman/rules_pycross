@@ -61,7 +61,7 @@ def _generate_lock_file(rctx):
         always_include_sdist = rctx.attr.always_include_sdist,
         annotations_data = annotations_data,
         default_build_dependencies_args = rctx.attr.default_build_dependencies,
-        alias_transitive = rctx.attr.alias_transitive,
+        create_transitive_aliases = rctx.attr.create_transitive_aliases,
     )
 
     resolved_lock_dict = {
@@ -70,6 +70,7 @@ def _generate_lock_file(rctx):
         "remote_files": resolved_lock.remote_files,
         "cycle_groups": resolved_lock.cycle_groups,
         "variants": resolved_lock.variants,
+        "legacy_create_root_aliases": raw_lock_data.get("legacy_create_root_aliases", False),
     }
 
     rctx.file("lock.json", json.encode(resolved_lock_dict))

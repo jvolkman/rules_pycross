@@ -104,35 +104,51 @@ def translate_pdm(project_dict, lock_dict, lock_model):
     # Collect requirements based on group selection
     requirements = []
 
-    if lock_model.default_group:
+    dependency_groups = getattr(lock_model, "dependency_groups", ["default"])
+    include_default = "default" in dependency_groups or "*" in dependency_groups
+
+    if include_default:
         for dep_str in default_deps:
             requirements.append(parse_pep508_requirement(dep_str))
 
-    if lock_model.all_optional_groups:
-        opt_groups = sorted(optional_deps.keys())
-    else:
-        opt_groups = getattr(lock_model, "optional_groups", [])
+    for group in dependency_groups:
+        if group == "default" or group == "*":
+            continue
 
-    for group_name in opt_groups:
-        if group_name not in optional_deps:
-            fail("Non-existent optional dependency group: {}".format(group_name))
-        for dep_str in optional_deps[group_name]:
-            requirements.append(parse_pep508_requirement(dep_str))
+        kind, _, name = group.partition(":")
+        if kind == "optional":
+            groups_dict = optional_deps
+        elif kind == "development":
+            groups_dict = dev_deps
+        else:
+            fail("Invalid dependency group format '{}'. Must be 'optional:name' or 'development:name'.".format(group))
 
-    if getattr(lock_model, "all_development_groups", False):
-        dev_groups = sorted(dev_deps.keys())
-    else:
-        dev_groups = getattr(lock_model, "development_groups", [])
+        if name == "*":
+            target_names = list(groups_dict.keys())
+        else:
+            target_names = [name]
 
-    for group_name in dev_groups:
-        if group_name not in dev_deps:
-            fail("Non-existent development dependency group: {}".format(group_name))
-        for dep_str in dev_deps[group_name]:
-            # Strip editable markers
-            stripped = dep_str.strip()
-            if stripped.startswith("-e "):
-                stripped = stripped[3:].strip()
-            requirements.append(parse_pep508_requirement(stripped))
+        for target_name in target_names:
+            if target_name in groups_dict:
+                entries = groups_dict[target_name]
+                for dep_str in entries:
+                    if type(dep_str) == "string":
+                        # Strip editable markers
+                        stripped = dep_str.strip()
+                        if stripped.startswith("-e "):
+                            stripped = stripped[3:].strip()
+                        requirements.append(parse_pep508_requirement(stripped))
+                    elif type(dep_str) == "dict" and "include-group" in dep_str:
+                        inc_group = dep_str["include-group"]
+                        if inc_group in dev_deps:
+                            for inc_dep in dev_deps[inc_group]:
+                                if type(inc_dep) == "string":
+                                    stripped = inc_dep.strip()
+                                    if stripped.startswith("-e "):
+                                        stripped = stripped[3:].strip()
+                                    requirements.append(parse_pep508_requirement(stripped))
+            else:
+                fail("Non-existent {} dependency group: {}".format(kind, target_name))
 
     # Build pinned specs from requirements
     pinned_package_specs = {}

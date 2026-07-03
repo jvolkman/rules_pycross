@@ -44,15 +44,14 @@ uv.workspace(
 )
 uv.repo(
     name = "project",
-    development_groups = [
-        "group-a",
-        "group-b",
+    dependency_groups = [
+        "default",
+        "development:group-a",
+        "development:group-b",
+        "optional:variant-a",
+        "optional:variant-b",
     ],
-    optional_groups = [
-        "variant-a",
-        "variant-b",
-    ],
-    project = "project",
+    projects = ["project"],
     workspace = "shared",
 )
 uv.repo(
@@ -61,18 +60,17 @@ uv.repo(
         "@platforms//os:linux",
         "@platforms//cpu:x86_64",
     ],
-    development_groups = [
-        "group-a",
-        "group-b",
+    dependency_groups = [
+        "default",
+        "development:group-a",
+        "development:group-b",
+        "optional:variant-a",
+        "optional:variant-b",
     ],
     flags = [
         "--@project_pinned//_variants:extra_variant-a=True",
     ],
-    optional_groups = [
-        "variant-a",
-        "variant-b",
-    ],
-    project = "project",
+    projects = ["project"],
     workspace = "shared",
 )
 use_repo(uv, "project", "project_pinned")

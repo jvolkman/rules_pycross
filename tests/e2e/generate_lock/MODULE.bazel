@@ -43,9 +43,12 @@ uv.workspace(
     lock_file = "//:uv.lock",
 )
 uv.repo(
-    development_groups = ["dev"],
-    optional_groups = ["yaml"],
+    dependency_groups = [
+        "development:dev",
+        "optional:yaml",
+    ],
     project_file = "//:pyproject.toml",
+    projects = ["*"],
     workspace = "uv",
 )
 use_repo(uv, "uv")

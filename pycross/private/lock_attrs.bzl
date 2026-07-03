@@ -77,7 +77,7 @@ RESOLVE_ATTRS = dict(
     remote_wheels = attr.string_dict(
         doc = "A mapping of remote wheels to their sha256 hashes.",
     ),
-    alias_transitive = attr.bool(
+    create_transitive_aliases = attr.bool(
         doc = "Generate aliases for all packages that have a single version in the lock file.",
     ),
     annotations = attr.string_dict(
@@ -168,7 +168,7 @@ def handle_resolve_attrs(attrs, local_wheel_names_and_labels):
     for remote_wheel_url, sha256 in attrs.remote_wheels.items():
         args.extend(["--remote-wheel", remote_wheel_url, sha256])
 
-    if attrs.alias_transitive:
+    if attrs.create_transitive_aliases:
         args.append("--default-alias-single-version")
 
     if attrs.disallow_builds:
@@ -354,7 +354,7 @@ OVERRIDE_TARGET_ATTRS = dict(
 
 # Attrs common to the import_* tags
 COMMON_IMPORT_ATTRS = dict(
-    alias_transitive = attr.bool(
+    create_transitive_aliases = attr.bool(
         doc = "Generate aliases for all packages that have a single version in the lock file.",
     ),
     local_wheels = attr.label_list(

@@ -59,7 +59,7 @@ ALL_PROJECTS_COMMON_ATTRS = dict(
     excluded_projects = attr.string_list(
         doc = "Project names to skip during auto-discovery.",
     ),
-    alias_transitive = attr.bool(
+    create_transitive_aliases = attr.bool(
         doc = "Generate aliases for transitive single-version packages in generated repos.",
     ),
 )
@@ -70,8 +70,8 @@ REPO_ATTRS = dict(
         doc = "Name of the workspace this member belongs to.",
         mandatory = True,
     ),
-    project = attr.string(
-        doc = "The project name as it appears in the lock file. Optional if the workspace has only one member.",
+    projects = attr.string_list(
+        doc = "A list of project names to include. Use ['*'] to include all discovered projects.",
     ),
     name = attr.string(
         doc = "Override the repo name.",
@@ -80,8 +80,16 @@ REPO_ATTRS = dict(
         doc = "Override auto-discovered pyproject.toml path.",
         allow_single_file = True,
     ),
-    alias_transitive = attr.bool(
+    create_transitive_aliases = attr.bool(
         doc = "Generate aliases for transitive single-version packages in this repo.",
+    ),
+    dependency_groups = attr.string_list(
+        doc = "A list of dependency groups to include. E.g. ['default', 'development:foo', '*']. Defaults to ['default'].",
+        default = ["default"],
+    ),
+    legacy_create_root_aliases = attr.bool(
+        doc = "Create //:pkg aliases for bare packages in the generated repo. Useful for migrating from 1.x.",
+        default = False,
     ),
 )
 
@@ -98,35 +106,9 @@ TRANSITION_ATTRS = dict(
     ),
 )
 
-# Group-selection attrs for all_projects tags (group-wide defaults).
-GROUP_ATTRS = dict(
-    optional_groups = attr.string_list(
-        doc = "List of optional dependency groups to install.",
-    ),
-    all_optional_groups = attr.bool(
-        doc = "Install all optional dependencies.",
-    ),
-    development_groups = attr.string_list(
-        doc = "List of development dependency groups to install.",
-    ),
-    all_development_groups = attr.bool(
-        doc = "Install all dev dependencies.",
-    ),
-)
+# (Deleted GROUP_ATTRS)
 
-# Group-selection attrs for member override project tags.
-GROUP_OVERRIDE_ATTRS = dict(
-    default_group = attr.bool(
-        doc = "Whether to install dependencies from the default group.",
-        default = True,
-    ),
-    optional_groups = attr.string_list(
-        doc = "List of optional dependency groups to install (overrides all_projects setting).",
-    ),
-    development_groups = attr.string_list(
-        doc = "List of development dependency groups to install (overrides all_projects setting).",
-    ),
-)
+# (Deleted GROUP_OVERRIDE_ATTRS)
 
 # Attrs for the package tag.
 PACKAGE_ATTRS = dict(
@@ -250,7 +232,7 @@ def _resolve_lock_inline(module_ctx, lock_info, serialized_lock_model, workspace
         always_include_sdist = False,
         annotations_data = annotations_data,
         default_build_dependencies_args = wildcard_pkg.build_dependencies if wildcard_pkg else [],
-        alias_transitive = lock_info.alias_transitive,
+        create_transitive_aliases = lock_info.create_transitive_aliases,
     )
 
     return {
@@ -264,7 +246,6 @@ def _resolve_lock_inline(module_ctx, lock_info, serialized_lock_model, workspace
 def make_format_extension(
         model_type,
         workspace_attrs = None,
-        all_projects_attrs = None,
         repo_attrs = None,
         discover_members_fn = None,
         repo_create_model_fn = None):
@@ -274,8 +255,6 @@ def make_format_extension(
         model_type: The lock model type string (e.g. "uv", "pdm", "poetry", "pylock").
         workspace_attrs: Format-specific attrs for workspace tags.
             Merged with WORKSPACE_COMMON_ATTRS.
-        all_projects_attrs: Format-specific attrs for all_projects tags, or None.
-            Merged with ALL_PROJECTS_COMMON_ATTRS and TRANSITION_ATTRS.
         repo_attrs: Format-specific attrs for member project override tags, or None.
             Merged with REPO_ATTRS, GROUP_OVERRIDE_ATTRS, and TRANSITION_ATTRS.
         discover_members_fn: Function(mctx, lock_file_label) -> [struct(name, path)].
@@ -310,23 +289,18 @@ def make_format_extension(
                     if tag.pypi_indexes:
                         workspace_pypi_indexes[ws_name] = tag.pypi_indexes
 
-            # 2. Process all_projects tags (if supported).
-            if all_projects_attrs != None:
-                for tag in module.tags.all_projects:
-                    validate_transition_attrs(tag, "all_projects")
-                    all_members_tags.append(struct(tag = tag, module = module))
+            # (Deleted all_projects tags processing)
 
             # 3. Process project tags (member overrides).
             for tag in module.tags.repo:
                 validate_transition_attrs(tag, "repo")
                 member_tag = struct(
                     workspace = tag.workspace,
-                    project = getattr(tag, "project", ""),
+                    projects = getattr(tag, "projects", []),
                     repo = getattr(tag, "name", ""),
                     project_file = getattr(tag, "project_file", None),
-                    default_group = getattr(tag, "default_group", True),
-                    optional_groups = getattr(tag, "optional_groups", []),
-                    development_groups = getattr(tag, "development_groups", []),
+                    dependency_groups = getattr(tag, "dependency_groups", ["default"]),
+                    legacy_create_root_aliases = getattr(tag, "legacy_create_root_aliases", False),
                     flags = getattr(tag, "flags", []),
                     constraint_values = getattr(tag, "constraint_values", []),
                     platform = getattr(tag, "platform", None),
@@ -473,7 +447,6 @@ def make_format_extension(
     if repo_attrs != None:
         repo_tag_attrs.update(repo_attrs)
     repo_tag_attrs.update(REPO_ATTRS)
-    repo_tag_attrs.update(GROUP_OVERRIDE_ATTRS)
     repo_tag_attrs.update(TRANSITION_ATTRS)
 
     tag_classes = {
@@ -495,15 +468,7 @@ def make_format_extension(
             attrs = ws_attrs,
         )
 
-    if all_projects_attrs != None:
-        ap_attrs = dict(all_projects_attrs)
-        ap_attrs.update(ALL_PROJECTS_COMMON_ATTRS)
-        ap_attrs.update(GROUP_ATTRS)
-        ap_attrs.update(TRANSITION_ATTRS)
-        tag_classes["all_projects"] = tag_class(
-            doc = "Auto-discover and import all members of a %s workspace." % model_type,
-            attrs = ap_attrs,
-        )
+    # (Deleted all_projects tag class)
 
     return module_extension(
         implementation = _impl,

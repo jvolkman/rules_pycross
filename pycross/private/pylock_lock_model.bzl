@@ -158,57 +158,53 @@ def translate_pylock(lock_dict, project_dict, lock_model):
 
     pins = {}
 
-    # If we have a project file and filters, subset the graph.
-    has_filter = (
-        not lock_model.default_group or
-        getattr(lock_model, "optional_groups", []) or
-        getattr(lock_model, "all_optional_groups", False) or
-        getattr(lock_model, "development_groups", []) or
-        getattr(lock_model, "all_development_groups", False)
-    )
+    dependency_groups = getattr(lock_model, "dependency_groups", ["default"])
+    include_default = "default" in dependency_groups or "*" in dependency_groups
+    has_filter = not include_default or len([g for g in dependency_groups if g != "default"]) > 0
 
     if project_dict and has_filter:
         root_req_names = []
 
         project_section = project_dict.get("project", {})
-        if lock_model.default_group:
+        if include_default:
             for dep_str in project_section.get("dependencies", []):
                 root_req_names.append(extract_pep508_name(dep_str))
 
         optional_deps = project_section.get("optional-dependencies", {})
-        if getattr(lock_model, "all_optional_groups", False):
-            opt_groups = sorted(optional_deps.keys())
-        else:
-            opt_groups = getattr(lock_model, "optional_groups", [])
-
-        for g in opt_groups:
-            if g in optional_deps:
-                for dep_str in optional_deps[g]:
-                    root_req_names.append(extract_pep508_name(dep_str))
-            else:
-                # buildifier: disable=print
-                print("WARNING: Optional group '{}' not found in project file.".format(g))
-
         dev_deps = project_dict.get("dependency-groups", {})
-        if getattr(lock_model, "all_development_groups", False):
-            dev_groups = sorted(dev_deps.keys())
-        else:
-            dev_groups = getattr(lock_model, "development_groups", [])
 
-        for g in dev_groups:
-            if g in dev_deps:
-                for dep_entry in dev_deps[g]:
-                    if type(dep_entry) == "string":
-                        root_req_names.append(extract_pep508_name(dep_entry))
-                    elif type(dep_entry) == "dict" and "include-group" in dep_entry:
-                        inc_group = dep_entry["include-group"]
-                        if inc_group in dev_deps:
-                            for inc_dep in dev_deps[inc_group]:
-                                if type(inc_dep) == "string":
-                                    root_req_names.append(extract_pep508_name(inc_dep))
+        for group in dependency_groups:
+            if group == "default" or group == "*":
+                continue
+
+            kind, _, name = group.partition(":")
+            if kind == "optional":
+                groups_dict = optional_deps
+            elif kind == "development":
+                groups_dict = dev_deps
             else:
-                # buildifier: disable=print
-                print("WARNING: Development group '{}' not found in project file.".format(g))
+                fail("Invalid dependency group format '{}'. Must be 'optional:name' or 'development:name'.".format(group))
+
+            if name == "*":
+                target_names = list(groups_dict.keys())
+            else:
+                target_names = [name]
+
+            for target_name in target_names:
+                if target_name in groups_dict:
+                    entries = groups_dict[target_name]
+                    for entry in entries:
+                        if type(entry) == "string":
+                            root_req_names.append(extract_pep508_name(entry))
+                        elif type(entry) == "dict" and "include-group" in entry:
+                            inc_group = entry["include-group"]
+                            if inc_group in dev_deps:
+                                for inc_dep in dev_deps[inc_group]:
+                                    if type(inc_dep) == "string":
+                                        root_req_names.append(extract_pep508_name(inc_dep))
+                else:
+                    # buildifier: disable=print
+                    print("WARNING: Dependency group '{}:{}' not found in project file.".format(kind, target_name))
 
         # Deduplicate
         root_package_names = {n: True for n in root_req_names}

@@ -7,17 +7,11 @@ load("@rules_testing//lib:util.bzl", "util")
 load("//pycross/private:pylock_lock_model.bzl", "translate_pylock")
 
 def _lock_model(
-        default_group = True,
-        optional_groups = [],
-        all_optional_groups = False,
-        development_groups = [],
-        all_development_groups = False):
+        projects = ["*"],
+        dependency_groups = ["default"]):
     return struct(
-        default_group = default_group,
-        optional_groups = optional_groups,
-        all_optional_groups = all_optional_groups,
-        development_groups = development_groups,
-        all_development_groups = all_development_groups,
+        projects = projects,
+        dependency_groups = dependency_groups,
     )
 
 def _whl(name, sha256, url = None, hashes = None):
@@ -269,7 +263,7 @@ def _test_pylock_wheel_hashes_table(name):
 
 # buildifier: disable=unused-variable
 def _test_pylock_no_default_impl(env, target):
-    result = translate_pylock(_LOCK_WITH_GROUPS, _PROJECT_WITH_GROUPS, _lock_model(default_group = False))
+    result = translate_pylock(_LOCK_WITH_GROUPS, _PROJECT_WITH_GROUPS, _lock_model(dependency_groups = []))
     env.expect.that_int(len(result["packages"])).equals(0)
     env.expect.that_int(len(result["pins"])).equals(0)
 
@@ -284,7 +278,7 @@ def _test_pylock_optional_group_impl(env, target):
     result = translate_pylock(
         _LOCK_WITH_GROUPS,
         _PROJECT_WITH_GROUPS,
-        _lock_model(default_group = False, optional_groups = ["test"]),
+        _lock_model(dependency_groups = ["optional:test"]),
     )
     names = _pkg_names(result)
     env.expect.that_collection(names).contains_at_least(["pytest", "pluggy"])
@@ -302,7 +296,7 @@ def _test_pylock_all_optional_groups_impl(env, target):
     result = translate_pylock(
         _LOCK_WITH_GROUPS,
         _PROJECT_WITH_GROUPS,
-        _lock_model(default_group = False, all_optional_groups = True),
+        _lock_model(dependency_groups = ["optional:*"]),
     )
     names = _pkg_names(result)
     env.expect.that_collection(names).contains_at_least(["pytest", "pluggy", "ruff"])
@@ -319,7 +313,7 @@ def _test_pylock_development_group_impl(env, target):
     result = translate_pylock(
         _LOCK_WITH_GROUPS,
         _PROJECT_WITH_GROUPS,
-        _lock_model(default_group = False, development_groups = ["dev"]),
+        _lock_model(dependency_groups = ["development:dev"]),
     )
     names = _pkg_names(result)
     env.expect.that_collection(names).contains_exactly(["mypy"])
@@ -335,7 +329,7 @@ def _test_pylock_all_development_groups_impl(env, target):
     result = translate_pylock(
         _LOCK_WITH_GROUPS,
         _PROJECT_WITH_GROUPS,
-        _lock_model(default_group = False, all_development_groups = True),
+        _lock_model(dependency_groups = ["development:*"]),
     )
     names = _pkg_names(result)
     env.expect.that_collection(names).contains_at_least(["mypy", "typing-extensions", "ruff"])
@@ -351,7 +345,7 @@ def _test_pylock_include_group_impl(env, target):
     result = translate_pylock(
         _LOCK_WITH_GROUPS,
         _PROJECT_WITH_GROUPS,
-        _lock_model(default_group = False, development_groups = ["all"]),
+        _lock_model(dependency_groups = ["development:all"]),
     )
     names = _pkg_names(result)
     env.expect.that_collection(names).contains_at_least(["ruff", "typing-extensions"])
@@ -368,7 +362,7 @@ def _test_pylock_graph_traversal_impl(env, target):
     result = translate_pylock(
         _LOCK_WITH_GROUPS,
         _PROJECT_WITH_GROUPS,
-        _lock_model(default_group = True, optional_groups = ["test"]),
+        _lock_model(dependency_groups = ["default", "optional:test"]),
     )
     names = _pkg_names(result)
 
@@ -447,7 +441,7 @@ def _test_pylock_no_default_no_groups_empty_impl(env, target):
             "optional-dependencies": {"test": ["pytest"]},
         },
     }
-    result = translate_pylock(lock, project, _lock_model(default_group = False))
+    result = translate_pylock(lock, project, _lock_model(dependency_groups = []))
     env.expect.that_int(len(result["packages"])).equals(0)
     env.expect.that_int(len(result["pins"])).equals(0)
 

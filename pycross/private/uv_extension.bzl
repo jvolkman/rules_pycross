@@ -18,13 +18,9 @@ _UV_WORKSPACE_ATTRS = dict(
     ),
 )
 
-# UV-specific attrs for all_projects tags (none beyond shared).
-_UV_ALL_PROJECTS_ATTRS = dict()
-
 uv = make_format_extension(
     model_type = "uv",
     workspace_attrs = _UV_WORKSPACE_ATTRS,
-    all_projects_attrs = _UV_ALL_PROJECTS_ATTRS,
     discover_members_fn = discover_uv_all_members,
     repo_create_model_fn = repo_create_uv_model,
 )

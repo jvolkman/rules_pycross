@@ -235,7 +235,10 @@ def translate_poetry(project_dict, lock_dict, lock_model):
     poetry_deps = project_dict.get("tool", {}).get("poetry", {}).get("dependencies", {})
     poetry_groups = project_dict.get("tool", {}).get("poetry", {}).get("group", {})
 
-    if lock_model.default_group:
+    dependency_groups = getattr(lock_model, "dependency_groups", ["default"])
+    include_default = "default" in dependency_groups or "*" in dependency_groups
+
+    if include_default:
         if has_project_deps:
             # PEP 508 format from [project.dependencies]
             for dep_str in project_deps:
@@ -252,44 +255,48 @@ def translate_poetry(project_dict, lock_dict, lock_model):
                 if type(pin_info) == "string":
                     pinned_package_specs[pin] = {"": _poetry_constraint_to_pep440(pin_info)}
                 elif type(pin_info) == "dict":
-                    if "path" in pin_info:
+                    if "path" in pin_info or pin_info.get("optional"):
                         continue
                     pinned_package_specs[pin] = {"": _poetry_constraint_to_pep440(pin_info.get("version", "*"))}
 
-    # Optional groups (from [tool.poetry.group.*.dependencies])
-    if getattr(lock_model, "all_optional_groups", False):
-        opt_groups = sorted(poetry_groups.keys())
-    else:
-        opt_groups = getattr(lock_model, "optional_groups", [])
-
-    for group_name in opt_groups:
-        group = poetry_groups.get(group_name, {})
-        for pin, pin_info in group.get("dependencies", {}).items():
-            pin = canonicalize_name(pin)
-            if pin == "python":
-                continue
-            if type(pin_info) == "string":
-                pinned_package_specs[pin] = {"": _poetry_constraint_to_pep440(pin_info)}
-            elif type(pin_info) == "dict":
-                if "path" in pin_info:
-                    continue
-                pinned_package_specs[pin] = {"": _poetry_constraint_to_pep440(pin_info.get("version", "*"))}
-
-    # Also support [project.optional-dependencies] (PEP 508)
     project_optional_deps = project_dict.get("project", {}).get("optional-dependencies", {})
-    if project_optional_deps:
-        if getattr(lock_model, "all_optional_groups", False):
-            pep_opt_groups = sorted(project_optional_deps.keys())
-        else:
-            pep_opt_groups = getattr(lock_model, "optional_groups", [])
 
-        for group_name in pep_opt_groups:
-            if group_name in project_optional_deps:
+    for group in dependency_groups:
+        if group == "default" or group == "*":
+            continue
+
+        kind, _, name = group.partition(":")
+
+        if name == "*":
+            target_names = list(poetry_groups.keys()) + list(project_optional_deps.keys())
+
+            # Deduplicate
+            target_names = {k: True for k in target_names}.keys()
+        else:
+            target_names = [name]
+
+        for group_name in target_names:
+            if group_name in poetry_groups:
+                g = poetry_groups[group_name]
+                for pin, pin_info in g.get("dependencies", {}).items():
+                    pin = canonicalize_name(pin)
+                    if pin == "python":
+                        continue
+                    if type(pin_info) == "string":
+                        pinned_package_specs[pin] = {"": _poetry_constraint_to_pep440(pin_info)}
+                    elif type(pin_info) == "dict":
+                        if "path" in pin_info:
+                            continue
+                        pinned_package_specs[pin] = {"": _poetry_constraint_to_pep440(pin_info.get("version", "*"))}
+            elif group_name in project_optional_deps:
                 for dep_str in project_optional_deps[group_name]:
                     req = parse_pep508_requirement(dep_str)
                     if req.name == "python":
                         continue
                     pinned_package_specs[req.name] = {"": req.specifier}
+            elif name != "*":
+                # buildifier: disable=print
+                print("WARNING: Dependency group '{}:{}' not found in project file.".format(kind, group_name))
 
     # Parse lock file metadata
     lock_python_versions = _parse_python_versions(

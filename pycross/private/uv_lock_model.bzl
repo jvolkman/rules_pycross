@@ -179,17 +179,14 @@ def translate_uv(project_dict, lock_dict, lock_model):
     if lock_version != 1:
         fail("UV lock file version {} is not supported (expected 1)".format(lock_version))
 
-    project_name = canonicalize_name(project_dict["project"]["name"])
-
     # backwards-compat for https://github.com/astral-sh/uv/pull/5861
     distributions_list = lock_dict.get("distribution", [])
     packages_list = lock_dict.get("package", distributions_list)
     requires_python = lock_dict.get("requires-python", "")
 
-    # Extract default-groups and conflicts from [tool.uv]
-    uv_settings = project_dict.get("tool", {}).get("uv", {})
-    uv_default_groups = uv_settings.get("default-groups", [])
+    # Extract conflicts from [tool.uv]
     uv_conflicts = lock_dict.get("conflicts", [])
+    uv_default_groups = project_dict.get("tool", {}).get("uv", {}).get("default-groups", [])
 
     # Parse variant sets from conflicts
     variant_items_by_key = {}  # (package, kind, name) -> variant item dict
@@ -206,11 +203,10 @@ def translate_uv(project_dict, lock_dict, lock_model):
                 kind, vname = "project", ""
             key = (package, kind, vname)
             if key not in variant_items_by_key:
-                is_default = kind == "group" and vname in uv_default_groups
                 item = {"package": package, "kind": kind}
                 if vname:
                     item["name"] = vname
-                if is_default:
+                if kind == "group" and vname in uv_default_groups:
                     item["default"] = True
                 variant_items_by_key[key] = item
             items.append(variant_items_by_key[key])
@@ -229,77 +225,111 @@ def translate_uv(project_dict, lock_dict, lock_model):
             qualified = "group_{}".format(vname)
             group_variant_values[vname] = qualified
 
-    # Find the project package in the lock
-    project_info = None
-    for pkg in packages_list:
-        if canonicalize_name(pkg["name"]) == project_name:
-            project_info = pkg
-            break
-    if not project_info:
-        fail("Project '{}' not found in uv.lock".format(project_name))
+    # Identify projects
+    projects_list = getattr(lock_model, "projects", [])
+    dependency_groups = getattr(lock_model, "dependency_groups", ["default"])
 
-    # Collect requirements from project info
+    workspace_members = {}
+    for pkg in packages_list:
+        if pkg.get("source", {}).get("virtual") == "." or pkg.get("source", {}).get("editable"):
+            workspace_members[canonicalize_name(pkg["name"])] = pkg
+
+    if not workspace_members and packages_list:
+        # Fallback for older uv.lock (< 0.2.35) or non-workspace setups.
+        # It's a single-project lock. Just read the project name from pyproject.toml.
+        pname = project_dict.get("project", {}).get("name")
+        if pname:
+            pname = canonicalize_name(pname)
+            for pkg in packages_list:
+                if canonicalize_name(pkg["name"]) == pname:
+                    workspace_members[pname] = pkg
+                    break
+
+    target_projects = []
+    if "*" in projects_list:
+        target_projects = list(workspace_members.keys())
+    else:
+        target_projects = [canonicalize_name(p) for p in projects_list]
+
+    for p in target_projects:
+        if p not in workspace_members:
+            # Fallback for standalone single-project locks
+            found = False
+            for pkg in packages_list:
+                if canonicalize_name(pkg["name"]) == p:
+                    workspace_members[p] = pkg
+                    found = True
+                    break
+            if not found:
+                fail("Project '{}' not found in uv.lock workspace members.".format(p))
+
+    # Collect requirements
     requirements = []  # list of (req_name, specifier, constraint)
 
-    # Parse project dependencies
-    default_dependencies = project_info.get("dependencies", [])
-    optional_dependencies = project_info.get("optional-dependencies", {})
-    development_dependencies = project_info.get("dev-dependencies", {})
+    include_default = "default" in dependency_groups or "*" in dependency_groups
 
-    if lock_model.default_group:
-        for dep in default_dependencies:
-            dep_name = canonicalize_name(dep["name"])
-            dep_version = dep.get("version", "")
-            dep_extras = dep.get("extra") or dep.get("extras", [])
-            specifier = "=={}".format(dep_version) if dep_version else ""
-            if dep_extras:
-                for extra in dep_extras:
-                    pin_name = "{}[{}]".format(dep_name, canonicalize_name(extra))
-                    requirements.append((pin_name, specifier, ""))
+    for project_name in target_projects:
+        project_info = workspace_members[project_name]
+
+        default_dependencies = project_info.get("dependencies", [])
+        optional_dependencies = project_info.get("optional-dependencies", {})
+        development_dependencies = project_info.get("dev-dependencies", {})
+
+        if include_default:
+            for dep in default_dependencies:
+                dep_name = canonicalize_name(dep["name"])
+                dep_version = dep.get("version", "")
+                dep_extras = dep.get("extra") or dep.get("extras", [])
+                specifier = "=={}".format(dep_version) if dep_version else ""
+                if dep_extras:
+                    for extra in dep_extras:
+                        pin_name = "{}[{}]".format(dep_name, canonicalize_name(extra))
+                        requirements.append((pin_name, specifier, ""))
+                else:
+                    requirements.append((dep_name, specifier, ""))
+
+        # Parse groups
+        for group in dependency_groups:
+            if group == "default" or group == "*":
+                continue
+
+            kind, _, name = group.partition(":")
+            if kind == "optional":
+                groups_dict = optional_dependencies
+                constraint_dict = extra_variant_values
+            elif kind == "development":
+                groups_dict = development_dependencies
+                constraint_dict = group_variant_values
             else:
-                requirements.append((dep_name, specifier, ""))
+                fail("Invalid dependency group format '{}'. Must be 'optional:name' or 'development:name'.".format(group))
 
-    if lock_model.all_optional_groups:
-        opt_groups = sorted(optional_dependencies.keys())
-    else:
-        opt_groups = getattr(lock_model, "optional_groups", [])
-
-    for group_name in opt_groups:
-        if group_name not in optional_dependencies:
-            fail("Non-existent optional dependency group: {}".format(group_name))
-        constraint = extra_variant_values.get(group_name, "")
-        for dep in optional_dependencies[group_name]:
-            dep_name = canonicalize_name(dep["name"])
-            dep_version = dep.get("version", "")
-            dep_extras = dep.get("extra") or dep.get("extras", [])
-            specifier = "=={}".format(dep_version) if dep_version else ""
-            if dep_extras:
-                for extra in dep_extras:
-                    pin_name = "{}[{}]".format(dep_name, canonicalize_name(extra))
-                    requirements.append((pin_name, specifier, constraint))
+            if name == "*":
+                target_names = list(groups_dict.keys())
             else:
-                requirements.append((dep_name, specifier, constraint))
+                target_names = [name]
 
-    if getattr(lock_model, "all_development_groups", False):
-        dev_groups = sorted(development_dependencies.keys())
-    else:
-        dev_groups = getattr(lock_model, "development_groups", [])
+            for t_name in target_names:
+                if t_name not in groups_dict:
+                    # It's a warning if the user explicitly requested a wildcard that matches nothing,
+                    # but if they explicitly ask for a specific group and it's missing, it should be an error.
+                    if name != "*":
+                        fail("Project '{}' does not have {} group '{}'.".format(project_name, kind, t_name))
+                    continue
 
-    for group_name in dev_groups:
-        if group_name not in development_dependencies:
-            fail("Non-existent development dependency group: {}".format(group_name))
-        constraint = group_variant_values.get(group_name, "")
-        for dep in development_dependencies[group_name]:
-            dep_name = canonicalize_name(dep["name"])
-            dep_version = dep.get("version", "")
-            dep_extras = dep.get("extra") or dep.get("extras", [])
-            specifier = "=={}".format(dep_version) if dep_version else ""
-            if dep_extras:
-                for extra in dep_extras:
-                    pin_name = "{}[{}]".format(dep_name, canonicalize_name(extra))
-                    requirements.append((pin_name, specifier, constraint))
-            else:
-                requirements.append((dep_name, specifier, constraint))
+                constraint = constraint_dict.get(t_name, "")
+                for dep in groups_dict[t_name]:
+                    dep_name = canonicalize_name(dep["name"])
+                    dep_version = dep.get("version", "")
+                    dep_extras = dep.get("extra") or dep.get("extras", [])
+                    specifier = "=={}".format(dep_version) if dep_version else ""
+                    if dep_extras:
+                        for extra in dep_extras:
+                            pin_name = "{}[{}]".format(dep_name, canonicalize_name(extra))
+                            requirements.append((pin_name, specifier, constraint))
+                    else:
+                        requirements.append((dep_name, specifier, constraint))
+
+    # End collect requirements
 
     # Build pinned specs
     pinned_package_specs = {}
@@ -453,6 +483,8 @@ def repo_create_uv_model(rctx, project_file, lock_file, lock_model, output):
     lock_path = rctx.path(lock_file)
     if not lock_path.exists:
         fail("Lock file not found: {}. Ensure uv.lock exists at the expected location.".format(lock_file))
+
+    # (project_file only used to read default-groups)
     project_dict = decode(rctx.read(project_path))
     lock_dict = decode(rctx.read(lock_path))
     raw_lock_data = translate_uv(project_dict, lock_dict, lock_model)

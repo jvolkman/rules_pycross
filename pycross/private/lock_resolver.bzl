@@ -448,7 +448,7 @@ def resolve(
         always_include_sdist = False,
         annotations_data = None,
         default_build_dependencies_args = None,
-        alias_transitive = False):
+        create_transitive_aliases = False):
     """Resolves dependencies from lock model data.
 
     Args:
@@ -458,7 +458,7 @@ def resolve(
         always_include_sdist: Whether to always include sdist.
         annotations_data: Annotations data.
         default_build_dependencies_args: Default build dependencies args.
-        alias_transitive: Whether to alias transitive single-version packages.
+        create_transitive_aliases: Whether to alias transitive single-version packages.
 
     Returns:
         Dictionary of resolved packages.
@@ -563,7 +563,7 @@ def resolve(
     sorted_repo_keys = sorted(repos.keys())
     repos = {k: repos[k] for k in sorted_repo_keys}
 
-    if alias_transitive:
+    if create_transitive_aliases:
         reachable_keys = _compute_reachable_keys(pins, packages_by_package_key)
         resolved_versions_by_name = {}
         for entry in resolved_packages:

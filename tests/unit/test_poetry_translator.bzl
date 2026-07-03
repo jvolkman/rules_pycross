@@ -7,13 +7,11 @@ load("@rules_testing//lib:util.bzl", "util")
 load("//pycross/private:poetry_lock_model.bzl", "translate_poetry")
 
 def _lock_model(
-        default_group = True,
-        optional_groups = [],
-        all_optional_groups = False):
+        projects = ["*"],
+        dependency_groups = ["default"]):
     return struct(
-        default_group = default_group,
-        optional_groups = optional_groups,
-        all_optional_groups = all_optional_groups,
+        projects = projects,
+        dependency_groups = dependency_groups,
     )
 
 def _whl(name, sha256 = "1234"):

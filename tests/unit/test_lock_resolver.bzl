@@ -80,7 +80,7 @@ def _test_basic_resolution(name):
     analysis_test(name = name, target = name + "_subject", impl = _test_basic_resolution_impl)
 
 # buildifier: disable=unused-variable
-def _test_alias_transitive_with_extras_impl(env, target):
+def _test_create_transitive_aliases_with_extras_impl(env, target):
     lock_model_data = {
         "packages": {
             "selenium@1.0": {
@@ -103,15 +103,15 @@ def _test_alias_transitive_with_extras_impl(env, target):
         },
     }
 
-    res = resolve(lock_model_data, alias_transitive = True)
+    res = resolve(lock_model_data, create_transitive_aliases = True)
 
     # Should have alias for urllib3 because it is resolved (transitively) and has only one version.
     env.expect.that_collection(res.pins.keys()).contains_exactly(["selenium", "urllib3"])
     env.expect.that_dict(res.pins["urllib3"]).contains_exactly({"": "urllib3@2.2.3"})
 
-def _test_alias_transitive_with_extras(name):
+def _test_create_transitive_aliases_with_extras(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
-    analysis_test(name = name, target = name + "_subject", impl = _test_alias_transitive_with_extras_impl)
+    analysis_test(name = name, target = name + "_subject", impl = _test_create_transitive_aliases_with_extras_impl)
 
 # buildifier: disable=unused-variable
 def _test_build_dependencies_override_impl(env, target):
@@ -725,7 +725,7 @@ def _test_version_isolation_impl(env, target):
     }
 
     # Wait, how does Starlark resolve handle pins dictionary?
-    # Let's check test_alias_transitive_with_extras_impl
+    # Let's check test_create_transitive_aliases_with_extras_impl
     # "pins": {"selenium": "selenium@1.0"}
     # Let's look at python test_version_isolation again.
     # pins = {canonicalize_name("foo"): {"": PackageKey.from_parts(...), "v2": PackageKey.from_parts(...)}}
@@ -1801,7 +1801,7 @@ def lock_resolver_test_suite(name):
         name = name,
         tests = [
             _test_basic_resolution,
-            _test_alias_transitive_with_extras,
+            _test_create_transitive_aliases_with_extras,
             _test_build_dependencies_override,
             _test_synthesized_deps,
             _test_cycle_two_nodes,

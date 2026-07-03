@@ -41,15 +41,21 @@ pdm.workspace(
     name = "shared",
     lock_file = "//:pdm.lock",
 )
-pdm.all_projects(
-    repo_pattern = "lock_{member}",
+pdm.repo(
+    name = "lock_all",
+    projects = ["*"],
     workspace = "shared",
 )
 
 # Override project-a's repo name; project-b uses the pattern default (lock_project_b).
 pdm.repo(
     name = "lock_a",
-    project = "project-a",
+    projects = ["project-a"],
+    workspace = "shared",
+)
+pdm.repo(
+    name = "lock_project_b",
+    projects = ["project-b"],
     workspace = "shared",
 )
 
@@ -59,4 +65,4 @@ pdm.package(
     install_exclude_globs = ["test_regex.py"],
     workspace = "shared",
 )
-use_repo(pdm, "lock_a", "lock_project_b")
+use_repo(pdm, "lock_a", "lock_all", "lock_project_b")
