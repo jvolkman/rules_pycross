@@ -265,7 +265,11 @@ def expand_pins_for_build_repo(resolved_locks_by_member):
     merged_pins = {}
     for _, resolved_lock in resolved_locks_by_member.items():
         all_packages.update(resolved_lock.get("packages", {}))
-        merged_pins.update(resolved_lock.get("pins", {}))
+        for pin_name, pin_dict in resolved_lock.get("pins", {}).items():
+            if pin_name not in merged_pins:
+                merged_pins[pin_name] = dict(pin_dict)
+            else:
+                merged_pins[pin_name].update(pin_dict)
 
     versions_by_name = {}
     for pkg_key in all_packages.keys():
