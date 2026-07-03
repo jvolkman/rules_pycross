@@ -47,9 +47,9 @@ uv.all_projects(
 )
 
 # Override project-a's repo name; project-b uses the pattern default (lock_project_b).
-uv.project(
-    name = "project-a",
-    repo = "lock_a",
+uv.repo(
+    name = "lock_a",
+    project = "project-a",
     workspace = "shared",
 )
 
@@ -66,14 +66,14 @@ uv.workspace(
     name = "standalone",
     lock_file = "//:uv.lock",
 )
-uv.project(
-    name = "project-a",
-    repo = "lock_standalone_a",
+uv.repo(
+    name = "lock_standalone_a",
+    project = "project-a",
     workspace = "standalone",
 )
-uv.project(
-    name = "project-b",
-    repo = "lock_standalone_b",
+uv.repo(
+    name = "lock_standalone_b",
+    project = "project-b",
     workspace = "standalone",
 )
 use_repo(uv, "lock_standalone_a", "lock_standalone_b")

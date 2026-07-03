@@ -67,7 +67,7 @@ def _apply_annotation(ann, versions_by_name, all_package_keys):
 
     return struct(
         build_dependencies = build_deps,
-        build_repo = ann.get("build_repo"),
+        build_workspace = ann.get("build_workspace"),
         build_target = ann.get("build_target"),
         always_build = ann.get("always_build", False),
         ignore_dependencies = ignore_deps,
@@ -211,7 +211,7 @@ def _create_package_resolver(pkg_key, pkg, ann, default_build_dependencies, cont
         "files": pkg.get("files", []),
         "sdist_file": sdist_file,
         "build_target": ann.build_target if ann else None,
-        "build_repo": ann.build_repo if ann else None,
+        "build_workspace": ann.build_workspace if ann else None,
         "always_build": always_build,
         "build_dependencies": build_dependencies,
         "install_exclude_globs": list(ann.install_exclude_globs.keys()) if ann else [],

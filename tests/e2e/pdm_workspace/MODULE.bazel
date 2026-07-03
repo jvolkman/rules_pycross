@@ -47,9 +47,9 @@ pdm.all_projects(
 )
 
 # Override project-a's repo name; project-b uses the pattern default (lock_project_b).
-pdm.project(
-    name = "project-a",
-    repo = "lock_a",
+pdm.repo(
+    name = "lock_a",
+    project = "project-a",
     workspace = "shared",
 )
 

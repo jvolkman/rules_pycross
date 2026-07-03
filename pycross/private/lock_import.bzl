@@ -33,7 +33,6 @@ def _generate_resolved_lock_repo(lock_info, serialized_lock_model):
         "name": repo_name,
         "lock_model": serialized_lock_model,
         "default_alias_single_version": lock_info.default_alias_single_version,
-        "default_build_dependencies": lock_info.default_build_dependencies,
         "disallow_builds": lock_info.disallow_builds,
         "local_wheels": lock_info.local_wheels,
         "annotations": {},
@@ -42,8 +41,6 @@ def _generate_resolved_lock_repo(lock_info, serialized_lock_model):
     for package_name, package in lock_info.packages.items():
         args["annotations"][package_name] = package_annotation(
             always_build = package.always_build,
-            build_dependencies = package.build_dependencies,
-            build_repo = package.build_repo,
             build_target = str(package.build_target) if package.build_target else None,
             ignore_dependencies = package.ignore_dependencies,
             install_exclude_globs = package.install_exclude_globs,
@@ -66,8 +63,6 @@ def _lock_struct(tag):
         default_alias_single_version = tag.default_alias_single_version,
         local_wheels = tag.local_wheels,
         disallow_builds = tag.disallow_builds,
-        default_build_dependencies = tag.default_build_dependencies,
-        build_repo = tag.build_repo,
         packages = {},
         flags = getattr(tag, "flags", []),
         constraint_values = getattr(tag, "constraint_values", []),
@@ -157,8 +152,6 @@ def _lock_import_impl(module_ctx):
         resolved_lock_repo_file = _generate_resolved_lock_repo(repo_info, lock_model_structs[repo_name])
         resolved_lock_files[repo_info.repo_name] = resolved_lock_repo_file
         workspace_memberships[repo_info.repo_name] = repo_info.repo_name
-        if repo_info.build_repo:
-            workspace_build_repos[repo_info.repo_name] = repo_info.build_repo
 
         if repo_info.flags:
             repo_flags[repo_info.repo_name] = json.encode(repo_info.flags)

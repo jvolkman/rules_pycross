@@ -89,9 +89,6 @@ RESOLVE_ATTRS = dict(
     always_include_sdist = attr.bool(
         doc = "Always include an entry for a package's sdist if one exists.",
     ),
-    default_build_dependencies = attr.string_list(
-        doc = "A list of package keys (name or name@version) that will be used as default build dependencies.",
-    ),
 )
 
 CREATE_REPOS_ATTRS = dict(
@@ -182,11 +179,6 @@ def handle_resolve_attrs(attrs, local_wheel_names_and_labels):
 
     for wheel_name, wheel_label in local_wheel_names_and_labels:
         args.extend(["--local-wheel", wheel_name, wheel_label])
-
-    # for dep in attrs.default_build_dependencies:
-    if attrs.default_build_dependencies:
-        args.append("--default-build-dependencies")
-        args.extend(attrs.default_build_dependencies)
 
     return args
 
@@ -371,12 +363,6 @@ COMMON_IMPORT_ATTRS = dict(
     disallow_builds = attr.bool(
         doc = "If True, only pre-built wheels are allowed.",
     ),
-    default_build_dependencies = attr.string_list(
-        doc = "A list of package keys (name or name@version) that will be used as default build dependencies.",
-    ),
-    build_repo = attr.string(
-        doc = "Optional default repo to use for resolving sdist build dependencies.",
-    ),
 ) | TRANSITION_ATTRS
 
 # Attrs common to import_uv_workspace (workspace-level settings inherited by all members).
@@ -394,12 +380,6 @@ WORKSPACE_COMMON_ATTRS = dict(
     ),
     disallow_builds = attr.bool(
         doc = "If True, only pre-built wheels are allowed.",
-    ),
-    default_build_dependencies = attr.string_list(
-        doc = "A list of package keys (name or name@version) that will be used as default build dependencies.",
-    ),
-    build_repo = attr.string(
-        doc = "Optional default repo to use for resolving sdist build dependencies.",
     ),
 )
 
@@ -429,7 +409,7 @@ PACKAGE_ATTRS = dict(
     build_dependencies = attr.string_list(
         doc = "A list of additional package keys (name or name@version) to use when building this package from source.",
     ),
-    build_repo = attr.string(
+    build_workspace = attr.string(
         doc = "Optional repo to use for resolving sdist build dependencies for this package.",
     ),
     ignore_dependencies = attr.string_list(

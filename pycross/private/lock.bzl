@@ -65,8 +65,6 @@ def _resolve_lock_inline(module_ctx, lock_info, serialized_lock_model, workspace
     for package_name, package in all_packages.items():
         annotations_data[package_name] = json.decode(package_annotation(
             always_build = package.always_build,
-            build_dependencies = package.build_dependencies,
-            build_repo = package.build_repo,
             build_target = str(package.build_target) if package.build_target else None,
             ignore_dependencies = package.ignore_dependencies,
             install_exclude_globs = package.install_exclude_globs,
@@ -90,7 +88,6 @@ def _resolve_lock_inline(module_ctx, lock_info, serialized_lock_model, workspace
         remote_wheels = {},
         always_include_sdist = False,
         annotations_data = annotations_data,
-        default_build_dependencies_args = lock_info.default_build_dependencies,
         default_alias_single_version = lock_info.default_alias_single_version,
     )
 

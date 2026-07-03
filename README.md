@@ -27,10 +27,10 @@ Add your lock file import to `MODULE.bazel`:
 ```python
 uv = use_extension("@rules_pycross//pycross/extensions:uv.bzl", "uv")
 
-uv.project(
+uv.repo(
     lock_file = "//:uv.lock",
     project_file = "//:pyproject.toml",
-    repo = "pypi",
+    name = "pypi",
 )
 use_repo(uv, "pypi")
 ```
@@ -170,14 +170,14 @@ Individual members can override the repo name or dependency groups using `uv_mem
 
 ```python
 # Override project-a's repo name (instead of the pattern-generated 'lock_project_a')
-uv.project(
+uv.repo(
     workspace = "shared",
     name = "project-a",
-    repo = "lock_a",
+    name = "lock_a",
 )
 
 # Include specific optional groups only for project-b
-uv.project(
+uv.repo(
     workspace = "shared",
     name = "project-b",
     optional_groups = ["grpc", "testing"],
@@ -220,15 +220,15 @@ uv.package(
 If your projects use separate lock files (not a shared workspace lock), each `import_uv` call creates its own isolated workspace:
 
 ```python
-uv.project(
+uv.repo(
     lock_file = "//frontend:uv.lock",
     project_file = "//frontend:pyproject.toml",
-    repo = "frontend_deps",
+    name = "frontend_deps",
 )
-uv.project(
+uv.repo(
     lock_file = "//ml:uv.lock",
     project_file = "//ml:pyproject.toml",
-    repo = "ml_deps",
+    name = "ml_deps",
 )
 use_repo(uv, "frontend_deps", "ml_deps")
 ```
@@ -462,7 +462,7 @@ There are three ways to specify the transition:
 **1. Using `flags` — embed `--flag=value` settings into a generated platform:**
 
 ```python
-uv.project(
+uv.repo(
     workspace = "shared",
     name = "ml-pipeline",
     flags = [
@@ -474,7 +474,7 @@ uv.project(
 **2. Using `constraint_values` — generate a platform with specific constraints:**
 
 ```python
-uv.project(
+uv.repo(
     workspace = "shared",
     name = "ml-pipeline",
     constraint_values = [
@@ -487,7 +487,7 @@ uv.project(
 **3. Using `platform` — reference an existing platform target directly:**
 
 ```python
-uv.project(
+uv.repo(
     workspace = "shared",
     name = "ml-pipeline",
     platform = "@//platforms:linux_cuda",

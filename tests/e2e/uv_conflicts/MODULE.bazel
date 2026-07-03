@@ -42,7 +42,7 @@ uv.workspace(
     name = "shared",
     lock_file = "//:uv.lock",
 )
-uv.project(
+uv.repo(
     name = "project",
     development_groups = [
         "group-a",
@@ -52,11 +52,11 @@ uv.project(
         "variant-a",
         "variant-b",
     ],
-    repo = "project",
+    project = "project",
     workspace = "shared",
 )
-uv.project(
-    name = "project",
+uv.repo(
+    name = "project_pinned",
     constraint_values = [
         "@platforms//os:linux",
         "@platforms//cpu:x86_64",
@@ -72,7 +72,7 @@ uv.project(
         "variant-a",
         "variant-b",
     ],
-    repo = "project_pinned",
+    project = "project",
     workspace = "shared",
 )
 use_repo(uv, "project", "project_pinned")

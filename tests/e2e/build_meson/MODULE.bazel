@@ -39,34 +39,37 @@ pycross.configure_toolchains(
 )
 
 uv = use_extension("@rules_pycross//pycross/extensions:uv.bzl", "uv")
-uv.project(
+uv.workspace(
+    name = "uv",
     default_alias_single_version = True,
     lock_file = "//:uv.lock",
+)
+uv.repo(
     project_file = "//:pyproject.toml",
-    repo = "uv",
+    workspace = "uv",
 )
 uv.package(
     name = "numpy",
     always_build = True,
     build_target = "@//deps/numpy:wheel",
-    repo = "uv",
+    workspace = "uv",
 )
 uv.package(
     name = "pandas",
     always_build = True,
     build_target = "@//deps/pandas:wheel",
-    repo = "uv",
+    workspace = "uv",
 )
 uv.package(
     name = "contourpy",
     always_build = True,
     build_target = "@//deps/contourpy:wheel",
-    repo = "uv",
+    workspace = "uv",
 )
 uv.package(
     name = "pywavelets",
     always_build = True,
     build_target = "@//deps/pywavelets:wheel",
-    repo = "uv",
+    workspace = "uv",
 )
 use_repo(uv, "uv")

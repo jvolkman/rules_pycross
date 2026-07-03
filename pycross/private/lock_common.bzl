@@ -42,7 +42,7 @@ def validate_transition_attrs(tag, tag_name):
 def package_annotation(
         always_build = False,
         build_dependencies = [],
-        build_repo = None,
+        build_workspace = None,
         build_target = None,
         ignore_dependencies = [],
         install_exclude_globs = [],
@@ -58,7 +58,7 @@ def package_annotation(
     return json.encode(struct(
         always_build = always_build,
         build_dependencies = build_dependencies,
-        build_repo = build_repo,
+        build_workspace = build_workspace,
         build_target = build_target,
         ignore_dependencies = ignore_dependencies,
         install_exclude_globs = install_exclude_globs,
@@ -118,11 +118,9 @@ def workspace_lock_struct(ws_tag, repo_name, workspace_name, transition_attrs):
     return struct(
         repo_name = repo_name,
         workspace = workspace_name,
-        build_repo = ws_tag.build_repo,
         default_alias_single_version = ws_tag.default_alias_single_version,
         local_wheels = ws_tag.local_wheels,
         disallow_builds = ws_tag.disallow_builds,
-        default_build_dependencies = ws_tag.default_build_dependencies,
         packages = {},
         flags = transition_attrs.get("flags", []),
         constraint_values = transition_attrs.get("constraint_values", []),
@@ -134,7 +132,7 @@ def normalize_package_tag(tag):
     return struct(
         always_build = tag.always_build,
         build_dependencies = tag.build_dependencies,
-        build_repo = tag.build_repo,
+        build_workspace = tag.build_workspace,
         build_target = tag.build_target,
         ignore_dependencies = tag.ignore_dependencies,
         install_exclude_globs = tag.install_exclude_globs,
@@ -471,40 +469,106 @@ def process_workspaces(
         discovered = discover_members_fn(module_ctx, ws_info.tag.lock_file)
         workspace_discovered_members[name] = {m.name: m for m in discovered}
 
-    # Collect per-member overrides indexed by (workspace, project)
+    # Count tags per workspace
+    workspace_project_count = {name: 0 for name in workspaces}
+    workspace_has_all_projects = {name: False for name in workspaces}
+
+    for tag_info in member_tags:
+        if tag_info.tag.workspace in workspace_project_count:
+            workspace_project_count[tag_info.tag.workspace] += 1
+        else:
+            fail("project tag references non-existent workspace: '{}'".format(tag_info.tag.workspace))
+
+    for tag_info in all_members_tags:
+        if tag_info.tag.workspace in workspace_has_all_projects:
+            workspace_has_all_projects[tag_info.tag.workspace] = True
+        else:
+            fail("all_projects tag references non-existent workspace: '{}'".format(tag_info.tag.workspace))
+
+    # Apply Defaulting Rules and collect per-member overrides indexed by (workspace, project)
     member_overrides = {}
+
+    # Rule 1: Auto-creation
+    for ws_name, ws_info in workspaces.items():
+        p_count = workspace_project_count[ws_name]
+        a_present = workspace_has_all_projects[ws_name]
+
+        if p_count == 0 and not a_present:
+            discovered = workspace_discovered_members[ws_name]
+            if len(discovered) == 1:
+                # Auto-create implicit project
+                project_name = list(discovered.keys())[0]
+                implicit_tag = struct(
+                    workspace = ws_name,
+                    project = project_name,
+                    repo = ws_name,
+                    project_file = None,
+                    default_group = True,
+                    optional_groups = [],
+                    development_groups = [],
+                    flags = [],
+                    constraint_values = [],
+                    platform = None,
+                )
+                member_overrides[(ws_name, project_name)] = [struct(tag = implicit_tag, module = ws_info.module)]
+            elif len(discovered) > 1:
+                fail("workspace '{}' contains multiple projects but has no project or all_projects tags.".format(ws_name))
+            else:
+                fail("workspace '{}' contains no projects.".format(ws_name))
+
     for tag_info in member_tags:
         tag = tag_info.tag
-        module = tag_info.module
-        if tag.workspace not in workspaces:
-            fail("member tag references non-existent workspace: '{}'".format(tag.workspace))
+        ws_name = tag.workspace
+        p_count = workspace_project_count[ws_name]
+        a_present = workspace_has_all_projects[ws_name]
 
         # If project is omitted, infer from discovered members.
         project = tag.project
         if not project:
-            discovered = workspace_discovered_members[tag.workspace]
+            discovered = workspace_discovered_members[ws_name]
             if len(discovered) == 1:
                 project = list(discovered.keys())[0]
             elif len(discovered) == 0:
-                fail("no members discovered in workspace '{}'; cannot infer project".format(tag.workspace))
+                fail("no members discovered in workspace '{}'; cannot infer project".format(ws_name))
             else:
-                fail("workspace '{}' has {} members ({}); 'project' is required to disambiguate".format(
-                    tag.workspace,
+                fail("workspace '{}' has {} members; 'project' is required to disambiguate".format(
+                    ws_name,
                     len(discovered),
-                    ", ".join(sorted(discovered.keys())),
                 ))
 
-        key = (tag.workspace, project)
+        # Default repo name based on rules
+        repo = tag.repo
+        if not repo:
+            if p_count == 1 and not a_present:
+                repo = ws_name
+            else:
+                fail("repo is required on project tags for workspace '{}' because it is in explicit mode (multiple project tags or all_projects present)".format(ws_name))
+
+        # We must create a new tag struct since we might have inferred `project` and `repo`
+        new_tag = struct(
+            workspace = tag.workspace,
+            project = project,
+            repo = repo,
+            project_file = tag.project_file,
+            default_group = tag.default_group,
+            optional_groups = tag.optional_groups,
+            development_groups = tag.development_groups,
+            flags = tag.flags,
+            constraint_values = tag.constraint_values,
+            platform = tag.platform,
+        )
+        new_tag_info = struct(tag = new_tag, module = tag_info.module)
+
+        key = (ws_name, project)
         if key not in member_overrides:
             member_overrides[key] = []
 
         # Check for duplicate repo names within the same project override
         for existing in member_overrides[key]:
-            if existing.tag.repo and tag.repo and existing.tag.repo == tag.repo:
-                fail("Duplicate member override for project '{}' with repo '{}' in workspace '{}'".format(project, tag.repo, tag.workspace))
+            if existing.tag.repo and new_tag.repo and existing.tag.repo == new_tag.repo:
+                fail("Duplicate member override for project '{}' with repo '{}' in workspace '{}'".format(project, new_tag.repo, ws_name))
 
-        member_overrides[key].append(tag_info)
-
+        member_overrides[key].append(new_tag_info)
     processed_members = {}  # (workspace, project) -> True
 
     # Process bulk member imports
@@ -691,8 +755,10 @@ def process_import_tags(module_ctx):
 
     for repo_info in lock_repos.values():
         workspace_memberships[repo_info.repo_name] = repo_info.workspace
-        if repo_info.build_repo:
-            workspace_build_repos[repo_info.workspace] = repo_info.build_repo
+        ws_pkgs = workspace_packages.get(repo_info.workspace, {})
+        wildcard_pkg = ws_pkgs.get("*")
+        if wildcard_pkg and wildcard_pkg.build_workspace:
+            workspace_build_repos[repo_info.workspace] = wildcard_pkg.build_workspace
 
         if repo_info.flags:
             repo_flags[repo_info.repo_name] = json.encode(repo_info.flags)

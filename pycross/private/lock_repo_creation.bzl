@@ -77,17 +77,6 @@ def create_repos(
                 norm_pkg = pypackaging.utils.canonicalize_name(pkg_name)
                 override_configs.setdefault(key, {}).setdefault(norm_pkg, {})[backend_name] = backend_attrs
 
-    # Validate that repo: overrides don't target workspace members.
-    for key in override_configs:
-        if key.startswith("repo:"):
-            repo_name = key[len("repo:"):]
-            ws = workspace_memberships.get(repo_name)
-            if ws and ws != repo_name:
-                fail(
-                    "Build system override targets repo '{}' which is a member of workspace '{}'. ".format(repo_name, ws) +
-                    "Use workspace = '{}' instead.".format(ws),
-                )
-
     # Pre-pathify all lock files to minimize restart time (only when reading from files).
     if not resolved_locks:
         for lock_file in all_locks.values():
@@ -172,9 +161,9 @@ def create_repos(
         # Every repo has a workspace.
         workspace_name = workspace_memberships.get(repo_name, repo_name)
 
-        ws_build_repo = workspace_build_repos.get(workspace_name)
-        if ws_build_repo:
-            lock_repo_for_deps = "{}__pkgs".format(workspace_memberships.get(ws_build_repo, ws_build_repo))
+        ws_build_workspace = workspace_build_repos.get(workspace_name)
+        if ws_build_workspace:
+            lock_repo_for_deps = "{}__pkgs".format(ws_build_workspace)
         else:
             lock_repo_for_deps = "{}__pkgs".format(workspace_name)
 
@@ -213,9 +202,9 @@ def create_repos(
             whldir_norm_name = sanitize_name(pkg_name_part)
             whldir_name = "{}-{}.whldir".format(whldir_norm_name, pkg_version)
 
-            pkg_build_repo = pkg.get("build_repo") or ws_build_repo
-            if pkg_build_repo:
-                pkg_lock_repo_for_deps = "{}__pkgs".format(workspace_memberships.get(pkg_build_repo, pkg_build_repo))
+            pkg_build_workspace = pkg.get("build_workspace") or ws_build_workspace
+            if pkg_build_workspace:
+                pkg_lock_repo_for_deps = "{}__pkgs".format(pkg_build_workspace)
             else:
                 pkg_lock_repo_for_deps = "{}__pkgs".format(workspace_name)
 
@@ -250,11 +239,8 @@ def create_repos(
                     for b_name, b_attrs in source.items():
                         pkg_overrides[b_name] = dict(b_attrs)
 
-            ws_key = "workspace:" + workspace_name
+            ws_key = workspace_name
             _apply_scope_overrides(ws_key)
-
-            repo_key = "repo:" + repo_name
-            _apply_scope_overrides(repo_key)
 
             if pkg_overrides:
                 sdist_repo_attrs["override_backend_configs"] = json.encode(pkg_overrides)
@@ -324,7 +310,7 @@ def create_repos(
 
         # Compute per-package override configs for package repo hooks.
         ws_overrides = {}  # pkg_name -> {backend_name -> backend_attrs}
-        keys = ["workspace:" + workspace_name] + ["repo:" + member for member in member_repos]
+        keys = [workspace_name]
         for key in keys:
             if key in override_configs:
                 for pkg_name, backends in override_configs[key].items():
@@ -349,7 +335,7 @@ def create_repos(
         package_repo(**package_repo_attrs)
 
         # Create thin repos for each workspace member, passing conflict info.
-        thin_build_repo = workspace_build_repos.get(workspace_name)
+        thin_build_workspace = workspace_build_repos.get(workspace_name)
         for member in member_repos:
             thin_repo_attrs = dict(
                 name = member,
@@ -359,8 +345,8 @@ def create_repos(
                 conflicts = conflicts,
                 backend_configs = backend_configs_json,
             )
-            if thin_build_repo:
-                thin_repo_attrs["workspace_build_repo"] = "{}__pkgs".format(workspace_memberships.get(thin_build_repo, thin_build_repo))
+            if thin_build_workspace:
+                thin_repo_attrs["workspace_build_repo"] = "{}__pkgs".format(thin_build_workspace)
 
             if member in repo_flags:
                 flags = repo_flags[member]
@@ -373,7 +359,7 @@ def create_repos(
 
             # Compute per-member override configs for thin repo hooks.
             member_overrides = {}  # pkg_name -> {backend_name -> backend_attrs}
-            ws_key = "workspace:" + workspace_name
+            ws_key = workspace_name
             if ws_key in override_configs:
                 for pkg_name, backends in override_configs[ws_key].items():
                     for b_name, b_attrs in backends.items():
