@@ -275,7 +275,6 @@ def make_format_extension(
         # Collect tags per module.
         workspace_tags = []
         member_tags = []
-        all_members_tags = []
 
         # Track per-workspace pypi_indexes (from workspace or standalone project tags).
         workspace_pypi_indexes = {}
@@ -315,7 +314,6 @@ def make_format_extension(
             lock_model_structs,
             workspace_tags,
             member_tags,
-            all_members_tags,
             discover_members_fn,
             model_type,
             root_direct_deps,
