@@ -32,7 +32,7 @@ def _generate_resolved_lock_repo(lock_info, serialized_lock_model):
     args = {
         "name": repo_name,
         "lock_model": serialized_lock_model,
-        "default_alias_single_version": lock_info.default_alias_single_version,
+        "alias_transitive": lock_info.alias_transitive,
         "disallow_builds": lock_info.disallow_builds,
         "local_wheels": lock_info.local_wheels,
         "annotations": {},
@@ -60,7 +60,7 @@ def _generate_resolved_lock_repo(lock_info, serialized_lock_model):
 def _lock_struct(tag):
     return struct(
         repo_name = tag.repo,
-        default_alias_single_version = tag.default_alias_single_version,
+        alias_transitive = tag.alias_transitive,
         local_wheels = tag.local_wheels,
         disallow_builds = tag.disallow_builds,
         packages = {},
@@ -143,7 +143,7 @@ def _lock_import_impl(module_ctx):
 
     # Generate the resolved lock repos.
     workspace_memberships = {}
-    workspace_build_repos = {}
+    default_build_repos = {}
     repo_flags = {}
     repo_constraint_values = {}
     repo_platforms = {}
@@ -164,7 +164,7 @@ def _lock_import_impl(module_ctx):
         name = "lock_import_repos_hub",
         repo_files = resolved_lock_files,
         workspace_memberships = workspace_memberships,
-        workspace_build_repos = workspace_build_repos,
+        default_build_repos = default_build_repos,
         root_repos = root_direct_deps,
         repo_flags = repo_flags,
         repo_constraint_values = repo_constraint_values,

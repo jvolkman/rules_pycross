@@ -34,9 +34,6 @@ WORKSPACE_COMMON_ATTRS = dict(
         allow_single_file = True,
         mandatory = True,
     ),
-    default_alias_single_version = attr.bool(
-        doc = "Generate aliases for all packages that have a single version in the lock file.",
-    ),
     local_wheels = attr.label_list(
         doc = "A list of local .whl files to consider when processing lock files.",
     ),
@@ -62,6 +59,9 @@ ALL_PROJECTS_COMMON_ATTRS = dict(
     excluded_projects = attr.string_list(
         doc = "Project names to skip during auto-discovery.",
     ),
+    alias_transitive = attr.bool(
+        doc = "Generate aliases for transitive single-version packages in generated repos.",
+    ),
 )
 
 # Shared attrs for member override project tags (within workspace).
@@ -79,6 +79,9 @@ REPO_ATTRS = dict(
     project_file = attr.label(
         doc = "Override auto-discovered pyproject.toml path.",
         allow_single_file = True,
+    ),
+    alias_transitive = attr.bool(
+        doc = "Generate aliases for transitive single-version packages in this repo.",
     ),
 )
 
@@ -146,7 +149,7 @@ PACKAGE_ATTRS = dict(
     build_dependencies = attr.string_list(
         doc = "A list of additional package keys to use when building this package from source.",
     ),
-    build_workspace = attr.string(
+    build_repo = attr.string(
         doc = "Optional repo to use for resolving sdist build dependencies for this package.",
     ),
     ignore_dependencies = attr.string_list(
@@ -222,7 +225,7 @@ def _resolve_lock_inline(module_ctx, lock_info, serialized_lock_model, workspace
         annotations_data[package_name] = json.decode(package_annotation(
             always_build = package.always_build if package.always_build != None else (wildcard_pkg.always_build if wildcard_pkg else False),
             build_dependencies = package.build_dependencies or (wildcard_pkg.build_dependencies if wildcard_pkg else []),
-            build_workspace = package.build_workspace or (wildcard_pkg.build_workspace if wildcard_pkg else None),
+            build_repo = package.build_repo or (wildcard_pkg.build_repo if wildcard_pkg else None),
             build_target = str(package.build_target) if package.build_target else (str(wildcard_pkg.build_target) if wildcard_pkg and wildcard_pkg.build_target else None),
             ignore_dependencies = package.ignore_dependencies or (wildcard_pkg.ignore_dependencies if wildcard_pkg else []),
             install_exclude_globs = package.install_exclude_globs or (wildcard_pkg.install_exclude_globs if wildcard_pkg else []),
@@ -247,7 +250,7 @@ def _resolve_lock_inline(module_ctx, lock_info, serialized_lock_model, workspace
         always_include_sdist = False,
         annotations_data = annotations_data,
         default_build_dependencies_args = wildcard_pkg.build_dependencies if wildcard_pkg else [],
-        default_alias_single_version = lock_info.default_alias_single_version,
+        alias_transitive = lock_info.alias_transitive,
     )
 
     return {
@@ -327,6 +330,7 @@ def make_format_extension(
                     flags = getattr(tag, "flags", []),
                     constraint_values = getattr(tag, "constraint_values", []),
                     platform = getattr(tag, "platform", None),
+                    alias_transitive = getattr(tag, "alias_transitive", False),
                 )
                 member_tags.append(struct(tag = member_tag, module = module))
 
@@ -417,7 +421,6 @@ def make_format_extension(
 
         # Compute workspace metadata.
         workspace_memberships = {}
-        workspace_build_repos = {}
         repo_flags = {}
         repo_constraint_values = {}
         repo_platforms = {}
@@ -425,12 +428,6 @@ def make_format_extension(
 
         for repo_info in lock_repos.values():
             workspace_memberships[repo_info.repo_name] = repo_info.workspace
-
-            # Extract workspace-level build_workspace from wildcard package
-            ws_pkgs = workspace_packages.get(repo_info.workspace, {})
-            wildcard_pkg = ws_pkgs.get("*")
-            if wildcard_pkg and wildcard_pkg.build_workspace:
-                workspace_build_repos[repo_info.workspace] = wildcard_pkg.build_workspace
 
             if repo_info.flags:
                 repo_flags[repo_info.repo_name] = json.encode(repo_info.flags)
@@ -445,7 +442,6 @@ def make_format_extension(
             module_ctx = module_ctx,
             all_locks = all_locks,
             workspace_memberships = workspace_memberships,
-            workspace_build_repos = workspace_build_repos,
             repo_flags = repo_flags,
             repo_constraint_values = repo_constraint_values,
             repo_platforms = repo_platforms,

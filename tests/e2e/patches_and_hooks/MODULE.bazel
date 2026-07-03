@@ -33,10 +33,10 @@ pycross.configure_toolchains(
 uv = use_extension("@rules_pycross//pycross/extensions:uv.bzl", "uv")
 uv.workspace(
     name = "uv",
-    default_alias_single_version = True,
     lock_file = "//:uv.lock",
 )
 uv.repo(
+    alias_transitive = True,
     project_file = "//:pyproject.toml",
     workspace = "uv",
 )

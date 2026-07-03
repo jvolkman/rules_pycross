@@ -67,7 +67,7 @@ def _apply_annotation(ann, versions_by_name, all_package_keys):
 
     return struct(
         build_dependencies = build_deps,
-        build_workspace = ann.get("build_workspace"),
+        build_repo = ann.get("build_repo"),
         build_target = ann.get("build_target"),
         always_build = ann.get("always_build", False),
         ignore_dependencies = ignore_deps,
@@ -211,7 +211,7 @@ def _create_package_resolver(pkg_key, pkg, ann, default_build_dependencies, cont
         "files": pkg.get("files", []),
         "sdist_file": sdist_file,
         "build_target": ann.build_target if ann else None,
-        "build_workspace": ann.build_workspace if ann else None,
+        "build_repo": ann.build_repo if ann else None,
         "always_build": always_build,
         "build_dependencies": build_dependencies,
         "install_exclude_globs": list(ann.install_exclude_globs.keys()) if ann else [],
@@ -448,7 +448,7 @@ def resolve(
         always_include_sdist = False,
         annotations_data = None,
         default_build_dependencies_args = None,
-        default_alias_single_version = False):
+        alias_transitive = False):
     """Resolves dependencies from lock model data.
 
     Args:
@@ -458,7 +458,7 @@ def resolve(
         always_include_sdist: Whether to always include sdist.
         annotations_data: Annotations data.
         default_build_dependencies_args: Default build dependencies args.
-        default_alias_single_version: Whether to default alias single version.
+        alias_transitive: Whether to alias transitive single-version packages.
 
     Returns:
         Dictionary of resolved packages.
@@ -563,7 +563,7 @@ def resolve(
     sorted_repo_keys = sorted(repos.keys())
     repos = {k: repos[k] for k in sorted_repo_keys}
 
-    if default_alias_single_version:
+    if alias_transitive:
         reachable_keys = _compute_reachable_keys(pins, packages_by_package_key)
         resolved_versions_by_name = {}
         for entry in resolved_packages:

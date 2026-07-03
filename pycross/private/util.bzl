@@ -248,3 +248,42 @@ def url_decode_filename(filename):
             result += filename[i]
             i += 1
     return result
+
+def expand_pins_for_build_repo(resolved_locks_by_member):
+    """Merge resolved locks and expand pins to include all single-version packages.
+
+    Creates the pin set for auto-generated __build repos, ensuring all
+    single-version packages are available as build dependencies.
+
+    Args:
+        resolved_locks_by_member: Dict of member_name -> resolved_lock (parsed JSON dict).
+
+    Returns:
+        A new pins dict with all single-version packages pinned.
+    """
+    all_packages = {}
+    merged_pins = {}
+    for _, resolved_lock in resolved_locks_by_member.items():
+        all_packages.update(resolved_lock.get("packages", {}))
+        merged_pins.update(resolved_lock.get("pins", {}))
+
+    versions_by_name = {}
+    for pkg_key in all_packages.keys():
+        parts = parse_package_key(pkg_key)
+        if parts.extra:
+            continue
+        name = parts.name
+        version = parts.version
+        if name not in versions_by_name:
+            versions_by_name[name] = {}
+        versions_by_name[name][version] = pkg_key
+
+    for name, versions in versions_by_name.items():
+        if name in merged_pins:
+            continue
+        if len(versions) > 1:
+            continue
+        pkg_key = versions.values()[0]
+        merged_pins[name] = {"": pkg_key}
+
+    return merged_pins

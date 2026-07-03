@@ -283,11 +283,13 @@ bzl_library(
     srcs = ["lock_repos.bzl"],
     deps = [
         ":git_file",
+        ":json_file_repo",
         ":lock_attrs",
         ":package_repo",
         ":pypi_file",
         ":sdist_repo",
         ":thin_package_repo",
+        ":util",
         ":wheel_file",
         "@bazel_features//:features",
         "@lock_import_repos_hub//:locks.bzl",
@@ -403,6 +405,7 @@ bzl_library(
     srcs = ["lock_repo_creation.bzl"],
     deps = [
         ":git_file",
+        ":json_file_repo",
         ":package_repo",
         ":pypi_file",
         ":thin_package_repo",

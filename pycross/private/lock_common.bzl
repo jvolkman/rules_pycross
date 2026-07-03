@@ -42,7 +42,7 @@ def validate_transition_attrs(tag, tag_name):
 def package_annotation(
         always_build = False,
         build_dependencies = [],
-        build_workspace = None,
+        build_repo = None,
         build_target = None,
         ignore_dependencies = [],
         install_exclude_globs = [],
@@ -58,7 +58,7 @@ def package_annotation(
     return json.encode(struct(
         always_build = always_build,
         build_dependencies = build_dependencies,
-        build_workspace = build_workspace,
+        build_repo = build_repo,
         build_target = build_target,
         ignore_dependencies = ignore_dependencies,
         install_exclude_globs = install_exclude_globs,
@@ -118,7 +118,7 @@ def workspace_lock_struct(ws_tag, repo_name, workspace_name, transition_attrs):
     return struct(
         repo_name = repo_name,
         workspace = workspace_name,
-        default_alias_single_version = ws_tag.default_alias_single_version,
+        alias_transitive = transition_attrs.get("alias_transitive", False),
         local_wheels = ws_tag.local_wheels,
         disallow_builds = ws_tag.disallow_builds,
         packages = {},
@@ -132,7 +132,7 @@ def normalize_package_tag(tag):
     return struct(
         always_build = tag.always_build,
         build_dependencies = tag.build_dependencies,
-        build_workspace = tag.build_workspace,
+        build_repo = tag.build_repo,
         build_target = tag.build_target,
         ignore_dependencies = tag.ignore_dependencies,
         install_exclude_globs = tag.install_exclude_globs,
@@ -304,17 +304,26 @@ def get_member_transition_attrs(members_tag, override_tag):
     has_explicit_constraints = override_tag and getattr(override_tag, "constraint_values", [])
     has_explicit_platform = override_tag and getattr(override_tag, "platform", None)
 
+    # alias_transitive: override wins if set, otherwise inherit from all_projects
+    alias_transitive = False
+    if override_tag and getattr(override_tag, "alias_transitive", False):
+        alias_transitive = True
+    elif members_tag and getattr(members_tag, "alias_transitive", False):
+        alias_transitive = True
+
     if override_tag and (has_explicit_flags or has_explicit_constraints or has_explicit_platform):
         return dict(
             flags = getattr(override_tag, "flags", []),
             constraint_values = [str(c) for c in getattr(override_tag, "constraint_values", [])],
             platform = str(override_tag.platform) if override_tag.platform else None,
+            alias_transitive = alias_transitive,
         )
 
     return dict(
         flags = getattr(members_tag, "flags", []) if members_tag else [],
         constraint_values = [str(c) for c in getattr(members_tag, "constraint_values", [])] if members_tag else [],
         platform = str(members_tag.platform) if members_tag and getattr(members_tag, "platform", None) else None,
+        alias_transitive = alias_transitive,
     )
 
 def register_workspace_member(
@@ -509,6 +518,7 @@ def process_workspaces(
                     flags = [],
                     constraint_values = [],
                     platform = None,
+                    alias_transitive = False,
                 )
                 member_overrides[(ws_name, project_name)] = [struct(tag = implicit_tag, module = ws_info.module)]
             elif len(discovered) > 1:
@@ -556,6 +566,7 @@ def process_workspaces(
             flags = tag.flags,
             constraint_values = tag.constraint_values,
             platform = tag.platform,
+            alias_transitive = getattr(tag, "alias_transitive", False),
         )
         new_tag_info = struct(tag = new_tag, module = tag_info.module)
 
@@ -747,7 +758,6 @@ def process_import_tags(module_ctx):
 
     # Generate the resolved lock repos
     workspace_memberships = {}
-    workspace_build_repos = {}
     repo_flags = {}
     repo_constraint_values = {}
     repo_platforms = {}
@@ -755,10 +765,6 @@ def process_import_tags(module_ctx):
 
     for repo_info in lock_repos.values():
         workspace_memberships[repo_info.repo_name] = repo_info.workspace
-        ws_pkgs = workspace_packages.get(repo_info.workspace, {})
-        wildcard_pkg = ws_pkgs.get("*")
-        if wildcard_pkg and wildcard_pkg.build_workspace:
-            workspace_build_repos[repo_info.workspace] = wildcard_pkg.build_workspace
 
         if repo_info.flags:
             repo_flags[repo_info.repo_name] = json.encode(repo_info.flags)
@@ -775,7 +781,6 @@ def process_import_tags(module_ctx):
         workspace_packages = workspace_packages,
         root_direct_deps = root_direct_deps,
         workspace_memberships = workspace_memberships,
-        workspace_build_repos = workspace_build_repos,
         repo_flags = repo_flags,
         repo_constraint_values = repo_constraint_values,
         repo_platforms = repo_platforms,

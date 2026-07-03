@@ -77,7 +77,7 @@ RESOLVE_ATTRS = dict(
     remote_wheels = attr.string_dict(
         doc = "A mapping of remote wheels to their sha256 hashes.",
     ),
-    default_alias_single_version = attr.bool(
+    alias_transitive = attr.bool(
         doc = "Generate aliases for all packages that have a single version in the lock file.",
     ),
     annotations = attr.string_dict(
@@ -168,7 +168,7 @@ def handle_resolve_attrs(attrs, local_wheel_names_and_labels):
     for remote_wheel_url, sha256 in attrs.remote_wheels.items():
         args.extend(["--remote-wheel", remote_wheel_url, sha256])
 
-    if attrs.default_alias_single_version:
+    if attrs.alias_transitive:
         args.append("--default-alias-single-version")
 
     if attrs.disallow_builds:
@@ -354,7 +354,7 @@ OVERRIDE_TARGET_ATTRS = dict(
 
 # Attrs common to the import_* tags
 COMMON_IMPORT_ATTRS = dict(
-    default_alias_single_version = attr.bool(
+    alias_transitive = attr.bool(
         doc = "Generate aliases for all packages that have a single version in the lock file.",
     ),
     local_wheels = attr.label_list(
@@ -371,9 +371,6 @@ WORKSPACE_COMMON_ATTRS = dict(
     name = attr.string(
         doc = "Workspace name. Used to link members to this workspace.",
         mandatory = True,
-    ),
-    default_alias_single_version = attr.bool(
-        doc = "Generate aliases for all packages that have a single version in the lock file.",
     ),
     local_wheels = attr.label_list(
         doc = "A list of local .whl files to consider when processing lock files.",
@@ -409,7 +406,7 @@ PACKAGE_ATTRS = dict(
     build_dependencies = attr.string_list(
         doc = "A list of additional package keys (name or name@version) to use when building this package from source.",
     ),
-    build_workspace = attr.string(
+    build_repo = attr.string(
         doc = "Optional repo to use for resolving sdist build dependencies for this package.",
     ),
     ignore_dependencies = attr.string_list(

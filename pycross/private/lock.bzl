@@ -88,7 +88,7 @@ def _resolve_lock_inline(module_ctx, lock_info, serialized_lock_model, workspace
         remote_wheels = {},
         always_include_sdist = False,
         annotations_data = annotations_data,
-        default_alias_single_version = lock_info.default_alias_single_version,
+        alias_transitive = lock_info.alias_transitive,
     )
 
     return {
@@ -156,7 +156,6 @@ def _lock_impl(module_ctx):
         module_ctx = module_ctx,
         all_locks = all_locks,
         workspace_memberships = result.workspace_memberships,
-        workspace_build_repos = result.workspace_build_repos,
         repo_flags = result.repo_flags,
         repo_constraint_values = result.repo_constraint_values,
         repo_platforms = result.repo_platforms,

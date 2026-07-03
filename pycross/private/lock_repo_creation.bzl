@@ -9,10 +9,11 @@ load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_file")
 load("@pycross_backends//:registry.bzl", "BACKEND_CONFIGS", "BACKEND_TO_RULE", "DEFAULT_BACKEND", "OVERRIDE_FILES")
 load("@pypackaging.bzl", "pypackaging")
 load("@rules_pycross//pycross/private:sdist_repo.bzl", "pycross_sdist_repo")
+load("//pycross/private:json_file_repo.bzl", "json_file_repo")
 load("//pycross/private:package_repo.bzl", "package_repo")
 load("//pycross/private:pypi_file.bzl", "pypi_file")
 load("//pycross/private:thin_package_repo.bzl", "thin_package_repo")
-load("//pycross/private:util.bzl", "key_name", "parse_package_key", "sanitize_name")
+load("//pycross/private:util.bzl", "expand_pins_for_build_repo", "key_name", "parse_package_key", "sanitize_name")
 load("//pycross/private:wheel_file.bzl", "pycross_wheel_file")
 load(":git_file.bzl", "pycross_git_file")
 
@@ -38,7 +39,6 @@ def create_repos(
         module_ctx,
         all_locks,
         workspace_memberships,
-        workspace_build_repos,
         repo_flags,
         repo_constraint_values,
         repo_platforms,
@@ -51,7 +51,6 @@ def create_repos(
         module_ctx: The module_ctx or similar context object (needs .path(), .read()).
         all_locks: Dict of repo_name -> lock file Label (pointing to lock.json).
         workspace_memberships: Dict of repo_name -> workspace_name.
-        workspace_build_repos: Dict of workspace_name -> build_repo.
         repo_flags: Dict of repo_name -> JSON-encoded flags list.
         repo_constraint_values: Dict of repo_name -> JSON-encoded constraint_values list.
         repo_platforms: Dict of repo_name -> platform string.
@@ -161,11 +160,7 @@ def create_repos(
         # Every repo has a workspace.
         workspace_name = workspace_memberships.get(repo_name, repo_name)
 
-        ws_build_workspace = workspace_build_repos.get(workspace_name)
-        if ws_build_workspace:
-            lock_repo_for_deps = "{}__pkgs".format(ws_build_workspace)
-        else:
-            lock_repo_for_deps = "{}__pkgs".format(workspace_name)
+        lock_repo_for_deps = "{}__pkgs".format(workspace_name)
 
         # Instantiate sdist repos for packages requiring source builds.
         for pkg_key, pkg in resolved_lock.get("packages", {}).items():
@@ -202,11 +197,7 @@ def create_repos(
             whldir_norm_name = sanitize_name(pkg_name_part)
             whldir_name = "{}-{}.whldir".format(whldir_norm_name, pkg_version)
 
-            pkg_build_workspace = pkg.get("build_workspace") or ws_build_workspace
-            if pkg_build_workspace:
-                pkg_lock_repo_for_deps = "{}__pkgs".format(pkg_build_workspace)
-            else:
-                pkg_lock_repo_for_deps = "{}__pkgs".format(workspace_name)
+            pkg_lock_repo_for_deps = "{}__pkgs".format(workspace_name)
 
             sdist_repo_attrs = {
                 "name": sdist_repo_name,
@@ -215,7 +206,7 @@ def create_repos(
                 "known_packages": known_packages,
                 "lock_json": lock_file,
                 "lock_repo": pkg_lock_repo_for_deps,
-                "thin_repo": repo_name,
+                "thin_repo": "{}__build".format(workspace_name),
                 "backend_to_rule": BACKEND_TO_RULE,
                 "default_backend": DEFAULT_BACKEND,
                 "whldir_name": whldir_name,
@@ -334,8 +325,38 @@ def create_repos(
             }
         package_repo(**package_repo_attrs)
 
+        # Auto-generate the __build thin repo for this workspace.
+        # This repo exposes all single-version packages with expanded pins,
+        # making them available as sdist build dependencies.
+        build_repo_name = "{}__build".format(workspace_name)
+        resolved_locks_by_member = {
+            member: per_repo_data[member].resolved_lock
+            for member in member_repos
+        }
+        build_pins = expand_pins_for_build_repo(resolved_locks_by_member)
+
+        # Create a resolved lock JSON with expanded pins for the build repo.
+        # Use the first member's lock as the base, replacing pins.
+        first_member = member_repos[0]
+        build_resolved_lock = dict(per_repo_data[first_member].resolved_lock)
+        build_resolved_lock["pins"] = build_pins
+        build_lock_repo_name = "{}_lock_json".format(build_repo_name)
+        json_file_repo(
+            name = build_lock_repo_name,
+            content = json.encode(build_resolved_lock),
+        )
+
+        thin_package_repo(
+            name = build_repo_name,
+            resolved_lock_file = "@{}//:data.json".format(build_lock_repo_name),
+            workspace_repo = workspace_repo_name,
+            member_name = build_repo_name,
+            conflicts = {},
+            backend_configs = backend_configs_json,
+            generate_root_aliases = True,
+        )
+
         # Create thin repos for each workspace member, passing conflict info.
-        thin_build_workspace = workspace_build_repos.get(workspace_name)
         for member in member_repos:
             thin_repo_attrs = dict(
                 name = member,
@@ -345,8 +366,8 @@ def create_repos(
                 conflicts = conflicts,
                 backend_configs = backend_configs_json,
             )
-            if thin_build_workspace:
-                thin_repo_attrs["workspace_build_repo"] = "{}__pkgs".format(thin_build_workspace)
+            thin_repo_attrs["default_build_repo"] = workspace_repo_name
+            thin_repo_attrs["generate_root_aliases"] = True
 
             if member in repo_flags:
                 flags = repo_flags[member]

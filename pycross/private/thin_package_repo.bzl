@@ -457,7 +457,7 @@ pycross_transitioning_file_proxy = rule(
         rctx.file("_transition.bzl", transition_bzl)
 
     # Collect platform-specific packages for _maybe_ aliases.
-    maybe_mapping_targets = {}  # pkg_key -> lock_label (for modules_mapping _maybe_ aliases)
+    maybe_mapping_targets = {}  # maybe_name -> (pkg_key, lock_label)
 
     root_build_lines.extend([
         'exports_files(["defs.bzl", "requirements.bzl", "_packages.bzl"])',
@@ -478,9 +478,9 @@ pycross_transitioning_file_proxy = rule(
                 lock_label = "@%s//_lock:%s" % (workspace_repo, pin_target)
 
             if _is_platform_specific(package):
-                maybe_name = "_maybe_mapping_%s" % pin_target.replace("@", "_").replace("[", "_").replace("]", "_")
+                maybe_name = pin_target.replace("@", "_").replace("[", "_").replace("]", "_")
                 maybe_mapping_targets[maybe_name] = (pin_target, lock_label)
-                root_build_lines.append('        ":%s",' % maybe_name)
+                root_build_lines.append('        "//__maybe:%s",' % maybe_name)
             else:
                 root_build_lines.append('        "%s",' % lock_label)
 
@@ -490,18 +490,29 @@ pycross_transitioning_file_proxy = rule(
         "",
     ])
 
-    # Generate _maybe_mapping_ aliases for modules_mapping (pointing at _lock targets).
-    for maybe_name, (pkg_key, lock_label) in sorted(maybe_mapping_targets.items()):
-        root_build_lines.extend([
-            "alias(",
-            '    name = "%s",' % maybe_name,
-            "    actual = select({",
-            '        "@%s//_lock:_available_%s": "%s",' % (workspace_repo, pkg_key, lock_label),
-            '        "//conditions:default": ":_empty_library",',
-            "    }),",
-            ")",
+    # Generate __maybe/ subdirectory with platform-specific conditional aliases.
+    if maybe_mapping_targets:
+        maybe_build_lines = [
+            'load("@rules_python//python:defs.bzl", "py_library")',
             "",
-        ])
+            "package(default_visibility = [\"//visibility:public\"])",
+            "",
+            "# Empty library for incompatible platforms.",
+            'py_library(name = "_empty_library")',
+            "",
+        ]
+        for maybe_name, (pkg_key, lock_label) in sorted(maybe_mapping_targets.items()):
+            maybe_build_lines.extend([
+                "alias(",
+                '    name = "%s",' % maybe_name,
+                "    actual = select({",
+                '        "@%s//_lock:_available_%s": "%s",' % (workspace_repo, pkg_key, lock_label),
+                '        "//conditions:default": ":_empty_library",',
+                "    }),",
+                ")",
+                "",
+            ])
+        rctx.file("__maybe/BUILD.bazel", "\n".join(maybe_build_lines))
 
     if rctx.attr.generate_root_aliases:
         for base_pin_name in sorted(grouped_pins.keys()):
@@ -752,7 +763,7 @@ thin_package_repo = repository_rule(
             mandatory = True,
             doc = "Name of the workspace package_repo that contains the shared _lock/ targets.",
         ),
-        "workspace_build_repo": attr.string(
+        "default_build_repo": attr.string(
             doc = "Name of the workspace to pull sdist build dependencies from (e.g. build_deps__pkgs).",
         ),
         "member_name": attr.string(
