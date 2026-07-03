@@ -40,7 +40,7 @@ def _test_expand_pins_all_single_version(name):
 # --------------------------------------------------------------------------- #
 
 # buildifier: disable=unused-variable
-def _test_expand_pins_multi_version_excluded_impl(env, target):
+def _test_expand_pins_multi_version_latest_impl(env, target):
     resolved_locks = {
         "my_app": {
             "packages": {
@@ -54,13 +54,14 @@ def _test_expand_pins_multi_version_excluded_impl(env, target):
 
     pins = expand_pins_for_build_repo(resolved_locks)
 
-    # foo has two versions -> not pinned. bar has one -> pinned.
-    env.expect.that_collection(pins.keys()).contains_exactly(["bar"])
+    # foo has two versions -> pinned to latest (2.0). bar has one -> pinned.
+    env.expect.that_collection(sorted(pins.keys())).contains_exactly(["bar", "foo"])
+    env.expect.that_dict(pins["foo"]).contains_exactly({"": "foo@2.0"})
     env.expect.that_dict(pins["bar"]).contains_exactly({"": "bar@1.0"})
 
-def _test_expand_pins_multi_version_excluded(name):
+def _test_expand_pins_multi_version_latest(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
-    analysis_test(name = name, target = name + "_subject", impl = _test_expand_pins_multi_version_excluded_impl)
+    analysis_test(name = name, target = name + "_subject", impl = _test_expand_pins_multi_version_latest_impl)
 
 # --------------------------------------------------------------------------- #
 # Test: existing pins are preserved (not overwritten)
@@ -157,7 +158,7 @@ def _test_expand_pins_multi_member_merge(name):
 # --------------------------------------------------------------------------- #
 
 # buildifier: disable=unused-variable
-def _test_expand_pins_cross_member_conflict_impl(env, target):
+def _test_expand_pins_cross_member_latest_impl(env, target):
     resolved_locks = {
         "app_a": {
             "packages": {
@@ -175,12 +176,13 @@ def _test_expand_pins_cross_member_conflict_impl(env, target):
 
     pins = expand_pins_for_build_repo(resolved_locks)
 
-    # foo has versions 1.0 and 2.0 across members -> not auto-pinned.
-    env.expect.that_collection(pins.keys()).contains_exactly([])
+    # foo has versions 1.0 and 2.0 across members -> auto-pinned to latest.
+    env.expect.that_collection(pins.keys()).contains_exactly(["foo"])
+    env.expect.that_dict(pins["foo"]).contains_exactly({"": "foo@2.0"})
 
-def _test_expand_pins_cross_member_conflict(name):
+def _test_expand_pins_cross_member_latest(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
-    analysis_test(name = name, target = name + "_subject", impl = _test_expand_pins_cross_member_conflict_impl)
+    analysis_test(name = name, target = name + "_subject", impl = _test_expand_pins_cross_member_latest_impl)
 
 # --------------------------------------------------------------------------- #
 # Test: empty lock -> empty pins
@@ -246,11 +248,11 @@ def expand_pins_test_suite(name):
         name = name,
         tests = [
             _test_expand_pins_all_single_version,
-            _test_expand_pins_multi_version_excluded,
+            _test_expand_pins_multi_version_latest,
             _test_expand_pins_preserves_existing,
             _test_expand_pins_extras_ignored,
             _test_expand_pins_multi_member_merge,
-            _test_expand_pins_cross_member_conflict,
+            _test_expand_pins_cross_member_latest,
             _test_expand_pins_empty_lock,
             _test_expand_pins_member_pins_merged,
         ],

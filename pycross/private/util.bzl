@@ -286,6 +286,13 @@ def expand_pins_for_build_repo(resolved_locks_by_member):
         if name in merged_pins:
             continue
         if len(versions) > 1:
+            version_tuples = [(pypackaging.version.parse(v).key, v) for v in versions.keys()]
+            latest_version = sorted(version_tuples)[-1][1]
+
+            # buildifier: disable=print
+            print("WARNING: Multiple versions of {} found in workspace. Pinning build repo to latest: {}".format(name, latest_version))
+            pkg_key = versions[latest_version]
+            merged_pins[name] = {"": pkg_key}
             continue
         pkg_key = versions.values()[0]
         merged_pins[name] = {"": pkg_key}

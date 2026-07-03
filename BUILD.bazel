@@ -25,3 +25,9 @@ bzl_library(
         "@bazel_tools//tools/build_defs/repo:utils.bzl",
     ],
 )
+
+bzl_library(
+    name = "test_version",
+    visibility = ["//visibility:public"],
+    deps = ["@pypackaging"],
+)

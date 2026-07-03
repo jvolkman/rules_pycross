@@ -579,6 +579,14 @@ def resolve(
             if package_pin_name in pins:
                 continue
             if len(versions) > 1:
+                version_tuples = [(pypackaging.version.parse(v).key, v) for v in versions.keys()]
+                latest_version = sorted(version_tuples)[-1][1]
+
+                # buildifier: disable=print
+                print("WARNING: Multiple versions of {} found in transitive dependencies. Aliasing to latest: {}".format(package_pin_name, latest_version))
+                base_key = "{}@{}".format(package_pin_name, latest_version)
+                if base_key in packages_by_package_key:
+                    pins[package_pin_name] = {"": base_key}
                 continue
             version = versions.keys()[0]
             base_key = "{}@{}".format(package_pin_name, version)
