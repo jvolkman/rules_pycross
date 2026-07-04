@@ -241,6 +241,7 @@ def _resolve_lock_inline(module_ctx, lock_info, serialized_lock_model, workspace
         "remote_files": resolved_lock.remote_files,
         "cycle_groups": resolved_lock.cycle_groups,
         "variants": resolved_lock.variants,
+        "legacy_create_root_aliases": getattr(lock_model, "legacy_create_root_aliases", False),
     }
 
 def make_format_extension(
@@ -303,7 +304,7 @@ def make_format_extension(
                     flags = getattr(tag, "flags", []),
                     constraint_values = getattr(tag, "constraint_values", []),
                     platform = getattr(tag, "platform", None),
-                    alias_transitive = getattr(tag, "alias_transitive", False),
+                    create_transitive_aliases = getattr(tag, "create_transitive_aliases", False),
                 )
                 member_tags.append(struct(tag = member_tag, module = module))
 
