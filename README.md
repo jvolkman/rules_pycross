@@ -40,21 +40,33 @@ After this, packages are available as `@pypi//package_name`. A `requirement()` m
 Other lock formats work the same way via their respective extensions: `pdm.bzl`, `poetry.bzl`, or `pylock.bzl`.
 
 <details>
-<summary>Legacy two-extension pattern (deprecated)</summary>
+<summary>Migrating from the legacy two-extension pattern</summary>
 
-The previous approach used two separate extensions. This still works but is deprecated:
+The previous approach used `lock_import` / `lock_repos` (or `lock`) extensions. These have been removed.
+Migrate by replacing them with the per-format extension:
 
 ```python
+# Before (removed):
 lock_import = use_extension("@rules_pycross//pycross/extensions:lock_import.bzl", "lock_import")
-
 lock_import.import_uv(
     lock_file = "//:uv.lock",
     project_file = "//:pyproject.toml",
     repo = "pypi",
 )
-
 lock_repos = use_extension("@rules_pycross//pycross/extensions:lock_repos.bzl", "lock_repos")
 use_repo(lock_repos, "pypi")
+
+# After:
+uv = use_extension("@rules_pycross//pycross/extensions:uv.bzl", "uv")
+uv.workspace(
+    name = "pypi",
+    lock_file = "//:uv.lock",
+)
+uv.repo(
+    project_file = "//:pyproject.toml",
+    workspace = "pypi",
+)
+use_repo(uv, "pypi")
 ```
 
 </details>
@@ -154,34 +166,34 @@ uv.workspace(
     lock_file = "//:uv.lock",
 )
 
-# 2. Auto-discover all members; generate repos with a naming pattern
-uv.all_projects(
+# 2. Import all projects into a single repo
+uv.repo(
+    name = "lock_all",
+    projects = ["*"],
     workspace = "shared",
-    repo_pattern = "lock_{member}",  # e.g., 'project-a' -> '@lock_project_a'
 )
-use_repo(uv, "lock_project_a", "lock_project_b")
+use_repo(uv, "lock_all")
 ```
 
 All members share a single backing `package_repo` — overlapping packages are downloaded and built only once.
 
-### Overriding Member Settings
+### Per-Member Repos
 
-Individual members can override the repo name or dependency groups using `uv_member`:
+To create separate repos per workspace member with different dependency selections:
 
 ```python
-# Override project-a's repo name (instead of the pattern-generated 'lock_project_a')
 uv.repo(
-    workspace = "shared",
-    name = "project-a",
     name = "lock_a",
-)
-
-# Include specific optional groups only for project-b
-uv.repo(
+    projects = ["project-a"],
     workspace = "shared",
-    name = "project-b",
-    optional_groups = ["grpc", "testing"],
 )
+uv.repo(
+    name = "lock_b",
+    projects = ["project-b"],
+    dependency_groups = ["default", "optional:grpc", "development:testing"],
+    workspace = "shared",
+)
+use_repo(uv, "lock_a", "lock_b")
 ```
 
 ### Package Annotations in a Workspace
@@ -497,7 +509,7 @@ uv.repo(
 > [!NOTE]
 > `flags` and `constraint_values` can be combined (they are merged into a single generated platform), but `platform` is mutually exclusive with both.
 
-These attributes are available on `uv.project`, `uv.all_projects`, and their PDM/Poetry/Pylock equivalents.
+These attributes are available on `uv.repo()` and its PDM/Poetry/Pylock equivalents.
 
 When `constraint_values` alone are specified, `rules_pycross` generates an internal `platform()` target and uses `pycross_transitioning_library_proxy` / `pycross_transitioning_file_proxy` at each package level to apply the `--platforms` transition.
 

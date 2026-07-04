@@ -361,7 +361,6 @@ bzl_library(
     name = "lock_common",
     srcs = ["lock_common.bzl"],
     deps = [
-        ":lock_attrs",
         ":util",
         "@toml.bzl//toml:toml",
     ],

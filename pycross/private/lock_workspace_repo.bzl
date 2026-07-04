@@ -35,7 +35,7 @@ def _lock_workspace_repo_impl(rctx):
 
     # Flags and constraint_values are JSON-encoded lists passed through string_dict attrs.
     # constraint_values are stored as strings (not labels) because repository rules cannot
-    # accept label attrs across repo boundaries; labels are resolved to strings at lock_import
+    # accept label attrs across repo boundaries; labels are resolved to strings at extension time
     # time via str(label).
     workspace_lines.append("repo_flags = {")
     for repo_name in sorted(rctx.attr.repo_flags):

@@ -1,7 +1,7 @@
 """Shared factory for creating per-format lock module extensions.
 
 Each per-format extension (uv, pdm, poetry, pylock) follows the same pattern:
-  1. Collect project/workspace/all_projects/package tags
+  1. Collect workspace/repo/package tags
   2. Desugar standalone projects into workspace + member
   3. Process workspaces (discover members, register repos)
   4. Run translators + resolver inline
@@ -45,25 +45,6 @@ WORKSPACE_COMMON_ATTRS = dict(
     ),
 )
 
-# Shared attrs for all_projects tags.
-ALL_PROJECTS_COMMON_ATTRS = dict(
-    workspace = attr.string(
-        doc = "Name of the workspace to auto-discover members from.",
-        mandatory = True,
-    ),
-    repo_pattern = attr.string(
-        doc = "Pattern for auto-generated repo names. Use '{member}' as a placeholder " +
-              "for the normalized project name.",
-        default = "{member}",
-    ),
-    excluded_projects = attr.string_list(
-        doc = "Project names to skip during auto-discovery.",
-    ),
-    create_transitive_aliases = attr.bool(
-        doc = "Generate aliases for transitive single-version packages in generated repos.",
-    ),
-)
-
 # Shared attrs for member override project tags (within workspace).
 REPO_ATTRS = dict(
     workspace = attr.string(
@@ -93,7 +74,7 @@ REPO_ATTRS = dict(
     ),
 )
 
-# Transition attrs for project and all_projects tags.
+# Transition attrs for repo tags.
 TRANSITION_ATTRS = dict(
     constraint_values = attr.label_list(
         doc = "A list of constraint values to apply to the generated platform.",
@@ -105,10 +86,6 @@ TRANSITION_ATTRS = dict(
         doc = "An existing platform target to use directly.",
     ),
 )
-
-# (Deleted GROUP_ATTRS)
-
-# (Deleted GROUP_OVERRIDE_ATTRS)
 
 # Attrs for the package tag.
 PACKAGE_ATTRS = dict(
@@ -257,7 +234,7 @@ def make_format_extension(
         workspace_attrs: Format-specific attrs for workspace tags.
             Merged with WORKSPACE_COMMON_ATTRS.
         repo_attrs: Format-specific attrs for member project override tags, or None.
-            Merged with REPO_ATTRS, GROUP_OVERRIDE_ATTRS, and TRANSITION_ATTRS.
+            Merged with REPO_ATTRS and TRANSITION_ATTRS.
         discover_members_fn: Function(mctx, lock_file_label) -> [struct(name, path)].
             Required when workspace_attrs is not None.
         repo_create_model_fn: Function(module_ctx, project_file, lock_file, lock_model, output).
@@ -288,8 +265,6 @@ def make_format_extension(
                     workspace_tags.append(struct(tag = tag, module = module, ws_name = ws_name))
                     if tag.pypi_indexes:
                         workspace_pypi_indexes[ws_name] = tag.pypi_indexes
-
-            # (Deleted all_projects tags processing)
 
             # 3. Process project tags (member overrides).
             for tag in module.tags.repo:
@@ -466,8 +441,6 @@ def make_format_extension(
             doc = "Declare a %s workspace from a shared lock file." % model_type,
             attrs = ws_attrs,
         )
-
-    # (Deleted all_projects tag class)
 
     return module_extension(
         implementation = _impl,
