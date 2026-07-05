@@ -8,7 +8,7 @@ The file structure is:
 - BUILD.bazel              - Root aliases (//:package).
 - requirements.bzl         - Provides requirement() and all_requirements.
 - modules_mapping.json     - Import-to-package mapping for Gazelle.
-- <package>/BUILD.bazel    - Pin proxies pointing to @workspace//_lock targets.
+- <package>/BUILD.bazel    - Pin proxies pointing to @workspace//_pkg targets.
 - _variants/BUILD.bazel    - Aliases for bool_flag and config_setting targets for variant selection.
 """
 
@@ -84,7 +84,7 @@ def _target_select(target_dict, prefix, suffix, workspace_repo, is_aggregated = 
         if constraint == "":
             lines.append('        "//conditions:default": "{}{}{}",'.format(prefix, t_base, suffix))
         else:
-            lines.append('        "@{}//_lock:is_{}": "{}{}{}",'.format(workspace_repo, constraint, prefix, t_base, suffix))
+            lines.append('        "@{}//_pkg:is_{}": "{}{}{}",'.format(workspace_repo, constraint, prefix, t_base, suffix))
 
             # If this constraint is a default variant, also map //conditions:default to it.
             if constraint in default_variants:
@@ -119,7 +119,7 @@ def _proxy_actual(actual_lines, target_dict, prefix, suffix, workspace_repo, ali
 def _pin_build(target_name, pin_target_dict, package, workspace_repo, workspace_lock_target_dict = None, has_aggregated_variant = False, extras_dict = None, default_variants = {}, target_platform = None, transition_bzl = None, maybe_available_key = None):
     """Generates the BUILD file for a pin directory, pointing to the workspace."""
     lock_target_dict = workspace_lock_target_dict if workspace_lock_target_dict else pin_target_dict
-    lock_ref = "@{}//_lock:".format(workspace_repo)
+    lock_ref = "@{}//_pkg:".format(workspace_repo)
     wheel_ref = "@{}//_wheel:".format(workspace_repo)
     sdist_ref = "@{}//_sdist:".format(workspace_repo)
 
@@ -258,7 +258,7 @@ def _pin_build(target_name, pin_target_dict, package, workspace_repo, workspace_
             "alias(",
             '    name = "{}",'.format(_safe_name(target_name, "maybe")),
             "    actual = select({",
-            '        "@{}//_lock:_available_{}": ":{}",'.format(workspace_repo, maybe_available_key, _safe_name(target_name, "pkg")),
+            '        "@{}//_pkg:_available_{}": ":{}",'.format(workspace_repo, maybe_available_key, _safe_name(target_name, "pkg")),
             '        "//conditions:default": "//:_empty_library",',
             "    }),",
             ")",
@@ -473,9 +473,9 @@ pycross_transitioning_file_proxy = rule(
 
             # Determine the lock-level label for this package.
             if package.get("cycle_group"):
-                lock_label = "@%s//_lock:_raw_%s" % (workspace_repo, pin_target)
+                lock_label = "@%s//_pkg:_raw_%s" % (workspace_repo, pin_target)
             else:
-                lock_label = "@%s//_lock:%s" % (workspace_repo, pin_target)
+                lock_label = "@%s//_pkg:%s" % (workspace_repo, pin_target)
 
             if _is_platform_specific(package):
                 maybe_name = pin_target.replace("@", "_").replace("[", "_").replace("]", "_")
@@ -506,7 +506,7 @@ pycross_transitioning_file_proxy = rule(
                 "alias(",
                 '    name = "%s",' % maybe_name,
                 "    actual = select({",
-                '        "@%s//_lock:_available_%s": "%s",' % (workspace_repo, pkg_key, lock_label),
+                '        "@%s//_pkg:_available_%s": "%s",' % (workspace_repo, pkg_key, lock_label),
                 '        "//conditions:default": ":_empty_library",',
                 "    }),",
                 ")",
@@ -562,7 +562,7 @@ pycross_transitioning_file_proxy = rule(
             base_pkg_key = "{}@{}".format(parts.name, parts.version)
             base_packages_with_extras[base_pkg_key] = True
 
-    # Pin directories: proxies pointing to @workspace//_lock targets
+    # Pin directories: proxies pointing to @workspace//_pkg targets
     for base_pin_name, group in sorted(grouped_pins.items()):
         base_target_dict = group["base_target"]
         if not base_target_dict and group["extras"]:
@@ -651,7 +651,7 @@ pycross_transitioning_file_proxy = rule(
             variant_lines.extend([
                 "alias(",
                 '    name = "{}",'.format(qname),
-                '    actual = "@{}//_lock:{}",'.format(workspace_repo, qname),
+                '    actual = "@{}//_pkg:{}",'.format(workspace_repo, qname),
                 ")",
                 "",
             ])
@@ -660,7 +660,7 @@ pycross_transitioning_file_proxy = rule(
             variant_lines.extend([
                 "alias(",
                 '    name = "is_{}",'.format(qname),
-                '    actual = "@{}//_lock:is_{}",'.format(workspace_repo, qname),
+                '    actual = "@{}//_pkg:is_{}",'.format(workspace_repo, qname),
                 ")",
                 "",
             ])
@@ -761,7 +761,7 @@ thin_package_repo = repository_rule(
         ),
         "workspace_repo": attr.string(
             mandatory = True,
-            doc = "Name of the workspace package_repo that contains the shared _lock/ targets.",
+            doc = "Name of the workspace package_repo that contains the shared _pkg/ targets.",
         ),
         "default_build_repo": attr.string(
             doc = "Name of the workspace to pull sdist build dependencies from (e.g. build_deps__pkgs).",

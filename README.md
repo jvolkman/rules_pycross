@@ -544,7 +544,7 @@ The generated flags follow the pattern `group_<name>` (e.g., `--@pypi//_variants
 
 ### Platform Transitions
 
-When a workspace member needs to be built under a specific platform configuration—for example, to pin a variant flag or target a particular architecture—you can declare a platform transition on the member import. This causes all proxy targets in the thin repo to apply a Bazel `--platforms` transition, ensuring the backing `_lock` targets are analyzed under the specified platform.
+When a workspace member needs to be built under a specific platform configuration—for example, to pin a variant flag or target a particular architecture—you can declare a platform transition on the member import. This causes all proxy targets in the thin repo to apply a Bazel `--platforms` transition, ensuring the backing `_pkg` targets are analyzed under the specified platform.
 
 There are three ways to specify the transition:
 

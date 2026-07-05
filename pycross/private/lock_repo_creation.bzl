@@ -188,7 +188,7 @@ def create_repos(
             deps_set = {}
 
             for md in pkg.get("marker_dependencies", []):
-                dep_label = "@{}//_lock:{}".format(lock_repo_for_deps, md["key"])
+                dep_label = "@{}//_pkg:{}".format(lock_repo_for_deps, md["key"])
                 deps_set[dep_label] = True
 
             parts = parse_package_key(pkg_key)

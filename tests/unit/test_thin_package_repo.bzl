@@ -223,7 +223,7 @@ def _test_pin_build_basic_structure_impl(env, target):
 
     # Should have pkg proxy pointing to lock target
     env.expect.that_bool('name = "pkg"' in res).equals(True)
-    env.expect.that_bool('"@ws//_lock:requests@2.31.0"' in res).equals(True)
+    env.expect.that_bool('"@ws//_pkg:requests@2.31.0"' in res).equals(True)
 
     # Should have wheel proxy pointing to wheel target
     env.expect.that_bool('name = "wheel"' in res).equals(True)
@@ -231,7 +231,7 @@ def _test_pin_build_basic_structure_impl(env, target):
 
     # Should have dist_info proxy
     env.expect.that_bool('name = "dist_info"' in res).equals(True)
-    env.expect.that_bool('"@ws//_lock:_dist_info_requests@2.31.0"' in res).equals(True)
+    env.expect.that_bool('"@ws//_pkg:_dist_info_requests@2.31.0"' in res).equals(True)
 
     # Should have data alias
     env.expect.that_bool('name = "data"' in res).equals(True)
