@@ -266,7 +266,7 @@ def make_format_extension(
                     if tag.pypi_indexes:
                         workspace_pypi_indexes[ws_name] = tag.pypi_indexes
 
-            # 3. Process project tags (member overrides).
+            # 2. Process repo tags (member overrides).
             for tag in module.tags.repo:
                 validate_transition_attrs(tag, "repo")
                 member_tag = struct(
@@ -409,14 +409,8 @@ def make_format_extension(
             root_module_direct_dev_deps = [],
         )
 
-    # Build tag classes.
-    #
-    # The "repo" tag is dual-purpose:
-    # - When lock_file is provided: standalone project (uses STANDALONE_PROJECT_ATTRS)
-    # - When workspace is provided: member override (uses REPO_ATTRS)
-    #
-    # We merge all attrs into a single tag_class since Bazel tag_class doesn't
-    # support conditional attrs. The _impl validates mutual exclusivity.
+    # Build the repo tag_class by merging format-specific, shared, and transition attrs.
+    # The repo tag always requires a workspace reference; project_file is optional.
     repo_tag_attrs = {}
     if repo_attrs != None:
         repo_tag_attrs.update(repo_attrs)

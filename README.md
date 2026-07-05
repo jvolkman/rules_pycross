@@ -27,10 +27,26 @@ Add your lock file import to `MODULE.bazel`:
 ```python
 uv = use_extension("@rules_pycross//pycross/extensions:uv.bzl", "uv")
 
-uv.repo(
-    lock_file = "//:uv.lock",
-    project_file = "//:pyproject.toml",
+uv.workspace(
     name = "pypi",
+    lock_file = "//:uv.lock",
+)
+use_repo(uv, "pypi")
+```
+
+For a single-project lock file, this is all you need — `rules_pycross` auto-discovers the project from the lock file and creates a repo named `"pypi"` with default dependencies.
+
+To customize which projects or dependency groups are included, or to set the `project_file` explicitly, add a `uv.repo()` tag:
+
+```python
+uv.workspace(
+    name = "pypi",
+    lock_file = "//:uv.lock",
+)
+uv.repo(
+    project_file = "//:pyproject.toml",
+    dependency_groups = ["default", "optional:grpc"],
+    workspace = "pypi",
 )
 use_repo(uv, "pypi")
 ```
@@ -53,6 +69,11 @@ lock_import.import_uv(
     project_file = "//:pyproject.toml",
     repo = "pypi",
 )
+lock_import.package(
+    name = "numpy",
+    always_build = True,
+    repo = "pypi",
+)
 lock_repos = use_extension("@rules_pycross//pycross/extensions:lock_repos.bzl", "lock_repos")
 use_repo(lock_repos, "pypi")
 
@@ -65,6 +86,11 @@ uv.workspace(
 uv.repo(
     project_file = "//:pyproject.toml",
     workspace = "pypi",
+)
+uv.package(
+    name = "numpy",
+    always_build = True,
+    workspace = "pypi",  # was: repo = "pypi"
 )
 use_repo(uv, "pypi")
 ```
@@ -117,11 +143,22 @@ A `pip install` operation can be broken down into:
 
 ## Dependency Groups
 
-Each import function supports selecting which dependency groups to include:
+The `dependency_groups` attribute on `uv.repo()` controls which dependency groups are included. It accepts a list of group specifiers:
 
-* `default_group` — include the project's default dependencies (default: `True`)
-* `optional_groups` / `all_optional_groups` — include `[project.optional-dependencies]`
-* `development_groups` / `all_development_groups` — include `[dependency-groups]`
+* `"default"` — the project's default dependencies
+* `"optional:<name>"` — a specific optional dependency group (`[project.optional-dependencies]`)
+* `"development:<name>"` — a specific development group (`[dependency-groups]`)
+* `"optional:*"` / `"development:*"` — all optional or all development groups
+* `"*"` — all groups (default + all optional + all development)
+
+The default is `["default"]`.
+
+```python
+uv.repo(
+    dependency_groups = ["default", "optional:grpc", "development:test"],
+    workspace = "pypi",
+)
+```
 
 ---
 
@@ -198,7 +235,7 @@ use_repo(uv, "lock_a", "lock_b")
 
 ### Package Annotations in a Workspace
 
-`uv.package()` annotations in a workspace must use the `workspace` attribute (not `repo`):
+`uv.package()` annotations target a workspace. The `workspace` attribute can be omitted if the module declares only one workspace:
 
 ```python
 # Apply to all members of the "shared" workspace
@@ -229,18 +266,24 @@ uv.package(
 
 ### Multiple Independent Lock Files
 
-If your projects use separate lock files (not a shared workspace lock), each `import_uv` call creates its own isolated workspace:
+If your projects use separate lock files (not a shared workspace lock), declare separate workspaces:
 
 ```python
-uv.repo(
-    lock_file = "//frontend:uv.lock",
-    project_file = "//frontend:pyproject.toml",
+uv.workspace(
     name = "frontend_deps",
+    lock_file = "//frontend:uv.lock",
 )
 uv.repo(
-    lock_file = "//ml:uv.lock",
-    project_file = "//ml:pyproject.toml",
+    project_file = "//frontend:pyproject.toml",
+    workspace = "frontend_deps",
+)
+uv.workspace(
     name = "ml_deps",
+    lock_file = "//ml:uv.lock",
+)
+uv.repo(
+    project_file = "//ml:pyproject.toml",
+    workspace = "ml_deps",
 )
 use_repo(uv, "frontend_deps", "ml_deps")
 ```
@@ -270,7 +313,41 @@ By default, `rules_pycross` uses pre-built wheels when available. To force build
 uv.package(
     name = "numpy",
     always_build = True,
-    repo = "pypi",
+    workspace = "pypi",
+)
+```
+
+### Build Dependencies
+
+When building a package from source, `rules_pycross` automatically includes the `build-system.requires` packages from the sdist's `pyproject.toml`. If a package needs additional Python packages at build time (e.g., `cython`, `numpy`, `setuptools-scm`), declare them with `build_dependencies`:
+
+```python
+uv.package(
+    name = "pandas",
+    build_dependencies = ["cython@0.29.36", "numpy@1.26.4"],
+    workspace = "pypi",
+)
+```
+
+These package keys must match entries in the lock file. Only packages that aren't already runtime dependencies are added as build-only deps.
+
+#### Default Build Dependencies
+
+Use `name = "*"` to set default build dependencies for all packages in a workspace. A specific `build_dependencies` on an individual package fully replaces the wildcard:
+
+```python
+# Default: every sdist build gets cython available
+uv.package(
+    name = "*",
+    build_dependencies = ["cython@0.29.36"],
+    workspace = "pypi",
+)
+
+# numpy gets its own specific set instead
+uv.package(
+    name = "numpy",
+    build_dependencies = ["cython@0.29.36", "oldest-supported-numpy@0.9"],
+    workspace = "pypi",
 )
 ```
 
@@ -350,12 +427,12 @@ rust.toolchain(
 uv.package(
     name = "rpds-py",
     always_build = True,
-    repo = "pypi",
+    workspace = "pypi",
 )
 uv.package(
     name = "jiter",
     always_build = True,
-    repo = "pypi",
+    workspace = "pypi",
 )
 
 # Provide a Cargo.lock for jiter (when the sdist doesn't include one)
@@ -376,7 +453,7 @@ For full control, provide your own build target:
 uv.package(
     name = "psycopg2",
     build_target = "@//deps/psycopg2:wheel",
-    repo = "pypi",
+    workspace = "pypi",
 )
 ```
 
