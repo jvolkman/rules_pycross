@@ -6,19 +6,20 @@ All notable changes to this project will be documented in this file.
 
 ### Breaking
 
-- **`project_file` removed from `repo()`.** It is now auto-discovered for all
-  workspace members. If you need to specify non-standard locations, use
-  `extra_project_files` on the `workspace()` tag instead.
-- **`build_dependencies` renamed to `extra_build_tools`** on `package()` tags.
-- **`build_repo` renamed to `build_tools_repo`** on `package()` tags.
 - **New `workspace` / `repo` API.** The legacy `lock_import` / `lock_repos`
   two-extension pattern and the `import_uv()` / `import_pdm()` / etc. tag
   classes have been removed. Use the per-format extensions (`uv.bzl`,
   `pdm.bzl`, `poetry.bzl`, `pylock.bzl`) with `workspace()` and `repo()` tags
   instead. See the migration guide in the README.
-- **`uv.package()` uses `workspace` instead of `repo`.** Package annotations
-  now target a workspace, not a repo. The `workspace` attribute can be omitted
-  if the module declares only one workspace.
+- **`project_file` is no longer supported on per-project tags** (formerly
+  `poetry_member`, etc., now unified as `repo()`). It is now auto-discovered
+  for all workspace members. If you need to specify non-standard locations,
+  use `extra_project_files` on the `workspace()` tag instead.
+- **`build_dependencies` renamed to `extra_build_tools`** on `package()` tags.
+- **`build_repo` renamed to `build_tools_repo`** on `package()` tags.
+- **Package annotations use `workspace` instead of `repo`.** Annotations
+  (e.g., `uv.package()`) now target a workspace, not a specific repo. The
+  `workspace` attribute can be omitted if the module declares only one workspace.
 - **`configure_environments` is deprecated.** Use `configure_toolchains` instead.
   The old name still works but prints a deprecation warning.
 - **`pycross_target_environment` rule removed.** Replaced by
@@ -29,8 +30,8 @@ All notable changes to this project will be documented in this file.
 - **`pip` is no longer a dependency.** The Python-based target environment
   generator that required pip has been removed.
 - **Workspace repo names changed** from `foo_pkgs` to `foo__pkgs` (#245).
-- **`default_alias_single_version` renamed to `create_transitive_aliases`.**
-  Also available on `repo()` tags.
+- **`default_alias_single_version` renamed to `create_transitive_aliases`** and
+  moved to `repo()` tags.
 
 ### Added
 

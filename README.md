@@ -81,6 +81,19 @@ uv.workspace(
 
 These explicitly specified files are appended to the auto-discovered files.
 
+#### Transitive Aliases
+
+By default, `rules_pycross` only generates top-level aliases for packages that are explicitly defined as dependencies in your project. If you want to be able to depend on transitive dependencies directly using `requirement("transitive-package")`, you can enable `create_transitive_aliases` on your `uv.repo()` tag:
+
+```python
+uv.repo(
+    workspace = "pypi",
+    create_transitive_aliases = True,
+)
+```
+
+If a transitive package has multiple versions in the lock file, `rules_pycross` will print a warning and alias to the highest version.
+
 #### The Internal Build Tools Repository (`__build`)
 
 For every workspace, `rules_pycross` also auto-generates an internal companion repository named `<workspace>__build` (e.g., `@pypi__build`).
@@ -136,6 +149,9 @@ uv.package(
 )
 use_repo(uv, "pypi")
 ```
+
+> [!TIP]
+> If you are migrating from a 1.x target layout where packages were referenced as `@pypi//:package_name` (with a colon), you can enable `legacy_create_root_aliases = True` on your `uv.repo()` tag to generate these aliases in the 2.x repo.
 
 </details>
 
@@ -370,6 +386,18 @@ uv.package(
 ```
 
 These package keys must match entries in the lock file. Only packages that aren't already runtime dependencies are added as build-only deps.
+
+#### Custom Build Tools Repository
+
+By default, build tools are resolved from the internal `<workspace>__build` repository. If a specific package needs to resolve its build dependencies from a different repository, you can specify `build_tools_repo` in its `package()` annotation:
+
+```python
+uv.package(
+    name = "my-complex-package",
+    build_tools_repo = "my_custom_build_deps",
+    workspace = "pypi",
+)
+```
 
 #### Default Extra Build Tools
 
