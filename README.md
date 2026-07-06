@@ -65,6 +65,22 @@ For simple, single-project lock files, you can omit the `uv.repo()` tag entirely
 
 To override these defaults (for example, to include optional extras or change the name), explicitly declare one or more `uv.repo()` tags.
 
+#### Project File Discovery
+
+`rules_pycross` automatically discovers your `pyproject.toml` files by inspecting the workspace members defined in the lock file. If it finds none (e.g. for a standalone lock file), it falls back to looking for a `pyproject.toml` next to the lock file.
+
+If you have additional `pyproject.toml` files that aren't part of the lock file's defined workspace members, but contain build settings or dependency definitions you need `rules_pycross` to see, you can explicitly add them using `extra_project_files` on the `workspace()` tag:
+
+```python
+uv.workspace(
+    name = "pypi",
+    lock_file = "//:uv.lock",
+    extra_project_files = ["//:pyproject.toml", "//tools:pyproject.toml"],
+)
+```
+
+These explicitly specified files are appended to the auto-discovered files.
+
 #### The Internal Build Tools Repository (`__build`)
 
 For every workspace, `rules_pycross` also auto-generates an internal companion repository named `<workspace>__build` (e.g., `@pypi__build`).
