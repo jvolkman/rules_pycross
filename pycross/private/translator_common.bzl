@@ -1,14 +1,60 @@
 """Shared Starlark utilities for lock file translators.
 
 Ports resolve_lock_graph and related logic from translator_utils.py.
-Used by PDM, Poetry, and UV translators.
+Used by PDM, Poetry, UV, and Pylock translators.
 """
 
 load("@pypackaging.bzl", "pypackaging")
+load("@toml.bzl//toml:toml.bzl", "decode")
 
 def canonicalize_name(name):
     """Canonicalize a Python package name per PEP 503."""
     return pypackaging.utils.canonicalize_name(name)
+
+def select_project_file(rctx, extra_project_files, lock_file, projects = []):
+    """Select the best matching pyproject.toml from extra_project_files.
+
+    For single-project repos (projects has exactly one non-wildcard entry),
+    iterates through extra_project_files to find the one whose [project].name
+    matches the requested project. Falls back to the sibling pyproject.toml
+    of the lock file if available, or the first file in the list.
+
+    Args:
+        rctx: The repository_ctx or module_ctx object.
+        extra_project_files: List of pyproject.toml labels.
+        lock_file: The lock file label, used for sibling fallback.
+        projects: List of project name strings from lock_model.
+
+    Returns:
+        A label for the selected pyproject.toml, or None if not found.
+    """
+    if not extra_project_files:
+        # Fall back to sibling pyproject.toml
+        return lock_file.relative(":pyproject.toml")
+
+    project_file = None
+
+    # Smart selection: if targeting a single named project, find its pyproject.toml
+    if len(projects) == 1 and projects[0] != "*":
+        target_name = canonicalize_name(projects[0])
+        for f in extra_project_files:
+            path = rctx.path(f)
+            if path.exists:
+                p_dict = decode(rctx.read(path))
+                p_name = p_dict.get("project", {}).get("name")
+                if p_name and canonicalize_name(p_name) == target_name:
+                    project_file = f
+                    break
+
+    if not project_file:
+        # Fallback: prefer sibling (root) pyproject.toml if in the list
+        sibling_label = lock_file.relative(":pyproject.toml")
+        if sibling_label in extra_project_files:
+            project_file = sibling_label
+        else:
+            project_file = extra_project_files[0]
+
+    return project_file
 
 def parse_pep508_requirement(req_str):
     """Parses a PEP 508 requirement string into components.

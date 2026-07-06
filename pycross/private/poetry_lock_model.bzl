@@ -17,6 +17,7 @@ load(
     "canonicalize_name",
     "parse_pep508_requirement",
     "resolve_lock_graph",
+    "select_project_file",
 )
 
 def _poetry_constraint_to_pep440(constraint):
@@ -218,10 +219,9 @@ def translate_poetry(project_dict, lock_dict, lock_model):
     lock_major = int(lock_version_parts[0])
     if lock_major < 2:
         fail(
-            "Poetry lock-version {} is not supported. " +
-            "rules_pycross requires Poetry 2.0+ (lock-version >= 2.0). " +
-            "Please regenerate your lock file with: poetry lock --regenerate",
-            lock_version,
+            ("Poetry lock-version {} is not supported. " +
+             "rules_pycross requires Poetry 2.0+ (lock-version >= 2.0). " +
+             "Please regenerate your lock file with: poetry lock --regenerate").format(lock_version),
         )
 
     # Collect pinned package specs from the project file
@@ -412,13 +412,8 @@ def repo_create_poetry_model(rctx, extra_project_files, lock_file, lock_model, o
         output: the output file.
     """
 
-    # Try to find a pyproject.toml
-    project_file = None
-    if extra_project_files:
-        project_file = extra_project_files[0]
-    else:
-        # Fall back to sibling pyproject.toml
-        project_file = lock_file.relative(":pyproject.toml")
+    projects = getattr(lock_model, "projects", [])
+    project_file = select_project_file(rctx, extra_project_files, lock_file, projects)
 
     project_dict = {}
     if project_file:

@@ -13,6 +13,7 @@ load(
     ":translator_common.bzl",
     "canonicalize_name",
     "resolve_lock_graph",
+    "select_project_file",
 )
 
 def _parse_file_info(file_info, package_name, package_version, registry = None):
@@ -480,13 +481,8 @@ def repo_create_uv_model(rctx, extra_project_files, lock_file, lock_model, outpu
         output: the output file.
     """
 
-    # Try to find a pyproject.toml
-    project_file = None
-    if extra_project_files:
-        project_file = extra_project_files[0]
-    else:
-        # Fall back to sibling pyproject.toml
-        project_file = lock_file.relative(":pyproject.toml")
+    projects = getattr(lock_model, "projects", [])
+    project_file = select_project_file(rctx, extra_project_files, lock_file, projects)
 
     project_dict = {}
     if project_file:

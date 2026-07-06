@@ -108,7 +108,6 @@ pycross_wheel_metadata(
     include_paths = {include_paths},
 )
 """.format(
-        thin_repo = rctx.attr.thin_repo,
         lock_repo = rctx.attr.lock_repo,
         backend_bzl = backend_bzl,
         backend_macro = backend_macro,

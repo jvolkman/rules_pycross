@@ -236,7 +236,7 @@ def make_format_extension(
             Merged with REPO_ATTRS and TRANSITION_ATTRS.
         discover_members_fn: Function(mctx, lock_file_label) -> [struct(name, path)].
             Required when workspace_attrs is not None.
-        repo_create_model_fn: Function(module_ctx, project_file, lock_file, lock_model, output).
+        repo_create_model_fn: Function(rctx, extra_project_files, lock_file, lock_model, output).
             Runs the format-specific translator to produce raw lock JSON.
 
     Returns:
@@ -408,7 +408,6 @@ def make_format_extension(
         )
 
     # Build the repo tag_class by merging format-specific, shared, and transition attrs.
-    # The repo tag always requires a workspace reference; project_file is optional.
     repo_tag_attrs = {}
     if repo_attrs != None:
         repo_tag_attrs.update(repo_attrs)

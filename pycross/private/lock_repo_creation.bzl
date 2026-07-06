@@ -196,8 +196,6 @@ def create_repos(
             whldir_norm_name = sanitize_name(pkg_name_part)
             whldir_name = "{}-{}.whldir".format(whldir_norm_name, pkg_version)
 
-            pkg_lock_repo_for_deps = "{}__pkgs".format(workspace_name)
-
             sdist_repo_attrs = {
                 "name": sdist_repo_name,
                 "sdist": sdist_label,
@@ -206,7 +204,7 @@ def create_repos(
                 "pin_versions_json": "@{}//:pin_versions.json".format(
                     pkg.get("build_tools_repo") or "{}__build".format(workspace_name),
                 ),
-                "lock_repo": pkg_lock_repo_for_deps,
+                "lock_repo": lock_repo_for_deps,
                 "thin_repo": pkg.get("build_tools_repo") or "{}__build".format(workspace_name),
                 "backend_to_rule": BACKEND_TO_RULE,
                 "default_backend": DEFAULT_BACKEND,

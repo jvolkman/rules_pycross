@@ -324,7 +324,6 @@ def process_repo(
         ws_name,
         tag_info,
         model_type,
-        discovered_members,
         extra_project_files):
     """Processes a single repo tag.
 
@@ -337,7 +336,6 @@ def process_repo(
         ws_name: The workspace name.
         tag_info: The repo tag info.
         model_type: The lock model type.
-        discovered_members: Dict of discovered members.
         extra_project_files: List of extra pyproject.toml files.
     """
     tag = tag_info.tag
@@ -353,19 +351,6 @@ def process_repo(
     if has_wildcard and has_specific:
         # buildifier: disable=print
         print("WARNING: repo '{}' in workspace '{}' specifies both wildcard ('*') and specific dependency groups ({}). The specific groups are redundant.".format(tag.repo, ws_name, dependency_groups))
-
-    # Check that any specific projects requested exist
-    projects_list = tag.projects
-    if "*" not in projects_list:
-        for p in projects_list:
-            if p not in discovered_members:
-                # If there is only one discovered member and its name is "root" (poetry/pylock), allow it
-                if len(discovered_members) == 1 and "root" in discovered_members:
-                    continue
-
-                # We allow it to pass through and fail in the translator, as the translator
-                # might support standalone locks where the project name isn't in discovered members
-                pass
 
     # Get transition attrs
     transition_attrs = get_member_transition_attrs(None, tag)
@@ -459,7 +444,6 @@ def process_workspaces(
                     workspace = ws_name,
                     projects = [project_name],
                     repo = ws_name,
-                    project_file = None,
                     dependency_groups = ["default"],
                     legacy_create_root_aliases = False,
                     flags = [],
@@ -517,7 +501,6 @@ def process_workspaces(
             ws_name,
             new_tag_info,
             model_type,
-            discovered,
             workspace_extra_project_files[ws_name],
         )
 

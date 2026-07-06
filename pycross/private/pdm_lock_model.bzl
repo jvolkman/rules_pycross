@@ -11,6 +11,7 @@ load(
     "canonicalize_name",
     "parse_pep508_requirement",
     "resolve_lock_graph",
+    "select_project_file",
 )
 load(":util.bzl", "url_decode_filename")
 
@@ -214,32 +215,8 @@ def repo_create_pdm_model(rctx, extra_project_files, lock_file, lock_model, outp
         output: the output file.
     """
 
-    # Try to find a pyproject.toml
-    project_file = None
     projects = getattr(lock_model, "projects", [])
-
-    if extra_project_files:
-        if len(projects) == 1 and projects[0] != "*":
-            target_name = canonicalize_name(projects[0])
-            for f in extra_project_files:
-                path = rctx.path(f)
-                if path.exists:
-                    p_dict = decode(rctx.read(path))
-                    p_name = p_dict.get("project", {}).get("name")
-                    if p_name and canonicalize_name(p_name) == target_name:
-                        project_file = f
-                        break
-
-        if not project_file:
-            # Fallback or wildcard: prefer sibling (root) pyproject.toml if in the list
-            sibling_label = lock_file.relative(":pyproject.toml")
-            if sibling_label in extra_project_files:
-                project_file = sibling_label
-            else:
-                project_file = extra_project_files[0]
-    else:
-        # Fall back to sibling pyproject.toml
-        project_file = lock_file.relative(":pyproject.toml")
+    project_file = select_project_file(rctx, extra_project_files, lock_file, projects)
 
     project_dict = {}
     if project_file:

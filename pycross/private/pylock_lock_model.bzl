@@ -7,6 +7,7 @@ lock_resolver.bzl.
 
 load("@pypackaging.bzl", "pypackaging")
 load("@toml.bzl//toml:toml.bzl", "decode")
+load(":translator_common.bzl", "select_project_file")
 load(":util.bzl", "extract_pep508_name", "parse_package_key")
 
 def _canonicalize_name(name):
@@ -272,13 +273,8 @@ def repo_create_pylock_model(rctx, extra_project_files, lock_file, lock_model, o
         output: the output file.
     """
 
-    # Try to find a pyproject.toml
-    project_file = None
-    if extra_project_files:
-        project_file = extra_project_files[0]
-    else:
-        # Fall back to sibling pyproject.toml
-        project_file = lock_file.relative(":pyproject.toml")
+    projects = getattr(lock_model, "projects", [])
+    project_file = select_project_file(rctx, extra_project_files, lock_file, projects)
 
     project_dict = {}
     if project_file:
