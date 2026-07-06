@@ -8,8 +8,8 @@ user-facing convenience targets.
 The file structure is as follows:
 - REPO.bazel               - The repository root marker.
 - BUILD.bazel              - Minimal root build file.
-- _pkg/lock.bzl            - Generated Starlark with all package targets.
-- _pkg/BUILD.bazel         - Loads lock.bzl and calls targets().
+- _lock/lock.bzl           - Generated Starlark with all package targets.
+- _lock/BUILD.bazel        - Loads lock.bzl and calls targets().
 - _wheel/BUILD.bazel       - Versioned wheel aliases.
 - _sdist/BUILD.bazel       - Versioned sdist aliases.
 - _backend/<rule>.bzl      - Backend macros with pre-configured tool deps.
@@ -156,8 +156,8 @@ def _package_repo_impl(rctx):
 
     rctx.file("REPO.bazel", "")
 
-    # 1. Render _pkg/lock.bzl and _pkg/BUILD.bazel
-    rctx.file("_pkg/lock.bzl", render_lock_bzl(lock, repo_map, sdist_map, rctx.name))
+    # 1. Render _lock/lock.bzl and _lock/BUILD.bazel
+    rctx.file("_lock/lock.bzl", render_lock_bzl(lock, repo_map, sdist_map, rctx.name))
 
     lock_build_lines = [
         'package(default_visibility = ["//visibility:public"])',
@@ -275,7 +275,7 @@ def _package_repo_impl(rctx):
                 "",
             ])
 
-    rctx.file("_pkg/BUILD.bazel", "\n".join(lock_build_lines))
+    rctx.file("_lock/BUILD.bazel", "\n".join(lock_build_lines))
 
     # 2. Root BUILD.bazel
     root_build_lines = [
@@ -331,11 +331,11 @@ def _package_repo_impl(rctx):
         us_name = _underscore_name(pkg_name_part)
         whldir_name = "{}-{}.whldir".format(us_name, pkg_version)
 
-        # Versioned target: _wheel:name@version -> pycross_wheel_dir wrapping //_pkg:_wheel_{key}
+        # Versioned target: _wheel:name@version -> pycross_wheel_dir wrapping //_lock:_wheel_{key}
         wheel_lines.extend([
             "pycross_wheel_dir(",
             '    name = "{}@{}",'.format(norm_name, pkg_version),
-            '    src = "//_pkg:_wheel_{}",'.format(pkg_key),
+            '    src = "//_lock:_wheel_{}",'.format(pkg_key),
             '    whldir_name = "{}",'.format(whldir_name),
             ")",
             "",
@@ -346,7 +346,7 @@ def _package_repo_impl(rctx):
             sdist_lines.extend([
                 "alias(",
                 '    name = "{}@{}",'.format(norm_name, pkg_version),
-                '    actual = "//_pkg:_sdist_{}",'.format(pkg_key),
+                '    actual = "//_lock:_sdist_{}",'.format(pkg_key),
                 ")",
                 "",
             ])
@@ -375,8 +375,8 @@ def _package_repo_impl(rctx):
             matching = [k for k in packages.keys() if _normalize_name(key_name(k)) == norm_pkg]
             if matching:
                 # Use the first match. For cycle groups, the name is _raw_{pkg_key}.
-                # But here we just need the dependency, so pointing to //_pkg:{pkg_key} is fine.
-                tool_deps_labels.append("//_pkg:{}".format(matching[0]))
+                # But here we just need the dependency, so pointing to //_lock:{pkg_key} is fine.
+                tool_deps_labels.append("//_lock:{}".format(matching[0]))
 
         lines = [
             '"""Backend macro with pre-configured tool defaults for this lock repo."""',
