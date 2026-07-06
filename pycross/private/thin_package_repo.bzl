@@ -751,6 +751,30 @@ pycross_transitioning_file_proxy = rule(
         if has_cargo_targets:
             rctx.file("_cargo/BUILD.bazel", "\n".join(cargo_lines))
 
+    # Generate pin_versions.json: a manifest of what each //dep:pkg pin resolves to.
+    # Simple pins: name -> version string. Variant pins: name -> {variant -> version}.
+    pin_versions = {}
+    for base_pin_name in sorted(grouped_pins.keys()):
+        group = grouped_pins[base_pin_name]
+        base_target_dict = group["base_target"]
+        if not base_target_dict:
+            continue
+
+        if len(base_target_dict) == 1 and "" in base_target_dict:
+            # Simple (unconditional) pin
+            pkg_key = base_target_dict[""]
+            parts = parse_package_key(pkg_key)
+            pin_versions[base_pin_name] = parts.version
+        else:
+            # Variant pin: {variant_name -> version}
+            variant_versions = {}
+            for variant_name, pkg_key in sorted(base_target_dict.items()):
+                parts = parse_package_key(pkg_key)
+                variant_versions[variant_name] = parts.version
+            pin_versions[base_pin_name] = variant_versions
+
+    rctx.file("pin_versions.json", json.encode(pin_versions))
+
 thin_package_repo = repository_rule(
     implementation = _thin_package_repo_impl,
     attrs = {
@@ -763,8 +787,8 @@ thin_package_repo = repository_rule(
             mandatory = True,
             doc = "Name of the workspace package_repo that contains the shared _pkg/ targets.",
         ),
-        "default_build_repo": attr.string(
-            doc = "Name of the workspace to pull sdist build dependencies from (e.g. build_deps__pkgs).",
+        "default_build_tools_repo": attr.string(
+            doc = "Name of the workspace to pull sdist build tool dependencies from.",
         ),
         "member_name": attr.string(
             mandatory = True,

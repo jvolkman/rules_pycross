@@ -13,7 +13,7 @@ load("//pycross/private:json_file_repo.bzl", "json_file_repo")
 load("//pycross/private:package_repo.bzl", "package_repo")
 load("//pycross/private:pypi_file.bzl", "pypi_file")
 load("//pycross/private:thin_package_repo.bzl", "thin_package_repo")
-load("//pycross/private:util.bzl", "expand_pins_for_build_repo", "key_name", "parse_package_key", "sanitize_name")
+load("//pycross/private:util.bzl", "key_name", "parse_package_key", "sanitize_name")
 load("//pycross/private:wheel_file.bzl", "pycross_wheel_file")
 load(":git_file.bzl", "pycross_git_file")
 
@@ -204,15 +204,17 @@ def create_repos(
                 "sdist": sdist_label,
                 "deps": sorted(deps_set.keys()),
                 "known_packages": known_packages,
-                "lock_json": lock_file,
+                "pin_versions_json": "@{}//:pin_versions.json".format(
+                    pkg.get("build_tools_repo") or "{}__build".format(workspace_name),
+                ),
                 "lock_repo": pkg_lock_repo_for_deps,
-                "thin_repo": "{}__build".format(workspace_name),
+                "thin_repo": pkg.get("build_tools_repo") or "{}__build".format(workspace_name),
                 "backend_to_rule": BACKEND_TO_RULE,
                 "default_backend": DEFAULT_BACKEND,
                 "whldir_name": whldir_name,
             }
-            if "build_dependencies" in pkg and pkg["build_dependencies"] != None:
-                sdist_repo_attrs["build_dependencies"] = pkg["build_dependencies"]
+            if "extra_build_tools" in pkg and pkg["extra_build_tools"] != None:
+                sdist_repo_attrs["extra_build_tools"] = pkg["extra_build_tools"]
 
             for attr_name in ("build_backend", "pre_build_patches", "site_hooks"):
                 if attr_name in pkg and pkg[attr_name] != None:
@@ -326,20 +328,65 @@ def create_repos(
         package_repo(**package_repo_attrs)
 
         # Auto-generate the __build thin repo for this workspace.
-        # This repo exposes all single-version packages with expanded pins,
-        # making them available as sdist build dependencies.
+        # This repo merges all member resolved locks and pins all packages,
+        # making them available as sdist build tool dependencies.
+        # Equivalent to dependency_groups=["*"], create_transitive_aliases=True.
         build_repo_name = "{}__build".format(workspace_name)
-        resolved_locks_by_member = {
-            member: per_repo_data[member].resolved_lock
-            for member in member_repos
-        }
-        build_pins = expand_pins_for_build_repo(resolved_locks_by_member)
 
-        # Create a resolved lock JSON with expanded pins for the build repo.
-        # Use the first member's lock as the base, replacing pins.
-        first_member = member_repos[0]
-        build_resolved_lock = dict(per_repo_data[first_member].resolved_lock)
-        build_resolved_lock["pins"] = build_pins
+        # Merge all member resolved locks: union of packages and pins.
+        merged_packages = {}
+        merged_pins = {}
+        merged_variants = []
+        base_lock = {}
+        for member in member_repos:
+            member_lock = per_repo_data[member].resolved_lock
+            if not base_lock:
+                base_lock = member_lock
+            merged_packages.update(member_lock.get("packages", {}))
+            for pin_name, pin_value in member_lock.get("pins", {}).items():
+                if pin_name not in merged_pins:
+                    if type(pin_value) == "string":
+                        merged_pins[pin_name] = {"": pin_value}
+                    else:
+                        merged_pins[pin_name] = dict(pin_value)
+                elif type(pin_value) == "dict":
+                    merged_pins[pin_name].update(pin_value)
+            for v in member_lock.get("variants", []):
+                if v not in merged_variants:
+                    merged_variants.append(v)
+
+        # Add transitive aliases: pin all single-version packages not already pinned.
+        versions_by_name = {}
+        for pkg_key in merged_packages.keys():
+            parts = parse_package_key(pkg_key)
+            if parts.extra:
+                continue
+            name = parts.name
+            version = parts.version
+            if name not in versions_by_name:
+                versions_by_name[name] = {}
+            versions_by_name[name][version] = pkg_key
+
+        for name, versions in versions_by_name.items():
+            if name in merged_pins:
+                continue
+            if len(versions) > 1:
+                version_tuples = [(pypackaging.version.parse(v).key, v) for v in versions.keys()]
+                latest_version = sorted(version_tuples)[-1][1]
+
+                # buildifier: disable=print
+                print("WARNING: Multiple versions of {} found in workspace. Pinning build repo to latest: {}".format(name, latest_version))
+                pkg_key = versions[latest_version]
+                merged_pins[name] = {"": pkg_key}
+                continue
+            pkg_key = versions.values()[0]
+            merged_pins[name] = {"": pkg_key}
+
+        build_resolved_lock = dict(base_lock)
+        build_resolved_lock["packages"] = merged_packages
+        build_resolved_lock["pins"] = merged_pins
+        build_resolved_lock["variants"] = merged_variants
+
         build_lock_repo_name = "{}_lock_json".format(build_repo_name)
         json_file_repo(
             name = build_lock_repo_name,
@@ -366,7 +413,7 @@ def create_repos(
                 conflicts = conflicts,
                 backend_configs = backend_configs_json,
             )
-            thin_repo_attrs["default_build_repo"] = workspace_repo_name
+            thin_repo_attrs["default_build_tools_repo"] = workspace_repo_name
             thin_repo_attrs["generate_root_aliases"] = True
 
             if member in repo_flags:

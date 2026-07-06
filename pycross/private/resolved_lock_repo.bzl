@@ -60,7 +60,7 @@ def _generate_lock_file(rctx):
         remote_wheels = rctx.attr.remote_wheels,
         always_include_sdist = rctx.attr.always_include_sdist,
         annotations_data = annotations_data,
-        default_build_dependencies_args = rctx.attr.default_build_dependencies,
+        default_extra_build_tools_args = rctx.attr.default_build_dependencies,
         create_transitive_aliases = rctx.attr.create_transitive_aliases,
     )
 

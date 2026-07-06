@@ -105,10 +105,10 @@ PACKAGE_ATTRS = dict(
     always_build = attr.bool(
         doc = "If True, don't use pre-built wheels for this package.",
     ),
-    build_dependencies = attr.string_list(
+    extra_build_tools = attr.string_list(
         doc = "A list of additional package keys to use when building this package from source.",
     ),
-    build_repo = attr.string(
+    build_tools_repo = attr.string(
         doc = "Optional repo to use for resolving sdist build dependencies for this package.",
     ),
     ignore_dependencies = attr.string_list(
@@ -183,8 +183,8 @@ def _resolve_lock_inline(module_ctx, lock_info, serialized_lock_model, workspace
     for package_name, package in all_packages.items():
         annotations_data[package_name] = json.decode(package_annotation(
             always_build = package.always_build if package.always_build != None else (wildcard_pkg.always_build if wildcard_pkg else False),
-            build_dependencies = package.build_dependencies or (wildcard_pkg.build_dependencies if wildcard_pkg else []),
-            build_repo = package.build_repo or (wildcard_pkg.build_repo if wildcard_pkg else None),
+            extra_build_tools = package.extra_build_tools or (wildcard_pkg.extra_build_tools if wildcard_pkg else []),
+            build_tools_repo = package.build_tools_repo or (wildcard_pkg.build_tools_repo if wildcard_pkg else None),
             build_target = str(package.build_target) if package.build_target else (str(wildcard_pkg.build_target) if wildcard_pkg and wildcard_pkg.build_target else None),
             ignore_dependencies = package.ignore_dependencies or (wildcard_pkg.ignore_dependencies if wildcard_pkg else []),
             install_exclude_globs = package.install_exclude_globs or (wildcard_pkg.install_exclude_globs if wildcard_pkg else []),
@@ -208,7 +208,7 @@ def _resolve_lock_inline(module_ctx, lock_info, serialized_lock_model, workspace
         remote_wheels = {},
         always_include_sdist = False,
         annotations_data = annotations_data,
-        default_build_dependencies_args = wildcard_pkg.build_dependencies if wildcard_pkg else [],
+        default_extra_build_tools_args = wildcard_pkg.extra_build_tools if wildcard_pkg else [],
         create_transitive_aliases = lock_info.create_transitive_aliases,
     )
 

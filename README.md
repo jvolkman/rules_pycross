@@ -317,36 +317,36 @@ uv.package(
 )
 ```
 
-### Build Dependencies
+### Extra Build Tools
 
-When building a package from source, `rules_pycross` automatically includes the `build-system.requires` packages from the sdist's `pyproject.toml`. If a package needs additional Python packages at build time (e.g., `cython`, `numpy`, `setuptools-scm`), declare them with `build_dependencies`:
+When building a package from source, `rules_pycross` automatically includes the `build-system.requires` packages from the sdist's `pyproject.toml`. If a package needs additional Python packages at build time (e.g., `cython`, `numpy`, `setuptools-scm`), declare them with `extra_build_tools`:
 
 ```python
 uv.package(
     name = "pandas",
-    build_dependencies = ["cython@0.29.36", "numpy@1.26.4"],
+    extra_build_tools = ["cython@0.29.36", "numpy@1.26.4"],
     workspace = "pypi",
 )
 ```
 
 These package keys must match entries in the lock file. Only packages that aren't already runtime dependencies are added as build-only deps.
 
-#### Default Build Dependencies
+#### Default Extra Build Tools
 
-Use `name = "*"` to set default build dependencies for all packages in a workspace. A specific `build_dependencies` on an individual package fully replaces the wildcard:
+Use `name = "*"` to set default extra build tools for all packages in a workspace. A specific `extra_build_tools` on an individual package fully replaces the wildcard:
 
 ```python
 # Default: every sdist build gets cython available
 uv.package(
     name = "*",
-    build_dependencies = ["cython@0.29.36"],
+    extra_build_tools = ["cython@0.29.36"],
     workspace = "pypi",
 )
 
 # numpy gets its own specific set instead
 uv.package(
     name = "numpy",
-    build_dependencies = ["cython@0.29.36", "oldest-supported-numpy@0.9"],
+    extra_build_tools = ["cython@0.29.36", "oldest-supported-numpy@0.9"],
     workspace = "pypi",
 )
 ```

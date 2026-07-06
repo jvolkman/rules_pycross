@@ -1,7 +1,6 @@
 load("@rules_python//python:defs.bzl", "py_test")
 load(":test_common_attrs.bzl", "common_attrs_test_suite")
 load(":test_cycle_member_marker_deps.bzl", "cycle_member_marker_deps_test_suite")
-load(":test_expand_pins.bzl", "expand_pins_test_suite")
 load(":test_lock_resolver.bzl", "lock_resolver_test_suite")
 load(":test_override_helpers.bzl", "override_helpers_test_suite")
 load(":test_pdm_translator.bzl", "pdm_translator_test_suite")
@@ -117,8 +116,6 @@ cycle_member_marker_deps_test_suite(name = "test_cycle_member_marker_deps")
 thin_package_repo_test_suite(name = "test_thin_package_repo")
 
 lock_resolver_test_suite(name = "test_lock_resolver")
-
-expand_pins_test_suite(name = "test_expand_pins")
 
 pdm_translator_test_suite(name = "test_pdm_translator")
 

@@ -18,8 +18,8 @@ def validate_transition_attrs(tag, tag_name):
 
 def package_annotation(
         always_build = False,
-        build_dependencies = [],
-        build_repo = None,
+        extra_build_tools = [],
+        build_tools_repo = None,
         build_target = None,
         ignore_dependencies = [],
         install_exclude_globs = [],
@@ -34,8 +34,8 @@ def package_annotation(
     """Annotations to apply to individual packages."""
     return json.encode(struct(
         always_build = always_build,
-        build_dependencies = build_dependencies,
-        build_repo = build_repo,
+        extra_build_tools = extra_build_tools,
+        build_tools_repo = build_tools_repo,
         build_target = build_target,
         ignore_dependencies = ignore_dependencies,
         install_exclude_globs = install_exclude_globs,
@@ -108,8 +108,8 @@ def normalize_package_tag(tag):
     """Normalize a generic package tag into a struct."""
     return struct(
         always_build = tag.always_build,
-        build_dependencies = tag.build_dependencies,
-        build_repo = tag.build_repo,
+        extra_build_tools = tag.extra_build_tools,
+        build_tools_repo = tag.build_tools_repo,
         build_target = tag.build_target,
         ignore_dependencies = tag.ignore_dependencies,
         install_exclude_globs = tag.install_exclude_globs,

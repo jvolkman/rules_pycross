@@ -106,10 +106,10 @@ PACKAGE_ATTRS = dict(
     always_build = attr.bool(
         doc = "If True, don't use pre-built wheels for this package.",
     ),
-    build_dependencies = attr.string_list(
+    extra_build_tools = attr.string_list(
         doc = "A list of additional package keys (name or name@version) to use when building this package from source.",
     ),
-    build_repo = attr.string(
+    build_tools_repo = attr.string(
         doc = "Optional repo to use for resolving sdist build dependencies for this package.",
     ),
     ignore_dependencies = attr.string_list(
