@@ -413,17 +413,24 @@ def process_workspaces(
     workspace_extra_project_files = {}
     for name, ws_info in workspaces.items():
         ws_tag = ws_info.tag
-        extra_project_files = list(getattr(ws_tag, "extra_project_files", []))
-        if not extra_project_files:
-            discovered = workspace_discovered_members[name]
-            for member_info in discovered.values():
-                label = resolve_member_project_file(ws_tag.lock_file, member_info.path)
-                extra_project_files.append(label)
 
-            if not extra_project_files:
-                # Still empty? Fall back to sibling
-                extra_project_files.append(ws_tag.lock_file.relative(":pyproject.toml"))
-        workspace_extra_project_files[name] = extra_project_files
+        # Always start with auto-discovered project files from workspace members.
+        project_files = []
+        discovered = workspace_discovered_members[name]
+        for member_info in discovered.values():
+            label = resolve_member_project_file(ws_tag.lock_file, member_info.path)
+            project_files.append(label)
+
+        if not project_files:
+            # No workspace members discovered; fall back to sibling pyproject.toml.
+            project_files.append(ws_tag.lock_file.relative(":pyproject.toml"))
+
+        # Append any user-specified extra_project_files, deduplicating.
+        for f in getattr(ws_tag, "extra_project_files", []):
+            if f not in project_files:
+                project_files.append(f)
+
+        workspace_extra_project_files[name] = project_files
 
     # Count repos per workspace
     workspace_repo_count = {name: 0 for name in workspaces}
