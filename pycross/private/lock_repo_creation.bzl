@@ -9,7 +9,6 @@ load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_file")
 load("@pycross_backends//:registry.bzl", "BACKEND_CONFIGS", "BACKEND_TO_RULE", "DEFAULT_BACKEND", "OVERRIDE_FILES")
 load("@pypackaging.bzl", "pypackaging")
 load("@rules_pycross//pycross/private:sdist_repo.bzl", "pycross_sdist_repo")
-load("//pycross/private:json_file_repo.bzl", "json_file_repo")
 load("//pycross/private:package_repo.bzl", "package_repo")
 load("//pycross/private:pypi_file.bzl", "pypi_file")
 load("//pycross/private:thin_package_repo.bzl", "thin_package_repo")
@@ -326,82 +325,6 @@ def create_repos(
                 for member in member_repos
             }
         package_repo(**package_repo_attrs)
-
-        # Auto-generate the __build thin repo for this workspace.
-        # This repo merges all member resolved locks and pins all packages,
-        # making them available as sdist build tool dependencies.
-        # Equivalent to dependency_groups=["*"], create_transitive_aliases=True.
-        build_repo_name = "{}__build".format(workspace_name)
-
-        # Merge all member resolved locks: union of packages and pins.
-        merged_packages = {}
-        merged_pins = {}
-        merged_variants = []
-        base_lock = {}
-        for member in member_repos:
-            member_lock = per_repo_data[member].resolved_lock
-            if not base_lock:
-                base_lock = member_lock
-            merged_packages.update(member_lock.get("packages", {}))
-            for pin_name, pin_value in member_lock.get("pins", {}).items():
-                if pin_name not in merged_pins:
-                    if type(pin_value) == "string":
-                        merged_pins[pin_name] = {"": pin_value}
-                    else:
-                        merged_pins[pin_name] = dict(pin_value)
-                elif type(pin_value) == "dict":
-                    merged_pins[pin_name].update(pin_value)
-            for v in member_lock.get("variants", []):
-                if v not in merged_variants:
-                    merged_variants.append(v)
-
-        # Add transitive aliases: pin all single-version packages not already pinned.
-        versions_by_name = {}
-        for pkg_key in merged_packages.keys():
-            parts = parse_package_key(pkg_key)
-            if parts.extra:
-                continue
-            name = parts.name
-            version = parts.version
-            if name not in versions_by_name:
-                versions_by_name[name] = {}
-            versions_by_name[name][version] = pkg_key
-
-        for name, versions in versions_by_name.items():
-            if name in merged_pins:
-                continue
-            if len(versions) > 1:
-                version_tuples = [(pypackaging.version.parse(v).key, v) for v in versions.keys()]
-                latest_version = sorted(version_tuples)[-1][1]
-
-                # buildifier: disable=print
-                print("WARNING: Multiple versions of {} found in workspace. Pinning build repo to latest: {}".format(name, latest_version))
-                pkg_key = versions[latest_version]
-                merged_pins[name] = {"": pkg_key}
-                continue
-            pkg_key = versions.values()[0]
-            merged_pins[name] = {"": pkg_key}
-
-        build_resolved_lock = dict(base_lock)
-        build_resolved_lock["packages"] = merged_packages
-        build_resolved_lock["pins"] = merged_pins
-        build_resolved_lock["variants"] = merged_variants
-
-        build_lock_repo_name = "{}_lock_json".format(build_repo_name)
-        json_file_repo(
-            name = build_lock_repo_name,
-            content = json.encode(build_resolved_lock),
-        )
-
-        thin_package_repo(
-            name = build_repo_name,
-            resolved_lock_file = "@{}//:data.json".format(build_lock_repo_name),
-            workspace_repo = workspace_repo_name,
-            member_name = build_repo_name,
-            conflicts = {},
-            backend_configs = backend_configs_json,
-            generate_root_aliases = True,
-        )
 
         # Create thin repos for each workspace member, passing conflict info.
         for member in member_repos:

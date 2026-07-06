@@ -43,6 +43,9 @@ WORKSPACE_COMMON_ATTRS = dict(
     pypi_indexes = attr.string_list(
         doc = "List of PyPI-compatible indexes to use for downloading packages.",
     ),
+    extra_project_files = attr.label_list(
+        doc = "Optional list of extra pyproject.toml files to consider.",
+    ),
 )
 
 # Shared attrs for member override project tags (within workspace).
@@ -56,10 +59,6 @@ REPO_ATTRS = dict(
     ),
     name = attr.string(
         doc = "Override the repo name.",
-    ),
-    project_file = attr.label(
-        doc = "Override auto-discovered pyproject.toml path.",
-        allow_single_file = True,
     ),
     create_transitive_aliases = attr.bool(
         doc = "Generate aliases for transitive single-version packages in this repo.",
@@ -159,13 +158,13 @@ def _resolve_lock_inline(module_ctx, lock_info, serialized_lock_model, workspace
     if type(lock_model) == "dict":
         lock_model = struct(**lock_model)
 
-    project_file = Label(lock_model.project_file) if getattr(lock_model, "project_file", "") else None
+    extra_project_files = [Label(f) for f in getattr(lock_model, "extra_project_files", [])]
     lock_file = Label(lock_model.lock_file)
 
     # Use a unique output file per repo to avoid conflicts.
     output = "raw_lock_{}.json".format(lock_info.repo_name)
 
-    repo_create_model_fn(module_ctx, project_file, lock_file, lock_model, output)
+    repo_create_model_fn(module_ctx, extra_project_files, lock_file, lock_model, output)
 
     # Read the raw lock and resolve.
     raw_lock_data = json.decode(module_ctx.read(module_ctx.path(output)))
@@ -273,7 +272,6 @@ def make_format_extension(
                     workspace = tag.workspace,
                     projects = getattr(tag, "projects", []),
                     repo = getattr(tag, "name", ""),
-                    project_file = getattr(tag, "project_file", None),
                     dependency_groups = getattr(tag, "dependency_groups", ["default"]),
                     legacy_create_root_aliases = getattr(tag, "legacy_create_root_aliases", False),
                     flags = getattr(tag, "flags", []),

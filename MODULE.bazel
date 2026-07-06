@@ -123,7 +123,6 @@ uv.repo(
         "optional:repairwheel",
     ],
     legacy_create_root_aliases = True,
-    project_file = "//:pyproject.toml",
     workspace = "pycross_internal_deps",
 )
 use_repo(uv, "pycross_internal_deps")

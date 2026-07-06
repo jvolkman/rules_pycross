@@ -236,7 +236,8 @@ def translate_poetry(project_dict, lock_dict, lock_model):
     poetry_groups = project_dict.get("tool", {}).get("poetry", {}).get("group", {})
 
     dependency_groups = getattr(lock_model, "dependency_groups", ["default"])
-    include_default = "default" in dependency_groups or "*" in dependency_groups
+    include_all = "*" in dependency_groups
+    include_default = "default" in dependency_groups or include_all
 
     if include_default:
         if has_project_deps:
@@ -261,7 +262,8 @@ def translate_poetry(project_dict, lock_dict, lock_model):
 
     project_optional_deps = project_dict.get("project", {}).get("optional-dependencies", {})
 
-    for group in dependency_groups:
+    effective_groups = ["optional:*", "development:*"] if include_all else dependency_groups
+    for group in effective_groups:
         if group == "default" or group == "*":
             continue
 
@@ -399,23 +401,35 @@ def translate_poetry(project_dict, lock_dict, lock_model):
         strict_dependencies = True,
     )
 
-def repo_create_poetry_model(rctx, project_file, lock_file, lock_model, output):
+def repo_create_poetry_model(rctx, extra_project_files, lock_file, lock_model, output):
     """Run the Poetry translator in pure Starlark.
 
     Args:
         rctx: The repository_ctx or module_ctx object.
-        project_file: The pyproject.toml file.
+        extra_project_files: List of extra pyproject.toml files.
         lock_file: The lock file.
         lock_model: a struct containing the same attrs as the pycross_poetry_lock_model rule.
         output: the output file.
     """
-    project_path = rctx.path(project_file)
-    if not project_path.exists:
-        fail("Project file not found: {}. Ensure pyproject.toml exists at the expected location.".format(project_file))
+
+    # Try to find a pyproject.toml
+    project_file = None
+    if extra_project_files:
+        project_file = extra_project_files[0]
+    else:
+        # Fall back to sibling pyproject.toml
+        project_file = lock_file.relative(":pyproject.toml")
+
+    project_dict = {}
+    if project_file:
+        project_path = rctx.path(project_file)
+        if project_path.exists:
+            project_dict = decode(rctx.read(project_path))
+
     lock_path = rctx.path(lock_file)
     if not lock_path.exists:
         fail("Lock file not found: {}. Ensure poetry.lock exists at the expected location.".format(lock_file))
-    project_dict = decode(rctx.read(project_path))
+
     lock_dict = decode(rctx.read(lock_path))
     raw_lock_data = translate_poetry(project_dict, lock_dict, lock_model)
     rctx.file(output, json.encode(raw_lock_data))

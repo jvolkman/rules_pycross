@@ -226,25 +226,6 @@ def resolve_member_project_file(lock_file_label, member_path):
     else:
         return lock_file_label.relative("//:pyproject.toml")
 
-def determine_project_file(override_tag, model_type, lock_file_label, member_path):
-    """Determines the project file path for a member.
-
-    Args:
-        override_tag: The override tag, if any.
-        model_type: The type of lock model.
-        lock_file_label: Label of the lock file.
-        member_path: Path to the member.
-
-    Returns:
-        The project file path or Label.
-    """
-    if override_tag and override_tag.project_file:
-        return override_tag.project_file
-    elif model_type == "pylock":
-        return ""
-    else:
-        return resolve_member_project_file(lock_file_label, member_path)
-
 def get_member_transition_attrs(members_tag, override_tag):
     """Merge transition attrs from a default members tag and optional override tag.
 
@@ -290,12 +271,12 @@ def register_workspace_repo(
         ws_name,
         model_type,
         repo_name,
-        project_file,
         projects,
         dependency_groups,
         legacy_create_root_aliases,
         transition_attrs,
-        lock_module):
+        lock_module,
+        extra_project_files):
     """Register a workspace lock repo.
 
     Args:
@@ -307,12 +288,12 @@ def register_workspace_repo(
         ws_name: The workspace name.
         model_type: The lock model type.
         repo_name: The repo name for this member.
-        project_file: The project file for this member.
         projects: List of projects included in this repo.
         dependency_groups: List of dependency groups.
         legacy_create_root_aliases: Boolean to create root aliases.
         transition_attrs: Transition attributes dict.
         lock_module: The module owning this lock.
+        extra_project_files: List of extra pyproject.toml files.
     """
     check_unique_repo_name(lock_owners, lock_module.name, repo_name)
     lock_repos[repo_name] = workspace_lock_struct(ws_tag, repo_name, ws_name, transition_attrs)
@@ -321,7 +302,7 @@ def register_workspace_repo(
 
     model = dict(
         model_type = model_type,
-        project_file = str(project_file) if project_file else "",
+        extra_project_files = [str(f) for f in extra_project_files],
         lock_file = str(ws_tag.lock_file),
         projects = projects,
         dependency_groups = dependency_groups,
@@ -343,7 +324,8 @@ def process_repo(
         ws_name,
         tag_info,
         model_type,
-        discovered_members):
+        discovered_members,
+        extra_project_files):
     """Processes a single repo tag.
 
     Args:
@@ -356,6 +338,7 @@ def process_repo(
         tag_info: The repo tag info.
         model_type: The lock model type.
         discovered_members: Dict of discovered members.
+        extra_project_files: List of extra pyproject.toml files.
     """
     tag = tag_info.tag
 
@@ -384,15 +367,6 @@ def process_repo(
                 # might support standalone locks where the project name isn't in discovered members
                 pass
 
-    # Determine project_file (just grab the first project's path if we need one for legacy translators)
-    member_path = ""
-    if projects_list and projects_list[0] != "*":
-        if projects_list[0] in discovered_members:
-            member_path = discovered_members[projects_list[0]].path
-    elif len(discovered_members) == 1:
-        member_path = list(discovered_members.values())[0].path
-    project_file = determine_project_file(tag, model_type, ws_tag.lock_file, member_path)
-
     # Get transition attrs
     transition_attrs = get_member_transition_attrs(None, tag)
 
@@ -405,12 +379,12 @@ def process_repo(
         ws_name,
         model_type,
         tag.repo,
-        project_file,
         tag.projects,
         tag.dependency_groups,
         tag.legacy_create_root_aliases,
         transition_attrs,
         tag_info.module,
+        extra_project_files,
     )
 
 def process_workspaces(
@@ -449,6 +423,22 @@ def process_workspaces(
     for name, ws_info in workspaces.items():
         discovered = discover_members_fn(module_ctx, ws_info.tag.lock_file)
         workspace_discovered_members[name] = {m.name: m for m in discovered}
+
+    # Compute extra_project_files for each workspace (explicit or auto-discovered)
+    workspace_extra_project_files = {}
+    for name, ws_info in workspaces.items():
+        ws_tag = ws_info.tag
+        extra_project_files = list(getattr(ws_tag, "extra_project_files", []))
+        if not extra_project_files:
+            discovered = workspace_discovered_members[name]
+            for member_info in discovered.values():
+                label = resolve_member_project_file(ws_tag.lock_file, member_info.path)
+                extra_project_files.append(label)
+
+            if not extra_project_files:
+                # Still empty? Fall back to sibling
+                extra_project_files.append(ws_tag.lock_file.relative(":pyproject.toml"))
+        workspace_extra_project_files[name] = extra_project_files
 
     # Count repos per workspace
     workspace_repo_count = {name: 0 for name in workspaces}
@@ -509,7 +499,6 @@ def process_workspaces(
             workspace = ws_name,
             projects = projects,
             repo = repo,
-            project_file = getattr(tag, "project_file", None),
             dependency_groups = getattr(tag, "dependency_groups", ["default"]),
             legacy_create_root_aliases = getattr(tag, "legacy_create_root_aliases", False),
             flags = getattr(tag, "flags", []),
@@ -529,4 +518,34 @@ def process_workspaces(
             new_tag_info,
             model_type,
             discovered,
+            workspace_extra_project_files[ws_name],
+        )
+
+    # Auto-generate the __build thin repo for this workspace.
+    for ws_name, ws_info in workspaces.items():
+        build_repo_name = "{}__build".format(ws_name)
+
+        if build_repo_name in lock_repos:
+            continue
+
+        register_workspace_repo(
+            lock_owners = lock_owners,
+            lock_repos = lock_repos,
+            lock_model_structs = lock_model_structs,
+            root_direct_deps = root_direct_deps,
+            ws_tag = ws_info.tag,
+            ws_name = ws_name,
+            model_type = model_type,
+            repo_name = build_repo_name,
+            projects = ["*"],
+            dependency_groups = ["*"],
+            legacy_create_root_aliases = False,
+            transition_attrs = dict(
+                flags = [],
+                constraint_values = [],
+                platform = None,
+                create_transitive_aliases = True,
+            ),
+            lock_module = ws_info.module,
+            extra_project_files = workspace_extra_project_files[ws_name],
         )
