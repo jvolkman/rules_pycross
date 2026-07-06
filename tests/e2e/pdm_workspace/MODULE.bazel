@@ -39,7 +39,13 @@ use_repo(environments, "pdm_workspace_envs")
 pdm = use_extension("@rules_pycross//pycross/extensions:pdm.bzl", "pdm")
 pdm.workspace(
     name = "shared",
+    extra_project_files = ["//project_c:pyproject.toml"],
     lock_file = "//:pdm.lock",
+)
+pdm.repo(
+    name = "lock_c",
+    projects = ["project-c"],
+    workspace = "shared",
 )
 pdm.repo(
     name = "lock_all",
@@ -65,4 +71,4 @@ pdm.package(
     install_exclude_globs = ["test_regex.py"],
     workspace = "shared",
 )
-use_repo(pdm, "lock_a", "lock_all", "lock_project_b")
+use_repo(pdm, "lock_a", "lock_all", "lock_c", "lock_project_b")

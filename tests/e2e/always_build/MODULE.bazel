@@ -43,12 +43,17 @@ uv.workspace(
     name = "uv",
     lock_file = "//:uv.lock",
 )
+uv.workspace(
+    name = "build_tools_provider",
+    lock_file = "//:uv.lock",
+)
 uv.repo(
     workspace = "uv",
 )
 uv.package(
     name = "regex",
     always_build = True,
+    build_tools_repo = "build_tools_provider__build",
     workspace = "uv",
 )
-use_repo(uv, "uv")
+use_repo(uv, "build_tools_provider__build", "uv")
