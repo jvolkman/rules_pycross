@@ -1573,6 +1573,39 @@ def _test_empty_lock(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
     analysis_test(name = name, target = name + "_subject", impl = _test_empty_lock_impl)
 
+def _test_duplicate_wheel_filename_raises_error_impl(env, target):
+    env.expect.that_target(target).failures().contains_predicate(
+        matching.contains("has multiple distinct files named"),
+    )
+
+def _test_duplicate_wheel_filename_raises_error(name):
+    lock_model_data = {
+        "packages": {
+            "foo@1.0": _make_pkg(
+                "foo",
+                "1.0",
+                [
+                    _make_file("foo-1.0-py3-none-any.whl", sha256 = "aaaa"),
+                    _make_file("foo-1.0-py3-none-any.whl", sha256 = "bbbb"),
+                ],
+            ),
+        },
+        "pins": {"foo": "foo@1.0"},
+    }
+
+    util.helper_target(
+        _resolve_failure_subject,
+        name = name + "_subject",
+        lock_model_data = json.encode(lock_model_data),
+    )
+
+    analysis_test(
+        name = name,
+        target = name + "_subject",
+        impl = _test_duplicate_wheel_filename_raises_error_impl,
+        expect_failure = True,
+    )
+
 def _test_pinned_package_not_in_packages_impl(env, target):
     env.expect.that_target(target).failures().contains_predicate(
         matching.contains("Missing package foo@1.0"),
@@ -1848,6 +1881,7 @@ def lock_resolver_test_suite(name):
             _test_multi_tag_wheel_candidates,
             _test_sdist_only_package,
             _test_no_files_raises_error,
+            _test_duplicate_wheel_filename_raises_error,
             _test_empty_lock,
             _test_pinned_package_not_in_packages,
             _test_wildcard_always_build_end_to_end,

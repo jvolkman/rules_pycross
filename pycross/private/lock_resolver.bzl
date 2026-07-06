@@ -119,6 +119,29 @@ def _create_package_resolver(pkg_key, pkg, ann, default_build_dependencies, cont
 
     package_sources = {}
     for f in pkg.get("files", []):
+        existing = package_sources.get(f["name"])
+        if existing != None and "file" in existing:
+            existing_file = existing["file"]
+
+            # Two files sharing a name but not a hash cannot be silently
+            # collapsed: keeping whichever entry is seen last makes wheel
+            # selection non-deterministic and is a supply-chain hazard. This
+            # commonly happens when a package is listed under more than one
+            # index. Fail and require the user to disambiguate. Multiple sdists
+            # with the same name are left unhandled.
+            if existing_file["name"].endswith(".whl") and existing_file.get("sha256") != f.get("sha256"):
+                fail(
+                    ("package {name}=={version} has multiple distinct files named {filename} " +
+                     "(sha256 {existing_sha} vs {new_sha}). This usually means the package is " +
+                     "listed under more than one index; pick one explicitly via " +
+                     "[tool.uv.sources] in pyproject.toml.").format(
+                        name = pkg_name,
+                        version = pkg_version,
+                        filename = repr(f["name"]),
+                        existing_sha = existing_file.get("sha256"),
+                        new_sha = f.get("sha256"),
+                    ),
+                )
         package_sources[f["name"]] = {"file": f}
 
     pkg_key_no_extra = "{}@{}".format(pkg_name, pkg_version)
