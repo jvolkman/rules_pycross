@@ -47,7 +47,6 @@ uv.repo(
         "development:dev",
         "optional:yaml",
     ],
-    project_file = "//:pyproject.toml",
     projects = ["*"],
     workspace = "uv",
 )

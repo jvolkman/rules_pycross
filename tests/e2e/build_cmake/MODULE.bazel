@@ -39,7 +39,6 @@ uv.workspace(
 )
 uv.repo(
     create_transitive_aliases = True,
-    project_file = "//:pyproject.toml",
     workspace = "uv",
 )
 uv.package(

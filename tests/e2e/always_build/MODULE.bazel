@@ -44,7 +44,6 @@ uv.workspace(
     lock_file = "//:uv.lock",
 )
 uv.repo(
-    project_file = "//:pyproject.toml",
     workspace = "uv",
 )
 uv.package(

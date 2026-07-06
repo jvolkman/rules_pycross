@@ -36,7 +36,6 @@ uv.workspace(
     lock_file = "//:uv.lock",
 )
 uv.repo(
-    project_file = "//:pyproject.toml",
     workspace = "markers_lock",
 )
 use_repo(uv, "markers_lock")

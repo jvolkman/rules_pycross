@@ -41,7 +41,6 @@ uv.workspace(
     lock_file = "//:uv.lock",
 )
 uv.repo(
-    project_file = "//:pyproject.toml",
     workspace = "cycle_lock",
 )
 use_repo(uv, "cycle_lock")
