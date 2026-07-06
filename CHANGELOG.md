@@ -6,6 +6,11 @@ All notable changes to this project will be documented in this file.
 
 ### Breaking
 
+- **`project_file` removed from `repo()`.** It is now auto-discovered for all
+  workspace members. If you need to specify non-standard locations, use
+  `extra_project_files` on the `workspace()` tag instead.
+- **`build_dependencies` renamed to `extra_build_tools`** on `package()` tags.
+- **`build_repo` renamed to `build_tools_repo`** on `package()` tags.
 - **New `workspace` / `repo` API.** The legacy `lock_import` / `lock_repos`
   two-extension pattern and the `import_uv()` / `import_pdm()` / etc. tag
   classes have been removed. Use the per-format extensions (`uv.bzl`,
@@ -26,10 +31,12 @@ All notable changes to this project will be documented in this file.
 - **Workspace repo names changed** from `foo_pkgs` to `foo__pkgs` (#245).
 - **`default_alias_single_version` renamed to `create_transitive_aliases`.**
   Also available on `repo()` tags.
-- **`build_workspace` renamed to `build_repo`.**
 
 ### Added
 
+- **`extra_project_files` attribute on `workspace()`.** Allows specifying
+  additional `pyproject.toml` files to consider for dependency resolution,
+  supplementing auto-discovery.
 - **Per-format lock extensions.** Format-specific module extensions (`uv`, `pdm`,
   `poetry`, `pylock`) that handle lock file translation, dependency resolution,
   and repo creation in one pass (#265).

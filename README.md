@@ -36,7 +36,7 @@ use_repo(uv, "pypi")
 
 For a single-project lock file, this is all you need — `rules_pycross` auto-discovers the project from the lock file and creates a repo named `"pypi"` with default dependencies.
 
-To customize which projects or dependency groups are included, or to set the `project_file` explicitly, add a `uv.repo()` tag:
+To customize which projects or dependency groups are included, add a `uv.repo()` tag:
 
 ```python
 uv.workspace(
@@ -44,7 +44,6 @@ uv.workspace(
     lock_file = "//:uv.lock",
 )
 uv.repo(
-    project_file = "//:pyproject.toml",
     dependency_groups = ["default", "optional:grpc"],
     workspace = "pypi",
 )
@@ -54,6 +53,34 @@ use_repo(uv, "pypi")
 After this, packages are available as `@pypi//package_name`. A `requirement()` macro is generated in `@pypi//:requirements.bzl`.
 
 Other lock formats work the same way via their respective extensions: `pdm.bzl`, `poetry.bzl`, or `pylock.bzl`.
+
+### Repository Defaults and Auto-Generation
+
+#### The Default Workspace Repository
+
+For simple, single-project lock files, you can omit the `uv.repo()` tag entirely. `rules_pycross` will automatically synthesize a repository for you with the following defaults:
+
+* **Name**: Matches the workspace name (e.g., `@pypi`).
+* **Content**: Includes only the `"default"` dependency group of the single discovered project.
+
+To override these defaults (for example, to include optional extras or change the name), explicitly declare one or more `uv.repo()` tags.
+
+#### The Internal Build Tools Repository (`__build`)
+
+For every workspace, `rules_pycross` also auto-generates an internal companion repository named `<workspace>__build` (e.g., `@pypi__build`).
+
+* **Purpose**: Provides build-time tools (like `setuptools`, `hatchling`, etc.) required to build source distributions (sdists) hermetically.
+* **Content**: Includes all projects and all dependency groups (`*`) from the workspace.
+
+This repository is managed automatically. However, if you need to customize its settings (such as restricting its dependency groups), you can override it by explicitly declaring a repo with the `<workspace>__build` name:
+
+```python
+uv.repo(
+    name = "pypi__build",
+    dependency_groups = ["default", "development:build"],
+    workspace = "pypi",
+)
+```
 
 <details>
 <summary>Migrating from the legacy two-extension pattern</summary>
@@ -84,7 +111,6 @@ uv.workspace(
     lock_file = "//:uv.lock",
 )
 uv.repo(
-    project_file = "//:pyproject.toml",
     workspace = "pypi",
 )
 uv.package(
@@ -274,7 +300,6 @@ uv.workspace(
     lock_file = "//frontend:uv.lock",
 )
 uv.repo(
-    project_file = "//frontend:pyproject.toml",
     workspace = "frontend_deps",
 )
 uv.workspace(
@@ -282,7 +307,6 @@ uv.workspace(
     lock_file = "//ml:uv.lock",
 )
 uv.repo(
-    project_file = "//ml:pyproject.toml",
     workspace = "ml_deps",
 )
 use_repo(uv, "frontend_deps", "ml_deps")
@@ -544,7 +568,7 @@ The generated flags follow the pattern `group_<name>` (e.g., `--@pypi//_variants
 
 ### Platform Transitions
 
-When a workspace member needs to be built under a specific platform configuration—for example, to pin a variant flag or target a particular architecture—you can declare a platform transition on the member import. This causes all proxy targets in the thin repo to apply a Bazel `--platforms` transition, ensuring the backing `_pkg` targets are analyzed under the specified platform.
+When a workspace member needs to be built under a specific platform configuration—for example, to pin a variant flag or target a particular architecture—you can declare a platform transition on the member import. This causes all proxy targets in the thin repo to apply a Bazel `--platforms` transition, ensuring the backing workspace targets are analyzed under the specified platform.
 
 There are three ways to specify the transition:
 
