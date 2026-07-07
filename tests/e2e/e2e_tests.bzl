@@ -3,6 +3,7 @@
 load("@rules_shell//shell:sh_test.bzl", "sh_test")
 
 def define_e2e_tests():
+    """Create the e2e tests"""
     _BUILD_WORKSPACES = [
         "build_cmake",
         "build_maturin",
@@ -13,19 +14,23 @@ def define_e2e_tests():
     for ws in [
         "always_build",
     ] + _BUILD_WORKSPACES + [
+        "bzlmod_flags",
+        "cross_repo_build_target",
+        "gazelle_integration",
         "generate_lock",
         "local_wheel",
+        "namespace_pkgs",
         "patches_and_hooks",
+        "pdm_workspace",
         "requirements",
         "sdist_repo",
-        "bzlmod_flags",
-        "namespace_pkgs",
-        "gazelle_integration",
-        "uv_workspace",
-        "pdm_workspace",
-        "uv_cycle",
+        "squash_extras",
         "uv_conflicts",
-        "cross_repo_build_target",
+        "uv_cycle",
+        "uv_cycle_stress",
+        "uv_cycle_stress_mixed",
+        "uv_markers",
+        "uv_workspace",
     ]:
         extra_tags = ["build"] if ws in _BUILD_WORKSPACES else []
         sh_test(
@@ -41,3 +46,20 @@ def define_e2e_tests():
                 "no-remote-exec",
             ] + extra_tags,
         )
+
+    # This test lives under modules/ rather than tests/e2e/, but is
+    # an integration test that should run with the e2e suite.
+    sh_test(
+        name = "test_backend_maturin_module",
+        size = "enormous",
+        srcs = ["run_integration_test.sh"],
+        args = ["modules/backend_maturin"],
+        env_inherit = ["PATH", "RULES_PYCROSS_DEBUG"],
+        tags = [
+            "build",
+            "e2e",
+            "integration",
+            "local",
+            "no-remote-exec",
+        ],
+    )
