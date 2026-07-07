@@ -133,8 +133,8 @@ def _create_package_resolver(pkg_key, pkg, ann, default_extra_build_tools, conte
                 fail(
                     ("package {name}=={version} has multiple distinct files named {filename} " +
                      "(sha256 {existing_sha} vs {new_sha}). This usually means the package is " +
-                     "listed under more than one index; pick one explicitly via " +
-                     "[tool.uv.sources] in pyproject.toml.").format(
+                     "listed under more than one index with different content; pin the package " +
+                     "to a single index to resolve the ambiguity.").format(
                         name = pkg_name,
                         version = pkg_version,
                         filename = repr(f["name"]),

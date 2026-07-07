@@ -1606,6 +1606,29 @@ def _test_duplicate_wheel_filename_raises_error(name):
         expect_failure = True,
     )
 
+# buildifier: disable=unused-variable
+def _test_duplicate_wheel_filename_same_hash_ok_impl(env, target):
+    lock_model_data = {
+        "packages": {
+            "foo@1.0": _make_pkg(
+                "foo",
+                "1.0",
+                [
+                    _make_file("foo-1.0-py3-none-any.whl", sha256 = "same_hash"),
+                    _make_file("foo-1.0-py3-none-any.whl", sha256 = "same_hash"),
+                ],
+            ),
+        },
+        "pins": {"foo": "foo@1.0"},
+    }
+
+    res = resolve(lock_model_data)
+    env.expect.that_collection(res.packages.keys()).contains_exactly(["foo@1.0"])
+
+def _test_duplicate_wheel_filename_same_hash_ok(name):
+    util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
+    analysis_test(name = name, target = name + "_subject", impl = _test_duplicate_wheel_filename_same_hash_ok_impl)
+
 def _test_pinned_package_not_in_packages_impl(env, target):
     env.expect.that_target(target).failures().contains_predicate(
         matching.contains("Missing package foo@1.0"),
@@ -1882,6 +1905,7 @@ def lock_resolver_test_suite(name):
             _test_sdist_only_package,
             _test_no_files_raises_error,
             _test_duplicate_wheel_filename_raises_error,
+            _test_duplicate_wheel_filename_same_hash_ok,
             _test_empty_lock,
             _test_pinned_package_not_in_packages,
             _test_wildcard_always_build_end_to_end,
