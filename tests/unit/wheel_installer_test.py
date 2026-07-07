@@ -38,8 +38,6 @@ class WheelInstallerWheelDirTest(unittest.TestCase):
 
     def test_wheel_dir_finds_single_wheel(self):
         """--wheel-dir should find the single .whl file in the directory."""
-        from pycross.private.tools.wheel_installer import _parse_args
-
         self._create_dummy_wheel()
         args = _parse_args(
             [
@@ -78,8 +76,6 @@ class WheelInstallerArgParsingTest(unittest.TestCase):
 
     def test_wheel_and_wheel_dir_are_optional(self):
         """Both --wheel and --wheel-dir should be optional."""
-        from pycross.private.tools.wheel_installer import _parse_args
-
         # Just --wheel-dir
         args = _parse_args(["--wheel-dir", "/tmp/wh", "--directory", "/tmp/out"])
         self.assertEqual(args.wheel_dir, Path("/tmp/wh"))
@@ -104,6 +100,73 @@ def _parse_args(argv):
     parser.add_argument("--wheel-name-file", type=Path, required=False)
     parser.add_argument("--directory", type=Path, required=True)
     return parser.parse_args(argv)
+
+
+class WheelInstallerValidationTest(unittest.TestCase):
+    """Test the _validate_wheel_identity function."""
+
+    def setUp(self):
+        self.temp_dir = tempfile.mkdtemp()
+
+    def tearDown(self):
+        import shutil
+
+        shutil.rmtree(self.temp_dir)
+
+    def _create_wheel(self, filename, metadata_name, metadata_version):
+        """Create a wheel with specific METADATA content."""
+        import zipfile
+
+        wheel_path = Path(self.temp_dir) / filename
+        dist_info = f"{metadata_name.replace('-', '_')}-{metadata_version}.dist-info"
+        with zipfile.ZipFile(wheel_path, "w") as zf:
+            zf.writestr(
+                f"{dist_info}/METADATA",
+                f"Metadata-Version: 2.1\nName: {metadata_name}\nVersion: {metadata_version}\n",
+            )
+            zf.writestr(
+                f"{dist_info}/WHEEL",
+                "Wheel-Version: 1.0\nGenerator: test\nRoot-Is-Purelib: true\nTag: py3-none-any\n",
+            )
+            zf.writestr(f"{dist_info}/RECORD", "")
+        return wheel_path
+
+    def test_matching_name_and_version_passes(self):
+        from pycross.private.tools.wheel_installer import _validate_wheel_identity
+
+        whl = self._create_wheel("six-1.17.0-py3-none-any.whl", "six", "1.17.0")
+        # Should not raise
+        _validate_wheel_identity(whl, "six", "1.17.0")
+
+    def test_normalized_name_passes(self):
+        from pycross.private.tools.wheel_installer import _validate_wheel_identity
+
+        whl = self._create_wheel("Foo_Bar-1.0-py3-none-any.whl", "Foo-Bar", "1.0")
+        # PEP 503 normalization: Foo-Bar == foo_bar == foo.bar
+        _validate_wheel_identity(whl, "foo_bar", "1.0")
+
+    def test_mismatched_name_raises(self):
+        from pycross.private.tools.wheel_installer import _validate_wheel_identity
+
+        whl = self._create_wheel("wrong-1.0-py3-none-any.whl", "wrong", "1.0")
+        with self.assertRaises(SystemExit) as cm:
+            _validate_wheel_identity(whl, "six", "1.0")
+        self.assertIn("wheel identity mismatch", str(cm.exception))
+
+    def test_mismatched_version_raises(self):
+        from pycross.private.tools.wheel_installer import _validate_wheel_identity
+
+        whl = self._create_wheel("six-2.0.0-py3-none-any.whl", "six", "2.0.0")
+        with self.assertRaises(SystemExit) as cm:
+            _validate_wheel_identity(whl, "six", "1.17.0")
+        self.assertIn("wheel version mismatch", str(cm.exception))
+
+    def test_none_expected_skips_check(self):
+        from pycross.private.tools.wheel_installer import _validate_wheel_identity
+
+        whl = self._create_wheel("anything-1.0-py3-none-any.whl", "anything", "1.0")
+        # No assertions should fire when expected values are None
+        _validate_wheel_identity(whl, None, None)
 
 
 if __name__ == "__main__":

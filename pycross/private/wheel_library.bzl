@@ -44,6 +44,11 @@ def _pycross_wheel_library_impl(ctx):
 
     args.add("--entry-points-output", entry_points)
 
+    if ctx.attr.package_name:
+        args.add("--expected-name", ctx.attr.package_name)
+    if ctx.attr.package_version:
+        args.add("--expected-version", ctx.attr.package_version)
+
     ctx.actions.run(
         inputs = inputs,
         outputs = [out, entry_points],
