@@ -46,12 +46,7 @@ def main():
         records.append(_record_entry(f"{dist_info}/METADATA", data))
 
         # WHEEL
-        wheel_meta = (
-            f"Wheel-Version: 1.0\n"
-            f"Generator: make_wheel.py\n"
-            f"Root-Is-Purelib: true\n"
-            f"Tag: {tag}\n"
-        )
+        wheel_meta = f"Wheel-Version: 1.0\nGenerator: make_wheel.py\nRoot-Is-Purelib: true\nTag: {tag}\n"
         data = wheel_meta.encode()
         whl.writestr(f"{dist_info}/WHEEL", data)
         records.append(_record_entry(f"{dist_info}/WHEEL", data))

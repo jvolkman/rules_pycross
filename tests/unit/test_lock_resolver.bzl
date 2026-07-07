@@ -1416,6 +1416,10 @@ def _test_always_build_annotation_impl(env, target):
     env.expect.that_bool(pkg["sdist_file"] != None).equals(True)
     env.expect.that_str(pkg["sdist_file"]["key"]).contains("foo-1.0.tar.gz")
 
+    # always_build should clear wheel_candidates so the renderer uses
+    # the sdist target directly instead of preferring PyPI wheels.
+    env.expect.that_collection(pkg["wheel_candidates"]).has_size(0)
+
 def _test_always_build_annotation(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
     analysis_test(name = name, target = name + "_subject", impl = _test_always_build_annotation_impl)
@@ -1424,7 +1428,10 @@ def _test_always_build_annotation(name):
 def _test_build_target_override_impl(env, target):
     lock_model_data = {
         "packages": {
-            "foo@1.0": _make_pkg("foo", "1.0", [_make_file("foo-1.0.tar.gz")]),
+            "foo@1.0": _make_pkg("foo", "1.0", [
+                _make_file("foo-1.0-cp310-cp310-manylinux_2_17_x86_64.whl"),
+                _make_file("foo-1.0.tar.gz"),
+            ]),
         },
         "pins": {"foo": "foo@1.0"},
     }
@@ -1438,6 +1445,10 @@ def _test_build_target_override_impl(env, target):
     pkg = res.packages["foo@1.0"]
 
     env.expect.that_str(pkg["build_target"]).equals("@//custom:build")
+
+    # build_target should clear wheel_candidates so the renderer aliases
+    # directly to the build_target instead of preferring PyPI wheels.
+    env.expect.that_collection(pkg["wheel_candidates"]).has_size(0)
 
 def _test_build_target_override(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])

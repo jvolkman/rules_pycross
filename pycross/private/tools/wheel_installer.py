@@ -24,6 +24,7 @@ from installer import install
 from installer.destinations import SchemeDictionaryDestination
 from installer.sources import WheelContentElement
 from installer.sources import WheelFile
+from installer.utils import parse_wheel_filename
 from pycross.private.tools.args import FlagFileArgumentParser
 
 
@@ -72,43 +73,31 @@ def _validate_wheel_identity(
     expected_name: str | None,
     expected_version: str | None,
 ) -> None:
-    """Validate that a wheel's METADATA matches the expected name and version.
+    """Validate that a wheel's filename matches the expected name and version.
 
-    This catches cases where a build_target provides a wheel for a different
-    package than expected, which would otherwise silently install the wrong code.
+    Per PEP 427 the wheel filename encodes {name}-{version}-{tags}.whl,
+    so the filename is the canonical source of identity.
     """
-    import email.parser
+    try:
+        parsed = parse_wheel_filename(wheel_path.name)
+    except Exception as e:
+        raise SystemExit(f"error: failed to parse wheel filename {wheel_path.name}: {e}")
 
-    with zipfile.ZipFile(wheel_path) as zf:
-        metadata_path = None
-        for entry in zf.namelist():
-            if entry.endswith(".dist-info/METADATA"):
-                metadata_path = entry
-                break
-
-        if metadata_path is None:
-            raise SystemExit(f"error: wheel {wheel_path.name} has no .dist-info/METADATA file")
-
-        metadata_text = zf.read(metadata_path).decode("utf-8")
-
-    parser = email.parser.Parser()
-    msg = parser.parsestr(metadata_text)
-
-    actual_name = msg.get("Name", "")
-    actual_version = msg.get("Version", "")
+    actual_name = parsed.distribution
+    actual_version = parsed.version
 
     if expected_name and _normalize_pep503(actual_name) != _normalize_pep503(expected_name):
         raise SystemExit(
             f"error: wheel identity mismatch for {wheel_path.name}: "
             f"expected package name '{expected_name}' "
-            f"but wheel metadata has '{actual_name}'"
+            f"but wheel filename has '{actual_name}'"
         )
 
     if expected_version and actual_version != expected_version:
         raise SystemExit(
             f"error: wheel version mismatch for {wheel_path.name}: "
             f"expected version '{expected_version}' "
-            f"but wheel metadata has '{actual_version}'"
+            f"but wheel filename has '{actual_version}'"
         )
 
 
