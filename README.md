@@ -111,8 +111,7 @@ uv.repo(
 )
 ```
 
-<details>
-<summary>Migrating from the legacy two-extension pattern</summary>
+### Migrating from the legacy two-extension pattern</summary>
 
 The previous approach used `lock_import` / `lock_repos` (or `lock`) extensions. These have been removed.
 Migrate by replacing them with the per-format extension:
@@ -152,8 +151,6 @@ use_repo(uv, "pypi")
 
 > [!TIP]
 > If you are migrating from a 1.x target layout where packages were referenced as `@pypi//:package_name` (with a colon), you can enable `legacy_create_root_aliases = True` on your `uv.repo()` tag to generate these aliases in the 2.x repo.
-
-</details>
 
 ### Toolchain Configuration
 
