@@ -1,14 +1,1 @@
-load("@rules_shell//shell:sh_test.bzl", "sh_test")
-
-sh_test(
-    name = "test_backend_maturin_module",
-    size = "enormous",
-    srcs = ["//tests/e2e:run_integration_test.sh"],
-    args = ["modules/backend_maturin"],
-    env_inherit = ["PATH"],
-    tags = [
-        "integration",
-        "local",
-        "no-remote-exec",
-    ],
-)
+# Tests are defined in unit/BUILD.bazel and e2e/BUILD.bazel
