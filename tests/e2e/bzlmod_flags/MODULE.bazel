@@ -30,17 +30,19 @@ pycross.configure_toolchains(
 )
 
 uv = use_extension("@rules_pycross//pycross/extensions:uv.bzl", "uv")
-uv.project(
-    default_alias_single_version = True,
+uv.workspace(
+    name = "uv",
     lock_file = "//:uv.lock",
-    project_file = "//:pyproject.toml",
-    repo = "uv",
+)
+uv.repo(
+    create_transitive_aliases = True,
+    workspace = "uv",
 )
 uv.package(
     name = "setproctitle",
     always_build = True,
-    build_dependencies = ["wheel"],  # Test build_dependencies override
-    repo = "uv",
+    extra_build_tools = ["wheel"],  # Test extra_build_tools override
+    workspace = "uv",
 )
 
 setuptools = use_extension("@rules_pycross//pycross/backends:setuptools.bzl", "setuptools")
@@ -52,7 +54,7 @@ setuptools.override(
         "-Wno-error",
     ],
     linkopts = ["-Wl,-strip-all"],
-    repo = "uv",
+    workspace = "uv",
 )
 
 use_repo(uv, "uv")

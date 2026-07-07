@@ -44,14 +44,14 @@ def _resolve_single_version(name, versions_by_name, all_versions, attr_name):
 
 def _apply_annotation(ann, versions_by_name, all_package_keys):
     build_deps = None
-    if "build_dependencies" in ann:
+    if "extra_build_tools" in ann:
         build_deps = []
-        for dep in ann["build_dependencies"]:
+        for dep in ann["extra_build_tools"]:
             resolved_dep = _resolve_single_version(
                 dep,
                 versions_by_name,
                 all_package_keys,
-                "build_dependencies",
+                "extra_build_tools",
             )
             build_deps.append(resolved_dep)
 
@@ -66,8 +66,8 @@ def _apply_annotation(ann, versions_by_name, all_package_keys):
         ignore_deps[dep] = True
 
     return struct(
-        build_dependencies = build_deps,
-        build_repo = ann.get("build_repo"),
+        extra_build_tools = build_deps,
+        build_tools_repo = ann.get("build_tools_repo"),
         build_target = ann.get("build_target"),
         always_build = ann.get("always_build", False),
         ignore_dependencies = ignore_deps,
@@ -111,7 +111,7 @@ def _collect_package_annotations(annotations_data, versions_by_name, all_package
 
     return annotations, wildcard_only_keys
 
-def _create_package_resolver(pkg_key, pkg, ann, default_build_dependencies, context):
+def _create_package_resolver(pkg_key, pkg, ann, default_extra_build_tools, context):
     parts = parse_package_key(pkg_key)
     pkg_name = parts.name
     pkg_version = parts.version
@@ -156,9 +156,9 @@ def _create_package_resolver(pkg_key, pkg, ann, default_build_dependencies, cont
             sdist_file_obj = f
             break
 
-    build_dependencies = []
+    extra_build_tools = []
     all_dependency_keys = []
-    ann_build_deps = ann.build_dependencies if ann else None
+    ann_build_deps = ann.extra_build_tools if ann else None
     ann_ignore_deps = ann.ignore_dependencies if ann else {}
 
     normal_deps = {"{}@{}".format(d["name"], d["version"]): True for d in pkg.get("dependencies", [])}
@@ -166,16 +166,16 @@ def _create_package_resolver(pkg_key, pkg, ann, default_build_dependencies, cont
     if ann_build_deps != None:
         for dep_key in ann_build_deps:
             if dep_key not in normal_deps:
-                build_dependencies.append(dep_key)
+                extra_build_tools.append(dep_key)
                 all_dependency_keys.append(dep_key)
     else:
-        for dep_key in default_build_dependencies:
+        for dep_key in default_extra_build_tools:
             parts = parse_package_key(dep_key)
             dep_name = parts.name
             if parts.extra:
                 dep_name = "{}[{}]".format(parts.name, parts.extra)
             if dep_name not in ann_ignore_deps and dep_key not in normal_deps:
-                build_dependencies.append(dep_key)
+                extra_build_tools.append(dep_key)
                 all_dependency_keys.append(dep_key)
 
     dependencies = []
@@ -211,9 +211,9 @@ def _create_package_resolver(pkg_key, pkg, ann, default_build_dependencies, cont
         "files": pkg.get("files", []),
         "sdist_file": sdist_file,
         "build_target": ann.build_target if ann else None,
-        "build_repo": ann.build_repo if ann else None,
+        "build_tools_repo": ann.build_tools_repo if ann else None,
         "always_build": always_build,
-        "build_dependencies": build_dependencies,
+        "extra_build_tools": extra_build_tools,
         "install_exclude_globs": list(ann.install_exclude_globs.keys()) if ann else [],
         "post_install_patches": ann.post_install_patches if ann else [],
         "pre_build_patches": ann.pre_build_patches if ann else [],
@@ -241,7 +241,7 @@ def _resolve_packages(
         pins,
         context,
         annotations,
-        default_build_dependencies,
+        default_extra_build_tools,
         wildcard_only_keys):
     work_set = {k: True for k in lock_model_packages.keys()}
     for pin_dict in pins.values():
@@ -300,11 +300,14 @@ def _resolve_packages(
             next_package_key,
             raw_pkg,
             ann,
-            default_build_dependencies,
+            default_extra_build_tools,
             context,
         )
         packages_by_package_key[next_package_key] = entry
         work.extend(entry.all_dependency_keys)
+
+    if len(work) > 0:
+        fail("Package resolution exceeded max iterations. Remaining work: {}".format(work))
 
     for key in wildcard_only_keys.keys():
         annotations.pop(key, None)
@@ -342,7 +345,7 @@ def _compute_cycle_groups(packages):
     num_edges = 0
     for deps in graph.values():
         num_edges += len(deps)
-    max_iters = len(graph) + num_edges
+    max_iters = 2 * len(graph) + num_edges
 
     for root in graph.keys():
         if root in indices:
@@ -395,6 +398,9 @@ def _compute_cycle_groups(packages):
                     parent = work_stack[-1][0]
                     lowlink[parent] = min(lowlink[parent], lowlink[v])
 
+        if len(work_stack) > 0:
+            fail("DFS traversal for SCC exceeded max iterations. Remaining stack: {}".format(work_stack))
+
     cycle_groups = {}
     for scc in sccs:
         if len(scc) <= 1:
@@ -429,6 +435,10 @@ def _compute_reachable_keys(pins, packages_by_package_key):
         entry = packages_by_package_key.get(key)
         if entry:
             work.extend(entry.all_dependency_keys)
+
+    if len(work) > 0:
+        fail("Reachable keys traversal exceeded max iterations. Remaining work: {}".format(work))
+
     return reachable
 
 def resolve(
@@ -437,8 +447,8 @@ def resolve(
         remote_wheels = None,
         always_include_sdist = False,
         annotations_data = None,
-        default_build_dependencies_args = None,
-        default_alias_single_version = False):
+        default_extra_build_tools_args = None,
+        create_transitive_aliases = False):
     """Resolves dependencies from lock model data.
 
     Args:
@@ -447,15 +457,19 @@ def resolve(
         remote_wheels: Dictionary of remote wheels.
         always_include_sdist: Whether to always include sdist.
         annotations_data: Annotations data.
-        default_build_dependencies_args: Default build dependencies args.
-        default_alias_single_version: Whether to default alias single version.
+        default_extra_build_tools_args: Default extra build tools args.
+        create_transitive_aliases: Whether to alias transitive single-version packages.
 
     Returns:
         Dictionary of resolved packages.
     """
     local_wheels = local_wheels or {}
     remote_wheels = remote_wheels or {}
-    default_build_dependencies_args = default_build_dependencies_args or []
+    if type(local_wheels) != "dict":
+        fail("local_wheels must be a dict (filename -> label), got {}".format(type(local_wheels)))
+    if type(remote_wheels) != "dict":
+        fail("remote_wheels must be a dict (url -> sha256), got {}".format(type(remote_wheels)))
+    default_extra_build_tools_args = default_extra_build_tools_args or []
     local_wheels_by_pkg = {}
     for filename, label in local_wheels.items():
         parsed = pypackaging.utils.parse_wheel_filename(filename)
@@ -509,15 +523,15 @@ def resolve(
             all_package_keys,
         )
 
-    default_build_dependencies = []
-    for dep in default_build_dependencies_args:
+    default_extra_build_tools = []
+    for dep in default_extra_build_tools_args:
         resolved_dep = _resolve_single_version(
             dep,
             versions_by_name,
             all_package_keys,
-            "build_dependencies",
+            "extra_build_tools",
         )
-        default_build_dependencies.append(resolved_dep)
+        default_extra_build_tools.append(resolved_dep)
 
     raw_pins = lock_model_data.get("pins", {})
     pins = {}
@@ -533,7 +547,7 @@ def resolve(
         pins,
         context,
         annotations,
-        default_build_dependencies,
+        default_extra_build_tools,
         wildcard_only_keys,
     )
 
@@ -549,7 +563,7 @@ def resolve(
     sorted_repo_keys = sorted(repos.keys())
     repos = {k: repos[k] for k in sorted_repo_keys}
 
-    if default_alias_single_version:
+    if create_transitive_aliases:
         reachable_keys = _compute_reachable_keys(pins, packages_by_package_key)
         resolved_versions_by_name = {}
         for entry in resolved_packages:
@@ -565,6 +579,14 @@ def resolve(
             if package_pin_name in pins:
                 continue
             if len(versions) > 1:
+                version_tuples = [(pypackaging.version.parse(v).key, v) for v in versions.keys()]
+                latest_version = sorted(version_tuples)[-1][1]
+
+                # buildifier: disable=print
+                print("WARNING: Multiple versions of {} found in transitive dependencies. Aliasing to latest: {}".format(package_pin_name, latest_version))
+                base_key = "{}@{}".format(package_pin_name, latest_version)
+                if base_key in packages_by_package_key:
+                    pins[package_pin_name] = {"": base_key}
                 continue
             version = versions.keys()[0]
             base_key = "{}@{}".format(package_pin_name, version)

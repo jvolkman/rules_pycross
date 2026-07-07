@@ -13,7 +13,7 @@ bazel_dep(name = "bazel_skylib", version = "1.9.0")
 bazel_dep(name = "platforms", version = "0.0.4")
 bazel_dep(name = "rules_python", version = "1.7.0")
 bazel_dep(name = "toml.bzl", version = "0.4.1")
-bazel_dep(name = "pypackaging.bzl", version = "0.2.0")
+bazel_dep(name = "pypackaging.bzl", version = "0.2.1")
 
 bazel_dep(name = "rules_testing", version = "0.9.0", dev_dependency = True)
 
@@ -110,25 +110,22 @@ use_repo(toolchains, "pycross_toolchains")
 
 register_toolchains("@pycross_toolchains//...")
 
-lock_import = use_extension("@rules_pycross//pycross/extensions:lock_import.bzl", "lock_import")
-use_repo(lock_import, "lock_import_repos_hub")
-
-lock_repos = use_extension("@rules_pycross//pycross/extensions:lock_repos.bzl", "lock_repos")
-lock_repos.create()
-
-lock = use_extension("@rules_pycross//pycross/extensions:lock.bzl", "lock")
-lock.import_uv(
+uv = use_extension("@rules_pycross//pycross/extensions:uv.bzl", "uv")
+uv.workspace(
+    name = "pycross_internal_deps",
     lock_file = "//:uv.lock",
-    optional_groups = [
-        "core",
-        "build",
-        "repairwheel",
-    ],
-    project_file = "//:pyproject.toml",
-    repo = "pycross_internal_deps",
 )
-lock.create()
-use_repo(lock, "pycross_internal_deps")
+uv.repo(
+    dependency_groups = [
+        "default",
+        "optional:core",
+        "optional:build",
+        "optional:repairwheel",
+    ],
+    legacy_create_root_aliases = True,
+    workspace = "pycross_internal_deps",
+)
+use_repo(uv, "pycross_internal_deps")
 
 # Create the default (empty) override repos for first-party backends.
 # These are referenced by the backends.register tags above.
@@ -152,11 +149,11 @@ bazel_dep(name = "rules_shell", version = "0.3.0", dev_dependency = True)
 # Starlark translator test repos (dev-only).
 # Each repo runs the pure-Starlark translator and produces raw_lock.json
 # for golden-file comparison against expected.json.
-_DEFAULT_LOCK_MODEL = '{"default_group": true, "optional_groups": [], "all_optional_groups": false}'
+_DEFAULT_LOCK_MODEL = '{"projects": ["*"], "dependency_groups": ["default"]}'
 
-_DEFAULT_UV_LOCK_MODEL = '{"default_group": true, "optional_groups": [], "all_optional_groups": false, "development_groups": [], "all_development_groups": false}'
+_DEFAULT_UV_LOCK_MODEL = '{"projects": ["*"], "dependency_groups": ["default"]}'
 
-_ALL_DEV_UV_LOCK_MODEL = '{"default_group": true, "optional_groups": [], "all_optional_groups": false, "development_groups": [], "all_development_groups": true}'
+_ALL_DEV_UV_LOCK_MODEL = '{"projects": ["*"], "dependency_groups": ["default", "development:*"]}'
 
 starlark_translators = use_extension(
     "//tests:starlark_lock_model_test.bzl",

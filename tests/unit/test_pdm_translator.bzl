@@ -7,17 +7,11 @@ load("@rules_testing//lib:util.bzl", "util")
 load("//pycross/private:pdm_lock_model.bzl", "translate_pdm")
 
 def _lock_model(
-        default_group = True,
-        optional_groups = [],
-        all_optional_groups = False,
-        development_groups = [],
-        all_development_groups = False):
+        projects = ["*"],
+        dependency_groups = ["default"]):
     return struct(
-        default_group = default_group,
-        optional_groups = optional_groups,
-        all_optional_groups = all_optional_groups,
-        development_groups = development_groups,
-        all_development_groups = all_development_groups,
+        projects = projects,
+        dependency_groups = dependency_groups,
     )
 
 def _minimal_project(deps = None):
@@ -125,7 +119,7 @@ def _test_pdm_package_with_groups_dev_included_impl(env, target):
     ])
 
     # Dev group included: both should be pinned
-    result = translate_pdm(project, lock, _lock_model(development_groups = ["dev"]))
+    result = translate_pdm(project, lock, _lock_model(dependency_groups = ["default", "development:dev"]))
     env.expect.that_collection(result["pins"].keys()).contains_at_least(["requests", "pytest"])
 
 def _test_pdm_package_with_groups_dev_included(name):

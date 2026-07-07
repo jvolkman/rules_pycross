@@ -14,9 +14,6 @@ _CORE_OVERRIDE_ATTRS = dict(
         doc = "The package key (name or name@version).",
         mandatory = True,
     ),
-    repo = attr.string(
-        doc = "The repository name (if applying to a specific lock file).",
-    ),
     workspace = attr.string(
         doc = "The workspace name (if applying to all members of a workspace).",
     ),
@@ -29,10 +26,8 @@ def _setuptools_rust_overrides_impl(module_ctx):
 
     for module in module_ctx.modules:
         for tag in module.tags.override:
-            if tag.repo and tag.workspace:
-                fail("override for '{}' specifies both repo and workspace".format(tag.name))
-            if not tag.repo and not tag.workspace:
-                fail("override for '{}' must specify either repo or workspace".format(tag.name))
+            if not tag.workspace:
+                fail("override for '{}' must specify workspace".format(tag.name))
 
             backend_attrs = encode_build_system_attrs(tag)
             if tag.cargo_lock:
@@ -40,7 +35,7 @@ def _setuptools_rust_overrides_impl(module_ctx):
             if tag.sdist:
                 backend_attrs["sdist"] = json.encode(str(tag.sdist))
 
-            key = "repo:" + tag.repo if tag.repo else "workspace:" + tag.workspace
+            key = tag.workspace
             overrides.setdefault(key, {})[tag.name] = {
                 "build_backend": "setuptools_rust_build",
                 "backend_attrs": backend_attrs,

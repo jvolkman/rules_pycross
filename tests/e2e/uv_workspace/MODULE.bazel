@@ -41,15 +41,21 @@ uv.workspace(
     name = "shared",
     lock_file = "//:uv.lock",
 )
-uv.all_projects(
-    repo_pattern = "lock_{member}",
+uv.repo(
+    name = "lock_all",
+    projects = ["*"],
     workspace = "shared",
 )
 
 # Override project-a's repo name; project-b uses the pattern default (lock_project_b).
-uv.project(
-    name = "project-a",
-    repo = "lock_a",
+uv.repo(
+    name = "lock_a",
+    projects = ["project-a"],
+    workspace = "shared",
+)
+uv.repo(
+    name = "lock_project_b",
+    projects = ["project-b"],
     workspace = "shared",
 )
 
@@ -59,21 +65,21 @@ uv.package(
     install_exclude_globs = ["test_regex.py"],
     workspace = "shared",
 )
-use_repo(uv, "lock_a", "lock_project_b")
+use_repo(uv, "lock_a", "lock_all", "lock_project_b")
 
 # Test standalone members (no uv_all_members)
 uv.workspace(
     name = "standalone",
     lock_file = "//:uv.lock",
 )
-uv.project(
-    name = "project-a",
-    repo = "lock_standalone_a",
+uv.repo(
+    name = "lock_standalone_a",
+    projects = ["project-a"],
     workspace = "standalone",
 )
-uv.project(
-    name = "project-b",
-    repo = "lock_standalone_b",
+uv.repo(
+    name = "lock_standalone_b",
+    projects = ["project-b"],
     workspace = "standalone",
 )
 use_repo(uv, "lock_standalone_a", "lock_standalone_b")

@@ -40,45 +40,47 @@ pycross.configure_toolchains(
 )
 
 uv = use_extension("@rules_pycross//pycross/extensions:uv.bzl", "uv")
-uv.project(
-    default_alias_single_version = True,
+uv.workspace(
+    name = "uv",
     lock_file = "//:uv.lock",
-    project_file = "//:pyproject.toml",
-    repo = "uv",
+)
+uv.repo(
+    create_transitive_aliases = True,
+    workspace = "uv",
 )
 uv.package(
     name = "psycopg2",
     build_target = "@//deps/psycopg2:wheel",
-    repo = "uv",
+    workspace = "uv",
 )
 uv.package(
     name = "setproctitle",
     always_build = True,
-    repo = "uv",
+    workspace = "uv",
 )
 uv.package(
     name = "pyyaml",
     always_build = True,
-    repo = "uv",
+    workspace = "uv",
 )
 
 setuptools = use_extension("@rules_pycross//pycross/backends:setuptools.bzl", "setuptools")
 setuptools.override(
     name = "psycopg2",
-    repo = "uv",
     tool_deps = {"pg_config": "@@//deps/psycopg2:pg_config"},
+    workspace = "uv",
 )
 setuptools.override(
     name = "zstandard",
     copts = ["-O2"],
-    repo = "uv",
+    workspace = "uv",
 )
 setuptools.override(
     name = "pyyaml",
     build_env = {
         "PYYAML_FORCE_LIBYAML": "0",
     },
-    repo = "uv",
+    workspace = "uv",
 )
 
 use_repo(uv, "uv")

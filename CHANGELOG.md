@@ -2,10 +2,24 @@
 
 All notable changes to this project will be documented in this file.
 
-## [unreleased]
+## [2.0.0-alpha.1]
 
 ### Breaking
 
+- **New `workspace` / `repo` API.** The legacy `lock_import` / `lock_repos`
+  two-extension pattern and the `import_uv()` / `import_pdm()` / etc. tag
+  classes have been removed. Use the per-format extensions (`uv.bzl`,
+  `pdm.bzl`, `poetry.bzl`, `pylock.bzl`) with `workspace()` and `repo()` tags
+  instead. See the migration guide in the README.
+- **`project_file` is no longer supported on per-project tags** (formerly
+  `poetry_member`, etc., now unified as `repo()`). It is now auto-discovered
+  for all workspace members. If you need to specify non-standard locations,
+  use `extra_project_files` on the `workspace()` tag instead.
+- **`build_dependencies` renamed to `extra_build_tools`** on `package()` tags.
+- **`build_repo` renamed to `build_tools_repo`** on `package()` tags.
+- **Package annotations use `workspace` instead of `repo`.** Annotations
+  (e.g., `uv.package()`) now target a workspace, not a specific repo. The
+  `workspace` attribute can be omitted if the module declares only one workspace.
 - **`configure_environments` is deprecated.** Use `configure_toolchains` instead.
   The old name still works but prints a deprecation warning.
 - **`pycross_target_environment` rule removed.** Replaced by
@@ -16,17 +30,34 @@ All notable changes to this project will be documented in this file.
 - **`pip` is no longer a dependency.** The Python-based target environment
   generator that required pip has been removed.
 - **Workspace repo names changed** from `foo_pkgs` to `foo__pkgs` (#245).
+- **`default_alias_single_version` renamed to `create_transitive_aliases`** and
+  moved to `repo()` tags.
 
 ### Added
 
-- **Per-format lock extensions.** Added format-specific module extensions (`uv`, `pdm`, `poetry`, `pylock`) that replace the legacy two-step `lock_import` + `lock_repos` pattern. The new extensions handle lock file translation, dependency resolution, and repo creation in one pass. Legacy extensions are deprecated but remain functional.
+- **`extra_project_files` attribute on `workspace()`.** Allows specifying
+  additional `pyproject.toml` files to consider for dependency resolution,
+  supplementing auto-discovery.
+- **Per-format lock extensions.** Format-specific module extensions (`uv`, `pdm`,
+  `poetry`, `pylock`) that handle lock file translation, dependency resolution,
+  and repo creation in one pass (#265).
+- **`workspace()` / `repo()` API.** Declarative workspace and repo configuration.
+  Single-project lock files only need `workspace()` — the repo is auto-created.
+  Multi-project workspaces use `repo(projects = ["*"])` or per-project `repo()` tags.
+- **`dependency_groups` attribute on `repo()`.** String-based group specifiers:
+  `"default"`, `"optional:<name>"`, `"development:<name>"`, `"optional:*"`,
+  `"development:*"`, `"*"`. Replaces the old boolean/list attributes.
+- **Auto-generated `__build` repos.** Build dependency repos are now auto-created
+  from workspace configuration; no manual `build_repo` declaration needed.
+- **`legacy_create_root_aliases` on `repo()`** for migrating from 1.x target
+  layouts.
 - **PEP 508 marker evaluation at analysis time.** Conditional dependencies
   (e.g., `colorama; sys_platform == "win32"`) now generate `select()`
   expressions in the lock file, enabling true cross-platform builds without
-  re-running lock import.
+  re-running lock import (#248, #258).
 - **PEP 425 wheel tag matching.** New `pycross_wheel_chooser` rule selects
   the best-matching wheel at analysis time based on the active Python toolchain,
-  with automatic sdist fallback.
+  with automatic sdist fallback (#248, #255).
 - **`pycross_target_platform` rule.** Generates PEP 425-compatible tags
   (interpreter, ABI, platform) from `rules_python` toolchain configuration,
   including libc variant and freethreaded support.
@@ -35,10 +66,14 @@ All notable changes to this project will be documented in this file.
 - **Marker-aware cycle resolution.** Cycle group dependencies are now gated
   behind `select()` so platform-specific deps don't trigger eager repo fetches.
   Tarjan's SCC algorithm runs over the full dependency graph for correct
-  detection of all cycles.
+  detection of all cycles (#253).
 - **Starlark port of `pypa/packaging`.** Pure-Starlark implementations of
   PEP 440 versions, PEP 508 markers, PEP 425 tags, and specifiers under
-  `//pycross/private/pypackaging` (#251, #252).
+  `//pycross/private/pypackaging` (#251, #252, #254).
+- **Starlark lock translator and resolver.** Lock file translation and dependency
+  resolution are now pure Starlark, running inline during module extension
+  evaluation. The Python-based translator and resolver have been removed
+  (#259, #261, #263).
 - **`setuptools-rust` build backend.** Auto-detected via bracket-notation
   matching when `setuptools-rust` appears in `build-system.requires` (#249).
 - **Variant resolver layer** for conflict set enforcement (#246).
@@ -49,16 +84,14 @@ All notable changes to this project will be documented in this file.
   PycrossPackageInfo, OutputGroupInfo) from a primary target, optionally
   merging additional deps. Replaces `py_library` wrappers in generated lock
   repos to preserve pycross-specific providers.
-- **Platform transitions for thin package repos.** New `flags`,
-  `constraint_values`, and `platform` attributes on `uv_member`,
-  `uv_all_members`, `import_uv`, and equivalent PDM/Poetry/Pylock tags.
+- **Platform transitions for thin package repos.** `flags`,
+  `constraint_values`, and `platform` attributes on `repo()` tags.
   When specified, proxy targets in the thin repo apply a `--platforms`
   transition, enabling variant flags or architecture constraints to be
-  locked to a workspace member without per-invocation `--flag` arguments.
-  When `flags` are used, a custom `_transition.bzl` is generated in the
-  thin repo that sets both `--platforms` and individual flag values directly
-  in the transition (since Bazel's `platform(flags=[...])` does not apply
-  via Starlark transitions).
+  locked to a repo without per-invocation `--flag` arguments (#256, #266).
+- **Per-package flag transitions.** Flag transitions are now applied at
+  the per-package level rather than the root, enabling finer-grained
+  control (#266).
 
 ### Changed
 
@@ -69,12 +102,14 @@ All notable changes to this project will be documented in this file.
 - Package name normalization consolidated on `pypackaging.canonicalize_name`.
 - Default macOS version bumped to 15.0.
 - Updated `repairwheel` to 0.6.2.
-- Extras-only packages in the lock repo (e.g., `package[extra]@version`)
-  now use `pycross_library_proxy` with `actual` pointing to the base
-  package, instead of `py_library`. This preserves pycross-specific
-  providers through extra targets.
+- Updated `pypackaging.bzl` to 0.2.1.
+- Extras-only packages in the lock repo now use `pycross_library_proxy` with
+  `actual` pointing to the base package, instead of `py_library`.
 - Cycle member wrappers and extras aggregate (`[_all_]`) targets in the
   lock repo now use `pycross_library_proxy` instead of `py_library`.
+- Cargo lock targets are now placed in thin + pkg repos (#270).
+- `maybe` targets moved to `//pkg:maybe` (#267).
+- Transitive package pruning removed from lock resolver (#264).
 
 ### Fixed
 
@@ -86,6 +121,20 @@ All notable changes to this project will be documented in this file.
   specifiers.
 - **Multi-tag wheel handling.** Fixed resolver to correctly handle compound
   platform tags like `manylinux_2_17_x86_64.manylinux2014_x86_64`.
+- **Silent clobber of extras in build repo pin merge.** Fixed merging logic
+  to preserve extras when combining pins from multiple workspaces.
+- **Build repo pin version conflicts.** Alias transitive and build repo pins
+  now select the latest version when there is a conflict instead of silently
+  using the first.
+- **Multi-version dep resolution.** Fixed resolution when specifier is empty.
+- **PyPI index location.** Fixed pulling pypi indexes from proper location,
+  allowing overrides (#269).
+- **`all_requirements` and `modules_mapping` platform incompatibility.**
+  Fixed platform handling (#260).
+- **Builder toolchain.** Fixed passing `ar` and `ranlib` to various builders
+  (#262).
+- **Cargo knowledge in pep517_action.** Removed unnecessary coupling (#268).
+- Improved error messages for missing files and invalid arguments.
 
 ## [2.0.0-alpha.0]
 

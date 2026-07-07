@@ -38,11 +38,16 @@ environments.create_for_python_toolchains(
 use_repo(environments, "rules_pycross_e2e_environments")
 
 uv = use_extension("@rules_pycross//pycross/extensions:uv.bzl", "uv")
-uv.project(
-    development_groups = ["dev"],
+uv.workspace(
+    name = "uv",
     lock_file = "//:uv.lock",
-    optional_groups = ["yaml"],
-    project_file = "//:pyproject.toml",
-    repo = "uv",
+)
+uv.repo(
+    dependency_groups = [
+        "development:dev",
+        "optional:yaml",
+    ],
+    projects = ["*"],
+    workspace = "uv",
 )
 use_repo(uv, "uv")

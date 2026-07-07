@@ -38,12 +38,11 @@ def create_repos(
         module_ctx,
         all_locks,
         workspace_memberships,
-        workspace_build_repos,
         repo_flags,
         repo_constraint_values,
         repo_platforms,
         repo_disallow_builds = {},
-        pypi_index = None,
+        workspace_pypi_indexes = {},
         resolved_locks = None):
     """Create all Bazel repos from resolved lock data.
 
@@ -51,12 +50,11 @@ def create_repos(
         module_ctx: The module_ctx or similar context object (needs .path(), .read()).
         all_locks: Dict of repo_name -> lock file Label (pointing to lock.json).
         workspace_memberships: Dict of repo_name -> workspace_name.
-        workspace_build_repos: Dict of workspace_name -> build_repo.
         repo_flags: Dict of repo_name -> JSON-encoded flags list.
         repo_constraint_values: Dict of repo_name -> JSON-encoded constraint_values list.
         repo_platforms: Dict of repo_name -> platform string.
         repo_disallow_builds: Dict of repo_name -> boolean indicating if builds are disallowed.
-        pypi_index: Optional PyPI index URL.
+        workspace_pypi_indexes: Dict of workspace_name -> list of string index URLs.
         resolved_locks: Optional dict of repo_name -> parsed lock JSON dict. When provided,
             lock data is taken from this dict instead of reading from all_locks file labels.
             all_locks is still used for passing labels to package_repo/thin_package_repo.
@@ -77,17 +75,6 @@ def create_repos(
                 norm_pkg = pypackaging.utils.canonicalize_name(pkg_name)
                 override_configs.setdefault(key, {}).setdefault(norm_pkg, {})[backend_name] = backend_attrs
 
-    # Validate that repo: overrides don't target workspace members.
-    for key in override_configs:
-        if key.startswith("repo:"):
-            repo_name = key[len("repo:"):]
-            ws = workspace_memberships.get(repo_name)
-            if ws and ws != repo_name:
-                fail(
-                    "Build system override targets repo '{}' which is a member of workspace '{}'. ".format(repo_name, ws) +
-                    "Use workspace = '{}' instead.".format(ws),
-                )
-
     # Pre-pathify all lock files to minimize restart time (only when reading from files).
     if not resolved_locks:
         for lock_file in all_locks.values():
@@ -107,6 +94,10 @@ def create_repos(
             resolved_lock = json.decode(module_ctx.read(resolved_lock_file))
 
         repo_remote_files = {}
+        workspace_name = workspace_memberships.get(repo_name)
+        indexes = workspace_pypi_indexes.get(workspace_name, []) if workspace_name else []
+        pypi_index = indexes[0] if indexes else None
+
         for key, file in resolved_lock.get("remote_files", {}).items():
             if key in all_remote_files:
                 repo_remote_files[key] = all_remote_files[key]
@@ -168,11 +159,7 @@ def create_repos(
         # Every repo has a workspace.
         workspace_name = workspace_memberships.get(repo_name, repo_name)
 
-        ws_build_repo = workspace_build_repos.get(workspace_name)
-        if ws_build_repo:
-            lock_repo_for_deps = "{}__pkgs".format(workspace_memberships.get(ws_build_repo, ws_build_repo))
-        else:
-            lock_repo_for_deps = "{}__pkgs".format(workspace_name)
+        lock_repo_for_deps = "{}__pkgs".format(workspace_name)
 
         # Instantiate sdist repos for packages requiring source builds.
         for pkg_key, pkg in resolved_lock.get("packages", {}).items():
@@ -209,26 +196,22 @@ def create_repos(
             whldir_norm_name = sanitize_name(pkg_name_part)
             whldir_name = "{}-{}.whldir".format(whldir_norm_name, pkg_version)
 
-            pkg_build_repo = pkg.get("build_repo") or ws_build_repo
-            if pkg_build_repo:
-                pkg_lock_repo_for_deps = "{}__pkgs".format(workspace_memberships.get(pkg_build_repo, pkg_build_repo))
-            else:
-                pkg_lock_repo_for_deps = "{}__pkgs".format(workspace_name)
-
             sdist_repo_attrs = {
                 "name": sdist_repo_name,
                 "sdist": sdist_label,
                 "deps": sorted(deps_set.keys()),
                 "known_packages": known_packages,
-                "lock_json": lock_file,
-                "lock_repo": pkg_lock_repo_for_deps,
-                "thin_repo": repo_name,
+                "pin_versions_json": "@{}//:pin_versions.json".format(
+                    pkg.get("build_tools_repo") or "{}__build".format(workspace_name),
+                ),
+                "lock_repo": lock_repo_for_deps,
+                "thin_repo": pkg.get("build_tools_repo") or "{}__build".format(workspace_name),
                 "backend_to_rule": BACKEND_TO_RULE,
                 "default_backend": DEFAULT_BACKEND,
                 "whldir_name": whldir_name,
             }
-            if "build_dependencies" in pkg and pkg["build_dependencies"] != None:
-                sdist_repo_attrs["build_dependencies"] = pkg["build_dependencies"]
+            if "extra_build_tools" in pkg and pkg["extra_build_tools"] != None:
+                sdist_repo_attrs["extra_build_tools"] = pkg["extra_build_tools"]
 
             for attr_name in ("build_backend", "pre_build_patches", "site_hooks"):
                 if attr_name in pkg and pkg[attr_name] != None:
@@ -246,11 +229,8 @@ def create_repos(
                     for b_name, b_attrs in source.items():
                         pkg_overrides[b_name] = dict(b_attrs)
 
-            ws_key = "workspace:" + workspace_name
+            ws_key = workspace_name
             _apply_scope_overrides(ws_key)
-
-            repo_key = "repo:" + repo_name
-            _apply_scope_overrides(repo_key)
 
             if pkg_overrides:
                 sdist_repo_attrs["override_backend_configs"] = json.encode(pkg_overrides)
@@ -320,7 +300,7 @@ def create_repos(
 
         # Compute per-package override configs for package repo hooks.
         ws_overrides = {}  # pkg_name -> {backend_name -> backend_attrs}
-        keys = ["workspace:" + workspace_name] + ["repo:" + member for member in member_repos]
+        keys = [workspace_name]
         for key in keys:
             if key in override_configs:
                 for pkg_name, backends in override_configs[key].items():
@@ -345,7 +325,6 @@ def create_repos(
         package_repo(**package_repo_attrs)
 
         # Create thin repos for each workspace member, passing conflict info.
-        thin_build_repo = workspace_build_repos.get(workspace_name)
         for member in member_repos:
             thin_repo_attrs = dict(
                 name = member,
@@ -355,8 +334,8 @@ def create_repos(
                 conflicts = conflicts,
                 backend_configs = backend_configs_json,
             )
-            if thin_build_repo:
-                thin_repo_attrs["workspace_build_repo"] = "{}__pkgs".format(workspace_memberships.get(thin_build_repo, thin_build_repo))
+            thin_repo_attrs["default_build_tools_repo"] = workspace_repo_name
+            thin_repo_attrs["generate_root_aliases"] = True
 
             if member in repo_flags:
                 flags = repo_flags[member]
@@ -369,7 +348,7 @@ def create_repos(
 
             # Compute per-member override configs for thin repo hooks.
             member_overrides = {}  # pkg_name -> {backend_name -> backend_attrs}
-            ws_key = "workspace:" + workspace_name
+            ws_key = workspace_name
             if ws_key in override_configs:
                 for pkg_name, backends in override_configs[ws_key].items():
                     for b_name, b_attrs in backends.items():

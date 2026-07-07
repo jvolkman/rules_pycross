@@ -11,6 +11,7 @@ load(
     "canonicalize_name",
     "parse_pep508_requirement",
     "resolve_lock_graph",
+    "select_project_file",
 )
 load(":util.bzl", "url_decode_filename")
 
@@ -104,35 +105,53 @@ def translate_pdm(project_dict, lock_dict, lock_model):
     # Collect requirements based on group selection
     requirements = []
 
-    if lock_model.default_group:
+    dependency_groups = getattr(lock_model, "dependency_groups", ["default"])
+    include_all = "*" in dependency_groups
+    include_default = "default" in dependency_groups or include_all
+
+    if include_default:
         for dep_str in default_deps:
             requirements.append(parse_pep508_requirement(dep_str))
 
-    if lock_model.all_optional_groups:
-        opt_groups = sorted(optional_deps.keys())
-    else:
-        opt_groups = getattr(lock_model, "optional_groups", [])
+    effective_groups = ["optional:*", "development:*"] if include_all else dependency_groups
+    for group in effective_groups:
+        if group == "default" or group == "*":
+            continue
 
-    for group_name in opt_groups:
-        if group_name not in optional_deps:
-            fail("Non-existent optional dependency group: {}".format(group_name))
-        for dep_str in optional_deps[group_name]:
-            requirements.append(parse_pep508_requirement(dep_str))
+        kind, _, name = group.partition(":")
+        if kind == "optional":
+            groups_dict = optional_deps
+        elif kind == "development":
+            groups_dict = dev_deps
+        else:
+            fail("Invalid dependency group format '{}'. Must be 'optional:name' or 'development:name'.".format(group))
 
-    if getattr(lock_model, "all_development_groups", False):
-        dev_groups = sorted(dev_deps.keys())
-    else:
-        dev_groups = getattr(lock_model, "development_groups", [])
+        if name == "*":
+            target_names = list(groups_dict.keys())
+        else:
+            target_names = [name]
 
-    for group_name in dev_groups:
-        if group_name not in dev_deps:
-            fail("Non-existent development dependency group: {}".format(group_name))
-        for dep_str in dev_deps[group_name]:
-            # Strip editable markers
-            stripped = dep_str.strip()
-            if stripped.startswith("-e "):
-                stripped = stripped[3:].strip()
-            requirements.append(parse_pep508_requirement(stripped))
+        for target_name in target_names:
+            if target_name in groups_dict:
+                entries = groups_dict[target_name]
+                for dep_str in entries:
+                    if type(dep_str) == "string":
+                        # Strip editable markers
+                        stripped = dep_str.strip()
+                        if stripped.startswith("-e "):
+                            stripped = stripped[3:].strip()
+                        requirements.append(parse_pep508_requirement(stripped))
+                    elif type(dep_str) == "dict" and "include-group" in dep_str:
+                        inc_group = dep_str["include-group"]
+                        if inc_group in dev_deps:
+                            for inc_dep in dev_deps[inc_group]:
+                                if type(inc_dep) == "string":
+                                    stripped = inc_dep.strip()
+                                    if stripped.startswith("-e "):
+                                        stripped = stripped[3:].strip()
+                                    requirements.append(parse_pep508_requirement(stripped))
+            else:
+                fail("Non-existent {} dependency group: {}".format(kind, target_name))
 
     # Build pinned specs from requirements
     pinned_package_specs = {}
@@ -185,17 +204,30 @@ def translate_pdm(project_dict, lock_dict, lock_model):
         strict_dependencies = False,
     )
 
-def repo_create_pdm_model(rctx, project_file, lock_file, lock_model, output):
+def repo_create_pdm_model(rctx, extra_project_files, lock_file, lock_model, output):
     """Run the PDM translator in pure Starlark.
 
     Args:
         rctx: The repository_ctx or module_ctx object.
-        project_file: The pyproject.toml file.
+        extra_project_files: List of extra pyproject.toml files.
         lock_file: The lock file.
         lock_model: a struct containing the same attrs as the pycross_pdm_lock_model rule.
         output: the output file.
     """
-    project_dict = decode(rctx.read(rctx.path(project_file)))
-    lock_dict = decode(rctx.read(rctx.path(lock_file)))
+
+    projects = getattr(lock_model, "projects", [])
+    project_file = select_project_file(rctx, extra_project_files, lock_file, projects)
+
+    project_dict = {}
+    if project_file:
+        project_path = rctx.path(project_file)
+        if project_path.exists:
+            project_dict = decode(rctx.read(project_path))
+
+    lock_path = rctx.path(lock_file)
+    if not lock_path.exists:
+        fail("Lock file not found: {}. Ensure pdm.lock exists at the expected location.".format(lock_file))
+
+    lock_dict = decode(rctx.read(lock_path))
     raw_lock_data = translate_pdm(project_dict, lock_dict, lock_model)
     rctx.file(output, json.encode(raw_lock_data))

@@ -18,7 +18,7 @@ def _test_ext_impl(mctx):
     pycross_sdist_repo(
         name = "repo_basic",
         sdist = "//sdists:basic.tar.gz",
-        lock_json = "//:lock.json",
+        pin_versions_json = "//:pin_versions.json",
         thin_repo = "dummy_lock_repo",
         lock_repo = "dummy_lock_repo",
         known_packages = ["setuptools", "hatchling"],
@@ -29,7 +29,7 @@ def _test_ext_impl(mctx):
     pycross_sdist_repo(
         name = "repo_with_pyproject",
         sdist = "//sdists:with_pyproject.tar.gz",
-        lock_json = "//:lock.json",
+        pin_versions_json = "//:pin_versions.json",
         thin_repo = "dummy_lock_repo",
         lock_repo = "dummy_lock_repo",
         known_packages = ["setuptools", "hatchling"],
@@ -40,7 +40,7 @@ def _test_ext_impl(mctx):
     pycross_sdist_repo(
         name = "repo_with_setuptools",
         sdist = "//sdists:with_setuptools.tar.gz",
-        lock_json = "//:lock.json",
+        pin_versions_json = "//:pin_versions.json",
         thin_repo = "dummy_lock_repo",
         lock_repo = "dummy_lock_repo",
         known_packages = ["setuptools", "hatchling"],
@@ -51,7 +51,7 @@ def _test_ext_impl(mctx):
     pycross_sdist_repo(
         name = "repo_legacy",
         sdist = "//sdists:legacy.tar.gz",
-        lock_json = "//:lock.json",
+        pin_versions_json = "//:pin_versions.json",
         thin_repo = "dummy_lock_repo",
         lock_repo = "dummy_lock_repo",
         known_packages = ["setuptools", "hatchling"],

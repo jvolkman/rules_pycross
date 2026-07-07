@@ -2,28 +2,12 @@ load("@bazel_skylib//:bzl_library.bzl", "bzl_library")
 
 exports_files([
     "backends.bzl",
-    "lock_import.bzl",
-    "lock_repos.bzl",
     "pdm.bzl",
     "poetry.bzl",
     "pycross.bzl",
     "pylock.bzl",
     "uv.bzl",
 ])
-
-bzl_library(
-    name = "lock_import",
-    srcs = ["lock_import.bzl"],
-    visibility = ["//visibility:public"],
-    deps = ["//pycross/private:lock_import"],
-)
-
-bzl_library(
-    name = "lock_repos",
-    srcs = ["lock_repos.bzl"],
-    visibility = ["//visibility:public"],
-    deps = ["//pycross/private:lock_repos"],
-)
 
 bzl_library(
     name = "pycross",
@@ -37,13 +21,6 @@ bzl_library(
     srcs = ["backends.bzl"],
     visibility = ["//visibility:public"],
     deps = ["//pycross/private:backends"],
-)
-
-bzl_library(
-    name = "lock",
-    srcs = ["lock.bzl"],
-    visibility = ["//visibility:public"],
-    deps = ["//pycross/private:lock"],
 )
 
 bzl_library(

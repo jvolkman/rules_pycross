@@ -31,25 +31,27 @@ pycross.configure_toolchains(
 )
 
 uv = use_extension("@rules_pycross//pycross/extensions:uv.bzl", "uv")
-uv.project(
-    default_alias_single_version = True,
+uv.workspace(
+    name = "uv",
     lock_file = "//:uv.lock",
-    project_file = "//:pyproject.toml",
-    repo = "uv",
+)
+uv.repo(
+    create_transitive_aliases = True,
+    workspace = "uv",
 )
 uv.package(
     name = "setproctitle",
     always_build = True,
     post_install_patches = ["@@//patches:setproctitle-postinstall.patch"],
     pre_build_patches = ["@@//patches:setproctitle-prebuild.patch"],
-    repo = "uv",
     site_hooks = ["with open('pkg/setproctitle/__init__.py', 'a') as f: f.write('SITE_HOOK_RAN = True\\n')"],
+    workspace = "uv",
 )
 
 setuptools = use_extension("@rules_pycross//pycross/backends:setuptools.bzl", "setuptools")
 setuptools.override(
     name = "setproctitle",
-    repo = "uv",
+    workspace = "uv",
 )
 
 use_repo(uv, "uv")

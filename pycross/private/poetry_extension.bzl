@@ -11,26 +11,12 @@ load(
 load(":lock_common.bzl", "discover_poetry_all_members")
 load(":poetry_lock_model.bzl", "repo_create_poetry_model")
 
-# Poetry-specific attrs for standalone project imports.
-_POETRY_PROJECT_ATTRS = dict(
-    default_group = attr.bool(
-        doc = "Whether to install dependencies from the default group.",
-        default = True,
-    ),
-    optional_groups = attr.string_list(
-        doc = "List of optional dependency groups to install.",
-    ),
-    all_optional_groups = attr.bool(
-        doc = "Install all optional dependencies.",
-    ),
-)
+# Poetry-specific attrs for workspace tags.
+_POETRY_WORKSPACE_ATTRS = dict()
 
 poetry = make_format_extension(
     model_type = "poetry",
-    standalone_project_attrs = _POETRY_PROJECT_ATTRS,
-    # Poetry has no workspace support — single-project only.
-    workspace_attrs = None,
-    all_projects_attrs = None,
+    workspace_attrs = _POETRY_WORKSPACE_ATTRS,
     discover_members_fn = discover_poetry_all_members,
     repo_create_model_fn = repo_create_poetry_model,
 )

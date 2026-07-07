@@ -80,7 +80,7 @@ def _test_basic_resolution(name):
     analysis_test(name = name, target = name + "_subject", impl = _test_basic_resolution_impl)
 
 # buildifier: disable=unused-variable
-def _test_default_alias_single_version_with_extras_impl(env, target):
+def _test_create_transitive_aliases_with_extras_impl(env, target):
     lock_model_data = {
         "packages": {
             "selenium@1.0": {
@@ -103,18 +103,18 @@ def _test_default_alias_single_version_with_extras_impl(env, target):
         },
     }
 
-    res = resolve(lock_model_data, default_alias_single_version = True)
+    res = resolve(lock_model_data, create_transitive_aliases = True)
 
     # Should have alias for urllib3 because it is resolved (transitively) and has only one version.
     env.expect.that_collection(res.pins.keys()).contains_exactly(["selenium", "urllib3"])
     env.expect.that_dict(res.pins["urllib3"]).contains_exactly({"": "urllib3@2.2.3"})
 
-def _test_default_alias_single_version_with_extras(name):
+def _test_create_transitive_aliases_with_extras(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
-    analysis_test(name = name, target = name + "_subject", impl = _test_default_alias_single_version_with_extras_impl)
+    analysis_test(name = name, target = name + "_subject", impl = _test_create_transitive_aliases_with_extras_impl)
 
 # buildifier: disable=unused-variable
-def _test_build_dependencies_override_impl(env, target):
+def _test_extra_build_tools_override_impl(env, target):
     lock_model_data = {
         "packages": {
             "foo@1.0": {
@@ -143,22 +143,22 @@ def _test_build_dependencies_override_impl(env, target):
 
     annotations_data = {
         "foo": {
-            "build_dependencies": ["bar@1.0"],
+            "extra_build_tools": ["bar@1.0"],
         },
     }
 
     res = resolve(
         lock_model_data,
         annotations_data = annotations_data,
-        default_build_dependencies_args = ["baz@1.0"],  # This should be ignored for foo
+        default_extra_build_tools_args = ["baz@1.0"],  # This should be ignored for foo
     )
 
     foo_pkg = res.packages["foo@1.0"]
-    env.expect.that_collection(foo_pkg["build_dependencies"]).contains_exactly(["bar@1.0"])
+    env.expect.that_collection(foo_pkg["extra_build_tools"]).contains_exactly(["bar@1.0"])
 
-def _test_build_dependencies_override(name):
+def _test_extra_build_tools_override(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
-    analysis_test(name = name, target = name + "_subject", impl = _test_build_dependencies_override_impl)
+    analysis_test(name = name, target = name + "_subject", impl = _test_extra_build_tools_override_impl)
 
 # buildifier: disable=unused-variable
 def _test_synthesized_deps_impl(env, target):
@@ -725,7 +725,7 @@ def _test_version_isolation_impl(env, target):
     }
 
     # Wait, how does Starlark resolve handle pins dictionary?
-    # Let's check test_default_alias_single_version_with_extras_impl
+    # Let's check test_create_transitive_aliases_with_extras_impl
     # "pins": {"selenium": "selenium@1.0"}
     # Let's look at python test_version_isolation again.
     # pins = {canonicalize_name("foo"): {"": PackageKey.from_parts(...), "v2": PackageKey.from_parts(...)}}
@@ -1300,7 +1300,7 @@ def _test_multi_version_dep_resolution(name):
     analysis_test(name = name, target = name + "_subject", impl = _test_multi_version_dep_resolution_impl)
 
 # buildifier: disable=unused-variable
-def _test_build_dependencies_impl(env, target):
+def _test_extra_build_tools_impl(env, target):
     lock_model_data = {
         "packages": {
             "foo@1.0": _make_pkg("foo", "1.0", [_make_file("foo-1.0.tar.gz")]),
@@ -1311,15 +1311,15 @@ def _test_build_dependencies_impl(env, target):
         },
     }
 
-    res = resolve(lock_model_data, default_build_dependencies_args = ["setuptools@60.0"])
+    res = resolve(lock_model_data, default_extra_build_tools_args = ["setuptools@60.0"])
     pkg = res.packages["foo@1.0"]
 
-    env.expect.that_collection(pkg["build_dependencies"]).has_size(1)
-    env.expect.that_str(pkg["build_dependencies"][0]).equals("setuptools@60.0")
+    env.expect.that_collection(pkg["extra_build_tools"]).has_size(1)
+    env.expect.that_str(pkg["extra_build_tools"][0]).equals("setuptools@60.0")
 
-def _test_build_dependencies(name):
+def _test_extra_build_tools(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
-    analysis_test(name = name, target = name + "_subject", impl = _test_build_dependencies_impl)
+    analysis_test(name = name, target = name + "_subject", impl = _test_extra_build_tools_impl)
 
 # buildifier: disable=unused-variable
 def _test_build_deps_not_duplicated_impl(env, target):
@@ -1338,10 +1338,10 @@ def _test_build_deps_not_duplicated_impl(env, target):
         },
     }
 
-    res = resolve(lock_model_data, default_build_dependencies_args = ["setuptools@60.0"])
+    res = resolve(lock_model_data, default_extra_build_tools_args = ["setuptools@60.0"])
     pkg = res.packages["foo@1.0"]
 
-    env.expect.that_collection(pkg["build_dependencies"]).has_size(0)
+    env.expect.that_collection(pkg["extra_build_tools"]).has_size(0)
 
 def _test_build_deps_not_duplicated(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
@@ -1698,7 +1698,7 @@ def _test_unconsumed_wildcard_annotations_no_error(name):
     analysis_test(name = name, target = name + "_subject", impl = _test_unconsumed_wildcard_annotations_no_error_impl)
 
 # buildifier: disable=unused-variable
-def _test_build_repo_flows_to_resolved_package_impl(env, target):
+def _test_build_tools_repo_flows_to_resolved_package_impl(env, target):
     lock_model_data = {
         "packages": {
             "foo@1.0": _make_pkg("foo", "1.0", [_make_file("foo-1.0.tar.gz")]),
@@ -1706,20 +1706,20 @@ def _test_build_repo_flows_to_resolved_package_impl(env, target):
         "pins": {"foo": "foo@1.0"},
     }
     annotations_data = {
-        "foo": {"build_repo": "build_deps"},
+        "foo": {"build_tools_repo": "build_deps"},
     }
 
     res = resolve(lock_model_data, annotations_data = annotations_data)
     pkg = res.packages["foo@1.0"]
 
-    env.expect.that_str(pkg["build_repo"]).equals("build_deps")
+    env.expect.that_str(pkg["build_tools_repo"]).equals("build_deps")
 
-def _test_build_repo_flows_to_resolved_package(name):
+def _test_build_tools_repo_flows_to_resolved_package(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
-    analysis_test(name = name, target = name + "_subject", impl = _test_build_repo_flows_to_resolved_package_impl)
+    analysis_test(name = name, target = name + "_subject", impl = _test_build_tools_repo_flows_to_resolved_package_impl)
 
 # buildifier: disable=unused-variable
-def _test_wildcard_build_repo_flows_to_resolved_package_impl(env, target):
+def _test_wildcard_build_tools_repo_flows_to_resolved_package_impl(env, target):
     lock_model_data = {
         "packages": {
             "foo@1.0": _make_pkg("foo", "1.0", [_make_file("foo-1.0.tar.gz")]),
@@ -1731,17 +1731,17 @@ def _test_wildcard_build_repo_flows_to_resolved_package_impl(env, target):
         },
     }
     annotations_data = {
-        "*": {"build_repo": "shared_build"},
+        "*": {"build_tools_repo": "shared_build"},
     }
 
     res = resolve(lock_model_data, annotations_data = annotations_data)
 
     for pkg in res.packages.values():
-        env.expect.that_str(pkg["build_repo"]).equals("shared_build")
+        env.expect.that_str(pkg["build_tools_repo"]).equals("shared_build")
 
-def _test_wildcard_build_repo_flows_to_resolved_package(name):
+def _test_wildcard_build_tools_repo_flows_to_resolved_package(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
-    analysis_test(name = name, target = name + "_subject", impl = _test_wildcard_build_repo_flows_to_resolved_package_impl)
+    analysis_test(name = name, target = name + "_subject", impl = _test_wildcard_build_tools_repo_flows_to_resolved_package_impl)
 
 # buildifier: disable=unused-variable
 def _test_wildcard_install_exclude_globs_end_to_end_impl(env, target):
@@ -1801,8 +1801,8 @@ def lock_resolver_test_suite(name):
         name = name,
         tests = [
             _test_basic_resolution,
-            _test_default_alias_single_version_with_extras,
-            _test_build_dependencies_override,
+            _test_create_transitive_aliases_with_extras,
+            _test_extra_build_tools_override,
             _test_synthesized_deps,
             _test_cycle_two_nodes,
             _test_cycle_via_extra,
@@ -1837,7 +1837,7 @@ def lock_resolver_test_suite(name):
             _test_marker_preserved,
             _test_ignore_dependencies,
             _test_multi_version_dep_resolution,
-            _test_build_dependencies,
+            _test_extra_build_tools,
             _test_build_deps_not_duplicated,
             _test_local_wheel_override,
             _test_remote_wheel_override,
@@ -1853,8 +1853,8 @@ def lock_resolver_test_suite(name):
             _test_wildcard_always_build_end_to_end,
             _test_wildcard_with_specific_override_end_to_end,
             _test_unconsumed_wildcard_annotations_no_error,
-            _test_build_repo_flows_to_resolved_package,
-            _test_wildcard_build_repo_flows_to_resolved_package,
+            _test_build_tools_repo_flows_to_resolved_package,
+            _test_wildcard_build_tools_repo_flows_to_resolved_package,
             _test_wildcard_install_exclude_globs_end_to_end,
             _test_wildcard_replace_semantics_exclude_globs_end_to_end,
         ],

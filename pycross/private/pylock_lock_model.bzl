@@ -7,6 +7,7 @@ lock_resolver.bzl.
 
 load("@pypackaging.bzl", "pypackaging")
 load("@toml.bzl//toml:toml.bzl", "decode")
+load(":translator_common.bzl", "select_project_file")
 load(":util.bzl", "extract_pep508_name", "parse_package_key")
 
 def _canonicalize_name(name):
@@ -158,57 +159,55 @@ def translate_pylock(lock_dict, project_dict, lock_model):
 
     pins = {}
 
-    # If we have a project file and filters, subset the graph.
-    has_filter = (
-        not lock_model.default_group or
-        getattr(lock_model, "optional_groups", []) or
-        getattr(lock_model, "all_optional_groups", False) or
-        getattr(lock_model, "development_groups", []) or
-        getattr(lock_model, "all_development_groups", False)
-    )
+    dependency_groups = getattr(lock_model, "dependency_groups", ["default"])
+    include_all = "*" in dependency_groups
+    include_default = "default" in dependency_groups or include_all
+    has_filter = not include_default or len([g for g in dependency_groups if g != "default"]) > 0
 
     if project_dict and has_filter:
         root_req_names = []
 
         project_section = project_dict.get("project", {})
-        if lock_model.default_group:
+        if include_default:
             for dep_str in project_section.get("dependencies", []):
                 root_req_names.append(extract_pep508_name(dep_str))
 
         optional_deps = project_section.get("optional-dependencies", {})
-        if getattr(lock_model, "all_optional_groups", False):
-            opt_groups = sorted(optional_deps.keys())
-        else:
-            opt_groups = getattr(lock_model, "optional_groups", [])
-
-        for g in opt_groups:
-            if g in optional_deps:
-                for dep_str in optional_deps[g]:
-                    root_req_names.append(extract_pep508_name(dep_str))
-            else:
-                # buildifier: disable=print
-                print("WARNING: Optional group '{}' not found in project file.".format(g))
-
         dev_deps = project_dict.get("dependency-groups", {})
-        if getattr(lock_model, "all_development_groups", False):
-            dev_groups = sorted(dev_deps.keys())
-        else:
-            dev_groups = getattr(lock_model, "development_groups", [])
 
-        for g in dev_groups:
-            if g in dev_deps:
-                for dep_entry in dev_deps[g]:
-                    if type(dep_entry) == "string":
-                        root_req_names.append(extract_pep508_name(dep_entry))
-                    elif type(dep_entry) == "dict" and "include-group" in dep_entry:
-                        inc_group = dep_entry["include-group"]
-                        if inc_group in dev_deps:
-                            for inc_dep in dev_deps[inc_group]:
-                                if type(inc_dep) == "string":
-                                    root_req_names.append(extract_pep508_name(inc_dep))
+        effective_groups = ["optional:*", "development:*"] if include_all else dependency_groups
+        for group in effective_groups:
+            if group == "default" or group == "*":
+                continue
+
+            kind, _, name = group.partition(":")
+            if kind == "optional":
+                groups_dict = optional_deps
+            elif kind == "development":
+                groups_dict = dev_deps
             else:
-                # buildifier: disable=print
-                print("WARNING: Development group '{}' not found in project file.".format(g))
+                fail("Invalid dependency group format '{}'. Must be 'optional:name' or 'development:name'.".format(group))
+
+            if name == "*":
+                target_names = list(groups_dict.keys())
+            else:
+                target_names = [name]
+
+            for target_name in target_names:
+                if target_name in groups_dict:
+                    entries = groups_dict[target_name]
+                    for entry in entries:
+                        if type(entry) == "string":
+                            root_req_names.append(extract_pep508_name(entry))
+                        elif type(entry) == "dict" and "include-group" in entry:
+                            inc_group = entry["include-group"]
+                            if inc_group in dev_deps:
+                                for inc_dep in dev_deps[inc_group]:
+                                    if type(inc_dep) == "string":
+                                        root_req_names.append(extract_pep508_name(inc_dep))
+                else:
+                    # buildifier: disable=print
+                    print("WARNING: Dependency group '{}:{}' not found in project file.".format(kind, target_name))
 
         # Deduplicate
         root_package_names = {n: True for n in root_req_names}
@@ -263,19 +262,30 @@ def translate_pylock(lock_dict, project_dict, lock_model):
         "python_versions": requires_python,
     }
 
-def repo_create_pylock_model(rctx, project_file, lock_file, lock_model, output):
+def repo_create_pylock_model(rctx, extra_project_files, lock_file, lock_model, output):
     """Run the pylock translator in pure Starlark.
 
     Args:
         rctx: The repository_ctx or module_ctx object.
-        project_file: The pyproject.toml file (optional).
+        extra_project_files: List of extra pyproject.toml files.
         lock_file: The lock file.
         lock_model: a struct containing the same attrs as the pycross_pylock_lock_model rule.
         output: the output file.
     """
-    lock_dict = decode(rctx.read(rctx.path(lock_file)))
-    project_dict = None
+
+    projects = getattr(lock_model, "projects", [])
+    project_file = select_project_file(rctx, extra_project_files, lock_file, projects)
+
+    project_dict = {}
     if project_file:
-        project_dict = decode(rctx.read(rctx.path(project_file)))
+        project_path = rctx.path(project_file)
+        if project_path.exists:
+            project_dict = decode(rctx.read(project_path))
+
+    lock_path = rctx.path(lock_file)
+    if not lock_path.exists:
+        fail("Lock file not found: {}. Ensure the pylock file exists at the expected location.".format(lock_file))
+
+    lock_dict = decode(rctx.read(lock_path))
     raw_lock_data = translate_pylock(lock_dict, project_dict, lock_model)
     rctx.file(output, json.encode(raw_lock_data))

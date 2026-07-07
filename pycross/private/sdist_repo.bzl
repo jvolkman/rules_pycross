@@ -108,7 +108,6 @@ pycross_wheel_metadata(
     include_paths = {include_paths},
 )
 """.format(
-        thin_repo = rctx.attr.thin_repo,
         lock_repo = rctx.attr.lock_repo,
         backend_bzl = backend_bzl,
         backend_macro = backend_macro,
@@ -163,11 +162,11 @@ def _sdist_repo_common(rctx):
             fail("Unknown build backend: " + backend_macro +
                  ". Registered backends: " + ", ".join(sorted(known_backends.keys())))
 
-        if rctx.attr.build_dependencies:
+        if rctx.attr.extra_build_tools:
             build_deps = {}
-            for dep in rctx.attr.build_dependencies:
+            for dep in rctx.attr.extra_build_tools:
                 dep_name = key_name(dep)
-                build_deps["@{}//{}:pkg".format(rctx.attr.lock_repo, underscore_name(dep_name))] = True
+                build_deps["@{}//{}:pkg".format(rctx.attr.thin_repo, underscore_name(dep_name))] = True
             macro_attrs["build_deps"] = str(sorted(build_deps.keys()))
 
         site_paths = []
@@ -185,8 +184,8 @@ def _sdist_repo_common(rctx):
             str(sdist_path),
             "--output",
             str(output_json),
-            "--lock-json",
-            str(rctx.path(rctx.attr.lock_json)),
+            "--pin-versions",
+            str(rctx.path(rctx.attr.pin_versions_json)),
         ]
         if rctx.attr.source_dir:
             inspect_args.extend(["--source-dir", rctx.attr.source_dir])
@@ -305,7 +304,7 @@ _SDIST_REPO_ATTRS = {
     "sdist": attr.label(mandatory = True),
     "deps": attr.string_list(doc = "Runtime dependencies from lock file."),
     "known_packages": attr.string_list(doc = "List of packages present in the lock file to filter build_requires."),
-    "lock_json": attr.label(doc = "The lock.json file from the resolved lock repo.", mandatory = True),
+    "pin_versions_json": attr.label(doc = "The pin_versions.json file from the build tools thin repo.", mandatory = True),
     "lock_repo": attr.string(doc = "Name of the lock workspace repo (e.g. 'uv__pkgs').", mandatory = True),
     "build_backend": attr.string(doc = "The build backend to use."),
     "backend_to_rule": attr.string_dict(
@@ -318,7 +317,7 @@ _SDIST_REPO_ATTRS = {
     "default_backend": attr.string(
         doc = "The rule name used when no pyproject backend name matches.",
     ),
-    "build_dependencies": attr.string_list(doc = "Overridden build-time dependencies."),
+    "extra_build_tools": attr.string_list(doc = "Additional build-time tool packages."),
     "override_backend_configs": attr.string(
         doc = "JSON-encoded dict mapping backend rule names to their backend_attrs for this package. " +
               "Populated from backend override extensions. Only the entry matching the resolved backend is applied.",

@@ -98,7 +98,7 @@ class InspectPackageTest(unittest.TestCase):
         # Mismatched version
         warnings = validate_requirements(
             requires=["numpy>=1.20"],
-            package_versions={"numpy": "1.19.0"},
+            pin_versions={"numpy": "1.19.0"},
             pkg_name="my_pkg",
         )
         self.assertEqual(len(warnings), 1)
@@ -107,7 +107,7 @@ class InspectPackageTest(unittest.TestCase):
         # Matching version
         warnings = validate_requirements(
             requires=["numpy>=1.20"],
-            package_versions={"numpy": "1.21.0"},
+            pin_versions={"numpy": "1.21.0"},
             pkg_name="my_pkg",
         )
         self.assertEqual(len(warnings), 0)
@@ -115,7 +115,7 @@ class InspectPackageTest(unittest.TestCase):
         # Extra markers ignored or parsed gracefully
         warnings = validate_requirements(
             requires=["foo; python_version >= '3.8'"],
-            package_versions={"foo": "1.0"},
+            pin_versions={"foo": "1.0"},
             pkg_name="my_pkg",
         )
         self.assertEqual(len(warnings), 0)

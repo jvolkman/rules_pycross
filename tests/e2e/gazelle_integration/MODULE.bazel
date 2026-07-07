@@ -42,9 +42,11 @@ python.toolchain(
 )
 
 uv = use_extension("@rules_pycross//pycross/extensions:uv.bzl", "uv")
-uv.project(
+uv.workspace(
+    name = "uv",
     lock_file = "//:uv.lock",
-    project_file = "//:pyproject.toml",
-    repo = "uv",
+)
+uv.repo(
+    workspace = "uv",
 )
 use_repo(uv, "uv")

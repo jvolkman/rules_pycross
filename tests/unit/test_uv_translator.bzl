@@ -7,17 +7,11 @@ load("@rules_testing//lib:util.bzl", "util")
 load("//pycross/private:uv_lock_model.bzl", "translate_uv")
 
 def _lock_model(
-        default_group = True,
-        optional_groups = [],
-        all_optional_groups = False,
-        development_groups = [],
-        all_development_groups = False):
+        projects = ["*"],
+        dependency_groups = ["default"]):
     return struct(
-        default_group = default_group,
-        optional_groups = optional_groups,
-        all_optional_groups = all_optional_groups,
-        development_groups = development_groups,
-        all_development_groups = all_development_groups,
+        projects = projects,
+        dependency_groups = dependency_groups,
     )
 
 def _project(name = "my-app", version = "0.1.0", deps = None, opt_deps = None, dep_groups = None, uv_conflicts = None, uv_default_groups = None):
@@ -276,7 +270,7 @@ def _test_uv_dev_dependencies_pep735_impl(env, target):
         _vpkg("my-app", dev_deps = {"dev": [_dep("b")]}),
         _pkg("b", "2.0", wheels = [_whl("b-2.0-py3-none-any.whl", "b")]),
     ])
-    result = translate_uv(project, lock, _lock_model(development_groups = ["dev"]))
+    result = translate_uv(project, lock, _lock_model(dependency_groups = ["default", "development:dev"]))
     env.expect.that_int(len(result["packages"])).equals(1)
     env.expect.that_collection(result["packages"].keys()).contains("b@2.0")
 
@@ -331,7 +325,7 @@ _CONFLICT_PROJECT = _project(
 # buildifier: disable=unused-variable
 def _test_uv_extra_variants_impl(env, target):
     lock = _lock(_CONFLICT_LOCK_PACKAGES, conflicts = _CONFLICT_CONFLICTS)
-    result = translate_uv(_CONFLICT_PROJECT, lock, _lock_model(default_group = False, all_optional_groups = True))
+    result = translate_uv(_CONFLICT_PROJECT, lock, _lock_model(dependency_groups = ["optional:*"]))
     env.expect.that_int(len(result.get("variants", []))).equals(1)
     vs = result["variants"][0]
     names = ["{}_{}".format(item["kind"], item.get("name", "")) for item in vs["items"]]
@@ -367,7 +361,7 @@ def _test_uv_group_variants_impl(env, target):
             {"package": "my-app", "group": "test-slow"},
         ]],
     )
-    result = translate_uv(project, lock, _lock_model(default_group = False, all_development_groups = True))
+    result = translate_uv(project, lock, _lock_model(dependency_groups = ["development:*"]))
     env.expect.that_int(len(result.get("variants", []))).equals(1)
     vs = result["variants"][0]
     names = ["{}_{}".format(item["kind"], item.get("name", "")) for item in vs["items"]]

@@ -8,3 +8,10 @@ py_test(
     main = "test_regex.py",
     deps = ["@uv//regex:pkg"],
 )
+
+py_test(
+    name = "test_regex_from_custom_build",
+    srcs = ["@rules_pycross_e2e_shared//:test_regex.py"],
+    main = "test_regex.py",
+    deps = ["@build_tools_provider__build//regex:pkg"],
+)

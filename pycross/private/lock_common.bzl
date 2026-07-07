@@ -1,29 +1,6 @@
 """Shared helpers for lock import/resolution extensions."""
 
 load("@toml.bzl//toml:toml.bzl", "decode")
-load("//pycross/private:util.bzl", "sanitize_name")
-load(
-    ":lock_attrs.bzl",
-    "COMMON_IMPORT_ATTRS",
-    "CREATE_REPOS_ATTRS",
-    "OVERRIDE_TARGET_ATTRS",
-    "PACKAGE_ATTRS",
-    "PDM_ALL_MEMBERS_ATTRS",
-    "PDM_IMPORT_ATTRS",
-    "PDM_MEMBER_ATTRS",
-    "PDM_WORKSPACE_ATTRS",
-    "POETRY_IMPORT_ATTRS",
-    "POETRY_MEMBER_ATTRS",
-    "PYLOCK_IMPORT_ATTRS",
-    "PYLOCK_MEMBER_ATTRS",
-    "REPO_ATTR",
-    "UV_ALL_MEMBERS_ATTRS",
-    "UV_IMPORT_ATTRS",
-    "UV_MEMBER_ATTRS",
-    "UV_WORKSPACE_ATTRS",
-    "WORKSPACE_COMMON_ATTRS",
-    "WORKSPACE_MEMBER_COMMON_ATTRS",
-)
 
 def validate_transition_attrs(tag, tag_name):
     """Validates that transition attributes are mutually exclusive.
@@ -41,8 +18,8 @@ def validate_transition_attrs(tag, tag_name):
 
 def package_annotation(
         always_build = False,
-        build_dependencies = [],
-        build_repo = None,
+        extra_build_tools = [],
+        build_tools_repo = None,
         build_target = None,
         ignore_dependencies = [],
         install_exclude_globs = [],
@@ -57,8 +34,8 @@ def package_annotation(
     """Annotations to apply to individual packages."""
     return json.encode(struct(
         always_build = always_build,
-        build_dependencies = build_dependencies,
-        build_repo = build_repo,
+        extra_build_tools = extra_build_tools,
+        build_tools_repo = build_tools_repo,
         build_target = build_target,
         ignore_dependencies = ignore_dependencies,
         install_exclude_globs = install_exclude_globs,
@@ -118,11 +95,9 @@ def workspace_lock_struct(ws_tag, repo_name, workspace_name, transition_attrs):
     return struct(
         repo_name = repo_name,
         workspace = workspace_name,
-        build_repo = ws_tag.build_repo,
-        default_alias_single_version = ws_tag.default_alias_single_version,
+        create_transitive_aliases = transition_attrs.get("create_transitive_aliases", False),
         local_wheels = ws_tag.local_wheels,
         disallow_builds = ws_tag.disallow_builds,
-        default_build_dependencies = ws_tag.default_build_dependencies,
         packages = {},
         flags = transition_attrs.get("flags", []),
         constraint_values = transition_attrs.get("constraint_values", []),
@@ -133,8 +108,8 @@ def normalize_package_tag(tag):
     """Normalize a generic package tag into a struct."""
     return struct(
         always_build = tag.always_build,
-        build_dependencies = tag.build_dependencies,
-        build_repo = tag.build_repo,
+        extra_build_tools = tag.extra_build_tools,
+        build_tools_repo = tag.build_tools_repo,
         build_target = tag.build_target,
         ignore_dependencies = tag.ignore_dependencies,
         install_exclude_globs = tag.install_exclude_globs,
@@ -251,53 +226,12 @@ def resolve_member_project_file(lock_file_label, member_path):
     else:
         return lock_file_label.relative("//:pyproject.toml")
 
-def determine_project_file(override_tag, model_type, lock_file_label, member_path):
-    """Determines the project file path for a member.
-
-    Args:
-        override_tag: The override tag, if any.
-        model_type: The type of lock model.
-        lock_file_label: Label of the lock file.
-        member_path: Path to the member.
-
-    Returns:
-        The project file path or Label.
-    """
-    if override_tag and override_tag.project_file:
-        return override_tag.project_file
-    elif model_type == "pylock":
-        return ""
-    else:
-        return resolve_member_project_file(lock_file_label, member_path)
-
-def get_member_group_attrs(members_tag, override_tag):
-    """Merge group attrs from an all_members default and optional member override.
-
-    Design: boolean flags live at exactly one level to avoid clobber issues
-    (Starlark booleans have no None sentinel).
-      - default_group: only on the override tag (per-member decision).
-      - all_optional_groups: only on the all_members tag (group-wide).
-        If the override specifies an explicit optional_groups list, all_optional_groups
-        is disabled for that member.
-      - all_development_groups: same pattern as all_optional_groups.
-    """
-    has_explicit_optional = override_tag and override_tag.optional_groups
-    has_explicit_development = override_tag and override_tag.development_groups
-
-    return dict(
-        default_group = override_tag.default_group if override_tag else True,
-        optional_groups = override_tag.optional_groups if has_explicit_optional else (members_tag.optional_groups if hasattr(members_tag, "optional_groups") else []),
-        all_optional_groups = (members_tag.all_optional_groups if hasattr(members_tag, "all_optional_groups") else False) and not has_explicit_optional,
-        development_groups = override_tag.development_groups if has_explicit_development else (members_tag.development_groups if hasattr(members_tag, "development_groups") else []),
-        all_development_groups = (members_tag.all_development_groups if hasattr(members_tag, "all_development_groups") else False) and not has_explicit_development,
-    )
-
 def get_member_transition_attrs(members_tag, override_tag):
-    """Merge transition attrs from an all_members default and optional member override.
+    """Merge transition attrs from a default members tag and optional override tag.
 
     Args:
-        members_tag: The default members tag.
-        override_tag: The member override tag.
+        members_tag: The default tag providing fallback transition values.
+        override_tag: The override tag providing explicit transition values.
 
     Returns:
         A dict with merged transition attributes (flags, constraint_values, platform).
@@ -306,20 +240,29 @@ def get_member_transition_attrs(members_tag, override_tag):
     has_explicit_constraints = override_tag and getattr(override_tag, "constraint_values", [])
     has_explicit_platform = override_tag and getattr(override_tag, "platform", None)
 
+    # create_transitive_aliases: override wins if set, otherwise inherit from members_tag
+    create_transitive_aliases = False
+    if override_tag and getattr(override_tag, "create_transitive_aliases", False):
+        create_transitive_aliases = True
+    elif members_tag and getattr(members_tag, "create_transitive_aliases", False):
+        create_transitive_aliases = True
+
     if override_tag and (has_explicit_flags or has_explicit_constraints or has_explicit_platform):
         return dict(
             flags = getattr(override_tag, "flags", []),
             constraint_values = [str(c) for c in getattr(override_tag, "constraint_values", [])],
             platform = str(override_tag.platform) if override_tag.platform else None,
+            create_transitive_aliases = create_transitive_aliases,
         )
 
     return dict(
         flags = getattr(members_tag, "flags", []) if members_tag else [],
         constraint_values = [str(c) for c in getattr(members_tag, "constraint_values", [])] if members_tag else [],
         platform = str(members_tag.platform) if members_tag and getattr(members_tag, "platform", None) else None,
+        create_transitive_aliases = create_transitive_aliases,
     )
 
-def register_workspace_member(
+def register_workspace_repo(
         lock_owners,
         lock_repos,
         lock_model_structs,
@@ -328,14 +271,13 @@ def register_workspace_member(
         ws_name,
         model_type,
         repo_name,
-        project_file,
-        group_attrs,
+        projects,
+        dependency_groups,
+        legacy_create_root_aliases,
         transition_attrs,
-        lock_module):
-    """Register a single workspace member as a lock repo with its model.
-
-    This is the shared registration path for both bulk (uv_all_members)
-    and standalone (uv_member) imports.
+        lock_module,
+        extra_project_files):
+    """Register a workspace lock repo.
 
     Args:
         lock_owners: Dict to track repo ownership.
@@ -346,10 +288,12 @@ def register_workspace_member(
         ws_name: The workspace name.
         model_type: The lock model type.
         repo_name: The repo name for this member.
-        project_file: The project file for this member.
-        group_attrs: Group attributes dict.
+        projects: List of projects included in this repo.
+        dependency_groups: List of dependency groups.
+        legacy_create_root_aliases: Boolean to create root aliases.
         transition_attrs: Transition attributes dict.
         lock_module: The module owning this lock.
+        extra_project_files: List of extra pyproject.toml files.
     """
     check_unique_repo_name(lock_owners, lock_module.name, repo_name)
     lock_repos[repo_name] = workspace_lock_struct(ws_tag, repo_name, ws_name, transition_attrs)
@@ -358,9 +302,11 @@ def register_workspace_member(
 
     model = dict(
         model_type = model_type,
-        project_file = str(project_file),
+        extra_project_files = [str(f) for f in extra_project_files],
         lock_file = str(ws_tag.lock_file),
-        **group_attrs
+        projects = projects,
+        dependency_groups = dependency_groups,
+        legacy_create_root_aliases = legacy_create_root_aliases,
     )
 
     # Handle attributes that are not common across all lock formats
@@ -369,19 +315,17 @@ def register_workspace_member(
             model[attr_name] = getattr(ws_tag, attr_name)
     lock_model_structs[repo_name] = json.encode(model)
 
-def process_member(
+def process_repo(
         lock_owners,
         lock_repos,
         lock_model_structs,
         root_direct_deps,
         ws_tag,
         ws_name,
-        member,
+        tag_info,
         model_type,
-        overrides,
-        default_module,
-        members_tag = None):
-    """Processes a single workspace member, applying overrides and registering it.
+        extra_project_files):
+    """Processes a single repo tag.
 
     Args:
         lock_owners: Dict to track repo ownership.
@@ -390,47 +334,43 @@ def process_member(
         root_direct_deps: List to store root direct dependencies.
         ws_tag: The workspace tag.
         ws_name: The workspace name.
-        member: The member struct to process.
+        tag_info: The repo tag info.
         model_type: The lock model type.
-        overrides: List of override tags for this member.
-        default_module: The default module for this workspace.
-        members_tag: The all_members tag, if applicable.
+        extra_project_files: List of extra pyproject.toml files.
     """
-    for override in overrides:
-        # Determine repo name
-        normalized_name = sanitize_name(member.name)
-        if override and override.tag.repo:
-            repo_name = override.tag.repo
-        elif members_tag and hasattr(members_tag, "repo_pattern"):
-            repo_name = members_tag.repo_pattern.format(member = normalized_name)
-        else:
-            repo_name = normalized_name
+    tag = tag_info.tag
 
-        # Determine project_file
-        project_file = determine_project_file(override.tag if override else None, model_type, ws_tag.lock_file, member.path)
+    dependency_groups = tag.dependency_groups
+    has_wildcard = "*" in dependency_groups
+    has_specific = False
+    for group in dependency_groups:
+        if group not in ("*", "default"):
+            has_specific = True
+            break
 
-        # Get group attrs (override wins)
-        group_attrs = get_member_group_attrs(members_tag or struct(), override.tag if override else None)
+    if has_wildcard and has_specific:
+        # buildifier: disable=print
+        print("WARNING: repo '{}' in workspace '{}' specifies both wildcard ('*') and specific dependency groups ({}). The specific groups are redundant.".format(tag.repo, ws_name, dependency_groups))
 
-        # Get transition attrs (override wins)
-        transition_attrs = get_member_transition_attrs(members_tag or struct(), override.tag if override else None)
+    # Get transition attrs
+    transition_attrs = get_member_transition_attrs(None, tag)
 
-        lock_module = override.module if override else default_module
-
-        register_workspace_member(
-            lock_owners,
-            lock_repos,
-            lock_model_structs,
-            root_direct_deps,
-            ws_tag,
-            ws_name,
-            model_type,
-            repo_name,
-            project_file,
-            group_attrs,
-            transition_attrs,
-            lock_module,
-        )
+    register_workspace_repo(
+        lock_owners,
+        lock_repos,
+        lock_model_structs,
+        root_direct_deps,
+        ws_tag,
+        ws_name,
+        model_type,
+        tag.repo,
+        tag.projects,
+        tag.dependency_groups,
+        tag.legacy_create_root_aliases,
+        transition_attrs,
+        tag_info.module,
+        extra_project_files,
+    )
 
 def process_workspaces(
         module_ctx,
@@ -439,7 +379,6 @@ def process_workspaces(
         lock_model_structs,
         workspace_tags,
         member_tags,
-        all_members_tags,
         discover_members_fn,
         model_type,
         root_direct_deps):
@@ -452,7 +391,6 @@ def process_workspaces(
         lock_model_structs: Dict to store serialized lock models.
         workspace_tags: List of workspace tags.
         member_tags: List of member tags.
-        all_members_tags: List of all_members tags.
         discover_members_fn: Function to discover members.
         model_type: The lock model type.
         root_direct_deps: List to store root direct dependencies.
@@ -471,268 +409,133 @@ def process_workspaces(
         discovered = discover_members_fn(module_ctx, ws_info.tag.lock_file)
         workspace_discovered_members[name] = {m.name: m for m in discovered}
 
-    # Collect per-member overrides indexed by (workspace, project)
-    member_overrides = {}
+    # Compute extra_project_files for each workspace (explicit or auto-discovered)
+    workspace_extra_project_files = {}
+    for name, ws_info in workspaces.items():
+        ws_tag = ws_info.tag
+
+        # Always start with auto-discovered project files from workspace members.
+        project_files = []
+        discovered = workspace_discovered_members[name]
+        for member_info in discovered.values():
+            label = resolve_member_project_file(ws_tag.lock_file, member_info.path)
+            project_files.append(label)
+
+        if not project_files:
+            # No workspace members discovered; fall back to sibling pyproject.toml.
+            project_files.append(ws_tag.lock_file.relative(":pyproject.toml"))
+
+        # Append any user-specified extra_project_files, deduplicating.
+        for f in getattr(ws_tag, "extra_project_files", []):
+            if f not in project_files:
+                project_files.append(f)
+
+        workspace_extra_project_files[name] = project_files
+
+    # Count repos per workspace
+    workspace_repo_count = {name: 0 for name in workspaces}
+    for tag_info in member_tags:
+        if tag_info.tag.workspace in workspace_repo_count:
+            workspace_repo_count[tag_info.tag.workspace] += 1
+        else:
+            fail("repo tag references non-existent workspace: '{}'".format(tag_info.tag.workspace))
+
+    # Apply Defaulting Rules
+    for ws_name, ws_info in workspaces.items():
+        if workspace_repo_count[ws_name] == 0:
+            discovered = workspace_discovered_members[ws_name]
+            if len(discovered) == 1:
+                # Auto-create implicit repo for the only project
+                project_name = list(discovered.keys())[0]
+                implicit_tag = struct(
+                    workspace = ws_name,
+                    projects = [project_name],
+                    repo = ws_name,
+                    dependency_groups = ["default"],
+                    legacy_create_root_aliases = False,
+                    flags = [],
+                    constraint_values = [],
+                    platform = None,
+                    create_transitive_aliases = False,
+                )
+                member_tags.append(struct(tag = implicit_tag, module = ws_info.module))
+                workspace_repo_count[ws_name] += 1
+            elif len(discovered) > 1:
+                fail("workspace '{}' contains multiple projects but has no repo tags.".format(ws_name))
+            else:
+                fail("workspace '{}' contains no projects.".format(ws_name))
+
     for tag_info in member_tags:
         tag = tag_info.tag
-        module = tag_info.module
-        if tag.workspace not in workspaces:
-            fail("member tag references non-existent workspace: '{}'".format(tag.workspace))
+        ws_name = tag.workspace
+        discovered = workspace_discovered_members[ws_name]
+        ws_info = workspaces[ws_name]
 
-        # If project is omitted, infer from discovered members.
-        project = tag.project
-        if not project:
-            discovered = workspace_discovered_members[tag.workspace]
+        projects = getattr(tag, "projects", [])
+        if not projects:
             if len(discovered) == 1:
-                project = list(discovered.keys())[0]
-            elif len(discovered) == 0:
-                fail("no members discovered in workspace '{}'; cannot infer project".format(tag.workspace))
+                projects = [list(discovered.keys())[0]]
             else:
-                fail("workspace '{}' has {} members ({}); 'project' is required to disambiguate".format(
-                    tag.workspace,
-                    len(discovered),
-                    ", ".join(sorted(discovered.keys())),
-                ))
+                fail("projects list is empty but workspace '{}' has {} members".format(ws_name, len(discovered)))
 
-        key = (tag.workspace, project)
-        if key not in member_overrides:
-            member_overrides[key] = []
+        repo = tag.repo
+        if not repo:
+            if workspace_repo_count[ws_name] == 1:
+                repo = ws_name
+            else:
+                fail("repo name is required for repo tags in workspace '{}' (multiple repo tags exist)".format(ws_name))
 
-        # Check for duplicate repo names within the same project override
-        for existing in member_overrides[key]:
-            if existing.tag.repo and tag.repo and existing.tag.repo == tag.repo:
-                fail("Duplicate member override for project '{}' with repo '{}' in workspace '{}'".format(project, tag.repo, tag.workspace))
+        # Build complete tag
+        new_tag = struct(
+            workspace = ws_name,
+            projects = projects,
+            repo = repo,
+            dependency_groups = getattr(tag, "dependency_groups", ["default"]),
+            legacy_create_root_aliases = getattr(tag, "legacy_create_root_aliases", False),
+            flags = getattr(tag, "flags", []),
+            constraint_values = getattr(tag, "constraint_values", []),
+            platform = getattr(tag, "platform", None),
+            create_transitive_aliases = getattr(tag, "create_transitive_aliases", False),
+        )
+        new_tag_info = struct(tag = new_tag, module = tag_info.module)
 
-        member_overrides[key].append(tag_info)
+        process_repo(
+            lock_owners,
+            lock_repos,
+            lock_model_structs,
+            root_direct_deps,
+            ws_info.tag,
+            ws_name,
+            new_tag_info,
+            model_type,
+            workspace_extra_project_files[ws_name],
+        )
 
-    processed_members = {}  # (workspace, project) -> True
+    # Auto-generate the __build thin repo for this workspace.
+    for ws_name, ws_info in workspaces.items():
+        build_repo_name = "{}__build".format(ws_name)
 
-    # Process bulk member imports
-    for tag_info in all_members_tags:
-        tag = tag_info.tag
-        module = tag_info.module
-        if tag.workspace not in workspaces:
-            fail("all_members tag references non-existent workspace: '{}'".format(tag.workspace))
-
-        ws_info = workspaces[tag.workspace]
-        ws_tag = ws_info.tag
-
-        discovered = workspace_discovered_members[tag.workspace]
-        excluded = {p: True for p in tag.excluded_projects}
-
-        for member_name, member in discovered.items():
-            if member_name in excluded:
-                continue
-
-            processed_members[(tag.workspace, member_name)] = True
-
-            overrides = member_overrides.get((tag.workspace, member_name), [None])
-
-            process_member(
-                lock_owners,
-                lock_repos,
-                lock_model_structs,
-                root_direct_deps,
-                ws_tag,
-                tag.workspace,
-                member,
-                model_type,
-                overrides,
-                module,
-                members_tag = tag,
-            )
-
-    # Process standalone member imports
-    for key, overrides in member_overrides.items():
-        if key in processed_members:
+        if build_repo_name in lock_repos:
             continue
 
-        ws_name, project = key
-        ws_info = workspaces[ws_name]
-        ws_tag = ws_info.tag
-        discovered = workspace_discovered_members[ws_name]
-
-        if project not in discovered:
-            fail("Project '{}' not found in workspace '{}'".format(project, ws_name))
-
-        member = discovered[project]
-
-        process_member(
-            lock_owners,
-            lock_repos,
-            lock_model_structs,
-            root_direct_deps,
-            ws_tag,
-            ws_name,
-            member,
-            model_type,
-            overrides,
-            None,
+        register_workspace_repo(
+            lock_owners = lock_owners,
+            lock_repos = lock_repos,
+            lock_model_structs = lock_model_structs,
+            root_direct_deps = root_direct_deps,
+            ws_tag = ws_info.tag,
+            ws_name = ws_name,
+            model_type = model_type,
+            repo_name = build_repo_name,
+            projects = ["*"],
+            dependency_groups = ["*"],
+            legacy_create_root_aliases = False,
+            transition_attrs = dict(
+                flags = [],
+                constraint_values = [],
+                platform = None,
+                create_transitive_aliases = True,
+            ),
+            lock_module = ws_info.module,
+            extra_project_files = workspace_extra_project_files[ws_name],
         )
-
-def process_import_tags(module_ctx):
-    """Processes all import tags from all modules and returns aggregated lock data.
-
-    Args:
-        module_ctx: The module_ctx object.
-
-    Returns:
-        A struct containing aggregated lock data.
-    """
-    lock_owners = {}
-    lock_repos = {}
-    root_direct_deps = []
-    lock_model_structs = {}
-
-    for name, tag_prefixes, discover_fn in [
-        ("uv", ["import_uv", "import_uv_workspace"], discover_uv_all_members),
-        ("pdm", ["import_pdm", "import_pdm_workspace"], discover_pdm_all_members),
-        ("poetry", ["import_poetry"], discover_poetry_all_members),
-        ("pylock", ["import_pylock"], discover_pylock_all_members),
-    ]:
-        workspace_tags = []
-        member_tags = []
-        all_members_tags = []
-
-        import_tag_name = tag_prefixes[0]
-        import_ws_tag_name = tag_prefixes[1] if len(tag_prefixes) > 1 else None
-
-        for module in module_ctx.modules:
-            # 1. Process workspace tags
-            if import_ws_tag_name:
-                for tag in getattr(module.tags, import_ws_tag_name):
-                    workspace_tags.append(struct(tag = tag, module = module, ws_name = tag.name))
-                for tag in getattr(module.tags, name + "_all_members"):
-                    validate_transition_attrs(tag, name + "_all_members")
-                    all_members_tags.append(struct(tag = tag, module = module))
-
-            for tag in getattr(module.tags, name + "_member"):
-                validate_transition_attrs(tag, name + "_member")
-                member_tags.append(struct(tag = tag, module = module))
-
-            # 2. Process legacy/standalone import tags (desugar)
-            for tag in getattr(module.tags, import_tag_name):
-                validate_transition_attrs(tag, import_tag_name)
-
-                # Synthesis workspace
-                workspace_tags.append(struct(tag = tag, module = module, ws_name = tag.repo))
-
-                # Synthesis member
-                member_tag = struct(
-                    workspace = tag.repo,
-                    project = "",
-                    repo = tag.repo,
-                    project_file = getattr(tag, "project_file", None),
-                    default_group = getattr(tag, "default_group", True),
-                    optional_groups = getattr(tag, "optional_groups", []),
-                    all_optional_groups = getattr(tag, "all_optional_groups", False),
-                    development_groups = getattr(tag, "development_groups", []),
-                    all_development_groups = getattr(tag, "all_development_groups", False),
-                    flags = getattr(tag, "flags", []),
-                    constraint_values = getattr(tag, "constraint_values", []),
-                    platform = getattr(tag, "platform", None),
-                )
-                member_tags.append(struct(tag = member_tag, module = module))
-
-        process_workspaces(
-            module_ctx,
-            lock_owners,
-            lock_repos,
-            lock_model_structs,
-            workspace_tags,
-            member_tags,
-            all_members_tags,
-            discover_fn,
-            name,
-            root_direct_deps,
-        )
-
-    workspace_packages = {}  # workspace_name -> {pkg_name -> normalized_tag}
-    valid_workspaces = {r.workspace: True for r in lock_repos.values()}
-
-    # Add package attributes
-    for module in module_ctx.modules:
-        for tag in module.tags.package:
-            if tag.repo and tag.workspace:
-                fail("package '{}' specifies both repo and workspace".format(tag.name))
-            if not tag.repo and not tag.workspace:
-                fail("package '{}' must specify either repo or workspace".format(tag.name))
-
-            normalized = normalize_package_tag(tag)
-            if tag.repo:
-                check_proper_package_repo(lock_owners, module, tag)
-                repo_info = lock_repos[tag.repo]
-                if repo_info.workspace != repo_info.repo_name:
-                    fail(
-                        "package '{}' targets repo '{}' which is a member of workspace '{}'. ".format(tag.name, tag.repo, repo_info.workspace) +
-                        "Use workspace = '{}' instead.".format(repo_info.workspace),
-                    )
-                if tag.name in repo_info.packages:
-                    fail("Multiple package entries for package '{}' in repo '{}'".format(tag.name, tag.repo))
-                repo_info.packages[tag.name] = normalized
-            elif tag.workspace:
-                # We intentionally don't enforce `check_proper_package_repo` for workspaces.
-                # Workspaces are top-level constructs, and it's acceptable for any module to
-                # inject packages into a shared workspace configuration.
-                if tag.workspace not in valid_workspaces:
-                    fail("Package override specifies workspace '{}' which does not exist".format(tag.workspace))
-                ws_pkgs = workspace_packages.setdefault(tag.workspace, {})
-                if tag.name in ws_pkgs:
-                    fail("Multiple package entries for package '{}' in workspace '{}'".format(tag.name, tag.workspace))
-                ws_pkgs[tag.name] = normalized
-
-    # Generate the resolved lock repos
-    workspace_memberships = {}
-    workspace_build_repos = {}
-    repo_flags = {}
-    repo_constraint_values = {}
-    repo_platforms = {}
-    repo_disallow_builds = {}
-
-    for repo_info in lock_repos.values():
-        workspace_memberships[repo_info.repo_name] = repo_info.workspace
-        if repo_info.build_repo:
-            workspace_build_repos[repo_info.workspace] = repo_info.build_repo
-
-        if repo_info.flags:
-            repo_flags[repo_info.repo_name] = json.encode(repo_info.flags)
-        if repo_info.constraint_values:
-            repo_constraint_values[repo_info.repo_name] = json.encode(repo_info.constraint_values)
-        if repo_info.platform:
-            repo_platforms[repo_info.repo_name] = repo_info.platform
-        if repo_info.disallow_builds:
-            repo_disallow_builds[repo_info.repo_name] = True
-
-    return struct(
-        lock_repos = lock_repos,
-        lock_model_structs = lock_model_structs,
-        workspace_packages = workspace_packages,
-        root_direct_deps = root_direct_deps,
-        workspace_memberships = workspace_memberships,
-        workspace_build_repos = workspace_build_repos,
-        repo_flags = repo_flags,
-        repo_constraint_values = repo_constraint_values,
-        repo_platforms = repo_platforms,
-        repo_disallow_builds = repo_disallow_builds,
-    )
-
-IMPORT_TAG_CLASSES = dict(
-    import_pdm = tag_class(doc = "Import a PDM lock file.", attrs = PDM_IMPORT_ATTRS | COMMON_IMPORT_ATTRS | REPO_ATTR),
-    import_poetry = tag_class(doc = "Import a Poetry lock file.", attrs = POETRY_IMPORT_ATTRS | COMMON_IMPORT_ATTRS | REPO_ATTR),
-    import_uv = tag_class(doc = "Import a uv lock file.", attrs = UV_IMPORT_ATTRS | COMMON_IMPORT_ATTRS | REPO_ATTR),
-    import_pylock = tag_class(doc = "Import a pylock.toml lock file.", attrs = PYLOCK_IMPORT_ATTRS | COMMON_IMPORT_ATTRS | REPO_ATTR),
-    import_pdm_workspace = tag_class(doc = "Import a PDM workspace.", attrs = PDM_WORKSPACE_ATTRS | WORKSPACE_COMMON_ATTRS),
-    pdm_all_members = tag_class(doc = "Auto-discover and import all members from a pdm.lock file.", attrs = PDM_ALL_MEMBERS_ATTRS | WORKSPACE_MEMBER_COMMON_ATTRS),
-    pdm_member = tag_class(doc = "Override settings for a specific PDM member.", attrs = PDM_MEMBER_ATTRS | WORKSPACE_MEMBER_COMMON_ATTRS),
-    import_uv_workspace = tag_class(doc = "Import a uv workspace. Define members with uv_all_members and uv_member tags.", attrs = UV_WORKSPACE_ATTRS | WORKSPACE_COMMON_ATTRS),
-    uv_all_members = tag_class(doc = "Auto-discover and import all members from a uv.lock file.", attrs = UV_ALL_MEMBERS_ATTRS | WORKSPACE_MEMBER_COMMON_ATTRS),
-    uv_member = tag_class(doc = "Override settings for a specific member.", attrs = UV_MEMBER_ATTRS | WORKSPACE_MEMBER_COMMON_ATTRS),
-    poetry_member = tag_class(doc = "Override settings for a specific Poetry member.", attrs = POETRY_MEMBER_ATTRS | WORKSPACE_MEMBER_COMMON_ATTRS),
-    pylock_member = tag_class(doc = "Override settings for a specific Pylock member.", attrs = PYLOCK_MEMBER_ATTRS | WORKSPACE_MEMBER_COMMON_ATTRS),
-    package = tag_class(doc = "Specify package-specific settings.", attrs = PACKAGE_ATTRS | OVERRIDE_TARGET_ATTRS),
-)
-
-CREATE_TAG_CLASS = tag_class(
-    doc = "Create declared Pycross repos.",
-    attrs = CREATE_REPOS_ATTRS,
-)

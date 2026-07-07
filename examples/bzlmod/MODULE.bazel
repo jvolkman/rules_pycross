@@ -51,7 +51,7 @@ lock_import.import_uv(
 lock_import.package(
     name = "ipython",
     always_build = True,
-    build_dependencies = [
+    extra_build_tools = [
         "setuptools",
         "wheel",
     ],

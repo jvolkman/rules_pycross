@@ -32,13 +32,15 @@ environments.create_for_python_toolchains(
 use_repo(environments, "uv_cycle_envs")
 
 uv = use_extension("@rules_pycross//pycross/extensions:uv.bzl", "uv")
-uv.project(
+uv.workspace(
+    name = "cycle_lock",
     local_wheels = [
         "//:cycle_a-1.0.0-py3-none-any.whl",
         "//:cycle_b-1.0.0-py3-none-any.whl",
     ],
     lock_file = "//:uv.lock",
-    project_file = "//:pyproject.toml",
-    repo = "cycle_lock",
+)
+uv.repo(
+    workspace = "cycle_lock",
 )
 use_repo(uv, "cycle_lock")

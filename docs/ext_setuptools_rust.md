@@ -9,8 +9,8 @@ Setuptools Rust overrides extension.
 <pre>
 setuptools_rust = use_extension("@rules_pycross_backend_maturin//extensions:setuptools_rust.bzl", "setuptools_rust")
 setuptools_rust.override(<a href="#setuptools_rust.override-name">name</a>, <a href="#setuptools_rust.override-data">data</a>, <a href="#setuptools_rust.override-build_env">build_env</a>, <a href="#setuptools_rust.override-cargo_lock">cargo_lock</a>, <a href="#setuptools_rust.override-config_settings">config_settings</a>, <a href="#setuptools_rust.override-copts">copts</a>, <a href="#setuptools_rust.override-linkopts">linkopts</a>,
-                         <a href="#setuptools_rust.override-native_deps">native_deps</a>, <a href="#setuptools_rust.override-path_tools">path_tools</a>, <a href="#setuptools_rust.override-post_build_hooks">post_build_hooks</a>, <a href="#setuptools_rust.override-pre_build_hooks">pre_build_hooks</a>, <a href="#setuptools_rust.override-repo">repo</a>, <a href="#setuptools_rust.override-sdist">sdist</a>,
-                         <a href="#setuptools_rust.override-tool_deps">tool_deps</a>, <a href="#setuptools_rust.override-workspace">workspace</a>)
+                         <a href="#setuptools_rust.override-native_deps">native_deps</a>, <a href="#setuptools_rust.override-path_tools">path_tools</a>, <a href="#setuptools_rust.override-post_build_hooks">post_build_hooks</a>, <a href="#setuptools_rust.override-pre_build_hooks">pre_build_hooks</a>, <a href="#setuptools_rust.override-sdist">sdist</a>, <a href="#setuptools_rust.override-tool_deps">tool_deps</a>,
+                         <a href="#setuptools_rust.override-workspace">workspace</a>)
 </pre>
 
 
@@ -37,7 +37,6 @@ Specify setuptools-rust-specific package overrides.
 | <a id="setuptools_rust.override-path_tools"></a>path_tools |  A list of binary targets placed on PATH during the build.   | <a href="https://bazel.build/concepts/labels">List of labels</a> | optional |  `[]`  |
 | <a id="setuptools_rust.override-post_build_hooks"></a>post_build_hooks |  Executables to run after the wheel is built.   | <a href="https://bazel.build/concepts/labels">List of labels</a> | optional |  `[]`  |
 | <a id="setuptools_rust.override-pre_build_hooks"></a>pre_build_hooks |  Executables to run before building the wheel.   | <a href="https://bazel.build/concepts/labels">List of labels</a> | optional |  `[]`  |
-| <a id="setuptools_rust.override-repo"></a>repo |  The repository name (if applying to a specific lock file).   | String | optional |  `""`  |
 | <a id="setuptools_rust.override-sdist"></a>sdist |  Label to the sdist target. Used to resolve repository visibility in the generated _cargo repo.   | <a href="https://bazel.build/concepts/labels">Label</a> | optional |  `None`  |
 | <a id="setuptools_rust.override-tool_deps"></a>tool_deps |  Overrides for built-in dependencies.   | <a href="https://bazel.build/rules/lib/dict">Dictionary: String -> String</a> | optional |  `{}`  |
 | <a id="setuptools_rust.override-workspace"></a>workspace |  The workspace name (if applying to all members of a workspace).   | String | optional |  `""`  |

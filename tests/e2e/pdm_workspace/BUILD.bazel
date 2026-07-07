@@ -1,4 +1,5 @@
 load("@lock_a//:requirements.bzl", requirement_a = "requirement")
+load("@lock_c//:requirements.bzl", requirement_c = "requirement")
 load("@lock_project_b//:requirements.bzl", requirement_b = "requirement")
 load("@rules_python//python:defs.bzl", "py_test")
 
@@ -47,4 +48,13 @@ py_test(
         requirement_a("six"),
         requirement_b("attrs"),
     ],
+)
+
+# Test: import six (from lock_c, which was added via extra_project_files)
+py_test(
+    name = "test_six_from_c",
+    srcs = ["test_import.py"],
+    args = ["six"],
+    main = "test_import.py",
+    deps = [requirement_c("six")],
 )

@@ -22,10 +22,10 @@ def _lock_workspace_repo_impl(rctx):
         workspace_lines.append('    "{}": "{}",'.format(repo_name, workspace_name))
     workspace_lines.append("}")
 
-    workspace_lines.append("workspace_build_repos = {")
-    for workspace_name in sorted(rctx.attr.workspace_build_repos):
-        build_repo = rctx.attr.workspace_build_repos[workspace_name]
-        workspace_lines.append('    "{}": "{}",'.format(workspace_name, build_repo))
+    workspace_lines.append("default_build_tools_repos = {")
+    for workspace_name in sorted(rctx.attr.default_build_tools_repos):
+        build_tools_repo = rctx.attr.default_build_tools_repos[workspace_name]
+        workspace_lines.append('    "{}": "{}",'.format(workspace_name, build_tools_repo))
     workspace_lines.append("}")
 
     workspace_lines.append("root_repos = [")
@@ -35,7 +35,7 @@ def _lock_workspace_repo_impl(rctx):
 
     # Flags and constraint_values are JSON-encoded lists passed through string_dict attrs.
     # constraint_values are stored as strings (not labels) because repository rules cannot
-    # accept label attrs across repo boundaries; labels are resolved to strings at lock_import
+    # accept label attrs across repo boundaries; labels are resolved to strings at extension time
     # time via str(label).
     workspace_lines.append("repo_flags = {")
     for repo_name in sorted(rctx.attr.repo_flags):
@@ -67,8 +67,8 @@ lock_workspace_repo = repository_rule(
             doc = "Maps repo_name to workspace_name for repos that share a workspace.",
             default = {},
         ),
-        "workspace_build_repos": attr.string_dict(
-            doc = "Maps workspace_name to build_repo for workspaces that use a different repo for sdist build dependencies.",
+        "default_build_tools_repos": attr.string_dict(
+            doc = "Maps workspace_name to build_tools_repo for workspaces that use a different repo for sdist build tool resolution.",
             default = {},
         ),
         "root_repos": attr.string_list(

@@ -31,9 +31,11 @@ environments.create_for_python_toolchains(
 use_repo(environments, "markers_envs")
 
 uv = use_extension("@rules_pycross//pycross/extensions:uv.bzl", "uv")
-uv.project(
+uv.workspace(
+    name = "markers_lock",
     lock_file = "//:uv.lock",
-    project_file = "//:pyproject.toml",
-    repo = "markers_lock",
+)
+uv.repo(
+    workspace = "markers_lock",
 )
 use_repo(uv, "markers_lock")

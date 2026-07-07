@@ -395,7 +395,18 @@ def inspect_wheel(wheel_path: Path) -> dict:
     }
 
 
-def validate_requirements(requires: list[str], package_versions: dict[str, str], pkg_name: str) -> list[str]:
+def validate_requirements(requires: list[str], pin_versions: dict[str, str | dict], pkg_name: str) -> list[str]:
+    """Validate build-system.requires against pinned versions from the thin repo.
+
+    Args:
+        requires: List of PEP 508 requirement strings from build-system.requires.
+        pin_versions: Dict from pin_versions.json. Simple pins: name -> version string.
+            Variant pins: name -> {variant -> version}.
+        pkg_name: Name of the package being inspected (for warning messages).
+
+    Returns:
+        List of warning strings.
+    """
     warnings = []
     try:
         from packaging.requirements import Requirement
@@ -403,6 +414,9 @@ def validate_requirements(requires: list[str], package_versions: dict[str, str],
     except ImportError:
         # Skip validation if packaging is not available in the host python
         return warnings
+
+    # Normalize pin names for lookup
+    normalized_pins = {canonicalize_name(k): v for k, v in pin_versions.items()}
 
     for req_str in requires:
         try:
@@ -414,17 +428,23 @@ def validate_requirements(requires: list[str], package_versions: dict[str, str],
         if req_name == "oldest-supported-numpy":
             req_name = "numpy"
 
-        # Check if the lock file has a version for this package
-        # Sometimes lock files use un-canonicalized names, so check lowercased
-        normalized_versions = {canonicalize_name(k): v for k, v in package_versions.items()}
-
-        if req_name in normalized_versions:
-            provided_version = normalized_versions[req_name]
-            if not req.specifier.contains(provided_version, prereleases=True):
-                warnings.append(
-                    f"WARNING: The lock file provides '{req_name}=={provided_version}', "
-                    f"but '{pkg_name}' requires '{req_str}' in pyproject.toml."
-                )
+        if req_name in normalized_pins:
+            version_or_dict = normalized_pins[req_name]
+            if isinstance(version_or_dict, str):
+                # Simple pin: validate the single version
+                if not req.specifier.contains(version_or_dict, prereleases=True):
+                    warnings.append(
+                        f"WARNING: The build tools repo pins '{req_name}=={version_or_dict}', "
+                        f"but '{pkg_name}' requires '{req_str}' in pyproject.toml."
+                    )
+            else:
+                # Variant pin: check if ANY variant satisfies
+                satisfying = [v for v in version_or_dict.values() if req.specifier.contains(v, prereleases=True)]
+                if not satisfying:
+                    versions_str = ", ".join(f"{k}={v}" for k, v in sorted(version_or_dict.items()))
+                    warnings.append(
+                        f"WARNING: No variant of '{req_name}' satisfies '{req_str}' (available: {versions_str})."
+                    )
 
     return warnings
 
@@ -434,7 +454,9 @@ def main():
     parser.add_argument("--sdist", type=Path)
     parser.add_argument("--wheel", type=Path)
     parser.add_argument("--output", type=Path, required=True)
-    parser.add_argument("--lock-json", type=Path)
+    parser.add_argument("--pin-versions", type=Path, help="Path to pin_versions.json from the build tools thin repo.")
+    # Keep --lock-json for backward compatibility
+    parser.add_argument("--lock-json", type=Path, help="(Deprecated) Path to lock.json. Use --pin-versions instead.")
     parser.add_argument(
         "--source-dir", type=str, default="", help="Subdirectory within the sdist archive containing the package."
     )
@@ -442,17 +464,22 @@ def main():
 
     if args.sdist:
         data = inspect_sdist(args.sdist, source_dir=args.source_dir)
-        if args.lock_json:
+
+        pin_versions = {}
+        if args.pin_versions:
+            with open(args.pin_versions, "r") as f:
+                pin_versions = json.load(f)
+        elif args.lock_json:
+            # Backward compat: derive pin_versions from lock JSON
             with open(args.lock_json, "r") as f:
                 lock_data = json.load(f)
-
-            package_versions = {}
             for key in lock_data.get("packages", {}):
                 parts = key.split("@", 1)
                 if len(parts) == 2:
-                    package_versions[parts[0]] = parts[1]
+                    pin_versions[parts[0]] = parts[1]
 
-            data["warnings"] = validate_requirements(data["build_requires"], package_versions, args.sdist.name)
+        if pin_versions:
+            data["warnings"] = validate_requirements(data["build_requires"], pin_versions, args.sdist.name)
     elif args.wheel:
         data = inspect_wheel(args.wheel)
     else:

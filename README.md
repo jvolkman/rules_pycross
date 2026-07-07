@@ -27,10 +27,25 @@ Add your lock file import to `MODULE.bazel`:
 ```python
 uv = use_extension("@rules_pycross//pycross/extensions:uv.bzl", "uv")
 
-uv.project(
+uv.workspace(
+    name = "pypi",
     lock_file = "//:uv.lock",
-    project_file = "//:pyproject.toml",
-    repo = "pypi",
+)
+use_repo(uv, "pypi")
+```
+
+For a single-project lock file, this is all you need — `rules_pycross` auto-discovers the project from the lock file and creates a repo named `"pypi"` with default dependencies.
+
+To customize which projects or dependency groups are included, add a `uv.repo()` tag:
+
+```python
+uv.workspace(
+    name = "pypi",
+    lock_file = "//:uv.lock",
+)
+uv.repo(
+    dependency_groups = ["default", "optional:grpc"],
+    workspace = "pypi",
 )
 use_repo(uv, "pypi")
 ```
@@ -39,23 +54,104 @@ After this, packages are available as `@pypi//package_name`. A `requirement()` m
 
 Other lock formats work the same way via their respective extensions: `pdm.bzl`, `poetry.bzl`, or `pylock.bzl`.
 
-<details>
-<summary>Legacy two-extension pattern (deprecated)</summary>
+### Repository Defaults and Auto-Generation
 
-The previous approach used two separate extensions. This still works but is deprecated:
+#### The Default Workspace Repository
+
+For simple, single-project lock files, you can omit the `uv.repo()` tag entirely. `rules_pycross` will automatically synthesize a repository for you with the following defaults:
+
+* **Name**: Matches the workspace name (e.g., `@pypi`).
+* **Content**: Includes only the `"default"` dependency group of the single discovered project.
+
+To override these defaults (for example, to include optional extras or change the name), explicitly declare one or more `uv.repo()` tags.
+
+#### Project File Discovery
+
+`rules_pycross` automatically discovers your `pyproject.toml` files by inspecting the workspace members defined in the lock file. If it finds none (e.g. for a standalone lock file), it falls back to looking for a `pyproject.toml` next to the lock file.
+
+If you have additional `pyproject.toml` files that aren't part of the lock file's defined workspace members, but contain build settings or dependency definitions you need `rules_pycross` to see, you can explicitly add them using `extra_project_files` on the `workspace()` tag:
 
 ```python
-lock_import = use_extension("@rules_pycross//pycross/extensions:lock_import.bzl", "lock_import")
+uv.workspace(
+    name = "pypi",
+    lock_file = "//:uv.lock",
+    extra_project_files = ["//:pyproject.toml", "//tools:pyproject.toml"],
+)
+```
 
+These explicitly specified files are appended to the auto-discovered files.
+
+#### Transitive Aliases
+
+By default, `rules_pycross` only generates top-level aliases for packages that are explicitly defined as dependencies in your project. If you want to be able to depend on transitive dependencies directly using `requirement("transitive-package")`, you can enable `create_transitive_aliases` on your `uv.repo()` tag:
+
+```python
+uv.repo(
+    workspace = "pypi",
+    create_transitive_aliases = True,
+)
+```
+
+If a transitive package has multiple versions in the lock file, `rules_pycross` will print a warning and alias to the highest version.
+
+#### The Internal Build Tools Repository (`__build`)
+
+For every workspace, `rules_pycross` also auto-generates an internal companion repository named `<workspace>__build` (e.g., `@pypi__build`).
+
+* **Purpose**: Provides build-time tools (like `setuptools`, `hatchling`, etc.) required to build source distributions (sdists) hermetically.
+* **Content**: Includes all projects and all dependency groups (`*`) from the workspace.
+
+This repository is managed automatically. However, if you need to customize its settings (such as restricting its dependency groups), you can override it by explicitly declaring a repo with the `<workspace>__build` name:
+
+```python
+uv.repo(
+    name = "pypi__build",
+    dependency_groups = ["default", "development:build"],
+    workspace = "pypi",
+)
+```
+
+<details>
+<summary>Migrating from the legacy two-extension pattern</summary>
+
+The previous approach used `lock_import` / `lock_repos` (or `lock`) extensions. These have been removed.
+Migrate by replacing them with the per-format extension:
+
+```python
+# Before (removed):
+lock_import = use_extension("@rules_pycross//pycross/extensions:lock_import.bzl", "lock_import")
 lock_import.import_uv(
     lock_file = "//:uv.lock",
     project_file = "//:pyproject.toml",
     repo = "pypi",
 )
-
+lock_import.package(
+    name = "numpy",
+    always_build = True,
+    repo = "pypi",
+)
 lock_repos = use_extension("@rules_pycross//pycross/extensions:lock_repos.bzl", "lock_repos")
 use_repo(lock_repos, "pypi")
+
+# After:
+uv = use_extension("@rules_pycross//pycross/extensions:uv.bzl", "uv")
+uv.workspace(
+    name = "pypi",
+    lock_file = "//:uv.lock",
+)
+uv.repo(
+    workspace = "pypi",
+)
+uv.package(
+    name = "numpy",
+    always_build = True,
+    workspace = "pypi",  # was: repo = "pypi"
+)
+use_repo(uv, "pypi")
 ```
+
+> [!TIP]
+> If you are migrating from a 1.x target layout where packages were referenced as `@pypi//:package_name` (with a colon), you can enable `legacy_create_root_aliases = True` on your `uv.repo()` tag to generate these aliases in the 2.x repo.
 
 </details>
 
@@ -105,11 +201,22 @@ A `pip install` operation can be broken down into:
 
 ## Dependency Groups
 
-Each import function supports selecting which dependency groups to include:
+The `dependency_groups` attribute on `uv.repo()` controls which dependency groups are included. It accepts a list of group specifiers:
 
-* `default_group` — include the project's default dependencies (default: `True`)
-* `optional_groups` / `all_optional_groups` — include `[project.optional-dependencies]`
-* `development_groups` / `all_development_groups` — include `[dependency-groups]`
+* `"default"` — the project's default dependencies
+* `"optional:<name>"` — a specific optional dependency group (`[project.optional-dependencies]`)
+* `"development:<name>"` — a specific development group (`[dependency-groups]`)
+* `"optional:*"` / `"development:*"` — all optional or all development groups
+* `"*"` — all groups (default + all optional + all development)
+
+The default is `["default"]`.
+
+```python
+uv.repo(
+    dependency_groups = ["default", "optional:grpc", "development:test"],
+    workspace = "pypi",
+)
+```
 
 ---
 
@@ -154,39 +261,39 @@ uv.workspace(
     lock_file = "//:uv.lock",
 )
 
-# 2. Auto-discover all members; generate repos with a naming pattern
-uv.all_projects(
+# 2. Import all projects into a single repo
+uv.repo(
+    name = "lock_all",
+    projects = ["*"],
     workspace = "shared",
-    repo_pattern = "lock_{member}",  # e.g., 'project-a' -> '@lock_project_a'
 )
-use_repo(uv, "lock_project_a", "lock_project_b")
+use_repo(uv, "lock_all")
 ```
 
 All members share a single backing `package_repo` — overlapping packages are downloaded and built only once.
 
-### Overriding Member Settings
+### Per-Member Repos
 
-Individual members can override the repo name or dependency groups using `uv_member`:
+To create separate repos per workspace member with different dependency selections:
 
 ```python
-# Override project-a's repo name (instead of the pattern-generated 'lock_project_a')
-uv.project(
+uv.repo(
+    name = "lock_a",
+    projects = ["project-a"],
     workspace = "shared",
-    name = "project-a",
-    repo = "lock_a",
 )
-
-# Include specific optional groups only for project-b
-uv.project(
+uv.repo(
+    name = "lock_b",
+    projects = ["project-b"],
+    dependency_groups = ["default", "optional:grpc", "development:testing"],
     workspace = "shared",
-    name = "project-b",
-    optional_groups = ["grpc", "testing"],
 )
+use_repo(uv, "lock_a", "lock_b")
 ```
 
 ### Package Annotations in a Workspace
 
-`uv.package()` annotations in a workspace must use the `workspace` attribute (not `repo`):
+`uv.package()` annotations target a workspace. The `workspace` attribute can be omitted if the module declares only one workspace:
 
 ```python
 # Apply to all members of the "shared" workspace
@@ -217,18 +324,22 @@ uv.package(
 
 ### Multiple Independent Lock Files
 
-If your projects use separate lock files (not a shared workspace lock), each `import_uv` call creates its own isolated workspace:
+If your projects use separate lock files (not a shared workspace lock), declare separate workspaces:
 
 ```python
-uv.project(
+uv.workspace(
+    name = "frontend_deps",
     lock_file = "//frontend:uv.lock",
-    project_file = "//frontend:pyproject.toml",
-    repo = "frontend_deps",
 )
-uv.project(
+uv.repo(
+    workspace = "frontend_deps",
+)
+uv.workspace(
+    name = "ml_deps",
     lock_file = "//ml:uv.lock",
-    project_file = "//ml:pyproject.toml",
-    repo = "ml_deps",
+)
+uv.repo(
+    workspace = "ml_deps",
 )
 use_repo(uv, "frontend_deps", "ml_deps")
 ```
@@ -258,7 +369,53 @@ By default, `rules_pycross` uses pre-built wheels when available. To force build
 uv.package(
     name = "numpy",
     always_build = True,
-    repo = "pypi",
+    workspace = "pypi",
+)
+```
+
+### Extra Build Tools
+
+When building a package from source, `rules_pycross` automatically includes the `build-system.requires` packages from the sdist's `pyproject.toml`. If a package needs additional Python packages at build time (e.g., `cython`, `numpy`, `setuptools-scm`), declare them with `extra_build_tools`:
+
+```python
+uv.package(
+    name = "pandas",
+    extra_build_tools = ["cython@0.29.36", "numpy@1.26.4"],
+    workspace = "pypi",
+)
+```
+
+These package keys must match entries in the lock file. Only packages that aren't already runtime dependencies are added as build-only deps.
+
+#### Custom Build Tools Repository
+
+By default, build tools are resolved from the internal `<workspace>__build` repository. If a specific package needs to resolve its build dependencies from a different repository, you can specify `build_tools_repo` in its `package()` annotation:
+
+```python
+uv.package(
+    name = "my-complex-package",
+    build_tools_repo = "my_custom_build_deps",
+    workspace = "pypi",
+)
+```
+
+#### Default Extra Build Tools
+
+Use `name = "*"` to set default extra build tools for all packages in a workspace. A specific `extra_build_tools` on an individual package fully replaces the wildcard:
+
+```python
+# Default: every sdist build gets cython available
+uv.package(
+    name = "*",
+    extra_build_tools = ["cython@0.29.36"],
+    workspace = "pypi",
+)
+
+# numpy gets its own specific set instead
+uv.package(
+    name = "numpy",
+    extra_build_tools = ["cython@0.29.36", "oldest-supported-numpy@0.9"],
+    workspace = "pypi",
 )
 ```
 
@@ -338,12 +495,12 @@ rust.toolchain(
 uv.package(
     name = "rpds-py",
     always_build = True,
-    repo = "pypi",
+    workspace = "pypi",
 )
 uv.package(
     name = "jiter",
     always_build = True,
-    repo = "pypi",
+    workspace = "pypi",
 )
 
 # Provide a Cargo.lock for jiter (when the sdist doesn't include one)
@@ -364,7 +521,7 @@ For full control, provide your own build target:
 uv.package(
     name = "psycopg2",
     build_target = "@//deps/psycopg2:wheel",
-    repo = "pypi",
+    workspace = "pypi",
 )
 ```
 
@@ -455,14 +612,14 @@ The generated flags follow the pattern `group_<name>` (e.g., `--@pypi//_variants
 
 ### Platform Transitions
 
-When a workspace member needs to be built under a specific platform configuration—for example, to pin a variant flag or target a particular architecture—you can declare a platform transition on the member import. This causes all proxy targets in the thin repo to apply a Bazel `--platforms` transition, ensuring the backing `_lock` targets are analyzed under the specified platform.
+When a workspace member needs to be built under a specific platform configuration—for example, to pin a variant flag or target a particular architecture—you can declare a platform transition on the member import. This causes all proxy targets in the thin repo to apply a Bazel `--platforms` transition, ensuring the backing workspace targets are analyzed under the specified platform.
 
 There are three ways to specify the transition:
 
 **1. Using `flags` — embed `--flag=value` settings into a generated platform:**
 
 ```python
-uv.project(
+uv.repo(
     workspace = "shared",
     name = "ml-pipeline",
     flags = [
@@ -474,7 +631,7 @@ uv.project(
 **2. Using `constraint_values` — generate a platform with specific constraints:**
 
 ```python
-uv.project(
+uv.repo(
     workspace = "shared",
     name = "ml-pipeline",
     constraint_values = [
@@ -487,7 +644,7 @@ uv.project(
 **3. Using `platform` — reference an existing platform target directly:**
 
 ```python
-uv.project(
+uv.repo(
     workspace = "shared",
     name = "ml-pipeline",
     platform = "@//platforms:linux_cuda",
@@ -497,7 +654,7 @@ uv.project(
 > [!NOTE]
 > `flags` and `constraint_values` can be combined (they are merged into a single generated platform), but `platform` is mutually exclusive with both.
 
-These attributes are available on `uv.project`, `uv.all_projects`, and their PDM/Poetry/Pylock equivalents.
+These attributes are available on `uv.repo()` and its PDM/Poetry/Pylock equivalents.
 
 When `constraint_values` alone are specified, `rules_pycross` generates an internal `platform()` target and uses `pycross_transitioning_library_proxy` / `pycross_transitioning_file_proxy` at each package level to apply the `--platforms` transition.
 

@@ -14,32 +14,6 @@ stardoc(
     ],
 )
 
-# ext_lock_import
-stardoc(
-    name = "ext_lock_import_gen",
-    out = "ext_lock_import.gen.md",
-    input = "@rules_pycross//pycross/extensions:lock_import.bzl",
-    deps = [
-        "@rules_cc//cc:find_cc_toolchain_bzl",
-        "@rules_pycross//pycross/extensions:lock_import",
-    ],
-)
-
-# ext_lock_repos
-stardoc(
-    name = "ext_lock_repos_gen",
-    out = "ext_lock_repos.gen.md",
-    input = "@rules_pycross//pycross/extensions:lock_repos.bzl",
-    deps = [
-        "@rules_cc//cc:find_cc_toolchain_bzl",
-        "@rules_pycross//pycross:backend",
-        "@rules_pycross//pycross/extensions:lock_repos",
-        "@rules_pycross_backend_maturin//private:cargo_lock_package_repo_hook",
-        "@rules_pycross_backend_maturin//private:maturin_sdist_hook",
-        "@rules_pycross_backend_maturin//private:setuptools_rust_sdist_hook",
-    ],
-)
-
 # ext_pycross
 stardoc(
     name = "ext_pycross_gen",
@@ -123,8 +97,6 @@ write_source_files(
     name = "update",
     files = {
         "rules.md": ":rules_gen",
-        "ext_lock_import.md": ":ext_lock_import_gen",
-        "ext_lock_repos.md": ":ext_lock_repos_gen",
         "ext_pycross.md": ":ext_pycross_gen",
         "maturin_rules.md": ":maturin_rules_gen",
         "ext_maturin.md": ":ext_maturin_gen",
