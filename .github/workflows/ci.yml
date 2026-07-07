@@ -25,14 +25,14 @@ jobs:
         run: |
           e2e_ws=()
           cross_ws=()
-          for d in tests/e2e/*; do
+          for d in tests/e2e/* modules/*; do
             if [ -f "$d/MODULE.bazel" ] || [ -f "$d/WORKSPACE" ] || [ -f "$d/WORKSPACE.bazel" ]; then
               ws_name=$(basename "$d")
               if [ "$ws_name" != "shared" ]; then
                 if [[ "$ws_name" == build_* ]]; then
                   cross_ws+=("\"$ws_name\"")
                 else
-                  e2e_ws+=("\"tests/e2e/$ws_name\"")
+                  e2e_ws+=("\"$d\"")
                 fi
               fi
             fi
