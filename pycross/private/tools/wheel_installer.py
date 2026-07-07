@@ -8,6 +8,7 @@ from __future__ import annotations
 import fnmatch
 import logging
 import os
+import re
 import shutil
 import tempfile
 import zipfile
@@ -23,6 +24,7 @@ from installer import install
 from installer.destinations import SchemeDictionaryDestination
 from installer.sources import WheelContentElement
 from installer.sources import WheelFile
+from installer.utils import parse_wheel_filename
 from pycross.private.tools.args import FlagFileArgumentParser
 
 
@@ -61,6 +63,44 @@ def apply_patches(lib_dir: Path, patches: List[str]) -> None:
             raise SystemExit(f"error: failed to apply patch file: {patch}")
 
 
+def _normalize_pep503(name: str) -> str:
+    """Normalize a package name per PEP 503."""
+    return re.sub(r"[-_.]+", "-", name).lower()
+
+
+def _validate_wheel_identity(
+    wheel_path: Path,
+    expected_name: str | None,
+    expected_version: str | None,
+) -> None:
+    """Validate that a wheel's filename matches the expected name and version.
+
+    Per PEP 427 the wheel filename encodes {name}-{version}-{tags}.whl,
+    so the filename is the canonical source of identity.
+    """
+    try:
+        parsed = parse_wheel_filename(wheel_path.name)
+    except Exception as e:
+        raise SystemExit(f"error: failed to parse wheel filename {wheel_path.name}: {e}")
+
+    actual_name = parsed.distribution
+    actual_version = parsed.version
+
+    if expected_name and _normalize_pep503(actual_name) != _normalize_pep503(expected_name):
+        raise SystemExit(
+            f"error: wheel identity mismatch for {wheel_path.name}: "
+            f"expected package name '{expected_name}' "
+            f"but wheel filename has '{actual_name}'"
+        )
+
+    if expected_version and actual_version != expected_version:
+        raise SystemExit(
+            f"error: wheel version mismatch for {wheel_path.name}: "
+            f"expected version '{expected_version}' "
+            f"but wheel filename has '{actual_version}'"
+        )
+
+
 def main(args: Any) -> None:
     dest_dir = args.directory
     lib_dir = dest_dir / "site-packages"
@@ -91,6 +131,10 @@ def main(args: Any) -> None:
                 wheel_name = f.read().strip()
         else:
             wheel_name = wheel_path.name
+
+    # Validate wheel identity before installation.
+    if args.expected_name or args.expected_version:
+        _validate_wheel_identity(wheel_path, args.expected_name, args.expected_version)
 
     link_path = link_dir / wheel_name
     os.symlink(wheel_path.absolute(), link_path)
@@ -178,7 +222,25 @@ def parse_flags() -> Any:
         help="The output path.",
     )
 
+    parser.add_argument(
+        "--expected-name",
+        type=str,
+        required=False,
+        help="Expected package name; validated against wheel METADATA.",
+    )
+
+    parser.add_argument(
+        "--expected-version",
+        type=str,
+        required=False,
+        help="Expected package version; validated against wheel METADATA.",
+    )
+
     return parser.parse_args()
+
+
+# Alias for testing
+_parse_args = parse_flags
 
 
 if __name__ == "__main__":

@@ -1,0 +1,53 @@
+bazel_dep(name = "rules_pycross", version = "0.0.0")
+bazel_dep(name = "rules_pycross_e2e_shared", version = "0.0.0")
+bazel_dep(name = "rules_python", version = "2.0.0")
+bazel_dep(name = "external_six")
+
+local_path_override(
+    module_name = "rules_pycross",
+    path = "../../..",
+)
+
+local_path_override(
+    module_name = "rules_pycross_e2e_shared",
+    path = "../shared",
+)
+
+local_path_override(
+    module_name = "external_six",
+    path = "external_six",
+)
+
+# rules_python
+python = use_extension("@rules_python//python/extensions:python.bzl", "python")
+python.toolchain(
+    is_default = True,
+    python_version = "3.11.6",
+)
+python.toolchain(python_version = "3.12.0")
+use_repo(python, "python_versions")
+
+# rules_pycross
+environments = use_extension("@rules_pycross//pycross/extensions:environments.bzl", "environments")
+environments.create_for_python_toolchains(
+    name = "rules_pycross_e2e_environments",
+    platforms = [
+        "aarch64-apple-darwin",
+        "aarch64-unknown-linux-gnu",
+        "x86_64-unknown-linux-gnu",
+    ],
+)
+use_repo(environments, "rules_pycross_e2e_environments")
+
+uv = use_extension("@rules_pycross//pycross/extensions:uv.bzl", "uv")
+uv.workspace(
+    name = "uv",
+    lock_file = "//:uv.lock",
+)
+uv.repo(workspace = "uv")
+uv.package(
+    name = "six",
+    build_target = "@external_six//:wheel",
+    workspace = "uv",
+)
+use_repo(uv, "uv", "uv__build")

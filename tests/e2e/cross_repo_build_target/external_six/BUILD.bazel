@@ -1,0 +1,16 @@
+load("@rules_python//python:defs.bzl", "py_binary")
+
+py_binary(
+    name = "make_wheel_bin",
+    srcs = ["make_wheel.py"],
+    main = "make_wheel.py",
+)
+
+genrule(
+    name = "wheel",
+    srcs = ["six.py"],
+    outs = ["six-1.17.0-py3-none-any.whl"],
+    cmd = "$(location :make_wheel_bin) --name six --version 1.17.0 --source $(location six.py) --output $@",
+    tools = [":make_wheel_bin"],
+    visibility = ["//visibility:public"],
+)

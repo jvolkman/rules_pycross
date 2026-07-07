@@ -133,8 +133,8 @@ def _create_package_resolver(pkg_key, pkg, ann, default_extra_build_tools, conte
                 fail(
                     ("package {name}=={version} has multiple distinct files named {filename} " +
                      "(sha256 {existing_sha} vs {new_sha}). This usually means the package is " +
-                     "listed under more than one index; pick one explicitly via " +
-                     "[tool.uv.sources] in pyproject.toml.").format(
+                     "listed under more than one index with different content; pin the package " +
+                     "to a single index to resolve the ambiguity.").format(
                         name = pkg_name,
                         version = pkg_version,
                         filename = repr(f["name"]),
@@ -218,10 +218,18 @@ def _create_package_resolver(pkg_key, pkg, ann, default_extra_build_tools, conte
             all_dependency_keys.append(dep_key)
 
     always_build = ann.always_build if ann else False
+    build_target = ann.build_target if ann else None
     uses_sdist = always_build or (context.always_include_sdist and sdist_file != None) or not wheel_candidates
 
-    if not pkg_extra and not wheel_candidates and sdist_file == None:
+    if not pkg_extra and not wheel_candidates and sdist_file == None and not build_target:
         fail("Package {} has no compatible wheels and no sdist found.".format(pkg_key))
+
+    # When always_build or build_target is set, the user explicitly wants the
+    # sdist/build_target used rather than pre-built wheels from the registry.
+    # Clear wheel_candidates so the renderer aliases directly to the sdist target
+    # instead of rendering a wheel chooser that would prefer matching PyPI wheels.
+    if always_build or build_target:
+        wheel_candidates = []
 
     resolved_pkg = {
         "key": pkg_key,
@@ -233,7 +241,7 @@ def _create_package_resolver(pkg_key, pkg, ann, default_extra_build_tools, conte
         "marker_dependencies": marker_dependencies,
         "files": pkg.get("files", []),
         "sdist_file": sdist_file,
-        "build_target": ann.build_target if ann else None,
+        "build_target": build_target,
         "build_tools_repo": ann.build_tools_repo if ann else None,
         "always_build": always_build,
         "extra_build_tools": extra_build_tools,

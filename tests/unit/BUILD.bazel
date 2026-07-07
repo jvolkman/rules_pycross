@@ -28,6 +28,16 @@ py_test(
     ],
 )
 
+py_test(
+    name = "wheel_installer_test",
+    srcs = ["wheel_installer_test.py"],
+    main = "wheel_installer_test.py",
+    tags = ["unit"],
+    deps = [
+        "//pycross/private/tools:wheel_installer",
+    ],
+)
+
 common_attrs_test_suite(
     name = "test_common_attrs",
 )
