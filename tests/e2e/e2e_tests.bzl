@@ -14,19 +14,23 @@ def define_e2e_tests():
     for ws in [
         "always_build",
     ] + _BUILD_WORKSPACES + [
+        "bzlmod_flags",
+        "cross_repo_build_target",
+        "gazelle_integration",
         "generate_lock",
         "local_wheel",
+        "namespace_pkgs",
         "patches_and_hooks",
+        "pdm_workspace",
         "requirements",
         "sdist_repo",
-        "bzlmod_flags",
-        "namespace_pkgs",
-        "gazelle_integration",
-        "uv_workspace",
-        "pdm_workspace",
-        "uv_cycle",
+        "squash_extras",
         "uv_conflicts",
-        "cross_repo_build_target",
+        "uv_cycle",
+        "uv_cycle_stress",
+        "uv_cycle_stress_mixed",
+        "uv_markers",
+        "uv_workspace",
     ]:
         extra_tags = ["build"] if ws in _BUILD_WORKSPACES else []
         sh_test(
