@@ -92,12 +92,14 @@ def translate_pdm(project_dict, lock_dict, lock_model):
     legacy_dev_deps = project_dict.get("tool", {}).get("pdm", {}).get("dev-dependencies", {})
     if legacy_dev_deps:
         for group_name, deps in legacy_dev_deps.items():
-            existing = dev_deps.get(group_name, [])
-            merged = list(existing)
-            for d in deps:
-                if d not in merged:
-                    merged.append(d)
-            dev_deps[group_name] = merged
+            if group_name in dev_deps:
+                fail("PDM error: group '{}' cannot appear in both [dependency-groups] and [tool.pdm.dev-dependencies]".format(group_name))
+            dev_deps[group_name] = deps
+
+    # Enforce PDM PEP 735 rule
+    for group_name in dev_deps:
+        if group_name in optional_deps:
+            fail("PDM error: the same group name '{}' MUST NOT appear in both development groups and [project.optional-dependencies]".format(group_name))
 
     requires_python = project_dict.get("project", {}).get("requires-python", "")
 
