@@ -89,16 +89,15 @@ def translate_pdm(project_dict, lock_dict, lock_model):
 
     # Development dependencies: dependency-groups + legacy tool.pdm.dev-dependencies
     dev_deps = dict(project_dict.get("dependency-groups", {}))
-    legacy_dev_deps = project_dict.get("tool", {}).get("pdm", {}).get("dev-dependencies", [])
+    legacy_dev_deps = project_dict.get("tool", {}).get("pdm", {}).get("dev-dependencies", {})
     if legacy_dev_deps:
-        existing = dev_deps.get("dev", [])
-
-        # Merge and deduplicate
-        merged = list(existing)
-        for d in legacy_dev_deps:
-            if d not in merged:
-                merged.append(d)
-        dev_deps["dev"] = merged
+        for group_name, deps in legacy_dev_deps.items():
+            existing = dev_deps.get(group_name, [])
+            merged = list(existing)
+            for d in deps:
+                if d not in merged:
+                    merged.append(d)
+            dev_deps[group_name] = merged
 
     requires_python = project_dict.get("project", {}).get("requires-python", "")
 
