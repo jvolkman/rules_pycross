@@ -65,6 +65,7 @@ def _pycross_wheel_chooser_impl(ctx):
 
 _pycross_wheel_chooser = rule(
     implementation = _pycross_wheel_chooser_impl,
+    provides = [config_common.FeatureFlagInfo],
     attrs = {
         "candidates": attr.string_list(
             mandatory = True,

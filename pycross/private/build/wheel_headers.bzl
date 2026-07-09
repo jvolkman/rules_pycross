@@ -40,6 +40,7 @@ def _pycross_wheel_headers_impl(ctx):
 
 pycross_wheel_headers = rule(
     implementation = _pycross_wheel_headers_impl,
+    provides = [CcInfo],
     doc = """Extracts C/C++ headers from an installed wheel library.
 
 Given a pycross_wheel_library target, this rule exposes the headers found at
