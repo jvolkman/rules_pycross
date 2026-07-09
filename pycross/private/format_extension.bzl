@@ -64,7 +64,7 @@ REPO_ATTRS = dict(
         doc = "Generate aliases for transitive single-version packages in this repo.",
     ),
     dependency_groups = attr.string_list(
-        doc = "A list of dependency groups to include. E.g. ['default', 'development:foo', '*']. Defaults to ['default'].",
+        doc = "A list of dependency groups to include. E.g. ['default', 'group:foo', '*']. Defaults to ['default'].",
         default = ["default"],
     ),
     legacy_create_root_aliases = attr.bool(

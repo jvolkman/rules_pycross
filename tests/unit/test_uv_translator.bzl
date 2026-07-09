@@ -270,7 +270,7 @@ def _test_uv_dev_dependencies_pep735_impl(env, target):
         _vpkg("my-app", dev_deps = {"dev": [_dep("b")]}),
         _pkg("b", "2.0", wheels = [_whl("b-2.0-py3-none-any.whl", "b")]),
     ])
-    result = translate_uv(project, lock, _lock_model(dependency_groups = ["default", "development:dev"]))
+    result = translate_uv(project, lock, _lock_model(dependency_groups = ["default", "group:dev"]))
     env.expect.that_int(len(result["packages"])).equals(1)
     env.expect.that_collection(result["packages"].keys()).contains("b@2.0")
 
@@ -361,7 +361,7 @@ def _test_uv_group_variants_impl(env, target):
             {"package": "my-app", "group": "test-slow"},
         ]],
     )
-    result = translate_uv(project, lock, _lock_model(dependency_groups = ["development:*"]))
+    result = translate_uv(project, lock, _lock_model(dependency_groups = ["group:*"]))
     env.expect.that_int(len(result.get("variants", []))).equals(1)
     vs = result["variants"][0]
     names = ["{}_{}".format(item["kind"], item.get("name", "")) for item in vs["items"]]

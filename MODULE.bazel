@@ -153,7 +153,7 @@ _DEFAULT_LOCK_MODEL = '{"projects": ["*"], "dependency_groups": ["default"]}'
 
 _DEFAULT_UV_LOCK_MODEL = '{"projects": ["*"], "dependency_groups": ["default"]}'
 
-_ALL_DEV_UV_LOCK_MODEL = '{"projects": ["*"], "dependency_groups": ["default", "development:*"]}'
+_ALL_DEV_UV_LOCK_MODEL = '{"projects": ["*"], "dependency_groups": ["default", "group:*"]}'
 
 starlark_translators = use_extension(
     "//tests:starlark_lock_model_test.bzl",

@@ -262,7 +262,7 @@ def translate_poetry(project_dict, lock_dict, lock_model):
 
     project_optional_deps = project_dict.get("project", {}).get("optional-dependencies", {})
 
-    effective_groups = ["optional:*", "development:*"] if include_all else dependency_groups
+    effective_groups = ["optional:*", "group:*"] if include_all else dependency_groups
     for group in effective_groups:
         if group == "default" or group == "*":
             continue

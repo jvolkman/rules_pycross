@@ -291,7 +291,7 @@ def translate_uv(project_dict, lock_dict, lock_model):
                     requirements.append((dep_name, specifier, ""))
 
         # Parse groups
-        effective_groups = ["optional:*", "development:*"] if include_all else dependency_groups
+        effective_groups = ["optional:*", "group:*"] if include_all else dependency_groups
         for group in effective_groups:
             if group == "default" or group == "*":
                 continue
@@ -300,11 +300,11 @@ def translate_uv(project_dict, lock_dict, lock_model):
             if kind == "optional":
                 groups_dict = optional_dependencies
                 constraint_dict = extra_variant_values
-            elif kind == "development":
+            elif kind == "group":
                 groups_dict = development_dependencies
                 constraint_dict = group_variant_values
             else:
-                fail("Invalid dependency group format '{}'. Must be 'optional:name' or 'development:name'.".format(group))
+                fail("Invalid dependency group format '{}'. Must be 'optional:name' or 'group:name'.".format(group))
 
             if name == "*":
                 target_names = list(groups_dict.keys())

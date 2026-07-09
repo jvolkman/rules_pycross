@@ -45,8 +45,8 @@ All notable changes to this project will be documented in this file.
   Single-project lock files only need `workspace()` — the repo is auto-created.
   Multi-project workspaces use `repo(projects = ["*"])` or per-project `repo()` tags.
 - **`dependency_groups` attribute on `repo()`.** String-based group specifiers:
-  `"default"`, `"optional:<name>"`, `"development:<name>"`, `"optional:*"`,
-  `"development:*"`, `"*"`. Replaces the old boolean/list attributes.
+  `"default"`, `"optional:<name>"`, `"group:<name>"`, `"optional:*"`,
+  `"group:*"`, `"*"`. Replaces the old boolean/list attributes.
 - **Auto-generated `__build` repos.** Build dependency repos are now auto-created
   from workspace configuration; no manual `build_repo` declaration needed.
 - **`legacy_create_root_aliases` on `repo()`** for migrating from 1.x target

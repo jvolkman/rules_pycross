@@ -119,7 +119,7 @@ def _test_pdm_package_with_groups_dev_included_impl(env, target):
     ])
 
     # Dev group included: both should be pinned
-    result = translate_pdm(project, lock, _lock_model(dependency_groups = ["default", "development:dev"]))
+    result = translate_pdm(project, lock, _lock_model(dependency_groups = ["default", "group:dev"]))
     env.expect.that_collection(result["pins"].keys()).contains_at_least(["requests", "pytest"])
 
 def _test_pdm_package_with_groups_dev_included(name):

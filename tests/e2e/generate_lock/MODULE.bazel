@@ -44,7 +44,7 @@ uv.workspace(
 )
 uv.repo(
     dependency_groups = [
-        "development:dev",
+        "group:dev",
         "optional:yaml",
     ],
     projects = ["*"],
