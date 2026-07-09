@@ -200,7 +200,7 @@ def _pycross_wheel_library_impl(ctx):
 
 pycross_wheel_library = rule(
     implementation = _pycross_wheel_library_impl,
-    provides = [PyInfo],
+    provides = [PyInfo, PycrossExtractedWheelInfo],
     attrs = dict({
         "deps": attr.label_list(
             doc = "A list of this wheel's Python library dependencies.",
@@ -259,6 +259,7 @@ def _pycross_wheel_metadata_impl(ctx):
 
 pycross_wheel_metadata = rule(
     implementation = _pycross_wheel_metadata_impl,
+    provides = [PycrossPackageInfo],
     attrs = {
         "wheel": attr.label(allow_files = True, mandatory = True),
         "package_name": attr.string(),

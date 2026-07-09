@@ -40,6 +40,7 @@ def _variant_resolver_impl(ctx):
 
 variant_resolver = rule(
     implementation = _variant_resolver_impl,
+    provides = [config_common.FeatureFlagInfo],
     attrs = {
         "flags": attr.label_list(
             providers = [BuildSettingInfo],
