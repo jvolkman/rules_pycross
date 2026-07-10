@@ -44,4 +44,9 @@ uv.package(
     build_tools_repo = "build_tools_provider__build",
     workspace = "uv",
 )
-use_repo(uv, "build_tools_provider", "build_tools_provider__build", "uv", "uv__build")
+use_repo(
+    uv,
+    "build_tools_provider",
+    "build_tools_provider__build",  # keep
+    "uv",
+)

@@ -522,7 +522,7 @@ def process_workspaces(
             lock_owners = lock_owners,
             lock_repos = lock_repos,
             lock_model_structs = lock_model_structs,
-            root_direct_deps = root_direct_deps,
+            root_direct_deps = [],  # Do not report as root direct dep
             ws_tag = ws_info.tag,
             ws_name = ws_name,
             model_type = model_type,
