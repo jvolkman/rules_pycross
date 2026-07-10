@@ -263,6 +263,11 @@ def translate_poetry(project_dict, lock_dict, lock_model):
     project_optional_deps = project_dict.get("project", {}).get("optional-dependencies", {})
     pep735_groups = project_dict.get("dependency-groups", {})
 
+    # Poetry does not allow the same group name in both [dependency-groups] and [tool.poetry.group]
+    for group_name in pep735_groups:
+        if group_name in poetry_groups:
+            fail("Poetry error: group '{}' cannot appear in both [dependency-groups] and [tool.poetry.group]".format(group_name))
+
     effective_groups = ["optional:*", "group:*"] if include_all else dependency_groups
     for group in effective_groups:
         if group == "default" or group == "*":
