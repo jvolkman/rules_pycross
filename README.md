@@ -106,7 +106,7 @@ This repository is managed automatically. However, if you need to customize its 
 ```python
 uv.repo(
     name = "pypi__build",
-    dependency_groups = ["default", "development:build"],
+    dependency_groups = ["default", "group:build"],
     workspace = "pypi",
 )
 ```
@@ -202,15 +202,15 @@ The `dependency_groups` attribute on `uv.repo()` controls which dependency group
 
 * `"default"` — the project's default dependencies
 * `"optional:<name>"` — a specific optional dependency group (`[project.optional-dependencies]`)
-* `"development:<name>"` — a specific development group (`[dependency-groups]`)
-* `"optional:*"` / `"development:*"` — all optional or all development groups
+* `"group:<name>"` — a specific dependency group (`[dependency-groups]`)
+* `"optional:*"` / `"group:*"` — all optional or all dependency groups
 * `"*"` — all groups (default + all optional + all development)
 
 The default is `["default"]`.
 
 ```python
 uv.repo(
-    dependency_groups = ["default", "optional:grpc", "development:test"],
+    dependency_groups = ["default", "optional:grpc", "group:test"],
     workspace = "pypi",
 )
 ```
@@ -282,7 +282,7 @@ uv.repo(
 uv.repo(
     name = "lock_b",
     projects = ["project-b"],
-    dependency_groups = ["default", "optional:grpc", "development:testing"],
+    dependency_groups = ["default", "optional:grpc", "group:testing"],
     workspace = "shared",
 )
 use_repo(uv, "lock_a", "lock_b")

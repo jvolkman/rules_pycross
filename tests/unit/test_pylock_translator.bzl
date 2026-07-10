@@ -313,7 +313,7 @@ def _test_pylock_development_group_impl(env, target):
     result = translate_pylock(
         _LOCK_WITH_GROUPS,
         _PROJECT_WITH_GROUPS,
-        _lock_model(dependency_groups = ["development:dev"]),
+        _lock_model(dependency_groups = ["group:dev"]),
     )
     names = _pkg_names(result)
     env.expect.that_collection(names).contains_exactly(["mypy"])
@@ -329,7 +329,7 @@ def _test_pylock_all_development_groups_impl(env, target):
     result = translate_pylock(
         _LOCK_WITH_GROUPS,
         _PROJECT_WITH_GROUPS,
-        _lock_model(dependency_groups = ["development:*"]),
+        _lock_model(dependency_groups = ["group:*"]),
     )
     names = _pkg_names(result)
     env.expect.that_collection(names).contains_at_least(["mypy", "typing-extensions", "ruff"])
@@ -345,7 +345,7 @@ def _test_pylock_include_group_impl(env, target):
     result = translate_pylock(
         _LOCK_WITH_GROUPS,
         _PROJECT_WITH_GROUPS,
-        _lock_model(dependency_groups = ["development:all"]),
+        _lock_model(dependency_groups = ["group:all"]),
     )
     names = _pkg_names(result)
     env.expect.that_collection(names).contains_at_least(["ruff", "typing-extensions"])

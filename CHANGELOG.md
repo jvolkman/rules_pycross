@@ -2,6 +2,30 @@
 
 All notable changes to this project will be documented in this file.
 
+## [Unreleased]
+
+### Breaking
+
+- **`"development:<name>"` renamed to `"group:<name>"`** in `dependency_groups`
+  specifiers. PEP 735 dependency groups are not inherently development
+  dependencies — they are general-purpose named groups. Update your `repo()`
+  declarations: e.g. `"development:dev"` → `"group:dev"`,
+  `"development:*"` → `"group:*"`.
+
+### Fixed
+
+- **PDM: correctly parse `[tool.pdm.dev-dependencies]`.** The previous code
+  iterated over the dict keys instead of the group contents, silently producing
+  incorrect results when multiple named dev groups were present.
+- **PDM: enforce group name disjointedness.** PDM does not allow the same group
+  name in both `[dependency-groups]` and `[tool.pdm.dev-dependencies]`, or in
+  both development groups and `[project.optional-dependencies]`. The translator
+  now fails early with a clear error message in these cases.
+- **Poetry: add PEP 735 `[dependency-groups]` support.** Poetry 2.2+ supports
+  standard PEP 735 dependency groups alongside legacy `[tool.poetry.group]`
+  sections. The translator now reads from both sources with union semantics
+  (per [python-poetry/poetry#10130](https://github.com/python-poetry/poetry/pull/10130)).
+
 ## [2.0.0-alpha.1]
 
 ### Breaking
@@ -45,8 +69,8 @@ All notable changes to this project will be documented in this file.
   Single-project lock files only need `workspace()` — the repo is auto-created.
   Multi-project workspaces use `repo(projects = ["*"])` or per-project `repo()` tags.
 - **`dependency_groups` attribute on `repo()`.** String-based group specifiers:
-  `"default"`, `"optional:<name>"`, `"development:<name>"`, `"optional:*"`,
-  `"development:*"`, `"*"`. Replaces the old boolean/list attributes.
+  `"default"`, `"optional:<name>"`, `"group:<name>"`, `"optional:*"`,
+  `"group:*"`, `"*"`. Replaces the old boolean/list attributes.
 - **Auto-generated `__build` repos.** Build dependency repos are now auto-created
   from workspace configuration; no manual `build_repo` declaration needed.
 - **`legacy_create_root_aliases` on `repo()`** for migrating from 1.x target

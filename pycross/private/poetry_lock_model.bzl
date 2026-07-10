@@ -261,8 +261,9 @@ def translate_poetry(project_dict, lock_dict, lock_model):
                     pinned_package_specs[pin] = {"": _poetry_constraint_to_pep440(pin_info.get("version", "*"))}
 
     project_optional_deps = project_dict.get("project", {}).get("optional-dependencies", {})
+    pep735_groups = project_dict.get("dependency-groups", {})
 
-    effective_groups = ["optional:*", "development:*"] if include_all else dependency_groups
+    effective_groups = ["optional:*", "group:*"] if include_all else dependency_groups
     for group in effective_groups:
         if group == "default" or group == "*":
             continue
@@ -270,7 +271,7 @@ def translate_poetry(project_dict, lock_dict, lock_model):
         kind, _, name = group.partition(":")
 
         if name == "*":
-            target_names = list(poetry_groups.keys()) + list(project_optional_deps.keys())
+            target_names = list(poetry_groups.keys()) + list(pep735_groups.keys()) + list(project_optional_deps.keys())
 
             # Deduplicate
             target_names = {k: True for k in target_names}.keys()
@@ -278,6 +279,13 @@ def translate_poetry(project_dict, lock_dict, lock_model):
             target_names = [name]
 
         for group_name in target_names:
+            # Poetry merges PEP 735 and legacy groups (union, not fallback).
+            if group_name in pep735_groups:
+                for dep_str in pep735_groups[group_name]:
+                    req = parse_pep508_requirement(dep_str)
+                    if req.name == "python":
+                        continue
+                    pinned_package_specs[canonicalize_name(req.name)] = {"": req.specifier}
             if group_name in poetry_groups:
                 g = poetry_groups[group_name]
                 for pin, pin_info in g.get("dependencies", {}).items():
@@ -290,7 +298,7 @@ def translate_poetry(project_dict, lock_dict, lock_model):
                         if "path" in pin_info:
                             continue
                         pinned_package_specs[pin] = {"": _poetry_constraint_to_pep440(pin_info.get("version", "*"))}
-            elif group_name in project_optional_deps:
+            if group_name in project_optional_deps:
                 for dep_str in project_optional_deps[group_name]:
                     req = parse_pep508_requirement(dep_str)
                     if req.name == "python":

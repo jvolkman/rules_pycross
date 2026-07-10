@@ -46,8 +46,8 @@ uv.repo(
     name = "project",
     dependency_groups = [
         "default",
-        "development:group-a",
-        "development:group-b",
+        "group:group-a",
+        "group:group-b",
         "optional:variant-a",
         "optional:variant-b",
     ],
@@ -62,8 +62,8 @@ uv.repo(
     ],
     dependency_groups = [
         "default",
-        "development:group-a",
-        "development:group-b",
+        "group:group-a",
+        "group:group-b",
         "optional:variant-a",
         "optional:variant-b",
     ],

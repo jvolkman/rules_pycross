@@ -89,16 +89,17 @@ def translate_pdm(project_dict, lock_dict, lock_model):
 
     # Development dependencies: dependency-groups + legacy tool.pdm.dev-dependencies
     dev_deps = dict(project_dict.get("dependency-groups", {}))
-    legacy_dev_deps = project_dict.get("tool", {}).get("pdm", {}).get("dev-dependencies", [])
+    legacy_dev_deps = project_dict.get("tool", {}).get("pdm", {}).get("dev-dependencies", {})
     if legacy_dev_deps:
-        existing = dev_deps.get("dev", [])
+        for group_name, deps in legacy_dev_deps.items():
+            if group_name in dev_deps:
+                fail("PDM error: group '{}' cannot appear in both [dependency-groups] and [tool.pdm.dev-dependencies]".format(group_name))
+            dev_deps[group_name] = deps
 
-        # Merge and deduplicate
-        merged = list(existing)
-        for d in legacy_dev_deps:
-            if d not in merged:
-                merged.append(d)
-        dev_deps["dev"] = merged
+    # Enforce PDM PEP 735 rule
+    for group_name in dev_deps:
+        if group_name in optional_deps:
+            fail("PDM error: the same group name '{}' MUST NOT appear in both development groups and [project.optional-dependencies]".format(group_name))
 
     requires_python = project_dict.get("project", {}).get("requires-python", "")
 
@@ -113,7 +114,7 @@ def translate_pdm(project_dict, lock_dict, lock_model):
         for dep_str in default_deps:
             requirements.append(parse_pep508_requirement(dep_str))
 
-    effective_groups = ["optional:*", "development:*"] if include_all else dependency_groups
+    effective_groups = ["optional:*", "group:*"] if include_all else dependency_groups
     for group in effective_groups:
         if group == "default" or group == "*":
             continue
@@ -121,10 +122,10 @@ def translate_pdm(project_dict, lock_dict, lock_model):
         kind, _, name = group.partition(":")
         if kind == "optional":
             groups_dict = optional_deps
-        elif kind == "development":
+        elif kind == "group":
             groups_dict = dev_deps
         else:
-            fail("Invalid dependency group format '{}'. Must be 'optional:name' or 'development:name'.".format(group))
+            fail("Invalid dependency group format '{}'. Must be 'optional:name' or 'group:name'.".format(group))
 
         if name == "*":
             target_names = list(groups_dict.keys())

@@ -175,7 +175,7 @@ def translate_pylock(lock_dict, project_dict, lock_model):
         optional_deps = project_section.get("optional-dependencies", {})
         dev_deps = project_dict.get("dependency-groups", {})
 
-        effective_groups = ["optional:*", "development:*"] if include_all else dependency_groups
+        effective_groups = ["optional:*", "group:*"] if include_all else dependency_groups
         for group in effective_groups:
             if group == "default" or group == "*":
                 continue
@@ -183,10 +183,10 @@ def translate_pylock(lock_dict, project_dict, lock_model):
             kind, _, name = group.partition(":")
             if kind == "optional":
                 groups_dict = optional_deps
-            elif kind == "development":
+            elif kind == "group":
                 groups_dict = dev_deps
             else:
-                fail("Invalid dependency group format '{}'. Must be 'optional:name' or 'development:name'.".format(group))
+                fail("Invalid dependency group format '{}'. Must be 'optional:name' or 'group:name'.".format(group))
 
             if name == "*":
                 target_names = list(groups_dict.keys())
