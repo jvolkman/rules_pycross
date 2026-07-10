@@ -20,17 +20,6 @@ python.toolchain(
 python.toolchain(python_version = "3.12.0")
 use_repo(python, "python_versions")
 
-environments = use_extension("@rules_pycross//pycross/extensions:environments.bzl", "environments")
-environments.create_for_python_toolchains(
-    name = "uv_cycle_stress_envs",
-    platforms = [
-        "aarch64-apple-darwin",
-        "aarch64-unknown-linux-gnu",
-        "x86_64-unknown-linux-gnu",
-    ],
-)
-use_repo(environments, "uv_cycle_stress_envs")
-
 uv = use_extension("@rules_pycross//pycross/extensions:uv.bzl", "uv")
 uv.workspace(
     name = "cycle_stress_lock",
@@ -52,4 +41,4 @@ uv.workspace(
 uv.repo(
     workspace = "cycle_stress_lock",
 )
-use_repo(uv, "cycle_stress_lock")
+use_repo(uv, "cycle_stress_lock", "cycle_stress_lock__build")

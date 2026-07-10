@@ -25,18 +25,6 @@ python.toolchain(python_version = "3.10.11")
 python.toolchain(python_version = "3.12.0")
 use_repo(python, "python_versions")
 
-# rules_pycross
-environments = use_extension("@rules_pycross//pycross/extensions:environments.bzl", "environments")
-environments.create_for_python_toolchains(
-    name = "rules_pycross_e2e_environments",
-    platforms = [
-        "aarch64-apple-darwin",
-        "aarch64-unknown-linux-gnu",
-        "x86_64-unknown-linux-gnu",
-    ],
-)
-use_repo(environments, "rules_pycross_e2e_environments")
-
 uv = use_extension("@rules_pycross//pycross/extensions:uv.bzl", "uv")
 uv.workspace(
     name = "uv",
@@ -45,4 +33,4 @@ uv.workspace(
 uv.repo(
     workspace = "uv",
 )
-use_repo(uv, "uv")
+use_repo(uv, "uv", "uv__build")
