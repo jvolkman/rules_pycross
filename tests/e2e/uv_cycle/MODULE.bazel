@@ -32,4 +32,4 @@ uv.workspace(
 uv.repo(
     workspace = "cycle_lock",
 )
-use_repo(uv, "cycle_lock", "cycle_lock__build")
+use_repo(uv, "cycle_lock")

@@ -56,4 +56,4 @@ pdm.package(
     install_exclude_globs = ["test_regex.py"],
     workspace = "shared",
 )
-use_repo(pdm, "lock_a", "lock_all", "lock_c", "lock_project_b", "shared__build")
+use_repo(pdm, "lock_a", "lock_all", "lock_c", "lock_project_b")

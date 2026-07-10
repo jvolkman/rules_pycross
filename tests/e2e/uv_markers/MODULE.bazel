@@ -27,4 +27,4 @@ uv.workspace(
 uv.repo(
     workspace = "markers_lock",
 )
-use_repo(uv, "markers_lock", "markers_lock__build")
+use_repo(uv, "markers_lock")

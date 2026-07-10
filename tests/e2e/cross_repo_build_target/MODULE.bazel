@@ -38,4 +38,4 @@ uv.package(
     build_target = "@external_six//:wheel",
     workspace = "uv",
 )
-use_repo(uv, "uv", "uv__build")
+use_repo(uv, "uv")

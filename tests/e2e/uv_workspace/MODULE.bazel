@@ -67,4 +67,4 @@ uv.repo(
     projects = ["project-b"],
     workspace = "standalone",
 )
-use_repo(uv, "lock_standalone_a", "lock_standalone_b", "shared__build", "standalone__build")
+use_repo(uv, "lock_standalone_a", "lock_standalone_b")

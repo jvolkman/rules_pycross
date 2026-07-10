@@ -58,4 +58,4 @@ uv.repo(
     projects = ["project"],
     workspace = "shared",
 )
-use_repo(uv, "project", "project_pinned", "shared__build")
+use_repo(uv, "project", "project_pinned")

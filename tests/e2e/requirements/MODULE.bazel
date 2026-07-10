@@ -33,4 +33,4 @@ uv.workspace(
 uv.repo(
     workspace = "uv",
 )
-use_repo(uv, "uv", "uv__build")
+use_repo(uv, "uv")
