@@ -21,21 +21,6 @@ python.toolchain(
 python.toolchain(python_version = "3.12.0")
 use_repo(python, "python_versions")
 
-# rules_pycross - use per-platform tag API
-environments = use_extension("@rules_pycross//pycross/extensions:environments.bzl", "environments")
-environments.create_for_python_toolchains(
-    name = "pdm_workspace_envs",
-)
-environments.platform(
-    name = "pdm_workspace_envs",
-    target = "aarch64-apple-darwin",
-)
-environments.platform(
-    name = "pdm_workspace_envs",
-    target = "x86_64-unknown-linux-gnu",
-)
-use_repo(environments, "pdm_workspace_envs")
-
 pdm = use_extension("@rules_pycross//pycross/extensions:pdm.bzl", "pdm")
 pdm.workspace(
     name = "shared",
