@@ -92,6 +92,11 @@ def generate_toolchain_file(ctx: BuildContext, cc_config: dict) -> None:
             "# strip utility cannot handle cross-compiled binaries (e.g. Mach-O).",
             "# Bazel/rules_pycross handles stripping separately if needed.",
             'set(CMAKE_STRIP "true" CACHE STRING "" FORCE)',
+            "",
+            "# Normalize shared library permissions across platforms. Without this,",
+            "# macOS builds install .so files with the execute bit (0755) while",
+            "# Linux/Debian builds strip it (0644), breaking wheel reproducibility.",
+            'set(CMAKE_INSTALL_SO_NO_EXE 1 CACHE BOOL "" FORCE)',
         ]
     )
 
