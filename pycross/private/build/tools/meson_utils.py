@@ -197,6 +197,12 @@ system = '{target_system}'
 cpu_family = '{target_cpu}'
 cpu = '{target_cpu}'
 endian = 'little'
+
+[build_machine]
+system = '{target_system}'
+cpu_family = '{target_cpu}'
+cpu = '{target_cpu}'
+endian = 'little'
 """
 
     # Write the cross file into the cc_layer directory

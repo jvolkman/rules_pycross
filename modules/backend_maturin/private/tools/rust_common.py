@@ -175,6 +175,10 @@ def configure_rust_env(ctx, cargo_dir: Path, is_maturin: bool = False):
     if is_maturin:
         # Prevent maturin from attempting to auto-bootstrap Rust via puccinialin
         ctx.build_env["MATURIN_NO_INSTALL_RUST"] = "1"
+        # Disable SBOM generation. The generated CycloneDX JSON contains
+        # non-reproducible data (random UUIDs, timestamps, and absolute
+        # sandbox paths), making wheels non-reproducible across builds.
+        ctx.build_env["MATURIN_PEP517_ARGS"] = "--no-sbom"
 
     ctx.build_env["CARGO_BUILD_TARGET"] = target_triple
 
