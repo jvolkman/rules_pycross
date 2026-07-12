@@ -20,13 +20,13 @@ def find_site_dir(env_dir: Path) -> Path:
 
 def _link_merge_multiple(src_dirs: list[Path], dst_dir: Path):
     """Merge contents of multiple src_dirs into dst_dir using symlinks.
-    
+
     Link only as deeply as necessary. If a top-level directory/file is unique
     across all sources, it is symlinked directly. If there are conflicts,
     directories are merged recursively.
     """
     from collections import defaultdict
-    
+
     entries = defaultdict(list)
     for src in src_dirs:
         if not src.exists():
@@ -36,7 +36,7 @@ def _link_merge_multiple(src_dirs: list[Path], dst_dir: Path):
 
     for name, items in entries.items():
         target = dst_dir / name
-        
+
         # Handle pre-existing files in dst_dir (e.g. .pth files written before this)
         if target.exists() or target.is_symlink():
             if target.is_dir() and not target.is_symlink() and all(item.is_dir() for item in items):
@@ -234,7 +234,6 @@ def inject_python_wrapper(ctx: BuildContext) -> None:
         python_exe.unlink()
 
     site_dir = find_site_dir(ctx.env_dir)
-    python_paths_list = [str(p.absolute()) for p in ctx.python_paths]
     sdist_paths = [str(ctx.sdist_dir.absolute())]
 
     with open(python_exe, "w") as f:

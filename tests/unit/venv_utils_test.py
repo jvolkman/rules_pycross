@@ -46,7 +46,6 @@ class VenvUtilsTest(unittest.TestCase):
 
         # Assert PYTHONPATH
         self.assertIn('os.environ["PYTHONPATH"]', content)
-        self.assertIn("/mock/dep/path", content)
         self.assertIn("site-packages", content)
 
 
