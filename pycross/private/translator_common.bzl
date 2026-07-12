@@ -310,10 +310,9 @@ def resolve_lock_graph(packages, pinned_package_specs, requires_python, strict_d
     lock_packages = {}
     for pkg in all_packages:
         if pkg.get("is_local", False):
-            # buildifier: disable=print
-            print("WARNING: Local package {} elided from pycross repo.".format(
-                _package_key_str(pkg["name"], pkg["version"]),
-            ))
+            # Local/editable/virtual packages are workspace members or path
+            # dependencies; they don't have downloadable artifacts so we skip
+            # them when building the pycross repo.
             continue
 
         pkg_key = _package_key_str(pkg["name"], pkg["version"])
