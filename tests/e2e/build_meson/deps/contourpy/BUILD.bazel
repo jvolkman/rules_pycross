@@ -1,3 +1,4 @@
+load("@rules_python//python:py_binary.bzl", "py_binary")
 load("@rules_python//python/entry_points:py_console_script_binary.bzl", "py_console_script_binary")
 load("@uv//_backend:meson_build.bzl", "meson_build")
 
@@ -9,6 +10,11 @@ py_console_script_binary(
     script = "pybind11-config",
 )
 
+py_binary(
+    name = "scrub_contourpy",
+    srcs = ["scrub_contourpy.py"],
+)
+
 meson_build(
     name = "wheel",
     build_deps = [
@@ -17,9 +23,6 @@ meson_build(
         "@uv//pybind11:pkg",
         "@uv//numpy:pkg",
     ],
-    build_env = {
-        "PYCROSS_SCRUB_PATHS": "contourpy/util/_build_config.py",
-    },
     meson_properties = {
         "numpy-include-dir": "$(NUMPY_INCLUDE_DIR)",
     },
@@ -27,7 +30,7 @@ meson_build(
         "//deps/numpy:numpy_headers",
     ],
     path_tools = [":pybind11-config"],
-    post_build_hooks = ["@rules_pycross//pycross/hooks:scrub_build_paths"],
+    post_build_hooks = [":scrub_contourpy"],
     sdist = "@uv//contourpy:sdist",
     deps = [
         "@uv//numpy:pkg",
