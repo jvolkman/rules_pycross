@@ -20,13 +20,13 @@ def find_site_dir(env_dir: Path) -> Path:
 
 def _link_merge_multiple(src_dirs: list[Path], dst_dir: Path):
     """Merge contents of multiple src_dirs into dst_dir using symlinks.
-
+    
     Link only as deeply as necessary. If a top-level directory/file is unique
     across all sources, it is symlinked directly. If there are conflicts,
     directories are merged recursively.
     """
     from collections import defaultdict
-
+    
     entries = defaultdict(list)
     for src in src_dirs:
         if not src.exists():
@@ -218,6 +218,10 @@ def build_crossenv_venv(ctx: BuildContext) -> None:
         raise
 
     ctx.crossenv_active = True
+    
+    site_dir = find_site_dir(ctx.env_dir)
+    _link_merge_multiple(ctx.python_paths, site_dir)
+
     inject_python_wrapper(ctx)
 
 
