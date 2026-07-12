@@ -17,6 +17,9 @@ meson_build(
         "@uv//pybind11:pkg",
         "@uv//numpy:pkg",
     ],
+    build_env = {
+        "PYCROSS_SCRUB_PATHS": "contourpy/util/_build_config.py",
+    },
     meson_properties = {
         "numpy-include-dir": "$(NUMPY_INCLUDE_DIR)",
     },
@@ -24,6 +27,7 @@ meson_build(
         "//deps/numpy:numpy_headers",
     ],
     path_tools = [":pybind11-config"],
+    post_build_hooks = ["@rules_pycross//pycross/hooks:scrub_build_paths"],
     sdist = "@uv//contourpy:sdist",
     deps = [
         "@uv//numpy:pkg",

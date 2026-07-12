@@ -25,6 +25,9 @@ meson_build(
         "@uv//ninja:pkg",
         "@uv//cython:pkg",
     ],
+    build_env = {
+        "PYCROSS_SCRUB_PATHS": "numpy/__config__.py",
+    },
     config_settings = {
         "setup-args": [],
         "compile-args": ["-v"],
@@ -35,6 +38,7 @@ meson_build(
     ],
     path_tools = [":cython"],
     pkg_config_files = [":gen_openblas_pc_file"],
+    post_build_hooks = ["@rules_pycross//pycross/hooks:scrub_build_paths"],
     resource_size = "medium",
     sdist = "@uv//numpy:sdist",
 )

@@ -41,7 +41,23 @@ def _get_cargo_dir() -> Path:
     return Path(".")
 
 
+def _disable_sbom() -> None:
+    """Disable maturin SBOM generation for reproducibility.
+
+    The generated CycloneDX SBOM contains non-reproducible data (random UUIDs,
+    timestamps, and absolute sandbox paths). Maturin only supports disabling
+    SBOM via pyproject.toml, so we patch it in the extracted sdist.
+    """
+    pyproject = Path("pyproject.toml")
+    if pyproject.exists():
+        content = pyproject.read_text()
+        if "[tool.maturin.sbom]" not in content:
+            content += "\n[tool.maturin.sbom]\nrust = false\nauditwheel = false\n"
+            pyproject.write_text(content)
+
+
 def pre_build(ctx):
+    _disable_sbom()
     cargo_dir = _get_cargo_dir()
     rust_common.configure_rust_env(ctx, cargo_dir, is_maturin=True)
 

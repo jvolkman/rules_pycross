@@ -87,3 +87,9 @@ py_binary(
         ":env_utils",
     ],
 )
+
+py_binary(
+    name = "scrub_build_paths",
+    srcs = ["scrub_build_paths.py"],
+    imports = ["../../../.."],
+)
