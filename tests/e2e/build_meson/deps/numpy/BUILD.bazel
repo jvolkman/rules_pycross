@@ -1,4 +1,5 @@
 load("@rules_pycross//pycross:defs.bzl", "pycross_cc_pkg_config", "pycross_wheel_library")
+load("@rules_python//python:py_binary.bzl", "py_binary")
 load("@rules_python//python/entry_points:py_console_script_binary.bzl", "py_console_script_binary")
 load("@uv//_backend:meson_build.bzl", "meson_build")
 load(":numpy_headers.bzl", "numpy_cc_library")
@@ -18,6 +19,11 @@ py_console_script_binary(
     script = "cython",
 )
 
+py_binary(
+    name = "scrub_numpy",
+    srcs = ["scrub_numpy.py"],
+)
+
 meson_build(
     name = "wheel",
     build_deps = [
@@ -25,9 +31,6 @@ meson_build(
         "@uv//ninja:pkg",
         "@uv//cython:pkg",
     ],
-    build_env = {
-        "PYCROSS_SCRUB_PATHS": "numpy/__config__.py",
-    },
     config_settings = {
         "setup-args": [],
         "compile-args": ["-v"],
@@ -38,7 +41,7 @@ meson_build(
     ],
     path_tools = [":cython"],
     pkg_config_files = [":gen_openblas_pc_file"],
-    post_build_hooks = ["@rules_pycross//pycross/hooks:scrub_build_paths"],
+    post_build_hooks = [":scrub_numpy"],
     resource_size = "medium",
     sdist = "@uv//numpy:sdist",
 )
