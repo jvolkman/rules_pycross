@@ -112,6 +112,25 @@ def generate_cross_ini(ctx: BuildContext, cc_config: Optional[Dict[str, Any]] = 
 
     is_cross = ctx.exec_python != ctx.target_python
 
+    # By default, always tell Meson it needs an exe wrapper and should skip
+    # sanity checks. This prevents Meson from running compiled test binaries
+    # on the build host, which would make feature detection (e.g., SIMD
+    # capabilities) depend on the host rather than the hermetic toolchain.
+    # This is critical for reproducible cross-host builds.
+    #
+    # When allow_native_exec is set (via meson_properties), fall back to the
+    # old behavior of allowing native execution when exec == target platform.
+    allow_native_exec = False
+    if cc_config:
+        allow_native_exec = cc_config.get("meson_properties", {}).get("_allow_native_exec") == "true"
+
+    if allow_native_exec:
+        needs_exe_wrapper = is_cross
+        skip_sanity_check = is_cross
+    else:
+        needs_exe_wrapper = True
+        skip_sanity_check = True
+
     # Compute longdouble_format from target platform. Meson auto-detection
     # can't work in cross builds, so we always set this explicitly to keep
     # native and cross paths identical.
@@ -163,10 +182,14 @@ def generate_cross_ini(ctx: BuildContext, cc_config: Optional[Dict[str, Any]] = 
 
     binaries_section = "\n".join(binaries_lines)
 
-    # Build additional [properties] lines from meson_properties
+    # Build additional [properties] lines from meson_properties.
+    # Filter out internal properties (prefixed with _) that are used for
+    # framework configuration and should not appear in the cross.ini.
     extra_properties_lines = []
     if cc_config:
         for key, value in cc_config.get("meson_properties", {}).items():
+            if key.startswith("_"):
+                continue
             if "$$EXT_BUILD_ROOT$$" in value:
                 resolved = Path(replace_placeholder(ctx.prefix, value)).absolute().as_posix()
             else:
@@ -186,8 +209,8 @@ cpp_link_args = {format_meson_list(c_link_args)}
 pkg_config_path = '{abs_pkgconfig_dir}'
 
 [properties]
-needs_exe_wrapper = {str(is_cross).lower()}
-skip_sanity_check = {str(is_cross).lower()}
+needs_exe_wrapper = {str(needs_exe_wrapper).lower()}
+skip_sanity_check = {str(skip_sanity_check).lower()}
 longdouble_format = '{longdouble_format}'
 pkg_config_libdir = '{abs_pkgconfig_dir}'
 {extra_properties_str}
