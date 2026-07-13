@@ -42,6 +42,17 @@ def generate_cross_ini(ctx: BuildContext, cc_config: Optional[Dict[str, Any]] = 
     c_args = shlex.split(cflags) if cflags else []
     cxx_args = shlex.split(cxxflags) if cxxflags else []
 
+    # Filter linker flags (-Wl,...) out of c_args/cxx_args into link args.
+    #
+    # Bazel's CC toolchain sometimes leaks linker flags (e.g. -Wl,-s) into
+    # CFLAGS. These are harmless during normal compilation but break Meson's
+    # compile-only feature detection, which uses -Werror internally. Clang
+    # reports "linker input unused" as an error under -Werror, causing feature
+    # checks (like NEON_VFPV4) to fail even when the compiler supports them.
+    leaked_link_args = [a for a in c_args if a.startswith("-Wl,")]
+    c_args = [a for a in c_args if not a.startswith("-Wl,")]
+    cxx_args = [a for a in cxx_args if not a.startswith("-Wl,")]
+
     # Use LDFLAGS (not LDSHAREDFLAGS) for Meson's c_link_args.
     #
     # LDSHAREDFLAGS comes from Bazel's cpp_link_dynamic_library action with
@@ -60,6 +71,7 @@ def generate_cross_ini(ctx: BuildContext, cc_config: Optional[Dict[str, Any]] = 
     # uses LDSHARED (CC + LDSHAREDFLAGS) directly and needs it.
     ldflags = get_var("LDFLAGS", "")
     c_link_args = shlex.split(ldflags) if ldflags else []
+    c_link_args.extend(leaked_link_args)
 
     # Add C++ static runtime libraries by full path, replicating Bazel's
     # static_link_cpp_runtimes behavior.
@@ -93,6 +105,22 @@ def generate_cross_ini(ctx: BuildContext, cc_config: Optional[Dict[str, Any]] = 
 
     target_system = cc_config["target_os"]
     target_cpu = cc_config["target_cpu"]
+
+    # Ensure consistent CPU feature baseline across different host compilers.
+    #
+    # The macOS-native clang binary (darwin-arm64) may default to a higher
+    # ARM feature level than the Linux cross-compiler (linux-amd64) when
+    # targeting aarch64-apple-darwin. This causes Meson's compile-only feature
+    # detection to produce different results on different build hosts.
+    #
+    # Explicitly setting -mcpu=apple-m1 (the minimum Apple Silicon baseline)
+    # makes both compiler binaries agree on the architecture features,
+    # producing identical feature detection and identical binaries.
+    if target_system == "darwin" and target_cpu == "aarch64":
+        has_mcpu = any(a.startswith("-mcpu=") or a == "-mcpu" for a in c_args)
+        if not has_mcpu:
+            c_args.append("-mcpu=apple-m1")
+            cxx_args.append("-mcpu=apple-m1")
 
     # Locate or create pkgconfig directory inside the build environment
     pkgconfig_dir = ctx.sdist_dir / "pkgconfig"

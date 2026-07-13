@@ -32,7 +32,14 @@ meson_build(
         "@uv//cython:pkg",
     ],
     config_settings = {
-        "setup-args": [],
+        "setup-args": [
+            # Explicitly set CPU feature baselines for reproducible builds.
+            # Without these, Meson's compile-only feature detection produces
+            # different results depending on the host clang binary (macOS-native
+            # vs Linux cross-compiler), even when both target the same arch.
+            "-Dcpu-baseline=neon",
+            "-Dcpu-dispatch=asimd,asimdhp,asimdfhm",
+        ],
         "compile-args": ["-v"],
     },
     copts = ["-Wl,-s"],
