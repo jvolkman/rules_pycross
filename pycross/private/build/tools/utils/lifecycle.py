@@ -2,6 +2,7 @@ import os
 import shutil
 import sys
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Callable
 
 from pycross.private.build.tools.utils.cc_toolchain import setup_cc_layer
@@ -40,6 +41,7 @@ class BackendStrategy:
     setup_venv: Callable[[BuildContext], None] = build_standard_venv
     pre_build: Callable[[BuildContext], None] = lambda ctx: None
     prepare_env: Callable[[BuildContext], None] = lambda ctx: None
+    post_build: Callable[["BuildContext", Path], Path] = lambda ctx, whl: whl
 
 
 def _apply_pre_build_patches(ctx: BuildContext) -> None:
@@ -104,5 +106,6 @@ def run_standard_build_lifecycle(config_path: str, strategy: BackendStrategy) ->
     strategy.prepare_env(ctx)
 
     wheel_file = run_pep517_build(ctx)
+    wheel_file = strategy.post_build(ctx, wheel_file)
     wheel_file = run_post_build_hooks(ctx, wheel_file)
     print(f"Successfully built wheel: {wheel_file}")
