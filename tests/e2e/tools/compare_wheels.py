@@ -2,8 +2,8 @@
 """Compare wheels built on different hosts for reproducibility.
 
 For each target platform, finds matching .whl files from both build
-directories and compares them. Non-blocking: always exits 0, but
-prints detailed diagnostics when differences are found.
+directories and compares them. Exits with code 1 if any wheels differ,
+failing the CI check.
 """
 
 import difflib
@@ -125,7 +125,7 @@ def main():
         print("\n\U0001f389 All wheels are byte-identical across build hosts!")
     else:
         print("\n\u26a0\ufe0f  Some wheels differ. See details above.")
-        print("This is informational only \u2014 cross-host reproducibility is a goal, not a requirement.")
+        sys.exit(1)
 
 
 if __name__ == "__main__":

@@ -184,7 +184,7 @@ jobs:
     name: Repro check
     needs: [cross-build]
     runs-on: ubuntu-latest
-    continue-on-error: true
+
     steps:
       - uses: actions/checkout@v6
         with:
