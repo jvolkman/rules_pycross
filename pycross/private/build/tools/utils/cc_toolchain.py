@@ -99,15 +99,6 @@ def wrap_compiler(lang: str, cc_exe: str, cflags: str, python_exe: Path, bin_dir
             linker_abs_path = str(linker_path.absolute())
             break
 
-    # Extract macOS deployment target from wrapper flags for platform_version.
-    # This is needed when using lld for Mach-O linking — lld requires an
-    # explicit -platform_version flag, unlike Apple's ld64.
-    macos_version = None
-    for flag in wrapper_flags:
-        if flag.startswith("-mmacosx-version-min="):
-            macos_version = flag.split("=", 1)[1]
-            break
-
     with open(wrapper_path, "w") as f:
         f.write(
             textwrap.dedent(
@@ -120,7 +111,6 @@ def wrap_compiler(lang: str, cc_exe: str, cflags: str, python_exe: Path, bin_dir
                 cc_exe = {repr(cc_exe)}
                 wrapper_flags = {repr(wrapper_flags)}
                 linker_abs_path = {repr(linker_abs_path)}
-                macos_version = {repr(macos_version)}
                 
                 filtered_args = []
                 is_link = True
@@ -134,10 +124,6 @@ def wrap_compiler(lang: str, cc_exe: str, cflags: str, python_exe: Path, bin_dir
                 extra_flags = []
                 if is_link and linker_abs_path:
                     extra_flags.append(f"-fuse-ld={{linker_abs_path}}")
-                    # Modern LLD requires explicit platform version for Mach-O target
-                    if macos_version and "aarch64-apple-darwin" in " ".join(wrapper_flags):
-                        v = macos_version + ".0" if macos_version.count(".") < 2 else macos_version
-                        extra_flags.append(f"-Wl,-platform_version,macos,{{v}},{{v}}")
 
                 os.execv(cc_exe, [cc_exe] + wrapper_flags + extra_flags + filtered_args)
                 """
