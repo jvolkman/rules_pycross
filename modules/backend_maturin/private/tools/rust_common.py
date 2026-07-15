@@ -249,6 +249,7 @@ def configure_rust_env(ctx, cargo_dir: Path, is_maturin: bool = False):
     wrapper_content = textwrap.dedent(f"""\
     #!/bin/sh
     "exec" "{ctx.exec_python.absolute()}" "-S" "$0" "$@"
+    import hashlib
     import os
     import sys
 
@@ -280,6 +281,40 @@ def configure_rust_env(ctx, cargo_dir: Path, is_maturin: bool = False):
     prefix = {repr(str(ctx.prefix))}
     final_args.extend(["--remap-path-prefix", f"{{prefix}}/="])
     final_args.extend(["--remap-path-prefix", f"{{prefix}}="])
+
+    # Force single codegen unit for deterministic LLVM module IDs.
+    # With multiple CGUs, LLVM generates non-deterministic module ID suffixes
+    # (.llvm.NNNNN) in symbol names that can vary across build hosts.
+    if is_target:
+        final_args.extend(["-C", "codegen-units=1"])
+
+    # Normalize -C metadata for cross-host reproducibility.
+    # Cargo's metadata hash includes host-specific info (host triple from
+    # rustc --version -v, paths to host-compiled build scripts, etc.).
+    # We replace it with a deterministic hash derived from host-independent
+    # inputs so symbol hashes are identical regardless of build host.
+    # We leave -C extra-filename alone so Cargo can still find its files.
+    crate_name = None
+    crate_types = []
+    cfg_flags = []
+    for i, arg in enumerate(final_args):
+        if arg == "--crate-name" and i + 1 < len(final_args):
+            crate_name = final_args[i + 1]
+        elif arg == "--crate-type" and i + 1 < len(final_args):
+            crate_types.append(final_args[i + 1])
+        elif arg == "--cfg" and i + 1 < len(final_args):
+            cfg_flags.append(final_args[i + 1])
+
+    if crate_name:
+        cfg_flags.sort()
+        crate_types.sort()
+        metadata_input = f"{{crate_name}}\\0{{target_triple}}\\0{{'|'.join(crate_types)}}\\0{{'|'.join(cfg_flags)}}"
+        stable_metadata = hashlib.sha256(metadata_input.encode()).hexdigest()[:16]
+        i = 0
+        while i < len(final_args):
+            if final_args[i] == "-C" and i + 1 < len(final_args) and final_args[i + 1].startswith("metadata="):
+                final_args[i + 1] = f"metadata={{stable_metadata}}"
+            i += 1
 
     os.execv(real_rustc, [real_rustc] + final_args)
     """)
