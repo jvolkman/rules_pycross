@@ -17,7 +17,21 @@ cmake(
             "TARGET": "HASWELL",
         },
         "@platforms//cpu:aarch64": {
+            # ARMV8 is the generic ARMv8 baseline. For Apple Silicon specifically,
+            # VORTEX would provide better performance, but ARMV8 is the safe
+            # choice for reproducible cross-compilation.
+            "TARGET": "ARMV8",
+            # Cross-compilation flags are required so OpenBLAS doesn't try to
+            # detect the build host CPU (which would be x86_64 on Linux).
+            "CMAKE_CROSSCOMPILING": "ON",
+            "CMAKE_SYSTEM_PROCESSOR": "aarch64",
+            "BINARY": "64",
             "CMAKE_SIZEOF_VOID_P": "8",  # For some reason this is needed with later versions of zig
+        },
+        "//conditions:default": {},
+    }) | select({
+        "@platforms//os:macos": {
+            "CMAKE_SYSTEM_NAME": "Darwin",
         },
         "//conditions:default": {},
     }),

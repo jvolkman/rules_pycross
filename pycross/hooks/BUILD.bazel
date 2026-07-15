@@ -8,3 +8,9 @@ alias(
     actual = "//pycross/private/build/tools:repair_wheel_hook",
     visibility = ["//visibility:public"],
 )
+
+alias(
+    name = "scrub_build_paths",
+    actual = "//pycross/private/build/tools:scrub_build_paths",
+    visibility = ["//visibility:public"],
+)

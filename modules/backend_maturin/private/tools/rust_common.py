@@ -246,9 +246,22 @@ def configure_rust_env(ctx, cargo_dir: Path, is_maturin: bool = False):
 
     sysroot_dir_str = str(sysroot_dir.absolute())
 
+    # Compute a host-independent toolchain identifier for the metadata hash.
+    # The cross_repo_name contains the host triple (e.g. "rust_linux_x86_64__")
+    # which differs across hosts. We strip it, keeping only the target triple
+    # and version suffix (e.g. "aarch64-apple-darwin__nightly_toolchains__2025-01-02").
+    _toolchain_id = ""
+    if cross_repo_name:
+        parts = cross_repo_name.split(target_triple)
+        if len(parts) > 1:
+            _toolchain_id = target_triple + parts[-1]
+        else:
+            _toolchain_id = cross_repo_name
+
     wrapper_content = textwrap.dedent(f"""\
     #!/bin/sh
     "exec" "{ctx.exec_python.absolute()}" "-S" "$0" "$@"
+    import hashlib
     import os
     import sys
 
@@ -275,6 +288,48 @@ def configure_rust_env(ctx, cargo_dir: Path, is_maturin: bool = False):
     if is_target:
         for link_arg in ldflags_args:
             final_args.extend(["-C", f"link-arg={{link_arg}}"])
+
+    # Remap sandbox paths for reproducible builds
+    prefix = {repr(str(ctx.prefix))}
+    final_args.extend(["--remap-path-prefix", f"{{prefix}}/="])
+    final_args.extend(["--remap-path-prefix", f"{{prefix}}="])
+
+    # Force single codegen unit for deterministic LLVM module IDs.
+    # With multiple CGUs, LLVM generates non-deterministic module ID suffixes
+    # (.llvm.NNNNN) in symbol names that can vary across build hosts.
+    if is_target:
+        final_args.extend(["-C", "codegen-units=1"])
+
+    # Normalize -C metadata for cross-host reproducibility.
+    # Cargo's metadata hash includes host-specific info (host triple from
+    # rustc --version -v, paths to host-compiled build scripts, etc.).
+    # We replace it with a deterministic hash derived from host-independent
+    # inputs so symbol hashes are identical regardless of build host.
+    # We leave -C extra-filename alone so Cargo can still find its files.
+    crate_name = None
+    crate_types = []
+    cfg_flags = []
+    for i, arg in enumerate(final_args):
+        if arg == "--crate-name" and i + 1 < len(final_args):
+            crate_name = final_args[i + 1]
+        elif arg == "--crate-type" and i + 1 < len(final_args):
+            crate_types.append(final_args[i + 1])
+        elif arg == "--cfg" and i + 1 < len(final_args):
+            cfg_flags.append(final_args[i + 1])
+
+    if crate_name:
+        cfg_flags.sort()
+        crate_types.sort()
+        # Include a toolchain version identifier so upgrades produce different
+        # hashes. We use the target triple + version suffix from the rules_rust
+        # repo name, which is host-independent.
+        metadata_input = f"{repr(_toolchain_id)}\\0{{crate_name}}\\0{{target_triple}}\\0{{'|'.join(crate_types)}}\\0{{'|'.join(cfg_flags)}}"
+        stable_metadata = hashlib.sha256(metadata_input.encode()).hexdigest()[:16]
+        i = 0
+        while i < len(final_args):
+            if final_args[i] == "-C" and i + 1 < len(final_args) and final_args[i + 1].startswith("metadata="):
+                final_args[i + 1] = f"metadata={{stable_metadata}}"
+            i += 1
 
     os.execv(real_rustc, [real_rustc] + final_args)
     """)

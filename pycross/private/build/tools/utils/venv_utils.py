@@ -18,6 +18,46 @@ def find_site_dir(env_dir: Path) -> Path:
         raise ValueError(f"Cannot find site-packages under {env_dir}")
 
 
+def _link_merge_multiple(src_dirs: list[Path], dst_dir: Path):
+    """Merge contents of multiple src_dirs into dst_dir using symlinks.
+
+    Link only as deeply as necessary. If a top-level directory/file is unique
+    across all sources, it is symlinked directly. If there are conflicts,
+    directories are merged recursively.
+    """
+    from collections import defaultdict
+
+    entries = defaultdict(list)
+    for src in src_dirs:
+        if not src.exists():
+            continue
+        for item in src.iterdir():
+            entries[item.name].append(item)
+
+    for name, items in entries.items():
+        target = dst_dir / name
+
+        # Handle pre-existing files in dst_dir (e.g. .pth files written before this)
+        if target.exists() or target.is_symlink():
+            if target.is_dir() and not target.is_symlink() and all(item.is_dir() for item in items):
+                _link_merge_multiple(items, target)
+            continue
+
+        if len(items) == 1:
+            target.symlink_to(items[0])
+        else:
+            if all(item.is_dir() for item in items):
+                target.mkdir()
+                _link_merge_multiple(items, target)
+            else:
+                # Conflict: mixed file/dir or multiple files. First one wins.
+                print(
+                    f"WARNING: link merge conflict for '{name}': using {items[0]}, ignoring {items[1:]}",
+                    file=sys.stderr,
+                )
+                target.symlink_to(items[0])
+
+
 def write_base_prefix_pth(
     site_dir: Path, prefix: Path, base_prefix: Optional[Path], platbase_prefix: Optional[Path]
 ) -> None:
@@ -121,10 +161,7 @@ def build_standard_venv(ctx: BuildContext) -> None:
 
     write_base_prefix_pth(site_dir, ctx.prefix, base_prefix, platbase_prefix)
 
-    with open(site_dir / "deps.pth", "w") as f:
-        for dep_path in ctx.python_paths:
-            rel_dep_path = os.path.relpath(dep_path, site_dir)
-            f.write(f"import os, site; site.addsitedir(os.path.join(sitedir, {rel_dep_path!r}))\n")
+    _link_merge_multiple(ctx.python_paths, site_dir)
 
     # Write site_hooks to a file and .pth entry.
     # The hooks file is loaded by the python wrapper's -c handler and by
@@ -185,6 +222,10 @@ def build_crossenv_venv(ctx: BuildContext) -> None:
         raise
 
     ctx.crossenv_active = True
+
+    site_dir = find_site_dir(ctx.env_dir)
+    _link_merge_multiple(ctx.python_paths, site_dir)
+
     inject_python_wrapper(ctx)
 
 
@@ -201,7 +242,6 @@ def inject_python_wrapper(ctx: BuildContext) -> None:
         python_exe.unlink()
 
     site_dir = find_site_dir(ctx.env_dir)
-    python_paths_list = [str(p.absolute()) for p in ctx.python_paths]
     sdist_paths = [str(ctx.sdist_dir.absolute())]
 
     with open(python_exe, "w") as f:
@@ -218,9 +258,8 @@ def inject_python_wrapper(ctx: BuildContext) -> None:
             import os, sys
 
             venv_site = {repr(str(site_dir.absolute()))}
-            dependency_paths = {repr(python_paths_list)}
             sdist_paths = {repr(sdist_paths)}
-            paths_to_add = [venv_site] + dependency_paths + sdist_paths
+            paths_to_add = [venv_site] + sdist_paths
             existing_pp = os.environ.get("PYTHONPATH")
             os.environ["PYTHONPATH"] = os.pathsep.join(paths_to_add) + (os.pathsep + existing_pp if existing_pp else "")
 

@@ -53,7 +53,7 @@ def parse_ar_and_guess_ranlib(ar: str | None) -> Tuple[List[str], Path | None]:
 
 def get_wrapper_flags(cflags: str) -> List[str]:
     """Extract target and sysroot flags to forward to compiler wrappers."""
-    possible_flags = ["-target", "--target", "--sysroot", "-isysroot"]
+    possible_flags = ["-target", "--target", "--sysroot", "-isysroot", "-mmacosx-version-min"]
     result = []
     split_cflags = shlex.split(cflags)
     for i, flag in enumerate(split_cflags):
@@ -88,6 +88,17 @@ def wrap_compiler(lang: str, cc_exe: str, cflags: str, python_exe: Path, bin_dir
     wrapper_flags = get_wrapper_flags(cflags)
     wrapper_path = bin_dir / wrapper_name
 
+    # Find the LLVM linker binary next to the compiler. This path is injected
+    # into the wrapper for link invocations so that Meson's feature detection
+    # link tests (compiler.links()) use the correct cross-linker instead of
+    # the system ld.bfd, which can't produce Mach-O for darwin targets.
+    linker_abs_path = None
+    for linker_candidate in ("ld64.lld", "ld.lld"):
+        linker_path = cc_path.parent / linker_candidate
+        if linker_path.exists():
+            linker_abs_path = str(linker_path.absolute())
+            break
+
     with open(wrapper_path, "w") as f:
         f.write(
             textwrap.dedent(
@@ -99,14 +110,22 @@ def wrap_compiler(lang: str, cc_exe: str, cflags: str, python_exe: Path, bin_dir
 
                 cc_exe = {repr(cc_exe)}
                 wrapper_flags = {repr(wrapper_flags)}
+                linker_abs_path = {repr(linker_abs_path)}
                 
                 filtered_args = []
+                is_link = True
                 for arg in sys.argv[1:]:
+                    if arg == "-c":
+                        is_link = False
                     if arg in ("-Wl,--start-group", "-Wl,--end-group", "-Wl,-start_group", "-Wl,-end_group", "-Wl,--as-needed", "-Wl,--allow-shlib-undefined", "-Wl,-O1"):
                         continue
                     filtered_args.append(arg)
 
-                os.execv(cc_exe, [cc_exe] + wrapper_flags + filtered_args)
+                extra_flags = []
+                if is_link and linker_abs_path:
+                    extra_flags.append(f"-fuse-ld={{linker_abs_path}}")
+
+                os.execv(cc_exe, [cc_exe] + wrapper_flags + extra_flags + filtered_args)
                 """
             )
         )

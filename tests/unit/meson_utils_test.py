@@ -58,8 +58,10 @@ class MesonUtilsTest(unittest.TestCase):
         self.assertIn("c_args = ['-O2', '-fPIC']", content)
         self.assertIn("c_link_args = ['-Wl,-O1']", content)
 
+        # Even for native builds, default is needs_exe_wrapper=true for reproducibility
         self.assertIn("[properties]", content)
-        self.assertIn("needs_exe_wrapper = false", content)
+        self.assertIn("needs_exe_wrapper = true", content)
+        self.assertIn("skip_sanity_check = true", content)
 
     def test_generate_cross_ini_cross(self):
         # Make it a cross build by having target_python != exec_python
@@ -74,6 +76,40 @@ class MesonUtilsTest(unittest.TestCase):
         self.assertIn("system = 'linux'", content)
         self.assertIn("cpu_family = 'aarch64'", content)
         self.assertIn("needs_exe_wrapper = true", content)
+
+    def test_generate_cross_ini_allow_native_exec(self):
+        # With allow_native_exec, native builds should get needs_exe_wrapper=false
+        cc_config = {
+            "target_os": "linux",
+            "target_cpu": "x86_64",
+            "meson_properties": {"_allow_native_exec": "true"},
+        }
+        generate_cross_ini(self.ctx, cc_config)
+
+        cross_ini_path = self.temp_path / "cc_layer" / "cross.ini"
+        content = cross_ini_path.read_text()
+
+        self.assertIn("needs_exe_wrapper = false", content)
+        self.assertIn("skip_sanity_check = false", content)
+        # Internal property should not appear in the cross.ini output
+        self.assertNotIn("_allow_native_exec", content)
+
+    def test_generate_cross_ini_allow_native_exec_cross(self):
+        # With allow_native_exec but cross-compiling, should still be true
+        self.ctx.target_python = self.temp_path / "target_env" / "bin" / "python"
+
+        cc_config = {
+            "target_os": "linux",
+            "target_cpu": "aarch64",
+            "meson_properties": {"_allow_native_exec": "true"},
+        }
+        generate_cross_ini(self.ctx, cc_config)
+
+        cross_ini_path = self.temp_path / "cc_layer" / "cross.ini"
+        content = cross_ini_path.read_text()
+
+        self.assertIn("needs_exe_wrapper = true", content)
+        self.assertIn("skip_sanity_check = true", content)
 
 
 if __name__ == "__main__":

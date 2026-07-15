@@ -42,6 +42,17 @@ def generate_cross_ini(ctx: BuildContext, cc_config: Optional[Dict[str, Any]] = 
     c_args = shlex.split(cflags) if cflags else []
     cxx_args = shlex.split(cxxflags) if cxxflags else []
 
+    # Filter linker flags (-Wl,...) out of c_args/cxx_args into link args.
+    #
+    # Bazel's CC toolchain sometimes leaks linker flags (e.g. -Wl,-s) into
+    # CFLAGS. These are harmless during normal compilation but break Meson's
+    # compile-only feature detection, which uses -Werror internally. Clang
+    # reports "linker input unused" as an error under -Werror, causing feature
+    # checks (like NEON_VFPV4) to fail even when the compiler supports them.
+    leaked_link_args = [a for a in c_args if a.startswith("-Wl,")]
+    c_args = [a for a in c_args if not a.startswith("-Wl,")]
+    cxx_args = [a for a in cxx_args if not a.startswith("-Wl,")]
+
     # Use LDFLAGS (not LDSHAREDFLAGS) for Meson's c_link_args.
     #
     # LDSHAREDFLAGS comes from Bazel's cpp_link_dynamic_library action with
@@ -60,6 +71,7 @@ def generate_cross_ini(ctx: BuildContext, cc_config: Optional[Dict[str, Any]] = 
     # uses LDSHARED (CC + LDSHAREDFLAGS) directly and needs it.
     ldflags = get_var("LDFLAGS", "")
     c_link_args = shlex.split(ldflags) if ldflags else []
+    c_link_args.extend(leaked_link_args)
 
     # Add C++ static runtime libraries by full path, replicating Bazel's
     # static_link_cpp_runtimes behavior.
@@ -94,6 +106,23 @@ def generate_cross_ini(ctx: BuildContext, cc_config: Optional[Dict[str, Any]] = 
     target_system = cc_config["target_os"]
     target_cpu = cc_config["target_cpu"]
 
+    # Ensure consistent CPU feature baseline across different host compilers.
+    #
+    # The macOS-native clang binary (darwin-arm64) may default to a higher
+    # ARM feature level than the Linux cross-compiler (linux-amd64) when
+    # targeting aarch64-apple-darwin. This causes Meson's compile-only feature
+    # detection to produce different results on different build hosts.
+    #
+    # We default to apple-m1 (the minimum Apple Silicon baseline, supporting
+    # all M1/M2/M3/M4 chips). Override via meson_properties _mcpu or by
+    # passing -mcpu=<value> in CFLAGS/copts.
+    if target_system == "darwin" and target_cpu == "aarch64":
+        has_mcpu = any(a.startswith("-mcpu=") or a == "-mcpu" for a in c_args)
+        if not has_mcpu:
+            mcpu = cc_config.get("meson_properties", {}).get("_mcpu", "apple-m1")
+            c_args.append(f"-mcpu={mcpu}")
+            cxx_args.append(f"-mcpu={mcpu}")
+
     # Locate or create pkgconfig directory inside the build environment
     pkgconfig_dir = ctx.sdist_dir / "pkgconfig"
     pkgconfig_dir.mkdir(exist_ok=True)
@@ -111,6 +140,25 @@ def generate_cross_ini(ctx: BuildContext, cc_config: Optional[Dict[str, Any]] = 
     abs_pkgconfig_dir = pkgconfig_dir.resolve().as_posix()
 
     is_cross = ctx.exec_python != ctx.target_python
+
+    # By default, always tell Meson it needs an exe wrapper and should skip
+    # sanity checks. This prevents Meson from running compiled test binaries
+    # on the build host, which would make feature detection (e.g., SIMD
+    # capabilities) depend on the host rather than the hermetic toolchain.
+    # This is critical for reproducible cross-host builds.
+    #
+    # When allow_native_exec is set (via meson_properties), fall back to the
+    # old behavior of allowing native execution when exec == target platform.
+    allow_native_exec = False
+    if cc_config:
+        allow_native_exec = cc_config.get("meson_properties", {}).get("_allow_native_exec") == "true"
+
+    if allow_native_exec:
+        needs_exe_wrapper = is_cross
+        skip_sanity_check = is_cross
+    else:
+        needs_exe_wrapper = True
+        skip_sanity_check = True
 
     # Compute longdouble_format from target platform. Meson auto-detection
     # can't work in cross builds, so we always set this explicitly to keep
@@ -163,10 +211,14 @@ def generate_cross_ini(ctx: BuildContext, cc_config: Optional[Dict[str, Any]] = 
 
     binaries_section = "\n".join(binaries_lines)
 
-    # Build additional [properties] lines from meson_properties
+    # Build additional [properties] lines from meson_properties.
+    # Filter out internal properties (prefixed with _) that are used for
+    # framework configuration and should not appear in the cross.ini.
     extra_properties_lines = []
     if cc_config:
         for key, value in cc_config.get("meson_properties", {}).items():
+            if key.startswith("_"):
+                continue
             if "$$EXT_BUILD_ROOT$$" in value:
                 resolved = Path(replace_placeholder(ctx.prefix, value)).absolute().as_posix()
             else:
@@ -186,13 +238,19 @@ cpp_link_args = {format_meson_list(c_link_args)}
 pkg_config_path = '{abs_pkgconfig_dir}'
 
 [properties]
-needs_exe_wrapper = {str(is_cross).lower()}
-skip_sanity_check = {str(is_cross).lower()}
+needs_exe_wrapper = {str(needs_exe_wrapper).lower()}
+skip_sanity_check = {str(skip_sanity_check).lower()}
 longdouble_format = '{longdouble_format}'
 pkg_config_libdir = '{abs_pkgconfig_dir}'
 {extra_properties_str}
 
 [host_machine]
+system = '{target_system}'
+cpu_family = '{target_cpu}'
+cpu = '{target_cpu}'
+endian = 'little'
+
+[build_machine]
 system = '{target_system}'
 cpu_family = '{target_cpu}'
 cpu = '{target_cpu}'

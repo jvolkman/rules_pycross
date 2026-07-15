@@ -35,12 +35,15 @@ def _meson_build_impl(ctx):
     tool_executables.extend(resolve_path_tools(ctx))
 
     # 2. Extract CC environment
+    meson_properties = dict(ctx.attr.meson_properties)
+    if ctx.attr.allow_native_exec:
+        meson_properties["_allow_native_exec"] = "true"
     cc_layer = extract_cc_layer(
         ctx,
         native_deps = ctx.attr.native_deps,
         copts = ctx.attr.copts,
         linkopts = ctx.attr.linkopts,
-        meson_properties = ctx.attr.meson_properties,
+        meson_properties = meson_properties,
     )
 
     additional_build_deps = []
@@ -92,6 +95,14 @@ meson_build = rule(
             cfg = pycross_exec_platform_transition,
         ),
         "meson_properties": attr.string_dict(),
+        "allow_native_exec": attr.bool(
+            doc = "Allow Meson to run compiled test binaries on the build host during " +
+                  "feature detection. When False (default), Meson always uses compile-only " +
+                  "checks, producing reproducible builds regardless of host. Set to True " +
+                  "only if you need host-specific optimizations and don't require " +
+                  "cross-host reproducibility.",
+            default = False,
+        ),
         "_builder": attr.label(
             default = "//pycross/private/build/tools:meson_builder",
             executable = True,
