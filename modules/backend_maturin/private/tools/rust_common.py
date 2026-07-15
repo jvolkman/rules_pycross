@@ -276,6 +276,11 @@ def configure_rust_env(ctx, cargo_dir: Path, is_maturin: bool = False):
         for link_arg in ldflags_args:
             final_args.extend(["-C", f"link-arg={{link_arg}}"])
 
+    # Remap sandbox paths for reproducible builds
+    prefix = {repr(str(ctx.prefix))}
+    final_args.extend(["--remap-path-prefix", f"{{prefix}}/="])
+    final_args.extend(["--remap-path-prefix", f"{{prefix}}="])
+
     os.execv(real_rustc, [real_rustc] + final_args)
     """)
 
