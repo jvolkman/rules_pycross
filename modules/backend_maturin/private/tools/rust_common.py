@@ -246,6 +246,18 @@ def configure_rust_env(ctx, cargo_dir: Path, is_maturin: bool = False):
 
     sysroot_dir_str = str(sysroot_dir.absolute())
 
+    # Compute a host-independent toolchain identifier for the metadata hash.
+    # The cross_repo_name contains the host triple (e.g. "rust_linux_x86_64__")
+    # which differs across hosts. We strip it, keeping only the target triple
+    # and version suffix (e.g. "aarch64-apple-darwin__nightly_toolchains__2025-01-02").
+    _toolchain_id = ""
+    if cross_repo_name:
+        parts = cross_repo_name.split(target_triple)
+        if len(parts) > 1:
+            _toolchain_id = target_triple + parts[-1]
+        else:
+            _toolchain_id = cross_repo_name
+
     wrapper_content = textwrap.dedent(f"""\
     #!/bin/sh
     "exec" "{ctx.exec_python.absolute()}" "-S" "$0" "$@"
@@ -308,7 +320,10 @@ def configure_rust_env(ctx, cargo_dir: Path, is_maturin: bool = False):
     if crate_name:
         cfg_flags.sort()
         crate_types.sort()
-        metadata_input = f"{{crate_name}}\\0{{target_triple}}\\0{{'|'.join(crate_types)}}\\0{{'|'.join(cfg_flags)}}"
+        # Include a toolchain version identifier so upgrades produce different
+        # hashes. We use the target triple + version suffix from the rules_rust
+        # repo name, which is host-independent.
+        metadata_input = f"{repr(_toolchain_id)}\\0{{crate_name}}\\0{{target_triple}}\\0{{'|'.join(crate_types)}}\\0{{'|'.join(cfg_flags)}}"
         stable_metadata = hashlib.sha256(metadata_input.encode()).hexdigest()[:16]
         i = 0
         while i < len(final_args):

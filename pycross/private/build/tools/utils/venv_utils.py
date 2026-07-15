@@ -51,6 +51,10 @@ def _link_merge_multiple(src_dirs: list[Path], dst_dir: Path):
                 _link_merge_multiple(items, target)
             else:
                 # Conflict: mixed file/dir or multiple files. First one wins.
+                print(
+                    f"WARNING: link merge conflict for '{name}': using {items[0]}, ignoring {items[1:]}",
+                    file=sys.stderr,
+                )
                 target.symlink_to(items[0])
 
 

@@ -113,14 +113,15 @@ def generate_cross_ini(ctx: BuildContext, cc_config: Optional[Dict[str, Any]] = 
     # targeting aarch64-apple-darwin. This causes Meson's compile-only feature
     # detection to produce different results on different build hosts.
     #
-    # Explicitly setting -mcpu=apple-m1 (the minimum Apple Silicon baseline)
-    # makes both compiler binaries agree on the architecture features,
-    # producing identical feature detection and identical binaries.
+    # We default to apple-m1 (the minimum Apple Silicon baseline, supporting
+    # all M1/M2/M3/M4 chips). Override via meson_properties _mcpu or by
+    # passing -mcpu=<value> in CFLAGS/copts.
     if target_system == "darwin" and target_cpu == "aarch64":
         has_mcpu = any(a.startswith("-mcpu=") or a == "-mcpu" for a in c_args)
         if not has_mcpu:
-            c_args.append("-mcpu=apple-m1")
-            cxx_args.append("-mcpu=apple-m1")
+            mcpu = cc_config.get("meson_properties", {}).get("_mcpu", "apple-m1")
+            c_args.append(f"-mcpu={mcpu}")
+            cxx_args.append(f"-mcpu={mcpu}")
 
     # Locate or create pkgconfig directory inside the build environment
     pkgconfig_dir = ctx.sdist_dir / "pkgconfig"
