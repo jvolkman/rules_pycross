@@ -427,7 +427,7 @@ setuptools = use_extension("@rules_pycross//pycross/backends:setuptools.bzl", "s
 
 setuptools.override(
     name = "psycopg2",
-    repo = "pypi",
+    workspace = "pypi",
     copts = ["-O2"],
     tool_deps = {"pg_config": "@@//deps/psycopg2:pg_config"},
     build_env = {"LDFLAGS": "-L/usr/lib"},
@@ -504,8 +504,8 @@ uv.package(
 maturin = use_extension("@rules_pycross_backend_maturin//extensions:maturin.bzl", "maturin")
 maturin.override(
     name = "jiter",
+    workspace = "pypi",
     cargo_lock = "//:jiter.lock",
-    repo = "pypi",
 )
 use_repo(maturin, "pypi_cargo")
 ```
