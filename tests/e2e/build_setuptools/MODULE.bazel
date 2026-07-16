@@ -65,6 +65,17 @@ uv.package(
 )
 
 setuptools = use_extension("@rules_pycross//pycross/backends:setuptools.bzl", "setuptools")
+
+# Wildcard: default copts for all setuptools-built packages.
+# Tests wildcard+specific merging:
+#   - pyyaml inherits these copts alongside its specific build_env
+#   - zstandard's specific copts replace these
+#   - psycopg2 inherits these copts alongside its specific tool_deps
+setuptools.override(
+    name = "*",
+    copts = ["-O2"],
+    workspace = "uv",
+)
 setuptools.override(
     name = "psycopg2",
     tool_deps = {"pg_config": "@@//deps/psycopg2:pg_config"},
@@ -72,7 +83,10 @@ setuptools.override(
 )
 setuptools.override(
     name = "zstandard",
-    copts = ["-O2"],
+    copts = [
+        "-O2",
+        "-Wl,-s",
+    ],
     workspace = "uv",
 )
 setuptools.override(
