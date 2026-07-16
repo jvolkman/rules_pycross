@@ -167,7 +167,47 @@ def _test_poetry_python_constraint(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
     analysis_test(name = name, target = name + "_subject", impl = _test_poetry_python_constraint_impl)
 
-# --- test_optional_dependency ---
+# --- test_python_caret_constraint ---
+
+# buildifier: disable=unused-variable
+def _test_poetry_python_caret_constraint_impl(env, target):
+    project = {"tool": {"poetry": {"dependencies": {"python": "^3.8", "a": "1.0"}}}}
+    lock = {
+        "metadata": {"lock-version": "2.0"},
+        "package": [
+            _pkg("a", "1.0", files = [_whl("a-1.0-py3-none-any.whl", "a")], python_versions = "^3.9"),
+        ],
+    }
+    result = translate_poetry(project, lock, _lock_model())
+    pkg_a = result["packages"]["a@1.0"]
+
+    # ^3.9 should expand to >=3.9,<4.0
+    env.expect.that_str(pkg_a["python_versions"]).equals(">=3.9,<4.0")
+
+def _test_poetry_python_caret_constraint(name):
+    util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
+    analysis_test(name = name, target = name + "_subject", impl = _test_poetry_python_caret_constraint_impl)
+
+# --- test_python_or_constraint ---
+
+# buildifier: disable=unused-variable
+def _test_poetry_python_or_constraint_impl(env, target):
+    project = {"tool": {"poetry": {"dependencies": {"python": "^3.8", "a": "1.0"}}}}
+    lock = {
+        "metadata": {"lock-version": "2.0"},
+        "package": [
+            _pkg("a", "1.0", files = [_whl("a-1.0-py3-none-any.whl", "a")], python_versions = "^3.8 || ^3.10"),
+        ],
+    }
+    result = translate_poetry(project, lock, _lock_model())
+    pkg_a = result["packages"]["a@1.0"]
+
+    # ^3.8 || ^3.10 should expand to >=3.8,<4.0,>=3.10,<4.0
+    env.expect.that_str(pkg_a["python_versions"]).equals(">=3.8,<4.0,>=3.10,<4.0")
+
+def _test_poetry_python_or_constraint(name):
+    util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
+    analysis_test(name = name, target = name + "_subject", impl = _test_poetry_python_or_constraint_impl)
 
 # buildifier: disable=unused-variable
 def _test_poetry_optional_dependency_impl(env, target):
@@ -207,6 +247,8 @@ def poetry_translator_test_suite(name):
             _test_poetry_source_directory,
             _test_poetry_source_git,
             _test_poetry_python_constraint,
+            _test_poetry_python_caret_constraint,
+            _test_poetry_python_or_constraint,
             _test_poetry_optional_dependency,
         ],
     )

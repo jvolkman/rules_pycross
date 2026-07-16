@@ -20,6 +20,33 @@ load(
     "select_project_file",
 )
 
+def _poetry_single_constraint_to_pep440(constraint):
+    """Convert a single Poetry version constraint part to PEP 440."""
+    constraint = constraint.strip()
+
+    if not constraint or constraint == "*":
+        return ""
+
+    # Already PEP 440? Pass through if it starts with a comparison operator
+    if constraint[0] in ("<", ">", "!", "=", "~"):
+        # But ~= is PEP 440 compatible release, while ~ alone is Poetry tilde
+        if constraint.startswith("~="):
+            return constraint
+        if constraint.startswith("~"):
+            return _expand_tilde(constraint[1:].strip())
+        return constraint
+
+    # Caret constraint
+    if constraint.startswith("^"):
+        return _expand_caret(constraint[1:].strip())
+
+    # Exact version (bare number)
+    if constraint[0].isdigit():
+        return "==" + constraint
+
+    # Unknown format, pass through
+    return constraint
+
 def _poetry_constraint_to_pep440(constraint):
     """Convert a Poetry version constraint to PEP 440 specifier string.
 
@@ -47,27 +74,9 @@ def _poetry_constraint_to_pep440(constraint):
     # Handle comma-separated constraints (e.g., "^1.2.3, !=1.2.5")
     if "," in constraint:
         parts = [p.strip() for p in constraint.split(",")]
-        return ",".join([_poetry_constraint_to_pep440(p) for p in parts])
+        return ",".join([_poetry_single_constraint_to_pep440(p) for p in parts])
 
-    # Already PEP 440? Pass through if it starts with a comparison operator
-    if constraint[0] in ("<", ">", "!", "=", "~"):
-        # But ~= is PEP 440 compatible release, while ~ alone is Poetry tilde
-        if constraint.startswith("~="):
-            return constraint
-        if constraint.startswith("~"):
-            return _expand_tilde(constraint[1:].strip())
-        return constraint
-
-    # Caret constraint
-    if constraint.startswith("^"):
-        return _expand_caret(constraint[1:].strip())
-
-    # Exact version (bare number)
-    if constraint[0].isdigit():
-        return "==" + constraint
-
-    # Unknown format, pass through
-    return constraint
+    return _poetry_single_constraint_to_pep440(constraint)
 
 def _parse_version_part(part):
     """Parse an integer from a version part, stripping pre-release suffixes.
@@ -154,6 +163,9 @@ def _expand_tilde(version_str):
 def _parse_python_versions(python_versions):
     """Parse Poetry's python-versions string to a PEP 440 specifier.
 
+    Poetry's python-versions field uses Poetry constraint syntax (^, ~, ||)
+    rather than PEP 440 specifiers, so we need to convert.
+
     Args:
         python_versions: The python-versions string from poetry.lock.
 
@@ -162,7 +174,17 @@ def _parse_python_versions(python_versions):
     """
     if not python_versions or python_versions == "*":
         return ""
-    return python_versions
+
+    # Poetry uses || for OR (union) of version constraints.
+    # PEP 440 has no OR operator, but we can represent it as a
+    # comma-separated list of specifiers when they don't conflict.
+    # For now, convert each part individually.
+    if "||" in python_versions:
+        parts = [p.strip() for p in python_versions.split("||")]
+        converted = [_poetry_constraint_to_pep440(p) for p in parts if p]
+        return ",".join([c for c in converted if c])
+
+    return _poetry_constraint_to_pep440(python_versions)
 
 def _get_files_for_package(files, package_name, package_version):
     """Filter files list to only those matching the given package.
