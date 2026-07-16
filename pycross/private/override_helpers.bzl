@@ -11,6 +11,37 @@ Each backend extension follows the same pattern:
 
 load("@bazel_features//:features.bzl", "bazel_features")
 
+def merge_backend_overrides(scope, pkg_name):
+    """Merge wildcard and package-specific backend overrides.
+
+    Wildcard ("*") entries provide defaults. Package-specific entries override
+    individual fields. Fields are replaced, not merged (i.e. if both wildcard
+    and specific set copts, the specific value wins entirely).
+
+    Args:
+        scope: dict mapping package names (including "*") to
+            {backend_name: backend_attrs} dicts.
+        pkg_name: the normalized package name to look up.
+
+    Returns:
+        A merged dict of {backend_name: backend_attrs}, or empty dict.
+    """
+    result = {}
+    wildcard = scope.get("*")
+    specific = scope.get(pkg_name)
+
+    # Apply wildcard defaults first.
+    if wildcard:
+        for b_name, b_attrs in wildcard.items():
+            result.setdefault(b_name, {}).update(b_attrs)
+
+    # Overlay package-specific fields (individual attrs replace, not merge).
+    if specific:
+        for b_name, b_attrs in specific.items():
+            result.setdefault(b_name, {}).update(b_attrs)
+
+    return result
+
 def _overrides_repo_impl(rctx):
     """Simple repo that exports an overrides.json file."""
     rctx.file("overrides.json", rctx.attr.content)

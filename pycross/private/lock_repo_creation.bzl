@@ -8,6 +8,7 @@ Used by both the legacy lock_repos extension and the unified locks extension.
 load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_file")
 load("@pycross_backends//:registry.bzl", "BACKEND_CONFIGS", "BACKEND_TO_RULE", "DEFAULT_BACKEND", "OVERRIDE_FILES")
 load("@pypackaging.bzl", "pypackaging")
+load("@rules_pycross//pycross/private:override_helpers.bzl", "merge_backend_overrides")
 load("@rules_pycross//pycross/private:sdist_repo.bzl", "pycross_sdist_repo")
 load("//pycross/private:package_repo.bzl", "package_repo")
 load("//pycross/private:pypi_file.bzl", "pypi_file")
@@ -223,11 +224,9 @@ def create_repos(
             def _apply_scope_overrides(src_key):
                 if src_key not in override_configs:
                     return
-                scope = override_configs[src_key]
-                source = scope.get(pkg_name, scope.get("*"))
-                if source:
-                    for b_name, b_attrs in source.items():
-                        pkg_overrides[b_name] = dict(b_attrs)
+                merged = merge_backend_overrides(override_configs[src_key], pkg_name)
+                for b_name, b_attrs in merged.items():
+                    pkg_overrides.setdefault(b_name, {}).update(b_attrs)
 
             ws_key = workspace_name
             _apply_scope_overrides(ws_key)
