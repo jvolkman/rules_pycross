@@ -17,7 +17,7 @@ def _lock_model(
 def _whl(name, sha256 = "1234"):
     return {"file": name, "hash": "sha256:" + sha256}
 
-def _pkg(name, version, files = None, deps = None, optional = False, python_versions = "*", extras = None, source = None):
+def _pkg(name, version, files = None, deps = None, optional = False, python_versions = "*", extras = None, source = None, markers = None):
     """Build a Poetry lock package entry."""
     p = {
         "name": name,
@@ -34,6 +34,8 @@ def _pkg(name, version, files = None, deps = None, optional = False, python_vers
         p["extras"] = extras
     if source != None:
         p["source"] = source
+    if markers != None:
+        p["markers"] = markers
     return p
 
 # --- test_minimal_lock ---
@@ -48,7 +50,7 @@ def _test_poetry_minimal_lock_impl(env, target):
         }},
     }
     lock = {
-        "metadata": {"lock-version": "2.0"},
+        "metadata": {"lock-version": "2.1"},
         "package": [
             _pkg("requests", "2.31.0", files = [_whl("requests-2.31.0-py3-none-any.whl", "12345")]),
         ],
@@ -72,7 +74,7 @@ def _test_poetry_minimal_lock(name):
 def _test_poetry_lock_version_impl(env, target):
     project = {"tool": {"poetry": {"dependencies": {"python": "^3.8", "a": "1.0"}}}}
     lock = {
-        "metadata": {"lock-version": "2.0"},
+        "metadata": {"lock-version": "2.1"},
         "package": [
             _pkg("a", "1.0", files = [_whl("a-1.0-py3-none-any.whl", "a")]),
         ],
@@ -90,7 +92,7 @@ def _test_poetry_lock_version(name):
 def _test_poetry_package_with_extras_impl(env, target):
     project = {"tool": {"poetry": {"dependencies": {"python": "^3.8", "a": "1.0"}}}}
     lock = {
-        "metadata": {"lock-version": "2.0"},
+        "metadata": {"lock-version": "2.1"},
         "package": [
             _pkg(
                 "a",
@@ -117,7 +119,7 @@ def _test_poetry_package_with_extras(name):
 def _test_poetry_source_directory_impl(env, target):
     project = {"tool": {"poetry": {"dependencies": {"python": "^3.8", "a": "1.0"}}}}
     lock = {
-        "metadata": {"lock-version": "2.0"},
+        "metadata": {"lock-version": "2.1"},
         "package": [
             _pkg("a", "1.0", source = {"type": "directory", "url": "..."}),
         ],
@@ -135,7 +137,7 @@ def _test_poetry_source_directory(name):
 def _test_poetry_source_git_impl(env, target):
     project = {"tool": {"poetry": {"dependencies": {"python": "^3.8", "a": "1.0"}}}}
     lock = {
-        "metadata": {"lock-version": "2.0"},
+        "metadata": {"lock-version": "2.1"},
         "package": [
             _pkg("a", "1.0", source = {"type": "git", "url": "..."}),
         ],
@@ -153,7 +155,7 @@ def _test_poetry_source_git(name):
 def _test_poetry_python_constraint_impl(env, target):
     project = {"tool": {"poetry": {"dependencies": {"python": "^3.8", "a": "1.0"}}}}
     lock = {
-        "metadata": {"lock-version": "2.0"},
+        "metadata": {"lock-version": "2.1"},
         "package": [
             _pkg("a", "1.0", files = [_whl("a-1.0-py3-none-any.whl", "a")], python_versions = ">=3.9,<3.13"),
         ],
@@ -173,7 +175,7 @@ def _test_poetry_python_constraint(name):
 def _test_poetry_python_caret_constraint_impl(env, target):
     project = {"tool": {"poetry": {"dependencies": {"python": "^3.8", "a": "1.0"}}}}
     lock = {
-        "metadata": {"lock-version": "2.0"},
+        "metadata": {"lock-version": "2.1"},
         "package": [
             _pkg("a", "1.0", files = [_whl("a-1.0-py3-none-any.whl", "a")], python_versions = "^3.9"),
         ],
@@ -194,7 +196,7 @@ def _test_poetry_python_caret_constraint(name):
 def _test_poetry_python_or_constraint_impl(env, target):
     project = {"tool": {"poetry": {"dependencies": {"python": "^3.8", "a": "1.0"}}}}
     lock = {
-        "metadata": {"lock-version": "2.0"},
+        "metadata": {"lock-version": "2.1"},
         "package": [
             _pkg("a", "1.0", files = [_whl("a-1.0-py3-none-any.whl", "a")], python_versions = "^3.8 || ^3.10"),
         ],
@@ -213,7 +215,7 @@ def _test_poetry_python_or_constraint(name):
 def _test_poetry_optional_dependency_impl(env, target):
     project = {"tool": {"poetry": {"dependencies": {"python": "^3.8", "a": "1.0"}}}}
     lock = {
-        "metadata": {"lock-version": "2.0"},
+        "metadata": {"lock-version": "2.1"},
         "package": [
             _pkg(
                 "a",
@@ -235,6 +237,75 @@ def _test_poetry_optional_dependency(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
     analysis_test(name = name, target = name + "_subject", impl = _test_poetry_optional_dependency_impl)
 
+# --- test_poetry_forks ---
+
+# buildifier: disable=unused-variable
+def _test_poetry_forks_impl(env, target):
+    project = {
+        "tool": {
+            "poetry": {
+                "dependencies": {
+                    "python": "^3.9",
+                    "greenlet": [
+                        {"version": ">=2.0,<3.3", "python": "~3.9"},
+                        {"version": ">=3.5", "python": ">=3.10"},
+                    ],
+                },
+            },
+        },
+    }
+    lock = {
+        "metadata": {"lock-version": "2.1"},
+        "package": [
+            _pkg("greenlet", "3.2.5", files = [_whl("greenlet-3.2.5-py3-none-any.whl", "1")], markers = "python_version == \"3.9\""),
+            _pkg("greenlet", "3.5.3", files = [_whl("greenlet-3.5.3-py3-none-any.whl", "2")], markers = "python_version >= \"3.10\""),
+        ],
+    }
+    result = translate_poetry(project, lock, _lock_model())
+
+    # Check resolution_marker_exprs
+    res_exprs = result.get("resolution_marker_exprs", {})
+    env.expect.that_bool("res_greenlet_3_2_5" in res_exprs).equals(True)
+    env.expect.that_bool("res_greenlet_3_5_3" in res_exprs).equals(True)
+    env.expect.that_str(res_exprs["res_greenlet_3_2_5"]).equals('python_version == "3.9"')
+    env.expect.that_str(res_exprs["res_greenlet_3_5_3"]).equals('python_version >= "3.10"')
+
+    # Check pinned specs resolved conditionally
+    pins = result["pins"]["greenlet"]
+    env.expect.that_str(pins["res_greenlet_3_2_5"]).equals("greenlet@3.2.5")
+    env.expect.that_str(pins["res_greenlet_3_5_3"]).equals("greenlet@3.5.3")
+
+def _test_poetry_forks(name):
+    util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
+    analysis_test(name = name, target = name + "_subject", impl = _test_poetry_forks_impl)
+
+# --- test_poetry_url_source ---
+
+# buildifier: disable=unused-variable
+def _test_poetry_url_source_impl(env, target):
+    project = {"tool": {"poetry": {"dependencies": {"python": "^3.9", "torch": "1.12.1"}}}}
+    lock = {
+        "metadata": {"lock-version": "2.1"},
+        "package": [
+            _pkg(
+                "torch",
+                "1.12.1",
+                source = {"type": "url", "url": "https://example.com/torch-1.12.1-whl"},
+                files = [_whl("torch-1.12.1-py3-none-any.whl", "12345")],
+            ),
+        ],
+    }
+    result = translate_poetry(project, lock, _lock_model())
+
+    # URL sources should NOT be skipped as local packages
+    env.expect.that_collection(result["packages"].keys()).contains_exactly(["torch@1.12.1"])
+    pkg = result["packages"]["torch@1.12.1"]
+    env.expect.that_str(pkg["files"][0]["url"]).equals("https://example.com/torch-1.12.1-whl")
+
+def _test_poetry_url_source(name):
+    util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
+    analysis_test(name = name, target = name + "_subject", impl = _test_poetry_url_source_impl)
+
 # --- Test suite ---
 
 def poetry_translator_test_suite(name):
@@ -250,5 +321,7 @@ def poetry_translator_test_suite(name):
             _test_poetry_python_caret_constraint,
             _test_poetry_python_or_constraint,
             _test_poetry_optional_dependency,
+            _test_poetry_forks,
+            _test_poetry_url_source,
         ],
     )

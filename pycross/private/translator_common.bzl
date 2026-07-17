@@ -11,6 +11,22 @@ def canonicalize_name(name):
     """Canonicalize a Python package name per PEP 503."""
     return pypackaging.utils.canonicalize_name(name)
 
+def resolution_marker_constraint_name(name, version):
+    """Generate a deterministic constraint name for a resolution-marker fork.
+
+    Used by both uv and poetry translators when a package has multiple
+    versions resolved for different environments.
+
+    Args:
+        name: Canonical package name.
+        version: Package version string.
+
+    Returns:
+        A constraint name like "res_numpy_2_3_4".
+    """
+    sanitized = (name + "_" + version).replace("-", "_").replace(".", "_").replace("+", "_")
+    return "res_{}".format(sanitized)
+
 def select_project_file(rctx, extra_project_files, lock_file, projects = []):
     """Select the best matching pyproject.toml from extra_project_files.
 

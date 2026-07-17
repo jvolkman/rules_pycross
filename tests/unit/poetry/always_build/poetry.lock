@@ -138,6 +138,6 @@ files = [
 test = ["pytest (>=6.0.0)", "setuptools (>=65)"]
 
 [metadata]
-lock-version = "2.0"
+lock-version = "2.1"
 python-versions = ">=3.9, <3.13"
 content-hash = "97cb11b7d51219d1ebcec04cd1d3d9a2d591fa27052f989804bc17f6151b8cb0"

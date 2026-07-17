@@ -12,6 +12,7 @@ load("@toml.bzl//toml:toml.bzl", "decode")
 load(
     ":translator_common.bzl",
     "canonicalize_name",
+    "resolution_marker_constraint_name",
     "resolve_lock_graph",
     "select_project_file",
 )
@@ -124,19 +125,6 @@ def _resolve_package_requires_python(markers):
                 if op and version_part:
                     specifiers.append("{} {}".format(op, version_part))
     return specifiers
-
-def _resolution_marker_constraint_name(name, version):
-    """Generate a deterministic constraint name for a resolution-marker fork.
-
-    Args:
-        name: Canonical package name.
-        version: Package version string.
-
-    Returns:
-        A constraint name like "res_numpy_2_3_4".
-    """
-    sanitized = (name + "_" + version).replace("-", "_").replace(".", "_")
-    return "res_{}".format(sanitized)
 
 def _parse_uv_dependency(dep):
     """Parse a UV lock dependency dict into a specifier.
@@ -301,7 +289,7 @@ def translate_uv(project_dict, lock_dict, lock_model):
                 combined = markers[0]
             else:
                 combined = " or ".join(["({})".format(m) for m in markers])
-            cname = _resolution_marker_constraint_name(fname, fversion)
+            cname = resolution_marker_constraint_name(fname, fversion)
             _fork_constraints.setdefault(fname, {})[fversion] = cname
             resolution_marker_exprs[cname] = combined
 
