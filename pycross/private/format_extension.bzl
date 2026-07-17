@@ -217,6 +217,7 @@ def _resolve_lock_inline(module_ctx, lock_info, serialized_lock_model, workspace
         "remote_files": resolved_lock.remote_files,
         "cycle_groups": resolved_lock.cycle_groups,
         "variants": resolved_lock.variants,
+        "resolution_marker_exprs": resolved_lock.resolution_marker_exprs,
         "legacy_create_root_aliases": getattr(lock_model, "legacy_create_root_aliases", False),
     }
 

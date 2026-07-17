@@ -70,6 +70,7 @@ def _generate_lock_file(rctx):
         "remote_files": resolved_lock.remote_files,
         "cycle_groups": resolved_lock.cycle_groups,
         "variants": resolved_lock.variants,
+        "resolution_marker_exprs": resolved_lock.resolution_marker_exprs,
         "legacy_create_root_aliases": raw_lock_data.get("legacy_create_root_aliases", False),
     }
 

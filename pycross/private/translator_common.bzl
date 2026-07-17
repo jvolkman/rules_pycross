@@ -144,7 +144,7 @@ def _version_key(version_str):
     """Parse a version string into a comparable key tuple."""
     return pypackaging.version.parse(version_str).key
 
-def resolve_lock_graph(packages, pinned_package_specs, requires_python, strict_dependencies = True, variants = None):
+def resolve_lock_graph(packages, pinned_package_specs, requires_python, strict_dependencies = True, variants = None, resolution_marker_exprs = None):
     """Resolves a dependency graph of packages.
 
     Ports translator_utils.py resolve_lock_graph() to Starlark.
@@ -167,12 +167,16 @@ def resolve_lock_graph(packages, pinned_package_specs, requires_python, strict_d
         requires_python: The requires-python specifier string.
         strict_dependencies: If True, fail on unresolved deps.
         variants: List of variant set dicts (optional).
+        resolution_marker_exprs: Dict mapping constraint names to PEP 508
+            marker expressions (optional). Used for resolution-marker forks.
 
     Returns:
         A dict in raw_lock.json format.
     """
     if variants == None:
         variants = []
+    if resolution_marker_exprs == None:
+        resolution_marker_exprs = {}
 
     # Deduplicate: merge packages with same key
     distinct_packages = {}
@@ -358,5 +362,8 @@ def resolve_lock_graph(packages, pinned_package_specs, requires_python, strict_d
 
     if variants:
         result["variants"] = variants
+
+    if resolution_marker_exprs:
+        result["resolution_marker_exprs"] = resolution_marker_exprs
 
     return result

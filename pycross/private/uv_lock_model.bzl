@@ -125,6 +125,19 @@ def _resolve_package_requires_python(markers):
                     specifiers.append("{} {}".format(op, version_part))
     return specifiers
 
+def _resolution_marker_constraint_name(name, version):
+    """Generate a deterministic constraint name for a resolution-marker fork.
+
+    Args:
+        name: Canonical package name.
+        version: Package version string.
+
+    Returns:
+        A constraint name like "res_numpy_2_3_4".
+    """
+    sanitized = (name + "_" + version).replace("-", "_").replace(".", "_")
+    return "res_{}".format(sanitized)
+
 def _parse_uv_dependency(dep):
     """Parse a UV lock dependency dict into a specifier.
 
@@ -264,6 +277,34 @@ def translate_uv(project_dict, lock_dict, lock_model):
             if not found:
                 fail("Project '{}' not found in uv.lock workspace members.".format(p))
 
+    # Pre-scan: detect resolution-marker forks.
+    # A fork exists when the same package name has multiple versions with
+    # resolution-markers (i.e. uv resolved different versions for different
+    # platforms).
+    _fork_versions = {}  # {canonical_name: {version: [marker_expr, ...]}}
+    for lock_pkg in packages_list:
+        res_markers = lock_pkg.get("resolution-markers", [])
+        if not res_markers:
+            continue
+        fname = canonicalize_name(lock_pkg["name"])
+        fversion = lock_pkg["version"]
+        _fork_versions.setdefault(fname, {}).setdefault(fversion, []).extend(res_markers)
+
+    # Build fork constraints for names with multiple versions.
+    resolution_marker_exprs = {}  # constraint_name -> marker_expression
+    _fork_constraints = {}  # {name: {version: constraint_name}}
+    for fname, versions in _fork_versions.items():
+        if len(versions) <= 1:
+            continue  # Not a fork — single version, no conditional pin needed.
+        for fversion, markers in versions.items():
+            if len(markers) == 1:
+                combined = markers[0]
+            else:
+                combined = " or ".join(["({})".format(m) for m in markers])
+            cname = _resolution_marker_constraint_name(fname, fversion)
+            _fork_constraints.setdefault(fname, {})[fversion] = cname
+            resolution_marker_exprs[cname] = combined
+
     # Collect requirements
     requirements = []  # list of (req_name, specifier, constraint)
 
@@ -283,12 +324,20 @@ def translate_uv(project_dict, lock_dict, lock_model):
                 dep_version = dep.get("version", "")
                 dep_extras = dep.get("extra") or dep.get("extras", [])
                 specifier = "=={}".format(dep_version) if dep_version else ""
+
+                # Resolution-marker fork: use per-version constraint.
+                base_dep_name = dep_name.split("[")[0]
+                if base_dep_name in _fork_constraints and dep_version in _fork_constraints[base_dep_name]:
+                    fork_constraint = _fork_constraints[base_dep_name][dep_version]
+                else:
+                    fork_constraint = ""
+
                 if dep_extras:
                     for extra in dep_extras:
                         pin_name = "{}[{}]".format(dep_name, canonicalize_name(extra))
-                        requirements.append((pin_name, specifier, ""))
+                        requirements.append((pin_name, specifier, fork_constraint))
                 else:
-                    requirements.append((dep_name, specifier, ""))
+                    requirements.append((dep_name, specifier, fork_constraint))
 
         # Parse groups
         effective_groups = ["optional:*", "group:*"] if include_all else dependency_groups
@@ -325,12 +374,30 @@ def translate_uv(project_dict, lock_dict, lock_model):
                     dep_version = dep.get("version", "")
                     dep_extras = dep.get("extra") or dep.get("extras", [])
                     specifier = "=={}".format(dep_version) if dep_version else ""
+
+                    # Resolution-marker fork: combine variant + fork constraints.
+                    base_dep_name = dep_name.split("[")[0]
+                    if base_dep_name in _fork_constraints and dep_version in _fork_constraints[base_dep_name]:
+                        fork_constraint = _fork_constraints[base_dep_name][dep_version]
+                        if constraint:
+                            effective_constraint = "{}_{}".format(constraint, fork_constraint)
+
+                            # Register compound constraint with its components.
+                            resolution_marker_exprs[effective_constraint] = {
+                                "variant": constraint,
+                                "marker": fork_constraint,
+                            }
+                        else:
+                            effective_constraint = fork_constraint
+                    else:
+                        effective_constraint = constraint
+
                     if dep_extras:
                         for extra in dep_extras:
                             pin_name = "{}[{}]".format(dep_name, canonicalize_name(extra))
-                            requirements.append((pin_name, specifier, constraint))
+                            requirements.append((pin_name, specifier, effective_constraint))
                     else:
-                        requirements.append((dep_name, specifier, constraint))
+                        requirements.append((dep_name, specifier, effective_constraint))
 
     # End collect requirements
 
@@ -468,6 +535,7 @@ def translate_uv(project_dict, lock_dict, lock_model):
         requires_python = requires_python,
         strict_dependencies = True,
         variants = variant_sets,
+        resolution_marker_exprs = resolution_marker_exprs,
     )
 
 def repo_create_uv_model(rctx, extra_project_files, lock_file, lock_model, output):
