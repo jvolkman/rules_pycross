@@ -300,8 +300,6 @@ def _test_poetry_url_source_impl(env, target):
         ],
     }
     result = translate_poetry(project, lock, _lock_model())
-
-    # URL sources should NOT be skipped as local packages
     env.expect.that_collection(result["packages"].keys()).contains_exactly(["torch@1.12.1"])
     pkg = result["packages"]["torch@1.12.1"]
     env.expect.that_collection(pkg["files"][0]["urls"]).contains_exactly(["https://example.com/torch-1.12.1-whl"])
