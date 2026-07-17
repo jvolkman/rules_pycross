@@ -219,7 +219,7 @@ def _get_files_for_package(files, package_name, package_version):
 
     return result
 
-def _parse_poetry_pin(pin, pin_info, pinned_package_specs):
+def _parse_poetry_pin(pin, pin_info, pinned_package_specs, enrich_only = False):
     """Parse a Poetry dependency pin into pinned_package_specs.
 
     Handles three formats:
@@ -231,13 +231,22 @@ def _parse_poetry_pin(pin, pin_info, pinned_package_specs):
         pin: Canonicalized package name.
         pin_info: The dependency value from pyproject.toml (string, dict, or list).
         pinned_package_specs: Dict to update with {name: {"": specifier} or {name: {"": specifier}}}.
+        enrich_only: If True, only replace existing pin specifiers if the new one is not empty/wildcard.
     """
+    existing_spec = pinned_package_specs.get(pin, {}).get("")
+
+    def set_spec(spec):
+        # Do not overwrite a specific existing constraint with a wildcard if enrich_only is set.
+        if enrich_only and existing_spec and not spec:
+            return
+        pinned_package_specs[pin] = {"": spec}
+
     if type(pin_info) == "string":
-        pinned_package_specs[pin] = {"": _poetry_constraint_to_pep440(pin_info)}
+        set_spec(_poetry_constraint_to_pep440(pin_info))
     elif type(pin_info) == "dict":
         if "path" in pin_info or pin_info.get("optional"):
             return
-        pinned_package_specs[pin] = {"": _poetry_constraint_to_pep440(pin_info.get("version", "*"))}
+        set_spec(_poetry_constraint_to_pep440(pin_info.get("version", "*")))
     elif type(pin_info) == "list":
         # List-of-dicts: each entry may have version, markers, url, python, etc.
         # We record the version spec for each entry; fork detection happens
@@ -248,8 +257,13 @@ def _parse_poetry_pin(pin, pin_info, pinned_package_specs):
             if "path" in entry or entry.get("optional"):
                 continue
             version = entry.get("version", "*")
+            spec = _poetry_constraint_to_pep440(version)
+
+            # If we are enriching and have an existing spec, maintain it if this entry is wildcard.
+            if enrich_only and existing_spec and not spec:
+                continue
             pinned_package_specs.setdefault(pin, {})
-            pinned_package_specs[pin][""] = _poetry_constraint_to_pep440(version)
+            pinned_package_specs[pin][""] = spec
 
 def translate_poetry(project_dict, lock_dict, lock_model):
     """Translates Poetry project and lock data to raw_lock_data dict.
@@ -303,13 +317,17 @@ def translate_poetry(project_dict, lock_dict, lock_model):
                 if req.name == "python":
                     continue
                 pinned_package_specs[req.name] = {"": req.specifier}
-        elif poetry_deps:
-            # Fall back to [tool.poetry.dependencies]
+        if poetry_deps:
+            # Also merge [tool.poetry.dependencies] if present
             for pin, pin_info in poetry_deps.items():
                 pin = canonicalize_name(pin)
                 if pin == "python":
                     continue
-                _parse_poetry_pin(pin, pin_info, pinned_package_specs)
+
+                # If project.dependencies is present, tool.poetry.dependencies can only enrich them.
+                if has_project_deps and pin not in pinned_package_specs:
+                    continue
+                _parse_poetry_pin(pin, pin_info, pinned_package_specs, enrich_only = has_project_deps)
 
     project_optional_deps = project_dict.get("project", {}).get("optional-dependencies", {})
     pep735_groups = project_dict.get("dependency-groups", {})
