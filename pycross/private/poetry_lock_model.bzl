@@ -73,6 +73,42 @@ def _poetry_constraint_to_pep440(constraint):
     if not constraint or constraint == "*":
         return ""
 
+    # Poetry often encodes != X as <X || >X
+    # We should convert this back to !=X or handle || in some way.
+    # pypackaging.specifiers does not support ||.
+    # Let's do a simple heuristic for `<X || >X`
+    if " || " in constraint:
+        parts = [p.strip() for p in constraint.split(" || ")]
+        if len(parts) == 2:
+            left_parts = parts[0].split(",")
+            right_parts = parts[1].split(",")
+
+            # Simple != X encoding (e.g., "<X || >X")
+            if len(left_parts) == 1 and len(right_parts) == 1 and left_parts[0].startswith("<") and right_parts[0].startswith(">"):
+                v1 = left_parts[0].replace("<", "").replace("=", "").strip()
+                v2 = right_parts[0].replace(">", "").replace("=", "").strip()
+                if v1 == v2:
+                    constraint = "!=" + v1
+                else:
+                    constraint = parts[0]
+
+                # Complex exclusion (e.g., ">=1.2.5,<2.2.0 || >2.2.0,<3")
+            elif left_parts[-1].startswith("<") and right_parts[0].startswith(">"):
+                v1 = left_parts[-1].replace("<", "").replace("=", "").strip()
+                v2 = right_parts[0].replace(">", "").replace("=", "").strip()
+                if v1 == v2:
+                    # Remove the upper bound from left and lower bound from right, insert !=
+                    new_left = ",".join(left_parts[:-1])
+                    new_right = ",".join(right_parts[1:])
+                    constraint = (new_left + "," if new_left else "") + "!=" + v1 + ("," + new_right if new_right else "")
+                else:
+                    # Generic || cannot be represented in PEP 440 strictly. Just pick the left side.
+                    constraint = parts[0]
+            else:
+                constraint = parts[0]
+        else:
+            constraint = parts[0]
+
     # Handle comma-separated constraints (e.g., "^1.2.3, !=1.2.5")
     if "," in constraint:
         parts = [p.strip() for p in constraint.split(",")]
@@ -419,10 +455,10 @@ def translate_poetry(project_dict, lock_dict, lock_model):
                     spec = dep.get("version", "*")
                     extras = dep.get("extras", [])
 
-                # In Poetry 2.0 lock files, specs are already PEP 440
+                # In Poetry 2.0 lock files, specs are mostly PEP 440, but may contain ||
                 deps.append({
                     "name": canonicalize_name(dep_name),
-                    "specifier": spec if spec != "*" else "",
+                    "specifier": _poetry_constraint_to_pep440(spec),
                     "marker": marker,
                     "extras": extras if extras else [None],
                 })
