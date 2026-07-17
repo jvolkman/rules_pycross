@@ -536,14 +536,41 @@ def resolve(
     all_package_keys = lock_model_packages.keys()
 
     versions_by_name = {}
+    locked_versions_by_simple_name = {}
     for pkg_key in all_package_keys:
         parts = parse_package_key(pkg_key)
+
+        if parts.name not in locked_versions_by_simple_name:
+            locked_versions_by_simple_name[parts.name] = []
+        if parts.version not in locked_versions_by_simple_name[parts.name]:
+            locked_versions_by_simple_name[parts.name].append(parts.version)
+
         dep_name = parts.name
         if parts.extra:
             dep_name = "{}[{}]".format(parts.name, parts.extra)
         if dep_name not in versions_by_name:
             versions_by_name[dep_name] = []
         versions_by_name[dep_name].append(pkg_key)
+
+    # Warn about local wheels that don't match locked packages
+    for pkg_key, filenames in local_wheels_by_pkg.items():
+        parts = parse_package_key(pkg_key)
+        name = parts.name
+        version = parts.version
+
+        if name not in locked_versions_by_simple_name:
+            for filename in filenames.keys():
+                # buildifier: disable=print
+                print("WARNING: Local wheel {} does not match any package in the lock file.".format(filename))
+        elif version not in locked_versions_by_simple_name[name]:
+            for filename in filenames.keys():
+                # buildifier: disable=print
+                print("WARNING: Local wheel {} matches package {} but version {} does not match locked versions: {}.".format(
+                    filename,
+                    name,
+                    version,
+                    locked_versions_by_simple_name[name],
+                ))
 
     annotations = {}
     wildcard_only_keys = {}
