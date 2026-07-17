@@ -30,7 +30,8 @@ def package_annotation(
         site_paths = [],
         bin_paths = [],
         data_paths = [],
-        include_paths = []):
+        include_paths = [],
+        wheel_library_tags = []):
     """Annotations to apply to individual packages."""
     return json.encode(struct(
         always_build = always_build,
@@ -47,6 +48,7 @@ def package_annotation(
         bin_paths = bin_paths,
         data_paths = data_paths,
         include_paths = include_paths,
+        wheel_library_tags = wheel_library_tags,
     ))
 
 def check_unique_repo_name(owners, module_name, repo_name):
@@ -121,6 +123,7 @@ def normalize_package_tag(tag):
         bin_paths = tag.bin_paths,
         data_paths = tag.data_paths,
         include_paths = tag.include_paths,
+        wheel_library_tags = tag.wheel_library_tags,
     )
 
 def discover_uv_all_members(mctx, lock_file_label):

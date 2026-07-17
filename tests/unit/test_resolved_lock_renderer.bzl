@@ -672,6 +672,33 @@ def _test_resolution_marker_compound_rendering(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
     analysis_test(name = name, target = name + "_subject", impl = _test_resolution_marker_compound_rendering_impl)
 
+# buildifier: disable=unused-variable
+def _test_wheel_library_tags_rendering_impl(env, target):
+    """Verify that wheel_library_tags is rendered as tags on pycross_wheel_library."""
+    lock = {
+        "packages": {
+            "foo@1.0": {
+                "wheel_candidates": [
+                    {
+                        "filename": "foo-1.0-py3-none-any.whl",
+                        "file_reference": {"key": "foo_wheel"},
+                    },
+                ],
+                "wheel_library_tags": ["no-remote", "custom-tag"],
+            },
+        },
+    }
+    repo_map = {"foo_wheel": "@my_repo//foo:wheel"}
+    res = render_lock_bzl(lock, repo_map, "my_rctx")
+
+    env.expect.that_bool("tags = [" in res).equals(True)
+    env.expect.that_bool('"no-remote",' in res).equals(True)
+    env.expect.that_bool('"custom-tag",' in res).equals(True)
+
+def _test_wheel_library_tags_rendering(name):
+    util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
+    analysis_test(name = name, target = name + "_subject", impl = _test_wheel_library_tags_rendering_impl)
+
 def resolved_lock_renderer_test_suite(name):
     test_suite(
         name = name,
@@ -688,5 +715,6 @@ def resolved_lock_renderer_test_suite(name):
             _test_no_available_when_all_have_sdist,
             _test_resolution_marker_evaluator_rendering,
             _test_resolution_marker_compound_rendering,
+            _test_wheel_library_tags_rendering,
         ],
     )

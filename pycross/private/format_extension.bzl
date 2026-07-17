@@ -139,7 +139,38 @@ PACKAGE_ATTRS = dict(
     include_paths = attr.string_list(
         doc = "Override the auto-detected include paths.",
     ),
+    wheel_library_tags = attr.string_list(
+        doc = "Optional tags to apply to the generated pycross_wheel_library target.",
+    ),
 )
+
+def _tag_to_annotation_data(pkg, wildcard_pkg = None):
+    """Convert a normalized package tag struct to an annotation data dict.
+
+    Args:
+        pkg: A normalized package tag struct.
+        wildcard_pkg: Optional wildcard package tag struct for fallback values.
+
+    Returns:
+        A dict of annotation fields.
+    """
+    return json.decode(package_annotation(
+        always_build = pkg.always_build if pkg.always_build != None else (wildcard_pkg.always_build if wildcard_pkg else False),
+        extra_build_tools = pkg.extra_build_tools or (wildcard_pkg.extra_build_tools if wildcard_pkg else []),
+        build_tools_repo = pkg.build_tools_repo or (wildcard_pkg.build_tools_repo if wildcard_pkg else None),
+        build_target = str(pkg.build_target) if pkg.build_target else (str(wildcard_pkg.build_target) if wildcard_pkg and wildcard_pkg.build_target else None),
+        ignore_dependencies = pkg.ignore_dependencies or (wildcard_pkg.ignore_dependencies if wildcard_pkg else []),
+        install_exclude_globs = pkg.install_exclude_globs or (wildcard_pkg.install_exclude_globs if wildcard_pkg else []),
+        post_install_patches = pkg.post_install_patches or (wildcard_pkg.post_install_patches if wildcard_pkg else []),
+        pre_build_patches = pkg.pre_build_patches or (wildcard_pkg.pre_build_patches if wildcard_pkg else []),
+        site_hooks = pkg.site_hooks or (wildcard_pkg.site_hooks if wildcard_pkg else []),
+        build_backend = pkg.build_backend or (wildcard_pkg.build_backend if wildcard_pkg else None),
+        site_paths = pkg.site_paths or (wildcard_pkg.site_paths if wildcard_pkg else []),
+        bin_paths = pkg.bin_paths or (wildcard_pkg.bin_paths if wildcard_pkg else []),
+        data_paths = pkg.data_paths or (wildcard_pkg.data_paths if wildcard_pkg else []),
+        include_paths = pkg.include_paths or (wildcard_pkg.include_paths if wildcard_pkg else []),
+        wheel_library_tags = pkg.wheel_library_tags or (wildcard_pkg.wheel_library_tags if wildcard_pkg else []),
+    ))
 
 def _resolve_lock_inline(module_ctx, lock_info, serialized_lock_model, workspace_packages, repo_create_model_fn):
     """Run translator + resolver inline within module_ctx.
@@ -179,23 +210,10 @@ def _resolve_lock_inline(module_ctx, lock_info, serialized_lock_model, workspace
     wildcard_pkg = all_packages.pop("*", None)
 
     annotations_data = {}
+    if wildcard_pkg:
+        annotations_data["*"] = _tag_to_annotation_data(wildcard_pkg)
     for package_name, package in all_packages.items():
-        annotations_data[package_name] = json.decode(package_annotation(
-            always_build = package.always_build if package.always_build != None else (wildcard_pkg.always_build if wildcard_pkg else False),
-            extra_build_tools = package.extra_build_tools or (wildcard_pkg.extra_build_tools if wildcard_pkg else []),
-            build_tools_repo = package.build_tools_repo or (wildcard_pkg.build_tools_repo if wildcard_pkg else None),
-            build_target = str(package.build_target) if package.build_target else (str(wildcard_pkg.build_target) if wildcard_pkg and wildcard_pkg.build_target else None),
-            ignore_dependencies = package.ignore_dependencies or (wildcard_pkg.ignore_dependencies if wildcard_pkg else []),
-            install_exclude_globs = package.install_exclude_globs or (wildcard_pkg.install_exclude_globs if wildcard_pkg else []),
-            post_install_patches = package.post_install_patches or (wildcard_pkg.post_install_patches if wildcard_pkg else []),
-            pre_build_patches = package.pre_build_patches or (wildcard_pkg.pre_build_patches if wildcard_pkg else []),
-            site_hooks = package.site_hooks or (wildcard_pkg.site_hooks if wildcard_pkg else []),
-            build_backend = package.build_backend or (wildcard_pkg.build_backend if wildcard_pkg else None),
-            site_paths = package.site_paths or (wildcard_pkg.site_paths if wildcard_pkg else []),
-            bin_paths = package.bin_paths or (wildcard_pkg.bin_paths if wildcard_pkg else []),
-            data_paths = package.data_paths or (wildcard_pkg.data_paths if wildcard_pkg else []),
-            include_paths = package.include_paths or (wildcard_pkg.include_paths if wildcard_pkg else []),
-        ))
+        annotations_data[package_name] = _tag_to_annotation_data(package, wildcard_pkg)
 
     local_wheels = {}
     for w in lock_info.local_wheels:

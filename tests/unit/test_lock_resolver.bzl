@@ -1863,6 +1863,28 @@ def _test_wildcard_replace_semantics_exclude_globs_end_to_end(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
     analysis_test(name = name, target = name + "_subject", impl = _test_wildcard_replace_semantics_exclude_globs_end_to_end_impl)
 
+# buildifier: disable=unused-variable
+def _test_wheel_library_tags_impl(env, target):
+    lock_model_data = {
+        "packages": {
+            "foo@1.0": _make_pkg("foo", "1.0", [_make_file("foo-1.0-py3-none-any.whl")]),
+        },
+        "pins": {
+            "foo": "foo@1.0",
+        },
+    }
+    annotations_data = {
+        "foo": {"wheel_library_tags": ["no-remote"]},
+    }
+
+    res = resolve(lock_model_data, annotations_data = annotations_data)
+    foo_pkg = res.packages["foo@1.0"]
+    env.expect.that_collection(foo_pkg["wheel_library_tags"]).contains("no-remote")
+
+def _test_wheel_library_tags(name):
+    util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
+    analysis_test(name = name, target = name + "_subject", impl = _test_wheel_library_tags_impl)
+
 def lock_resolver_test_suite(name):
     test_suite(
         name = name,
@@ -1926,5 +1948,6 @@ def lock_resolver_test_suite(name):
             _test_wildcard_build_tools_repo_flows_to_resolved_package,
             _test_wildcard_install_exclude_globs_end_to_end,
             _test_wildcard_replace_semantics_exclude_globs_end_to_end,
+            _test_wheel_library_tags,
         ],
     )
