@@ -15,6 +15,7 @@ load(
     "resolution_marker_constraint_name",
     "resolve_lock_graph",
     "select_project_file",
+    "sha256_from_string",
 )
 
 def _parse_file_info(file_info, package_name, package_version, registry = None):
@@ -65,33 +66,7 @@ def _parse_file_info(file_info, package_name, package_version, registry = None):
         result["index"] = registry
     return result
 
-def _sha256_from_string(s):
-    """Generate a deterministic hex string from a string input.
-
-    This is a simplistic hash for creating stable cache keys from
-    git commit hashes. Not cryptographically secure, but deterministic
-    and sufficient for cache keying purposes.
-
-    Args:
-        s: The input string.
-
-    Returns:
-        A 64-character hex string.
-    """
-
-    # Starlark doesn't have hashlib. We use a simple deterministic
-    # encoding of the commit as a "hash". Since the commit is already
-    # a hex SHA, we can use it directly padded to 64 chars.
-    if len(s) >= 64:
-        return s[:64]
-
-    # Pad with repeated content
-    result = s
-    for _ in range(10):
-        if len(result) >= 64:
-            break
-        result = result + s
-    return result[:64]
+# sha256_from_string is imported from translator_common.bzl
 
 def _resolve_package_requires_python(markers):
     """Extract python version specifiers from resolution markers.
@@ -454,7 +429,7 @@ def translate_uv(project_dict, lock_dict, lock_model):
             if "#" in git_url:
                 commit = git_url.split("#")[-1]
             if commit:
-                synthetic_hash = _sha256_from_string(commit)
+                synthetic_hash = sha256_from_string(commit)
                 filename = "{}-{}.tar.gz".format(package_name, package_version)
                 files.append({
                     "name": filename,

@@ -139,11 +139,15 @@ def _test_poetry_source_git_impl(env, target):
     lock = {
         "metadata": {"lock-version": "2.1"},
         "package": [
-            _pkg("a", "1.0", source = {"type": "git", "url": "..."}),
+            _pkg("a", "1.0", source = {"type": "git", "url": "https://github.com/user/a.git", "resolved_reference": "abcdef123456"}),
         ],
     }
     result = translate_poetry(project, lock, _lock_model())
-    env.expect.that_collection(result["packages"].keys()).has_size(0)
+    env.expect.that_collection(result["packages"].keys()).contains_exactly(["a@1.0"])
+
+    pkg = result["packages"]["a@1.0"]
+    env.expect.that_collection(pkg["files"]).has_size(1)
+    env.expect.that_collection(pkg["files"][0]["urls"]).contains_exactly(["git+https://github.com/user/a.git#abcdef123456"])
 
 def _test_poetry_source_git(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
@@ -300,7 +304,7 @@ def _test_poetry_url_source_impl(env, target):
     # URL sources should NOT be skipped as local packages
     env.expect.that_collection(result["packages"].keys()).contains_exactly(["torch@1.12.1"])
     pkg = result["packages"]["torch@1.12.1"]
-    env.expect.that_str(pkg["files"][0]["url"]).equals("https://example.com/torch-1.12.1-whl")
+    env.expect.that_collection(pkg["files"][0]["urls"]).contains_exactly(["https://example.com/torch-1.12.1-whl"])
 
 def _test_poetry_url_source(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])

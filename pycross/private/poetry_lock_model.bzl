@@ -19,6 +19,7 @@ load(
     "resolution_marker_constraint_name",
     "resolve_lock_graph",
     "select_project_file",
+    "sha256_from_string",
 )
 
 def _poetry_single_constraint_to_pep440(constraint):
@@ -429,11 +430,22 @@ def translate_poetry(project_dict, lock_dict, lock_model):
         # Source type check for local packages
         source = lock_pkg.get("source", {})
         source_type = source.get("type", "")
-        is_local = source_type in ("directory", "git")
+
+        # Treat git as remote
+        is_local = source_type == "directory"
         registry = source.get("url") if source_type == "legacy" else None
 
-        # For URL sources, use the source URL as the download URL
-        source_url = source.get("url", "") if source_type == "url" else ""
+        # Determine download URLs for URL or Git sources
+        source_urls = []
+        if source_type == "url" and source.get("url"):
+            source_urls = [source["url"]]
+        elif source_type == "git":
+            git_url = source.get("url", "")
+            commit = source.get("resolved_reference", "")
+            if not commit:
+                commit = source.get("reference", "")
+            if git_url and commit:
+                source_urls = ["git+{}#{}".format(git_url, commit)]
 
         # Parse files (inline in Poetry 2.0)
         files = [parse_file_info(f, registry) for f in lock_pkg.get("files", [])]
@@ -447,14 +459,24 @@ def translate_poetry(project_dict, lock_dict, lock_model):
                     new_files.append(nf)
                 files = new_files
 
-        # Add package name, version, and source URL to files
+        # Handle git synthetic file if no files found
+        if source_type == "git" and not files and source_urls:
+            commit = source_urls[0].split("#")[-1]
+            synthetic_hash = sha256_from_string(commit)
+            filename = "{}-{}.tar.gz".format(package_name, package_version)
+            files = [{
+                "name": filename,
+                "sha256": synthetic_hash,
+            }]
+
+        # Add package name, version, and source URLs to files
         updated_files = []
         for f in files:
             updated_f = dict(f)
             updated_f["package_name"] = package_name
             updated_f["package_version"] = package_version
-            if source_url:
-                updated_f["url"] = source_url
+            if source_urls:
+                updated_f["urls"] = source_urls
             updated_files.append(updated_f)
         files = updated_files
 
