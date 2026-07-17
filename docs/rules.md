@@ -219,7 +219,7 @@ Used in thin package repos when a uv_member specifies a target platform.
 <pre>
 load("@rules_pycross//pycross:defs.bzl", "pycross_wheel_headers")
 
-pycross_wheel_headers(<a href="#pycross_wheel_headers-name">name</a>, <a href="#pycross_wheel_headers-include_dir">include_dir</a>, <a href="#pycross_wheel_headers-make_variable">make_variable</a>, <a href="#pycross_wheel_headers-wheel">wheel</a>)
+pycross_wheel_headers(<a href="#pycross_wheel_headers-name">name</a>, <a href="#pycross_wheel_headers-include_dir">include_dir</a>, <a href="#pycross_wheel_headers-make_variable">make_variable</a>, <a href="#pycross_wheel_headers-wheel_library">wheel_library</a>)
 </pre>
 
 Extracts C/C++ headers from an installed wheel library.
@@ -238,7 +238,7 @@ configuration (e.g., Meson cross files).
 | <a id="pycross_wheel_headers-name"></a>name |  A unique name for this target.   | <a href="https://bazel.build/concepts/labels#target-names">Name</a> | required |  |
 | <a id="pycross_wheel_headers-include_dir"></a>include_dir |  Relative path within the wheel's site-packages to the include directory (e.g. 'numpy/_core/include').   | String | required |  |
 | <a id="pycross_wheel_headers-make_variable"></a>make_variable |  If set, export a TemplateVariableInfo with this name mapped to the absolutized include path.   | String | optional |  `""`  |
-| <a id="pycross_wheel_headers-wheel"></a>wheel |  A pycross_wheel_library target containing the headers.   | <a href="https://bazel.build/concepts/labels">Label</a> | required |  |
+| <a id="pycross_wheel_headers-wheel_library"></a>wheel_library |  A pycross_wheel_library target containing the headers.   | <a href="https://bazel.build/concepts/labels">Label</a> | required |  |
 
 
 <a id="pycross_wheel_library"></a>
