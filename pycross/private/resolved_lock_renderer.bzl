@@ -525,6 +525,12 @@ def _render_marker_package(lines, pkg_key, pkg, packages, repo_map, sdist_map, r
             lines.append(_ind('"{}",'.format(patch), 3))
         lines.append(_ind("],", 2))
 
+    if pkg.get("wheel_library_tags"):
+        lines.append(_ind("tags = [", 2))
+        for tag in pkg["wheel_library_tags"]:
+            lines.append(_ind('"{}",'.format(tag), 3))
+        lines.append(_ind("],", 2))
+
     lines.extend([
         _ind(")"),
         "",

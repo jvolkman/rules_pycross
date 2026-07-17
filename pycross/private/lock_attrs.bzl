@@ -142,6 +142,9 @@ PACKAGE_ATTRS = dict(
     include_paths = attr.string_list(
         doc = "Override the auto-detected include paths.",
     ),
+    wheel_library_tags = attr.string_list(
+        doc = "Optional tags to apply to the generated pycross_wheel_library target.",
+    ),
 )
 
 # Attrs specific to build-system overrides (meson, setuptools, etc.).
