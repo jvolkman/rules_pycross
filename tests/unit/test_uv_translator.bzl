@@ -441,6 +441,132 @@ def _test_uv_unconditional_pins_are_bare(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
     analysis_test(name = name, target = name + "_subject", impl = _test_uv_unconditional_pins_are_bare_impl)
 
+# --- test_resolution_marker_fork_conditional_pins ---
+
+# buildifier: disable=unused-variable
+def _test_uv_resolution_marker_fork_conditional_pins_impl(env, target):
+    """When uv forks to different versions, pins should be conditional."""
+    project = _project(deps = ["numpy"])
+    lock = _lock([
+        _vpkg("my-app", deps = [_dep("numpy", "2.3.4"), _dep("numpy", "2.3.3")]),
+        _pkg("numpy", "2.3.4", wheels = [_whl("numpy-2.3.4-cp312-cp312-manylinux_2_17_x86_64.whl", "a1")], markers = ["sys_platform == 'linux'"]),
+        _pkg("numpy", "2.3.3", wheels = [_whl("numpy-2.3.3-cp312-cp312-macosx_11_0_arm64.whl", "a2")], markers = ["sys_platform == 'darwin'"]),
+    ])
+    result = translate_uv(project, lock, _lock_model())
+
+    # Both versions should exist
+    env.expect.that_collection(result["packages"].keys()).contains_at_least(["numpy@2.3.4", "numpy@2.3.3"])
+
+    # Pin should be conditional (a dict, not a bare string)
+    numpy_pin = result["pins"]["numpy"]
+    env.expect.that_int(len(numpy_pin)).equals(2)
+    env.expect.that_str(numpy_pin["res_numpy_2_3_4"]).equals("numpy@2.3.4")
+    env.expect.that_str(numpy_pin["res_numpy_2_3_3"]).equals("numpy@2.3.3")
+
+    # resolution_marker_exprs should have the marker expressions
+    exprs = result["resolution_marker_exprs"]
+    env.expect.that_str(exprs["res_numpy_2_3_4"]).equals("sys_platform == 'linux'")
+    env.expect.that_str(exprs["res_numpy_2_3_3"]).equals("sys_platform == 'darwin'")
+
+def _test_uv_resolution_marker_fork_conditional_pins(name):
+    util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
+    analysis_test(name = name, target = name + "_subject", impl = _test_uv_resolution_marker_fork_conditional_pins_impl)
+
+# --- test_resolution_marker_single_version_no_fork ---
+
+# buildifier: disable=unused-variable
+def _test_uv_resolution_marker_single_version_no_fork_impl(env, target):
+    """When resolution-markers exist but only one version, no fork needed."""
+    project = _project(deps = ["numpy==2.3.4"])
+    lock = _lock([
+        _vpkg("my-app", deps = [_dep("numpy", "2.3.4")]),
+        _pkg("numpy", "2.3.4", wheels = [_whl("numpy-2.3.4-cp312-cp312-manylinux_2_17_x86_64.whl", "a1")], markers = ["sys_platform == 'linux'"]),
+    ])
+    result = translate_uv(project, lock, _lock_model())
+
+    # Pin should be unconditional (a bare string)
+    numpy_pin = result["pins"]["numpy"]
+    env.expect.that_str(numpy_pin).equals("numpy@2.3.4")
+
+    # No resolution_marker_exprs should be present
+    env.expect.that_bool("resolution_marker_exprs" in result).equals(False)
+
+def _test_uv_resolution_marker_single_version_no_fork(name):
+    util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
+    analysis_test(name = name, target = name + "_subject", impl = _test_uv_resolution_marker_single_version_no_fork_impl)
+
+# --- test_resolution_marker_multi_marker_or ---
+
+# buildifier: disable=unused-variable
+def _test_uv_resolution_marker_multi_marker_or_impl(env, target):
+    """Multiple resolution-markers on a version should be OR'd."""
+    project = _project(deps = ["numpy"])
+    lock = _lock([
+        _vpkg("my-app", deps = [_dep("numpy", "2.3.4"), _dep("numpy", "2.3.3")]),
+        _pkg(
+            "numpy",
+            "2.3.4",
+            wheels = [_whl("numpy-2.3.4-cp312-cp312-manylinux_2_17_x86_64.whl", "a1")],
+            markers = [
+                "python_full_version >= '3.12' and sys_platform == 'linux'",
+                "python_full_version < '3.12' and sys_platform == 'linux'",
+            ],
+        ),
+        _pkg("numpy", "2.3.3", wheels = [_whl("numpy-2.3.3-cp312-cp312-macosx_11_0_arm64.whl", "a2")], markers = ["sys_platform == 'darwin'"]),
+    ])
+    result = translate_uv(project, lock, _lock_model())
+    exprs = result["resolution_marker_exprs"]
+
+    # 2.3.4 should have its markers OR'd together
+    env.expect.that_str(exprs["res_numpy_2_3_4"]).equals(
+        "(python_full_version >= '3.12' and sys_platform == 'linux') or (python_full_version < '3.12' and sys_platform == 'linux')",
+    )
+
+    # 2.3.3 has a single marker, no parens needed
+    env.expect.that_str(exprs["res_numpy_2_3_3"]).equals("sys_platform == 'darwin'")
+
+def _test_uv_resolution_marker_multi_marker_or(name):
+    util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
+    analysis_test(name = name, target = name + "_subject", impl = _test_uv_resolution_marker_multi_marker_or_impl)
+
+# --- test_resolution_marker_fork_optional_group ---
+
+# buildifier: disable=unused-variable
+def _test_uv_resolution_marker_fork_optional_group_impl(env, target):
+    """Forked dep in an optional group produces compound constraints."""
+    project = _project(
+        uv_conflicts = [[{"package": "my-app", "extra": "science"}]],
+        opt_deps = {"science": ["numpy"]},
+    )
+    lock = _lock(
+        [
+            _vpkg("my-app", opt_deps = {"science": [_dep("numpy", "2.3.4"), _dep("numpy", "2.3.3")]}),
+            _pkg("numpy", "2.3.4", wheels = [_whl("numpy-2.3.4-cp312-cp312-manylinux_2_17_x86_64.whl", "a1")], markers = ["sys_platform == 'linux'"]),
+            _pkg("numpy", "2.3.3", wheels = [_whl("numpy-2.3.3-cp312-cp312-macosx_11_0_arm64.whl", "a2")], markers = ["sys_platform == 'darwin'"]),
+        ],
+        conflicts = [[{"package": "my-app", "extra": "science"}]],
+    )
+    result = translate_uv(project, lock, _lock_model(dependency_groups = ["default", "optional:science"]))
+
+    # Pin should have compound constraint names.
+    numpy_pin = result["pins"]["numpy"]
+    env.expect.that_int(len(numpy_pin)).equals(2)
+    env.expect.that_str(numpy_pin["extra_science_res_numpy_2_3_4"]).equals("numpy@2.3.4")
+    env.expect.that_str(numpy_pin["extra_science_res_numpy_2_3_3"]).equals("numpy@2.3.3")
+
+    # Compound entries should store component info.
+    exprs = result["resolution_marker_exprs"]
+    compound_2_3_4 = exprs["extra_science_res_numpy_2_3_4"]
+    env.expect.that_str(compound_2_3_4["variant"]).equals("extra_science")
+    env.expect.that_str(compound_2_3_4["marker"]).equals("res_numpy_2_3_4")
+
+    # Simple entries should still be strings.
+    env.expect.that_str(exprs["res_numpy_2_3_4"]).equals("sys_platform == 'linux'")
+
+def _test_uv_resolution_marker_fork_optional_group(name):
+    util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
+    analysis_test(name = name, target = name + "_subject", impl = _test_uv_resolution_marker_fork_optional_group_impl)
+
 # --- Test suite ---
 
 def uv_translator_test_suite(name):
@@ -465,5 +591,9 @@ def uv_translator_test_suite(name):
             _test_uv_dependencies_with_extra,
             _test_uv_requires_python_propagation,
             _test_uv_unconditional_pins_are_bare,
+            _test_uv_resolution_marker_fork_conditional_pins,
+            _test_uv_resolution_marker_single_version_no_fork,
+            _test_uv_resolution_marker_multi_marker_or,
+            _test_uv_resolution_marker_fork_optional_group,
         ],
     )

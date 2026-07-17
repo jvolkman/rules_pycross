@@ -74,6 +74,7 @@ def _package_repo_impl(rctx):
     # First pass: collect per-member package data, environment names, and cycle groups.
     member_packages = {}  # member_name -> {pkg_key -> pkg_data}
     cycle_groups = {}  # group_name -> [pkg_key, ...]
+    resolution_marker_exprs = {}  # constraint_name -> marker_expr or compound dict
     variant_items = {}  # qualified_name -> True (dedup across members)
     variant_sets = []  # list of {"qnames": [...], "default": "..."}
     variant_sets_seen = {}  # frozenset key -> True (dedup across members)
@@ -108,6 +109,12 @@ def _package_repo_impl(rctx):
             if group_name in cycle_groups and sorted(cycle_groups[group_name]) != sorted(group_members):
                 fail("Cycle group {} conflicts between workspace members ({} vs {})".format(group_name, cycle_groups[group_name], group_members))
             cycle_groups[group_name] = group_members
+
+        # Merge resolution-marker expressions (union across members).
+        for cname, expr in member_lock.get("resolution_marker_exprs", {}).items():
+            if cname in resolution_marker_exprs and resolution_marker_exprs[cname] != expr:
+                fail("Resolution marker '{}' conflicts between workspace members ({} vs {})".format(cname, resolution_marker_exprs[cname], expr))
+            resolution_marker_exprs[cname] = expr
 
     # Second pass: detect conflicts and build merged package set.
     # conflicts maps pkg_key -> [member_name, ...] for packages with
@@ -149,6 +156,7 @@ def _package_repo_impl(rctx):
         "packages": packages,
         "pins": {},
         "cycle_groups": cycle_groups,
+        "resolution_marker_exprs": resolution_marker_exprs,
     }
 
     repo_map = rctx.attr.repo_map

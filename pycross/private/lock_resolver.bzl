@@ -638,4 +638,5 @@ def resolve(
         remote_files = repos,
         cycle_groups = cycle_groups,
         variants = lock_model_data.get("variants", []),
+        resolution_marker_exprs = lock_model_data.get("resolution_marker_exprs", {}),
     )
