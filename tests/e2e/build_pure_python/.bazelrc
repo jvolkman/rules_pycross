@@ -4,3 +4,7 @@ common --disk_cache .cache
 try-import %workspace%/.bazelrc.user
 try-import %workspace%/../shared/.bazelrc.user
 import %workspace%/../shared/.bazelrc.cc
+
+# Test the newer venv bootstrap method with wheel builds
+--@rules_python//python/config_settings:bootstrap_impl=script
+--@rules_python//python/config_settings:venvs_site_packages=yes
