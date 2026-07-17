@@ -193,6 +193,7 @@ bzl_library(
     name = "pylock_lock_model",
     srcs = ["pylock_lock_model.bzl"],
     deps = [
+        ":translator_common",
         ":util",
         "@pypackaging.bzl//:pypackaging",
         "@toml.bzl//toml:toml",
@@ -271,6 +272,7 @@ bzl_library(
     srcs = ["sdist_repo.bzl"],
     deps = [
         ":internal_repo",
+        "@pycross_backends//:sdist_dispatch",
     ],
 )
 
@@ -372,6 +374,7 @@ bzl_library(
     deps = [
         ":git_file",
         ":json_file_repo",
+        ":override_helpers",
         ":package_repo",
         ":pypi_file",
         ":thin_package_repo",

@@ -34,6 +34,7 @@ bzl_library(
         ":common_attrs",
         "//pycross/private:providers",
         "//pycross/private/build/actions:pep517_action",
+        "//pycross/private/build/actions:repair_action",
     ],
 )
 

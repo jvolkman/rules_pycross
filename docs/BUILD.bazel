@@ -14,6 +14,12 @@ stardoc(
     ],
 )
 
+BACKEND_HOOK_DEPS = [
+    "@rules_pycross_backend_maturin//private:cargo_lock_package_repo_hook",
+    "@rules_pycross_backend_maturin//private:maturin_sdist_hook",
+    "@rules_pycross_backend_maturin//private:setuptools_rust_sdist_hook",
+]
+
 # ext_pycross
 stardoc(
     name = "ext_pycross_gen",
@@ -22,7 +28,7 @@ stardoc(
     deps = [
         "@rules_cc//cc:find_cc_toolchain_bzl",
         "@rules_pycross//pycross/extensions:pycross",
-    ],
+    ] + BACKEND_HOOK_DEPS,
 )
 
 # backend_maturin rules
@@ -43,6 +49,7 @@ stardoc(
     deps = [
         "@rules_cc//cc:find_cc_toolchain_bzl",
         "@rules_pycross_backend_maturin//extensions:maturin",
+        "@rules_pycross_backend_maturin//private:cargo_lock_package_repo_hook",
         "@rules_pycross_backend_maturin//private:cargo_lock_repo",
     ],
 )
@@ -55,6 +62,7 @@ stardoc(
     deps = [
         "@rules_cc//cc:find_cc_toolchain_bzl",
         "@rules_pycross_backend_maturin//extensions:setuptools_rust",
+        "@rules_pycross_backend_maturin//private:cargo_lock_package_repo_hook",
         "@rules_pycross_backend_maturin//private:cargo_lock_repo",
     ],
 )
@@ -92,6 +100,72 @@ stardoc(
     ],
 )
 
+# uv extension
+stardoc(
+    name = "ext_uv_gen",
+    out = "ext_uv.gen.md",
+    input = "@rules_pycross//pycross/extensions:uv.bzl",
+    deps = [
+        "@rules_cc//cc:find_cc_toolchain_bzl",
+        "@rules_pycross//pycross/extensions:uv",
+    ] + BACKEND_HOOK_DEPS,
+)
+
+# poetry extension
+stardoc(
+    name = "ext_poetry_gen",
+    out = "ext_poetry.gen.md",
+    input = "@rules_pycross//pycross/extensions:poetry.bzl",
+    deps = [
+        "@rules_cc//cc:find_cc_toolchain_bzl",
+        "@rules_pycross//pycross/extensions:poetry",
+    ] + BACKEND_HOOK_DEPS,
+)
+
+# pdm extension
+stardoc(
+    name = "ext_pdm_gen",
+    out = "ext_pdm.gen.md",
+    input = "@rules_pycross//pycross/extensions:pdm.bzl",
+    deps = [
+        "@rules_cc//cc:find_cc_toolchain_bzl",
+        "@rules_pycross//pycross/extensions:pdm",
+    ] + BACKEND_HOOK_DEPS,
+)
+
+# pylock extension
+stardoc(
+    name = "ext_pylock_gen",
+    out = "ext_pylock.gen.md",
+    input = "@rules_pycross//pycross/extensions:pylock.bzl",
+    deps = [
+        "@rules_cc//cc:find_cc_toolchain_bzl",
+        "@rules_pycross//pycross/extensions:pylock",
+    ] + BACKEND_HOOK_DEPS,
+)
+
+# backends extension
+stardoc(
+    name = "ext_backends_gen",
+    out = "ext_backends.gen.md",
+    input = "@rules_pycross//pycross/extensions:backends.bzl",
+    deps = [
+        "@rules_cc//cc:find_cc_toolchain_bzl",
+        "@rules_pycross//pycross/extensions:backends",
+    ],
+)
+
+# pep517 backend
+stardoc(
+    name = "ext_pep517_gen",
+    out = "ext_pep517.gen.md",
+    input = "@rules_pycross//pycross/backends:pep517.bzl",
+    deps = [
+        "@rules_cc//cc:find_cc_toolchain_bzl",
+        "@rules_pycross//pycross/backends:pep517",
+    ],
+)
+
 # Update and test checked-in docs
 write_source_files(
     name = "update",
@@ -104,5 +178,11 @@ write_source_files(
         "ext_setuptools.md": ":ext_setuptools_gen",
         "ext_meson.md": ":ext_meson_gen",
         "ext_cmake.md": ":ext_cmake_gen",
+        "ext_uv.md": ":ext_uv_gen",
+        "ext_poetry.md": ":ext_poetry_gen",
+        "ext_pdm.md": ":ext_pdm_gen",
+        "ext_pylock.md": ":ext_pylock_gen",
+        "ext_backends.md": ":ext_backends_gen",
+        "ext_pep517.md": ":ext_pep517_gen",
     },
 )
