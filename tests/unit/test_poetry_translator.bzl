@@ -308,6 +308,96 @@ def _test_poetry_url_source(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
     analysis_test(name = name, target = name + "_subject", impl = _test_poetry_url_source_impl)
 
+# --- Issue #117: URL without version ---
+
+# buildifier: disable=unused-variable
+def _test_poetry_issue_117_impl(env, target):
+    project = {
+        "tool": {
+            "poetry": {
+                "dependencies": {
+                    "python": "^3.9",
+                    "boto3": {"url": "https://github.com/boto/boto3/archive/31a8a3d7bcd021aadceba63d6f207a3a61c58aac.zip"},
+                },
+            },
+        },
+    }
+    lock = {
+        "metadata": {"lock-version": "2.1"},
+        "package": [
+            _pkg(
+                "boto3",
+                "1.35.13",
+                source = {"type": "url", "url": "https://github.com/boto/boto3/archive/31a8a3d7bcd021aadceba63d6f207a3a61c58aac.zip"},
+                files = [_whl("31a8a3d7bcd021aadceba63d6f207a3a61c58aac.zip", "12345")],
+            ),
+        ],
+    }
+
+    # This should NOT crash with KeyError: 'version'
+    result = translate_poetry(project, lock, _lock_model())
+
+    env.expect.that_collection(result["packages"].keys()).contains_exactly(["boto3@1.35.13"])
+    pkg = result["packages"]["boto3@1.35.13"]
+    env.expect.that_collection(pkg["files"][0]["urls"]).contains_exactly(["https://github.com/boto/boto3/archive/31a8a3d7bcd021aadceba63d6f207a3a61c58aac.zip"])
+
+def _test_poetry_issue_117(name):
+    util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
+    analysis_test(name = name, target = name + "_subject", impl = _test_poetry_issue_117_impl)
+
+# --- Issue #34: List of dicts with URLs ---
+
+# buildifier: disable=unused-variable
+def _test_poetry_issue_34_impl(env, target):
+    project = {
+        "tool": {
+            "poetry": {
+                "dependencies": {
+                    "python": "^3.9",
+                    "torch": [
+                        {"markers": "platform_machine == 'aarch64'", "url": "https://download.pytorch.org/whl/torch-1.12.1-cp39-cp39-manylinux2014_aarch64.whl"},
+                        {"markers": "platform_machine == 'x86_64'", "url": "https://download.pytorch.org/whl/cpu/torch-1.12.1%2Bcpu-cp39-cp39-linux_x86_64.whl"},
+                    ],
+                },
+            },
+        },
+    }
+
+    # In Poetry 2.1+, these would have markers in the lock file if they are forks.
+    lock = {
+        "metadata": {"lock-version": "2.1"},
+        "package": [
+            _pkg(
+                "torch",
+                "1.12.1",
+                source = {"type": "url", "url": "https://download.pytorch.org/whl/torch-1.12.1-cp39-cp39-manylinux2014_aarch64.whl"},
+                files = [_whl("torch-1.12.1-cp39-cp39-manylinux2014_aarch64.whl", "aaaa")],
+                markers = "platform_machine == \"aarch64\"",
+            ),
+            _pkg(
+                "torch",
+                "1.12.1+cpu",
+                source = {"type": "url", "url": "https://download.pytorch.org/whl/cpu/torch-1.12.1%2Bcpu-cp39-cp39-linux_x86_64.whl"},
+                files = [_whl("torch-1.12.1%2Bcpu-cp39-cp39-linux_x86_64.whl", "bbbb")],
+                markers = "platform_machine == \"x86_64\"",
+            ),
+        ],
+    }
+
+    result = translate_poetry(project, lock, _lock_model())
+
+    # Verify both versions are captured
+    env.expect.that_collection(result["packages"].keys()).contains_exactly(["torch@1.12.1", "torch@1.12.1+cpu"])
+
+    # Verify forks are detected
+    res_exprs = result.get("resolution_marker_exprs", {})
+    env.expect.that_bool("res_torch_1_12_1" in res_exprs).equals(True)
+    env.expect.that_bool("res_torch_1_12_1_cpu" in res_exprs).equals(True)
+
+def _test_poetry_issue_34(name):
+    util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
+    analysis_test(name = name, target = name + "_subject", impl = _test_poetry_issue_34_impl)
+
 # --- Test suite ---
 
 def poetry_translator_test_suite(name):
@@ -325,5 +415,7 @@ def poetry_translator_test_suite(name):
             _test_poetry_optional_dependency,
             _test_poetry_forks,
             _test_poetry_url_source,
+            _test_poetry_issue_34,
+            _test_poetry_issue_117,
         ],
     )

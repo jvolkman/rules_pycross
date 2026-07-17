@@ -480,8 +480,9 @@ def translate_poetry(project_dict, lock_dict, lock_model):
             updated_files.append(updated_f)
         files = updated_files
 
-        # Filter to only matching files
-        files = _get_files_for_package(files, package_name, package_version)
+        # Filter to only matching files for standard sources
+        if source_type not in ("url", "git"):
+            files = _get_files_for_package(files, package_name, package_version)
 
         # Read package-level markers (Poetry 2.1+)
         package_markers = lock_pkg.get("markers", "")
