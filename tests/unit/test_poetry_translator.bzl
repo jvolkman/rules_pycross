@@ -208,8 +208,9 @@ def _test_poetry_python_or_constraint_impl(env, target):
     result = translate_poetry(project, lock, _lock_model())
     pkg_a = result["packages"]["a@1.0"]
 
-    # ^3.8 || ^3.10 should expand to >=3.8,<4.0,>=3.10,<4.0
-    env.expect.that_str(pkg_a["python_versions"]).equals(">=3.8,<4.0,>=3.10,<4.0")
+    # ^3.8 || ^3.10 cannot be represented in PEP 440 (no OR operator).
+    # We drop the constraint entirely rather than AND-joining (which would be unsatisfiable).
+    env.expect.that_str(pkg_a["python_versions"]).equals("")
 
 def _test_poetry_python_or_constraint(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])

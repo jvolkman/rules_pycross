@@ -214,13 +214,14 @@ def _parse_python_versions(python_versions):
         return ""
 
     # Poetry uses || for OR (union) of version constraints.
-    # PEP 440 has no OR operator, but we can represent it as a
-    # comma-separated list of specifiers when they don't conflict.
-    # For now, convert each part individually.
+    # PEP 440 has no OR operator — comma-separated specifiers are AND.
+    # Joining || parts with commas would turn ">=3.9,<3.10 || >=3.11"
+    # into ">=3.9,<3.10,>=3.11" which is unsatisfiable.
+    # Drop the constraint entirely: being too permissive is safe (we may
+    # include a package for a Python it doesn't support, caught at build time)
+    # while being too restrictive silently excludes valid packages.
     if "||" in python_versions:
-        parts = [p.strip() for p in python_versions.split("||")]
-        converted = [_poetry_constraint_to_pep440(p) for p in parts if p]
-        return ",".join([c for c in converted if c])
+        return ""
 
     return _poetry_constraint_to_pep440(python_versions)
 
