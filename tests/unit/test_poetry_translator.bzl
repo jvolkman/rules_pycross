@@ -48,7 +48,7 @@ def _test_poetry_minimal_lock_impl(env, target):
         }},
     }
     lock = {
-        "metadata": {"lock-version": "2.0"},
+        "metadata": {"lock-version": "2.1"},
         "package": [
             _pkg("requests", "2.31.0", files = [_whl("requests-2.31.0-py3-none-any.whl", "12345")]),
         ],
@@ -72,7 +72,7 @@ def _test_poetry_minimal_lock(name):
 def _test_poetry_lock_version_impl(env, target):
     project = {"tool": {"poetry": {"dependencies": {"python": "^3.8", "a": "1.0"}}}}
     lock = {
-        "metadata": {"lock-version": "2.0"},
+        "metadata": {"lock-version": "2.1"},
         "package": [
             _pkg("a", "1.0", files = [_whl("a-1.0-py3-none-any.whl", "a")]),
         ],
@@ -90,7 +90,7 @@ def _test_poetry_lock_version(name):
 def _test_poetry_package_with_extras_impl(env, target):
     project = {"tool": {"poetry": {"dependencies": {"python": "^3.8", "a": "1.0"}}}}
     lock = {
-        "metadata": {"lock-version": "2.0"},
+        "metadata": {"lock-version": "2.1"},
         "package": [
             _pkg(
                 "a",
@@ -117,7 +117,7 @@ def _test_poetry_package_with_extras(name):
 def _test_poetry_source_directory_impl(env, target):
     project = {"tool": {"poetry": {"dependencies": {"python": "^3.8", "a": "1.0"}}}}
     lock = {
-        "metadata": {"lock-version": "2.0"},
+        "metadata": {"lock-version": "2.1"},
         "package": [
             _pkg("a", "1.0", source = {"type": "directory", "url": "..."}),
         ],
@@ -135,7 +135,7 @@ def _test_poetry_source_directory(name):
 def _test_poetry_source_git_impl(env, target):
     project = {"tool": {"poetry": {"dependencies": {"python": "^3.8", "a": "1.0"}}}}
     lock = {
-        "metadata": {"lock-version": "2.0"},
+        "metadata": {"lock-version": "2.1"},
         "package": [
             _pkg("a", "1.0", source = {"type": "git", "url": "..."}),
         ],
@@ -153,7 +153,7 @@ def _test_poetry_source_git(name):
 def _test_poetry_python_constraint_impl(env, target):
     project = {"tool": {"poetry": {"dependencies": {"python": "^3.8", "a": "1.0"}}}}
     lock = {
-        "metadata": {"lock-version": "2.0"},
+        "metadata": {"lock-version": "2.1"},
         "package": [
             _pkg("a", "1.0", files = [_whl("a-1.0-py3-none-any.whl", "a")], python_versions = ">=3.9,<3.13"),
         ],
@@ -173,7 +173,7 @@ def _test_poetry_python_constraint(name):
 def _test_poetry_python_caret_constraint_impl(env, target):
     project = {"tool": {"poetry": {"dependencies": {"python": "^3.8", "a": "1.0"}}}}
     lock = {
-        "metadata": {"lock-version": "2.0"},
+        "metadata": {"lock-version": "2.1"},
         "package": [
             _pkg("a", "1.0", files = [_whl("a-1.0-py3-none-any.whl", "a")], python_versions = "^3.9"),
         ],
@@ -194,7 +194,7 @@ def _test_poetry_python_caret_constraint(name):
 def _test_poetry_python_or_constraint_impl(env, target):
     project = {"tool": {"poetry": {"dependencies": {"python": "^3.8", "a": "1.0"}}}}
     lock = {
-        "metadata": {"lock-version": "2.0"},
+        "metadata": {"lock-version": "2.1"},
         "package": [
             _pkg("a", "1.0", files = [_whl("a-1.0-py3-none-any.whl", "a")], python_versions = "^3.8 || ^3.10"),
         ],
@@ -213,7 +213,7 @@ def _test_poetry_python_or_constraint(name):
 def _test_poetry_optional_dependency_impl(env, target):
     project = {"tool": {"poetry": {"dependencies": {"python": "^3.8", "a": "1.0"}}}}
     lock = {
-        "metadata": {"lock-version": "2.0"},
+        "metadata": {"lock-version": "2.1"},
         "package": [
             _pkg(
                 "a",

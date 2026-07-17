@@ -583,6 +583,95 @@ def _test_no_available_when_all_have_sdist(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
     analysis_test(name = name, target = name + "_subject", impl = _test_no_available_when_all_have_sdist_impl)
 
+# buildifier: disable=unused-variable
+def _test_resolution_marker_evaluator_rendering_impl(env, target):
+    """Verify resolution_marker_exprs generate evaluator + config_setting targets."""
+    lock = {
+        "packages": {
+            "numpy@2.3.4": {
+                "wheel_candidates": [
+                    {
+                        "filename": "numpy-2.3.4-cp312-cp312-manylinux_2_17_x86_64.whl",
+                        "file_reference": {"key": "numpy_wheel_linux"},
+                    },
+                ],
+            },
+            "numpy@2.3.3": {
+                "wheel_candidates": [
+                    {
+                        "filename": "numpy-2.3.3-cp312-cp312-macosx_11_0_arm64.whl",
+                        "file_reference": {"key": "numpy_wheel_mac"},
+                    },
+                ],
+            },
+        },
+        "resolution_marker_exprs": {
+            "res_numpy_2_3_4": "sys_platform == 'linux'",
+            "res_numpy_2_3_3": "sys_platform == 'darwin'",
+        },
+    }
+    repo_map = {
+        "numpy_wheel_linux": "@repo//numpy:wheel_linux",
+        "numpy_wheel_mac": "@repo//numpy:wheel_mac",
+    }
+    res = render_lock_bzl(lock, repo_map, "my_rctx")
+
+    # Should generate pycross_pep508_evaluator for each fork
+    env.expect.that_bool("pycross_pep508_evaluator(" in res).equals(True)
+    env.expect.that_bool("_res_eval_res_numpy_2_3_4" in res).equals(True)
+    env.expect.that_bool("_res_eval_res_numpy_2_3_3" in res).equals(True)
+
+    # Should generate config_settings with is_ prefix
+    env.expect.that_bool('"is_res_numpy_2_3_4"' in res).equals(True)
+    env.expect.that_bool('"is_res_numpy_2_3_3"' in res).equals(True)
+
+    # Should contain the marker expressions
+    env.expect.that_bool("sys_platform == 'linux'" in res).equals(True)
+    env.expect.that_bool("sys_platform == 'darwin'" in res).equals(True)
+
+def _test_resolution_marker_evaluator_rendering(name):
+    util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
+    analysis_test(name = name, target = name + "_subject", impl = _test_resolution_marker_evaluator_rendering_impl)
+
+# buildifier: disable=unused-variable
+def _test_resolution_marker_compound_rendering_impl(env, target):
+    """Verify compound resolution-marker constraints use config_setting_group."""
+    lock = {
+        "packages": {
+            "numpy@2.3.4": {
+                "wheel_candidates": [
+                    {
+                        "filename": "numpy-2.3.4-cp312-cp312-manylinux_2_17_x86_64.whl",
+                        "file_reference": {"key": "numpy_whl"},
+                    },
+                ],
+            },
+        },
+        "resolution_marker_exprs": {
+            "res_numpy_2_3_4": "sys_platform == 'linux'",
+            "extra_science_res_numpy_2_3_4": {
+                "variant": "extra_science",
+                "marker": "res_numpy_2_3_4",
+            },
+        },
+    }
+    repo_map = {"numpy_whl": "@repo//numpy:wheel"}
+    res = render_lock_bzl(lock, repo_map, "my_rctx")
+
+    # Compound should use config_setting_group
+    env.expect.that_bool("selects.config_setting_group(" in res).equals(True)
+    env.expect.that_bool('"is_extra_science_res_numpy_2_3_4"' in res).equals(True)
+    env.expect.that_bool("match_all" in res).equals(True)
+    env.expect.that_bool('"is_extra_science"' in res).equals(True)
+    env.expect.that_bool('"is_res_numpy_2_3_4"' in res).equals(True)
+
+    # selects.bzl should be loaded
+    env.expect.that_bool('load("@bazel_skylib//lib:selects.bzl"' in res).equals(True)
+
+def _test_resolution_marker_compound_rendering(name):
+    util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
+    analysis_test(name = name, target = name + "_subject", impl = _test_resolution_marker_compound_rendering_impl)
+
 def resolved_lock_renderer_test_suite(name):
     test_suite(
         name = name,
@@ -597,5 +686,7 @@ def resolved_lock_renderer_test_suite(name):
             _test_multi_platform_repo_map,
             _test_available_config_setting_group,
             _test_no_available_when_all_have_sdist,
+            _test_resolution_marker_evaluator_rendering,
+            _test_resolution_marker_compound_rendering,
         ],
     )

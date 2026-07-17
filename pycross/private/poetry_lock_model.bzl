@@ -16,6 +16,7 @@ load(
     ":translator_common.bzl",
     "canonicalize_name",
     "parse_pep508_requirement",
+    "resolution_marker_constraint_name",
     "resolve_lock_graph",
     "select_project_file",
 )
@@ -218,6 +219,38 @@ def _get_files_for_package(files, package_name, package_version):
 
     return result
 
+def _parse_poetry_pin(pin, pin_info, pinned_package_specs):
+    """Parse a Poetry dependency pin into pinned_package_specs.
+
+    Handles three formats:
+        - string: "^1.2.3"
+        - dict: {version = "^1.2.3", markers = "...", optional = true, ...}
+        - list: [{version = "1.0", python = "~3.9"}, {version = "2.0", python = ">=3.10"}]
+
+    Args:
+        pin: Canonicalized package name.
+        pin_info: The dependency value from pyproject.toml (string, dict, or list).
+        pinned_package_specs: Dict to update with {name: {"": specifier} or {name: {"": specifier}}}.
+    """
+    if type(pin_info) == "string":
+        pinned_package_specs[pin] = {"": _poetry_constraint_to_pep440(pin_info)}
+    elif type(pin_info) == "dict":
+        if "path" in pin_info or pin_info.get("optional"):
+            return
+        pinned_package_specs[pin] = {"": _poetry_constraint_to_pep440(pin_info.get("version", "*"))}
+    elif type(pin_info) == "list":
+        # List-of-dicts: each entry may have version, markers, url, python, etc.
+        # We record the version spec for each entry; fork detection happens
+        # later when we scan the lock file for per-package markers.
+        for entry in pin_info:
+            if type(entry) != "dict":
+                continue
+            if "path" in entry or entry.get("optional"):
+                continue
+            version = entry.get("version", "*")
+            pinned_package_specs.setdefault(pin, {})
+            pinned_package_specs[pin][""] = _poetry_constraint_to_pep440(version)
+
 def translate_poetry(project_dict, lock_dict, lock_model):
     """Translates Poetry project and lock data to raw_lock_data dict.
 
@@ -239,10 +272,11 @@ def translate_poetry(project_dict, lock_dict, lock_model):
     if len(lock_version_parts) < 1:
         fail("Invalid lock-version: {}".format(lock_version))
     lock_major = int(lock_version_parts[0])
-    if lock_major < 2:
+    lock_minor = int(lock_version_parts[1]) if len(lock_version_parts) > 1 else 0
+    if lock_major < 2 or (lock_major == 2 and lock_minor < 1):
         fail(
             ("Poetry lock-version {} is not supported. " +
-             "rules_pycross requires Poetry 2.0+ (lock-version >= 2.0). " +
+             "rules_pycross requires Poetry 2.1+ (lock-version >= 2.1). " +
              "Please regenerate your lock file with: poetry lock --regenerate").format(lock_version),
         )
 
@@ -275,12 +309,7 @@ def translate_poetry(project_dict, lock_dict, lock_model):
                 pin = canonicalize_name(pin)
                 if pin == "python":
                     continue
-                if type(pin_info) == "string":
-                    pinned_package_specs[pin] = {"": _poetry_constraint_to_pep440(pin_info)}
-                elif type(pin_info) == "dict":
-                    if "path" in pin_info or pin_info.get("optional"):
-                        continue
-                    pinned_package_specs[pin] = {"": _poetry_constraint_to_pep440(pin_info.get("version", "*"))}
+                _parse_poetry_pin(pin, pin_info, pinned_package_specs)
 
     project_optional_deps = project_dict.get("project", {}).get("optional-dependencies", {})
     pep735_groups = project_dict.get("dependency-groups", {})
@@ -314,12 +343,7 @@ def translate_poetry(project_dict, lock_dict, lock_model):
                     pin = canonicalize_name(pin)
                     if pin == "python":
                         continue
-                    if type(pin_info) == "string":
-                        pinned_package_specs[pin] = {"": _poetry_constraint_to_pep440(pin_info)}
-                    elif type(pin_info) == "dict":
-                        if "path" in pin_info:
-                            continue
-                        pinned_package_specs[pin] = {"": _poetry_constraint_to_pep440(pin_info.get("version", "*"))}
+                    _parse_poetry_pin(pin, pin_info, pinned_package_specs)
             if group_name in project_optional_deps:
                 for dep_str in project_optional_deps[group_name]:
                     req = parse_pep508_requirement(dep_str)
@@ -387,8 +411,11 @@ def translate_poetry(project_dict, lock_dict, lock_model):
         # Source type check for local packages
         source = lock_pkg.get("source", {})
         source_type = source.get("type", "")
-        is_local = source_type in ("directory", "git", "url")
+        is_local = source_type in ("directory", "git")
         registry = source.get("url") if source_type == "legacy" else None
+
+        # For URL sources, use the source URL as the download URL
+        source_url = source.get("url", "") if source_type == "url" else ""
 
         # Parse files (inline in Poetry 2.0)
         files = [parse_file_info(f, registry) for f in lock_pkg.get("files", [])]
@@ -402,17 +429,22 @@ def translate_poetry(project_dict, lock_dict, lock_model):
                     new_files.append(nf)
                 files = new_files
 
-        # Add package name and version to files
+        # Add package name, version, and source URL to files
         updated_files = []
         for f in files:
             updated_f = dict(f)
             updated_f["package_name"] = package_name
             updated_f["package_version"] = package_version
+            if source_url:
+                updated_f["url"] = source_url
             updated_files.append(updated_f)
         files = updated_files
 
         # Filter to only matching files
         files = _get_files_for_package(files, package_name, package_version)
+
+        # Read package-level markers (Poetry 2.1+)
+        package_markers = lock_pkg.get("markers", "")
 
         packages.append({
             "name": package_name,
@@ -422,13 +454,41 @@ def translate_poetry(project_dict, lock_dict, lock_model):
             "files": files,
             "is_local": is_local,
             "extras": [],
+            "markers": package_markers,
         })
+
+    # Detect resolution-marker forks: same package name with multiple versions.
+    resolution_marker_exprs = {}
+    _fork_versions = {}  # {name: {version: marker_expr}}
+    for pkg in packages:
+        marker = pkg.get("markers", "")
+        if not marker:
+            continue
+        _fork_versions.setdefault(pkg["name"], {})[pkg["version"]] = marker
+
+    _fork_constraints = {}  # {name: {version: constraint_name}}
+    for fname, versions in _fork_versions.items():
+        if len(versions) <= 1:
+            continue  # Single version, no fork.
+        for fversion, marker_expr in versions.items():
+            cname = resolution_marker_constraint_name(fname, fversion)
+            _fork_constraints.setdefault(fname, {})[fversion] = cname
+            resolution_marker_exprs[cname] = marker_expr
+
+    # If forks were detected, update pinned_package_specs to use conditional pins.
+    for fname, version_constraints in _fork_constraints.items():
+        if fname in pinned_package_specs:
+            conditional_pins = {}
+            for fversion, cname in version_constraints.items():
+                conditional_pins[cname] = "==" + fversion
+            pinned_package_specs[fname] = conditional_pins
 
     return resolve_lock_graph(
         packages = packages,
         pinned_package_specs = pinned_package_specs,
         requires_python = lock_python_versions,
         strict_dependencies = True,
+        resolution_marker_exprs = resolution_marker_exprs,
     )
 
 def repo_create_poetry_model(rctx, extra_project_files, lock_file, lock_model, output):
