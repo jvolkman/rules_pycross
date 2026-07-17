@@ -97,15 +97,16 @@ def _target_select(target_dict, prefix, suffix, workspace_repo, is_aggregated = 
     lines.append("    })")
     return "\n".join(lines)
 
-def _proxy_actual(actual_lines, target_dict, prefix, suffix, workspace_repo, alias_name, actual_pkg_ref, transition_bzl, is_aggregated = False, default_variants = {}):
+def _proxy_actual(actual_lines, target_dict, prefix, suffix, workspace_repo, alias_name, actual_pkg_ref, has_transition = False, is_aggregated = False, default_variants = {}):
     """Emit an intermediate select alias if needed, return the actual expression for the proxy.
 
-    When transition_bzl is set and target_dict has variants (would generate a select()),
-    we emit an intermediate alias in the __actual/<pkg> package so the select() is
-    evaluated in the transitioned configuration rather than before the transition applies.
+    When transitions are active (has_transition is True) and target_dict has variants
+    or resolution-marker forks (would generate a select()), we emit an intermediate alias in the
+    __actual/<pkg> package so the select() is evaluated in the transitioned configuration rather
+    than before the transition applies.
     """
     actual = _target_select(target_dict, prefix, suffix, workspace_repo, is_aggregated = is_aggregated, default_variants = default_variants)
-    if transition_bzl and not (len(target_dict) == 1 and "" in target_dict):
+    if has_transition and not (len(target_dict) == 1 and "" in target_dict):
         actual_lines.extend([
             "alias(",
             '    name = "{}",'.format(alias_name),
@@ -150,6 +151,7 @@ def _pin_build(target_name, pin_target_dict, package, workspace_repo, workspace_
 
     # Emit the platform attr whenever using transitioning rules.
     emit_platform = bool(target_platform)
+    has_transition = bool(transition_bzl or target_platform)
 
     if lock_target_dict:
         lines.extend([
@@ -159,7 +161,7 @@ def _pin_build(target_name, pin_target_dict, package, workspace_repo, workspace_
             ")",
             "",
         ])
-        actual_pkg = _proxy_actual(actual_lines, lock_target_dict, lock_ref, "", workspace_repo, "pkg", actual_pkg_ref, transition_bzl, is_aggregated = has_aggregated_variant, default_variants = default_variants)
+        actual_pkg = _proxy_actual(actual_lines, lock_target_dict, lock_ref, "", workspace_repo, "pkg", actual_pkg_ref, has_transition = has_transition, is_aggregated = has_aggregated_variant, default_variants = default_variants)
         lines.extend([
             lib_rule + "(",
             '    name = "{}",'.format(_safe_name(target_name, "pkg")),
@@ -171,7 +173,7 @@ def _pin_build(target_name, pin_target_dict, package, workspace_repo, workspace_
             ")",
             "",
         ])
-        actual_wheel = _proxy_actual(actual_lines, pin_target_dict, wheel_ref, "", workspace_repo, "wheel", actual_pkg_ref, transition_bzl, default_variants = default_variants)
+        actual_wheel = _proxy_actual(actual_lines, pin_target_dict, wheel_ref, "", workspace_repo, "wheel", actual_pkg_ref, has_transition = has_transition, default_variants = default_variants)
         lines.extend([
             file_rule + "(",
             '    name = "{}",'.format(_safe_name(target_name, "wheel")),
@@ -183,7 +185,7 @@ def _pin_build(target_name, pin_target_dict, package, workspace_repo, workspace_
             ")",
             "",
         ])
-        actual_dist_info = _proxy_actual(actual_lines, lock_target_dict, lock_ref + "_dist_info_", "", workspace_repo, "dist_info", actual_pkg_ref, transition_bzl, default_variants = default_variants)
+        actual_dist_info = _proxy_actual(actual_lines, lock_target_dict, lock_ref + "_dist_info_", "", workspace_repo, "dist_info", actual_pkg_ref, has_transition = has_transition, default_variants = default_variants)
         lines.extend([
             file_rule + "(",
             '    name = "{}",'.format(_safe_name(target_name, "dist_info")),
@@ -210,7 +212,7 @@ def _pin_build(target_name, pin_target_dict, package, workspace_repo, workspace_
                     "",
                 ])
             else:
-                actual_all = _proxy_actual(actual_lines, lock_target_dict, lock_ref, "", workspace_repo, "all", actual_pkg_ref, transition_bzl, default_variants = default_variants)
+                actual_all = _proxy_actual(actual_lines, lock_target_dict, lock_ref, "", workspace_repo, "all", actual_pkg_ref, has_transition = has_transition, default_variants = default_variants)
                 lines.extend([
                     lib_rule + "(",
                     '    name = "[]",',
@@ -225,7 +227,7 @@ def _pin_build(target_name, pin_target_dict, package, workspace_repo, workspace_
 
         sdist_file = package.get("sdist_file")
         if sdist_file:
-            actual_sdist = _proxy_actual(actual_lines, pin_target_dict, sdist_ref, "", workspace_repo, "sdist", actual_pkg_ref, transition_bzl, default_variants = default_variants)
+            actual_sdist = _proxy_actual(actual_lines, pin_target_dict, sdist_ref, "", workspace_repo, "sdist", actual_pkg_ref, has_transition = has_transition, default_variants = default_variants)
             lines.extend([
                 file_rule + "(",
                 '    name = "{}",'.format(_safe_name(target_name, "sdist")),
@@ -240,7 +242,7 @@ def _pin_build(target_name, pin_target_dict, package, workspace_repo, workspace_
 
     extras_dict = extras_dict or {}
     for extra_name, extra_target_dict in sorted(extras_dict.items()):
-        actual_extra = _proxy_actual(actual_lines, extra_target_dict, lock_ref, "", workspace_repo, "extra_{}".format(extra_name), actual_pkg_ref, transition_bzl, default_variants = default_variants)
+        actual_extra = _proxy_actual(actual_lines, extra_target_dict, lock_ref, "", workspace_repo, "extra_{}".format(extra_name), actual_pkg_ref, has_transition = has_transition, default_variants = default_variants)
         lines.extend([
             lib_rule + "(",
             '    name = "[{}]",'.format(extra_name),

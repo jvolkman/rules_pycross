@@ -161,7 +161,7 @@ def _test_pin_build_sdist_with_platform(name):
 # buildifier: disable=unused-variable
 def _test_pin_build_variants_with_platform_impl(env, target):
     """Combines variants (has_aggregated_variant=True, non-trivial pin_target_dict) with platform transition."""
-    res = pin_build_for_testing(
+    res_struct = pin_build_for_testing(
         target_name = "numpy",
         pin_target_dict = {
             "cpu": "numpy@1.26.0",
@@ -173,7 +173,8 @@ def _test_pin_build_variants_with_platform_impl(env, target):
         extras_dict = {"extra1": {"cpu": "numpy[extra1]@1.26.0", "gpu": "numpy[extra1]@1.26.0+gpu"}},
         default_variants = {"cpu": True},
         target_platform = "@my//platform:linux",
-    ).build
+    )
+    res = res_struct.build + "\n" + (res_struct.actual_build or "")
 
     # Should use select for variants
     env.expect.that_bool("select({" in res).equals(True)
@@ -194,8 +195,8 @@ def _test_pin_build_variants_with_platform_impl(env, target):
     # With has_aggregated_variant + extras, the [] base target should use lib_rule (not alias)
     env.expect.that_bool('name = "[]"' in res).equals(True)
 
-    # Extras with variants should also use select
-    extra_section = res.split('name = "[extra1]"')[1].split(")")[0]
+    # Extras with variants should also use select in actual_build
+    extra_section = (res_struct.actual_build or "").split('name = "extra_extra1"')[1].split(")")[0]
     env.expect.that_bool("select({" in extra_section).equals(True)
 
     # //conditions:default should be set to the default variant (cpu)
