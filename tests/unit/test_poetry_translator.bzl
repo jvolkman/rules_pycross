@@ -398,6 +398,53 @@ def _test_poetry_issue_34(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
     analysis_test(name = name, target = name + "_subject", impl = _test_poetry_issue_34_impl)
 
+# --- || Constraint Translation ---
+
+# buildifier: disable=unused-variable
+def _test_poetry_or_constraint_translations_impl(env, target):
+    project = {
+        "tool": {
+            "poetry": {
+                "dependencies": {
+                    "python": "^3.9",
+                    "pkg-a": "1.0.0",
+                },
+            },
+        },
+    }
+
+    lock = {
+        "metadata": {"lock-version": "2.1"},
+        "package": [
+            _pkg(
+                "pkg-a",
+                "1.0.0",
+                deps = {
+                    "dep-simple-exclude": "<2.2.0 || >2.2.0",
+                    "dep-complex-exclude": ">=1.25.4,<2.2.0 || >2.2.0,<3",
+                    "dep-unsupported": ">=1.0.0 || >=2.0.0",  # Unhandled format fallback
+                },
+                files = [_whl("pkg_a-1.0.0-py3-none-any.whl", "aaaa")],
+            ),
+            _pkg("dep-simple-exclude", "2.1.0", files = [_whl("dep_simple-2.1.0-py3-none-any.whl", "bbbb")]),
+            _pkg("dep-complex-exclude", "2.1.0", files = [_whl("dep_complex-2.1.0-py3-none-any.whl", "cccc")]),
+            _pkg("dep-unsupported", "2.1.0", files = [_whl("dep_unsupported-2.1.0-py3-none-any.whl", "dddd")]),
+        ],
+    }
+
+    result = translate_poetry(project, lock, _lock_model())
+    pkgs = result["packages"]
+    pkg_a_deps = [d["name"] + "@" + d["version"] for d in pkgs["pkg-a@1.0.0"]["dependencies"]]
+
+    # If the constraints parsed correctly, it will have found the 2.1.0 candidates.
+    env.expect.that_collection(pkg_a_deps).contains("dep-simple-exclude@2.1.0")
+    env.expect.that_collection(pkg_a_deps).contains("dep-complex-exclude@2.1.0")
+    env.expect.that_collection(pkg_a_deps).contains("dep-unsupported@2.1.0")
+
+def _test_poetry_or_constraint_translations(name):
+    util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
+    analysis_test(name = name, target = name + "_subject", impl = _test_poetry_or_constraint_translations_impl)
+
 # --- Test suite ---
 
 def poetry_translator_test_suite(name):
@@ -417,5 +464,6 @@ def poetry_translator_test_suite(name):
             _test_poetry_url_source,
             _test_poetry_issue_34,
             _test_poetry_issue_117,
+            _test_poetry_or_constraint_translations,
         ],
     )
