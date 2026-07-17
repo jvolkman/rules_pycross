@@ -9,9 +9,9 @@ load(
 )
 
 def _pycross_wheel_headers_impl(ctx):
-    unzipped_wheel = getattr(ctx.attr.wheel[PycrossExtractedWheelInfo], "site_packages", None)
+    unzipped_wheel = getattr(ctx.attr.wheel_library[PycrossExtractedWheelInfo], "site_packages", None)
     if not unzipped_wheel:
-        fail("The target provided to `wheel` does not provide an extracted site-packages directory. Make sure to use a `pycross_wheel_library` target.")
+        fail("The target provided to `wheel_library` does not provide an extracted site-packages directory. Make sure to use a `pycross_wheel_library` target.")
 
     include_dir_path = unzipped_wheel.path + "/site-packages/" + ctx.attr.include_dir
 
@@ -50,9 +50,10 @@ variable pointing to the absolute include path for use in build system
 configuration (e.g., Meson cross files).
 """,
     attrs = {
-        "wheel": attr.label(
+        "wheel_library": attr.label(
             doc = "A pycross_wheel_library target containing the headers.",
             mandatory = True,
+            providers = [PycrossExtractedWheelInfo],
         ),
         "include_dir": attr.string(
             doc = "Relative path within the wheel's site-packages to the include directory (e.g. 'numpy/_core/include').",

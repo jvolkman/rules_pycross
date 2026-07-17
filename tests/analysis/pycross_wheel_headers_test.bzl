@@ -34,7 +34,7 @@ def _test_pycross_wheel_headers_basic(name):
     util.helper_target(
         pycross_wheel_headers,
         name = name + "_subject",
-        wheel = name + "_wheel",
+        wheel_library = name + "_wheel",
         include_dir = "numpy/_core/include",
         make_variable = "NUMPY_INCLUDE",
     )
@@ -73,7 +73,7 @@ def _test_pycross_wheel_headers_no_make_variable(name):
     util.helper_target(
         pycross_wheel_headers,
         name = name + "_subject",
-        wheel = name + "_wheel",
+        wheel_library = name + "_wheel",
         include_dir = "numpy/_core/include",
     )
 
