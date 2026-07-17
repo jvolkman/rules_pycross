@@ -66,8 +66,6 @@ def _parse_file_info(file_info, package_name, package_version, registry = None):
         result["index"] = registry
     return result
 
-# sha256_from_string is imported from translator_common.bzl
-
 def _resolve_package_requires_python(markers):
     """Extract python version specifiers from resolution markers.
 
