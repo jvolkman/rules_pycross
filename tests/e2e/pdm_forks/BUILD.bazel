@@ -1,0 +1,9 @@
+load("@rules_python//python:defs.bzl", "py_test")
+
+py_test(
+    name = "test_forks",
+    srcs = ["test_forks.py"],
+    deps = [
+        "@forks_lock//greenlet",
+    ],
+)

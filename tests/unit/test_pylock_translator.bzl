@@ -449,6 +449,57 @@ def _test_pylock_no_default_no_groups_empty(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
     analysis_test(name = name, target = name + "_subject", impl = _test_pylock_no_default_no_groups_empty_impl)
 
+# --- test_pylock_resolution_forks ---
+
+# buildifier: disable=unused-variable
+def _test_pylock_resolution_forks_impl(env, target):
+    """Test pylock files with multiple versions of the same package (multi-target forks)."""
+    lock = {
+        "lock-version": "1.0",
+        "requires-python": ">=3.9",
+        "environments": [
+            'python_version < "3.10" and python_version >= "3.9"',
+            'python_version >= "3.10"',
+        ],
+        "package": [
+            {
+                "name": "greenlet",
+                "version": "3.2.5",
+                "requires-python": ">=3.9",
+                "marker": 'python_version < "3.10" and python_version >= "3.9" and "default" in dependency_groups',
+                "wheels": [_whl("greenlet-3.2.5-cp39-cp39-manylinux2014_x86_64.whl", "aaaa")],
+            },
+            {
+                "name": "greenlet",
+                "version": "3.5.3",
+                "requires-python": ">=3.10",
+                "marker": 'python_version >= "3.10" and "default" in dependency_groups',
+                "wheels": [_whl("greenlet-3.5.3-cp310-cp310-manylinux_2_24_x86_64.whl", "bbbb")],
+            },
+        ],
+    }
+    result = translate_pylock(lock, None, _lock_model())
+
+    # Both versions should be present as separate packages
+    env.expect.that_collection(result["packages"].keys()).contains_exactly(["greenlet@3.2.5", "greenlet@3.5.3"])
+
+    # Resolution marker expressions should be generated (with PDM selection markers stripped)
+    res_exprs = result.get("resolution_marker_exprs", {})
+    env.expect.that_bool("res_greenlet_3_2_5" in res_exprs).equals(True)
+    env.expect.that_bool("res_greenlet_3_5_3" in res_exprs).equals(True)
+
+    env.expect.that_str(res_exprs["res_greenlet_3_2_5"]).equals('python_version < "3.10" and python_version >= "3.9"')
+    env.expect.that_str(res_exprs["res_greenlet_3_5_3"]).equals('python_version >= "3.10"')
+
+    # Pinned specs should be conditional
+    pins = result["pins"]["greenlet"]
+    env.expect.that_str(pins["res_greenlet_3_2_5"]).equals("greenlet@3.2.5")
+    env.expect.that_str(pins["res_greenlet_3_5_3"]).equals("greenlet@3.5.3")
+
+def _test_pylock_resolution_forks(name):
+    util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
+    analysis_test(name = name, target = name + "_subject", impl = _test_pylock_resolution_forks_impl)
+
 # --- Test suite ---
 
 def pylock_translator_test_suite(name):
@@ -469,5 +520,6 @@ def pylock_translator_test_suite(name):
             _test_pylock_graph_traversal,
             _test_pylock_sdist_parsing,
             _test_pylock_no_default_no_groups_empty,
+            _test_pylock_resolution_forks,
         ],
     )
