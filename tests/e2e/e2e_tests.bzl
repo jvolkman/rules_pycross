@@ -21,7 +21,9 @@ def define_e2e_tests():
         "local_wheel",
         "namespace_pkgs",
         "patches_and_hooks",
+        "pdm_forks",
         "pdm_workspace",
+        "poetry_forks",
         "requirements",
         "sdist_repo",
         "squash_extras",
@@ -29,6 +31,7 @@ def define_e2e_tests():
         "uv_cycle",
         "uv_cycle_stress",
         "uv_cycle_stress_mixed",
+        "uv_forks",
         "uv_markers",
         "uv_workspace",
     ]:
