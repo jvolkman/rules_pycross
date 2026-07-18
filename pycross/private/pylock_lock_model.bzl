@@ -7,11 +7,38 @@ lock_resolver.bzl.
 
 load("@pypackaging.bzl", "pypackaging")
 load("@toml.bzl//toml:toml.bzl", "decode")
-load(":translator_common.bzl", "select_project_file")
+load(":translator_common.bzl", "resolution_marker_constraint_name", "select_project_file")
 load(":util.bzl", "extract_pep508_name", "parse_package_key")
 
 def _canonicalize_name(name):
     return pypackaging.utils.canonicalize_name(name)
+
+def _strip_selection_markers(marker):
+    """Strip PDM selection markers (dependency_groups, extras) from a marker string.
+
+    PDM pylock markers combine environment markers with selection logic like
+    '"default" in dependency_groups'. We only want the environment markers
+    for resolution fork detection.
+
+    Args:
+        marker: A marker string, e.g. 'python_version < "3.10" and "default" in dependency_groups'
+
+    Returns:
+        A string with only environment marker parts, e.g. 'python_version < "3.10"'
+    """
+    if not marker:
+        return ""
+
+    # Split on " and " and filter out selection-related parts
+    parts = marker.split(" and ")
+    env_parts = []
+    for part in parts:
+        stripped = part.strip()
+        if "dependency_groups" in stripped or "in extras" in stripped:
+            continue
+        env_parts.append(stripped)
+
+    return " and ".join(env_parts)
 
 def translate_pylock(lock_dict, project_dict, lock_model):
     """Translates pylock data to raw_lock_data dict.
@@ -35,12 +62,21 @@ def translate_pylock(lock_dict, project_dict, lock_model):
 
     packages_list = lock_dict.get("package", lock_dict.get("packages", []))
 
-    # Create lookup map for versions. In PEP 751, each package is strictly pinned.
-    versions = {}
+    # Create lookup map for versions.
+    # Track all versions per name to support multi-target forks.
+    versions = {}  # {name: version} - first version seen
+    versions_all = {}  # {name: {version: marker}} - all versions with markers
     for pkg in packages_list:
         name = _canonicalize_name(pkg["name"])
         version = pkg["version"]
-        versions[name] = version
+        if name not in versions:
+            versions[name] = version
+        marker = pkg.get("marker", "")
+
+        # Strip dependency_groups/extras selection markers (PDM-specific).
+        # Keep only environment markers for resolution fork detection.
+        env_marker = _strip_selection_markers(marker)
+        versions_all.setdefault(name, {})[version] = env_marker
 
     lock_packages = {}
 
@@ -152,10 +188,10 @@ def translate_pylock(lock_dict, project_dict, lock_model):
         lock_packages[pkg_key] = raw_package
 
     # Build dependency lookup by name
-    deps_by_name = {}
+    deps_by_name = {}  # {name: [pkg_key, ...]}
     for pkg_key, pkg in lock_packages.items():
         pkg_name = pkg["name"]
-        deps_by_name[pkg_name] = pkg_key
+        deps_by_name.setdefault(pkg_name, []).append(pkg_key)
 
     pins = {}
 
@@ -231,11 +267,11 @@ def translate_pylock(lock_dict, project_dict, lock_model):
                 continue
             visited_names[curr] = True
 
-            pkg_key = deps_by_name.get(curr)
-            if pkg_key and pkg_key in lock_packages:
-                for dep in lock_packages[pkg_key].get("dependencies", []):
-                    dep_base = parse_package_key(dep["name"]).name
-                    queue.append(dep_base)
+            for pkg_key in deps_by_name.get(curr, []):
+                if pkg_key in lock_packages:
+                    for dep in lock_packages[pkg_key].get("dependencies", []):
+                        dep_base = parse_package_key(dep["name"]).name
+                        queue.append(dep_base)
 
         if queue:
             fail("BFS traversal exceeded max iterations; this is a bug in pycross")
@@ -249,18 +285,47 @@ def translate_pylock(lock_dict, project_dict, lock_model):
 
         # Pins from roots
         for root_name in sorted(root_package_names.keys()):
-            if root_name in deps_by_name:
-                pins[root_name] = deps_by_name[root_name]
+            keys = deps_by_name.get(root_name, [])
+            if keys:
+                pins[root_name] = keys[0]
     else:
-        # Default: include all
+        # Default: include all (use first key per name; fork detection below may override)
+        seen_names = {}
         for pkg_key, pkg in lock_packages.items():
-            pins[pkg["name"]] = pkg_key
+            pname = pkg["name"]
+            if pname not in seen_names:
+                pins[pname] = pkg_key
+                seen_names[pname] = True
 
-    return {
+    # Detect resolution-marker forks: same package name with multiple versions.
+    resolution_marker_exprs = {}
+    fork_constraints = {}  # {name: {version: constraint_name}}
+    for fname, version_markers in versions_all.items():
+        if len(version_markers) <= 1:
+            continue  # Single version, no fork.
+        for fversion, marker_expr in version_markers.items():
+            if not marker_expr:
+                continue  # Skip versions without env markers.
+            cname = resolution_marker_constraint_name(fname, fversion)
+            fork_constraints.setdefault(fname, {})[fversion] = cname
+            resolution_marker_exprs[cname] = marker_expr
+
+    # If forks were detected, update pins to use conditional pins.
+    for fname, version_constraints in fork_constraints.items():
+        if fname in pins:
+            conditional_pins = {}
+            for fversion, cname in version_constraints.items():
+                conditional_pins[cname] = "{}@{}".format(fname, fversion)
+            pins[fname] = conditional_pins
+
+    result = {
         "packages": lock_packages,
         "pins": pins,
         "python_versions": requires_python,
     }
+    if resolution_marker_exprs:
+        result["resolution_marker_exprs"] = resolution_marker_exprs
+    return result
 
 def repo_create_pylock_model(rctx, extra_project_files, lock_file, lock_model, output):
     """Run the pylock translator in pure Starlark.
