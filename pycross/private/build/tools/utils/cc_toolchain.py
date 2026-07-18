@@ -123,7 +123,9 @@ def wrap_compiler(lang: str, cc_exe: str, cflags: str, python_exe: Path, bin_dir
 
                 extra_flags = []
                 if is_link and linker_abs_path:
-                    extra_flags.append(f"-fuse-ld={{linker_abs_path}}")
+                    linker_dir = os.path.dirname(linker_abs_path)
+                    os.environ["PATH"] = linker_dir + os.pathsep + os.environ.get("PATH", "")
+                    extra_flags.append("-fuse-ld=lld")
 
                 os.execv(cc_exe, [cc_exe] + wrapper_flags + extra_flags + filtered_args)
                 """
