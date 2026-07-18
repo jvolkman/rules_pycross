@@ -140,10 +140,10 @@ def create_repos(
                     filename = file["name"],
                     sha256 = file["sha256"],
                 )
-                if pypi_index:
-                    pypi_file_attrs["index"] = pypi_index
-                elif file.get("index"):
+                if file.get("index"):
                     pypi_file_attrs["index"] = file["index"]
+                elif pypi_index:
+                    pypi_file_attrs["index"] = pypi_index
                 if file["name"].endswith(".whl"):
                     pycross_wheel_file(**pypi_file_attrs)
                 else:
