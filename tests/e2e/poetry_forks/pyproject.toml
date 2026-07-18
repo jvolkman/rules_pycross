@@ -1,0 +1,15 @@
+[tool.poetry]
+name = "poetry-forks-test"
+version = "0.1.0"
+description = ""
+
+[tool.poetry.dependencies]
+python = ">=3.9"
+greenlet = [
+  {version = ">=2.0,<3.3", python = "~3.9"},
+  {version = ">=3.5", python = ">=3.10"},
+]
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"

@@ -12,8 +12,10 @@ load("@toml.bzl//toml:toml.bzl", "decode")
 load(
     ":translator_common.bzl",
     "canonicalize_name",
+    "resolution_marker_constraint_name",
     "resolve_lock_graph",
     "select_project_file",
+    "sha256_from_string",
 )
 
 def _parse_file_info(file_info, package_name, package_version, registry = None):
@@ -64,34 +66,6 @@ def _parse_file_info(file_info, package_name, package_version, registry = None):
         result["index"] = registry
     return result
 
-def _sha256_from_string(s):
-    """Generate a deterministic hex string from a string input.
-
-    This is a simplistic hash for creating stable cache keys from
-    git commit hashes. Not cryptographically secure, but deterministic
-    and sufficient for cache keying purposes.
-
-    Args:
-        s: The input string.
-
-    Returns:
-        A 64-character hex string.
-    """
-
-    # Starlark doesn't have hashlib. We use a simple deterministic
-    # encoding of the commit as a "hash". Since the commit is already
-    # a hex SHA, we can use it directly padded to 64 chars.
-    if len(s) >= 64:
-        return s[:64]
-
-    # Pad with repeated content
-    result = s
-    for _ in range(10):
-        if len(result) >= 64:
-            break
-        result = result + s
-    return result[:64]
-
 def _resolve_package_requires_python(markers):
     """Extract python version specifiers from resolution markers.
 
@@ -124,19 +98,6 @@ def _resolve_package_requires_python(markers):
                 if op and version_part:
                     specifiers.append("{} {}".format(op, version_part))
     return specifiers
-
-def _resolution_marker_constraint_name(name, version):
-    """Generate a deterministic constraint name for a resolution-marker fork.
-
-    Args:
-        name: Canonical package name.
-        version: Package version string.
-
-    Returns:
-        A constraint name like "res_numpy_2_3_4".
-    """
-    sanitized = (name + "_" + version).replace("-", "_").replace(".", "_")
-    return "res_{}".format(sanitized)
 
 def _parse_uv_dependency(dep):
     """Parse a UV lock dependency dict into a specifier.
@@ -301,7 +262,7 @@ def translate_uv(project_dict, lock_dict, lock_model):
                 combined = markers[0]
             else:
                 combined = " or ".join(["({})".format(m) for m in markers])
-            cname = _resolution_marker_constraint_name(fname, fversion)
+            cname = resolution_marker_constraint_name(fname, fversion)
             _fork_constraints.setdefault(fname, {})[fversion] = cname
             resolution_marker_exprs[cname] = combined
 
@@ -466,7 +427,7 @@ def translate_uv(project_dict, lock_dict, lock_model):
             if "#" in git_url:
                 commit = git_url.split("#")[-1]
             if commit:
-                synthetic_hash = _sha256_from_string(commit)
+                synthetic_hash = sha256_from_string(commit)
                 filename = "{}-{}.tar.gz".format(package_name, package_version)
                 files.append({
                     "name": filename,

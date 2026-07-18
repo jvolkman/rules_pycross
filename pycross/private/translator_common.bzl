@@ -11,6 +11,50 @@ def canonicalize_name(name):
     """Canonicalize a Python package name per PEP 503."""
     return pypackaging.utils.canonicalize_name(name)
 
+def resolution_marker_constraint_name(name, version):
+    """Generate a deterministic constraint name for a resolution-marker fork.
+
+    Used by both uv and poetry translators when a package has multiple
+    versions resolved for different environments.
+
+    Args:
+        name: Canonical package name.
+        version: Package version string.
+
+    Returns:
+        A constraint name like "res_numpy_2_3_4".
+    """
+    sanitized = (name + "_" + version).replace("-", "_").replace(".", "_").replace("+", "_")
+    return "res_{}".format(sanitized)
+
+def sha256_from_string(s):
+    """Generate a deterministic hex string from a string input.
+
+    This is a simplistic hash for creating stable cache keys from
+    git commit hashes. Not cryptographically secure, but deterministic
+    and sufficient for cache keying purposes.
+
+    Args:
+        s: The input string.
+
+    Returns:
+        A 64-character hex string.
+    """
+
+    # Starlark doesn't have hashlib. We use a simple deterministic
+    # encoding of the commit as a "hash". Since the commit is already
+    # a hex SHA, we can use it directly padded to 64 chars.
+    if len(s) >= 64:
+        return s[:64]
+
+    # Pad with repeated content
+    result = s
+    for _ in range(10):
+        if len(result) >= 64:
+            break
+        result = result + s
+    return result[:64]
+
 def select_project_file(rctx, extra_project_files, lock_file, projects = []):
     """Select the best matching pyproject.toml from extra_project_files.
 
