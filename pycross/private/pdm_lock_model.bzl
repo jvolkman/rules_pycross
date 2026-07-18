@@ -10,6 +10,7 @@ load(
     ":translator_common.bzl",
     "canonicalize_name",
     "parse_pep508_requirement",
+    "resolution_marker_constraint_name",
     "resolve_lock_graph",
     "select_project_file",
 )
@@ -170,6 +171,9 @@ def translate_pdm(project_dict, lock_dict, lock_model):
         if pkg_requires_python == "*":
             pkg_requires_python = ""
 
+        # Read package-level markers (PDM multi-target lock files)
+        package_markers = lock_pkg.get("marker", "")
+
         # Parse dependencies as PEP 508 requirement strings
         deps = []
         for dep_str in lock_pkg.get("dependencies", []):
@@ -196,13 +200,41 @@ def translate_pdm(project_dict, lock_dict, lock_model):
             "files": files,
             "is_local": is_local,
             "extras": [e.lower() for e in pkg_extras],
+            "markers": package_markers,
         })
+
+    # Detect resolution-marker forks: same package name with multiple versions.
+    resolution_marker_exprs = {}
+    fork_versions = {}  # {name: {version: marker_expr}}
+    for pkg in packages:
+        marker = pkg.get("markers", "")
+        if not marker:
+            continue
+        fork_versions.setdefault(pkg["name"], {})[pkg["version"]] = marker
+
+    fork_constraints = {}  # {name: {version: constraint_name}}
+    for fname, versions in fork_versions.items():
+        if len(versions) <= 1:
+            continue  # Single version, no fork.
+        for fversion, marker_expr in versions.items():
+            cname = resolution_marker_constraint_name(fname, fversion)
+            fork_constraints.setdefault(fname, {})[fversion] = cname
+            resolution_marker_exprs[cname] = marker_expr
+
+    # If forks were detected, update pinned_package_specs to use conditional pins.
+    for fname, version_constraints in fork_constraints.items():
+        if fname in pinned_package_specs:
+            conditional_pins = {}
+            for fversion, cname in version_constraints.items():
+                conditional_pins[cname] = "==" + fversion
+            pinned_package_specs[fname] = conditional_pins
 
     return resolve_lock_graph(
         packages = packages,
         pinned_package_specs = pinned_package_specs,
         requires_python = requires_python,
         strict_dependencies = False,
+        resolution_marker_exprs = resolution_marker_exprs,
     )
 
 def repo_create_pdm_model(rctx, extra_project_files, lock_file, lock_model, output):

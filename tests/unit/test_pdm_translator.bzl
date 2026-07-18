@@ -269,6 +269,65 @@ def _test_pdm_extra_dependency(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
     analysis_test(name = name, target = name + "_subject", impl = _test_pdm_extra_dependency_impl)
 
+# --- test_pdm_resolution_forks ---
+
+# buildifier: disable=unused-variable
+def _test_pdm_resolution_forks_impl(env, target):
+    """Test PDM multi-target lock files with different versions per environment."""
+    project = {
+        "project": {
+            "name": "my-app",
+            "version": "0.1.0",
+            "requires-python": ">=3.9",
+            "dependencies": [
+                "greenlet>=2.0,<3.3; python_version < '3.10'",
+                "greenlet>=3.5; python_version >= '3.10'",
+            ],
+        },
+    }
+    lock = {
+        "metadata": {"lock_version": "4.5"},
+        "package": [
+            {
+                "name": "greenlet",
+                "version": "3.2.5",
+                "requires_python": ">=3.9",
+                "groups": ["default"],
+                "marker": "python_version < \"3.10\" and python_version >= \"3.9\"",
+                "files": [_whl("greenlet-3.2.5-cp39-cp39-manylinux2014_x86_64.whl", "aaaa")],
+            },
+            {
+                "name": "greenlet",
+                "version": "3.5.3",
+                "requires_python": ">=3.10",
+                "groups": ["default"],
+                "marker": "python_version >= \"3.10\"",
+                "files": [_whl("greenlet-3.5.3-cp310-cp310-manylinux_2_24_x86_64.whl", "bbbb")],
+            },
+        ],
+    }
+    result = translate_pdm(project, lock, _lock_model())
+
+    # Both versions should be present as separate packages
+    env.expect.that_collection(result["packages"].keys()).contains_exactly(["greenlet@3.2.5", "greenlet@3.5.3"])
+
+    # Resolution marker expressions should be generated
+    res_exprs = result.get("resolution_marker_exprs", {})
+    env.expect.that_bool("res_greenlet_3_2_5" in res_exprs).equals(True)
+    env.expect.that_bool("res_greenlet_3_5_3" in res_exprs).equals(True)
+
+    env.expect.that_str(res_exprs["res_greenlet_3_2_5"]).equals('python_version < "3.10" and python_version >= "3.9"')
+    env.expect.that_str(res_exprs["res_greenlet_3_5_3"]).equals('python_version >= "3.10"')
+
+    # Pinned specs should be conditional
+    pins = result["pins"]["greenlet"]
+    env.expect.that_str(pins["res_greenlet_3_2_5"]).equals("greenlet@3.2.5")
+    env.expect.that_str(pins["res_greenlet_3_5_3"]).equals("greenlet@3.5.3")
+
+def _test_pdm_resolution_forks(name):
+    util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
+    analysis_test(name = name, target = name + "_subject", impl = _test_pdm_resolution_forks_impl)
+
 # --- Test suite ---
 
 def pdm_translator_test_suite(name):
@@ -284,5 +343,6 @@ def pdm_translator_test_suite(name):
             _test_pdm_file_hashes,
             _test_pdm_extras_in_markers,
             _test_pdm_extra_dependency,
+            _test_pdm_resolution_forks,
         ],
     )
