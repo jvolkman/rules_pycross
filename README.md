@@ -81,19 +81,6 @@ uv.workspace(
 
 These explicitly specified files are appended to the auto-discovered files.
 
-#### Transitive Aliases
-
-By default, `rules_pycross` only generates top-level aliases for packages that are explicitly defined as dependencies in your project. If you want to be able to depend on transitive dependencies directly using `requirement("transitive-package")`, you can enable `create_transitive_aliases` on your `uv.repo()` tag:
-
-```python
-uv.repo(
-    workspace = "pypi",
-    create_transitive_aliases = True,
-)
-```
-
-If a transitive package has multiple versions in the lock file, `rules_pycross` will print a warning and alias to the highest version.
-
 #### The Internal Build Tools Repository (`__build`)
 
 For every workspace, `rules_pycross` also auto-generates an internal companion repository named `<workspace>__build` (e.g., `@pypi__build`).
@@ -211,6 +198,63 @@ The default is `["default"]`.
 ```python
 uv.repo(
     dependency_groups = ["default", "optional:grpc", "group:test"],
+    workspace = "pypi",
+)
+```
+
+### Transitive Aliases
+
+By adding `"transitive"` to `dependency_groups`, `rules_pycross` will generate aliases for all transitively resolved packages — not just those directly pinned by your selected groups. This lets you reference any package in the lock file via `@pypi//package_name`, even if it's only an indirect dependency.
+
+```python
+uv.repo(
+    dependency_groups = ["default", "transitive"],
+    workspace = "pypi",
+)
+```
+
+If a transitive package has multiple versions in the lock file, `rules_pycross` will print a warning and alias to the highest version.
+
+### Testonly Dependencies
+
+Append `;testonly` to any group specifier to mark its packages as `testonly` in the generated Bazel targets. This is useful for test frameworks and other packages that should not be depended upon by production code:
+
+```python
+uv.repo(
+    dependency_groups = ["default", "group:test;testonly"],
+    workspace = "pypi",
+)
+```
+
+With `transitive;testonly`, `rules_pycross` performs reachability analysis to determine which transitive packages are **exclusively** reachable from testonly roots. Packages reachable from both testonly and non-testonly groups remain non-testonly:
+
+```python
+uv.repo(
+    dependency_groups = ["default", "group:test;testonly", "transitive;testonly"],
+    workspace = "pypi",
+)
+```
+
+### Wildcards and Precedence
+
+The `*` wildcard and `;testonly` modifier follow **last-wins** precedence. When `*` appears, it sets the default testonly status for all groups and resets any prior specific overrides. Specific entries after `*` override individual groups:
+
+```python
+# Everything testonly except group:dev
+uv.repo(
+    dependency_groups = ["*;testonly", "group:dev"],
+    workspace = "pypi",
+)
+
+# Only group:test is testonly
+uv.repo(
+    dependency_groups = ["*", "group:test;testonly"],
+    workspace = "pypi",
+)
+
+# group:dev;testonly is overridden by the later *
+uv.repo(
+    dependency_groups = ["group:dev;testonly", "*"],
     workspace = "pypi",
 )
 ```

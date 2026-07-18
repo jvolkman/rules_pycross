@@ -633,5 +633,6 @@
     "setuptools": "setuptools@75.6.0",
     "wheel": "wheel@0.45.1"
   },
-  "python_versions": ">=3.9, <3.13"
+  "python_versions": ">=3.9, <3.13",
+  "testonly_pins": []
 }

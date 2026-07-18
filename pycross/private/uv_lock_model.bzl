@@ -203,6 +203,9 @@ def translate_uv(project_dict, lock_dict, lock_model):
     # Identify projects
     projects_list = getattr(lock_model, "projects", [])
     dependency_groups = getattr(lock_model, "dependency_groups", ["default"])
+    testonly_groups = getattr(lock_model, "testonly_groups", [])
+    non_testonly_groups = getattr(lock_model, "non_testonly_groups", [])
+    wildcard_testonly = getattr(lock_model, "wildcard_testonly", False)
 
     workspace_members = {}
     for pkg in packages_list:
@@ -267,7 +270,7 @@ def translate_uv(project_dict, lock_dict, lock_model):
             resolution_marker_exprs[cname] = combined
 
     # Collect requirements
-    requirements = []  # list of (req_name, specifier, constraint)
+    requirements = []  # list of (req_name, specifier, constraint, is_testonly)
 
     include_all = "*" in dependency_groups
     include_default = "default" in dependency_groups or include_all
@@ -296,15 +299,23 @@ def translate_uv(project_dict, lock_dict, lock_model):
                 if dep_extras:
                     for extra in dep_extras:
                         pin_name = "{}[{}]".format(dep_name, canonicalize_name(extra))
-                        requirements.append((pin_name, specifier, fork_constraint))
+                        requirements.append((pin_name, specifier, fork_constraint, False))
                 else:
-                    requirements.append((dep_name, specifier, fork_constraint))
+                    requirements.append((dep_name, specifier, fork_constraint, False))
 
         # Parse groups
         effective_groups = ["optional:*", "group:*"] if include_all else dependency_groups
         for group in effective_groups:
             if group == "default" or group == "*":
                 continue
+
+            # Last-wins testonly: specific overrides beat wildcard default
+            if group in testonly_groups:
+                is_testonly = True
+            elif group in non_testonly_groups:
+                is_testonly = False
+            else:
+                is_testonly = wildcard_testonly
 
             kind, _, name = group.partition(":")
             if kind == "optional":
@@ -356,18 +367,27 @@ def translate_uv(project_dict, lock_dict, lock_model):
                     if dep_extras:
                         for extra in dep_extras:
                             pin_name = "{}[{}]".format(dep_name, canonicalize_name(extra))
-                            requirements.append((pin_name, specifier, effective_constraint))
+                            requirements.append((pin_name, specifier, effective_constraint, is_testonly))
                     else:
-                        requirements.append((dep_name, specifier, effective_constraint))
+                        requirements.append((dep_name, specifier, effective_constraint, is_testonly))
 
     # End collect requirements
 
     # Build pinned specs
     pinned_package_specs = {}
-    for pin_name, specifier, constraint in requirements:
+    testonly_reqs = {}
+    non_testonly_reqs = {}
+    for pin_name, specifier, constraint, is_testonly in requirements:
         if pin_name not in pinned_package_specs:
             pinned_package_specs[pin_name] = {}
         pinned_package_specs[pin_name][constraint] = specifier
+
+        if is_testonly:
+            testonly_reqs[pin_name] = True
+        else:
+            non_testonly_reqs[pin_name] = True
+
+    testonly_pin_names = [name for name in testonly_reqs if name not in non_testonly_reqs]
 
     # Process all packages from lock
     packages = []
@@ -497,6 +517,7 @@ def translate_uv(project_dict, lock_dict, lock_model):
         strict_dependencies = True,
         variants = variant_sets,
         resolution_marker_exprs = resolution_marker_exprs,
+        testonly_pins = testonly_pin_names,
     )
 
 def repo_create_uv_model(rctx, extra_project_files, lock_file, lock_model, output):

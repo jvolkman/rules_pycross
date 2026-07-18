@@ -202,6 +202,10 @@ def translate_pylock(lock_dict, project_dict, lock_model):
 
     if project_dict and has_filter:
         root_req_names = []
+        testonly_root_req_names = []
+        testonly_groups = getattr(lock_model, "testonly_groups", [])
+        non_testonly_groups = getattr(lock_model, "non_testonly_groups", [])
+        wildcard_testonly = getattr(lock_model, "wildcard_testonly", False)
 
         project_section = project_dict.get("project", {})
         if include_default:
@@ -215,6 +219,14 @@ def translate_pylock(lock_dict, project_dict, lock_model):
         for group in effective_groups:
             if group == "default" or group == "*":
                 continue
+
+            # Last-wins testonly: specific overrides beat wildcard default
+            if group in testonly_groups:
+                is_testonly = True
+            elif group in non_testonly_groups:
+                is_testonly = False
+            else:
+                is_testonly = wildcard_testonly
 
             kind, _, name = group.partition(":")
             if kind == "optional":
@@ -234,23 +246,34 @@ def translate_pylock(lock_dict, project_dict, lock_model):
                     entries = groups_dict[target_name]
                     for entry in entries:
                         if type(entry) == "string":
-                            root_req_names.append(extract_pep508_name(entry))
+                            n = extract_pep508_name(entry)
+                            if is_testonly:
+                                testonly_root_req_names.append(n)
+                            else:
+                                root_req_names.append(n)
                         elif type(entry) == "dict" and "include-group" in entry:
                             inc_group = entry["include-group"]
                             if inc_group in dev_deps:
                                 for inc_dep in dev_deps[inc_group]:
                                     if type(inc_dep) == "string":
-                                        root_req_names.append(extract_pep508_name(inc_dep))
+                                        n = extract_pep508_name(inc_dep)
+                                        if is_testonly:
+                                            testonly_root_req_names.append(n)
+                                        else:
+                                            root_req_names.append(n)
                 else:
                     # buildifier: disable=print
                     print("WARNING: Dependency group '{}:{}' not found in project file.".format(kind, target_name))
 
         # Deduplicate
         root_package_names = {n: True for n in root_req_names}
+        testonly_package_names = {n: True for n in testonly_root_req_names if n not in root_package_names}
 
-        # BFS from root_package_names
+        # BFS from all root names to find reachable packages
         visited_names = {}
-        queue = sorted(root_package_names.keys())
+        all_roots = dict(root_package_names)
+        all_roots.update(testonly_package_names)
+        queue = sorted(all_roots.keys())
 
         # Starlark has no while loop, simulate with for+range.
         # Upper bound: each edge can add one item to the queue, plus the initial queue size.
@@ -284,10 +307,12 @@ def translate_pylock(lock_dict, project_dict, lock_model):
         lock_packages = filtered_packages
 
         # Pins from roots
-        for root_name in sorted(root_package_names.keys()):
+        for root_name in sorted(all_roots.keys()):
             keys = deps_by_name.get(root_name, [])
             if keys:
                 pins[root_name] = keys[0]
+
+        testonly_pins = sorted(testonly_package_names.keys())
     else:
         # Default: include all (use first key per name; fork detection below may override)
         seen_names = {}
@@ -296,6 +321,7 @@ def translate_pylock(lock_dict, project_dict, lock_model):
             if pname not in seen_names:
                 pins[pname] = pkg_key
                 seen_names[pname] = True
+        testonly_pins = []
 
     # Detect resolution-marker forks: same package name with multiple versions.
     resolution_marker_exprs = {}
@@ -322,6 +348,7 @@ def translate_pylock(lock_dict, project_dict, lock_model):
         "packages": lock_packages,
         "pins": pins,
         "python_versions": requires_python,
+        "testonly_pins": testonly_pins,
     }
     if resolution_marker_exprs:
         result["resolution_marker_exprs"] = resolution_marker_exprs

@@ -103,7 +103,7 @@ def _test_create_transitive_aliases_with_extras_impl(env, target):
         },
     }
 
-    res = resolve(lock_model_data, create_transitive_aliases = True)
+    res = resolve(lock_model_data, include_transitive = True)
 
     # Should have alias for urllib3 because it is resolved (transitively) and has only one version.
     env.expect.that_collection(res.pins.keys()).contains_exactly(["selenium", "urllib3"])
@@ -1885,6 +1885,161 @@ def _test_wheel_library_tags(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
     analysis_test(name = name, target = name + "_subject", impl = _test_wheel_library_tags_impl)
 
+# --- testonly tests ---
+
+# buildifier: disable=unused-variable
+def _test_testonly_passthrough_without_transitive_impl(env, target):
+    """When transitive_testonly is False, testonly_pins from lock_model_data are passed through as-is."""
+    lock_model_data = {
+        "packages": {
+            "foo@1.0": _make_pkg("foo", "1.0", [_make_file("foo-1.0.tar.gz")]),
+            "pytest@7.0": _make_pkg("pytest", "7.0", [_make_file("pytest-7.0.tar.gz")]),
+        },
+        "pins": {
+            "foo": "foo@1.0",
+            "pytest": "pytest@7.0",
+        },
+        "testonly_pins": ["pytest"],
+    }
+
+    res = resolve(lock_model_data, transitive_testonly = False)
+    env.expect.that_collection(res.testonly_pins).contains_exactly(["pytest"])
+
+def _test_testonly_passthrough_without_transitive(name):
+    util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
+    analysis_test(name = name, target = name + "_subject", impl = _test_testonly_passthrough_without_transitive_impl)
+
+# buildifier: disable=unused-variable
+def _test_testonly_exclusive_transitive_impl(env, target):
+    """Packages exclusively reachable from testonly pins are marked testonly.
+
+    Graph:
+        foo (normal) -> shared-lib
+        pytest (testonly) -> test-utils -> test-helper
+    Expected: pytest, test-utils, test-helper are testonly; foo, shared-lib are not.
+    """
+    lock_model_data = {
+        "packages": {
+            "foo@1.0": _make_pkg("foo", "1.0", [_make_file("foo-1.0.tar.gz")], deps = [_make_dep("shared-lib", "1.0")]),
+            "shared-lib@1.0": _make_pkg("shared-lib", "1.0", [_make_file("shared_lib-1.0.tar.gz")]),
+            "pytest@7.0": _make_pkg("pytest", "7.0", [_make_file("pytest-7.0.tar.gz")], deps = [_make_dep("test-utils", "1.0")]),
+            "test-utils@1.0": _make_pkg("test-utils", "1.0", [_make_file("test_utils-1.0.tar.gz")], deps = [_make_dep("test-helper", "1.0")]),
+            "test-helper@1.0": _make_pkg("test-helper", "1.0", [_make_file("test_helper-1.0.tar.gz")]),
+        },
+        "pins": {
+            "foo": "foo@1.0",
+            "pytest": "pytest@7.0",
+        },
+        "testonly_pins": ["pytest"],
+    }
+
+    res = resolve(lock_model_data, transitive_testonly = True)
+
+    # pytest and its exclusive transitive deps should be testonly
+    env.expect.that_collection(res.testonly_pins).contains("pytest")
+    env.expect.that_collection(res.testonly_pins).contains("test-utils")
+    env.expect.that_collection(res.testonly_pins).contains("test-helper")
+
+    # foo and shared-lib should NOT be testonly
+    env.expect.that_collection(res.testonly_pins).contains_none_of(["foo", "shared-lib"])
+
+def _test_testonly_exclusive_transitive(name):
+    util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
+    analysis_test(name = name, target = name + "_subject", impl = _test_testonly_exclusive_transitive_impl)
+
+# buildifier: disable=unused-variable
+def _test_testonly_shared_dep_not_testonly_impl(env, target):
+    """A package reachable from both testonly and non-testonly roots is NOT testonly.
+
+    Graph:
+        foo (normal) -> common
+        pytest (testonly) -> common
+    Expected: common is NOT testonly because it's reachable from foo.
+    """
+    lock_model_data = {
+        "packages": {
+            "foo@1.0": _make_pkg("foo", "1.0", [_make_file("foo-1.0.tar.gz")], deps = [_make_dep("common", "1.0")]),
+            "common@1.0": _make_pkg("common", "1.0", [_make_file("common-1.0.tar.gz")]),
+            "pytest@7.0": _make_pkg("pytest", "7.0", [_make_file("pytest-7.0.tar.gz")], deps = [_make_dep("common", "1.0")]),
+        },
+        "pins": {
+            "foo": "foo@1.0",
+            "pytest": "pytest@7.0",
+        },
+        "testonly_pins": ["pytest"],
+    }
+
+    res = resolve(lock_model_data, transitive_testonly = True)
+
+    # pytest is testonly (it's a direct testonly pin)
+    env.expect.that_collection(res.testonly_pins).contains("pytest")
+
+    # common is reachable from foo (non-testonly), so it should NOT be testonly
+    env.expect.that_collection(res.testonly_pins).contains_none_of(["foo", "common"])
+
+def _test_testonly_shared_dep_not_testonly(name):
+    util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
+    analysis_test(name = name, target = name + "_subject", impl = _test_testonly_shared_dep_not_testonly_impl)
+
+# buildifier: disable=unused-variable
+def _test_testonly_no_testonly_pins_impl(env, target):
+    """When testonly_pins is empty, transitive_testonly produces no testonly pins."""
+    lock_model_data = {
+        "packages": {
+            "foo@1.0": _make_pkg("foo", "1.0", [_make_file("foo-1.0.tar.gz")], deps = [_make_dep("bar", "1.0")]),
+            "bar@1.0": _make_pkg("bar", "1.0", [_make_file("bar-1.0.tar.gz")]),
+        },
+        "pins": {
+            "foo": "foo@1.0",
+            "bar": "bar@1.0",
+        },
+        "testonly_pins": [],
+    }
+
+    res = resolve(lock_model_data, transitive_testonly = True)
+    env.expect.that_collection(res.testonly_pins).has_size(0)
+
+def _test_testonly_no_testonly_pins(name):
+    util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
+    analysis_test(name = name, target = name + "_subject", impl = _test_testonly_no_testonly_pins_impl)
+
+# buildifier: disable=unused-variable
+def _test_testonly_diamond_with_testonly_branch_impl(env, target):
+    """Diamond dependency where one branch is testonly.
+
+    Graph:
+        foo (normal) -> mid-a -> leaf
+        bar (testonly) -> mid-b -> leaf
+    Expected: bar, mid-b are testonly; leaf is NOT (reachable from foo via mid-a).
+    """
+    lock_model_data = {
+        "packages": {
+            "foo@1.0": _make_pkg("foo", "1.0", [_make_file("foo-1.0.tar.gz")], deps = [_make_dep("mid-a", "1.0")]),
+            "mid-a@1.0": _make_pkg("mid-a", "1.0", [_make_file("mid_a-1.0.tar.gz")], deps = [_make_dep("leaf", "1.0")]),
+            "bar@1.0": _make_pkg("bar", "1.0", [_make_file("bar-1.0.tar.gz")], deps = [_make_dep("mid-b", "1.0")]),
+            "mid-b@1.0": _make_pkg("mid-b", "1.0", [_make_file("mid_b-1.0.tar.gz")], deps = [_make_dep("leaf", "1.0")]),
+            "leaf@1.0": _make_pkg("leaf", "1.0", [_make_file("leaf-1.0.tar.gz")]),
+        },
+        "pins": {
+            "foo": "foo@1.0",
+            "bar": "bar@1.0",
+        },
+        "testonly_pins": ["bar"],
+    }
+
+    res = resolve(lock_model_data, transitive_testonly = True)
+
+    # bar and mid-b are exclusively testonly
+    env.expect.that_collection(res.testonly_pins).contains("bar")
+    env.expect.that_collection(res.testonly_pins).contains("mid-b")
+
+    # leaf is reachable from foo -> mid-a -> leaf, so NOT testonly
+    env.expect.that_collection(res.testonly_pins).contains_none_of(["foo", "mid-a", "leaf"])
+
+def _test_testonly_diamond_with_testonly_branch(name):
+    util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
+    analysis_test(name = name, target = name + "_subject", impl = _test_testonly_diamond_with_testonly_branch_impl)
+
 def lock_resolver_test_suite(name):
     test_suite(
         name = name,
@@ -1949,5 +2104,10 @@ def lock_resolver_test_suite(name):
             _test_wildcard_install_exclude_globs_end_to_end,
             _test_wildcard_replace_semantics_exclude_globs_end_to_end,
             _test_wheel_library_tags,
+            _test_testonly_passthrough_without_transitive,
+            _test_testonly_exclusive_transitive,
+            _test_testonly_shared_dep_not_testonly,
+            _test_testonly_no_testonly_pins,
+            _test_testonly_diamond_with_testonly_branch,
         ],
     )

@@ -8,8 +8,8 @@ The pylock extension.
 
 <pre>
 pylock = use_extension("@rules_pycross//pycross/extensions:pylock.bzl", "pylock")
-pylock.repo(<a href="#pylock.repo-name">name</a>, <a href="#pylock.repo-constraint_values">constraint_values</a>, <a href="#pylock.repo-create_transitive_aliases">create_transitive_aliases</a>, <a href="#pylock.repo-dependency_groups">dependency_groups</a>, <a href="#pylock.repo-flags">flags</a>,
-            <a href="#pylock.repo-legacy_create_root_aliases">legacy_create_root_aliases</a>, <a href="#pylock.repo-platform">platform</a>, <a href="#pylock.repo-projects">projects</a>, <a href="#pylock.repo-workspace">workspace</a>)
+pylock.repo(<a href="#pylock.repo-name">name</a>, <a href="#pylock.repo-constraint_values">constraint_values</a>, <a href="#pylock.repo-dependency_groups">dependency_groups</a>, <a href="#pylock.repo-flags">flags</a>, <a href="#pylock.repo-legacy_create_root_aliases">legacy_create_root_aliases</a>, <a href="#pylock.repo-platform">platform</a>,
+            <a href="#pylock.repo-projects">projects</a>, <a href="#pylock.repo-workspace">workspace</a>)
 pylock.package(<a href="#pylock.package-name">name</a>, <a href="#pylock.package-always_build">always_build</a>, <a href="#pylock.package-bin_paths">bin_paths</a>, <a href="#pylock.package-build_backend">build_backend</a>, <a href="#pylock.package-build_target">build_target</a>, <a href="#pylock.package-build_tools_repo">build_tools_repo</a>,
                <a href="#pylock.package-data_paths">data_paths</a>, <a href="#pylock.package-extra_build_tools">extra_build_tools</a>, <a href="#pylock.package-ignore_dependencies">ignore_dependencies</a>, <a href="#pylock.package-include_paths">include_paths</a>,
                <a href="#pylock.package-install_exclude_globs">install_exclude_globs</a>, <a href="#pylock.package-post_install_patches">post_install_patches</a>, <a href="#pylock.package-pre_build_patches">pre_build_patches</a>, <a href="#pylock.package-site_hooks">site_hooks</a>, <a href="#pylock.package-site_paths">site_paths</a>,
@@ -32,8 +32,7 @@ Override a pylock workspace member's settings.
 | :------------- | :------------- | :------------- | :------------- | :------------- |
 | <a id="pylock.repo-name"></a>name |  Override the repo name.   | <a href="https://bazel.build/concepts/labels#target-names">Name</a> | optional |  `""`  |
 | <a id="pylock.repo-constraint_values"></a>constraint_values |  A list of constraint values to apply to the generated platform.   | <a href="https://bazel.build/concepts/labels">List of labels</a> | optional |  `[]`  |
-| <a id="pylock.repo-create_transitive_aliases"></a>create_transitive_aliases |  Generate aliases for transitive single-version packages in this repo.   | Boolean | optional |  `False`  |
-| <a id="pylock.repo-dependency_groups"></a>dependency_groups |  A list of dependency groups to include. E.g. ['default', 'group:foo', '*']. Defaults to ['default'].   | List of strings | optional |  `["default"]`  |
+| <a id="pylock.repo-dependency_groups"></a>dependency_groups |  A list of target groups to include. E.g. ['default', 'group:foo', '*']. Use 'transitive' to generate aliases for transitively-reachable packages. Defaults to ['default'].   | List of strings | optional |  `["default"]`  |
 | <a id="pylock.repo-flags"></a>flags |  A list of flags to apply to the generated platform (e.g., '--@flag=value').   | List of strings | optional |  `[]`  |
 | <a id="pylock.repo-legacy_create_root_aliases"></a>legacy_create_root_aliases |  Create //:pkg aliases for bare packages in the generated repo. Useful for migrating from 1.x.   | Boolean | optional |  `False`  |
 | <a id="pylock.repo-platform"></a>platform |  An existing platform target to use directly.   | <a href="https://bazel.build/concepts/labels">Label</a> | optional |  `None`  |

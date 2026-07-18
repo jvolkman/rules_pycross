@@ -8,8 +8,8 @@ The pdm extension.
 
 <pre>
 pdm = use_extension("@rules_pycross//pycross/extensions:pdm.bzl", "pdm")
-pdm.repo(<a href="#pdm.repo-name">name</a>, <a href="#pdm.repo-constraint_values">constraint_values</a>, <a href="#pdm.repo-create_transitive_aliases">create_transitive_aliases</a>, <a href="#pdm.repo-dependency_groups">dependency_groups</a>, <a href="#pdm.repo-flags">flags</a>,
-         <a href="#pdm.repo-legacy_create_root_aliases">legacy_create_root_aliases</a>, <a href="#pdm.repo-platform">platform</a>, <a href="#pdm.repo-projects">projects</a>, <a href="#pdm.repo-workspace">workspace</a>)
+pdm.repo(<a href="#pdm.repo-name">name</a>, <a href="#pdm.repo-constraint_values">constraint_values</a>, <a href="#pdm.repo-dependency_groups">dependency_groups</a>, <a href="#pdm.repo-flags">flags</a>, <a href="#pdm.repo-legacy_create_root_aliases">legacy_create_root_aliases</a>, <a href="#pdm.repo-platform">platform</a>,
+         <a href="#pdm.repo-projects">projects</a>, <a href="#pdm.repo-workspace">workspace</a>)
 pdm.package(<a href="#pdm.package-name">name</a>, <a href="#pdm.package-always_build">always_build</a>, <a href="#pdm.package-bin_paths">bin_paths</a>, <a href="#pdm.package-build_backend">build_backend</a>, <a href="#pdm.package-build_target">build_target</a>, <a href="#pdm.package-build_tools_repo">build_tools_repo</a>,
             <a href="#pdm.package-data_paths">data_paths</a>, <a href="#pdm.package-extra_build_tools">extra_build_tools</a>, <a href="#pdm.package-ignore_dependencies">ignore_dependencies</a>, <a href="#pdm.package-include_paths">include_paths</a>, <a href="#pdm.package-install_exclude_globs">install_exclude_globs</a>,
             <a href="#pdm.package-post_install_patches">post_install_patches</a>, <a href="#pdm.package-pre_build_patches">pre_build_patches</a>, <a href="#pdm.package-site_hooks">site_hooks</a>, <a href="#pdm.package-site_paths">site_paths</a>, <a href="#pdm.package-wheel_library_tags">wheel_library_tags</a>,
@@ -32,8 +32,7 @@ Override a pdm workspace member's settings.
 | :------------- | :------------- | :------------- | :------------- | :------------- |
 | <a id="pdm.repo-name"></a>name |  Override the repo name.   | <a href="https://bazel.build/concepts/labels#target-names">Name</a> | optional |  `""`  |
 | <a id="pdm.repo-constraint_values"></a>constraint_values |  A list of constraint values to apply to the generated platform.   | <a href="https://bazel.build/concepts/labels">List of labels</a> | optional |  `[]`  |
-| <a id="pdm.repo-create_transitive_aliases"></a>create_transitive_aliases |  Generate aliases for transitive single-version packages in this repo.   | Boolean | optional |  `False`  |
-| <a id="pdm.repo-dependency_groups"></a>dependency_groups |  A list of dependency groups to include. E.g. ['default', 'group:foo', '*']. Defaults to ['default'].   | List of strings | optional |  `["default"]`  |
+| <a id="pdm.repo-dependency_groups"></a>dependency_groups |  A list of target groups to include. E.g. ['default', 'group:foo', '*']. Use 'transitive' to generate aliases for transitively-reachable packages. Defaults to ['default'].   | List of strings | optional |  `["default"]`  |
 | <a id="pdm.repo-flags"></a>flags |  A list of flags to apply to the generated platform (e.g., '--@flag=value').   | List of strings | optional |  `[]`  |
 | <a id="pdm.repo-legacy_create_root_aliases"></a>legacy_create_root_aliases |  Create //:pkg aliases for bare packages in the generated repo. Useful for migrating from 1.x.   | Boolean | optional |  `False`  |
 | <a id="pdm.repo-platform"></a>platform |  An existing platform target to use directly.   | <a href="https://bazel.build/concepts/labels">Label</a> | optional |  `None`  |

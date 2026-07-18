@@ -188,7 +188,7 @@ def _version_key(version_str):
     """Parse a version string into a comparable key tuple."""
     return pypackaging.version.parse(version_str).key
 
-def resolve_lock_graph(packages, pinned_package_specs, requires_python, strict_dependencies = True, variants = None, resolution_marker_exprs = None):
+def resolve_lock_graph(packages, pinned_package_specs, requires_python, strict_dependencies = True, variants = None, resolution_marker_exprs = None, testonly_pins = None):
     """Resolves a dependency graph of packages.
 
     Ports translator_utils.py resolve_lock_graph() to Starlark.
@@ -213,6 +213,7 @@ def resolve_lock_graph(packages, pinned_package_specs, requires_python, strict_d
         variants: List of variant set dicts (optional).
         resolution_marker_exprs: Dict mapping constraint names to PEP 508
             marker expressions (optional). Used for resolution-marker forks.
+        testonly_pins: List of pin names that are exclusively reachable from testonly groups.
 
     Returns:
         A dict in raw_lock.json format.
@@ -221,6 +222,8 @@ def resolve_lock_graph(packages, pinned_package_specs, requires_python, strict_d
         variants = []
     if resolution_marker_exprs == None:
         resolution_marker_exprs = {}
+    if testonly_pins == None:
+        testonly_pins = []
 
     # Deduplicate: merge packages with same key
     distinct_packages = {}
@@ -402,6 +405,7 @@ def resolve_lock_graph(packages, pinned_package_specs, requires_python, strict_d
         "packages": lock_packages,
         "pins": simplified_pins,
         "python_versions": requires_python,
+        "testonly_pins": testonly_pins,
     }
 
     if variants:

@@ -61,7 +61,8 @@ def _generate_lock_file(rctx):
         always_include_sdist = rctx.attr.always_include_sdist,
         annotations_data = annotations_data,
         default_extra_build_tools_args = rctx.attr.default_build_dependencies,
-        create_transitive_aliases = rctx.attr.create_transitive_aliases,
+        include_transitive = getattr(lock_model, "include_transitive", False),
+        transitive_testonly = getattr(lock_model, "transitive_testonly", False),
     )
 
     resolved_lock_dict = {
@@ -72,6 +73,7 @@ def _generate_lock_file(rctx):
         "variants": resolved_lock.variants,
         "resolution_marker_exprs": resolved_lock.resolution_marker_exprs,
         "legacy_create_root_aliases": raw_lock_data.get("legacy_create_root_aliases", False),
+        "testonly_pins": resolved_lock.testonly_pins,
     }
 
     rctx.file("lock.json", json.encode(resolved_lock_dict))

@@ -110,10 +110,13 @@ def translate_pdm(project_dict, lock_dict, lock_model):
     dependency_groups = getattr(lock_model, "dependency_groups", ["default"])
     include_all = "*" in dependency_groups
     include_default = "default" in dependency_groups or include_all
+    testonly_groups = getattr(lock_model, "testonly_groups", [])
+    non_testonly_groups = getattr(lock_model, "non_testonly_groups", [])
+    wildcard_testonly = getattr(lock_model, "wildcard_testonly", False)
 
     if include_default:
         for dep_str in default_deps:
-            requirements.append(parse_pep508_requirement(dep_str))
+            requirements.append((parse_pep508_requirement(dep_str), False))
 
     effective_groups = ["optional:*", "group:*"] if include_all else dependency_groups
     for group in effective_groups:
@@ -133,6 +136,14 @@ def translate_pdm(project_dict, lock_dict, lock_model):
         else:
             target_names = [name]
 
+        # Last-wins testonly: specific overrides beat wildcard default
+        if group in testonly_groups:
+            is_testonly = True
+        elif group in non_testonly_groups:
+            is_testonly = False
+        else:
+            is_testonly = wildcard_testonly
+
         for target_name in target_names:
             if target_name in groups_dict:
                 entries = groups_dict[target_name]
@@ -142,7 +153,7 @@ def translate_pdm(project_dict, lock_dict, lock_model):
                         stripped = dep_str.strip()
                         if stripped.startswith("-e "):
                             stripped = stripped[3:].strip()
-                        requirements.append(parse_pep508_requirement(stripped))
+                        requirements.append((parse_pep508_requirement(stripped), is_testonly))
                     elif type(dep_str) == "dict" and "include-group" in dep_str:
                         inc_group = dep_str["include-group"]
                         if inc_group in dev_deps:
@@ -151,14 +162,22 @@ def translate_pdm(project_dict, lock_dict, lock_model):
                                     stripped = inc_dep.strip()
                                     if stripped.startswith("-e "):
                                         stripped = stripped[3:].strip()
-                                    requirements.append(parse_pep508_requirement(stripped))
+                                    requirements.append((parse_pep508_requirement(stripped), is_testonly))
             else:
                 fail("Non-existent {} dependency group: {}".format(kind, target_name))
 
     # Build pinned specs from requirements
     pinned_package_specs = {}
-    for req in requirements:
+    testonly_reqs = {}
+    non_testonly_reqs = {}
+    for req, is_testonly in requirements:
         pinned_package_specs[req.name] = {"": req.specifier}
+        if is_testonly:
+            testonly_reqs[req.name] = True
+        else:
+            non_testonly_reqs[req.name] = True
+
+    testonly_pin_names = [name for name in testonly_reqs if name not in non_testonly_reqs]
 
     # Parse lock packages
     packages = []
@@ -235,6 +254,7 @@ def translate_pdm(project_dict, lock_dict, lock_model):
         requires_python = requires_python,
         strict_dependencies = False,
         resolution_marker_exprs = resolution_marker_exprs,
+        testonly_pins = testonly_pin_names,
     )
 
 def repo_create_pdm_model(rctx, extra_project_files, lock_file, lock_model, output):

@@ -36,7 +36,10 @@ uv.workspace(
     lock_file = "//:uv.lock",
 )
 uv.repo(
-    create_transitive_aliases = True,
+    dependency_groups = [
+        "default",
+        "transitive",
+    ],
     workspace = "uv",
 )
 uv.package(

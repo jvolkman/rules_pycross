@@ -97,7 +97,6 @@ def workspace_lock_struct(ws_tag, repo_name, workspace_name, transition_attrs):
     return struct(
         repo_name = repo_name,
         workspace = workspace_name,
-        create_transitive_aliases = transition_attrs.get("create_transitive_aliases", False),
         local_wheels = ws_tag.local_wheels,
         disallow_builds = ws_tag.disallow_builds,
         packages = {},
@@ -243,26 +242,17 @@ def get_member_transition_attrs(members_tag, override_tag):
     has_explicit_constraints = override_tag and getattr(override_tag, "constraint_values", [])
     has_explicit_platform = override_tag and getattr(override_tag, "platform", None)
 
-    # create_transitive_aliases: override wins if set, otherwise inherit from members_tag
-    create_transitive_aliases = False
-    if override_tag and getattr(override_tag, "create_transitive_aliases", False):
-        create_transitive_aliases = True
-    elif members_tag and getattr(members_tag, "create_transitive_aliases", False):
-        create_transitive_aliases = True
-
     if override_tag and (has_explicit_flags or has_explicit_constraints or has_explicit_platform):
         return dict(
             flags = getattr(override_tag, "flags", []),
             constraint_values = [str(c) for c in getattr(override_tag, "constraint_values", [])],
             platform = str(override_tag.platform) if override_tag.platform else None,
-            create_transitive_aliases = create_transitive_aliases,
         )
 
     return dict(
         flags = getattr(members_tag, "flags", []) if members_tag else [],
         constraint_values = [str(c) for c in getattr(members_tag, "constraint_values", [])] if members_tag else [],
         platform = str(members_tag.platform) if members_tag and getattr(members_tag, "platform", None) else None,
-        create_transitive_aliases = create_transitive_aliases,
     )
 
 def register_workspace_repo(
@@ -276,6 +266,11 @@ def register_workspace_repo(
         repo_name,
         projects,
         dependency_groups,
+        testonly_groups,
+        non_testonly_groups,
+        wildcard_testonly,
+        include_transitive,
+        transitive_testonly,
         legacy_create_root_aliases,
         transition_attrs,
         lock_module,
@@ -292,7 +287,12 @@ def register_workspace_repo(
         model_type: The lock model type.
         repo_name: The repo name for this member.
         projects: List of projects included in this repo.
-        dependency_groups: List of dependency groups.
+        dependency_groups: List of parsed dependency groups.
+        testonly_groups: List of groups explicitly marked testonly.
+        non_testonly_groups: List of groups explicitly marked non-testonly (overrides wildcard).
+        wildcard_testonly: Whether the wildcard (*) is marked testonly.
+        include_transitive: Whether to include transitive dependencies.
+        transitive_testonly: Whether transitive dependencies are testonly.
         legacy_create_root_aliases: Boolean to create root aliases.
         transition_attrs: Transition attributes dict.
         lock_module: The module owning this lock.
@@ -309,6 +309,11 @@ def register_workspace_repo(
         lock_file = str(ws_tag.lock_file),
         projects = projects,
         dependency_groups = dependency_groups,
+        testonly_groups = testonly_groups,
+        non_testonly_groups = non_testonly_groups,
+        wildcard_testonly = wildcard_testonly,
+        include_transitive = include_transitive,
+        transitive_testonly = transitive_testonly,
         legacy_create_root_aliases = legacy_create_root_aliases,
     )
 
@@ -317,6 +322,62 @@ def register_workspace_repo(
         if hasattr(ws_tag, attr_name):
             model[attr_name] = getattr(ws_tag, attr_name)
     lock_model_structs[repo_name] = json.encode(model)
+
+def parse_dependency_group_entries(raw_groups):
+    """Parse dependency group entries with last-wins testonly semantics.
+
+    Processes a list of dependency group entries (e.g., ["default", "group:dev;testonly",
+    "*;testonly", "transitive"]) and resolves testonly status with last-wins precedence:
+    - When * appears, it sets the default testonly status and clears prior specific overrides
+    - Specific entries after * override individual groups
+    - The last entry matching a group wins
+
+    Args:
+        raw_groups: List of raw dependency group strings from the user's config.
+
+    Returns:
+        A struct with:
+            dependency_groups: Parsed group specs (without ;testonly suffixes).
+            testonly_groups: Groups explicitly marked testonly (after last *).
+            non_testonly_groups: Groups explicitly marked non-testonly (after last *).
+            wildcard_testonly: Whether * was marked testonly.
+            include_transitive: Whether "transitive" was present.
+            transitive_testonly: Whether "transitive;testonly" was present.
+    """
+    parsed_groups = []
+    include_transitive = False
+    transitive_testonly = False
+
+    wildcard_testonly = False
+    testonly_overrides = {}  # group -> is_testonly (only entries after last *)
+
+    for entry in raw_groups:
+        parts = entry.split(";")
+        spec = parts[0]
+        is_testonly = "testonly" in parts[1:]
+
+        if spec == "transitive":
+            include_transitive = True
+            transitive_testonly = is_testonly
+        elif spec == "*":
+            wildcard_testonly = is_testonly
+            testonly_overrides = {}  # Reset: * supersedes earlier entries
+            parsed_groups.append(spec)
+        else:
+            testonly_overrides[spec] = is_testonly
+            parsed_groups.append(spec)
+
+    testonly_groups = sorted([g for g, t in testonly_overrides.items() if t])
+    non_testonly_groups = sorted([g for g, t in testonly_overrides.items() if not t])
+
+    return struct(
+        dependency_groups = parsed_groups,
+        testonly_groups = testonly_groups,
+        non_testonly_groups = non_testonly_groups,
+        wildcard_testonly = wildcard_testonly,
+        include_transitive = include_transitive,
+        transitive_testonly = transitive_testonly,
+    )
 
 def process_repo(
         lock_owners,
@@ -343,17 +404,25 @@ def process_repo(
     """
     tag = tag_info.tag
 
-    dependency_groups = tag.dependency_groups
-    has_wildcard = "*" in dependency_groups
+    raw_groups = tag.dependency_groups
+    parsed = parse_dependency_group_entries(raw_groups)
+    parsed_groups = parsed.dependency_groups
+    testonly_groups = parsed.testonly_groups
+    non_testonly_groups = parsed.non_testonly_groups
+    wildcard_testonly = parsed.wildcard_testonly
+    include_transitive = parsed.include_transitive
+    transitive_testonly = parsed.transitive_testonly
+
+    has_wildcard = "*" in parsed_groups
     has_specific = False
-    for group in dependency_groups:
+    for group in parsed_groups:
         if group not in ("*", "default"):
             has_specific = True
             break
 
     if has_wildcard and has_specific:
         # buildifier: disable=print
-        print("WARNING: repo '{}' in workspace '{}' specifies both wildcard ('*') and specific dependency groups ({}). The specific groups are redundant.".format(tag.repo, ws_name, dependency_groups))
+        print("WARNING: repo '{}' in workspace '{}' specifies both wildcard ('*') and specific dependency groups ({}). The specific groups are redundant.".format(tag.repo, ws_name, parsed_groups))
 
     # Get transition attrs
     transition_attrs = get_member_transition_attrs(None, tag)
@@ -368,7 +437,12 @@ def process_repo(
         model_type,
         tag.repo,
         tag.projects,
-        tag.dependency_groups,
+        parsed_groups,
+        testonly_groups,
+        non_testonly_groups,
+        wildcard_testonly,
+        include_transitive,
+        transitive_testonly,
         tag.legacy_create_root_aliases,
         transition_attrs,
         tag_info.module,
@@ -459,7 +533,6 @@ def process_workspaces(
                     flags = [],
                     constraint_values = [],
                     platform = None,
-                    create_transitive_aliases = False,
                 )
                 member_tags.append(struct(tag = implicit_tag, module = ws_info.module))
                 workspace_repo_count[ws_name] += 1
@@ -498,7 +571,6 @@ def process_workspaces(
             flags = getattr(tag, "flags", []),
             constraint_values = getattr(tag, "constraint_values", []),
             platform = getattr(tag, "platform", None),
-            create_transitive_aliases = getattr(tag, "create_transitive_aliases", False),
         )
         new_tag_info = struct(tag = new_tag, module = tag_info.module)
 
@@ -532,12 +604,16 @@ def process_workspaces(
             repo_name = build_repo_name,
             projects = ["*"],
             dependency_groups = ["*"],
+            testonly_groups = [],
+            non_testonly_groups = [],
+            wildcard_testonly = False,
+            include_transitive = False,
+            transitive_testonly = False,
             legacy_create_root_aliases = False,
             transition_attrs = dict(
                 flags = [],
                 constraint_values = [],
                 platform = None,
-                create_transitive_aliases = True,
             ),
             lock_module = ws_info.module,
             extra_project_files = workspace_extra_project_files[ws_name],

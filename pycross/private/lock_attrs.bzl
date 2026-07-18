@@ -77,9 +77,6 @@ RESOLVE_ATTRS = dict(
     remote_wheels = attr.string_dict(
         doc = "A mapping of remote wheels to their sha256 hashes.",
     ),
-    create_transitive_aliases = attr.bool(
-        doc = "Generate aliases for all packages that have a single version in the lock file.",
-    ),
     annotations = attr.string_dict(
         doc = "Optional annotations to apply to packages.",
     ),
