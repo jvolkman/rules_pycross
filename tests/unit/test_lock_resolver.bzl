@@ -1911,12 +1911,19 @@ def _test_testonly_passthrough_without_transitive(name):
 
 # buildifier: disable=unused-variable
 def _test_testonly_exclusive_transitive_impl(env, target):
-    """Packages exclusively reachable from testonly pins are marked testonly.
+    """transitive_testonly marks newly-added transitive pins as testonly.
+
+    testonly is only applied to proxy aliases, not propagated through the
+    dependency graph. transitive_testonly marks pins added by include_transitive
+    as testonly; non-pinned transitive deps are unaffected (they have no proxy).
 
     Graph:
         foo (normal) -> shared-lib
         pytest (testonly) -> test-utils -> test-helper
-    Expected: pytest, test-utils, test-helper are testonly; foo, shared-lib are not.
+    include_transitive discovers: shared-lib, test-utils, test-helper as new pins.
+    Expected: pytest is testonly (direct pin); shared-lib, test-utils, test-helper
+    are all testonly (added by include_transitive with transitive_testonly=True).
+    foo is NOT testonly (direct non-testonly pin).
     """
     lock_model_data = {
         "packages": {
@@ -1933,15 +1940,18 @@ def _test_testonly_exclusive_transitive_impl(env, target):
         "testonly_pins": ["pytest"],
     }
 
-    res = resolve(lock_model_data, transitive_testonly = True)
+    res = resolve(lock_model_data, include_transitive = True, transitive_testonly = True)
 
-    # pytest and its exclusive transitive deps should be testonly
+    # pytest is testonly (direct testonly pin)
     env.expect.that_collection(res.testonly_pins).contains("pytest")
+
+    # All transitive pins are testonly when transitive_testonly is set
     env.expect.that_collection(res.testonly_pins).contains("test-utils")
     env.expect.that_collection(res.testonly_pins).contains("test-helper")
+    env.expect.that_collection(res.testonly_pins).contains("shared-lib")
 
-    # foo and shared-lib should NOT be testonly
-    env.expect.that_collection(res.testonly_pins).contains_none_of(["foo", "shared-lib"])
+    # foo is NOT testonly (direct non-testonly pin)
+    env.expect.that_collection(res.testonly_pins).contains_none_of(["foo"])
 
 def _test_testonly_exclusive_transitive(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
@@ -2005,12 +2015,17 @@ def _test_testonly_no_testonly_pins(name):
 
 # buildifier: disable=unused-variable
 def _test_testonly_diamond_with_testonly_branch_impl(env, target):
-    """Diamond dependency where one branch is testonly.
+    """Diamond dependency with testonly branch: transitive pins are all testonly.
+
+    testonly is only applied to proxy aliases. transitive_testonly marks all
+    newly-discovered transitive pins as testonly regardless of reachability.
 
     Graph:
         foo (normal) -> mid-a -> leaf
         bar (testonly) -> mid-b -> leaf
-    Expected: bar, mid-b are testonly; leaf is NOT (reachable from foo via mid-a).
+    include_transitive discovers: mid-a, mid-b, leaf as new pins.
+    Expected: bar is testonly (direct pin); mid-a, mid-b, leaf are testonly
+    (transitive pins with transitive_testonly); foo is NOT testonly.
     """
     lock_model_data = {
         "packages": {
@@ -2027,14 +2042,18 @@ def _test_testonly_diamond_with_testonly_branch_impl(env, target):
         "testonly_pins": ["bar"],
     }
 
-    res = resolve(lock_model_data, transitive_testonly = True)
+    res = resolve(lock_model_data, include_transitive = True, transitive_testonly = True)
 
-    # bar and mid-b are exclusively testonly
+    # bar is testonly (direct testonly pin)
     env.expect.that_collection(res.testonly_pins).contains("bar")
-    env.expect.that_collection(res.testonly_pins).contains("mid-b")
 
-    # leaf is reachable from foo -> mid-a -> leaf, so NOT testonly
-    env.expect.that_collection(res.testonly_pins).contains_none_of(["foo", "mid-a", "leaf"])
+    # All transitive pins are testonly when transitive_testonly is set
+    env.expect.that_collection(res.testonly_pins).contains("mid-a")
+    env.expect.that_collection(res.testonly_pins).contains("mid-b")
+    env.expect.that_collection(res.testonly_pins).contains("leaf")
+
+    # foo is NOT testonly (direct non-testonly pin)
+    env.expect.that_collection(res.testonly_pins).contains_none_of(["foo"])
 
 def _test_testonly_diamond_with_testonly_branch(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
