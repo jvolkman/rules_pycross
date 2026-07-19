@@ -273,8 +273,6 @@ def translate_uv(project_dict, lock_dict, lock_model):
     # Collect requirements
     requirements = []  # list of (req_name, specifier, constraint, is_testonly)
 
-
-
     for project_name in target_projects:
         project_info = workspace_members[project_name]
 
@@ -318,8 +316,6 @@ def translate_uv(project_dict, lock_dict, lock_model):
                         requirements.append((pin_name, specifier, fork_constraint, default_is_testonly))
                 else:
                     requirements.append((dep_name, specifier, fork_constraint, default_is_testonly))
-
-
 
         for kind, groups_dict, constraint_dict in [("optional", optional_dependencies, extra_variant_values), ("group", development_dependencies, group_variant_values)]:
             for group_name in groups_dict.keys():

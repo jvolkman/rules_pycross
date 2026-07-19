@@ -626,21 +626,7 @@ def resolve(
     repos = {k: repos[k] for k in sorted_repo_keys}
 
     testonly_pin_names = lock_model_data.get("testonly_pins", [])
-    if transitive_testonly:
-        # All reachable from actual pins
-        all_reachable = _compute_reachable_keys(pins, packages_by_package_key)
-
-        # All reachable from pins explicitly NOT testonly
-        non_testonly_pins = {p: v for p, v in pins.items() if p not in testonly_pin_names}
-        non_testonly_reachable = _compute_reachable_keys(non_testonly_pins, packages_by_package_key)
-
-        testonly_keys = [k for k in all_reachable if k not in non_testonly_reachable]
-        testonly_names_dict = {}
-        for k in testonly_keys:
-            entry = packages_by_package_key.get(k)
-            if entry:
-                testonly_names_dict[entry.resolved_package["name"]] = True
-        testonly_pin_names = sorted(testonly_names_dict.keys())
+    testonly_pins_set = {p: True for p in testonly_pin_names}
 
     if include_transitive:
         reachable_keys = _compute_reachable_keys(pins, packages_by_package_key)
@@ -666,11 +652,17 @@ def resolve(
                 base_key = "{}@{}".format(package_pin_name, latest_version)
                 if base_key in packages_by_package_key:
                     pins[package_pin_name] = {"": base_key}
+                    if transitive_testonly:
+                        testonly_pins_set[package_pin_name] = True
                 continue
             version = versions.keys()[0]
             base_key = "{}@{}".format(package_pin_name, version)
             if base_key in packages_by_package_key:
                 pins[package_pin_name] = {"": base_key}
+                if transitive_testonly:
+                    testonly_pins_set[package_pin_name] = True
+
+    testonly_pin_names = sorted(testonly_pins_set.keys())
 
     cycle_groups = _compute_cycle_groups(lock_model_packages)
 

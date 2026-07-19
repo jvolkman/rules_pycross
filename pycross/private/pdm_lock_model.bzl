@@ -136,8 +136,6 @@ def translate_pdm(project_dict, lock_dict, lock_model):
         for dep_str in default_deps:
             requirements.append((parse_pep508_requirement(dep_str), default_is_testonly))
 
-
-
     for kind, groups_dict in [("optional", optional_deps), ("group", dev_deps)]:
         for target_name in groups_dict.keys():
             key = "{}:{}".format(kind, target_name)

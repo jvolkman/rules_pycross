@@ -348,7 +348,6 @@ def translate_poetry(project_dict, lock_dict, lock_model):
 
     dependency_groups = getattr(lock_model, "dependency_groups", ["default"])
 
-
     testonly_groups = getattr(lock_model, "testonly_groups", [])
     non_testonly_groups = getattr(lock_model, "non_testonly_groups", [])
     wildcard_testonly = getattr(lock_model, "wildcard_testonly", False)
@@ -409,7 +408,6 @@ def translate_poetry(project_dict, lock_dict, lock_model):
                     track_pin = lambda p, spec: track_pin(p, spec, default_is_testonly),
                     enrich_only = has_project_deps,
                 )
-
 
     for group_name in project_optional_deps.keys():
         key = "optional:{}".format(group_name)

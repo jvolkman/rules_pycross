@@ -202,7 +202,6 @@ def translate_pylock(lock_dict, project_dict, lock_model):
         non_testonly_groups = getattr(lock_model, "non_testonly_groups", [])
         wildcard_testonly = getattr(lock_model, "wildcard_testonly", False)
 
-
         project_section = project_dict.get("project", {})
         optional_deps = project_section.get("optional-dependencies", {})
         dev_deps = project_dict.get("dependency-groups", {})
