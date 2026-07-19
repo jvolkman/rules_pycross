@@ -15,6 +15,7 @@ load("@toml.bzl//toml:toml.bzl", "decode")
 load(
     ":translator_common.bzl",
     "canonicalize_name",
+    "compute_requested_dependency_groups",
     "parse_pep508_requirement",
     "resolution_marker_constraint_name",
     "resolve_lock_graph",
@@ -336,7 +337,9 @@ def translate_poetry(project_dict, lock_dict, lock_model):
     pinned_package_specs = {}
 
     # First, check for [project.dependencies] (PEP 508, preferred)
-    project_deps = project_dict.get("project", {}).get("dependencies", [])
+    project_section = project_dict.get("project", {})
+    project_name = project_section.get("name")
+    project_deps = project_section.get("dependencies", [])
     has_project_deps = len(project_deps) > 0
 
     # Then, check for [tool.poetry.dependencies] (Poetry format)
@@ -344,8 +347,7 @@ def translate_poetry(project_dict, lock_dict, lock_model):
     poetry_groups = project_dict.get("tool", {}).get("poetry", {}).get("group", {})
 
     dependency_groups = getattr(lock_model, "dependency_groups", ["default"])
-    include_all = "*" in dependency_groups
-    include_default = "default" in dependency_groups or include_all
+
 
     testonly_groups = getattr(lock_model, "testonly_groups", [])
     non_testonly_groups = getattr(lock_model, "non_testonly_groups", [])
@@ -362,14 +364,34 @@ def translate_poetry(project_dict, lock_dict, lock_model):
         else:
             non_testonly_reqs[pin_name] = True
 
-    if include_default:
+    project_optional_deps = project_dict.get("project", {}).get("optional-dependencies", {})
+    pep735_groups = project_dict.get("dependency-groups", {})
+
+    available_dev_groups = list({k: True for k in list(poetry_groups.keys()) + list(pep735_groups.keys())}.keys())
+
+    requested_groups_dict = compute_requested_dependency_groups(
+        dependency_groups = dependency_groups,
+        testonly_groups = testonly_groups,
+        non_testonly_groups = non_testonly_groups,
+        wildcard_testonly = wildcard_testonly,
+        available_groups = (
+            ["default"] +
+            ["optional:" + g for g in project_optional_deps.keys()] +
+            ["group:" + g for g in available_dev_groups]
+        ),
+        project_name = project_name,
+        fail_on_missing = False,
+    )
+
+    if "default" in requested_groups_dict:
+        default_is_testonly = requested_groups_dict["default"]
         if has_project_deps:
             # PEP 508 format from [project.dependencies]
             for dep_str in project_deps:
                 req = parse_pep508_requirement(dep_str)
                 if req.name == "python":
                     continue
-                track_pin(req.name, req.specifier, False)
+                track_pin(req.name, req.specifier, default_is_testonly)
         if poetry_deps:
             # Also merge [tool.poetry.dependencies] if present
             for pin, pin_info in poetry_deps.items():
@@ -384,37 +406,26 @@ def translate_poetry(project_dict, lock_dict, lock_model):
                     pin,
                     pin_info,
                     pinned_package_specs,
-                    track_pin = lambda p, spec: track_pin(p, spec, False),
+                    track_pin = lambda p, spec: track_pin(p, spec, default_is_testonly),
                     enrich_only = has_project_deps,
                 )
 
-    project_optional_deps = project_dict.get("project", {}).get("optional-dependencies", {})
-    pep735_groups = project_dict.get("dependency-groups", {})
 
-    effective_groups = ["optional:*", "group:*"] if include_all else dependency_groups
-    for group in effective_groups:
-        if group == "default" or group == "*":
-            continue
+    for group_name in project_optional_deps.keys():
+        key = "optional:{}".format(group_name)
+        if key in requested_groups_dict:
+            is_testonly = requested_groups_dict[key]
+            for dep_str in project_optional_deps[group_name]:
+                req = parse_pep508_requirement(dep_str)
+                if req.name == "python":
+                    continue
+                track_pin(req.name, req.specifier, is_testonly)
 
-        # Last-wins testonly: specific overrides beat wildcard default
-        if group in testonly_groups:
-            is_testonly = True
-        elif group in non_testonly_groups:
-            is_testonly = False
-        else:
-            is_testonly = wildcard_testonly
+    for group_name in available_dev_groups:
+        key = "group:{}".format(group_name)
+        if key in requested_groups_dict:
+            is_testonly = requested_groups_dict[key]
 
-        kind, _, name = group.partition(":")
-
-        if name == "*":
-            target_names = list(poetry_groups.keys()) + list(pep735_groups.keys()) + list(project_optional_deps.keys())
-
-            # Deduplicate
-            target_names = {k: True for k in target_names}.keys()
-        else:
-            target_names = [name]
-
-        for group_name in target_names:
             # Poetry merges PEP 735 and legacy groups (union, not fallback).
             if group_name in pep735_groups:
                 for dep_str in pep735_groups[group_name]:
@@ -422,6 +433,7 @@ def translate_poetry(project_dict, lock_dict, lock_model):
                     if req.name == "python":
                         continue
                     track_pin(canonicalize_name(req.name), req.specifier, is_testonly)
+
             if group_name in poetry_groups:
                 g = poetry_groups[group_name]
                 for pin, pin_info in g.get("dependencies", {}).items():
@@ -434,15 +446,6 @@ def translate_poetry(project_dict, lock_dict, lock_model):
                         pinned_package_specs,
                         track_pin = lambda p, spec: track_pin(p, spec, is_testonly),
                     )
-            if group_name in project_optional_deps:
-                for dep_str in project_optional_deps[group_name]:
-                    req = parse_pep508_requirement(dep_str)
-                    if req.name == "python":
-                        continue
-                    track_pin(req.name, req.specifier, is_testonly)
-            elif name != "*":
-                # buildifier: disable=print
-                print("WARNING: Dependency group '{}:{}' not found in project file.".format(kind, group_name))
 
     testonly_pin_names = [name for name in testonly_reqs if name not in non_testonly_reqs]
 

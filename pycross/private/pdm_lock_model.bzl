@@ -9,6 +9,7 @@ load("@toml.bzl//toml:toml.bzl", "decode")
 load(
     ":translator_common.bzl",
     "canonicalize_name",
+    "compute_requested_dependency_groups",
     "parse_pep508_requirement",
     "resolution_marker_constraint_name",
     "resolve_lock_graph",
@@ -84,9 +85,12 @@ def translate_pdm(project_dict, lock_dict, lock_model):
     if len(v_parts) < 1 or v_parts[0] != "4":
         fail("PDM lock file version {} not in supported range ~=4.0".format(lock_version))
 
+    project_section = project_dict.get("project", {})
+    project_name = project_section.get("name")
+
     # Parse project dependencies
-    default_deps = project_dict.get("project", {}).get("dependencies", [])
-    optional_deps = project_dict.get("project", {}).get("optional-dependencies", {})
+    default_deps = project_section.get("dependencies", [])
+    optional_deps = project_section.get("optional-dependencies", {})
 
     # Development dependencies: dependency-groups + legacy tool.pdm.dev-dependencies
     dev_deps = dict(project_dict.get("dependency-groups", {}))
@@ -108,63 +112,56 @@ def translate_pdm(project_dict, lock_dict, lock_model):
     requirements = []
 
     dependency_groups = getattr(lock_model, "dependency_groups", ["default"])
-    include_all = "*" in dependency_groups
-    include_default = "default" in dependency_groups or include_all
+
     testonly_groups = getattr(lock_model, "testonly_groups", [])
     non_testonly_groups = getattr(lock_model, "non_testonly_groups", [])
     wildcard_testonly = getattr(lock_model, "wildcard_testonly", False)
 
-    if include_default:
+    requested_groups_dict = compute_requested_dependency_groups(
+        dependency_groups = dependency_groups,
+        testonly_groups = testonly_groups,
+        non_testonly_groups = non_testonly_groups,
+        wildcard_testonly = wildcard_testonly,
+        available_groups = (
+            ["default"] +
+            ["optional:" + g for g in optional_deps.keys()] +
+            ["group:" + g for g in dev_deps.keys()]
+        ),
+        project_name = project_name,
+        fail_on_missing = True,
+    )
+
+    if "default" in requested_groups_dict:
+        default_is_testonly = requested_groups_dict["default"]
         for dep_str in default_deps:
-            requirements.append((parse_pep508_requirement(dep_str), False))
+            requirements.append((parse_pep508_requirement(dep_str), default_is_testonly))
 
-    effective_groups = ["optional:*", "group:*"] if include_all else dependency_groups
-    for group in effective_groups:
-        if group == "default" or group == "*":
-            continue
 
-        kind, _, name = group.partition(":")
-        if kind == "optional":
-            groups_dict = optional_deps
-        elif kind == "group":
-            groups_dict = dev_deps
-        else:
-            fail("Invalid dependency group format '{}'. Must be 'optional:name' or 'group:name'.".format(group))
 
-        if name == "*":
-            target_names = list(groups_dict.keys())
-        else:
-            target_names = [name]
+    for kind, groups_dict in [("optional", optional_deps), ("group", dev_deps)]:
+        for target_name in groups_dict.keys():
+            key = "{}:{}".format(kind, target_name)
+            if key not in requested_groups_dict:
+                continue
+            is_testonly = requested_groups_dict[key]
 
-        # Last-wins testonly: specific overrides beat wildcard default
-        if group in testonly_groups:
-            is_testonly = True
-        elif group in non_testonly_groups:
-            is_testonly = False
-        else:
-            is_testonly = wildcard_testonly
-
-        for target_name in target_names:
-            if target_name in groups_dict:
-                entries = groups_dict[target_name]
-                for dep_str in entries:
-                    if type(dep_str) == "string":
-                        # Strip editable markers
-                        stripped = dep_str.strip()
-                        if stripped.startswith("-e "):
-                            stripped = stripped[3:].strip()
-                        requirements.append((parse_pep508_requirement(stripped), is_testonly))
-                    elif type(dep_str) == "dict" and "include-group" in dep_str:
-                        inc_group = dep_str["include-group"]
-                        if inc_group in dev_deps:
-                            for inc_dep in dev_deps[inc_group]:
-                                if type(inc_dep) == "string":
-                                    stripped = inc_dep.strip()
-                                    if stripped.startswith("-e "):
-                                        stripped = stripped[3:].strip()
-                                    requirements.append((parse_pep508_requirement(stripped), is_testonly))
-            else:
-                fail("Non-existent {} dependency group: {}".format(kind, target_name))
+            entries = groups_dict[target_name]
+            for dep_str in entries:
+                if type(dep_str) == "string":
+                    # Strip editable markers
+                    stripped = dep_str.strip()
+                    if stripped.startswith("-e "):
+                        stripped = stripped[3:].strip()
+                    requirements.append((parse_pep508_requirement(stripped), is_testonly))
+                elif type(dep_str) == "dict" and "include-group" in dep_str:
+                    inc_group = dep_str["include-group"]
+                    if inc_group in dev_deps:
+                        for inc_dep in dev_deps[inc_group]:
+                            if type(inc_dep) == "string":
+                                stripped = inc_dep.strip()
+                                if stripped.startswith("-e "):
+                                    stripped = stripped[3:].strip()
+                                requirements.append((parse_pep508_requirement(stripped), is_testonly))
 
     # Build pinned specs from requirements
     pinned_package_specs = {}

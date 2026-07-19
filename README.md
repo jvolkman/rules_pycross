@@ -215,6 +215,8 @@ uv.repo(
 
 If a transitive package has multiple versions in the lock file, `rules_pycross` will print a warning and alias to the highest version.
 
+> **Note:** `"transitive"` is a modifier, not a dependency group — it is _not_ included by the `*` wildcard. You must list it explicitly.
+
 ### Testonly Dependencies
 
 Append `;testonly` to any group specifier to mark its packages as `testonly` in the generated Bazel targets. This is useful for test frameworks and other packages that should not be depended upon by production code:

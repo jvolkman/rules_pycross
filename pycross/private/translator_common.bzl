@@ -415,3 +415,82 @@ def resolve_lock_graph(packages, pinned_package_specs, requires_python, strict_d
         result["resolution_marker_exprs"] = resolution_marker_exprs
 
     return result
+
+def compute_requested_dependency_groups(
+        dependency_groups,
+        testonly_groups,
+        non_testonly_groups,
+        wildcard_testonly,
+        available_groups,
+        project_name = None,
+        fail_on_missing = True):
+    """Compute the definitive list of requested dependency groups and their testonly status.
+
+    Processes wildcard group expansions and applies last-wins testonly resolution
+    to construct the final dictionary of requested groups.
+
+    Wildcard rules:
+    - '*' expands to all entries in available_groups
+    - 'kind:*' (e.g. 'optional:*', 'group:*') expands to all entries with that prefix
+
+    Args:
+        dependency_groups: List of requested dependency group specs (from lock_model).
+        testonly_groups: List of dependency groups explicitly marked testonly.
+        non_testonly_groups: List of dependency groups explicitly marked non-testonly.
+        wildcard_testonly: Boolean indicating if the wildcard default is testonly.
+        available_groups: List of fully-prefixed available group names
+            (e.g. ["optional:extras1", "group:dev", "group:test"]).
+        project_name: Optional project name for error messages.
+        fail_on_missing: If True, fail when an explicitly requested group is missing.
+                         If False, print a warning instead.
+
+    Returns:
+        A dictionary mapping the group identifier (e.g. "optional:foo", "group:dev")
+        to a boolean indicating whether it is testonly.
+    """
+    available_set = {g: True for g in available_groups}
+
+    include_all = "*" in dependency_groups
+    effective_groups = list(available_set.keys()) if include_all else dependency_groups
+
+    requested = {}
+
+    for group in effective_groups:
+        if group in testonly_groups:
+            is_testonly = True
+        elif group in non_testonly_groups:
+            is_testonly = False
+        else:
+            is_testonly = wildcard_testonly
+
+        kind, sep, name = group.partition(":")
+        if not sep:
+            if group in available_set:
+                requested[group] = is_testonly
+            continue
+
+        if name == "*":
+            # Expand kind:* to all available groups with this prefix.
+            prefix = kind + ":"
+            targets = [g for g in available_set if g.startswith(prefix)]
+        else:
+            targets = [group]
+
+        for target in targets:
+            if target not in available_set:
+                if name != "*":
+                    if project_name:
+                        msg = "Project '{}' does not have group '{}'.".format(project_name, target)
+                    else:
+                        msg = "Dependency group '{}' not found.".format(target)
+
+                    if fail_on_missing:
+                        fail(msg)
+                    else:
+                        # buildifier: disable=print
+                        print("WARNING: " + msg)
+                continue
+
+            requested[target] = is_testonly
+
+    return requested

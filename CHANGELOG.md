@@ -11,6 +11,8 @@ All notable changes to this project will be documented in this file.
   dependencies — they are general-purpose named groups. Update your `repo()`
   declarations: e.g. `"development:dev"` → `"group:dev"`,
   `"development:*"` → `"group:*"`.
+- **`create_transitive_aliases` removed.** Use `"transitive"` in
+  `dependency_groups` instead. E.g. `dependency_groups = ["default", "transitive"]`.
 
 ### Fixed
 

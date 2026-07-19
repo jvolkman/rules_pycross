@@ -12,6 +12,7 @@ load("@toml.bzl//toml:toml.bzl", "decode")
 load(
     ":translator_common.bzl",
     "canonicalize_name",
+    "compute_requested_dependency_groups",
     "resolution_marker_constraint_name",
     "resolve_lock_graph",
     "select_project_file",
@@ -272,8 +273,7 @@ def translate_uv(project_dict, lock_dict, lock_model):
     # Collect requirements
     requirements = []  # list of (req_name, specifier, constraint, is_testonly)
 
-    include_all = "*" in dependency_groups
-    include_default = "default" in dependency_groups or include_all
+
 
     for project_name in target_projects:
         project_info = workspace_members[project_name]
@@ -282,7 +282,23 @@ def translate_uv(project_dict, lock_dict, lock_model):
         optional_dependencies = project_info.get("optional-dependencies", {})
         development_dependencies = project_info.get("dev-dependencies", {})
 
-        if include_default:
+        # Parse groups
+        requested_groups_dict = compute_requested_dependency_groups(
+            dependency_groups = dependency_groups,
+            testonly_groups = testonly_groups,
+            non_testonly_groups = non_testonly_groups,
+            wildcard_testonly = wildcard_testonly,
+            available_groups = (
+                ["default"] +
+                ["optional:" + g for g in optional_dependencies.keys()] +
+                ["group:" + g for g in development_dependencies.keys()]
+            ),
+            project_name = project_name,
+            fail_on_missing = True,
+        )
+
+        if "default" in requested_groups_dict:
+            default_is_testonly = requested_groups_dict["default"]
             for dep in default_dependencies:
                 dep_name = canonicalize_name(dep["name"])
                 dep_version = dep.get("version", "")
@@ -299,49 +315,20 @@ def translate_uv(project_dict, lock_dict, lock_model):
                 if dep_extras:
                     for extra in dep_extras:
                         pin_name = "{}[{}]".format(dep_name, canonicalize_name(extra))
-                        requirements.append((pin_name, specifier, fork_constraint, False))
+                        requirements.append((pin_name, specifier, fork_constraint, default_is_testonly))
                 else:
-                    requirements.append((dep_name, specifier, fork_constraint, False))
+                    requirements.append((dep_name, specifier, fork_constraint, default_is_testonly))
 
-        # Parse groups
-        effective_groups = ["optional:*", "group:*"] if include_all else dependency_groups
-        for group in effective_groups:
-            if group == "default" or group == "*":
-                continue
 
-            # Last-wins testonly: specific overrides beat wildcard default
-            if group in testonly_groups:
-                is_testonly = True
-            elif group in non_testonly_groups:
-                is_testonly = False
-            else:
-                is_testonly = wildcard_testonly
 
-            kind, _, name = group.partition(":")
-            if kind == "optional":
-                groups_dict = optional_dependencies
-                constraint_dict = extra_variant_values
-            elif kind == "group":
-                groups_dict = development_dependencies
-                constraint_dict = group_variant_values
-            else:
-                fail("Invalid dependency group format '{}'. Must be 'optional:name' or 'group:name'.".format(group))
-
-            if name == "*":
-                target_names = list(groups_dict.keys())
-            else:
-                target_names = [name]
-
-            for t_name in target_names:
-                if t_name not in groups_dict:
-                    # It's a warning if the user explicitly requested a wildcard that matches nothing,
-                    # but if they explicitly ask for a specific group and it's missing, it should be an error.
-                    if name != "*":
-                        fail("Project '{}' does not have {} group '{}'.".format(project_name, kind, t_name))
+        for kind, groups_dict, constraint_dict in [("optional", optional_dependencies, extra_variant_values), ("group", development_dependencies, group_variant_values)]:
+            for group_name in groups_dict.keys():
+                key = "{}:{}".format(kind, group_name)
+                if key not in requested_groups_dict:
                     continue
-
-                constraint = constraint_dict.get(t_name, "")
-                for dep in groups_dict[t_name]:
+                is_testonly = requested_groups_dict[key]
+                constraint = constraint_dict.get(group_name, "")
+                for dep in groups_dict[group_name]:
                     dep_name = canonicalize_name(dep["name"])
                     dep_version = dep.get("version", "")
                     dep_extras = dep.get("extra") or dep.get("extras", [])

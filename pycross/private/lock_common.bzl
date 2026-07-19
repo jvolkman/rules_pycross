@@ -265,12 +265,7 @@ def register_workspace_repo(
         model_type,
         repo_name,
         projects,
-        dependency_groups,
-        testonly_groups,
-        non_testonly_groups,
-        wildcard_testonly,
-        include_transitive,
-        transitive_testonly,
+        raw_dependency_groups,
         legacy_create_root_aliases,
         transition_attrs,
         lock_module,
@@ -287,12 +282,8 @@ def register_workspace_repo(
         model_type: The lock model type.
         repo_name: The repo name for this member.
         projects: List of projects included in this repo.
-        dependency_groups: List of parsed dependency groups.
-        testonly_groups: List of groups explicitly marked testonly.
-        non_testonly_groups: List of groups explicitly marked non-testonly (overrides wildcard).
-        wildcard_testonly: Whether the wildcard (*) is marked testonly.
-        include_transitive: Whether to include transitive dependencies.
-        transitive_testonly: Whether transitive dependencies are testonly.
+        raw_dependency_groups: Raw dependency group strings from user config
+            (e.g. ["default", "group:dev;testonly", "transitive"]).
         legacy_create_root_aliases: Boolean to create root aliases.
         transition_attrs: Transition attributes dict.
         lock_module: The module owning this lock.
@@ -303,17 +294,19 @@ def register_workspace_repo(
     if lock_module.is_root:
         root_direct_deps.append(repo_name)
 
+    parsed = parse_dependency_group_entries(raw_dependency_groups)
+
     model = dict(
         model_type = model_type,
         extra_project_files = [str(f) for f in extra_project_files],
         lock_file = str(ws_tag.lock_file),
         projects = projects,
-        dependency_groups = dependency_groups,
-        testonly_groups = testonly_groups,
-        non_testonly_groups = non_testonly_groups,
-        wildcard_testonly = wildcard_testonly,
-        include_transitive = include_transitive,
-        transitive_testonly = transitive_testonly,
+        dependency_groups = parsed.dependency_groups,
+        testonly_groups = parsed.testonly_groups,
+        non_testonly_groups = parsed.non_testonly_groups,
+        wildcard_testonly = parsed.wildcard_testonly,
+        include_transitive = parsed.include_transitive,
+        transitive_testonly = parsed.transitive_testonly,
         legacy_create_root_aliases = legacy_create_root_aliases,
     )
 
@@ -405,24 +398,19 @@ def process_repo(
     tag = tag_info.tag
 
     raw_groups = tag.dependency_groups
-    parsed = parse_dependency_group_entries(raw_groups)
-    parsed_groups = parsed.dependency_groups
-    testonly_groups = parsed.testonly_groups
-    non_testonly_groups = parsed.non_testonly_groups
-    wildcard_testonly = parsed.wildcard_testonly
-    include_transitive = parsed.include_transitive
-    transitive_testonly = parsed.transitive_testonly
 
-    has_wildcard = "*" in parsed_groups
+    has_wildcard = False
     has_specific = False
-    for group in parsed_groups:
-        if group not in ("*", "default"):
+    for entry in raw_groups:
+        spec = entry.split(";")[0]
+        if spec == "*":
+            has_wildcard = True
+        elif spec not in ("default", "transitive"):
             has_specific = True
-            break
 
     if has_wildcard and has_specific:
         # buildifier: disable=print
-        print("WARNING: repo '{}' in workspace '{}' specifies both wildcard ('*') and specific dependency groups ({}). The specific groups are redundant.".format(tag.repo, ws_name, parsed_groups))
+        print("WARNING: repo '{}' in workspace '{}' specifies both wildcard ('*') and specific dependency groups ({}). The specific groups are redundant.".format(tag.repo, ws_name, raw_groups))
 
     # Get transition attrs
     transition_attrs = get_member_transition_attrs(None, tag)
@@ -437,12 +425,7 @@ def process_repo(
         model_type,
         tag.repo,
         tag.projects,
-        parsed_groups,
-        testonly_groups,
-        non_testonly_groups,
-        wildcard_testonly,
-        include_transitive,
-        transitive_testonly,
+        raw_groups,
         tag.legacy_create_root_aliases,
         transition_attrs,
         tag_info.module,
@@ -603,12 +586,7 @@ def process_workspaces(
             model_type = model_type,
             repo_name = build_repo_name,
             projects = ["*"],
-            dependency_groups = ["*"],
-            testonly_groups = [],
-            non_testonly_groups = [],
-            wildcard_testonly = False,
-            include_transitive = False,
-            transitive_testonly = False,
+            raw_dependency_groups = ["*", "transitive"],
             legacy_create_root_aliases = False,
             transition_attrs = dict(
                 flags = [],
