@@ -2,7 +2,7 @@
 
 All notable changes to this project will be documented in this file.
 
-## [Unreleased]
+## [2.0.0-alpha.2]
 
 ### Breaking
 
@@ -13,6 +13,11 @@ All notable changes to this project will be documented in this file.
   `"development:*"` → `"group:*"`.
 - **`create_transitive_aliases` removed.** Use `"transitive"` in
   `dependency_groups` instead. E.g. `dependency_groups = ["default", "transitive"]`.
+
+### Added
+
+- Dependency groups can now be marked as `testonly`. E.g.,
+  `dependency_groups = ["default", "group:dev;testonly"]`.
 
 ### Fixed
 
