@@ -369,10 +369,11 @@ def translate_uv(project_dict, lock_dict, lock_model):
             pinned_package_specs[pin_name] = {}
         pinned_package_specs[pin_name][constraint] = specifier
 
+        base_pin_name = pin_name.split("[")[0]
         if is_testonly:
-            testonly_reqs[pin_name] = True
+            testonly_reqs[base_pin_name] = True
         else:
-            non_testonly_reqs[pin_name] = True
+            non_testonly_reqs[base_pin_name] = True
 
     testonly_pin_names = [name for name in testonly_reqs if name not in non_testonly_reqs]
 
