@@ -60,11 +60,8 @@ REPO_ATTRS = dict(
     name = attr.string(
         doc = "Override the repo name.",
     ),
-    create_transitive_aliases = attr.bool(
-        doc = "Generate aliases for transitive single-version packages in this repo.",
-    ),
     dependency_groups = attr.string_list(
-        doc = "A list of dependency groups to include. E.g. ['default', 'group:foo', '*']. Defaults to ['default'].",
+        doc = "A list of target groups to include. E.g. ['default', 'group:foo', '*']. Use 'transitive' to generate aliases for transitively-reachable packages. Defaults to ['default'].",
         default = ["default"],
     ),
     legacy_create_root_aliases = attr.bool(
@@ -226,7 +223,8 @@ def _resolve_lock_inline(module_ctx, lock_info, serialized_lock_model, workspace
         always_include_sdist = False,
         annotations_data = annotations_data,
         default_extra_build_tools_args = wildcard_pkg.extra_build_tools if wildcard_pkg else [],
-        create_transitive_aliases = lock_info.create_transitive_aliases,
+        include_transitive = getattr(lock_model, "include_transitive", False),
+        transitive_testonly = getattr(lock_model, "transitive_testonly", False),
     )
 
     return {
@@ -237,6 +235,7 @@ def _resolve_lock_inline(module_ctx, lock_info, serialized_lock_model, workspace
         "variants": resolved_lock.variants,
         "resolution_marker_exprs": resolved_lock.resolution_marker_exprs,
         "legacy_create_root_aliases": getattr(lock_model, "legacy_create_root_aliases", False),
+        "testonly_pins": resolved_lock.testonly_pins,
     }
 
 def make_format_extension(
@@ -296,7 +295,6 @@ def make_format_extension(
                     flags = getattr(tag, "flags", []),
                     constraint_values = getattr(tag, "constraint_values", []),
                     platform = getattr(tag, "platform", None),
-                    create_transitive_aliases = getattr(tag, "create_transitive_aliases", False),
                 )
                 member_tags.append(struct(tag = member_tag, module = module))
 

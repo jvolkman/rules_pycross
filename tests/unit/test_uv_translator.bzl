@@ -8,10 +8,16 @@ load("//pycross/private:uv_lock_model.bzl", "translate_uv")
 
 def _lock_model(
         projects = ["*"],
-        dependency_groups = ["default"]):
+        dependency_groups = ["default"],
+        testonly_groups = [],
+        non_testonly_groups = [],
+        wildcard_testonly = False):
     return struct(
         projects = projects,
         dependency_groups = dependency_groups,
+        testonly_groups = testonly_groups,
+        non_testonly_groups = non_testonly_groups,
+        wildcard_testonly = wildcard_testonly,
     )
 
 def _project(name = "my-app", version = "0.1.0", deps = None, opt_deps = None, dep_groups = None, uv_conflicts = None, uv_default_groups = None):
@@ -567,6 +573,148 @@ def _test_uv_resolution_marker_fork_optional_group(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
     analysis_test(name = name, target = name + "_subject", impl = _test_uv_resolution_marker_fork_optional_group_impl)
 
+# --- test_testonly_groups ---
+
+# buildifier: disable=unused-variable
+def _test_uv_testonly_groups_impl(env, target):
+    """Dev group marked as testonly produces testonly_pins in the raw lock data."""
+    project = _project(
+        deps = ["requests==2.31.0"],
+        dep_groups = {"test": ["pytest==7.0"]},
+    )
+    lock = _lock([
+        _vpkg("my-app", deps = [_dep("requests", "2.31.0")], dev_deps = {"test": [_dep("pytest")]}),
+        _pkg("requests", "2.31.0", wheels = [_whl("requests-2.31.0-py3-none-any.whl", "abc")]),
+        _pkg("pytest", "7.0", wheels = [_whl("pytest-7.0-py3-none-any.whl", "def")]),
+    ])
+    result = translate_uv(
+        project,
+        lock,
+        _lock_model(dependency_groups = ["default", "group:test"], testonly_groups = ["group:test"]),
+    )
+
+    # Both packages should be resolved
+    env.expect.that_collection(result["packages"].keys()).contains("requests@2.31.0")
+    env.expect.that_collection(result["packages"].keys()).contains("pytest@7.0")
+
+    # pytest should be in testonly_pins because its group is testonly
+    env.expect.that_collection(result["testonly_pins"]).contains("pytest")
+
+    # requests should NOT be in testonly_pins
+    env.expect.that_collection(result["testonly_pins"]).contains_none_of(["requests"])
+
+def _test_uv_testonly_groups(name):
+    util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
+    analysis_test(name = name, target = name + "_subject", impl = _test_uv_testonly_groups_impl)
+
+# --- test_testonly_shared_dep_not_testonly ---
+
+# buildifier: disable=unused-variable
+def _test_uv_testonly_shared_dep_not_testonly_impl(env, target):
+    """A package required by both default and testonly groups is NOT testonly."""
+    project = _project(
+        deps = ["common==1.0"],
+        dep_groups = {"test": ["common==1.0", "pytest==7.0"]},
+    )
+    lock = _lock([
+        _vpkg("my-app", deps = [_dep("common", "1.0")], dev_deps = {"test": [_dep("common"), _dep("pytest")]}),
+        _pkg("common", "1.0", wheels = [_whl("common-1.0-py3-none-any.whl", "aaa")]),
+        _pkg("pytest", "7.0", wheels = [_whl("pytest-7.0-py3-none-any.whl", "bbb")]),
+    ])
+    result = translate_uv(
+        project,
+        lock,
+        _lock_model(dependency_groups = ["default", "group:test"], testonly_groups = ["group:test"]),
+    )
+
+    # pytest is exclusively testonly
+    env.expect.that_collection(result["testonly_pins"]).contains("pytest")
+
+    # common appears in both default and test groups, so NOT testonly
+    env.expect.that_collection(result["testonly_pins"]).contains_none_of(["common"])
+
+def _test_uv_testonly_shared_dep_not_testonly(name):
+    util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
+    analysis_test(name = name, target = name + "_subject", impl = _test_uv_testonly_shared_dep_not_testonly_impl)
+
+# --- test_testonly_wildcard_with_override ---
+
+# buildifier: disable=unused-variable
+def _test_uv_testonly_wildcard_with_override_impl(env, target):
+    """['*;testonly', 'group:dev'] -> everything testonly except dev.
+
+    Simulates: dependency_groups = ['*;testonly', 'group:dev']
+    Parsed by process_repo as: wildcard_testonly=True, non_testonly_groups=['group:dev']
+    """
+    project = _project(
+        deps = ["requests==2.31.0"],
+        dep_groups = {"dev": ["flask==2.0"], "test": ["pytest==7.0"]},
+    )
+    lock = _lock([
+        _vpkg("my-app", deps = [_dep("requests", "2.31.0")], dev_deps = {"dev": [_dep("flask")], "test": [_dep("pytest")]}),
+        _pkg("requests", "2.31.0", wheels = [_whl("requests-2.31.0-py3-none-any.whl", "abc")]),
+        _pkg("flask", "2.0", wheels = [_whl("flask-2.0-py3-none-any.whl", "def")]),
+        _pkg("pytest", "7.0", wheels = [_whl("pytest-7.0-py3-none-any.whl", "ghi")]),
+    ])
+    result = translate_uv(
+        project,
+        lock,
+        _lock_model(
+            dependency_groups = ["default", "group:dev", "group:test"],
+            # *;testonly -> wildcard_testonly=True, group:dev overrides to non-testonly
+            wildcard_testonly = True,
+            non_testonly_groups = ["group:dev"],
+        ),
+    )
+
+    # pytest is testonly (from wildcard, no override)
+    env.expect.that_collection(result["testonly_pins"]).contains("pytest")
+
+    # flask is NOT testonly (group:dev explicitly overridden)
+    env.expect.that_collection(result["testonly_pins"]).contains_none_of(["flask"])
+
+def _test_uv_testonly_wildcard_with_override(name):
+    util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
+    analysis_test(name = name, target = name + "_subject", impl = _test_uv_testonly_wildcard_with_override_impl)
+
+# --- test_testonly_wildcard_overrides_earlier ---
+
+# buildifier: disable=unused-variable
+def _test_uv_testonly_wildcard_overrides_earlier_impl(env, target):
+    """['group:dev;testonly', '*'] -> wildcard last, overrides dev to non-testonly.
+
+    Simulates: dependency_groups = ['group:dev;testonly', '*']
+    Parsed by process_repo as: wildcard_testonly=False, testonly_groups=[], non_testonly_groups=[]
+    (The * resets overrides, so group:dev;testonly is forgotten)
+    """
+    project = _project(
+        deps = ["requests==2.31.0"],
+        dep_groups = {"dev": ["pytest==7.0"]},
+    )
+    lock = _lock([
+        _vpkg("my-app", deps = [_dep("requests", "2.31.0")], dev_deps = {"dev": [_dep("pytest")]}),
+        _pkg("requests", "2.31.0", wheels = [_whl("requests-2.31.0-py3-none-any.whl", "abc")]),
+        _pkg("pytest", "7.0", wheels = [_whl("pytest-7.0-py3-none-any.whl", "def")]),
+    ])
+    result = translate_uv(
+        project,
+        lock,
+        _lock_model(
+            dependency_groups = ["default", "group:dev"],
+            # group:dev;testonly then * -> wildcard_testonly=False, no specific overrides
+            wildcard_testonly = False,
+            testonly_groups = [],
+            non_testonly_groups = [],
+        ),
+    )
+
+    # Nothing is testonly: * came last and reset everything
+    env.expect.that_collection(result["testonly_pins"]).has_size(0)
+
+def _test_uv_testonly_wildcard_overrides_earlier(name):
+    util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
+    analysis_test(name = name, target = name + "_subject", impl = _test_uv_testonly_wildcard_overrides_earlier_impl)
+
 # --- Test suite ---
 
 def uv_translator_test_suite(name):
@@ -595,5 +743,9 @@ def uv_translator_test_suite(name):
             _test_uv_resolution_marker_single_version_no_fork,
             _test_uv_resolution_marker_multi_marker_or,
             _test_uv_resolution_marker_fork_optional_group,
+            _test_uv_testonly_groups,
+            _test_uv_testonly_shared_dep_not_testonly,
+            _test_uv_testonly_wildcard_with_override,
+            _test_uv_testonly_wildcard_overrides_earlier,
         ],
     )

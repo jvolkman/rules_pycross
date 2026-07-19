@@ -5,13 +5,9 @@ Parses pylock.toml files and produces the raw_lock.json structure consumed by
 lock_resolver.bzl.
 """
 
-load("@pypackaging.bzl", "pypackaging")
 load("@toml.bzl//toml:toml.bzl", "decode")
-load(":translator_common.bzl", "resolution_marker_constraint_name", "select_project_file")
+load(":translator_common.bzl", "canonicalize_name", "compute_requested_dependency_groups", "resolution_marker_constraint_name", "select_project_file")
 load(":util.bzl", "extract_pep508_name", "parse_package_key")
-
-def _canonicalize_name(name):
-    return pypackaging.utils.canonicalize_name(name)
 
 def _strip_selection_markers(marker):
     """Strip PDM selection markers (dependency_groups, extras) from a marker string.
@@ -67,7 +63,7 @@ def translate_pylock(lock_dict, project_dict, lock_model):
     versions = {}  # {name: version} - first version seen
     versions_all = {}  # {name: {version: marker}} - all versions with markers
     for pkg in packages_list:
-        name = _canonicalize_name(pkg["name"])
+        name = canonicalize_name(pkg["name"])
         version = pkg["version"]
         if name not in versions:
             versions[name] = version
@@ -81,25 +77,25 @@ def translate_pylock(lock_dict, project_dict, lock_model):
     lock_packages = {}
 
     for pkg in packages_list:
-        name = _canonicalize_name(pkg["name"])
+        name = canonicalize_name(pkg["name"])
         version = pkg["version"]
         pkg_key = "{}@{}".format(name, version)
 
         dependencies = []
         for dep in pkg.get("dependencies", []):
             dep_name_raw = dep["name"]
-            dep_name = _canonicalize_name(dep_name_raw)
+            dep_name = canonicalize_name(dep_name_raw)
 
             # Handle extras in dependency name
             dep_extra = ""
             if "[" in dep_name_raw:
                 parts = dep_name_raw.split("[", 1)
-                dep_name = _canonicalize_name(parts[0])
+                dep_name = canonicalize_name(parts[0])
                 dep_extra = parts[1].rstrip("]").strip()
 
             dep_display = dep_name
             if dep_extra:
-                dep_display = "{}[{}]".format(dep_name, _canonicalize_name(dep_extra))
+                dep_display = "{}[{}]".format(dep_name, canonicalize_name(dep_extra))
 
             dep_version = versions.get(dep_name)
             if not dep_version:
@@ -196,61 +192,78 @@ def translate_pylock(lock_dict, project_dict, lock_model):
     pins = {}
 
     dependency_groups = getattr(lock_model, "dependency_groups", ["default"])
-    include_all = "*" in dependency_groups
-    include_default = "default" in dependency_groups or include_all
+    include_default = "default" in dependency_groups or "*" in dependency_groups
     has_filter = not include_default or len([g for g in dependency_groups if g != "default"]) > 0
 
     if project_dict and has_filter:
         root_req_names = []
+        testonly_root_req_names = []
+        testonly_groups = getattr(lock_model, "testonly_groups", [])
+        non_testonly_groups = getattr(lock_model, "non_testonly_groups", [])
+        wildcard_testonly = getattr(lock_model, "wildcard_testonly", False)
 
         project_section = project_dict.get("project", {})
-        if include_default:
-            for dep_str in project_section.get("dependencies", []):
-                root_req_names.append(extract_pep508_name(dep_str))
-
         optional_deps = project_section.get("optional-dependencies", {})
         dev_deps = project_dict.get("dependency-groups", {})
 
-        effective_groups = ["optional:*", "group:*"] if include_all else dependency_groups
-        for group in effective_groups:
-            if group == "default" or group == "*":
-                continue
+        project_name = project_dict.get("project", {}).get("name")
 
-            kind, _, name = group.partition(":")
-            if kind == "optional":
-                groups_dict = optional_deps
-            elif kind == "group":
-                groups_dict = dev_deps
-            else:
-                fail("Invalid dependency group format '{}'. Must be 'optional:name' or 'group:name'.".format(group))
+        requested_groups_dict = compute_requested_dependency_groups(
+            dependency_groups = dependency_groups,
+            testonly_groups = testonly_groups,
+            non_testonly_groups = non_testonly_groups,
+            wildcard_testonly = wildcard_testonly,
+            available_groups = (
+                ["default"] +
+                ["optional:" + g for g in optional_deps.keys()] +
+                ["group:" + g for g in dev_deps.keys()]
+            ),
+            project_name = project_name,
+            fail_on_missing = False,  # Following precedent set by original print warning
+        )
 
-            if name == "*":
-                target_names = list(groups_dict.keys())
-            else:
-                target_names = [name]
-
-            for target_name in target_names:
-                if target_name in groups_dict:
-                    entries = groups_dict[target_name]
-                    for entry in entries:
-                        if type(entry) == "string":
-                            root_req_names.append(extract_pep508_name(entry))
-                        elif type(entry) == "dict" and "include-group" in entry:
-                            inc_group = entry["include-group"]
-                            if inc_group in dev_deps:
-                                for inc_dep in dev_deps[inc_group]:
-                                    if type(inc_dep) == "string":
-                                        root_req_names.append(extract_pep508_name(inc_dep))
+        if "default" in requested_groups_dict:
+            is_testonly = requested_groups_dict["default"]
+            for dep_str in project_section.get("dependencies", []):
+                if is_testonly:
+                    testonly_root_req_names.append(extract_pep508_name(dep_str))
                 else:
-                    # buildifier: disable=print
-                    print("WARNING: Dependency group '{}:{}' not found in project file.".format(kind, target_name))
+                    root_req_names.append(extract_pep508_name(dep_str))
+
+        for kind, groups_dict in [("optional", optional_deps), ("group", dev_deps)]:
+            for target_name in groups_dict.keys():
+                key = "{}:{}".format(kind, target_name)
+                if key not in requested_groups_dict:
+                    continue
+                is_testonly = requested_groups_dict[key]
+                entries = groups_dict[target_name]
+                for entry in entries:
+                    if type(entry) == "string":
+                        n = extract_pep508_name(entry)
+                        if is_testonly:
+                            testonly_root_req_names.append(n)
+                        else:
+                            root_req_names.append(n)
+                    elif type(entry) == "dict" and "include-group" in entry:
+                        inc_group = entry["include-group"]
+                        if inc_group in dev_deps:
+                            for inc_dep in dev_deps[inc_group]:
+                                if type(inc_dep) == "string":
+                                    n = extract_pep508_name(inc_dep)
+                                    if is_testonly:
+                                        testonly_root_req_names.append(n)
+                                    else:
+                                        root_req_names.append(n)
 
         # Deduplicate
         root_package_names = {n: True for n in root_req_names}
+        testonly_package_names = {n: True for n in testonly_root_req_names if n not in root_package_names}
 
-        # BFS from root_package_names
+        # BFS from all root names to find reachable packages
         visited_names = {}
-        queue = sorted(root_package_names.keys())
+        all_roots = dict(root_package_names)
+        all_roots.update(testonly_package_names)
+        queue = sorted(all_roots.keys())
 
         # Starlark has no while loop, simulate with for+range.
         # Upper bound: each edge can add one item to the queue, plus the initial queue size.
@@ -284,10 +297,12 @@ def translate_pylock(lock_dict, project_dict, lock_model):
         lock_packages = filtered_packages
 
         # Pins from roots
-        for root_name in sorted(root_package_names.keys()):
+        for root_name in sorted(all_roots.keys()):
             keys = deps_by_name.get(root_name, [])
             if keys:
                 pins[root_name] = keys[0]
+
+        testonly_pins = sorted(testonly_package_names.keys())
     else:
         # Default: include all (use first key per name; fork detection below may override)
         seen_names = {}
@@ -296,6 +311,7 @@ def translate_pylock(lock_dict, project_dict, lock_model):
             if pname not in seen_names:
                 pins[pname] = pkg_key
                 seen_names[pname] = True
+        testonly_pins = []
 
     # Detect resolution-marker forks: same package name with multiple versions.
     resolution_marker_exprs = {}
@@ -322,6 +338,7 @@ def translate_pylock(lock_dict, project_dict, lock_model):
         "packages": lock_packages,
         "pins": pins,
         "python_versions": requires_python,
+        "testonly_pins": testonly_pins,
     }
     if resolution_marker_exprs:
         result["resolution_marker_exprs"] = resolution_marker_exprs

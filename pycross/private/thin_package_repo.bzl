@@ -117,7 +117,7 @@ def _proxy_actual(actual_lines, target_dict, prefix, suffix, workspace_repo, ali
         return '"{}:{}",'.format(actual_pkg_ref, alias_name)
     return "{},".format(actual)
 
-def _pin_build(target_name, pin_target_dict, package, workspace_repo, workspace_lock_target_dict = None, has_aggregated_variant = False, extras_dict = None, default_variants = {}, target_platform = None, transition_bzl = None, maybe_available_key = None):
+def _pin_build(target_name, pin_target_dict, package, workspace_repo, workspace_lock_target_dict = None, has_aggregated_variant = False, extras_dict = None, default_variants = {}, target_platform = None, transition_bzl = None, maybe_available_key = None, testonly = False):
     """Generates the BUILD file for a pin directory, pointing to the workspace."""
     lock_target_dict = workspace_lock_target_dict if workspace_lock_target_dict else pin_target_dict
     lock_ref = "@{}//_lock:".format(workspace_repo)
@@ -167,6 +167,8 @@ def _pin_build(target_name, pin_target_dict, package, workspace_repo, workspace_
             '    name = "{}",'.format(_safe_name(target_name, "pkg")),
             "    actual = {}".format(actual_pkg),
         ])
+        if testonly:
+            lines.append("    testonly = True,")
         if emit_platform:
             lines.append('    platform = "{}",'.format(target_platform))
         lines.extend([
@@ -218,6 +220,8 @@ def _pin_build(target_name, pin_target_dict, package, workspace_repo, workspace_
                     '    name = "[]",',
                     "    actual = {}".format(actual_all),
                 ])
+                if testonly:
+                    lines.append("    testonly = True,")
                 if emit_platform:
                     lines.append('    platform = "{}",'.format(target_platform))
                 lines.extend([
@@ -248,6 +252,8 @@ def _pin_build(target_name, pin_target_dict, package, workspace_repo, workspace_
             '    name = "[{}]",'.format(extra_name),
             "    actual = {}".format(actual_extra),
         ])
+        if testonly:
+            lines.append("    testonly = True,")
         if emit_platform:
             lines.append('    platform = "{}",'.format(target_platform))
         lines.extend([
@@ -286,6 +292,7 @@ def _thin_package_repo_impl(rctx):
     lock = json.decode(rctx.read(lock_json_path))
     packages = lock["packages"]
     pins = lock["pins"]
+    testonly_pins_set = {p: True for p in lock.get("testonly_pins", [])}
 
     # Normalize pin values: bare strings (unconditional) become {"": value}
     for pin_name in pins.keys():
@@ -618,7 +625,20 @@ pycross_transitioning_file_proxy = rule(
                     maybe_available_key = pkg_key
                     break
 
-        result = _pin_build(us_name, base_target_dict, package, workspace_repo, workspace_lock_target_dict, has_aggregated_variant, extras_dict, default_variants = default_variants, target_platform = target_platform, transition_bzl = "//:_transition.bzl" if has_flags else None, maybe_available_key = maybe_available_key)
+        result = _pin_build(
+            us_name,
+            base_target_dict,
+            package,
+            workspace_repo,
+            workspace_lock_target_dict,
+            has_aggregated_variant,
+            extras_dict,
+            default_variants = default_variants,
+            target_platform = target_platform,
+            transition_bzl = "//:_transition.bzl" if has_flags else None,
+            maybe_available_key = maybe_available_key,
+            testonly = (base_pin_name in testonly_pins_set),
+        )
         rctx.file(
             "{}/BUILD.bazel".format(us_name),
             result.build,

@@ -8,8 +8,8 @@ The poetry extension.
 
 <pre>
 poetry = use_extension("@rules_pycross//pycross/extensions:poetry.bzl", "poetry")
-poetry.repo(<a href="#poetry.repo-name">name</a>, <a href="#poetry.repo-constraint_values">constraint_values</a>, <a href="#poetry.repo-create_transitive_aliases">create_transitive_aliases</a>, <a href="#poetry.repo-dependency_groups">dependency_groups</a>, <a href="#poetry.repo-flags">flags</a>,
-            <a href="#poetry.repo-legacy_create_root_aliases">legacy_create_root_aliases</a>, <a href="#poetry.repo-platform">platform</a>, <a href="#poetry.repo-projects">projects</a>, <a href="#poetry.repo-workspace">workspace</a>)
+poetry.repo(<a href="#poetry.repo-name">name</a>, <a href="#poetry.repo-constraint_values">constraint_values</a>, <a href="#poetry.repo-dependency_groups">dependency_groups</a>, <a href="#poetry.repo-flags">flags</a>, <a href="#poetry.repo-legacy_create_root_aliases">legacy_create_root_aliases</a>, <a href="#poetry.repo-platform">platform</a>,
+            <a href="#poetry.repo-projects">projects</a>, <a href="#poetry.repo-workspace">workspace</a>)
 poetry.package(<a href="#poetry.package-name">name</a>, <a href="#poetry.package-always_build">always_build</a>, <a href="#poetry.package-bin_paths">bin_paths</a>, <a href="#poetry.package-build_backend">build_backend</a>, <a href="#poetry.package-build_target">build_target</a>, <a href="#poetry.package-build_tools_repo">build_tools_repo</a>,
                <a href="#poetry.package-data_paths">data_paths</a>, <a href="#poetry.package-extra_build_tools">extra_build_tools</a>, <a href="#poetry.package-ignore_dependencies">ignore_dependencies</a>, <a href="#poetry.package-include_paths">include_paths</a>,
                <a href="#poetry.package-install_exclude_globs">install_exclude_globs</a>, <a href="#poetry.package-post_install_patches">post_install_patches</a>, <a href="#poetry.package-pre_build_patches">pre_build_patches</a>, <a href="#poetry.package-site_hooks">site_hooks</a>, <a href="#poetry.package-site_paths">site_paths</a>,
@@ -32,8 +32,7 @@ Override a poetry workspace member's settings.
 | :------------- | :------------- | :------------- | :------------- | :------------- |
 | <a id="poetry.repo-name"></a>name |  Override the repo name.   | <a href="https://bazel.build/concepts/labels#target-names">Name</a> | optional |  `""`  |
 | <a id="poetry.repo-constraint_values"></a>constraint_values |  A list of constraint values to apply to the generated platform.   | <a href="https://bazel.build/concepts/labels">List of labels</a> | optional |  `[]`  |
-| <a id="poetry.repo-create_transitive_aliases"></a>create_transitive_aliases |  Generate aliases for transitive single-version packages in this repo.   | Boolean | optional |  `False`  |
-| <a id="poetry.repo-dependency_groups"></a>dependency_groups |  A list of dependency groups to include. E.g. ['default', 'group:foo', '*']. Defaults to ['default'].   | List of strings | optional |  `["default"]`  |
+| <a id="poetry.repo-dependency_groups"></a>dependency_groups |  A list of target groups to include. E.g. ['default', 'group:foo', '*']. Use 'transitive' to generate aliases for transitively-reachable packages. Defaults to ['default'].   | List of strings | optional |  `["default"]`  |
 | <a id="poetry.repo-flags"></a>flags |  A list of flags to apply to the generated platform (e.g., '--@flag=value').   | List of strings | optional |  `[]`  |
 | <a id="poetry.repo-legacy_create_root_aliases"></a>legacy_create_root_aliases |  Create //:pkg aliases for bare packages in the generated repo. Useful for migrating from 1.x.   | Boolean | optional |  `False`  |
 | <a id="poetry.repo-platform"></a>platform |  An existing platform target to use directly.   | <a href="https://bazel.build/concepts/labels">Label</a> | optional |  `None`  |

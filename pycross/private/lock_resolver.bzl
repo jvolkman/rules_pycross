@@ -481,7 +481,8 @@ def resolve(
         always_include_sdist = False,
         annotations_data = None,
         default_extra_build_tools_args = None,
-        create_transitive_aliases = False):
+        include_transitive = False,
+        transitive_testonly = False):
     """Resolves dependencies from lock model data.
 
     Args:
@@ -491,7 +492,8 @@ def resolve(
         always_include_sdist: Whether to always include sdist.
         annotations_data: Annotations data.
         default_extra_build_tools_args: Default extra build tools args.
-        create_transitive_aliases: Whether to alias transitive single-version packages.
+        include_transitive: Whether to include transitive dependencies.
+        transitive_testonly: Whether to perform reachability analysis to assign testonly status.
 
     Returns:
         Dictionary of resolved packages.
@@ -623,7 +625,10 @@ def resolve(
     sorted_repo_keys = sorted(repos.keys())
     repos = {k: repos[k] for k in sorted_repo_keys}
 
-    if create_transitive_aliases:
+    testonly_pin_names = lock_model_data.get("testonly_pins", [])
+    testonly_pins_set = {p: True for p in testonly_pin_names}
+
+    if include_transitive:
         reachable_keys = _compute_reachable_keys(pins, packages_by_package_key)
         resolved_versions_by_name = {}
         for entry in resolved_packages:
@@ -647,11 +652,17 @@ def resolve(
                 base_key = "{}@{}".format(package_pin_name, latest_version)
                 if base_key in packages_by_package_key:
                     pins[package_pin_name] = {"": base_key}
+                    if transitive_testonly:
+                        testonly_pins_set[package_pin_name] = True
                 continue
             version = versions.keys()[0]
             base_key = "{}@{}".format(package_pin_name, version)
             if base_key in packages_by_package_key:
                 pins[package_pin_name] = {"": base_key}
+                if transitive_testonly:
+                    testonly_pins_set[package_pin_name] = True
+
+    testonly_pin_names = sorted(testonly_pins_set.keys())
 
     cycle_groups = _compute_cycle_groups(lock_model_packages)
 
@@ -668,4 +679,5 @@ def resolve(
         cycle_groups = cycle_groups,
         variants = lock_model_data.get("variants", []),
         resolution_marker_exprs = lock_model_data.get("resolution_marker_exprs", {}),
+        testonly_pins = testonly_pin_names,
     )
