@@ -16,8 +16,14 @@ All notable changes to this project will be documented in this file.
 
 ### Added
 
-- Dependency groups can now be marked as `testonly`. E.g.,
-  `dependency_groups = ["default", "group:dev;testonly"]`.
+- **Resolution forks.** When a lock file resolves different versions of the
+  same package for different platforms (e.g., uv's `resolution-markers`,
+  Poetry's environment markers, PDM's multi-target resolution), pycross now
+  generates conditional pins with `select()` expressions so the correct
+  version is chosen at analysis time. Supported for uv, Poetry, PDM, and
+  pylock formats.
+- **testonly dependency groups.** Dependency groups can now be marked as
+  `testonly`. E.g., `dependency_groups = ["default", "group:dev;testonly"]`.
 
 ### Fixed
 
