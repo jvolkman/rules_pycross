@@ -110,6 +110,9 @@ PACKAGE_ATTRS = dict(
     ignore_dependencies = attr.string_list(
         doc = "A list of package keys to drop from this package's declared dependencies.",
     ),
+    extra_dependencies = attr.string_list(
+        doc = "A list of package keys to add to this package's runtime dependencies.",
+    ),
     install_exclude_globs = attr.string_list(
         doc = "A list of globs for files to exclude during installation.",
     ),
@@ -157,6 +160,7 @@ def _tag_to_annotation_data(pkg, wildcard_pkg = None):
         build_tools_repo = pkg.build_tools_repo or (wildcard_pkg.build_tools_repo if wildcard_pkg else None),
         build_target = str(pkg.build_target) if pkg.build_target else (str(wildcard_pkg.build_target) if wildcard_pkg and wildcard_pkg.build_target else None),
         ignore_dependencies = pkg.ignore_dependencies or (wildcard_pkg.ignore_dependencies if wildcard_pkg else []),
+        extra_dependencies = pkg.extra_dependencies or (wildcard_pkg.extra_dependencies if wildcard_pkg else []),
         install_exclude_globs = pkg.install_exclude_globs or (wildcard_pkg.install_exclude_globs if wildcard_pkg else []),
         post_install_patches = pkg.post_install_patches or (wildcard_pkg.post_install_patches if wildcard_pkg else []),
         pre_build_patches = pkg.pre_build_patches or (wildcard_pkg.pre_build_patches if wildcard_pkg else []),
