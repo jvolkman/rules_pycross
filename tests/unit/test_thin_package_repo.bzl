@@ -432,6 +432,32 @@ def _test_requirements_bzl_all_unconditional(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
     analysis_test(name = name, target = name + "_subject", impl = _test_requirements_bzl_all_unconditional_impl)
 
+# ── Test: _requirements_bzl with extra-bearing pins ────────────────
+
+# buildifier: disable=unused-variable
+def _test_requirements_bzl_extra_pins_impl(env, target):
+    """Extra-bearing pins produce distinct :[extra] entries in all_requirements."""
+    mock_rctx = struct(name = "my_repo")
+    pins = {
+        "foo[bar]": {"": "foo[bar]@1.0"},
+        "foo[baz]": {"": "foo[baz]@1.0"},
+    }
+    packages = {
+        "foo@1.0": {
+            "wheel_candidates": [{"filename": "foo-1.0-py3-none-any.whl"}],
+            "sdist_file": {"key": "foo_sdist"},
+        },
+    }
+    res = requirements_bzl_for_testing(mock_rctx, pins, packages)
+
+    # Both extras should appear as separate entries.
+    env.expect.that_bool("@@my_repo//foo:[bar]" in res).equals(True)
+    env.expect.that_bool("@@my_repo//foo:[baz]" in res).equals(True)
+
+def _test_requirements_bzl_extra_pins(name):
+    util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
+    analysis_test(name = name, target = name + "_subject", impl = _test_requirements_bzl_extra_pins_impl)
+
 # ── Test suite ─────────────────────────────────────────────────────
 
 def thin_package_repo_test_suite(name):
@@ -450,5 +476,6 @@ def thin_package_repo_test_suite(name):
             _test_is_platform_specific,
             _test_requirements_bzl_maybe_aliases,
             _test_requirements_bzl_all_unconditional,
+            _test_requirements_bzl_extra_pins,
         ],
     )
