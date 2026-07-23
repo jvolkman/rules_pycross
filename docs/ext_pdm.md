@@ -11,9 +11,9 @@ pdm = use_extension("@rules_pycross//pycross/extensions:pdm.bzl", "pdm")
 pdm.repo(<a href="#pdm.repo-name">name</a>, <a href="#pdm.repo-constraint_values">constraint_values</a>, <a href="#pdm.repo-dependency_groups">dependency_groups</a>, <a href="#pdm.repo-flags">flags</a>, <a href="#pdm.repo-legacy_create_root_aliases">legacy_create_root_aliases</a>, <a href="#pdm.repo-platform">platform</a>,
          <a href="#pdm.repo-projects">projects</a>, <a href="#pdm.repo-workspace">workspace</a>)
 pdm.package(<a href="#pdm.package-name">name</a>, <a href="#pdm.package-always_build">always_build</a>, <a href="#pdm.package-bin_paths">bin_paths</a>, <a href="#pdm.package-build_backend">build_backend</a>, <a href="#pdm.package-build_target">build_target</a>, <a href="#pdm.package-build_tools_repo">build_tools_repo</a>,
-            <a href="#pdm.package-data_paths">data_paths</a>, <a href="#pdm.package-extra_build_tools">extra_build_tools</a>, <a href="#pdm.package-ignore_dependencies">ignore_dependencies</a>, <a href="#pdm.package-include_paths">include_paths</a>, <a href="#pdm.package-install_exclude_globs">install_exclude_globs</a>,
-            <a href="#pdm.package-post_install_patches">post_install_patches</a>, <a href="#pdm.package-pre_build_patches">pre_build_patches</a>, <a href="#pdm.package-site_hooks">site_hooks</a>, <a href="#pdm.package-site_paths">site_paths</a>, <a href="#pdm.package-wheel_library_tags">wheel_library_tags</a>,
-            <a href="#pdm.package-workspace">workspace</a>)
+            <a href="#pdm.package-data_paths">data_paths</a>, <a href="#pdm.package-extra_build_tools">extra_build_tools</a>, <a href="#pdm.package-extra_dependencies">extra_dependencies</a>, <a href="#pdm.package-ignore_dependencies">ignore_dependencies</a>, <a href="#pdm.package-include_paths">include_paths</a>,
+            <a href="#pdm.package-install_exclude_globs">install_exclude_globs</a>, <a href="#pdm.package-post_install_patches">post_install_patches</a>, <a href="#pdm.package-pre_build_patches">pre_build_patches</a>, <a href="#pdm.package-site_hooks">site_hooks</a>, <a href="#pdm.package-site_paths">site_paths</a>,
+            <a href="#pdm.package-wheel_library_tags">wheel_library_tags</a>, <a href="#pdm.package-workspace">workspace</a>)
 pdm.workspace(<a href="#pdm.workspace-name">name</a>, <a href="#pdm.workspace-disallow_builds">disallow_builds</a>, <a href="#pdm.workspace-extra_project_files">extra_project_files</a>, <a href="#pdm.workspace-local_wheels">local_wheels</a>, <a href="#pdm.workspace-lock_file">lock_file</a>, <a href="#pdm.workspace-pypi_indexes">pypi_indexes</a>)
 </pre>
 
@@ -57,6 +57,7 @@ Specify package-specific settings.
 | <a id="pdm.package-build_tools_repo"></a>build_tools_repo |  Optional repo to use for resolving sdist build dependencies for this package.   | String | optional |  `""`  |
 | <a id="pdm.package-data_paths"></a>data_paths |  Override the auto-detected data paths.   | List of strings | optional |  `[]`  |
 | <a id="pdm.package-extra_build_tools"></a>extra_build_tools |  A list of additional package keys to use when building this package from source.   | List of strings | optional |  `[]`  |
+| <a id="pdm.package-extra_dependencies"></a>extra_dependencies |  A list of package keys to add to this package's runtime dependencies.   | List of strings | optional |  `[]`  |
 | <a id="pdm.package-ignore_dependencies"></a>ignore_dependencies |  A list of package keys to drop from this package's declared dependencies.   | List of strings | optional |  `[]`  |
 | <a id="pdm.package-include_paths"></a>include_paths |  Override the auto-detected include paths.   | List of strings | optional |  `[]`  |
 | <a id="pdm.package-install_exclude_globs"></a>install_exclude_globs |  A list of globs for files to exclude during installation.   | List of strings | optional |  `[]`  |

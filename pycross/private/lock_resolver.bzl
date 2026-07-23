@@ -65,12 +65,23 @@ def _apply_annotation(ann, versions_by_name, all_package_keys):
             fail('package_ignore_dependencies entry "{}" matches no packages'.format(dep))
         ignore_deps[dep] = True
 
+    extra_deps = []
+    for dep in ann.get("extra_dependencies", []):
+        resolved_dep = _resolve_single_version(
+            dep,
+            versions_by_name,
+            all_package_keys,
+            "extra_dependencies",
+        )
+        extra_deps.append(resolved_dep)
+
     return struct(
         extra_build_tools = build_deps,
         build_tools_repo = ann.get("build_tools_repo"),
         build_target = ann.get("build_target"),
         always_build = ann.get("always_build", False),
         ignore_dependencies = ignore_deps,
+        extra_dependencies = extra_deps,
         install_exclude_globs = {g: True for g in ann.get("install_exclude_globs", [])},
         post_install_patches = ann.get("post_install_patches", []),
         pre_build_patches = ann.get("pre_build_patches", []),
@@ -215,6 +226,15 @@ def _create_package_resolver(pkg_key, pkg, ann, default_extra_build_tools, conte
             marker_dependencies.append({
                 "key": dep_key,
                 "marker": dep.get("marker", ""),
+            })
+            all_dependency_keys.append(dep_key)
+
+    ann_extra_deps = ann.extra_dependencies if ann else []
+    for dep_key in ann_extra_deps:
+        if dep_key not in normal_deps:
+            marker_dependencies.append({
+                "key": dep_key,
+                "marker": "",
             })
             all_dependency_keys.append(dep_key)
 

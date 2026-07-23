@@ -161,6 +161,39 @@ def _test_extra_build_tools_override(name):
     analysis_test(name = name, target = name + "_subject", impl = _test_extra_build_tools_override_impl)
 
 # buildifier: disable=unused-variable
+def _test_extra_dependencies_impl(env, target):
+    lock_model_data = {
+        "packages": {
+            "foo@1.0": _make_pkg("foo", "1.0", [_make_file("foo-1.0.tar.gz")]),
+            "bar@1.0": _make_pkg("bar", "1.0", [_make_file("bar-1.0.tar.gz")]),
+        },
+        "pins": {
+            "foo": "foo@1.0",
+        },
+    }
+
+    annotations_data = {
+        "foo": {
+            "extra_dependencies": ["bar@1.0"],
+        },
+    }
+
+    res = resolve(lock_model_data, annotations_data = annotations_data)
+    pkg = res.packages["foo@1.0"]
+
+    # bar is added as an unconditional (empty-marker) runtime dependency of foo:
+    # the additive counterpart to ignore_dependencies.
+    env.expect.that_collection([md["key"] for md in pkg["marker_dependencies"]]).contains_exactly(["bar@1.0"])
+    env.expect.that_str(pkg["marker_dependencies"][0]["marker"]).equals("")
+
+    # ...and it is pulled into the resolved closure even though nothing else requires it.
+    env.expect.that_collection(res.packages.keys()).contains_exactly(["foo@1.0", "bar@1.0"])
+
+def _test_extra_dependencies(name):
+    util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
+    analysis_test(name = name, target = name + "_subject", impl = _test_extra_dependencies_impl)
+
+# buildifier: disable=unused-variable
 def _test_synthesized_deps_impl(env, target):
     lock_model_data = {
         "packages": {
@@ -2099,6 +2132,7 @@ def lock_resolver_test_suite(name):
             _test_unconditional_and_conditional_deps,
             _test_marker_preserved,
             _test_ignore_dependencies,
+            _test_extra_dependencies,
             _test_multi_version_dep_resolution,
             _test_extra_build_tools,
             _test_build_deps_not_duplicated,
