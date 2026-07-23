@@ -46,6 +46,7 @@ def _requirements_bzl(rctx, pins, packages):
     ]
     for pin in sorted(pins.keys()):
         pin_target_dict = pins[pin]
+        pin_parts = parse_package_key(pin)
 
         # Check if ANY variant of this pin is platform-specific.
         is_conditional = False
@@ -55,11 +56,13 @@ def _requirements_bzl(rctx, pins, packages):
                 is_conditional = True
                 break
 
-        if is_conditional:
-            us_pin = underscore_name(pin)
+        us_pin = underscore_name(pin_parts.name)
+        if pin_parts.extra:
+            lines.append('    "@@{repo_name}//{pin}:[{extra}]",'.format(repo_name = rctx.name, pin = us_pin, extra = pin_parts.extra))
+        elif is_conditional:
             lines.append('    "@@{repo_name}//{pin}:{maybe}",'.format(repo_name = rctx.name, pin = us_pin, maybe = _safe_name(us_pin, "maybe")))
         else:
-            lines.append('    "@@{repo_name}//{pin}",'.format(repo_name = rctx.name, pin = underscore_name(pin)))
+            lines.append('    "@@{repo_name}//{pin}",'.format(repo_name = rctx.name, pin = us_pin))
     lines.append("]")
     return "\n".join(lines) + "\n"
 

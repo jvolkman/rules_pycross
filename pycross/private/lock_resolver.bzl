@@ -618,7 +618,12 @@ def resolve(
     raw_pins = lock_model_data.get("pins", {})
     pins = {}
     for k, v in raw_pins.items():
-        name = parse_package_key(k).name
+        parts = parse_package_key(k)
+
+        if parts.extra:
+            name = "{}[{}]".format(parts.name, parts.extra)
+        else:
+            name = parts.name
         if type(v) == "string":
             pins[name] = {"": v}
         else:

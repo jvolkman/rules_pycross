@@ -224,6 +224,28 @@ def _test_synthesized_deps(name):
     analysis_test(name = name, target = name + "_subject", impl = _test_synthesized_deps_impl)
 
 # buildifier: disable=unused-variable
+def _test_multi_extra_pins_impl(env, target):
+    lock_model_data = {
+        "packages": {
+            "foo@1.0": _make_pkg("foo", "1.0", [_make_file("foo-1.0.tar.gz")]),
+        },
+        "pins": {
+            "foo[bar]": "foo[bar]@1.0",
+            "foo[baz]": "foo[baz]@1.0",
+        },
+    }
+
+    res = resolve(lock_model_data)
+
+    # Both extras survive as distinct pins rather than collapsing to a single
+    # "foo" entry, which would silently drop all but the last extra.
+    env.expect.that_collection(res.pins.keys()).contains_at_least(["foo[bar]", "foo[baz]"])
+
+def _test_multi_extra_pins(name):
+    util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
+    analysis_test(name = name, target = name + "_subject", impl = _test_multi_extra_pins_impl)
+
+# buildifier: disable=unused-variable
 def _test_cycle_two_nodes_impl(env, target):
     lock_model_data = {
         "packages": {
@@ -2100,6 +2122,7 @@ def lock_resolver_test_suite(name):
             _test_create_transitive_aliases_with_extras,
             _test_extra_build_tools_override,
             _test_synthesized_deps,
+            _test_multi_extra_pins,
             _test_cycle_two_nodes,
             _test_cycle_via_extra,
             _test_cycle_three_nodes,
