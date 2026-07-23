@@ -161,6 +161,15 @@ class WheelInstallerValidationTest(unittest.TestCase):
             _validate_wheel_identity(whl, "six", "1.17.0")
         self.assertIn("wheel version mismatch", str(cm.exception))
 
+    def test_local_version_segment_passes(self):
+        from pycross.private.tools.wheel_installer import _validate_wheel_identity
+
+        # Wheel filename carries a PEP 440 local version segment (e.g. a CUDA
+        # build) that the locked version omits; only the public version is compared.
+        whl = self._create_wheel("foo-1.0+cu130-py3-none-any.whl", "foo", "1.0")
+        # Should not raise
+        _validate_wheel_identity(whl, "foo", "1.0")
+
     def test_none_expected_skips_check(self):
         from pycross.private.tools.wheel_installer import _validate_wheel_identity
 

@@ -93,7 +93,11 @@ def _validate_wheel_identity(
             f"but wheel filename has '{actual_name}'"
         )
 
-    if expected_version and actual_version != expected_version:
+    # A wheel filename may carry a local version segment (e.g. a CUDA
+    # build `3.0.0+cu130torch2110`) that the locked version (`3.0.0`) omits.
+    # Compare only the public version (everything before `+`) so such wheels
+    # are accepted while genuine version differences are still rejected.
+    if expected_version and actual_version.split("+", 1)[0] != expected_version.split("+", 1)[0]:
         raise SystemExit(
             f"error: wheel version mismatch for {wheel_path.name}: "
             f"expected version '{expected_version}' "
