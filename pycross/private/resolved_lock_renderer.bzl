@@ -33,6 +33,64 @@ def _is_in_same_cycle(dep_key, pkg, packages):
         return False
     return dep_pkg.get("cycle_group") == cycle_group
 
+def _render_package_override_label_validation_test_rule(lines):
+    lines.extend([
+        "def _package_override_label_validation_test_impl(ctx):",
+        _ind("_ = ctx.attr.targets"),
+        _ind('executable = ctx.actions.declare_file(ctx.label.name + ".sh")'),
+        _ind("ctx.actions.write("),
+        _ind("output = executable,", 2),
+        _ind('content = "#!/bin/sh\\nexit 0\\n",', 2),
+        _ind("is_executable = True,", 2),
+        _ind(")"),
+        _ind("return [DefaultInfo(executable = executable)]"),
+        "",
+        "_package_override_label_validation_test = rule(",
+        _ind("implementation = _package_override_label_validation_test_impl,"),
+        _ind("attrs = {"),
+        _ind('"targets": attr.label_list(', 2),
+        _ind("allow_files = True,", 3),
+        _ind('doc = "Targets referenced by pycross package overrides.",', 3),
+        _ind("),", 2),
+        _ind("},"),
+        _ind("test = True,"),
+        ")",
+        "",
+    ])
+
+def _collect_package_override_labels(packages):
+    labels = {}
+    for _pkg_key, pkg in packages.items():
+        build_target = pkg.get("build_target")
+        if build_target:
+            labels[build_target] = True
+
+        sdist_file = pkg.get("sdist_file")
+        if sdist_file and sdist_file.get("label"):
+            labels[sdist_file["label"]] = True
+
+        for candidate in pkg.get("wheel_candidates", []):
+            file_ref = candidate.get("file_reference", {})
+            if file_ref.get("label"):
+                labels[file_ref["label"]] = True
+
+    return sorted(labels.keys())
+
+def _render_package_override_label_validation_test(lines, package_override_labels):
+    lines.extend([
+        _ind("_package_override_label_validation_test("),
+        _ind('name = "validate_package_override_labels",', 2),
+        _ind("targets = [", 2),
+    ])
+    for label in package_override_labels:
+        lines.append(_ind('"{}",'.format(label), 3))
+    lines.extend([
+        _ind("],", 2),
+        _ind('visibility = ["//visibility:public"],', 2),
+        _ind(")"),
+        "",
+    ])
+
 def _wheel_target(file_ref, sdist_file, pkg_key, pkg, repo_map, sdist_map, rctx_name):
     if file_ref.get("label"):
         return file_ref["label"]
@@ -603,11 +661,16 @@ def render_lock_bzl(lock, repo_map, sdist_map = None, rctx_name = ""):
 
     lines.extend([
         "",
+    ])
+    _render_package_override_label_validation_test_rule(lines)
+    lines.extend([
         "# buildifier: disable=unnamed-macro",
         "def targets():",
         _ind('"""Generated package targets."""'),
         "",
     ])
+
+    package_override_labels = _collect_package_override_labels(packages)
 
     # 1. Marker evaluators for dependency markers (deduped)
     unique_markers = _collect_unique_markers(packages)
@@ -626,5 +689,8 @@ def render_lock_bzl(lock, repo_map, sdist_map = None, rctx_name = ""):
 
     # 4. Extras aggregates ([_all_] targets)
     _render_extras_aggregates(lines, packages)
+
+    # 5. Package override label validation
+    _render_package_override_label_validation_test(lines, package_override_labels)
 
     return "\n".join(lines) + "\n"
