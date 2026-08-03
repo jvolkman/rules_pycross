@@ -101,6 +101,7 @@ def workspace_lock_struct(ws_tag, repo_name, workspace_name, transition_attrs):
         workspace = workspace_name,
         local_wheels = ws_tag.local_wheels,
         disallow_builds = ws_tag.disallow_builds,
+        incompatible_wheel_fallback = ws_tag.incompatible_wheel_fallback,
         packages = {},
         flags = transition_attrs.get("flags", []),
         constraint_values = transition_attrs.get("constraint_values", []),

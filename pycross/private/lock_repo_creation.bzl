@@ -43,6 +43,7 @@ def create_repos(
         repo_constraint_values,
         repo_platforms,
         repo_disallow_builds = {},
+        workspace_incompatible_wheel_fallbacks = {},
         workspace_pypi_indexes = {},
         resolved_locks = None):
     """Create all Bazel repos from resolved lock data.
@@ -55,6 +56,8 @@ def create_repos(
         repo_constraint_values: Dict of repo_name -> JSON-encoded constraint_values list.
         repo_platforms: Dict of repo_name -> platform string.
         repo_disallow_builds: Dict of repo_name -> boolean indicating if builds are disallowed.
+        workspace_incompatible_wheel_fallbacks: Dict of workspace_name -> boolean indicating
+            whether incompatible wheel failures should be deferred to execution.
         workspace_pypi_indexes: Dict of workspace_name -> list of string index URLs.
         resolved_locks: Optional dict of repo_name -> parsed lock JSON dict. When provided,
             lock data is taken from this dict instead of reading from all_locks file labels.
@@ -312,6 +315,7 @@ def create_repos(
             repo_map = merged_repo_map,
             sdist_map = merged_sdist_map,
             backend_configs = backend_configs_json,
+            incompatible_wheel_fallback = workspace_incompatible_wheel_fallbacks.get(workspace_name, False),
             member_lock_files = member_lock_files,
         )
         if ws_overrides:

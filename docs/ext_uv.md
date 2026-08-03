@@ -14,8 +14,8 @@ uv.package(<a href="#uv.package-name">name</a>, <a href="#uv.package-always_buil
            <a href="#uv.package-extra_build_tools">extra_build_tools</a>, <a href="#uv.package-extra_dependencies">extra_dependencies</a>, <a href="#uv.package-ignore_dependencies">ignore_dependencies</a>, <a href="#uv.package-include_paths">include_paths</a>,
            <a href="#uv.package-install_exclude_globs">install_exclude_globs</a>, <a href="#uv.package-post_install_patches">post_install_patches</a>, <a href="#uv.package-pre_build_patches">pre_build_patches</a>, <a href="#uv.package-site_hooks">site_hooks</a>, <a href="#uv.package-site_paths">site_paths</a>,
            <a href="#uv.package-wheel_library_tags">wheel_library_tags</a>, <a href="#uv.package-workspace">workspace</a>)
-uv.workspace(<a href="#uv.workspace-name">name</a>, <a href="#uv.workspace-disallow_builds">disallow_builds</a>, <a href="#uv.workspace-extra_project_files">extra_project_files</a>, <a href="#uv.workspace-local_wheels">local_wheels</a>, <a href="#uv.workspace-lock_file">lock_file</a>, <a href="#uv.workspace-pypi_indexes">pypi_indexes</a>,
-             <a href="#uv.workspace-require_static_urls">require_static_urls</a>)
+uv.workspace(<a href="#uv.workspace-name">name</a>, <a href="#uv.workspace-disallow_builds">disallow_builds</a>, <a href="#uv.workspace-extra_project_files">extra_project_files</a>, <a href="#uv.workspace-incompatible_wheel_fallback">incompatible_wheel_fallback</a>, <a href="#uv.workspace-local_wheels">local_wheels</a>,
+             <a href="#uv.workspace-lock_file">lock_file</a>, <a href="#uv.workspace-pypi_indexes">pypi_indexes</a>, <a href="#uv.workspace-require_static_urls">require_static_urls</a>)
 </pre>
 
 
@@ -82,6 +82,7 @@ Declare a uv workspace from a shared lock file.
 | <a id="uv.workspace-name"></a>name |  Workspace name. Used to link members to this workspace.   | <a href="https://bazel.build/concepts/labels#target-names">Name</a> | required |  |
 | <a id="uv.workspace-disallow_builds"></a>disallow_builds |  If True, only pre-built wheels are allowed.   | Boolean | optional |  `False`  |
 | <a id="uv.workspace-extra_project_files"></a>extra_project_files |  Optional list of extra pyproject.toml files to consider.   | <a href="https://bazel.build/concepts/labels">List of labels</a> | optional |  `[]`  |
+| <a id="uv.workspace-incompatible_wheel_fallback"></a>incompatible_wheel_fallback |  If True, defer failures for incompatible wheels from analysis to execution.   | Boolean | optional |  `False`  |
 | <a id="uv.workspace-local_wheels"></a>local_wheels |  A list of local .whl files to consider when processing lock files.   | <a href="https://bazel.build/concepts/labels">List of labels</a> | optional |  `[]`  |
 | <a id="uv.workspace-lock_file"></a>lock_file |  The shared lock file for the workspace.   | <a href="https://bazel.build/concepts/labels">Label</a> | required |  |
 | <a id="uv.workspace-pypi_indexes"></a>pypi_indexes |  List of PyPI-compatible indexes to use for downloading packages.   | List of strings | optional |  `[]`  |
