@@ -500,6 +500,75 @@ def _test_multi_platform_repo_map(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
     analysis_test(name = name, target = name + "_subject", impl = _test_multi_platform_repo_map_impl)
 
+# ── Test: unsupported wheel execution fallback ────────────────────
+
+# buildifier: disable=unused-variable
+def _test_unsupported_wheel_fallback_impl(env, target):
+    """Verify incompatible wheels analyze successfully and fail during execution."""
+    lock = {
+        "packages": {
+            "platform_pkg@1.0": {
+                "wheel_candidates": [
+                    {
+                        "filename": "platform_pkg-1.0-cp310-cp310-manylinux_2_17_x86_64.whl",
+                        "file_reference": {"key": "plat_linux"},
+                    },
+                ],
+            },
+            "sdist_pkg@2.0": {
+                "sdist_file": {"key": "sdist_key"},
+                "wheel_candidates": [
+                    {
+                        "filename": "sdist_pkg-2.0-cp310-cp310-manylinux_2_17_x86_64.whl",
+                        "file_reference": {"key": "sdist_linux"},
+                    },
+                ],
+            },
+        },
+    }
+    repo_map = {
+        "plat_linux": "@repo//plat:linux_wheel",
+        "sdist_key": "@repo//sdist:sdist",
+        "sdist_linux": "@repo//sdist:linux_wheel",
+    }
+    default_res = render_lock_bzl(lock, repo_map, rctx_name = "my_rctx")
+    env.expect.that_bool("def _unsupported_wheel_impl(ctx):" in default_res).equals(False)
+
+    default_wheel_alias_section = default_res.split('name = "_wheel_platform_pkg@1.0"')[1].split(")", 1)[0]
+    env.expect.that_bool(
+        '"//conditions:default": "@rules_pycross//pycross/private:no_match_error"' in default_wheel_alias_section,
+    ).equals(True)
+
+    res = render_lock_bzl(
+        lock,
+        repo_map,
+        rctx_name = "my_rctx",
+        incompatible_wheel_fallback = True,
+    )
+
+    # The generated rule provides one .whl artifact during analysis, with a
+    # generating action that reports the unsupported package during execution.
+    env.expect.that_bool("def _unsupported_wheel_impl(ctx):" in res).equals(True)
+    env.expect.that_bool('ctx.actions.declare_file(ctx.label.name + ".whl")' in res).equals(True)
+    env.expect.that_bool("ctx.actions.run_shell(" in res).equals(True)
+    env.expect.that_bool("No compatible wheel is available for ${PYCROSS_PACKAGE}" in res).equals(True)
+    env.expect.that_bool("DefaultInfo(files = depset([wheel]))" in res).equals(True)
+
+    fallback_section = res.split('name = "_unsupported_wheel_platform_pkg@1.0"')[1].split(")", 1)[0]
+    env.expect.that_bool('package = "platform_pkg@1.0"' in fallback_section).equals(True)
+
+    wheel_alias_section = res.split('name = "_wheel_platform_pkg@1.0"')[1].split(")", 1)[0]
+    env.expect.that_bool(
+        '"//conditions:default": ":_unsupported_wheel_platform_pkg@1.0"' in wheel_alias_section,
+    ).equals(True)
+
+    # Packages with an sdist retain the source-build fallback.
+    env.expect.that_bool("_unsupported_wheel_sdist_pkg@2.0" in res).equals(False)
+
+def _test_unsupported_wheel_fallback(name):
+    util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
+    analysis_test(name = name, target = name + "_subject", impl = _test_unsupported_wheel_fallback_impl)
+
 # ── Test: _available_ config_setting_group ─────────────────────────
 
 # buildifier: disable=unused-variable
@@ -711,6 +780,7 @@ def resolved_lock_renderer_test_suite(name):
             _test_no_cycles_no_cycle_targets,
             _test_marker_deps_rendering,
             _test_multi_platform_repo_map,
+            _test_unsupported_wheel_fallback,
             _test_available_config_setting_group,
             _test_no_available_when_all_have_sdist,
             _test_resolution_marker_evaluator_rendering,

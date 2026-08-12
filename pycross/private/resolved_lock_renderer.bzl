@@ -24,6 +24,32 @@ def _ind(text, tabs = 1):
 def _sanitize_name(name):
     return name.lower().replace("-", "_").replace("@", "_").replace("+", "_").replace(".", "_").replace("[", "_").replace("]", "_")
 
+def _render_unsupported_wheel_rule(lines):
+    """Render the rule used to defer incompatible wheel failures to execution."""
+    lines.extend([
+        "def _unsupported_wheel_impl(ctx):",
+        _ind('wheel = ctx.actions.declare_file(ctx.label.name + ".whl")'),
+        _ind("ctx.actions.run_shell("),
+        _ind("outputs = [wheel],", 2),
+        _ind('command = \'echo "No compatible wheel is available for ${PYCROSS_PACKAGE} in the selected target environment." >&2; exit 1\',', 2),
+        _ind('env = {"PYCROSS_PACKAGE": ctx.attr.package},', 2),
+        _ind('mnemonic = "UnsupportedPycrossWheel",', 2),
+        _ind('progress_message = "Rejecting unsupported wheel {}".format(ctx.attr.package),', 2),
+        _ind(")"),
+        _ind("return [DefaultInfo(files = depset([wheel]))]"),
+        "",
+        "_unsupported_wheel = rule(",
+        _ind("implementation = _unsupported_wheel_impl,"),
+        _ind("attrs = {"),
+        _ind('"package": attr.string(', 2),
+        _ind("mandatory = True,", 3),
+        _ind('doc = "The locked Python package without a wheel for the selected target environment.",', 3),
+        _ind("),", 2),
+        _ind("},"),
+        ")",
+        "",
+    ])
+
 def _is_in_same_cycle(dep_key, pkg, packages):
     cycle_group = pkg.get("cycle_group")
     if not cycle_group:
@@ -279,7 +305,15 @@ def _render_marker_cycle_member_deps(lines, cycle_groups, packages):
             lines.append(_ind(")"))
             lines.append("")
 
-def _render_marker_wheel_chooser(lines, pkg_key, pkg, repo_map, sdist_map, rctx_name, sdist_target = None):
+def _render_marker_wheel_chooser(
+        lines,
+        pkg_key,
+        pkg,
+        repo_map,
+        sdist_map,
+        rctx_name,
+        sdist_target = None,
+        incompatible_wheel_fallback = False):
     """Render a wheel chooser target and per-wheel config_settings + alias."""
     candidates = pkg.get("wheel_candidates", [])
     if not candidates:
@@ -321,6 +355,17 @@ def _render_marker_wheel_chooser(lines, pkg_key, pkg, repo_map, sdist_map, rctx_
             "",
         ])
 
+    unsupported_wheel_target = None
+    if not sdist_target and incompatible_wheel_fallback:
+        unsupported_wheel_target = ":_unsupported_wheel_{}".format(pkg_key)
+        lines.extend([
+            _ind("_unsupported_wheel("),
+            _ind('name = "_unsupported_wheel_{}",'.format(pkg_key), 2),
+            _ind('package = "{}",'.format(pkg_key), 2),
+            _ind(")"),
+            "",
+        ])
+
     # Wheel alias selecting over the config_settings
     lines.extend([
         _ind("native.alias("),
@@ -331,8 +376,8 @@ def _render_marker_wheel_chooser(lines, pkg_key, pkg, repo_map, sdist_map, rctx_
         filename = candidate["filename"]
         cs_name = "_wheel_cs_{}_{}".format(pkg_key, _sanitize_name(filename))
         lines.append(_ind('":{}": "{}",'.format(cs_name, target), 3))
-    no_match_target = sdist_target if sdist_target else "@rules_pycross//pycross/private:no_match_error"
-    lines.append(_ind('"//conditions:default": "{}",'.format(no_match_target), 3))
+    fallback_target = sdist_target or unsupported_wheel_target or "@rules_pycross//pycross/private:no_match_error"
+    lines.append(_ind('"//conditions:default": "{}",'.format(fallback_target), 3))
     lines.extend([
         _ind("}),", 2),
         _ind(")"),
@@ -340,7 +385,7 @@ def _render_marker_wheel_chooser(lines, pkg_key, pkg, repo_map, sdist_map, rctx_
     ])
 
     # Availability config_setting_group: ORs all per-wheel config_settings.
-    # Only emitted for packages that would fall to no_match_error (no sdist),
+    # Only emitted for packages without an sdist fallback,
     # so that all_requirements can use select() to exclude them on incompatible
     # platforms.
     if not sdist_target and resolved_candidates:
@@ -399,7 +444,15 @@ def _render_marker_package_deps(lines, pkg_key, pkg_key_san, pkg, packages):
 
     lines.append("")
 
-def _render_marker_package(lines, pkg_key, pkg, packages, repo_map, sdist_map, rctx_name):
+def _render_marker_package(
+        lines,
+        pkg_key,
+        pkg,
+        packages,
+        repo_map,
+        sdist_map,
+        rctx_name,
+        incompatible_wheel_fallback = False):
     """Renders all targets for a single package using marker-based deps and wheel selection."""
     pkg_key_san = _sanitize_name(pkg_key)
     parts = parse_package_key(pkg_key)
@@ -459,7 +512,16 @@ def _render_marker_package(lines, pkg_key, pkg, packages, repo_map, sdist_map, r
 
     # Wheel chooser
     if has_wheel_candidates:
-        _render_marker_wheel_chooser(lines, pkg_key, pkg, repo_map, sdist_map, rctx_name, sdist_target = sdist_target)
+        _render_marker_wheel_chooser(
+            lines,
+            pkg_key,
+            pkg,
+            repo_map,
+            sdist_map,
+            rctx_name,
+            sdist_target = sdist_target,
+            incompatible_wheel_fallback = incompatible_wheel_fallback,
+        )
     else:
         # No wheel candidates, alias directly to sdist_target or no_match_error
         target = sdist_target if sdist_target else "@rules_pycross//pycross/private:no_match_error"
@@ -551,7 +613,12 @@ def _render_marker_package(lines, pkg_key, pkg, packages, repo_map, sdist_map, r
 
 # ---- Main render function ---------------------------------------------------
 
-def render_lock_bzl(lock, repo_map, sdist_map = None, rctx_name = ""):
+def render_lock_bzl(
+        lock,
+        repo_map,
+        sdist_map = None,
+        rctx_name = "",
+        incompatible_wheel_fallback = False):
     """Renders a lock.bzl file from a resolved lock structure.
 
     Args:
@@ -559,6 +626,8 @@ def render_lock_bzl(lock, repo_map, sdist_map = None, rctx_name = ""):
         repo_map: A dict mapping file keys to repo labels.
         sdist_map: A dict mapping sdist package keys to their wheel target labels.
         rctx_name: The name of the package repository.
+        incompatible_wheel_fallback: Whether incompatible wheel failures should be
+            deferred from analysis to execution.
 
     Returns:
         A string containing the rendered lock.bzl file.
@@ -601,8 +670,11 @@ def render_lock_bzl(lock, repo_map, sdist_map = None, rctx_name = ""):
     if needs_selects:
         lines.append('load("@bazel_skylib//lib:selects.bzl", "selects")')
 
+    lines.append("")
+    if incompatible_wheel_fallback:
+        _render_unsupported_wheel_rule(lines)
+
     lines.extend([
-        "",
         "# buildifier: disable=unnamed-macro",
         "def targets():",
         _ind('"""Generated package targets."""'),
@@ -622,7 +694,16 @@ def render_lock_bzl(lock, repo_map, sdist_map = None, rctx_name = ""):
 
     # 3. Packages
     for pkg_key, pkg in sorted(packages.items()):
-        _render_marker_package(lines, pkg_key, pkg, packages, repo_map, sdist_map, rctx_name)
+        _render_marker_package(
+            lines,
+            pkg_key,
+            pkg,
+            packages,
+            repo_map,
+            sdist_map,
+            rctx_name,
+            incompatible_wheel_fallback = incompatible_wheel_fallback,
+        )
 
     # 4. Extras aggregates ([_all_] targets)
     _render_extras_aggregates(lines, packages)

@@ -165,7 +165,16 @@ def _package_repo_impl(rctx):
     rctx.file("REPO.bazel", "")
 
     # 1. Render _lock/lock.bzl and _lock/BUILD.bazel
-    rctx.file("_lock/lock.bzl", render_lock_bzl(lock, repo_map, sdist_map, rctx.name))
+    rctx.file(
+        "_lock/lock.bzl",
+        render_lock_bzl(
+            lock,
+            repo_map,
+            sdist_map,
+            rctx.name,
+            incompatible_wheel_fallback = rctx.attr.incompatible_wheel_fallback,
+        ),
+    )
 
     lock_build_lines = [
         'package(default_visibility = ["//visibility:public"])',
@@ -469,6 +478,10 @@ package_repo = repository_rule(
         ),
         "backend_configs": attr.string_dict(
             doc = "Maps pycross rule names to JSON-encoded config dicts with 'rule_bzl' and 'tool_packages'.",
+        ),
+        "incompatible_wheel_fallback": attr.bool(
+            doc = "Defer failures for incompatible wheels from analysis to execution.",
+            default = False,
         ),
         "member_lock_files": attr.string_dict(
             doc = "Maps member repo names to their resolved lock file labels.",

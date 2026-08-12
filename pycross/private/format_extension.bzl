@@ -40,6 +40,10 @@ WORKSPACE_COMMON_ATTRS = dict(
     disallow_builds = attr.bool(
         doc = "If True, only pre-built wheels are allowed.",
     ),
+    incompatible_wheel_fallback = attr.bool(
+        doc = "If True, defer failures for incompatible wheels from analysis to execution.",
+        default = False,
+    ),
     pypi_indexes = attr.string_list(
         doc = "List of PyPI-compatible indexes to use for downloading packages.",
     ),
@@ -392,9 +396,11 @@ def make_format_extension(
         repo_constraint_values = {}
         repo_platforms = {}
         repo_disallow_builds = {}
+        workspace_incompatible_wheel_fallbacks = {}
 
         for repo_info in lock_repos.values():
             workspace_memberships[repo_info.repo_name] = repo_info.workspace
+            workspace_incompatible_wheel_fallbacks[repo_info.workspace] = repo_info.incompatible_wheel_fallback
 
             if repo_info.flags:
                 repo_flags[repo_info.repo_name] = json.encode(repo_info.flags)
@@ -413,6 +419,7 @@ def make_format_extension(
             repo_constraint_values = repo_constraint_values,
             repo_platforms = repo_platforms,
             repo_disallow_builds = repo_disallow_builds,
+            workspace_incompatible_wheel_fallbacks = workspace_incompatible_wheel_fallbacks,
             workspace_pypi_indexes = workspace_pypi_indexes,
             resolved_locks = resolved_locks,
         )
