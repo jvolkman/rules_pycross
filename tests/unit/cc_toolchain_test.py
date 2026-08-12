@@ -1,5 +1,4 @@
 import os
-import sys
 import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -46,6 +45,29 @@ class CcToolchainTest(unittest.TestCase):
         self.assertIn("-Wl,--end-group", content)
         self.assertIn("-Wl,--as-needed", content)
 
+    def test_wrap_compiler_linker_selection(self):
+        bin_dir = self.temp_path / "bin"
+        bin_dir.mkdir(exist_ok=True)
+
+        # ld64.lld (Mach-O) is preferred over ld.lld (ELF) when both exist
+        mac_dir = self.temp_path / "mac_bin"
+        mac_dir.mkdir()
+        (mac_dir / "clang").touch()
+        (mac_dir / "ld64.lld").touch()
+        (mac_dir / "ld.lld").touch()
+        wrapper_mac = wrap_compiler("cc", str(mac_dir / "clang"), "-O2", Path("/usr/bin/python3"), bin_dir)
+        content_mac = wrapper_mac.read_text()
+        self.assertIn("fuse_ld_flag = 'ld64.lld'", content_mac)
+
+        # ld.lld (ELF) selected when ld64.lld is absent
+        elf_dir = self.temp_path / "elf_bin"
+        elf_dir.mkdir()
+        (elf_dir / "clang").touch()
+        (elf_dir / "ld.lld").touch()
+        wrapper_elf = wrap_compiler("cc", str(elf_dir / "clang"), "-O2", Path("/usr/bin/python3"), bin_dir)
+        content_elf = wrapper_elf.read_text()
+        self.assertIn("fuse_ld_flag = 'lld'", content_elf)
+
     def test_setup_cc_layer(self):
         ctx = MockBuildContext(self.temp_path)
 
@@ -76,7 +98,7 @@ class CcToolchainTest(unittest.TestCase):
 
         # Assert LDSHARED
         self.assertIn("LDSHARED", ctx.sysconfig_vars)
-        if sys.platform == "darwin" or ctx.sysconfig_vars.get("MACHDEP") == "darwin":
+        if ctx.sysconfig_vars.get("MACHDEP") == "darwin":
             self.assertIn("-undefined,dynamic_lookup", ctx.sysconfig_vars["LDSHARED"])
         self.assertIn("-shared", ctx.sysconfig_vars["LDSHARED"])
 

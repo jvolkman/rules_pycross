@@ -88,15 +88,21 @@ def wrap_compiler(lang: str, cc_exe: str, cflags: str, python_exe: Path, bin_dir
     wrapper_flags = get_wrapper_flags(cflags)
     wrapper_path = bin_dir / wrapper_name
 
-    # Find the LLVM linker binary next to the compiler. This path is injected
-    # into the wrapper for link invocations so that Meson's feature detection
-    # link tests (compiler.links()) use the correct cross-linker instead of
-    # the system ld.bfd, which can't produce Mach-O for darwin targets.
+    # Find the linker binary next to the compiler. This path is injected
+    # into the wrapper for link invocations so that feature detection link tests
+    # (e.g. Meson's compiler.links()) use the correct cross-linker instead of
+    # the system default linker.
     linker_abs_path = None
-    for linker_candidate in ("ld64.lld", "ld.lld"):
-        linker_path = cc_path.parent / linker_candidate
-        if linker_path.exists():
-            linker_abs_path = str(linker_path.absolute())
+    fuse_ld_flag = None
+
+    # Check for LLVM linkers next to the compiler. On macOS targets the
+    # Mach-O linker (ld64.lld) must be preferred over the ELF linker
+    # (ld.lld), otherwise Clang will invoke the wrong linker format.
+    for candidate, flag in (("ld64.lld", "ld64.lld"), ("ld.lld", "lld")):
+        candidate_path = cc_path.parent / candidate
+        if candidate_path.exists():
+            linker_abs_path = str(candidate_path.absolute())
+            fuse_ld_flag = flag
             break
 
     with open(wrapper_path, "w") as f:
@@ -111,6 +117,7 @@ def wrap_compiler(lang: str, cc_exe: str, cflags: str, python_exe: Path, bin_dir
                 cc_exe = {repr(cc_exe)}
                 wrapper_flags = {repr(wrapper_flags)}
                 linker_abs_path = {repr(linker_abs_path)}
+                fuse_ld_flag = {repr(fuse_ld_flag)}
                 
                 filtered_args = []
                 is_link = True
@@ -125,7 +132,8 @@ def wrap_compiler(lang: str, cc_exe: str, cflags: str, python_exe: Path, bin_dir
                 if is_link and linker_abs_path:
                     linker_dir = os.path.dirname(linker_abs_path)
                     os.environ["PATH"] = linker_dir + os.pathsep + os.environ.get("PATH", "")
-                    extra_flags.append("-fuse-ld=lld")
+                    if fuse_ld_flag:
+                        extra_flags.append(f"-fuse-ld={{fuse_ld_flag}}")
 
                 os.execv(cc_exe, [cc_exe] + wrapper_flags + extra_flags + filtered_args)
                 """
