@@ -40,6 +40,7 @@ def _pep517_build_impl(ctx):
         input_wheel_dir = build_result.wheel_dir,
         repair_tool = ctx.executable._repair_tool,
         target_environment = target_environment,
+        repair_exclude = ctx.attr.repair_exclude,
         resource_set = resources.resource_set,
     )
 

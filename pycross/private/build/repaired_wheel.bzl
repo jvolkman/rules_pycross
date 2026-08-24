@@ -16,6 +16,7 @@ def _pycross_repaired_wheel_impl(ctx):
         native_deps = ctx.attr.native_deps,
         repair_tool = ctx.executable._repair_tool,
         target_environment = target_environment,
+        repair_exclude = ctx.attr.repair_exclude,
     )
 
     return [DefaultInfo(files = depset([repair_result.wheel_dir]))]
@@ -36,6 +37,9 @@ pycross_repaired_wheel = rule(
             doc = "The target environment mapping JSON (resolved dynamically via alias filegroup).",
             default = Label("@rules_pycross//pycross/private:default_target_platform"),
             allow_files = True,
+        ),
+        "repair_exclude": attr.string_list(
+            doc = "Linux SONAME globs to exclude from wheel repair; assumed provided at runtime.",
         ),
         "whldir_name": attr.string(
             doc = "Name for the output .whldir TreeArtifact directory. If empty, defaults to '{name}.whldir'.",
