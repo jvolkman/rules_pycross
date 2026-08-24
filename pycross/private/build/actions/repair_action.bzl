@@ -10,6 +10,7 @@ def register_repair_action(
         repair_tool,
         native_deps = [],
         target_environment = None,
+        repair_exclude = [],
         repair_deps = [],
         resource_set = None):
     """Registers the repairwheel action to bundle native shared libs.
@@ -20,6 +21,7 @@ def register_repair_action(
         native_deps: list[Target], CcInfo deps whose shared libs to bundle.
         repair_tool: Target, the repair_wheel executable.
         target_environment: File (optional), the target environment JSON.
+        repair_exclude: list[str], Linux SONAME globs to leave unbundled.
         repair_deps: list[Target], optional PyInfo targets (e.g. user-provided
             repairwheel) whose site-packages are prepended to PYTHONPATH,
             shadowing the bundled version.
@@ -67,6 +69,9 @@ def register_repair_action(
 
     for d in depset(lib_dirs).to_list():
         args.add("--lib-dir", d)
+
+    for soname in repair_exclude:
+        args.add("--exclude", soname)
 
     if target_environment:
         args.add("--target-environment", target_environment.path)
