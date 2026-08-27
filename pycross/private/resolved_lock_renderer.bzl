@@ -90,6 +90,11 @@ def _collect_unique_markers(packages):
                 # We can share a single evaluator by setting extra to "".
                 effective_extra = extra if "extra" in marker else ""
                 markers[(marker, effective_extra)] = True
+
+        # Availability markers come from root project dependency edges, which
+        # never reference `extra`, so they share the extra-free evaluators.
+        for marker in pkg.get("availability_markers", []):
+            markers[(marker, "")] = True
     return markers.keys()
 
 def _marker_evaluator_name(marker_str, extra = ""):
@@ -280,10 +285,16 @@ def _render_marker_cycle_member_deps(lines, cycle_groups, packages):
             lines.append("")
 
 def _render_marker_wheel_chooser(lines, pkg_key, pkg, repo_map, sdist_map, rctx_name, sdist_target = None):
-    """Render a wheel chooser target and per-wheel config_settings + alias."""
+    """Render a wheel chooser target and per-wheel config_settings + alias.
+
+    Returns True when the wheel-based availability group was emitted under the
+    name _wheel_available_<pkg> because the package also carries availability
+    markers - the caller must then compose the two groups into the final
+    _available_<pkg> via _render_marker_availability(wheel_gated = True).
+    """
     candidates = pkg.get("wheel_candidates", [])
     if not candidates:
-        return
+        return False
 
     filenames = [c["filename"] for c in candidates]
     chooser_name = "_wheel_chooser_{}".format(pkg_key)
@@ -342,15 +353,19 @@ def _render_marker_wheel_chooser(lines, pkg_key, pkg, repo_map, sdist_map, rctx_
     # Availability config_setting_group: ORs all per-wheel config_settings.
     # Only emitted for packages that would fall to no_match_error (no sdist),
     # so that all_requirements can use select() to exclude them on incompatible
-    # platforms.
+    # platforms. When the package also carries availability markers, the group
+    # is named _wheel_available_ so _render_marker_availability can compose it
+    # with the marker-based group into the final _available_ group.
     if not sdist_target and resolved_candidates:
+        wheel_gated = bool(pkg.get("availability_markers"))
+        group_name = "_wheel_available_{}".format(pkg_key) if wheel_gated else "_available_{}".format(pkg_key)
         cs_names = []
         for candidate, _target in resolved_candidates:
             filename = candidate["filename"]
             cs_names.append(":_wheel_cs_{}_{}".format(pkg_key, _sanitize_name(filename)))
         lines.extend([
             _ind("selects.config_setting_group("),
-            _ind('name = "_available_{}",'.format(pkg_key), 2),
+            _ind('name = "{}",'.format(group_name), 2),
             _ind("match_any = [", 2),
         ])
         for cs in cs_names:
@@ -360,6 +375,8 @@ def _render_marker_wheel_chooser(lines, pkg_key, pkg, repo_map, sdist_map, rctx_
             _ind(")"),
             "",
         ])
+        return wheel_gated
+    return False
 
 def _render_marker_package_deps(lines, pkg_key, pkg_key_san, pkg, packages):
     """Render deps using marker-based select() instead of environment-based."""
@@ -399,6 +416,44 @@ def _render_marker_package_deps(lines, pkg_key, pkg_key_san, pkg, packages):
 
     lines.append("")
 
+def _render_marker_availability(lines, pkg_key, pkg, wheel_gated = False):
+    """Render an _available_<pkg> config_setting_group from availability markers.
+
+    No-op unless the package carries availability_markers. With wheel_gated,
+    the marker group is ANDed with the chooser's _wheel_available_<pkg> group;
+    otherwise the markers alone gate the package.
+    """
+    markers = pkg.get("availability_markers", [])
+    if not markers:
+        return
+    marker_group = "_available_{}".format(pkg_key)
+    if wheel_gated:
+        marker_group = "_marker_available_{}".format(pkg_key)
+    lines.extend([
+        _ind("selects.config_setting_group("),
+        _ind('name = "{}",'.format(marker_group), 2),
+        _ind("match_any = [", 2),
+    ])
+    for marker in markers:
+        eval_name = _marker_evaluator_name(marker, "")
+        lines.append(_ind('":{}_match",'.format(eval_name), 3))
+    lines.extend([
+        _ind("],", 2),
+        _ind(")"),
+        "",
+    ])
+    if wheel_gated:
+        lines.extend([
+            _ind("selects.config_setting_group("),
+            _ind('name = "_available_{}",'.format(pkg_key), 2),
+            _ind("match_all = [", 2),
+            _ind('":_wheel_available_{}",'.format(pkg_key), 3),
+            _ind('":{}",'.format(marker_group), 3),
+            _ind("],", 2),
+            _ind(")"),
+            "",
+        ])
+
 def _render_marker_package(lines, pkg_key, pkg, packages, repo_map, sdist_map, rctx_name):
     """Renders all targets for a single package using marker-based deps and wheel selection."""
     pkg_key_san = _sanitize_name(pkg_key)
@@ -425,6 +480,8 @@ def _render_marker_package(lines, pkg_key, pkg, packages, repo_map, sdist_map, r
         _render_marker_package_deps(lines, pkg_key, pkg_key_san, pkg, packages)
 
     if not has_wheel_candidates and extra:
+        _render_marker_availability(lines, pkg_key, pkg)
+
         # Extras packages wrap the base package plus their own deps.
         base_pkg_key = "{}@{}".format(package_name, package_version)
         lines.extend([
@@ -458,8 +515,9 @@ def _render_marker_package(lines, pkg_key, pkg, packages, repo_map, sdist_map, r
             sdist_target = "@@{}//:wheel".format(sdist_repo_name)
 
     # Wheel chooser
+    wheel_gated = False
     if has_wheel_candidates:
-        _render_marker_wheel_chooser(lines, pkg_key, pkg, repo_map, sdist_map, rctx_name, sdist_target = sdist_target)
+        wheel_gated = _render_marker_wheel_chooser(lines, pkg_key, pkg, repo_map, sdist_map, rctx_name, sdist_target = sdist_target)
     else:
         # No wheel candidates, alias directly to sdist_target or no_match_error
         target = sdist_target if sdist_target else "@rules_pycross//pycross/private:no_match_error"
@@ -470,6 +528,8 @@ def _render_marker_package(lines, pkg_key, pkg, packages, repo_map, sdist_map, r
             _ind(")"),
             "",
         ])
+
+    _render_marker_availability(lines, pkg_key, pkg, wheel_gated = wheel_gated)
 
     # Library
     lib_name = pkg_key
@@ -572,10 +632,13 @@ def render_lock_bzl(lock, repo_map, sdist_map = None, rctx_name = ""):
 
     # Check if selects.bzl is needed (for config_setting_group).
     # True for: packages with wheel candidates but no sdist fallback,
-    # or compound resolution-marker constraints.
+    # marker-restricted availability, or compound resolution-marker constraints.
     needs_selects = False
     for _pk, pkg_data in packages.items():
         if pkg_data.get("wheel_candidates") and not pkg_data.get("sdist_file") and not pkg_data.get("build_target"):
+            needs_selects = True
+            break
+        if pkg_data.get("availability_markers"):
             needs_selects = True
             break
     if not needs_selects:

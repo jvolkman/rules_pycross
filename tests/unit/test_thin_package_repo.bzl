@@ -337,6 +337,34 @@ def _test_pin_build_transition_bzl_variants(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
     analysis_test(name = name, target = name + "_subject", impl = _test_pin_build_transition_bzl_variants_impl)
 
+# ── Test: marked build targets and extras use maybe aliases ─────────
+
+# buildifier: disable=unused-variable
+def _test_requirements_bzl_root_marker_aliases_impl(env, target):
+    mock_rctx = struct(name = "my_repo")
+    pins = {
+        "foo": {"": "foo@1.0"},
+        "foo[linux-extra]": {"": "foo[linux-extra]@1.0"},
+    }
+    packages = {
+        "foo@1.0": {"build_target": "@//custom:foo"},
+        "foo[linux-extra]@1.0": {
+            "build_target": "@//custom:foo_extra",
+            "availability_markers": ["sys_platform == \"linux\""],
+        },
+    }
+    res = requirements_bzl_for_testing(mock_rctx, pins, packages)
+
+    # The unconditional base remains unconditional. Only the marked extra
+    # selects the empty library away on incompatible platforms.
+    env.expect.that_bool("@@my_repo//foo\"" in res).equals(True)
+    env.expect.that_bool("@@my_repo//foo:maybe" not in res).equals(True)
+    env.expect.that_bool("@@my_repo//foo:[linux-extra]_maybe" in res).equals(True)
+
+def _test_requirements_bzl_root_marker_aliases(name):
+    util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
+    analysis_test(name = name, target = name + "_subject", impl = _test_requirements_bzl_root_marker_aliases_impl)
+
 # ── Test suite ─────────────────────────────────────────────────────
 
 # ── Test: _is_platform_specific ────────────────────────────────────
@@ -477,5 +505,6 @@ def thin_package_repo_test_suite(name):
             _test_requirements_bzl_maybe_aliases,
             _test_requirements_bzl_all_unconditional,
             _test_requirements_bzl_extra_pins,
+            _test_requirements_bzl_root_marker_aliases,
         ],
     )

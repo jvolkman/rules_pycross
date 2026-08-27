@@ -188,7 +188,7 @@ def _version_key(version_str):
     """Parse a version string into a comparable key tuple."""
     return pypackaging.version.parse(version_str).key
 
-def resolve_lock_graph(packages, pinned_package_specs, requires_python, strict_dependencies = True, variants = None, resolution_marker_exprs = None, testonly_pins = None):
+def resolve_lock_graph(packages, pinned_package_specs, requires_python, strict_dependencies = True, variants = None, resolution_marker_exprs = None, testonly_pins = None, root_dependency_markers = None):
     """Resolves a dependency graph of packages.
 
     Ports translator_utils.py resolve_lock_graph() to Starlark.
@@ -214,6 +214,10 @@ def resolve_lock_graph(packages, pinned_package_specs, requires_python, strict_d
         resolution_marker_exprs: Dict mapping constraint names to PEP 508
             marker expressions (optional). Used for resolution-marker forks.
         testonly_pins: List of pin names that are exclusively reachable from testonly groups.
+        root_dependency_markers: Dict mapping root pin names (including
+            extras) to the list of PEP 508 environment markers on the root
+            projects' dependency edges to them (optional). Only pins that are
+            exclusively requested under markers appear here.
 
     Returns:
         A dict in raw_lock.json format.
@@ -413,6 +417,9 @@ def resolve_lock_graph(packages, pinned_package_specs, requires_python, strict_d
 
     if resolution_marker_exprs:
         result["resolution_marker_exprs"] = resolution_marker_exprs
+
+    if root_dependency_markers:
+        result["root_dependency_markers"] = root_dependency_markers
 
     return result
 

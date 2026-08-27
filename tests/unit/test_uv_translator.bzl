@@ -715,6 +715,34 @@ def _test_uv_testonly_wildcard_overrides_earlier(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
     analysis_test(name = name, target = name + "_subject", impl = _test_uv_testonly_wildcard_overrides_earlier_impl)
 
+# --- test_root_dependency_markers ---
+
+# buildifier: disable=unused-variable
+def _test_uv_root_dependency_markers_impl(env, target):
+    project = _project(deps = [
+        "foo==1.0",
+        "foo[linux-extra]==1.0 ; sys_platform == \"linux\"",
+    ])
+    lock = _lock([
+        _vpkg("my-app", deps = [
+            _dep("foo", "1.0"),
+            _dep("foo", "1.0", marker = "sys_platform == \"linux\"", extra = ["linux-extra"]),
+        ]),
+        _pkg("foo", "1.0", wheels = [_whl("foo-1.0-py3-none-any.whl", "foo")], opt_deps = {"linux-extra": []}),
+    ])
+    result = translate_uv(project, lock, _lock_model())
+
+    # The unmarked base pin is available everywhere. The marked extra remains
+    # separate so its marker cannot make the extra available on other platforms.
+    markers = result["root_dependency_markers"]
+    env.expect.that_collection(markers.keys()).contains("foo[linux-extra]")
+    env.expect.that_collection(markers.keys()).contains_none_of(["foo"])
+    env.expect.that_str(markers["foo[linux-extra]"][0]).equals("sys_platform == \"linux\"")
+
+def _test_uv_root_dependency_markers(name):
+    util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
+    analysis_test(name = name, target = name + "_subject", impl = _test_uv_root_dependency_markers_impl)
+
 # --- Test suite ---
 
 def uv_translator_test_suite(name):
@@ -747,5 +775,6 @@ def uv_translator_test_suite(name):
             _test_uv_testonly_shared_dep_not_testonly,
             _test_uv_testonly_wildcard_with_override,
             _test_uv_testonly_wildcard_overrides_earlier,
+            _test_uv_root_dependency_markers,
         ],
     )
