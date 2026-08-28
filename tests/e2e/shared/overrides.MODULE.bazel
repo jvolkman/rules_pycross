@@ -5,6 +5,9 @@
 # - cmake cross-compilation: map aarch64 to arm64 on Apple platforms, and make
 #   CMAKE_SYSTEM_NAME/CMAKE_SYSTEM_PROCESSOR replaceable so user cache_entries
 #   override rather than concatenate with auto-detected values.
+# - pkgconfig: fix bootstrap with hermetic LLVM toolchains on macOS by keeping
+#   AR, filtering static archives (.a) out of LDFLAGS, passing CPPFLAGS, and
+#   disabling shared libraries.
 archive_override(
     module_name = "rules_foreign_cc",
     integrity = "sha256-XhngvpzWyhUahYlQtOdv1o8dE5yhgLFMJmVmaPNMLYw=",
@@ -12,6 +15,7 @@ archive_override(
     patches = [
         "//shared/patches:rules_foreign_cc-cppflags.patch",
         "//shared/patches:rules_foreign_cc-cmake-xcompile.patch",
+        "//shared/patches:rules_foreign_cc-pkgconfig.patch",
     ],
     strip_prefix = "rules_foreign_cc-d1c7b2be20edfd4a94731077426c42ae8cd8be1e",
     urls = ["https://github.com/bazel-contrib/rules_foreign_cc/archive/d1c7b2be20edfd4a94731077426c42ae8cd8be1e.tar.gz"],

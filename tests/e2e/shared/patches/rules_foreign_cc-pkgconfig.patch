@@ -1,0 +1,32 @@
+--- a/foreign_cc/built_tools/pkgconfig_build.bzl
++++ b/foreign_cc/built_tools/pkgconfig_build.bzl
+@@ -58,9 +58,12 @@ def _pkgconfig_tool_impl(ctx):
+     absolute_ar = absolutize(ctx.workspace_name, ar_path, True)
+ 
+     if os_name(ctx) == "macos":
+-        absolute_ar = ""
+         non_system_include_ldflags += ["-undefined", "error"]
+ 
++    # Static libraries in LDFLAGS confuse libtool into archiving them as members
++    # of convenience archives (e.g. libglib-2.0.a), corrupting the archive on macOS.
++    non_system_include_ldflags = [x for x in non_system_include_ldflags if not x.endswith(".a")]
++
+     arflags = [e for e in frozen_arflags]
+     if absolute_ar == "libtool" or absolute_ar.endswith("/libtool"):
+         arflags.append("-o")
+@@ -69,6 +72,7 @@ def _pkgconfig_tool_impl(ctx):
+ 
+     configure_options = [
+         "--with-internal-glib",
++        "--disable-shared",
+         "--prefix=\"$$INSTALLDIR$$\"",
+     ]
+ 
+@@ -81,6 +85,7 @@ def _pkgconfig_tool_impl(ctx):
+         "ARFLAGS": _join_flags_list(ctx.workspace_name, arflags),
+         "CC": absolute_cc,
+         "CFLAGS": _join_flags_list(ctx.workspace_name, non_system_include_cflags),
++        "CPPFLAGS": _join_flags_list(ctx.workspace_name, non_system_include_cflags),
+         "LD": absolute_ld,
+         "LDFLAGS": _join_flags_list(ctx.workspace_name, non_system_include_ldflags),
+         "MAKE": make_data.path,
