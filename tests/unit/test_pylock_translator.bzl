@@ -500,6 +500,46 @@ def _test_pylock_resolution_forks(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
     analysis_test(name = name, target = name + "_subject", impl = _test_pylock_resolution_forks_impl)
 
+# --- test_root_dependency_markers ---
+
+# buildifier: disable=unused-variable
+def _test_pylock_root_dependency_markers_impl(env, target):
+    project = {
+        "project": {
+            "name": "my-project",
+            "dependencies": [
+                "foo==1.0 ; sys_platform == \"linux\"",
+                "bar==2.0",
+            ],
+        },
+    }
+    lock = {
+        "lock-version": "1.0",
+        "requires-python": ">=3.8",
+        "package": [
+            {
+                "name": "foo",
+                "version": "1.0",
+                "wheels": [_whl("foo-1.0-py3-none-any.whl", "foo")],
+            },
+            {
+                "name": "bar",
+                "version": "2.0",
+                "wheels": [_whl("bar-2.0-py3-none-any.whl", "bar")],
+            },
+        ],
+    }
+    result = translate_pylock(lock, project, _lock_model())
+
+    markers = result.get("root_dependency_markers", {})
+    env.expect.that_collection(markers.keys()).contains("foo")
+    env.expect.that_collection(markers.keys()).contains_none_of(["bar"])
+    env.expect.that_str(markers["foo"][0]).equals("sys_platform == \"linux\"")
+
+def _test_pylock_root_dependency_markers(name):
+    util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
+    analysis_test(name = name, target = name + "_subject", impl = _test_pylock_root_dependency_markers_impl)
+
 # --- Test suite ---
 
 def pylock_translator_test_suite(name):
@@ -521,5 +561,6 @@ def pylock_translator_test_suite(name):
             _test_pylock_sdist_parsing,
             _test_pylock_no_default_no_groups_empty,
             _test_pylock_resolution_forks,
+            _test_pylock_root_dependency_markers,
         ],
     )

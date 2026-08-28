@@ -17,6 +17,7 @@ load(
     "canonicalize_name",
     "compute_requested_dependency_groups",
     "parse_pep508_requirement",
+    "record_root_marker",
     "resolution_marker_constraint_name",
     "resolve_lock_graph",
     "select_project_file",
@@ -258,6 +259,15 @@ def _get_files_for_package(files, package_name, package_version):
 
     return result
 
+def _extract_poetry_marker(info_dict):
+    if not info_dict:
+        return ""
+    if "markers" in info_dict:
+        return info_dict["markers"]
+    if "platform" in info_dict:
+        return 'sys_platform == "{}"'.format(info_dict["platform"])
+    return ""
+
 def _parse_poetry_pin(pin, pin_info, pinned_package_specs, track_pin, enrich_only = False):
     """Parse a Poetry dependency pin into pinned_package_specs.
 
@@ -278,18 +288,18 @@ def _parse_poetry_pin(pin, pin_info, pinned_package_specs, track_pin, enrich_onl
     # We don't propagate is_testonly here directly because pinned_package_specs
     # is now managed by the track_pin callback passed to us.
 
-    def track_spec(spec):
+    def track_spec(spec, marker = ""):
         # Do not overwrite a specific existing constraint with a wildcard if enrich_only is set.
         if enrich_only and existing_spec and not spec:
             return
-        track_pin(pin, spec)
+        track_pin(pin, spec, marker)
 
     if type(pin_info) == "string":
-        track_spec(_poetry_constraint_to_pep440(pin_info))
+        track_spec(_poetry_constraint_to_pep440(pin_info), "")
     elif type(pin_info) == "dict":
         if "path" in pin_info or pin_info.get("optional"):
             return
-        track_spec(_poetry_constraint_to_pep440(pin_info.get("version", "*")))
+        track_spec(_poetry_constraint_to_pep440(pin_info.get("version", "*")), _extract_poetry_marker(pin_info))
     elif type(pin_info) == "list":
         # List-of-dicts: each entry may have version, markers, url, python, etc.
         for entry in pin_info:
@@ -302,7 +312,7 @@ def _parse_poetry_pin(pin, pin_info, pinned_package_specs, track_pin, enrich_onl
 
             if enrich_only and existing_spec and not spec:
                 continue
-            track_pin(pin, spec)
+            track_spec(spec, _extract_poetry_marker(entry))
 
 def translate_poetry(project_dict, lock_dict, lock_model):
     """Translates Poetry project and lock data to raw_lock_data dict.
@@ -354,14 +364,16 @@ def translate_poetry(project_dict, lock_dict, lock_model):
 
     testonly_reqs = {}
     non_testonly_reqs = {}
+    root_dependency_markers = {}
 
-    def track_pin(pin_name, specifier, is_testonly):
+    def track_pin(pin_name, specifier, is_testonly, marker = ""):
         pinned_package_specs.setdefault(pin_name, {})
         pinned_package_specs[pin_name][""] = specifier
         if is_testonly:
             testonly_reqs[pin_name] = True
         else:
             non_testonly_reqs[pin_name] = True
+        record_root_marker(root_dependency_markers, pin_name, marker)
 
     project_optional_deps = project_dict.get("project", {}).get("optional-dependencies", {})
     pep735_groups = project_dict.get("dependency-groups", {})
@@ -390,7 +402,11 @@ def translate_poetry(project_dict, lock_dict, lock_model):
                 req = parse_pep508_requirement(dep_str)
                 if req.name == "python":
                     continue
-                track_pin(req.name, req.specifier, default_is_testonly)
+                if req.extras:
+                    for extra in req.extras:
+                        pin_name = "{}[{}]".format(req.name, canonicalize_name(extra))
+                        record_root_marker(root_dependency_markers, pin_name, req.marker)
+                track_pin(req.name, req.specifier, default_is_testonly, req.marker)
         if poetry_deps:
             # Also merge [tool.poetry.dependencies] if present
             for pin, pin_info in poetry_deps.items():
@@ -405,7 +421,7 @@ def translate_poetry(project_dict, lock_dict, lock_model):
                     pin,
                     pin_info,
                     pinned_package_specs,
-                    track_pin = lambda p, spec: track_pin(p, spec, default_is_testonly),
+                    track_pin = lambda p, spec, marker: track_pin(p, spec, default_is_testonly, marker),
                     enrich_only = has_project_deps,
                 )
 
@@ -417,7 +433,11 @@ def translate_poetry(project_dict, lock_dict, lock_model):
                 req = parse_pep508_requirement(dep_str)
                 if req.name == "python":
                     continue
-                track_pin(req.name, req.specifier, is_testonly)
+                if req.extras:
+                    for extra in req.extras:
+                        pin_name = "{}[{}]".format(req.name, canonicalize_name(extra))
+                        record_root_marker(root_dependency_markers, pin_name, req.marker)
+                track_pin(req.name, req.specifier, is_testonly, req.marker)
 
     for group_name in available_dev_groups:
         key = "group:{}".format(group_name)
@@ -430,7 +450,12 @@ def translate_poetry(project_dict, lock_dict, lock_model):
                     req = parse_pep508_requirement(dep_str)
                     if req.name == "python":
                         continue
-                    track_pin(canonicalize_name(req.name), req.specifier, is_testonly)
+                    canonical_name = canonicalize_name(req.name)
+                    if req.extras:
+                        for extra in req.extras:
+                            pin_name = "{}[{}]".format(canonical_name, canonicalize_name(extra))
+                            record_root_marker(root_dependency_markers, pin_name, req.marker)
+                    track_pin(canonical_name, req.specifier, is_testonly, req.marker)
 
             if group_name in poetry_groups:
                 g = poetry_groups[group_name]
@@ -442,7 +467,7 @@ def translate_poetry(project_dict, lock_dict, lock_model):
                         pin,
                         pin_info,
                         pinned_package_specs,
-                        track_pin = lambda p, spec: track_pin(p, spec, is_testonly),
+                        track_pin = lambda p, spec, marker: track_pin(p, spec, is_testonly, marker),
                     )
 
     testonly_pin_names = [name for name in testonly_reqs if name not in non_testonly_reqs]
@@ -605,6 +630,11 @@ def translate_poetry(project_dict, lock_dict, lock_model):
         strict_dependencies = True,
         resolution_marker_exprs = resolution_marker_exprs,
         testonly_pins = testonly_pin_names,
+        root_dependency_markers = {
+            name: markers
+            for name, markers in root_dependency_markers.items()
+            if markers != None
+        },
     )
 
 def repo_create_poetry_model(rctx, extra_project_files, lock_file, lock_model, output):

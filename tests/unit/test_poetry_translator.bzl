@@ -446,6 +446,43 @@ def _test_poetry_or_constraint_translations(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
     analysis_test(name = name, target = name + "_subject", impl = _test_poetry_or_constraint_translations_impl)
 
+# --- test_root_dependency_markers ---
+
+# buildifier: disable=unused-variable
+def _test_poetry_root_dependency_markers_impl(env, target):
+    project = {
+        "tool": {"poetry": {
+            "name": "my-app",
+            "version": "0.1.0",
+            "dependencies": {
+                "python": "^3.8",
+                "foo": {"version": "1.0", "markers": "sys_platform == 'linux'"},
+                "bar": {"version": "2.0", "platform": "darwin"},
+                "baz": "3.0",
+            },
+        }},
+    }
+    lock = {
+        "metadata": {"lock-version": "2.1"},
+        "package": [
+            _pkg("foo", "1.0", files = [_whl("foo-1.0-py3-none-any.whl")]),
+            _pkg("bar", "2.0", files = [_whl("bar-2.0-py3-none-any.whl")]),
+            _pkg("baz", "3.0", files = [_whl("baz-3.0-py3-none-any.whl")]),
+        ],
+    }
+    result = translate_poetry(project, lock, _lock_model())
+
+    markers = result["root_dependency_markers"]
+    env.expect.that_collection(markers.keys()).contains("foo")
+    env.expect.that_collection(markers.keys()).contains("bar")
+    env.expect.that_collection(markers.keys()).contains_none_of(["baz"])
+    env.expect.that_str(markers["foo"][0]).equals("sys_platform == 'linux'")
+    env.expect.that_str(markers["bar"][0]).equals('sys_platform == "darwin"')
+
+def _test_poetry_root_dependency_markers(name):
+    util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
+    analysis_test(name = name, target = name + "_subject", impl = _test_poetry_root_dependency_markers_impl)
+
 # --- Test suite ---
 
 def poetry_translator_test_suite(name):
@@ -466,5 +503,6 @@ def poetry_translator_test_suite(name):
             _test_poetry_issue_34,
             _test_poetry_issue_117,
             _test_poetry_or_constraint_translations,
+            _test_poetry_root_dependency_markers,
         ],
     )
