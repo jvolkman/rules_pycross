@@ -715,7 +715,7 @@ def _test_uv_testonly_wildcard_overrides_earlier(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
     analysis_test(name = name, target = name + "_subject", impl = _test_uv_testonly_wildcard_overrides_earlier_impl)
 
-# --- test_root_dependency_markers ---
+# --- test_uv_root_dependency_markers ---
 
 # buildifier: disable=unused-variable
 def _test_uv_root_dependency_markers_impl(env, target):

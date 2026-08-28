@@ -328,7 +328,7 @@ def _test_pdm_resolution_forks(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
     analysis_test(name = name, target = name + "_subject", impl = _test_pdm_resolution_forks_impl)
 
-# --- test_root_dependency_markers ---
+# --- test_pdm_root_dependency_markers ---
 
 # buildifier: disable=unused-variable
 def _test_pdm_root_dependency_markers_impl(env, target):
