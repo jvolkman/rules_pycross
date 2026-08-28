@@ -13,6 +13,7 @@ load(
     ":translator_common.bzl",
     "canonicalize_name",
     "compute_requested_dependency_groups",
+    "record_root_marker",
     "resolution_marker_constraint_name",
     "resolve_lock_graph",
     "select_project_file",
@@ -136,20 +137,7 @@ def _parse_uv_dependency(dep):
 
     return results
 
-def _record_root_marker(root_dependency_markers, name, marker):
-    """Accumulate the environment markers on a root project dependency.
-
-    A name maps to its root edges' markers, or to None once any unmarked
-    (i.e. unconditional) edge is seen.
-    """
-    if name in root_dependency_markers and root_dependency_markers[name] == None:
-        return
-    if not marker:
-        root_dependency_markers[name] = None
-        return
-    existing = root_dependency_markers.get(name, [])
-    if marker not in existing:
-        root_dependency_markers[name] = existing + [marker]
+_record_root_marker = record_root_marker
 
 def translate_uv(project_dict, lock_dict, lock_model):
     """Translates UV project and lock data to raw_lock_data dict.

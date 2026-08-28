@@ -6,8 +6,16 @@ lock_resolver.bzl.
 """
 
 load("@toml.bzl//toml:toml.bzl", "decode")
-load(":translator_common.bzl", "canonicalize_name", "compute_requested_dependency_groups", "resolution_marker_constraint_name", "select_project_file")
-load(":util.bzl", "extract_pep508_name", "parse_package_key")
+load(
+    ":translator_common.bzl",
+    "canonicalize_name",
+    "compute_requested_dependency_groups",
+    "parse_pep508_requirement",
+    "record_root_marker",
+    "resolution_marker_constraint_name",
+    "select_project_file",
+)
+load(":util.bzl", "parse_package_key")
 
 def _strip_selection_markers(marker):
     """Strip PDM selection markers (dependency_groups, extras) from a marker string.
@@ -192,10 +200,9 @@ def translate_pylock(lock_dict, project_dict, lock_model):
     pins = {}
 
     dependency_groups = getattr(lock_model, "dependency_groups", ["default"])
-    include_default = "default" in dependency_groups or "*" in dependency_groups
-    has_filter = not include_default or len([g for g in dependency_groups if g != "default"]) > 0
+    root_dependency_markers = {}
 
-    if project_dict and has_filter:
+    if project_dict:
         root_req_names = []
         testonly_root_req_names = []
         testonly_groups = getattr(lock_model, "testonly_groups", [])
@@ -222,13 +229,23 @@ def translate_pylock(lock_dict, project_dict, lock_model):
             fail_on_missing = False,  # Following precedent set by original print warning
         )
 
+        def handle_dep_str(dep_str, is_testonly):
+            req = parse_pep508_requirement(dep_str)
+            n = req.name
+            if is_testonly:
+                testonly_root_req_names.append(n)
+            else:
+                root_req_names.append(n)
+            if req.extras:
+                for extra in req.extras:
+                    pin_name = "{}[{}]".format(n, canonicalize_name(extra))
+                    record_root_marker(root_dependency_markers, pin_name, req.marker)
+            record_root_marker(root_dependency_markers, n, req.marker)
+
         if "default" in requested_groups_dict:
             is_testonly = requested_groups_dict["default"]
             for dep_str in project_section.get("dependencies", []):
-                if is_testonly:
-                    testonly_root_req_names.append(extract_pep508_name(dep_str))
-                else:
-                    root_req_names.append(extract_pep508_name(dep_str))
+                handle_dep_str(dep_str, is_testonly)
 
         for kind, groups_dict in [("optional", optional_deps), ("group", dev_deps)]:
             for target_name in groups_dict.keys():
@@ -239,21 +256,13 @@ def translate_pylock(lock_dict, project_dict, lock_model):
                 entries = groups_dict[target_name]
                 for entry in entries:
                     if type(entry) == "string":
-                        n = extract_pep508_name(entry)
-                        if is_testonly:
-                            testonly_root_req_names.append(n)
-                        else:
-                            root_req_names.append(n)
+                        handle_dep_str(entry, is_testonly)
                     elif type(entry) == "dict" and "include-group" in entry:
                         inc_group = entry["include-group"]
                         if inc_group in dev_deps:
                             for inc_dep in dev_deps[inc_group]:
                                 if type(inc_dep) == "string":
-                                    n = extract_pep508_name(inc_dep)
-                                    if is_testonly:
-                                        testonly_root_req_names.append(n)
-                                    else:
-                                        root_req_names.append(n)
+                                    handle_dep_str(inc_dep, is_testonly)
 
         # Deduplicate
         root_package_names = {n: True for n in root_req_names}
@@ -342,6 +351,13 @@ def translate_pylock(lock_dict, project_dict, lock_model):
     }
     if resolution_marker_exprs:
         result["resolution_marker_exprs"] = resolution_marker_exprs
+    filtered_root_markers = {
+        name: markers
+        for name, markers in root_dependency_markers.items()
+        if markers != None
+    }
+    if filtered_root_markers:
+        result["root_dependency_markers"] = filtered_root_markers
     return result
 
 def repo_create_pylock_model(rctx, extra_project_files, lock_file, lock_model, output):

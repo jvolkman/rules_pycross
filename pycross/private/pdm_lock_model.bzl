@@ -11,6 +11,7 @@ load(
     "canonicalize_name",
     "compute_requested_dependency_groups",
     "parse_pep508_requirement",
+    "record_root_marker",
     "resolution_marker_constraint_name",
     "resolve_lock_graph",
     "select_project_file",
@@ -165,8 +166,14 @@ def translate_pdm(project_dict, lock_dict, lock_model):
     pinned_package_specs = {}
     testonly_reqs = {}
     non_testonly_reqs = {}
+    root_dependency_markers = {}
     for req, is_testonly in requirements:
         pinned_package_specs[req.name] = {"": req.specifier}
+        if req.extras:
+            for extra in req.extras:
+                pin_name = "{}[{}]".format(req.name, canonicalize_name(extra))
+                record_root_marker(root_dependency_markers, pin_name, req.marker)
+        record_root_marker(root_dependency_markers, req.name, req.marker)
         if is_testonly:
             testonly_reqs[req.name] = True
         else:
@@ -250,6 +257,11 @@ def translate_pdm(project_dict, lock_dict, lock_model):
         strict_dependencies = False,
         resolution_marker_exprs = resolution_marker_exprs,
         testonly_pins = testonly_pin_names,
+        root_dependency_markers = {
+            name: markers
+            for name, markers in root_dependency_markers.items()
+            if markers != None
+        },
     )
 
 def repo_create_pdm_model(rctx, extra_project_files, lock_file, lock_model, output):

@@ -11,6 +11,26 @@ def canonicalize_name(name):
     """Canonicalize a Python package name per PEP 503."""
     return pypackaging.utils.canonicalize_name(name)
 
+def record_root_marker(root_dependency_markers, name, marker):
+    """Accumulate the environment markers on a root project dependency.
+
+    A name maps to its root edges' markers, or to None once any unmarked
+    (i.e. unconditional) edge is seen.
+
+    Args:
+        root_dependency_markers: Dict mapping pin names to list of marker strings or None.
+        name: Canonicalized package or extra pin name.
+        marker: PEP 508 environment marker string.
+    """
+    if name in root_dependency_markers and root_dependency_markers[name] == None:
+        return
+    if not marker:
+        root_dependency_markers[name] = None
+        return
+    existing = root_dependency_markers.get(name, [])
+    if marker not in existing:
+        root_dependency_markers[name] = existing + [marker]
+
 def resolution_marker_constraint_name(name, version):
     """Generate a deterministic constraint name for a resolution-marker fork.
 

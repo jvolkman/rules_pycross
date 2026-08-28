@@ -328,6 +328,37 @@ def _test_pdm_resolution_forks(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
     analysis_test(name = name, target = name + "_subject", impl = _test_pdm_resolution_forks_impl)
 
+# --- test_pdm_root_dependency_markers ---
+
+# buildifier: disable=unused-variable
+def _test_pdm_root_dependency_markers_impl(env, target):
+    project = _minimal_project(deps = [
+        "foo==1.0 ; sys_platform == \"linux\"",
+        "bar==2.0",
+    ])
+    lock = _minimal_lock([
+        {
+            "name": "foo",
+            "version": "1.0",
+            "files": [_whl("foo-1.0-py3-none-any.whl")],
+        },
+        {
+            "name": "bar",
+            "version": "2.0",
+            "files": [_whl("bar-2.0-py3-none-any.whl")],
+        },
+    ])
+    result = translate_pdm(project, lock, _lock_model())
+
+    markers = result["root_dependency_markers"]
+    env.expect.that_collection(markers.keys()).contains("foo")
+    env.expect.that_collection(markers.keys()).contains_none_of(["bar"])
+    env.expect.that_str(markers["foo"][0]).equals("sys_platform == \"linux\"")
+
+def _test_pdm_root_dependency_markers(name):
+    util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
+    analysis_test(name = name, target = name + "_subject", impl = _test_pdm_root_dependency_markers_impl)
+
 # --- Test suite ---
 
 def pdm_translator_test_suite(name):
@@ -344,5 +375,6 @@ def pdm_translator_test_suite(name):
             _test_pdm_extras_in_markers,
             _test_pdm_extra_dependency,
             _test_pdm_resolution_forks,
+            _test_pdm_root_dependency_markers,
         ],
     )
