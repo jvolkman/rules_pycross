@@ -136,6 +136,21 @@ def _parse_uv_dependency(dep):
 
     return results
 
+def _record_root_marker(root_dependency_markers, name, marker):
+    """Accumulate the environment markers on a root project dependency.
+
+    A name maps to its root edges' markers, or to None once any unmarked
+    (i.e. unconditional) edge is seen.
+    """
+    if name in root_dependency_markers and root_dependency_markers[name] == None:
+        return
+    if not marker:
+        root_dependency_markers[name] = None
+        return
+    existing = root_dependency_markers.get(name, [])
+    if marker not in existing:
+        root_dependency_markers[name] = existing + [marker]
+
 def translate_uv(project_dict, lock_dict, lock_model):
     """Translates UV project and lock data to raw_lock_data dict.
 
@@ -273,6 +288,10 @@ def translate_uv(project_dict, lock_dict, lock_model):
     # Collect requirements
     requirements = []  # list of (req_name, specifier, constraint, is_testonly)
 
+    # Root dependency markers per exact pin; extras also record their implied
+    # base package marker. See _record_root_marker.
+    root_dependency_markers = {}
+
     for project_name in target_projects:
         project_info = workspace_members[project_name]
 
@@ -313,8 +332,13 @@ def translate_uv(project_dict, lock_dict, lock_model):
                 if dep_extras:
                     for extra in dep_extras:
                         pin_name = "{}[{}]".format(dep_name, canonicalize_name(extra))
+                        _record_root_marker(root_dependency_markers, pin_name, dep.get("marker", ""))
                         requirements.append((pin_name, specifier, fork_constraint, default_is_testonly))
-                else:
+
+                # An extras pin implies its base package, so the base records
+                # the same marker (an unmarked extras edge unlocks the base).
+                _record_root_marker(root_dependency_markers, base_dep_name, dep.get("marker", ""))
+                if not dep_extras:
                     requirements.append((dep_name, specifier, fork_constraint, default_is_testonly))
 
         for kind, groups_dict, constraint_dict in [("optional", optional_dependencies, extra_variant_values), ("group", development_dependencies, group_variant_values)]:
@@ -350,8 +374,12 @@ def translate_uv(project_dict, lock_dict, lock_model):
                     if dep_extras:
                         for extra in dep_extras:
                             pin_name = "{}[{}]".format(dep_name, canonicalize_name(extra))
+                            _record_root_marker(root_dependency_markers, pin_name, dep.get("marker", ""))
                             requirements.append((pin_name, specifier, effective_constraint, is_testonly))
-                    else:
+
+                    # See the default-dependencies loop: base shares the edge's marker.
+                    _record_root_marker(root_dependency_markers, base_dep_name, dep.get("marker", ""))
+                    if not dep_extras:
                         requirements.append((dep_name, specifier, effective_constraint, is_testonly))
 
     # End collect requirements
@@ -502,6 +530,11 @@ def translate_uv(project_dict, lock_dict, lock_model):
         variants = variant_sets,
         resolution_marker_exprs = resolution_marker_exprs,
         testonly_pins = testonly_pin_names,
+        root_dependency_markers = {
+            name: markers
+            for name, markers in root_dependency_markers.items()
+            if markers != None
+        },
     )
 
 def repo_create_uv_model(rctx, extra_project_files, lock_file, lock_model, output):

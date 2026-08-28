@@ -32,7 +32,9 @@ def requirement(pkg):
 """
 
 def _is_platform_specific(pkg):
-    """Check if a package is platform-specific (would be incompatible on some platforms)."""
+    """Check if a package is unavailable in some target environments."""
+    if pkg.get("availability_markers"):
+        return True
     has_wheels = bool(pkg.get("wheel_candidates"))
     has_sdist = bool(pkg.get("sdist_file")) or bool(pkg.get("build_target"))
     return has_wheels and not has_sdist
@@ -58,7 +60,10 @@ def _requirements_bzl(rctx, pins, packages):
 
         us_pin = underscore_name(pin_parts.name)
         if pin_parts.extra:
-            lines.append('    "@@{repo_name}//{pin}:[{extra}]",'.format(repo_name = rctx.name, pin = us_pin, extra = pin_parts.extra))
+            if is_conditional:
+                lines.append('    "@@{repo_name}//{pin}:[{extra}]_maybe",'.format(repo_name = rctx.name, pin = us_pin, extra = pin_parts.extra))
+            else:
+                lines.append('    "@@{repo_name}//{pin}:[{extra}]",'.format(repo_name = rctx.name, pin = us_pin, extra = pin_parts.extra))
         elif is_conditional:
             lines.append('    "@@{repo_name}//{pin}:{maybe}",'.format(repo_name = rctx.name, pin = us_pin, maybe = _safe_name(us_pin, "maybe")))
         else:
@@ -120,7 +125,7 @@ def _proxy_actual(actual_lines, target_dict, prefix, suffix, workspace_repo, ali
         return '"{}:{}",'.format(actual_pkg_ref, alias_name)
     return "{},".format(actual)
 
-def _pin_build(target_name, pin_target_dict, package, workspace_repo, workspace_lock_target_dict = None, has_aggregated_variant = False, extras_dict = None, default_variants = {}, target_platform = None, transition_bzl = None, maybe_available_key = None, testonly = False):
+def _pin_build(target_name, pin_target_dict, package, workspace_repo, workspace_lock_target_dict = None, has_aggregated_variant = False, extras_dict = None, default_variants = {}, target_platform = None, transition_bzl = None, maybe_available_key = None, extras_maybe_keys = None, testonly = False):
     """Generates the BUILD file for a pin directory, pointing to the workspace."""
     lock_target_dict = workspace_lock_target_dict if workspace_lock_target_dict else pin_target_dict
     lock_ref = "@{}//_lock:".format(workspace_repo)
@@ -248,6 +253,7 @@ def _pin_build(target_name, pin_target_dict, package, workspace_repo, workspace_
             ])
 
     extras_dict = extras_dict or {}
+    extras_maybe_keys = extras_maybe_keys or {}
     for extra_name, extra_target_dict in sorted(extras_dict.items()):
         actual_extra = _proxy_actual(actual_lines, extra_target_dict, lock_ref, "", workspace_repo, "extra_{}".format(extra_name), actual_pkg_ref, has_transition = has_transition, default_variants = default_variants)
         lines.extend([
@@ -263,6 +269,17 @@ def _pin_build(target_name, pin_target_dict, package, workspace_repo, workspace_
             ")",
             "",
         ])
+        if extra_name in extras_maybe_keys:
+            lines.extend([
+                "alias(",
+                '    name = "[{}]_maybe",'.format(extra_name),
+                "    actual = select({",
+                '        "@{}//_lock:_available_{}": ":[{}]",'.format(workspace_repo, extras_maybe_keys[extra_name], extra_name),
+                '        "//conditions:default": "//:_empty_library",',
+                "    }),",
+                ")",
+                "",
+            ])
 
     if maybe_available_key:
         lines.extend([
@@ -628,6 +645,14 @@ pycross_transitioning_file_proxy = rule(
                     maybe_available_key = pkg_key
                     break
 
+        extras_maybe_keys = {}
+        for extra_name, extra_target_dict in extras_dict.items():
+            for pkg_key in extra_target_dict.values():
+                pkg = packages.get(pkg_key, {})
+                if _is_platform_specific(pkg):
+                    extras_maybe_keys[extra_name] = pkg_key
+                    break
+
         result = _pin_build(
             us_name,
             base_target_dict,
@@ -640,6 +665,7 @@ pycross_transitioning_file_proxy = rule(
             target_platform = target_platform,
             transition_bzl = "//:_transition.bzl" if has_flags else None,
             maybe_available_key = maybe_available_key,
+            extras_maybe_keys = extras_maybe_keys,
             testonly = (base_pin_name in testonly_pins_set),
         )
         rctx.file(

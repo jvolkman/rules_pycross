@@ -252,6 +252,13 @@ def _create_package_resolver(pkg_key, pkg, ann, default_extra_build_tools, conte
     if always_build or build_target:
         wheel_candidates = []
 
+    # Markers under which the root projects request this exact pin; see
+    # _record_root_marker in uv_lock_model.bzl for the semantics.
+    root_pin_name = pkg_name
+    if pkg_extra:
+        root_pin_name = "{}[{}]".format(pkg_name, pkg_extra)
+    availability_markers = context.root_dependency_markers.get(root_pin_name, [])
+
     resolved_pkg = {
         "key": pkg_key,
         "name": pkg_name,
@@ -278,6 +285,7 @@ def _create_package_resolver(pkg_key, pkg, ann, default_extra_build_tools, conte
         "wheel_library_tags": ann.wheel_library_tags if ann else [],
         "wheel_candidates": wheel_candidates,
         "uses_sdist": uses_sdist,
+        "availability_markers": availability_markers,
     }
 
     return struct(
@@ -554,6 +562,7 @@ def resolve(
         local_wheels = local_wheels_by_pkg,
         remote_wheels = remote_wheels_by_pkg,
         always_include_sdist = always_include_sdist,
+        root_dependency_markers = lock_model_data.get("root_dependency_markers", {}),
     )
 
     lock_model_packages = lock_model_data.get("packages", {})
