@@ -112,6 +112,11 @@ def _resolve_python_interpreter(rctx):
         python_interpreter = rctx.path(rctx.attr.python_interpreter_target)
         if hasattr(rctx, "watch"):
             rctx.watch(python_interpreter)
+
+        # Keep the logical external-repository path. Resolving it can embed a
+        # transient repository contents-cache UUID in generated files.
+        return python_interpreter
+
     elif "/" not in python_interpreter:
         found_python_interpreter = rctx.which(python_interpreter)
         if not found_python_interpreter:
