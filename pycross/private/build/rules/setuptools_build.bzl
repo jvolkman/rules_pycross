@@ -50,6 +50,7 @@ def _setuptools_build_impl(ctx):
         native_deps = ctx.attr.native_deps,
         repair_tool = ctx.executable._repair_tool,
         target_environment = target_environment,
+        repair_exclude = ctx.attr.repair_exclude,
         repair_deps = tool_deps.get("repairwheel", []),
         resource_set = resources.resource_set,
     )
