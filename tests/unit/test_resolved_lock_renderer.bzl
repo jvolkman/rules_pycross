@@ -699,6 +699,55 @@ def _test_wheel_library_tags_rendering(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
     analysis_test(name = name, target = name + "_subject", impl = _test_wheel_library_tags_rendering_impl)
 
+# buildifier: disable=unused-variable
+def _test_package_override_label_validation_impl(env, target):
+    """Verify package override labels are rendered into a validation test."""
+    lock = {
+        "packages": {
+            "bar@2.0": {
+                "wheel_candidates": [
+                    {
+                        "filename": "bar-2.0-py3-none-any.whl",
+                        "file_reference": {"label": "@//local:bar_wheel"},
+                    },
+                    {
+                        "filename": "bar-2.0-cp310-cp310-manylinux_2_17_x86_64.whl",
+                        "file_reference": {"label": "@//local:bar_wheel"},
+                    },
+                ],
+            },
+            "foo@1.0": {
+                "build_target": "@//third_party:foo_wheel",
+                "sdist_file": {"label": "@//third_party:foo_sdist"},
+            },
+            "remote@3.0": {
+                "wheel_candidates": [
+                    {
+                        "filename": "remote-3.0-py3-none-any.whl",
+                        "file_reference": {"key": "remote_wheel"},
+                    },
+                ],
+            },
+        },
+    }
+    repo_map = {"remote_wheel": "@repo//remote:wheel"}
+    res = render_lock_bzl(lock, repo_map, rctx_name = "my_rctx")
+
+    pre_targets_section = res.split("def targets():")[0]
+    env.expect.that_bool("def _package_override_label_validation_test_impl(ctx):" in pre_targets_section).equals(True)
+    env.expect.that_bool("_package_override_label_validation_test = rule(" in pre_targets_section).equals(True)
+
+    validation_section = res.split('name = "validate_package_override_labels"')[1].split(")", 1)[0]
+    env.expect.that_bool('"@//local:bar_wheel",' in validation_section).equals(True)
+    env.expect.that_bool('"@//third_party:foo_sdist",' in validation_section).equals(True)
+    env.expect.that_bool('"@//third_party:foo_wheel",' in validation_section).equals(True)
+    env.expect.that_bool("@repo//remote:wheel" not in validation_section).equals(True)
+    env.expect.that_collection(validation_section.split('"@//local:bar_wheel",')).has_size(2)
+
+def _test_package_override_label_validation(name):
+    util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
+    analysis_test(name = name, target = name + "_subject", impl = _test_package_override_label_validation_impl)
+
 def resolved_lock_renderer_test_suite(name):
     test_suite(
         name = name,
@@ -716,5 +765,6 @@ def resolved_lock_renderer_test_suite(name):
             _test_resolution_marker_evaluator_rendering,
             _test_resolution_marker_compound_rendering,
             _test_wheel_library_tags_rendering,
+            _test_package_override_label_validation,
         ],
     )
