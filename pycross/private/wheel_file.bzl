@@ -72,6 +72,17 @@ def _pycross_wheel_file_impl(rctx):
         site_paths = site_paths,
     ))
 
+    if not hasattr(rctx, "repo_metadata"):
+        return None
+
+    # Everything this repo contains is determined by the recorded inputs:
+    # the wheel itself is pinned by the mandatory sha256, and inspection.json
+    # plus BUILD.bazel are derived from the wheel bytes and the rule's attrs.
+    # inspect_package.py reads only the zip entry names and entry_points.txt
+    # and sorts every list it emits, so its output does not vary between runs
+    # or machines for a given wheel.
+    return rctx.repo_metadata(reproducible = True)
+
 pycross_wheel_file = repository_rule(
     implementation = _pycross_wheel_file_impl,
     attrs = {
