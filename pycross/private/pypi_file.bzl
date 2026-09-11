@@ -96,7 +96,16 @@ def _pypi_file_impl(ctx):
     )
     ctx.file("file/BUILD.bazel", _PYPI_FILE_BUILD.format(ctx.attr.filename))
 
-    return update_attrs(ctx.attr, _pypi_file_attrs.keys(), {"sha256": download_info.sha256})
+    attrs = update_attrs(ctx.attr, _pypi_file_attrs.keys(), {"sha256": download_info.sha256})
+
+    if not hasattr(ctx, "repo_metadata"):
+        return attrs
+
+    # sha256 is mandatory, so the downloaded file is pinned and the generated
+    # BUILD file depends only on attrs. keep_metadata is the exception: it
+    # retains pypi_metadata.json, a live PyPI JSON API response that changes as
+    # new releases are published, so those repos stay non-reproducible.
+    return ctx.repo_metadata(reproducible = not ctx.attr.keep_metadata)
 
 _pypi_file_attrs = {
     "sha256": attr.string(
