@@ -30,8 +30,17 @@ def exec_internal_tool(rctx, tool, args, *, flagfile_param = "--flagfile", flagf
     Returns:
       exec_result
     """
-    interpreter_path_file = rctx.path(Label("@{}//:interpreter_path.txt".format(INTERNAL_REPO_NAME)))
-    python_exe = rctx.read(interpreter_path_file).strip()
+
+    # interpreter_path.txt holds host-specific paths, so recording it as an
+    # input would make every caller's repo contents cache entry specific to
+    # one machine and output base. Record the machine-independent
+    # interpreter_identity.txt instead, so that callers still re-run when
+    # the interpreter changes. rctx.path(Label) records the file it resolves,
+    # so reach interpreter_path.txt as a sibling instead.
+    interpreter_identity_file = rctx.path(Label("@{}//:interpreter_identity.txt".format(INTERNAL_REPO_NAME)))
+    rctx.read(interpreter_identity_file)
+    interpreter_path_file = interpreter_identity_file.dirname.get_child("interpreter_path.txt")
+    python_exe = rctx.read(interpreter_path_file, watch = "no").strip()
 
     # Setup the flagfile if necessary
     flagfile = None
@@ -74,6 +83,12 @@ runpy.run_path("{tool}", run_name="__main__")
         [python_exe, str(wrapper_file)] + args,
         quiet = quiet,
     )
+
+    # These files embed host-specific paths and are not needed after execution;
+    # leaving them behind would make the calling repo's contents host-specific.
+    rctx.delete(wrapper_file)
+    if flagfile:
+        rctx.delete(flagfile)
 
     if result.return_code != 0:
         fail("Failed to execute internal tool: {}\n{}".format(tool, result.stderr))
@@ -120,6 +135,34 @@ def _resolve_python_interpreter(rctx):
 
     return python_interpreter.realpath
 
+def _interpreter_identity(rctx, python_executable):
+    """Describes the interpreter without referring to a host-specific path.
+
+    Args:
+      rctx: Handle to the rule repository context.
+      python_executable: The resolved interpreter path.
+
+    Returns:
+      str: The interpreter's label (or path, if found on PATH) and version.
+    """
+    if rctx.attr.python_interpreter_target != None:
+        # A canonical label is the same on every machine.
+        location = str(rctx.attr.python_interpreter_target)
+    else:
+        # An interpreter found on PATH is host-specific anyway.
+        location = str(python_executable)
+
+    # The label does not change across patch releases, so include the version.
+    result = rctx.execute([
+        python_executable,
+        "-c",
+        "import sys; print(sys.implementation.name, *sys.version_info)",
+    ])
+    if result.return_code != 0:
+        fail("Failed to query python interpreter {}: {}".format(python_executable, result.stderr))
+
+    return "{}\n{}\n".format(location, result.stdout.strip())
+
 def _defaults_bzl(rctx):
     lines = []
     for key in CONFIGURE_TOOLCHAINS_ATTRS:
@@ -132,6 +175,7 @@ def _defaults_bzl(rctx):
 def _pycross_internal_repo_impl(rctx):
     python_executable = _resolve_python_interpreter(rctx)
     rctx.file("interpreter_path.txt", str(python_executable))
+    rctx.file("interpreter_identity.txt", _interpreter_identity(rctx, python_executable))
 
     # python.bzl
     if rctx.attr.python_defs_file:
@@ -146,6 +190,7 @@ package(default_visibility = ["//visibility:public"])
 
 exports_files([
     "python.bzl",
+    "interpreter_identity.txt",
     "interpreter_path.txt",
 ])
 """)

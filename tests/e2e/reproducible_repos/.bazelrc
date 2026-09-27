@@ -1,0 +1,3 @@
+import %workspace%/../shared/.bazelrc.common
+try-import %workspace%/.bazelrc.user
+try-import %workspace%/../shared/.bazelrc.user

@@ -1,0 +1,8 @@
+load("@rules_python//python:defs.bzl", "py_library")
+
+# run.sh fetches this target's repos, which include pycross_wheel_file repos
+# for cowsay and for the wheels rules_pycross's own tools use.
+py_library(
+    name = "cowsay",
+    deps = ["@uv//cowsay:pkg"],
+)
