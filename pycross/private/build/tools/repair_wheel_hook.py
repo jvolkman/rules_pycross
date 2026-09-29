@@ -14,9 +14,7 @@ def main() -> None:
         "--lib-dir", action="append", default=[], help="Library directory for repairwheel (can be repeated)."
     )
     parser.add_argument("--target-environment", help="Path to target environment JSON for compatibility check.")
-    parser.add_argument(
-        "--exclude", action="append", default=[], help="Linux SONAME glob to exclude from repairwheel."
-    )
+    parser.add_argument("--exclude", action="append", default=[], help="Linux SONAME glob to exclude from repairwheel.")
 
     args = parser.parse_args()
 
