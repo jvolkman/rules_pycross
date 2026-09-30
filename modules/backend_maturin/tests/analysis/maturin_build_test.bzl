@@ -103,7 +103,7 @@ def _test_maturin_build_missing_tools_impl(env, target):
     action = env.expect.that_target(target).action_generating(wheel_dir.short_path)
     action.mnemonic().equals("PycrossSdistBuildConfigError")
     action.env().contains_exactly({
-        "PYCROSS_ERROR": "Cannot build maturinpkg-1.0 from source:\nMissing 'maturin' in tool_deps",
+        "PYCROSS_ERROR": "Cannot build test-sdist.tar.gz from source:\nMissing 'maturin' in tool_deps",
     })
 
 def maturin_build_test_suite(name):

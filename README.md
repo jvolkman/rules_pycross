@@ -725,7 +725,7 @@ With the flag enabled, unsupported packages analyze successfully and provide the
 
 Set the flag with `common` rather than `build` so that `build`, `test`, and `cquery` share a configuration; changing a build setting between commands discards Bazel's analysis cache.
 
-Independently of this flag, sdist builds whose configuration is known to be broken at analysis time (e.g. `build-system.requires` packages missing from the lock file, or no `meson`/`cmake`/`ninja`/`maturin` in `tool_deps`) always analyze successfully and fail at execution with `Cannot build <package> from source: ...`. This keeps aspects and `cquery` working on platforms where such a package would fall back to a source build that is never actually run.
+Independently of this flag, sdist builds whose configuration is known to be broken at analysis time (e.g. `build-system.requires` packages missing from the lock file, or no `meson`/`cmake`/`ninja`/`maturin` in `tool_deps`) always analyze successfully and fail at execution with `Cannot build <sdist file> from source: ...`. This keeps aspects and `cquery` working on platforms where such a package would fall back to a source build that is never actually run.
 
 ---
 

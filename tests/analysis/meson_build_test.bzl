@@ -100,7 +100,9 @@ def _test_meson_build_missing_tools_impl(env, target):
     action = env.expect.that_target(target).action_generating(wheel_dir.short_path)
     action.mnemonic().equals("PycrossSdistBuildConfigError")
     action.env().contains_exactly({
-        "PYCROSS_ERROR": "Cannot build mesonpkg-1.0 from source:\nMissing 'meson' in tool_deps\nMissing 'ninja' in tool_deps",
+        "PYCROSS_ERROR": "Cannot build {}_sdist.tar.gz from source:\nMissing 'meson' in tool_deps\nMissing 'ninja' in tool_deps".format(
+            target.label.name.removesuffix("_subject"),
+        ),
     })
 
 def meson_build_test_suite(name):

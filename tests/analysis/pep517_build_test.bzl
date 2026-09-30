@@ -71,7 +71,7 @@ def _test_pep517_build_invalid_deps_impl(env, target):
     action = env.expect.that_target(target).action_generating(wheel_dir.short_path)
     action.mnemonic().equals("PycrossSdistBuildConfigError")
     action.env().contains_exactly({
-        "PYCROSS_ERROR": "Cannot build pkg-1.0 from source:\n" +
+        "PYCROSS_ERROR": "Cannot build {}_sdist.tar.gz from source:\n".format(target.label.name.removesuffix("_subject")) +
                          "Missing required build-system packages: hatchling. " +
                          "These are listed in build-system.requires but are not present in build_deps. " +
                          "Make sure they are included in your lockfile.",

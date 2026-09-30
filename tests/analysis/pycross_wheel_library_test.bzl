@@ -128,8 +128,10 @@ def _test_pycross_wheel_dir_no_match_deferred_impl(env, target):
     env.expect.that_bool(wheel_dir.is_directory).equals(True)
     action = env.expect.that_target(target).action_generating(wheel_dir.short_path)
     action.mnemonic().equals("PycrossUnsupportedWheel")
+
+    # Generated wheel_dir targets are named by package key, which the message uses.
     action.env().contains_exactly({
-        "PYCROSS_ERROR": "No compatible wheel is available for unsupported_pkg-1.0 in the selected target environment.",
+        "PYCROSS_ERROR": "No compatible wheel is available for {} in the selected target environment.".format(target.label.name),
     })
 
     # The marker is forwarded so downstream rules can report the package too.

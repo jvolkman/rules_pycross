@@ -15,7 +15,9 @@ def _pycross_wheel_dir_impl(ctx):
         # than the shared placeholder target, and keep the marker so downstream
         # rules can do the same.
         out = ctx.actions.declare_directory(ctx.attr.whldir_name)
-        package = ctx.attr.whldir_name.removesuffix(".whldir")
+
+        # Generated wheel_dir targets are named by package key (name@version).
+        package = ctx.label.name
         register_failure_action(
             ctx,
             outputs = [out],

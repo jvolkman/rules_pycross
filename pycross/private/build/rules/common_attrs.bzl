@@ -222,7 +222,7 @@ def defer_build_error(ctx, errors):
         ctx,
         outputs = [out],
         message = "Cannot build {} from source:\n{}".format(
-            whldir_name.removesuffix(".whldir"),
+            ctx.file.sdist.basename,
             "\n".join(errors),
         ),
         mnemonic = "PycrossSdistBuildConfigError",
