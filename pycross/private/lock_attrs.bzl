@@ -153,6 +153,7 @@ BUILD_SYSTEM_ATTRS = dict(
     data = attr.label_list(doc = "Additional data and dependencies used by the build."),
     pre_build_hooks = attr.label_list(doc = "Executables to run before building the wheel."),
     post_build_hooks = attr.label_list(doc = "Executables to run after the wheel is built."),
+    repair_exclude_globs = attr.string_list(doc = "Shared library globs to exclude from wheel repair; assumed provided at runtime."),
 )
 
 # Attrs for build backends that compile native (C/C++) code.

@@ -34,7 +34,6 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/d1/d6/3965ed04c63042e047cb6a3e6ed1a63a35087b6a609aa3a15ed8ac56c221/colorama-0.4.6-py2.py3-none-any.whl", hash = "sha256:4f1d9991f5acc0ca119f9d443620b77f9d6b33703e51011c16baf57afb285fc6", size = 25335, upload-time = "2022-10-25T02:36:20.889Z" },
 ]
 
-
 [[package]]
 name = "delvewheel"
 version = "1.12.1"
@@ -95,7 +94,6 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/54/16/12b82f791c7f50ddec566873d5bdd245baa1491bac11d15ffb98aecc8f8b/pefile-2024.8.26-py3-none-any.whl", hash = "sha256:76f8b485dcd3b1bb8166f1128d395fa3d87af26360c2358fb75b80019b957c6f", size = 74766, upload-time = "2024-08-26T21:01:02.632Z" },
 ]
 
-
 [[package]]
 name = "pyelftools"
 version = "0.32"
@@ -116,7 +114,7 @@ wheels = [
 
 [[package]]
 name = "repairwheel"
-version = "0.6.2"
+version = "0.7.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "delvewheel" },
@@ -124,10 +122,11 @@ dependencies = [
     { name = "packaging" },
     { name = "pefile" },
     { name = "pyelftools" },
+    { name = "typing-extensions" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/d2/74/81f836d2008127c7e946de8a2327f8c0743c971f295916c54e2805a364d7/repairwheel-0.6.2.tar.gz", hash = "sha256:f45873e795e79dc5a2304fda25cf18209734a63c8d431dc6446f87e7e5495c43", size = 294638, upload-time = "2026-06-23T05:22:42.199Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/fb/74/e4c2ed3d34cde8cf790f4f5d99fb7b06933864ca8b5b6eed1dd237c7b763/repairwheel-0.7.0.tar.gz", hash = "sha256:46083dad76e35595712ae593c1c9f112fb3f37a0e63268906e6de8182de55122", size = 286421, upload-time = "2026-08-29T04:07:10.422Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/3b/c7/0e9a023f91d54d7d65ccd23681b7f215ee2ca41e77cfcbd1efacd1199158/repairwheel-0.6.2-py3-none-any.whl", hash = "sha256:d0f4e67dc1428a26dceddb3def3bdf66f7deb3e17a87e34e44bb8d9191984b61", size = 161111, upload-time = "2026-06-23T05:22:41.088Z" },
+    { url = "https://files.pythonhosted.org/packages/14/12/bbc4f17fa2661e40342a1e36ad099f085bb83d6dbd025fb00c69e313182f/repairwheel-0.7.0-py3-none-any.whl", hash = "sha256:7fff43ed5abbf9710ef5ea6478c10cfd551aae043f445fd46307d4b602674ce0", size = 146908, upload-time = "2026-08-29T04:07:11.442Z" },
 ]
 
 [[package]]
@@ -154,7 +153,15 @@ requires-dist = [
     { name = "installer", marker = "extra == 'core'", specifier = "==1.0.0" },
     { name = "packaging", marker = "extra == 'core'", specifier = "==26.2" },
     { name = "patch-ng", marker = "extra == 'core'", specifier = "==1.19.1" },
-    { name = "repairwheel", marker = "extra == 'repairwheel'", specifier = "==0.6.2" },
+    { name = "repairwheel", marker = "extra == 'repairwheel'", specifier = "==0.7.0" },
 ]
 provides-extras = ["core", "build", "repairwheel"]
 
+[[package]]
+name = "typing-extensions"
+version = "4.16.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/f6/cc/6253133b5bb138fc3306cebfbda2c520f545d36b5be2c7255cc528bb45d6/typing_extensions-4.16.0.tar.gz", hash = "sha256:dc983d19a509c94dba722ee6abd33940f7c05a89e243c47e907eb4db6f1a43e5", size = 113555, upload-time = "2026-07-02T08:40:05.92Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/49/d3/b8441a820a491ddfc024b0b0cf0393375b75ea13866d9c66727e54c2fc80/typing_extensions-4.16.0-py3-none-any.whl", hash = "sha256:481caa481374e813c1b176ada14e97f1f67a4539ce9cfeb3f350d78d6370c2e8", size = 45571, upload-time = "2026-07-02T08:40:04.659Z" },
+]

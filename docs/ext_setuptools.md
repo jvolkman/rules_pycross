@@ -11,8 +11,8 @@ load("@rules_pycross//pycross/backends:setuptools.bzl", "setuptools_build")
 
 setuptools_build(<a href="#setuptools_build-name">name</a>, <a href="#setuptools_build-deps">deps</a>, <a href="#setuptools_build-data">data</a>, <a href="#setuptools_build-build_deps">build_deps</a>, <a href="#setuptools_build-build_env">build_env</a>, <a href="#setuptools_build-config_settings">config_settings</a>, <a href="#setuptools_build-copts">copts</a>, <a href="#setuptools_build-linkopts">linkopts</a>,
                  <a href="#setuptools_build-native_deps">native_deps</a>, <a href="#setuptools_build-path_tools">path_tools</a>, <a href="#setuptools_build-pkg_config_files">pkg_config_files</a>, <a href="#setuptools_build-post_build_hooks">post_build_hooks</a>, <a href="#setuptools_build-pre_build_hooks">pre_build_hooks</a>,
-                 <a href="#setuptools_build-pre_build_patches">pre_build_patches</a>, <a href="#setuptools_build-repair_exclude">repair_exclude</a>, <a href="#setuptools_build-resource_size">resource_size</a>, <a href="#setuptools_build-sdist">sdist</a>, <a href="#setuptools_build-site_hooks">site_hooks</a>, <a href="#setuptools_build-source_dir">source_dir</a>,
-                 <a href="#setuptools_build-target_environment">target_environment</a>, <a href="#setuptools_build-tool_deps">tool_deps</a>, <a href="#setuptools_build-whldir_name">whldir_name</a>)
+                 <a href="#setuptools_build-pre_build_patches">pre_build_patches</a>, <a href="#setuptools_build-repair_exclude_globs">repair_exclude_globs</a>, <a href="#setuptools_build-resource_size">resource_size</a>, <a href="#setuptools_build-sdist">sdist</a>, <a href="#setuptools_build-site_hooks">site_hooks</a>,
+                 <a href="#setuptools_build-source_dir">source_dir</a>, <a href="#setuptools_build-target_environment">target_environment</a>, <a href="#setuptools_build-tool_deps">tool_deps</a>, <a href="#setuptools_build-whldir_name">whldir_name</a>)
 </pre>
 
 
@@ -36,7 +36,7 @@ setuptools_build(<a href="#setuptools_build-name">name</a>, <a href="#setuptools
 | <a id="setuptools_build-post_build_hooks"></a>post_build_hooks |  Executables to run after the wheel is built. Each hook receives PYCROSS_WHEEL_FILE pointing to the built wheel.   | <a href="https://bazel.build/concepts/labels">List of labels</a> | optional |  `[]`  |
 | <a id="setuptools_build-pre_build_hooks"></a>pre_build_hooks |  Executables to run before building the wheel. Each hook receives PYCROSS_CONFIG_SETTINGS_FILE and PYCROSS_ENV_VARS_FILE environment variables pointing to JSON files it may read and modify.   | <a href="https://bazel.build/concepts/labels">List of labels</a> | optional |  `[]`  |
 | <a id="setuptools_build-pre_build_patches"></a>pre_build_patches |  Patch files to apply to the sdist source tree before building.   | <a href="https://bazel.build/concepts/labels">List of labels</a> | optional |  `[]`  |
-| <a id="setuptools_build-repair_exclude"></a>repair_exclude |  Linux SONAME globs to exclude from wheel repair; assumed provided at runtime.   | List of strings | optional |  `[]`  |
+| <a id="setuptools_build-repair_exclude_globs"></a>repair_exclude_globs |  Shared library globs to exclude from wheel repair; assumed provided at runtime.   | List of strings | optional |  `[]`  |
 | <a id="setuptools_build-resource_size"></a>resource_size |  Set the approximate size of this build, which controls two things:<br><br>1. The Bazel scheduler reservation, so large builds don't all run at once. 2. The parallelism passed to the underlying build system via environment    variables (CMAKE_BUILD_PARALLEL_LEVEL, GNUMAKEFLAGS, NINJA_JOBS, etc.).<br><br>Build tool parallelism is set to the scheduler reservation plus a small overcommit (default +2, matching ninja's ncpus+2 convention). This hides I/O latency and lets configure_make targets — whose configure phase is always serial — make better use of their allocation during the parallel make phase. The overcommit can be tuned with @rules_pycross//pycross/settings:parallelism_overcommit.<br><br>Each size maps to a cpu and mem value that can be overridden per-size. See @rules_pycross//pycross/settings:size_{size}_{cpu\|mem}.<br><br>The `serial` size is special: it fixes cpu=1 with no overcommit, for packages that are known-broken under parallel builds.   | String | optional |  `"default"`  |
 | <a id="setuptools_build-sdist"></a>sdist |  -   | <a href="https://bazel.build/concepts/labels">Label</a> | required |  |
 | <a id="setuptools_build-site_hooks"></a>site_hooks |  Python code snippets to execute on interpreter startup during builds.   | List of strings | optional |  `[]`  |
@@ -53,7 +53,8 @@ setuptools_build(<a href="#setuptools_build-name">name</a>, <a href="#setuptools
 <pre>
 setuptools = use_extension("@rules_pycross//pycross/backends:setuptools.bzl", "setuptools")
 setuptools.override(<a href="#setuptools.override-name">name</a>, <a href="#setuptools.override-data">data</a>, <a href="#setuptools.override-build_env">build_env</a>, <a href="#setuptools.override-config_settings">config_settings</a>, <a href="#setuptools.override-copts">copts</a>, <a href="#setuptools.override-linkopts">linkopts</a>, <a href="#setuptools.override-native_deps">native_deps</a>,
-                    <a href="#setuptools.override-path_tools">path_tools</a>, <a href="#setuptools.override-post_build_hooks">post_build_hooks</a>, <a href="#setuptools.override-pre_build_hooks">pre_build_hooks</a>, <a href="#setuptools.override-repo">repo</a>, <a href="#setuptools.override-tool_deps">tool_deps</a>, <a href="#setuptools.override-workspace">workspace</a>)
+                    <a href="#setuptools.override-path_tools">path_tools</a>, <a href="#setuptools.override-post_build_hooks">post_build_hooks</a>, <a href="#setuptools.override-pre_build_hooks">pre_build_hooks</a>, <a href="#setuptools.override-repair_exclude_globs">repair_exclude_globs</a>, <a href="#setuptools.override-repo">repo</a>,
+                    <a href="#setuptools.override-tool_deps">tool_deps</a>, <a href="#setuptools.override-workspace">workspace</a>)
 </pre>
 
 
@@ -79,6 +80,7 @@ Specify setuptools-specific package overrides.
 | <a id="setuptools.override-path_tools"></a>path_tools |  A list of binary targets placed on PATH during the build.   | <a href="https://bazel.build/concepts/labels">List of labels</a> | optional |  `[]`  |
 | <a id="setuptools.override-post_build_hooks"></a>post_build_hooks |  Executables to run after the wheel is built.   | <a href="https://bazel.build/concepts/labels">List of labels</a> | optional |  `[]`  |
 | <a id="setuptools.override-pre_build_hooks"></a>pre_build_hooks |  Executables to run before building the wheel.   | <a href="https://bazel.build/concepts/labels">List of labels</a> | optional |  `[]`  |
+| <a id="setuptools.override-repair_exclude_globs"></a>repair_exclude_globs |  Shared library globs to exclude from wheel repair; assumed provided at runtime.   | List of strings | optional |  `[]`  |
 | <a id="setuptools.override-repo"></a>repo |  The repository name (if applying to a specific lock file).   | String | optional |  `""`  |
 | <a id="setuptools.override-tool_deps"></a>tool_deps |  Overrides for built-in dependencies.   | <a href="https://bazel.build/rules/lib/dict">Dictionary: String -> String</a> | optional |  `{}`  |
 | <a id="setuptools.override-workspace"></a>workspace |  The workspace name (if applying to all members of a workspace).   | String | optional |  `""`  |

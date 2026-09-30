@@ -14,7 +14,9 @@ def main() -> None:
         "--lib-dir", action="append", default=[], help="Library directory for repairwheel (can be repeated)."
     )
     parser.add_argument("--target-environment", help="Path to target environment JSON for compatibility check.")
-    parser.add_argument("--exclude", action="append", default=[], help="Linux SONAME glob to exclude from repairwheel.")
+    parser.add_argument(
+        "--exclude", action="append", default=[], help="Shared library glob to exclude from repairwheel."
+    )
 
     args = parser.parse_args()
 
@@ -67,8 +69,8 @@ def main() -> None:
 
     from pycross.private.build.tools.utils.env import make_clean_env
 
-    for soname in args.exclude:
-        cmd.extend(["--exclude", soname])
+    for pattern in args.exclude:
+        cmd.extend(["--exclude", pattern])
 
     env = make_clean_env()
     python_path = list(sys.path)

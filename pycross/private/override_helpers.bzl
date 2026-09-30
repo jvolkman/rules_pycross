@@ -104,6 +104,10 @@ def encode_build_system_attrs(tag):
     if path_tools != None and path_tools:
         backend_attrs["path_tools"] = json.encode([str(dep) for dep in path_tools])
 
+    repair_exclude_globs = getattr(tag, "repair_exclude_globs", None)
+    if repair_exclude_globs != None and repair_exclude_globs:
+        backend_attrs["repair_exclude_globs"] = json.encode(repair_exclude_globs)
+
     return backend_attrs
 
 def make_override_extension(backend_name, build_backend, override_attrs):

@@ -42,10 +42,11 @@ py_test(
 py_test(
     name = "repair_wheel_hook_test",
     srcs = ["repair_wheel_hook_test.py"],
-    imports = ["../.."],
     main = "repair_wheel_hook_test.py",
     tags = ["unit"],
-    deps = ["//pycross/private/build/tools:repair_wheel_hook"],
+    deps = [
+        "//pycross/private/build/tools:repair_wheel_hook",
+    ],
 )
 
 common_attrs_test_suite(

@@ -64,6 +64,26 @@ def _test_setuptools_build_resources_impl(env, target):
         "MAKEFLAGS": "-j6",
     })
 
+def _test_setuptools_build_with_repair_exclude_globs(name):
+    util.helper_target(_mock_sdist, name = name + "_sdist")
+    util.helper_target(
+        setuptools_build,
+        name = name + "_subject",
+        sdist = name + "_sdist",
+        repair_exclude_globs = ["libtorch*.so"],
+    )
+    analysis_test(name = name, target = name + "_subject", impl = _test_setuptools_build_with_repair_exclude_globs_impl)
+
+# buildifier: disable=unused-variable
+def _test_setuptools_build_with_repair_exclude_globs_impl(env, target):
+    wheel_dir = target[DefaultInfo].files.to_list()[0]
+    action = env.expect.that_target(target).action_generating(wheel_dir.short_path)
+    action.mnemonic().equals("PycrossRepairWheel")
+    action.argv().contains_at_least([
+        "--exclude",
+        "libtorch*.so",
+    ]).in_order()
+
 def setuptools_build_test_suite(name):
     test_suite(
         name = name,
@@ -71,5 +91,6 @@ def setuptools_build_test_suite(name):
             _test_setuptools_build_no_repair,
             _test_setuptools_build_with_repair,
             _test_setuptools_build_resources,
+            _test_setuptools_build_with_repair_exclude_globs,
         ],
     )

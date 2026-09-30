@@ -115,8 +115,8 @@ CC_BUILD_ATTRS = {
 }
 
 REPAIR_BUILD_ATTRS = {
-    "repair_exclude": attr.string_list(
-        doc = "Linux SONAME globs to exclude from wheel repair; assumed provided at runtime.",
+    "repair_exclude_globs": attr.string_list(
+        doc = "Shared library globs to exclude from wheel repair; assumed provided at runtime.",
     ),
     "target_environment": attr.label(
         doc = "The target environment mapping JSON (resolved dynamically via alias filegroup).",
