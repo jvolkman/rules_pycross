@@ -148,7 +148,8 @@ Wraps an executable target with a custom PATH name for use in pycross build rule
 <pre>
 load("@rules_pycross//pycross:defs.bzl", "pycross_repaired_wheel")
 
-pycross_repaired_wheel(<a href="#pycross_repaired_wheel-name">name</a>, <a href="#pycross_repaired_wheel-native_deps">native_deps</a>, <a href="#pycross_repaired_wheel-target_environment">target_environment</a>, <a href="#pycross_repaired_wheel-wheel">wheel</a>, <a href="#pycross_repaired_wheel-whldir_name">whldir_name</a>)
+pycross_repaired_wheel(<a href="#pycross_repaired_wheel-name">name</a>, <a href="#pycross_repaired_wheel-native_deps">native_deps</a>, <a href="#pycross_repaired_wheel-repair_exclude_globs">repair_exclude_globs</a>, <a href="#pycross_repaired_wheel-target_environment">target_environment</a>, <a href="#pycross_repaired_wheel-wheel">wheel</a>,
+                       <a href="#pycross_repaired_wheel-whldir_name">whldir_name</a>)
 </pre>
 
 
@@ -160,6 +161,7 @@ pycross_repaired_wheel(<a href="#pycross_repaired_wheel-name">name</a>, <a href=
 | :------------- | :------------- | :------------- | :------------- | :------------- |
 | <a id="pycross_repaired_wheel-name"></a>name |  A unique name for this target.   | <a href="https://bazel.build/concepts/labels#target-names">Name</a> | required |  |
 | <a id="pycross_repaired_wheel-native_deps"></a>native_deps |  Native dependencies providing shared libraries to bundle.   | <a href="https://bazel.build/concepts/labels">List of labels</a> | optional |  `[]`  |
+| <a id="pycross_repaired_wheel-repair_exclude_globs"></a>repair_exclude_globs |  Shared library globs to exclude from wheel repair; assumed provided at runtime.   | List of strings | optional |  `[]`  |
 | <a id="pycross_repaired_wheel-target_environment"></a>target_environment |  The target environment mapping JSON (resolved dynamically via alias filegroup).   | <a href="https://bazel.build/concepts/labels">Label</a> | optional |  `"@rules_pycross//pycross/private:default_target_platform"`  |
 | <a id="pycross_repaired_wheel-wheel"></a>wheel |  The input wheel to repair.   | <a href="https://bazel.build/concepts/labels">Label</a> | required |  |
 | <a id="pycross_repaired_wheel-whldir_name"></a>whldir_name |  Name for the output .whldir TreeArtifact directory. If empty, defaults to '{name}.whldir'.   | String | optional |  `""`  |

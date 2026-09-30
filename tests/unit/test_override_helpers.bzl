@@ -19,6 +19,7 @@ def _test_encode_build_system_attrs_impl(env, target):
         pre_build_hooks = ["//pkg:pre_hook"],
         post_build_hooks = ["//pkg:post_hook"],
         path_tools = ["//pkg:path_tool"],
+        repair_exclude_globs = ["libtorch*.so", "libc10*.so"],
     )
     res = encode_build_system_attrs(mock_tag)
 
@@ -35,6 +36,7 @@ def _test_encode_build_system_attrs_impl(env, target):
         "pre_build_hooks": json.encode(["//pkg:pre_hook"]),
         "post_build_hooks": json.encode(["//pkg:post_hook"]),
         "path_tools": json.encode(["//pkg:path_tool"]),
+        "repair_exclude_globs": json.encode(["libtorch*.so", "libc10*.so"]),
     })
 
 def _test_encode_build_system_attrs(name):

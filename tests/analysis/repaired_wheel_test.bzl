@@ -54,11 +54,34 @@ def _test_repaired_wheel_with_native_deps_impl(env, target):
     wheel_dir = target[DefaultInfo].files.to_list()[0]
     env.expect.that_bool(wheel_dir.is_directory).equals(True)
 
+def _test_repaired_wheel_with_exclude_globs(name):
+    util.helper_target(_mock_wheel, name = name + "_wheel")
+    util.helper_target(
+        pycross_repaired_wheel,
+        name = name + "_subject",
+        wheel = name + "_wheel",
+        repair_exclude_globs = ["libtorch*.so", "libc10*.dylib"],
+    )
+    analysis_test(name = name, target = name + "_subject", impl = _test_repaired_wheel_with_exclude_globs_impl)
+
+# buildifier: disable=unused-variable
+def _test_repaired_wheel_with_exclude_globs_impl(env, target):
+    wheel_dir = target[DefaultInfo].files.to_list()[0]
+    action = env.expect.that_target(target).action_generating(wheel_dir.short_path)
+    action.mnemonic().equals("PycrossRepairWheel")
+    action.argv().contains_at_least([
+        "--exclude",
+        "libtorch*.so",
+        "--exclude",
+        "libc10*.dylib",
+    ]).in_order()
+
 def repaired_wheel_test_suite(name):
     test_suite(
         name = name,
         tests = [
             _test_repaired_wheel_basic,
             _test_repaired_wheel_with_native_deps,
+            _test_repaired_wheel_with_exclude_globs,
         ],
     )

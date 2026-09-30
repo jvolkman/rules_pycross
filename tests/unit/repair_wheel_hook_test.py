@@ -124,6 +124,45 @@ class RepairWheelHookArgsTest(unittest.TestCase):
         lib_dir_indices = [i for i, a in enumerate(call_args) if a == "--lib-dir"]
         self.assertEqual(len(lib_dir_indices), 2)
 
+    @patch("subprocess.check_call")
+    def test_excludes_passed_through(self, mock_check_call):
+        """--exclude arguments should be passed to repairwheel in order."""
+        self._create_dummy_wheel(self.wheel_dir)
+
+        def fake_repair(*args, **kwargs):
+            cmd = args[0]
+            for i, arg in enumerate(cmd):
+                if arg == "--output-dir":
+                    self._create_dummy_wheel(Path(cmd[i + 1]))
+                    break
+
+        mock_check_call.side_effect = fake_repair
+
+        from pycross.private.build.tools.repair_wheel_hook import main
+
+        with patch(
+            "sys.argv",
+            [
+                "repair_wheel_hook",
+                "--wheel-dir",
+                str(self.wheel_dir),
+                "--out-wheel-dir",
+                str(self.out_wheel_dir),
+                "--exclude",
+                "libtorch*.so",
+                "--exclude",
+                "libc10*.so",
+            ],
+        ):
+            main()
+
+        call_args = mock_check_call.call_args[0][0]
+        exclude_indices = [i for i, arg in enumerate(call_args) if arg == "--exclude"]
+        self.assertEqual(
+            [call_args[i + 1] for i in exclude_indices],
+            ["libtorch*.so", "libc10*.so"],
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
