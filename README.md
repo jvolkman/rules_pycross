@@ -707,6 +707,28 @@ This is particularly useful for locking variant selections to a member without r
 
 ---
 
+## Deferring Unsupported Wheel Failures
+
+By default, a package that has no compatible wheel for the target environment (and no sdist to fall back to) is marked [incompatible](https://bazel.build/extending/platforms#skipping-incompatible-targets): targets that depend on it are skipped by `bazel build //...` and fail analysis when requested explicitly. (`all_requirements` and other platform-conditional aggregates exclude such packages instead.)
+
+This is a problem for consumers that only *analyze* dependencies, such as type-checking aspects that attach stub packages via implicit attributes: they see a target without the usual providers and fail even when the package would never be built. To defer these failures to execution, enable:
+
+```
+# .bazelrc
+common --@rules_pycross//pycross/settings:defer_unsupported_wheel_errors
+```
+
+With the flag enabled, unsupported packages analyze successfully and provide the usual providers (`PyInfo`, etc.). Building anything that actually needs the package fails with `No compatible wheel is available for <package> in the selected target environment.`
+
+> [!WARNING]
+> Because unsupported packages are no longer incompatible, `bazel build //...` and `bazel test //...` will **fail** (rather than skip) targets that depend on a package without a wheel for the current platform. If you rely on incompatible-target skipping, scope the flag to a config instead (e.g. `common:typecheck --@rules_pycross//pycross/settings:defer_unsupported_wheel_errors`, used with `--config=typecheck`).
+
+Set the flag with `common` rather than `build` so that `build`, `test`, and `cquery` share a configuration; changing a build setting between commands discards Bazel's analysis cache.
+
+Independently of this flag, sdist builds whose configuration is known to be broken at analysis time (e.g. `build-system.requires` packages missing from the lock file, or no `meson`/`cmake`/`ninja`/`maturin` in `tool_deps`) always analyze successfully and fail at execution with `Cannot build <package> from source: ...`. This keeps aspects and `cquery` working on platforms where such a package would fall back to a source build that is never actually run.
+
+---
+
 ## rules_python Compatibility
 
 `rules_pycross` integrates with `rules_python`. The generated target layout (`@<repo>//<package>`) is compatible with `rules_python` conventions.

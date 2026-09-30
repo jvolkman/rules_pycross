@@ -76,11 +76,42 @@ def _test_maturin_build_resources_impl(env, target):
         "MAKEFLAGS": "-j6",
     })
 
+def _test_maturin_build_missing_tools(name):
+    util.helper_target(
+        native.filegroup,
+        name = name + "_sdist",
+        srcs = ["test-sdist.tar.gz"],
+    )
+
+    util.helper_target(
+        maturin_build,
+        name = name + "_subject",
+        sdist = name + "_sdist",
+        whldir_name = "maturinpkg-1.0.whldir",
+        tags = ["manual"],
+    )
+
+    analysis_test(
+        name = name,
+        target = name + "_subject",
+        impl = _test_maturin_build_missing_tools_impl,
+    )
+
+def _test_maturin_build_missing_tools_impl(env, target):
+    wheel_dir = target[DefaultInfo].files.to_list()[0]
+    env.expect.that_bool(wheel_dir.is_directory).equals(True)
+    action = env.expect.that_target(target).action_generating(wheel_dir.short_path)
+    action.mnemonic().equals("PycrossSdistBuildConfigError")
+    action.env().contains_exactly({
+        "PYCROSS_ERROR": "Cannot build maturinpkg-1.0 from source:\nMissing 'maturin' in tool_deps",
+    })
+
 def maturin_build_test_suite(name):
     test_suite(
         name = name,
         tests = [
             _test_maturin_build_basic,
             _test_maturin_build_resources,
+            _test_maturin_build_missing_tools,
         ],
     )

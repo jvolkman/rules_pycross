@@ -2,6 +2,7 @@
 
 load("@rules_cc//cc/common:cc_info.bzl", "CcInfo")
 load("@rules_python//python:py_info.bzl", "PyInfo")
+load("//pycross/private:deferred_failure.bzl", "register_failure_action")
 load(
     "//pycross/private:providers.bzl",
     "PycrossExtractedWheelInfo",
@@ -196,3 +197,38 @@ def get_unzipped_wheel(target):
     if PycrossExtractedWheelInfo in target:
         return target[PycrossExtractedWheelInfo].site_packages
     fail("Target {} does not provide a site_packages directory. Make sure it is wrapped in a pycross_wheel_library.".format(target.label))
+
+def defer_build_error(ctx, errors):
+    """Reports sdist build configuration errors at execution time.
+
+    Build rules call this instead of `fail()` when they detect, during analysis,
+    that a build cannot succeed (e.g. missing build-system packages or tools).
+    Returning providers backed by a failing action, rather than failing
+    analysis, keeps analysis-only consumers (aspects, `cquery`) working for
+    packages that are never actually built, while any real build of the package
+    still fails with the same message. This mirrors Bazel's validation-action
+    pattern.
+
+    Args:
+        ctx: The build rule context (must include `COMMON_BUILD_ATTRS`).
+        errors: list[str], the error messages. Must be non-empty.
+
+    Returns:
+        list of providers for the build rule to return.
+    """
+    whldir_name = ctx.attr.whldir_name or (ctx.attr.name + ".whldir")
+    out = ctx.actions.declare_directory(whldir_name)
+    register_failure_action(
+        ctx,
+        outputs = [out],
+        message = "Cannot build {} from source:\n{}".format(
+            whldir_name.removesuffix(".whldir"),
+            "\n".join(errors),
+        ),
+        mnemonic = "PycrossSdistBuildConfigError",
+        progress_message = "Rejecting sdist build %{label}",
+    )
+    return [
+        DefaultInfo(files = depset([out])),
+        OutputGroupInfo(raw_wheel = depset([out])),
+    ]

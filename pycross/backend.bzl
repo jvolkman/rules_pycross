@@ -54,6 +54,7 @@ load(
     _COMMON_BUILD_ATTRS = "COMMON_BUILD_ATTRS",
     _REPAIR_BUILD_ATTRS = "REPAIR_BUILD_ATTRS",
     _TOOL_EXTRACT_ATTRS = "TOOL_EXTRACT_ATTRS",
+    _defer_build_error = "defer_build_error",
     _get_unzipped_wheel = "get_unzipped_wheel",
     _get_wheel = "get_wheel",
     _group_tool_deps = "group_tool_deps",
@@ -83,6 +84,7 @@ REPAIR_BUILD_ATTRS = _REPAIR_BUILD_ATTRS
 TOOL_EXTRACT_ATTRS = _TOOL_EXTRACT_ATTRS
 
 # Utilities
+defer_build_error = _defer_build_error
 get_resource_set = _get_resource_set
 get_unzipped_wheel = _get_unzipped_wheel
 get_wheel = _get_wheel

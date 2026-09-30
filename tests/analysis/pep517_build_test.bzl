@@ -2,7 +2,6 @@
 
 load("@rules_python//python:defs.bzl", "PyInfo")
 load("@rules_testing//lib:analysis_test.bzl", "analysis_test", "test_suite")
-load("@rules_testing//lib:truth.bzl", "matching")
 load("@rules_testing//lib:util.bzl", "util")
 
 # buildifier: disable=bzl-visibility
@@ -54,13 +53,34 @@ def _test_pep517_build_invalid_deps(name):
         sdist = name + "_sdist",
         required_build_packages = ["hatchling"],
         build_deps = [],
+        whldir_name = "pkg-1.0.whldir",
         tags = ["manual"],
     )
-    analysis_test(name = name, target = name + "_subject", expect_failure = True, impl = _test_pep517_build_invalid_deps_impl)
+    analysis_test(
+        name = name,
+        target = name + "_subject",
+        impl = _test_pep517_build_invalid_deps_impl,
+    )
 
-# buildifier: disable=unused-variable
 def _test_pep517_build_invalid_deps_impl(env, target):
-    env.expect.that_target(target).failures().contains_predicate(matching.contains("Missing required build-system packages: hatchling."))
+    wheel_dir = target[DefaultInfo].files.to_list()[0]
+    env.expect.that_bool(wheel_dir.is_directory).equals(True)
+    env.expect.that_str(wheel_dir.basename).equals("pkg-1.0.whldir")
+    env.expect.that_target(target).output_group("raw_wheel").contains_exactly([wheel_dir.short_path])
+
+    action = env.expect.that_target(target).action_generating(wheel_dir.short_path)
+    action.mnemonic().equals("PycrossSdistBuildConfigError")
+    action.env().contains_exactly({
+        "PYCROSS_ERROR": "Cannot build pkg-1.0 from source:\n" +
+                         "Missing required build-system packages: hatchling. " +
+                         "These are listed in build-system.requires but are not present in build_deps. " +
+                         "Make sure they are included in your lockfile.",
+    })
+
+    # The real build should not be registered.
+    env.expect.that_bool(
+        any([a.mnemonic == "PycrossPep517Build" for a in target.actions]),
+    ).equals(False)
 
 def _test_pep517_build_basic(name):
     util.helper_target(_mock_sdist, name = name + "_sdist")

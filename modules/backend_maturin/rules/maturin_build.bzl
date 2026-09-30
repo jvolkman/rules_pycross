@@ -9,6 +9,7 @@ load(
     "COMMON_BUILD_ATTRS",
     "REPAIR_BUILD_ATTRS",
     "TOOL_EXTRACT_ATTRS",
+    "defer_build_error",
     "extract_cc_layer",
     "get_resource_set",
     "get_unzipped_wheel",
@@ -37,7 +38,7 @@ def _maturin_build_impl(ctx):
 
     if not has_maturin:
         if "maturin" not in tool_deps:
-            fail("Missing 'maturin' in tool_deps")
+            return defer_build_error(ctx, ["Missing 'maturin' in tool_deps"])
         maturin_wheel = get_unzipped_wheel(tool_deps["maturin"][0])
         tool_executables.append(register_bin_extract_action(
             ctx,

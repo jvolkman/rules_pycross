@@ -5,7 +5,29 @@ TreeArtifact directory. For sdist-built wheels (already TreeArtifact
 directories from the build action), this is a no-op pass-through.
 """
 
+load(":deferred_failure.bzl", "register_failure_action", "unsupported_wheel_message")
+load(":providers.bzl", "PycrossUnsupportedWheelInfo")
+
 def _pycross_wheel_dir_impl(ctx):
+    if PycrossUnsupportedWheelInfo in ctx.attr.src:
+        # No compatible wheel for this target environment (and failures are
+        # deferred to execution). Fail with a message naming the package rather
+        # than the shared placeholder target, and keep the marker so downstream
+        # rules can do the same.
+        out = ctx.actions.declare_directory(ctx.attr.whldir_name)
+        package = ctx.attr.whldir_name.removesuffix(".whldir")
+        register_failure_action(
+            ctx,
+            outputs = [out],
+            message = unsupported_wheel_message(package),
+            mnemonic = "PycrossUnsupportedWheel",
+            progress_message = "Rejecting unsupported wheel %s" % package,
+        )
+        return [
+            DefaultInfo(files = depset([out])),
+            ctx.attr.src[PycrossUnsupportedWheelInfo],
+        ]
+
     src = ctx.files.src[0]
 
     if src.is_directory:

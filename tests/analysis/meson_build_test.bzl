@@ -78,11 +78,37 @@ def _test_meson_build_resources_impl(env, target):
         "MAKEFLAGS": "-j6",
     })
 
+def _test_meson_build_missing_tools(name):
+    util.helper_target(_mock_sdist, name = name + "_sdist")
+    util.helper_target(
+        meson_build,
+        name = name + "_subject",
+        sdist = name + "_sdist",
+        tool_deps = [],
+        whldir_name = "mesonpkg-1.0.whldir",
+        tags = ["manual"],
+    )
+    analysis_test(
+        name = name,
+        target = name + "_subject",
+        impl = _test_meson_build_missing_tools_impl,
+    )
+
+def _test_meson_build_missing_tools_impl(env, target):
+    wheel_dir = target[DefaultInfo].files.to_list()[0]
+    env.expect.that_bool(wheel_dir.is_directory).equals(True)
+    action = env.expect.that_target(target).action_generating(wheel_dir.short_path)
+    action.mnemonic().equals("PycrossSdistBuildConfigError")
+    action.env().contains_exactly({
+        "PYCROSS_ERROR": "Cannot build mesonpkg-1.0 from source:\nMissing 'meson' in tool_deps\nMissing 'ninja' in tool_deps",
+    })
+
 def meson_build_test_suite(name):
     test_suite(
         name = name,
         tests = [
             _test_meson_build_basic,
             _test_meson_build_resources,
+            _test_meson_build_missing_tools,
         ],
     )

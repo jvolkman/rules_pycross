@@ -26,3 +26,8 @@ PycrossPathToolInfo = provider(
         "name": "string: The name to use on PATH.",
     },
 )
+
+PycrossUnsupportedWheelInfo = provider(
+    doc = "Marker provider indicating a wheel target has no compatible wheel for the selected target environment.",
+    fields = {},
+)
