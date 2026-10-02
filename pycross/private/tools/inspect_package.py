@@ -368,13 +368,21 @@ def _find_wheel_paths(wheel_path: Path) -> tuple[list[str], list[str], list[str]
 
 def inspect_sdist(sdist_path: Path, source_dir: str = "") -> dict:
     content = _get_archive_file_content(sdist_path, "pyproject.toml", source_dir=source_dir)
+    warnings = []
     if content:
-        pyproject = tomllib.loads(content)
+        try:
+            pyproject = tomllib.loads(content)
+        except tomllib.TOMLDecodeError as exc:
+            warnings.append(
+                f"WARNING: Failed to parse pyproject.toml in '{sdist_path.name}' ({exc}); "
+                f"falling back to default build-system settings."
+            )
+            pyproject = {}
     else:
         pyproject = {}
 
     build_system = pyproject.get("build-system", {})
-    return {
+    result = {
         "build_backend": build_system.get("build-backend", PEP517_DEFAULT_BACKEND),
         "build_requires": build_system.get("requires", PEP517_DEFAULT_REQUIRES),
         "site_paths": _find_site_paths_sdist(sdist_path, source_dir=source_dir),
@@ -382,6 +390,9 @@ def inspect_sdist(sdist_path: Path, source_dir: str = "") -> dict:
         "data_paths": [],
         "include_paths": [],
     }
+    if warnings:
+        result["warnings"] = warnings
+    return result
 
 
 def inspect_wheel(wheel_path: Path) -> dict:
@@ -479,7 +490,8 @@ def main():
                     pin_versions[parts[0]] = parts[1]
 
         if pin_versions:
-            data["warnings"] = validate_requirements(data["build_requires"], pin_versions, args.sdist.name)
+            req_warnings = validate_requirements(data["build_requires"], pin_versions, args.sdist.name)
+            data["warnings"] = data.get("warnings", []) + req_warnings
     elif args.wheel:
         data = inspect_wheel(args.wheel)
     else:

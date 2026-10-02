@@ -125,6 +125,119 @@ pycross_wheel_metadata(
     rctx.file("BUILD.bazel", build_content)
     rctx.file("REPO.bazel", "")
 
+def _validate_build_backend(attr):
+    if attr.build_backend:
+        known_backends = {v: True for v in attr.backend_to_rule.values()}
+        if attr.build_backend not in known_backends and attr.build_backend != attr.default_backend:
+            fail("Unknown build backend: " + attr.build_backend +
+                 ". Registered backends: " + ", ".join(sorted(known_backends.keys())))
+
+def _compute_sdist_build_config(attr, metadata):
+    """Compute macro attributes, resolved backend, and paths from sdist metadata and repo attrs.
+
+    Args:
+        attr: A struct or rctx.attr with sdist_repo attributes.
+        metadata: Decoded dict from inspect_package.py.
+
+    Returns:
+        A struct with macro_attrs, backend_macro, site_paths, bin_paths, data_paths,
+        include_paths, applied_override_config, non_matching_override_backends.
+    """
+    _validate_build_backend(attr)
+
+    backend_to_rule = attr.backend_to_rule
+    default_backend = attr.default_backend
+
+    macro_attrs = {
+        "name": "\"wheel_build\"",
+        "sdist": "\"{}\"".format(attr.sdist),
+        "deps": str(attr.deps),
+    }
+
+    if attr.whldir_name:
+        macro_attrs["whldir_name"] = "\"{}\"".format(attr.whldir_name)
+
+    if attr.source_dir:
+        macro_attrs["source_dir"] = "\"{}\"".format(attr.source_dir)
+
+    backend = metadata.get("build_backend", "")
+    requires = metadata.get("build_requires", [])
+
+    site_paths = metadata.get("site_paths", [])
+    bin_paths = metadata.get("bin_paths", [])
+    data_paths = metadata.get("data_paths", [])
+    include_paths = metadata.get("include_paths", [])
+
+    build_requires_names = [extract_pep508_name(r) for r in requires]
+    if attr.build_backend:
+        backend_macro = attr.build_backend
+    else:
+        # Map pyproject backend to pycross rule name via the registry.
+        # Uses bracket-notation matching: entries like 'setuptools.build_meta[setuptools-rust]'
+        # are preferred when the package's build-system.requires includes the bracketed deps.
+        # Falls back to the registered default backend.
+        backend_macro = _resolve_backend(backend_to_rule, default_backend, backend, build_requires_names)
+
+    # Map build requires and extra_build_tools to targets in the workspace repo
+    build_deps = {}
+    required_build_packages = {}
+    for req in requires:
+        req_name = extract_pep508_name(req)
+        if req_name == "oldest-supported-numpy":
+            req_name = "numpy"
+
+        required_build_packages[req_name] = True
+
+        # We only add it if it's in the known lock repo mapping.
+        # (This will be passed in via rctx.attr.known_packages)
+        if req_name in attr.known_packages:
+            build_deps["@{}//{}:pkg".format(attr.thin_repo, underscore_name(req_name))] = True
+
+    for dep in attr.extra_build_tools:
+        dep_name = key_name(dep)
+        build_deps["@{}//{}:pkg".format(attr.thin_repo, underscore_name(dep_name))] = True
+
+    macro_attrs["build_deps"] = str(sorted(build_deps.keys()))
+
+    # For pep517_build, pass the required package names for validation.
+    if backend_macro == "pep517_build":
+        macro_attrs["required_build_packages"] = str(sorted(required_build_packages.keys()))
+
+    # Apply override backend configs: only use the entry matching the resolved backend.
+    matching_config = {}
+    non_matching_backends = []
+    if attr.override_backend_configs:
+        all_configs = json.decode(attr.override_backend_configs)
+
+        matching_config = all_configs.pop(backend_macro, {})
+        for attr_name, json_val in sorted(matching_config.items()):
+            decoded = json.decode(json_val)
+            if type(decoded) == "string":
+                macro_attrs[attr_name] = "\"{}\"".format(decoded)
+            else:
+                macro_attrs[attr_name] = str(decoded)
+        if all_configs:
+            non_matching_backends = sorted(all_configs.keys())
+
+    # Pass through pre_build_patches if specified.
+    if attr.pre_build_patches:
+        macro_attrs["pre_build_patches"] = str(attr.pre_build_patches)
+
+    # Pass through site_hooks if specified.
+    if attr.site_hooks:
+        macro_attrs["site_hooks"] = str(attr.site_hooks)
+
+    return struct(
+        macro_attrs = macro_attrs,
+        backend_macro = backend_macro,
+        site_paths = site_paths,
+        bin_paths = bin_paths,
+        data_paths = data_paths,
+        include_paths = include_paths,
+        applied_override_config = matching_config,
+        non_matching_override_backends = non_matching_backends,
+    )
+
 def _sdist_repo_common(rctx):
     """Shared sdist repo logic: inspect metadata, resolve backend, apply override configs.
 
@@ -138,148 +251,65 @@ def _sdist_repo_common(rctx):
             applied_override_config: Dict of override config entries that matched the resolved backend.
             render: A function(macro_attrs, backend_macro, extra_build_snippets) to write BUILD.bazel.
     """
-    backend_to_rule = rctx.attr.backend_to_rule
-    default_backend = rctx.attr.default_backend
-    known_backends = {v: True for v in backend_to_rule.values()}
+    _validate_build_backend(rctx.attr)
 
-    macro_attrs = {
-        "name": "\"wheel_build\"",
-        "sdist": "\"{}\"".format(rctx.attr.sdist),
-        "deps": str(rctx.attr.deps),
-    }
+    sdist_path = rctx.path(rctx.attr.sdist)
+    output_json = rctx.path("build_metadata.json")
 
-    if rctx.attr.whldir_name:
-        macro_attrs["whldir_name"] = "\"{}\"".format(rctx.attr.whldir_name)
-
+    # Run the Python inspector tool
+    inspect_args = [
+        "--sdist",
+        str(sdist_path),
+        "--output",
+        str(output_json),
+        "--pin-versions",
+        str(rctx.path(rctx.attr.pin_versions_json)),
+    ]
     if rctx.attr.source_dir:
-        macro_attrs["source_dir"] = "\"{}\"".format(rctx.attr.source_dir)
+        inspect_args.extend(["--source-dir", rctx.attr.source_dir])
 
-    if rctx.attr.build_backend:
-        backend_macro = rctx.attr.build_backend
+    exec_internal_tool(
+        rctx,
+        Label("//pycross/private/tools:inspect_package.py"),
+        inspect_args,
+        extra_wheels = [Label("@pycross_internal_deps//packaging:wheel")],
+    )
 
-        # Validate that the explicitly-set backend is a registered rule name.
-        if backend_macro not in known_backends and backend_macro != default_backend:
-            fail("Unknown build backend: " + backend_macro +
-                 ". Registered backends: " + ", ".join(sorted(known_backends.keys())))
+    metadata = json.decode(rctx.read(output_json))
 
-        if rctx.attr.extra_build_tools:
-            build_deps = {}
-            for dep in rctx.attr.extra_build_tools:
-                dep_name = key_name(dep)
-                build_deps["@{}//{}:pkg".format(rctx.attr.thin_repo, underscore_name(dep_name))] = True
-            macro_attrs["build_deps"] = str(sorted(build_deps.keys()))
+    # Print any warnings from the package inspector
+    for warning in metadata.get("warnings", []):
+        # buildifier: disable=print
+        print(warning)
 
-        site_paths = []
-        bin_paths = []
-        data_paths = []
-        include_paths = []
-        rctx.file("inspection.json", json.encode({"site_paths": [], "bin_paths": [], "data_paths": [], "include_paths": []}))
-    else:
-        sdist_path = rctx.path(rctx.attr.sdist)
-        output_json = rctx.path("build_metadata.json")
+    config = _compute_sdist_build_config(rctx.attr, metadata)
+    site_paths = config.site_paths
+    bin_paths = config.bin_paths
+    data_paths = config.data_paths
+    include_paths = config.include_paths
 
-        # Run the Python inspector tool
-        inspect_args = [
-            "--sdist",
-            str(sdist_path),
-            "--output",
-            str(output_json),
-            "--pin-versions",
-            str(rctx.path(rctx.attr.pin_versions_json)),
-        ]
-        if rctx.attr.source_dir:
-            inspect_args.extend(["--source-dir", rctx.attr.source_dir])
+    rctx.file("inspection.json", json.encode({
+        "site_paths": site_paths,
+        "bin_paths": bin_paths,
+        "data_paths": data_paths,
+        "include_paths": include_paths,
+    }))
 
-        exec_internal_tool(
-            rctx,
-            Label("//pycross/private/tools:inspect_package.py"),
-            inspect_args,
-            extra_wheels = [Label("@pycross_internal_deps//packaging:wheel")],
-        )
-
-        metadata = json.decode(rctx.read(output_json))
-        backend = metadata.get("build_backend", "")
-        requires = metadata.get("build_requires", [])
-
-        site_paths = metadata.get("site_paths", [])
-        bin_paths = metadata.get("bin_paths", [])
-        data_paths = metadata.get("data_paths", [])
-        include_paths = metadata.get("include_paths", [])
-        rctx.file("inspection.json", json.encode({
-            "site_paths": site_paths,
-            "bin_paths": bin_paths,
-            "data_paths": data_paths,
-            "include_paths": include_paths,
-        }))
-
-        # Print any warnings from the package inspector
-        for warning in metadata.get("warnings", []):
-            # buildifier: disable=print
-            print(warning)
-
-        # Map pyproject backend to pycross rule name via the registry.
-        # Uses bracket-notation matching: entries like 'setuptools.build_meta[setuptools-rust]'
-        # are preferred when the package's build-system.requires includes the bracketed deps.
-        # Falls back to the registered default backend.
-        build_requires_names = [extract_pep508_name(r) for r in requires]
-        backend_macro = _resolve_backend(backend_to_rule, default_backend, backend, build_requires_names)
-
-        # Map build requires to targets in the workspace repo
-        build_deps = {}
-        required_build_packages = {}
-        for req in requires:
-            req_name = extract_pep508_name(req)
-            if req_name == "oldest-supported-numpy":
-                req_name = "numpy"
-
-            required_build_packages[req_name] = True
-
-            # We only add it if it's in the known lock repo mapping.
-            # (This will be passed in via rctx.attr.known_packages)
-            if req_name in rctx.attr.known_packages:
-                build_deps["@{}//{}:pkg".format(rctx.attr.thin_repo, underscore_name(req_name))] = True
-
-        macro_attrs["build_deps"] = str(sorted(build_deps.keys()))
-
-        # For pep517_build, pass the required package names for validation.
-        if backend_macro == "pep517_build":
-            macro_attrs["required_build_packages"] = str(sorted(required_build_packages.keys()))
-
-    # Apply override backend configs: only use the entry matching the resolved backend.
-    matching_config = {}
-    if rctx.attr.override_backend_configs:
-        all_configs = json.decode(rctx.attr.override_backend_configs)
-
-        matching_config = all_configs.pop(backend_macro, {})
-        for attr_name, json_val in sorted(matching_config.items()):
-            decoded = json.decode(json_val)
-            if type(decoded) == "string":
-                macro_attrs[attr_name] = "\"{}\"".format(decoded)
-            else:
-                macro_attrs[attr_name] = str(decoded)
-        if all_configs:
-            # buildifier: disable=print
-            print("WARNING: package '{}' has override configs for non-matching backends: {}".format(
-                rctx.attr.sdist,
-                ", ".join(sorted(all_configs.keys())),
-            ))
-
-    # Pass through pre_build_patches if specified.
-    if rctx.attr.pre_build_patches:
-        macro_attrs["pre_build_patches"] = str(rctx.attr.pre_build_patches)
-
-    # Pass through site_hooks if specified.
-    if rctx.attr.site_hooks:
-        macro_attrs["site_hooks"] = str(rctx.attr.site_hooks)
+    if config.non_matching_override_backends:
+        # buildifier: disable=print
+        print("WARNING: package '{}' has override configs for non-matching backends: {}".format(
+            rctx.attr.sdist,
+            ", ".join(config.non_matching_override_backends),
+        ))
 
     return struct(
-        macro_attrs = macro_attrs,
-        backend_macro = backend_macro,
+        macro_attrs = config.macro_attrs,
+        backend_macro = config.backend_macro,
         site_paths = site_paths,
         bin_paths = bin_paths,
         data_paths = data_paths,
         include_paths = include_paths,
-        applied_override_config = matching_config,
+        applied_override_config = config.applied_override_config,
         render = lambda macro_attrs, backend_macro, extra_build_snippets = None: _render_build_file(rctx, macro_attrs, backend_macro, site_paths, bin_paths, data_paths, include_paths, extra_build_snippets),
     )
 
@@ -332,3 +362,6 @@ pycross_sdist_repo = repository_rule(
     implementation = _sdist_repo_impl,
     attrs = _SDIST_REPO_ATTRS,
 )
+
+# Visible for testing
+compute_sdist_build_config_for_testing = _compute_sdist_build_config

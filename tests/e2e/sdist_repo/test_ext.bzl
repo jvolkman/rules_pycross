@@ -33,6 +33,7 @@ def _test_ext_impl(mctx):
         thin_repo = "dummy_lock_repo",
         lock_repo = "dummy_lock_repo",
         known_packages = ["setuptools", "hatchling"],
+        extra_build_tools = ["setuptools"],
         backend_to_rule = {"setuptools.build_meta": "setuptools_build", "hatchling.build": "pep517_build"},
         default_backend = "setuptools_build",
     )
@@ -55,6 +56,18 @@ def _test_ext_impl(mctx):
         thin_repo = "dummy_lock_repo",
         lock_repo = "dummy_lock_repo",
         known_packages = ["setuptools", "hatchling"],
+        backend_to_rule = {"setuptools.build_meta": "setuptools_build", "hatchling.build": "pep517_build"},
+        default_backend = "setuptools_build",
+    )
+
+    pycross_sdist_repo(
+        name = "repo_explicit_backend",
+        sdist = "//sdists:with_pyproject.tar.gz",
+        pin_versions_json = "//:pin_versions.json",
+        thin_repo = "dummy_lock_repo",
+        lock_repo = "dummy_lock_repo",
+        known_packages = ["setuptools", "hatchling"],
+        build_backend = "setuptools_build",
         backend_to_rule = {"setuptools.build_meta": "setuptools_build", "hatchling.build": "pep517_build"},
         default_backend = "setuptools_build",
     )

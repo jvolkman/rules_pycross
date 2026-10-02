@@ -52,7 +52,7 @@ Specify package-specific settings.
 | <a id="pylock.package-name"></a>name |  The package key (name or name@version). Can be '*' to apply to all packages in the workspace.   | <a href="https://bazel.build/concepts/labels#target-names">Name</a> | required |  |
 | <a id="pylock.package-always_build"></a>always_build |  If True, don't use pre-built wheels for this package.   | Boolean | optional |  `False`  |
 | <a id="pylock.package-bin_paths"></a>bin_paths |  Override the auto-detected bin paths.   | List of strings | optional |  `[]`  |
-| <a id="pylock.package-build_backend"></a>build_backend |  An explicit build backend rule name to use for this package.   | String | optional |  `""`  |
+| <a id="pylock.package-build_backend"></a>build_backend |  An explicit pycross build rule name to use for this package (e.g. 'maturin_build'), overriding the rule auto-selected from pyproject.toml's build-backend. The sdist's declared PEP 517 backend is still invoked, and its build-system.requires are still added as build dependencies.   | String | optional |  `""`  |
 | <a id="pylock.package-build_target"></a>build_target |  An optional override build target to use when building from source.   | <a href="https://bazel.build/concepts/labels">Label</a> | optional |  `None`  |
 | <a id="pylock.package-build_tools_repo"></a>build_tools_repo |  Optional repo to use for resolving sdist build dependencies for this package.   | String | optional |  `""`  |
 | <a id="pylock.package-data_paths"></a>data_paths |  Override the auto-detected data paths.   | List of strings | optional |  `[]`  |

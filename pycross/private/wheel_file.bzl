@@ -17,8 +17,22 @@ pycross_wheel_metadata(
     package_name = "{package_name}",
     package_version = "{package_version}",
     site_paths = {site_paths},
+    bin_paths = {bin_paths},
+    data_paths = {data_paths},
+    include_paths = {include_paths},
 )
 """
+
+def _render_wheel_file_build(filename, package_name, package_version, inspection_data):
+    return _BUILD_TEMPLATE.format(
+        filename = filename,
+        package_name = package_name or "",
+        package_version = package_version or "",
+        site_paths = inspection_data.get("site_paths", []),
+        bin_paths = inspection_data.get("bin_paths", []),
+        data_paths = inspection_data.get("data_paths", []),
+        include_paths = inspection_data.get("include_paths", []),
+    )
 
 def _pycross_wheel_file_impl(rctx):
     netrc = read_user_netrc(rctx)
@@ -42,7 +56,7 @@ def _pycross_wheel_file_impl(rctx):
         auth = use_netrc(netrc, urls, {}),
     )
 
-    # Inspect the wheel for site_paths
+    # Inspect the wheel for site_paths, bin_paths, data_paths, and include_paths
     result = exec_internal_tool(
         rctx,
         rctx.attr._inspect_tool,
@@ -59,17 +73,21 @@ def _pycross_wheel_file_impl(rctx):
         # Non-fatal: if inspection fails, write empty result
         # Note: exec_internal_tool will actually fail() if return_code != 0,
         # but if we somehow bypass it or change it, we write a fallback.
-        rctx.file("inspection.json", json.encode({"site_paths": []}))
-        site_paths = []
+        inspection_data = {
+            "site_paths": [],
+            "bin_paths": [],
+            "data_paths": [],
+            "include_paths": [],
+        }
+        rctx.file("inspection.json", json.encode(inspection_data))
     else:
         inspection_data = json.decode(rctx.read("inspection.json"))
-        site_paths = inspection_data.get("site_paths", [])
 
-    rctx.file("BUILD.bazel", _BUILD_TEMPLATE.format(
+    rctx.file("BUILD.bazel", _render_wheel_file_build(
         filename = rctx.attr.filename,
-        package_name = rctx.attr.package_name or "",
-        package_version = rctx.attr.package_version or "",
-        site_paths = site_paths,
+        package_name = rctx.attr.package_name,
+        package_version = rctx.attr.package_version,
+        inspection_data = inspection_data,
     ))
 
     if not hasattr(rctx, "repo_metadata"):
@@ -95,3 +113,6 @@ pycross_wheel_file = repository_rule(
         "_inspect_tool": attr.label(default = "//pycross/private/tools:inspect_package.py"),
     },
 )
+
+# Visible for testing
+render_wheel_file_build_for_testing = _render_wheel_file_build

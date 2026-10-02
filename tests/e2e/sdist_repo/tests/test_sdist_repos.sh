@@ -5,6 +5,7 @@ REPO_BASIC_BUILD=$1
 REPO_PYPROJECT_BUILD=$2
 REPO_SETUPTOOLS_BUILD=$3
 REPO_LEGACY_BUILD=$4
+REPO_EXPLICIT_BACKEND_BUILD=$5
 
 function check_content() {
     local file=$1
@@ -33,6 +34,7 @@ check_content "$REPO_BASIC_BUILD" 'sdist = "@@//sdists:basic.tar.gz"'
 echo "Checking with_pyproject repo..."
 check_content "$REPO_PYPROJECT_BUILD" "pep517_build("
 check_content "$REPO_PYPROJECT_BUILD" '"@dummy_lock_repo//hatchling:pkg"'
+check_content "$REPO_PYPROJECT_BUILD" '"@dummy_lock_repo//setuptools:pkg"'
 
 echo "Checking with_setuptools repo..."
 check_content "$REPO_SETUPTOOLS_BUILD" "setuptools_build("
@@ -41,3 +43,7 @@ check_not_content "$REPO_SETUPTOOLS_BUILD" "unknown_dep"
 
 echo "Checking legacy repo..."
 check_content "$REPO_LEGACY_BUILD" "setuptools_build("
+
+echo "Checking explicit_backend repo..."
+check_content "$REPO_EXPLICIT_BACKEND_BUILD" "setuptools_build("
+check_content "$REPO_EXPLICIT_BACKEND_BUILD" '"@dummy_lock_repo//hatchling:pkg"'

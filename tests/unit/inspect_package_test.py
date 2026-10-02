@@ -79,6 +79,21 @@ class InspectPackageTest(unittest.TestCase):
         result = inspect_sdist(sdist_path)
         self.assertEqual(result["build_requires"], ["setuptools[ssl]>=40"])
 
+    def test_inspect_sdist_malformed_pyproject(self):
+        sdist_path = self._create_tarball_with_dirs(
+            "pkg-1.0.tar.gz",
+            {
+                "pkg-1.0/pyproject.toml": "[build-system\ninvalid toml ===",
+                "pkg-1.0/mypkg/__init__.py": "",
+            },
+        )
+        result = inspect_sdist(sdist_path)
+        self.assertEqual(result["build_backend"], PEP517_DEFAULT_BACKEND)
+        self.assertEqual(result["build_requires"], PEP517_DEFAULT_REQUIRES)
+        self.assertEqual(result["site_paths"], ["mypkg"])
+        self.assertEqual(len(result.get("warnings", [])), 1)
+        self.assertIn("Failed to parse pyproject.toml", result["warnings"][0])
+
     def test_inspect_wheel_with_entry_points(self):
         entry_points = """
         [console_scripts]
