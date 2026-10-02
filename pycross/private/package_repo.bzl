@@ -460,7 +460,6 @@ def _package_repo_impl(rctx):
 package_repo = repository_rule(
     implementation = _package_repo_impl,
     attrs = {
-        "resolved_lock_file": attr.label(mandatory = True),
         "repo_map": attr.string_dict(
             doc = "Maps file keys to their repository label strings (e.g. 'foo_wheel' -> '@pypi_foo//:wheel').",
         ),

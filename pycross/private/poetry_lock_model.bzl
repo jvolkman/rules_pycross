@@ -11,12 +11,12 @@ Supports pins from:
 """
 
 load("@pypackaging.bzl", "pypackaging")
-load("@toml.bzl//toml:toml.bzl", "decode")
 load(
     ":translator_common.bzl",
     "canonicalize_name",
     "compute_requested_dependency_groups",
     "parse_pep508_requirement",
+    "read_toml_cached",
     "record_root_marker",
     "resolution_marker_constraint_name",
     "resolve_lock_graph",
@@ -637,7 +637,7 @@ def translate_poetry(project_dict, lock_dict, lock_model):
         },
     )
 
-def repo_create_poetry_model(rctx, extra_project_files, lock_file, lock_model, output):
+def repo_create_poetry_model(rctx, extra_project_files, lock_file, lock_model, toml_cache = None):
     """Run the Poetry translator in pure Starlark.
 
     Args:
@@ -645,22 +645,21 @@ def repo_create_poetry_model(rctx, extra_project_files, lock_file, lock_model, o
         extra_project_files: List of extra pyproject.toml files.
         lock_file: The lock file.
         lock_model: a struct containing the same attrs as the pycross_poetry_lock_model rule.
-        output: the output file.
+        toml_cache: Optional dict cache mapping str(label) -> parsed TOML dict.
+
+    Returns:
+        The raw_lock_data dict.
     """
 
     projects = getattr(lock_model, "projects", [])
-    project_file = select_project_file(rctx, extra_project_files, lock_file, projects)
+    project_file = select_project_file(rctx, extra_project_files, lock_file, projects, toml_cache = toml_cache)
 
     project_dict = {}
     if project_file:
-        project_path = rctx.path(project_file)
-        if project_path.exists:
-            project_dict = decode(rctx.read(project_path))
+        project_dict = read_toml_cached(rctx, project_file, toml_cache = toml_cache) or {}
 
-    lock_path = rctx.path(lock_file)
-    if not lock_path.exists:
+    lock_dict = read_toml_cached(rctx, lock_file, toml_cache = toml_cache)
+    if lock_dict == None:
         fail("Lock file not found: {}. Ensure poetry.lock exists at the expected location.".format(lock_file))
 
-    lock_dict = decode(rctx.read(lock_path))
-    raw_lock_data = translate_poetry(project_dict, lock_dict, lock_model)
-    rctx.file(output, json.encode(raw_lock_data))
+    return translate_poetry(project_dict, lock_dict, lock_model)

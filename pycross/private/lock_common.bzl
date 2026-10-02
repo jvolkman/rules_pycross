@@ -1,6 +1,6 @@
 """Shared helpers for lock import/resolution extensions."""
 
-load("@toml.bzl//toml:toml.bzl", "decode")
+load(":translator_common.bzl", "read_toml_cached")
 
 def validate_transition_attrs(tag, tag_name):
     """Validates that transition attributes are mutually exclusive.
@@ -63,37 +63,6 @@ def check_unique_repo_name(owners, module_name, repo_name):
         ))
     owners[repo_name] = module_name
 
-def check_proper_tag_repo(owners, module, tag, tag_desc):
-    """Checks that a tag is attached to a valid repo owned by the declaring module.
-
-    Args:
-        owners: Dict of repo_name -> module_name.
-        module: The module declaring the tag.
-        tag: The tag to check.
-        tag_desc: Description of the tag for error messages.
-    """
-    owner = owners.get(tag.repo)
-    if owner == None:
-        fail(
-            "{} declared by module '{}' attached to non-existent lock repo '{}'".format(
-                tag_desc,
-                module.name,
-                tag.repo,
-            ),
-        )
-    elif owner != module.name:
-        fail(
-            "{} declared by module '{}' attached to lock repo '{}' owned by other module '{}'".format(
-                tag_desc,
-                module.name,
-                tag.repo,
-                owner,
-            ),
-        )
-
-def check_proper_package_repo(owners, module, tag):
-    check_proper_tag_repo(owners, module, tag, "package '{}'".format(tag.name))
-
 def workspace_lock_struct(ws_tag, repo_name, workspace_name, transition_attrs):
     """Create a lock struct for a workspace member, inheriting workspace-level settings."""
     return struct(
@@ -101,7 +70,6 @@ def workspace_lock_struct(ws_tag, repo_name, workspace_name, transition_attrs):
         workspace = workspace_name,
         local_wheels = ws_tag.local_wheels,
         disallow_builds = ws_tag.disallow_builds,
-        packages = {},
         flags = transition_attrs.get("flags", []),
         constraint_values = transition_attrs.get("constraint_values", []),
         platform = transition_attrs.get("platform"),
@@ -128,18 +96,20 @@ def normalize_package_tag(tag):
         wheel_library_tags = tag.wheel_library_tags,
     )
 
-def discover_uv_all_members(mctx, lock_file_label):
+def discover_uv_all_members(mctx, lock_file_label, toml_cache = None):
     """Parse uv.lock and return workspace members (editable packages).
 
     Args:
         mctx: The module_ctx object.
         lock_file_label: Label of the uv.lock file.
+        toml_cache: Optional dict cache mapping str(label) -> parsed TOML dict.
 
     Returns:
         A list of structs with 'name' and 'path' fields.
     """
-    lock_content = mctx.read(lock_file_label)
-    lock_data = decode(lock_content)
+    lock_data = read_toml_cached(mctx, lock_file_label, toml_cache = toml_cache)
+    if lock_data == None:
+        fail("Lock file not found: {}. Ensure uv.lock exists at the expected location.".format(lock_file_label))
 
     # uv.lock uses "package" (newer) or "distribution" (older) for the package list.
     packages_list = lock_data.get("package", lock_data.get("distribution", []))
@@ -169,18 +139,20 @@ def discover_uv_all_members(mctx, lock_file_label):
 
     return members
 
-def discover_pdm_all_members(mctx, lock_file_label):
+def discover_pdm_all_members(mctx, lock_file_label, toml_cache = None):
     """Parse pdm.lock and return workspace members (editable local packages).
 
     Args:
         mctx: The module_ctx object.
         lock_file_label: Label of the pdm.lock file.
+        toml_cache: Optional dict cache mapping str(label) -> parsed TOML dict.
 
     Returns:
         A list of structs with 'name' and 'path' fields.
     """
-    lock_content = mctx.read(lock_file_label)
-    lock_data = decode(lock_content)
+    lock_data = read_toml_cached(mctx, lock_file_label, toml_cache = toml_cache)
+    if lock_data == None:
+        fail("Lock file not found: {}. Ensure pdm.lock exists at the expected location.".format(lock_file_label))
 
     packages_list = lock_data.get("package", [])
 
@@ -195,10 +167,10 @@ def discover_pdm_all_members(mctx, lock_file_label):
 
     return members
 
-def discover_poetry_all_members(_mctx, _lock_file_label):
+def discover_poetry_all_members(_mctx, _lock_file_label, toml_cache = None):  # buildifier: disable=unused-variable
     return [struct(name = "root", path = "")]
 
-def discover_pylock_all_members(_mctx, _lock_file_label):
+def discover_pylock_all_members(_mctx, _lock_file_label, toml_cache = None):  # buildifier: disable=unused-variable
     return [struct(name = "root", path = "")]
 
 def resolve_member_project_file(lock_file_label, member_path):
@@ -444,7 +416,8 @@ def process_workspaces(
         member_tags,
         discover_members_fn,
         model_type,
-        root_direct_deps):
+        root_direct_deps,
+        toml_cache = None):
     """Processes workspace definitions, discovers members, and processes them.
 
     Args:
@@ -457,6 +430,7 @@ def process_workspaces(
         discover_members_fn: Function to discover members.
         model_type: The lock model type.
         root_direct_deps: List to store root direct dependencies.
+        toml_cache: Optional dict cache mapping str(label) -> parsed TOML dict.
     """
 
     # Collect workspace definitions
@@ -469,7 +443,7 @@ def process_workspaces(
     # Auto-discover members for each workspace
     workspace_discovered_members = {}
     for name, ws_info in workspaces.items():
-        discovered = discover_members_fn(module_ctx, ws_info.tag.lock_file)
+        discovered = discover_members_fn(module_ctx, ws_info.tag.lock_file, toml_cache = toml_cache)
         workspace_discovered_members[name] = {m.name: m for m in discovered}
 
     # Compute extra_project_files for each workspace (explicit or auto-discovered)

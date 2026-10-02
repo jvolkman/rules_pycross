@@ -173,7 +173,7 @@ def _tag_to_annotation_data(pkg, wildcard_pkg = None):
         wheel_library_tags = pkg.wheel_library_tags or (wildcard_pkg.wheel_library_tags if wildcard_pkg else []),
     ))
 
-def _resolve_lock_inline(module_ctx, lock_info, serialized_lock_model, workspace_packages, repo_create_model_fn):
+def _resolve_lock_inline(module_ctx, lock_info, serialized_lock_model, workspace_packages, repo_create_model_fn, toml_cache = None):
     """Run translator + resolver inline within module_ctx.
 
     Args:
@@ -182,6 +182,7 @@ def _resolve_lock_inline(module_ctx, lock_info, serialized_lock_model, workspace
         serialized_lock_model: JSON-encoded lock model.
         workspace_packages: Dict of workspace_name -> {pkg_name -> normalized_tag}.
         repo_create_model_fn: The format-specific translator function.
+        toml_cache: Optional dict cache mapping str(label) -> parsed TOML dict.
 
     Returns:
         A dict containing the resolved lock data (packages, pins, remote_files, etc.).
@@ -193,20 +194,16 @@ def _resolve_lock_inline(module_ctx, lock_info, serialized_lock_model, workspace
     extra_project_files = [Label(f) for f in getattr(lock_model, "extra_project_files", [])]
     lock_file = Label(lock_model.lock_file)
 
-    # Use a unique output file per repo to avoid conflicts.
-    output = "raw_lock_{}.json".format(lock_info.repo_name)
-
-    repo_create_model_fn(module_ctx, extra_project_files, lock_file, lock_model, output)
-
-    # Read the raw lock and resolve.
-    raw_lock_data = json.decode(module_ctx.read(module_ctx.path(output)))
+    raw_lock_data = repo_create_model_fn(
+        module_ctx,
+        extra_project_files,
+        lock_file,
+        lock_model,
+        toml_cache = toml_cache,
+    )
 
     # Compute annotations from package tags.
-    all_packages = {}
-    for package_name, package in workspace_packages.get(lock_info.workspace, {}).items():
-        all_packages[package_name] = package
-    for package_name, package in lock_info.packages.items():
-        all_packages[package_name] = package
+    all_packages = dict(workspace_packages.get(lock_info.workspace, {}))
 
     wildcard_pkg = all_packages.pop("*", None)
 
@@ -256,10 +253,10 @@ def make_format_extension(
             Merged with WORKSPACE_COMMON_ATTRS.
         repo_attrs: Format-specific attrs for member project override tags, or None.
             Merged with REPO_ATTRS and TRANSITION_ATTRS.
-        discover_members_fn: Function(mctx, lock_file_label) -> [struct(name, path)].
+        discover_members_fn: Function(mctx, lock_file_label, toml_cache = None) -> [struct(name, path)].
             Required when workspace_attrs is not None.
-        repo_create_model_fn: Function(rctx, extra_project_files, lock_file, lock_model, output).
-            Runs the format-specific translator to produce raw lock JSON.
+        repo_create_model_fn: Function(rctx, extra_project_files, lock_file, lock_model, toml_cache = None) -> dict.
+            Runs the format-specific translator to produce raw lock data.
 
     Returns:
         A module_extension value.
@@ -302,6 +299,7 @@ def make_format_extension(
                 )
                 member_tags.append(struct(tag = member_tag, module = module))
 
+        toml_cache = {}
         process_workspaces(
             module_ctx,
             lock_owners,
@@ -312,6 +310,7 @@ def make_format_extension(
             discover_members_fn,
             model_type,
             root_direct_deps,
+            toml_cache = toml_cache,
         )
 
         # Track which workspaces each module declares for validation
@@ -375,6 +374,7 @@ def make_format_extension(
                 lock_model_structs[repo_name],
                 workspace_packages,
                 repo_create_model_fn,
+                toml_cache = toml_cache,
             )
             resolved_locks[repo_info.repo_name] = resolved_data
 
