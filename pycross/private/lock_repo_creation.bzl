@@ -297,25 +297,23 @@ def create_repos(
                 if pkg_key in conflicts:
                     break
 
-        # Compute per-package override configs for package repo hooks.
+        # Compute per-package override configs for package and thin repo hooks.
         ws_overrides = {}  # pkg_name -> {backend_name -> backend_attrs}
-        keys = [workspace_name]
-        for key in keys:
-            if key in override_configs:
-                for pkg_name, backends in override_configs[key].items():
-                    for b_name, b_attrs in backends.items():
-                        ws_overrides.setdefault(pkg_name, {})[b_name] = dict(b_attrs)
+        if workspace_name in override_configs:
+            for pkg_name, backends in override_configs[workspace_name].items():
+                for b_name, b_attrs in backends.items():
+                    ws_overrides.setdefault(pkg_name, {})[b_name] = dict(b_attrs)
+        ws_overrides_json = json.encode(ws_overrides) if ws_overrides else None
 
         package_repo_attrs = dict(
             name = workspace_repo_name,
-            resolved_lock_file = per_repo_data[member_repos[0]].lock_file,
             repo_map = merged_repo_map,
             sdist_map = merged_sdist_map,
             backend_configs = backend_configs_json,
             member_lock_files = member_lock_files,
         )
-        if ws_overrides:
-            package_repo_attrs["override_configs"] = json.encode(ws_overrides)
+        if ws_overrides_json:
+            package_repo_attrs["override_configs"] = ws_overrides_json
         if resolved_locks:
             package_repo_attrs["member_lock_data"] = {
                 member: json.encode(per_repo_data[member].resolved_lock)
@@ -345,19 +343,7 @@ def create_repos(
             if member in repo_platforms:
                 thin_repo_attrs["platform"] = repo_platforms[member]
 
-            # Compute per-member override configs for thin repo hooks.
-            member_overrides = {}  # pkg_name -> {backend_name -> backend_attrs}
-            ws_key = workspace_name
-            if ws_key in override_configs:
-                for pkg_name, backends in override_configs[ws_key].items():
-                    for b_name, b_attrs in backends.items():
-                        member_overrides.setdefault(pkg_name, {})[b_name] = dict(b_attrs)
-            repo_key = "repo:" + member
-            if repo_key in override_configs:
-                for pkg_name, backends in override_configs[repo_key].items():
-                    for b_name, b_attrs in backends.items():
-                        member_overrides.setdefault(pkg_name, {})[b_name] = dict(b_attrs)
-            if member_overrides:
-                thin_repo_attrs["override_configs"] = json.encode(member_overrides)
+            if ws_overrides_json:
+                thin_repo_attrs["override_configs"] = ws_overrides_json
 
             thin_package_repo(**thin_repo_attrs)

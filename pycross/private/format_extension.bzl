@@ -198,20 +198,15 @@ def _resolve_lock_inline(module_ctx, lock_info, serialized_lock_model, workspace
     extra_project_files = [Label(f) for f in getattr(lock_model, "extra_project_files", [])]
     lock_file = Label(lock_model.lock_file)
 
-    # Use a unique output file per repo to avoid conflicts.
-    output = "raw_lock_{}.json".format(lock_info.repo_name)
-
-    repo_create_model_fn(module_ctx, extra_project_files, lock_file, lock_model, output)
-
-    # Read the raw lock and resolve.
-    raw_lock_data = json.decode(module_ctx.read(module_ctx.path(output)))
+    raw_lock_data = repo_create_model_fn(
+        module_ctx,
+        extra_project_files,
+        lock_file,
+        lock_model,
+    )
 
     # Compute annotations from package tags.
-    all_packages = {}
-    for package_name, package in workspace_packages.get(lock_info.workspace, {}).items():
-        all_packages[package_name] = package
-    for package_name, package in lock_info.packages.items():
-        all_packages[package_name] = package
+    all_packages = dict(workspace_packages.get(lock_info.workspace, {}))
 
     wildcard_pkg = all_packages.pop("*", None)
 
@@ -263,8 +258,8 @@ def make_format_extension(
             Merged with REPO_ATTRS and TRANSITION_ATTRS.
         discover_members_fn: Function(mctx, lock_file_label) -> [struct(name, path)].
             Required when workspace_attrs is not None.
-        repo_create_model_fn: Function(rctx, extra_project_files, lock_file, lock_model, output).
-            Runs the format-specific translator to produce raw lock JSON.
+        repo_create_model_fn: Function(rctx, extra_project_files, lock_file, lock_model) -> dict.
+            Runs the format-specific translator to produce raw lock data.
 
     Returns:
         A module_extension value.

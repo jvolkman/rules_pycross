@@ -63,37 +63,6 @@ def check_unique_repo_name(owners, module_name, repo_name):
         ))
     owners[repo_name] = module_name
 
-def check_proper_tag_repo(owners, module, tag, tag_desc):
-    """Checks that a tag is attached to a valid repo owned by the declaring module.
-
-    Args:
-        owners: Dict of repo_name -> module_name.
-        module: The module declaring the tag.
-        tag: The tag to check.
-        tag_desc: Description of the tag for error messages.
-    """
-    owner = owners.get(tag.repo)
-    if owner == None:
-        fail(
-            "{} declared by module '{}' attached to non-existent lock repo '{}'".format(
-                tag_desc,
-                module.name,
-                tag.repo,
-            ),
-        )
-    elif owner != module.name:
-        fail(
-            "{} declared by module '{}' attached to lock repo '{}' owned by other module '{}'".format(
-                tag_desc,
-                module.name,
-                tag.repo,
-                owner,
-            ),
-        )
-
-def check_proper_package_repo(owners, module, tag):
-    check_proper_tag_repo(owners, module, tag, "package '{}'".format(tag.name))
-
 def workspace_lock_struct(ws_tag, repo_name, workspace_name, transition_attrs):
     """Create a lock struct for a workspace member, inheriting workspace-level settings."""
     return struct(
@@ -101,7 +70,6 @@ def workspace_lock_struct(ws_tag, repo_name, workspace_name, transition_attrs):
         workspace = workspace_name,
         local_wheels = ws_tag.local_wheels,
         disallow_builds = ws_tag.disallow_builds,
-        packages = {},
         flags = transition_attrs.get("flags", []),
         constraint_values = transition_attrs.get("constraint_values", []),
         platform = transition_attrs.get("platform"),

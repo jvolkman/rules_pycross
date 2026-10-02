@@ -360,7 +360,7 @@ def translate_pylock(lock_dict, project_dict, lock_model):
         result["root_dependency_markers"] = filtered_root_markers
     return result
 
-def repo_create_pylock_model(rctx, extra_project_files, lock_file, lock_model, output):
+def repo_create_pylock_model(rctx, extra_project_files, lock_file, lock_model):
     """Run the pylock translator in pure Starlark.
 
     Args:
@@ -368,7 +368,9 @@ def repo_create_pylock_model(rctx, extra_project_files, lock_file, lock_model, o
         extra_project_files: List of extra pyproject.toml files.
         lock_file: The lock file.
         lock_model: a struct containing the same attrs as the pycross_pylock_lock_model rule.
-        output: the output file.
+
+    Returns:
+        The raw_lock_data dict.
     """
 
     projects = getattr(lock_model, "projects", [])
@@ -385,5 +387,4 @@ def repo_create_pylock_model(rctx, extra_project_files, lock_file, lock_model, o
         fail("Lock file not found: {}. Ensure the pylock file exists at the expected location.".format(lock_file))
 
     lock_dict = decode(rctx.read(lock_path))
-    raw_lock_data = translate_pylock(lock_dict, project_dict, lock_model)
-    rctx.file(output, json.encode(raw_lock_data))
+    return translate_pylock(lock_dict, project_dict, lock_model)

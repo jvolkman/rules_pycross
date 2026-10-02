@@ -637,7 +637,7 @@ def translate_poetry(project_dict, lock_dict, lock_model):
         },
     )
 
-def repo_create_poetry_model(rctx, extra_project_files, lock_file, lock_model, output):
+def repo_create_poetry_model(rctx, extra_project_files, lock_file, lock_model):
     """Run the Poetry translator in pure Starlark.
 
     Args:
@@ -645,7 +645,9 @@ def repo_create_poetry_model(rctx, extra_project_files, lock_file, lock_model, o
         extra_project_files: List of extra pyproject.toml files.
         lock_file: The lock file.
         lock_model: a struct containing the same attrs as the pycross_poetry_lock_model rule.
-        output: the output file.
+
+    Returns:
+        The raw_lock_data dict.
     """
 
     projects = getattr(lock_model, "projects", [])
@@ -662,5 +664,4 @@ def repo_create_poetry_model(rctx, extra_project_files, lock_file, lock_model, o
         fail("Lock file not found: {}. Ensure poetry.lock exists at the expected location.".format(lock_file))
 
     lock_dict = decode(rctx.read(lock_path))
-    raw_lock_data = translate_poetry(project_dict, lock_dict, lock_model)
-    rctx.file(output, json.encode(raw_lock_data))
+    return translate_poetry(project_dict, lock_dict, lock_model)
