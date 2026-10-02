@@ -75,7 +75,36 @@ def sha256_from_string(s):
         result = result + s
     return result[:64]
 
-def select_project_file(rctx, extra_project_files, lock_file, projects = []):
+def read_toml_cached(rctx, label, toml_cache = None):
+    """Read and TOML-decode a file label, optionally caching by canonical label string.
+
+    When `toml_cache` is provided, the returned dict is shared across callers
+    within the same evaluation and must be treated as read-only.
+
+    Args:
+        rctx: The repository_ctx or module_ctx object.
+        label: The file Label to read.
+        toml_cache: Optional dict mapping str(label) -> parsed dict (or None if missing).
+
+    Returns:
+        The parsed TOML dict, or None if the file does not exist.
+    """
+    cache_key = str(label)
+    if toml_cache != None and cache_key in toml_cache:
+        return toml_cache[cache_key]
+
+    path = rctx.path(label)
+    if not path.exists:
+        if toml_cache != None:
+            toml_cache[cache_key] = None
+        return None
+
+    parsed = decode(rctx.read(path))
+    if toml_cache != None:
+        toml_cache[cache_key] = parsed
+    return parsed
+
+def select_project_file(rctx, extra_project_files, lock_file, projects = [], toml_cache = None):
     """Select the best matching pyproject.toml from extra_project_files.
 
     For single-project repos (projects has exactly one non-wildcard entry),
@@ -88,6 +117,7 @@ def select_project_file(rctx, extra_project_files, lock_file, projects = []):
         extra_project_files: List of pyproject.toml labels.
         lock_file: The lock file label, used for sibling fallback.
         projects: List of project name strings from lock_model.
+        toml_cache: Optional dict cache mapping str(label) -> parsed TOML dict.
 
     Returns:
         A label for the selected pyproject.toml, or None if not found.
@@ -102,9 +132,8 @@ def select_project_file(rctx, extra_project_files, lock_file, projects = []):
     if len(projects) == 1 and projects[0] != "*":
         target_name = canonicalize_name(projects[0])
         for f in extra_project_files:
-            path = rctx.path(f)
-            if path.exists:
-                p_dict = decode(rctx.read(path))
+            p_dict = read_toml_cached(rctx, f, toml_cache = toml_cache)
+            if p_dict != None:
                 p_name = p_dict.get("project", {}).get("name")
                 if p_name and canonicalize_name(p_name) == target_name:
                     project_file = f

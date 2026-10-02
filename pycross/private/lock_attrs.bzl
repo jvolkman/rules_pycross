@@ -69,25 +69,6 @@ CONFIGURE_TOOLCHAINS_ATTRS = dict(
     ),
 )
 
-RESOLVE_ATTRS = dict(
-    local_wheels = attr.label_list(
-        doc = "A list of wheel files.",
-        allow_files = [".whl"],
-    ),
-    remote_wheels = attr.string_dict(
-        doc = "A mapping of remote wheels to their sha256 hashes.",
-    ),
-    annotations = attr.string_dict(
-        doc = "Optional annotations to apply to packages.",
-    ),
-    disallow_builds = attr.bool(
-        doc = "Do not allow pycross_wheel_build targets in the final lock file (i.e., require wheels).",
-    ),
-    always_include_sdist = attr.bool(
-        doc = "Always include an entry for a package's sdist if one exists.",
-    ),
-)
-
 # Attrs for the package tag
 PACKAGE_ATTRS = dict(
     name = attr.string(
