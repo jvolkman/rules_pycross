@@ -18,13 +18,40 @@ The file structure is as follows:
 load("@pycross_backends//:package_repo_dispatch.bzl", "PACKAGE_REPO_HOOKS")
 load("@pypackaging.bzl", "pypackaging")
 load(":resolved_lock_renderer.bzl", "render_lock_bzl")
-load(":util.bzl", "key_name", "parse_package_key", "underscore_name")
+load(":util.bzl", "parse_package_key", "underscore_name")
 
 def _normalize_name(name):
     return pypackaging.utils.canonicalize_name(name)
 
 def _underscore_name(name):
     return underscore_name(name)
+
+def _resolve_tool_package_key(packages, pkg_name):
+    """Find the best matching base package key in `packages` for a backend tool package name.
+
+    Ignores extra keys (`pkg[extra]@version`) and conflict variants (`__via_`).
+    When multiple versions are present in the workspace lock repo, selects the
+    highest PEP 440 version so that `_backend/<rule>.bzl` gets a deterministic
+    `//_lock:<pkg>@<version>` label (note: if a tool package is itself forked by
+    resolution markers in `<ws>__build`, this static default picks the highest
+    locked version rather than a fork `select()`).
+    """
+    norm_pkg = _normalize_name(pkg_name)
+    matching = []
+    for k in packages.keys():
+        if "__via_" in k:
+            continue
+        parts = parse_package_key(k)
+        if parts.extra:
+            continue
+        if _normalize_name(parts.name) == norm_pkg:
+            matching.append((pypackaging.version.parse(parts.version).key, k))
+    if not matching:
+        return None
+    return sorted(matching)[-1][1]
+
+# Visible for testing
+resolve_tool_package_key_for_testing = _resolve_tool_package_key
 
 def _merge_dependencies(first_data, entries):
     merged = dict(first_data)
@@ -377,14 +404,11 @@ def _package_repo_impl(rctx):
 
         tool_deps_labels = []
         for pkg in config["tool_packages"]:
-            norm_pkg = _normalize_name(pkg)
-
-            # Find a matching package in the lockfile
-            matching = [k for k in packages.keys() if _normalize_name(key_name(k)) == norm_pkg]
-            if matching:
-                # Use the first match. For cycle groups, the name is _raw_{pkg_key}.
-                # But here we just need the dependency, so pointing to //_lock:{pkg_key} is fine.
-                tool_deps_labels.append("//_lock:{}".format(matching[0]))
+            matched_key = _resolve_tool_package_key(packages, pkg)
+            if matched_key:
+                # For cycle groups, the raw target is _raw_{pkg_key}, while //_lock:{pkg_key}
+                # is the cycle-resolved wrapper. Pointing to //_lock:{pkg_key} works in both cases.
+                tool_deps_labels.append("//_lock:{}".format(matched_key))
 
         lines = [
             '"""Backend macro with pre-configured tool defaults for this lock repo."""',
