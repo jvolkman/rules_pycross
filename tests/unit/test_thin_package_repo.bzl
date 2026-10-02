@@ -4,7 +4,17 @@ load("@rules_testing//lib:analysis_test.bzl", "analysis_test", "test_suite")
 load("@rules_testing//lib:util.bzl", "util")
 
 # buildifier: disable=bzl-visibility
-load("//pycross/private:thin_package_repo.bzl", "is_platform_specific_for_testing", "pin_build_for_testing", "requirements_bzl_for_testing")
+load("//pycross/private:package_repo.bzl", "resolve_tool_package_key_for_testing")
+
+# buildifier: disable=bzl-visibility
+load(
+    "//pycross/private:thin_package_repo.bzl",
+    "cargo_build_for_testing",
+    "is_platform_specific_for_testing",
+    "packages_bzl_for_testing",
+    "pin_build_for_testing",
+    "requirements_bzl_for_testing",
+)
 
 # ── Test: no platform → non-transitioning proxies ──────────────────
 
@@ -486,6 +496,156 @@ def _test_requirements_bzl_extra_pins(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
     analysis_test(name = name, target = name + "_subject", impl = _test_requirements_bzl_extra_pins_impl)
 
+# ── Test: multi-branch maybe and [extra]_maybe aliases ─────────────
+
+# buildifier: disable=unused-variable
+def _test_pin_build_multi_branch_maybe_impl(env, target):
+    """Multi-branch pins emit per-branch availability helpers and branch-aware maybe select()."""
+    res = pin_build_for_testing(
+        target_name = "foo",
+        pin_target_dict = {
+            "res_foo_1_0": "foo@1.0",
+            "res_foo_2_0": "foo@2.0",
+        },
+        package = {},
+        workspace_repo = "ws",
+        extras_dict = {
+            "bar": {
+                "res_foo_1_0": "foo[bar]@1.0",
+                "res_foo_2_0": "foo[bar]@2.0",
+            },
+        },
+        maybe_available_keys = ["foo@1.0"],
+        extras_maybe_keys = {"bar": ["foo[bar]@1.0", "foo[bar]@2.0"]},
+    ).build
+
+    # Base maybe: foo@1.0 is platform-specific (uses helper _maybe_foo_1.0),
+    # while foo@2.0 is unconditional (maps directly to :pkg).
+    env.expect.that_bool('name = "_maybe_foo_1.0"' in res).equals(True)
+    env.expect.that_bool('"@ws//_lock:_available_foo@1.0": ":pkg"' in res).equals(True)
+    env.expect.that_bool('"@ws//_lock:is_res_foo_1_0": ":_maybe_foo_1.0"' in res).equals(True)
+    env.expect.that_bool('"@ws//_lock:is_res_foo_2_0": ":pkg"' in res).equals(True)
+
+    # Extra maybe: both foo[bar]@1.0 and foo[bar]@2.0 are platform-specific.
+    env.expect.that_bool('name = "_maybe_extra_bar_foo_bar__1.0"' in res).equals(True)
+    env.expect.that_bool('name = "_maybe_extra_bar_foo_bar__2.0"' in res).equals(True)
+    env.expect.that_bool('"@ws//_lock:is_res_foo_1_0": ":_maybe_extra_bar_foo_bar__1.0"' in res).equals(True)
+    env.expect.that_bool('"@ws//_lock:is_res_foo_2_0": ":_maybe_extra_bar_foo_bar__2.0"' in res).equals(True)
+
+def _test_pin_build_multi_branch_maybe(name):
+    util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
+    analysis_test(name = name, target = name + "_subject", impl = _test_pin_build_multi_branch_maybe_impl)
+
+# ── Test: multi-branch sdist and _packages.bzl ─────────────────────
+
+# buildifier: disable=unused-variable
+def _test_pin_build_multi_branch_sdist_impl(env, target):
+    """When only a non-first branch has an sdist, :sdist and PACKAGES.has_sdist still reflect it."""
+    pin_target_dict = {
+        "res_foo_1_0": "foo@1.0",
+        "res_foo_2_0": "foo@2.0",
+    }
+    packages = {
+        "foo@1.0": {
+            "wheel_candidates": [{"filename": "foo-1.0-py3-none-any.whl"}],
+        },
+        "foo@2.0": {
+            "wheel_candidates": [{"filename": "foo-2.0-py3-none-any.whl"}],
+            "sdist_file": {"key": "foo_2_sdist"},
+        },
+    }
+    res = pin_build_for_testing(
+        target_name = "foo",
+        pin_target_dict = pin_target_dict,
+        package = packages["foo@1.0"],
+        workspace_repo = "ws",
+        sdist_target_dict = {"res_foo_2_0": "foo@2.0"},
+    ).build
+
+    env.expect.that_bool('name = "sdist"' in res).equals(True)
+    env.expect.that_bool('"@ws//_lock:is_res_foo_1_0": "@rules_pycross//pycross/private:no_match_error"' in res).equals(True)
+    env.expect.that_bool('"@ws//_lock:is_res_foo_2_0": "@ws//_sdist:foo@2.0"' in res).equals(True)
+    env.expect.that_bool('"//conditions:default": "@rules_pycross//pycross/private:no_match_error"' in res).equals(True)
+    env.expect.that_bool('"@ws//_sdist:foo@1.0"' not in res).equals(True)
+
+    pkgs_bzl = packages_bzl_for_testing(
+        {"foo": {"base_target": pin_target_dict, "extras": {}}},
+        packages,
+    )
+    env.expect.that_bool("has_sdist = True," in pkgs_bzl).equals(True)
+
+def _test_pin_build_multi_branch_sdist(name):
+    util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
+    analysis_test(name = name, target = name + "_subject", impl = _test_pin_build_multi_branch_sdist_impl)
+
+# ── Test: multi-branch _cargo/BUILD.bazel ──────────────────────────
+
+# buildifier: disable=unused-variable
+def _test_cargo_build_multi_branch_impl(env, target):
+    """_cargo_build uses _target_select across branches with sdist_file and falls back to no_match_error."""
+    grouped_pins = {
+        "jiter": {
+            "base_target": {
+                "res_jiter_0_5_0": "jiter@0.5.0",
+                "res_jiter_0_6_0": "jiter@0.6.0",
+            },
+            "extras": {},
+        },
+        "partial": {
+            "base_target": {
+                "res_partial_1_0": "partial@1.0",
+                "res_partial_2_0": "partial@2.0",
+            },
+            "extras": {},
+        },
+    }
+    packages = {
+        "jiter@0.5.0": {"sdist_file": {"key": "sdist_0_5"}},
+        "jiter@0.6.0": {"sdist_file": {"key": "sdist_0_6"}},
+        "partial@1.0": {},
+        "partial@2.0": {"sdist_file": {"key": "sdist_partial_2"}},
+    }
+    cargo_bzl = cargo_build_for_testing(
+        grouped_pins,
+        packages,
+        {
+            "jiter": {"maturin_build": {}},
+            "partial": {"maturin_build": {}},
+        },
+        "ws",
+    )
+    env.expect.that_bool(cargo_bzl != None).equals(True)
+    env.expect.that_bool("select({" in cargo_bzl).equals(True)
+    env.expect.that_bool('"@ws//_lock:is_res_jiter_0_5_0": "@ws//_cargo:jiter@0.5.0"' in cargo_bzl).equals(True)
+    env.expect.that_bool('"@ws//_lock:is_res_jiter_0_6_0": "@ws//_cargo:jiter@0.6.0"' in cargo_bzl).equals(True)
+    env.expect.that_bool('"@ws//_lock:is_res_partial_1_0": "@rules_pycross//pycross/private:no_match_error"' in cargo_bzl).equals(True)
+    env.expect.that_bool('"@ws//_lock:is_res_partial_2_0": "@ws//_cargo:partial@2.0"' in cargo_bzl).equals(True)
+    env.expect.that_bool('"//conditions:default": "@rules_pycross//pycross/private:no_match_error"' in cargo_bzl).equals(True)
+
+def _test_cargo_build_multi_branch(name):
+    util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
+    analysis_test(name = name, target = name + "_subject", impl = _test_cargo_build_multi_branch_impl)
+
+# ── Test: _resolve_tool_package_key ────────────────────────────────
+
+# buildifier: disable=unused-variable
+def _test_resolve_tool_package_key_impl(env, target):
+    """_resolve_tool_package_key skips extras/__via_ keys and picks the highest PEP 440 version."""
+    packages = {
+        "setuptools[core]@68.0.0": {},
+        "setuptools@9.0.0": {},
+        "setuptools@68.0.0": {},
+        "setuptools@75.1.0": {},
+        "setuptools[testing]@80.0.0": {},
+        "setuptools@80.0.0__via_other": {},
+    }
+    env.expect.that_str(resolve_tool_package_key_for_testing(packages, "setuptools")).equals("setuptools@75.1.0")
+    env.expect.that_str(str(resolve_tool_package_key_for_testing(packages, "flit-core"))).equals("None")
+
+def _test_resolve_tool_package_key(name):
+    util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
+    analysis_test(name = name, target = name + "_subject", impl = _test_resolve_tool_package_key_impl)
+
 # ── Test suite ─────────────────────────────────────────────────────
 
 def thin_package_repo_test_suite(name):
@@ -506,5 +666,9 @@ def thin_package_repo_test_suite(name):
             _test_requirements_bzl_all_unconditional,
             _test_requirements_bzl_extra_pins,
             _test_requirements_bzl_root_marker_aliases,
+            _test_pin_build_multi_branch_maybe,
+            _test_pin_build_multi_branch_sdist,
+            _test_cargo_build_multi_branch,
+            _test_resolve_tool_package_key,
         ],
     )

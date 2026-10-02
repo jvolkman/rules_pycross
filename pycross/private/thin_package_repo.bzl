@@ -74,8 +74,11 @@ def _requirements_bzl(rctx, pins, packages):
 def _safe_name(pin_name, name):
     return name + "_" if pin_name == name else name
 
-def _target_select(target_dict, prefix, suffix, workspace_repo, is_aggregated = False, default_variants = {}):
-    if len(target_dict) == 1 and "" in target_dict:
+_NO_MATCH_ERROR_TARGET = "@rules_pycross//pycross/private:no_match_error"
+
+def _target_select(target_dict, prefix, suffix, workspace_repo, is_aggregated = False, default_variants = {}, all_target_dict = None, fallback_target = None):
+    effective_all = all_target_dict if all_target_dict != None else target_dict
+    if len(effective_all) == 1 and "" in effective_all and "" in target_dict:
         t = target_dict[""]
         if is_aggregated:
             parts = parse_package_key(t)
@@ -83,29 +86,41 @@ def _target_select(target_dict, prefix, suffix, workspace_repo, is_aggregated = 
         return '"{}{}{}"'.format(prefix, t, suffix)
 
     lines = ["select({"]
-    default_target = None
-    for constraint, t in target_dict.items():
-        t_base = t
-        if is_aggregated:
-            parts = parse_package_key(t)
-            t_base = "{}[_all_]@{}".format(parts.name, parts.version)
-        if constraint == "":
-            lines.append('        "//conditions:default": "{}{}{}",'.format(prefix, t_base, suffix))
+    default_target_label = None
+    has_uncovered_branch = False
+    for constraint in effective_all.keys():
+        if constraint in target_dict:
+            t_base = target_dict[constraint]
+            if is_aggregated:
+                parts = parse_package_key(t_base)
+                t_base = "{}[_all_]@{}".format(parts.name, parts.version)
+            target_label = "{}{}{}".format(prefix, t_base, suffix)
+        elif fallback_target:
+            target_label = fallback_target
+            has_uncovered_branch = True
         else:
-            lines.append('        "@{}//_lock:is_{}": "{}{}{}",'.format(workspace_repo, constraint, prefix, t_base, suffix))
+            continue
+
+        if constraint == "":
+            lines.append('        "//conditions:default": "{}",'.format(target_label))
+        else:
+            lines.append('        "@{}//_lock:is_{}": "{}",'.format(workspace_repo, constraint, target_label))
 
             # If this constraint is a default variant, also map //conditions:default to it.
             if constraint in default_variants:
-                default_target = t_base
+                default_target_label = target_label
 
-    # Add //conditions:default for default variant (only if not already present via "").
-    if default_target and "" not in target_dict:
-        lines.append('        "//conditions:default": "{}{}{}",'.format(prefix, default_target, suffix))
+    # Add //conditions:default for default variant or partial-coverage fallback (only if not already present via "").
+    if "" not in effective_all:
+        if default_target_label:
+            lines.append('        "//conditions:default": "{}",'.format(default_target_label))
+        elif fallback_target and has_uncovered_branch:
+            lines.append('        "//conditions:default": "{}",'.format(fallback_target))
 
     lines.append("    })")
     return "\n".join(lines)
 
-def _proxy_actual(actual_lines, target_dict, prefix, suffix, workspace_repo, alias_name, actual_pkg_ref, has_transition = False, is_aggregated = False, default_variants = {}):
+def _proxy_actual(actual_lines, target_dict, prefix, suffix, workspace_repo, alias_name, actual_pkg_ref, has_transition = False, is_aggregated = False, default_variants = {}, all_target_dict = None, fallback_target = None):
     """Emit an intermediate select alias if needed, return the actual expression for the proxy.
 
     When transitions are active (has_transition is True) and target_dict has variants
@@ -113,8 +128,18 @@ def _proxy_actual(actual_lines, target_dict, prefix, suffix, workspace_repo, ali
     __actual/<pkg> package so the select() is evaluated in the transitioned configuration rather
     than before the transition applies.
     """
-    actual = _target_select(target_dict, prefix, suffix, workspace_repo, is_aggregated = is_aggregated, default_variants = default_variants)
-    if has_transition and not (len(target_dict) == 1 and "" in target_dict):
+    effective_all = all_target_dict if all_target_dict != None else target_dict
+    actual = _target_select(
+        target_dict,
+        prefix,
+        suffix,
+        workspace_repo,
+        is_aggregated = is_aggregated,
+        default_variants = default_variants,
+        all_target_dict = all_target_dict,
+        fallback_target = fallback_target,
+    )
+    if has_transition and not (len(effective_all) == 1 and "" in effective_all and "" in target_dict):
         actual_lines.extend([
             "alias(",
             '    name = "{}",'.format(alias_name),
@@ -125,7 +150,76 @@ def _proxy_actual(actual_lines, target_dict, prefix, suffix, workspace_repo, ali
         return '"{}:{}",'.format(actual_pkg_ref, alias_name)
     return "{},".format(actual)
 
-def _pin_build(target_name, pin_target_dict, package, workspace_repo, workspace_lock_target_dict = None, has_aggregated_variant = False, extras_dict = None, default_variants = {}, target_platform = None, transition_bzl = None, maybe_available_key = None, extras_maybe_keys = None, testonly = False):
+def _emit_maybe_alias(lines, maybe_name, pkg_target, target_dict, available_keys, workspace_repo, default_variants = {}, helper_prefix = "_maybe"):
+    """Emit a `:maybe` or `:[extra]_maybe` alias supporting both single-branch and multi-branch pins."""
+    available_set = {k: True for k in (available_keys or [])}
+    if not available_set or not target_dict:
+        return
+
+    if len(target_dict) == 1 and "" in target_dict:
+        only_key = target_dict[""]
+        if only_key not in available_set:
+            fail("Single-branch target '{}' not found in available_keys {}".format(only_key, available_keys))
+        lines.extend([
+            "alias(",
+            '    name = "{}",'.format(maybe_name),
+            "    actual = select({",
+            '        "@{}//_lock:_available_{}": "{}",'.format(workspace_repo, only_key, pkg_target),
+            '        "//conditions:default": "//:_empty_library",',
+            "    }),",
+            ")",
+            "",
+        ])
+        return
+
+    emitted_helpers = {}
+    branch_targets = {}
+    for constraint, pkg_key in target_dict.items():
+        if pkg_key in available_set:
+            helper_name = "{}_{}".format(
+                helper_prefix,
+                pkg_key.replace("@", "_").replace("[", "_").replace("]", "_"),
+            )
+            if pkg_key not in emitted_helpers:
+                emitted_helpers[pkg_key] = helper_name
+                lines.extend([
+                    "alias(",
+                    '    name = "{}",'.format(helper_name),
+                    "    actual = select({",
+                    '        "@{}//_lock:_available_{}": "{}",'.format(workspace_repo, pkg_key, pkg_target),
+                    '        "//conditions:default": "//:_empty_library",',
+                    "    }),",
+                    ")",
+                    "",
+                ])
+            branch_targets[constraint] = ":{}".format(emitted_helpers[pkg_key])
+        else:
+            branch_targets[constraint] = pkg_target
+
+    lines.extend([
+        "alias(",
+        '    name = "{}",'.format(maybe_name),
+        "    actual = select({",
+    ])
+    default_target = None
+    for constraint, branch_target in branch_targets.items():
+        if constraint == "":
+            lines.append('        "//conditions:default": "{}",'.format(branch_target))
+        else:
+            lines.append('        "@{}//_lock:is_{}": "{}",'.format(workspace_repo, constraint, branch_target))
+            if constraint in default_variants:
+                default_target = branch_target
+
+    if "" not in branch_targets:
+        lines.append('        "//conditions:default": "{}",'.format(default_target if default_target else "//:_empty_library"))
+
+    lines.extend([
+        "    }),",
+        ")",
+        "",
+    ])
+
+def _pin_build(target_name, pin_target_dict, package, workspace_repo, workspace_lock_target_dict = None, has_aggregated_variant = False, extras_dict = None, default_variants = {}, target_platform = None, transition_bzl = None, maybe_available_keys = None, extras_maybe_keys = None, testonly = False, sdist_target_dict = None):
     """Generates the BUILD file for a pin directory, pointing to the workspace."""
     lock_target_dict = workspace_lock_target_dict if workspace_lock_target_dict else pin_target_dict
     lock_ref = "@{}//_lock:".format(workspace_repo)
@@ -237,9 +331,23 @@ def _pin_build(target_name, pin_target_dict, package, workspace_repo, workspace_
                     "",
                 ])
 
-        sdist_file = package.get("sdist_file")
-        if sdist_file:
-            actual_sdist = _proxy_actual(actual_lines, pin_target_dict, sdist_ref, "", workspace_repo, "sdist", actual_pkg_ref, has_transition = has_transition, default_variants = default_variants)
+        effective_sdist_dict = sdist_target_dict
+        if effective_sdist_dict == None and package.get("sdist_file"):
+            effective_sdist_dict = pin_target_dict
+        if effective_sdist_dict:
+            actual_sdist = _proxy_actual(
+                actual_lines,
+                effective_sdist_dict,
+                sdist_ref,
+                "",
+                workspace_repo,
+                "sdist",
+                actual_pkg_ref,
+                has_transition = has_transition,
+                default_variants = default_variants,
+                all_target_dict = pin_target_dict,
+                fallback_target = _NO_MATCH_ERROR_TARGET,
+            )
             lines.extend([
                 file_rule + "(",
                 '    name = "{}",'.format(_safe_name(target_name, "sdist")),
@@ -270,28 +378,28 @@ def _pin_build(target_name, pin_target_dict, package, workspace_repo, workspace_
             "",
         ])
         if extra_name in extras_maybe_keys:
-            lines.extend([
-                "alias(",
-                '    name = "[{}]_maybe",'.format(extra_name),
-                "    actual = select({",
-                '        "@{}//_lock:_available_{}": ":[{}]",'.format(workspace_repo, extras_maybe_keys[extra_name], extra_name),
-                '        "//conditions:default": "//:_empty_library",',
-                "    }),",
-                ")",
-                "",
-            ])
+            _emit_maybe_alias(
+                lines,
+                "[{}]_maybe".format(extra_name),
+                ":[{}]".format(extra_name),
+                extra_target_dict,
+                extras_maybe_keys[extra_name],
+                workspace_repo,
+                default_variants = default_variants,
+                helper_prefix = "_maybe_extra_{}".format(extra_name),
+            )
 
-    if maybe_available_key:
-        lines.extend([
-            "alias(",
-            '    name = "{}",'.format(_safe_name(target_name, "maybe")),
-            "    actual = select({",
-            '        "@{}//_lock:_available_{}": ":{}",'.format(workspace_repo, maybe_available_key, _safe_name(target_name, "pkg")),
-            '        "//conditions:default": "//:_empty_library",',
-            "    }),",
-            ")",
-            "",
-        ])
+    if maybe_available_keys:
+        _emit_maybe_alias(
+            lines,
+            _safe_name(target_name, "maybe"),
+            ":{}".format(_safe_name(target_name, "pkg")),
+            lock_target_dict,
+            maybe_available_keys,
+            workspace_repo,
+            default_variants = default_variants,
+            helper_prefix = "_maybe",
+        )
 
     actual_build = None
     if actual_lines:
@@ -636,22 +744,27 @@ pycross_transitioning_file_proxy = rule(
                     new_target_dict[constraint] = extra_target
             extras_dict[extra_name] = new_target_dict
 
-        # Determine if this pin is platform-specific for the 'maybe' alias.
-        maybe_available_key = None
+        # Determine which branches of this pin are platform-specific or have sdists.
+        maybe_available_keys = []
+        sdist_target_dict = {}
         if base_target_dict:
-            for pkg_key in base_target_dict.values():
+            for constraint, pkg_key in base_target_dict.items():
                 pkg = packages.get(pkg_key, {})
                 if _is_platform_specific(pkg):
-                    maybe_available_key = pkg_key
-                    break
+                    lock_key = workspace_lock_target_dict[constraint] if workspace_lock_target_dict else pkg_key
+                    maybe_available_keys.append(lock_key)
+                if pkg.get("sdist_file"):
+                    sdist_target_dict[constraint] = pkg_key
 
         extras_maybe_keys = {}
-        for extra_name, extra_target_dict in extras_dict.items():
-            for pkg_key in extra_target_dict.values():
+        for extra_name, orig_extra_target_dict in group["extras"].items():
+            extra_avail = []
+            for constraint, pkg_key in orig_extra_target_dict.items():
                 pkg = packages.get(pkg_key, {})
                 if _is_platform_specific(pkg):
-                    extras_maybe_keys[extra_name] = pkg_key
-                    break
+                    extra_avail.append(extras_dict[extra_name][constraint])
+            if extra_avail:
+                extras_maybe_keys[extra_name] = extra_avail
 
         result = _pin_build(
             us_name,
@@ -664,9 +777,10 @@ pycross_transitioning_file_proxy = rule(
             default_variants = default_variants,
             target_platform = target_platform,
             transition_bzl = "//:_transition.bzl" if has_flags else None,
-            maybe_available_key = maybe_available_key,
+            maybe_available_keys = maybe_available_keys,
             extras_maybe_keys = extras_maybe_keys,
             testonly = (base_pin_name in testonly_pins_set),
+            sdist_target_dict = sdist_target_dict,
         )
         rctx.file(
             "{}/BUILD.bazel".format(us_name),
@@ -737,70 +851,21 @@ pycross_transitioning_file_proxy = rule(
             rctx.file("_backend/{}.bzl".format(macro_name), "\n".join(lines))
 
     # _packages.bzl: metadata about all packages in this thin repo.
-    packages_lines = [
-        '"""Generated package metadata. Do not edit."""',
-        "",
-        "PACKAGES = {",
-    ]
-    for base_pin_name in sorted(grouped_pins.keys()):
-        group = grouped_pins[base_pin_name]
-        us_name = underscore_name(base_pin_name)
-
-        base_target_dict = group["base_target"]
-        has_sdist = False
-        if base_target_dict:
-            first_target = list(base_target_dict.values())[0]
-            pkg = packages.get(first_target, {})
-            has_sdist = bool(pkg.get("sdist_file"))
-
-        packages_lines.extend([
-            '    "{}": struct('.format(us_name),
-            "        has_sdist = {},".format(has_sdist),
-            "    ),",
-        ])
-    packages_lines.extend([
-        "}",
-        "",
-    ])
-    rctx.file("_packages.bzl", "\n".join(packages_lines))
+    rctx.file("_packages.bzl", _packages_bzl(grouped_pins, packages))
 
     # _cargo/ aliases: if any packages have cargo lock overrides, create
     # aliases from unversioned names to versioned targets in the package repo.
     if rctx.attr.override_configs:
         override_configs = json.decode(rctx.attr.override_configs)
-
-        cargo_lines = [
-            'package(default_visibility = ["//visibility:public"])',
-            "",
-        ]
-
-        has_cargo_targets = False
-        for base_pin_name in sorted(grouped_pins.keys()):
-            us_name = underscore_name(base_pin_name)
-            if base_pin_name not in override_configs:
-                continue
-
-            group = grouped_pins[base_pin_name]
-            base_target_dict = group["base_target"]
-            if not base_target_dict:
-                continue
-
-            # Get the versioned package key from the pin.
-            first_target = list(base_target_dict.values())[0]
-            parts = parse_package_key(first_target)
-            versioned_name = "{}@{}".format(parts.name, parts.version)
-
-            cargo_lines.extend([
-                "alias(",
-                '    name = "{}",'.format(us_name),
-                '    actual = "@{}//_cargo:{}",'.format(workspace_repo, versioned_name),
-                ")",
-                "",
-            ])
-            has_cargo_targets = True
-
-        if has_cargo_targets:
-            rctx.file("_cargo/BUILD.bazel", "\n".join(cargo_lines))
+        cargo_build = _cargo_build(
+            grouped_pins,
+            packages,
+            override_configs,
+            workspace_repo,
+            default_variants = default_variants,
+        )
+        if cargo_build:
+            rctx.file("_cargo/BUILD.bazel", cargo_build)
 
     # Generate pin_versions.json: a manifest of what each //dep:pkg pin resolves to.
     # Simple pins: name -> version string. Variant pins: name -> {variant -> version}.
@@ -825,6 +890,86 @@ pycross_transitioning_file_proxy = rule(
             pin_versions[base_pin_name] = variant_versions
 
     rctx.file("pin_versions.json", json.encode(pin_versions))
+
+def _packages_bzl(grouped_pins, packages):
+    """Render `_packages.bzl` metadata for all packages in a thin repo."""
+    packages_lines = [
+        '"""Generated package metadata. Do not edit."""',
+        "",
+        "PACKAGES = {",
+    ]
+    for base_pin_name in sorted(grouped_pins.keys()):
+        group = grouped_pins[base_pin_name]
+        us_name = underscore_name(base_pin_name)
+
+        base_target_dict = group["base_target"]
+        has_sdist = False
+        if base_target_dict:
+            for pkg_key in base_target_dict.values():
+                if packages.get(pkg_key, {}).get("sdist_file"):
+                    has_sdist = True
+                    break
+
+        packages_lines.extend([
+            '    "{}": struct('.format(us_name),
+            "        has_sdist = {},".format(has_sdist),
+            "    ),",
+        ])
+    packages_lines.extend([
+        "}",
+        "",
+    ])
+    return "\n".join(packages_lines)
+
+def _cargo_build(grouped_pins, packages, override_configs, workspace_repo, default_variants = {}):
+    """Render `_cargo/BUILD.bazel` aliases for packages with cargo lock overrides, or None."""
+    cargo_lines = [
+        'package(default_visibility = ["//visibility:public"])',
+        "",
+    ]
+
+    has_cargo_targets = False
+    for base_pin_name in sorted(grouped_pins.keys()):
+        us_name = underscore_name(base_pin_name)
+        if base_pin_name not in override_configs:
+            continue
+
+        group = grouped_pins[base_pin_name]
+        base_target_dict = group["base_target"]
+        if not base_target_dict:
+            continue
+
+        cargo_target_dict = {}
+        for constraint, pkg_key in base_target_dict.items():
+            if not packages.get(pkg_key, {}).get("sdist_file"):
+                continue
+            parts = parse_package_key(pkg_key)
+            cargo_target_dict[constraint] = "{}@{}".format(parts.name, parts.version)
+        if not cargo_target_dict:
+            continue
+
+        actual_cargo = _target_select(
+            cargo_target_dict,
+            "@{}//_cargo:".format(workspace_repo),
+            "",
+            workspace_repo,
+            default_variants = default_variants,
+            all_target_dict = base_target_dict,
+            fallback_target = _NO_MATCH_ERROR_TARGET,
+        )
+
+        cargo_lines.extend([
+            "alias(",
+            '    name = "{}",'.format(us_name),
+            "    actual = {},".format(actual_cargo),
+            ")",
+            "",
+        ])
+        has_cargo_targets = True
+
+    if not has_cargo_targets:
+        return None
+    return "\n".join(cargo_lines)
 
 thin_package_repo = repository_rule(
     implementation = _thin_package_repo_impl,
@@ -873,3 +1018,5 @@ thin_package_repo = repository_rule(
 pin_build_for_testing = _pin_build
 is_platform_specific_for_testing = _is_platform_specific
 requirements_bzl_for_testing = _requirements_bzl
+packages_bzl_for_testing = _packages_bzl
+cargo_build_for_testing = _cargo_build
