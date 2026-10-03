@@ -32,8 +32,12 @@ def _merge_dependencies(first_data, entries):
     for _, pkg_data in entries[1:]:
         if not merged.get("site_paths") and pkg_data.get("site_paths"):
             merged["site_paths"] = pkg_data["site_paths"]
-        if not merged.get("data_level_paths") and pkg_data.get("data_level_paths"):
-            merged["data_level_paths"] = pkg_data["data_level_paths"]
+        if not merged.get("bin_paths") and pkg_data.get("bin_paths"):
+            merged["bin_paths"] = pkg_data["bin_paths"]
+        if not merged.get("data_paths") and pkg_data.get("data_paths"):
+            merged["data_paths"] = pkg_data["data_paths"]
+        if not merged.get("include_paths") and pkg_data.get("include_paths"):
+            merged["include_paths"] = pkg_data["include_paths"]
         if not merged.get("sdist_file") and pkg_data.get("sdist_file"):
             merged["sdist_file"] = pkg_data["sdist_file"]
 
@@ -60,10 +64,12 @@ def _merge_dependencies(first_data, entries):
 
     return merged
 
+# Visible for testing
+merge_dependencies_for_testing = _merge_dependencies
+
 def _package_repo_impl(rctx):
     # Workspace repos always have member_lock_files — even single-lock repos
     # are wrapped in a workspace with one member.
-    packages = {}
     packages = {}
 
     # Annotation fields that affect pycross_wheel_library targets.

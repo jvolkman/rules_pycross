@@ -2,6 +2,31 @@
 
 All notable changes to this project will be documented in this file.
 
+## [Unreleased]
+
+### Changed
+
+- **`build_backend` annotation semantics.** Setting `build_backend` on a package
+  now only overrides the pycross build rule selected for the sdist; sdist
+  inspection still runs to detect `site_paths`, `pyproject.toml`'s
+  `build-system.requires` are still added as build dependencies, and an explicit
+  `pep517_build` now validates that all `build-system.requires` are present in
+  the lockfile.
+
+### Fixed
+
+- **Pre-built wheel metadata paths.** `pycross_wheel_file` and workspace package
+  dependency merging now preserve `bin_paths`, `data_paths`, and `include_paths`
+  in addition to `site_paths`.
+- **`extra_build_tools` with auto-detected backends.** Package
+  `extra_build_tools` annotations are now included in `build_deps` when
+  `build_backend` is auto-detected from `pyproject.toml`, not only when
+  `build_backend` is set explicitly.
+- **Sdist inspection with explicit `build_backend` or malformed `pyproject.toml`.**
+  Packages with an explicit `build_backend` now run `inspect_package.py` so
+  `site_paths` are populated, and `inspect_sdist` gracefully falls back to PEP
+  517 defaults with a warning if `pyproject.toml` fails to parse.
+
 ## [2.0.0-alpha.2]
 
 ### Breaking

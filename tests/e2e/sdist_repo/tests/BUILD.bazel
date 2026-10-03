@@ -8,9 +8,11 @@ sh_test(
         "$(rootpath @repo_with_pyproject//:BUILD.bazel)",
         "$(rootpath @repo_with_setuptools//:BUILD.bazel)",
         "$(rootpath @repo_legacy//:BUILD.bazel)",
+        "$(rootpath @repo_explicit_backend//:BUILD.bazel)",
     ],
     data = [
         "@repo_basic//:BUILD.bazel",
+        "@repo_explicit_backend//:BUILD.bazel",
         "@repo_legacy//:BUILD.bazel",
         "@repo_with_pyproject//:BUILD.bazel",
         "@repo_with_setuptools//:BUILD.bazel",

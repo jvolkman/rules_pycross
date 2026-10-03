@@ -95,7 +95,12 @@ PACKAGE_ATTRS = dict(
         mandatory = True,
     ),
     build_backend = attr.string(
-        doc = "An explicit build backend rule name to use for this package (e.g. 'maturin_build'). Overrides pyproject.toml detection.",
+        doc = (
+            "An explicit pycross build rule name to use for this package (e.g. 'maturin_build'), " +
+            "overriding the rule auto-selected from pyproject.toml's build-backend. " +
+            "The sdist's declared PEP 517 backend is still invoked, and its build-system.requires " +
+            "are still added as build dependencies."
+        ),
     ),
     build_target = attr.label(
         doc = "An optional override build target to use when and if this package needs to be built from source.",
