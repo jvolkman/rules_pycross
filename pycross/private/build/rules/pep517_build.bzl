@@ -4,7 +4,7 @@ load("//pycross/private:providers.bzl", "PycrossPackageInfo")
 load("//pycross/private/build:resource_sets.bzl", "get_resource_set")
 load("//pycross/private/build/actions:pep517_action.bzl", "register_pep517_action")
 load("//pycross/private/build/actions:repair_action.bzl", "register_repair_action")
-load(":common_attrs.bzl", "COMMON_BUILD_ATTRS", "REPAIR_BUILD_ATTRS")
+load(":common_attrs.bzl", "COMMON_BUILD_ATTRS", "REPAIR_BUILD_ATTRS", "defer_build_error")
 
 def _pep517_build_impl(ctx):
     # Validate that all required build packages are present in build_deps.
@@ -16,11 +16,11 @@ def _pep517_build_impl(ctx):
 
         missing = [pkg for pkg in ctx.attr.required_build_packages if pkg not in available]
         if missing:
-            fail(
+            return defer_build_error(ctx, [
                 "Missing required build-system packages: {}. ".format(", ".join(missing)) +
                 "These are listed in build-system.requires but are not present in build_deps. " +
                 "Make sure they are included in your lockfile.",
-            )
+            ])
 
     resources = get_resource_set(ctx.attr)
     env = {}

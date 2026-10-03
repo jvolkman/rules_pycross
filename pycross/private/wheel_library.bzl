@@ -15,10 +15,12 @@ load(
     "VenvSymlinkEntry",
     "VenvSymlinkKind",
 )
+load(":deferred_failure.bzl", "register_failure_action", "unsupported_wheel_message")
 load(
     ":providers.bzl",
     "PycrossExtractedWheelInfo",
     "PycrossPackageInfo",
+    "PycrossUnsupportedWheelInfo",
 )
 load(":util.bzl", "PY_COMMON_ATTRS", "merge_py_providers")
 
@@ -26,43 +28,56 @@ def _pycross_wheel_library_impl(ctx):
     out = ctx.actions.declare_directory(ctx.attr.name)
     entry_points = ctx.actions.declare_file(ctx.attr.name + ".dist_info/entry_points.txt")
 
-    wheel_input = ctx.files.wheel[0]
-
-    args = ctx.actions.args().use_param_file("--flagfile=%s")
-    if type(wheel_input) == "File" and wheel_input.is_directory:
-        args.add("--wheel-dir", wheel_input.path)
+    if PycrossUnsupportedWheelInfo in ctx.attr.wheel:
+        pkg_id = "{}{}".format(
+            ctx.attr.package_name or ctx.label.name,
+            "@{}".format(ctx.attr.package_version) if ctx.attr.package_version else "",
+        )
+        register_failure_action(
+            ctx,
+            outputs = [out, entry_points],
+            message = unsupported_wheel_message(pkg_id),
+            mnemonic = "PycrossUnsupportedWheel",
+            progress_message = "Rejecting unsupported wheel %s" % pkg_id,
+        )
     else:
-        # Plain file (e.g., local override wheel) — pass directly as --wheel
-        args.add("--wheel", wheel_input.path)
-    args.add("--directory", out.path)
-    args.add_all(ctx.files.post_install_patches, format_each = "--patch=%s")
+        wheel_input = ctx.files.wheel[0]
 
-    inputs = [wheel_input] + ctx.files.post_install_patches
+        args = ctx.actions.args().use_param_file("--flagfile=%s")
+        if type(wheel_input) == "File" and wheel_input.is_directory:
+            args.add("--wheel-dir", wheel_input.path)
+        else:
+            # Plain file (e.g., local override wheel) — pass directly as --wheel
+            args.add("--wheel", wheel_input.path)
+        args.add("--directory", out.path)
+        args.add_all(ctx.files.post_install_patches, format_each = "--patch=%s")
 
-    for install_exclude_glob in ctx.attr.install_exclude_globs:
-        args.add("--install-exclude-glob", install_exclude_glob)
+        inputs = [wheel_input] + ctx.files.post_install_patches
 
-    args.add("--entry-points-output", entry_points)
+        for install_exclude_glob in ctx.attr.install_exclude_globs:
+            args.add("--install-exclude-glob", install_exclude_glob)
 
-    if ctx.attr.package_name:
-        args.add("--expected-name", ctx.attr.package_name)
-    if ctx.attr.package_version:
-        args.add("--expected-version", ctx.attr.package_version)
+        args.add("--entry-points-output", entry_points)
 
-    ctx.actions.run(
-        inputs = inputs,
-        outputs = [out, entry_points],
-        executable = ctx.executable._tool,
-        mnemonic = "PycrossWheelInstall",
-        execution_requirements = {"supports-path-mapping": "1"},
-        arguments = [args],
-        # Set environment variables to make generated .pyc files reproducible.
-        env = {
-            "SOURCE_DATE_EPOCH": "315532800",
-            "PYTHONHASHSEED": "0",
-        },
-        progress_message = "Installing %s" % wheel_input.basename,
-    )
+        if ctx.attr.package_name:
+            args.add("--expected-name", ctx.attr.package_name)
+        if ctx.attr.package_version:
+            args.add("--expected-version", ctx.attr.package_version)
+
+        ctx.actions.run(
+            inputs = inputs,
+            outputs = [out, entry_points],
+            executable = ctx.executable._tool,
+            mnemonic = "PycrossWheelInstall",
+            execution_requirements = {"supports-path-mapping": "1"},
+            arguments = [args],
+            # Set environment variables to make generated .pyc files reproducible.
+            env = {
+                "SOURCE_DATE_EPOCH": "315532800",
+                "PYTHONHASHSEED": "0",
+            },
+            progress_message = "Installing %s" % wheel_input.basename,
+        )
 
     # TODO: Is there a more correct way to get this runfiles-relative import path?
     imp = paths.join(
@@ -270,4 +285,23 @@ pycross_wheel_metadata = rule(
         "data_paths": attr.string_list(doc = "The list of data paths provided by this wheel."),
         "include_paths": attr.string_list(doc = "The list of include paths provided by this wheel."),
     },
+)
+
+def _pycross_unsupported_wheel_impl(ctx):
+    wheel = ctx.actions.declare_file(ctx.label.name + ".whl")
+    register_failure_action(
+        ctx,
+        outputs = [wheel],
+        message = unsupported_wheel_message(None),
+        mnemonic = "PycrossUnsupportedWheel",
+        progress_message = "Rejecting unsupported wheel",
+    )
+    return [
+        DefaultInfo(files = depset([wheel])),
+        PycrossUnsupportedWheelInfo(),
+    ]
+
+pycross_unsupported_wheel = rule(
+    implementation = _pycross_unsupported_wheel_impl,
+    provides = [PycrossUnsupportedWheelInfo],
 )

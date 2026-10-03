@@ -6,16 +6,15 @@ load("//pycross/private/build/actions:cc_layer.bzl", "extract_cc_layer")
 load("//pycross/private/build/actions:pep517_action.bzl", "register_pep517_action")
 load("//pycross/private/build/actions:repair_action.bzl", "register_repair_action")
 load("//pycross/private/build/actions:tool_extract.bzl", "register_bin_extract_action", "register_console_script_extract_action")
-load(":common_attrs.bzl", "CC_BUILD_ATTRS", "CC_FRAGMENTS", "CC_TOOLCHAINS", "CC_TOOLCHAIN_ATTRS", "COMMON_BUILD_ATTRS", "REPAIR_BUILD_ATTRS", "TOOL_EXTRACT_ATTRS", "get_unzipped_wheel", "group_tool_deps", "resolve_path_tools")
+load(":common_attrs.bzl", "CC_BUILD_ATTRS", "CC_FRAGMENTS", "CC_TOOLCHAINS", "CC_TOOLCHAIN_ATTRS", "COMMON_BUILD_ATTRS", "REPAIR_BUILD_ATTRS", "TOOL_EXTRACT_ATTRS", "defer_build_error", "get_unzipped_wheel", "group_tool_deps", "resolve_path_tools")
 
 def _meson_build_impl(ctx):
     # 1. Extract tools
     tool_deps = group_tool_deps(ctx.attr.tool_deps)
 
-    if "meson" not in tool_deps:
-        fail("Missing 'meson' in tool_deps")
-    if "ninja" not in tool_deps:
-        fail("Missing 'ninja' in tool_deps")
+    missing_tools = [t for t in ("meson", "ninja") if t not in tool_deps]
+    if missing_tools:
+        return defer_build_error(ctx, ["Missing '{}' in tool_deps".format(t) for t in missing_tools])
 
     meson_site_packages = get_unzipped_wheel(tool_deps["meson"][0])
     ninja_wheel = get_unzipped_wheel(tool_deps["ninja"][0])

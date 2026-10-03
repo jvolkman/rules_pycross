@@ -6,6 +6,7 @@ bzl_library(
     name = "common_attrs",
     srcs = ["common_attrs.bzl"],
     deps = [
+        "//pycross/private:deferred_failure",
         "//pycross/private:providers",
         "//pycross/private/build:resource_sets",
         "//pycross/private/build:transitions",

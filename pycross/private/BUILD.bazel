@@ -3,6 +3,7 @@ load("@bazel_skylib//rules:write_file.bzl", "write_file")
 load(":pep508_marker_values.bzl", "FREETHREADED_VALUES", "LIBC_VALUES")
 load(":target_platform.bzl", "pycross_target_platform")
 load(":util.bzl", "REPO_HTTP_DEPS")
+load(":wheel_library.bzl", "pycross_unsupported_wheel")
 
 package(default_visibility = ["//visibility:public"])
 
@@ -153,6 +154,7 @@ bzl_library(
     name = "wheel_library",
     srcs = ["wheel_library.bzl"],
     deps = [
+        ":deferred_failure",
         ":modules_mapping",
         ":providers",
         ":rules_python_bzl",
@@ -200,9 +202,12 @@ bzl_library(
     ],
 )
 
-filegroup(
+pycross_unsupported_wheel(
     name = "no_match_error",
-    target_compatible_with = ["@platforms//:incompatible"],
+    target_compatible_with = select({
+        "//pycross/settings:defer_unsupported_wheel_errors_enabled": [],
+        "//conditions:default": ["@platforms//:incompatible"],
+    }),
     visibility = ["//visibility:public"],
 )
 
@@ -439,8 +444,22 @@ bzl_library(
 )
 
 bzl_library(
+    name = "wheel_dir",
+    srcs = ["wheel_dir.bzl"],
+    deps = [
+        ":deferred_failure",
+        ":providers",
+    ],
+)
+
+bzl_library(
     name = "backend_registry_repo",
     srcs = ["backend_registry_repo.bzl"],
+)
+
+bzl_library(
+    name = "deferred_failure",
+    srcs = ["deferred_failure.bzl"],
 )
 
 bzl_library(
@@ -466,11 +485,6 @@ bzl_library(
 bzl_library(
     name = "providers",
     srcs = ["providers.bzl"],
-)
-
-bzl_library(
-    name = "wheel_dir",
-    srcs = ["wheel_dir.bzl"],
 )
 
 bzl_library(

@@ -1,4 +1,4 @@
-load("@bazel_skylib//rules:common_settings.bzl", "string_flag")
+load("@bazel_skylib//rules:common_settings.bzl", "bool_flag", "string_flag")
 load("@rules_pycross_internal_config//:defaults.bzl", "glibc_version", "macos_version", "musl_version")
 load("//pycross/private/build:resource_sets.bzl", _create_settings = "create_resource_set_settings")
 
@@ -41,4 +41,19 @@ string_flag(
 string_flag(
     name = "max_musl_version",
     build_setting_default = musl_version,
+)
+
+# Deferred Unsupported Wheel Errors
+# When True, packages without a compatible wheel (and no sdist) analyze
+# successfully and fail only when executed, instead of being incompatible.
+# Useful for analysis-only consumers such as aspects. See "Deferring Unsupported
+# Wheel Failures" in README.md.
+bool_flag(
+    name = "defer_unsupported_wheel_errors",
+    build_setting_default = False,
+)
+
+config_setting(
+    name = "defer_unsupported_wheel_errors_enabled",
+    flag_values = {":defer_unsupported_wheel_errors": "True"},
 )
