@@ -6,7 +6,7 @@ Each backend extension follows the same pattern:
   1. Collect override tags into a JSON dict keyed by repo, then package name.
   2. Write that dict to a generated `@<backend>_overrides//:overrides.json` repo.
   3. The backends extension aggregates these into OVERRIDE_FILES for
-     resolved_lock_repo to consume.
+     lock_repo_creation to consume.
 """
 
 load("@bazel_features//:features.bzl", "bazel_features")

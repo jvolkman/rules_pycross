@@ -121,21 +121,6 @@ bzl_library(
     ],
 )
 
-bzl_library(
-    name = "resolved_lock_repo",
-    srcs = ["resolved_lock_repo.bzl"],
-    deps = [
-        ":internal_repo",
-        ":lock_attrs",
-        ":lock_resolver",
-        ":pdm_lock_model",
-        ":poetry_lock_model",
-        ":pylock_lock_model",
-        ":resolved_lock_renderer",
-        ":uv_lock_model",
-    ],
-)
-
 # keep
 bzl_library(
     name = "rules_python_bzl",
