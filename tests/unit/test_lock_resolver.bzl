@@ -2114,6 +2114,43 @@ def _test_testonly_diamond_with_testonly_branch(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
     analysis_test(name = name, target = name + "_subject", impl = _test_testonly_diamond_with_testonly_branch_impl)
 
+# buildifier: disable=unused-variable
+def _test_transitive_resolution_marker_forks_impl(env, target):
+    """include_transitive preserves resolution-marker fork constraints instead of collapsing to latest."""
+    lock_model_data = {
+        "packages": {
+            "app@1.0": _make_pkg(
+                "app",
+                "1.0",
+                [_make_file("app-1.0.tar.gz")],
+                deps = [
+                    _make_dep("setuptools", "68.0.0", marker = "python_full_version < '3.12'"),
+                    _make_dep("setuptools", "75.1.0", marker = "python_full_version >= '3.12'"),
+                ],
+            ),
+            "setuptools@68.0.0": _make_pkg("setuptools", "68.0.0", [_make_file("setuptools-68.0.0-py3-none-any.whl")]),
+            "setuptools@75.1.0": _make_pkg("setuptools", "75.1.0", [_make_file("setuptools-75.1.0-py3-none-any.whl")]),
+        },
+        "pins": {
+            "app": "app@1.0",
+        },
+        "resolution_marker_exprs": {
+            "res_setuptools_68_0_0": "python_full_version < '3.12'",
+            "res_setuptools_75_1_0": "python_full_version >= '3.12'",
+        },
+    }
+
+    res = resolve(lock_model_data, include_transitive = True)
+
+    env.expect.that_dict(res.pins["setuptools"]).contains_exactly({
+        "res_setuptools_68_0_0": "setuptools@68.0.0",
+        "res_setuptools_75_1_0": "setuptools@75.1.0",
+    })
+
+def _test_transitive_resolution_marker_forks(name):
+    util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
+    analysis_test(name = name, target = name + "_subject", impl = _test_transitive_resolution_marker_forks_impl)
+
 def lock_resolver_test_suite(name):
     test_suite(
         name = name,
@@ -2185,5 +2222,6 @@ def lock_resolver_test_suite(name):
             _test_testonly_shared_dep_not_testonly,
             _test_testonly_no_testonly_pins,
             _test_testonly_diamond_with_testonly_branch,
+            _test_transitive_resolution_marker_forks,
         ],
     )

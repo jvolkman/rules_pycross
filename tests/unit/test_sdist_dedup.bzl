@@ -19,19 +19,23 @@ load("//pycross/private:wheel_file.bzl", "render_wheel_file_build_for_testing")
 
 # ── Helpers ─────────────────────────────────────────────────────────
 
-def _make_attr(known_packages, thin_repo = "pypi", build_backend = "", extra_build_tools = None):
+def _make_attr(known_packages, thin_repo = "pypi", build_backend = "", extra_build_tools = None, backend_tool_packages = None, override_backend_configs = ""):
     return struct(
         sdist = "@pypi_foo//:foo.tar.gz",
         deps = [],
         known_packages = known_packages,
         thin_repo = thin_repo,
         build_backend = build_backend,
-        backend_to_rule = {"setuptools.build_meta": "setuptools_build"},
+        backend_to_rule = {
+            "setuptools.build_meta": "setuptools_build",
+            "scikit_build_core.build": "cmake_build",
+        },
+        backend_tool_packages = backend_tool_packages or {},
         default_backend = "pep517_build",
         extra_build_tools = extra_build_tools or [],
         whldir_name = "",
         source_dir = "",
-        override_backend_configs = "",
+        override_backend_configs = override_backend_configs,
         pre_build_patches = [],
         site_hooks = [],
     )
@@ -276,6 +280,90 @@ def _test_merge_dependencies_paths(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
     analysis_test(name = name, target = name + "_subject", impl = _test_merge_dependencies_paths_impl)
 
+# ── Test: tool_deps populated from thin_repo (including build_tools_repo) ──
+
+# buildifier: disable=unused-variable
+def _test_tool_deps_from_thin_repo_impl(env, target):
+    """tool_deps uses thin_repo (build_tools_repo or <ws>__build) and filters by known_packages."""
+    backend_tool_packages = {
+        "setuptools_build": ["setuptools", "wheel"],
+        "cmake_build": ["cmake", "ninja", "scikit-build-core"],
+    }
+
+    # Default build repo with both setuptools and wheel in known_packages.
+    cfg_default = compute_sdist_build_config_for_testing(
+        _make_attr(
+            known_packages = ["setuptools", "wheel"],
+            thin_repo = "uv__build",
+            backend_tool_packages = backend_tool_packages,
+        ),
+        {
+            "build_backend": "setuptools.build_meta",
+            "build_requires": ["setuptools>=61"],
+        },
+    )
+    env.expect.that_collection(json.decode(cfg_default.macro_attrs["tool_deps"])).contains_exactly([
+        "@uv__build//setuptools:pkg",
+        "@uv__build//wheel:pkg",
+    ])
+
+    # Custom build_tools_repo where only cmake and scikit-build-core are in known_packages.
+    cfg_custom = compute_sdist_build_config_for_testing(
+        _make_attr(
+            known_packages = ["cmake", "scikit-build-core"],
+            thin_repo = "custom_build_tools__build",
+            backend_tool_packages = backend_tool_packages,
+        ),
+        {
+            "build_backend": "scikit_build_core.build",
+            "build_requires": ["scikit-build-core"],
+        },
+    )
+    env.expect.that_collection(json.decode(cfg_custom.macro_attrs["tool_deps"])).contains_exactly([
+        "@custom_build_tools__build//cmake:pkg",
+        "@custom_build_tools__build//scikit_build_core:pkg",
+    ])
+
+    # Custom build_tools_repo with none of the backend's tool_packages emits an explicit empty list
+    # so the _backend macro does not fall back to @<ws>__build.
+    cfg_empty = compute_sdist_build_config_for_testing(
+        _make_attr(
+            known_packages = [],
+            thin_repo = "custom_build_tools__build",
+            backend_tool_packages = backend_tool_packages,
+        ),
+        {
+            "build_backend": "setuptools.build_meta",
+            "build_requires": [],
+        },
+    )
+    env.expect.that_collection(json.decode(cfg_empty.macro_attrs["tool_deps"])).contains_exactly([])
+
+    # override_backend_configs tool_deps still overrides the default tool_deps.
+    cfg_override = compute_sdist_build_config_for_testing(
+        _make_attr(
+            known_packages = ["setuptools", "wheel"],
+            thin_repo = "uv__build",
+            backend_tool_packages = backend_tool_packages,
+            override_backend_configs = json.encode({
+                "setuptools_build": {
+                    "tool_deps": json.encode(["@custom//:setuptools"]),
+                },
+            }),
+        ),
+        {
+            "build_backend": "setuptools.build_meta",
+            "build_requires": [],
+        },
+    )
+    env.expect.that_collection(json.decode(cfg_override.macro_attrs["tool_deps"])).contains_exactly([
+        "@custom//:setuptools",
+    ])
+
+def _test_tool_deps_from_thin_repo(name):
+    util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
+    analysis_test(name = name, target = name + "_subject", impl = _test_tool_deps_from_thin_repo_impl)
+
 # ── Test suite ──────────────────────────────────────────────────────
 
 def sdist_dedup_test_suite(name):
@@ -291,5 +379,6 @@ def sdist_dedup_test_suite(name):
             _test_explicit_build_backend_preserves_inspection,
             _test_wheel_file_build_metadata_paths,
             _test_merge_dependencies_paths,
+            _test_tool_deps_from_thin_repo,
         ],
     )

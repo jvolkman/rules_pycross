@@ -17,6 +17,7 @@ load(
     ":providers.bzl",
     "PycrossExtractedWheelInfo",
     "PycrossPackageInfo",
+    "PycrossUnsupportedWheelInfo",
 )
 load(":util.bzl", "PY_COMMON_ATTRS", "merge_py_providers")
 
@@ -60,6 +61,8 @@ def _pycross_library_proxy_impl(ctx):
         providers.append(actual[PycrossExtractedWheelInfo])
     if PycrossPackageInfo in actual:
         providers.append(actual[PycrossPackageInfo])
+    if PycrossUnsupportedWheelInfo in actual:
+        providers.append(actual[PycrossUnsupportedWheelInfo])
 
     # Forward OutputGroupInfo (e.g., dist_info) if present.
     if OutputGroupInfo in actual:
@@ -124,10 +127,13 @@ def _pycross_file_proxy_impl(ctx):
     actual = ctx.attr.actual[0] if type(ctx.attr.actual) == "list" else ctx.attr.actual
 
     # Return a new DefaultInfo to avoid carrying over executable status if not intended.
-    return [DefaultInfo(
+    providers = [DefaultInfo(
         files = actual[DefaultInfo].files,
         runfiles = actual[DefaultInfo].default_runfiles,
     )]
+    if PycrossUnsupportedWheelInfo in actual:
+        providers.append(actual[PycrossUnsupportedWheelInfo])
+    return providers
 
 # Non-transitioning variant.
 pycross_file_proxy = rule(

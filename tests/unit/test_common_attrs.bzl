@@ -1,25 +1,38 @@
 """Module docstring for tests."""
 
+load("@rules_python//python:py_info.bzl", "PyInfo")
 load("@rules_testing//lib:analysis_test.bzl", "analysis_test", "test_suite")
+load("//pycross:defs.bzl", "pycross_library_proxy")
 
 # buildifier: disable=bzl-visibility
-# buildifier: disable=bzl-visibility
-load("//pycross/private:providers.bzl", "PycrossPackageInfo")
+load("//pycross/private:providers.bzl", "PycrossExtractedWheelInfo", "PycrossPackageInfo")
 
 # buildifier: disable=bzl-visibility
-# buildifier: disable=bzl-visibility
-load("//pycross/private/build/rules:common_attrs.bzl", "group_tool_deps")
+load("//pycross/private/build/rules:common_attrs.bzl", "get_unzipped_wheel", "group_tool_deps")
 
-TestingInfo = provider(doc = "TestingInfo", fields = ["result"])
+TestingInfo = provider(doc = "TestingInfo", fields = ["result", "site_packages"])
 
 def _mock_pkg_impl(ctx):
-    return [PycrossPackageInfo(package_name = ctx.attr.package_name)]
+    site_dir = ctx.actions.declare_directory(ctx.label.name + "_site")
+    ctx.actions.run_shell(
+        outputs = [site_dir],
+        command = "mkdir -p \"$1\"",
+        arguments = [site_dir.path],
+        mnemonic = "MockSitePackages",
+    )
+    return [
+        DefaultInfo(files = depset([site_dir])),
+        PyInfo(transitive_sources = depset()),
+        PycrossPackageInfo(package_name = ctx.attr.package_name),
+        PycrossExtractedWheelInfo(site_packages = site_dir),
+    ]
 
 mock_pkg = rule(
     implementation = _mock_pkg_impl,
     attrs = {
         "package_name": attr.string(mandatory = True),
     },
+    provides = [DefaultInfo, PyInfo],
 )
 
 # buildifier: disable=unused-variable
@@ -37,9 +50,12 @@ def _test_rule_impl(ctx):
     other = ctx.attr.other
 
     result = group_tool_deps([d for d in [dep1, dep2, dep3, other] if d != None])
+    site_packages = {}
+    for name, targets in result.items():
+        site_packages[name] = get_unzipped_wheel(targets[0]).basename
 
     # Store result to be accessed by the test
-    return [TestingInfo(result = result)]
+    return [TestingInfo(result = result, site_packages = site_packages)]
 
 group_tool_deps_subject = rule(
     implementation = _test_rule_impl,
@@ -141,6 +157,33 @@ def _group_tool_deps_same_test(name):
     )
     analysis_test(name = name, target = ":" + name + "_subject", impl = _group_tool_deps_same_impl)
 
+# buildifier: disable=unused-variable
+def _group_tool_deps_via_library_proxy_impl(env, target):
+    info = target[TestingInfo]
+    env.expect.that_int(len(info.result)).equals(2)
+    env.expect.that_int(len(info.result.get("setuptools", []))).equals(1)
+    env.expect.that_int(len(info.result.get("maturin", []))).equals(1)
+    env.expect.that_str(info.site_packages.get("setuptools", "")).contains("_raw_setuptools_site")
+    env.expect.that_str(info.site_packages.get("maturin", "")).contains("_raw_maturin_site")
+
+def _group_tool_deps_via_library_proxy_test(name):
+    mock_pkg(name = name + "_raw_setuptools", package_name = "setuptools")
+    mock_pkg(name = name + "_raw_maturin", package_name = "maturin")
+    pycross_library_proxy(
+        name = name + "_proxy_setuptools",
+        actual = ":" + name + "_raw_setuptools",
+    )
+    pycross_library_proxy(
+        name = name + "_proxy_maturin",
+        actual = ":" + name + "_raw_maturin",
+    )
+    group_tool_deps_subject(
+        name = name + "_subject",
+        dep1 = ":" + name + "_proxy_setuptools",
+        dep2 = ":" + name + "_proxy_maturin",
+    )
+    analysis_test(name = name, target = ":" + name + "_subject", impl = _group_tool_deps_via_library_proxy_impl)
+
 def common_attrs_test_suite(name):
     test_suite(
         name = name,
@@ -150,5 +193,6 @@ def common_attrs_test_suite(name):
             _group_tool_deps_no_pkg_test,
             _group_tool_deps_single_test,
             _group_tool_deps_same_test,
+            _group_tool_deps_via_library_proxy_test,
         ],
     )

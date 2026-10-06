@@ -1,6 +1,7 @@
 """Starlark implementation of the raw lock resolver."""
 
 load("@pypackaging.bzl", "pypackaging")
+load(":translator_common.bzl", "resolution_marker_constraint_name")
 load(":util.bzl", "parse_package_key")
 
 def _file_key(f):
@@ -674,8 +675,20 @@ def resolve(
                 resolved_versions_by_name[pkg_name] = {}
             resolved_versions_by_name[pkg_name][pkg_version] = True
 
+        resolution_marker_exprs = lock_model_data.get("resolution_marker_exprs", {})
         for package_pin_name, versions in resolved_versions_by_name.items():
             if package_pin_name in pins:
+                continue
+            fork_targets = {}
+            for v in sorted(versions.keys()):
+                cname = resolution_marker_constraint_name(package_pin_name, v)
+                base_key = "{}@{}".format(package_pin_name, v)
+                if cname in resolution_marker_exprs and base_key in packages_by_package_key:
+                    fork_targets[cname] = base_key
+            if fork_targets and len(fork_targets) == len(versions):
+                pins[package_pin_name] = fork_targets
+                if transitive_testonly:
+                    testonly_pins_set[package_pin_name] = True
                 continue
             if len(versions) > 1:
                 version_tuples = [(pypackaging.version.parse(v).key, v) for v in versions.keys()]

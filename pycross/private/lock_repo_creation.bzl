@@ -81,18 +81,31 @@ def create_repos(
         for lock_file in all_locks.values():
             module_ctx.path(lock_file)
 
-    # Serialize backend configs for passing to package_repo.
+    # Serialize backend configs for passing to package_repo and sdist_repo.
     backend_configs_json = {name: json.encode(config) for name, config in BACKEND_CONFIGS.items()}
+    backend_tool_packages = {
+        name: list(config.get("tool_packages", []))
+        for name, config in BACKEND_CONFIGS.items()
+    }
+
+    all_resolved_locks = {}
+    for repo_name, lock_file in all_locks.items():
+        if resolved_locks and repo_name in resolved_locks:
+            all_resolved_locks[repo_name] = resolved_locks[repo_name]
+        else:
+            resolved_lock_file = module_ctx.path(lock_file)
+            all_resolved_locks[repo_name] = json.decode(module_ctx.read(resolved_lock_file))
+
+    known_packages_by_repo = {
+        repo_name: [key_name(key) for key in rlock.get("packages", {})]
+        for repo_name, rlock in all_resolved_locks.items()
+    }
 
     # Generate the lock repos and any remote package repos
     per_repo_data = {}  # repo_name -> struct(repo_map, sdist_map, lock_file)
     created_sdist_repos = {}  # sdist_repo_name -> True, for workspace-level dedup
     for repo_name, lock_file in all_locks.items():
-        if resolved_locks:
-            resolved_lock = resolved_locks[repo_name]
-        else:
-            resolved_lock_file = module_ctx.path(lock_file)
-            resolved_lock = json.decode(module_ctx.read(resolved_lock_file))
+        resolved_lock = all_resolved_locks[repo_name]
 
         repo_remote_files = {}
         workspace_name = workspace_memberships.get(repo_name)
@@ -153,7 +166,7 @@ def create_repos(
             all_remote_files[key] = remote_file_label
 
         # Pre-calculate known packages in this lock file to filter sdist build_requires
-        known_packages = [key_name(key) for key in resolved_lock.get("packages", {})]
+        known_packages = known_packages_by_repo[repo_name]
 
         sdist_map = {}
 
@@ -197,17 +210,17 @@ def create_repos(
             whldir_norm_name = sanitize_name(pkg_name_part)
             whldir_name = "{}-{}.whldir".format(whldir_norm_name, pkg_version)
 
+            thin_repo = pkg.get("build_tools_repo") or "{}__build".format(workspace_name)
             sdist_repo_attrs = {
                 "name": sdist_repo_name,
                 "sdist": sdist_label,
                 "deps": sorted(deps_set.keys()),
-                "known_packages": known_packages,
-                "pin_versions_json": "@{}//:pin_versions.json".format(
-                    pkg.get("build_tools_repo") or "{}__build".format(workspace_name),
-                ),
+                "known_packages": known_packages_by_repo.get(thin_repo, known_packages),
+                "pin_versions_json": "@{}//:pin_versions.json".format(thin_repo),
                 "lock_repo": lock_repo_for_deps,
-                "thin_repo": pkg.get("build_tools_repo") or "{}__build".format(workspace_name),
+                "thin_repo": thin_repo,
                 "backend_to_rule": BACKEND_TO_RULE,
+                "backend_tool_packages": backend_tool_packages,
                 "default_backend": DEFAULT_BACKEND,
                 "whldir_name": whldir_name,
             }
@@ -307,6 +320,7 @@ def create_repos(
 
         package_repo_attrs = dict(
             name = workspace_repo_name,
+            build_repo = "{}__build".format(workspace_name),
             repo_map = merged_repo_map,
             sdist_map = merged_sdist_map,
             backend_configs = backend_configs_json,
