@@ -92,7 +92,7 @@ def _test_pycross_wheel_library_no_match_deferred(name):
         name = name,
         target = name + "_subject",
         config_settings = {
-            str(Label("//pycross/settings:defer_unsupported_wheel_errors")): True,
+            str(Label("//pycross/settings:unavailable_package_mode")): "fail_at_execution",
         },
         impl = _test_pycross_wheel_library_no_match_deferred_impl,
     )
@@ -120,7 +120,7 @@ def _test_pycross_wheel_dir_no_match_deferred(name):
         name = name,
         target = name + "_subject",
         config_settings = {
-            str(Label("//pycross/settings:defer_unsupported_wheel_errors")): True,
+            str(Label("//pycross/settings:unavailable_package_mode")): "fail_at_execution",
         },
         impl = _test_pycross_wheel_dir_no_match_deferred_impl,
     )
@@ -189,7 +189,7 @@ def _test_no_match_error_compatible_when_deferred(name):
         target = name + "_subject",
         extra_target_under_test_aspects = [_no_match_probe_aspect],
         config_settings = {
-            str(Label("//pycross/settings:defer_unsupported_wheel_errors")): True,
+            str(Label("//pycross/settings:unavailable_package_mode")): "fail_at_execution",
         },
         impl = _test_no_match_error_compatible_when_deferred_impl,
     )
@@ -212,7 +212,7 @@ def _test_pycross_library_proxy_no_match_deferred(name):
         name = name,
         target = name + "_subject",
         config_settings = {
-            str(Label("//pycross/settings:defer_unsupported_wheel_errors")): True,
+            str(Label("//pycross/settings:unavailable_package_mode")): "fail_at_execution",
         },
         impl = _test_pycross_library_proxy_no_match_deferred_impl,
     )
