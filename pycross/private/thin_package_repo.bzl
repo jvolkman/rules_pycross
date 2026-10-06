@@ -76,7 +76,7 @@ def _safe_name(pin_name, name):
 
 _NO_MATCH_ERROR_TARGET = "@rules_pycross//pycross/private:no_match_error"
 
-def _target_select(target_dict, prefix, suffix, workspace_repo, is_aggregated = False, default_variants = {}, all_target_dict = None, fallback_target = None):
+def _target_select(target_dict, prefix, suffix, workspace_repo, is_aggregated = False, default_variants = {}, all_target_dict = None, fallback_target = _NO_MATCH_ERROR_TARGET):
     effective_all = all_target_dict if all_target_dict != None else target_dict
     if len(effective_all) == 1 and "" in effective_all and "" in target_dict:
         t = target_dict[""]
@@ -87,7 +87,6 @@ def _target_select(target_dict, prefix, suffix, workspace_repo, is_aggregated = 
 
     lines = ["select({"]
     default_target_label = None
-    has_uncovered_branch = False
     for constraint in effective_all.keys():
         if constraint in target_dict:
             t_base = target_dict[constraint]
@@ -97,7 +96,6 @@ def _target_select(target_dict, prefix, suffix, workspace_repo, is_aggregated = 
             target_label = "{}{}{}".format(prefix, t_base, suffix)
         elif fallback_target:
             target_label = fallback_target
-            has_uncovered_branch = True
         else:
             continue
 
@@ -110,17 +108,17 @@ def _target_select(target_dict, prefix, suffix, workspace_repo, is_aggregated = 
             if constraint in default_variants:
                 default_target_label = target_label
 
-    # Add //conditions:default for default variant or partial-coverage fallback (only if not already present via "").
+    # Add //conditions:default for default variant or uncovered-branch fallback (only if not already present via "").
     if "" not in effective_all:
         if default_target_label:
             lines.append('        "//conditions:default": "{}",'.format(default_target_label))
-        elif fallback_target and has_uncovered_branch:
+        elif fallback_target:
             lines.append('        "//conditions:default": "{}",'.format(fallback_target))
 
     lines.append("    })")
     return "\n".join(lines)
 
-def _proxy_actual(actual_lines, target_dict, prefix, suffix, workspace_repo, alias_name, actual_pkg_ref, has_transition = False, is_aggregated = False, default_variants = {}, all_target_dict = None, fallback_target = None):
+def _proxy_actual(actual_lines, target_dict, prefix, suffix, workspace_repo, alias_name, actual_pkg_ref, has_transition = False, is_aggregated = False, default_variants = {}, all_target_dict = None, fallback_target = _NO_MATCH_ERROR_TARGET):
     """Emit an intermediate select alias if needed, return the actual expression for the proxy.
 
     When transitions are active (has_transition is True) and target_dict has variants

@@ -178,6 +178,8 @@ def _compute_sdist_build_config(attr, metadata):
         # Falls back to the registered default backend.
         backend_macro = _resolve_backend(backend_to_rule, default_backend, backend, build_requires_names)
 
+    known_packages_set = {extract_pep508_name(k): True for k in attr.known_packages}
+
     # Map build requires and extra_build_tools to targets in the workspace repo
     build_deps = {}
     required_build_packages = {}
@@ -190,7 +192,7 @@ def _compute_sdist_build_config(attr, metadata):
 
         # We only add it if it's in the known lock repo mapping.
         # (This will be passed in via rctx.attr.known_packages)
-        if req_name in attr.known_packages:
+        if req_name in known_packages_set:
             build_deps["@{}//{}:pkg".format(attr.thin_repo, underscore_name(req_name))] = True
 
     for dep in attr.extra_build_tools:
@@ -198,6 +200,17 @@ def _compute_sdist_build_config(attr, metadata):
         build_deps["@{}//{}:pkg".format(attr.thin_repo, underscore_name(dep_name))] = True
 
     macro_attrs["build_deps"] = str(sorted(build_deps.keys()))
+
+    # Populate tool_deps from the resolved backend's tool_packages that are present in the lock.
+    backend_tool_packages = getattr(attr, "backend_tool_packages", None) or {}
+    tool_packages = backend_tool_packages.get(backend_macro, [])
+    if tool_packages:
+        tool_deps = {}
+        for pkg in tool_packages:
+            pkg_name = extract_pep508_name(pkg)
+            if pkg_name in known_packages_set:
+                tool_deps["@{}//{}:pkg".format(attr.thin_repo, underscore_name(pkg_name))] = True
+        macro_attrs["tool_deps"] = str(sorted(tool_deps.keys()))
 
     # For pep517_build, pass the required package names for validation.
     if backend_macro == "pep517_build":
@@ -339,6 +352,9 @@ _SDIST_REPO_ATTRS = {
     "build_backend": attr.string(doc = "The build backend to use."),
     "backend_to_rule": attr.string_dict(
         doc = "Registry mapping pyproject backend names to pycross rule names.",
+    ),
+    "backend_tool_packages": attr.string_list_dict(
+        doc = "Registry mapping backend rule names to their tool_packages lists.",
     ),
     "thin_repo": attr.string(
         doc = "Name of the thin workspace repo.",

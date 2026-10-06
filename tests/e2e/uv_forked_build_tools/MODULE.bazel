@@ -1,0 +1,48 @@
+bazel_dep(name = "rules_pycross", version = "0.0.0")
+bazel_dep(name = "rules_pycross_e2e_shared", version = "0.0.0")
+bazel_dep(name = "rules_python", version = "2.0.0")
+
+local_path_override(
+    module_name = "rules_pycross",
+    path = "../../..",
+)
+
+local_path_override(
+    module_name = "rules_pycross_e2e_shared",
+    path = "../shared",
+)
+
+python = use_extension("@rules_python//python/extensions:python.bzl", "python")
+python.toolchain(
+    is_default = True,
+    python_version = "3.11.6",
+)
+python.toolchain(python_version = "3.12.0")
+use_repo(python, "python_versions")
+
+SITE_HOOK = (
+    "import importlib.metadata, pathlib; " +
+    "p = pathlib.Path('six.py'); " +
+    "vers = sorted(d.version for d in importlib.metadata.distributions() if d.metadata['Name'] == 'setuptools'); " +
+    "(p.exists() and 'BUILD_SETUPTOOLS_VERSIONS' not in p.read_text()) and " +
+    "p.write_text(p.read_text() + f'\\nBUILD_SETUPTOOLS_VERSIONS = {vers!r}\\n')"
+)
+
+uv = use_extension("@rules_pycross//pycross/extensions:uv.bzl", "uv")
+uv.workspace(
+    name = "uv",
+    lock_file = "//:uv.lock",
+)
+uv.repo(
+    workspace = "uv",
+)
+uv.package(
+    name = "six",
+    always_build = True,
+    site_hooks = [SITE_HOOK],
+    workspace = "uv",
+)
+use_repo(
+    uv,
+    "uv",
+)

@@ -4,7 +4,7 @@ load("@rules_testing//lib:analysis_test.bzl", "analysis_test", "test_suite")
 load("@rules_testing//lib:util.bzl", "util")
 
 # buildifier: disable=bzl-visibility
-load("//pycross/private:package_repo.bzl", "resolve_tool_package_key_for_testing")
+load("//pycross/private:package_repo.bzl", "backend_tool_deps_labels_for_testing")
 
 # buildifier: disable=bzl-visibility
 load(
@@ -626,25 +626,60 @@ def _test_cargo_build_multi_branch(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
     analysis_test(name = name, target = name + "_subject", impl = _test_cargo_build_multi_branch_impl)
 
-# ── Test: _resolve_tool_package_key ────────────────────────────────
+# ── Test: _backend_tool_deps_labels ────────────────────────────────
 
 # buildifier: disable=unused-variable
-def _test_resolve_tool_package_key_impl(env, target):
-    """_resolve_tool_package_key skips extras/__via_ keys and picks the highest PEP 440 version."""
+def _test_backend_tool_deps_labels_impl(env, target):
+    """_backend_tool_deps_labels skips extras/__via_ keys and emits @<build_repo>//<pkg>:pkg labels."""
     packages = {
         "setuptools[core]@68.0.0": {},
         "setuptools@9.0.0": {},
         "setuptools@68.0.0": {},
         "setuptools@75.1.0": {},
-        "setuptools[testing]@80.0.0": {},
-        "setuptools@80.0.0__via_other": {},
+        "scikit-build-core@0.10.0": {},
+        "wheel[testing]@0.45.0": {},
+        "flit-core@3.9.0__via_other": {},
     }
-    env.expect.that_str(resolve_tool_package_key_for_testing(packages, "setuptools")).equals("setuptools@75.1.0")
-    env.expect.that_str(str(resolve_tool_package_key_for_testing(packages, "flit-core"))).equals("None")
+    labels = backend_tool_deps_labels_for_testing(
+        ["setuptools", "scikit-build-core", "wheel", "flit-core"],
+        packages,
+        "uv__build",
+    )
+    env.expect.that_collection(labels).contains_exactly([
+        "@uv__build//setuptools:pkg",
+        "@uv__build//scikit_build_core:pkg",
+    ])
 
-def _test_resolve_tool_package_key(name):
+def _test_backend_tool_deps_labels(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
-    analysis_test(name = name, target = name + "_subject", impl = _test_resolve_tool_package_key_impl)
+    analysis_test(name = name, target = name + "_subject", impl = _test_backend_tool_deps_labels_impl)
+
+# ── Test: multi-branch pin falls back to no_match_error on uncovered branches ─
+
+# buildifier: disable=unused-variable
+def _test_pin_build_multi_branch_no_match_fallback_impl(env, target):
+    """Multi-branch pins without a default variant emit //conditions:default -> no_match_error."""
+    res = pin_build_for_testing(
+        target_name = "setuptools",
+        pin_target_dict = {
+            "res_setuptools_68_0_0": "setuptools@68.0.0",
+            "res_setuptools_75_1_0": "setuptools@75.1.0",
+        },
+        package = {},
+        workspace_repo = "ws",
+    ).build
+
+    pkg_section = res.split('name = "pkg"')[1].split(")")[0]
+    env.expect.that_bool('"@ws//_lock:is_res_setuptools_68_0_0": "@ws//_lock:setuptools@68.0.0"' in pkg_section).equals(True)
+    env.expect.that_bool('"@ws//_lock:is_res_setuptools_75_1_0": "@ws//_lock:setuptools@75.1.0"' in pkg_section).equals(True)
+    env.expect.that_bool('"//conditions:default": "@rules_pycross//pycross/private:no_match_error"' in pkg_section).equals(True)
+
+    wheel_section = res.split('name = "wheel"')[1].split(")")[0]
+    env.expect.that_bool('"//conditions:default": "@rules_pycross//pycross/private:no_match_error"' in wheel_section).equals(True)
+
+def _test_pin_build_multi_branch_no_match_fallback(name):
+    util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
+    analysis_test(name = name, target = name + "_subject", impl = _test_pin_build_multi_branch_no_match_fallback_impl)
 
 # ── Test suite ─────────────────────────────────────────────────────
 
@@ -669,6 +704,7 @@ def thin_package_repo_test_suite(name):
             _test_pin_build_multi_branch_maybe,
             _test_pin_build_multi_branch_sdist,
             _test_cargo_build_multi_branch,
-            _test_resolve_tool_package_key,
+            _test_backend_tool_deps_labels,
+            _test_pin_build_multi_branch_no_match_fallback,
         ],
     )

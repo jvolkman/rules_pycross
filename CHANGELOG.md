@@ -12,6 +12,15 @@ All notable changes to this project will be documented in this file.
   `build-system.requires` are still added as build dependencies, and an explicit
   `pep517_build` now validates that all `build-system.requires` are present in
   the lockfile.
+- **Thin-repo fork and variant `select()` fallback.** Thin-repo `:pkg`,
+  `:wheel`, `:dist_info`, and `:sdist` `select()`s that lack an unconditional or
+  default-variant branch now fall back to
+  `@rules_pycross//pycross/private:no_match_error` on `//conditions:default`, so
+  non-matching resolution-marker forks become incompatible targets by default (or
+  deferred build errors under
+  `--@rules_pycross//pycross/settings:defer_unsupported_wheel_errors`) instead of
+  failing analysis with a "configurable attribute doesn't match this
+  configuration" error.
 
 ### Fixed
 
@@ -26,6 +35,12 @@ All notable changes to this project will be documented in this file.
   Packages with an explicit `build_backend` now run `inspect_package.py` so
   `site_paths` are populated, and `inspect_sdist` gracefully falls back to PEP
   517 defaults with a warning if `pyproject.toml` fails to parse.
+- **Backend `tool_deps` resolution-marker forks and `build_tools_repo`.**
+  Generated `_backend/<rule>.bzl` macros now default `tool_deps` to
+  `@<ws>__build//<pkg>:pkg` instead of a static highest-version `@<ws>__pkgs`
+  target, `pycross_sdist_repo` emits explicit `tool_deps` from its configured
+  `build_tools_repo` (or `<ws>__build`), and `<ws>__build` preserves
+  resolution-marker fork pins for transitive tool packages.
 
 ## [2.0.0-alpha.2]
 

@@ -26,32 +26,30 @@ def _normalize_name(name):
 def _underscore_name(name):
     return underscore_name(name)
 
-def _resolve_tool_package_key(packages, pkg_name):
-    """Find the best matching base package key in `packages` for a backend tool package name.
+def _backend_tool_deps_labels(tool_packages, packages, build_repo):
+    """Resolve backend tool_packages to `@<build_repo>//<pkg>:pkg` labels for packages present in `packages`.
 
     Ignores extra keys (`pkg[extra]@version`) and conflict variants (`__via_`).
-    When multiple versions are present in the workspace lock repo, selects the
-    highest PEP 440 version so that `_backend/<rule>.bzl` gets a deterministic
-    `//_lock:<pkg>@<version>` label (note: if a tool package is itself forked by
-    resolution markers in `<ws>__build`, this static default picks the highest
-    locked version rather than a fork `select()`).
+    Pointing at `@<build_repo>//<pkg>:pkg` ensures the macro default follows
+    resolution-marker forks and variants via the build thin repo's `select()`.
     """
-    norm_pkg = _normalize_name(pkg_name)
-    matching = []
+    known_base_packages = {}
     for k in packages.keys():
         if "__via_" in k:
             continue
         parts = parse_package_key(k)
         if parts.extra:
             continue
-        if _normalize_name(parts.name) == norm_pkg:
-            matching.append((pypackaging.version.parse(parts.version).key, k))
-    if not matching:
-        return None
-    return sorted(matching)[-1][1]
+        known_base_packages[_normalize_name(parts.name)] = True
+
+    labels = []
+    for pkg in tool_packages:
+        if _normalize_name(pkg) in known_base_packages:
+            labels.append("@{}//{}:pkg".format(build_repo, _underscore_name(pkg)))
+    return labels
 
 # Visible for testing
-resolve_tool_package_key_for_testing = _resolve_tool_package_key
+backend_tool_deps_labels_for_testing = _backend_tool_deps_labels
 
 def _merge_dependencies(first_data, entries):
     merged = dict(first_data)
@@ -405,16 +403,11 @@ def _package_repo_impl(rctx):
     for name, config_json in rctx.attr.backend_configs.items():
         backend_configs[name] = json.decode(config_json)
 
+    build_repo = rctx.attr.build_repo
+
     for macro_name, config in backend_configs.items():
         rule_bzl = config["rule_bzl"]
-
-        tool_deps_labels = []
-        for pkg in config["tool_packages"]:
-            matched_key = _resolve_tool_package_key(packages, pkg)
-            if matched_key:
-                # For cycle groups, the raw target is _raw_{pkg_key}, while //_lock:{pkg_key}
-                # is the cycle-resolved wrapper. Pointing to //_lock:{pkg_key} works in both cases.
-                tool_deps_labels.append("//_lock:{}".format(matched_key))
+        tool_deps_labels = _backend_tool_deps_labels(config["tool_packages"], packages, build_repo)
 
         lines = [
             '"""Backend macro with pre-configured tool defaults for this lock repo."""',
@@ -490,6 +483,10 @@ def _package_repo_impl(rctx):
 package_repo = repository_rule(
     implementation = _package_repo_impl,
     attrs = {
+        "build_repo": attr.string(
+            doc = "Name of the default build tools thin repo (e.g. 'uv__build').",
+            mandatory = True,
+        ),
         "repo_map": attr.string_dict(
             doc = "Maps file keys to their repository label strings (e.g. 'foo_wheel' -> '@pypi_foo//:wheel').",
         ),

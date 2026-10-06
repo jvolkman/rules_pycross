@@ -297,11 +297,15 @@ def _pycross_unsupported_wheel_impl(ctx):
         progress_message = "Rejecting unsupported wheel",
     )
     return [
-        DefaultInfo(files = depset([wheel])),
+        DefaultInfo(
+            files = depset([wheel]),
+            runfiles = ctx.runfiles(files = [wheel]),
+        ),
+        PyInfo(transitive_sources = depset()),
         PycrossUnsupportedWheelInfo(),
     ]
 
 pycross_unsupported_wheel = rule(
     implementation = _pycross_unsupported_wheel_impl,
-    provides = [PycrossUnsupportedWheelInfo],
+    provides = [PyInfo, PycrossUnsupportedWheelInfo],
 )

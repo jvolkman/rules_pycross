@@ -1,0 +1,57 @@
+load("@python_versions//3.11.6:defs.bzl", py_test_311 = "py_test")
+load("@python_versions//3.12.0:defs.bzl", py_test_312 = "py_test")
+load("@rules_pycross//pycross:defs.bzl", "pycross_wheel_library")
+load("@uv//_backend:setuptools_build.bzl", "setuptools_build")
+
+SITE_HOOK = (
+    "import importlib.metadata, pathlib; " +
+    "p = pathlib.Path('six.py'); " +
+    "vers = sorted(d.version for d in importlib.metadata.distributions() if d.metadata['Name'] == 'setuptools'); " +
+    "(p.exists() and 'BUILD_SETUPTOOLS_VERSIONS' not in p.read_text()) and " +
+    "p.write_text(p.read_text() + f'\\nBUILD_SETUPTOOLS_VERSIONS = {vers!r}\\n')"
+)
+
+# Manual setuptools_build target without explicit tool_deps to exercise the
+# generated _backend/setuptools_build.bzl macro default (@uv__build//setuptools:pkg).
+setuptools_build(
+    name = "manual_six_wheel",
+    sdist = "@uv//six:sdist",
+    site_hooks = [SITE_HOOK],
+)
+
+pycross_wheel_library(
+    name = "manual_six",
+    wheel = ":manual_six_wheel",
+)
+
+py_test_311(
+    name = "test_sdist_repo_py311",
+    srcs = ["test_forked_build_tools.py"],
+    args = ["68.0.0"],
+    main = "test_forked_build_tools.py",
+    deps = ["@uv//six:pkg"],
+)
+
+py_test_312(
+    name = "test_sdist_repo_py312",
+    srcs = ["test_forked_build_tools.py"],
+    args = ["75.6.0"],
+    main = "test_forked_build_tools.py",
+    deps = ["@uv//six:pkg"],
+)
+
+py_test_311(
+    name = "test_backend_macro_default_py311",
+    srcs = ["test_forked_build_tools.py"],
+    args = ["68.0.0"],
+    main = "test_forked_build_tools.py",
+    deps = [":manual_six"],
+)
+
+py_test_312(
+    name = "test_backend_macro_default_py312",
+    srcs = ["test_forked_build_tools.py"],
+    args = ["75.6.0"],
+    main = "test_forked_build_tools.py",
+    deps = [":manual_six"],
+)
