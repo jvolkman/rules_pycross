@@ -609,6 +609,104 @@ class InspectPackageTest(unittest.TestCase):
             ["google/auth.py", "google/cloud/storage"],
         )
 
+    # -- pre_build_patches tests --
+
+    def test_sdist_pre_build_patch_modifies_pyproject(self):
+        """pre_build_patches modifying pyproject.toml are reflected in inspect_sdist."""
+        sdist_path = self._create_tarball_with_dirs(
+            "pkg-1.0.tar.gz",
+            {
+                "pkg-1.0/pyproject.toml": (
+                    '[build-system]\nrequires = ["setuptools", "unwanted_dep"]\n'
+                    'build-backend = "setuptools.build_meta"\n'
+                ),
+                "pkg-1.0/mypkg/__init__.py": "",
+            },
+        )
+        patch_file = self.temp_path / "fix-pyproject.patch"
+        patch_file.write_text(
+            "--- a/pyproject.toml\n"
+            "+++ b/pyproject.toml\n"
+            "@@ -1,3 +1,3 @@\n"
+            " [build-system]\n"
+            '-requires = ["setuptools", "unwanted_dep"]\n'
+            '-build-backend = "setuptools.build_meta"\n'
+            '+requires = ["hatchling"]\n'
+            '+build-backend = "hatchling.build"\n'
+        )
+        result = inspect_sdist(sdist_path, pre_build_patches=[patch_file])
+        self.assertEqual(result["build_backend"], "hatchling.build")
+        self.assertEqual(result["build_requires"], ["hatchling"])
+        self.assertEqual(result["site_paths"], ["mypkg"])
+
+    def test_sdist_pre_build_patch_zip_and_source_dir(self):
+        """pre_build_patches apply relative to source_dir when source_dir is set."""
+        sdist_path = self.create_zip(
+            "monorepo-1.0.zip",
+            {
+                "monorepo-1.0/packages/mylib/pyproject.toml": (
+                    '[build-system]\nrequires = ["setuptools"]\nbuild-backend = "setuptools.build_meta"\n'
+                ),
+                "monorepo-1.0/packages/mylib/mylib/__init__.py": "",
+            },
+        )
+        patch_file = self.temp_path / "fix-subpkg.patch"
+        patch_file.write_text(
+            "--- a/pyproject.toml\n"
+            "+++ b/pyproject.toml\n"
+            "@@ -1,3 +1,3 @@\n"
+            " [build-system]\n"
+            '-requires = ["setuptools"]\n'
+            '-build-backend = "setuptools.build_meta"\n'
+            '+requires = ["flit_core"]\n'
+            '+build-backend = "flit_core.buildapi"\n'
+        )
+        result = inspect_sdist(
+            sdist_path,
+            source_dir="packages/mylib",
+            pre_build_patches=[patch_file],
+        )
+        self.assertEqual(result["build_backend"], "flit_core.buildapi")
+        self.assertEqual(result["build_requires"], ["flit_core"])
+        self.assertEqual(result["site_paths"], ["mylib"])
+
+    def test_sdist_pre_build_patch_adds_package(self):
+        """pre_build_patches adding a new package directory update site_paths."""
+        sdist_path = self._create_tarball_with_dirs(
+            "pkg-1.0.tar.gz",
+            {
+                "pkg-1.0/pyproject.toml": '[build-system]\nrequires = ["setuptools"]\nbuild-backend = "setuptools.build_meta"\n',
+                "pkg-1.0/mypkg/__init__.py": "",
+            },
+        )
+        patch_file = self.temp_path / "add-pkg.patch"
+        patch_file.write_text("--- /dev/null\n+++ b/extra_pkg/__init__.py\n@@ -0,0 +1 @@\n+# extra package\n")
+        result = inspect_sdist(sdist_path, pre_build_patches=[patch_file])
+        self.assertEqual(result["site_paths"], ["extra_pkg", "mypkg"])
+
+    def test_sdist_pre_build_patch_invalid_fails(self):
+        """Malformed or unapplicable pre_build_patches raise SystemExit."""
+        sdist_path = self._create_tarball_with_dirs(
+            "pkg-1.0.tar.gz",
+            {
+                "pkg-1.0/pyproject.toml": '[build-system]\nrequires = ["setuptools"]\n',
+                "pkg-1.0/mypkg/__init__.py": "",
+            },
+        )
+        bad_parse_patch = self.temp_path / "bad_parse.patch"
+        bad_parse_patch.write_text("not a valid patch file\n")
+        with self.assertRaises(SystemExit) as ctx:
+            inspect_sdist(sdist_path, pre_build_patches=[bad_parse_patch])
+        self.assertIn("failed to parse patch file", str(ctx.exception))
+
+        bad_apply_patch = self.temp_path / "bad_apply.patch"
+        bad_apply_patch.write_text(
+            "--- a/pyproject.toml\n+++ b/pyproject.toml\n@@ -1 +1 @@\n-nonexistent line\n+replacement line\n"
+        )
+        with self.assertRaises(SystemExit) as ctx:
+            inspect_sdist(sdist_path, pre_build_patches=[bad_apply_patch])
+        self.assertIn("failed to apply patch file", str(ctx.exception))
+
 
 if __name__ == "__main__":
     unittest.main()

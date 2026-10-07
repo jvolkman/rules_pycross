@@ -8,6 +8,7 @@ REPO_LEGACY_BUILD=$4
 REPO_EXPLICIT_BACKEND_BUILD=$5
 REPO_BASIC_INSPECTION=$6
 REPO_VERSION_MISMATCH_INSPECTION=$7
+REPO_PATCHED_PYPROJECT_BUILD=$8
 
 function check_content() {
     local file=$1
@@ -53,3 +54,9 @@ check_content "$REPO_EXPLICIT_BACKEND_BUILD" '"@dummy_lock_repo//hatchling:pkg"'
 
 echo "Checking version_mismatch repo..."
 check_content "$REPO_VERSION_MISMATCH_INSPECTION" "WARNING: The build tools repo pins 'setuptools==30.0.0', but 'basic.tar.gz' requires 'setuptools>=40.8.0' in pyproject.toml."
+
+echo "Checking patched_pyproject repo..."
+check_content "$REPO_PATCHED_PYPROJECT_BUILD" "pep517_build("
+check_content "$REPO_PATCHED_PYPROJECT_BUILD" '"@dummy_lock_repo//hatchling:pkg"'
+check_content "$REPO_PATCHED_PYPROJECT_BUILD" 'pre_build_patches = \["@@//:use_hatchling.patch"\]'
+check_not_content "$REPO_PATCHED_PYPROJECT_BUILD" '"@dummy_lock_repo//setuptools:pkg"'
