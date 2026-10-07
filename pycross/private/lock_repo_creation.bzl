@@ -13,7 +13,7 @@ load("@rules_pycross//pycross/private:sdist_repo.bzl", "pycross_sdist_repo")
 load("//pycross/private:package_repo.bzl", "package_repo")
 load("//pycross/private:pypi_file.bzl", "pypi_file")
 load("//pycross/private:thin_package_repo.bzl", "thin_package_repo")
-load("//pycross/private:util.bzl", "key_name", "parse_package_key", "sanitize_name")
+load("//pycross/private:util.bzl", "key_name", "parse_package_key", "sanitize_name", "sdist_builds_disallowed")
 load("//pycross/private:wheel_file.bzl", "pycross_wheel_file")
 load(":git_file.bzl", "pycross_git_file")
 
@@ -35,14 +35,7 @@ pycross_disallowed_sdist_repo = repository_rule(
     },
 )
 
-def _sdist_builds_disallowed(pkg):
-    """Whether build_mode = "never" forbids building this resolved package's sdist.
-
-    A user-supplied build_target is exempt: it replaces the sdist build entirely.
-    """
-    return pkg.get("build_mode") == "never" and not pkg.get("build_target")
-
-sdist_builds_disallowed_for_testing = _sdist_builds_disallowed
+sdist_builds_disallowed_for_testing = sdist_builds_disallowed
 
 def _normalize_override_name(pkg_name, backend_name, workspace_name):
     """Normalize an override tag name ("*", "name", or "name@version") into its storage key.
@@ -107,6 +100,7 @@ def create_repos(
         repo_constraint_values,
         repo_platforms,
         workspace_pypi_indexes = {},
+        repo_settings = {},
         resolved_locks = None):
     """Create all Bazel repos from resolved lock data.
 
@@ -115,6 +109,7 @@ def create_repos(
         all_locks: Dict of repo_name -> lock file Label (pointing to lock.json).
         workspace_memberships: Dict of repo_name -> workspace_name.
         repo_flags: Dict of repo_name -> JSON-encoded flags list.
+        repo_settings: Dict of repo_name -> {setting label: value} dict.
         repo_constraint_values: Dict of repo_name -> JSON-encoded constraint_values list.
         repo_platforms: Dict of repo_name -> platform string.
         workspace_pypi_indexes: Dict of workspace_name -> list of string index URLs.
@@ -322,7 +317,7 @@ def create_repos(
             if pkg_overrides:
                 sdist_repo_attrs["override_backend_configs"] = json.encode(pkg_overrides)
 
-            if _sdist_builds_disallowed(pkg):
+            if sdist_builds_disallowed(pkg):
                 pycross_disallowed_sdist_repo(
                     name = sdist_repo_name,
                     package_name = pkg_key,
@@ -426,6 +421,8 @@ def create_repos(
             if member in repo_flags:
                 flags = repo_flags[member]
                 thin_repo_attrs["flags"] = json.decode(flags) if type(flags) == "string" else flags
+            if member in repo_settings:
+                thin_repo_attrs["settings"] = repo_settings[member]
             if member in repo_constraint_values:
                 constraints = repo_constraint_values[member]
                 thin_repo_attrs["constraint_values"] = json.decode(constraints) if type(constraints) == "string" else constraints

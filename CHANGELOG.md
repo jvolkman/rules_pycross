@@ -31,6 +31,8 @@ All notable changes to this project will be documented in this file.
 - **`build_tools_repo` must name a repo from the same extension.**
 - **`always_build` and `disallow_builds` replaced by `package(build_mode = ...)`**
   (`auto`/`always`/`never`, inherits from `*`).
+- **`all_requirements` excludes testonly packages.** They are now in
+  `all_testonly_requirements`.
 
 ### Changed
 
@@ -69,6 +71,12 @@ All notable changes to this project will be documented in this file.
   graphs, and `vcs`/`archive`/`directory` entries.
 - **Lock translators**: git/URL subdirectories, percent-encoded wheel URLs,
   `.zip` sdists, marker-gated build requires, epoch versions.
+- **Generated repos**: forks, markers and extras for workspace members; extras
+  availability; `[_all_]` references; uv variant scoping; `transitive;testonly`
+  reachability; `build_mode = "never"` without wheels is unavailable instead of
+  a failing fetch; `modules_mapping` builds under the repo transition.
+- **`repo(flags=...)` and new `repo(settings=...)`** take command-line style
+  flags and label-keyed build settings; both work without `constraint_values`.
 
 ## [2.0.0-alpha.2]
 

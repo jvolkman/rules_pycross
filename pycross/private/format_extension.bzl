@@ -70,7 +70,20 @@ TRANSITION_ATTRS = dict(
         doc = "A list of constraint values to apply to the generated platform.",
     ),
     flags = attr.string_list(
-        doc = "A list of flags to apply to the generated platform (e.g., '--@flag=value').",
+        doc = (
+            "Flags applied to this repo's targets via a transition, written like the command line: " +
+            "`--<flag>[=<value>]` (a missing value means `True`), e.g. `--@repo//_variants:extra_x=True` " +
+            "or `--compilation_mode=opt`. Repeat an entry to pass multiple values to a list setting; " +
+            "each entry is one element (no comma splitting). `@repo` labels must be visible to " +
+            "rules_pycross (e.g. repos from this extension); use `settings` for other build settings."
+        ),
+    ),
+    settings = attr.label_keyed_string_dict(
+        doc = (
+            "Build settings applied to this repo's targets via a transition, as `{label: value}`. " +
+            "Labels resolve relative to the declaring module. List settings split the value on commas. " +
+            "Use `flags` for built-in options."
+        ),
     ),
     platform = attr.label(
         doc = "An existing platform target to use directly.",
@@ -181,6 +194,40 @@ def _tag_to_annotation_data(pkg, wildcard_pkg = None):
     ))
 
 tag_to_annotation_data_for_testing = _tag_to_annotation_data
+
+def _normalize_flag(flag, is_root):
+    """Validate a `--<flag>[=<value>]` repo flag and make its label resolve from the generated repo.
+
+    Bare names (`--compilation_mode=opt`) become `//command_line_option:<name>`.
+    In the root module, main-repo-relative labels (`//pkg:x`, `:x`) become
+    canonical `@@//` labels; flag labels are otherwise resolved from inside the
+    generated repo.
+    """
+    name, sep, value = flag[2:].partition("=")
+    if not flag.startswith("--") or not name:
+        fail("Invalid repo flag {}: expected '--<flag>[=<value>]'".format(repr(flag)))
+    if not name.startswith(("@", "/", ":")):
+        name = "//command_line_option:" + name
+    elif is_root and name.startswith(":"):
+        name = "@@//" + name
+    elif is_root and name.startswith("//") and not name.startswith("//command_line_option:"):
+        name = "@@" + name
+    if name == "//command_line_option:platforms":
+        fail("Invalid repo flag {}: use 'platform' or 'constraint_values' instead".format(repr(flag)))
+    return "--" + name + sep + value
+
+def _normalize_settings(settings, flags):
+    """Stringify `settings` labels, rejecting built-in options and settings also set in `flags`."""
+    flag_labels = {f[2:].partition("=")[0]: True for f in flags}
+    result = {}
+    for label, value in settings.items():
+        if label.package == "command_line_option":
+            fail("repo settings key {} is a built-in option; use flags = [\"--{}=...\"] instead".format(label, label.name))
+        key = str(label)
+        if key in flag_labels:
+            fail("Build setting {} is set in both flags and settings".format(key))
+        result[key] = value
+    return result
 
 def _resolve_lock_inline(module_ctx, lock_info, serialized_lock_model, workspace_packages, repo_create_model_fn):
     """Run translator + resolver inline within module_ctx.
@@ -293,12 +340,14 @@ def make_format_extension(
             # 2. Process repo tags (member overrides).
             for tag in module.tags.repo:
                 validate_transition_attrs(tag, "repo")
+                flags = [_normalize_flag(f, module.is_root) for f in getattr(tag, "flags", [])]
                 member_tag = struct(
                     workspace = tag.workspace,
                     projects = getattr(tag, "projects", []),
                     repo = getattr(tag, "name", ""),
                     dependency_groups = getattr(tag, "dependency_groups", ["default"]),
-                    flags = getattr(tag, "flags", []),
+                    flags = flags,
+                    settings = _normalize_settings(getattr(tag, "settings", {}), flags),
                     constraint_values = getattr(tag, "constraint_values", []),
                     platform = getattr(tag, "platform", None),
                 )
@@ -391,6 +440,7 @@ def make_format_extension(
         # Compute workspace metadata.
         workspace_memberships = {}
         repo_flags = {}
+        repo_settings = {}
         repo_constraint_values = {}
         repo_platforms = {}
 
@@ -399,6 +449,8 @@ def make_format_extension(
 
             if repo_info.flags:
                 repo_flags[repo_info.repo_name] = json.encode(repo_info.flags)
+            if repo_info.settings:
+                repo_settings[repo_info.repo_name] = repo_info.settings
             if repo_info.constraint_values:
                 repo_constraint_values[repo_info.repo_name] = json.encode(repo_info.constraint_values)
             if repo_info.platform:
@@ -409,6 +461,7 @@ def make_format_extension(
             all_locks = all_locks,
             workspace_memberships = workspace_memberships,
             repo_flags = repo_flags,
+            repo_settings = repo_settings,
             repo_constraint_values = repo_constraint_values,
             repo_platforms = repo_platforms,
             workspace_pypi_indexes = workspace_pypi_indexes,
@@ -456,3 +509,6 @@ def make_format_extension(
         implementation = _impl,
         tag_classes = tag_classes,
     )
+
+normalize_flag_for_testing = _normalize_flag
+normalize_settings_for_testing = _normalize_settings

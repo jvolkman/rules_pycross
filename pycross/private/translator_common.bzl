@@ -379,6 +379,12 @@ def resolve_lock_graph(packages, pinned_package_specs, requires_python, strict_d
                 fail("Found no packages to satisfy pin (name={}, spec={})".format(pin_name, pin_specifier))
 
     # Replace pins of local packages with pins of their dependencies
+    if root_dependency_markers == None:
+        root_dependency_markers = {}
+    direct_pin_names = {}
+    for name in pinned_package_specs.keys():
+        direct_pin_names[name] = True
+        direct_pin_names[name.split("[")[0]] = True
     for _ in range(len(pinned_keys) + 1):
         local_pins = []
         for pin_name, constraints in pinned_keys.items():
@@ -392,9 +398,35 @@ def resolve_lock_graph(packages, pinned_package_specs, requires_python, strict_d
             pkg_deps = resolved_deps.get(key, [])
             for dep in pkg_deps:
                 dep_base_name = dep["name"].split("[")[0]
-                if dep_base_name not in pinned_keys:
-                    pinned_keys[dep_base_name] = {}
-                pinned_keys[dep_base_name][constraint] = _package_key_str(dep_base_name, dep["version"])
+                dep_pin_name = dep["name"]
+                if _package_key_str(dep_pin_name, dep["version"]) not in distinct_packages:
+                    dep_pin_name = dep_base_name
+
+                # Keep resolution-marker forks of the dependency distinct.
+                dep_constraint = constraint
+                cname = resolution_marker_constraint_name(dep_base_name, dep["version"])
+                if cname in resolution_marker_exprs and constraint != cname:
+                    if not constraint:
+                        dep_constraint = cname
+                    elif type(resolution_marker_exprs.get(constraint)) != "string":
+                        dep_constraint = "{}_{}".format(constraint, cname)
+                        resolution_marker_exprs[dep_constraint] = {
+                            "variant": constraint,
+                            "marker": cname,
+                        }
+
+                # The dependency is requested under the local package's edge
+                # marker. A directly pinned name absent from
+                # root_dependency_markers is already unconditional.
+                marker_names = [dep_pin_name] if dep_pin_name == dep_base_name else [dep_pin_name, dep_base_name]
+                for marker_name in marker_names:
+                    if marker_name in direct_pin_names and marker_name not in root_dependency_markers:
+                        continue
+                    record_root_marker(root_dependency_markers, marker_name, dep["marker"])
+
+                if dep_pin_name not in pinned_keys:
+                    pinned_keys[dep_pin_name] = {}
+                pinned_keys[dep_pin_name][dep_constraint] = _package_key_str(dep_pin_name, dep["version"])
             pinned_keys[pin_name].pop(constraint)
 
         # Cleanup empty dicts
@@ -459,6 +491,11 @@ def resolve_lock_graph(packages, pinned_package_specs, requires_python, strict_d
     if resolution_marker_exprs:
         result["resolution_marker_exprs"] = resolution_marker_exprs
 
+    root_dependency_markers = {
+        name: markers
+        for name, markers in root_dependency_markers.items()
+        if markers != None
+    }
     if root_dependency_markers:
         result["root_dependency_markers"] = root_dependency_markers
 

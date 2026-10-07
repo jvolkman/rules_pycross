@@ -93,3 +93,39 @@ py_test(
     main = "tests/test_conflict_version.py",
     deps = pinned_all_requirements,
 )
+
+# Test that @project_flags (flags only, no constraint_values or platform)
+# keeps the incoming --platforms and applies the pinned variant flag.
+py_test(
+    name = "test_transition_flags_only",
+    srcs = ["tests/test_conflict_version.py"],
+    args = [
+        "typing-extensions",
+        "4.11.0",
+    ],
+    main = "tests/test_conflict_version.py",
+    deps = ["@project_flags//typing_extensions"],
+)
+
+# Test that @project_settings pins the variant via `settings` (a label-keyed
+# dict resolved relative to this module) instead of `flags`.
+py_test(
+    name = "test_transition_settings",
+    srcs = ["tests/test_conflict_version.py"],
+    args = [
+        "typing-extensions",
+        "4.11.0",
+    ],
+    main = "tests/test_conflict_version.py",
+    deps = ["@project_settings//typing_extensions"],
+)
+
+# The generated modules_mapping targets must be analyzed under the repo's
+# transition so their variant selects resolve without CLI flags.
+filegroup(
+    name = "transition_modules_mappings",
+    srcs = [
+        "@project_flags//:modules_mapping",
+        "@project_pinned//:modules_mapping",
+    ],
+)

@@ -116,6 +116,70 @@ def parse_package_key(key):
         version = version,
     )
 
+def sdist_builds_disallowed(pkg):
+    """Whether build_mode = "never" forbids building this resolved package's sdist.
+
+    A user-supplied build_target is exempt: it replaces the sdist build entirely.
+
+    Args:
+        pkg: A resolved package dict.
+
+    Returns:
+        True if the package's sdist must not be built.
+    """
+    return pkg.get("build_mode") == "never" and not pkg.get("build_target")
+
+def has_build_fallback(pkg):
+    """Whether a resolved package can be built from source when no wheel matches.
+
+    Args:
+        pkg: A resolved package dict.
+
+    Returns:
+        True if the package has a build_target, or an sdist that may be built.
+    """
+    if pkg.get("build_target"):
+        return True
+    return bool(pkg.get("sdist_file")) and not sdist_builds_disallowed(pkg)
+
+def coerce_transition_values(current, values):
+    """Coerce raw repo transition values to the type of a setting's current value.
+
+    Args:
+        current: The setting's current value (determines the type).
+        values: Raw string values, in order.
+
+    Returns:
+        All values for list settings; otherwise the last value as a bool, int or string.
+    """
+    t = type(current)
+    if t == "list":
+        return values
+    value = values[-1]
+    if t == "bool":
+        if value in ("True", "true", "1"):
+            return True
+        if value in ("False", "false", "0"):
+            return False
+        fail("Invalid boolean flag value: %r" % value)
+    if t == "int":
+        return int(value)
+    return value
+
+def split_setting_value(current, value):
+    """Split a repo `settings` value like the command line: on commas for list settings.
+
+    Args:
+        current: The setting's current value (determines the type).
+        value: The raw string value.
+
+    Returns:
+        A list of raw values for coerce_transition_values.
+    """
+    if type(current) == "list":
+        return value.split(",") if value else []
+    return [value]
+
 # Attrs that consuming rules must include for merge_py_providers to work.
 PY_COMMON_ATTRS = py_common.API_ATTRS
 

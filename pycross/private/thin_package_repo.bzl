@@ -6,13 +6,13 @@ pycross_wheel_library targets live in the shared workspace repo.
 
 The file structure is:
 - BUILD.bazel              - Root aliases (//:package).
-- requirements.bzl         - Provides requirement() and all_requirements.
+- requirements.bzl         - Provides requirement(), all_requirements and all_testonly_requirements.
 - modules_mapping.json     - Import-to-package mapping for Gazelle.
 - <package>/BUILD.bazel    - Pin proxies pointing to @workspace//_lock targets.
 - _variants/BUILD.bazel    - Aliases for bool_flag and config_setting targets for variant selection.
 """
 
-load(":util.bzl", "parse_package_key", "underscore_name")
+load(":util.bzl", "has_build_fallback", "parse_package_key", "underscore_name")
 
 _requirement_func = """\
 load("@pypackaging.bzl", "pypackaging")
@@ -36,16 +36,19 @@ def _is_platform_specific(pkg):
     if pkg.get("availability_markers"):
         return True
     has_wheels = bool(pkg.get("wheel_candidates"))
-    has_sdist = bool(pkg.get("sdist_file")) or bool(pkg.get("build_target"))
-    return has_wheels and not has_sdist
+    return has_wheels and not has_build_fallback(pkg)
 
-def _requirements_bzl(rctx, pins, packages):
-    lines = [
-        _requirement_func.format(repo_name = rctx.name),
-        "",
-        "# All pinned requirements",
-        "all_requirements = [",
-    ]
+def _is_key_platform_specific(packages, pkg_key):
+    """Like _is_platform_specific, but an extras key also inherits its base package's availability."""
+    if _is_platform_specific(packages.get(pkg_key, {})):
+        return True
+    parts = parse_package_key(pkg_key)
+    if parts.extra:
+        return _is_platform_specific(packages.get("{}@{}".format(parts.name, parts.version), {}))
+    return False
+
+def _requirements_bzl(rctx, pins, packages, testonly_pins = {}):
+    entries = {False: [], True: []}  # testonly -> requirement labels
     for pin in sorted(pins.keys()):
         pin_target_dict = pins[pin]
         pin_parts = parse_package_key(pin)
@@ -53,36 +56,68 @@ def _requirements_bzl(rctx, pins, packages):
         # Check if ANY variant of this pin is platform-specific.
         is_conditional = False
         for pkg_key in pin_target_dict.values():
-            pkg = packages.get(pkg_key, {})
-            if _is_platform_specific(pkg):
+            if _is_key_platform_specific(packages, pkg_key):
                 is_conditional = True
                 break
 
         us_pin = underscore_name(pin_parts.name)
         if pin_parts.extra:
             if is_conditional:
-                lines.append('    "@@{repo_name}//{pin}:[{extra}]_maybe",'.format(repo_name = rctx.name, pin = us_pin, extra = pin_parts.extra))
+                label = "@@{repo_name}//{pin}:[{extra}]_maybe".format(repo_name = rctx.name, pin = us_pin, extra = pin_parts.extra)
             else:
-                lines.append('    "@@{repo_name}//{pin}:[{extra}]",'.format(repo_name = rctx.name, pin = us_pin, extra = pin_parts.extra))
+                label = "@@{repo_name}//{pin}:[{extra}]".format(repo_name = rctx.name, pin = us_pin, extra = pin_parts.extra)
         elif is_conditional:
-            lines.append('    "@@{repo_name}//{pin}:{maybe}",'.format(repo_name = rctx.name, pin = us_pin, maybe = _safe_name(us_pin, "maybe")))
+            label = "@@{repo_name}//{pin}:{maybe}".format(repo_name = rctx.name, pin = us_pin, maybe = _safe_name(us_pin, "maybe"))
         else:
-            lines.append('    "@@{repo_name}//{pin}",'.format(repo_name = rctx.name, pin = us_pin))
+            label = "@@{repo_name}//{pin}".format(repo_name = rctx.name, pin = us_pin)
+        entries[pin in testonly_pins or pin_parts.name in testonly_pins].append(label)
+
+    lines = [
+        _requirement_func.format(repo_name = rctx.name),
+        "",
+        "# All pinned requirements, excluding testonly ones",
+        "all_requirements = [",
+    ]
+    lines.extend(['    "{}",'.format(label) for label in entries[False]])
+    lines.extend([
+        "]",
+        "",
+        "# All testonly pinned requirements",
+        "all_testonly_requirements = [",
+    ])
+    lines.extend(['    "{}",'.format(label) for label in entries[True]])
     lines.append("]")
     return "\n".join(lines) + "\n"
+
+def _flag_values(flags):
+    """Parse `--label[=value]` flags (validated by the extension) into label -> values.
+
+    Values keep declaration order; a flag without a value means "True".
+    """
+    values = {}
+    for f in flags:
+        label, sep, value = f[2:].partition("=")
+        values.setdefault(label, []).append(value if sep else "True")
+    return values
 
 def _safe_name(pin_name, name):
     return name + "_" if pin_name == name else name
 
 _NO_MATCH_ERROR_TARGET = "@rules_pycross//pycross/private:no_match_error"
 
-def _target_select(target_dict, prefix, suffix, workspace_repo, is_aggregated = False, default_variants = {}, all_target_dict = None, fallback_target = _NO_MATCH_ERROR_TARGET):
+def _aggregated_key(pkg_key, aggregated_keys):
+    """Return the [_all_] aggregate key for pkg_key, unless aggregated_keys says it has no extras."""
+    parts = parse_package_key(pkg_key)
+    if aggregated_keys != None and "{}@{}".format(parts.name, parts.version) not in aggregated_keys:
+        return pkg_key
+    return "{}[_all_]@{}".format(parts.name, parts.version)
+
+def _target_select(target_dict, prefix, suffix, workspace_repo, is_aggregated = False, default_variants = {}, all_target_dict = None, fallback_target = _NO_MATCH_ERROR_TARGET, aggregated_keys = None):
     effective_all = all_target_dict if all_target_dict != None else target_dict
     if len(effective_all) == 1 and "" in effective_all and "" in target_dict:
         t = target_dict[""]
         if is_aggregated:
-            parts = parse_package_key(t)
-            t = "{}[_all_]@{}".format(parts.name, parts.version)
+            t = _aggregated_key(t, aggregated_keys)
         return '"{}{}{}"'.format(prefix, t, suffix)
 
     lines = ["select({"]
@@ -91,8 +126,8 @@ def _target_select(target_dict, prefix, suffix, workspace_repo, is_aggregated = 
         if constraint in target_dict:
             t_base = target_dict[constraint]
             if is_aggregated:
-                parts = parse_package_key(t_base)
-                t_base = "{}[_all_]@{}".format(parts.name, parts.version)
+                # Only versions that actually have extras get an [_all_] target.
+                t_base = _aggregated_key(t_base, aggregated_keys)
             target_label = "{}{}{}".format(prefix, t_base, suffix)
         elif fallback_target:
             target_label = fallback_target
@@ -118,7 +153,7 @@ def _target_select(target_dict, prefix, suffix, workspace_repo, is_aggregated = 
     lines.append("    })")
     return "\n".join(lines)
 
-def _proxy_actual(actual_lines, target_dict, prefix, suffix, workspace_repo, alias_name, actual_pkg_ref, has_transition = False, is_aggregated = False, default_variants = {}, all_target_dict = None, fallback_target = _NO_MATCH_ERROR_TARGET):
+def _proxy_actual(actual_lines, target_dict, prefix, suffix, workspace_repo, alias_name, actual_pkg_ref, has_transition = False, is_aggregated = False, default_variants = {}, all_target_dict = None, fallback_target = _NO_MATCH_ERROR_TARGET, aggregated_keys = None):
     """Emit an intermediate select alias if needed, return the actual expression for the proxy.
 
     When transitions are active (has_transition is True) and target_dict has variants
@@ -136,6 +171,7 @@ def _proxy_actual(actual_lines, target_dict, prefix, suffix, workspace_repo, ali
         default_variants = default_variants,
         all_target_dict = all_target_dict,
         fallback_target = fallback_target,
+        aggregated_keys = aggregated_keys,
     )
     if has_transition and not (len(effective_all) == 1 and "" in effective_all and "" in target_dict):
         actual_lines.extend([
@@ -217,7 +253,7 @@ def _emit_maybe_alias(lines, maybe_name, pkg_target, target_dict, available_keys
         "",
     ])
 
-def _pin_build(target_name, pin_target_dict, package, workspace_repo, workspace_lock_target_dict = None, has_aggregated_variant = False, extras_dict = None, default_variants = {}, target_platform = None, transition_bzl = None, maybe_available_keys = None, extras_maybe_keys = None, testonly = False, sdist_target_dict = None):
+def _pin_build(target_name, pin_target_dict, package, workspace_repo, workspace_lock_target_dict = None, has_aggregated_variant = False, extras_dict = None, default_variants = {}, target_platform = None, transition_bzl = None, maybe_available_keys = None, extras_maybe_keys = None, testonly = False, sdist_target_dict = None, aggregated_keys = None):
     """Generates the BUILD file for a pin directory, pointing to the workspace."""
     lock_target_dict = workspace_lock_target_dict if workspace_lock_target_dict else pin_target_dict
     lock_ref = "@{}//_lock:".format(workspace_repo)
@@ -262,7 +298,7 @@ def _pin_build(target_name, pin_target_dict, package, workspace_repo, workspace_
             ")",
             "",
         ])
-        actual_pkg = _proxy_actual(actual_lines, lock_target_dict, lock_ref, "", workspace_repo, "pkg", actual_pkg_ref, has_transition = has_transition, is_aggregated = has_aggregated_variant, default_variants = default_variants)
+        actual_pkg = _proxy_actual(actual_lines, lock_target_dict, lock_ref, "", workspace_repo, "pkg", actual_pkg_ref, has_transition = has_transition, is_aggregated = has_aggregated_variant, default_variants = default_variants, aggregated_keys = aggregated_keys)
         lines.extend([
             lib_rule + "(",
             '    name = "{}",'.format(_safe_name(target_name, "pkg")),
@@ -498,7 +534,7 @@ def _thin_package_repo_impl(rctx):
 
     rctx.file("REPO.bazel", "")
     rctx.file("defs.bzl", "")
-    rctx.file("requirements.bzl", _requirements_bzl(rctx, pins, packages))
+    rctx.file("requirements.bzl", _requirements_bzl(rctx, pins, packages, testonly_pins_set))
 
     # Root BUILD.bazel with //:package aliases
 
@@ -527,57 +563,48 @@ def _thin_package_repo_impl(rctx):
 
     # Generate internal platform + transition if needed
     target_platform = rctx.attr.platform
-    has_flags = bool(rctx.attr.flags)
+    has_flags = bool(rctx.attr.flags) or bool(rctx.attr.settings)
     has_constraints = bool(rctx.attr.constraint_values)
 
-    if not target_platform and (has_flags or has_constraints):
+    if not target_platform and has_constraints:
         target_platform = "//:_internal_platform"
 
         # Generate the platform target (for constraint_values / toolchain resolution).
         root_build_lines.extend([
             "platform(",
             '    name = "_internal_platform",',
+            "    constraint_values = [",
         ])
-        if has_constraints:
-            root_build_lines.append("    constraint_values = [")
-            for cv in rctx.attr.constraint_values:
-                root_build_lines.append('        "{}",'.format(cv))
-            root_build_lines.append("    ],")
+        for cv in rctx.attr.constraint_values:
+            root_build_lines.append('        "{}",'.format(cv))
         root_build_lines.extend([
+            "    ],",
             ")",
             "",
         ])
 
-    if has_flags and target_platform:
+    if has_flags:
         # Bazel's platform(flags=[...]) only applies during top-level platform
         # mapping, NOT when --platforms is set via a Starlark transition.
         # So we generate a _transition.bzl with custom proxy rules whose
-        # transition sets both --platforms and the individual flag values.
+        # transition sets the individual flag values (and --platforms, if a
+        # platform or constraint_values were given; otherwise the incoming
+        # --platforms is kept).
 
-        # Parse flags: extract label and value from "--label=value" strings.
-        flag_settings = {}  # label -> value
-        for f in rctx.attr.flags:
-            stripped = f.lstrip("-")
-            if "=" in stripped:
-                label_part, value = stripped.split("=", 1)
-            else:
-                label_part, value = stripped, "True"
-            flag_settings[label_part] = value
+        flag_settings = _flag_values(rctx.attr.flags)
 
-        # Build the transition outputs list and return dict
+        # Build the transition settings list and the label -> raw values dicts.
+        # Values are coerced at analysis time based on the setting's type.
+        # The extension guarantees flags and settings don't overlap.
         outputs_lines = []
         return_lines = []
-        for label, value in sorted(flag_settings.items()):
-            outputs_lines.append('    "{}",'.format(label))
-
-            # bool_flag expects actual booleans, not strings.
-            if value in ("True", "true", "1"):
-                py_value = "True"
-            elif value in ("False", "false", "0"):
-                py_value = "False"
-            else:
-                py_value = repr(value)
-            return_lines.append('        "{}": {},'.format(label, py_value))
+        for label, values in sorted(flag_settings.items()):
+            outputs_lines.append('        "{}",'.format(label))
+            return_lines.append('    "{}": {},'.format(label, repr(values)))
+        settings_lines = []
+        for label, value in sorted(rctx.attr.settings.items()):
+            outputs_lines.append('        "{}",'.format(label))
+            settings_lines.append('    "{}": {},'.format(label, repr(value)))
 
         transition_bzl = """\
 \"\"\"Generated transition rules for {repo} with pinned flag values.\"\"\"
@@ -587,17 +614,35 @@ load("@rules_pycross//pycross/private:proxy.bzl",
     _file_proxy_impl = "pycross_file_proxy_impl",
     _library_proxy_impl = "pycross_library_proxy_impl",
 )
-load("@rules_pycross//pycross/private:util.bzl", "PY_COMMON_ATTRS")
+load("@rules_pycross//pycross/private:util.bzl", "PY_COMMON_ATTRS", "coerce_transition_values", "split_setting_value")
+
+_FLAG_VALUES = {{
+{return_dict}
+}}
+
+_SETTING_VALUES = {{
+{settings_dict}
+}}
 
 def _transition_impl(settings, attr):
-    return {{
-        "//command_line_option:platforms": [str(attr.platform)],
-{return_dict}
+    result = {{
+        label: coerce_transition_values(settings[label], values)
+        for label, values in _FLAG_VALUES.items()
     }}
+    for label, value in _SETTING_VALUES.items():
+        result[label] = coerce_transition_values(settings[label], split_setting_value(settings[label], value))
+    if attr.platform:
+        result["//command_line_option:platforms"] = [str(attr.platform)]
+    else:
+        result["//command_line_option:platforms"] = settings["//command_line_option:platforms"]
+    return result
 
 _repo_transition = transition(
     implementation = _transition_impl,
-    inputs = ["//command_line_option:platforms"],
+    inputs = [
+        "//command_line_option:platforms",
+{outputs}
+    ],
     outputs = [
         "//command_line_option:platforms",
 {outputs}
@@ -616,7 +661,7 @@ pycross_transitioning_library_proxy = rule(
             default = [],
             providers = [PyInfo],
         ),
-        "platform": attr.label(mandatory = True),
+        "platform": attr.label(),
         "_allowlist_function_transition": attr.label(
             default = "@bazel_tools//tools/allowlists/function_transition_allowlist",
         ),
@@ -631,7 +676,7 @@ pycross_transitioning_file_proxy = rule(
             mandatory = True,
             cfg = _repo_transition,
         ),
-        "platform": attr.label(mandatory = True),
+        "platform": attr.label(),
         "_allowlist_function_transition": attr.label(
             default = "@bazel_tools//tools/allowlists/function_transition_allowlist",
         ),
@@ -641,6 +686,7 @@ pycross_transitioning_file_proxy = rule(
 """.format(
             repo = rctx.attr.member_name,
             return_dict = "\n".join(return_lines),
+            settings_dict = "\n".join(settings_lines),
             outputs = "\n".join(outputs_lines),
         )
         rctx.file("_transition.bzl", transition_bzl)
@@ -648,11 +694,31 @@ pycross_transitioning_file_proxy = rule(
     # Collect platform-specific packages for _maybe_ aliases.
     maybe_mapping_targets = {}  # maybe_name -> (pkg_key, lock_label)
 
+    # When the repo has a transition, the mapping (and the selects behind its
+    # deps) must be analyzed under it, so wrap it in a transitioning proxy.
+    if has_flags or target_platform:
+        mapping_name = "_modules_mapping"
+        if has_flags:
+            root_build_lines.insert(0, 'load("//:_transition.bzl", "pycross_transitioning_file_proxy")')
+        else:
+            root_build_lines.insert(0, 'load("@rules_pycross//pycross/private:proxy.bzl", "pycross_transitioning_file_proxy")')
+        root_build_lines.append("pycross_transitioning_file_proxy(")
+        root_build_lines.append('    name = "modules_mapping",')
+        root_build_lines.append('    actual = ":_modules_mapping",')
+        if target_platform:
+            root_build_lines.append('    platform = "{}",'.format(target_platform))
+        root_build_lines.extend([
+            ")",
+            "",
+        ])
+    else:
+        mapping_name = "modules_mapping"
+
     root_build_lines.extend([
         'exports_files(["defs.bzl", "requirements.bzl", "_packages.bzl"])',
         "",
         "pycross_modules_mapping(",
-        '    name = "modules_mapping",',
+        '    name = "{}",'.format(mapping_name),
         "    deps = [",
     ])
     for pin_name in sorted(pins.keys()):
@@ -666,7 +732,7 @@ pycross_transitioning_file_proxy = rule(
             else:
                 lock_label = "@%s//_lock:%s" % (workspace_repo, pin_target)
 
-            if _is_platform_specific(package):
+            if _is_key_platform_specific(packages, pin_target):
                 maybe_name = pin_target.replace("@", "_").replace("[", "_").replace("]", "_")
                 maybe_mapping_targets[maybe_name] = (pin_target, lock_label)
                 root_build_lines.append('        "//__maybe:%s",' % maybe_name)
@@ -812,8 +878,7 @@ pycross_transitioning_file_proxy = rule(
         for extra_name, orig_extra_target_dict in group["extras"].items():
             extra_avail = []
             for constraint, pkg_key in orig_extra_target_dict.items():
-                pkg = packages.get(pkg_key, {})
-                if _is_platform_specific(pkg):
+                if _is_key_platform_specific(packages, pkg_key):
                     extra_avail.append(extras_dict[extra_name][constraint])
             if extra_avail:
                 extras_maybe_keys[extra_name] = extra_avail
@@ -833,6 +898,7 @@ pycross_transitioning_file_proxy = rule(
             extras_maybe_keys = extras_maybe_keys,
             testonly = (base_pin_name in testonly_pins_set),
             sdist_target_dict = sdist_target_dict,
+            aggregated_keys = base_packages_with_extras,
         )
         rctx.file(
             "{}/BUILD.bazel".format(us_name),
@@ -1050,8 +1116,12 @@ thin_package_repo = repository_rule(
             doc = "Map of rule names to JSON-encoded config dicts.",
         ),
         "flags": attr.string_list(
-            doc = "List of flags to apply to the generated platform.",
+            doc = "Normalized `--<label>[=<value>]` flags applied by the repo transition.",
             default = [],
+        ),
+        "settings": attr.string_dict(
+            doc = "Canonical build setting label -> value, applied by the repo transition.",
+            default = {},
         ),
         "constraint_values": attr.string_list(
             doc = "List of constraint values to apply to the generated platform.",
@@ -1068,6 +1138,7 @@ thin_package_repo = repository_rule(
 
 # Visible for testing
 pin_build_for_testing = _pin_build
+flag_values_for_testing = _flag_values
 is_platform_specific_for_testing = _is_platform_specific
 requirements_bzl_for_testing = _requirements_bzl
 packages_bzl_for_testing = _packages_bzl

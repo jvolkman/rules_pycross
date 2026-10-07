@@ -14,7 +14,7 @@ Naming conventions for generated targets:
     base package and all of its parsed extras into a single target.
 """
 
-load(":util.bzl", "parse_package_key", "sanitize_name")
+load(":util.bzl", "has_build_fallback", "parse_package_key", "sanitize_name")
 
 def _ind(text, tabs = 1):
     if not text:
@@ -416,18 +416,39 @@ def _render_marker_package_deps(lines, pkg_key, pkg_key_san, pkg, packages):
 
     lines.append("")
 
-def _render_marker_availability(lines, pkg_key, pkg, wheel_gated = False):
+def _has_available_group(pkg):
+    """Whether _available_<pkg> is rendered for a (non-extras) package."""
+    if pkg.get("availability_markers"):
+        return True
+    return bool(pkg.get("wheel_candidates")) and not has_build_fallback(pkg)
+
+def _render_marker_availability(lines, pkg_key, pkg, wheel_gated = False, base_available = None):
     """Render an _available_<pkg> config_setting_group from availability markers.
 
-    No-op unless the package carries availability_markers. With wheel_gated,
-    the marker group is ANDed with the chooser's _wheel_available_<pkg> group;
-    otherwise the markers alone gate the package.
+    No-op unless the package carries availability_markers or base_available is
+    given. With wheel_gated, the marker group is ANDed with the chooser's
+    _wheel_available_<pkg> group; with base_available (extras packages), it is
+    ANDed with the base package's _available_ group; otherwise the markers alone
+    gate the package.
     """
     markers = pkg.get("availability_markers", [])
     if not markers:
+        if base_available:
+            lines.extend([
+                _ind("native.alias("),
+                _ind('name = "_available_{}",'.format(pkg_key), 2),
+                _ind('actual = ":{}",'.format(base_available), 2),
+                _ind(")"),
+                "",
+            ])
         return
-    marker_group = "_available_{}".format(pkg_key)
+    gate = None
     if wheel_gated:
+        gate = "_wheel_available_{}".format(pkg_key)
+    elif base_available:
+        gate = base_available
+    marker_group = "_available_{}".format(pkg_key)
+    if gate:
         marker_group = "_marker_available_{}".format(pkg_key)
     lines.extend([
         _ind("selects.config_setting_group("),
@@ -442,12 +463,12 @@ def _render_marker_availability(lines, pkg_key, pkg, wheel_gated = False):
         _ind(")"),
         "",
     ])
-    if wheel_gated:
+    if gate:
         lines.extend([
             _ind("selects.config_setting_group("),
             _ind('name = "_available_{}",'.format(pkg_key), 2),
             _ind("match_all = [", 2),
-            _ind('":_wheel_available_{}",'.format(pkg_key), 3),
+            _ind('":{}",'.format(gate), 3),
             _ind('":{}",'.format(marker_group), 3),
             _ind("],", 2),
             _ind(")"),
@@ -480,10 +501,14 @@ def _render_marker_package(lines, pkg_key, pkg, packages, repo_map, sdist_map, r
         _render_marker_package_deps(lines, pkg_key, pkg_key_san, pkg, packages)
 
     if not has_wheel_candidates and extra:
-        _render_marker_availability(lines, pkg_key, pkg)
-
-        # Extras packages wrap the base package plus their own deps.
+        # Extras packages wrap the base package plus their own deps, so they
+        # are only available where the base package is.
         base_pkg_key = "{}@{}".format(package_name, package_version)
+        base_available = None
+        if _has_available_group(packages.get(base_pkg_key, {})):
+            base_available = "_available_{}".format(base_pkg_key)
+        _render_marker_availability(lines, pkg_key, pkg, base_available = base_available)
+
         lines.extend([
             _ind("pycross_library_proxy("),
             _ind('name = "{}",'.format(pkg_key), 2),
@@ -508,7 +533,7 @@ def _render_marker_package(lines, pkg_key, pkg, packages, repo_map, sdist_map, r
     sdist_target = None
     if pkg.get("build_target"):
         sdist_target = pkg["build_target"]
-    elif sdist_file:
+    elif sdist_file and has_build_fallback(pkg):
         sdist_file_key = sdist_file.get("key")
         if sdist_file_key:
             sdist_repo_name = "{}_sdist_{}".format(rctx_name, sanitize_name(pkg_key))
@@ -642,7 +667,7 @@ def render_lock_bzl(lock, repo_map, sdist_map = None, rctx_name = ""):
     # marker-restricted availability, or compound resolution-marker constraints.
     needs_selects = False
     for _pk, pkg_data in packages.items():
-        if pkg_data.get("wheel_candidates") and not pkg_data.get("sdist_file") and not pkg_data.get("build_target"):
+        if pkg_data.get("wheel_candidates") and not has_build_fallback(pkg_data):
             needs_selects = True
             break
         if pkg_data.get("availability_markers"):

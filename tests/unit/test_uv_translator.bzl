@@ -739,6 +739,61 @@ def _test_uv_root_dependency_markers_impl(env, target):
     env.expect.that_collection(markers.keys()).contains_none_of(["foo"])
     env.expect.that_str(markers["foo[linux-extra]"][0]).equals("sys_platform == \"linux\"")
 
+# --- test_local_member_dep_keeps_forks_extras_markers ---
+
+# buildifier: disable=unused-variable
+def _test_uv_local_member_deps_keep_forks_impl(env, target):
+    """Deps reached through an editable member keep forks, extras and markers."""
+    project = _project(name = "app", deps = ["lib"])
+    lock = _lock([
+        _pkg("app", "0.1.0", source = {"editable": "."}, deps = [_dep("lib")]),
+        _pkg("lib", "0.1.0", source = {"editable": "lib"}, deps = [
+            _dep("numpy", "1.26.4", marker = "python_full_version < '3.10'"),
+            _dep("numpy", "2.2.0", marker = "python_full_version >= '3.10'"),
+            _dep("uvloop", marker = "sys_platform != 'win32'"),
+            _dep("foo", extra = ["bar"]),
+        ]),
+        _pkg("numpy", "1.26.4", markers = ["python_full_version < '3.10'"], wheels = [_whl("numpy-1.26.4-cp39-cp39-manylinux_2_17_x86_64.whl", "aa")]),
+        _pkg("numpy", "2.2.0", markers = ["python_full_version >= '3.10'"], wheels = [_whl("numpy-2.2.0-cp312-cp312-manylinux_2_17_x86_64.whl", "bb")]),
+        _pkg("uvloop", "0.21.0", wheels = [_whl("uvloop-0.21.0-cp312-cp312-manylinux_2_17_x86_64.whl", "cc")]),
+        _pkg("foo", "1.0", wheels = [_whl("foo-1.0-py3-none-any.whl", "dd")], opt_deps = {"bar": []}),
+    ], requires_python = ">=3.9")
+    result = translate_uv(project, lock, _lock_model(projects = ["app"]))
+
+    env.expect.that_dict(result["pins"]["numpy"]).contains_exactly({
+        "res_numpy_1_26_4": "numpy@1.26.4",
+        "res_numpy_2_2_0": "numpy@2.2.0",
+    })
+    env.expect.that_str(result["pins"]["foo[bar]"]).equals("foo[bar]@1.0")
+    env.expect.that_dict(result["root_dependency_markers"]).contains_at_least({
+        "uvloop": ["sys_platform != 'win32'"],
+    })
+
+def _test_uv_local_member_deps_keep_forks(name):
+    util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
+    analysis_test(name = name, target = name + "_subject", impl = _test_uv_local_member_deps_keep_forks_impl)
+
+# --- test_variants_scoped_to_declaring_project ---
+
+# buildifier: disable=unused-variable
+def _test_uv_variants_scoped_to_project_impl(env, target):
+    """A conflict on trainer's extras doesn't gate server's same-named extra."""
+    project = _project(name = "server")
+    lock = _lock(
+        [
+            _pkg("server", "0.1.0", source = {"editable": "server"}, opt_deps = {"cpu": [_dep("six")]}),
+            _pkg("trainer", "0.1.0", source = {"editable": "trainer"}, opt_deps = {"cpu": [_dep("six")], "gpu": [_dep("six")]}),
+            _pkg("six", "1.17.0", wheels = [_whl("six-1.17.0-py2.py3-none-any.whl", "dd")]),
+        ],
+        conflicts = [[{"package": "trainer", "extra": "cpu"}, {"package": "trainer", "extra": "gpu"}]],
+    )
+    result = translate_uv(project, lock, _lock_model(projects = ["server"], dependency_groups = ["default", "optional:cpu"]))
+    env.expect.that_str(result["pins"]["six"]).equals("six@1.17.0")
+
+def _test_uv_variants_scoped_to_project(name):
+    util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
+    analysis_test(name = name, target = name + "_subject", impl = _test_uv_variants_scoped_to_project_impl)
+
 def _test_uv_root_dependency_markers(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
     analysis_test(name = name, target = name + "_subject", impl = _test_uv_root_dependency_markers_impl)
@@ -851,5 +906,7 @@ def uv_translator_test_suite(name):
             _test_uv_url_filenames_decoded,
             _test_uv_url_and_git_sources,
             _test_uv_virtual_and_directory_members,
+            _test_uv_local_member_deps_keep_forks,
+            _test_uv_variants_scoped_to_project,
         ],
     )

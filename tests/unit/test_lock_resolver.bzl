@@ -1625,6 +1625,33 @@ def _test_no_files_raises_error(name):
         expect_failure = True,
     )
 
+def _test_build_mode_always_without_sdist_raises_error_impl(env, target):
+    env.expect.that_target(target).failures().contains_predicate(
+        matching.contains("has build_mode = \"always\" but no sdist to build from"),
+    )
+
+def _test_build_mode_always_without_sdist_raises_error(name):
+    lock_model_data = {
+        "packages": {
+            "foo@1.0": _make_pkg("foo", "1.0", [_make_file("foo-1.0-py3-none-any.whl")]),
+        },
+        "pins": {"foo": "foo@1.0"},
+    }
+
+    util.helper_target(
+        _resolve_failure_subject,
+        name = name + "_subject",
+        lock_model_data = json.encode(lock_model_data),
+        annotations_data = json.encode({"foo": {"build_mode": "always"}}),
+    )
+
+    analysis_test(
+        name = name,
+        target = name + "_subject",
+        impl = _test_build_mode_always_without_sdist_raises_error_impl,
+        expect_failure = True,
+    )
+
 # buildifier: disable=unused-variable
 def _test_empty_lock_impl(env, target):
     lock_model_data = {
@@ -1995,19 +2022,15 @@ def _test_testonly_passthrough_without_transitive(name):
 
 # buildifier: disable=unused-variable
 def _test_testonly_exclusive_transitive_impl(env, target):
-    """transitive_testonly marks newly-added transitive pins as testonly.
-
-    testonly is only applied to proxy aliases, not propagated through the
-    dependency graph. transitive_testonly marks pins added by include_transitive
-    as testonly; non-pinned transitive deps are unaffected (they have no proxy).
+    """transitive_testonly marks transitive pins exclusively reachable from testonly roots.
 
     Graph:
         foo (normal) -> shared-lib
         pytest (testonly) -> test-utils -> test-helper
     include_transitive discovers: shared-lib, test-utils, test-helper as new pins.
-    Expected: pytest is testonly (direct pin); shared-lib, test-utils, test-helper
-    are all testonly (added by include_transitive with transitive_testonly=True).
-    foo is NOT testonly (direct non-testonly pin).
+    Expected: pytest is testonly (direct pin); test-utils and test-helper are
+    testonly (only reachable from pytest). shared-lib and foo are NOT testonly
+    (reachable from the non-testonly foo).
     """
     lock_model_data = {
         "packages": {
@@ -2029,13 +2052,12 @@ def _test_testonly_exclusive_transitive_impl(env, target):
     # pytest is testonly (direct testonly pin)
     env.expect.that_collection(res.testonly_pins).contains("pytest")
 
-    # All transitive pins are testonly when transitive_testonly is set
+    # Transitive pins only reachable from testonly roots are testonly
     env.expect.that_collection(res.testonly_pins).contains("test-utils")
     env.expect.that_collection(res.testonly_pins).contains("test-helper")
-    env.expect.that_collection(res.testonly_pins).contains("shared-lib")
 
-    # foo is NOT testonly (direct non-testonly pin)
-    env.expect.that_collection(res.testonly_pins).contains_none_of(["foo"])
+    # foo (direct non-testonly pin) and shared-lib (reachable from foo) are NOT testonly
+    env.expect.that_collection(res.testonly_pins).contains_none_of(["foo", "shared-lib"])
 
 def _test_testonly_exclusive_transitive(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
@@ -2099,17 +2121,18 @@ def _test_testonly_no_testonly_pins(name):
 
 # buildifier: disable=unused-variable
 def _test_testonly_diamond_with_testonly_branch_impl(env, target):
-    """Diamond dependency with testonly branch: transitive pins are all testonly.
+    """Diamond dependency with testonly branch: only exclusive transitive pins are testonly.
 
-    testonly is only applied to proxy aliases. transitive_testonly marks all
-    newly-discovered transitive pins as testonly regardless of reachability.
+    testonly is only applied to proxy aliases. transitive_testonly marks
+    newly-discovered transitive pins as testonly only when they are not
+    reachable from a non-testonly pin.
 
     Graph:
         foo (normal) -> mid-a -> leaf
         bar (testonly) -> mid-b -> leaf
     include_transitive discovers: mid-a, mid-b, leaf as new pins.
-    Expected: bar is testonly (direct pin); mid-a, mid-b, leaf are testonly
-    (transitive pins with transitive_testonly); foo is NOT testonly.
+    Expected: bar and mid-b are testonly; foo, mid-a and leaf are NOT
+    testonly (reachable from foo).
     """
     lock_model_data = {
         "packages": {
@@ -2128,16 +2151,7 @@ def _test_testonly_diamond_with_testonly_branch_impl(env, target):
 
     res = resolve(lock_model_data, include_transitive = True, transitive_testonly = True)
 
-    # bar is testonly (direct testonly pin)
-    env.expect.that_collection(res.testonly_pins).contains("bar")
-
-    # All transitive pins are testonly when transitive_testonly is set
-    env.expect.that_collection(res.testonly_pins).contains("mid-a")
-    env.expect.that_collection(res.testonly_pins).contains("mid-b")
-    env.expect.that_collection(res.testonly_pins).contains("leaf")
-
-    # foo is NOT testonly (direct non-testonly pin)
-    env.expect.that_collection(res.testonly_pins).contains_none_of(["foo"])
+    env.expect.that_collection(res.testonly_pins).contains_exactly(["bar", "mid-b"])
 
 def _test_testonly_diamond_with_testonly_branch(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
@@ -2255,6 +2269,7 @@ def lock_resolver_test_suite(name):
             _test_multi_tag_wheel_candidates,
             _test_sdist_only_package,
             _test_no_files_raises_error,
+            _test_build_mode_always_without_sdist_raises_error,
             _test_duplicate_wheel_filename_raises_error,
             _test_duplicate_wheel_filename_same_hash_ok,
             _test_empty_lock,

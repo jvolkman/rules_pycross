@@ -195,18 +195,21 @@ def translate_uv(project_dict, lock_dict, lock_model):
             items.append(variant_items_by_key[key])
         variant_sets.append({"items": items})
 
-    # Build constraint lookup from variants
+    # Build constraint lookup from variants, keyed by (package, name) so a
+    # conflict declared on one project's extra/group doesn't apply to a
+    # same-named extra/group of another project.
     extra_variant_values = {}
     group_variant_values = {}
     for item in variant_items_by_key.values():
         kind = item["kind"]
         vname = item.get("name", "")
+        lookup_key = (canonicalize_name(item["package"]), vname)
         if kind == "extra":
             qualified = "extra_{}".format(vname)
-            extra_variant_values[vname] = qualified
+            extra_variant_values[lookup_key] = qualified
         elif kind == "group":
             qualified = "group_{}".format(vname)
-            group_variant_values[vname] = qualified
+            group_variant_values[lookup_key] = qualified
 
     # Identify projects
     projects_list = getattr(lock_model, "projects", [])
@@ -338,7 +341,7 @@ def translate_uv(project_dict, lock_dict, lock_model):
                 if key not in requested_groups_dict:
                     continue
                 is_testonly = requested_groups_dict[key]
-                constraint = constraint_dict.get(group_name, "")
+                constraint = constraint_dict.get((project_name, group_name), "")
                 for dep in groups_dict[group_name]:
                     dep_name = canonicalize_name(dep["name"])
                     dep_version = dep.get("version", "")
