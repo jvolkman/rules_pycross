@@ -49,24 +49,30 @@ class CcToolchainTest(unittest.TestCase):
         bin_dir = self.temp_path / "bin"
         bin_dir.mkdir(exist_ok=True)
 
-        # ld64.lld (Mach-O) is preferred over ld.lld (ELF) when both exist
-        mac_dir = self.temp_path / "mac_bin"
-        mac_dir.mkdir()
-        (mac_dir / "clang").touch()
-        (mac_dir / "ld64.lld").touch()
-        (mac_dir / "ld.lld").touch()
-        wrapper_mac = wrap_compiler("cc", str(mac_dir / "clang"), "-O2", Path("/usr/bin/python3"), bin_dir)
+        # LLVM distributions commonly ship both ld64.lld and ld.lld next to clang.
+        llvm_dir = self.temp_path / "llvm_bin"
+        llvm_dir.mkdir()
+        (llvm_dir / "clang").touch()
+        (llvm_dir / "ld64.lld").touch()
+        (llvm_dir / "ld.lld").touch()
+
+        # On Linux (or unspecified target_os), ld.lld (ELF) must be selected.
+        wrapper_linux = wrap_compiler(
+            "cc", str(llvm_dir / "clang"), "-O2", Path("/usr/bin/python3"), bin_dir, target_os="linux"
+        )
+        content_linux = wrapper_linux.read_text()
+        self.assertIn("fuse_ld_flag = 'lld'", content_linux)
+
+        wrapper_default = wrap_compiler("cc", str(llvm_dir / "clang"), "-O2", Path("/usr/bin/python3"), bin_dir)
+        content_default = wrapper_default.read_text()
+        self.assertIn("fuse_ld_flag = 'lld'", content_default)
+
+        # On macOS (darwin), ld64.lld (Mach-O) must be selected.
+        wrapper_mac = wrap_compiler(
+            "cc", str(llvm_dir / "clang"), "-O2", Path("/usr/bin/python3"), bin_dir, target_os="darwin"
+        )
         content_mac = wrapper_mac.read_text()
         self.assertIn("fuse_ld_flag = 'ld64.lld'", content_mac)
-
-        # ld.lld (ELF) selected when ld64.lld is absent
-        elf_dir = self.temp_path / "elf_bin"
-        elf_dir.mkdir()
-        (elf_dir / "clang").touch()
-        (elf_dir / "ld.lld").touch()
-        wrapper_elf = wrap_compiler("cc", str(elf_dir / "clang"), "-O2", Path("/usr/bin/python3"), bin_dir)
-        content_elf = wrapper_elf.read_text()
-        self.assertIn("fuse_ld_flag = 'lld'", content_elf)
 
     def test_setup_cc_layer(self):
         ctx = MockBuildContext(self.temp_path)
