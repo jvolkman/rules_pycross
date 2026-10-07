@@ -1,7 +1,6 @@
 module(
     name = "example_bzlmod",
     version = "0.0.0",
-    compatibility_level = 1,
 )
 
 bazel_dep(name = "bazel_lib", version = "3.3.1")
@@ -33,47 +32,37 @@ pycross.configure_toolchains(
     ],
 )
 
-# Import and configure environments extension to generate pycross_environments
-environments = use_extension("@rules_pycross//pycross/extensions:environments.bzl", "environments")
-use_repo(environments, "pycross_environments")
-
-# Use the lock_import extension to import external lock files.
-lock_import = use_extension("@rules_pycross//pycross/extensions:lock_import.bzl", "lock_import")
-
-# Import from uv
-lock_import.import_uv(
+# Import the uv lockfile and create the @uv_deps package repository.
+uv = use_extension("@rules_pycross//pycross/extensions:uv.bzl", "uv")
+uv.workspace(
+    name = "uv_deps",
     lock_file = "//:uv.lock",
-    project_file = "//:pyproject.toml",
-    repo = "uv_deps",
+)
+uv.repo(
+    dependency_groups = ["default"],
+    workspace = "uv_deps",
 )
 
 # Specify per-package overrides. Here we say that we want to build ipython from an sdist.
-lock_import.package(
+uv.package(
     name = "ipython",
     always_build = True,
-    extra_build_tools = [
-        "setuptools",
-        "wheel",
-    ],
-    repo = "uv_deps",
+    workspace = "uv_deps",
 )
 
 # Specify per-package overrides. Here we say that we want certain files excluded during installation.
-lock_import.package(
+uv.package(
     name = "amqp-mock",
     install_exclude_globs = [
         "tests/**",
     ],
-    repo = "uv_deps",
+    workspace = "uv_deps",
 )
-lock_import.package(
+uv.package(
     name = "matplotlib",
     post_install_patches = [
-        "@@//:matplotlib.patch",
+        "//:matplotlib.patch",
     ],
-    repo = "uv_deps",
+    workspace = "uv_deps",
 )
-
-# The actual repos are loaded from the lock_repos extension.
-lock_repos = use_extension("@rules_pycross//pycross/extensions:lock_repos.bzl", "lock_repos")
-use_repo(lock_repos, "uv_deps")
+use_repo(uv, "uv_deps")

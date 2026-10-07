@@ -2,7 +2,13 @@
 name = "rules-pycross-example-bzlmod"
 version = "0.1.0"
 dependencies = [
-    "ipython>=8.17", "packaging @ git+https://github.com/pypa/packaging.git@23.2",
+    "amqp-mock==0.6.1",
+    "ipython>=8.17",
+    "matplotlib>=3.10.7",
+    "packaging @ git+https://github.com/pypa/packaging.git@23.2",
+    # Build-system tools used by the auto-generated uv_deps__build repo when
+    # building sdists from source (packaging from git and ipython via always_build).
+    "flit-core>=3.3",
     "setuptools>=68",
     "wheel>=0.42",
 ]
