@@ -4,6 +4,7 @@ The common logic is factored into _sdist_repo_common() so it can be called befor
 """
 
 load("@pycross_backends//:sdist_dispatch.bzl", "SDIST_HOOKS")
+load("@pypackaging.bzl", "pypackaging")
 load("//pycross/private:internal_repo.bzl", "exec_internal_tool")
 load("//pycross/private:util.bzl", "extract_pep508_name", "key_name", "underscore_name")
 
@@ -94,6 +95,8 @@ def _render_build_file(rctx, macro_attrs, backend_macro, site_paths, bin_paths, 
 load("@rules_pycross//pycross/private:wheel_library.bzl", "pycross_wheel_metadata")
 
 package(default_visibility = ["//visibility:public"])
+
+exports_files(["inspection.json"])
 
 {backend_macro}(
 {attrs}
@@ -251,6 +254,66 @@ def _compute_sdist_build_config(attr, metadata):
         non_matching_override_backends = non_matching_backends,
     )
 
+def _validate_requirements(requires, pin_versions, pkg_name):
+    """Validate build-system.requires against pinned versions from the thin repo.
+
+    Args:
+        requires: List of PEP 508 requirement strings from build-system.requires.
+        pin_versions: Dict from pin_versions.json. Simple pins: name -> version string.
+            Variant pins: name -> {variant -> version}.
+        pkg_name: Name of the package being inspected (for warning messages).
+
+    Returns:
+        List of warning strings.
+    """
+    if not pin_versions:
+        return []
+
+    warnings = []
+    normalized_pins = {
+        pypackaging.utils.canonicalize_name(k): v
+        for k, v in pin_versions.items()
+    }
+
+    for req_str in requires:
+        req = pypackaging.requirements.parse(req_str)
+        if not req.specifier:
+            continue
+
+        req_name = req.name
+        if req_name == "oldest-supported-numpy":
+            req_name = "numpy"
+
+        if req_name in normalized_pins:
+            version_or_dict = normalized_pins[req_name]
+            if type(version_or_dict) == "string":
+                if not pypackaging.specifiers.set_contains(req.specifier, version_or_dict):
+                    warnings.append(
+                        "WARNING: The build tools repo pins '{}=={}', but '{}' requires '{}' in pyproject.toml.".format(
+                            req_name,
+                            version_or_dict,
+                            pkg_name,
+                            req_str,
+                        ),
+                    )
+            elif type(version_or_dict) == "dict":
+                satisfying = [
+                    v
+                    for v in version_or_dict.values()
+                    if pypackaging.specifiers.set_contains(req.specifier, v)
+                ]
+                if not satisfying:
+                    versions_str = ", ".join(["{}={}".format(k, v) for k, v in sorted(version_or_dict.items())])
+                    warnings.append(
+                        "WARNING: No variant of '{}' satisfies '{}' (available: {}).".format(
+                            req_name,
+                            req_str,
+                            versions_str,
+                        ),
+                    )
+
+    return warnings
+
 def _sdist_repo_common(rctx):
     """Shared sdist repo logic: inspect metadata, resolve backend, apply override configs.
 
@@ -268,6 +331,7 @@ def _sdist_repo_common(rctx):
 
     sdist_path = rctx.path(rctx.attr.sdist)
     output_json = rctx.path("build_metadata.json")
+    pin_versions = json.decode(rctx.read(rctx.path(rctx.attr.pin_versions_json)))
 
     # Run the Python inspector tool
     inspect_args = [
@@ -275,8 +339,6 @@ def _sdist_repo_common(rctx):
         str(sdist_path),
         "--output",
         str(output_json),
-        "--pin-versions",
-        str(rctx.path(rctx.attr.pin_versions_json)),
     ]
     if rctx.attr.source_dir:
         inspect_args.extend(["--source-dir", rctx.attr.source_dir])
@@ -285,13 +347,17 @@ def _sdist_repo_common(rctx):
         rctx,
         Label("//pycross/private/tools:inspect_package.py"),
         inspect_args,
-        extra_wheels = [Label("@pycross_internal_deps//packaging:wheel")],
     )
 
     metadata = json.decode(rctx.read(output_json))
+    warnings = list(metadata.get("warnings", [])) + _validate_requirements(
+        metadata.get("build_requires", []),
+        pin_versions,
+        sdist_path.basename,
+    )
 
-    # Print any warnings from the package inspector
-    for warning in metadata.get("warnings", []):
+    # Print any warnings from the package inspector or version validation
+    for warning in warnings:
         # buildifier: disable=print
         print(warning)
 
@@ -306,6 +372,7 @@ def _sdist_repo_common(rctx):
         "bin_paths": bin_paths,
         "data_paths": data_paths,
         "include_paths": include_paths,
+        "warnings": warnings,
     }))
 
     if config.non_matching_override_backends:
@@ -381,3 +448,4 @@ pycross_sdist_repo = repository_rule(
 
 # Visible for testing
 compute_sdist_build_config_for_testing = _compute_sdist_build_config
+validate_requirements_for_testing = _validate_requirements

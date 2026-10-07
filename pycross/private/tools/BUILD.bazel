@@ -3,6 +3,10 @@ load("//pycross/private:wheel_zipimport_library.bzl", "pycross_wheel_zipimport_l
 
 package(default_visibility = ["//visibility:public"])
 
+exports_files([
+    "inspect_package.py",
+])
+
 py_library(
     name = "args",
     srcs = [
@@ -15,16 +19,14 @@ py_library(
     name = "inspect_package",
     srcs = ["inspect_package.py"],
     visibility = ["//visibility:public"],
+    deps = [
+        "//pycross/private/third_party/patch_ng",
+    ],
 )
 
 pycross_wheel_zipimport_library(
     name = "installer",
     wheel = "@pycross_internal_deps//installer:wheel",
-)
-
-pycross_wheel_zipimport_library(
-    name = "patch_ng",
-    wheel = "@pycross_internal_deps//patch_ng:wheel",
 )
 
 py_binary(
@@ -35,7 +37,7 @@ py_binary(
     deps = [
         ":args",
         ":installer",
-        ":patch_ng",
+        "//pycross/private/third_party/patch_ng",
     ],
 )
 

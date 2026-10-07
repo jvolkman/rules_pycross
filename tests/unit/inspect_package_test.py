@@ -9,7 +9,6 @@ from pycross.private.tools.inspect_package import PEP517_DEFAULT_BACKEND
 from pycross.private.tools.inspect_package import PEP517_DEFAULT_REQUIRES
 from pycross.private.tools.inspect_package import inspect_sdist
 from pycross.private.tools.inspect_package import inspect_wheel
-from pycross.private.tools.inspect_package import validate_requirements
 
 
 class InspectPackageTest(unittest.TestCase):
@@ -109,31 +108,17 @@ class InspectPackageTest(unittest.TestCase):
         result = inspect_wheel(wheel_path)
         self.assertEqual(result["bin_paths"], [])
 
-    def test_validate_requirements(self):
-        # Mismatched version
-        warnings = validate_requirements(
-            requires=["numpy>=1.20"],
-            pin_versions={"numpy": "1.19.0"},
-            pkg_name="my_pkg",
-        )
-        self.assertEqual(len(warnings), 1)
-        self.assertIn("WARNING:", warnings[0])
+    def test_vendored_patch_ng(self):
+        import patch_ng
 
-        # Matching version
-        warnings = validate_requirements(
-            requires=["numpy>=1.20"],
-            pin_versions={"numpy": "1.21.0"},
-            pkg_name="my_pkg",
-        )
-        self.assertEqual(len(warnings), 0)
-
-        # Extra markers ignored or parsed gracefully
-        warnings = validate_requirements(
-            requires=["foo; python_version >= '3.8'"],
-            pin_versions={"foo": "1.0"},
-            pkg_name="my_pkg",
-        )
-        self.assertEqual(len(warnings), 0)
+        target_file = self.temp_path / "hello.txt"
+        target_file.write_text("hello = 'old'\n")
+        patch_file = self.temp_path / "fix.patch"
+        patch_file.write_text("--- a/hello.txt\n+++ b/hello.txt\n@@ -1 +1 @@\n-hello = 'old'\n+hello = 'new'\n")
+        pset = patch_ng.fromfile(str(patch_file))
+        self.assertTrue(pset)
+        self.assertTrue(pset.apply(root=str(self.temp_path)))
+        self.assertEqual(target_file.read_text(), "hello = 'new'\n")
 
     def _create_tarball_with_dirs(self, filename, files):
         """Create a tarball with proper directory entries.

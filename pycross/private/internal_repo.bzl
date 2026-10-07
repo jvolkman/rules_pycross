@@ -14,7 +14,7 @@ py_library = _py_library
 py_test = _py_test
 """
 
-def exec_internal_tool(rctx, tool, args, *, flagfile_param = "--flagfile", flagfile_threshold = 1000, quiet = False, extra_wheels = []):
+def exec_internal_tool(rctx, tool, args, *, flagfile_param = "--flagfile", flagfile_threshold = 1000, quiet = False):
     """
     Execute a script under //pycross/private/tools.
 
@@ -25,7 +25,6 @@ def exec_internal_tool(rctx, tool, args, *, flagfile_param = "--flagfile", flagf
       flagfile_param: the parameter name used when dumping arguments to a flag file
       flagfile_threshold: use a flag file if len(args) >= this value
       quiet: The quiet value to pass to rctx.execute.
-      extra_wheels: a list of wheel files or directories to add to sys.path
 
     Returns:
       exec_result
@@ -52,31 +51,23 @@ def exec_internal_tool(rctx, tool, args, *, flagfile_param = "--flagfile", flagf
         rctx.file(flagfile, flagfile_data)
         args = [flagfile_param, str(flagfile)]
 
+    patch_ng_dir = rctx.path(Label("//pycross/private/third_party/patch_ng:patch_ng.py")).dirname
+
     wrapper_script = """
-import sys
-import os
-import glob
-
-extra_wheels = {extra_wheels}
-paths_to_add = []
-for w in extra_wheels:
-    if os.path.isdir(w):
-        paths_to_add.extend(glob.glob(os.path.join(w, "*.whl")))
-    elif w.endswith(".whl"):
-        paths_to_add.append(w)
-
-sys.path = paths_to_add + sys.path
-
-sys.argv = ["{tool}"] + sys.argv[1:]
-
 import runpy
-runpy.run_path("{tool}", run_name="__main__")
+import sys
+
+tool_path = {tool}
+sys.path.insert(0, {patch_ng_dir})
+sys.argv = [tool_path] + sys.argv[1:]
+
+runpy.run_path(tool_path, run_name="__main__")
 """
 
     wrapper_file = rctx.path("_internal_wrapper.py")
     rctx.file(wrapper_file, wrapper_script.format(
-        extra_wheels = repr([str(rctx.path(w)) for w in extra_wheels]),
-        tool = str(rctx.path(tool)),
+        patch_ng_dir = repr(str(patch_ng_dir)),
+        tool = repr(str(rctx.path(tool))),
     ))
 
     result = rctx.execute(

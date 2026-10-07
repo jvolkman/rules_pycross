@@ -77,15 +77,6 @@ wheels = [
 ]
 
 [[package]]
-name = "patch-ng"
-version = "1.19.1"
-source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/da/b6/8ea8095f964f93567bbe28709298b30104ad418b50d4217538387bf48f7d/patch_ng-1.19.1.tar.gz", hash = "sha256:036a3cc00134ec53f37e92333958ee75e117f2e62a5ec2b85c7122e5e815c29e", size = 18525, upload-time = "2026-04-23T13:36:54.692Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/2c/ef/c60c07b2f9d973672608815e4c176943146c353d3b60fdab914a6dcd44e8/patch_ng-1.19.1-py3-none-any.whl", hash = "sha256:d45fd47b3f74b48c3e336690341876bb26244a077a06f5f7e6e47c19c15c1ca4", size = 17601, upload-time = "2026-04-23T13:36:51.95Z" },
-]
-
-[[package]]
 name = "pefile"
 version = "2024.8.26"
 source = { registry = "https://pypi.org/simple" }
@@ -141,7 +132,6 @@ build = [
 core = [
     { name = "installer" },
     { name = "packaging" },
-    { name = "patch-ng" },
 ]
 repairwheel = [
     { name = "repairwheel" },
@@ -152,7 +142,6 @@ requires-dist = [
     { name = "build", marker = "extra == 'build'", specifier = "==1.5.0" },
     { name = "installer", marker = "extra == 'core'", specifier = "==1.0.0" },
     { name = "packaging", marker = "extra == 'core'", specifier = "==26.2" },
-    { name = "patch-ng", marker = "extra == 'core'", specifier = "==1.19.1" },
     { name = "repairwheel", marker = "extra == 'repairwheel'", specifier = "==0.7.0" },
 ]
 provides-extras = ["core", "build", "repairwheel"]

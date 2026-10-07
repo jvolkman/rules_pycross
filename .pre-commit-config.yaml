@@ -6,7 +6,7 @@
 # but we don't want to run the other hooks on commit messages
 default_stages: [pre-commit]
 
-exclude: (^third_party/.*$|\.lock$|^docs/.*\.md$)
+exclude: (^third_party/.*$|\.lock$|^docs/.*\.md$|^pycross/private/third_party/)
 repos:
   # Check formatting and lint for starlark code
   - repo: https://github.com/keith/pre-commit-buildifier
