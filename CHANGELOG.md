@@ -4,77 +4,33 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Breaking
+
+- **`defer_unsupported_wheel_errors` replaced by `unavailable_package_mode`.**
+  Use `--@rules_pycross//pycross/settings:unavailable_package_mode=fail_at_execution`.
+
 ### Changed
 
-- **`build_backend` annotation semantics.** Setting `build_backend` on a package
-  now only overrides the pycross build rule selected for the sdist; sdist
-  inspection still runs to detect `site_paths`, `pyproject.toml`'s
-  `build-system.requires` are still added as build dependencies, and an explicit
-  `pep517_build` now validates that all `build-system.requires` are present in
-  the lockfile.
-- **Thin-repo fork and variant `select()` fallback.** Thin-repo `:pkg`,
-  `:wheel`, `:dist_info`, and `:sdist` `select()`s that lack an unconditional or
-  default-variant branch now fall back to
-  `@rules_pycross//pycross/private:no_match_error` on `//conditions:default`, so
-  non-matching resolution-marker forks become incompatible targets by default (or
-  deferred build errors under
-  `--@rules_pycross//pycross/settings:unavailable_package_mode=fail_at_execution`)
-  instead of failing analysis with a "configurable attribute doesn't match this
-  configuration" error.
-- **Breaking: `unavailable_package_mode` setting.** Removed the boolean
-  `--@rules_pycross//pycross/settings:defer_unsupported_wheel_errors` flag and
-  `//pycross/settings:defer_unsupported_wheel_errors_enabled` `config_setting`;
-  use the string flag
-  `--@rules_pycross//pycross/settings:unavailable_package_mode={incompatible,fail_at_execution}`
-  (default `incompatible`)
-  and `//pycross/settings:unavailable_package_fail_at_execution` `config_setting`
-  instead, covering both packages without a compatible wheel and fork/variant
-  `select()`s without a matching branch.
+- **`build_backend` annotation** now only overrides the build rule; sdist
+  inspection and `build-system.requires` detection still run.
+- **Unmatched fork/variant `select()`s** now yield incompatible targets instead
+  of analysis errors.
 
 ### Fixed
 
-- **Pre-built wheel metadata paths.** `pycross_wheel_file` and workspace package
-  dependency merging now preserve `bin_paths`, `data_paths`, and `include_paths`
-  in addition to `site_paths`.
-- **`extra_build_tools` with auto-detected backends.** Package
-  `extra_build_tools` annotations are now included in `build_deps` when
-  `build_backend` is auto-detected from `pyproject.toml`, not only when
-  `build_backend` is set explicitly.
-- **Sdist inspection with explicit `build_backend` or malformed `pyproject.toml`.**
-  Packages with an explicit `build_backend` now run `inspect_package.py` so
-  `site_paths` are populated, and `inspect_sdist` gracefully falls back to PEP
-  517 defaults with a warning if `pyproject.toml` fails to parse.
-- **Backend `tool_deps` resolution-marker forks and `build_tools_repo`.**
-  Generated `_backend/<rule>.bzl` macros now default `tool_deps` to
-  `@<ws>__build//<pkg>:pkg` instead of a static highest-version `@<ws>__pkgs`
-  target, `pycross_sdist_repo` emits explicit `tool_deps` from its configured
-  `build_tools_repo` (or `<ws>__build`), and `<ws>__build` preserves
-  resolution-marker fork pins for transitive tool packages.
-- **Post-transition `:maybe` and `:[extra]_maybe` `select()` evaluation.**
-  Thin package repos with `platform`, `constraint_values`, or `flags`
-  transitions now emit `:maybe` and `:[extra]_maybe` `select()` aliases under
-  `__actual/<pkg>` and wrap them in `pycross_transitioning_library_proxy`, so
-  both branch-selection and platform-availability conditions are evaluated in
-  the transitioned configuration.
-- **`build-system.requires` version-mismatch warnings for sdists are now actually emitted.**
-  Previously this check silently never ran because `exec_internal_tool` dropped
-  `extra_wheels` when `rctx.path(Label("@repo//pkg:wheel"))` resolved to a
-  nonexistent file, causing `inspect_package.py` to skip validation when
-  `packaging` was absent from the interpreter. Version validation against
-  `pin_versions.json` now runs in Starlark in `pycross_sdist_repo` using
-  `pypackaging.bzl`, `patch_ng` is vendored under
-  `//pycross/private/third_party/patch_ng`, and the broken `extra_wheels`
-  parameter has been removed from `exec_internal_tool`.
-- **`pre_build_patches` applied before sdist inspection.** `pycross_sdist_repo`
-  now passes `pre_build_patches` to `inspect_package.py`, which extracts the
-  sdist and applies patches before inspecting `pyproject.toml` and `site_paths`,
-  so patched `build-system.requires`, `build-backend`, and package layouts take
-  effect during repository generation.
-- **Dead `environments` extension removed from `rules_pycross_backend_maturin`.**
-  Removed the stale `@rules_pycross//pycross/extensions:environments.bzl`
-  `use_extension` declaration from `modules/backend_maturin/MODULE.bazel`, which
-  caused `bazel mod show_extension` to fail in downstream workspaces using the
-  maturin backend module.
+- **Pre-built wheels** now preserve `bin_paths`, `data_paths`, and
+  `include_paths`.
+- **`extra_build_tools`** is now honored for auto-detected backends.
+- **Malformed `pyproject.toml`** in an sdist now falls back to PEP 517 defaults.
+- **Backend `tool_deps`** now respect resolution-marker forks and
+  `build_tools_repo`.
+- **`:maybe` targets in transitioned repos** now evaluate in the transitioned
+  configuration.
+- **`build-system.requires` version-mismatch warnings** are now actually
+  emitted.
+- **`pre_build_patches`** are now applied before sdist inspection.
+- **`rules_pycross_backend_maturin`** no longer references the removed
+  `environments` extension.
 
 ## [2.0.0-alpha.2]
 
