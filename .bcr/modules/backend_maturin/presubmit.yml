@@ -12,4 +12,6 @@ tasks:
     bazel: ${{ bazel }}
     platform: ${{ platform }}
     build_targets:
-      - //...
+      - "@rules_pycross_backend_maturin//rules/..."
+      - "@rules_pycross_backend_maturin//private/..."
+      - "@rules_pycross_backend_maturin//extensions/..."

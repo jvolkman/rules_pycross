@@ -48,4 +48,19 @@ uv.repo(
     ],
     workspace = "uv",
 )
+uv.package(
+    name = "filelock",
+    always_build = True,
+    workspace = "uv",
+)
+uv.package(
+    name = "pyproject-metadata",
+    always_build = True,
+    workspace = "uv",
+)
+uv.package(
+    name = "tomli",
+    always_build = True,
+    workspace = "uv",
+)
 use_repo(uv, "uv")

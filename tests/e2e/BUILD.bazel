@@ -1,6 +1,14 @@
+load("@rules_python//python:defs.bzl", "py_library")
 load(":e2e_tests.bzl", "define_e2e_tests")
 
 exports_files(["run_integration_test.sh"])
+
+py_library(
+    name = "compare_wheels",
+    srcs = ["tools/compare_wheels.py"],
+    visibility = ["//tests/unit:__pkg__"],
+)
+
 # Expose the integration test workspaces as Bazel targets.
 # They are tagged "manual" so they are excluded from wildcard patterns like `bazel test //...`.
 # They can be run explicitly via `bazel test //tests/e2e/...`

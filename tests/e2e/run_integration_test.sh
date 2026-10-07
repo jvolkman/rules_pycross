@@ -27,11 +27,11 @@ unset TEST_SRCDIR
 cd "${WORKSPACE_DIR}"
 echo "Running bazel clean --expunge..."
 bazel clean --expunge
-# If a workspace provides an executable run.sh, use it instead of the default build/test commands.
+# If a workspace provides a run.sh, use it instead of the default build/test commands.
 # This serves as an escape hatch for tests that require specific bazel invocation flags.
-if [[ -x "run.sh" ]]; then
+if [[ -f "run.sh" ]]; then
   echo "Running custom run.sh..."
-  ./run.sh
+  bash ./run.sh
 else
   BAZEL_ARGS=()
   if [ -n "${RULES_PYCROSS_DEBUG:-}" ]; then

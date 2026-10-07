@@ -207,7 +207,7 @@ def build_context(
 
     target_context = TargetContext(
         abiflags=sysconfig_vars.get("ABIFLAGS"),
-        effective_glibc=determine_glibc_version(sysconfig_vars),
+        effective_glibc=(determine_glibc_version(sysconfig_vars) if target_uname.sysname == "linux" else None),
         home=str(home),
         macosx_deployment_target=macosx_deployment_target,
         manylinux_tags=manylinux_tags,

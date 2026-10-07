@@ -10,6 +10,20 @@ common --enable_bzlmod
 # https://bazelbuild.slack.com/archives/C014RARENH0/p1691158021917459?thread_ts=1691156601.420349&cid=C014RARENH0
 common --check_direct_dependencies=off
 
+# BuildBuddy remote cache configuration
+build:remote --bes_results_url=https://app.buildbuddy.io/invocation/
+build:remote --bes_backend=grpcs://remote.buildbuddy.io
+build:remote --remote_cache=grpcs://remote.buildbuddy.io
+build:remote --remote_timeout=3600
+
+# Read-only BuildBuddy remote cache configuration (safe for local contributors and untrusted PRs)
+build:remote-ro --config=remote
+build:remote-ro --remote_header=x-buildbuddy-api-key=lXj8mtc6dMxIxXnaj5y4
+build:remote-ro --noremote_upload_local_results
+
+# Load any settings specific to ci pipelines.
+try-import %workspace%/.bazelrc.ci
+
 # Load any settings specific to the current user.
 # .bazelrc.user should appear in .gitignore so that settings are not shared with team members
 # This needs to be last statement in this
@@ -18,12 +32,3 @@ common --check_direct_dependencies=off
 # (Note that we use .bazelrc.user so the file appears next to .bazelrc in directory listing,
 # rather than user.bazelrc as suggested in the Bazel docs)
 try-import %workspace%/.bazelrc.user
-
-# Load any settings specific to ci pipelines.
-try-import %workspace%/.bazelrc.ci
-
-# BuildBuddy remote cache configuration
-build:remote --bes_results_url=https://app.buildbuddy.io/invocation/
-build:remote --bes_backend=grpcs://remote.buildbuddy.io
-build:remote --remote_cache=grpcs://remote.buildbuddy.io
-build:remote --remote_timeout=3600

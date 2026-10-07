@@ -98,33 +98,47 @@ def compare_wheels(whl_a: Path, whl_b: Path) -> bool:
     return False
 
 
-def main():
-    if len(sys.argv) != 3:
-        print(f"Usage: {sys.argv[0]} <dir-a> <dir-b>", file=sys.stderr)
-        sys.exit(2)
-
-    dir_a, dir_b = Path(sys.argv[1]), Path(sys.argv[2])
+def compare_wheel_dirs(dir_a: Path, dir_b: Path) -> bool:
+    """Compare all .whl files in two directories. Returns True if sets match and all wheels are identical."""
     wheels_a = {w.name: w for w in dir_a.rglob("*.whl")}
     wheels_b = {w.name: w for w in dir_b.rglob("*.whl")}
 
+    only_in_a = sorted(set(wheels_a) - set(wheels_b))
+    only_in_b = sorted(set(wheels_b) - set(wheels_a))
     common = set(wheels_a) & set(wheels_b)
     all_identical = True
+
+    if only_in_a:
+        print(f"Wheels only in host A: {only_in_a}")
+        all_identical = False
+    if only_in_b:
+        print(f"Wheels only in host B: {only_in_b}")
+        all_identical = False
 
     if not common:
         print("No matching wheel filenames found to compare.")
         print(f"  Host A: {sorted(wheels_a.keys())}")
         print(f"  Host B: {sorted(wheels_b.keys())}")
-        return
+        return False
 
     print(f"Comparing {len(common)} wheel(s):")
     for name in sorted(common):
         if not compare_wheels(wheels_a[name], wheels_b[name]):
             all_identical = False
 
-    if all_identical:
+    return all_identical
+
+
+def main():
+    if len(sys.argv) != 3:
+        print(f"Usage: {sys.argv[0]} <dir-a> <dir-b>", file=sys.stderr)
+        sys.exit(2)
+
+    dir_a, dir_b = Path(sys.argv[1]), Path(sys.argv[2])
+    if compare_wheel_dirs(dir_a, dir_b):
         print("\n\U0001f389 All wheels are byte-identical across build hosts!")
     else:
-        print("\n\u26a0\ufe0f  Some wheels differ. See details above.")
+        print("\n\u26a0\ufe0f  Some wheels differ or are missing. See details above.")
         sys.exit(1)
 
 
