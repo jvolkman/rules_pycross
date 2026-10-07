@@ -483,6 +483,104 @@ def _test_poetry_root_dependency_markers(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
     analysis_test(name = name, target = name + "_subject", impl = _test_poetry_root_dependency_markers_impl)
 
+# --- test_poetry_dependency_extras ---
+
+# buildifier: disable=unused-variable
+def _test_poetry_dependency_extras_impl(env, target):
+    project = {"project": {"name": "my-app", "dependencies": ["pytest-cov>=5", "requests[socks]>=2"]}}
+    lock = {
+        "metadata": {"lock-version": "2.1"},
+        "package": [
+            _pkg(
+                "pytest-cov",
+                "5.0.0",
+                files = [_whl("pytest_cov-5.0.0-py3-none-any.whl")],
+                deps = {"coverage": {"version": ">=5.2.1", "extras": ["toml"]}},
+            ),
+            _pkg(
+                "coverage",
+                "7.6.1",
+                files = [_whl("coverage-7.6.1-py3-none-any.whl")],
+                deps = {"tomli": {"version": "*", "optional": True, "markers": "extra == \"toml\""}},
+                extras = {"toml": ["tomli ; python_full_version <= \"3.11.0a6\""]},
+            ),
+            _pkg("tomli", "2.0.1", files = [_whl("tomli-2.0.1-py3-none-any.whl")]),
+            _pkg(
+                "requests",
+                "2.32.3",
+                files = [_whl("requests-2.32.3-py3-none-any.whl")],
+                deps = {"PySocks": {"version": ">=1.5.6", "optional": True, "markers": "extra == \"socks\""}},
+                extras = {"socks": ["PySocks (>=1.5.6)"], "use-chardet-on-py3": ["chardet"]},
+            ),
+            _pkg("pysocks", "1.7.1", files = [_whl("PySocks-1.7.1-py3-none-any.whl")]),
+        ],
+    }
+    result = translate_poetry(project, lock, _lock_model())
+
+    cov_deps = result["packages"]["pytest-cov@5.0.0"]["dependencies"]
+    env.expect.that_collection([d["name"] for d in cov_deps]).contains_exactly(["coverage[toml]"])
+    env.expect.that_str(result["pins"]["requests[socks]"]).equals("requests[socks]@2.32.3")
+    env.expect.that_str(result["pins"]["requests"]).equals("requests@2.32.3")
+
+def _test_poetry_dependency_extras(name):
+    util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
+    analysis_test(name = name, target = name + "_subject", impl = _test_poetry_dependency_extras_impl)
+
+# --- test_poetry_tool_dependency_extras_and_python ---
+
+# buildifier: disable=unused-variable
+def _test_poetry_tool_dependency_extras_and_python_impl(env, target):
+    project = {"tool": {"poetry": {"dependencies": {
+        "python": "^3.8",
+        "requests": {"version": "^2", "extras": ["socks"]},
+        "foo": {"version": "^1", "python": "<3.9"},
+        "bar": {"version": "^1", "python": "^3.8.1", "markers": "sys_platform == 'linux'"},
+    }}}}
+    lock = {
+        "metadata": {"lock-version": "2.1"},
+        "package": [
+            _pkg("requests", "2.32.3", files = [_whl("requests-2.32.3-py3-none-any.whl")], extras = {"socks": ["PySocks"]}),
+            _pkg("foo", "1.0", files = [_whl("foo-1.0-py3-none-any.whl")]),
+            _pkg("bar", "1.0", files = [_whl("bar-1.0-py3-none-any.whl")]),
+        ],
+    }
+    result = translate_poetry(project, lock, _lock_model())
+
+    env.expect.that_str(result["pins"]["requests[socks]"]).equals("requests[socks]@2.32.3")
+    markers = result["root_dependency_markers"]
+    env.expect.that_collection(markers["foo"]).contains_exactly(['python_version < "3.9"'])
+    env.expect.that_collection(markers["bar"]).contains_exactly([
+        '(sys_platform == \'linux\') and (python_full_version >= "3.8.1" and python_full_version < "4.0.0")',
+    ])
+
+def _test_poetry_tool_dependency_extras_and_python(name):
+    util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
+    analysis_test(name = name, target = name + "_subject", impl = _test_poetry_tool_dependency_extras_and_python_impl)
+
+# --- test_poetry_git_subdirectory ---
+
+# buildifier: disable=unused-variable
+def _test_poetry_git_subdirectory_impl(env, target):
+    project = {"project": {"name": "my-app", "dependencies": ["sub"]}}
+    lock = {
+        "metadata": {"lock-version": "2.1"},
+        "package": [
+            _pkg("sub", "0.1.0", files = [], source = {
+                "type": "git",
+                "url": "https://github.com/example/mono.git",
+                "reference": "main",
+                "resolved_reference": "abc123",
+                "subdirectory": "pkgs/sub",
+            }),
+        ],
+    }
+    result = translate_poetry(project, lock, _lock_model())
+    env.expect.that_str(result["packages"]["sub@0.1.0"]["source_dir"]).equals("pkgs/sub")
+
+def _test_poetry_git_subdirectory(name):
+    util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
+    analysis_test(name = name, target = name + "_subject", impl = _test_poetry_git_subdirectory_impl)
+
 # --- Test suite ---
 
 def poetry_translator_test_suite(name):
@@ -504,5 +602,8 @@ def poetry_translator_test_suite(name):
             _test_poetry_issue_117,
             _test_poetry_or_constraint_translations,
             _test_poetry_root_dependency_markers,
+            _test_poetry_dependency_extras,
+            _test_poetry_tool_dependency_extras_and_python,
+            _test_poetry_git_subdirectory,
         ],
     )

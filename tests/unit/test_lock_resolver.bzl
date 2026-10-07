@@ -2180,11 +2180,32 @@ def _test_transitive_resolution_marker_forks(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
     analysis_test(name = name, target = name + "_subject", impl = _test_transitive_resolution_marker_forks_impl)
 
+# buildifier: disable=unused-variable
+def _test_source_dir_and_synthesized_extra_pin_impl(env, target):
+    """source_dir reaches the resolved package; a name[extra] pin synthesizes the extra package."""
+    pkg = _make_pkg("foo", "1.0", [_make_file("foo-1.0.tar.gz")], deps = [_make_dep("bar", "2.0", 'extra == "x"')])
+    pkg["source_dir"] = "pkgs/foo"
+    lock_model_data = {
+        "packages": {
+            "foo@1.0": pkg,
+            "bar@2.0": _make_pkg("bar", "2.0", [_make_file("bar-2.0-py3-none-any.whl")]),
+        },
+        "pins": {"foo": "foo@1.0", "foo[x]": "foo[x]@1.0"},
+    }
+    res = resolve(lock_model_data)
+    env.expect.that_str(res.packages["foo@1.0"]["source_dir"]).equals("pkgs/foo")
+    env.expect.that_collection(res.packages.keys()).contains("foo[x]@1.0")
+
+def _test_source_dir_and_synthesized_extra_pin(name):
+    util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
+    analysis_test(name = name, target = name + "_subject", impl = _test_source_dir_and_synthesized_extra_pin_impl)
+
 def lock_resolver_test_suite(name):
     test_suite(
         name = name,
         tests = [
             _test_basic_resolution,
+            _test_source_dir_and_synthesized_extra_pin,
             _test_create_transitive_aliases_with_extras,
             _test_extra_build_tools_override,
             _test_synthesized_deps,

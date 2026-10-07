@@ -487,6 +487,23 @@ def _test_validate_requirements(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
     analysis_test(name = name, target = name + "_subject", impl = _test_validate_requirements_impl)
 
+# ── Test: marker-gated requires are not required ────────────────────
+
+# buildifier: disable=unused-variable
+def _test_marker_gated_requires_impl(env, target):
+    """Marker-gated build-system.requires may not apply to the target, so pep517_build must not require them."""
+    deps, pkgs = _build_deps_from_requires(
+        ["flit_core>=3.4", "tomli; python_version < '3.11'"],
+        ["flit-core", "tomli"],
+        "pypi",
+    )
+    env.expect.that_collection(deps).contains_exactly(["@pypi//flit_core:pkg", "@pypi//tomli:pkg"])
+    env.expect.that_collection(pkgs).contains_exactly(["flit-core"])
+
+def _test_marker_gated_requires(name):
+    util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
+    analysis_test(name = name, target = name + "_subject", impl = _test_marker_gated_requires_impl)
+
 # ── Test suite ──────────────────────────────────────────────────────
 
 def sdist_dedup_test_suite(name):
@@ -505,5 +522,6 @@ def sdist_dedup_test_suite(name):
             _test_tool_deps_from_thin_repo,
             _test_tool_deps_override_unknown_key,
             _test_validate_requirements,
+            _test_marker_gated_requires,
         ],
     )

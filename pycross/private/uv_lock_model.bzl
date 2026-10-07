@@ -11,6 +11,7 @@ resolution markers, git sources, and editable packages.
 load("@toml.bzl//toml:toml.bzl", "decode")
 load(
     ":translator_common.bzl",
+    "archive_extension",
     "canonicalize_name",
     "compute_requested_dependency_groups",
     "record_root_marker",
@@ -19,6 +20,7 @@ load(
     "select_project_file",
     "sha256_from_string",
 )
+load(":util.bzl", "url_decode_filename")
 
 def _parse_file_info(file_info, package_name, package_version, registry = None):
     """Parse a UV lock file entry into a file dict.
@@ -47,8 +49,10 @@ def _parse_file_info(file_info, package_name, package_version, registry = None):
             path_part = path_part.split("?")[0]
         if "#" in path_part:
             path_part = path_part.split("#")[0]
-        filename = path_part.split("/")[-1]
+        filename = url_decode_filename(path_part.split("/")[-1])
         urls = [url]
+    elif "path" in file_info:
+        fail("Package {}=={}: local path distributions ({}) are not supported".format(package_name, package_version, file_info["path"]))
     else:
         fail("UV file entry has no 'file', 'filename', or 'url' member: {}".format(file_info))
 
@@ -213,7 +217,7 @@ def translate_uv(project_dict, lock_dict, lock_model):
 
     workspace_members = {}
     for pkg in packages_list:
-        if pkg.get("source", {}).get("virtual") == "." or pkg.get("source", {}).get("editable"):
+        if "virtual" in pkg.get("source", {}) or pkg.get("source", {}).get("editable"):
             workspace_members[canonicalize_name(pkg["name"])] = pkg
 
     if not workspace_members and packages_list:
@@ -421,7 +425,7 @@ def translate_uv(project_dict, lock_dict, lock_model):
                 file_hash = sdist["hash"]
                 if not file_hash.startswith("sha256:"):
                     fail("Expected sha256: prefix on hash")
-                filename = "{}-{}.tar.gz".format(package_name, package_version)
+                filename = "{}-{}{}".format(package_name, package_version, archive_extension(url))
                 f = {
                     "name": filename,
                     "sha256": file_hash[7:],
@@ -437,6 +441,9 @@ def translate_uv(project_dict, lock_dict, lock_model):
             else:
                 files.append(_parse_file_info(sdist, package_name, package_version, registry))
 
+        # Source dir
+        source_dir = source.get("subdirectory", "")
+
         # Handle git sources
         if "git" in source and not files:
             git_url = source["git"]
@@ -445,6 +452,13 @@ def translate_uv(project_dict, lock_dict, lock_model):
             commit = ""
             if "#" in git_url:
                 commit = git_url.split("#")[-1]
+
+            # uv records git subdirectories in the URL query: ?subdirectory=a%2Fb&rev=...
+            if "?" in git_url:
+                query = git_url.split("#")[0].split("?", 1)[1]
+                for param in query.split("&"):
+                    if param.startswith("subdirectory="):
+                        source_dir = url_decode_filename(param[len("subdirectory="):])
             if commit:
                 synthetic_hash = sha256_from_string(commit)
                 filename = "{}-{}.tar.gz".format(package_name, package_version)
@@ -456,14 +470,12 @@ def translate_uv(project_dict, lock_dict, lock_model):
                     "package_version": package_version,
                 })
 
-        # Source dir
-        source_dir = source.get("subdirectory", "")
-
         # Detect local packages
         is_local_editable = "editable" in source and type(source.get("editable")) == "string"
         is_local_virtual = "virtual" in source and type(source.get("virtual")) == "string"
+        is_local_directory = "directory" in source
         is_local_sdist = type(sdist) == "dict" and "path" in sdist and "url" not in sdist
-        is_local = is_local_sdist or is_local_editable or is_local_virtual
+        is_local = is_local_sdist or is_local_editable or is_local_virtual or is_local_directory
 
         # Base package
         base_pkg = {

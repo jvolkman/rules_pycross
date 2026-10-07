@@ -299,6 +299,9 @@ def create_repos(
             if "extra_build_tools" in pkg and pkg["extra_build_tools"] != None:
                 sdist_repo_attrs["extra_build_tools"] = pkg["extra_build_tools"]
 
+            if pkg.get("source_dir"):
+                sdist_repo_attrs["source_dir"] = pkg["source_dir"]
+
             for attr_name in ("build_backend", "pre_build_patches", "site_hooks"):
                 if attr_name in pkg and pkg[attr_name] != None:
                     sdist_repo_attrs[attr_name] = pkg[attr_name]

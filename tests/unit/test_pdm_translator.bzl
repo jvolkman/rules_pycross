@@ -359,6 +359,31 @@ def _test_pdm_root_dependency_markers(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
     analysis_test(name = name, target = name + "_subject", impl = _test_pdm_root_dependency_markers_impl)
 
+# --- test_pdm_git_dependency ---
+
+# buildifier: disable=unused-variable
+def _test_pdm_git_dependency_impl(env, target):
+    project = _minimal_project(deps = ["sampleproject @ git+https://github.com/pypa/sampleproject.git@main"])
+    lock = _minimal_lock([{
+        "name": "sampleproject",
+        "version": "4.0.0",
+        "git": "https://github.com/pypa/sampleproject.git",
+        "ref": "main",
+        "revision": "621e4974ca25ce531773def586ba3ed8e736b3fc",
+        "subdirectory": "src/pkg",
+    }])
+    result = translate_pdm(project, lock, _lock_model())
+    pkg = result["packages"]["sampleproject@4.0.0"]
+    env.expect.that_str(pkg["source_dir"]).equals("src/pkg")
+    env.expect.that_str(pkg["files"][0]["name"]).equals("sampleproject-4.0.0.tar.gz")
+    env.expect.that_collection(pkg["files"][0]["urls"]).contains_exactly([
+        "git+https://github.com/pypa/sampleproject.git#621e4974ca25ce531773def586ba3ed8e736b3fc",
+    ])
+
+def _test_pdm_git_dependency(name):
+    util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
+    analysis_test(name = name, target = name + "_subject", impl = _test_pdm_git_dependency_impl)
+
 # --- Test suite ---
 
 def pdm_translator_test_suite(name):
@@ -376,5 +401,6 @@ def pdm_translator_test_suite(name):
             _test_pdm_extra_dependency,
             _test_pdm_resolution_forks,
             _test_pdm_root_dependency_markers,
+            _test_pdm_git_dependency,
         ],
     )

@@ -11,6 +11,20 @@ def canonicalize_name(name):
     """Canonicalize a Python package name per PEP 503."""
     return pypackaging.utils.canonicalize_name(name)
 
+def archive_extension(url):
+    """Filename suffix for an sdist synthesized from a direct URL.
+
+    The build tooling picks the extractor by suffix, so a .zip archive must keep it.
+
+    Args:
+        url: The archive URL.
+
+    Returns:
+        ".zip" or ".tar.gz".
+    """
+    path = url.split("#")[0].split("?")[0]
+    return ".zip" if path.lower().endswith(".zip") else ".tar.gz"
+
 def record_root_marker(root_dependency_markers, name, marker):
     """Accumulate the environment markers on a root project dependency.
 
@@ -324,8 +338,8 @@ def resolve_lock_graph(packages, pinned_package_specs, requires_python, strict_d
                 candidates = packages_by_name.get(dep_name, [])
                 found = False
                 for cand in candidates:
-                    cand_extras = [e.lower() for e in cand.get("extras", [])]
-                    if req_extra and req_extra.lower() not in cand_extras:
+                    cand_extras = [canonicalize_name(e) for e in cand.get("extras", [])]
+                    if req_extra and canonicalize_name(req_extra) not in cand_extras:
                         continue
                     if _specifier_contains_version(dep_specifier, cand["version"]):
                         pkg_resolved.append({
@@ -345,13 +359,20 @@ def resolve_lock_graph(packages, pinned_package_specs, requires_python, strict_d
     # Resolve pins
     pinned_keys = {}
     for pin_name, pin_specs in pinned_package_specs.items():
-        pin_packages = packages_by_name.get(pin_name, [])
+        pin_packages = packages_by_name.get(pin_name)
+        key_name = None
+        if pin_packages == None and "[" in pin_name:
+            # No separate name[extra] package (e.g. Poetry): pin the base
+            # version; lock_resolver synthesizes name[extra] from the base.
+            pin_packages = packages_by_name.get(pin_name.split("[")[0])
+            key_name = pin_name
+        pin_packages = pin_packages or []
         pinned_keys[pin_name] = {}
         for constraint, pin_specifier in pin_specs.items():
             found = False
             for pin_pkg in pin_packages:
                 if _specifier_contains_version(pin_specifier, pin_pkg["version"]):
-                    pinned_keys[pin_name][constraint] = _package_key_str(pin_pkg["name"], pin_pkg["version"])
+                    pinned_keys[pin_name][constraint] = _package_key_str(key_name or pin_pkg["name"], pin_pkg["version"])
                     found = True
                     break
             if not found and strict_dependencies:

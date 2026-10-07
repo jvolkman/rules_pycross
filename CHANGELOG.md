@@ -64,6 +64,11 @@ All notable changes to this project will be documented in this file.
 - **Main-repo `native_deps`** include directories now resolve correctly.
 - **`--experimental_output_paths=strip`** no longer breaks builds.
 - **`.tgz`, `.tar.bz2` and `.tar` sdists** can now be built.
+- **Poetry extras** and `python` constraints now resolve.
+- **pylock**: transitive deps for graphless locks (pip, uv export), PDM
+  graphs, and `vcs`/`archive`/`directory` entries.
+- **Lock translators**: git/URL subdirectories, percent-encoded wheel URLs,
+  `.zip` sdists, marker-gated build requires, epoch versions.
 
 ## [2.0.0-alpha.2]
 

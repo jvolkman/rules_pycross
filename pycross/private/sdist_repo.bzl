@@ -213,7 +213,10 @@ def _compute_sdist_build_config(attr, metadata):
         if req_name == "oldest-supported-numpy":
             req_name = "numpy"
 
-        required_build_packages[req_name] = True
+        # Marker-gated entries may not apply to the target environment (and so
+        # may be absent from the lock); don't require them.
+        if ";" not in req:
+            required_build_packages[req_name] = True
 
         # We only add it if it's in the known lock repo mapping.
         # (This will be passed in via rctx.attr.known_packages)
