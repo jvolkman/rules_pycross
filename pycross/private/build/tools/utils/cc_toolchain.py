@@ -73,7 +73,14 @@ def get_wrapper_flags(cflags: str) -> List[str]:
     return result
 
 
-def wrap_compiler(lang: str, cc_exe: str, cflags: str, python_exe: Path, bin_dir: Path) -> Path:
+def wrap_compiler(
+    lang: str,
+    cc_exe: str,
+    cflags: str,
+    python_exe: Path,
+    bin_dir: Path,
+    target_os: str | None = None,
+) -> Path:
     """Generate custom compiler wrapper scripts to filter incompatible linker flags."""
     assert lang in ("cc", "cxx")
 
@@ -95,10 +102,11 @@ def wrap_compiler(lang: str, cc_exe: str, cflags: str, python_exe: Path, bin_dir
     linker_abs_path = None
     fuse_ld_flag = None
 
-    # Check for LLVM linkers next to the compiler. On macOS targets the
-    # Mach-O linker (ld64.lld) must be preferred over the ELF linker
-    # (ld.lld), otherwise Clang will invoke the wrong linker format.
-    for candidate, flag in (("ld64.lld", "ld64.lld"), ("ld.lld", "lld")):
+    # Check for LLVM linkers next to the compiler. LLVM distributions commonly
+    # ship both ld64.lld (Mach-O) and ld.lld (ELF) next to clang, so only
+    # consider ld64.lld when targeting macOS ("darwin"); otherwise use ld.lld.
+    candidates = (("ld64.lld", "ld64.lld"), ("ld.lld", "lld")) if target_os == "darwin" else (("ld.lld", "lld"),)
+    for candidate, flag in candidates:
         candidate_path = cc_path.parent / candidate
         if candidate_path.exists():
             linker_abs_path = str(candidate_path.absolute())
@@ -162,9 +170,10 @@ def setup_cc_layer(ctx: BuildContext, cc_config: Dict[str, Any]) -> None:
     orig_cc = replace_placeholder(ctx.prefix, cc_config["CC"])
     orig_cxx = replace_placeholder(ctx.prefix, cc_config["CXX"])
     cflags = replace_placeholder(ctx.prefix, cc_config["CFLAGS"])
+    target_os = cc_config.get("target_os")
 
-    wrapped_cc = wrap_compiler("cc", orig_cc, cflags, ctx.exec_python, layer_bin_dir)
-    wrapped_cxx = wrap_compiler("cxx", orig_cxx, cflags, ctx.exec_python, layer_bin_dir)
+    wrapped_cc = wrap_compiler("cc", orig_cc, cflags, ctx.exec_python, layer_bin_dir, target_os=target_os)
+    wrapped_cxx = wrap_compiler("cxx", orig_cxx, cflags, ctx.exec_python, layer_bin_dir, target_os=target_os)
 
     # When the toolchain already handles C++ header hermeticity (indicated by
     # -nostdlibinc in flags), it provides libc++ headers via -isystem. We must
