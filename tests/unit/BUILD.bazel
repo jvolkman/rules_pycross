@@ -25,7 +25,6 @@ py_test(
     tags = ["unit"],
     deps = [
         "//pycross/private/tools:inspect_package",
-        "@pycross_internal_deps//packaging:pkg",
     ],
 )
 

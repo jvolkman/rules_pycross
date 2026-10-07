@@ -12,7 +12,7 @@ load("@rules_testing//lib:util.bzl", "util")
 load("//pycross/private:package_repo.bzl", "merge_dependencies_for_testing")
 
 # buildifier: disable=bzl-visibility
-load("//pycross/private:sdist_repo.bzl", "compute_sdist_build_config_for_testing")
+load("//pycross/private:sdist_repo.bzl", "compute_sdist_build_config_for_testing", "validate_requirements_for_testing")
 
 # buildifier: disable=bzl-visibility
 load("//pycross/private:wheel_file.bzl", "render_wheel_file_build_for_testing")
@@ -364,6 +364,67 @@ def _test_tool_deps_from_thin_repo(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
     analysis_test(name = name, target = name + "_subject", impl = _test_tool_deps_from_thin_repo_impl)
 
+# ── Test: validate_requirements in Starlark ─────────────────────────
+
+# buildifier: disable=unused-variable
+def _test_validate_requirements_impl(env, target):
+    """validate_requirements_for_testing checks simple and variant pins using pypackaging.bzl."""
+
+    # 1. Simple pin mismatch
+    w_mismatch = validate_requirements_for_testing(
+        ["numpy>=1.20"],
+        {"numpy": "1.19.0"},
+        "my_pkg-1.0.tar.gz",
+    )
+    env.expect.that_collection(w_mismatch).contains_exactly([
+        "WARNING: The build tools repo pins 'numpy==1.19.0', but 'my_pkg-1.0.tar.gz' requires 'numpy>=1.20' in pyproject.toml.",
+    ])
+
+    # 2. Simple pin match, markers/extras, and unpinned package
+    w_match = validate_requirements_for_testing(
+        [
+            "numpy>=1.20",
+            "setuptools[ssl]>=40; python_version >= '3.8'",
+            "wheel",
+            "unknown-pkg>=99.0",
+        ],
+        {"NumPy": "1.21.0", "setuptools": "68.0.0", "wheel": "0.45.0"},
+        "my_pkg-1.0.tar.gz",
+    )
+    env.expect.that_collection(w_match).contains_exactly([])
+
+    # 3. Variant pin where at least one variant satisfies -> no warning
+    w_variant_ok = validate_requirements_for_testing(
+        ["setuptools>=70.0"],
+        {"setuptools": {"py310": "68.0.0", "py312": "75.1.0"}},
+        "my_pkg-1.0.tar.gz",
+    )
+    env.expect.that_collection(w_variant_ok).contains_exactly([])
+
+    # 4. Variant pin where no variant satisfies -> warning
+    w_variant_bad = validate_requirements_for_testing(
+        ["setuptools>=80.0"],
+        {"setuptools": {"py310": "68.0.0", "py312": "75.1.0"}},
+        "my_pkg-1.0.tar.gz",
+    )
+    env.expect.that_collection(w_variant_bad).contains_exactly([
+        "WARNING: No variant of 'setuptools' satisfies 'setuptools>=80.0' (available: py310=68.0.0, py312=75.1.0).",
+    ])
+
+    # 5. oldest-supported-numpy maps to numpy pin
+    w_oldest_numpy = validate_requirements_for_testing(
+        ["oldest-supported-numpy>=2022.1"],
+        {"numpy": "1.26.4"},
+        "my_pkg-1.0.tar.gz",
+    )
+    env.expect.that_collection(w_oldest_numpy).contains_exactly([
+        "WARNING: The build tools repo pins 'numpy==1.26.4', but 'my_pkg-1.0.tar.gz' requires 'oldest-supported-numpy>=2022.1' in pyproject.toml.",
+    ])
+
+def _test_validate_requirements(name):
+    util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
+    analysis_test(name = name, target = name + "_subject", impl = _test_validate_requirements_impl)
+
 # ── Test suite ──────────────────────────────────────────────────────
 
 def sdist_dedup_test_suite(name):
@@ -380,5 +441,6 @@ def sdist_dedup_test_suite(name):
             _test_wheel_file_build_metadata_paths,
             _test_merge_dependencies_paths,
             _test_tool_deps_from_thin_repo,
+            _test_validate_requirements,
         ],
     )

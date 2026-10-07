@@ -13,9 +13,9 @@ py_library(
     srcs = glob(["utils/*.py"]),
     imports = ["../../../.."],
     deps = [
+        "//pycross/private/third_party/patch_ng",
         "@pycross_internal_deps//build:pkg",
         "@pycross_internal_deps//packaging:pkg",
-        "@pycross_internal_deps//patch_ng:pkg",
     ],
 )
 

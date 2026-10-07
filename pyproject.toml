@@ -9,7 +9,6 @@ requires-python = ">=3.11"
 core = [
     "installer==1.0.0",
     "packaging==26.2",
-    "patch-ng==1.19.1",
 ]
 build = [
     "build==1.5.0",

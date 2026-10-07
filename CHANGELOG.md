@@ -50,6 +50,15 @@ All notable changes to this project will be documented in this file.
   target, `pycross_sdist_repo` emits explicit `tool_deps` from its configured
   `build_tools_repo` (or `<ws>__build`), and `<ws>__build` preserves
   resolution-marker fork pins for transitive tool packages.
+- **`build-system.requires` version-mismatch warnings for sdists are now actually emitted.**
+  Previously this check silently never ran because `exec_internal_tool` dropped
+  `extra_wheels` when `rctx.path(Label("@repo//pkg:wheel"))` resolved to a
+  nonexistent file, causing `inspect_package.py` to skip validation when
+  `packaging` was absent from the interpreter. Version validation against
+  `pin_versions.json` now runs in Starlark in `pycross_sdist_repo` using
+  `pypackaging.bzl`, `patch_ng` is vendored under
+  `//pycross/private/third_party/patch_ng`, and the broken `extra_wheels`
+  parameter has been removed from `exec_internal_tool`.
 
 ## [2.0.0-alpha.2]
 

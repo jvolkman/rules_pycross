@@ -263,6 +263,7 @@ bzl_library(
     deps = [
         ":internal_repo",
         "@pycross_backends//:sdist_dispatch",
+        "@pypackaging.bzl//:pypackaging",
     ],
 )
 

@@ -1,0 +1,15 @@
+load("@rules_pycross_internal//:python.bzl", "py_library")
+
+package(default_visibility = ["//pycross:__subpackages__"])
+
+exports_files(
+    ["patch_ng.py"],
+    visibility = ["//pycross:__subpackages__"],
+)
+
+py_library(
+    name = "patch_ng",
+    srcs = ["patch_ng.py"],
+    imports = ["."],
+    visibility = ["//pycross:__subpackages__"],
+)
