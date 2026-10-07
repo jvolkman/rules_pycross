@@ -681,6 +681,75 @@ def _test_pin_build_multi_branch_no_match_fallback(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
     analysis_test(name = name, target = name + "_subject", impl = _test_pin_build_multi_branch_no_match_fallback_impl)
 
+# ── Test: maybe and [extra]_maybe with transitions use __actual ────
+
+# buildifier: disable=unused-variable
+def _test_pin_build_maybe_with_transition_impl(env, target):
+    """When has_transition is set, :maybe and :[extra]_maybe selects live in __actual/<pkg>."""
+
+    # 1. Single-branch platform-specific pin with target_platform
+    single = pin_build_for_testing(
+        target_name = "pywin32",
+        pin_target_dict = {"": "pywin32@312"},
+        package = {},
+        workspace_repo = "ws",
+        target_platform = "@my//platform:linux",
+        maybe_available_keys = ["pywin32@312"],
+    )
+    env.expect.that_bool("select({" not in single.build).equals(True)
+    env.expect.that_bool('name = "maybe"' in single.build).equals(True)
+    env.expect.that_bool('actual = "//__actual/pywin32:maybe"' in single.build).equals(True)
+    env.expect.that_bool(single.actual_build != None).equals(True)
+    env.expect.that_bool('name = "maybe"' in single.actual_build).equals(True)
+    env.expect.that_bool('"@ws//_lock:_available_pywin32@312": "@ws//_lock:pywin32@312"' in single.actual_build).equals(True)
+
+    # 2. Multi-branch pin and extra with transition_bzl + target_platform + testonly
+    multi = pin_build_for_testing(
+        target_name = "foo",
+        pin_target_dict = {
+            "res_foo_1_0": "foo@1.0",
+            "res_foo_2_0": "foo@2.0",
+        },
+        package = {},
+        workspace_repo = "ws",
+        extras_dict = {
+            "bar": {
+                "res_foo_1_0": "foo[bar]@1.0",
+                "res_foo_2_0": "foo[bar]@2.0",
+            },
+        },
+        target_platform = "//:_internal_platform",
+        transition_bzl = "//:_transition.bzl",
+        maybe_available_keys = ["foo@1.0"],
+        extras_maybe_keys = {"bar": ["foo[bar]@1.0", "foo[bar]@2.0"]},
+        testonly = True,
+    )
+    env.expect.that_bool("select({" not in multi.build).equals(True)
+    env.expect.that_bool('actual = "//__actual/foo:maybe"' in multi.build).equals(True)
+    env.expect.that_bool('actual = "//__actual/foo:extra_bar_maybe"' in multi.build).equals(True)
+
+    maybe_section = multi.build.split('name = "maybe"')[1].split(")")[0]
+    env.expect.that_bool("testonly = True," in maybe_section).equals(True)
+    env.expect.that_bool('platform = "//:_internal_platform"' in maybe_section).equals(True)
+
+    extra_maybe_section = multi.build.split('name = "[bar]_maybe"')[1].split(")")[0]
+    env.expect.that_bool("testonly = True," in extra_maybe_section).equals(True)
+    env.expect.that_bool('platform = "//:_internal_platform"' in extra_maybe_section).equals(True)
+
+    env.expect.that_bool('name = "_maybe_foo_1.0"' in multi.actual_build).equals(True)
+    env.expect.that_bool('"@ws//_lock:_available_foo@1.0": "//__actual/foo:pkg"' in multi.actual_build).equals(True)
+    env.expect.that_bool('"@ws//_lock:is_res_foo_1_0": ":_maybe_foo_1.0"' in multi.actual_build).equals(True)
+    env.expect.that_bool('"@ws//_lock:is_res_foo_2_0": "//__actual/foo:pkg"' in multi.actual_build).equals(True)
+
+    env.expect.that_bool('name = "_maybe_extra_bar_foo_bar__1.0"' in multi.actual_build).equals(True)
+    env.expect.that_bool('name = "_maybe_extra_bar_foo_bar__2.0"' in multi.actual_build).equals(True)
+    env.expect.that_bool('"@ws//_lock:_available_foo[bar]@1.0": "//__actual/foo:extra_bar"' in multi.actual_build).equals(True)
+    env.expect.that_bool('name = "extra_bar_maybe"' in multi.actual_build).equals(True)
+
+def _test_pin_build_maybe_with_transition(name):
+    util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
+    analysis_test(name = name, target = name + "_subject", impl = _test_pin_build_maybe_with_transition_impl)
+
 # ── Test suite ─────────────────────────────────────────────────────
 
 def thin_package_repo_test_suite(name):
@@ -706,5 +775,6 @@ def thin_package_repo_test_suite(name):
             _test_cargo_build_multi_branch,
             _test_backend_tool_deps_labels,
             _test_pin_build_multi_branch_no_match_fallback,
+            _test_pin_build_maybe_with_transition,
         ],
     )

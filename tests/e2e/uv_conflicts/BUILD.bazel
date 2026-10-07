@@ -1,3 +1,4 @@
+load("@project_pinned//:requirements.bzl", pinned_all_requirements = "all_requirements")
 load("@rules_python//python:defs.bzl", "py_test")
 
 # Platforms that select conflict variants via bool_flag settings.
@@ -76,4 +77,19 @@ py_test(
     ],
     main = "tests/test_conflict_version.py",
     deps = ["@project_pinned//typing_extensions"],
+)
+
+# Test that @project_pinned//:requirements.bzl all_requirements (which uses
+# @project_pinned//typing_extensions:maybe because typing-extensions has an
+# availability marker) evaluates its variant and availability selects after the
+# repo transition, resolving typing-extensions 4.11.0 without CLI --flag args.
+py_test(
+    name = "test_transition_pinned_maybe",
+    srcs = ["tests/test_conflict_version.py"],
+    args = [
+        "typing-extensions",
+        "4.11.0",
+    ],
+    main = "tests/test_conflict_version.py",
+    deps = pinned_all_requirements,
 )

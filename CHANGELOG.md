@@ -50,6 +50,12 @@ All notable changes to this project will be documented in this file.
   target, `pycross_sdist_repo` emits explicit `tool_deps` from its configured
   `build_tools_repo` (or `<ws>__build`), and `<ws>__build` preserves
   resolution-marker fork pins for transitive tool packages.
+- **Post-transition `:maybe` and `:[extra]_maybe` `select()` evaluation.**
+  Thin package repos with `platform`, `constraint_values`, or `flags`
+  transitions now emit `:maybe` and `:[extra]_maybe` `select()` aliases under
+  `__actual/<pkg>` and wrap them in `pycross_transitioning_library_proxy`, so
+  both branch-selection and platform-availability conditions are evaluated in
+  the transitioned configuration.
 - **`build-system.requires` version-mismatch warnings for sdists are now actually emitted.**
   Previously this check silently never ran because `exec_internal_tool` dropped
   `extra_wheels` when `rctx.path(Label("@repo//pkg:wheel"))` resolved to a

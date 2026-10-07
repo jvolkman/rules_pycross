@@ -6,10 +6,10 @@ dependencies = []
 
 [project.optional-dependencies]
 variant-a = [
-  "typing-extensions==4.11.0",
+  "typing-extensions==4.11.0 ; sys_platform != 'win32'",
 ]
 variant-b = [
-  "typing-extensions==4.12.2",
+  "typing-extensions==4.12.2 ; sys_platform != 'win32'",
 ]
 
 [dependency-groups]

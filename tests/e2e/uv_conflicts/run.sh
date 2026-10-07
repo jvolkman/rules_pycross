@@ -29,7 +29,8 @@ fi
 echo "Failed as expected."
 
 # Test platform transition: @project_pinned has variant-a pinned via flags on the member import.
-# This should resolve typing-extensions 4.11.0 without any --flag arguments.
+# This should resolve typing-extensions 4.11.0 without any --flag arguments,
+# both via direct @project_pinned//typing_extensions and via :maybe in all_requirements.
 echo "Testing platform transition (variant-a pinned via flags)..."
-bazel test "$@" //:test_transition_pinned --test_output=errors
+bazel test "$@" //:test_transition_pinned //:test_transition_pinned_maybe --test_output=errors
 echo "Platform transition test passed."
