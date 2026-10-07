@@ -50,7 +50,6 @@ stardoc(
         "@rules_cc//cc:find_cc_toolchain_bzl",
         "@rules_pycross_backend_maturin//extensions:maturin",
         "@rules_pycross_backend_maturin//private:cargo_lock_package_repo_hook",
-        "@rules_pycross_backend_maturin//private:cargo_lock_repo",
     ],
 )
 
@@ -63,7 +62,6 @@ stardoc(
         "@rules_cc//cc:find_cc_toolchain_bzl",
         "@rules_pycross_backend_maturin//extensions:setuptools_rust",
         "@rules_pycross_backend_maturin//private:cargo_lock_package_repo_hook",
-        "@rules_pycross_backend_maturin//private:cargo_lock_repo",
     ],
 )
 

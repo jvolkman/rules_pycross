@@ -17,7 +17,7 @@ def validate_transition_attrs(tag, tag_name):
         fail("Tag '{}' cannot specify both 'platform' and ('flags' or 'constraint_values')".format(tag_name))
 
 def package_annotation(
-        always_build = False,
+        build_mode = "auto",
         extra_build_tools = [],
         build_tools_repo = None,
         build_target = None,
@@ -35,7 +35,7 @@ def package_annotation(
         wheel_library_tags = []):
     """Annotations to apply to individual packages."""
     return json.encode(struct(
-        always_build = always_build,
+        build_mode = build_mode,
         extra_build_tools = extra_build_tools,
         build_tools_repo = build_tools_repo,
         build_target = build_target,
@@ -69,7 +69,6 @@ def workspace_lock_struct(ws_tag, repo_name, workspace_name, transition_attrs):
         repo_name = repo_name,
         workspace = workspace_name,
         local_wheels = ws_tag.local_wheels,
-        disallow_builds = ws_tag.disallow_builds,
         flags = transition_attrs.get("flags", []),
         constraint_values = transition_attrs.get("constraint_values", []),
         platform = transition_attrs.get("platform"),
@@ -78,7 +77,7 @@ def workspace_lock_struct(ws_tag, repo_name, workspace_name, transition_attrs):
 def normalize_package_tag(tag):
     """Normalize a generic package tag into a struct."""
     return struct(
-        always_build = tag.always_build,
+        build_mode = tag.build_mode,
         extra_build_tools = tag.extra_build_tools,
         build_tools_repo = tag.build_tools_repo,
         build_target = tag.build_target,
@@ -237,7 +236,6 @@ def register_workspace_repo(
         repo_name,
         projects,
         raw_dependency_groups,
-        legacy_create_root_aliases,
         transition_attrs,
         lock_module,
         extra_project_files):
@@ -255,7 +253,6 @@ def register_workspace_repo(
         projects: List of projects included in this repo.
         raw_dependency_groups: Raw dependency group strings from user config
             (e.g. ["default", "group:dev;testonly", "transitive"]).
-        legacy_create_root_aliases: Boolean to create root aliases.
         transition_attrs: Transition attributes dict.
         lock_module: The module owning this lock.
         extra_project_files: List of extra pyproject.toml files.
@@ -278,13 +275,7 @@ def register_workspace_repo(
         wildcard_testonly = parsed.wildcard_testonly,
         include_transitive = parsed.include_transitive,
         transitive_testonly = parsed.transitive_testonly,
-        legacy_create_root_aliases = legacy_create_root_aliases,
     )
-
-    # Handle attributes that are not common across all lock formats
-    for attr_name in ("require_static_urls",):
-        if hasattr(ws_tag, attr_name):
-            model[attr_name] = getattr(ws_tag, attr_name)
     lock_model_structs[repo_name] = json.encode(model)
 
 def parse_dependency_group_entries(raw_groups):
@@ -318,6 +309,9 @@ def parse_dependency_group_entries(raw_groups):
     for entry in raw_groups:
         parts = entry.split(";")
         spec = parts[0]
+        for modifier in parts[1:]:
+            if modifier != "testonly":
+                fail("Unknown modifier ';{}' in dependency_groups entry '{}'. Only ';testonly' is supported.".format(modifier, entry))
         is_testonly = "testonly" in parts[1:]
 
         if spec == "transitive":
@@ -397,7 +391,6 @@ def process_repo(
         tag.repo,
         tag.projects,
         raw_groups,
-        tag.legacy_create_root_aliases,
         transition_attrs,
         tag_info.module,
         extra_project_files,
@@ -483,7 +476,6 @@ def process_workspaces(
                     projects = [project_name],
                     repo = ws_name,
                     dependency_groups = ["default"],
-                    legacy_create_root_aliases = False,
                     flags = [],
                     constraint_values = [],
                     platform = None,
@@ -521,7 +513,6 @@ def process_workspaces(
             projects = projects,
             repo = repo,
             dependency_groups = getattr(tag, "dependency_groups", ["default"]),
-            legacy_create_root_aliases = getattr(tag, "legacy_create_root_aliases", False),
             flags = getattr(tag, "flags", []),
             constraint_values = getattr(tag, "constraint_values", []),
             platform = getattr(tag, "platform", None),
@@ -558,7 +549,6 @@ def process_workspaces(
             repo_name = build_repo_name,
             projects = ["*"],
             raw_dependency_groups = ["*", "transitive"],
-            legacy_create_root_aliases = False,
             transition_attrs = dict(
                 flags = [],
                 constraint_values = [],

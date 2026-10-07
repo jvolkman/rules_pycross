@@ -61,17 +61,17 @@ uv.repo(
 )
 uv.package(
     name = "rpds-py",
-    always_build = True,
+    build_mode = "always",
     workspace = "uv",
 )
 uv.package(
     name = "jiter",
-    always_build = True,
+    build_mode = "always",
     workspace = "uv",
 )
 uv.package(
     name = "python-geohash",
-    always_build = True,
+    build_mode = "always",
     workspace = "uv",
 )
 
@@ -79,7 +79,6 @@ maturin = use_extension("@rules_pycross_backend_maturin//extensions:maturin.bzl"
 maturin.override(
     name = "jiter",
     cargo_lock = "//:jiter.lock",
-    sdist = "@uv//jiter:sdist",
     workspace = "uv",
 )
 

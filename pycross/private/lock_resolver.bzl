@@ -80,7 +80,7 @@ def _apply_annotation(ann, versions_by_name, all_package_keys):
         extra_build_tools = build_deps,
         build_tools_repo = ann.get("build_tools_repo"),
         build_target = ann.get("build_target"),
-        always_build = ann.get("always_build", False),
+        build_mode = ann.get("build_mode", "auto"),
         ignore_dependencies = ignore_deps,
         extra_dependencies = extra_deps,
         install_exclude_globs = {g: True for g in ann.get("install_exclude_globs", [])},
@@ -239,14 +239,15 @@ def _create_package_resolver(pkg_key, pkg, ann, default_extra_build_tools, conte
             })
             all_dependency_keys.append(dep_key)
 
-    always_build = ann.always_build if ann else False
+    build_mode = ann.build_mode if ann else "auto"
+    always_build = build_mode == "always"
     build_target = ann.build_target if ann else None
     uses_sdist = always_build or (context.always_include_sdist and sdist_file != None) or not wheel_candidates
 
     if not pkg_extra and not wheel_candidates and sdist_file == None and not build_target:
         fail("Package {} has no compatible wheels and no sdist found.".format(pkg_key))
 
-    # When always_build or build_target is set, the user explicitly wants the
+    # When build_mode = "always" or build_target is set, the user explicitly wants the
     # sdist/build_target used rather than pre-built wheels from the registry.
     # Clear wheel_candidates so the renderer aliases directly to the sdist target
     # instead of rendering a wheel chooser that would prefer matching PyPI wheels.
@@ -272,7 +273,7 @@ def _create_package_resolver(pkg_key, pkg, ann, default_extra_build_tools, conte
         "sdist_file": sdist_file,
         "build_target": build_target,
         "build_tools_repo": ann.build_tools_repo if ann else None,
-        "always_build": always_build,
+        "build_mode": build_mode,
         "extra_build_tools": extra_build_tools,
         "install_exclude_globs": list(ann.install_exclude_globs.keys()) if ann else [],
         "post_install_patches": ann.post_install_patches if ann else [],

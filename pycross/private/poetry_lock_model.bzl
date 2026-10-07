@@ -391,7 +391,6 @@ def translate_poetry(project_dict, lock_dict, lock_model):
             ["group:" + g for g in available_dev_groups]
         ),
         project_name = project_name,
-        fail_on_missing = False,
     )
 
     if "default" in requested_groups_dict:

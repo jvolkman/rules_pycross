@@ -1460,7 +1460,7 @@ def _test_always_build_annotation_impl(env, target):
     }
     annotations_data = {
         "foo": {
-            "always_build": True,
+            "build_mode": "always",
         },
     }
 
@@ -1471,7 +1471,7 @@ def _test_always_build_annotation_impl(env, target):
     env.expect.that_bool(pkg["sdist_file"] != None).equals(True)
     env.expect.that_str(pkg["sdist_file"]["key"]).contains("foo-1.0.tar.gz")
 
-    # always_build should clear wheel_candidates so the renderer uses
+    # build_mode = "always" should clear wheel_candidates so the renderer uses
     # the sdist target directly instead of preferring PyPI wheels.
     env.expect.that_collection(pkg["wheel_candidates"]).has_size(0)
 
@@ -1720,6 +1720,35 @@ def _test_pinned_package_not_in_packages(name):
     )
 
 # buildifier: disable=unused-variable
+def _test_build_mode_never_keeps_wheels_impl(env, target):
+    lock_model_data = {
+        "packages": {
+            "foo@1.0": _make_pkg(
+                "foo",
+                "1.0",
+                [
+                    _make_file("foo-1.0-cp310-cp310-manylinux_2_17_x86_64.whl"),
+                    _make_file("foo-1.0.tar.gz"),
+                ],
+            ),
+        },
+        "pins": {"foo": "foo@1.0"},
+    }
+    annotations_data = {"foo": {"build_mode": "never"}}
+
+    res = resolve(lock_model_data, annotations_data = annotations_data, always_include_sdist = False)
+    pkg = res.packages["foo@1.0"]
+
+    # "never" is enforced when sdist repos are created; the resolver just records it.
+    env.expect.that_str(pkg["build_mode"]).equals("never")
+    env.expect.that_collection(pkg["wheel_candidates"]).has_size(1)
+    env.expect.that_bool(pkg["uses_sdist"]).equals(False)
+
+def _test_build_mode_never_keeps_wheels(name):
+    util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
+    analysis_test(name = name, target = name + "_subject", impl = _test_build_mode_never_keeps_wheels_impl)
+
+# buildifier: disable=unused-variable
 def _test_wildcard_always_build_end_to_end_impl(env, target):
     lock_model_data = {
         "packages": {
@@ -1736,7 +1765,7 @@ def _test_wildcard_always_build_end_to_end_impl(env, target):
     }
     annotations_data = {
         "*": {
-            "always_build": True,
+            "build_mode": "always",
         },
     }
 
@@ -1778,8 +1807,8 @@ def _test_wildcard_with_specific_override_end_to_end_impl(env, target):
         },
     }
     annotations_data = {
-        "*": {"always_build": True},
-        "foo": {"always_build": False},
+        "*": {"build_mode": "always"},
+        "foo": {"build_mode": "auto"},
     }
 
     res = resolve(lock_model_data, annotations_data = annotations_data, always_include_sdist = False)
@@ -1809,7 +1838,7 @@ def _test_unconsumed_wildcard_annotations_no_error_impl(env, target):
         "pins": {"foo": "foo@1.0"},
     }
     annotations_data = {
-        "*": {"always_build": True},
+        "*": {"build_mode": "always"},
     }
 
     res = resolve(lock_model_data, annotations_data = annotations_data)
@@ -2210,6 +2239,7 @@ def lock_resolver_test_suite(name):
             _test_empty_lock,
             _test_pinned_package_not_in_packages,
             _test_wildcard_always_build_end_to_end,
+            _test_build_mode_never_keeps_wheels,
             _test_wildcard_with_specific_override_end_to_end,
             _test_unconsumed_wildcard_annotations_no_error,
             _test_build_tools_repo_flows_to_resolved_package,

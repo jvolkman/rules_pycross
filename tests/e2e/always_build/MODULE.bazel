@@ -40,7 +40,7 @@ uv.repo(
 )
 uv.package(
     name = "regex",
-    always_build = True,
+    build_mode = "always",
     build_tools_repo = "build_tools_provider__build",
     workspace = "uv",
 )

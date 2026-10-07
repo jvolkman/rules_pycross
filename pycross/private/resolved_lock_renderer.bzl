@@ -626,9 +626,16 @@ def render_lock_bzl(lock, repo_map, sdist_map = None, rctx_name = ""):
     packages = lock.get("packages", {})
     cycle_groups = lock.get("cycle_groups", {})
 
-    pycross_loads = ["pycross_dist_info", "pycross_library_proxy", "pycross_pep508_evaluator", "pycross_wheel_chooser", "pycross_wheel_library"]
+    # Generated code loads from //pycross/private so these rules don't have to be public API.
+    pycross_loads = {
+        "dist_info.bzl": "pycross_dist_info",
+        "pep508_evaluator.bzl": "pycross_pep508_evaluator",
+        "proxy.bzl": "pycross_library_proxy",
+        "wheel_chooser.bzl": "pycross_wheel_chooser",
+        "wheel_library.bzl": "pycross_wheel_library",
+    }
     if cycle_groups:
-        pycross_loads.insert(0, "pycross_cycle_member_marker_deps")
+        pycross_loads["cycle_member_marker_deps.bzl"] = "pycross_cycle_member_marker_deps"
 
     # Check if selects.bzl is needed (for config_setting_group).
     # True for: packages with wheel candidates but no sdist fallback,
@@ -652,9 +659,10 @@ def render_lock_bzl(lock, repo_map, sdist_map = None, rctx_name = ""):
         "# It is not intended for manual editing.",
         '"""Pycross-generated dependency targets."""',
         "",
-        'load("@rules_pycross//pycross:defs.bzl", {})'.format(
-            ", ".join(['"{}"'.format(s) for s in sorted(pycross_loads)]),
-        ),
+    ] + [
+        'load("@rules_pycross//pycross/private:{}", "{}")'.format(bzl, symbol)
+        for bzl, symbol in sorted(pycross_loads.items())
+    ] + [
         'load("@rules_pycross//pycross/private:pep508_marker_values.bzl",',
         '    "FREETHREADED_VALUES",',
         '    "LIBC_VALUES",',

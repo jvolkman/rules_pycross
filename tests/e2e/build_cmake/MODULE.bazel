@@ -46,7 +46,7 @@ uv.repo(
 )
 uv.package(
     name = "iminuit",
-    always_build = True,
+    build_mode = "always",
     workspace = "uv",
 )
 use_repo(uv, "uv")

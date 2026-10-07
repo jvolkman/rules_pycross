@@ -443,14 +443,16 @@ def resolve_lock_graph(packages, pinned_package_specs, requires_python, strict_d
 
     return result
 
+# Prefixes accepted in dependency_groups entries ('<kind>:<name>' or '<kind>:*').
+_GROUP_KINDS = ["optional", "group"]
+
 def compute_requested_dependency_groups(
         dependency_groups,
         testonly_groups,
         non_testonly_groups,
         wildcard_testonly,
         available_groups,
-        project_name = None,
-        fail_on_missing = True):
+        project_name = None):
     """Compute the definitive list of requested dependency groups and their testonly status.
 
     Processes wildcard group expansions and applies last-wins testonly resolution
@@ -468,8 +470,6 @@ def compute_requested_dependency_groups(
         available_groups: List of fully-prefixed available group names
             (e.g. ["optional:extras1", "group:dev", "group:test"]).
         project_name: Optional project name for error messages.
-        fail_on_missing: If True, fail when an explicitly requested group is missing.
-                         If False, print a warning instead.
 
     Returns:
         A dictionary mapping the group identifier (e.g. "optional:foo", "group:dev")
@@ -491,9 +491,13 @@ def compute_requested_dependency_groups(
             is_testonly = wildcard_testonly
 
         kind, sep, name = group.partition(":")
-        if not sep:
-            if group in available_set:
-                requested[group] = is_testonly
+        if not sep or kind not in _GROUP_KINDS:
+            if group not in available_set:
+                fail("Unknown dependency group '{}'. Expected '*', 'default', 'transitive', or one of: {}.".format(
+                    group,
+                    ", ".join(["'{}:<name>'".format(k) for k in _GROUP_KINDS]),
+                ))
+            requested[group] = is_testonly
             continue
 
         if name == "*":
@@ -505,18 +509,9 @@ def compute_requested_dependency_groups(
 
         for target in targets:
             if target not in available_set:
-                if name != "*":
-                    if project_name:
-                        msg = "Project '{}' does not have group '{}'.".format(project_name, target)
-                    else:
-                        msg = "Dependency group '{}' not found.".format(target)
-
-                    if fail_on_missing:
-                        fail(msg)
-                    else:
-                        # buildifier: disable=print
-                        print("WARNING: " + msg)
-                continue
+                if project_name:
+                    fail("Project '{}' does not have group '{}'.".format(project_name, target))
+                fail("Dependency group '{}' not found.".format(target))
 
             requested[target] = is_testonly
 

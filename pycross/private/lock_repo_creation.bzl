@@ -2,7 +2,7 @@
 
 This module contains the create_repos() function that creates all Bazel repos
 (remote files, sdist repos, package repos, thin repos) from resolved lock data.
-Used by both the legacy lock_repos extension and the unified locks extension.
+Used by the per-format lock extensions (uv, pdm, poetry, pylock).
 """
 
 load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_file")
@@ -23,8 +23,8 @@ _ANNOTATION_FIELDS = ["post_install_patches", "install_exclude_globs", "wheel_li
 def _disallowed_sdist_repo_impl(rctx):
     fail(
         "Package '{}' requires building from source (sdist), ".format(rctx.attr.package_name) +
-        "but builds are disallowed for lock import '{}'. ".format(rctx.attr.lock_name) +
-        "Provide a pre-built wheel or remove disallow_builds.",
+        "but its build_mode is \"never\" (lock import '{}'). ".format(rctx.attr.lock_name) +
+        "Provide a pre-built wheel or set a different build_mode for this package.",
     )
 
 pycross_disallowed_sdist_repo = repository_rule(
@@ -35,6 +35,70 @@ pycross_disallowed_sdist_repo = repository_rule(
     },
 )
 
+def _sdist_builds_disallowed(pkg):
+    """Whether build_mode = "never" forbids building this resolved package's sdist.
+
+    A user-supplied build_target is exempt: it replaces the sdist build entirely.
+    """
+    return pkg.get("build_mode") == "never" and not pkg.get("build_target")
+
+sdist_builds_disallowed_for_testing = _sdist_builds_disallowed
+
+def _normalize_override_name(pkg_name, backend_name, workspace_name):
+    """Normalize an override tag name ("*", "name", or "name@version") into its storage key.
+
+    The package name is canonicalized; the version is kept as written and must match
+    the locked version string.
+    """
+    if pkg_name == "*":
+        return pkg_name
+    name, sep, version = pkg_name.partition("@")
+    if not name or name == "*" or (sep and not version):
+        fail("{} override '{}' (workspace '{}'): expected a package name, 'name@version', or '*'".format(
+            backend_name,
+            pkg_name,
+            workspace_name,
+        ))
+    name = pypackaging.utils.canonicalize_name(name)
+    return "{}@{}".format(name, version) if sep else name
+
+def _validate_override_packages(override_configs, all_resolved_locks, workspace_memberships):
+    """Fail on backend overrides that name a package (or version) not present in their workspace.
+
+    Workspaces that are not known here are skipped: they may belong to a different
+    lock extension (e.g. a pdm workspace when running the uv extension).
+    """
+    workspace_versions = {}  # workspace_name -> {normalized package name -> {version -> True}}
+    for repo_name, rlock in all_resolved_locks.items():
+        names = workspace_versions.setdefault(workspace_memberships.get(repo_name, repo_name), {})
+        for key in rlock.get("packages", {}):
+            parts = parse_package_key(key)
+            names.setdefault(pypackaging.utils.canonicalize_name(parts.name), {})[parts.version] = True
+
+    for workspace_name, packages in override_configs.items():
+        known_names = workspace_versions.get(workspace_name)
+        if known_names == None:
+            continue
+        for override_key, backends in packages.items():
+            if override_key == "*":
+                continue
+            pkg_name, _, version = override_key.partition("@")
+            backend_names = ", ".join(sorted(backends.keys()))
+            if pkg_name not in known_names:
+                fail("{} override for package '{}' matches no package in workspace '{}'".format(
+                    backend_names,
+                    override_key,
+                    workspace_name,
+                ))
+            if version and version not in known_names[pkg_name]:
+                fail("{} override for '{}' matches no locked version of '{}' in workspace '{}'; available versions: {}".format(
+                    backend_names,
+                    override_key,
+                    pkg_name,
+                    workspace_name,
+                    ", ".join(sorted(known_names[pkg_name].keys())),
+                ))
+
 def create_repos(
         module_ctx,
         all_locks,
@@ -42,7 +106,6 @@ def create_repos(
         repo_flags,
         repo_constraint_values,
         repo_platforms,
-        repo_disallow_builds = {},
         workspace_pypi_indexes = {},
         resolved_locks = None):
     """Create all Bazel repos from resolved lock data.
@@ -54,7 +117,6 @@ def create_repos(
         repo_flags: Dict of repo_name -> JSON-encoded flags list.
         repo_constraint_values: Dict of repo_name -> JSON-encoded constraint_values list.
         repo_platforms: Dict of repo_name -> platform string.
-        repo_disallow_builds: Dict of repo_name -> boolean indicating if builds are disallowed.
         workspace_pypi_indexes: Dict of workspace_name -> list of string index URLs.
         resolved_locks: Optional dict of repo_name -> parsed lock JSON dict. When provided,
             lock data is taken from this dict instead of reading from all_locks file labels.
@@ -65,7 +127,7 @@ def create_repos(
     """
     all_remote_files = {}
 
-    # Build per-repo, per-package override configs from registered override files.
+    # Build per-workspace, per-package override configs from registered override files.
     override_configs = {}
     for f in OVERRIDE_FILES:
         data = json.decode(module_ctx.read(f))
@@ -73,7 +135,7 @@ def create_repos(
             for pkg_name, entry in packages.items():
                 backend_name = entry.get("build_backend", "")
                 backend_attrs = entry.get("backend_attrs", {})
-                norm_pkg = pypackaging.utils.canonicalize_name(pkg_name)
+                norm_pkg = _normalize_override_name(pkg_name, backend_name, key)
                 override_configs.setdefault(key, {}).setdefault(norm_pkg, {})[backend_name] = backend_attrs
 
     # Pre-pathify all lock files to minimize restart time (only when reading from files).
@@ -100,6 +162,8 @@ def create_repos(
         repo_name: [key_name(key) for key in rlock.get("packages", {})]
         for repo_name, rlock in all_resolved_locks.items()
     }
+
+    _validate_override_packages(override_configs, all_resolved_locks, workspace_memberships)
 
     # Generate the lock repos and any remote package repos
     per_repo_data = {}  # repo_name -> struct(repo_map, sdist_map, lock_file)
@@ -212,6 +276,12 @@ def create_repos(
             whldir_norm_name = sanitize_name(pkg_name_part)
             whldir_name = "{}-{}.whldir".format(whldir_norm_name, pkg_version)
 
+            if pkg.get("build_tools_repo") and pkg["build_tools_repo"] not in known_packages_by_repo:
+                fail("Package '{}' sets build_tools_repo = '{}', which is not a repo created by this extension. Known repos: {}".format(
+                    pkg_key,
+                    pkg["build_tools_repo"],
+                    ", ".join(sorted(known_packages_by_repo.keys())),
+                ))
             thin_repo = pkg.get("build_tools_repo") or "{}__build".format(workspace_name)
             sdist_repo_attrs = {
                 "name": sdist_repo_name,
@@ -233,13 +303,13 @@ def create_repos(
                 if attr_name in pkg and pkg[attr_name] != None:
                     sdist_repo_attrs[attr_name] = pkg[attr_name]
 
-            pkg_name = key_name(pkg_key)
+            pkg_name = pypackaging.utils.canonicalize_name(parts.name)
             pkg_overrides = {}
 
             def _apply_scope_overrides(src_key):
                 if src_key not in override_configs:
                     return
-                merged = merge_backend_overrides(override_configs[src_key], pkg_name)
+                merged = merge_backend_overrides(override_configs[src_key], pkg_name, pkg_version)
                 for b_name, b_attrs in merged.items():
                     pkg_overrides.setdefault(b_name, {}).update(b_attrs)
 
@@ -249,7 +319,7 @@ def create_repos(
             if pkg_overrides:
                 sdist_repo_attrs["override_backend_configs"] = json.encode(pkg_overrides)
 
-            if repo_disallow_builds.get(repo_name, False):
+            if _sdist_builds_disallowed(pkg):
                 pycross_disallowed_sdist_repo(
                     name = sdist_repo_name,
                     package_name = pkg_key,
@@ -363,3 +433,7 @@ def create_repos(
                 thin_repo_attrs["override_configs"] = ws_overrides_json
 
             thin_package_repo(**thin_repo_attrs)
+
+# Visible for testing
+validate_override_packages_for_testing = _validate_override_packages
+normalize_override_name_for_testing = _normalize_override_name

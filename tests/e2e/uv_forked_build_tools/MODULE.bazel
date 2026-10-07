@@ -38,7 +38,7 @@ uv.repo(
 )
 uv.package(
     name = "six",
-    always_build = True,
+    build_mode = "always",
     site_hooks = [SITE_HOOK],
     workspace = "uv",
 )

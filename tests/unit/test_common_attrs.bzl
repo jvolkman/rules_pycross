@@ -2,10 +2,12 @@
 
 load("@rules_python//python:py_info.bzl", "PyInfo")
 load("@rules_testing//lib:analysis_test.bzl", "analysis_test", "test_suite")
-load("//pycross:defs.bzl", "pycross_library_proxy")
 
 # buildifier: disable=bzl-visibility
 load("//pycross/private:providers.bzl", "PycrossExtractedWheelInfo", "PycrossPackageInfo")
+
+# buildifier: disable=bzl-visibility
+load("//pycross/private:proxy.bzl", "pycross_library_proxy")
 
 # buildifier: disable=bzl-visibility
 load("//pycross/private/build/rules:common_attrs.bzl", "get_unzipped_wheel", "group_tool_deps")

@@ -43,7 +43,7 @@ uv.repo(
 )
 uv.package(
     name = "setproctitle",
-    always_build = True,
+    build_mode = "always",
     extra_build_tools = ["wheel"],  # Test extra_build_tools override
     workspace = "uv",
 )

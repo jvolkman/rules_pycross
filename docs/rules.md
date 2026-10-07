@@ -51,52 +51,6 @@ py_console_script_binary which expects a :dist_info filegroup.
 | <a id="pycross_dist_info-pkg"></a>pkg |  A pycross_wheel_library target.   | <a href="https://bazel.build/concepts/labels">Label</a> | required |  |
 
 
-<a id="pycross_file_proxy"></a>
-
-## pycross_file_proxy
-
-<pre>
-load("@rules_pycross//pycross:defs.bzl", "pycross_file_proxy")
-
-pycross_file_proxy(<a href="#pycross_file_proxy-name">name</a>, <a href="#pycross_file_proxy-actual">actual</a>)
-</pre>
-
-Forwards DefaultInfo from a target. Used for raw file targets (wheels, sdists, dist_info).
-
-**ATTRIBUTES**
-
-
-| Name  | Description | Type | Mandatory | Default |
-| :------------- | :------------- | :------------- | :------------- | :------------- |
-| <a id="pycross_file_proxy-name"></a>name |  A unique name for this target.   | <a href="https://bazel.build/concepts/labels#target-names">Name</a> | required |  |
-| <a id="pycross_file_proxy-actual"></a>actual |  The target to forward DefaultInfo from.   | <a href="https://bazel.build/concepts/labels">Label</a> | required |  |
-
-
-<a id="pycross_library_proxy"></a>
-
-## pycross_library_proxy
-
-<pre>
-load("@rules_pycross//pycross:defs.bzl", "pycross_library_proxy")
-
-pycross_library_proxy(<a href="#pycross_library_proxy-name">name</a>, <a href="#pycross_library_proxy-deps">deps</a>, <a href="#pycross_library_proxy-actual">actual</a>)
-</pre>
-
-Forwards PyInfo and pycross-specific providers from a target, optionally merging additional deps.
-
-Replaces py_library wrappers in generated lock repos, preserving PycrossExtractedWheelInfo,
-PycrossPackageInfo, and OutputGroupInfo that py_library would drop.
-
-**ATTRIBUTES**
-
-
-| Name  | Description | Type | Mandatory | Default |
-| :------------- | :------------- | :------------- | :------------- | :------------- |
-| <a id="pycross_library_proxy-name"></a>name |  A unique name for this target.   | <a href="https://bazel.build/concepts/labels#target-names">Name</a> | required |  |
-| <a id="pycross_library_proxy-deps"></a>deps |  Additional dependencies to merge into the PyInfo provider.   | <a href="https://bazel.build/concepts/labels">List of labels</a> | optional |  `[]`  |
-| <a id="pycross_library_proxy-actual"></a>actual |  The primary target to forward providers from.   | <a href="https://bazel.build/concepts/labels">Label</a> | required |  |
-
-
 <a id="pycross_modules_mapping"></a>
 
 ## pycross_modules_mapping
@@ -167,53 +121,6 @@ pycross_repaired_wheel(<a href="#pycross_repaired_wheel-name">name</a>, <a href=
 | <a id="pycross_repaired_wheel-whldir_name"></a>whldir_name |  Name for the output .whldir TreeArtifact directory. If empty, defaults to '{name}.whldir'.   | String | optional |  `""`  |
 
 
-<a id="pycross_transitioning_file_proxy"></a>
-
-## pycross_transitioning_file_proxy
-
-<pre>
-load("@rules_pycross//pycross:defs.bzl", "pycross_transitioning_file_proxy")
-
-pycross_transitioning_file_proxy(<a href="#pycross_transitioning_file_proxy-name">name</a>, <a href="#pycross_transitioning_file_proxy-actual">actual</a>, <a href="#pycross_transitioning_file_proxy-platform">platform</a>)
-</pre>
-
-Like pycross_file_proxy, but applies a platform transition to the actual target.
-
-**ATTRIBUTES**
-
-
-| Name  | Description | Type | Mandatory | Default |
-| :------------- | :------------- | :------------- | :------------- | :------------- |
-| <a id="pycross_transitioning_file_proxy-name"></a>name |  A unique name for this target.   | <a href="https://bazel.build/concepts/labels#target-names">Name</a> | required |  |
-| <a id="pycross_transitioning_file_proxy-actual"></a>actual |  The target to forward DefaultInfo from (analyzed under the target platform).   | <a href="https://bazel.build/concepts/labels">Label</a> | required |  |
-| <a id="pycross_transitioning_file_proxy-platform"></a>platform |  The target platform to transition to.   | <a href="https://bazel.build/concepts/labels">Label</a> | required |  |
-
-
-<a id="pycross_transitioning_library_proxy"></a>
-
-## pycross_transitioning_library_proxy
-
-<pre>
-load("@rules_pycross//pycross:defs.bzl", "pycross_transitioning_library_proxy")
-
-pycross_transitioning_library_proxy(<a href="#pycross_transitioning_library_proxy-name">name</a>, <a href="#pycross_transitioning_library_proxy-deps">deps</a>, <a href="#pycross_transitioning_library_proxy-actual">actual</a>, <a href="#pycross_transitioning_library_proxy-platform">platform</a>)
-</pre>
-
-Like pycross_library_proxy, but applies a platform transition to the actual target.
-
-Used in thin package repos when a uv_member specifies a target platform.
-
-**ATTRIBUTES**
-
-
-| Name  | Description | Type | Mandatory | Default |
-| :------------- | :------------- | :------------- | :------------- | :------------- |
-| <a id="pycross_transitioning_library_proxy-name"></a>name |  A unique name for this target.   | <a href="https://bazel.build/concepts/labels#target-names">Name</a> | required |  |
-| <a id="pycross_transitioning_library_proxy-deps"></a>deps |  Additional dependencies to merge into the PyInfo provider.   | <a href="https://bazel.build/concepts/labels">List of labels</a> | optional |  `[]`  |
-| <a id="pycross_transitioning_library_proxy-actual"></a>actual |  The primary target to forward providers from (analyzed under the target platform).   | <a href="https://bazel.build/concepts/labels">Label</a> | required |  |
-| <a id="pycross_transitioning_library_proxy-platform"></a>platform |  The target platform to transition to.   | <a href="https://bazel.build/concepts/labels">Label</a> | required |  |
-
-
 <a id="pycross_wheel_headers"></a>
 
 ## pycross_wheel_headers
@@ -250,10 +157,9 @@ configuration (e.g., Meson cross files).
 <pre>
 load("@rules_pycross//pycross:defs.bzl", "pycross_wheel_library")
 
-pycross_wheel_library(<a href="#pycross_wheel_library-name">name</a>, <a href="#pycross_wheel_library-deps">deps</a>, <a href="#pycross_wheel_library-bin_paths">bin_paths</a>, <a href="#pycross_wheel_library-console_scripts">console_scripts</a>, <a href="#pycross_wheel_library-data_paths">data_paths</a>,
-                      <a href="#pycross_wheel_library-experimental_venvs_site_packages">experimental_venvs_site_packages</a>, <a href="#pycross_wheel_library-include_paths">include_paths</a>, <a href="#pycross_wheel_library-install_exclude_globs">install_exclude_globs</a>,
-                      <a href="#pycross_wheel_library-package_name">package_name</a>, <a href="#pycross_wheel_library-package_version">package_version</a>, <a href="#pycross_wheel_library-post_install_patches">post_install_patches</a>, <a href="#pycross_wheel_library-python_version">python_version</a>, <a href="#pycross_wheel_library-site_paths">site_paths</a>,
-                      <a href="#pycross_wheel_library-wheel">wheel</a>)
+pycross_wheel_library(<a href="#pycross_wheel_library-name">name</a>, <a href="#pycross_wheel_library-deps">deps</a>, <a href="#pycross_wheel_library-bin_paths">bin_paths</a>, <a href="#pycross_wheel_library-data_paths">data_paths</a>, <a href="#pycross_wheel_library-experimental_venvs_site_packages">experimental_venvs_site_packages</a>,
+                      <a href="#pycross_wheel_library-include_paths">include_paths</a>, <a href="#pycross_wheel_library-install_exclude_globs">install_exclude_globs</a>, <a href="#pycross_wheel_library-package_name">package_name</a>, <a href="#pycross_wheel_library-package_version">package_version</a>,
+                      <a href="#pycross_wheel_library-post_install_patches">post_install_patches</a>, <a href="#pycross_wheel_library-site_paths">site_paths</a>, <a href="#pycross_wheel_library-wheel">wheel</a>)
 </pre>
 
 
@@ -266,7 +172,6 @@ pycross_wheel_library(<a href="#pycross_wheel_library-name">name</a>, <a href="#
 | <a id="pycross_wheel_library-name"></a>name |  A unique name for this target.   | <a href="https://bazel.build/concepts/labels#target-names">Name</a> | required |  |
 | <a id="pycross_wheel_library-deps"></a>deps |  A list of this wheel's Python library dependencies.   | <a href="https://bazel.build/concepts/labels">List of labels</a> | optional |  `[]`  |
 | <a id="pycross_wheel_library-bin_paths"></a>bin_paths |  The list of bin paths provided by this wheel.   | List of strings | optional |  `[]`  |
-| <a id="pycross_wheel_library-console_scripts"></a>console_scripts |  Deprecated: Use bin_paths instead.   | List of strings | optional |  `[]`  |
 | <a id="pycross_wheel_library-data_paths"></a>data_paths |  The list of data paths provided by this wheel.   | List of strings | optional |  `[]`  |
 | <a id="pycross_wheel_library-experimental_venvs_site_packages"></a>experimental_venvs_site_packages |  -   | <a href="https://bazel.build/concepts/labels">Label</a> | optional |  `"@@rules_python+//python/config_settings:venvs_site_packages"`  |
 | <a id="pycross_wheel_library-include_paths"></a>include_paths |  The list of include paths provided by this wheel.   | List of strings | optional |  `[]`  |
@@ -274,7 +179,6 @@ pycross_wheel_library(<a href="#pycross_wheel_library-name">name</a>, <a href="#
 | <a id="pycross_wheel_library-package_name"></a>package_name |  The name of the package. Used for providing PycrossPackageInfo.   | String | optional |  `""`  |
 | <a id="pycross_wheel_library-package_version"></a>package_version |  The version of the package. Used for providing PycrossPackageInfo.   | String | optional |  `""`  |
 | <a id="pycross_wheel_library-post_install_patches"></a>post_install_patches |  A list of patches to apply after installation.   | <a href="https://bazel.build/concepts/labels">List of labels</a> | optional |  `[]`  |
-| <a id="pycross_wheel_library-python_version"></a>python_version |  The python version required for this wheel ('PY2' or 'PY3')   | String | optional |  `""`  |
 | <a id="pycross_wheel_library-site_paths"></a>site_paths |  The list of site-packages paths provided by this wheel.   | List of strings | optional |  `[]`  |
 | <a id="pycross_wheel_library-wheel"></a>wheel |  The wheel file.   | <a href="https://bazel.build/concepts/labels">Label</a> | required |  |
 
@@ -342,174 +246,5 @@ Information about an extracted (installed) Python wheel.
 | Name  | Description |
 | :------------- | :------------- |
 | <a id="PycrossExtractedWheelInfo-site_packages"></a>site_packages |  File (TreeArtifact): The unzipped site-packages directory containing the wheel's installed files.    |
-
-
-<a id="pycross_cycle_member_marker_deps"></a>
-
-## pycross_cycle_member_marker_deps
-
-<pre>
-load("@rules_pycross//pycross:defs.bzl", "pycross_cycle_member_marker_deps")
-
-pycross_cycle_member_marker_deps(<a href="#pycross_cycle_member_marker_deps-name">name</a>, <a href="#pycross_cycle_member_marker_deps-raw_name">raw_name</a>, <a href="#pycross_cycle_member_marker_deps-member">member</a>, <a href="#pycross_cycle_member_marker_deps-edges">edges</a>, <a href="#pycross_cycle_member_marker_deps-kwargs">**kwargs</a>)
-</pre>
-
-Creates select()-gated cycle member deps with grouped reachability checks.
-
-For each reachability group (set of members with identical reachability
-from this member), creates a single pycross_cycle_dep_needed rule and
-config_setting, then gates all members of the group behind that check.
-
-
-**PARAMETERS**
-
-
-| Name  | Description | Default Value |
-| :------------- | :------------- | :------------- |
-| <a id="pycross_cycle_member_marker_deps-name"></a>name |  The final target name (e.g. "pkg@1.0").   |  none |
-| <a id="pycross_cycle_member_marker_deps-raw_name"></a>raw_name |  The raw package target name (e.g. "_raw_pkg@1.0").   |  none |
-| <a id="pycross_cycle_member_marker_deps-member"></a>member |  The package key of this cycle member.   |  none |
-| <a id="pycross_cycle_member_marker_deps-edges"></a>edges |  Dict edge map: {node: [{"dep": key, "marker": expr}, ...], ...}. The keys of this dict are the full set of cycle members.   |  none |
-| <a id="pycross_cycle_member_marker_deps-kwargs"></a>kwargs |  Marker value attrs (sys_platform, os_name, etc.) passed through to pycross_cycle_dep_needed.   |  none |
-
-
-<a id="pycross_pep508_evaluator"></a>
-
-## pycross_pep508_evaluator
-
-<pre>
-load("@rules_pycross//pycross:defs.bzl", "pycross_pep508_evaluator")
-
-pycross_pep508_evaluator(<a href="#pycross_pep508_evaluator-name">name</a>, <a href="#pycross_pep508_evaluator-kwargs">**kwargs</a>)
-</pre>
-
-Evaluate a PEP 508 marker expression at analysis time.
-
-This macro wraps the underlying rule and returns
-config_common.FeatureFlagInfo with value "true" or "false".
-
-
-**PARAMETERS**
-
-
-| Name  | Description | Default Value |
-| :------------- | :------------- | :------------- |
-| <a id="pycross_pep508_evaluator-name"></a>name |  The target name.   |  none |
-| <a id="pycross_pep508_evaluator-kwargs"></a>kwargs |  Forwarded to the underlying rule.  Must include ``expr`` and may include any PEP 508 marker dimension overrides.   |  none |
-
-
-<a id="pycross_target_platform"></a>
-
-## pycross_target_platform
-
-<pre>
-load("@rules_pycross//pycross:defs.bzl", "pycross_target_platform")
-
-pycross_target_platform(<a href="#pycross_target_platform-name">name</a>, <a href="#pycross_target_platform-kwargs">**kwargs</a>)
-</pre>
-
-
-
-**PARAMETERS**
-
-
-| Name  | Description | Default Value |
-| :------------- | :------------- | :------------- |
-| <a id="pycross_target_platform-name"></a>name |  <p align="center"> - </p>   |  none |
-| <a id="pycross_target_platform-kwargs"></a>kwargs |  <p align="center"> - </p>   |  none |
-
-
-<a id="pycross_wheel_build"></a>
-
-## pycross_wheel_build
-
-<pre>
-load("@rules_pycross//pycross:defs.bzl", "pycross_wheel_build")
-
-pycross_wheel_build(<a href="#pycross_wheel_build-name">name</a>, <a href="#pycross_wheel_build-sdist">sdist</a>, <a href="#pycross_wheel_build-deps">deps</a>, <a href="#pycross_wheel_build-native_deps">native_deps</a>, <a href="#pycross_wheel_build-data">data</a>, <a href="#pycross_wheel_build-copts">copts</a>, <a href="#pycross_wheel_build-linkopts">linkopts</a>, <a href="#pycross_wheel_build-config_settings">config_settings</a>,
-                    <a href="#pycross_wheel_build-path_tools">path_tools</a>, <a href="#pycross_wheel_build-target_environment">target_environment</a>, <a href="#pycross_wheel_build-build_env">build_env</a>, <a href="#pycross_wheel_build-pre_build_hooks">pre_build_hooks</a>, <a href="#pycross_wheel_build-post_build_hooks">post_build_hooks</a>,
-                    <a href="#pycross_wheel_build-whldir_name">whldir_name</a>, <a href="#pycross_wheel_build-kwargs">**kwargs</a>)
-</pre>
-
-Builds a Python wheel from a source distribution.
-
-This is a backward-compatible wrapper around setuptools_build.
-It accepts the v1 pycross_wheel_build arguments and delegates
-to the v2 backend.
-
-
-**PARAMETERS**
-
-
-| Name  | Description | Default Value |
-| :------------- | :------------- | :------------- |
-| <a id="pycross_wheel_build-name"></a>name |  The target name.   |  none |
-| <a id="pycross_wheel_build-sdist"></a>sdist |  The sdist file label.   |  none |
-| <a id="pycross_wheel_build-deps"></a>deps |  Python build dependencies.   |  `[]` |
-| <a id="pycross_wheel_build-native_deps"></a>native_deps |  Native dependencies (CcInfo).   |  `[]` |
-| <a id="pycross_wheel_build-data"></a>data |  Additional data and dependencies used by the build.   |  `[]` |
-| <a id="pycross_wheel_build-copts"></a>copts |  Additional C compiler options.   |  `[]` |
-| <a id="pycross_wheel_build-linkopts"></a>linkopts |  Additional C linker options.   |  `[]` |
-| <a id="pycross_wheel_build-config_settings"></a>config_settings |  PEP 517 config settings.   |  `{}` |
-| <a id="pycross_wheel_build-path_tools"></a>path_tools |  A mapping of binary targets to names placed on PATH during the build. Use {"//tools:cmake3": "cmake"} to rename, or {"//tools:cmake": ""} to use the executable's basename. Can also be passed as a list of targets directly.   |  `{}` |
-| <a id="pycross_wheel_build-target_environment"></a>target_environment |  The target environment JSON label.   |  `None` |
-| <a id="pycross_wheel_build-build_env"></a>build_env |  Environment variables passed to the sdist build. Values are subject to $(location) expansion.   |  `{}` |
-| <a id="pycross_wheel_build-pre_build_hooks"></a>pre_build_hooks |  Executables to run before building the wheel.   |  `[]` |
-| <a id="pycross_wheel_build-post_build_hooks"></a>post_build_hooks |  Executables to run after the wheel is built.   |  `[]` |
-| <a id="pycross_wheel_build-whldir_name"></a>whldir_name |  Name for the output .whldir TreeArtifact.   |  `None` |
-| <a id="pycross_wheel_build-kwargs"></a>kwargs |  Additional arguments passed to setuptools_build.   |  none |
-
-
-<a id="pycross_wheel_chooser"></a>
-
-## pycross_wheel_chooser
-
-<pre>
-load("@rules_pycross//pycross:defs.bzl", "pycross_wheel_chooser")
-
-pycross_wheel_chooser(<a href="#pycross_wheel_chooser-name">name</a>, <a href="#pycross_wheel_chooser-kwargs">**kwargs</a>)
-</pre>
-
-Select the best-matching wheel from a list of candidates.
-
-This macro wraps the private _pycross_wheel_chooser rule. It takes a
-list of candidate wheel filenames and a target platform (which provides
-ordered compatibility tags), and produces a config_common.FeatureFlagInfo
-whose value is the filename of the best matching wheel.
-
-
-**PARAMETERS**
-
-
-| Name  | Description | Default Value |
-| :------------- | :------------- | :------------- |
-| <a id="pycross_wheel_chooser-name"></a>name |  The target name.   |  none |
-| <a id="pycross_wheel_chooser-kwargs"></a>kwargs |  Forwarded to _pycross_wheel_chooser.   |  none |
-
-
-<a id="pypi_file"></a>
-
-## pypi_file
-
-<pre>
-load("@rules_pycross//pycross:defs.bzl", "pypi_file")
-
-pypi_file(<a href="#pypi_file-name">name</a>, <a href="#pypi_file-filename">filename</a>, <a href="#pypi_file-indexes">indexes</a>, <a href="#pypi_file-keep_metadata">keep_metadata</a>, <a href="#pypi_file-package_name">package_name</a>, <a href="#pypi_file-package_version">package_version</a>, <a href="#pypi_file-sha256">sha256</a>)
-</pre>
-
-Downloads a file from a PyPI-compatible package index.
-
-**ATTRIBUTES**
-
-
-| Name  | Description | Type | Mandatory | Default |
-| :------------- | :------------- | :------------- | :------------- | :------------- |
-| <a id="pypi_file-name"></a>name |  A unique name for this repository.   | <a href="https://bazel.build/concepts/labels#target-names">Name</a> | required |  |
-| <a id="pypi_file-filename"></a>filename |  The name of the file to download.   | String | required |  |
-| <a id="pypi_file-indexes"></a>indexes |  Simple Repository API (PEP 503/691) index URLs, tried in order until one lists the file.   | List of strings | optional |  `["https://pypi.org/simple"]`  |
-| <a id="pypi_file-keep_metadata"></a>keep_metadata |  Whether to keep the downloaded index pages (under simple_index/) for debugging.   | Boolean | optional |  `False`  |
-| <a id="pypi_file-package_name"></a>package_name |  The package name.   | String | required |  |
-| <a id="pypi_file-package_version"></a>package_version |  The package version.   | String | required |  |
-| <a id="pypi_file-sha256"></a>sha256 |  The expected SHA-256 of the file downloaded.   | String | required |  |
 
 

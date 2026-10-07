@@ -6,6 +6,7 @@ the generated BUILD file must not contain duplicate label entries.
 """
 
 load("@rules_testing//lib:analysis_test.bzl", "analysis_test", "test_suite")
+load("@rules_testing//lib:truth.bzl", "matching")
 load("@rules_testing//lib:util.bzl", "util")
 
 # buildifier: disable=bzl-visibility
@@ -339,7 +340,8 @@ def _test_tool_deps_from_thin_repo_impl(env, target):
     )
     env.expect.that_collection(json.decode(cfg_empty.macro_attrs["tool_deps"])).contains_exactly([])
 
-    # override_backend_configs tool_deps still overrides the default tool_deps.
+    # override_backend_configs tool_deps replace the defaults per tool package name;
+    # other tools keep their defaults, and keys are normalized.
     cfg_override = compute_sdist_build_config_for_testing(
         _make_attr(
             known_packages = ["setuptools", "wheel"],
@@ -347,7 +349,7 @@ def _test_tool_deps_from_thin_repo_impl(env, target):
             backend_tool_packages = backend_tool_packages,
             override_backend_configs = json.encode({
                 "setuptools_build": {
-                    "tool_deps": json.encode(["@custom//:setuptools"]),
+                    "tool_deps": json.encode({"SetupTools": "@@custom//setuptools:pkg"}),
                 },
             }),
         ),
@@ -357,12 +359,72 @@ def _test_tool_deps_from_thin_repo_impl(env, target):
         },
     )
     env.expect.that_collection(json.decode(cfg_override.macro_attrs["tool_deps"])).contains_exactly([
-        "@custom//:setuptools",
+        "@@custom//setuptools:pkg",
+        "@uv__build//wheel:pkg",
+    ])
+
+    # Override tool_deps can add tools missing from the lock, including repairwheel.
+    cfg_add = compute_sdist_build_config_for_testing(
+        _make_attr(
+            known_packages = ["cmake"],
+            thin_repo = "uv__build",
+            backend_tool_packages = backend_tool_packages,
+            override_backend_configs = json.encode({
+                "cmake_build": {
+                    "tool_deps": json.encode({
+                        "ninja": "@@other//ninja:pkg",
+                        "repairwheel": "@@other//repairwheel:pkg",
+                    }),
+                },
+            }),
+        ),
+        {
+            "build_backend": "scikit_build_core.build",
+            "build_requires": [],
+        },
+    )
+    env.expect.that_collection(json.decode(cfg_add.macro_attrs["tool_deps"])).contains_exactly([
+        "@@other//ninja:pkg",
+        "@@other//repairwheel:pkg",
+        "@uv__build//cmake:pkg",
     ])
 
 def _test_tool_deps_from_thin_repo(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
     analysis_test(name = name, target = name + "_subject", impl = _test_tool_deps_from_thin_repo_impl)
+
+# ── Test: unknown tool_deps override key fails ──────────────────────
+
+def _unknown_tool_dep_subject_impl(ctx):  # @unused
+    compute_sdist_build_config_for_testing(
+        _make_attr(
+            known_packages = ["setuptools", "wheel"],
+            backend_tool_packages = {"setuptools_build": ["setuptools", "wheel"]},
+            override_backend_configs = json.encode({
+                "setuptools_build": {
+                    "tool_deps": json.encode({"pg_config": "@@//:pg_config"}),
+                },
+            }),
+        ),
+        {"build_backend": "setuptools.build_meta", "build_requires": []},
+    )
+    return []
+
+_unknown_tool_dep_subject = rule(implementation = _unknown_tool_dep_subject_impl)
+
+def _test_tool_deps_override_unknown_key_impl(env, target):
+    env.expect.that_target(target).failures().contains_predicate(
+        matching.contains("has unknown tool package 'pg_config'; setuptools_build accepts: repairwheel, setuptools, wheel"),
+    )
+
+def _test_tool_deps_override_unknown_key(name):
+    util.helper_target(_unknown_tool_dep_subject, name = name + "_subject")
+    analysis_test(
+        name = name,
+        target = name + "_subject",
+        impl = _test_tool_deps_override_unknown_key_impl,
+        expect_failure = True,
+    )
 
 # ── Test: validate_requirements in Starlark ─────────────────────────
 
@@ -441,6 +503,7 @@ def sdist_dedup_test_suite(name):
             _test_wheel_file_build_metadata_paths,
             _test_merge_dependencies_paths,
             _test_tool_deps_from_thin_repo,
+            _test_tool_deps_override_unknown_key,
             _test_validate_requirements,
         ],
     )
