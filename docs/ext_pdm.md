@@ -83,6 +83,6 @@ Declare a pdm workspace from a shared lock file.
 | <a id="pdm.workspace-extra_project_files"></a>extra_project_files |  Optional list of extra pyproject.toml files to consider.   | <a href="https://bazel.build/concepts/labels">List of labels</a> | optional |  `[]`  |
 | <a id="pdm.workspace-local_wheels"></a>local_wheels |  A list of local .whl files to consider when processing lock files.   | <a href="https://bazel.build/concepts/labels">List of labels</a> | optional |  `[]`  |
 | <a id="pdm.workspace-lock_file"></a>lock_file |  The shared lock file for the workspace.   | <a href="https://bazel.build/concepts/labels">Label</a> | required |  |
-| <a id="pdm.workspace-pypi_indexes"></a>pypi_indexes |  List of PyPI-compatible indexes to use for downloading packages.   | List of strings | optional |  `[]`  |
+| <a id="pdm.workspace-pypi_indexes"></a>pypi_indexes |  Simple Repository API (PEP 503/691) index URLs, e.g. `https://pypi.org/simple`. Lock entries without a download URL or per-package index are looked up in each index in order. Defaults to PyPI.   | List of strings | optional |  `[]`  |
 
 

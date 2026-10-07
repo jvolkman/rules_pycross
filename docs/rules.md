@@ -494,7 +494,7 @@ whose value is the filename of the best matching wheel.
 <pre>
 load("@rules_pycross//pycross:defs.bzl", "pypi_file")
 
-pypi_file(<a href="#pypi_file-name">name</a>, <a href="#pypi_file-filename">filename</a>, <a href="#pypi_file-index">index</a>, <a href="#pypi_file-keep_metadata">keep_metadata</a>, <a href="#pypi_file-package_name">package_name</a>, <a href="#pypi_file-package_version">package_version</a>, <a href="#pypi_file-sha256">sha256</a>)
+pypi_file(<a href="#pypi_file-name">name</a>, <a href="#pypi_file-filename">filename</a>, <a href="#pypi_file-indexes">indexes</a>, <a href="#pypi_file-keep_metadata">keep_metadata</a>, <a href="#pypi_file-package_name">package_name</a>, <a href="#pypi_file-package_version">package_version</a>, <a href="#pypi_file-sha256">sha256</a>)
 </pre>
 
 Downloads a file from a PyPI-compatible package index.
@@ -506,8 +506,8 @@ Downloads a file from a PyPI-compatible package index.
 | :------------- | :------------- | :------------- | :------------- | :------------- |
 | <a id="pypi_file-name"></a>name |  A unique name for this repository.   | <a href="https://bazel.build/concepts/labels#target-names">Name</a> | required |  |
 | <a id="pypi_file-filename"></a>filename |  The name of the file to download.   | String | required |  |
-| <a id="pypi_file-index"></a>index |  The base URL of the PyPI-compatible package index to use. Defaults to pypi.org.   | String | optional |  `"https://pypi.org"`  |
-| <a id="pypi_file-keep_metadata"></a>keep_metadata |  Whether to store the pypi_metadata.json file for debugging.   | Boolean | optional |  `False`  |
+| <a id="pypi_file-indexes"></a>indexes |  Simple Repository API (PEP 503/691) index URLs, tried in order until one lists the file.   | List of strings | optional |  `["https://pypi.org/simple"]`  |
+| <a id="pypi_file-keep_metadata"></a>keep_metadata |  Whether to keep the downloaded index pages (under simple_index/) for debugging.   | Boolean | optional |  `False`  |
 | <a id="pypi_file-package_name"></a>package_name |  The package name.   | String | required |  |
 | <a id="pypi_file-package_version"></a>package_version |  The package version.   | String | required |  |
 | <a id="pypi_file-sha256"></a>sha256 |  The expected SHA-256 of the file downloaded.   | String | required |  |

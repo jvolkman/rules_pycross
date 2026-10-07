@@ -27,6 +27,7 @@ def define_e2e_tests():
         "reproducible_repos",
         "requirements",
         "sdist_repo",
+        "simple_index",
         "uv_conflicts",
         "uv_cycle",
         "uv_cycle_stress",
