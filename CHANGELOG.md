@@ -31,7 +31,7 @@ All notable changes to this project will be documented in this file.
 - **`pre_build_patches`** are now applied before sdist inspection.
 - **`rules_pycross_backend_maturin`** no longer references the removed
   `environments` extension.
-- **CC compiler wrappers** now select `ld.lld` vs `ld64.lld` based on target OS.
+- **CC compiler wrappers** now forward toolchain `LDFLAGS` on link invocations.
 
 ## [2.0.0-alpha.2]
 

@@ -1,4 +1,8 @@
+import json
 import os
+import subprocess
+import sys
+import textwrap
 import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -13,7 +17,7 @@ class MockBuildContext:
         self.build_env = {}
         self.prefix = temp_dir
         self.temp_dir = temp_dir
-        self.exec_python = Path("/usr/bin/python3")
+        self.exec_python = Path(sys.executable)
 
 
 class CcToolchainTest(unittest.TestCase):
@@ -24,12 +28,30 @@ class CcToolchainTest(unittest.TestCase):
     def tearDown(self):
         self.temp_dir.cleanup()
 
+    def _make_fake_cc(self) -> Path:
+        fake_cc = self.temp_path / "fake_clang"
+        fake_cc.write_text(
+            textwrap.dedent(
+                f"""\
+                #!/bin/sh
+                "exec" "{sys.executable}" "-S" "$0" "$@"
+                import json
+                import sys
+
+                print(json.dumps(sys.argv[1:]))
+                """
+            )
+        )
+        fake_cc.chmod(0o755)
+        return fake_cc
+
     def test_wrap_compiler(self):
         bin_dir = self.temp_path / "bin"
         bin_dir.mkdir()
 
         cflags = "-O2 -target x86_64-linux-gnu --sysroot=/tmp/sysroot"
-        wrapper = wrap_compiler("cc", "/usr/bin/gcc", cflags, Path("/usr/bin/python3"), bin_dir)
+        ldflags = "-fuse-ld=lld -B/tmp/crt -L/tmp/glibc -Wl,--as-needed -Wl,-O1 -lpthread"
+        wrapper = wrap_compiler("cc", "/usr/bin/gcc", cflags, Path(sys.executable), bin_dir, ldflags=ldflags)
 
         self.assertTrue(wrapper.exists())
         self.assertTrue(os.access(wrapper, os.X_OK))
@@ -40,39 +62,50 @@ class CcToolchainTest(unittest.TestCase):
         self.assertIn("'-target'", content)
         self.assertIn("'x86_64-linux-gnu'", content)
         self.assertIn("'--sysroot=/tmp/sysroot'", content)
+        self.assertIn("linker_flags = ['-fuse-ld=lld', '-B/tmp/crt', '-L/tmp/glibc', '-lpthread']", content)
 
         self.assertIn("-Wl,--start-group", content)
         self.assertIn("-Wl,--end-group", content)
         self.assertIn("-Wl,--as-needed", content)
 
-    def test_wrap_compiler_linker_selection(self):
+    def test_wrap_compiler_link_vs_non_link_invocations(self):
         bin_dir = self.temp_path / "bin"
         bin_dir.mkdir(exist_ok=True)
+        fake_cc = self._make_fake_cc()
 
-        # LLVM distributions commonly ship both ld64.lld and ld.lld next to clang.
-        llvm_dir = self.temp_path / "llvm_bin"
-        llvm_dir.mkdir()
-        (llvm_dir / "clang").touch()
-        (llvm_dir / "ld64.lld").touch()
-        (llvm_dir / "ld.lld").touch()
+        cflags = "-O2 -target x86_64-linux-gnu --sysroot=/dev/null"
+        ldflags = "-fuse-ld=lld -B/tmp/crt -L/tmp/glibc -Wl,--as-needed -Wl,-O1 -lpthread"
+        wrapper = wrap_compiler("cc", str(fake_cc), cflags, Path(sys.executable), bin_dir, ldflags=ldflags)
 
-        # On Linux (or unspecified target_os), ld.lld (ELF) must be selected.
-        wrapper_linux = wrap_compiler(
-            "cc", str(llvm_dir / "clang"), "-O2", Path("/usr/bin/python3"), bin_dir, target_os="linux"
+        def run_wrapper(*args: str) -> list[str]:
+            out = subprocess.check_output([str(wrapper), *args], text=True)
+            return json.loads(out)
+
+        expected_prefix = ["-target", "x86_64-linux-gnu", "--sysroot=/dev/null"]
+        expected_linker_tail = ["-fuse-ld=lld", "-B/tmp/crt", "-L/tmp/glibc", "-lpthread"]
+
+        # Real link: LDFLAGS appended after caller args, incompatible flags filtered from both.
+        self.assertEqual(
+            run_wrapper("probe.o", "-Wl,--as-needed", "-Wl,--start-group", "-lm", "-Wl,--end-group", "-o", "probe"),
+            expected_prefix + ["probe.o", "-lm", "-o", "probe"] + expected_linker_tail,
         )
-        content_linux = wrapper_linux.read_text()
-        self.assertIn("fuse_ld_flag = 'lld'", content_linux)
 
-        wrapper_default = wrap_compiler("cc", str(llvm_dir / "clang"), "-O2", Path("/usr/bin/python3"), bin_dir)
-        content_default = wrapper_default.read_text()
-        self.assertIn("fuse_ld_flag = 'lld'", content_default)
-
-        # On macOS (darwin), ld64.lld (Mach-O) must be selected.
-        wrapper_mac = wrap_compiler(
-            "cc", str(llvm_dir / "clang"), "-O2", Path("/usr/bin/python3"), bin_dir, target_os="darwin"
-        )
-        content_mac = wrapper_mac.read_text()
-        self.assertIn("fuse_ld_flag = 'ld64.lld'", content_mac)
+        # Compile / preprocess / assemble / dependency-gen / syntax-only / partial link (-r) / bare -v:
+        # LDFLAGS must NOT be appended.
+        non_link_cases = [
+            ["-c", "probe.c", "-o", "probe.o"],
+            ["-E", "probe.c"],
+            ["-S", "probe.c"],
+            ["-M", "probe.c"],
+            ["-MM", "probe.c"],
+            ["-fsyntax-only", "probe.c"],
+            ["-r", "a.o", "b.o", "-o", "combined.o"],
+            ["-v"],
+            [],
+        ]
+        for case in non_link_cases:
+            with self.subTest(case=case):
+                self.assertEqual(run_wrapper(*case), expected_prefix + case)
 
     def test_setup_cc_layer(self):
         ctx = MockBuildContext(self.temp_path)
@@ -89,7 +122,7 @@ class CcToolchainTest(unittest.TestCase):
             "CXX": "/usr/bin/g++",
             "CFLAGS": "-O2",
             "CXXFLAGS": "-O2",
-            "LDFLAGS": "-Wl,-O1",
+            "LDFLAGS": "-fuse-ld=lld -B$$EXT_BUILD_ROOT$$/crt -Wl,-O1",
             "LDSHAREDFLAGS": "-shared -Wl,-O1",
             "AR": "/usr/bin/ar",
             "ARFLAGS": "rcs",
@@ -101,6 +134,11 @@ class CcToolchainTest(unittest.TestCase):
         self.assertIn("PYCROSS_LIBRARY_PATH", ctx.build_env)
         self.assertIn("PYCROSS_INCLUDE_PATH", ctx.build_env)
         self.assertTrue(ctx.build_env["PYCROSS_LIBRARY_PATH"].endswith("cc_layer/lib"))
+
+        # Assert wrapper received placeholder-expanded, filtered LDFLAGS
+        cc_wrapper_content = Path(ctx.sysconfig_vars["CC"]).read_text()
+        self.assertIn(f"'-B{self.temp_path}/crt'", cc_wrapper_content)
+        self.assertIn("'-fuse-ld=lld'", cc_wrapper_content)
 
         # Assert LDSHARED
         self.assertIn("LDSHARED", ctx.sysconfig_vars)
