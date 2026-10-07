@@ -253,6 +253,7 @@ def _pin_build(target_name, pin_target_dict, package, workspace_repo, workspace_
     emit_platform = bool(target_platform)
     has_transition = bool(transition_bzl or target_platform)
 
+    actual_pkg = None
     if lock_target_dict:
         lines.extend([
             "alias(",
@@ -375,29 +376,82 @@ def _pin_build(target_name, pin_target_dict, package, workspace_repo, workspace_
             ")",
             "",
         ])
-        if extra_name in extras_maybe_keys:
+        if extra_name in extras_maybe_keys and extras_maybe_keys[extra_name] and extra_target_dict:
+            if has_transition:
+                actual_extra_maybe = "extra_{}_maybe".format(extra_name)
+                _emit_maybe_alias(
+                    actual_lines,
+                    actual_extra_maybe,
+                    actual_extra.rstrip(",").strip('"'),
+                    extra_target_dict,
+                    extras_maybe_keys[extra_name],
+                    workspace_repo,
+                    default_variants = default_variants,
+                    helper_prefix = "_maybe_extra_{}".format(extra_name),
+                )
+                lines.extend([
+                    lib_rule + "(",
+                    '    name = "[{}]_maybe",'.format(extra_name),
+                    '    actual = "{}:{}",'.format(actual_pkg_ref, actual_extra_maybe),
+                ])
+                if testonly:
+                    lines.append("    testonly = True,")
+                if emit_platform:
+                    lines.append('    platform = "{}",'.format(target_platform))
+                lines.extend([
+                    ")",
+                    "",
+                ])
+            else:
+                _emit_maybe_alias(
+                    lines,
+                    "[{}]_maybe".format(extra_name),
+                    ":[{}]".format(extra_name),
+                    extra_target_dict,
+                    extras_maybe_keys[extra_name],
+                    workspace_repo,
+                    default_variants = default_variants,
+                    helper_prefix = "_maybe_extra_{}".format(extra_name),
+                )
+
+    if maybe_available_keys and lock_target_dict:
+        maybe_name = _safe_name(target_name, "maybe")
+        pkg_name = _safe_name(target_name, "pkg")
+        if has_transition:
             _emit_maybe_alias(
-                lines,
-                "[{}]_maybe".format(extra_name),
-                ":[{}]".format(extra_name),
-                extra_target_dict,
-                extras_maybe_keys[extra_name],
+                actual_lines,
+                "maybe",
+                actual_pkg.rstrip(",").strip('"'),
+                lock_target_dict,
+                maybe_available_keys,
                 workspace_repo,
                 default_variants = default_variants,
-                helper_prefix = "_maybe_extra_{}".format(extra_name),
+                helper_prefix = "_maybe",
             )
-
-    if maybe_available_keys:
-        _emit_maybe_alias(
-            lines,
-            _safe_name(target_name, "maybe"),
-            ":{}".format(_safe_name(target_name, "pkg")),
-            lock_target_dict,
-            maybe_available_keys,
-            workspace_repo,
-            default_variants = default_variants,
-            helper_prefix = "_maybe",
-        )
+            lines.extend([
+                lib_rule + "(",
+                '    name = "{}",'.format(maybe_name),
+                '    actual = "{}:maybe",'.format(actual_pkg_ref),
+            ])
+            if testonly:
+                lines.append("    testonly = True,")
+            if emit_platform:
+                lines.append('    platform = "{}",'.format(target_platform))
+            lines.extend([
+                ")",
+                "",
+            ])
+        else:
+            _emit_maybe_alias(
+                lines,
+                maybe_name,
+                ":{}".format(pkg_name),
+                lock_target_dict,
+                maybe_available_keys,
+                workspace_repo,
+                default_variants = default_variants,
+                helper_prefix = "_maybe",
+            )
 
     actual_build = None
     if actual_lines:
