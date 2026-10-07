@@ -65,6 +65,11 @@ All notable changes to this project will be documented in this file.
   `pypackaging.bzl`, `patch_ng` is vendored under
   `//pycross/private/third_party/patch_ng`, and the broken `extra_wheels`
   parameter has been removed from `exec_internal_tool`.
+- **`pre_build_patches` applied before sdist inspection.** `pycross_sdist_repo`
+  now passes `pre_build_patches` to `inspect_package.py`, which extracts the
+  sdist and applies patches before inspecting `pyproject.toml` and `site_paths`,
+  so patched `build-system.requires`, `build-backend`, and package layouts take
+  effect during repository generation.
 
 ## [2.0.0-alpha.2]
 

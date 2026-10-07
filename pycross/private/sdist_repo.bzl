@@ -237,7 +237,7 @@ def _compute_sdist_build_config(attr, metadata):
 
     # Pass through pre_build_patches if specified.
     if attr.pre_build_patches:
-        macro_attrs["pre_build_patches"] = str(attr.pre_build_patches)
+        macro_attrs["pre_build_patches"] = str([str(p) for p in attr.pre_build_patches])
 
     # Pass through site_hooks if specified.
     if attr.site_hooks:
@@ -342,6 +342,8 @@ def _sdist_repo_common(rctx):
     ]
     if rctx.attr.source_dir:
         inspect_args.extend(["--source-dir", rctx.attr.source_dir])
+    for patch_label in rctx.attr.pre_build_patches:
+        inspect_args.extend(["--pre-build-patch", str(rctx.path(patch_label))])
 
     exec_internal_tool(
         rctx,
@@ -435,7 +437,7 @@ _SDIST_REPO_ATTRS = {
         doc = "JSON-encoded dict mapping backend rule names to their backend_attrs for this package. " +
               "Populated from backend override extensions. Only the entry matching the resolved backend is applied.",
     ),
-    "pre_build_patches": attr.string_list(doc = "Patches to apply to the sdist source tree before building."),
+    "pre_build_patches": attr.label_list(doc = "Patches to apply to the sdist source tree before building."),
     "site_hooks": attr.string_list(doc = "Python code snippets to execute on interpreter startup during builds."),
     "whldir_name": attr.string(doc = "Name for the output .whldir TreeArtifact directory."),
     "source_dir": attr.string(doc = "Subdirectory within the sdist archive to build."),
