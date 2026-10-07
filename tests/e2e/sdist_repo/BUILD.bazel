@@ -2,4 +2,5 @@ exports_files([
     "lock.json",
     "pin_versions.json",
     "pin_versions_mismatch.json",
+    "use_hatchling.patch",
 ])
