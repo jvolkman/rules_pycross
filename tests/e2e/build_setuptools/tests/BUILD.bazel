@@ -23,3 +23,9 @@ py_test(
     srcs = ["test_pyyaml.py"],
     deps = ["@uv//pyyaml:pkg"],
 )
+
+py_test(
+    name = "test_distutils_probe",
+    srcs = ["test_distutils_probe.py"],
+    deps = ["//:distutils_probe"],
+)

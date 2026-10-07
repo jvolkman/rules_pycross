@@ -51,6 +51,29 @@ def parse_ar_and_guess_ranlib(ar: str | None) -> Tuple[List[str], Path | None]:
     return ar_list, None
 
 
+_FILTERED_LINKER_ARGS = (
+    "-Wl,--start-group",
+    "-Wl,--end-group",
+    "-Wl,-start_group",
+    "-Wl,-end_group",
+    "-Wl,--as-needed",
+    "-Wl,--allow-shlib-undefined",
+    "-Wl,-O1",
+)
+
+# Compiler driver modes that stop before linking, plus relocatable partial
+# links (-r, which conflicts with LDFLAGS like --gc-sections / -l*).
+_NON_LINK_ARGS = (
+    "-c",
+    "-E",
+    "-S",
+    "-M",
+    "-MM",
+    "-fsyntax-only",
+    "-r",
+)
+
+
 def get_wrapper_flags(cflags: str) -> List[str]:
     """Extract target and sysroot flags to forward to compiler wrappers."""
     possible_flags = ["-target", "--target", "--sysroot", "-isysroot", "-mmacosx-version-min"]
@@ -79,7 +102,7 @@ def wrap_compiler(
     cflags: str,
     python_exe: Path,
     bin_dir: Path,
-    target_os: str | None = None,
+    ldflags: str = "",
 ) -> Path:
     """Generate custom compiler wrapper scripts to filter incompatible linker flags."""
     assert lang in ("cc", "cxx")
@@ -93,25 +116,8 @@ def wrap_compiler(
         wrapper_name = cc_path.name
 
     wrapper_flags = get_wrapper_flags(cflags)
+    linker_flags = [arg for arg in shlex.split(ldflags) if arg not in _FILTERED_LINKER_ARGS]
     wrapper_path = bin_dir / wrapper_name
-
-    # Find the linker binary next to the compiler. This path is injected
-    # into the wrapper for link invocations so that feature detection link tests
-    # (e.g. Meson's compiler.links()) use the correct cross-linker instead of
-    # the system default linker.
-    linker_abs_path = None
-    fuse_ld_flag = None
-
-    # Check for LLVM linkers next to the compiler. LLVM distributions commonly
-    # ship both ld64.lld (Mach-O) and ld.lld (ELF) next to clang, so only
-    # consider ld64.lld when targeting macOS ("darwin"); otherwise use ld.lld.
-    candidates = (("ld64.lld", "ld64.lld"), ("ld.lld", "lld")) if target_os == "darwin" else (("ld.lld", "lld"),)
-    for candidate, flag in candidates:
-        candidate_path = cc_path.parent / candidate
-        if candidate_path.exists():
-            linker_abs_path = str(candidate_path.absolute())
-            fuse_ld_flag = flag
-            break
 
     with open(wrapper_path, "w") as f:
         f.write(
@@ -124,26 +130,25 @@ def wrap_compiler(
 
                 cc_exe = {repr(cc_exe)}
                 wrapper_flags = {repr(wrapper_flags)}
-                linker_abs_path = {repr(linker_abs_path)}
-                fuse_ld_flag = {repr(fuse_ld_flag)}
-                
+                linker_flags = {repr(linker_flags)}
+                filtered_linker_args = {repr(_FILTERED_LINKER_ARGS)}
+                non_link_args = {repr(_NON_LINK_ARGS)}
+
                 filtered_args = []
-                is_link = True
+                is_link = bool(sys.argv[1:])
                 for arg in sys.argv[1:]:
-                    if arg == "-c":
+                    if arg in non_link_args:
                         is_link = False
-                    if arg in ("-Wl,--start-group", "-Wl,--end-group", "-Wl,-start_group", "-Wl,-end_group", "-Wl,--as-needed", "-Wl,--allow-shlib-undefined", "-Wl,-O1"):
+                    if arg in filtered_linker_args:
                         continue
                     filtered_args.append(arg)
 
-                extra_flags = []
-                if is_link and linker_abs_path:
-                    linker_dir = os.path.dirname(linker_abs_path)
-                    os.environ["PATH"] = linker_dir + os.pathsep + os.environ.get("PATH", "")
-                    if fuse_ld_flag:
-                        extra_flags.append(f"-fuse-ld={{fuse_ld_flag}}")
+                if filtered_args == ["-v"]:
+                    is_link = False
 
-                os.execv(cc_exe, [cc_exe] + wrapper_flags + extra_flags + filtered_args)
+                extra_link_flags = linker_flags if is_link else []
+
+                os.execv(cc_exe, [cc_exe] + wrapper_flags + filtered_args + extra_link_flags)
                 """
             )
         )
@@ -170,10 +175,10 @@ def setup_cc_layer(ctx: BuildContext, cc_config: Dict[str, Any]) -> None:
     orig_cc = replace_placeholder(ctx.prefix, cc_config["CC"])
     orig_cxx = replace_placeholder(ctx.prefix, cc_config["CXX"])
     cflags = replace_placeholder(ctx.prefix, cc_config["CFLAGS"])
-    target_os = cc_config.get("target_os")
+    raw_ldflags = replace_placeholder(ctx.prefix, cc_config["LDFLAGS"])
 
-    wrapped_cc = wrap_compiler("cc", orig_cc, cflags, ctx.exec_python, layer_bin_dir, target_os=target_os)
-    wrapped_cxx = wrap_compiler("cxx", orig_cxx, cflags, ctx.exec_python, layer_bin_dir, target_os=target_os)
+    wrapped_cc = wrap_compiler("cc", orig_cc, cflags, ctx.exec_python, layer_bin_dir, ldflags=raw_ldflags)
+    wrapped_cxx = wrap_compiler("cxx", orig_cxx, cflags, ctx.exec_python, layer_bin_dir, ldflags=raw_ldflags)
 
     # When the toolchain already handles C++ header hermeticity (indicated by
     # -nostdlibinc in flags), it provides libc++ headers via -isystem. We must
