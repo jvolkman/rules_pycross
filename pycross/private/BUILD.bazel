@@ -190,7 +190,7 @@ bzl_library(
 pycross_unsupported_wheel(
     name = "no_match_error",
     target_compatible_with = select({
-        "//pycross/settings:defer_unsupported_wheel_errors_enabled": [],
+        "//pycross/settings:unavailable_package_fail_at_execution": [],
         "//conditions:default": ["@platforms//:incompatible"],
     }),
     visibility = ["//visibility:public"],

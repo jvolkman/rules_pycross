@@ -707,25 +707,26 @@ This is particularly useful for locking variant selections to a member without r
 
 ---
 
-## Deferring Unsupported Wheel Failures
+## Handling Unavailable Packages
 
-By default, a package that has no compatible wheel for the target environment (and no sdist to fall back to) is marked [incompatible](https://bazel.build/extending/platforms#skipping-incompatible-targets): targets that depend on it are skipped by `bazel build //...` and fail analysis when requested explicitly. (`all_requirements` and other platform-conditional aggregates exclude such packages instead.)
+A package is unavailable in the selected target environment when it has no compatible wheel (and no sdist to fall back to) or when its resolution-marker fork or conflict-variant `select()` has no matching branch. The `--@rules_pycross//pycross/settings:unavailable_package_mode` flag controls how such packages behave:
 
-This is a problem for consumers that only *analyze* dependencies, such as type-checking aspects that attach stub packages via implicit attributes: they see a target without the usual providers and fail even when the package would never be built. To defer these failures to execution, enable:
+* **`incompatible` (default)** — unavailable packages are marked [incompatible](https://bazel.build/extending/platforms#skipping-incompatible-targets): targets that depend on them are skipped by `bazel build //...` and `bazel test //...`, and fail analysis when requested explicitly. (`all_requirements` and other platform-conditional `:maybe` aggregates exclude such packages instead.)
+* **`fail_at_execution`** — unavailable packages analyze successfully and provide the usual providers (`PyInfo`, etc.), registering an action that fails only when executed. Building anything that actually needs the package fails with a `No compatible wheel is available ...` error.
+
+`fail_at_execution` is useful when running consumers that only *analyze* dependencies—such as type-checking aspects that attach stub packages via implicit attributes, which otherwise see a target without the usual providers and fail even when the package is never built—or when you want wildcard `bazel build //...` / `bazel test //...` runs to fail loudly instead of silently skipping targets with unavailable dependencies:
 
 ```
 # .bazelrc
-common --@rules_pycross//pycross/settings:defer_unsupported_wheel_errors
+common --@rules_pycross//pycross/settings:unavailable_package_mode=fail_at_execution
 ```
 
-With the flag enabled, unsupported packages analyze successfully and provide the usual providers (`PyInfo`, etc.). Building anything that actually needs the package fails with `No compatible wheel is available for <package> in the selected target environment.`
-
 > [!WARNING]
-> Because unsupported packages are no longer incompatible, `bazel build //...` and `bazel test //...` will **fail** (rather than skip) targets that depend on a package without a wheel for the current platform. If you rely on incompatible-target skipping, scope the flag to a config instead (e.g. `common:typecheck --@rules_pycross//pycross/settings:defer_unsupported_wheel_errors`, used with `--config=typecheck`).
+> Under `unavailable_package_mode=fail_at_execution`, unavailable packages are no longer incompatible, so `bazel build //...` and `bazel test //...` will **fail** (rather than skip) targets that depend on a package unavailable for the current platform or Python version. If you rely on incompatible-target skipping for normal builds, scope the setting to a config instead (e.g. `common:typecheck --@rules_pycross//pycross/settings:unavailable_package_mode=fail_at_execution`, used with `--config=typecheck`).
 
 Set the flag with `common` rather than `build` so that `build`, `test`, and `cquery` share a configuration; changing a build setting between commands discards Bazel's analysis cache.
 
-Independently of this flag, sdist builds whose configuration is known to be broken at analysis time (e.g. `build-system.requires` packages missing from the lock file, or no `meson`/`cmake`/`ninja`/`maturin` in `tool_deps`) always analyze successfully and fail at execution with `Cannot build <sdist file> from source: ...`. This keeps aspects and `cquery` working on platforms where such a package would fall back to a source build that is never actually run.
+Independently of this setting, sdist builds whose configuration is known to be broken at analysis time (e.g. `build-system.requires` packages missing from the lock file, or no `meson`/`cmake`/`ninja`/`maturin` in `tool_deps`) always analyze successfully and fail at execution with `Cannot build <sdist file> from source: ...`. This keeps aspects and `cquery` working on platforms where such a package would fall back to a source build that is never actually run.
 
 ---
 

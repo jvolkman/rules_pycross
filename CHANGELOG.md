@@ -18,9 +18,18 @@ All notable changes to this project will be documented in this file.
   `@rules_pycross//pycross/private:no_match_error` on `//conditions:default`, so
   non-matching resolution-marker forks become incompatible targets by default (or
   deferred build errors under
-  `--@rules_pycross//pycross/settings:defer_unsupported_wheel_errors`) instead of
-  failing analysis with a "configurable attribute doesn't match this
+  `--@rules_pycross//pycross/settings:unavailable_package_mode=fail_at_execution`)
+  instead of failing analysis with a "configurable attribute doesn't match this
   configuration" error.
+- **Breaking: `unavailable_package_mode` setting.** Removed the boolean
+  `--@rules_pycross//pycross/settings:defer_unsupported_wheel_errors` flag and
+  `//pycross/settings:defer_unsupported_wheel_errors_enabled` `config_setting`;
+  use the string flag
+  `--@rules_pycross//pycross/settings:unavailable_package_mode={incompatible,fail_at_execution}`
+  (default `incompatible`)
+  and `//pycross/settings:unavailable_package_fail_at_execution` `config_setting`
+  instead, covering both packages without a compatible wheel and fork/variant
+  `select()`s without a matching branch.
 
 ### Fixed
 

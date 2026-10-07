@@ -2,11 +2,11 @@
 
 Targets that cannot produce their outputs for the selected target environment
 (an sdist build with missing build requirements, or - when
-`//pycross/settings:defer_unsupported_wheel_errors` is enabled - a package with
-no compatible wheel) analyze successfully and instead register an action that
-fails when executed. This lets aspects and other analysis-only consumers
-traverse the dependency graph without tripping over packages they never
-actually build.
+`//pycross/settings:unavailable_package_mode=fail_at_execution` is set - a
+package with no compatible wheel or no matching fork/variant branch) analyze
+successfully and instead register an action that fails when executed. This lets
+aspects and other analysis-only consumers traverse the dependency graph without
+tripping over packages they never actually build.
 """
 
 def register_failure_action(ctx, outputs, message, mnemonic, progress_message):
