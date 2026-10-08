@@ -98,6 +98,8 @@ cmake_build = rule(
     implementation = _cmake_build_impl,
     attrs = COMMON_BUILD_ATTRS | CC_BUILD_ATTRS | CC_TOOLCHAIN_ATTRS | REPAIR_BUILD_ATTRS | TOOL_EXTRACT_ATTRS | {
         "tool_deps": attr.label_list(
+            doc = "Python build tool packages (`cmake`, `ninja` and `scikit-build-core`). " +
+                  "The generated `@<repo>//_backend` macro fills these in from the lock file.",
             cfg = pycross_exec_platform_transition,
         ),
         "_builder": attr.label(

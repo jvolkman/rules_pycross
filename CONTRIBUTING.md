@@ -19,21 +19,25 @@ Some targets are generated from sources.
 Currently this is just the `bzl_library` targets.
 Run `bazel run //:gazelle` to keep them up-to-date.
 
-## Using this as a development dependency of other rules
+## Remote cache
 
-You'll commonly find that you develop in another WORKSPACE, such as
-some other ruleset that depends on rules_pycross, or in a nested
-WORKSPACE in the integration_tests folder.
-
-To always tell Bazel to use this directory rather than some release
-artifact or a version fetched from the internet, run this from this
-directory:
+CI uses a BuildBuddy remote cache. Pull request runs use a public read-only API key and don't upload results; only trusted runs (pushes to `main`, scheduled and manual runs) write to the cache.
+You can use the same read-only cache locally with `--config=remote-ro` (defined in the root `.bazelrc`):
 
 ```sh
-OVERRIDE="--override_repository=rules_pycross=$(pwd)/rules_pycross"
-echo "build $OVERRIDE" >> ~/.bazelrc
-echo "fetch $OVERRIDE" >> ~/.bazelrc
-echo "query $OVERRIDE" >> ~/.bazelrc
+bazel test --config=remote-ro //tests/unit/...
+```
+
+The root `.bazelrc` (and so `remote-ro`) applies only in the root workspace and `examples/bzlmod`, not in the nested e2e workspaces under `tests/e2e/`.
+
+## Using this as a development dependency of other rules
+
+To test changes from another module that depends on rules_pycross (for example
+a ruleset or a project of your own), point Bazel at this checkout. Run this
+from this directory:
+
+```sh
+echo "common --override_module=rules_pycross=$(pwd)" >> ~/.bazelrc
 ```
 
 This means that any usage of `@rules_pycross` on your system will point to this folder.

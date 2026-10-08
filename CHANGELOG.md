@@ -6,12 +6,8 @@ All notable changes to this project will be documented in this file.
 
 ### Breaking
 
-- **`defer_unsupported_wheel_errors` replaced by `unavailable_package_mode`.**
-  Use `--@rules_pycross//pycross/settings:unavailable_package_mode=fail_at_execution`.
-- **Index URLs are now Simple API roots.** Files without URLs (Poetry, PDM) are
-  resolved via PEP 691/503; use e.g. `https://pypi.org/simple` in `pypi_indexes`.
-- **`pypi_file` `index` replaced by `indexes`.** All `pypi_indexes` entries are
-  now tried in order.
+- **`pypi_indexes` are now Simple API roots** (e.g. `https://pypi.org/simple`),
+  tried in order for files without URLs (Poetry, PDM).
 - **Backend override `tool_deps`** is now a `{tool package name: label}` dict
   merged over the backend's default tools.
 - **Backend override tags**: `repo` removed, `workspace` required, `name` must
@@ -34,17 +30,28 @@ All notable changes to this project will be documented in this file.
 - **`all_requirements` excludes testonly packages.** They are now in
   `all_testonly_requirements`.
 
+### Added
+
+- **`unavailable_package_mode` flag**: `fail_at_execution` defers unavailable
+  packages to an execution-time error instead of making them incompatible.
+- **`extra_dependencies`** package annotation.
+- **`repair_exclude_globs`** on build rules and backend overrides.
+- **`repo(settings = ...)`**: label-keyed build settings for repo transitions.
+
 ### Changed
 
 - **`build_backend` annotation** now only overrides the build rule; sdist
   inspection and `build-system.requires` detection still run.
-- **Unmatched fork/variant `select()`s** now yield incompatible targets instead
-  of analysis errors.
+- **Sdist build-config errors** (missing build requirements or tools) now fail
+  at execution instead of analysis.
+- **Unmatched resolution-marker forks**, and packages missing from the selected
+  variant, now yield unavailable targets instead of analysis errors.
 
 ### Fixed
 
 - **Pre-built wheels** now preserve `bin_paths`, `data_paths`, and
   `include_paths`.
+- **Wheels with a local version** (e.g. `+cpu`) now install.
 - **`extra_build_tools`** is now honored for auto-detected backends.
 - **Malformed `pyproject.toml`** in an sdist now falls back to PEP 517 defaults.
 - **Backend `tool_deps`** now respect resolution-marker forks and
@@ -56,8 +63,11 @@ All notable changes to this project will be documented in this file.
 - **`pre_build_patches`** are now applied before sdist inspection.
 - **`rules_pycross_backend_maturin`** no longer references the removed
   `environments` extension.
+- **Repository contents cache**: repo rules are reproducible and no longer
+  record host-specific paths.
 - **CC compiler wrappers** now forward toolchain `LDFLAGS` on link invocations.
-- **README override examples** (setuptools `pg_config`, maturin `use_repo`) corrected.
+- **README examples** corrected (override `tool_deps`, maturin `use_repo`,
+  `__build` overrides, and more).
 - **Non-sandboxed sdist builds** no longer reuse stale sources or share a
   scratch directory across packages.
 - **C/C++ flags with quotes or spaces** (e.g. `-D__DATE__="redacted"`) now
@@ -66,17 +76,22 @@ All notable changes to this project will be documented in this file.
 - **Main-repo `native_deps`** include directories now resolve correctly.
 - **`--experimental_output_paths=strip`** no longer breaks builds.
 - **`.tgz`, `.tar.bz2` and `.tar` sdists** can now be built.
+- **`pep517_build` for macOS targets** no longer fails on Linux hosts that have
+  `clang` installed.
 - **Poetry extras** and `python` constraints now resolve.
 - **pylock**: transitive deps for graphless locks (pip, uv export), PDM
   graphs, and `vcs`/`archive`/`directory` entries.
 - **Lock translators**: git/URL subdirectories, percent-encoded wheel URLs,
   `.zip` sdists, marker-gated build requires, epoch versions.
+- **Root dependencies with markers** are now gated per platform in all lock
+  formats.
 - **Generated repos**: forks, markers and extras for workspace members; extras
-  availability; `[_all_]` references; uv variant scoping; `transitive;testonly`
-  reachability; `build_mode = "never"` without wheels is unavailable instead of
-  a failing fetch; `modules_mapping` builds under the repo transition.
-- **`repo(flags=...)` and new `repo(settings=...)`** take command-line style
-  flags and label-keyed build settings; both work without `constraint_values`.
+  availability; multiple extras of one package; `[_all_]` references; uv
+  variant scoping; `transitive;testonly` reachability; `build_mode = "never"`
+  without wheels is unavailable instead of a failing fetch; `modules_mapping`
+  builds under the repo transition.
+- **`repo(flags = ...)`** works without `constraint_values` and accepts built-in
+  options (`--compilation_mode=opt`) and repeated list flags.
 
 ## [2.0.0-alpha.2]
 
@@ -181,8 +196,8 @@ All notable changes to this project will be documented in this file.
   Tarjan's SCC algorithm runs over the full dependency graph for correct
   detection of all cycles (#253).
 - **Starlark port of `pypa/packaging`.** Pure-Starlark implementations of
-  PEP 440 versions, PEP 508 markers, PEP 425 tags, and specifiers under
-  `//pycross/private/pypackaging` (#251, #252, #254).
+  PEP 440 versions, PEP 508 markers, PEP 425 tags, and specifiers, now the
+  separate `pypackaging.bzl` module (#251, #252, #254).
 - **Starlark lock translator and resolver.** Lock file translation and dependency
   resolution are now pure Starlark, running inline during module extension
   evaluation. The Python-based translator and resolver have been removed

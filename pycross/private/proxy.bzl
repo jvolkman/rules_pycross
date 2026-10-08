@@ -97,7 +97,7 @@ pycross_transitioning_library_proxy = rule(
     implementation = _pycross_library_proxy_impl,
     doc = """Like pycross_library_proxy, but applies a platform transition to the actual target.
 
-Used in thin package repos when a repo() tag specifies a target platform.""",
+Used in thin package repos when a repo() tag specifies `platform` or `constraint_values`.""",
     attrs = dict({
         "actual": attr.label(
             mandatory = True,
