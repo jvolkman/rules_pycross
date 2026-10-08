@@ -22,6 +22,8 @@ Configure rules_pycross.
 
 ### configure_interpreter
 
+Configure the Python interpreter used to run rules_pycross's internal repository tools.
+
 **Attributes**
 
 | Name  | Description | Type | Mandatory | Default |
@@ -32,6 +34,8 @@ Configure rules_pycross.
 <a id="pycross.configure_toolchains"></a>
 
 ### configure_toolchains
+
+Restrict the target platforms and Python versions, and set platform version constraints.
 
 **Attributes**
 

@@ -56,6 +56,7 @@ pycross = module_extension(
     implementation = _pycross_impl,
     tag_classes = {
         "configure_interpreter": tag_class(
+            doc = "Configure the Python interpreter used to run rules_pycross's internal repository tools.",
             attrs = {
                 "python_interpreter_target": attr.label(
                     doc = "The label to a python executable to use for invoking internal tools.",
@@ -66,6 +67,7 @@ pycross = module_extension(
             },
         ),
         "configure_toolchains": tag_class(
+            doc = "Restrict the target platforms and Python versions, and set platform version constraints.",
             attrs = CONFIGURE_TOOLCHAINS_ATTRS,
         ),
     },

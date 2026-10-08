@@ -51,15 +51,21 @@ def resolve_path_tools(ctx):
     return result
 
 COMMON_BUILD_ATTRS = {
-    "sdist": attr.label(mandatory = True, allow_single_file = True),
+    "sdist": attr.label(
+        mandatory = True,
+        allow_single_file = True,
+        doc = "The sdist archive to build.",
+    ),
     "source_dir": attr.string(
         doc = "Subdirectory within the sdist source tree to build.",
     ),
     "deps": attr.label_list(
+        doc = "Runtime dependencies of the package, available on the build's Python path.",
         providers = [PyInfo],
         cfg = pycross_exec_platform_transition,
     ),
     "build_deps": attr.label_list(
+        doc = "Build-time Python packages (e.g. `build-system.requires`), available on the build's Python path.",
         providers = [PyInfo],
         cfg = pycross_exec_platform_transition,
     ),
@@ -103,11 +109,24 @@ COMMON_BUILD_ATTRS = {
 } | RESOURCE_SET_ATTRS
 
 CC_BUILD_ATTRS = {
-    "native_deps": attr.label_list(providers = [CcInfo]),
-    "copts": attr.string_list(),
-    "linkopts": attr.string_list(),
-    "config_settings": attr.string_list_dict(),
-    "pkg_config_files": attr.label_list(allow_files = True),
+    "native_deps": attr.label_list(
+        doc = "C/C++ libraries whose headers and libraries are made available to the build.",
+        providers = [CcInfo],
+    ),
+    "copts": attr.string_list(
+        doc = "Extra C/C++ compiler flags, appended after the toolchain flags.",
+    ),
+    "linkopts": attr.string_list(
+        doc = "Extra linker flags, appended after the toolchain flags.",
+    ),
+    "config_settings": attr.string_list_dict(
+        doc = "PEP 517 `config_settings` passed to the build backend. " +
+              "Values are subject to $(location) expansion.",
+    ),
+    "pkg_config_files": attr.label_list(
+        doc = "pkg-config `.pc` files made available to the build (e.g. from `pycross_cc_pkg_config`).",
+        allow_files = True,
+    ),
     "path_tools": attr.label_list(
         doc = "A list of binary targets placed on PATH during the build. " +
               "Targets can be raw executables or pycross_path_tool targets.",

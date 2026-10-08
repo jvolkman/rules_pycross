@@ -22,9 +22,11 @@ See the [CI results](https://github.com/jvolkman/rules_pycross/actions/workflows
 
 ## Getting Started
 
-Add your lock file import to `MODULE.bazel`:
+Add `rules_pycross` and your lock file import to `MODULE.bazel`:
 
 ```python
+bazel_dep(name = "rules_pycross", version = "2.0.0")
+
 uv = use_extension("@rules_pycross//pycross/extensions:uv.bzl", "uv")
 
 uv.workspace(
@@ -52,7 +54,9 @@ use_repo(uv, "pypi")
 
 After this, packages are available as `@pypi//package_name`. A `requirement()` macro is generated in `@pypi//:requirements.bzl`.
 
-Other lock formats work the same way via their respective extensions: `pdm.bzl`, `poetry.bzl`, or `pylock.bzl`.
+Other lock formats work the same way via their respective extensions: `pdm.bzl`, `poetry.bzl`, or `pylock.bzl`. A `pylock.toml` without a dependency graph (as written by `pip lock` and `uv export`) is installed as a whole, like PEP 751 installers do: each pinned package depends on every locked package whose marker matches the target.
+
+Building sdists that contain native code needs a registered C/C++ toolchain; use a hermetic one (e.g. [toolchains_llvm](https://github.com/bazel-contrib/toolchains_llvm)) for cross builds. BUILD files that use `py_binary`/`py_test` also need a `bazel_dep` on `rules_python`.
 
 ### Repository Defaults and Auto-Generation
 
@@ -81,22 +85,36 @@ uv.workspace(
 
 These explicitly specified files are appended to the auto-discovered files.
 
+#### Package Indexes
+
+Lock entries without a download URL (common with Poetry and PDM) are looked up by filename through the Simple Repository API (PEP 691/503), in the package's own index if the lock records one. Otherwise, set `pypi_indexes` on the `workspace()` tag to use other indexes; they are tried in order and default to PyPI:
+
+```python
+uv.workspace(
+    name = "pypi",
+    lock_file = "//:uv.lock",
+    pypi_indexes = ["https://pypi.example.com/simple", "https://pypi.org/simple"],
+)
+```
+
 #### The Internal Build Tools Repository (`__build`)
 
 For every workspace, `rules_pycross` also auto-generates an internal companion repository named `<workspace>__build` (e.g., `@pypi__build`).
 
 * **Purpose**: Provides build-time tools (like `setuptools`, `hatchling`, etc.) required to build source distributions (sdists) hermetically.
-* **Content**: Includes all projects and all dependency groups (`*`) from the workspace.
+* **Content**: Includes all projects, all dependency groups and their transitive packages (`["*", "transitive"]`) from the workspace.
 
 This repository is managed automatically. However, if you need to customize its settings (such as restricting its dependency groups), you can override it by explicitly declaring a repo with the `<workspace>__build` name:
 
 ```python
 uv.repo(
     name = "pypi__build",
-    dependency_groups = ["default", "group:build"],
+    dependency_groups = ["default", "group:build", "transitive"],
     workspace = "pypi",
 )
 ```
+
+An overridden build repo must still provide every package needed to build sdists (`build-system.requires`, backend tools, `extra_build_tools`), so keep `"transitive"` unless those are all pinned directly.
 
 ### Migrating from the legacy two-extension pattern
 
@@ -113,7 +131,7 @@ lock_import.import_uv(
 )
 lock_import.package(
     name = "numpy",
-    build_mode = "always",
+    always_build = True,
     repo = "pypi",
 )
 lock_repos = use_extension("@rules_pycross//pycross/extensions:lock_repos.bzl", "lock_repos")
@@ -130,7 +148,7 @@ uv.repo(
 )
 uv.package(
     name = "numpy",
-    build_mode = "always",
+    build_mode = "always",  # was: always_build = True
     workspace = "pypi",  # was: repo = "pypi"
 )
 use_repo(uv, "pypi")
@@ -191,7 +209,7 @@ The `dependency_groups` attribute on `uv.repo()` controls which dependency group
 * `"optional:<name>"` — a specific optional dependency group (`[project.optional-dependencies]`)
 * `"group:<name>"` — a specific dependency group (`[dependency-groups]`)
 * `"optional:*"` / `"group:*"` — all optional or all dependency groups
-* `"*"` — all groups (default + all optional + all development)
+* `"*"` — all groups (default + all optional + all dependency groups)
 
 The default is `["default"]`.
 
@@ -213,7 +231,7 @@ uv.repo(
 )
 ```
 
-If a transitive package has multiple versions in the lock file, `rules_pycross` will print a warning and alias to the highest version.
+If a transitive package has multiple versions in the lock file, the alias `select()`s between them when they belong to resolution-marker forks; otherwise `rules_pycross` prints a warning and aliases to the highest version.
 
 > **Note:** `"transitive"` is a modifier, not a dependency group — it is _not_ included by the `*` wildcard. You must list it explicitly.
 
@@ -349,6 +367,8 @@ uv.package(
 )
 ```
 
+`ignore_dependencies` and `extra_dependencies` drop or add runtime dependencies (as package keys) when a package's metadata is wrong. See the [API reference](docs/ext_uv.md) for all annotation fields.
+
 Use `name = "*"` to set defaults for all packages. Fields left unset on a specific `package()` entry inherit the wildcard's value; fields set on it replace the wildcard's value:
 
 ```python
@@ -406,11 +426,11 @@ use_repo(uv, "frontend_deps", "ml_deps")
 
 | Backend | Detected from `build-backend` | Use case |
 |---|---|---|
-| `pep517_build` | `hatchling`, `flit_core`, `pdm.backend`, `poetry.core.masonry.api` | Pure-Python packages (default fallback) |
+| `pep517_build` | `hatchling.build`, `flit_core.buildapi`, `pdm.backend`, `poetry.core.masonry.api`, and any other backend | Pure-Python packages (default fallback) |
 | `setuptools_build` | `setuptools.build_meta` | C extension packages using setuptools |
 | `setuptools_rust_build` | `setuptools.build_meta` (when `setuptools-rust` is in `build-system.requires`) | Rust+Python packages using setuptools-rust |
 | `meson_build` | `mesonpy` | Scientific packages (numpy, pandas, etc.) |
-| `cmake_build` | `scikit_build_core.build`, `skbuild` | Packages using CMake/scikit-build |
+| `cmake_build` | `scikit_build_core.build` | Packages using CMake/scikit-build-core |
 | `maturin_build` | `maturin` | Rust+Python packages via maturin |
 
 ### Choosing Between Wheels and Sdists
@@ -447,7 +467,7 @@ These package keys must match entries in the lock file. Only packages that aren'
 
 #### Custom Build Tools Repository
 
-By default, build tools are resolved from the internal `<workspace>__build` repository. If a specific package needs to resolve its build dependencies from a different repository, you can specify `build_tools_repo` in its `package()` annotation:
+By default, build tools are resolved from the internal `<workspace>__build` repository. If a specific package needs to resolve its build dependencies from a different repository (declared with the same extension), you can specify `build_tools_repo` in its `package()` annotation:
 
 ```python
 uv.package(
@@ -642,7 +662,7 @@ When `rules_pycross` processes a lock file with conflicts, it generates:
 
 1. **`bool_flag` targets** under `@<repo>//_variants:` — one per conflict member (e.g., `extra_cpu`, `extra_cu124`).
 2. **`config_setting` targets** — `@<repo>//_variants:is_extra_cpu`, `@<repo>//_variants:is_extra_cu124`.
-3. **`select()` expressions** on the package aliases — so `@<repo>//:torch` resolves to the correct version based on which flag is set.
+3. **`select()` expressions** on the package aliases — so `@<repo>//torch` resolves to the correct version based on which flag is set.
 
 ### Selecting a Variant
 
@@ -699,7 +719,7 @@ The generated flags follow the pattern `group_<name>` (e.g., `--@pypi//_variants
 
 ### Platform Transitions
 
-When a workspace member needs to be built under a specific platform configuration—for example, to pin a variant flag or target a particular architecture—you can declare a platform transition on the member import. This causes all proxy targets in the thin repo to apply a Bazel `--platforms` transition, ensuring the backing workspace targets are analyzed under the specified platform.
+When a workspace member needs to be built under a specific configuration—for example, to pin a variant flag or target a particular architecture—you can declare a transition on its `repo()` tag. All proxy targets in the thin repo then apply a Bazel transition, so the backing workspace targets are analyzed under the specified platform and flags.
 
 There are three ways to specify the transition:
 
@@ -745,7 +765,7 @@ These attributes are available on `uv.repo()` and its PDM/Poetry/Pylock equivale
 
 When `constraint_values` are specified, `rules_pycross` generates an internal `platform()` target and uses `pycross_transitioning_library_proxy` / `pycross_transitioning_file_proxy` at each package level to apply the `--platforms` transition.
 
-When `flags` are specified, `rules_pycross` additionally generates a custom `_transition.bzl` in the thin repo. This is necessary because Bazel's `platform(flags=[...])` mechanism only applies during top-level platform mapping — it does **not** take effect when `--platforms` is set via a Starlark transition. The generated transition directly sets the individual flag values (and `--platforms`, when `constraint_values` are given). Root-level targets become transitioning proxies so that `select()` expressions in per-package BUILD files resolve in the transitioned configuration where the flags are set.
+When `flags` or `settings` are specified, `rules_pycross` additionally generates a custom `_transition.bzl` in the thin repo. This is necessary because Bazel's `platform(flags=[...])` mechanism only applies during top-level platform mapping — it does **not** take effect when `--platforms` is set via a Starlark transition. The generated transition directly sets the individual flag values (and `--platforms`, when `constraint_values` are given). Root-level targets become transitioning proxies so that `select()` expressions in per-package BUILD files resolve in the transitioned configuration where the flags are set.
 
 Each `flags` entry is written like a command-line flag, `--<flag>[=<value>]` (a missing value means `True`):
 
@@ -769,11 +789,13 @@ Use `flags` for built-in options and labels `rules_pycross` can see (such as its
 
 This is particularly useful for locking variant selections to a member without requiring `--flag` arguments on every `bazel build` invocation.
 
+The transition applies to the repo's whole closure, including sdist builds from the workspace: these read the configured `--copt`/`--linkopt`/`--compilation_mode`, so such flags reach native compiles. Each transitioned repo therefore builds its sdists in a separate configuration, with no sharing with the untransitioned build.
+
 ---
 
 ## Handling Unavailable Packages
 
-A package is unavailable in the selected target environment when it has no compatible wheel (and no sdist to fall back to) or when its resolution-marker fork or conflict-variant `select()` has no matching branch. The `--@rules_pycross//pycross/settings:unavailable_package_mode` flag controls how such packages behave:
+A package is unavailable in the selected target environment when it has no compatible wheel (and no sdist to fall back to), when no resolution-marker fork matches, or when the selected conflict variant doesn't include it. (Selecting no variant from a conflict set that has no default is still an analysis error; see [Default Groups](#default-groups).) The `--@rules_pycross//pycross/settings:unavailable_package_mode` flag controls how such packages behave:
 
 * **`incompatible` (default)** — unavailable packages are marked [incompatible](https://bazel.build/extending/platforms#skipping-incompatible-targets): targets that depend on them are skipped by `bazel build //...` and `bazel test //...`, and fail analysis when requested explicitly. (`all_requirements` and other platform-conditional `:maybe` aggregates exclude such packages instead.)
 * **`fail_at_execution`** — unavailable packages analyze successfully and provide the usual providers (`PyInfo`, etc.), registering an action that fails only when executed. Building anything that actually needs the package fails with a `No compatible wheel is available ...` error.
@@ -799,7 +821,7 @@ Independently of this setting, sdist builds whose configuration is known to be b
 `rules_pycross` integrates with `rules_python`. The generated target layout (`@<repo>//<package>`) is compatible with `rules_python` conventions.
 
 * **Venv support** — when `rules_python` venvs are enabled, `pycross_wheel_library` populates the symlinks needed for a correct `site-packages` layout. Auto-detected paths can be overridden via `uv.package(site_paths = [...])`, and additional path categories (`bin_paths`, `data_paths`, `include_paths`) are also supported.
-* **`py_console_script_binary`** — each `pycross_wheel_library` produces a `:dist_info` output group for entry point discovery. Use `py_console_script_binary(pkg = "@pypi//cython", script = "cython")` directly.
+* **`py_console_script_binary`** — each generated package has a `@<repo>//<package>:dist_info` target for entry point discovery. Use `py_console_script_binary(pkg = "@pypi//cython", script = "cython")` directly.
 
 ---
 

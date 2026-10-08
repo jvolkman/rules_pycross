@@ -92,9 +92,13 @@ meson_build = rule(
     implementation = _meson_build_impl,
     attrs = COMMON_BUILD_ATTRS | CC_BUILD_ATTRS | CC_TOOLCHAIN_ATTRS | REPAIR_BUILD_ATTRS | TOOL_EXTRACT_ATTRS | {
         "tool_deps": attr.label_list(
+            doc = "Python build tool packages (`meson`, `ninja` and `meson-python`). " +
+                  "The generated `@<repo>//_backend` macro fills these in from the lock file.",
             cfg = pycross_exec_platform_transition,
         ),
-        "meson_properties": attr.string_dict(),
+        "meson_properties": attr.string_dict(
+            doc = "Extra entries for the `[properties]` section of the generated Meson cross file.",
+        ),
         "allow_native_exec": attr.bool(
             doc = "Allow Meson to run compiled test binaries on the build host during " +
                   "feature detection. When False (default), Meson always uses compile-only " +
