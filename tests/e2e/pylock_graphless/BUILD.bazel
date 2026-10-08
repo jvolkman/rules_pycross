@@ -1,0 +1,9 @@
+load("@rules_python//python:defs.bzl", "py_test")
+
+py_test(
+    name = "test_graphless",
+    srcs = ["test_graphless.py"],
+    deps = [
+        "@graphless_lock//python_dateutil",
+    ],
+)

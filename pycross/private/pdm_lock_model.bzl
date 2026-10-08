@@ -15,6 +15,7 @@ load(
     "resolution_marker_constraint_name",
     "resolve_lock_graph",
     "select_project_file",
+    "sha256_from_string",
 )
 load(":util.bzl", "url_decode_filename")
 
@@ -210,9 +211,22 @@ def translate_pdm(project_dict, lock_dict, lock_model):
         for f in lock_pkg.get("files", []):
             files.append(_parse_file_info(f, name, version))
 
+        # Git dependencies have no files; fetch the pinned revision instead.
+        if "git" in lock_pkg and not files:
+            revision = lock_pkg.get("revision")
+            if not revision:
+                fail("PDM git package {}=={} has no revision".format(name, version))
+            files.append({
+                "name": "{}-{}.tar.gz".format(name, version),
+                "sha256": sha256_from_string(revision),
+                "urls": ["git+{}#{}".format(lock_pkg["git"], revision)],
+                "package_name": name,
+                "package_version": version,
+            })
+
         is_local = "path" in lock_pkg and "files" not in lock_pkg
 
-        packages.append({
+        pkg = {
             "name": name,
             "version": version,
             "python_versions": pkg_requires_python,
@@ -221,7 +235,10 @@ def translate_pdm(project_dict, lock_dict, lock_model):
             "is_local": is_local,
             "extras": [e.lower() for e in pkg_extras],
             "markers": package_markers,
-        })
+        }
+        if lock_pkg.get("subdirectory"):
+            pkg["source_dir"] = lock_pkg["subdirectory"]
+        packages.append(pkg)
 
     # Detect resolution-marker forks: same package name with multiple versions.
     resolution_marker_exprs = {}

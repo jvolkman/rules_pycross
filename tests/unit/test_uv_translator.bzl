@@ -743,6 +743,78 @@ def _test_uv_root_dependency_markers(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
     analysis_test(name = name, target = name + "_subject", impl = _test_uv_root_dependency_markers_impl)
 
+# --- test_uv_url_filenames_decoded ---
+
+# buildifier: disable=unused-variable
+def _test_uv_url_filenames_decoded_impl(env, target):
+    project = _project(deps = ["torch==2.5.1+cpu"])
+    lock = _lock([
+        _vpkg("my-app", deps = [_dep("torch", "2.5.1+cpu")]),
+        _pkg("torch", "2.5.1+cpu", wheels = [
+            _whl(url = "https://download.pytorch.org/whl/cpu/torch-2.5.1%2Bcpu-cp312-cp312-linux_x86_64.whl"),
+        ]),
+    ])
+    result = translate_uv(project, lock, _lock_model())
+    files = result["packages"]["torch@2.5.1+cpu"]["files"]
+    env.expect.that_str(files[0]["name"]).equals("torch-2.5.1+cpu-cp312-cp312-linux_x86_64.whl")
+    env.expect.that_collection(files[0]["urls"]).contains_exactly([
+        "https://download.pytorch.org/whl/cpu/torch-2.5.1%2Bcpu-cp312-cp312-linux_x86_64.whl",
+    ])
+
+def _test_uv_url_filenames_decoded(name):
+    util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
+    analysis_test(name = name, target = name + "_subject", impl = _test_uv_url_filenames_decoded_impl)
+
+# --- test_uv_url_and_git_sources ---
+
+# buildifier: disable=unused-variable
+def _test_uv_url_and_git_sources_impl(env, target):
+    project = _project(deps = ["boto3", "sub"])
+    lock = _lock([
+        _vpkg("my-app", deps = [_dep("boto3"), _dep("sub")]),
+        {
+            "name": "boto3",
+            "version": "1.35.13",
+            "source": {"url": "https://github.com/boto/boto3/archive/refs/tags/1.35.13.zip"},
+            "sdist": {"hash": "sha256:abcd"},
+        },
+        {
+            "name": "sub",
+            "version": "0.1.0",
+            "source": {"git": "https://github.com/example/mono?subdirectory=pkgs%2Fsub&rev=main#0123456789abcdef"},
+        },
+    ])
+    result = translate_uv(project, lock, _lock_model())
+    env.expect.that_str(result["packages"]["boto3@1.35.13"]["files"][0]["name"]).equals("boto3-1.35.13.zip")
+    sub = result["packages"]["sub@0.1.0"]
+    env.expect.that_str(sub["source_dir"]).equals("pkgs/sub")
+    env.expect.that_str(sub["files"][0]["name"]).equals("sub-0.1.0.tar.gz")
+
+def _test_uv_url_and_git_sources(name):
+    util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
+    analysis_test(name = name, target = name + "_subject", impl = _test_uv_url_and_git_sources_impl)
+
+# --- test_uv_virtual_and_directory_members ---
+
+# buildifier: disable=unused-variable
+def _test_uv_virtual_and_directory_members_impl(env, target):
+    lock = _lock([
+        _vpkg("root"),
+        {"name": "member", "version": "0.1.0", "source": {"virtual": "packages/member"}, "dependencies": [_dep("a")]},
+        {"name": "localdep", "version": "0.1.0", "source": {"directory": "packages/localdep"}, "dependencies": [_dep("b")]},
+        _pkg("a", "1.0", wheels = [_whl("a-1.0-py3-none-any.whl", "a")]),
+        _pkg("b", "1.0", wheels = [_whl("b-1.0-py3-none-any.whl", "b")]),
+    ])
+    result = translate_uv(_project(name = "root"), lock, _lock_model(projects = ["*"]))
+
+    # The non-root virtual member is a project; the directory dep is local.
+    env.expect.that_collection(result["pins"].keys()).contains_exactly(["a"])
+    env.expect.that_collection(result["packages"].keys()).contains_exactly(["a@1.0", "b@1.0"])
+
+def _test_uv_virtual_and_directory_members(name):
+    util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
+    analysis_test(name = name, target = name + "_subject", impl = _test_uv_virtual_and_directory_members_impl)
+
 # --- Test suite ---
 
 def uv_translator_test_suite(name):
@@ -776,5 +848,8 @@ def uv_translator_test_suite(name):
             _test_uv_testonly_wildcard_with_override,
             _test_uv_testonly_wildcard_overrides_earlier,
             _test_uv_root_dependency_markers,
+            _test_uv_url_filenames_decoded,
+            _test_uv_url_and_git_sources,
+            _test_uv_virtual_and_directory_members,
         ],
     )

@@ -24,6 +24,7 @@ def define_e2e_tests():
         "pdm_forks",
         "pdm_workspace",
         "poetry_forks",
+        "pylock_graphless",
         "reproducible_repos",
         "requirements",
         "sdist_repo",

@@ -289,6 +289,8 @@ def _create_package_resolver(pkg_key, pkg, ann, default_extra_build_tools, conte
         "uses_sdist": uses_sdist,
         "availability_markers": availability_markers,
     }
+    if pkg.get("source_dir"):
+        resolved_pkg["source_dir"] = pkg["source_dir"]
 
     return struct(
         resolved_package = resolved_pkg,

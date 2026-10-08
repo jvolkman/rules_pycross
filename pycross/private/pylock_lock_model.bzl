@@ -8,14 +8,16 @@ lock_resolver.bzl.
 load("@toml.bzl//toml:toml.bzl", "decode")
 load(
     ":translator_common.bzl",
+    "archive_extension",
     "canonicalize_name",
     "compute_requested_dependency_groups",
     "parse_pep508_requirement",
     "record_root_marker",
     "resolution_marker_constraint_name",
     "select_project_file",
+    "sha256_from_string",
 )
-load(":util.bzl", "parse_package_key")
+load(":util.bzl", "parse_package_key", "url_decode_filename")
 
 def _strip_selection_markers(marker):
     """Strip PDM selection markers (dependency_groups, extras) from a marker string.
@@ -44,6 +46,65 @@ def _strip_selection_markers(marker):
 
     return " and ".join(env_parts)
 
+def _selects_requested_group(marker, requested_groups):
+    """Whether a marker has a PDM selection term naming a requested group.
+
+    Matches '"<g>" in dependency_groups' or '"<g>" in extras' terms against
+    the requested groups ("default", "group:<g>", "optional:<g>").
+    """
+    requested = {}
+    for group in requested_groups:
+        kind, _, name = group.rpartition(":")
+        requested["{}:{}".format(kind or "group", canonicalize_name(name))] = True
+    for keyword, kind in [("in dependency_groups", "group"), ("in extras", "optional")]:
+        for part in marker.split(keyword)[:-1]:
+            part = part.rstrip()
+            if not part or part[-1] not in "'\"":
+                continue  # e.g. `not in`
+            name = part[:-1].split(part[-1])[-1]
+            if "{}:{}".format(kind, canonicalize_name(name)) in requested:
+                return True
+    return False
+
+def _set_dependency(pkg, dep_pkg, marker):
+    pkg["dependencies"] = [
+        d
+        for d in pkg["dependencies"]
+        if (d["name"], d["version"]) != (dep_pkg["name"], dep_pkg["version"])
+    ] + [{"name": dep_pkg["name"], "version": dep_pkg["version"], "marker": marker}]
+
+def _link_through_hub(lock_packages, versions_all):
+    """Ties a graphless lock into a single dependency cycle.
+
+    Graphless locks (pip lock, uv export) describe one environment: every
+    package is installed when its own marker matches. To model that, a hub
+    depends on every other package, gated by that package's marker, and every
+    package depends on the hub. The resulting cycle lets the cycle machinery
+    give any root the full marker-filtered environment.
+
+    The hub is a real unconditional package (always installed, so depending on
+    it is exact). If there is none, every package links to every other instead.
+
+    Args:
+        lock_packages: {pkg_key: raw_package}, updated in place.
+        versions_all: {name: {version: env_marker}}.
+    """
+    keys = sorted(lock_packages.keys())
+    unconditional = [
+        k
+        for k in keys
+        if versions_all[lock_packages[k]["name"]] == {lock_packages[k]["version"]: ""}
+    ]
+    hubs = unconditional[:1] or keys
+    for hub in hubs:
+        for k in keys:
+            if k == hub:
+                continue
+            pkg = lock_packages[k]
+            _set_dependency(lock_packages[hub], pkg, versions_all[pkg["name"]][pkg["version"]])
+            if len(hubs) == 1:
+                _set_dependency(pkg, lock_packages[hub], "")
+
 def translate_pylock(lock_dict, project_dict, lock_model):
     """Translates pylock data to raw_lock_data dict.
 
@@ -66,16 +127,33 @@ def translate_pylock(lock_dict, project_dict, lock_model):
 
     packages_list = lock_dict.get("package", lock_dict.get("packages", []))
 
+    # Directory entries are local source trees (e.g. workspace members). Like
+    # the other translators' local packages they have no downloadable
+    # artifact, and uv omits their version.
+    packages_list = [pkg for pkg in packages_list if "directory" not in pkg]
+    for pkg in packages_list:
+        if "version" not in pkg:
+            fail("pylock package '{}' has no version, which rules_pycross requires".format(pkg["name"]))
+
+    # pip lock and uv export write no dependency graph; see _link_through_hub.
+    has_graph = [
+        True
+        for pkg in packages_list
+        if "dependencies" in pkg or "dependencies" in pkg.get("tool", {}).get("pdm", {})
+    ]
+
     # Create lookup map for versions.
     # Track all versions per name to support multi-target forks.
     versions = {}  # {name: version} - first version seen
     versions_all = {}  # {name: {version: marker}} - all versions with markers
+    pkg_markers = {}  # {pkg_key: raw marker}
     for pkg in packages_list:
         name = canonicalize_name(pkg["name"])
         version = pkg["version"]
         if name not in versions:
             versions[name] = version
         marker = pkg.get("marker", "")
+        pkg_markers["{}@{}".format(name, version)] = marker
 
         # Strip dependency_groups/extras selection markers (PDM-specific).
         # Keep only environment markers for resolution fork detection.
@@ -89,8 +167,20 @@ def translate_pylock(lock_dict, project_dict, lock_model):
         version = pkg["version"]
         pkg_key = "{}@{}".format(name, version)
 
+        raw_deps = pkg.get("dependencies")
+        if raw_deps == None:
+            # PDM's exporter records the graph as PEP 508 strings under tool.pdm.
+            raw_deps = []
+            for req_str in pkg.get("tool", {}).get("pdm", {}).get("dependencies", []):
+                req = parse_pep508_requirement(req_str)
+                for extra in req.extras or [""]:
+                    raw_deps.append({
+                        "name": "{}[{}]".format(req.name, extra) if extra else req.name,
+                        "marker": req.marker,
+                    })
+
         dependencies = []
-        for dep in pkg.get("dependencies", []):
+        for dep in raw_deps:
             dep_name_raw = dep["name"]
             dep_name = canonicalize_name(dep_name_raw)
 
@@ -128,7 +218,7 @@ def translate_pylock(lock_dict, project_dict, lock_model):
                 continue
             filename = wheel.get("name", wheel.get("file", ""))
             if not filename and "url" in wheel:
-                filename = wheel["url"].split("/")[-1]
+                filename = url_decode_filename(wheel["url"].split("?")[0].split("#")[0].split("/")[-1])
             url = wheel.get("url", "")
             urls = [url] if url else []
             hash_str = wheel.get("hash", "")
@@ -156,7 +246,7 @@ def translate_pylock(lock_dict, project_dict, lock_model):
                 continue
             filename = sdist.get("name", sdist.get("file", ""))
             if not filename and "url" in sdist:
-                filename = sdist["url"].split("/")[-1]
+                filename = url_decode_filename(sdist["url"].split("?")[0].split("#")[0].split("/")[-1])
             url = sdist.get("url", "")
             urls = [url] if url else []
             hash_str = sdist.get("hash", "")
@@ -175,6 +265,36 @@ def translate_pylock(lock_dict, project_dict, lock_model):
                 file_entry["urls"] = urls
             files.append(file_entry)
 
+        # Direct references: a VCS checkout or a source archive URL.
+        source_dir = ""
+        vcs = pkg.get("vcs")
+        archive = pkg.get("archive")
+        if vcs:
+            commit = vcs.get("commit-id", "")
+            if vcs.get("type") != "git" or not vcs.get("url") or not commit:
+                fail("pylock package '{}': only git vcs entries with a url and commit-id are supported".format(name))
+            files.append({
+                "name": "{}-{}.tar.gz".format(name, version),
+                "sha256": sha256_from_string(commit),
+                "urls": ["git+{}#{}".format(vcs["url"], commit)],
+                "package_name": name,
+                "package_version": version,
+            })
+            source_dir = vcs.get("subdirectory", "")
+        elif archive:
+            if not archive.get("url"):
+                fail("pylock package '{}': local archive entries are not supported".format(name))
+            files.append({
+                "name": "{}-{}{}".format(name, version, archive_extension(archive["url"])),
+                "sha256": archive.get("hashes", {}).get("sha256", ""),
+                "urls": [archive["url"]],
+                "package_name": name,
+                "package_version": version,
+            })
+            source_dir = archive.get("subdirectory", "")
+        elif not files:
+            fail("pylock package '{}' has no wheels, sdist, vcs, or archive entry".format(name))
+
         # Sort dependencies and files for determinism
         dependencies = sorted(dependencies, key = lambda d: d["name"])
         files = sorted(files, key = lambda f: f["name"])
@@ -188,8 +308,13 @@ def translate_pylock(lock_dict, project_dict, lock_model):
             "dependencies": dependencies,
             "files": files,
         }
+        if source_dir:
+            raw_package["source_dir"] = source_dir
 
         lock_packages[pkg_key] = raw_package
+
+    if len(lock_packages) > 1 and not has_graph:
+        _link_through_hub(lock_packages, versions_all)
 
     # Build dependency lookup by name
     deps_by_name = {}  # {name: [pkg_key, ...]}
@@ -296,6 +421,24 @@ def translate_pylock(lock_dict, project_dict, lock_model):
 
         if queue:
             fail("BFS traversal exceeded max iterations; this is a bug in pycross")
+
+        # PDM's export drops extras edges (requests[socks] -> pysocks), leaving
+        # locked packages unreachable from the roots. If any such orphan's PDM
+        # selection marker names a requested group, model the lock as graphless
+        # instead. Other unreachable packages are pruned as before.
+        orphans = {
+            k: True
+            for k, pkg in lock_packages.items()
+            if pkg["name"] not in visited_names and _selects_requested_group(pkg_markers[k], requested_groups_dict)
+        }
+        if orphans:
+            lock_packages = {
+                k: pkg
+                for k, pkg in lock_packages.items()
+                if k in orphans or pkg["name"] in visited_names
+            }
+            _link_through_hub(lock_packages, versions_all)
+            visited_names = {pkg["name"]: True for pkg in lock_packages.values()}
 
         # Filter
         filtered_packages = {}

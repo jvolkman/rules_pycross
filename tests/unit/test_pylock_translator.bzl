@@ -4,6 +4,9 @@ load("@rules_testing//lib:analysis_test.bzl", "analysis_test", "test_suite")
 load("@rules_testing//lib:util.bzl", "util")
 
 # buildifier: disable=bzl-visibility
+load("//pycross/private:lock_resolver.bzl", "resolve")
+
+# buildifier: disable=bzl-visibility
 load("//pycross/private:pylock_lock_model.bzl", "translate_pylock")
 
 def _lock_model(
@@ -540,6 +543,250 @@ def _test_pylock_root_dependency_markers(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
     analysis_test(name = name, target = name + "_subject", impl = _test_pylock_root_dependency_markers_impl)
 
+# --- test_pylock_pdm_tool_dependencies ---
+
+# buildifier: disable=unused-variable
+def _test_pylock_pdm_tool_dependencies_impl(env, target):
+    """PDM's exporter writes the graph under [packages.tool.pdm].dependencies."""
+    project = {"project": {"name": "my-project", "dependencies": ["requests"]}}
+    lock = {
+        "lock-version": "1.0",
+        "packages": [
+            {
+                "name": "requests",
+                "version": "2.32.3",
+                "wheels": [_whl("requests-2.32.3-py3-none-any.whl", "req")],
+                "tool": {"pdm": {"dependencies": ["urllib3<3,>=1.21.1", "PySocks!=1.5.7,>=1.5.6; extra == \"socks\""]}},
+            },
+            {
+                "name": "urllib3",
+                "version": "2.2.0",
+                "wheels": [_whl("urllib3-2.2.0-py3-none-any.whl", "url")],
+                "tool": {"pdm": {"dependencies": []}},
+            },
+            {
+                "name": "pysocks",
+                "version": "1.7.1",
+                "wheels": [_whl("PySocks-1.7.1-py3-none-any.whl", "soc")],
+            },
+        ],
+    }
+    result = translate_pylock(lock, project, _lock_model())
+    env.expect.that_collection(_pkg_names(result)).contains_exactly(["requests", "urllib3", "pysocks"])
+    deps = result["packages"]["requests@2.32.3"]["dependencies"]
+    env.expect.that_collection([d["name"] for d in deps]).contains_exactly(["pysocks", "urllib3"])
+    env.expect.that_str([d for d in deps if d["name"] == "pysocks"][0]["marker"]).equals('extra == "socks"')
+
+def _test_pylock_pdm_tool_dependencies(name):
+    util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
+    analysis_test(name = name, target = name + "_subject", impl = _test_pylock_pdm_tool_dependencies_impl)
+
+# --- test_pylock_source_kinds ---
+
+# buildifier: disable=unused-variable
+def _test_pylock_source_kinds_impl(env, target):
+    lock = {
+        "lock-version": "1.0",
+        "packages": [
+            {
+                "name": "torch",
+                "version": "2.5.1+cpu",
+                "wheels": [{
+                    "url": "https://download.pytorch.org/whl/cpu/torch-2.5.1%2Bcpu-cp312-cp312-linux_x86_64.whl",
+                    "hashes": {"sha256": "abc"},
+                }],
+            },
+            {
+                "name": "mono",
+                "version": "0.1.0",
+                "vcs": {"type": "git", "url": "https://github.com/example/mono", "commit-id": "0123456789abcdef", "subdirectory": "pkgs/mono"},
+            },
+            {
+                "name": "boto3",
+                "version": "1.35.13",
+                "archive": {"url": "https://github.com/boto/boto3/archive/refs/tags/1.35.13.zip", "hashes": {"sha256": "def"}},
+            },
+            {"name": "subpkg", "directory": {"path": "sub", "editable": False}},
+        ],
+    }
+    result = translate_pylock(lock, None, _lock_model())
+    env.expect.that_collection(result["packages"].keys()).contains_exactly(["torch@2.5.1+cpu", "mono@0.1.0", "boto3@1.35.13"])
+    env.expect.that_str(result["packages"]["torch@2.5.1+cpu"]["files"][0]["name"]).equals("torch-2.5.1+cpu-cp312-cp312-linux_x86_64.whl")
+
+    mono = result["packages"]["mono@0.1.0"]
+    env.expect.that_str(mono["source_dir"]).equals("pkgs/mono")
+    env.expect.that_collection(mono["files"][0]["urls"]).contains_exactly(["git+https://github.com/example/mono#0123456789abcdef"])
+
+    boto3 = result["packages"]["boto3@1.35.13"]["files"][0]
+    env.expect.that_str(boto3["name"]).equals("boto3-1.35.13.zip")
+    env.expect.that_str(boto3["sha256"]).equals("def")
+
+def _test_pylock_source_kinds(name):
+    util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
+    analysis_test(name = name, target = name + "_subject", impl = _test_pylock_source_kinds_impl)
+
+# --- test_pylock_graphless ---
+
+def _graphless_pkg(name, version, marker = None):
+    pkg = {"name": name, "version": version, "wheels": [_whl("{}-{}-py3-none-any.whl".format(name, version), name)]}
+    if marker:
+        pkg["marker"] = marker
+    return pkg
+
+def _edges(result, pkg_key):
+    return {
+        "{}@{}".format(d["name"], d["version"]): d["marker"]
+        for d in result["packages"][pkg_key]["dependencies"]
+    }
+
+# buildifier: disable=unused-variable
+def _test_pylock_graphless_impl(env, target):
+    """pip lock / uv export write no graph: packages are tied into one cycle via a hub."""
+    project = {"project": {"name": "my-project", "dependencies": ["requests"]}}
+    lock = {
+        "lock-version": "1.0",
+        "created-by": "pip",
+        "packages": [
+            _graphless_pkg("requests", "2.32.3"),
+            _graphless_pkg("urllib3", "2.2.0"),
+            _graphless_pkg("certifi", "2024.8.30"),
+            _graphless_pkg("colorama", "0.4.6", 'sys_platform == "win32" and "dev" in dependency_groups'),
+            _graphless_pkg("greenlet", "3.2.5", 'python_version < "3.10"'),
+            _graphless_pkg("greenlet", "3.5.3", 'python_version >= "3.10"'),
+        ],
+    }
+    result = translate_pylock(lock, project, _lock_model())
+
+    # Every package is kept, but only the declared root is pinned.
+    env.expect.that_collection(result["packages"].keys()).contains_exactly([
+        "requests@2.32.3",
+        "urllib3@2.2.0",
+        "certifi@2024.8.30",
+        "colorama@0.4.6",
+        "greenlet@3.2.5",
+        "greenlet@3.5.3",
+    ])
+    env.expect.that_collection(result["pins"].keys()).contains_exactly(["requests"])
+
+    # The hub (first unconditional package) depends on everything, gated by
+    # each package's environment marker; selection markers are stripped.
+    env.expect.that_dict(_edges(result, "certifi@2024.8.30")).contains_exactly({
+        "requests@2.32.3": "",
+        "urllib3@2.2.0": "",
+        "colorama@0.4.6": 'sys_platform == "win32"',
+        "greenlet@3.2.5": 'python_version < "3.10"',
+        "greenlet@3.5.3": 'python_version >= "3.10"',
+    })
+
+    # Every other package depends on the hub, closing the cycle.
+    for key in ["requests@2.32.3", "urllib3@2.2.0", "colorama@0.4.6", "greenlet@3.2.5"]:
+        env.expect.that_dict(_edges(result, key)).contains_exactly({"certifi@2024.8.30": ""})
+
+    resolved = resolve(result)
+    env.expect.that_collection(resolved.cycle_groups.values()[0]).contains_exactly(result["packages"].keys())
+
+def _test_pylock_graphless(name):
+    util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
+    analysis_test(name = name, target = name + "_subject", impl = _test_pylock_graphless_impl)
+
+# buildifier: disable=unused-variable
+def _test_pylock_graphless_all_marked_impl(env, target):
+    """Without an unconditional package, every package links to every other."""
+    lock = {
+        "lock-version": "1.0",
+        "packages": [
+            _graphless_pkg("greenlet", "3.2.5", 'python_version < "3.10"'),
+            _graphless_pkg("greenlet", "3.5.3", 'python_version >= "3.10"'),
+        ],
+    }
+    result = translate_pylock(lock, None, _lock_model())
+    env.expect.that_dict(_edges(result, "greenlet@3.2.5")).contains_exactly({"greenlet@3.5.3": 'python_version >= "3.10"'})
+    env.expect.that_dict(_edges(result, "greenlet@3.5.3")).contains_exactly({"greenlet@3.2.5": 'python_version < "3.10"'})
+
+def _test_pylock_graphless_all_marked(name):
+    util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
+    analysis_test(name = name, target = name + "_subject", impl = _test_pylock_graphless_all_marked_impl)
+
+# buildifier: disable=unused-variable
+def _test_pylock_graphless_single_package_impl(env, target):
+    lock = {"lock-version": "1.0", "packages": [_graphless_pkg("six", "1.16.0")]}
+    result = translate_pylock(lock, None, _lock_model())
+    env.expect.that_collection(result["packages"]["six@1.16.0"]["dependencies"]).has_size(0)
+
+def _test_pylock_graphless_single_package(name):
+    util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
+    analysis_test(name = name, target = name + "_subject", impl = _test_pylock_graphless_single_package_impl)
+
+def _pdm_pkg(name, version, deps = None, marker = '"default" in dependency_groups'):
+    pkg = _graphless_pkg(name, version, marker)
+    if deps != None:
+        pkg["tool"] = {"pdm": {"dependencies": deps}}
+    return pkg
+
+# buildifier: disable=unused-variable
+def _test_pylock_pdm_orphan_impl(env, target):
+    """Modeled on `pdm export -f pylock` for `requests[socks]`: the extras edge is dropped."""
+    project = {"project": {"name": "my-project", "dependencies": ["requests[socks]==2.32.3"]}}
+    lock = {
+        "lock-version": "1.0",
+        "created-by": "pdm",
+        "packages": [
+            _pdm_pkg("certifi", "2024.8.30", []),
+            _pdm_pkg("idna", "3.10", []),
+            _pdm_pkg("pysocks", "1.7.1"),
+            _pdm_pkg("requests", "2.32.3", ["certifi>=2017.4.17", "idna<4,>=2.5", "urllib3<3,>=1.21.1"]),
+            _pdm_pkg("urllib3", "2.2.3", []),
+            _pdm_pkg("pytest", "8.3.3", [], '"dev" in dependency_groups'),
+        ],
+    }
+    result = translate_pylock(lock, project, _lock_model())
+
+    # pysocks is an orphan in a requested group: it joins the hub cycle. pytest
+    # only selects the unrequested "dev" group, so it is still dropped.
+    env.expect.that_collection(_pkg_names(result)).contains_exactly(["certifi", "idna", "pysocks", "requests", "urllib3"])
+    env.expect.that_dict(_edges(result, "certifi@2024.8.30")).contains_exactly({
+        "idna@3.10": "",
+        "pysocks@1.7.1": "",
+        "requests@2.32.3": "",
+        "urllib3@2.2.3": "",
+    })
+
+    # Graph edges are kept alongside the hub edge, without duplicates.
+    env.expect.that_dict(_edges(result, "requests@2.32.3")).contains_exactly({
+        "certifi@2024.8.30": "",
+        "idna@3.10": "",
+        "urllib3@2.2.3": "",
+    })
+    env.expect.that_collection(result["pins"].keys()).contains_exactly(["requests"])
+
+    resolved = resolve(result)
+    env.expect.that_collection(resolved.cycle_groups.values()[0]).contains_exactly(result["packages"].keys())
+
+def _test_pylock_pdm_orphan(name):
+    util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
+    analysis_test(name = name, target = name + "_subject", impl = _test_pylock_pdm_orphan_impl)
+
+# buildifier: disable=unused-variable
+def _test_pylock_pdm_reachable_no_hub_impl(env, target):
+    """A fully reachable PDM graph keeps its precise edges."""
+    project = {"project": {"name": "my-project", "dependencies": ["requests==2.32.3"]}}
+    lock = {
+        "lock-version": "1.0",
+        "packages": [
+            _pdm_pkg("certifi", "2024.8.30", []),
+            _pdm_pkg("requests", "2.32.3", ["certifi>=2017.4.17"]),
+            _pdm_pkg("pytest", "8.3.3", [], '"dev" in dependency_groups'),
+        ],
+    }
+    result = translate_pylock(lock, project, _lock_model())
+    env.expect.that_collection(_pkg_names(result)).contains_exactly(["certifi", "requests"])
+    env.expect.that_collection(result["packages"]["certifi@2024.8.30"]["dependencies"]).has_size(0)
+    env.expect.that_dict(_edges(result, "requests@2.32.3")).contains_exactly({"certifi@2024.8.30": ""})
+
+def _test_pylock_pdm_reachable_no_hub(name):
+    util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
+    analysis_test(name = name, target = name + "_subject", impl = _test_pylock_pdm_reachable_no_hub_impl)
+
 # --- Test suite ---
 
 def pylock_translator_test_suite(name):
@@ -562,5 +809,12 @@ def pylock_translator_test_suite(name):
             _test_pylock_no_default_no_groups_empty,
             _test_pylock_resolution_forks,
             _test_pylock_root_dependency_markers,
+            _test_pylock_pdm_tool_dependencies,
+            _test_pylock_source_kinds,
+            _test_pylock_graphless,
+            _test_pylock_graphless_all_marked,
+            _test_pylock_graphless_single_package,
+            _test_pylock_pdm_orphan,
+            _test_pylock_pdm_reachable_no_hub,
         ],
     )

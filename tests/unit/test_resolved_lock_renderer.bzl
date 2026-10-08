@@ -699,11 +699,30 @@ def _test_wheel_library_tags_rendering(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
     analysis_test(name = name, target = name + "_subject", impl = _test_wheel_library_tags_rendering_impl)
 
+# buildifier: disable=unused-variable
+def _test_epoch_sdist_repo_name_impl(env, target):
+    """The sdist repo label must use the same sanitization as lock_repo_creation (e.g. epoch '!')."""
+    lock = {
+        "packages": {
+            "foo@1!2.0": {
+                "sdist_file": {"key": "foo_sdist"},
+                "wheel_candidates": [],
+            },
+        },
+    }
+    res = render_lock_bzl(lock, {"foo_sdist": "@repo//file:foo-1!2.0.tar.gz"}, rctx_name = "uv__pkgs")
+    env.expect.that_bool("@@uv__pkgs_sdist_foo_1_2_0//:wheel" in res).equals(True)
+
+def _test_epoch_sdist_repo_name(name):
+    util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
+    analysis_test(name = name, target = name + "_subject", impl = _test_epoch_sdist_repo_name_impl)
+
 def resolved_lock_renderer_test_suite(name):
     test_suite(
         name = name,
         tests = [
             _test_render_lock,
+            _test_epoch_sdist_repo_name,
             _test_cycle_group_rendering,
             _test_cycle_group_marker_specific_rendering,
             _test_extras_rendering,

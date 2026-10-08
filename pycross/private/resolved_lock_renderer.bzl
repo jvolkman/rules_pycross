@@ -14,7 +14,7 @@ Naming conventions for generated targets:
     base package and all of its parsed extras into a single target.
 """
 
-load(":util.bzl", "parse_package_key")
+load(":util.bzl", "parse_package_key", "sanitize_name")
 
 def _ind(text, tabs = 1):
     if not text:
@@ -42,7 +42,7 @@ def _wheel_target(file_ref, sdist_file, pkg_key, pkg, repo_map, sdist_map, rctx_
             return pkg["build_target"]
         if sdist_map and key in sdist_map:
             return sdist_map[key]
-        repo_name = "{}_sdist_{}".format(rctx_name, _sanitize_name(pkg_key))
+        repo_name = "{}_sdist_{}".format(rctx_name, sanitize_name(pkg_key))
         return "@@{}//:wheel".format(repo_name)
 
     return repo_map.get(key)
@@ -511,7 +511,7 @@ def _render_marker_package(lines, pkg_key, pkg, packages, repo_map, sdist_map, r
     elif sdist_file:
         sdist_file_key = sdist_file.get("key")
         if sdist_file_key:
-            sdist_repo_name = "{}_sdist_{}".format(rctx_name, _sanitize_name(pkg_key))
+            sdist_repo_name = "{}_sdist_{}".format(rctx_name, sanitize_name(pkg_key))
             sdist_target = "@@{}//:wheel".format(sdist_repo_name)
 
     # Wheel chooser
