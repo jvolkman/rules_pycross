@@ -8,6 +8,7 @@ package(default_visibility = ["//visibility:public"])
 collect_wheels(
     name = "all_wheels",
     platforms = [
+        "@llvm//platforms:linux_aarch64",
         "@llvm//platforms:linux_x86_64",
         "@llvm//platforms:macos_aarch64",
     ],
