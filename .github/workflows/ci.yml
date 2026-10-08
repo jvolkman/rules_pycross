@@ -3,9 +3,20 @@ name: CI
 on:
   push:
     branches: [main]
-  pull_request_target:
+  pull_request:
     branches: [main]
+  schedule:
+    - cron: "0 6 * * 1"
   workflow_dispatch:
+    inputs:
+      no_remote_cache:
+        description: "Ignore cached remote results (--noremote_accept_cached)"
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
 
 concurrency:
   group: ci-${{ github.event.pull_request.number || github.sha }}
@@ -22,13 +33,12 @@ jobs:
     steps:
       - uses: actions/checkout@v6
         with:
-          ref: ${{ github.event.pull_request.head.sha || github.sha }}
-          allow-unsafe-pr-checkout: true
+          persist-credentials: false
       - id: set-matrix
         run: |
           e2e_ws=()
           cross_ws=()
-          for d in tests/e2e/* modules/*; do
+          for d in tests/e2e/* modules/* examples/*; do
             if [ -f "$d/MODULE.bazel" ] || [ -f "$d/WORKSPACE" ] || [ -f "$d/WORKSPACE.bazel" ]; then
               ws_name=$(basename "$d")
               if [ "$ws_name" != "shared" ]; then
@@ -44,13 +54,21 @@ jobs:
           echo "cross=[$(IFS=,; echo "${cross_ws[*]}")]" >> $GITHUB_OUTPUT
       - name: Configure BuildBuddy
         run: |
-          echo "build:remote --remote_header=x-buildbuddy-api-key=${{ secrets.BUILDBUDDY_API_KEY }}" > .bazelrc.user
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            echo "build:remote --remote_header=x-buildbuddy-api-key=lXj8mtc6dMxIxXnaj5y4" > .bazelrc.user
+            echo "build:remote --noremote_upload_local_results" >> .bazelrc.user
+          else
+            echo "build:remote --remote_header=x-buildbuddy-api-key=${{ secrets.BUILDBUDDY_API_KEY }}" > .bazelrc.user
+          fi
+          if [ "${{ github.event_name }}" = "schedule" ] || [ "${{ inputs.no_remote_cache }}" = "true" ]; then
+            echo "build:remote --noremote_accept_cached" >> .bazelrc.user
+          fi
       - name: Test
         run: |
           bazel \
             --bazelrc=.github/workflows/ci.bazelrc \
             test --config=remote \
-            -- //pycross/... //docs/... //tests/... -//tests/e2e/...
+            -- //pycross/... //tests/... -//tests/e2e/...
 
   # Stage 2: E2E integration tests
   e2e:
@@ -65,10 +83,10 @@ jobs:
     steps:
       - uses: actions/checkout@v6
         with:
-          ref: ${{ github.event.pull_request.head.sha || github.sha }}
-          allow-unsafe-pr-checkout: true
+          persist-credentials: false
       - uses: bazel-contrib/setup-bazel@0.19.0
         with:
+          repository-cache: true
           bazelrc: |
             common --announce_rc
             common --color=yes
@@ -77,7 +95,15 @@ jobs:
         working-directory: ${{ matrix.workspace }}
         run: |
           echo "${{ matrix.bazel }}" > .bazelversion
-          echo "build:remote --remote_header=x-buildbuddy-api-key=${{ secrets.BUILDBUDDY_API_KEY }}" > .bazelrc.user
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            echo "build:remote --remote_header=x-buildbuddy-api-key=lXj8mtc6dMxIxXnaj5y4" > .bazelrc.user
+            echo "build:remote --noremote_upload_local_results" >> .bazelrc.user
+          else
+            echo "build:remote --remote_header=x-buildbuddy-api-key=${{ secrets.BUILDBUDDY_API_KEY }}" > .bazelrc.user
+          fi
+          if [ "${{ github.event_name }}" = "schedule" ] || [ "${{ inputs.no_remote_cache }}" = "true" ]; then
+            echo "build:remote --noremote_accept_cached" >> .bazelrc.user
+          fi
       - name: Build
         working-directory: ${{ matrix.workspace }}
         run: |
@@ -112,16 +138,27 @@ jobs:
     steps:
       - uses: actions/checkout@v6
         with:
-          ref: ${{ github.event.pull_request.head.sha || github.sha }}
-          allow-unsafe-pr-checkout: true
+          persist-credentials: false
       - name: Enable unprivileged user namespaces
         if: matrix.host == 'ubuntu'
         run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
       - name: Configure BuildBuddy
+        working-directory: tests/e2e/${{ matrix.workspace }}
         run: |
-          echo "build:remote --remote_header=x-buildbuddy-api-key=${{ secrets.BUILDBUDDY_API_KEY }}" > tests/e2e/${{ matrix.workspace }}/.bazelrc.user
-      - name: Build all wheels
-        run: cd tests/e2e/${{ matrix.workspace }} && bazel build --config=remote //:all_wheels
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            echo "build:remote --remote_header=x-buildbuddy-api-key=lXj8mtc6dMxIxXnaj5y4" > .bazelrc.user
+            echo "build:remote --noremote_upload_local_results" >> .bazelrc.user
+          else
+            echo "build:remote --remote_header=x-buildbuddy-api-key=${{ secrets.BUILDBUDDY_API_KEY }}" > .bazelrc.user
+          fi
+          if [ "${{ github.event_name }}" = "schedule" ] || [ "${{ inputs.no_remote_cache }}" = "true" ]; then
+            echo "build:remote --noremote_accept_cached" >> .bazelrc.user
+          fi
+      - name: Build all wheels and run tests
+        working-directory: tests/e2e/${{ matrix.workspace }}
+        run: |
+          bazel build --config=remote //:all_wheels
+          bazel test --config=remote //...
       - uses: actions/upload-artifact@v6
         with:
           name: wheels-${{ matrix.host }}-${{ matrix.workspace }}
@@ -140,8 +177,7 @@ jobs:
     steps:
       - uses: actions/checkout@v6
         with:
-          ref: ${{ github.event.pull_request.head.sha || github.sha }}
-          allow-unsafe-pr-checkout: true
+          persist-credentials: false
       - name: Enable unprivileged user namespaces
         if: matrix.runner == 'ubuntu'
         run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
@@ -192,8 +228,7 @@ jobs:
     steps:
       - uses: actions/checkout@v6
         with:
-          ref: ${{ github.event.pull_request.head.sha || github.sha }}
-          allow-unsafe-pr-checkout: true
+          persist-credentials: false
       - uses: actions/setup-python@v6
         with:
           python-version: "3.14"

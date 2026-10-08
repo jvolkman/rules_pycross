@@ -123,6 +123,16 @@ py_test(
     ],
 )
 
+py_test(
+    name = "compare_wheels_test",
+    srcs = ["compare_wheels_test.py"],
+    main = "compare_wheels_test.py",
+    tags = ["unit"],
+    deps = [
+        "//tests/e2e:compare_wheels",
+    ],
+)
+
 resolved_lock_renderer_test_suite(name = "test_resolved_lock_renderer")
 
 override_helpers_test_suite(name = "test_override_helpers")
