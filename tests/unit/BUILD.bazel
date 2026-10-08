@@ -66,6 +66,16 @@ py_test(
 )
 
 py_test(
+    name = "crossenv_test",
+    srcs = ["crossenv_test.py"],
+    main = "crossenv_test.py",
+    tags = ["unit"],
+    deps = [
+        "//pycross/private/build/tools/crossenv:crossenv_lib",
+    ],
+)
+
+py_test(
     name = "cc_toolchain_test",
     srcs = ["cc_toolchain_test.py"],
     main = "cc_toolchain_test.py",

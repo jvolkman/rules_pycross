@@ -107,6 +107,46 @@ class CcToolchainTest(unittest.TestCase):
             with self.subTest(case=case):
                 self.assertEqual(run_wrapper(*case), expected_prefix + case)
 
+    def test_wrap_compiler_shared_links_use_shared_flags(self):
+        bin_dir = self.temp_path / "bin"
+        bin_dir.mkdir(exist_ok=True)
+        fake_cc = self._make_fake_cc()
+
+        # Like the @llvm musl toolchain: -static-pie is executable-only.
+        ldflags = "-static-pie -fuse-ld=lld -L/tmp/musl -Wl,--gc-sections"
+        ldsharedflags = "-fuse-ld=lld -L/tmp/musl -Wl,--gc-sections -shared"
+        wrapper = wrap_compiler(
+            "cc", str(fake_cc), "-O2", Path(sys.executable), bin_dir, ldflags=ldflags, ldsharedflags=ldsharedflags
+        )
+
+        def run_wrapper(*args: str) -> list[str]:
+            return json.loads(subprocess.check_output([str(wrapper), *args], text=True))
+
+        shared_tail = ["-fuse-ld=lld", "-L/tmp/musl", "-Wl,--gc-sections"]
+        for mode in ["-shared", "-bundle", "-dynamiclib"]:
+            with self.subTest(mode=mode):
+                self.assertEqual(
+                    run_wrapper(mode, "a.o", "-o", "a.so"),
+                    [mode, "a.o", "-o", "a.so"] + shared_tail,
+                )
+
+        # Executable links still get the full LDFLAGS (#330).
+        self.assertEqual(
+            run_wrapper("a.o", "-o", "a"),
+            ["a.o", "-o", "a", "-static-pie", "-fuse-ld=lld", "-L/tmp/musl", "-Wl,--gc-sections"],
+        )
+        # Compiles get neither.
+        self.assertEqual(run_wrapper("-shared", "-c", "a.c"), ["-shared", "-c", "a.c"])
+        # distutils appends $LDFLAGS (with -static-pie) to LDSHARED itself.
+        self.assertEqual(
+            run_wrapper("-shared", "-static-pie", "a.o", "-o", "a.so"),
+            ["-shared", "a.o", "-o", "a.so"] + shared_tail,
+        )
+        self.assertEqual(
+            run_wrapper("-static-pie", "a.o", "-o", "a")[:4],
+            ["-static-pie", "a.o", "-o", "a"],
+        )
+
     def test_setup_cc_layer(self):
         ctx = MockBuildContext(self.temp_path)
 
@@ -142,9 +182,8 @@ class CcToolchainTest(unittest.TestCase):
 
         # Assert LDSHARED
         self.assertIn("LDSHARED", ctx.sysconfig_vars)
-        if ctx.sysconfig_vars.get("MACHDEP") == "darwin":
-            self.assertIn("-undefined,dynamic_lookup", ctx.sysconfig_vars["LDSHARED"])
         self.assertIn("-shared", ctx.sysconfig_vars["LDSHARED"])
+        self.assertNotIn("-bundle", ctx.sysconfig_vars["LDSHARED"])
 
     def test_setup_cc_layer_mac(self):
         ctx = MockBuildContext(self.temp_path)
@@ -156,14 +195,18 @@ class CcToolchainTest(unittest.TestCase):
             "CFLAGS": "-O2",
             "CXXFLAGS": "-O2",
             "LDFLAGS": "-Wl,-O1",
-            "LDSHAREDFLAGS": "-bundle -Wl,-O1",
+            "LDSHAREDFLAGS": "-Wl,-O1 -shared",
             "AR": "/usr/bin/ar",
             "ARFLAGS": "rcs",
         }
 
         setup_cc_layer(ctx, cc_config)
-        self.assertIn("-bundle", ctx.sysconfig_vars["LDSHARED"])
-        self.assertIn("-undefined,dynamic_lookup", ctx.sysconfig_vars["LDSHARED"])
+        # Extensions are linked as MH_BUNDLE like CPython, not MH_DYLIB (-shared).
+        ldshared = ctx.sysconfig_vars["LDSHARED"].split()
+        self.assertIn("-Wl,-O1", ldshared)
+        self.assertNotIn("-shared", ldshared)
+        self.assertEqual(ldshared[-3:], ["-bundle", "-undefined", "dynamic_lookup"])
+        self.assertEqual(ctx.sysconfig_vars["LDCXXSHARED"], ctx.sysconfig_vars["LDSHARED"])
 
 
 if __name__ == "__main__":

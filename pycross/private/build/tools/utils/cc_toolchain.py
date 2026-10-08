@@ -73,6 +73,21 @@ _NON_LINK_ARGS = (
     "-r",
 )
 
+# Driver flags that make a link produce a shared object/bundle instead of an
+# executable. These links get the toolchain's shared-link flags.
+_SHARED_LINK_ARGS = (
+    "-shared",
+    "-bundle",
+    "-dynamiclib",
+)
+
+# Executable-only link flags that can't be combined with a shared link
+# (e.g. the @llvm musl toolchain's -static-pie).
+_EXE_ONLY_LINK_ARGS = (
+    "-pie",
+    "-static-pie",
+)
+
 
 def get_wrapper_flags(cflags: str) -> List[str]:
     """Extract target and sysroot flags to forward to compiler wrappers."""
@@ -103,6 +118,7 @@ def wrap_compiler(
     python_exe: Path,
     bin_dir: Path,
     ldflags: str = "",
+    ldsharedflags: str | None = None,
 ) -> Path:
     """Generate custom compiler wrapper scripts to filter incompatible linker flags."""
     assert lang in ("cc", "cxx")
@@ -117,6 +133,12 @@ def wrap_compiler(
 
     wrapper_flags = get_wrapper_flags(cflags)
     linker_flags = [arg for arg in shlex.split(ldflags) if arg not in _FILTERED_LINKER_ARGS]
+    # The caller picks the output type, so drop -shared (clang rejects -shared with -bundle).
+    shared_linker_flags = [
+        arg
+        for arg in shlex.split(ldflags if ldsharedflags is None else ldsharedflags)
+        if arg not in _FILTERED_LINKER_ARGS and arg != "-shared"
+    ]
     wrapper_path = bin_dir / wrapper_name
 
     with open(wrapper_path, "w") as f:
@@ -131,14 +153,20 @@ def wrap_compiler(
                 cc_exe = {repr(cc_exe)}
                 wrapper_flags = {repr(wrapper_flags)}
                 linker_flags = {repr(linker_flags)}
+                shared_linker_flags = {repr(shared_linker_flags)}
                 filtered_linker_args = {repr(_FILTERED_LINKER_ARGS)}
                 non_link_args = {repr(_NON_LINK_ARGS)}
+                shared_link_args = {repr(_SHARED_LINK_ARGS)}
+                exe_only_link_args = {repr(_EXE_ONLY_LINK_ARGS)}
 
                 filtered_args = []
                 is_link = bool(sys.argv[1:])
+                is_shared = False
                 for arg in sys.argv[1:]:
                     if arg in non_link_args:
                         is_link = False
+                    if arg in shared_link_args:
+                        is_shared = True
                     if arg in filtered_linker_args:
                         continue
                     filtered_args.append(arg)
@@ -146,7 +174,14 @@ def wrap_compiler(
                 if filtered_args == ["-v"]:
                     is_link = False
 
-                extra_link_flags = linker_flags if is_link else []
+                if is_link and is_shared:
+                    # Build systems may pass executable LDFLAGS to shared links too
+                    # (distutils appends $LDFLAGS to LDSHARED).
+                    filtered_args = [a for a in filtered_args if a not in exe_only_link_args]
+
+                extra_link_flags = []
+                if is_link:
+                    extra_link_flags = shared_linker_flags if is_shared else linker_flags
 
                 os.execv(cc_exe, [cc_exe] + wrapper_flags + filtered_args + extra_link_flags)
                 """
@@ -176,9 +211,14 @@ def setup_cc_layer(ctx: BuildContext, cc_config: Dict[str, Any]) -> None:
     orig_cxx = replace_placeholder(ctx.prefix, cc_config["CXX"])
     cflags = replace_placeholder(ctx.prefix, cc_config["CFLAGS"])
     raw_ldflags = replace_placeholder(ctx.prefix, cc_config["LDFLAGS"])
+    raw_ldsharedflags = replace_placeholder(ctx.prefix, cc_config["LDSHAREDFLAGS"])
 
-    wrapped_cc = wrap_compiler("cc", orig_cc, cflags, ctx.exec_python, layer_bin_dir, ldflags=raw_ldflags)
-    wrapped_cxx = wrap_compiler("cxx", orig_cxx, cflags, ctx.exec_python, layer_bin_dir, ldflags=raw_ldflags)
+    wrapped_cc = wrap_compiler(
+        "cc", orig_cc, cflags, ctx.exec_python, layer_bin_dir, ldflags=raw_ldflags, ldsharedflags=raw_ldsharedflags
+    )
+    wrapped_cxx = wrap_compiler(
+        "cxx", orig_cxx, cflags, ctx.exec_python, layer_bin_dir, ldflags=raw_ldflags, ldsharedflags=raw_ldsharedflags
+    )
 
     # When the toolchain already handles C++ header hermeticity (indicated by
     # -nostdlibinc in flags), it provides libc++ headers via -isystem. We must
@@ -231,9 +271,14 @@ def setup_cc_layer(ctx: BuildContext, cc_config: Dict[str, Any]) -> None:
         if env_key in ctx.sysconfig_vars:
             ctx.build_env[env_key] = ctx.sysconfig_vars[env_key]
 
-    ctx.sysconfig_vars["LDSHARED"] = " ".join([ctx.sysconfig_vars["CC"], ctx.sysconfig_vars["LDSHAREDFLAGS"]])
     if ctx.sysconfig_vars.get("MACHDEP") == "darwin":
-        ctx.sysconfig_vars["LDSHARED"] += " -Wl,-undefined,dynamic_lookup"
+        # Link extensions as MH_BUNDLE like CPython and the meson builder. LDSHAREDFLAGS
+        # carries -shared (MH_DYLIB), so start from LDFLAGS instead.
+        ctx.sysconfig_vars["LDSHARED"] = " ".join(
+            [ctx.sysconfig_vars["CC"], ctx.sysconfig_vars["LDFLAGS"], "-bundle -undefined dynamic_lookup"]
+        )
+    else:
+        ctx.sysconfig_vars["LDSHARED"] = " ".join([ctx.sysconfig_vars["CC"], ctx.sysconfig_vars["LDSHAREDFLAGS"]])
     ctx.sysconfig_vars["LDCXXSHARED"] = ctx.sysconfig_vars["LDSHARED"]
 
     include_paths = [str(layer_include_dir.absolute())] + [
