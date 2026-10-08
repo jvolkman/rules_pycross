@@ -259,8 +259,11 @@ def register_pep517_action(
     if builder[DefaultInfo].default_runfiles:
         transitive_inputs.append(builder[DefaultInfo].default_runfiles.files)
 
+    # Undeclared scratch dirs, unique per target (out_wheel_dir.dirname
+    # includes the repo, package and target name). The builder wipes them
+    # before use, since non-sandboxed strategies leave them behind.
     sdist_root = out_wheel_dir.dirname + "/sdist"
-    build_root = ctx.bin_dir.path + "/" + ctx.label.package + "/" + ctx.label.name + "_tmp"
+    build_root = out_wheel_dir.dirname + "/_tmp"
 
     action_env = dict(ctx.configuration.default_shell_env)
     action_env.update({
@@ -273,6 +276,8 @@ def register_pep517_action(
     # them directly, in addition to build_env in the config JSON.
     action_env.update(env)
 
+    # No "supports-path-mapping": paths are embedded in the config JSON and
+    # env, which Bazel doesn't rewrite.
     ctx.actions.run(
         inputs = depset(inputs, transitive = transitive_inputs),
         outputs = [out_wheel_dir],
@@ -283,7 +288,6 @@ def register_pep517_action(
         mnemonic = "PycrossPep517Build",
         progress_message = "Building wheel %s" % sdist.basename,
         resource_set = resource_set,
-        execution_requirements = {"supports-path-mapping": "1"},
     )
 
     return struct(

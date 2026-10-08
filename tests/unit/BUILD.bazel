@@ -86,6 +86,16 @@ py_test(
 )
 
 py_test(
+    name = "sdist_test",
+    srcs = ["sdist_test.py"],
+    main = "sdist_test.py",
+    tags = ["unit"],
+    deps = [
+        "//pycross/private/build/tools:utils",
+    ],
+)
+
+py_test(
     name = "hooks_test",
     srcs = ["hooks_test.py"],
     main = "hooks_test.py",

@@ -1,5 +1,6 @@
 """Module docstring for tests."""
 
+load("@rules_cc//cc:defs.bzl", "cc_library")
 load("@rules_testing//lib:analysis_test.bzl", "analysis_test", "test_suite")
 load("@rules_testing//lib:util.bzl", "util")
 
@@ -24,6 +25,8 @@ def _mock_cc_layer_impl(ctx):
 _mock_cc_layer = rule(
     implementation = _mock_cc_layer_impl,
     attrs = dict(CC_TOOLCHAIN_ATTRS, **{
+        # Defines from `deps` end up in the toolchain flags.
+        "deps": attr.label_list(),
         "native_deps": attr.label_list(),
         "copts": attr.string_list(),
         "linkopts": attr.string_list(),
@@ -66,10 +69,58 @@ def _test_extract_cc_layer_flags_impl(env, target):
     content.contains("-fno-strict-aliasing")
     content.contains("-Wl,-strip-all")
 
+def _cc_config(target):
+    for action in target.actions:
+        for output in action.outputs.to_list():
+            if output.basename.endswith("_cc_config.json"):
+                return json.decode(action.content)
+    fail("no cc_config.json action")
+
+def _test_extract_cc_layer_user_flags(name):
+    util.helper_target(cc_library, name = name + "_defines", defines = ["PYCROSS_TEST_DUP"])
+    util.helper_target(
+        _mock_cc_layer,
+        name = name + "_subject",
+        deps = [name + "_defines"],
+        copts = ["-DPYCROSS_TEST_DUP", "-DPYCROSS_TEST_STR=\"a b\"", "-isystem", "/opt/userinc"],
+        linkopts = ["-Wl,-rpath,$$ORIGIN"],
+    )
+    analysis_test(name = name, target = name + "_subject", impl = _test_extract_cc_layer_user_flags_impl)
+
+def _test_extract_cc_layer_user_flags_impl(env, target):
+    cflags = _cc_config(target)["CFLAGS"]
+
+    # User copts are appended verbatim, even if a token also appears in the
+    # toolchain flags, and tokens with quotes/spaces are shell-quoted.
+    env.expect.that_bool(
+        cflags.endswith(" -DPYCROSS_TEST_DUP '-DPYCROSS_TEST_STR=\"a b\"' -isystem /opt/userinc"),
+    ).equals(True)
+    env.expect.that_int(cflags.count("-DPYCROSS_TEST_DUP")).equals(2)
+
+    # `$` is left unquoted.
+    env.expect.that_bool(_cc_config(target)["LDFLAGS"].endswith(" -Wl,-rpath,$ORIGIN")).equals(True)
+
+def _test_extract_cc_layer_main_repo_includes(name):
+    util.helper_target(cc_library, name = name + "_hdrs", hdrs = ["mock.h"], includes = ["."])
+    util.helper_target(
+        _mock_cc_layer,
+        name = name + "_subject",
+        native_deps = [name + "_hdrs"],
+    )
+    analysis_test(name = name, target = name + "_subject", impl = _test_extract_cc_layer_main_repo_includes_impl)
+
+def _test_extract_cc_layer_main_repo_includes_impl(env, target):
+    include_dirs = _cc_config(target)["include_dirs"]
+    env.expect.that_collection(include_dirs).contains("$$EXT_BUILD_ROOT$$//tests/analysis")
+    for inc in include_dirs:
+        env.expect.where(include_dir = inc).that_bool(inc.startswith("$$EXT_BUILD_ROOT$$/")).equals(True)
+
 def extract_cc_layer_test_suite(name):
     test_suite(
         name = name,
         tests = [
             _test_extract_cc_layer_flags,
+            _test_extract_cc_layer_user_flags,
+            _test_extract_cc_layer_main_repo_includes,
         ],
     )

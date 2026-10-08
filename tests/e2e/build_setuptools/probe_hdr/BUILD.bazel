@@ -1,0 +1,11 @@
+load("@rules_cc//cc:defs.bzl", "cc_library")
+
+package(default_visibility = ["//visibility:public"])
+
+# Main-repo native dep with a source include dir (exercises include-dir
+# absolutization in the cc layer).
+cc_library(
+    name = "probe_hdr",
+    hdrs = ["include/probe_hdr.h"],
+    includes = ["include"],
+)

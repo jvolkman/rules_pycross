@@ -193,6 +193,13 @@ def configure_rust_env(ctx, cargo_dir: Path, is_maturin: bool = False):
             ctx.build_env[f"AR_{triple}"] = ar
         if ranlib_path:
             ctx.build_env[f"RANLIB_{triple}"] = ranlib_path.as_posix()
+        # CFLAGS/CXXFLAGS are shell-quoted, but cc-rs splits them on
+        # whitespace unless CC_SHELL_ESCAPED_FLAGS is set (newer cc only).
+        # It prefers the per-target vars, so give it the unquoted tokens.
+        for flags_var in ("CFLAGS", "CXXFLAGS"):
+            flags = ctx.sysconfig_vars.get(flags_var)
+            if flags:
+                ctx.build_env[f"{flags_var}_{triple}"] = " ".join(shlex.split(flags))
 
     host_stdlib_src = ""
     cross_repo_name = ""

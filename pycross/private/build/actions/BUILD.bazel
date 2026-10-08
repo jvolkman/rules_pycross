@@ -7,6 +7,7 @@ bzl_library(
     srcs = ["cc_layer.bzl"],
     deps = [
         "//pycross/private/build:cc_toolchain_util",
+        "@bazel_skylib//lib:shell",
         "@bazel_tools//tools/cpp:toolchain_utils.bzl",
     ],
 )

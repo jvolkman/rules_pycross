@@ -37,7 +37,6 @@ def _pycross_wheel_transform_impl(ctx):
         outputs = outputs,
         tools = [ctx.attr.transform[DefaultInfo].files_to_run],
         mnemonic = "PycrossWheelTransform",
-        execution_requirements = {"supports-path-mapping": "1"},
         progress_message = "Transforming %s" % wheel_input.basename,
     )
 

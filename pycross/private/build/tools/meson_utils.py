@@ -18,6 +18,18 @@ def format_meson_list(items: List[str]) -> str:
     return "[" + ", ".join(f"'{item}'" for item in items) + "]"
 
 
+def _split_flags(flags: str) -> List[str]:
+    """Split a flags string, dropping shell quoting inside tokens.
+
+    The cc layer shell-quotes tokens such as -D__DATE__="redacted". Meson
+    passes c_args to the compiler verbatim, but projects embed them in
+    generated sources (numpy writes them into a raw string in
+    numpy/__config__.py), where a literal `"` breaks the file. Keep the
+    pre-quoting token semantics for Meson.
+    """
+    return shlex.split(" ".join(shlex.split(flags))) if flags else []
+
+
 def generate_cross_ini(ctx: BuildContext, cc_config: Optional[Dict[str, Any]] = None) -> None:
     """Generates the Meson cross.ini file dynamically from BuildContext and env configuration."""
 
@@ -39,8 +51,8 @@ def generate_cross_ini(ctx: BuildContext, cc_config: Optional[Dict[str, Any]] = 
     cxxflags = get_var("CXXFLAGS", "")
 
     # Parse arguments for Meson cross file
-    c_args = shlex.split(cflags) if cflags else []
-    cxx_args = shlex.split(cxxflags) if cxxflags else []
+    c_args = _split_flags(cflags)
+    cxx_args = _split_flags(cxxflags)
 
     # Filter linker flags (-Wl,...) out of c_args/cxx_args into link args.
     #
@@ -70,7 +82,7 @@ def generate_cross_ini(ctx: BuildContext, cc_config: Optional[Dict[str, Any]] = 
     # We can't remove -shared from LDSHAREDFLAGS itself because setuptools
     # uses LDSHARED (CC + LDSHAREDFLAGS) directly and needs it.
     ldflags = get_var("LDFLAGS", "")
-    c_link_args = shlex.split(ldflags) if ldflags else []
+    c_link_args = _split_flags(ldflags)
     c_link_args.extend(leaked_link_args)
 
     # Add C++ static runtime libraries by full path, replicating Bazel's

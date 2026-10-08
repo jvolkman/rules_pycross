@@ -111,6 +111,17 @@ class MesonUtilsTest(unittest.TestCase):
         self.assertIn("needs_exe_wrapper = true", content)
         self.assertIn("skip_sanity_check = true", content)
 
+    def test_generate_cross_ini_quoted_flags(self):
+        # Meson keeps the pre-quoting token semantics (quotes inside tokens
+        # are dropped), since projects like numpy embed c_args in generated
+        # Python sources.
+        self.ctx.sysconfig_vars["CFLAGS"] = "-O2 '-D__DATE__=\"redacted\"'"
+        cc_config = {"target_os": "linux", "target_cpu": "x86_64"}
+        generate_cross_ini(self.ctx, cc_config)
+
+        content = (self.temp_path / "cc_layer" / "cross.ini").read_text()
+        self.assertIn("c_args = ['-O2', '-D__DATE__=redacted']", content)
+
 
 if __name__ == "__main__":
     unittest.main()

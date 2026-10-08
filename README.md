@@ -595,6 +595,9 @@ maturin.override(
 
 To generate a Cargo.lock for an overridden package, run `bazel run @pypi//_cargo:jiter@<version>`.
 
+> [!NOTE]
+> When cross-compiling Rust packages (`maturin_build` or `setuptools_rust_build` with a target triple that differs from the exec platform), cargo builds build scripts and proc-macros for the exec platform and links them with the system `cc` found on `PATH`, not the Bazel C/C++ toolchain. The exec host (or remote execution image) needs a working C toolchain for these builds.
+
 #### Using a Custom Build Target
 
 For full control, provide your own build target:
