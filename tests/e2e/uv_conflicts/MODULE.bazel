@@ -58,4 +58,34 @@ uv.repo(
     projects = ["project"],
     workspace = "shared",
 )
-use_repo(uv, "project", "project_pinned")
+uv.repo(
+    name = "project_flags",
+    dependency_groups = [
+        "default",
+        "group:group-a",
+        "group:group-b",
+        "optional:variant-a",
+        "optional:variant-b",
+    ],
+    flags = [
+        "--@project_flags//_variants:extra_variant-a=True",
+    ],
+    projects = ["project"],
+    workspace = "shared",
+)
+uv.repo(
+    name = "project_settings",
+    dependency_groups = [
+        "default",
+        "group:group-a",
+        "group:group-b",
+        "optional:variant-a",
+        "optional:variant-b",
+    ],
+    projects = ["project"],
+    settings = {
+        "@project_settings//_variants:extra_variant-a": "True",
+    },
+    workspace = "shared",
+)
+use_repo(uv, "project", "project_flags", "project_pinned", "project_settings")

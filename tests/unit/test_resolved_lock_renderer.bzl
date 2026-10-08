@@ -584,6 +584,63 @@ def _test_no_available_when_all_have_sdist(name):
     analysis_test(name = name, target = name + "_subject", impl = _test_no_available_when_all_have_sdist_impl)
 
 # buildifier: disable=unused-variable
+def _test_extras_inherit_base_available_impl(env, target):
+    """Extras of a wheel-only package are gated by the base's _available_ group."""
+    lock = {
+        "packages": {
+            "plat@1.0": {
+                "wheel_candidates": [
+                    {
+                        "filename": "plat-1.0-cp310-cp310-win_amd64.whl",
+                        "file_reference": {"key": "plat_win"},
+                    },
+                ],
+            },
+            "plat[extra]@1.0": {},
+        },
+    }
+    repo_map = {"plat_win": "@repo//plat:win_wheel"}
+    res = render_lock_bzl(lock, repo_map, rctx_name = "my_rctx")
+
+    alias = res.split('name = "_available_plat[extra]@1.0"')[1].split(")", 1)[0]
+    env.expect.that_str(alias).contains('actual = ":_available_plat@1.0"')
+
+def _test_extras_inherit_base_available(name):
+    util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
+    analysis_test(name = name, target = name + "_subject", impl = _test_extras_inherit_base_available_impl)
+
+# buildifier: disable=unused-variable
+def _test_build_mode_never_no_sdist_fallback_impl(env, target):
+    """build_mode = "never" packages don't fall back to the sdist build and get _available_."""
+    lock = {
+        "packages": {
+            "pkg@1.0": {
+                "sdist_file": {"key": "sdist_key"},
+                "build_mode": "never",
+                "wheel_candidates": [
+                    {
+                        "filename": "pkg-1.0-cp310-cp310-win_amd64.whl",
+                        "file_reference": {"key": "pkg_win"},
+                    },
+                ],
+            },
+        },
+    }
+    repo_map = {
+        "pkg_win": "@repo//pkg:win_wheel",
+        "sdist_key": "@repo//pkg:sdist",
+    }
+    res = render_lock_bzl(lock, repo_map, rctx_name = "my_rctx")
+
+    env.expect.that_bool("my_rctx_sdist_" in res).equals(False)
+    env.expect.that_str(res).contains("@rules_pycross//pycross/private:no_match_error")
+    env.expect.that_str(res).contains('name = "_available_pkg@1.0"')
+
+def _test_build_mode_never_no_sdist_fallback(name):
+    util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
+    analysis_test(name = name, target = name + "_subject", impl = _test_build_mode_never_no_sdist_fallback_impl)
+
+# buildifier: disable=unused-variable
 def _test_resolution_marker_evaluator_rendering_impl(env, target):
     """Verify resolution_marker_exprs generate evaluator + config_setting targets."""
     lock = {
@@ -732,6 +789,8 @@ def resolved_lock_renderer_test_suite(name):
             _test_multi_platform_repo_map,
             _test_available_config_setting_group,
             _test_no_available_when_all_have_sdist,
+            _test_extras_inherit_base_available,
+            _test_build_mode_never_no_sdist_fallback,
             _test_resolution_marker_evaluator_rendering,
             _test_resolution_marker_compound_rendering,
             _test_wheel_library_tags_rendering,

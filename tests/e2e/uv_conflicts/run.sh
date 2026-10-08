@@ -34,3 +34,9 @@ echo "Failed as expected."
 echo "Testing platform transition (variant-a pinned via flags)..."
 bazel test "$@" //:test_transition_pinned //:test_transition_pinned_maybe --test_output=errors
 echo "Platform transition test passed."
+
+# Test flags-only and settings-only transitions (no constraint_values) and transitioned modules_mapping targets.
+echo "Testing flags-only transition and modules_mapping..."
+bazel test "$@" //:test_transition_flags_only //:test_transition_settings --test_output=errors
+bazel build "$@" //:transition_modules_mappings
+echo "Flags-only transition test passed."

@@ -254,6 +254,9 @@ def _create_package_resolver(pkg_key, pkg, ann, default_extra_build_tools, conte
     if always_build or build_target:
         wheel_candidates = []
 
+    if not pkg_extra and always_build and sdist_file == None and not build_target:
+        fail("Package {} has build_mode = \"always\" but no sdist to build from.".format(pkg_key))
+
     # Markers under which the root projects request this exact pin; see
     # _record_root_marker in uv_lock_model.bzl for the semantics.
     root_pin_name = pkg_name
@@ -668,6 +671,15 @@ def resolve(
 
     if include_transitive:
         reachable_keys = _compute_reachable_keys(pins, packages_by_package_key)
+
+        # With transitive_testonly, a transitive pin is testonly only if it is
+        # not reachable from any non-testonly root pin.
+        non_testonly_reachable_keys = {}
+        if transitive_testonly:
+            non_testonly_reachable_keys = _compute_reachable_keys(
+                {name: v for name, v in pins.items() if parse_package_key(name).name not in testonly_pins_set},
+                packages_by_package_key,
+            )
         resolved_versions_by_name = {}
         for entry in resolved_packages:
             if entry.key not in reachable_keys:
@@ -682,6 +694,11 @@ def resolve(
         for package_pin_name, versions in resolved_versions_by_name.items():
             if package_pin_name in pins:
                 continue
+            is_testonly = transitive_testonly and not [
+                v
+                for v in versions.keys()
+                if "{}@{}".format(package_pin_name, v) in non_testonly_reachable_keys
+            ]
             fork_targets = {}
             for v in sorted(versions.keys()):
                 cname = resolution_marker_constraint_name(package_pin_name, v)
@@ -690,7 +707,7 @@ def resolve(
                     fork_targets[cname] = base_key
             if fork_targets and len(fork_targets) == len(versions):
                 pins[package_pin_name] = fork_targets
-                if transitive_testonly:
+                if is_testonly:
                     testonly_pins_set[package_pin_name] = True
                 continue
             if len(versions) > 1:
@@ -702,14 +719,14 @@ def resolve(
                 base_key = "{}@{}".format(package_pin_name, latest_version)
                 if base_key in packages_by_package_key:
                     pins[package_pin_name] = {"": base_key}
-                    if transitive_testonly:
+                    if is_testonly:
                         testonly_pins_set[package_pin_name] = True
                 continue
             version = versions.keys()[0]
             base_key = "{}@{}".format(package_pin_name, version)
             if base_key in packages_by_package_key:
                 pins[package_pin_name] = {"": base_key}
-                if transitive_testonly:
+                if is_testonly:
                     testonly_pins_set[package_pin_name] = True
 
     testonly_pin_names = sorted(testonly_pins_set.keys())

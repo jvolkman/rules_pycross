@@ -10,11 +10,15 @@ load("//pycross/private:package_repo.bzl", "backend_tool_deps_labels_for_testing
 load(
     "//pycross/private:thin_package_repo.bzl",
     "cargo_build_for_testing",
+    "flag_values_for_testing",
     "is_platform_specific_for_testing",
     "packages_bzl_for_testing",
     "pin_build_for_testing",
     "requirements_bzl_for_testing",
 )
+
+# buildifier: disable=bzl-visibility
+load("//pycross/private:util.bzl", "coerce_transition_values", "split_setting_value")
 
 # ── Test: no platform → non-transitioning proxies ──────────────────
 
@@ -536,6 +540,101 @@ def _test_pin_build_multi_branch_maybe(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
     analysis_test(name = name, target = name + "_subject", impl = _test_pin_build_multi_branch_maybe_impl)
 
+# buildifier: disable=unused-variable
+def _test_flag_values_impl(env, target):
+    """Repeated flags collect values in order; a bare flag means True; no comma splitting."""
+    res = flag_values_for_testing([
+        "--//command_line_option:copt=-Wl,-rpath,/x",
+        "--@ws//_variants:extra_a",
+        "--//command_line_option:copt=-O2",
+        "--//command_line_option:compilation_mode=opt",
+    ])
+    env.expect.that_dict(res).contains_exactly({
+        "//command_line_option:copt": ["-Wl,-rpath,/x", "-O2"],
+        "@ws//_variants:extra_a": ["True"],
+        "//command_line_option:compilation_mode": ["opt"],
+    })
+
+def _test_flag_values(name):
+    util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
+    analysis_test(name = name, target = name + "_subject", impl = _test_flag_values_impl)
+
+# buildifier: disable=unused-variable
+def _test_transition_value_coercion_impl(env, target):
+    """settings values split on commas for list settings only; flags lists are kept per entry."""
+    env.expect.that_collection(split_setting_value([], "-O2,-g")).contains_exactly(["-O2", "-g"]).in_order()
+    env.expect.that_collection(split_setting_value([], "")).contains_exactly([])
+    env.expect.that_collection(split_setting_value("", "a,b")).contains_exactly(["a,b"])
+    env.expect.that_collection(coerce_transition_values([], ["-Wl,-rpath,/x", "-O2"])).contains_exactly(["-Wl,-rpath,/x", "-O2"]).in_order()
+    env.expect.that_str(coerce_transition_values("", ["a,b"])).equals("a,b")
+    env.expect.that_bool(coerce_transition_values(False, ["True", "0"])).equals(False)
+    env.expect.that_int(coerce_transition_values(0, ["3"])).equals(3)
+
+def _test_transition_value_coercion(name):
+    util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
+    analysis_test(name = name, target = name + "_subject", impl = _test_transition_value_coercion_impl)
+
+# buildifier: disable=unused-variable
+def _test_requirements_bzl_extra_of_platform_specific_impl(env, target):
+    """Extras of a wheel-only package use the [extra]_maybe target in all_requirements."""
+    mock_rctx = struct(name = "my_repo")
+    pins = {"plat[extra]": {"": "plat[extra]@1.0"}}
+    packages = {
+        "plat@1.0": {"wheel_candidates": [{"filename": "plat-1.0-cp310-win_amd64.whl"}]},
+        "plat[extra]@1.0": {},
+    }
+    res = requirements_bzl_for_testing(mock_rctx, pins, packages)
+    env.expect.that_str(res).contains("@@my_repo//plat:[extra]_maybe")
+
+# buildifier: disable=unused-variable
+def _test_requirements_bzl_testonly_split_impl(env, target):
+    """Testonly pins go to all_testonly_requirements, not all_requirements."""
+    mock_rctx = struct(name = "my_repo")
+    pins = {
+        "foo": {"": "foo@1.0"},
+        "pytest": {"": "pytest@8.0"},
+        "pytest[toml]": {"": "pytest[toml]@8.0"},
+    }
+    packages = {
+        "foo@1.0": {"sdist_file": {"key": "foo_sdist"}},
+        "pytest@8.0": {"sdist_file": {"key": "pytest_sdist"}},
+    }
+    res = requirements_bzl_for_testing(mock_rctx, pins, packages, {"pytest": True})
+    all_reqs, testonly_reqs = res.split("all_requirements = [")[1].split("all_testonly_requirements = [")
+    env.expect.that_str(all_reqs).contains("@@my_repo//foo")
+    env.expect.that_bool("pytest" in all_reqs).equals(False)
+    env.expect.that_str(testonly_reqs).contains('"@@my_repo//pytest"')
+    env.expect.that_str(testonly_reqs).contains('"@@my_repo//pytest:[toml]"')
+
+def _test_requirements_bzl_testonly_split(name):
+    util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
+    analysis_test(name = name, target = name + "_subject", impl = _test_requirements_bzl_testonly_split_impl)
+
+def _test_requirements_bzl_extra_of_platform_specific(name):
+    util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
+    analysis_test(name = name, target = name + "_subject", impl = _test_requirements_bzl_extra_of_platform_specific_impl)
+
+# buildifier: disable=unused-variable
+def _test_pin_build_aggregated_only_branches_with_extras_impl(env, target):
+    """has_aggregated_variant uses [_all_] only for fork branches that have extras."""
+    res = pin_build_for_testing(
+        target_name = "foo",
+        pin_target_dict = {
+            "res_foo_1_0": "foo@1.0",
+            "res_foo_2_0": "foo@2.0",
+        },
+        package = {},
+        workspace_repo = "ws",
+        has_aggregated_variant = True,
+        aggregated_keys = {"foo@1.0": True},
+    ).build
+    env.expect.that_str(res).contains('"@ws//_lock:is_res_foo_1_0": "@ws//_lock:foo[_all_]@1.0"')
+    env.expect.that_str(res).contains('"@ws//_lock:is_res_foo_2_0": "@ws//_lock:foo@2.0"')
+
+def _test_pin_build_aggregated_only_branches_with_extras(name):
+    util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
+    analysis_test(name = name, target = name + "_subject", impl = _test_pin_build_aggregated_only_branches_with_extras_impl)
+
 # ── Test: multi-branch sdist and _packages.bzl ─────────────────────
 
 # buildifier: disable=unused-variable
@@ -771,6 +870,11 @@ def thin_package_repo_test_suite(name):
             _test_requirements_bzl_extra_pins,
             _test_requirements_bzl_root_marker_aliases,
             _test_pin_build_multi_branch_maybe,
+            _test_requirements_bzl_extra_of_platform_specific,
+            _test_flag_values,
+            _test_transition_value_coercion,
+            _test_requirements_bzl_testonly_split,
+            _test_pin_build_aggregated_only_branches_with_extras,
             _test_pin_build_multi_branch_sdist,
             _test_cargo_build_multi_branch,
             _test_backend_tool_deps_labels,

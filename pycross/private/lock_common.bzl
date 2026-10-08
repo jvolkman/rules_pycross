@@ -10,11 +10,11 @@ def validate_transition_attrs(tag, tag_name):
         tag_name: The name of the tag for error messages.
     """
     has_platform = bool(getattr(tag, "platform", None))
-    has_flags = bool(getattr(tag, "flags", []))
+    has_flags = bool(getattr(tag, "flags", [])) or bool(getattr(tag, "settings", {}))
     has_constraints = bool(getattr(tag, "constraint_values", []))
 
     if has_platform and (has_flags or has_constraints):
-        fail("Tag '{}' cannot specify both 'platform' and ('flags' or 'constraint_values')".format(tag_name))
+        fail("Tag '{}' cannot specify both 'platform' and ('flags', 'settings' or 'constraint_values')".format(tag_name))
 
 def package_annotation(
         build_mode = "auto",
@@ -70,6 +70,7 @@ def workspace_lock_struct(ws_tag, repo_name, workspace_name, transition_attrs):
         workspace = workspace_name,
         local_wheels = ws_tag.local_wheels,
         flags = transition_attrs.get("flags", []),
+        settings = transition_attrs.get("settings", {}),
         constraint_values = transition_attrs.get("constraint_values", []),
         platform = transition_attrs.get("platform"),
     )
@@ -208,19 +209,21 @@ def get_member_transition_attrs(members_tag, override_tag):
     Returns:
         A dict with merged transition attributes (flags, constraint_values, platform).
     """
-    has_explicit_flags = override_tag and getattr(override_tag, "flags", [])
+    has_explicit_flags = override_tag and (getattr(override_tag, "flags", []) or getattr(override_tag, "settings", {}))
     has_explicit_constraints = override_tag and getattr(override_tag, "constraint_values", [])
     has_explicit_platform = override_tag and getattr(override_tag, "platform", None)
 
     if override_tag and (has_explicit_flags or has_explicit_constraints or has_explicit_platform):
         return dict(
             flags = getattr(override_tag, "flags", []),
+            settings = getattr(override_tag, "settings", {}),
             constraint_values = [str(c) for c in getattr(override_tag, "constraint_values", [])],
             platform = str(override_tag.platform) if override_tag.platform else None,
         )
 
     return dict(
         flags = getattr(members_tag, "flags", []) if members_tag else [],
+        settings = getattr(members_tag, "settings", {}) if members_tag else {},
         constraint_values = [str(c) for c in getattr(members_tag, "constraint_values", [])] if members_tag else [],
         platform = str(members_tag.platform) if members_tag and getattr(members_tag, "platform", None) else None,
     )
@@ -477,6 +480,7 @@ def process_workspaces(
                     repo = ws_name,
                     dependency_groups = ["default"],
                     flags = [],
+                    settings = {},
                     constraint_values = [],
                     platform = None,
                 )
@@ -514,6 +518,7 @@ def process_workspaces(
             repo = repo,
             dependency_groups = getattr(tag, "dependency_groups", ["default"]),
             flags = getattr(tag, "flags", []),
+            settings = getattr(tag, "settings", {}),
             constraint_values = getattr(tag, "constraint_values", []),
             platform = getattr(tag, "platform", None),
         )
@@ -551,6 +556,7 @@ def process_workspaces(
             raw_dependency_groups = ["*", "transitive"],
             transition_attrs = dict(
                 flags = [],
+                settings = {},
                 constraint_values = [],
                 platform = None,
             ),

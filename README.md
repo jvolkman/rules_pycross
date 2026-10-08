@@ -228,6 +228,8 @@ uv.repo(
 )
 ```
 
+Testonly packages are left out of `all_requirements` in the generated `requirements.bzl` and listed in `all_testonly_requirements` instead.
+
 With `transitive;testonly`, `rules_pycross` performs reachability analysis to determine which transitive packages are **exclusively** reachable from testonly roots. Packages reachable from both testonly and non-testonly groups remain non-testonly:
 
 ```python
@@ -701,14 +703,14 @@ When a workspace member needs to be built under a specific platform configuratio
 
 There are three ways to specify the transition:
 
-**1. Using `flags` — embed `--flag=value` settings into a generated platform:**
+**1. Using `flags` — pin `--flag=value` settings for the repo's targets:**
 
 ```python
 uv.repo(
     workspace = "shared",
     name = "ml-pipeline",
     flags = [
-        "--@pypi//_variants:extra_cu124=True",
+        "--@ml-pipeline//_variants:extra_cu124=True",
     ],
 )
 ```
@@ -737,13 +739,33 @@ uv.repo(
 ```
 
 > [!NOTE]
-> `flags` and `constraint_values` can be combined (they are merged into a single generated platform), but `platform` is mutually exclusive with both.
+> `flags`, `settings` and `constraint_values` can be combined, but `platform` is mutually exclusive with all of them. With `flags`/`settings` alone, the incoming `--platforms` is kept.
 
 These attributes are available on `uv.repo()` and its PDM/Poetry/Pylock equivalents.
 
-When `constraint_values` alone are specified, `rules_pycross` generates an internal `platform()` target and uses `pycross_transitioning_library_proxy` / `pycross_transitioning_file_proxy` at each package level to apply the `--platforms` transition.
+When `constraint_values` are specified, `rules_pycross` generates an internal `platform()` target and uses `pycross_transitioning_library_proxy` / `pycross_transitioning_file_proxy` at each package level to apply the `--platforms` transition.
 
-When `flags` are specified (with or without `constraint_values`), `rules_pycross` additionally generates a custom `_transition.bzl` in the thin repo. This is necessary because Bazel's `platform(flags=[...])` mechanism only applies during top-level platform mapping — it does **not** take effect when `--platforms` is set via a Starlark transition. The generated transition directly sets both `--platforms` and the individual flag values. Root-level targets become transitioning proxies so that `select()` expressions in per-package BUILD files resolve in the transitioned configuration where the flags are set.
+When `flags` are specified, `rules_pycross` additionally generates a custom `_transition.bzl` in the thin repo. This is necessary because Bazel's `platform(flags=[...])` mechanism only applies during top-level platform mapping — it does **not** take effect when `--platforms` is set via a Starlark transition. The generated transition directly sets the individual flag values (and `--platforms`, when `constraint_values` are given). Root-level targets become transitioning proxies so that `select()` expressions in per-package BUILD files resolve in the transitioned configuration where the flags are set.
+
+Each `flags` entry is written like a command-line flag, `--<flag>[=<value>]` (a missing value means `True`):
+
+* Built-in options use their plain names, e.g. `--compilation_mode=opt` or `--copt=-O2`.
+* Repeat an entry to pass multiple values to a list setting such as `--copt`; each entry is one element (values are not split on commas).
+* Labels are resolved from inside the generated repo: use `@<repo>//...` for generated repos such as `@ml-pipeline//_variants:...`. In the root module, `//pkg:flag` and `:flag` refer to your main repository. Other `@repo` labels must be visible to `rules_pycross`.
+* `--platforms` is not allowed; use `platform` or `constraint_values`.
+
+`settings` takes build-setting labels keyed to their values, resolved from the module that declares the repo:
+
+```python
+uv.repo(
+    workspace = "shared",
+    name = "ml-pipeline",
+    flags = ["--compilation_mode=opt"],
+    settings = {"@my_flags//:level": "2"},
+)
+```
+
+Use `flags` for built-in options and labels `rules_pycross` can see (such as its generated repos), and `settings` for build settings from your own or other modules; list-valued settings split on commas.
 
 This is particularly useful for locking variant selections to a member without requiring `--flag` arguments on every `bazel build` invocation.
 
@@ -785,22 +807,15 @@ Independently of this setting, sdist builds whose configuration is known to be b
 
 `rules_pycross` is compatible with `rules_python_gazelle_plugin`. The target layout (`@<repo>//<package>`) matches the plugin's default label conventions, so no `gazelle:python_label_convention` directives are needed.
 
-The `pycross_modules_mapping` rule generates `modules_mapping.json` from package metadata at build time — wheels do not need to be downloaded or extracted during analysis.
+Each generated repo provides a `:modules_mapping` target, built by the `pycross_modules_mapping` rule from package metadata at build time — wheels do not need to be downloaded or extracted during analysis. It covers every pinned package, including testonly ones.
 
 ```python
 load("@gazelle//:def.bzl", "gazelle")
-load("@rules_pycross//pycross:defs.bzl", "pycross_modules_mapping")
 load("@rules_python_gazelle_plugin//manifest:defs.bzl", "gazelle_python_manifest")
-load("@pypi//:requirements.bzl", "all_requirements")
-
-pycross_modules_mapping(
-    name = "modules_map",
-    deps = all_requirements,
-)
 
 gazelle_python_manifest(
     name = "gazelle_python_manifest",
-    modules_mapping = ":modules_map",
+    modules_mapping = "@pypi//:modules_mapping",
     pip_repository_name = "pypi",
 )
 
@@ -811,6 +826,8 @@ gazelle(
     gazelle = "@rules_python_gazelle_plugin//python:gazelle_binary",
 )
 ```
+
+To map a custom set of packages, use `pycross_modules_mapping(deps = ...)` from `@rules_pycross//pycross:defs.bzl` (set `testonly = True` if `deps` include `all_testonly_requirements`).
 
 ```bash
 > bazel run //:gazelle_python_manifest.update  # Update gazelle_python.yaml

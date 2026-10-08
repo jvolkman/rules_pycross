@@ -8,7 +8,7 @@ The uv extension.
 
 <pre>
 uv = use_extension("@rules_pycross//pycross/extensions:uv.bzl", "uv")
-uv.repo(<a href="#uv.repo-name">name</a>, <a href="#uv.repo-constraint_values">constraint_values</a>, <a href="#uv.repo-dependency_groups">dependency_groups</a>, <a href="#uv.repo-flags">flags</a>, <a href="#uv.repo-platform">platform</a>, <a href="#uv.repo-projects">projects</a>, <a href="#uv.repo-workspace">workspace</a>)
+uv.repo(<a href="#uv.repo-name">name</a>, <a href="#uv.repo-constraint_values">constraint_values</a>, <a href="#uv.repo-dependency_groups">dependency_groups</a>, <a href="#uv.repo-flags">flags</a>, <a href="#uv.repo-platform">platform</a>, <a href="#uv.repo-projects">projects</a>, <a href="#uv.repo-settings">settings</a>, <a href="#uv.repo-workspace">workspace</a>)
 uv.package(<a href="#uv.package-name">name</a>, <a href="#uv.package-bin_paths">bin_paths</a>, <a href="#uv.package-build_backend">build_backend</a>, <a href="#uv.package-build_mode">build_mode</a>, <a href="#uv.package-build_target">build_target</a>, <a href="#uv.package-build_tools_repo">build_tools_repo</a>, <a href="#uv.package-data_paths">data_paths</a>,
            <a href="#uv.package-extra_build_tools">extra_build_tools</a>, <a href="#uv.package-extra_dependencies">extra_dependencies</a>, <a href="#uv.package-ignore_dependencies">ignore_dependencies</a>, <a href="#uv.package-include_paths">include_paths</a>,
            <a href="#uv.package-install_exclude_globs">install_exclude_globs</a>, <a href="#uv.package-post_install_patches">post_install_patches</a>, <a href="#uv.package-pre_build_patches">pre_build_patches</a>, <a href="#uv.package-site_hooks">site_hooks</a>, <a href="#uv.package-site_paths">site_paths</a>,
@@ -32,9 +32,10 @@ Override a uv workspace member's settings.
 | <a id="uv.repo-name"></a>name |  Override the repo name.   | <a href="https://bazel.build/concepts/labels#target-names">Name</a> | optional |  `""`  |
 | <a id="uv.repo-constraint_values"></a>constraint_values |  A list of constraint values to apply to the generated platform.   | <a href="https://bazel.build/concepts/labels">List of labels</a> | optional |  `[]`  |
 | <a id="uv.repo-dependency_groups"></a>dependency_groups |  A list of target groups to include. E.g. ['default', 'group:foo', '*']. Use 'transitive' to generate aliases for transitively-reachable packages. Defaults to ['default'].   | List of strings | optional |  `["default"]`  |
-| <a id="uv.repo-flags"></a>flags |  A list of flags to apply to the generated platform (e.g., '--@flag=value').   | List of strings | optional |  `[]`  |
+| <a id="uv.repo-flags"></a>flags |  Flags applied to this repo's targets via a transition, written like the command line: `--<flag>[=<value>]` (a missing value means `True`), e.g. `--@repo//_variants:extra_x=True` or `--compilation_mode=opt`. Repeat an entry to pass multiple values to a list setting; each entry is one element (no comma splitting). `@repo` labels must be visible to rules_pycross (e.g. repos from this extension); use `settings` for other build settings.   | List of strings | optional |  `[]`  |
 | <a id="uv.repo-platform"></a>platform |  An existing platform target to use directly.   | <a href="https://bazel.build/concepts/labels">Label</a> | optional |  `None`  |
 | <a id="uv.repo-projects"></a>projects |  A list of project names to include. Use ['*'] to include all discovered projects.   | List of strings | optional |  `[]`  |
+| <a id="uv.repo-settings"></a>settings |  Build settings applied to this repo's targets via a transition, as `{label: value}`. Labels resolve relative to the declaring module. List settings split the value on commas. Use `flags` for built-in options.   | <a href="https://bazel.build/rules/lib/dict">Dictionary: Label -> String</a> | optional |  `{}`  |
 | <a id="uv.repo-workspace"></a>workspace |  Name of the workspace this member belongs to.   | String | required |  |
 
 <a id="uv.package"></a>

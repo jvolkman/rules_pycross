@@ -5,6 +5,9 @@ load("@rules_testing//lib:truth.bzl", "matching")
 load("@rules_testing//lib:util.bzl", "util")
 
 # buildifier: disable=bzl-visibility
+load("//pycross/private:format_extension.bzl", "normalize_flag_for_testing", "normalize_settings_for_testing")
+
+# buildifier: disable=bzl-visibility
 load("//pycross/private:lock_repo_creation.bzl", "normalize_override_name_for_testing", "validate_override_packages_for_testing")
 
 # buildifier: disable=bzl-visibility
@@ -329,11 +332,128 @@ def _test_validate_override_version_unknown(name):
         expect_failure = True,
     )
 
+# buildifier: disable=unused-variable
+def _test_normalize_flags_impl(env, target):
+    """Repo flags: bare names map to command_line_option; root-relative labels become canonical."""
+    n = normalize_flag_for_testing
+    env.expect.that_str(n("--//pkg:flag=1", True)).equals("--@@//pkg:flag=1")
+    env.expect.that_str(n("--:flag", True)).equals("--@@//:flag")
+    env.expect.that_str(n("--//pkg:flag=1", False)).equals("--//pkg:flag=1")
+    env.expect.that_str(n("--:flag", False)).equals("--:flag")
+    env.expect.that_str(n("--@repo//_variants:x=True", True)).equals("--@repo//_variants:x=True")
+    env.expect.that_str(n("--@@//pkg:flag", True)).equals("--@@//pkg:flag")
+    env.expect.that_str(n("--//command_line_option:copt=-O2", True)).equals("--//command_line_option:copt=-O2")
+    env.expect.that_str(n("--compilation_mode=opt", True)).equals("--//command_line_option:compilation_mode=opt")
+    env.expect.that_str(n("--copt=-Wl,-rpath,/x", False)).equals("--//command_line_option:copt=-Wl,-rpath,/x")
+
+def _test_normalize_flags(name):
+    util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
+    analysis_test(name = name, target = name + "_subject", impl = _test_normalize_flags_impl)
+
+def _invalid_flag_subject_impl(ctx):  # @unused
+    normalize_flag_for_testing("compilation_mode=opt", True)
+    return []
+
+_invalid_flag_subject = rule(implementation = _invalid_flag_subject_impl)
+
+def _test_normalize_flag_requires_dashes_impl(env, target):
+    env.expect.that_target(target).failures().contains_predicate(
+        matching.contains("Invalid repo flag \"compilation_mode=opt\": expected '--<flag>[=<value>]'"),
+    )
+
+def _test_normalize_flag_requires_dashes(name):
+    util.helper_target(_invalid_flag_subject, name = name + "_subject")
+    analysis_test(
+        name = name,
+        target = name + "_subject",
+        impl = _test_normalize_flag_requires_dashes_impl,
+        expect_failure = True,
+    )
+
+def _platforms_flag_subject_impl(ctx):  # @unused
+    normalize_flag_for_testing("--platforms=//:p", True)
+    return []
+
+_platforms_flag_subject = rule(implementation = _platforms_flag_subject_impl)
+
+def _test_normalize_flag_rejects_platforms_impl(env, target):
+    env.expect.that_target(target).failures().contains_predicate(
+        matching.contains("use 'platform' or 'constraint_values' instead"),
+    )
+
+def _test_normalize_flag_rejects_platforms(name):
+    util.helper_target(_platforms_flag_subject, name = name + "_subject")
+    analysis_test(
+        name = name,
+        target = name + "_subject",
+        impl = _test_normalize_flag_rejects_platforms_impl,
+        expect_failure = True,
+    )
+
+# buildifier: disable=unused-variable
+def _test_normalize_settings_impl(env, target):
+    """settings keys are stringified to canonical labels."""
+    res = normalize_settings_for_testing({Label("//pkg:flag"): "a,b"}, ["--@@//other:flag=1"])
+    env.expect.that_dict(res).contains_exactly({str(Label("//pkg:flag")): "a,b"})
+
+def _test_normalize_settings(name):
+    util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
+    analysis_test(name = name, target = name + "_subject", impl = _test_normalize_settings_impl)
+
+def _cmdline_setting_subject_impl(ctx):  # @unused
+    normalize_settings_for_testing({Label("//command_line_option:copt"): "-O2"}, [])
+    return []
+
+_cmdline_setting_subject = rule(implementation = _cmdline_setting_subject_impl)
+
+def _test_normalize_settings_rejects_builtin_impl(env, target):
+    env.expect.that_target(target).failures().contains_predicate(
+        matching.contains("is a built-in option; use flags = [\"--copt=...\"] instead"),
+    )
+
+def _test_normalize_settings_rejects_builtin(name):
+    util.helper_target(_cmdline_setting_subject, name = name + "_subject")
+    analysis_test(
+        name = name,
+        target = name + "_subject",
+        impl = _test_normalize_settings_rejects_builtin_impl,
+        expect_failure = True,
+    )
+
+def _duplicate_setting_subject_impl(ctx):  # @unused
+    normalize_settings_for_testing(
+        {Label("//pkg:flag"): "1"},
+        [normalize_flag_for_testing("--//pkg:flag=2", True)],
+    )
+    return []
+
+_duplicate_setting_subject = rule(implementation = _duplicate_setting_subject_impl)
+
+def _test_normalize_settings_rejects_duplicate_impl(env, target):
+    env.expect.that_target(target).failures().contains_predicate(
+        matching.contains("is set in both flags and settings"),
+    )
+
+def _test_normalize_settings_rejects_duplicate(name):
+    util.helper_target(_duplicate_setting_subject, name = name + "_subject")
+    analysis_test(
+        name = name,
+        target = name + "_subject",
+        impl = _test_normalize_settings_rejects_duplicate_impl,
+        expect_failure = True,
+    )
+
 def override_helpers_test_suite(name):
     test_suite(
         name = name,
         tests = [
             _test_encode_build_system_attrs,
+            _test_normalize_flags,
+            _test_normalize_flag_requires_dashes,
+            _test_normalize_flag_rejects_platforms,
+            _test_normalize_settings,
+            _test_normalize_settings_rejects_builtin,
+            _test_normalize_settings_rejects_duplicate,
             _test_merge_wildcard_only,
             _test_merge_specific_only,
             _test_merge_no_match,
