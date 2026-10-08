@@ -1,5 +1,6 @@
 """Action logic for CC environment extraction."""
 
+load("@bazel_skylib//lib:shell.bzl", "shell")
 load("@bazel_tools//tools/cpp:toolchain_utils.bzl", "find_cpp_toolchain")
 load("@rules_cc//cc/common:cc_common.bzl", "cc_common")
 load("@rules_cc//cc/common:cc_info.bzl", "CcInfo")
@@ -15,14 +16,24 @@ load(
 
 def _absolute_tool_value(workspace_name, value):
     if value:
-        tool_value_absolute = absolutize_path_in_str(workspace_name, "$$EXT_BUILD_ROOT$$/", value, True)
-        if " " in tool_value_absolute:
-            tool_value_absolute = "\\\"" + tool_value_absolute + "\\\""
-        return tool_value_absolute
+        return absolutize_path_in_str(workspace_name, "$$EXT_BUILD_ROOT$$/", value, True)
     return value
 
+# `$` is included so $$EXT_BUILD_ROOT$$ paths (and flags like -Wl,-rpath,$ORIGIN)
+# are left as they were.
+_UNQUOTED_FLAG_CHARS = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_@%+=:,./-$"
+
+def _quote_flag(flag):
+    # Consumers re-split these strings with shell rules (shlex, distutils
+    # split_quoted, CMake/make command lines), so quote tokens that would
+    # otherwise be split or lose quotes (e.g. -D__DATE__="redacted").
+    for c in flag.elems():
+        if c not in _UNQUOTED_FLAG_CHARS:
+            return shell.quote(flag)
+    return flag
+
 def _join_flags_list(workspace_name, flags):
-    return " ".join([absolutize_path_in_str(workspace_name, "$$EXT_BUILD_ROOT$$/", flag) for flag in flags])
+    return " ".join([_quote_flag(absolutize_path_in_str(workspace_name, "$$EXT_BUILD_ROOT$$/", flag)) for flag in flags])
 
 def _get_sysconfig_data(workspace_name, tools, flags):
     cc = _absolute_tool_value(workspace_name, tools.cc)
@@ -140,13 +151,17 @@ def extract_cc_layer(ctx, native_deps, copts, linkopts, meson_properties = {}):
 
         headers_and_includes = get_headers(ccinfo)
         transitive_files.append(ccinfo.compilation_context.headers)
+
+        # force=True: main-repo source paths (e.g. "pkg/include") have no
+        # prefix to match, and the builder resolves relative paths against
+        # the sdist dir.
         for inc in headers_and_includes.include_dirs:
-            include_dirs.append(absolutize_path_in_str(ctx.workspace_name, "$$EXT_BUILD_ROOT$$/", inc))
+            include_dirs.append(absolutize_path_in_str(ctx.workspace_name, "$$EXT_BUILD_ROOT$$/", inc, True))
 
         libraries = get_libraries(ccinfo)
         transitive_files.append(depset(libraries))
         for lib in libraries:
-            lib_path = absolutize_path_in_str(ctx.workspace_name, "$$EXT_BUILD_ROOT$$/", lib.path)
+            lib_path = absolutize_path_in_str(ctx.workspace_name, "$$EXT_BUILD_ROOT$$/", lib.path, True)
             if lib.path.endswith(".a"):
                 static_libs.append(lib_path)
             elif _is_shared_library(lib.path):
@@ -177,7 +192,7 @@ def extract_cc_layer(ctx, native_deps, copts, linkopts, meson_properties = {}):
     if runtime_depset:
         for f in runtime_depset.to_list():
             runtime_libs.append(
-                absolutize_path_in_str(ctx.workspace_name, "$$EXT_BUILD_ROOT$$/", f.path),
+                absolutize_path_in_str(ctx.workspace_name, "$$EXT_BUILD_ROOT$$/", f.path, True),
             )
         transitive_files.append(runtime_depset)
 

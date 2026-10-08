@@ -4,6 +4,7 @@ import os
 import platform
 import pprint
 import re
+import shlex
 import shutil
 import subprocess
 import sys
@@ -148,14 +149,14 @@ def guess_sysconfig_platform(uname: Uname, target_platform: str, macosx_deployme
 
 
 def determine_glibc_version(sysconfig_vars: Dict[str, Any]) -> Optional[str]:
-    cc_parts = sysconfig_vars.get("CC", "").split()
+    cc_parts = shlex.split(sysconfig_vars.get("CC", ""))
     if not cc_parts:
         return None
     # Verify the compiler is actually executable on the host
     if not shutil.which(cc_parts[0]):
         return None
 
-    cmd = cc_parts + sysconfig_vars.get("CFLAGS", "").split()
+    cmd = cc_parts + shlex.split(sysconfig_vars.get("CFLAGS", ""))
     with tempfile.TemporaryDirectory() as tmp:
         tmp = Path(tmp)
         teller_src = tmp / "teller.cc"

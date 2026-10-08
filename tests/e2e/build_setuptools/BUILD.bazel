@@ -39,6 +39,8 @@ genrule(
 
 setuptools_build(
     name = "distutils_probe_build",
+    copts = ["-DPROBE_STR=\"a b\""],
+    native_deps = ["//probe_hdr"],
     sdist = ":distutils_probe_sdist",
     tags = ["manual"],
 )

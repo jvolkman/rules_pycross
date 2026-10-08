@@ -114,6 +114,27 @@ def _test_pep517_build_resources_impl(env, target):
     action = env.expect.that_target(target).action_named("PycrossPep517Build")
     action.env().contains_at_least({"MAKEFLAGS": "-j6"})
 
+def _test_pep517_build_scratch_dirs(name):
+    util.helper_target(_mock_sdist, name = name + "_sdist")
+    util.helper_target(
+        pep517_build,
+        name = name + "_subject",
+        sdist = name + "_sdist",
+    )
+    analysis_test(name = name, target = name + "_subject", impl = _test_pep517_build_scratch_dirs_impl)
+
+def _test_pep517_build_scratch_dirs_impl(env, target):
+    # Scratch dirs live next to the wheel output so they are unique per
+    # repo/package/target (the builder wipes them before use).
+    build = [a for a in target.actions if a.mnemonic == "PycrossPep517Build"][0]
+    out_dir = build.outputs.to_list()[0].dirname
+    env.expect.that_str(out_dir).contains(target.label.name)
+    action = env.expect.that_target(target).action_named("PycrossPep517Build")
+    action.env().contains_at_least({
+        "PYCROSS_BUILD_ROOT": out_dir + "/_tmp",
+        "PYCROSS_SDIST_DIR": out_dir + "/sdist",
+    })
+
 def pep517_build_test_suite(name):
     test_suite(
         name = name,
@@ -122,5 +143,6 @@ def pep517_build_test_suite(name):
             _test_pep517_build_invalid_deps,
             _test_pep517_build_basic,
             _test_pep517_build_resources,
+            _test_pep517_build_scratch_dirs,
         ],
     )

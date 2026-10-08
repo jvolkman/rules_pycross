@@ -56,6 +56,14 @@ All notable changes to this project will be documented in this file.
   `environments` extension.
 - **CC compiler wrappers** now forward toolchain `LDFLAGS` on link invocations.
 - **README override examples** (setuptools `pg_config`, maturin `use_repo`) corrected.
+- **Non-sandboxed sdist builds** no longer reuse stale sources or share a
+  scratch directory across packages.
+- **C/C++ flags with quotes or spaces** (e.g. `-D__DATE__="redacted"`) now
+  reach the compiler intact.
+- **`copts`/`linkopts`** are no longer dropped when they match a toolchain flag.
+- **Main-repo `native_deps`** include directories now resolve correctly.
+- **`--experimental_output_paths=strip`** no longer breaks builds.
+- **`.tgz`, `.tar.bz2` and `.tar` sdists** can now be built.
 
 ## [2.0.0-alpha.2]
 

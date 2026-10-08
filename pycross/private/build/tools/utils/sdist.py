@@ -4,13 +4,21 @@ import zipfile
 
 from pycross.private.build.tools.utils.context import BuildContext
 
+# Keep in sync with the sdist formats accepted by inspect_package.py.
+_TAR_SUFFIXES = (".tar.gz", ".tgz", ".tar.bz2", ".tar")
+
 
 def extract_sdist(ctx: BuildContext) -> None:
     """Extracts the source distribution into the build sandbox."""
+    # The scratch and sdist dirs are not declared outputs, so non-sandboxed
+    # strategies leave them behind from earlier runs. Start clean.
+    shutil.rmtree(ctx.temp_dir, ignore_errors=True)
+    shutil.rmtree(ctx.sdist_root_dir, ignore_errors=True)
+
     extract_parent = ctx.temp_dir / "extracted"
     extract_parent.mkdir(parents=True, exist_ok=True)
 
-    if ctx.sdist_path.name.endswith(".tar.gz"):
+    if ctx.sdist_path.name.endswith(_TAR_SUFFIXES):
         with tarfile.open(ctx.sdist_path, "r") as f:
             if hasattr(tarfile, "data_filter"):
                 f.extraction_filter = tarfile.data_filter

@@ -201,12 +201,15 @@ def get_flags_info(ctx, copts = [], linkopts = [], link_output_file = None):
             ),
         ),
     )
+
+    # User flags are appended verbatim (no dedup against toolchain tokens:
+    # that would split pairs like `-isystem DIR`).
     return CxxFlagsInfo(
-        cc = _convert_flags(cc_toolchain_.compiler, _add_if_needed(flags.cc, copts)),
-        cxx = _convert_flags(cc_toolchain_.compiler, _add_if_needed(flags.cxx, cxxopts)),
-        cxx_linker_shared = _convert_flags(cc_toolchain_.compiler, _add_if_needed(flags.cxx_linker_shared, linkopts)),
+        cc = _convert_flags(cc_toolchain_.compiler, flags.cc + copts),
+        cxx = _convert_flags(cc_toolchain_.compiler, flags.cxx + cxxopts),
+        cxx_linker_shared = _convert_flags(cc_toolchain_.compiler, flags.cxx_linker_shared + linkopts),
         cxx_linker_static = _convert_flags(cc_toolchain_.compiler, flags.cxx_linker_static),
-        cxx_linker_executable = _convert_flags(cc_toolchain_.compiler, _add_if_needed(flags.cxx_linker_executable, linkopts)),
+        cxx_linker_executable = _convert_flags(cc_toolchain_.compiler, flags.cxx_linker_executable + linkopts),
         needs_pic_for_dynamic_libraries = cc_toolchain_.needs_pic_for_dynamic_libraries(
             feature_configuration = feature_configuration,
         ),
@@ -229,17 +232,6 @@ def _convert_flags(compiler, flags):
     if compiler == "msvc-cl":
         return [flag.replace("/", "-") if flag.startswith("/") else flag for flag in flags]
     return flags
-
-def _add_if_needed(arr, add_arr):
-    filtered = []
-    for to_add in add_arr:
-        found = False
-        for existing in arr:
-            if existing == to_add:
-                found = True
-        if not found:
-            filtered.append(to_add)
-    return arr + filtered
 
 def absolutize_path_in_str(workspace_name, root_str, text, force = False):
     """Replaces relative paths in [the middle of] 'text', prepending them with 'root_str'. If there is nothing to replace, returns the 'text'.

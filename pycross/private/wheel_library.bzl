@@ -69,7 +69,6 @@ def _pycross_wheel_library_impl(ctx):
             outputs = [out, entry_points],
             executable = ctx.executable._tool,
             mnemonic = "PycrossWheelInstall",
-            execution_requirements = {"supports-path-mapping": "1"},
             arguments = [args],
             # Set environment variables to make generated .pyc files reproducible.
             env = {
