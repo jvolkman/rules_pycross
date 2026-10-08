@@ -2,6 +2,7 @@ load("@rules_python//python:defs.bzl", "py_test")
 load(":test_build_mode.bzl", "build_mode_test_suite")
 load(":test_common_attrs.bzl", "common_attrs_test_suite")
 load(":test_cycle_member_marker_deps.bzl", "cycle_member_marker_deps_test_suite")
+load(":test_git_file.bzl", "git_file_test_suite")
 load(":test_lock_resolver.bzl", "lock_resolver_test_suite")
 load(":test_override_helpers.bzl", "override_helpers_test_suite")
 load(":test_parse_dependency_groups.bzl", "parse_dependency_groups_test_suite")
@@ -18,6 +19,16 @@ load(":test_variant_resolver.bzl", "variant_resolver_test_suite")
 
 pep508_test_suite(
     name = "test_pep508",
+)
+
+py_test(
+    name = "git_archive_test",
+    srcs = ["git_archive_test.py"],
+    main = "git_archive_test.py",
+    tags = ["unit"],
+    deps = [
+        "//pycross/private/tools:git_archive",
+    ],
 )
 
 py_test(
@@ -156,6 +167,8 @@ variant_resolver_test_suite(name = "test_variant_resolver")
 sdist_dedup_test_suite(name = "test_sdist_dedup")
 
 pypi_file_test_suite(name = "test_pypi_file")
+
+git_file_test_suite(name = "test_git_file")
 
 cycle_member_marker_deps_test_suite(name = "test_cycle_member_marker_deps")
 

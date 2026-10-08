@@ -1,0 +1,7 @@
+import %workspace%/../shared/.bazelrc.common
+common --disk_cache .cache
+try-import %workspace%/.bazelrc.user
+try-import %workspace%/../shared/.bazelrc.user
+
+# run.sh's fixture uses file:// submodules, which git blocks by default.
+common --repo_env=GIT_ALLOW_PROTOCOL=file
