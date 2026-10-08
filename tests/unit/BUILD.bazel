@@ -1,4 +1,5 @@
 load("@rules_python//python:defs.bzl", "py_test")
+load(":test_backends.bzl", "backends_test_suite")
 load(":test_build_mode.bzl", "build_mode_test_suite")
 load(":test_common_attrs.bzl", "common_attrs_test_suite")
 load(":test_cycle_member_marker_deps.bzl", "cycle_member_marker_deps_test_suite")
@@ -148,6 +149,8 @@ py_test(
 resolved_lock_renderer_test_suite(name = "test_resolved_lock_renderer")
 
 override_helpers_test_suite(name = "test_override_helpers")
+
+backends_test_suite(name = "test_backends")
 
 build_mode_test_suite(name = "test_build_mode")
 

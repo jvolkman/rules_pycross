@@ -81,7 +81,6 @@ def register_pep517_action(
     # Resolve interpreters
     exec_python = None
     target_python = None
-    target_sys_path = []
 
     py_toolchain = ctx.toolchains[PYTHON_TOOLCHAIN_TYPE].py3_runtime
     if py_toolchain.files:
@@ -91,7 +90,6 @@ def register_pep517_action(
         pycross_info = ctx.toolchains[PYCROSS_TOOLCHAIN_TYPE].pycross_info
         exec_python = pycross_info.exec_python_executable
         target_python = pycross_info.target_python_executable
-        target_sys_path = pycross_info.target_sys_path or []
         if pycross_info.exec_python_files:
             transitive_inputs.append(pycross_info.exec_python_files)
         if pycross_info.target_python_files:
@@ -187,7 +185,6 @@ def register_pep517_action(
         "source_dir": getattr(ctx.attr, "source_dir", ""),
         "exec_python": exec_python,
         "target_python": target_python,
-        "target_sys_path": target_sys_path,
         "python_paths": python_paths,
         "layers": layer_jsons,
         "config_settings_raw": config_settings_file.path if config_settings_file else None,

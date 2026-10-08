@@ -29,6 +29,11 @@ All notable changes to this project will be documented in this file.
   (`auto`/`always`/`never`, inherits from `*`).
 - **`all_requirements` excludes testonly packages.** They are now in
   `all_testonly_requirements`.
+- **Generated repos no longer have `defs.bzl`**, and `:_empty_library` is private.
+- **`//pycross/settings:max_{glibc,musl,macos}_version` renamed** to
+  `glibc_version`, `musl_version` and `macos_version`.
+- **`PycrossBuildExecRuntimeInfo.target_sys_path` and `config_compatible` removed**
+  from `//pycross:toolchain.bzl`.
 
 ### Added
 
@@ -46,6 +51,8 @@ All notable changes to this project will be documented in this file.
   at execution instead of analysis.
 - **Unmatched resolution-marker forks**, and packages missing from the selected
   variant, now yield unavailable targets instead of analysis errors.
+- **Built-in backend rules** are registered from the public
+  `@rules_pycross//pycross/backends:*.bzl` files (see `docs/backend.md`).
 
 ### Fixed
 
@@ -68,6 +75,8 @@ All notable changes to this project will be documented in this file.
 - **CC compiler wrappers** now forward toolchain `LDFLAGS` on link invocations.
 - **README examples** corrected (override `tool_deps`, maturin `use_repo`,
   `__build` overrides, and more).
+- **`backends` extension** no longer warns when the root module overrides a
+  default registration.
 - **Non-sandboxed sdist builds** no longer reuse stale sources or share a
   scratch directory across packages.
 - **C/C++ flags with quotes or spaces** (e.g. `-D__DATE__="redacted"`) now

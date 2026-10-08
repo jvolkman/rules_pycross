@@ -181,6 +181,8 @@ pycross.configure_toolchains(
 )
 ```
 
+The libc and macOS versions set the defaults of the `@rules_pycross//pycross/settings:glibc_version`, `musl_version` and `macos_version` flags, which can override them per build.
+
 By default, `rules_pycross` will automatically register toolchains for all configured platforms and versions. You can disable this by setting `register_toolchains = False` if you prefer to register them manually.
 
 ### How It Works
@@ -822,6 +824,7 @@ Independently of this setting, sdist builds whose configuration is known to be b
 
 * **Venv support** — when `rules_python` venvs are enabled, `pycross_wheel_library` populates the symlinks needed for a correct `site-packages` layout. Auto-detected paths can be overridden via `uv.package(site_paths = [...])`, and additional path categories (`bin_paths`, `data_paths`, `include_paths`) are also supported.
 * **`py_console_script_binary`** — each generated package has a `@<repo>//<package>:dist_info` target for entry point discovery. Use `py_console_script_binary(pkg = "@pypi//cython", script = "cython")` directly.
+* **`:data`** — `@<repo>//<package>:data` aliases `:pkg` for `rules_python` label compatibility; the installed wheel directory (with `bin/`, `data/` and `include/`) and its runfiles come with it.
 
 ---
 

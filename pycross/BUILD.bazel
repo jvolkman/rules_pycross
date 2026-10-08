@@ -4,6 +4,7 @@ load("@bazel_skylib//:bzl_library.bzl", "bzl_library")
 exports_files([
     "defs.bzl",
     "backend.bzl",
+    "toolchain.bzl",
 ])
 
 toolchain_type(
@@ -37,6 +38,7 @@ bzl_library(
         "//pycross/private:lock_attrs",
         "//pycross/private:override_helpers",
         "//pycross/private:providers",
+        "//pycross/private/build:resource_sets",
         "//pycross/private/build:transitions",
         "//pycross/private/build/actions:cc_layer",
         "//pycross/private/build/actions:pep517_action",
@@ -50,8 +52,5 @@ bzl_library(
     name = "toolchain",
     srcs = ["toolchain.bzl"],
     visibility = ["//visibility:public"],
-    deps = [
-        "//pycross/private:providers",
-        "@bazel_skylib//lib:paths",
-    ],
+    deps = ["@rules_python//python:defs_bzl"],
 )

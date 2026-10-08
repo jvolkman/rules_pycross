@@ -53,7 +53,7 @@ backends.register(
         "mesonpy",
         "mesonbuild",
     ],
-    rule_bzl = "@rules_pycross//pycross/private/build/rules:meson_build.bzl",
+    rule_bzl = "@rules_pycross//pycross/backends:meson.bzl",
     tool_packages = [
         "meson",
         "ninja",
@@ -64,7 +64,7 @@ backends.register(
     name = "cmake_build",
     override_json = "@cmake_overrides//:overrides.json",
     pyproject_backends = ["scikit_build_core.build"],
-    rule_bzl = "@rules_pycross//pycross/private/build/rules:cmake_build.bzl",
+    rule_bzl = "@rules_pycross//pycross/backends:cmake.bzl",
     tool_packages = [
         "cmake",
         "ninja",
@@ -78,7 +78,7 @@ backends.register(
         "setuptools.build_meta",
         "setuptools.build_meta:__legacy__",
     ],
-    rule_bzl = "@rules_pycross//pycross/private/build/rules:setuptools_build.bzl",
+    rule_bzl = "@rules_pycross//pycross/backends:setuptools.bzl",
     tool_packages = [
         "setuptools",
         "wheel",
@@ -96,7 +96,7 @@ backends.register(
         "pdm.backend",
         "poetry.core.masonry.api",
     ],
-    rule_bzl = "@rules_pycross//pycross/private/build/rules:pep517_build.bzl",
+    rule_bzl = "@rules_pycross//pycross/backends:pep517.bzl",
     tool_packages = [],
 )
 use_repo(
