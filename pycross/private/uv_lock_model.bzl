@@ -299,7 +299,6 @@ def translate_uv(project_dict, lock_dict, lock_model):
                 ["group:" + g for g in development_dependencies.keys()]
             ),
             project_name = project_name,
-            fail_on_missing = True,
         )
 
         if "default" in requested_groups_dict:

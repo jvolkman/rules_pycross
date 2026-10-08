@@ -37,9 +37,6 @@ WORKSPACE_COMMON_ATTRS = dict(
     local_wheels = attr.label_list(
         doc = "A list of local .whl files to consider when processing lock files.",
     ),
-    disallow_builds = attr.bool(
-        doc = "If True, only pre-built wheels are allowed.",
-    ),
     pypi_indexes = attr.string_list(
         doc = "Simple Repository API (PEP 503/691) index URLs, e.g. `https://pypi.org/simple`. Lock entries without " +
               "a download URL or per-package index are looked up in each index in order. Defaults to PyPI.",
@@ -64,10 +61,6 @@ REPO_ATTRS = dict(
     dependency_groups = attr.string_list(
         doc = "A list of target groups to include. E.g. ['default', 'group:foo', '*']. Use 'transitive' to generate aliases for transitively-reachable packages. Defaults to ['default'].",
         default = ["default"],
-    ),
-    legacy_create_root_aliases = attr.bool(
-        doc = "Create //:pkg aliases for bare packages in the generated repo. Useful for migrating from 1.x.",
-        default = False,
     ),
 )
 
@@ -104,8 +97,16 @@ PACKAGE_ATTRS = dict(
     build_target = attr.label(
         doc = "An optional override build target to use when building from source.",
     ),
-    always_build = attr.bool(
-        doc = "If True, don't use pre-built wheels for this package.",
+    build_mode = attr.string(
+        doc = (
+            "How to choose between pre-built wheels and building from source. " +
+            "`auto` (the default): use a matching wheel if there is one, otherwise build the sdist. " +
+            "`always`: always build from source. " +
+            "`never`: never build the sdist; fail if no wheel matches (a `build_target` is still used). " +
+            "Unset (`\"\"`) inherits from the `*` entry."
+        ),
+        values = ["", "auto", "always", "never"],
+        default = "",
     ),
     extra_build_tools = attr.string_list(
         doc = "A list of additional package keys to use when building this package from source.",
@@ -161,7 +162,7 @@ def _tag_to_annotation_data(pkg, wildcard_pkg = None):
         A dict of annotation fields.
     """
     return json.decode(package_annotation(
-        always_build = pkg.always_build if pkg.always_build != None else (wildcard_pkg.always_build if wildcard_pkg else False),
+        build_mode = pkg.build_mode or (wildcard_pkg.build_mode if wildcard_pkg else "") or "auto",
         extra_build_tools = pkg.extra_build_tools or (wildcard_pkg.extra_build_tools if wildcard_pkg else []),
         build_tools_repo = pkg.build_tools_repo or (wildcard_pkg.build_tools_repo if wildcard_pkg else None),
         build_target = str(pkg.build_target) if pkg.build_target else (str(wildcard_pkg.build_target) if wildcard_pkg and wildcard_pkg.build_target else None),
@@ -178,6 +179,8 @@ def _tag_to_annotation_data(pkg, wildcard_pkg = None):
         include_paths = pkg.include_paths or (wildcard_pkg.include_paths if wildcard_pkg else []),
         wheel_library_tags = pkg.wheel_library_tags or (wildcard_pkg.wheel_library_tags if wildcard_pkg else []),
     ))
+
+tag_to_annotation_data_for_testing = _tag_to_annotation_data
 
 def _resolve_lock_inline(module_ctx, lock_info, serialized_lock_model, workspace_packages, repo_create_model_fn):
     """Run translator + resolver inline within module_ctx.
@@ -239,7 +242,6 @@ def _resolve_lock_inline(module_ctx, lock_info, serialized_lock_model, workspace
         "cycle_groups": resolved_lock.cycle_groups,
         "variants": resolved_lock.variants,
         "resolution_marker_exprs": resolved_lock.resolution_marker_exprs,
-        "legacy_create_root_aliases": getattr(lock_model, "legacy_create_root_aliases", False),
         "testonly_pins": resolved_lock.testonly_pins,
     }
 
@@ -296,7 +298,6 @@ def make_format_extension(
                     projects = getattr(tag, "projects", []),
                     repo = getattr(tag, "name", ""),
                     dependency_groups = getattr(tag, "dependency_groups", ["default"]),
-                    legacy_create_root_aliases = getattr(tag, "legacy_create_root_aliases", False),
                     flags = getattr(tag, "flags", []),
                     constraint_values = getattr(tag, "constraint_values", []),
                     platform = getattr(tag, "platform", None),
@@ -392,7 +393,6 @@ def make_format_extension(
         repo_flags = {}
         repo_constraint_values = {}
         repo_platforms = {}
-        repo_disallow_builds = {}
 
         for repo_info in lock_repos.values():
             workspace_memberships[repo_info.repo_name] = repo_info.workspace
@@ -403,8 +403,6 @@ def make_format_extension(
                 repo_constraint_values[repo_info.repo_name] = json.encode(repo_info.constraint_values)
             if repo_info.platform:
                 repo_platforms[repo_info.repo_name] = repo_info.platform
-            if repo_info.disallow_builds:
-                repo_disallow_builds[repo_info.repo_name] = True
 
         create_repos(
             module_ctx = module_ctx,
@@ -413,7 +411,6 @@ def make_format_extension(
             repo_flags = repo_flags,
             repo_constraint_values = repo_constraint_values,
             repo_platforms = repo_platforms,
-            repo_disallow_builds = repo_disallow_builds,
             workspace_pypi_indexes = workspace_pypi_indexes,
             resolved_locks = resolved_locks,
         )

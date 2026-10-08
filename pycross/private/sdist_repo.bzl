@@ -135,6 +135,28 @@ def _validate_build_backend(attr):
             fail("Unknown build backend: " + attr.build_backend +
                  ". Registered backends: " + ", ".join(sorted(known_backends.keys())))
 
+# Tool package names that every build rule accepts in tool_deps, in addition to the
+# backend's registered tool_packages.
+_COMMON_TOOL_PACKAGES = ["repairwheel"]
+
+def _merge_tool_deps_override(tool_deps, override, tool_packages, backend_macro, sdist):
+    """Merge an override's tool_deps ({tool package name: label}) over the defaults in place.
+
+    Build rules group tool_deps by PycrossPackageInfo.package_name, so keys that are not
+    one of the backend's tool packages would be silently ignored; reject them instead.
+    """
+    allowed = {name: True for name in tool_packages + _COMMON_TOOL_PACKAGES}
+    for name, label in sorted(override.items()):
+        norm_name = extract_pep508_name(name)
+        if norm_name not in allowed:
+            fail("tool_deps override for '{}' has unknown tool package '{}'; {} accepts: {}".format(
+                sdist,
+                name,
+                backend_macro,
+                ", ".join(sorted(allowed.keys())),
+            ))
+        tool_deps[norm_name] = label
+
 def _compute_sdist_build_config(attr, metadata):
     """Compute macro attributes, resolved backend, and paths from sdist metadata and repo attrs.
 
@@ -205,15 +227,13 @@ def _compute_sdist_build_config(attr, metadata):
     macro_attrs["build_deps"] = str(sorted(build_deps.keys()))
 
     # Populate tool_deps from the resolved backend's tool_packages that are present in the lock.
+    # Keyed by normalized tool package name so that override tool_deps can replace single entries.
     backend_tool_packages = getattr(attr, "backend_tool_packages", None) or {}
-    tool_packages = backend_tool_packages.get(backend_macro, [])
-    if tool_packages:
-        tool_deps = {}
-        for pkg in tool_packages:
-            pkg_name = extract_pep508_name(pkg)
-            if pkg_name in known_packages_set:
-                tool_deps["@{}//{}:pkg".format(attr.thin_repo, underscore_name(pkg_name))] = True
-        macro_attrs["tool_deps"] = str(sorted(tool_deps.keys()))
+    tool_packages = [extract_pep508_name(pkg) for pkg in backend_tool_packages.get(backend_macro, [])]
+    tool_deps = {}
+    for pkg_name in tool_packages:
+        if pkg_name in known_packages_set:
+            tool_deps[pkg_name] = "@{}//{}:pkg".format(attr.thin_repo, underscore_name(pkg_name))
 
     # For pep517_build, pass the required package names for validation.
     if backend_macro == "pep517_build":
@@ -228,12 +248,17 @@ def _compute_sdist_build_config(attr, metadata):
         matching_config = all_configs.pop(backend_macro, {})
         for attr_name, json_val in sorted(matching_config.items()):
             decoded = json.decode(json_val)
-            if type(decoded) == "string":
+            if attr_name == "tool_deps":
+                _merge_tool_deps_override(tool_deps, decoded, tool_packages, backend_macro, attr.sdist)
+            elif type(decoded) == "string":
                 macro_attrs[attr_name] = "\"{}\"".format(decoded)
             else:
                 macro_attrs[attr_name] = str(decoded)
         if all_configs:
             non_matching_backends = sorted(all_configs.keys())
+
+    if tool_packages or tool_deps:
+        macro_attrs["tool_deps"] = str(sorted({label: True for label in tool_deps.values()}.keys()))
 
     # Pass through pre_build_patches if specified.
     if attr.pre_build_patches:

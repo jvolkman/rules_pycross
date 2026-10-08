@@ -46,7 +46,7 @@ uv.repo(
 # Specify per-package overrides. Here we say that we want to build ipython from an sdist.
 uv.package(
     name = "ipython",
-    always_build = True,
+    build_mode = "always",
     workspace = "uv_deps",
 )
 

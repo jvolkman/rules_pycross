@@ -1,11 +1,12 @@
-load("@rules_pycross//pycross:defs.bzl", "pycross_wheel_build", "pycross_wheel_library")
+load("@rules_pycross//pycross:defs.bzl", "pycross_path_tool", "pycross_wheel_library")
 load("@rules_python//python:defs.bzl", "py_binary", "py_library")
 load("@rules_shell//shell:sh_binary.bzl", "sh_binary")
+load("@uv//_backend:setuptools_build.bzl", "setuptools_build")
 
 package(default_visibility = ["//visibility:public"])
 
-# ====== V1 compat regression test ======
-# Tests pycross_wheel_build with build_env, data, pre_build_hooks, post_build_hooks.
+# ====== Hand-written build target regression test ======
+# Tests setuptools_build with build_env, data, path_tools, pre_build_hooks, post_build_hooks.
 # Uses setproctitle sdist from the lock repo and setuptools/wheel as build deps.
 
 sh_binary(
@@ -18,7 +19,13 @@ sh_binary(
     srcs = ["hooks/post_build_hook.sh"],
 )
 
-pycross_wheel_build(
+pycross_path_tool(
+    name = "my_pre_hook_on_path",
+    executable_name = "my_pre_hook_on_path",
+    tool = ":pre_build_hook",
+)
+
+setuptools_build(
     name = "setproctitle_v1_compat",
     build_deps = [
         "@uv//setuptools:pkg",
@@ -29,9 +36,7 @@ pycross_wheel_build(
         "MY_DATA_FILE": "$(location hooks/build_data.txt)",
     },
     data = ["hooks/build_data.txt"],
-    path_tools = {
-        ":pre_build_hook": "my_pre_hook_on_path",
-    },
+    path_tools = [":my_pre_hook_on_path"],
     post_build_hooks = [":post_build_hook"],
     pre_build_hooks = [":pre_build_hook"],
     sdist = "@uv//setproctitle:sdist",
@@ -43,7 +48,7 @@ pycross_wheel_library(
     wheel = ":setproctitle_v1_compat",
 )
 
-# ====== Python hooks and repair_wheel test ======
+# ====== Python hooks and wheel repair test ======
 
 py_library(
     name = "hook_dep",
@@ -57,14 +62,11 @@ py_binary(
     deps = [":hook_dep"],
 )
 
-pycross_wheel_build(
+setuptools_build(
     name = "setproctitle_v1_compat_with_repair",
     build_deps = [
         "@uv//setuptools:pkg",
         "@uv//wheel:pkg",
-    ],
-    post_build_hooks = [
-        "@rules_pycross//pycross/hooks:repair_wheel",
     ],
     pre_build_hooks = [
         ":py_pre_build_hook",

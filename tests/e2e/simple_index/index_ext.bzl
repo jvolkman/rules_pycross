@@ -1,6 +1,7 @@
 """Creates pypi_file / pycross_wheel_file repos backed by the local static indexes."""
 
-load("@rules_pycross//pycross:defs.bzl", "pypi_file")
+# buildifier: disable=bzl-visibility
+load("@rules_pycross//pycross/private:pypi_file.bzl", "pypi_file")
 
 # buildifier: disable=bzl-visibility
 load("@rules_pycross//pycross/private:wheel_file.bzl", "pycross_wheel_file")

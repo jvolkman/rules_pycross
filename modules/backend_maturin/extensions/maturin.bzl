@@ -1,13 +1,13 @@
 """Maturin overrides extension.
 
 Provides the `maturin` module extension with an `override` tag class
-for declaring maturin-specific package overrides. Generates:
+for declaring maturin-specific package overrides. The overrides are written to
+`@maturin_overrides//:overrides.json`, which the `backends` registry passes to
+every lock extension.
 
-  1. `@maturin_overrides//:overrides.json` — consumed by lock_import via
-     `lock_import.override_source(file = ...)`.
-
-  2. `@<repo>_cargo//` repos — containing `pycross_generate_cargo_lock` targets
-     for each maturin-overridden package.
+For each overridden package that has an sdist, the lock repos also get a
+`_cargo` package with a `pycross_generate_cargo_lock` target per version (for
+example `bazel run @pypi//_cargo:jiter@<version>` writes a Cargo.lock for jiter).
 """
 
 load("@bazel_features//:features.bzl", "bazel_features")
@@ -21,11 +21,15 @@ load(
 
 _CORE_OVERRIDE_ATTRS = dict(
     name = attr.string(
-        doc = "The package key (name or name@version).",
+        doc = "The package name, `name@version`, or '*' to apply to all packages built with this backend. " +
+              "For a package `name@version`, matching entries are layered from least to most specific " +
+              "(`*`, then `name`, then `name@version`); each field set by a more specific entry replaces " +
+              "the less specific value. The version must match a locked version exactly.",
         mandatory = True,
     ),
     workspace = attr.string(
-        doc = "The workspace name (if applying to all members of a workspace).",
+        doc = "The workspace whose packages this override applies to.",
+        mandatory = True,
     ),
 )
 
@@ -37,14 +41,9 @@ def _maturin_overrides_impl(module_ctx):
     for module in module_ctx.modules:
         # Process maturin overrides
         for tag in module.tags.override:
-            if not tag.workspace:
-                fail("override for '{}' must specify workspace".format(tag.name))
-
             backend_attrs = encode_build_system_attrs(tag)
             if tag.cargo_lock:
                 backend_attrs["cargo_lock"] = json.encode(str(tag.cargo_lock))
-            if tag.sdist:
-                backend_attrs["sdist"] = json.encode(str(tag.sdist))
 
             key = tag.workspace
             maturin_overrides.setdefault(key, {})[tag.name] = {
@@ -63,9 +62,6 @@ def _maturin_overrides_impl(module_ctx):
     return module_ctx.extension_metadata()
 
 override_attrs = dict(
-    sdist = attr.label(
-        doc = "Label to the sdist target (e.g. @uv//pkg:sdist). Used to resolve repository visibility in the generated _cargo repo.",
-    ),
     cargo_lock = attr.label(
         doc = "A Cargo.lock file to use. If not provided, the sdist's own Cargo.lock is used.",
         allow_single_file = [".lock"],

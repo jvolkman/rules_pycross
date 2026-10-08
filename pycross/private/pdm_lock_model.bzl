@@ -129,7 +129,6 @@ def translate_pdm(project_dict, lock_dict, lock_model):
             ["group:" + g for g in dev_deps.keys()]
         ),
         project_name = project_name,
-        fail_on_missing = True,
     )
 
     if "default" in requested_groups_dict:

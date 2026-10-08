@@ -12,6 +12,25 @@ All notable changes to this project will be documented in this file.
   resolved via PEP 691/503; use e.g. `https://pypi.org/simple` in `pypi_indexes`.
 - **`pypi_file` `index` replaced by `indexes`.** All `pypi_indexes` entries are
   now tried in order.
+- **Backend override `tool_deps`** is now a `{tool package name: label}` dict
+  merged over the backend's default tools.
+- **Backend override tags**: `repo` removed, `workspace` required, `name` must
+  match a locked package (`name@version` targets one version).
+- **Maturin/setuptools-rust override `sdist` attr removed.**
+- **`repo(legacy_create_root_aliases)` and `uv.workspace(require_static_urls)`
+  removed.** Both had no effect.
+- **Unknown `dependency_groups` entries now fail** for every lock format.
+- **`pycross_wheel_build` removed.** Use `setuptools_build` from
+  `@<repo>//_backend:setuptools_build.bzl`.
+- **Internal rules no longer exported from `defs.bzl`**: proxies,
+  `pycross_pep508_evaluator`, `pycross_target_platform`, `pycross_wheel_chooser`,
+  `pycross_cycle_member_marker_deps`, `pypi_file`.
+- **Deprecated APIs removed**: `pycross.configure_environments`,
+  `pycross_wheel_library` `console_scripts`/`python_version`, and
+  `//pycross/hooks:repair_wheel`.
+- **`build_tools_repo` must name a repo from the same extension.**
+- **`always_build` and `disallow_builds` replaced by `package(build_mode = ...)`**
+  (`auto`/`always`/`never`, inherits from `*`).
 
 ### Changed
 
@@ -36,6 +55,7 @@ All notable changes to this project will be documented in this file.
 - **`rules_pycross_backend_maturin`** no longer references the removed
   `environments` extension.
 - **CC compiler wrappers** now forward toolchain `LDFLAGS` on link invocations.
+- **README override examples** (setuptools `pg_config`, maturin `use_repo`) corrected.
 
 ## [2.0.0-alpha.2]
 

@@ -44,7 +44,7 @@ uv.repo(
 )
 uv.package(
     name = "setproctitle",
-    always_build = True,
+    build_mode = "always",
     post_install_patches = ["@@//patches:setproctitle-postinstall.patch"],
     pre_build_patches = ["@@//patches:setproctitle-prebuild.patch"],
     site_hooks = ["with open('pkg/setproctitle/__init__.py', 'a') as f: f.write('SITE_HOOK_RAN = True\\n')"],

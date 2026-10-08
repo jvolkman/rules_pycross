@@ -53,8 +53,8 @@ setuptools_build(<a href="#setuptools_build-name">name</a>, <a href="#setuptools
 <pre>
 setuptools = use_extension("@rules_pycross//pycross/backends:setuptools.bzl", "setuptools")
 setuptools.override(<a href="#setuptools.override-name">name</a>, <a href="#setuptools.override-data">data</a>, <a href="#setuptools.override-build_env">build_env</a>, <a href="#setuptools.override-config_settings">config_settings</a>, <a href="#setuptools.override-copts">copts</a>, <a href="#setuptools.override-linkopts">linkopts</a>, <a href="#setuptools.override-native_deps">native_deps</a>,
-                    <a href="#setuptools.override-path_tools">path_tools</a>, <a href="#setuptools.override-post_build_hooks">post_build_hooks</a>, <a href="#setuptools.override-pre_build_hooks">pre_build_hooks</a>, <a href="#setuptools.override-repair_exclude_globs">repair_exclude_globs</a>, <a href="#setuptools.override-repo">repo</a>,
-                    <a href="#setuptools.override-tool_deps">tool_deps</a>, <a href="#setuptools.override-workspace">workspace</a>)
+                    <a href="#setuptools.override-path_tools">path_tools</a>, <a href="#setuptools.override-post_build_hooks">post_build_hooks</a>, <a href="#setuptools.override-pre_build_hooks">pre_build_hooks</a>, <a href="#setuptools.override-repair_exclude_globs">repair_exclude_globs</a>, <a href="#setuptools.override-tool_deps">tool_deps</a>,
+                    <a href="#setuptools.override-workspace">workspace</a>)
 </pre>
 
 
@@ -70,19 +70,18 @@ Specify setuptools-specific package overrides.
 
 | Name  | Description | Type | Mandatory | Default |
 | :------------- | :------------- | :------------- | :------------- | :------------- |
-| <a id="setuptools.override-name"></a>name |  The package key (name or name@version).   | <a href="https://bazel.build/concepts/labels#target-names">Name</a> | required |  |
+| <a id="setuptools.override-name"></a>name |  The package name, `name@version`, or '*' to apply to all packages built with this backend. For a package `name@version`, matching entries are layered from least to most specific (`*`, then `name`, then `name@version`); each field set by a more specific entry replaces the less specific value. The version must match a locked version exactly.   | <a href="https://bazel.build/concepts/labels#target-names">Name</a> | required |  |
 | <a id="setuptools.override-data"></a>data |  Additional data and dependencies used by the build.   | <a href="https://bazel.build/concepts/labels">List of labels</a> | optional |  `[]`  |
 | <a id="setuptools.override-build_env"></a>build_env |  Extra environment variables passed to the sdist build.   | <a href="https://bazel.build/rules/lib/dict">Dictionary: String -> String</a> | optional |  `{}`  |
 | <a id="setuptools.override-config_settings"></a>config_settings |  Setup configuration arguments.   | <a href="https://bazel.build/rules/lib/dict">Dictionary: String -> List of strings</a> | optional |  `{}`  |
 | <a id="setuptools.override-copts"></a>copts |  Extra C++ compiler options.   | List of strings | optional |  `[]`  |
 | <a id="setuptools.override-linkopts"></a>linkopts |  Extra linker options.   | List of strings | optional |  `[]`  |
 | <a id="setuptools.override-native_deps"></a>native_deps |  CC dependencies to link against.   | <a href="https://bazel.build/concepts/labels">List of labels</a> | optional |  `[]`  |
-| <a id="setuptools.override-path_tools"></a>path_tools |  A list of binary targets placed on PATH during the build.   | <a href="https://bazel.build/concepts/labels">List of labels</a> | optional |  `[]`  |
+| <a id="setuptools.override-path_tools"></a>path_tools |  A list of binary targets placed on PATH during the build, under their basename. Wrap a target in `pycross_path_tool` to give it a different name on PATH.   | <a href="https://bazel.build/concepts/labels">List of labels</a> | optional |  `[]`  |
 | <a id="setuptools.override-post_build_hooks"></a>post_build_hooks |  Executables to run after the wheel is built.   | <a href="https://bazel.build/concepts/labels">List of labels</a> | optional |  `[]`  |
 | <a id="setuptools.override-pre_build_hooks"></a>pre_build_hooks |  Executables to run before building the wheel.   | <a href="https://bazel.build/concepts/labels">List of labels</a> | optional |  `[]`  |
 | <a id="setuptools.override-repair_exclude_globs"></a>repair_exclude_globs |  Shared library globs to exclude from wheel repair; assumed provided at runtime.   | List of strings | optional |  `[]`  |
-| <a id="setuptools.override-repo"></a>repo |  The repository name (if applying to a specific lock file).   | String | optional |  `""`  |
-| <a id="setuptools.override-tool_deps"></a>tool_deps |  Overrides for built-in dependencies.   | <a href="https://bazel.build/rules/lib/dict">Dictionary: String -> String</a> | optional |  `{}`  |
-| <a id="setuptools.override-workspace"></a>workspace |  The workspace name (if applying to all members of a workspace).   | String | optional |  `""`  |
+| <a id="setuptools.override-tool_deps"></a>tool_deps |  Overrides for the backend's tool packages, keyed by tool package name (e.g. `{"cmake": "@other//cmake:pkg"}`). Each entry replaces the auto-detected default for that tool, or adds it if the tool is not in the lock. Keys must be one of the backend's tool packages (or `repairwheel`), and each value must be a pycross package target for that package.   | Dictionary: String -> Label | optional |  `{}`  |
+| <a id="setuptools.override-workspace"></a>workspace |  The workspace whose packages this override applies to.   | String | required |  |
 
 

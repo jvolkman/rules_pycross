@@ -52,25 +52,25 @@ uv.repo(
 )
 uv.package(
     name = "numpy",
-    always_build = True,
+    build_mode = "always",
     build_target = "@//deps/numpy:wheel",
     workspace = "uv",
 )
 uv.package(
     name = "pandas",
-    always_build = True,
+    build_mode = "always",
     build_target = "@//deps/pandas:wheel",
     workspace = "uv",
 )
 uv.package(
     name = "contourpy",
-    always_build = True,
+    build_mode = "always",
     build_target = "@//deps/contourpy:wheel",
     workspace = "uv",
 )
 uv.package(
     name = "pywavelets",
-    always_build = True,
+    build_mode = "always",
     build_target = "@//deps/pywavelets:wheel",
     workspace = "uv",
 )

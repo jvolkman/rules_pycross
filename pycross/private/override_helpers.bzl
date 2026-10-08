@@ -3,7 +3,7 @@
 Provides a factory function that eliminates boilerplate when defining
 backend-specific override extensions (setuptools, meson, cmake, etc.).
 Each backend extension follows the same pattern:
-  1. Collect override tags into a JSON dict keyed by repo, then package name.
+  1. Collect override tags into a JSON dict keyed by workspace, then package name.
   2. Write that dict to a generated `@<backend>_overrides//:overrides.json` repo.
   3. The backends extension aggregates these into OVERRIDE_FILES for
      lock_repo_creation to consume.
@@ -11,33 +11,30 @@ Each backend extension follows the same pattern:
 
 load("@bazel_features//:features.bzl", "bazel_features")
 
-def merge_backend_overrides(scope, pkg_name):
-    """Merge wildcard and package-specific backend overrides.
+def merge_backend_overrides(scope, pkg_name, version = ""):
+    """Merge wildcard, package-specific, and version-specific backend overrides.
 
-    Wildcard ("*") entries provide defaults. Package-specific entries override
-    individual fields. Fields are replaced, not merged (i.e. if both wildcard
-    and specific set copts, the specific value wins entirely).
+    Entries are layered from least to most specific: "*", then "name", then
+    "name@version". Each layer overrides individual fields of the previous ones.
+    Fields are replaced, not merged (i.e. if both wildcard and specific set copts,
+    the more specific value wins entirely).
 
     Args:
-        scope: dict mapping package names (including "*") to
+        scope: dict mapping override keys ("*", "name", or "name@version") to
             {backend_name: backend_attrs} dicts.
         pkg_name: the normalized package name to look up.
+        version: optional package version; enables "name@version" entries.
 
     Returns:
         A merged dict of {backend_name: backend_attrs}, or empty dict.
     """
     result = {}
-    wildcard = scope.get("*")
-    specific = scope.get(pkg_name)
+    keys = ["*", pkg_name]
+    if version:
+        keys.append("{}@{}".format(pkg_name, version))
 
-    # Apply wildcard defaults first.
-    if wildcard:
-        for b_name, b_attrs in wildcard.items():
-            result.setdefault(b_name, {}).update(b_attrs)
-
-    # Overlay package-specific fields (individual attrs replace, not merge).
-    if specific:
-        for b_name, b_attrs in specific.items():
+    for key in keys:
+        for b_name, b_attrs in scope.get(key, {}).items():
             result.setdefault(b_name, {}).update(b_attrs)
 
     return result
@@ -82,7 +79,7 @@ def encode_build_system_attrs(tag):
 
     tool_deps = getattr(tag, "tool_deps", None)
     if tool_deps != None and tool_deps:
-        backend_attrs["tool_deps"] = json.encode(tool_deps)
+        backend_attrs["tool_deps"] = json.encode({name: str(label) for name, label in tool_deps.items()})
 
     build_env = getattr(tag, "build_env", None)
     if build_env != None and build_env:
@@ -128,9 +125,6 @@ def make_override_extension(backend_name, build_backend, override_attrs):
         overrides = {}
         for module in module_ctx.modules:
             for tag in module.tags.override:
-                if not tag.workspace:
-                    fail("override for '{}' must specify workspace".format(tag.name))
-
                 backend_attrs = encode_build_system_attrs(tag)
                 key = tag.workspace
                 overrides.setdefault(key, {})[tag.name] = {

@@ -226,7 +226,6 @@ def translate_pylock(lock_dict, project_dict, lock_model):
                 ["group:" + g for g in dev_deps.keys()]
             ),
             project_name = project_name,
-            fail_on_missing = False,  # Following precedent set by original print warning
         )
 
         def handle_dep_str(dep_str, is_testonly):

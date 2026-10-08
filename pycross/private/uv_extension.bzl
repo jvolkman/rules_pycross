@@ -10,17 +10,9 @@ load(
 load(":lock_common.bzl", "discover_uv_all_members")
 load(":uv_lock_model.bzl", "repo_create_uv_model")
 
-# UV-specific attrs for workspace tags.
-_UV_WORKSPACE_ATTRS = dict(
-    require_static_urls = attr.bool(
-        doc = "Require that the lock file is created with --static-urls.",
-        default = True,
-    ),
-)
-
 uv = make_format_extension(
     model_type = "uv",
-    workspace_attrs = _UV_WORKSPACE_ATTRS,
+    workspace_attrs = {},
     discover_members_fn = discover_uv_all_members,
     repo_create_model_fn = repo_create_uv_model,
 )

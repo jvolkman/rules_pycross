@@ -98,7 +98,7 @@ uv.repo(
 )
 ```
 
-### Migrating from the legacy two-extension pattern</summary>
+### Migrating from the legacy two-extension pattern
 
 The previous approach used `lock_import` / `lock_repos` (or `lock`) extensions. These have been removed.
 Migrate by replacing them with the per-format extension:
@@ -113,7 +113,7 @@ lock_import.import_uv(
 )
 lock_import.package(
     name = "numpy",
-    always_build = True,
+    build_mode = "always",
     repo = "pypi",
 )
 lock_repos = use_extension("@rules_pycross//pycross/extensions:lock_repos.bzl", "lock_repos")
@@ -130,14 +130,14 @@ uv.repo(
 )
 uv.package(
     name = "numpy",
-    always_build = True,
+    build_mode = "always",
     workspace = "pypi",  # was: repo = "pypi"
 )
 use_repo(uv, "pypi")
 ```
 
 > [!TIP]
-> If you are migrating from a 1.x target layout where packages were referenced as `@pypi//:package_name` (with a colon), you can enable `legacy_create_root_aliases = True` on your `uv.repo()` tag to generate these aliases in the 2.x repo.
+> 1.x-style labels such as `@pypi//:package_name` (with a colon) keep working: every generated repo also contains these root aliases.
 
 ### Toolchain Configuration
 
@@ -347,20 +347,27 @@ uv.package(
 )
 ```
 
-Use `name = "*"` to set defaults for all packages. A specific annotation for a package fully replaces the wildcard:
+Use `name = "*"` to set defaults for all packages. Fields left unset on a specific `package()` entry inherit the wildcard's value; fields set on it replace the wildcard's value:
 
 ```python
-# Force all packages to build from source by default
+# Wheels only: never build sdists in this workspace
 uv.package(
     name = "*",
-    always_build = True,
+    build_mode = "never",
     workspace = "shared",
 )
 
-# Override the wildcard for a specific package
+# ...except for this package, which always builds from source
+uv.package(
+    name = "regex",
+    build_mode = "always",
+    workspace = "shared",
+)
+
+# ...and this one, which uses a wheel if one matches and builds otherwise
 uv.package(
     name = "requests",
-    always_build = False,
+    build_mode = "auto",
     workspace = "shared",
 )
 ```
@@ -404,14 +411,20 @@ use_repo(uv, "frontend_deps", "ml_deps")
 | `cmake_build` | `scikit_build_core.build`, `skbuild` | Packages using CMake/scikit-build |
 | `maturin_build` | `maturin` | Rust+Python packages via maturin |
 
-### Forcing a Package to Build from Source
+### Choosing Between Wheels and Sdists
 
-By default, `rules_pycross` uses pre-built wheels when available. To force building from source, set `always_build = True`:
+`package(build_mode = ...)` controls whether a package is built from source:
+
+* `auto` (default): use a matching pre-built wheel if there is one; otherwise build the sdist.
+* `always`: always build from source.
+* `never`: never build the sdist. Building fails if no wheel matches. A `build_target` is still used.
+
+Set it on `name = "*"` to apply it to a whole workspace (for example, `build_mode = "never"` for wheels-only).
 
 ```python
 uv.package(
     name = "numpy",
-    always_build = True,
+    build_mode = "always",
     workspace = "pypi",
 )
 ```
@@ -464,7 +477,7 @@ uv.package(
 
 ### Build Overrides
 
-When packages need native dependencies, compiler flags, environment variables, or other build customizations, use the backend-specific override extensions. Use `name = "*"` to set defaults for all packages built with that backend.
+When packages need native dependencies, compiler flags, environment variables, or other build customizations, use the backend-specific override extensions. `name` is a package name, `name@version` (for one locked version, e.g. one side of a fork), or `"*"` for all packages built with that backend. For a given package, matching entries are layered from least to most specific: `*`, then `name`, then `name@version`. Each field set on a more specific entry replaces the less specific value.
 
 #### Setuptools
 
@@ -475,8 +488,33 @@ setuptools.override(
     name = "psycopg2",
     workspace = "pypi",
     copts = ["-O2"],
-    tool_deps = {"pg_config": "@@//deps/psycopg2:pg_config"},
+    path_tools = ["//deps/psycopg2:pg_config_tool"],
     build_env = {"LDFLAGS": "-L/usr/lib"},
+)
+```
+
+`path_tools` puts binaries on `PATH` under their basename. To use a different name, wrap the binary in `pycross_path_tool`:
+
+```python
+# deps/psycopg2/BUILD.bazel
+load("@rules_pycross//pycross:defs.bzl", "pycross_path_tool")
+
+pycross_path_tool(
+    name = "pg_config_tool",
+    executable_name = "pg_config",
+    tool = "//third_party/postgresql:pg_config_bin",
+)
+```
+
+`tool_deps` replaces the Python tool packages the backend adds to every build (for setuptools: `setuptools` and `wheel`; for cmake: `cmake`, `ninja` and `scikit-build-core`). Keys are tool package names; other tools keep their defaults:
+
+```python
+cmake = use_extension("@rules_pycross//pycross/backends:cmake.bzl", "cmake")
+
+cmake.override(
+    name = "*",
+    workspace = "pypi",
+    tool_deps = {"cmake": "@other_deps//cmake:pkg"},
 )
 ```
 
@@ -537,12 +575,12 @@ rust.toolchain(
 # Mark packages for source build
 uv.package(
     name = "rpds-py",
-    always_build = True,
+    build_mode = "always",
     workspace = "pypi",
 )
 uv.package(
     name = "jiter",
-    always_build = True,
+    build_mode = "always",
     workspace = "pypi",
 )
 
@@ -553,8 +591,9 @@ maturin.override(
     workspace = "pypi",
     cargo_lock = "//:jiter.lock",
 )
-use_repo(maturin, "pypi_cargo")
 ```
+
+To generate a Cargo.lock for an overridden package, run `bazel run @pypi//_cargo:jiter@<version>`.
 
 #### Using a Custom Build Target
 

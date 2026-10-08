@@ -122,7 +122,6 @@ uv.repo(
         "optional:build",
         "optional:repairwheel",
     ],
-    legacy_create_root_aliases = True,
     workspace = "pycross_internal_deps",
 )
 use_repo(uv, "pycross_internal_deps")

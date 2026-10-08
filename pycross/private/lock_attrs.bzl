@@ -7,18 +7,6 @@ DEFAULT_GLIBC_VERSION = "2.28"
 
 DEFAULT_MUSL_VERSION = "1.2"
 
-TRANSITION_ATTRS = dict(
-    constraint_values = attr.label_list(
-        doc = "A list of constraint values to apply to the generated platform.",
-    ),
-    flags = attr.string_list(
-        doc = "A list of flags to apply to the generated platform (e.g., '--@flag=value').",
-    ),
-    platform = attr.label(
-        doc = "An existing platform target to use directly.",
-    ),
-)
-
 CONFIGURE_TOOLCHAINS_ATTRS = dict(
     python_versions = attr.string_list(
         doc = (
@@ -69,72 +57,19 @@ CONFIGURE_TOOLCHAINS_ATTRS = dict(
     ),
 )
 
-# Attrs for the package tag
-PACKAGE_ATTRS = dict(
-    name = attr.string(
-        doc = "The package key (name or name@version).",
-        mandatory = True,
-    ),
-    build_backend = attr.string(
-        doc = (
-            "An explicit pycross build rule name to use for this package (e.g. 'maturin_build'), " +
-            "overriding the rule auto-selected from pyproject.toml's build-backend. " +
-            "The sdist's declared PEP 517 backend is still invoked, and its build-system.requires " +
-            "are still added as build dependencies."
-        ),
-    ),
-    build_target = attr.label(
-        doc = "An optional override build target to use when and if this package needs to be built from source.",
-    ),
-    always_build = attr.bool(
-        doc = "If True, don't use pre-built wheels for this package.",
-    ),
-    extra_build_tools = attr.string_list(
-        doc = "A list of additional package keys (name or name@version) to use when building this package from source.",
-    ),
-    build_tools_repo = attr.string(
-        doc = "Optional repo to use for resolving sdist build dependencies for this package.",
-    ),
-    ignore_dependencies = attr.string_list(
-        doc = "A list of package keys (name or name@version) to drop from this package's set of declared dependencies.",
-    ),
-    install_exclude_globs = attr.string_list(
-        doc = "A list of globs for files to exclude during installation.",
-    ),
-    post_install_patches = attr.label_list(
-        doc = "A list of patches to apply after wheel installation.",
-        allow_files = True,
-    ),
-    pre_build_patches = attr.label_list(
-        doc = "A list of patches to apply to the sdist source tree before building.",
-        allow_files = True,
-    ),
-    site_hooks = attr.string_list(
-        doc = "A list of Python code snippets to execute on interpreter startup during builds.",
-    ),
-    site_paths = attr.string_list(
-        doc = "Override the auto-detected top-level importable paths (packages, .pth files, standalone modules). " +
-              "Use forward slashes for nested namespaces (e.g. 'google/cloud/storage').",
-    ),
-    bin_paths = attr.string_list(
-        doc = "Override the auto-detected bin paths.",
-    ),
-    data_paths = attr.string_list(
-        doc = "Override the auto-detected data paths.",
-    ),
-    include_paths = attr.string_list(
-        doc = "Override the auto-detected include paths.",
-    ),
-    wheel_library_tags = attr.string_list(
-        doc = "Optional tags to apply to the generated pycross_wheel_library target.",
-    ),
-)
-
 # Attrs specific to build-system overrides (meson, setuptools, etc.).
 # These do not belong on the generic package() tag.
 BUILD_SYSTEM_ATTRS = dict(
     config_settings = attr.string_list_dict(doc = "Setup configuration arguments."),
-    tool_deps = attr.string_dict(doc = "Overrides for built-in dependencies."),
+    tool_deps = attr.string_keyed_label_dict(
+        doc = (
+            "Overrides for the backend's tool packages, keyed by tool package name (e.g. " +
+            "`{\"cmake\": \"@other//cmake:pkg\"}`). Each entry replaces the auto-detected " +
+            "default for that tool, or adds it if the tool is not in the lock. Keys must be one " +
+            "of the backend's tool packages (or `repairwheel`), and each value must be a pycross " +
+            "package target for that package."
+        ),
+    ),
     build_env = attr.string_dict(doc = "Extra environment variables passed to the sdist build."),
     data = attr.label_list(doc = "Additional data and dependencies used by the build."),
     pre_build_hooks = attr.label_list(doc = "Executables to run before building the wheel."),
@@ -147,25 +82,25 @@ CC_BUILD_SYSTEM_ATTRS = dict(
     copts = attr.string_list(doc = "Extra C++ compiler options."),
     linkopts = attr.string_list(doc = "Extra linker options."),
     native_deps = attr.label_list(doc = "CC dependencies to link against."),
-    path_tools = attr.label_list(doc = "A list of binary targets placed on PATH during the build."),
-)
-
-# Attrs for applying overrides to specific repos or workspaces.
-OVERRIDE_TARGET_ATTRS = dict(
-    repo = attr.string(
-        doc = "The repository name (if applying to a specific lock file).",
-    ),
-    workspace = attr.string(
-        doc = "The workspace name (if applying to all members of a workspace).",
+    path_tools = attr.label_list(
+        doc = "A list of binary targets placed on PATH during the build, under their basename. " +
+              "Wrap a target in `pycross_path_tool` to give it a different name on PATH.",
     ),
 )
 
 CORE_OVERRIDE_ATTRS = dict(
     name = attr.string(
-        doc = "The package key (name or name@version).",
+        doc = "The package name, `name@version`, or '*' to apply to all packages built with this backend. " +
+              "For a package `name@version`, matching entries are layered from least to most specific " +
+              "(`*`, then `name`, then `name@version`); each field set by a more specific entry replaces " +
+              "the less specific value. The version must match a locked version exactly.",
         mandatory = True,
     ),
-) | OVERRIDE_TARGET_ATTRS
+    workspace = attr.string(
+        doc = "The workspace whose packages this override applies to.",
+        mandatory = True,
+    ),
+)
 
 MESON_OVERRIDE_ATTRS = CORE_OVERRIDE_ATTRS | BUILD_SYSTEM_ATTRS | CC_BUILD_SYSTEM_ATTRS
 

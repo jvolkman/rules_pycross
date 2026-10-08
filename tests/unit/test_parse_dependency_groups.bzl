@@ -1,10 +1,14 @@
 """Tests for parse_dependency_group_entries in lock_common.bzl."""
 
 load("@rules_testing//lib:analysis_test.bzl", "analysis_test", "test_suite")
+load("@rules_testing//lib:truth.bzl", "matching")
 load("@rules_testing//lib:util.bzl", "util")
 
 # buildifier: disable=bzl-visibility
 load("//pycross/private:lock_common.bzl", "parse_dependency_group_entries")
+
+# buildifier: disable=bzl-visibility
+load("//pycross/private:translator_common.bzl", "compute_requested_dependency_groups")
 
 # --- test: basic testonly group ---
 
@@ -140,6 +144,46 @@ def _test_parse_double_wildcard(name):
 
 # --- Test suite ---
 
+# --- tests: invalid specs fail, for every lock format ---
+
+def _bad_groups_subject_impl(ctx):
+    parsed = parse_dependency_group_entries(ctx.attr.groups)
+    compute_requested_dependency_groups(
+        dependency_groups = parsed.dependency_groups,
+        testonly_groups = parsed.testonly_groups,
+        non_testonly_groups = parsed.non_testonly_groups,
+        wildcard_testonly = parsed.wildcard_testonly,
+        available_groups = ["default", "optional:extra1", "group:dev"],
+        project_name = "proj",
+    )
+    return []
+
+_bad_groups_subject = rule(
+    implementation = _bad_groups_subject_impl,
+    attrs = {"groups": attr.string_list()},
+)
+
+def _bad_groups_test(name, groups, expected):
+    util.helper_target(_bad_groups_subject, name = name + "_subject", groups = groups)
+    analysis_test(
+        name = name,
+        target = name + "_subject",
+        impl = lambda env, target: env.expect.that_target(target).failures().contains_predicate(matching.contains(expected)),
+        expect_failure = True,
+    )
+
+def _test_unprefixed_typo_fails(name):
+    _bad_groups_test(name, ["dfault"], "Unknown dependency group 'dfault'")
+
+def _test_unknown_kind_wildcard_fails(name):
+    _bad_groups_test(name, ["grp:*"], "Unknown dependency group 'grp:*'")
+
+def _test_missing_group_fails(name):
+    _bad_groups_test(name, ["group:nope"], "Project 'proj' does not have group 'group:nope'")
+
+def _test_unknown_modifier_fails(name):
+    _bad_groups_test(name, ["group:dev;testnly"], "Unknown modifier ';testnly'")
+
 def parse_dependency_groups_test_suite(name):
     test_suite(
         name = name,
@@ -152,5 +196,9 @@ def parse_dependency_groups_test_suite(name):
             _test_parse_no_testonly,
             _test_parse_transitive_testonly,
             _test_parse_double_wildcard,
+            _test_unprefixed_typo_fails,
+            _test_unknown_kind_wildcard_fails,
+            _test_missing_group_fails,
+            _test_unknown_modifier_fails,
         ],
     )

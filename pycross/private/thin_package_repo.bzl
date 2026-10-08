@@ -239,12 +239,12 @@ def _pin_build(target_name, pin_target_dict, package, workspace_repo, workspace_
         file_rule = "pycross_transitioning_file_proxy"
     elif target_platform:
         # Platform-only transition: use built-in transitioning rules.
-        lines.append('load("@rules_pycross//pycross:defs.bzl", "pycross_transitioning_file_proxy", "pycross_transitioning_library_proxy")')
+        lines.append('load("@rules_pycross//pycross/private:proxy.bzl", "pycross_transitioning_file_proxy", "pycross_transitioning_library_proxy")')
         lib_rule = "pycross_transitioning_library_proxy"
         file_rule = "pycross_transitioning_file_proxy"
     else:
         # No transition.
-        lines.append('load("@rules_pycross//pycross:defs.bzl", "pycross_file_proxy", "pycross_library_proxy")')
+        lines.append('load("@rules_pycross//pycross/private:proxy.bzl", "pycross_file_proxy", "pycross_library_proxy")')
         lib_rule = "pycross_library_proxy"
         file_rule = "pycross_file_proxy"
     lines.append("")
