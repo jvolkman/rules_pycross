@@ -2,7 +2,7 @@
 
 load("@bazel_tools//tools/build_defs/repo:utils.bzl", "read_user_netrc", "use_netrc")
 load("//pycross/private:internal_repo.bzl", "exec_internal_tool")
-load("//pycross/private:pypi_file.bzl", "get_pypi_file_url")
+load("//pycross/private:pypi_file.bzl", "DEFAULT_INDEX", "get_pypi_file_url")
 
 _BUILD_TEMPLATE = """\
 load("@rules_pycross//pycross/private:wheel_library.bzl", "pycross_wheel_metadata")
@@ -42,10 +42,10 @@ def _pycross_wheel_file_impl(rctx):
         urls = [get_pypi_file_url(
             rctx,
             netrc,
-            rctx.attr.index,
+            rctx.attr.indexes,
             rctx.attr.package_name,
-            rctx.attr.package_version,
             rctx.attr.filename,
+            rctx.attr.sha256,
         )]
 
     # Download the wheel file directly
@@ -103,12 +103,12 @@ def _pycross_wheel_file_impl(rctx):
 pycross_wheel_file = repository_rule(
     implementation = _pycross_wheel_file_impl,
     attrs = {
-        "urls": attr.string_list(doc = "Direct download URLs. If empty, uses PyPI JSON API."),
+        "urls": attr.string_list(doc = "Direct download URLs. If empty, the file is looked up in `indexes`."),
         "sha256": attr.string(mandatory = True),
         "filename": attr.string(mandatory = True, doc = "The wheel filename."),
-        "package_name": attr.string(doc = "PyPI package name (for JSON API mode)."),
-        "package_version": attr.string(doc = "Package version (for JSON API mode)."),
-        "index": attr.string(default = "https://pypi.org", doc = "PyPI index URL."),
+        "package_name": attr.string(doc = "Package name (required for index lookup)."),
+        "package_version": attr.string(doc = "Package version."),
+        "indexes": attr.string_list(default = [DEFAULT_INDEX], doc = "Simple Repository API index URLs, tried in order."),
         "_inspect_tool": attr.label(default = "//pycross/private/tools:inspect_package.py"),
     },
 )

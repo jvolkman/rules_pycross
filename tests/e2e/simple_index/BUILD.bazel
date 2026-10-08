@@ -1,0 +1,14 @@
+load("@rules_shell//shell:sh_test.bzl", "sh_test")
+
+sh_test(
+    name = "test_simple_index",
+    srcs = ["test_simple_index.sh"],
+    args = [
+        "$(rootpaths @wheel_html_fallback//:wheel)",
+        "$(rootpaths @file_json//file)",
+    ],
+    data = [
+        "@file_json//file",
+        "@wheel_html_fallback//:wheel",
+    ],
+)

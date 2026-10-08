@@ -110,7 +110,6 @@ def create_repos(
         repo_remote_files = {}
         workspace_name = workspace_memberships.get(repo_name)
         indexes = workspace_pypi_indexes.get(workspace_name, []) if workspace_name else []
-        pypi_index = indexes[0] if indexes else None
 
         for key, file in resolved_lock.get("remote_files", {}).items():
             if key in all_remote_files:
@@ -153,10 +152,13 @@ def create_repos(
                     filename = file["name"],
                     sha256 = file["sha256"],
                 )
+
+                # A per-package index recorded in the lock takes priority over
+                # the workspace's pypi_indexes.
                 if file.get("index"):
-                    pypi_file_attrs["index"] = file["index"]
-                elif pypi_index:
-                    pypi_file_attrs["index"] = pypi_index
+                    pypi_file_attrs["indexes"] = [file["index"]]
+                elif indexes:
+                    pypi_file_attrs["indexes"] = indexes
                 if file["name"].endswith(".whl"):
                     pycross_wheel_file(**pypi_file_attrs)
                 else:

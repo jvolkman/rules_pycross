@@ -98,7 +98,11 @@ bzl_library(
 bzl_library(
     name = "pypi_file",
     srcs = ["pypi_file.bzl"],
-    deps = ["@bazel_tools//tools/build_defs/repo:utils.bzl"],
+    deps = [
+        ":util",
+        "@bazel_tools//tools/build_defs/repo:utils.bzl",
+        "@pypackaging.bzl//:pypackaging",
+    ],
 )
 
 bzl_library(
@@ -201,6 +205,7 @@ bzl_library(
     srcs = ["wheel_file.bzl"],
     deps = [
         ":internal_repo",
+        ":pypi_file",
         "@bazel_tools//tools/build_defs/repo:utils.bzl",
     ],
 )

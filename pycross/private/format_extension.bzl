@@ -41,7 +41,8 @@ WORKSPACE_COMMON_ATTRS = dict(
         doc = "If True, only pre-built wheels are allowed.",
     ),
     pypi_indexes = attr.string_list(
-        doc = "List of PyPI-compatible indexes to use for downloading packages.",
+        doc = "Simple Repository API (PEP 503/691) index URLs, e.g. `https://pypi.org/simple`. Lock entries without " +
+              "a download URL or per-package index are looked up in each index in order. Defaults to PyPI.",
     ),
     extra_project_files = attr.label_list(
         doc = "Optional list of extra pyproject.toml files to consider.",

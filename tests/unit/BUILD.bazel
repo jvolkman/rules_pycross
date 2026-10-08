@@ -8,6 +8,7 @@ load(":test_pdm_translator.bzl", "pdm_translator_test_suite")
 load(":test_pep508.bzl", "pep508_test_suite")
 load(":test_poetry_translator.bzl", "poetry_translator_test_suite")
 load(":test_pylock_translator.bzl", "pylock_translator_test_suite")
+load(":test_pypi_file.bzl", "pypi_file_test_suite")
 load(":test_resolved_lock_renderer.bzl", "resolved_lock_renderer_test_suite")
 load(":test_sdist_dedup.bzl", "sdist_dedup_test_suite")
 load(":test_thin_package_repo.bzl", "thin_package_repo_test_suite")
@@ -140,6 +141,8 @@ override_helpers_test_suite(name = "test_override_helpers")
 variant_resolver_test_suite(name = "test_variant_resolver")
 
 sdist_dedup_test_suite(name = "test_sdist_dedup")
+
+pypi_file_test_suite(name = "test_pypi_file")
 
 cycle_member_marker_deps_test_suite(name = "test_cycle_member_marker_deps")
 

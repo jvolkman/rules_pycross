@@ -1,0 +1,22 @@
+module(
+    name = "test_simple_index",
+    version = "0.0.0",
+)
+
+bazel_dep(name = "rules_pycross_e2e_shared", version = "0.0.0")
+local_path_override(
+    module_name = "rules_pycross_e2e_shared",
+    path = "../shared",
+)
+
+bazel_dep(name = "rules_pycross", version = "0.0.0")
+local_path_override(
+    module_name = "rules_pycross",
+    path = "../../..",
+)
+
+bazel_dep(name = "rules_shell", version = "0.3.0")
+
+# Resolves filename-only files against the static Simple API indexes under index/.
+index_ext = use_extension("//:index_ext.bzl", "index_ext")
+use_repo(index_ext, "file_json", "file_not_found", "wheel_html_fallback")

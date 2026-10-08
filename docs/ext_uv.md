@@ -84,7 +84,7 @@ Declare a uv workspace from a shared lock file.
 | <a id="uv.workspace-extra_project_files"></a>extra_project_files |  Optional list of extra pyproject.toml files to consider.   | <a href="https://bazel.build/concepts/labels">List of labels</a> | optional |  `[]`  |
 | <a id="uv.workspace-local_wheels"></a>local_wheels |  A list of local .whl files to consider when processing lock files.   | <a href="https://bazel.build/concepts/labels">List of labels</a> | optional |  `[]`  |
 | <a id="uv.workspace-lock_file"></a>lock_file |  The shared lock file for the workspace.   | <a href="https://bazel.build/concepts/labels">Label</a> | required |  |
-| <a id="uv.workspace-pypi_indexes"></a>pypi_indexes |  List of PyPI-compatible indexes to use for downloading packages.   | List of strings | optional |  `[]`  |
+| <a id="uv.workspace-pypi_indexes"></a>pypi_indexes |  Simple Repository API (PEP 503/691) index URLs, e.g. `https://pypi.org/simple`. Lock entries without a download URL or per-package index are looked up in each index in order. Defaults to PyPI.   | List of strings | optional |  `[]`  |
 | <a id="uv.workspace-require_static_urls"></a>require_static_urls |  Require that the lock file is created with --static-urls.   | Boolean | optional |  `True`  |
 
 

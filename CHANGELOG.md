@@ -8,6 +8,10 @@ All notable changes to this project will be documented in this file.
 
 - **`defer_unsupported_wheel_errors` replaced by `unavailable_package_mode`.**
   Use `--@rules_pycross//pycross/settings:unavailable_package_mode=fail_at_execution`.
+- **Index URLs are now Simple API roots.** Files without URLs (Poetry, PDM) are
+  resolved via PEP 691/503; use e.g. `https://pypi.org/simple` in `pypi_indexes`.
+- **`pypi_file` `index` replaced by `indexes`.** All `pypi_indexes` entries are
+  now tried in order.
 
 ### Changed
 
