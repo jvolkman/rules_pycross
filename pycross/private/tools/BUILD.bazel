@@ -4,8 +4,14 @@ load("//pycross/private:wheel_zipimport_library.bzl", "pycross_wheel_zipimport_l
 package(default_visibility = ["//visibility:public"])
 
 exports_files([
+    "git_archive.py",
     "inspect_package.py",
 ])
+
+py_library(
+    name = "git_archive",
+    srcs = ["git_archive.py"],
+)
 
 py_library(
     name = "args",

@@ -1,0 +1,32 @@
+version = 1
+revision = 3
+requires-python = ">=3.10"
+
+[[package]]
+name = "flit-core"
+version = "4.1.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/e7/91/add211b38c357bf1b94900b4f79c34661a92be65c0243d2b0a3393c5092d/flit_core-4.1.0.tar.gz", hash = "sha256:62e12b63ead8335b37f59fabb977c7167fe476dafb5e41785dfa8c9aff843bc6", size = 54678, upload-time = "2026-09-16T10:46:58.455Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/38/2a/8ea4bd54734f0fcbb507c28cb6b79d72f528e40498178a01cb35fc5d686f/flit_core-4.1.0-py3-none-any.whl", hash = "sha256:17398cdd2c38b24047a5a9c93089ec5c0bf12ec3d1469bbf69c27ed7965299db", size = 45622, upload-time = "2026-09-16T10:46:56.119Z" },
+]
+
+[[package]]
+name = "git-sources-test"
+version = "0.1.0"
+source = { virtual = "." }
+dependencies = [
+    { name = "flit-core" },
+    { name = "lib" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "flit-core" },
+    { name = "lib", git = "@LIB_URL@" },
+]
+
+[[package]]
+name = "lib"
+version = "0.1.0"
+source = { git = "@LIB_URL@#@LIB_SHA@" }

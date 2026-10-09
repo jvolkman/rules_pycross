@@ -18,6 +18,7 @@ def define_e2e_tests():
         "cross_repo_build_target",
         "gazelle_integration",
         "generate_lock",
+        "git_sources",
         "local_wheel",
         "namespace_pkgs",
         "patches_and_hooks",

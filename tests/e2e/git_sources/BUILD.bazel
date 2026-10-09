@@ -1,0 +1,7 @@
+load("@rules_python//python:defs.bzl", "py_test")
+
+py_test(
+    name = "test_git_sources",
+    srcs = ["test_git_sources.py"],
+    deps = ["@uv//lib"],
+)

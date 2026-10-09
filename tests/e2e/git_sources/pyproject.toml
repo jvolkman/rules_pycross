@@ -1,0 +1,11 @@
+[project]
+name = "git-sources-test"
+version = "0.1.0"
+requires-python = ">=3.10"
+dependencies = [
+    "flit-core",
+    "lib",
+]
+
+[tool.uv.sources]
+lib = { git = "@LIB_URL@" }  # run.sh substitutes the fixture URL

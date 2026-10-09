@@ -56,6 +56,8 @@ All notable changes to this project will be documented in this file.
 
 ### Fixed
 
+- **Git sources** now include submodules, honor uv's `lfs = true`, fetch only
+  the locked commit, and produce reproducible archives.
 - **Pre-built wheels** now preserve `bin_paths`, `data_paths`, and
   `include_paths`.
 - **Wheels with a local version** (e.g. `+cpu`) now install.
