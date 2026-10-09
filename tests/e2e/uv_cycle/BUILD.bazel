@@ -10,6 +10,5 @@ py_test(
     srcs = ["test_cycle.py"],
     deps = [
         "@cycle_lock//cycle_a",
-        "@cycle_lock//cycle_b",
     ],
 )

@@ -52,6 +52,39 @@ def sanitize_name(val):
         res = res.replace(c, "_")
     return res
 
+def marker_evaluator_name(marker_str, extra = ""):
+    """Generate a deterministic target name for a PEP 508 marker evaluator.
+
+    Args:
+        marker_str: The PEP 508 marker expression.
+        extra: The PEP 508 extra value (e.g. 'test'), or '' for no extra.
+
+    Returns:
+        The deterministic target name string (e.g. '_marker_eval_<san>_<hash>').
+    """
+
+    # Starlark's hash() is deterministic within a build invocation.
+    # We sanitize the marker string for readability and add the hash for uniqueness.
+    effective_extra = extra if (extra and "extra" in marker_str) else ""
+    key = marker_str if not effective_extra else "{}|extra={}".format(marker_str, effective_extra)
+    san = (
+        key.lower()
+            .replace(" ", "")
+            .replace("\"", "")
+            .replace("'", "")
+            .replace("-", "_")
+            .replace("@", "_")
+            .replace("+", "_")
+            .replace(".", "_")
+            .replace("[", "_")
+            .replace("]", "_")
+    )
+
+    # Truncate to keep target names reasonable
+    if len(san) > 40:
+        san = san[:40]
+    return "_marker_eval_{}_{}".format(san, hash(key))
+
 def underscore_name(name):
     """rules_python-style normalization: lowercase, replace [-. ] with _."""
     return pypackaging.utils.canonicalize_name(name).replace("-", "_")
