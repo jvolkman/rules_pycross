@@ -41,7 +41,7 @@ class BasePrefixPthTest(unittest.TestCase):
         # Simulate a venv site-packages directory
         self.site_dir = self.temp_path / "env" / "lib" / "python3.10" / "site-packages"
         self.site_dir.mkdir(parents=True)
-        self.pth_file = self.site_dir / "_pycross_sys_base_prefix.pth"
+        self.pth_file = self.site_dir / "_00_pycross_sys_base_prefix.pth"
 
     def tearDown(self):
         self.temp_dir.cleanup()

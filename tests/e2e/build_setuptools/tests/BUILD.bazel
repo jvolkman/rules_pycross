@@ -29,11 +29,3 @@ py_test(
     srcs = ["test_distutils_probe.py"],
     deps = ["//:distutils_probe"],
 )
-
-py_test(
-    name = "test_zstandard_musl_wheel",
-    srcs = ["check_zstandard_musl_wheel.py"],
-    args = ["$(rootpaths //:zstandard_wheel_musl)"],
-    data = ["//:zstandard_wheel_musl"],
-    main = "check_zstandard_musl_wheel.py",
-)

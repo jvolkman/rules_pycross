@@ -7,6 +7,8 @@ exports_files([
 
 collect_wheels(
     name = "all_wheels",
+    # No linux_x86_64_musl: @llvm ships only a static musl libc.a, so Rust cdylibs embed
+    # a second libc (with its own TLS) and crash when imported.
     platforms = [
         "@llvm//platforms:linux_x86_64",
         "@llvm//platforms:macos_aarch64",

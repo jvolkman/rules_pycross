@@ -86,7 +86,7 @@ def write_base_prefix_pth(
     imports = "import os, sys; " if need_os else "import sys; "
     pth_line = imports + "; ".join(parts) + "\n"
 
-    with open(site_dir / "_pycross_sys_base_prefix.pth", "w") as f:
+    with open(site_dir / "_00_pycross_sys_base_prefix.pth", "w") as f:
         f.write(pth_line)
 
 

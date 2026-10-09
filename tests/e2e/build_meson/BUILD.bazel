@@ -6,6 +6,7 @@ collect_wheels(
         "@llvm//platforms:linux_aarch64",
         "@llvm//platforms:linux_x86_64",
         "@llvm//platforms:macos_aarch64",
+        "//shared:linux_x86_64_musl",
     ],
     wheels = [
         "@uv//contourpy:wheel",
