@@ -1,3 +1,4 @@
+load("@bazel_lib//lib:transitions.bzl", "platform_transition_filegroup")
 load("@rules_pycross//pycross:defs.bzl", "pycross_wheel_library")
 load("@rules_python//python:defs.bzl", "py_binary")
 load("@uv//_backend:setuptools_build.bzl", "setuptools_build")
@@ -70,4 +71,17 @@ setuptools_build(
 pycross_wheel_library(
     name = "zstandard",
     wheel = ":zstandard_build",
+)
+
+# musl cross build. Not in all_wheels: psycopg2/openssl doesn't build for musl.
+platform(
+    name = "linux_x86_64_musl",
+    flags = ["--@rules_python//python/config_settings:py_linux_libc=musl"],
+    parents = ["@llvm//platforms:linux_x86_64_musl"],
+)
+
+platform_transition_filegroup(
+    name = "zstandard_wheel_musl",
+    srcs = [":zstandard_build"],
+    target_platform = ":linux_x86_64_musl",
 )

@@ -1,9 +1,37 @@
 import argparse
 import glob
+import json
 import os
+import re
 import subprocess
 import sys
 from pathlib import Path
+from typing import Iterable
+from typing import Optional
+
+_LINUX_PLAT_RE = re.compile(r"^(musllinux|manylinux)_(\d+)_(\d+)_\w+$")
+
+
+def auditwheel_plat_from_tags(compatibility_tags: Iterable[str]) -> Optional[str]:
+    """Pick the AUDITWHEEL_PLAT for repairwheel from the target's PEP 425 tags.
+
+    repairwheel uses a musllinux_X_Y platform as both the libc and the musl
+    policy, and any manylinux platform to mean glibc. Prefer the highest
+    musllinux tag, then the highest manylinux tag.
+    """
+    best = {}
+    for tag in compatibility_tags:
+        platform = tag.rsplit("-", 1)[-1]
+        m = _LINUX_PLAT_RE.match(platform)
+        if not m:
+            continue
+        kind, version = m.group(1), (int(m.group(2)), int(m.group(3)))
+        if kind not in best or version > best[kind][0]:
+            best[kind] = (version, platform)
+    for kind in ("musllinux", "manylinux"):
+        if kind in best:
+            return best[kind][1]
+    return None
 
 
 def main() -> None:
@@ -78,17 +106,27 @@ def main() -> None:
     if extra:
         python_path = extra.split(os.pathsep) + python_path
     env["PYTHONPATH"] = os.pathsep.join(python_path)
-    subprocess.check_call(cmd, env=env)
 
+    target_env_data = None
     if args.target_environment:
-        import json
-
-        from packaging.utils import parse_wheel_filename
-
         target_env_path = Path(args.target_environment)
         if target_env_path.exists():
             with open(target_env_path, "r") as f:
                 target_env_data = json.load(f)
+
+    # Tell repairwheel the target libc and musl policy up front; otherwise it
+    # guesses from the input wheel and ignores the configured musl version.
+    if target_env_data and "AUDITWHEEL_PLAT" not in env:
+        plat = auditwheel_plat_from_tags(target_env_data.get("compatibility_tags", []))
+        if plat:
+            env["AUDITWHEEL_PLAT"] = plat
+
+    subprocess.check_call(cmd, env=env)
+
+    if args.target_environment:
+        from packaging.utils import parse_wheel_filename
+
+        if target_env_data is not None:
             compatibility_tags = set(target_env_data.get("compatibility_tags", []))
 
             repaired_wheels = list(Path(out_wheel_dir).glob("*.whl"))

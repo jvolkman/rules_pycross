@@ -164,5 +164,80 @@ class RepairWheelHookArgsTest(unittest.TestCase):
         )
 
 
+class AuditwheelPlatTest(unittest.TestCase):
+    def test_prefers_highest_musllinux(self):
+        from pycross.private.build.tools.repair_wheel_hook import auditwheel_plat_from_tags
+
+        tags = [
+            "cp314-cp314-musllinux_1_2_x86_64",
+            "cp314-cp314-musllinux_1_0_x86_64",
+            "cp314-cp314-musllinux_1_1_x86_64",
+            "cp314-abi3-musllinux_1_2_x86_64",
+            "py3-none-any",
+        ]
+        self.assertEqual(auditwheel_plat_from_tags(tags), "musllinux_1_2_x86_64")
+
+    def test_manylinux(self):
+        from pycross.private.build.tools.repair_wheel_hook import auditwheel_plat_from_tags
+
+        tags = ["cp314-cp314-manylinux_2_17_x86_64", "cp314-cp314-manylinux_2_28_x86_64", "py3-none-any"]
+        self.assertEqual(auditwheel_plat_from_tags(tags), "manylinux_2_28_x86_64")
+
+    def test_non_linux(self):
+        from pycross.private.build.tools.repair_wheel_hook import auditwheel_plat_from_tags
+
+        self.assertIsNone(auditwheel_plat_from_tags(["cp314-cp314-macosx_14_0_arm64", "py3-none-any"]))
+        self.assertIsNone(auditwheel_plat_from_tags([]))
+
+    @patch("subprocess.check_call")
+    def test_target_environment_sets_auditwheel_plat(self, mock_check_call):
+        """AUDITWHEEL_PLAT comes from the target tags and is set before repairwheel runs."""
+        import json
+        import os
+
+        temp_dir = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, temp_dir)
+        wheel_dir = temp_dir / "in"
+        wheel_dir.mkdir()
+        out_dir = temp_dir / "out"
+        out_dir.mkdir()
+        wheel_name = "foo-1.0-cp314-cp314-musllinux_1_2_x86_64.whl"
+        (wheel_dir / wheel_name).write_bytes(b"")
+        target_env = temp_dir / "target.json"
+        target_env.write_text(
+            json.dumps({"compatibility_tags": ["cp314-cp314-musllinux_1_1_x86_64", "cp314-cp314-musllinux_1_2_x86_64"]})
+        )
+
+        seen_env = {}
+
+        def fake_repair(cmd, env):
+            seen_env.update(env)
+            (out_dir / wheel_name).write_bytes(b"")
+
+        mock_check_call.side_effect = fake_repair
+
+        from pycross.private.build.tools.repair_wheel_hook import main
+
+        argv = [
+            "repair_wheel_hook",
+            "--wheel-dir",
+            str(wheel_dir),
+            "--out-wheel-dir",
+            str(out_dir),
+            "--target-environment",
+            str(target_env),
+        ]
+        with patch("sys.argv", argv), patch.dict(os.environ, {}, clear=False):
+            os.environ.pop("AUDITWHEEL_PLAT", None)
+            main()
+        self.assertEqual(seen_env.get("AUDITWHEEL_PLAT"), "musllinux_1_2_x86_64")
+
+        # An explicit AUDITWHEEL_PLAT wins.
+        seen_env.clear()
+        with patch("sys.argv", argv), patch.dict(os.environ, {"AUDITWHEEL_PLAT": "musllinux_1_1_x86_64"}):
+            main()
+        self.assertEqual(seen_env.get("AUDITWHEEL_PLAT"), "musllinux_1_1_x86_64")
+
+
 if __name__ == "__main__":
     unittest.main()

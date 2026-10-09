@@ -52,5 +52,8 @@ bzl_library(
     name = "toolchain",
     srcs = ["toolchain.bzl"],
     visibility = ["//visibility:public"],
-    deps = ["@rules_python//python:defs_bzl"],
+    deps = [
+        "//pycross/private/build:transitions",
+        "@rules_python//python:defs_bzl",
+    ],
 )

@@ -80,6 +80,7 @@ All notable changes to this project will be documented in this file.
 - **macOS cross builds** accept `MACOSX_DEPLOYMENT_TARGET` 12 and later.
 - **Shared-library links** no longer get executable-only toolchain flags (e.g.
   musl `-static-pie`).
+- **musl cross builds** (`py_linux_libc=musl`) now produce `musllinux` wheels.
 - **README examples** corrected (override `tool_deps`, maturin `use_repo`,
   `__build` overrides, and more).
 - **`backends` extension** no longer warns when the root module overrides a
