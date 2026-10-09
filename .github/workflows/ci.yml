@@ -168,18 +168,18 @@ jobs:
   cross-test:
     name: Test - (${{ matrix.builder }}→${{ matrix.runner }})
     needs: [cross-build, unit]
-    runs-on: ${{ format('{0}-latest', matrix.runner) }}
+    runs-on: ${{ matrix.runner }}
     strategy:
       fail-fast: false
       matrix:
         builder: [ubuntu, macos]
-        runner: [ubuntu, macos]
+        runner: [ubuntu-latest, macos-latest, ubuntu-24.04-arm]
     steps:
       - uses: actions/checkout@v6
         with:
           persist-credentials: false
       - name: Enable unprivileged user namespaces
-        if: matrix.runner == 'ubuntu'
+        if: runner.os == 'Linux'
         run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
       - uses: actions/setup-python@v6
         with:
@@ -191,6 +191,13 @@ jobs:
       - name: Test workspaces
         run: |
           for ws in ${{ join(fromJSON(needs.unit.outputs.cross-workspaces), ' ') }}; do
+            if [ "${{ runner.os }}-${{ runner.arch }}" = "Linux-ARM64" ]; then
+              # Only these workspaces build linux_aarch64 wheels (or only pure wheels).
+              case "$ws" in
+                build_meson|build_pure_python|build_setuptools) ;;
+                *) echo "Skipping $ws: no linux_aarch64 wheels"; continue ;;
+              esac
+            fi
             echo "::group::Testing $ws"
 
             python -m venv ${{ runner.temp }}/venv-$ws
@@ -199,11 +206,11 @@ jobs:
             mkdir -p ${{ runner.temp }}/install-wheels-$ws
             artifact_dir="${{ runner.temp }}/artifacts/wheels-${{ matrix.builder }}-$ws"
 
-            if [ "${{ matrix.runner }}" = "ubuntu" ]; then
-              cp $artifact_dir/*linux*.whl ${{ runner.temp }}/install-wheels-$ws/ 2>/dev/null || true
-            else
-              cp $artifact_dir/*macosx*.whl ${{ runner.temp }}/install-wheels-$ws/ 2>/dev/null || true
-            fi
+            case "${{ runner.os }}-${{ runner.arch }}" in
+              Linux-X64) cp $artifact_dir/*linux*_x86_64.whl ${{ runner.temp }}/install-wheels-$ws/ 2>/dev/null || true ;;
+              Linux-ARM64) cp $artifact_dir/*linux*_aarch64.whl ${{ runner.temp }}/install-wheels-$ws/ 2>/dev/null || true ;;
+              *) cp $artifact_dir/*macosx*.whl ${{ runner.temp }}/install-wheels-$ws/ 2>/dev/null || true ;;
+            esac
             cp $artifact_dir/*none-any*.whl ${{ runner.temp }}/install-wheels-$ws/ 2>/dev/null || true
             if ! ls ${{ runner.temp }}/install-wheels-$ws/*.whl 1> /dev/null 2>&1; then
               echo "Error: No wheels found to install for $ws"

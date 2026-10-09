@@ -1,0 +1,26 @@
+load("@rules_python//python:defs.bzl", "py_binary")
+load("@uv//:requirements.bzl", "all_requirements")
+
+# rerun-sdk 0.33.0 (used for Python >= 3.10) has no macOS x86_64 wheel and no sdist, so it is
+# unavailable on this platform. run.sh uses it to check unavailable_package_mode behavior.
+platform(
+    name = "macos_x86_64",
+    constraint_values = [
+        "@platforms//os:macos",
+        "@platforms//cpu:x86_64",
+    ],
+)
+
+# Depends directly on the unavailable package.
+py_binary(
+    name = "uses_rerun",
+    srcs = ["uses_rerun.py"],
+    deps = ["@uv//rerun_sdk:pkg"],
+)
+
+# Aggregates leave out packages that are unavailable on the target platform.
+py_binary(
+    name = "uses_all_requirements",
+    srcs = ["uses_all_requirements.py"],
+    deps = all_requirements,
+)
