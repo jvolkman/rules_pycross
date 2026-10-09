@@ -2,6 +2,7 @@
 """
 
 load("@rules_python//python:defs.bzl", "PyRuntimeInfo")
+load("//pycross/private/build:transitions.bzl", "pycross_exec_platform_transition")
 
 PycrossBuildExecRuntimeInfo = provider(
     doc = "Extended information about a (exec, target) Python interpreter pair.",
@@ -34,6 +35,8 @@ def _pycross_hermetic_toolchain_impl(ctx):
 
     # Resolve exec interpreter (can be direct PyRuntimeInfo or current_py_toolchain)
     exec_interpreter = ctx.attr.exec_interpreter
+    if type(exec_interpreter) == "list":
+        exec_interpreter = exec_interpreter[0]
     if PyRuntimeInfo in exec_interpreter:
         exec_py_info = exec_interpreter[PyRuntimeInfo]
     elif platform_common.ToolchainInfo in exec_interpreter:
@@ -72,7 +75,10 @@ pycross_hermetic_toolchain = rule(
         "exec_interpreter": attr.label(
             doc = "The execution Python interpreter (can be PyRuntimeInfo or a toolchain alias).",
             mandatory = True,
-            cfg = "exec",
+            cfg = pycross_exec_platform_transition,
+        ),
+        "_allowlist_function_transition": attr.label(
+            default = "@bazel_tools//tools/allowlists/function_transition_allowlist",
         ),
     },
 )

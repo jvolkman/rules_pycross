@@ -9,7 +9,14 @@ _python_bzl = """\
 load("@rules_python//python:defs.bzl", _py_library = "py_library")
 load("{python_defs}", _py_binary = "py_binary", _py_test = "py_test")
 
-py_binary = _py_binary
+_GLIBC = {{"@rules_python//python/config_settings:py_linux_libc": "glibc"}}
+
+def py_binary(name, config_settings = None, **kwargs):
+    # Internal tools run on the (glibc) exec host, even for musl targets.
+    settings = dict(_GLIBC)
+    settings.update(config_settings or {{}})
+    _py_binary(name = name, config_settings = settings, **kwargs)
+
 py_library = _py_library
 py_test = _py_test
 """

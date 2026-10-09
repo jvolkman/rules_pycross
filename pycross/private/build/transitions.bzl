@@ -32,6 +32,9 @@ def _pycross_exec_platform_transition_impl(settings, _attr):
         "//command_line_option:action_env": settings["//command_line_option:host_action_env"],
         "//command_line_option:features": settings["//command_line_option:host_features"],
         "//command_line_option:strip": "always",
+        # The exec platform is a glibc host; don't let a musl target's
+        # py_linux_libc select a musl interpreter for exec-side tools.
+        "@rules_python//python/config_settings:py_linux_libc": "glibc",
     }
 
 pycross_exec_platform_transition = transition(
@@ -59,5 +62,6 @@ pycross_exec_platform_transition = transition(
         "//command_line_option:action_env",
         "//command_line_option:features",
         "//command_line_option:strip",
+        "@rules_python//python/config_settings:py_linux_libc",
     ],
 )
