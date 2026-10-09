@@ -582,7 +582,7 @@ meson_build(
 For Rust+Python packages, use the `rules_pycross_backend_maturin` module:
 
 ```python
-bazel_dep(name = "rules_pycross_backend_maturin", version = "0.0.0")
+bazel_dep(name = "rules_pycross_backend_maturin", version = "2.0.0")
 bazel_dep(name = "rules_rust", version = "0.68.0")
 
 # Register Rust toolchains

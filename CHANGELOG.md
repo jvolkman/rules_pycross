@@ -2,10 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
-## [Unreleased]
+## [2.0.0]
 
 ### Breaking
 
+- **`always_build` and `disallow_builds` replaced by `package(build_mode = ...)`**
+  (`auto`/`always`/`never`, inherits from `*`).
 - **`pypi_indexes` are now Simple API roots** (e.g. `https://pypi.org/simple`),
   tried in order for files without URLs (Poetry, PDM).
 - **Backend override `tool_deps`** is now a `{tool package name: label}` dict
@@ -25,8 +27,6 @@ All notable changes to this project will be documented in this file.
   `pycross_wheel_library` `console_scripts`/`python_version`, and
   `//pycross/hooks:repair_wheel`.
 - **`build_tools_repo` must name a repo from the same extension.**
-- **`always_build` and `disallow_builds` replaced by `package(build_mode = ...)`**
-  (`auto`/`always`/`never`, inherits from `*`).
 - **`all_requirements` excludes testonly packages.** They are now in
   `all_testonly_requirements`.
 - **Generated repos no longer have `defs.bzl`**, and `:_empty_library` is private.
