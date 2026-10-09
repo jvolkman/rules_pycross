@@ -17,3 +17,11 @@ py_binary(
     main = "collect_wheels.py",
     visibility = ["//visibility:public"],
 )
+
+# musl target platform. rules_python must select the musl target Python, or wheels are tagged
+# manylinux.
+platform(
+    name = "linux_x86_64_musl",
+    flags = ["--@rules_python//python/config_settings:py_linux_libc=musl"],
+    parents = ["@llvm//platforms:linux_x86_64_musl"],
+)

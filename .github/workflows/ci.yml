@@ -207,8 +207,8 @@ jobs:
             artifact_dir="${{ runner.temp }}/artifacts/wheels-${{ matrix.builder }}-$ws"
 
             case "${{ runner.os }}-${{ runner.arch }}" in
-              Linux-X64) cp $artifact_dir/*linux*_x86_64.whl ${{ runner.temp }}/install-wheels-$ws/ 2>/dev/null || true ;;
-              Linux-ARM64) cp $artifact_dir/*linux*_aarch64.whl ${{ runner.temp }}/install-wheels-$ws/ 2>/dev/null || true ;;
+              Linux-X64) cp $artifact_dir/*manylinux*_x86_64.whl ${{ runner.temp }}/install-wheels-$ws/ 2>/dev/null || true ;;
+              Linux-ARM64) cp $artifact_dir/*manylinux*_aarch64.whl ${{ runner.temp }}/install-wheels-$ws/ 2>/dev/null || true ;;
               *) cp $artifact_dir/*macosx*.whl ${{ runner.temp }}/install-wheels-$ws/ 2>/dev/null || true ;;
             esac
             cp $artifact_dir/*none-any*.whl ${{ runner.temp }}/install-wheels-$ws/ 2>/dev/null || true
@@ -225,6 +225,50 @@ jobs:
             deactivate
             echo "::endgroup::"
           done
+
+  # Stage 3b (musl): Test musllinux wheels in an Alpine container
+  cross-test-musl:
+    name: Test - (${{ matrix.builder }}→musl)
+    needs: [cross-build, unit]
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        builder: [ubuntu, macos]
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@v6
+        with:
+          pattern: wheels-${{ matrix.builder }}-*
+          path: ${{ runner.temp }}/artifacts
+      - name: Test workspaces
+        env:
+          WORKSPACES: ${{ join(fromJSON(needs.unit.outputs.cross-workspaces), ' ') }}
+        run: |
+          docker run --rm -e WORKSPACES -e BUILDER=${{ matrix.builder }} \
+            -v "$PWD:/src" -v "${{ runner.temp }}/artifacts:/artifacts:ro" \
+            python:3.14-alpine sh -euc '
+              for ws in $WORKSPACES; do
+                # Only these workspaces build linux_x86_64_musl wheels.
+                case "$ws" in
+                  build_cmake|build_meson|build_setuptools) ;;
+                  *) echo "Skipping $ws: no musllinux wheels"; continue ;;
+                esac
+                echo "::group::Testing $ws"
+                wheels=$(ls /artifacts/wheels-$BUILDER-$ws/*musllinux*_x86_64.whl /artifacts/wheels-$BUILDER-$ws/*none-any*.whl 2>/dev/null || true)
+                if [ -z "$wheels" ]; then
+                  echo "Error: No wheels found to install for $ws"
+                  exit 1
+                fi
+                python -m venv /tmp/venv-$ws
+                /tmp/venv-$ws/bin/pip install pytest $wheels
+                cd /src/tests/e2e/$ws
+                /tmp/venv-$ws/bin/python -m pytest tests/ -v -p no:cacheprovider
+                echo "::endgroup::"
+              done
+            '
 
   # Stage 3c: Reproducibility check
   reproducibility:
@@ -254,7 +298,7 @@ jobs:
 
   # Gate for branch protection
   conclusion:
-    needs: [unit, e2e, cross-test, reproducibility]
+    needs: [unit, e2e, cross-test, cross-test-musl, reproducibility]
     runs-on: ubuntu-latest
     if: always()
     steps:

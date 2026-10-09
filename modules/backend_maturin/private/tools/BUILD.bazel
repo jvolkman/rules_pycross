@@ -2,6 +2,10 @@ load("@rules_python//python:defs.bzl", "py_binary", "py_library")
 
 package(default_visibility = ["//visibility:public"])
 
+# The builders run in the exec config, which inherits py_linux_libc from a musl target
+# platform; keep them on a glibc interpreter.
+_EXEC_GLIBC = {"@rules_python//python/config_settings:py_linux_libc": "glibc"}
+
 py_library(
     name = "generate_cargo_lock_lib",
     srcs = ["generate_cargo_lock.py"],
@@ -26,6 +30,7 @@ py_library(
 py_binary(
     name = "maturin_builder",
     srcs = ["maturin_builder.py"],
+    config_settings = _EXEC_GLIBC,
     imports = ["../.."],
     deps = [
         ":rust_common_lib",
@@ -37,6 +42,7 @@ py_binary(
 py_binary(
     name = "setuptools_rust_builder",
     srcs = ["setuptools_rust_builder.py"],
+    config_settings = _EXEC_GLIBC,
     imports = ["../.."],
     deps = [
         ":rust_common_lib",

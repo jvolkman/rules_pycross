@@ -26,6 +26,7 @@ pycross.configure_toolchains(
     platforms = [
         "aarch64-apple-darwin",
         "x86_64-unknown-linux-gnu",
+        "x86_64-unknown-linux-musl",
     ],
     python_versions = [
         "3.14.2",

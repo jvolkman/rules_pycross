@@ -43,6 +43,11 @@ config_setting(
     ],
 )
 
+config_setting(
+    name = "musl",
+    constraint_values = ["@llvm//constraints/libc:musl"],
+)
+
 filegroup(
     name = "all_srcs",
     srcs = glob(
@@ -79,6 +84,12 @@ configure_make(
     configure_command = "Configure",
     configure_in_place = True,
     configure_options = CONFIGURE_OPTIONS,
+    # The @llvm musl toolchain links executables with -static-pie, which breaks the shared
+    # library links (-shared and -pie may not be used together).
+    configure_prefix = select({
+        ":musl": "bash -c 'export LDFLAGS=\"$${LDFLAGS//-static-pie/}\"; exec \"$$@\"' _",
+        "//conditions:default": "",
+    }),
     copts = [
         "-DOPENSSL_NO_APPLE_CRYPTO_RANDOM",
         "-DOPENSSL_NO_FILENAMES",
