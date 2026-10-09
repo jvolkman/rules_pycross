@@ -122,6 +122,30 @@ class MesonUtilsTest(unittest.TestCase):
         content = (self.temp_path / "cc_layer" / "cross.ini").read_text()
         self.assertIn("c_args = ['-O2', '-D__DATE__=redacted']", content)
 
+    def test_generate_cross_ini_omits_build_machine(self):
+        # Meson detects the build machine itself; the cross file only
+        # describes the target.
+        self.ctx.target_python = self.temp_path / "target_env" / "bin" / "python"
+        cc_config = {"target_os": "darwin", "target_cpu": "aarch64"}
+        generate_cross_ini(self.ctx, cc_config)
+
+        content = (self.temp_path / "cc_layer" / "cross.ini").read_text()
+        self.assertIn("[host_machine]", content)
+        self.assertNotIn("[build_machine]", content)
+
+    def test_generate_cross_ini_runtime_libs_not_duplicated(self):
+        # setup_cc_layer already appends runtime_libs to sysconfig LDFLAGS.
+        self.ctx.sysconfig_vars["LDFLAGS"] = "-Wl,-O1 /abs/libc++.a"
+        cc_config = {
+            "target_os": "linux",
+            "target_cpu": "x86_64",
+            "runtime_libs": ["/abs/libc++.a"],
+        }
+        generate_cross_ini(self.ctx, cc_config)
+
+        content = (self.temp_path / "cc_layer" / "cross.ini").read_text()
+        self.assertIn("c_link_args = ['-Wl,-O1', '/abs/libc++.a']", content)
+
 
 if __name__ == "__main__":
     unittest.main()

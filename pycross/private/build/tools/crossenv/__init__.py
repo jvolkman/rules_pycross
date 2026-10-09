@@ -119,15 +119,24 @@ def guess_uname(
             uname_machine = host_gnu_type.split("-")[0]
 
     if macosx_deployment_target:
+        parts = macosx_deployment_target.split(".")
         try:
-            major, minor = macosx_deployment_target.split(".")
-            major, minor = int(major), int(minor)
+            if not 1 <= len(parts) <= 3:
+                raise ValueError()
+            major = int(parts[0])
+            minor = int(parts[1]) if len(parts) > 1 else 0
         except ValueError:
             raise ValueError(f"Unexpected value {macosx_deployment_target} for MACOSX_DEPLOYMENT_TARGET")
+        # Map the macOS version to the Darwin kernel release reported by uname.
         if major == 10:
+            # macOS 10.x is Darwin x+4 (10.13 -> 17).
             uname_release = "%s.0.0" % (minor + 4)
-        elif major == 11:
-            uname_release = "%s.0.0" % (minor + 20)
+        elif 11 <= major <= 15:
+            # macOS 11-15 are Darwin 20-24.
+            uname_release = "%s.0.0" % (major + 9)
+        elif major >= 26:
+            # macOS jumped from 15 to 26, which is Darwin 25.
+            uname_release = "%s.0.0" % (major - 1)
         else:
             raise ValueError(f"Unexpected major version {major} for MACOSX_DEPLOYMENT_TARGET")
 

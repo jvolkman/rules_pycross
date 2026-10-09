@@ -75,6 +75,11 @@ All notable changes to this project will be documented in this file.
 - **Repository contents cache**: repo rules are reproducible and no longer
   record host-specific paths.
 - **CC compiler wrappers** now forward toolchain `LDFLAGS` on link invocations.
+- **macOS setuptools extensions** are now linked as bundles (`-bundle`), like
+  CPython.
+- **macOS cross builds** accept `MACOSX_DEPLOYMENT_TARGET` 12 and later.
+- **Shared-library links** no longer get executable-only toolchain flags (e.g.
+  musl `-static-pie`).
 - **README examples** corrected (override `tool_deps`, maturin `use_repo`,
   `__build` overrides, and more).
 - **`backends` extension** no longer warns when the root module overrides a

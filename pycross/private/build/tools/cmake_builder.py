@@ -40,12 +40,6 @@ def generate_toolchain_file(ctx: BuildContext, cc_config: dict) -> None:
     cxxflags = _cmake_escape(get_var("CXXFLAGS", ""))
     ldflags = _cmake_escape(get_var("LDFLAGS", ""))
 
-    # Add runtime libs to ldflags
-    if cc_config:
-        runtime_libs = [replace_placeholder(ctx.prefix, p) for p in cc_config.get("runtime_libs", [])]
-        if runtime_libs:
-            ldflags = ldflags + " " + " ".join(runtime_libs)
-
     # Determine system and processor
     target_system = cc_config.get("target_os", "Linux")
     cmake_system_name = {

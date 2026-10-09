@@ -85,13 +85,6 @@ def generate_cross_ini(ctx: BuildContext, cc_config: Optional[Dict[str, Any]] = 
     c_link_args = _split_flags(ldflags)
     c_link_args.extend(leaked_link_args)
 
-    # Add C++ static runtime libraries by full path, replicating Bazel's
-    # static_link_cpp_runtimes behavior.
-    if cc_config:
-        for lib_path_str in cc_config.get("runtime_libs", []):
-            lib_path = replace_placeholder(ctx.prefix, lib_path_str)
-            c_link_args.append(lib_path)
-
     # Dynamically append all sandboxed C/C++ includes to c_args and cpp_args inside cross.ini
     if cc_config and "include_dirs" in cc_config:
         for inc_dir_str in cc_config["include_dirs"]:
@@ -257,12 +250,6 @@ pkg_config_libdir = '{abs_pkgconfig_dir}'
 {extra_properties_str}
 
 [host_machine]
-system = '{target_system}'
-cpu_family = '{target_cpu}'
-cpu = '{target_cpu}'
-endian = 'little'
-
-[build_machine]
 system = '{target_system}'
 cpu_family = '{target_cpu}'
 cpu = '{target_cpu}'
