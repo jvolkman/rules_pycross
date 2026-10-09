@@ -75,12 +75,11 @@ All notable changes to this project will be documented in this file.
   `environments` extension.
 - **Repository contents cache**: repo rules are reproducible and no longer
   record host-specific paths.
-- **CC compiler wrappers** now forward toolchain `LDFLAGS` on link invocations.
+- **CC compiler wrappers** now forward toolchain `LDFLAGS` (and `LDSHAREDFLAGS`
+  for shared links) on link invocations.
 - **macOS setuptools extensions** are now linked as bundles (`-bundle`), like
   CPython.
 - **macOS cross builds** accept `MACOSX_DEPLOYMENT_TARGET` 12 and later.
-- **Shared-library links** no longer get executable-only toolchain flags (e.g.
-  musl `-static-pie`).
 - **musl cross builds** (`py_linux_libc=musl`) now produce `musllinux` wheels.
 - **README examples** corrected (override `tool_deps`, maturin `use_repo`,
   `__build` overrides, and more).
