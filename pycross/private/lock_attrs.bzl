@@ -26,29 +26,30 @@ CONFIGURE_TOOLCHAINS_ATTRS = dict(
     glibc_version = attr.string(
         default = DEFAULT_GLIBC_VERSION,
         doc = (
-            "The maximum glibc version to accept for Bazel platforms that match the " +
-            "@platforms//os:linux constraint. Must be in the format '2.X', and greater than 2.5. " +
-            "All versions from 2.5 through this version will be supported. For example, if this " +
-            "value is set to 2.15, wheels tagged manylinux_2_5, manylinux_2_6, ..., " +
-            "manylinux_2_15 will be accepted."
+            "The target's glibc version, for Bazel platforms that match the " +
+            "@platforms//os:linux constraint; wheels tagged up to it are accepted. Must be in " +
+            "the format '2.X', and greater than 2.5. For example, if this value is set to 2.15, " +
+            "wheels tagged manylinux_2_5, manylinux_2_6, ..., manylinux_2_15 will be accepted. " +
+            "Sets the default of `@rules_pycross//pycross/settings:glibc_version`."
         ),
     ),
     musl_version = attr.string(
         default = DEFAULT_MUSL_VERSION,
         doc = (
-            "The musl version to accept for Bazel platforms that match the " +
+            "The target's musl version, for Bazel platforms that match the " +
             "@platforms//os:linux constraint when @rules_python//python/config_settings:py_linux_libc " +
-            "is set to 'musl'."
+            "is set to 'musl'; wheels tagged up to it are accepted. " +
+            "Sets the default of `@rules_pycross//pycross/settings:musl_version`."
         ),
     ),
     macos_version = attr.string(
         default = DEFAULT_MACOS_VERSION,
         doc = (
-            "The maximum macOS version to accept for Bazel platforms that match the " +
-            "@platforms//os:osx constraint. Must be in the format 'X.Y' with X >= 10. " +
-            "All versions from 10.4 through this version will be supported. For example, if this " +
-            "value is set to 12.0, wheels tagged macosx_10_4, macosx_10_5, ..., macosx_11_0, " +
-            "macosx_12_0 will be accepted."
+            "The target's macOS version, for Bazel platforms that match the " +
+            "@platforms//os:osx constraint; wheels tagged up to it are accepted. Must be in the " +
+            "format 'X.Y' with X >= 10. For example, if this value is set to 12.0, wheels tagged " +
+            "macosx_10_4, macosx_10_5, ..., macosx_11_0, macosx_12_0 will be accepted. " +
+            "Sets the default of `@rules_pycross//pycross/settings:macos_version`."
         ),
     ),
     register_toolchains = attr.bool(

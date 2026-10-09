@@ -164,6 +164,27 @@ stardoc(
     ],
 )
 
+# backend module author API
+stardoc(
+    name = "backend_gen",
+    out = "backend.gen.md",
+    input = "@rules_pycross//pycross:backend.bzl",
+    deps = [
+        "@rules_cc//cc:find_cc_toolchain_bzl",
+        "@rules_pycross//pycross:backend",
+    ],
+)
+
+# toolchain rule
+stardoc(
+    name = "toolchain_gen",
+    out = "toolchain.gen.md",
+    input = "@rules_pycross//pycross:toolchain.bzl",
+    deps = [
+        "@rules_pycross//pycross:toolchain",
+    ],
+)
+
 # Update and test checked-in docs
 write_source_files(
     name = "update",
@@ -182,5 +203,7 @@ write_source_files(
         "ext_pylock.md": ":ext_pylock_gen",
         "ext_backends.md": ":ext_backends_gen",
         "ext_pep517.md": ":ext_pep517_gen",
+        "backend.md": ":backend_gen",
+        "toolchain.md": ":toolchain_gen",
     },
 )

@@ -61,13 +61,13 @@ def _pycross_target_platform_impl(ctx):
             if ctx.attr.libc == "glibc":
                 # Defensive fallback; should not be needed since the string_flag
                 # default is populated from configure_toolchains().
-                max_glibc = flag_value(ctx.attr._max_glibc_version) or "2.28"
+                max_glibc = flag_value(ctx.attr._glibc_version) or "2.28"
                 version = max_glibc.split(".")
                 minor = version[1] if len(version) > 1 else "17"
                 platforms.append("manylinux_{}_{}_{}".format(version[0], minor, arch))
             elif ctx.attr.libc == "musl":
                 # Defensive fallback; see comment above.
-                max_musl = flag_value(ctx.attr._max_musl_version) or "1.2"
+                max_musl = flag_value(ctx.attr._musl_version) or "1.2"
                 version = max_musl.split(".")
                 minor = version[1] if len(version) > 1 else "2"
                 platforms.append("musllinux_{}_{}_{}".format(version[0], minor, arch))
@@ -75,7 +75,7 @@ def _pycross_target_platform_impl(ctx):
                 platforms.append("linux_" + arch)
         elif sys_platform == "darwin":
             # Defensive fallback chain; flag default comes from configure_toolchains().
-            macos_ver = flag_value(ctx.attr._max_macos_version) or markers["platform_version"] or "15.0"
+            macos_ver = flag_value(ctx.attr._macos_version) or markers["platform_version"] or "15.0"
             version = macos_ver.split(".")
             major = version[0]
             minor = version[1] if len(version) > 1 else "0"
@@ -143,9 +143,9 @@ _pycross_target_platform = rule(
             default = "no",
             doc = "'yes' if the host Python is freethreaded, 'no' otherwise.",
         ),
-        "_max_glibc_version": attr.label(default = "@rules_pycross//pycross/settings:max_glibc_version"),
-        "_max_macos_version": attr.label(default = "@rules_pycross//pycross/settings:max_macos_version"),
-        "_max_musl_version": attr.label(default = "@rules_pycross//pycross/settings:max_musl_version"),
+        "_glibc_version": attr.label(default = "@rules_pycross//pycross/settings:glibc_version"),
+        "_macos_version": attr.label(default = "@rules_pycross//pycross/settings:macos_version"),
+        "_musl_version": attr.label(default = "@rules_pycross//pycross/settings:musl_version"),
     } | marker_value_attrs(),
     provides = [PycrossTargetPlatformInfo],
     toolchains = [PYTHON_TOOLCHAIN_TYPE],

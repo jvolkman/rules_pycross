@@ -12,7 +12,6 @@ PycrossBuildExecRuntimeInfo = provider(
         "target_python_files": "A depset containing all files for the target interpreter.",
         "target_python_files_to_run": "Optional FilesToRunProvider for the target interpreter.",
         "target_python_executable": "The path to the target Python interpreter, either absolute or relative to execroot.",
-        "target_sys_path": "An array of system path directories (i.e., the value of sys.path from `python -m site`).",
     },
 )
 
@@ -53,7 +52,6 @@ def _pycross_hermetic_toolchain_impl(ctx):
         target_python_files = target_py_info.files,
         target_python_files_to_run = getattr(target_py_info, "interpreter_files_to_run", None),
         target_python_executable = _python_executable(target_py_info),
-        target_sys_path = None,
     )
 
     return [
@@ -78,11 +76,3 @@ pycross_hermetic_toolchain = rule(
         ),
     },
 )
-
-def config_compatible(config_setting_target):
-    return select(
-        {
-            config_setting_target: [],
-            "//conditions:default": ["@platforms//:incompatible"],
-        },
-    )

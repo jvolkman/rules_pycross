@@ -533,7 +533,6 @@ def _thin_package_repo_impl(rctx):
     conflicts = rctx.attr.conflicts
 
     rctx.file("REPO.bazel", "")
-    rctx.file("defs.bzl", "")
     rctx.file("requirements.bzl", _requirements_bzl(rctx, pins, packages, testonly_pins_set))
 
     # Root BUILD.bazel with //:package aliases
@@ -557,7 +556,7 @@ def _thin_package_repo_impl(rctx):
         'package(default_visibility = ["//visibility:public"])',
         "",
         "# Empty library for _maybe_ targets on incompatible platforms.",
-        'py_library(name = "_empty_library")',
+        'py_library(name = "_empty_library", visibility = ["//:__subpackages__"])',
         "",
     ]
 
@@ -715,7 +714,7 @@ pycross_transitioning_file_proxy = rule(
         mapping_name = "modules_mapping"
 
     root_build_lines.extend([
-        'exports_files(["defs.bzl", "requirements.bzl", "_packages.bzl"])',
+        'exports_files(["requirements.bzl", "_packages.bzl"])',
         "",
         "pycross_modules_mapping(",
         '    name = "{}",'.format(mapping_name),
@@ -753,7 +752,7 @@ pycross_transitioning_file_proxy = rule(
             "package(default_visibility = [\"//visibility:public\"])",
             "",
             "# Empty library for incompatible platforms.",
-            'py_library(name = "_empty_library")',
+            'py_library(name = "_empty_library", visibility = ["//visibility:private"])',
             "",
         ]
         for maybe_name, (pkg_key, lock_label) in sorted(maybe_mapping_targets.items()):
