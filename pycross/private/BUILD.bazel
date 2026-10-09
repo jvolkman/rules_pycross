@@ -295,6 +295,7 @@ bzl_library(
     srcs = ["cycle_dep_needed.bzl"],
     deps = [
         ":pep508_marker_values",
+        ":util",
         "@pypackaging.bzl//:pypackaging",
     ],
 )
@@ -304,7 +305,8 @@ bzl_library(
     srcs = ["cycle_member_marker_deps.bzl"],
     deps = [
         ":cycle_dep_needed",
-        "@rules_python//python:defs_bzl",
+        ":proxy",
+        ":util",
     ],
 )
 

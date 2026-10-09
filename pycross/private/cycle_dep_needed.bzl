@@ -22,6 +22,7 @@ Each edge is either unconditional (no marker) or conditional
 
 load("@pypackaging.bzl", "pypackaging")
 load("//pycross/private:pep508_marker_values.bzl", "PYTHON_TOOLCHAIN_TYPE", "collect_markers", "marker_value_attrs")
+load("//pycross/private:util.bzl", "parse_package_key")
 
 # ---- BFS reachability -------------------------------------------------------
 
@@ -37,12 +38,20 @@ def _active_neighbors(edges, node, markers_env):
         A list of neighbor node name strings.
     """
     node_edges = edges.get(node, [])
+    node_extra = parse_package_key(node).extra
+    node_env = None
     result = []
     for edge in node_edges:
         marker_str = edge.get("marker")
         if marker_str:
+            if node_env == None:
+                if markers_env.get("extra", "") == node_extra:
+                    node_env = markers_env
+                else:
+                    node_env = dict(markers_env)
+                    node_env["extra"] = node_extra
             parsed_marker = pypackaging.markers.parse(marker_str)
-            if not pypackaging.markers.evaluate(parsed_marker, markers_env):
+            if not pypackaging.markers.evaluate(parsed_marker, node_env):
                 continue
         result.append(edge["dep"])
     return result

@@ -14,7 +14,7 @@ Naming conventions for generated targets:
     base package and all of its parsed extras into a single target.
 """
 
-load(":util.bzl", "has_build_fallback", "parse_package_key", "sanitize_name")
+load(":util.bzl", "has_build_fallback", "marker_evaluator_name", "parse_package_key", "sanitize_name")
 
 def _ind(text, tabs = 1):
     if not text:
@@ -98,22 +98,7 @@ def _collect_unique_markers(packages):
     return markers.keys()
 
 def _marker_evaluator_name(marker_str, extra = ""):
-    """Generate a deterministic target name for a marker evaluator.
-
-    Args:
-        marker_str: The PEP 508 marker expression.
-        extra: The PEP 508 extra value (e.g. 'test'), or '' for no extra.
-    """
-
-    # Starlark's hash() is deterministic within a build invocation.
-    # We sanitize the marker string for readability and add the hash for uniqueness.
-    key = marker_str if not extra else "{}|extra={}".format(marker_str, extra)
-    san = _sanitize_name(key.replace(" ", "").replace("\"", "").replace("'", ""))
-
-    # Truncate to keep target names reasonable
-    if len(san) > 40:
-        san = san[:40]
-    return "_marker_eval_{}_{}".format(san, hash(key))
+    return marker_evaluator_name(marker_str, extra)
 
 def _render_marker_evaluators(lines, unique_markers):
     """Render deduped pycross_pep508_evaluator and config_setting targets.
@@ -273,14 +258,11 @@ def _render_marker_cycle_member_deps(lines, cycle_groups, packages):
         lines.append("")
 
         for pkg_key in sorted(resolved_members):
-            extra = parse_package_key(pkg_key).extra
             lines.append(_ind("pycross_cycle_member_marker_deps("))
             lines.append(_ind('name = "{}",'.format(pkg_key), 2))
             lines.append(_ind('raw_name = "_raw_{}",'.format(pkg_key), 2))
             lines.append(_ind('member = "{}",'.format(pkg_key), 2))
             lines.append(_ind("edges = {},".format(edges_var_name), 2))
-            if extra:
-                lines.append(_ind('extra = "{}",'.format(extra), 2))
             lines.append(_ind(")"))
             lines.append("")
 
