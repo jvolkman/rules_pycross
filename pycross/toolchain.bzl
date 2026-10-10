@@ -8,6 +8,7 @@ PycrossBuildExecRuntimeInfo = provider(
     doc = "Extended information about a (exec, target) Python interpreter pair.",
     fields = {
         "exec_python_files": "A depset containing all files for the exec interpreter.",
+        "exec_python_compile_files": "A depset containing the subset of exec interpreter files needed for .pyc bytecode compilation.",
         "exec_python_files_to_run": "Optional FilesToRunProvider for the exec interpreter.",
         "exec_python_executable": "The path to the exec Python interpreter, either absolute or relative to execroot.",
         "target_python_files": "A depset containing all files for the target interpreter.",
@@ -15,6 +16,47 @@ PycrossBuildExecRuntimeInfo = provider(
         "target_python_executable": "The path to the target Python interpreter, either absolute or relative to execroot.",
     },
 )
+
+_EXCLUDED_STDLIB_DIRS = {
+    "distutils": True,
+    "ensurepip": True,
+    "idlelib": True,
+    "lib2to3": True,
+    "site-packages": True,
+    "test": True,
+    "tkinter": True,
+    "turtledemo": True,
+}
+
+def _is_compile_interpreter_path(path):
+    """Return True if an interpreter file path should be staged for .pyc compilation."""
+    if path.startswith("../"):
+        _, _, path = path[3:].partition("/")
+    parts = path.split("/")
+    if len(parts) < 2:
+        return True
+    top = parts[0]
+    if top in ("include", "Include", "tcl", "tk"):
+        return False
+    if top == "lib":
+        if len(parts) >= 3 and (
+            parts[1].startswith("tcl") or
+            parts[1].startswith("tk") or
+            parts[1].startswith("Tix")
+        ):
+            return False
+        if len(parts) >= 4 and parts[1].startswith("python3."):
+            sub = parts[2]
+            if sub in _EXCLUDED_STDLIB_DIRS or sub.startswith("config-"):
+                return False
+    elif top == "Lib" and len(parts) >= 3:
+        sub = parts[1]
+        if sub in _EXCLUDED_STDLIB_DIRS or sub.startswith("config-"):
+            return False
+    return True
+
+# Visible for testing
+is_compile_interpreter_path_for_testing = _is_compile_interpreter_path
 
 def _python_executable(runtime):
     """Resolve the Python executable path from a PyRuntimeInfo.
@@ -48,8 +90,15 @@ def _pycross_hermetic_toolchain_impl(ctx):
     else:
         fail("exec_interpreter must provide PyRuntimeInfo or ToolchainInfo")
 
+    exec_python_compile_files = depset([
+        f
+        for f in exec_py_info.files.to_list()
+        if _is_compile_interpreter_path(f.short_path)
+    ]) if exec_py_info.files else depset()
+
     pycross_info = PycrossBuildExecRuntimeInfo(
         exec_python_files = exec_py_info.files,
+        exec_python_compile_files = exec_python_compile_files,
         exec_python_files_to_run = getattr(exec_py_info, "interpreter_files_to_run", None),
         exec_python_executable = _python_executable(exec_py_info),
         target_python_files = target_py_info.files,

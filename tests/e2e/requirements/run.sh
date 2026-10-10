@@ -4,6 +4,27 @@ set -euo pipefail
 bazel build "$@" //...
 bazel test "$@" //...
 bazel test "$@" --@rules_python//python/config_settings:python_version=3.10.11 //:test_dist_info
+bazel test "$@" \
+  -c fastbuild \
+  --@rules_python//python/config_settings:precompile=enabled \
+  --test_env=EXPECTED_PRECOMPILE=1 \
+  --test_env=EXPECTED_PYC_TAG=cpython-311 \
+  --test_env=EXPECTED_PYC_FLAGS=3 \
+  //:test_precompile
+bazel test "$@" \
+  --@rules_python//python/config_settings:precompile=enabled \
+  --@rules_python//python/config_settings:python_version=3.12.0 \
+  --test_env=EXPECTED_PRECOMPILE=1 \
+  --test_env=EXPECTED_PYC_TAG=cpython-312 \
+  --test_env=EXPECTED_PYC_FLAGS=1 \
+  //:test_precompile
+bazel test "$@" \
+  --@rules_python//python/config_settings:precompile=enabled \
+  --@rules_python//python/config_settings:python_version=3.14.2 \
+  --test_env=EXPECTED_PRECOMPILE=1 \
+  --test_env=EXPECTED_PYC_TAG=cpython-314 \
+  --test_env=EXPECTED_PYC_FLAGS=1 \
+  //:test_precompile
 
 # rerun-sdk 0.33.0 has no macOS x86_64 wheel and no sdist, so it is unavailable on
 # //unavailable:macos_x86_64. The checks are scoped to //unavailable/... because the root py_tests

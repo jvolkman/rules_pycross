@@ -10,6 +10,7 @@ import logging
 import os
 import re
 import shutil
+import subprocess
 import tempfile
 import zipfile
 from contextlib import contextmanager
@@ -28,6 +29,72 @@ from installer.sources import WheelFile
 from installer.utils import Scheme
 from installer.utils import parse_wheel_filename
 from pycross.private.tools.args import FlagFileArgumentParser
+
+_COMPILE_SCRIPT = """\
+import importlib.util
+import os
+import py_compile
+import sys
+from pathlib import Path
+
+lib_dir = Path(sys.argv[1])
+mode_name = sys.argv[2]
+opt_level = int(sys.argv[3])
+opt_arg = "" if opt_level == 0 else opt_level
+mode = (
+    py_compile.PycInvalidationMode.UNCHECKED_HASH
+    if mode_name == "unchecked_hash"
+    else py_compile.PycInvalidationMode.CHECKED_HASH
+)
+
+if lib_dir.is_dir():
+    for root, dirs, files in os.walk(lib_dir):
+        dirs[:] = sorted(d for d in dirs if d != "__pycache__")
+        for fn in sorted(files):
+            if not fn.endswith(".py"):
+                continue
+            src = Path(root) / fn
+            rel = src.relative_to(lib_dir).as_posix()
+            cfile = importlib.util.cache_from_source(str(src), optimization=opt_arg)
+            try:
+                py_compile.compile(
+                    str(src),
+                    cfile=cfile,
+                    dfile=rel,
+                    doraise=True,
+                    optimize=opt_level,
+                    invalidation_mode=mode,
+                )
+            except (SyntaxError, py_compile.PyCompileError) as exc:
+                sys.stderr.write(f"Skipping bytecode compilation for {rel}: {exc}\\n")
+"""
+
+
+def compile_bytecode(
+    lib_dir: Path,
+    compile_python: str,
+    invalidation_mode: str,
+    optimize: int = 0,
+) -> None:
+    env = dict(os.environ)
+    env["PYTHONHASHSEED"] = "0"
+    env["PYTHONNOUSERSITE"] = "1"
+    env["PYTHONSAFEPATH"] = "1"
+    subprocess.run(
+        [
+            compile_python,
+            "-S",
+            "-s",
+            "-B",
+            "-c",
+            _COMPILE_SCRIPT,
+            str(lib_dir),
+            invalidation_mode,
+            str(optimize),
+        ],
+        env=env,
+        check=True,
+    )
 
 
 class NormalizedDistInfoDestination(SchemeDictionaryDestination):
@@ -225,6 +292,12 @@ def main(args: Any) -> None:
 
     apply_patches(lib_dir, args.patches)
 
+    compile_python = getattr(args, "compile_python", None)
+    if compile_python:
+        invalidation_mode = getattr(args, "compile_invalidation_mode", None) or "checked_hash"
+        compile_optimize = getattr(args, "compile_optimize", None) or 0
+        compile_bytecode(lib_dir, compile_python, invalidation_mode, compile_optimize)
+
     # Extract entry_points.txt for rules_python compatibility.
     if args.entry_points_output:
         entry_points_output = Path(args.entry_points_output)
@@ -313,6 +386,31 @@ def parse_flags() -> Any:
         required=False,
         default=None,
         help="Normalized .dist-info directory name to write under site-packages.",
+    )
+
+    parser.add_argument(
+        "--compile-python",
+        type=str,
+        required=False,
+        default=None,
+        help="Python interpreter executable to use for .pyc precompilation.",
+    )
+
+    parser.add_argument(
+        "--compile-invalidation-mode",
+        type=str,
+        choices=["checked_hash", "unchecked_hash"],
+        required=False,
+        default=None,
+        help="PycInvalidationMode for .pyc precompilation.",
+    )
+
+    parser.add_argument(
+        "--compile-optimize",
+        type=int,
+        required=False,
+        default=0,
+        help="Optimization level for .pyc precompilation.",
     )
 
     return parser.parse_args()

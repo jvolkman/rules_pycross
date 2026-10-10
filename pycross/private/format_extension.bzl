@@ -162,6 +162,11 @@ PACKAGE_ATTRS = dict(
     wheel_library_tags = attr.string_list(
         doc = "Optional tags to apply to the generated pycross_wheel_library target.",
     ),
+    precompile = attr.string(
+        default = "",
+        values = ["", "auto", "enabled", "disabled"],
+        doc = "Whether to precompile `.pyc` files when installing this package's wheel (`\"auto\"`, `\"enabled\"`, or `\"disabled\"`). `\"auto\"` follows the `--@rules_python//python/config_settings:precompile` flag. Defaults to inheriting from `*` if set, or `\"auto\"`.",
+    ),
 )
 
 def _tag_to_annotation_data(pkg, wildcard_pkg = None):
@@ -191,6 +196,7 @@ def _tag_to_annotation_data(pkg, wildcard_pkg = None):
         data_paths = pkg.data_paths or (wildcard_pkg.data_paths if wildcard_pkg else []),
         include_paths = pkg.include_paths or (wildcard_pkg.include_paths if wildcard_pkg else []),
         wheel_library_tags = pkg.wheel_library_tags or (wildcard_pkg.wheel_library_tags if wildcard_pkg else []),
+        precompile = pkg.precompile or (wildcard_pkg.precompile if wildcard_pkg else ""),
     ))
 
 tag_to_annotation_data_for_testing = _tag_to_annotation_data

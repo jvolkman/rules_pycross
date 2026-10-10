@@ -42,6 +42,8 @@ All notable changes to this project will be documented in this file.
 - **`extra_dependencies`** package annotation.
 - **`repair_exclude_globs`** on build rules and backend overrides.
 - **`repo(settings = ...)`**: label-keyed build settings for repo transitions.
+- **`.pyc` precompilation** for installed wheels, following `rules_python`'s
+  `precompile` flag, with per-package `package(precompile = ...)`.
 
 ### Changed
 

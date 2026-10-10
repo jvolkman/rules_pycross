@@ -293,5 +293,196 @@ class WheelInstallerNormalizedDistInfoTest(unittest.TestCase):
                 self.assertEqual(size_str, expected_size, f"Size mismatch for {rel_path}")
 
 
+class WheelInstallerPrecompileTest(unittest.TestCase):
+    """Test optional .pyc precompilation in wheel_installer."""
+
+    def setUp(self):
+        self.temp_dir = tempfile.mkdtemp()
+
+    def tearDown(self):
+        import shutil
+
+        shutil.rmtree(self.temp_dir)
+
+    def _create_precompile_wheel(self) -> Path:
+        import zipfile
+
+        wheel_path = Path(self.temp_dir) / "pkg-1.0-py3-none-any.whl"
+        with zipfile.ZipFile(wheel_path, "w") as zf:
+            zf.writestr(
+                "pkg-1.0.dist-info/METADATA",
+                "Metadata-Version: 2.1\nName: pkg\nVersion: 1.0\n",
+            )
+            zf.writestr(
+                "pkg-1.0.dist-info/WHEEL",
+                "Wheel-Version: 1.0\nGenerator: test\nRoot-Is-Purelib: true\nTag: py3-none-any\n",
+            )
+            zf.writestr("pkg-1.0.dist-info/RECORD", "")
+            zf.writestr("pkg/__init__.py", "VALUE = 1\n")
+            zf.writestr("pkg/sub.py", "def greet():\n    return 'hello'\n")
+            zf.writestr("pkg/sub.pyi", "def greet() -> str: ...\n")
+            zf.writestr("pkg/py2_legacy.py", "print 'legacy python 2 syntax'\n")
+            zf.writestr("top.py", "TOP = True\n")
+            zf.writestr("pkg-1.0.data/scripts/helper.py", "print('script')\n")
+        return wheel_path
+
+    @staticmethod
+    def _tree_snapshot(root: Path) -> dict[str, bytes]:
+        return {p.relative_to(root).as_posix(): p.read_bytes() for p in sorted(root.rglob("*")) if p.is_file()}
+
+    def test_precompile_not_run_when_flags_omitted(self):
+        import argparse
+
+        from pycross.private.tools import wheel_installer
+
+        wheel_path = self._create_precompile_wheel()
+        out_dir = Path(self.temp_dir) / "out_no_compile"
+        args = argparse.Namespace(
+            wheel=wheel_path,
+            wheel_dir=None,
+            wheel_name_file=None,
+            install_exclude_globs=[],
+            patches=[],
+            entry_points_output=None,
+            directory=out_dir,
+            expected_name="pkg",
+            expected_version="1.0",
+            dist_info_dir="pkg-1.0.dist-info",
+            compile_python=None,
+            compile_invalidation_mode=None,
+        )
+        wheel_installer.main(args)
+        self.assertEqual(list(out_dir.rglob("*.pyc")), [])
+
+    def test_precompile_modes_headers_dfile_and_determinism(self):
+        import argparse
+        import importlib.util
+        import marshal
+        import struct
+        import sys
+
+        from pycross.private.tools import wheel_installer
+
+        wheel_path = self._create_precompile_wheel()
+        out_checked_1 = Path(self.temp_dir) / "out_checked_1"
+        out_checked_2 = Path(self.temp_dir) / "out_checked_2"
+        out_unchecked = Path(self.temp_dir) / "out_unchecked"
+
+        for out_dir, mode in [
+            (out_checked_1, "checked_hash"),
+            (out_checked_2, "checked_hash"),
+            (out_unchecked, "unchecked_hash"),
+        ]:
+            args = argparse.Namespace(
+                wheel=wheel_path,
+                wheel_dir=None,
+                wheel_name_file=None,
+                install_exclude_globs=[],
+                patches=[],
+                entry_points_output=None,
+                directory=out_dir,
+                expected_name="pkg",
+                expected_version="1.0",
+                dist_info_dir="pkg-1.0.dist-info",
+                compile_python=sys.executable,
+                compile_invalidation_mode=mode,
+            )
+            wheel_installer.main(args)
+
+        sp = out_checked_1 / "site-packages"
+        expected_modules = ["pkg/__init__.py", "pkg/sub.py", "top.py"]
+        for rel_mod in expected_modules:
+            src_file = sp / rel_mod
+            self.assertTrue(src_file.is_file(), f"Source should be kept: {rel_mod}")
+            pyc_path = Path(importlib.util.cache_from_source(str(src_file)))
+            self.assertTrue(pyc_path.is_file(), f"Missing .pyc for {rel_mod}: {pyc_path}")
+
+            checked_bytes = pyc_path.read_bytes()
+            checked_flags = struct.unpack("<I", checked_bytes[4:8])[0]
+            self.assertEqual(checked_flags, 0b11, f"Expected checked_hash flags (0b11) for {rel_mod}")
+            code_obj = marshal.loads(checked_bytes[16:])
+            self.assertEqual(code_obj.co_filename, rel_mod)
+
+            unchecked_src = out_unchecked / "site-packages" / rel_mod
+            unchecked_pyc = Path(importlib.util.cache_from_source(str(unchecked_src)))
+            unchecked_bytes = unchecked_pyc.read_bytes()
+            unchecked_flags = struct.unpack("<I", unchecked_bytes[4:8])[0]
+            self.assertEqual(unchecked_flags, 0b01, f"Expected unchecked_hash flags (0b01) for {rel_mod}")
+            unchecked_code = marshal.loads(unchecked_bytes[16:])
+            self.assertEqual(unchecked_code.co_filename, rel_mod)
+
+        # Python 2 syntax file is kept as source and skipped without failing
+        py2_src = sp / "pkg" / "py2_legacy.py"
+        self.assertTrue(py2_src.is_file())
+        py2_pyc = Path(importlib.util.cache_from_source(str(py2_src)))
+        self.assertFalse(py2_pyc.exists())
+
+        # Nothing outside site-packages/ is compiled
+        self.assertTrue((out_checked_1 / "bin" / "helper.py").is_file())
+        self.assertEqual(list((out_checked_1 / "bin").rglob("*.pyc")), [])
+
+        # Two runs produce byte-identical trees
+        self.assertEqual(
+            self._tree_snapshot(out_checked_1),
+            self._tree_snapshot(out_checked_2),
+        )
+
+    def test_precompile_optimize_level_and_hashseed_honored(self):
+        import argparse
+        import importlib.util
+        import marshal
+        import sys
+        from unittest import mock
+
+        from pycross.private.tools import wheel_installer
+
+        wheel_path = self._create_precompile_wheel()
+        out_opt1 = Path(self.temp_dir) / "out_opt1"
+        args = argparse.Namespace(
+            wheel=wheel_path,
+            wheel_dir=None,
+            wheel_name_file=None,
+            install_exclude_globs=[],
+            patches=[],
+            entry_points_output=None,
+            directory=out_opt1,
+            expected_name="pkg",
+            expected_version="1.0",
+            dist_info_dir="pkg-1.0.dist-info",
+            compile_python=sys.executable,
+            compile_invalidation_mode="checked_hash",
+            compile_optimize=1,
+        )
+        with mock.patch.object(
+            wheel_installer.subprocess,
+            "run",
+            wraps=wheel_installer.subprocess.run,
+        ) as run_spy:
+            wheel_installer.main(args)
+
+        self.assertEqual(run_spy.call_count, 1)
+        cmd = run_spy.call_args[0][0]
+        env = run_spy.call_args[1]["env"]
+        self.assertNotIn("-I", cmd)
+        self.assertNotIn("-E", cmd)
+        self.assertIn("-S", cmd)
+        self.assertIn("-s", cmd)
+        self.assertIn("-B", cmd)
+        self.assertEqual(env.get("PYTHONHASHSEED"), "0")
+        self.assertEqual(env.get("PYTHONNOUSERSITE"), "1")
+        self.assertEqual(env.get("PYTHONSAFEPATH"), "1")
+
+        sp = out_opt1 / "site-packages"
+        for rel_mod in ["pkg/__init__.py", "pkg/sub.py", "top.py"]:
+            src_file = sp / rel_mod
+            opt1_pyc = Path(importlib.util.cache_from_source(str(src_file), optimization=1))
+            opt0_pyc = Path(importlib.util.cache_from_source(str(src_file), optimization=""))
+            self.assertTrue(opt1_pyc.is_file(), f"Missing opt-1 .pyc for {rel_mod}: {opt1_pyc}")
+            self.assertIn(".opt-1.pyc", opt1_pyc.name)
+            self.assertFalse(opt0_pyc.exists(), f"Did not expect opt-0 .pyc for {rel_mod}")
+            code_obj = marshal.loads(opt1_pyc.read_bytes()[16:])
+            self.assertEqual(code_obj.co_filename, rel_mod)
+
+
 if __name__ == "__main__":
     unittest.main()

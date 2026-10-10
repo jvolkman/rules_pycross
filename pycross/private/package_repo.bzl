@@ -100,7 +100,7 @@ def _package_repo_impl(rctx):
     # Annotation fields that affect pycross_wheel_library targets.
     # If these differ between members for the same pkg_key, the package
     # is "conflicting" and gets per-member variant targets.
-    _ANNOTATION_FIELDS = ["post_install_patches", "install_exclude_globs", "wheel_library_tags"]
+    _ANNOTATION_FIELDS = ["post_install_patches", "install_exclude_globs", "wheel_library_tags", "precompile"]
 
     # First pass: collect per-member package data, environment names, and cycle groups.
     member_packages = {}  # member_name -> {pkg_key -> pkg_data}
@@ -167,7 +167,7 @@ def _package_repo_impl(rctx):
         has_annotation_conflict = False
         for _, other_data in entries[1:]:
             for field in _ANNOTATION_FIELDS:
-                if first_data.get(field, []) != other_data.get(field, []):
+                if (first_data.get(field) or None) != (other_data.get(field) or None):
                     has_annotation_conflict = True
                     break
             if has_annotation_conflict:

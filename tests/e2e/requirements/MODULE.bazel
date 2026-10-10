@@ -24,6 +24,7 @@ python.toolchain(
 )
 python.toolchain(python_version = "3.10.11")
 python.toolchain(python_version = "3.12.0")
+python.toolchain(python_version = "3.14.2")
 use_repo(python, "python_versions")
 
 uv = use_extension("@rules_pycross//pycross/extensions:uv.bzl", "uv")
@@ -32,6 +33,11 @@ uv.workspace(
     lock_file = "//:uv.lock",
 )
 uv.repo(
+    workspace = "uv",
+)
+uv.package(
+    name = "python-dateutil",
+    precompile = "enabled",
     workspace = "uv",
 )
 use_repo(uv, "uv")

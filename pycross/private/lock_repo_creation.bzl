@@ -18,7 +18,7 @@ load("//pycross/private:wheel_file.bzl", "pycross_wheel_file")
 load(":git_file.bzl", "pycross_git_file")
 
 # Annotation fields that affect pycross_wheel_library targets.
-_ANNOTATION_FIELDS = ["post_install_patches", "install_exclude_globs", "wheel_library_tags"]
+_ANNOTATION_FIELDS = ["post_install_patches", "install_exclude_globs", "wheel_library_tags", "precompile"]
 
 def _disallowed_sdist_repo_impl(rctx):
     fail(
@@ -374,7 +374,7 @@ def create_repos(
             _, first_data = entries[0]
             for _, other_data in entries[1:]:
                 for field in _ANNOTATION_FIELDS:
-                    if first_data.get(field, []) != other_data.get(field, []):
+                    if (first_data.get(field) or None) != (other_data.get(field) or None):
                         conflicts[pkg_key] = [m for m, _ in entries]
                         break
                 if pkg_key in conflicts:

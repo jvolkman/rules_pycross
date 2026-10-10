@@ -75,3 +75,13 @@ py_test(
     main = "test_dist_info.py",
     deps = ["@uv//pygments:pkg"],
 )
+
+py_test(
+    name = "test_precompile",
+    srcs = ["@rules_pycross_e2e_shared//:test_precompile.py"],
+    main = "test_precompile.py",
+    deps = [
+        "@uv//pygments:pkg",
+        "@uv//python_dateutil:pkg",
+    ],
+)
