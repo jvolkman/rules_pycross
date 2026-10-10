@@ -159,7 +159,8 @@ load("@rules_pycross//pycross:defs.bzl", "pycross_wheel_library")
 
 pycross_wheel_library(<a href="#pycross_wheel_library-name">name</a>, <a href="#pycross_wheel_library-deps">deps</a>, <a href="#pycross_wheel_library-bin_paths">bin_paths</a>, <a href="#pycross_wheel_library-data_paths">data_paths</a>, <a href="#pycross_wheel_library-experimental_venvs_site_packages">experimental_venvs_site_packages</a>,
                       <a href="#pycross_wheel_library-include_paths">include_paths</a>, <a href="#pycross_wheel_library-install_exclude_globs">install_exclude_globs</a>, <a href="#pycross_wheel_library-package_name">package_name</a>, <a href="#pycross_wheel_library-package_version">package_version</a>,
-                      <a href="#pycross_wheel_library-post_install_patches">post_install_patches</a>, <a href="#pycross_wheel_library-site_paths">site_paths</a>, <a href="#pycross_wheel_library-wheel">wheel</a>)
+                      <a href="#pycross_wheel_library-post_install_patches">post_install_patches</a>, <a href="#pycross_wheel_library-precompile">precompile</a>, <a href="#pycross_wheel_library-precompile_invalidation_mode">precompile_invalidation_mode</a>,
+                      <a href="#pycross_wheel_library-precompile_optimize_level">precompile_optimize_level</a>, <a href="#pycross_wheel_library-site_paths">site_paths</a>, <a href="#pycross_wheel_library-wheel">wheel</a>)
 </pre>
 
 
@@ -179,6 +180,9 @@ pycross_wheel_library(<a href="#pycross_wheel_library-name">name</a>, <a href="#
 | <a id="pycross_wheel_library-package_name"></a>package_name |  The name of the package. Used for providing PycrossPackageInfo.   | String | optional |  `""`  |
 | <a id="pycross_wheel_library-package_version"></a>package_version |  The version of the package. Used for providing PycrossPackageInfo.   | String | optional |  `""`  |
 | <a id="pycross_wheel_library-post_install_patches"></a>post_install_patches |  A list of patches to apply after installation.   | <a href="https://bazel.build/concepts/labels">List of labels</a> | optional |  `[]`  |
+| <a id="pycross_wheel_library-precompile"></a>precompile |  Whether to compile Python source files to `.pyc` bytecode at wheel install time. `auto` (default) follows the `--@rules_python//python/config_settings:precompile` flag: compile only when it is `enabled` or `force_enabled`. `force_enabled`/`force_disabled` override `enabled`/`disabled` here. Unlike `py_library`, there is no `inherit`: a binary's `pyc_collection` does not apply to installed wheels.   | String | optional |  `"auto"`  |
+| <a id="pycross_wheel_library-precompile_invalidation_mode"></a>precompile_invalidation_mode |  The PEP 552 hash invalidation mode for generated `.pyc` files. `auto` uses `unchecked_hash` when `--compilation_mode=opt` and `checked_hash` otherwise.   | String | optional |  `"auto"`  |
+| <a id="pycross_wheel_library-precompile_optimize_level"></a>precompile_optimize_level |  The Python bytecode optimization level passed to `py_compile.compile(optimize=...)`.   | Integer | optional |  `0`  |
 | <a id="pycross_wheel_library-site_paths"></a>site_paths |  The list of site-packages paths provided by this wheel.   | List of strings | optional |  `[]`  |
 | <a id="pycross_wheel_library-wheel"></a>wheel |  The wheel file.   | <a href="https://bazel.build/concepts/labels">Label</a> | required |  |
 

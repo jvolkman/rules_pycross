@@ -11,8 +11,8 @@ uv = use_extension("@rules_pycross//pycross/extensions:uv.bzl", "uv")
 uv.repo(<a href="#uv.repo-name">name</a>, <a href="#uv.repo-constraint_values">constraint_values</a>, <a href="#uv.repo-dependency_groups">dependency_groups</a>, <a href="#uv.repo-flags">flags</a>, <a href="#uv.repo-platform">platform</a>, <a href="#uv.repo-projects">projects</a>, <a href="#uv.repo-settings">settings</a>, <a href="#uv.repo-workspace">workspace</a>)
 uv.package(<a href="#uv.package-name">name</a>, <a href="#uv.package-bin_paths">bin_paths</a>, <a href="#uv.package-build_backend">build_backend</a>, <a href="#uv.package-build_mode">build_mode</a>, <a href="#uv.package-build_target">build_target</a>, <a href="#uv.package-build_tools_repo">build_tools_repo</a>, <a href="#uv.package-data_paths">data_paths</a>,
            <a href="#uv.package-extra_build_tools">extra_build_tools</a>, <a href="#uv.package-extra_dependencies">extra_dependencies</a>, <a href="#uv.package-ignore_dependencies">ignore_dependencies</a>, <a href="#uv.package-include_paths">include_paths</a>,
-           <a href="#uv.package-install_exclude_globs">install_exclude_globs</a>, <a href="#uv.package-post_install_patches">post_install_patches</a>, <a href="#uv.package-pre_build_patches">pre_build_patches</a>, <a href="#uv.package-site_hooks">site_hooks</a>, <a href="#uv.package-site_paths">site_paths</a>,
-           <a href="#uv.package-wheel_library_tags">wheel_library_tags</a>, <a href="#uv.package-workspace">workspace</a>)
+           <a href="#uv.package-install_exclude_globs">install_exclude_globs</a>, <a href="#uv.package-post_install_patches">post_install_patches</a>, <a href="#uv.package-pre_build_patches">pre_build_patches</a>, <a href="#uv.package-precompile">precompile</a>, <a href="#uv.package-site_hooks">site_hooks</a>,
+           <a href="#uv.package-site_paths">site_paths</a>, <a href="#uv.package-wheel_library_tags">wheel_library_tags</a>, <a href="#uv.package-workspace">workspace</a>)
 uv.workspace(<a href="#uv.workspace-name">name</a>, <a href="#uv.workspace-extra_project_files">extra_project_files</a>, <a href="#uv.workspace-local_wheels">local_wheels</a>, <a href="#uv.workspace-lock_file">lock_file</a>, <a href="#uv.workspace-pypi_indexes">pypi_indexes</a>)
 </pre>
 
@@ -62,6 +62,7 @@ Specify package-specific settings.
 | <a id="uv.package-install_exclude_globs"></a>install_exclude_globs |  A list of globs for files to exclude during installation.   | List of strings | optional |  `[]`  |
 | <a id="uv.package-post_install_patches"></a>post_install_patches |  A list of patches to apply after wheel installation.   | <a href="https://bazel.build/concepts/labels">List of labels</a> | optional |  `[]`  |
 | <a id="uv.package-pre_build_patches"></a>pre_build_patches |  A list of patches to apply to the sdist source tree before building.   | <a href="https://bazel.build/concepts/labels">List of labels</a> | optional |  `[]`  |
+| <a id="uv.package-precompile"></a>precompile |  Whether to precompile `.pyc` files when installing this package's wheel (`"auto"`, `"enabled"`, or `"disabled"`). `"auto"` follows the `--@rules_python//python/config_settings:precompile` flag. Defaults to inheriting from `*` if set, or `"auto"`.   | String | optional |  `""`  |
 | <a id="uv.package-site_hooks"></a>site_hooks |  A list of Python code snippets to execute on interpreter startup during builds.   | List of strings | optional |  `[]`  |
 | <a id="uv.package-site_paths"></a>site_paths |  Override the auto-detected top-level importable paths.   | List of strings | optional |  `[]`  |
 | <a id="uv.package-wheel_library_tags"></a>wheel_library_tags |  Optional tags to apply to the generated pycross_wheel_library target.   | List of strings | optional |  `[]`  |

@@ -598,6 +598,9 @@ def _render_marker_package(lines, pkg_key, pkg, packages, repo_map, sdist_map, r
             lines.append(_ind('"{}",'.format(tag), 3))
         lines.append(_ind("],", 2))
 
+    if pkg.get("precompile"):
+        lines.append(_ind('precompile = "{}",'.format(pkg["precompile"]), 2))
+
     lines.extend([
         _ind(")"),
         "",

@@ -757,6 +757,45 @@ def _test_wheel_library_tags_rendering(name):
     analysis_test(name = name, target = name + "_subject", impl = _test_wheel_library_tags_rendering_impl)
 
 # buildifier: disable=unused-variable
+def _test_precompile_rendering_impl(env, target):
+    """Verify that precompile is rendered on pycross_wheel_library only when non-empty."""
+    lock = {
+        "packages": {
+            "compiled@1.0": {
+                "wheel_candidates": [
+                    {
+                        "filename": "compiled-1.0-py3-none-any.whl",
+                        "file_reference": {"key": "compiled_wheel"},
+                    },
+                ],
+                "precompile": "enabled",
+            },
+            "default_pkg@1.0": {
+                "wheel_candidates": [
+                    {
+                        "filename": "default_pkg-1.0-py3-none-any.whl",
+                        "file_reference": {"key": "default_wheel"},
+                    },
+                ],
+                "precompile": "",
+            },
+        },
+    }
+    repo_map = {
+        "compiled_wheel": "@my_repo//compiled:wheel",
+        "default_wheel": "@my_repo//default_pkg:wheel",
+    }
+    res = render_lock_bzl(lock, repo_map, "my_rctx")
+
+    env.expect.that_bool('precompile = "enabled",' in res).equals(True)
+    env.expect.that_bool('precompile = ""' in res).equals(False)
+    env.expect.that_int(res.count("precompile =")).equals(1)
+
+def _test_precompile_rendering(name):
+    util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
+    analysis_test(name = name, target = name + "_subject", impl = _test_precompile_rendering_impl)
+
+# buildifier: disable=unused-variable
 def _test_epoch_sdist_repo_name_impl(env, target):
     """The sdist repo label must use the same sanitization as lock_repo_creation (e.g. epoch '!')."""
     lock = {
@@ -794,5 +833,6 @@ def resolved_lock_renderer_test_suite(name):
             _test_resolution_marker_evaluator_rendering,
             _test_resolution_marker_compound_rendering,
             _test_wheel_library_tags_rendering,
+            _test_precompile_rendering,
         ],
     )

@@ -15,6 +15,7 @@ load(":test_pypi_file.bzl", "pypi_file_test_suite")
 load(":test_resolved_lock_renderer.bzl", "resolved_lock_renderer_test_suite")
 load(":test_sdist_dedup.bzl", "sdist_dedup_test_suite")
 load(":test_thin_package_repo.bzl", "thin_package_repo_test_suite")
+load(":test_toolchain.bzl", "toolchain_test_suite")
 load(":test_uv_translator.bzl", "uv_translator_test_suite")
 load(":test_variant_resolver.bzl", "variant_resolver_test_suite")
 
@@ -198,3 +199,5 @@ pylock_translator_test_suite(name = "test_pylock_translator")
 uv_translator_test_suite(name = "test_uv_translator")
 
 parse_dependency_groups_test_suite(name = "test_parse_dependency_groups")
+
+toolchain_test_suite(name = "test_toolchain")

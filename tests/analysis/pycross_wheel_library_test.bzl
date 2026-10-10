@@ -235,6 +235,242 @@ def _test_pycross_library_proxy_no_match_deferred_impl(env, target):
     runfile_names = [f.basename for f in target[DefaultInfo].default_runfiles.files.to_list()]
     env.expect.that_collection(runfile_names).contains("no_match_error.whl")
 
+def _define_precompile_subject(name, **kwargs):
+    util.helper_target(
+        native.filegroup,
+        name = name + "_wheel",
+        srcs = ["test-1.0-py3-none-any.whl"],
+    )
+    util.helper_target(
+        pycross_wheel_library,
+        name = name + "_subject",
+        wheel = name + "_wheel",
+        package_name = "test",
+        package_version = "1.0",
+        **kwargs
+    )
+
+def _assert_precompile_disabled_impl(env, target):
+    extracted_info = target[PycrossExtractedWheelInfo]
+    action = env.expect.that_target(target).action_generating(extracted_info.site_packages.short_path)
+    env.expect.that_bool("--compile-python" in action.actual.argv).equals(False)
+    env.expect.that_bool("--compile-invalidation-mode" in action.actual.argv).equals(False)
+    env.expect.that_bool("--compile-optimize" in action.actual.argv).equals(False)
+
+def _assert_precompile_enabled_checked_opt0_impl(env, target):
+    extracted_info = target[PycrossExtractedWheelInfo]
+    action = env.expect.that_target(target).action_generating(extracted_info.site_packages.short_path)
+    env.expect.that_bool("--compile-python" in action.actual.argv).equals(True)
+    action.argv().contains_at_least([
+        "--compile-invalidation-mode",
+        "checked_hash",
+        "--compile-optimize",
+        "0",
+    ])
+    input_paths = [f.short_path for f in action.actual.inputs.to_list()]
+    has_python_bin = any(["/bin/python" in p for p in input_paths])
+    has_stdlib_os = any(["/lib/python3." in p and p.endswith("/os.py") for p in input_paths])
+    env.expect.that_bool(has_python_bin).equals(True)
+    env.expect.that_bool(has_stdlib_os).equals(True)
+    excluded_interp_inputs = [
+        p
+        for p in input_paths
+        if "/python_" in p and (
+            "/site-packages/" in p or
+            "/tcl" in p or
+            "/tk" in p or
+            "/Tix" in p or
+            "/include/" in p or
+            "/idlelib/" in p or
+            "/lib2to3/" in p or
+            "/distutils/" in p or
+            "/turtledemo/" in p or
+            "/tkinter/" in p
+        )
+    ]
+    env.expect.that_collection(excluded_interp_inputs).contains_exactly([])
+
+def _assert_precompile_enabled_unchecked_opt0_impl(env, target):
+    extracted_info = target[PycrossExtractedWheelInfo]
+    action = env.expect.that_target(target).action_generating(extracted_info.site_packages.short_path)
+    env.expect.that_bool("--compile-python" in action.actual.argv).equals(True)
+    action.argv().contains_at_least([
+        "--compile-invalidation-mode",
+        "unchecked_hash",
+        "--compile-optimize",
+        "0",
+    ])
+
+def _test_pycross_wheel_library_precompile_auto(name):
+    _define_precompile_subject(name)
+    analysis_test(
+        name = name,
+        target = name + "_subject",
+        config_settings = {
+            str(Label("@rules_python//python/config_settings:precompile")): "auto",
+        },
+        impl = _assert_precompile_disabled_impl,
+    )
+
+def _test_pycross_wheel_library_precompile_disabled(name):
+    _define_precompile_subject(name)
+    analysis_test(
+        name = name,
+        target = name + "_subject",
+        config_settings = {
+            str(Label("@rules_python//python/config_settings:precompile")): "disabled",
+        },
+        impl = _assert_precompile_disabled_impl,
+    )
+
+def _test_pycross_wheel_library_precompile_force_disabled(name):
+    _define_precompile_subject(name)
+    analysis_test(
+        name = name,
+        target = name + "_subject",
+        config_settings = {
+            str(Label("@rules_python//python/config_settings:precompile")): "force_disabled",
+        },
+        impl = _assert_precompile_disabled_impl,
+    )
+
+def _test_pycross_wheel_library_precompile_enabled_checked_hash(name):
+    _define_precompile_subject(name)
+    analysis_test(
+        name = name,
+        target = name + "_subject",
+        config_settings = {
+            str(Label("@rules_python//python/config_settings:precompile")): "enabled",
+        },
+        impl = _assert_precompile_enabled_checked_opt0_impl,
+    )
+
+def _test_pycross_wheel_library_precompile_force_enabled_opt(name):
+    _define_precompile_subject(name)
+    analysis_test(
+        name = name,
+        target = name + "_subject",
+        config_settings = {
+            str(Label("@rules_python//python/config_settings:precompile")): "force_enabled",
+            "//command_line_option:compilation_mode": "opt",
+        },
+        impl = _assert_precompile_enabled_unchecked_opt0_impl,
+    )
+
+def _test_pycross_wheel_library_precompile_attr_enabled_flag_auto(name):
+    _define_precompile_subject(name, precompile = "enabled")
+    analysis_test(
+        name = name,
+        target = name + "_subject",
+        config_settings = {
+            str(Label("@rules_python//python/config_settings:precompile")): "auto",
+        },
+        impl = _assert_precompile_enabled_checked_opt0_impl,
+    )
+
+def _test_pycross_wheel_library_precompile_attr_enabled_flag_disabled(name):
+    _define_precompile_subject(name, precompile = "enabled")
+    analysis_test(
+        name = name,
+        target = name + "_subject",
+        config_settings = {
+            str(Label("@rules_python//python/config_settings:precompile")): "disabled",
+        },
+        impl = _assert_precompile_enabled_checked_opt0_impl,
+    )
+
+def _test_pycross_wheel_library_precompile_attr_enabled_flag_force_disabled(name):
+    _define_precompile_subject(name, precompile = "enabled")
+    analysis_test(
+        name = name,
+        target = name + "_subject",
+        config_settings = {
+            str(Label("@rules_python//python/config_settings:precompile")): "force_disabled",
+        },
+        impl = _assert_precompile_disabled_impl,
+    )
+
+def _test_pycross_wheel_library_precompile_attr_disabled_flag_enabled(name):
+    _define_precompile_subject(name, precompile = "disabled")
+    analysis_test(
+        name = name,
+        target = name + "_subject",
+        config_settings = {
+            str(Label("@rules_python//python/config_settings:precompile")): "enabled",
+        },
+        impl = _assert_precompile_disabled_impl,
+    )
+
+def _test_pycross_wheel_library_precompile_attr_disabled_flag_force_enabled(name):
+    _define_precompile_subject(name, precompile = "disabled")
+    analysis_test(
+        name = name,
+        target = name + "_subject",
+        config_settings = {
+            str(Label("@rules_python//python/config_settings:precompile")): "force_enabled",
+        },
+        impl = _assert_precompile_enabled_checked_opt0_impl,
+    )
+
+def _test_pycross_wheel_library_precompile_invalidation_mode_explicit(name):
+    _define_precompile_subject(
+        name,
+        precompile = "enabled",
+        precompile_invalidation_mode = "checked_hash",
+    )
+    analysis_test(
+        name = name,
+        target = name + "_subject",
+        config_settings = {
+            "//command_line_option:compilation_mode": "opt",
+        },
+        impl = _assert_precompile_enabled_checked_opt0_impl,
+    )
+
+def _test_pycross_wheel_library_precompile_invalidation_mode_unchecked_explicit(name):
+    _define_precompile_subject(
+        name,
+        precompile = "enabled",
+        precompile_invalidation_mode = "unchecked_hash",
+    )
+    analysis_test(
+        name = name,
+        target = name + "_subject",
+        config_settings = {
+            "//command_line_option:compilation_mode": "fastbuild",
+        },
+        impl = _assert_precompile_enabled_unchecked_opt0_impl,
+    )
+
+def _test_pycross_wheel_library_precompile_optimize_level(name):
+    _define_precompile_subject(
+        name,
+        precompile = "enabled",
+        precompile_optimize_level = 2,
+    )
+    analysis_test(
+        name = name,
+        target = name + "_subject",
+        impl = _test_pycross_wheel_library_precompile_optimize_level_impl,
+    )
+
+def _test_pycross_wheel_library_precompile_optimize_level_impl(env, target):
+    extracted_info = target[PycrossExtractedWheelInfo]
+    action = env.expect.that_target(target).action_generating(extracted_info.site_packages.short_path)
+    action.argv().contains_at_least(["--compile-optimize", "2"])
+
+def _test_pycross_wheel_library_precompile_missing_toolchain_skipped(name):
+    _define_precompile_subject(name, precompile = "enabled")
+    analysis_test(
+        name = name,
+        target = name + "_subject",
+        config_settings = {
+            str(Label("@rules_python//python/config_settings:precompile")): "enabled",
+            str(Label("@rules_python//python/config_settings:python_version")): "3.10",
+        },
+        impl = _assert_precompile_disabled_impl,
+    )
+
 def pycross_wheel_library_test_suite(name):
     test_suite(
         name = name,
@@ -246,5 +482,19 @@ def pycross_wheel_library_test_suite(name):
             _test_no_match_error_incompatible_by_default,
             _test_no_match_error_compatible_when_deferred,
             _test_pycross_library_proxy_no_match_deferred,
+            _test_pycross_wheel_library_precompile_auto,
+            _test_pycross_wheel_library_precompile_disabled,
+            _test_pycross_wheel_library_precompile_force_disabled,
+            _test_pycross_wheel_library_precompile_enabled_checked_hash,
+            _test_pycross_wheel_library_precompile_force_enabled_opt,
+            _test_pycross_wheel_library_precompile_attr_enabled_flag_auto,
+            _test_pycross_wheel_library_precompile_attr_enabled_flag_disabled,
+            _test_pycross_wheel_library_precompile_attr_enabled_flag_force_disabled,
+            _test_pycross_wheel_library_precompile_attr_disabled_flag_enabled,
+            _test_pycross_wheel_library_precompile_attr_disabled_flag_force_enabled,
+            _test_pycross_wheel_library_precompile_invalidation_mode_explicit,
+            _test_pycross_wheel_library_precompile_invalidation_mode_unchecked_explicit,
+            _test_pycross_wheel_library_precompile_optimize_level,
+            _test_pycross_wheel_library_precompile_missing_toolchain_skipped,
         ],
     )

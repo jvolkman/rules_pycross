@@ -93,6 +93,7 @@ def _apply_annotation(ann, versions_by_name, all_package_keys):
         data_paths = ann.get("data_paths", []),
         include_paths = ann.get("include_paths", []),
         wheel_library_tags = ann.get("wheel_library_tags", []),
+        precompile = ann.get("precompile", ""),
     )
 
 def _collect_package_annotations(annotations_data, versions_by_name, all_package_keys):
@@ -288,6 +289,7 @@ def _create_package_resolver(pkg_key, pkg, ann, default_extra_build_tools, conte
         "data_paths": ann.data_paths if ann else [],
         "include_paths": ann.include_paths if ann else [],
         "wheel_library_tags": ann.wheel_library_tags if ann else [],
+        "precompile": ann.precompile if ann else "",
         "wheel_candidates": wheel_candidates,
         "uses_sdist": uses_sdist,
         "availability_markers": availability_markers,

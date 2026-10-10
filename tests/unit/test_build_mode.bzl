@@ -28,6 +28,7 @@ def _pkg_tag(**kwargs):
         data_paths = [],
         include_paths = [],
         wheel_library_tags = [],
+        precompile = "",
     )
     fields.update(kwargs)
     return struct(**fields)
@@ -39,6 +40,7 @@ def _subject(name):
 def _test_default_is_auto_impl(env, target):
     ann = tag_to_annotation_data_for_testing(_pkg_tag())
     env.expect.that_str(ann["build_mode"]).equals("auto")
+    env.expect.that_str(ann["precompile"]).equals("")
 
 def _test_default_is_auto(name):
     _subject(name)
@@ -46,12 +48,13 @@ def _test_default_is_auto(name):
 
 # buildifier: disable=unused-variable
 def _test_specific_inherits_wildcard_impl(env, target):
-    # A specific entry that only sets another field inherits build_mode from "*".
+    # A specific entry that only sets another field inherits build_mode and precompile from "*".
     ann = tag_to_annotation_data_for_testing(
         _pkg_tag(site_hooks = ["import foo"]),
-        _pkg_tag(build_mode = "always"),
+        _pkg_tag(build_mode = "always", precompile = "enabled"),
     )
     env.expect.that_str(ann["build_mode"]).equals("always")
+    env.expect.that_str(ann["precompile"]).equals("enabled")
     env.expect.that_collection(ann["site_hooks"]).contains_exactly(["import foo"])
 
 def _test_specific_inherits_wildcard(name):
@@ -61,10 +64,17 @@ def _test_specific_inherits_wildcard(name):
 # buildifier: disable=unused-variable
 def _test_specific_auto_opts_out_impl(env, target):
     ann = tag_to_annotation_data_for_testing(
-        _pkg_tag(build_mode = "auto"),
-        _pkg_tag(build_mode = "never"),
+        _pkg_tag(build_mode = "auto", precompile = "disabled"),
+        _pkg_tag(build_mode = "never", precompile = "enabled"),
     )
     env.expect.that_str(ann["build_mode"]).equals("auto")
+    env.expect.that_str(ann["precompile"]).equals("disabled")
+
+    ann_auto = tag_to_annotation_data_for_testing(
+        _pkg_tag(precompile = "auto"),
+        _pkg_tag(precompile = "enabled"),
+    )
+    env.expect.that_str(ann_auto["precompile"]).equals("auto")
 
 def _test_specific_auto_opts_out(name):
     _subject(name)

@@ -8,6 +8,7 @@ exports_files([
     "ipython.py",
     "test_cowsay.py",
     "test_dist_info.py",
+    "test_precompile.py",
     "test_regex.py",
     "test_top_level_packages.py",
 ])
