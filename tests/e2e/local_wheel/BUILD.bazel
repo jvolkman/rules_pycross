@@ -8,3 +8,10 @@ py_test(
     main = "test_cowsay.py",
     deps = ["@uv//cowsay:pkg"],
 )
+
+py_test(
+    name = "test_dist_info",
+    srcs = ["@rules_pycross_e2e_shared//:test_dist_info.py"],
+    main = "test_dist_info.py",
+    deps = ["@uv//pygments:pkg"],
+)

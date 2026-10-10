@@ -56,6 +56,9 @@ All notable changes to this project will be documented in this file.
 
 ### Fixed
 
+- **`venvs_site_packages`**: package metadata and entry points no longer go
+  missing for wheels with a mixed-case `.dist-info` directory (now installed
+  under its normalized name).
 - **Dependency cycles** with markers or extras no longer drop members or activate the wrong extras.
 - **Meson cross builds** now compile against the target Python's headers instead of the host's.
 - **Git sources** now include submodules, honor uv's `lfs = true`, fetch only

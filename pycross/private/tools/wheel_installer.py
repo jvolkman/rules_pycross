@@ -22,10 +22,65 @@ from typing import Union
 import patch_ng
 from installer import install
 from installer.destinations import SchemeDictionaryDestination
+from installer.records import RecordEntry
 from installer.sources import WheelContentElement
 from installer.sources import WheelFile
+from installer.utils import Scheme
 from installer.utils import parse_wheel_filename
 from pycross.private.tools.args import FlagFileArgumentParser
+
+
+class NormalizedDistInfoDestination(SchemeDictionaryDestination):
+    """SchemeDictionaryDestination that remaps the wheel's .dist-info directory name."""
+
+    def __init__(
+        self,
+        *args: Any,
+        src_dist_info_dir: str,
+        dst_dist_info_dir: str,
+        **kwargs: Any,
+    ) -> None:
+        super().__init__(*args, **kwargs)
+        self._src_dist_info_dir = src_dist_info_dir
+        self._dst_dist_info_dir = dst_dist_info_dir
+
+    def _remap_dist_info_path(self, path: str) -> str:
+        if path == self._src_dist_info_dir:
+            return self._dst_dist_info_dir
+        prefix = self._src_dist_info_dir + "/"
+        if path.startswith(prefix):
+            return self._dst_dist_info_dir + "/" + path[len(prefix) :]
+        return path
+
+    def write_file(
+        self,
+        scheme: Scheme,
+        path: Union[str, os.PathLike[str]],
+        stream: Any,
+        is_executable: bool,
+    ) -> RecordEntry:
+        remapped = self._remap_dist_info_path(os.fspath(path))
+        return super().write_file(scheme, remapped, stream, is_executable)
+
+    def finalize_installation(
+        self,
+        scheme: Scheme,
+        record_file_path: Union[str, os.PathLike[str]],
+        records: Any,
+    ) -> None:
+        remapped_record_file_path = self._remap_dist_info_path(os.fspath(record_file_path))
+        remapped_records = [
+            (
+                scheme_,
+                RecordEntry(
+                    self._remap_dist_info_path(record.path),
+                    record.hash_,
+                    record.size,
+                ),
+            )
+            for scheme_, record in records
+        ]
+        super().finalize_installation(scheme, remapped_record_file_path, remapped_records)
 
 
 class FilteredWheelFile(WheelFile):
@@ -108,18 +163,13 @@ def _validate_wheel_identity(
 def main(args: Any) -> None:
     dest_dir = args.directory
     lib_dir = dest_dir / "site-packages"
-    destination = SchemeDictionaryDestination(
-        scheme_dict={
-            "platlib": str(lib_dir),
-            "purelib": str(lib_dir),
-            "headers": str(dest_dir / "include"),
-            "scripts": str(dest_dir / "bin"),
-            "data": str(dest_dir / "data"),
-        },
-        interpreter="python",  # Generic; it's not feasible to run these scripts directly.
-        script_kind="posix",
-        bytecode_optimization_levels=[],  # Setting to empty list to disable generation of .pyc files.
-    )
+    scheme_dict = {
+        "platlib": str(lib_dir),
+        "purelib": str(lib_dir),
+        "headers": str(dest_dir / "include"),
+        "scripts": str(dest_dir / "bin"),
+        "data": str(dest_dir / "data"),
+    }
 
     link_dir = Path(tempfile.mkdtemp())
     if args.wheel_dir:
@@ -145,6 +195,23 @@ def main(args: Any) -> None:
 
     try:
         with FilteredWheelFile.open_filtered(link_path, args.install_exclude_globs) as source:
+            dist_info_dir = getattr(args, "dist_info_dir", None)
+            if dist_info_dir and dist_info_dir != source.dist_info_dir:
+                destination: SchemeDictionaryDestination = NormalizedDistInfoDestination(
+                    scheme_dict=scheme_dict,
+                    interpreter="python",  # Generic; it's not feasible to run these scripts directly.
+                    script_kind="posix",
+                    bytecode_optimization_levels=[],  # Setting to empty list to disable generation of .pyc files.
+                    src_dist_info_dir=source.dist_info_dir,
+                    dst_dist_info_dir=dist_info_dir,
+                )
+            else:
+                destination = SchemeDictionaryDestination(
+                    scheme_dict=scheme_dict,
+                    interpreter="python",  # Generic; it's not feasible to run these scripts directly.
+                    script_kind="posix",
+                    bytecode_optimization_levels=[],  # Setting to empty list to disable generation of .pyc files.
+                )
             install(
                 source=source,
                 destination=destination,
@@ -238,6 +305,14 @@ def parse_flags() -> Any:
         type=str,
         required=False,
         help="Expected package version; validated against wheel METADATA.",
+    )
+
+    parser.add_argument(
+        "--dist-info-dir",
+        type=str,
+        required=False,
+        default=None,
+        help="Normalized .dist-info directory name to write under site-packages.",
     )
 
     return parser.parse_args()

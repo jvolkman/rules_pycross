@@ -22,11 +22,17 @@ load(
     "PycrossPackageInfo",
     "PycrossUnsupportedWheelInfo",
 )
-load(":util.bzl", "PY_COMMON_ATTRS", "merge_py_providers")
+load(":util.bzl", "PY_COMMON_ATTRS", "merge_py_providers", "underscore_name")
 
 def _pycross_wheel_library_impl(ctx):
     out = ctx.actions.declare_directory(ctx.attr.name)
     entry_points = ctx.actions.declare_file(ctx.attr.name + ".dist_info/entry_points.txt")
+    dist_info_dir = None
+    if ctx.attr.package_name and ctx.attr.package_version:
+        dist_info_dir = "{}-{}.dist-info".format(
+            underscore_name(ctx.attr.package_name),
+            ctx.attr.package_version,
+        )
 
     if PycrossUnsupportedWheelInfo in ctx.attr.wheel:
         pkg_id = "{}{}".format(
@@ -63,6 +69,8 @@ def _pycross_wheel_library_impl(ctx):
             args.add("--expected-name", ctx.attr.package_name)
         if ctx.attr.package_version:
             args.add("--expected-version", ctx.attr.package_version)
+        if dist_info_dir:
+            args.add("--dist-info-dir", dist_info_dir)
 
         ctx.actions.run(
             inputs = inputs,
@@ -120,11 +128,7 @@ def _pycross_wheel_library_impl(ctx):
             ))
 
         # Also add .dist-info directory symlink so metadata is accessible.
-        dist_info_candidates = [
-            "{}-{}.dist-info".format(package_name.replace("-", "_"), package_version),
-            "{}-{}.dist-info".format(package_name, package_version),
-        ]
-        for dist_info_dir in dist_info_candidates:
+        if dist_info_dir:
             venv_symlinks.append(VenvSymlinkEntry(
                 kind = VenvSymlinkKind.LIB,
                 link_to_path = paths.join(imp, dist_info_dir),
@@ -133,7 +137,6 @@ def _pycross_wheel_library_impl(ctx):
                 venv_path = dist_info_dir,
                 files = depset([out]),
             ))
-            break  # Only need one
 
         # Add other directory symlinks if supported by the rules_python version.
         base_dir = paths.dirname(imp)

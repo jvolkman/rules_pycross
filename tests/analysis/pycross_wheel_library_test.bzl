@@ -27,7 +27,7 @@ def _test_pycross_wheel_library_basic(name):
         pycross_wheel_library,
         name = name + "_subject",
         wheel = name + "_wheel",
-        package_name = "test",
+        package_name = "Foo-Bar",
         package_version = "1.0",
     )
 
@@ -47,12 +47,15 @@ def _test_pycross_wheel_library_basic_impl(env, target):
     # Assert site_packages is a TreeArtifact. We can check if it's a directory.
     env.expect.that_bool(extracted_info.site_packages.is_directory).equals(True)
 
+    action = env.expect.that_target(target).action_generating(extracted_info.site_packages.short_path)
+    action.argv().contains_at_least(["--dist-info-dir", "foo_bar-1.0.dist-info"])
+
     # Check that it returns PycrossPackageInfo
     env.expect.that_target(target).has_provider(PycrossPackageInfo)
 
     # Assert package details
     if PycrossPackageInfo in target:
-        env.expect.that_str(target[PycrossPackageInfo].package_name).equals("test")
+        env.expect.that_str(target[PycrossPackageInfo].package_name).equals("Foo-Bar")
         env.expect.that_str(target[PycrossPackageInfo].package_version).equals("1.0")
 
 def _test_pycross_wheel_library_no_package_name(name):
@@ -76,6 +79,10 @@ def _test_pycross_wheel_library_no_package_name(name):
 # buildifier: disable=unused-variable
 def _test_pycross_wheel_library_no_package_name_impl(env, target):
     env.expect.that_target(target).has_provider(PycrossExtractedWheelInfo)
+
+    extracted_info = target[PycrossExtractedWheelInfo]
+    action = env.expect.that_target(target).action_generating(extracted_info.site_packages.short_path)
+    env.expect.that_bool("--dist-info-dir" in action.actual.argv).equals(False)
 
     # PycrossPackageInfo should not be present
     env.expect.that_bool(PycrossPackageInfo in target).equals(False)

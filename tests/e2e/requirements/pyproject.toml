@@ -7,6 +7,8 @@ dependencies = [
     "attrs>=24.2.0",
     "beautifulsoup4>=4.12.3",
     "ipython>=8.18.1",
+    # Last release whose wheel ships a mixed-case .dist-info (Pygments-2.16.1.dist-info); test_dist_info depends on it. Don't bump.
+    "pygments==2.16.1",
     "python-dateutil>=2.9.0",
     "regex>=2024.11.6",
     "six>=1.17.0",
