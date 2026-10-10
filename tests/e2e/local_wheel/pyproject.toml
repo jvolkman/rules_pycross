@@ -5,6 +5,8 @@ description = ""
 requires-python = ">=3.9, <3.13"
 dependencies = [
     "cowsay==6.1",
+    # Last release whose wheel ships a mixed-case .dist-info (Pygments-2.16.1.dist-info); test_dist_info depends on it. Don't bump.
+    "pygments==2.16.1",
 ]
 
 [build-system]

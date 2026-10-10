@@ -7,6 +7,7 @@ exports_files([
     "cowsay-6.1-py3-none-any.whl",
     "ipython.py",
     "test_cowsay.py",
+    "test_dist_info.py",
     "test_regex.py",
     "test_top_level_packages.py",
 ])

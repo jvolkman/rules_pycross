@@ -65,3 +65,13 @@ py_test(
         "MAPPING_JSON": "$(location @uv//:modules_mapping)",
     },
 )
+
+py_test(
+    name = "test_dist_info",
+    srcs = ["@rules_pycross_e2e_shared//:test_dist_info.py"],
+    env = {
+        "PYCROSS_EXPECT_VENV_DIST_INFO": "1",
+    },
+    main = "test_dist_info.py",
+    deps = ["@uv//pygments:pkg"],
+)

@@ -3,6 +3,7 @@ set -euo pipefail
 
 bazel build "$@" //...
 bazel test "$@" //...
+bazel test "$@" --@rules_python//python/config_settings:python_version=3.10.11 //:test_dist_info
 
 # rerun-sdk 0.33.0 has no macOS x86_64 wheel and no sdist, so it is unavailable on
 # //unavailable:macos_x86_64. The checks are scoped to //unavailable/... because the root py_tests
