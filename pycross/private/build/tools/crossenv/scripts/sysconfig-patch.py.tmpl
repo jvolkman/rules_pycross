@@ -2,7 +2,8 @@
 _PROJECT_BASE = {{repr(target.project_base)}}
 
 # Things that need to be re-evaluated after patching
-_PYTHON_BUILD = is_python_build(True)
+# PROBE-ONLY workaround, see FINDINGS.md
+_PYTHON_BUILD = is_python_build()
 _PREFIX = os.path.normpath(sys.prefix)
 _BASE_PREFIX = os.path.normpath(sys.base_prefix)
 _EXEC_PREFIX = os.path.normpath(sys.exec_prefix)

@@ -1,6 +1,6 @@
 version = 1
 revision = 3
-requires-python = "==3.14.*"
+requires-python = "==3.15.*"
 
 [[package]]
 name = "cffi"
@@ -22,9 +22,12 @@ wheels = [
 
 [[package]]
 name = "psycopg2"
-version = "2.9.10"
+version = "2.9.13"
 source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/62/51/2007ea29e605957a17ac6357115d0c1a1b60c8c984951c19419b3474cdfd/psycopg2-2.9.10.tar.gz", hash = "sha256:12ec0b40b0273f95296233e8750441339298e6a572f7039da5b260e3c8b60e11", size = 385672, upload-time = "2024-10-16T11:24:54.832Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/91/81/6ea19b8b28feb9405c8c87a307776614d6e404bdb98467d1ce10a39d2c1d/psycopg2-2.9.13.tar.gz", hash = "sha256:d36784fc2dae69523ba4b79c7d1d1b4d6e83e87836874f111262f4db940b16a6", size = 378068, upload-time = "2026-09-09T23:56:21.749Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/44/0f/da6a374ed5e3b4040c53b29ab57b8b26c0872900cf8aed2265790889a1e3/psycopg2-2.9.13-cp315-cp315-win_amd64.whl", hash = "sha256:0d2fc7eedfaca0586dcf1476454598428d0d8471d3b5cb55f92015a5f9d0af40", size = 2863865, upload-time = "2026-09-09T23:54:03.316Z" },
+]
 
 [[package]]
 name = "pycparser"
@@ -58,7 +61,7 @@ dependencies = [
 [package.metadata]
 requires-dist = [
     { name = "cython", specifier = "<3.0" },
-    { name = "psycopg2", specifier = "==2.9.10" },
+    { name = "psycopg2", specifier = "==2.9.13" },
     { name = "pyyaml", specifier = "==6.0.1" },
     { name = "setproctitle", specifier = "==1.3.2" },
     { name = "setuptools", specifier = "==69.5.1" },
