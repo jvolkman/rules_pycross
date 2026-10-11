@@ -10,7 +10,7 @@ dependencies = [
     "scikit-build-core",
     "pybind11",
 ]
-requires-python = "~=3.14.0"
+requires-python = "~=3.15.0"
 license = {text = "MIT"}
 
 [build-system]

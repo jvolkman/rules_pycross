@@ -1,21 +1,22 @@
 version = 1
-requires-python = ">=3.9, <3.13"
+revision = 3
+requires-python = ">=3.9, <3.15"
 
 [[package]]
 name = "cowsay"
 version = "6.1"
 source = { registry = "https://pypi.org/simple" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/f1/13/63c0a02c44024ee16f664e0b36eefeb22d54e93531630bd99e237986f534/cowsay-6.1-py3-none-any.whl", hash = "sha256:274b1e6fc1b966d53976333eb90ac94cb07a450a700b455af9fbdf882244b30a", size = 25560 },
+    { url = "https://files.pythonhosted.org/packages/f1/13/63c0a02c44024ee16f664e0b36eefeb22d54e93531630bd99e237986f534/cowsay-6.1-py3-none-any.whl", hash = "sha256:274b1e6fc1b966d53976333eb90ac94cb07a450a700b455af9fbdf882244b30a", size = 25560, upload-time = "2023-09-25T16:30:01.619Z" },
 ]
 
 [[package]]
 name = "pygments"
 version = "2.16.1"
 source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/d6/f7/4d461ddf9c2bcd6a4d7b2b139267ca32a69439387cc1f02a924ff8883825/Pygments-2.16.1.tar.gz", hash = "sha256:1daff0494820c69bc8941e407aa20f577374ee88364ee10a98fdbe0aece96e29", size = 4872980 }
+sdist = { url = "https://files.pythonhosted.org/packages/d6/f7/4d461ddf9c2bcd6a4d7b2b139267ca32a69439387cc1f02a924ff8883825/Pygments-2.16.1.tar.gz", hash = "sha256:1daff0494820c69bc8941e407aa20f577374ee88364ee10a98fdbe0aece96e29", size = 4872980, upload-time = "2023-08-06T15:14:55.713Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/43/88/29adf0b44ba6ac85045e63734ae0997d3c58d8b1a91c914d240828d0d73d/Pygments-2.16.1-py3-none-any.whl", hash = "sha256:13fc09fa63bc8d8671a6d247e1eb303c4b343eaee81d861f3404db2935653692", size = 1164750 },
+    { url = "https://files.pythonhosted.org/packages/43/88/29adf0b44ba6ac85045e63734ae0997d3c58d8b1a91c914d240828d0d73d/Pygments-2.16.1-py3-none-any.whl", hash = "sha256:13fc09fa63bc8d8671a6d247e1eb303c4b343eaee81d861f3404db2935653692", size = 1164750, upload-time = "2023-08-06T15:14:51.905Z" },
 ]
 
 [[package]]

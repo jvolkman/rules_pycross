@@ -76,6 +76,21 @@ py_test(
     deps = ["@uv//pygments:pkg"],
 )
 
+# Free-threaded checks: run.sh runs this with
+# --@rules_python//python/config_settings:py_freethreaded=yes and EXPECT_FREETHREADED=1.
+py_test(
+    name = "test_freethreaded",
+    srcs = ["@rules_pycross_e2e_shared//:test_freethreaded.py"],
+    env = {
+        "PYCROSS_TEST_DIST": "regex",
+        # regex declares that it doesn't need the GIL.
+        "PYCROSS_TEST_GIL_FREE": "1",
+        "PYCROSS_TEST_MODULE": "regex._regex",
+    },
+    main = "test_freethreaded.py",
+    deps = ["@uv//regex:pkg"],
+)
+
 py_test(
     name = "test_precompile",
     srcs = ["@rules_pycross_e2e_shared//:test_precompile.py"],

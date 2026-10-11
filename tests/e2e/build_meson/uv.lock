@@ -1,6 +1,6 @@
 version = 1
 revision = 3
-requires-python = "==3.14.*"
+requires-python = "==3.15.*"
 resolution-markers = [
     "sys_platform != 'ios'",
     "sys_platform == 'ios'",
@@ -9,7 +9,7 @@ resolution-markers = [
 [[package]]
 name = "contourpy"
 version = "1.3.1"
-source = { registry = "https://pypi.org/simple/" }
+source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "numpy" },
 ]
@@ -18,13 +18,9 @@ sdist = { url = "https://files.pythonhosted.org/packages/25/c2/fc7193cc5383637ff
 [[package]]
 name = "cython"
 version = "3.2.5"
-source = { registry = "https://pypi.org/simple/" }
+source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/3f/3b/ebd94c8b85f8e41b5015a9ed94ee3df866024d480d05cd08b774684fb81d/cython-3.2.5.tar.gz", hash = "sha256:3dd42e4cf36ad15f265bdfec2337cc00c688c8eb6d374ffd13bb19437c27bba1", size = 3286381, upload-time = "2026-05-23T19:34:08.439Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/82/78/668ef887621f68255feddd482dbcdcf5788b6c91227dd35bd17f128f827b/cython-3.2.5-cp314-cp314-macosx_11_0_arm64.whl", hash = "sha256:a636c8b7824f3cb587eb2fdde59d8f4a14d433565508081cc290198e37567910", size = 2981525, upload-time = "2026-05-23T19:34:58.445Z" },
-    { url = "https://files.pythonhosted.org/packages/a3/26/3b0adcbab1ab97db0fbcfd6ba30e375bf2ae1ee0389279dadcc277a061a3/cython-3.2.5-cp314-cp314-manylinux2014_aarch64.manylinux_2_17_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:69cd71b90d4e0f142fd15b2353982c3f9171fc5e613001f16bcb366ffb29004b", size = 3257788, upload-time = "2026-05-23T19:35:00.764Z" },
-    { url = "https://files.pythonhosted.org/packages/dd/57/4b3e78cbacff3800468632c08e2c48b0b58f0d72f20595ddc1d0c8c3442c/cython-3.2.5-cp314-cp314-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:3864da4ca2ebe4660d8f672f2143b02840bf3045655222f6090486171c84298f", size = 3390671, upload-time = "2026-05-23T19:35:02.659Z" },
-    { url = "https://files.pythonhosted.org/packages/69/22/6d93cc72ec6a840b185dc0c21a0465a79ce0e992d3863168d43170c96276/cython-3.2.5-cp314-cp314-win_amd64.whl", hash = "sha256:605c447188aecf2941709f53a2ce44862be256e54601c01b38ab710d83db8047", size = 2794115, upload-time = "2026-05-23T19:35:04.883Z" },
     { url = "https://files.pythonhosted.org/packages/a3/de/e3e0cf5704fe569d54b8cd5dc316c9fbf08b1b74728732f86e90168b7a3f/cython-3.2.5-cp39-abi3-macosx_10_9_x86_64.whl", hash = "sha256:224149d18d980e6ea5001b70fc7ce096c1891d59035dfa9cc5ede50f55804913", size = 2879054, upload-time = "2026-05-23T19:35:18.265Z" },
     { url = "https://files.pythonhosted.org/packages/3c/d1/0a6a8caa35c4c57a1f1866b1141c2d00c6af67f73edbe34b2baec6919ccf/cython-3.2.5-cp39-abi3-manylinux1_i686.manylinux_2_28_i686.manylinux_2_5_i686.whl", hash = "sha256:992a50e90d01813333752f374a4405863113059ec67102ab8d6a431a171ee328", size = 3210422, upload-time = "2026-05-23T19:35:20.641Z" },
     { url = "https://files.pythonhosted.org/packages/07/b8/2523398ec96bb0c9bf69ada625a2256a581940b09fe11fcd0029f26ef4ad/cython-3.2.5-cp39-abi3-manylinux2014_armv7l.manylinux_2_17_armv7l.manylinux_2_31_armv7l.whl", hash = "sha256:8d7b81e6a52a84a02993f01aa5873786ba1dd593c892d93d5fe9866da0bad297", size = 2863809, upload-time = "2026-05-23T19:35:22.416Z" },
@@ -40,7 +36,7 @@ wheels = [
 [[package]]
 name = "meson"
 version = "1.11.1"
-source = { registry = "https://pypi.org/simple/" }
+source = { registry = "https://pypi.org/simple" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/5e/cd/f3a881ff5e601d6bbeff63b38ee2362e1167c47d9cde03eddf8d71a4ffb0/meson-1.11.1-py3-none-any.whl", hash = "sha256:9b3a023657e393dbc5335b95c561337d49b7a458f5541e47ec44f2cc566e0d80", size = 1078534, upload-time = "2026-04-21T03:15:31.611Z" },
 ]
@@ -48,7 +44,7 @@ wheels = [
 [[package]]
 name = "meson-python"
 version = "0.19.0"
-source = { registry = "https://pypi.org/simple/" }
+source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "meson" },
     { name = "packaging" },
@@ -62,7 +58,7 @@ wheels = [
 [[package]]
 name = "ninja"
 version = "1.13.0"
-source = { registry = "https://pypi.org/simple/" }
+source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/43/73/79a0b22fc731989c708068427579e840a6cf4e937fe7ae5c5d0b7356ac22/ninja-1.13.0.tar.gz", hash = "sha256:4a40ce995ded54d9dc24f8ea37ff3bf62ad192b547f6c7126e7e25045e76f978", size = 242558, upload-time = "2025-08-11T15:10:19.421Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/3c/74/d02409ed2aa865e051b7edda22ad416a39d81a84980f544f8de717cab133/ninja-1.13.0-py3-none-macosx_10_9_universal2.whl", hash = "sha256:fa2a8bfc62e31b08f83127d1613d10821775a0eb334197154c4d6067b7068ff1", size = 310125, upload-time = "2025-08-11T15:09:50.971Z" },
@@ -88,13 +84,13 @@ wheels = [
 [[package]]
 name = "numpy"
 version = "2.2.6"
-source = { registry = "https://pypi.org/simple/" }
+source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/76/21/7d2a95e4bba9dc13d043ee156a356c0a8f0c6309dff6b21b4d71a073b8a8/numpy-2.2.6.tar.gz", hash = "sha256:e29554e2bef54a90aa5cc07da6ce955accb83f21ab5de01a62c8478897b264fd", size = 20276440, upload-time = "2025-05-17T22:38:04.611Z" }
 
 [[package]]
 name = "packaging"
 version = "26.2"
-source = { registry = "https://pypi.org/simple/" }
+source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/d7/f1/e7a6dd94a8d4a5626c03e4e99c87f241ba9e350cd9e6d75123f992427270/packaging-26.2.tar.gz", hash = "sha256:ff452ff5a3e828ce110190feff1178bb1f2ea2281fa2075aadb987c2fb221661", size = 228134, upload-time = "2026-04-24T20:15:23.917Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/df/b2/87e62e8c3e2f4b32e5fe99e0b86d576da1312593b39f47d8ceef365e95ed/packaging-26.2-py3-none-any.whl", hash = "sha256:5fc45236b9446107ff2415ce77c807cee2862cb6fac22b8a73826d0693b0980e", size = 100195, upload-time = "2026-04-24T20:15:22.081Z" },
@@ -103,7 +99,7 @@ wheels = [
 [[package]]
 name = "pandas"
 version = "2.2.3"
-source = { registry = "https://pypi.org/simple/" }
+source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "numpy" },
     { name = "python-dateutil" },
@@ -115,7 +111,7 @@ sdist = { url = "https://files.pythonhosted.org/packages/9c/d6/9f8431bacc2e19dca
 [[package]]
 name = "pybind11"
 version = "3.0.4"
-source = { registry = "https://pypi.org/simple/" }
+source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/cc/f0/35145a3c3baffeef55d4b8324caa33abaa8fa56ab345ecd4b2211d09163e/pybind11-3.0.4.tar.gz", hash = "sha256:3286b59c8a774b9ee650169302dd5a4eedc30a8617905a0560dd8ee44775130c", size = 589533, upload-time = "2026-04-19T03:08:15.925Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/b3/06/c3a23c9a0263b136c519f033a58d4641e73065fefc7754e9667ec206d992/pybind11-3.0.4-py3-none-any.whl", hash = "sha256:961720ee652da51d531b7b2451a6bd2bc042b0106e6d9baa48ecb7d58034ce63", size = 314166, upload-time = "2026-04-19T03:08:14.091Z" },
@@ -124,7 +120,7 @@ wheels = [
 [[package]]
 name = "pyproject-metadata"
 version = "0.11.0"
-source = { registry = "https://pypi.org/simple/" }
+source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "packaging" },
 ]
@@ -136,7 +132,7 @@ wheels = [
 [[package]]
 name = "python-dateutil"
 version = "2.9.0.post0"
-source = { registry = "https://pypi.org/simple/" }
+source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "six" },
 ]
@@ -148,7 +144,7 @@ wheels = [
 [[package]]
 name = "pytz"
 version = "2026.2"
-source = { registry = "https://pypi.org/simple/" }
+source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/ff/46/dd499ec9038423421951e4fad73051febaa13d2df82b4064f87af8b8c0c3/pytz-2026.2.tar.gz", hash = "sha256:0e60b47b29f21574376f218fe21abc009894a2321ea16c6754f3cad6eb7cdd6a", size = 320861, upload-time = "2026-05-04T01:35:29.667Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/ec/dd/96da98f892250475bdf2328112d7468abdd4acc7b902b6af23f4ed958ea0/pytz-2026.2-py2.py3-none-any.whl", hash = "sha256:04156e608bee23d3792fd45c94ae47fae1036688e75032eea2e3bf0323d1f126", size = 510141, upload-time = "2026-05-04T01:35:27.408Z" },
@@ -157,7 +153,7 @@ wheels = [
 [[package]]
 name = "pywavelets"
 version = "1.8.0"
-source = { registry = "https://pypi.org/simple/" }
+source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "numpy" },
 ]
@@ -199,7 +195,7 @@ requires-dist = [
 [[package]]
 name = "setuptools"
 version = "82.0.1"
-source = { registry = "https://pypi.org/simple/" }
+source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/4f/db/cfac1baf10650ab4d1c111714410d2fbb77ac5a616db26775db562c8fab2/setuptools-82.0.1.tar.gz", hash = "sha256:7d872682c5d01cfde07da7bccc7b65469d3dca203318515ada1de5eda35efbf9", size = 1152316, upload-time = "2026-03-09T12:47:17.221Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/9d/76/f789f7a86709c6b087c5a2f52f911838cad707cc613162401badc665acfe/setuptools-82.0.1-py3-none-any.whl", hash = "sha256:a59e362652f08dcd477c78bb6e7bd9d80a7995bc73ce773050228a348ce2e5bb", size = 1006223, upload-time = "2026-03-09T12:47:15.026Z" },
@@ -208,7 +204,7 @@ wheels = [
 [[package]]
 name = "six"
 version = "1.17.0"
-source = { registry = "https://pypi.org/simple/" }
+source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/94/e7/b2c673351809dca68a0e064b6af791aa332cf192da575fd474ed7d6f16a2/six-1.17.0.tar.gz", hash = "sha256:ff70335d468e7eb6ec65b95b99d3a2836546063f63acc5171de367e834932a81", size = 34031, upload-time = "2024-12-04T17:35:28.174Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/b7/ce/149a00dd41f10bc29e5921b496af8b574d8413afcd5e30dfa0ed46c2cc5e/six-1.17.0-py2.py3-none-any.whl", hash = "sha256:4721f391ed90541fddacab5acf947aa0d3dc7d27b2e1e8eda2be8970586c3274", size = 11050, upload-time = "2024-12-04T17:35:26.475Z" },
@@ -217,7 +213,7 @@ wheels = [
 [[package]]
 name = "tzdata"
 version = "2026.2"
-source = { registry = "https://pypi.org/simple/" }
+source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/ba/19/1b9b0e29f30c6d35cb345486df41110984ea67ae69dddbc0e8a100999493/tzdata-2026.2.tar.gz", hash = "sha256:9173fde7d80d9018e02a662e168e5a2d04f87c41ea174b139fbef642eda62d10", size = 198254, upload-time = "2026-04-24T15:22:08.651Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/ce/e4/dccd7f47c4b64213ac01ef921a1337ee6e30e8c6466046018326977efd95/tzdata-2026.2-py2.py3-none-any.whl", hash = "sha256:bbe9af844f658da81a5f95019480da3a89415801f6cc966806612cc7169bffe7", size = 349321, upload-time = "2026-04-24T15:22:05.876Z" },
@@ -226,7 +222,7 @@ wheels = [
 [[package]]
 name = "versioneer"
 version = "0.29"
-source = { registry = "https://pypi.org/simple/" }
+source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/32/d7/854e45d2b03e1a8ee2aa6429dd396d002ce71e5d88b77551b2fb249cb382/versioneer-0.29.tar.gz", hash = "sha256:5ab283b9857211d61b53318b7c792cf68e798e765ee17c27ade9f6c924235731", size = 75141, upload-time = "2023-07-07T15:09:28.131Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/b0/79/f0f1ca286b78f6f33c521a36b5cbd5bd697c0d66217d8856f443aeb9dd77/versioneer-0.29-py3-none-any.whl", hash = "sha256:0f1a137bb5d6811e96a79bb0486798aeae9b9c6efc24b389659cebb0ee396cb9", size = 46785, upload-time = "2023-07-07T15:09:26.545Z" },

@@ -6,4 +6,4 @@ try-import %workspace%/../shared/.bazelrc.user
 # Enable the venv/site-packages layout for py_binary/py_test.
 build --@rules_python//python/config_settings:bootstrap_impl=script
 build --@rules_python//python/config_settings:venvs_site_packages=yes
-build --@rules_python//python/config_settings:python_version=3.12.0
+build --@rules_python//python/config_settings:python_version=3.14.2

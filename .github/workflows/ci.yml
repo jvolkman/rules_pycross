@@ -158,7 +158,11 @@ jobs:
         working-directory: tests/e2e/${{ matrix.workspace }}
         run: |
           bazel build --config=remote //:all_wheels
-          bazel test --config=remote //...
+          if [ -f "run.sh" ]; then
+            ./run.sh --config=remote
+          else
+            bazel test --config=remote //...
+          fi
       - uses: actions/upload-artifact@v6
         with:
           name: wheels-${{ matrix.host }}-${{ matrix.workspace }}
@@ -183,7 +187,7 @@ jobs:
         run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
       - uses: actions/setup-python@v6
         with:
-          python-version: "3.14"
+          python-version: "3.15"
       - uses: actions/download-artifact@v6
         with:
           pattern: wheels-${{ matrix.builder }}-*
@@ -249,7 +253,7 @@ jobs:
         run: |
           docker run --rm -e WORKSPACES -e BUILDER=${{ matrix.builder }} \
             -v "$PWD:/src" -v "${{ runner.temp }}/artifacts:/artifacts:ro" \
-            python:3.14-alpine sh -euc '
+            python:3.15-rc-alpine sh -euc '
               for ws in $WORKSPACES; do
                 # Only these workspaces build linux_x86_64_musl wheels.
                 case "$ws" in
@@ -282,7 +286,7 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-python@v6
         with:
-          python-version: "3.14"
+          python-version: "3.15"
       - uses: actions/download-artifact@v6
         with:
           pattern: wheels-ubuntu-*
