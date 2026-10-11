@@ -202,3 +202,41 @@ def find_sysconfig_data(paths: List[Path], given_file: Optional[Path] = None) ->
         raise FileNotFoundError(f"No {pattern} found in target paths. Looked in {', '.join(path_strs)}")
 
     return target_sysconfigdata.build_time_vars
+
+
+def target_extension_suffixes(sysconfig_vars: Dict[str, Any]) -> Optional[List[str]]:
+    """Return the target interpreter's importlib.machinery.EXTENSION_SUFFIXES.
+
+    Mirrors CPython's _PyImport_DynLoadFiletab (Python/dynload_shlib.c) for POSIX targets, using
+    the target's sysconfig variables. Build backends (setuptools, setuptools-rust) pick limited-API
+    suffixes from this list, and since Python 3.15 those include the platform, e.g.
+    ".abi3-x86_64-linux-gnu.so", so the exec interpreter's list must not leak into cross builds.
+
+    Returns None for non-CPython targets.
+    """
+    soabi = sysconfig_vars.get("SOABI")
+    if not soabi or not soabi.startswith("cpython-"):
+        return None
+
+    version = tuple(int(p) for p in str(sysconfig_vars.get("VERSION", "0.0")).split(".")[:2])
+    freethreaded = bool(sysconfig_vars.get("Py_GIL_DISABLED"))
+
+    suffixes = [sysconfig_vars.get("EXT_SUFFIX") or ".%s.so" % soabi]
+    alt_soabi = sysconfig_vars.get("ALT_SOABI")
+    if alt_soabi:
+        suffixes.append(".%s.so" % alt_soabi)
+
+    if version >= (3, 15):
+        platform = sysconfig_vars.get("SOABI_PLATFORM")
+        if not freethreaded:
+            if platform:
+                suffixes.append(".abi3-%s.so" % platform)
+            suffixes.append(".abi3.so")
+        if platform:
+            suffixes.append(".abi3t-%s.so" % platform)
+        suffixes.append(".abi3t.so")
+    else:
+        suffixes.append(".abi3.so")
+
+    suffixes.append(".so")
+    return suffixes
