@@ -21,7 +21,7 @@ Run `bazel run //:gazelle` to keep them up-to-date.
 
 ## Remote cache
 
-CI uses a BuildBuddy remote cache. Pull request runs use a public read-only API key and don't upload results; only trusted runs (pushes to `main`, scheduled and manual runs) write to the cache.
+CI uses a BuildBuddy remote cache. Runs that have the `BUILDBUDDY_API_KEY` secret (pushes to `main`, scheduled and manual runs, and pull requests from branches in this repository) read and write the cache. Pull requests from forks don't get the secret, so they use a public read-only API key and don't upload results.
 You can use the same read-only cache locally with `--config=remote-ro` (defined in the root `.bazelrc`):
 
 ```sh
