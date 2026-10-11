@@ -152,6 +152,15 @@ except ValueError:
     _index = 0
 sys.meta_path.insert(_index, CrossenvFinder())
 
+# Report the target's extension module suffixes to build backends (setuptools and
+# setuptools-rust pick limited-API suffixes such as Python 3.15's ".abi3-<platform>.so" from
+# this list). Only rebind the public name: the import system keeps its own list, so the exec
+# interpreter can still load its own extension modules.
+_target_extension_suffixes = {{repr(target.extension_suffixes)}}
+if _target_extension_suffixes is not None:
+    importlib.machinery.EXTENSION_SUFFIXES = _target_extension_suffixes
+del _target_extension_suffixes
+
 # Re-import the real site module, so Python can continue booting. Crossenv is
 # ready! We do want to remove sysconfig or any other module that relies on
 # patching after site has messed with sys.
