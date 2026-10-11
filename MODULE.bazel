@@ -18,7 +18,7 @@ bazel_dep(name = "pypackaging.bzl", version = "0.2.2")
 bazel_dep(name = "rules_testing", version = "0.9.0", dev_dependency = True)
 
 # Change this value to set the Python version we use in our repo venv.
-PYTHON_VERSION = "3.13"
+PYTHON_VERSION = "3.14"
 
 py_underscore_version = PYTHON_VERSION.replace(".", "_")
 

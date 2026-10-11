@@ -29,3 +29,18 @@ py_test(
     srcs = ["test_distutils_probe.py"],
     deps = ["//:distutils_probe"],
 )
+
+# Free-threaded checks: run.sh runs this with
+# --@rules_python//python/config_settings:py_freethreaded=yes and EXPECT_FREETHREADED=1.
+# setproctitle is always built from its sdist (build_mode = "always"). Its extension doesn't
+# declare GIL-free support, so importing it re-enables the GIL (PYCROSS_TEST_GIL_FREE unset).
+py_test(
+    name = "test_freethreaded",
+    srcs = ["//shared:test_freethreaded.py"],
+    env = {
+        "PYCROSS_TEST_DIST": "setproctitle",
+        "PYCROSS_TEST_MODULE": "setproctitle._setproctitle",
+    },
+    main = "test_freethreaded.py",
+    deps = ["@uv//setproctitle:pkg"],
+)

@@ -132,7 +132,7 @@ rules_python_interpreter_version(
 _TOOLCHAIN_TEMPLATE = """\
 pycross_hermetic_toolchain(
     name = {provider_name},
-    exec_interpreter = "@rules_python//python:current_py_toolchain",
+    exec_interpreter = {runtime},
     target_interpreter = {runtime},
 )
 

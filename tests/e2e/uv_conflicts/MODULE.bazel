@@ -17,8 +17,9 @@ local_path_override(
 python = use_extension("@rules_python//python/extensions:python.bzl", "python")
 python.toolchain(
     is_default = True,
-    python_version = "3.11.6",
+    python_version = "3.14.2",
 )
+python.toolchain(python_version = "3.11.6")
 python.toolchain(python_version = "3.12.0")
 use_repo(python, "python_versions")
 
