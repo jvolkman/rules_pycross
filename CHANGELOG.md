@@ -60,6 +60,8 @@ All notable changes to this project will be documented in this file.
 
 ### Fixed
 
+- **Repository rules** re-run when pycross's internal tools change, instead of
+  serving stale cached results.
 - **Custom Python versions** (e.g. from `python.single_version_override`) now get
   pycross toolchains and are selected by `python_version`.
 - **Cross builds on Python 3.15** no longer fail in crossenv's `sysconfig` patch.
