@@ -1,4 +1,13 @@
 bazel_dep(name = "llvm", version = "0.8.11")
 bazel_dep(name = "platforms", version = "1.0.0")
 
+# Apple now returns 403 for the macOS SDK pkg that llvm 0.8.11 downloads. Point it at the newer
+# SDK that llvm 0.8.20+ uses, without taking those releases' toolchain changes.
+single_version_override(
+    module_name = "llvm",
+    patch_strip = 1,
+    patches = ["//shared:llvm_macos_sdk.patch"],
+    version = "0.8.11",
+)
+
 register_toolchains("@llvm//toolchain:all")
