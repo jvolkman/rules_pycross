@@ -7,6 +7,7 @@ from tempfile import TemporaryDirectory
 
 from pycross.private.tools.inspect_package import PEP517_DEFAULT_BACKEND
 from pycross.private.tools.inspect_package import PEP517_DEFAULT_REQUIRES
+from pycross.private.tools.inspect_package import _resolve_top_level_paths
 from pycross.private.tools.inspect_package import inspect_sdist
 from pycross.private.tools.inspect_package import inspect_wheel
 
@@ -364,6 +365,184 @@ class InspectPackageTest(unittest.TestCase):
         )
         result = inspect_sdist(sdist_path)
         self.assertEqual(result["site_paths"], ["google/cloud/storage"])
+
+    # -- pkgutil-style / well-known namespace package tests --
+
+    def test_wheel_pkgutil_namespace(self):
+        """backports.tarfile style: backports/__init__.py uses pkgutil.extend_path."""
+        wheel_path = self.create_zip(
+            "backports.tarfile-1.2.0-py3-none-any.whl",
+            {
+                "backports/__init__.py": "__path__ = __import__('pkgutil').extend_path(__path__, __name__)\n",
+                "backports/tarfile/__init__.py": "",
+                "backports/tarfile/compat/__init__.py": "",
+                "backports.tarfile-1.2.0.dist-info/METADATA": "Name: backports.tarfile",
+            },
+        )
+        self.assertEqual(inspect_wheel(wheel_path)["site_paths"], ["backports/tarfile"])
+
+    def test_wheel_pkgutil_namespace_module(self):
+        wheel_path = self.create_zip(
+            "backports.entry_points_selectable-1.3.0-py3-none-any.whl",
+            {
+                "backports/__init__.py": "__path__ = __import__('pkgutil').extend_path(__path__, __name__)\n",
+                "backports/entry_points_selectable.py": "",
+            },
+        )
+        self.assertEqual(inspect_wheel(wheel_path)["site_paths"], ["backports/entry_points_selectable.py"])
+
+    def test_wheel_pkg_resources_nested_namespace(self):
+        """Old google-cloud style: google/ and google/cloud/ both declare_namespace."""
+        declare = "__import__('pkg_resources').declare_namespace(__name__)\n"
+        wheel_path = self.create_zip(
+            "google_cloud_storage-1.0-py3-none-any.whl",
+            {
+                "google/__init__.py": declare,
+                "google/cloud/__init__.py": "try:\n    import pkg_resources\n    pkg_resources.declare_namespace(__name__)\nexcept ImportError:\n    pass\n",
+                "google/cloud/storage/__init__.py": "",
+                "google/cloud/storage/blob.py": "",
+            },
+        )
+        self.assertEqual(inspect_wheel(wheel_path)["site_paths"], ["google/cloud/storage"])
+
+    def test_wheel_nvidia_namespace(self):
+        """nvidia wheels ship an empty nvidia/__init__.py but share the namespace."""
+        wheel_path = self.create_zip(
+            "nvidia_cublas_cu12-12.0-py3-none-manylinux1_x86_64.whl",
+            {
+                "nvidia/__init__.py": "",
+                "nvidia/cublas/__init__.py": "",
+                "nvidia/cublas/lib/libcublas.so.12": "",
+            },
+        )
+        self.assertEqual(inspect_wheel(wheel_path)["site_paths"], ["nvidia/cublas"])
+
+    def test_wheel_purelib_pkgutil_namespace(self):
+        wheel_path = self.create_zip(
+            "pkg-1.0-py3-none-any.whl",
+            {
+                "pkg-1.0.data/purelib/ns/__init__.py": "import pkgutil\n__path__ = pkgutil.extend_path(__path__, __name__)\n",
+                "pkg-1.0.data/purelib/ns/sub/__init__.py": "",
+            },
+        )
+        self.assertEqual(inspect_wheel(wheel_path)["site_paths"], ["ns/sub"])
+
+    def test_sdist_pkgutil_namespace(self):
+        sdist_path = self._create_tarball_with_dirs(
+            "backports.tarfile-1.2.0.tar.gz",
+            {
+                "backports.tarfile-1.2.0/backports/__init__.py": "__path__ = __import__('pkgutil').extend_path(__path__, __name__)\n",
+                "backports.tarfile-1.2.0/backports/tarfile/__init__.py": "",
+            },
+        )
+        self.assertEqual(inspect_sdist(sdist_path)["site_paths"], ["backports/tarfile"])
+
+    def test_sdist_top_level_txt_pkgutil_namespace(self):
+        """top_level.txt names that are namespace packages resolve to their concrete paths."""
+        sdist_path = self._create_tarball_with_dirs(
+            "backports.tarfile-1.2.0.tar.gz",
+            {
+                "backports.tarfile-1.2.0/backports.tarfile.egg-info/top_level.txt": "backports\n_cext\n",
+                "backports.tarfile-1.2.0/backports/__init__.py": "__path__ = __import__('pkgutil').extend_path(__path__, __name__)\n",
+                "backports.tarfile-1.2.0/backports/tarfile/__init__.py": "",
+            },
+        )
+        # _cext has no files to scan (e.g. a C-only extension), so it's kept as declared.
+        self.assertEqual(inspect_sdist(sdist_path)["site_paths"], ["_cext", "backports/tarfile"])
+
+    def test_wheel_pkg_resources_like_package_is_regular(self):
+        """setuptools' pkg_resources/__init__.py defines declare_namespace; it's not a namespace."""
+        init = (
+            '"""Package resource API."""\n'
+            "import sys\n"
+            "import pkgutil\n"
+            "_namespace_packages = {}\n"
+            "def declare_namespace(packageName):\n"
+            '    """Declare that package \'packageName\' is a namespace package"""\n'
+            "    path = pkgutil.extend_path([], packageName)\n"
+            "    _namespace_packages[packageName] = path\n"
+            "class WorkingSet:\n"
+            "    pass\n"
+        ) + "# padding\n" * 2000
+        wheel_path = self.create_zip(
+            "setuptools-75.6.0-py3-none-any.whl",
+            {
+                "pkg_resources/__init__.py": init,
+                "pkg_resources/tests/__init__.py": "",
+                "setuptools/__init__.py": "",
+            },
+        )
+        self.assertEqual(inspect_wheel(wheel_path)["site_paths"], ["pkg_resources", "setuptools"])
+
+    def test_namespace_init_classification(self):
+        pkgutil_stub = "__path__ = __import__('pkgutil').extend_path(__path__, __name__)\n"
+        cases = {
+            # Namespace stubs.
+            "pkgutil_one_liner": (pkgutil_stub, True),
+            "pkgutil_import": ("import pkgutil\n__path__ = pkgutil.extend_path(__path__, __name__)\n", True),
+            "from_import": ("from pkgutil import extend_path\n__path__ = extend_path(__path__, __name__)\n", True),
+            "docstring_stub": (
+                '"""Namespace package.\n\nShared by several distributions.\n"""\n'
+                "__import__('pkg_resources').declare_namespace(__name__)\n",
+                True,
+            ),
+            "try_except_dual_stub": (
+                "try:\n"
+                "    __import__('pkg_resources').declare_namespace(__name__)\n"
+                "except ImportError:\n"
+                "    __path__ = __import__('pkgutil').extend_path(__path__, __name__)\n",
+                True,
+            ),
+            # Regular packages.
+            "extend_path_with_version": (pkgutil_stub + "__version__ = '1.0'\n", False),
+            "comment_mentions_declare_namespace": (
+                "# Unlike pkg_resources.declare_namespace, this is a regular package.\nVALUE = 1\n",
+                False,
+            ),
+            "defines_declare_namespace": ("def declare_namespace(packageName):\n    pass\n", False),
+            "empty": ("", False),
+            "imports_only": ("import pkgutil\n", False),
+            "syntax_error": ("def (\n", False),
+        }
+        for name, (init, is_namespace) in cases.items():
+            with self.subTest(name):
+                files = {"pkg/__init__.py": init, "pkg/sub/__init__.py": ""}
+                expected = {"pkg/sub"} if is_namespace else {"pkg"}
+                self.assertEqual(_resolve_top_level_paths(set(files), {"pkg"}, files.get), expected)
+
+    def test_resolve_top_level_paths(self):
+        pkgutil_init = "__path__ = __import__('pkgutil').extend_path(__path__, __name__)\n"
+        declare_init = "__import__('pkg_resources').declare_namespace(__name__)\n"
+        files = {
+            "regular/__init__.py": "",
+            "regular/mod.py": "",
+            "pep420/sub/__init__.py": "",
+            "pep420/helper.py": "",
+            "pkgutil_ns/__init__.py": pkgutil_init,
+            "pkgutil_ns/a/__init__.py": "",
+            "declare_ns/__init__.py": declare_init,
+            "declare_ns/b.py": "",
+            "nvidia/__init__.py": "",
+            "nvidia/cudnn/__init__.py": "",
+            "empty_init/__init__.py": "",
+            "empty_init/sub/__init__.py": "",
+        }
+        top_level_dirs = {f.split("/", 1)[0] for f in files}
+        self.assertEqual(
+            _resolve_top_level_paths(set(files), top_level_dirs, files.get),
+            {
+                "regular",
+                "pep420/sub",
+                "pep420/helper.py",
+                "pkgutil_ns/a",
+                "declare_ns/b.py",
+                "nvidia/cudnn",
+                "empty_init",
+            },
+        )
+
+        # Without a reader, pkgutil-style namespaces can't be detected.
+        self.assertIn("pkgutil_ns", _resolve_top_level_paths(set(files), {"pkgutil_ns"}))
 
     # -- source_dir tests --
 

@@ -1,3 +1,6 @@
+import os
+import site
+import sys
 import unittest
 
 
@@ -16,6 +19,17 @@ class TestNamespacePkgs(unittest.TestCase):
 
         self.assertIsNotNone(interface)
         self.assertIsNotNone(event)
+
+    def test_no_per_wheel_site_packages_on_sys_path(self):
+        # Under venvs_site_packages=yes, wheels are linked into the venv's site-packages, so their
+        # own install dirs must not be on sys.path (matching rules_python).
+        venv_site_packages = {os.path.realpath(p) for p in site.getsitepackages()}
+        extra = [
+            p
+            for p in sys.path
+            if os.path.basename(p.rstrip("/")) == "site-packages" and os.path.realpath(p) not in venv_site_packages
+        ]
+        self.assertEqual(extra, [])
 
 
 if __name__ == "__main__":
