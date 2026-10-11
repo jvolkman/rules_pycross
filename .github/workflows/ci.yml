@@ -53,12 +53,16 @@ jobs:
           echo "e2e=[$(IFS=,; echo "${e2e_ws[*]}")]" >> $GITHUB_OUTPUT
           echo "cross=[$(IFS=,; echo "${cross_ws[*]}")]" >> $GITHUB_OUTPUT
       - name: Configure BuildBuddy
+        env:
+          BUILDBUDDY_API_KEY: ${{ secrets.BUILDBUDDY_API_KEY }}
         run: |
-          if [ "${{ github.event_name }}" = "pull_request" ]; then
+          # The secret is available on pushes, scheduled/manual runs and same-repo PRs, which then read
+          # and write the cache. Fork PRs don't get it and fall back to the public read-only key.
+          if [ -n "$BUILDBUDDY_API_KEY" ]; then
+            echo "build:remote --remote_header=x-buildbuddy-api-key=$BUILDBUDDY_API_KEY" > .bazelrc.user
+          else
             echo "build:remote --remote_header=x-buildbuddy-api-key=lXj8mtc6dMxIxXnaj5y4" > .bazelrc.user
             echo "build:remote --noremote_upload_local_results" >> .bazelrc.user
-          else
-            echo "build:remote --remote_header=x-buildbuddy-api-key=${{ secrets.BUILDBUDDY_API_KEY }}" > .bazelrc.user
           fi
           if [ "${{ github.event_name }}" = "schedule" ] || [ "${{ inputs.no_remote_cache }}" = "true" ]; then
             echo "build:remote --noremote_accept_cached" >> .bazelrc.user
@@ -93,13 +97,17 @@ jobs:
             test --test_output=errors
       - name: Configure
         working-directory: ${{ matrix.workspace }}
+        env:
+          BUILDBUDDY_API_KEY: ${{ secrets.BUILDBUDDY_API_KEY }}
         run: |
           echo "${{ matrix.bazel }}" > .bazelversion
-          if [ "${{ github.event_name }}" = "pull_request" ]; then
+          # The secret is available on pushes, scheduled/manual runs and same-repo PRs, which then read
+          # and write the cache. Fork PRs don't get it and fall back to the public read-only key.
+          if [ -n "$BUILDBUDDY_API_KEY" ]; then
+            echo "build:remote --remote_header=x-buildbuddy-api-key=$BUILDBUDDY_API_KEY" > .bazelrc.user
+          else
             echo "build:remote --remote_header=x-buildbuddy-api-key=lXj8mtc6dMxIxXnaj5y4" > .bazelrc.user
             echo "build:remote --noremote_upload_local_results" >> .bazelrc.user
-          else
-            echo "build:remote --remote_header=x-buildbuddy-api-key=${{ secrets.BUILDBUDDY_API_KEY }}" > .bazelrc.user
           fi
           if [ "${{ github.event_name }}" = "schedule" ] || [ "${{ inputs.no_remote_cache }}" = "true" ]; then
             echo "build:remote --noremote_accept_cached" >> .bazelrc.user
@@ -144,12 +152,16 @@ jobs:
         run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
       - name: Configure BuildBuddy
         working-directory: tests/e2e/${{ matrix.workspace }}
+        env:
+          BUILDBUDDY_API_KEY: ${{ secrets.BUILDBUDDY_API_KEY }}
         run: |
-          if [ "${{ github.event_name }}" = "pull_request" ]; then
+          # The secret is available on pushes, scheduled/manual runs and same-repo PRs, which then read
+          # and write the cache. Fork PRs don't get it and fall back to the public read-only key.
+          if [ -n "$BUILDBUDDY_API_KEY" ]; then
+            echo "build:remote --remote_header=x-buildbuddy-api-key=$BUILDBUDDY_API_KEY" > .bazelrc.user
+          else
             echo "build:remote --remote_header=x-buildbuddy-api-key=lXj8mtc6dMxIxXnaj5y4" > .bazelrc.user
             echo "build:remote --noremote_upload_local_results" >> .bazelrc.user
-          else
-            echo "build:remote --remote_header=x-buildbuddy-api-key=${{ secrets.BUILDBUDDY_API_KEY }}" > .bazelrc.user
           fi
           if [ "${{ github.event_name }}" = "schedule" ] || [ "${{ inputs.no_remote_cache }}" = "true" ]; then
             echo "build:remote --noremote_accept_cached" >> .bazelrc.user
