@@ -65,22 +65,11 @@ def generate_cross_ini(ctx: BuildContext, cc_config: Optional[Dict[str, Any]] = 
     c_args = [a for a in c_args if not a.startswith("-Wl,")]
     cxx_args = [a for a in cxx_args if not a.startswith("-Wl,")]
 
-    # Use LDFLAGS (not LDSHAREDFLAGS) for Meson's c_link_args.
-    #
-    # LDSHAREDFLAGS comes from Bazel's cpp_link_dynamic_library action with
-    # is_linking_dynamic_library=True, which includes -shared. On macOS,
-    # clang maps -shared to -dynamiclib (MH_DYLIB). But Meson builds Python
-    # extensions as shared_module targets using -bundle (MH_BUNDLE) — which
-    # is the correct Mach-O type (verified against official PyPI wheels).
-    # Passing both -shared and -bundle to clang is a fatal error.
-    #
-    # LDFLAGS comes from cpp_link_executable with is_linking_dynamic_library=
-    # False. It contains all the same toolchain configuration flags (sysroot,
-    # -fuse-ld=lld, -rtlib=compiler-rt, framework flags, library paths) but
-    # without -shared. This lets Meson add its own link-type flag as needed.
-    #
-    # We can't remove -shared from LDSHAREDFLAGS itself because setuptools
-    # uses LDSHARED (CC + LDSHAREDFLAGS) directly and needs it.
+    # Meson links through the wrapped CC/CXX, which append the toolchain's
+    # executable or shared-library link flags per link (shared_module targets
+    # use -bundle on macOS, the correct Mach-O type for Python extensions). So
+    # c_link_args only needs what pycross exports in LDFLAGS (the cc layer's
+    # library dir and the C++ runtime libs).
     ldflags = get_var("LDFLAGS", "")
     c_link_args = _split_flags(ldflags)
     c_link_args.extend(leaked_link_args)

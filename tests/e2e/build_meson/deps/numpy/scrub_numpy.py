@@ -19,8 +19,11 @@ def main():
     bazel_out_re = re.compile(r"bazel-out/[^/]+/bin/")
     external_re = re.compile(r"external/")
 
-    # Regex to match toolchain minimal path in args
+    # Regexes to match exec-platform-named toolchain paths in args: the compile
+    # resource dir lives under llvm-toolchain-minimal-<os>-<cpu>, and the link one is
+    # <exec>_cc_toolchain_resource_directory.
     toolchain_re = re.compile(r"llvm-toolchain-minimal-[^/]+")
+    resource_dir_re = re.compile(r"[a-z0-9_]+_cc_toolchain_resource_directory")
 
     output_wheel = output_dir / wheel_file.name
     modified = False
@@ -41,6 +44,7 @@ def main():
 
                 # Scrub specific toolchain path differences
                 text = toolchain_re.sub("llvm-toolchain-minimal-redacted", text)
+                text = resource_dir_re.sub("redacted_cc_toolchain_resource_directory", text)
 
                 # Scrub build machine metadata
                 # We want to scrub ONLY the "build" block under "Machine Information"

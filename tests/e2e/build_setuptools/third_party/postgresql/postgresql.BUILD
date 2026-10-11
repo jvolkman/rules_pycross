@@ -59,10 +59,10 @@ configure_make(
         ":linux_x86_64": ["--host=amd64-linux"],
         ":linux_arm64": ["--host=aarch64-linux"],
     }),
-    # The @llvm musl toolchain links executables with -static-pie, which breaks the shared
-    # library links (-shared and -pie may not be used together).
+    # The @llvm musl toolchain links executables with -static-pie or -static, which break the
+    # shared library links.
     configure_prefix = select({
-        ":musl": "bash -c 'export LDFLAGS=\"$${LDFLAGS//-static-pie/}\"; exec \"$$@\"' _",
+        ":musl": "bash -c 'f=\" $$LDFLAGS \"; f=\"$${f// -static-pie / }\"; export LDFLAGS=\"$${f// -static / }\"; exec \"$$@\"' _",
         "//conditions:default": "",
     }),
     copts = [

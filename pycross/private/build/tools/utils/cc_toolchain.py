@@ -81,13 +81,6 @@ _SHARED_LINK_ARGS = (
     "-dynamiclib",
 )
 
-# Executable-only link flags that can't be combined with a shared link
-# (e.g. the @llvm musl toolchain's -static-pie).
-_EXE_ONLY_LINK_ARGS = (
-    "-pie",
-    "-static-pie",
-)
-
 
 def get_wrapper_flags(cflags: str) -> List[str]:
     """Extract target and sysroot flags to forward to compiler wrappers."""
@@ -157,7 +150,6 @@ def wrap_compiler(
                 filtered_linker_args = {repr(_FILTERED_LINKER_ARGS)}
                 non_link_args = {repr(_NON_LINK_ARGS)}
                 shared_link_args = {repr(_SHARED_LINK_ARGS)}
-                exe_only_link_args = {repr(_EXE_ONLY_LINK_ARGS)}
 
                 filtered_args = []
                 is_link = bool(sys.argv[1:])
@@ -173,11 +165,6 @@ def wrap_compiler(
 
                 if filtered_args == ["-v"]:
                     is_link = False
-
-                if is_link and is_shared:
-                    # Build systems may pass executable LDFLAGS to shared links too
-                    # (distutils appends $LDFLAGS to LDSHARED).
-                    filtered_args = [a for a in filtered_args if a not in exe_only_link_args]
 
                 extra_link_flags = []
                 if is_link:
@@ -210,6 +197,7 @@ def setup_cc_layer(ctx: BuildContext, cc_config: Dict[str, Any]) -> None:
     orig_cc = replace_placeholder(ctx.prefix, cc_config["CC"])
     orig_cxx = replace_placeholder(ctx.prefix, cc_config["CXX"])
     cflags = replace_placeholder(ctx.prefix, cc_config["CFLAGS"])
+    cxxflags = replace_placeholder(ctx.prefix, cc_config["CXXFLAGS"])
     raw_ldflags = replace_placeholder(ctx.prefix, cc_config["LDFLAGS"])
     raw_ldsharedflags = replace_placeholder(ctx.prefix, cc_config["LDSHAREDFLAGS"])
 
@@ -236,18 +224,21 @@ def setup_cc_layer(ctx: BuildContext, cc_config: Dict[str, Any]) -> None:
         extra_includes.append(f"-I{inc_dir.absolute()}")
     extra_includes_str = " ".join(extra_includes)
 
-    ldflags = replace_placeholder(ctx.prefix, cc_config["LDFLAGS"]) + f" -L{layer_lib_dir.absolute()}"
-    ldsharedflags = replace_placeholder(ctx.prefix, cc_config["LDSHAREDFLAGS"]) + f" -L{layer_lib_dir.absolute()}"
+    # The wrappers are the single source of the toolchain's link flags: they
+    # append the executable or shared-library set per link. Build systems apply
+    # the exported LDFLAGS to every link (distutils appends it to LDSHARED, and
+    # it feeds Meson's c_link_args, CMake's linker flags and maturin's link
+    # args), so it only carries what pycross itself adds.
+    ldflags = f"-L{layer_lib_dir.absolute()}"
 
-    # Append C++ static runtime libraries directly by full path to LDFLAGS and
-    # LDSHAREDFLAGS. This replicates Bazel's static_link_cpp_runtimes behavior
+    # Append C++ static runtime libraries directly by full path to LDFLAGS.
+    # This replicates Bazel's static_link_cpp_runtimes behavior
     # and ensures all builders (Meson, Maturin, setuptools) can link the C++
     # runtime without needing -l flags or specific library naming conventions.
     runtime_libs = cc_config.get("runtime_libs", [])
     if runtime_libs:
         runtime_lib_flags = " ".join(str(Path(replace_placeholder(ctx.prefix, lib)).absolute()) for lib in runtime_libs)
         ldflags += f" {runtime_lib_flags}"
-        ldsharedflags += f" {runtime_lib_flags}"
 
     ctx.sysconfig_vars.update(
         {
@@ -256,11 +247,13 @@ def setup_cc_layer(ctx: BuildContext, cc_config: Dict[str, Any]) -> None:
             "CFLAGS": cflags
             + f" -I{layer_include_dir.absolute()}"
             + (f" {extra_includes_str}" if extra_includes_str else ""),
-            "CXXFLAGS": replace_placeholder(ctx.prefix, cc_config["CXXFLAGS"])
+            "CXXFLAGS": cxxflags
             + f" -I{layer_include_dir.absolute()}"
             + (f" {extra_includes_str}" if extra_includes_str else ""),
             "LDFLAGS": ldflags,
-            "LDSHAREDFLAGS": ldsharedflags,
+            # Bazel's shared-library link flags (with -shared), for LDSHARED. Only
+            # shared links use them, so they can come straight from Bazel.
+            "LDSHAREDFLAGS": raw_ldsharedflags,
             "AR": replace_placeholder(ctx.prefix, cc_config["AR"]),
             "ARFLAGS": replace_placeholder(ctx.prefix, cc_config["ARFLAGS"]),
         }
@@ -272,8 +265,8 @@ def setup_cc_layer(ctx: BuildContext, cc_config: Dict[str, Any]) -> None:
             ctx.build_env[env_key] = ctx.sysconfig_vars[env_key]
 
     if ctx.sysconfig_vars.get("MACHDEP") == "darwin":
-        # Link extensions as MH_BUNDLE like CPython and the meson builder. LDSHAREDFLAGS
-        # carries -shared (MH_DYLIB), so start from LDFLAGS instead.
+        # Link extensions as MH_BUNDLE like CPython and the meson builder, not
+        # -shared (MH_DYLIB).
         ctx.sysconfig_vars["LDSHARED"] = " ".join(
             [ctx.sysconfig_vars["CC"], ctx.sysconfig_vars["LDFLAGS"], "-bundle -undefined dynamic_lookup"]
         )
