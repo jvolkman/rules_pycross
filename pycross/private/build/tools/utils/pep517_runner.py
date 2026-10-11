@@ -3,6 +3,7 @@ import subprocess
 import sys
 import traceback
 
+from pycross.private.build.tools.crossenv import utils as crossenv_utils
 from pycross.private.build.tools.utils.context import BuildContext
 
 
@@ -91,6 +92,13 @@ def run_pep517_build(ctx: BuildContext) -> str:
             return res
 
         sysconfig.get_config_vars = _get_config_vars
+
+        # Limited-API suffixes come from this list (e.g. Python 3.15's ".abi3-<platform>.so").
+        target_extension_suffixes = crossenv_utils.target_extension_suffixes(ctx.sysconfig_vars)
+        if target_extension_suffixes is not None:
+            import importlib.machinery
+
+            importlib.machinery.EXTENSION_SUFFIXES = target_extension_suffixes
 
     try:
         wheel_file = builder.build(

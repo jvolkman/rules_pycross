@@ -38,6 +38,20 @@ bazel test "$@" "$FREETHREADED" \
   --test_env=EXPECTED_PYC_FLAGS=1 \
   //:test_precompile //:test_dist_info
 
+# Python 3.15.0 exists only through python.single_version_override (rules_python 2.0.0 doesn't know
+# it). It must still get a pycross toolchain, and --python_version=3.15.0 must select it rather than
+# fall back to the default. Analysis only; no interpreter is downloaded.
+TOOLCHAINS=@@rules_pycross++toolchains+pycross_toolchains
+bazel query "$TOOLCHAINS//:python_3.15.0_tc"
+selected=$(bazel cquery "$@" \
+  --@rules_python//python/config_settings:python_version=3.15.0 \
+  --output=starlark --starlark:expr='providers(target)["FeatureFlagInfo"].value' \
+  "$TOOLCHAINS//:_interpreter_version")
+if [ "$selected" != "3.15.0" ]; then
+  echo "Expected python_version=3.15.0 to select the 3.15.0 pycross toolchain, got: $selected"
+  exit 1
+fi
+
 # rerun-sdk 0.33.0 has no macOS x86_64 wheel and no sdist, so it is unavailable on
 # //unavailable:macos_x86_64. The checks are scoped to //unavailable/... because the root py_tests
 # can't be configured for a target platform that isn't an execution platform.

@@ -1,16 +1,16 @@
 """Provides a config flag that returns the micro-level version of the selected rules_python toolchain."""
 
 load("@bazel_skylib//rules:common_settings.bzl", "BuildSettingInfo")
-load("@pythons_hub//:versions.bzl", "MINOR_MAPPING")
-load("@rules_python//python:versions.bzl", "TOOL_VERSIONS")
+load("@pythons_hub//:versions.bzl", "MINOR_MAPPING", "PYTHON_VERSIONS")
+load(":python_versions.bzl", "resolve_interpreter_version")
 
 def _rules_python_interpreter_version_impl(ctx):
-    value = _flag_value(ctx.attr._python_version_flag)
-    value = MINOR_MAPPING.get(value, value)
-
-    if value not in TOOL_VERSIONS:
-        value = ctx.attr.default_version
-
+    value = resolve_interpreter_version(
+        _flag_value(ctx.attr._python_version_flag),
+        ctx.attr.default_version,
+        MINOR_MAPPING,
+        PYTHON_VERSIONS,
+    )
     return [config_common.FeatureFlagInfo(value = value)]
 
 _rules_python_interpreter_version = rule(

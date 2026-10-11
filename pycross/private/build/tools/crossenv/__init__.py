@@ -47,6 +47,7 @@ class Uname:
 class TargetContext:
     abiflags: Optional[str]
     effective_glibc: Optional[str]
+    extension_suffixes: Optional[List[str]]  # target's importlib.machinery.EXTENSION_SUFFIXES
     home: str
     macosx_deployment_target: Optional[str]
     manylinux_tags: List[str]
@@ -218,6 +219,7 @@ def build_context(
     target_context = TargetContext(
         abiflags=sysconfig_vars.get("ABIFLAGS"),
         effective_glibc=(determine_glibc_version(sysconfig_vars) if target_uname.sysname == "linux" else None),
+        extension_suffixes=utils.target_extension_suffixes(sysconfig_vars),
         home=str(home),
         macosx_deployment_target=macosx_deployment_target,
         manylinux_tags=manylinux_tags,

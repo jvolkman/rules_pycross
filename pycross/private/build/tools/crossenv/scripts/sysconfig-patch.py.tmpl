@@ -2,7 +2,11 @@
 _PROJECT_BASE = {{repr(target.project_base)}}
 
 # Things that need to be re-evaluated after patching
-_PYTHON_BUILD = is_python_build(True)
+# Python 3.15 removed is_python_build()'s check_home argument (ignored since 3.12).
+if sys.version_info[:2] < (3, 12):
+    _PYTHON_BUILD = is_python_build(True)
+else:
+    _PYTHON_BUILD = is_python_build()
 _PREFIX = os.path.normpath(sys.prefix)
 _BASE_PREFIX = os.path.normpath(sys.base_prefix)
 _EXEC_PREFIX = os.path.normpath(sys.exec_prefix)
