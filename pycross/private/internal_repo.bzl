@@ -58,7 +58,15 @@ def exec_internal_tool(rctx, tool, args, *, flagfile_param = "--flagfile", flagf
         rctx.file(flagfile, flagfile_data)
         args = [flagfile_param, str(flagfile)]
 
-    patch_ng_dir = rctx.path(Label("//pycross/private/third_party/patch_ng:patch_ng.py")).dirname
+    patch_ng_file = Label("//pycross/private/third_party/patch_ng:patch_ng.py")
+    patch_ng_dir = rctx.path(patch_ng_file).dirname
+
+    # rctx.path() doesn't record its file as an input, so changes to the tool (or to the vendored
+    # patch_ng module it may import) wouldn't re-run the calling repo rule, and the repo contents
+    # cache would keep serving stale results. Watch them explicitly.
+    if hasattr(rctx, "watch"):
+        rctx.watch(tool)
+        rctx.watch(patch_ng_file)
 
     wrapper_script = """
 import runpy
