@@ -158,7 +158,11 @@ jobs:
         working-directory: tests/e2e/${{ matrix.workspace }}
         run: |
           bazel build --config=remote //:all_wheels
-          bazel test --config=remote //...
+          if [ -f "run.sh" ]; then
+            ./run.sh --config=remote
+          else
+            bazel test --config=remote //...
+          fi
       - uses: actions/upload-artifact@v6
         with:
           name: wheels-${{ matrix.host }}-${{ matrix.workspace }}

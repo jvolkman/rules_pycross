@@ -2,7 +2,7 @@
 name = "rules-pycross-gazelle"
 version = "0.1.0"
 description = ""
-requires-python = ">=3.9, <3.13"
+requires-python = ">=3.9, <3.15"
 dependencies = [
     "requests",
     "python-dateutil",

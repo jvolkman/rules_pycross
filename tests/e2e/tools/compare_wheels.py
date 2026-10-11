@@ -2,12 +2,15 @@
 """Compare wheels built on different hosts for reproducibility.
 
 For each target platform, finds matching .whl files from both build
-directories and compares them. Exits with code 1 if any wheels differ,
-failing the CI check.
+directories and compares them. Also checks that every extension module's
+filename suffix matches its wheel's platform tag (e.g. no Linux suffix in a
+macOS wheel). Exits with code 1 if any wheels differ or have mismatched
+extension suffixes, failing the CI check.
 """
 
 import difflib
 import hashlib
+import re
 import subprocess
 import sys
 import tempfile
@@ -56,6 +59,49 @@ def compare_binaries(file_a: Path, file_b: Path, name: str):
                 return
         except FileNotFoundError:
             continue
+
+
+# Wheel platform tag architecture -> CPython multiarch architecture.
+_MULTIARCH_ARCH = {
+    "armv7l": "arm",
+    "i686": "i386",
+    "ppc64": "powerpc64",
+    "ppc64le": "powerpc64le",
+}
+
+# Extension module ABI tag, e.g. "cpython-315-x86_64-linux-gnu", "abi3-darwin", or "abi3".
+_EXTENSION_TAG = re.compile(r"^(?:cpython-\d+t?|abi3t?|pypy\d+-pp\d+)(?:-(?P<platform>.+))?$")
+
+
+def _platform_matcher(platform_tag: str):
+    """Return a predicate for extension-suffix platforms compatible with a wheel platform tag."""
+    if platform_tag.startswith("macosx_"):
+        return lambda p: p == "darwin"
+    m = re.match(r"^(?P<kind>many|musl)?linux(?:\d+|_\d+_\d+)?_(?P<arch>.+)$", platform_tag)
+    if m:
+        libc = "musl" if m.group("kind") == "musl" else "gnu"
+        arch = _MULTIARCH_ARCH.get(m.group("arch"), m.group("arch"))
+        return lambda p: p.startswith(f"{arch}-linux-{libc}")
+    return None
+
+
+def check_extension_suffixes(whl: Path) -> list[str]:
+    """Return extension modules in `whl` whose suffix names a platform other than the wheel's."""
+    platform_tag = whl.name[: -len(".whl")].split("-")[-1].split(".")[0]
+    matches = _platform_matcher(platform_tag)
+    if matches is None:
+        return []
+
+    bad = []
+    with zipfile.ZipFile(whl) as zf:
+        for name in zf.namelist():
+            parts = name.rsplit("/", 1)[-1].split(".")
+            if len(parts) < 3 or parts[-1] != "so":
+                continue
+            m = _EXTENSION_TAG.match(parts[-2])
+            if m and m.group("platform") and not matches(m.group("platform")):
+                bad.append(name)
+    return bad
 
 
 def compare_wheels(whl_a: Path, whl_b: Path) -> bool:
@@ -125,6 +171,13 @@ def compare_wheel_dirs(dir_a: Path, dir_b: Path) -> bool:
     for name in sorted(common):
         if not compare_wheels(wheels_a[name], wheels_b[name]):
             all_identical = False
+
+    for host, wheels in (("host-a", wheels_a), ("host-b", wheels_b)):
+        for name in sorted(wheels):
+            bad = check_extension_suffixes(wheels[name])
+            if bad:
+                print(f"  \u274c WRONG EXTENSION SUFFIX ({host}): {name}: {bad}")
+                all_identical = False
 
     return all_identical
 

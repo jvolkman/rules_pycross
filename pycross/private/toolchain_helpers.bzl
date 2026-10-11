@@ -1,34 +1,20 @@
 """Helpers for creating Pycross environments and toolchains"""
 
-load("@rules_python//python:versions.bzl", "MINOR_MAPPING", "TOOL_VERSIONS")
+load("@pythons_hub//:versions.bzl", "MINOR_MAPPING", "PYTHON_VERSIONS")
+load(":python_versions.bzl", "dedupe_versions", "get_micro_version")
+
+# The hub's tables reflect the root module's rules_python configuration, including versions
+# added with `python.single_version_override`; rules_python's built-in tables don't.
 
 def _get_micro_version(version):
-    if version in MINOR_MAPPING:
-        return MINOR_MAPPING[version]
-    elif version in TOOL_VERSIONS:
-        return version
-
-    fail("Unknown Python version: {}".format(version))
+    micro_version = get_micro_version(version, MINOR_MAPPING, PYTHON_VERSIONS)
+    if not micro_version:
+        fail("Unknown Python version: {}".format(version))
+    return micro_version
 
 def _dedupe_versions(versions):
     """Returns a list of versions deduped by resolved minor version."""
-
-    # E.g., if '3.10' and '3.10.6' are both passed, we only want '3.10.6'. Otherwise we'll run into
-    # ambiguous select() criteria.
-    unique_versions = {}
-    for version in sorted(versions):
-        # Skip versions not known to this rules_python release (e.g. EOL Python 3.8 was removed
-        # from MINOR_MAPPING in rules_python 1.9.0 but still appears in the python_versions hub's
-        # pip.bzl because that file lists all historically-supported versions).
-        if version not in MINOR_MAPPING and version not in TOOL_VERSIONS:
-            continue
-
-        micro_version = _get_micro_version(version)
-
-        # In sorted order, 3.10.6 will override 3.10.
-        unique_versions[micro_version] = version
-
-    return sorted(unique_versions.values())
+    return dedupe_versions(versions, MINOR_MAPPING, PYTHON_VERSIONS)
 
 def _canonical_prefix(python_toolchains_repo_name):
     # We assume that python_toolchains_repo_name points to the `python_versions` repo
@@ -132,7 +118,7 @@ rules_python_interpreter_version(
 _TOOLCHAIN_TEMPLATE = """\
 pycross_hermetic_toolchain(
     name = {provider_name},
-    exec_interpreter = "@rules_python//python:current_py_toolchain",
+    exec_interpreter = {runtime},
     target_interpreter = {runtime},
 )
 

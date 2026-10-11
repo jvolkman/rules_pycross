@@ -3,7 +3,7 @@
 name = "rules_pycross_test"
 version = "0.1.0"
 description = ""
-requires-python = ">=3.10, <3.13"
+requires-python = ">=3.10, <3.15"
 dependencies = [
     "regex",
     # Should NOT be in uv.lock, simulating a user adding

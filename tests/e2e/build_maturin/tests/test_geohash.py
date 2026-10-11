@@ -4,6 +4,10 @@ import geohash
 
 
 class TestGeohash(unittest.TestCase):
+    def test_extension_loaded(self):
+        # geohash silently falls back to pure Python if its extension can't be imported.
+        self.assertIsNotNone(geohash._geohash)
+
     def test_cycle(self):
         for code in ["000000000000", "zzzzzzzzzzzz", "bgr96qxvpd46"]:
             self.assertEqual(code, geohash.encode(*geohash.decode(code)))

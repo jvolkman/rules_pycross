@@ -55,9 +55,18 @@ All notable changes to this project will be documented in this file.
   variant, now yield unavailable targets instead of analysis errors.
 - **Built-in backend rules** are registered from the public
   `@rules_pycross//pycross/backends:*.bzl` files (see `docs/backend.md`).
+- **Internal tools run on Python 3.14** (was 3.13), unless the root module sets
+  `pycross.configure_interpreter`.
 
 ### Fixed
 
+- **Custom Python versions** (e.g. from `python.single_version_override`) now get
+  pycross toolchains and are selected by `python_version`.
+- **Cross builds on Python 3.15** no longer fail in crossenv's `sysconfig` patch.
+- **Cross-built abi3 extensions** on Python 3.15 now get the target platform's
+  file suffix instead of the build host's.
+- **Native sdist builds** no longer go through crossenv (skipping `site_hooks`)
+  when the same Python version is registered under two names.
 - **`venvs_site_packages`**: package metadata and entry points no longer go
   missing for wheels with a mixed-case `.dist-info` directory (now installed
   under its normalized name).
