@@ -9,6 +9,9 @@ dependencies = [
     "zope.interface",
     "zope.event",
     "google-api-core",
+    # Both ship a pkgutil-style backports/__init__.py (pkgutil.extend_path).
+    "backports.tarfile==1.2.0",
+    "backports.entry-points-selectable==1.3.0",
 ]
 
 [build-system]

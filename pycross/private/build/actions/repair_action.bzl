@@ -57,6 +57,12 @@ def register_repair_action(
             for imp in py_info.imports.to_list():
                 repair_dep_paths.append(imp)
 
+            # Installed wheels don't list their site-packages in PyInfo.imports under
+            # venvs_site_packages (see pep517_action.bzl).
+            for src in py_info.transitive_sources.to_list():
+                if src.is_directory:
+                    repair_dep_paths.append(src.path + "/site-packages")
+
     # Collect inputs.
     input_files = [input_wheel_dir]
     if target_environment:

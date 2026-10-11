@@ -1,4 +1,5 @@
 import argparse
+import ast
 import configparser
 import json
 import sys
@@ -8,6 +9,8 @@ import tomllib
 import zipfile
 from pathlib import Path
 from pathlib import PurePosixPath
+from typing import Callable
+from typing import Optional
 
 PEP517_DEFAULT_BACKEND = "setuptools.build_meta:__legacy__"
 PEP517_DEFAULT_REQUIRES = ["setuptools>=40.8.0", "wheel"]
@@ -28,6 +31,91 @@ _EXCLUDED_DIRS = frozenset(
 )
 
 _EXCLUDED_ROOT_MODULES = frozenset({"setup", "conftest"})
+
+# Top-level namespace packages that ship an `__init__.py` that doesn't declare the namespace.
+# Mirrors rules_python's _WELL_KNOWN_NAMESPACE_PACKAGES (python/private/venv_runfiles.bzl).
+_WELL_KNOWN_NAMESPACE_PACKAGES = frozenset({"nvidia"})
+
+# Reads an archive-relative file path (as in all_files), returning None if unavailable.
+FileReader = Callable[[str], Optional[str]]
+
+
+_NAMESPACE_MODULES = frozenset({"pkgutil", "pkg_resources"})
+_NAMESPACE_FUNCTIONS = frozenset({"extend_path", "declare_namespace"})
+
+
+def _is_name(node: ast.AST, name: str) -> bool:
+    return isinstance(node, ast.Name) and node.id == name
+
+
+def _is_namespace_call(node: ast.AST, function: str, args: tuple[str, ...]) -> bool:
+    """Whether node is `<anything>.function(*args)` or `function(*args)` with the given Name args."""
+    if not isinstance(node, ast.Call) or node.keywords or len(node.args) != len(args):
+        return False
+    func = node.func
+    if not (_is_name(func, function) or (isinstance(func, ast.Attribute) and func.attr == function)):
+        return False
+    return all(_is_name(arg, name) for arg, name in zip(node.args, args))
+
+
+def _is_pkgutil_namespace_init(content: str) -> bool:
+    """Whether an __init__.py is a pure pkgutil- or pkg_resources-style namespace package stub.
+
+    Only stubs qualify: every statement (also inside try/except/else/finally) must be a docstring,
+    `pass`, an import of pkgutil/pkg_resources (or of extend_path/declare_namespace from them),
+    `__path__ = <...>extend_path(__path__, __name__)`, or `<...>declare_namespace(__name__)`, with
+    at least one declaration. Anything else (real code, `__version__`, a module that merely defines
+    or mentions these functions, like setuptools' pkg_resources) is a regular package.
+    """
+    try:
+        tree = ast.parse(content)
+    except (SyntaxError, ValueError):
+        return False
+
+    declarations = 0
+
+    def is_stub(statements: list[ast.stmt]) -> bool:
+        nonlocal declarations
+        for node in statements:
+            if isinstance(node, ast.Pass):
+                continue
+            if (
+                isinstance(node, ast.Expr)
+                and isinstance(node.value, ast.Constant)
+                and isinstance(node.value.value, str)
+            ):
+                continue  # docstring
+            if isinstance(node, ast.Import):
+                if not all(alias.name in _NAMESPACE_MODULES and alias.asname is None for alias in node.names):
+                    return False
+                continue
+            if isinstance(node, ast.ImportFrom):
+                if node.module not in _NAMESPACE_MODULES or not all(
+                    alias.name in _NAMESPACE_FUNCTIONS and alias.asname is None for alias in node.names
+                ):
+                    return False
+                continue
+            if (
+                isinstance(node, ast.Assign)
+                and len(node.targets) == 1
+                and _is_name(node.targets[0], "__path__")
+                and _is_namespace_call(node.value, "extend_path", ("__path__", "__name__"))
+            ):
+                declarations += 1
+                continue
+            if isinstance(node, ast.Expr) and _is_namespace_call(node.value, "declare_namespace", ("__name__",)):
+                declarations += 1
+                continue
+            if isinstance(node, ast.Try):
+                if not all(
+                    is_stub(body) for body in [node.body, node.orelse, node.finalbody] + [h.body for h in node.handlers]
+                ):
+                    return False
+                continue
+            return False
+        return True
+
+    return is_stub(tree.body) and declarations > 0
 
 
 def _extract_module_name(filename: str) -> str | None:
@@ -103,13 +191,22 @@ def _get_archive_file_content(archive_path: Path, target_filename: str, source_d
     return ""
 
 
-def _resolve_top_level_paths(all_files: set[str], top_level_dirs: set[str]) -> set[str]:
+def _resolve_top_level_paths(
+    all_files: set[str],
+    top_level_dirs: set[str],
+    read_file: Optional[FileReader] = None,
+) -> set[str]:
     """Resolve top-level directories to their concrete importable paths.
 
     For regular packages (directories with __init__.py), returns the directory
-    name as-is. For implicit namespace packages (PEP 420 — directories without
-    __init__.py), descends to find the shallowest concrete sub-packages or
-    standalone module files (preserving their extensions).
+    name as-is. For namespace packages, descends to find the shallowest concrete
+    sub-packages or standalone module files (preserving their extensions).
+    Namespace packages are:
+
+    * implicit namespace packages (PEP 420 — directories without __init__.py);
+    * pkgutil- or pkg_resources-style namespace packages, whose __init__.py calls
+      pkgutil.extend_path or pkg_resources.declare_namespace (needs `read_file`);
+    * well-known top-level namespaces that ship an empty __init__.py (nvidia).
 
     This is critical for venv symlink support: if two distributions share a
     namespace (e.g. google-cloud-storage and google-cloud-bigquery both install
@@ -120,6 +217,8 @@ def _resolve_top_level_paths(all_files: set[str], top_level_dirs: set[str]) -> s
     Args:
         all_files: Set of all file paths in the archive (forward-slash separated).
         top_level_dirs: Set of top-level directory names to classify.
+        read_file: Optional function returning the content of a path in all_files,
+            used to detect pkgutil-style namespace packages.
 
     Returns:
         Set of concrete paths — either top-level names for regular packages, or
@@ -127,44 +226,42 @@ def _resolve_top_level_paths(all_files: set[str], top_level_dirs: set[str]) -> s
         module files retain their extensions (e.g. 'ns/helper.py').
     """
     init_files = {f for f in all_files if f.endswith("/__init__.py")}
-    code_files = {f for f in all_files if _extract_module_name(f) is not None}
+
+    def is_namespace(dir_path: str) -> bool:
+        init = f"{dir_path}/__init__.py"
+        if init not in init_files:
+            return True
+        if dir_path in _WELL_KNOWN_NAMESPACE_PACKAGES:
+            return True
+        content = read_file(init) if read_file else None
+        return bool(content) and _is_pkgutil_namespace_init(content)
+
+    def resolve(dir_path: str) -> list[str]:
+        if not is_namespace(dir_path):
+            # Regular package — can be linked directly.
+            return [dir_path]
+
+        # Namespace package — link its modules and descend into its subdirectories. The namespace's
+        # own __init__.py (if any) is shared by every distribution, so it isn't linked.
+        prefix = dir_path + "/"
+        kept = []
+        subdirs = set()
+        for f in all_files:
+            if not f.startswith(prefix):
+                continue
+            rest = f[len(prefix) :]
+            if "/" in rest:
+                subdirs.add(prefix + rest.split("/", 1)[0])
+            elif rest != "__init__.py" and _extract_module_name(rest):
+                kept.append(f)
+        for subdir in sorted(subdirs):
+            kept.extend(resolve(subdir))
+        # A namespace dir with no concrete sub-packages or modules resolves to nothing.
+        return kept
 
     result = set()
     for dir_name in top_level_dirs:
-        if f"{dir_name}/__init__.py" in init_files:
-            # Regular package — can be linked directly.
-            result.add(dir_name)
-        else:
-            # Namespace package — find the shallowest concrete sub-packages.
-            prefix = dir_name + "/"
-            candidates = []
-
-            for init in init_files:
-                if init.startswith(prefix):
-                    # e.g. "google/cloud/storage/__init__.py" -> "google/cloud/storage"
-                    pkg_path = init.rsplit("/", 1)[0]
-                    candidates.append(pkg_path)
-
-            for f in code_files:
-                if f.startswith(prefix) and not f.endswith("/__init__.py"):
-                    if _extract_module_name(f):
-                        candidates.append(f)
-
-            # Sort by depth (shallowest first) so we can skip sub-packages/files
-            # of already-selected packages.
-            candidates.sort(key=lambda p: p.count("/"))
-
-            kept = []
-            for candidate in candidates:
-                # Skip if this is a sub-package of an already-kept package.
-                if any(candidate.startswith(k + "/") for k in kept):
-                    continue
-                kept.append(candidate)
-
-            if kept:
-                result.update(kept)
-            # else: namespace dir with no concrete sub-packages — skip.
-
+        result.update(resolve(dir_name))
     return result
 
 
@@ -200,11 +297,27 @@ def _read_top_level_txt(sdist_path: Path) -> list[str] | None:
     return names if names else None
 
 
-def _find_site_paths_from_items(items: list[tuple[str, bool, bool]], source_dir: str = "") -> list[str]:
+def _find_site_paths_from_items(
+    items: list[tuple[str, bool, bool]],
+    source_dir: str = "",
+    read_member: Optional[FileReader] = None,
+    top_level_names: Optional[list[str]] = None,
+) -> list[str]:
+    """Find top-level importable paths from an sdist's (name, is_dir, is_file) entries.
+
+    Args:
+        items: Archive entries.
+        source_dir: Optional subdirectory within the archive root containing the package.
+        read_member: Optional function returning the content of an archive entry (by name), used
+            to detect pkgutil-style namespace packages.
+        top_level_names: Top-level names declared by the sdist's top_level.txt. When set, these are
+            returned, except that namespace packages among them resolve to their concrete paths.
+    """
     source_dir_path = PurePosixPath(source_dir.strip("/")) if source_dir else None
 
     # Collect all file paths and candidate top-level directories.
     all_files: set[str] = set()
+    members: dict[str, str] = {}  # relative path -> archive entry name
     top_level_dirs: set[str] = set()
     root_files: set[str] = set()
     src_layout = False
@@ -236,6 +349,7 @@ def _find_site_paths_from_items(items: list[tuple[str, bool, bool]], source_dir:
         if is_file:
             # Collect all relative file paths for namespace package resolution.
             all_files.add(str(rel))
+            members[str(rel)] = name
 
             if len(rel.parts) == 1:
                 root_files.add(rel.parts[0])
@@ -251,14 +365,29 @@ def _find_site_paths_from_items(items: list[tuple[str, bool, bool]], source_dir:
     # For src-layout, adjust file paths to be relative to src/
     if src_layout:
         adjusted_files = set()
+        adjusted_members = {}
         for f in all_files:
-            if f.startswith("src/"):
-                adjusted_files.add(f[4:])  # strip "src/"
-            else:
-                adjusted_files.add(f)
+            adjusted = f[4:] if f.startswith("src/") else f  # strip "src/"
+            adjusted_files.add(adjusted)
+            adjusted_members[adjusted] = members[f]
         all_files = adjusted_files
+        members = adjusted_members
 
-    pkgs = _resolve_top_level_paths(all_files, top_level_dirs)
+    def read_file(path: str) -> Optional[str]:
+        return read_member(members[path]) if read_member and path in members else None
+
+    if top_level_names is not None:
+        # Keep declared names (they may be C-only extensions with no files to scan), but resolve
+        # namespace packages among them so distributions sharing a namespace don't collide.
+        declared = set()
+        for name in top_level_names:
+            if any(f.startswith(name + "/") for f in all_files):
+                declared.update(_resolve_top_level_paths(all_files, {name}, read_file))
+            else:
+                declared.add(name)
+        return sorted(declared)
+
+    pkgs = _resolve_top_level_paths(all_files, top_level_dirs, read_file)
     for f in root_files:
         name = _extract_module_name(f)
         if (
@@ -294,8 +423,6 @@ def _find_site_paths_sdist(sdist_path: Path, source_dir: str = "") -> list[str]:
     """
     # Prefer the authoritative top_level.txt if present.
     top_level_names = _read_top_level_txt(sdist_path) if not source_dir else None
-    if top_level_names is not None:
-        return sorted(top_level_names)
 
     # List of (name, is_dir, is_file)
     items = []
@@ -303,13 +430,28 @@ def _find_site_paths_sdist(sdist_path: Path, source_dir: str = "") -> list[str]:
         with tarfile.open(sdist_path) as t:
             for member in t.getmembers():
                 items.append((member.name, member.isdir(), member.isfile()))
+
+            def read_tar_member(name: str) -> Optional[str]:
+                f = t.extractfile(name)
+                return f.read().decode("utf-8", "replace") if f else None
+
+            return _find_site_paths_from_items(
+                items, source_dir=source_dir, read_member=read_tar_member, top_level_names=top_level_names
+            )
     elif sdist_path.name.endswith(".zip"):
         with zipfile.ZipFile(sdist_path) as z:
             for name in z.namelist():
                 is_dir = name.endswith("/")
                 items.append((name, is_dir, not is_dir))
 
-    return _find_site_paths_from_items(items, source_dir=source_dir)
+            def read_zip_member(name: str) -> Optional[str]:
+                return z.read(name).decode("utf-8", "replace")
+
+            return _find_site_paths_from_items(
+                items, source_dir=source_dir, read_member=read_zip_member, top_level_names=top_level_names
+            )
+
+    return sorted(top_level_names) if top_level_names is not None else []
 
 
 def _inspect_patched_sdist(
@@ -351,19 +493,23 @@ def _inspect_patched_sdist(
         pyproject_path = sdist_dir / "pyproject.toml"
         content = pyproject_path.read_text(encoding="utf-8") if pyproject_path.is_file() else ""
 
-        site_paths: list[str] | None = None
+        top_level_names: list[str] | None = None
         if not source_dir:
             for p in sorted(sdist_root_dir.rglob("*.egg-info/top_level.txt")):
                 if p.is_file():
                     tl_content = p.read_text(encoding="utf-8")
                     names = [line.strip() for line in tl_content.splitlines() if line.strip()]
                     if names:
-                        site_paths = sorted(names)
+                        top_level_names = names
                     break
 
-        if site_paths is None:
-            items = [(p.relative_to(tmp_path).as_posix(), p.is_dir(), p.is_file()) for p in sdist_root_dir.rglob("*")]
-            site_paths = _find_site_paths_from_items(items, source_dir=source_dir)
+        def read_extracted(name: str) -> Optional[str]:
+            return (tmp_path / name).read_text(encoding="utf-8", errors="replace")
+
+        items = [(p.relative_to(tmp_path).as_posix(), p.is_dir(), p.is_file()) for p in sdist_root_dir.rglob("*")]
+        site_paths = _find_site_paths_from_items(
+            items, source_dir=source_dir, read_member=read_extracted, top_level_names=top_level_names
+        )
 
         return content, site_paths
 
@@ -376,6 +522,9 @@ def _find_wheel_paths(wheel_path: Path) -> tuple[list[str], list[str], list[str]
     bin_paths = set()
     data_paths = set()
     include_paths = set()
+
+    # Maps site-packages-relative paths in all_files to archive member names.
+    members: dict[str, str] = {}
 
     with zipfile.ZipFile(wheel_path) as z:
         for name in z.namelist():
@@ -394,6 +543,7 @@ def _find_wheel_paths(wheel_path: Path) -> tuple[list[str], list[str], list[str]
                 elif scheme in ("purelib", "platlib"):
                     adjusted_name = "/".join(parts[2:])
                     all_files.add(adjusted_name)
+                    members[adjusted_name] = name
                     if len(parts) >= 4:
                         top_level_dirs.add(parts[2])
                     elif len(parts) == 3 and parts[2] and not name.endswith("/"):
@@ -402,12 +552,16 @@ def _find_wheel_paths(wheel_path: Path) -> tuple[list[str], list[str], list[str]
 
             if not parts[0].endswith(".data"):
                 all_files.add(name)
+                members[name] = name
                 if len(parts) >= 2:
                     top_level_dirs.add(parts[0])
                 elif len(parts) == 1 and parts[0] and not name.endswith("/"):
                     root_files.add(parts[0])
 
-    pkgs = _resolve_top_level_paths(all_files, top_level_dirs)
+        def read_file(path: str) -> Optional[str]:
+            return z.read(members[path]).decode("utf-8", "replace") if path in members else None
+
+        pkgs = _resolve_top_level_paths(all_files, top_level_dirs, read_file)
 
     for f in root_files:
         name = _extract_module_name(f)

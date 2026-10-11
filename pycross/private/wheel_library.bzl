@@ -215,11 +215,13 @@ def _pycross_wheel_library_impl(ctx):
                         files = depset([out]),
                     ))
 
+    # With venvs_site_packages, the wheel is linked into the venv's site-packages, so (like rules_python)
+    # don't also put its own site-packages dir on sys.path.
     merged = merge_py_providers(
         ctx,
         ctx.attr.deps,
         direct_sources = [out],
-        direct_imports = [imp],
+        direct_imports = [] if (venvs_site_packages_enabled and site_paths) else [imp],
         base_runfiles = ctx.runfiles(files = [out]),
         direct_venv_symlinks = venv_symlinks,
     )

@@ -28,3 +28,12 @@ py_test(
         requirement("google-api-core"),
     ],
 )
+
+py_test(
+    name = "test_pkgutil_namespace",
+    srcs = ["test_pkgutil_namespace.py"],
+    deps = [
+        requirement("backports.entry-points-selectable"),
+        requirement("backports.tarfile"),
+    ],
+)

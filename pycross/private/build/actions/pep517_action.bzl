@@ -122,7 +122,16 @@ def register_pep517_action(
         _is_sibling_repository_layout_enabled(),
     )
     python_paths = [map_fn(imp) for imp in imports.to_list()]
-    transitive_inputs.extend([dep[PyInfo].transitive_sources for dep in all_deps])
+
+    # Installed wheels (pycross_wheel_library TreeArtifacts) don't list their site-packages in
+    # PyInfo.imports under venvs_site_packages, so add them from the sources as well.
+    sources = depset(transitive = [dep[PyInfo].transitive_sources for dep in all_deps])
+    for src in sources.to_list():
+        if src.is_directory:
+            site_packages = paths.join(src.path, "site-packages")
+            if site_packages not in python_paths:
+                python_paths.append(site_packages)
+    transitive_inputs.append(sources)
 
     # Resolve user-provided config settings
     config_settings_file = None

@@ -6,6 +6,8 @@ All notable changes to this project will be documented in this file.
 
 ### Breaking
 
+- **`venvs_site_packages=yes`**: wheel libraries no longer add their
+  `site-packages` to `PyInfo.imports`/`sys.path`, matching `rules_python`.
 - **`always_build` and `disallow_builds` replaced by `package(build_mode = ...)`**
   (`auto`/`always`/`never`, inherits from `*`).
 - **`pypi_indexes` are now Simple API roots** (e.g. `https://pypi.org/simple`),
@@ -60,6 +62,8 @@ All notable changes to this project will be documented in this file.
 
 ### Fixed
 
+- **pkgutil-style and `nvidia` namespace packages** no longer collide in the
+  venv layout.
 - **Repository rules** re-run when pycross's internal tools change, instead of
   serving stale cached results.
 - **Custom Python versions** (e.g. from `python.single_version_override`) now get
