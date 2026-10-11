@@ -1,0 +1,47 @@
+# DO NOT MERGE (Python 3.15 probe): rules_python 2.0.0 doesn't know Python 3.15.0 (no release ships
+# it yet), so register 3.15.0 final from python-build-standalone 20261009.
+_python315 = use_extension("@rules_python//python/extensions:python.bzl", "python")
+
+_URLS = ["https://github.com/astral-sh/python-build-standalone/releases/download/20261009/cpython-{python_version}+20261009-{platform}-{build}.{ext}"]
+
+_python315.single_version_override(
+    python_version = "3.15.0",
+    sha256 = {
+        "aarch64-apple-darwin": "3fb079450ee57075a790b94634206759501166e0a99de459cdad095f6c158d39",
+        "aarch64-unknown-linux-gnu": "f02953d2c56c7eaa2fa3a21f2680a823b8748959c571ac149cd76b0fd1a1c33c",
+        "x86_64-apple-darwin": "5b73d275ef59c742ae58a13130381ddf3451a5a96b2d802c8d5aa0741511baa7",
+        "x86_64-unknown-linux-gnu": "95ba085863806dacf0fd7119c590154bbcd3351099e55c0808a9c61603e320a8",
+        "x86_64-unknown-linux-musl": "60cfeb7119e2b8af4f8ea2bbba3d63a65e093ce50e82495e1d8c9b32d97e34d2",
+    },
+    urls = _URLS,
+)
+
+# Free-threaded builds ship as full archives (python/install prefix).
+_python315.single_version_platform_override(
+    platform = "aarch64-apple-darwin-freethreaded",
+    python_version = "3.15.0",
+    sha256 = "01f6223e05bd92a2cc7722eae45ae8591c6837a05af94a894fc7f6f8f8fe6592",
+    strip_prefix = "python/install",
+    urls = _URLS,
+)
+_python315.single_version_platform_override(
+    platform = "aarch64-unknown-linux-gnu-freethreaded",
+    python_version = "3.15.0",
+    sha256 = "a404137ddb03738d823b84217d2f0d0b0311f1ff32372e9230376cc428cfd0be",
+    strip_prefix = "python/install",
+    urls = _URLS,
+)
+_python315.single_version_platform_override(
+    platform = "x86_64-apple-darwin-freethreaded",
+    python_version = "3.15.0",
+    sha256 = "6ff8f4012c29cedf22c4175fec1eb3d2e08149143c0a88bd0c1fb57fbf10b1da",
+    strip_prefix = "python/install",
+    urls = _URLS,
+)
+_python315.single_version_platform_override(
+    platform = "x86_64-unknown-linux-gnu-freethreaded",
+    python_version = "3.15.0",
+    sha256 = "55e98538d12f144f4c7e02f9530762fa2c51e2c6f52fed54f88d22e3e99c5196",
+    strip_prefix = "python/install",
+    urls = _URLS,
+)
