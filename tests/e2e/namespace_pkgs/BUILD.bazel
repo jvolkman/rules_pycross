@@ -37,3 +37,20 @@ py_test(
         requirement("backports.tarfile"),
     ],
 )
+
+# Needs rules_python's prototype --venv_import_index, so it only runs through
+# run_import_index.sh.
+py_test(
+    name = "test_import_index",
+    srcs = ["test_import_index.py"],
+    tags = ["manual"],
+    deps = [
+        "//fixtures:azfixture_core",
+        "//fixtures:azfixture_core_tracing_plugin",
+        "//fixtures:enumfixture",
+        "//fixtures:nvidia_fixture_cublas",
+        "//fixtures:nvidia_fixture_cudnn",
+        "//fixtures:nvidia_fixture_nccl",
+        "//fixtures:pthfixture",
+    ],
+)

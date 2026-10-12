@@ -1,0 +1,44 @@
+load("@rules_pycross//pycross:defs.bzl", "pycross_wheel_library")
+load("@rules_python//python:defs.bzl", "py_binary")
+
+package(default_visibility = ["//:__subpackages__"])
+
+# Synthetic local wheels for //:test_import_index. make_wheel.py holds their contents.
+py_binary(
+    name = "make_wheel",
+    srcs = ["make_wheel.py"],
+)
+
+_FIXTURES = {
+    # target name: (distribution, version)
+    "azfixture_core": ("azfixture-core", "1.0"),
+    "azfixture_core_tracing_plugin": ("azfixture-core-tracing-plugin", "1.0"),
+    "enumfixture": ("enumfixture", "1.0"),
+    "nvidia_fixture_cublas": ("nvidia-fixture-cublas", "12.0"),
+    "nvidia_fixture_cudnn": ("nvidia-fixture-cudnn", "12.0"),
+    "nvidia_fixture_nccl": ("nvidia-fixture-nccl", "12.0"),
+    "pthfixture": ("pthfixture", "1.0"),
+}
+
+[
+    genrule(
+        name = name + "_whl",
+        outs = ["{}-{}-py3-none-any.whl".format(
+            dist.replace("-", "_"),
+            version,
+        )],
+        cmd = "$(execpath :make_wheel) {} {} {} $@".format(name, dist, version),
+        tools = [":make_wheel"],
+    )
+    for name, (dist, version) in _FIXTURES.items()
+]
+
+[
+    pycross_wheel_library(
+        name = name,
+        package_name = dist,
+        package_version = version,
+        wheel = name + "_whl",
+    )
+    for name, (dist, version) in _FIXTURES.items()
+]
