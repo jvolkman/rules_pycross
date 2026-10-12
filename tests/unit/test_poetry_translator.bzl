@@ -423,13 +423,24 @@ def _test_poetry_or_constraint_translations_impl(env, target):
                 deps = {
                     "dep-simple-exclude": "<2.2.0 || >2.2.0",
                     "dep-complex-exclude": ">=1.25.4,<2.2.0 || >2.2.0,<3",
-                    "dep-unsupported": ">=1.0.0 || >=2.0.0",  # Unhandled format fallback
+                    "dep-inclusive-bound": "<=2.2.0 || >2.2.0",
+                    "dep-caret-union": "^1.0 || ^2.0",
+                    "dep-multi-exclude": ">=1.0,<2.0 || >2.0,<2.1 || >2.1,<3.0",
                 },
                 files = [_whl("pkg_a-1.0.0-py3-none-any.whl", "aaaa")],
             ),
+            # 2.2.0 is excluded by `<2.2.0 || >2.2.0`, so resolution must skip 2.2.0 and pick 2.1.0.
+            _pkg("dep-simple-exclude", "2.2.0", files = [_whl("dep_simple-2.2.0-py3-none-any.whl", "bbb0")]),
             _pkg("dep-simple-exclude", "2.1.0", files = [_whl("dep_simple-2.1.0-py3-none-any.whl", "bbbb")]),
+            _pkg("dep-complex-exclude", "2.2.0", files = [_whl("dep_complex-2.2.0-py3-none-any.whl", "ccc0")]),
             _pkg("dep-complex-exclude", "2.1.0", files = [_whl("dep_complex-2.1.0-py3-none-any.whl", "cccc")]),
-            _pkg("dep-unsupported", "2.1.0", files = [_whl("dep_unsupported-2.1.0-py3-none-any.whl", "dddd")]),
+            # 2.2.0 is included by `<=2.2.0 || >2.2.0` (issue #361), so resolution must pick 2.2.0 over 2.1.0.
+            _pkg("dep-inclusive-bound", "2.2.0", files = [_whl("dep_incl-2.2.0-py3-none-any.whl", "ddd0")]),
+            _pkg("dep-inclusive-bound", "2.1.0", files = [_whl("dep_incl-2.1.0-py3-none-any.whl", "dddd")]),
+            # 2.1.0 matches only the second branch of `^1.0 || ^2.0`.
+            _pkg("dep-caret-union", "2.1.0", files = [_whl("dep_union-2.1.0-py3-none-any.whl", "eeee")]),
+            # 2.2.0 matches only the third branch of `>=1.0,<2.0 || >2.0,<2.1 || >2.1,<3.0`.
+            _pkg("dep-multi-exclude", "2.2.0", files = [_whl("dep_multi-2.2.0-py3-none-any.whl", "ffff")]),
         ],
     }
 
@@ -437,14 +448,121 @@ def _test_poetry_or_constraint_translations_impl(env, target):
     pkgs = result["packages"]
     pkg_a_deps = [d["name"] + "@" + d["version"] for d in pkgs["pkg-a@1.0.0"]["dependencies"]]
 
-    # If the constraints parsed correctly, it will have found the 2.1.0 candidates.
-    env.expect.that_collection(pkg_a_deps).contains("dep-simple-exclude@2.1.0")
-    env.expect.that_collection(pkg_a_deps).contains("dep-complex-exclude@2.1.0")
-    env.expect.that_collection(pkg_a_deps).contains("dep-unsupported@2.1.0")
+    env.expect.that_collection(pkg_a_deps).contains_exactly([
+        "dep-caret-union@2.1.0",
+        "dep-complex-exclude@2.1.0",
+        "dep-inclusive-bound@2.2.0",
+        "dep-multi-exclude@2.2.0",
+        "dep-simple-exclude@2.1.0",
+    ])
 
 def _test_poetry_or_constraint_translations(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
     analysis_test(name = name, target = name + "_subject", impl = _test_poetry_or_constraint_translations_impl)
+
+# --- Unary Constraint Operators ---
+
+# buildifier: disable=unused-variable
+def _test_poetry_unary_constraint_operators_impl(env, target):
+    project = {
+        "tool": {
+            "poetry": {
+                "dependencies": {
+                    "python": "^3.9",
+                    "pkg-a": "1.0.0",
+                },
+            },
+        },
+    }
+
+    lock = {
+        "metadata": {"lock-version": "2.1"},
+        "package": [
+            _pkg(
+                "pkg-a",
+                "1.0.0",
+                deps = {
+                    "dep-lt": "<2.0.0",
+                    "dep-le": "<=2.0.0",
+                    "dep-gt": ">1.0.0",
+                    "dep-ge": ">=1.0.0",
+                    "dep-eq": "==1.5.0",
+                    "dep-single-eq": "=1.5.0",
+                    "dep-bare": "1.5.0",
+                    "dep-ne": "!=2.0.0",
+                    "dep-compat": "~=1.2.1",
+                    "dep-tilde-patch": "~1.2.1",
+                    "dep-tilde-minor": "~1.2",
+                    "dep-caret-major": "^1.2.3",
+                    "dep-caret-zero-major": "^0.2.3",
+                    "dep-caret-zero-minor": "^0.0.3",
+                    "dep-wildcard": "*",
+                },
+                files = [_whl("pkg_a-1.0.0-py3-none-any.whl", "aaaa")],
+            ),
+            # `<2.0.0` must skip 2.0.0 and pick 1.9.0.
+            _pkg("dep-lt", "2.0.0", files = [_whl("dep_lt-2.0.0-py3-none-any.whl", "1")]),
+            _pkg("dep-lt", "1.9.0", files = [_whl("dep_lt-1.9.0-py3-none-any.whl", "2")]),
+            # `<=2.0.0` must skip 2.1.0 and include 2.0.0.
+            _pkg("dep-le", "2.1.0", files = [_whl("dep_le-2.1.0-py3-none-any.whl", "3")]),
+            _pkg("dep-le", "2.0.0", files = [_whl("dep_le-2.0.0-py3-none-any.whl", "4")]),
+            # `>1.0.0` matches 1.0.1; `>=1.0.0` matches 1.0.0.
+            _pkg("dep-gt", "1.0.1", files = [_whl("dep_gt-1.0.1-py3-none-any.whl", "5")]),
+            _pkg("dep-ge", "1.0.0", files = [_whl("dep_ge-1.0.0-py3-none-any.whl", "6")]),
+            # `==1.5.0`, `=1.5.0`, and bare `1.5.0` must skip 2.0.0 and pick 1.5.0.
+            _pkg("dep-eq", "2.0.0", files = [_whl("dep_eq-2.0.0-py3-none-any.whl", "7")]),
+            _pkg("dep-eq", "1.5.0", files = [_whl("dep_eq-1.5.0-py3-none-any.whl", "8")]),
+            _pkg("dep-single-eq", "2.0.0", files = [_whl("dep_seq-2.0.0-py3-none-any.whl", "9")]),
+            _pkg("dep-single-eq", "1.5.0", files = [_whl("dep_seq-1.5.0-py3-none-any.whl", "10")]),
+            _pkg("dep-bare", "2.0.0", files = [_whl("dep_bare-2.0.0-py3-none-any.whl", "11")]),
+            _pkg("dep-bare", "1.5.0", files = [_whl("dep_bare-1.5.0-py3-none-any.whl", "12")]),
+            # `!=2.0.0` must skip 2.0.0 and pick 1.9.0.
+            _pkg("dep-ne", "2.0.0", files = [_whl("dep_ne-2.0.0-py3-none-any.whl", "13")]),
+            _pkg("dep-ne", "1.9.0", files = [_whl("dep_ne-1.9.0-py3-none-any.whl", "14")]),
+            # `~=1.2.1`, `~1.2.1`, and `~1.2` must skip 1.3.0 and pick 1.2.5.
+            _pkg("dep-compat", "1.3.0", files = [_whl("dep_compat-1.3.0-py3-none-any.whl", "15")]),
+            _pkg("dep-compat", "1.2.5", files = [_whl("dep_compat-1.2.5-py3-none-any.whl", "16")]),
+            _pkg("dep-tilde-patch", "1.3.0", files = [_whl("dep_tp-1.3.0-py3-none-any.whl", "17")]),
+            _pkg("dep-tilde-patch", "1.2.5", files = [_whl("dep_tp-1.2.5-py3-none-any.whl", "18")]),
+            _pkg("dep-tilde-minor", "1.3.0", files = [_whl("dep_tm-1.3.0-py3-none-any.whl", "19")]),
+            _pkg("dep-tilde-minor", "1.2.5", files = [_whl("dep_tm-1.2.5-py3-none-any.whl", "20")]),
+            # `^1.2.3`, `^0.2.3`, and `^0.0.3` must skip their upper bounds and pick the in-range version.
+            _pkg("dep-caret-major", "2.0.0", files = [_whl("dep_cm-2.0.0-py3-none-any.whl", "21")]),
+            _pkg("dep-caret-major", "1.9.0", files = [_whl("dep_cm-1.9.0-py3-none-any.whl", "22")]),
+            _pkg("dep-caret-zero-major", "0.3.0", files = [_whl("dep_czm-0.3.0-py3-none-any.whl", "23")]),
+            _pkg("dep-caret-zero-major", "0.2.5", files = [_whl("dep_czm-0.2.5-py3-none-any.whl", "24")]),
+            _pkg("dep-caret-zero-minor", "0.0.4", files = [_whl("dep_czmin-0.0.4-py3-none-any.whl", "25")]),
+            _pkg("dep-caret-zero-minor", "0.0.3", files = [_whl("dep_czmin-0.0.3-py3-none-any.whl", "26")]),
+            # `*` matches all versions.
+            _pkg("dep-wildcard", "2.0.0", files = [_whl("dep_wc-2.0.0-py3-none-any.whl", "27")]),
+        ],
+    }
+
+    result = translate_poetry(project, lock, _lock_model())
+    pkgs = result["packages"]
+    pkg_a_deps = [d["name"] + "@" + d["version"] for d in pkgs["pkg-a@1.0.0"]["dependencies"]]
+
+    env.expect.that_collection(pkg_a_deps).contains_exactly([
+        "dep-bare@1.5.0",
+        "dep-caret-major@1.9.0",
+        "dep-caret-zero-major@0.2.5",
+        "dep-caret-zero-minor@0.0.3",
+        "dep-compat@1.2.5",
+        "dep-eq@1.5.0",
+        "dep-ge@1.0.0",
+        "dep-gt@1.0.1",
+        "dep-le@2.0.0",
+        "dep-lt@1.9.0",
+        "dep-ne@1.9.0",
+        "dep-single-eq@1.5.0",
+        "dep-tilde-minor@1.2.5",
+        "dep-tilde-patch@1.2.5",
+        "dep-wildcard@2.0.0",
+    ])
+
+def _test_poetry_unary_constraint_operators(name):
+    util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
+    analysis_test(name = name, target = name + "_subject", impl = _test_poetry_unary_constraint_operators_impl)
 
 # --- test_poetry_root_dependency_markers ---
 
@@ -601,6 +719,7 @@ def poetry_translator_test_suite(name):
             _test_poetry_issue_34,
             _test_poetry_issue_117,
             _test_poetry_or_constraint_translations,
+            _test_poetry_unary_constraint_operators,
             _test_poetry_root_dependency_markers,
             _test_poetry_dependency_extras,
             _test_poetry_tool_dependency_extras_and_python,

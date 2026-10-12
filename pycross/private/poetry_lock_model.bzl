@@ -38,6 +38,8 @@ def _poetry_single_constraint_to_pep440(constraint):
             return constraint
         if constraint.startswith("~"):
             return _expand_tilde(constraint[1:].strip())
+        if constraint.startswith("=") and not constraint.startswith("=="):
+            return "==" + constraint[1:].strip()
         return constraint
 
     # Caret constraint
@@ -75,48 +77,18 @@ def _poetry_constraint_to_pep440(constraint):
     if not constraint or constraint == "*":
         return ""
 
-    # Poetry often encodes != X as <X || >X
-    # We should convert this back to !=X or handle || in some way.
-    # pypackaging.specifiers does not support ||.
-    # Let's do a simple heuristic for `<X || >X`
-    if " || " in constraint:
-        parts = [p.strip() for p in constraint.split(" || ")]
-        if len(parts) == 2:
-            left_parts = parts[0].split(",")
-            right_parts = parts[1].split(",")
-
-            # Simple != X encoding (e.g., "<X || >X")
-            if len(left_parts) == 1 and len(right_parts) == 1 and left_parts[0].startswith("<") and right_parts[0].startswith(">"):
-                v1 = left_parts[0].replace("<", "").replace("=", "").strip()
-                v2 = right_parts[0].replace(">", "").replace("=", "").strip()
-                if v1 == v2:
-                    constraint = "!=" + v1
-                else:
-                    constraint = parts[0]
-
-                # Complex exclusion (e.g., ">=1.2.5,<2.2.0 || >2.2.0,<3")
-            elif left_parts[-1].startswith("<") and right_parts[0].startswith(">"):
-                v1 = left_parts[-1].replace("<", "").replace("=", "").strip()
-                v2 = right_parts[0].replace(">", "").replace("=", "").strip()
-                if v1 == v2:
-                    # Remove the upper bound from left and lower bound from right, insert !=
-                    new_left = ",".join(left_parts[:-1])
-                    new_right = ",".join(right_parts[1:])
-                    constraint = (new_left + "," if new_left else "") + "!=" + v1 + ("," + new_right if new_right else "")
-                else:
-                    # Generic || cannot be represented in PEP 440 strictly. Just pick the left side.
-                    constraint = parts[0]
-            else:
-                constraint = parts[0]
+    clauses = []
+    for part in constraint.split("||"):
+        part = part.strip()
+        if not part or part == "*":
+            return ""
+        if "," in part:
+            clause = ",".join([_poetry_single_constraint_to_pep440(p) for p in part.split(",")])
         else:
-            constraint = parts[0]
+            clause = _poetry_single_constraint_to_pep440(part)
+        clauses.append(clause)
 
-    # Handle comma-separated constraints (e.g., "^1.2.3, !=1.2.5")
-    if "," in constraint:
-        parts = [p.strip() for p in constraint.split(",")]
-        return ",".join([_poetry_single_constraint_to_pep440(p) for p in parts])
-
-    return _poetry_single_constraint_to_pep440(constraint)
+    return " || ".join(clauses)
 
 def _parse_version_part(part):
     """Parse an integer from a version part, stripping pre-release suffixes.
