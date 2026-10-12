@@ -843,6 +843,8 @@ Independently of this setting, sdist builds whose configuration is known to be b
 
 Each generated repo provides a `:modules_mapping` target, built by the `pycross_modules_mapping` rule. It covers every pinned package, including testonly ones. The mapping comes from the installed wheels: each install action writes an index of what it installed (`<name>.dist_info/index.json`, also available with `--output_groups=pycross_wheel_index`), so packages built from sdists map their real module names. Building the mapping therefore installs the pinned packages, building sdists where needed; for packages that resolve to different versions per environment, only the version for the current configuration is built. Names that several packages share, like namespace packages, are mapped through the deeper names that only one package provides.
 
+Set `lockfiles` on `gazelle_python_manifest`: `gazelle_python.yaml` then records a hash of the lock files, and `.test` only checks that hash. Without it, `.test` regenerates the manifest, which builds the mapping. (`rules_python_gazelle_plugin` versions before 2.4.0 call this attribute `requirements`.)
+
 ```python
 load("@gazelle//:def.bzl", "gazelle")
 load("@rules_python_gazelle_plugin//manifest:defs.bzl", "gazelle_python_manifest")
@@ -851,6 +853,7 @@ gazelle_python_manifest(
     name = "gazelle_python_manifest",
     modules_mapping = "@pypi//:modules_mapping",
     pip_repository_name = "pypi",
+    lockfiles = ["//:uv.lock"],
 )
 
 # gazelle:python_extension enabled
