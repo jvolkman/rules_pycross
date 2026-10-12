@@ -61,8 +61,13 @@ load("@rules_pycross//pycross:defs.bzl", "pycross_modules_mapping")
 pycross_modules_mapping(<a href="#pycross_modules_mapping-name">name</a>, <a href="#pycross_modules_mapping-deps">deps</a>)
 </pre>
 
-Generates a modules_mapping.json file mapping top-level Python import paths to package names.
+Generates a modules_mapping.json file mapping Python import names to package names.
 This is intended to be used with rules_python_gazelle_plugin to resolve third-party imports.
+
+The mapping is built from the per-wheel index that each installed wheel's install action
+writes, so building it installs every dep (building sdists where needed). Namespace packages
+are never mapped themselves, and names that several packages provide are dropped; the
+modules and packages below them map to the package that provides them.
 
 **ATTRIBUTES**
 
@@ -70,7 +75,7 @@ This is intended to be used with rules_python_gazelle_plugin to resolve third-pa
 | Name  | Description | Type | Mandatory | Default |
 | :------------- | :------------- | :------------- | :------------- | :------------- |
 | <a id="pycross_modules_mapping-name"></a>name |  A unique name for this target.   | <a href="https://bazel.build/concepts/labels#target-names">Name</a> | required |  |
-| <a id="pycross_modules_mapping-deps"></a>deps |  A list of package targets. Targets providing PycrossPackageInfo will be included in the mapping; others are silently skipped.   | <a href="https://bazel.build/concepts/labels">List of labels</a> | optional |  `[]`  |
+| <a id="pycross_modules_mapping-deps"></a>deps |  A list of package targets. Targets providing PycrossExtractedWheelInfo with an index are mapped from their installed files; targets providing only PycrossPackageInfo are mapped from its site_paths; others are silently skipped.   | <a href="https://bazel.build/concepts/labels">List of labels</a> | optional |  `[]`  |
 
 
 <a id="pycross_path_tool"></a>

@@ -56,6 +56,16 @@ py_test(
 )
 
 py_test(
+    name = "modules_mapping_test",
+    srcs = ["modules_mapping_test.py"],
+    main = "modules_mapping_test.py",
+    tags = ["unit"],
+    deps = [
+        "//pycross/private/tools:modules_mapping",
+    ],
+)
+
+py_test(
     name = "repair_wheel_hook_test",
     srcs = ["repair_wheel_hook_test.py"],
     main = "repair_wheel_hook_test.py",

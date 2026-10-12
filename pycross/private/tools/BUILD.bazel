@@ -55,6 +55,16 @@ py_binary(
 )
 
 py_binary(
+    name = "modules_mapping",
+    srcs = ["modules_mapping.py"],
+    imports = ["../../.."],
+    visibility = ["//visibility:public"],
+    deps = [
+        ":args",
+    ],
+)
+
+py_binary(
     name = "extract_console_script",
     srcs = ["extract_console_script.py"],
     imports = ["../../.."],

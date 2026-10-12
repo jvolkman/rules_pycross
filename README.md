@@ -841,7 +841,7 @@ Independently of this setting, sdist builds whose configuration is known to be b
 
 `rules_pycross` is compatible with `rules_python_gazelle_plugin`. The target layout (`@<repo>//<package>`) matches the plugin's default label conventions, so no `gazelle:python_label_convention` directives are needed.
 
-Each generated repo provides a `:modules_mapping` target, built by the `pycross_modules_mapping` rule from package metadata at build time — wheels do not need to be downloaded or extracted during analysis. It covers every pinned package, including testonly ones.
+Each generated repo provides a `:modules_mapping` target, built by the `pycross_modules_mapping` rule. It covers every pinned package, including testonly ones. The mapping comes from the installed wheels: each install action writes an index of what it installed (`<name>.dist_info/index.json`, also available with `--output_groups=pycross_wheel_index`), so packages built from sdists map their real module names. Building the mapping therefore installs the pinned packages, building sdists where needed; for packages that resolve to different versions per environment, only the version for the current configuration is built. Names that several packages share, like namespace packages, are mapped through the deeper names that only one package provides.
 
 ```python
 load("@gazelle//:def.bzl", "gazelle")

@@ -4,6 +4,9 @@ load("@rules_testing//lib:analysis_test.bzl", "analysis_test", "test_suite")
 load("@rules_testing//lib:util.bzl", "util")
 
 # buildifier: disable=bzl-visibility
+load("//pycross/private:modules_mapping.bzl", "pycross_modules_mapping")
+
+# buildifier: disable=bzl-visibility
 load("//pycross/private:providers.bzl", "PycrossExtractedWheelInfo", "PycrossPackageInfo", "PycrossUnsupportedWheelInfo")
 
 # buildifier: disable=bzl-visibility
@@ -13,7 +16,7 @@ load("//pycross/private:proxy.bzl", "pycross_library_proxy", "pycross_transition
 load("//pycross/private:wheel_dir.bzl", "pycross_wheel_dir")
 
 # buildifier: disable=bzl-visibility
-load("//pycross/private:wheel_library.bzl", "pycross_wheel_library")
+load("//pycross/private:wheel_library.bzl", "pycross_wheel_library", "pycross_wheel_metadata")
 
 def _test_pycross_wheel_library_basic(name):
     # Dummy wheel file
@@ -538,6 +541,60 @@ def _test_pycross_transitioning_library_proxy_forwards_index(name):
         impl = _assert_forwards_index,
     )
 
+def _test_pycross_modules_mapping(name):
+    _define_index_subject_wheel(name)
+    util.helper_target(
+        pycross_library_proxy,
+        name = name + "_proxy",
+        actual = name + "_lib",
+    )
+    util.helper_target(
+        pycross_wheel_metadata,
+        name = name + "_metadata_only",
+        wheel = name + "_wheel",
+        package_name = "legacy-pkg",
+        package_version = "1.0",
+        site_paths = ["legacy", "ns/mod.py"],
+    )
+    util.helper_target(
+        pycross_modules_mapping,
+        name = name + "_subject",
+        deps = [
+            name + "_lib",
+            name + "_proxy",
+            name + "_metadata_only",
+        ],
+    )
+    analysis_test(
+        name = name,
+        target = name + "_subject",
+        impl = _test_pycross_modules_mapping_impl,
+    )
+
+def _test_pycross_modules_mapping_impl(env, target):
+    output = target[DefaultInfo].files.to_list()
+    env.expect.that_collection([f.basename for f in output]).contains_exactly([target.label.name + ".json"])
+
+    action = env.expect.that_target(target).action_generating(output[0].short_path)
+    action.mnemonic().equals("PycrossModulesMapping")
+
+    # One index, even though it arrives through both the library and its proxy.
+    indexes = [f for f in action.actual.inputs.to_list() if f.basename == "index.json"]
+    env.expect.that_collection([f.dirname.rpartition("/")[2] for f in indexes]).contains_exactly([
+        target.label.name.replace("_subject", "_lib") + ".dist_info",
+    ])
+    argv = action.actual.argv
+    env.expect.that_collection([a for a in argv if a == "--index"]).has_size(1)
+    action.argv().contains_at_least(["--index", indexes[0].path])
+
+    # A dep without an index falls back to its analysis-time site_paths.
+    action.argv().contains_at_least([
+        "--site-path",
+        "legacy-pkg=legacy",
+        "--site-path",
+        "legacy-pkg=ns/mod.py",
+    ])
+
 def pycross_wheel_library_test_suite(name):
     test_suite(
         name = name,
@@ -565,5 +622,6 @@ def pycross_wheel_library_test_suite(name):
             _test_pycross_wheel_library_precompile_missing_toolchain_skipped,
             _test_pycross_library_proxy_forwards_index,
             _test_pycross_transitioning_library_proxy_forwards_index,
+            _test_pycross_modules_mapping,
         ],
     )

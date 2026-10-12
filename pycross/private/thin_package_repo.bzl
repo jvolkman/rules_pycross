@@ -502,6 +502,90 @@ def _pin_build(target_name, pin_target_dict, package, workspace_repo, workspace_
         actual_build = actual_build,
     )
 
+def _mapping_marker_constraint(constraint, resolution_marker_exprs):
+    """Returns the resolution-marker constraint gating a pin branch in the modules mapping, or "".
+
+    Building the mapping installs its deps, so resolution-marker forks (and the marker half of a
+    variant + marker fork) are selected by configuration: wheels of forks that don't apply aren't
+    built. Conflict variants are all included, as before, because their config_settings fail
+    analysis when no variant is selected.
+    """
+    entry = resolution_marker_exprs.get(constraint)
+    if type(entry) == "string":
+        return constraint
+    if type(entry) == "dict":
+        return entry["marker"]
+    return ""
+
+def _label_list(labels):
+    return "[{}]".format(", ".join(['"{}"'.format(label) for label in labels]))
+
+def _modules_mapping_deps(pins, packages, workspace_repo, resolution_marker_exprs):
+    """Renders the `deps` attribute of the generated pycross_modules_mapping.
+
+    Args:
+        pins: Pin name -> {constraint: pkg_key}; "" is the unconditional constraint.
+        packages: The resolved lock packages.
+        workspace_repo: The workspace repo holding the _lock targets.
+        resolution_marker_exprs: Constraint name -> marker expression (simple fork) or
+            {"variant": ..., "marker": ...} (variant + marker fork).
+
+    Returns:
+        struct(lines = BUILD lines for the attribute, maybe_targets = {maybe_name: (pkg_key, lock_label)}
+        for the //__maybe aliases of platform-specific packages).
+    """
+    maybe_targets = {}
+
+    def mapping_label(pkg_key):
+        if packages.get(pkg_key, {}).get("cycle_group"):
+            lock_label = "@%s//_lock:_raw_%s" % (workspace_repo, pkg_key)
+        else:
+            lock_label = "@%s//_lock:%s" % (workspace_repo, pkg_key)
+        if _is_key_platform_specific(packages, pkg_key):
+            maybe_name = pkg_key.replace("@", "_").replace("[", "_").replace("]", "_")
+            maybe_targets[maybe_name] = (pkg_key, lock_label)
+            return "//__maybe:%s" % maybe_name
+        return lock_label
+
+    direct = {}  # label -> True, in order
+    forks = []  # (marker -> [labels], default labels) per forked pin
+    for pin_name in sorted(pins.keys()):
+        by_marker = {}
+        default_labels = []
+        for constraint, pkg_key in sorted(pins[pin_name].items()):
+            label = mapping_label(pkg_key)
+            marker = _mapping_marker_constraint(constraint, resolution_marker_exprs) if constraint else ""
+            if marker:
+                if label not in by_marker.setdefault(marker, []):
+                    by_marker[marker].append(label)
+            elif constraint == "":
+                default_labels.append(label)
+            else:
+                direct[label] = True
+        if by_marker:
+            forks.append((by_marker, default_labels))
+        else:
+            for label in default_labels:
+                direct[label] = True
+
+    lines = ["    deps = ["]
+    lines.extend(['        "{}",'.format(label) for label in direct])
+    closing = "    ]"
+    for by_marker, default_labels in forks:
+        lines.append(closing + " + select({")
+        for marker, labels in sorted(by_marker.items()):
+            lines.append('        "@{}//_lock:is_{}": {},'.format(
+                workspace_repo,
+                marker,
+                _label_list([label for label in labels if label not in direct]),
+            ))
+        lines.append('        "//conditions:default": {},'.format(
+            _label_list([label for label in default_labels if label not in direct]),
+        ))
+        closing = "    })"
+    lines.append(closing + ",")
+    return struct(lines = lines, maybe_targets = maybe_targets)
+
 def _thin_package_repo_impl(rctx):
     workspace_repo = rctx.attr.workspace_repo
     lock_json_path = rctx.path(rctx.attr.resolved_lock_file)
@@ -690,9 +774,6 @@ pycross_transitioning_file_proxy = rule(
         )
         rctx.file("_transition.bzl", transition_bzl)
 
-    # Collect platform-specific packages for _maybe_ aliases.
-    maybe_mapping_targets = {}  # maybe_name -> (pkg_key, lock_label)
-
     # When the repo has a transition, the mapping (and the selects behind its
     # deps) must be analyzed under it, so wrap it in a transitioning proxy.
     if has_flags or target_platform:
@@ -713,33 +794,21 @@ pycross_transitioning_file_proxy = rule(
     else:
         mapping_name = "modules_mapping"
 
+    mapping_deps = _modules_mapping_deps(
+        pins,
+        packages,
+        workspace_repo,
+        lock.get("resolution_marker_exprs", {}),
+    )
+    maybe_mapping_targets = mapping_deps.maybe_targets
     root_build_lines.extend([
         'exports_files(["requirements.bzl", "_packages.bzl"])',
         "",
         "pycross_modules_mapping(",
         '    name = "{}",'.format(mapping_name),
-        "    deps = [",
     ])
-    for pin_name in sorted(pins.keys()):
-        pin_target_dict = pins[pin_name]
-        for pin_target in sorted(pin_target_dict.values()):
-            package = packages.get(pin_target, {})
-
-            # Determine the lock-level label for this package.
-            if package.get("cycle_group"):
-                lock_label = "@%s//_lock:_raw_%s" % (workspace_repo, pin_target)
-            else:
-                lock_label = "@%s//_lock:%s" % (workspace_repo, pin_target)
-
-            if _is_key_platform_specific(packages, pin_target):
-                maybe_name = pin_target.replace("@", "_").replace("[", "_").replace("]", "_")
-                maybe_mapping_targets[maybe_name] = (pin_target, lock_label)
-                root_build_lines.append('        "//__maybe:%s",' % maybe_name)
-            else:
-                root_build_lines.append('        "%s",' % lock_label)
-
+    root_build_lines.extend(mapping_deps.lines)
     root_build_lines.extend([
-        "    ],",
         ")",
         "",
     ])
@@ -1142,3 +1211,4 @@ is_platform_specific_for_testing = _is_platform_specific
 requirements_bzl_for_testing = _requirements_bzl
 packages_bzl_for_testing = _packages_bzl
 cargo_build_for_testing = _cargo_build
+modules_mapping_deps_for_testing = _modules_mapping_deps
