@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## [Unreleased]
+
+### Fixed
+
+- **Poetry `||` version constraints** now evaluate all union branches instead of
+  collapsing to `!=` or taking only the first branch.
+
 ## [2.0.0]
 
 ### Breaking

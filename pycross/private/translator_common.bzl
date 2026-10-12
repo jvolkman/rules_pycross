@@ -204,10 +204,10 @@ def _package_key_str(name, version):
     return "{}@{}".format(name, version)
 
 def _specifier_contains_version(specifier_str, version_str):
-    """Check if a PEP 440 specifier set contains a version.
+    """Check if a PEP 440 specifier set (or ||-separated union) contains a version.
 
     Args:
-        specifier_str: The specifier string (e.g. ">=1.0,<2.0") or "*" or "".
+        specifier_str: The specifier string (e.g. ">=1.0,<2.0" or "<2.0 || >2.0") or "*" or "".
         version_str: The version string (e.g. "1.5.0").
 
     Returns:
@@ -215,8 +215,14 @@ def _specifier_contains_version(specifier_str, version_str):
     """
     if not specifier_str or specifier_str == "*":
         return True
-    spec_set = pypackaging.specifiers.parse_set(specifier_str)
-    return pypackaging.specifiers.set_contains(spec_set, version_str)
+    for part in specifier_str.split("||"):
+        part = part.strip()
+        if not part or part == "*":
+            return True
+        spec_set = pypackaging.specifiers.parse_set(part)
+        if pypackaging.specifiers.set_contains(spec_set, version_str):
+            return True
+    return False
 
 def _version_key(version_str):
     """Parse a version string into a comparable key tuple."""
