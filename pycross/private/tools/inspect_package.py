@@ -32,6 +32,9 @@ _EXCLUDED_DIRS = frozenset(
 
 _EXCLUDED_ROOT_MODULES = frozenset({"setup", "conftest"})
 
+# EXPERIMENT (do not merge): sdists report no site_paths, to find what still depends on them.
+_SDIST_SITE_PATHS_STUBBED = True
+
 # Top-level namespace packages that ship an `__init__.py` that doesn't declare the namespace.
 # Mirrors rules_python's _WELL_KNOWN_NAMESPACE_PACKAGES (python/private/venv_runfiles.bzl).
 _WELL_KNOWN_NAMESPACE_PACKAGES = frozenset({"nvidia"})
@@ -421,6 +424,11 @@ def _find_site_paths_sdist(sdist_path: Path, source_dir: str = "") -> list[str]:
             the actual package. When set, only files under this subdirectory are
             considered. This handles git/URL packages with #subdirectory= fragments.
     """
+    # EXPERIMENT (do not merge): no sdist layout inspection. Imports go through the import
+    # index, and the Gazelle mapping comes from the built wheel's per-wheel index.
+    if _SDIST_SITE_PATHS_STUBBED:
+        return []
+
     # Prefer the authoritative top_level.txt if present.
     top_level_names = _read_top_level_txt(sdist_path) if not source_dir else None
 
@@ -511,7 +519,8 @@ def _inspect_patched_sdist(
             items, source_dir=source_dir, read_member=read_extracted, top_level_names=top_level_names
         )
 
-        return content, site_paths
+        # EXPERIMENT (do not merge): see _find_site_paths_sdist.
+        return content, [] if _SDIST_SITE_PATHS_STUBBED else site_paths
 
 
 def _find_wheel_paths(wheel_path: Path) -> tuple[list[str], list[str], list[str], list[str]]:
