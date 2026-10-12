@@ -11,7 +11,7 @@ from pycross.private.tools.modules_mapping import build_mapping
 from pycross.private.tools.modules_mapping import simplify
 
 
-def make_index(name, top=None, dirs=(), namespaces=None, version="1.0"):
+def make_index(name, top=None, dirs=(), namespaces=None, version="1.0", pth=None):
     """A per-wheel index (see wheel_index.py). `top` defaults to the top-level dirs."""
     if top is None:
         top = {d: [d] for d in dirs if "/" not in d}
@@ -20,7 +20,8 @@ def make_index(name, top=None, dirs=(), namespaces=None, version="1.0"):
         "distribution": {"name": name, "version": version},
         "dist_info": "{}-{}.dist-info".format(name.replace("-", "_"), version),
         "top": top,
-        "pth": [],
+        "pth": sorted(pth or {}),
+        "pth_paths": pth or {},
         "dirs": sorted(dirs),
         "namespaces": namespaces or {},
     }
@@ -157,7 +158,7 @@ class ModulesMappingTest(unittest.TestCase):
             },
         )
 
-    def test_unmappable_root_names(self):
+    def test_excluded_top_level_names(self):
         mapping = mapping_for(
             make_index(
                 "sloppy",
@@ -167,11 +168,50 @@ class ModulesMappingTest(unittest.TestCase):
                     "conftest": ["conftest.py"],
                     "setup": ["setup.py"],
                     "sloppy": ["sloppy"],
+                    "tests": ["tests"],
+                    "docs": ["docs"],
+                    "tools": ["tools.py"],
                 },
-                dirs=["sloppy"],
+                dirs=["docs", "sloppy", "tests", "tests/unique_helpers"],
+                namespaces={"tests": ["conftest_helpers"]},
+            ),
+            # The denylist applies to names under .pth roots too, since they're top-level names.
+            make_index(
+                "rooted",
+                dirs=["lib", "lib/rootedpkg", "lib/tests"],
+                namespaces={"lib": []},
+                pth={"rooted.pth": ["lib"]},
             ),
         )
-        self.assertEqual(mapping, {"sloppy": "sloppy"})
+        # Only the re-rooted `tests` is a top-level name; `lib.tests` stays mapped.
+        self.assertEqual(
+            mapping,
+            {"sloppy": "sloppy", "rootedpkg": "rooted", "lib.rootedpkg": "rooted", "lib.tests": "rooted"},
+        )
+
+    def test_pth_paths_add_roots(self):
+        rerun = make_index(
+            "rerun-sdk",
+            top={"rerun_bindings": ["rerun_bindings"], "rerun_sdk": ["rerun_sdk"]},
+            dirs=["rerun_bindings", "rerun_sdk", "rerun_sdk/rerun", "rerun_sdk/rerun/blueprint", "rerun_sdk/rerun_cli"],
+            namespaces={"rerun_sdk": ["rerun_helper"]},
+            pth={"rerun_sdk.pth": ["rerun_sdk"]},
+        )
+        self.assertEqual(
+            mapping_for(rerun),
+            {
+                "rerun": "rerun_sdk",
+                "rerun_bindings": "rerun_sdk",
+                "rerun_cli": "rerun_sdk",
+                "rerun_helper": "rerun_sdk",
+                "rerun_sdk.rerun": "rerun_sdk",
+                "rerun_sdk.rerun_cli": "rerun_sdk",
+                "rerun_sdk.rerun_helper": "rerun_sdk",
+            },
+        )
+        # Re-rooted names take part in conflict resolution like any other top-level name.
+        other = make_index("other-rerun", dirs=["rerun"])
+        self.assertNotIn("rerun", mapping_for(rerun, other))
 
     def test_module_next_to_namespace_dir_is_concrete(self):
         mapping = mapping_for(

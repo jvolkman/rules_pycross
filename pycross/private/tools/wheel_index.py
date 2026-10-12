@@ -17,6 +17,12 @@ are no absolute paths or timestamps, so the output is deterministic.
   top           Top-level importable name -> the root entries that provide it, for example
                 {"six": ["six.py"], "yaml": ["yaml"], "_yaml": ["_yaml.cpython-312-x86_64-linux-gnu.so"]}.
   pth           The .pth files in the root.
+  pth_paths     For root .pth files with path lines: the directories they add to sys.path, as
+                normalized paths relative to the root, in file order, for example
+                {"rerun_sdk.pth": ["rerun_sdk"]}. Like site.addpackage, this skips comments, blank
+                lines and import lines, and only keeps lines naming an existing directory.
+                Absolute paths and paths outside the root are dropped, and backslashes are read
+                as separators (Windows .pth files).
   dirs          Every package directory: identifier-named directories below an importable
                 top-level directory, excluding __pycache__.
   namespaces    Namespace package directories (no __init__ module, or an __init__.py that is a
@@ -36,6 +42,7 @@ from __future__ import annotations
 import ast
 import json
 import os
+import posixpath
 import re
 from email.parser import BytesHeaderParser
 from pathlib import Path
@@ -173,6 +180,28 @@ def _read_distribution(dist_info_path: Optional[Path]) -> dict[str, Optional[str
     return {"name": headers.get("Name"), "version": headers.get("Version")}
 
 
+def _pth_paths(root: Path, name: str) -> list[str]:
+    """Returns the directories a root .pth file adds to sys.path, relative to the root.
+
+    Follows site.addpackage: comments, blank lines and import lines are skipped, and a path line is
+    used only if it names an existing directory.
+    """
+    text = (root / name).read_bytes().decode("utf-8-sig", "replace")
+    paths: list[str] = []
+    for line in text.splitlines():
+        if line.startswith("#") or not line.strip() or line.startswith(("import ", "import\t")):
+            continue
+        line = line.rstrip().replace("\\", "/")
+        if posixpath.isabs(line) or re.match(r"^[A-Za-z]:", line):
+            continue
+        rel = posixpath.normpath(line)
+        if rel == "." or rel == ".." or rel.startswith("../"):
+            continue
+        if (root / rel).is_dir() and rel not in paths:
+            paths.append(rel)
+    return paths
+
+
 def index_site_packages(
     root: Path,
     fallback_name: Optional[str] = None,
@@ -219,6 +248,12 @@ def index_site_packages(
             if mod:
                 top.setdefault(mod, []).append(name)
 
+    pth_paths = {}
+    for name in sorted(pth):
+        paths = _pth_paths(root, name)
+        if paths:
+            pth_paths[name] = paths
+
     distribution = _read_distribution(root / dist_info if dist_info else None)
     return {
         "version": INDEX_VERSION,
@@ -229,6 +264,7 @@ def index_site_packages(
         "dist_info": dist_info,
         "top": {k: sorted(v) for k, v in sorted(top.items())},
         "pth": sorted(pth),
+        "pth_paths": pth_paths,
         "dirs": sorted(dirs),
         "namespaces": dict(sorted(namespaces.items())),
     }

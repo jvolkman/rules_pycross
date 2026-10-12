@@ -503,17 +503,24 @@ class WheelInstallerIndexTest(unittest.TestCase):
             "_abi3ext": ["_abi3ext.abi3.so"],
             "_ext": ["_ext.cpython-311-x86_64-linux-gnu.so"],
             "ns": ["ns"],
+            "pathroot": ["pathroot"],
             "patched_ns": ["patched_ns"],
             "pep420": ["pep420"],
             "pkg": ["pkg"],
             "top": ["top.py"],
             "winmod": ["winmod.cp311-win_amd64.pyd"],
         },
-        "pth": ["pkg.pth"],
+        "pth": ["paths.pth", "pkg.pth"],
+        # Path lines only: no import lines, comments, missing or absolute dirs, or dirs outside
+        # the root; normalized, deduplicated, in file order.
+        "pth_paths": {"paths.pth": ["pathroot", "pathroot/sub", "pathroot/win"]},
         "dirs": [
             "ns",
             "ns/inner",
             "patched_ns",
+            "pathroot",
+            "pathroot/sub",
+            "pathroot/win",
             "pep420",
             "pep420/deep",
             "pep420/regular",
@@ -525,6 +532,9 @@ class WheelInstallerIndexTest(unittest.TestCase):
         # patched_ns is a pkgutil stub in the wheel, but not after post_install_patches.
         "namespaces": {
             "ns": ["helper"],
+            "pathroot": ["rooted"],
+            "pathroot/sub": ["submod"],
+            "pathroot/win": [],
             "pep420": ["helper2"],
             "pep420/deep": ["x"],
         },
@@ -562,6 +572,23 @@ class WheelInstallerIndexTest(unittest.TestCase):
             "libfoo.so.1": "",
             "README.txt": "",
             "pkg.pth": "import pkg\n",
+            "paths.pth": (
+                "# comment\n"
+                "pathroot\n"
+                "import sys; sys.flags\n"
+                "./pathroot/sub/\n"
+                "missing_dir\n"
+                "/abs/dir\n"
+                "C:\\abs\\dir\n"
+                "../outside\n"
+                "pathroot\\win\n"
+                ".\n"
+                "\n"
+                "pathroot\n"
+            ),
+            "pathroot/rooted.py": "",
+            "pathroot/sub/submod.py": "",
+            "pathroot/win/winonly.txt": "",
             "ns/__init__.py": stub,
             "ns/helper.py": "",
             "ns/excluded_helper.py": "",

@@ -15,6 +15,12 @@ per distribution, the shallowest import names that identify it:
 * Names that several distributions provide concretely (e.g. two wheels shipping the same package)
   are dropped, and the lookup descends into them so that sub-packages provided by only one of
   them still map to it.
+* Directories that a distribution's .pth files put on sys.path (`pth_paths`) are extra roots:
+  the names below them are top-level names too (rerun-sdk's `rerun_sdk.pth` makes
+  `rerun_sdk/rerun` importable as `rerun`).
+* Top-level names in inspect_package.py's denylists (`tests`, `docs`, `setup`, ...) are never
+  mapped. Gazelle consults the mapping before first-party code, so such keys would capture
+  imports of a project's own `tests` package.
 * Finally, entries whose ancestor maps to the same distribution are collapsed into the ancestor,
   like rules_python's modules_mapping merger.
 
@@ -39,11 +45,29 @@ SUPPORTED_INDEX_VERSION = 1
 # Mirrors inspect_package.py's _WELL_KNOWN_NAMESPACE_PACKAGES (from rules_python).
 WELL_KNOWN_NAMESPACES = frozenset({"nvidia"})
 
-# Root modules that aren't import roots (mirrors inspect_package.py's _EXCLUDED_ROOT_MODULES).
-EXCLUDED_ROOT_MODULES = frozenset({"setup", "conftest"})
-
-# Root names that can't refer to a third-party module.
-UNMAPPABLE_ROOT_NAMES = frozenset({"__init__", "__main__"})
+# Top-level names that are never mapped: inspect_package.py's _EXCLUDED_DIRS and
+# _EXCLUDED_ROOT_MODULES, plus names that can't refer to a third-party module.
+EXCLUDED_TOP_LEVEL_NAMES = frozenset(
+    {
+        # _EXCLUDED_DIRS
+        "bin",
+        "benchmarks",
+        "docs",
+        "examples",
+        "scripts",
+        "src",
+        "test",
+        "tests",
+        "testing",
+        "tools",
+        # _EXCLUDED_ROOT_MODULES
+        "setup",
+        "conftest",
+        # Not importable as third-party modules.
+        "__init__",
+        "__main__",
+    }
+)
 
 MODULE = "module"
 PACKAGE = "package"
@@ -106,6 +130,20 @@ class Distribution:
                 self.add(name, MODULE)  # a module file in the root
             elif name not in self.kinds:
                 self.add(name, PACKAGE)  # defensive: a top-level directory missing from "dirs"
+        for paths in index.get("pth_paths", {}).values():
+            for path in paths:
+                self.add_root(path.replace("/", "."))
+
+    def add_root(self, prefix: str) -> None:
+        """Makes the names below `prefix` top-level names too, like a .pth path entry does.
+
+        Only names the index knows are re-rooted: the directory's sub-packages, and its module
+        files if it is a namespace directory (as .pth targets usually are).
+        """
+        cut = len(prefix) + 1
+        for name, kind in sorted(self.kinds.items()):
+            if name.startswith(prefix + "."):
+                self.add(name[cut:], kind)
 
     def add_site_path(self, site_path: str) -> None:
         name = module_name_from_site_path(site_path)
@@ -146,13 +184,10 @@ def build_mapping(distributions: Iterable[Distribution]) -> dict[str, str]:
         claims: dict[str, tuple[list[Distribution], list[Distribution]]] = {}
         for dist in contributors:
             for child in dist.children.get(parent, ()):
-                kind = dist.kinds[child]
-                if not parent and (
-                    child in UNMAPPABLE_ROOT_NAMES or (kind == MODULE and child in EXCLUDED_ROOT_MODULES)
-                ):
+                if not parent and child in EXCLUDED_TOP_LEVEL_NAMES:
                     continue
                 concrete, namespace = claims.setdefault(child, ([], []))
-                (namespace if kind == NAMESPACE else concrete).append(dist)
+                (namespace if dist.kinds[child] == NAMESPACE else concrete).append(dist)
 
         for child in sorted(claims):
             concrete, namespace = claims[child]
