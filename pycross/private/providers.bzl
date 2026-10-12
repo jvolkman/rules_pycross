@@ -3,6 +3,7 @@
 PycrossExtractedWheelInfo = provider(
     doc = "Information about an extracted (installed) Python wheel.",
     fields = {
+        "index": "File: The per-wheel index (`<name>.dist_info/index.json`) that the install action writes after installing, describing the installed site-packages (see `pycross/private/tools/wheel_index.py`). Absent or None when the provider wasn't created by `pycross_wheel_library`.",
         "site_packages": "File (TreeArtifact): The unzipped site-packages directory containing the wheel's installed files.",
     },
 )

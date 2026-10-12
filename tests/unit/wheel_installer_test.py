@@ -484,5 +484,180 @@ class WheelInstallerPrecompileTest(unittest.TestCase):
             self.assertEqual(code_obj.co_filename, rel_mod)
 
 
+class WheelInstallerIndexTest(unittest.TestCase):
+    """Test the per-wheel index (--index-output) written after installation."""
+
+    PATCH = (
+        "--- a/patched_ns/__init__.py\n"
+        "+++ b/patched_ns/__init__.py\n"
+        "@@ -1 +1,2 @@\n"
+        " __path__ = __import__('pkgutil').extend_path(__path__, __name__)\n"
+        "+__version__ = '1'\n"
+    )
+
+    EXPECTED_INDEX = {
+        "version": 1,
+        "distribution": {"name": "Pkg-Name", "version": "1.0"},
+        "dist_info": "pkg_name-1.0.dist-info",
+        "top": {
+            "_abi3ext": ["_abi3ext.abi3.so"],
+            "_ext": ["_ext.cpython-311-x86_64-linux-gnu.so"],
+            "ns": ["ns"],
+            "patched_ns": ["patched_ns"],
+            "pep420": ["pep420"],
+            "pkg": ["pkg"],
+            "top": ["top.py"],
+            "winmod": ["winmod.cp311-win_amd64.pyd"],
+        },
+        "pth": ["pkg.pth"],
+        "dirs": [
+            "ns",
+            "ns/inner",
+            "patched_ns",
+            "pep420",
+            "pep420/deep",
+            "pep420/regular",
+            "pep420/regular/nsdir",
+            "pkg",
+            "pkg/data",
+            "pkg/sub",
+        ],
+        # patched_ns is a pkgutil stub in the wheel, but not after post_install_patches.
+        "namespaces": {
+            "ns": ["helper"],
+            "pep420": ["helper2"],
+            "pep420/deep": ["x"],
+        },
+    }
+
+    def setUp(self):
+        self.temp_dir = tempfile.mkdtemp()
+
+    def tearDown(self):
+        import shutil
+
+        shutil.rmtree(self.temp_dir)
+
+    def _create_wheel(self) -> Path:
+        import zipfile
+
+        wheel_path = Path(self.temp_dir) / "pkg_name-1.0-py3-none-any.whl"
+        stub = "__path__ = __import__('pkgutil').extend_path(__path__, __name__)\n"
+        files = {
+            "Pkg_Name-1.0.dist-info/METADATA": "Metadata-Version: 2.1\nName: Pkg-Name\nVersion: 1.0\n",
+            "Pkg_Name-1.0.dist-info/WHEEL": (
+                "Wheel-Version: 1.0\nGenerator: test\nRoot-Is-Purelib: true\nTag: py3-none-any\n"
+            ),
+            "Pkg_Name-1.0.dist-info/RECORD": "",
+            "pkg/__init__.py": "VALUE = 1\n",
+            "pkg/sub/__init__.py": "",
+            "pkg/sub/mod.py": "X = 1\n",
+            "pkg/data/thing.txt": "data\n",
+            "pkg/not-a-pkg/x.py": "",
+            "top.py": "TOP = True\n",
+            "top_excluded.py": "",
+            "_ext.cpython-311-x86_64-linux-gnu.so": "not really an extension",
+            "_abi3ext.abi3.so": "",
+            "winmod.cp311-win_amd64.pyd": "",
+            "libfoo.so.1": "",
+            "README.txt": "",
+            "pkg.pth": "import pkg\n",
+            "ns/__init__.py": stub,
+            "ns/helper.py": "",
+            "ns/excluded_helper.py": "",
+            "ns/inner/__init__.py": "",
+            "patched_ns/__init__.py": stub,
+            "patched_ns/mod.py": "",
+            "pep420/helper2.py": "",
+            "pep420/deep/x.py": "",
+            "pep420/regular/__init__.py": "",
+            "pep420/regular/nsdir/y.py": "",
+            "Pkg_Name-1.0.data/scripts/tool": "#!/bin/sh\n",
+        }
+        with zipfile.ZipFile(wheel_path, "w") as zf:
+            for name, content in files.items():
+                zf.writestr(name, content)
+        return wheel_path
+
+    def _install(self, name: str, compile_python=None) -> tuple[Path, Path]:
+        import argparse
+
+        from pycross.private.tools import wheel_installer
+
+        patch = Path(self.temp_dir) / "make_regular.patch"
+        patch.write_text(self.PATCH)
+        out_dir = Path(self.temp_dir) / name
+        index_out = Path(self.temp_dir) / (name + ".dist_info") / "index.json"
+        args = argparse.Namespace(
+            wheel=self._create_wheel(),
+            wheel_dir=None,
+            wheel_name_file=None,
+            install_exclude_globs=["top_excluded.py", "ns/excluded_*"],
+            patches=[str(patch)],
+            entry_points_output=None,
+            index_output=index_out,
+            directory=out_dir,
+            expected_name="pkg-name",
+            expected_version="1.0",
+            dist_info_dir="pkg_name-1.0.dist-info",
+            compile_python=compile_python,
+            compile_invalidation_mode="checked_hash" if compile_python else None,
+        )
+        wheel_installer.main(args)
+        return out_dir, index_out
+
+    def test_index_describes_installed_tree(self):
+        import json
+
+        _, index_out = self._install("out")
+        self.assertEqual(json.loads(index_out.read_text()), self.EXPECTED_INDEX)
+
+    def test_index_is_deterministic_and_relative(self):
+        _, first = self._install("out1")
+        _, second = self._install("out2")
+        self.assertEqual(first.read_bytes(), second.read_bytes())
+        self.assertNotIn(self.temp_dir, first.read_text())
+
+    def test_index_ignores_precompiled_bytecode(self):
+        import sys
+
+        _, plain = self._install("plain")
+        compiled_dir, compiled = self._install("compiled", compile_python=sys.executable)
+        # .pyc files were written into __pycache__ dirs, including the root's (for top.py)...
+        self.assertTrue((compiled_dir / "site-packages" / "__pycache__").is_dir())
+        self.assertTrue(list((compiled_dir / "site-packages" / "pkg").glob("__pycache__/*.pyc")))
+        # ...but the index doesn't change.
+        self.assertEqual(plain.read_bytes(), compiled.read_bytes())
+
+
+class WheelIndexModuleNameTest(unittest.TestCase):
+    """Module names don't depend on the interpreter that runs the installer."""
+
+    def test_module_names(self):
+        from pycross.private.tools.wheel_index import module_name
+
+        cases = {
+            "six.py": "six",
+            "legacy.pyc": "legacy",
+            "_regex.cpython-311-x86_64-linux-gnu.so": "_regex",
+            "_regex.cpython-314t-x86_64-linux-gnu.so": "_regex",
+            "_speedups.cpython-312-darwin.so": "_speedups",
+            "_foo.abi3.so": "_foo",
+            "_foo.abi3-x86_64-linux-gnu.so": "_foo",
+            "_cffi.pypy310-pp73-x86_64-linux-gnu.so": "_cffi",
+            "plain.so": "plain",
+            "win.cp311-win_amd64.pyd": "win",
+            "win.pyd": "win",
+            "libfoo.so.1": None,
+            "foo.bar.baz.so": None,
+            "foo-bar.py": None,
+            "stubs.pyi": None,
+            "README": None,
+            "x.pth": None,
+        }
+        for filename, expected in cases.items():
+            self.assertEqual(module_name(filename), expected, filename)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -30,6 +30,7 @@ _PYCROSS_TOOLCHAIN_TYPE = Label("//pycross:toolchain_type")
 def _pycross_wheel_library_impl(ctx):
     out = ctx.actions.declare_directory(ctx.attr.name)
     entry_points = ctx.actions.declare_file(ctx.attr.name + ".dist_info/entry_points.txt")
+    index = ctx.actions.declare_file(ctx.attr.name + ".dist_info/index.json")
     dist_info_dir = None
     if ctx.attr.package_name and ctx.attr.package_version:
         dist_info_dir = "{}-{}.dist-info".format(
@@ -44,7 +45,7 @@ def _pycross_wheel_library_impl(ctx):
         )
         register_failure_action(
             ctx,
-            outputs = [out, entry_points],
+            outputs = [out, entry_points, index],
             message = unsupported_wheel_message(pkg_id),
             mnemonic = "PycrossUnsupportedWheel",
             progress_message = "Rejecting unsupported wheel %s" % pkg_id,
@@ -69,6 +70,7 @@ def _pycross_wheel_library_impl(ctx):
             args.add("--install-exclude-glob", install_exclude_glob)
 
         args.add("--entry-points-output", entry_points)
+        args.add("--index-output", index)
 
         if ctx.attr.package_name:
             args.add("--expected-name", ctx.attr.package_name)
@@ -114,7 +116,7 @@ def _pycross_wheel_library_impl(ctx):
 
         ctx.actions.run(
             inputs = depset(inputs, transitive = transitive_inputs),
-            outputs = [out, entry_points],
+            outputs = [out, entry_points, index],
             executable = ctx.executable._tool,
             tools = tools,
             mnemonic = "PycrossWheelInstall",
@@ -234,9 +236,13 @@ def _pycross_wheel_library_impl(ctx):
         merged.py_info,
         PycrossExtractedWheelInfo(
             site_packages = out,
+            index = index,
         ),
         OutputGroupInfo(
             dist_info = depset([entry_points]),
+            # This wheel's own index (not its deps'), e.g. for
+            # `bazel build --output_groups=pycross_wheel_index <target>`.
+            pycross_wheel_index = depset([index]),
         ),
     ]
 

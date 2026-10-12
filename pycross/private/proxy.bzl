@@ -56,7 +56,8 @@ def _pycross_library_proxy_impl(ctx):
         merged.py_info,
     ]
 
-    # Forward pycross-specific providers from the actual target.
+    # Forward pycross-specific providers from the actual target. PycrossExtractedWheelInfo
+    # also carries the per-wheel index (`index`).
     if PycrossExtractedWheelInfo in actual:
         providers.append(actual[PycrossExtractedWheelInfo])
     if PycrossPackageInfo in actual:
@@ -64,7 +65,7 @@ def _pycross_library_proxy_impl(ctx):
     if PycrossUnsupportedWheelInfo in actual:
         providers.append(actual[PycrossUnsupportedWheelInfo])
 
-    # Forward OutputGroupInfo (e.g., dist_info) if present.
+    # Forward OutputGroupInfo (e.g., dist_info, pycross_wheel_index) if present.
     if OutputGroupInfo in actual:
         providers.append(actual[OutputGroupInfo])
 

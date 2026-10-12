@@ -35,6 +35,12 @@ pycross_wheel_zipimport_library(
     wheel = "@pycross_internal_deps//installer:wheel",
 )
 
+py_library(
+    name = "wheel_index",
+    srcs = ["wheel_index.py"],
+    imports = ["../../.."],
+)
+
 py_binary(
     name = "wheel_installer",
     srcs = ["wheel_installer.py"],
@@ -43,6 +49,7 @@ py_binary(
     deps = [
         ":args",
         ":installer",
+        ":wheel_index",
         "//pycross/private/third_party/patch_ng",
     ],
 )
