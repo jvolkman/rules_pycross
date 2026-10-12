@@ -529,6 +529,11 @@ class WheelInstallerIndexTest(unittest.TestCase):
             "pkg/data",
             "pkg/sub",
         ],
+        "modules": {
+            "patched_ns": ["mod"],
+            "pep420/regular/nsdir": ["y"],
+            "pkg/sub": ["mod"],
+        },
         # patched_ns is a pkgutil stub in the wheel, but not after post_install_patches.
         "namespaces": {
             "ns": ["helper"],

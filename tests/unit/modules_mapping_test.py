@@ -11,7 +11,7 @@ from pycross.private.tools.modules_mapping import build_mapping
 from pycross.private.tools.modules_mapping import simplify
 
 
-def make_index(name, top=None, dirs=(), namespaces=None, version="1.0", pth=None):
+def make_index(name, top=None, dirs=(), modules=None, namespaces=None, version="1.0", pth=None):
     """A per-wheel index (see wheel_index.py). `top` defaults to the top-level dirs."""
     if top is None:
         top = {d: [d] for d in dirs if "/" not in d}
@@ -23,6 +23,7 @@ def make_index(name, top=None, dirs=(), namespaces=None, version="1.0", pth=None
         "pth": sorted(pth or {}),
         "pth_paths": pth or {},
         "dirs": sorted(dirs),
+        "modules": modules or {},
         "namespaces": namespaces or {},
     }
 
@@ -118,12 +119,46 @@ class ModulesMappingTest(unittest.TestCase):
         mapping = mapping_for(
             make_index("opencv-python", dirs=["cv2", "cv2/data", "cv2/gapi"]),
             make_index("opencv-contrib-python", dirs=["cv2", "cv2/data", "cv2/contrib"]),
+            make_index(
+                "functions-framework",
+                dirs=["functions_framework", "google", "google/cloud", "google/cloud/functions", "google/cloud/functions_v1"],
+                modules={"google/cloud/functions": ["context"], "google/cloud/functions_v1": ["context"]},
+                namespaces={"google": [], "google/cloud": []},
+            ),
+            make_index(
+                "google-cloud-functions",
+                dirs=[
+                    "google",
+                    "google/cloud",
+                    "google/cloud/functions",
+                    "google/cloud/functions_v1",
+                    "google/cloud/functions_v1/services",
+                    "google/cloud/functions_v2",
+                ],
+                modules={"google/cloud/functions_v1": ["gapic_version"]},
+                namespaces={"google": [], "google/cloud": []},
+            ),
+            make_index("PyQt5", dirs=["PyQt5", "PyQt5/uic"], modules={"PyQt5": ["QtCore", "QtWidgets"]}),
+            make_index("PyQt5-Qt5", dirs=["PyQt5", "PyQt5/Qt5"]),
+            make_index("PyQt5-sip", dirs=["PyQt5"], namespaces={"PyQt5": ["sip"]}),
             make_index("six", top={"six": ["six.py"]}),
             make_index("six-fork", top={"six": ["six.py"]}),
         )
         self.assertEqual(
             mapping,
-            {"cv2.contrib": "opencv_contrib_python", "cv2.gapi": "opencv_python"},
+            {
+                "PyQt5": "pyqt5",
+                "PyQt5.Qt5": "pyqt5_qt5",
+                "PyQt5.sip": "pyqt5_sip",
+                "cv2.contrib": "opencv_contrib_python",
+                "cv2.gapi": "opencv_python",
+                "functions_framework": "functions_framework",
+                "google.cloud.functions": "google_cloud_functions",
+                "google.cloud.functions.context": "functions_framework",
+                "google.cloud.functions_v1": "google_cloud_functions",
+                "google.cloud.functions_v1.context": "functions_framework",
+                "google.cloud.functions_v2": "google_cloud_functions",
+            },
         )
 
     def test_versions_of_one_distribution_do_not_conflict(self):

@@ -125,6 +125,9 @@ class Distribution:
         for d, modules in namespaces.items():
             for module in modules:
                 self.add(d.replace("/", ".") + "." + module, MODULE)
+        for d, modules in index.get("modules", {}).items():
+            for module in modules:
+                self.add(d.replace("/", ".") + "." + module, MODULE)
         for name, entries in index.get("top", {}).items():
             if any(entry != name for entry in entries):
                 self.add(name, MODULE)  # a module file in the root
@@ -176,6 +179,16 @@ def simplify(mapping: dict[str, str]) -> dict[str, str]:
     return simplified
 
 
+def _canonical_owner(pkg: str, concrete: list[Distribution]) -> Optional[Distribution]:
+    """When several distributions ship `__init__.py` for `pkg`, picks the one named after `pkg`."""
+    if not all(d.kinds[pkg] == PACKAGE for d in concrete):
+        return None
+    norm = canonical_name(pkg.replace(".", "_"))
+    norm_base = re.sub(r"_v\d+$", "", norm)
+    matches = [d for d in concrete if d.name in (norm, norm_base)]
+    return matches[0] if len(matches) == 1 else None
+
+
 def build_mapping(distributions: Iterable[Distribution]) -> dict[str, str]:
     """Builds the import name -> distribution mapping for a set of distributions."""
     mapping: dict[str, str] = {}
@@ -193,6 +206,10 @@ def build_mapping(distributions: Iterable[Distribution]) -> dict[str, str]:
             concrete, namespace = claims[child]
             if len(concrete) == 1:
                 mapping[child] = concrete[0].name
+            elif len(concrete) > 1:
+                owner = _canonical_owner(child, concrete)
+                if owner is not None:
+                    mapping[child] = owner.name
             # Descend unless a single distribution owns the name outright. Entries that end up
             # below an ancestor with the same distribution are collapsed by simplify().
             if namespace or len(concrete) > 1:

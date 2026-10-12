@@ -25,6 +25,10 @@ are no absolute paths or timestamps, so the output is deterministic.
                 as separators (Windows .pth files).
   dirs          Every package directory: identifier-named directories below an importable
                 top-level directory, excluding __pycache__.
+  modules       Non-namespace package directories that contain module files directly (excluding
+                __init__), mapped to those module names. Needed when several distributions ship
+                the same regular package directory (e.g. via post-install patches) so consumers
+                can still map the unique leaf modules inside it.
   namespaces    Namespace package directories (no __init__ module, or an __init__.py that is a
                 pure pkgutil/pkg_resources namespace stub) that are reachable from the root through
                 namespace directories only, mapped to the names of the module files directly
@@ -218,6 +222,7 @@ def index_site_packages(
     top: dict[str, list[str]] = {}
     pth: list[str] = []
     dirs: list[str] = []
+    modules: dict[str, list[str]] = {}
     namespaces: dict[str, list[str]] = {}
     dist_info = None
 
@@ -226,8 +231,11 @@ def index_site_packages(
         path = root / rel
         subdirs, files = _scan(path)
         is_namespace = parent_is_namespace and _is_namespace_dir(path, files)
+        mods = sorted({m for m in map(module_name, files) if m and m != "__init__"})
         if is_namespace:
-            namespaces[rel] = sorted({m for m in map(module_name, files) if m and m != "__init__"})
+            namespaces[rel] = mods
+        elif mods:
+            modules[rel] = mods
         for subdir in subdirs:
             walk(rel + "/" + subdir, is_namespace)
 
@@ -266,6 +274,7 @@ def index_site_packages(
         "pth": sorted(pth),
         "pth_paths": pth_paths,
         "dirs": sorted(dirs),
+        "modules": dict(sorted(modules.items())),
         "namespaces": dict(sorted(namespaces.items())),
     }
 
