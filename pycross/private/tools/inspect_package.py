@@ -534,6 +534,8 @@ def _find_wheel_paths(wheel_path: Path) -> tuple[list[str], list[str], list[str]
             if parts[0].endswith(".data") and len(parts) > 2:
                 scheme = parts[1]
                 top_level_name = parts[2]
+                if not top_level_name:
+                    continue
                 if scheme == "scripts":
                     bin_paths.add(top_level_name)
                 elif scheme == "data":
@@ -541,18 +543,20 @@ def _find_wheel_paths(wheel_path: Path) -> tuple[list[str], list[str], list[str]
                 elif scheme == "headers":
                     include_paths.add(top_level_name)
                 elif scheme in ("purelib", "platlib"):
-                    adjusted_name = "/".join(parts[2:])
-                    all_files.add(adjusted_name)
-                    members[adjusted_name] = name
+                    if not name.endswith("/"):
+                        adjusted_name = "/".join(parts[2:])
+                        all_files.add(adjusted_name)
+                        members[adjusted_name] = name
                     if len(parts) >= 4:
                         top_level_dirs.add(parts[2])
                     elif len(parts) == 3 and parts[2] and not name.endswith("/"):
                         root_files.add(parts[2])
                 continue
 
-            if not parts[0].endswith(".data"):
-                all_files.add(name)
-                members[name] = name
+            if parts[0] and not parts[0].endswith(".data"):
+                if not name.endswith("/"):
+                    all_files.add(name)
+                    members[name] = name
                 if len(parts) >= 2:
                     top_level_dirs.add(parts[0])
                 elif len(parts) == 1 and parts[0] and not name.endswith("/"):

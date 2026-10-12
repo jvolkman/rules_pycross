@@ -109,6 +109,30 @@ class InspectPackageTest(unittest.TestCase):
         result = inspect_wheel(wheel_path)
         self.assertEqual(result["bin_paths"], [])
 
+    def test_wheel_data_directory_entries_ignored(self):
+        wheel_path = self.create_zip(
+            "pkg-1.0-py3-none-any.whl",
+            {
+                "pkg-1.0.data/": "",
+                "pkg-1.0.data/headers/": "",
+                "pkg-1.0.data/headers/greenlet.h": "/* header */",
+                "pkg-1.0.data/scripts/": "",
+                "pkg-1.0.data/scripts/cli": "#!/bin/sh\n",
+                "pkg-1.0.data/data/": "",
+                "pkg-1.0.data/data/share/": "",
+                "pkg-1.0.data/data/share/doc.txt": "doc",
+                "pkg-1.0.data/purelib/": "",
+                "pkg-1.0.data/purelib/mod.py": "# mod\n",
+                "pkg-1.0.dist-info/": "",
+                "pkg-1.0.dist-info/WHEEL": "",
+            },
+        )
+        result = inspect_wheel(wheel_path)
+        self.assertEqual(result["include_paths"], ["greenlet.h"])
+        self.assertEqual(result["bin_paths"], ["cli"])
+        self.assertEqual(result["data_paths"], ["share"])
+        self.assertEqual(result["site_paths"], ["mod.py"])
+
     def test_vendored_patch_ng(self):
         import patch_ng
 
