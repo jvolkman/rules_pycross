@@ -11,7 +11,7 @@
 * Import lock files from **uv**, **PDM**, **Poetry**, or **PEP 751 pylock.toml**
 * Build source distributions inside Bazel build actions, not during workspace initialization
 * Pluggable build backends: setuptools, meson, cmake, maturin, and generic PEP 517
-* Cross-platform sdist builds — build wheels for Linux and macOS from either host with an appropriate cross-compilation toolchain (e.g., [toolchains_llvm](https://github.com/bazel-contrib/toolchains_llvm))
+* Cross-platform sdist builds — build wheels for Linux and macOS from either host with a hermetic cross-compilation toolchain ([hermetic-llvm](https://github.com/hermeticbuild/hermetic-llvm), BCR module `llvm`)
 * Multi-workspace support for monorepos with shared dependency deduplication
 * Conflict/variant resolution for mutually exclusive dependencies (e.g., torch CPU vs. CUDA)
 * Compatible with `rules_python` and Gazelle
@@ -56,7 +56,7 @@ After this, packages are available as `@pypi//package_name`. A `requirement()` m
 
 Other lock formats work the same way via their respective extensions: `pdm.bzl`, `poetry.bzl`, or `pylock.bzl`. A `pylock.toml` without a dependency graph (as written by `pip lock` and `uv export`) is installed as a whole, like PEP 751 installers do: each pinned package depends on every locked package whose marker matches the target.
 
-Building sdists that contain native code needs a registered C/C++ toolchain; use a hermetic one (e.g. [toolchains_llvm](https://github.com/bazel-contrib/toolchains_llvm)) for cross builds. BUILD files that use `py_binary`/`py_test` also need a `bazel_dep` on `rules_python`.
+Building sdists that contain native code needs a registered C/C++ toolchain; for cross builds, use [hermetic-llvm](https://github.com/hermeticbuild/hermetic-llvm) (BCR module `llvm`), which is what rules_pycross is tested with. BUILD files that use `py_binary`/`py_test` also need a `bazel_dep` on `rules_python`.
 
 ### Repository Defaults and Auto-Generation
 

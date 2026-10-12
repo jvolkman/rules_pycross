@@ -1,13 +1,15 @@
-bazel_dep(name = "llvm", version = "0.8.11")
+bazel_dep(name = "llvm", version = "0.8.24")
 bazel_dep(name = "platforms", version = "1.0.0")
 
-# Apple now returns 403 for the macOS SDK pkg that llvm 0.8.11 downloads. Point it at the newer
-# SDK that llvm 0.8.20+ uses, without taking those releases' toolchain changes.
+# Backport hermetic-llvm#793 (unreleased as of 0.8.24): under Bazel's local sandboxes the merged link
+# resource directory loses Clang's builtin headers, so rules_foreign_cc's configure (compile and link
+# in one call) fails with "cannot run C compiled programs". See hermetic-llvm#812.
+# Drop this override once a release includes the fix.
 single_version_override(
     module_name = "llvm",
     patch_strip = 1,
-    patches = ["//shared:llvm_macos_sdk.patch"],
-    version = "0.8.11",
+    patches = ["//shared:llvm_resource_dir_sandbox.patch"],
+    version = "0.8.24",
 )
 
 register_toolchains("@llvm//toolchain:all")

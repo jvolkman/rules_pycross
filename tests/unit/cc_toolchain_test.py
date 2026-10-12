@@ -1,5 +1,6 @@
 import json
 import os
+import shlex
 import subprocess
 import sys
 import textwrap
@@ -137,15 +138,44 @@ class CcToolchainTest(unittest.TestCase):
         )
         # Compiles get neither.
         self.assertEqual(run_wrapper("-shared", "-c", "a.c"), ["-shared", "-c", "a.c"])
-        # distutils appends $LDFLAGS (with -static-pie) to LDSHARED itself.
+
+    def test_setup_cc_layer_exports_no_toolchain_ldflags(self):
+        ctx = MockBuildContext(self.temp_path)
+        fake_cc = self._make_fake_cc()
+        cc_config = {
+            "CC": str(fake_cc),
+            "CXX": str(fake_cc),
+            "CFLAGS": "-O2",
+            "CXXFLAGS": "-O2",
+            # Like hermetic-llvm 0.8.24 on glibc.
+            "LDFLAGS": "-fuse-ld=lld -no-pie -Wl,-S",
+            "LDSHAREDFLAGS": "-fuse-ld=lld -shared -Wl,-S",
+            "AR": "/usr/bin/ar",
+            "ARFLAGS": "rcs",
+        }
+
+        setup_cc_layer(ctx, cc_config)
+
+        # Build systems apply LDFLAGS to every link; the wrapper is the single source
+        # of the toolchain's link flags, so LDFLAGS only carries pycross's own additions.
+        layer_lib = self.temp_path / "cc_layer" / "lib"
+        self.assertEqual(ctx.sysconfig_vars["LDFLAGS"], f"-L{layer_lib}")
+        self.assertEqual(ctx.build_env["LDFLAGS"], ctx.sysconfig_vars["LDFLAGS"])
+        # LDSHARED uses Bazel's shared-library set directly.
+        self.assertEqual(ctx.sysconfig_vars["LDSHARED"], f"{ctx.sysconfig_vars['CC']} -fuse-ld=lld -shared -Wl,-S")
+
+        def run_wrapper(*args: str) -> list[str]:
+            return json.loads(subprocess.check_output([ctx.sysconfig_vars["CC"], *args], text=True))
+
+        # distutils-style shared link (LDSHARED + $LDFLAGS): only shared-valid flags (the
+        # wrapper re-appends the shared set), and no executable-only ones.
+        ldshared = shlex.split(ctx.sysconfig_vars["LDSHARED"])[1:]
         self.assertEqual(
-            run_wrapper("-shared", "-static-pie", "a.o", "-o", "a.so"),
-            ["-shared", "a.o", "-o", "a.so"] + shared_tail,
+            run_wrapper(*ldshared, *shlex.split(ctx.sysconfig_vars["LDFLAGS"]), "a.o", "-o", "a.so"),
+            ["-fuse-ld=lld", "-shared", "-Wl,-S", f"-L{layer_lib}", "a.o", "-o", "a.so", "-fuse-ld=lld", "-Wl,-S"],
         )
-        self.assertEqual(
-            run_wrapper("-static-pie", "a.o", "-o", "a")[:4],
-            ["-static-pie", "a.o", "-o", "a"],
-        )
+        # Executable links get the executable set, including -no-pie.
+        self.assertEqual(run_wrapper("a.o", "-o", "a"), ["a.o", "-o", "a", "-fuse-ld=lld", "-no-pie", "-Wl,-S"])
 
     def test_setup_cc_layer(self):
         ctx = MockBuildContext(self.temp_path)
@@ -203,7 +233,8 @@ class CcToolchainTest(unittest.TestCase):
         setup_cc_layer(ctx, cc_config)
         # Extensions are linked as MH_BUNDLE like CPython, not MH_DYLIB (-shared).
         ldshared = ctx.sysconfig_vars["LDSHARED"].split()
-        self.assertIn("-Wl,-O1", ldshared)
+        # Toolchain link flags come from the wrapper, not LDSHARED.
+        self.assertNotIn("-Wl,-O1", ldshared)
         self.assertNotIn("-shared", ldshared)
         self.assertEqual(ldshared[-3:], ["-bundle", "-undefined", "dynamic_lookup"])
         self.assertEqual(ctx.sysconfig_vars["LDCXXSHARED"], ctx.sysconfig_vars["LDSHARED"])

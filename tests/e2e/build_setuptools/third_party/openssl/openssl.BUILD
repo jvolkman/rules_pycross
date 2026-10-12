@@ -84,10 +84,11 @@ configure_make(
     configure_command = "Configure",
     configure_in_place = True,
     configure_options = CONFIGURE_OPTIONS,
-    # The @llvm musl toolchain links executables with -static-pie, which breaks the shared
-    # library links (-shared and -pie may not be used together).
+    # The @llvm musl toolchain links executables with -static-pie or -static. -static-pie breaks
+    # the shared library links (-shared and -pie may not be used together), and -static makes
+    # OpenSSL's Configure disable shared libraries.
     configure_prefix = select({
-        ":musl": "bash -c 'export LDFLAGS=\"$${LDFLAGS//-static-pie/}\"; exec \"$$@\"' _",
+        ":musl": "bash -c 'f=\" $$LDFLAGS \"; f=\"$${f// -static-pie / }\"; export LDFLAGS=\"$${f// -static / }\"; exec \"$$@\"' _",
         "//conditions:default": "",
     }),
     copts = [
