@@ -8,6 +8,7 @@ All notable changes to this project will be documented in this file.
 
 - **`venvs_site_packages=yes`**: wheel libraries no longer add their
   `site-packages` to `PyInfo.imports`/`sys.path`, matching `rules_python`.
+  pkgutil-style and `nvidia` namespace packages are linked per subpackage.
 - **`always_build` and `disallow_builds` replaced by `package(build_mode = ...)`**
   (`auto`/`always`/`never`, inherits from `*`).
 - **`pypi_indexes` are now Simple API roots** (e.g. `https://pypi.org/simple`),
@@ -46,6 +47,8 @@ All notable changes to this project will be documented in this file.
 - **`repo(settings = ...)`**: label-keyed build settings for repo transitions.
 - **`.pyc` precompilation** for installed wheels, following `rules_python`'s
   `precompile` flag, with per-package `package(precompile = ...)`.
+- **Repository contents cache support**: repo rules are reproducible, record no
+  host-specific paths, and re-run when pycross's internal tools change.
 
 ### Changed
 
@@ -62,24 +65,22 @@ All notable changes to this project will be documented in this file.
 
 ### Fixed
 
-- **pkgutil-style and `nvidia` namespace packages** no longer collide in the
-  venv layout.
-- **Repository rules** re-run when pycross's internal tools change, instead of
-  serving stale cached results.
-- **Sdist builds** no longer export the toolchain's executable link flags as
-  `LDFLAGS`; the compiler wrapper applies the right flags per link type.
+- **Sdist build link flags**: the compiler wrapper applies the toolchain's
+  executable or shared-library link flags per link; exported `LDFLAGS` no longer
+  carries executable-only flags (e.g. `-no-pie`) that broke shared links.
 - **Custom Python versions** (e.g. from `python.single_version_override`) now get
   pycross toolchains and are selected by `python_version`.
-- **Cross builds on Python 3.15** no longer fail in crossenv's `sysconfig` patch.
-- **Cross-built abi3 extensions** on Python 3.15 now get the target platform's
-  file suffix instead of the build host's.
+- **Python 3.15 cross builds** work, and abi3 extensions get the target
+  platform's file suffix instead of the build host's.
 - **Native sdist builds** no longer go through crossenv (skipping `site_hooks`)
   when the same Python version is registered under two names.
 - **`venvs_site_packages`**: package metadata and entry points no longer go
   missing for wheels with a mixed-case `.dist-info` directory (now installed
   under its normalized name).
-- **Dependency cycles** with markers or extras no longer drop members or activate the wrong extras.
-- **Meson cross builds** now compile against the target Python's headers instead of the host's.
+- **Dependency cycles** with markers or extras no longer drop members or
+  activate the wrong extras.
+- **Meson cross builds** now compile against the target Python's headers
+  instead of the host's.
 - **Git sources** now include submodules, honor uv's `lfs = true`, fetch only
   the locked commit, and produce reproducible archives.
 - **Pre-built wheels** now preserve `bin_paths`, `data_paths`, and
@@ -96,16 +97,10 @@ All notable changes to this project will be documented in this file.
 - **`pre_build_patches`** are now applied before sdist inspection.
 - **`rules_pycross_backend_maturin`** no longer references the removed
   `environments` extension.
-- **Repository contents cache**: repo rules are reproducible and no longer
-  record host-specific paths.
-- **CC compiler wrappers** now forward toolchain `LDFLAGS` (and `LDSHAREDFLAGS`
-  for shared links) on link invocations.
 - **macOS setuptools extensions** are now linked as bundles (`-bundle`), like
   CPython.
 - **macOS cross builds** accept `MACOSX_DEPLOYMENT_TARGET` 12 and later.
 - **musl cross builds** (`py_linux_libc=musl`) now produce `musllinux` wheels.
-- **README examples** corrected (override `tool_deps`, maturin `use_repo`,
-  `__build` overrides, and more).
 - **`backends` extension** no longer warns when the root module overrides a
   default registration.
 - **Non-sandboxed sdist builds** no longer reuse stale sources or share a
