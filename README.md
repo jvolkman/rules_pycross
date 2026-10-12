@@ -3,8 +3,8 @@
 `rules_pycross` lets you use Python lock files with Bazel, enabling cross-platform, hermetic builds of Python dependencies — including native extensions.
 
 > [!NOTE]
-> [#243](https://github.com/jvolkman/rules_pycross/pull/243) merged a major "v2" overhaul. The prior release can be found at
-> the [v1](https://github.com/jvolkman/rules_pycross/tree/v1) branch.
+> 2.0 is a major overhaul of `rules_pycross` ([#243](https://github.com/jvolkman/rules_pycross/pull/243)); see the
+> [CHANGELOG](CHANGELOG.md) for breaking changes. The 1.x line lives on the [v1](https://github.com/jvolkman/rules_pycross/tree/v1) branch.
 
 ### Features
 
@@ -56,7 +56,15 @@ After this, packages are available as `@pypi//package_name`. A `requirement()` m
 
 Other lock formats work the same way via their respective extensions: `pdm.bzl`, `poetry.bzl`, or `pylock.bzl`. A `pylock.toml` without a dependency graph (as written by `pip lock` and `uv export`) is installed as a whole, like PEP 751 installers do: each pinned package depends on every locked package whose marker matches the target.
 
-Building sdists that contain native code needs a registered C/C++ toolchain; for cross builds, use [hermetic-llvm](https://github.com/hermeticbuild/hermetic-llvm) (BCR module `llvm`), which is what rules_pycross is tested with. BUILD files that use `py_binary`/`py_test` also need a `bazel_dep` on `rules_python`.
+Building sdists that contain native code needs a registered C/C++ toolchain; for cross builds, use [hermetic-llvm](https://github.com/hermeticbuild/hermetic-llvm) (BCR module `llvm`), which is what rules_pycross is tested with:
+
+```python
+bazel_dep(name = "llvm", version = "0.8.24")
+
+register_toolchains("@llvm//toolchain:all")
+```
+
+Then select a target with its platforms, e.g. `--platforms=@llvm//platforms:linux_aarch64` or `--platforms=@llvm//platforms:macos_aarch64`. BUILD files that use `py_binary`/`py_test` also need a `bazel_dep` on `rules_python`.
 
 ### Repository Defaults and Auto-Generation
 
@@ -171,8 +179,8 @@ pycross.configure_toolchains(
     ],
     # Restrict supported Python versions
     python_versions = [
-        "3.11",
-        "3.12",
+        "3.13",
+        "3.14",
     ],
     # Set platform version constraints
     glibc_version = "2.28",
@@ -822,7 +830,7 @@ Independently of this setting, sdist builds whose configuration is known to be b
 
 `rules_pycross` integrates with `rules_python`. The generated target layout (`@<repo>//<package>`) is compatible with `rules_python` conventions.
 
-* **Venv support** — when `rules_python` venvs are enabled, `pycross_wheel_library` populates the symlinks needed for a correct `site-packages` layout. Auto-detected paths can be overridden via `uv.package(site_paths = [...])`, and additional path categories (`bin_paths`, `data_paths`, `include_paths`) are also supported.
+* **Venv support** — when `rules_python` venvs are enabled (`venvs_site_packages=yes`), `pycross_wheel_library` populates the symlinks needed for a correct `site-packages` layout, and, like `rules_python`, doesn't also add each wheel's `site-packages` to `sys.path`. Namespace packages (PEP 420, pkgutil-style, and `nvidia`) are linked per subpackage so wheels sharing a namespace don't collide. Auto-detected paths can be overridden via `uv.package(site_paths = [...])`, and additional path categories (`bin_paths`, `data_paths`, `include_paths`) are also supported.
 * **`.pyc` precompilation** — setting `--@rules_python//python/config_settings:precompile=enabled` (or `force_enabled`) or `package(precompile = "enabled")` (on individual packages or `name = "*"`; default `"auto"` follows the flag) precompiles `.py` files in installed wheels during the install action for faster cold startup, using the target Python version's interpreter from the registered `pycross` toolchain. Like `rules_python`, `force_enabled`/`force_disabled` override per-package settings, the `.pyc` invalidation mode follows `--compilation_mode` (`unchecked_hash` under `opt`, `checked_hash` otherwise), and `.py` sources are always kept (a binary's `pyc_collection` attribute does not apply to installed wheels). Note for cache-sensitive builds: precompiled wheel installs are keyed per Python version (whereas uncompiled pure-Python wheel installs are shared across versions), staging part of the interpreter as action inputs means an interpreter patch release re-runs compiled installs, and setting `package(precompile = "enabled")` on specific large packages limits that overhead to those packages.
 * **`py_console_script_binary`** — each generated package has a `@<repo>//<package>:dist_info` target for entry point discovery. Use `py_console_script_binary(pkg = "@pypi//cython", script = "cython")` directly.
 * **`:data`** — `@<repo>//<package>:data` aliases `:pkg` for `rules_python` label compatibility; the installed wheel directory (with `bin/`, `data/` and `include/`) and its runfiles come with it.
