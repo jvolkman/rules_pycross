@@ -2,6 +2,7 @@
 
 load("@bazel_skylib//lib:paths.bzl", "paths")
 load("@bazel_skylib//rules:common_settings.bzl", "BuildSettingInfo")
+load("@rules_python//python:features.bzl", "features")
 load("@rules_python//python:py_info.bzl", "PyInfo")
 
 # buildifier: disable=bzl-visibility
@@ -26,6 +27,24 @@ load(
 load(":util.bzl", "PY_COMMON_ATTRS", "merge_py_providers", "underscore_name")
 
 _PYCROSS_TOOLCHAIN_TYPE = Label("//pycross:toolchain_type")
+
+# rules_python with PyInfo.venv_import_indexes (prototype) also has the
+# --@rules_python//python/config_settings:venv_import_index flag. Older versions have neither, and
+# a load of a missing private symbol would fail, so the flag is read through an attribute that
+# only exists when the feature does.
+_HAS_VENV_IMPORT_INDEX = getattr(features, "py_info_venv_import_indexes", False)
+
+_VENV_IMPORT_INDEX_ATTRS = {
+    "_venv_import_index_flag": attr.label(
+        default = Label("@rules_python//python/config_settings:venv_import_index"),
+        providers = [BuildSettingInfo],
+    ),
+} if _HAS_VENV_IMPORT_INDEX else {}
+
+def _venv_import_index_enabled(ctx):
+    """Whether binaries resolve wheel imports through rules_python's import index finder."""
+    flag = getattr(ctx.attr, "_venv_import_index_flag", None)
+    return bool(flag) and flag[BuildSettingInfo].value != "off"
 
 def _pycross_wheel_library_impl(ctx):
     out = ctx.actions.declare_directory(ctx.attr.name)
@@ -157,7 +176,15 @@ def _pycross_wheel_library_impl(ctx):
 
     venvs_site_packages_enabled = VenvsSitePackages.is_enabled(ctx)
 
-    if venvs_site_packages_enabled and site_paths:
+    # With --venv_import_index, rules_python's import index finder resolves imports from the wheel
+    # roots on sys.path, so every wheel stays on sys.path (and in the index) and none is linked
+    # into the venv's site-packages, whatever venvs_site_packages says. Entries outside
+    # site-packages (bin/, data/, include/) are still linked.
+    use_import_index = _venv_import_index_enabled(ctx)
+    link_lib = venvs_site_packages_enabled and bool(site_paths) and not use_import_index
+    link_other = venvs_site_packages_enabled and (bool(site_paths) or use_import_index)
+
+    if link_lib:
         for tlp in site_paths:
             venv_symlinks.append(VenvSymlinkEntry(
                 kind = VenvSymlinkKind.LIB,
@@ -179,6 +206,7 @@ def _pycross_wheel_library_impl(ctx):
                 files = depset([out]),
             ))
 
+    if link_other:
         # Add other directory symlinks if supported by the rules_python version.
         base_dir = paths.dirname(imp)
 
@@ -223,9 +251,12 @@ def _pycross_wheel_library_impl(ctx):
         ctx,
         ctx.attr.deps,
         direct_sources = [out],
-        direct_imports = [] if (venvs_site_packages_enabled and site_paths) else [imp],
+        direct_imports = [] if link_lib else [imp],
         base_runfiles = ctx.runfiles(files = [out]),
         direct_venv_symlinks = venv_symlinks,
+        # For binaries built with --venv_import_index=prebuilt: `root` is the same string as the
+        # imports entry above.
+        direct_venv_import_indexes = [struct(root = imp, index = index)],
     )
 
     providers = [
@@ -315,7 +346,7 @@ pycross_wheel_library = rule(
         "experimental_venvs_site_packages": attr.label(
             default = Label("@rules_python//python/config_settings:venvs_site_packages"),
         ),
-    }, **PY_COMMON_ATTRS),
+    }, **(PY_COMMON_ATTRS | _VENV_IMPORT_INDEX_ATTRS)),
     toolchains = [
         config_common.toolchain_type("//pycross:toolchain_type", mandatory = False),
     ],
