@@ -22,6 +22,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from unittest import mock
 
 from pycross.private.tools import import_index
 from pycross.private.tools import venv_import_index_merger
@@ -618,6 +619,104 @@ class ImportIndexTest(unittest.TestCase):
                 [1, "nvidia/cudnn/lib/libcudnn.so.9"],
             ],
         )
+        self.assertEqual(
+            merged["preload"]["nvidia.cudnn"],
+            [
+                [0, "nvidia/cublas/lib/libcublasLt.so.12"],
+                [0, "nvidia/cublas/lib/libcublas.so.12"],
+            ],
+        )
+
+    def test_preload_soname_dt_needed_without_rpath_and_dot_libs(self):
+        def wheel(**fields):
+            return dict(
+                {"version": 1, "top": {}, "pth": [], "dirs": [], "dist_info": None},
+                **fields,
+            )
+
+        entries = [
+            (
+                "cublas/site-packages",
+                wheel(
+                    top={"nvidia": ["nvidia"]},
+                    dirs=["nvidia", "nvidia/cublas", "nvidia/cublas/lib"],
+                    native={
+                        # Both symlink and versioned file share DT_SONAME; canonical
+                        # symlink should win without duplicate preload entries.
+                        "nvidia/cublas/lib/libcublas.so": {
+                            "soname": "libcublas.so.12",
+                            "needed": [],
+                            "rpath": [],
+                            "runpath": [],
+                        },
+                        "nvidia/cublas/lib/libcublas.so.12": {
+                            "soname": "libcublas.so.12",
+                            "needed": [],
+                            "rpath": [],
+                            "runpath": [],
+                        },
+                        "nvidia/cublas/lib/libcublas.so.12.8": {
+                            "soname": "libcublas.so.12",
+                            "needed": [],
+                            "rpath": [],
+                            "runpath": [],
+                        },
+                        # Library without DT_SONAME should fall back to basename,
+                        # whereas ABI-tagged Python extension must not.
+                        "nvidia/cublas/lib/libnosoname.so": {
+                            "soname": None,
+                            "needed": [],
+                            "rpath": [],
+                            "runpath": [],
+                        },
+                        "nvidia/cublas/_ext.cpython-312-x86_64-linux-gnu.so": {
+                            "soname": None,
+                            "needed": [],
+                            "rpath": [],
+                            "runpath": [],
+                        },
+                    },
+                ),
+            ),
+            (
+                "ort/site-packages",
+                wheel(
+                    top={"onnxruntime": ["onnxruntime"]},
+                    dirs=["onnxruntime", "onnxruntime/capi"],
+                    native={
+                        # No escaping RPATH/RUNPATH, only DT_NEEDED on SONAMEs
+                        # from another wheel, plus a .libs/ sibling directory.
+                        "onnxruntime.libs/libort_bundled.so.1": {
+                            "soname": "libort_bundled.so.1",
+                            "needed": ["libcublas.so.12", "libnosoname.so"],
+                            "rpath": [],
+                            "runpath": [],
+                        },
+                    },
+                ),
+            ),
+        ]
+        merged = venv_import_index_merger.merge(entries)
+        self.assertEqual(
+            merged["preload"]["onnxruntime"],
+            [
+                [0, "nvidia/cublas/lib/libcublas.so.12"],
+                [0, "nvidia/cublas/lib/libnosoname.so"],
+            ],
+        )
+        self.assertEqual(
+            merged["sonames"]["libcublas.so.12"],
+            [0, "nvidia/cublas/lib/libcublas.so.12"],
+        )
+        self.assertEqual(
+            merged["sonames"]["libnosoname.so"],
+            [0, "nvidia/cublas/lib/libnosoname.so"],
+        )
+        self.assertNotIn("_ext.cpython-312-x86_64-linux-gnu.so", merged["sonames"])
+
+        with mock.patch.dict(os.environ, {"RULES_PYTHON_IMPORT_INDEX_SONAME_PRELOAD": "0"}):
+            merged_disabled = venv_import_index_merger.merge(entries)
+        self.assertNotIn("preload", merged_disabled)
 
 
 if __name__ == "__main__":

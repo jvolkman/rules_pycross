@@ -109,30 +109,105 @@ def _candidate_origin_dirs(own_dirs, so_dir, entry):
     return candidates
 
 
-def _compute_preload(wheel_indexes):
+def _is_abi_tagged_ext(filename):
+    """Whether `filename` has a Python extension ABI tag (.cpython-*, .abi3*, .pypy*, .graalpy*)."""
+    if not filename.endswith(".so"):
+        return False
+    base = filename[:-3]
+    _, dot, tag = base.partition(".")
+    if not dot or not tag:
+        return False
+    return tag.startswith(("cpython-", "abi3", "pypy", "graalpy"))
+
+
+def _soname_preload_enabled():
+    return os.environ.get("RULES_PYTHON_IMPORT_INDEX_SONAME_PRELOAD", "1").lower() not in (
+        "0",
+        "false",
+        "no",
+        "off",
+    )
+
+
+def _preload_trigger_keys(wheel_idx, idx, rel_so, merged, sub):
+    top = idx.get("top", {})
+    first_seg = rel_so.split("/", 1)[0] if "/" in rel_so else rel_so.split(".", 1)[0]
+    if first_seg in top or first_seg in idx.get("dirs", ()):
+        if merged and first_seg in merged and sub:
+            matched = [
+                d
+                for d, owner in sub.items()
+                if owner == wheel_idx
+                and (rel_so == d.replace(".", "/") or rel_so.startswith(d.replace(".", "/") + "/"))
+            ]
+            if matched:
+                return matched
+            wheel_subs = [d for d, owner in sub.items() if owner == wheel_idx and d.startswith(first_seg + ".")]
+            if wheel_subs and "/" not in rel_so[len(first_seg) + 1 :]:
+                return [first_seg] + wheel_subs
+            if wheel_subs:
+                return wheel_subs
+        return [first_seg]
+    keys = []
+    for name in sorted(top):
+        if merged and name in merged and sub:
+            wheel_subs = [d for d, owner in sub.items() if owner == wheel_idx and d.startswith(name + ".")]
+            if wheel_subs:
+                keys.extend(wheel_subs)
+                continue
+        keys.append(name)
+    return keys or [first_seg.partition(".")[0]]
+
+
+def _compute_native(wheel_indexes, merged=None, sub=None):
     if not any(idx.get("native") for idx in wheel_indexes):
-        return {}
+        return {}, {}, {}
 
     own_dirs_per_wheel = []
+    own_sonames_per_wheel = []
     libs_by_dir = {}
+    dir_sonames = {}
     by_soname = {}
     meta_by_key = {}
 
     for i, idx in enumerate(wheel_indexes):
         own_dirs = set(idx.get("dirs", ())) | set(idx.get("top", ()))
-        for rel_so, meta in sorted(idx.get("native", {}).items()):
+        own_sonames = set()
+        native = idx.get("native", {})
+        ordered_native = sorted(
+            native.items(),
+            key=lambda item: (posixpath.basename(item[0]) != item[1].get("soname"), item[0]),
+        )
+        for rel_so, meta in ordered_native:
             parent = posixpath.dirname(rel_so)
             while parent:
                 own_dirs.add(parent)
                 parent = posixpath.dirname(parent)
             key = (i, rel_so)
             meta_by_key[key] = meta
+            basename = posixpath.basename(rel_so)
+            own_sonames.add(basename)
             soname = meta.get("soname")
             if soname:
+                own_sonames.add(soname)
+            is_ext = _is_abi_tagged_ext(basename)
+            effective_soname = soname or (None if is_ext else basename)
+            if effective_soname:
+                by_soname.setdefault(effective_soname, key)
+                if not is_ext and basename != effective_soname:
+                    by_soname.setdefault(basename, key)
+            first_seg = rel_so.split("/", 1)[0] if "/" in rel_so else ""
+            if soname or (
+                not is_ext and (basename.startswith("lib") or ".so." in basename or first_seg.endswith(".libs"))
+            ):
                 so_dir = posixpath.dirname(rel_so)
-                libs_by_dir.setdefault(so_dir, []).append(key)
-                by_soname.setdefault(soname, key)
+                dedup_name = soname or basename
+                seen = dir_sonames.setdefault((i, so_dir), set())
+                if dedup_name not in seen:
+                    seen.add(dedup_name)
+                    libs_by_dir.setdefault(so_dir, []).append(key)
         own_dirs_per_wheel.append(own_dirs)
+        own_sonames_per_wheel.append(own_sonames)
 
     def escaping_targets(wheel_idx, rel_so, meta):
         so_dir = posixpath.dirname(rel_so)
@@ -146,22 +221,25 @@ def _compute_preload(wheel_indexes):
                         targets.append(key)
         return targets
 
-    pkg_roots = {}
-    for i, idx in enumerate(wheel_indexes):
-        for rel_so, meta in sorted(idx.get("native", {}).items()):
-            targets = escaping_targets(i, rel_so, meta)
-            if not targets:
-                continue
-            top_pkg = rel_so.split("/", 1)[0] if "/" in rel_so else rel_so.split(".", 1)[0]
-            seeds = pkg_roots.setdefault(top_pkg, [])
-            for t in targets:
-                if t not in seeds:
-                    seeds.append(t)
+    soname_preload = _soname_preload_enabled()
 
-    preload = {}
-    for top_pkg, seeds in sorted(pkg_roots.items()):
+    def direct_cross_wheel_deps(wheel_idx, rel_so, meta):
+        targets = list(escaping_targets(wheel_idx, rel_so, meta))
+        if soname_preload:
+            own_sonames = own_sonames_per_wheel[wheel_idx]
+            for needed_name in meta.get("needed") or ():
+                if needed_name in own_sonames:
+                    continue
+                dep_key = by_soname.get(needed_name)
+                if dep_key is not None and dep_key[0] != wheel_idx and dep_key not in targets:
+                    targets.append(dep_key)
+        return targets
+
+    def resolve_closure(seeds, exclude_key=None):
         ordered = []
         visited = set()
+        if exclude_key is not None:
+            visited.add(exclude_key)
 
         def visit(key):
             if key in visited:
@@ -178,10 +256,45 @@ def _compute_preload(wheel_indexes):
 
         for seed in seeds:
             visit(seed)
-        if ordered:
-            preload[top_pkg] = ordered
+        return ordered
 
-    return preload
+    pkg_roots = {}
+    native_deps = {}
+    for i, idx in enumerate(wheel_indexes):
+        for rel_so, meta in sorted(idx.get("native", {}).items()):
+            key = (i, rel_so)
+            targets = direct_cross_wheel_deps(i, rel_so, meta)
+            if targets:
+                for trigger_key in _preload_trigger_keys(i, idx, rel_so, merged, sub):
+                    seeds = pkg_roots.setdefault(trigger_key, [])
+                    for t in targets:
+                        if t not in seeds:
+                            seeds.append(t)
+            lib_seeds = []
+            for needed_name in meta.get("needed") or ():
+                dep_key = by_soname.get(needed_name)
+                if dep_key is not None and dep_key != key and dep_key not in lib_seeds:
+                    lib_seeds.append(dep_key)
+            for dep_key in escaping_targets(i, rel_so, meta):
+                if dep_key not in lib_seeds:
+                    lib_seeds.append(dep_key)
+            if lib_seeds:
+                deps = resolve_closure(lib_seeds, exclude_key=key)
+                if deps:
+                    native_deps["{}:{}".format(i, rel_so)] = deps
+
+    preload = {}
+    for pkg_key, seeds in sorted(pkg_roots.items()):
+        ordered = resolve_closure(seeds)
+        if ordered:
+            preload[pkg_key] = ordered
+
+    sonames = {name: [key[0], key[1]] for name, key in sorted(by_soname.items())}
+    return preload, sonames, native_deps
+
+
+def _compute_preload(wheel_indexes, merged=None, sub=None):
+    return _compute_native(wheel_indexes, merged, sub)[0]
 
 
 def merge_wheel_indexes(entries):
@@ -238,9 +351,13 @@ def merge_wheel_indexes(entries):
             name for name, owners in top.items() if len(owners) > 1 and any(e != name for _, es in owners for e in es)
         ),
     }
-    preload = _compute_preload(wheel_indexes)
+    preload, sonames, native_deps = _compute_native(wheel_indexes, merged, sub)
     if preload:
         result["preload"] = preload
+    if sonames:
+        result["sonames"] = sonames
+    if native_deps:
+        result["native_deps"] = native_deps
     return result
 
 
@@ -367,6 +484,11 @@ class _Prebuilt:
         self.merged = {d: [roots[i] for i in owners] for d, owners in data["merged"].items()}
         self.sub = {d: roots[i] for d, i in data.get("sub", {}).items()}
         self.preload = {pkg: [(roots[i], rel) for i, rel in libs] for pkg, libs in data.get("preload", {}).items()}
+        self.sonames = {name: (roots[i], rel) for name, (i, rel) in data.get("sonames", {}).items()}
+        self.native_deps = {}
+        for k, deps in data.get("native_deps", {}).items():
+            i_str, _, rel = k.partition(":")
+            self.native_deps[(roots[int(i_str)], rel)] = [(roots[di], drel) for di, drel in deps]
 
 
 def _load_per_wheel_prebuilt(roots, runfiles_root):
@@ -401,6 +523,8 @@ class _Index:
         self.merged = prebuilt.merged if prebuilt else {}
         self.sub = prebuilt.sub if prebuilt else {}
         self.preload = dict(prebuilt.preload) if prebuilt else {}
+        self.sonames = dict(prebuilt.sonames) if prebuilt else {}
+        self.native_deps = dict(prebuilt.native_deps) if prebuilt else {}
         self._parent_dirs = {}
         self._dists_by_name = None
 
@@ -673,8 +797,12 @@ class PathFinder(_machinery.PathFinder):
                     spec = _merged_subdir_spec(fullname, dirs)
                 else:
                     spec = super().find_spec(fullname, path, target)
-                return _merge(spec, fullname, path, dirs)
-            return super().find_spec(fullname, path, target)
+                spec = _merge(spec, fullname, path, dirs)
+            else:
+                spec = super().find_spec(fullname, path, target)
+            if _INDEX is not None and spec is not None and fullname in _INDEX.preload:
+                _preload_native(fullname, _INDEX.preload.pop(fullname))
+            return spec
 
         spec = cls._find_top_level(fullname, sys.path, target)
         if spec is not None and _is_namespace_spec(spec) and _NamespacePath is not None:
