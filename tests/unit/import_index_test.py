@@ -1209,6 +1209,113 @@ class ImportIndexTest(unittest.TestCase):
                 self.assertEqual(res[0], "stub_loaded")
                 spy_stub.assert_called_once_with(tmp, "libfoo.so.1", real_file)
 
+    def test_unnormalized_wheel_roots_and_intra_wheel_duplicate_sonames(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            rf = os.path.join(tmp, ".", "bazel-bin", "pkg", "bin.runfiles")
+            w0 = os.path.join(rf, "_lock", "numpy@2.1.3", "site-packages")
+            w1 = os.path.join(rf, "_lock", "scipy@1.16.1", "site-packages")
+            ext_so = os.path.join(
+                os.path.normpath(w0),
+                "numpy",
+                "_core",
+                "_multiarray_umath.cpython-313-x86_64-linux-gnu.so",
+            )
+            _write(ext_so, "ELF")
+
+            idx0 = {
+                "version": 1,
+                "distribution": {"name": "numpy", "version": "2.1.3"},
+                "dist_info": "numpy-2.1.3.dist-info",
+                "top": {"numpy": ["numpy"], "numpy.libs": ["numpy.libs"]},
+                "pth": [],
+                "pth_paths": [],
+                "dirs": ["numpy", "numpy/_core", "numpy.libs"],
+                "namespaces": {},
+                "modules": {},
+                "native": {
+                    "numpy.libs/libgfortran-040039e1-0352e75f.so.5.0.0": {
+                        "soname": "libgfortran-040039e1-0352e75f.so.5.0.0",
+                        "needed": ["libquadmath-96973f99-934c22de.so.0.0.0", "libc.so.6"],
+                        "rpath": ["$ORIGIN"],
+                        "runpath": [],
+                    },
+                    "numpy.libs/libquadmath-96973f99-934c22de.so.0.0.0": {
+                        "soname": "libquadmath-96973f99-934c22de.so.0.0.0",
+                        "needed": ["libc.so.6"],
+                        "rpath": [],
+                        "runpath": [],
+                    },
+                    "numpy/_core/_multiarray_umath.cpython-313-x86_64-linux-gnu.so": {
+                        "soname": None,
+                        "needed": ["libscipy_openblas64_-ff651d7f.so", "libc.so.6"],
+                        "rpath": ["$ORIGIN/../../numpy.libs"],
+                        "runpath": [],
+                    },
+                    "numpy.libs/libscipy_openblas64_-ff651d7f.so": {
+                        "soname": "libscipy_openblas64_-ff651d7f.so",
+                        "needed": ["libgfortran-040039e1-0352e75f.so.5.0.0", "libc.so.6"],
+                        "rpath": ["$ORIGIN"],
+                        "runpath": [],
+                    },
+                },
+            }
+            idx1 = {
+                "version": 1,
+                "distribution": {"name": "scipy", "version": "1.16.1"},
+                "dist_info": "scipy-1.16.1.dist-info",
+                "top": {"scipy": ["scipy"], "scipy.libs": ["scipy.libs"]},
+                "pth": [],
+                "pth_paths": [],
+                "dirs": ["scipy", "scipy.libs"],
+                "namespaces": {},
+                "modules": {},
+                "native": {
+                    "scipy.libs/libgfortran-040039e1-0352e75f.so.5.0.0": {
+                        "soname": "libgfortran-040039e1-0352e75f.so.5.0.0",
+                        "needed": ["libquadmath-96973f99-934c22de.so.0.0.0", "libc.so.6"],
+                        "rpath": ["$ORIGIN"],
+                        "runpath": [],
+                    },
+                    "scipy.libs/libquadmath-96973f99-934c22de.so.0.0.0": {
+                        "soname": "libquadmath-96973f99-934c22de.so.0.0.0",
+                        "needed": ["libc.so.6"],
+                        "rpath": [],
+                        "runpath": [],
+                    },
+                    "scipy.libs/libscipy_openblas-68440149.so": {
+                        "soname": "libscipy_openblas-68440149.so",
+                        "needed": ["libgfortran-040039e1-0352e75f.so.5.0.0", "libc.so.6"],
+                        "rpath": ["$ORIGIN"],
+                        "runpath": [],
+                    },
+                },
+            }
+
+            merged = import_index.merge_wheel_indexes(
+                [
+                    ("_lock/numpy@2.1.3/site-packages", idx0),
+                    ("_lock/scipy@1.16.1/site-packages", idx1),
+                ]
+            )
+            # scipy.libs/libscipy_openblas-68440149.so resolves libgfortran to its OWN wheel's copy
+            # (with $ORIGIN RPATH), so neither preload nor cross-wheel native_deps is emitted.
+            self.assertEqual(merged.get("preload", {}), {})
+            self.assertEqual(merged.get("native_deps", {}), {})
+
+            prev_index = import_index._INDEX
+            try:
+                pb = import_index._Prebuilt(merged, rf)
+                import_index._INDEX = import_index._Index([w0, w1], pb, rf)
+                # Even though w0 contains `/./` in its path, _match_wheel_relpath matches the
+                # normalized extension path and _is_first_party_extension_origin returns False.
+                self.assertEqual(
+                    import_index._match_wheel_relpath(ext_so),
+                    (w0, "numpy/_core/_multiarray_umath.cpython-313-x86_64-linux-gnu.so"),
+                )
+                self.assertFalse(import_index._is_first_party_extension_origin(ext_so))
+            finally:
+                import_index._INDEX = prev_index
+
 
 if __name__ == "__main__":
     unittest.main()

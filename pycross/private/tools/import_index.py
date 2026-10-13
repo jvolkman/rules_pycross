@@ -210,6 +210,7 @@ def _compute_native(wheel_indexes, merged=None, sub=None):
 
     own_dirs_per_wheel = []
     own_sonames_per_wheel = []
+    own_by_soname_per_wheel = []
     libs_by_dir = {}
     dir_sonames = {}
     by_soname = {}
@@ -219,6 +220,7 @@ def _compute_native(wheel_indexes, merged=None, sub=None):
     for i, idx in enumerate(wheel_indexes):
         own_dirs = set(idx.get("dirs", ())) | set(idx.get("top", ()))
         own_sonames = set()
+        own_by_soname = {}
         native = idx.get("native", {})
         ordered_native = sorted(
             native.items(),
@@ -244,6 +246,7 @@ def _compute_native(wheel_indexes, merged=None, sub=None):
             )
             effective_soname = soname or (basename if is_shared_lib else None)
             if effective_soname and not _is_system_soname(effective_soname):
+                own_by_soname.setdefault(effective_soname, key)
                 by_soname.setdefault(effective_soname, key)
                 if (
                     not is_ext
@@ -251,6 +254,7 @@ def _compute_native(wheel_indexes, merged=None, sub=None):
                     and not basename.endswith(".so")
                     and not _is_system_soname(basename)
                 ):
+                    own_by_soname.setdefault(basename, key)
                     by_soname.setdefault(basename, key)
             if is_shared_lib:
                 dedup_name = soname or basename
@@ -261,6 +265,7 @@ def _compute_native(wheel_indexes, merged=None, sub=None):
                         libs_by_dir.setdefault(so_dir, []).append(key)
         own_dirs_per_wheel.append(own_dirs)
         own_sonames_per_wheel.append(own_sonames)
+        own_by_soname_per_wheel.append(own_by_soname)
 
     escaping_cache = {}
     origin_dir_cache = {}
@@ -296,9 +301,11 @@ def _compute_native(wheel_indexes, merged=None, sub=None):
 
     needed_by_key = {}
     for key, meta in meta_by_key.items():
+        wheel_idx = key[0]
+        own_by_soname = own_by_soname_per_wheel[wheel_idx]
         deps = []
         for needed_name in meta.get("needed") or ():
-            dep_key = by_soname.get(needed_name)
+            dep_key = own_by_soname.get(needed_name) or by_soname.get(needed_name)
             if dep_key is not None and dep_key != key and dep_key not in deps:
                 deps.append(dep_key)
         needed_by_key[key] = tuple(deps)
@@ -328,6 +335,8 @@ def _compute_native(wheel_indexes, merged=None, sub=None):
         return ordered
 
     canonical_shared_keys = set(by_soname.values())
+    for own_by_soname in own_by_soname_per_wheel:
+        canonical_shared_keys.update(own_by_soname.values())
     trigger_cache = {}
     needed_closure_cache = {}
     pkg_roots = {}
@@ -651,6 +660,7 @@ class _Index:
             for name in pths:
                 self.pth.setdefault(name, root)
         self.root_set = frozenset(self.roots)
+        self._norm_roots = tuple((r, os.path.normpath(os.path.abspath(r)).rstrip("/")) for r in self.roots)
 
     def merged_dirs(self, name, parents):
         """The `name` directories below `parents`, per the prebuilt index."""
@@ -1102,8 +1112,8 @@ def _match_wheel_relpath(path_str):
     if _INDEX is None:
         return None
     norm = os.path.normpath(os.path.abspath(path_str))
-    for r in _INDEX.roots:
-        prefix = r.rstrip("/") + "/"
+    for r, r_clean in _INDEX._norm_roots:
+        prefix = r_clean + "/"
         if norm.startswith(prefix):
             return r, norm[len(prefix) :].replace(os.sep, "/")
     return None
@@ -1130,8 +1140,8 @@ def _extract_escaped_relpath(path_str):
             if rel:
                 return rel
     norm = os.path.normpath(abs_raw)
-    for r in _INDEX.roots:
-        r_clean = r.rstrip("/")
+    norm_roots = _INDEX._norm_roots
+    for r, r_clean in norm_roots:
         prefix = r_clean + "/"
         if norm.startswith(prefix):
             return norm[len(prefix) :].replace(os.sep, "/")
@@ -1141,7 +1151,7 @@ def _extract_escaped_relpath(path_str):
             if (
                 parent
                 and norm.startswith(parent_prefix)
-                and not any(r2 != r and r2.startswith(parent_prefix) for r2 in _INDEX.roots)
+                and not any(r2_clean != r_clean and r2_clean.startswith(parent_prefix) for _, r2_clean in norm_roots)
             ):
                 rel = norm[len(parent_prefix) :].replace(os.sep, "/")
                 first_seg = rel.split("/", 1)[0]
@@ -1456,6 +1466,8 @@ def _is_first_party_extension_origin(origin):
     if _is_stdlib_extension_origin(origin) or _match_wheel_relpath(origin) is not None:
         return False
     norm = os.path.normpath(os.path.abspath(origin))
+    if "/site-packages/" in norm.replace(os.sep, "/"):
+        return False
     runfiles_prefix = getattr(_INDEX, "runfiles_root", "")
     if runfiles_prefix and norm.startswith(runfiles_prefix.rstrip("/") + "/"):
         return True
