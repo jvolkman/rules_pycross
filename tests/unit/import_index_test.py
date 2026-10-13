@@ -718,6 +718,194 @@ class ImportIndexTest(unittest.TestCase):
             merged_disabled = venv_import_index_merger.merge(entries)
         self.assertNotIn("preload", merged_disabled)
 
+    def test_stub_elf_and_read_elf_needed_roundtrip(self):
+        stub_bytes = import_index._make_stub_elf("/tmp/wheel/lib", "libcublas.so.12")
+        self.assertIsNotNone(stub_bytes)
+        self.assertTrue(stub_bytes.startswith(b"\x7fELF"))
+        with tempfile.NamedTemporaryFile(suffix=".so") as tf:
+            tf.write(stub_bytes)
+            tf.flush()
+            self.assertEqual(import_index._read_elf_needed(tf.name), ["libcublas.so.12"])
+
+    def test_runtime_dlopen_find_library_cffi_and_extension_needed(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            cublas_root = os.path.join(tmp, "cublas", "site-packages")
+            cudnn_root = os.path.join(tmp, "cudnn", "site-packages")
+            torch_root = os.path.join(tmp, "torch", "site-packages")
+            nvcc_root = os.path.join(tmp, "nvcc", "site-packages")
+            fp_root = os.path.join(tmp, "first_party")
+
+            cublas_lt_so = os.path.join(cublas_root, "nvidia", "cublas", "lib", "libcublasLt.so.12")
+            cublas_so = os.path.join(cublas_root, "nvidia", "cublas", "lib", "libcublas.so.12")
+            cudnn_so = os.path.join(cudnn_root, "nvidia", "cudnn", "lib", "libcudnn.so.9")
+            torch_init = os.path.join(torch_root, "torch", "__init__.py")
+            ptxas_bin = os.path.join(nvcc_root, "nvidia", "cuda_nvcc", "bin", "ptxas")
+
+            _write(cublas_lt_so, "")
+            _write(cublas_so, "")
+            _write(cudnn_so, "")
+            _write(torch_init, "")
+            _write(os.path.join(nvcc_root, "nvidia", "cuda_nvcc", "__init__.py"), "")
+            _write(ptxas_bin, "")
+
+            # First-party native extension with DT_NEEDED on libcudnn.so.9.
+            fp_ext_path = os.path.join(fp_root, "fp_ext.so")
+            os.makedirs(fp_root, exist_ok=True)
+            with open(fp_ext_path, "wb") as fh:
+                fh.write(import_index._make_stub_elf("/unused", "libcudnn.so.9"))
+
+            def wheel_meta(**fields):
+                return dict(
+                    {"version": 1, "top": {}, "pth": [], "dirs": [], "dist_info": None},
+                    **fields,
+                )
+
+            merged = import_index.merge_wheel_indexes(
+                [
+                    (
+                        "cublas/site-packages",
+                        wheel_meta(
+                            top={"nvidia": ["nvidia"]},
+                            dirs=["nvidia", "nvidia/cublas", "nvidia/cublas/lib"],
+                            native={
+                                "nvidia/cublas/lib/libcublasLt.so.12": {
+                                    "soname": "libcublasLt.so.12",
+                                    "needed": [],
+                                    "rpath": [],
+                                    "runpath": [],
+                                },
+                                "nvidia/cublas/lib/libcublas.so.12": {
+                                    "soname": "libcublas.so.12",
+                                    "needed": ["libcublasLt.so.12"],
+                                    "rpath": [],
+                                    "runpath": ["$ORIGIN"],
+                                },
+                            },
+                        ),
+                    ),
+                    (
+                        "cudnn/site-packages",
+                        wheel_meta(
+                            top={"nvidia": ["nvidia"]},
+                            dirs=["nvidia", "nvidia/cudnn", "nvidia/cudnn/lib"],
+                            native={
+                                "nvidia/cudnn/lib/libcudnn.so.9": {
+                                    "soname": "libcudnn.so.9",
+                                    "needed": ["libcublas.so.12"],
+                                    "rpath": [],
+                                    "runpath": ["$ORIGIN/../../cublas/lib"],
+                                },
+                            },
+                        ),
+                    ),
+                    (
+                        "torch/site-packages",
+                        wheel_meta(
+                            top={"torch": ["torch"]},
+                            dirs=["torch"],
+                        ),
+                    ),
+                    (
+                        "nvcc/site-packages",
+                        wheel_meta(
+                            top={"nvidia": ["nvidia"]},
+                            dirs=["nvidia", "nvidia/cuda_nvcc"],
+                        ),
+                    ),
+                ]
+            )
+            idx_file = os.path.join(tmp, "_bazel_import_index.json")
+            _write(idx_file, json.dumps(merged))
+
+            roots = [cublas_root, cudnn_root, torch_root, nvcc_root]
+            preloaded_calls = []
+
+            def fake_raw_dlopen(path):
+                preloaded_calls.append(path)
+                return path
+
+            prev_index = import_index._INDEX
+            prev_meta = list(sys.meta_path)
+            try:
+                import_index._INDEX = None
+                with (
+                    mock.patch.object(import_index, "_raw_dlopen", side_effect=fake_raw_dlopen),
+                    mock.patch.dict(
+                        os.environ,
+                        {"RULES_PYTHON_IMPORT_INDEX_SET_CUDA_ENV": "1", "PATH": "/usr/bin"},
+                        clear=False,
+                    ),
+                ):
+                    os.environ.pop("CUDA_HOME", None)
+                    os.environ.pop("CUDA_PATH", None)
+                    self.assertTrue(
+                        import_index.install(
+                            roots,
+                            mode="prebuilt",
+                            index_path=idx_file,
+                            runfiles_root=tmp,
+                        )
+                    )
+                    # Item 7: Opt-in CUDA_HOME and PATH setup from nvidia.cuda_nvcc.
+                    expected_cuda_home = os.path.join(nvcc_root, "nvidia", "cuda_nvcc")
+                    self.assertEqual(os.environ.get("CUDA_HOME"), expected_cuda_home)
+                    self.assertTrue(
+                        os.environ["PATH"].startswith(os.path.join(expected_cuda_home, "bin") + os.pathsep)
+                    )
+
+                    # Item 5a: Escaped relative path from torch/__init__.py -> cudnn wheel,
+                    # plus transitive preload of libcublasLt.so.12 and libcublas.so.12.
+                    escaped = os.path.join(torch_root, "torch", "..", "nvidia", "cudnn", "lib", "libcudnn.so.9")
+                    resolved = import_index._resolve_dlopen_arg(escaped)
+                    self.assertEqual(resolved, cudnn_so)
+                    self.assertEqual(preloaded_calls, [cublas_lt_so, cublas_so])
+
+                    # Item 5a: Bare SONAME resolution.
+                    preloaded_calls.clear()
+                    import_index._PRELOADED.clear()
+                    self.assertEqual(import_index._resolve_dlopen_arg("libcudnn.so.9"), cudnn_so)
+                    self.assertEqual(preloaded_calls, [cublas_lt_so, cublas_so])
+
+                    # Item 5c: ctypes.util.find_library wrapper.
+                    import ctypes.util
+
+                    import_index._hook_ctypes_util_module(ctypes.util)
+                    self.assertEqual(ctypes.util.find_library("cublas"), cublas_so)
+                    self.assertEqual(ctypes.util.find_library("libcudnn.so.9"), cudnn_so)
+
+                    # Item 5b: _cffi_backend wrapper (load_library and FFI.dlopen).
+                    class FakeFFI:
+                        def dlopen(self, name=None, flags=0):
+                            return (name, flags)
+
+                    class FakeCffiBackend:
+                        FFI = FakeFFI
+
+                        @staticmethod
+                        def load_library(name=None, flags=0):
+                            return (name, flags)
+
+                    import_index._hook_cffi_backend_module(FakeCffiBackend)
+                    self.assertEqual(FakeCffiBackend.load_library("cublas", 2), (cublas_so, 2))
+                    self.assertEqual(FakeCffiBackend.FFI().dlopen("libcudnn.so.9", 1), (cudnn_so, 1))
+
+                    # Item 6: First-party ExtensionFileLoader DT_NEEDED preloading.
+                    preloaded_calls.clear()
+                    import_index._PRELOADED.clear()
+                    import_index._CHECKED_EXTENSIONS.clear()
+                    fp_spec = import_index._spec(
+                        "fp_ext",
+                        fp_ext_path,
+                        import_index._machinery.ExtensionFileLoader,
+                    )
+                    import_index._finalize_spec("fp_ext", fp_spec)
+                    self.assertEqual(preloaded_calls, [cublas_lt_so, cublas_so, cudnn_so])
+            finally:
+                import_index._INDEX = prev_index
+                import_index._PRELOADED.clear()
+                import_index._CHECKED_EXTENSIONS.clear()
+                sys.meta_path[:] = prev_meta
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -66,6 +66,11 @@ _SPLIT = (None, (), (), frozenset())
 _METADATA_TEXT = {}
 _CACHED_DIST_CLS = {}
 _CACHED_METADATA_FILES = ("METADATA", "PKG-INFO", "entry_points.txt")
+_PRELOADED = set()
+_CHECKED_EXTENSIONS = set()
+_IN_PRELOAD = False
+_ORIG_CTYPES_DLOPEN = None
+_HOOK_MODULES = frozenset(("_ctypes", "ctypes", "ctypes.util", "_cffi_backend"))
 
 
 def _log(*args):
@@ -696,19 +701,587 @@ def _merged_subdir_spec(fullname, dirs):
     return spec
 
 
-def _preload_native(fullname, libs):
-    """Preloads cross-wheel shared libraries required by `fullname`."""
+def _is_musl():
+    override = os.environ.get("RULES_PYTHON_IMPORT_INDEX_LIBC")
+    if override:
+        return override.lower() == "musl"
+    if sys.platform != "linux":
+        return False
+    try:
+        return not os.confstr("CS_GNU_LIBC_VERSION")
+    except (ValueError, OSError, AttributeError):
+        return True
+
+
+def _make_stub_elf(rpath, needed_name, sample_so_path=None):
+    """Builds a minimal ELF64 ET_DYN stub with DT_RPATH and DT_NEEDED (`PF_R` only)."""
+    import struct
+
+    ei_data = 1
+    e_machine = 0xB7 if getattr(os, "uname", lambda: None)() and os.uname().machine in ("aarch64", "arm64") else 0x3E
+    if sample_so_path:
+        try:
+            with open(sample_so_path, "rb") as fh:
+                hdr = fh.read(20)
+            if len(hdr) >= 20 and hdr[:4] == b"\x7fELF":
+                if hdr[4] != 2:
+                    return None
+                ei_data = hdr[5] if hdr[5] in (1, 2) else 1
+                endian_hdr = "<" if ei_data == 1 else ">"
+                e_machine = struct.unpack(endian_hdr + "H", hdr[18:20])[0]
+        except OSError:
+            pass
+    endian = "<" if ei_data == 1 else ">"
+
+    dynstr = bytearray(b"\x00")
+    needed_off = len(dynstr)
+    dynstr.extend(os.fsencode(needed_name) + b"\x00")
+    rpath_off = len(dynstr)
+    dynstr.extend(os.fsencode(rpath) + b"\x00")
+    while len(dynstr) % 8:
+        dynstr.append(0)
+
+    ehdr_size = 64
+    phdr_size = 56
+    phnum = 3
+    table_off = ehdr_size + phdr_size * phnum
+    dynsym_off = table_off
+    dynsym = b"\x00" * 24
+    hash_off = dynsym_off + len(dynsym)
+    elf_hash = struct.pack(endian + "IIII", 1, 1, 0, 0)
+    dynstr_off = hash_off + len(elf_hash)
+    dyn_off = dynstr_off + len(dynstr)
+
+    dyn_entries = [
+        (1, needed_off),  # DT_NEEDED
+        (15, rpath_off),  # DT_RPATH
+        (5, dynstr_off),  # DT_STRTAB
+        (10, len(dynstr)),  # DT_STRSZ
+        (6, dynsym_off),  # DT_SYMTAB
+        (11, 24),  # DT_SYMENT
+        (4, hash_off),  # DT_HASH
+        (0, 0),  # DT_NULL
+    ]
+    dyn = b"".join(struct.pack(endian + "QQ", tag, val) for tag, val in dyn_entries)
+    total_size = dyn_off + len(dyn)
+
+    e_ident = struct.pack("4sBBBBB7s", b"\x7fELF", 2, ei_data, 1, 0, 0, b"\x00" * 7)
+    ehdr = e_ident + struct.pack(
+        endian + "HHIQQQIHHHHHH",
+        3,  # ET_DYN
+        e_machine,
+        1,
+        0,
+        ehdr_size,
+        0,
+        0,
+        ehdr_size,
+        phdr_size,
+        phnum,
+        64,
+        0,
+        0,
+    )
+    phdr_load = struct.pack(endian + "IIQQQQQQ", 1, 4, 0, 0, 0, total_size, total_size, 0x1000)
+    phdr_dyn = struct.pack(endian + "IIQQQQQQ", 2, 6, dyn_off, dyn_off, dyn_off, len(dyn), len(dyn), 8)
+    phdr_stack = struct.pack(endian + "IIQQQQQQ", 0x6474E551, 6, 0, 0, 0, 0, 0, 16)
+    return ehdr + phdr_load + phdr_dyn + phdr_stack + dynsym + elf_hash + bytes(dynstr) + dyn
+
+
+def _raw_dlopen(path):
+    if _ORIG_CTYPES_DLOPEN is not None:
+        return _ORIG_CTYPES_DLOPEN(path)
     import ctypes
 
-    for root, rel in libs:
-        path = os.path.join(root, rel)
+    if _ORIG_CTYPES_DLOPEN is not None:
+        return _ORIG_CTYPES_DLOPEN(path)
+    return ctypes.CDLL(path)
+
+
+def _dlopen_musl_stub(path):
+    stub = _make_stub_elf(os.path.dirname(path), os.path.basename(path), path)
+    if stub is None:
+        return _raw_dlopen(path)
+    memfd_create = getattr(os, "memfd_create", None)
+    if memfd_create is not None:
+        fd = None
         try:
-            ctypes.CDLL(path)
-            if _DEBUG:
-                _log("preload", fullname, "->", path)
-        except OSError as e:
-            if _DEBUG:
-                _log("preload failed", fullname, path, e)
+            mfd_cloexec = getattr(os, "MFD_CLOEXEC", 1)
+            try:
+                fd = memfd_create("pycross_stub", mfd_cloexec | 0x0002)
+            except OSError:
+                fd = memfd_create("pycross_stub", mfd_cloexec)
+            os.write(fd, stub)
+            return _raw_dlopen("/proc/self/fd/{}".format(fd))
+        except OSError:
+            pass
+        finally:
+            if fd is not None:
+                try:
+                    os.close(fd)
+                except OSError:
+                    pass
+    import tempfile
+
+    tmp_path = None
+    try:
+        with tempfile.NamedTemporaryFile(prefix="pycross_stub_", suffix=".so", delete=False) as tf:
+            tf.write(stub)
+            tmp_path = tf.name
+        return _raw_dlopen(tmp_path)
+    except OSError:
+        return _raw_dlopen(path)
+    finally:
+        if tmp_path is not None:
+            try:
+                os.unlink(tmp_path)
+            except OSError:
+                pass
+
+
+def _load_native_path(path, label=""):
+    global _IN_PRELOAD
+    if path in _PRELOADED:
+        return True
+    prev = _IN_PRELOAD
+    _IN_PRELOAD = True
+    try:
+        if _is_musl():
+            _dlopen_musl_stub(path)
+        else:
+            _raw_dlopen(path)
+        _PRELOADED.add(path)
+        if _DEBUG and label:
+            _log("preload", label, "->", path)
+        return True
+    except OSError as e:
+        if _DEBUG and label:
+            _log("preload failed", label, path, e)
+        return False
+    finally:
+        _IN_PRELOAD = prev
+
+
+def _preload_native(fullname, libs):
+    """Preloads cross-wheel shared libraries required by `fullname`."""
+    for root, rel in libs:
+        _load_native_path(os.path.join(root, rel), fullname)
+
+
+def _read_elf_needed(path):
+    """Extracts DT_NEEDED library names from an ELF shared object."""
+    import struct
+
+    try:
+        with open(path, "rb") as fh:
+            ident = fh.read(16)
+            if len(ident) < 16 or ident[:4] != b"\x7fELF":
+                return ()
+            ei_class, ei_data = ident[4], ident[5]
+            if ei_class not in (1, 2) or ei_data not in (1, 2):
+                return ()
+            endian = "<" if ei_data == 1 else ">"
+            is_64 = ei_class == 2
+            if is_64:
+                hdr = fh.read(48)
+                if len(hdr) < 48:
+                    return ()
+                _, _, _, _, e_phoff, _, _, _, e_phentsize, e_phnum, _, _, _ = struct.unpack(
+                    endian + "HHIQQQIHHHHHH", hdr
+                )
+            else:
+                hdr = fh.read(36)
+                if len(hdr) < 36:
+                    return ()
+                _, _, _, _, e_phoff, _, _, _, e_phentsize, e_phnum, _, _, _ = struct.unpack(
+                    endian + "HHIIIIIHHHHHH", hdr
+                )
+            if e_phoff == 0 or e_phnum == 0:
+                return ()
+            fh.seek(e_phoff)
+            phdrs_raw = fh.read(e_phentsize * e_phnum)
+            if len(phdrs_raw) < e_phentsize * e_phnum:
+                return ()
+            load_segments = []
+            dyn_offset = dyn_filesz = 0
+            for i in range(e_phnum):
+                chunk = phdrs_raw[i * e_phentsize : (i + 1) * e_phentsize]
+                if is_64:
+                    p_type, _, p_offset, p_vaddr, _, p_filesz, p_memsz, _ = struct.unpack(
+                        endian + "IIQQQQQQ", chunk[:56]
+                    )
+                else:
+                    p_type, p_offset, p_vaddr, _, p_filesz, p_memsz, _, _ = struct.unpack(
+                        endian + "IIIIIIII", chunk[:32]
+                    )
+                if p_type == 1:
+                    load_segments.append((p_vaddr, p_memsz, p_offset, p_filesz))
+                elif p_type == 2:
+                    dyn_offset, dyn_filesz = p_offset, p_filesz
+            if not dyn_offset or not dyn_filesz:
+                return ()
+            fh.seek(dyn_offset)
+            dyn_raw = fh.read(dyn_filesz)
+            entry_fmt = endian + ("qQ" if is_64 else "iI")
+            entry_size = 16 if is_64 else 8
+            strtab_vaddr = None
+            strtab_size = 0
+            needed_offsets = []
+            for pos in range(0, len(dyn_raw) - entry_size + 1, entry_size):
+                d_tag, d_val = struct.unpack(entry_fmt, dyn_raw[pos : pos + entry_size])
+                if d_tag == 0:
+                    break
+                elif d_tag == 5:
+                    strtab_vaddr = d_val
+                elif d_tag == 10:
+                    strtab_size = d_val
+                elif d_tag == 1:
+                    needed_offsets.append(d_val)
+            if strtab_vaddr is None or not strtab_size or not needed_offsets:
+                return ()
+            strtab_off = None
+            for vaddr, memsz, offset, filesz in load_segments:
+                span = max(memsz, filesz)
+                if vaddr <= strtab_vaddr < vaddr + span:
+                    strtab_off = offset + (strtab_vaddr - vaddr)
+                    break
+            if strtab_off is None:
+                return ()
+            fh.seek(strtab_off)
+            dynstr = fh.read(strtab_size)
+            needed = []
+            for off in needed_offsets:
+                if 0 <= off < len(dynstr):
+                    end = dynstr.find(b"\x00", off)
+                    raw = dynstr[off:] if end == -1 else dynstr[off:end]
+                    val = raw.decode("utf-8", errors="replace")
+                    if val:
+                        needed.append(val)
+            return needed
+    except OSError:
+        return ()
+
+
+def _match_wheel_relpath(path_str):
+    if _INDEX is None:
+        return None
+    norm = os.path.normpath(os.path.abspath(path_str))
+    for r in _INDEX.roots:
+        prefix = r.rstrip("/") + "/"
+        if norm.startswith(prefix):
+            return r, norm[len(prefix) :].replace(os.sep, "/")
+    return None
+
+
+def _extract_escaped_relpath(path_str):
+    if _INDEX is None:
+        return None
+    raw = path_str.replace(os.sep, "/")
+    marker = "/site-packages/"
+    if marker in raw:
+        after = posixpath.normpath(raw.rsplit(marker, 1)[1])
+        parts = after.split("/")
+        while parts and parts[0] == "..":
+            parts.pop(0)
+        if parts and parts != ["."]:
+            return "/".join(parts)
+    norm = os.path.normpath(os.path.abspath(path_str))
+    for r in _INDEX.roots:
+        for base in (r.rstrip("/"), os.path.dirname(r.rstrip("/"))):
+            prefix = base + "/"
+            if base and norm.startswith(prefix):
+                return norm[len(prefix) :].replace(os.sep, "/")
+    real_roots = getattr(_INDEX, "_real_roots", None)
+    if real_roots is None:
+        real_roots = [os.path.realpath(r) for r in _INDEX.roots]
+        _INDEX._real_roots = real_roots
+    try:
+        real_norm = os.path.normpath(os.path.join(os.path.realpath(os.path.dirname(path_str)), os.path.basename(path_str)))
+    except OSError:
+        return None
+    for rr in real_roots:
+        for base in (rr.rstrip("/"), os.path.dirname(rr.rstrip("/"))):
+            prefix = base + "/"
+            if base and real_norm.startswith(prefix):
+                return real_norm[len(prefix) :].replace(os.sep, "/")
+    return None
+
+
+def _find_owner_for_relpath(rel_so):
+    if _INDEX is None or not rel_so:
+        return None
+    basename = posixpath.basename(rel_so)
+    by_name = _INDEX.sonames.get(basename)
+    if by_name is not None and by_name[1] == rel_so:
+        return by_name
+    candidates = []
+    first_seg = rel_so.split("/", 1)[0]
+    for sub_key, owner_root in _INDEX.sub.items():
+        if rel_so.startswith(sub_key.replace(".", "/") + "/") and owner_root not in candidates:
+            candidates.append(owner_root)
+    for owner_root in _INDEX.top.get(first_seg, ()):
+        if owner_root not in candidates:
+            candidates.append(owner_root)
+    for r in _INDEX.roots:
+        if r not in candidates:
+            candidates.append(r)
+    for r in candidates:
+        if os.path.isfile(os.path.join(r, rel_so)):
+            return r, rel_so
+    return None
+
+
+def _find_wheel_library(name):
+    if _INDEX is None or not _INDEX.sonames or not name:
+        return None
+    try:
+        s = os.fsdecode(os.fspath(name))
+    except TypeError:
+        return None
+    if s in _INDEX.sonames:
+        return _INDEX.sonames[s]
+    for exact in ("lib" + s + ".so", s + ".so"):
+        if exact in _INDEX.sonames:
+            return _INDEX.sonames[exact]
+    prefixes = ("lib" + s + ".so.", s + ".so.")
+    for soname in sorted(_INDEX.sonames):
+        if soname.startswith(prefixes):
+            return _INDEX.sonames[soname]
+    return None
+
+
+def _prepare_resolved_target(root, rel_so, label="dlopen"):
+    deps = _INDEX.native_deps.get((root, rel_so))
+    if deps:
+        _preload_native(label, deps)
+    resolved = os.path.join(root, rel_so)
+    if _is_musl():
+        _load_native_path(resolved, label)
+    return resolved
+
+
+def _resolve_dlopen_arg(name, allow_short_name=False):
+    if _IN_PRELOAD or _INDEX is None or not name:
+        return name
+    try:
+        raw = os.fspath(name)
+    except TypeError:
+        return name
+    is_bytes = isinstance(raw, bytes)
+    s = os.fsdecode(raw)
+
+    def encode_like(res):
+        return os.fsencode(res) if is_bytes else res
+
+    if "/" in s or (os.sep != "/" and os.sep in s):
+        if os.path.exists(s):
+            matched = _match_wheel_relpath(s)
+            if matched is not None:
+                _prepare_resolved_target(matched[0], matched[1], "dlopen")
+            return name
+        rel_so = _extract_escaped_relpath(s)
+        if rel_so:
+            target = _find_owner_for_relpath(rel_so)
+            if target is not None:
+                resolved = _prepare_resolved_target(target[0], target[1], "dlopen")
+                if _DEBUG:
+                    _log("dlopen rewrite", s, "->", resolved)
+                return encode_like(resolved)
+        return name
+
+    target = _INDEX.sonames.get(s)
+    if target is None and allow_short_name:
+        target = _find_wheel_library(s)
+    if target is not None:
+        resolved = _prepare_resolved_target(target[0], target[1], "dlopen")
+        if _DEBUG:
+            _log("dlopen soname", s, "->", resolved)
+        return encode_like(resolved)
+    return name
+
+
+def _hook_ctypes_module(mod):
+    global _ORIG_CTYPES_DLOPEN
+    dlopen = getattr(mod, "dlopen", None)
+    if dlopen is None or getattr(dlopen, "_pycross_wrapped", False):
+        return
+    _ORIG_CTYPES_DLOPEN = dlopen
+
+    def _wrapped_dlopen(name, *args):
+        return dlopen(_resolve_dlopen_arg(name), *args)
+
+    _wrapped_dlopen._pycross_wrapped = True
+    try:
+        mod.dlopen = _wrapped_dlopen
+    except (AttributeError, TypeError):
+        pass
+    ctypes_pkg = sys.modules.get("ctypes")
+    if ctypes_pkg is not None:
+        try:
+            ctypes_pkg._dlopen = _wrapped_dlopen
+        except (AttributeError, TypeError):
+            pass
+
+
+def _hook_ctypes_pkg(mod):
+    _ctypes_mod = sys.modules.get("_ctypes")
+    if _ctypes_mod is not None:
+        _hook_ctypes_module(_ctypes_mod)
+        if getattr(_ctypes_mod.dlopen, "_pycross_wrapped", False):
+            try:
+                mod._dlopen = _ctypes_mod.dlopen
+            except (AttributeError, TypeError):
+                pass
+
+
+def _hook_ctypes_util_module(mod):
+    orig_find = getattr(mod, "find_library", None)
+    if orig_find is None or getattr(orig_find, "_pycross_wrapped", False):
+        return
+
+    def _wrapped_find_library(name):
+        target = _find_wheel_library(name)
+        if target is not None:
+            return _prepare_resolved_target(target[0], target[1], "find_library")
+        return orig_find(name)
+
+    _wrapped_find_library._pycross_wrapped = True
+    try:
+        mod.find_library = _wrapped_find_library
+    except (AttributeError, TypeError):
+        pass
+
+
+def _hook_cffi_backend_module(mod):
+    orig_load = getattr(mod, "load_library", None)
+    if orig_load is not None and not getattr(orig_load, "_pycross_wrapped", False):
+
+        def _wrapped_load_library(name=None, *args):
+            if name is not None:
+                name = _resolve_dlopen_arg(name, allow_short_name=True)
+            return orig_load(name, *args)
+
+        _wrapped_load_library._pycross_wrapped = True
+        try:
+            mod.load_library = _wrapped_load_library
+        except (AttributeError, TypeError):
+            pass
+
+    orig_ffi = getattr(mod, "FFI", None)
+    if isinstance(orig_ffi, type) and not getattr(orig_ffi, "_pycross_wrapped", False):
+        try:
+
+            class _FFI(orig_ffi):
+                _pycross_wrapped = True
+
+                def dlopen(self, name=None, *args, **kwargs):
+                    if name is not None:
+                        name = _resolve_dlopen_arg(name, allow_short_name=True)
+                    return super().dlopen(name, *args, **kwargs)
+
+            _FFI.__name__ = orig_ffi.__name__
+            _FFI.__qualname__ = orig_ffi.__qualname__
+            mod.FFI = _FFI
+        except TypeError:
+            pass
+
+
+def _apply_module_hook(fullname, module):
+    if fullname == "_ctypes":
+        _hook_ctypes_module(module)
+    elif fullname == "ctypes":
+        _hook_ctypes_pkg(module)
+    elif fullname == "ctypes.util":
+        _hook_ctypes_util_module(module)
+    elif fullname == "_cffi_backend":
+        _hook_cffi_backend_module(module)
+
+
+def _maybe_preload_extension_needed(fullname, spec):
+    if _INDEX is None or not _INDEX.sonames or spec is None:
+        return
+    loader = getattr(spec, "loader", None)
+    if not isinstance(loader, _machinery.ExtensionFileLoader):
+        return
+    origin = getattr(spec, "origin", None)
+    if not origin or origin in _CHECKED_EXTENSIONS:
+        return
+    _CHECKED_EXTENSIONS.add(origin)
+    if _match_wheel_relpath(origin) is not None:
+        return
+    needed = _read_elf_needed(origin)
+    if not needed:
+        return
+    libs = []
+    for soname in needed:
+        target = _INDEX.sonames.get(soname)
+        if target is not None:
+            for dep in _INDEX.native_deps.get(target, ()):
+                if dep not in libs:
+                    libs.append(dep)
+            if target not in libs:
+                libs.append(target)
+    if libs:
+        _preload_native(fullname, libs)
+
+
+def _finalize_spec(fullname, spec):
+    if spec is None or _INDEX is None:
+        return spec
+    if fullname in _HOOK_MODULES:
+        loader = getattr(spec, "loader", None)
+        if loader is not None and hasattr(loader, "exec_module") and not getattr(loader, "_pycross_wrapped", False):
+
+            class _HookedLoader(type(loader)):
+                _pycross_wrapped = True
+
+                def exec_module(self, module):
+                    super().exec_module(module)
+                    _apply_module_hook(fullname, module)
+
+            try:
+                loader.__class__ = _HookedLoader
+            except TypeError:
+                orig_exec = loader.exec_module
+
+                def _exec(module):
+                    orig_exec(module)
+                    _apply_module_hook(fullname, module)
+
+                try:
+                    loader.exec_module = _exec
+                    loader._pycross_wrapped = True
+                except AttributeError:
+                    pass
+    if _INDEX.sonames:
+        _maybe_preload_extension_needed(fullname, spec)
+    return spec
+
+
+def _maybe_configure_cuda_env(index):
+    if os.environ.get("RULES_PYTHON_IMPORT_INDEX_SET_CUDA_ENV", "").lower() not in (
+        "1",
+        "true",
+        "yes",
+        "on",
+    ):
+        return
+    for key in ("nvidia.cuda_nvcc", "nvidia.cu13"):
+        root = index.sub.get(key)
+        if not root:
+            continue
+        cuda_dir = os.path.join(root, *key.split("."))
+        if not os.path.isdir(cuda_dir):
+            continue
+        if "CUDA_HOME" not in os.environ and "CUDA_PATH" not in os.environ:
+            os.environ["CUDA_HOME"] = cuda_dir
+        bin_dir = os.path.join(cuda_dir, "bin")
+        if os.path.isdir(bin_dir):
+            cur_path = os.environ.get("PATH", "")
+            parts = cur_path.split(os.pathsep) if cur_path else []
+            if bin_dir not in parts:
+                os.environ["PATH"] = bin_dir + (os.pathsep + cur_path if cur_path else "")
+        break
 
 
 def _is_namespace_spec(spec):
@@ -802,7 +1375,7 @@ class PathFinder(_machinery.PathFinder):
                 spec = super().find_spec(fullname, path, target)
             if _INDEX is not None and spec is not None and fullname in _INDEX.preload:
                 _preload_native(fullname, _INDEX.preload.pop(fullname))
-            return spec
+            return _finalize_spec(fullname, spec)
 
         spec = cls._find_top_level(fullname, sys.path, target)
         if spec is not None and _is_namespace_spec(spec) and _NamespacePath is not None:
@@ -811,7 +1384,7 @@ class PathFinder(_machinery.PathFinder):
             )
         if spec is not None and fullname in _INDEX.preload:
             _preload_native(fullname, _INDEX.preload.pop(fullname))
-        return spec
+        return _finalize_spec(fullname, spec)
 
     @classmethod
     def _find_top_level(cls, fullname, search_path, target=None):
@@ -1018,8 +1591,15 @@ def install(roots, debug=False, mode="scan", index_path=None, runfiles_root=""):
         if debug:
             _log("no wheel roots could be listed; not installing")
         return False
+    _PRELOADED.clear()
+    _CHECKED_EXTENSIONS.clear()
     _INDEX = index
     sys.meta_path[i] = PathFinder
+    for mod_name in ("_ctypes", "ctypes", "ctypes.util", "_cffi_backend"):
+        mod = sys.modules.get(mod_name)
+        if mod is not None:
+            _apply_module_hook(mod_name, mod)
+    _maybe_configure_cuda_env(index)
 
     if index.pth:
         import site
