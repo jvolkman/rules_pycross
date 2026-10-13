@@ -71,14 +71,6 @@ class ImportIndexTest(unittest.TestCase):
         self.assertTrue(first_party_ns.FIRST_PARTY_NS)
         self.assertTrue(fixture_span.SPAN)
 
-    def test_premerged_index_file_when_expected(self):
-        if not os.environ.get("EXPECT_PREMERGED_INDEX_FILE"):
-            return
-        finder_mod = sys.modules.get("_bazel_import_index")
-        self.assertIsNotNone(finder_mod)
-        index_json = os.path.join(os.path.dirname(finder_mod.__file__), "_bazel_import_index.json")
-        self.assertTrue(os.path.isfile(index_json), index_json)
-
     def test_metadata(self):
         for distribution, version in VERSIONS.items():
             self.assertEqual(importlib.metadata.version(distribution), version)
@@ -93,7 +85,7 @@ class ImportIndexTest(unittest.TestCase):
     def test_cross_wheel_origin_rpath_without_preload(self):
         # rpathfixture/libuser.so has DT_NEEDED libfixture_cublas.so.12 and dlopens
         # libfixture_cudnn.so.12 by SONAME via $ORIGIN/../nvidia/fixture_{cublas,cudnn}/lib.
-        # In prebuilt mode, PyMakeVenvIndex resolves those cross-wheel $ORIGIN paths from the
+        # In prebuilt mode, merge_wheel_indexes resolves those cross-wheel $ORIGIN paths from the
         # per-wheel "native" metadata and records "preload" entries that the finder loads via
         # ctypes.CDLL when importing rpathfixture.
         finder_mod = sys.modules.get("_bazel_import_index")

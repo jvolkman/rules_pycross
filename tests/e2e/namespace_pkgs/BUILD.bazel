@@ -1,4 +1,3 @@
-load("@rules_pycross//pycross:defs.bzl", "pycross_py_binary", "pycross_py_test")
 load("@rules_python//python:defs.bzl", "py_binary", "py_library", "py_test")
 load("@uv//:requirements.bzl", "all_requirements", "requirement")
 
@@ -70,35 +69,10 @@ py_test(
     ],
 )
 
-# pycross_py_test wrapper that pre-merges transitive wheel indexes (through
-# first_party_bridge) into a single _bazel_import_index.json via PyMakeVenvIndex.
-pycross_py_test(
-    name = "test_import_index_merged",
-    srcs = ["test_import_index.py"],
-    env = {
-        "EXPECT_PREMERGED_INDEX_FILE": "1",
-    },
-    main = "test_import_index.py",
-    tags = ["manual"],
-    deps = [
-        ":first_party_bridge",
-    ],
-)
-
-# Interactive demo binaries (run with `bazel run --config=index //:demo` or `//:demo_stock`).
-pycross_py_binary(
+# Interactive demo binary (run with `bazel run --config=index //:demo`).
+py_binary(
     name = "demo",
     srcs = ["demo.py"],
-    tags = ["manual"],
-    deps = all_requirements + [
-        ":first_party_bridge",
-    ],
-)
-
-py_binary(
-    name = "demo_stock",
-    srcs = ["demo.py"],
-    main = "demo.py",
     tags = ["manual"],
     deps = all_requirements + [
         ":first_party_bridge",

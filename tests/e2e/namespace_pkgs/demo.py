@@ -2,22 +2,19 @@
 
 Try running from `tests/e2e/namespace_pkgs`:
 
-  # 1. Prebuilt index with pycross_py_binary (single merged _bazel_import_index.json):
+  # 1. Prebuilt index with stock py_binary (merges per-wheel index.json files):
   bazel run --config=index //:demo
 
-  # 2. Prebuilt index with stock py_binary (merges per-wheel index.json files):
-  bazel run --config=index //:demo_stock
-
-  # 3. Verbose finder debug trace (shows index load time, merged dirs, and CDLL preloads):
+  # 2. Verbose finder debug trace (shows index load time, merged dirs, and CDLL preloads):
   RULES_PYTHON_IMPORT_INDEX_DEBUG=1 bazel run --config=index //:demo
 
-  # 4. Verify mode (cross-checks the prebuilt index against a live disk scan):
+  # 3. Verify mode (cross-checks the prebuilt index against a live disk scan):
   RULES_PYTHON_IMPORT_INDEX=verify bazel run --config=index //:demo
 
-  # 5. Compare with scan mode (Python imports pass, but cross-wheel $ORIGIN RPATH fails):
+  # 4. Compare with scan mode (Python imports pass, but cross-wheel $ORIGIN RPATH fails):
   bazel run --config=scan //:demo
 
-  # 6. Compare with plain sys.path (venvs_site_packages=no, index=off):
+  # 5. Compare with plain sys.path (venvs_site_packages=no, index=off):
   bazel run //:demo --@rules_python//python/config_settings:venvs_site_packages=no
 """
 
@@ -67,13 +64,8 @@ def main() -> None:
     if idx is None:
         print("  import index active: False (plain PathFinder)")
     else:
-        index_json = os.path.join(os.path.dirname(finder_mod.__file__), "_bazel_import_index.json")
         source = (
-            f"pre-merged _bazel_import_index.json ({os.path.getsize(index_json):,} bytes)"
-            if os.path.isfile(index_json)
-            else "per-wheel <wheel>.dist_info/index.json files in runfiles"
-            if idx.indexed
-            else "runtime os.scandir scan"
+            "per-wheel <wheel>.dist_info/index.json files in runfiles" if idx.indexed else "runtime os.scandir scan"
         )
         print(f"  import index active: True ({len(idx.roots)} wheel roots, {len(idx.indexed)} prebuilt)")
         print(f"  index source: {source}")
