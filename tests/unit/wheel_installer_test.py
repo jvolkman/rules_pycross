@@ -800,24 +800,28 @@ class WheelIndexNativeMetadataTest(unittest.TestCase):
             },
         )
 
+    def test_native_elf_metadata_records_soname_symlinks(self):
+        from pycross.private.tools.wheel_index import index_site_packages
 
-def test_generate_wheel_index_records_soname_symlinks(tmp_path: Path) -> None:
-    site = tmp_path / "site-packages"
-    (site / "pkg" / "lib").mkdir(parents=True)
-    (site / "pkg" / "__init__.py").write_text("")
-    real_so = site / "pkg" / "lib" / "libfoo.so.1.2"
-    real_so.write_bytes(_make_test_elf_so(soname="libfoo.so.1"))
-    symlink_so = site / "pkg" / "lib" / "libfoo.so.1"
-    symlink_so.symlink_to("libfoo.so.1.2")
-    broken_so = site / "pkg" / "lib" / "libbroken.so.1"
-    broken_so.symlink_to("nonexistent.so")
+        root = Path(self.temp_dir) / "site-packages"
+        lib_dir = root / "pkg" / "lib"
+        lib_dir.mkdir(parents=True, exist_ok=True)
+        (root / "pkg" / "__init__.py").write_text("")
+        real_so = lib_dir / "libfixture_cublas.so.12.8"
+        real_so.write_bytes(self._unpack_blob(self.LIBFIXTURE_CUBLAS_SO_12))
+        symlink_so = lib_dir / "libfixture_cublas.so.12"
+        symlink_so.symlink_to("libfixture_cublas.so.12.8")
+        broken_so = lib_dir / "libbroken.so.1"
+        broken_so.symlink_to("nonexistent.so")
 
-    index = generate_wheel_index(tmp_path)
-
-    assert "pkg/lib/libfoo.so.1.2" in index["native"]
-    assert "pkg/lib/libfoo.so.1" in index["native"]
-    assert index["native"]["pkg/lib/libfoo.so.1"]["soname"] == "libfoo.so.1"
-    assert "pkg/lib/libbroken.so.1" not in index["native"]
+        idx = index_site_packages(root, "pkg", "1.0")
+        self.assertIn("pkg/lib/libfixture_cublas.so.12.8", idx["native"])
+        self.assertIn("pkg/lib/libfixture_cublas.so.12", idx["native"])
+        self.assertEqual(
+            idx["native"]["pkg/lib/libfixture_cublas.so.12"]["soname"],
+            "libfixture_cublas.so.12",
+        )
+        self.assertNotIn("pkg/lib/libbroken.so.1", idx["native"])
 
 
 if __name__ == "__main__":

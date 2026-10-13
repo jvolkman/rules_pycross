@@ -849,9 +849,7 @@ class ImportIndexTest(unittest.TestCase):
                     # Item 7: Opt-in CUDA_HOME and PATH setup from nvidia.cuda_nvcc.
                     expected_cuda_home = os.path.join(nvcc_root, "nvidia", "cuda_nvcc")
                     self.assertEqual(os.environ.get("CUDA_HOME"), expected_cuda_home)
-                    self.assertTrue(
-                        os.environ["PATH"].startswith(os.path.join(expected_cuda_home, "bin") + os.pathsep)
-                    )
+                    self.assertTrue(os.environ["PATH"].startswith(os.path.join(expected_cuda_home, "bin") + os.pathsep))
 
                     # Item 5a: Escaped relative path from torch/__init__.py -> cudnn wheel,
                     # plus transitive preload of libcublasLt.so.12 and libcublas.so.12.

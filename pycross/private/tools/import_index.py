@@ -997,7 +997,9 @@ def _extract_escaped_relpath(path_str):
         real_roots = [os.path.realpath(r) for r in _INDEX.roots]
         _INDEX._real_roots = real_roots
     try:
-        real_norm = os.path.normpath(os.path.join(os.path.realpath(os.path.dirname(path_str)), os.path.basename(path_str)))
+        real_norm = os.path.normpath(
+            os.path.join(os.path.realpath(os.path.dirname(path_str)), os.path.basename(path_str))
+        )
     except OSError:
         return None
     for rr in real_roots:

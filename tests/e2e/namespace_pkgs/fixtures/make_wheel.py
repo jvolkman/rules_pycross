@@ -91,6 +91,8 @@ _LIBUSER_SO = zlib.decompress(
         "QP/NPPX/Caf28Vw="
     )
 )
+
+
 def _strip_elf_rpath(elf_bytes: bytes) -> bytes:
     """Returns a copy of `elf_bytes` with DT_RPATH (15) and DT_RUNPATH (29) removed."""
     buf = bytearray(elf_bytes)
