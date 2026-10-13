@@ -36,9 +36,18 @@ pycross_wheel_zipimport_library(
 )
 
 py_library(
+    name = "elf_tools",
+    srcs = ["elf_tools.py"],
+    imports = ["../../.."],
+)
+
+py_library(
     name = "wheel_index",
     srcs = ["wheel_index.py"],
     imports = ["../../.."],
+    deps = [
+        ":elf_tools",
+    ],
 )
 
 py_binary(

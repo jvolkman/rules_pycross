@@ -35,6 +35,9 @@ are no absolute paths or timestamps, so the output is deterministic.
                 inside them. Their sub-packages are in "dirs". These are the directories that
                 several distributions can share, so consumers need their module files to tell the
                 distributions apart.
+  native        Optional; present when the wheel contains ELF shared objects. Maps each ELF file's
+                path relative to site-packages to `{"soname": ..., "needed": [...], "rpath": [...],
+                "runpath": [...]}`.
 
 Module names don't depend on the interpreter running this code: extension modules are recognized
 as `<name>.so`, `<name>.<tag>.so`, `<name>.pyd` and `<name>.<tag>.pyd` for any ABI tag, because
@@ -52,6 +55,9 @@ from email.parser import BytesHeaderParser
 from pathlib import Path
 from typing import Any
 from typing import Optional
+
+from pycross.private.tools.elf_tools import is_candidate_so
+from pycross.private.tools.elf_tools import read_elf_metadata
 
 INDEX_VERSION = 1
 
@@ -151,17 +157,21 @@ def is_pkgutil_namespace_init(content: str) -> bool:
     return is_stub(tree.body) and declarations > 0
 
 
-def _scan(path: Path) -> tuple[list[str], list[str]]:
-    """Returns the sorted (package subdirectory names, file names) of a directory."""
-    subdirs, files = [], []
+def _scan(path: Path) -> tuple[list[str], list[str], list[str]]:
+    """Returns sorted `(package_subdirs, non_package_subdirs, files)` of a directory."""
+    subdirs, other_dirs, files = [], [], []
     with os.scandir(path) as it:
         for entry in it:
             if entry.is_dir():
-                if entry.name.isidentifier() and entry.name not in _SKIPPED_DIRS:
+                if entry.name in _SKIPPED_DIRS or entry.name.endswith(".dist-info"):
+                    continue
+                if entry.name.isidentifier():
                     subdirs.append(entry.name)
+                else:
+                    other_dirs.append(entry.name)
             else:
                 files.append(entry.name)
-    return sorted(subdirs), sorted(files)
+    return sorted(subdirs), sorted(other_dirs), sorted(files)
 
 
 def _is_namespace_dir(path: Path, files: list[str]) -> bool:
@@ -224,12 +234,30 @@ def index_site_packages(
     dirs: list[str] = []
     modules: dict[str, list[str]] = {}
     namespaces: dict[str, list[str]] = {}
+    native: dict[str, dict[str, Any]] = {}
     dist_info = None
+
+    def record_native_files(rel_dir: str, dir_path: Path, files: list[str]) -> None:
+        for fname in files:
+            if not is_candidate_so(fname):
+                continue
+            meta = read_elf_metadata(dir_path / fname)
+            if meta is not None:
+                rel_path = f"{rel_dir}/{fname}" if rel_dir else fname
+                native[rel_path] = meta
+
+    def walk_native_only(rel: str) -> None:
+        path = root / rel
+        subdirs, other_dirs, files = _scan(path)
+        record_native_files(rel, path, files)
+        for subdir in sorted(subdirs + other_dirs):
+            walk_native_only(rel + "/" + subdir)
 
     def walk(rel: str, parent_is_namespace: bool) -> None:
         dirs.append(rel)
         path = root / rel
-        subdirs, files = _scan(path)
+        subdirs, other_dirs, files = _scan(path)
+        record_native_files(rel, path, files)
         is_namespace = parent_is_namespace and _is_namespace_dir(path, files)
         mods = sorted({m for m in map(module_name, files) if m and m != "__init__"})
         if is_namespace:
@@ -238,23 +266,32 @@ def index_site_packages(
             modules[rel] = mods
         for subdir in subdirs:
             walk(rel + "/" + subdir, is_namespace)
+        for other_dir in other_dirs:
+            walk_native_only(rel + "/" + other_dir)
 
     with os.scandir(root) as it:
         entries = sorted(it, key=lambda e: e.name)
+    root_files: list[str] = []
     for entry in entries:
         name = entry.name
         if entry.is_dir():
             if name.endswith(".dist-info"):
                 dist_info = dist_info or name
-            elif name.isidentifier() and name not in _SKIPPED_DIRS:
+            elif name in _SKIPPED_DIRS:
+                continue
+            elif name.isidentifier():
                 top.setdefault(name, []).append(name)
                 walk(name, True)
+            else:
+                walk_native_only(name)
         elif name.endswith(".pth"):
             pth.append(name)
         else:
+            root_files.append(name)
             mod = module_name(name)
             if mod:
                 top.setdefault(mod, []).append(name)
+    record_native_files("", root, root_files)
 
     pth_paths = {}
     for name in sorted(pth):
@@ -263,7 +300,7 @@ def index_site_packages(
             pth_paths[name] = paths
 
     distribution = _read_distribution(root / dist_info if dist_info else None)
-    return {
+    result: dict[str, Any] = {
         "version": INDEX_VERSION,
         "distribution": {
             "name": distribution.get("name") or fallback_name,
@@ -277,6 +314,9 @@ def index_site_packages(
         "modules": dict(sorted(modules.items())),
         "namespaces": dict(sorted(namespaces.items())),
     }
+    if native:
+        result["native"] = dict(sorted(native.items()))
+    return result
 
 
 def write_index(

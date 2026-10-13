@@ -52,5 +52,6 @@ py_test(
         "//fixtures:nvidia_fixture_cudnn",
         "//fixtures:nvidia_fixture_nccl",
         "//fixtures:pthfixture",
+        "//fixtures:rpathfixture",
     ],
 )
