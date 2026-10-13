@@ -121,7 +121,13 @@ class ModulesMappingTest(unittest.TestCase):
             make_index("opencv-contrib-python", dirs=["cv2", "cv2/data", "cv2/contrib"]),
             make_index(
                 "functions-framework",
-                dirs=["functions_framework", "google", "google/cloud", "google/cloud/functions", "google/cloud/functions_v1"],
+                dirs=[
+                    "functions_framework",
+                    "google",
+                    "google/cloud",
+                    "google/cloud/functions",
+                    "google/cloud/functions_v1",
+                ],
                 modules={"google/cloud/functions": ["context"], "google/cloud/functions_v1": ["context"]},
                 namespaces={"google": [], "google/cloud": []},
             ),
