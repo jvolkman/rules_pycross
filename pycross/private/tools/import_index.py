@@ -432,6 +432,7 @@ class _JsonContext:
     strict = True
     object_hook = None
     object_pairs_hook = None
+    array_hook = None
     parse_float = float
     parse_int = int
     parse_constant = None
@@ -442,7 +443,7 @@ try:
     from _json import make_scanner as _make_json_scanner
 
     _JSON_SCANNER = _make_json_scanner(_JsonContext)
-except ImportError:  # pragma: no cover
+except Exception:  # pragma: no cover
     _JSON_SCANNER = None
 
 
