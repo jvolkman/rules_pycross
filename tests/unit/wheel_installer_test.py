@@ -801,5 +801,24 @@ class WheelIndexNativeMetadataTest(unittest.TestCase):
         )
 
 
+def test_generate_wheel_index_records_soname_symlinks(tmp_path: Path) -> None:
+    site = tmp_path / "site-packages"
+    (site / "pkg" / "lib").mkdir(parents=True)
+    (site / "pkg" / "__init__.py").write_text("")
+    real_so = site / "pkg" / "lib" / "libfoo.so.1.2"
+    real_so.write_bytes(_make_test_elf_so(soname="libfoo.so.1"))
+    symlink_so = site / "pkg" / "lib" / "libfoo.so.1"
+    symlink_so.symlink_to("libfoo.so.1.2")
+    broken_so = site / "pkg" / "lib" / "libbroken.so.1"
+    broken_so.symlink_to("nonexistent.so")
+
+    index = generate_wheel_index(tmp_path)
+
+    assert "pkg/lib/libfoo.so.1.2" in index["native"]
+    assert "pkg/lib/libfoo.so.1" in index["native"]
+    assert index["native"]["pkg/lib/libfoo.so.1"]["soname"] == "libfoo.so.1"
+    assert "pkg/lib/libbroken.so.1" not in index["native"]
+
+
 if __name__ == "__main__":
     unittest.main()
