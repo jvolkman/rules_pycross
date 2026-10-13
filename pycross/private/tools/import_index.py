@@ -70,7 +70,38 @@ _PRELOADED = set()
 _CHECKED_EXTENSIONS = set()
 _IN_PRELOAD = False
 _ORIG_CTYPES_DLOPEN = None
+_IS_MUSL = None
 _HOOK_MODULES = frozenset(("_ctypes", "ctypes", "ctypes.util", "_cffi_backend"))
+_SYSTEM_SONAME_STEMS = frozenset(
+    (
+        "ld",
+        "libc",
+        "libm",
+        "libdl",
+        "libpthread",
+        "librt",
+        "libutil",
+        "libresolv",
+        "libnsl",
+        "libcrypt",
+        "libgcc_s",
+        "libstdc++",
+        "libgomp",
+        "libatomic",
+        "libquadmath",
+        "libgfortran",
+        "libz",
+        "libbz2",
+        "liblzma",
+        "libffi",
+        "libexpat",
+        "libssl",
+        "libcrypto",
+        "libsqlite3",
+        "libuuid",
+        "libcuda",
+    )
+)
 
 
 def _log(*args):
@@ -125,6 +156,15 @@ def _is_abi_tagged_ext(filename):
     return tag.startswith(("cpython-", "abi3", "pypy", "graalpy"))
 
 
+def _is_system_soname(name):
+    """Whether `name` is a standard system/toolchain/driver library SONAME."""
+    if not name:
+        return False
+    base = name.rpartition("/")[2] if "/" in name else name
+    stem = base.partition(".so")[0]
+    return stem in _SYSTEM_SONAME_STEMS or stem.startswith(("ld-linux", "libnvidia-"))
+
+
 def _soname_preload_enabled():
     return os.environ.get("RULES_PYTHON_IMPORT_INDEX_SONAME_PRELOAD", "1").lower() not in (
         "0",
@@ -174,6 +214,7 @@ def _compute_native(wheel_indexes, merged=None, sub=None):
     dir_sonames = {}
     by_soname = {}
     meta_by_key = {}
+    so_dir_by_key = {}
 
     for i, idx in enumerate(wheel_indexes):
         own_dirs = set(idx.get("dirs", ())) | set(idx.get("top", ()))
@@ -181,116 +222,168 @@ def _compute_native(wheel_indexes, merged=None, sub=None):
         native = idx.get("native", {})
         ordered_native = sorted(
             native.items(),
-            key=lambda item: (posixpath.basename(item[0]) != item[1].get("soname"), item[0]),
+            key=lambda item: (item[0].rpartition("/")[2] != item[1].get("soname"), item[0]),
         )
         for rel_so, meta in ordered_native:
-            parent = posixpath.dirname(rel_so)
-            while parent:
+            so_dir, _, basename = rel_so.rpartition("/")
+            parent = so_dir
+            while parent and parent not in own_dirs:
                 own_dirs.add(parent)
-                parent = posixpath.dirname(parent)
+                parent = parent.rpartition("/")[0]
             key = (i, rel_so)
             meta_by_key[key] = meta
-            basename = posixpath.basename(rel_so)
+            so_dir_by_key[key] = so_dir
             own_sonames.add(basename)
             soname = meta.get("soname")
             if soname:
                 own_sonames.add(soname)
             is_ext = _is_abi_tagged_ext(basename)
-            effective_soname = soname or (None if is_ext else basename)
-            if effective_soname:
-                by_soname.setdefault(effective_soname, key)
-                if not is_ext and basename != effective_soname:
-                    by_soname.setdefault(basename, key)
             first_seg = rel_so.split("/", 1)[0] if "/" in rel_so else ""
-            if soname or (
+            is_shared_lib = bool(soname) or (
                 not is_ext and (basename.startswith("lib") or ".so." in basename or first_seg.endswith(".libs"))
-            ):
-                so_dir = posixpath.dirname(rel_so)
+            )
+            effective_soname = soname or (basename if is_shared_lib else None)
+            if effective_soname and not _is_system_soname(effective_soname):
+                by_soname.setdefault(effective_soname, key)
+                if (
+                    not is_ext
+                    and basename != effective_soname
+                    and not basename.endswith(".so")
+                    and not _is_system_soname(basename)
+                ):
+                    by_soname.setdefault(basename, key)
+            if is_shared_lib:
                 dedup_name = soname or basename
-                seen = dir_sonames.setdefault((i, so_dir), set())
-                if dedup_name not in seen:
-                    seen.add(dedup_name)
-                    libs_by_dir.setdefault(so_dir, []).append(key)
+                if not _is_system_soname(dedup_name):
+                    seen = dir_sonames.setdefault((i, so_dir), set())
+                    if dedup_name not in seen:
+                        seen.add(dedup_name)
+                        libs_by_dir.setdefault(so_dir, []).append(key)
         own_dirs_per_wheel.append(own_dirs)
         own_sonames_per_wheel.append(own_sonames)
 
-    def escaping_targets(wheel_idx, rel_so, meta):
-        so_dir = posixpath.dirname(rel_so)
-        own_dirs = own_dirs_per_wheel[wheel_idx]
-        rpaths = list(meta.get("runpath") or ()) + list(meta.get("rpath") or ())
-        targets = []
-        for entry in rpaths:
-            for cand_dir in _candidate_origin_dirs(own_dirs, so_dir, entry):
-                for key in libs_by_dir.get(cand_dir, ()):
-                    if key[0] != wheel_idx and key not in targets:
-                        targets.append(key)
-        return targets
+    escaping_cache = {}
+    origin_dir_cache = {}
+    escaping_by_key = {}
+
+    for key, meta in meta_by_key.items():
+        runpath = meta.get("runpath")
+        rpath = meta.get("rpath")
+        if not runpath and not rpath:
+            escaping_by_key[key] = ()
+            continue
+        wheel_idx = key[0]
+        so_dir = so_dir_by_key[key]
+        rpath_tuple = tuple(runpath or ()) + tuple(rpath or ())
+        esc_key = (wheel_idx, so_dir, rpath_tuple)
+        targets = escaping_cache.get(esc_key)
+        if targets is None:
+            own_dirs = own_dirs_per_wheel[wheel_idx]
+            targets = []
+            for entry in rpath_tuple:
+                cache_key = (wheel_idx, so_dir, entry)
+                cand_dirs = origin_dir_cache.get(cache_key)
+                if cand_dirs is None:
+                    cand_dirs = _candidate_origin_dirs(own_dirs, so_dir, entry)
+                    origin_dir_cache[cache_key] = cand_dirs
+                for cand_dir in cand_dirs:
+                    for dep_key in libs_by_dir.get(cand_dir, ()):
+                        if dep_key[0] != wheel_idx and dep_key not in targets:
+                            targets.append(dep_key)
+            targets = tuple(targets)
+            escaping_cache[esc_key] = targets
+        escaping_by_key[key] = targets
+
+    needed_by_key = {}
+    for key, meta in meta_by_key.items():
+        deps = []
+        for needed_name in meta.get("needed") or ():
+            dep_key = by_soname.get(needed_name)
+            if dep_key is not None and dep_key != key and dep_key not in deps:
+                deps.append(dep_key)
+        needed_by_key[key] = tuple(deps)
 
     soname_preload = _soname_preload_enabled()
 
-    def direct_cross_wheel_deps(wheel_idx, rel_so, meta):
-        targets = list(escaping_targets(wheel_idx, rel_so, meta))
-        if soname_preload:
-            own_sonames = own_sonames_per_wheel[wheel_idx]
-            for needed_name in meta.get("needed") or ():
-                if needed_name in own_sonames:
-                    continue
-                dep_key = by_soname.get(needed_name)
-                if dep_key is not None and dep_key[0] != wheel_idx and dep_key not in targets:
-                    targets.append(dep_key)
-        return targets
-
-    def resolve_closure(seeds, exclude_key=None):
+    def resolve_closure(seeds, exclude_key=None, include_escaping=True):
         ordered = []
-        visited = set()
-        if exclude_key is not None:
-            visited.add(exclude_key)
+        visited = {exclude_key} if exclude_key is not None else set()
 
         def visit(key):
             if key in visited:
                 return
             visited.add(key)
-            meta = meta_by_key[key]
-            for needed_name in meta.get("needed") or ():
-                dep_key = by_soname.get(needed_name)
-                if dep_key is not None:
+            for dep_key in needed_by_key[key]:
+                if dep_key not in visited:
                     visit(dep_key)
-            for dep_key in escaping_targets(key[0], key[1], meta):
-                visit(dep_key)
+            if include_escaping:
+                for dep_key in escaping_by_key[key]:
+                    if dep_key not in visited:
+                        visit(dep_key)
             ordered.append([key[0], key[1]])
 
         for seed in seeds:
-            visit(seed)
+            if seed not in visited:
+                visit(seed)
         return ordered
 
+    canonical_shared_keys = set(by_soname.values())
+    trigger_cache = {}
+    needed_closure_cache = {}
     pkg_roots = {}
+    pkg_roots_sets = {}
     native_deps = {}
     for i, idx in enumerate(wheel_indexes):
+        own_sonames = own_sonames_per_wheel[i]
         for rel_so, meta in sorted(idx.get("native", {}).items()):
             key = (i, rel_so)
-            targets = direct_cross_wheel_deps(i, rel_so, meta)
-            if targets:
-                for trigger_key in _preload_trigger_keys(i, idx, rel_so, merged, sub):
+            esc_targets = escaping_by_key[key]
+            cross_needed = ()
+            if soname_preload:
+                cross_needed = [
+                    dep_key
+                    for dep_key in needed_by_key[key]
+                    if dep_key[0] != i
+                    and meta_by_key[dep_key].get("soname") not in own_sonames
+                    and dep_key[1].rpartition("/")[2] not in own_sonames
+                ]
+            if esc_targets or cross_needed:
+                so_dir = so_dir_by_key[key]
+                trig_cache_key = (i, so_dir if so_dir else rel_so)
+                tkeys = trigger_cache.get(trig_cache_key)
+                if tkeys is None:
+                    tkeys = _preload_trigger_keys(i, idx, rel_so, merged, sub)
+                    trigger_cache[trig_cache_key] = tkeys
+                for trigger_key in tkeys:
                     seeds = pkg_roots.setdefault(trigger_key, [])
-                    for t in targets:
-                        if t not in seeds:
+                    seen_seeds = pkg_roots_sets.setdefault(trigger_key, set())
+                    for t in esc_targets:
+                        if t not in seen_seeds:
+                            seen_seeds.add(t)
                             seeds.append(t)
-            lib_seeds = []
-            for needed_name in meta.get("needed") or ():
-                dep_key = by_soname.get(needed_name)
-                if dep_key is not None and dep_key != key and dep_key not in lib_seeds:
-                    lib_seeds.append(dep_key)
-            for dep_key in escaping_targets(i, rel_so, meta):
-                if dep_key not in lib_seeds:
-                    lib_seeds.append(dep_key)
+                    for t in cross_needed:
+                        if t not in seen_seeds:
+                            seen_seeds.add(t)
+                            seeds.append(t)
+            if key not in canonical_shared_keys:
+                continue
+            lib_seeds = needed_by_key[key]
             if lib_seeds:
-                deps = resolve_closure(lib_seeds, exclude_key=key)
-                if deps:
-                    native_deps["{}:{}".format(i, rel_so)] = deps
+                has_cross = any(dep_key[0] != i for dep_key in lib_seeds)
+                rpaths = (meta.get("runpath") or ()) or (meta.get("rpath") or ())
+                if has_cross or not rpaths:
+                    deps = needed_closure_cache.get(lib_seeds)
+                    if deps is None:
+                        deps = resolve_closure(lib_seeds, include_escaping=False)
+                        needed_closure_cache[lib_seeds] = deps
+                    if key in {(d[0], d[1]) for d in deps}:
+                        deps = [d for d in deps if (d[0], d[1]) != key]
+                    if deps and (any(d[0] != i for d in deps) or not rpaths):
+                        native_deps["{}:{}".format(i, rel_so)] = deps
 
     preload = {}
     for pkg_key, seeds in sorted(pkg_roots.items()):
-        ordered = resolve_closure(seeds)
+        ordered = resolve_closure(seeds, include_escaping=True)
         if ordered:
             preload[pkg_key] = ordered
 
@@ -518,7 +611,7 @@ def _load_per_wheel_prebuilt(roots, runfiles_root):
 class _Index:
     """The top-level entries of every wheel root, prebuilt or listed."""
 
-    def __init__(self, roots, prebuilt=None):
+    def __init__(self, roots, prebuilt=None, runfiles_root=""):
         self.roots = []
         self.indexed = []
         self.unscanned = []
@@ -531,6 +624,7 @@ class _Index:
         self.preload = dict(prebuilt.preload) if prebuilt else {}
         self.sonames = dict(prebuilt.sonames) if prebuilt else {}
         self.native_deps = dict(prebuilt.native_deps) if prebuilt else {}
+        self.runfiles_root = os.path.normpath(os.path.abspath(runfiles_root)).rstrip("/") + "/" if runfiles_root else ""
         self._parent_dirs = {}
         self._dists_by_name = None
 
@@ -703,19 +797,28 @@ def _merged_subdir_spec(fullname, dirs):
 
 
 def _is_musl():
+    global _IS_MUSL
     override = os.environ.get("RULES_PYTHON_IMPORT_INDEX_LIBC")
     if override:
         return override.lower() == "musl"
+    if _IS_MUSL is not None:
+        return _IS_MUSL
     if sys.platform != "linux":
+        _IS_MUSL = False
         return False
     try:
-        return not os.confstr("CS_GNU_LIBC_VERSION")
+        _IS_MUSL = not os.confstr("CS_GNU_LIBC_VERSION")
     except (ValueError, OSError, AttributeError):
-        return True
+        _IS_MUSL = True
+    return _IS_MUSL
 
 
-def _make_stub_elf(rpath, needed_name, sample_so_path=None):
-    """Builds a minimal ELF64 ET_DYN stub with DT_RPATH and DT_NEEDED (`PF_R` only)."""
+def _make_stub_elf(rpath, needed_name, sample_so_path=None, soname=None):
+    """Builds a minimal ELF64 ET_DYN stub with DT_RPATH and DT_NEEDED (`PF_R` only).
+
+    Note: Only 64-bit ELF (`ei_class == 2`) is synthesized; 32-bit ELF returns
+    `None` so callers fall back to `_raw_dlopen`.
+    """
     import struct
 
     ei_data = 1
@@ -739,6 +842,10 @@ def _make_stub_elf(rpath, needed_name, sample_so_path=None):
     dynstr.extend(os.fsencode(needed_name) + b"\x00")
     rpath_off = len(dynstr)
     dynstr.extend(os.fsencode(rpath) + b"\x00")
+    soname_off = None
+    if soname:
+        soname_off = len(dynstr)
+        dynstr.extend(os.fsencode(soname) + b"\x00")
     while len(dynstr) % 8:
         dynstr.append(0)
 
@@ -756,13 +863,19 @@ def _make_stub_elf(rpath, needed_name, sample_so_path=None):
     dyn_entries = [
         (1, needed_off),  # DT_NEEDED
         (15, rpath_off),  # DT_RPATH
-        (5, dynstr_off),  # DT_STRTAB
-        (10, len(dynstr)),  # DT_STRSZ
-        (6, dynsym_off),  # DT_SYMTAB
-        (11, 24),  # DT_SYMENT
-        (4, hash_off),  # DT_HASH
-        (0, 0),  # DT_NULL
     ]
+    if soname_off is not None:
+        dyn_entries.append((14, soname_off))  # DT_SONAME
+    dyn_entries.extend(
+        [
+            (5, dynstr_off),  # DT_STRTAB
+            (10, len(dynstr)),  # DT_STRSZ
+            (6, dynsym_off),  # DT_SYMTAB
+            (11, 24),  # DT_SYMENT
+            (4, hash_off),  # DT_HASH
+            (0, 0),  # DT_NULL
+        ]
+    )
     dyn = b"".join(struct.pack(endian + "QQ", tag, val) for tag, val in dyn_entries)
     total_size = dyn_off + len(dyn)
 
@@ -794,13 +907,24 @@ def _raw_dlopen(path):
         return _ORIG_CTYPES_DLOPEN(path)
     import ctypes
 
-    if _ORIG_CTYPES_DLOPEN is not None:
-        return _ORIG_CTYPES_DLOPEN(path)
     return ctypes.CDLL(path)
 
 
-def _dlopen_musl_stub(path):
-    stub = _make_stub_elf(os.path.dirname(path), os.path.basename(path), path)
+def _dlopen_musl_stub(path, soname=None):
+    dir_path = os.path.dirname(path)
+    basename = os.path.basename(path)
+    if soname is None:
+        soname = _read_elf_dynamic(path)[0]
+    if soname and soname != basename:
+        if os.path.exists(os.path.join(dir_path, soname)):
+            needed_name = soname
+        else:
+            if _DEBUG:
+                _log("musl stub skipped for", path, "(missing SONAME file", soname, "in dir)")
+            return _raw_dlopen(path)
+    else:
+        needed_name = basename
+    stub = _make_stub_elf(dir_path, needed_name, path)
     if stub is None:
         return _raw_dlopen(path)
     memfd_create = getattr(os, "memfd_create", None)
@@ -808,8 +932,9 @@ def _dlopen_musl_stub(path):
         fd = None
         try:
             mfd_cloexec = getattr(os, "MFD_CLOEXEC", 1)
+            mfd_noexec_seal = getattr(os, "MFD_NOEXEC_SEAL", 0x0008)
             try:
-                fd = memfd_create("pycross_stub", mfd_cloexec | 0x0002)
+                fd = memfd_create("pycross_stub", mfd_cloexec | mfd_noexec_seal)
             except OSError:
                 fd = memfd_create("pycross_stub", mfd_cloexec)
             os.write(fd, stub)
@@ -869,40 +994,40 @@ def _preload_native(fullname, libs):
         _load_native_path(os.path.join(root, rel), fullname)
 
 
-def _read_elf_needed(path):
-    """Extracts DT_NEEDED library names from an ELF shared object."""
+def _read_elf_dynamic(path):
+    """Extracts `(soname, needed_list)` from an ELF shared object."""
     import struct
 
     try:
         with open(path, "rb") as fh:
             ident = fh.read(16)
             if len(ident) < 16 or ident[:4] != b"\x7fELF":
-                return ()
+                return None, ()
             ei_class, ei_data = ident[4], ident[5]
             if ei_class not in (1, 2) or ei_data not in (1, 2):
-                return ()
+                return None, ()
             endian = "<" if ei_data == 1 else ">"
             is_64 = ei_class == 2
             if is_64:
                 hdr = fh.read(48)
                 if len(hdr) < 48:
-                    return ()
+                    return None, ()
                 _, _, _, _, e_phoff, _, _, _, e_phentsize, e_phnum, _, _, _ = struct.unpack(
                     endian + "HHIQQQIHHHHHH", hdr
                 )
             else:
                 hdr = fh.read(36)
                 if len(hdr) < 36:
-                    return ()
+                    return None, ()
                 _, _, _, _, e_phoff, _, _, _, e_phentsize, e_phnum, _, _, _ = struct.unpack(
                     endian + "HHIIIIIHHHHHH", hdr
                 )
             if e_phoff == 0 or e_phnum == 0:
-                return ()
+                return None, ()
             fh.seek(e_phoff)
             phdrs_raw = fh.read(e_phentsize * e_phnum)
             if len(phdrs_raw) < e_phentsize * e_phnum:
-                return ()
+                return None, ()
             load_segments = []
             dyn_offset = dyn_filesz = 0
             for i in range(e_phnum):
@@ -920,13 +1045,14 @@ def _read_elf_needed(path):
                 elif p_type == 2:
                     dyn_offset, dyn_filesz = p_offset, p_filesz
             if not dyn_offset or not dyn_filesz:
-                return ()
+                return None, ()
             fh.seek(dyn_offset)
             dyn_raw = fh.read(dyn_filesz)
             entry_fmt = endian + ("qQ" if is_64 else "iI")
             entry_size = 16 if is_64 else 8
             strtab_vaddr = None
             strtab_size = 0
+            soname_offset = None
             needed_offsets = []
             for pos in range(0, len(dyn_raw) - entry_size + 1, entry_size):
                 d_tag, d_val = struct.unpack(entry_fmt, dyn_raw[pos : pos + entry_size])
@@ -936,10 +1062,12 @@ def _read_elf_needed(path):
                     strtab_vaddr = d_val
                 elif d_tag == 10:
                     strtab_size = d_val
+                elif d_tag == 14:
+                    soname_offset = d_val
                 elif d_tag == 1:
                     needed_offsets.append(d_val)
-            if strtab_vaddr is None or not strtab_size or not needed_offsets:
-                return ()
+            if strtab_vaddr is None or not strtab_size or (soname_offset is None and not needed_offsets):
+                return None, ()
             strtab_off = None
             for vaddr, memsz, offset, filesz in load_segments:
                 span = max(memsz, filesz)
@@ -947,20 +1075,27 @@ def _read_elf_needed(path):
                     strtab_off = offset + (strtab_vaddr - vaddr)
                     break
             if strtab_off is None:
-                return ()
+                return None, ()
             fh.seek(strtab_off)
             dynstr = fh.read(strtab_size)
-            needed = []
-            for off in needed_offsets:
-                if 0 <= off < len(dynstr):
+
+            def get_str(off):
+                if off is not None and 0 <= off < len(dynstr):
                     end = dynstr.find(b"\x00", off)
                     raw = dynstr[off:] if end == -1 else dynstr[off:end]
-                    val = raw.decode("utf-8", errors="replace")
-                    if val:
-                        needed.append(val)
-            return needed
+                    return raw.decode("utf-8", errors="replace") or None
+                return None
+
+            soname = get_str(soname_offset)
+            needed = [val for off in needed_offsets for val in (get_str(off),) if val]
+            return soname, needed
     except OSError:
-        return ()
+        return None, ()
+
+
+def _read_elf_needed(path):
+    """Extracts DT_NEEDED library names from an ELF shared object."""
+    return _read_elf_dynamic(path)[1]
 
 
 def _match_wheel_relpath(path_str):
@@ -974,24 +1109,44 @@ def _match_wheel_relpath(path_str):
     return None
 
 
+def _strip_leading_dotdot(rel_path):
+    norm = posixpath.normpath(rel_path.replace(os.sep, "/"))
+    parts = norm.split("/")
+    while parts and parts[0] == "..":
+        parts.pop(0)
+    if parts and parts != ["."]:
+        return "/".join(parts)
+    return None
+
+
 def _extract_escaped_relpath(path_str):
     if _INDEX is None:
         return None
-    raw = path_str.replace(os.sep, "/")
-    marker = "/site-packages/"
-    if marker in raw:
-        after = posixpath.normpath(raw.rsplit(marker, 1)[1])
-        parts = after.split("/")
-        while parts and parts[0] == "..":
-            parts.pop(0)
-        if parts and parts != ["."]:
-            return "/".join(parts)
-    norm = os.path.normpath(os.path.abspath(path_str))
+    abs_raw = os.path.abspath(path_str)
     for r in _INDEX.roots:
-        for base in (r.rstrip("/"), os.path.dirname(r.rstrip("/"))):
-            prefix = base + "/"
-            if base and norm.startswith(prefix):
-                return norm[len(prefix) :].replace(os.sep, "/")
+        prefix = r.rstrip("/") + "/"
+        if abs_raw.startswith(prefix):
+            rel = _strip_leading_dotdot(abs_raw[len(prefix) :])
+            if rel:
+                return rel
+    norm = os.path.normpath(abs_raw)
+    for r in _INDEX.roots:
+        r_clean = r.rstrip("/")
+        prefix = r_clean + "/"
+        if norm.startswith(prefix):
+            return norm[len(prefix) :].replace(os.sep, "/")
+        if os.path.basename(r_clean) == "site-packages":
+            parent = os.path.dirname(r_clean)
+            parent_prefix = parent + "/"
+            if (
+                parent
+                and norm.startswith(parent_prefix)
+                and not any(r2 != r and r2.startswith(parent_prefix) for r2 in _INDEX.roots)
+            ):
+                rel = norm[len(parent_prefix) :].replace(os.sep, "/")
+                first_seg = rel.split("/", 1)[0]
+                if first_seg in _INDEX.top or first_seg in _INDEX.merged:
+                    return rel
     real_roots = getattr(_INDEX, "_real_roots", None)
     if real_roots is None:
         real_roots = [os.path.realpath(r) for r in _INDEX.roots]
@@ -1003,10 +1158,22 @@ def _extract_escaped_relpath(path_str):
     except OSError:
         return None
     for rr in real_roots:
-        for base in (rr.rstrip("/"), os.path.dirname(rr.rstrip("/"))):
-            prefix = base + "/"
-            if base and real_norm.startswith(prefix):
-                return real_norm[len(prefix) :].replace(os.sep, "/")
+        rr_clean = rr.rstrip("/")
+        prefix = rr_clean + "/"
+        if real_norm.startswith(prefix):
+            return real_norm[len(prefix) :].replace(os.sep, "/")
+        if os.path.basename(rr_clean) == "site-packages":
+            parent = os.path.dirname(rr_clean)
+            parent_prefix = parent + "/"
+            if (
+                parent
+                and real_norm.startswith(parent_prefix)
+                and not any(r2 != rr and r2.startswith(parent_prefix) for r2 in real_roots)
+            ):
+                rel = real_norm[len(parent_prefix) :].replace(os.sep, "/")
+                first_seg = rel.split("/", 1)[0]
+                if first_seg in _INDEX.top or first_seg in _INDEX.merged:
+                    return rel
     return None
 
 
@@ -1025,9 +1192,6 @@ def _find_owner_for_relpath(rel_so):
     for owner_root in _INDEX.top.get(first_seg, ()):
         if owner_root not in candidates:
             candidates.append(owner_root)
-    for r in _INDEX.roots:
-        if r not in candidates:
-            candidates.append(r)
     for r in candidates:
         if os.path.isfile(os.path.join(r, rel_so)):
             return r, rel_so
@@ -1041,8 +1205,16 @@ def _find_wheel_library(name):
         s = os.fsdecode(os.fspath(name))
     except TypeError:
         return None
+    if _is_system_soname(s) or _is_system_soname("lib" + s + ".so"):
+        return None
     if s in _INDEX.sonames:
         return _INDEX.sonames[s]
+    if s.endswith(".so"):
+        prefix = s + "."
+        for soname in sorted(_INDEX.sonames):
+            if soname.startswith(prefix):
+                return _INDEX.sonames[soname]
+        return None
     for exact in ("lib" + s + ".so", s + ".so"):
         if exact in _INDEX.sonames:
             return _INDEX.sonames[exact]
@@ -1055,6 +1227,10 @@ def _find_wheel_library(name):
 
 def _prepare_resolved_target(root, rel_so, label="dlopen"):
     deps = _INDEX.native_deps.get((root, rel_so))
+    if deps is None:
+        canon = _find_wheel_library(rel_so.rpartition("/")[2])
+        if canon is not None and canon[0] == root:
+            deps = _INDEX.native_deps.get(canon)
     if deps:
         _preload_native(label, deps)
     resolved = os.path.join(root, rel_so)
@@ -1063,7 +1239,7 @@ def _prepare_resolved_target(root, rel_so, label="dlopen"):
     return resolved
 
 
-def _resolve_dlopen_arg(name, allow_short_name=False):
+def _resolve_path_dlopen_arg(name):
     if _IN_PRELOAD or _INDEX is None or not name:
         return name
     try:
@@ -1072,35 +1248,51 @@ def _resolve_dlopen_arg(name, allow_short_name=False):
         return name
     is_bytes = isinstance(raw, bytes)
     s = os.fsdecode(raw)
-
-    def encode_like(res):
-        return os.fsencode(res) if is_bytes else res
-
-    if "/" in s or (os.sep != "/" and os.sep in s):
-        if os.path.exists(s):
-            matched = _match_wheel_relpath(s)
-            if matched is not None:
-                _prepare_resolved_target(matched[0], matched[1], "dlopen")
-            return name
-        rel_so = _extract_escaped_relpath(s)
-        if rel_so:
-            target = _find_owner_for_relpath(rel_so)
-            if target is not None:
-                resolved = _prepare_resolved_target(target[0], target[1], "dlopen")
-                if _DEBUG:
-                    _log("dlopen rewrite", s, "->", resolved)
-                return encode_like(resolved)
+    if "/" not in s and (os.sep == "/" or os.sep not in s):
         return name
+    if os.path.exists(s):
+        matched = _match_wheel_relpath(s)
+        if matched is not None:
+            _prepare_resolved_target(matched[0], matched[1], "dlopen")
+        return name
+    rel_so = _extract_escaped_relpath(s)
+    if rel_so:
+        target = _find_owner_for_relpath(rel_so)
+        if target is not None:
+            resolved = _prepare_resolved_target(target[0], target[1], "dlopen")
+            if _DEBUG:
+                _log("dlopen rewrite", s, "->", resolved)
+            return os.fsencode(resolved) if is_bytes else resolved
+    return name
 
+
+def _resolve_bare_dlopen_arg(name, allow_short_name=False):
+    if _IN_PRELOAD or _INDEX is None or not name:
+        return name
+    try:
+        raw = os.fspath(name)
+    except TypeError:
+        return name
+    is_bytes = isinstance(raw, bytes)
+    s = os.fsdecode(raw)
+    if "/" in s or (os.sep != "/" and os.sep in s) or _is_system_soname(s):
+        return name
     target = _INDEX.sonames.get(s)
-    if target is None and allow_short_name:
+    if target is None and (allow_short_name or s.endswith(".so")):
         target = _find_wheel_library(s)
     if target is not None:
         resolved = _prepare_resolved_target(target[0], target[1], "dlopen")
         if _DEBUG:
             _log("dlopen soname", s, "->", resolved)
-        return encode_like(resolved)
+        return os.fsencode(resolved) if is_bytes else resolved
     return name
+
+
+def _resolve_dlopen_arg(name, allow_short_name=False):
+    rewritten = _resolve_path_dlopen_arg(name)
+    if rewritten != name:
+        return rewritten
+    return _resolve_bare_dlopen_arg(name, allow_short_name=allow_short_name)
 
 
 def _hook_ctypes_module(mod):
@@ -1111,7 +1303,15 @@ def _hook_ctypes_module(mod):
     _ORIG_CTYPES_DLOPEN = dlopen
 
     def _wrapped_dlopen(name, *args):
-        return dlopen(_resolve_dlopen_arg(name), *args)
+        rewritten = _resolve_path_dlopen_arg(name)
+        try:
+            return dlopen(rewritten, *args)
+        except OSError:
+            if rewritten == name:
+                fallback = _resolve_bare_dlopen_arg(name)
+                if fallback != name:
+                    return dlopen(fallback, *args)
+            raise
 
     _wrapped_dlopen._pycross_wrapped = True
     try:
@@ -1143,10 +1343,13 @@ def _hook_ctypes_util_module(mod):
         return
 
     def _wrapped_find_library(name):
+        res = orig_find(name)
+        if res:
+            return res
         target = _find_wheel_library(name)
         if target is not None:
             return _prepare_resolved_target(target[0], target[1], "find_library")
-        return orig_find(name)
+        return res
 
     _wrapped_find_library._pycross_wrapped = True
     try:
@@ -1160,9 +1363,17 @@ def _hook_cffi_backend_module(mod):
     if orig_load is not None and not getattr(orig_load, "_pycross_wrapped", False):
 
         def _wrapped_load_library(name=None, *args):
-            if name is not None:
-                name = _resolve_dlopen_arg(name, allow_short_name=True)
-            return orig_load(name, *args)
+            if name is None:
+                return orig_load(name, *args)
+            rewritten = _resolve_path_dlopen_arg(name)
+            try:
+                return orig_load(rewritten, *args)
+            except OSError:
+                if rewritten == name:
+                    fallback = _resolve_bare_dlopen_arg(name, allow_short_name=True)
+                    if fallback != name:
+                        return orig_load(fallback, *args)
+                raise
 
         _wrapped_load_library._pycross_wrapped = True
         try:
@@ -1178,9 +1389,17 @@ def _hook_cffi_backend_module(mod):
                 _pycross_wrapped = True
 
                 def dlopen(self, name=None, *args, **kwargs):
-                    if name is not None:
-                        name = _resolve_dlopen_arg(name, allow_short_name=True)
-                    return super().dlopen(name, *args, **kwargs)
+                    if name is None:
+                        return super().dlopen(name, *args, **kwargs)
+                    rewritten = _resolve_path_dlopen_arg(name)
+                    try:
+                        return super().dlopen(rewritten, *args, **kwargs)
+                    except OSError:
+                        if rewritten == name:
+                            fallback = _resolve_bare_dlopen_arg(name, allow_short_name=True)
+                            if fallback != name:
+                                return super().dlopen(fallback, *args, **kwargs)
+                        raise
 
             _FFI.__name__ = orig_ffi.__name__
             _FFI.__qualname__ = orig_ffi.__qualname__
@@ -1200,6 +1419,55 @@ def _apply_module_hook(fullname, module):
         _hook_cffi_backend_module(module)
 
 
+def _is_stdlib_extension_origin(origin):
+    norm = os.path.normpath(os.path.abspath(origin))
+    if "/lib-dynload/" in norm.replace(os.sep, "/"):
+        return True
+    prefixes = getattr(_INDEX, "_stdlib_prefixes", None)
+    if prefixes is None:
+        raw_prefixes = set()
+        for attr in ("base_prefix", "base_exec_prefix", "prefix", "exec_prefix"):
+            val = getattr(sys, attr, None)
+            if val:
+                p = os.path.normpath(os.path.abspath(val)).rstrip("/")
+                if p:
+                    raw_prefixes.add(p + "/")
+                try:
+                    rp = os.path.realpath(val).rstrip("/")
+                    if rp:
+                        raw_prefixes.add(rp + "/")
+                except OSError:
+                    pass
+        prefixes = tuple(sorted(raw_prefixes))
+        if _INDEX is not None:
+            _INDEX._stdlib_prefixes = prefixes
+    if norm.startswith(prefixes):
+        return True
+    try:
+        real_norm = os.path.realpath(origin)
+        if real_norm.startswith(prefixes):
+            return True
+    except OSError:
+        pass
+    return False
+
+
+def _is_first_party_extension_origin(origin):
+    if _is_stdlib_extension_origin(origin) or _match_wheel_relpath(origin) is not None:
+        return False
+    norm = os.path.normpath(os.path.abspath(origin))
+    runfiles_prefix = getattr(_INDEX, "runfiles_root", "")
+    if runfiles_prefix and norm.startswith(runfiles_prefix):
+        return True
+    _, post, _ = _split(sys.path)
+    for entry in post:
+        if isinstance(entry, str) and entry:
+            entry_prefix = os.path.normpath(os.path.abspath(entry)).rstrip("/") + "/"
+            if norm.startswith(entry_prefix):
+                return True
+    return not runfiles_prefix and not post
+
+
 def _maybe_preload_extension_needed(fullname, spec):
     if _INDEX is None or not _INDEX.sonames or spec is None:
         return
@@ -1210,13 +1478,15 @@ def _maybe_preload_extension_needed(fullname, spec):
     if not origin or origin in _CHECKED_EXTENSIONS:
         return
     _CHECKED_EXTENSIONS.add(origin)
-    if _match_wheel_relpath(origin) is not None:
+    if not _is_first_party_extension_origin(origin):
         return
     needed = _read_elf_needed(origin)
     if not needed:
         return
     libs = []
     for soname in needed:
+        if _is_system_soname(soname):
+            continue
         target = _INDEX.sonames.get(soname)
         if target is not None:
             for dep in _INDEX.native_deps.get(target, ()):
@@ -1589,7 +1859,7 @@ def install(roots, debug=False, mode="scan", index_path=None, runfiles_root=""):
         if debug:
             _log("verified", prebuilt.path)
 
-    index = _Index(roots, prebuilt)
+    index = _Index(roots, prebuilt, runfiles_root=runfiles_root)
     if not index.roots:
         if debug:
             _log("no wheel roots could be listed; not installing")

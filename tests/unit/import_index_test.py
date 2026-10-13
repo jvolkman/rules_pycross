@@ -874,6 +874,8 @@ class ImportIndexTest(unittest.TestCase):
                     # Item 5b: _cffi_backend wrapper (load_library and FFI.dlopen).
                     class FakeFFI:
                         def dlopen(self, name=None, flags=0):
+                            if name is not None and not os.path.exists(name):
+                                raise OSError(name)
                             return (name, flags)
 
                     class FakeCffiBackend:
@@ -881,6 +883,8 @@ class ImportIndexTest(unittest.TestCase):
 
                         @staticmethod
                         def load_library(name=None, flags=0):
+                            if name is not None and not os.path.exists(name):
+                                raise OSError(name)
                             return (name, flags)
 
                     import_index._hook_cffi_backend_module(FakeCffiBackend)
@@ -903,6 +907,308 @@ class ImportIndexTest(unittest.TestCase):
                 import_index._PRELOADED.clear()
                 import_index._CHECKED_EXTENSIONS.clear()
                 sys.meta_path[:] = prev_meta
+
+    def test_system_soname_denylist_and_original_first_bare_dlopen(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            wheel_a = os.path.join(tmp, "wheel_a", "site-packages")
+            wheel_b = os.path.join(tmp, "wheel_b", "site-packages")
+            wheel_c = os.path.join(tmp, "wheel_c", "site-packages")
+            fp_root = os.path.join(tmp, "first_party")
+            stdlib_dynload = os.path.join(tmp, "stdlib", "lib", "python3.11", "lib-dynload")
+
+            cudart_so = os.path.join(wheel_a, "nvidia", "cuda_runtime", "lib", "libcudart.so.12")
+            cublas_so = os.path.join(wheel_b, "nvidia", "cublas", "lib", "libcublas.so.12")
+            gomp_so = os.path.join(wheel_a, "pkg_a.libs", "libgomp.so.1")
+            stdcpp_so = os.path.join(wheel_a, "pkg_a.libs", "libstdc++.so.6")
+            zlib_so = os.path.join(wheel_a, "pkg_a.libs", "libz.so.1")
+            ssl_so = os.path.join(wheel_a, "pkg_a.libs", "libssl.so.3")
+            cuda_driver_so = os.path.join(wheel_a, "pkg_a.libs", "libcuda.so.1")
+            nvml_so = os.path.join(wheel_a, "pkg_a.libs", "libnvidia-ml.so.1")
+
+            for p in (cudart_so, cublas_so, gomp_so, stdcpp_so, zlib_so, ssl_so, cuda_driver_so, nvml_so):
+                _write(p, "")
+
+            def wheel_meta(**fields):
+                return dict(
+                    {"version": 1, "top": {}, "pth": [], "dirs": [], "dist_info": None},
+                    **fields,
+                )
+
+            merged = import_index.merge_wheel_indexes(
+                [
+                    (
+                        "wheel_a/site-packages",
+                        wheel_meta(
+                            top={"nvidia": ["nvidia"], "pkg_a": ["pkg_a"]},
+                            dirs=["nvidia", "nvidia/cuda_runtime", "nvidia/cuda_runtime/lib", "pkg_a"],
+                            native={
+                                "nvidia/cuda_runtime/lib/libcudart.so.12": {
+                                    "soname": "libcudart.so.12",
+                                    "needed": ["libc.so.6", "libstdc++.so.6", "libcuda.so.1"],
+                                    "rpath": [],
+                                    "runpath": ["$ORIGIN"],
+                                },
+                                "pkg_a.libs/libgomp.so.1": {
+                                    "soname": "libgomp.so.1",
+                                    "needed": ["libc.so.6"],
+                                    "rpath": [],
+                                    "runpath": [],
+                                },
+                                "pkg_a.libs/libstdc++.so.6": {
+                                    "soname": "libstdc++.so.6",
+                                    "needed": ["libc.so.6"],
+                                    "rpath": [],
+                                    "runpath": [],
+                                },
+                                "pkg_a.libs/libz.so.1": {
+                                    "soname": "libz.so.1",
+                                    "needed": ["libc.so.6"],
+                                    "rpath": [],
+                                    "runpath": [],
+                                },
+                                "pkg_a.libs/libssl.so.3": {
+                                    "soname": "libssl.so.3",
+                                    "needed": ["libc.so.6"],
+                                    "rpath": [],
+                                    "runpath": [],
+                                },
+                                "pkg_a.libs/libcuda.so.1": {
+                                    "soname": "libcuda.so.1",
+                                    "needed": ["libc.so.6"],
+                                    "rpath": [],
+                                    "runpath": [],
+                                },
+                                "pkg_a.libs/libnvidia-ml.so.1": {
+                                    "soname": "libnvidia-ml.so.1",
+                                    "needed": ["libc.so.6"],
+                                    "rpath": [],
+                                    "runpath": [],
+                                },
+                            },
+                        ),
+                    ),
+                    (
+                        "wheel_b/site-packages",
+                        wheel_meta(
+                            top={"nvidia": ["nvidia"]},
+                            dirs=["nvidia", "nvidia/cublas", "nvidia/cublas/lib"],
+                            native={
+                                "nvidia/cublas/lib/libcublas.so.12": {
+                                    "soname": "libcublas.so.12",
+                                    "needed": [
+                                        "libcudart.so.12",
+                                        "libgomp.so.1",
+                                        "libstdc++.so.6",
+                                        "libz.so.1",
+                                        "libssl.so.3",
+                                        "libcuda.so.1",
+                                        "libnvidia-ml.so.1",
+                                    ],
+                                    "rpath": [],
+                                    "runpath": ["$ORIGIN"],
+                                },
+                            },
+                        ),
+                    ),
+                    (
+                        "wheel_c/site-packages",
+                        wheel_meta(
+                            top={"pkg_b": ["pkg_b"]},
+                            dirs=["pkg_b"],
+                            native={
+                                "pkg_b/_ext.so": {
+                                    "soname": None,
+                                    "needed": [
+                                        "libcublas.so.12",
+                                        "libgomp.so.1",
+                                        "libstdc++.so.6",
+                                        "libz.so.1",
+                                        "libssl.so.3",
+                                        "libcuda.so.1",
+                                        "libnvidia-ml.so.1",
+                                    ],
+                                    "rpath": [],
+                                    "runpath": ["$ORIGIN"],
+                                },
+                            },
+                        ),
+                    ),
+                ]
+            )
+
+            # (b) System/toolchain/driver SONAMEs are excluded from sonames and cross-wheel preload,
+            # while CUDA toolkit SONAMEs (libcudart.so.12, libcublas.so.12) ARE indexed and preloaded.
+            self.assertEqual(
+                set(merged.get("sonames", {}).keys()),
+                {"libcudart.so.12", "libcublas.so.12"},
+            )
+            self.assertEqual(
+                merged.get("preload", {}).get("nvidia.cublas"),
+                [[0, "nvidia/cuda_runtime/lib/libcudart.so.12"]],
+            )
+            self.assertEqual(
+                merged.get("preload", {}).get("pkg_b"),
+                [[0, "nvidia/cuda_runtime/lib/libcudart.so.12"], [1, "nvidia/cublas/lib/libcublas.so.12"]],
+            )
+
+            idx_file = os.path.join(tmp, "_bazel_import_index.json")
+            _write(idx_file, json.dumps(merged))
+            roots = [wheel_a, wheel_b, wheel_c]
+            prev_index = import_index._INDEX
+            prev_meta = list(sys.meta_path)
+            try:
+                import_index._INDEX = None
+                with mock.patch.object(import_index, "_raw_dlopen", side_effect=lambda p: p):
+                    self.assertTrue(
+                        import_index.install(
+                            roots,
+                            mode="prebuilt",
+                            index_path=idx_file,
+                            runfiles_root=tmp,
+                        )
+                    )
+
+                    # (a) Bare-name dlopen / cffi / find_library tries original first:
+                    # if the original call succeeds for a bare name, it is NOT redirected to the wheel.
+                    dlopen_calls = []
+
+                    class FakeCtypesMod:
+                        @staticmethod
+                        def dlopen(name, *args):
+                            dlopen_calls.append(name)
+                            if name == "libcublas.so.12":
+                                return ("host_hit", name)
+                            if isinstance(name, str) and not os.path.exists(name):
+                                raise OSError(name)
+                            return ("loaded", name)
+
+                    import_index._hook_ctypes_module(FakeCtypesMod)
+                    # Host hit on bare "libcublas.so.12" -> not redirected to wheel's cublas_so.
+                    self.assertEqual(FakeCtypesMod.dlopen("libcublas.so.12"), ("host_hit", "libcublas.so.12"))
+                    self.assertEqual(dlopen_calls, ["libcublas.so.12"])
+                    # Host miss on bare "libcudart.so.12" -> falls back to wheel's cudart_so.
+                    dlopen_calls.clear()
+                    self.assertEqual(FakeCtypesMod.dlopen("libcudart.so.12"), ("loaded", cudart_so))
+                    self.assertEqual(dlopen_calls, ["libcudart.so.12", cudart_so])
+
+                    # Same original-first behavior for ctypes.util.find_library:
+                    class FakeCtypesUtil:
+                        @staticmethod
+                        def find_library(name):
+                            if name == "cublas":
+                                return "libcublas.so.host"
+                            return None
+
+                    import_index._hook_ctypes_util_module(FakeCtypesUtil)
+                    self.assertEqual(FakeCtypesUtil.find_library("cublas"), "libcublas.so.host")
+                    self.assertEqual(FakeCtypesUtil.find_library("cudart"), cudart_so)
+                    self.assertIsNone(FakeCtypesUtil.find_library("stdc++"))
+                    self.assertIsNone(FakeCtypesUtil.find_library("cuda"))
+
+                    # Same original-first behavior for _cffi_backend:
+                    class FakeFFIHostFirst:
+                        def dlopen(self, name=None, flags=0):
+                            if name == "cublas":
+                                return ("host_ffi", name, flags)
+                            if name is not None and not os.path.exists(name):
+                                raise OSError(name)
+                            return ("wheel_ffi", name, flags)
+
+                    class FakeCffiHostFirst:
+                        FFI = FakeFFIHostFirst
+
+                        @staticmethod
+                        def load_library(name=None, flags=0):
+                            if name == "cublas":
+                                return ("host_load", name, flags)
+                            if name is not None and not os.path.exists(name):
+                                raise OSError(name)
+                            return ("wheel_load", name, flags)
+
+                    import_index._hook_cffi_backend_module(FakeCffiHostFirst)
+                    self.assertEqual(FakeCffiHostFirst.load_library("cublas", 1), ("host_load", "cublas", 1))
+                    self.assertEqual(FakeCffiHostFirst.load_library("cudart", 1), ("wheel_load", cudart_so, 1))
+                    self.assertEqual(FakeCffiHostFirst.FFI().dlopen("cublas", 2), ("host_ffi", "cublas", 2))
+                    self.assertEqual(FakeCffiHostFirst.FFI().dlopen("cudart", 2), ("wheel_ffi", cudart_so, 2))
+
+                    # (c) Stdlib extension (under lib-dynload or sys.base_prefix) and external paths outside
+                    # runfiles_root are NOT inspected by _maybe_preload_extension_needed.
+                    stdlib_so = os.path.join(stdlib_dynload, "_ssl.cpython-311-x86_64-linux-gnu.so")
+                    _write(stdlib_so, "")
+                    base_prefix_so = os.path.join(sys.base_prefix, "lib", "_struct.so")
+                    ext_outside_so = os.path.join("/opt/unrelated_venv/lib/python3.11/site-packages", "ext.so")
+                    fp_so = os.path.join(fp_root, "my_fp_ext.so")
+                    os.makedirs(fp_root, exist_ok=True)
+                    with open(fp_so, "wb") as fh:
+                        fh.write(import_index._make_stub_elf("/unused", "libcudart.so.12"))
+
+                    with mock.patch.object(
+                        import_index,
+                        "_read_elf_needed",
+                        wraps=import_index._read_elf_needed,
+                    ) as spy_needed:
+                        for non_fp in (stdlib_so, base_prefix_so, ext_outside_so):
+                            spec = import_index._spec(
+                                "mod",
+                                non_fp,
+                                import_index._machinery.ExtensionFileLoader,
+                            )
+                            import_index._finalize_spec("mod", spec)
+                        self.assertEqual(spy_needed.call_count, 0)
+
+                        fp_spec = import_index._spec(
+                            "my_fp_ext",
+                            fp_so,
+                            import_index._machinery.ExtensionFileLoader,
+                        )
+                        import_index._finalize_spec("my_fp_ext", fp_spec)
+                        self.assertEqual(spy_needed.call_count, 1)
+
+                    # (d) Unrelated nonexistent /site-packages/ path is NOT redirected and does zero isfile probes.
+                    unrelated = "/other/venv/lib/python3.11/site-packages/nvidia/cublas/lib/libcublas.so.12"
+                    with mock.patch.object(import_index.os.path, "isfile", wraps=os.path.isfile) as spy_isfile:
+                        self.assertIsNone(import_index._extract_escaped_relpath(unrelated))
+                        self.assertEqual(import_index._resolve_path_dlopen_arg(unrelated), unrelated)
+                        self.assertEqual(spy_isfile.call_count, 0)
+            finally:
+                import_index._INDEX = prev_index
+                import_index._PRELOADED.clear()
+                import_index._CHECKED_EXTENSIONS.clear()
+                sys.meta_path[:] = prev_meta
+
+    def test_musl_stub_filename_mismatch_with_dt_soname(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            real_file = os.path.join(tmp, "libfoo.so.1.2.3")
+            soname_file = os.path.join(tmp, "libfoo.so.1")
+            with open(real_file, "wb") as fh:
+                fh.write(import_index._make_stub_elf("$ORIGIN", "libc.so.6", soname="libfoo.so.1"))
+
+            # Verify _read_elf_dynamic parses both DT_SONAME and DT_NEEDED.
+            soname, needed = import_index._read_elf_dynamic(real_file)
+            self.assertEqual(soname, "libfoo.so.1")
+            self.assertEqual(needed, ["libc.so.6"])
+
+            # Case 1: libfoo.so.1 does NOT exist in tmp -> _dlopen_musl_stub skips stub creation
+            # and falls back directly to _raw_dlopen(real_file).
+            with (
+                mock.patch.object(import_index, "_make_stub_elf", wraps=import_index._make_stub_elf) as spy_stub,
+                mock.patch.object(import_index, "_raw_dlopen", side_effect=lambda p: ("raw", p)) as spy_raw,
+            ):
+                res = import_index._dlopen_musl_stub(real_file)
+                self.assertEqual(res, ("raw", real_file))
+                self.assertEqual(spy_stub.call_count, 0)
+                self.assertEqual(spy_raw.call_count, 1)
+
+            # Case 2: libfoo.so.1 DOES exist in tmp -> _dlopen_musl_stub builds a stub with
+            # DT_NEEDED = "libfoo.so.1" (the DT_SONAME, not "libfoo.so.1.2.3").
+            _write(soname_file, "")
+            with (
+                mock.patch.object(import_index, "_make_stub_elf", wraps=import_index._make_stub_elf) as spy_stub,
+                mock.patch.object(import_index, "_raw_dlopen", side_effect=lambda p: ("stub_loaded", p)),
+            ):
+                res = import_index._dlopen_musl_stub(real_file)
+                self.assertEqual(res[0], "stub_loaded")
+                spy_stub.assert_called_once_with(tmp, "libfoo.so.1", real_file)
 
 
 if __name__ == "__main__":
