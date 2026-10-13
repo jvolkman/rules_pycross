@@ -25,7 +25,6 @@ import unittest
 from unittest import mock
 
 from pycross.private.tools import import_index
-from pycross.private.tools import venv_import_index_merger
 
 _FINDER_DIR = os.path.dirname(os.path.abspath(import_index.__file__))
 
@@ -347,7 +346,7 @@ class ImportIndexTest(unittest.TestCase):
             for name, root in cls.roots.items()
             if names is None or name in names
         ]
-        merged = venv_import_index_merger.merge(entries)
+        merged = import_index.merge_wheel_indexes(entries)
         if tamper:
             tamper(merged)
         path = os.path.join(cls.tmp, "index{}.json".format(next(cls._counter)))
@@ -547,7 +546,7 @@ class ImportIndexTest(unittest.TestCase):
                 **fields,
             )
 
-        merged = venv_import_index_merger.merge(
+        merged = import_index.merge_wheel_indexes(
             [
                 (
                     "cublas/site-packages",
@@ -696,7 +695,7 @@ class ImportIndexTest(unittest.TestCase):
                 ),
             ),
         ]
-        merged = venv_import_index_merger.merge(entries)
+        merged = import_index.merge_wheel_indexes(entries)
         self.assertEqual(
             merged["preload"]["onnxruntime"],
             [
@@ -715,7 +714,7 @@ class ImportIndexTest(unittest.TestCase):
         self.assertNotIn("_ext.cpython-312-x86_64-linux-gnu.so", merged["sonames"])
 
         with mock.patch.dict(os.environ, {"RULES_PYTHON_IMPORT_INDEX_SONAME_PRELOAD": "0"}):
-            merged_disabled = venv_import_index_merger.merge(entries)
+            merged_disabled = import_index.merge_wheel_indexes(entries)
         self.assertNotIn("preload", merged_disabled)
 
     def test_stub_elf_and_read_elf_needed_roundtrip(self):

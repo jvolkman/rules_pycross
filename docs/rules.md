@@ -126,27 +126,6 @@ pycross_repaired_wheel(<a href="#pycross_repaired_wheel-name">name</a>, <a href=
 | <a id="pycross_repaired_wheel-whldir_name"></a>whldir_name |  Name for the output .whldir TreeArtifact directory. If empty, defaults to '{name}.whldir'.   | String | optional |  `""`  |
 
 
-<a id="pycross_venv_import_index"></a>
-
-## pycross_venv_import_index
-
-<pre>
-load("@rules_pycross//pycross:defs.bzl", "pycross_venv_import_index")
-
-pycross_venv_import_index(<a href="#pycross_venv_import_index-name">name</a>, <a href="#pycross_venv_import_index-deps">deps</a>)
-</pre>
-
-Merges transitive per-wheel import indexes into a single `_bazel_import_index.json` file for a binary's venv.
-
-**ATTRIBUTES**
-
-
-| Name  | Description | Type | Mandatory | Default |
-| :------------- | :------------- | :------------- | :------------- | :------------- |
-| <a id="pycross_venv_import_index-name"></a>name |  A unique name for this target.   | <a href="https://bazel.build/concepts/labels#target-names">Name</a> | required |  |
-| <a id="pycross_venv_import_index-deps"></a>deps |  The binary or test dependencies to collect transitive wheel indexes from.   | <a href="https://bazel.build/concepts/labels">List of labels</a> | optional |  `[]`  |
-
-
 <a id="pycross_wheel_headers"></a>
 
 ## pycross_wheel_headers
@@ -277,49 +256,5 @@ Information about an extracted (installed) Python wheel.
 | :------------- | :------------- |
 | <a id="PycrossExtractedWheelInfo-index"></a>index |  File: The per-wheel index (`<name>.dist_info/index.json`) that the install action writes after installing, describing the installed site-packages (see `pycross/private/tools/wheel_index.py`). Absent or None when the provider wasn't created by `pycross_wheel_library`.    |
 | <a id="PycrossExtractedWheelInfo-site_packages"></a>site_packages |  File (TreeArtifact): The unzipped site-packages directory containing the wheel's installed files.    |
-
-
-<a id="pycross_py_binary"></a>
-
-## pycross_py_binary
-
-<pre>
-load("@rules_pycross//pycross:defs.bzl", "pycross_py_binary")
-
-pycross_py_binary(<a href="#pycross_py_binary-name">name</a>, <a href="#pycross_py_binary-deps">deps</a>, <a href="#pycross_py_binary-kwargs">**kwargs</a>)
-</pre>
-
-Wrapper around `py_binary` that pre-merges transitive wheel import indexes into `_bazel_import_index.json`.
-
-**PARAMETERS**
-
-
-| Name  | Description | Default Value |
-| :------------- | :------------- | :------------- |
-| <a id="pycross_py_binary-name"></a>name |  The target name.   |  none |
-| <a id="pycross_py_binary-deps"></a>deps |  The binary's Python dependencies.   |  `None` |
-| <a id="pycross_py_binary-kwargs"></a>kwargs |  Additional arguments forwarded to `py_binary`.   |  none |
-
-
-<a id="pycross_py_test"></a>
-
-## pycross_py_test
-
-<pre>
-load("@rules_pycross//pycross:defs.bzl", "pycross_py_test")
-
-pycross_py_test(<a href="#pycross_py_test-name">name</a>, <a href="#pycross_py_test-deps">deps</a>, <a href="#pycross_py_test-kwargs">**kwargs</a>)
-</pre>
-
-Wrapper around `py_test` that pre-merges transitive wheel import indexes into `_bazel_import_index.json`.
-
-**PARAMETERS**
-
-
-| Name  | Description | Default Value |
-| :------------- | :------------- | :------------- |
-| <a id="pycross_py_test-name"></a>name |  The target name.   |  none |
-| <a id="pycross_py_test-deps"></a>deps |  The test's Python dependencies.   |  `None` |
-| <a id="pycross_py_test-kwargs"></a>kwargs |  Additional arguments forwarded to `py_test`.   |  none |
 
 

@@ -1457,7 +1457,7 @@ def _is_first_party_extension_origin(origin):
         return False
     norm = os.path.normpath(os.path.abspath(origin))
     runfiles_prefix = getattr(_INDEX, "runfiles_root", "")
-    if runfiles_prefix and norm.startswith(runfiles_prefix):
+    if runfiles_prefix and norm.startswith(runfiles_prefix.rstrip("/") + "/"):
         return True
     _, post, _ = _split(sys.path)
     for entry in post:
@@ -1944,16 +1944,9 @@ def auto_install():
             _log("no wheel roots")
         return False
 
-    index_path = None
-    if mode in ("prebuilt", "verify") and (mode == "verify" or os.path.isdir(roots[0])):
-        candidate = os.path.join(os.path.dirname(__file__), "_bazel_import_index.json")
-        if os.path.isfile(candidate):
-            index_path = candidate
-
     return install(
         roots,
         debug=debug,
         mode=mode,
-        index_path=index_path,
         runfiles_root=runfiles_root,
     )

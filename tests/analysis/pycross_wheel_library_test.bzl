@@ -1,7 +1,5 @@
 """Module docstring for tests."""
 
-load("@rules_python//python:features.bzl", "features")
-load("@rules_python//python:py_info.bzl", "PyInfo")
 load("@rules_testing//lib:analysis_test.bzl", "analysis_test", "test_suite")
 load("@rules_testing//lib:util.bzl", "util")
 
@@ -597,101 +595,6 @@ def _test_pycross_modules_mapping_impl(env, target):
         "legacy-pkg=ns/mod.py",
     ])
 
-# ── PyInfo.venv_import_indexes and --venv_import_index ──────────────
-#
-# Only registered with a rules_python that has the (prototype) field, e.g. with
-# --override_module=rules_python=<prototype checkout>.
-
-_VENV_IMPORT_INDEX_FLAG = str(Label("@rules_python//python/config_settings:venv_import_index"))
-_VENVS_SITE_PACKAGES_FLAG = str(Label("@rules_python//python/config_settings:venvs_site_packages"))
-
-def _define_venv_subject(name):
-    util.helper_target(
-        native.filegroup,
-        name = name + "_wheel",
-        srcs = ["test-1.0-py3-none-any.whl"],
-    )
-    util.helper_target(
-        pycross_wheel_library,
-        name = name + "_lib",
-        wheel = name + "_wheel",
-        package_name = "test",
-        package_version = "1.0",
-        # As inspect_package would report, so venvs_site_packages links them.
-        site_paths = ["test"],
-        bin_paths = ["test-cli"],
-    )
-    util.helper_target(
-        pycross_library_proxy,
-        name = name + "_subject",
-        actual = name + "_lib",
-    )
-
-def _imp(target):
-    return "{}/{}/{}/site-packages".format(
-        target.label.workspace_name or "_main",
-        target.label.package,
-        target.label.name.replace("_subject", "_lib"),
-    )
-
-def _venv_kinds(target):
-    return sorted([e.kind for e in target[PyInfo].venv_symlinks.to_list()])
-
-def _test_venv_import_indexes_through_proxy(name):
-    _define_venv_subject(name)
-    analysis_test(
-        name = name,
-        target = name + "_subject",
-        impl = _test_venv_import_indexes_through_proxy_impl,
-    )
-
-def _test_venv_import_indexes_through_proxy_impl(env, target):
-    entries = target[PyInfo].venv_import_indexes.to_list()
-    env.expect.that_collection([e.root for e in entries]).contains_exactly([_imp(target)])
-    env.expect.that_collection([e.index for e in entries]).contains_exactly([
-        target[PycrossExtractedWheelInfo].index,
-    ])
-
-def _test_venv_import_index_overrides_venvs_site_packages(name):
-    _define_venv_subject(name)
-    analysis_test(
-        name = name,
-        target = name + "_subject",
-        config_settings = {
-            _VENV_IMPORT_INDEX_FLAG: "scan",
-            _VENVS_SITE_PACKAGES_FLAG: "yes",
-        },
-        impl = _test_venv_import_index_overrides_venvs_site_packages_impl,
-    )
-
-def _test_venv_import_index_overrides_venvs_site_packages_impl(env, target):
-    # The wheel stays on sys.path for the finder, and only BIN entries are linked.
-    env.expect.that_collection(target[PyInfo].imports.to_list()).contains_exactly([_imp(target)])
-    env.expect.that_collection(_venv_kinds(target)).contains_exactly(["BIN"])
-
-def _test_venvs_site_packages_without_import_index(name):
-    _define_venv_subject(name)
-    analysis_test(
-        name = name,
-        target = name + "_subject",
-        config_settings = {
-            _VENV_IMPORT_INDEX_FLAG: "off",
-            _VENVS_SITE_PACKAGES_FLAG: "yes",
-        },
-        impl = _test_venvs_site_packages_without_import_index_impl,
-    )
-
-def _test_venvs_site_packages_without_import_index_impl(env, target):
-    # Unchanged venvs_site_packages behavior: linked into the venv, not on sys.path.
-    env.expect.that_collection(target[PyInfo].imports.to_list()).contains_exactly([])
-    env.expect.that_collection(_venv_kinds(target)).contains_exactly(["BIN", "LIB", "LIB"])
-
-_VENV_IMPORT_INDEX_TESTS = [
-    _test_venv_import_indexes_through_proxy,
-    _test_venv_import_index_overrides_venvs_site_packages,
-    _test_venvs_site_packages_without_import_index,
-] if getattr(features, "py_info_venv_import_indexes", False) else []
-
 def pycross_wheel_library_test_suite(name):
     test_suite(
         name = name,
@@ -720,5 +623,5 @@ def pycross_wheel_library_test_suite(name):
             _test_pycross_library_proxy_forwards_index,
             _test_pycross_transitioning_library_proxy_forwards_index,
             _test_pycross_modules_mapping,
-        ] + _VENV_IMPORT_INDEX_TESTS,
+        ],
     )

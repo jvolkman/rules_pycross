@@ -223,14 +223,13 @@ def merge_py_providers(
         direct_imports = [],
         base_runfiles = None,
         direct_venv_symlinks = [],
-        direct_venv_import_indexes = [],
         has_py2_only_sources = False,
         has_py3_only_sources = False,
         uses_shared_libraries = True):
     """Merges PyInfo and DefaultInfo from deps with optional direct entries.
 
     Uses rules_python's PyInfoBuilder to ensure all PyInfo fields (including
-    pyc files, pyi stubs, venv symlinks and venv import indexes) are properly merged.
+    pyc files, pyi stubs, and venv symlinks) are properly merged.
 
     The consuming rule must include PY_COMMON_ATTRS in its attrs dict.
 
@@ -241,8 +240,6 @@ def merge_py_providers(
         direct_imports: Strings to add as direct entries to imports.
         base_runfiles: A Runfiles object (e.g. from ctx.runfiles) to merge with dep runfiles.
         direct_venv_symlinks: VenvSymlinkEntry values to add directly.
-        direct_venv_import_indexes: `struct(root, index)` values to add to
-            PyInfo.venv_import_indexes. Dropped when rules_python's PyInfo has no such field.
         has_py2_only_sources: Whether this target has PY2-only sources.
         has_py3_only_sources: Whether this target has PY3-only sources.
         uses_shared_libraries: Whether to set uses_shared_libraries on PyInfo.
@@ -264,8 +261,6 @@ def merge_py_providers(
     builder.imports.add(direct_imports)
     if direct_venv_symlinks:
         builder.venv_symlinks.add(direct_venv_symlinks)
-    if direct_venv_import_indexes and hasattr(builder, "venv_import_indexes"):
-        builder.venv_import_indexes.add(direct_venv_import_indexes)
 
     if has_py2_only_sources:
         builder.set_has_py2_only_sources(True)

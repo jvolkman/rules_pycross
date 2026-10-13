@@ -3,12 +3,6 @@
 load("//pycross/private:dist_info.bzl", _pycross_dist_info = "pycross_dist_info")
 load("//pycross/private:modules_mapping.bzl", _pycross_modules_mapping = "pycross_modules_mapping")
 load("//pycross/private:providers.bzl", _PycrossExtractedWheelInfo = "PycrossExtractedWheelInfo")
-load(
-    "//pycross/private:venv_import_index.bzl",
-    _pycross_py_binary = "pycross_py_binary",
-    _pycross_py_test = "pycross_py_test",
-    _pycross_venv_import_index = "pycross_venv_import_index",
-)
 load("//pycross/private:wheel_library.bzl", _pycross_wheel_library = "pycross_wheel_library")
 load("//pycross/private:wheel_transform.bzl", _pycross_wheel_transform = "pycross_wheel_transform")
 load("//pycross/private:wheel_zipimport_library.bzl", _pycross_wheel_zipimport_library = "pycross_wheel_zipimport_library")
@@ -30,6 +24,3 @@ pycross_repaired_wheel = _pycross_repaired_wheel
 pycross_wheel_transform = _pycross_wheel_transform
 pycross_wheel_zipimport_library = _pycross_wheel_zipimport_library
 pycross_path_tool = _pycross_path_tool
-pycross_venv_import_index = _pycross_venv_import_index
-pycross_py_binary = _pycross_py_binary
-pycross_py_test = _pycross_py_test

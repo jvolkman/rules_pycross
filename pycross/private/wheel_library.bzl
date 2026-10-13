@@ -27,7 +27,6 @@ load(":util.bzl", "PY_COMMON_ATTRS", "merge_py_providers", "underscore_name")
 load(
     ":venv_import_index.bzl",
     "VENV_IMPORT_INDEX_ATTRS",
-    "pycross_venv_import_index_active",
     "venv_import_index_enabled",
     "venv_import_index_mode",
 )
@@ -235,11 +234,10 @@ def _pycross_wheel_library_impl(ctx):
 
     # With venvs_site_packages, the wheel is linked into the venv's site-packages, so (like rules_python)
     # don't also put its own site-packages dir on sys.path.
-    pycross_index_active = pycross_venv_import_index_active(ctx)
     merged_deps = list(ctx.attr.deps)
-    if pycross_index_active:
+    if use_import_index:
         merged_deps.append(ctx.attr._venv_import_index_runtime)
-    runfiles_files = [out, index] if (pycross_index_active and venv_import_index_mode(ctx) == "prebuilt") else [out]
+    runfiles_files = [out, index] if (use_import_index and venv_import_index_mode(ctx) == "prebuilt") else [out]
 
     merged = merge_py_providers(
         ctx,
@@ -248,9 +246,6 @@ def _pycross_wheel_library_impl(ctx):
         direct_imports = [] if link_lib else [imp],
         base_runfiles = ctx.runfiles(files = runfiles_files),
         direct_venv_symlinks = venv_symlinks,
-        # For binaries built with --venv_import_index=prebuilt: `root` is the same string as the
-        # imports entry above.
-        direct_venv_import_indexes = [struct(root = imp, index = index)],
     )
 
     providers = [
