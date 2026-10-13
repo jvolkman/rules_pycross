@@ -56,6 +56,7 @@ py_library(
         "//fixtures:nvidia_fixture_nccl",
         "//fixtures:pthfixture",
         "//fixtures:rpathfixture",
+        "//fixtures:sonamefixture",
     ],
 )
 

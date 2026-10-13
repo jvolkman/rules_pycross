@@ -19,10 +19,15 @@ _FIXTURES = {
     "nvidia_fixture_nccl": ("nvidia-fixture-nccl", "12.0"),
     "pthfixture": ("pthfixture", "1.0"),
     "rpathfixture": ("rpathfixture", "1.0"),
+    "sonamefixture": ("sonamefixture", "1.0"),
 }
 
 _FIXTURE_DEPS = {
     "rpathfixture": [
+        ":nvidia_fixture_cublas",
+        ":nvidia_fixture_cudnn",
+    ],
+    "sonamefixture": [
         ":nvidia_fixture_cublas",
         ":nvidia_fixture_cudnn",
     ],

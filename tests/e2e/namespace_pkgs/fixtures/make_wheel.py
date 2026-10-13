@@ -5,6 +5,7 @@ Usage: make_wheel.py <fixture> <distribution> <version> <output.whl>
 
 import base64
 import hashlib
+import struct
 import sys
 import zipfile
 import zlib
@@ -90,6 +91,30 @@ _LIBUSER_SO = zlib.decompress(
         "QP/NPPX/Caf28Vw="
     )
 )
+def _strip_elf_rpath(elf_bytes: bytes) -> bytes:
+    """Returns a copy of `elf_bytes` with DT_RPATH (15) and DT_RUNPATH (29) removed."""
+    buf = bytearray(elf_bytes)
+    e_phoff = struct.unpack_from("<Q", buf, 32)[0]
+    e_phentsize, e_phnum = struct.unpack_from("<HH", buf, 54)
+    for i in range(e_phnum):
+        ph_off = e_phoff + i * e_phentsize
+        p_type, _, p_offset, _, _, p_filesz, _, _ = struct.unpack_from("<IIQQQQQQ", buf, ph_off)
+        if p_type == 2:  # PT_DYNAMIC
+            kept = bytearray()
+            for pos in range(p_offset, p_offset + p_filesz, 16):
+                d_tag, _ = struct.unpack_from("<qQ", buf, pos)
+                if d_tag not in (15, 29):
+                    kept.extend(buf[pos : pos + 16])
+                if d_tag == 0:
+                    break
+            kept.extend(b"\x00" * (p_filesz - len(kept)))
+            buf[p_offset : p_offset + p_filesz] = kept
+            break
+    return bytes(buf)
+
+
+_LIBUSER_NO_RPATH_SO = _strip_elf_rpath(_LIBUSER_SO)
+
 _NATIVE_LIBS = {
     "cublas": _LIBFIXTURE_CUBLAS_SO_12,
     "cudnn": _LIBFIXTURE_CUDNN_SO_12,
@@ -120,6 +145,31 @@ FIXTURES = {
             "    return lib.eager_cublas(), lib.lazy_cudnn()\n"
         ),
         "rpathfixture/libuser.so": _LIBUSER_SO,
+    },
+    # Cross-wheel DT_NEEDED user WITHOUT escaping RPATH/RUNPATH (onnxruntime-like):
+    # sonamefixture/libuser_nopath.so has DT_NEEDED libfixture_cublas.so.12 and empty
+    # RPATH/RUNPATH; also exercises bare-name ctypes.CDLL, escaped relative path
+    # rewriting, and ctypes.util.find_library.
+    "sonamefixture": {
+        "sonamefixture/__init__.py": (
+            "import ctypes, ctypes.util, os\n"
+            "LIB_PATH = os.path.join(os.path.dirname(__file__), 'libuser_nopath.so')\n"
+            "ESCAPED_CUDNN = os.path.join(\n"
+            "    os.path.dirname(__file__), '..', 'nvidia', 'fixture_cudnn', 'lib', 'libfixture_cudnn.so.12'\n"
+            ")\n"
+            "def load_and_call():\n"
+            "    lib = ctypes.CDLL(LIB_PATH)\n"
+            "    cudnn_bare = ctypes.CDLL('libfixture_cudnn.so.12')\n"
+            "    cudnn_escaped = ctypes.CDLL(ESCAPED_CUDNN)\n"
+            "    found = ctypes.util.find_library('fixture_cublas') or ''\n"
+            "    return (\n"
+            "        lib.eager_cublas(),\n"
+            "        cudnn_bare.fixture_cudnn(),\n"
+            "        cudnn_escaped.fixture_cudnn(),\n"
+            "        os.path.basename(found),\n"
+            "    )\n"
+        ),
+        "sonamefixture/libuser_nopath.so": _LIBUSER_NO_RPATH_SO,
     },
     # azure-style plugin: the plugin installs a package into another distribution's regular
     # package (azfixture.core.tracing.ext), so only a merged view can import it.

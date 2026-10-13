@@ -22,6 +22,7 @@ VERSIONS = {
     "nvidia-fixture-nccl": "12.0",
     "pthfixture": "1.0",
     "rpathfixture": "1.0",
+    "sonamefixture": "1.0",
 }
 
 
@@ -102,6 +103,22 @@ class ImportIndexTest(unittest.TestCase):
         import rpathfixture
 
         self.assertEqual(rpathfixture.load_and_call(), (12, 9))
+
+    @unittest.skipUnless(
+        sys.platform == "linux" and os.uname().machine == "x86_64",
+        "prebuilt ELF fixture is x86_64 Linux",
+    )
+    def test_cross_wheel_soname_dt_needed_and_dlopen_hooks(self):
+        finder_mod = sys.modules.get("_bazel_import_index")
+        if finder_mod is not None and getattr(finder_mod, "_INDEX", None) is not None:
+            if not finder_mod._INDEX.indexed:
+                self.skipTest("cross-wheel native preloading requires the prebuilt import index")
+        import sonamefixture
+
+        self.assertEqual(
+            sonamefixture.load_and_call(),
+            (12, 9, 9, "libfixture_cublas.so.12"),
+        )
 
 
 if __name__ == "__main__":
