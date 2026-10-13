@@ -78,23 +78,43 @@ At Python startup, `bazel.pth` runs `_bazel_site_init.py` (which populates `sys.
 
 ---
 
-## 3. Cross-Wheel Native Library (`$ORIGIN` RPATH) Preloading
+## 3. Cross-Wheel Native Library Preloading & Dynamic Loader Hooks
 
-Many native Python wheels (such as `tensorflow` + `nvidia-*-cu12`, or split C++/CUDA wheel families) compile shared libraries with relative RPATHs like `$ORIGIN/../nvidia/cudnn/lib` or `$ORIGIN/../../cublas/lib`, assuming all wheels are unpacked into one flat `site-packages` directory.
+Many native Python wheels (such as `tensorflow` + `nvidia-*-cu12`, `onnxruntime-gpu`, or split C++/CUDA wheel families) rely on shared libraries distributed across separate wheels. When each wheel lives in its own Bazel `TreeArtifact`, three cross-wheel native loading patterns break without assistance:
 
-When each wheel lives in its own Bazel `TreeArtifact`, `$ORIGIN/../nvidia/cudnn/lib` resolves inside the *consuming* wheel's `TreeArtifact` and fails to find libraries in sibling wheels.
+1. **Escaping `$ORIGIN` RPATHs:** An extension or library in Wheel A has `DT_RPATH` / `DT_RUNPATH` set to `$ORIGIN/../nvidia/cudnn/lib`, which resolves inside Wheel A's `TreeArtifact` instead of Wheel B's.
+2. **Unsatisfied cross-wheel `DT_NEEDED` by bare SONAME:** A plugin `.so` in Wheel A (such as `libonnxruntime_providers_cuda.so`) has `DT_NEEDED: ["libcublas.so.12", "libcudnn.so.9"]` with no escaping `$ORIGIN` RPATH, expecting its dependencies to be preloaded or on `LD_LIBRARY_PATH`.
+3. **Python-level `ctypes` / `cffi` path computation and bare-SONAME `dlopen`:** Python initialization code constructs `os.path.join(os.path.dirname(__file__), "..", "nvidia", ...)` or calls `ctypes.CDLL("libcudnn.so.9")` / `ctypes.util.find_library("cublas")` / `ffi.dlopen("cublas")`.
 
-Instead of patching ELF binaries on disk (which would require coupling wheel install actions across dependencies) or setting `LD_LIBRARY_PATH` (which leaks into subprocesses), the Import Index solves this via **index-driven `ctypes.CDLL` preloading**:
+Instead of patching ELF binaries on disk (which would couple wheel install actions across dependencies) or setting `LD_LIBRARY_PATH` (which leaks into subprocesses), the Import Index handles these via **index-driven preloading and lazy loader hooks**:
 
 ![Cross-Wheel Native Library Preloading Pipeline](images/import_index_preload.svg)
 
-### Why Preloading Works for Both `DT_NEEDED` and Lazy `dlopen("libfoo.so.1")`
-In `glibc` (`elf/dl-load.c`, `_dl_map_object`), whenever the dynamic linker loads a shared object by bare SONAME—whether via an eager `DT_NEEDED` entry when importing a C extension or via a lazy `dlopen("libcudnn.so.9", RTLD_NOW)` call inside C++ code—**`glibc` checks the `DT_SONAME` of every library already loaded in the process's `link_map` *before* searching `DT_RPATH`, `LD_LIBRARY_PATH`, or `DT_RUNPATH`**.
+### 3.1 Build-Time / Startup Dependency Graph (`_compute_native`)
+1. During per-wheel indexing, [`elf_tools.py`](../pycross/private/tools/elf_tools.py) records `{soname, needed, rpath, runpath}` for every ELF `.so` file and SONAME symlink in the wheel.
+2. During index merging ([`merge_wheel_indexes()`](../pycross/private/tools/import_index.py)), `_compute_native()` builds a cross-wheel SONAME table (`"sonames"`) and dependency closure (`"preload"` and `"native_deps"`):
+   - **Escaping `$ORIGIN` RPATHs:** Any `$ORIGIN/...` `rpath` or `runpath` entry that escapes the owning wheel and matches a directory in another wheel pulls in the target directory's shared libraries.
+   - **Unsatisfied cross-wheel `DT_NEEDED`:** Any `DT_NEEDED` entry not satisfied within the same wheel that matches a `soname` (or non-extension library filename) in another wheel is added as a dependency seed (enabled by default; disable with `RULES_PYTHON_IMPORT_INDEX_SONAME_PRELOAD=0`).
+   - **Trigger keys:** Preload lists are keyed by the owning top-level package, by every importable top-level name when libraries live in `<pkg>.libs/` (`auditwheel` layout), or by the single-owner subpackage in `"sub"` (such as `"nvidia.cudnn"`) when the top-level namespace is shared across wheels.
+   - **Topological sort:** A post-order DFS orders transitive `DT_NEEDED` and escaping RPATH dependencies before dependents.
 
-1. During index merging, [`_compute_preload()`](../pycross/private/tools/import_index.py) inspects the `"native"` ELF metadata of every wheel in the binary's closure.
-2. Whenever an ELF file in top-level package `P` (Wheel A) has an `$ORIGIN/...` `rpath` or `runpath` entry that escapes Wheel A and matches a directory owned by Wheel B, `_compute_preload()` collects all `.so` files with a `soname` in that target directory (covering both `DT_NEEDED` dependencies and lazy `dlopen` targets).
-3. It performs a post-order DFS over `needed` SONAMEs and transitive escaping RPATHs so dependencies are ordered before dependents, emitting `"preload": {"<top_pkg>": [[wheel_idx, "<rel_so_path>"], ...]}`.
-4. At runtime, the first time `PathFinder.find_spec` resolves `<top_pkg>`, [`_preload_native()`](../pycross/private/tools/import_index.py) pops `preload["<top_pkg>"]` and calls `ctypes.CDLL` on each path in topological order before returning the module spec.
+### 3.2 `glibc` vs `musl` Preload Backends
+- **`glibc`:** In `glibc` (`elf/dl-load.c`, `_dl_map_object`), whenever the dynamic linker resolves a library by bare SONAME—whether via `DT_NEEDED` or `dlopen("libcudnn.so.9", RTLD_NOW)`—it checks the `DT_SONAME` of every library already in the process's `link_map` *before* searching `DT_RPATH`, `LD_LIBRARY_PATH`, or `DT_RUNPATH`. Calling `ctypes.CDLL(abs_path)` in topological order registers each library's `DT_SONAME` in `link_map`.
+- **`musl` (Alpine Linux):** In `musl` (`ldso/dynlink.c`), `dlopen("/abs/path/to/libfoo.so.1")` leaves `p->shortname` unset (`NULL`) because the argument contains `'/'`, so a subsequent `DT_NEEDED` or bare-name `dlopen("libfoo.so.1")` will not match the already-loaded library unless `p->shortname` is populated via a `DT_RPATH` + bare-name load. On `musl`, `_load_native_path()` synthesizes a tiny (~360-byte) in-memory ELF64 `ET_DYN` stub (`PT_LOAD` `PF_R` only, `DT_RPATH = dirname(abs_path)`, `DT_NEEDED = basename(abs_path)`) via `os.memfd_create("pycross_stub", MFD_CLOEXEC | MFD_NOEXEC_SEAL)` (falling back to `NamedTemporaryFile` if `memfd_create` or `/proc/self/fd` is unavailable) and loads it via `/proc/self/fd/<fd>`, which causes `musl` to resolve the library by shortname through `DT_RPATH` and populate `p->shortname`.
+
+### 3.3 Zero-Startup-Cost `ctypes` / `cffi` Hooks & First-Party Extensions
+When `_ctypes`, `ctypes`, `ctypes.util`, or `_cffi_backend` is imported, `PathFinder.find_spec` wraps the module loader to install lightweight resolvers (costing `0 ms` when those modules are not imported):
+- **`_ctypes.dlopen` & `_cffi_backend` (`load_library`, `FFI.dlopen`):**
+  - If a path containing `'/'` does not exist on disk and escaped a wheel root via `..` (e.g., `<torch_wheel>/site-packages/torch/../nvidia/cudnn/lib/libcudnn.so.9`), rewrites it to the owning wheel root's path and preloads its `"native_deps"` closure.
+  - If a bare SONAME (e.g., `"libcudnn.so.9"`) is in `"sonames"`, preloads its `"native_deps"` closure and resolves it to the owning wheel path.
+- **`ctypes.util.find_library`:** Checks `"sonames"` for `<name>`, `lib<name>.so`, or `lib<name>.so.*` before falling back to the system `find_library`.
+- **First-party `ExtensionFileLoader` `DT_NEEDED` inspection:** When `PathFinder` resolves a non-wheel `ExtensionFileLoader` `.so` (from `pre` or `post`), `_maybe_preload_extension_needed()` reads its ELF `DT_NEEDED` entries and preloads any matching wheel libraries and their transitive dependencies before returning the module spec.
+
+### 3.4 Remaining Scope & Known Limitations
+- **C/C++ `dlopen("/abs/escaped/path.so")` constructed in native code (e.g., via `dladdr` + `../nvidia/...`):** C-level `dlopen` bypasses Python's `_ctypes.dlopen`. If the library was already preloaded by SONAME and the native caller falls back to bare-SONAME `dlopen`, it succeeds; if the native caller only tries the broken relative path without fallback, it requires either preloading before the native check or filesystem/linker-level path mapping.
+- **Subprocess binaries (`bin/ptxas`, `nvcc`) & data files (`libdevice.10.bc`):** Subprocesses do not inherit in-process `ctypes.CDLL` state or Python `PathFinder` hooks. Setting `RULES_PYTHON_IMPORT_INDEX_SET_CUDA_ENV=1` (opt-in, default off) configures `CUDA_HOME` and prepends `<wheel_root>/nvidia/<cuda_nvcc|cu13>/bin` to `PATH` when `nvidia.cuda_nvcc` or `nvidia.cu13` is present in the index.
+- **`bootstrap_impl=system_python` on Bazel 7:** On Bazel 8+, `rules_python` creates the full venv (`pycross_import_index.pth`) under both `bootstrap_impl=script` and `bootstrap_impl=system_python`. On Bazel 7 with `bootstrap_impl=system_python`, `.pth` files in the venv are not processed unless `bootstrap_impl=script` is enabled.
+- **macOS (`dyld`) and Windows (`LoadLibraryExW`):** Currently `auto_install()` is a no-op on Windows, and the ELF metadata parser targets Linux ELF binaries (`@loader_path` Mach-O and Windows `.dll` directories are not yet indexed).
 
 ---
 
@@ -146,7 +166,9 @@ To keep `_bazel_import_index.json` compact (~28 KB for ~100 wheels), wheel root 
 | `"top"` | Maps top-level import name $\rightarrow$ `[[root_idx, [filenames]], ...]` in `sys.path` order. |
 | `"merged"` | Maps dotted package directory $\rightarrow$ `[root_idx, ...]` for directories present in $\ge 2$ wheels. |
 | `"sub"` | Maps dotted subpackage directory $\rightarrow$ `root_idx` for single-owner subdirectories whose parent is in `"merged"`, enabling $O(1)$ subpackage resolution without `stat`ting parent directories. |
-| `"preload"` | Maps top-level package $\rightarrow$ `[[root_idx, rel_so_path], ...]` in topological load order for cross-wheel `$ORIGIN` native libraries. |
+| `"preload"` | Maps package/subpackage trigger key $\rightarrow$ `[[root_idx, rel_so_path], ...]` in topological load order for cross-wheel `$ORIGIN` and `DT_NEEDED` native libraries. |
+| `"sonames"` | Maps library SONAME (or filename for libraries without `DT_SONAME`) $\rightarrow$ `[root_idx, rel_so_path]` for runtime `dlopen` / `find_library` / first-party extension resolution. |
+| `"native_deps"` | Maps `"<root_idx>:<rel_so_path>"` $\rightarrow$ `[[dep_root_idx, dep_rel_so_path], ...]` in topological order for on-demand preloading when a library is loaded directly via `dlopen` or a first-party extension. |
 | `"pth"` | Sorted `[[pth_filename, root_idx], ...]` executed via `site.addpackage` at startup. |
 | `"dists"` | Maps normalized distribution name $\rightarrow$ `[[root_idx, dist_info_dirname], ...]` for $O(1)$ `importlib.metadata` lookups. |
 
@@ -198,7 +220,10 @@ Two target styles are supported:
 
 ### Runtime Environment Variables
 - `RULES_PYTHON_IMPORT_INDEX=off|scan|prebuilt|verify`: Override the index mode at runtime. `verify` cross-checks the prebuilt index against a live `os.scandir` walk of all wheel roots and exits non-zero on any discrepancy.
-- `RULES_PYTHON_IMPORT_INDEX_DEBUG=1`: Log index load timing, merged packages, `find_spec` resolutions, and `ctypes.CDLL` preloads to `stderr`.
+- `RULES_PYTHON_IMPORT_INDEX_DEBUG=1`: Log index load timing, merged packages, `find_spec` resolutions, `ctypes.CDLL` preloads, and `dlopen` rewrites to `stderr`.
+- `RULES_PYTHON_IMPORT_INDEX_SONAME_PRELOAD=0|1` (default `1`): Enable or disable cross-wheel `DT_NEEDED` preloading by SONAME when no escaping `$ORIGIN` RPATH is present.
+- `RULES_PYTHON_IMPORT_INDEX_SET_CUDA_ENV=0|1` (default `0`): Opt in to setting `CUDA_HOME` and prepending `<wheel_root>/nvidia/<cuda_nvcc|cu13>/bin` to `PATH` when `nvidia.cuda_nvcc` or `nvidia.cu13` is present in the wheel index and `CUDA_HOME` / `CUDA_PATH` are unset.
+- `RULES_PYTHON_IMPORT_INDEX_LIBC=glibc|musl`: Override automatic libc detection (`os.confstr("CS_GNU_LIBC_VERSION")`) for testing the `glibc` direct `CDLL` vs `musl` `memfd` stub ELF loader backend.
 
 ### Running the Interactive Demo (`tests/e2e/namespace_pkgs`)
 
