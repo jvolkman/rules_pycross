@@ -66,6 +66,17 @@ py_test(
 )
 
 py_test(
+    name = "import_index_test",
+    srcs = ["import_index_test.py"],
+    main = "import_index_test.py",
+    tags = ["unit"],
+    deps = [
+        "//pycross/private/tools:import_index",
+        "//pycross/private/tools:venv_import_index_merger",
+    ],
+)
+
+py_test(
     name = "repair_wheel_hook_test",
     srcs = ["repair_wheel_hook_test.py"],
     main = "repair_wheel_hook_test.py",

@@ -61,6 +61,23 @@ class ImportIndexTest(unittest.TestCase):
         self.assertFalse(hasattr(enum, "SHADOW"), enum.__file__)
         self.assertTrue(hasattr(enum, "IntFlag"))
 
+    def test_first_party_py_library_and_shared_namespace(self):
+        import first_party_mod
+        from azfixture import first_party_ns
+        from azfixture.core.tracing.ext import fixture_span
+
+        self.assertTrue(first_party_mod.FIRST_PARTY)
+        self.assertTrue(first_party_ns.FIRST_PARTY_NS)
+        self.assertTrue(fixture_span.SPAN)
+
+    def test_premerged_index_file_when_expected(self):
+        if not os.environ.get("EXPECT_PREMERGED_INDEX_FILE"):
+            return
+        finder_mod = sys.modules.get("_bazel_import_index")
+        self.assertIsNotNone(finder_mod)
+        index_json = os.path.join(os.path.dirname(finder_mod.__file__), "_bazel_import_index.json")
+        self.assertTrue(os.path.isfile(index_json), index_json)
+
     def test_metadata(self):
         for distribution, version in VERSIONS.items():
             self.assertEqual(importlib.metadata.version(distribution), version)

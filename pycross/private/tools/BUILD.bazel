@@ -5,6 +5,7 @@ package(default_visibility = ["//visibility:public"])
 
 exports_files([
     "git_archive.py",
+    "import_index.py",
     "inspect_package.py",
 ])
 
@@ -70,6 +71,23 @@ py_binary(
     visibility = ["//visibility:public"],
     deps = [
         ":args",
+    ],
+)
+
+py_library(
+    name = "import_index",
+    srcs = ["import_index.py"],
+    imports = ["../../.."],
+    visibility = ["//visibility:public"],
+)
+
+py_binary(
+    name = "venv_import_index_merger",
+    srcs = ["venv_import_index_merger.py"],
+    imports = ["../../.."],
+    visibility = ["//visibility:public"],
+    deps = [
+        ":import_index",
     ],
 )
 

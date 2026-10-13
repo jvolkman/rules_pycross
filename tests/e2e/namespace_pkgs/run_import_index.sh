@@ -1,15 +1,23 @@
 #!/usr/bin/env bash
-# Runs //:test_import_index, which needs a rules_python with --venv_import_index (prototype).
+# Runs //:test_import_index and //:test_import_index_merged using rules_pycross's
+# --@rules_pycross//pycross/settings:venv_import_index flag on stock rules_python.
 #
-#   RULES_PYTHON=<rules_python checkout> ./run_import_index.sh [scan|prebuilt] [bazel args...]
+#   ./run_import_index.sh [scan|prebuilt] [bazel args...]
 set -euo pipefail
 cd "$(dirname "$0")"
-: "${RULES_PYTHON:?set RULES_PYTHON to a rules_python checkout that has --venv_import_index}"
-mode="${1:-scan}"
+mode="${1:-prebuilt}"
 shift || true
-bazel test //:test_import_index \
-    --override_module=rules_python="$RULES_PYTHON" \
+override_args=()
+if [[ -n "${RULES_PYTHON:-}" ]]; then
+    override_args+=(--override_module=rules_python="$RULES_PYTHON")
+fi
+targets=(//:test_import_index)
+if [[ "$mode" == "prebuilt" ]]; then
+    targets+=(//:test_import_index_merged)
+fi
+bazel test "${targets[@]}" \
+    "${override_args[@]}" \
     --@rules_python//python/config_settings:bootstrap_impl=script \
-    --@rules_python//python/config_settings:venv_import_index="$mode" \
+    --@rules_pycross//pycross/settings:venv_import_index="$mode" \
     --test_output=errors \
     "$@"

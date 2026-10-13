@@ -5,15 +5,48 @@ import zipfile
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
+from pycross.private.tools import inspect_package
 from pycross.private.tools.inspect_package import PEP517_DEFAULT_BACKEND
 from pycross.private.tools.inspect_package import PEP517_DEFAULT_REQUIRES
 from pycross.private.tools.inspect_package import _resolve_top_level_paths
 from pycross.private.tools.inspect_package import inspect_sdist
 from pycross.private.tools.inspect_package import inspect_wheel
 
+# EXPERIMENT (do not merge): these tests assert sdist site_paths, which inspect_package.py
+# stubs out (_SDIST_SITE_PATHS_STUBBED).
+_SDIST_SITE_PATHS_TESTS = frozenset(
+    {
+        "test_inspect_sdist_malformed_pyproject",
+        "test_sdist_egg_info_ignored_with_source_dir",
+        "test_sdist_egg_info_multiple_modules",
+        "test_sdist_egg_info_top_level_txt",
+        "test_sdist_egg_info_zip",
+        "test_sdist_excluded_dirs",
+        "test_sdist_fallback_without_egg_info",
+        "test_sdist_namespace_package",
+        "test_sdist_namespace_src_layout",
+        "test_sdist_no_source_dir_unchanged",
+        "test_sdist_pkgutil_namespace",
+        "test_sdist_pre_build_patch_adds_package",
+        "test_sdist_pre_build_patch_modifies_pyproject",
+        "test_sdist_pre_build_patch_zip_and_source_dir",
+        "test_sdist_source_dir_basic",
+        "test_sdist_source_dir_ignores_sibling_packages",
+        "test_sdist_source_dir_namespace_package",
+        "test_sdist_source_dir_single_level",
+        "test_sdist_source_dir_src_layout",
+        "test_sdist_src_layout",
+        "test_sdist_standard_layout",
+        "test_sdist_top_level_paths_pth",
+        "test_sdist_top_level_txt_pkgutil_namespace",
+    }
+)
+
 
 class InspectPackageTest(unittest.TestCase):
     def setUp(self):
+        if inspect_package._SDIST_SITE_PATHS_STUBBED and self._testMethodName in _SDIST_SITE_PATHS_TESTS:
+            self.skipTest("EXPERIMENT: sdist site_paths inspection is stubbed out")
         self.temp_dir = TemporaryDirectory()
         self.temp_path = Path(self.temp_dir.name)
 

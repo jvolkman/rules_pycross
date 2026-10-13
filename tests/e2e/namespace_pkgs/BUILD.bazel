@@ -1,4 +1,5 @@
-load("@rules_python//python:defs.bzl", "py_test")
+load("@rules_pycross//pycross:defs.bzl", "pycross_py_binary", "pycross_py_test")
+load("@rules_python//python:defs.bzl", "py_binary", "py_library", "py_test")
 load("@uv//:requirements.bzl", "all_requirements", "requirement")
 
 package(default_visibility = ["//visibility:public"])
@@ -38,12 +39,14 @@ py_test(
     ],
 )
 
-# Needs rules_python's prototype --venv_import_index, so it only runs through
-# run_import_index.sh.
-py_test(
-    name = "test_import_index",
-    srcs = ["test_import_index.py"],
-    tags = ["manual"],
+# Stock first-party py_library sitting between the test targets and the
+# pycross_wheel_library fixtures.
+py_library(
+    name = "first_party_bridge",
+    srcs = [
+        "azfixture/first_party_ns.py",
+        "first_party_mod.py",
+    ],
     deps = [
         "//fixtures:azfixture_core",
         "//fixtures:azfixture_core_tracing_plugin",
@@ -53,5 +56,50 @@ py_test(
         "//fixtures:nvidia_fixture_nccl",
         "//fixtures:pthfixture",
         "//fixtures:rpathfixture",
+    ],
+)
+
+# Stock py_test using pycross_import_index.pth + per-wheel indexes via venv_symlinks.
+py_test(
+    name = "test_import_index",
+    srcs = ["test_import_index.py"],
+    tags = ["manual"],
+    deps = [
+        ":first_party_bridge",
+    ],
+)
+
+# pycross_py_test wrapper that pre-merges transitive wheel indexes (through
+# first_party_bridge) into a single _bazel_import_index.json via PyMakeVenvIndex.
+pycross_py_test(
+    name = "test_import_index_merged",
+    srcs = ["test_import_index.py"],
+    env = {
+        "EXPECT_PREMERGED_INDEX_FILE": "1",
+    },
+    main = "test_import_index.py",
+    tags = ["manual"],
+    deps = [
+        ":first_party_bridge",
+    ],
+)
+
+# Interactive demo binaries (run with `bazel run --config=index //:demo` or `//:demo_stock`).
+pycross_py_binary(
+    name = "demo",
+    srcs = ["demo.py"],
+    tags = ["manual"],
+    deps = all_requirements + [
+        ":first_party_bridge",
+    ],
+)
+
+py_binary(
+    name = "demo_stock",
+    srcs = ["demo.py"],
+    main = "demo.py",
+    tags = ["manual"],
+    deps = all_requirements + [
+        ":first_party_bridge",
     ],
 )
