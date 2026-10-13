@@ -58,7 +58,7 @@
   <text x="450" y="252" class="label">   (dependencies loaded before dependents)</text>
 
   <rect x="438" y="280" width="324" height="108" class="box-action"/>
-  <text x="450" y="300" class="step-title">Emits "preload" in _bazel_import_index.json:</text>
+  <text x="450" y="300" class="step-title">Emits "preload" in merged import index:</text>
   <text x="450" y="320" class="code">preload["rpathfixture"] = [</text>
   <text x="462" y="338" class="code">[34, "nvidia/.../libfixture_cublas.so.12"],</text>
   <text x="462" y="356" class="code">[35, "nvidia/.../libfixture_cudnn.so.12"],</text>

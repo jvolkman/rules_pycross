@@ -35,13 +35,12 @@ flowchart LR
     subgraph Build["Build Time (Bazel Execution Phase)"]
         W1["PycrossWheelInstall (Wheel 1)"] -->|"writes"| I1["wheel_1.dist_info/index.json"]
         W2["PycrossWheelInstall (Wheel N)"] -->|"writes"| I2["wheel_N.dist_info/index.json"]
-        I1 & I2 -->|"PyMakeVenvIndex"| M["_bazel_import_index.json"]
         I1 & I2 -->|"pycross_modules_mapping"| G["Gazelle modules_mapping.json"]
     end
 
     subgraph Runtime["Runtime (Python Startup)"]
         PTH["pycross_import_index.pth"] -->|"auto_install()"| PF["_bazel_import_index.PathFinder"]
-        M -->|"1 openat() + _json.make_scanner"| PF
+        I1 & I2 -->|"merge_wheel_indexes()"| PF
         PF -->|"pre -> wheels (O(1)) -> post"| IMP["ModuleSpec + __path__ merge + CDLL preload"]
     end
 ```
@@ -59,8 +58,8 @@ flowchart LR
    - `native`: ELF metadata (`soname`, `needed`, `rpath`, `runpath`) for every `.so` file in the wheel (parsed via pure-Python [`elf_tools.py`](../pycross/private/tools/elf_tools.py))
 2. **Exact Gazelle `modules_mapping.json`:**
    [`pycross_modules_mapping`](../pycross/private/modules_mapping.bzl) builds `modules_mapping.json` from the post-install per-wheel `index.json` files instead of repo-time `site_paths` heuristics.
-3. **Binary Merged Index (`_bazel_import_index.json`):**
-   [`venv_import_index_merger.py`](../pycross/private/tools/venv_import_index_merger.py) (`PyMakeVenvIndex`) merges the per-wheel `index.json` files (without staging the wheel `TreeArtifact`s!) into a single `_bazel_import_index.json`.
+3. **Venv Runtime Injection via `PyInfo.venv_symlinks`:**
+   When `--@rules_pycross//pycross/settings:venv_import_index` is enabled (`prebuilt` or `scan`), `pycross_wheel_library` includes `pycross_import_index.pth` and `_bazel_import_index.py` in `PyInfo.venv_symlinks` (and adds `<name>.dist_info/index.json` to runfiles in `prebuilt` mode), propagating automatically through arbitrary chains of stock `py_library` targets into any stock `py_binary` or `py_test`.
 
 ### Runtime Finder (`_bazel_import_index.PathFinder`)
 At Python startup, `bazel.pth` runs `_bazel_site_init.py` (which populates `sys.path`), and immediately afterward `pycross_import_index.pth` runs `_bazel_import_index.auto_install()`, replacing `importlib.machinery.PathFinder` in `sys.meta_path` with [`_bazel_import_index.PathFinder`](../pycross/private/tools/import_index.py):
@@ -119,9 +118,9 @@ When `_ctypes`, `ctypes`, `ctypes.util`, or `_cffi_backend` is imported, `PathFi
 
 ---
 
-## 4. Understanding the `_bazel_import_index.json` Format
+## 4. Understanding the Merged Import Index Schema
 
-To keep `_bazel_import_index.json` compact (~28 KB for ~100 wheels), wheel root paths are listed once in the `"roots"` array, and all other sections reference wheels by their **0-based integer index into `"roots"`**:
+When `merge_wheel_indexes()` merges the per-wheel `<wheel>.dist_info/index.json` files at startup, wheel root paths are listed once in the `"roots"` array, and all other sections reference wheels by their **0-based integer index into `"roots"`**:
 
 ```json
 {
@@ -188,36 +187,31 @@ To keep `_bazel_import_index.json` compact (~28 KB for ~100 wheels), wheel root 
 | **50 missing-module `find_spec` probes (126 wheels)** | 71.0 ms | 4.2 ms | **4.2 ms** | **$16.9\times$ faster** |
 | **7 subpackages under merged `google.*`/`opentelemetry.*`** | 6.36 ms | 4.79 ms | **2.07 ms** | **$3.1\times$ faster** |
 | **Cold `importlib.metadata.version()` lookup** | 63.4 ms | 18.1 ms | **16.4 ms** | **$3.9\times$ faster** |
-| **Index initialization time (94 wheels)** | — | 4.1 ms | **0.6 ms** | **$6.8\times$ faster than `scan`** |
+| **Index initialization time (100 pure-Python wheels)** | — | 4.1 ms | **5.8 ms** | **Zero `getdents64` on wheel roots** |
+| **Index initialization time (100 wheels, 15 native / 750 `.so`)** | — | — | **14.8 ms** (`_compute_native`: 6.7 ms) | **Includes full cross-wheel ELF graph** |
 | **600-wheel synthetic total import benchmark** | 3,487.3 ms | 420.3 ms | **418.6 ms** | **$8.3\times$ faster** |
 
 ---
 
 ## 6. Usage & Interactive Demo
 
-The Import Index works on **stock released `rules_python`** with no `rules_python` fork required.
+The Import Index works with **unmodified stock `@rules_python//python:defs.bzl` `py_binary` and `py_test` targets** on released `rules_python` with zero `BUILD` file changes and no `rules_python` fork required.
 
-### Flags & Rules
+### Flags
 
 Enable the index via `--@rules_pycross//pycross/settings:venv_import_index`:
 ```bash
-# Build-time index + cross-wheel native preloading (recommended):
+# Build-time per-wheel indexes + cross-wheel native preloading (recommended):
 build --@rules_python//python/config_settings:bootstrap_impl=script
 build --@rules_pycross//pycross/settings:venv_import_index=prebuilt
 
-# Or startup directory scan (no index merge action):
+# Or startup directory scan (for pure-Python wheels without native preloading):
 build --@rules_pycross//pycross/settings:venv_import_index=scan
 ```
 
-Two target styles are supported:
-1. **Unmodified stock `@rules_python//python:defs.bzl` `py_binary` / `py_test` (zero `BUILD` changes):**
-   - `pycross_wheel_library` automatically injects `pycross_import_index.pth` and `_bazel_import_index.py` into the venv via `PyInfo.venv_symlinks` (even through arbitrary chains of stock first-party `py_library` targets).
-   - At startup, `_load_per_wheel_prebuilt()` reads the per-wheel `<wheel>.dist_info/index.json` files from runfiles and computes the merged index + `"preload"` table in memory.
-2. **`pycross_py_binary` / `pycross_py_test` (or `pycross_venv_import_index` in `deps`):**
-   ```starlark
-   load("@rules_pycross//pycross:defs.bzl", "pycross_py_binary", "pycross_py_test")
-   ```
-   - Runs a `PyMakeVenvIndex` build action to pre-merge all transitive wheel indexes into a single `_bazel_import_index.json` file inside the venv's `site-packages/`, reducing startup index loading to **1 `openat()` call (`~0.6 ms`)**.
+How it works on stock `py_binary` / `py_test`:
+- `pycross_wheel_library` automatically injects `pycross_import_index.pth` and `_bazel_import_index.py` into the venv via `PyInfo.venv_symlinks` (even through arbitrary chains of stock first-party `py_library` targets).
+- At startup, `_load_per_wheel_prebuilt()` reads the per-wheel `<wheel>.dist_info/index.json` files from runfiles and computes the merged index + `"preload"` / `"sonames"` / `"native_deps"` tables in memory via `merge_wheel_indexes()`.
 
 ### Runtime Environment Variables
 - `RULES_PYTHON_IMPORT_INDEX=off|scan|prebuilt|verify`: Override the index mode at runtime. `verify` cross-checks the prebuilt index against a live `os.scandir` walk of all wheel roots and exits non-zero on any discrepancy.
@@ -231,21 +225,18 @@ Two target styles are supported:
 ```bash
 cd tests/e2e/namespace_pkgs
 
-# 1. Pre-merged _bazel_import_index.json via pycross_py_binary (all 5 checks pass):
+# 1. Prebuilt index with stock py_binary (all 5 checks pass):
 bazel run --config=index //:demo
 
-# 2. Stock py_binary loading per-wheel index.json files from runfiles (all 5 checks pass):
-bazel run --config=index //:demo_stock
-
-# 3. Debug trace showing startup timing and ctypes.CDLL preloads:
+# 2. Debug trace showing startup timing and ctypes.CDLL preloads:
 RULES_PYTHON_IMPORT_INDEX_DEBUG=1 bazel run --config=index //:demo
 
-# 4. Verify mode (asserts prebuilt index matches disk 100%):
+# 3. Verify mode (asserts prebuilt index matches disk 100%):
 RULES_PYTHON_IMPORT_INDEX=verify bazel run --config=index //:demo
 
-# 5. Compare with scan mode (Python imports pass, cross-wheel $ORIGIN RPATH fails):
+# 4. Compare with scan mode (Python imports pass, cross-wheel $ORIGIN RPATH fails):
 bazel run --config=scan //:demo
 
-# 6. Compare with plain sys.path (4 of 5 checks fail):
+# 5. Compare with plain sys.path (4 of 5 checks fail):
 bazel run //:demo --@rules_python//python/config_settings:venvs_site_packages=no
 ```

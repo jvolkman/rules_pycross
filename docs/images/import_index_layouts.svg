@@ -96,12 +96,12 @@
   <text x="992" y="124" text-anchor="middle" class="col-sub">venv_import_index=prebuilt</text>
 
   <rect x="828" y="148" width="328" height="112" class="box-accent"/>
-  <text x="840" y="168" class="label-bold">Venv has 0 wheel symlinks + 1 JSON index:</text>
-  <text x="840" y="188" class="code">_bazel_import_index.json (top, merged, sub, preload)</text>
-  <text x="840" y="205" class="code">_bazel_import_index.py   (PathFinder subclass)</text>
-  <text x="840" y="222" class="code">pycross_import_index.pth (auto_install hook)</text>
+  <text x="840" y="168" class="label-bold">Venv has 0 wheel symlinks + per-wheel JSON indexes:</text>
+  <text x="840" y="188" class="code">&lt;wheel&gt;.dist_info/index.json (top, dirs, native)</text>
+  <text x="840" y="205" class="code">_bazel_import_index.py       (PathFinder subclass)</text>
+  <text x="840" y="222" class="code">pycross_import_index.pth     (auto_install hook)</text>
   <text x="840" y="239" class="code">+ All wheel roots stay on sys.path untouched</text>
-  <text x="840" y="254" class="code">+ Per-wheel index.json written post-install</text>
+  <text x="840" y="254" class="code">+ Merged in memory via merge_wheel_indexes()</text>
 
   <line x1="992" y1="260" x2="992" y2="288" stroke="#16a34a" stroke-width="1.8"/>
   <polygon points="988,284 996,284 992,290" fill="#16a34a"/>
@@ -117,5 +117,5 @@
   <text x="832" y="482" class="badge-good">+ Keeps wheel roots on sys.path (torch glob works)</text>
   <text x="832" y="504" class="badge-good">+ Preloads cross-wheel $ORIGIN .so deps via CDLL</text>
   <text x="846" y="520" class="badge-good">(satisfies both DT_NEEDED &amp; lazy dlopen by SONAME)</text>
-  <text x="832" y="542" class="badge-good">+ Works on stock rules_python (py_binary &amp; wrappers)</text>
+  <text x="832" y="542" class="badge-good">+ Works on stock rules_python (py_binary &amp; py_test)</text>
 </svg>
