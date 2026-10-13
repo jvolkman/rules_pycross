@@ -316,19 +316,24 @@ class _JsonContext:
     memo = {}
 
 
+try:
+    from _json import make_scanner as _make_json_scanner
+
+    _JSON_SCANNER = _make_json_scanner(_JsonContext)
+except ImportError:  # pragma: no cover
+    _JSON_SCANNER = None
+
+
 def _read_json(path):
     with open(path, "rb") as f:
         text = f.read().decode("utf-8")
-    try:
-        from _json import make_scanner
-    except ImportError:  # pragma: no cover
-        make_scanner = None
-    if make_scanner is not None:
+    if _JSON_SCANNER is not None:
         try:
-            value, _ = make_scanner(_JsonContext)(text.lstrip(), 0)
+            value, _ = _JSON_SCANNER(text.lstrip(), 0)
+            _JsonContext.memo.clear()
             return value
         except Exception:  # pragma: no cover
-            pass  # Let json produce a proper error.
+            _JsonContext.memo.clear()
     import json
 
     return json.loads(text)
@@ -371,10 +376,12 @@ def _load_per_wheel_prebuilt(roots, runfiles_root):
     for root in dict.fromkeys(roots):
         wheel_dir = os.path.dirname(root.rstrip("/"))
         idx_path = wheel_dir + ".dist_info/index.json"
-        if not os.path.isfile(idx_path):
+        try:
+            idx = _read_json(idx_path)
+        except OSError:
             continue
         rel_root = root[len(prefix) :] if prefix and root.startswith(prefix) else root
-        entries.append((rel_root, _read_json(idx_path)))
+        entries.append((rel_root, idx))
     if not entries:
         return None
     return _Prebuilt(merge_wheel_indexes(entries), runfiles_root)
