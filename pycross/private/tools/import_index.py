@@ -65,54 +65,25 @@ _SPLIT = (None, (), (), frozenset())
 # Cache for PathDistribution.read_text(): (dist-info path, filename) -> text.
 _METADATA_TEXT = {}
 _CACHED_DIST_CLS = {}
+_CACHED_EXT_LOADER_CLS = {}
 _CACHED_METADATA_FILES = ("METADATA", "PKG-INFO", "entry_points.txt")
 _PRELOADED = set()
+_PRELOADED_SONAMES = set()
+_ALREADY_LOADED_SONAMES = set()
 _CHECKED_EXTENSIONS = set()
 _IN_PRELOAD = False
 _ORIG_CTYPES_DLOPEN = None
+_REAL_CTYPES_DLOPEN = None
 _IS_MUSL = None
+_LDCACHE_PATH = "/etc/ld.so.cache"
+_LDCACHE_SONAMES = False
+_GLIBC_DEFAULT_DIRS = None
+_MUSL_SEARCH_DIRS = None
+_DIR_PROBE_CACHE = {}
+_HOST_PROVIDES_CACHE = {}
 _HOOK_MODULES = frozenset(("_ctypes", "ctypes", "ctypes.util", "_cffi_backend"))
 NATIVE_CONSUMER_FILENAME = ".pycross-native-consumer.json"
 NATIVE_PROVIDER_FILENAME = ".pycross-native.json"
-_SYSTEM_SONAME_STEMS = frozenset(
-    (
-        "ld",
-        "libc",
-        "libm",
-        "libdl",
-        "libpthread",
-        "librt",
-        "libutil",
-        "libresolv",
-        "libnsl",
-        "libcrypt",
-        "libanl",
-        "libBrokenLocale",
-        "libgcc_s",
-        "libstdc++",
-        "libgomp",
-        "libatomic",
-        "libquadmath",
-        "libgfortran",
-        "libz",
-        "libbz2",
-        "liblzma",
-        "libffi",
-        "libexpat",
-        "libssl",
-        "libcrypto",
-        "libsqlite3",
-        "libuuid",
-        "libcuda",
-        "libOpenCL",
-    )
-)
-_SYSTEM_SONAME_PREFIXES = (
-    "ld-linux",
-    "ld64.so",
-    "libnvidia-",
-    "libpython",
-)
 
 
 def _log(*args):
@@ -131,18 +102,22 @@ def dist_info_key(dist_info):
     return _normalize_dist_name(dist_info.lower().rpartition(".")[0].partition("-")[0])
 
 
-def _candidate_origin_dirs(own_dirs, so_dir, entry):
+def _resolve_origin_entry(own_dirs, so_dir, entry):
+    if entry in ("$ORIGIN", "${ORIGIN}"):
+        return so_dir, ()
     for token in ("$ORIGIN/", "${ORIGIN}/"):
         if entry.startswith(token):
             after = entry[len(token) :]
             break
     else:
-        return ()
+        return None, ()
     if not after:
-        return ()
+        return so_dir, ()
     norm = posixpath.normpath(posixpath.join(so_dir, after) if so_dir else after)
-    if norm == "." or (not norm.startswith("..") and norm in own_dirs):
-        return ()
+    if norm == ".":
+        return "", ()
+    if not norm.startswith("..") and norm in own_dirs:
+        return norm, ()
     candidates = []
     if not norm.startswith(".."):
         candidates.append(norm)
@@ -153,7 +128,11 @@ def _candidate_origin_dirs(own_dirs, so_dir, entry):
         stripped = "/".join(parts)
         if stripped not in own_dirs and stripped not in candidates:
             candidates.append(stripped)
-    return candidates
+    return None, tuple(candidates)
+
+
+def _candidate_origin_dirs(own_dirs, so_dir, entry):
+    return _resolve_origin_entry(own_dirs, so_dir, entry)[1]
 
 
 def _is_abi_tagged_ext(filename):
@@ -167,42 +146,291 @@ def _is_abi_tagged_ext(filename):
     return tag.startswith(("cpython-", "abi3", "pypy", "graalpy"))
 
 
-def _is_system_soname(name):
-    """Whether `name` is a standard system/toolchain/driver library SONAME."""
-    if not name:
+def _expected_ldcache_arch_flags(machine=None, is_64bit=None):
+    """Returns the set of glibc ld.so.cache `(flags & 0xff00)` values for `machine`."""
+    if machine is None:
+        machine = os.uname().machine if hasattr(os, "uname") else ""
+    if is_64bit is None:
+        is_64bit = sys.maxsize > (1 << 32)
+    m = (machine or "").lower()
+    if m in ("x86_64", "amd64"):
+        return frozenset((0x0300,)) if is_64bit else frozenset((0x0800, 0x0000))
+    if m in ("i386", "i486", "i586", "i686", "x86"):
+        return frozenset((0x0000,))
+    if m in ("aarch64", "arm64"):
+        return frozenset((0x0A00,)) if is_64bit else frozenset((0x0900, 0x0B00, 0x0000))
+    if m.startswith("arm"):
+        return frozenset((0x0900, 0x0B00, 0x0000))
+    if m in ("ppc64le", "ppc64"):
+        return frozenset((0x0500,))
+    if m == "s390x":
+        return frozenset((0x0400,))
+    if m == "riscv64":
+        return frozenset((0x0F00, 0x1000, 0x0000))
+    if m == "loongarch64":
+        return frozenset((0x1100, 0x1200, 0x0000))
+    if m == "sparc64":
+        return frozenset((0x0100,))
+    if m in ("mips64", "mips64el"):
+        return frozenset((0x0700, 0x0E00))
+    return None
+
+
+def _parse_ld_so_cache(data, machine=None, is_64bit=None):
+    """Parses glibc `/etc/ld.so.cache` (`glibc-ld.so.cache1.1`) into a frozenset of SONAMEs, or None."""
+    import struct
+
+    if not data or len(data) < 48:
+        return None
+    new_magic = b"glibc-ld.so.cache1.1"
+    base = 0
+    if data[:20] != new_magic:
+        if data[:11] == b"ld.so-1.7.0" and len(data) >= 16:
+            nat_endian = "<" if sys.byteorder == "little" else ">"
+            old_nlibs = struct.unpack_from(nat_endian + "I", data, 12)[0]
+            aligned = (16 + old_nlibs * 12 + 7) & ~7
+            if aligned + 48 <= len(data) and data[aligned : aligned + 20] == new_magic:
+                base = aligned
+            else:
+                return None
+        else:
+            return None
+    if base + 48 > len(data):
+        return None
+    flags_byte = data[base + 28]
+    endian_bits = flags_byte & 3
+    if endian_bits == 1:
+        return None
+    if endian_bits == 2:
+        endian = "<"
+    elif endian_bits == 3:
+        endian = ">"
+    else:
+        endian = "<" if sys.byteorder == "little" else ">"
+    nlibs, _ = struct.unpack_from(endian + "II", data, base + 20)
+    entries_start = base + 48
+    entries_end = entries_start + nlibs * 24
+    if entries_end > len(data):
+        return None
+    expected_arch = _expected_ldcache_arch_flags(machine=machine, is_64bit=is_64bit)
+    entry_struct = struct.Struct(endian + "iIIIQ")
+    sonames = set()
+    data_len = len(data)
+    for i in range(nlibs):
+        eflags, key_off, _, _, _ = entry_struct.unpack_from(data, entries_start + i * 24)
+        if not (eflags & 0x0001):
+            continue
+        if expected_arch is not None and (eflags & 0xFF00) not in expected_arch:
+            continue
+        str_pos = base + key_off
+        if 0 <= str_pos < data_len:
+            end = data.find(b"\x00", str_pos)
+            if end > str_pos:
+                sonames.add(data[str_pos:end].decode("utf-8", "surrogateescape"))
+    return frozenset(sonames)
+
+
+def _get_ld_so_cache_sonames():
+    global _LDCACHE_SONAMES
+    if _LDCACHE_SONAMES is not False:
+        return _LDCACHE_SONAMES
+    try:
+        with open(_LDCACHE_PATH, "rb") as fh:
+            data = fh.read()
+        _LDCACHE_SONAMES = _parse_ld_so_cache(data)
+    except OSError:
+        _LDCACHE_SONAMES = None
+    return _LDCACHE_SONAMES
+
+
+def _elf_matches_process_class(path):
+    """Checks whether `path` is an ELF file matching the current process's 32/64-bit class."""
+    try:
+        with open(path, "rb") as fh:
+            ident = fh.read(5)
+    except OSError:
         return False
-    base = name.rpartition("/")[2] if "/" in name else name
-    stem = base.partition(".so")[0]
-    return stem in _SYSTEM_SONAME_STEMS or base.startswith(_SYSTEM_SONAME_PREFIXES)
+    if len(ident) < 5:
+        return False
+    if ident[:4] != b"\x7fELF":
+        # Non-ELF file (e.g. a linker script or empty test fixture on disk).
+        return True
+    expected_class = 2 if sys.maxsize > (1 << 32) else 1
+    return ident[4] == expected_class
+
+
+def _get_glibc_default_dirs():
+    global _GLIBC_DEFAULT_DIRS
+    if _GLIBC_DEFAULT_DIRS is not None:
+        return _GLIBC_DEFAULT_DIRS
+    machine = (os.uname().machine if hasattr(os, "uname") else "").lower()
+    candidates = []
+    if machine in ("x86_64", "amd64"):
+        candidates.extend(
+            (
+                "/lib/x86_64-linux-gnu",
+                "/usr/lib/x86_64-linux-gnu",
+                "/lib64",
+                "/usr/lib64",
+            )
+        )
+    elif machine in ("aarch64", "arm64"):
+        candidates.extend(
+            (
+                "/lib/aarch64-linux-gnu",
+                "/usr/lib/aarch64-linux-gnu",
+                "/lib64",
+                "/usr/lib64",
+            )
+        )
+    else:
+        candidates.extend(("/lib64", "/usr/lib64"))
+    candidates.extend(("/lib", "/usr/lib"))
+    existing = []
+    for d in candidates:
+        if d not in existing and os.path.isdir(d):
+            existing.append(d)
+    _GLIBC_DEFAULT_DIRS = tuple(existing)
+    return _GLIBC_DEFAULT_DIRS
+
+
+def _get_musl_search_dirs():
+    global _MUSL_SEARCH_DIRS
+    if _MUSL_SEARCH_DIRS is not None:
+        return _MUSL_SEARCH_DIRS
+    machine = (os.uname().machine if hasattr(os, "uname") else "").lower()
+    arch_map = {"amd64": "x86_64", "arm64": "aarch64", "i686": "i386", "i586": "i386", "i486": "i386"}
+    arch = arch_map.get(machine, machine or "x86_64")
+    path_file = "/etc/ld-musl-{}.path".format(arch)
+    dirs = None
+    try:
+        with open(path_file, "r", encoding="utf-8", errors="replace") as fh:
+            raw = fh.read()
+        parsed = [p.strip() for line in raw.splitlines() for p in line.split(":") if p.strip()]
+        if parsed:
+            dirs = tuple(parsed)
+    except OSError:
+        pass
+    if dirs is None:
+        dirs = ("/lib", "/usr/local/lib", "/usr/lib")
+    _MUSL_SEARCH_DIRS = dirs
+    return _MUSL_SEARCH_DIRS
+
+
+def _dirs_provide_soname(dirs, base):
+    for d in dirs:
+        if not d:
+            continue
+        key = (d, base)
+        res = _DIR_PROBE_CACHE.get(key)
+        if res is None:
+            cand = os.path.join(d, base)
+            res = os.path.isfile(cand) and _elf_matches_process_class(cand)
+            _DIR_PROBE_CACHE[key] = res
+        if res:
+            return True
+    return False
+
+
+def _ld_library_path_provides(soname):
+    if not soname:
+        return False
+    ld_path = os.environ.get("LD_LIBRARY_PATH", "")
+    if not ld_path:
+        return False
+    base = soname.rpartition("/")[2] if "/" in soname else soname
+    return _dirs_provide_soname(ld_path.split(":"), base)
+
+
+def _get_real_ctypes_dlopen():
+    global _REAL_CTYPES_DLOPEN
+    if _REAL_CTYPES_DLOPEN is not None:
+        return _REAL_CTYPES_DLOPEN
+    try:
+        import _ctypes
+
+        dl = getattr(_ctypes, "dlopen", None)
+        if dl is not None:
+            _REAL_CTYPES_DLOPEN = getattr(dl, "_pycross_orig", dl)
+    except ImportError:
+        pass
+    return _REAL_CTYPES_DLOPEN
+
+
+def _is_already_loaded(soname):
+    """Returns True if `soname` is already mapped in the process (`dlopen` with `RTLD_NOLOAD`)."""
+    if not soname or sys.platform != "linux":
+        return False
+    if soname in _ALREADY_LOADED_SONAMES:
+        return True
+    dlopen = _get_real_ctypes_dlopen()
+    if dlopen is None:
+        return False
+    rtld_noload = getattr(os, "RTLD_NOLOAD", 4)
+    try:
+        handle = dlopen(soname, os.RTLD_LAZY | rtld_noload)
+    except OSError:
+        return False
+    if not handle:
+        return False
+    try:
+        import _ctypes
+
+        dlclose = getattr(_ctypes, "dlclose", None)
+        if dlclose is not None:
+            dlclose(handle)
+    except Exception:
+        pass
+    _ALREADY_LOADED_SONAMES.add(soname)
+    return True
+
+
+def _host_provides(soname):
+    """Returns True if the host dynamic linker or current process already provides `soname`."""
+    if not soname:
+        return False
+    base = soname.rpartition("/")[2] if "/" in soname else soname
+    if not base:
+        return False
+    is_musl = _is_musl()
+    cache_key = (is_musl, base)
+    cached = _HOST_PROVIDES_CACHE.get(cache_key)
+    if cached is None:
+        if is_musl:
+            cached = _dirs_provide_soname(_get_musl_search_dirs(), base)
+        else:
+            ldcache = _get_ld_so_cache_sonames()
+            if ldcache is not None:
+                cached = base in ldcache
+            else:
+                cached = _dirs_provide_soname(_get_glibc_default_dirs(), base)
+        _HOST_PROVIDES_CACHE[cache_key] = cached
+    if cached:
+        return True
+    if _ld_library_path_provides(base):
+        return True
+    if base not in _PRELOADED_SONAMES and _is_already_loaded(base):
+        return True
+    return False
 
 
 def _is_native_consumer(top, dirs, native):
-    """Whether a wheel's ELF files have escaping `$ORIGIN` RPATHs or unsatisfied `DT_NEEDED`s."""
+    """Whether a wheel's ELF files have any `$ORIGIN` RPATH/RUNPATH entry escaping the wheel."""
     if not native:
         return False
     own_dirs = set(dirs or ())
     own_dirs.update(top or ())
-    own_sonames = set()
-    for rel_so, meta in native.items():
+    for rel_so in native:
         parent = rel_so.rpartition("/")[0]
         while parent:
             own_dirs.add(parent)
             parent = parent.rpartition("/")[0]
-        basename = rel_so.rpartition("/")[2]
-        if basename:
-            own_sonames.add(basename)
-        soname = meta.get("soname")
-        if soname:
-            own_sonames.add(soname)
 
     for rel_so, meta in native.items():
         so_dir = rel_so.rpartition("/")[0]
         rpaths = (meta.get("runpath") or []) + (meta.get("rpath") or [])
         for entry in rpaths:
             if _candidate_origin_dirs(own_dirs, so_dir, entry):
-                return True
-        for needed_name in meta.get("needed") or ():
-            if not _is_system_soname(needed_name) and needed_name not in own_sonames:
                 return True
     return False
 
@@ -253,6 +481,7 @@ def _compute_native(wheel_indexes, merged=None, sub=None):
     own_dirs_per_wheel = []
     own_sonames_per_wheel = []
     own_by_soname_per_wheel = []
+    ordered_native_per_wheel = []
     libs_by_dir = {}
     dir_sonames = {}
     by_soname = {}
@@ -264,10 +493,8 @@ def _compute_native(wheel_indexes, merged=None, sub=None):
         own_sonames = set()
         own_by_soname = {}
         native = idx.get("native", {})
-        ordered_native = sorted(
-            native.items(),
-            key=lambda item: (item[0].rpartition("/")[2] != item[1].get("soname"), item[0]),
-        )
+        ordered_native = sorted(native.items())
+        ordered_native_per_wheel.append(ordered_native)
         for rel_so, meta in ordered_native:
             so_dir, _, basename = rel_so.rpartition("/")
             parent = so_dir
@@ -287,24 +514,30 @@ def _compute_native(wheel_indexes, merged=None, sub=None):
                 not is_ext and (basename.startswith("lib") or ".so." in basename or first_seg.endswith(".libs"))
             )
             effective_soname = soname or (basename if is_shared_lib else None)
-            if effective_soname and not _is_system_soname(effective_soname):
-                own_by_soname.setdefault(effective_soname, key)
-                by_soname.setdefault(effective_soname, key)
-                if (
-                    not is_ext
-                    and basename != effective_soname
-                    and not basename.endswith(".so")
-                    and not _is_system_soname(basename)
+            if effective_soname:
+                if basename == effective_soname and (
+                    effective_soname not in own_by_soname
+                    or own_by_soname[effective_soname][1].rpartition("/")[2] != effective_soname
                 ):
+                    own_by_soname[effective_soname] = key
+                else:
+                    own_by_soname.setdefault(effective_soname, key)
+                if basename == effective_soname and (
+                    effective_soname not in by_soname
+                    or by_soname[effective_soname][1].rpartition("/")[2] != effective_soname
+                ):
+                    by_soname[effective_soname] = key
+                else:
+                    by_soname.setdefault(effective_soname, key)
+                if not is_ext and basename != effective_soname and not basename.endswith(".so"):
                     own_by_soname.setdefault(basename, key)
                     by_soname.setdefault(basename, key)
             if is_shared_lib:
                 dedup_name = soname or basename
-                if not _is_system_soname(dedup_name):
-                    seen = dir_sonames.setdefault((i, so_dir), set())
-                    if dedup_name not in seen:
-                        seen.add(dedup_name)
-                        libs_by_dir.setdefault(so_dir, []).append(key)
+                seen = dir_sonames.setdefault((i, so_dir), set())
+                if dedup_name not in seen:
+                    seen.add(dedup_name)
+                    libs_by_dir.setdefault(so_dir, []).append(key)
         own_dirs_per_wheel.append(own_dirs)
         own_sonames_per_wheel.append(own_sonames)
         own_by_soname_per_wheel.append(own_by_soname)
@@ -312,42 +545,79 @@ def _compute_native(wheel_indexes, merged=None, sub=None):
     escaping_cache = {}
     origin_dir_cache = {}
     escaping_by_key = {}
+    escaping_sonames_by_key = {}
+    own_reached_by_key = {}
+    has_ld_path = bool(os.environ.get("LD_LIBRARY_PATH"))
 
     for key, meta in meta_by_key.items():
         runpath = meta.get("runpath")
         rpath = meta.get("rpath")
         if not runpath and not rpath:
             escaping_by_key[key] = ()
+            escaping_sonames_by_key[key] = None
+            own_reached_by_key[key] = None
             continue
         wheel_idx = key[0]
         so_dir = so_dir_by_key[key]
-        rpath_tuple = tuple(runpath or ()) + tuple(rpath or ())
-        esc_key = (wheel_idx, so_dir, rpath_tuple)
-        targets = escaping_cache.get(esc_key)
-        if targets is None:
+        is_runpath = bool(runpath)
+        active_rpaths = tuple(runpath) if is_runpath else tuple(rpath or ())
+        esc_key = (wheel_idx, so_dir, is_runpath, active_rpaths)
+        cached_esc = escaping_cache.get(esc_key)
+        if cached_esc is None:
             own_dirs = own_dirs_per_wheel[wheel_idx]
             targets = []
-            for entry in rpath_tuple:
+            esc_by_soname = {}
+            own_reached = set()
+            for entry in active_rpaths:
                 cache_key = (wheel_idx, so_dir, entry)
-                cand_dirs = origin_dir_cache.get(cache_key)
-                if cand_dirs is None:
-                    cand_dirs = _candidate_origin_dirs(own_dirs, so_dir, entry)
-                    origin_dir_cache[cache_key] = cand_dirs
+                resolved_entry = origin_dir_cache.get(cache_key)
+                if resolved_entry is None:
+                    resolved_entry = _resolve_origin_entry(own_dirs, so_dir, entry)
+                    origin_dir_cache[cache_key] = resolved_entry
+                own_dir, cand_dirs = resolved_entry
+                if own_dir is not None:
+                    own_reached.add(own_dir)
                 for cand_dir in cand_dirs:
                     for dep_key in libs_by_dir.get(cand_dir, ()):
-                        if dep_key[0] != wheel_idx and dep_key not in targets:
-                            targets.append(dep_key)
-            targets = tuple(targets)
-            escaping_cache[esc_key] = targets
-        escaping_by_key[key] = targets
+                        if dep_key[0] == wheel_idx or dep_key in targets:
+                            continue
+                        dep_meta = meta_by_key[dep_key]
+                        dep_basename = dep_key[1].rpartition("/")[2]
+                        dep_soname = dep_meta.get("soname") or dep_basename
+                        if is_runpath and has_ld_path and _ld_library_path_provides(dep_soname):
+                            continue
+                        targets.append(dep_key)
+                        esc_by_soname.setdefault(dep_soname, dep_key)
+                        if dep_basename != dep_soname:
+                            esc_by_soname.setdefault(dep_basename, dep_key)
+            cached_esc = (tuple(targets), esc_by_soname, frozenset(own_reached) if own_reached else None)
+            escaping_cache[esc_key] = cached_esc
+        escaping_by_key[key] = cached_esc[0]
+        escaping_sonames_by_key[key] = cached_esc[1]
+        own_reached_by_key[key] = cached_esc[2]
 
     needed_by_key = {}
     for key, meta in meta_by_key.items():
         wheel_idx = key[0]
         own_by_soname = own_by_soname_per_wheel[wheel_idx]
+        esc_by_soname = escaping_sonames_by_key[key]
+        own_reached = own_reached_by_key[key]
         deps = []
         for needed_name in meta.get("needed") or ():
-            dep_key = own_by_soname.get(needed_name) or by_soname.get(needed_name)
+            dep_key = None
+            own_dep = own_by_soname.get(needed_name)
+            if own_dep is not None:
+                if (own_reached is not None and so_dir_by_key[own_dep] in own_reached) or not _host_provides(
+                    needed_name
+                ):
+                    dep_key = own_dep
+            else:
+                if esc_by_soname:
+                    dep_key = esc_by_soname.get(needed_name)
+                if dep_key is None:
+                    cand = by_soname.get(needed_name)
+                    if cand is not None and not _host_provides(needed_name):
+                        dep_key = cand
             if dep_key is not None and dep_key != key and dep_key not in deps:
                 deps.append(dep_key)
         needed_by_key[key] = tuple(deps)
@@ -386,7 +656,7 @@ def _compute_native(wheel_indexes, merged=None, sub=None):
     native_deps = {}
     for i, idx in enumerate(wheel_indexes):
         own_sonames = own_sonames_per_wheel[i]
-        for rel_so, meta in sorted(idx.get("native", {}).items()):
+        for rel_so, meta in ordered_native_per_wheel[i]:
             key = (i, rel_so)
             esc_targets = escaping_by_key[key]
             cross_needed = ()
@@ -427,8 +697,9 @@ def _compute_native(wheel_indexes, merged=None, sub=None):
                     if deps is None:
                         deps = resolve_closure(lib_seeds, include_escaping=False)
                         needed_closure_cache[lib_seeds] = deps
-                    if key in {(d[0], d[1]) for d in deps}:
-                        deps = [d for d in deps if (d[0], d[1]) != key]
+                    self_entry = [i, rel_so]
+                    if self_entry in deps:
+                        deps = [d for d in deps if d != self_entry]
                     if deps and (any(d[0] != i for d in deps) or not rpaths):
                         native_deps["{}:{}".format(i, rel_so)] = deps
 
@@ -1214,7 +1485,7 @@ def _is_musl():
 
 
 def _make_stub_elf(rpath, needed_name, sample_so_path=None, soname=None):
-    """Builds a minimal ELF64 ET_DYN stub with DT_RPATH and DT_NEEDED (`PF_R` only).
+    """Builds a minimal ELF64 ET_DYN stub with DT_RPATH and DT_NEEDED (`PF_R | PF_W`).
 
     Note: Only 64-bit ELF (`ei_class == 2`) is synthesized; 32-bit ELF returns
     `None` so callers fall back to `_raw_dlopen`.
@@ -1296,7 +1567,7 @@ def _make_stub_elf(rpath, needed_name, sample_so_path=None, soname=None):
         0,
         0,
     )
-    phdr_load = struct.pack(endian + "IIQQQQQQ", 1, 4, 0, 0, 0, total_size, total_size, 0x1000)
+    phdr_load = struct.pack(endian + "IIQQQQQQ", 1, 6, 0, 0, 0, total_size, total_size, 0x1000)
     phdr_dyn = struct.pack(endian + "IIQQQQQQ", 2, 6, dyn_off, dyn_off, dyn_off, len(dyn), len(dyn), 8)
     phdr_stack = struct.pack(endian + "IIQQQQQQ", 0x6474E551, 6, 0, 0, 0, 0, 0, 16)
     return ehdr + phdr_load + phdr_dyn + phdr_stack + dynsym + elf_hash + bytes(dynstr) + dyn
@@ -1377,6 +1648,9 @@ def _load_native_path(path, label=""):
         else:
             _raw_dlopen(path)
         _PRELOADED.add(path)
+        base = os.path.basename(path)
+        if base:
+            _PRELOADED_SONAMES.add(base)
         if _DEBUG and label:
             _log("preload", label, "->", path)
         return True
@@ -1606,26 +1880,30 @@ def _find_wheel_library(name):
         s = os.fsdecode(os.fspath(name))
     except TypeError:
         return None
-    if _is_system_soname(s) or _is_system_soname("lib" + s + ".so"):
+    if not _INDEX._native_loaded and (
+        _host_provides(s) or (not s.endswith(".so") and ".so." not in s and _host_provides("lib" + s + ".so"))
+    ):
         return None
     _INDEX.ensure_native_loaded()
     if not _INDEX.sonames:
         return None
     if s in _INDEX.sonames:
-        return _INDEX.sonames[s]
+        return None if _host_provides(s) else _INDEX.sonames[s]
     if s.endswith(".so"):
+        if _host_provides(s):
+            return None
         prefix = s + "."
         for soname in sorted(_INDEX.sonames):
             if soname.startswith(prefix):
-                return _INDEX.sonames[soname]
+                return None if _host_provides(soname) else _INDEX.sonames[soname]
         return None
     for exact in ("lib" + s + ".so", s + ".so"):
         if exact in _INDEX.sonames:
-            return _INDEX.sonames[exact]
+            return None if _host_provides(exact) else _INDEX.sonames[exact]
     prefixes = ("lib" + s + ".so.", s + ".so.")
     for soname in sorted(_INDEX.sonames):
         if soname.startswith(prefixes):
-            return _INDEX.sonames[soname]
+            return None if _host_provides(soname) else _INDEX.sonames[soname]
     return None
 
 
@@ -1643,6 +1921,64 @@ def _prepare_resolved_target(root, rel_so, label="dlopen"):
     return resolved
 
 
+def _extract_missing_soname(exc):
+    """Parses a missing shared library SONAME from a glibc or musl dlopen error message."""
+    msg = str(exc) if exc is not None else ""
+    if not msg:
+        return None
+    if "Error loading shared library " in msg:
+        after = msg.split("Error loading shared library ", 1)[1]
+        soname = after.partition(":")[0].strip()
+        if soname and "/" not in soname:
+            return soname
+    if ": cannot open shared object file" in msg:
+        prefix = msg.split(": cannot open shared object file", 1)[0]
+        soname = prefix.rpartition(": ")[2].strip() if ": " in prefix else prefix.strip()
+        if soname and "/" not in soname:
+            return soname
+    return None
+
+
+def _preload_on_dlopen_error(exc, origin=None, fullname=None):
+    """Lazily loads native dotfiles and preloads missing cross-wheel dependencies on dlopen failure."""
+    if _IN_PRELOAD or _INDEX is None or (not _INDEX.sonames and not _INDEX.native_files):
+        return False
+    missing_soname = _extract_missing_soname(exc)
+    matched = _match_wheel_relpath(origin) if origin else None
+    if not missing_soname and matched is None:
+        return False
+    _INDEX.ensure_native_loaded()
+    if not _INDEX.sonames and not _INDEX.native_deps and not _INDEX.preload:
+        return False
+    label = fullname or "retry"
+    preloaded_any = False
+    if fullname and _INDEX.preload:
+        pkg = fullname
+        while pkg:
+            if pkg in _INDEX.preload:
+                _preload_native(label, _INDEX.preload.pop(pkg))
+                preloaded_any = True
+            pkg = pkg.rpartition(".")[0]
+    if matched is not None:
+        deps = _INDEX.native_deps.get(matched)
+        if deps is None:
+            canon = _INDEX.sonames.get(matched[1].rpartition("/")[2])
+            if canon is not None and canon[0] == matched[0]:
+                deps = _INDEX.native_deps.get(canon)
+        if deps:
+            _preload_native(label, deps)
+            preloaded_any = True
+    if missing_soname:
+        target = _INDEX.sonames.get(missing_soname)
+        if target is None:
+            target = _find_wheel_library(missing_soname)
+        if target is not None:
+            resolved = _prepare_resolved_target(target[0], target[1], label)
+            if _load_native_path(resolved, label):
+                preloaded_any = True
+    return preloaded_any
+
+
 def _resolve_path_dlopen_arg(name):
     if _IN_PRELOAD or _INDEX is None or not name:
         return name
@@ -1656,8 +1992,7 @@ def _resolve_path_dlopen_arg(name):
         return name
     if os.path.exists(s):
         matched = _match_wheel_relpath(s)
-        if matched is not None and (_INDEX._native_loaded or _is_musl()):
-            _INDEX.ensure_native_loaded()
+        if matched is not None and _INDEX._native_loaded:
             _prepare_resolved_target(matched[0], matched[1], "dlopen")
         return name
     rel_so = _extract_escaped_relpath(s)
@@ -1680,11 +2015,16 @@ def _resolve_bare_dlopen_arg(name, allow_short_name=False):
         return name
     is_bytes = isinstance(raw, bytes)
     s = os.fsdecode(raw)
-    if "/" in s or (os.sep != "/" and os.sep in s) or _is_system_soname(s):
+    if "/" in s or (os.sep != "/" and os.sep in s):
+        return name
+    if not _INDEX._native_loaded and _host_provides(s):
         return name
     _INDEX.ensure_native_loaded()
     target = _INDEX.sonames.get(s)
-    if target is None and (allow_short_name or s.endswith(".so")):
+    if target is not None:
+        if _host_provides(s):
+            return name
+    elif allow_short_name or s.endswith(".so"):
         target = _find_wheel_library(s)
     if target is not None:
         resolved = _prepare_resolved_target(target[0], target[1], "dlopen")
@@ -1701,25 +2041,41 @@ def _resolve_dlopen_arg(name, allow_short_name=False):
     return _resolve_bare_dlopen_arg(name, allow_short_name=allow_short_name)
 
 
+def _decode_path_arg(name):
+    if not name:
+        return None
+    try:
+        return os.fsdecode(os.fspath(name))
+    except TypeError:
+        return None
+
+
 def _hook_ctypes_module(mod):
-    global _ORIG_CTYPES_DLOPEN
+    global _ORIG_CTYPES_DLOPEN, _REAL_CTYPES_DLOPEN
     dlopen = getattr(mod, "dlopen", None)
     if dlopen is None or getattr(dlopen, "_pycross_wrapped", False):
         return
     _ORIG_CTYPES_DLOPEN = dlopen
+    if getattr(mod, "__name__", None) == "_ctypes":
+        _REAL_CTYPES_DLOPEN = dlopen
 
     def _wrapped_dlopen(name, *args):
         rewritten = _resolve_path_dlopen_arg(name)
         try:
             return dlopen(rewritten, *args)
-        except OSError:
-            if rewritten == name:
+        except OSError as exc:
+            s = _decode_path_arg(rewritten)
+            if s and ("/" in s or (os.sep != "/" and os.sep in s)):
+                if _preload_on_dlopen_error(exc, origin=s, fullname="dlopen"):
+                    return dlopen(rewritten, *args)
+            elif rewritten == name:
                 fallback = _resolve_bare_dlopen_arg(name)
                 if fallback != name:
                     return dlopen(fallback, *args)
             raise
 
     _wrapped_dlopen._pycross_wrapped = True
+    _wrapped_dlopen._pycross_orig = dlopen
     try:
         mod.dlopen = _wrapped_dlopen
     except (AttributeError, TypeError):
@@ -1774,8 +2130,12 @@ def _hook_cffi_backend_module(mod):
             rewritten = _resolve_path_dlopen_arg(name)
             try:
                 return orig_load(rewritten, *args)
-            except OSError:
-                if rewritten == name:
+            except OSError as exc:
+                s = _decode_path_arg(rewritten)
+                if s and ("/" in s or (os.sep != "/" and os.sep in s)):
+                    if _preload_on_dlopen_error(exc, origin=s, fullname="dlopen"):
+                        return orig_load(rewritten, *args)
+                elif rewritten == name:
                     fallback = _resolve_bare_dlopen_arg(name, allow_short_name=True)
                     if fallback != name:
                         return orig_load(fallback, *args)
@@ -1800,8 +2160,12 @@ def _hook_cffi_backend_module(mod):
                     rewritten = _resolve_path_dlopen_arg(name)
                     try:
                         return super().dlopen(rewritten, *args, **kwargs)
-                    except OSError:
-                        if rewritten == name:
+                    except OSError as exc:
+                        s = _decode_path_arg(rewritten)
+                        if s and ("/" in s or (os.sep != "/" and os.sep in s)):
+                            if _preload_on_dlopen_error(exc, origin=s, fullname="dlopen"):
+                                return super().dlopen(rewritten, *args, **kwargs)
+                        elif rewritten == name:
                             fallback = _resolve_bare_dlopen_arg(name, allow_short_name=True)
                             if fallback != name:
                                 return super().dlopen(fallback, *args, **kwargs)
@@ -1876,6 +2240,56 @@ def _is_first_party_extension_origin(origin):
     return not runfiles_prefix and not post
 
 
+def _retry_extension_loader_cls(base):
+    cls = _CACHED_EXT_LOADER_CLS.get(base)
+    if cls is None:
+
+        class _ExtensionFileLoader(base):
+            _pycross_ext_wrapped = True
+
+            def create_module(self, spec):
+                try:
+                    return super().create_module(spec)
+                except ImportError as exc:
+                    origin = getattr(spec, "origin", None) or getattr(self, "path", None)
+                    fullname = getattr(spec, "name", None) or getattr(self, "name", "")
+                    if _preload_on_dlopen_error(exc, origin=origin, fullname=fullname):
+                        return super().create_module(spec)
+                    raise
+
+        _ExtensionFileLoader.__name__ = base.__name__
+        _ExtensionFileLoader.__qualname__ = base.__qualname__
+        cls = _CACHED_EXT_LOADER_CLS[base] = _ExtensionFileLoader
+    return cls
+
+
+def _wrap_extension_loader(fullname, spec):
+    loader = getattr(spec, "loader", None)
+    if not isinstance(loader, _machinery.ExtensionFileLoader) or getattr(loader, "_pycross_ext_wrapped", False):
+        return
+    origin = getattr(spec, "origin", None) or getattr(loader, "path", None)
+    if not origin or _is_stdlib_extension_origin(origin):
+        return
+    try:
+        loader.__class__ = _retry_extension_loader_cls(type(loader))
+    except TypeError:
+        orig_create = loader.create_module
+
+        def _create_module(s):
+            try:
+                return orig_create(s)
+            except ImportError as exc:
+                if _preload_on_dlopen_error(exc, origin=origin, fullname=fullname):
+                    return orig_create(s)
+                raise
+
+        try:
+            loader.create_module = _create_module
+            loader._pycross_ext_wrapped = True
+        except AttributeError:
+            pass
+
+
 def _maybe_preload_extension_needed(fullname, spec):
     if _INDEX is None or (not _INDEX.sonames and not _INDEX.native_files) or spec is None:
         return
@@ -1888,21 +2302,37 @@ def _maybe_preload_extension_needed(fullname, spec):
     _CHECKED_EXTENSIONS.add(origin)
     if not _is_first_party_extension_origin(origin):
         return
-    needed = [s for s in _read_elf_needed(origin) if not _is_system_soname(s)]
-    if not needed:
+    raw_needed = _read_elf_needed(origin)
+    if not raw_needed:
         return
-    _INDEX.ensure_native_loaded()
-    if not _INDEX.sonames:
-        return
-    libs = []
-    for soname in needed:
-        target = _INDEX.sonames.get(soname)
-        if target is not None:
-            for dep in _INDEX.native_deps.get(target, ()):
-                if dep not in libs:
-                    libs.append(dep)
-            if target not in libs:
-                libs.append(target)
+    if not _INDEX._native_loaded:
+        needed = [s for s in raw_needed if not _host_provides(s)]
+        if not needed:
+            return
+        _INDEX.ensure_native_loaded()
+        if not _INDEX.sonames:
+            return
+        libs = []
+        for soname in needed:
+            target = _INDEX.sonames.get(soname)
+            if target is not None:
+                for dep in _INDEX.native_deps.get(target, ()):
+                    if dep not in libs:
+                        libs.append(dep)
+                if target not in libs:
+                    libs.append(target)
+    else:
+        if not _INDEX.sonames:
+            return
+        libs = []
+        for soname in raw_needed:
+            target = _INDEX.sonames.get(soname)
+            if target is not None and not _host_provides(soname):
+                for dep in _INDEX.native_deps.get(target, ()):
+                    if dep not in libs:
+                        libs.append(dep)
+                if target not in libs:
+                    libs.append(target)
     if libs:
         _preload_native(fullname, libs)
 
@@ -1936,6 +2366,7 @@ def _finalize_spec(fullname, spec):
                 except AttributeError:
                     pass
     if _INDEX.sonames or _INDEX.native_files:
+        _wrap_extension_loader(fullname, spec)
         _maybe_preload_extension_needed(fullname, spec)
     return spec
 
@@ -2284,6 +2715,7 @@ def install(roots, debug=False, mode="scan", index_path=None, runfiles_root=""):
         if debug:
             _log("verified {} wheel roots ({} native)".format(len(index.roots), len(index.native_files)))
     _PRELOADED.clear()
+    _PRELOADED_SONAMES.clear()
     _CHECKED_EXTENSIONS.clear()
     _INDEX = index
     sys.meta_path[i] = PathFinder

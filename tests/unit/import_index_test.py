@@ -1145,114 +1145,132 @@ class ImportIndexTest(unittest.TestCase):
                     **fields,
                 )
 
-            merged = import_index.merge_wheel_indexes(
-                [
-                    (
-                        "wheel_a/site-packages",
-                        wheel_meta(
-                            top={"nvidia": ["nvidia"], "pkg_a": ["pkg_a"]},
-                            dirs=["nvidia", "nvidia/cuda_runtime", "nvidia/cuda_runtime/lib", "pkg_a"],
-                            native={
-                                "nvidia/cuda_runtime/lib/libcudart.so.12": {
-                                    "soname": "libcudart.so.12",
-                                    "needed": ["libc.so.6", "libstdc++.so.6", "libcuda.so.1"],
-                                    "rpath": [],
-                                    "runpath": ["$ORIGIN"],
-                                },
-                                "pkg_a.libs/libgomp.so.1": {
-                                    "soname": "libgomp.so.1",
-                                    "needed": ["libc.so.6"],
-                                    "rpath": [],
-                                    "runpath": [],
-                                },
-                                "pkg_a.libs/libstdc++.so.6": {
-                                    "soname": "libstdc++.so.6",
-                                    "needed": ["libc.so.6"],
-                                    "rpath": [],
-                                    "runpath": [],
-                                },
-                                "pkg_a.libs/libz.so.1": {
-                                    "soname": "libz.so.1",
-                                    "needed": ["libc.so.6"],
-                                    "rpath": [],
-                                    "runpath": [],
-                                },
-                                "pkg_a.libs/libssl.so.3": {
-                                    "soname": "libssl.so.3",
-                                    "needed": ["libc.so.6"],
-                                    "rpath": [],
-                                    "runpath": [],
-                                },
-                                "pkg_a.libs/libcuda.so.1": {
-                                    "soname": "libcuda.so.1",
-                                    "needed": ["libc.so.6"],
-                                    "rpath": [],
-                                    "runpath": [],
-                                },
-                                "pkg_a.libs/libnvidia-ml.so.1": {
-                                    "soname": "libnvidia-ml.so.1",
-                                    "needed": ["libc.so.6"],
-                                    "rpath": [],
-                                    "runpath": [],
-                                },
-                            },
-                        ),
-                    ),
-                    (
-                        "wheel_b/site-packages",
-                        wheel_meta(
-                            top={"nvidia": ["nvidia"]},
-                            dirs=["nvidia", "nvidia/cublas", "nvidia/cublas/lib"],
-                            native={
-                                "nvidia/cublas/lib/libcublas.so.12": {
-                                    "soname": "libcublas.so.12",
-                                    "needed": [
-                                        "libcudart.so.12",
-                                        "libgomp.so.1",
-                                        "libstdc++.so.6",
-                                        "libz.so.1",
-                                        "libssl.so.3",
-                                        "libcuda.so.1",
-                                        "libnvidia-ml.so.1",
-                                    ],
-                                    "rpath": [],
-                                    "runpath": ["$ORIGIN"],
-                                },
-                            },
-                        ),
-                    ),
-                    (
-                        "wheel_c/site-packages",
-                        wheel_meta(
-                            top={"pkg_b": ["pkg_b"]},
-                            dirs=["pkg_b"],
-                            native={
-                                "pkg_b/_ext.so": {
-                                    "soname": None,
-                                    "needed": [
-                                        "libcublas.so.12",
-                                        "libgomp.so.1",
-                                        "libstdc++.so.6",
-                                        "libz.so.1",
-                                        "libssl.so.3",
-                                        "libcuda.so.1",
-                                        "libnvidia-ml.so.1",
-                                    ],
-                                    "rpath": [],
-                                    "runpath": ["$ORIGIN"],
-                                },
-                            },
-                        ),
-                    ),
-                ]
+            simulated_host_cache = frozenset(
+                {
+                    "libc.so.6",
+                    "libgomp.so.1",
+                    "libstdc++.so.6",
+                    "libz.so.1",
+                    "libssl.so.3",
+                    "libcuda.so.1",
+                    "libnvidia-ml.so.1",
+                }
             )
+            import_index._HOST_PROVIDES_CACHE.clear()
+            with mock.patch.object(
+                import_index,
+                "_get_ld_so_cache_sonames",
+                return_value=simulated_host_cache,
+            ):
+                merged = import_index.merge_wheel_indexes(
+                    [
+                        (
+                            "wheel_a/site-packages",
+                            wheel_meta(
+                                top={"nvidia": ["nvidia"], "pkg_a": ["pkg_a"]},
+                                dirs=["nvidia", "nvidia/cuda_runtime", "nvidia/cuda_runtime/lib", "pkg_a"],
+                                native={
+                                    "nvidia/cuda_runtime/lib/libcudart.so.12": {
+                                        "soname": "libcudart.so.12",
+                                        "needed": ["libc.so.6", "libstdc++.so.6", "libcuda.so.1"],
+                                        "rpath": [],
+                                        "runpath": ["$ORIGIN"],
+                                    },
+                                    "pkg_a.libs/libgomp.so.1": {
+                                        "soname": "libgomp.so.1",
+                                        "needed": ["libc.so.6"],
+                                        "rpath": [],
+                                        "runpath": [],
+                                    },
+                                    "pkg_a.libs/libstdc++.so.6": {
+                                        "soname": "libstdc++.so.6",
+                                        "needed": ["libc.so.6"],
+                                        "rpath": [],
+                                        "runpath": [],
+                                    },
+                                    "pkg_a.libs/libz.so.1": {
+                                        "soname": "libz.so.1",
+                                        "needed": ["libc.so.6"],
+                                        "rpath": [],
+                                        "runpath": [],
+                                    },
+                                    "pkg_a.libs/libssl.so.3": {
+                                        "soname": "libssl.so.3",
+                                        "needed": ["libc.so.6"],
+                                        "rpath": [],
+                                        "runpath": [],
+                                    },
+                                    "pkg_a.libs/libcuda.so.1": {
+                                        "soname": "libcuda.so.1",
+                                        "needed": ["libc.so.6"],
+                                        "rpath": [],
+                                        "runpath": [],
+                                    },
+                                    "pkg_a.libs/libnvidia-ml.so.1": {
+                                        "soname": "libnvidia-ml.so.1",
+                                        "needed": ["libc.so.6"],
+                                        "rpath": [],
+                                        "runpath": [],
+                                    },
+                                },
+                            ),
+                        ),
+                        (
+                            "wheel_b/site-packages",
+                            wheel_meta(
+                                top={"nvidia": ["nvidia"]},
+                                dirs=["nvidia", "nvidia/cublas", "nvidia/cublas/lib"],
+                                native={
+                                    "nvidia/cublas/lib/libcublas.so.12": {
+                                        "soname": "libcublas.so.12",
+                                        "needed": [
+                                            "libcudart.so.12",
+                                            "libgomp.so.1",
+                                            "libstdc++.so.6",
+                                            "libz.so.1",
+                                            "libssl.so.3",
+                                            "libcuda.so.1",
+                                            "libnvidia-ml.so.1",
+                                        ],
+                                        "rpath": [],
+                                        "runpath": ["$ORIGIN"],
+                                    },
+                                },
+                            ),
+                        ),
+                        (
+                            "wheel_c/site-packages",
+                            wheel_meta(
+                                top={"pkg_b": ["pkg_b"]},
+                                dirs=["pkg_b"],
+                                native={
+                                    "pkg_b/_ext.so": {
+                                        "soname": None,
+                                        "needed": [
+                                            "libcublas.so.12",
+                                            "libgomp.so.1",
+                                            "libstdc++.so.6",
+                                            "libz.so.1",
+                                            "libssl.so.3",
+                                            "libcuda.so.1",
+                                            "libnvidia-ml.so.1",
+                                        ],
+                                        "rpath": [],
+                                        "runpath": ["$ORIGIN"],
+                                    },
+                                },
+                            ),
+                        ),
+                    ]
+                )
+            import_index._HOST_PROVIDES_CACHE.clear()
 
-            # (b) System/toolchain/driver SONAMEs are excluded from sonames and cross-wheel preload,
-            # while CUDA toolkit SONAMEs (libcudart.so.12, libcublas.so.12) ARE indexed and preloaded.
-            self.assertEqual(
-                set(merged.get("sonames", {}).keys()),
-                {"libcudart.so.12", "libcublas.so.12"},
-            )
+            # (b) Provider tables (sonames) are built unfiltered without calling _host_provides per entry,
+            # while cross-wheel preload filters out host-provided SONAMEs and keeps CUDA toolkit SONAMEs
+            # not on the host (libcudart.so.12, libcublas.so.12).
+            self.assertIn("libcudart.so.12", merged.get("sonames", {}))
+            self.assertIn("libcublas.so.12", merged.get("sonames", {}))
+            self.assertIn("libstdc++.so.6", merged.get("sonames", {}))
             self.assertEqual(
                 merged.get("preload", {}).get("nvidia.cublas"),
                 [[0, "nvidia/cuda_runtime/lib/libcudart.so.12"]],
@@ -1269,7 +1287,14 @@ class ImportIndexTest(unittest.TestCase):
             prev_meta = list(sys.meta_path)
             try:
                 import_index._INDEX = None
-                with mock.patch.object(import_index, "_raw_dlopen", side_effect=lambda p: p):
+                with (
+                    mock.patch.object(import_index, "_raw_dlopen", side_effect=lambda p: p),
+                    mock.patch.object(
+                        import_index,
+                        "_get_ld_so_cache_sonames",
+                        return_value=simulated_host_cache,
+                    ),
+                ):
                     self.assertTrue(
                         import_index.install(
                             roots,
@@ -1596,6 +1621,376 @@ class ImportIndexTest(unittest.TestCase):
                 for k in list(sys.modules):
                     if k == "ff_google" or k.startswith("ff_google."):
                         sys.modules.pop(k, None)
+
+    def test_host_provides_ld_so_cache_arch_flags_rtld_noload_and_runpath(self):
+        import struct
+
+        def build_ld_so_cache1_1(entries):
+            magic = b"glibc-ld.so.cache1.1"
+            nlibs = len(entries)
+            str_parts = []
+            str_offsets = {}
+            cur_off = 48 + nlibs * 24
+            for _flags, key_str, val_str in entries:
+                for s in (key_str, val_str):
+                    if s not in str_offsets:
+                        b = s.encode("utf-8") + b"\x00"
+                        str_offsets[s] = cur_off
+                        str_parts.append(b)
+                        cur_off += len(b)
+            str_blob = b"".join(str_parts)
+            hdr = struct.pack("<20sII20s", magic, nlibs, len(str_blob), b"\x00" * 20)
+            entry_blobs = [
+                struct.pack("<iIIIQ", flags, str_offsets[k], str_offsets[v], 0, 0) for flags, k, v in entries
+            ]
+            return hdr + b"".join(entry_blobs) + str_blob
+
+        cache_entries = [
+            (0x0003, "libonly32.so.1", "/lib/i386-linux-gnu/libonly32.so.1"),
+            (0x0803, "libonlyx32.so.1", "/libx32/libonlyx32.so.1"),
+            (0x0303, "libhost64.so.1", "/lib/x86_64-linux-gnu/libhost64.so.1"),
+            (0x0A03, "libhostarm64.so.1", "/lib/aarch64-linux-gnu/libhostarm64.so.1"),
+        ]
+        new_blob = build_ld_so_cache1_1(cache_entries)
+        # Also test old-format "ld.so-1.7.0" prefix followed by 8-byte aligned new format.
+        old_prefix = b"ld.so-1.7.0\x00" + struct.pack("<I", 1) + b"\x00" * 12
+        while len(old_prefix) % 8 != 0:
+            old_prefix += b"\x00"
+        compat_blob = old_prefix + new_blob
+
+        with mock.patch.object(import_index, "_expected_ldcache_arch_flags", return_value=frozenset((0x0300,))):
+            self.assertEqual(import_index._parse_ld_so_cache(new_blob), {"libhost64.so.1"})
+            self.assertEqual(import_index._parse_ld_so_cache(compat_blob), {"libhost64.so.1"})
+
+        with mock.patch.object(import_index, "_expected_ldcache_arch_flags", return_value=frozenset((0x0A00,))):
+            self.assertEqual(import_index._parse_ld_so_cache(new_blob), {"libhostarm64.so.1"})
+        self.assertIsNone(import_index._parse_ld_so_cache(b"invalid magic"))
+
+        # RTLD_NOLOAD check: libc.so.6 is already loaded in the Python process on Linux glibc;
+        # a nonexistent SONAME is not. And SONAMEs in _PRELOADED_SONAMES are not treated as host-provided.
+        if sys.platform.startswith("linux") and not import_index._is_musl():
+            import_index._ALREADY_LOADED_SONAMES.clear()
+            self.assertTrue(import_index._is_already_loaded("libc.so.6"))
+            self.assertIn("libc.so.6", import_index._ALREADY_LOADED_SONAMES)
+            self.assertFalse(import_index._is_already_loaded("libnonexistent_pycross_xyz.so.99"))
+            self.assertNotIn("libnonexistent_pycross_xyz.so.99", import_index._ALREADY_LOADED_SONAMES)
+
+        import_index._HOST_PROVIDES_CACHE.clear()
+        import_index._DIR_PROBE_CACHE.clear()
+        import_index._PRELOADED_SONAMES.add("libwheel_preloaded_fake.so.1")
+        try:
+            with (
+                mock.patch.object(import_index, "_is_already_loaded", return_value=True),
+                mock.patch.object(import_index, "_get_ld_so_cache_sonames", return_value=frozenset()) as spy_ldcache,
+                mock.patch.object(import_index, "_dirs_provide_soname", return_value=False) as spy_dirs,
+            ):
+                self.assertFalse(import_index._host_provides("libwheel_preloaded_fake.so.1"))
+                self.assertTrue(import_index._host_provides("libhost_already_loaded.so.1"))
+                # When ld.so.cache was parsed successfully on glibc (non-None frozenset), default dirs are skipped.
+                self.assertEqual(spy_ldcache.call_count, 2)
+                self.assertEqual(spy_dirs.call_count, 0)
+            import_index._HOST_PROVIDES_CACHE.clear()
+            with (
+                mock.patch.object(import_index, "_is_already_loaded", return_value=False),
+                mock.patch.object(import_index, "_get_ld_so_cache_sonames", return_value=None),
+                mock.patch.object(import_index, "_dirs_provide_soname", return_value=True) as spy_dirs_fallback,
+            ):
+                # When ld.so.cache is missing or unparsable (None), default glibc dirs ARE probed.
+                self.assertTrue(import_index._host_provides("libfrom_default_dir.so.1"))
+                self.assertEqual(spy_dirs_fallback.call_count, 1)
+        finally:
+            import_index._PRELOADED_SONAMES.discard("libwheel_preloaded_fake.so.1")
+            import_index._HOST_PROVIDES_CACHE.clear()
+            import_index._DIR_PROBE_CACHE.clear()
+
+        # DT_RUNPATH vs LD_LIBRARY_PATH vs DT_RPATH ordering in _compute_native:
+        with tempfile.TemporaryDirectory() as tmp:
+            ld_dir = os.path.join(tmp, "ld_path")
+            os.makedirs(ld_dir, exist_ok=True)
+            ld_cudart = os.path.join(ld_dir, "libcudart.so.12")
+            with open(ld_cudart, "wb") as fh:
+                fh.write(import_index._make_stub_elf("$ORIGIN", "libc.so.6", soname="libcudart.so.12"))
+
+            def make_roots_data(use_rpath):
+                return [
+                    (
+                        "wheel_a/site-packages",
+                        {
+                            "version": 1,
+                            "top": {"nvidia": ["nvidia"]},
+                            "pth": [],
+                            "dirs": ["nvidia", "nvidia/cuda_runtime", "nvidia/cuda_runtime/lib"],
+                            "dist_info": None,
+                            "native": {
+                                "nvidia/cuda_runtime/lib/libcudart.so.12": {
+                                    "soname": "libcudart.so.12",
+                                    "needed": ["libc.so.6"],
+                                    "rpath": [],
+                                    "runpath": [],
+                                }
+                            },
+                        },
+                    ),
+                    (
+                        "wheel_b/site-packages",
+                        {
+                            "version": 1,
+                            "top": {"nvidia": ["nvidia"]},
+                            "pth": [],
+                            "dirs": ["nvidia", "nvidia/cublas", "nvidia/cublas/lib"],
+                            "dist_info": None,
+                            "native": {
+                                "nvidia/cublas/lib/libcublas.so.12": {
+                                    "soname": "libcublas.so.12",
+                                    "needed": ["libcudart.so.12"],
+                                    "rpath": ["$ORIGIN/../../cuda_runtime/lib"] if use_rpath else [],
+                                    "runpath": [] if use_rpath else ["$ORIGIN/../../cuda_runtime/lib"],
+                                }
+                            },
+                        },
+                    ),
+                ]
+
+            # 1. Escaping $ORIGIN DT_RUNPATH beats /etc/ld.so.cache when LD_LIBRARY_PATH is unset.
+            import_index._HOST_PROVIDES_CACHE.clear()
+            with (
+                mock.patch.dict(os.environ, {"LD_LIBRARY_PATH": ""}, clear=False),
+                mock.patch.object(
+                    import_index,
+                    "_get_ld_so_cache_sonames",
+                    return_value=frozenset({"libc.so.6", "libcudart.so.12"}),
+                ),
+            ):
+                merged = import_index.merge_wheel_indexes(make_roots_data(use_rpath=False))
+                self.assertEqual(
+                    merged.get("preload", {}).get("nvidia.cublas"),
+                    [[0, "nvidia/cuda_runtime/lib/libcudart.so.12"]],
+                )
+
+            # 2. LD_LIBRARY_PATH wins over escaping $ORIGIN DT_RUNPATH -> wheel copy NOT preloaded.
+            import_index._HOST_PROVIDES_CACHE.clear()
+            with mock.patch.dict(os.environ, {"LD_LIBRARY_PATH": ld_dir}, clear=False):
+                merged = import_index.merge_wheel_indexes(make_roots_data(use_rpath=False))
+                self.assertIsNone(merged.get("preload", {}).get("nvidia.cublas"))
+
+            # 3. Escaping $ORIGIN DT_RPATH wins over LD_LIBRARY_PATH -> wheel copy IS preloaded.
+            import_index._HOST_PROVIDES_CACHE.clear()
+            with mock.patch.dict(os.environ, {"LD_LIBRARY_PATH": ld_dir}, clear=False):
+                merged = import_index.merge_wheel_indexes(make_roots_data(use_rpath=True))
+                self.assertEqual(
+                    merged.get("preload", {}).get("nvidia.cublas"),
+                    [[0, "nvidia/cuda_runtime/lib/libcudart.so.12"]],
+                )
+
+            # 4. Musl mode checks musl search dirs + ELF class.
+            import_index._HOST_PROVIDES_CACHE.clear()
+            with (
+                mock.patch.dict(
+                    os.environ,
+                    {"RULES_PYTHON_IMPORT_INDEX_LIBC": "musl", "LD_LIBRARY_PATH": ""},
+                    clear=False,
+                ),
+                mock.patch.object(import_index, "_is_already_loaded", return_value=False),
+                mock.patch.object(import_index, "_get_musl_search_dirs", return_value=(ld_dir,)),
+            ):
+                self.assertTrue(import_index._host_provides("libcudart.so.12"))
+                self.assertFalse(import_index._host_provides("libmissing_musl.so.1"))
+            import_index._HOST_PROVIDES_CACHE.clear()
+
+    def test_lazy_unsatisfied_dt_needed_retry_and_consumer_classification(self):
+        # 1. Consumer classification only triggers on escaping $ORIGIN RPATH/RUNPATH.
+        self.assertTrue(
+            import_index._is_native_consumer(
+                {"pkg": ["pkg"]},
+                ["pkg", "pkg/lib"],
+                {
+                    "pkg/lib/liba.so": {
+                        "soname": "liba.so",
+                        "needed": [],
+                        "rpath": [],
+                        "runpath": ["$ORIGIN/../../other_pkg/lib"],
+                    }
+                },
+            )
+        )
+        self.assertFalse(
+            import_index._is_native_consumer(
+                {"pkg": ["pkg"]},
+                ["pkg", "pkg.libs"],
+                {
+                    "pkg/_ext.so": {
+                        "soname": None,
+                        "needed": ["libcross_wheel_unsatisfied.so.1"],
+                        "rpath": ["$ORIGIN/../pkg.libs"],
+                        "runpath": ["$ORIGIN"],
+                    }
+                },
+            )
+        )
+
+        # 2. Lazy retry-on-failure when 0 consumers exist at startup (_native_loaded starts False).
+        with tempfile.TemporaryDirectory() as tmp:
+            w_prov = os.path.join(tmp, "wheel_prov", "site-packages")
+            w_ext = os.path.join(tmp, "wheel_ext", "site-packages")
+            bar_so = os.path.join(w_prov, "prov_pkg", "lib", "libbar_lazy.so.1")
+            foo_so = os.path.join(w_prov, "prov_pkg", "lib", "libfoo_lazy.so.1")
+            ext_suffix = import_index._machinery.EXTENSION_SUFFIXES[0]
+            ext_rel = "ext_pkg/_ext" + ext_suffix
+            ext_so = os.path.join(w_ext, "ext_pkg", "_ext" + ext_suffix)
+            wheel_ctypes_so = os.path.join(w_ext, "ext_pkg", "libuser.so")
+            _write(bar_so, "ELF")
+            _write(foo_so, "ELF")
+            _write(ext_so, "ELF")
+            _write(wheel_ctypes_so, "ELF")
+            _write(os.path.join(w_ext, "ext_pkg", "__init__.py"), "X = 1\n")
+
+            # Write per-wheel dotfiles: both wheels have .pycross-native.json (NO .pycross-native-consumer.json).
+            _write(
+                os.path.join(w_prov, ".pycross-native.json"),
+                json.dumps(
+                    {
+                        "version": 1,
+                        "top": ["prov_pkg"],
+                        "dirs": ["prov_pkg", "prov_pkg/lib"],
+                        "native": {
+                            "prov_pkg/lib/libbar_lazy.so.1": {
+                                "soname": "libbar_lazy.so.1",
+                                "needed": ["libc.so.6"],
+                                "rpath": [],
+                                "runpath": [],
+                            },
+                            "prov_pkg/lib/libfoo_lazy.so.1": {
+                                "soname": "libfoo_lazy.so.1",
+                                "needed": ["libbar_lazy.so.1", "libc.so.6"],
+                                "rpath": [],
+                                "runpath": ["$ORIGIN"],
+                            },
+                        },
+                    }
+                ),
+            )
+            _write(
+                os.path.join(w_ext, ".pycross-native.json"),
+                json.dumps(
+                    {
+                        "version": 1,
+                        "top": ["ext_pkg"],
+                        "dirs": ["ext_pkg"],
+                        "native": {
+                            ext_rel: {
+                                "soname": None,
+                                "needed": ["libfoo_lazy.so.1", "libc.so.6"],
+                                "rpath": [],
+                                "runpath": [],
+                            },
+                            "ext_pkg/libuser.so": {
+                                "soname": "libuser.so",
+                                "needed": ["libfoo_lazy.so.1", "libc.so.6"],
+                                "rpath": [],
+                                "runpath": [],
+                            },
+                        },
+                    }
+                ),
+            )
+
+            prev_index = import_index._INDEX
+            prev_meta = list(sys.meta_path)
+            prev_path = list(sys.path)
+            prev_retry_cls = import_index._CACHED_EXT_LOADER_CLS
+            try:
+                import_index._INDEX = None
+                import_index._PRELOADED.clear()
+                import_index._PRELOADED_SONAMES.clear()
+                import_index._HOST_PROVIDES_CACHE.clear()
+                sys.path[:] = [w_prov, w_ext] + prev_path
+                preloaded = []
+                with mock.patch.object(
+                    import_index,
+                    "_raw_dlopen",
+                    side_effect=lambda p: preloaded.append(p),
+                ):
+                    self.assertTrue(import_index.install([w_prov, w_ext], mode="prebuilt"))
+                    # Because neither wheel has .pycross-native-consumer.json, _native_loaded is False at startup!
+                    self.assertFalse(import_index._INDEX._native_loaded)
+
+                    # Pure-Python spec lookup does not trigger native dotfile loading.
+                    py_spec = import_index.PathFinder.find_spec("ext_pkg")
+                    self.assertIsNotNone(py_spec)
+                    self.assertFalse(import_index._INDEX._native_loaded)
+                    self.assertEqual(preloaded, [])
+
+                    # Extension spec lookup wraps ExtensionFileLoader with retry-on-ImportError.
+                    ext_spec = import_index.PathFinder.find_spec("ext_pkg._ext", [os.path.join(w_ext, "ext_pkg")])
+                    self.assertIsNotNone(ext_spec)
+                    self.assertFalse(import_index._INDEX._native_loaded)
+
+                    for err_msg in (
+                        "libfoo_lazy.so.1: cannot open shared object file: No such file or directory",
+                        "Error loading shared library libfoo_lazy.so.1: No such file or directory (needed by _ext.so)",
+                    ):
+                        import_index._INDEX._native_loaded = False
+                        import_index._INDEX.preload.clear()
+                        import_index._INDEX.sonames.clear()
+                        import_index._INDEX.native_deps.clear()
+                        import_index._PRELOADED.clear()
+                        import_index._PRELOADED_SONAMES.clear()
+                        preloaded.clear()
+                        attempts = []
+
+                        def fake_super_create(_self, _spec, msg=err_msg):
+                            attempts.append(len(preloaded))
+                            if len(attempts) == 1:
+                                raise ImportError(msg)
+                            return "ext_module_ok"
+
+                        with mock.patch.object(
+                            import_index._machinery.ExtensionFileLoader,
+                            "create_module",
+                            new=fake_super_create,
+                        ):
+                            res = ext_spec.loader.create_module(ext_spec)
+                        self.assertEqual(res, "ext_module_ok")
+                        self.assertTrue(import_index._INDEX._native_loaded)
+                        self.assertEqual(attempts, [0, 2])
+                        self.assertEqual(preloaded, [bar_so, foo_so])
+
+                    # Also verify ctypes and cffi wheel-path dlopen lazy retry on OSError.
+                    import_index._INDEX._native_loaded = False
+                    import_index._INDEX.preload.clear()
+                    import_index._INDEX.sonames.clear()
+                    import_index._INDEX.native_deps.clear()
+                    import_index._PRELOADED.clear()
+                    import_index._PRELOADED_SONAMES.clear()
+                    preloaded.clear()
+                    ctypes_attempts = []
+
+                    class FakeCtypesRetry:
+                        @staticmethod
+                        def dlopen(name, *args):
+                            ctypes_attempts.append((name, list(preloaded)))
+                            if len(ctypes_attempts) == 1:
+                                raise OSError(
+                                    "libfoo_lazy.so.1: cannot open shared object file: No such file or directory"
+                                )
+                            return ("ctypes_ok", name)
+
+                    import_index._hook_ctypes_module(FakeCtypesRetry)
+                    self.assertEqual(
+                        FakeCtypesRetry.dlopen(wheel_ctypes_so),
+                        ("ctypes_ok", wheel_ctypes_so),
+                    )
+                    self.assertTrue(import_index._INDEX._native_loaded)
+                    self.assertEqual(preloaded, [bar_so, foo_so])
+                    self.assertEqual(len(ctypes_attempts), 2)
+            finally:
+                import_index._INDEX = prev_index
+                import_index._CACHED_EXT_LOADER_CLS = prev_retry_cls
+                import_index._PRELOADED.clear()
+                import_index._PRELOADED_SONAMES.clear()
+                import_index._HOST_PROVIDES_CACHE.clear()
+                sys.meta_path[:] = prev_meta
+                sys.path[:] = prev_path
 
 
 if __name__ == "__main__":

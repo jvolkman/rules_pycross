@@ -112,6 +112,31 @@ class ImportIndexTest(unittest.TestCase):
             (12, 9, 9, "libfixture_cublas.so.12"),
         )
 
+        # Also verify lazy retry-on-failure in a clean subprocess with 0 consumer wheels
+        # (filtering out rpathfixture so no .pycross-native-consumer.json wheel is present).
+        if finder_mod is not None:
+            import subprocess
+
+            non_consumer_roots = [
+                r
+                for r in finder_mod._INDEX.roots
+                if os.path.basename(os.path.dirname(r))
+                in ("nvidia_fixture_cublas", "nvidia_fixture_cudnn", "sonamefixture")
+            ]
+            finder_dir = os.path.dirname(finder_mod.__file__)
+            code = (
+                "import sys; "
+                "sys.path[:0] = {!r} + [{!r}]; "
+                "import _bazel_import_index as bi; "
+                "bi.install({!r}, mode='prebuilt'); "
+                "assert not bi._INDEX._native_loaded, 'expected 0 consumers at startup'; "
+                "import sonamefixture; "
+                "assert not bi._INDEX._native_loaded, 'pure-Python import should not load native dotfiles'; "
+                "assert sonamefixture.load_and_call() == (12, 9, 9, 'libfixture_cublas.so.12'); "
+                "assert bi._INDEX._native_loaded, 'expected lazy native load on dlopen failure'"
+            ).format(non_consumer_roots, finder_dir, non_consumer_roots)
+            subprocess.run([sys.executable, "-S", "-c", code], check=True)
+
 
 if __name__ == "__main__":
     unittest.main()

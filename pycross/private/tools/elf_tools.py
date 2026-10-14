@@ -16,45 +16,6 @@ from typing import Optional
 NATIVE_CONSUMER_FILENAME = ".pycross-native-consumer.json"
 NATIVE_PROVIDER_FILENAME = ".pycross-native.json"
 
-_SYSTEM_SONAME_STEMS = frozenset(
-    (
-        "libc",
-        "libm",
-        "libdl",
-        "libpthread",
-        "librt",
-        "libresolv",
-        "libutil",
-        "libnsl",
-        "libcrypt",
-        "libanl",
-        "libBrokenLocale",
-        "libgcc_s",
-        "libstdc++",
-        "libgomp",
-        "libatomic",
-        "libgfortran",
-        "libquadmath",
-        "libz",
-        "libbz2",
-        "liblzma",
-        "libffi",
-        "libexpat",
-        "libssl",
-        "libcrypto",
-        "libsqlite3",
-        "libuuid",
-        "libcuda",
-        "libOpenCL",
-    )
-)
-_SYSTEM_SONAME_PREFIXES = (
-    "ld-linux",
-    "ld64.so",
-    "libnvidia-",
-    "libpython",
-)
-
 ELF_MAGIC_BYTES = b"\x7fELF"
 
 ELFCLASS32 = 1
@@ -220,15 +181,6 @@ def read_elf_metadata(path: Path) -> Optional[dict[str, Any]]:
         return None
 
 
-def is_system_soname(name: str) -> bool:
-    """Return True if `name` is a standard OS, toolchain, or host GPU driver SONAME."""
-    if not name:
-        return False
-    base = name.rpartition("/")[2] if "/" in name else name
-    stem = base.partition(".so")[0]
-    return stem in _SYSTEM_SONAME_STEMS or stem.startswith(_SYSTEM_SONAME_PREFIXES)
-
-
 def candidate_origin_dirs(own_dirs: set[str], so_dir: str, entry: str) -> list[str]:
     """Return candidate cross-wheel relative directory paths for an `$ORIGIN` RPATH entry."""
     for token in ("$ORIGIN/", "${ORIGIN}/"):
@@ -260,31 +212,21 @@ def is_native_consumer(
     dirs: Any,
     native: dict[str, dict[str, Any]],
 ) -> bool:
-    """Return True if a wheel's ELF files have escaping `$ORIGIN` RPATHs or unsatisfied `DT_NEEDED`s."""
+    """Return True if a wheel's ELF files have any `$ORIGIN` RPATH/RUNPATH entry escaping the wheel."""
     if not native:
         return False
     own_dirs = set(dirs or ())
     own_dirs.update(top or ())
-    own_sonames = set()
-    for rel_so, meta in native.items():
+    for rel_so in native:
         parent = rel_so.rpartition("/")[0]
         while parent:
             own_dirs.add(parent)
             parent = parent.rpartition("/")[0]
-        basename = rel_so.rpartition("/")[2]
-        if basename:
-            own_sonames.add(basename)
-        soname = meta.get("soname")
-        if soname:
-            own_sonames.add(soname)
 
     for rel_so, meta in native.items():
         so_dir = rel_so.rpartition("/")[0]
         rpaths = (meta.get("runpath") or []) + (meta.get("rpath") or [])
         for entry in rpaths:
             if candidate_origin_dirs(own_dirs, so_dir, entry):
-                return True
-        for needed_name in meta.get("needed") or ():
-            if not is_system_soname(needed_name) and needed_name not in own_sonames:
                 return True
     return False

@@ -913,6 +913,48 @@ class WheelIndexNativeMetadataTest(unittest.TestCase):
             json.loads(cons_idx_out.read_text()),
         )
 
+        # 4. Wheel with unsatisfied cross-wheel DT_NEEDED but NO escaping $ORIGIN RPATH/RUNPATH:
+        # writes .pycross-native.json (provider, NOT consumer) while still recording "needed".
+        import struct
+
+        buf = bytearray(self._unpack_blob(self.LIBUSER_SO))
+        e_phoff = struct.unpack_from("<Q", buf, 32)[0]
+        e_phentsize, e_phnum = struct.unpack_from("<HH", buf, 54)
+        for i in range(e_phnum):
+            ph_off = e_phoff + i * e_phentsize
+            p_type, _, p_offset, _, _, p_filesz, _, _ = struct.unpack_from("<IIQQQQQQ", buf, ph_off)
+            if p_type == 2:
+                kept = bytearray()
+                for pos in range(p_offset, p_offset + p_filesz, 16):
+                    d_tag, _ = struct.unpack_from("<qQ", buf, pos)
+                    if d_tag not in (15, 29):
+                        kept.extend(buf[pos : pos + 16])
+                    if d_tag == 0:
+                        break
+                kept.extend(b"\x00" * (p_filesz - len(kept)))
+                buf[p_offset : p_offset + p_filesz] = kept
+                break
+
+        soname_only_root = Path(self.temp_dir) / "soname_only" / "site-packages"
+        nopath_so = soname_only_root / "sonameuser" / "libuser_nopath.so"
+        nopath_so.parent.mkdir(parents=True, exist_ok=True)
+        (soname_only_root / "sonameuser" / "__init__.py").write_text("")
+        nopath_so.write_bytes(bytes(buf))
+        soname_only_idx = Path(self.temp_dir) / "soname_only.dist_info" / "index.json"
+        write_index(soname_only_root, soname_only_idx, "soname-user", "1.0")
+        self.assertFalse((soname_only_root / NATIVE_CONSUMER_FILENAME).exists())
+        soname_only_dot = soname_only_root / NATIVE_PROVIDER_FILENAME
+        self.assertTrue(soname_only_dot.is_file())
+        self.assertEqual(
+            json.loads(soname_only_dot.read_text())["native"]["sonameuser/libuser_nopath.so"],
+            {
+                "needed": ["libfixture_cublas.so.12", "libc.so.6"],
+                "rpath": [],
+                "runpath": [],
+                "soname": None,
+            },
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
