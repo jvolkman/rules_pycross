@@ -463,16 +463,93 @@ class InspectPackageTest(unittest.TestCase):
         self.assertEqual(inspect_wheel(wheel_path)["site_paths"], ["google/cloud/storage"])
 
     def test_wheel_nvidia_namespace(self):
-        """nvidia wheels ship an empty nvidia/__init__.py but share the namespace."""
+        """nvidia wheels ship an empty nvidia/__init__.py but share the namespace.
+
+        The shared libraries are linked individually below real directories, so
+        libcusparse's `$ORIGIN/../../nvjitlink/lib` RPATH resolves in the venv.
+        Directories without shared libraries (include/) are still linked whole.
+        """
         wheel_path = self.create_zip(
-            "nvidia_cublas_cu12-12.0-py3-none-manylinux1_x86_64.whl",
+            "nvidia_cusparse_cu12-12.0-py3-none-manylinux1_x86_64.whl",
             {
                 "nvidia/__init__.py": "",
-                "nvidia/cublas/__init__.py": "",
-                "nvidia/cublas/lib/libcublas.so.12": "",
+                "nvidia/cusparse/__init__.py": "",
+                "nvidia/cusparse/include/__init__.py": "",
+                "nvidia/cusparse/include/cusparse.h": "",
+                "nvidia/cusparse/lib/__init__.py": "",
+                "nvidia/cusparse/lib/libcusparse.so.12": "",
             },
         )
-        self.assertEqual(inspect_wheel(wheel_path)["site_paths"], ["nvidia/cublas"])
+        self.assertEqual(
+            inspect_wheel(wheel_path)["site_paths"],
+            [
+                "nvidia/cusparse/__init__.py",
+                "nvidia/cusparse/include",
+                "nvidia/cusparse/lib/__init__.py",
+                "nvidia/cusparse/lib/libcusparse.so.12",
+            ],
+        )
+
+    def test_wheel_top_level_package_with_shared_libraries_is_linked_whole(self):
+        """Top-level packages keep RPATHs inside the wheel (e.g. auditwheel's .libs dir)."""
+        wheel_path = self.create_zip(
+            "numpy-2.0-cp313-cp313-manylinux_2_28_x86_64.whl",
+            {
+                "numpy/__init__.py": "",
+                "numpy/_core/__init__.py": "",
+                "numpy/_core/_multiarray_umath.cpython-313-x86_64-linux-gnu.so": "",
+                "numpy.libs/libscipy_openblas64_-1234abcd.so": "",
+            },
+        )
+        self.assertEqual(
+            inspect_wheel(wheel_path)["site_paths"],
+            ["numpy", "numpy.libs/libscipy_openblas64_-1234abcd.so"],
+        )
+
+    def test_wheel_namespace_keeps_data_files(self):
+        """PyQt5-Qt5 style: Qt's data files under a namespace must be linked too.
+
+        Two wheels can share any directory below a namespace (PyQtWebEngine-Qt5 also
+        installs into PyQt5/Qt5/translations), so data-only directories without an
+        __init__.py are descended like any other namespace directory.
+        """
+        wheel_path = self.create_zip(
+            "pyqt5_qt5-5.15.0-py3-none-manylinux2014_x86_64.whl",
+            {
+                "PyQt5/Qt5/lib/libQt5Core.so.5": "",
+                "PyQt5/Qt5/qml/QtQuick.2/qmldir": "",
+                "PyQt5/Qt5/qml/QtQuick.2/libqtquick2plugin.so": "",
+                "PyQt5/Qt5/translations/qt_de.qm": "",
+                "PyQt5/Qt5/plugins/platforms/libqoffscreen.so": "",
+            },
+        )
+        self.assertEqual(
+            inspect_wheel(wheel_path)["site_paths"],
+            [
+                "PyQt5/Qt5/lib/libQt5Core.so.5",
+                "PyQt5/Qt5/plugins/platforms/libqoffscreen.so",
+                "PyQt5/Qt5/qml/QtQuick.2/libqtquick2plugin.so",
+                "PyQt5/Qt5/qml/QtQuick.2/qmldir",
+                "PyQt5/Qt5/translations/qt_de.qm",
+            ],
+        )
+
+    def test_wheel_pkgutil_namespace_keeps_non_module_files(self):
+        """PyQt5 style: type stubs and other files next to a pkgutil __init__.py are linked."""
+        wheel_path = self.create_zip(
+            "PyQt5-5.15.0-cp38-abi3-manylinux_2_17_x86_64.whl",
+            {
+                "PyQt5/__init__.py": "import pkgutil\n__path__ = pkgutil.extend_path(__path__, __name__)\n",
+                "PyQt5/__pycache__/__init__.cpython-313.pyc": "",
+                "PyQt5/QtCore.abi3.so": "",
+                "PyQt5/QtCore.pyi": "",
+                "PyQt5/py.typed": "",
+            },
+        )
+        self.assertEqual(
+            inspect_wheel(wheel_path)["site_paths"],
+            ["PyQt5/QtCore.abi3.so", "PyQt5/QtCore.pyi", "PyQt5/py.typed"],
+        )
 
     def test_wheel_purelib_pkgutil_namespace(self):
         wheel_path = self.create_zip(

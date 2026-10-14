@@ -97,6 +97,11 @@ FREETHREADED_VALUES = {
 
 PYTHON_TOOLCHAIN_TYPE = Label("@rules_python//python:toolchain_type")
 
+DEFAULT_PEP508_IMPLEMENTATION_NAME = "cpython"
+DEFAULT_PEP508_PLATFORM_PYTHON_IMPLEMENTATION = "CPython"
+DEFAULT_PEP508_PLATFORM_RELEASE = ""
+DEFAULT_PEP508_PLATFORM_VERSION = ""
+
 def flag_value(target):
     """Read a flag value from either FeatureFlagInfo or BuildSettingInfo.
 
@@ -241,12 +246,12 @@ def collect_markers(ctx):
 
     # Defaults (matching rules_python's pep508_env.bzl behavior) if still empty.
     if not implementation_name:
-        implementation_name = "cpython"
+        implementation_name = DEFAULT_PEP508_IMPLEMENTATION_NAME
     if not implementation_version and python_full_version:
         implementation_version = python_full_version
     if not platform_python_implementation:
-        if implementation_name == "cpython":
-            platform_python_implementation = "CPython"
+        if implementation_name == DEFAULT_PEP508_IMPLEMENTATION_NAME:
+            platform_python_implementation = DEFAULT_PEP508_PLATFORM_PYTHON_IMPLEMENTATION
         elif implementation_name == "pypy":
             platform_python_implementation = "PyPy"
         else:

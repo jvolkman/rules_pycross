@@ -6,8 +6,17 @@ All notable changes to this project will be documented in this file.
 
 ### Fixed
 
+- **Target-environment settings** (`glibc_version`, `macos_version`, `musl_version`,
+  and `pep508_*`) now use `scope = "target"` and are reset to their defaults in
+  exec-platform transitions.
 - **Poetry `||` version constraints** now evaluate all union branches instead of
   collapsing to `!=` or taking only the first branch.
+- **`venvs_site_packages=yes`: wheel files missing from the venv.** Namespace
+  directories now link every file, not just Python modules, so data such as
+  PyQt5-Qt5's `PyQt5/Qt5/qml` and `translations`, and `.pyi`/`py.typed` files,
+  are present. Below a namespace, shared libraries are linked individually under
+  real directories, so cross-wheel `$ORIGIN` RPATHs (e.g. `nvidia-cusparse-cu12`
+  → `nvidia-nvjitlink-cu12`) resolve inside the venv.
 
 ## [2.0.0]
 

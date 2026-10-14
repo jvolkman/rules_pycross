@@ -54,4 +54,8 @@ bzl_library(
 bzl_library(
     name = "transitions",
     srcs = ["transitions.bzl"],
+    deps = [
+        "//pycross/private:pep508_marker_values",  # keep
+        "@rules_pycross_internal_config//:defaults",
+    ],
 )

@@ -1,5 +1,12 @@
 load("@bazel_skylib//rules:common_settings.bzl", "string_flag")
 load("@rules_pycross_internal_config//:defaults.bzl", "glibc_version", "macos_version", "musl_version")
+load(
+    "//pycross/private:pep508_marker_values.bzl",
+    "DEFAULT_PEP508_IMPLEMENTATION_NAME",
+    "DEFAULT_PEP508_PLATFORM_PYTHON_IMPLEMENTATION",
+    "DEFAULT_PEP508_PLATFORM_RELEASE",
+    "DEFAULT_PEP508_PLATFORM_VERSION",
+)
 load("//pycross/private/build:resource_sets.bzl", _create_settings = "create_resource_set_settings")
 
 package(default_visibility = ["//visibility:public"])
@@ -9,22 +16,26 @@ _create_settings()
 # Configurable PEP 508 Markers
 string_flag(
     name = "pep508_implementation_name",
-    build_setting_default = "cpython",
+    build_setting_default = DEFAULT_PEP508_IMPLEMENTATION_NAME,
+    scope = "target",
 )
 
 string_flag(
     name = "pep508_platform_python_implementation",
-    build_setting_default = "CPython",
+    build_setting_default = DEFAULT_PEP508_PLATFORM_PYTHON_IMPLEMENTATION,
+    scope = "target",
 )
 
 string_flag(
     name = "pep508_platform_release",
-    build_setting_default = "",
+    build_setting_default = DEFAULT_PEP508_PLATFORM_RELEASE,
+    scope = "target",
 )
 
 string_flag(
     name = "pep508_platform_version",
-    build_setting_default = "",
+    build_setting_default = DEFAULT_PEP508_PLATFORM_VERSION,
+    scope = "target",
 )
 
 # Target Environment Constraints
@@ -34,18 +45,21 @@ string_flag(
 string_flag(
     name = "glibc_version",
     build_setting_default = glibc_version,
+    scope = "target",
 )
 
 # The target's macOS version; wheels tagged up to it (macosx_X_Y) are accepted.
 string_flag(
     name = "macos_version",
     build_setting_default = macos_version,
+    scope = "target",
 )
 
 # The target's musl version; wheels tagged up to it (musllinux_1_X) are accepted.
 string_flag(
     name = "musl_version",
     build_setting_default = musl_version,
+    scope = "target",
 )
 
 # Unavailable Package Mode
