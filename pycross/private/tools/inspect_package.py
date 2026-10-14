@@ -150,6 +150,11 @@ def _extract_module_name(filename: str) -> str | None:
     return None
 
 
+def _is_shared_library(filename: str) -> bool:
+    """Whether a file is loaded by the dynamic linker (mirrors rules_python's _is_linker_loaded_library)."""
+    return filename.endswith((".so", ".dylib", ".dll")) or ".so." in filename
+
+
 def _get_archive_file_content(archive_path: Path, target_filename: str, source_dir: str = "") -> str:
     """Reads a specific file from a tar.gz or zip archive without extracting it to disk.
 
@@ -200,7 +205,7 @@ def _resolve_top_level_paths(
 
     For regular packages (directories with __init__.py), returns the directory
     name as-is. For namespace packages, descends to find the shallowest concrete
-    sub-packages or standalone module files (preserving their extensions).
+    sub-packages and the files directly inside (preserving their extensions).
     Namespace packages are:
 
     * implicit namespace packages (PEP 420 — directories without __init__.py);
@@ -214,6 +219,18 @@ def _resolve_top_level_paths(
     (google/cloud/storage, google/cloud/bigquery) rather than the namespace
     root (google/) to avoid one distribution shadowing the other.
 
+    Every file in a namespace directory is kept, not just modules: data files such as PyQt5-Qt5's
+    PyQt5/Qt5/qml/** must exist in the venv too.
+
+    Below a namespace directory, shared libraries are linked individually and the directories
+    above them are never linked as a whole (like rules_python's get_venv_symlinks). The dynamic
+    linker expands $ORIGIN to the directory of the path a library was opened by, but the kernel
+    resolves `..` and the rest of an RPATH entry against the real directories. Through a directory
+    symlink, an RPATH such as nvidia/cusparse/lib's `$ORIGIN/../../nvjitlink/lib` would resolve
+    inside the cusparse wheel instead of the venv, where nvidia-nvjitlink-cu12 is linked. Top-level
+    regular packages stay whole: their libraries' RPATHs normally stay inside the wheel (e.g.
+    auditwheel's `$ORIGIN/../<pkg>.libs`), which resolves the same through a directory symlink.
+
     Args:
         all_files: Set of all file paths in the archive (forward-slash separated).
         top_level_dirs: Set of top-level directory names to classify.
@@ -221,11 +238,29 @@ def _resolve_top_level_paths(
             used to detect pkgutil-style namespace packages.
 
     Returns:
-        Set of concrete paths — either top-level names for regular packages, or
-        deeper paths for namespace packages (using forward slashes). Standalone
-        module files retain their extensions (e.g. 'ns/helper.py').
+        Set of concrete paths: directories that can be linked as a whole, plus individual files
+        (with their extensions, e.g. 'ns/helper.py') in namespace directories or next to shared
+        libraries.
     """
     init_files = {f for f in all_files if f.endswith("/__init__.py")}
+
+    # dir -> (file names, subdirectory names) directly inside it.
+    children: dict[str, tuple[set[str], set[str]]] = {}
+    # Directories that contain a shared library at any depth.
+    library_dirs: set[str] = set()
+    for f in all_files:
+        parent, _, name = f.rpartition("/")
+        if not parent:
+            continue
+        children.setdefault(parent, (set(), set()))[0].add(name)
+        is_library = _is_shared_library(name)
+        while parent:
+            if is_library:
+                library_dirs.add(parent)
+            grandparent, _, dir_name = parent.rpartition("/")
+            if grandparent:
+                children.setdefault(grandparent, (set(), set()))[1].add(dir_name)
+            parent = grandparent
 
     def is_namespace(dir_path: str) -> bool:
         init = f"{dir_path}/__init__.py"
@@ -236,32 +271,31 @@ def _resolve_top_level_paths(
         content = read_file(init) if read_file else None
         return bool(content) and _is_pkgutil_namespace_init(content)
 
-    def resolve(dir_path: str) -> list[str]:
-        if not is_namespace(dir_path):
-            # Regular package — can be linked directly.
+    def resolve(dir_path: str, in_namespace: bool, split_libraries: bool) -> list[str]:
+        # Namespaces are only detected directly below other namespaces: other distributions can't
+        # install into a regular package's subdirectories. Directories holding shared libraries
+        # are split below a namespace (split_libraries), never at the top level.
+        namespace = in_namespace and is_namespace(dir_path)
+        split = split_libraries and dir_path in library_dirs
+        if not namespace and not split:
+            # Regular package (or plain directory): can be linked directly.
             return [dir_path]
 
-        # Namespace package — link its modules and descend into its subdirectories. The namespace's
-        # own __init__.py (if any) is shared by every distribution, so it isn't linked.
-        prefix = dir_path + "/"
-        kept = []
-        subdirs = set()
-        for f in all_files:
-            if not f.startswith(prefix):
+        # Namespace package, or a directory holding shared libraries: link its files and descend
+        # into its subdirectories. A namespace's own __init__.py (if any) is shared by every
+        # distribution, so it isn't linked, and neither are its bytecode caches.
+        file_names, subdir_names = children.get(dir_path, (set(), set()))
+        kept = [f"{dir_path}/{name}" for name in file_names if not (namespace and name == "__init__.py")]
+        for name in sorted(subdir_names):
+            if namespace and name == "__pycache__":
                 continue
-            rest = f[len(prefix) :]
-            if "/" in rest:
-                subdirs.add(prefix + rest.split("/", 1)[0])
-            elif rest != "__init__.py" and _extract_module_name(rest):
-                kept.append(f)
-        for subdir in sorted(subdirs):
-            kept.extend(resolve(subdir))
-        # A namespace dir with no concrete sub-packages or modules resolves to nothing.
+            kept.extend(resolve(f"{dir_path}/{name}", namespace, True))
+        # A namespace dir with no concrete sub-packages or files resolves to nothing.
         return kept
 
     result = set()
     for dir_name in top_level_dirs:
-        result.update(resolve(dir_name))
+        result.update(resolve(dir_name, True, False))
     return result
 
 
