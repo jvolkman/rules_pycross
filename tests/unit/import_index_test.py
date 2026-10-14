@@ -1528,6 +1528,75 @@ class ImportIndexTest(unittest.TestCase):
             finally:
                 import_index._INDEX = prev_index
 
+    def test_nspkg_pth_reconciliation_and_comment_only_init_override(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            w_ff = os.path.join(tmp, "functions-framework", "site-packages")
+            w_gcf = os.path.join(tmp, "google-cloud-functions", "site-packages")
+
+            # functions-framework ships a setuptools *-nspkg.pth for google and google.cloud,
+            # plus comment-only __init__.py files under google/cloud/functions{_v1}/.
+            _write(
+                os.path.join(w_ff, "functions_framework-3.10.2-py3.12-nspkg.pth"),
+                "import sys, types, os;p = os.path.join(sys._getframe(1).f_locals['sitedir'], *('ff_google',));"
+                "importlib = __import__('importlib.util');__import__('importlib.machinery');"
+                "m = sys.modules.setdefault('ff_google', importlib.util.module_from_spec("
+                "importlib.machinery.PathFinder.find_spec('ff_google', [os.path.dirname(p)])));"
+                "m = m or sys.modules.setdefault('ff_google', types.ModuleType('ff_google'));"
+                "mp = (m or []) and m.__dict__.setdefault('__path__',[]);(p not in mp) and mp.append(p)\n"
+                "import sys, types, os;p = os.path.join(sys._getframe(1).f_locals['sitedir'], *('ff_google', 'cloud'));"
+                "importlib = __import__('importlib.util');__import__('importlib.machinery');"
+                "m = sys.modules.setdefault('ff_google.cloud', importlib.util.module_from_spec("
+                "importlib.machinery.PathFinder.find_spec('ff_google.cloud', [os.path.dirname(p)])));"
+                "m = m or sys.modules.setdefault('ff_google.cloud', types.ModuleType('ff_google.cloud'));"
+                "mp = (m or []) and m.__dict__.setdefault('__path__',[]);(p not in mp) and mp.append(p);"
+                "m and setattr(sys.modules['ff_google'], 'cloud', m)\n",
+            )
+            _write(
+                os.path.join(w_ff, "ff_google", "cloud", "functions", "__init__.py"),
+                "# Copyright 2020 Google LLC\n# Comment-only header.\n",
+            )
+            _write(
+                os.path.join(w_ff, "ff_google", "cloud", "functions", "context.py"),
+                "class Context:\n    pass\n",
+            )
+
+            # google-cloud-functions is a PEP 420 package (no *-nspkg.pth) and ships a real
+            # __init__.py plus submodules under ff_google/cloud/functions/.
+            _write(
+                os.path.join(w_gcf, "ff_google", "cloud", "functions", "__init__.py"),
+                "from ff_google.cloud.functions.client import CloudFunctionsServiceClient\n",
+            )
+            _write(
+                os.path.join(w_gcf, "ff_google", "cloud", "functions", "client.py"),
+                "class CloudFunctionsServiceClient:\n    pass\n",
+            )
+
+            import importlib
+
+            prev_index = import_index._INDEX
+            prev_meta = list(sys.meta_path)
+            prev_path = list(sys.path)
+            prev_merged = set(import_index._MERGED)
+            try:
+                import_index._INDEX = None
+                import_index._MERGED.clear()
+                sys.path[:] = [w_ff, w_gcf] + prev_path
+                import_index.install([w_ff, w_gcf], mode="prebuilt")
+                mod_fns = importlib.import_module("ff_google.cloud.functions")
+                mod_ctx = importlib.import_module("ff_google.cloud.functions.context")
+                self.assertTrue(hasattr(mod_fns, "CloudFunctionsServiceClient"))
+                self.assertTrue(hasattr(mod_ctx, "Context"))
+                self.assertEqual(len(mod_fns.__path__), 2)
+            finally:
+                import_index._INDEX = prev_index
+                import_index._MERGED.clear()
+                import_index._MERGED.update(prev_merged)
+                sys.meta_path[:] = prev_meta
+                sys.path[:] = prev_path
+                for k in list(sys.modules):
+                    if k == "ff_google" or k.startswith("ff_google."):
+                        sys.modules.pop(k, None)
+
 
 if __name__ == "__main__":
     unittest.main()

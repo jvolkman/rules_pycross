@@ -1162,13 +1162,35 @@ def _single_owner_spec(fullname, root, entries):
     return None
 
 
+def _is_comment_only_py(path):
+    """Returns True if `path` is a `.py` file containing only comments and whitespace."""
+    if not path or not path.endswith(".py"):
+        return False
+    try:
+        with open(path, "rb") as f:
+            for line in f:
+                s = line.strip()
+                if s and not s.startswith(b"#"):
+                    return False
+        return True
+    except OSError:
+        return False
+
+
 def _merged_subdir_spec(fullname, dirs):
     """Resolves a package directory `fullname` whose directories are `dirs`."""
+    fallback = None
     for d in dirs:
         for suffix, loader_class in _LOADERS:
             init = os.path.join(d, "__init__" + suffix)
             if os.path.isfile(init):
-                return _spec(fullname, init, loader_class, [d])
+                spec = _spec(fullname, init, loader_class, [d])
+                if len(dirs) == 1 or not _is_comment_only_py(init):
+                    return spec
+                if fallback is None:
+                    fallback = spec
+    if fallback is not None:
+        return fallback
     spec = _machinery.ModuleSpec(fullname, None, is_package=True)
     spec.submodule_search_locations = list(dirs)
     return spec
@@ -1976,6 +1998,16 @@ def _merge(spec, name, parents, dirs=None):
                 if os.path.isdir(d):
                     dirs.append(d)
     if len(dirs) > 1:
+        if _is_comment_only_py(spec.origin):
+            for d in dirs:
+                for suffix, loader_class in _LOADERS:
+                    init = os.path.join(d, "__init__" + suffix)
+                    if init != spec.origin and os.path.isfile(init) and not _is_comment_only_py(init):
+                        spec = _spec(name, init, loader_class, [d])
+                        break
+                else:
+                    continue
+                break
         primary = list(spec.submodule_search_locations)
         spec.submodule_search_locations = primary + [d for d in dirs if d not in primary]
         _MERGED.add(name)
@@ -2264,10 +2296,30 @@ def install(roots, debug=False, mode="scan", index_path=None, runfiles_root=""):
     if index.pth:
         import site
 
+        before_pth = set(sys.modules)
         known_paths = {os.path.normcase(p) for p in sys.path if isinstance(p, str)}
         for name in sorted(index.pth):
             if not name.startswith("."):
                 site.addpackage(index.pth[name], name, known_paths)
+        for mod_name in sorted(set(sys.modules) - before_pth, key=lambda s: (s.count("."), s)):
+            mod = sys.modules.get(mod_name)
+            mod_path = getattr(mod, "__path__", None)
+            if mod is None or mod_path is None or getattr(mod, "__file__", None) is not None:
+                continue
+            if "." in mod_name:
+                parent_mod = sys.modules.get(mod_name.rpartition(".")[0])
+                parent_path = getattr(parent_mod, "__path__", None) if parent_mod is not None else None
+                spec = PathFinder.find_spec(mod_name, parent_path) if parent_path is not None else None
+            else:
+                spec = PathFinder._find_top_level(mod_name, sys.path)
+            if spec is not None and spec.submodule_search_locations is not None:
+                merged_locs = list(mod_path)
+                for loc in spec.submodule_search_locations:
+                    if loc not in merged_locs:
+                        merged_locs.append(loc)
+                mod.__path__ = merged_locs
+                if len(merged_locs) > 1:
+                    _MERGED.add(mod_name)
 
     if debug:
         elapsed = (time.perf_counter() - start) * 1000
