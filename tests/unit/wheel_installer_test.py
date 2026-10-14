@@ -777,18 +777,27 @@ class WheelIndexNativeMetadataTest(unittest.TestCase):
             idx["native"],
             {
                 "nvidia/fixture_cublas/lib/libfixture_cublas.so.12": {
+                    "ei_class": 2,
+                    "ei_data": 1,
+                    "e_machine": 62,
                     "needed": [],
                     "rpath": [],
                     "runpath": [],
                     "soname": "libfixture_cublas.so.12",
                 },
                 "rpathuser.libs/libbundled.so.1": {
+                    "ei_class": 2,
+                    "ei_data": 1,
+                    "e_machine": 62,
                     "needed": [],
                     "rpath": [],
                     "runpath": [],
                     "soname": "libfixture_cublas.so.12",
                 },
                 "rpathuser/libuser.so": {
+                    "ei_class": 2,
+                    "ei_data": 1,
+                    "e_machine": 62,
                     "needed": ["libfixture_cublas.so.12", "libc.so.6"],
                     "rpath": [],
                     "runpath": [
@@ -862,6 +871,9 @@ class WheelIndexNativeMetadataTest(unittest.TestCase):
                 "dirs": ["nvidia", "nvidia/fixture_cublas", "nvidia/fixture_cublas/lib"],
                 "native": {
                     "nvidia/fixture_cublas/lib/libfixture_cublas.so.12": {
+                        "ei_class": 2,
+                        "ei_data": 1,
+                        "e_machine": 62,
                         "needed": [],
                         "rpath": [],
                         "runpath": [],
@@ -897,6 +909,9 @@ class WheelIndexNativeMetadataTest(unittest.TestCase):
                 "dirs": ["rpathuser"],
                 "native": {
                     "rpathuser/libuser.so": {
+                        "ei_class": 2,
+                        "ei_data": 1,
+                        "e_machine": 62,
                         "needed": ["libfixture_cublas.so.12", "libc.so.6"],
                         "rpath": [],
                         "runpath": [
@@ -948,6 +963,9 @@ class WheelIndexNativeMetadataTest(unittest.TestCase):
         self.assertEqual(
             json.loads(soname_only_dot.read_text())["native"]["sonameuser/libuser_nopath.so"],
             {
+                "ei_class": 2,
+                "ei_data": 1,
+                "e_machine": 62,
                 "needed": ["libfixture_cublas.so.12", "libc.so.6"],
                 "rpath": [],
                 "runpath": [],

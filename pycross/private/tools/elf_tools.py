@@ -83,7 +83,7 @@ def _parse_elf_dynamic(fh: BinaryIO) -> Optional[dict[str, Any]]:
         return None
     (
         e_type,
-        _e_machine,
+        e_machine,
         _e_version,
         _e_entry,
         _e_phoff,
@@ -167,11 +167,14 @@ def _parse_elf_dynamic(fh: BinaryIO) -> Optional[dict[str, Any]]:
         "needed": needed,
         "rpath": _split_rpath(rpath_str),
         "runpath": _split_rpath(runpath_str),
+        "ei_class": ei_class,
+        "ei_data": ei_data,
+        "e_machine": e_machine,
     }
 
 
 def read_elf_metadata(path: Path) -> Optional[dict[str, Any]]:
-    """Returns `{soname, needed, rpath, runpath}` for an ELF shared object, or `None`."""
+    """Returns `{soname, needed, rpath, runpath, ei_class, ei_data, e_machine}` for an ELF shared object, or `None`."""
     try:
         if not path.is_file():
             return None

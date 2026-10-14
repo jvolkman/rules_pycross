@@ -584,6 +584,8 @@ class ImportIndexTest(unittest.TestCase):
 
             cublas_dot = os.path.join(cublas_root, import_index.NATIVE_PROVIDER_FILENAME)
             cudnn_dot = os.path.join(cudnn_root, import_index.NATIVE_CONSUMER_FILENAME)
+            stub_meta = import_index._read_elf_metadata_full(cublas_so)
+            e_machine = stub_meta["e_machine"]
             cublas_meta = {
                 "version": 1,
                 "top": ["nvidia"],
@@ -594,12 +596,18 @@ class ImportIndexTest(unittest.TestCase):
                         "needed": ["libcublasLt.so.12"],
                         "rpath": ["$ORIGIN"],
                         "runpath": [],
+                        "ei_class": 2,
+                        "ei_data": 1,
+                        "e_machine": e_machine,
                     },
                     "nvidia/cublas/lib/libcublasLt.so.12": {
                         "soname": "libcublasLt.so.12",
                         "needed": ["libc.so.6"],
                         "rpath": ["$ORIGIN"],
                         "runpath": [],
+                        "ei_class": 2,
+                        "ei_data": 1,
+                        "e_machine": e_machine,
                     },
                 },
             }
@@ -613,6 +621,9 @@ class ImportIndexTest(unittest.TestCase):
                         "needed": ["libcublas.so.12"],
                         "rpath": ["$ORIGIN/../../cublas/lib"],
                         "runpath": [],
+                        "ei_class": 2,
+                        "ei_data": 1,
+                        "e_machine": e_machine,
                     },
                 },
             }
@@ -643,14 +654,12 @@ class ImportIndexTest(unittest.TestCase):
                     self.assertEqual(spy_json.call_count, 0)
                     self.assertFalse(import_index._INDEX._native_loaded)
 
-                    # First-party extension with only system DT_NEEDED does NOT trigger lazy JSON loading.
+                    # First-party extension spec lookup wraps loader without opening the .so or loading JSON.
                     os.makedirs(fp_root, exist_ok=True)
                     fp_sys_so = os.path.join(fp_root, "fp_sys.so")
-                    with open(fp_sys_so, "wb") as fh:
-                        fh.write(import_index._make_stub_elf("$ORIGIN", "libc.so.6"))
-                    import_index._CHECKED_EXTENSIONS.clear()
                     sys_spec = import_index._spec("fp_sys", fp_sys_so, import_index._machinery.ExtensionFileLoader)
                     import_index._finalize_spec("fp_sys", sys_spec)
+                    self.assertTrue(getattr(sys_spec.loader, "_pycross_ext_wrapped", False))
                     self.assertEqual(spy_json.call_count, 0)
                     self.assertFalse(import_index._INDEX._native_loaded)
 
@@ -748,7 +757,6 @@ class ImportIndexTest(unittest.TestCase):
             finally:
                 import_index._INDEX = prev_index
                 import_index._PRELOADED.clear()
-                import_index._CHECKED_EXTENSIONS.clear()
                 sys.meta_path[:] = prev_meta
 
     def test_merge_preload_and_finder_preloads_on_import(self):
@@ -929,14 +937,33 @@ class ImportIndexTest(unittest.TestCase):
             merged_disabled = import_index.merge_wheel_indexes(entries)
         self.assertNotIn("preload", merged_disabled)
 
-    def test_stub_elf_and_read_elf_needed_roundtrip(self):
-        stub_bytes = import_index._make_stub_elf("/tmp/wheel/lib", "libcublas.so.12")
+    def test_stub_elf_and_read_elf_metadata_full_roundtrip(self):
+        self.assertIsNone(import_index._make_stub_elf("/tmp/wheel/lib", "libcublas.so.12", ei_class=1))
+        stub_bytes = import_index._make_stub_elf(
+            "/tmp/wheel/lib",
+            "libcublas.so.12",
+            soname="libstub.so.1",
+            ei_class=2,
+            ei_data=1,
+            e_machine=62,
+        )
         self.assertIsNotNone(stub_bytes)
         self.assertTrue(stub_bytes.startswith(b"\x7fELF"))
         with tempfile.NamedTemporaryFile(suffix=".so") as tf:
             tf.write(stub_bytes)
             tf.flush()
-            self.assertEqual(import_index._read_elf_needed(tf.name), ["libcublas.so.12"])
+            self.assertEqual(
+                import_index._read_elf_metadata_full(tf.name),
+                {
+                    "soname": "libstub.so.1",
+                    "needed": ["libcublas.so.12"],
+                    "rpath": ["/tmp/wheel/lib"],
+                    "runpath": [],
+                    "ei_class": 2,
+                    "ei_data": 1,
+                    "e_machine": 62,
+                },
+            )
 
     def test_runtime_dlopen_find_library_cffi_and_extension_needed(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -959,11 +986,8 @@ class ImportIndexTest(unittest.TestCase):
             _write(os.path.join(nvcc_root, "nvidia", "cuda_nvcc", "__init__.py"), "")
             _write(ptxas_bin, "")
 
-            # First-party native extension with DT_NEEDED on libcudnn.so.9.
+            # First-party native extension path (need not exist on disk: _finalize_spec never opens it).
             fp_ext_path = os.path.join(fp_root, "fp_ext.so")
-            os.makedirs(fp_root, exist_ok=True)
-            with open(fp_ext_path, "wb") as fh:
-                fh.write(import_index._make_stub_elf("/unused", "libcudnn.so.9"))
 
             def wheel_meta(**fields):
                 return dict(
@@ -1102,21 +1126,37 @@ class ImportIndexTest(unittest.TestCase):
                     self.assertEqual(FakeCffiBackend.load_library("cublas", 2), (cublas_so, 2))
                     self.assertEqual(FakeCffiBackend.FFI().dlopen("libcudnn.so.9", 1), (cudnn_so, 1))
 
-                    # Item 6: First-party ExtensionFileLoader DT_NEEDED preloading.
+                    # Item 6: First-party ExtensionFileLoader lazy retry on ImportError.
                     preloaded_calls.clear()
                     import_index._PRELOADED.clear()
-                    import_index._CHECKED_EXTENSIONS.clear()
                     fp_spec = import_index._spec(
                         "fp_ext",
                         fp_ext_path,
                         import_index._machinery.ExtensionFileLoader,
                     )
                     import_index._finalize_spec("fp_ext", fp_spec)
+                    self.assertEqual(preloaded_calls, [])
+                    fp_attempts = []
+
+                    def fake_fp_create(_self, _spec):
+                        fp_attempts.append(list(preloaded_calls))
+                        if len(fp_attempts) == 1:
+                            raise ImportError(
+                                "libcudnn.so.9: cannot open shared object file: No such file or directory"
+                            )
+                        return "fp_ext_ok"
+
+                    with mock.patch.object(
+                        import_index._machinery.ExtensionFileLoader,
+                        "create_module",
+                        new=fake_fp_create,
+                    ):
+                        self.assertEqual(fp_spec.loader.create_module(fp_spec), "fp_ext_ok")
                     self.assertEqual(preloaded_calls, [cublas_lt_so, cublas_so, cudnn_so])
+                    self.assertEqual(len(fp_attempts), 2)
             finally:
                 import_index._INDEX = prev_index
                 import_index._PRELOADED.clear()
-                import_index._CHECKED_EXTENSIONS.clear()
                 sys.meta_path[:] = prev_meta
 
     def test_system_soname_denylist_and_original_first_bare_dlopen(self):
@@ -1367,38 +1407,28 @@ class ImportIndexTest(unittest.TestCase):
                     self.assertEqual(FakeCffiHostFirst.FFI().dlopen("cublas", 2), ("host_ffi", "cublas", 2))
                     self.assertEqual(FakeCffiHostFirst.FFI().dlopen("cudart", 2), ("wheel_ffi", cudart_so, 2))
 
-                    # (c) Stdlib extension (under lib-dynload or sys.base_prefix) and external paths outside
-                    # runfiles_root are NOT inspected by _maybe_preload_extension_needed.
+                    # (c) Stdlib extensions (under lib-dynload or sys.base_prefix) are NOT wrapped by
+                    # _wrap_extension_loader, while non-stdlib extensions ARE wrapped without opening any .so file.
                     stdlib_so = os.path.join(stdlib_dynload, "_ssl.cpython-311-x86_64-linux-gnu.so")
-                    _write(stdlib_so, "")
                     base_prefix_so = os.path.join(sys.base_prefix, "lib", "_struct.so")
-                    ext_outside_so = os.path.join("/opt/unrelated_venv/lib/python3.11/site-packages", "ext.so")
                     fp_so = os.path.join(fp_root, "my_fp_ext.so")
-                    os.makedirs(fp_root, exist_ok=True)
-                    with open(fp_so, "wb") as fh:
-                        fh.write(import_index._make_stub_elf("/unused", "libcudart.so.12"))
 
-                    with mock.patch.object(
-                        import_index,
-                        "_read_elf_needed",
-                        wraps=import_index._read_elf_needed,
-                    ) as spy_needed:
-                        for non_fp in (stdlib_so, base_prefix_so, ext_outside_so):
-                            spec = import_index._spec(
-                                "mod",
-                                non_fp,
-                                import_index._machinery.ExtensionFileLoader,
-                            )
-                            import_index._finalize_spec("mod", spec)
-                        self.assertEqual(spy_needed.call_count, 0)
-
-                        fp_spec = import_index._spec(
-                            "my_fp_ext",
-                            fp_so,
+                    for std_origin in (stdlib_so, base_prefix_so):
+                        spec = import_index._spec(
+                            "mod",
+                            std_origin,
                             import_index._machinery.ExtensionFileLoader,
                         )
-                        import_index._finalize_spec("my_fp_ext", fp_spec)
-                        self.assertEqual(spy_needed.call_count, 1)
+                        import_index._finalize_spec("mod", spec)
+                        self.assertFalse(getattr(spec.loader, "_pycross_ext_wrapped", False))
+
+                    fp_spec = import_index._spec(
+                        "my_fp_ext",
+                        fp_so,
+                        import_index._machinery.ExtensionFileLoader,
+                    )
+                    import_index._finalize_spec("my_fp_ext", fp_spec)
+                    self.assertTrue(getattr(fp_spec.loader, "_pycross_ext_wrapped", False))
 
                     # (d) Unrelated nonexistent /site-packages/ path is NOT redirected and does zero isfile probes.
                     unrelated = "/other/venv/lib/python3.11/site-packages/nvidia/cublas/lib/libcublas.so.12"
@@ -1409,42 +1439,91 @@ class ImportIndexTest(unittest.TestCase):
             finally:
                 import_index._INDEX = prev_index
                 import_index._PRELOADED.clear()
-                import_index._CHECKED_EXTENSIONS.clear()
                 sys.meta_path[:] = prev_meta
 
-    def test_musl_stub_filename_mismatch_with_dt_soname(self):
+    def test_musl_stub_uses_dotfile_metadata_without_reading_target_so(self):
         with tempfile.TemporaryDirectory() as tmp:
-            real_file = os.path.join(tmp, "libfoo.so.1.2.3")
-            soname_file = os.path.join(tmp, "libfoo.so.1")
-            with open(real_file, "wb") as fh:
-                fh.write(import_index._make_stub_elf("$ORIGIN", "libc.so.6", soname="libfoo.so.1"))
+            w0 = os.path.join(tmp, "wheel_a", "site-packages")
+            lib_dir = os.path.join(w0, "pkg", "lib")
+            os.makedirs(lib_dir, exist_ok=True)
+            real_file = os.path.join(lib_dir, "libfoo.so.1.2.3")
+            soname_file = os.path.join(lib_dir, "libfoo.so.1")
+            lib32_file = os.path.join(lib_dir, "libfoo32.so.1")
+            _write(os.path.join(w0, "pkg", "__init__.py"), "")
+            dotfile = os.path.join(w0, import_index.NATIVE_PROVIDER_FILENAME)
+            _write(
+                dotfile,
+                json.dumps(
+                    {
+                        "version": 1,
+                        "top": ["pkg"],
+                        "dirs": ["pkg", "pkg/lib"],
+                        "native": {
+                            "pkg/lib/libfoo.so.1.2.3": {
+                                "soname": "libfoo.so.1",
+                                "needed": ["libc.so.6"],
+                                "rpath": ["$ORIGIN"],
+                                "runpath": [],
+                                "ei_class": 2,
+                                "ei_data": 1,
+                                "e_machine": 62,
+                            },
+                            "pkg/lib/libfoo32.so.1": {
+                                "soname": "libfoo32.so.1",
+                                "needed": ["libc.so.6"],
+                                "rpath": ["$ORIGIN"],
+                                "runpath": [],
+                                "ei_class": 1,
+                                "ei_data": 1,
+                                "e_machine": 3,
+                            },
+                        },
+                    }
+                ),
+            )
 
-            # Verify _read_elf_dynamic parses both DT_SONAME and DT_NEEDED.
-            soname, needed = import_index._read_elf_dynamic(real_file)
-            self.assertEqual(soname, "libfoo.so.1")
-            self.assertEqual(needed, ["libc.so.6"])
+            prev_index = import_index._INDEX
+            try:
+                import_index._INDEX = import_index._Index([w0], mode="prebuilt")
+                import_index._INDEX.ensure_native_loaded()
 
-            # Case 1: libfoo.so.1 does NOT exist in tmp -> _dlopen_musl_stub skips stub creation
-            # and falls back directly to _raw_dlopen(real_file).
-            with (
-                mock.patch.object(import_index, "_make_stub_elf", wraps=import_index._make_stub_elf) as spy_stub,
-                mock.patch.object(import_index, "_raw_dlopen", side_effect=lambda p: ("raw", p)) as spy_raw,
-            ):
-                res = import_index._dlopen_musl_stub(real_file)
-                self.assertEqual(res, ("raw", real_file))
-                self.assertEqual(spy_stub.call_count, 0)
-                self.assertEqual(spy_raw.call_count, 1)
+                # Notice real_file does not even exist on disk: _dlopen_musl_stub never opens it!
+                # Case 1: libfoo.so.1 does NOT exist in lib_dir -> _dlopen_musl_stub skips stub creation
+                # and falls back directly to _raw_dlopen(real_file).
+                with (
+                    mock.patch.object(import_index, "_make_stub_elf", wraps=import_index._make_stub_elf) as spy_stub,
+                    mock.patch.object(import_index, "_raw_dlopen", side_effect=lambda p: ("raw", p)) as spy_raw,
+                ):
+                    res = import_index._dlopen_musl_stub(real_file)
+                    self.assertEqual(res, ("raw", real_file))
+                    self.assertEqual(spy_stub.call_count, 0)
+                    self.assertEqual(spy_raw.call_count, 1)
 
-            # Case 2: libfoo.so.1 DOES exist in tmp -> _dlopen_musl_stub builds a stub with
-            # DT_NEEDED = "libfoo.so.1" (the DT_SONAME, not "libfoo.so.1.2.3").
-            _write(soname_file, "")
-            with (
-                mock.patch.object(import_index, "_make_stub_elf", wraps=import_index._make_stub_elf) as spy_stub,
-                mock.patch.object(import_index, "_raw_dlopen", side_effect=lambda p: ("stub_loaded", p)),
-            ):
-                res = import_index._dlopen_musl_stub(real_file)
-                self.assertEqual(res[0], "stub_loaded")
-                spy_stub.assert_called_once_with(tmp, "libfoo.so.1", real_file)
+                # Case 2: libfoo.so.1 DOES exist in lib_dir -> _dlopen_musl_stub builds a stub with
+                # DT_NEEDED = "libfoo.so.1" and (ei_class, ei_data, e_machine) from the dotfile.
+                _write(soname_file, "")
+                with (
+                    mock.patch.object(import_index, "_make_stub_elf", wraps=import_index._make_stub_elf) as spy_stub,
+                    mock.patch.object(import_index, "_raw_dlopen", side_effect=lambda p: ("stub_loaded", p)),
+                ):
+                    res = import_index._dlopen_musl_stub(real_file)
+                    self.assertEqual(res[0], "stub_loaded")
+                    spy_stub.assert_called_once_with(
+                        lib_dir,
+                        "libfoo.so.1",
+                        ei_class=2,
+                        ei_data=1,
+                        e_machine=62,
+                    )
+
+                # Case 3: 32-bit library (ei_class=1 in dotfile) -> _make_stub_elf returns None
+                # and _dlopen_musl_stub falls back to _raw_dlopen(lib32_file).
+                with mock.patch.object(import_index, "_raw_dlopen", side_effect=lambda p: ("raw32", p)) as spy_raw32:
+                    res32 = import_index._dlopen_musl_stub(lib32_file)
+                    self.assertEqual(res32, ("raw32", lib32_file))
+                    self.assertEqual(spy_raw32.call_count, 1)
+            finally:
+                import_index._INDEX = prev_index
 
     def test_unnormalized_wheel_roots_and_intra_wheel_duplicate_sonames(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -1544,12 +1623,11 @@ class ImportIndexTest(unittest.TestCase):
                 pb = import_index._Prebuilt(merged, rf)
                 import_index._INDEX = import_index._Index([w0, w1], pb, rf)
                 # Even though w0 contains `/./` in its path, _match_wheel_relpath matches the
-                # normalized extension path and _is_first_party_extension_origin returns False.
+                # normalized extension path.
                 self.assertEqual(
                     import_index._match_wheel_relpath(ext_so),
                     (w0, "numpy/_core/_multiarray_umath.cpython-313-x86_64-linux-gnu.so"),
                 )
-                self.assertFalse(import_index._is_first_party_extension_origin(ext_so))
             finally:
                 import_index._INDEX = prev_index
 

@@ -70,7 +70,6 @@ _CACHED_METADATA_FILES = ("METADATA", "PKG-INFO", "entry_points.txt")
 _PRELOADED = set()
 _PRELOADED_SONAMES = set()
 _ALREADY_LOADED_SONAMES = set()
-_CHECKED_EXTENSIONS = set()
 _IN_PRELOAD = False
 _ORIG_CTYPES_DLOPEN = None
 _REAL_CTYPES_DLOPEN = None
@@ -944,6 +943,7 @@ class _Index:
         self.mode = mode
         self.native_files = {}
         self.consumer_roots = []
+        self._wheel_native = None
         self._native_loaded = prebuilt is not None
         self.runfiles_root = os.path.normpath(os.path.abspath(runfiles_root)).rstrip("/") + "/" if runfiles_root else ""
         self._parent_dirs = {}
@@ -1040,6 +1040,7 @@ class _Index:
                 ):
                     sub[d] = owners[0]
         preload, sonames, native_deps = _compute_native(wheel_indexes, merged, sub)
+        self._wheel_native = {native_roots[i]: idx.get("native") or {} for i, idx in enumerate(wheel_indexes)}
         self.preload = {pkg: [(native_roots[i], rel) for i, rel in libs] for pkg, libs in preload.items()}
         self.sonames = {name: (native_roots[i], rel) for name, (i, rel) in sonames.items()}
         self.native_deps = {}
@@ -1153,7 +1154,7 @@ def _verify(roots, prebuilt):
 
 
 def _read_elf_metadata_full(path):
-    """Returns `{soname, needed, rpath, runpath}` for an ELF shared object on disk, or `None`."""
+    """Returns `{soname, needed, rpath, runpath, ei_class, ei_data, e_machine}` for an ELF shared object on disk, or `None`."""
     import struct
 
     try:
@@ -1181,7 +1182,7 @@ def _read_elf_metadata_full(path):
                 return None
             (
                 e_type,
-                _,
+                e_machine,
                 _,
                 _,
                 e_phoff,
@@ -1316,6 +1317,9 @@ def _read_elf_metadata_full(path):
                 "needed": needed,
                 "rpath": [p for p in rpath_str.split(":") if p] if rpath_str else [],
                 "runpath": [p for p in runpath_str.split(":") if p] if runpath_str else [],
+                "ei_class": ei_class,
+                "ei_data": ei_data,
+                "e_machine": e_machine,
             }
     except Exception:
         return None
@@ -1484,7 +1488,7 @@ def _is_musl():
     return _IS_MUSL
 
 
-def _make_stub_elf(rpath, needed_name, sample_so_path=None, soname=None):
+def _make_stub_elf(rpath, needed_name, soname=None, ei_class=None, ei_data=None, e_machine=None):
     """Builds a minimal ELF64 ET_DYN stub with DT_RPATH and DT_NEEDED (`PF_R | PF_W`).
 
     Note: Only 64-bit ELF (`ei_class == 2`) is synthesized; 32-bit ELF returns
@@ -1492,20 +1496,14 @@ def _make_stub_elf(rpath, needed_name, sample_so_path=None, soname=None):
     """
     import struct
 
-    ei_data = 1
-    e_machine = 0xB7 if getattr(os, "uname", lambda: None)() and os.uname().machine in ("aarch64", "arm64") else 0x3E
-    if sample_so_path:
-        try:
-            with open(sample_so_path, "rb") as fh:
-                hdr = fh.read(20)
-            if len(hdr) >= 20 and hdr[:4] == b"\x7fELF":
-                if hdr[4] != 2:
-                    return None
-                ei_data = hdr[5] if hdr[5] in (1, 2) else 1
-                endian_hdr = "<" if ei_data == 1 else ">"
-                e_machine = struct.unpack(endian_hdr + "H", hdr[18:20])[0]
-        except OSError:
-            pass
+    if ei_class is not None and ei_class != 2:
+        return None
+    if ei_data not in (1, 2):
+        ei_data = 1 if sys.byteorder == "little" else 2
+    if e_machine is None:
+        e_machine = (
+            0xB7 if getattr(os, "uname", lambda: None)() and os.uname().machine in ("aarch64", "arm64") else 0x3E
+        )
     endian = "<" if ei_data == 1 else ">"
 
     dynstr = bytearray(b"\x00")
@@ -1581,11 +1579,38 @@ def _raw_dlopen(path):
     return ctypes.CDLL(path)
 
 
-def _dlopen_musl_stub(path, soname=None):
+def _lookup_native_meta(path):
+    if _INDEX is None:
+        return None
+    matched = _match_wheel_relpath(path)
+    if matched is None:
+        return None
+    root, rel_so = matched
+    wheel_native = getattr(_INDEX, "_wheel_native", None)
+    if wheel_native:
+        meta = wheel_native.get(root, {}).get(rel_so)
+        if meta is not None:
+            return meta
+    for name, target in _INDEX.sonames.items():
+        if target == matched:
+            return {"soname": name}
+    return None
+
+
+def _dlopen_musl_stub(path, soname=None, ei_class=None, ei_data=None, e_machine=None):
     dir_path = os.path.dirname(path)
     basename = os.path.basename(path)
-    if soname is None:
-        soname = _read_elf_dynamic(path)[0]
+    if soname is None or ei_class is None or ei_data is None or e_machine is None:
+        meta = _lookup_native_meta(path)
+        if meta is not None:
+            if soname is None:
+                soname = meta.get("soname")
+            if ei_class is None:
+                ei_class = meta.get("ei_class")
+            if ei_data is None:
+                ei_data = meta.get("ei_data")
+            if e_machine is None:
+                e_machine = meta.get("e_machine")
     if soname and soname != basename:
         if os.path.exists(os.path.join(dir_path, soname)):
             needed_name = soname
@@ -1595,7 +1620,13 @@ def _dlopen_musl_stub(path, soname=None):
             return _raw_dlopen(path)
     else:
         needed_name = basename
-    stub = _make_stub_elf(dir_path, needed_name, path)
+    stub = _make_stub_elf(
+        dir_path,
+        needed_name,
+        ei_class=ei_class,
+        ei_data=ei_data,
+        e_machine=e_machine,
+    )
     if stub is None:
         return _raw_dlopen(path)
     memfd_create = getattr(os, "memfd_create", None)
@@ -1666,110 +1697,6 @@ def _preload_native(fullname, libs):
     """Preloads cross-wheel shared libraries required by `fullname`."""
     for root, rel in libs:
         _load_native_path(os.path.join(root, rel), fullname)
-
-
-def _read_elf_dynamic(path):
-    """Extracts `(soname, needed_list)` from an ELF shared object."""
-    import struct
-
-    try:
-        with open(path, "rb") as fh:
-            ident = fh.read(16)
-            if len(ident) < 16 or ident[:4] != b"\x7fELF":
-                return None, ()
-            ei_class, ei_data = ident[4], ident[5]
-            if ei_class not in (1, 2) or ei_data not in (1, 2):
-                return None, ()
-            endian = "<" if ei_data == 1 else ">"
-            is_64 = ei_class == 2
-            if is_64:
-                hdr = fh.read(48)
-                if len(hdr) < 48:
-                    return None, ()
-                _, _, _, _, e_phoff, _, _, _, e_phentsize, e_phnum, _, _, _ = struct.unpack(
-                    endian + "HHIQQQIHHHHHH", hdr
-                )
-            else:
-                hdr = fh.read(36)
-                if len(hdr) < 36:
-                    return None, ()
-                _, _, _, _, e_phoff, _, _, _, e_phentsize, e_phnum, _, _, _ = struct.unpack(
-                    endian + "HHIIIIIHHHHHH", hdr
-                )
-            if e_phoff == 0 or e_phnum == 0:
-                return None, ()
-            fh.seek(e_phoff)
-            phdrs_raw = fh.read(e_phentsize * e_phnum)
-            if len(phdrs_raw) < e_phentsize * e_phnum:
-                return None, ()
-            load_segments = []
-            dyn_offset = dyn_filesz = 0
-            for i in range(e_phnum):
-                chunk = phdrs_raw[i * e_phentsize : (i + 1) * e_phentsize]
-                if is_64:
-                    p_type, _, p_offset, p_vaddr, _, p_filesz, p_memsz, _ = struct.unpack(
-                        endian + "IIQQQQQQ", chunk[:56]
-                    )
-                else:
-                    p_type, p_offset, p_vaddr, _, p_filesz, p_memsz, _, _ = struct.unpack(
-                        endian + "IIIIIIII", chunk[:32]
-                    )
-                if p_type == 1:
-                    load_segments.append((p_vaddr, p_memsz, p_offset, p_filesz))
-                elif p_type == 2:
-                    dyn_offset, dyn_filesz = p_offset, p_filesz
-            if not dyn_offset or not dyn_filesz:
-                return None, ()
-            fh.seek(dyn_offset)
-            dyn_raw = fh.read(dyn_filesz)
-            entry_fmt = endian + ("qQ" if is_64 else "iI")
-            entry_size = 16 if is_64 else 8
-            strtab_vaddr = None
-            strtab_size = 0
-            soname_offset = None
-            needed_offsets = []
-            for pos in range(0, len(dyn_raw) - entry_size + 1, entry_size):
-                d_tag, d_val = struct.unpack(entry_fmt, dyn_raw[pos : pos + entry_size])
-                if d_tag == 0:
-                    break
-                elif d_tag == 5:
-                    strtab_vaddr = d_val
-                elif d_tag == 10:
-                    strtab_size = d_val
-                elif d_tag == 14:
-                    soname_offset = d_val
-                elif d_tag == 1:
-                    needed_offsets.append(d_val)
-            if strtab_vaddr is None or not strtab_size or (soname_offset is None and not needed_offsets):
-                return None, ()
-            strtab_off = None
-            for vaddr, memsz, offset, filesz in load_segments:
-                span = max(memsz, filesz)
-                if vaddr <= strtab_vaddr < vaddr + span:
-                    strtab_off = offset + (strtab_vaddr - vaddr)
-                    break
-            if strtab_off is None:
-                return None, ()
-            fh.seek(strtab_off)
-            dynstr = fh.read(strtab_size)
-
-            def get_str(off):
-                if off is not None and 0 <= off < len(dynstr):
-                    end = dynstr.find(b"\x00", off)
-                    raw = dynstr[off:] if end == -1 else dynstr[off:end]
-                    return raw.decode("utf-8", errors="replace") or None
-                return None
-
-            soname = get_str(soname_offset)
-            needed = [val for off in needed_offsets for val in (get_str(off),) if val]
-            return soname, needed
-    except OSError:
-        return None, ()
-
-
-def _read_elf_needed(path):
-    """Extracts DT_NEEDED library names from an ELF shared object."""
-    return _read_elf_dynamic(path)[1]
 
 
 def _match_wheel_relpath(path_str):
@@ -1950,6 +1877,7 @@ def _preload_on_dlopen_error(exc, origin=None, fullname=None):
     _INDEX.ensure_native_loaded()
     if not _INDEX.sonames and not _INDEX.native_deps and not _INDEX.preload:
         return False
+    before = len(_PRELOADED)
     label = fullname or "retry"
     preloaded_any = False
     if fullname and _INDEX.preload:
@@ -1976,7 +1904,7 @@ def _preload_on_dlopen_error(exc, origin=None, fullname=None):
             resolved = _prepare_resolved_target(target[0], target[1], label)
             if _load_native_path(resolved, label):
                 preloaded_any = True
-    return preloaded_any
+    return preloaded_any and len(_PRELOADED) > before
 
 
 def _resolve_path_dlopen_arg(name):
@@ -2222,24 +2150,6 @@ def _is_stdlib_extension_origin(origin):
     return False
 
 
-def _is_first_party_extension_origin(origin):
-    if _is_stdlib_extension_origin(origin) or _match_wheel_relpath(origin) is not None:
-        return False
-    norm = os.path.normpath(os.path.abspath(origin))
-    if "/site-packages/" in norm.replace(os.sep, "/"):
-        return False
-    runfiles_prefix = getattr(_INDEX, "runfiles_root", "")
-    if runfiles_prefix and norm.startswith(runfiles_prefix.rstrip("/") + "/"):
-        return True
-    _, post, _ = _split(sys.path)
-    for entry in post:
-        if isinstance(entry, str) and entry:
-            entry_prefix = os.path.normpath(os.path.abspath(entry)).rstrip("/") + "/"
-            if norm.startswith(entry_prefix):
-                return True
-    return not runfiles_prefix and not post
-
-
 def _retry_extension_loader_cls(base):
     cls = _CACHED_EXT_LOADER_CLS.get(base)
     if cls is None:
@@ -2248,14 +2158,14 @@ def _retry_extension_loader_cls(base):
             _pycross_ext_wrapped = True
 
             def create_module(self, spec):
-                try:
-                    return super().create_module(spec)
-                except ImportError as exc:
-                    origin = getattr(spec, "origin", None) or getattr(self, "path", None)
-                    fullname = getattr(spec, "name", None) or getattr(self, "name", "")
-                    if _preload_on_dlopen_error(exc, origin=origin, fullname=fullname):
+                origin = getattr(spec, "origin", None) or getattr(self, "path", None)
+                fullname = getattr(spec, "name", None) or getattr(self, "name", "")
+                while True:
+                    try:
                         return super().create_module(spec)
-                    raise
+                    except ImportError as exc:
+                        if not _preload_on_dlopen_error(exc, origin=origin, fullname=fullname):
+                            raise
 
         _ExtensionFileLoader.__name__ = base.__name__
         _ExtensionFileLoader.__qualname__ = base.__qualname__
@@ -2276,65 +2186,18 @@ def _wrap_extension_loader(fullname, spec):
         orig_create = loader.create_module
 
         def _create_module(s):
-            try:
-                return orig_create(s)
-            except ImportError as exc:
-                if _preload_on_dlopen_error(exc, origin=origin, fullname=fullname):
+            while True:
+                try:
                     return orig_create(s)
-                raise
+                except ImportError as exc:
+                    if not _preload_on_dlopen_error(exc, origin=origin, fullname=fullname):
+                        raise
 
         try:
             loader.create_module = _create_module
             loader._pycross_ext_wrapped = True
         except AttributeError:
             pass
-
-
-def _maybe_preload_extension_needed(fullname, spec):
-    if _INDEX is None or (not _INDEX.sonames and not _INDEX.native_files) or spec is None:
-        return
-    loader = getattr(spec, "loader", None)
-    if not isinstance(loader, _machinery.ExtensionFileLoader):
-        return
-    origin = getattr(spec, "origin", None)
-    if not origin or origin in _CHECKED_EXTENSIONS:
-        return
-    _CHECKED_EXTENSIONS.add(origin)
-    if not _is_first_party_extension_origin(origin):
-        return
-    raw_needed = _read_elf_needed(origin)
-    if not raw_needed:
-        return
-    if not _INDEX._native_loaded:
-        needed = [s for s in raw_needed if not _host_provides(s)]
-        if not needed:
-            return
-        _INDEX.ensure_native_loaded()
-        if not _INDEX.sonames:
-            return
-        libs = []
-        for soname in needed:
-            target = _INDEX.sonames.get(soname)
-            if target is not None:
-                for dep in _INDEX.native_deps.get(target, ()):
-                    if dep not in libs:
-                        libs.append(dep)
-                if target not in libs:
-                    libs.append(target)
-    else:
-        if not _INDEX.sonames:
-            return
-        libs = []
-        for soname in raw_needed:
-            target = _INDEX.sonames.get(soname)
-            if target is not None and not _host_provides(soname):
-                for dep in _INDEX.native_deps.get(target, ()):
-                    if dep not in libs:
-                        libs.append(dep)
-                if target not in libs:
-                    libs.append(target)
-    if libs:
-        _preload_native(fullname, libs)
 
 
 def _finalize_spec(fullname, spec):
@@ -2367,7 +2230,6 @@ def _finalize_spec(fullname, spec):
                     pass
     if _INDEX.sonames or _INDEX.native_files:
         _wrap_extension_loader(fullname, spec)
-        _maybe_preload_extension_needed(fullname, spec)
     return spec
 
 
@@ -2716,7 +2578,6 @@ def install(roots, debug=False, mode="scan", index_path=None, runfiles_root=""):
             _log("verified {} wheel roots ({} native)".format(len(index.roots), len(index.native_files)))
     _PRELOADED.clear()
     _PRELOADED_SONAMES.clear()
-    _CHECKED_EXTENSIONS.clear()
     _INDEX = index
     sys.meta_path[i] = PathFinder
     for mod_name in ("_ctypes", "ctypes", "ctypes.util", "_cffi_backend"):

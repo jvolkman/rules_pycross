@@ -113,9 +113,12 @@ class ImportIndexTest(unittest.TestCase):
         )
 
         # Also verify lazy retry-on-failure in a clean subprocess with 0 consumer wheels
-        # (filtering out rpathfixture so no .pycross-native-consumer.json wheel is present).
+        # (filtering out rpathfixture so no .pycross-native-consumer.json wheel is present),
+        # for both a first-party ExtensionFileLoader and a wheel ctypes.CDLL load.
         if finder_mod is not None:
             import subprocess
+
+            import first_party_mod
 
             non_consumer_roots = [
                 r
@@ -124,17 +127,39 @@ class ImportIndexTest(unittest.TestCase):
                 in ("nvidia_fixture_cublas", "nvidia_fixture_cudnn", "sonamefixture")
             ]
             finder_dir = os.path.dirname(finder_mod.__file__)
-            code = (
-                "import sys; "
-                "sys.path[:0] = {!r} + [{!r}]; "
-                "import _bazel_import_index as bi; "
-                "bi.install({!r}, mode='prebuilt'); "
-                "assert not bi._INDEX._native_loaded, 'expected 0 consumers at startup'; "
-                "import sonamefixture; "
-                "assert not bi._INDEX._native_loaded, 'pure-Python import should not load native dotfiles'; "
-                "assert sonamefixture.load_and_call() == (12, 9, 9, 'libfixture_cublas.so.12'); "
-                "assert bi._INDEX._native_loaded, 'expected lazy native load on dlopen failure'"
-            ).format(non_consumer_roots, finder_dir, non_consumer_roots)
+            fp_dir = os.path.dirname(first_party_mod.__file__)
+            code = "\n".join(
+                [
+                    "import os, sys, unittest.mock as mock",
+                    "sys.path[:0] = {!r} + [{!r}, {!r}]".format(non_consumer_roots, finder_dir, fp_dir),
+                    "import _bazel_import_index as bi",
+                    "bi.install({!r}, mode='prebuilt')".format(non_consumer_roots),
+                    "assert not bi._INDEX._native_loaded, 'expected 0 consumers at startup'",
+                    "fp_spec = bi._spec('fp_native_ext', os.path.join({!r}, 'fp_native_ext.so'), bi._machinery.ExtensionFileLoader)".format(
+                        fp_dir
+                    ),
+                    "bi._finalize_spec('fp_native_ext', fp_spec)",
+                    "assert not bi._INDEX._native_loaded, 'wrapping first-party extension must not load native dotfiles'",
+                    "calls = []",
+                    "def fake_create(self, spec):",
+                    "    calls.append(1)",
+                    "    if len(calls) == 1:",
+                    "        raise ImportError('libfixture_cudnn.so.12: cannot open shared object file: No such file or directory')",
+                    "    return 'fp_ok'",
+                    "with mock.patch.object(bi._machinery.ExtensionFileLoader, 'create_module', new=fake_create):",
+                    "    assert fp_spec.loader.create_module(fp_spec) == 'fp_ok'",
+                    "assert bi._INDEX._native_loaded and 'libfixture_cudnn.so.12' in bi._PRELOADED_SONAMES",
+                    "bi._INDEX._native_loaded = False",
+                    "bi._INDEX.sonames.clear()",
+                    "bi._INDEX.native_deps.clear()",
+                    "bi._PRELOADED.clear()",
+                    "bi._PRELOADED_SONAMES.clear()",
+                    "import sonamefixture",
+                    "assert not bi._INDEX._native_loaded, 'pure-Python import should not load native dotfiles'",
+                    "assert sonamefixture.load_and_call() == (12, 9, 9, 'libfixture_cublas.so.12')",
+                    "assert bi._INDEX._native_loaded, 'expected lazy native load on dlopen failure'",
+                ]
+            )
             subprocess.run([sys.executable, "-S", "-c", code], check=True)
 
 
