@@ -33,14 +33,14 @@ The Import Index gives binaries the exact semantics of `pip` installing all whee
 ```mermaid
 flowchart LR
     subgraph Build["Build Time (Bazel Execution Phase)"]
-        W1["PycrossWheelInstall (Wheel 1)"] -->|"writes"| I1["wheel_1.dist_info/index.json"]
-        W2["PycrossWheelInstall (Wheel N)"] -->|"writes"| I2["wheel_N.dist_info/index.json"]
-        I1 & I2 -->|"pycross_modules_mapping"| G["Gazelle modules_mapping.json"]
+        W1["PycrossWheelInstall (Wheel 1..N)"] -->|"writes"| I1["<wheel>.dist_info/index.json"]
+        W1 -->|"if native ELF (.so)"| D1["site-packages/.pycross-native[-consumer].json"]
+        I1 -->|"pycross_modules_mapping"| G["Gazelle modules_mapping.json"]
     end
 
-    subgraph Runtime["Runtime (Python Startup)"]
+    subgraph Runtime["Runtime (Python Startup - Split-File Hybrid)"]
         PTH["pycross_import_index.pth"] -->|"auto_install()"| PF["_bazel_import_index.PathFinder"]
-        I1 & I2 -->|"merge_wheel_indexes()"| PF
+        D1 -->|"0 JSON reads if 0 consumers;\neager or lazy ensure_native_loaded()"| PF
         PF -->|"pre -> wheels (O(1)) -> post"| IMP["ModuleSpec + __path__ merge + CDLL preload"]
     end
 ```
@@ -56,20 +56,29 @@ flowchart LR
    - `namespaces`: PEP 420 and `pkgutil`/`pkg_resources` namespace directories
    - `pth` / `pth_paths`: root `.pth` files and relative path entries they add
    - `native`: ELF metadata (`soname`, `needed`, `rpath`, `runpath`) for every `.so` file in the wheel (parsed via pure-Python [`elf_tools.py`](../pycross/private/tools/elf_tools.py))
-2. **Exact Gazelle `modules_mapping.json`:**
+2. **In-Root Native Dotfiles (`.pycross-native-consumer.json` / `.pycross-native.json`):**
+   When a wheel contains ELF `.so` files (`native` is non-empty), `wheel_index.py` also writes a compact dotfile (`{"version": 1, "top": [...], "dirs": [...], "native": {...}}`) directly inside `<wheel_target>/site-packages/`:
+   - `.pycross-native-consumer.json` if any ELF file in the wheel has an escaping `$ORIGIN` `DT_RPATH` / `DT_RUNPATH` entry or a non-system `DT_NEEDED` entry not satisfied by a SONAME/filename within the same wheel (e.g., `nvidia-cudnn-cu12`, `tensorflow`, `onnxruntime-gpu`, `pyqt5`).
+   - `.pycross-native.json` otherwise, when all ELF files in the wheel are self-contained or provider-only (e.g., `numpy`, `scipy`, `nvidia-cublas-cu12`, `pillow`, `h5py`, `grpcio`, `protobuf`).
+   - Pure-Python wheels have no dotfile at all.
+3. **Exact Gazelle `modules_mapping.json`:**
    [`pycross_modules_mapping`](../pycross/private/modules_mapping.bzl) builds `modules_mapping.json` from the post-install per-wheel `index.json` files instead of repo-time `site_paths` heuristics.
-3. **Venv Runtime Injection via `PyInfo.venv_symlinks`:**
-   When `--@rules_pycross//pycross/settings:venv_import_index` is enabled (`prebuilt` or `scan`), `pycross_wheel_library` includes `pycross_import_index.pth` and `_bazel_import_index.py` in `PyInfo.venv_symlinks` (and adds `<name>.dist_info/index.json` to runfiles in `prebuilt` mode), propagating automatically through arbitrary chains of stock `py_library` targets into any stock `py_binary` or `py_test`.
+4. **Venv Runtime Injection via `PyInfo.venv_symlinks`:**
+   When `--@rules_pycross//pycross/settings:venv_import_index` is enabled (`prebuilt` or `scan`), `pycross_wheel_library` includes `pycross_import_index.pth` and `_bazel_import_index.py` in `PyInfo.venv_symlinks`, propagating automatically through arbitrary chains of stock `py_library` targets into any stock `py_binary` or `py_test` without staging `<name>.dist_info/index.json` into runtime runfiles.
 
 ### Runtime Finder (`_bazel_import_index.PathFinder`)
 At Python startup, `bazel.pth` runs `_bazel_site_init.py` (which populates `sys.path`), and immediately afterward `pycross_import_index.pth` runs `_bazel_import_index.auto_install()`, replacing `importlib.machinery.PathFinder` in `sys.meta_path` with [`_bazel_import_index.PathFinder`](../pycross/private/tools/import_index.py):
 
+- **Split-file hybrid startup (`_scan_root_with_native`):**
+  Every wheel root on `sys.path` is indexed via a single `os.scandir` call (`~3.6 ms` for 94 wheels, `~4.7 ms` for 126 wheels). In that same `os.scandir` loop (zero extra `stat` syscalls), `_Index` records `.pycross-native-consumer.json` and `.pycross-native.json` while ignoring dotfiles as Python modules.
+  - **0 consumer wheels $\rightarrow$ 0 JSON reads at startup:** If no wheel in the binary has `.pycross-native-consumer.json`, startup reads **zero** JSON files and matches `scan` mode speed (`3.6 ms` / `4.7 ms`). The SONAME table (`ensure_native_loaded()`) is loaded lazily only if a bare-name `dlopen` fallback, `ctypes.util.find_library` fallback, escaped wheel path `dlopen`, or first-party C++ extension with non-system `DT_NEEDED` entries is encountered at runtime.
+  - **$\ge 1$ consumer wheel $\rightarrow$ eager native graph load:** If at least one wheel has `.pycross-native-consumer.json`, `ensure_native_loaded()` runs at startup, reading only the native wheels' dotfiles (`len(native_files)` instead of all $N_{\text{wheels}}$) to populate `preload`, `sonames`, and `native_deps`.
 - **`pre` $\rightarrow$ `wheels` ($O(1)$) $\rightarrow$ `post` ordering:**
   `sys.path` is partitioned into `pre` (the Python stdlib and any earlier non-wheel paths), `wheels` (all wheel `site-packages` roots collapsed into one virtual merged directory), and `post` (`<runfiles>/<workspace_name>`, where first-party `py_library` sources live).
   - Because `pre` runs first, an `enum34`-style backport wheel can never shadow the stdlib.
   - Because `wheels` resolves in $O(1)$ from the index dict, importing any **first-party `py_library` module** from `post` skips $O(N_{\text{wheels}})$ `stat` calls and jumps straight to `<runfiles>/<workspace_name>`.
 - **Multi-owner package & subpackage merging (`merged` & `sub`):**
-  When multiple wheels own the same package directory (`nvidia`, `google.cloud`, `azure.core.tracing.ext`), the finder populates `__path__` with all owner directories in `sys.path` order and resolves single-owner subpackages (`sub`) in $O(1)$ without scanning parent directories.
+  When multiple wheels own the same package directory (`nvidia`, `google.cloud`, `azure.core.tracing.ext`), the finder populates `__path__` with all owner directories in `sys.path` order.
 - **First-party + wheel shared namespaces:**
   PEP 420 namespaces shared between first-party `py_library` targets and wheels accumulate portions across `pre`, `wheels`, and `post` (even if Bazel's `legacy_create_init` synthesizes an empty `__init__.py` in `<runfiles>/_main`).
 - **$O(1)$ `importlib.metadata` with memoized `read_text()`:**
@@ -178,17 +187,17 @@ When `merge_wheel_indexes()` merges the per-wheel `<wheel>.dist_info/index.json`
 
 ![Measured Performance Impact](images/import_index_benchmarks.svg)
 
-| Metric | `off` (Plain `sys.path`) | `scan` (Startup `scandir`) | `prebuilt` (JSON Index) | Improvement (`prebuilt` vs `off`) |
+| Metric | `off` (Plain `sys.path`) | `scan` (Startup `scandir`) | `prebuilt` (Split-File Hybrid) | Improvement (`prebuilt` vs `off`) |
 |---|---:|---:|---:|---:|
 | **`service_a` (94 wheels) `stat` syscalls** | 23,281 | 14,314 | **13,662** | **$-41.3\%$** |
 | **`service_a` (94 wheels) `getdents64` syscalls** | 1,414 | 1,226 | **984** | **$-30.4\%$** |
 | **`service_b` (126 wheels) `stat` syscalls** | 32,190 | 19,919 | **19,216** | **$-40.3\%$** |
 | **`service_b` (126 wheels) `getdents64` syscalls** | 3,270 | 1,940 | **1,608** | **$-50.8\%$** |
+| **`service_a` (94 wheels, 17 native, 0 consumers) index init** | — | 3.58 ms | **3.60 ms** (0 JSON reads) | **$4.9\times$ faster than full JSON merge** |
+| **`service_b` (126 wheels, 23 native, 0 consumers) index init** | — | 4.77 ms | **4.73 ms** (0 JSON reads) | **$5.9\times$ faster than full JSON merge** |
 | **50 missing-module `find_spec` probes (126 wheels)** | 71.0 ms | 4.2 ms | **4.2 ms** | **$16.9\times$ faster** |
 | **7 subpackages under merged `google.*`/`opentelemetry.*`** | 6.36 ms | 4.79 ms | **2.07 ms** | **$3.1\times$ faster** |
 | **Cold `importlib.metadata.version()` lookup** | 63.4 ms | 18.1 ms | **16.4 ms** | **$3.9\times$ faster** |
-| **Index initialization time (100 pure-Python wheels)** | — | 4.1 ms | **5.8 ms** | **Zero `getdents64` on wheel roots** |
-| **Index initialization time (100 wheels, 15 native / 750 `.so`)** | — | — | **14.8 ms** (`_compute_native`: 6.7 ms) | **Includes full cross-wheel ELF graph** |
 | **600-wheel synthetic total import benchmark** | 3,487.3 ms | 420.3 ms | **418.6 ms** | **$8.3\times$ faster** |
 
 ---
@@ -201,7 +210,7 @@ The Import Index works with **unmodified stock `@rules_python//python:defs.bzl` 
 
 Enable the index via `--@rules_pycross//pycross/settings:venv_import_index`:
 ```bash
-# Build-time per-wheel indexes + cross-wheel native preloading (recommended):
+# Split-file hybrid (`os.scandir` + consumer-driven native dotfiles, recommended):
 build --@rules_python//python/config_settings:bootstrap_impl=script
 build --@rules_pycross//pycross/settings:venv_import_index=prebuilt
 
@@ -211,10 +220,10 @@ build --@rules_pycross//pycross/settings:venv_import_index=scan
 
 How it works on stock `py_binary` / `py_test`:
 - `pycross_wheel_library` automatically injects `pycross_import_index.pth` and `_bazel_import_index.py` into the venv via `PyInfo.venv_symlinks` (even through arbitrary chains of stock first-party `py_library` targets).
-- At startup, `_load_per_wheel_prebuilt()` reads the per-wheel `<wheel>.dist_info/index.json` files from runfiles and computes the merged index + `"preload"` / `"sonames"` / `"native_deps"` tables in memory via `merge_wheel_indexes()`.
+- At startup, `_Index` scans each wheel root via `os.scandir` (`_scan_root_with_native`) and detects any `.pycross-native-consumer.json` or `.pycross-native.json` dotfiles in the same pass. If $\ge 1$ wheel has `.pycross-native-consumer.json`, `ensure_native_loaded()` eagerly reads the native dotfiles and computes `"preload"`, `"sonames"`, and `"native_deps"`; otherwise **0** JSON files are read at startup and `ensure_native_loaded()` runs lazily on first need.
 
 ### Runtime Environment Variables
-- `RULES_PYTHON_IMPORT_INDEX=off|scan|prebuilt|verify`: Override the index mode at runtime. `verify` cross-checks the prebuilt index against a live `os.scandir` walk of all wheel roots and exits non-zero on any discrepancy.
+- `RULES_PYTHON_IMPORT_INDEX=off|scan|prebuilt|verify`: Override the index mode at runtime. `verify` cross-checks the wheel roots and native dotfiles (`.pycross-native-consumer.json` / `.pycross-native.json`) against a live `os.scandir` + ELF walk of all wheel roots and exits non-zero on any discrepancy.
 - `RULES_PYTHON_IMPORT_INDEX_DEBUG=1`: Log index load timing, merged packages, `find_spec` resolutions, `ctypes.CDLL` preloads, and `dlopen` rewrites to `stderr`.
 - `RULES_PYTHON_IMPORT_INDEX_SONAME_PRELOAD=0|1` (default `1`): Enable or disable cross-wheel `DT_NEEDED` preloading by SONAME when no escaping `$ORIGIN` RPATH is present.
 - `RULES_PYTHON_IMPORT_INDEX_SET_CUDA_ENV=0|1` (default `0`): Opt in to setting `CUDA_HOME` and prepending `<wheel_root>/nvidia/<cuda_nvcc|cu13>/bin` to `PATH` when `nvidia.cuda_nvcc` or `nvidia.cu13` is present in the wheel index and `CUDA_HOME` / `CUDA_PATH` are unset.

@@ -65,30 +65,28 @@ def main() -> None:
         print("  import index active: False (plain PathFinder)")
     else:
         source = (
-            "per-wheel <wheel>.dist_info/index.json files in runfiles" if idx.indexed else "runtime os.scandir scan"
+            "split-file hybrid (os.scandir + in-root .pycross-native*.json dotfiles)"
+            if idx.indexed
+            else "runtime os.scandir scan"
         )
-        print(f"  import index active: True ({len(idx.roots)} wheel roots, {len(idx.indexed)} prebuilt)")
+        print(
+            f"  import index active: True ({len(idx.roots)} wheel roots, "
+            f"{len(idx.native_files)} native dotfiles, {len(idx.consumer_roots)} consumers)"
+        )
         print(f"  index source: {source}")
-        print(f"  merged multi-owner dirs ({len(idx.merged)}): {sorted(idx.merged)}")
-        print(f"  single-owner fast-path subdirs ({len(idx.sub)}): {sorted(idx.sub)}")
         print("  cross-wheel ELF preload plan:")
         for pkg, libs in sorted(idx.preload.items()):
             formatted = [f"{_short(root)}/{rel}" for root, rel in libs]
             print(f"    {pkg} -> {formatted}")
 
-    if venv_sp:
-        rpath_wheel_idx = os.path.join(
-            os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(venv_sp)))),
-            "fixtures",
-            "rpathfixture.dist_info",
-            "index.json",
-        )
-        if os.path.isfile(rpath_wheel_idx):
-            with open(rpath_wheel_idx, encoding="utf-8") as f:
-                rpath_meta = json.load(f).get("native", {})
-            _section("2. Per-Wheel ELF Metadata (from rpathfixture.dist_info/index.json)")
-            for so_path, meta in rpath_meta.items():
-                print(f"  {so_path}: {json.dumps(meta)}")
+    if idx is not None:
+        for root, dotfile_path in sorted(idx.native_files.items()):
+            if "rpathfixture" in root and os.path.isfile(dotfile_path):
+                with open(dotfile_path, encoding="utf-8") as f:
+                    rpath_meta = json.load(f).get("native", {})
+                _section(f"2. In-Root Native Consumer Dotfile ({os.path.basename(dotfile_path)})")
+                for so_path, meta in rpath_meta.items():
+                    print(f"  {so_path}: {json.dumps(meta)}")
 
     _section("3. Live Import & Native Preload Checks")
 

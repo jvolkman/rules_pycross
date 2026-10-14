@@ -521,23 +521,235 @@ class ImportIndexTest(unittest.TestCase):
         self.assertEqual(finder["_root_listdir_calls"], 0)
 
     def test_per_wheel_prebuilt_fallback_without_merged_file(self):
-        # Write `<wheel>.dist_info/index.json` next to each `<wheel>/site-packages`
-        # and verify `index_path=None` in `prebuilt` mode merges them in memory
-        # with zero os.scandir calls.
-        per_wheel_files = []
-        for root in self.roots.values():
-            idx_path = os.path.dirname(root) + ".dist_info/index.json"
-            _write(idx_path, json.dumps(_wheel_index(root)))
-            per_wheel_files.append(idx_path)
+        # Split-file hybrid (`index_path=None`, `mode="prebuilt"`):
+        # `_scan_root_with_native` scans each wheel root via `os.scandir`, ignores
+        # dotfiles as top-level modules or `.pth` files, and records any
+        # `.pycross-native.json` / `.pycross-native-consumer.json` dotfiles.
+        dotfile_paths = []
+        for name, root in self.roots.items():
+            if name.startswith("nvidia_"):
+                dot_path = os.path.join(root, import_index.NATIVE_PROVIDER_FILENAME)
+                _write(
+                    dot_path,
+                    json.dumps(
+                        {
+                            "version": 1,
+                            "top": ["nvidia"],
+                            "dirs": ["nvidia", "nvidia/" + name.split("_")[1], "nvidia/" + name.split("_")[1] + "/lib"],
+                            "native": {},
+                        }
+                    ),
+                )
+                dotfile_paths.append(dot_path)
         try:
-            finder = self.probe_index("prebuilt", None, forbid_scandir=True)
+            finder = self.probe_index("prebuilt", None)
             self.assertTrue(finder["_installed"])
             self.assertEqual(finder["_indexed"], len(self.roots))
             self.assertEqual(self.oracle_keys(finder), self.results["merged"])
-            self.assertEqual(finder["_isdir_calls"], 0)
+            self.assertEqual(finder["_root_listdir_calls"], 0)
         finally:
-            for p in per_wheel_files:
-                shutil.rmtree(os.path.dirname(p), ignore_errors=True)
+            for p in dotfile_paths:
+                if os.path.exists(p):
+                    os.unlink(p)
+
+    def test_split_file_hybrid_provider_lazy_vs_consumer_eager_and_verify(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            cublas_root = os.path.join(tmp, "cublas", "site-packages")
+            cudnn_root = os.path.join(tmp, "cudnn", "site-packages")
+            pure_root = os.path.join(tmp, "pure", "site-packages")
+            fp_root = os.path.join(tmp, "first_party")
+
+            cublas_lt_so = os.path.join(cublas_root, "nvidia", "cublas", "lib", "libcublasLt.so.12")
+            cublas_so = os.path.join(cublas_root, "nvidia", "cublas", "lib", "libcublas.so.12")
+            cudnn_so = os.path.join(cudnn_root, "nvidia", "cudnn", "lib", "libcudnn.so.9")
+
+            os.makedirs(os.path.dirname(cublas_so), exist_ok=True)
+            with open(cublas_lt_so, "wb") as fh:
+                fh.write(import_index._make_stub_elf("$ORIGIN", "libc.so.6", soname="libcublasLt.so.12"))
+            with open(cublas_so, "wb") as fh:
+                fh.write(import_index._make_stub_elf("$ORIGIN", "libcublasLt.so.12", soname="libcublas.so.12"))
+            _write(os.path.join(cublas_root, "nvidia", "cublas", "__init__.py"), "")
+
+            os.makedirs(os.path.dirname(cudnn_so), exist_ok=True)
+            with open(cudnn_so, "wb") as fh:
+                fh.write(
+                    import_index._make_stub_elf(
+                        "$ORIGIN/../../cublas/lib",
+                        "libcublas.so.12",
+                        soname="libcudnn.so.9",
+                    )
+                )
+            _write(os.path.join(cudnn_root, "nvidia", "cudnn", "__init__.py"), "")
+            _write(os.path.join(pure_root, "purepkg", "__init__.py"), "")
+
+            cublas_dot = os.path.join(cublas_root, import_index.NATIVE_PROVIDER_FILENAME)
+            cudnn_dot = os.path.join(cudnn_root, import_index.NATIVE_CONSUMER_FILENAME)
+            cublas_meta = {
+                "version": 1,
+                "top": ["nvidia"],
+                "dirs": ["nvidia", "nvidia/cublas", "nvidia/cublas/lib"],
+                "native": {
+                    "nvidia/cublas/lib/libcublas.so.12": {
+                        "soname": "libcublas.so.12",
+                        "needed": ["libcublasLt.so.12"],
+                        "rpath": ["$ORIGIN"],
+                        "runpath": [],
+                    },
+                    "nvidia/cublas/lib/libcublasLt.so.12": {
+                        "soname": "libcublasLt.so.12",
+                        "needed": ["libc.so.6"],
+                        "rpath": ["$ORIGIN"],
+                        "runpath": [],
+                    },
+                },
+            }
+            cudnn_meta = {
+                "version": 1,
+                "top": ["nvidia"],
+                "dirs": ["nvidia", "nvidia/cudnn", "nvidia/cudnn/lib"],
+                "native": {
+                    "nvidia/cudnn/lib/libcudnn.so.9": {
+                        "soname": "libcudnn.so.9",
+                        "needed": ["libcublas.so.12"],
+                        "rpath": ["$ORIGIN/../../cublas/lib"],
+                        "runpath": [],
+                    },
+                },
+            }
+            _write(cublas_dot, json.dumps(cublas_meta))
+            _write(cudnn_dot, json.dumps(cudnn_meta))
+
+            prev_index = import_index._INDEX
+            prev_meta = list(sys.meta_path)
+            try:
+                # 1. Provider-only roots ([cublas_root, pure_root]): 0 JSON files read at startup!
+                import_index._INDEX = None
+                with mock.patch.object(import_index, "_read_json", wraps=import_index._read_json) as spy_json:
+                    self.assertTrue(
+                        import_index.install(
+                            [cublas_root, pure_root],
+                            mode="prebuilt",
+                            index_path=None,
+                            runfiles_root=tmp,
+                        )
+                    )
+                    self.assertEqual(spy_json.call_count, 0)
+                    self.assertFalse(import_index._INDEX._native_loaded)
+                    self.assertEqual(len(import_index._INDEX.native_files), 1)
+                    self.assertEqual(len(import_index._INDEX.consumer_roots), 0)
+
+                    # System SONAME or host-hit bare dlopen does NOT trigger lazy JSON loading.
+                    self.assertEqual(import_index._resolve_bare_dlopen_arg("libc.so.6"), "libc.so.6")
+                    self.assertEqual(spy_json.call_count, 0)
+                    self.assertFalse(import_index._INDEX._native_loaded)
+
+                    # First-party extension with only system DT_NEEDED does NOT trigger lazy JSON loading.
+                    os.makedirs(fp_root, exist_ok=True)
+                    fp_sys_so = os.path.join(fp_root, "fp_sys.so")
+                    with open(fp_sys_so, "wb") as fh:
+                        fh.write(import_index._make_stub_elf("$ORIGIN", "libc.so.6"))
+                    import_index._CHECKED_EXTENSIONS.clear()
+                    sys_spec = import_index._spec("fp_sys", fp_sys_so, import_index._machinery.ExtensionFileLoader)
+                    import_index._finalize_spec("fp_sys", sys_spec)
+                    self.assertEqual(spy_json.call_count, 0)
+                    self.assertFalse(import_index._INDEX._native_loaded)
+
+                    # Bare SONAME fallback for non-system "libcublas.so.12" lazily loads `.pycross-native.json`.
+                    with mock.patch.object(import_index, "_raw_dlopen", side_effect=lambda p: p):
+                        resolved = import_index._resolve_bare_dlopen_arg("libcublas.so.12")
+                    self.assertEqual(resolved, cublas_so)
+                    self.assertEqual(spy_json.call_count, 1)
+                    self.assertTrue(import_index._INDEX._native_loaded)
+
+                # 2. Consumer wheel present ([cublas_root, cudnn_root, pure_root]):
+                # Eagerly loads both native dotfiles at startup and populates preload table.
+                import_index._INDEX = None
+                sys.meta_path[:] = prev_meta
+                import_index._PRELOADED.clear()
+                preloaded = []
+                with (
+                    mock.patch.object(import_index, "_read_json", wraps=import_index._read_json) as spy_json,
+                    mock.patch.object(import_index, "_raw_dlopen", side_effect=lambda p: preloaded.append(p)),
+                ):
+                    self.assertTrue(
+                        import_index.install(
+                            [cublas_root, cudnn_root, pure_root],
+                            mode="prebuilt",
+                            index_path=None,
+                            runfiles_root=tmp,
+                        )
+                    )
+                    self.assertEqual(spy_json.call_count, 2)
+                    self.assertTrue(import_index._INDEX._native_loaded)
+                    self.assertEqual(
+                        list(import_index._INDEX.preload.get("nvidia.cudnn", ())),
+                        [
+                            (cublas_root, "nvidia/cublas/lib/libcublasLt.so.12"),
+                            (cublas_root, "nvidia/cublas/lib/libcublas.so.12"),
+                        ],
+                    )
+                    import_index.PathFinder.find_spec("nvidia.cudnn", [os.path.join(cudnn_root, "nvidia")])
+                    self.assertEqual(preloaded, [cublas_lt_so, cublas_so])
+
+                # 3. `verify` mode (`_verify_hybrid`) passes when dotfiles match on-disk ELF files.
+                import_index._INDEX = None
+                sys.meta_path[:] = prev_meta
+                with mock.patch.object(import_index, "_raw_dlopen", side_effect=lambda p: p):
+                    self.assertTrue(
+                        import_index.install(
+                            [cublas_root, cudnn_root, pure_root],
+                            mode="verify",
+                            index_path=None,
+                            runfiles_root=tmp,
+                        )
+                    )
+
+                # 4. `verify` mode raises SystemExit when a consumer wheel is misclassified as provider.
+                os.unlink(cudnn_dot)
+                wrong_dot = os.path.join(cudnn_root, import_index.NATIVE_PROVIDER_FILENAME)
+                _write(wrong_dot, json.dumps(cudnn_meta))
+                try:
+                    import_index._INDEX = None
+                    sys.meta_path[:] = prev_meta
+                    with (
+                        mock.patch.object(import_index, "_raw_dlopen", side_effect=lambda p: p),
+                        self.assertRaises(SystemExit),
+                    ):
+                        import_index.install(
+                            [cublas_root, cudnn_root, pure_root],
+                            mode="verify",
+                            index_path=None,
+                            runfiles_root=tmp,
+                        )
+                finally:
+                    if os.path.exists(wrong_dot):
+                        os.unlink(wrong_dot)
+                    _write(cudnn_dot, json.dumps(cudnn_meta))
+
+                # 5. `verify` mode raises SystemExit when a pure-Python wheel has an unexpected dotfile.
+                pure_dot = os.path.join(pure_root, import_index.NATIVE_PROVIDER_FILENAME)
+                _write(pure_dot, json.dumps({"version": 1, "top": ["purepkg"], "dirs": ["purepkg"], "native": {}}))
+                try:
+                    import_index._INDEX = None
+                    sys.meta_path[:] = prev_meta
+                    with (
+                        mock.patch.object(import_index, "_raw_dlopen", side_effect=lambda p: p),
+                        self.assertRaises(SystemExit),
+                    ):
+                        import_index.install(
+                            [cublas_root, cudnn_root, pure_root],
+                            mode="verify",
+                            index_path=None,
+                            runfiles_root=tmp,
+                        )
+                finally:
+                    if os.path.exists(pure_dot):
+                        os.unlink(pure_dot)
+            finally:
+                import_index._INDEX = prev_index
+                import_index._PRELOADED.clear()
+                import_index._CHECKED_EXTENSIONS.clear()
+                sys.meta_path[:] = prev_meta
 
     def test_merge_preload_and_finder_preloads_on_import(self):
         def wheel(**fields):

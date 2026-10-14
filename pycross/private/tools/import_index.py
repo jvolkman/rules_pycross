@@ -72,6 +72,8 @@ _IN_PRELOAD = False
 _ORIG_CTYPES_DLOPEN = None
 _IS_MUSL = None
 _HOOK_MODULES = frozenset(("_ctypes", "ctypes", "ctypes.util", "_cffi_backend"))
+NATIVE_CONSUMER_FILENAME = ".pycross-native-consumer.json"
+NATIVE_PROVIDER_FILENAME = ".pycross-native.json"
 _SYSTEM_SONAME_STEMS = frozenset(
     (
         "ld",
@@ -84,6 +86,8 @@ _SYSTEM_SONAME_STEMS = frozenset(
         "libresolv",
         "libnsl",
         "libcrypt",
+        "libanl",
+        "libBrokenLocale",
         "libgcc_s",
         "libstdc++",
         "libgomp",
@@ -100,7 +104,14 @@ _SYSTEM_SONAME_STEMS = frozenset(
         "libsqlite3",
         "libuuid",
         "libcuda",
+        "libOpenCL",
     )
+)
+_SYSTEM_SONAME_PREFIXES = (
+    "ld-linux",
+    "ld64.so",
+    "libnvidia-",
+    "libpython",
 )
 
 
@@ -162,7 +173,38 @@ def _is_system_soname(name):
         return False
     base = name.rpartition("/")[2] if "/" in name else name
     stem = base.partition(".so")[0]
-    return stem in _SYSTEM_SONAME_STEMS or stem.startswith(("ld-linux", "libnvidia-"))
+    return stem in _SYSTEM_SONAME_STEMS or base.startswith(_SYSTEM_SONAME_PREFIXES)
+
+
+def _is_native_consumer(top, dirs, native):
+    """Whether a wheel's ELF files have escaping `$ORIGIN` RPATHs or unsatisfied `DT_NEEDED`s."""
+    if not native:
+        return False
+    own_dirs = set(dirs or ())
+    own_dirs.update(top or ())
+    own_sonames = set()
+    for rel_so, meta in native.items():
+        parent = rel_so.rpartition("/")[0]
+        while parent:
+            own_dirs.add(parent)
+            parent = parent.rpartition("/")[0]
+        basename = rel_so.rpartition("/")[2]
+        if basename:
+            own_sonames.add(basename)
+        soname = meta.get("soname")
+        if soname:
+            own_sonames.add(soname)
+
+    for rel_so, meta in native.items():
+        so_dir = rel_so.rpartition("/")[0]
+        rpaths = (meta.get("runpath") or []) + (meta.get("rpath") or [])
+        for entry in rpaths:
+            if _candidate_origin_dirs(own_dirs, so_dir, entry):
+                return True
+        for needed_name in meta.get("needed") or ():
+            if not _is_system_soname(needed_name) and needed_name not in own_sonames:
+                return True
+    return False
 
 
 def _soname_preload_enabled():
@@ -487,14 +529,21 @@ def _module_name(filename):
     return stem if stem.isidentifier() else None
 
 
-def _scan_root(root):
-    """Lists a wheel root like the per-wheel index (version 1) describes it."""
+def _scan_root_with_native(root):
+    """Lists a wheel root like the per-wheel index (version 1) and detects any native dotfile."""
     names = []
     dists = []
     pths = []
+    native_file = None
     with os.scandir(root) as it:
         for e in it:
             n = e.name
+            if n.startswith("."):
+                if n == NATIVE_CONSUMER_FILENAME:
+                    native_file = NATIVE_CONSUMER_FILENAME
+                elif n == NATIVE_PROVIDER_FILENAME and native_file is None:
+                    native_file = NATIVE_PROVIDER_FILENAME
+                continue
             if n.lower().endswith((".dist-info", ".egg-info")):
                 dists.append(n)
             elif n.isidentifier():
@@ -507,6 +556,12 @@ def _scan_root(root):
                 name = _module_name(n)
                 if name and not e.is_dir():
                     names.append((name, n))
+    return names, dists, pths, native_file
+
+
+def _scan_root(root):
+    """Lists a wheel root like the per-wheel index (version 1) describes it."""
+    names, dists, pths, _ = _scan_root_with_native(root)
     return names, dists, pths
 
 
@@ -599,28 +654,10 @@ class _Prebuilt:
             self.native_deps[(roots[int(i_str)], rel)] = [(roots[di], drel) for di, drel in deps]
 
 
-def _load_per_wheel_prebuilt(roots, runfiles_root):
-    """Loads per-wheel `<wheel>.dist_info/index.json` files adjacent to `roots`."""
-    prefix = runfiles_root.rstrip("/") + "/" if runfiles_root else ""
-    entries = []
-    for root in dict.fromkeys(roots):
-        wheel_dir = os.path.dirname(root.rstrip("/"))
-        idx_path = wheel_dir + ".dist_info/index.json"
-        try:
-            idx = _read_json(idx_path)
-        except OSError:
-            continue
-        rel_root = root[len(prefix) :] if prefix and root.startswith(prefix) else root
-        entries.append((rel_root, idx))
-    if not entries:
-        return None
-    return _Prebuilt(merge_wheel_indexes(entries), runfiles_root)
-
-
 class _Index:
     """The top-level entries of every wheel root, prebuilt or listed."""
 
-    def __init__(self, roots, prebuilt=None, runfiles_root=""):
+    def __init__(self, roots, prebuilt=None, runfiles_root="", mode="prebuilt"):
         self.roots = []
         self.indexed = []
         self.unscanned = []
@@ -633,6 +670,10 @@ class _Index:
         self.preload = dict(prebuilt.preload) if prebuilt else {}
         self.sonames = dict(prebuilt.sonames) if prebuilt else {}
         self.native_deps = dict(prebuilt.native_deps) if prebuilt else {}
+        self.mode = mode
+        self.native_files = {}
+        self.consumer_roots = []
+        self._native_loaded = prebuilt is not None
         self.runfiles_root = os.path.normpath(os.path.abspath(runfiles_root)).rstrip("/") + "/" if runfiles_root else ""
         self._parent_dirs = {}
         self._dists_by_name = None
@@ -640,15 +681,23 @@ class _Index:
         records = prebuilt.records if prebuilt else {}
         for root in dict.fromkeys(roots):
             record = records.get(root)
+            native_file = None
             if record is not None:
                 self.indexed.append(root)
             else:
                 try:
-                    record = _scan_root(root)
+                    names, dists, pths, native_file = _scan_root_with_native(root)
+                    record = (names, dists, pths)
                 except OSError:
                     self.unscanned.append(root)
                     continue
+                if mode in ("prebuilt", "verify"):
+                    self.indexed.append(root)
             self.roots.append(root)
+            if mode in ("prebuilt", "verify") and native_file is not None:
+                self.native_files[root] = os.path.join(root, native_file)
+                if native_file == NATIVE_CONSUMER_FILENAME:
+                    self.consumer_roots.append(root)
             names, dists, pths = record
             for name, entry in names:
                 owners = self.top.setdefault(name, [])
@@ -661,6 +710,71 @@ class _Index:
                 self.pth.setdefault(name, root)
         self.root_set = frozenset(self.roots)
         self._norm_roots = tuple((r, os.path.normpath(os.path.abspath(r)).rstrip("/")) for r in self.roots)
+        if prebuilt is None and mode in ("prebuilt", "verify"):
+            if self.consumer_roots:
+                self.ensure_native_loaded()
+            elif not self.native_files:
+                self._native_loaded = True
+
+    def ensure_native_loaded(self):
+        """Loads native dotfiles to populate `preload`, `sonames`, and `native_deps`."""
+        if self._native_loaded:
+            return
+        self._native_loaded = True
+        if not self.native_files or self.mode not in ("prebuilt", "verify"):
+            return
+        native_roots = []
+        wheel_indexes = []
+        dir_owners = {}
+        for root in self.roots:
+            dotfile = self.native_files.get(root)
+            if not dotfile:
+                continue
+            try:
+                idx = _read_json(dotfile)
+            except (OSError, ValueError, LookupError, TypeError) as e:
+                if self.mode == "verify":
+                    raise SystemExit("{} verify failed: can't load {}: {}".format(_LOG_PREFIX, dotfile, e))
+                if _DEBUG:
+                    _log("can't load {} ({})".format(dotfile, e))
+                continue
+            version = idx.get("version")
+            if version != _SUPPORTED_VERSION:
+                if self.mode == "verify":
+                    raise SystemExit(
+                        "{} verify failed: {}: unsupported version {!r}".format(_LOG_PREFIX, dotfile, version)
+                    )
+                continue
+            i = len(native_roots)
+            native_roots.append(root)
+            wheel_indexes.append(idx)
+            for d in idx.get("dirs") or ():
+                dir_owners.setdefault(d.replace("/", "."), []).append(i)
+        if not wheel_indexes:
+            return
+        merged = {d: owners for d, owners in sorted(dir_owners.items()) if len(owners) > 1}
+        for i, idx in enumerate(wheel_indexes):
+            for t in idx.get("top") or ():
+                if len(self.top.get(t, ())) > 1 and t not in merged:
+                    merged[t] = dir_owners.get(t, [i])
+        native_root_set = frozenset(native_roots)
+        sub = {}
+        for d, owners in sorted(dir_owners.items()):
+            if len(owners) == 1 and d.rpartition(".")[0] in merged:
+                top_seg = d.partition(".")[0]
+                rel_d = d.replace(".", os.sep)
+                if not any(
+                    r not in native_root_set and os.path.isdir(os.path.join(r, rel_d))
+                    for r in self.top.get(top_seg, ())
+                ):
+                    sub[d] = owners[0]
+        preload, sonames, native_deps = _compute_native(wheel_indexes, merged, sub)
+        self.preload = {pkg: [(native_roots[i], rel) for i, rel in libs] for pkg, libs in preload.items()}
+        self.sonames = {name: (native_roots[i], rel) for name, (i, rel) in sonames.items()}
+        self.native_deps = {}
+        for k, deps in native_deps.items():
+            i_str, _, rel = k.partition(":")
+            self.native_deps[(native_roots[int(i_str)], rel)] = [(native_roots[di], drel) for di, drel in deps]
 
     def merged_dirs(self, name, parents):
         """The `name` directories below `parents`, per the prebuilt index."""
@@ -764,6 +878,260 @@ def _verify(roots, prebuilt):
                         d, scanned_sub.get(d), indexed_sub.get(d)
                     )
                 )
+    return problems
+
+
+def _read_elf_metadata_full(path):
+    """Returns `{soname, needed, rpath, runpath}` for an ELF shared object on disk, or `None`."""
+    import struct
+
+    try:
+        if not os.path.isfile(path):
+            return None
+        with open(path, "rb") as fh:
+            ident = fh.read(16)
+            if len(ident) < 16 or ident[:4] != b"\x7fELF":
+                return None
+            ei_class, ei_data = ident[4], ident[5]
+            if ei_class not in (1, 2) or ei_data not in (1, 2):
+                return None
+            endian = "<" if ei_data == 1 else ">"
+            is_64 = ei_class == 2
+            if is_64:
+                ehdr_fmt = struct.Struct(endian + "HHIQQQIHHHHHH")
+                shdr_fmt = struct.Struct(endian + "IIQQQQIIQQ")
+                dyn_fmt = struct.Struct(endian + "qQ")
+            else:
+                ehdr_fmt = struct.Struct(endian + "HHIIIIIHHHHHH")
+                shdr_fmt = struct.Struct(endian + "IIIIIIIIII")
+                dyn_fmt = struct.Struct(endian + "iI")
+            ehdr_buf = fh.read(ehdr_fmt.size)
+            if len(ehdr_buf) != ehdr_fmt.size:
+                return None
+            (
+                e_type,
+                _,
+                _,
+                _,
+                e_phoff,
+                e_shoff,
+                _,
+                _,
+                e_phentsize,
+                e_phnum,
+                e_shentsize,
+                e_shnum,
+                _,
+            ) = ehdr_fmt.unpack(ehdr_buf)
+            if e_type not in (2, 3):
+                return None
+
+            dyn_offset = dyn_size = 0
+            dynstr = None
+            if e_shoff and e_shentsize == shdr_fmt.size:
+                fh.seek(e_shoff)
+                shdrs = []
+                if e_shnum == 0:
+                    first_buf = fh.read(shdr_fmt.size)
+                    if len(first_buf) == shdr_fmt.size:
+                        first_shdr = shdr_fmt.unpack(first_buf)
+                        e_shnum = first_shdr[5]
+                        shdrs.append(first_shdr)
+                        remaining = e_shnum - 1
+                    else:
+                        remaining = 0
+                else:
+                    remaining = e_shnum
+                for _ in range(remaining):
+                    buf = fh.read(shdr_fmt.size)
+                    if len(buf) != shdr_fmt.size:
+                        break
+                    shdrs.append(shdr_fmt.unpack(buf))
+                dyn_shdr = None
+                for shdr in shdrs:
+                    if shdr[1] == 6:  # SHT_DYNAMIC
+                        dyn_shdr = shdr
+                        break
+                if dyn_shdr is not None:
+                    strtab_idx = dyn_shdr[6]
+                    if strtab_idx < len(shdrs) and shdrs[strtab_idx][1] == 3:
+                        strtab_shdr = shdrs[strtab_idx]
+                        fh.seek(strtab_shdr[4])
+                        dynstr = fh.read(strtab_shdr[5])
+                        dyn_offset = dyn_shdr[4]
+                        dyn_size = dyn_shdr[5]
+
+            if dynstr is None and e_phoff and e_phnum and e_phentsize:
+                fh.seek(e_phoff)
+                phdrs_raw = fh.read(e_phentsize * e_phnum)
+                if len(phdrs_raw) < e_phentsize * e_phnum:
+                    return None
+                load_segments = []
+                for i in range(e_phnum):
+                    chunk = phdrs_raw[i * e_phentsize : (i + 1) * e_phentsize]
+                    if is_64:
+                        p_type, _, p_offset, p_vaddr, _, p_filesz, p_memsz, _ = struct.unpack(
+                            endian + "IIQQQQQQ", chunk[:56]
+                        )
+                    else:
+                        p_type, p_offset, p_vaddr, _, p_filesz, p_memsz, _, _ = struct.unpack(
+                            endian + "IIIIIIII", chunk[:32]
+                        )
+                    if p_type == 1:
+                        load_segments.append((p_vaddr, p_memsz, p_offset, p_filesz))
+                    elif p_type == 2:
+                        dyn_offset, dyn_size = p_offset, p_filesz
+                if not dyn_offset or not dyn_size:
+                    return None
+                fh.seek(dyn_offset)
+                dyn_raw = fh.read(dyn_size)
+                strtab_vaddr = None
+                strtab_size = 0
+                for pos in range(0, len(dyn_raw) - dyn_fmt.size + 1, dyn_fmt.size):
+                    d_tag, d_val = dyn_fmt.unpack(dyn_raw[pos : pos + dyn_fmt.size])
+                    if d_tag == 0:
+                        break
+                    elif d_tag == 5:
+                        strtab_vaddr = d_val
+                    elif d_tag == 10:
+                        strtab_size = d_val
+                if strtab_vaddr is None or not strtab_size:
+                    return None
+                strtab_off = None
+                for vaddr, memsz, offset, filesz in load_segments:
+                    span = max(memsz, filesz)
+                    if vaddr <= strtab_vaddr < vaddr + span:
+                        strtab_off = offset + (strtab_vaddr - vaddr)
+                        break
+                if strtab_off is None:
+                    return None
+                fh.seek(strtab_off)
+                dynstr = fh.read(strtab_size)
+
+            if dynstr is None or not dyn_offset or not dyn_size:
+                return None
+
+            def get_str(off):
+                if off < 0 or off >= len(dynstr):
+                    return ""
+                end = dynstr.find(b"\x00", off)
+                raw = dynstr[off:] if end < 0 else dynstr[off:end]
+                return raw.decode("utf-8", "replace")
+
+            fh.seek(dyn_offset)
+            soname = None
+            needed = []
+            rpath_str = ""
+            runpath_str = ""
+            for _ in range(dyn_size // dyn_fmt.size):
+                buf = fh.read(dyn_fmt.size)
+                if len(buf) != dyn_fmt.size:
+                    break
+                d_tag, d_val = dyn_fmt.unpack(buf)
+                if d_tag == 0:
+                    break
+                elif d_tag == 14:
+                    soname = get_str(d_val)
+                elif d_tag == 1:
+                    val = get_str(d_val)
+                    if val:
+                        needed.append(val)
+                elif d_tag == 15:
+                    rpath_str = get_str(d_val)
+                elif d_tag == 29:
+                    runpath_str = get_str(d_val)
+            return {
+                "soname": soname,
+                "needed": needed,
+                "rpath": [p for p in rpath_str.split(":") if p] if rpath_str else [],
+                "runpath": [p for p in runpath_str.split(":") if p] if runpath_str else [],
+            }
+    except Exception:
+        return None
+
+
+def _scan_native_files(root):
+    """Walks `root` for ELF `.so` files on disk, matching `wheel_index.py`."""
+    native = {}
+
+    def walk_dir(rel_dir, abs_dir):
+        with os.scandir(abs_dir) as it:
+            entries = sorted(it, key=lambda e: e.name)
+        for entry in entries:
+            name = entry.name
+            if name.startswith("."):
+                continue
+            if entry.is_dir():
+                if name == "__pycache__" or name.endswith(".dist-info"):
+                    continue
+                child_rel = rel_dir + "/" + name if rel_dir else name
+                walk_dir(child_rel, os.path.join(abs_dir, name))
+            elif name.endswith(".so") or ".so." in name:
+                meta = _read_elf_metadata_full(os.path.join(abs_dir, name))
+                if meta is not None:
+                    rel_path = rel_dir + "/" + name if rel_dir else name
+                    native[rel_path] = meta
+
+    walk_dir("", root)
+    return dict(sorted(native.items()))
+
+
+def _verify_hybrid(index):
+    """Verifies scanned root entries and native dotfiles against disk."""
+    problems = []
+    for root in index.roots:
+        try:
+            names, _, _, _ = _scan_root_with_native(root)
+            expected_dirs = sorted(d.replace(".", "/") for d in _walk_dirs(root))
+            expected_native = _scan_native_files(root)
+        except OSError as e:
+            problems.append("can't scan {}: {}".format(root, e))
+            continue
+
+        present_dotfiles = [
+            fn for fn in (NATIVE_CONSUMER_FILENAME, NATIVE_PROVIDER_FILENAME) if os.path.exists(os.path.join(root, fn))
+        ]
+        if not expected_native:
+            if present_dotfiles:
+                problems.append(
+                    "{}: unexpected native dotfile {} (no ELF files on disk)".format(root, present_dotfiles)
+                )
+            continue
+
+        top_names = sorted({name for name, _ in names})
+        expected_fn = (
+            NATIVE_CONSUMER_FILENAME
+            if _is_native_consumer(top_names, expected_dirs, expected_native)
+            else NATIVE_PROVIDER_FILENAME
+        )
+        if present_dotfiles != [expected_fn]:
+            problems.append("{}: expected native dotfile {!r}, found {}".format(root, expected_fn, present_dotfiles))
+            continue
+        dotfile_path = os.path.join(root, expected_fn)
+        try:
+            data = _read_json(dotfile_path)
+        except Exception as e:
+            problems.append("{}: can't parse {}: {}".format(root, expected_fn, e))
+            continue
+        if data.get("version") != _SUPPORTED_VERSION:
+            problems.append("{}: {}: unsupported version {!r}".format(root, expected_fn, data.get("version")))
+        if data.get("top") != top_names:
+            problems.append(
+                "{}: {}: top mismatch (dotfile={}, disk={})".format(root, expected_fn, data.get("top"), top_names)
+            )
+        if data.get("dirs") != expected_dirs:
+            problems.append(
+                "{}: {}: dirs mismatch (dotfile={}, disk={})".format(root, expected_fn, data.get("dirs"), expected_dirs)
+            )
+        if data.get("native") != expected_native:
+            problems.append(
+                "{}: {}: native metadata mismatch (dotfile keys={}, disk keys={})".format(
+                    root,
+                    expected_fn,
+                    sorted(data.get("native") or ()),
+                    sorted(expected_native),
+                )
+            )
     return problems
 
 
@@ -1190,6 +1558,7 @@ def _extract_escaped_relpath(path_str):
 def _find_owner_for_relpath(rel_so):
     if _INDEX is None or not rel_so:
         return None
+    _INDEX.ensure_native_loaded()
     basename = posixpath.basename(rel_so)
     by_name = _INDEX.sonames.get(basename)
     if by_name is not None and by_name[1] == rel_so:
@@ -1209,13 +1578,16 @@ def _find_owner_for_relpath(rel_so):
 
 
 def _find_wheel_library(name):
-    if _INDEX is None or not _INDEX.sonames or not name:
+    if _INDEX is None or not name:
         return None
     try:
         s = os.fsdecode(os.fspath(name))
     except TypeError:
         return None
     if _is_system_soname(s) or _is_system_soname("lib" + s + ".so"):
+        return None
+    _INDEX.ensure_native_loaded()
+    if not _INDEX.sonames:
         return None
     if s in _INDEX.sonames:
         return _INDEX.sonames[s]
@@ -1262,7 +1634,8 @@ def _resolve_path_dlopen_arg(name):
         return name
     if os.path.exists(s):
         matched = _match_wheel_relpath(s)
-        if matched is not None:
+        if matched is not None and (_INDEX._native_loaded or _is_musl()):
+            _INDEX.ensure_native_loaded()
             _prepare_resolved_target(matched[0], matched[1], "dlopen")
         return name
     rel_so = _extract_escaped_relpath(s)
@@ -1287,6 +1660,7 @@ def _resolve_bare_dlopen_arg(name, allow_short_name=False):
     s = os.fsdecode(raw)
     if "/" in s or (os.sep != "/" and os.sep in s) or _is_system_soname(s):
         return name
+    _INDEX.ensure_native_loaded()
     target = _INDEX.sonames.get(s)
     if target is None and (allow_short_name or s.endswith(".so")):
         target = _find_wheel_library(s)
@@ -1481,7 +1855,7 @@ def _is_first_party_extension_origin(origin):
 
 
 def _maybe_preload_extension_needed(fullname, spec):
-    if _INDEX is None or not _INDEX.sonames or spec is None:
+    if _INDEX is None or (not _INDEX.sonames and not _INDEX.native_files) or spec is None:
         return
     loader = getattr(spec, "loader", None)
     if not isinstance(loader, _machinery.ExtensionFileLoader):
@@ -1492,13 +1866,14 @@ def _maybe_preload_extension_needed(fullname, spec):
     _CHECKED_EXTENSIONS.add(origin)
     if not _is_first_party_extension_origin(origin):
         return
-    needed = _read_elf_needed(origin)
+    needed = [s for s in _read_elf_needed(origin) if not _is_system_soname(s)]
     if not needed:
+        return
+    _INDEX.ensure_native_loaded()
+    if not _INDEX.sonames:
         return
     libs = []
     for soname in needed:
-        if _is_system_soname(soname):
-            continue
         target = _INDEX.sonames.get(soname)
         if target is not None:
             for dep in _INDEX.native_deps.get(target, ()):
@@ -1538,7 +1913,7 @@ def _finalize_spec(fullname, spec):
                     loader._pycross_wrapped = True
                 except AttributeError:
                     pass
-    if _INDEX.sonames:
+    if _INDEX.sonames or _INDEX.native_files:
         _maybe_preload_extension_needed(fullname, spec)
     return spec
 
@@ -1552,21 +1927,25 @@ def _maybe_configure_cuda_env(index):
     ):
         return
     for key in ("nvidia.cuda_nvcc", "nvidia.cu13"):
-        root = index.sub.get(key)
-        if not root:
-            continue
-        cuda_dir = os.path.join(root, *key.split("."))
-        if not os.path.isdir(cuda_dir):
-            continue
-        if "CUDA_HOME" not in os.environ and "CUDA_PATH" not in os.environ:
-            os.environ["CUDA_HOME"] = cuda_dir
-        bin_dir = os.path.join(cuda_dir, "bin")
-        if os.path.isdir(bin_dir):
-            cur_path = os.environ.get("PATH", "")
-            parts = cur_path.split(os.pathsep) if cur_path else []
-            if bin_dir not in parts:
-                os.environ["PATH"] = bin_dir + (os.pathsep + cur_path if cur_path else "")
-        break
+        sub_root = index.sub.get(key)
+        candidates = (sub_root,) if sub_root else index.top.get("nvidia", ())
+        found = False
+        for root in candidates:
+            cuda_dir = os.path.join(root, *key.split("."))
+            if not os.path.isdir(cuda_dir):
+                continue
+            if "CUDA_HOME" not in os.environ and "CUDA_PATH" not in os.environ:
+                os.environ["CUDA_HOME"] = cuda_dir
+            bin_dir = os.path.join(cuda_dir, "bin")
+            if os.path.isdir(bin_dir):
+                cur_path = os.environ.get("PATH", "")
+                parts = cur_path.split(os.pathsep) if cur_path else []
+                if bin_dir not in parts:
+                    os.environ["PATH"] = bin_dir + (os.pathsep + cur_path if cur_path else "")
+            found = True
+            break
+        if found:
+            break
 
 
 def _is_namespace_spec(spec):
@@ -1841,26 +2220,13 @@ def install(roots, debug=False, mode="scan", index_path=None, runfiles_root=""):
 
         start = time.perf_counter()
     prebuilt = None
-    if mode in ("prebuilt", "verify"):
-        if index_path:
-            try:
-                prebuilt = _Prebuilt(index_path, runfiles_root)
-            except (OSError, ValueError, LookupError, TypeError) as e:
-                if mode == "verify":
-                    raise SystemExit("{} verify failed: can't load {}: {}".format(_LOG_PREFIX, index_path, e))
-                _log("can't load {} ({}); listing every root".format(index_path, e))
-        else:
-            try:
-                prebuilt = _load_per_wheel_prebuilt(roots, runfiles_root)
-            except (OSError, ValueError, LookupError, TypeError) as e:
-                if mode == "verify":
-                    raise SystemExit("{} verify failed: can't load per-wheel indexes: {}".format(_LOG_PREFIX, e))
-                _log("can't load per-wheel indexes ({}); listing every root".format(e))
-            if prebuilt is None:
-                if mode == "verify":
-                    _log("verify: this binary has no prebuilt index; listing every root")
-                elif debug:
-                    _log("no prebuilt index; listing every root")
+    if mode in ("prebuilt", "verify") and index_path:
+        try:
+            prebuilt = _Prebuilt(index_path, runfiles_root)
+        except (OSError, ValueError, LookupError, TypeError) as e:
+            if mode == "verify":
+                raise SystemExit("{} verify failed: can't load {}: {}".format(_LOG_PREFIX, index_path, e))
+            _log("can't load {} ({}); listing every root".format(index_path, e))
     if mode == "verify" and prebuilt is not None:
         problems = _verify(roots, prebuilt)
         if problems:
@@ -1871,11 +2237,20 @@ def install(roots, debug=False, mode="scan", index_path=None, runfiles_root=""):
         if debug:
             _log("verified", prebuilt.path)
 
-    index = _Index(roots, prebuilt, runfiles_root=runfiles_root)
+    index = _Index(roots, prebuilt, runfiles_root=runfiles_root, mode=mode)
     if not index.roots:
         if debug:
             _log("no wheel roots could be listed; not installing")
         return False
+    if mode == "verify" and prebuilt is None:
+        problems = _verify_hybrid(index)
+        if problems:
+            _log("native wheel dotfiles don't match disk:")
+            for problem in problems:
+                _log("  " + problem)
+            raise SystemExit("{} verify failed: {} differences (see above)".format(_LOG_PREFIX, len(problems)))
+        if debug:
+            _log("verified {} wheel roots ({} native)".format(len(index.roots), len(index.native_files)))
     _PRELOADED.clear()
     _CHECKED_EXTENSIONS.clear()
     _INDEX = index
@@ -1898,11 +2273,12 @@ def install(roots, debug=False, mode="scan", index_path=None, runfiles_root=""):
         elapsed = (time.perf_counter() - start) * 1000
         multi = sorted(n for n, owners in index.top.items() if len(owners) > 1)
         _log(
-            "indexed {} wheel roots ({} from the prebuilt index, {} listed) in "
+            "indexed {} wheel roots ({} native, {} consumers, native_loaded={}) in "
             "{:.1f} ms: {} top-level names, {} distributions, {} .pth files".format(
                 len(index.roots),
-                len(index.indexed),
-                len(index.roots) - len(index.indexed),
+                len(index.native_files),
+                len(index.consumer_roots),
+                index._native_loaded,
                 elapsed,
                 len(index.top),
                 sum(len(v) for v in index.dist_entries.values()),

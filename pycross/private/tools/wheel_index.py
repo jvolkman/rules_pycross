@@ -56,7 +56,10 @@ from pathlib import Path
 from typing import Any
 from typing import Optional
 
+from pycross.private.tools.elf_tools import NATIVE_CONSUMER_FILENAME
+from pycross.private.tools.elf_tools import NATIVE_PROVIDER_FILENAME
 from pycross.private.tools.elf_tools import is_candidate_so
+from pycross.private.tools.elf_tools import is_native_consumer
 from pycross.private.tools.elf_tools import read_elf_metadata
 
 INDEX_VERSION = 1
@@ -162,6 +165,8 @@ def _scan(path: Path) -> tuple[list[str], list[str], list[str]]:
     subdirs, other_dirs, files = [], [], []
     with os.scandir(path) as it:
         for entry in it:
+            if entry.name.startswith("."):
+                continue
             if entry.is_dir():
                 if entry.name in _SKIPPED_DIRS or entry.name.endswith(".dist-info"):
                     continue
@@ -274,6 +279,8 @@ def index_site_packages(
     root_files: list[str] = []
     for entry in entries:
         name = entry.name
+        if name.startswith("."):
+            continue
         if entry.is_dir():
             if name.endswith(".dist-info"):
                 dist_info = dist_info or name
@@ -319,16 +326,52 @@ def index_site_packages(
     return result
 
 
+def build_native_dotfile(index: dict[str, Any]) -> Optional[tuple[str, dict[str, Any]]]:
+    """Builds `(filename, payload)` for the in-root native dotfile, or `None` if pure-Python."""
+    native = index.get("native")
+    if not native:
+        return None
+    top = index.get("top") or {}
+    dirs = index.get("dirs") or []
+    filename = NATIVE_CONSUMER_FILENAME if is_native_consumer(top, dirs, native) else NATIVE_PROVIDER_FILENAME
+    payload = {
+        "version": INDEX_VERSION,
+        "top": sorted(top),
+        "dirs": list(dirs),
+        "native": native,
+    }
+    return filename, payload
+
+
+def write_native_dotfile(root: Path, index: dict[str, Any]) -> Optional[Path]:
+    """Writes `.pycross-native-consumer.json` or `.pycross-native.json` inside `root` when needed."""
+    root = Path(root)
+    for stale in (NATIVE_CONSUMER_FILENAME, NATIVE_PROVIDER_FILENAME):
+        stale_path = root / stale
+        if stale_path.exists():
+            stale_path.unlink()
+    built = build_native_dotfile(index)
+    if built is None:
+        return None
+    filename, payload = built
+    dotfile_path = root / filename
+    with open(dotfile_path, "w", encoding="utf-8") as f:
+        json.dump(payload, f, sort_keys=True, separators=(",", ":"))
+        f.write("\n")
+    return dotfile_path
+
+
 def write_index(
     root: Path,
     output: Path,
     fallback_name: Optional[str] = None,
     fallback_version: Optional[str] = None,
 ) -> None:
-    """Writes the per-wheel index of `root` to `output` as compact, key-sorted JSON."""
+    """Writes the per-wheel index of `root` to `output` and any in-root native dotfile."""
     index = index_site_packages(root, fallback_name, fallback_version)
     output = Path(output)
     output.parent.mkdir(parents=True, exist_ok=True)
     with open(output, "w", encoding="utf-8") as f:
         json.dump(index, f, sort_keys=True, separators=(",", ":"))
         f.write("\n")
+    write_native_dotfile(root, index)

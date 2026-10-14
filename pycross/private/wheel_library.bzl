@@ -28,7 +28,6 @@ load(
     ":venv_import_index.bzl",
     "VENV_IMPORT_INDEX_ATTRS",
     "venv_import_index_enabled",
-    "venv_import_index_mode",
 )
 
 _PYCROSS_TOOLCHAIN_TYPE = Label("//pycross:toolchain_type")
@@ -237,14 +236,13 @@ def _pycross_wheel_library_impl(ctx):
     merged_deps = list(ctx.attr.deps)
     if use_import_index:
         merged_deps.append(ctx.attr._venv_import_index_runtime)
-    runfiles_files = [out, index] if (use_import_index and venv_import_index_mode(ctx) == "prebuilt") else [out]
 
     merged = merge_py_providers(
         ctx,
         merged_deps,
         direct_sources = [out],
         direct_imports = [] if link_lib else [imp],
-        base_runfiles = ctx.runfiles(files = runfiles_files),
+        base_runfiles = ctx.runfiles(files = [out]),
         direct_venv_symlinks = venv_symlinks,
     )
 

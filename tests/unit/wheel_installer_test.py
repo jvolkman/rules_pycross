@@ -823,6 +823,96 @@ class WheelIndexNativeMetadataTest(unittest.TestCase):
         )
         self.assertNotIn("pkg/lib/libbroken.so.1", idx["native"])
 
+    def test_native_dotfile_consumer_vs_provider_vs_pure_python(self):
+        import json
+
+        from pycross.private.tools.elf_tools import NATIVE_CONSUMER_FILENAME
+        from pycross.private.tools.elf_tools import NATIVE_PROVIDER_FILENAME
+        from pycross.private.tools.wheel_index import index_site_packages
+        from pycross.private.tools.wheel_index import write_index
+
+        # 1. Pure-Python wheel: writes <name>.dist_info/index.json and no dotfile.
+        pure_root = Path(self.temp_dir) / "pure" / "site-packages"
+        (pure_root / "purepkg").mkdir(parents=True, exist_ok=True)
+        (pure_root / "purepkg" / "__init__.py").write_text("")
+        pure_idx_out = Path(self.temp_dir) / "pure.dist_info" / "index.json"
+        write_index(pure_root, pure_idx_out, "purepkg", "1.0")
+        self.assertTrue(pure_idx_out.is_file())
+        self.assertFalse((pure_root / NATIVE_CONSUMER_FILENAME).exists())
+        self.assertFalse((pure_root / NATIVE_PROVIDER_FILENAME).exists())
+
+        # 2. Provider-only native wheel (no escaping $ORIGIN RPATH, no unsatisfied non-system DT_NEEDED):
+        # writes .pycross-native.json.
+        prov_root = Path(self.temp_dir) / "prov" / "site-packages"
+        cublas_so = prov_root / "nvidia" / "fixture_cublas" / "lib" / "libfixture_cublas.so.12"
+        cublas_so.parent.mkdir(parents=True, exist_ok=True)
+        (prov_root / "nvidia" / "__init__.py").write_text("")
+        (prov_root / "nvidia" / "fixture_cublas" / "__init__.py").write_text("")
+        cublas_so.write_bytes(self._unpack_blob(self.LIBFIXTURE_CUBLAS_SO_12))
+        prov_idx_out = Path(self.temp_dir) / "prov.dist_info" / "index.json"
+        write_index(prov_root, prov_idx_out, "nvidia-fixture-cublas", "12.0")
+        self.assertFalse((prov_root / NATIVE_CONSUMER_FILENAME).exists())
+        prov_dotfile = prov_root / NATIVE_PROVIDER_FILENAME
+        self.assertTrue(prov_dotfile.is_file())
+        self.assertEqual(
+            json.loads(prov_dotfile.read_text()),
+            {
+                "version": 1,
+                "top": ["nvidia"],
+                "dirs": ["nvidia", "nvidia/fixture_cublas", "nvidia/fixture_cublas/lib"],
+                "native": {
+                    "nvidia/fixture_cublas/lib/libfixture_cublas.so.12": {
+                        "needed": [],
+                        "rpath": [],
+                        "runpath": [],
+                        "soname": "libfixture_cublas.so.12",
+                    },
+                },
+            },
+        )
+        # Re-indexing after dotfile is written is idempotent and ignores dotfiles.
+        self.assertEqual(
+            index_site_packages(prov_root, "nvidia-fixture-cublas", "12.0"),
+            json.loads(prov_idx_out.read_text()),
+        )
+
+        # 3. Consumer native wheel (escaping $ORIGIN/../nvidia/fixture_cudnn/lib RPATH and unsatisfied DT_NEEDED):
+        # writes .pycross-native-consumer.json and removes any stale .pycross-native.json.
+        cons_root = Path(self.temp_dir) / "cons" / "site-packages"
+        user_so = cons_root / "rpathuser" / "libuser.so"
+        user_so.parent.mkdir(parents=True, exist_ok=True)
+        (cons_root / "rpathuser" / "__init__.py").write_text("")
+        user_so.write_bytes(self._unpack_blob(self.LIBUSER_SO))
+        (cons_root / NATIVE_PROVIDER_FILENAME).write_text("{}")
+        cons_idx_out = Path(self.temp_dir) / "cons.dist_info" / "index.json"
+        write_index(cons_root, cons_idx_out, "rpath-user", "1.0")
+        self.assertFalse((cons_root / NATIVE_PROVIDER_FILENAME).exists())
+        cons_dotfile = cons_root / NATIVE_CONSUMER_FILENAME
+        self.assertTrue(cons_dotfile.is_file())
+        self.assertEqual(
+            json.loads(cons_dotfile.read_text()),
+            {
+                "version": 1,
+                "top": ["rpathuser"],
+                "dirs": ["rpathuser"],
+                "native": {
+                    "rpathuser/libuser.so": {
+                        "needed": ["libfixture_cublas.so.12", "libc.so.6"],
+                        "rpath": [],
+                        "runpath": [
+                            "$ORIGIN/../nvidia/fixture_cublas/lib",
+                            "$ORIGIN/../nvidia/fixture_cudnn/lib",
+                        ],
+                        "soname": None,
+                    },
+                },
+            },
+        )
+        self.assertEqual(
+            index_site_packages(cons_root, "rpath-user", "1.0"),
+            json.loads(cons_idx_out.read_text()),
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
