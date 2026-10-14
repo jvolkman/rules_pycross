@@ -6,6 +6,9 @@ All notable changes to this project will be documented in this file.
 
 ### Fixed
 
+- **Target-environment settings** (`glibc_version`, `macos_version`, `musl_version`,
+  and `pep508_*`) now use `scope = "target"` and are reset to their defaults in
+  exec-platform transitions.
 - **Poetry `||` version constraints** now evaluate all union branches instead of
   collapsing to `!=` or taking only the first branch.
 

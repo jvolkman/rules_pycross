@@ -220,7 +220,17 @@ pycross_internal_repo = repository_rule(
 )
 
 def _pycross_internal_config_repo_impl(rctx):
-    rctx.file("BUILD.bazel", 'exports_files(["defaults.bzl"])')
+    rctx.file("BUILD.bazel", """\
+load("@bazel_skylib//:bzl_library.bzl", "bzl_library")
+
+exports_files(["defaults.bzl"])
+
+bzl_library(
+    name = "defaults",
+    srcs = ["defaults.bzl"],
+    visibility = ["//visibility:public"],
+)
+""")
     rctx.file("defaults.bzl", _defaults_bzl(rctx))
 
 pycross_internal_config_repo = repository_rule(
