@@ -57,9 +57,10 @@ from typing import Any
 from typing import Optional
 
 from pycross.private.tools.elf_tools import NATIVE_CONSUMER_FILENAME
+from pycross.private.tools.elf_tools import NATIVE_DOTFILE_VERSION
 from pycross.private.tools.elf_tools import NATIVE_PROVIDER_FILENAME
+from pycross.private.tools.elf_tools import compute_escaping_rpaths
 from pycross.private.tools.elf_tools import is_candidate_so
-from pycross.private.tools.elf_tools import is_native_consumer
 from pycross.private.tools.elf_tools import read_elf_metadata
 
 INDEX_VERSION = 1
@@ -333,13 +334,16 @@ def build_native_dotfile(index: dict[str, Any]) -> Optional[tuple[str, dict[str,
         return None
     top = index.get("top") or {}
     dirs = index.get("dirs") or []
-    filename = NATIVE_CONSUMER_FILENAME if is_native_consumer(top, dirs, native) else NATIVE_PROVIDER_FILENAME
-    payload = {
-        "version": INDEX_VERSION,
+    escaping = compute_escaping_rpaths(top, dirs, native)
+    filename = NATIVE_CONSUMER_FILENAME if escaping else NATIVE_PROVIDER_FILENAME
+    payload: dict[str, Any] = {
+        "version": NATIVE_DOTFILE_VERSION,
         "top": sorted(top),
         "dirs": list(dirs),
         "native": native,
     }
+    if escaping:
+        payload["escaping"] = escaping
     return filename, payload
 
 

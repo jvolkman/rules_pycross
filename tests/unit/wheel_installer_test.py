@@ -866,7 +866,7 @@ class WheelIndexNativeMetadataTest(unittest.TestCase):
         self.assertEqual(
             json.loads(prov_dotfile.read_text()),
             {
-                "version": 1,
+                "version": 2,
                 "top": ["nvidia"],
                 "dirs": ["nvidia", "nvidia/fixture_cublas", "nvidia/fixture_cublas/lib"],
                 "native": {
@@ -904,7 +904,7 @@ class WheelIndexNativeMetadataTest(unittest.TestCase):
         self.assertEqual(
             json.loads(cons_dotfile.read_text()),
             {
-                "version": 1,
+                "version": 2,
                 "top": ["rpathuser"],
                 "dirs": ["rpathuser"],
                 "native": {
@@ -921,11 +921,50 @@ class WheelIndexNativeMetadataTest(unittest.TestCase):
                         "soname": None,
                     },
                 },
+                "escaping": {
+                    "rpathuser/libuser.so": {
+                        "rpath": [],
+                        "runpath": [
+                            "nvidia/fixture_cublas/lib",
+                            "nvidia/fixture_cudnn/lib",
+                        ],
+                    },
+                },
             },
         )
         self.assertEqual(
             index_site_packages(cons_root, "rpath-user", "1.0"),
             json.loads(cons_idx_out.read_text()),
+        )
+
+        # Verify compute_escaping_rpaths honors DT_RPATH only when DT_RUNPATH is absent.
+        from pycross.private.tools.elf_tools import compute_escaping_rpaths
+
+        self.assertEqual(
+            compute_escaping_rpaths(
+                ["pkg"],
+                ["pkg", "pkg.libs"],
+                {
+                    "pkg/lib_rpath.so": {
+                        "rpath": ["$ORIGIN/../pkg.libs", "$ORIGIN/../other_pkg/lib"],
+                        "runpath": [],
+                    },
+                    "pkg/lib_both.so": {
+                        "rpath": ["$ORIGIN/../ignored_rpath/lib"],
+                        "runpath": ["$ORIGIN/../active_runpath/lib"],
+                    },
+                },
+            ),
+            {
+                "pkg/lib_both.so": {
+                    "rpath": [],
+                    "runpath": ["active_runpath/lib"],
+                },
+                "pkg/lib_rpath.so": {
+                    "rpath": ["other_pkg/lib"],
+                    "runpath": [],
+                },
+            },
         )
 
         # 4. Wheel with unsatisfied cross-wheel DT_NEEDED but NO escaping $ORIGIN RPATH/RUNPATH:

@@ -15,6 +15,7 @@ from typing import Optional
 
 NATIVE_CONSUMER_FILENAME = ".pycross-native-consumer.json"
 NATIVE_PROVIDER_FILENAME = ".pycross-native.json"
+NATIVE_DOTFILE_VERSION = 2
 
 ELF_MAGIC_BYTES = b"\x7fELF"
 
@@ -210,14 +211,12 @@ def candidate_origin_dirs(own_dirs: set[str], so_dir: str, entry: str) -> list[s
     return candidates
 
 
-def is_native_consumer(
+def wheel_own_dirs(
     top: Any,
     dirs: Any,
     native: dict[str, dict[str, Any]],
-) -> bool:
-    """Return True if a wheel's ELF files have any `$ORIGIN` RPATH/RUNPATH entry escaping the wheel."""
-    if not native:
-        return False
+) -> set[str]:
+    """Return the set of relative directory paths owned by a wheel."""
     own_dirs = set(dirs or ())
     own_dirs.update(top or ())
     for rel_so in native:
@@ -225,11 +224,43 @@ def is_native_consumer(
         while parent:
             own_dirs.add(parent)
             parent = parent.rpartition("/")[0]
+    return own_dirs
 
-    for rel_so, meta in native.items():
+
+def compute_escaping_rpaths(
+    top: Any,
+    dirs: Any,
+    native: dict[str, dict[str, Any]],
+) -> dict[str, dict[str, list[str]]]:
+    """Return `{rel_so: {"rpath": [...], "runpath": [...]}}` for libraries with escaping `$ORIGIN` RPATHs."""
+    if not native:
+        return {}
+    own_dirs = wheel_own_dirs(top, dirs, native)
+    escaping: dict[str, dict[str, list[str]]] = {}
+    for rel_so, meta in sorted(native.items()):
         so_dir = rel_so.rpartition("/")[0]
-        rpaths = (meta.get("runpath") or []) + (meta.get("rpath") or [])
-        for entry in rpaths:
-            if candidate_origin_dirs(own_dirs, so_dir, entry):
-                return True
-    return False
+        runpath = meta.get("runpath") or []
+        rpath = meta.get("rpath") or []
+        active = runpath if runpath else rpath
+        if not active:
+            continue
+        cand_dirs: list[str] = []
+        for entry in active:
+            for cand in candidate_origin_dirs(own_dirs, so_dir, entry):
+                if cand not in cand_dirs:
+                    cand_dirs.append(cand)
+        if cand_dirs:
+            if runpath:
+                escaping[rel_so] = {"rpath": [], "runpath": cand_dirs}
+            else:
+                escaping[rel_so] = {"rpath": cand_dirs, "runpath": []}
+    return escaping
+
+
+def is_native_consumer(
+    top: Any,
+    dirs: Any,
+    native: dict[str, dict[str, Any]],
+) -> bool:
+    """Return True if a wheel's ELF files have any `$ORIGIN` RPATH/RUNPATH entry escaping the wheel."""
+    return bool(compute_escaping_rpaths(top, dirs, native))
