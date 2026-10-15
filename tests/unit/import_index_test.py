@@ -11,12 +11,10 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-"""Tests for the import index finder and merger (pycross/private/tools/import_index.py)."""
+"""Tests for the import index finder (pycross/private/tools/import_index.py)."""
 
-import itertools
 import json
 import os
-import re
 import shutil
 import subprocess
 import sys
@@ -49,22 +47,11 @@ if mode == "finder":
     import import_index
 
     sys.path.pop(0)
-    real_scandir = os.scandir
-    if cfg.get("forbid_scandir"):
-        def _no_scandir(*args, **kwargs):
-            raise AssertionError("os.scandir{!r} while installing".format(args))
-
-        os.scandir = _no_scandir
-    try:
-        installed = import_index.install(
-            cfg["roots"],
-            debug=cfg.get("debug", False),
-            mode=cfg.get("index_mode", "scan"),
-            index_path=cfg.get("index"),
-            runfiles_root=cfg.get("runfiles_root", ""),
-        )
-    finally:
-        os.scandir = real_scandir
+    installed = import_index.install(
+        cfg["roots"],
+        debug=cfg.get("debug", False),
+        mode=cfg.get("index_mode", "scan"),
+    )
 
 out = {}
 bases = cfg["roots"] + [cfg["merged"], cfg["fp_root"]] + cfg.get("extra_bases", [])
@@ -145,7 +132,6 @@ for step in cfg.get("then", []):
     exec(step)
 if mode == "finder":
     out["_installed"] = installed
-    out["_indexed"] = len(import_index._INDEX.indexed) if import_index._INDEX else 0
     out["_isdir_calls"] = isdir_calls[0]
     out["_root_listdir_calls"] = root_listdir_calls[0]
     out["_meta_path"] = [
@@ -179,64 +165,6 @@ def _write(path, content=""):
     os.makedirs(os.path.dirname(path), exist_ok=True)
     with open(path, "w") as f:
         f.write(content)
-
-
-_EXTENSION_MODULE_RE = re.compile(r"^([^.]+)(?:\.[^.]+)?\.(?:so|pyd)$")
-
-
-def _module_name(filename):
-    if filename.endswith(".py"):
-        stem = filename[: -len(".py")]
-    elif filename.endswith(".pyc"):
-        stem = filename[: -len(".pyc")]
-    else:
-        match = _EXTENSION_MODULE_RE.match(filename)
-        if not match:
-            return None
-        stem = match.group(1)
-    return stem if stem.isidentifier() else None
-
-
-def _wheel_index(root):
-    """A per-wheel index (version 1), as rules_pycross's PycrossWheelInstall writes it."""
-    top, pth, dirs = {}, [], []
-    dist_info = None
-
-    def walk(rel):
-        dirs.append(rel)
-        for e in sorted(os.scandir(os.path.join(root, rel)), key=lambda e: e.name):
-            if e.is_dir() and e.name.isidentifier() and e.name != "__pycache__":
-                walk(rel + "/" + e.name)
-
-    for e in sorted(os.scandir(root), key=lambda e: e.name):
-        if e.is_dir():
-            if e.name.endswith(".dist-info"):
-                dist_info = dist_info or e.name
-            elif e.name.isidentifier() and e.name != "__pycache__":
-                top.setdefault(e.name, []).append(e.name)
-                walk(e.name)
-        elif e.name.endswith(".pth"):
-            pth.append(e.name)
-        else:
-            mod = _module_name(e.name)
-            if mod:
-                top.setdefault(mod, []).append(e.name)
-    distribution = {"name": None, "version": None}
-    if dist_info:
-        with open(os.path.join(root, dist_info, "METADATA")) as f:
-            for line in f:
-                key, _, value = line.partition(":")
-                if key.lower() in distribution:
-                    distribution[key.lower()] = value.strip()
-    return {
-        "version": 1,
-        "distribution": distribution,
-        "dist_info": dist_info,
-        "top": {k: sorted(v) for k, v in sorted(top.items())},
-        "pth": sorted(pth),
-        "dirs": sorted(dirs),
-        "namespaces": {},
-    }
 
 
 class ImportIndexTest(unittest.TestCase):
@@ -337,23 +265,6 @@ class ImportIndexTest(unittest.TestCase):
             shutil.copytree(root, cls.merged, dirs_exist_ok=True)
 
         cls.results = {mode: cls.probe(mode) for mode in ("plain", "merged", "finder")}
-
-    _counter = itertools.count()
-
-    @classmethod
-    def write_index(cls, names=None, tamper=None):
-        entries = [
-            (os.path.relpath(root, cls.tmp), _wheel_index(root))
-            for name, root in cls.roots.items()
-            if names is None or name in names
-        ]
-        merged = import_index.merge_wheel_indexes(entries)
-        if tamper:
-            tamper(merged)
-        path = os.path.join(cls.tmp, "index{}.json".format(next(cls._counter)))
-        with open(path, "w") as f:
-            json.dump(merged, f)
-        return path
 
     @classmethod
     def config(cls, **kwargs):
@@ -504,25 +415,8 @@ class ImportIndexTest(unittest.TestCase):
     def oracle_keys(self, result):
         return {k: v for k, v in result.items() if not k.startswith("_")}
 
-    def probe_index(self, mode, index, **kwargs):
-        return self.probe(
-            "finder",
-            index_mode=mode,
-            index=index,
-            runfiles_root=self.tmp,
-            **kwargs,
-        )
-
     def test_prebuilt_matches_pip_merged_layout(self):
-        finder = self.probe_index("prebuilt", self.write_index(), forbid_scandir=True)
-        self.assertTrue(finder["_installed"])
-        self.assertEqual(finder["_indexed"], len(self.roots))
-        self.assertEqual(self.oracle_keys(finder), self.results["merged"])
-        self.assertEqual(finder["_isdir_calls"], 0)
-        self.assertEqual(finder["_root_listdir_calls"], 0)
-
-    def test_per_wheel_prebuilt_fallback_without_merged_file(self):
-        # Split-file hybrid (`index_path=None`, `mode="prebuilt"`):
+        # Split-file hybrid (`mode="prebuilt"`):
         # `_scan_root_with_native` scans each wheel root via `os.scandir`, ignores
         # dotfiles as top-level modules or `.pth` files, and records any
         # `.pycross-native.json` / `.pycross-native-consumer.json` dotfiles.
@@ -543,9 +437,8 @@ class ImportIndexTest(unittest.TestCase):
                 )
                 dotfile_paths.append(dot_path)
         try:
-            finder = self.probe_index("prebuilt", None)
+            finder = self.probe("finder", index_mode="prebuilt")
             self.assertTrue(finder["_installed"])
-            self.assertEqual(finder["_indexed"], len(self.roots))
             self.assertEqual(self.oracle_keys(finder), self.results["merged"])
             self.assertEqual(finder["_root_listdir_calls"], 0)
         finally:
@@ -565,9 +458,9 @@ class ImportIndexTest(unittest.TestCase):
 
             os.makedirs(os.path.dirname(cublas_so), exist_ok=True)
             with open(cublas_lt_so, "wb") as fh:
-                fh.write(import_index._make_stub_elf("$ORIGIN", "libc.so.6", soname="libcublasLt.so.12"))
+                fh.write(import_index._make_stub_elf("$ORIGIN", "libc.so.6"))
             with open(cublas_so, "wb") as fh:
-                fh.write(import_index._make_stub_elf("$ORIGIN", "libcublasLt.so.12", soname="libcublas.so.12"))
+                fh.write(import_index._make_stub_elf("$ORIGIN", "libcublasLt.so.12"))
             _write(os.path.join(cublas_root, "nvidia", "cublas", "__init__.py"), "")
 
             os.makedirs(os.path.dirname(cudnn_so), exist_ok=True)
@@ -576,7 +469,6 @@ class ImportIndexTest(unittest.TestCase):
                     import_index._make_stub_elf(
                         "$ORIGIN/../../cublas/lib",
                         "libcublas.so.12",
-                        soname="libcudnn.so.9",
                     )
                 )
             _write(os.path.join(cudnn_root, "nvidia", "cudnn", "__init__.py"), "")
@@ -645,8 +537,6 @@ class ImportIndexTest(unittest.TestCase):
                         import_index.install(
                             [cublas_root, pure_root],
                             mode="prebuilt",
-                            index_path=None,
-                            runfiles_root=tmp,
                         )
                     )
                     self.assertEqual(spy_json.call_count, 0)
@@ -689,8 +579,6 @@ class ImportIndexTest(unittest.TestCase):
                         import_index.install(
                             [cublas_root, cudnn_root, pure_root],
                             mode="prebuilt",
-                            index_path=None,
-                            runfiles_root=tmp,
                         )
                     )
                     self.assertEqual(spy_json.call_count, 2)
@@ -705,7 +593,7 @@ class ImportIndexTest(unittest.TestCase):
                     import_index.PathFinder.find_spec("nvidia.cudnn", [os.path.join(cudnn_root, "nvidia")])
                     self.assertEqual(preloaded, [cublas_lt_so, cublas_so])
 
-                # 3. `verify` mode (`_verify_hybrid`) passes when dotfiles match on-disk ELF files.
+                # 3. `verify` mode (`_verify`) passes when dotfiles match on-disk layout.
                 import_index._INDEX = None
                 sys.meta_path[:] = prev_meta
                 with mock.patch.object(import_index, "_raw_dlopen", side_effect=lambda p: p):
@@ -713,8 +601,6 @@ class ImportIndexTest(unittest.TestCase):
                         import_index.install(
                             [cublas_root, cudnn_root, pure_root],
                             mode="verify",
-                            index_path=None,
-                            runfiles_root=tmp,
                         )
                     )
 
@@ -731,8 +617,6 @@ class ImportIndexTest(unittest.TestCase):
                         import_index.install(
                             [cublas_root, cudnn_root, pure_root],
                             mode="verify",
-                            index_path=None,
-                            runfiles_root=tmp,
                         )
                 finally:
                     _write(cudnn_dot, json.dumps(cudnn_meta))
@@ -751,8 +635,6 @@ class ImportIndexTest(unittest.TestCase):
                         import_index.install(
                             [cublas_root, cudnn_root, pure_root],
                             mode="verify",
-                            index_path=None,
-                            runfiles_root=tmp,
                         )
                 finally:
                     if os.path.exists(wrong_dot):
@@ -772,8 +654,6 @@ class ImportIndexTest(unittest.TestCase):
                         import_index.install(
                             [cublas_root, cudnn_root, pure_root],
                             mode="verify",
-                            index_path=None,
-                            runfiles_root=tmp,
                         )
                 finally:
                     if os.path.exists(pure_dot):
@@ -784,90 +664,81 @@ class ImportIndexTest(unittest.TestCase):
                 sys.meta_path[:] = prev_meta
 
     def test_merge_preload_and_finder_preloads_on_import(self):
-        def wheel(**fields):
-            return dict(
-                {"version": 1, "top": {}, "pth": [], "dirs": [], "dist_info": None},
-                **fields,
-            )
-
-        merged = import_index.merge_wheel_indexes(
+        preload, _, _ = import_index._compute_native(
             [
-                (
-                    "cublas/site-packages",
-                    wheel(
-                        top={"nvidia": ["nvidia"]},
-                        dirs=["nvidia", "nvidia/cublas", "nvidia/cublas/lib"],
-                        native={
-                            "nvidia/cublas/lib/libcublas.so.12": {
-                                "soname": "libcublas.so.12",
-                                "needed": ["libcublasLt.so.12"],
-                                "rpath": [],
-                                "runpath": ["$ORIGIN"],
-                            },
-                            "nvidia/cublas/lib/libcublasLt.so.12": {
-                                "soname": "libcublasLt.so.12",
-                                "needed": [],
-                                "rpath": [],
-                                "runpath": [],
-                            },
+                {
+                    "version": 2,
+                    "top": ["nvidia"],
+                    "dirs": ["nvidia", "nvidia/cublas", "nvidia/cublas/lib"],
+                    "native": {
+                        "nvidia/cublas/lib/libcublas.so.12": {
+                            "soname": "libcublas.so.12",
+                            "needed": ["libcublasLt.so.12"],
+                            "rpath": [],
+                            "runpath": ["$ORIGIN"],
                         },
-                    ),
-                ),
-                (
-                    "cudnn/site-packages",
-                    wheel(
-                        top={"nvidia": ["nvidia"]},
-                        dirs=["nvidia", "nvidia/cudnn", "nvidia/cudnn/lib"],
-                        native={
-                            "nvidia/cudnn/lib/libcudnn.so.9": {
-                                "soname": "libcudnn.so.9",
-                                "needed": ["libcublas.so.12"],
-                                "rpath": [],
-                                "runpath": ["$ORIGIN/../../cublas/lib"],
-                            },
+                        "nvidia/cublas/lib/libcublasLt.so.12": {
+                            "soname": "libcublasLt.so.12",
+                            "needed": [],
+                            "rpath": [],
+                            "runpath": [],
                         },
-                        escaping={
-                            "nvidia/cudnn/lib/libcudnn.so.9": {
-                                "rpath": [],
-                                "runpath": ["nvidia/cublas/lib"],
-                            },
+                    },
+                },
+                {
+                    "version": 2,
+                    "top": ["nvidia"],
+                    "dirs": ["nvidia", "nvidia/cudnn", "nvidia/cudnn/lib"],
+                    "native": {
+                        "nvidia/cudnn/lib/libcudnn.so.9": {
+                            "soname": "libcudnn.so.9",
+                            "needed": ["libcublas.so.12"],
+                            "rpath": [],
+                            "runpath": ["$ORIGIN/../../cublas/lib"],
                         },
-                    ),
-                ),
-                (
-                    "tf/site-packages",
-                    wheel(
-                        top={"tf": ["tf"]},
-                        dirs=["tf", "tf/python"],
-                        native={
-                            "tf/python/_pywrap.so": {
-                                "soname": None,
-                                "needed": ["libcudnn.so.9", "libtf_internal.so"],
-                                "rpath": [],
-                                "runpath": [
-                                    "$ORIGIN",
-                                    "$ORIGIN/../../nvidia/cudnn/lib",
-                                ],
-                            },
-                            "tf/python/libtf_internal.so": {
-                                "soname": "libtf_internal.so",
-                                "needed": [],
-                                "rpath": [],
-                                "runpath": [],
-                            },
+                    },
+                    "escaping": {
+                        "nvidia/cudnn/lib/libcudnn.so.9": {
+                            "rpath": [],
+                            "runpath": ["nvidia/cublas/lib"],
                         },
-                        escaping={
-                            "tf/python/_pywrap.so": {
-                                "rpath": [],
-                                "runpath": ["nvidia/cudnn/lib"],
-                            },
+                    },
+                },
+                {
+                    "version": 2,
+                    "top": ["tf"],
+                    "dirs": ["tf", "tf/python"],
+                    "native": {
+                        "tf/python/_pywrap.so": {
+                            "soname": None,
+                            "needed": ["libcudnn.so.9", "libtf_internal.so"],
+                            "rpath": [],
+                            "runpath": [
+                                "$ORIGIN",
+                                "$ORIGIN/../../nvidia/cudnn/lib",
+                            ],
                         },
-                    ),
-                ),
-            ]
+                        "tf/python/libtf_internal.so": {
+                            "soname": "libtf_internal.so",
+                            "needed": [],
+                            "rpath": [],
+                            "runpath": [],
+                        },
+                    },
+                    "escaping": {
+                        "tf/python/_pywrap.so": {
+                            "rpath": [],
+                            "runpath": ["nvidia/cudnn/lib"],
+                        },
+                    },
+                },
+            ],
+            merged={"nvidia": [0, 1]},
+            sub={"nvidia.cublas": 0, "nvidia.cudnn": 1},
+            ld_dirs=(),
         )
         self.assertEqual(
-            merged["preload"]["tf"],
+            preload["tf"],
             [
                 [0, "nvidia/cublas/lib/libcublasLt.so.12"],
                 [0, "nvidia/cublas/lib/libcublas.so.12"],
@@ -875,7 +746,7 @@ class ImportIndexTest(unittest.TestCase):
             ],
         )
         self.assertEqual(
-            merged["preload"]["nvidia.cudnn"],
+            preload["nvidia.cudnn"],
             [
                 [0, "nvidia/cublas/lib/libcublasLt.so.12"],
                 [0, "nvidia/cublas/lib/libcublas.so.12"],
@@ -883,19 +754,13 @@ class ImportIndexTest(unittest.TestCase):
         )
 
     def test_no_rpath_dt_needed_recorded_in_sonames_not_eager_preload(self):
-        def wheel(**fields):
-            return dict(
-                {"version": 1, "top": {}, "pth": [], "dirs": [], "dist_info": None},
-                **fields,
-            )
-
-        entries = [
-            (
-                "cublas/site-packages",
-                wheel(
-                    top={"nvidia": ["nvidia"]},
-                    dirs=["nvidia", "nvidia/cublas", "nvidia/cublas/lib"],
-                    native={
+        preload, sonames, native_deps = import_index._compute_native(
+            [
+                {
+                    "version": 2,
+                    "top": ["nvidia"],
+                    "dirs": ["nvidia", "nvidia/cublas", "nvidia/cublas/lib"],
+                    "native": {
                         # Both symlink and versioned file share DT_SONAME; canonical
                         # symlink should win in `sonames`.
                         "nvidia/cublas/lib/libcublas.so": {
@@ -931,14 +796,12 @@ class ImportIndexTest(unittest.TestCase):
                             "runpath": [],
                         },
                     },
-                ),
-            ),
-            (
-                "ort/site-packages",
-                wheel(
-                    top={"onnxruntime": ["onnxruntime"]},
-                    dirs=["onnxruntime", "onnxruntime/capi"],
-                    native={
+                },
+                {
+                    "version": 2,
+                    "top": ["onnxruntime"],
+                    "dirs": ["onnxruntime", "onnxruntime/capi"],
+                    "native": {
                         # No escaping RPATH/RUNPATH, only DT_NEEDED on SONAMEs
                         # from another wheel, plus a .libs/ sibling directory.
                         "onnxruntime.libs/libort_bundled.so.1": {
@@ -948,34 +811,33 @@ class ImportIndexTest(unittest.TestCase):
                             "runpath": [],
                         },
                     },
-                ),
-            ),
-        ]
-        merged = import_index.merge_wheel_indexes(entries)
+                },
+            ],
+            ld_dirs=(),
+        )
         # Unsatisfied DT_NEEDED without an escaping RPATH is NOT eagerly preloaded;
         # it is resolved lazily via `sonames` if the dynamic linker fails at load time.
-        self.assertNotIn("preload", merged)
-        self.assertNotIn("native_deps", merged)
+        self.assertEqual(preload, {})
+        self.assertEqual(native_deps, {})
         self.assertEqual(
-            merged["sonames"]["libcublas.so.12"],
+            sonames["libcublas.so.12"],
             [0, "nvidia/cublas/lib/libcublas.so.12"],
         )
         self.assertEqual(
-            merged["sonames"]["libnosoname.so"],
+            sonames["libnosoname.so"],
             [0, "nvidia/cublas/lib/libnosoname.so"],
         )
         self.assertEqual(
-            merged["sonames"]["libort_bundled.so.1"],
+            sonames["libort_bundled.so.1"],
             [1, "onnxruntime.libs/libort_bundled.so.1"],
         )
-        self.assertNotIn("_ext.cpython-312-x86_64-linux-gnu.so", merged["sonames"])
+        self.assertNotIn("_ext.cpython-312-x86_64-linux-gnu.so", sonames)
 
     def test_stub_elf_header_and_dynstr(self):
         self.assertIsNone(import_index._make_stub_elf("/tmp/wheel/lib", "libcublas.so.12", ei_class=1))
         stub_bytes = import_index._make_stub_elf(
             "/tmp/wheel/lib",
             "libcublas.so.12",
-            soname="libstub.so.1",
             ei_class=2,
             ei_data=1,
             e_machine=62,
@@ -1005,74 +867,54 @@ class ImportIndexTest(unittest.TestCase):
             _write(os.path.join(nvcc_root, "nvidia", "cuda_nvcc", "__init__.py"), "")
             _write(ptxas_bin, "")
 
-            def wheel_meta(**fields):
-                return dict(
-                    {"version": 1, "top": {}, "pth": [], "dirs": [], "dist_info": None},
-                    **fields,
-                )
-
-            merged = import_index.merge_wheel_indexes(
-                [
-                    (
-                        "cublas/site-packages",
-                        wheel_meta(
-                            top={"nvidia": ["nvidia"]},
-                            dirs=["nvidia", "nvidia/cublas", "nvidia/cublas/lib"],
-                            native={
-                                "nvidia/cublas/lib/libcublasLt.so.12": {
-                                    "soname": "libcublasLt.so.12",
-                                    "needed": [],
-                                    "rpath": [],
-                                    "runpath": [],
-                                },
-                                "nvidia/cublas/lib/libcublas.so.12": {
-                                    "soname": "libcublas.so.12",
-                                    "needed": ["libcublasLt.so.12"],
-                                    "rpath": [],
-                                    "runpath": ["$ORIGIN"],
-                                },
+            _write(
+                os.path.join(cublas_root, import_index.NATIVE_PROVIDER_FILENAME),
+                json.dumps(
+                    {
+                        "version": 2,
+                        "top": ["nvidia"],
+                        "dirs": ["nvidia", "nvidia/cublas", "nvidia/cublas/lib"],
+                        "native": {
+                            "nvidia/cublas/lib/libcublasLt.so.12": {
+                                "soname": "libcublasLt.so.12",
+                                "needed": [],
+                                "rpath": [],
+                                "runpath": [],
                             },
-                        ),
-                    ),
-                    (
-                        "cudnn/site-packages",
-                        wheel_meta(
-                            top={"nvidia": ["nvidia"]},
-                            dirs=["nvidia", "nvidia/cudnn", "nvidia/cudnn/lib"],
-                            native={
-                                "nvidia/cudnn/lib/libcudnn.so.9": {
-                                    "soname": "libcudnn.so.9",
-                                    "needed": ["libcublas.so.12"],
-                                    "rpath": [],
-                                    "runpath": ["$ORIGIN/../../cublas/lib"],
-                                },
+                            "nvidia/cublas/lib/libcublas.so.12": {
+                                "soname": "libcublas.so.12",
+                                "needed": ["libcublasLt.so.12"],
+                                "rpath": [],
+                                "runpath": ["$ORIGIN"],
                             },
-                            escaping={
-                                "nvidia/cudnn/lib/libcudnn.so.9": {
-                                    "rpath": [],
-                                    "runpath": ["nvidia/cublas/lib"],
-                                },
-                            },
-                        ),
-                    ),
-                    (
-                        "torch/site-packages",
-                        wheel_meta(
-                            top={"torch": ["torch"]},
-                            dirs=["torch"],
-                        ),
-                    ),
-                    (
-                        "nvcc/site-packages",
-                        wheel_meta(
-                            top={"nvidia": ["nvidia"]},
-                            dirs=["nvidia", "nvidia/cuda_nvcc"],
-                        ),
-                    ),
-                ]
+                        },
+                    }
+                ),
             )
-            idx_file = os.path.join(tmp, "_bazel_import_index.json")
-            _write(idx_file, json.dumps(merged))
+            _write(
+                os.path.join(cudnn_root, import_index.NATIVE_CONSUMER_FILENAME),
+                json.dumps(
+                    {
+                        "version": 2,
+                        "top": ["nvidia"],
+                        "dirs": ["nvidia", "nvidia/cudnn", "nvidia/cudnn/lib"],
+                        "native": {
+                            "nvidia/cudnn/lib/libcudnn.so.9": {
+                                "soname": "libcudnn.so.9",
+                                "needed": ["libcublas.so.12"],
+                                "rpath": [],
+                                "runpath": ["$ORIGIN/../../cublas/lib"],
+                            },
+                        },
+                        "escaping": {
+                            "nvidia/cudnn/lib/libcudnn.so.9": {
+                                "rpath": [],
+                                "runpath": ["nvidia/cublas/lib"],
+                            },
+                        },
+                    }
+                ),
+            )
 
             roots = [cublas_root, cudnn_root, torch_root, nvcc_root]
             preloaded_calls = []
@@ -1099,8 +941,6 @@ class ImportIndexTest(unittest.TestCase):
                         import_index.install(
                             roots,
                             mode="prebuilt",
-                            index_path=idx_file,
-                            runfiles_root=tmp,
                         )
                     )
                     # Item 7: Opt-in CUDA_HOME and PATH setup from nvidia.cuda_nvcc.
@@ -1111,14 +951,14 @@ class ImportIndexTest(unittest.TestCase):
                     # Item 5a: Escaped relative path from torch/__init__.py -> cudnn wheel,
                     # plus transitive preload of libcublasLt.so.12 and libcublas.so.12.
                     escaped = os.path.join(torch_root, "torch", "..", "nvidia", "cudnn", "lib", "libcudnn.so.9")
-                    resolved = import_index._resolve_dlopen_arg(escaped)
+                    resolved = import_index._resolve_path_dlopen_arg(escaped)
                     self.assertEqual(resolved, cudnn_so)
                     self.assertEqual(preloaded_calls, [cublas_lt_so, cublas_so])
 
                     # Item 5a: Bare SONAME resolution.
                     preloaded_calls.clear()
                     import_index._PRELOADED.clear()
-                    self.assertEqual(import_index._resolve_dlopen_arg("libcudnn.so.9"), cudnn_so)
+                    self.assertEqual(import_index._resolve_bare_dlopen_arg("libcudnn.so.9"), cudnn_so)
                     self.assertEqual(preloaded_calls, [cublas_lt_so, cublas_so])
 
                     # Item 5b: _cffi_backend wrapper (load_library and FFI.dlopen).
@@ -1156,52 +996,43 @@ class ImportIndexTest(unittest.TestCase):
             for p in (cudart_so, cublas_so):
                 _write(p, "")
 
-            def wheel_meta(**fields):
-                return dict(
-                    {"version": 1, "top": {}, "pth": [], "dirs": [], "dist_info": None},
-                    **fields,
-                )
-
-            merged = import_index.merge_wheel_indexes(
-                [
-                    (
-                        "wheel_a/site-packages",
-                        wheel_meta(
-                            top={"nvidia": ["nvidia"]},
-                            dirs=["nvidia", "nvidia/cuda_runtime", "nvidia/cuda_runtime/lib"],
-                            native={
-                                "nvidia/cuda_runtime/lib/libcudart.so.12": {
-                                    "soname": "libcudart.so.12",
-                                    "needed": ["libc.so.6"],
-                                    "rpath": [],
-                                    "runpath": ["$ORIGIN"],
-                                },
+            _write(
+                os.path.join(wheel_a, import_index.NATIVE_PROVIDER_FILENAME),
+                json.dumps(
+                    {
+                        "version": 2,
+                        "top": ["nvidia"],
+                        "dirs": ["nvidia", "nvidia/cuda_runtime", "nvidia/cuda_runtime/lib"],
+                        "native": {
+                            "nvidia/cuda_runtime/lib/libcudart.so.12": {
+                                "soname": "libcudart.so.12",
+                                "needed": ["libc.so.6"],
+                                "rpath": [],
+                                "runpath": ["$ORIGIN"],
                             },
-                        ),
-                    ),
-                    (
-                        "wheel_b/site-packages",
-                        wheel_meta(
-                            top={"nvidia": ["nvidia"]},
-                            dirs=["nvidia", "nvidia/cublas", "nvidia/cublas/lib"],
-                            native={
-                                "nvidia/cublas/lib/libcublas.so.12": {
-                                    "soname": "libcublas.so.12",
-                                    "needed": ["libcudart.so.12"],
-                                    "rpath": [],
-                                    "runpath": ["$ORIGIN"],
-                                },
-                            },
-                        ),
-                    ),
-                ]
+                        },
+                    }
+                ),
             )
-            self.assertIn("libcudart.so.12", merged.get("sonames", {}))
-            self.assertIn("libcublas.so.12", merged.get("sonames", {}))
-            self.assertNotIn("preload", merged)
+            _write(
+                os.path.join(wheel_b, import_index.NATIVE_PROVIDER_FILENAME),
+                json.dumps(
+                    {
+                        "version": 2,
+                        "top": ["nvidia"],
+                        "dirs": ["nvidia", "nvidia/cublas", "nvidia/cublas/lib"],
+                        "native": {
+                            "nvidia/cublas/lib/libcublas.so.12": {
+                                "soname": "libcublas.so.12",
+                                "needed": ["libcudart.so.12"],
+                                "rpath": [],
+                                "runpath": ["$ORIGIN"],
+                            },
+                        },
+                    }
+                ),
+            )
 
-            idx_file = os.path.join(tmp, "_bazel_import_index.json")
-            _write(idx_file, json.dumps(merged))
             roots = [wheel_a, wheel_b]
             prev_index = import_index._INDEX
             prev_meta = list(sys.meta_path)
@@ -1212,8 +1043,6 @@ class ImportIndexTest(unittest.TestCase):
                         import_index.install(
                             roots,
                             mode="prebuilt",
-                            index_path=idx_file,
-                            runfiles_root=tmp,
                         )
                     )
 
@@ -1443,21 +1272,16 @@ class ImportIndexTest(unittest.TestCase):
                 },
             }
 
-            merged = import_index.merge_wheel_indexes(
-                [
-                    ("_lock/numpy@2.1.3/site-packages", idx0),
-                    ("_lock/scipy@1.16.1/site-packages", idx1),
-                ]
-            )
+            preload, _, native_deps = import_index._compute_native([idx0, idx1], ld_dirs=())
             # scipy.libs/libscipy_openblas-68440149.so resolves libgfortran to its OWN wheel's copy
             # (with $ORIGIN RPATH), so neither preload nor cross-wheel native_deps is emitted.
-            self.assertEqual(merged.get("preload", {}), {})
-            self.assertEqual(merged.get("native_deps", {}), {})
+            self.assertEqual(preload, {})
+            self.assertEqual(native_deps, {})
 
             prev_index = import_index._INDEX
             try:
-                pb = import_index._Prebuilt(merged, rf)
-                import_index._INDEX = import_index._Index([w0, w1], pb, rf)
+                os.makedirs(w1, exist_ok=True)
+                import_index._INDEX = import_index._Index([w0, w1], mode="prebuilt")
                 # Even though w0 contains `/./` in its path, _match_wheel_relpath matches the
                 # normalized extension path.
                 self.assertEqual(
@@ -1542,7 +1366,7 @@ class ImportIndexTest(unittest.TestCase):
             os.makedirs(ld_dir, exist_ok=True)
             ld_cudart = os.path.join(ld_dir, "libcudart.so.12")
             with open(ld_cudart, "wb") as fh:
-                fh.write(import_index._make_stub_elf("$ORIGIN", "libc.so.6", soname="libcudart.so.12"))
+                fh.write(import_index._make_stub_elf("$ORIGIN", "libc.so.6"))
 
             # Wrong-class (32-bit ELF, ei_class=1) file in LD_LIBRARY_PATH is skipped by
             # _elf_matches_process_class on 64-bit Python, matching glibc.
@@ -1552,83 +1376,92 @@ class ImportIndexTest(unittest.TestCase):
             with open(ld_cudart_32, "wb") as fh:
                 fh.write(b"\x7fELF\x01\x01\x01" + b"\x00" * 57)
 
-            def make_roots_data(use_rpath):
+            def make_wheel_indexes(use_rpath):
                 return [
-                    (
-                        "wheel_a/site-packages",
-                        {
-                            "version": 2,
-                            "top": {"nvidia": ["nvidia"]},
-                            "pth": [],
-                            "dirs": ["nvidia", "nvidia/cuda_runtime", "nvidia/cuda_runtime/lib"],
-                            "dist_info": None,
-                            "native": {
-                                "nvidia/cuda_runtime/lib/libcudart.so.12": {
-                                    "soname": "libcudart.so.12",
-                                    "needed": ["libc.so.6"],
-                                    "rpath": [],
-                                    "runpath": [],
-                                }
-                            },
+                    {
+                        "version": 2,
+                        "top": ["nvidia"],
+                        "dirs": ["nvidia", "nvidia/cuda_runtime", "nvidia/cuda_runtime/lib"],
+                        "native": {
+                            "nvidia/cuda_runtime/lib/libcudart.so.12": {
+                                "soname": "libcudart.so.12",
+                                "needed": ["libc.so.6"],
+                                "rpath": [],
+                                "runpath": [],
+                            }
                         },
-                    ),
-                    (
-                        "wheel_b/site-packages",
-                        {
-                            "version": 2,
-                            "top": {"nvidia": ["nvidia"]},
-                            "pth": [],
-                            "dirs": ["nvidia", "nvidia/cublas", "nvidia/cublas/lib"],
-                            "dist_info": None,
-                            "native": {
-                                "nvidia/cublas/lib/libcublas.so.12": {
-                                    "soname": "libcublas.so.12",
-                                    "needed": ["libcudart.so.12"],
-                                    "rpath": ["$ORIGIN/../../cuda_runtime/lib"] if use_rpath else [],
-                                    "runpath": [] if use_rpath else ["$ORIGIN/../../cuda_runtime/lib"],
-                                }
-                            },
-                            "escaping": {
-                                "nvidia/cublas/lib/libcublas.so.12": {
-                                    "rpath": ["nvidia/cuda_runtime/lib"] if use_rpath else [],
-                                    "runpath": [] if use_rpath else ["nvidia/cuda_runtime/lib"],
-                                }
-                            },
+                    },
+                    {
+                        "version": 2,
+                        "top": ["nvidia"],
+                        "dirs": ["nvidia", "nvidia/cublas", "nvidia/cublas/lib"],
+                        "native": {
+                            "nvidia/cublas/lib/libcublas.so.12": {
+                                "soname": "libcublas.so.12",
+                                "needed": ["libcudart.so.12"],
+                                "rpath": ["$ORIGIN/../../cuda_runtime/lib"] if use_rpath else [],
+                                "runpath": [] if use_rpath else ["$ORIGIN/../../cuda_runtime/lib"],
+                            }
                         },
-                    ),
+                        "escaping": {
+                            "nvidia/cublas/lib/libcublas.so.12": {
+                                "rpath": ["nvidia/cuda_runtime/lib"] if use_rpath else [],
+                                "runpath": [] if use_rpath else ["nvidia/cuda_runtime/lib"],
+                            }
+                        },
+                    },
                 ]
 
+            merged = {"nvidia": [0, 1]}
+            sub = {"nvidia.cuda_runtime": 0, "nvidia.cublas": 1}
+
             # 1. Escaping $ORIGIN DT_RUNPATH preloads the provider library when LD_LIBRARY_PATH is unset.
-            with mock.patch.dict(os.environ, {"LD_LIBRARY_PATH": ""}, clear=False):
-                merged = import_index.merge_wheel_indexes(make_roots_data(use_rpath=False))
-                self.assertEqual(
-                    merged.get("preload", {}).get("nvidia.cublas"),
-                    [[0, "nvidia/cuda_runtime/lib/libcudart.so.12"]],
-                )
+            preload, _, _ = import_index._compute_native(
+                make_wheel_indexes(use_rpath=False),
+                merged=merged,
+                sub=sub,
+                ld_dirs=(),
+            )
+            self.assertEqual(
+                preload.get("nvidia.cublas"),
+                [[0, "nvidia/cuda_runtime/lib/libcudart.so.12"]],
+            )
 
             # 2. LD_LIBRARY_PATH wins over escaping $ORIGIN DT_RUNPATH -> wheel copy NOT preloaded.
-            with mock.patch.dict(os.environ, {"LD_LIBRARY_PATH": ld_dir}, clear=False):
-                merged = import_index.merge_wheel_indexes(make_roots_data(use_rpath=False))
-                self.assertIsNone(merged.get("preload", {}).get("nvidia.cublas"))
+            preload, _, _ = import_index._compute_native(
+                make_wheel_indexes(use_rpath=False),
+                merged=merged,
+                sub=sub,
+                ld_dirs=(ld_dir,),
+            )
+            self.assertIsNone(preload.get("nvidia.cublas"))
 
             # 3. Wrong-class (32-bit) ELF in LD_LIBRARY_PATH is ignored -> DT_RUNPATH still preloads wheel copy.
             if sys.maxsize > (1 << 32):
                 self.assertFalse(import_index._elf_matches_process_class(ld_cudart_32))
                 self.assertTrue(import_index._elf_matches_process_class(ld_cudart))
-                with mock.patch.dict(os.environ, {"LD_LIBRARY_PATH": ld_wrong_dir}, clear=False):
-                    merged = import_index.merge_wheel_indexes(make_roots_data(use_rpath=False))
-                    self.assertEqual(
-                        merged.get("preload", {}).get("nvidia.cublas"),
-                        [[0, "nvidia/cuda_runtime/lib/libcudart.so.12"]],
-                    )
-
-            # 4. Escaping $ORIGIN DT_RPATH wins over LD_LIBRARY_PATH -> wheel copy IS preloaded.
-            with mock.patch.dict(os.environ, {"LD_LIBRARY_PATH": ld_dir}, clear=False):
-                merged = import_index.merge_wheel_indexes(make_roots_data(use_rpath=True))
+                preload, _, _ = import_index._compute_native(
+                    make_wheel_indexes(use_rpath=False),
+                    merged=merged,
+                    sub=sub,
+                    ld_dirs=(ld_wrong_dir,),
+                )
                 self.assertEqual(
-                    merged.get("preload", {}).get("nvidia.cublas"),
+                    preload.get("nvidia.cublas"),
                     [[0, "nvidia/cuda_runtime/lib/libcudart.so.12"]],
                 )
+
+            # 4. Escaping $ORIGIN DT_RPATH wins over LD_LIBRARY_PATH -> wheel copy IS preloaded.
+            preload, _, _ = import_index._compute_native(
+                make_wheel_indexes(use_rpath=True),
+                merged=merged,
+                sub=sub,
+                ld_dirs=(ld_dir,),
+            )
+            self.assertEqual(
+                preload.get("nvidia.cublas"),
+                [[0, "nvidia/cuda_runtime/lib/libcudart.so.12"]],
+            )
 
             # 5. LD_LIBRARY_PATH is snapshotted at install() time (matching glibc): mutating
             # os.environ["LD_LIBRARY_PATH"] after install() does not affect lazy ensure_native_loaded().
@@ -1638,11 +1471,11 @@ class ImportIndexTest(unittest.TestCase):
             _write(os.path.join(w_b, "nvidia", "cublas", "__init__.py"), "")
             _write(
                 os.path.join(w_a, import_index.NATIVE_PROVIDER_FILENAME),
-                json.dumps(make_roots_data(use_rpath=False)[0][1]),
+                json.dumps(make_wheel_indexes(use_rpath=False)[0]),
             )
             _write(
                 os.path.join(w_b, import_index.NATIVE_PROVIDER_FILENAME),
-                json.dumps(make_roots_data(use_rpath=False)[1][1]),
+                json.dumps(make_wheel_indexes(use_rpath=False)[1]),
             )
             prev_index = import_index._INDEX
             prev_meta = list(sys.meta_path)

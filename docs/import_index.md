@@ -99,7 +99,7 @@ Instead of patching ELF binaries on disk (which would couple wheel install actio
 
 ### 3.1 Build-Time / Startup Dependency Graph (`_compute_native`)
 1. During per-wheel indexing, [`elf_tools.py`](../pycross/private/tools/elf_tools.py) records `{soname, needed, rpath, runpath, ei_class, ei_data, e_machine}` for every ELF `.so` file and SONAME symlink in the wheel, and `compute_escaping_rpaths()` precomputes each consumer library's normalized escaping `$ORIGIN` candidate directories (`{"rpath": [...], "runpath": [...]}`, honoring `DT_RPATH` only when the object has no `DT_RUNPATH`).
-2. When building the cross-wheel native graph (`ensure_native_loaded()` at runtime or [`merge_wheel_indexes()`](../pycross/private/tools/import_index.py)), `_compute_native()` builds a cross-wheel SONAME table (`"sonames"`) and RPATH-reachable dependency closures (`"preload"` and `"native_deps"`):
+2. When building the cross-wheel native graph (`ensure_native_loaded()` at runtime), `_compute_native()` builds a cross-wheel SONAME table (`"sonames"`) and RPATH-reachable dependency closures (`"preload"` and `"native_deps"`):
    - **The loader decides (no Python host-check layer):** Instead of probing `/etc/ld.so.cache`, default system library directories, or `RTLD_NOLOAD` in Python, the real dynamic linker decides whether a library is already satisfied on the host:
      - Eager preloads (consumer wheels at startup, and `"native_deps"` closures used by the escaped-path rewrite and bare-name `dlopen` fallback) follow **only RPATH-reachable edges**: own-wheel dependencies reached by the library's own `DT_RPATH` / `DT_RUNPATH`, and cross-wheel dependencies reached by the precomputed `"escaping"` `$ORIGIN` directories.
      - Bare-name `dlopen` / `cffi` is **never** preloaded eagerly; the real dynamic linker runs first, and `"sonames"` is consulted only as a fallback if that lookup fails.
@@ -126,59 +126,53 @@ When `_ctypes`, `ctypes`, or `_cffi_backend` is imported, `PathFinder.find_spec`
 
 ---
 
-## 4. Understanding the Merged Import Index Schema
+## 4. Understanding the Native Dotfile Schema & Runtime `_Index` Tables
 
-When `merge_wheel_indexes()` merges the per-wheel `<wheel>.dist_info/index.json` files at startup, wheel root paths are listed once in the `"roots"` array, and all other sections reference wheels by their **0-based integer index into `"roots"`**:
+Each wheel containing ELF `.so` files has a compact version-2 dotfile (`site-packages/.pycross-native-consumer.json` if `escaping` is non-empty, or `site-packages/.pycross-native.json` otherwise) written at wheel install time:
 
 ```json
 {
-  "version": 1,
-  "roots": [
-    "rules_pycross++uv+uv__pkgs/_lock/backports-entry-points-selectable@1.3.0/site-packages",
-    "rules_pycross++uv+uv__pkgs/_lock/backports-tarfile@1.2.0/site-packages",
-    "...",
-    "_main/fixtures/nvidia_fixture_cublas/site-packages",
-    "_main/fixtures/nvidia_fixture_cudnn/site-packages",
-    "_main/fixtures/nvidia_fixture_nccl/site-packages",
-    "_main/fixtures/pthfixture/site-packages",
-    "_main/fixtures/rpathfixture/site-packages"
-  ],
-  "top": {
-    "nvidia": [[34, ["nvidia"]], [35, ["nvidia"]], [36, ["nvidia"]]],
-    "typing_extensions": [[17, ["typing_extensions.py"]]]
+  "version": 2,
+  "top": ["rpathfixture"],
+  "dirs": ["rpathfixture"],
+  "native": {
+    "rpathfixture/libuser.so": {
+      "soname": "libuser.so",
+      "needed": ["libfixture_cublas.so.12", "libc.so.6"],
+      "rpath": [],
+      "runpath": [
+        "$ORIGIN/../nvidia/fixture_cublas/lib",
+        "$ORIGIN/../nvidia/fixture_cudnn/lib"
+      ],
+      "ei_class": 2,
+      "ei_data": 1,
+      "e_machine": 62
+    }
   },
-  "merged": {
-    "nvidia": [34, 35, 36],
-    "google.cloud": [9, 24, 25, 28]
-  },
-  "sub": {
-    "nvidia.fixture_cublas": 34,
-    "nvidia.fixture_cudnn": 35,
-    "google.cloud.storage": 28
-  },
-  "preload": {
-    "rpathfixture": [
-      [34, "nvidia/fixture_cublas/lib/libfixture_cublas.so.12"],
-      [35, "nvidia/fixture_cudnn/lib/libfixture_cudnn.so.12"]
-    ]
-  },
-  "pth": [
-    ["pthfixture.pth", 37]
-  ]
+  "escaping": {
+    "rpathfixture/libuser.so": {
+      "rpath": [],
+      "runpath": [
+        "nvidia/fixture_cublas/lib",
+        "nvidia/fixture_cudnn/lib"
+      ]
+    }
+  }
 }
 ```
 
-| Field | Meaning |
+At runtime, `_Index` combines the single-pass `os.scandir` listing (`_scan_root_with_native`) of all wheel roots with the native dotfiles (loaded eagerly when $\ge 1$ wheel has `.pycross-native-consumer.json`, or lazily via `ensure_native_loaded()`):
+
+| Attribute / Key | Meaning |
 |---|---|
-| `"roots"` | Ordered list of runfiles-relative wheel `site-packages` paths. Every integer `i` elsewhere in the file refers to `roots[i]`. |
-| `"top"` | Maps top-level import name $\rightarrow$ `[[root_idx, [filenames]], ...]` in `sys.path` order. |
-| `"merged"` | Maps dotted package directory $\rightarrow$ `[root_idx, ...]` for directories present in $\ge 2$ wheels. |
-| `"sub"` | Maps dotted subpackage directory $\rightarrow$ `root_idx` for single-owner subdirectories whose parent is in `"merged"`, enabling $O(1)$ subpackage resolution without `stat`ting parent directories. |
-| `"preload"` | Maps package/subpackage trigger key $\rightarrow$ `[[root_idx, rel_so_path], ...]` in topological load order for cross-wheel `$ORIGIN` and `DT_NEEDED` native libraries. |
-| `"sonames"` | Maps library SONAME (or filename for libraries without `DT_SONAME`) $\rightarrow$ `[root_idx, rel_so_path]` for runtime bare-name `dlopen` / `cffi` fallback resolution. |
-| `"native_deps"` | Maps `"<root_idx>:<rel_so_path>"` $\rightarrow$ `[[dep_root_idx, dep_rel_so_path], ...]` in topological order for on-demand preloading when a wheel library is loaded directly via `dlopen`. |
-| `"pth"` | Sorted `[[pth_filename, root_idx], ...]` executed via `site.addpackage` at startup. |
-| `"dists"` | Maps normalized distribution name $\rightarrow$ `[[root_idx, dist_info_dirname], ...]` for $O(1)$ `importlib.metadata` lookups. |
+| `_Index.roots` | Ordered list of wheel `site-packages` paths on `sys.path`. |
+| `_Index.top` | Maps top-level import name $\rightarrow$ `[root, ...]` in `sys.path` order. |
+| `_Index.entries` | Maps `(top_name, root)` $\rightarrow$ `[entry_filenames]` from `_scan_root_with_native`. |
+| `_Index.dist_entries` | Maps `root` $\rightarrow$ `[dist_info_dirname, ...]` for $O(1)$ `importlib.metadata` lookups. |
+| `_Index.pth` | Maps `pth_filename` $\rightarrow$ `root`, executed via `site.addpackage` at startup. |
+| `_Index.preload` | Maps package/subpackage trigger key $\rightarrow$ `[(root, rel_so_path), ...]` in topological load order for cross-wheel `$ORIGIN` and `DT_NEEDED` native libraries. |
+| `_Index.sonames` | Maps library SONAME (or filename for libraries without `DT_SONAME`) $\rightarrow$ `(root, rel_so_path)` for runtime bare-name `dlopen` / `cffi` fallback resolution. |
+| `_Index.native_deps` | Maps `(root, rel_so_path)` $\rightarrow$ `[(dep_root, dep_rel_so_path), ...]` in topological order for on-demand preloading when a wheel library is loaded directly via `dlopen`. |
 
 ---
 

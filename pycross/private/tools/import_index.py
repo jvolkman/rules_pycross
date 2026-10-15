@@ -86,11 +86,6 @@ def _normalize_dist_name(name):
     return re.sub(r"[-_.]+", "-", name).lower().replace("-", "_")
 
 
-def dist_info_key(dist_info):
-    """The normalized distribution name of a .dist-info directory name."""
-    return _normalize_dist_name(dist_info.lower().rpartition(".")[0].partition("-")[0])
-
-
 def _own_origin_dirs(so_dir, entries):
     dirs = set()
     for entry in entries:
@@ -319,9 +314,9 @@ def _compute_native(wheel_indexes, merged=None, sub=None, ld_dirs=None):
                 deps.append(dep_key)
         needed_by_key[key] = tuple(deps)
 
-    def resolve_closure(seeds, exclude_key=None, include_escaping=True):
+    def resolve_closure(seeds, include_escaping=True):
         ordered = []
-        visited = {exclude_key} if exclude_key is not None else set()
+        visited = set()
 
         def visit(key):
             if key in visited:
@@ -391,74 +386,6 @@ def _compute_native(wheel_indexes, merged=None, sub=None, ld_dirs=None):
     return preload, sonames, native_deps
 
 
-def _compute_preload(wheel_indexes, merged=None, sub=None):
-    return _compute_native(wheel_indexes, merged, sub)[0]
-
-
-def merge_wheel_indexes(entries):
-    """Merges per-wheel indexes into a single binary import index dict.
-
-    Args:
-        entries: [(root, per-wheel index dict)] in sys.path order.
-
-    Returns:
-        The merged index dict.
-    """
-    roots = []
-    wheel_indexes = []
-    distributions = []
-    top = {}
-    dists = {}
-    pth = []
-    dir_owners = {}
-    for root, index in entries:
-        version = index.get("version")
-        if version not in (1, _SUPPORTED_VERSION):
-            raise ValueError(
-                "{}: unsupported per-wheel index version {!r} (want {})".format(root, version, _SUPPORTED_VERSION)
-            )
-        if root in roots:
-            continue
-        i = len(roots)
-        roots.append(root)
-        wheel_indexes.append(index)
-        distributions.append(index.get("distribution"))
-        for name, root_entries in sorted(index.get("top", {}).items()):
-            top.setdefault(name, []).append([i, sorted(root_entries)])
-        dist_info = index.get("dist_info")
-        if dist_info:
-            dists.setdefault(dist_info_key(dist_info), []).append([i, dist_info])
-        pth.extend([name, i] for name in index.get("pth", ()))
-        for d in index.get("dirs", ()):
-            dir_owners.setdefault(d.replace("/", "."), []).append(i)
-
-    merged = {d: owners for d, owners in sorted(dir_owners.items()) if len(owners) > 1}
-    sub = {
-        d: owners[0] for d, owners in sorted(dir_owners.items()) if len(owners) == 1 and d.rpartition(".")[0] in merged
-    }
-    result = {
-        "version": 1,
-        "roots": roots,
-        "distributions": distributions,
-        "top": dict(sorted(top.items())),
-        "dists": dict(sorted(dists.items())),
-        "pth": sorted(pth),
-        "merged": merged,
-        "sub": sub,
-        "conflicts": sorted(
-            name for name, owners in top.items() if len(owners) > 1 and any(e != name for _, es in owners for e in es)
-        ),
-    }
-    preload, sonames, native_deps = _compute_native(wheel_indexes, merged, sub)
-    if preload:
-        result["preload"] = preload
-    if sonames:
-        result["sonames"] = sonames
-    if native_deps:
-        result["native_deps"] = native_deps
-    return result
-
-
 def _module_name(filename):
     """The module a file in a wheel root provides, per the per-wheel index rules."""
     if filename.endswith(".py"):
@@ -506,12 +433,6 @@ def _scan_root_with_native(root):
                 if name and not e.is_dir():
                     names.append((name, n))
     return names, dists, pths, native_file
-
-
-def _scan_root(root):
-    """Lists a wheel root like the per-wheel index (version 1) describes it."""
-    names, dists, pths, _ = _scan_root_with_native(root)
-    return names, dists, pths
 
 
 def _walk_dirs(root):
@@ -568,89 +489,39 @@ def _read_json(path):
     return json.loads(text)
 
 
-class _Prebuilt:
-    """A prebuilt index (merged JSON file or merged per-wheel index dict)."""
-
-    def __init__(self, data_or_path, runfiles_root, source=None):
-        if isinstance(data_or_path, dict):
-            data = data_or_path
-            self.path = source or "<per-wheel indexes>"
-        else:
-            data = _read_json(data_or_path)
-            self.path = data_or_path
-        if data.get("version") != 1:
-            raise ValueError("unsupported import index version {!r}".format(data.get("version")))
-        self.roots = [os.path.join(runfiles_root, r) for r in data["roots"]]
-        roots = self.roots
-        self.records = {r: ([], [], []) for r in roots}
-        for name, owners in data["top"].items():
-            for i, entries in owners:
-                names = self.records[roots[i]][0]
-                for entry in entries:
-                    names.append((name, entry))
-        for owners in data["dists"].values():
-            for i, dist_info in owners:
-                self.records[roots[i]][1].append(dist_info)
-        for name, i in data["pth"]:
-            self.records[roots[i]][2].append(name)
-        self.merged = {d: [roots[i] for i in owners] for d, owners in data["merged"].items()}
-        self.sub = {d: roots[i] for d, i in data.get("sub", {}).items()}
-        self.preload = {pkg: [(roots[i], rel) for i, rel in libs] for pkg, libs in data.get("preload", {}).items()}
-        self.sonames = {name: (roots[i], rel) for name, (i, rel) in data.get("sonames", {}).items()}
-        self.native_deps = {}
-        for k, deps in data.get("native_deps", {}).items():
-            i_str, _, rel = k.partition(":")
-            self.native_deps[(roots[int(i_str)], rel)] = [(roots[di], drel) for di, drel in deps]
-
-
 class _Index:
-    """The top-level entries of every wheel root, prebuilt or listed."""
+    """The top-level entries of every wheel root."""
 
-    def __init__(self, roots, prebuilt=None, runfiles_root="", mode="prebuilt"):
+    def __init__(self, roots, mode="prebuilt"):
         self.roots = []
-        self.indexed = []
         self.unscanned = []
         self.top = {}
         self.entries = {}
         self.dist_entries = {}
         self.pth = {}
-        self.merged = prebuilt.merged if prebuilt else {}
-        self.sub = prebuilt.sub if prebuilt else {}
-        self.preload = dict(prebuilt.preload) if prebuilt else {}
-        self.sonames = dict(prebuilt.sonames) if prebuilt else {}
-        self.native_deps = dict(prebuilt.native_deps) if prebuilt else {}
+        self.preload = {}
+        self.sonames = {}
+        self.native_deps = {}
         self.mode = mode
         self.native_files = {}
         self.consumer_roots = []
         self._wheel_native = None
-        self._native_loaded = prebuilt is not None
+        self._native_loaded = False
         ld_env = os.environ.get("LD_LIBRARY_PATH", "")
         self._ld_library_path_dirs = tuple(d for d in ld_env.split(":") if d) if ld_env else ()
-        self.runfiles_root = os.path.normpath(os.path.abspath(runfiles_root)).rstrip("/") + "/" if runfiles_root else ""
-        self._parent_dirs = {}
         self._dists_by_name = None
 
-        records = prebuilt.records if prebuilt else {}
         for root in dict.fromkeys(roots):
-            record = records.get(root)
-            native_file = None
-            if record is not None:
-                self.indexed.append(root)
-            else:
-                try:
-                    names, dists, pths, native_file = _scan_root_with_native(root)
-                    record = (names, dists, pths)
-                except OSError:
-                    self.unscanned.append(root)
-                    continue
-                if mode in ("prebuilt", "verify"):
-                    self.indexed.append(root)
+            try:
+                names, dists, pths, native_file = _scan_root_with_native(root)
+            except OSError:
+                self.unscanned.append(root)
+                continue
             self.roots.append(root)
             if mode in ("prebuilt", "verify") and native_file is not None:
                 self.native_files[root] = os.path.join(root, native_file)
                 if native_file == NATIVE_CONSUMER_FILENAME:
                     self.consumer_roots.append(root)
-            names, dists, pths = record
             for name, entry in names:
                 owners = self.top.setdefault(name, [])
                 if not owners or owners[-1] != root:
@@ -662,7 +533,7 @@ class _Index:
                 self.pth.setdefault(name, root)
         self.root_set = frozenset(self.roots)
         self._norm_roots = tuple((r, os.path.normpath(os.path.abspath(r)).rstrip("/")) for r in self.roots)
-        if prebuilt is None and mode in ("prebuilt", "verify"):
+        if mode in ("prebuilt", "verify"):
             if self.consumer_roots:
                 self.ensure_native_loaded()
             elif not self.native_files:
@@ -729,34 +600,6 @@ class _Index:
             i_str, _, rel = k.partition(":")
             self.native_deps[(native_roots[int(i_str)], rel)] = [(native_roots[di], drel) for di, drel in deps]
 
-    def merged_dirs(self, name, parents):
-        """The `name` directories below `parents`, per the prebuilt index."""
-        if not self.merged:
-            return None
-        parent = name.rpartition(".")[0]
-        parent_roots = self.merged.get(parent)
-        if parent_roots is None:
-            return None
-        known = self._parent_dirs.get(parent)
-        if known is None:
-            parts = parent.split(".")
-            known = {os.path.join(r, *parts): r for r in parent_roots}
-            self._parent_dirs[parent] = known
-        roots = []
-        for p in parents:
-            root = known.get(p) if isinstance(p, str) else None
-            if root is None:
-                return None
-            roots.append(root)
-        owners = self.merged.get(name)
-        if not owners:
-            owner = self.sub.get(name)
-            owners = (owner,) if owner is not None else ()
-        if not owners:
-            return []
-        parts = name.split(".")
-        return [os.path.join(r, *parts) for r in roots if r in owners]
-
     def dists_by_name(self):
         """Normalized distribution name -> [(root, dist-info path), ...]."""
         if self._dists_by_name is None:
@@ -769,72 +612,7 @@ class _Index:
         return self._dists_by_name
 
 
-def _verify(roots, prebuilt):
-    """Compares a prebuilt index with a fresh listing of the roots it covers."""
-    problems = []
-    covered = [r for r in dict.fromkeys(roots) if r in prebuilt.records]
-
-    def diff(what, root, scanned, indexed):
-        scanned, indexed = sorted(scanned), sorted(indexed)
-        if scanned != indexed:
-            problems.append(
-                "{} of {}: only on disk: {}; only in the index: {}".format(
-                    what,
-                    root,
-                    [x for x in scanned if x not in indexed],
-                    [x for x in indexed if x not in scanned],
-                )
-            )
-
-    for root in covered:
-        try:
-            names, dists, pths = _scan_root(root)
-        except OSError as e:
-            problems.append("can't list {}: {}".format(root, e))
-            continue
-        indexed_names, indexed_dists, indexed_pths = prebuilt.records[root]
-        diff("top-level entries", root, names, indexed_names)
-        dist_info = sorted(d for d in dists if d.endswith(".dist-info") and os.path.isdir(os.path.join(root, d)))[:1]
-        diff(".dist-info", root, dist_info, indexed_dists)
-        diff(".pth files", root, pths, indexed_pths)
-
-    owners = {}
-    for root in covered:
-        try:
-            for d in _walk_dirs(root):
-                owners.setdefault(d, []).append(root)
-        except OSError:
-            pass
-    scanned_merged = {d: rs for d, rs in owners.items() if len(rs) > 1}
-    covered_set = set(covered)
-    indexed_merged = {}
-    for d, rs in prebuilt.merged.items():
-        rs = [r for r in rs if r in covered_set]
-        if len(rs) > 1:
-            indexed_merged[d] = rs
-    for d in sorted(set(scanned_merged) | set(indexed_merged)):
-        if scanned_merged.get(d) != indexed_merged.get(d):
-            problems.append(
-                "merged directory {}: on disk in {}, in the index in {}".format(
-                    d, scanned_merged.get(d, []), indexed_merged.get(d, [])
-                )
-            )
-    if prebuilt.sub:
-        scanned_sub = {d: rs[0] for d, rs in owners.items() if len(rs) == 1 and d.rpartition(".")[0] in scanned_merged}
-        indexed_sub = {
-            d: r for d, r in prebuilt.sub.items() if r in covered_set and d.rpartition(".")[0] in indexed_merged
-        }
-        for d in sorted(set(scanned_sub) | set(indexed_sub)):
-            if scanned_sub.get(d) != indexed_sub.get(d):
-                problems.append(
-                    "sub-directory {}: on disk in {!r}, in the index in {!r}".format(
-                        d, scanned_sub.get(d), indexed_sub.get(d)
-                    )
-                )
-    return problems
-
-
-def _verify_hybrid(index):
+def _verify(index):
     """Verifies scanned root entries and native dotfiles against disk."""
     problems = []
     for root in index.roots:
@@ -957,25 +735,6 @@ def _is_comment_only_py(path):
         return False
 
 
-def _merged_subdir_spec(fullname, dirs):
-    """Resolves a package directory `fullname` whose directories are `dirs`."""
-    fallback = None
-    for d in dirs:
-        for suffix, loader_class in _LOADERS:
-            init = os.path.join(d, "__init__" + suffix)
-            if os.path.isfile(init):
-                spec = _spec(fullname, init, loader_class, [d])
-                if len(dirs) == 1 or not _is_comment_only_py(init):
-                    return spec
-                if fallback is None:
-                    fallback = spec
-    if fallback is not None:
-        return fallback
-    spec = _machinery.ModuleSpec(fullname, None, is_package=True)
-    spec.submodule_search_locations = list(dirs)
-    return spec
-
-
 def _is_musl():
     global _IS_MUSL
     override = os.environ.get("RULES_PYTHON_IMPORT_INDEX_LIBC")
@@ -993,7 +752,7 @@ def _is_musl():
     return _IS_MUSL
 
 
-def _make_stub_elf(rpath, needed_name, soname=None, ei_class=None, ei_data=None, e_machine=None):
+def _make_stub_elf(rpath, needed_name, ei_class=None, ei_data=None, e_machine=None):
     """Builds a minimal ELF64 ET_DYN stub with DT_RPATH and DT_NEEDED (`PF_R | PF_W`).
 
     Note: Only 64-bit ELF (`ei_class == 2`) is synthesized; 32-bit ELF returns
@@ -1016,10 +775,6 @@ def _make_stub_elf(rpath, needed_name, soname=None, ei_class=None, ei_data=None,
     dynstr.extend(os.fsencode(needed_name) + b"\x00")
     rpath_off = len(dynstr)
     dynstr.extend(os.fsencode(rpath) + b"\x00")
-    soname_off = None
-    if soname:
-        soname_off = len(dynstr)
-        dynstr.extend(os.fsencode(soname) + b"\x00")
     while len(dynstr) % 8:
         dynstr.append(0)
 
@@ -1037,19 +792,13 @@ def _make_stub_elf(rpath, needed_name, soname=None, ei_class=None, ei_data=None,
     dyn_entries = [
         (1, needed_off),  # DT_NEEDED
         (15, rpath_off),  # DT_RPATH
+        (5, dynstr_off),  # DT_STRTAB
+        (10, len(dynstr)),  # DT_STRSZ
+        (6, dynsym_off),  # DT_SYMTAB
+        (11, 24),  # DT_SYMENT
+        (4, hash_off),  # DT_HASH
+        (0, 0),  # DT_NULL
     ]
-    if soname_off is not None:
-        dyn_entries.append((14, soname_off))  # DT_SONAME
-    dyn_entries.extend(
-        [
-            (5, dynstr_off),  # DT_STRTAB
-            (10, len(dynstr)),  # DT_STRSZ
-            (6, dynsym_off),  # DT_SYMTAB
-            (11, 24),  # DT_SYMENT
-            (4, hash_off),  # DT_HASH
-            (0, 0),  # DT_NULL
-        ]
-    )
     dyn = b"".join(struct.pack(endian + "QQ", tag, val) for tag, val in dyn_entries)
     total_size = dyn_off + len(dyn)
 
@@ -1091,31 +840,17 @@ def _lookup_native_meta(path):
     if matched is None:
         return None
     root, rel_so = matched
-    wheel_native = getattr(_INDEX, "_wheel_native", None)
+    wheel_native = _INDEX._wheel_native
     if wheel_native:
-        meta = wheel_native.get(root, {}).get(rel_so)
-        if meta is not None:
-            return meta
-    for name, target in _INDEX.sonames.items():
-        if target == matched:
-            return {"soname": name}
+        return wheel_native.get(root, {}).get(rel_so)
     return None
 
 
-def _dlopen_musl_stub(path, soname=None, ei_class=None, ei_data=None, e_machine=None):
+def _dlopen_musl_stub(path):
     dir_path = os.path.dirname(path)
     basename = os.path.basename(path)
-    if soname is None or ei_class is None or ei_data is None or e_machine is None:
-        meta = _lookup_native_meta(path)
-        if meta is not None:
-            if soname is None:
-                soname = meta.get("soname")
-            if ei_class is None:
-                ei_class = meta.get("ei_class")
-            if ei_data is None:
-                ei_data = meta.get("ei_data")
-            if e_machine is None:
-                e_machine = meta.get("e_machine")
+    meta = _lookup_native_meta(path) or {}
+    soname = meta.get("soname")
     if soname and soname != basename:
         if os.path.exists(os.path.join(dir_path, soname)):
             needed_name = soname
@@ -1128,9 +863,9 @@ def _dlopen_musl_stub(path, soname=None, ei_class=None, ei_data=None, e_machine=
     stub = _make_stub_elf(
         dir_path,
         needed_name,
-        ei_class=ei_class,
-        ei_data=ei_data,
-        e_machine=e_machine,
+        ei_class=meta.get("ei_class"),
+        ei_data=meta.get("ei_data"),
+        e_machine=meta.get("e_machine"),
     )
     if stub is None:
         return _raw_dlopen(path)
@@ -1222,6 +957,25 @@ def _strip_leading_dotdot(rel_path):
     return None
 
 
+def _match_escaped_norm(target_norm, clean_roots):
+    for r_clean in clean_roots:
+        prefix = r_clean + "/"
+        if target_norm.startswith(prefix):
+            return target_norm[len(prefix) :].replace(os.sep, "/")
+        if os.path.basename(r_clean) == "site-packages":
+            parent = os.path.dirname(r_clean)
+            parent_prefix = parent + "/"
+            if (
+                parent
+                and target_norm.startswith(parent_prefix)
+                and not any(r2 != r_clean and r2.startswith(parent_prefix) for r2 in clean_roots)
+            ):
+                rel = target_norm[len(parent_prefix) :].replace(os.sep, "/")
+                if rel.split("/", 1)[0] in _INDEX.top:
+                    return rel
+    return None
+
+
 def _extract_escaped_relpath(path_str):
     if _INDEX is None:
         return None
@@ -1232,27 +986,12 @@ def _extract_escaped_relpath(path_str):
             rel = _strip_leading_dotdot(abs_raw[len(prefix) :])
             if rel:
                 return rel
-    norm = os.path.normpath(abs_raw)
-    norm_roots = _INDEX._norm_roots
-    for r, r_clean in norm_roots:
-        prefix = r_clean + "/"
-        if norm.startswith(prefix):
-            return norm[len(prefix) :].replace(os.sep, "/")
-        if os.path.basename(r_clean) == "site-packages":
-            parent = os.path.dirname(r_clean)
-            parent_prefix = parent + "/"
-            if (
-                parent
-                and norm.startswith(parent_prefix)
-                and not any(r2_clean != r_clean and r2_clean.startswith(parent_prefix) for _, r2_clean in norm_roots)
-            ):
-                rel = norm[len(parent_prefix) :].replace(os.sep, "/")
-                first_seg = rel.split("/", 1)[0]
-                if first_seg in _INDEX.top or first_seg in _INDEX.merged:
-                    return rel
+    rel = _match_escaped_norm(os.path.normpath(abs_raw), [r_clean for _, r_clean in _INDEX._norm_roots])
+    if rel:
+        return rel
     real_roots = getattr(_INDEX, "_real_roots", None)
     if real_roots is None:
-        real_roots = [os.path.realpath(r) for r in _INDEX.roots]
+        real_roots = [os.path.realpath(r).rstrip("/") for r in _INDEX.roots]
         _INDEX._real_roots = real_roots
     try:
         real_norm = os.path.normpath(
@@ -1260,24 +999,7 @@ def _extract_escaped_relpath(path_str):
         )
     except OSError:
         return None
-    for rr in real_roots:
-        rr_clean = rr.rstrip("/")
-        prefix = rr_clean + "/"
-        if real_norm.startswith(prefix):
-            return real_norm[len(prefix) :].replace(os.sep, "/")
-        if os.path.basename(rr_clean) == "site-packages":
-            parent = os.path.dirname(rr_clean)
-            parent_prefix = parent + "/"
-            if (
-                parent
-                and real_norm.startswith(parent_prefix)
-                and not any(r2 != rr and r2.startswith(parent_prefix) for r2 in real_roots)
-            ):
-                rel = real_norm[len(parent_prefix) :].replace(os.sep, "/")
-                first_seg = rel.split("/", 1)[0]
-                if first_seg in _INDEX.top or first_seg in _INDEX.merged:
-                    return rel
-    return None
+    return _match_escaped_norm(real_norm, real_roots)
 
 
 def _find_owner_for_relpath(rel_so):
@@ -1288,15 +1010,8 @@ def _find_owner_for_relpath(rel_so):
     by_name = _INDEX.sonames.get(basename)
     if by_name is not None and by_name[1] == rel_so:
         return by_name
-    candidates = []
     first_seg = rel_so.split("/", 1)[0]
-    for sub_key, owner_root in _INDEX.sub.items():
-        if rel_so.startswith(sub_key.replace(".", "/") + "/") and owner_root not in candidates:
-            candidates.append(owner_root)
-    for owner_root in _INDEX.top.get(first_seg, ()):
-        if owner_root not in candidates:
-            candidates.append(owner_root)
-    for r in candidates:
+    for r in _INDEX.top.get(first_seg, ()):
         if os.path.isfile(os.path.join(r, rel_so)):
             return r, rel_so
     return None
@@ -1392,13 +1107,6 @@ def _resolve_bare_dlopen_arg(name, allow_short_name=False):
             _log("dlopen soname", s, "->", resolved)
         return os.fsencode(resolved) if is_bytes else resolved
     return name
-
-
-def _resolve_dlopen_arg(name, allow_short_name=False):
-    rewritten = _resolve_path_dlopen_arg(name)
-    if rewritten != name:
-        return rewritten
-    return _resolve_bare_dlopen_arg(name, allow_short_name=allow_short_name)
 
 
 def _hook_ctypes_module(mod):
@@ -1543,10 +1251,8 @@ def _maybe_configure_cuda_env(index):
     ):
         return
     for key in ("nvidia.cuda_nvcc", "nvidia.cu13"):
-        sub_root = index.sub.get(key)
-        candidates = (sub_root,) if sub_root else index.top.get("nvidia", ())
         found = False
-        for root in candidates:
+        for root in index.top.get("nvidia", ()):
             cuda_dir = os.path.join(root, *key.split("."))
             if not os.path.isdir(cuda_dir):
                 continue
@@ -1581,8 +1287,6 @@ def _merge(spec, name, parents, dirs=None):
         if len(spec.submodule_search_locations) > 1:
             _MERGED.add(name)
         return spec
-    if dirs is None and _INDEX is not None:
-        dirs = _INDEX.merged_dirs(name, parents)
     if dirs is None:
         tail = name.rpartition(".")[2]
         dirs = []
@@ -1653,16 +1357,10 @@ class PathFinder(_machinery.PathFinder):
     @classmethod
     def find_spec(cls, fullname, path=None, target=None):
         if path is not None or _INDEX is None:
+            spec = super().find_spec(fullname, path, target)
             parent = fullname.rpartition(".")[0] if _INDEX is not None else ""
             if parent and parent in _MERGED:
-                dirs = _INDEX.merged_dirs(fullname, path)
-                if dirs:
-                    spec = _merged_subdir_spec(fullname, dirs)
-                else:
-                    spec = super().find_spec(fullname, path, target)
-                spec = _merge(spec, fullname, path, dirs)
-            else:
-                spec = super().find_spec(fullname, path, target)
+                spec = _merge(spec, fullname, path)
             if _INDEX is not None and spec is not None and fullname in _INDEX.preload:
                 _preload_native(fullname, _INDEX.preload.pop(fullname))
             return _finalize_spec(fullname, spec)
@@ -1825,7 +1523,7 @@ def _backport_metadata_finder_active():
     return False
 
 
-def install(roots, debug=False, mode="scan", index_path=None, runfiles_root=""):
+def install(roots, debug=False, mode="scan"):
     """Installs the finder for the given wheel roots."""
     global _DEBUG, _INDEX
     _DEBUG = debug
@@ -1845,31 +1543,14 @@ def install(roots, debug=False, mode="scan", index_path=None, runfiles_root=""):
         import time
 
         start = time.perf_counter()
-    prebuilt = None
-    if mode in ("prebuilt", "verify") and index_path:
-        try:
-            prebuilt = _Prebuilt(index_path, runfiles_root)
-        except (OSError, ValueError, LookupError, TypeError) as e:
-            if mode == "verify":
-                raise SystemExit("{} verify failed: can't load {}: {}".format(_LOG_PREFIX, index_path, e))
-            _log("can't load {} ({}); listing every root".format(index_path, e))
-    if mode == "verify" and prebuilt is not None:
-        problems = _verify(roots, prebuilt)
-        if problems:
-            _log("the prebuilt index {} doesn't match its roots:".format(prebuilt.path))
-            for problem in problems:
-                _log("  " + problem)
-            raise SystemExit("{} verify failed: {} differences (see above)".format(_LOG_PREFIX, len(problems)))
-        if debug:
-            _log("verified", prebuilt.path)
 
-    index = _Index(roots, prebuilt, runfiles_root=runfiles_root, mode=mode)
+    index = _Index(roots, mode=mode)
     if not index.roots:
         if debug:
             _log("no wheel roots could be listed; not installing")
         return False
-    if mode == "verify" and prebuilt is None:
-        problems = _verify_hybrid(index)
+    if mode == "verify":
+        problems = _verify(index)
         if problems:
             _log("native wheel dotfiles don't match disk:")
             for problem in problems:
@@ -1981,5 +1662,4 @@ def auto_install():
         roots,
         debug=debug,
         mode=mode,
-        runfiles_root=runfiles_root,
     )

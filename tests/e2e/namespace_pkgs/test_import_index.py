@@ -85,12 +85,11 @@ class ImportIndexTest(unittest.TestCase):
     def test_cross_wheel_origin_rpath_without_preload(self):
         # rpathfixture/libuser.so has DT_NEEDED libfixture_cublas.so.12 and dlopens
         # libfixture_cudnn.so.12 by SONAME via $ORIGIN/../nvidia/fixture_{cublas,cudnn}/lib.
-        # In prebuilt mode, merge_wheel_indexes resolves those cross-wheel $ORIGIN paths from the
-        # per-wheel "native" metadata and records "preload" entries that the finder loads via
-        # ctypes.CDLL when importing rpathfixture.
+        # In prebuilt mode, the native dotfiles record those cross-wheel $ORIGIN paths and the
+        # finder preloads the target libraries when importing rpathfixture.
         finder_mod = sys.modules.get("_bazel_import_index")
         if finder_mod is not None and getattr(finder_mod, "_INDEX", None) is not None:
-            if not finder_mod._INDEX.indexed:
+            if finder_mod._INDEX.mode == "scan":
                 self.skipTest("cross-wheel native preloading requires the prebuilt import index")
         import rpathfixture
 
@@ -103,7 +102,7 @@ class ImportIndexTest(unittest.TestCase):
     def test_cross_wheel_soname_dt_needed_and_dlopen_hooks(self):
         finder_mod = sys.modules.get("_bazel_import_index")
         if finder_mod is not None and getattr(finder_mod, "_INDEX", None) is not None:
-            if not finder_mod._INDEX.indexed:
+            if finder_mod._INDEX.mode == "scan":
                 self.skipTest("cross-wheel native preloading requires the prebuilt import index")
         import sonamefixture
 
