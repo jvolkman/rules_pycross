@@ -216,7 +216,7 @@ How it works on stock `py_binary` / `py_test`:
 - At startup, `_Index` scans each wheel root via `os.scandir` (`_scan_root_with_native`) and detects any `.pycross-native-consumer.json` or `.pycross-native.json` dotfiles in the same pass. If $\ge 1$ wheel has `.pycross-native-consumer.json`, `ensure_native_loaded()` eagerly reads the native dotfiles and computes `"preload"`, `"sonames"`, and `"native_deps"`; otherwise **0** JSON files are read at startup and `ensure_native_loaded()` runs lazily on first need.
 
 ### Runtime Environment Variables
-- `RULES_PYTHON_IMPORT_INDEX=off|scan|prebuilt|verify`: Override the index mode at runtime. `verify` cross-checks the indexed wheel roots and native dotfiles (`.pycross-native-consumer.json` / `.pycross-native.json`) against a live `os.scandir` + directory walk of the wheel roots (top-level entries, `dirs`, consumer vs provider dotfile classification, and existence of listed `native` `.so` paths) and exits non-zero on any discrepancy.
+- `RULES_PYTHON_IMPORT_INDEX=off|scan|prebuilt`: Override the index mode at runtime.
 - `RULES_PYTHON_IMPORT_INDEX_DEBUG=1`: Log index load timing, merged packages, `find_spec` resolutions, `ctypes.CDLL` preloads, and `dlopen` rewrites to `stderr`.
 - `RULES_PYTHON_IMPORT_INDEX_SET_CUDA_ENV=0|1` (default `0`): Opt in to setting `CUDA_HOME` and prepending `<wheel_root>/nvidia/<cuda_nvcc|cu13>/bin` to `PATH` when `nvidia.cuda_nvcc` or `nvidia.cu13` is present in the wheel index and `CUDA_HOME` / `CUDA_PATH` are unset.
 - `RULES_PYTHON_IMPORT_INDEX_LIBC=glibc|musl`: Override automatic libc detection (`os.confstr("CS_GNU_LIBC_VERSION")`) for testing the `glibc` direct `CDLL` vs `musl` `memfd` stub ELF loader backend.
@@ -232,10 +232,7 @@ bazel run --config=index //:demo
 # 2. Debug trace showing startup timing and ctypes.CDLL preloads:
 RULES_PYTHON_IMPORT_INDEX_DEBUG=1 bazel run --config=index //:demo
 
-# 3. Verify mode (asserts prebuilt index matches disk 100%):
-RULES_PYTHON_IMPORT_INDEX=verify bazel run --config=index //:demo
-
-# 4. Compare with scan mode (Python imports pass, cross-wheel $ORIGIN RPATH fails):
+# 3. Compare with scan mode (Python imports pass, cross-wheel $ORIGIN RPATH fails):
 bazel run --config=scan //:demo
 
 # 5. Compare with plain sys.path (4 of 5 checks fail):

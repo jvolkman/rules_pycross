@@ -435,24 +435,6 @@ def _scan_root_with_native(root):
     return names, dists, pths, native_file
 
 
-def _walk_dirs(root):
-    """Dotted names of a root's package directories, like the per-wheel `dirs`."""
-    found = []
-
-    def subdirs(path):
-        with os.scandir(path) as it:
-            return [e for e in it if e.name.isidentifier() and e.name != "__pycache__" and e.is_dir()]
-
-    def walk(path, dotted):
-        found.append(dotted)
-        for e in subdirs(path):
-            walk(e.path, dotted + "." + e.name)
-
-    for e in subdirs(root):
-        walk(e.path, e.name)
-    return found
-
-
 class _JsonContext:
     """Settings for the C JSON scanner, which spares importing json (and re)."""
 
@@ -518,7 +500,7 @@ class _Index:
                 self.unscanned.append(root)
                 continue
             self.roots.append(root)
-            if mode in ("prebuilt", "verify") and native_file is not None:
+            if mode == "prebuilt" and native_file is not None:
                 self.native_files[root] = os.path.join(root, native_file)
                 if native_file == NATIVE_CONSUMER_FILENAME:
                     self.consumer_roots.append(root)
@@ -533,7 +515,7 @@ class _Index:
                 self.pth.setdefault(name, root)
         self.root_set = frozenset(self.roots)
         self._norm_roots = tuple((r, os.path.normpath(os.path.abspath(r)).rstrip("/")) for r in self.roots)
-        if mode in ("prebuilt", "verify"):
+        if mode == "prebuilt":
             if self.consumer_roots:
                 self.ensure_native_loaded()
             elif not self.native_files:
@@ -544,7 +526,7 @@ class _Index:
         if self._native_loaded:
             return
         self._native_loaded = True
-        if not self.native_files or self.mode not in ("prebuilt", "verify"):
+        if not self.native_files or self.mode != "prebuilt":
             return
         native_roots = []
         wheel_indexes = []
@@ -556,17 +538,11 @@ class _Index:
             try:
                 idx = _read_json(dotfile)
             except (OSError, ValueError, LookupError, TypeError) as e:
-                if self.mode == "verify":
-                    raise SystemExit("{} verify failed: can't load {}: {}".format(_LOG_PREFIX, dotfile, e))
                 if _DEBUG:
                     _log("can't load {} ({})".format(dotfile, e))
                 continue
             version = idx.get("version")
             if version != _SUPPORTED_VERSION:
-                if self.mode == "verify":
-                    raise SystemExit(
-                        "{} verify failed: {}: unsupported version {!r}".format(_LOG_PREFIX, dotfile, version)
-                    )
                 continue
             i = len(native_roots)
             native_roots.append(root)
@@ -610,87 +586,6 @@ class _Index:
                     by_name.setdefault(_normalize_dist_name(name), []).append((root, os.path.join(root, n)))
             self._dists_by_name = by_name
         return self._dists_by_name
-
-
-def _verify(index):
-    """Verifies scanned root entries and native dotfiles against disk."""
-    problems = []
-    for root in index.roots:
-        try:
-            names, dists, pths, _ = _scan_root_with_native(root)
-        except OSError as e:
-            problems.append("can't scan {}: {}".format(root, e))
-            continue
-
-        indexed_names = sorted(
-            (name, entry)
-            for name, owners in index.top.items()
-            if root in owners
-            for entry in index.entries.get((name, root), ())
-        )
-        if sorted(names) != indexed_names:
-            problems.append(
-                "{}: top-level entries mismatch (disk={}, index={})".format(root, sorted(names), indexed_names)
-            )
-        if sorted(dists) != sorted(index.dist_entries.get(root, ())):
-            problems.append(
-                "{}: .dist-info mismatch (disk={}, index={})".format(
-                    root, sorted(dists), sorted(index.dist_entries.get(root, ()))
-                )
-            )
-        indexed_pths = sorted(name for name, owner in index.pth.items() if owner == root)
-        if sorted(pths) != indexed_pths:
-            problems.append("{}: .pth mismatch (disk={}, index={})".format(root, sorted(pths), indexed_pths))
-
-        present_dotfiles = [
-            fn for fn in (NATIVE_CONSUMER_FILENAME, NATIVE_PROVIDER_FILENAME) if os.path.exists(os.path.join(root, fn))
-        ]
-        if len(present_dotfiles) > 1:
-            problems.append("{}: multiple native dotfiles {}".format(root, present_dotfiles))
-            continue
-        if not present_dotfiles:
-            if root in index.native_files:
-                problems.append("{}: indexed native dotfile {} missing on disk".format(root, index.native_files[root]))
-            continue
-
-        expected_fn = present_dotfiles[0]
-        dotfile_path = os.path.join(root, expected_fn)
-        if index.native_files.get(root) != dotfile_path:
-            problems.append(
-                "{}: native dotfile mismatch (disk={!r}, index={!r})".format(
-                    root, dotfile_path, index.native_files.get(root)
-                )
-            )
-            continue
-        try:
-            expected_dirs = sorted(d.replace(".", "/") for d in _walk_dirs(root))
-            data = _read_json(dotfile_path)
-        except Exception as e:
-            problems.append("{}: can't verify {}: {}".format(root, expected_fn, e))
-            continue
-        top_names = sorted({name for name, _ in names})
-        if data.get("version") != _SUPPORTED_VERSION:
-            problems.append("{}: {}: unsupported version {!r}".format(root, expected_fn, data.get("version")))
-        if data.get("top") != top_names:
-            problems.append(
-                "{}: {}: top mismatch (dotfile={}, disk={})".format(root, expected_fn, data.get("top"), top_names)
-            )
-        if data.get("dirs") != expected_dirs:
-            problems.append(
-                "{}: {}: dirs mismatch (dotfile={}, disk={})".format(root, expected_fn, data.get("dirs"), expected_dirs)
-            )
-        native = data.get("native") or {}
-        if not native:
-            problems.append("{}: {}: empty native table".format(root, expected_fn))
-        for rel_so in sorted(native):
-            if not os.path.isfile(os.path.join(root, rel_so)):
-                problems.append("{}: {}: missing native file {!r}".format(root, expected_fn, rel_so))
-        has_escaping = bool(data.get("escaping"))
-        if expected_fn == NATIVE_CONSUMER_FILENAME and not has_escaping:
-            problems.append("{}: {}: consumer dotfile has no escaping entries".format(root, expected_fn))
-        elif expected_fn == NATIVE_PROVIDER_FILENAME and has_escaping:
-            problems.append("{}: {}: provider dotfile has escaping entries".format(root, expected_fn))
-    return problems
 
 
 def _spec(fullname, path, loader_class, search_locations=None):
@@ -1549,15 +1444,6 @@ def install(roots, debug=False, mode="scan"):
         if debug:
             _log("no wheel roots could be listed; not installing")
         return False
-    if mode == "verify":
-        problems = _verify(index)
-        if problems:
-            _log("native wheel dotfiles don't match disk:")
-            for problem in problems:
-                _log("  " + problem)
-            raise SystemExit("{} verify failed: {} differences (see above)".format(_LOG_PREFIX, len(problems)))
-        if debug:
-            _log("verified {} wheel roots ({} native)".format(len(index.roots), len(index.native_files)))
     _PRELOADED.clear()
     _INDEX = index
     sys.meta_path[i] = PathFinder
@@ -1627,7 +1513,7 @@ def auto_install():
         return False
     debug = bool(os.environ.get("RULES_PYTHON_IMPORT_INDEX_DEBUG"))
     mode = os.environ.get("RULES_PYTHON_IMPORT_INDEX") or default_mode
-    if mode not in ("off", "scan", "prebuilt", "verify"):
+    if mode not in ("off", "scan", "prebuilt"):
         _log("ignoring unknown RULES_PYTHON_IMPORT_INDEX={!r}".format(mode))
         mode = default_mode
     if mode == "off":

@@ -8,13 +8,10 @@ Try running from `tests/e2e/namespace_pkgs`:
   # 2. Verbose finder debug trace (shows index load time, merged dirs, and CDLL preloads):
   RULES_PYTHON_IMPORT_INDEX_DEBUG=1 bazel run --config=index //:demo
 
-  # 3. Verify mode (cross-checks the prebuilt index against a live disk scan):
-  RULES_PYTHON_IMPORT_INDEX=verify bazel run --config=index //:demo
-
-  # 4. Compare with scan mode (Python imports pass, but cross-wheel $ORIGIN RPATH fails):
+  # 3. Compare with scan mode (Python imports pass, but cross-wheel $ORIGIN RPATH fails):
   bazel run --config=scan //:demo
 
-  # 5. Compare with plain sys.path (venvs_site_packages=no, index=off):
+  # 4. Compare with plain sys.path (venvs_site_packages=no, index=off):
   bazel run //:demo --@rules_python//python/config_settings:venvs_site_packages=no
 """
 

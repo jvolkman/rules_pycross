@@ -446,7 +446,7 @@ class ImportIndexTest(unittest.TestCase):
                 if os.path.exists(p):
                     os.unlink(p)
 
-    def test_split_file_hybrid_provider_lazy_vs_consumer_eager_and_verify(self):
+    def test_split_file_hybrid_provider_lazy_vs_consumer_eager(self):
         with tempfile.TemporaryDirectory() as tmp:
             cublas_root = os.path.join(tmp, "cublas", "site-packages")
             cudnn_root = os.path.join(tmp, "cudnn", "site-packages")
@@ -592,72 +592,6 @@ class ImportIndexTest(unittest.TestCase):
                     )
                     import_index.PathFinder.find_spec("nvidia.cudnn", [os.path.join(cudnn_root, "nvidia")])
                     self.assertEqual(preloaded, [cublas_lt_so, cublas_so])
-
-                # 3. `verify` mode (`_verify`) passes when dotfiles match on-disk layout.
-                import_index._INDEX = None
-                sys.meta_path[:] = prev_meta
-                with mock.patch.object(import_index, "_raw_dlopen", side_effect=lambda p: p):
-                    self.assertTrue(
-                        import_index.install(
-                            [cublas_root, cudnn_root, pure_root],
-                            mode="verify",
-                        )
-                    )
-
-                # 4. `verify` mode raises SystemExit when `dirs` in dotfile does not match disk.
-                bad_dirs_meta = dict(cudnn_meta, dirs=["nvidia", "nvidia/wrong_dir"])
-                _write(cudnn_dot, json.dumps(bad_dirs_meta))
-                try:
-                    import_index._INDEX = None
-                    sys.meta_path[:] = prev_meta
-                    with (
-                        mock.patch.object(import_index, "_raw_dlopen", side_effect=lambda p: p),
-                        self.assertRaises(SystemExit),
-                    ):
-                        import_index.install(
-                            [cublas_root, cudnn_root, pure_root],
-                            mode="verify",
-                        )
-                finally:
-                    _write(cudnn_dot, json.dumps(cudnn_meta))
-
-                # 5. `verify` mode raises SystemExit when a consumer wheel is misclassified as provider.
-                os.unlink(cudnn_dot)
-                wrong_dot = os.path.join(cudnn_root, import_index.NATIVE_PROVIDER_FILENAME)
-                _write(wrong_dot, json.dumps(cudnn_meta))
-                try:
-                    import_index._INDEX = None
-                    sys.meta_path[:] = prev_meta
-                    with (
-                        mock.patch.object(import_index, "_raw_dlopen", side_effect=lambda p: p),
-                        self.assertRaises(SystemExit),
-                    ):
-                        import_index.install(
-                            [cublas_root, cudnn_root, pure_root],
-                            mode="verify",
-                        )
-                finally:
-                    if os.path.exists(wrong_dot):
-                        os.unlink(wrong_dot)
-                    _write(cudnn_dot, json.dumps(cudnn_meta))
-
-                # 6. `verify` mode raises SystemExit when a pure-Python wheel has an unexpected dotfile.
-                pure_dot = os.path.join(pure_root, import_index.NATIVE_PROVIDER_FILENAME)
-                _write(pure_dot, json.dumps({"version": 2, "top": ["purepkg"], "dirs": ["purepkg"], "native": {}}))
-                try:
-                    import_index._INDEX = None
-                    sys.meta_path[:] = prev_meta
-                    with (
-                        mock.patch.object(import_index, "_raw_dlopen", side_effect=lambda p: p),
-                        self.assertRaises(SystemExit),
-                    ):
-                        import_index.install(
-                            [cublas_root, cudnn_root, pure_root],
-                            mode="verify",
-                        )
-                finally:
-                    if os.path.exists(pure_dot):
-                        os.unlink(pure_dot)
             finally:
                 import_index._INDEX = prev_index
                 import_index._PRELOADED.clear()
