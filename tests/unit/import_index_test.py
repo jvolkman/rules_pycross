@@ -557,7 +557,6 @@ class ImportIndexTest(unittest.TestCase):
             cublas_root = os.path.join(tmp, "cublas", "site-packages")
             cudnn_root = os.path.join(tmp, "cudnn", "site-packages")
             pure_root = os.path.join(tmp, "pure", "site-packages")
-            fp_root = os.path.join(tmp, "first_party")
 
             cublas_lt_so = os.path.join(cublas_root, "nvidia", "cublas", "lib", "libcublasLt.so.12")
             cublas_so = os.path.join(cublas_root, "nvidia", "cublas", "lib", "libcublas.so.12")
@@ -667,15 +666,6 @@ class ImportIndexTest(unittest.TestCase):
 
                     import_index._hook_ctypes_module(FakeCtypesHostOk)
                     self.assertEqual(FakeCtypesHostOk.dlopen("libc.so.6"), ("host", "libc.so.6"))
-                    self.assertEqual(spy_json.call_count, 0)
-                    self.assertFalse(import_index._INDEX._native_loaded)
-
-                    # First-party extension spec lookup wraps loader without opening the .so or loading JSON.
-                    os.makedirs(fp_root, exist_ok=True)
-                    fp_sys_so = os.path.join(fp_root, "fp_sys.so")
-                    sys_spec = import_index._spec("fp_sys", fp_sys_so, import_index._machinery.ExtensionFileLoader)
-                    import_index._finalize_spec("fp_sys", sys_spec)
-                    self.assertTrue(getattr(sys_spec.loader, "_pycross_ext_wrapped", False))
                     self.assertEqual(spy_json.call_count, 0)
                     self.assertFalse(import_index._INDEX._native_loaded)
 
@@ -1016,7 +1006,6 @@ class ImportIndexTest(unittest.TestCase):
             cudnn_root = os.path.join(tmp, "cudnn", "site-packages")
             torch_root = os.path.join(tmp, "torch", "site-packages")
             nvcc_root = os.path.join(tmp, "nvcc", "site-packages")
-            fp_root = os.path.join(tmp, "first_party")
 
             cublas_lt_so = os.path.join(cublas_root, "nvidia", "cublas", "lib", "libcublasLt.so.12")
             cublas_so = os.path.join(cublas_root, "nvidia", "cublas", "lib", "libcublas.so.12")
@@ -1030,9 +1019,6 @@ class ImportIndexTest(unittest.TestCase):
             _write(torch_init, "")
             _write(os.path.join(nvcc_root, "nvidia", "cuda_nvcc", "__init__.py"), "")
             _write(ptxas_bin, "")
-
-            # First-party native extension path (need not exist on disk: _finalize_spec never opens it).
-            fp_ext_path = os.path.join(fp_root, "fp_ext.so")
 
             def wheel_meta(**fields):
                 return dict(
@@ -1176,46 +1162,15 @@ class ImportIndexTest(unittest.TestCase):
                     import_index._hook_cffi_backend_module(FakeCffiBackend)
                     self.assertEqual(FakeCffiBackend.load_library("cublas", 2), (cublas_so, 2))
                     self.assertEqual(FakeCffiBackend.FFI().dlopen("libcudnn.so.9", 1), (cudnn_so, 1))
-
-                    # Item 6: First-party ExtensionFileLoader lazy retry on ImportError.
-                    preloaded_calls.clear()
-                    import_index._PRELOADED.clear()
-                    fp_spec = import_index._spec(
-                        "fp_ext",
-                        fp_ext_path,
-                        import_index._machinery.ExtensionFileLoader,
-                    )
-                    import_index._finalize_spec("fp_ext", fp_spec)
-                    self.assertEqual(preloaded_calls, [])
-                    fp_attempts = []
-
-                    def fake_fp_create(_self, _spec):
-                        fp_attempts.append(list(preloaded_calls))
-                        if len(fp_attempts) == 1:
-                            raise ImportError(
-                                "libcudnn.so.9: cannot open shared object file: No such file or directory"
-                            )
-                        return "fp_ext_ok"
-
-                    with mock.patch.object(
-                        import_index._machinery.ExtensionFileLoader,
-                        "create_module",
-                        new=fake_fp_create,
-                    ):
-                        self.assertEqual(fp_spec.loader.create_module(fp_spec), "fp_ext_ok")
-                    self.assertEqual(preloaded_calls, [cublas_lt_so, cublas_so, cudnn_so])
-                    self.assertEqual(len(fp_attempts), 2)
             finally:
                 import_index._INDEX = prev_index
                 import_index._PRELOADED.clear()
                 sys.meta_path[:] = prev_meta
 
-    def test_original_first_bare_dlopen_stdlib_skip_and_unrelated_path(self):
+    def test_original_first_bare_dlopen_and_unrelated_path(self):
         with tempfile.TemporaryDirectory() as tmp:
             wheel_a = os.path.join(tmp, "wheel_a", "site-packages")
             wheel_b = os.path.join(tmp, "wheel_b", "site-packages")
-            fp_root = os.path.join(tmp, "first_party")
-            stdlib_dynload = os.path.join(tmp, "stdlib", "lib", "python3.11", "lib-dynload")
 
             cudart_so = os.path.join(wheel_a, "nvidia", "cuda_runtime", "lib", "libcudart.so.12")
             cublas_so = os.path.join(wheel_b, "nvidia", "cublas", "lib", "libcublas.so.12")
@@ -1346,30 +1301,7 @@ class ImportIndexTest(unittest.TestCase):
                     self.assertEqual(FakeCffiHostFirst.FFI().dlopen("cublas", 2), ("host_ffi", "cublas", 2))
                     self.assertEqual(FakeCffiHostFirst.FFI().dlopen("cudart", 2), ("wheel_ffi", cudart_so, 2))
 
-                    # (b) Stdlib extensions (under lib-dynload or sys.base_prefix) are NOT wrapped by
-                    # _wrap_extension_loader, while non-stdlib extensions ARE wrapped without opening any .so file.
-                    stdlib_so = os.path.join(stdlib_dynload, "_ssl.cpython-311-x86_64-linux-gnu.so")
-                    base_prefix_so = os.path.join(sys.base_prefix, "lib", "_struct.so")
-                    fp_so = os.path.join(fp_root, "my_fp_ext.so")
-
-                    for std_origin in (stdlib_so, base_prefix_so):
-                        spec = import_index._spec(
-                            "mod",
-                            std_origin,
-                            import_index._machinery.ExtensionFileLoader,
-                        )
-                        import_index._finalize_spec("mod", spec)
-                        self.assertFalse(getattr(spec.loader, "_pycross_ext_wrapped", False))
-
-                    fp_spec = import_index._spec(
-                        "my_fp_ext",
-                        fp_so,
-                        import_index._machinery.ExtensionFileLoader,
-                    )
-                    import_index._finalize_spec("my_fp_ext", fp_spec)
-                    self.assertTrue(getattr(fp_spec.loader, "_pycross_ext_wrapped", False))
-
-                    # (c) Unrelated nonexistent /site-packages/ path is NOT redirected and does zero isfile probes.
+                    # (b) Unrelated nonexistent /site-packages/ path is NOT redirected and does zero isfile probes.
                     unrelated = "/other/venv/lib/python3.11/site-packages/nvidia/cublas/lib/libcublas.so.12"
                     with mock.patch.object(import_index.os.path, "isfile", wraps=os.path.isfile) as spy_isfile:
                         self.assertIsNone(import_index._extract_escaped_relpath(unrelated))
@@ -1766,7 +1698,7 @@ class ImportIndexTest(unittest.TestCase):
                 import_index._PRELOADED.clear()
                 sys.meta_path[:] = prev_meta
 
-    def test_no_rpath_dt_needed_first_attempt_succeeds_vs_fails_retry(self):
+    def test_no_rpath_dt_needed_missing_on_host_is_not_rescued(self):
         # 1. Consumer classification only triggers on escaping $ORIGIN RPATH/RUNPATH.
         self.assertTrue(
             import_index._is_native_consumer(
@@ -1797,20 +1729,17 @@ class ImportIndexTest(unittest.TestCase):
             )
         )
 
-        # 2. No-RPATH DT_NEEDED:
-        # (a) when the first attempt succeeds, nothing is preloaded (and dotfiles stay unloaded);
-        # (b) when the first attempt fails, retry lazily loads dotfiles and preloads missing SONAMEs
-        #     (including chained no-RPATH DT_NEEDED dependencies).
+        # 2. No-RPATH DT_NEEDED missing on the host is NOT rescued (matching pip):
+        #    neither ExtensionFileLoader nor wheel-path dlopen retries or preloads missing SONAMEs,
+        #    while bare-name dlopen fallback still lazily loads dotfiles and resolves SONAMEs.
         with tempfile.TemporaryDirectory() as tmp:
             w_prov = os.path.join(tmp, "wheel_prov", "site-packages")
             w_ext = os.path.join(tmp, "wheel_ext", "site-packages")
-            bar_so = os.path.join(w_prov, "prov_pkg", "lib", "libbar_lazy.so.1")
             foo_so = os.path.join(w_prov, "prov_pkg", "lib", "libfoo_lazy.so.1")
             ext_suffix = import_index._machinery.EXTENSION_SUFFIXES[0]
             ext_rel = "ext_pkg/_ext" + ext_suffix
             ext_so = os.path.join(w_ext, "ext_pkg", "_ext" + ext_suffix)
             wheel_ctypes_so = os.path.join(w_ext, "ext_pkg", "libuser.so")
-            _write(bar_so, "ELF")
             _write(foo_so, "ELF")
             _write(ext_so, "ELF")
             _write(wheel_ctypes_so, "ELF")
@@ -1826,15 +1755,9 @@ class ImportIndexTest(unittest.TestCase):
                         "top": ["prov_pkg"],
                         "dirs": ["prov_pkg", "prov_pkg/lib"],
                         "native": {
-                            "prov_pkg/lib/libbar_lazy.so.1": {
-                                "soname": "libbar_lazy.so.1",
-                                "needed": ["libc.so.6"],
-                                "rpath": [],
-                                "runpath": [],
-                            },
                             "prov_pkg/lib/libfoo_lazy.so.1": {
                                 "soname": "libfoo_lazy.so.1",
-                                "needed": ["libbar_lazy.so.1", "libc.so.6"],
+                                "needed": ["libc.so.6"],
                                 "rpath": [],
                                 "runpath": [],
                             },
@@ -1870,21 +1793,13 @@ class ImportIndexTest(unittest.TestCase):
             prev_index = import_index._INDEX
             prev_meta = list(sys.meta_path)
             prev_path = list(sys.path)
-            prev_retry_cls = import_index._CACHED_EXT_LOADER_CLS
             try:
                 import_index._INDEX = None
                 import_index._PRELOADED.clear()
                 sys.path[:] = [w_prov, w_ext] + prev_path
                 preloaded = []
 
-                def fake_raw_dlopen(p):
-                    # Simulate chained no-RPATH DT_NEEDED: loading foo_so fails until bar_so is preloaded.
-                    if p == foo_so and bar_so not in preloaded:
-                        raise OSError("libbar_lazy.so.1: cannot open shared object file: No such file or directory")
-                    preloaded.append(p)
-                    return p
-
-                with mock.patch.object(import_index, "_raw_dlopen", side_effect=fake_raw_dlopen):
+                with mock.patch.object(import_index, "_raw_dlopen", side_effect=lambda p: preloaded.append(p) or p):
                     self.assertTrue(import_index.install([w_prov, w_ext], mode="prebuilt"))
                     # Because neither wheel has .pycross-native-consumer.json, _native_loaded is False at startup!
                     self.assertFalse(import_index._INDEX._native_loaded)
@@ -1895,98 +1810,60 @@ class ImportIndexTest(unittest.TestCase):
                     self.assertFalse(import_index._INDEX._native_loaded)
                     self.assertEqual(preloaded, [])
 
-                    # Extension spec lookup wraps ExtensionFileLoader with retry-on-ImportError.
+                    # Extension spec lookup returns stock ExtensionFileLoader without wrapping.
                     ext_spec = import_index.PathFinder.find_spec("ext_pkg._ext", [os.path.join(w_ext, "ext_pkg")])
                     self.assertIsNotNone(ext_spec)
+                    self.assertIs(type(ext_spec.loader), import_index._machinery.ExtensionFileLoader)
                     self.assertFalse(import_index._INDEX._native_loaded)
 
-                    # (a) First attempt succeeds (e.g. loader satisfies DT_NEEDED from host):
-                    # nothing is preloaded and dotfiles are not loaded.
+                    # (a) Extension load failing with missing no-RPATH DT_NEEDED is NOT rescued:
+                    # ImportError propagates immediately without loading dotfiles or preloading.
+                    ext_attempts = []
+
+                    def fake_fail_create(_self, _spec):
+                        ext_attempts.append(1)
+                        raise ImportError("libfoo_lazy.so.1: cannot open shared object file: No such file or directory")
+
                     with mock.patch.object(
                         import_index._machinery.ExtensionFileLoader,
                         "create_module",
-                        new=lambda _self, _spec: "ext_ok_first_try",
+                        new=fake_fail_create,
                     ):
-                        self.assertEqual(ext_spec.loader.create_module(ext_spec), "ext_ok_first_try")
+                        with self.assertRaises(ImportError):
+                            ext_spec.loader.create_module(ext_spec)
+                    self.assertEqual(len(ext_attempts), 1)
                     self.assertFalse(import_index._INDEX._native_loaded)
                     self.assertEqual(preloaded, [])
 
-                    class FakeCtypesFirstTryOk:
-                        @staticmethod
-                        def dlopen(name, *args):
-                            return ("ctypes_ok_first_try", name)
-
-                    import_index._hook_ctypes_module(FakeCtypesFirstTryOk)
-                    self.assertEqual(
-                        FakeCtypesFirstTryOk.dlopen(wheel_ctypes_so),
-                        ("ctypes_ok_first_try", wheel_ctypes_so),
-                    )
-                    self.assertFalse(import_index._INDEX._native_loaded)
-                    self.assertEqual(preloaded, [])
-
-                    # (b) First attempt fails with missing SONAME (glibc and musl error formats):
-                    # retry lazily loads dotfiles and preloads [bar_so, foo_so] via SONAME lookup.
-                    for err_msg in (
-                        "libfoo_lazy.so.1: cannot open shared object file: No such file or directory",
-                        "Error loading shared library libfoo_lazy.so.1: No such file or directory (needed by _ext.so)",
-                    ):
-                        import_index._INDEX._native_loaded = False
-                        import_index._INDEX.preload.clear()
-                        import_index._INDEX.sonames.clear()
-                        import_index._INDEX.native_deps.clear()
-                        import_index._PRELOADED.clear()
-                        preloaded.clear()
-                        attempts = []
-
-                        def fake_super_create(_self, _spec, msg=err_msg):
-                            attempts.append(len(preloaded))
-                            if len(attempts) == 1:
-                                raise ImportError(msg)
-                            return "ext_module_ok"
-
-                        with mock.patch.object(
-                            import_index._machinery.ExtensionFileLoader,
-                            "create_module",
-                            new=fake_super_create,
-                        ):
-                            res = ext_spec.loader.create_module(ext_spec)
-                        self.assertEqual(res, "ext_module_ok")
-                        self.assertTrue(import_index._INDEX._native_loaded)
-                        self.assertEqual(import_index._INDEX.preload, {})
-                        self.assertEqual(import_index._INDEX.native_deps, {})
-                        self.assertEqual(attempts, [0, 2])
-                        self.assertEqual(preloaded, [bar_so, foo_so])
-
-                    # Also verify ctypes wheel-path dlopen lazy retry on OSError.
-                    import_index._INDEX._native_loaded = False
-                    import_index._INDEX.preload.clear()
-                    import_index._INDEX.sonames.clear()
-                    import_index._INDEX.native_deps.clear()
-                    import_index._PRELOADED.clear()
-                    preloaded.clear()
+                    # (b) Wheel-path dlopen failing with missing no-RPATH DT_NEEDED is NOT rescued:
+                    # OSError propagates immediately without retrying or preloading.
                     ctypes_attempts = []
 
-                    class FakeCtypesRetry:
+                    class FakeCtypesNoRescue:
                         @staticmethod
                         def dlopen(name, *args):
-                            ctypes_attempts.append((name, list(preloaded)))
-                            if len(ctypes_attempts) == 1:
+                            ctypes_attempts.append(name)
+                            if name in (wheel_ctypes_so, "libfoo_lazy.so.1"):
                                 raise OSError(
                                     "libfoo_lazy.so.1: cannot open shared object file: No such file or directory"
                                 )
-                            return ("ctypes_ok", name)
+                            return ("loaded", name)
 
-                    import_index._hook_ctypes_module(FakeCtypesRetry)
-                    self.assertEqual(
-                        FakeCtypesRetry.dlopen(wheel_ctypes_so),
-                        ("ctypes_ok", wheel_ctypes_so),
-                    )
+                    import_index._hook_ctypes_module(FakeCtypesNoRescue)
+                    with self.assertRaises(OSError):
+                        FakeCtypesNoRescue.dlopen(wheel_ctypes_so)
+                    self.assertEqual(ctypes_attempts, [wheel_ctypes_so])
+                    self.assertFalse(import_index._INDEX._native_loaded)
+                    self.assertEqual(preloaded, [])
+
+                    # (c) Bare-name dlopen("libfoo_lazy.so.1") DOES fall back to wheel SONAME after
+                    # the original bare-name dlopen fails, lazily loading dotfiles.
+                    ctypes_attempts.clear()
+                    self.assertEqual(FakeCtypesNoRescue.dlopen("libfoo_lazy.so.1"), ("loaded", foo_so))
+                    self.assertEqual(ctypes_attempts, ["libfoo_lazy.so.1", foo_so])
                     self.assertTrue(import_index._INDEX._native_loaded)
-                    self.assertEqual(preloaded, [bar_so, foo_so])
-                    self.assertEqual(len(ctypes_attempts), 2)
             finally:
                 import_index._INDEX = prev_index
-                import_index._CACHED_EXT_LOADER_CLS = prev_retry_cls
                 import_index._PRELOADED.clear()
                 sys.meta_path[:] = prev_meta
                 sys.path[:] = prev_path

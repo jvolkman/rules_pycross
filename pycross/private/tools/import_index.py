@@ -65,7 +65,6 @@ _SPLIT = (None, (), (), frozenset())
 # Cache for PathDistribution.read_text(): (dist-info path, filename) -> text.
 _METADATA_TEXT = {}
 _CACHED_DIST_CLS = {}
-_CACHED_EXT_LOADER_CLS = {}
 _CACHED_METADATA_FILES = ("METADATA", "PKG-INFO", "entry_points.txt")
 _PRELOADED = set()
 _IN_PRELOAD = False
@@ -1419,44 +1418,25 @@ def _dlopen_musl_stub(path, soname=None, ei_class=None, ei_data=None, e_machine=
                 pass
 
 
-def _load_native_path(path, label="", _seen=None):
+def _load_native_path(path, label=""):
     global _IN_PRELOAD
     if path in _PRELOADED:
         return True
     prev = _IN_PRELOAD
     _IN_PRELOAD = True
     try:
-        while True:
-            try:
-                if _is_musl():
-                    _dlopen_musl_stub(path)
-                else:
-                    _raw_dlopen(path)
-                _PRELOADED.add(path)
-                if _DEBUG and label:
-                    _log("preload", label, "->", path)
-                return True
-            except OSError as e:
-                missing = _extract_missing_soname(e) if _INDEX is not None else None
-                if not missing:
-                    if _DEBUG and label:
-                        _log("preload failed", label, path, e)
-                    return False
-                if _seen is None:
-                    _seen = {path}
-                target = _INDEX.sonames.get(missing) or _find_wheel_library(missing)
-                if target is None:
-                    if _DEBUG and label:
-                        _log("preload failed", label, path, e)
-                    return False
-                dep_path = _prepare_resolved_target(target[0], target[1], label)
-                if dep_path in _seen or dep_path in _PRELOADED:
-                    if _DEBUG and label:
-                        _log("preload failed", label, path, e)
-                    return False
-                _seen.add(dep_path)
-                if not _load_native_path(dep_path, label, _seen):
-                    return False
+        if _is_musl():
+            _dlopen_musl_stub(path)
+        else:
+            _raw_dlopen(path)
+        _PRELOADED.add(path)
+        if _DEBUG and label:
+            _log("preload", label, "->", path)
+        return True
+    except OSError as e:
+        if _DEBUG and label:
+            _log("preload failed", label, path, e)
+        return False
     finally:
         _IN_PRELOAD = prev
 
@@ -1610,65 +1590,6 @@ def _prepare_resolved_target(root, rel_so, label="dlopen"):
     return resolved
 
 
-def _extract_missing_soname(exc):
-    """Parses a missing shared library SONAME from a glibc or musl dlopen error message."""
-    msg = str(exc) if exc is not None else ""
-    if not msg:
-        return None
-    if "Error loading shared library " in msg:
-        after = msg.split("Error loading shared library ", 1)[1]
-        soname = after.partition(":")[0].strip()
-        if soname and "/" not in soname:
-            return soname
-    if ": cannot open shared object file" in msg:
-        prefix = msg.split(": cannot open shared object file", 1)[0]
-        soname = prefix.rpartition(": ")[2].strip() if ": " in prefix else prefix.strip()
-        if soname and "/" not in soname:
-            return soname
-    return None
-
-
-def _preload_on_dlopen_error(exc, origin=None, fullname=None):
-    """Lazily loads native dotfiles and preloads missing cross-wheel dependencies on dlopen failure."""
-    if _IN_PRELOAD or _INDEX is None or (not _INDEX.sonames and not _INDEX.native_files):
-        return False
-    missing_soname = _extract_missing_soname(exc)
-    matched = _match_wheel_relpath(origin) if origin else None
-    if not missing_soname and matched is None:
-        return False
-    _INDEX.ensure_native_loaded()
-    if not _INDEX.sonames and not _INDEX.native_deps and not _INDEX.preload:
-        return False
-    before = len(_PRELOADED)
-    label = fullname or "retry"
-    preloaded_any = False
-    if fullname and _INDEX.preload:
-        pkg = fullname
-        while pkg:
-            if pkg in _INDEX.preload:
-                _preload_native(label, _INDEX.preload.pop(pkg))
-                preloaded_any = True
-            pkg = pkg.rpartition(".")[0]
-    if matched is not None:
-        deps = _INDEX.native_deps.get(matched)
-        if deps is None:
-            canon = _INDEX.sonames.get(matched[1].rpartition("/")[2])
-            if canon is not None and canon[0] == matched[0]:
-                deps = _INDEX.native_deps.get(canon)
-        if deps:
-            _preload_native(label, deps)
-            preloaded_any = True
-    if missing_soname:
-        target = _INDEX.sonames.get(missing_soname)
-        if target is None:
-            target = _find_wheel_library(missing_soname)
-        if target is not None:
-            resolved = _prepare_resolved_target(target[0], target[1], label)
-            if _load_native_path(resolved, label):
-                preloaded_any = True
-    return preloaded_any and len(_PRELOADED) > before
-
-
 def _resolve_path_dlopen_arg(name):
     if _IN_PRELOAD or _INDEX is None or not name:
         return name
@@ -1726,15 +1647,6 @@ def _resolve_dlopen_arg(name, allow_short_name=False):
     return _resolve_bare_dlopen_arg(name, allow_short_name=allow_short_name)
 
 
-def _decode_path_arg(name):
-    if not name:
-        return None
-    try:
-        return os.fsdecode(os.fspath(name))
-    except TypeError:
-        return None
-
-
 def _hook_ctypes_module(mod):
     global _ORIG_CTYPES_DLOPEN
     dlopen = getattr(mod, "dlopen", None)
@@ -1744,20 +1656,14 @@ def _hook_ctypes_module(mod):
 
     def _wrapped_dlopen(name, *args):
         rewritten = _resolve_path_dlopen_arg(name)
-        while True:
-            try:
-                return dlopen(rewritten, *args)
-            except OSError as exc:
-                s = _decode_path_arg(rewritten)
-                if s and ("/" in s or (os.sep != "/" and os.sep in s)):
-                    if _preload_on_dlopen_error(exc, origin=s, fullname="dlopen"):
-                        continue
-                elif rewritten == name:
-                    fallback = _resolve_bare_dlopen_arg(name)
-                    if fallback != name:
-                        rewritten = fallback
-                        continue
-                raise
+        try:
+            return dlopen(rewritten, *args)
+        except OSError:
+            if rewritten == name:
+                fallback = _resolve_bare_dlopen_arg(name)
+                if fallback != name:
+                    return dlopen(fallback, *args)
+            raise
 
     _wrapped_dlopen._pycross_wrapped = True
     _wrapped_dlopen._pycross_orig = dlopen
@@ -1813,20 +1719,14 @@ def _hook_cffi_backend_module(mod):
             if name is None:
                 return orig_load(name, *args)
             rewritten = _resolve_path_dlopen_arg(name)
-            while True:
-                try:
-                    return orig_load(rewritten, *args)
-                except OSError as exc:
-                    s = _decode_path_arg(rewritten)
-                    if s and ("/" in s or (os.sep != "/" and os.sep in s)):
-                        if _preload_on_dlopen_error(exc, origin=s, fullname="dlopen"):
-                            continue
-                    elif rewritten == name:
-                        fallback = _resolve_bare_dlopen_arg(name, allow_short_name=True)
-                        if fallback != name:
-                            rewritten = fallback
-                            continue
-                    raise
+            try:
+                return orig_load(rewritten, *args)
+            except OSError:
+                if rewritten == name:
+                    fallback = _resolve_bare_dlopen_arg(name, allow_short_name=True)
+                    if fallback != name:
+                        return orig_load(fallback, *args)
+                raise
 
         _wrapped_load_library._pycross_wrapped = True
         try:
@@ -1845,20 +1745,14 @@ def _hook_cffi_backend_module(mod):
                     if name is None:
                         return super().dlopen(name, *args, **kwargs)
                     rewritten = _resolve_path_dlopen_arg(name)
-                    while True:
-                        try:
-                            return super().dlopen(rewritten, *args, **kwargs)
-                        except OSError as exc:
-                            s = _decode_path_arg(rewritten)
-                            if s and ("/" in s or (os.sep != "/" and os.sep in s)):
-                                if _preload_on_dlopen_error(exc, origin=s, fullname="dlopen"):
-                                    continue
-                            elif rewritten == name:
-                                fallback = _resolve_bare_dlopen_arg(name, allow_short_name=True)
-                                if fallback != name:
-                                    rewritten = fallback
-                                    continue
-                            raise
+                    try:
+                        return super().dlopen(rewritten, *args, **kwargs)
+                    except OSError:
+                        if rewritten == name:
+                            fallback = _resolve_bare_dlopen_arg(name, allow_short_name=True)
+                            if fallback != name:
+                                return super().dlopen(fallback, *args, **kwargs)
+                        raise
 
             _FFI.__name__ = orig_ffi.__name__
             _FFI.__qualname__ = orig_ffi.__qualname__
@@ -1876,89 +1770,6 @@ def _apply_module_hook(fullname, module):
         _hook_ctypes_util_module(module)
     elif fullname == "_cffi_backend":
         _hook_cffi_backend_module(module)
-
-
-def _is_stdlib_extension_origin(origin):
-    norm = os.path.normpath(os.path.abspath(origin))
-    if "/lib-dynload/" in norm.replace(os.sep, "/"):
-        return True
-    prefixes = getattr(_INDEX, "_stdlib_prefixes", None)
-    if prefixes is None:
-        raw_prefixes = set()
-        for attr in ("base_prefix", "base_exec_prefix", "prefix", "exec_prefix"):
-            val = getattr(sys, attr, None)
-            if val:
-                p = os.path.normpath(os.path.abspath(val)).rstrip("/")
-                if p:
-                    raw_prefixes.add(p + "/")
-                try:
-                    rp = os.path.realpath(val).rstrip("/")
-                    if rp:
-                        raw_prefixes.add(rp + "/")
-                except OSError:
-                    pass
-        prefixes = tuple(sorted(raw_prefixes))
-        if _INDEX is not None:
-            _INDEX._stdlib_prefixes = prefixes
-    if norm.startswith(prefixes):
-        return True
-    try:
-        real_norm = os.path.realpath(origin)
-        if real_norm.startswith(prefixes):
-            return True
-    except OSError:
-        pass
-    return False
-
-
-def _retry_extension_loader_cls(base):
-    cls = _CACHED_EXT_LOADER_CLS.get(base)
-    if cls is None:
-
-        class _ExtensionFileLoader(base):
-            _pycross_ext_wrapped = True
-
-            def create_module(self, spec):
-                origin = getattr(spec, "origin", None) or getattr(self, "path", None)
-                fullname = getattr(spec, "name", None) or getattr(self, "name", "")
-                while True:
-                    try:
-                        return super().create_module(spec)
-                    except ImportError as exc:
-                        if not _preload_on_dlopen_error(exc, origin=origin, fullname=fullname):
-                            raise
-
-        _ExtensionFileLoader.__name__ = base.__name__
-        _ExtensionFileLoader.__qualname__ = base.__qualname__
-        cls = _CACHED_EXT_LOADER_CLS[base] = _ExtensionFileLoader
-    return cls
-
-
-def _wrap_extension_loader(fullname, spec):
-    loader = getattr(spec, "loader", None)
-    if not isinstance(loader, _machinery.ExtensionFileLoader) or getattr(loader, "_pycross_ext_wrapped", False):
-        return
-    origin = getattr(spec, "origin", None) or getattr(loader, "path", None)
-    if not origin or _is_stdlib_extension_origin(origin):
-        return
-    try:
-        loader.__class__ = _retry_extension_loader_cls(type(loader))
-    except TypeError:
-        orig_create = loader.create_module
-
-        def _create_module(s):
-            while True:
-                try:
-                    return orig_create(s)
-                except ImportError as exc:
-                    if not _preload_on_dlopen_error(exc, origin=origin, fullname=fullname):
-                        raise
-
-        try:
-            loader.create_module = _create_module
-            loader._pycross_ext_wrapped = True
-        except AttributeError:
-            pass
 
 
 def _finalize_spec(fullname, spec):
@@ -1989,8 +1800,6 @@ def _finalize_spec(fullname, spec):
                     loader._pycross_wrapped = True
                 except AttributeError:
                     pass
-    if _INDEX.sonames or _INDEX.native_files:
-        _wrap_extension_loader(fullname, spec)
     return spec
 
 

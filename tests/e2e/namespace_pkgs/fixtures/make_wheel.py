@@ -150,8 +150,9 @@ FIXTURES = {
     },
     # Cross-wheel DT_NEEDED user WITHOUT escaping RPATH/RUNPATH (onnxruntime-like):
     # sonamefixture/libuser_nopath.so has DT_NEEDED libfixture_cublas.so.12 and empty
-    # RPATH/RUNPATH; also exercises bare-name ctypes.CDLL, escaped relative path
-    # rewriting, and ctypes.util.find_library.
+    # RPATH/RUNPATH. Preloading libfixture_cublas.so.12 by bare SONAME via ctypes.CDLL
+    # satisfies libuser_nopath.so's DT_NEEDED; also exercises escaped relative path
+    # rewriting and ctypes.util.find_library.
     "sonamefixture": {
         "sonamefixture/__init__.py": (
             "import ctypes, ctypes.util, os\n"
@@ -160,11 +161,13 @@ FIXTURES = {
             "    os.path.dirname(__file__), '..', 'nvidia', 'fixture_cudnn', 'lib', 'libfixture_cudnn.so.12'\n"
             ")\n"
             "def load_and_call():\n"
-            "    lib = ctypes.CDLL(LIB_PATH)\n"
+            "    cublas_bare = ctypes.CDLL('libfixture_cublas.so.12')\n"
             "    cudnn_bare = ctypes.CDLL('libfixture_cudnn.so.12')\n"
             "    cudnn_escaped = ctypes.CDLL(ESCAPED_CUDNN)\n"
+            "    lib = ctypes.CDLL(LIB_PATH)\n"
             "    found = ctypes.util.find_library('fixture_cublas') or ''\n"
             "    return (\n"
+            "        cublas_bare.fixture_cublas(),\n"
             "        lib.eager_cublas(),\n"
             "        cudnn_bare.fixture_cudnn(),\n"
             "        cudnn_escaped.fixture_cudnn(),\n"
