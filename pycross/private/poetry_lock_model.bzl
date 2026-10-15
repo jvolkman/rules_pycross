@@ -611,7 +611,7 @@ def translate_poetry(project_dict, lock_dict, lock_model):
     for fname, version_constraints in _fork_constraints.items():
         conditional_pins = {}
         for fversion, cname in version_constraints.items():
-            conditional_pins[cname] = "==" + fversion
+            conditional_pins[cname] = "===" + fversion
         for pin_name in list(pinned_package_specs.keys()):
             if pin_name == fname or pin_name.startswith(fname + "["):
                 pinned_package_specs[pin_name] = conditional_pins

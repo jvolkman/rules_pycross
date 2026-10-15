@@ -794,6 +794,81 @@ def _test_uv_variants_scoped_to_project(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
     analysis_test(name = name, target = name + "_subject", impl = _test_uv_variants_scoped_to_project_impl)
 
+# --- test_local_version_exact_matching ---
+
+# buildifier: disable=unused-variable
+def _test_uv_local_version_exact_matching_impl(env, target):
+    """Exact locked versions (===) distinguish 2.12.0 from 2.12.0+cpu in pins, deps, and extra self-deps."""
+    project = _project(
+        opt_deps = {
+            "cpu": ["torch==2.12.0+cpu"],
+            "cuda": ["torch[opt]==2.12.0"],
+        },
+        uv_conflicts = [[{"package": "my-app", "extra": "cpu"}, {"package": "my-app", "extra": "cuda"}]],
+    )
+    lock = _lock(
+        [
+            _vpkg(
+                "my-app",
+                deps = [_dep("helper", "1.0.0")],
+                opt_deps = {
+                    "cpu": [_dep("torch", "2.12.0+cpu")],
+                    "cuda": [
+                        _dep("torch", "2.12.0"),
+                        _dep("torch", "2.12.0", extra = ["opt"]),
+                    ],
+                },
+            ),
+            _pkg(
+                "helper",
+                "1.0.0",
+                wheels = [_whl("helper-1.0.0-py3-none-any.whl", "h1")],
+                deps = [_dep("torch", "2.12.0")],
+            ),
+            _pkg(
+                "helper",
+                "1.0.0+local",
+                wheels = [_whl("helper-1.0.0%2Blocal-py3-none-any.whl", "h2")],
+            ),
+            _pkg(
+                "torch",
+                "2.12.0",
+                wheels = [_whl("torch-2.12.0-cp312-cp312-linux_x86_64.whl", "t1")],
+                opt_deps = {"opt": []},
+            ),
+            _pkg(
+                "torch",
+                "2.12.0+cpu",
+                wheels = [_whl("torch-2.12.0%2Bcpu-cp312-cp312-linux_x86_64.whl", "t2")],
+                opt_deps = {"opt": []},
+            ),
+        ],
+        conflicts = [[{"package": "my-app", "extra": "cpu"}, {"package": "my-app", "extra": "cuda"}]],
+    )
+    result = translate_uv(project, lock, _lock_model(dependency_groups = ["default", "optional:*"]))
+
+    # Root pins: 2.12.0 -> torch@2.12.0 (not +cpu), 2.12.0+cpu -> torch@2.12.0+cpu
+    env.expect.that_str(result["pins"]["helper"]).equals("helper@1.0.0")
+    env.expect.that_str(result["pins"]["torch"]["extra_cuda"]).equals("torch@2.12.0")
+    env.expect.that_str(result["pins"]["torch"]["extra_cpu"]).equals("torch@2.12.0+cpu")
+    env.expect.that_str(result["pins"]["torch[opt]"]["extra_cuda"]).equals("torch[opt]@2.12.0")
+
+    # Package dependency edge with explicit version 2.12.0 resolves to 2.12.0 (not 2.12.0+cpu)
+    helper_deps = result["packages"]["helper@1.0.0"]["dependencies"]
+    env.expect.that_int(len(helper_deps)).equals(1)
+    env.expect.that_str(helper_deps[0]["name"]).equals("torch")
+    env.expect.that_str(helper_deps[0]["version"]).equals("2.12.0")
+
+    # Self-dependency of torch[opt]@2.12.0 resolves to 2.12.0 (not 2.12.0+cpu)
+    torch_opt_deps = result["packages"]["torch[opt]@2.12.0"]["dependencies"]
+    env.expect.that_int(len(torch_opt_deps)).equals(1)
+    env.expect.that_str(torch_opt_deps[0]["name"]).equals("torch")
+    env.expect.that_str(torch_opt_deps[0]["version"]).equals("2.12.0")
+
+def _test_uv_local_version_exact_matching(name):
+    util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
+    analysis_test(name = name, target = name + "_subject", impl = _test_uv_local_version_exact_matching_impl)
+
 def _test_uv_root_dependency_markers(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
     analysis_test(name = name, target = name + "_subject", impl = _test_uv_root_dependency_markers_impl)
@@ -908,5 +983,6 @@ def uv_translator_test_suite(name):
             _test_uv_virtual_and_directory_members,
             _test_uv_local_member_deps_keep_forks,
             _test_uv_variants_scoped_to_project,
+            _test_uv_local_version_exact_matching,
         ],
     )

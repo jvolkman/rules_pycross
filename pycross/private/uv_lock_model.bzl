@@ -123,7 +123,7 @@ def _parse_uv_dependency(dep):
     if extras:
         for extra in extras:
             dep_name = "{}[{}]".format(canonicalize_name(name), canonicalize_name(extra))
-            specifier = "=={}".format(version) if version else ""
+            specifier = "==={}".format(version) if version else ""
             results.append({
                 "name": dep_name,
                 "specifier": specifier,
@@ -131,7 +131,7 @@ def _parse_uv_dependency(dep):
                 "extras": [None],
             })
     else:
-        specifier = "=={}".format(version) if version else ""
+        specifier = "==={}".format(version) if version else ""
         results.append({
             "name": canonicalize_name(name),
             "specifier": specifier,
@@ -314,7 +314,7 @@ def translate_uv(project_dict, lock_dict, lock_model):
                 dep_name = canonicalize_name(dep["name"])
                 dep_version = dep.get("version", "")
                 dep_extras = dep.get("extra") or dep.get("extras", [])
-                specifier = "=={}".format(dep_version) if dep_version else ""
+                specifier = "==={}".format(dep_version) if dep_version else ""
 
                 # Resolution-marker fork: use per-version constraint.
                 base_dep_name = dep_name.split("[")[0]
@@ -346,7 +346,7 @@ def translate_uv(project_dict, lock_dict, lock_model):
                     dep_name = canonicalize_name(dep["name"])
                     dep_version = dep.get("version", "")
                     dep_extras = dep.get("extra") or dep.get("extras", [])
-                    specifier = "=={}".format(dep_version) if dep_version else ""
+                    specifier = "==={}".format(dep_version) if dep_version else ""
 
                     # Resolution-marker fork: combine variant + fork constraints.
                     base_dep_name = dep_name.split("[")[0]
@@ -504,7 +504,7 @@ def translate_uv(project_dict, lock_dict, lock_model):
             # Add self-dependency
             extra_parsed_deps.append({
                 "name": package_name,
-                "specifier": "=={}".format(package_version),
+                "specifier": "==={}".format(package_version),
                 "marker": "",
                 "extras": [None],
             })
