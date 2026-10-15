@@ -834,302 +834,63 @@ def _verify(roots, prebuilt):
     return problems
 
 
-def _read_elf_metadata_full(path):
-    """Returns `{soname, needed, rpath, runpath, ei_class, ei_data, e_machine}` for an ELF shared object on disk, or `None`."""
-    import struct
-
-    try:
-        if not os.path.isfile(path):
-            return None
-        with open(path, "rb") as fh:
-            ident = fh.read(16)
-            if len(ident) < 16 or ident[:4] != b"\x7fELF":
-                return None
-            ei_class, ei_data = ident[4], ident[5]
-            if ei_class not in (1, 2) or ei_data not in (1, 2):
-                return None
-            endian = "<" if ei_data == 1 else ">"
-            is_64 = ei_class == 2
-            if is_64:
-                ehdr_fmt = struct.Struct(endian + "HHIQQQIHHHHHH")
-                shdr_fmt = struct.Struct(endian + "IIQQQQIIQQ")
-                dyn_fmt = struct.Struct(endian + "qQ")
-            else:
-                ehdr_fmt = struct.Struct(endian + "HHIIIIIHHHHHH")
-                shdr_fmt = struct.Struct(endian + "IIIIIIIIII")
-                dyn_fmt = struct.Struct(endian + "iI")
-            ehdr_buf = fh.read(ehdr_fmt.size)
-            if len(ehdr_buf) != ehdr_fmt.size:
-                return None
-            (
-                e_type,
-                e_machine,
-                _,
-                _,
-                e_phoff,
-                e_shoff,
-                _,
-                _,
-                e_phentsize,
-                e_phnum,
-                e_shentsize,
-                e_shnum,
-                _,
-            ) = ehdr_fmt.unpack(ehdr_buf)
-            if e_type not in (2, 3):
-                return None
-
-            dyn_offset = dyn_size = 0
-            dynstr = None
-            if e_shoff and e_shentsize == shdr_fmt.size:
-                fh.seek(e_shoff)
-                shdrs = []
-                if e_shnum == 0:
-                    first_buf = fh.read(shdr_fmt.size)
-                    if len(first_buf) == shdr_fmt.size:
-                        first_shdr = shdr_fmt.unpack(first_buf)
-                        e_shnum = first_shdr[5]
-                        shdrs.append(first_shdr)
-                        remaining = e_shnum - 1
-                    else:
-                        remaining = 0
-                else:
-                    remaining = e_shnum
-                for _ in range(remaining):
-                    buf = fh.read(shdr_fmt.size)
-                    if len(buf) != shdr_fmt.size:
-                        break
-                    shdrs.append(shdr_fmt.unpack(buf))
-                dyn_shdr = None
-                for shdr in shdrs:
-                    if shdr[1] == 6:  # SHT_DYNAMIC
-                        dyn_shdr = shdr
-                        break
-                if dyn_shdr is not None:
-                    strtab_idx = dyn_shdr[6]
-                    if strtab_idx < len(shdrs) and shdrs[strtab_idx][1] == 3:
-                        strtab_shdr = shdrs[strtab_idx]
-                        fh.seek(strtab_shdr[4])
-                        dynstr = fh.read(strtab_shdr[5])
-                        dyn_offset = dyn_shdr[4]
-                        dyn_size = dyn_shdr[5]
-
-            if dynstr is None and e_phoff and e_phnum and e_phentsize:
-                fh.seek(e_phoff)
-                phdrs_raw = fh.read(e_phentsize * e_phnum)
-                if len(phdrs_raw) < e_phentsize * e_phnum:
-                    return None
-                load_segments = []
-                for i in range(e_phnum):
-                    chunk = phdrs_raw[i * e_phentsize : (i + 1) * e_phentsize]
-                    if is_64:
-                        p_type, _, p_offset, p_vaddr, _, p_filesz, p_memsz, _ = struct.unpack(
-                            endian + "IIQQQQQQ", chunk[:56]
-                        )
-                    else:
-                        p_type, p_offset, p_vaddr, _, p_filesz, p_memsz, _, _ = struct.unpack(
-                            endian + "IIIIIIII", chunk[:32]
-                        )
-                    if p_type == 1:
-                        load_segments.append((p_vaddr, p_memsz, p_offset, p_filesz))
-                    elif p_type == 2:
-                        dyn_offset, dyn_size = p_offset, p_filesz
-                if not dyn_offset or not dyn_size:
-                    return None
-                fh.seek(dyn_offset)
-                dyn_raw = fh.read(dyn_size)
-                strtab_vaddr = None
-                strtab_size = 0
-                for pos in range(0, len(dyn_raw) - dyn_fmt.size + 1, dyn_fmt.size):
-                    d_tag, d_val = dyn_fmt.unpack(dyn_raw[pos : pos + dyn_fmt.size])
-                    if d_tag == 0:
-                        break
-                    elif d_tag == 5:
-                        strtab_vaddr = d_val
-                    elif d_tag == 10:
-                        strtab_size = d_val
-                if strtab_vaddr is None or not strtab_size:
-                    return None
-                strtab_off = None
-                for vaddr, memsz, offset, filesz in load_segments:
-                    span = max(memsz, filesz)
-                    if vaddr <= strtab_vaddr < vaddr + span:
-                        strtab_off = offset + (strtab_vaddr - vaddr)
-                        break
-                if strtab_off is None:
-                    return None
-                fh.seek(strtab_off)
-                dynstr = fh.read(strtab_size)
-
-            if dynstr is None or not dyn_offset or not dyn_size:
-                return None
-
-            def get_str(off):
-                if off < 0 or off >= len(dynstr):
-                    return ""
-                end = dynstr.find(b"\x00", off)
-                raw = dynstr[off:] if end < 0 else dynstr[off:end]
-                return raw.decode("utf-8", "replace")
-
-            fh.seek(dyn_offset)
-            soname = None
-            needed = []
-            rpath_str = ""
-            runpath_str = ""
-            for _ in range(dyn_size // dyn_fmt.size):
-                buf = fh.read(dyn_fmt.size)
-                if len(buf) != dyn_fmt.size:
-                    break
-                d_tag, d_val = dyn_fmt.unpack(buf)
-                if d_tag == 0:
-                    break
-                elif d_tag == 14:
-                    soname = get_str(d_val)
-                elif d_tag == 1:
-                    val = get_str(d_val)
-                    if val:
-                        needed.append(val)
-                elif d_tag == 15:
-                    rpath_str = get_str(d_val)
-                elif d_tag == 29:
-                    runpath_str = get_str(d_val)
-            return {
-                "soname": soname,
-                "needed": needed,
-                "rpath": [p for p in rpath_str.split(":") if p] if rpath_str else [],
-                "runpath": [p for p in runpath_str.split(":") if p] if runpath_str else [],
-                "ei_class": ei_class,
-                "ei_data": ei_data,
-                "e_machine": e_machine,
-            }
-    except Exception:
-        return None
-
-
-def _scan_native_files(root):
-    """Walks `root` for ELF `.so` files on disk, matching `wheel_index.py`."""
-    native = {}
-
-    def walk_dir(rel_dir, abs_dir):
-        with os.scandir(abs_dir) as it:
-            entries = sorted(it, key=lambda e: e.name)
-        for entry in entries:
-            name = entry.name
-            if name.startswith("."):
-                continue
-            if entry.is_dir():
-                if name == "__pycache__" or name.endswith(".dist-info"):
-                    continue
-                child_rel = rel_dir + "/" + name if rel_dir else name
-                walk_dir(child_rel, os.path.join(abs_dir, name))
-            elif name.endswith(".so") or ".so." in name:
-                meta = _read_elf_metadata_full(os.path.join(abs_dir, name))
-                if meta is not None:
-                    rel_path = rel_dir + "/" + name if rel_dir else name
-                    native[rel_path] = meta
-
-    walk_dir("", root)
-    return dict(sorted(native.items()))
-
-
-def _candidate_origin_dirs(own_dirs, so_dir, entry):
-    for token in ("$ORIGIN/", "${ORIGIN}/"):
-        if entry.startswith(token):
-            after = entry[len(token) :]
-            break
-    else:
-        return ()
-    if not after:
-        return ()
-    norm = posixpath.normpath(posixpath.join(so_dir, after) if so_dir else after)
-    if norm == "." or (not norm.startswith("..") and norm in own_dirs):
-        return ()
-    candidates = []
-    if not norm.startswith(".."):
-        candidates.append(norm)
-    parts = posixpath.normpath(after).split("/")
-    while parts and parts[0] == "..":
-        parts.pop(0)
-    if parts and parts != ["."]:
-        stripped = "/".join(parts)
-        if stripped not in own_dirs and stripped not in candidates:
-            candidates.append(stripped)
-    return tuple(candidates)
-
-
-def _compute_escaping_rpaths(top, dirs, native):
-    """Computes pre-normalized escaping `$ORIGIN` RPATH/RUNPATH directories per library."""
-    if not native:
-        return {}
-    own_dirs = set(dirs or ())
-    own_dirs.update(top or ())
-    for rel_so in native:
-        parent = rel_so.rpartition("/")[0]
-        while parent:
-            own_dirs.add(parent)
-            parent = parent.rpartition("/")[0]
-
-    escaping = {}
-    for rel_so, meta in sorted(native.items()):
-        so_dir = rel_so.rpartition("/")[0]
-        runpath = meta.get("runpath") or []
-        rpath = meta.get("rpath") or []
-        is_runpath = bool(runpath)
-        active = runpath if is_runpath else rpath
-        if not active:
-            continue
-        cand_dirs = []
-        for entry in active:
-            for cand in _candidate_origin_dirs(own_dirs, so_dir, entry):
-                if cand not in cand_dirs:
-                    cand_dirs.append(cand)
-        if cand_dirs:
-            escaping[rel_so] = {
-                "rpath": [] if is_runpath else cand_dirs,
-                "runpath": cand_dirs if is_runpath else [],
-            }
-    return escaping
-
-
-def _is_native_consumer(top, dirs, native):
-    """Whether a wheel's ELF files have any `$ORIGIN` RPATH/RUNPATH entry escaping the wheel."""
-    return bool(_compute_escaping_rpaths(top, dirs, native))
-
-
 def _verify_hybrid(index):
     """Verifies scanned root entries and native dotfiles against disk."""
     problems = []
     for root in index.roots:
         try:
-            names, _, _, _ = _scan_root_with_native(root)
-            expected_dirs = sorted(d.replace(".", "/") for d in _walk_dirs(root))
-            expected_native = _scan_native_files(root)
+            names, dists, pths, _ = _scan_root_with_native(root)
         except OSError as e:
             problems.append("can't scan {}: {}".format(root, e))
             continue
 
+        indexed_names = sorted(
+            (name, entry)
+            for name, owners in index.top.items()
+            if root in owners
+            for entry in index.entries.get((name, root), ())
+        )
+        if sorted(names) != indexed_names:
+            problems.append(
+                "{}: top-level entries mismatch (disk={}, index={})".format(root, sorted(names), indexed_names)
+            )
+        if sorted(dists) != sorted(index.dist_entries.get(root, ())):
+            problems.append(
+                "{}: .dist-info mismatch (disk={}, index={})".format(
+                    root, sorted(dists), sorted(index.dist_entries.get(root, ()))
+                )
+            )
+        indexed_pths = sorted(name for name, owner in index.pth.items() if owner == root)
+        if sorted(pths) != indexed_pths:
+            problems.append("{}: .pth mismatch (disk={}, index={})".format(root, sorted(pths), indexed_pths))
+
         present_dotfiles = [
             fn for fn in (NATIVE_CONSUMER_FILENAME, NATIVE_PROVIDER_FILENAME) if os.path.exists(os.path.join(root, fn))
         ]
-        if not expected_native:
-            if present_dotfiles:
-                problems.append(
-                    "{}: unexpected native dotfile {} (no ELF files on disk)".format(root, present_dotfiles)
-                )
+        if len(present_dotfiles) > 1:
+            problems.append("{}: multiple native dotfiles {}".format(root, present_dotfiles))
+            continue
+        if not present_dotfiles:
+            if root in index.native_files:
+                problems.append("{}: indexed native dotfile {} missing on disk".format(root, index.native_files[root]))
             continue
 
-        top_names = sorted({name for name, _ in names})
-        expected_escaping = _compute_escaping_rpaths(top_names, expected_dirs, expected_native)
-        expected_fn = NATIVE_CONSUMER_FILENAME if expected_escaping else NATIVE_PROVIDER_FILENAME
-        if present_dotfiles != [expected_fn]:
-            problems.append("{}: expected native dotfile {!r}, found {}".format(root, expected_fn, present_dotfiles))
-            continue
+        expected_fn = present_dotfiles[0]
         dotfile_path = os.path.join(root, expected_fn)
+        if index.native_files.get(root) != dotfile_path:
+            problems.append(
+                "{}: native dotfile mismatch (disk={!r}, index={!r})".format(
+                    root, dotfile_path, index.native_files.get(root)
+                )
+            )
+            continue
         try:
+            expected_dirs = sorted(d.replace(".", "/") for d in _walk_dirs(root))
             data = _read_json(dotfile_path)
         except Exception as e:
-            problems.append("{}: can't parse {}: {}".format(root, expected_fn, e))
+            problems.append("{}: can't verify {}: {}".format(root, expected_fn, e))
             continue
+        top_names = sorted({name for name, _ in names})
         if data.get("version") != _SUPPORTED_VERSION:
             problems.append("{}: {}: unsupported version {!r}".format(root, expected_fn, data.get("version")))
         if data.get("top") != top_names:
@@ -1140,24 +901,17 @@ def _verify_hybrid(index):
             problems.append(
                 "{}: {}: dirs mismatch (dotfile={}, disk={})".format(root, expected_fn, data.get("dirs"), expected_dirs)
             )
-        if data.get("native") != expected_native:
-            problems.append(
-                "{}: {}: native metadata mismatch (dotfile keys={}, disk keys={})".format(
-                    root,
-                    expected_fn,
-                    sorted(data.get("native") or ()),
-                    sorted(expected_native),
-                )
-            )
-        if (data.get("escaping") or {}) != expected_escaping:
-            problems.append(
-                "{}: {}: escaping mismatch (dotfile={}, disk={})".format(
-                    root,
-                    expected_fn,
-                    data.get("escaping") or {},
-                    expected_escaping,
-                )
-            )
+        native = data.get("native") or {}
+        if not native:
+            problems.append("{}: {}: empty native table".format(root, expected_fn))
+        for rel_so in sorted(native):
+            if not os.path.isfile(os.path.join(root, rel_so)):
+                problems.append("{}: {}: missing native file {!r}".format(root, expected_fn, rel_so))
+        has_escaping = bool(data.get("escaping"))
+        if expected_fn == NATIVE_CONSUMER_FILENAME and not has_escaping:
+            problems.append("{}: {}: consumer dotfile has no escaping entries".format(root, expected_fn))
+        elif expected_fn == NATIVE_PROVIDER_FILENAME and has_escaping:
+            problems.append("{}: {}: provider dotfile has escaping entries".format(root, expected_fn))
     return problems
 
 

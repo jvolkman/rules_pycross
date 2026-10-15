@@ -71,6 +71,7 @@ py_test(
     main = "import_index_test.py",
     tags = ["unit"],
     deps = [
+        "//pycross/private/tools:elf_tools",
         "//pycross/private/tools:import_index",
     ],
 )

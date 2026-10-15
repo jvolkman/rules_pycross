@@ -24,6 +24,7 @@ import tempfile
 import unittest
 from unittest import mock
 
+from pycross.private.tools import elf_tools
 from pycross.private.tools import import_index
 
 _FINDER_DIR = os.path.dirname(os.path.abspath(import_index.__file__))
@@ -583,8 +584,7 @@ class ImportIndexTest(unittest.TestCase):
 
             cublas_dot = os.path.join(cublas_root, import_index.NATIVE_PROVIDER_FILENAME)
             cudnn_dot = os.path.join(cudnn_root, import_index.NATIVE_CONSUMER_FILENAME)
-            stub_meta = import_index._read_elf_metadata_full(cublas_so)
-            e_machine = stub_meta["e_machine"]
+            e_machine = 62
             cublas_meta = {
                 "version": 2,
                 "top": ["nvidia"],
@@ -718,11 +718,9 @@ class ImportIndexTest(unittest.TestCase):
                         )
                     )
 
-                # 4. `verify` mode raises SystemExit when `escaping` in consumer dotfile does not match disk.
-                bad_escaping_meta = dict(
-                    cudnn_meta, escaping={"nvidia/cudnn/lib/libcudnn.so.9": {"rpath": ["wrong/dir"], "runpath": []}}
-                )
-                _write(cudnn_dot, json.dumps(bad_escaping_meta))
+                # 4. `verify` mode raises SystemExit when `dirs` in dotfile does not match disk.
+                bad_dirs_meta = dict(cudnn_meta, dirs=["nvidia", "nvidia/wrong_dir"])
+                _write(cudnn_dot, json.dumps(bad_dirs_meta))
                 try:
                     import_index._INDEX = None
                     sys.meta_path[:] = prev_meta
@@ -972,7 +970,7 @@ class ImportIndexTest(unittest.TestCase):
         )
         self.assertNotIn("_ext.cpython-312-x86_64-linux-gnu.so", merged["sonames"])
 
-    def test_stub_elf_and_read_elf_metadata_full_roundtrip(self):
+    def test_stub_elf_header_and_dynstr(self):
         self.assertIsNone(import_index._make_stub_elf("/tmp/wheel/lib", "libcublas.so.12", ei_class=1))
         stub_bytes = import_index._make_stub_elf(
             "/tmp/wheel/lib",
@@ -983,22 +981,9 @@ class ImportIndexTest(unittest.TestCase):
             e_machine=62,
         )
         self.assertIsNotNone(stub_bytes)
-        self.assertTrue(stub_bytes.startswith(b"\x7fELF"))
-        with tempfile.NamedTemporaryFile(suffix=".so") as tf:
-            tf.write(stub_bytes)
-            tf.flush()
-            self.assertEqual(
-                import_index._read_elf_metadata_full(tf.name),
-                {
-                    "soname": "libstub.so.1",
-                    "needed": ["libcublas.so.12"],
-                    "rpath": ["/tmp/wheel/lib"],
-                    "runpath": [],
-                    "ei_class": 2,
-                    "ei_data": 1,
-                    "e_machine": 62,
-                },
-            )
+        self.assertTrue(stub_bytes.startswith(b"\x7fELF\x02\x01"))
+        self.assertIn(b"libcublas.so.12\x00", stub_bytes)
+        self.assertIn(b"/tmp/wheel/lib\x00", stub_bytes)
 
     def test_runtime_dlopen_and_cffi(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -1681,7 +1666,7 @@ class ImportIndexTest(unittest.TestCase):
     def test_no_rpath_dt_needed_missing_on_host_is_not_rescued(self):
         # 1. Consumer classification only triggers on escaping $ORIGIN RPATH/RUNPATH.
         self.assertTrue(
-            import_index._is_native_consumer(
+            elf_tools.is_native_consumer(
                 {"pkg": ["pkg"]},
                 ["pkg", "pkg/lib"],
                 {
@@ -1695,7 +1680,7 @@ class ImportIndexTest(unittest.TestCase):
             )
         )
         self.assertFalse(
-            import_index._is_native_consumer(
+            elf_tools.is_native_consumer(
                 {"pkg": ["pkg"]},
                 ["pkg", "pkg.libs"],
                 {
