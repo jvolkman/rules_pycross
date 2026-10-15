@@ -1000,7 +1000,7 @@ class ImportIndexTest(unittest.TestCase):
                 },
             )
 
-    def test_runtime_dlopen_find_library_cffi_and_extension_needed(self):
+    def test_runtime_dlopen_and_cffi(self):
         with tempfile.TemporaryDirectory() as tmp:
             cublas_root = os.path.join(tmp, "cublas", "site-packages")
             cudnn_root = os.path.join(tmp, "cudnn", "site-packages")
@@ -1136,13 +1136,6 @@ class ImportIndexTest(unittest.TestCase):
                     self.assertEqual(import_index._resolve_dlopen_arg("libcudnn.so.9"), cudnn_so)
                     self.assertEqual(preloaded_calls, [cublas_lt_so, cublas_so])
 
-                    # Item 5c: ctypes.util.find_library wrapper.
-                    import ctypes.util
-
-                    import_index._hook_ctypes_util_module(ctypes.util)
-                    self.assertEqual(ctypes.util.find_library("cublas"), cublas_so)
-                    self.assertEqual(ctypes.util.find_library("libcudnn.so.9"), cudnn_so)
-
                     # Item 5b: _cffi_backend wrapper (load_library and FFI.dlopen).
                     class FakeFFI:
                         def dlopen(self, name=None, flags=0):
@@ -1239,7 +1232,7 @@ class ImportIndexTest(unittest.TestCase):
                         )
                     )
 
-                    # (a) Bare-name dlopen / cffi / find_library tries original first:
+                    # (a) Bare-name dlopen / cffi tries original first:
                     # if the original call succeeds for a bare name, it is NOT redirected to the wheel.
                     dlopen_calls = []
 
@@ -1261,19 +1254,6 @@ class ImportIndexTest(unittest.TestCase):
                     dlopen_calls.clear()
                     self.assertEqual(FakeCtypesMod.dlopen("libcudart.so.12"), ("loaded", cudart_so))
                     self.assertEqual(dlopen_calls, ["libcudart.so.12", cudart_so])
-
-                    # Same original-first behavior for ctypes.util.find_library:
-                    class FakeCtypesUtil:
-                        @staticmethod
-                        def find_library(name):
-                            if name == "cublas":
-                                return "libcublas.so.host"
-                            return None
-
-                    import_index._hook_ctypes_util_module(FakeCtypesUtil)
-                    self.assertEqual(FakeCtypesUtil.find_library("cublas"), "libcublas.so.host")
-                    self.assertEqual(FakeCtypesUtil.find_library("cudart"), cudart_so)
-                    self.assertIsNone(FakeCtypesUtil.find_library("nonexistent_lib"))
 
                     # Same original-first behavior for _cffi_backend:
                     class FakeFFIHostFirst:

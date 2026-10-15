@@ -109,7 +109,7 @@ class ImportIndexTest(unittest.TestCase):
 
         self.assertEqual(
             sonamefixture.load_and_call(),
-            (12, 12, 9, 9, "libfixture_cublas.so.12"),
+            (12, 12, 9, 9),
         )
 
         # Also verify in a clean subprocess with 0 consumer wheels (filtering out
@@ -146,7 +146,7 @@ class ImportIndexTest(unittest.TestCase):
                     "else:",
                     "    raise AssertionError('expected OSError for unpreloaded no-RPATH DT_NEEDED')",
                     "assert not bi._INDEX._native_loaded, 'failed path dlopen must not load native dotfiles'",
-                    "assert sonamefixture.load_and_call() == (12, 12, 9, 9, 'libfixture_cublas.so.12')",
+                    "assert sonamefixture.load_and_call() == (12, 12, 9, 9)",
                     "assert bi._INDEX._native_loaded, 'expected lazy native load on bare-name dlopen fallback'",
                 ]
             )

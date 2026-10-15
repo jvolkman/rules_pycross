@@ -70,7 +70,7 @@ _PRELOADED = set()
 _IN_PRELOAD = False
 _ORIG_CTYPES_DLOPEN = None
 _IS_MUSL = None
-_HOOK_MODULES = frozenset(("_ctypes", "ctypes", "ctypes.util", "_cffi_backend"))
+_HOOK_MODULES = frozenset(("_ctypes", "ctypes", "_cffi_backend"))
 NATIVE_CONSUMER_FILENAME = ".pycross-native-consumer.json"
 NATIVE_PROVIDER_FILENAME = ".pycross-native.json"
 
@@ -1690,27 +1690,6 @@ def _hook_ctypes_pkg(mod):
                 pass
 
 
-def _hook_ctypes_util_module(mod):
-    orig_find = getattr(mod, "find_library", None)
-    if orig_find is None or getattr(orig_find, "_pycross_wrapped", False):
-        return
-
-    def _wrapped_find_library(name):
-        res = orig_find(name)
-        if res:
-            return res
-        target = _find_wheel_library(name)
-        if target is not None:
-            return _prepare_resolved_target(target[0], target[1], "find_library")
-        return res
-
-    _wrapped_find_library._pycross_wrapped = True
-    try:
-        mod.find_library = _wrapped_find_library
-    except (AttributeError, TypeError):
-        pass
-
-
 def _hook_cffi_backend_module(mod):
     orig_load = getattr(mod, "load_library", None)
     if orig_load is not None and not getattr(orig_load, "_pycross_wrapped", False):
@@ -1766,8 +1745,6 @@ def _apply_module_hook(fullname, module):
         _hook_ctypes_module(module)
     elif fullname == "ctypes":
         _hook_ctypes_pkg(module)
-    elif fullname == "ctypes.util":
-        _hook_ctypes_util_module(module)
     elif fullname == "_cffi_backend":
         _hook_cffi_backend_module(module)
 
@@ -2149,7 +2126,7 @@ def install(roots, debug=False, mode="scan", index_path=None, runfiles_root=""):
     _PRELOADED.clear()
     _INDEX = index
     sys.meta_path[i] = PathFinder
-    for mod_name in ("_ctypes", "ctypes", "ctypes.util", "_cffi_backend"):
+    for mod_name in ("_ctypes", "ctypes", "_cffi_backend"):
         mod = sys.modules.get(mod_name)
         if mod is not None:
             _apply_module_hook(mod_name, mod)
