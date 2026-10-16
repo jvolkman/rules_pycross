@@ -19,6 +19,7 @@ load("@pycross_backends//:package_repo_dispatch.bzl", "PACKAGE_REPO_HOOKS")
 load("@pypackaging.bzl", "pypackaging")
 load(":resolved_lock_renderer.bzl", "render_lock_bzl")
 load(":util.bzl", "parse_package_key", "underscore_name")
+load(":variant_resolver.bzl", "conflict_token")
 
 def _normalize_name(name):
     return pypackaging.utils.canonicalize_name(name)
@@ -109,6 +110,7 @@ def _package_repo_impl(rctx):
     variant_items = {}  # qualified_name -> True (dedup across members)
     variant_sets = []  # list of {"qnames": [...], "default": "..."}
     variant_sets_seen = {}  # frozenset key -> True (dedup across members)
+    qname_tokens_set = {}  # qname -> {token: True}
     for member in rctx.attr.member_lock_files.keys():
         if hasattr(rctx.attr, "member_lock_data") and rctx.attr.member_lock_data and member in rctx.attr.member_lock_data:
             member_lock = json.decode(rctx.attr.member_lock_data[member])
@@ -128,6 +130,7 @@ def _package_repo_impl(rctx):
                 set_qnames.append(qname)
                 if item.get("default", False):
                     set_default = qname
+                qname_tokens_set.setdefault(qname, {})[conflict_token(item)] = True
             set_key = "|".join(sorted(set_qnames))
             if set_key not in variant_sets_seen:
                 variant_sets_seen[set_key] = True
@@ -196,7 +199,7 @@ def _package_repo_impl(rctx):
     rctx.file("REPO.bazel", "")
 
     # 1. Render _lock/lock.bzl and _lock/BUILD.bazel
-    rctx.file("_lock/lock.bzl", render_lock_bzl(lock, repo_map, sdist_map, rctx.name))
+    rctx.file("_lock/lock.bzl", render_lock_bzl(lock, repo_map, sdist_map, rctx.name, has_conflicts = bool(variant_items)))
 
     lock_build_lines = [
         'package(default_visibility = ["//visibility:public"])',
@@ -207,7 +210,7 @@ def _package_repo_impl(rctx):
     if variant_items:
         lock_build_lines.extend([
             'load("@bazel_skylib//rules:common_settings.bzl", "bool_flag")',
-            'load("@rules_pycross//pycross/private:variant_resolver.bzl", "variant_resolver")',
+            'load("@rules_pycross//pycross/private:variant_resolver.bzl", "conflict_state", "variant_resolver")',
             "",
         ])
 
@@ -243,6 +246,43 @@ def _package_repo_impl(rctx):
             "bool_flag(",
             '    name = "{}",'.format(qname),
             "    build_setting_default = False,",
+            ")",
+            "",
+        ])
+
+    if variant_items:
+        sorted_qnames = sorted(variant_items.keys())
+        lock_build_lines.extend([
+            "conflict_state(",
+            '    name = "_conflict_state",',
+            "    flags = [",
+        ])
+        for qname in sorted_qnames:
+            lock_build_lines.append('        ":{}",'.format(qname))
+        lock_build_lines.extend([
+            "    ],",
+            "    names = [",
+        ])
+        for qname in sorted_qnames:
+            lock_build_lines.append('        "{}",'.format(qname))
+        lock_build_lines.extend([
+            "    ],",
+            "    conflict_sets = [",
+        ])
+        for vset in variant_sets:
+            lock_build_lines.append("        {},".format(repr(json.encode(vset))))
+        lock_build_lines.extend([
+            "    ],",
+            "    qname_tokens = {",
+        ])
+        for qname in sorted_qnames:
+            tokens_list = sorted(qname_tokens_set.get(qname, {}).keys())
+            lock_build_lines.append('        "{}": [{}],'.format(
+                qname,
+                ", ".join(['"{}"'.format(t) for t in tokens_list]),
+            ))
+        lock_build_lines.extend([
+            "    },",
             ")",
             "",
         ])

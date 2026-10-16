@@ -122,7 +122,9 @@ bzl_library(
     name = "variant_resolver",
     srcs = ["variant_resolver.bzl"],
     deps = [
+        ":providers",
         "@bazel_skylib//rules:common_settings",
+        "@pypackaging.bzl//:pypackaging",
     ],
 )
 
@@ -297,6 +299,7 @@ bzl_library(
     srcs = ["cycle_dep_needed.bzl"],
     deps = [
         ":pep508_marker_values",
+        ":providers",
         ":util",
         "@pypackaging.bzl//:pypackaging",
     ],
@@ -317,6 +320,7 @@ bzl_library(
     srcs = ["pep508_evaluator.bzl"],
     deps = [
         ":pep508_marker_values",
+        ":providers",
         "@pypackaging.bzl//:pypackaging",
     ],
 )
@@ -324,7 +328,10 @@ bzl_library(
 bzl_library(
     name = "pep508_marker_values",
     srcs = ["pep508_marker_values.bzl"],
-    deps = ["@bazel_skylib//rules:common_settings"],
+    deps = [
+        "@bazel_skylib//rules:common_settings",
+        "@pypackaging.bzl//:pypackaging",
+    ],
 )
 
 bzl_library(

@@ -10,6 +10,7 @@ not explicitly provided.
 """
 
 load("@bazel_skylib//rules:common_settings.bzl", "BuildSettingInfo")
+load("@pypackaging.bzl", "pypackaging")
 
 # Maps @platforms//os constraint values to PEP 508 sys_platform values.
 # Synced with rules_python's pep508_env.bzl sys_platform_select_map.
@@ -292,3 +293,71 @@ marker_value = rule(
     },
     doc = """Converts a string (possibly configurable via select()) into a FeatureFlagInfo provider.""",
 )
+
+def _rewrite_conflict_leaf(elem, active_tokens):
+    lhs, op, rhs = elem
+    if op not in ("==", "===", "!="):
+        return elem
+    if lhs.type == "variable" and lhs.value == "extra" and rhs.type == "string":
+        canonical = pypackaging.utils.canonicalize_name(rhs.value)
+    elif rhs.type == "variable" and rhs.value == "extra" and lhs.type == "string":
+        canonical = pypackaging.utils.canonicalize_name(lhs.value)
+    else:
+        return elem
+    if canonical not in active_tokens:
+        return elem
+    return (
+        struct(type = "string", value = canonical),
+        "in" if op in ("==", "===") else "not in",
+        struct(type = "variable", value = "__pycross_conflicts"),
+    )
+
+def evaluate_marker(marker, env, active_tokens = None):
+    """Evaluate a PEP 508 marker expression with optional uv conflict tokens.
+
+    Args:
+        marker: A PEP 508 marker string or parsed marker AST from pypackaging.markers.parse.
+        env: Dict of PEP 508 marker environment values.
+        active_tokens: Optional dict or list of active uv conflict tokens.
+
+    Returns:
+        True if the marker evaluates to true, False otherwise.
+    """
+    if type(marker) == "string":
+        max_steps = len(marker) + 1
+        parsed = pypackaging.markers.parse(marker)
+    else:
+        max_steps = len(str(marker)) + 1
+        parsed = marker
+    if not active_tokens:
+        return pypackaging.markers.evaluate(parsed, env)
+
+    # Rewrite active conflict-token `extra` comparisons into membership checks
+    # against `__pycross_conflicts`. Inactive conflict tokens stay `extra == '<token>'`
+    # and compare against `env["extra"]` (empty or a real package extra, never a
+    # synthetic `<kind>-<len>-<pkg>...` token), so `==` is False and `!=` is True.
+    stack = [(parsed, 0, [])]
+    rewritten = parsed
+    for _ in range(max_steps):
+        if not stack:
+            break
+        curr_list, idx, out_list = stack[-1]
+        if idx >= len(curr_list):
+            stack.pop()
+            if stack:
+                stack[-1][2].append(out_list)
+            else:
+                rewritten = out_list
+            continue
+        elem = curr_list[idx]
+        stack[-1] = (curr_list, idx + 1, out_list)
+        if type(elem) == type([]):
+            stack.append((elem, 0, []))
+        elif type(elem) == type(()):
+            out_list.append(_rewrite_conflict_leaf(elem, active_tokens))
+        else:
+            out_list.append(elem)
+
+    eval_env = dict(env)
+    eval_env["__pycross_conflicts"] = active_tokens.keys() if type(active_tokens) == "dict" else list(active_tokens)
+    return pypackaging.markers.evaluate(rewritten, eval_env)

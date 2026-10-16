@@ -31,3 +31,10 @@ PycrossUnsupportedWheelInfo = provider(
     doc = "Marker provider indicating a wheel target has no compatible wheel for the selected target environment.",
     fields = {},
 )
+
+PycrossConflictStateInfo = provider(
+    doc = "Active uv conflict marker tokens for the current build configuration.",
+    fields = {
+        "active_tokens": "dict[str, bool] mapping active uv conflict tokens to True",
+    },
+)

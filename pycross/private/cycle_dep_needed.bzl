@@ -20,19 +20,20 @@ Each edge is either unconditional (no marker) or conditional
 (marker is evaluated against the current platform).
 """
 
-load("@pypackaging.bzl", "pypackaging")
-load("//pycross/private:pep508_marker_values.bzl", "PYTHON_TOOLCHAIN_TYPE", "collect_markers", "marker_value_attrs")
+load("//pycross/private:pep508_marker_values.bzl", "PYTHON_TOOLCHAIN_TYPE", "collect_markers", "evaluate_marker", "marker_value_attrs")
+load("//pycross/private:providers.bzl", "PycrossConflictStateInfo")
 load("//pycross/private:util.bzl", "parse_package_key")
 
 # ---- BFS reachability -------------------------------------------------------
 
-def _active_neighbors(edges, node, markers_env):
+def _active_neighbors(edges, node, markers_env, active_tokens = None):
     """Returns the list of neighbor nodes reachable from `node` given marker values.
 
     Args:
         edges: Dict mapping node name -> list of edge dicts.
         node: The current node name.
         markers_env: Dict of PEP 508 marker values for the current platform.
+        active_tokens: Optional dict or list of active uv conflict tokens.
 
     Returns:
         A list of neighbor node name strings.
@@ -50,13 +51,12 @@ def _active_neighbors(edges, node, markers_env):
                 else:
                     node_env = dict(markers_env)
                     node_env["extra"] = node_extra
-            parsed_marker = pypackaging.markers.parse(marker_str)
-            if not pypackaging.markers.evaluate(parsed_marker, node_env):
+            if not evaluate_marker(marker_str, node_env, active_tokens = active_tokens):
                 continue
         result.append(edge["dep"])
     return result
 
-def is_reachable(edges, source, target, markers):
+def is_reachable(edges, source, target, markers, active_tokens = None):
     """BFS to determine if `target` is reachable from `source`.
 
     Args:
@@ -64,6 +64,7 @@ def is_reachable(edges, source, target, markers):
         source: Starting node name.
         target: Target node name to search for.
         markers: Dict of PEP 508 marker values for the current platform.
+        active_tokens: Optional dict or list of active uv conflict tokens.
 
     Returns:
         True if target is reachable from source via active edges, False otherwise.
@@ -82,7 +83,7 @@ def is_reachable(edges, source, target, markers):
             break
         current = queue[head]
         head += 1
-        for neighbor in _active_neighbors(edges, current, markers):
+        for neighbor in _active_neighbors(edges, current, markers, active_tokens = active_tokens):
             if neighbor == target:
                 return True
             if neighbor not in visited:
@@ -96,7 +97,10 @@ def is_reachable(edges, source, target, markers):
 def _pycross_cycle_dep_needed_impl(ctx):
     edges = json.decode(ctx.attr.edges)
     markers = collect_markers(ctx)
-    reachable = is_reachable(edges, ctx.attr.source, ctx.attr.target, markers)
+    active_tokens = None
+    if ctx.attr.conflict_state != None:
+        active_tokens = ctx.attr.conflict_state[PycrossConflictStateInfo].active_tokens
+    reachable = is_reachable(edges, ctx.attr.source, ctx.attr.target, markers, active_tokens = active_tokens)
     return [config_common.FeatureFlagInfo(value = "true" if reachable else "false")]
 
 _pycross_cycle_dep_needed = rule(
@@ -113,6 +117,10 @@ _pycross_cycle_dep_needed = rule(
         "edges": attr.string(
             mandatory = True,
             doc = "JSON-encoded edge map: {node: [{dep, marker?}, ...]}.",
+        ),
+        "conflict_state": attr.label(
+            providers = [PycrossConflictStateInfo],
+            doc = "Optional conflict_state target providing active uv conflict tokens.",
         ),
     } | marker_value_attrs(),
     provides = [config_common.FeatureFlagInfo],
