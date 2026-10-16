@@ -720,9 +720,13 @@ pycross_transitioning_file_proxy = rule(
         '    name = "{}",'.format(mapping_name),
         "    deps = [",
     ])
+    seen_mapping_targets = {}
     for pin_name in sorted(pins.keys()):
         pin_target_dict = pins[pin_name]
         for pin_target in sorted(pin_target_dict.values()):
+            if pin_target in seen_mapping_targets:
+                continue
+            seen_mapping_targets[pin_target] = True
             package = packages.get(pin_target, {})
 
             # Determine the lock-level label for this package.

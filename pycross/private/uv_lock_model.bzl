@@ -353,6 +353,10 @@ def translate_uv(project_dict, lock_dict, lock_model):
                     if base_dep_name in _fork_constraints and dep_version in _fork_constraints[base_dep_name]:
                         fork_constraint = _fork_constraints[base_dep_name][dep_version]
                         if constraint:
+                            if dep.get("marker") and dep["marker"] != resolution_marker_exprs.get(fork_constraint):
+                                edge_fork_constraint = "{}__{}".format(fork_constraint, constraint)
+                                resolution_marker_exprs[edge_fork_constraint] = dep["marker"]
+                                fork_constraint = edge_fork_constraint
                             effective_constraint = "{}_{}".format(constraint, fork_constraint)
 
                             # Register compound constraint with its components.
