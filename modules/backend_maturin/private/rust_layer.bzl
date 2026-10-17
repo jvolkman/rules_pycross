@@ -145,7 +145,7 @@ def run_rust_pep517_build(ctx, tool_deps, tool_executables, tool_pkg_names):
         ctx: The rule context.
         tool_deps: Dict mapping normalized tool package names to Target lists.
         tool_executables: List of tool executable structs to place on PATH.
-        tool_pkg_names: Tuple of tool package names to include in additional_build_deps.
+        tool_pkg_names: List of tool package names to include in additional_build_deps.
 
     Returns:
         List of providers for the build rule.

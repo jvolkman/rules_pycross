@@ -61,23 +61,30 @@ def encode_build_system_attrs(tag):
     """
     backend_attrs = {}
 
-    for attr_name in ("copts", "linkopts", "config_settings", "build_env", "repair_exclude_globs"):
+    for attr_name, kind in (
+        ("copts", "raw"),
+        ("linkopts", "raw"),
+        ("native_deps", "label_list"),
+        ("config_settings", "raw"),
+        ("tool_deps", "label_dict"),
+        ("build_env", "raw"),
+        ("data", "label_list"),
+        ("pre_build_hooks", "label_list"),
+        ("post_build_hooks", "label_list"),
+        ("path_tools", "label_list"),
+        ("repair_exclude_globs", "raw"),
+        ("cargo_lock", "label"),
+    ):
         val = getattr(tag, attr_name, None)
-        if val:
-            backend_attrs[attr_name] = json.encode(val)
-
-    for attr_name in ("native_deps", "data", "pre_build_hooks", "post_build_hooks", "path_tools"):
-        val = getattr(tag, attr_name, None)
-        if val:
-            backend_attrs[attr_name] = json.encode([str(dep) for dep in val])
-
-    tool_deps = getattr(tag, "tool_deps", None)
-    if tool_deps:
-        backend_attrs["tool_deps"] = json.encode({name: str(label) for name, label in tool_deps.items()})
-
-    cargo_lock = getattr(tag, "cargo_lock", None)
-    if cargo_lock:
-        backend_attrs["cargo_lock"] = json.encode(str(cargo_lock))
+        if not val:
+            continue
+        if kind == "label_list":
+            val = [str(dep) for dep in val]
+        elif kind == "label_dict":
+            val = {name: str(label) for name, label in val.items()}
+        elif kind == "label":
+            val = str(val)
+        backend_attrs[attr_name] = json.encode(val)
 
     return backend_attrs
 

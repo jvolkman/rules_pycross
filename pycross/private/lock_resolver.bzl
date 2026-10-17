@@ -83,7 +83,7 @@ def _apply_annotation(ann, versions_by_name, all_package_keys):
         build_mode = ann.get("build_mode", "auto"),
         ignore_dependencies = ignore_deps,
         extra_dependencies = extra_deps,
-        install_exclude_globs = ann.get("install_exclude_globs", []),
+        install_exclude_globs = list({g: True for g in ann.get("install_exclude_globs", [])}.keys()),
         post_install_patches = ann.get("post_install_patches", []),
         pre_build_patches = ann.get("pre_build_patches", []),
         site_hooks = ann.get("site_hooks", []),

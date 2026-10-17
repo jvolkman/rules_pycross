@@ -7,12 +7,22 @@ import shutil
 import stat
 import sys
 import textwrap
-import tomllib
 from pathlib import Path
 
 from pycross.private.build.tools.utils.cc_toolchain import parse_ar_and_guess_ranlib
 from pycross.private.build.tools.utils.context import load_layers
 from pycross.private.build.tools.utils.context import resolve_sandbox_path
+
+
+def load_toml_file(path: Path) -> dict:
+    """Parse a TOML file using tomllib (Python 3.11+) or pip vendored tomli (Python 3.10)."""
+    try:
+        import tomllib
+    except ImportError:
+        from pip._vendor import tomli as tomllib  # type: ignore[no-redef]
+
+    with open(path, "rb") as f:
+        return tomllib.load(f)
 
 
 def get_pyo3_version(cargo_dir: Path):
@@ -22,8 +32,7 @@ def get_pyo3_version(cargo_dir: Path):
         return None
 
     try:
-        with open(lock_path, "rb") as f:
-            lock_data = tomllib.load(f)
+        lock_data = load_toml_file(lock_path)
         for pkg in lock_data.get("package", []):
             if pkg.get("name") == "pyo3":
                 return pkg.get("version")

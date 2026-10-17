@@ -191,7 +191,7 @@ def register_workspace_repo(
     Args:
         lock_owners: Dict to track repo ownership.
         lock_repos: Dict to store repo configs.
-        lock_model_structs: Dict to store serialized lock models.
+        lock_model_structs: Dict to store lock model structs.
         root_direct_deps: List to store root direct dependencies.
         ws_tag: The workspace tag.
         ws_name: The workspace name.
@@ -298,7 +298,7 @@ def process_repo(
     Args:
         lock_owners: Dict to track repo ownership.
         lock_repos: Dict to store repo configs.
-        lock_model_structs: Dict to store serialized lock models.
+        lock_model_structs: Dict to store lock model structs.
         root_direct_deps: List to store root direct dependencies.
         ws_tag: The workspace tag.
         ws_name: The workspace name.
@@ -358,7 +358,7 @@ def process_workspaces(
         module_ctx: The module_ctx object.
         lock_owners: Dict to track repo ownership.
         lock_repos: Dict to store repo configs.
-        lock_model_structs: Dict to store serialized lock models.
+        lock_model_structs: Dict to store lock model structs.
         workspace_tags: List of workspace tags.
         member_tags: List of member tags.
         discover_members_fn: Function to discover members.

@@ -11,9 +11,6 @@ from pycross.private.build.tools.utils.context import BuildContext
 from pycross.private.build.tools.utils.context import replace_placeholder
 
 
-# NOTE: A simplified copy of the ranlib-guessing logic lives in
-# modules/backend_maturin/private/tools/rust_common.py (guess_ranlib_path)
-# to avoid a cross-module import. Keep both copies in sync.
 def parse_ar_and_guess_ranlib(ar: str | None) -> Tuple[List[str], Path | None]:
     """Parse AR path and flags, and guess ranlib path.
 

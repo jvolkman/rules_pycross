@@ -1,7 +1,6 @@
 """Setuptools Rust / PEP 517 Rust builder."""
 
 import sys
-import tomllib
 from pathlib import Path
 
 from private.tools import rust_common
@@ -16,8 +15,7 @@ def _get_cargo_dir() -> Path:
     pyproject = Path("pyproject.toml")
     if pyproject.exists():
         try:
-            with open(pyproject, "rb") as f:
-                data = tomllib.load(f)
+            data = rust_common.load_toml_file(pyproject)
             ext_modules = data.get("tool", {}).get("setuptools-rust", {}).get("ext-modules", [])
             if ext_modules and isinstance(ext_modules, list):
                 manifest_path = ext_modules[0].get("path", "Cargo.toml")

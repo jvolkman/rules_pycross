@@ -1,7 +1,6 @@
 """Maturin / PEP 517 Rust builder."""
 
 import sys
-import tomllib
 from pathlib import Path
 
 from private.tools import rust_common
@@ -16,8 +15,7 @@ def _get_cargo_dir() -> Path:
     pyproject = Path("pyproject.toml")
     if pyproject.exists():
         try:
-            with open(pyproject, "rb") as f:
-                data = tomllib.load(f)
+            data = rust_common.load_toml_file(pyproject)
             manifest_path = data.get("tool", {}).get("maturin", {}).get("manifest-path", "Cargo.toml")
             return Path(manifest_path).parent
         except Exception as e:

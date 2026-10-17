@@ -400,6 +400,12 @@ def resolve_lock_graph(packages, pinned_package_specs, requires_python, strict_d
     # Replace pins of local packages with pins of their dependencies
     if root_dependency_markers == None:
         root_dependency_markers = {}
+    else:
+        root_dependency_markers = {
+            name: markers
+            for name, markers in root_dependency_markers.items()
+            if markers != None
+        }
     direct_pin_names = {}
     for name in pinned_package_specs.keys():
         direct_pin_names[name] = True

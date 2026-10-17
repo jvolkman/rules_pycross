@@ -306,7 +306,7 @@ def make_format_extension(
         workspace_attrs: Format-specific attrs for workspace tags.
             Merged with WORKSPACE_COMMON_ATTRS.
         discover_members_fn: Function(mctx, lock_file_label) -> [struct(name, path)].
-            Required when workspace_attrs is not None.
+            Auto-discovers workspace members from the project configuration.
         repo_create_model_fn: Function(rctx, extra_project_files, lock_file, lock_model) -> dict.
             Runs the format-specific translator to produce raw lock data.
 

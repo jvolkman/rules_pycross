@@ -280,7 +280,7 @@ def _pin_build(target_name, pin_target_dict, package, workspace_repo, workspace_
 
     has_transition = bool(transition_bzl or target_platform)
 
-    def _emit_proxy(rule_name, name, actual, is_testonly = False, trailing_blank = True):
+    def _emit_proxy(rule_name, name, actual, is_testonly = False):
         lines.extend([
             rule_name + "(",
             '    name = "{}",'.format(name),
@@ -290,9 +290,7 @@ def _pin_build(target_name, pin_target_dict, package, workspace_repo, workspace_
             lines.append("    testonly = True,")
         if target_platform:
             lines.append('    platform = "{}",'.format(target_platform))
-        lines.append(")")
-        if trailing_blank:
-            lines.append("")
+        lines.extend([")", ""])
 
     actual_pkg = None
     if lock_target_dict:

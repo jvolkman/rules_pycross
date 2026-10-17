@@ -381,11 +381,11 @@ def _test_requirements_bzl_root_marker_aliases(name):
 
 # ── Test suite ─────────────────────────────────────────────────────
 
-# ── Test: _is_platform_specific ────────────────────────────────────
+# ── Test: is_platform_specific ─────────────────────────────────────
 
 # buildifier: disable=unused-variable
 def _test_is_platform_specific_impl(env, target):
-    """Verify _is_platform_specific correctly classifies packages."""
+    """Verify is_platform_specific correctly classifies packages."""
 
     # Package with wheels but no sdist → platform-specific
     env.expect.that_bool(is_platform_specific_for_testing({
