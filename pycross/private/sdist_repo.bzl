@@ -129,11 +129,12 @@ pycross_wheel_metadata(
     rctx.file("REPO.bazel", "")
 
 def _validate_build_backend(attr):
-    if attr.build_backend:
-        known_backends = {v: True for v in attr.backend_to_rule.values()}
-        if attr.build_backend not in known_backends and attr.build_backend != attr.default_backend:
-            fail("Unknown build backend: " + attr.build_backend +
-                 ". Registered backends: " + ", ".join(sorted(known_backends.keys())))
+    if not attr.build_backend:
+        return
+    known_backends = {v: True for v in attr.backend_to_rule.values()}
+    if attr.build_backend not in known_backends and attr.build_backend != attr.default_backend:
+        fail("Unknown build backend: " + attr.build_backend +
+             ". Registered backends: " + ", ".join(sorted(known_backends.keys())))
 
 # Tool package names that every build rule accepts in tool_deps, in addition to the
 # backend's registered tool_packages.
@@ -312,33 +313,34 @@ def _validate_requirements(requires, pin_versions, pkg_name):
         if req_name == "oldest-supported-numpy":
             req_name = "numpy"
 
-        if req_name in normalized_pins:
-            version_or_dict = normalized_pins[req_name]
-            if type(version_or_dict) == "string":
-                if not pypackaging.specifiers.set_contains(req.specifier, version_or_dict):
-                    warnings.append(
-                        "WARNING: The build tools repo pins '{}=={}', but '{}' requires '{}' in pyproject.toml.".format(
-                            req_name,
-                            version_or_dict,
-                            pkg_name,
-                            req_str,
-                        ),
-                    )
-            elif type(version_or_dict) == "dict":
-                satisfying = [
-                    v
-                    for v in version_or_dict.values()
-                    if pypackaging.specifiers.set_contains(req.specifier, v)
-                ]
-                if not satisfying:
-                    versions_str = ", ".join(["{}={}".format(k, v) for k, v in sorted(version_or_dict.items())])
-                    warnings.append(
-                        "WARNING: No variant of '{}' satisfies '{}' (available: {}).".format(
-                            req_name,
-                            req_str,
-                            versions_str,
-                        ),
-                    )
+        if req_name not in normalized_pins:
+            continue
+        version_or_dict = normalized_pins[req_name]
+        if type(version_or_dict) == "string":
+            if not pypackaging.specifiers.set_contains(req.specifier, version_or_dict):
+                warnings.append(
+                    "WARNING: The build tools repo pins '{}=={}', but '{}' requires '{}' in pyproject.toml.".format(
+                        req_name,
+                        version_or_dict,
+                        pkg_name,
+                        req_str,
+                    ),
+                )
+        elif type(version_or_dict) == "dict":
+            satisfying = [
+                v
+                for v in version_or_dict.values()
+                if pypackaging.specifiers.set_contains(req.specifier, v)
+            ]
+            if not satisfying:
+                versions_str = ", ".join(["{}={}".format(k, v) for k, v in sorted(version_or_dict.items())])
+                warnings.append(
+                    "WARNING: No variant of '{}' satisfies '{}' (available: {}).".format(
+                        req_name,
+                        req_str,
+                        versions_str,
+                    ),
+                )
 
     return warnings
 

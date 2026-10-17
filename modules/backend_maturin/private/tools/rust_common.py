@@ -41,6 +41,15 @@ def get_pyo3_version(cargo_dir: Path):
     return None
 
 
+def _symlink_stdlib(src_path: Path, dst_path: Path, label: str) -> None:
+    if not src_path.exists():
+        raise RuntimeError(f"{label} missing at {src_path}")
+    if dst_path.exists() or dst_path.is_symlink():
+        dst_path.unlink(missing_ok=True)
+    dst_path.parent.mkdir(parents=True, exist_ok=True)
+    os.symlink(src_path.resolve(), dst_path)
+
+
 def configure_rust_env(ctx, cargo_dir: Path, is_maturin: bool = False):
     rust_config = None
     for layer_config in load_layers(ctx):
@@ -198,24 +207,12 @@ def configure_rust_env(ctx, cargo_dir: Path, is_maturin: bool = False):
     target_stdlib_dst_path = sysroot_dir / Path(f"lib/rustlib/{target_triple}/lib")
 
     try:
-        if host_stdlib_src_path:
-            if not host_stdlib_src_path.exists():
-                raise RuntimeError(f"host_stdlib missing at {host_stdlib_src_path}")
-            if host_stdlib_dst_path.exists() or host_stdlib_dst_path.is_symlink():
-                host_stdlib_dst_path.unlink(missing_ok=True)
-
-            host_stdlib_dst_path.parent.mkdir(parents=True, exist_ok=True)
-            os.symlink(host_stdlib_src_path.resolve(), host_stdlib_dst_path)
+        if host_stdlib_src_path and host_stdlib_dst_path:
+            _symlink_stdlib(host_stdlib_src_path, host_stdlib_dst_path, "host_stdlib")
 
             target_stdlib_src_path = ctx.prefix / Path(f"external/{cross_repo_name}/lib/rustlib/{target_triple}/lib")
-            if target_stdlib_src_path and target_stdlib_dst_path:
-                if not target_stdlib_src_path.exists():
-                    raise RuntimeError(f"target_stdlib missing at {target_stdlib_src_path}")
-                if target_stdlib_src_path != host_stdlib_src_path:
-                    if target_stdlib_dst_path.exists() or target_stdlib_dst_path.is_symlink():
-                        target_stdlib_dst_path.unlink(missing_ok=True)
-                    target_stdlib_dst_path.parent.mkdir(parents=True, exist_ok=True)
-                    os.symlink(target_stdlib_src_path.resolve(), target_stdlib_dst_path)
+            if target_stdlib_src_path != host_stdlib_src_path:
+                _symlink_stdlib(target_stdlib_src_path, target_stdlib_dst_path, "target_stdlib")
     except Exception as e:
         raise RuntimeError(f"Failed to populate hermetic Rust sysroot: {e}") from e
 

@@ -43,6 +43,21 @@ def _sha256_from_fragment(url):
             return part[len("sha256="):].lower()
     return None
 
+def _extract_href(tag):
+    tag_lower = tag.lower()
+    idx = tag_lower.find("href")
+    for _attempt in range(len(tag)):
+        if idx < 0:
+            return None
+        rest = tag[idx + 4:].lstrip()
+        if (idx == 0 or tag[idx - 1] in " \t\r\n") and rest.startswith("="):
+            rest = rest[1:].lstrip()
+            if rest[:1] in ("\"", "'"):
+                return rest[1:].split(rest[0], 1)[0]
+            return rest.replace("\t", " ").replace("\r", " ").replace("\n", " ").split(" ", 1)[0]
+        idx = tag_lower.find("href", idx + 4)
+    return None
+
 def _parse_simple_html(content):
     """Parses a PEP 503 project page into a list of file dicts."""
     files = []
@@ -65,21 +80,7 @@ def _parse_simple_html(content):
         text = content[end + 1:close]
         pos = close + 4
 
-        href = None
-        tag_lower = tag.lower()
-        idx = tag_lower.find("href")
-        for _attempt in range(len(tag)):
-            if idx < 0:
-                break
-            rest = tag[idx + 4:].lstrip()
-            if (idx == 0 or tag[idx - 1] in " \t\r\n") and rest.startswith("="):
-                rest = rest[1:].lstrip()
-                if rest[:1] in ("\"", "'"):
-                    href = rest[1:].split(rest[0], 1)[0]
-                else:
-                    href = rest.replace("\t", " ").replace("\r", " ").replace("\n", " ").split(" ", 1)[0]
-                break
-            idx = tag_lower.find("href", idx + 4)
+        href = _extract_href(tag)
         if href == None:
             continue
         href = _html_unescape(href.strip())

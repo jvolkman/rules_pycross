@@ -181,7 +181,7 @@ def _get_archive_file_content(archive_path: Path, target_filename: str, source_d
             return len(p.parts) >= 2 and p.is_relative_to(PurePosixPath(p.parts[0]) / target_suffix)
         return p == target_suffix or (len(p.parts) >= 2 and PurePosixPath(*p.parts[1:]) == target_suffix)
 
-    if archive_path.name.endswith(".zip") or archive_path.name.endswith(".whl"):
+    if archive_path.name.endswith((".zip", ".whl")):
         with zipfile.ZipFile(archive_path) as z:
             for name in z.namelist():
                 if _matches(name):
@@ -189,10 +189,11 @@ def _get_archive_file_content(archive_path: Path, target_filename: str, source_d
     elif archive_path.name.endswith((".tar.gz", ".tgz", ".tar.bz2", ".tar")):
         with tarfile.open(archive_path) as t:
             for member in t.getmembers():
-                if member.isfile() and _matches(member.name):
-                    f = t.extractfile(member)
-                    if f:
-                        return f.read().decode("utf-8")
+                if not (member.isfile() and _matches(member.name)):
+                    continue
+                f = t.extractfile(member)
+                if f:
+                    return f.read().decode("utf-8")
     return ""
 
 
@@ -314,19 +315,22 @@ def _read_top_level_txt(sdist_path: Path) -> list[str] | None:
     if sdist_path.name.endswith((".tar.gz", ".tgz", ".tar.bz2", ".tar")):
         with tarfile.open(sdist_path) as t:
             for member in t.getmembers():
-                if member.isfile() and member.name.endswith(".egg-info/top_level.txt"):
-                    f = t.extractfile(member)
-                    if f:
-                        content = f.read().decode("utf-8")
-                        names = [line.strip() for line in content.splitlines() if line.strip()]
-                        break
+                if not (member.isfile() and member.name.endswith(".egg-info/top_level.txt")):
+                    continue
+                f = t.extractfile(member)
+                if not f:
+                    continue
+                content = f.read().decode("utf-8")
+                names = [line.strip() for line in content.splitlines() if line.strip()]
+                break
     elif sdist_path.name.endswith(".zip"):
         with zipfile.ZipFile(sdist_path) as z:
             for name in z.namelist():
-                if name.endswith(".egg-info/top_level.txt"):
-                    content = z.read(name).decode("utf-8")
-                    names = [line.strip() for line in content.splitlines() if line.strip()]
-                    break
+                if not name.endswith(".egg-info/top_level.txt"):
+                    continue
+                content = z.read(name).decode("utf-8")
+                names = [line.strip() for line in content.splitlines() if line.strip()]
+                break
 
     return names if names else None
 
@@ -530,12 +534,13 @@ def _inspect_patched_sdist(
         top_level_names: list[str] | None = None
         if not source_dir:
             for p in sorted(sdist_root_dir.rglob("*.egg-info/top_level.txt")):
-                if p.is_file():
-                    tl_content = p.read_text(encoding="utf-8")
-                    names = [line.strip() for line in tl_content.splitlines() if line.strip()]
-                    if names:
-                        top_level_names = names
-                    break
+                if not p.is_file():
+                    continue
+                tl_content = p.read_text(encoding="utf-8")
+                names = [line.strip() for line in tl_content.splitlines() if line.strip()]
+                if names:
+                    top_level_names = names
+                break
 
         def read_extracted(name: str) -> Optional[str]:
             return (tmp_path / name).read_text(encoding="utf-8", errors="replace")
@@ -587,14 +592,15 @@ def _find_wheel_paths(wheel_path: Path) -> tuple[list[str], list[str], list[str]
                         root_files.add(parts[2])
                 continue
 
-            if parts[0] and not parts[0].endswith(".data"):
-                if not name.endswith("/"):
-                    all_files.add(name)
-                    members[name] = name
-                if len(parts) >= 2:
-                    top_level_dirs.add(parts[0])
-                elif len(parts) == 1 and parts[0] and not name.endswith("/"):
-                    root_files.add(parts[0])
+            if not parts[0] or parts[0].endswith(".data"):
+                continue
+            if not name.endswith("/"):
+                all_files.add(name)
+                members[name] = name
+            if len(parts) >= 2:
+                top_level_dirs.add(parts[0])
+            elif len(parts) == 1 and parts[0] and not name.endswith("/"):
+                root_files.add(parts[0])
 
         def read_file(path: str) -> Optional[str]:
             return z.read(members[path]).decode("utf-8", "replace") if path in members else None

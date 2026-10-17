@@ -35,19 +35,19 @@ def resolve_path_tools(ctx):
                 file = info.executable,
                 files_to_run = target[DefaultInfo].files_to_run,
             ))
-        else:
-            exe = target[DefaultInfo].files_to_run.executable
-            if not exe:
-                files = target[DefaultInfo].files.to_list()
-                if files:
-                    exe = files[0]
-            if not exe:
-                fail("Tool target must provide an executable: " + str(target.label))
-            result.append(struct(
-                name = exe.basename,
-                file = exe,
-                files_to_run = target[DefaultInfo].files_to_run,
-            ))
+            continue
+
+        exe = target[DefaultInfo].files_to_run.executable
+        if not exe:
+            files = target[DefaultInfo].files.to_list()
+            exe = files[0] if files else None
+        if not exe:
+            fail("Tool target must provide an executable: " + str(target.label))
+        result.append(struct(
+            name = exe.basename,
+            file = exe,
+            files_to_run = target[DefaultInfo].files_to_run,
+        ))
     return result
 
 COMMON_BUILD_ATTRS = {
@@ -188,11 +188,9 @@ def group_tool_deps(tool_deps_list):
     """
     result = {}
     for dep in tool_deps_list:
-        if PycrossPackageInfo in dep:
-            name = dep[PycrossPackageInfo].package_name
-            if name not in result:
-                result[name] = []
-            result[name].append(dep)
+        if PycrossPackageInfo not in dep:
+            continue
+        result.setdefault(dep[PycrossPackageInfo].package_name, []).append(dep)
     return result
 
 def get_wheel(target):

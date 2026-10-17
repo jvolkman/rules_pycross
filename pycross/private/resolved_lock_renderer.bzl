@@ -41,11 +41,9 @@ def _render_extras_aggregates(lines, packages):
     base_packages_with_extras = {}
     for pkg_key in packages.keys():
         parts = parse_package_key(pkg_key)
-        if parts.extra:
-            base_key = (parts.name, parts.version)
-            if base_key not in base_packages_with_extras:
-                base_packages_with_extras[base_key] = []
-            base_packages_with_extras[base_key].append(pkg_key)
+        if not parts.extra:
+            continue
+        base_packages_with_extras.setdefault((parts.name, parts.version), []).append(pkg_key)
 
     for (base_name, version), extra_keys in sorted(base_packages_with_extras.items()):
         base_pkg_key = "{}@{}".format(base_name, version)
@@ -74,11 +72,13 @@ def _collect_unique_markers(packages):
         extra = parse_package_key(pkg_key).extra
         for md in pkg.get("marker_dependencies", []):
             marker = md.get("marker")
-            if marker:
-                # Optimization: if "extra" is not in the marker string, it doesn't reference the extra variable.
-                # We can share a single evaluator by setting extra to "".
-                effective_extra = extra if "extra" in marker else ""
-                markers[(marker, effective_extra)] = True
+            if not marker:
+                continue
+
+            # Optimization: if "extra" is not in the marker string, it doesn't reference the extra variable.
+            # We can share a single evaluator by setting extra to "".
+            effective_extra = extra if "extra" in marker else ""
+            markers[(marker, effective_extra)] = True
 
         # Availability markers come from root project dependency edges, which
         # never reference `extra`, so they share the extra-free evaluators.
@@ -190,11 +190,12 @@ def _build_cycle_edges_dict(scc, packages):
         edge_list = []
         for md in pkg.get("marker_dependencies", []):
             dep_key = md["key"]
-            if dep_key in scc_set:
-                entry = {"dep": dep_key}
-                if md.get("marker"):
-                    entry["marker"] = md["marker"]
-                edge_list.append(entry)
+            if dep_key not in scc_set:
+                continue
+            entry = {"dep": dep_key}
+            if md.get("marker"):
+                entry["marker"] = md["marker"]
+            edge_list.append(entry)
         edges[pkg_key] = edge_list
     return edges
 
@@ -341,27 +342,28 @@ def _render_marker_wheel_chooser(lines, pkg_key, pkg, repo_map, sdist_target = N
     # platforms. When the package also carries availability markers, the group
     # is named _wheel_available_ so _render_marker_availability can compose it
     # with the marker-based group into the final _available_ group.
-    if not sdist_target and resolved_candidates:
-        wheel_gated = bool(pkg.get("availability_markers"))
-        group_name = "_wheel_available_{}".format(pkg_key) if wheel_gated else "_available_{}".format(pkg_key)
-        cs_names = []
-        for candidate, _target in resolved_candidates:
-            filename = candidate["filename"]
-            cs_names.append(":_wheel_cs_{}_{}".format(pkg_key, _sanitize_name(filename)))
-        lines.extend([
-            _ind("selects.config_setting_group("),
-            _ind('name = "{}",'.format(group_name), 2),
-            _ind("match_any = [", 2),
-        ])
-        for cs in cs_names:
-            lines.append(_ind('"{}",'.format(cs), 3))
-        lines.extend([
-            _ind("],", 2),
-            _ind(")"),
-            "",
-        ])
-        return wheel_gated
-    return False
+    if sdist_target or not resolved_candidates:
+        return False
+
+    wheel_gated = bool(pkg.get("availability_markers"))
+    group_name = "_wheel_available_{}".format(pkg_key) if wheel_gated else "_available_{}".format(pkg_key)
+    cs_names = []
+    for candidate, _target in resolved_candidates:
+        filename = candidate["filename"]
+        cs_names.append(":_wheel_cs_{}_{}".format(pkg_key, _sanitize_name(filename)))
+    lines.extend([
+        _ind("selects.config_setting_group("),
+        _ind('name = "{}",'.format(group_name), 2),
+        _ind("match_any = [", 2),
+    ])
+    for cs in cs_names:
+        lines.append(_ind('"{}",'.format(cs), 3))
+    lines.extend([
+        _ind("],", 2),
+        _ind(")"),
+        "",
+    ])
+    return wheel_gated
 
 def _render_marker_package_deps(lines, pkg_key, pkg_key_san, pkg, packages):
     """Render deps using marker-based select() instead of environment-based."""
