@@ -4,6 +4,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from pycross.private.tools.wheel_installer import parse_flags
+
 
 class WheelInstallerWheelDirTest(unittest.TestCase):
     """Test the wheel_dir argument handling in wheel_installer."""
@@ -85,20 +87,6 @@ class WheelInstallerArgParsingTest(unittest.TestCase):
         args = parse_flags(["--wheel", "/tmp/foo.whl", "--directory", "/tmp/out"])
         self.assertEqual(args.wheel, Path("/tmp/foo.whl"))
         self.assertIsNone(args.wheel_dir)
-
-
-def parse_flags(argv):
-    """Helper to import and call the argument parser."""
-    import argparse
-
-    # We need to replicate or import the parser. Since wheel_installer doesn't
-    # expose a parse_args function, we test the arg definitions.
-
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--wheel", type=Path, required=False)
-    parser.add_argument("--wheel-dir", type=Path, required=False)
-    parser.add_argument("--directory", type=Path, required=True)
-    return parser.parse_args(argv)
 
 
 class WheelInstallerValidationTest(unittest.TestCase):

@@ -299,7 +299,7 @@ def main(args: Any) -> None:
             entry_points_output.touch()
 
 
-def parse_flags() -> Any:
+def parse_flags(argv: list[str] | None = None) -> Any:
     parser = FlagFileArgumentParser(description="Extract a Python wheel.")
 
     parser.add_argument(
@@ -392,7 +392,7 @@ def parse_flags() -> Any:
         help="Optimization level for .pyc precompilation.",
     )
 
-    return parser.parse_args()
+    return parser.parse_args(argv)
 
 
 if __name__ == "__main__":

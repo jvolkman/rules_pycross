@@ -171,12 +171,19 @@ def _test_wheel_abi3(name):
 
 def _test_evaluator_rule_impl(env, target):
     env.expect.that_target(target).default_outputs().contains_at_least([])
+    env.expect.that_str(target[config_common.FeatureFlagInfo].value).equals("true")
 
 def _test_evaluator_rule(name):
     pycross_pep508_evaluator(
         name = name + "_evaluator",
-        expr = "sys_platform == 'linux'",
+        expr = (
+            "sys_platform == 'linux' and os.name == 'posix' and " +
+            "sys.platform == 'linux' and platform.machine == 'x86_64' and " +
+            "python_implementation == 'CPython' and platform.python_implementation == 'CPython'"
+        ),
+        os_name = "posix",
         sys_platform = "linux",
+        platform_machine = "x86_64",
         tags = ["manual"],
     )
     analysis_test(
@@ -230,9 +237,19 @@ _CYCLE_EDGES = {
 
 # buildifier: disable=unused-variable
 def _test_cycle_reachable_impl(env, target):
-    """beta@2.0 is unconditionally reachable from alpha@1.0."""
+    """beta@2.0 is unconditionally reachable from alpha@1.0 (including dotted/alias marker vars)."""
     result = is_reachable(_CYCLE_EDGES, "alpha@1.0", "beta@2.0", _LINUX_MARKERS)
     env.expect.that_bool(result).equals(True)
+    dotted_edges = {
+        "alpha@1.0": [
+            {
+                "dep": "beta@2.0",
+                "marker": "os.name == 'posix' and platform.machine == 'x86_64' and python_implementation == 'CPython'",
+            },
+        ],
+        "beta@2.0": [{"dep": "alpha@1.0"}],
+    }
+    env.expect.that_bool(is_reachable(dotted_edges, "alpha@1.0", "beta@2.0", _LINUX_MARKERS)).equals(True)
 
 def _test_cycle_reachable(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])

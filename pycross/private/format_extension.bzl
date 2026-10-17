@@ -305,10 +305,10 @@ def make_format_extension(
         model_type: The lock model type string (e.g. "uv", "pdm", "poetry", "pylock").
         workspace_attrs: Format-specific attrs for workspace tags.
             Merged with WORKSPACE_COMMON_ATTRS.
-        discover_members_fn: Function(mctx, lock_file_label) -> [struct(name, path)].
-            Auto-discovers workspace members from the project configuration.
-        repo_create_model_fn: Function(rctx, extra_project_files, lock_file, lock_model) -> dict.
-            Runs the format-specific translator to produce raw lock data.
+        discover_members_fn: Required function(mctx, lock_file_label) -> [struct(name, path)]
+            that auto-discovers workspace members from the project configuration.
+        repo_create_model_fn: Required function(rctx, extra_project_files, lock_file, lock_model) -> dict
+            that runs the format-specific translator to produce raw lock data.
 
     Returns:
         A module_extension value.
@@ -329,12 +329,11 @@ def make_format_extension(
 
         for module in module_ctx.modules:
             # 1. Process workspace tags.
-            if workspace_attrs != None:
-                for tag in module.tags.workspace:
-                    ws_name = tag.name
-                    workspace_tags.append(struct(tag = tag, module = module, ws_name = ws_name))
-                    if tag.pypi_indexes:
-                        workspace_pypi_indexes[ws_name] = tag.pypi_indexes
+            for tag in module.tags.workspace:
+                ws_name = tag.name
+                workspace_tags.append(struct(tag = tag, module = module, ws_name = ws_name))
+                if tag.pypi_indexes:
+                    workspace_pypi_indexes[ws_name] = tag.pypi_indexes
 
             # 2. Process repo tags (member overrides).
             for tag in module.tags.repo:
@@ -369,10 +368,7 @@ def make_format_extension(
         valid_workspaces = {r.workspace: True for r in lock_repos.values()}
 
         for module in module_ctx.modules:
-            module_workspaces[module.name] = []
-            if workspace_attrs != None:
-                for tag in module.tags.workspace:
-                    module_workspaces[module.name].append(tag.name)
+            module_workspaces[module.name] = [tag.name for tag in module.tags.workspace]
 
         # Process package annotations.
         workspace_packages = {}
@@ -476,6 +472,9 @@ def make_format_extension(
     repo_tag_attrs = dict(REPO_ATTRS)
     repo_tag_attrs.update(TRANSITION_ATTRS)
 
+    ws_attrs = dict(workspace_attrs)
+    ws_attrs.update(WORKSPACE_COMMON_ATTRS)
+
     tag_classes = {
         "repo": tag_class(
             doc = "Override a %s workspace member's settings." % model_type,
@@ -485,15 +484,11 @@ def make_format_extension(
             doc = "Specify package-specific settings.",
             attrs = PACKAGE_ATTRS,
         ),
-    }
-
-    if workspace_attrs != None:
-        ws_attrs = dict(workspace_attrs)
-        ws_attrs.update(WORKSPACE_COMMON_ATTRS)
-        tag_classes["workspace"] = tag_class(
+        "workspace": tag_class(
             doc = "Declare a %s workspace from a shared lock file." % model_type,
             attrs = ws_attrs,
-        )
+        ),
+    }
 
     return module_extension(
         implementation = _impl,
