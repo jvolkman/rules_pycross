@@ -85,12 +85,32 @@ bazel test "$@" //...
 # Prints the path of the archive behind `$2//lib:sdist` in output base `$1`,
 # fetching it if needed. Extra arguments go to bazel query.
 archive_in() {
-  local ob="$1" hub="$2" label
+  local ob="$1" hub="$2" out label err
   shift 2
-  label="$(bazel --output_base="$ob" query --repo_contents_cache= "$@" \
-    "kind('source file', deps($hub//lib:sdist))" 2>/dev/null | grep 'lib-0.1.0.tar.gz$')"
+  err="$fixtures/$(basename "$ob").stderr"
+  if ! out="$(bazel --output_base="$ob" query "$@" \
+    "kind('source file', deps($hub//lib:sdist))" 2>"$err")"; then
+    cat "$err" >&2
+    echo "ERROR: bazel query failed in $ob" >&2
+    return 1
+  fi
+  label="$(grep 'lib-0.1.0.tar.gz$' <<<"$out")" || {
+    echo "$out" >&2
+    echo "ERROR: no lib-0.1.0.tar.gz in the query output for $ob" >&2
+    return 1
+  }
   label="${label#@@}"
   echo "$ob/external/${label%%//*}/file/lib-0.1.0.tar.gz"
+}
+
+# Flags for a fresh output base `$1` that must fetch everything itself. It gets
+# its own empty repo contents cache instead of `--repo_contents_cache=`
+# (disabled): with the cache disabled, Bazel 9 creates `external/_main` lazily
+# from every parallel fetch of a reproducible repo, and those non-atomic
+# creations race in a fresh output base ("error replanting symlinks ... File
+# exists"). With a cache configured, Bazel creates it once at startup.
+fresh() {
+  echo "--repo_contents_cache=$1/rcc"
 }
 
 first="$(archive_in "$(bazel info output_base 2>/dev/null)" @uv)"
@@ -106,9 +126,9 @@ if ! tar -xzOf "$first" repo/lib/blob.txt | grep -q '^oid sha256:'; then
   exit 1
 fi
 
-# A fresh output base, with the repo contents cache off, fetches again. Protocol
+# A fresh output base with an empty repo contents cache fetches again. Protocol
 # v0 refuses the shallow fetch of a non-tip commit, so this takes the fallback.
-second="$(archive_in "$fixtures/ob_second" @uv \
+second="$(archive_in "$fixtures/ob_second" @uv "$(fresh "$fixtures/ob_second")" \
   --repo_env=GIT_CONFIG_COUNT=1 --repo_env=GIT_CONFIG_KEY_0=protocol.version --repo_env=GIT_CONFIG_VALUE_0=0)"
 if ! cmp "$first" "$second"; then
   echo "ERROR: archives differ between fetches" >&2
@@ -121,7 +141,7 @@ nolfs="$fixtures/nolfs"
 mkdir -p "$nolfs"
 printf '#!/bin/sh\nexit 1\n' >"$nolfs/git-lfs"
 chmod +x "$nolfs/git-lfs"
-if out="$(bazel --output_base="$fixtures/ob_nolfs" query --repo_contents_cache= \
+if out="$(bazel --output_base="$fixtures/ob_nolfs" query "$(fresh "$fixtures/ob_nolfs")" \
   --repo_env=PATH="$nolfs:$PATH" 'deps(@uv_lfs//lib:sdist)' 2>&1)"; then
   echo "ERROR: expected the lfs = true fetch to fail without git-lfs" >&2
   exit 1
@@ -134,7 +154,7 @@ fi
 echo "lfs = true fails clearly without git-lfs."
 
 if git lfs version >/dev/null 2>&1; then
-  lfs_archive="$(archive_in "$fixtures/ob_lfs" @uv_lfs)"
+  lfs_archive="$(archive_in "$fixtures/ob_lfs" @uv_lfs "$(fresh "$fixtures/ob_lfs")")"
   if [ "$(tar -xzOf "$lfs_archive" repo/lib/blob.txt)" != "$blob" ]; then
     echo "ERROR: LFS object was not fetched with lfs = true" >&2
     exit 1
