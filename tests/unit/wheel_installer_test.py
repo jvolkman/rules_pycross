@@ -97,7 +97,6 @@ def parse_flags(argv):
     parser = argparse.ArgumentParser()
     parser.add_argument("--wheel", type=Path, required=False)
     parser.add_argument("--wheel-dir", type=Path, required=False)
-    parser.add_argument("--wheel-name-file", type=Path, required=False)
     parser.add_argument("--directory", type=Path, required=True)
     return parser.parse_args(argv)
 
@@ -236,7 +235,6 @@ class WheelInstallerNormalizedDistInfoTest(unittest.TestCase):
         args = argparse.Namespace(
             wheel=wheel_path,
             wheel_dir=None,
-            wheel_name_file=None,
             install_exclude_globs=[],
             patches=[],
             entry_points_output=entry_points_out,
@@ -340,7 +338,6 @@ class WheelInstallerPrecompileTest(unittest.TestCase):
         args = argparse.Namespace(
             wheel=wheel_path,
             wheel_dir=None,
-            wheel_name_file=None,
             install_exclude_globs=[],
             patches=[],
             entry_points_output=None,
@@ -376,7 +373,6 @@ class WheelInstallerPrecompileTest(unittest.TestCase):
             args = argparse.Namespace(
                 wheel=wheel_path,
                 wheel_dir=None,
-                wheel_name_file=None,
                 install_exclude_globs=[],
                 patches=[],
                 entry_points_output=None,
@@ -441,7 +437,6 @@ class WheelInstallerPrecompileTest(unittest.TestCase):
         args = argparse.Namespace(
             wheel=wheel_path,
             wheel_dir=None,
-            wheel_name_file=None,
             install_exclude_globs=[],
             patches=[],
             entry_points_output=None,

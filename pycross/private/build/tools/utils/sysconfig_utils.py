@@ -104,10 +104,8 @@ def load_target_sysconfig(ctx: BuildContext) -> Dict[str, Any]:
         return result
 
     # Fallback for cross-compilation: load static _sysconfigdata
-    if not ctx.target_sys_path:
-        ctx.target_sys_path = determine_target_path_from_exec(ctx.exec_python, ctx.target_python)
-
-    return find_sysconfig_data(ctx.target_sys_path)
+    target_sys_path = determine_target_path_from_exec(ctx.exec_python, ctx.target_python)
+    return find_sysconfig_data(target_sys_path)
 
 
 def derive_platform_overrides(sysconfig_vars: Dict[str, Any]) -> tuple[Optional[str], Optional[str]]:
