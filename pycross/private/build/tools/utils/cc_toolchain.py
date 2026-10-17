@@ -32,20 +32,18 @@ def parse_ar_and_guess_ranlib(ar: str | None) -> Tuple[List[str], Path | None]:
             ar_list[0] = resolved_ar
 
     stem = ar_path.stem
-    if stem == "ar" or stem.endswith(("-ar", "_ar")):
-        ranlib_stem = stem[:-2] + "ranlib"
-        ranlib_name = ranlib_stem + ar_path.suffix
+    if not (stem == "ar" or stem.endswith(("-ar", "_ar"))):
+        return ar_list, None
 
-        if ar_path.is_absolute():
-            guessed_ranlib_path = ar_path.parent / ranlib_name
-            if guessed_ranlib_path.exists():
-                return ar_list, guessed_ranlib_path
-        else:
-            resolved_ranlib = shutil.which(ranlib_name)
-            if resolved_ranlib:
-                return ar_list, Path(resolved_ranlib)
+    ranlib_stem = stem[:-2] + "ranlib"
+    ranlib_name = ranlib_stem + ar_path.suffix
 
-    return ar_list, None
+    if ar_path.is_absolute():
+        guessed_ranlib_path = ar_path.parent / ranlib_name
+        return ar_list, guessed_ranlib_path if guessed_ranlib_path.exists() else None
+
+    resolved_ranlib = shutil.which(ranlib_name)
+    return ar_list, Path(resolved_ranlib) if resolved_ranlib else None
 
 
 _FILTERED_LINKER_ARGS = (
@@ -81,23 +79,17 @@ _SHARED_LINK_ARGS = (
 
 def get_wrapper_flags(cflags: str) -> List[str]:
     """Extract target and sysroot flags to forward to compiler wrappers."""
-    possible_flags = ["-target", "--target", "--sysroot", "-isysroot", "-mmacosx-version-min"]
+    possible_flags = ("-target", "--target", "--sysroot", "-isysroot", "-mmacosx-version-min")
     result = []
     split_cflags = shlex.split(cflags)
     for i, flag in enumerate(split_cflags):
-        for possible_flag in possible_flags:
-            if not (flag.startswith(possible_flag)):
-                continue
-            if "=" in flag:
-                flag, value = flag.split("=", 1)
-                additions = [f"{flag}={value}"]
-            else:
-                flag, value = flag, split_cflags[i + 1]
-                additions = [flag, value]
-
-            if not flag == possible_flag:
-                continue
-            result.extend(additions)
+        flag_name, sep, value = flag.partition("=")
+        if flag_name not in possible_flags:
+            continue
+        if sep:
+            result.append(f"{flag_name}={value}")
+        else:
+            result.extend([flag_name, split_cflags[i + 1]])
     return result
 
 

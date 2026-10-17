@@ -89,6 +89,57 @@ def _validate_override_packages(override_configs, all_resolved_locks, workspace_
                     ", ".join(sorted(known_names[pkg_name].keys())),
                 ))
 
+def _create_remote_file_repo(key, file, indexes):
+    remote_file_repo = "pypi_{}".format(sanitize_name(key.replace("/", "_")))
+    is_wheel = file["name"].endswith(".whl")
+    remote_file_label = (
+        "@{}//:wheel".format(remote_file_repo) if is_wheel else "@{}//file:{}".format(remote_file_repo, file["name"])
+    )
+
+    urls = file.get("urls", [])
+    if urls:
+        if is_wheel:
+            pycross_wheel_file(
+                name = remote_file_repo,
+                urls = urls,
+                sha256 = file["sha256"],
+                filename = file["name"],
+            )
+        elif urls[0].startswith("git+"):
+            pycross_git_file(
+                name = remote_file_repo,
+                url = urls[0],
+                filename = file["name"],
+            )
+        else:
+            http_file(
+                name = remote_file_repo,
+                urls = urls,
+                sha256 = file["sha256"],
+                downloaded_file_path = file["name"],
+            )
+        return remote_file_label
+
+    pypi_file_attrs = dict(
+        name = remote_file_repo,
+        package_name = file["package_name"],
+        package_version = file["package_version"],
+        filename = file["name"],
+        sha256 = file["sha256"],
+    )
+
+    # A per-package index recorded in the lock takes priority over
+    # the workspace's pypi_indexes.
+    if file.get("index"):
+        pypi_file_attrs["indexes"] = [file["index"]]
+    elif indexes:
+        pypi_file_attrs["indexes"] = indexes
+    if is_wheel:
+        pycross_wheel_file(**pypi_file_attrs)
+    else:
+        pypi_file(**pypi_file_attrs)
+    return remote_file_label
+
 def create_repos(
         module_ctx,
         all_locks,
@@ -168,60 +219,9 @@ def create_repos(
         indexes = workspace_pypi_indexes.get(workspace_name, []) if workspace_name else []
 
         for key, file in resolved_lock.get("remote_files", {}).items():
-            if key in all_remote_files:
-                repo_remote_files[key] = all_remote_files[key]
-                continue
-
-            remote_file_repo = "pypi_{}".format(sanitize_name(key.replace("/", "_")))
-            if file["name"].endswith(".whl"):
-                remote_file_label = "@{}//:wheel".format(remote_file_repo)
-            else:
-                remote_file_label = "@{}//file:{}".format(remote_file_repo, file["name"])
-
-            urls = file.get("urls", [])
-            if urls:
-                if file["name"].endswith(".whl"):
-                    pycross_wheel_file(
-                        name = remote_file_repo,
-                        urls = urls,
-                        sha256 = file["sha256"],
-                        filename = file["name"],
-                    )
-                elif urls[0].startswith("git+"):
-                    pycross_git_file(
-                        name = remote_file_repo,
-                        url = urls[0],
-                        filename = file["name"],
-                    )
-                else:
-                    http_file(
-                        name = remote_file_repo,
-                        urls = urls,
-                        sha256 = file["sha256"],
-                        downloaded_file_path = file["name"],
-                    )
-            else:
-                pypi_file_attrs = dict(
-                    name = remote_file_repo,
-                    package_name = file["package_name"],
-                    package_version = file["package_version"],
-                    filename = file["name"],
-                    sha256 = file["sha256"],
-                )
-
-                # A per-package index recorded in the lock takes priority over
-                # the workspace's pypi_indexes.
-                if file.get("index"):
-                    pypi_file_attrs["indexes"] = [file["index"]]
-                elif indexes:
-                    pypi_file_attrs["indexes"] = indexes
-                if file["name"].endswith(".whl"):
-                    pycross_wheel_file(**pypi_file_attrs)
-                else:
-                    pypi_file(**pypi_file_attrs)
-
-            repo_remote_files[key] = remote_file_label
-            all_remote_files[key] = remote_file_label
+            if key not in all_remote_files:
+                all_remote_files[key] = _create_remote_file_repo(key, file, indexes)
+            repo_remote_files[key] = all_remote_files[key]
 
         # Pre-calculate known packages in this lock file to filter sdist build_requires
         known_packages = known_packages_by_repo[repo_name]

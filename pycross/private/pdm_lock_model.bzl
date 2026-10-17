@@ -96,11 +96,10 @@ def translate_pdm(project_dict, lock_dict, lock_model):
     # Development dependencies: dependency-groups + legacy tool.pdm.dev-dependencies
     dev_deps = dict(project_dict.get("dependency-groups", {}))
     legacy_dev_deps = project_dict.get("tool", {}).get("pdm", {}).get("dev-dependencies", {})
-    if legacy_dev_deps:
-        for group_name, deps in legacy_dev_deps.items():
-            if group_name in dev_deps:
-                fail("PDM error: group '{}' cannot appear in both [dependency-groups] and [tool.pdm.dev-dependencies]".format(group_name))
-            dev_deps[group_name] = deps
+    for group_name, deps in legacy_dev_deps.items():
+        if group_name in dev_deps:
+            fail("PDM error: group '{}' cannot appear in both [dependency-groups] and [tool.pdm.dev-dependencies]".format(group_name))
+        dev_deps[group_name] = deps
 
     # Enforce PDM PEP 735 rule
     for group_name in dev_deps:
@@ -146,11 +145,12 @@ def translate_pdm(project_dict, lock_dict, lock_model):
             for dep_str in groups_dict[target_name]:
                 if type(dep_str) == "string":
                     requirements.append((parse_pep508_requirement(dep_str), is_testonly))
-                elif type(dep_str) == "dict" and "include-group" in dep_str:
-                    inc_group = dep_str["include-group"]
-                    for inc_dep in dev_deps.get(inc_group, []):
-                        if type(inc_dep) == "string":
-                            requirements.append((parse_pep508_requirement(inc_dep), is_testonly))
+                    continue
+                if type(dep_str) != "dict" or "include-group" not in dep_str:
+                    continue
+                for inc_dep in dev_deps.get(dep_str["include-group"], []):
+                    if type(inc_dep) == "string":
+                        requirements.append((parse_pep508_requirement(inc_dep), is_testonly))
 
     # Build pinned specs from requirements
     pinned_package_specs = {}

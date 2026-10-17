@@ -89,6 +89,29 @@ def sha256_from_string(s):
         result = result + s
     return result[:64]
 
+def _read_project_dict(rctx, extra_project_files, lock_file, lock_model):
+    """Select and decode the relevant pyproject.toml as a dict."""
+    sibling_label = lock_file.relative(":pyproject.toml")
+    if not extra_project_files:
+        project_path = rctx.path(sibling_label)
+        return decode(rctx.read(project_path)) if project_path.exists else {}
+
+    projects = getattr(lock_model, "projects", [])
+    if len(projects) == 1 and projects[0] != "*":
+        target_name = canonicalize_name(projects[0])
+        for f in extra_project_files:
+            path = rctx.path(f)
+            if not path.exists:
+                continue
+            p_dict = decode(rctx.read(path))
+            p_name = p_dict.get("project", {}).get("name")
+            if p_name and canonicalize_name(p_name) == target_name:
+                return p_dict
+
+    project_file = sibling_label if sibling_label in extra_project_files else extra_project_files[0]
+    project_path = rctx.path(project_file)
+    return decode(rctx.read(project_path)) if project_path.exists else {}
+
 def read_project_and_lock(rctx, extra_project_files, lock_file, lock_model, lock_label_hint):
     """Select and decode pyproject.toml and the lock file.
 
@@ -102,35 +125,7 @@ def read_project_and_lock(rctx, extra_project_files, lock_file, lock_model, lock
     Returns:
         A tuple of (project_dict, lock_dict).
     """
-    projects = getattr(lock_model, "projects", [])
-    project_file = None
-    project_dict = None
-
-    if not extra_project_files:
-        project_file = lock_file.relative(":pyproject.toml")
-    else:
-        if len(projects) == 1 and projects[0] != "*":
-            target_name = canonicalize_name(projects[0])
-            for f in extra_project_files:
-                path = rctx.path(f)
-                if path.exists:
-                    p_dict = decode(rctx.read(path))
-                    p_name = p_dict.get("project", {}).get("name")
-                    if p_name and canonicalize_name(p_name) == target_name:
-                        project_file = f
-                        project_dict = p_dict
-                        break
-
-        if not project_file:
-            sibling_label = lock_file.relative(":pyproject.toml")
-            project_file = sibling_label if sibling_label in extra_project_files else extra_project_files[0]
-
-    if project_dict == None:
-        project_dict = {}
-        if project_file:
-            project_path = rctx.path(project_file)
-            if project_path.exists:
-                project_dict = decode(rctx.read(project_path))
+    project_dict = _read_project_dict(rctx, extra_project_files, lock_file, lock_model)
 
     lock_path = rctx.path(lock_file)
     if not lock_path.exists:
@@ -241,6 +236,22 @@ def _version_key(version_str):
     """Parse a version string into a comparable key tuple."""
     return pypackaging.version.parse(version_str).key
 
+def _resolve_local_dep_constraint(constraint, dep_base_name, dep_version, resolution_marker_exprs):
+    """Combine a local package pin's constraint with any resolution-marker fork on its dependency."""
+    cname = resolution_marker_constraint_name(dep_base_name, dep_version)
+    if cname not in resolution_marker_exprs or constraint == cname:
+        return constraint
+    if not constraint:
+        return cname
+    if type(resolution_marker_exprs.get(constraint)) == "string":
+        return constraint
+    dep_constraint = "{}_{}".format(constraint, cname)
+    resolution_marker_exprs[dep_constraint] = {
+        "variant": constraint,
+        "marker": cname,
+    }
+    return dep_constraint
+
 def resolve_lock_graph(packages, pinned_package_specs, requires_python, strict_dependencies = True, variants = None, resolution_marker_exprs = None, testonly_pins = None, root_dependency_markers = None):
     """Resolves a dependency graph of packages.
 
@@ -286,35 +297,36 @@ def resolve_lock_graph(packages, pinned_package_specs, requires_python, strict_d
     distinct_packages = {}
     for pkg in packages:
         pkg_key = _package_key_str(pkg["name"], pkg["version"])
-        if pkg_key in distinct_packages:
-            # Merge: combine deps, files, extras
-            existing = distinct_packages[pkg_key]
-            merged_deps = list(existing["dependencies"])
-            existing_dep_keys = {"{}/{}".format(d["name"], d.get("specifier", "")): True for d in merged_deps}
-            for d in pkg["dependencies"]:
-                dk = "{}/{}".format(d["name"], d.get("specifier", ""))
-                if dk not in existing_dep_keys:
-                    merged_deps.append(d)
-                    existing_dep_keys[dk] = True
-            merged_files = list(existing["files"])
-            existing_file_names = {f["name"]: True for f in merged_files}
-            for f in pkg["files"]:
-                if f["name"] not in existing_file_names:
-                    merged_files.append(f)
-                    existing_file_names[f["name"]] = True
-            merged_extras = list(existing.get("extras", []))
-            for e in pkg.get("extras", []):
-                if e not in merged_extras:
-                    merged_extras.append(e)
-            distinct_packages[pkg_key] = dict(
-                existing,
-                dependencies = merged_deps,
-                files = merged_files,
-                extras = merged_extras,
-                is_local = existing.get("is_local", False) or pkg.get("is_local", False),
-            )
-        else:
+        if pkg_key not in distinct_packages:
             distinct_packages[pkg_key] = pkg
+            continue
+
+        # Merge: combine deps, files, extras
+        existing = distinct_packages[pkg_key]
+        merged_deps = list(existing["dependencies"])
+        existing_dep_keys = {"{}/{}".format(d["name"], d.get("specifier", "")): True for d in merged_deps}
+        for d in pkg["dependencies"]:
+            dk = "{}/{}".format(d["name"], d.get("specifier", ""))
+            if dk not in existing_dep_keys:
+                merged_deps.append(d)
+                existing_dep_keys[dk] = True
+        merged_files = list(existing["files"])
+        existing_file_names = {f["name"]: True for f in merged_files}
+        for f in pkg["files"]:
+            if f["name"] not in existing_file_names:
+                merged_files.append(f)
+                existing_file_names[f["name"]] = True
+        merged_extras = list(existing.get("extras", []))
+        for e in pkg.get("extras", []):
+            if e not in merged_extras:
+                merged_extras.append(e)
+        distinct_packages[pkg_key] = dict(
+            existing,
+            dependencies = merged_deps,
+            files = merged_files,
+            extras = merged_extras,
+            is_local = existing.get("is_local", False) or pkg.get("is_local", False),
+        )
 
     all_packages = distinct_packages.values()
 
@@ -360,15 +372,16 @@ def resolve_lock_graph(packages, pinned_package_specs, requires_python, strict_d
                     cand_extras = [canonicalize_name(e) for e in cand.get("extras", [])]
                     if req_extra and canonicalize_name(req_extra) not in cand_extras:
                         continue
-                    if _specifier_contains_version(dep_specifier, cand["version"]):
-                        pkg_resolved.append({
-                            "name": display_name,
-                            "version": cand["version"],
-                            "marker": dep_marker,
-                        })
-                        found = True
-                        if dep_specifier:
-                            break
+                    if not _specifier_contains_version(dep_specifier, cand["version"]):
+                        continue
+                    pkg_resolved.append({
+                        "name": display_name,
+                        "version": cand["version"],
+                        "marker": dep_marker,
+                    })
+                    found = True
+                    if dep_specifier:
+                        break
 
                 if not found and strict_dependencies:
                     fail("Found no packages to satisfy dependency (name={}, spec={})".format(dep_name, dep_specifier))
@@ -390,10 +403,11 @@ def resolve_lock_graph(packages, pinned_package_specs, requires_python, strict_d
         for constraint, pin_specifier in pin_specs.items():
             found = False
             for pin_pkg in pin_packages:
-                if _specifier_contains_version(pin_specifier, pin_pkg["version"]):
-                    pinned_keys[pin_name][constraint] = _package_key_str(key_name or pin_pkg["name"], pin_pkg["version"])
-                    found = True
-                    break
+                if not _specifier_contains_version(pin_specifier, pin_pkg["version"]):
+                    continue
+                pinned_keys[pin_name][constraint] = _package_key_str(key_name or pin_pkg["name"], pin_pkg["version"])
+                found = True
+                break
             if not found and strict_dependencies:
                 fail("Found no packages to satisfy pin (name={}, spec={})".format(pin_name, pin_specifier))
 
@@ -428,17 +442,12 @@ def resolve_lock_graph(packages, pinned_package_specs, requires_python, strict_d
                     dep_pin_name = dep_base_name
 
                 # Keep resolution-marker forks of the dependency distinct.
-                dep_constraint = constraint
-                cname = resolution_marker_constraint_name(dep_base_name, dep["version"])
-                if cname in resolution_marker_exprs and constraint != cname:
-                    if not constraint:
-                        dep_constraint = cname
-                    elif type(resolution_marker_exprs.get(constraint)) != "string":
-                        dep_constraint = "{}_{}".format(constraint, cname)
-                        resolution_marker_exprs[dep_constraint] = {
-                            "variant": constraint,
-                            "marker": cname,
-                        }
+                dep_constraint = _resolve_local_dep_constraint(
+                    constraint,
+                    dep_base_name,
+                    dep["version"],
+                    resolution_marker_exprs,
+                )
 
                 # The dependency is requested under the local package's edge
                 # marker. A directly pinned name absent from

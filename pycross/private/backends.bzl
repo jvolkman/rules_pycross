@@ -63,25 +63,24 @@ def _collect_registrations(modules, warn = _print_warn):
 
             for pyproject_backend in tag.pyproject_backends:
                 if pyproject_backend in backend_to_rule and not module.is_root:
-                    if pyproject_backend in root_pyproject_backends:
-                        continue
-                    warn(
-                        "Ignoring duplicate pyproject backend '{}' -> '{}' from module '{}' (already mapped to '{}')".format(
-                            pyproject_backend,
-                            name,
-                            module.name,
-                            backend_to_rule[pyproject_backend],
-                        ),
-                    )
-                else:
-                    backend_to_rule[pyproject_backend] = name
-                    if module.is_root:
-                        root_pyproject_backends[pyproject_backend] = True
+                    if pyproject_backend not in root_pyproject_backends:
+                        warn(
+                            "Ignoring duplicate pyproject backend '{}' -> '{}' from module '{}' (already mapped to '{}')".format(
+                                pyproject_backend,
+                                name,
+                                module.name,
+                                backend_to_rule[pyproject_backend],
+                            ),
+                        )
+                    continue
+                backend_to_rule[pyproject_backend] = name
+                if module.is_root:
+                    root_pyproject_backends[pyproject_backend] = True
 
-            if tag.default:
-                if default_backend and not module.is_root:
-                    if root_default:
-                        continue
+            if not tag.default:
+                continue
+            if default_backend and not module.is_root:
+                if not root_default:
                     warn(
                         "Ignoring default backend '{}' from module '{}' (already set to '{}' by module '{}')".format(
                             name,
@@ -90,10 +89,10 @@ def _collect_registrations(modules, warn = _print_warn):
                             default_backend_module,
                         ),
                     )
-                else:
-                    default_backend = name
-                    default_backend_module = module.name
-                    root_default = module.is_root
+                continue
+            default_backend = name
+            default_backend_module = module.name
+            root_default = module.is_root
 
     if not default_backend:
         fail("No default build backend registered. Set `default = True` on one `backends.register` tag.")

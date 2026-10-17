@@ -65,12 +65,12 @@ def find_unconditional_deps(member, other_members, edges):
             dep = edge["dep"]
             if dep not in cycle_members:
                 continue
-            has_marker = bool(edge.get("marker"))
-            if not has_marker and dep not in visited:
-                visited[dep] = True
-                if dep != member:
-                    unconditional[dep] = True
-                queue.append(dep)
+            if edge.get("marker") or dep in visited:
+                continue
+            visited[dep] = True
+            if dep != member:
+                unconditional[dep] = True
+            queue.append(dep)
 
     return sorted(unconditional.keys())
 
@@ -116,10 +116,11 @@ def compute_reachability_groups(member, other_members, edges):
     collapsible = {}  # node -> predecessor
     for node in other_members:
         node_inbound = inbound.get(node, [])
-        if len(node_inbound) == 1:
-            pred, has_marker = node_inbound[0]
-            if not has_marker and pred != member and pred in members_set:
-                collapsible[node] = pred
+        if len(node_inbound) != 1:
+            continue
+        pred, has_marker = node_inbound[0]
+        if not has_marker and pred != member and pred in members_set:
+            collapsible[node] = pred
 
     # Step 3: resolve chains.  If C -> B -> A in the collapsible map, C's
     # representative is A (the first non-collapsible ancestor).
@@ -370,13 +371,12 @@ def pycross_cycle_member_marker_deps(
     edges_json = None
 
     for cg in plan.conditional_groups:
-        if cg.eval_match_name and native.existing_rule(cg.eval_match_name):
-            match_name = cg.eval_match_name
-        else:
-            if edges_json == None:
-                edges_json = json.encode(edges)
-
+        match_name = cg.eval_match_name if (cg.eval_match_name and native.existing_rule(cg.eval_match_name)) else None
+        if not match_name:
             if not native.existing_rule(cg.pair_name):
+                if edges_json == None:
+                    edges_json = json.encode(edges)
+
                 # Reachability evaluator: returns FeatureFlagInfo("true"/"false")
                 pycross_cycle_dep_needed(
                     name = cg.pair_name,

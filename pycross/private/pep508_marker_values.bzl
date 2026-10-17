@@ -184,6 +184,14 @@ def marker_value_attrs():
         "_platform_python_implementation_target": attr.label(default = "@rules_pycross//pycross/settings:pep508_platform_python_implementation"),
     }
 
+def _toolchain_py3_runtime(ctx):
+    if PYTHON_TOOLCHAIN_TYPE not in ctx.toolchains:
+        return None
+    tc = ctx.toolchains[PYTHON_TOOLCHAIN_TYPE]
+    if not hasattr(tc, "py3_runtime"):
+        return None
+    return tc.py3_runtime
+
 def collect_markers(ctx):
     """Collects PEP 508 marker values from rule context attrs and toolchain.
 
@@ -216,26 +224,20 @@ def collect_markers(ctx):
     platform_python_implementation = ctx.attr.platform_python_implementation
 
     # Try PyRuntimeInfo from the toolchain first (most accurate).
-    if (not python_version or not python_full_version or not implementation_name):
-        runtime = None
-        if PYTHON_TOOLCHAIN_TYPE in ctx.toolchains:
-            tc = ctx.toolchains[PYTHON_TOOLCHAIN_TYPE]
-            if hasattr(tc, "py3_runtime"):
-                runtime = tc.py3_runtime
+    runtime = _toolchain_py3_runtime(ctx) if (not python_version or not python_full_version or not implementation_name) else None
+    if runtime:
+        if not implementation_name and hasattr(runtime, "implementation_name") and runtime.implementation_name:
+            implementation_name = runtime.implementation_name
 
-        if runtime:
-            if not implementation_name and hasattr(runtime, "implementation_name") and runtime.implementation_name:
-                implementation_name = runtime.implementation_name
-
-            if hasattr(runtime, "interpreter_version_info") and runtime.interpreter_version_info:
-                vi = runtime.interpreter_version_info
-                if not python_version:
-                    python_version = "{}.{}".format(vi.major, vi.minor)
-                full_ver = _format_full_version(vi)
-                if not python_full_version:
-                    python_full_version = full_ver
-                if not implementation_version:
-                    implementation_version = full_ver
+        vi = runtime.interpreter_version_info if hasattr(runtime, "interpreter_version_info") else None
+        if vi:
+            if not python_version:
+                python_version = "{}.{}".format(vi.major, vi.minor)
+            full_ver = _format_full_version(vi)
+            if not python_full_version:
+                python_full_version = full_ver
+            if not implementation_version:
+                implementation_version = full_ver
 
     # Fall back to target flags.
     if not python_version:

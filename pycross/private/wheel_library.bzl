@@ -27,16 +27,7 @@ load(":util.bzl", "PY_COMMON_ATTRS", "merge_py_providers", "underscore_name")
 
 _PYCROSS_TOOLCHAIN_TYPE = Label("//pycross:toolchain_type")
 
-def _pycross_wheel_library_impl(ctx):
-    out = ctx.actions.declare_directory(ctx.attr.name)
-    entry_points = ctx.actions.declare_file(ctx.attr.name + ".dist_info/entry_points.txt")
-    dist_info_dir = None
-    if ctx.attr.package_name and ctx.attr.package_version:
-        dist_info_dir = "{}-{}.dist-info".format(
-            underscore_name(ctx.attr.package_name),
-            ctx.attr.package_version,
-        )
-
+def _register_wheel_install_action(ctx, out, entry_points, dist_info_dir):
     if PycrossUnsupportedWheelInfo in ctx.attr.wheel:
         pkg_id = "{}{}".format(
             ctx.attr.package_name or ctx.label.name,
@@ -49,81 +40,170 @@ def _pycross_wheel_library_impl(ctx):
             mnemonic = "PycrossUnsupportedWheel",
             progress_message = "Rejecting unsupported wheel %s" % pkg_id,
         )
+        return
+
+    wheel_input = ctx.files.wheel[0]
+
+    args = ctx.actions.args().use_param_file("--flagfile=%s")
+    if type(wheel_input) == "File" and wheel_input.is_directory:
+        args.add("--wheel-dir", wheel_input.path)
     else:
-        wheel_input = ctx.files.wheel[0]
+        # Plain file (e.g., local override wheel) — pass directly as --wheel
+        args.add("--wheel", wheel_input.path)
+    args.add("--directory", out.path)
+    args.add_all(ctx.files.post_install_patches, format_each = "--patch=%s")
 
-        args = ctx.actions.args().use_param_file("--flagfile=%s")
-        if type(wheel_input) == "File" and wheel_input.is_directory:
-            args.add("--wheel-dir", wheel_input.path)
-        else:
-            # Plain file (e.g., local override wheel) — pass directly as --wheel
-            args.add("--wheel", wheel_input.path)
-        args.add("--directory", out.path)
-        args.add_all(ctx.files.post_install_patches, format_each = "--patch=%s")
+    inputs = [wheel_input] + ctx.files.post_install_patches
+    transitive_inputs = []
+    tools = []
 
-        inputs = [wheel_input] + ctx.files.post_install_patches
-        transitive_inputs = []
-        tools = []
+    for install_exclude_glob in ctx.attr.install_exclude_globs:
+        args.add("--install-exclude-glob", install_exclude_glob)
 
-        for install_exclude_glob in ctx.attr.install_exclude_globs:
-            args.add("--install-exclude-glob", install_exclude_glob)
+    args.add("--entry-points-output", entry_points)
 
-        args.add("--entry-points-output", entry_points)
+    if ctx.attr.package_name:
+        args.add("--expected-name", ctx.attr.package_name)
+    if ctx.attr.package_version:
+        args.add("--expected-version", ctx.attr.package_version)
+    if dist_info_dir:
+        args.add("--dist-info-dir", dist_info_dir)
 
-        if ctx.attr.package_name:
-            args.add("--expected-name", ctx.attr.package_name)
-        if ctx.attr.package_version:
-            args.add("--expected-version", ctx.attr.package_version)
-        if dist_info_dir:
-            args.add("--dist-info-dir", dist_info_dir)
+    flag_precompile = ctx.attr._precompile[BuildSettingInfo].value
+    if flag_precompile == "force_enabled":
+        effective_precompile = "enabled"
+    elif flag_precompile == "force_disabled":
+        effective_precompile = "disabled"
+    elif ctx.attr.precompile == "auto":
+        effective_precompile = "enabled" if flag_precompile == "enabled" else "disabled"
+    else:
+        effective_precompile = ctx.attr.precompile
 
-        flag_precompile = ctx.attr._precompile[BuildSettingInfo].value
-        if flag_precompile == "force_enabled":
-            effective_precompile = "enabled"
-        elif flag_precompile == "force_disabled":
-            effective_precompile = "disabled"
-        elif ctx.attr.precompile == "auto":
-            effective_precompile = "enabled" if flag_precompile == "enabled" else "disabled"
-        else:
-            effective_precompile = ctx.attr.precompile
-
-        if (
-            effective_precompile == "enabled" and
-            _PYCROSS_TOOLCHAIN_TYPE in ctx.toolchains and
-            ctx.toolchains[_PYCROSS_TOOLCHAIN_TYPE]
-        ):
-            pycross_info = ctx.toolchains[_PYCROSS_TOOLCHAIN_TYPE].pycross_info
-            if ctx.attr.precompile_invalidation_mode == "auto":
-                invalidation_mode = (
-                    "unchecked_hash" if ctx.var.get("COMPILATION_MODE") == "opt" else "checked_hash"
-                )
-            else:
-                invalidation_mode = ctx.attr.precompile_invalidation_mode
-            args.add("--compile-python", pycross_info.exec_python_executable)
-            args.add("--compile-invalidation-mode", invalidation_mode)
-            args.add("--compile-optimize", str(ctx.attr.precompile_optimize_level))
-            compile_files = getattr(
-                pycross_info,
-                "exec_python_compile_files",
-                pycross_info.exec_python_files,
+    if (
+        effective_precompile == "enabled" and
+        _PYCROSS_TOOLCHAIN_TYPE in ctx.toolchains and
+        ctx.toolchains[_PYCROSS_TOOLCHAIN_TYPE]
+    ):
+        pycross_info = ctx.toolchains[_PYCROSS_TOOLCHAIN_TYPE].pycross_info
+        if ctx.attr.precompile_invalidation_mode == "auto":
+            invalidation_mode = (
+                "unchecked_hash" if ctx.var.get("COMPILATION_MODE") == "opt" else "checked_hash"
             )
-            if compile_files:
-                transitive_inputs.append(compile_files)
-            if pycross_info.exec_python_files_to_run:
-                tools.append(pycross_info.exec_python_files_to_run)
-
-        ctx.actions.run(
-            inputs = depset(inputs, transitive = transitive_inputs),
-            outputs = [out, entry_points],
-            executable = ctx.executable._tool,
-            tools = tools,
-            mnemonic = "PycrossWheelInstall",
-            arguments = [args],
-            env = {
-                "PYTHONHASHSEED": "0",
-            },
-            progress_message = "Installing %s" % wheel_input.basename,
+        else:
+            invalidation_mode = ctx.attr.precompile_invalidation_mode
+        args.add("--compile-python", pycross_info.exec_python_executable)
+        args.add("--compile-invalidation-mode", invalidation_mode)
+        args.add("--compile-optimize", str(ctx.attr.precompile_optimize_level))
+        compile_files = getattr(
+            pycross_info,
+            "exec_python_compile_files",
+            pycross_info.exec_python_files,
         )
+        if compile_files:
+            transitive_inputs.append(compile_files)
+        if pycross_info.exec_python_files_to_run:
+            tools.append(pycross_info.exec_python_files_to_run)
+
+    ctx.actions.run(
+        inputs = depset(inputs, transitive = transitive_inputs),
+        outputs = [out, entry_points],
+        executable = ctx.executable._tool,
+        tools = tools,
+        mnemonic = "PycrossWheelInstall",
+        arguments = [args],
+        env = {
+            "PYTHONHASHSEED": "0",
+        },
+        progress_message = "Installing %s" % wheel_input.basename,
+    )
+
+def _build_venv_symlinks(
+        venvs_site_packages_enabled,
+        out,
+        imp,
+        dist_info_dir,
+        package_name,
+        package_version,
+        site_paths,
+        bin_paths,
+        data_paths,
+        include_paths):
+    if not (venvs_site_packages_enabled and site_paths):
+        return []
+
+    venv_symlinks = []
+    for tlp in site_paths:
+        venv_symlinks.append(VenvSymlinkEntry(
+            kind = VenvSymlinkKind.LIB,
+            link_to_path = paths.join(imp, tlp),
+            package = package_name,
+            version = package_version,
+            venv_path = tlp,
+            files = depset([out]),
+        ))
+
+    # Also add .dist-info directory symlink so metadata is accessible.
+    if dist_info_dir:
+        venv_symlinks.append(VenvSymlinkEntry(
+            kind = VenvSymlinkKind.LIB,
+            link_to_path = paths.join(imp, dist_info_dir),
+            package = package_name,
+            version = package_version,
+            venv_path = dist_info_dir,
+            files = depset([out]),
+        ))
+
+    # Add other directory symlinks if supported by the rules_python version.
+    base_dir = paths.dirname(imp)
+
+    if hasattr(VenvSymlinkKind, "BIN"):
+        for p in bin_paths:
+            venv_symlinks.append(VenvSymlinkEntry(
+                kind = getattr(VenvSymlinkKind, "BIN"),
+                link_to_path = paths.join(base_dir, "bin", p),
+                package = package_name,
+                version = package_version,
+                venv_path = p,
+                files = depset([out]),
+            ))
+
+    if hasattr(VenvSymlinkKind, "DATA"):
+        for p in data_paths:
+            venv_symlinks.append(VenvSymlinkEntry(
+                kind = getattr(VenvSymlinkKind, "DATA"),
+                link_to_path = paths.join(base_dir, "data", p),
+                package = package_name,
+                version = package_version,
+                venv_path = p,
+                files = depset([out]),
+            ))
+
+        # VenvSymlinkKind.INCLUDE existed in earlier versions of rules_python but was missing from venv_dir_map.
+        # It was properly added in the same commit that introduced VenvSymlinkKind.DATA.
+        if hasattr(VenvSymlinkKind, "INCLUDE"):
+            for p in include_paths:
+                venv_symlinks.append(VenvSymlinkEntry(
+                    kind = getattr(VenvSymlinkKind, "INCLUDE"),
+                    link_to_path = paths.join(base_dir, "include", p),
+                    package = package_name,
+                    version = package_version,
+                    venv_path = p,
+                    files = depset([out]),
+                ))
+
+    return venv_symlinks
+
+def _pycross_wheel_library_impl(ctx):
+    out = ctx.actions.declare_directory(ctx.attr.name)
+    entry_points = ctx.actions.declare_file(ctx.attr.name + ".dist_info/entry_points.txt")
+    dist_info_dir = None
+    if ctx.attr.package_name and ctx.attr.package_version:
+        dist_info_dir = "{}-{}.dist-info".format(
+            underscore_name(ctx.attr.package_name),
+            ctx.attr.package_version,
+        )
+
+    _register_wheel_install_action(ctx, out, entry_points, dist_info_dir)
 
     # TODO: Is there a more correct way to get this runfiles-relative import path?
     imp = paths.join(
@@ -133,10 +213,6 @@ def _pycross_wheel_library_impl(ctx):
         "site-packages",  # we put lib files in this subdirectory.
     )
 
-    # Build venv symlink entries for rules_python's venvs_site_packages support.
-    # Each top-level package gets a symlink from the venv's site-packages/<tlp>
-    # to the runfiles location <repo>/<pkg>/<name>/site-packages/<tlp>.
-    venv_symlinks = []
     package_name = ctx.attr.package_name or ctx.label.name
     package_version = ctx.attr.package_version or ""
 
@@ -155,65 +231,21 @@ def _pycross_wheel_library_impl(ctx):
 
     venvs_site_packages_enabled = VenvsSitePackages.is_enabled(ctx)
 
-    if venvs_site_packages_enabled and site_paths:
-        for tlp in site_paths:
-            venv_symlinks.append(VenvSymlinkEntry(
-                kind = VenvSymlinkKind.LIB,
-                link_to_path = paths.join(imp, tlp),
-                package = package_name,
-                version = package_version,
-                venv_path = tlp,
-                files = depset([out]),
-            ))
-
-        # Also add .dist-info directory symlink so metadata is accessible.
-        if dist_info_dir:
-            venv_symlinks.append(VenvSymlinkEntry(
-                kind = VenvSymlinkKind.LIB,
-                link_to_path = paths.join(imp, dist_info_dir),
-                package = package_name,
-                version = package_version,
-                venv_path = dist_info_dir,
-                files = depset([out]),
-            ))
-
-        # Add other directory symlinks if supported by the rules_python version.
-        base_dir = paths.dirname(imp)
-
-        if hasattr(VenvSymlinkKind, "BIN"):
-            for p in bin_paths:
-                venv_symlinks.append(VenvSymlinkEntry(
-                    kind = getattr(VenvSymlinkKind, "BIN"),
-                    link_to_path = paths.join(base_dir, "bin", p),
-                    package = package_name,
-                    version = package_version,
-                    venv_path = p,
-                    files = depset([out]),
-                ))
-
-        if hasattr(VenvSymlinkKind, "DATA"):
-            for p in data_paths:
-                venv_symlinks.append(VenvSymlinkEntry(
-                    kind = getattr(VenvSymlinkKind, "DATA"),
-                    link_to_path = paths.join(base_dir, "data", p),
-                    package = package_name,
-                    version = package_version,
-                    venv_path = p,
-                    files = depset([out]),
-                ))
-
-            # VenvSymlinkKind.INCLUDE existed in earlier versions of rules_python but was missing from venv_dir_map.
-            # It was properly added in the same commit that introduced VenvSymlinkKind.DATA.
-            if hasattr(VenvSymlinkKind, "INCLUDE"):
-                for p in include_paths:
-                    venv_symlinks.append(VenvSymlinkEntry(
-                        kind = getattr(VenvSymlinkKind, "INCLUDE"),
-                        link_to_path = paths.join(base_dir, "include", p),
-                        package = package_name,
-                        version = package_version,
-                        venv_path = p,
-                        files = depset([out]),
-                    ))
+    # Build venv symlink entries for rules_python's venvs_site_packages support.
+    # Each top-level package gets a symlink from the venv's site-packages/<tlp>
+    # to the runfiles location <repo>/<pkg>/<name>/site-packages/<tlp>.
+    venv_symlinks = _build_venv_symlinks(
+        venvs_site_packages_enabled,
+        out,
+        imp,
+        dist_info_dir,
+        package_name,
+        package_version,
+        site_paths,
+        bin_paths,
+        data_paths,
+        include_paths,
+    )
 
     # With venvs_site_packages, the wheel is linked into the venv's site-packages, so (like rules_python)
     # don't also put its own site-packages dir on sys.path.

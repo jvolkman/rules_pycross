@@ -84,24 +84,25 @@ def _resolve_package_requires_python(markers):
     for marker in markers:
         # Simple extraction of python_full_version constraints
         # e.g. "python_full_version >= '3.8'" -> ">= 3.8"
-        if "python_full_version" in marker:
-            # Parse out the operator and version
-            parts = marker.strip().split("python_full_version")
-            if len(parts) == 2:
-                rest = parts[1].strip()
+        if "python_full_version" not in marker:
+            continue
 
-                # Extract operator
-                op = ""
-                for c in rest.elems():
-                    if c in "<>=!":
-                        op += c
-                    elif c == " " and op:
-                        break
-                    elif op:
-                        break
-                version_part = rest[len(op):].strip().strip("'\"")
-                if op and version_part:
-                    specifiers.append("{} {}".format(op, version_part))
+        # Parse out the operator and version
+        parts = marker.strip().split("python_full_version")
+        if len(parts) != 2:
+            continue
+        rest = parts[1].strip()
+
+        # Extract operator
+        op = ""
+        for c in rest.elems():
+            if c in "<>=!":
+                op += c
+            elif op:
+                break
+        version_part = rest[len(op):].strip().strip("'\"")
+        if op and version_part:
+            specifiers.append("{} {}".format(op, version_part))
     return specifiers
 
 def _uv_conflict_token(item):
@@ -136,32 +137,74 @@ def _parse_uv_dependency(dep, token_replacements = ()):
     Returns:
         A list of dep dicts suitable for resolve_lock_graph.
     """
-    name = dep.get("name", "")
+    name = canonicalize_name(dep.get("name", ""))
     version = dep.get("version", "")
+    specifier = "==={}".format(version) if version else ""
     marker = _rewrite_conflict_markers(dep.get("marker", ""), token_replacements)
     extras = dep.get("extra") or dep.get("extras", [])
 
-    results = []
-    if extras:
-        for extra in extras:
-            dep_name = "{}[{}]".format(canonicalize_name(name), canonicalize_name(extra))
-            specifier = "==={}".format(version) if version else ""
-            results.append({
-                "name": dep_name,
-                "specifier": specifier,
-                "marker": marker,
-                "extras": [None],
-            })
-    else:
-        specifier = "==={}".format(version) if version else ""
-        results.append({
-            "name": canonicalize_name(name),
+    if not extras:
+        return [{
+            "name": name,
             "specifier": specifier,
             "marker": marker,
             "extras": [None],
-        })
+        }]
 
-    return results
+    return [
+        {
+            "name": "{}[{}]".format(name, canonicalize_name(extra)),
+            "specifier": specifier,
+            "marker": marker,
+            "extras": [None],
+        }
+        for extra in extras
+    ]
+
+def _resolve_uv_dep_constraint(constraint, base_dep_name, dep_version, dep_marker, fork_constraints, resolution_marker_exprs):
+    """Combine a group/extra variant constraint with any resolution-marker fork constraint."""
+    if base_dep_name not in fork_constraints or dep_version not in fork_constraints[base_dep_name]:
+        return constraint
+    fork_constraint = fork_constraints[base_dep_name][dep_version]
+    if not constraint:
+        return fork_constraint
+    if dep_marker and dep_marker != resolution_marker_exprs.get(fork_constraint):
+        edge_fork_constraint = "{}__{}".format(fork_constraint, constraint)
+        resolution_marker_exprs[edge_fork_constraint] = dep_marker
+        fork_constraint = edge_fork_constraint
+    effective_constraint = "{}_{}".format(constraint, fork_constraint)
+
+    # Register compound constraint with its components.
+    resolution_marker_exprs[effective_constraint] = {
+        "variant": constraint,
+        "marker": fork_constraint,
+    }
+    return effective_constraint
+
+def _parse_sdist_file(sdist, source, package_name, package_version, registry):
+    """Parse an sdist entry from a UV lock package, or return None."""
+    if not sdist:
+        return None
+    if "url" not in sdist and "file" not in sdist and "url" in source:
+        # URL-based source with subdirectory
+        url = source["url"]
+        file_hash = sdist["hash"]
+        if not file_hash.startswith("sha256:"):
+            fail("Expected sha256: prefix on hash")
+        filename = "{}-{}{}".format(package_name, package_version, archive_extension(url))
+        f = {
+            "name": filename,
+            "sha256": file_hash[7:],
+            "urls": [url],
+            "package_name": package_name,
+            "package_version": package_version,
+        }
+        if registry:
+            f["index"] = registry
+        return f
+    if "git" not in source or "url" in sdist or "file" in sdist:
+        return _parse_file_info(sdist, package_name, package_version, registry)
+    return None
 
 def translate_uv(project_dict, lock_dict, lock_model):
     """Translates UV project and lock data to raw_lock_data dict.
@@ -266,16 +309,16 @@ def translate_uv(project_dict, lock_dict, lock_model):
         target_projects = [canonicalize_name(p) for p in projects_list]
 
     for p in target_projects:
+        if p in workspace_members:
+            continue
+
+        # Fallback for standalone single-project locks
+        for pkg in packages_list:
+            if canonicalize_name(pkg["name"]) == p:
+                workspace_members[p] = pkg
+                break
         if p not in workspace_members:
-            # Fallback for standalone single-project locks
-            found = False
-            for pkg in packages_list:
-                if canonicalize_name(pkg["name"]) == p:
-                    workspace_members[p] = pkg
-                    found = True
-                    break
-            if not found:
-                fail("Project '{}' not found in uv.lock workspace members.".format(p))
+            fail("Project '{}' not found in uv.lock workspace members.".format(p))
 
     # Pre-scan: detect resolution-marker forks.
     # A fork exists when the same package name has multiple versions with
@@ -345,12 +388,13 @@ def translate_uv(project_dict, lock_dict, lock_model):
         ]:
             for group_name, deps_list in groups_dict.items():
                 key = "{}:{}".format(kind, group_name)
-                if key in requested_groups_dict:
-                    group_batches.append((
-                        constraint_dict.get((project_name, group_name), ""),
-                        deps_list,
-                        requested_groups_dict[key],
-                    ))
+                if key not in requested_groups_dict:
+                    continue
+                group_batches.append((
+                    constraint_dict.get((project_name, group_name), ""),
+                    deps_list,
+                    requested_groups_dict[key],
+                ))
 
         for constraint, deps_list, is_testonly in group_batches:
             for dep in deps_list:
@@ -362,24 +406,14 @@ def translate_uv(project_dict, lock_dict, lock_model):
 
                 # Resolution-marker fork: combine variant + fork constraints.
                 base_dep_name = dep_name.split("[")[0]
-                if base_dep_name in _fork_constraints and dep_version in _fork_constraints[base_dep_name]:
-                    fork_constraint = _fork_constraints[base_dep_name][dep_version]
-                    if constraint:
-                        if dep_marker and dep_marker != resolution_marker_exprs.get(fork_constraint):
-                            edge_fork_constraint = "{}__{}".format(fork_constraint, constraint)
-                            resolution_marker_exprs[edge_fork_constraint] = dep_marker
-                            fork_constraint = edge_fork_constraint
-                        effective_constraint = "{}_{}".format(constraint, fork_constraint)
-
-                        # Register compound constraint with its components.
-                        resolution_marker_exprs[effective_constraint] = {
-                            "variant": constraint,
-                            "marker": fork_constraint,
-                        }
-                    else:
-                        effective_constraint = fork_constraint
-                else:
-                    effective_constraint = constraint
+                effective_constraint = _resolve_uv_dep_constraint(
+                    constraint,
+                    base_dep_name,
+                    dep_version,
+                    dep_marker,
+                    _fork_constraints,
+                    resolution_marker_exprs,
+                )
 
                 if dep_extras:
                     for extra in dep_extras:
@@ -438,27 +472,9 @@ def translate_uv(project_dict, lock_dict, lock_model):
             files.append(_parse_file_info(w, package_name, package_version, registry))
 
         sdist = lock_pkg.get("sdist", {})
-
-        if sdist:
-            if "url" not in sdist and "file" not in sdist and "url" in source:
-                # URL-based source with subdirectory
-                url = source["url"]
-                file_hash = sdist["hash"]
-                if not file_hash.startswith("sha256:"):
-                    fail("Expected sha256: prefix on hash")
-                filename = "{}-{}{}".format(package_name, package_version, archive_extension(url))
-                f = {
-                    "name": filename,
-                    "sha256": file_hash[7:],
-                    "urls": [url],
-                    "package_name": package_name,
-                    "package_version": package_version,
-                }
-                if registry:
-                    f["index"] = registry
-                files.append(f)
-            elif "git" not in source or "url" in sdist or "file" in sdist:
-                files.append(_parse_file_info(sdist, package_name, package_version, registry))
+        sdist_file = _parse_sdist_file(sdist, source, package_name, package_version, registry)
+        if sdist_file:
+            files.append(sdist_file)
 
         # Source dir
         source_dir = source.get("subdirectory", "")

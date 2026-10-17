@@ -84,20 +84,23 @@ def discover_uv_all_members(mctx, lock_file_label):
                 name = pkg["name"],
                 path = source["editable"],
             ))
-        elif "virtual" in source:
-            # Only include virtual members that have actual dependencies.
-            # A virtual workspace root with no dependencies is just the workspace
-            # definition and shouldn't produce a lock repo.
-            has_deps = (
-                pkg.get("dependencies") or
-                pkg.get("optional-dependencies") or
-                pkg.get("dev-dependencies")
-            )
-            if has_deps:
-                members.append(struct(
-                    name = pkg["name"],
-                    path = source["virtual"],
-                ))
+            continue
+        if "virtual" not in source:
+            continue
+
+        # Only include virtual members that have actual dependencies.
+        # A virtual workspace root with no dependencies is just the workspace
+        # definition and shouldn't produce a lock repo.
+        has_deps = (
+            pkg.get("dependencies") or
+            pkg.get("optional-dependencies") or
+            pkg.get("dev-dependencies")
+        )
+        if has_deps:
+            members.append(struct(
+                name = pkg["name"],
+                path = source["virtual"],
+            ))
 
     return members
 
@@ -412,27 +415,28 @@ def process_workspaces(
 
     # Apply Defaulting Rules
     for ws_name, ws_info in workspaces.items():
-        if workspace_repo_count[ws_name] == 0:
-            discovered = workspace_discovered_members[ws_name]
-            if len(discovered) == 1:
-                # Auto-create implicit repo for the only project
-                project_name = list(discovered.keys())[0]
-                implicit_tag = struct(
-                    workspace = ws_name,
-                    projects = [project_name],
-                    repo = ws_name,
-                    dependency_groups = ["default"],
-                    flags = [],
-                    settings = {},
-                    constraint_values = [],
-                    platform = None,
-                )
-                member_tags.append(struct(tag = implicit_tag, module = ws_info.module))
-                workspace_repo_count[ws_name] += 1
-            elif len(discovered) > 1:
-                fail("workspace '{}' contains multiple projects but has no repo tags.".format(ws_name))
-            else:
-                fail("workspace '{}' contains no projects.".format(ws_name))
+        if workspace_repo_count[ws_name] != 0:
+            continue
+        discovered = workspace_discovered_members[ws_name]
+        if not discovered:
+            fail("workspace '{}' contains no projects.".format(ws_name))
+        if len(discovered) > 1:
+            fail("workspace '{}' contains multiple projects but has no repo tags.".format(ws_name))
+
+        # Auto-create implicit repo for the only project
+        project_name = list(discovered.keys())[0]
+        implicit_tag = struct(
+            workspace = ws_name,
+            projects = [project_name],
+            repo = ws_name,
+            dependency_groups = ["default"],
+            flags = [],
+            settings = {},
+            constraint_values = [],
+            platform = None,
+        )
+        member_tags.append(struct(tag = implicit_tag, module = ws_info.module))
+        workspace_repo_count[ws_name] += 1
 
     for tag_info in member_tags:
         tag = tag_info.tag
@@ -442,17 +446,15 @@ def process_workspaces(
 
         projects = getattr(tag, "projects", [])
         if not projects:
-            if len(discovered) == 1:
-                projects = [list(discovered.keys())[0]]
-            else:
+            if len(discovered) != 1:
                 fail("projects list is empty but workspace '{}' has {} members".format(ws_name, len(discovered)))
+            projects = [list(discovered.keys())[0]]
 
         repo = tag.repo
         if not repo:
-            if workspace_repo_count[ws_name] == 1:
-                repo = ws_name
-            else:
+            if workspace_repo_count[ws_name] != 1:
                 fail("repo name is required for repo tags in workspace '{}' (multiple repo tags exist)".format(ws_name))
+            repo = ws_name
 
         # Build complete tag
         new_tag = struct(
