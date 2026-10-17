@@ -186,9 +186,7 @@ def _get_archive_file_content(archive_path: Path, target_filename: str, source_d
             for name in z.namelist():
                 if _matches(name):
                     return z.read(name).decode("utf-8")
-        return ""
-
-    if archive_path.name.endswith((".tar.gz", ".tgz", ".tar.bz2", ".tar")):
+    elif archive_path.name.endswith((".tar.gz", ".tgz", ".tar.bz2", ".tar")):
         with tarfile.open(archive_path) as t:
             for member in t.getmembers():
                 if not (member.isfile() and _matches(member.name)):
