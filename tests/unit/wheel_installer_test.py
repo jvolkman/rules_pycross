@@ -39,7 +39,7 @@ class WheelInstallerWheelDirTest(unittest.TestCase):
     def test_wheel_dir_finds_single_wheel(self):
         """--wheel-dir should find the single .whl file in the directory."""
         self._create_dummy_wheel()
-        args = _parse_args(
+        args = parse_flags(
             [
                 "--wheel-dir",
                 str(self.wheel_dir),
@@ -77,17 +77,17 @@ class WheelInstallerArgParsingTest(unittest.TestCase):
     def test_wheel_and_wheel_dir_are_optional(self):
         """Both --wheel and --wheel-dir should be optional."""
         # Just --wheel-dir
-        args = _parse_args(["--wheel-dir", "/tmp/wh", "--directory", "/tmp/out"])
+        args = parse_flags(["--wheel-dir", "/tmp/wh", "--directory", "/tmp/out"])
         self.assertEqual(args.wheel_dir, Path("/tmp/wh"))
         self.assertIsNone(args.wheel)
 
         # Just --wheel
-        args = _parse_args(["--wheel", "/tmp/foo.whl", "--directory", "/tmp/out"])
+        args = parse_flags(["--wheel", "/tmp/foo.whl", "--directory", "/tmp/out"])
         self.assertEqual(args.wheel, Path("/tmp/foo.whl"))
         self.assertIsNone(args.wheel_dir)
 
 
-def _parse_args(argv):
+def parse_flags(argv):
     """Helper to import and call the argument parser."""
     import argparse
 

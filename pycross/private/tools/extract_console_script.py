@@ -1,5 +1,6 @@
 import argparse
 import configparser
+import os
 import sys
 from pathlib import Path
 
@@ -59,8 +60,6 @@ def main():
         f.write(f"import {module}\n")
         f.write("if __name__ == '__main__':\n")
         f.write(f"    sys.exit({module}.{function}())\n")
-
-    import os
 
     os.chmod(out_path, 0o755)
 

@@ -7,6 +7,33 @@ It produces:
   - `package_repo_dispatch.bzl`: exports PACKAGE_REPO_HOOKS mapping backend names to package repo hook functions
 """
 
+def _render_hook_dispatch(doc_title, hook_desc, var_name, bzl_map, fn_map, hook_suffix, rule_names):
+    lines = [
+        '"""Generated {} dispatch table. Do not edit."""'.format(doc_title),
+        "",
+    ]
+    load_aliases = {}
+    for rule_name in sorted(bzl_map.keys()):
+        bzl_file = bzl_map[rule_name]
+        fn_name = fn_map.get(rule_name, rule_name.replace("_build", hook_suffix))
+        alias = "{}_{}".format(hook_suffix, rule_name)
+        lines.append('load("{}", {} = "{}")'.format(bzl_file, alias, fn_name))
+        load_aliases[rule_name] = alias
+
+    lines.extend([
+        "",
+        "# Maps backend rule names to their {} functions.".format(hook_desc),
+        "{} = {{".format(var_name),
+    ])
+    for rule_name in sorted(rule_names):
+        if rule_name in load_aliases:
+            lines.append('    "{}": {},'.format(rule_name, load_aliases[rule_name]))
+    lines.extend([
+        "}",
+        "",
+    ])
+    return "\n".join(lines)
+
 def _backend_registry_repo_impl(rctx):
     # Emit registry.bzl with the three constants.
     lines = [
@@ -47,68 +74,24 @@ def _backend_registry_repo_impl(rctx):
 
     rctx.file("registry.bzl", "\n".join(lines))
 
-    # Emit sdist_dispatch.bzl with per-backend repo rule mappings.
-    dispatch_lines = [
-        '"""Generated sdist repo rule dispatch table. Do not edit."""',
-        "",
-    ]
-
-    # Collect unique (bzl_file, symbol) pairs for backends that have custom sdist hooks.
-    load_aliases = {}  # rule_name -> alias symbol
-    for rule_name in sorted(rctx.attr.sdist_hook_bzl.keys()):
-        bzl_file = rctx.attr.sdist_hook_bzl[rule_name]
-        fn_name = rctx.attr.sdist_hook_fn.get(rule_name, rule_name.replace("_build", "_sdist_hook"))
-        alias = "_sdist_hook_{}".format(rule_name)
-        dispatch_lines.append('load("{}", {} = "{}")'.format(bzl_file, alias, fn_name))
-        load_aliases[rule_name] = alias
-
-    dispatch_lines.extend([
-        "",
-        "# Maps backend rule names to their sdist hook functions.",
-        "SDIST_HOOKS = {",
-    ])
-
-    for rule_name in sorted(rctx.attr.backend_configs.keys()):
-        if rule_name in load_aliases:
-            dispatch_lines.append('    "{}": {},'.format(rule_name, load_aliases[rule_name]))
-
-    dispatch_lines.extend([
-        "}",
-        "",
-    ])
-
-    rctx.file("sdist_dispatch.bzl", "\n".join(dispatch_lines))
-
-    # Emit package_repo_dispatch.bzl with per-backend package repo hook mappings.
-    package_dispatch_lines = [
-        '"""Generated package repo hook dispatch table. Do not edit."""',
-        "",
-    ]
-
-    package_load_aliases = {}  # rule_name -> alias symbol
-    for rule_name in sorted(rctx.attr.package_repo_hook_bzl.keys()):
-        bzl_file = rctx.attr.package_repo_hook_bzl[rule_name]
-        fn_name = rctx.attr.package_repo_hook_fn.get(rule_name, rule_name.replace("_build", "_package_repo_hook"))
-        alias = "_package_repo_hook_{}".format(rule_name)
-        package_dispatch_lines.append('load("{}", {} = "{}")'.format(bzl_file, alias, fn_name))
-        package_load_aliases[rule_name] = alias
-
-    package_dispatch_lines.extend([
-        "",
-        "# Maps backend rule names to their package repo hook functions.",
-        "PACKAGE_REPO_HOOKS = {",
-    ])
-
-    for rule_name in sorted(rctx.attr.backend_configs.keys()):
-        if rule_name in package_load_aliases:
-            package_dispatch_lines.append('    "{}": {},'.format(rule_name, package_load_aliases[rule_name]))
-
-    package_dispatch_lines.extend([
-        "}",
-        "",
-    ])
-
-    rctx.file("package_repo_dispatch.bzl", "\n".join(package_dispatch_lines))
+    rctx.file("sdist_dispatch.bzl", _render_hook_dispatch(
+        "sdist repo rule",
+        "sdist hook",
+        "SDIST_HOOKS",
+        rctx.attr.sdist_hook_bzl,
+        rctx.attr.sdist_hook_fn,
+        "_sdist_hook",
+        rctx.attr.backend_configs.keys(),
+    ))
+    rctx.file("package_repo_dispatch.bzl", _render_hook_dispatch(
+        "package repo hook",
+        "package repo hook",
+        "PACKAGE_REPO_HOOKS",
+        rctx.attr.package_repo_hook_bzl,
+        rctx.attr.package_repo_hook_fn,
+        "_package_repo_hook",
+        rctx.attr.backend_configs.keys(),
+    ))
     rctx.file("BUILD.bazel", """\
 load("@bazel_skylib//:bzl_library.bzl", "bzl_library")
 

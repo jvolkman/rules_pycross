@@ -25,8 +25,6 @@ def _pycross_wheel_zipimport_library_impl(ctx):
         progress_message = "Linking/Copying wheel for %s" % ctx.attr.name,
     )
 
-    extra_files = []
-
     # TODO: Is there a more correct way to get this runfiles-relative import path?
     imp = paths.join(
         ctx.label.workspace_name or ctx.workspace_name,  # Default to the local workspace.
@@ -37,9 +35,9 @@ def _pycross_wheel_zipimport_library_impl(ctx):
     merged = merge_py_providers(
         ctx,
         ctx.attr.deps,
-        direct_sources = [stable_wheel] + extra_files,
+        direct_sources = [stable_wheel],
         direct_imports = [imp],
-        base_runfiles = ctx.runfiles(files = [stable_wheel] + extra_files),
+        base_runfiles = ctx.runfiles(files = [stable_wheel]),
         has_py3_only_sources = True,
     )
 

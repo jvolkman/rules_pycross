@@ -231,10 +231,11 @@ def collect_markers(ctx):
                 vi = runtime.interpreter_version_info
                 if not python_version:
                     python_version = "{}.{}".format(vi.major, vi.minor)
+                full_ver = _format_full_version(vi)
                 if not python_full_version:
-                    python_full_version = _format_full_version(vi)
+                    python_full_version = full_ver
                 if not implementation_version:
-                    implementation_version = _format_full_version(vi)
+                    implementation_version = full_ver
 
     # Fall back to target flags.
     if not python_version:

@@ -101,67 +101,19 @@ runpy.run_path(tool_path, run_name="__main__")
 
     return result
 
-def _get_python_interpreter_attr(rctx):
-    """A helper function for getting the `python_interpreter` attribute or its default.
-
-    Args:
-      rctx (repository_ctx): Handle to the rule repository context.
-
-    Returns:
-      str: The attribute value or its default.
-    """
-    if rctx.attr.python_interpreter:
-        return rctx.attr.python_interpreter
-
-    if "win" in rctx.os.name:
-        return "python.exe"
-    else:
-        return "python3"
-
 def _resolve_python_interpreter(rctx):
-    """Helper function to find the python interpreter from the common attributes
+    """Resolve the configured python_interpreter_target path."""
+    python_interpreter = rctx.path(rctx.attr.python_interpreter_target)
+    if hasattr(rctx, "watch"):
+        rctx.watch(python_interpreter)
 
-    Args:
-      rctx: Handle to the rule repository context.
-
-    Returns:
-      Python interpreter path.
-    """
-    python_interpreter = _get_python_interpreter_attr(rctx)
-
-    if rctx.attr.python_interpreter_target != None:
-        python_interpreter = rctx.path(rctx.attr.python_interpreter_target)
-        if hasattr(rctx, "watch"):
-            rctx.watch(python_interpreter)
-
-        # Keep the logical external-repository path. Resolving it can embed a
-        # transient repository contents-cache UUID in generated files.
-        return python_interpreter
-
-    elif "/" not in python_interpreter:
-        found_python_interpreter = rctx.which(python_interpreter)
-        if not found_python_interpreter:
-            fail("python interpreter `{}` not found in PATH".format(python_interpreter))
-        python_interpreter = found_python_interpreter
-
-    return python_interpreter.realpath
+    # Keep the logical external-repository path. Resolving it can embed a
+    # transient repository contents-cache UUID in generated files.
+    return python_interpreter
 
 def _interpreter_identity(rctx, python_executable):
-    """Describes the interpreter without referring to a host-specific path.
-
-    Args:
-      rctx: Handle to the rule repository context.
-      python_executable: The resolved interpreter path.
-
-    Returns:
-      str: The interpreter's label (or path, if found on PATH) and version.
-    """
-    if rctx.attr.python_interpreter_target != None:
-        # A canonical label is the same on every machine.
-        location = str(rctx.attr.python_interpreter_target)
-    else:
-        # An interpreter found on PATH is host-specific anyway.
-        location = str(python_executable)
+    """Describes the interpreter without referring to a host-specific path."""
+    location = str(rctx.attr.python_interpreter_target)
 
     # The label does not change across patch releases, so include the version.
     result = rctx.execute([
@@ -215,7 +167,6 @@ pycross_internal_repo = repository_rule(
         "python_defs_file": attr.label(
             allow_single_file = True,
         ),
-        "python_interpreter": attr.string(),
     },
 )
 

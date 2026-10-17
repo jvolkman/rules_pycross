@@ -16,45 +16,6 @@ def validate_transition_attrs(tag, tag_name):
     if has_platform and (has_flags or has_constraints):
         fail("Tag '{}' cannot specify both 'platform' and ('flags', 'settings' or 'constraint_values')".format(tag_name))
 
-def package_annotation(
-        build_mode = "auto",
-        extra_build_tools = [],
-        build_tools_repo = None,
-        build_target = None,
-        ignore_dependencies = [],
-        extra_dependencies = [],
-        install_exclude_globs = [],
-        post_install_patches = [],
-        pre_build_patches = [],
-        site_hooks = [],
-        build_backend = None,
-        site_paths = [],
-        bin_paths = [],
-        data_paths = [],
-        include_paths = [],
-        wheel_library_tags = [],
-        precompile = ""):
-    """Annotations to apply to individual packages."""
-    return json.encode(struct(
-        build_mode = build_mode,
-        extra_build_tools = extra_build_tools,
-        build_tools_repo = build_tools_repo,
-        build_target = build_target,
-        ignore_dependencies = ignore_dependencies,
-        extra_dependencies = extra_dependencies,
-        install_exclude_globs = install_exclude_globs,
-        post_install_patches = post_install_patches,
-        pre_build_patches = pre_build_patches,
-        site_hooks = site_hooks,
-        build_backend = build_backend,
-        site_paths = site_paths,
-        bin_paths = bin_paths,
-        data_paths = data_paths,
-        include_paths = include_paths,
-        wheel_library_tags = wheel_library_tags,
-        precompile = precompile,
-    ))
-
 def check_unique_repo_name(owners, module_name, repo_name):
     """Check uniqueness using a repo name string instead of a tag."""
     if repo_name in owners:
@@ -202,33 +163,13 @@ def resolve_member_project_file(lock_file_label, member_path):
     else:
         return lock_file_label.relative("//:pyproject.toml")
 
-def get_member_transition_attrs(members_tag, override_tag):
-    """Merge transition attrs from a default members tag and optional override tag.
-
-    Args:
-        members_tag: The default tag providing fallback transition values.
-        override_tag: The override tag providing explicit transition values.
-
-    Returns:
-        A dict with merged transition attributes (flags, constraint_values, platform).
-    """
-    has_explicit_flags = override_tag and (getattr(override_tag, "flags", []) or getattr(override_tag, "settings", {}))
-    has_explicit_constraints = override_tag and getattr(override_tag, "constraint_values", [])
-    has_explicit_platform = override_tag and getattr(override_tag, "platform", None)
-
-    if override_tag and (has_explicit_flags or has_explicit_constraints or has_explicit_platform):
-        return dict(
-            flags = getattr(override_tag, "flags", []),
-            settings = getattr(override_tag, "settings", {}),
-            constraint_values = [str(c) for c in getattr(override_tag, "constraint_values", [])],
-            platform = str(override_tag.platform) if override_tag.platform else None,
-        )
-
+def get_member_transition_attrs(tag):
+    """Extract normalized transition attributes from a repo tag."""
     return dict(
-        flags = getattr(members_tag, "flags", []) if members_tag else [],
-        settings = getattr(members_tag, "settings", {}) if members_tag else {},
-        constraint_values = [str(c) for c in getattr(members_tag, "constraint_values", [])] if members_tag else [],
-        platform = str(members_tag.platform) if members_tag and getattr(members_tag, "platform", None) else None,
+        flags = getattr(tag, "flags", []),
+        settings = getattr(tag, "settings", {}),
+        constraint_values = [str(c) for c in getattr(tag, "constraint_values", [])],
+        platform = str(tag.platform) if getattr(tag, "platform", None) else None,
     )
 
 def register_workspace_repo(
@@ -270,7 +211,7 @@ def register_workspace_repo(
 
     parsed = parse_dependency_group_entries(raw_dependency_groups)
 
-    model = dict(
+    lock_model_structs[repo_name] = struct(
         model_type = model_type,
         extra_project_files = [str(f) for f in extra_project_files],
         lock_file = str(ws_tag.lock_file),
@@ -282,7 +223,6 @@ def register_workspace_repo(
         include_transitive = parsed.include_transitive,
         transitive_testonly = parsed.transitive_testonly,
     )
-    lock_model_structs[repo_name] = json.encode(model)
 
 def parse_dependency_group_entries(raw_groups):
     """Parse dependency group entries with last-wins testonly semantics.
@@ -384,7 +324,7 @@ def process_repo(
         print("WARNING: repo '{}' in workspace '{}' specifies both wildcard ('*') and specific dependency groups ({}). The specific groups are redundant.".format(tag.repo, ws_name, raw_groups))
 
     # Get transition attrs
-    transition_attrs = get_member_transition_attrs(None, tag)
+    transition_attrs = get_member_transition_attrs(tag)
 
     register_workspace_repo(
         lock_owners,

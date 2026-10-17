@@ -1,12 +1,12 @@
 """Provides a config flag that returns the micro-level version of the selected rules_python toolchain."""
 
-load("@bazel_skylib//rules:common_settings.bzl", "BuildSettingInfo")
 load("@pythons_hub//:versions.bzl", "MINOR_MAPPING", "PYTHON_VERSIONS")
+load(":pep508_marker_values.bzl", "flag_value")
 load(":python_versions.bzl", "resolve_interpreter_version")
 
 def _rules_python_interpreter_version_impl(ctx):
     value = resolve_interpreter_version(
-        _flag_value(ctx.attr._python_version_flag),
+        flag_value(ctx.attr._python_version_flag),
         ctx.attr.default_version,
         MINOR_MAPPING,
         PYTHON_VERSIONS,
@@ -22,12 +22,6 @@ _rules_python_interpreter_version = rule(
         ),
     },
 )
-
-def _flag_value(s):
-    if config_common.FeatureFlagInfo in s:
-        return s[config_common.FeatureFlagInfo].value
-    else:
-        return s[BuildSettingInfo].value
 
 def rules_python_interpreter_version(name, default_version, **kwargs):
     """Builds a target that returns the currently-selected rules_pycross toolchain version.

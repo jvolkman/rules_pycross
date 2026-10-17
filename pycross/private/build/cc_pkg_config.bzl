@@ -1,16 +1,8 @@
 """A rule that generates a pkg-config (.pc) file dynamically from a CcInfo provider target."""
 
+load("@bazel_skylib//lib:collections.bzl", "collections")
 load("@rules_cc//cc/common:cc_info.bzl", "CcInfo")
 load("//pycross/private/build:cc_toolchain_util.bzl", "absolutize_path_in_str", "get_libraries")
-
-def _uniq(lst):
-    res = []
-    seen = {}
-    for item in lst:
-        if item not in seen:
-            seen[item] = True
-            res.append(item)
-    return res
 
 def _get_lib_flag(file):
     basename = file.basename
@@ -36,7 +28,7 @@ def _pycross_cc_pkg_config_impl(ctx):
         comp_ctx.includes.to_list() +
         comp_ctx.quote_includes.to_list()
     )
-    unique_includes = _uniq(raw_includes)
+    unique_includes = collections.uniq(raw_includes)
     cflags = []
     for inc in unique_includes:
         abs_inc = absolutize_path_in_str(ctx.workspace_name, "$$EXT_BUILD_ROOT$$/", inc)
@@ -50,8 +42,8 @@ def _pycross_cc_pkg_config_impl(ctx):
         lib_dirs.append(lib.dirname)
         lib_flags.append(_get_lib_flag(lib))
 
-    unique_lib_dirs = _uniq(lib_dirs)
-    unique_lib_flags = _uniq(lib_flags)
+    unique_lib_dirs = collections.uniq(lib_dirs)
+    unique_lib_flags = collections.uniq(lib_flags)
 
     libs_field_parts = []
     for lib_dir in unique_lib_dirs:

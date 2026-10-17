@@ -34,7 +34,6 @@ A Package object represents a specific version of a Python package and its depen
 - `python_versions`: (String) PEP 440 specifier string for supported Python versions for this package.
 - `dependencies`: (Array of Dependency Objects) List of dependencies required by this package.
 - `files`: (Array of File Objects) List of files (wheels, sdists) available for this package.
-- `python_version_specifiers`: (Array of Strings, Optional) List of PEP 440 specifier strings derived from resolution markers.
 - `source_dir`: (String, Optional) Subdirectory within the source (e.g., for git dependencies).
 
 ---

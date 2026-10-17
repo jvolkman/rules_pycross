@@ -11,16 +11,15 @@ Supports pins from:
 """
 
 load("@pypackaging.bzl", "pypackaging")
-load("@toml.bzl//toml:toml.bzl", "decode")
 load(
     ":translator_common.bzl",
     "canonicalize_name",
     "compute_requested_dependency_groups",
+    "detect_package_marker_forks",
     "parse_pep508_requirement",
+    "read_project_and_lock",
     "record_root_marker",
-    "resolution_marker_constraint_name",
     "resolve_lock_graph",
-    "select_project_file",
     "sha256_from_string",
 )
 
@@ -296,23 +295,16 @@ def _parse_poetry_pin(pin, pin_info, pinned_package_specs, track_pin, enrich_onl
 
     if type(pin_info) == "string":
         track_spec(_poetry_constraint_to_pep440(pin_info), "")
-    elif type(pin_info) == "dict":
-        if "path" in pin_info or pin_info.get("optional"):
-            return
-        track_spec(_poetry_constraint_to_pep440(pin_info.get("version", "*")), _extract_poetry_marker(pin_info), pin_info.get("extras", []))
-    elif type(pin_info) == "list":
-        # List-of-dicts: each entry may have version, markers, url, python, etc.
-        for entry in pin_info:
-            if type(entry) != "dict":
-                continue
-            if "path" in entry or entry.get("optional"):
-                continue
-            version = entry.get("version", "*")
-            spec = _poetry_constraint_to_pep440(version)
-
-            if enrich_only and existing_spec and not spec:
-                continue
-            track_spec(spec, _extract_poetry_marker(entry), entry.get("extras", []))
+        return
+    entries = [pin_info] if type(pin_info) == "dict" else (pin_info if type(pin_info) == "list" else [])
+    for entry in entries:
+        if type(entry) != "dict" or "path" in entry or entry.get("optional"):
+            continue
+        track_spec(
+            _poetry_constraint_to_pep440(entry.get("version", "*")),
+            _extract_poetry_marker(entry),
+            entry.get("extras", []),
+        )
 
 def translate_poetry(project_dict, lock_dict, lock_model):
     """Translates Poetry project and lock data to raw_lock_data dict.
@@ -589,32 +581,7 @@ def translate_poetry(project_dict, lock_dict, lock_model):
             pkg["source_dir"] = source["subdirectory"]
         packages.append(pkg)
 
-    # Detect resolution-marker forks: same package name with multiple versions.
-    resolution_marker_exprs = {}
-    _fork_versions = {}  # {name: {version: marker_expr}}
-    for pkg in packages:
-        marker = pkg.get("markers", "")
-        if not marker:
-            continue
-        _fork_versions.setdefault(pkg["name"], {})[pkg["version"]] = marker
-
-    _fork_constraints = {}  # {name: {version: constraint_name}}
-    for fname, versions in _fork_versions.items():
-        if len(versions) <= 1:
-            continue  # Single version, no fork.
-        for fversion, marker_expr in versions.items():
-            cname = resolution_marker_constraint_name(fname, fversion)
-            _fork_constraints.setdefault(fname, {})[fversion] = cname
-            resolution_marker_exprs[cname] = marker_expr
-
-    # If forks were detected, update pinned_package_specs to use conditional pins.
-    for fname, version_constraints in _fork_constraints.items():
-        conditional_pins = {}
-        for fversion, cname in version_constraints.items():
-            conditional_pins[cname] = "===" + fversion
-        for pin_name in list(pinned_package_specs.keys()):
-            if pin_name == fname or pin_name.startswith(fname + "["):
-                pinned_package_specs[pin_name] = conditional_pins
+    resolution_marker_exprs = detect_package_marker_forks(packages, pinned_package_specs)
 
     return resolve_lock_graph(
         packages = packages,
@@ -623,38 +590,10 @@ def translate_poetry(project_dict, lock_dict, lock_model):
         strict_dependencies = True,
         resolution_marker_exprs = resolution_marker_exprs,
         testonly_pins = testonly_pin_names,
-        root_dependency_markers = {
-            name: markers
-            for name, markers in root_dependency_markers.items()
-            if markers != None
-        },
+        root_dependency_markers = root_dependency_markers,
     )
 
 def repo_create_poetry_model(rctx, extra_project_files, lock_file, lock_model):
-    """Run the Poetry translator in pure Starlark.
-
-    Args:
-        rctx: The repository_ctx or module_ctx object.
-        extra_project_files: List of extra pyproject.toml files.
-        lock_file: The lock file.
-        lock_model: a struct containing the same attrs as the pycross_poetry_lock_model rule.
-
-    Returns:
-        The raw_lock_data dict.
-    """
-
-    projects = getattr(lock_model, "projects", [])
-    project_file = select_project_file(rctx, extra_project_files, lock_file, projects)
-
-    project_dict = {}
-    if project_file:
-        project_path = rctx.path(project_file)
-        if project_path.exists:
-            project_dict = decode(rctx.read(project_path))
-
-    lock_path = rctx.path(lock_file)
-    if not lock_path.exists:
-        fail("Lock file not found: {}. Ensure poetry.lock exists at the expected location.".format(lock_file))
-
-    lock_dict = decode(rctx.read(lock_path))
+    """Run the Poetry translator in pure Starlark."""
+    project_dict, lock_dict = read_project_and_lock(rctx, extra_project_files, lock_file, lock_model, "poetry.lock")
     return translate_poetry(project_dict, lock_dict, lock_model)

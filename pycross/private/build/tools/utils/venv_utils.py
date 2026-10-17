@@ -221,12 +221,18 @@ def build_crossenv_venv(ctx: BuildContext) -> None:
         print(cpe.output.decode(), file=sys.stderr)
         raise
 
-    ctx.crossenv_active = True
-
     site_dir = find_site_dir(ctx.env_dir)
     _link_merge_multiple(ctx.python_paths, site_dir)
 
     inject_python_wrapper(ctx)
+
+
+def build_crossenv_or_standard_venv(ctx: BuildContext) -> None:
+    """Build a crossenv venv when cross-compiling, or a standard venv otherwise."""
+    if ctx.exec_python != ctx.target_python or ctx.bazel_config.get("always_use_crossenv"):
+        build_crossenv_venv(ctx)
+    else:
+        build_standard_venv(ctx)
 
 
 def inject_python_wrapper(ctx: BuildContext) -> None:

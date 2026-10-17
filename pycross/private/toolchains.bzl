@@ -24,7 +24,6 @@ def _toolchains_impl(module_ctx):
                     python_toolchains_repo = "@python_versions",
                     pythons_hub_repo = "@pythons_hub",
                     requested_python_versions = tag.python_versions,
-                    platforms = tag.platforms,
                 )
             else:
                 _empty_repo(name = tag.name)

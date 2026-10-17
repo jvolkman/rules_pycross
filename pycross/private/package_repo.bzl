@@ -18,13 +18,33 @@ The file structure is as follows:
 load("@pycross_backends//:package_repo_dispatch.bzl", "PACKAGE_REPO_HOOKS")
 load("@pypackaging.bzl", "pypackaging")
 load(":resolved_lock_renderer.bzl", "render_lock_bzl")
-load(":util.bzl", "parse_package_key", "underscore_name")
+load(":util.bzl", "parse_package_key", "underscore_name", "variant_item_qname")
 
 def _normalize_name(name):
     return pypackaging.utils.canonicalize_name(name)
 
-def _underscore_name(name):
-    return underscore_name(name)
+# Annotation fields that affect pycross_wheel_library targets.
+# If these differ between members for the same pkg_key, the package
+# is "conflicting" and gets per-member variant targets.
+ANNOTATION_FIELDS = ["post_install_patches", "install_exclude_globs", "wheel_library_tags", "precompile"]
+
+def has_annotation_conflict(entries):
+    """Return True if any entry in [(member, pkg_data), ...] differs on ANNOTATION_FIELDS.
+
+    Args:
+        entries: List of (member_name, pkg_data) tuples for the same package key.
+
+    Returns:
+        True if any annotation field differs across members, False otherwise.
+    """
+    if len(entries) <= 1:
+        return False
+    _, first_data = entries[0]
+    for _, other_data in entries[1:]:
+        for field in ANNOTATION_FIELDS:
+            if (first_data.get(field) or None) != (other_data.get(field) or None):
+                return True
+    return False
 
 def _backend_tool_deps_labels(tool_packages, packages, build_repo):
     """Resolve backend tool_packages to `@<build_repo>//<pkg>:pkg` labels for packages present in `packages`.
@@ -45,7 +65,7 @@ def _backend_tool_deps_labels(tool_packages, packages, build_repo):
     labels = []
     for pkg in tool_packages:
         if _normalize_name(pkg) in known_base_packages:
-            labels.append("@{}//{}:pkg".format(build_repo, _underscore_name(pkg)))
+            labels.append("@{}//{}:pkg".format(build_repo, underscore_name(pkg)))
     return labels
 
 # Visible for testing
@@ -55,16 +75,9 @@ def _merge_dependencies(first_data, entries):
     merged = dict(first_data)
 
     for _, pkg_data in entries[1:]:
-        if not merged.get("site_paths") and pkg_data.get("site_paths"):
-            merged["site_paths"] = pkg_data["site_paths"]
-        if not merged.get("bin_paths") and pkg_data.get("bin_paths"):
-            merged["bin_paths"] = pkg_data["bin_paths"]
-        if not merged.get("data_paths") and pkg_data.get("data_paths"):
-            merged["data_paths"] = pkg_data["data_paths"]
-        if not merged.get("include_paths") and pkg_data.get("include_paths"):
-            merged["include_paths"] = pkg_data["include_paths"]
-        if not merged.get("sdist_file") and pkg_data.get("sdist_file"):
-            merged["sdist_file"] = pkg_data["sdist_file"]
+        for field in ("site_paths", "bin_paths", "data_paths", "include_paths", "sdist_file"):
+            if not merged.get(field) and pkg_data.get(field):
+                merged[field] = pkg_data[field]
 
     # Merge marker_dependencies: union across workspace members, dedup by (key, marker).
     seen_marker_deps = {}  # (key, marker) -> entry
@@ -97,11 +110,6 @@ def _package_repo_impl(rctx):
     # are wrapped in a workspace with one member.
     packages = {}
 
-    # Annotation fields that affect pycross_wheel_library targets.
-    # If these differ between members for the same pkg_key, the package
-    # is "conflicting" and gets per-member variant targets.
-    _ANNOTATION_FIELDS = ["post_install_patches", "install_exclude_globs", "wheel_library_tags", "precompile"]
-
     # First pass: collect per-member package data, environment names, and cycle groups.
     member_packages = {}  # member_name -> {pkg_key -> pkg_data}
     cycle_groups = {}  # group_name -> [pkg_key, ...]
@@ -110,7 +118,7 @@ def _package_repo_impl(rctx):
     variant_sets = []  # list of {"qnames": [...], "default": "..."}
     variant_sets_seen = {}  # frozenset key -> True (dedup across members)
     for member in rctx.attr.member_lock_files.keys():
-        if hasattr(rctx.attr, "member_lock_data") and rctx.attr.member_lock_data and member in rctx.attr.member_lock_data:
+        if member in rctx.attr.member_lock_data:
             member_lock = json.decode(rctx.attr.member_lock_data[member])
         else:
             lock_label = rctx.attr.member_lock_files[member]
@@ -120,10 +128,7 @@ def _package_repo_impl(rctx):
             set_qnames = []
             set_default = ""
             for item in variant_set["items"]:
-                if item["kind"] == "project":
-                    qname = "package_{}".format(item["package"])
-                else:
-                    qname = "{}_{}".format(item["kind"], item["name"])
+                qname = variant_item_qname(item)
                 variant_items[qname] = True
                 set_qnames.append(qname)
                 if item.get("default", False):
@@ -148,9 +153,6 @@ def _package_repo_impl(rctx):
             resolution_marker_exprs[cname] = expr
 
     # Second pass: detect conflicts and build merged package set.
-    # conflicts maps pkg_key -> [member_name, ...] for packages with
-    # differing annotations across members.
-    conflicts = {}
     all_pkg_keys = {}  # pkg_key -> list of (member, pkg_data)
     for member, pkgs in member_packages.items():
         for pkg_key, pkg_data in pkgs.items():
@@ -162,36 +164,20 @@ def _package_repo_impl(rctx):
             packages[pkg_key] = dict(entries[0][1])
             continue
 
-        # Check annotation fields for differences.
-        _, first_data = entries[0]
-        has_annotation_conflict = False
-        for _, other_data in entries[1:]:
-            for field in _ANNOTATION_FIELDS:
-                if (first_data.get(field) or None) != (other_data.get(field) or None):
-                    has_annotation_conflict = True
-                    break
-            if has_annotation_conflict:
-                break
-
-        if has_annotation_conflict:
+        if has_annotation_conflict(entries):
             # Conflicting annotations: create per-member variant packages.
-            conflicts[pkg_key] = [member for member, _ in entries]
             for member, pkg_data in entries:
                 variant_key = "{}__via_{}".format(pkg_key, member)
                 packages[variant_key] = dict(pkg_data)
         else:
-            packages[pkg_key] = _merge_dependencies(first_data, entries)
+            packages[pkg_key] = _merge_dependencies(entries[0][1], entries)
 
     # Workspace repos have no pins — each thin repo has its own.
     lock = {
         "packages": packages,
-        "pins": {},
         "cycle_groups": cycle_groups,
         "resolution_marker_exprs": resolution_marker_exprs,
     }
-
-    repo_map = rctx.attr.repo_map
-    sdist_map = rctx.attr.sdist_map
 
     rctx.file("REPO.bazel", "")
 
@@ -209,8 +195,7 @@ def _package_repo_impl(rctx):
         "_lock/lock.bzl",
         render_lock_bzl(
             lock,
-            repo_map,
-            sdist_map,
+            rctx.attr.repo_map,
             rctx.name,
             variant_resolvers = [":" + r for r in resolver_names],
         ),
@@ -358,7 +343,7 @@ def _package_repo_impl(rctx):
         pkg_name_part = parts.name
         pkg_version = parts.version
         norm_name = _normalize_name(pkg_name_part)
-        us_name = _underscore_name(pkg_name_part)
+        us_name = underscore_name(pkg_name_part)
         whldir_name = "{}-{}.whldir".format(us_name, pkg_version)
 
         # Versioned target: _wheel:name@version -> pycross_wheel_dir wrapping //_lock:_wheel_{key}
@@ -480,9 +465,6 @@ package_repo = repository_rule(
         ),
         "repo_map": attr.string_dict(
             doc = "Maps file keys to their repository label strings (e.g. 'foo_wheel' -> '@pypi_foo//:wheel').",
-        ),
-        "sdist_map": attr.string_dict(
-            doc = "Maps sdist file keys to their built wheel label strings (e.g. 'foo_sdist' -> '@foo_sdist_repo//:wheel').",
         ),
         "backend_configs": attr.string_dict(
             doc = "Maps pycross rule names to JSON-encoded config dicts with 'rule_bzl' and 'tool_packages'.",

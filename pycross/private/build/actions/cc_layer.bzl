@@ -2,12 +2,11 @@
 
 load("@bazel_skylib//lib:shell.bzl", "shell")
 load("@bazel_tools//tools/cpp:toolchain_utils.bzl", "find_cpp_toolchain")
-load("@rules_cc//cc/common:cc_common.bzl", "cc_common")
 load("@rules_cc//cc/common:cc_info.bzl", "CcInfo")
 load(
     "//pycross/private/build:cc_toolchain_util.bzl",
-    "CC_DISABLED_FEATURES",
     "absolutize_path_in_str",
+    "configure_features",
     "get_flags_info",
     "get_headers",
     "get_libraries",
@@ -177,15 +176,7 @@ def extract_cc_layer(ctx, native_deps, copts, linkopts, meson_properties = {}):
         expanded_meson_properties[key] = ctx.expand_make_variables("meson_properties", value, make_vars)
 
     runtime_libs = []
-    disabled_features = ctx.disabled_features + CC_DISABLED_FEATURES
-    if not ctx.coverage_instrumented():
-        disabled_features.append("coverage")
-    feature_configuration = cc_common.configure_features(
-        ctx = ctx,
-        cc_toolchain = cpp_toolchain,
-        requested_features = ctx.features,
-        unsupported_features = disabled_features,
-    )
+    feature_configuration = configure_features(ctx, cpp_toolchain)
     runtime_depset = cpp_toolchain.static_runtime_lib(
         feature_configuration = feature_configuration,
     )
@@ -196,24 +187,16 @@ def extract_cc_layer(ctx, native_deps, copts, linkopts, meson_properties = {}):
             )
         transitive_files.append(runtime_depset)
 
-    cc_config = {
-        "CC": sysconfig_vars["CC"],
-        "CXX": sysconfig_vars["CXX"],
-        "CFLAGS": sysconfig_vars["CFLAGS"],
-        "CXXFLAGS": sysconfig_vars["CXXFLAGS"],
-        "CCSHARED": sysconfig_vars["CCSHARED"],
-        "LDFLAGS": sysconfig_vars["LDFLAGS"],
-        "LDSHAREDFLAGS": sysconfig_vars["LDSHAREDFLAGS"],
-        "AR": sysconfig_vars["AR"],
-        "ARFLAGS": sysconfig_vars["ARFLAGS"],
-        "include_dirs": include_dirs,
-        "static_libs": static_libs,
-        "shared_libs": shared_libs,
-        "runtime_libs": runtime_libs,
-        "target_os": target_os,
-        "target_cpu": target_cpu,
-        "meson_properties": expanded_meson_properties,
-    }
+    cc_config = dict(
+        sysconfig_vars,
+        include_dirs = include_dirs,
+        static_libs = static_libs,
+        shared_libs = shared_libs,
+        runtime_libs = runtime_libs,
+        target_os = target_os,
+        target_cpu = target_cpu,
+        meson_properties = expanded_meson_properties,
+    )
 
     config_json = ctx.actions.declare_file(ctx.label.name + "_cc_config.json")
     ctx.actions.write(config_json, json.encode(cc_config))

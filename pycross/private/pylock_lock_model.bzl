@@ -5,16 +5,15 @@ Parses pylock.toml files and produces the raw_lock.json structure consumed by
 lock_resolver.bzl.
 """
 
-load("@toml.bzl//toml:toml.bzl", "decode")
 load(
     ":translator_common.bzl",
     "archive_extension",
     "canonicalize_name",
     "compute_requested_dependency_groups",
     "parse_pep508_requirement",
+    "read_project_and_lock",
     "record_root_marker",
     "resolution_marker_constraint_name",
-    "select_project_file",
     "sha256_from_string",
 )
 load(":util.bzl", "parse_package_key", "url_decode_filename")
@@ -212,57 +211,30 @@ def translate_pylock(lock_dict, project_dict, lock_model):
 
         files = []
 
-        # Wheels
-        for wheel in pkg.get("wheels", pkg.get("wheel", [])):
-            if type(wheel) != "dict":
-                continue
-            filename = wheel.get("name", wheel.get("file", ""))
-            if not filename and "url" in wheel:
-                filename = url_decode_filename(wheel["url"].split("?")[0].split("#")[0].split("/")[-1])
-            url = wheel.get("url", "")
-            urls = [url] if url else []
-            hash_str = wheel.get("hash", "")
-            if hash_str and hash_str.startswith("sha256:"):
-                hash_val = hash_str[7:]
-            else:
-                hashes = wheel.get("hashes", {})
-                hash_val = hashes.get("sha256", "")
-            file_entry = {
-                "name": filename,
-                "sha256": hash_val,
-                "package_name": name,
-                "package_version": version,
-            }
-            if urls:
-                file_entry["urls"] = urls
-            files.append(file_entry)
-
-        # Sdists
+        # Wheels and sdists
         sdist_list = pkg.get("sdists", pkg.get("sdist", []))
         if type(sdist_list) == "dict":
             sdist_list = [sdist_list]
-        for sdist in sdist_list:
-            if type(sdist) != "dict":
+        for artifact in list(pkg.get("wheels", pkg.get("wheel", []))) + list(sdist_list):
+            if type(artifact) != "dict":
                 continue
-            filename = sdist.get("name", sdist.get("file", ""))
-            if not filename and "url" in sdist:
-                filename = url_decode_filename(sdist["url"].split("?")[0].split("#")[0].split("/")[-1])
-            url = sdist.get("url", "")
-            urls = [url] if url else []
-            hash_str = sdist.get("hash", "")
+            filename = artifact.get("name", artifact.get("file", ""))
+            if not filename and "url" in artifact:
+                filename = url_decode_filename(artifact["url"].split("?")[0].split("#")[0].split("/")[-1])
+            url = artifact.get("url", "")
+            hash_str = artifact.get("hash", "")
             if hash_str and hash_str.startswith("sha256:"):
                 hash_val = hash_str[7:]
             else:
-                hashes = sdist.get("hashes", {})
-                hash_val = hashes.get("sha256", "")
+                hash_val = artifact.get("hashes", {}).get("sha256", "")
             file_entry = {
                 "name": filename,
                 "sha256": hash_val,
                 "package_name": name,
                 "package_version": version,
             }
-            if urls:
-                file_entry["urls"] = urls
+            if url:
+                file_entry["urls"] = [url]
             files.append(file_entry)
 
         # Direct references: a VCS checkout or a source archive URL.
@@ -503,30 +475,6 @@ def translate_pylock(lock_dict, project_dict, lock_model):
     return result
 
 def repo_create_pylock_model(rctx, extra_project_files, lock_file, lock_model):
-    """Run the pylock translator in pure Starlark.
-
-    Args:
-        rctx: The repository_ctx or module_ctx object.
-        extra_project_files: List of extra pyproject.toml files.
-        lock_file: The lock file.
-        lock_model: a struct containing the same attrs as the pycross_pylock_lock_model rule.
-
-    Returns:
-        The raw_lock_data dict.
-    """
-
-    projects = getattr(lock_model, "projects", [])
-    project_file = select_project_file(rctx, extra_project_files, lock_file, projects)
-
-    project_dict = {}
-    if project_file:
-        project_path = rctx.path(project_file)
-        if project_path.exists:
-            project_dict = decode(rctx.read(project_path))
-
-    lock_path = rctx.path(lock_file)
-    if not lock_path.exists:
-        fail("Lock file not found: {}. Ensure the pylock file exists at the expected location.".format(lock_file))
-
-    lock_dict = decode(rctx.read(lock_path))
+    """Run the pylock translator in pure Starlark."""
+    project_dict, lock_dict = read_project_and_lock(rctx, extra_project_files, lock_file, lock_model, "the pylock file")
     return translate_pylock(lock_dict, project_dict, lock_model)

@@ -1331,12 +1331,10 @@ def _test_uv_issue_1510_verbatim_lock_impl(env, target):
     rendered_lock = render_lock_bzl(
         {
             "packages": resolved.packages,
-            "pins": {},
             "cycle_groups": resolved.cycle_groups,
             "resolution_marker_exprs": resolved.resolution_marker_exprs,
         },
         repo_map,
-        None,
         "ws",
         variant_resolvers = [":_resolver_group_cpu_group_cuda"],
     )

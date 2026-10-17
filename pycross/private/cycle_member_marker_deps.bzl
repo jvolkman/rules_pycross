@@ -356,9 +356,7 @@ def pycross_cycle_member_marker_deps(
         **kwargs: Marker value attrs (sys_platform, os_name, etc.) passed
                   through to pycross_cycle_dep_needed.
     """
-    other_members = [m for m in sorted(edges.keys()) if m != member]
-
-    if not other_members:
+    if len(edges) <= 1:
         # Single-member cycle (shouldn't happen, but handle gracefully).
         native.alias(
             name = name,

@@ -189,6 +189,5 @@ pycross_toolchains_repo = repository_rule(
         "python_toolchains_repo": attr.label(),
         "pythons_hub_repo": attr.label(),
         "requested_python_versions": attr.string_list(),
-        "platforms": attr.string_list(),
     },
 )

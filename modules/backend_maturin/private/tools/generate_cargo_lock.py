@@ -7,6 +7,7 @@ import subprocess
 import sys
 import tarfile
 import tempfile
+import tomllib
 from pathlib import Path
 
 
@@ -67,31 +68,17 @@ def main():
         cargo_toml_dir = sdist_root
         pyproject_path = sdist_root / "pyproject.toml"
         if pyproject_path.exists():
-            try:
-                import tomllib
-            except ImportError:
+            with open(pyproject_path, "rb") as f:
                 try:
-                    from pip._vendor import tomli as tomllib
-                except ImportError:
-                    tomllib = None
-
-            if tomllib:
-                with open(pyproject_path, "rb") as f:
-                    try:
-                        pyproject_data = tomllib.load(f)
-                        manifest_path = (
-                            pyproject_data.get("tool", {}).get("maturin", {}).get("manifest-path", "Cargo.toml")
-                        )
-                        cargo_toml_dir = (sdist_root / manifest_path).parent
-                    except Exception as e:
-                        print(
-                            f"Warning: Failed to parse pyproject.toml: {e}. Searching for Cargo.toml instead.",
-                            file=sys.stderr,
-                        )
-                        cargo_toml_dir = None
-            else:
-                print("Warning: tomllib/tomli not found. Searching for Cargo.toml instead.", file=sys.stderr)
-                cargo_toml_dir = None
+                    pyproject_data = tomllib.load(f)
+                    manifest_path = pyproject_data.get("tool", {}).get("maturin", {}).get("manifest-path", "Cargo.toml")
+                    cargo_toml_dir = (sdist_root / manifest_path).parent
+                except Exception as e:
+                    print(
+                        f"Warning: Failed to parse pyproject.toml: {e}. Searching for Cargo.toml instead.",
+                        file=sys.stderr,
+                    )
+                    cargo_toml_dir = None
 
         if not cargo_toml_dir or not (cargo_toml_dir / "Cargo.toml").exists():
             # Fallback to searching

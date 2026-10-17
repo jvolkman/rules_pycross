@@ -7,43 +7,12 @@ import shutil
 import stat
 import sys
 import textwrap
+import tomllib
 from pathlib import Path
 
+from pycross.private.build.tools.utils.cc_toolchain import parse_ar_and_guess_ranlib
 from pycross.private.build.tools.utils.context import load_layers
 from pycross.private.build.tools.utils.context import resolve_sandbox_path
-
-
-# NOTE: The canonical version of this logic is parse_ar_and_guess_ranlib in
-# pycross/private/build/tools/utils/cc_toolchain.py. This copy avoids a
-# cross-module import. Keep both copies in sync.
-def guess_ranlib_path(ar: str | None) -> Path | None:
-    """Guess ranlib path from AR path."""
-    if not ar:
-        return None
-    ar_list = shlex.split(ar)
-    if not ar_list:
-        return None
-
-    ar_path = Path(ar_list[0])
-    if not ar_path.is_absolute():
-        resolved_ar = shutil.which(str(ar_path))
-        if resolved_ar:
-            ar_path = Path(resolved_ar)
-
-    stem = ar_path.stem
-    if stem == "ar" or stem.endswith(("-ar", "_ar")):
-        ranlib_stem = stem[:-2] + "ranlib"
-        ranlib_name = ranlib_stem + ar_path.suffix
-
-        if ar_path.is_absolute():
-            guessed_ranlib_path = ar_path.parent / ranlib_name
-            if guessed_ranlib_path.exists():
-                return guessed_ranlib_path
-        else:
-            resolved_ranlib = shutil.which(ranlib_name)
-            if resolved_ranlib:
-                return Path(resolved_ranlib)
-    return None
 
 
 def get_pyo3_version(cargo_dir: Path):
@@ -53,11 +22,6 @@ def get_pyo3_version(cargo_dir: Path):
         return None
 
     try:
-        try:
-            import tomllib
-        except ImportError:
-            from pip._vendor import tomli as tomllib
-
         with open(lock_path, "rb") as f:
             lock_data = tomllib.load(f)
         for pkg in lock_data.get("package", []):
@@ -184,7 +148,7 @@ def configure_rust_env(ctx, cargo_dir: Path, is_maturin: bool = False):
     ctx.build_env[f"CARGO_TARGET_{triple_env_name}_LINKER"] = wrapped_cxx
 
     ar = ctx.sysconfig_vars.get("AR")
-    ranlib_path = guess_ranlib_path(ar)
+    _, ranlib_path = parse_ar_and_guess_ranlib(ar)
 
     for triple in (target_triple, target_triple.replace("-", "_")):
         ctx.build_env[f"CC_{triple}"] = ctx.sysconfig_vars["CC"]

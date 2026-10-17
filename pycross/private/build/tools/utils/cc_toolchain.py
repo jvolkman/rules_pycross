@@ -282,11 +282,5 @@ def setup_cc_layer(ctx: BuildContext, cc_config: Dict[str, Any]) -> None:
             "PATH": f"{layer_bin_dir.absolute()}:{ctx.build_env.get('PATH', '')}",
             "PYCROSS_LIBRARY_PATH": str(layer_lib_dir.absolute()),
             "PYCROSS_INCLUDE_PATH": ":".join(include_paths),
-            "CC": ctx.sysconfig_vars["CC"],
-            "CXX": ctx.sysconfig_vars["CXX"],
-            "CFLAGS": ctx.sysconfig_vars["CFLAGS"],
-            "CXXFLAGS": ctx.sysconfig_vars["CXXFLAGS"],
-            "LDFLAGS": ctx.sysconfig_vars["LDFLAGS"],
-            "LDSHAREDFLAGS": ctx.sysconfig_vars["LDSHAREDFLAGS"],
         }
     )

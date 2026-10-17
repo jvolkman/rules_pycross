@@ -61,49 +61,23 @@ def encode_build_system_attrs(tag):
     """
     backend_attrs = {}
 
-    copts = getattr(tag, "copts", None)
-    if copts != None and copts:
-        backend_attrs["copts"] = json.encode(copts)
+    for attr_name in ("copts", "linkopts", "config_settings", "build_env", "repair_exclude_globs"):
+        val = getattr(tag, attr_name, None)
+        if val:
+            backend_attrs[attr_name] = json.encode(val)
 
-    linkopts = getattr(tag, "linkopts", None)
-    if linkopts != None and linkopts:
-        backend_attrs["linkopts"] = json.encode(linkopts)
-
-    native_deps = getattr(tag, "native_deps", None)
-    if native_deps != None and native_deps:
-        backend_attrs["native_deps"] = json.encode([str(dep) for dep in native_deps])
-
-    config_settings = getattr(tag, "config_settings", None)
-    if config_settings != None and config_settings:
-        backend_attrs["config_settings"] = json.encode(config_settings)
+    for attr_name in ("native_deps", "data", "pre_build_hooks", "post_build_hooks", "path_tools"):
+        val = getattr(tag, attr_name, None)
+        if val:
+            backend_attrs[attr_name] = json.encode([str(dep) for dep in val])
 
     tool_deps = getattr(tag, "tool_deps", None)
-    if tool_deps != None and tool_deps:
+    if tool_deps:
         backend_attrs["tool_deps"] = json.encode({name: str(label) for name, label in tool_deps.items()})
 
-    build_env = getattr(tag, "build_env", None)
-    if build_env != None and build_env:
-        backend_attrs["build_env"] = json.encode(build_env)
-
-    data = getattr(tag, "data", None)
-    if data != None and data:
-        backend_attrs["data"] = json.encode([str(dep) for dep in data])
-
-    pre_build_hooks = getattr(tag, "pre_build_hooks", None)
-    if pre_build_hooks != None and pre_build_hooks:
-        backend_attrs["pre_build_hooks"] = json.encode([str(dep) for dep in pre_build_hooks])
-
-    post_build_hooks = getattr(tag, "post_build_hooks", None)
-    if post_build_hooks != None and post_build_hooks:
-        backend_attrs["post_build_hooks"] = json.encode([str(dep) for dep in post_build_hooks])
-
-    path_tools = getattr(tag, "path_tools", None)
-    if path_tools != None and path_tools:
-        backend_attrs["path_tools"] = json.encode([str(dep) for dep in path_tools])
-
-    repair_exclude_globs = getattr(tag, "repair_exclude_globs", None)
-    if repair_exclude_globs != None and repair_exclude_globs:
-        backend_attrs["repair_exclude_globs"] = json.encode(repair_exclude_globs)
+    cargo_lock = getattr(tag, "cargo_lock", None)
+    if cargo_lock:
+        backend_attrs["cargo_lock"] = json.encode(str(cargo_lock))
 
     return backend_attrs
 
@@ -145,7 +119,7 @@ def make_override_extension(backend_name, build_backend, override_attrs):
         implementation = _impl,
         tag_classes = dict(
             override = tag_class(
-                doc = "Specify %s-specific package overrides." % backend_name,
+                doc = "Specify %s-specific package overrides." % backend_name.replace("_", "-"),
                 attrs = override_attrs,
             ),
         ),

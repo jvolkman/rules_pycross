@@ -12,7 +12,7 @@ The file structure is:
 - _variants/BUILD.bazel    - Aliases for bool_flag and config_setting targets for variant selection.
 """
 
-load(":util.bzl", "has_build_fallback", "parse_package_key", "underscore_name")
+load(":util.bzl", "is_platform_specific", "parse_package_key", "underscore_name", "variant_item_qname")
 
 _requirement_func = """\
 load("@pypackaging.bzl", "pypackaging")
@@ -31,20 +31,13 @@ def requirement(pkg):
     return "@@{repo_name}//%s" % (pkg_dir)
 """
 
-def _is_platform_specific(pkg):
-    """Check if a package is unavailable in some target environments."""
-    if pkg.get("availability_markers"):
-        return True
-    has_wheels = bool(pkg.get("wheel_candidates"))
-    return has_wheels and not has_build_fallback(pkg)
-
 def _is_key_platform_specific(packages, pkg_key):
-    """Like _is_platform_specific, but an extras key also inherits its base package's availability."""
-    if _is_platform_specific(packages.get(pkg_key, {})):
+    """Like is_platform_specific, but an extras key also inherits its base package's availability."""
+    if is_platform_specific(packages.get(pkg_key, {})):
         return True
     parts = parse_package_key(pkg_key)
     if parts.extra:
-        return _is_platform_specific(packages.get("{}@{}".format(parts.name, parts.version), {}))
+        return is_platform_specific(packages.get("{}@{}".format(parts.name, parts.version), {}))
     return False
 
 def _requirements_bzl(rctx, pins, packages, testonly_pins = {}):
@@ -285,9 +278,21 @@ def _pin_build(target_name, pin_target_dict, package, workspace_repo, workspace_
         file_rule = "pycross_file_proxy"
     lines.append("")
 
-    # Emit the platform attr whenever using transitioning rules.
-    emit_platform = bool(target_platform)
     has_transition = bool(transition_bzl or target_platform)
+
+    def _emit_proxy(rule_name, name, actual, is_testonly = False, trailing_blank = True):
+        lines.extend([
+            rule_name + "(",
+            '    name = "{}",'.format(name),
+            "    actual = {}".format(actual),
+        ])
+        if is_testonly:
+            lines.append("    testonly = True,")
+        if target_platform:
+            lines.append('    platform = "{}",'.format(target_platform))
+        lines.append(")")
+        if trailing_blank:
+            lines.append("")
 
     actual_pkg = None
     if lock_target_dict:
@@ -299,42 +304,14 @@ def _pin_build(target_name, pin_target_dict, package, workspace_repo, workspace_
             "",
         ])
         actual_pkg = _proxy_actual(actual_lines, lock_target_dict, lock_ref, "", workspace_repo, "pkg", actual_pkg_ref, has_transition = has_transition, is_aggregated = has_aggregated_variant, default_variants = default_variants, aggregated_keys = aggregated_keys)
-        lines.extend([
-            lib_rule + "(",
-            '    name = "{}",'.format(_safe_name(target_name, "pkg")),
-            "    actual = {}".format(actual_pkg),
-        ])
-        if testonly:
-            lines.append("    testonly = True,")
-        if emit_platform:
-            lines.append('    platform = "{}",'.format(target_platform))
-        lines.extend([
-            ")",
-            "",
-        ])
+        _emit_proxy(lib_rule, _safe_name(target_name, "pkg"), actual_pkg, is_testonly = testonly)
+
         actual_wheel = _proxy_actual(actual_lines, pin_target_dict, wheel_ref, "", workspace_repo, "wheel", actual_pkg_ref, has_transition = has_transition, default_variants = default_variants)
-        lines.extend([
-            file_rule + "(",
-            '    name = "{}",'.format(_safe_name(target_name, "wheel")),
-            "    actual = {}".format(actual_wheel),
-        ])
-        if emit_platform:
-            lines.append('    platform = "{}",'.format(target_platform))
-        lines.extend([
-            ")",
-            "",
-        ])
+        _emit_proxy(file_rule, _safe_name(target_name, "wheel"), actual_wheel)
+
         actual_dist_info = _proxy_actual(actual_lines, lock_target_dict, lock_ref + "_dist_info_", "", workspace_repo, "dist_info", actual_pkg_ref, has_transition = has_transition, default_variants = default_variants)
+        _emit_proxy(file_rule, _safe_name(target_name, "dist_info"), actual_dist_info)
         lines.extend([
-            file_rule + "(",
-            '    name = "{}",'.format(_safe_name(target_name, "dist_info")),
-            "    actual = {}".format(actual_dist_info),
-        ])
-        if emit_platform:
-            lines.append('    platform = "{}",'.format(target_platform))
-        lines.extend([
-            ")",
-            "",
             "alias(",
             '    name = "{}",'.format(_safe_name(target_name, "data")),
             '    actual = ":{}",'.format(_safe_name(target_name, "pkg")),
@@ -352,19 +329,7 @@ def _pin_build(target_name, pin_target_dict, package, workspace_repo, workspace_
                 ])
             else:
                 actual_all = _proxy_actual(actual_lines, lock_target_dict, lock_ref, "", workspace_repo, "all", actual_pkg_ref, has_transition = has_transition, default_variants = default_variants)
-                lines.extend([
-                    lib_rule + "(",
-                    '    name = "[]",',
-                    "    actual = {}".format(actual_all),
-                ])
-                if testonly:
-                    lines.append("    testonly = True,")
-                if emit_platform:
-                    lines.append('    platform = "{}",'.format(target_platform))
-                lines.extend([
-                    ")",
-                    "",
-                ])
+                _emit_proxy(lib_rule, "[]", actual_all, is_testonly = testonly)
 
         effective_sdist_dict = sdist_target_dict
         if effective_sdist_dict == None and package.get("sdist_file"):
@@ -383,35 +348,13 @@ def _pin_build(target_name, pin_target_dict, package, workspace_repo, workspace_
                 all_target_dict = pin_target_dict,
                 fallback_target = _NO_MATCH_ERROR_TARGET,
             )
-            lines.extend([
-                file_rule + "(",
-                '    name = "{}",'.format(_safe_name(target_name, "sdist")),
-                "    actual = {}".format(actual_sdist),
-            ])
-            if emit_platform:
-                lines.append('    platform = "{}",'.format(target_platform))
-            lines.extend([
-                ")",
-                "",
-            ])
+            _emit_proxy(file_rule, _safe_name(target_name, "sdist"), actual_sdist)
 
     extras_dict = extras_dict or {}
     extras_maybe_keys = extras_maybe_keys or {}
     for extra_name, extra_target_dict in sorted(extras_dict.items()):
         actual_extra = _proxy_actual(actual_lines, extra_target_dict, lock_ref, "", workspace_repo, "extra_{}".format(extra_name), actual_pkg_ref, has_transition = has_transition, default_variants = default_variants)
-        lines.extend([
-            lib_rule + "(",
-            '    name = "[{}]",'.format(extra_name),
-            "    actual = {}".format(actual_extra),
-        ])
-        if testonly:
-            lines.append("    testonly = True,")
-        if emit_platform:
-            lines.append('    platform = "{}",'.format(target_platform))
-        lines.extend([
-            ")",
-            "",
-        ])
+        _emit_proxy(lib_rule, "[{}]".format(extra_name), actual_extra, is_testonly = testonly)
         if extra_name in extras_maybe_keys and extras_maybe_keys[extra_name] and extra_target_dict:
             if has_transition:
                 actual_extra_maybe = "extra_{}_maybe".format(extra_name)
@@ -425,19 +368,7 @@ def _pin_build(target_name, pin_target_dict, package, workspace_repo, workspace_
                     default_variants = default_variants,
                     helper_prefix = "_maybe_extra_{}".format(extra_name),
                 )
-                lines.extend([
-                    lib_rule + "(",
-                    '    name = "[{}]_maybe",'.format(extra_name),
-                    '    actual = "{}:{}",'.format(actual_pkg_ref, actual_extra_maybe),
-                ])
-                if testonly:
-                    lines.append("    testonly = True,")
-                if emit_platform:
-                    lines.append('    platform = "{}",'.format(target_platform))
-                lines.extend([
-                    ")",
-                    "",
-                ])
+                _emit_proxy(lib_rule, "[{}]_maybe".format(extra_name), '"{}:{}",'.format(actual_pkg_ref, actual_extra_maybe), is_testonly = testonly)
             else:
                 _emit_maybe_alias(
                     lines,
@@ -464,19 +395,7 @@ def _pin_build(target_name, pin_target_dict, package, workspace_repo, workspace_
                 default_variants = default_variants,
                 helper_prefix = "_maybe",
             )
-            lines.extend([
-                lib_rule + "(",
-                '    name = "{}",'.format(maybe_name),
-                '    actual = "{}:maybe",'.format(actual_pkg_ref),
-            ])
-            if testonly:
-                lines.append("    testonly = True,")
-            if emit_platform:
-                lines.append('    platform = "{}",'.format(target_platform))
-            lines.extend([
-                ")",
-                "",
-            ])
+            _emit_proxy(lib_rule, maybe_name, '"{}:maybe",'.format(actual_pkg_ref), is_testonly = testonly)
         else:
             _emit_maybe_alias(
                 lines,
@@ -515,17 +434,16 @@ def _thin_package_repo_impl(rctx):
         if type(pins[pin_name]) == "string":
             pins[pin_name] = {"": pins[pin_name]}
 
-    # Build a set of default variant item qualified names.
+    # Build sets of all and default variant item qualified names.
     # When a VariantItem has default=True, its target becomes //conditions:default
     # in the select(), so builds without explicit flags use the default variant.
+    variant_items = {}  # qualified_name -> True
     default_variants = {}  # qualified_name -> True
     for variant_set in lock.get("variants", []):
         for item in variant_set["items"]:
+            qname = variant_item_qname(item)
+            variant_items[qname] = True
             if item.get("default", False):
-                if item["kind"] == "project":
-                    qname = "package_{}".format(item["package"])
-                else:
-                    qname = "{}_{}".format(item["kind"], item["name"])
                 default_variants[qname] = True
 
     # Conflicts dict: pkg_key -> [member_names...] for packages with
@@ -838,32 +756,25 @@ pycross_transitioning_file_proxy = rule(
             package = packages.get(first_target, {})
         us_name = underscore_name(base_pin_name)
 
-        # For conflicting packages, use the member-specific variant target.
-        workspace_lock_target_dict = None
-        if base_target_dict:
-            workspace_lock_target_dict = {}
-            for constraint, base_target in base_target_dict.items():
-                if base_target in conflicts:
-                    workspace_lock_target_dict[constraint] = "{}__via_{}".format(base_target, rctx.attr.member_name)
-                else:
-                    workspace_lock_target_dict[constraint] = base_target
+        def _remap_conflicts(target_dict):
+            return {
+                constraint: "{}__via_{}".format(t, rctx.attr.member_name) if t in conflicts else t
+                for constraint, t in target_dict.items()
+            }
 
-        has_aggregated_variant = False
-        if base_target_dict:
-            for constraint, base_target in base_target_dict.items():
-                if base_target in base_packages_with_extras:
-                    has_aggregated_variant = True
+        # For conflicting packages, use the member-specific variant target.
+        workspace_lock_target_dict = _remap_conflicts(base_target_dict) if base_target_dict else None
+
+        has_aggregated_variant = bool(base_target_dict) and any([
+            t in base_packages_with_extras
+            for t in base_target_dict.values()
+        ])
 
         # Handle extras variants
-        extras_dict = {}
-        for extra_name, extra_target_dict in group["extras"].items():
-            new_target_dict = {}
-            for constraint, extra_target in extra_target_dict.items():
-                if extra_target in conflicts:
-                    new_target_dict[constraint] = "{}__via_{}".format(extra_target, rctx.attr.member_name)
-                else:
-                    new_target_dict[constraint] = extra_target
-            extras_dict[extra_name] = new_target_dict
+        extras_dict = {
+            extra_name: _remap_conflicts(extra_target_dict)
+            for extra_name, extra_target_dict in group["extras"].items()
+        }
 
         # Determine which branches of this pin are platform-specific or have sdists.
         maybe_available_keys = []
@@ -871,7 +782,7 @@ pycross_transitioning_file_proxy = rule(
         if base_target_dict:
             for constraint, pkg_key in base_target_dict.items():
                 pkg = packages.get(pkg_key, {})
-                if _is_platform_specific(pkg):
+                if is_platform_specific(pkg):
                     lock_key = workspace_lock_target_dict[constraint] if workspace_lock_target_dict else pkg_key
                     maybe_available_keys.append(lock_key)
                 if pkg.get("sdist_file"):
@@ -916,18 +827,7 @@ pycross_transitioning_file_proxy = rule(
     # _variants/ BUILD: alias bool_flag and config_setting targets
     # from the workspace repo so users can reference @<thin_repo>//_variants:<name>
     # in platform(flags=[...]) and transitions without needing the workspace repo directly.
-    raw_variants = lock.get("variants", [])
-    if raw_variants:
-        # Collect unique variant items across all variant sets.
-        variant_items = {}  # qualified_name -> True
-        for variant_set in raw_variants:
-            for item in variant_set["items"]:
-                if item["kind"] == "project":
-                    qname = "package_{}".format(item["package"])
-                else:
-                    qname = "{}_{}".format(item["kind"], item["name"])
-                variant_items[qname] = True
-
+    if variant_items:
         variant_lines = [
             'package(default_visibility = ["//visibility:public"])',
             "",
@@ -1104,9 +1004,6 @@ thin_package_repo = repository_rule(
             mandatory = True,
             doc = "Name of the workspace package_repo that contains the shared _lock/ targets.",
         ),
-        "default_build_tools_repo": attr.string(
-            doc = "Name of the workspace to pull sdist build tool dependencies from.",
-        ),
         "member_name": attr.string(
             mandatory = True,
             doc = "User-facing repo name for this member (used in variant target naming).",
@@ -1142,7 +1039,7 @@ thin_package_repo = repository_rule(
 # Visible for testing
 pin_build_for_testing = _pin_build
 flag_values_for_testing = _flag_values
-is_platform_specific_for_testing = _is_platform_specific
+is_platform_specific_for_testing = is_platform_specific
 requirements_bzl_for_testing = _requirements_bzl
 packages_bzl_for_testing = _packages_bzl
 cargo_build_for_testing = _cargo_build

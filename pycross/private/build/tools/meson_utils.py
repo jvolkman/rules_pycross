@@ -143,9 +143,7 @@ def generate_cross_ini(ctx: BuildContext, cc_config: Optional[Dict[str, Any]] = 
     #
     # When allow_native_exec is set (via meson_properties), fall back to the
     # old behavior of allowing native execution when exec == target platform.
-    allow_native_exec = False
-    if cc_config:
-        allow_native_exec = cc_config.get("meson_properties", {}).get("_allow_native_exec") == "true"
+    allow_native_exec = cc_config.get("meson_properties", {}).get("_allow_native_exec") == "true"
 
     if allow_native_exec:
         needs_exe_wrapper = is_cross
@@ -209,15 +207,14 @@ def generate_cross_ini(ctx: BuildContext, cc_config: Optional[Dict[str, Any]] = 
     # Filter out internal properties (prefixed with _) that are used for
     # framework configuration and should not appear in the cross.ini.
     extra_properties_lines = []
-    if cc_config:
-        for key, value in cc_config.get("meson_properties", {}).items():
-            if key.startswith("_"):
-                continue
-            if "$$EXT_BUILD_ROOT$$" in value:
-                resolved = Path(replace_placeholder(ctx.prefix, value)).absolute().as_posix()
-            else:
-                resolved = value
-            extra_properties_lines.append(f"{key} = '{resolved}'")
+    for key, value in cc_config.get("meson_properties", {}).items():
+        if key.startswith("_"):
+            continue
+        if "$$EXT_BUILD_ROOT$$" in value:
+            resolved = Path(replace_placeholder(ctx.prefix, value)).absolute().as_posix()
+        else:
+            resolved = value
+        extra_properties_lines.append(f"{key} = '{resolved}'")
     extra_properties_str = "\n".join(extra_properties_lines)
 
     cross_ini = f"""\

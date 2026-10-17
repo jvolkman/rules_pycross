@@ -10,15 +10,12 @@ load("@pycross_backends//:registry.bzl", "BACKEND_CONFIGS", "BACKEND_TO_RULE", "
 load("@pypackaging.bzl", "pypackaging")
 load("@rules_pycross//pycross/private:override_helpers.bzl", "merge_backend_overrides")
 load("@rules_pycross//pycross/private:sdist_repo.bzl", "pycross_sdist_repo")
-load("//pycross/private:package_repo.bzl", "package_repo")
+load("//pycross/private:package_repo.bzl", "has_annotation_conflict", "package_repo")
 load("//pycross/private:pypi_file.bzl", "pypi_file")
 load("//pycross/private:thin_package_repo.bzl", "thin_package_repo")
 load("//pycross/private:util.bzl", "key_name", "parse_package_key", "sanitize_name", "sdist_builds_disallowed")
 load("//pycross/private:wheel_file.bzl", "pycross_wheel_file")
 load(":git_file.bzl", "pycross_git_file")
-
-# Annotation fields that affect pycross_wheel_library targets.
-_ANNOTATION_FIELDS = ["post_install_patches", "install_exclude_globs", "wheel_library_tags", "precompile"]
 
 def _disallowed_sdist_repo_impl(rctx):
     fail(
@@ -161,7 +158,7 @@ def create_repos(
     _validate_override_packages(override_configs, all_resolved_locks, workspace_memberships)
 
     # Generate the lock repos and any remote package repos
-    per_repo_data = {}  # repo_name -> struct(repo_map, sdist_map, lock_file)
+    per_repo_data = {}  # repo_name -> struct(repo_map, lock_file, resolved_lock)
     created_sdist_repos = {}  # sdist_repo_name -> True, for workspace-level dedup
     for repo_name, lock_file in all_locks.items():
         resolved_lock = all_resolved_locks[repo_name]
@@ -229,8 +226,6 @@ def create_repos(
         # Pre-calculate known packages in this lock file to filter sdist build_requires
         known_packages = known_packages_by_repo[repo_name]
 
-        sdist_map = {}
-
         # Every repo has a workspace.
         workspace_name = workspace_memberships.get(repo_name, repo_name)
 
@@ -252,8 +247,6 @@ def create_repos(
                 lock_repo_for_deps,
                 sanitize_name(pkg_key),
             )
-            sdist_label_str = "@{}//:wheel".format(sdist_repo_name)
-            sdist_map[sdist_file_key] = sdist_label_str
 
             if sdist_repo_name in created_sdist_repos:
                 continue
@@ -302,20 +295,10 @@ def create_repos(
                     sdist_repo_attrs[attr_name] = pkg[attr_name]
 
             pkg_name = pypackaging.utils.canonicalize_name(parts.name)
-            pkg_overrides = {}
-
-            def _apply_scope_overrides(src_key):
-                if src_key not in override_configs:
-                    return
-                merged = merge_backend_overrides(override_configs[src_key], pkg_name, pkg_version)
-                for b_name, b_attrs in merged.items():
-                    pkg_overrides.setdefault(b_name, {}).update(b_attrs)
-
-            ws_key = workspace_name
-            _apply_scope_overrides(ws_key)
-
-            if pkg_overrides:
-                sdist_repo_attrs["override_backend_configs"] = json.encode(pkg_overrides)
+            if workspace_name in override_configs:
+                pkg_overrides = merge_backend_overrides(override_configs[workspace_name], pkg_name, pkg_version)
+                if pkg_overrides:
+                    sdist_repo_attrs["override_backend_configs"] = json.encode(pkg_overrides)
 
             if sdist_builds_disallowed(pkg):
                 pycross_disallowed_sdist_repo(
@@ -329,7 +312,6 @@ def create_repos(
         # Save per-repo data for workspace processing
         per_repo_data[repo_name] = struct(
             repo_map = repo_remote_files,
-            sdist_map = sdist_map,
             lock_file = lock_file,
             resolved_lock = resolved_lock,
         )
@@ -342,14 +324,10 @@ def create_repos(
     for workspace_name, member_repos in workspace_groups.items():
         workspace_repo_name = "{}__pkgs".format(workspace_name)
 
-        # Merge repo_maps and sdist_maps from all members
+        # Merge repo_maps from all members
         merged_repo_map = {}
-        merged_sdist_map = {}
-
         for member in member_repos:
-            data = per_repo_data[member]
-            merged_repo_map.update(data.repo_map)
-            merged_sdist_map.update(data.sdist_map)
+            merged_repo_map.update(per_repo_data[member].repo_map)
 
         member_lock_files = {
             member: str(per_repo_data[member].lock_file)
@@ -357,42 +335,25 @@ def create_repos(
         }
 
         # Detect annotation conflicts using cached resolved lock data.
-        member_packages = {}  # member -> {pkg_key -> pkg_data}
-        for member in member_repos:
-            member_packages[member] = per_repo_data[member].resolved_lock.get("packages", {})
-
-        # Build a map of pkg_key -> [member, ...] for conflicting packages.
         all_pkg_keys = {}  # pkg_key -> list of (member, pkg_data)
-        for member, pkgs in member_packages.items():
-            for pkg_key, pkg_data in pkgs.items():
+        for member in member_repos:
+            for pkg_key, pkg_data in per_repo_data[member].resolved_lock.get("packages", {}).items():
                 all_pkg_keys.setdefault(pkg_key, []).append((member, pkg_data))
 
-        conflicts = {}  # pkg_key -> [member_name, ...]
-        for pkg_key, entries in all_pkg_keys.items():
-            if len(entries) <= 1:
-                continue
-            _, first_data = entries[0]
-            for _, other_data in entries[1:]:
-                for field in _ANNOTATION_FIELDS:
-                    if (first_data.get(field) or None) != (other_data.get(field) or None):
-                        conflicts[pkg_key] = [m for m, _ in entries]
-                        break
-                if pkg_key in conflicts:
-                    break
+        conflicts = {
+            pkg_key: [m for m, _ in entries]
+            for pkg_key, entries in all_pkg_keys.items()
+            if has_annotation_conflict(entries)
+        }
 
         # Compute per-package override configs for package and thin repo hooks.
-        ws_overrides = {}  # pkg_name -> {backend_name -> backend_attrs}
-        if workspace_name in override_configs:
-            for pkg_name, backends in override_configs[workspace_name].items():
-                for b_name, b_attrs in backends.items():
-                    ws_overrides.setdefault(pkg_name, {})[b_name] = dict(b_attrs)
+        ws_overrides = override_configs.get(workspace_name)
         ws_overrides_json = json.encode(ws_overrides) if ws_overrides else None
 
         package_repo_attrs = dict(
             name = workspace_repo_name,
             build_repo = "{}__build".format(workspace_name),
             repo_map = merged_repo_map,
-            sdist_map = merged_sdist_map,
             backend_configs = backend_configs_json,
             member_lock_files = member_lock_files,
         )
@@ -415,7 +376,6 @@ def create_repos(
                 conflicts = conflicts,
                 backend_configs = backend_configs_json,
             )
-            thin_repo_attrs["default_build_tools_repo"] = workspace_repo_name
             thin_repo_attrs["generate_root_aliases"] = True
 
             if member in repo_flags:
