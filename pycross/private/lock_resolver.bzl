@@ -545,8 +545,8 @@ def resolve(
     local_wheels_by_pkg = {}
     for filename, label in local_wheels.items():
         parsed = pypackaging.utils.parse_wheel_filename(filename)
-        name = pypackaging.utils.canonicalize_name(parsed.name)
-        version = parsed.version.version_str
+        name = parsed.name
+        version = pypackaging.version.to_string(parsed.version)
         pkg_key = "{}@{}".format(name, version)
         if pkg_key not in local_wheels_by_pkg:
             local_wheels_by_pkg[pkg_key] = {}
@@ -556,8 +556,8 @@ def resolve(
     for url, sha256 in remote_wheels.items():
         filename = url.split("/")[-1]
         parsed = pypackaging.utils.parse_wheel_filename(filename)
-        name = pypackaging.utils.canonicalize_name(parsed.name)
-        version = parsed.version.version_str
+        name = parsed.name
+        version = pypackaging.version.to_string(parsed.version)
         pkg_key = "{}@{}".format(name, version)
         if pkg_key not in remote_wheels_by_pkg:
             remote_wheels_by_pkg[pkg_key] = {}

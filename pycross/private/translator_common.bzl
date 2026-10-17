@@ -162,35 +162,11 @@ def parse_pep508_requirement(req_str):
     if parsed.specifier and parsed.specifier.specs:
         specifier_str = ",".join(["{}{}".format(s.operator, s.version) for s in parsed.specifier.specs])
 
-    # Replicate pypackaging logic to extract marker_str to maintain compatible interface
-    at_idx = req_str.find("@")
-    semi_idx = req_str.find(";")
-    marker_str = ""
-
-    if at_idx != -1 and (semi_idx == -1 or at_idx < semi_idx):
-        # URL requirement
-        right = req_str[at_idx + 1:].strip()
-        ws_idx = -1
-
-        # buildifier: disable=string-iteration
-        for i in range(len(right)):
-            if right[i] in " \t":
-                ws_idx = i
-                break
-        if ws_idx != -1:
-            rest = right[ws_idx:].strip()
-            if rest.startswith(";"):
-                marker_str = rest[1:].strip()
-    else:
-        # Specifier requirement
-        if semi_idx != -1:
-            marker_str = req_str[semi_idx + 1:].strip()
-
     return struct(
         name = parsed.name,
         extras = parsed.extras,
         specifier = specifier_str,
-        marker = marker_str,
+        marker = parsed.marker_str or "",
     )
 
 def _dependency_name_str(name, extra = ""):

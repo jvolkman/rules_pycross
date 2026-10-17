@@ -219,11 +219,11 @@ def _get_files_for_package(files, package_name, package_version):
         if filename.endswith(".whl"):
             # Parse wheel filename to check name and version
             parsed = pypackaging.utils.parse_wheel_filename(filename)
-            if parsed.name == package_name and parsed.version.version_str == package_version:
+            if parsed.name == package_name and pypackaging.version.to_string(parsed.version) == package_version:
                 result.append(f)
         elif filename.endswith(".tar.gz") or filename.endswith(".zip"):
             parsed = pypackaging.utils.parse_sdist_filename(filename)
-            if parsed.name == package_name and parsed.version.version_str == package_version:
+            if parsed.name == package_name and pypackaging.version.to_string(parsed.version) == package_version:
                 result.append(f)
         else:
             # Unknown format, include it
