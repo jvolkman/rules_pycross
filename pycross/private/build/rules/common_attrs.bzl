@@ -37,8 +37,10 @@ def resolve_path_tools(ctx):
             ))
             continue
 
-        files = target[DefaultInfo].files.to_list()
-        exe = target[DefaultInfo].files_to_run.executable or (files[0] if files else None)
+        exe = target[DefaultInfo].files_to_run.executable
+        if not exe:
+            files = target[DefaultInfo].files.to_list()
+            exe = files[0] if files else None
         if not exe:
             fail("Tool target must provide an executable: " + str(target.label))
         result.append(struct(

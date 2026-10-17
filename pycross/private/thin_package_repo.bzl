@@ -457,11 +457,12 @@ def _thin_package_repo_impl(rctx):
     grouped_pins = {}
     for pin_name, pin_target in pins.items():
         parts = parse_package_key(pin_name)
-        group = grouped_pins.setdefault(parts.name, {"base_target": None, "extras": {}})
+        if parts.name not in grouped_pins:
+            grouped_pins[parts.name] = {"base_target": None, "extras": {}}
         if parts.extra:
-            group["extras"][parts.extra] = pin_target
+            grouped_pins[parts.name]["extras"][parts.extra] = pin_target
         else:
-            group["base_target"] = pin_target
+            grouped_pins[parts.name]["base_target"] = pin_target
 
     root_build_lines = [
         'load("@rules_pycross//pycross/private:modules_mapping.bzl", "pycross_modules_mapping")',
