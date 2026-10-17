@@ -166,12 +166,10 @@ def _resolve_pylock_project_pins(project_dict, lock_model, lock_packages, deps_b
             for entry in entries:
                 if type(entry) == "string":
                     handle_dep_str(entry, is_testonly)
-                    continue
-                if type(entry) != "dict" or "include-group" not in entry:
-                    continue
-                for inc_dep in dev_deps.get(entry["include-group"], []):
-                    if type(inc_dep) == "string":
-                        handle_dep_str(inc_dep, is_testonly)
+                elif type(entry) == "dict" and "include-group" in entry:
+                    for inc_dep in dev_deps.get(entry["include-group"], []):
+                        if type(inc_dep) == "string":
+                            handle_dep_str(inc_dep, is_testonly)
 
     # Deduplicate
     root_package_names = {n: True for n in root_req_names}

@@ -84,23 +84,20 @@ def discover_uv_all_members(mctx, lock_file_label):
                 name = pkg["name"],
                 path = source["editable"],
             ))
-            continue
-        if "virtual" not in source:
-            continue
-
-        # Only include virtual members that have actual dependencies.
-        # A virtual workspace root with no dependencies is just the workspace
-        # definition and shouldn't produce a lock repo.
-        has_deps = (
-            pkg.get("dependencies") or
-            pkg.get("optional-dependencies") or
-            pkg.get("dev-dependencies")
-        )
-        if has_deps:
-            members.append(struct(
-                name = pkg["name"],
-                path = source["virtual"],
-            ))
+        elif "virtual" in source:
+            # Only include virtual members that have actual dependencies.
+            # A virtual workspace root with no dependencies is just the workspace
+            # definition and shouldn't produce a lock repo.
+            has_deps = (
+                pkg.get("dependencies") or
+                pkg.get("optional-dependencies") or
+                pkg.get("dev-dependencies")
+            )
+            if has_deps:
+                members.append(struct(
+                    name = pkg["name"],
+                    path = source["virtual"],
+                ))
 
     return members
 

@@ -715,23 +715,20 @@ def resolve(
                     fork_targets[cname] = base_key
             if fork_targets and len(fork_targets) == len(versions):
                 pins[package_pin_name] = fork_targets
-                if is_testonly:
-                    testonly_pins_set[package_pin_name] = True
-                continue
-
-            if len(versions) > 1:
-                version_tuples = [(pypackaging.version.parse(v).key, v) for v in versions.keys()]
-                chosen_version = sorted(version_tuples)[-1][1]
-
-                # buildifier: disable=print
-                print("WARNING: Multiple versions of {} found in transitive dependencies. Aliasing to latest: {}".format(package_pin_name, chosen_version))
             else:
-                chosen_version = versions.keys()[0]
-            base_key = "{}@{}".format(package_pin_name, chosen_version)
-            if base_key in packages_by_package_key:
-                pins[package_pin_name] = {"": base_key}
-                if is_testonly:
-                    testonly_pins_set[package_pin_name] = True
+                if len(versions) > 1:
+                    version_tuples = [(pypackaging.version.parse(v).key, v) for v in versions.keys()]
+                    chosen_version = sorted(version_tuples)[-1][1]
+
+                    # buildifier: disable=print
+                    print("WARNING: Multiple versions of {} found in transitive dependencies. Aliasing to latest: {}".format(package_pin_name, chosen_version))
+                else:
+                    chosen_version = versions.keys()[0]
+                base_key = "{}@{}".format(package_pin_name, chosen_version)
+                if base_key in packages_by_package_key:
+                    pins[package_pin_name] = {"": base_key}
+            if is_testonly and package_pin_name in pins:
+                testonly_pins_set[package_pin_name] = True
 
     testonly_pin_names = sorted(testonly_pins_set.keys())
 

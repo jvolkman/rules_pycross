@@ -371,8 +371,9 @@ def pycross_cycle_member_marker_deps(
     edges_json = None
 
     for cg in plan.conditional_groups:
-        match_name = cg.eval_match_name if (cg.eval_match_name and native.existing_rule(cg.eval_match_name)) else None
-        if not match_name:
+        if cg.eval_match_name and native.existing_rule(cg.eval_match_name):
+            match_name = cg.eval_match_name
+        else:
             if not native.existing_rule(cg.pair_name):
                 if edges_json == None:
                     edges_json = json.encode(edges)

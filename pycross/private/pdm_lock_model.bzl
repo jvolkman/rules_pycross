@@ -146,12 +146,11 @@ def translate_pdm(project_dict, lock_dict, lock_model):
             for dep_str in groups_dict[target_name]:
                 if type(dep_str) == "string":
                     requirements.append((parse_pep508_requirement(dep_str), is_testonly))
-                    continue
-                if type(dep_str) != "dict" or "include-group" not in dep_str:
-                    continue
-                for inc_dep in dev_deps.get(dep_str["include-group"], []):
-                    if type(inc_dep) == "string":
-                        requirements.append((parse_pep508_requirement(inc_dep), is_testonly))
+                elif type(dep_str) == "dict" and "include-group" in dep_str:
+                    inc_group = dep_str["include-group"]
+                    for inc_dep in dev_deps.get(inc_group, []):
+                        if type(inc_dep) == "string":
+                            requirements.append((parse_pep508_requirement(inc_dep), is_testonly))
 
     # Build pinned specs from requirements
     pinned_package_specs = {}

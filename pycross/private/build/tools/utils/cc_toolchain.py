@@ -41,9 +41,9 @@ def parse_ar_and_guess_ranlib(ar: str | None) -> Tuple[List[str], Path | None]:
     if ar_path.is_absolute():
         guessed_ranlib_path = ar_path.parent / ranlib_name
         return ar_list, guessed_ranlib_path if guessed_ranlib_path.exists() else None
-
-    resolved_ranlib = shutil.which(ranlib_name)
-    return ar_list, Path(resolved_ranlib) if resolved_ranlib else None
+    else:
+        resolved_ranlib = shutil.which(ranlib_name)
+        return ar_list, Path(resolved_ranlib) if resolved_ranlib else None
 
 
 _FILTERED_LINKER_ARGS = (

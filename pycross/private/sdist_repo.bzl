@@ -326,8 +326,7 @@ def _validate_requirements(requires, pin_versions, pkg_name):
                         req_str,
                     ),
                 )
-            continue
-        if type(version_or_dict) == "dict":
+        elif type(version_or_dict) == "dict":
             satisfying = [
                 v
                 for v in version_or_dict.values()

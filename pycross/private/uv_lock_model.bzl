@@ -202,7 +202,7 @@ def _parse_sdist_file(sdist, source, package_name, package_version, registry):
         if registry:
             f["index"] = registry
         return f
-    if "git" not in source or "url" in sdist or "file" in sdist:
+    elif "git" not in source or "url" in sdist or "file" in sdist:
         return _parse_file_info(sdist, package_name, package_version, registry)
     return None
 

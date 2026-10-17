@@ -151,32 +151,31 @@ def _render_resolution_marker_evaluators(lines, resolution_marker_exprs, variant
                 _ind(")"),
                 "",
             ])
-            continue
+        else:
+            # Simple fork: evaluator + config_setting.
+            eval_name = "_res_eval_{}".format(constraint_name)
+            lines.extend([
+                _ind("pycross_pep508_evaluator("),
+                _ind('name = "{}",'.format(eval_name), 2),
+                _ind('expr = "{}",'.format(entry.replace('"', '\\"')), 2),
+            ])
+            if variant_resolvers and "__variant_" in entry:
+                lines.append(_ind("variants = [{}],".format(", ".join(['"{}"'.format(r) for r in variant_resolvers])), 2))
+            lines.extend([
+                _ind(")"),
+                "",
+            ])
 
-        # Simple fork: evaluator + config_setting.
-        eval_name = "_res_eval_{}".format(constraint_name)
-        lines.extend([
-            _ind("pycross_pep508_evaluator("),
-            _ind('name = "{}",'.format(eval_name), 2),
-            _ind('expr = "{}",'.format(entry.replace('"', '\\"')), 2),
-        ])
-        if variant_resolvers and "__variant_" in entry:
-            lines.append(_ind("variants = [{}],".format(", ".join(['"{}"'.format(r) for r in variant_resolvers])), 2))
-        lines.extend([
-            _ind(")"),
-            "",
-        ])
-
-        # Config setting matching when the evaluator says "true".
-        lines.extend([
-            _ind("native.config_setting("),
-            _ind('name = "is_{}",'.format(constraint_name), 2),
-            _ind("flag_values = {", 2),
-            _ind('":{eval}": "true",'.format(eval = eval_name), 3),
-            _ind("},", 2),
-            _ind(")"),
-            "",
-        ])
+            # Config setting matching when the evaluator says "true".
+            lines.extend([
+                _ind("native.config_setting("),
+                _ind('name = "is_{}",'.format(constraint_name), 2),
+                _ind("flag_values = {", 2),
+                _ind('":{eval}": "true",'.format(eval = eval_name), 3),
+                _ind("},", 2),
+                _ind(")"),
+                "",
+            ])
 
 def _build_cycle_edges_dict(scc, packages):
     """Builds the in-cycle edge map for marker mode.
