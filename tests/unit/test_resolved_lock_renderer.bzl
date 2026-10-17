@@ -815,9 +815,10 @@ def _test_epoch_sdist_repo_name(name):
 
 # buildifier: disable=unused-variable
 def _test_conflict_state_rendering_impl(env, target):
-    """Verify conflict_state is emitted only on extra-referencing evaluators when has_conflicts = True."""
-    t_cuda = "group-18-native-torch-probe-cuda"
+    """Verify variants is emitted only on __variant_-referencing evaluators when variant_resolvers is provided."""
+    t_cuda = "__variant_group_cuda"
     conflict_marker = "sys_platform == 'linux' and extra == '{}'".format(t_cuda)
+    plain_extra_marker = "extra == 'cudart'"
     plain_marker = "sys_platform == 'darwin'"
     lock = {
         "cycle_groups": {
@@ -837,6 +838,7 @@ def _test_conflict_state_rendering_impl(env, target):
                 "marker_dependencies": [
                     {"key": "dep_a@1.0", "marker": conflict_marker},
                     {"key": "dep_b@1.0", "marker": plain_marker},
+                    {"key": "dep_b@1.0", "marker": plain_extra_marker},
                 ],
             },
             "dep_a@1.0": {
@@ -892,29 +894,28 @@ def _test_conflict_state_rendering_impl(env, target):
         "ca_whl": "@repo//ca:wheel",
         "cb_whl": "@repo//cb:wheel",
     }
-    res_with_conflicts = render_lock_bzl(
+    res_with_variants = render_lock_bzl(
         lock,
         repo_map,
         rctx_name = "my_rctx",
-        has_conflicts = True,
+        variant_resolvers = [":_resolver_group_cpu_group_cuda"],
     )
-    res_without_conflicts = render_lock_bzl(
+    res_without_variants = render_lock_bzl(
         lock,
         repo_map,
         rctx_name = "my_rctx",
-        has_conflicts = False,
     )
 
-    # Without conflicts, conflict_state is never emitted.
-    env.expect.that_int(res_without_conflicts.count('conflict_state = ":_conflict_state"')).equals(0)
+    # Without variant_resolvers, variants is never emitted.
+    env.expect.that_int(res_without_variants.count('variants = [":_resolver_group_cpu_group_cuda"]')).equals(0)
 
-    # With conflicts, conflict_state = ":_conflict_state" appears on:
+    # With variant_resolvers, variants = [":_resolver_group_cpu_group_cuda"] appears on:
     # - _marker_eval_* for availability_markers (extra="") (1)
     # - _marker_eval_* for cuda-toolkit[cudart] (extra="cudart") (1)
     # - _res_eval_res_fork_conflict (1)
     # - the 2 cycle members in cycle_group_c1 (2)
-    # and NOT on plain_marker or res_fork_plain!
-    env.expect.that_int(res_with_conflicts.count('conflict_state = ":_conflict_state"')).equals(5)
+    # and NOT on plain_marker, plain_extra_marker, or res_fork_plain!
+    env.expect.that_int(res_with_variants.count('variants = [":_resolver_group_cpu_group_cuda"]')).equals(5)
 
 def _test_conflict_state_rendering(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])

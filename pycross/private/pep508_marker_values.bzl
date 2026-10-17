@@ -10,7 +10,6 @@ not explicitly provided.
 """
 
 load("@bazel_skylib//rules:common_settings.bzl", "BuildSettingInfo")
-load("@pypackaging.bzl", "pypackaging")
 
 # Maps @platforms//os constraint values to PEP 508 sys_platform values.
 # Synced with rules_python's pep508_env.bzl sys_platform_select_map.
@@ -166,6 +165,10 @@ def marker_value_attrs():
         "implementation_version": attr.string(default = ""),
         "platform_python_implementation": attr.string(default = ""),
         "extra": attr.string(default = ""),
+        "variants": attr.label_list(
+            default = [],
+            providers = [config_common.FeatureFlagInfo],
+        ),
 
         # Hidden fallback targets pointing to standard marker definitions.
         "_os_name_target": attr.label(default = "@rules_pycross//pycross/private/markers:os_name"),
@@ -258,7 +261,12 @@ def collect_markers(ctx):
         else:
             platform_python_implementation = implementation_name
 
-    extra = ctx.attr.extra
+    active_variants = []
+    for v in getattr(ctx.attr, "variants", []):
+        val = flag_value(v)
+        if val:
+            active_variants.append("__variant_" + val)
+    extra = ([ctx.attr.extra] + active_variants) if active_variants else ctx.attr.extra
 
     return {
         "os_name": os_name,
@@ -293,23 +301,3 @@ marker_value = rule(
     },
     doc = """Converts a string (possibly configurable via select()) into a FeatureFlagInfo provider.""",
 )
-
-def evaluate_marker(marker, env, active_tokens = None):
-    """Evaluate a PEP 508 marker expression with optional uv conflict tokens.
-
-    Args:
-        marker: A PEP 508 marker string or parsed marker AST from pypackaging.markers.parse.
-        env: Dict of PEP 508 marker environment values.
-        active_tokens: Optional dict or list of active uv conflict tokens.
-
-    Returns:
-        True if the marker evaluates to true, False otherwise.
-    """
-    parsed = pypackaging.markers.parse(marker) if type(marker) == "string" else marker
-    if active_tokens:
-        env = dict(env)
-        base_extra = env.get("extra", "")
-        extras = base_extra if type(base_extra) == "list" else [base_extra]
-        tokens = active_tokens.keys() if type(active_tokens) == "dict" else list(active_tokens)
-        env["extra"] = extras + tokens
-    return pypackaging.markers.evaluate(parsed, env)

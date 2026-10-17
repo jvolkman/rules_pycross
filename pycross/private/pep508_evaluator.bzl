@@ -9,17 +9,15 @@ The expression is supplied as a raw PEP 508 marker string, e.g.:
 Parsing and evaluation are handled by the pypackaging markers library.
 """
 
-load(":pep508_marker_values.bzl", "PYTHON_TOOLCHAIN_TYPE", "collect_markers", "evaluate_marker", "marker_value_attrs")
-load(":providers.bzl", "PycrossConflictStateInfo")
+load("@pypackaging.bzl", "pypackaging")
+load(":pep508_marker_values.bzl", "PYTHON_TOOLCHAIN_TYPE", "collect_markers", "marker_value_attrs")
 
 # ---- rule implementation ----------------------------------------------------
 
 def _pycross_pep508_evaluator_impl(ctx):
     markers_env = collect_markers(ctx)
-    active_tokens = None
-    if ctx.attr.conflict_state != None:
-        active_tokens = ctx.attr.conflict_state[PycrossConflictStateInfo].active_tokens
-    result = evaluate_marker(ctx.attr.expr, markers_env, active_tokens = active_tokens)
+    parsed_marker = pypackaging.markers.parse(ctx.attr.expr)
+    result = pypackaging.markers.evaluate(parsed_marker, markers_env)
 
     return [config_common.FeatureFlagInfo(value = "true" if result else "false")]
 
@@ -29,10 +27,6 @@ _pycross_pep508_evaluator = rule(
         expr = attr.string(
             mandatory = True,
             doc = "A PEP 508 marker expression string.",
-        ),
-        conflict_state = attr.label(
-            providers = [PycrossConflictStateInfo],
-            doc = "Optional conflict_state target providing active uv conflict tokens.",
         ),
         **marker_value_attrs()
     ),

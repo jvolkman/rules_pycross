@@ -9,10 +9,7 @@ load("@rules_testing//lib:truth.bzl", "matching")
 load("//pycross/private:pep508_evaluator.bzl", "pycross_pep508_evaluator")
 
 # buildifier: disable=bzl-visibility
-load("//pycross/private:providers.bzl", "PycrossConflictStateInfo")
-
-# buildifier: disable=bzl-visibility
-load("//pycross/private:variant_resolver.bzl", "conflict_state", "conflict_token", "variant_resolver")
+load("//pycross/private:variant_resolver.bzl", "variant_resolver")
 
 # ── Helpers ──────────────────────────────────────────────────────────
 
@@ -71,14 +68,13 @@ def _test_default_when_no_flag(name):
         impl = _test_default_when_no_flag_impl,
     )
 
-# ── Test: no flags and no default fails ──────────────────────────────
+# ── Test: no flags and no default returns empty string ───────────────
 
-def _test_no_flags_no_default_fails_impl(env, target):
-    env.expect.that_target(target).failures().contains_predicate(
-        matching.contains("No variant selected"),
-    )
+def _test_no_flags_no_default_impl(env, target):
+    info = target[config_common.FeatureFlagInfo]
+    env.expect.that_str(info.value).equals("")
 
-def _test_no_flags_no_default_fails(name):
+def _test_no_flags_no_default(name):
     flag_refs = _setup_flags(name, ["a", "b"])
     variant_resolver(
         name = name + "_resolver",
@@ -90,8 +86,7 @@ def _test_no_flags_no_default_fails(name):
     analysis_test(
         name = name,
         target = name + "_resolver",
-        impl = _test_no_flags_no_default_fails_impl,
-        expect_failure = True,
+        impl = _test_no_flags_no_default_impl,
     )
 
 # ── Test: mutual exclusion (both flags set) ──────────────────────────
@@ -388,64 +383,26 @@ def _test_multi_set_cross_exclusion_fails(name):
         },
     )
 
-# ── Test: conflict_state with 0 active flags and no default succeeds ──
+# ── Test: variant_resolver with pycross_pep508_evaluator ─────────────
 
-def _test_conflict_state_empty_no_default_impl(env, target):
-    info = target[PycrossConflictStateInfo]
-    env.expect.that_dict(info.active_tokens).contains_exactly({})
-    env.expect.that_str(conflict_token("extra", "My_Pkg", "Cu_12")).equals("extra-6-my-pkg-cu-12")
-    env.expect.that_str(conflict_token({"kind": "group", "package": "native-torch-probe", "name": "cuda"})).equals(
-        "group-18-native-torch-probe-cuda",
-    )
-    env.expect.that_str(conflict_token({"kind": "project", "package": "Sub_Pkg"})).equals("project-7-sub-pkg")
-
-def _test_conflict_state_empty_no_default(name):
-    flag_refs = _setup_flags(name, ["group_cpu", "group_cuda"])
-    conflict_state(
-        name = name + "_state",
-        flags = flag_refs,
-        names = ["group_cpu", "group_cuda"],
-        conflict_sets = [
-            json.encode({"qnames": ["group_cpu", "group_cuda"], "default": ""}),
-        ],
-        qname_tokens = {
-            "group_cpu": ["group-18-native-torch-probe-cpu"],
-            "group_cuda": ["group-18-native-torch-probe-cuda"],
-        },
-        tags = ["manual"],
-    )
-    analysis_test(
-        name = name,
-        target = name + "_state",
-        impl = _test_conflict_state_empty_no_default_impl,
-    )
-
-# ── Test: conflict_state activates flag and evaluates marker with package extra ──
-
-def _test_conflict_state_with_evaluator_impl(env, target):
+def _test_variants_with_evaluator_impl(env, target):
     env.expect.that_target(target).default_outputs().contains_at_least([])
 
-def _test_conflict_state_with_evaluator(name):
+def _test_variants_with_evaluator(name):
     flag_refs = _setup_flags(name, ["group_cpu", "group_cuda"])
-    conflict_state(
-        name = name + "_state",
+    variant_resolver(
+        name = name + "_resolver",
         flags = flag_refs,
         names = ["group_cpu", "group_cuda"],
-        conflict_sets = [
-            json.encode({"qnames": ["group_cpu", "group_cuda"], "default": "group_cpu"}),
-        ],
-        qname_tokens = {
-            "group_cpu": ["group-18-native-torch-probe-cpu"],
-            "group_cuda": ["group-18-native-torch-probe-cuda"],
-        },
+        default = "group_cpu",
         tags = ["manual"],
     )
     pycross_pep508_evaluator(
         name = name + "_eval",
-        expr = "sys_platform == 'linux' and 'group-18-native-torch-probe-cuda' == extra and extra != 'group-18-native-torch-probe-cpu' and extra == 'cudart'",
+        expr = "sys_platform == 'linux' and '__variant_group_cuda' == extra and extra != '__variant_group_cpu' and extra == 'cudart'",
         extra = "cudart",
         sys_platform = "linux",
-        conflict_state = ":" + name + "_state",
+        variants = [":" + name + "_resolver"],
         tags = ["manual"],
     )
     native.config_setting(
@@ -462,41 +419,10 @@ def _test_conflict_state_with_evaluator(name):
     analysis_test(
         name = name,
         target = name + "_subject",
-        impl = _test_conflict_state_with_evaluator_impl,
+        impl = _test_variants_with_evaluator_impl,
         config_settings = {
             str(Label(":" + name + "_flag_group_cuda")): True,
         },
-    )
-
-# ── Test: conflict_state fails on Pass 2 when defaults conflict across sets ──
-
-def _test_conflict_state_conflicting_defaults_fails_impl(env, target):
-    env.expect.that_target(target).failures().contains_predicate(
-        matching.contains("Conflicting variants in conflict set"),
-    )
-
-def _test_conflict_state_conflicting_defaults_fails(name):
-    flag_refs = _setup_flags(name, ["cpu", "cuda", "gpu"])
-    conflict_state(
-        name = name + "_state",
-        flags = flag_refs,
-        names = ["cpu", "cuda", "gpu"],
-        conflict_sets = [
-            json.encode({"qnames": ["cpu", "cuda"], "default": "cpu"}),
-            json.encode({"qnames": ["cpu", "gpu"], "default": "gpu"}),
-        ],
-        qname_tokens = {
-            "cpu": ["group-3-app-cpu"],
-            "cuda": ["group-3-app-cuda"],
-            "gpu": ["group-3-app-gpu"],
-        },
-        tags = ["manual"],
-    )
-    analysis_test(
-        name = name,
-        target = name + "_state",
-        impl = _test_conflict_state_conflicting_defaults_fails_impl,
-        expect_failure = True,
     )
 
 # ── Suite ────────────────────────────────────────────────────────────
@@ -507,7 +433,7 @@ def variant_resolver_test_suite(name):
         tests = [
             _test_single_flag_active,
             _test_default_when_no_flag,
-            _test_no_flags_no_default_fails,
+            _test_no_flags_no_default,
             _test_mutual_exclusion_fails,
             _test_mixed_extra_group,
             _test_three_way_conflict,
@@ -516,8 +442,6 @@ def variant_resolver_test_suite(name):
             _test_config_setting_explicit_flag,
             _test_multi_set_overlap,
             _test_multi_set_cross_exclusion_fails,
-            _test_conflict_state_empty_no_default,
-            _test_conflict_state_with_evaluator,
-            _test_conflict_state_conflicting_defaults_fails,
+            _test_variants_with_evaluator,
         ],
     )

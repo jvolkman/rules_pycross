@@ -100,13 +100,13 @@ def _collect_unique_markers(packages):
 def _marker_evaluator_name(marker_str, extra = ""):
     return marker_evaluator_name(marker_str, extra)
 
-def _render_marker_evaluators(lines, unique_markers, has_conflicts = False):
+def _render_marker_evaluators(lines, unique_markers, variant_resolvers = None):
     """Render deduped pycross_pep508_evaluator and config_setting targets.
 
     Args:
         lines: Output lines list.
         unique_markers: Iterable of (marker_str, extra) tuples.
-        has_conflicts: True if the lock has conflict variants (_conflict_state).
+        variant_resolvers: Optional list of variant_resolver target labels.
     """
     for marker_str, extra in sorted(unique_markers):
         eval_name = _marker_evaluator_name(marker_str, extra)
@@ -119,8 +119,8 @@ def _render_marker_evaluators(lines, unique_markers, has_conflicts = False):
         ])
         if extra:
             lines.append(_ind('extra = "{}",'.format(extra), 2))
-        if has_conflicts and "extra" in marker_str:
-            lines.append(_ind('conflict_state = ":_conflict_state",', 2))
+        if variant_resolvers and "__variant_" in marker_str:
+            lines.append(_ind("variants = [{}],".format(", ".join(['"{}"'.format(r) for r in variant_resolvers])), 2))
         lines.extend([
             _ind(")"),
             "",
@@ -137,7 +137,7 @@ def _render_marker_evaluators(lines, unique_markers, has_conflicts = False):
             "",
         ])
 
-def _render_resolution_marker_evaluators(lines, resolution_marker_exprs, has_conflicts = False):
+def _render_resolution_marker_evaluators(lines, resolution_marker_exprs, variant_resolvers = None):
     """Render pycross_pep508_evaluator + config_setting for resolution-marker forks.
 
     Entries in ``resolution_marker_exprs`` are either:
@@ -149,7 +149,7 @@ def _render_resolution_marker_evaluators(lines, resolution_marker_exprs, has_con
         lines: Output lines list.
         resolution_marker_exprs: Dict mapping constraint_name to either a
             PEP 508 marker expression string or a compound dict.
-        has_conflicts: True if the lock has conflict variants (_conflict_state).
+        variant_resolvers: Optional list of variant_resolver target labels.
     """
     for constraint_name, entry in sorted(resolution_marker_exprs.items()):
         if type(entry) == "dict":
@@ -173,8 +173,8 @@ def _render_resolution_marker_evaluators(lines, resolution_marker_exprs, has_con
                 _ind('name = "{}",'.format(eval_name), 2),
                 _ind('expr = "{}",'.format(entry.replace('"', '\\"')), 2),
             ])
-            if has_conflicts and "extra" in entry:
-                lines.append(_ind('conflict_state = ":_conflict_state",', 2))
+            if variant_resolvers and "__variant_" in entry:
+                lines.append(_ind("variants = [{}],".format(", ".join(['"{}"'.format(r) for r in variant_resolvers])), 2))
             lines.extend([
                 _ind(")"),
                 "",
@@ -238,7 +238,7 @@ def _render_edges_dict(edges, base_indent = 1):
     lines.append(_ind("}", base_indent))
     return lines
 
-def _render_marker_cycle_member_deps(lines, cycle_groups, packages, has_conflicts = False):
+def _render_marker_cycle_member_deps(lines, cycle_groups, packages, variant_resolvers = None):
     """Renders pycross_cycle_member_marker_deps macro calls for each cycle member.
 
     Each macro call internally creates N reachability evaluators + config_settings
@@ -254,14 +254,14 @@ def _render_marker_cycle_member_deps(lines, cycle_groups, packages, has_conflict
             continue
 
         edges = _build_cycle_edges_dict(scc, packages)
-        edges_need_conflict_state = False
-        if has_conflicts:
+        edges_need_variants = False
+        if variant_resolvers:
             for edge_list in edges.values():
                 for entry in edge_list:
-                    if "extra" in entry.get("marker", ""):
-                        edges_need_conflict_state = True
+                    if "__variant_" in entry.get("marker", ""):
+                        edges_need_variants = True
                         break
-                if edges_need_conflict_state:
+                if edges_need_variants:
                     break
 
         sanitized_group_name = _sanitize_name(group_name).upper()
@@ -280,8 +280,8 @@ def _render_marker_cycle_member_deps(lines, cycle_groups, packages, has_conflict
             lines.append(_ind('raw_name = "_raw_{}",'.format(pkg_key), 2))
             lines.append(_ind('member = "{}",'.format(pkg_key), 2))
             lines.append(_ind("edges = {},".format(edges_var_name), 2))
-            if edges_need_conflict_state:
-                lines.append(_ind('conflict_state = ":_conflict_state",', 2))
+            if edges_need_variants:
+                lines.append(_ind("variants = [{}],".format(", ".join(['"{}"'.format(r) for r in variant_resolvers])), 2))
             lines.append(_ind(")"))
             lines.append("")
 
@@ -640,7 +640,7 @@ def _render_marker_package(lines, pkg_key, pkg, packages, repo_map, sdist_map, r
 
 # ---- Main render function ---------------------------------------------------
 
-def render_lock_bzl(lock, repo_map, sdist_map = None, rctx_name = "", has_conflicts = False):
+def render_lock_bzl(lock, repo_map, sdist_map = None, rctx_name = "", variant_resolvers = None):
     """Renders a lock.bzl file from a resolved lock structure.
 
     Args:
@@ -648,7 +648,7 @@ def render_lock_bzl(lock, repo_map, sdist_map = None, rctx_name = "", has_confli
         repo_map: A dict mapping file keys to repo labels.
         sdist_map: A dict mapping sdist package keys to their wheel target labels.
         rctx_name: The name of the package repository.
-        has_conflicts: True if the lock has conflict variants (_conflict_state).
+        variant_resolvers: Optional list of variant_resolver target labels.
 
     Returns:
         A string containing the rendered lock.bzl file.
@@ -712,14 +712,14 @@ def render_lock_bzl(lock, repo_map, sdist_map = None, rctx_name = "", has_confli
 
     # 1. Marker evaluators for dependency markers (deduped)
     unique_markers = _collect_unique_markers(packages)
-    _render_marker_evaluators(lines, unique_markers, has_conflicts = has_conflicts)
+    _render_marker_evaluators(lines, unique_markers, variant_resolvers = variant_resolvers)
 
     # 1b. Resolution-marker evaluators for pin forks
     resolution_marker_exprs = lock.get("resolution_marker_exprs", {})
-    _render_resolution_marker_evaluators(lines, resolution_marker_exprs, has_conflicts = has_conflicts)
+    _render_resolution_marker_evaluators(lines, resolution_marker_exprs, variant_resolvers = variant_resolvers)
 
     # 2. Per-member cycle deps (marker-aware)
-    _render_marker_cycle_member_deps(lines, cycle_groups, packages, has_conflicts = has_conflicts)
+    _render_marker_cycle_member_deps(lines, cycle_groups, packages, variant_resolvers = variant_resolvers)
 
     # 3. Packages
     for pkg_key, pkg in sorted(packages.items()):

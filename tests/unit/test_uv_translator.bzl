@@ -1316,17 +1316,17 @@ def _test_uv_issue_1510_verbatim_lock_impl(env, target):
         "variant": "group_cuda",
         "marker": "res_torch_2_12_0__group_cuda",
     })
-    env.expect.that_str(exprs["res_torch_2_12_0__group_cpu"]).contains("extra == 'group-18-native-torch-probe-cpu'")
-    env.expect.that_str(exprs["res_torch_2_12_0_cpu__group_cpu"]).contains("extra == 'group-18-native-torch-probe-cpu'")
+    env.expect.that_str(exprs["res_torch_2_12_0__group_cpu"]).contains("extra == '__variant_group_cpu'")
+    env.expect.that_str(exprs["res_torch_2_12_0_cpu__group_cpu"]).contains("extra == '__variant_group_cpu'")
     env.expect.that_str(exprs["res_torch_2_12_0__group_cuda"]).equals("platform_machine == 'x86_64' and sys_platform == 'linux'")
 
-    # 2. Run resolve() and check torch's availability markers reference conflict tokens.
+    # 2. Run resolve() and check torch's availability markers reference __variant_ tokens.
     resolved = resolve(raw, include_transitive = True)
     torch_avail = resolved.packages["torch@2.12.0"]["availability_markers"]
     env.expect.that_int(len(torch_avail)).equals(3)
-    env.expect.that_bool(any(["extra == 'group-18-native-torch-probe-cpu'" in m for m in torch_avail])).equals(True)
+    env.expect.that_bool(any(["extra == '__variant_group_cpu'" in m for m in torch_avail])).equals(True)
 
-    # 3. Render lock.bzl and verify conflict_state = ":_conflict_state" on evaluators.
+    # 3. Render lock.bzl and verify variants = [":_resolver_group_cpu_group_cuda"] on evaluators.
     repo_map = {k: "@repo//" + k + ":file" for k in resolved.remote_files.keys()}
     rendered_lock = render_lock_bzl(
         {
@@ -1338,7 +1338,7 @@ def _test_uv_issue_1510_verbatim_lock_impl(env, target):
         repo_map,
         None,
         "ws",
-        has_conflicts = True,
+        variant_resolvers = [":_resolver_group_cpu_group_cuda"],
     )
 
     for extra_name in ["cudart", "cufft", "cufile", "cupti", "curand", "cusolver", "cusparse", "nvjitlink", "nvrtc", "nvtx"]:
@@ -1349,10 +1349,10 @@ def _test_uv_issue_1510_verbatim_lock_impl(env, target):
         for b in rendered_lock.split("pycross_pep508_evaluator(\n")[1:]
     ]
     for block in eval_blocks:
-        if "extra" in block.split('expr = "')[1].split('",')[0]:
-            env.expect.that_str(block).contains('conflict_state = ":_conflict_state"')
+        if "__variant_" in block.split('expr = "')[1].split('",')[0]:
+            env.expect.that_str(block).contains('variants = [":_resolver_group_cpu_group_cuda"]')
         else:
-            env.expect.that_bool('conflict_state = ":_conflict_state"' in block).equals(False)
+            env.expect.that_bool("variants =" in block).equals(False)
 
     avail_torch_block = rendered_lock.split('name = "_marker_available_torch@2.12.0"')[1].split("\n    )")[0]
     env.expect.that_str(avail_torch_block).contains("_marker_eval_")

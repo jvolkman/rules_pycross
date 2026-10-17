@@ -105,18 +105,46 @@ def _resolve_package_requires_python(markers):
                     specifiers.append("{} {}".format(op, version_part))
     return specifiers
 
-def _parse_uv_dependency(dep):
+def _uv_conflict_token(item):
+    """Return the uv-encoded conflict marker token for a conflict item."""
+    kind = item["kind"]
+    pkg = canonicalize_name(item["package"])
+    name = item.get("name", "")
+    if kind == "extra":
+        return "extra-{}-{}-{}".format(len(pkg), pkg, canonicalize_name(name))
+    if kind == "group":
+        return "group-{}-{}-{}".format(len(pkg), pkg, canonicalize_name(name))
+    if kind == "project":
+        return "project-{}-{}".format(len(pkg), pkg)
+    fail("Unknown conflict item kind: {}".format(kind))
+
+def _variant_qname(item):
+    if item["kind"] == "project":
+        return "package_{}".format(item["package"])
+    return "{}_{}".format(item["kind"], item["name"])
+
+def _rewrite_conflict_markers(marker, token_replacements):
+    if not marker or not token_replacements:
+        return marker
+    for old_quoted, new_quoted in token_replacements:
+        if old_quoted in marker:
+            marker = marker.replace(old_quoted, new_quoted)
+    return marker
+
+def _parse_uv_dependency(dep, token_replacements = ()):
     """Parse a UV lock dependency dict into a specifier.
 
     Args:
         dep: Dict with name, version, marker, extra/extras keys.
+        token_replacements: Optional list of (old_quoted, new_quoted) pairs
+            for rewriting uv conflict tokens into __variant_<qname>.
 
     Returns:
         A list of dep dicts suitable for resolve_lock_graph.
     """
     name = dep.get("name", "")
     version = dep.get("version", "")
-    marker = dep.get("marker", "")
+    marker = _rewrite_conflict_markers(dep.get("marker", ""), token_replacements)
     extras = dep.get("extra") or dep.get("extras", [])
 
     results = []
@@ -200,6 +228,7 @@ def translate_uv(project_dict, lock_dict, lock_model):
     # same-named extra/group of another project.
     extra_variant_values = {}
     group_variant_values = {}
+    token_replacements = []
     for item in variant_items_by_key.values():
         kind = item["kind"]
         vname = item.get("name", "")
@@ -210,6 +239,10 @@ def translate_uv(project_dict, lock_dict, lock_model):
         elif kind == "group":
             qualified = "group_{}".format(vname)
             group_variant_values[lookup_key] = qualified
+        uv_tok = _uv_conflict_token(item)
+        var_tok = "__variant_{}".format(_variant_qname(item))
+        token_replacements.append(("'{}'".format(uv_tok), "'{}'".format(var_tok)))
+        token_replacements.append(('"{}"'.format(uv_tok), '"{}"'.format(var_tok)))
 
     # Identify projects
     projects_list = getattr(lock_model, "projects", [])
@@ -258,7 +291,10 @@ def translate_uv(project_dict, lock_dict, lock_model):
     # platforms).
     _fork_versions = {}  # {canonical_name: {version: [marker_expr, ...]}}
     for lock_pkg in packages_list:
-        res_markers = lock_pkg.get("resolution-markers", [])
+        res_markers = [
+            _rewrite_conflict_markers(m, token_replacements)
+            for m in lock_pkg.get("resolution-markers", [])
+        ]
         if not res_markers:
             continue
         fname = canonicalize_name(lock_pkg["name"])
@@ -323,15 +359,16 @@ def translate_uv(project_dict, lock_dict, lock_model):
                 else:
                     fork_constraint = ""
 
+                dep_marker = _rewrite_conflict_markers(dep.get("marker", ""), token_replacements)
                 if dep_extras:
                     for extra in dep_extras:
                         pin_name = "{}[{}]".format(dep_name, canonicalize_name(extra))
-                        _record_root_marker(root_dependency_markers, pin_name, dep.get("marker", ""))
+                        _record_root_marker(root_dependency_markers, pin_name, dep_marker)
                         requirements.append((pin_name, specifier, fork_constraint, default_is_testonly))
 
                 # An extras pin implies its base package, so the base records
                 # the same marker (an unmarked extras edge unlocks the base).
-                _record_root_marker(root_dependency_markers, base_dep_name, dep.get("marker", ""))
+                _record_root_marker(root_dependency_markers, base_dep_name, dep_marker)
                 if not dep_extras:
                     requirements.append((dep_name, specifier, fork_constraint, default_is_testonly))
 
@@ -346,6 +383,7 @@ def translate_uv(project_dict, lock_dict, lock_model):
                     dep_name = canonicalize_name(dep["name"])
                     dep_version = dep.get("version", "")
                     dep_extras = dep.get("extra") or dep.get("extras", [])
+                    dep_marker = _rewrite_conflict_markers(dep.get("marker", ""), token_replacements)
                     specifier = "==={}".format(dep_version) if dep_version else ""
 
                     # Resolution-marker fork: combine variant + fork constraints.
@@ -353,9 +391,9 @@ def translate_uv(project_dict, lock_dict, lock_model):
                     if base_dep_name in _fork_constraints and dep_version in _fork_constraints[base_dep_name]:
                         fork_constraint = _fork_constraints[base_dep_name][dep_version]
                         if constraint:
-                            if dep.get("marker") and dep["marker"] != resolution_marker_exprs.get(fork_constraint):
+                            if dep_marker and dep_marker != resolution_marker_exprs.get(fork_constraint):
                                 edge_fork_constraint = "{}__{}".format(fork_constraint, constraint)
-                                resolution_marker_exprs[edge_fork_constraint] = dep["marker"]
+                                resolution_marker_exprs[edge_fork_constraint] = dep_marker
                                 fork_constraint = edge_fork_constraint
                             effective_constraint = "{}_{}".format(constraint, fork_constraint)
 
@@ -372,11 +410,11 @@ def translate_uv(project_dict, lock_dict, lock_model):
                     if dep_extras:
                         for extra in dep_extras:
                             pin_name = "{}[{}]".format(dep_name, canonicalize_name(extra))
-                            _record_root_marker(root_dependency_markers, pin_name, dep.get("marker", ""))
+                            _record_root_marker(root_dependency_markers, pin_name, dep_marker)
                             requirements.append((pin_name, specifier, effective_constraint, is_testonly))
 
                     # See the default-dependencies loop: base shares the edge's marker.
-                    _record_root_marker(root_dependency_markers, base_dep_name, dep.get("marker", ""))
+                    _record_root_marker(root_dependency_markers, base_dep_name, dep_marker)
                     if not dep_extras:
                         requirements.append((dep_name, specifier, effective_constraint, is_testonly))
 
@@ -404,14 +442,17 @@ def translate_uv(project_dict, lock_dict, lock_model):
     for lock_pkg in packages_list:
         package_name = canonicalize_name(lock_pkg["name"])
         package_version = lock_pkg["version"]
-        resolution_markers = lock_pkg.get("resolution-markers", [])
+        resolution_markers = [
+            _rewrite_conflict_markers(m, token_replacements)
+            for m in lock_pkg.get("resolution-markers", [])
+        ]
         python_version_specifiers = _resolve_package_requires_python(resolution_markers)
         package_extras = lock_pkg.get("extras", [])
 
         # Parse base dependencies
         deps = []
         for dep in lock_pkg.get("dependencies", []):
-            deps.extend(_parse_uv_dependency(dep))
+            deps.extend(_parse_uv_dependency(dep, token_replacements))
 
         # Parse files: wheels + sdist
         files = []
@@ -503,7 +544,7 @@ def translate_uv(project_dict, lock_dict, lock_model):
         for extra_name, extra_deps_list in lock_pkg.get("optional-dependencies", {}).items():
             extra_parsed_deps = []
             for dep in extra_deps_list:
-                extra_parsed_deps.extend(_parse_uv_dependency(dep))
+                extra_parsed_deps.extend(_parse_uv_dependency(dep, token_replacements))
 
             # Add self-dependency
             extra_parsed_deps.append({
