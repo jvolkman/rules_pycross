@@ -5,16 +5,15 @@ Parses pdm.lock and pyproject.toml files, then produces the raw_lock.json
 structure consumed by lock_resolver.bzl.
 """
 
-load("@toml.bzl//toml:toml.bzl", "decode")
 load(
     ":translator_common.bzl",
     "canonicalize_name",
     "compute_requested_dependency_groups",
+    "detect_package_marker_forks",
     "parse_pep508_requirement",
+    "read_project_and_lock",
     "record_root_marker",
-    "resolution_marker_constraint_name",
     "resolve_lock_graph",
-    "select_project_file",
     "sha256_from_string",
 )
 load(":util.bzl", "url_decode_filename")
@@ -144,23 +143,14 @@ def translate_pdm(project_dict, lock_dict, lock_model):
                 continue
             is_testonly = requested_groups_dict[key]
 
-            entries = groups_dict[target_name]
-            for dep_str in entries:
+            for dep_str in groups_dict[target_name]:
                 if type(dep_str) == "string":
-                    # Strip editable markers
-                    stripped = dep_str.strip()
-                    if stripped.startswith("-e "):
-                        stripped = stripped[3:].strip()
-                    requirements.append((parse_pep508_requirement(stripped), is_testonly))
+                    requirements.append((parse_pep508_requirement(dep_str), is_testonly))
                 elif type(dep_str) == "dict" and "include-group" in dep_str:
                     inc_group = dep_str["include-group"]
-                    if inc_group in dev_deps:
-                        for inc_dep in dev_deps[inc_group]:
-                            if type(inc_dep) == "string":
-                                stripped = inc_dep.strip()
-                                if stripped.startswith("-e "):
-                                    stripped = stripped[3:].strip()
-                                requirements.append((parse_pep508_requirement(stripped), is_testonly))
+                    for inc_dep in dev_deps.get(inc_group, []):
+                        if type(inc_dep) == "string":
+                            requirements.append((parse_pep508_requirement(inc_dep), is_testonly))
 
     # Build pinned specs from requirements
     pinned_package_specs = {}
@@ -240,31 +230,7 @@ def translate_pdm(project_dict, lock_dict, lock_model):
             pkg["source_dir"] = lock_pkg["subdirectory"]
         packages.append(pkg)
 
-    # Detect resolution-marker forks: same package name with multiple versions.
-    resolution_marker_exprs = {}
-    fork_versions = {}  # {name: {version: marker_expr}}
-    for pkg in packages:
-        marker = pkg.get("markers", "")
-        if not marker:
-            continue
-        fork_versions.setdefault(pkg["name"], {})[pkg["version"]] = marker
-
-    fork_constraints = {}  # {name: {version: constraint_name}}
-    for fname, versions in fork_versions.items():
-        if len(versions) <= 1:
-            continue  # Single version, no fork.
-        for fversion, marker_expr in versions.items():
-            cname = resolution_marker_constraint_name(fname, fversion)
-            fork_constraints.setdefault(fname, {})[fversion] = cname
-            resolution_marker_exprs[cname] = marker_expr
-
-    # If forks were detected, update pinned_package_specs to use conditional pins.
-    for fname, version_constraints in fork_constraints.items():
-        if fname in pinned_package_specs:
-            conditional_pins = {}
-            for fversion, cname in version_constraints.items():
-                conditional_pins[cname] = "===" + fversion
-            pinned_package_specs[fname] = conditional_pins
+    resolution_marker_exprs = detect_package_marker_forks(packages, pinned_package_specs)
 
     return resolve_lock_graph(
         packages = packages,
@@ -273,38 +239,10 @@ def translate_pdm(project_dict, lock_dict, lock_model):
         strict_dependencies = False,
         resolution_marker_exprs = resolution_marker_exprs,
         testonly_pins = testonly_pin_names,
-        root_dependency_markers = {
-            name: markers
-            for name, markers in root_dependency_markers.items()
-            if markers != None
-        },
+        root_dependency_markers = root_dependency_markers,
     )
 
 def repo_create_pdm_model(rctx, extra_project_files, lock_file, lock_model):
-    """Run the PDM translator in pure Starlark.
-
-    Args:
-        rctx: The repository_ctx or module_ctx object.
-        extra_project_files: List of extra pyproject.toml files.
-        lock_file: The lock file.
-        lock_model: a struct containing the same attrs as the pycross_pdm_lock_model rule.
-
-    Returns:
-        The raw_lock_data dict.
-    """
-
-    projects = getattr(lock_model, "projects", [])
-    project_file = select_project_file(rctx, extra_project_files, lock_file, projects)
-
-    project_dict = {}
-    if project_file:
-        project_path = rctx.path(project_file)
-        if project_path.exists:
-            project_dict = decode(rctx.read(project_path))
-
-    lock_path = rctx.path(lock_file)
-    if not lock_path.exists:
-        fail("Lock file not found: {}. Ensure pdm.lock exists at the expected location.".format(lock_file))
-
-    lock_dict = decode(rctx.read(lock_path))
+    """Run the PDM translator in pure Starlark."""
+    project_dict, lock_dict = read_project_and_lock(rctx, extra_project_files, lock_file, lock_model, "pdm.lock")
     return translate_pdm(project_dict, lock_dict, lock_model)

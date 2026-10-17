@@ -8,19 +8,18 @@ Handles UV-specific features: workspace members, conflicts/variants,
 resolution markers, git sources, and editable packages.
 """
 
-load("@toml.bzl//toml:toml.bzl", "decode")
 load(
     ":translator_common.bzl",
     "archive_extension",
     "canonicalize_name",
     "compute_requested_dependency_groups",
+    "read_project_and_lock",
     "record_root_marker",
     "resolution_marker_constraint_name",
     "resolve_lock_graph",
-    "select_project_file",
     "sha256_from_string",
 )
-load(":util.bzl", "url_decode_filename")
+load(":util.bzl", "url_decode_filename", "variant_item_qname")
 
 def _parse_file_info(file_info, package_name, package_version, registry = None):
     """Parse a UV lock file entry into a file dict.
@@ -118,11 +117,6 @@ def _uv_conflict_token(item):
         return "project-{}-{}".format(len(pkg), pkg)
     fail("Unknown conflict item kind: {}".format(kind))
 
-def _variant_qname(item):
-    if item["kind"] == "project":
-        return "package_{}".format(item["package"])
-    return "{}_{}".format(item["kind"], item["name"])
-
 def _rewrite_conflict_markers(marker, token_replacements):
     if not marker or not token_replacements:
         return marker
@@ -168,8 +162,6 @@ def _parse_uv_dependency(dep, token_replacements = ()):
         })
 
     return results
-
-_record_root_marker = record_root_marker
 
 def translate_uv(project_dict, lock_dict, lock_model):
     """Translates UV project and lock data to raw_lock_data dict.
@@ -240,7 +232,7 @@ def translate_uv(project_dict, lock_dict, lock_model):
             qualified = "group_{}".format(vname)
             group_variant_values[lookup_key] = qualified
         uv_tok = _uv_conflict_token(item)
-        var_tok = "__variant_{}".format(_variant_qname(item))
+        var_tok = "__variant_{}".format(variant_item_qname(item))
         token_replacements.append(("'{}'".format(uv_tok), "'{}'".format(var_tok)))
         token_replacements.append(('"{}"'.format(uv_tok), '"{}"'.format(var_tok)))
 
@@ -320,7 +312,7 @@ def translate_uv(project_dict, lock_dict, lock_model):
     requirements = []  # list of (req_name, specifier, constraint, is_testonly)
 
     # Root dependency markers per exact pin; extras also record their implied
-    # base package marker. See _record_root_marker.
+    # base package marker. See record_root_marker.
     root_dependency_markers = {}
 
     for project_name in target_projects:
@@ -344,79 +336,62 @@ def translate_uv(project_dict, lock_dict, lock_model):
             project_name = project_name,
         )
 
+        group_batches = []
         if "default" in requested_groups_dict:
-            default_is_testonly = requested_groups_dict["default"]
-            for dep in default_dependencies:
+            group_batches.append(("", default_dependencies, requested_groups_dict["default"]))
+        for kind, groups_dict, constraint_dict in [
+            ("optional", optional_dependencies, extra_variant_values),
+            ("group", development_dependencies, group_variant_values),
+        ]:
+            for group_name, deps_list in groups_dict.items():
+                key = "{}:{}".format(kind, group_name)
+                if key in requested_groups_dict:
+                    group_batches.append((
+                        constraint_dict.get((project_name, group_name), ""),
+                        deps_list,
+                        requested_groups_dict[key],
+                    ))
+
+        for constraint, deps_list, is_testonly in group_batches:
+            for dep in deps_list:
                 dep_name = canonicalize_name(dep["name"])
                 dep_version = dep.get("version", "")
                 dep_extras = dep.get("extra") or dep.get("extras", [])
+                dep_marker = _rewrite_conflict_markers(dep.get("marker", ""), token_replacements)
                 specifier = "==={}".format(dep_version) if dep_version else ""
 
-                # Resolution-marker fork: use per-version constraint.
+                # Resolution-marker fork: combine variant + fork constraints.
                 base_dep_name = dep_name.split("[")[0]
                 if base_dep_name in _fork_constraints and dep_version in _fork_constraints[base_dep_name]:
                     fork_constraint = _fork_constraints[base_dep_name][dep_version]
-                else:
-                    fork_constraint = ""
+                    if constraint:
+                        if dep_marker and dep_marker != resolution_marker_exprs.get(fork_constraint):
+                            edge_fork_constraint = "{}__{}".format(fork_constraint, constraint)
+                            resolution_marker_exprs[edge_fork_constraint] = dep_marker
+                            fork_constraint = edge_fork_constraint
+                        effective_constraint = "{}_{}".format(constraint, fork_constraint)
 
-                dep_marker = _rewrite_conflict_markers(dep.get("marker", ""), token_replacements)
+                        # Register compound constraint with its components.
+                        resolution_marker_exprs[effective_constraint] = {
+                            "variant": constraint,
+                            "marker": fork_constraint,
+                        }
+                    else:
+                        effective_constraint = fork_constraint
+                else:
+                    effective_constraint = constraint
+
                 if dep_extras:
                     for extra in dep_extras:
                         pin_name = "{}[{}]".format(dep_name, canonicalize_name(extra))
-                        _record_root_marker(root_dependency_markers, pin_name, dep_marker)
-                        requirements.append((pin_name, specifier, fork_constraint, default_is_testonly))
+                        record_root_marker(root_dependency_markers, pin_name, dep_marker)
+                        requirements.append((pin_name, specifier, effective_constraint, is_testonly))
 
                 # An extras pin implies its base package, so the base records
                 # the same marker (an unmarked extras edge unlocks the base).
-                _record_root_marker(root_dependency_markers, base_dep_name, dep_marker)
+                record_root_marker(root_dependency_markers, base_dep_name, dep_marker)
                 if not dep_extras:
-                    requirements.append((dep_name, specifier, fork_constraint, default_is_testonly))
-
-        for kind, groups_dict, constraint_dict in [("optional", optional_dependencies, extra_variant_values), ("group", development_dependencies, group_variant_values)]:
-            for group_name in groups_dict.keys():
-                key = "{}:{}".format(kind, group_name)
-                if key not in requested_groups_dict:
-                    continue
-                is_testonly = requested_groups_dict[key]
-                constraint = constraint_dict.get((project_name, group_name), "")
-                for dep in groups_dict[group_name]:
-                    dep_name = canonicalize_name(dep["name"])
-                    dep_version = dep.get("version", "")
-                    dep_extras = dep.get("extra") or dep.get("extras", [])
-                    dep_marker = _rewrite_conflict_markers(dep.get("marker", ""), token_replacements)
-                    specifier = "==={}".format(dep_version) if dep_version else ""
-
-                    # Resolution-marker fork: combine variant + fork constraints.
-                    base_dep_name = dep_name.split("[")[0]
-                    if base_dep_name in _fork_constraints and dep_version in _fork_constraints[base_dep_name]:
-                        fork_constraint = _fork_constraints[base_dep_name][dep_version]
-                        if constraint:
-                            if dep_marker and dep_marker != resolution_marker_exprs.get(fork_constraint):
-                                edge_fork_constraint = "{}__{}".format(fork_constraint, constraint)
-                                resolution_marker_exprs[edge_fork_constraint] = dep_marker
-                                fork_constraint = edge_fork_constraint
-                            effective_constraint = "{}_{}".format(constraint, fork_constraint)
-
-                            # Register compound constraint with its components.
-                            resolution_marker_exprs[effective_constraint] = {
-                                "variant": constraint,
-                                "marker": fork_constraint,
-                            }
-                        else:
-                            effective_constraint = fork_constraint
-                    else:
-                        effective_constraint = constraint
-
-                    if dep_extras:
-                        for extra in dep_extras:
-                            pin_name = "{}[{}]".format(dep_name, canonicalize_name(extra))
-                            _record_root_marker(root_dependency_markers, pin_name, dep_marker)
-                            requirements.append((pin_name, specifier, effective_constraint, is_testonly))
-
-                    # See the default-dependencies loop: base shares the edge's marker.
-                    _record_root_marker(root_dependency_markers, base_dep_name, dep_marker)
-                    if not dep_extras:
-                        requirements.append((dep_name, specifier, effective_constraint, is_testonly))
+                    requirements.append((dep_name, specifier, effective_constraint, is_testonly))
 
     # End collect requirements
 
@@ -465,9 +440,7 @@ def translate_uv(project_dict, lock_dict, lock_model):
         sdist = lock_pkg.get("sdist", {})
 
         if sdist:
-            if "url" in sdist or "file" in sdist:
-                files.append(_parse_file_info(sdist, package_name, package_version, registry))
-            elif "url" in source:
+            if "url" not in sdist and "file" not in sdist and "url" in source:
                 # URL-based source with subdirectory
                 url = source["url"]
                 file_hash = sdist["hash"]
@@ -484,9 +457,7 @@ def translate_uv(project_dict, lock_dict, lock_model):
                 if registry:
                     f["index"] = registry
                 files.append(f)
-            elif "git" in source:
-                pass  # handled below
-            else:
+            elif "git" not in source or "url" in sdist or "file" in sdist:
                 files.append(_parse_file_info(sdist, package_name, package_version, registry))
 
         # Source dir
@@ -525,12 +496,13 @@ def translate_uv(project_dict, lock_dict, lock_model):
         is_local_sdist = type(sdist) == "dict" and "path" in sdist and "url" not in sdist
         is_local = is_local_sdist or is_local_editable or is_local_virtual or is_local_directory
 
+        pkg_python_versions = python_version_specifiers[0] if python_version_specifiers else ""
+
         # Base package
         base_pkg = {
             "name": package_name,
             "version": package_version,
-            "python_versions": python_version_specifiers[0] if python_version_specifiers else "",
-            "python_version_specifiers": python_version_specifiers,
+            "python_versions": pkg_python_versions,
             "dependencies": deps,
             "files": files,
             "is_local": is_local,
@@ -558,8 +530,7 @@ def translate_uv(project_dict, lock_dict, lock_model):
             extra_pkg = {
                 "name": extra_pkg_name,
                 "version": package_version,
-                "python_versions": python_version_specifiers[0] if python_version_specifiers else "",
-                "python_version_specifiers": python_version_specifiers,
+                "python_versions": pkg_python_versions,
                 "dependencies": extra_parsed_deps,
                 "files": [],
                 "is_local": is_local,
@@ -577,38 +548,10 @@ def translate_uv(project_dict, lock_dict, lock_model):
         variants = variant_sets,
         resolution_marker_exprs = resolution_marker_exprs,
         testonly_pins = testonly_pin_names,
-        root_dependency_markers = {
-            name: markers
-            for name, markers in root_dependency_markers.items()
-            if markers != None
-        },
+        root_dependency_markers = root_dependency_markers,
     )
 
 def repo_create_uv_model(rctx, extra_project_files, lock_file, lock_model):
-    """Run the UV translator in pure Starlark.
-
-    Args:
-        rctx: The repository_ctx or module_ctx object.
-        extra_project_files: List of extra pyproject.toml files.
-        lock_file: The lock file.
-        lock_model: a struct containing the same attrs as the pycross_uv_lock_model rule.
-
-    Returns:
-        The raw_lock_data dict.
-    """
-
-    projects = getattr(lock_model, "projects", [])
-    project_file = select_project_file(rctx, extra_project_files, lock_file, projects)
-
-    project_dict = {}
-    if project_file:
-        project_path = rctx.path(project_file)
-        if project_path.exists:
-            project_dict = decode(rctx.read(project_path))
-
-    lock_path = rctx.path(lock_file)
-    if not lock_path.exists:
-        fail("Lock file not found: {}. Ensure uv.lock exists at the expected location.".format(lock_file))
-
-    lock_dict = decode(rctx.read(lock_path))
+    """Run the UV translator in pure Starlark."""
+    project_dict, lock_dict = read_project_and_lock(rctx, extra_project_files, lock_file, lock_model, "uv.lock")
     return translate_uv(project_dict, lock_dict, lock_model)

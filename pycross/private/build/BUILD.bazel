@@ -16,6 +16,7 @@ bzl_library(
     srcs = ["cc_pkg_config.bzl"],
     deps = [
         ":cc_toolchain_util",
+        "@bazel_skylib//lib:collections",
         "@rules_cc//cc/common",
     ],
 )

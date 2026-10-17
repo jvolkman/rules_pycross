@@ -9,35 +9,6 @@ REPO_HTTP_DEPS = [
     "@bazel_tools//tools/build_defs/repo:cache.bzl",
 ]
 
-def trace_ctx(ctx, display_name = "ctx"):
-    """Wraps a context object so that method calls are printed with their arguments.
-
-    Usage example:
-      def _my_module_impl(module_ctx):
-          module_ctx = trace_context(module_ctx, "module_ctx")
-          ...
-    """
-
-    def wrap(field_name):
-        field = getattr(ctx, field_name)
-
-        if type(field) != "builtin_function_or_method":
-            return field
-
-        def _wrapper(*a, **kw):
-            args = [repr(arg) for arg in a]
-            for k, v in kw.items():
-                args.append("{}={}".format(k, repr(v)))
-
-            # buildifier: disable=print
-            print("{}.{}({})".format(display_name, field_name, ", ".join(args)))
-
-            return field(*a, **kw)
-
-        return _wrapper
-
-    return struct(**{field_name: wrap(field_name) for field_name in dir(ctx)})
-
 def sanitize_name(val):
     """Sanitize a string into a valid Bazel repository and target name identifier.
 
@@ -175,6 +146,18 @@ def has_build_fallback(pkg):
         return True
     return bool(pkg.get("sdist_file")) and not sdist_builds_disallowed(pkg)
 
+def is_platform_specific(pkg):
+    """Whether a resolved package may be unavailable in some target environments."""
+    if pkg.get("availability_markers"):
+        return True
+    return bool(pkg.get("wheel_candidates")) and not has_build_fallback(pkg)
+
+def variant_item_qname(item):
+    """Return the qualified name (e.g. 'package_foo' or 'extra_bar') for a variant item."""
+    if item["kind"] == "project":
+        return "package_{}".format(item["package"])
+    return "{}_{}".format(item["kind"], item["name"])
+
 def coerce_transition_values(current, values):
     """Coerce raw repo transition values to the type of a setting's current value.
 
@@ -246,7 +229,6 @@ def merge_py_providers(
 
     Returns:
         A struct with fields:
-          - default_info: A DefaultInfo provider.
           - py_info: A PyInfo provider.
           - runfiles: The merged Runfiles object.
     """
@@ -282,10 +264,6 @@ def merge_py_providers(
                 runfiles = runfiles.merge(rf)
 
     return struct(
-        default_info = DefaultInfo(
-            files = depset(direct = direct_sources) if direct_sources else depset(),
-            runfiles = runfiles,
-        ),
         py_info = py_info,
         runfiles = runfiles,
     )

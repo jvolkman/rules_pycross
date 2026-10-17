@@ -53,6 +53,7 @@ bzl_library(
     name = "interpreter_version",
     srcs = ["interpreter_version.bzl"],
     deps = [
+        ":pep508_marker_values",
         ":python_versions",
         ":rules_python_bzl",
         "@bazel_skylib//rules:common_settings",

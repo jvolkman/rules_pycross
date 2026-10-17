@@ -16,7 +16,6 @@ load(":json_file_repo.bzl", "json_file_repo")
 load(
     ":lock_common.bzl",
     "normalize_package_tag",
-    "package_annotation",
     "process_workspaces",
     "validate_transition_attrs",
 )
@@ -179,7 +178,7 @@ def _tag_to_annotation_data(pkg, wildcard_pkg = None):
     Returns:
         A dict of annotation fields.
     """
-    return json.decode(package_annotation(
+    return dict(
         build_mode = pkg.build_mode or (wildcard_pkg.build_mode if wildcard_pkg else "") or "auto",
         extra_build_tools = pkg.extra_build_tools or (wildcard_pkg.extra_build_tools if wildcard_pkg else []),
         build_tools_repo = pkg.build_tools_repo or (wildcard_pkg.build_tools_repo if wildcard_pkg else None),
@@ -197,7 +196,7 @@ def _tag_to_annotation_data(pkg, wildcard_pkg = None):
         include_paths = pkg.include_paths or (wildcard_pkg.include_paths if wildcard_pkg else []),
         wheel_library_tags = pkg.wheel_library_tags or (wildcard_pkg.wheel_library_tags if wildcard_pkg else []),
         precompile = pkg.precompile or (wildcard_pkg.precompile if wildcard_pkg else ""),
-    ))
+    )
 
 tag_to_annotation_data_for_testing = _tag_to_annotation_data
 
@@ -235,22 +234,19 @@ def _normalize_settings(settings, flags):
         result[key] = value
     return result
 
-def _resolve_lock_inline(module_ctx, lock_info, serialized_lock_model, workspace_packages, repo_create_model_fn):
+def _resolve_lock_inline(module_ctx, lock_info, lock_model, workspace_packages, repo_create_model_fn):
     """Run translator + resolver inline within module_ctx.
 
     Args:
         module_ctx: The module_ctx object.
         lock_info: The lock repo info struct.
-        serialized_lock_model: JSON-encoded lock model.
+        lock_model: The lock model struct.
         workspace_packages: Dict of workspace_name -> {pkg_name -> normalized_tag}.
         repo_create_model_fn: The format-specific translator function.
 
     Returns:
         A dict containing the resolved lock data (packages, pins, remote_files, etc.).
     """
-    lock_model = json.decode(serialized_lock_model)
-    if type(lock_model) == "dict":
-        lock_model = struct(**lock_model)
 
     extra_project_files = [Label(f) for f in getattr(lock_model, "extra_project_files", [])]
     lock_file = Label(lock_model.lock_file)
@@ -300,8 +296,7 @@ def _resolve_lock_inline(module_ctx, lock_info, serialized_lock_model, workspace
 
 def make_format_extension(
         model_type,
-        workspace_attrs = None,
-        repo_attrs = None,
+        workspace_attrs = {},
         discover_members_fn = None,
         repo_create_model_fn = None):
     """Create a module_extension for a specific lock format.
@@ -310,12 +305,10 @@ def make_format_extension(
         model_type: The lock model type string (e.g. "uv", "pdm", "poetry", "pylock").
         workspace_attrs: Format-specific attrs for workspace tags.
             Merged with WORKSPACE_COMMON_ATTRS.
-        repo_attrs: Format-specific attrs for member project override tags, or None.
-            Merged with REPO_ATTRS and TRANSITION_ATTRS.
-        discover_members_fn: Function(mctx, lock_file_label) -> [struct(name, path)].
-            Required when workspace_attrs is not None.
-        repo_create_model_fn: Function(rctx, extra_project_files, lock_file, lock_model) -> dict.
-            Runs the format-specific translator to produce raw lock data.
+        discover_members_fn: Required function(mctx, lock_file_label) -> [struct(name, path)]
+            that auto-discovers workspace members from the project configuration.
+        repo_create_model_fn: Required function(rctx, extra_project_files, lock_file, lock_model) -> dict
+            that runs the format-specific translator to produce raw lock data.
 
     Returns:
         A module_extension value.
@@ -336,12 +329,11 @@ def make_format_extension(
 
         for module in module_ctx.modules:
             # 1. Process workspace tags.
-            if workspace_attrs != None:
-                for tag in module.tags.workspace:
-                    ws_name = tag.name
-                    workspace_tags.append(struct(tag = tag, module = module, ws_name = ws_name))
-                    if tag.pypi_indexes:
-                        workspace_pypi_indexes[ws_name] = tag.pypi_indexes
+            for tag in module.tags.workspace:
+                ws_name = tag.name
+                workspace_tags.append(struct(tag = tag, module = module, ws_name = ws_name))
+                if tag.pypi_indexes:
+                    workspace_pypi_indexes[ws_name] = tag.pypi_indexes
 
             # 2. Process repo tags (member overrides).
             for tag in module.tags.repo:
@@ -376,10 +368,7 @@ def make_format_extension(
         valid_workspaces = {r.workspace: True for r in lock_repos.values()}
 
         for module in module_ctx.modules:
-            module_workspaces[module.name] = []
-            if workspace_attrs != None:
-                for tag in module.tags.workspace:
-                    module_workspaces[module.name].append(tag.name)
+            module_workspaces[module.name] = [tag.name for tag in module.tags.workspace]
 
         # Process package annotations.
         workspace_packages = {}
@@ -418,14 +407,8 @@ def make_format_extension(
         # Run translators + resolver inline for each lock repo.
         resolved_locks = {}
         all_locks = {}
-        repo_pypi_indexes = {}  # repo_name -> pypi_indexes list
 
         for repo_name, repo_info in lock_repos.items():
-            # Determine pypi_indexes for this repo from its workspace.
-            pypi_indexes = workspace_pypi_indexes.get(repo_info.workspace, [])
-            if pypi_indexes:
-                repo_pypi_indexes[repo_name] = pypi_indexes
-
             resolved_data = _resolve_lock_inline(
                 module_ctx,
                 repo_info,
@@ -485,12 +468,12 @@ def make_format_extension(
             root_module_direct_dev_deps = [],
         )
 
-    # Build the repo tag_class by merging format-specific, shared, and transition attrs.
-    repo_tag_attrs = {}
-    if repo_attrs != None:
-        repo_tag_attrs.update(repo_attrs)
-    repo_tag_attrs.update(REPO_ATTRS)
+    # Build the repo tag_class by merging shared and transition attrs.
+    repo_tag_attrs = dict(REPO_ATTRS)
     repo_tag_attrs.update(TRANSITION_ATTRS)
+
+    ws_attrs = dict(workspace_attrs)
+    ws_attrs.update(WORKSPACE_COMMON_ATTRS)
 
     tag_classes = {
         "repo": tag_class(
@@ -501,15 +484,11 @@ def make_format_extension(
             doc = "Specify package-specific settings.",
             attrs = PACKAGE_ATTRS,
         ),
-    }
-
-    if workspace_attrs != None:
-        ws_attrs = dict(workspace_attrs)
-        ws_attrs.update(WORKSPACE_COMMON_ATTRS)
-        tag_classes["workspace"] = tag_class(
+        "workspace": tag_class(
             doc = "Declare a %s workspace from a shared lock file." % model_type,
             attrs = ws_attrs,
-        )
+        ),
+    }
 
     return module_extension(
         implementation = _impl,

@@ -4,6 +4,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from pycross.private.tools.wheel_installer import parse_flags
+
 
 class WheelInstallerWheelDirTest(unittest.TestCase):
     """Test the wheel_dir argument handling in wheel_installer."""
@@ -39,7 +41,7 @@ class WheelInstallerWheelDirTest(unittest.TestCase):
     def test_wheel_dir_finds_single_wheel(self):
         """--wheel-dir should find the single .whl file in the directory."""
         self._create_dummy_wheel()
-        args = _parse_args(
+        args = parse_flags(
             [
                 "--wheel-dir",
                 str(self.wheel_dir),
@@ -77,29 +79,14 @@ class WheelInstallerArgParsingTest(unittest.TestCase):
     def test_wheel_and_wheel_dir_are_optional(self):
         """Both --wheel and --wheel-dir should be optional."""
         # Just --wheel-dir
-        args = _parse_args(["--wheel-dir", "/tmp/wh", "--directory", "/tmp/out"])
+        args = parse_flags(["--wheel-dir", "/tmp/wh", "--directory", "/tmp/out"])
         self.assertEqual(args.wheel_dir, Path("/tmp/wh"))
         self.assertIsNone(args.wheel)
 
         # Just --wheel
-        args = _parse_args(["--wheel", "/tmp/foo.whl", "--directory", "/tmp/out"])
+        args = parse_flags(["--wheel", "/tmp/foo.whl", "--directory", "/tmp/out"])
         self.assertEqual(args.wheel, Path("/tmp/foo.whl"))
         self.assertIsNone(args.wheel_dir)
-
-
-def _parse_args(argv):
-    """Helper to import and call the argument parser."""
-    import argparse
-
-    # We need to replicate or import the parser. Since wheel_installer doesn't
-    # expose a parse_args function, we test the arg definitions.
-
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--wheel", type=Path, required=False)
-    parser.add_argument("--wheel-dir", type=Path, required=False)
-    parser.add_argument("--wheel-name-file", type=Path, required=False)
-    parser.add_argument("--directory", type=Path, required=True)
-    return parser.parse_args(argv)
 
 
 class WheelInstallerValidationTest(unittest.TestCase):
@@ -236,7 +223,6 @@ class WheelInstallerNormalizedDistInfoTest(unittest.TestCase):
         args = argparse.Namespace(
             wheel=wheel_path,
             wheel_dir=None,
-            wheel_name_file=None,
             install_exclude_globs=[],
             patches=[],
             entry_points_output=entry_points_out,
@@ -340,7 +326,6 @@ class WheelInstallerPrecompileTest(unittest.TestCase):
         args = argparse.Namespace(
             wheel=wheel_path,
             wheel_dir=None,
-            wheel_name_file=None,
             install_exclude_globs=[],
             patches=[],
             entry_points_output=None,
@@ -376,7 +361,6 @@ class WheelInstallerPrecompileTest(unittest.TestCase):
             args = argparse.Namespace(
                 wheel=wheel_path,
                 wheel_dir=None,
-                wheel_name_file=None,
                 install_exclude_globs=[],
                 patches=[],
                 entry_points_output=None,
@@ -441,7 +425,6 @@ class WheelInstallerPrecompileTest(unittest.TestCase):
         args = argparse.Namespace(
             wheel=wheel_path,
             wheel_dir=None,
-            wheel_name_file=None,
             install_exclude_globs=[],
             patches=[],
             entry_points_output=None,

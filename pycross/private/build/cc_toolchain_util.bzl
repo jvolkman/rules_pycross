@@ -40,7 +40,16 @@ CC_DISABLED_FEATURES = [
     "thin_lto",
 ]
 
-def _configure_features(ctx, cc_toolchain):
+def configure_features(ctx, cc_toolchain):
+    """Configures CC toolchain features with external-build-unsupported features disabled.
+
+    Args:
+        ctx: The rule context.
+        cc_toolchain: The C++ toolchain info.
+
+    Returns:
+        A FeatureConfiguration object.
+    """
     disabled_features = ctx.disabled_features + CC_DISABLED_FEATURES
     if not ctx.coverage_instrumented():
         # In coverage mode, cc_common.configure_features() adds coverage related flags,
@@ -57,40 +66,6 @@ def _configure_features(ctx, cc_toolchain):
 def _defines_from_deps(ctx):
     return depset(transitive = [dep[CcInfo].compilation_context.defines for dep in getattr(ctx.attr, "deps", []) if CcInfo in dep])
 
-def get_env_vars(ctx):
-    """Returns environment variables for C tools
-
-    Args:
-        ctx: rule context
-    Returns:
-        environment variables
-    """
-    cc_toolchain = find_cpp_toolchain(ctx)
-    feature_configuration = _configure_features(
-        ctx = ctx,
-        cc_toolchain = cc_toolchain,
-    )
-    copts = getattr(ctx.attr, "copts", [])
-
-    action_names = [
-        ACTION_NAMES.c_compile,
-        ACTION_NAMES.cpp_link_static_library,
-        ACTION_NAMES.cpp_link_executable,
-    ]
-
-    vars = dict()
-    for action_name in action_names:
-        vars.update(cc_common.get_environment_variables(
-            feature_configuration = feature_configuration,
-            action_name = action_name,
-            variables = cc_common.create_compile_variables(
-                feature_configuration = feature_configuration,
-                cc_toolchain = cc_toolchain,
-                user_compile_flags = copts,
-            ),
-        ))
-    return vars
-
 def get_tools_info(ctx):
     """Takes information about tools paths from cc_toolchain, returns CxxToolsInfo
 
@@ -98,7 +73,7 @@ def get_tools_info(ctx):
         ctx: rule context
     """
     cc_toolchain = find_cpp_toolchain(ctx)
-    feature_configuration = _configure_features(
+    feature_configuration = configure_features(
         ctx = ctx,
         cc_toolchain = cc_toolchain,
     )
@@ -136,7 +111,7 @@ def get_flags_info(ctx, copts = [], linkopts = [], link_output_file = None):
         CxxFlagsInfo: A provider containing Cxx flags
     """
     cc_toolchain_ = find_cpp_toolchain(ctx)
-    feature_configuration = _configure_features(
+    feature_configuration = configure_features(
         ctx = ctx,
         cc_toolchain = cc_toolchain_,
     )

@@ -57,7 +57,7 @@ def _pycross_wheel_file_impl(rctx):
     )
 
     # Inspect the wheel for site_paths, bin_paths, data_paths, and include_paths
-    result = exec_internal_tool(
+    exec_internal_tool(
         rctx,
         rctx.attr._inspect_tool,
         [
@@ -67,20 +67,7 @@ def _pycross_wheel_file_impl(rctx):
             "inspection.json",
         ],
     )
-
-    if result.return_code != 0:
-        # Non-fatal: if inspection fails, write empty result
-        # Note: exec_internal_tool will actually fail() if return_code != 0,
-        # but if we somehow bypass it or change it, we write a fallback.
-        inspection_data = {
-            "site_paths": [],
-            "bin_paths": [],
-            "data_paths": [],
-            "include_paths": [],
-        }
-        rctx.file("inspection.json", json.encode(inspection_data))
-    else:
-        inspection_data = json.decode(rctx.read("inspection.json"))
+    inspection_data = json.decode(rctx.read("inspection.json"))
 
     rctx.file("BUILD.bazel", _render_wheel_file_build(
         filename = rctx.attr.filename,

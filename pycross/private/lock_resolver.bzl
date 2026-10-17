@@ -83,7 +83,7 @@ def _apply_annotation(ann, versions_by_name, all_package_keys):
         build_mode = ann.get("build_mode", "auto"),
         ignore_dependencies = ignore_deps,
         extra_dependencies = extra_deps,
-        install_exclude_globs = {g: True for g in ann.get("install_exclude_globs", [])},
+        install_exclude_globs = list({g: True for g in ann.get("install_exclude_globs", [])}.keys()),
         post_install_patches = ann.get("post_install_patches", []),
         pre_build_patches = ann.get("pre_build_patches", []),
         site_hooks = ann.get("site_hooks", []),
@@ -218,12 +218,9 @@ def _create_package_resolver(pkg_key, pkg, ann, default_extra_build_tools, conte
     dependencies = []
     marker_dependencies = []
     for dep in pkg.get("dependencies", []):
-        dep_key = "{}@{}".format(dep["name"], dep["version"])
-        parts = parse_package_key(dep_key)
-        dep_name = parts.name
-        if parts.extra:
-            dep_name = "{}[{}]".format(parts.name, parts.extra)
+        dep_name = dep["name"]
         if dep_name not in ann_ignore_deps:
+            dep_key = "{}@{}".format(dep_name, dep["version"])
             dependencies.append(dep)
             marker_dependencies.append({
                 "key": dep_key,
@@ -279,7 +276,7 @@ def _create_package_resolver(pkg_key, pkg, ann, default_extra_build_tools, conte
         "build_tools_repo": ann.build_tools_repo if ann else None,
         "build_mode": build_mode,
         "extra_build_tools": extra_build_tools,
-        "install_exclude_globs": list(ann.install_exclude_globs.keys()) if ann else [],
+        "install_exclude_globs": ann.install_exclude_globs if ann else [],
         "post_install_patches": ann.post_install_patches if ann else [],
         "pre_build_patches": ann.pre_build_patches if ann else [],
         "site_hooks": ann.site_hooks if ann else [],
@@ -302,7 +299,6 @@ def _create_package_resolver(pkg_key, pkg, ann, default_extra_build_tools, conte
         all_dependency_keys = all_dependency_keys,
         wheel_candidate_files = wheel_candidate_files,
         sdist_file_obj = sdist_file_obj,
-        uses_sdist = uses_sdist,
         key = pkg_key,
     )
 
@@ -709,27 +705,20 @@ def resolve(
                     fork_targets[cname] = base_key
             if fork_targets and len(fork_targets) == len(versions):
                 pins[package_pin_name] = fork_targets
-                if is_testonly:
-                    testonly_pins_set[package_pin_name] = True
-                continue
-            if len(versions) > 1:
-                version_tuples = [(pypackaging.version.parse(v).key, v) for v in versions.keys()]
-                latest_version = sorted(version_tuples)[-1][1]
+            else:
+                if len(versions) > 1:
+                    version_tuples = [(pypackaging.version.parse(v).key, v) for v in versions.keys()]
+                    chosen_version = sorted(version_tuples)[-1][1]
 
-                # buildifier: disable=print
-                print("WARNING: Multiple versions of {} found in transitive dependencies. Aliasing to latest: {}".format(package_pin_name, latest_version))
-                base_key = "{}@{}".format(package_pin_name, latest_version)
+                    # buildifier: disable=print
+                    print("WARNING: Multiple versions of {} found in transitive dependencies. Aliasing to latest: {}".format(package_pin_name, chosen_version))
+                else:
+                    chosen_version = versions.keys()[0]
+                base_key = "{}@{}".format(package_pin_name, chosen_version)
                 if base_key in packages_by_package_key:
                     pins[package_pin_name] = {"": base_key}
-                    if is_testonly:
-                        testonly_pins_set[package_pin_name] = True
-                continue
-            version = versions.keys()[0]
-            base_key = "{}@{}".format(package_pin_name, version)
-            if base_key in packages_by_package_key:
-                pins[package_pin_name] = {"": base_key}
-                if is_testonly:
-                    testonly_pins_set[package_pin_name] = True
+            if is_testonly and package_pin_name in pins:
+                testonly_pins_set[package_pin_name] = True
 
     testonly_pin_names = sorted(testonly_pins_set.keys())
 

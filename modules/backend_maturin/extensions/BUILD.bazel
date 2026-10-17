@@ -15,6 +15,7 @@ bzl_library(
     name = "setuptools_rust",
     srcs = ["setuptools_rust.bzl"],
     deps = [
+        ":maturin",
         "//rules:generate_cargo_lock",
         "@rules_pycross//pycross:backend",
     ],

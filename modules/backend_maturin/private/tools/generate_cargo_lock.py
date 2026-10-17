@@ -71,9 +71,9 @@ def main():
                 import tomllib
             except ImportError:
                 try:
-                    from pip._vendor import tomli as tomllib
+                    from pip._vendor import tomli as tomllib  # type: ignore[no-redef]
                 except ImportError:
-                    tomllib = None
+                    tomllib = None  # type: ignore[assignment]
 
             if tomllib:
                 with open(pyproject_path, "rb") as f:

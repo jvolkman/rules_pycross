@@ -11,9 +11,6 @@ from pycross.private.build.tools.utils.context import BuildContext
 from pycross.private.build.tools.utils.context import replace_placeholder
 
 
-# NOTE: A simplified copy of the ranlib-guessing logic lives in
-# modules/backend_maturin/private/tools/rust_common.py (guess_ranlib_path)
-# to avoid a cross-module import. Keep both copies in sync.
 def parse_ar_and_guess_ranlib(ar: str | None) -> Tuple[List[str], Path | None]:
     """Parse AR path and flags, and guess ranlib path.
 
@@ -282,11 +279,5 @@ def setup_cc_layer(ctx: BuildContext, cc_config: Dict[str, Any]) -> None:
             "PATH": f"{layer_bin_dir.absolute()}:{ctx.build_env.get('PATH', '')}",
             "PYCROSS_LIBRARY_PATH": str(layer_lib_dir.absolute()),
             "PYCROSS_INCLUDE_PATH": ":".join(include_paths),
-            "CC": ctx.sysconfig_vars["CC"],
-            "CXX": ctx.sysconfig_vars["CXX"],
-            "CFLAGS": ctx.sysconfig_vars["CFLAGS"],
-            "CXXFLAGS": ctx.sysconfig_vars["CXXFLAGS"],
-            "LDFLAGS": ctx.sysconfig_vars["LDFLAGS"],
-            "LDSHAREDFLAGS": ctx.sysconfig_vars["LDSHAREDFLAGS"],
         }
     )

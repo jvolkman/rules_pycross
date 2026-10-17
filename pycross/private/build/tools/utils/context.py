@@ -33,7 +33,6 @@ class BuildContext:
     pkg_config_files: List[Path]
     path_tools: List[Dict[str, Any]]
     python_paths: List[Path]
-    target_sys_path: List[Path]
     site_hooks: List[str]
 
     # Shared build environment state
@@ -112,7 +111,6 @@ def load_build_context(config_path: str) -> BuildContext:
             for tool in bazel_config.get("path_tools", [])
         ],
         python_paths=[(prefix / Path(p)).absolute() for p in bazel_config.get("python_paths", [])],
-        target_sys_path=[(prefix / Path(p)).absolute() for p in (bazel_config.get("target_sys_path") or [])],
         site_hooks=[replace_placeholder(prefix, h) for h in bazel_config.get("site_hooks", [])],
         build_env=build_env,
         config_settings=config_settings,

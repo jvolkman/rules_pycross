@@ -89,50 +89,87 @@ def sha256_from_string(s):
         result = result + s
     return result[:64]
 
-def select_project_file(rctx, extra_project_files, lock_file, projects = []):
-    """Select the best matching pyproject.toml from extra_project_files.
-
-    For single-project repos (projects has exactly one non-wildcard entry),
-    iterates through extra_project_files to find the one whose [project].name
-    matches the requested project. Falls back to the sibling pyproject.toml
-    of the lock file if available, or the first file in the list.
+def read_project_and_lock(rctx, extra_project_files, lock_file, lock_model, lock_label_hint):
+    """Select and decode pyproject.toml and the lock file.
 
     Args:
         rctx: The repository_ctx or module_ctx object.
         extra_project_files: List of pyproject.toml labels.
-        lock_file: The lock file label, used for sibling fallback.
-        projects: List of project name strings from lock_model.
+        lock_file: The lock file label.
+        lock_model: Struct with lock model attributes (including optional `projects`).
+        lock_label_hint: Human-readable lock file name for error messages (e.g. "uv.lock").
 
     Returns:
-        A label for the selected pyproject.toml, or None if not found.
+        A tuple of (project_dict, lock_dict).
     """
-    if not extra_project_files:
-        # Fall back to sibling pyproject.toml
-        return lock_file.relative(":pyproject.toml")
-
+    projects = getattr(lock_model, "projects", [])
     project_file = None
+    project_dict = None
 
-    # Smart selection: if targeting a single named project, find its pyproject.toml
-    if len(projects) == 1 and projects[0] != "*":
-        target_name = canonicalize_name(projects[0])
-        for f in extra_project_files:
-            path = rctx.path(f)
-            if path.exists:
-                p_dict = decode(rctx.read(path))
-                p_name = p_dict.get("project", {}).get("name")
-                if p_name and canonicalize_name(p_name) == target_name:
-                    project_file = f
-                    break
+    if not extra_project_files:
+        project_file = lock_file.relative(":pyproject.toml")
+    else:
+        if len(projects) == 1 and projects[0] != "*":
+            target_name = canonicalize_name(projects[0])
+            for f in extra_project_files:
+                path = rctx.path(f)
+                if path.exists:
+                    p_dict = decode(rctx.read(path))
+                    p_name = p_dict.get("project", {}).get("name")
+                    if p_name and canonicalize_name(p_name) == target_name:
+                        project_file = f
+                        project_dict = p_dict
+                        break
 
-    if not project_file:
-        # Fallback: prefer sibling (root) pyproject.toml if in the list
-        sibling_label = lock_file.relative(":pyproject.toml")
-        if sibling_label in extra_project_files:
-            project_file = sibling_label
-        else:
-            project_file = extra_project_files[0]
+        if not project_file:
+            sibling_label = lock_file.relative(":pyproject.toml")
+            project_file = sibling_label if sibling_label in extra_project_files else extra_project_files[0]
 
-    return project_file
+    if project_dict == None:
+        project_dict = {}
+        if project_file:
+            project_path = rctx.path(project_file)
+            if project_path.exists:
+                project_dict = decode(rctx.read(project_path))
+
+    lock_path = rctx.path(lock_file)
+    if not lock_path.exists:
+        fail("Lock file not found: {}. Ensure {} exists at the expected location.".format(lock_file, lock_label_hint))
+
+    lock_dict = decode(rctx.read(lock_path))
+    return project_dict, lock_dict
+
+def detect_package_marker_forks(packages, pinned_package_specs):
+    """Detect resolution-marker forks (same package name with multiple marked versions) and update pins.
+
+    Args:
+        packages: List of translated package dicts.
+        pinned_package_specs: Dict of pin_name -> specifier, mutated in place for forked packages.
+
+    Returns:
+        Dict of constraint_name -> PEP 508 marker expression string.
+    """
+    resolution_marker_exprs = {}
+    fork_versions = {}  # {name: {version: marker_expr}}
+    for pkg in packages:
+        marker = pkg.get("markers", "")
+        if not marker:
+            continue
+        fork_versions.setdefault(pkg["name"], {})[pkg["version"]] = marker
+
+    for fname, versions in fork_versions.items():
+        if len(versions) <= 1:
+            continue
+        conditional_pins = {}
+        for fversion, marker_expr in versions.items():
+            cname = resolution_marker_constraint_name(fname, fversion)
+            conditional_pins[cname] = "===" + fversion
+            resolution_marker_exprs[cname] = marker_expr
+        for pin_name in list(pinned_package_specs.keys()):
+            if pin_name == fname or pin_name.startswith(fname + "["):
+                pinned_package_specs[pin_name] = conditional_pins
+
+    return resolution_marker_exprs
 
 def parse_pep508_requirement(req_str):
     """Parses a PEP 508 requirement string into components.
@@ -363,6 +400,12 @@ def resolve_lock_graph(packages, pinned_package_specs, requires_python, strict_d
     # Replace pins of local packages with pins of their dependencies
     if root_dependency_markers == None:
         root_dependency_markers = {}
+    else:
+        root_dependency_markers = {
+            name: markers
+            for name, markers in root_dependency_markers.items()
+            if markers != None
+        }
     direct_pin_names = {}
     for name in pinned_package_specs.keys():
         direct_pin_names[name] = True
@@ -440,10 +483,6 @@ def resolve_lock_graph(packages, pinned_package_specs, requires_python, strict_d
             "dependencies": deps_sorted,
             "files": files_sorted,
         }
-
-        # Include python_version_specifiers if present
-        if pkg.get("python_version_specifiers"):
-            raw_package["python_version_specifiers"] = pkg["python_version_specifiers"]
 
         # Include source_dir if present
         if pkg.get("source_dir"):

@@ -14,7 +14,7 @@ Naming conventions for generated targets:
     base package and all of its parsed extras into a single target.
 """
 
-load(":util.bzl", "has_build_fallback", "marker_evaluator_name", "parse_package_key", "sanitize_name")
+load(":util.bzl", "has_build_fallback", "is_platform_specific", "marker_evaluator_name", "parse_package_key", "sanitize_name")
 
 def _ind(text, tabs = 1):
     if not text:
@@ -33,19 +33,8 @@ def _is_in_same_cycle(dep_key, pkg, packages):
         return False
     return dep_pkg.get("cycle_group") == cycle_group
 
-def _wheel_target(file_ref, sdist_file, pkg_key, pkg, repo_map, sdist_map, rctx_name):
-    if file_ref.get("label"):
-        return file_ref["label"]
-    key = file_ref.get("key")
-    if sdist_file and key == sdist_file.get("key"):
-        if pkg.get("build_target"):
-            return pkg["build_target"]
-        if sdist_map and key in sdist_map:
-            return sdist_map[key]
-        repo_name = "{}_sdist_{}".format(rctx_name, sanitize_name(pkg_key))
-        return "@@{}//:wheel".format(repo_name)
-
-    return repo_map.get(key)
+def _wheel_target(file_ref, repo_map):
+    return file_ref.get("label") or repo_map.get(file_ref.get("key"))
 
 def _render_extras_aggregates(lines, packages):
     """Renders [_all_] pycross_library_proxy targets that aggregate a base package and all its extras."""
@@ -97,9 +86,6 @@ def _collect_unique_markers(packages):
             markers[(marker, "")] = True
     return markers.keys()
 
-def _marker_evaluator_name(marker_str, extra = ""):
-    return marker_evaluator_name(marker_str, extra)
-
 def _render_marker_evaluators(lines, unique_markers, variant_resolvers = None):
     """Render deduped pycross_pep508_evaluator and config_setting targets.
 
@@ -109,7 +95,7 @@ def _render_marker_evaluators(lines, unique_markers, variant_resolvers = None):
         variant_resolvers: Optional list of variant_resolver target labels.
     """
     for marker_str, extra in sorted(unique_markers):
-        eval_name = _marker_evaluator_name(marker_str, extra)
+        eval_name = marker_evaluator_name(marker_str, extra)
 
         # Evaluator rule — returns FeatureFlagInfo("true"/"false")
         lines.extend([
@@ -285,7 +271,7 @@ def _render_marker_cycle_member_deps(lines, cycle_groups, packages, variant_reso
             lines.append(_ind(")"))
             lines.append("")
 
-def _render_marker_wheel_chooser(lines, pkg_key, pkg, repo_map, sdist_map, rctx_name, sdist_target = None):
+def _render_marker_wheel_chooser(lines, pkg_key, pkg, repo_map, sdist_target = None):
     """Render a wheel chooser target and per-wheel config_settings + alias.
 
     Returns True when the wheel-based availability group was emitted under the
@@ -309,11 +295,9 @@ def _render_marker_wheel_chooser(lines, pkg_key, pkg, repo_map, sdist_map, rctx_
     ])
 
     # Config setting per wheel candidate (skip candidates with no target)
-    sdist_file = pkg.get("sdist_file")
     resolved_candidates = []
     for candidate in candidates:
-        file_ref = candidate.get("file_reference", {})
-        target = _wheel_target(file_ref, sdist_file, pkg_key, pkg, repo_map, sdist_map, rctx_name)
+        target = _wheel_target(candidate.get("file_reference", {}), repo_map)
         if target:
             resolved_candidates.append((candidate, target))
 
@@ -382,11 +366,6 @@ def _render_marker_wheel_chooser(lines, pkg_key, pkg, repo_map, sdist_map, rctx_
 def _render_marker_package_deps(lines, pkg_key, pkg_key_san, pkg, packages):
     """Render deps using marker-based select() instead of environment-based."""
     marker_deps = pkg.get("marker_dependencies", [])
-    if not marker_deps:
-        lines.append(_ind("_{}_deps = []".format(pkg_key_san)))
-        lines.append("")
-        return
-
     extra = parse_package_key(pkg_key).extra
 
     unconditional = []
@@ -409,19 +388,13 @@ def _render_marker_package_deps(lines, pkg_key, pkg_key_san, pkg, packages):
         # Each conditional dep gets its own select()
         for md in sorted(conditional, key = lambda m: m["key"]):
             effective_extra = extra if "extra" in md["marker"] else ""
-            eval_name = _marker_evaluator_name(md["marker"], effective_extra)
+            eval_name = marker_evaluator_name(md["marker"], effective_extra)
             lines[-1] = lines[-1] + " + select({"
             lines.append(_ind('":{}_match": [":{}"],'.format(eval_name, md["key"]), 2))
             lines.append(_ind('"//conditions:default": [],', 2))
             lines.append(_ind("})", 1))
 
     lines.append("")
-
-def _has_available_group(pkg):
-    """Whether _available_<pkg> is rendered for a (non-extras) package."""
-    if pkg.get("availability_markers"):
-        return True
-    return bool(pkg.get("wheel_candidates")) and not has_build_fallback(pkg)
 
 def _render_marker_availability(lines, pkg_key, pkg, wheel_gated = False, base_available = None):
     """Render an _available_<pkg> config_setting_group from availability markers.
@@ -457,7 +430,7 @@ def _render_marker_availability(lines, pkg_key, pkg, wheel_gated = False, base_a
         _ind("match_any = [", 2),
     ])
     for marker in markers:
-        eval_name = _marker_evaluator_name(marker, "")
+        eval_name = marker_evaluator_name(marker, "")
         lines.append(_ind('":{}_match",'.format(eval_name), 3))
     lines.extend([
         _ind("],", 2),
@@ -476,7 +449,14 @@ def _render_marker_availability(lines, pkg_key, pkg, wheel_gated = False, base_a
             "",
         ])
 
-def _render_marker_package(lines, pkg_key, pkg, packages, repo_map, sdist_map, rctx_name):
+def _render_str_list_attr(lines, attr_name, values):
+    if values:
+        lines.append(_ind("{} = [".format(attr_name), 2))
+        for val in values:
+            lines.append(_ind('"{}",'.format(val), 3))
+        lines.append(_ind("],", 2))
+
+def _render_marker_package(lines, pkg_key, pkg, packages, repo_map, rctx_name):
     """Renders all targets for a single package using marker-based deps and wheel selection."""
     pkg_key_san = _sanitize_name(pkg_key)
     parts = parse_package_key(pkg_key)
@@ -488,14 +468,7 @@ def _render_marker_package(lines, pkg_key, pkg, packages, repo_map, sdist_map, r
     has_wheel_candidates = bool(pkg.get("wheel_candidates"))
 
     sdist_file = pkg.get("sdist_file")
-    sdist_label = None
-    if sdist_file:
-        if sdist_file.get("label"):
-            sdist_label = sdist_file["label"]
-        elif sdist_file.get("key"):
-            sdist_label = repo_map.get(sdist_file["key"])
-
-    has_runtime_deps = has_marker_deps
+    sdist_label = _wheel_target(sdist_file, repo_map) if sdist_file else None
 
     # Runtime deps
     if has_marker_deps:
@@ -506,7 +479,7 @@ def _render_marker_package(lines, pkg_key, pkg, packages, repo_map, sdist_map, r
         # are only available where the base package is.
         base_pkg_key = "{}@{}".format(package_name, package_version)
         base_available = None
-        if _has_available_group(packages.get(base_pkg_key, {})):
+        if is_platform_specific(packages.get(base_pkg_key, {})):
             base_available = "_available_{}".format(base_pkg_key)
         _render_marker_availability(lines, pkg_key, pkg, base_available = base_available)
 
@@ -514,7 +487,7 @@ def _render_marker_package(lines, pkg_key, pkg, packages, repo_map, sdist_map, r
             _ind("pycross_library_proxy("),
             _ind('name = "{}",'.format(pkg_key), 2),
             _ind('actual = ":{}",'.format(base_pkg_key), 2),
-            _ind("deps = _{}_deps,".format(pkg_key_san) if has_runtime_deps else "deps = [],", 2),
+            _ind("deps = _{}_deps,".format(pkg_key_san) if has_marker_deps else "deps = [],", 2),
             _ind(")"),
             "",
         ])
@@ -543,7 +516,7 @@ def _render_marker_package(lines, pkg_key, pkg, packages, repo_map, sdist_map, r
     # Wheel chooser
     wheel_gated = False
     if has_wheel_candidates:
-        wheel_gated = _render_marker_wheel_chooser(lines, pkg_key, pkg, repo_map, sdist_map, rctx_name, sdist_target = sdist_target)
+        wheel_gated = _render_marker_wheel_chooser(lines, pkg_key, pkg, repo_map, sdist_target = sdist_target)
     else:
         # No wheel candidates, alias directly to sdist_target or no_match_error
         target = sdist_target if sdist_target else "@rules_pycross//pycross/private:no_match_error"
@@ -562,8 +535,6 @@ def _render_marker_package(lines, pkg_key, pkg, packages, repo_map, sdist_map, r
     if pkg.get("cycle_group"):
         lib_name = "_raw_{}".format(pkg_key)
 
-    has_any_deps = has_runtime_deps
-
     lines.extend([
         _ind("pycross_wheel_library("),
         _ind('name = "{}",'.format(lib_name), 2),
@@ -572,50 +543,18 @@ def _render_marker_package(lines, pkg_key, pkg, packages, repo_map, sdist_map, r
         _ind('wheel = ":_wheel_{}",'.format(pkg_key), 2),
     ])
 
-    if pkg.get("site_paths"):
-        lines.append(_ind("site_paths = [", 2))
-        for tlp in pkg["site_paths"]:
-            lines.append(_ind('"{}",'.format(tlp), 3))
-        lines.append(_ind("],", 2))
+    for attr_name in ("site_paths", "bin_paths", "data_paths", "include_paths"):
+        _render_str_list_attr(lines, attr_name, pkg.get(attr_name))
 
-    if pkg.get("bin_paths"):
-        lines.append(_ind("bin_paths = [", 2))
-        for bp in pkg["bin_paths"]:
-            lines.append(_ind('"{}",'.format(bp), 3))
-        lines.append(_ind("],", 2))
-
-    if pkg.get("data_paths"):
-        lines.append(_ind("data_paths = [", 2))
-        for dp in pkg["data_paths"]:
-            lines.append(_ind('"{}",'.format(dp), 3))
-        lines.append(_ind("],", 2))
-
-    if pkg.get("include_paths"):
-        lines.append(_ind("include_paths = [", 2))
-        for ip in pkg["include_paths"]:
-            lines.append(_ind('"{}",'.format(ip), 3))
-        lines.append(_ind("],", 2))
-
-    if has_any_deps:
+    if has_marker_deps:
         lines.append(_ind("deps = _{}_deps,".format(pkg_key_san), 2))
 
-    if pkg.get("install_exclude_globs"):
-        lines.append(_ind("install_exclude_globs = [", 2))
-        for glob in pkg["install_exclude_globs"]:
-            lines.append(_ind('"{}",'.format(glob), 3))
-        lines.append(_ind("],", 2))
-
-    if pkg.get("post_install_patches"):
-        lines.append(_ind("post_install_patches = [", 2))
-        for patch in pkg["post_install_patches"]:
-            lines.append(_ind('"{}",'.format(patch), 3))
-        lines.append(_ind("],", 2))
-
-    if pkg.get("wheel_library_tags"):
-        lines.append(_ind("tags = [", 2))
-        for tag in pkg["wheel_library_tags"]:
-            lines.append(_ind('"{}",'.format(tag), 3))
-        lines.append(_ind("],", 2))
+    for field, attr_name in (
+        ("install_exclude_globs", "install_exclude_globs"),
+        ("post_install_patches", "post_install_patches"),
+        ("wheel_library_tags", "tags"),
+    ):
+        _render_str_list_attr(lines, attr_name, pkg.get(field))
 
     if pkg.get("precompile"):
         lines.append(_ind('precompile = "{}",'.format(pkg["precompile"]), 2))
@@ -640,13 +579,12 @@ def _render_marker_package(lines, pkg_key, pkg, packages, repo_map, sdist_map, r
 
 # ---- Main render function ---------------------------------------------------
 
-def render_lock_bzl(lock, repo_map, sdist_map = None, rctx_name = "", variant_resolvers = None):
+def render_lock_bzl(lock, repo_map, rctx_name = "", variant_resolvers = None):
     """Renders a lock.bzl file from a resolved lock structure.
 
     Args:
         lock: The parsed lock.json dict.
         repo_map: A dict mapping file keys to repo labels.
-        sdist_map: A dict mapping sdist package keys to their wheel target labels.
         rctx_name: The name of the package repository.
         variant_resolvers: Optional list of variant_resolver target labels.
 
@@ -671,15 +609,12 @@ def render_lock_bzl(lock, repo_map, sdist_map = None, rctx_name = "", variant_re
     # True for: packages with wheel candidates but no sdist fallback,
     # marker-restricted availability, or compound resolution-marker constraints.
     needs_selects = False
-    for _pk, pkg_data in packages.items():
-        if pkg_data.get("wheel_candidates") and not has_build_fallback(pkg_data):
-            needs_selects = True
-            break
-        if pkg_data.get("availability_markers"):
+    for pkg_data in packages.values():
+        if is_platform_specific(pkg_data):
             needs_selects = True
             break
     if not needs_selects:
-        for _cn, entry in lock.get("resolution_marker_exprs", {}).items():
+        for entry in lock.get("resolution_marker_exprs", {}).values():
             if type(entry) == "dict":
                 needs_selects = True
                 break
@@ -692,11 +627,6 @@ def render_lock_bzl(lock, repo_map, sdist_map = None, rctx_name = "", variant_re
     ] + [
         'load("@rules_pycross//pycross/private:{}", "{}")'.format(bzl, symbol)
         for bzl, symbol in sorted(pycross_loads.items())
-    ] + [
-        'load("@rules_pycross//pycross/private:pep508_marker_values.bzl",',
-        '    "FREETHREADED_VALUES",',
-        '    "LIBC_VALUES",',
-        ")",
     ]
 
     if needs_selects:
@@ -723,7 +653,7 @@ def render_lock_bzl(lock, repo_map, sdist_map = None, rctx_name = "", variant_re
 
     # 3. Packages
     for pkg_key, pkg in sorted(packages.items()):
-        _render_marker_package(lines, pkg_key, pkg, packages, repo_map, sdist_map, rctx_name)
+        _render_marker_package(lines, pkg_key, pkg, packages, repo_map, rctx_name)
 
     # 4. Extras aggregates ([_all_] targets)
     _render_extras_aggregates(lines, packages)

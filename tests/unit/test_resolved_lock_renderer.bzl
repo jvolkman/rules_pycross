@@ -317,7 +317,6 @@ def _test_lock_bzl_format_impl(env, target):
     # Should always have marker-related loads
     env.expect.that_bool("pycross_pep508_evaluator" in res).equals(True)
     env.expect.that_bool("pycross_wheel_chooser" in res).equals(True)
-    env.expect.that_bool("pep508_marker_values" in res).equals(True)
 
 def _test_lock_bzl_format(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
@@ -420,7 +419,6 @@ def _test_marker_deps_rendering_impl(env, target):
     # Should load the marker-related symbols
     env.expect.that_bool("pycross_pep508_evaluator" in res).equals(True)
     env.expect.that_bool("pycross_wheel_chooser" in res).equals(True)
-    env.expect.that_bool("pep508_marker_values" in res).equals(True)
 
     # Should have an evaluator target for the sys_platform marker
     env.expect.that_bool("_marker_eval_" in res).equals(True)
