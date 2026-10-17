@@ -263,7 +263,7 @@ def translate_pdm(project_dict, lock_dict, lock_model):
         if fname in pinned_package_specs:
             conditional_pins = {}
             for fversion, cname in version_constraints.items():
-                conditional_pins[cname] = "==" + fversion
+                conditional_pins[cname] = "===" + fversion
             pinned_package_specs[fname] = conditional_pins
 
     return resolve_lock_graph(

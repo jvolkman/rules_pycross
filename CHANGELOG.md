@@ -17,6 +17,12 @@ All notable changes to this project will be documented in this file.
   are present. Below a namespace, shared libraries are linked individually under
   real directories, so cross-wheel `$ORIGIN` RPATHs (e.g. `nvidia-cusparse-cu12`
   → `nvidia-nvjitlink-cu12`) resolve inside the venv.
+- **`uv` conflict groups and local-version forks.** Synthetic `uv` conflict
+  markers (`extra == '<kind>-<len>-<pkg>-<name>'`) are now evaluated against the
+  active conflict variant state so transitive dependency edges and cycles are
+  preserved, per-edge resolution-marker forks use their variant-specific marker
+  expressions, and locked versions use exact (`===`) matching so local version
+  tags (e.g. `2.12.0` vs `2.12.0+cpu`) do not collide.
 
 ## [2.0.0]
 

@@ -165,6 +165,10 @@ def marker_value_attrs():
         "implementation_version": attr.string(default = ""),
         "platform_python_implementation": attr.string(default = ""),
         "extra": attr.string(default = ""),
+        "variants": attr.label_list(
+            default = [],
+            providers = [config_common.FeatureFlagInfo],
+        ),
 
         # Hidden fallback targets pointing to standard marker definitions.
         "_os_name_target": attr.label(default = "@rules_pycross//pycross/private/markers:os_name"),
@@ -257,7 +261,12 @@ def collect_markers(ctx):
         else:
             platform_python_implementation = implementation_name
 
-    extra = ctx.attr.extra
+    active_variants = []
+    for v in getattr(ctx.attr, "variants", []):
+        val = flag_value(v)
+        if val:
+            active_variants.append("__variant_" + val)
+    extra = ([ctx.attr.extra] + active_variants) if active_variants else ctx.attr.extra
 
     return {
         "os_name": os_name,

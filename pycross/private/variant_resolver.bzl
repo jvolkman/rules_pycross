@@ -31,10 +31,7 @@ def _variant_resolver_impl(ctx):
     elif ctx.attr.default:
         value = ctx.attr.default
     else:
-        fail(
-            "No variant selected and no default configured for conflict set. " +
-            "Set one of: " + ", ".join(ctx.attr.names),
-        )
+        value = ""
 
     return [config_common.FeatureFlagInfo(value = value)]
 

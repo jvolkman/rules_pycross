@@ -6,6 +6,9 @@ load("@rules_testing//lib:analysis_test.bzl", "analysis_test", "test_suite")
 load("@rules_testing//lib:truth.bzl", "matching")
 
 # buildifier: disable=bzl-visibility
+load("//pycross/private:pep508_evaluator.bzl", "pycross_pep508_evaluator")
+
+# buildifier: disable=bzl-visibility
 load("//pycross/private:variant_resolver.bzl", "variant_resolver")
 
 # ── Helpers ──────────────────────────────────────────────────────────
@@ -65,14 +68,13 @@ def _test_default_when_no_flag(name):
         impl = _test_default_when_no_flag_impl,
     )
 
-# ── Test: no flags and no default fails ──────────────────────────────
+# ── Test: no flags and no default returns empty string ───────────────
 
-def _test_no_flags_no_default_fails_impl(env, target):
-    env.expect.that_target(target).failures().contains_predicate(
-        matching.contains("No variant selected"),
-    )
+def _test_no_flags_no_default_impl(env, target):
+    info = target[config_common.FeatureFlagInfo]
+    env.expect.that_str(info.value).equals("")
 
-def _test_no_flags_no_default_fails(name):
+def _test_no_flags_no_default(name):
     flag_refs = _setup_flags(name, ["a", "b"])
     variant_resolver(
         name = name + "_resolver",
@@ -84,8 +86,7 @@ def _test_no_flags_no_default_fails(name):
     analysis_test(
         name = name,
         target = name + "_resolver",
-        impl = _test_no_flags_no_default_fails_impl,
-        expect_failure = True,
+        impl = _test_no_flags_no_default_impl,
     )
 
 # ── Test: mutual exclusion (both flags set) ──────────────────────────
@@ -382,6 +383,48 @@ def _test_multi_set_cross_exclusion_fails(name):
         },
     )
 
+# ── Test: variant_resolver with pycross_pep508_evaluator ─────────────
+
+def _test_variants_with_evaluator_impl(env, target):
+    env.expect.that_target(target).default_outputs().contains_at_least([])
+
+def _test_variants_with_evaluator(name):
+    flag_refs = _setup_flags(name, ["group_cpu", "group_cuda"])
+    variant_resolver(
+        name = name + "_resolver",
+        flags = flag_refs,
+        names = ["group_cpu", "group_cuda"],
+        default = "group_cpu",
+        tags = ["manual"],
+    )
+    pycross_pep508_evaluator(
+        name = name + "_eval",
+        expr = "sys_platform == 'linux' and '__variant_group_cuda' == extra and extra != '__variant_group_cpu' and extra == 'cudart'",
+        extra = "cudart",
+        sys_platform = "linux",
+        variants = [":" + name + "_resolver"],
+        tags = ["manual"],
+    )
+    native.config_setting(
+        name = name + "_eval_match",
+        flag_values = {":" + name + "_eval": "true"},
+    )
+    native.filegroup(
+        name = name + "_subject",
+        srcs = select({
+            ":" + name + "_eval_match": [],
+        }),
+        tags = ["manual"],
+    )
+    analysis_test(
+        name = name,
+        target = name + "_subject",
+        impl = _test_variants_with_evaluator_impl,
+        config_settings = {
+            str(Label(":" + name + "_flag_group_cuda")): True,
+        },
+    )
+
 # ── Suite ────────────────────────────────────────────────────────────
 
 def variant_resolver_test_suite(name):
@@ -390,7 +433,7 @@ def variant_resolver_test_suite(name):
         tests = [
             _test_single_flag_active,
             _test_default_when_no_flag,
-            _test_no_flags_no_default_fails,
+            _test_no_flags_no_default,
             _test_mutual_exclusion_fails,
             _test_mixed_extra_group,
             _test_three_way_conflict,
@@ -399,5 +442,6 @@ def variant_resolver_test_suite(name):
             _test_config_setting_explicit_flag,
             _test_multi_set_overlap,
             _test_multi_set_cross_exclusion_fails,
+            _test_variants_with_evaluator,
         ],
     )

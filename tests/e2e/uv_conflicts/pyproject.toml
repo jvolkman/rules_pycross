@@ -7,9 +7,12 @@ dependencies = []
 [project.optional-dependencies]
 variant-a = [
   "typing-extensions==4.11.0 ; sys_platform != 'win32'",
+  "jinja2==3.1.6 ; sys_platform == 'linux'",
 ]
 variant-b = [
-  "typing-extensions==4.12.2 ; sys_platform != 'win32'",
+  "typing-extensions==4.11.0 ; sys_platform == 'darwin'",
+  "typing-extensions==4.12.2 ; sys_platform != 'win32' and sys_platform != 'darwin'",
+  "jinja2==3.1.6 ; sys_platform != 'win32'",
 ]
 
 [dependency-groups]
@@ -21,7 +24,7 @@ group-b = [
 ]
 
 [tool.uv]
-# variant-a is the default, so builds without explicit flags use variant-a.
+# group-a is the default, so builds without explicit flags use group-a.
 default-groups = ["group-a"]
 conflicts = [
   [

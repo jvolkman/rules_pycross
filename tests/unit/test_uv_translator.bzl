@@ -2,6 +2,13 @@
 
 load("@rules_testing//lib:analysis_test.bzl", "analysis_test", "test_suite")
 load("@rules_testing//lib:util.bzl", "util")
+load("@toml.bzl//toml:toml.bzl", "decode")
+
+# buildifier: disable=bzl-visibility
+load("//pycross/private:lock_resolver.bzl", "resolve")
+
+# buildifier: disable=bzl-visibility
+load("//pycross/private:resolved_lock_renderer.bzl", "render_lock_bzl")
 
 # buildifier: disable=bzl-visibility
 load("//pycross/private:uv_lock_model.bzl", "translate_uv")
@@ -794,6 +801,566 @@ def _test_uv_variants_scoped_to_project(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
     analysis_test(name = name, target = name + "_subject", impl = _test_uv_variants_scoped_to_project_impl)
 
+# --- test_local_version_exact_matching ---
+
+# buildifier: disable=unused-variable
+def _test_uv_local_version_exact_matching_impl(env, target):
+    """Exact locked versions (===) distinguish 2.12.0 from 2.12.0+cpu in pins, deps, and extra self-deps."""
+    project = _project(
+        opt_deps = {
+            "cpu": ["torch==2.12.0+cpu"],
+            "cuda": ["torch[opt]==2.12.0"],
+        },
+        uv_conflicts = [[{"package": "my-app", "extra": "cpu"}, {"package": "my-app", "extra": "cuda"}]],
+    )
+    lock = _lock(
+        [
+            _vpkg(
+                "my-app",
+                deps = [_dep("helper", "1.0.0")],
+                opt_deps = {
+                    "cpu": [_dep("torch", "2.12.0+cpu")],
+                    "cuda": [
+                        _dep("torch", "2.12.0"),
+                        _dep("torch", "2.12.0", extra = ["opt"]),
+                    ],
+                },
+            ),
+            _pkg(
+                "helper",
+                "1.0.0",
+                wheels = [_whl("helper-1.0.0-py3-none-any.whl", "h1")],
+                deps = [_dep("torch", "2.12.0")],
+            ),
+            _pkg(
+                "helper",
+                "1.0.0+local",
+                wheels = [_whl("helper-1.0.0%2Blocal-py3-none-any.whl", "h2")],
+            ),
+            _pkg(
+                "torch",
+                "2.12.0",
+                wheels = [_whl("torch-2.12.0-cp312-cp312-linux_x86_64.whl", "t1")],
+                opt_deps = {"opt": []},
+            ),
+            _pkg(
+                "torch",
+                "2.12.0+cpu",
+                wheels = [_whl("torch-2.12.0%2Bcpu-cp312-cp312-linux_x86_64.whl", "t2")],
+                opt_deps = {"opt": []},
+            ),
+        ],
+        conflicts = [[{"package": "my-app", "extra": "cpu"}, {"package": "my-app", "extra": "cuda"}]],
+    )
+    result = translate_uv(project, lock, _lock_model(dependency_groups = ["default", "optional:*"]))
+
+    # Root pins: 2.12.0 -> torch@2.12.0 (not +cpu), 2.12.0+cpu -> torch@2.12.0+cpu
+    env.expect.that_str(result["pins"]["helper"]).equals("helper@1.0.0")
+    env.expect.that_str(result["pins"]["torch"]["extra_cuda"]).equals("torch@2.12.0")
+    env.expect.that_str(result["pins"]["torch"]["extra_cpu"]).equals("torch@2.12.0+cpu")
+    env.expect.that_str(result["pins"]["torch[opt]"]["extra_cuda"]).equals("torch[opt]@2.12.0")
+
+    # Package dependency edge with explicit version 2.12.0 resolves to 2.12.0 (not 2.12.0+cpu)
+    helper_deps = result["packages"]["helper@1.0.0"]["dependencies"]
+    env.expect.that_int(len(helper_deps)).equals(1)
+    env.expect.that_str(helper_deps[0]["name"]).equals("torch")
+    env.expect.that_str(helper_deps[0]["version"]).equals("2.12.0")
+
+    # Self-dependency of torch[opt]@2.12.0 resolves to 2.12.0 (not 2.12.0+cpu)
+    torch_opt_deps = result["packages"]["torch[opt]@2.12.0"]["dependencies"]
+    env.expect.that_int(len(torch_opt_deps)).equals(1)
+    env.expect.that_str(torch_opt_deps[0]["name"]).equals("torch")
+    env.expect.that_str(torch_opt_deps[0]["version"]).equals("2.12.0")
+
+def _test_uv_local_version_exact_matching(name):
+    util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
+    analysis_test(name = name, target = name + "_subject", impl = _test_uv_local_version_exact_matching_impl)
+
+# --- test_issue_1510_verbatim_lock ---
+
+_ISSUE_1510_PYPROJECT_TOML = """\
+[project]
+name = "native-torch-probe"
+version = "0.0.0"
+requires-python = ">=3.12,<3.13"
+
+[dependency-groups]
+cpu = ["torch==2.12.0"]
+cuda = ["torch==2.12.0; sys_platform == 'linux'"]
+
+[tool.uv]
+package = false
+environments = [
+    "sys_platform == 'linux' and platform_machine == 'x86_64'",
+    "sys_platform == 'darwin' and platform_machine == 'arm64'",
+]
+conflicts = [[{group = "cpu"}, {group = "cuda"}]]
+
+[tool.uv.sources]
+torch = [{index = "pytorch-cpu", group = "cpu", marker = "sys_platform == 'linux'"}]
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+"""
+
+_ISSUE_1510_UV_LOCK = """\
+version = 1
+revision = 3
+requires-python = "==3.12.*"
+resolution-markers = [
+    "platform_machine == 'x86_64' and sys_platform == 'linux'",
+    "platform_machine == 'arm64' and sys_platform == 'darwin'",
+]
+supported-markers = [
+    "platform_machine == 'x86_64' and sys_platform == 'linux'",
+    "platform_machine == 'arm64' and sys_platform == 'darwin'",
+]
+conflicts = [[
+    { package = "native-torch-probe", group = "cpu" },
+    { package = "native-torch-probe", group = "cuda" },
+]]
+
+[[package]]
+name = "cuda-bindings"
+version = "13.3.1"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "cuda-pathfinder", marker = "(platform_machine == 'x86_64' and sys_platform == 'linux' and extra == 'group-18-native-torch-probe-cuda') or (platform_machine != 'x86_64' and extra == 'group-18-native-torch-probe-cpu' and extra == 'group-18-native-torch-probe-cuda') or (sys_platform != 'linux' and extra == 'group-18-native-torch-probe-cpu' and extra == 'group-18-native-torch-probe-cuda')" },
+]
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/39/2a/6d2e9047d1fb243dbaa364b01e0297534b9ed7fd27dba1c9f361519cf69b/cuda_bindings-13.3.1-cp312-cp312-manylinux_2_24_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:e32d08f71ebcdf00f0f41eab2eb37e8da94c8ed411cc9f7f7a019ce6b34abe3a", size = 6657965, upload-time = "2026-05-29T23:11:52.227Z" },
+]
+
+[[package]]
+name = "cuda-pathfinder"
+version = "1.8.0"
+source = { registry = "https://pypi.org/simple" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/a1/b1/ef21259ec74fe0b265ed201379de1d0ef7c14178313ee03705952f1b7093/cuda_pathfinder-1.8.0-py3-none-any.whl", hash = "sha256:c44e574dc997fae2814721d1ae97d0fd6db76db82decbe9b753bf75de53f515e", size = 62539, upload-time = "2026-08-27T21:33:03.229Z" },
+]
+
+[[package]]
+name = "cuda-toolkit"
+version = "13.0.2"
+source = { registry = "https://pypi.org/simple" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/57/b2/453099f5f3b698d7d0eab38916aac44c7f76229f451709e2eb9db6615dcd/cuda_toolkit-13.0.2-py2.py3-none-any.whl", hash = "sha256:b198824cf2f54003f50d64ada3a0f184b42ca0846c1c94192fa269ecd97a66eb", size = 2364, upload-time = "2025-12-19T23:24:07.328Z" },
+]
+
+[package.optional-dependencies]
+cudart = [
+    { name = "nvidia-cuda-runtime", marker = "(platform_machine == 'x86_64' and sys_platform == 'linux' and extra == 'group-18-native-torch-probe-cuda') or (platform_machine != 'x86_64' and extra == 'group-18-native-torch-probe-cpu' and extra == 'group-18-native-torch-probe-cuda') or (sys_platform != 'linux' and extra == 'group-18-native-torch-probe-cpu' and extra == 'group-18-native-torch-probe-cuda')" },
+]
+cufft = [
+    { name = "nvidia-cufft", marker = "(platform_machine == 'x86_64' and sys_platform == 'linux' and extra == 'group-18-native-torch-probe-cuda') or (platform_machine != 'x86_64' and extra == 'group-18-native-torch-probe-cpu' and extra == 'group-18-native-torch-probe-cuda') or (sys_platform != 'linux' and extra == 'group-18-native-torch-probe-cpu' and extra == 'group-18-native-torch-probe-cuda')" },
+]
+cufile = [
+    { name = "nvidia-cufile", marker = "(platform_machine == 'x86_64' and sys_platform == 'linux' and extra == 'group-18-native-torch-probe-cuda') or (platform_machine != 'x86_64' and extra == 'group-18-native-torch-probe-cpu' and extra == 'group-18-native-torch-probe-cuda') or (sys_platform != 'linux' and extra == 'group-18-native-torch-probe-cpu' and extra == 'group-18-native-torch-probe-cuda')" },
+]
+cupti = [
+    { name = "nvidia-cuda-cupti", marker = "(platform_machine == 'x86_64' and sys_platform == 'linux' and extra == 'group-18-native-torch-probe-cuda') or (platform_machine != 'x86_64' and extra == 'group-18-native-torch-probe-cpu' and extra == 'group-18-native-torch-probe-cuda') or (sys_platform != 'linux' and extra == 'group-18-native-torch-probe-cpu' and extra == 'group-18-native-torch-probe-cuda')" },
+]
+curand = [
+    { name = "nvidia-curand", marker = "(platform_machine == 'x86_64' and sys_platform == 'linux' and extra == 'group-18-native-torch-probe-cuda') or (platform_machine != 'x86_64' and extra == 'group-18-native-torch-probe-cpu' and extra == 'group-18-native-torch-probe-cuda') or (sys_platform != 'linux' and extra == 'group-18-native-torch-probe-cpu' and extra == 'group-18-native-torch-probe-cuda')" },
+]
+cusolver = [
+    { name = "nvidia-cusolver", marker = "(platform_machine == 'x86_64' and sys_platform == 'linux' and extra == 'group-18-native-torch-probe-cuda') or (platform_machine != 'x86_64' and extra == 'group-18-native-torch-probe-cpu' and extra == 'group-18-native-torch-probe-cuda') or (sys_platform != 'linux' and extra == 'group-18-native-torch-probe-cpu' and extra == 'group-18-native-torch-probe-cuda')" },
+]
+cusparse = [
+    { name = "nvidia-cusparse", marker = "(platform_machine == 'x86_64' and sys_platform == 'linux' and extra == 'group-18-native-torch-probe-cuda') or (platform_machine != 'x86_64' and extra == 'group-18-native-torch-probe-cpu' and extra == 'group-18-native-torch-probe-cuda') or (sys_platform != 'linux' and extra == 'group-18-native-torch-probe-cpu' and extra == 'group-18-native-torch-probe-cuda')" },
+]
+nvjitlink = [
+    { name = "nvidia-nvjitlink", marker = "(platform_machine == 'x86_64' and sys_platform == 'linux' and extra == 'group-18-native-torch-probe-cuda') or (platform_machine != 'x86_64' and extra == 'group-18-native-torch-probe-cpu' and extra == 'group-18-native-torch-probe-cuda') or (sys_platform != 'linux' and extra == 'group-18-native-torch-probe-cpu' and extra == 'group-18-native-torch-probe-cuda')" },
+]
+nvrtc = [
+    { name = "nvidia-cuda-nvrtc", marker = "(platform_machine == 'x86_64' and sys_platform == 'linux' and extra == 'group-18-native-torch-probe-cuda') or (platform_machine != 'x86_64' and extra == 'group-18-native-torch-probe-cpu' and extra == 'group-18-native-torch-probe-cuda') or (sys_platform != 'linux' and extra == 'group-18-native-torch-probe-cpu' and extra == 'group-18-native-torch-probe-cuda')" },
+]
+nvtx = [
+    { name = "nvidia-nvtx", marker = "(platform_machine == 'x86_64' and sys_platform == 'linux' and extra == 'group-18-native-torch-probe-cuda') or (platform_machine != 'x86_64' and extra == 'group-18-native-torch-probe-cpu' and extra == 'group-18-native-torch-probe-cuda') or (sys_platform != 'linux' and extra == 'group-18-native-torch-probe-cpu' and extra == 'group-18-native-torch-probe-cuda')" },
+]
+
+[[package]]
+name = "filelock"
+version = "3.32.4"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/6d/30/03b03951873a1a0ffc7e8ca0e10c15597b59e8d0e39260704cd2ea087bc4/filelock-3.32.4.tar.gz", hash = "sha256:2bde2e4cf732e0153406d8a7bc80620ecf5e621fe0d25e41143c4e3b4733ff30", size = 222126, upload-time = "2026-08-23T17:37:55.363Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/01/a4/9b63d595d748e3aff8812b65eacc1a2c4bd90b7c2012e08e72373b4835eb/filelock-3.32.4-py3-none-any.whl", hash = "sha256:22e58ca3b1ae3b98993b762d7338367ae64fe50252bf78d59da3bfebcdf1cedd", size = 99864, upload-time = "2026-08-23T17:37:53.913Z" },
+]
+
+[[package]]
+name = "fsspec"
+version = "2026.7.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/00/78/f34251dadb8f3921264a1d9b8946f5e542014ee2614b285261b4e40e6775/fsspec-2026.7.0.tar.gz", hash = "sha256:c803c40f4cf860b49dea58ee3e1c33cb9c790520e233537e1340049f89b82a88", size = 317040, upload-time = "2026-07-28T16:34:51.052Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/fd/3c/6a2bf344106328fd04963664a60b9bb6496fc25df8e962fcdc1367285fb9/fsspec-2026.7.0-py3-none-any.whl", hash = "sha256:b57ddbafedfaef7018c1ecab32aa200a9d7ca26b77965f64e48b70061249d279", size = 206583, upload-time = "2026-07-28T16:34:49.538Z" },
+]
+
+[[package]]
+name = "jinja2"
+version = "3.1.6"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "markupsafe", marker = "(platform_machine == 'arm64' and sys_platform == 'darwin' and extra == 'group-18-native-torch-probe-cpu') or (platform_machine == 'x86_64' and sys_platform == 'linux' and extra == 'group-18-native-torch-probe-cpu') or (platform_machine == 'x86_64' and sys_platform == 'linux' and extra == 'group-18-native-torch-probe-cuda') or (sys_platform != 'darwin' and sys_platform != 'linux' and extra == 'group-18-native-torch-probe-cpu' and extra == 'group-18-native-torch-probe-cuda') or (sys_platform == 'darwin' and extra == 'group-18-native-torch-probe-cpu' and extra == 'group-18-native-torch-probe-cuda') or (sys_platform == 'linux' and extra == 'group-18-native-torch-probe-cpu' and extra == 'group-18-native-torch-probe-cuda')" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/df/bf/f7da0350254c0ed7c72f3e33cef02e048281fec7ecec5f032d4aac52226b/jinja2-3.1.6.tar.gz", hash = "sha256:0137fb05990d35f1275a587e9aee6d56da821fc83491a0fb838183be43f66d6d", size = 245115, upload-time = "2025-03-05T20:05:02.478Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/62/a1/3d680cbfd5f4b8f15abc1d571870c5fc3e594bb582bc3b64ea099db13e56/jinja2-3.1.6-py3-none-any.whl", hash = "sha256:85ece4451f492d0c13c5dd7c13a64681a86afae63a5f347908daf103ce6d2f67", size = 134899, upload-time = "2025-03-05T20:05:00.369Z" },
+]
+
+[[package]]
+name = "markupsafe"
+version = "3.0.3"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/7e/99/7690b6d4034fffd95959cbe0c02de8deb3098cc577c67bb6a24fe5d7caa7/markupsafe-3.0.3.tar.gz", hash = "sha256:722695808f4b6457b320fdc131280796bdceb04ab50fe1795cd540799ebe1698", size = 80313, upload-time = "2025-09-27T18:37:40.426Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/9a/81/7e4e08678a1f98521201c3079f77db69fb552acd56067661f8c2f534a718/markupsafe-3.0.3-cp312-cp312-macosx_11_0_arm64.whl", hash = "sha256:1872df69a4de6aead3491198eaf13810b565bdbeec3ae2dc8780f14458ec73ce", size = 12020, upload-time = "2025-09-27T18:36:31.971Z" },
+    { url = "https://files.pythonhosted.org/packages/3c/2e/8d0c2ab90a8c1d9a24f0399058ab8519a3279d1bd4289511d74e909f060e/markupsafe-3.0.3-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:d6dd0be5b5b189d31db7cda48b91d7e0a9795f31430b7f271219ab30f1d3ac9d", size = 22947, upload-time = "2025-09-27T18:36:33.86Z" },
+    { url = "https://files.pythonhosted.org/packages/89/e0/4486f11e51bbba8b0c041098859e869e304d1c261e59244baa3d295d47b7/markupsafe-3.0.3-cp312-cp312-musllinux_1_2_x86_64.whl", hash = "sha256:77f0643abe7495da77fb436f50f8dab76dbc6e5fd25d39589a0f1fe6548bfa2b", size = 23015, upload-time = "2025-09-27T18:36:37.868Z" },
+]
+
+[[package]]
+name = "mpmath"
+version = "1.3.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/e0/47/dd32fa426cc72114383ac549964eecb20ecfd886d1e5ccf5340b55b02f57/mpmath-1.3.0.tar.gz", hash = "sha256:7a28eb2a9774d00c7bc92411c19a89209d5da7c4c9a9e227be8330a23a25b91f", size = 508106, upload-time = "2023-03-07T16:47:11.061Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/43/e3/7d92a15f894aa0c9c4b49b8ee9ac9850d6e63b03c9c32c0367a13ae62209/mpmath-1.3.0-py3-none-any.whl", hash = "sha256:a0b2b9fe80bbcd81a6647ff13108738cfb482d481d826cc0e02f5b35e5c88d2c", size = 536198, upload-time = "2023-03-07T16:47:09.197Z" },
+]
+
+[[package]]
+name = "native-torch-probe"
+version = "0.0.0"
+source = { virtual = "." }
+
+[package.dev-dependencies]
+cpu = [
+    { name = "torch", version = "2.12.0", source = { registry = "https://pypi.org/simple" }, marker = "(platform_machine == 'arm64' and sys_platform == 'darwin' and extra == 'group-18-native-torch-probe-cpu') or (platform_machine != 'arm64' and extra == 'group-18-native-torch-probe-cpu' and extra == 'group-18-native-torch-probe-cuda') or (sys_platform != 'darwin' and extra == 'group-18-native-torch-probe-cpu' and extra == 'group-18-native-torch-probe-cuda')" },
+    { name = "torch", version = "2.12.0+cpu", source = { registry = "https://download.pytorch.org/whl/cpu" }, marker = "(platform_machine == 'x86_64' and sys_platform == 'linux' and extra == 'group-18-native-torch-probe-cpu') or (platform_machine != 'x86_64' and extra == 'group-18-native-torch-probe-cpu' and extra == 'group-18-native-torch-probe-cuda') or (sys_platform != 'linux' and extra == 'group-18-native-torch-probe-cpu' and extra == 'group-18-native-torch-probe-cuda')" },
+]
+cuda = [
+    { name = "torch", version = "2.12.0", source = { registry = "https://pypi.org/simple" }, marker = "platform_machine == 'x86_64' and sys_platform == 'linux'" },
+]
+
+[package.metadata]
+
+[package.metadata.requires-dev]
+cpu = [
+    { name = "torch", marker = "sys_platform != 'linux'", specifier = "==2.12.0" },
+    { name = "torch", marker = "sys_platform == 'linux'", specifier = "==2.12.0", index = "https://download.pytorch.org/whl/cpu", conflict = { package = "native-torch-probe", group = "cpu" } },
+]
+cuda = [{ name = "torch", marker = "sys_platform == 'linux'", specifier = "==2.12.0" }]
+
+[[package]]
+name = "networkx"
+version = "3.6.1"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/6a/51/63fe664f3908c97be9d2e4f1158eb633317598cfa6e1fc14af5383f17512/networkx-3.6.1.tar.gz", hash = "sha256:26b7c357accc0c8cde558ad486283728b65b6a95d85ee1cd66bafab4c8168509", size = 2517025, upload-time = "2025-12-08T17:02:39.908Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/9e/c9/b2622292ea83fbb4ec318f5b9ab867d0a28ab43c5717bb85b0a5f6b3b0a4/networkx-3.6.1-py3-none-any.whl", hash = "sha256:d47fbf302e7d9cbbb9e2555a0d267983d2aa476bac30e90dfbe5669bd57f3762", size = 2068504, upload-time = "2025-12-08T17:02:38.159Z" },
+]
+
+[[package]]
+name = "nvidia-cublas"
+version = "13.1.1.3"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "nvidia-cuda-nvrtc", marker = "(platform_machine == 'x86_64' and sys_platform == 'linux' and extra == 'group-18-native-torch-probe-cuda') or (platform_machine != 'x86_64' and extra == 'group-18-native-torch-probe-cpu' and extra == 'group-18-native-torch-probe-cuda') or (sys_platform != 'linux' and extra == 'group-18-native-torch-probe-cpu' and extra == 'group-18-native-torch-probe-cuda')" },
+]
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/3b/cd/154ca20c38269e05eff77c1464e6c1da89f50a6390b565e9d82e06bc11e1/nvidia_cublas-13.1.1.3-py3-none-manylinux_2_27_x86_64.whl", hash = "sha256:37936a16db8fe4ac1f065c2139360608a543a09275cb1a1af612e08cfa065436", size = 423138758, upload-time = "2026-04-08T18:46:58.655Z" },
+]
+
+[[package]]
+name = "nvidia-cuda-cupti"
+version = "13.0.85"
+source = { registry = "https://pypi.org/simple" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/33/6d/737d164b4837a9bbd202f5ae3078975f0525a55730fe871d8ed4e3b952b0/nvidia_cuda_cupti-13.0.85-py3-none-manylinux_2_25_x86_64.whl", hash = "sha256:4eb01c08e859bf924d222250d2e8f8b8ff6d3db4721288cf35d14252a4d933c8", size = 10715597, upload-time = "2025-09-04T08:26:51.312Z" },
+]
+
+[[package]]
+name = "nvidia-cuda-nvrtc"
+version = "13.0.88"
+source = { registry = "https://pypi.org/simple" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/c3/68/483a78f5e8f31b08fb1bb671559968c0ca3a065ac7acabfc7cee55214fd6/nvidia_cuda_nvrtc-13.0.88-py3-none-manylinux2010_x86_64.manylinux_2_12_x86_64.whl", hash = "sha256:ad9b6d2ead2435f11cbb6868809d2adeeee302e9bb94bcf0539c7a40d80e8575", size = 90215200, upload-time = "2025-09-04T08:28:44.204Z" },
+]
+
+[[package]]
+name = "nvidia-cuda-runtime"
+version = "13.0.96"
+source = { registry = "https://pypi.org/simple" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/2e/24/d1558f3b68b1d26e706813b1d10aa1d785e4698c425af8db8edc3dced472/nvidia_cuda_runtime-13.0.96-py3-none-manylinux2014_x86_64.manylinux_2_17_x86_64.whl", hash = "sha256:7f82250d7782aa23b6cfe765ecc7db554bd3c2870c43f3d1821f1d18aebf0548", size = 2243632, upload-time = "2025-10-09T08:55:36.117Z" },
+]
+
+[[package]]
+name = "nvidia-cudnn-cu13"
+version = "9.20.0.48"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "nvidia-cublas", marker = "(platform_machine == 'x86_64' and sys_platform == 'linux' and extra == 'group-18-native-torch-probe-cuda') or (platform_machine != 'x86_64' and extra == 'group-18-native-torch-probe-cpu' and extra == 'group-18-native-torch-probe-cuda') or (sys_platform != 'linux' and extra == 'group-18-native-torch-probe-cpu' and extra == 'group-18-native-torch-probe-cuda')" },
+]
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/6e/5e/edb9c0ae051602c3ccaffe424256463636d639e27d7f302dde9975ef9e7a/nvidia_cudnn_cu13-9.20.0.48-py3-none-manylinux_2_27_x86_64.whl", hash = "sha256:0c45dd8eeb50b603f07995b1b300c62ffe6a1980482b82b3bcf94a4ca9d49304", size = 366173588, upload-time = "2026-03-09T19:29:34.474Z" },
+]
+
+[[package]]
+name = "nvidia-cufft"
+version = "12.0.0.61"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "nvidia-nvjitlink", marker = "(platform_machine == 'x86_64' and sys_platform == 'linux' and extra == 'group-18-native-torch-probe-cuda') or (platform_machine != 'x86_64' and extra == 'group-18-native-torch-probe-cpu' and extra == 'group-18-native-torch-probe-cuda') or (sys_platform != 'linux' and extra == 'group-18-native-torch-probe-cpu' and extra == 'group-18-native-torch-probe-cuda')" },
+]
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/a8/2f/7b57e29836ea8714f81e9898409196f47d772d5ddedddf1592eadb8ab743/nvidia_cufft-12.0.0.61-py3-none-manylinux2014_x86_64.manylinux_2_17_x86_64.whl", hash = "sha256:6c44f692dce8fd5ffd3e3df134b6cdb9c2f72d99cf40b62c32dde45eea9ddad3", size = 214085489, upload-time = "2025-09-04T08:31:56.044Z" },
+]
+
+[[package]]
+name = "nvidia-cufile"
+version = "1.15.1.6"
+source = { registry = "https://pypi.org/simple" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/3f/70/4f193de89a48b71714e74602ee14d04e4019ad36a5a9f20c425776e72cd6/nvidia_cufile-1.15.1.6-py3-none-manylinux2014_x86_64.manylinux_2_17_x86_64.whl", hash = "sha256:08a3ecefae5a01c7f5117351c64f17c7c62efa5fffdbe24fc7d298da19cd0b44", size = 1223672, upload-time = "2025-09-04T08:32:22.779Z" },
+]
+
+[[package]]
+name = "nvidia-curand"
+version = "10.4.0.35"
+source = { registry = "https://pypi.org/simple" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/a5/9f/be0a41ca4a4917abf5cb9ae0daff1a6060cc5de950aec0396de9f3b52bc5/nvidia_curand-10.4.0.35-py3-none-manylinux_2_27_x86_64.whl", hash = "sha256:1aee33a5da6e1db083fe2b90082def8915f30f3248d5896bcec36a579d941bfc", size = 59544258, upload-time = "2025-08-04T10:22:03.992Z" },
+]
+
+[[package]]
+name = "nvidia-cusolver"
+version = "12.0.4.66"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "nvidia-cublas", marker = "(platform_machine == 'x86_64' and sys_platform == 'linux' and extra == 'group-18-native-torch-probe-cuda') or (platform_machine != 'x86_64' and extra == 'group-18-native-torch-probe-cpu' and extra == 'group-18-native-torch-probe-cuda') or (sys_platform != 'linux' and extra == 'group-18-native-torch-probe-cpu' and extra == 'group-18-native-torch-probe-cuda')" },
+    { name = "nvidia-cusparse", marker = "(platform_machine == 'x86_64' and sys_platform == 'linux' and extra == 'group-18-native-torch-probe-cuda') or (platform_machine != 'x86_64' and extra == 'group-18-native-torch-probe-cpu' and extra == 'group-18-native-torch-probe-cuda') or (sys_platform != 'linux' and extra == 'group-18-native-torch-probe-cpu' and extra == 'group-18-native-torch-probe-cuda')" },
+    { name = "nvidia-nvjitlink", marker = "(platform_machine == 'x86_64' and sys_platform == 'linux' and extra == 'group-18-native-torch-probe-cuda') or (platform_machine != 'x86_64' and extra == 'group-18-native-torch-probe-cpu' and extra == 'group-18-native-torch-probe-cuda') or (sys_platform != 'linux' and extra == 'group-18-native-torch-probe-cpu' and extra == 'group-18-native-torch-probe-cuda')" },
+]
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/5f/67/cba3777620cdacb99102da4042883709c41c709f4b6323c10781a9c3aa34/nvidia_cusolver-12.0.4.66-py3-none-manylinux_2_27_x86_64.whl", hash = "sha256:0a759da5dea5c0ea10fd307de75cdeb59e7ea4fcb8add0924859b944babf1112", size = 200941980, upload-time = "2025-09-04T08:33:22.767Z" },
+]
+
+[[package]]
+name = "nvidia-cusparse"
+version = "12.6.3.3"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "nvidia-nvjitlink", marker = "(platform_machine == 'x86_64' and sys_platform == 'linux' and extra == 'group-18-native-torch-probe-cuda') or (platform_machine != 'x86_64' and extra == 'group-18-native-torch-probe-cpu' and extra == 'group-18-native-torch-probe-cuda') or (sys_platform != 'linux' and extra == 'group-18-native-torch-probe-cpu' and extra == 'group-18-native-torch-probe-cuda')" },
+]
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/fa/18/623c77619c31d62efd55302939756966f3ecc8d724a14dab2b75f1508850/nvidia_cusparse-12.6.3.3-py3-none-manylinux2014_x86_64.manylinux_2_17_x86_64.whl", hash = "sha256:2b3c89c88d01ee0e477cb7f82ef60a11a4bcd57b6b87c33f789350b59759360b", size = 145942937, upload-time = "2025-09-04T08:33:58.029Z" },
+]
+
+[[package]]
+name = "nvidia-cusparselt-cu13"
+version = "0.8.1"
+source = { registry = "https://pypi.org/simple" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/34/7d/2661f2fb3ac4302f3a246f5fc030213ac60c1fe0bce84f9783dbd831dbb7/nvidia_cusparselt_cu13-0.8.1-py3-none-manylinux2014_x86_64.whl", hash = "sha256:786ce87568c303fadb5afcc7102d454cd3040d75f6f8626f5db460d1871f4dd0", size = 170148586, upload-time = "2025-09-05T18:50:50.248Z" },
+]
+
+[[package]]
+name = "nvidia-nccl-cu13"
+version = "2.29.7"
+source = { registry = "https://pypi.org/simple" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/67/f4/58e4e91b6919367c7aafb8e36fce9aad1a3047e536bf7e2fd560927d3a4c/nvidia_nccl_cu13-2.29.7-py3-none-manylinux_2_18_x86_64.whl", hash = "sha256:edd81538446786ec3b73972543e53bb43bcaf0bfc8ef76cb679fcc390ffe136d", size = 205976000, upload-time = "2026-03-03T05:36:24.472Z" },
+]
+
+[[package]]
+name = "nvidia-nvjitlink"
+version = "13.0.88"
+source = { registry = "https://pypi.org/simple" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/56/7a/123e033aaff487c77107195fa5a2b8686795ca537935a24efae476c41f05/nvidia_nvjitlink-13.0.88-py3-none-manylinux2010_x86_64.manylinux_2_12_x86_64.whl", hash = "sha256:13a74f429e23b921c1109976abefacc69835f2f433ebd323d3946e11d804e47b", size = 40713933, upload-time = "2025-09-04T08:35:43.553Z" },
+]
+
+[[package]]
+name = "nvidia-nvshmem-cu13"
+version = "3.4.5"
+source = { registry = "https://pypi.org/simple" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/3c/35/a9bf80a609e74e3b000fef598933235c908fcefcef9026042b8e6dfde2a9/nvidia_nvshmem_cu13-3.4.5-py3-none-manylinux2014_x86_64.manylinux_2_17_x86_64.whl", hash = "sha256:290f0a2ee94c9f3687a02502f3b9299a9f9fe826e6d0287ee18482e78d495b80", size = 60412546, upload-time = "2025-09-06T00:32:41.564Z" },
+]
+
+[[package]]
+name = "nvidia-nvtx"
+version = "13.0.85"
+source = { registry = "https://pypi.org/simple" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/c2/f3/d86c845465a2723ad7e1e5c36dcd75ddb82898b3f53be47ebd429fb2fa5d/nvidia_nvtx-13.0.85-py3-none-manylinux1_x86_64.manylinux_2_5_x86_64.whl", hash = "sha256:4936d1d6780fbe68db454f5e72a42ff64d1fd6397df9f363ae786930fd5c1cd4", size = 148047, upload-time = "2025-09-04T08:29:01.761Z" },
+]
+
+[[package]]
+name = "setuptools"
+version = "81.0.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/0d/1c/73e719955c59b8e424d015ab450f51c0af856ae46ea2da83eba51cc88de1/setuptools-81.0.0.tar.gz", hash = "sha256:487b53915f52501f0a79ccfd0c02c165ffe06631443a886740b91af4b7a5845a", size = 1198299, upload-time = "2026-02-06T21:10:39.601Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/e1/e3/c164c88b2e5ce7b24d667b9bd83589cf4f3520d97cad01534cd3c4f55fdb/setuptools-81.0.0-py3-none-any.whl", hash = "sha256:fdd925d5c5d9f62e4b74b30d6dd7828ce236fd6ed998a08d81de62ce5a6310d6", size = 1062021, upload-time = "2026-02-06T21:10:37.175Z" },
+]
+
+[[package]]
+name = "sympy"
+version = "1.14.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "mpmath", marker = "(platform_machine == 'arm64' and sys_platform == 'darwin' and extra == 'group-18-native-torch-probe-cpu') or (platform_machine == 'x86_64' and sys_platform == 'linux' and extra == 'group-18-native-torch-probe-cpu') or (platform_machine == 'x86_64' and sys_platform == 'linux' and extra == 'group-18-native-torch-probe-cuda') or (sys_platform != 'darwin' and sys_platform != 'linux' and extra == 'group-18-native-torch-probe-cpu' and extra == 'group-18-native-torch-probe-cuda') or (sys_platform == 'darwin' and extra == 'group-18-native-torch-probe-cpu' and extra == 'group-18-native-torch-probe-cuda') or (sys_platform == 'linux' and extra == 'group-18-native-torch-probe-cpu' and extra == 'group-18-native-torch-probe-cuda')" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/83/d3/803453b36afefb7c2bb238361cd4ae6125a569b4db67cd9e79846ba2d68c/sympy-1.14.0.tar.gz", hash = "sha256:d3d3fe8df1e5a0b42f0e7bdf50541697dbe7d23746e894990c030e2b05e72517", size = 7793921, upload-time = "2025-04-27T18:05:01.611Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/a2/09/77d55d46fd61b4a135c444fc97158ef34a095e5681d0a6c10b75bf356191/sympy-1.14.0-py3-none-any.whl", hash = "sha256:e091cc3e99d2141a0ba2847328f5479b05d94a6635cb96148ccb3f34671bd8f5", size = 6299353, upload-time = "2025-04-27T18:04:59.103Z" },
+]
+
+[[package]]
+name = "torch"
+version = "2.12.0"
+source = { registry = "https://pypi.org/simple" }
+resolution-markers = [
+    "platform_machine == 'x86_64' and sys_platform == 'linux'",
+    "platform_machine == 'arm64' and sys_platform == 'darwin'",
+]
+dependencies = [
+    { name = "cuda-bindings", marker = "(platform_machine == 'x86_64' and sys_platform == 'linux' and extra == 'group-18-native-torch-probe-cuda') or (platform_machine != 'x86_64' and extra == 'group-18-native-torch-probe-cpu' and extra == 'group-18-native-torch-probe-cuda') or (sys_platform != 'linux' and extra == 'group-18-native-torch-probe-cpu' and extra == 'group-18-native-torch-probe-cuda')" },
+    { name = "cuda-toolkit", extra = ["cudart", "cufft", "cufile", "cupti", "curand", "cusolver", "cusparse", "nvjitlink", "nvrtc", "nvtx"], marker = "(platform_machine == 'x86_64' and sys_platform == 'linux' and extra == 'group-18-native-torch-probe-cuda') or (platform_machine != 'x86_64' and extra == 'group-18-native-torch-probe-cpu' and extra == 'group-18-native-torch-probe-cuda') or (sys_platform != 'linux' and extra == 'group-18-native-torch-probe-cpu' and extra == 'group-18-native-torch-probe-cuda')" },
+    { name = "filelock", marker = "(platform_machine == 'arm64' and sys_platform == 'darwin' and extra == 'group-18-native-torch-probe-cpu') or (platform_machine == 'x86_64' and sys_platform == 'linux' and extra == 'group-18-native-torch-probe-cuda') or (sys_platform != 'darwin' and sys_platform != 'linux' and extra == 'group-18-native-torch-probe-cpu' and extra == 'group-18-native-torch-probe-cuda') or (sys_platform == 'darwin' and extra == 'group-18-native-torch-probe-cpu' and extra == 'group-18-native-torch-probe-cuda') or (sys_platform == 'linux' and extra == 'group-18-native-torch-probe-cpu' and extra == 'group-18-native-torch-probe-cuda')" },
+    { name = "fsspec", marker = "(platform_machine == 'arm64' and sys_platform == 'darwin' and extra == 'group-18-native-torch-probe-cpu') or (platform_machine == 'x86_64' and sys_platform == 'linux' and extra == 'group-18-native-torch-probe-cuda') or (sys_platform != 'darwin' and sys_platform != 'linux' and extra == 'group-18-native-torch-probe-cpu' and extra == 'group-18-native-torch-probe-cuda') or (sys_platform == 'darwin' and extra == 'group-18-native-torch-probe-cpu' and extra == 'group-18-native-torch-probe-cuda') or (sys_platform == 'linux' and extra == 'group-18-native-torch-probe-cpu' and extra == 'group-18-native-torch-probe-cuda')" },
+    { name = "jinja2", marker = "(platform_machine == 'arm64' and sys_platform == 'darwin' and extra == 'group-18-native-torch-probe-cpu') or (platform_machine == 'x86_64' and sys_platform == 'linux' and extra == 'group-18-native-torch-probe-cuda') or (sys_platform != 'darwin' and sys_platform != 'linux' and extra == 'group-18-native-torch-probe-cpu' and extra == 'group-18-native-torch-probe-cuda') or (sys_platform == 'darwin' and extra == 'group-18-native-torch-probe-cpu' and extra == 'group-18-native-torch-probe-cuda') or (sys_platform == 'linux' and extra == 'group-18-native-torch-probe-cpu' and extra == 'group-18-native-torch-probe-cuda')" },
+    { name = "networkx", marker = "(platform_machine == 'arm64' and sys_platform == 'darwin' and extra == 'group-18-native-torch-probe-cpu') or (platform_machine == 'x86_64' and sys_platform == 'linux' and extra == 'group-18-native-torch-probe-cuda') or (sys_platform != 'darwin' and sys_platform != 'linux' and extra == 'group-18-native-torch-probe-cpu' and extra == 'group-18-native-torch-probe-cuda') or (sys_platform == 'darwin' and extra == 'group-18-native-torch-probe-cpu' and extra == 'group-18-native-torch-probe-cuda') or (sys_platform == 'linux' and extra == 'group-18-native-torch-probe-cpu' and extra == 'group-18-native-torch-probe-cuda')" },
+    { name = "nvidia-cublas", marker = "(platform_machine == 'x86_64' and sys_platform == 'linux' and extra == 'group-18-native-torch-probe-cuda') or (platform_machine != 'x86_64' and extra == 'group-18-native-torch-probe-cpu' and extra == 'group-18-native-torch-probe-cuda') or (sys_platform != 'linux' and extra == 'group-18-native-torch-probe-cpu' and extra == 'group-18-native-torch-probe-cuda')" },
+    { name = "nvidia-cudnn-cu13", marker = "(platform_machine == 'x86_64' and sys_platform == 'linux' and extra == 'group-18-native-torch-probe-cuda') or (platform_machine != 'x86_64' and extra == 'group-18-native-torch-probe-cpu' and extra == 'group-18-native-torch-probe-cuda') or (sys_platform != 'linux' and extra == 'group-18-native-torch-probe-cpu' and extra == 'group-18-native-torch-probe-cuda')" },
+    { name = "nvidia-cusparselt-cu13", marker = "(platform_machine == 'x86_64' and sys_platform == 'linux' and extra == 'group-18-native-torch-probe-cuda') or (platform_machine != 'x86_64' and extra == 'group-18-native-torch-probe-cpu' and extra == 'group-18-native-torch-probe-cuda') or (sys_platform != 'linux' and extra == 'group-18-native-torch-probe-cpu' and extra == 'group-18-native-torch-probe-cuda')" },
+    { name = "nvidia-nccl-cu13", marker = "(platform_machine == 'x86_64' and sys_platform == 'linux' and extra == 'group-18-native-torch-probe-cuda') or (platform_machine != 'x86_64' and extra == 'group-18-native-torch-probe-cpu' and extra == 'group-18-native-torch-probe-cuda') or (sys_platform != 'linux' and extra == 'group-18-native-torch-probe-cpu' and extra == 'group-18-native-torch-probe-cuda')" },
+    { name = "nvidia-nvshmem-cu13", marker = "(platform_machine == 'x86_64' and sys_platform == 'linux' and extra == 'group-18-native-torch-probe-cuda') or (platform_machine != 'x86_64' and extra == 'group-18-native-torch-probe-cpu' and extra == 'group-18-native-torch-probe-cuda') or (sys_platform != 'linux' and extra == 'group-18-native-torch-probe-cpu' and extra == 'group-18-native-torch-probe-cuda')" },
+    { name = "setuptools", marker = "(platform_machine == 'arm64' and sys_platform == 'darwin' and extra == 'group-18-native-torch-probe-cpu') or (platform_machine == 'x86_64' and sys_platform == 'linux' and extra == 'group-18-native-torch-probe-cuda') or (sys_platform != 'darwin' and sys_platform != 'linux' and extra == 'group-18-native-torch-probe-cpu' and extra == 'group-18-native-torch-probe-cuda') or (sys_platform == 'darwin' and extra == 'group-18-native-torch-probe-cpu' and extra == 'group-18-native-torch-probe-cuda') or (sys_platform == 'linux' and extra == 'group-18-native-torch-probe-cpu' and extra == 'group-18-native-torch-probe-cuda')" },
+    { name = "sympy", marker = "(platform_machine == 'arm64' and sys_platform == 'darwin' and extra == 'group-18-native-torch-probe-cpu') or (platform_machine == 'x86_64' and sys_platform == 'linux' and extra == 'group-18-native-torch-probe-cuda') or (sys_platform != 'darwin' and sys_platform != 'linux' and extra == 'group-18-native-torch-probe-cpu' and extra == 'group-18-native-torch-probe-cuda') or (sys_platform == 'darwin' and extra == 'group-18-native-torch-probe-cpu' and extra == 'group-18-native-torch-probe-cuda') or (sys_platform == 'linux' and extra == 'group-18-native-torch-probe-cpu' and extra == 'group-18-native-torch-probe-cuda')" },
+    { name = "triton", marker = "(platform_machine == 'x86_64' and sys_platform == 'linux' and extra == 'group-18-native-torch-probe-cuda') or (platform_machine != 'x86_64' and extra == 'group-18-native-torch-probe-cpu' and extra == 'group-18-native-torch-probe-cuda') or (sys_platform != 'linux' and extra == 'group-18-native-torch-probe-cpu' and extra == 'group-18-native-torch-probe-cuda')" },
+    { name = "typing-extensions", marker = "(platform_machine == 'arm64' and sys_platform == 'darwin' and extra == 'group-18-native-torch-probe-cpu') or (platform_machine == 'x86_64' and sys_platform == 'linux' and extra == 'group-18-native-torch-probe-cuda') or (sys_platform != 'darwin' and sys_platform != 'linux' and extra == 'group-18-native-torch-probe-cpu' and extra == 'group-18-native-torch-probe-cuda') or (sys_platform == 'darwin' and extra == 'group-18-native-torch-probe-cpu' and extra == 'group-18-native-torch-probe-cuda') or (sys_platform == 'linux' and extra == 'group-18-native-torch-probe-cpu' and extra == 'group-18-native-torch-probe-cuda')" },
+]
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/ef/bb/285d643f254731294c9b595a007eac39db4600a98682d7bca688f42ca164/torch-2.12.0-cp312-cp312-macosx_14_0_arm64.whl", hash = "sha256:b41339df93d491435e790ff8bcbae1c0ce777175889bfd1281d119862793e6a2", size = 88010197, upload-time = "2026-05-13T14:55:35.414Z" },
+    { url = "https://files.pythonhosted.org/packages/de/f0/80026028b603c4650ff270fc3785bdef4bd6738765a9cc5a0f5a637d65a2/torch-2.12.0-cp312-cp312-manylinux_2_28_x86_64.whl", hash = "sha256:4b4f64c2c2b11f7510d93dd6412b87025ff6eddd6bb61c3b5a3d892ea20c4756", size = 532261691, upload-time = "2026-05-13T14:52:54.453Z" },
+]
+
+[[package]]
+name = "torch"
+version = "2.12.0+cpu"
+source = { registry = "https://download.pytorch.org/whl/cpu" }
+resolution-markers = [
+    "platform_machine == 'x86_64' and sys_platform == 'linux'",
+]
+dependencies = [
+    { name = "filelock", marker = "platform_machine == 'x86_64' and sys_platform == 'linux'" },
+    { name = "fsspec", marker = "platform_machine == 'x86_64' and sys_platform == 'linux'" },
+    { name = "jinja2", marker = "platform_machine == 'x86_64' and sys_platform == 'linux'" },
+    { name = "networkx", marker = "platform_machine == 'x86_64' and sys_platform == 'linux'" },
+    { name = "setuptools", marker = "platform_machine == 'x86_64' and sys_platform == 'linux'" },
+    { name = "sympy", marker = "platform_machine == 'x86_64' and sys_platform == 'linux'" },
+    { name = "typing-extensions", marker = "platform_machine == 'x86_64' and sys_platform == 'linux'" },
+]
+wheels = [
+    { url = "https://download-r2.pytorch.org/whl/cpu/torch-2.12.0%2Bcpu-cp312-cp312-manylinux_2_28_x86_64.whl", hash = "sha256:5e3dc83725581fa38b7b2e45c58692e30b2a3cde19191af54b675ffcac3840a6", upload-time = "2026-05-12T23:16:48Z" },
+]
+
+[[package]]
+name = "triton"
+version = "3.7.0"
+source = { registry = "https://pypi.org/simple" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/62/7b/468a576e35beef1426e0828e28e9ba9e65f5474d496f16ee126c15646324/triton-3.7.0-cp312-cp312-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:8f111161d49bf903c0eaedde3962353a3d841c08a836839b7cc1025b8426efcf", size = 201457567, upload-time = "2026-05-07T18:46:13.505Z" },
+]
+
+[[package]]
+name = "typing-extensions"
+version = "4.16.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/f6/cc/6253133b5bb138fc3306cebfbda2c520f545d36b5be2c7255cc528bb45d6/typing_extensions-4.16.0.tar.gz", hash = "sha256:dc983d19a509c94dba722ee6abd33940f7c05a89e243c47e907eb4db6f1a43e5", size = 113555, upload-time = "2026-07-02T08:40:05.92Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/49/d3/b8441a820a491ddfc024b0b0cf0393375b75ea13866d9c66727e54c2fc80/typing_extensions-4.16.0-py3-none-any.whl", hash = "sha256:481caa481374e813c1b176ada14e97f1f67a4539ce9cfeb3f350d78d6370c2e8", size = 45571, upload-time = "2026-07-02T08:40:04.659Z" },
+]
+"""
+
+# buildifier: disable=unused-variable
+def _test_uv_issue_1510_verbatim_lock_impl(env, target):
+    """End-to-end pipeline test (translate_uv -> resolve -> render_lock_bzl) on the verbatim #1510 uv.lock."""
+    project = decode(_ISSUE_1510_PYPROJECT_TOML)
+    lock = decode(_ISSUE_1510_UV_LOCK)
+    raw = translate_uv(project, lock, _lock_model(dependency_groups = ["group:*"]))
+
+    # 1. Verify deterministic per-(variant, version) fork pins on torch:
+    torch_pins = raw["pins"]["torch"]
+    exprs = raw["resolution_marker_exprs"]
+    env.expect.that_dict(torch_pins).contains_exactly({
+        "group_cpu_res_torch_2_12_0__group_cpu": "torch@2.12.0",
+        "group_cpu_res_torch_2_12_0_cpu__group_cpu": "torch@2.12.0+cpu",
+        "group_cuda_res_torch_2_12_0__group_cuda": "torch@2.12.0",
+    })
+    env.expect.that_dict(exprs["group_cpu_res_torch_2_12_0__group_cpu"]).contains_exactly({
+        "variant": "group_cpu",
+        "marker": "res_torch_2_12_0__group_cpu",
+    })
+    env.expect.that_dict(exprs["group_cpu_res_torch_2_12_0_cpu__group_cpu"]).contains_exactly({
+        "variant": "group_cpu",
+        "marker": "res_torch_2_12_0_cpu__group_cpu",
+    })
+    env.expect.that_dict(exprs["group_cuda_res_torch_2_12_0__group_cuda"]).contains_exactly({
+        "variant": "group_cuda",
+        "marker": "res_torch_2_12_0__group_cuda",
+    })
+    env.expect.that_str(exprs["res_torch_2_12_0__group_cpu"]).contains("extra == '__variant_group_cpu'")
+    env.expect.that_str(exprs["res_torch_2_12_0_cpu__group_cpu"]).contains("extra == '__variant_group_cpu'")
+    env.expect.that_str(exprs["res_torch_2_12_0__group_cuda"]).equals("platform_machine == 'x86_64' and sys_platform == 'linux'")
+
+    # 2. Run resolve() and check torch's availability markers reference __variant_ tokens.
+    resolved = resolve(raw, include_transitive = True)
+    torch_avail = resolved.packages["torch@2.12.0"]["availability_markers"]
+    env.expect.that_int(len(torch_avail)).equals(3)
+    env.expect.that_bool(any(["extra == '__variant_group_cpu'" in m for m in torch_avail])).equals(True)
+
+    # 3. Render lock.bzl and verify variants = [":_resolver_group_cpu_group_cuda"] on evaluators.
+    repo_map = {k: "@repo//" + k + ":file" for k in resolved.remote_files.keys()}
+    rendered_lock = render_lock_bzl(
+        {
+            "packages": resolved.packages,
+            "pins": {},
+            "cycle_groups": resolved.cycle_groups,
+            "resolution_marker_exprs": resolved.resolution_marker_exprs,
+        },
+        repo_map,
+        None,
+        "ws",
+        variant_resolvers = [":_resolver_group_cpu_group_cuda"],
+    )
+
+    for extra_name in ["cudart", "cufft", "cufile", "cupti", "curand", "cusolver", "cusparse", "nvjitlink", "nvrtc", "nvtx"]:
+        env.expect.that_str(rendered_lock).contains('"cuda-toolkit[{}]@13.0.2"'.format(extra_name))
+
+    eval_blocks = [
+        b.split("\n    )")[0]
+        for b in rendered_lock.split("pycross_pep508_evaluator(\n")[1:]
+    ]
+    for block in eval_blocks:
+        if "__variant_" in block.split('expr = "')[1].split('",')[0]:
+            env.expect.that_str(block).contains('variants = [":_resolver_group_cpu_group_cuda"]')
+        else:
+            env.expect.that_bool("variants =" in block).equals(False)
+
+    avail_torch_block = rendered_lock.split('name = "_marker_available_torch@2.12.0"')[1].split("\n    )")[0]
+    env.expect.that_str(avail_torch_block).contains("_marker_eval_")
+
+def _test_uv_issue_1510_verbatim_lock(name):
+    util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
+    analysis_test(name = name, target = name + "_subject", impl = _test_uv_issue_1510_verbatim_lock_impl)
+
 def _test_uv_root_dependency_markers(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
     analysis_test(name = name, target = name + "_subject", impl = _test_uv_root_dependency_markers_impl)
@@ -908,5 +1475,7 @@ def uv_translator_test_suite(name):
             _test_uv_virtual_and_directory_members,
             _test_uv_local_member_deps_keep_forks,
             _test_uv_variants_scoped_to_project,
+            _test_uv_local_version_exact_matching,
+            _test_uv_issue_1510_verbatim_lock,
         ],
     )

@@ -27,28 +27,42 @@ platform(
     ],
 )
 
-# Test that variant-a resolves typing_extensions 4.11.0.
+# Test that variant-a resolves typing_extensions 4.11.0 and jinja2 3.1.6 -> markupsafe 3.0.4 (via uv conflict marker).
 py_test(
     name = "test_variant_a",
     srcs = ["tests/test_conflict_version.py"],
     args = [
         "typing-extensions",
         "4.11.0",
+        "jinja2",
+        "3.1.6",
+        "markupsafe",
+        "3.0.4",
     ],
     main = "tests/test_conflict_version.py",
-    deps = ["@project//typing_extensions"],
+    deps = [
+        "@project//jinja2",
+        "@project//typing_extensions",
+    ],
 )
 
-# Test that variant-b resolves typing_extensions 4.12.2.
+# Test that variant-b resolves typing_extensions 4.12.2 and jinja2 3.1.6 -> markupsafe 3.0.4 (via uv conflict marker).
 py_test(
     name = "test_variant_b",
     srcs = ["tests/test_conflict_version.py"],
     args = [
         "typing-extensions",
         "4.12.2",
+        "jinja2",
+        "3.1.6",
+        "markupsafe",
+        "3.0.4",
     ],
     main = "tests/test_conflict_version.py",
-    deps = ["@project//typing_extensions"],
+    deps = [
+        "@project//jinja2",
+        "@project//typing_extensions",
+    ],
 )
 
 # Test that default-groups makes group-a the default:

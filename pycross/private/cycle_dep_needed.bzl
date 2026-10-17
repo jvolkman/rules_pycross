@@ -45,7 +45,14 @@ def _active_neighbors(edges, node, markers_env):
         marker_str = edge.get("marker")
         if marker_str:
             if node_env == None:
-                if markers_env.get("extra", "") == node_extra:
+                base_extra = markers_env.get("extra", "")
+                if type(base_extra) == "list":
+                    if base_extra[0] == node_extra:
+                        node_env = markers_env
+                    else:
+                        node_env = dict(markers_env)
+                        node_env["extra"] = [node_extra] + base_extra[1:]
+                elif base_extra == node_extra:
                     node_env = markers_env
                 else:
                     node_env = dict(markers_env)

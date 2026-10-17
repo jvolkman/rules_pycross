@@ -813,6 +813,114 @@ def _test_epoch_sdist_repo_name(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
     analysis_test(name = name, target = name + "_subject", impl = _test_epoch_sdist_repo_name_impl)
 
+# buildifier: disable=unused-variable
+def _test_conflict_state_rendering_impl(env, target):
+    """Verify variants is emitted only on __variant_-referencing evaluators when variant_resolvers is provided."""
+    t_cuda = "__variant_group_cuda"
+    conflict_marker = "sys_platform == 'linux' and extra == '{}'".format(t_cuda)
+    plain_extra_marker = "extra == 'cudart'"
+    plain_marker = "sys_platform == 'darwin'"
+    lock = {
+        "cycle_groups": {
+            "cycle_group_c1": ["cyca@1.0", "cycb@1.0"],
+        },
+        "packages": {
+            "cuda-toolkit@13.0.2": {
+                "availability_markers": [conflict_marker],
+                "wheel_candidates": [
+                    {
+                        "filename": "cuda_toolkit-13.0.2-py3-none-any.whl",
+                        "file_reference": {"key": "ct_whl"},
+                    },
+                ],
+            },
+            "cuda-toolkit[cudart]@13.0.2": {
+                "marker_dependencies": [
+                    {"key": "dep_a@1.0", "marker": conflict_marker},
+                    {"key": "dep_b@1.0", "marker": plain_marker},
+                    {"key": "dep_b@1.0", "marker": plain_extra_marker},
+                ],
+            },
+            "dep_a@1.0": {
+                "wheel_candidates": [
+                    {
+                        "filename": "dep_a-1.0-py3-none-any.whl",
+                        "file_reference": {"key": "da_whl"},
+                    },
+                ],
+            },
+            "dep_b@1.0": {
+                "wheel_candidates": [
+                    {
+                        "filename": "dep_b-1.0-py3-none-any.whl",
+                        "file_reference": {"key": "db_whl"},
+                    },
+                ],
+            },
+            "cyca@1.0": {
+                "cycle_group": "cycle_group_c1",
+                "marker_dependencies": [
+                    {"key": "cycb@1.0", "marker": conflict_marker},
+                ],
+                "wheel_candidates": [
+                    {
+                        "filename": "cyca-1.0-py3-none-any.whl",
+                        "file_reference": {"key": "ca_whl"},
+                    },
+                ],
+            },
+            "cycb@1.0": {
+                "cycle_group": "cycle_group_c1",
+                "marker_dependencies": [
+                    {"key": "cyca@1.0", "marker": None},
+                ],
+                "wheel_candidates": [
+                    {
+                        "filename": "cycb-1.0-py3-none-any.whl",
+                        "file_reference": {"key": "cb_whl"},
+                    },
+                ],
+            },
+        },
+        "resolution_marker_exprs": {
+            "res_fork_conflict": conflict_marker,
+            "res_fork_plain": plain_marker,
+        },
+    }
+    repo_map = {
+        "ct_whl": "@repo//ct:wheel",
+        "da_whl": "@repo//da:wheel",
+        "db_whl": "@repo//db:wheel",
+        "ca_whl": "@repo//ca:wheel",
+        "cb_whl": "@repo//cb:wheel",
+    }
+    res_with_variants = render_lock_bzl(
+        lock,
+        repo_map,
+        rctx_name = "my_rctx",
+        variant_resolvers = [":_resolver_group_cpu_group_cuda"],
+    )
+    res_without_variants = render_lock_bzl(
+        lock,
+        repo_map,
+        rctx_name = "my_rctx",
+    )
+
+    # Without variant_resolvers, variants is never emitted.
+    env.expect.that_int(res_without_variants.count('variants = [":_resolver_group_cpu_group_cuda"]')).equals(0)
+
+    # With variant_resolvers, variants = [":_resolver_group_cpu_group_cuda"] appears on:
+    # - _marker_eval_* for availability_markers (extra="") (1)
+    # - _marker_eval_* for cuda-toolkit[cudart] (extra="cudart") (1)
+    # - _res_eval_res_fork_conflict (1)
+    # - the 2 cycle members in cycle_group_c1 (2)
+    # and NOT on plain_marker, plain_extra_marker, or res_fork_plain!
+    env.expect.that_int(res_with_variants.count('variants = [":_resolver_group_cpu_group_cuda"]')).equals(5)
+
+def _test_conflict_state_rendering(name):
+    util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
+    analysis_test(name = name, target = name + "_subject", impl = _test_conflict_state_rendering_impl)
+
 def resolved_lock_renderer_test_suite(name):
     test_suite(
         name = name,
@@ -834,5 +942,6 @@ def resolved_lock_renderer_test_suite(name):
             _test_resolution_marker_compound_rendering,
             _test_wheel_library_tags_rendering,
             _test_precompile_rendering,
+            _test_conflict_state_rendering,
         ],
     )

@@ -195,8 +195,26 @@ def _package_repo_impl(rctx):
 
     rctx.file("REPO.bazel", "")
 
+    # Map each variant item to the resolver(s) it participates in.
+    qname_to_resolvers = {}  # qname -> [resolver_name, ...]
+    resolver_names = []  # ordered list of resolver target names
+    for vset in variant_sets:
+        resolver_name = "_resolver_" + "_".join(sorted(vset["qnames"]))
+        resolver_names.append(resolver_name)
+        for qname in vset["qnames"]:
+            qname_to_resolvers.setdefault(qname, []).append(resolver_name)
+
     # 1. Render _lock/lock.bzl and _lock/BUILD.bazel
-    rctx.file("_lock/lock.bzl", render_lock_bzl(lock, repo_map, sdist_map, rctx.name))
+    rctx.file(
+        "_lock/lock.bzl",
+        render_lock_bzl(
+            lock,
+            repo_map,
+            sdist_map,
+            rctx.name,
+            variant_resolvers = [":" + r for r in resolver_names],
+        ),
+    )
 
     lock_build_lines = [
         'package(default_visibility = ["//visibility:public"])',
@@ -210,15 +228,6 @@ def _package_repo_impl(rctx):
             'load("@rules_pycross//pycross/private:variant_resolver.bzl", "variant_resolver")',
             "",
         ])
-
-    # Map each variant item to the resolver(s) it participates in.
-    qname_to_resolvers = {}  # qname -> [resolver_name, ...]
-    resolver_names = []  # ordered list of resolver target names
-    for vset in variant_sets:
-        resolver_name = "_resolver_" + "_".join(sorted(vset["qnames"]))
-        resolver_names.append(resolver_name)
-        for qname in vset["qnames"]:
-            qname_to_resolvers.setdefault(qname, []).append(resolver_name)
 
     # Check if we need config_setting_group for items in multiple sets.
     needs_config_setting_group = False
