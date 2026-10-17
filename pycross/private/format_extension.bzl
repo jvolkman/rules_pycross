@@ -379,13 +379,12 @@ def make_format_extension(
             for tag in module.tags.package:
                 ws_name = tag.workspace
                 if not ws_name:
-                    if len(workspaces_in_module) == 1:
-                        ws_name = workspaces_in_module[0]
-                    else:
+                    if len(workspaces_in_module) != 1:
                         fail("package '{}' must specify workspace (module defines workspaces: {})".format(
                             tag.name,
                             ", ".join(workspaces_in_module) if workspaces_in_module else "none",
                         ))
+                    ws_name = workspaces_in_module[0]
 
                 if ws_name not in workspaces_in_module:
                     fail("package '{}': workspace '{}' not declared by this module".format(tag.name, ws_name))

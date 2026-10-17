@@ -202,26 +202,26 @@ def _emit_maybe_alias(lines, maybe_name, pkg_target, target_dict, available_keys
     emitted_helpers = {}
     branch_targets = {}
     for constraint, pkg_key in target_dict.items():
-        if pkg_key in available_set:
-            helper_name = "{}_{}".format(
-                helper_prefix,
-                pkg_key.replace("@", "_").replace("[", "_").replace("]", "_"),
-            )
-            if pkg_key not in emitted_helpers:
-                emitted_helpers[pkg_key] = helper_name
-                lines.extend([
-                    "alias(",
-                    '    name = "{}",'.format(helper_name),
-                    "    actual = select({",
-                    '        "@{}//_lock:_available_{}": "{}",'.format(workspace_repo, pkg_key, pkg_target),
-                    '        "//conditions:default": "//:_empty_library",',
-                    "    }),",
-                    ")",
-                    "",
-                ])
-            branch_targets[constraint] = ":{}".format(emitted_helpers[pkg_key])
-        else:
+        if pkg_key not in available_set:
             branch_targets[constraint] = pkg_target
+            continue
+        helper_name = "{}_{}".format(
+            helper_prefix,
+            pkg_key.replace("@", "_").replace("[", "_").replace("]", "_"),
+        )
+        if pkg_key not in emitted_helpers:
+            emitted_helpers[pkg_key] = helper_name
+            lines.extend([
+                "alias(",
+                '    name = "{}",'.format(helper_name),
+                "    actual = select({",
+                '        "@{}//_lock:_available_{}": "{}",'.format(workspace_repo, pkg_key, pkg_target),
+                '        "//conditions:default": "//:_empty_library",',
+                "    }),",
+                ")",
+                "",
+            ])
+        branch_targets[constraint] = ":{}".format(emitted_helpers[pkg_key])
 
     lines.extend([
         "alias(",
@@ -457,13 +457,11 @@ def _thin_package_repo_impl(rctx):
     grouped_pins = {}
     for pin_name, pin_target in pins.items():
         parts = parse_package_key(pin_name)
+        if parts.name not in grouped_pins:
+            grouped_pins[parts.name] = {"base_target": None, "extras": {}}
         if parts.extra:
-            if parts.name not in grouped_pins:
-                grouped_pins[parts.name] = {"base_target": None, "extras": {}}
             grouped_pins[parts.name]["extras"][parts.extra] = pin_target
         else:
-            if parts.name not in grouped_pins:
-                grouped_pins[parts.name] = {"base_target": None, "extras": {}}
             grouped_pins[parts.name]["base_target"] = pin_target
 
     root_build_lines = [
@@ -732,9 +730,9 @@ pycross_transitioning_file_proxy = rule(
     base_packages_with_extras = {}
     for pkg_key in packages.keys():
         parts = parse_package_key(pkg_key)
-        if parts.extra:
-            base_pkg_key = "{}@{}".format(parts.name, parts.version)
-            base_packages_with_extras[base_pkg_key] = True
+        if not parts.extra:
+            continue
+        base_packages_with_extras["{}@{}".format(parts.name, parts.version)] = True
 
     # Pin directories: proxies pointing to @workspace//_lock targets
     for base_pin_name, group in sorted(grouped_pins.items()):

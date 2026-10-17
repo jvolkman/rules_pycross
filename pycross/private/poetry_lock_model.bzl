@@ -218,14 +218,14 @@ def _get_files_for_package(files, package_name, package_version):
         if filename.endswith(".whl"):
             # Parse wheel filename to check name and version
             parsed = pypackaging.utils.parse_wheel_filename(filename)
-            if parsed.name == package_name and pypackaging.version.to_string(parsed.version) == package_version:
-                result.append(f)
         elif filename.endswith(".tar.gz") or filename.endswith(".zip"):
             parsed = pypackaging.utils.parse_sdist_filename(filename)
-            if parsed.name == package_name and pypackaging.version.to_string(parsed.version) == package_version:
-                result.append(f)
         else:
             # Unknown format, include it
+            result.append(f)
+            continue
+
+        if parsed.name == package_name and pypackaging.version.to_string(parsed.version) == package_version:
             result.append(f)
 
     return result
@@ -417,39 +417,41 @@ def translate_poetry(project_dict, lock_dict, lock_model):
 
     for group_name in project_optional_deps.keys():
         key = "optional:{}".format(group_name)
-        if key in requested_groups_dict:
-            is_testonly = requested_groups_dict[key]
-            for dep_str in project_optional_deps[group_name]:
-                req = parse_pep508_requirement(dep_str)
-                if req.name == "python":
-                    continue
-                track_pin(req.name, req.specifier, is_testonly, req.marker, req.extras)
+        if key not in requested_groups_dict:
+            continue
+        is_testonly = requested_groups_dict[key]
+        for dep_str in project_optional_deps[group_name]:
+            req = parse_pep508_requirement(dep_str)
+            if req.name == "python":
+                continue
+            track_pin(req.name, req.specifier, is_testonly, req.marker, req.extras)
 
     for group_name in available_dev_groups:
         key = "group:{}".format(group_name)
-        if key in requested_groups_dict:
-            is_testonly = requested_groups_dict[key]
+        if key not in requested_groups_dict:
+            continue
+        is_testonly = requested_groups_dict[key]
 
-            # Poetry merges PEP 735 and legacy groups (union, not fallback).
-            if group_name in pep735_groups:
-                for dep_str in pep735_groups[group_name]:
-                    req = parse_pep508_requirement(dep_str)
-                    if req.name == "python":
-                        continue
-                    track_pin(canonicalize_name(req.name), req.specifier, is_testonly, req.marker, req.extras)
+        # Poetry merges PEP 735 and legacy groups (union, not fallback).
+        if group_name in pep735_groups:
+            for dep_str in pep735_groups[group_name]:
+                req = parse_pep508_requirement(dep_str)
+                if req.name == "python":
+                    continue
+                track_pin(canonicalize_name(req.name), req.specifier, is_testonly, req.marker, req.extras)
 
-            if group_name in poetry_groups:
-                g = poetry_groups[group_name]
-                for pin, pin_info in g.get("dependencies", {}).items():
-                    pin = canonicalize_name(pin)
-                    if pin == "python":
-                        continue
-                    _parse_poetry_pin(
-                        pin,
-                        pin_info,
-                        pinned_package_specs,
-                        track_pin = lambda p, spec, marker, extras: track_pin(p, spec, is_testonly, marker, extras),
-                    )
+        if group_name in poetry_groups:
+            g = poetry_groups[group_name]
+            for pin, pin_info in g.get("dependencies", {}).items():
+                pin = canonicalize_name(pin)
+                if pin == "python":
+                    continue
+                _parse_poetry_pin(
+                    pin,
+                    pin_info,
+                    pinned_package_specs,
+                    track_pin = lambda p, spec, marker, extras: track_pin(p, spec, is_testonly, marker, extras),
+                )
 
     testonly_pin_names = [name for name in testonly_reqs if name not in non_testonly_reqs]
 

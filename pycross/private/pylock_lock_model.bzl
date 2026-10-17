@@ -104,6 +104,139 @@ def _link_through_hub(lock_packages, versions_all):
             if len(hubs) == 1:
                 _set_dependency(pkg, lock_packages[hub], "")
 
+def _resolve_pylock_project_pins(project_dict, lock_model, lock_packages, deps_by_name, pkg_markers, versions_all):
+    """Filter lock_packages and compute pins, testonly_pins, and root_dependency_markers."""
+    if not project_dict:
+        # Default: include all (use first key per name; fork detection below may override)
+        pins = {}
+        for pkg_key, pkg in lock_packages.items():
+            pins.setdefault(pkg["name"], pkg_key)
+        return lock_packages, pins, [], {}
+
+    dependency_groups = getattr(lock_model, "dependency_groups", ["default"])
+    testonly_groups = getattr(lock_model, "testonly_groups", [])
+    non_testonly_groups = getattr(lock_model, "non_testonly_groups", [])
+    wildcard_testonly = getattr(lock_model, "wildcard_testonly", False)
+
+    project_section = project_dict.get("project", {})
+    optional_deps = project_section.get("optional-dependencies", {})
+    dev_deps = project_dict.get("dependency-groups", {})
+    project_name = project_section.get("name")
+
+    requested_groups_dict = compute_requested_dependency_groups(
+        dependency_groups = dependency_groups,
+        testonly_groups = testonly_groups,
+        non_testonly_groups = non_testonly_groups,
+        wildcard_testonly = wildcard_testonly,
+        available_groups = (
+            ["default"] +
+            ["optional:" + g for g in optional_deps.keys()] +
+            ["group:" + g for g in dev_deps.keys()]
+        ),
+        project_name = project_name,
+    )
+
+    root_req_names = []
+    testonly_root_req_names = []
+    root_dependency_markers = {}
+
+    def handle_dep_str(dep_str, is_testonly):
+        req = parse_pep508_requirement(dep_str)
+        n = req.name
+        if is_testonly:
+            testonly_root_req_names.append(n)
+        else:
+            root_req_names.append(n)
+        for extra in req.extras:
+            pin_name = "{}[{}]".format(n, canonicalize_name(extra))
+            record_root_marker(root_dependency_markers, pin_name, req.marker)
+        record_root_marker(root_dependency_markers, n, req.marker)
+
+    if "default" in requested_groups_dict:
+        is_testonly = requested_groups_dict["default"]
+        for dep_str in project_section.get("dependencies", []):
+            handle_dep_str(dep_str, is_testonly)
+
+    for kind, groups_dict in [("optional", optional_deps), ("group", dev_deps)]:
+        for target_name, entries in groups_dict.items():
+            key = "{}:{}".format(kind, target_name)
+            if key not in requested_groups_dict:
+                continue
+            is_testonly = requested_groups_dict[key]
+            for entry in entries:
+                if type(entry) == "string":
+                    handle_dep_str(entry, is_testonly)
+                elif type(entry) == "dict" and "include-group" in entry:
+                    for inc_dep in dev_deps.get(entry["include-group"], []):
+                        if type(inc_dep) == "string":
+                            handle_dep_str(inc_dep, is_testonly)
+
+    # Deduplicate
+    root_package_names = {n: True for n in root_req_names}
+    testonly_package_names = {n: True for n in testonly_root_req_names if n not in root_package_names}
+
+    # BFS from all root names to find reachable packages
+    visited_names = {}
+    all_roots = dict(root_package_names)
+    all_roots.update(testonly_package_names)
+    queue = sorted(all_roots.keys())
+
+    # Starlark has no while loop, simulate with for+range.
+    # Upper bound: each edge can add one item to the queue, plus the initial queue size.
+    total_edges = 0
+    for pkg_key in lock_packages:
+        total_edges += len(lock_packages[pkg_key].get("dependencies", []))
+    max_iter = total_edges + len(queue) + 1
+    for _ in range(max_iter):
+        if not queue:
+            break
+        curr = queue[0]
+        queue = queue[1:]
+        if curr in visited_names:
+            continue
+        visited_names[curr] = True
+
+        for pkg_key in deps_by_name.get(curr, []):
+            if pkg_key not in lock_packages:
+                continue
+            for dep in lock_packages[pkg_key].get("dependencies", []):
+                queue.append(parse_package_key(dep["name"]).name)
+
+    if queue:
+        fail("BFS traversal exceeded max iterations; this is a bug in pycross")
+
+    # PDM's export drops extras edges (requests[socks] -> pysocks), leaving
+    # locked packages unreachable from the roots. If any such orphan's PDM
+    # selection marker names a requested group, model the lock as graphless
+    # instead. Other unreachable packages are pruned as before.
+    orphans = {
+        k: True
+        for k, pkg in lock_packages.items()
+        if pkg["name"] not in visited_names and _selects_requested_group(pkg_markers[k], requested_groups_dict)
+    }
+    if orphans:
+        lock_packages = {
+            k: pkg
+            for k, pkg in lock_packages.items()
+            if k in orphans or pkg["name"] in visited_names
+        }
+        _link_through_hub(lock_packages, versions_all)
+        visited_names = {pkg["name"]: True for pkg in lock_packages.values()}
+
+    lock_packages = {
+        pkg_key: pkg
+        for pkg_key, pkg in lock_packages.items()
+        if pkg["name"] in visited_names
+    }
+
+    pins = {}
+    for root_name in sorted(all_roots.keys()):
+        keys = deps_by_name.get(root_name, [])
+        if keys:
+            pins[root_name] = keys[0]
+
+    return lock_packages, pins, sorted(testonly_package_names.keys()), root_dependency_markers
+
 def translate_pylock(lock_dict, project_dict, lock_model):
     """Translates pylock data to raw_lock_data dict.
 
@@ -294,147 +427,14 @@ def translate_pylock(lock_dict, project_dict, lock_model):
         pkg_name = pkg["name"]
         deps_by_name.setdefault(pkg_name, []).append(pkg_key)
 
-    pins = {}
-
-    dependency_groups = getattr(lock_model, "dependency_groups", ["default"])
-    root_dependency_markers = {}
-
-    if project_dict:
-        root_req_names = []
-        testonly_root_req_names = []
-        testonly_groups = getattr(lock_model, "testonly_groups", [])
-        non_testonly_groups = getattr(lock_model, "non_testonly_groups", [])
-        wildcard_testonly = getattr(lock_model, "wildcard_testonly", False)
-
-        project_section = project_dict.get("project", {})
-        optional_deps = project_section.get("optional-dependencies", {})
-        dev_deps = project_dict.get("dependency-groups", {})
-
-        project_name = project_dict.get("project", {}).get("name")
-
-        requested_groups_dict = compute_requested_dependency_groups(
-            dependency_groups = dependency_groups,
-            testonly_groups = testonly_groups,
-            non_testonly_groups = non_testonly_groups,
-            wildcard_testonly = wildcard_testonly,
-            available_groups = (
-                ["default"] +
-                ["optional:" + g for g in optional_deps.keys()] +
-                ["group:" + g for g in dev_deps.keys()]
-            ),
-            project_name = project_name,
-        )
-
-        def handle_dep_str(dep_str, is_testonly):
-            req = parse_pep508_requirement(dep_str)
-            n = req.name
-            if is_testonly:
-                testonly_root_req_names.append(n)
-            else:
-                root_req_names.append(n)
-            if req.extras:
-                for extra in req.extras:
-                    pin_name = "{}[{}]".format(n, canonicalize_name(extra))
-                    record_root_marker(root_dependency_markers, pin_name, req.marker)
-            record_root_marker(root_dependency_markers, n, req.marker)
-
-        if "default" in requested_groups_dict:
-            is_testonly = requested_groups_dict["default"]
-            for dep_str in project_section.get("dependencies", []):
-                handle_dep_str(dep_str, is_testonly)
-
-        for kind, groups_dict in [("optional", optional_deps), ("group", dev_deps)]:
-            for target_name in groups_dict.keys():
-                key = "{}:{}".format(kind, target_name)
-                if key not in requested_groups_dict:
-                    continue
-                is_testonly = requested_groups_dict[key]
-                entries = groups_dict[target_name]
-                for entry in entries:
-                    if type(entry) == "string":
-                        handle_dep_str(entry, is_testonly)
-                    elif type(entry) == "dict" and "include-group" in entry:
-                        inc_group = entry["include-group"]
-                        if inc_group in dev_deps:
-                            for inc_dep in dev_deps[inc_group]:
-                                if type(inc_dep) == "string":
-                                    handle_dep_str(inc_dep, is_testonly)
-
-        # Deduplicate
-        root_package_names = {n: True for n in root_req_names}
-        testonly_package_names = {n: True for n in testonly_root_req_names if n not in root_package_names}
-
-        # BFS from all root names to find reachable packages
-        visited_names = {}
-        all_roots = dict(root_package_names)
-        all_roots.update(testonly_package_names)
-        queue = sorted(all_roots.keys())
-
-        # Starlark has no while loop, simulate with for+range.
-        # Upper bound: each edge can add one item to the queue, plus the initial queue size.
-        total_edges = 0
-        for pkg_key in lock_packages:
-            total_edges += len(lock_packages[pkg_key].get("dependencies", []))
-        max_iter = total_edges + len(queue) + 1
-        for _ in range(max_iter):
-            if not queue:
-                break
-            curr = queue[0]
-            queue = queue[1:]
-            if curr in visited_names:
-                continue
-            visited_names[curr] = True
-
-            for pkg_key in deps_by_name.get(curr, []):
-                if pkg_key in lock_packages:
-                    for dep in lock_packages[pkg_key].get("dependencies", []):
-                        dep_base = parse_package_key(dep["name"]).name
-                        queue.append(dep_base)
-
-        if queue:
-            fail("BFS traversal exceeded max iterations; this is a bug in pycross")
-
-        # PDM's export drops extras edges (requests[socks] -> pysocks), leaving
-        # locked packages unreachable from the roots. If any such orphan's PDM
-        # selection marker names a requested group, model the lock as graphless
-        # instead. Other unreachable packages are pruned as before.
-        orphans = {
-            k: True
-            for k, pkg in lock_packages.items()
-            if pkg["name"] not in visited_names and _selects_requested_group(pkg_markers[k], requested_groups_dict)
-        }
-        if orphans:
-            lock_packages = {
-                k: pkg
-                for k, pkg in lock_packages.items()
-                if k in orphans or pkg["name"] in visited_names
-            }
-            _link_through_hub(lock_packages, versions_all)
-            visited_names = {pkg["name"]: True for pkg in lock_packages.values()}
-
-        # Filter
-        filtered_packages = {}
-        for pkg_key, pkg in lock_packages.items():
-            if pkg["name"] in visited_names:
-                filtered_packages[pkg_key] = pkg
-        lock_packages = filtered_packages
-
-        # Pins from roots
-        for root_name in sorted(all_roots.keys()):
-            keys = deps_by_name.get(root_name, [])
-            if keys:
-                pins[root_name] = keys[0]
-
-        testonly_pins = sorted(testonly_package_names.keys())
-    else:
-        # Default: include all (use first key per name; fork detection below may override)
-        seen_names = {}
-        for pkg_key, pkg in lock_packages.items():
-            pname = pkg["name"]
-            if pname not in seen_names:
-                pins[pname] = pkg_key
-                seen_names[pname] = True
-        testonly_pins = []
+    lock_packages, pins, testonly_pins, root_dependency_markers = _resolve_pylock_project_pins(
+        project_dict,
+        lock_model,
+        lock_packages,
+        deps_by_name,
+        pkg_markers,
+        versions_all,
+    )
 
     # Detect resolution-marker forks: same package name with multiple versions.
     resolution_marker_exprs = {}
@@ -451,11 +451,12 @@ def translate_pylock(lock_dict, project_dict, lock_model):
 
     # If forks were detected, update pins to use conditional pins.
     for fname, version_constraints in fork_constraints.items():
-        if fname in pins:
-            conditional_pins = {}
-            for fversion, cname in version_constraints.items():
-                conditional_pins[cname] = "{}@{}".format(fname, fversion)
-            pins[fname] = conditional_pins
+        if fname not in pins:
+            continue
+        pins[fname] = {
+            cname: "{}@{}".format(fname, fversion)
+            for fversion, cname in version_constraints.items()
+        }
 
     result = {
         "packages": lock_packages,

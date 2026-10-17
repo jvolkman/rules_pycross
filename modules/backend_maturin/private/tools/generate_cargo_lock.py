@@ -24,6 +24,33 @@ def derive_default_output(sdist_path: Path) -> str:
     return "Cargo.lock"
 
 
+def _find_cargo_toml_dir_from_pyproject(sdist_root: Path) -> Path | None:
+    pyproject_path = sdist_root / "pyproject.toml"
+    if not pyproject_path.exists():
+        return sdist_root
+
+    try:
+        import tomllib
+    except ImportError:
+        try:
+            from pip._vendor import tomli as tomllib  # type: ignore[no-redef]
+        except ImportError:
+            print("Warning: tomllib/tomli not found. Searching for Cargo.toml instead.", file=sys.stderr)
+            return None
+
+    try:
+        with open(pyproject_path, "rb") as f:
+            pyproject_data = tomllib.load(f)
+        manifest_path = pyproject_data.get("tool", {}).get("maturin", {}).get("manifest-path", "Cargo.toml")
+        return (sdist_root / manifest_path).parent
+    except Exception as e:
+        print(
+            f"Warning: Failed to parse pyproject.toml: {e}. Searching for Cargo.toml instead.",
+            file=sys.stderr,
+        )
+        return None
+
+
 def main():
     parser = argparse.ArgumentParser(description="Generate Cargo.lock for an sdist.")
     parser.add_argument("--sdist", required=True, help="Path to the sdist tarball.")
@@ -64,34 +91,7 @@ def main():
 
         # Find Cargo.toml.
         # We also want to support manifest-path if defined in pyproject.toml
-        cargo_toml_dir = sdist_root
-        pyproject_path = sdist_root / "pyproject.toml"
-        if pyproject_path.exists():
-            try:
-                import tomllib
-            except ImportError:
-                try:
-                    from pip._vendor import tomli as tomllib  # type: ignore[no-redef]
-                except ImportError:
-                    tomllib = None  # type: ignore[assignment]
-
-            if tomllib:
-                with open(pyproject_path, "rb") as f:
-                    try:
-                        pyproject_data = tomllib.load(f)
-                        manifest_path = (
-                            pyproject_data.get("tool", {}).get("maturin", {}).get("manifest-path", "Cargo.toml")
-                        )
-                        cargo_toml_dir = (sdist_root / manifest_path).parent
-                    except Exception as e:
-                        print(
-                            f"Warning: Failed to parse pyproject.toml: {e}. Searching for Cargo.toml instead.",
-                            file=sys.stderr,
-                        )
-                        cargo_toml_dir = None
-            else:
-                print("Warning: tomllib/tomli not found. Searching for Cargo.toml instead.", file=sys.stderr)
-                cargo_toml_dir = None
+        cargo_toml_dir = _find_cargo_toml_dir_from_pyproject(sdist_root)
 
         if not cargo_toml_dir or not (cargo_toml_dir / "Cargo.toml").exists():
             # Fallback to searching

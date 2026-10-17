@@ -219,14 +219,15 @@ def _create_package_resolver(pkg_key, pkg, ann, default_extra_build_tools, conte
     marker_dependencies = []
     for dep in pkg.get("dependencies", []):
         dep_name = dep["name"]
-        if dep_name not in ann_ignore_deps:
-            dep_key = "{}@{}".format(dep_name, dep["version"])
-            dependencies.append(dep)
-            marker_dependencies.append({
-                "key": dep_key,
-                "marker": dep.get("marker", ""),
-            })
-            all_dependency_keys.append(dep_key)
+        if dep_name in ann_ignore_deps:
+            continue
+        dep_key = "{}@{}".format(dep_name, dep["version"])
+        dependencies.append(dep)
+        marker_dependencies.append({
+            "key": dep_key,
+            "marker": dep.get("marker", ""),
+        })
+        all_dependency_keys.append(dep_key)
 
     ann_extra_deps = ann.extra_dependencies if ann else []
     for dep_key in ann_extra_deps:
@@ -302,6 +303,32 @@ def _create_package_resolver(pkg_key, pkg, ann, default_extra_build_tools, conte
         key = pkg_key,
     )
 
+def _synthesize_extra_package(next_package_key, lock_model_packages, synthesized_packages):
+    parts = parse_package_key(next_package_key)
+    if not parts.extra:
+        fail("Missing package {}".format(next_package_key))
+
+    base_key = "{}@{}".format(parts.name, parts.version)
+    base_package = lock_model_packages.get(base_key) or synthesized_packages.get(base_key)
+    if not base_package:
+        fail("Missing base package {} for extra {}".format(base_key, next_package_key))
+
+    base_deps = base_package.get("dependencies", [])
+    synthesized_deps = list(base_deps) + [{
+        "name": parts.name,
+        "version": parts.version,
+        "marker": "",
+    }]
+    raw_pkg = {
+        "name": parts.name,
+        "version": parts.version,
+        "python_versions": base_package.get("python_versions", ""),
+        "dependencies": synthesized_deps,
+        "files": [],
+    }
+    synthesized_packages[next_package_key] = raw_pkg
+    return raw_pkg
+
 def _resolve_packages(
         lock_model_packages,
         pins,
@@ -337,29 +364,11 @@ def _resolve_packages(
 
         raw_pkg = lock_model_packages.get(next_package_key) or synthesized_packages.get(next_package_key)
         if not raw_pkg:
-            parts = parse_package_key(next_package_key)
-            if parts.extra:
-                base_key = "{}@{}".format(parts.name, parts.version)
-                base_package = lock_model_packages.get(base_key) or synthesized_packages.get(base_key)
-                if not base_package:
-                    fail("Missing base package {} for extra {}".format(base_key, next_package_key))
-
-                base_deps = base_package.get("dependencies", [])
-                synthesized_deps = list(base_deps) + [{
-                    "name": parts.name,
-                    "version": parts.version,
-                    "marker": "",
-                }]
-                raw_pkg = {
-                    "name": parts.name,
-                    "version": parts.version,
-                    "python_versions": base_package.get("python_versions", ""),
-                    "dependencies": synthesized_deps,
-                    "files": [],
-                }
-                synthesized_packages[next_package_key] = raw_pkg
-            else:
-                fail("Missing package {}".format(next_package_key))
+            raw_pkg = _synthesize_extra_package(
+                next_package_key,
+                lock_model_packages,
+                synthesized_packages,
+            )
 
         ann = annotations.pop(next_package_key, None)
         entry = _create_package_resolver(
@@ -445,24 +454,25 @@ def _compute_cycle_groups(packages):
                     work_stack.append([w, graph.get(w, []), 0])
                 elif w in on_stack:
                     lowlink[v] = min(lowlink[v], indices[w])
-            else:
-                if lowlink[v] == indices[v]:
-                    scc = []
+                continue
 
-                    # We also need to simulate this while True loop
-                    # It runs at most len(stack) times.
-                    for _ in range(len(stack) + 1):
-                        w = stack.pop()
-                        on_stack.pop(w)
-                        scc.append(w)
-                        if w == v:
-                            break
-                    sccs.append(scc)
+            if lowlink[v] == indices[v]:
+                scc = []
 
-                work_stack.pop()
-                if len(work_stack) > 0:
-                    parent = work_stack[-1][0]
-                    lowlink[parent] = min(lowlink[parent], lowlink[v])
+                # We also need to simulate this while True loop
+                # It runs at most len(stack) times.
+                for _ in range(len(stack) + 1):
+                    w = stack.pop()
+                    on_stack.pop(w)
+                    scc.append(w)
+                    if w == v:
+                        break
+                sccs.append(scc)
+
+            work_stack.pop()
+            if len(work_stack) > 0:
+                parent = work_stack[-1][0]
+                lowlink[parent] = min(lowlink[parent], lowlink[v])
 
         if len(work_stack) > 0:
             fail("DFS traversal for SCC exceeded max iterations. Remaining stack: {}".format(work_stack))

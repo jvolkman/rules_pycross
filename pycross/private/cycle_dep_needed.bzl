@@ -26,6 +26,20 @@ load("//pycross/private:util.bzl", "parse_package_key")
 
 # ---- BFS reachability -------------------------------------------------------
 
+def _node_env(markers_env, node_extra):
+    base_extra = markers_env.get("extra", "")
+    if type(base_extra) == "list":
+        if base_extra[0] == node_extra:
+            return markers_env
+        env = dict(markers_env)
+        env["extra"] = [node_extra] + base_extra[1:]
+        return env
+    if base_extra == node_extra:
+        return markers_env
+    env = dict(markers_env)
+    env["extra"] = node_extra
+    return env
+
 def _active_neighbors(edges, node, markers_env):
     """Returns the list of neighbor nodes reachable from `node` given marker values.
 
@@ -45,18 +59,7 @@ def _active_neighbors(edges, node, markers_env):
         marker_str = edge.get("marker")
         if marker_str:
             if node_env == None:
-                base_extra = markers_env.get("extra", "")
-                if type(base_extra) == "list":
-                    if base_extra[0] == node_extra:
-                        node_env = markers_env
-                    else:
-                        node_env = dict(markers_env)
-                        node_env["extra"] = [node_extra] + base_extra[1:]
-                elif base_extra == node_extra:
-                    node_env = markers_env
-                else:
-                    node_env = dict(markers_env)
-                    node_env["extra"] = node_extra
+                node_env = _node_env(markers_env, node_extra)
             parsed_marker = pypackaging.markers.parse(marker_str)
             if not pypackaging.markers.evaluate(parsed_marker, node_env):
                 continue
