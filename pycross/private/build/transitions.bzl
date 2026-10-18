@@ -41,50 +41,35 @@ _EXEC_TARGET_SETTINGS = {
     "@rules_python//python/config_settings:py_linux_libc": "glibc",
 }
 
+# Target-specific C/C++ compiler and feature flags that are reset to their
+# host_* counterparts when transitioning from a non-host target platform.
+_CROSS_HOST_OPTION_MAP = {
+    "//command_line_option:copt": "//command_line_option:host_copt",
+    "//command_line_option:conlyopt": "//command_line_option:host_conlyopt",
+    "//command_line_option:cxxopt": "//command_line_option:host_cxxopt",
+    "//command_line_option:linkopt": "//command_line_option:host_linkopt",
+    "//command_line_option:features": "//command_line_option:host_features",
+}
+
 def _pycross_exec_platform_transition_impl(settings, _attr):
-    if (
-        settings["//command_line_option:platforms"] == [settings["//command_line_option:host_platform"]] and
-        all([settings[k] == v for k, v in _EXEC_TARGET_SETTINGS.items()])
-    ):
+    is_cross = settings["//command_line_option:platforms"] != [settings["//command_line_option:host_platform"]]
+    if not is_cross and all([settings[k] == v for k, v in _EXEC_TARGET_SETTINGS.items()]):
         return {}
 
     return {
         "//command_line_option:platforms": [settings["//command_line_option:host_platform"]],
-        "//command_line_option:cpu": settings["//command_line_option:host_cpu"],
-        "//command_line_option:compiler": settings["//command_line_option:host_compiler"],
-        "//command_line_option:compilation_mode": settings["//command_line_option:host_compilation_mode"],
-        "//command_line_option:copt": settings["//command_line_option:host_copt"],
-        "//command_line_option:cxxopt": settings["//command_line_option:host_cxxopt"],
-        "//command_line_option:linkopt": settings["//command_line_option:host_linkopt"],
-        "//command_line_option:action_env": settings["//command_line_option:host_action_env"],
-        "//command_line_option:features": settings["//command_line_option:host_features"],
-        "//command_line_option:strip": "always",
-    } | _EXEC_TARGET_SETTINGS
+    } | _EXEC_TARGET_SETTINGS | {
+        target_opt: settings[host_opt if is_cross else target_opt]
+        for target_opt, host_opt in _CROSS_HOST_OPTION_MAP.items()
+    }
 
 pycross_exec_platform_transition = transition(
     implementation = _pycross_exec_platform_transition_impl,
     inputs = [
         "//command_line_option:platforms",
         "//command_line_option:host_platform",
-        "//command_line_option:host_cpu",
-        "//command_line_option:host_compiler",
-        "//command_line_option:host_compilation_mode",
-        "//command_line_option:host_copt",
-        "//command_line_option:host_cxxopt",
-        "//command_line_option:host_linkopt",
-        "//command_line_option:host_action_env",
-        "//command_line_option:host_features",
-    ] + _EXEC_TARGET_SETTINGS.keys(),
+    ] + _EXEC_TARGET_SETTINGS.keys() + _CROSS_HOST_OPTION_MAP.keys() + _CROSS_HOST_OPTION_MAP.values(),
     outputs = [
         "//command_line_option:platforms",
-        "//command_line_option:cpu",
-        "//command_line_option:compiler",
-        "//command_line_option:compilation_mode",
-        "//command_line_option:copt",
-        "//command_line_option:cxxopt",
-        "//command_line_option:linkopt",
-        "//command_line_option:action_env",
-        "//command_line_option:features",
-        "//command_line_option:strip",
-    ] + _EXEC_TARGET_SETTINGS.keys(),
+    ] + _EXEC_TARGET_SETTINGS.keys() + _CROSS_HOST_OPTION_MAP.keys(),
 )
