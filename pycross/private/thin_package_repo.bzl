@@ -107,7 +107,8 @@ def _aggregated_key(pkg_key, aggregated_keys):
 
 def _no_variant_set_for(constraints, no_variant_fallbacks):
     # Return the first conflict set suffix touched by constraints so at most one
-    # _unselected_<set> condition is added to a given select().
+    # _unselected_<set> condition is added to a given select() (preventing select
+    # ambiguity if a single pin ever referenced two unselected conflict sets).
     for constraint in constraints:
         if constraint in no_variant_fallbacks:
             return no_variant_fallbacks[constraint]

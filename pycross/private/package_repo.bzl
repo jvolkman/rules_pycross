@@ -136,7 +136,7 @@ def _package_repo_impl(rctx):
             set_key = "|".join(sorted(set_qnames))
             if set_key not in variant_sets_seen:
                 variant_sets_seen[set_key] = True
-                variant_sets.append({"qnames": set_qnames, "default": set_default, "member": member})
+                variant_sets.append({"qnames": set_qnames, "default": set_default})
 
         member_packages[member] = member_lock.get("packages", {})
 
@@ -270,10 +270,6 @@ def _package_repo_impl(rctx):
             "",
         ])
         if not vset["default"]:
-            flag_examples = [
-                "--@{member}//_variants:{qname}".format(member = vset["member"], qname = qname)
-                for qname in vset["qnames"]
-            ]
             lock_build_lines.extend([
                 "config_setting(",
                 '    name = "_unselected_{}",'.format(set_suffix),
@@ -282,9 +278,9 @@ def _package_repo_impl(rctx):
                 "",
                 "pycross_no_variant_selected(",
                 '    name = "_no_variant_{}",'.format(set_suffix),
-                '    message = "No uv conflict variant selected. Set one of the _variants flags on your pycross repo: {} (e.g. {})",'.format(
+                '    message = "No uv conflict variant selected. Set one of the _variants flags on your pycross repo: {} (e.g. --@<repo>//_variants:{}=True)",'.format(
                     ", ".join(vset["qnames"]),
-                    ", ".join(flag_examples),
+                    vset["qnames"][0],
                 ),
                 ")",
                 "",
