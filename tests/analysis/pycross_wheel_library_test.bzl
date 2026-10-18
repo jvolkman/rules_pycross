@@ -1,6 +1,8 @@
 """Module docstring for tests."""
 
+load("@rules_python//python:py_info.bzl", "PyInfo")
 load("@rules_testing//lib:analysis_test.bzl", "analysis_test", "test_suite")
+load("@rules_testing//lib:truth.bzl", "matching")
 load("@rules_testing//lib:util.bzl", "util")
 
 # buildifier: disable=bzl-visibility
@@ -8,6 +10,9 @@ load("//pycross/private:providers.bzl", "PycrossExtractedWheelInfo", "PycrossPac
 
 # buildifier: disable=bzl-visibility
 load("//pycross/private:proxy.bzl", "pycross_library_proxy")
+
+# buildifier: disable=bzl-visibility
+load("//pycross/private:variant_resolver.bzl", "pycross_no_variant_selected")
 
 # buildifier: disable=bzl-visibility
 load("//pycross/private:wheel_dir.bzl", "pycross_wheel_dir")
@@ -234,6 +239,55 @@ def _test_pycross_library_proxy_no_match_deferred_impl(env, target):
     # build time instead of succeeding with an empty environment.
     runfile_names = [f.basename for f in target[DefaultInfo].default_runfiles.files.to_list()]
     env.expect.that_collection(runfile_names).contains("no_match_error.whl")
+
+def _test_no_variant_selected_fails_by_default(name):
+    util.helper_target(
+        pycross_no_variant_selected,
+        name = name + "_subject",
+        message = "No uv conflict variant selected. Set one of the _variants flags on your pycross repo: extra_a, extra_b",
+    )
+    analysis_test(
+        name = name,
+        target = name + "_subject",
+        expect_failure = True,
+        impl = _test_no_variant_selected_fails_by_default_impl,
+    )
+
+# buildifier: disable=unused-variable
+def _test_no_variant_selected_fails_by_default_impl(env, target):
+    env.expect.that_target(target).failures().contains_predicate(
+        matching.contains("No uv conflict variant selected. Set one of"),
+    )
+
+def _test_no_variant_selected_deferred(name):
+    util.helper_target(
+        pycross_no_variant_selected,
+        name = name + "_subject",
+        message = "No uv conflict variant selected. Set one of the _variants flags on your pycross repo: extra_a, extra_b",
+    )
+    analysis_test(
+        name = name,
+        target = name + "_subject",
+        config_settings = {
+            str(Label("//pycross/settings:unavailable_package_mode")): "fail_at_execution",
+        },
+        impl = _test_no_variant_selected_deferred_impl,
+    )
+
+# buildifier: disable=unused-variable
+def _test_no_variant_selected_deferred_impl(env, target):
+    env.expect.that_target(target).has_provider(PyInfo)
+    env.expect.that_bool(PycrossUnsupportedWheelInfo in target).equals(False)
+
+    whl = target[DefaultInfo].files.to_list()[0]
+    action = env.expect.that_target(target).action_generating(whl.short_path)
+    action.mnemonic().equals("PycrossNoVariantSelected")
+    action.env().contains_exactly({
+        "PYCROSS_ERROR": "No uv conflict variant selected. Set one of the _variants flags on your pycross repo: extra_a, extra_b",
+    })
+
+    runfile_names = [f.basename for f in target[DefaultInfo].default_runfiles.files.to_list()]
+    env.expect.that_collection(runfile_names).contains(whl.basename)
 
 def _define_precompile_subject(name, **kwargs):
     util.helper_target(
@@ -482,6 +536,8 @@ def pycross_wheel_library_test_suite(name):
             _test_no_match_error_incompatible_by_default,
             _test_no_match_error_compatible_when_deferred,
             _test_pycross_library_proxy_no_match_deferred,
+            _test_no_variant_selected_fails_by_default,
+            _test_no_variant_selected_deferred,
             _test_pycross_wheel_library_precompile_auto,
             _test_pycross_wheel_library_precompile_disabled,
             _test_pycross_wheel_library_precompile_force_disabled,

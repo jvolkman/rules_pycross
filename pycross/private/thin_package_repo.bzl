@@ -105,7 +105,16 @@ def _aggregated_key(pkg_key, aggregated_keys):
         return pkg_key
     return "{}[_all_]@{}".format(parts.name, parts.version)
 
-def _target_select(target_dict, prefix, suffix, workspace_repo, is_aggregated = False, default_variants = {}, all_target_dict = None, fallback_target = _NO_MATCH_ERROR_TARGET, aggregated_keys = None):
+def _no_variant_set_for(constraints, no_variant_fallbacks):
+    # Return the first conflict set suffix touched by constraints so at most one
+    # _unselected_<set> condition is added to a given select() (preventing select
+    # ambiguity if a single pin ever referenced two unselected conflict sets).
+    for constraint in constraints:
+        if constraint in no_variant_fallbacks:
+            return no_variant_fallbacks[constraint]
+    return None
+
+def _target_select(target_dict, prefix, suffix, workspace_repo, is_aggregated = False, default_variants = {}, no_variant_fallbacks = {}, all_target_dict = None, fallback_target = _NO_MATCH_ERROR_TARGET, aggregated_keys = None):
     effective_all = all_target_dict if all_target_dict != None else target_dict
     if len(effective_all) == 1 and "" in effective_all and "" in target_dict:
         t = target_dict[""]
@@ -137,16 +146,30 @@ def _target_select(target_dict, prefix, suffix, workspace_repo, is_aggregated = 
                 default_target_label = target_label
 
     # Add //conditions:default for default variant or uncovered-branch fallback (only if not already present via "").
+    # When the select touches a conflict set without a default, also add an explicit
+    # _unselected_<set> condition -> _no_variant_<set> so unselected variants fail
+    # clearly while platform-incompatible selected variants still fall through to default.
     if "" not in effective_all:
         if default_target_label:
             lines.append('        "//conditions:default": "{}",'.format(default_target_label))
-        elif fallback_target:
-            lines.append('        "//conditions:default": "{}",'.format(fallback_target))
+        else:
+            unselected_set = _no_variant_set_for(effective_all.keys(), no_variant_fallbacks)
+            if unselected_set:
+                lines.append(
+                    '        "@{}//_lock:_unselected_{}": "@{}//_lock:_no_variant_{}",'.format(
+                        workspace_repo,
+                        unselected_set,
+                        workspace_repo,
+                        unselected_set,
+                    ),
+                )
+            if fallback_target:
+                lines.append('        "//conditions:default": "{}",'.format(fallback_target))
 
     lines.append("    })")
     return "\n".join(lines)
 
-def _proxy_actual(actual_lines, target_dict, prefix, suffix, workspace_repo, alias_name, actual_pkg_ref, has_transition = False, is_aggregated = False, default_variants = {}, all_target_dict = None, fallback_target = _NO_MATCH_ERROR_TARGET, aggregated_keys = None):
+def _proxy_actual(actual_lines, target_dict, prefix, suffix, workspace_repo, alias_name, actual_pkg_ref, has_transition = False, is_aggregated = False, default_variants = {}, no_variant_fallbacks = {}, all_target_dict = None, fallback_target = _NO_MATCH_ERROR_TARGET, aggregated_keys = None):
     """Emit an intermediate select alias if needed, return the actual expression for the proxy.
 
     When transitions are active (has_transition is True) and target_dict has variants
@@ -162,6 +185,7 @@ def _proxy_actual(actual_lines, target_dict, prefix, suffix, workspace_repo, ali
         workspace_repo,
         is_aggregated = is_aggregated,
         default_variants = default_variants,
+        no_variant_fallbacks = no_variant_fallbacks,
         all_target_dict = all_target_dict,
         fallback_target = fallback_target,
         aggregated_keys = aggregated_keys,
@@ -177,7 +201,7 @@ def _proxy_actual(actual_lines, target_dict, prefix, suffix, workspace_repo, ali
         return '"{}:{}",'.format(actual_pkg_ref, alias_name)
     return "{},".format(actual)
 
-def _emit_maybe_alias(lines, maybe_name, pkg_target, target_dict, available_keys, workspace_repo, default_variants = {}, helper_prefix = "_maybe"):
+def _emit_maybe_alias(lines, maybe_name, pkg_target, target_dict, available_keys, workspace_repo, default_variants = {}, no_variant_fallbacks = {}, helper_prefix = "_maybe"):
     """Emit a `:maybe` or `:[extra]_maybe` alias supporting both single-branch and multi-branch pins."""
     available_set = {k: True for k in (available_keys or [])}
     if not available_set or not target_dict:
@@ -238,6 +262,17 @@ def _emit_maybe_alias(lines, maybe_name, pkg_target, target_dict, available_keys
                 default_target = branch_target
 
     if "" not in branch_targets:
+        if not default_target:
+            unselected_set = _no_variant_set_for(branch_targets.keys(), no_variant_fallbacks)
+            if unselected_set:
+                lines.append(
+                    '        "@{}//_lock:_unselected_{}": "@{}//_lock:_no_variant_{}",'.format(
+                        workspace_repo,
+                        unselected_set,
+                        workspace_repo,
+                        unselected_set,
+                    ),
+                )
         lines.append('        "//conditions:default": "{}",'.format(default_target if default_target else "//:_empty_library"))
 
     lines.extend([
@@ -246,7 +281,7 @@ def _emit_maybe_alias(lines, maybe_name, pkg_target, target_dict, available_keys
         "",
     ])
 
-def _pin_build(target_name, pin_target_dict, package, workspace_repo, workspace_lock_target_dict = None, has_aggregated_variant = False, extras_dict = None, default_variants = {}, target_platform = None, transition_bzl = None, maybe_available_keys = None, extras_maybe_keys = None, testonly = False, sdist_target_dict = None, aggregated_keys = None):
+def _pin_build(target_name, pin_target_dict, package, workspace_repo, workspace_lock_target_dict = None, has_aggregated_variant = False, extras_dict = None, default_variants = {}, no_variant_fallbacks = {}, target_platform = None, transition_bzl = None, maybe_available_keys = None, extras_maybe_keys = None, testonly = False, sdist_target_dict = None, aggregated_keys = None):
     """Generates the BUILD file for a pin directory, pointing to the workspace."""
     lock_target_dict = workspace_lock_target_dict if workspace_lock_target_dict else pin_target_dict
     lock_ref = "@{}//_lock:".format(workspace_repo)
@@ -301,13 +336,13 @@ def _pin_build(target_name, pin_target_dict, package, workspace_repo, workspace_
             ")",
             "",
         ])
-        actual_pkg = _proxy_actual(actual_lines, lock_target_dict, lock_ref, "", workspace_repo, "pkg", actual_pkg_ref, has_transition = has_transition, is_aggregated = has_aggregated_variant, default_variants = default_variants, aggregated_keys = aggregated_keys)
+        actual_pkg = _proxy_actual(actual_lines, lock_target_dict, lock_ref, "", workspace_repo, "pkg", actual_pkg_ref, has_transition = has_transition, is_aggregated = has_aggregated_variant, default_variants = default_variants, no_variant_fallbacks = no_variant_fallbacks, aggregated_keys = aggregated_keys)
         _emit_proxy(lib_rule, _safe_name(target_name, "pkg"), actual_pkg, is_testonly = testonly)
 
-        actual_wheel = _proxy_actual(actual_lines, pin_target_dict, wheel_ref, "", workspace_repo, "wheel", actual_pkg_ref, has_transition = has_transition, default_variants = default_variants)
+        actual_wheel = _proxy_actual(actual_lines, pin_target_dict, wheel_ref, "", workspace_repo, "wheel", actual_pkg_ref, has_transition = has_transition, default_variants = default_variants, no_variant_fallbacks = no_variant_fallbacks)
         _emit_proxy(file_rule, _safe_name(target_name, "wheel"), actual_wheel)
 
-        actual_dist_info = _proxy_actual(actual_lines, lock_target_dict, lock_ref + "_dist_info_", "", workspace_repo, "dist_info", actual_pkg_ref, has_transition = has_transition, default_variants = default_variants)
+        actual_dist_info = _proxy_actual(actual_lines, lock_target_dict, lock_ref + "_dist_info_", "", workspace_repo, "dist_info", actual_pkg_ref, has_transition = has_transition, default_variants = default_variants, no_variant_fallbacks = no_variant_fallbacks)
         _emit_proxy(file_rule, _safe_name(target_name, "dist_info"), actual_dist_info)
         lines.extend([
             "alias(",
@@ -326,7 +361,7 @@ def _pin_build(target_name, pin_target_dict, package, workspace_repo, workspace_
                     "",
                 ])
             else:
-                actual_all = _proxy_actual(actual_lines, lock_target_dict, lock_ref, "", workspace_repo, "all", actual_pkg_ref, has_transition = has_transition, default_variants = default_variants)
+                actual_all = _proxy_actual(actual_lines, lock_target_dict, lock_ref, "", workspace_repo, "all", actual_pkg_ref, has_transition = has_transition, default_variants = default_variants, no_variant_fallbacks = no_variant_fallbacks)
                 _emit_proxy(lib_rule, "[]", actual_all, is_testonly = testonly)
 
         effective_sdist_dict = sdist_target_dict
@@ -343,6 +378,7 @@ def _pin_build(target_name, pin_target_dict, package, workspace_repo, workspace_
                 actual_pkg_ref,
                 has_transition = has_transition,
                 default_variants = default_variants,
+                no_variant_fallbacks = no_variant_fallbacks,
                 all_target_dict = pin_target_dict,
                 fallback_target = _NO_MATCH_ERROR_TARGET,
             )
@@ -351,7 +387,7 @@ def _pin_build(target_name, pin_target_dict, package, workspace_repo, workspace_
     extras_dict = extras_dict or {}
     extras_maybe_keys = extras_maybe_keys or {}
     for extra_name, extra_target_dict in sorted(extras_dict.items()):
-        actual_extra = _proxy_actual(actual_lines, extra_target_dict, lock_ref, "", workspace_repo, "extra_{}".format(extra_name), actual_pkg_ref, has_transition = has_transition, default_variants = default_variants)
+        actual_extra = _proxy_actual(actual_lines, extra_target_dict, lock_ref, "", workspace_repo, "extra_{}".format(extra_name), actual_pkg_ref, has_transition = has_transition, default_variants = default_variants, no_variant_fallbacks = no_variant_fallbacks)
         _emit_proxy(lib_rule, "[{}]".format(extra_name), actual_extra, is_testonly = testonly)
         if extra_name in extras_maybe_keys and extras_maybe_keys[extra_name] and extra_target_dict:
             if has_transition:
@@ -364,6 +400,7 @@ def _pin_build(target_name, pin_target_dict, package, workspace_repo, workspace_
                     extras_maybe_keys[extra_name],
                     workspace_repo,
                     default_variants = default_variants,
+                    no_variant_fallbacks = no_variant_fallbacks,
                     helper_prefix = "_maybe_extra_{}".format(extra_name),
                 )
                 _emit_proxy(lib_rule, "[{}]_maybe".format(extra_name), '"{}:{}",'.format(actual_pkg_ref, actual_extra_maybe), is_testonly = testonly)
@@ -376,6 +413,7 @@ def _pin_build(target_name, pin_target_dict, package, workspace_repo, workspace_
                     extras_maybe_keys[extra_name],
                     workspace_repo,
                     default_variants = default_variants,
+                    no_variant_fallbacks = no_variant_fallbacks,
                     helper_prefix = "_maybe_extra_{}".format(extra_name),
                 )
 
@@ -391,6 +429,7 @@ def _pin_build(target_name, pin_target_dict, package, workspace_repo, workspace_
                 maybe_available_keys,
                 workspace_repo,
                 default_variants = default_variants,
+                no_variant_fallbacks = no_variant_fallbacks,
                 helper_prefix = "_maybe",
             )
             _emit_proxy(lib_rule, maybe_name, '"{}:maybe",'.format(actual_pkg_ref), is_testonly = testonly)
@@ -403,6 +442,7 @@ def _pin_build(target_name, pin_target_dict, package, workspace_repo, workspace_
                 maybe_available_keys,
                 workspace_repo,
                 default_variants = default_variants,
+                no_variant_fallbacks = no_variant_fallbacks,
                 helper_prefix = "_maybe",
             )
 
@@ -432,17 +472,30 @@ def _thin_package_repo_impl(rctx):
         if type(pins[pin_name]) == "string":
             pins[pin_name] = {"": pins[pin_name]}
 
-    # Build sets of all and default variant item qualified names.
+    # Build sets of all and default variant item qualified names, and fallback
+    # targets for conflict sets without a default variant.
     # When a VariantItem has default=True, its target becomes //conditions:default
     # in the select(), so builds without explicit flags use the default variant.
     variant_items = {}  # qualified_name -> True
     default_variants = {}  # qualified_name -> True
+    no_variant_fallbacks = {}  # constraint -> conflict set suffix (sorted qnames joined by "_")
     for variant_set in lock.get("variants", []):
+        set_qnames = []
+        has_default = False
         for item in variant_set["items"]:
             qname = variant_item_qname(item)
             variant_items[qname] = True
+            set_qnames.append(qname)
             if item.get("default", False):
                 default_variants[qname] = True
+                has_default = True
+        if not has_default and set_qnames:
+            set_suffix = "_".join(sorted(set_qnames))
+            for qname in set_qnames:
+                no_variant_fallbacks[qname] = set_suffix
+    for cname, expr in lock.get("resolution_marker_exprs", {}).items():
+        if type(expr) == "dict" and expr.get("variant") in no_variant_fallbacks:
+            no_variant_fallbacks[cname] = no_variant_fallbacks[expr["variant"]]
 
     # Conflicts dict: pkg_key -> [member_names...] for packages with
     # differing annotations across workspace members.
@@ -802,6 +855,7 @@ pycross_transitioning_file_proxy = rule(
             has_aggregated_variant,
             extras_dict,
             default_variants = default_variants,
+            no_variant_fallbacks = no_variant_fallbacks,
             target_platform = target_platform,
             transition_bzl = "//:_transition.bzl" if has_flags else None,
             maybe_available_keys = maybe_available_keys,
@@ -880,6 +934,7 @@ pycross_transitioning_file_proxy = rule(
             override_configs,
             workspace_repo,
             default_variants = default_variants,
+            no_variant_fallbacks = no_variant_fallbacks,
         )
         if cargo_build:
             rctx.file("_cargo/BUILD.bazel", cargo_build)
@@ -938,7 +993,7 @@ def _packages_bzl(grouped_pins, packages):
     ])
     return "\n".join(packages_lines)
 
-def _cargo_build(grouped_pins, packages, override_configs, workspace_repo, default_variants = {}):
+def _cargo_build(grouped_pins, packages, override_configs, workspace_repo, default_variants = {}, no_variant_fallbacks = {}):
     """Render `_cargo/BUILD.bazel` aliases for packages with cargo lock overrides, or None."""
     cargo_lines = [
         'package(default_visibility = ["//visibility:public"])',
@@ -971,6 +1026,7 @@ def _cargo_build(grouped_pins, packages, override_configs, workspace_repo, defau
             "",
             workspace_repo,
             default_variants = default_variants,
+            no_variant_fallbacks = no_variant_fallbacks,
             all_target_dict = base_target_dict,
             fallback_target = _NO_MATCH_ERROR_TARGET,
         )

@@ -123,7 +123,9 @@ bzl_library(
     name = "variant_resolver",
     srcs = ["variant_resolver.bzl"],
     deps = [
+        ":deferred_failure",
         "@bazel_skylib//rules:common_settings",
+        "@rules_python//python:py_info_bzl",
     ],
 )
 

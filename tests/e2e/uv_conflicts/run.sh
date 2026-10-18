@@ -22,11 +22,51 @@ bazel test "$@" //:test_default_group --@project//_variants:extra_variant-a=True
 
 # Verify error without flags for extras (which have no default)
 echo "Testing without flags (should fail for extras)..."
-if bazel build "$@" //:test_variant_a >/dev/null 2>&1; then
-  echo "Expected build to fail without flags!"
+if out=$(bazel build "$@" //:test_variant_a 2>&1); then
+  echo "Expected //:test_variant_a build to fail without flags!"
+  exit 1
+fi
+if [[ "$out" != *"Set one of"* ]]; then
+  echo "Expected error message to contain 'Set one of', got:"
+  echo "$out"
+  exit 1
+fi
+if out=$(bazel build "$@" //... 2>&1); then
+  echo "Expected //... build to fail without flags!"
+  exit 1
+fi
+if [[ "$out" != *"Set one of"* ]]; then
+  echo "Expected //... error message to contain 'Set one of', got:"
+  echo "$out"
   exit 1
 fi
 echo "Failed as expected."
+
+# Verify that under unavailable_package_mode=fail_at_execution without variant flags:
+# 1. Analysis (cquery) succeeds for both :pkg and :maybe.
+# 2. Execution (build) fails with the same "Set one of" message.
+echo "Testing without flags under unavailable_package_mode=fail_at_execution..."
+bazel cquery "$@" "@project//typing_extensions:pkg + @project//typing_extensions:maybe" \
+  --@rules_pycross//pycross/settings:unavailable_package_mode=fail_at_execution >/dev/null
+if out=$(bazel build "$@" @project//typing_extensions:pkg --@rules_pycross//pycross/settings:unavailable_package_mode=fail_at_execution 2>&1); then
+  echo "Expected @project//typing_extensions:pkg build to fail at execution without flags!"
+  exit 1
+fi
+if [[ "$out" != *"Set one of"* ]]; then
+  echo "Expected fail_at_execution error message to contain 'Set one of', got:"
+  echo "$out"
+  exit 1
+fi
+echo "Deferred execution failure without flags passed."
+
+# Verify that when a variant IS selected, a platform where the package's fork
+# does not match (Windows for typing-extensions, which has sys_platform != 'win32')
+# falls through to //conditions:default (no_match_error for :pkg, _empty_library for :maybe)
+# rather than failing with the unselected-variant error.
+echo "Testing selected variant on non-matching platform (Windows)..."
+bazel cquery "$@" "@project//typing_extensions:pkg + @project//typing_extensions:maybe" \
+  --platforms=//:plat_windows_x86_64 --@project//_variants:extra_variant-a=True >/dev/null
+echo "Selected variant on non-matching platform passed."
 
 # Test platform transition: @project_pinned has variant-a pinned via flags on the member import.
 # This should resolve typing-extensions 4.11.0 without any --flag arguments,
