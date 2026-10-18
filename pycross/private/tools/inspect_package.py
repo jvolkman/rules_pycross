@@ -425,6 +425,13 @@ def _find_site_paths_from_items(
                 declared.add(name)
         return sorted(declared)
 
+    def _has_python(d: str) -> bool:
+        prefix = d + "/"
+        return any(f.startswith(prefix) and _extract_module_name(f.rsplit("/", 1)[1]) for f in all_files)
+
+    # An sdist's top-level dirs are only a guess at what the built wheel installs; a dir with
+    # no Python anywhere below it (.github/, requirements/, licenses/) can't be an import package.
+    top_level_dirs = {d for d in top_level_dirs if d.isidentifier() and _has_python(d)}
     pkgs = _resolve_top_level_paths(all_files, top_level_dirs, read_file)
     for f in root_files:
         name = _extract_module_name(f)
