@@ -12,6 +12,7 @@ rather than individual bool_flags, providing:
 """
 
 load("@bazel_skylib//rules:common_settings.bzl", "BuildSettingInfo")
+load("@rules_python//python:py_info.bzl", "PyInfo")
 
 def _variant_resolver_impl(ctx):
     active = []
@@ -49,6 +50,20 @@ variant_resolver = rule(
         "default": attr.string(
             default = "",
             doc = "The default variant qualified name when no flag is set.",
+        ),
+    },
+)
+
+def _pycross_no_variant_selected_impl(ctx):
+    fail(ctx.attr.message)
+
+pycross_no_variant_selected = rule(
+    implementation = _pycross_no_variant_selected_impl,
+    provides = [DefaultInfo, PyInfo],
+    attrs = {
+        "message": attr.string(
+            mandatory = True,
+            doc = "Error message emitted at analysis time when no variant is selected.",
         ),
     },
 )

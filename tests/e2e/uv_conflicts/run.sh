@@ -22,8 +22,22 @@ bazel test "$@" //:test_default_group --@project//_variants:extra_variant-a=True
 
 # Verify error without flags for extras (which have no default)
 echo "Testing without flags (should fail for extras)..."
-if bazel build "$@" //:test_variant_a >/dev/null 2>&1; then
-  echo "Expected build to fail without flags!"
+if out=$(bazel build "$@" //:test_variant_a 2>&1); then
+  echo "Expected //:test_variant_a build to fail without flags!"
+  exit 1
+fi
+if [[ "$out" != *"Set one of"* ]]; then
+  echo "Expected error message to contain 'Set one of', got:"
+  echo "$out"
+  exit 1
+fi
+if out=$(bazel build "$@" //... 2>&1); then
+  echo "Expected //... build to fail without flags!"
+  exit 1
+fi
+if [[ "$out" != *"Set one of"* ]]; then
+  echo "Expected //... error message to contain 'Set one of', got:"
+  echo "$out"
   exit 1
 fi
 echo "Failed as expected."

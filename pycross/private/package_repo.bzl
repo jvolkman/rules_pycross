@@ -136,7 +136,7 @@ def _package_repo_impl(rctx):
             set_key = "|".join(sorted(set_qnames))
             if set_key not in variant_sets_seen:
                 variant_sets_seen[set_key] = True
-                variant_sets.append({"qnames": set_qnames, "default": set_default})
+                variant_sets.append({"qnames": set_qnames, "default": set_default, "member": member})
 
         member_packages[member] = member_lock.get("packages", {})
 
@@ -208,11 +208,13 @@ def _package_repo_impl(rctx):
         "",
     ]
     if variant_items:
-        lock_build_lines.extend([
-            'load("@bazel_skylib//rules:common_settings.bzl", "bool_flag")',
-            'load("@rules_pycross//pycross/private:variant_resolver.bzl", "variant_resolver")',
-            "",
-        ])
+        has_unselected_fallback = any([not vset["default"] for vset in variant_sets])
+        lock_build_lines.append('load("@bazel_skylib//rules:common_settings.bzl", "bool_flag")')
+        if has_unselected_fallback:
+            lock_build_lines.append('load("@rules_pycross//pycross/private:variant_resolver.bzl", "pycross_no_variant_selected", "variant_resolver")')
+        else:
+            lock_build_lines.append('load("@rules_pycross//pycross/private:variant_resolver.bzl", "variant_resolver")')
+        lock_build_lines.append("")
 
     # Check if we need config_setting_group for items in multiple sets.
     needs_config_setting_group = False
@@ -243,7 +245,8 @@ def _package_repo_impl(rctx):
 
     # Emit variant_resolver targets (one per conflict set).
     for vset in variant_sets:
-        resolver_name = "_resolver_" + "_".join(sorted(vset["qnames"]))
+        set_suffix = "_".join(sorted(vset["qnames"]))
+        resolver_name = "_resolver_" + set_suffix
         lock_build_lines.extend([
             "variant_resolver(",
             '    name = "{}",'.format(resolver_name),
@@ -266,6 +269,18 @@ def _package_repo_impl(rctx):
             ")",
             "",
         ])
+        if not vset["default"]:
+            flag_labels = [
+                "--@{member}//_variants:{qname}".format(member = vset["member"], qname = qname)
+                for qname in vset["qnames"]
+            ]
+            lock_build_lines.extend([
+                "pycross_no_variant_selected(",
+                '    name = "_no_variant_{}",'.format(set_suffix),
+                '    message = "No uv conflict variant selected. Set one of: {}",'.format(", ".join(flag_labels)),
+                ")",
+                "",
+            ])
 
     # Emit config_settings referencing the resolver(s).
     for qname in sorted(variant_items.keys()):
