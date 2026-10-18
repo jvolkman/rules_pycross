@@ -13,6 +13,7 @@ rather than individual bool_flags, providing:
 
 load("@bazel_skylib//rules:common_settings.bzl", "BuildSettingInfo")
 load("@rules_python//python:py_info.bzl", "PyInfo")
+load(":deferred_failure.bzl", "register_failure_action")
 
 def _variant_resolver_impl(ctx):
     active = []
@@ -55,16 +56,38 @@ variant_resolver = rule(
 )
 
 def _pycross_no_variant_selected_impl(ctx):
-    fail(ctx.attr.message)
+    if ctx.attr._unavailable_package_mode[BuildSettingInfo].value != "fail_at_execution":
+        fail(ctx.attr.message)
 
-# Provides DefaultInfo and PyInfo so it type-checks as a select() branch for pycross_library_proxy.
+    out = ctx.actions.declare_file(ctx.label.name + ".whl")
+    register_failure_action(
+        ctx,
+        outputs = [out],
+        message = ctx.attr.message,
+        mnemonic = "PycrossNoVariantSelected",
+        progress_message = "No uv conflict variant selected",
+    )
+    return [
+        DefaultInfo(
+            files = depset([out]),
+            runfiles = ctx.runfiles(files = [out]),
+        ),
+        PyInfo(transitive_sources = depset()),
+    ]
+
+# Provides DefaultInfo and PyInfo so it type-checks as a select() branch for
+# pycross_library_proxy and satisfies consumers when deferred to execution under
+# unavailable_package_mode=fail_at_execution.
 pycross_no_variant_selected = rule(
     implementation = _pycross_no_variant_selected_impl,
     provides = [DefaultInfo, PyInfo],
     attrs = {
         "message": attr.string(
             mandatory = True,
-            doc = "Error message emitted at analysis time when no variant is selected.",
+            doc = "Error message emitted when no variant is selected.",
+        ),
+        "_unavailable_package_mode": attr.label(
+            default = Label("//pycross/settings:unavailable_package_mode"),
         ),
     },
 )

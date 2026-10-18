@@ -42,6 +42,23 @@ if [[ "$out" != *"Set one of"* ]]; then
 fi
 echo "Failed as expected."
 
+# Verify that under unavailable_package_mode=fail_at_execution without variant flags:
+# 1. Analysis (cquery) succeeds for both :pkg and :maybe.
+# 2. Execution (build) fails with the same "Set one of" message.
+echo "Testing without flags under unavailable_package_mode=fail_at_execution..."
+bazel cquery "$@" "@project//typing_extensions:pkg + @project//typing_extensions:maybe" \
+  --@rules_pycross//pycross/settings:unavailable_package_mode=fail_at_execution >/dev/null
+if out=$(bazel build "$@" @project//typing_extensions:pkg --@rules_pycross//pycross/settings:unavailable_package_mode=fail_at_execution 2>&1); then
+  echo "Expected @project//typing_extensions:pkg build to fail at execution without flags!"
+  exit 1
+fi
+if [[ "$out" != *"Set one of"* ]]; then
+  echo "Expected fail_at_execution error message to contain 'Set one of', got:"
+  echo "$out"
+  exit 1
+fi
+echo "Deferred execution failure without flags passed."
+
 # Verify that when a variant IS selected, a platform where the package's fork
 # does not match (Windows for typing-extensions, which has sys_platform != 'win32')
 # falls through to //conditions:default (no_match_error for :pkg, _empty_library for :maybe)

@@ -805,10 +805,12 @@ The transition applies to the repo's whole closure, including sdist builds from 
 
 ## Handling Unavailable Packages
 
-A package is unavailable in the selected target environment when it has no compatible wheel (and no sdist to fall back to), when no resolution-marker fork matches, or when the selected conflict variant doesn't include it. (Selecting no variant from a conflict set that has no default is still an analysis error; see [Default Groups](#default-groups).) The `--@rules_pycross//pycross/settings:unavailable_package_mode` flag controls how such packages behave:
+A package is unavailable in the selected target environment when it has no compatible wheel (and no sdist to fall back to), when no resolution-marker fork matches, or when the selected conflict variant doesn't include it. The `--@rules_pycross//pycross/settings:unavailable_package_mode` flag controls how such packages behave:
 
 * **`incompatible` (default)** — unavailable packages are marked [incompatible](https://bazel.build/extending/platforms#skipping-incompatible-targets): targets that depend on them are skipped by `bazel build //...` and `bazel test //...`, and fail analysis when requested explicitly. (`all_requirements` and other platform-conditional `:maybe` aggregates exclude such packages instead.)
 * **`fail_at_execution`** — unavailable packages analyze successfully and provide the usual providers (`PyInfo`, etc.), registering an action that fails only when executed. Building anything that actually needs the package fails with a `No compatible wheel is available ...` error.
+
+Leaving a `uv` conflict set without a default unselected (see [Default Groups](#default-groups)) always fails with a message naming the `_variants` flags to set—at analysis time by default (so `bazel build //...` does not silently skip conflicted targets), or at execution time under `fail_at_execution`.
 
 `fail_at_execution` is useful when running consumers that only *analyze* dependencies—such as type-checking aspects that attach stub packages via implicit attributes, which otherwise see a target without the usual providers and fail even when the package is never built—or when you want wildcard `bazel build //...` / `bazel test //...` runs to fail loudly instead of silently skipping targets with unavailable dependencies:
 

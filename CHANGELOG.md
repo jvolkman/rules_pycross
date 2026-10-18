@@ -25,6 +25,8 @@ All notable changes to this project will be documented in this file.
   preserved, per-edge resolution-marker forks use their variant-specific marker
   expressions, and locked versions use exact (`===`) matching so local version
   tags (e.g. `2.12.0` vs `2.12.0+cpu`) do not collide.
+- **Missing `uv` conflict variant.** Fails with a message naming the `_variants`
+  flags, at execution time under `unavailable_package_mode=fail_at_execution`.
 
 ## [2.0.0]
 
