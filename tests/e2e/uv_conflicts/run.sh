@@ -42,6 +42,15 @@ if [[ "$out" != *"Set one of"* ]]; then
 fi
 echo "Failed as expected."
 
+# Verify that when a variant IS selected, a platform where the package's fork
+# does not match (Windows for typing-extensions, which has sys_platform != 'win32')
+# falls through to //conditions:default (no_match_error for :pkg, _empty_library for :maybe)
+# rather than failing with the unselected-variant error.
+echo "Testing selected variant on non-matching platform (Windows)..."
+bazel cquery "$@" "@project//typing_extensions:pkg + @project//typing_extensions:maybe" \
+  --platforms=//:plat_windows_x86_64 --@project//_variants:extra_variant-a=True >/dev/null
+echo "Selected variant on non-matching platform passed."
+
 # Test platform transition: @project_pinned has variant-a pinned via flags on the member import.
 # This should resolve typing-extensions 4.11.0 without any --flag arguments,
 # both via direct @project_pinned//typing_extensions and via :maybe in all_requirements.

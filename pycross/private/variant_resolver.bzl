@@ -57,6 +57,7 @@ variant_resolver = rule(
 def _pycross_no_variant_selected_impl(ctx):
     fail(ctx.attr.message)
 
+# Provides DefaultInfo and PyInfo so it type-checks as a select() branch for pycross_library_proxy.
 pycross_no_variant_selected = rule(
     implementation = _pycross_no_variant_selected_impl,
     provides = [DefaultInfo, PyInfo],

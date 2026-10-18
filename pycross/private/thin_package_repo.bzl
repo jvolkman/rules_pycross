@@ -105,7 +105,9 @@ def _aggregated_key(pkg_key, aggregated_keys):
         return pkg_key
     return "{}[_all_]@{}".format(parts.name, parts.version)
 
-def _no_variant_fallback_for(constraints, no_variant_fallbacks):
+def _no_variant_set_for(constraints, no_variant_fallbacks):
+    # Return the first conflict set suffix touched by constraints so at most one
+    # _unselected_<set> condition is added to a given select().
     for constraint in constraints:
         if constraint in no_variant_fallbacks:
             return no_variant_fallbacks[constraint]
@@ -143,14 +145,25 @@ def _target_select(target_dict, prefix, suffix, workspace_repo, is_aggregated = 
                 default_target_label = target_label
 
     # Add //conditions:default for default variant or uncovered-branch fallback (only if not already present via "").
+    # When the select touches a conflict set without a default, also add an explicit
+    # _unselected_<set> condition -> _no_variant_<set> so unselected variants fail
+    # clearly while platform-incompatible selected variants still fall through to default.
     if "" not in effective_all:
         if default_target_label:
             lines.append('        "//conditions:default": "{}",'.format(default_target_label))
         else:
-            no_variant_fallback = _no_variant_fallback_for(effective_all.keys(), no_variant_fallbacks)
-            default_fallback = no_variant_fallback if no_variant_fallback else fallback_target
-            if default_fallback:
-                lines.append('        "//conditions:default": "{}",'.format(default_fallback))
+            unselected_set = _no_variant_set_for(effective_all.keys(), no_variant_fallbacks)
+            if unselected_set:
+                lines.append(
+                    '        "@{}//_lock:_unselected_{}": "@{}//_lock:_no_variant_{}",'.format(
+                        workspace_repo,
+                        unselected_set,
+                        workspace_repo,
+                        unselected_set,
+                    ),
+                )
+            if fallback_target:
+                lines.append('        "//conditions:default": "{}",'.format(fallback_target))
 
     lines.append("    })")
     return "\n".join(lines)
@@ -248,9 +261,18 @@ def _emit_maybe_alias(lines, maybe_name, pkg_target, target_dict, available_keys
                 default_target = branch_target
 
     if "" not in branch_targets:
-        no_variant_fallback = _no_variant_fallback_for(branch_targets.keys(), no_variant_fallbacks)
-        default_fallback = default_target if default_target else (no_variant_fallback if no_variant_fallback else "//:_empty_library")
-        lines.append('        "//conditions:default": "{}",'.format(default_fallback))
+        if not default_target:
+            unselected_set = _no_variant_set_for(branch_targets.keys(), no_variant_fallbacks)
+            if unselected_set:
+                lines.append(
+                    '        "@{}//_lock:_unselected_{}": "@{}//_lock:_no_variant_{}",'.format(
+                        workspace_repo,
+                        unselected_set,
+                        workspace_repo,
+                        unselected_set,
+                    ),
+                )
+        lines.append('        "//conditions:default": "{}",'.format(default_target if default_target else "//:_empty_library"))
 
     lines.extend([
         "    }),",
@@ -455,7 +477,7 @@ def _thin_package_repo_impl(rctx):
     # in the select(), so builds without explicit flags use the default variant.
     variant_items = {}  # qualified_name -> True
     default_variants = {}  # qualified_name -> True
-    no_variant_fallbacks = {}  # constraint -> @<workspace_repo>//_lock:_no_variant_<set>
+    no_variant_fallbacks = {}  # constraint -> conflict set suffix (sorted qnames joined by "_")
     for variant_set in lock.get("variants", []):
         set_qnames = []
         has_default = False
@@ -467,9 +489,9 @@ def _thin_package_repo_impl(rctx):
                 default_variants[qname] = True
                 has_default = True
         if not has_default and set_qnames:
-            fallback_label = "@{}//_lock:_no_variant_{}".format(workspace_repo, "_".join(sorted(set_qnames)))
+            set_suffix = "_".join(sorted(set_qnames))
             for qname in set_qnames:
-                no_variant_fallbacks[qname] = fallback_label
+                no_variant_fallbacks[qname] = set_suffix
     for cname, expr in lock.get("resolution_marker_exprs", {}).items():
         if type(expr) == "dict" and expr.get("variant") in no_variant_fallbacks:
             no_variant_fallbacks[cname] = no_variant_fallbacks[expr["variant"]]

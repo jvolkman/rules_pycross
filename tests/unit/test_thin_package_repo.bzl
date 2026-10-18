@@ -853,10 +853,10 @@ def _test_pin_build_maybe_with_transition(name):
 
 # buildifier: disable=unused-variable
 def _test_pin_build_no_variant_fallback_impl(env, target):
-    """Variant pins without a default variant emit //conditions:default -> _no_variant_<set>."""
+    """Variant pins without a default variant emit _unselected_<set> -> _no_variant_<set> and preserve //conditions:default."""
     no_variant_fallbacks = {
-        "extra_variant-a": "@ws//_lock:_no_variant_extra_variant-a_extra_variant-b",
-        "extra_variant-b": "@ws//_lock:_no_variant_extra_variant-a_extra_variant-b",
+        "extra_variant-a": "extra_variant-a_extra_variant-b",
+        "extra_variant-b": "extra_variant-a_extra_variant-b",
     }
     res = pin_build_for_testing(
         target_name = "typing_extensions",
@@ -873,10 +873,12 @@ def _test_pin_build_no_variant_fallback_impl(env, target):
     pkg_section = res.split('name = "pkg"')[1].split(")")[0]
     env.expect.that_bool('"@ws//_lock:is_extra_variant-a": "@ws//_lock:typing-extensions@4.11.0"' in pkg_section).equals(True)
     env.expect.that_bool('"@ws//_lock:is_extra_variant-b": "@ws//_lock:typing-extensions@4.12.0"' in pkg_section).equals(True)
-    env.expect.that_bool('"//conditions:default": "@ws//_lock:_no_variant_extra_variant-a_extra_variant-b"' in pkg_section).equals(True)
+    env.expect.that_bool('"@ws//_lock:_unselected_extra_variant-a_extra_variant-b": "@ws//_lock:_no_variant_extra_variant-a_extra_variant-b"' in pkg_section).equals(True)
+    env.expect.that_bool('"//conditions:default": "@rules_pycross//pycross/private:no_match_error"' in pkg_section).equals(True)
 
     maybe_section = res.split('name = "maybe"')[1].split(")")[0]
-    env.expect.that_bool('"//conditions:default": "@ws//_lock:_no_variant_extra_variant-a_extra_variant-b"' in maybe_section).equals(True)
+    env.expect.that_bool('"@ws//_lock:_unselected_extra_variant-a_extra_variant-b": "@ws//_lock:_no_variant_extra_variant-a_extra_variant-b"' in maybe_section).equals(True)
+    env.expect.that_bool('"//conditions:default": "//:_empty_library"' in maybe_section).equals(True)
 
 def _test_pin_build_no_variant_fallback(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])

@@ -270,14 +270,22 @@ def _package_repo_impl(rctx):
             "",
         ])
         if not vset["default"]:
-            flag_labels = [
+            flag_examples = [
                 "--@{member}//_variants:{qname}".format(member = vset["member"], qname = qname)
                 for qname in vset["qnames"]
             ]
             lock_build_lines.extend([
+                "config_setting(",
+                '    name = "_unselected_{}",'.format(set_suffix),
+                '    flag_values = {{":{resolver}": ""}},'.format(resolver = resolver_name),
+                ")",
+                "",
                 "pycross_no_variant_selected(",
                 '    name = "_no_variant_{}",'.format(set_suffix),
-                '    message = "No uv conflict variant selected. Set one of: {}",'.format(", ".join(flag_labels)),
+                '    message = "No uv conflict variant selected. Set one of the _variants flags on your pycross repo: {} (e.g. {})",'.format(
+                    ", ".join(vset["qnames"]),
+                    ", ".join(flag_examples),
+                ),
                 ")",
                 "",
             ])
