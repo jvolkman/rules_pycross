@@ -16,7 +16,9 @@ All notable changes to this project will be documented in this file.
   PyQt5-Qt5's `PyQt5/Qt5/qml` and `translations`, and `.pyi`/`py.typed` files,
   are present. Below a namespace, shared libraries are linked individually under
   real directories, so cross-wheel `$ORIGIN` RPATHs (e.g. `nvidia-cusparse-cu12`
-  → `nvidia-nvjitlink-cu12`) resolve inside the venv.
+  → `nvidia-nvjitlink-cu12`) resolve inside the venv. `pycross_modules_mapping`
+  excludes non-module files from these expanded `site_paths` and collapses split
+  namespace subpackages back to their package import name.
 - **`uv` conflict groups and local-version forks.** Synthetic `uv` conflict
   markers (`extra == '<kind>-<len>-<pkg>-<name>'`) are now evaluated against the
   active conflict variant state so transitive dependency edges and cycles are
