@@ -35,36 +35,59 @@ def _strip_extensions(module_name):
         break
     return module_name
 
-def _is_valid_module_name(module_name):
-    for c in module_name.split("."):
-        if not _is_valid_identifier(c):
-            return False
-    return True
-
 def _get_module_name(tlp):
     """Converts a top-level path (from site_paths) to a Python import name."""
-    module_name = _strip_extensions(tlp).replace("/", ".")
-    if not _is_valid_module_name(module_name):
+    if not tlp:
         return None
-    return module_name
+    parts = tlp.split("/")
+    parts[-1] = _strip_extensions(parts[-1])
+    if parts[-1] == "__init__":
+        parts = parts[:-1]
+    if not parts:
+        return None
+    for part in parts:
+        if not _is_valid_identifier(part):
+            return None
+    return ".".join(parts)
 
-def _pycross_modules_mapping_impl(ctx):
+def _build_modules_mapping(pkg_infos):
     mapping = {}
-
-    for dep in ctx.attr.deps:
-        if PycrossPackageInfo not in dep:
-            continue
-        pkg_info = dep[PycrossPackageInfo]
+    for pkg_info in pkg_infos:
+        pkg_name = pkg_info.package_name.replace("-", "_")
         for tlp in pkg_info.site_paths:
             module_name = _get_module_name(tlp)
             if not module_name:
                 continue
+            mapping[module_name] = pkg_name
 
-            mapping[module_name] = pkg_info.package_name.replace("-", "_")
+    simplified = {}
+    for module_name, pkg_name in mapping.items():
+        parts = module_name.split(".")
+        has_same_pkg_ancestor = False
+        for i in range(1, len(parts)):
+            if mapping.get(".".join(parts[:i])) == pkg_name:
+                has_same_pkg_ancestor = True
+                break
+        if not has_same_pkg_ancestor:
+            simplified[module_name] = pkg_name
+
+    return simplified
+
+def _pycross_modules_mapping_impl(ctx):
+    pkg_infos = [
+        dep[PycrossPackageInfo]
+        for dep in ctx.attr.deps
+        if PycrossPackageInfo in dep
+    ]
+    mapping = _build_modules_mapping(pkg_infos)
 
     out = ctx.actions.declare_file(ctx.attr.name + ".json")
     ctx.actions.write(out, json.encode(mapping))
     return DefaultInfo(files = depset([out]))
+
+# Visible for testing
+get_module_name_for_testing = _get_module_name
+build_modules_mapping_for_testing = _build_modules_mapping
 
 pycross_modules_mapping = rule(
     implementation = _pycross_modules_mapping_impl,
