@@ -258,6 +258,31 @@ class InspectPackageTest(unittest.TestCase):
         result = inspect_sdist(sdist_path)
         self.assertEqual(result["site_paths"], [])
 
+    def test_sdist_ignores_non_package_top_level_dirs(self):
+        """Top-level sdist directories without Python modules (.github/, requirements/) are ignored."""
+        sdist_path = self._create_tarball_with_dirs(
+            "packaging-23.2.tar.gz",
+            {
+                "packaging-23.2/.github/workflows/x.yml": "name: ci\n",
+                "packaging-23.2/requirements/base.txt": "pytest\n",
+                "packaging-23.2/packaging/__init__.py": "",
+            },
+        )
+        result = inspect_sdist(sdist_path)
+        self.assertEqual(result["site_paths"], ["packaging"])
+
+    def test_sdist_namespace_keeps_data_files_when_python_present(self):
+        """Data files inside a namespace directory that also contains Python modules are kept."""
+        sdist_path = self._create_tarball_with_dirs(
+            "ns-pkg-1.0.tar.gz",
+            {
+                "ns-pkg-1.0/myns/helper.py": "# module\n",
+                "ns-pkg-1.0/myns/py.typed": "",
+            },
+        )
+        result = inspect_sdist(sdist_path)
+        self.assertEqual(result["site_paths"], ["myns/helper.py", "myns/py.typed"])
+
     def test_sdist_top_level_paths_pth(self):
         sdist_path = self._create_tarball_with_dirs(
             "rerun_sdk-1.0.tar.gz",
