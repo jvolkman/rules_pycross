@@ -2,31 +2,27 @@
 
 All notable changes to this project will be documented in this file.
 
-## [Unreleased]
+## [2.0.1]
 
 ### Fixed
 
-- **Target-environment settings** (`glibc_version`, `macos_version`, `musl_version`,
-  and `pep508_*`) now use `scope = "target"` and are reset to their defaults in
-  exec-platform transitions.
-- **Poetry `||` version constraints** now evaluate all union branches instead of
-  collapsing to `!=` or taking only the first branch.
-- **`venvs_site_packages=yes`: wheel files missing from the venv.** Namespace
-  directories now link every file, not just Python modules, so data such as
-  PyQt5-Qt5's `PyQt5/Qt5/qml` and `translations`, and `.pyi`/`py.typed` files,
-  are present. Below a namespace, shared libraries are linked individually under
-  real directories, so cross-wheel `$ORIGIN` RPATHs (e.g. `nvidia-cusparse-cu12`
-  → `nvidia-nvjitlink-cu12`) resolve inside the venv. `pycross_modules_mapping`
-  excludes non-module files from these expanded `site_paths` and collapses split
-  namespace subpackages back to their package import name.
-- **`uv` conflict groups and local-version forks.** Synthetic `uv` conflict
-  markers (`extra == '<kind>-<len>-<pkg>-<name>'`) are now evaluated against the
-  active conflict variant state so transitive dependency edges and cycles are
-  preserved, per-edge resolution-marker forks use their variant-specific marker
-  expressions, and locked versions use exact (`===`) matching so local version
-  tags (e.g. `2.12.0` vs `2.12.0+cpu`) do not collide.
-- **Missing `uv` conflict variant.** Fails with a message naming the `_variants`
-  flags, at execution time under `unavailable_package_mode=fail_at_execution`.
+- **`uv` conflict groups.** Conflict-gated dependency edges are no longer
+  dropped, and local versions (e.g. `2.12.0` vs `2.12.0+cpu`) pin exactly.
+- **Missing `uv` conflict variant** now fails at execution time under
+  `unavailable_package_mode=fail_at_execution`, naming the `_variants` flags.
+- **Poetry `||` version constraints** now evaluate every branch.
+- **`venvs_site_packages=yes`: missing wheel files.** Namespace directories link
+  every file, and shared libraries under them resolve cross-wheel `$ORIGIN` RPATHs.
+- **Target-environment settings** (`glibc_version`, `macos_version`,
+  `musl_version`, `pep508_*`) no longer leak into exec-side build tools.
+- **Duplicate host builds.** Build dependencies of cross-compiled packages share
+  the host configuration instead of being built twice.
+
+### Changed
+
+- **Cross-compiled build dependencies** inherit the target's `--compilation_mode`,
+  `--strip` and `--action_env`; only C/C++ flags are reset to `--host_*`.
+- **repairwheel 0.8.0** and updated internal Python dependencies.
 
 ## [2.0.0]
 
