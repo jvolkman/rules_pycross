@@ -28,6 +28,7 @@ from installer.sources import WheelFile
 from installer.utils import Scheme
 from installer.utils import parse_wheel_filename
 from pycross.private.tools.args import FlagFileArgumentParser
+from pycross.private.tools.wheel_index import write_index
 
 _COMPILE_SCRIPT = """\
 import importlib.util
@@ -298,6 +299,17 @@ def main(args: Any) -> None:
         if not found:
             entry_points_output.touch()
 
+    # Write the per-wheel index last, so it describes the final tree: install_exclude_globs were
+    # applied during installation, then post_install_patches, then .pyc compilation.
+    index_output = getattr(args, "index_output", None)
+    if index_output:
+        try:
+            parsed = parse_wheel_filename(wheel_path.name)
+            fallback_name, fallback_version = parsed.distribution, parsed.version
+        except Exception:
+            fallback_name, fallback_version = None, None
+        write_index(lib_dir, Path(index_output), fallback_name, fallback_version)
+
 
 def parse_flags(argv: list[str] | None = None) -> Any:
     parser = FlagFileArgumentParser(description="Extract a Python wheel.")
@@ -337,6 +349,13 @@ def parse_flags(argv: list[str] | None = None) -> Any:
         type=Path,
         required=False,
         help="Path to write the entry_points.txt file for rules_python compatibility.",
+    )
+
+    parser.add_argument(
+        "--index-output",
+        type=Path,
+        required=False,
+        help="Path to write the per-wheel index (JSON) describing the installed site-packages.",
     )
 
     parser.add_argument(

@@ -467,5 +467,534 @@ class WheelInstallerPrecompileTest(unittest.TestCase):
             self.assertEqual(code_obj.co_filename, rel_mod)
 
 
+class WheelInstallerIndexTest(unittest.TestCase):
+    """Test the per-wheel index (--index-output) written after installation."""
+
+    PATCH = (
+        "--- a/patched_ns/__init__.py\n"
+        "+++ b/patched_ns/__init__.py\n"
+        "@@ -1 +1,2 @@\n"
+        " __path__ = __import__('pkgutil').extend_path(__path__, __name__)\n"
+        "+__version__ = '1'\n"
+    )
+
+    EXPECTED_INDEX = {
+        "version": 1,
+        "distribution": {"name": "Pkg-Name", "version": "1.0"},
+        "dist_info": "pkg_name-1.0.dist-info",
+        "top": {
+            "_abi3ext": ["_abi3ext.abi3.so"],
+            "_ext": ["_ext.cpython-311-x86_64-linux-gnu.so"],
+            "ns": ["ns"],
+            "pathroot": ["pathroot"],
+            "patched_ns": ["patched_ns"],
+            "pep420": ["pep420"],
+            "pkg": ["pkg"],
+            "top": ["top.py"],
+            "winmod": ["winmod.cp311-win_amd64.pyd"],
+        },
+        "pth": ["paths.pth", "pkg.pth"],
+        # Path lines only: no import lines, comments, missing or absolute dirs, or dirs outside
+        # the root; normalized, deduplicated, in file order.
+        "pth_paths": {"paths.pth": ["pathroot", "pathroot/sub", "pathroot/win"]},
+        "dirs": [
+            "ns",
+            "ns/inner",
+            "patched_ns",
+            "pathroot",
+            "pathroot/sub",
+            "pathroot/win",
+            "pep420",
+            "pep420/deep",
+            "pep420/regular",
+            "pep420/regular/nsdir",
+            "pkg",
+            "pkg/data",
+            "pkg/sub",
+        ],
+        "modules": {
+            "patched_ns": ["mod"],
+            "pep420/regular/nsdir": ["y"],
+            "pkg/sub": ["mod"],
+        },
+        # patched_ns is a pkgutil stub in the wheel, but not after post_install_patches.
+        "namespaces": {
+            "ns": ["helper"],
+            "pathroot": ["rooted"],
+            "pathroot/sub": ["submod"],
+            "pathroot/win": [],
+            "pep420": ["helper2"],
+            "pep420/deep": ["x"],
+        },
+    }
+
+    def setUp(self):
+        self.temp_dir = tempfile.mkdtemp()
+
+    def tearDown(self):
+        import shutil
+
+        shutil.rmtree(self.temp_dir)
+
+    def _create_wheel(self) -> Path:
+        import zipfile
+
+        wheel_path = Path(self.temp_dir) / "pkg_name-1.0-py3-none-any.whl"
+        stub = "__path__ = __import__('pkgutil').extend_path(__path__, __name__)\n"
+        files = {
+            "Pkg_Name-1.0.dist-info/METADATA": "Metadata-Version: 2.1\nName: Pkg-Name\nVersion: 1.0\n",
+            "Pkg_Name-1.0.dist-info/WHEEL": (
+                "Wheel-Version: 1.0\nGenerator: test\nRoot-Is-Purelib: true\nTag: py3-none-any\n"
+            ),
+            "Pkg_Name-1.0.dist-info/RECORD": "",
+            "pkg/__init__.py": "VALUE = 1\n",
+            "pkg/sub/__init__.py": "",
+            "pkg/sub/mod.py": "X = 1\n",
+            "pkg/data/thing.txt": "data\n",
+            "pkg/not-a-pkg/x.py": "",
+            "top.py": "TOP = True\n",
+            "top_excluded.py": "",
+            "_ext.cpython-311-x86_64-linux-gnu.so": "not really an extension",
+            "_abi3ext.abi3.so": "",
+            "winmod.cp311-win_amd64.pyd": "",
+            "libfoo.so.1": "",
+            "README.txt": "",
+            "pkg.pth": "import pkg\n",
+            "paths.pth": (
+                "# comment\n"
+                "pathroot\n"
+                "import sys; sys.flags\n"
+                "./pathroot/sub/\n"
+                "missing_dir\n"
+                "/abs/dir\n"
+                "C:\\abs\\dir\n"
+                "../outside\n"
+                "pathroot\\win\n"
+                ".\n"
+                "\n"
+                "pathroot\n"
+            ),
+            "pathroot/rooted.py": "",
+            "pathroot/sub/submod.py": "",
+            "pathroot/win/winonly.txt": "",
+            "ns/__init__.py": stub,
+            "ns/helper.py": "",
+            "ns/excluded_helper.py": "",
+            "ns/inner/__init__.py": "",
+            "patched_ns/__init__.py": stub,
+            "patched_ns/mod.py": "",
+            "pep420/helper2.py": "",
+            "pep420/deep/x.py": "",
+            "pep420/regular/__init__.py": "",
+            "pep420/regular/nsdir/y.py": "",
+            "Pkg_Name-1.0.data/scripts/tool": "#!/bin/sh\n",
+        }
+        with zipfile.ZipFile(wheel_path, "w") as zf:
+            for name, content in files.items():
+                zf.writestr(name, content)
+        return wheel_path
+
+    def _install(self, name: str, compile_python=None) -> tuple[Path, Path]:
+        import argparse
+
+        from pycross.private.tools import wheel_installer
+
+        patch = Path(self.temp_dir) / "make_regular.patch"
+        patch.write_text(self.PATCH)
+        out_dir = Path(self.temp_dir) / name
+        index_out = Path(self.temp_dir) / (name + ".dist_info") / "index.json"
+        args = argparse.Namespace(
+            wheel=self._create_wheel(),
+            wheel_dir=None,
+            wheel_name_file=None,
+            install_exclude_globs=["top_excluded.py", "ns/excluded_*"],
+            patches=[str(patch)],
+            entry_points_output=None,
+            index_output=index_out,
+            directory=out_dir,
+            expected_name="pkg-name",
+            expected_version="1.0",
+            dist_info_dir="pkg_name-1.0.dist-info",
+            compile_python=compile_python,
+            compile_invalidation_mode="checked_hash" if compile_python else None,
+        )
+        wheel_installer.main(args)
+        return out_dir, index_out
+
+    def test_index_describes_installed_tree(self):
+        import json
+
+        _, index_out = self._install("out")
+        self.assertEqual(json.loads(index_out.read_text()), self.EXPECTED_INDEX)
+
+    def test_index_is_deterministic_and_relative(self):
+        _, first = self._install("out1")
+        _, second = self._install("out2")
+        self.assertEqual(first.read_bytes(), second.read_bytes())
+        self.assertNotIn(self.temp_dir, first.read_text())
+
+    def test_index_ignores_precompiled_bytecode(self):
+        import sys
+
+        _, plain = self._install("plain")
+        compiled_dir, compiled = self._install("compiled", compile_python=sys.executable)
+        # .pyc files were written into __pycache__ dirs, including the root's (for top.py)...
+        self.assertTrue((compiled_dir / "site-packages" / "__pycache__").is_dir())
+        self.assertTrue(list((compiled_dir / "site-packages" / "pkg").glob("__pycache__/*.pyc")))
+        # ...but the index doesn't change.
+        self.assertEqual(plain.read_bytes(), compiled.read_bytes())
+
+
+class WheelIndexModuleNameTest(unittest.TestCase):
+    """Module names don't depend on the interpreter that runs the installer."""
+
+    def test_module_names(self):
+        from pycross.private.tools.wheel_index import module_name
+
+        cases = {
+            "six.py": "six",
+            "legacy.pyc": "legacy",
+            "_regex.cpython-311-x86_64-linux-gnu.so": "_regex",
+            "_regex.cpython-314t-x86_64-linux-gnu.so": "_regex",
+            "_speedups.cpython-312-darwin.so": "_speedups",
+            "_foo.abi3.so": "_foo",
+            "_foo.abi3-x86_64-linux-gnu.so": "_foo",
+            "_cffi.pypy310-pp73-x86_64-linux-gnu.so": "_cffi",
+            "plain.so": "plain",
+            "win.cp311-win_amd64.pyd": "win",
+            "win.pyd": "win",
+            "libfoo.so.1": None,
+            "foo.bar.baz.so": None,
+            "foo-bar.py": None,
+            "stubs.pyi": None,
+            "README": None,
+            "x.pth": None,
+        }
+        for filename, expected in cases.items():
+            self.assertEqual(module_name(filename), expected, filename)
+
+
+class WheelIndexNativeMetadataTest(unittest.TestCase):
+    """Test read-only ELF shared-object metadata extraction in wheel_index.py."""
+
+    LIBFIXTURE_CUBLAS_SO_12 = (
+        "eNrtW19oHEUYn91r0o2Nua0kWJtqDkkw9c/mUj1oLUkOEuNaDNSSQgRls5fby53cn7q7oUkoGggitQZiX/TRxzz2"
+        "MfhiQ0sJpQ/1odDHvBQiiAZKpfEh6+ztN5eZaTcp+CDK94Pd33zfzG++nT+7x97OfPneh6OqohCGBBkkuxYhWeD1"
+        "NO87STR67iDt9bIHSDw2EiITPaJQ18TZMrcoIvO6erwU+CX+gYjM65rpMWFE9sSgyNcgzqoUTwVdEXTFQZEnFZE1"
+        "kJ994Of3us5uIjLrw4+orpk8O1i3nYN4ce1bUURmzVRhHFj/1C9RjTj0O58t7TW8ZJRrGo83Y/x6jF+J8Z+nxwu0"
+        "V7ehoY2+sazpSq1qeb7t+pZFrA/Gx6y84zrTJc933PGx4XKt6ozbubIT5T09x5qata1CqWqXS/MOKZRm/RnXsaZm"
+        "cmXbI+VSTvQYXs3oPyH0KxvvLbi+Scl/TRdvJE26sdaHdtvF33d3Ob/K+e9z/gR/n3H+AwSBQCAQCAQCgUAgnoS5"
+        "+JtmXmm610eTX1331eCuuXhTu9HIDzK3aVbQc4eek11ZmrpKU4Xlhn5pYC3ULjX9FNKpx34Hre4LqK4l2Eh2LYTl"
+        "bgDT8t/Vy2e+Cen4jnl5y1z7fchce5wwlVvmLzt+O60gAxVowUYh2TWyq3+YfOWvhYExmk1m3jhvLg6oYdK8/MBv"
+        "Na8MGNTY/DgIgs08Pd1q6qG28inVCvpfL9LM1dbwqqL2Cy1GIBAIBAKBQCAQCATi/welM3E6/AYdfktMbQVBlnKa"
+        "cpHyNuUFKNfOys+fI8qsrnS2HtSWlej79TF63P8jCOqfOtv00bYjZ5KHLmoLZOjo6dff7n6V6elrPLlOy2lc/FDz"
+        "CT0+p7GacTgQCAQCgUAgEAgE4j8Hth6WrX9tA38euJV/AaR4ntmHI3oJTLbOthNs9u54FJittz0m5T/aCWr1BLeW"
+        "OcQq2Oxdsxfs58C+BHwI+AgwW2u7CetsD4J9MiHGXQFukfTbQXQ9iX9pPNh69SeQjej94eF3U70jTq5kV1P9GeOE"
+        "kX6r/53jkCTE8Iqe7/p2jhjT1RmjaHtFYuTnqt5cJWLfJYbrlO3QIEapWvKJcaHsG9M1mvCdWXouUC8xnKJVcO2K"
+        "YxXz7q4VSSzbde25qCRL0/rsSmmKhDWFNVKP7dvEyHkeMaZqlYpT9f95/4Tj/Scdo8Zaa1XkbsmtSfoOqEOV5hXj"
+        "ZW4eKZyezY+XIU+V5injS/L/NpLdQ6J136o0LxmvxFw/i99HxD0A8n6MF6V48hrzryV9ShdZl8rL2z4ykj6tiyz3"
+        "tybxoKTP6iL/HBOfYURu/2GRW/Zp/xnQN+ZPSuTuffQTkr43JfKFmPYz5OAZm5Cem2w/yH79V6VHktOz5+rkM+rn"
+        "ibgnobFPBvRsf0xC0rFxOAXtZ/lsX8R6n9idcfEXJT17Tm/2ifM8Tv+tpG9sfErv3X6Gq+BrtA/0Woxevn+/B19a"
+        "jgOOrhg9z0/7bXkN9D/u"
+        "E/9v7Gcvhw=="
+    )
+    LIBUSER_SO = (
+        "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"
+        "QP/NPPX/Caf28Vw="
+    )
+
+    def setUp(self):
+        self.temp_dir = tempfile.mkdtemp()
+
+    def tearDown(self):
+        import shutil
+
+        shutil.rmtree(self.temp_dir)
+
+    @staticmethod
+    def _unpack_blob(b64_data: str) -> bytes:
+        import base64
+        import zlib
+
+        return zlib.decompress(base64.b64decode(b64_data))
+
+    def test_native_elf_metadata_recorded_in_wheel_index(self):
+        from pycross.private.tools.wheel_index import index_site_packages
+
+        root = Path(self.temp_dir) / "site-packages"
+        cublas_so = root / "nvidia" / "fixture_cublas" / "lib" / "libfixture_cublas.so.12"
+        user_so = root / "rpathuser" / "libuser.so"
+        extra_so = root / "rpathuser.libs" / "libbundled.so.1"
+        for p, data in [
+            (cublas_so, self._unpack_blob(self.LIBFIXTURE_CUBLAS_SO_12)),
+            (user_so, self._unpack_blob(self.LIBUSER_SO)),
+            (extra_so, self._unpack_blob(self.LIBFIXTURE_CUBLAS_SO_12)),
+        ]:
+            p.parent.mkdir(parents=True, exist_ok=True)
+            p.write_bytes(data)
+
+        idx = index_site_packages(root, "rpath-user", "1.0")
+        self.assertEqual(
+            idx["native"],
+            {
+                "nvidia/fixture_cublas/lib/libfixture_cublas.so.12": {
+                    "ei_class": 2,
+                    "ei_data": 1,
+                    "e_machine": 62,
+                    "needed": [],
+                    "rpath": [],
+                    "runpath": [],
+                    "soname": "libfixture_cublas.so.12",
+                },
+                "rpathuser.libs/libbundled.so.1": {
+                    "ei_class": 2,
+                    "ei_data": 1,
+                    "e_machine": 62,
+                    "needed": [],
+                    "rpath": [],
+                    "runpath": [],
+                    "soname": "libfixture_cublas.so.12",
+                },
+                "rpathuser/libuser.so": {
+                    "ei_class": 2,
+                    "ei_data": 1,
+                    "e_machine": 62,
+                    "needed": ["libfixture_cublas.so.12", "libc.so.6"],
+                    "rpath": [],
+                    "runpath": [
+                        "$ORIGIN/../nvidia/fixture_cublas/lib",
+                        "$ORIGIN/../nvidia/fixture_cudnn/lib",
+                    ],
+                    "soname": None,
+                },
+            },
+        )
+
+    def test_native_elf_metadata_records_soname_symlinks(self):
+        from pycross.private.tools.wheel_index import index_site_packages
+
+        root = Path(self.temp_dir) / "site-packages"
+        lib_dir = root / "pkg" / "lib"
+        lib_dir.mkdir(parents=True, exist_ok=True)
+        (root / "pkg" / "__init__.py").write_text("")
+        real_so = lib_dir / "libfixture_cublas.so.12.8"
+        real_so.write_bytes(self._unpack_blob(self.LIBFIXTURE_CUBLAS_SO_12))
+        symlink_so = lib_dir / "libfixture_cublas.so.12"
+        symlink_so.symlink_to("libfixture_cublas.so.12.8")
+        broken_so = lib_dir / "libbroken.so.1"
+        broken_so.symlink_to("nonexistent.so")
+
+        idx = index_site_packages(root, "pkg", "1.0")
+        self.assertIn("pkg/lib/libfixture_cublas.so.12.8", idx["native"])
+        self.assertIn("pkg/lib/libfixture_cublas.so.12", idx["native"])
+        self.assertEqual(
+            idx["native"]["pkg/lib/libfixture_cublas.so.12"]["soname"],
+            "libfixture_cublas.so.12",
+        )
+        self.assertNotIn("pkg/lib/libbroken.so.1", idx["native"])
+
+    def test_native_dotfile_consumer_vs_provider_vs_pure_python(self):
+        import json
+
+        from pycross.private.tools.elf_tools import NATIVE_CONSUMER_FILENAME
+        from pycross.private.tools.elf_tools import NATIVE_PROVIDER_FILENAME
+        from pycross.private.tools.wheel_index import index_site_packages
+        from pycross.private.tools.wheel_index import write_index
+
+        # 1. Pure-Python wheel: writes <name>.dist_info/index.json and no dotfile.
+        pure_root = Path(self.temp_dir) / "pure" / "site-packages"
+        (pure_root / "purepkg").mkdir(parents=True, exist_ok=True)
+        (pure_root / "purepkg" / "__init__.py").write_text("")
+        pure_idx_out = Path(self.temp_dir) / "pure.dist_info" / "index.json"
+        write_index(pure_root, pure_idx_out, "purepkg", "1.0")
+        self.assertTrue(pure_idx_out.is_file())
+        self.assertFalse((pure_root / NATIVE_CONSUMER_FILENAME).exists())
+        self.assertFalse((pure_root / NATIVE_PROVIDER_FILENAME).exists())
+
+        # 2. Provider-only native wheel (no escaping $ORIGIN RPATH, no unsatisfied non-system DT_NEEDED):
+        # writes .pycross-native.json.
+        prov_root = Path(self.temp_dir) / "prov" / "site-packages"
+        cublas_so = prov_root / "nvidia" / "fixture_cublas" / "lib" / "libfixture_cublas.so.12"
+        cublas_so.parent.mkdir(parents=True, exist_ok=True)
+        (prov_root / "nvidia" / "__init__.py").write_text("")
+        (prov_root / "nvidia" / "fixture_cublas" / "__init__.py").write_text("")
+        cublas_so.write_bytes(self._unpack_blob(self.LIBFIXTURE_CUBLAS_SO_12))
+        prov_idx_out = Path(self.temp_dir) / "prov.dist_info" / "index.json"
+        write_index(prov_root, prov_idx_out, "nvidia-fixture-cublas", "12.0")
+        self.assertFalse((prov_root / NATIVE_CONSUMER_FILENAME).exists())
+        prov_dotfile = prov_root / NATIVE_PROVIDER_FILENAME
+        self.assertTrue(prov_dotfile.is_file())
+        self.assertEqual(
+            json.loads(prov_dotfile.read_text()),
+            {
+                "version": 2,
+                "top": ["nvidia"],
+                "dirs": ["nvidia", "nvidia/fixture_cublas", "nvidia/fixture_cublas/lib"],
+                "native": {
+                    "nvidia/fixture_cublas/lib/libfixture_cublas.so.12": {
+                        "ei_class": 2,
+                        "ei_data": 1,
+                        "e_machine": 62,
+                        "needed": [],
+                        "rpath": [],
+                        "runpath": [],
+                        "soname": "libfixture_cublas.so.12",
+                    },
+                },
+            },
+        )
+        # Re-indexing after dotfile is written is idempotent and ignores dotfiles.
+        self.assertEqual(
+            index_site_packages(prov_root, "nvidia-fixture-cublas", "12.0"),
+            json.loads(prov_idx_out.read_text()),
+        )
+
+        # 3. Consumer native wheel (escaping $ORIGIN/../nvidia/fixture_cudnn/lib RPATH and unsatisfied DT_NEEDED):
+        # writes .pycross-native-consumer.json and removes any stale .pycross-native.json.
+        cons_root = Path(self.temp_dir) / "cons" / "site-packages"
+        user_so = cons_root / "rpathuser" / "libuser.so"
+        user_so.parent.mkdir(parents=True, exist_ok=True)
+        (cons_root / "rpathuser" / "__init__.py").write_text("")
+        user_so.write_bytes(self._unpack_blob(self.LIBUSER_SO))
+        (cons_root / NATIVE_PROVIDER_FILENAME).write_text("{}")
+        cons_idx_out = Path(self.temp_dir) / "cons.dist_info" / "index.json"
+        write_index(cons_root, cons_idx_out, "rpath-user", "1.0")
+        self.assertFalse((cons_root / NATIVE_PROVIDER_FILENAME).exists())
+        cons_dotfile = cons_root / NATIVE_CONSUMER_FILENAME
+        self.assertTrue(cons_dotfile.is_file())
+        self.assertEqual(
+            json.loads(cons_dotfile.read_text()),
+            {
+                "version": 2,
+                "top": ["rpathuser"],
+                "dirs": ["rpathuser"],
+                "native": {
+                    "rpathuser/libuser.so": {
+                        "ei_class": 2,
+                        "ei_data": 1,
+                        "e_machine": 62,
+                        "needed": ["libfixture_cublas.so.12", "libc.so.6"],
+                        "rpath": [],
+                        "runpath": [
+                            "$ORIGIN/../nvidia/fixture_cublas/lib",
+                            "$ORIGIN/../nvidia/fixture_cudnn/lib",
+                        ],
+                        "soname": None,
+                    },
+                },
+                "escaping": {
+                    "rpathuser/libuser.so": {
+                        "rpath": [],
+                        "runpath": [
+                            "nvidia/fixture_cublas/lib",
+                            "nvidia/fixture_cudnn/lib",
+                        ],
+                    },
+                },
+            },
+        )
+        self.assertEqual(
+            index_site_packages(cons_root, "rpath-user", "1.0"),
+            json.loads(cons_idx_out.read_text()),
+        )
+
+        # Verify compute_escaping_rpaths honors DT_RPATH only when DT_RUNPATH is absent.
+        from pycross.private.tools.elf_tools import compute_escaping_rpaths
+
+        self.assertEqual(
+            compute_escaping_rpaths(
+                ["pkg"],
+                ["pkg", "pkg.libs"],
+                {
+                    "pkg/lib_rpath.so": {
+                        "rpath": ["$ORIGIN/../pkg.libs", "$ORIGIN/../other_pkg/lib"],
+                        "runpath": [],
+                    },
+                    "pkg/lib_both.so": {
+                        "rpath": ["$ORIGIN/../ignored_rpath/lib"],
+                        "runpath": ["$ORIGIN/../active_runpath/lib"],
+                    },
+                },
+            ),
+            {
+                "pkg/lib_both.so": {
+                    "rpath": [],
+                    "runpath": ["active_runpath/lib"],
+                },
+                "pkg/lib_rpath.so": {
+                    "rpath": ["other_pkg/lib"],
+                    "runpath": [],
+                },
+            },
+        )
+
+        # 4. Wheel with unsatisfied cross-wheel DT_NEEDED but NO escaping $ORIGIN RPATH/RUNPATH:
+        # writes .pycross-native.json (provider, NOT consumer) while still recording "needed".
+        import struct
+
+        buf = bytearray(self._unpack_blob(self.LIBUSER_SO))
+        e_phoff = struct.unpack_from("<Q", buf, 32)[0]
+        e_phentsize, e_phnum = struct.unpack_from("<HH", buf, 54)
+        for i in range(e_phnum):
+            ph_off = e_phoff + i * e_phentsize
+            p_type, _, p_offset, _, _, p_filesz, _, _ = struct.unpack_from("<IIQQQQQQ", buf, ph_off)
+            if p_type == 2:
+                kept = bytearray()
+                for pos in range(p_offset, p_offset + p_filesz, 16):
+                    d_tag, _ = struct.unpack_from("<qQ", buf, pos)
+                    if d_tag not in (15, 29):
+                        kept.extend(buf[pos : pos + 16])
+                    if d_tag == 0:
+                        break
+                kept.extend(b"\x00" * (p_filesz - len(kept)))
+                buf[p_offset : p_offset + p_filesz] = kept
+                break
+
+        soname_only_root = Path(self.temp_dir) / "soname_only" / "site-packages"
+        nopath_so = soname_only_root / "sonameuser" / "libuser_nopath.so"
+        nopath_so.parent.mkdir(parents=True, exist_ok=True)
+        (soname_only_root / "sonameuser" / "__init__.py").write_text("")
+        nopath_so.write_bytes(bytes(buf))
+        soname_only_idx = Path(self.temp_dir) / "soname_only.dist_info" / "index.json"
+        write_index(soname_only_root, soname_only_idx, "soname-user", "1.0")
+        self.assertFalse((soname_only_root / NATIVE_CONSUMER_FILENAME).exists())
+        soname_only_dot = soname_only_root / NATIVE_PROVIDER_FILENAME
+        self.assertTrue(soname_only_dot.is_file())
+        self.assertEqual(
+            json.loads(soname_only_dot.read_text())["native"]["sonameuser/libuser_nopath.so"],
+            {
+                "ei_class": 2,
+                "ei_data": 1,
+                "e_machine": 62,
+                "needed": ["libfixture_cublas.so.12", "libc.so.6"],
+                "rpath": [],
+                "runpath": [],
+                "soname": None,
+            },
+        )
+
+
 if __name__ == "__main__":
     unittest.main()

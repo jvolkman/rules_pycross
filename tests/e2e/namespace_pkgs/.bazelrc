@@ -8,3 +8,9 @@ try-import %workspace%/../shared/.bazelrc.user
 # determines which directories are symlinked into site-packages.
 build --@rules_python//python/config_settings:bootstrap_impl=script
 build --@rules_python//python/config_settings:venvs_site_packages=yes
+
+# Shorthand configs for experimenting with the import index:
+#   bazel run --config=index //:demo
+#   bazel run --config=scan //:demo
+common:index --@rules_pycross//pycross/settings:venv_import_index=prebuilt
+common:scan --@rules_pycross//pycross/settings:venv_import_index=scan

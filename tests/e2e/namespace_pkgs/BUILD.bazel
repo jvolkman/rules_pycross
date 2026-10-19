@@ -1,4 +1,4 @@
-load("@rules_python//python:defs.bzl", "py_test")
+load("@rules_python//python:defs.bzl", "py_binary", "py_library", "py_test")
 load("@uv//:requirements.bzl", "all_requirements", "requirement")
 
 package(default_visibility = ["//visibility:public"])
@@ -35,5 +35,46 @@ py_test(
     deps = [
         requirement("backports.entry-points-selectable"),
         requirement("backports.tarfile"),
+    ],
+)
+
+# Stock first-party py_library sitting between the test targets and the
+# pycross_wheel_library fixtures.
+py_library(
+    name = "first_party_bridge",
+    srcs = [
+        "azfixture/first_party_ns.py",
+        "first_party_mod.py",
+    ],
+    deps = [
+        "//fixtures:azfixture_core",
+        "//fixtures:azfixture_core_tracing_plugin",
+        "//fixtures:enumfixture",
+        "//fixtures:nvidia_fixture_cublas",
+        "//fixtures:nvidia_fixture_cudnn",
+        "//fixtures:nvidia_fixture_nccl",
+        "//fixtures:pthfixture",
+        "//fixtures:rpathfixture",
+        "//fixtures:sonamefixture",
+    ],
+)
+
+# Stock py_test using pycross_import_index.pth + per-wheel indexes via venv_symlinks.
+py_test(
+    name = "test_import_index",
+    srcs = ["test_import_index.py"],
+    tags = ["manual"],
+    deps = [
+        ":first_party_bridge",
+    ],
+)
+
+# Interactive demo binary (run with `bazel run --config=index //:demo`).
+py_binary(
+    name = "demo",
+    srcs = ["demo.py"],
+    tags = ["manual"],
+    deps = all_requirements + [
+        ":first_party_bridge",
     ],
 )

@@ -23,6 +23,10 @@ class TestNamespacePkgs(unittest.TestCase):
     def test_no_per_wheel_site_packages_on_sys_path(self):
         # Under venvs_site_packages=yes, wheels are linked into the venv's site-packages, so their
         # own install dirs must not be on sys.path (matching rules_python).
+        if "_bazel_import_index" in sys.modules:
+            # rules_python's import index (--venv_import_index, prototype) keeps every wheel root
+            # on sys.path instead, whatever venvs_site_packages says.
+            self.skipTest("the import index keeps wheel roots on sys.path")
         venv_site_packages = {os.path.realpath(p) for p in site.getsitepackages()}
         extra = [
             p

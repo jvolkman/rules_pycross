@@ -5,6 +5,7 @@ package(default_visibility = ["//visibility:public"])
 
 exports_files([
     "git_archive.py",
+    "import_index.py",
     "inspect_package.py",
 ])
 
@@ -34,6 +35,21 @@ pycross_wheel_zipimport_library(
     wheel = "@pycross_internal_deps//installer:wheel",
 )
 
+py_library(
+    name = "elf_tools",
+    srcs = ["elf_tools.py"],
+    imports = ["../../.."],
+)
+
+py_library(
+    name = "wheel_index",
+    srcs = ["wheel_index.py"],
+    imports = ["../../.."],
+    deps = [
+        ":elf_tools",
+    ],
+)
+
 py_binary(
     name = "wheel_installer",
     srcs = ["wheel_installer.py"],
@@ -42,8 +58,26 @@ py_binary(
     deps = [
         ":args",
         ":installer",
+        ":wheel_index",
         "//pycross/private/third_party/patch_ng",
     ],
+)
+
+py_binary(
+    name = "modules_mapping",
+    srcs = ["modules_mapping.py"],
+    imports = ["../../.."],
+    visibility = ["//visibility:public"],
+    deps = [
+        ":args",
+    ],
+)
+
+py_library(
+    name = "import_index",
+    srcs = ["import_index.py"],
+    imports = ["../../.."],
+    visibility = ["//visibility:public"],
 )
 
 py_binary(

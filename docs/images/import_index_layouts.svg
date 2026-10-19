@@ -1,0 +1,121 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 610" width="1200" height="610" font-family="Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif">
+  <defs>
+    <style>
+      .bg { fill: #f8fafc; }
+      .card { fill: #ffffff; stroke: #cbd5e1; stroke-width: 1.5; rx: 10; }
+      .card-good { fill: #ffffff; stroke: #16a34a; stroke-width: 2; rx: 10; }
+      .header-bad { fill: #fee2e2; stroke: #fca5a5; stroke-width: 1; rx: 8; }
+      .header-warn { fill: #fef3c7; stroke: #fcd34d; stroke-width: 1; rx: 8; }
+      .header-good { fill: #dcfce7; stroke: #86efac; stroke-width: 1; rx: 8; }
+      .box { fill: #f1f5f9; stroke: #94a3b8; stroke-width: 1.2; rx: 6; }
+      .box-accent { fill: #eff6ff; stroke: #60a5fa; stroke-width: 1.4; rx: 6; }
+      .box-green { fill: #f0fdf4; stroke: #4ade80; stroke-width: 1.4; rx: 6; }
+      .box-red { fill: #fef2f2; stroke: #f87171; stroke-width: 1.2; rx: 6; }
+      .title { font-size: 20px; font-weight: 700; fill: #0f172a; }
+      .subtitle { font-size: 13px; fill: #475569; }
+      .col-title { font-size: 15px; font-weight: 700; fill: #0f172a; }
+      .col-sub { font-size: 11px; font-weight: 600; fill: #475569; font-family: 'JetBrains Mono', monospace; }
+      .code { font-size: 10.2px; font-family: 'JetBrains Mono', 'Courier New', monospace; fill: #1e293b; }
+      .label { font-size: 12px; fill: #334155; }
+      .label-bold { font-size: 12px; font-weight: 700; fill: #0f172a; }
+      .badge-bad { font-size: 11.5px; font-weight: 600; fill: #b91c1c; }
+      .badge-good { font-size: 11.5px; font-weight: 600; fill: #15803d; }
+    </style>
+  </defs>
+
+  <rect width="1200" height="610" class="bg"/>
+  <text x="600" y="34" text-anchor="middle" class="title">Wheel Import Resolution Strategies in Bazel (rules_python + rules_pycross)</text>
+  <text x="600" y="54" text-anchor="middle" class="subtitle">How 500+ extracted wheel TreeArtifacts are exposed to Python at runtime</text>
+
+  <!-- COLUMN 1: Plain sys.path -->
+  <rect x="24" y="72" width="368" height="516" class="card"/>
+  <rect x="38" y="86" width="340" height="48" class="header-bad"/>
+  <text x="208" y="107" text-anchor="middle" class="col-title">1. Plain sys.path (One Entry / Wheel)</text>
+  <text x="208" y="124" text-anchor="middle" class="col-sub">venvs_site_packages=no, import_index=off</text>
+
+  <rect x="44" y="148" width="328" height="112" class="box"/>
+  <text x="56" y="168" class="label-bold">sys.path (500+ wheel directories):</text>
+  <text x="56" y="188" class="code">[0] .../stdlib</text>
+  <text x="56" y="205" class="code">[1] .../nvidia_cublas/site-packages</text>
+  <text x="56" y="222" class="code">[2] .../nvidia_cudnn/site-packages</text>
+  <text x="56" y="239" class="code">... (500 more wheel site-packages)</text>
+  <text x="56" y="254" class="code">[N] .../_main (first-party py_library)</text>
+
+  <line x1="208" y1="260" x2="208" y2="288" stroke="#64748b" stroke-width="1.5"/>
+  <polygon points="204,284 212,284 208,290" fill="#64748b"/>
+  <rect x="44" y="290" width="328" height="54" class="box-red"/>
+  <text x="208" y="312" text-anchor="middle" class="label-bold">CPython PathFinder Linear Scan</text>
+  <text x="208" y="330" text-anchor="middle" class="label">O(N_wheels) stat() + listdir() calls per import</text>
+
+  <text x="48" y="372" class="label-bold">What Works / What Breaks:</text>
+  <text x="48" y="394" class="badge-good">+ Zero venv symlinks; torch sys.path glob works</text>
+  <text x="48" y="416" class="badge-bad">x O(N_wheels) stat storm (32k+ stats at startup)</text>
+  <text x="48" y="438" class="badge-bad">x Split packages break: nvidia/__init__.py in</text>
+  <text x="62" y="454" class="badge-bad">wheel [1] shadows nvidia.cudnn in wheel [2]</text>
+  <text x="48" y="476" class="badge-bad">x Plugins under another wheel's package fail</text>
+  <text x="62" y="492" class="badge-bad">(azure.core.tracing.ext.opentelemetry_span)</text>
+  <text x="48" y="514" class="badge-bad">x Wheel .pth files are ignored by site.py</text>
+  <text x="48" y="536" class="badge-bad">x Cross-wheel $ORIGIN/../nvidia/... RPATHs fail</text>
+  <text x="62" y="552" class="badge-bad">(each wheel lives in its own isolated directory)</text>
+
+  <!-- COLUMN 2: Symlinked Venv -->
+  <rect x="416" y="72" width="368" height="516" class="card"/>
+  <rect x="430" y="86" width="340" height="48" class="header-warn"/>
+  <text x="600" y="107" text-anchor="middle" class="col-title">2. Symlinked Venv site-packages</text>
+  <text x="600" y="124" text-anchor="middle" class="col-sub">venvs_site_packages=yes, import_index=off</text>
+
+  <rect x="436" y="148" width="328" height="112" class="box"/>
+  <text x="448" y="168" class="label-bold">_bin.venv/lib/pythonX.Y/site-packages/:</text>
+  <text x="448" y="188" class="code">requests/    -&gt; .../requests/site-packages/...</text>
+  <text x="448" y="205" class="code">google/      -&gt; per-subpkg symlinks</text>
+  <text x="448" y="222" class="code">nvidia/      -&gt; CONFLICT across nvidia wheels!</text>
+  <text x="448" y="239" class="code">*.dist-info/ -&gt; 500+ dist-info symlinks</text>
+  <text x="448" y="254" class="code">(Thousands of symlinks materialized per binary)</text>
+
+  <line x1="600" y1="260" x2="600" y2="288" stroke="#64748b" stroke-width="1.5"/>
+  <polygon points="596,284 604,284 600,290" fill="#64748b"/>
+  <rect x="436" y="290" width="328" height="54" class="box"/>
+  <text x="600" y="312" text-anchor="middle" class="label-bold">Analysis-Time Symlink Tree Construction</text>
+  <text x="600" y="330" text-anchor="middle" class="label">Needs top-level site_paths before wheels are built</text>
+
+  <text x="440" y="372" class="label-bold">What Works / What Breaks:</text>
+  <text x="440" y="394" class="badge-good">+ Single site-packages dir on sys.path</text>
+  <text x="440" y="416" class="badge-bad">x Requires repo-time sdist site_paths guessing</text>
+  <text x="454" y="432" class="badge-bad">before sdist wheels are even compiled</text>
+  <text x="440" y="454" class="badge-bad">x TreeArtifact wheels are opaque at analysis time:</text>
+  <text x="454" y="470" class="badge-bad">cannot merge subdirs of opaque TreeArtifacts</text>
+  <text x="440" y="492" class="badge-bad">x Directory symlinks break cross-wheel $ORIGIN:</text>
+  <text x="454" y="508" class="badge-bad">glibc resolves realpath(libuser.so) back into</text>
+  <text x="454" y="524" class="badge-bad">Wheel A's TreeArtifact, missing Wheel B's .so</text>
+  <text x="440" y="546" class="badge-bad">x Heavy symlink count in runfiles &amp; OCI layers</text>
+
+  <!-- COLUMN 3: Import Index -->
+  <rect x="808" y="72" width="368" height="516" class="card-good"/>
+  <rect x="822" y="86" width="340" height="48" class="header-good"/>
+  <text x="992" y="107" text-anchor="middle" class="col-title">3. Import Index + Native Preload</text>
+  <text x="992" y="124" text-anchor="middle" class="col-sub">venv_import_index=prebuilt</text>
+
+  <rect x="828" y="148" width="328" height="112" class="box-accent"/>
+  <text x="840" y="168" class="label-bold">Venv has 0 wheel symlinks + per-wheel JSON indexes:</text>
+  <text x="840" y="188" class="code">&lt;wheel&gt;.dist_info/index.json (top, dirs, native)</text>
+  <text x="840" y="205" class="code">_bazel_import_index.py       (PathFinder subclass)</text>
+  <text x="840" y="222" class="code">pycross_import_index.pth     (auto_install hook)</text>
+  <text x="840" y="239" class="code">+ All wheel roots stay on sys.path untouched</text>
+  <text x="840" y="254" class="code">+ Merged in memory via merge_wheel_indexes()</text>
+
+  <line x1="992" y1="260" x2="992" y2="288" stroke="#16a34a" stroke-width="1.8"/>
+  <polygon points="988,284 996,284 992,290" fill="#16a34a"/>
+  <rect x="828" y="290" width="328" height="54" class="box-green"/>
+  <text x="992" y="312" text-anchor="middle" class="label-bold">_bazel_import_index.PathFinder</text>
+  <text x="992" y="330" text-anchor="middle" class="label">pre -&gt; wheels (O(1) index) -&gt; post (_main)</text>
+
+  <text x="832" y="372" class="label-bold">What Works:</text>
+  <text x="832" y="394" class="badge-good">+ O(1) top-level, subpackage &amp; metadata lookup</text>
+  <text x="832" y="416" class="badge-good">+ Zero repo-time sdist guessing (indexed after build)</text>
+  <text x="832" y="438" class="badge-good">+ Merges multi-owner packages (nvidia.*, azure.*)</text>
+  <text x="832" y="460" class="badge-good">+ Runs wheel .pth files in global sorted order</text>
+  <text x="832" y="482" class="badge-good">+ Keeps wheel roots on sys.path (torch glob works)</text>
+  <text x="832" y="504" class="badge-good">+ Preloads cross-wheel $ORIGIN .so deps via CDLL</text>
+  <text x="846" y="520" class="badge-good">(satisfies both DT_NEEDED &amp; lazy dlopen by SONAME)</text>
+  <text x="832" y="542" class="badge-good">+ Works on stock rules_python (py_binary &amp; py_test)</text>
+</svg>

@@ -6,10 +6,13 @@ load("@rules_testing//lib:truth.bzl", "matching")
 load("@rules_testing//lib:util.bzl", "util")
 
 # buildifier: disable=bzl-visibility
+load("//pycross/private:modules_mapping.bzl", "pycross_modules_mapping")
+
+# buildifier: disable=bzl-visibility
 load("//pycross/private:providers.bzl", "PycrossExtractedWheelInfo", "PycrossPackageInfo", "PycrossUnsupportedWheelInfo")
 
 # buildifier: disable=bzl-visibility
-load("//pycross/private:proxy.bzl", "pycross_library_proxy")
+load("//pycross/private:proxy.bzl", "pycross_library_proxy", "pycross_transitioning_library_proxy")
 
 # buildifier: disable=bzl-visibility
 load("//pycross/private:variant_resolver.bzl", "pycross_no_variant_selected")
@@ -18,7 +21,7 @@ load("//pycross/private:variant_resolver.bzl", "pycross_no_variant_selected")
 load("//pycross/private:wheel_dir.bzl", "pycross_wheel_dir")
 
 # buildifier: disable=bzl-visibility
-load("//pycross/private:wheel_library.bzl", "pycross_wheel_library")
+load("//pycross/private:wheel_library.bzl", "pycross_wheel_library", "pycross_wheel_metadata")
 
 def _test_pycross_wheel_library_basic(name):
     # Dummy wheel file
@@ -54,6 +57,16 @@ def _test_pycross_wheel_library_basic_impl(env, target):
 
     action = env.expect.that_target(target).action_generating(extracted_info.site_packages.short_path)
     action.argv().contains_at_least(["--dist-info-dir", "foo_bar-1.0.dist-info"])
+
+    # The install action also writes the per-wheel index, exposed via the provider and an
+    # output group.
+    index = extracted_info.index
+    env.expect.that_str(index.short_path).equals(
+        "{}/{}.dist_info/index.json".format(target.label.package, target.label.name),
+    )
+    env.expect.that_collection(action.actual.outputs.to_list()).contains(index)
+    action.argv().contains_at_least(["--index-output", index.path])
+    env.expect.that_collection(target[OutputGroupInfo].pycross_wheel_index.to_list()).contains_exactly([index])
 
     # Check that it returns PycrossPackageInfo
     env.expect.that_target(target).has_provider(PycrossPackageInfo)
@@ -120,6 +133,11 @@ def _test_pycross_wheel_library_no_match_deferred_impl(env, target):
     action.env().contains_exactly({
         "PYCROSS_ERROR": "No compatible wheel is available for unsupported_pkg@1.0 in the selected target environment.",
     })
+
+    # The failing action also stands in for the per-wheel index, so a modules mapping that
+    # depends on this package fails with the same message.
+    index_action = env.expect.that_target(target).action_generating(extracted_info.index.short_path)
+    index_action.mnemonic().equals("PycrossUnsupportedWheel")
 
 def _test_pycross_wheel_dir_no_match_deferred(name):
     util.helper_target(
@@ -525,6 +543,112 @@ def _test_pycross_wheel_library_precompile_missing_toolchain_skipped(name):
         impl = _assert_precompile_disabled_impl,
     )
 
+def _define_index_subject_wheel(name):
+    util.helper_target(
+        native.filegroup,
+        name = name + "_wheel",
+        srcs = ["test-1.0-py3-none-any.whl"],
+    )
+    util.helper_target(
+        pycross_wheel_library,
+        name = name + "_lib",
+        wheel = name + "_wheel",
+        package_name = "test",
+        package_version = "1.0",
+    )
+
+def _assert_forwards_index(env, target):
+    index = target[PycrossExtractedWheelInfo].index
+    env.expect.that_str(index.basename).equals("index.json")
+    env.expect.that_str(index.dirname.rpartition("/")[2]).equals(target.label.name.replace("_subject", "_lib") + ".dist_info")
+    env.expect.that_collection(target[OutputGroupInfo].pycross_wheel_index.to_list()).contains_exactly([index])
+
+def _test_pycross_library_proxy_forwards_index(name):
+    _define_index_subject_wheel(name)
+    util.helper_target(
+        pycross_library_proxy,
+        name = name + "_subject",
+        actual = name + "_lib",
+    )
+    analysis_test(
+        name = name,
+        target = name + "_subject",
+        impl = _assert_forwards_index,
+    )
+
+def _test_pycross_transitioning_library_proxy_forwards_index(name):
+    _define_index_subject_wheel(name)
+    util.helper_target(
+        native.platform,
+        name = name + "_platform",
+        parents = ["@platforms//host"],
+    )
+    util.helper_target(
+        pycross_transitioning_library_proxy,
+        name = name + "_subject",
+        actual = name + "_lib",
+        platform = name + "_platform",
+    )
+    analysis_test(
+        name = name,
+        target = name + "_subject",
+        impl = _assert_forwards_index,
+    )
+
+def _test_pycross_modules_mapping(name):
+    _define_index_subject_wheel(name)
+    util.helper_target(
+        pycross_library_proxy,
+        name = name + "_proxy",
+        actual = name + "_lib",
+    )
+    util.helper_target(
+        pycross_wheel_metadata,
+        name = name + "_metadata_only",
+        wheel = name + "_wheel",
+        package_name = "legacy-pkg",
+        package_version = "1.0",
+        site_paths = ["legacy", "ns/mod.py"],
+    )
+    util.helper_target(
+        pycross_modules_mapping,
+        name = name + "_subject",
+        deps = [
+            name + "_lib",
+            name + "_proxy",
+            name + "_metadata_only",
+        ],
+    )
+    analysis_test(
+        name = name,
+        target = name + "_subject",
+        impl = _test_pycross_modules_mapping_impl,
+    )
+
+def _test_pycross_modules_mapping_impl(env, target):
+    output = target[DefaultInfo].files.to_list()
+    env.expect.that_collection([f.basename for f in output]).contains_exactly([target.label.name + ".json"])
+
+    action = env.expect.that_target(target).action_generating(output[0].short_path)
+    action.mnemonic().equals("PycrossModulesMapping")
+
+    # One index, even though it arrives through both the library and its proxy.
+    indexes = [f for f in action.actual.inputs.to_list() if f.basename == "index.json"]
+    env.expect.that_collection([f.dirname.rpartition("/")[2] for f in indexes]).contains_exactly([
+        target.label.name.replace("_subject", "_lib") + ".dist_info",
+    ])
+    argv = action.actual.argv
+    env.expect.that_collection([a for a in argv if a == "--index"]).has_size(1)
+    action.argv().contains_at_least(["--index", indexes[0].path])
+
+    # A dep without an index falls back to its analysis-time site_paths.
+    action.argv().contains_at_least([
+        "--site-path",
+        "legacy-pkg=legacy",
+        "--site-path",
+        "legacy-pkg=ns/mod.py",
+    ])
+
 def pycross_wheel_library_test_suite(name):
     test_suite(
         name = name,
@@ -552,5 +676,8 @@ def pycross_wheel_library_test_suite(name):
             _test_pycross_wheel_library_precompile_invalidation_mode_unchecked_explicit,
             _test_pycross_wheel_library_precompile_optimize_level,
             _test_pycross_wheel_library_precompile_missing_toolchain_skipped,
+            _test_pycross_library_proxy_forwards_index,
+            _test_pycross_transitioning_library_proxy_forwards_index,
+            _test_pycross_modules_mapping,
         ],
     )

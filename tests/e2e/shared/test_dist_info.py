@@ -30,6 +30,10 @@ class DistInfoNormalizationTest(unittest.TestCase):
     def test_venv_dist_info_symlink_resolves(self):
         if os.environ.get("PYCROSS_EXPECT_VENV_DIST_INFO") != "1":
             return
+        if "_bazel_import_index" in sys.modules:
+            # rules_python's import index (--venv_import_index, prototype) finds .dist-info dirs
+            # in the wheel roots on sys.path; nothing is linked into the venv.
+            self.skipTest("the import index links no .dist-info into the venv")
 
         venv_site_packages = [Path(p) for p in sys.path if ".venv" in p and p.endswith("site-packages")]
         self.assertTrue(

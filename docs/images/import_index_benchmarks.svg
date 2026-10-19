@@ -1,0 +1,92 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 500" width="1200" height="500" font-family="Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif">
+  <defs>
+    <style>
+      .bg { fill: #f8fafc; }
+      .card { fill: #ffffff; stroke: #cbd5e1; stroke-width: 1.5; rx: 10; }
+      .title { font-size: 20px; font-weight: 700; fill: #0f172a; }
+      .subtitle { font-size: 13px; fill: #475569; }
+      .panel-title { font-size: 15px; font-weight: 700; fill: #0f172a; }
+      .panel-sub { font-size: 12px; fill: #64748b; }
+      .axis-label { font-size: 12px; font-weight: 600; fill: #334155; }
+      .val-label { font-size: 11.5px; font-weight: 700; fill: #0f172a; }
+      .val-green { font-size: 11.5px; font-weight: 700; fill: #15803d; }
+      .bar-off { fill: #94a3b8; rx: 4; }
+      .bar-scan { fill: #60a5fa; rx: 4; }
+      .bar-prebuilt { fill: #16a34a; rx: 4; }
+      .legend { font-size: 12px; fill: #334155; font-weight: 600; }
+    </style>
+  </defs>
+
+  <rect width="1200" height="500" class="bg"/>
+  <text x="600" y="34" text-anchor="middle" class="title">Measured Performance Impact (Production Monorepo &amp; 600-Wheel Scaling)</text>
+  <text x="600" y="54" text-anchor="middle" class="subtitle">Comparing plain sys.path (off), startup directory scan (scan), and build-time index (prebuilt)</text>
+
+  <!-- Legend -->
+  <rect x="410" y="68" width="14" height="14" class="bar-off"/>
+  <text x="430" y="80" class="legend">off (plain sys.path)</text>
+  <rect x="575" y="68" width="14" height="14" class="bar-scan"/>
+  <text x="595" y="80" class="legend">scan (1 scandir/root)</text>
+  <rect x="755" y="68" width="14" height="14" class="bar-prebuilt"/>
+  <text x="775" y="80" class="legend">prebuilt (JSON index)</text>
+
+  <!-- PANEL 1: Monorepo Syscalls -->
+  <rect x="24" y="96" width="564" height="380" class="card"/>
+  <text x="44" y="126" class="panel-title">A. Startup File Syscalls on Production Services (strace -f -c)</text>
+  <text x="44" y="144" class="panel-sub">Total stat + openat + getdents64 calls during warm `--help`</text>
+
+  <!-- service_a (94 wheels) -->
+  <text x="44" y="182" class="axis-label">service_a (94 wheels) — stat() calls</text>
+  <rect x="44" y="192" width="320" height="20" class="bar-off"/>
+  <text x="372" y="207" class="val-label">23,281</text>
+  <rect x="44" y="216" width="197" height="20" class="bar-scan"/>
+  <text x="249" y="231" class="val-label">14,314 (-38.5%)</text>
+  <rect x="44" y="240" width="188" height="20" class="bar-prebuilt"/>
+  <text x="240" y="255" class="val-green">13,662 (-41.3%)</text>
+
+  <!-- service_b (126 wheels) stat -->
+  <text x="44" y="290" class="axis-label">service_b (126 wheels) — stat() calls</text>
+  <rect x="44" y="300" width="360" height="20" class="bar-off"/>
+  <text x="412" y="315" class="val-label">32,190</text>
+  <rect x="44" y="324" width="223" height="20" class="bar-scan"/>
+  <text x="275" y="339" class="val-label">19,919 (-38.1%)</text>
+  <rect x="44" y="348" width="215" height="20" class="bar-prebuilt"/>
+  <text x="267" y="363" class="val-green">19,216 (-40.3%)</text>
+
+  <!-- service_b getdents64 -->
+  <text x="44" y="398" class="axis-label">service_b (126 wheels) — getdents64() directory scans</text>
+  <rect x="44" y="408" width="340" height="20" class="bar-off"/>
+  <text x="392" y="423" class="val-label">3,270</text>
+  <rect x="44" y="432" width="167" height="20" class="bar-prebuilt"/>
+  <text x="219" y="447" class="val-green">1,608 (-50.8%)</text>
+
+  <!-- PANEL 2: Microbenchmarks & 600-Wheel Scaling -->
+  <rect x="612" y="96" width="564" height="380" class="card"/>
+  <text x="632" y="126" class="panel-title">B. Targeted Import Latency &amp; 600-Wheel Scaling</text>
+  <text x="632" y="144" class="panel-sub">Wall time (ms, lower is better)</text>
+
+  <!-- 50 failed find_spec (126 wheels) -->
+  <text x="632" y="182" class="axis-label">50 missing-module find_spec() probes (126 wheels)</text>
+  <rect x="632" y="192" width="340" height="20" class="bar-off"/>
+  <text x="980" y="207" class="val-label">71.0 ms</text>
+  <rect x="632" y="216" width="20" height="20" class="bar-prebuilt"/>
+  <text x="660" y="231" class="val-green">4.2 ms (16.9x faster)</text>
+
+  <!-- 7 merged subpackages (94 wheels) -->
+  <text x="632" y="266" class="axis-label">7 subpackages under merged google.* / opentelemetry.*</text>
+  <rect x="632" y="276" width="280" height="20" class="bar-off"/>
+  <text x="920" y="291" class="val-label">6.36 ms</text>
+  <rect x="632" y="300" width="211" height="20" class="bar-scan"/>
+  <text x="851" y="315" class="val-label">4.79 ms</text>
+  <rect x="632" y="324" width="91" height="20" class="bar-prebuilt"/>
+  <text x="731" y="339" class="val-green">2.07 ms (3.1x faster)</text>
+
+  <!-- Cold metadata.version() -->
+  <text x="632" y="374" class="axis-label">Cold importlib.metadata.version() lookup</text>
+  <rect x="632" y="384" width="280" height="20" class="bar-off"/>
+  <text x="920" y="399" class="val-label">63.4 ms</text>
+  <rect x="632" y="408" width="72" height="20" class="bar-prebuilt"/>
+  <text x="712" y="423" class="val-green">16.4 ms (3.9x faster)</text>
+
+  <!-- 600-wheel synthetic total -->
+  <text x="632" y="450" class="axis-label">600-wheel synthetic benchmark: 3,487 ms (off) -&gt; 419 ms (prebuilt, 8.3x faster)</text>
+</svg>

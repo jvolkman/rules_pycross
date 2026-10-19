@@ -6,7 +6,6 @@ load(":test_cycle_member_marker_deps.bzl", "cycle_member_marker_deps_test_suite"
 load(":test_freethreaded.bzl", "freethreaded_test_suite")
 load(":test_git_file.bzl", "git_file_test_suite")
 load(":test_lock_resolver.bzl", "lock_resolver_test_suite")
-load(":test_modules_mapping.bzl", "modules_mapping_test_suite")
 load(":test_override_helpers.bzl", "override_helpers_test_suite")
 load(":test_parse_dependency_groups.bzl", "parse_dependency_groups_test_suite")
 load(":test_pdm_translator.bzl", "pdm_translator_test_suite")
@@ -53,6 +52,27 @@ py_test(
     tags = ["unit"],
     deps = [
         "//pycross/private/tools:wheel_installer",
+    ],
+)
+
+py_test(
+    name = "modules_mapping_test",
+    srcs = ["modules_mapping_test.py"],
+    main = "modules_mapping_test.py",
+    tags = ["unit"],
+    deps = [
+        "//pycross/private/tools:modules_mapping",
+    ],
+)
+
+py_test(
+    name = "import_index_test",
+    srcs = ["import_index_test.py"],
+    main = "import_index_test.py",
+    tags = ["unit"],
+    deps = [
+        "//pycross/private/tools:elf_tools",
+        "//pycross/private/tools:import_index",
     ],
 )
 
@@ -196,8 +216,6 @@ python_versions_test_suite(name = "test_python_versions")
 thin_package_repo_test_suite(name = "test_thin_package_repo")
 
 lock_resolver_test_suite(name = "test_lock_resolver")
-
-modules_mapping_test_suite(name = "test_modules_mapping")
 
 pdm_translator_test_suite(name = "test_pdm_translator")
 

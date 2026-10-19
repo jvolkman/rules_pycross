@@ -1,0 +1,89 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 440" width="1200" height="440" font-family="Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif">
+  <defs>
+    <style>
+      .bg { fill: #f8fafc; }
+      .card { fill: #ffffff; stroke: #cbd5e1; stroke-width: 1.5; rx: 10; }
+      .box-wheel { fill: #eff6ff; stroke: #60a5fa; stroke-width: 1.5; rx: 8; }
+      .box-action { fill: #fefce8; stroke: #facc15; stroke-width: 1.5; rx: 8; }
+      .box-runtime { fill: #f0fdf4; stroke: #4ade80; stroke-width: 1.8; rx: 8; }
+      .title { font-size: 20px; font-weight: 700; fill: #0f172a; }
+      .subtitle { font-size: 13px; fill: #475569; }
+      .step-title { font-size: 14px; font-weight: 700; fill: #0f172a; }
+      .code { font-size: 9.6px; font-family: 'JetBrains Mono', 'Courier New', monospace; fill: #1e293b; }
+      .label { font-size: 12px; fill: #334155; }
+      .label-green { font-size: 12px; font-weight: 700; fill: #15803d; }
+    </style>
+  </defs>
+
+  <rect width="1200" height="440" class="bg"/>
+  <text x="600" y="34" text-anchor="middle" class="title">Cross-Wheel Native Library ($ORIGIN RPATH) Preloading Pipeline</text>
+  <text x="600" y="54" text-anchor="middle" class="subtitle">How escaping $ORIGIN RPATHs across separate wheel directories are resolved without patching ELF binaries</text>
+
+  <!-- Step 1: Per-Wheel Install -->
+  <rect x="24" y="76" width="356" height="340" class="card"/>
+  <text x="42" y="104" class="step-title">1. Per-Wheel Install (PycrossWheelInstall)</text>
+  <text x="42" y="122" class="label">Read-only ELF dynamic section inspection:</text>
+
+  <rect x="40" y="138" width="324" height="82" class="box-wheel"/>
+  <text x="52" y="158" class="step-title">Wheel A: rpathfixture (or tensorflow)</text>
+  <text x="52" y="176" class="code">rpathfixture/libuser.so</text>
+  <text x="52" y="192" class="code">needed:  ["libfixture_cublas.so.12"]</text>
+  <text x="52" y="208" class="code">runpath: ["$ORIGIN/../nvidia/fixture_cublas/lib",</text>
+
+  <rect x="40" y="232" width="324" height="72" class="box-wheel"/>
+  <text x="52" y="252" class="step-title">Wheel B: nvidia-fixture-cublas</text>
+  <text x="52" y="270" class="code">nvidia/fixture_cublas/lib/libfixture_cublas.so.12</text>
+  <text x="52" y="288" class="code">soname:  "libfixture_cublas.so.12"</text>
+
+  <rect x="40" y="316" width="324" height="72" class="box-wheel"/>
+  <text x="52" y="336" class="step-title">Wheel C: nvidia-fixture-cudnn</text>
+  <text x="52" y="354" class="code">nvidia/fixture_cudnn/lib/libfixture_cudnn.so.12</text>
+  <text x="52" y="372" class="code">soname:  "libfixture_cudnn.so.12" (dlopen target)</text>
+
+  <!-- Arrow 1 -> 2 -->
+  <line x1="380" y1="246" x2="416" y2="246" stroke="#475569" stroke-width="2"/>
+  <polygon points="412,241 422,246 412,251" fill="#475569"/>
+
+  <!-- Step 2: Merge Action -->
+  <rect x="422" y="76" width="356" height="340" class="card"/>
+  <text x="440" y="104" class="step-title">2. Index Merge (_compute_preload)</text>
+  <text x="440" y="122" class="label">Resolves escaping $ORIGIN dirs across closure:</text>
+
+  <rect x="438" y="138" width="324" height="128" class="box-action"/>
+  <text x="450" y="160" class="step-title">Topological Dependency Resolution</text>
+  <text x="450" y="180" class="label">1. Detects $ORIGIN/../nvidia/... escapes Wheel A</text>
+  <text x="450" y="198" class="label">2. Matches candidate dir in Wheel B &amp; Wheel C</text>
+  <text x="450" y="216" class="label">3. Collects all .so with DT_SONAME in those dirs</text>
+  <text x="450" y="234" class="label">4. Post-order DFS by DT_NEEDED -&gt; DT_SONAME</text>
+  <text x="450" y="252" class="label">   (dependencies loaded before dependents)</text>
+
+  <rect x="438" y="280" width="324" height="108" class="box-action"/>
+  <text x="450" y="300" class="step-title">Emits "preload" in merged import index:</text>
+  <text x="450" y="320" class="code">preload["rpathfixture"] = [</text>
+  <text x="462" y="338" class="code">[34, "nvidia/.../libfixture_cublas.so.12"],</text>
+  <text x="462" y="356" class="code">[35, "nvidia/.../libfixture_cudnn.so.12"],</text>
+  <text x="450" y="374" class="code">]</text>
+
+  <!-- Arrow 2 -> 3 -->
+  <line x1="778" y1="246" x2="814" y2="246" stroke="#16a34a" stroke-width="2"/>
+  <polygon points="810,241 820,246 810,251" fill="#16a34a"/>
+
+  <!-- Step 3: Runtime Preload -->
+  <rect x="820" y="76" width="356" height="340" class="card"/>
+  <text x="838" y="104" class="step-title">3. Runtime Import (PathFinder.find_spec)</text>
+  <text x="838" y="122" class="label">Triggered once when `import rpathfixture` runs:</text>
+
+  <rect x="836" y="138" width="324" height="110" class="box-runtime"/>
+  <text x="848" y="160" class="step-title">_preload_native("rpathfixture")</text>
+  <text x="848" y="180" class="code">ctypes.CDLL(".../libfixture_cublas.so.12")</text>
+  <text x="848" y="198" class="code">ctypes.CDLL(".../libfixture_cudnn.so.12")</text>
+  <text x="848" y="220" class="label">Registers both DT_SONAMEs in glibc's</text>
+  <text x="848" y="236" class="label">process link_map before libuser.so loads</text>
+
+  <rect x="836" y="264" width="324" height="124" class="box-runtime"/>
+  <text x="848" y="286" class="step-title">glibc _dl_map_object SONAME Short-Circuit</text>
+  <text x="848" y="308" class="label-green">+ Eager DT_NEEDED ("libfixture_cublas.so.12"):</text>
+  <text x="860" y="324" class="label">Found in link_map -&gt; no RPATH search needed!</text>
+  <text x="848" y="348" class="label-green">+ Lazy dlopen("libfixture_cudnn.so.12"):</text>
+  <text x="860" y="364" class="label">Found in link_map -&gt; returns loaded handle!</text>
+</svg>

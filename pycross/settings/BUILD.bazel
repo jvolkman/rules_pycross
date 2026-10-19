@@ -81,3 +81,19 @@ config_setting(
     name = "unavailable_package_fail_at_execution",
     flag_values = {":unavailable_package_mode": "fail_at_execution"},
 )
+
+# Venv Import Index Mode
+# Controls whether binaries resolve imports from their wheel roots through an
+# import index finder instead of symlinking wheel contents into site-packages:
+# - "off" (default): standard sys.path / venv_symlinks behavior.
+# - "scan": index wheel roots at startup (one os.scandir per root).
+# - "prebuilt": resolve imports from build-time per-wheel / merged indexes.
+string_flag(
+    name = "venv_import_index",
+    build_setting_default = "off",
+    values = [
+        "off",
+        "scan",
+        "prebuilt",
+    ],
+)

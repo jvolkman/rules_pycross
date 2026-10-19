@@ -12,6 +12,7 @@ load(
     "cargo_build_for_testing",
     "flag_values_for_testing",
     "is_platform_specific_for_testing",
+    "modules_mapping_deps_for_testing",
     "packages_bzl_for_testing",
     "pin_build_for_testing",
     "requirements_bzl_for_testing",
@@ -884,6 +885,75 @@ def _test_pin_build_no_variant_fallback(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
     analysis_test(name = name, target = name + "_subject", impl = _test_pin_build_no_variant_fallback_impl)
 
+# ── Test: modules_mapping deps ─────────────────────────────────────
+
+# buildifier: disable=unused-variable
+def _test_modules_mapping_deps_impl(env, target):
+    """Unconditional pins and variants are direct deps; resolution-marker forks are selected."""
+    pins = {
+        "six": {"": "six@1.17.0"},
+        "pywin32": {"": "pywin32@312"},
+        "cyc": {"": "cyc@1.0"},
+        # Resolution-marker fork.
+        "numpy": {"res_numpy_1_26_4": "numpy@1.26.4", "res_numpy_2_3_4": "numpy@2.3.4"},
+        # Conflict variants: all included (their config_settings fail without a variant).
+        "typing-extensions": {"extra_a": "typing-extensions@4.11.0", "extra_b": "typing-extensions@4.12.2"},
+        # Variant + marker forks select on the marker half only.
+        "idna": {"extra_a_res_idna_3_6": "idna@3.6", "extra_b_res_idna_3_7": "idna@3.7"},
+        # "" is the default branch of a marker fork.
+        "attrs": {"": "attrs@25.1.0", "res_attrs_23_1_0": "attrs@23.1.0"},
+    }
+    packages = {
+        "six@1.17.0": {"wheel_candidates": [{"filename": "six-1.17.0-py3-none-any.whl"}], "sdist_file": {"key": "s"}},
+        "pywin32@312": {"wheel_candidates": [{"filename": "pywin32-312-cp310-win_amd64.whl"}]},
+        "cyc@1.0": {"cycle_group": "_cycle_x", "sdist_file": {"key": "c"}},
+    }
+    resolution_marker_exprs = {
+        "res_numpy_1_26_4": "python_version < \"3.12\"",
+        "res_numpy_2_3_4": "python_version >= \"3.12\"",
+        "res_idna_3_6": "sys_platform == \"win32\"",
+        "res_idna_3_7": "sys_platform != \"win32\"",
+        "extra_a_res_idna_3_6": {"variant": "extra_a", "marker": "res_idna_3_6"},
+        "extra_b_res_idna_3_7": {"variant": "extra_b", "marker": "res_idna_3_7"},
+        "res_attrs_23_1_0": "python_version < \"3.10\"",
+    }
+    res = modules_mapping_deps_for_testing(pins, packages, "ws", resolution_marker_exprs)
+    env.expect.that_collection(res.lines).contains_exactly([
+        "    deps = [",
+        '        "@ws//_lock:_raw_cyc@1.0",',
+        '        "//__maybe:pywin32_312",',
+        '        "@ws//_lock:six@1.17.0",',
+        '        "@ws//_lock:typing-extensions@4.11.0",',
+        '        "@ws//_lock:typing-extensions@4.12.2",',
+        "    ] + select({",
+        '        "@ws//_lock:is_res_attrs_23_1_0": ["@ws//_lock:attrs@23.1.0"],',
+        '        "//conditions:default": ["@ws//_lock:attrs@25.1.0"],',
+        "    }) + select({",
+        '        "@ws//_lock:is_res_idna_3_6": ["@ws//_lock:idna@3.6"],',
+        '        "@ws//_lock:is_res_idna_3_7": ["@ws//_lock:idna@3.7"],',
+        '        "//conditions:default": [],',
+        "    }) + select({",
+        '        "@ws//_lock:is_res_numpy_1_26_4": ["@ws//_lock:numpy@1.26.4"],',
+        '        "@ws//_lock:is_res_numpy_2_3_4": ["@ws//_lock:numpy@2.3.4"],',
+        '        "//conditions:default": [],',
+        "    }),",
+    ]).in_order()
+    env.expect.that_dict(res.maybe_targets).contains_exactly({
+        "pywin32_312": ("pywin32@312", "@ws//_lock:pywin32@312"),
+    })
+
+    # Without forks, the attribute is a plain list.
+    plain = modules_mapping_deps_for_testing({"six": {"": "six@1.17.0"}}, packages, "ws", {})
+    env.expect.that_collection(plain.lines).contains_exactly([
+        "    deps = [",
+        '        "@ws//_lock:six@1.17.0",',
+        "    ],",
+    ]).in_order()
+
+def _test_modules_mapping_deps(name):
+    util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
+    analysis_test(name = name, target = name + "_subject", impl = _test_modules_mapping_deps_impl)
+
 # ── Test suite ─────────────────────────────────────────────────────
 
 def thin_package_repo_test_suite(name):
@@ -916,5 +986,6 @@ def thin_package_repo_test_suite(name):
             _test_pin_build_multi_branch_no_match_fallback,
             _test_pin_build_maybe_with_transition,
             _test_pin_build_no_variant_fallback,
+            _test_modules_mapping_deps,
         ],
     )

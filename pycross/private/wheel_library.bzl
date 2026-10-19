@@ -24,10 +24,15 @@ load(
     "PycrossUnsupportedWheelInfo",
 )
 load(":util.bzl", "PY_COMMON_ATTRS", "merge_py_providers", "underscore_name")
+load(
+    ":venv_import_index.bzl",
+    "VENV_IMPORT_INDEX_ATTRS",
+    "venv_import_index_enabled",
+)
 
 _PYCROSS_TOOLCHAIN_TYPE = Label("//pycross:toolchain_type")
 
-def _register_wheel_install_action(ctx, out, entry_points, dist_info_dir):
+def _register_wheel_install_action(ctx, out, entry_points, index, dist_info_dir):
     if PycrossUnsupportedWheelInfo in ctx.attr.wheel:
         pkg_id = "{}{}".format(
             ctx.attr.package_name or ctx.label.name,
@@ -35,7 +40,7 @@ def _register_wheel_install_action(ctx, out, entry_points, dist_info_dir):
         )
         register_failure_action(
             ctx,
-            outputs = [out, entry_points],
+            outputs = [out, entry_points, index],
             message = unsupported_wheel_message(pkg_id),
             mnemonic = "PycrossUnsupportedWheel",
             progress_message = "Rejecting unsupported wheel %s" % pkg_id,
@@ -61,6 +66,7 @@ def _register_wheel_install_action(ctx, out, entry_points, dist_info_dir):
         args.add("--install-exclude-glob", install_exclude_glob)
 
     args.add("--entry-points-output", entry_points)
+    args.add("--index-output", index)
 
     if ctx.attr.package_name:
         args.add("--expected-name", ctx.attr.package_name)
@@ -106,7 +112,7 @@ def _register_wheel_install_action(ctx, out, entry_points, dist_info_dir):
 
     ctx.actions.run(
         inputs = depset(inputs, transitive = transitive_inputs),
-        outputs = [out, entry_points],
+        outputs = [out, entry_points, index],
         executable = ctx.executable._tool,
         tools = tools,
         mnemonic = "PycrossWheelInstall",
@@ -119,6 +125,7 @@ def _register_wheel_install_action(ctx, out, entry_points, dist_info_dir):
 
 def _build_venv_symlinks(
         venvs_site_packages_enabled,
+        use_import_index,
         out,
         imp,
         dist_info_dir,
@@ -128,11 +135,17 @@ def _build_venv_symlinks(
         bin_paths,
         data_paths,
         include_paths):
-    if not (venvs_site_packages_enabled and site_paths):
+    # With --venv_import_index, the import index finder resolves imports from the wheel
+    # roots on sys.path, so every wheel stays on sys.path (and in the index) and none is linked
+    # into the venv's site-packages, whatever venvs_site_packages says. Entries outside
+    # site-packages (bin/, data/, include/) are still linked.
+    link_lib = venvs_site_packages_enabled and bool(site_paths) and not use_import_index
+    link_other = venvs_site_packages_enabled and (bool(site_paths) or use_import_index)
+    if not link_other:
         return []
 
     venv_symlinks = []
-    for tlp in site_paths:
+    for tlp in (site_paths if link_lib else []):
         venv_symlinks.append(VenvSymlinkEntry(
             kind = VenvSymlinkKind.LIB,
             link_to_path = paths.join(imp, tlp),
@@ -143,7 +156,7 @@ def _build_venv_symlinks(
         ))
 
     # Also add .dist-info directory symlink so metadata is accessible.
-    if dist_info_dir:
+    if link_lib and dist_info_dir:
         venv_symlinks.append(VenvSymlinkEntry(
             kind = VenvSymlinkKind.LIB,
             link_to_path = paths.join(imp, dist_info_dir),
@@ -196,6 +209,7 @@ def _build_venv_symlinks(
 def _pycross_wheel_library_impl(ctx):
     out = ctx.actions.declare_directory(ctx.attr.name)
     entry_points = ctx.actions.declare_file(ctx.attr.name + ".dist_info/entry_points.txt")
+    index = ctx.actions.declare_file(ctx.attr.name + ".dist_info/index.json")
     dist_info_dir = None
     if ctx.attr.package_name and ctx.attr.package_version:
         dist_info_dir = "{}-{}.dist-info".format(
@@ -203,7 +217,7 @@ def _pycross_wheel_library_impl(ctx):
             ctx.attr.package_version,
         )
 
-    _register_wheel_install_action(ctx, out, entry_points, dist_info_dir)
+    _register_wheel_install_action(ctx, out, entry_points, index, dist_info_dir)
 
     # TODO: Is there a more correct way to get this runfiles-relative import path?
     imp = paths.join(
@@ -230,12 +244,15 @@ def _pycross_wheel_library_impl(ctx):
         include_paths = ctx.attr.wheel[PycrossPackageInfo].include_paths
 
     venvs_site_packages_enabled = VenvsSitePackages.is_enabled(ctx)
+    use_import_index = venv_import_index_enabled(ctx)
+    link_lib = venvs_site_packages_enabled and bool(site_paths) and not use_import_index
 
     # Build venv symlink entries for rules_python's venvs_site_packages support.
     # Each top-level package gets a symlink from the venv's site-packages/<tlp>
     # to the runfiles location <repo>/<pkg>/<name>/site-packages/<tlp>.
     venv_symlinks = _build_venv_symlinks(
         venvs_site_packages_enabled,
+        use_import_index,
         out,
         imp,
         dist_info_dir,
@@ -249,11 +266,15 @@ def _pycross_wheel_library_impl(ctx):
 
     # With venvs_site_packages, the wheel is linked into the venv's site-packages, so (like rules_python)
     # don't also put its own site-packages dir on sys.path.
+    merged_deps = list(ctx.attr.deps)
+    if use_import_index:
+        merged_deps.append(ctx.attr._venv_import_index_runtime)
+
     merged = merge_py_providers(
         ctx,
-        ctx.attr.deps,
+        merged_deps,
         direct_sources = [out],
-        direct_imports = [] if (venvs_site_packages_enabled and site_paths) else [imp],
+        direct_imports = [] if link_lib else [imp],
         base_runfiles = ctx.runfiles(files = [out]),
         direct_venv_symlinks = venv_symlinks,
     )
@@ -266,9 +287,13 @@ def _pycross_wheel_library_impl(ctx):
         merged.py_info,
         PycrossExtractedWheelInfo(
             site_packages = out,
+            index = index,
         ),
         OutputGroupInfo(
             dist_info = depset([entry_points]),
+            # This wheel's own index (not its deps'), e.g. for
+            # `bazel build --output_groups=pycross_wheel_index <target>`.
+            pycross_wheel_index = depset([index]),
         ),
     ]
 
@@ -338,10 +363,13 @@ pycross_wheel_library = rule(
         "_precompile": attr.label(
             default = Label("@rules_python//python/config_settings:precompile"),
         ),
+        "_venv_import_index_runtime": attr.label(
+            default = Label("//pycross/private:venv_import_index_runtime"),
+        ),
         "experimental_venvs_site_packages": attr.label(
             default = Label("@rules_python//python/config_settings:venvs_site_packages"),
         ),
-    }, **PY_COMMON_ATTRS),
+    }, **(PY_COMMON_ATTRS | VENV_IMPORT_INDEX_ATTRS)),
     toolchains = [
         config_common.toolchain_type("//pycross:toolchain_type", mandatory = False),
     ],
