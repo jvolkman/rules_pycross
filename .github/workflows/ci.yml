@@ -82,7 +82,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        bazel: ["8.7.0", "9.1.0"]
+        bazel: ["8.7.0", "9.1.0", "10.0.0rc2"]
         workspace: ${{ fromJSON(needs.unit.outputs.e2e-workspaces) }}
     steps:
       - uses: actions/checkout@v6
