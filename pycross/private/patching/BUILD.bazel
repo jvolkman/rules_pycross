@@ -1,0 +1,19 @@
+load("@rules_pycross_internal//:python.bzl", "py_library")
+
+package(default_visibility = ["//pycross:__subpackages__"])
+
+exports_files(
+    ["pycross_patch.py"],
+    visibility = ["//pycross:__subpackages__"],
+)
+
+py_library(
+    name = "patching",
+    srcs = ["pycross_patch.py"],
+    imports = ["."],
+    visibility = [
+        "//pycross:__subpackages__",
+        "//tests:__subpackages__",
+    ],
+    deps = ["//pycross/private/third_party/rules_python_patch:unified_patch"],
+)

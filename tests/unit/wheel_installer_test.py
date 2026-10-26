@@ -279,6 +279,62 @@ class WheelInstallerNormalizedDistInfoTest(unittest.TestCase):
                 self.assertEqual(size_str, expected_size, f"Size mismatch for {rel_path}")
 
 
+class WheelInstallerPatchTest(unittest.TestCase):
+    """Test post_install_patches applied to the installed site-packages."""
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.tmp = Path(self._tmp.name)
+        self.lib_dir = self.tmp / "site-packages"
+        (self.lib_dir / "pkg").mkdir(parents=True)
+        (self.lib_dir / "pkg/__init__.py").write_bytes(b"import sys\nPATCHED = False\n")
+
+    def tearDown(self):
+        self._tmp.cleanup()
+
+    def _patch(self, name, data):
+        p = self.tmp / name
+        p.write_bytes(data)
+        return str(p)
+
+    def test_git_style_patches_apply_in_order(self):
+        from pycross.private.tools.wheel_installer import apply_patches
+
+        modify = self._patch(
+            "modify.patch",
+            b"diff --git a/pkg/__init__.py b/pkg/__init__.py\n"
+            b"--- a/pkg/__init__.py\n+++ b/pkg/__init__.py\n"
+            b"@@ -1,2 +1,2 @@\n import sys\n-PATCHED = False\n+PATCHED = True\n",
+        )
+        create = self._patch(
+            "create.patch",
+            b"--- /dev/null\n+++ b/pkg/extra.py\n@@ -0,0 +1 @@\n+EXTRA = 1\n",
+        )
+        apply_patches(self.lib_dir, [modify, create])
+        self.assertEqual((self.lib_dir / "pkg/__init__.py").read_bytes(), b"import sys\nPATCHED = True\n")
+        self.assertEqual((self.lib_dir / "pkg/extra.py").read_bytes(), b"EXTRA = 1\n")
+
+    def test_failures_exit_with_reason(self):
+        from pycross.private.tools.wheel_installer import apply_patches
+
+        stale = self._patch(
+            "stale.patch",
+            b"--- a/pkg/__init__.py\n+++ b/pkg/__init__.py\n@@ -2 +2 @@\n-PATCHED = maybe\n+PATCHED = True\n",
+        )
+        with self.assertRaises(SystemExit) as ctx:
+            apply_patches(self.lib_dir, [stale])
+        self.assertRegex(str(ctx.exception), r"^error: failed to apply patch file: .*stale\.patch: .*context mismatch")
+
+        create_existing = self._patch(
+            "create_existing.patch",
+            b"--- /dev/null\n+++ b/pkg/__init__.py\n@@ -0,0 +1 @@\n+X = 1\n",
+        )
+        with self.assertRaises(SystemExit) as ctx:
+            apply_patches(self.lib_dir, [create_existing])
+        self.assertIn("attempts to create existing file 'pkg/__init__.py'", str(ctx.exception))
+        self.assertEqual((self.lib_dir / "pkg/__init__.py").read_bytes(), b"import sys\nPATCHED = False\n")
+
+
 class WheelInstallerPrecompileTest(unittest.TestCase):
     """Test optional .pyc precompilation in wheel_installer."""
 

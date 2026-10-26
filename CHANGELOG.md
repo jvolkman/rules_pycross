@@ -2,6 +2,25 @@
 
 All notable changes to this project will be documented in this file.
 
+## [Unreleased]
+
+### Changed
+
+- **Stricter patch application.** `post_install_patches` and `pre_build_patches`
+  now go through rules_python's unified-diff engine instead of the vendored
+  `patch_ng`. Patches that applied cleanly before give the same result. Strip
+  level 0 still drops git-style `a/` / `b/` prefixes. Patches that `patch_ng`
+  silently got wrong now fail with a reason:
+  - context that doesn't match exactly (no fuzz), and hunks out of order;
+  - creating a file that already exists, or deleting only part of a file;
+  - paths that are absolute or escape the patch root;
+  - `GIT binary patch` sections, and git renames or copies (not supported);
+  - diff body lines beyond the hunk's line counts.
+
+  Hunks whose context moved are now found by searching outward from the stated
+  line, `-U0` insertions land after the anchor line, and
+  `\ No newline at end of file` is honored.
+
 ## [2.0.1]
 
 ### Fixed
