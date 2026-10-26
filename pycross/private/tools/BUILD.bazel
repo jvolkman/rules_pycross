@@ -25,7 +25,7 @@ py_library(
     srcs = ["inspect_package.py"],
     visibility = ["//visibility:public"],
     deps = [
-        "//pycross/private/third_party/patch_ng",
+        "//pycross/private/patching",
     ],
 )
 
@@ -42,7 +42,7 @@ py_binary(
     deps = [
         ":args",
         ":installer",
-        "//pycross/private/third_party/patch_ng",
+        "//pycross/private/patching",
     ],
 )
 

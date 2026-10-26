@@ -58,22 +58,24 @@ def exec_internal_tool(rctx, tool, args, *, flagfile_param = "--flagfile", flagf
         rctx.file(flagfile, flagfile_data)
         args = [flagfile_param, str(flagfile)]
 
-    patch_ng_file = Label("//pycross/private/third_party/patch_ng:patch_ng.py")
-    patch_ng_dir = rctx.path(patch_ng_file).dirname
+    # Repo-time tools may import the stdlib-only patch engine (inspect_package applies
+    # pre_build_patches).
+    patch_module = Label("//pycross/private/patching:pycross_patch.py")
+    patch_module_dir = rctx.path(patch_module).dirname
 
-    # rctx.path() doesn't record its file as an input, so changes to the tool (or to the vendored
-    # patch_ng module it may import) wouldn't re-run the calling repo rule, and the repo contents
-    # cache would keep serving stale results. Watch them explicitly.
+    # rctx.path() doesn't record its file as an input, so changes to the tool (or to the patch
+    # module it may import) wouldn't re-run the calling repo rule, and the repo contents cache
+    # would keep serving stale results. Watch them explicitly.
     if hasattr(rctx, "watch"):
         rctx.watch(tool)
-        rctx.watch(patch_ng_file)
+        rctx.watch(patch_module)
 
     wrapper_script = """
 import runpy
 import sys
 
 tool_path = {tool}
-sys.path.insert(0, {patch_ng_dir})
+sys.path.insert(0, {patch_module_dir})
 sys.argv = [tool_path] + sys.argv[1:]
 
 runpy.run_path(tool_path, run_name="__main__")
@@ -81,7 +83,7 @@ runpy.run_path(tool_path, run_name="__main__")
 
     wrapper_file = rctx.path("_internal_wrapper.py")
     rctx.file(wrapper_file, wrapper_script.format(
-        patch_ng_dir = repr(str(patch_ng_dir)),
+        patch_module_dir = repr(str(patch_module_dir)),
         tool = repr(str(rctx.path(tool))),
     ))
 

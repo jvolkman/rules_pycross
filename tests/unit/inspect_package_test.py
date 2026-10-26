@@ -133,16 +133,14 @@ class InspectPackageTest(unittest.TestCase):
         self.assertEqual(result["data_paths"], ["share"])
         self.assertEqual(result["site_paths"], ["mod.py"])
 
-    def test_vendored_patch_ng(self):
-        import patch_ng
+    def test_vendored_patch_engine(self):
+        from pycross_patch import apply_patch
 
         target_file = self.temp_path / "hello.txt"
         target_file.write_text("hello = 'old'\n")
         patch_file = self.temp_path / "fix.patch"
         patch_file.write_text("--- a/hello.txt\n+++ b/hello.txt\n@@ -1 +1 @@\n-hello = 'old'\n+hello = 'new'\n")
-        pset = patch_ng.fromfile(str(patch_file))
-        self.assertTrue(pset)
-        self.assertTrue(pset.apply(root=str(self.temp_path)))
+        self.assertEqual(apply_patch(self.temp_path, patch_file), {"hello.txt"})
         self.assertEqual(target_file.read_text(), "hello = 'new'\n")
 
     def _create_tarball_with_dirs(self, filename, files):
@@ -1011,6 +1009,7 @@ class InspectPackageTest(unittest.TestCase):
         with self.assertRaises(SystemExit) as ctx:
             inspect_sdist(sdist_path, pre_build_patches=[bad_apply_patch])
         self.assertIn("failed to apply patch file", str(ctx.exception))
+        self.assertIn("context mismatch", str(ctx.exception))
 
 
 if __name__ == "__main__":

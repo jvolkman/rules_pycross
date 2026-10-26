@@ -6,7 +6,6 @@ The wheels may be pre-built or built from sdist tarballs using pypa/build (via w
 from __future__ import annotations
 
 import fnmatch
-import logging
 import os
 import re
 import shutil
@@ -19,7 +18,6 @@ from typing import Iterator
 from typing import List
 from typing import Union
 
-import patch_ng
 from installer import install
 from installer.destinations import SchemeDictionaryDestination
 from installer.records import RecordEntry
@@ -28,6 +26,7 @@ from installer.sources import WheelFile
 from installer.utils import Scheme
 from installer.utils import parse_wheel_filename
 from pycross.private.tools.args import FlagFileArgumentParser
+from pycross_patch import apply_patch_or_exit
 
 _COMPILE_SCRIPT = """\
 import importlib.util
@@ -177,11 +176,7 @@ class FilteredWheelFile(WheelFile):
 
 def apply_patches(lib_dir: Path, patches: List[str]) -> None:
     for patch in patches:
-        patch_file = patch_ng.fromfile(patch)
-        if not patch_file:
-            raise SystemExit(f"error: failed to parse patch file: {patch}")
-        if not patch_file.apply(root=lib_dir):
-            raise SystemExit(f"error: failed to apply patch file: {patch}")
+        apply_patch_or_exit(lib_dir, patch)
 
 
 def _normalize_pep503(name: str) -> str:
@@ -396,5 +391,4 @@ def parse_flags(argv: list[str] | None = None) -> Any:
 
 
 if __name__ == "__main__":
-    logging.getLogger("patch_ng").setLevel(logging.WARNING)
     main(parse_flags())
