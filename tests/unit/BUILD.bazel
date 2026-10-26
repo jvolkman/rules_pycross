@@ -47,6 +47,17 @@ py_test(
 )
 
 py_test(
+    name = "pycross_patch_test",
+    srcs = ["pycross_patch_test.py"],
+    main = "pycross_patch_test.py",
+    tags = ["unit"],
+    deps = [
+        "//pycross/private/patching",
+        "//pycross/private/third_party/rules_python_patch:unified_patch",
+    ],
+)
+
+py_test(
     name = "wheel_installer_test",
     srcs = ["wheel_installer_test.py"],
     main = "wheel_installer_test.py",
