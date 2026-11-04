@@ -63,7 +63,13 @@ def find_sysconfig_data(search_paths: List[Path]) -> Dict[str, Any]:
     return {}
 
 
-def _query_interpreter(python_exe: Path, env: Optional[Dict[str, str]] = None) -> Optional[Dict[str, Any]]:
+def _query_interpreter(
+    python_exe: Path,
+    env: Optional[Dict[str, str]] = None,
+    *,
+    # Some toolchain interpreters exceeded the previous 5-second query timeout in CI.
+    timeout: int = 30,
+) -> Optional[Dict[str, Any]]:
     query_args = (
         python_exe,
         "-c",
@@ -85,7 +91,7 @@ def _query_interpreter(python_exe: Path, env: Optional[Dict[str, str]] = None) -
         ),
     )
     try:
-        out_json = subprocess.check_output(args=query_args, timeout=30, stderr=subprocess.DEVNULL, env=env)
+        out_json = subprocess.check_output(args=query_args, timeout=timeout, stderr=subprocess.DEVNULL, env=env)
         return json.loads(out_json)
     except Exception as e:
         print(
