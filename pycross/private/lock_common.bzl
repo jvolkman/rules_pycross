@@ -150,16 +150,16 @@ def resolve_member_project_file(lock_file_label, member_path):
     Returns:
         A Label pointing to the member's pyproject.toml.
     """
-    name = lock_file_label.name
-    lock_dir = name.rpartition("/")[0] if "/" in name else ""
-    rel = paths.normalize("/".join([p for p in [lock_dir, member_path, "pyproject.toml"] if p]))
-    if not rel.startswith("../"):
+    if paths.is_absolute(member_path):
+        fail("Workspace member path '{}' (relative to {}) must be relative".format(member_path, lock_file_label))
+    lock_dir = paths.dirname(lock_file_label.name)
+    rel = paths.normalize(paths.join(lock_dir, member_path, "pyproject.toml"))
+    if not paths.starts_with(rel, ".."):
         return lock_file_label.same_package_label(rel)
 
     # The member is outside the lock file's package: resolve from the repo root.
-    pkg = lock_file_label.package
-    repo_rel = paths.normalize("/".join([p for p in [pkg, rel] if p]))
-    if repo_rel.startswith("../"):
+    repo_rel = paths.normalize(paths.join(lock_file_label.package, rel))
+    if paths.starts_with(repo_rel, ".."):
         fail("Workspace member path '{}' (relative to {}) is outside the repository".format(member_path, lock_file_label))
     return lock_file_label.relative("//:" + repo_rel)
 
