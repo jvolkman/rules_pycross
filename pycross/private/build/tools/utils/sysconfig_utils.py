@@ -13,7 +13,7 @@ from pycross.private.build.tools.utils.context import BuildContext
 from pycross.private.build.tools.utils.venv_utils import find_site_dir
 
 
-def determine_target_path_from_exec(exec_python_exe: Path, target_python_exe: Path) -> List[Path]:
+def determine_target_path_from_exec(exec_python_exe: Path, target_python_exe: Path, env: Dict[str, str]) -> List[Path]:
     """Query target sys.path using host Python relative references."""
     query_args = (
         exec_python_exe,
@@ -21,7 +21,7 @@ def determine_target_path_from_exec(exec_python_exe: Path, target_python_exe: Pa
         "import json, sys; print(json.dumps(dict(exec=sys.executable, path=sys.path)))",
     )
     try:
-        out_json = subprocess.check_output(args=query_args, env={})
+        out_json = subprocess.check_output(args=query_args, env=env)
         query_result = json.loads(out_json)
     except subprocess.CalledProcessError as cpe:
         print("Failed to query exec_python for target path", file=sys.stderr)
@@ -63,7 +63,13 @@ def find_sysconfig_data(search_paths: List[Path]) -> Dict[str, Any]:
     return {}
 
 
-def _query_interpreter(python_exe: Path) -> Optional[Dict[str, Any]]:
+def _query_interpreter(
+    python_exe: Path,
+    env: Optional[Dict[str, str]] = None,
+    *,
+    # Some toolchain interpreters exceeded the previous 5-second query timeout in CI.
+    timeout: int = 30,
+) -> Optional[Dict[str, Any]]:
     query_args = (
         python_exe,
         "-c",
@@ -85,7 +91,7 @@ def _query_interpreter(python_exe: Path) -> Optional[Dict[str, Any]]:
         ),
     )
     try:
-        out_json = subprocess.check_output(args=query_args, timeout=5, stderr=subprocess.DEVNULL)
+        out_json = subprocess.check_output(args=query_args, timeout=timeout, stderr=subprocess.DEVNULL, env=env)
         return json.loads(out_json)
     except Exception as e:
         print(
@@ -99,12 +105,14 @@ def load_target_sysconfig(ctx: BuildContext) -> Dict[str, Any]:
     # Try to query the target python directly first (works for host and same-arch target toolchains).
     # Falls back to static _sysconfigdata for cross-compilation where the target
     # interpreter cannot be executed on the host.
-    result = _query_interpreter(ctx.target_python)
+    result = _query_interpreter(ctx.target_python, ctx.build_env)
     if result is not None:
         return result
 
     # Fallback for cross-compilation: load static _sysconfigdata
-    target_sys_path = determine_target_path_from_exec(ctx.exec_python, ctx.target_python)
+    query_env = ctx.build_env.copy()
+    query_env.pop("PYTHONPATH", None)
+    target_sys_path = determine_target_path_from_exec(ctx.exec_python, ctx.target_python, query_env)
     return find_sysconfig_data(target_sys_path)
 
 
