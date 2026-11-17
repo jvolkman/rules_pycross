@@ -44,10 +44,9 @@ bzl_library(
     name = "cc_toolchain_util",
     srcs = ["cc_toolchain_util.bzl"],
     deps = [
-        # keep
         "@bazel_skylib//lib:collections",
-        "@bazel_tools//tools/build_defs/cc:action_names.bzl",
-        "@bazel_tools//tools/cpp:toolchain_utils.bzl",
+        "@rules_cc//cc:action_names_bzl",
+        "@rules_cc//cc:find_cc_toolchain_bzl",
         "@rules_cc//cc/common",
     ],
 )

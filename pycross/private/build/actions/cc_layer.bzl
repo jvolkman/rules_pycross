@@ -1,7 +1,7 @@
 """Action logic for CC environment extraction."""
 
 load("@bazel_skylib//lib:shell.bzl", "shell")
-load("@bazel_tools//tools/cpp:toolchain_utils.bzl", "find_cpp_toolchain")
+load("@rules_cc//cc:find_cc_toolchain.bzl", "find_cpp_toolchain")
 load("@rules_cc//cc/common:cc_info.bzl", "CcInfo")
 load(
     "//pycross/private/build:cc_toolchain_util.bzl",
