@@ -1,5 +1,6 @@
 """Shared helpers for lock import/resolution extensions."""
 
+load("@bazel_skylib//lib:paths.bzl", "paths")
 load("@toml.bzl//toml:toml.bzl", "decode")
 
 def validate_transition_attrs(tag, tag_name):
@@ -133,21 +134,6 @@ def discover_poetry_all_members(_mctx, _lock_file_label):
 def discover_pylock_all_members(_mctx, _lock_file_label):
     return [struct(name = "root", path = "")]
 
-def _normalize_relpath(path):
-    """Collapse `.`/`..` segments in a `/`-separated relative path.
-
-    Leading `..` segments that would escape the root are kept.
-    """
-    parts = []
-    for seg in path.split("/"):
-        if seg in ("", "."):
-            continue
-        if seg == ".." and parts and parts[-1] != "..":
-            parts.pop()
-        else:
-            parts.append(seg)
-    return "/".join(parts)
-
 def resolve_member_project_file(lock_file_label, member_path):
     """Resolve a member's pyproject.toml label relative to the lock file's directory.
 
@@ -166,13 +152,13 @@ def resolve_member_project_file(lock_file_label, member_path):
     """
     name = lock_file_label.name
     lock_dir = name.rpartition("/")[0] if "/" in name else ""
-    rel = _normalize_relpath("/".join([p for p in [lock_dir, member_path, "pyproject.toml"] if p]))
+    rel = paths.normalize("/".join([p for p in [lock_dir, member_path, "pyproject.toml"] if p]))
     if not rel.startswith("../"):
         return lock_file_label.same_package_label(rel)
 
     # The member is outside the lock file's package: resolve from the repo root.
     pkg = lock_file_label.package
-    repo_rel = _normalize_relpath("/".join([p for p in [pkg, rel] if p]))
+    repo_rel = paths.normalize("/".join([p for p in [pkg, rel] if p]))
     if repo_rel.startswith("../"):
         fail("Workspace member path '{}' (relative to {}) is outside the repository".format(member_path, lock_file_label))
     return lock_file_label.relative("//:" + repo_rel)
