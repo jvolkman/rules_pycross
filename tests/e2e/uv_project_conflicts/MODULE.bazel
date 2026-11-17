@@ -81,4 +81,4 @@ uv.repo(
     ],
     workspace = "ws",
 )
-use_repo(uv, "all", "all_pinned_b", "everything", "repo_a", "repo_a_plain", "repo_b", "repo_c")
+use_repo(uv, "all", "all_pinned_b", "everything", "repo_a", "repo_a_plain", "repo_b", "repo_c", "ws__build")

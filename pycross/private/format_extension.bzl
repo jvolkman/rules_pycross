@@ -282,6 +282,11 @@ def _resolve_lock_inline(module_ctx, lock_info, lock_model, workspace_packages, 
         default_extra_build_tools_args = wildcard_pkg.extra_build_tools if wildcard_pkg else [],
         include_transitive = getattr(lock_model, "include_transitive", False),
         transitive_testonly = getattr(lock_model, "transitive_testonly", False),
+        # The workspace's build tools repo serves sdist builds from every repo, so
+        # its variant-only pins get an unconditional fallback. Repos named in
+        # `build_tools_repo` annotations are left alone: they're user repos that
+        # may also serve runtime targets, where an unselected variant must fail.
+        ungated_fallback = lock_info.repo_name == "{}__build".format(lock_info.workspace),
     )
 
     return {

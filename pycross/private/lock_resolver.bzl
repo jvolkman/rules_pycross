@@ -2,7 +2,7 @@
 
 load("@pypackaging.bzl", "pypackaging")
 load(":translator_common.bzl", "resolution_marker_constraint_name")
-load(":util.bzl", "parse_package_key")
+load(":util.bzl", "parse_package_key", "variant_item_qname")
 
 def _file_key(f):
     if not f.get("sha256"):
@@ -517,6 +517,41 @@ def _compute_reachable_keys(pins, packages_by_package_key):
 
     return reachable
 
+def _add_ungated_fallbacks(pins, lock_model_data):
+    """Add an unconditional ("") branch to pins whose branches are all conflict-variant gated.
+
+    The `<ws>__build` repo serves sdist builds from every repo of the workspace, so a tool
+    that the lock only pins under one variant (e.g. a direct dependency of one of two
+    conflicting projects) must still resolve when another variant, or none, is selected.
+    The fallback is the pin's single version, or its highest one.
+    """
+    variant_qnames = {}
+    for variant_set in lock_model_data.get("variants", []):
+        for item in variant_set["items"]:
+            variant_qnames[variant_item_qname(item)] = True
+    exprs = lock_model_data.get("resolution_marker_exprs", {})
+
+    def is_gated(constraint):
+        if constraint in variant_qnames:
+            return True
+        expr = exprs.get(constraint)
+        return type(expr) == "dict" or (type(expr) == "string" and "__variant_" in expr)
+
+    for pin_name, pin in pins.items():
+        if type(pin) != "dict" or not pin or [c for c in pin.keys() if not is_gated(c)]:
+            continue
+        keys = {key: True for key in pin.values()}.keys()
+        if len(keys) == 1:
+            fallback = keys[0]
+        else:
+            versioned = [(pypackaging.version.parse(parse_package_key(k).version).key, k) for k in keys]
+            fallback = sorted(versioned)[-1][1]
+
+        # Copy: the pin dict can be shared with the caller's lock model data.
+        new_pin = dict(pin)
+        new_pin[""] = fallback
+        pins[pin_name] = new_pin
+
 def resolve(
         lock_model_data,
         local_wheels = None,
@@ -525,7 +560,8 @@ def resolve(
         annotations_data = None,
         default_extra_build_tools_args = None,
         include_transitive = False,
-        transitive_testonly = False):
+        transitive_testonly = False,
+        ungated_fallback = False):
     """Resolves dependencies from lock model data.
 
     Args:
@@ -537,6 +573,9 @@ def resolve(
         default_extra_build_tools_args: Default extra build tools args.
         include_transitive: Whether to include transitive dependencies.
         transitive_testonly: Whether to perform reachability analysis to assign testonly status.
+        ungated_fallback: Give every pin that only has uv conflict-variant branches an
+            unconditional fallback (for the workspace's `<ws>__build` repo: sdist builds
+            need their tools whichever variant, if any, is selected).
 
     Returns:
         Dictionary of resolved packages.
@@ -729,6 +768,9 @@ def resolve(
                     pins[package_pin_name] = {"": base_key}
             if is_testonly and package_pin_name in pins:
                 testonly_pins_set[package_pin_name] = True
+
+    if ungated_fallback:
+        _add_ungated_fallbacks(pins, lock_model_data)
 
     testonly_pin_names = sorted(testonly_pins_set.keys())
 
