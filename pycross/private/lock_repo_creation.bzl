@@ -140,7 +140,8 @@ def _create_remote_file_repo(key, file, indexes):
         pypi_file(**pypi_file_attrs)
     return remote_file_label
 
-_TRUE_VALUES = ["true", "1", "yes"]
+# Same spellings as coerce_transition_values (util.bzl), which applies them in the transition.
+_TRUE_VALUES = ["True", "true", "1"]
 
 def _variants_flag_ref(label):
     """Return (repo name, flag) if label is a generated repo's `//_variants:<flag>`, else None."""
@@ -168,17 +169,21 @@ def _compute_variant_pins(member, flags, settings, resolved_locks):
     Returns:
         {conflict set suffix: qualified name}.
     """
-    entries = []
+
+    # Last value wins per label, as in the generated transition.
+    values = {}
     for f in flags:
         label, sep, value = f[2:].partition("=")
-        entries.append((label, value if sep else "True"))
-    entries.extend(sorted(settings.items()))
+        values[label] = value if sep else "True"
+    for label, value in settings.items():
+        values[label] = value
+    entries = sorted(values.items())
 
     # (repo, flag) -> [(set suffix, qname)], built lazily per referenced repo.
     index = {}
     selected = {}  # set suffix -> {qname: True}
     for label, value in entries:
-        if value.lower() not in _TRUE_VALUES:
+        if value not in _TRUE_VALUES:
             continue
         ref = _variants_flag_ref(label)
         if not ref or ref[0] not in resolved_locks:

@@ -9,7 +9,7 @@ The file structure is:
 - requirements.bzl         - Provides requirement(), all_requirements and all_testonly_requirements.
 - modules_mapping.json     - Import-to-package mapping for Gazelle.
 - <package>/BUILD.bazel    - Pin proxies pointing to @workspace//_lock targets.
-- _variants/BUILD.bazel    - Aliases for bool_flag and config_setting targets for variant selection.
+- _variants/BUILD.bazel    - This repo's variant bool_flags, is_<flag> config settings and no-variant errors.
 """
 
 load(":util.bzl", "is_platform_specific", "parse_package_key", "underscore_name", "variant_item_qname")
@@ -600,10 +600,9 @@ def _thin_package_repo_impl(rctx):
         if type(pins[pin_name]) == "string":
             pins[pin_name] = {"": pins[pin_name]}
 
-    # Build sets of all and default variant item qualified names, and fallback
-    # targets for conflict sets without a default variant.
-    # When a VariantItem has default=True, its target becomes //conditions:default
-    # in the select(), so builds without explicit flags use the default variant.
+    # This repo's variant flags and conflict sets. Every set gets an
+    # _unselected_<set> -> _no_variant_<set> fallback in selects; defaults come
+    # from this repo's transition (`_default_<set>`), not //conditions:default.
     variant_info = _collect_variants(lock.get("variants", []))
     no_variant_fallbacks = {}  # constraint -> conflict set suffix (sorted qnames joined by "_")
     for set_suffix, vset in variant_info.sets.items():
@@ -1013,9 +1012,6 @@ pycross_transitioning_file_proxy = rule(
                 result.actual_build,
             )
 
-    # _variants/ BUILD: alias bool_flag and config_setting targets
-    # from the workspace repo so users can reference @<thin_repo>//_variants:<name>
-    # in platform(flags=[...]) and transitions without needing the workspace repo directly.
     # _variants/ BUILD: this repo's variant flags (see _variants_build).
     variants_build = _variants_build(variant_info, workspace_repo, getattr(rctx, "original_name", "") or "<repo>")
     if variants_build:

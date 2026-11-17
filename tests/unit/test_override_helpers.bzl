@@ -463,6 +463,9 @@ def _test_compute_variant_pins_impl(env, target):
     # Canonical label from `settings`, and a sibling repo's per-project flag.
     env.expect.that_dict(compute_variant_pins_for_testing("x", [], {"@@rules_pycross++uv+lock_all//_variants:group_app-b_test": "True"}, locks)).contains_exactly({set_suffix: "group_app-b_test"})
 
+    # The last value for a flag wins, as in the transition.
+    env.expect.that_dict(compute_variant_pins_for_testing("x", ["--@lock_all//_variants:group_app-a_test", "--@lock_all//_variants:group_app-a_test=False"], {}, locks)).contains_exactly({})
+
     # `=False` and unrelated flags select nothing.
     env.expect.that_dict(compute_variant_pins_for_testing("x", ["--@lock_all//_variants:group_test=False", "--compilation_mode=opt", "--//:foo"], {}, locks)).contains_exactly({})
 
