@@ -319,22 +319,18 @@ def translate_uv(project_dict, lock_dict, lock_model):
         if p not in workspace_members:
             fail("Project '{}' not found in uv.lock workspace members.".format(p))
 
-    # User-facing `_variants` names for this repo. Items declared by this repo's
-    # projects use the short `<kind>_<name>` (e.g. `extra_cpu`), unless two of
-    # them share it (e.g. a repo covering two members that each declare a
-    # `test` group); everything else keeps the package-qualified name.
+    # User-facing `_variants` flags for this repo: items declared by this repo's
+    # projects get `<kind>_<name>` (e.g. `group_test`). One flag covers that
+    # extra/group in every project of the repo, like `uv --group test` across
+    # selected packages. Other projects' items get no flag in this repo.
     target_projects_set = {p: True for p in target_projects}
-    owned_short_names = {}
     for item in variant_items_by_key.values():
-        if item["kind"] != "project" and item["package"] in target_projects_set:
-            short = "{}_{}".format(item["kind"], item["name"])
-            owned_short_names[short] = owned_short_names.get(short, 0) + 1
-    for item in variant_items_by_key.values():
-        short = "{}_{}".format(item["kind"], item.get("name", ""))
-        if owned_short_names.get(short, 0) == 1 and item["package"] in target_projects_set:
-            item["alias"] = short
+        if item["package"] not in target_projects_set:
+            continue
+        if item["kind"] == "project":
+            item["flag"] = "package_{}".format(item["package"])
         else:
-            item["alias"] = variant_item_qname(item)
+            item["flag"] = "{}_{}".format(item["kind"], item["name"])
 
     # Pre-scan: detect resolution-marker forks.
     # A fork exists when the same package name has multiple versions with

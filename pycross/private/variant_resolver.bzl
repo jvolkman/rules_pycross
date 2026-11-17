@@ -1,7 +1,7 @@
 """Variant resolver rule for conflict set mutual exclusion enforcement.
 
-Each variant resolver reads a set of bool_flags that represent the items in
-a single conflict set. It validates that at most one flag is set, and returns
+Each variant resolver reads the bool_flags that enable the items in a single
+conflict set (a flag may enable more than one item). It validates that at most one flag is set, and returns
 a config_common.FeatureFlagInfo whose value is the qualified name of the
 active variant. This lets config_setting targets reference the resolver
 rather than individual bool_flags, providing:
@@ -17,14 +17,20 @@ load(":deferred_failure.bzl", "register_failure_action")
 
 def _variant_resolver_impl(ctx):
     active = []
-    for i, flag in enumerate(ctx.attr.flags):
-        if flag[BuildSettingInfo].value:
-            active.append(ctx.attr.names[i])
+    active_flags = []
+    for flag, names in ctx.attr.flags.items():
+        if not flag[BuildSettingInfo].value:
+            continue
+        active_flags.append(str(flag.label))
+        for name in names.split(" "):
+            if name not in active:
+                active.append(name)
 
     if len(active) > 1:
         fail(
-            "Conflicting variants are active simultaneously: {}. ".format(
-                " and ".join(["--" + name for name in active]),
+            "Conflicting variants are active simultaneously: {} (enabling {}). ".format(
+                " and ".join(["--" + f for f in active_flags]),
+                " and ".join(active),
             ) + "Only one variant from each conflict set may be enabled at a time.",
         )
 
@@ -41,12 +47,10 @@ variant_resolver = rule(
     implementation = _variant_resolver_impl,
     provides = [config_common.FeatureFlagInfo],
     attrs = {
-        "flags": attr.label_list(
+        "flags": attr.label_keyed_string_dict(
             providers = [BuildSettingInfo],
-            doc = "The bool_flag targets for each item in the conflict set.",
-        ),
-        "names": attr.string_list(
-            doc = "The qualified name for each flag, in the same order as flags.",
+            doc = "Maps each bool_flag to the space-separated qualified names of the items it enables. " +
+                  "A flag can enable several items (e.g. a repo-level `group_test` covering two projects).",
         ),
         "default": attr.string(
             default = "",

@@ -34,8 +34,7 @@ def _test_single_flag_active(name):
     flag_refs = _setup_flags(name, ["alpha", "beta"])
     variant_resolver(
         name = name + "_resolver",
-        flags = flag_refs,
-        names = ["alpha", "beta"],
+        flags = dict(zip(flag_refs, ["alpha", "beta"])),
         tags = ["manual"],
     )
     analysis_test(
@@ -57,8 +56,7 @@ def _test_default_when_no_flag(name):
     flag_refs = _setup_flags(name, ["cpu", "gpu"])
     variant_resolver(
         name = name + "_resolver",
-        flags = flag_refs,
-        names = ["cpu", "gpu"],
+        flags = dict(zip(flag_refs, ["cpu", "gpu"])),
         default = "cpu",
         tags = ["manual"],
     )
@@ -78,8 +76,7 @@ def _test_no_flags_no_default(name):
     flag_refs = _setup_flags(name, ["a", "b"])
     variant_resolver(
         name = name + "_resolver",
-        flags = flag_refs,
-        names = ["a", "b"],
+        flags = dict(zip(flag_refs, ["a", "b"])),
         # No default
         tags = ["manual"],
     )
@@ -100,8 +97,7 @@ def _test_mutual_exclusion_fails(name):
     flag_refs = _setup_flags(name, ["x", "y"])
     variant_resolver(
         name = name + "_resolver",
-        flags = flag_refs,
-        names = ["x", "y"],
+        flags = dict(zip(flag_refs, ["x", "y"])),
         default = "x",
         tags = ["manual"],
     )
@@ -116,6 +112,60 @@ def _test_mutual_exclusion_fails(name):
         },
     )
 
+# ── Test: one flag enabling two items of the same set ───────────────
+
+def _test_shared_flag_conflict_fails_impl(env, target):
+    env.expect.that_target(target).failures().contains_predicate(
+        matching.contains("(enabling group_app-a_test and group_app-b_test)"),
+    )
+
+def _test_shared_flag_conflict_fails(name):
+    """A repo-level `group_test` covering two projects whose `test` groups conflict."""
+    flag_refs = _setup_flags(name, ["group_test", "group_test_a"])
+    variant_resolver(
+        name = name + "_resolver",
+        flags = {
+            flag_refs[0]: "group_app-a_test group_app-b_test",
+            flag_refs[1]: "group_app-a_test",
+        },
+        tags = ["manual"],
+    )
+    analysis_test(
+        name = name,
+        target = name + "_resolver",
+        impl = _test_shared_flag_conflict_fails_impl,
+        expect_failure = True,
+        config_settings = {
+            str(Label(":" + name + "_flag_group_test")): True,
+        },
+    )
+
+# ── Test: two flags enabling the same item ───────────────────────────
+
+def _test_flags_sharing_item_impl(env, target):
+    # Both flags enable only group_app-a_test, so there is no conflict.
+    env.expect.that_target(target).default_outputs().contains_at_least([])
+
+def _test_flags_sharing_item(name):
+    flag_refs = _setup_flags(name, ["group_test", "group_test_a"])
+    variant_resolver(
+        name = name + "_resolver",
+        flags = {
+            flag_refs[0]: "group_app-a_test",
+            flag_refs[1]: "group_app-a_test",
+        },
+        tags = ["manual"],
+    )
+    analysis_test(
+        name = name,
+        target = name + "_resolver",
+        impl = _test_flags_sharing_item_impl,
+        config_settings = {
+            str(Label(":" + name + "_flag_group_test")): True,
+            str(Label(":" + name + "_flag_group_test_a")): True,
+        },
+    )
+
 # ── Test: mixed extra+group conflict set ─────────────────────────────
 
 def _test_mixed_extra_group_impl(env, target):
@@ -125,8 +175,7 @@ def _test_mixed_extra_group(name):
     flag_refs = _setup_flags(name, ["extra_variant-a", "group_variant-b"])
     variant_resolver(
         name = name + "_resolver",
-        flags = flag_refs,
-        names = ["extra_variant-a", "group_variant-b"],
+        flags = dict(zip(flag_refs, ["extra_variant-a", "group_variant-b"])),
         tags = ["manual"],
     )
     analysis_test(
@@ -147,8 +196,7 @@ def _test_three_way_conflict(name):
     flag_refs = _setup_flags(name, ["cpu", "cu118", "cu124"])
     variant_resolver(
         name = name + "_resolver",
-        flags = flag_refs,
-        names = ["cpu", "cu118", "cu124"],
+        flags = dict(zip(flag_refs, ["cpu", "cu118", "cu124"])),
         default = "cpu",
         tags = ["manual"],
     )
@@ -172,8 +220,7 @@ def _test_three_way_exclusion_fails(name):
     flag_refs = _setup_flags(name, ["cpu", "cu118", "cu124"])
     variant_resolver(
         name = name + "_resolver",
-        flags = flag_refs,
-        names = ["cpu", "cu118", "cu124"],
+        flags = dict(zip(flag_refs, ["cpu", "cu118", "cu124"])),
         default = "cpu",
         tags = ["manual"],
     )
@@ -200,8 +247,7 @@ def _test_config_setting_matches_resolver(name):
     flag_refs = _setup_flags(name, ["opt_a", "opt_b"])
     variant_resolver(
         name = name + "_resolver",
-        flags = flag_refs,
-        names = ["opt_a", "opt_b"],
+        flags = dict(zip(flag_refs, ["opt_a", "opt_b"])),
         default = "opt_a",
         tags = ["manual"],
     )
@@ -240,8 +286,7 @@ def _test_config_setting_explicit_flag(name):
     flag_refs = _setup_flags(name, ["opt_a", "opt_b"])
     variant_resolver(
         name = name + "_resolver",
-        flags = flag_refs,
-        names = ["opt_a", "opt_b"],
+        flags = dict(zip(flag_refs, ["opt_a", "opt_b"])),
         default = "opt_a",
         tags = ["manual"],
     )
@@ -287,8 +332,7 @@ def _test_multi_set_overlap(name):
     # Resolver for set 1: [extra_variant-a, group_group-a]
     variant_resolver(
         name = name + "_resolver_set1",
-        flags = [flag_refs[0], flag_refs[1]],
-        names = ["extra_variant-a", "group_group-a"],
+        flags = {flag_refs[0]: "extra_variant-a", flag_refs[1]: "group_group-a"},
         default = "group_group-a",
         tags = ["manual"],
     )
@@ -296,8 +340,7 @@ def _test_multi_set_overlap(name):
     # Resolver for set 2: [group_group-a, group_group-b]
     variant_resolver(
         name = name + "_resolver_set2",
-        flags = [flag_refs[1], flag_refs[2]],
-        names = ["group_group-a", "group_group-b"],
+        flags = {flag_refs[1]: "group_group-a", flag_refs[2]: "group_group-b"},
         default = "group_group-a",
         tags = ["manual"],
     )
@@ -367,8 +410,7 @@ def _test_multi_set_cross_exclusion_fails(name):
 
     variant_resolver(
         name = name + "_resolver",
-        flags = flag_refs,
-        names = ["extra_variant-a", "group_group-a"],
+        flags = dict(zip(flag_refs, ["extra_variant-a", "group_group-a"])),
         tags = ["manual"],
     )
     analysis_test(
@@ -392,8 +434,7 @@ def _test_variants_with_evaluator(name):
     flag_refs = _setup_flags(name, ["group_cpu", "group_cuda"])
     variant_resolver(
         name = name + "_resolver",
-        flags = flag_refs,
-        names = ["group_cpu", "group_cuda"],
+        flags = dict(zip(flag_refs, ["group_cpu", "group_cuda"])),
         default = "group_cpu",
         tags = ["manual"],
     )
@@ -435,6 +476,8 @@ def variant_resolver_test_suite(name):
             _test_default_when_no_flag,
             _test_no_flags_no_default,
             _test_mutual_exclusion_fails,
+            _test_shared_flag_conflict_fails,
+            _test_flags_sharing_item,
             _test_mixed_extra_group,
             _test_three_way_conflict,
             _test_three_way_exclusion_fails,

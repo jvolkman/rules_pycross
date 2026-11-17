@@ -153,19 +153,15 @@ def is_platform_specific(pkg):
     return bool(pkg.get("wheel_candidates")) and not has_build_fallback(pkg)
 
 def variant_item_qname(item):
-    """Return the internal flag name for a variant item.
+    """Return the internal name for a variant item.
 
     Names are package-qualified (e.g. `extra_my-app_cpu`, `package_my-app`) so they're unique
-    across a workspace lock. Users don't see these: each generated repo exposes its own
-    `_variants` aliases (see `variant_item_alias`).
+    across a workspace lock. Users don't see these: each generated repo has its own
+    `_variants` flags (the item's `flag`, e.g. `extra_cpu`).
     """
     if item["kind"] == "project":
         return "package_{}".format(item["package"])
     return "{}_{}_{}".format(item["kind"], item["package"], item["name"])
-
-def variant_item_alias(item):
-    """Return the user-facing `_variants` name for a variant item in a generated repo."""
-    return item.get("alias") or variant_item_qname(item)
 
 def coerce_transition_values(current, values):
     """Coerce raw repo transition values to the type of a setting's current value.

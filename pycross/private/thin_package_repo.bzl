@@ -12,7 +12,7 @@ The file structure is:
 - _variants/BUILD.bazel    - Aliases for bool_flag and config_setting targets for variant selection.
 """
 
-load(":util.bzl", "is_platform_specific", "parse_package_key", "underscore_name", "variant_item_alias", "variant_item_qname")
+load(":util.bzl", "is_platform_specific", "parse_package_key", "underscore_name", "variant_item_qname")
 
 _requirement_func = """\
 load("@pypackaging.bzl", "pypackaging")
@@ -479,23 +479,30 @@ def _thin_package_repo_impl(rctx):
     # targets for conflict sets without a default variant.
     # When a VariantItem has default=True, its target becomes //conditions:default
     # in the select(), so builds without explicit flags use the default variant.
-    variant_items = {}  # qualified_name -> user-facing _variants alias
+    variant_flags = {}  # this repo's _variants flag -> [qualified names it enables]
     default_variants = {}  # qualified_name -> True
     no_variant_fallbacks = {}  # constraint -> conflict set suffix (sorted qnames joined by "_")
-    no_variant_sets = {}  # conflict set suffix -> [user-facing aliases]
+    no_variant_sets = {}  # conflict set suffix -> [this repo's flags for the set]
     for variant_set in lock.get("variants", []):
         set_qnames = []
+        set_flags = []
         has_default = False
         for item in variant_set["items"]:
             qname = variant_item_qname(item)
-            variant_items[qname] = variant_item_alias(item)
             set_qnames.append(qname)
+            flag = item.get("flag")
+            if flag:
+                qnames = variant_flags.setdefault(flag, [])
+                if qname not in qnames:
+                    qnames.append(qname)
+                if flag not in set_flags:
+                    set_flags.append(flag)
             if item.get("default", False):
                 default_variants[qname] = True
                 has_default = True
         if not has_default and set_qnames:
             set_suffix = "_".join(sorted(set_qnames))
-            no_variant_sets[set_suffix] = [variant_items[q] for q in set_qnames]
+            no_variant_sets[set_suffix] = set_flags
             for qname in set_qnames:
                 no_variant_fallbacks[qname] = set_suffix
     for cname, expr in lock.get("resolution_marker_exprs", {}).items():
@@ -882,47 +889,60 @@ pycross_transitioning_file_proxy = rule(
     # _variants/ BUILD: alias bool_flag and config_setting targets
     # from the workspace repo so users can reference @<thin_repo>//_variants:<name>
     # in platform(flags=[...]) and transitions without needing the workspace repo directly.
-    # The workspace repo's flags are package-qualified (e.g. `extra_my-app_cpu`); the
-    # aliases use this repo's names (`extra_cpu` for its own projects' items).
-    if variant_items:
+    # _variants/ BUILD: this repo's variant flags. The workspace repo's variant
+    # resolvers read them (see package_repo.bzl), so one flag here can enable the
+    # same extra/group in several projects. `is_<flag>` matches when any of them
+    # is the active variant.
+    if variant_flags or no_variant_sets:
         variant_lines = [
             'package(default_visibility = ["//visibility:public"])',
             "",
+            'load("@bazel_skylib//lib:selects.bzl", "selects")',
+            'load("@bazel_skylib//rules:common_settings.bzl", "bool_flag")',
+            'load("@rules_pycross//pycross/private:variant_resolver.bzl", "pycross_no_variant_selected")',
+            "",
         ]
-        if no_variant_sets:
+        for flag, qnames in sorted(variant_flags.items()):
             variant_lines.extend([
-                'load("@rules_pycross//pycross/private:variant_resolver.bzl", "pycross_no_variant_selected")',
-                "",
-            ])
-        for qname, alias in sorted(variant_items.items(), key = lambda kv: kv[1]):
-            # Alias the bool_flag itself (for --@repo//_variants:extra_cpu)
-            variant_lines.extend([
-                "alias(",
-                '    name = "{}",'.format(alias),
-                '    actual = "@{}//_lock:{}",'.format(workspace_repo, qname),
+                "bool_flag(",
+                '    name = "{}",'.format(flag),
+                "    build_setting_default = False,",
                 ")",
                 "",
             ])
-
-            # Alias the config_setting (for select() references)
-            variant_lines.extend([
-                "alias(",
-                '    name = "is_{}",'.format(alias),
-                '    actual = "@{}//_lock:is_{}",'.format(workspace_repo, qname),
-                ")",
-                "",
-            ])
+            if len(qnames) == 1:
+                variant_lines.extend([
+                    "alias(",
+                    '    name = "is_{}",'.format(flag),
+                    '    actual = "@{}//_lock:is_{}",'.format(workspace_repo, qnames[0]),
+                    ")",
+                    "",
+                ])
+            else:
+                variant_lines.append("selects.config_setting_group(")
+                variant_lines.append('    name = "is_{}",'.format(flag))
+                variant_lines.append("    match_any = [")
+                for qname in qnames:
+                    variant_lines.append('        "@{}//_lock:is_{}",'.format(workspace_repo, qname))
+                variant_lines.extend(["    ],", ")", ""])
 
         repo_name = getattr(rctx, "original_name", "") or "<repo>"
-        for set_suffix, aliases in sorted(no_variant_sets.items()):
+        for set_suffix, set_flags in sorted(no_variant_sets.items()):
+            if set_flags:
+                message = "No uv conflict variant selected. Set one of the _variants flags on your pycross repo: {} (e.g. --@{}//_variants:{}=True)".format(
+                    ", ".join(set_flags),
+                    repo_name,
+                    set_flags[0],
+                )
+            else:
+                message = "No uv conflict variant selected, and @{} has no _variants flag for it ({}). Select it through a repo for the declaring project.".format(
+                    repo_name,
+                    set_suffix,
+                )
             variant_lines.extend([
                 "pycross_no_variant_selected(",
                 '    name = "_no_variant_{}",'.format(set_suffix),
-                '    message = "No uv conflict variant selected. Set one of the _variants flags on your pycross repo: {} (e.g. --@{}//_variants:{}=True)",'.format(
-                    ", ".join(aliases),
-                    repo_name,
-                    aliases[0],
-                ),
+                "    message = {},".format(json.encode(message)),
                 ")",
                 "",
             ])

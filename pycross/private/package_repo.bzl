@@ -115,8 +115,8 @@ def _package_repo_impl(rctx):
     cycle_groups = {}  # group_name -> [pkg_key, ...]
     resolution_marker_exprs = {}  # constraint_name -> marker_expr or compound dict
     variant_items = {}  # qualified_name -> True (dedup across members)
-    variant_sets = []  # list of {"qnames": [...], "default": "..."}
-    variant_sets_seen = {}  # frozenset key -> True (dedup across members)
+    variant_sets = []  # list of {"qnames": [...], "default": "...", "flags": {flag label: [qnames]}}
+    variant_sets_seen = {}  # sorted qnames key -> variant set (dedup across members)
     for member in rctx.attr.member_lock_files.keys():
         if member in rctx.attr.member_lock_data:
             member_lock = json.decode(rctx.attr.member_lock_data[member])
@@ -127,16 +127,20 @@ def _package_repo_impl(rctx):
         for variant_set in member_lock.get("variants", []):
             set_qnames = []
             set_default = ""
+            set_flags = {}  # "@<member>//_variants:<flag>" -> [qnames]
             for item in variant_set["items"]:
                 qname = variant_item_qname(item)
                 variant_items[qname] = True
                 set_qnames.append(qname)
                 if item.get("default", False):
                     set_default = qname
+                if item.get("flag"):
+                    set_flags.setdefault("@{}//_variants:{}".format(member, item["flag"]), []).append(qname)
             set_key = "|".join(sorted(set_qnames))
             if set_key not in variant_sets_seen:
-                variant_sets_seen[set_key] = True
-                variant_sets.append({"qnames": set_qnames, "default": set_default})
+                variant_sets_seen[set_key] = {"qnames": set_qnames, "default": set_default, "flags": {}}
+                variant_sets.append(variant_sets_seen[set_key])
+            variant_sets_seen[set_key]["flags"].update(set_flags)
 
         member_packages[member] = member_lock.get("packages", {})
 
@@ -208,7 +212,6 @@ def _package_repo_impl(rctx):
         "",
     ]
     if variant_items:
-        lock_build_lines.append('load("@bazel_skylib//rules:common_settings.bzl", "bool_flag")')
         lock_build_lines.append('load("@rules_pycross//pycross/private:variant_resolver.bzl", "variant_resolver")')
         lock_build_lines.append("")
 
@@ -229,36 +232,22 @@ def _package_repo_impl(rctx):
         "",
     ])
 
-    # Emit bool_flags. Their names are package-qualified; thin repos alias them
-    # under user-facing names in @<repo>//_variants.
-    for qname in sorted(variant_items.keys()):
-        lock_build_lines.extend([
-            "bool_flag(",
-            '    name = "{}",'.format(qname),
-            "    build_setting_default = False,",
-            ")",
-            "",
-        ])
-
     # Emit variant_resolver targets (one per conflict set).
     for vset in variant_sets:
         set_suffix = "_".join(sorted(vset["qnames"]))
         resolver_name = "_resolver_" + set_suffix
+
+        # The flags live in the thin repos' _variants packages. One flag can
+        # enable several items (e.g. `group_test` in a repo with two projects).
         lock_build_lines.extend([
             "variant_resolver(",
             '    name = "{}",'.format(resolver_name),
-            "    flags = [",
+            "    flags = {",
         ])
-        for qname in vset["qnames"]:
-            lock_build_lines.append('        ":{}",'.format(qname))
+        for flag_label, qnames in sorted(vset["flags"].items()):
+            lock_build_lines.append('        "{}": "{}",'.format(flag_label, " ".join(qnames)))
         lock_build_lines.extend([
-            "    ],",
-            "    names = [",
-        ])
-        for qname in vset["qnames"]:
-            lock_build_lines.append('        "{}",'.format(qname))
-        lock_build_lines.extend([
-            "    ],",
+            "    },",
         ])
         if vset["default"]:
             lock_build_lines.append('    default = "{}",'.format(vset["default"]))

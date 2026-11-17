@@ -670,7 +670,7 @@ conflicts = [
 
 When `rules_pycross` processes a lock file with conflicts, it generates:
 
-1. **`bool_flag` targets** under `@<repo>//_variants:` — one per conflict member (e.g., `extra_cpu`, `extra_cu124`).
+1. **`bool_flag` targets** under `@<repo>//_variants:` — one per conflicting extra or group of the repo's projects (e.g., `extra_cpu`, `extra_cu124`).
 2. **`config_setting` targets** — `@<repo>//_variants:is_extra_cpu`, `@<repo>//_variants:is_extra_cu124`.
 3. **`select()` expressions** on the package aliases — so `@<repo>//torch` resolves to the correct version based on which flag is set.
 
@@ -725,7 +725,7 @@ conflicts = [
 ]
 ```
 
-The generated flags follow the pattern `group_<name>` (e.g., `--@pypi//_variants:group_test-fast=True`). Flag names are scoped to each repo's projects: in a workspace where each member declares its own conflicting `test` group, a repo for `app-a` (`projects = ["app-a"]`) exposes app-a's group as `group_test`. Items from other projects, or same-named items from several projects in one repo (e.g. `projects = ["*"]`), include the project name: `group_<project>_<name>` (e.g., `--@pypi//_variants:group_app-a_test=True`). The same applies to extras.
+The generated flags follow the pattern `group_<name>` (e.g., `--@pypi//_variants:group_test-fast=True`). Each repo has flags for its own projects' conflict items. In a workspace where members each declare their own conflicting `test` group, a repo for `app-a` (`projects = ["app-a"]`) has a `group_test` flag for app-a's group. In a repo with several projects (e.g. `projects = ["*"]`), `group_test` enables the `test` group of every project in the repo that declares one, like `uv sync --all-packages --group test`. If those groups conflict with each other, that fails just as it does in uv; select them through per-project repos instead. The same applies to extras.
 
 ### Platform Transitions
 
