@@ -20,6 +20,18 @@ All notable changes to this project will be documented in this file.
 - **`pyproject.toml` lookup for workspace members** is relative to the lock
   file's directory, so member directories no longer need to be Bazel packages.
 
+### Added
+
+- **Git patch headers** in `post_install_patches` and `pre_build_patches`: empty
+  new or deleted files, mode changes, renames and copies.
+
+### Changed
+
+- **Stricter patching.** Patches are applied by a new strict engine instead of
+  `patch_ng`. Patches that `patch_ng` silently got wrong (fuzzy context, partial
+  deletes, unsafe paths, binary sections) now fail with a reason, and a failed
+  patch leaves files untouched.
+
 ## [2.0.1]
 
 ### Fixed

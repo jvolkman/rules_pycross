@@ -48,6 +48,23 @@ py_test(
 )
 
 py_test(
+    name = "pycross_patch_test",
+    srcs = ["pycross_patch_test.py"],
+    main = "pycross_patch_test.py",
+    tags = ["unit"],
+    deps = ["//pycross/private/patching"],
+)
+
+py_test(
+    name = "patch_conformance_test",
+    srcs = ["patch_conformance_test.py"],
+    data = glob(["testdata/patch_conformance/**"]),
+    main = "patch_conformance_test.py",
+    tags = ["unit"],
+    deps = ["//pycross/private/patching"],
+)
+
+py_test(
     name = "wheel_installer_test",
     srcs = ["wheel_installer_test.py"],
     main = "wheel_installer_test.py",

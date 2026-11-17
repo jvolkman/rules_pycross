@@ -48,16 +48,12 @@ def _apply_pre_build_patches(ctx: BuildContext) -> None:
     patches = ctx.bazel_config.get("pre_build_patches", [])
     if not patches:
         return
-    import patch_ng
+    from pycross_patch import apply_patch_or_exit
 
     for patch_path in patches:
         abs_path = ctx.prefix / patch_path
         print(f"Applying pre-build patch: {abs_path}", file=sys.stderr)
-        patch_file = patch_ng.fromfile(str(abs_path))
-        if not patch_file:
-            raise SystemExit(f"error: failed to parse patch file: {abs_path}")
-        if not patch_file.apply(root=ctx.sdist_dir):
-            raise SystemExit(f"error: failed to apply patch file: {abs_path}")
+        apply_patch_or_exit(ctx.sdist_dir, abs_path)
 
 
 def run_standard_build_lifecycle(config_path: str, strategy: BackendStrategy) -> None:

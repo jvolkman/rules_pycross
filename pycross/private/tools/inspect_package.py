@@ -505,7 +505,7 @@ def _inspect_patched_sdist(
     pre_build_patches: list[Path],
 ) -> tuple[str, list[str]]:
     """Extract an sdist, apply pre_build_patches, and return (pyproject_content, site_paths)."""
-    import patch_ng
+    from pycross_patch import apply_patch_or_exit
 
     resolved_patches = [(patch_path, Path(patch_path).resolve()) for patch_path in pre_build_patches]
     with tempfile.TemporaryDirectory() as tmp_dir:
@@ -529,11 +529,7 @@ def _inspect_patched_sdist(
         sdist_dir = sdist_root_dir / source_dir.strip("/") if source_dir else sdist_root_dir
 
         for orig_patch_path, abs_patch_path in resolved_patches:
-            patch_file = patch_ng.fromfile(str(abs_patch_path))
-            if not patch_file:
-                raise SystemExit(f"error: failed to parse patch file: {orig_patch_path}")
-            if not patch_file.apply(root=str(sdist_dir)):
-                raise SystemExit(f"error: failed to apply patch file: {orig_patch_path}")
+            apply_patch_or_exit(sdist_dir, abs_patch_path, display_name=str(orig_patch_path))
 
         pyproject_path = sdist_dir / "pyproject.toml"
         content = pyproject_path.read_text(encoding="utf-8") if pyproject_path.is_file() else ""
