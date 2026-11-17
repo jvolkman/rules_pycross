@@ -2,7 +2,7 @@
 name="a"
 version="0"
 requires-python=">=3.12"
-dependencies=["iniconfig==1.1.1"]
+dependencies=["iniconfig==1.1.1", "six==1.16.0"]
 [dependency-groups]
 # Not covered by the project conflict: uv splits this edge by conflict markers.
 plain=["iniconfig>=1.0"]

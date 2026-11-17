@@ -3,6 +3,6 @@ name="c"
 version="0"
 requires-python=">=3.12"
 # Not in the conflict; uv splits this edge by the conflict markers.
-dependencies=["iniconfig>=1.0"]
+dependencies=["iniconfig>=1.0", "six"]
 [tool.uv]
 package=false

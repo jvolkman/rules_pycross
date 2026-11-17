@@ -19,6 +19,9 @@ if [[ "$out" != *"Set one of the _variants flags on your pycross repo: package_a
 fi
 # Same with every member, including the unconflicted `c`.
 bazel test "$@" //:test_everything_a --@everything//_variants:package_a=True --test_output=errors
+
+# Only `a` and `c` depend on six; with package_b, c's six is still there.
+bazel test "$@" //:test_everything_b_six --@everything//_variants:package_b=True --test_output=errors
 if out=$(bazel build "$@" //:test_everything_a 2>&1); then
   echo "Expected //:test_everything_a to fail without a variant flag!"
   exit 1

@@ -83,3 +83,17 @@ py_test(
     tags = ["manual"],
     deps = ["@everything//iniconfig"],
 )
+
+# `b` doesn't depend on six but `c` does: with package_b, `everything` gets c's
+# six (needs --@everything//_variants:package_b=True; see run.sh).
+py_test(
+    name = "test_everything_b_six",
+    srcs = ["test_version.py"],
+    args = [
+        "six",
+        "1.17.0",
+    ],
+    main = "test_version.py",
+    tags = ["manual"],
+    deps = ["@everything//six"],
+)

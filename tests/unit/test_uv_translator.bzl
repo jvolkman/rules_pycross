@@ -1013,6 +1013,38 @@ def _test_uv_project_conflict_redundant_edges_impl(env, target):
         "package_b": "iniconfig@2.0.0",
     })
 
+# buildifier: disable=unused-variable
+def _test_uv_project_conflict_asymmetric_edges_impl(env, target):
+    """When only some items of the set depend on the package, the edge entry is narrowed, not dropped."""
+    lock = _lock(
+        [
+            _pkg("a", "0", source = {"virtual": "a"}, deps = [_dep("iniconfig", "1.1.1", marker = "extra == 'project-1-a'")]),
+            _pkg("b", "0", source = {"virtual": "b"}),
+            _pkg("c", "0", source = {"virtual": "c"}, deps = [
+                _dep("iniconfig", "1.1.1", marker = "extra == 'project-1-a'"),
+                _dep("iniconfig", "2.3.1", marker = "extra == 'project-1-b' or extra != 'project-1-a'"),
+            ]),
+            _pkg("iniconfig", "1.1.1", wheels = [_whl("iniconfig-1.1.1-py2.py3-none-any.whl", "aaa")]),
+            _pkg("iniconfig", "2.3.1", wheels = [_whl("iniconfig-2.3.1-py3-none-any.whl", "bbb")]),
+        ],
+        conflicts = [[{"package": "a"}, {"package": "b"}]],
+    )
+    result = translate_uv(_project(name = "root"), lock, _lock_model())
+    pin = result["pins"]["iniconfig"]
+    exprs = result["resolution_marker_exprs"]
+    env.expect.that_str(pin["package_a"]).equals("iniconfig@1.1.1")
+
+    # `b` has no entry, so c's 2.3.1 edge stays, guarded on a variant being selected.
+    narrowed = [k for k, v in pin.items() if v == "iniconfig@2.3.1"]
+    env.expect.that_collection(narrowed).has_size(1)
+    env.expect.that_str(exprs[narrowed[0]]).equals(
+        "(extra == '__variant_package_a' or extra == '__variant_package_b') and (extra == '__variant_package_b' or extra != '__variant_package_a')",
+    )
+
+def _test_uv_project_conflict_asymmetric_edges(name):
+    util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
+    analysis_test(name = name, target = name + "_subject", impl = _test_uv_project_conflict_asymmetric_edges_impl)
+
 def _test_uv_project_conflict_redundant_edges(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
     analysis_test(name = name, target = name + "_subject", impl = _test_uv_project_conflict_redundant_edges_impl)
@@ -1711,6 +1743,7 @@ def uv_translator_test_suite(name):
             _test_uv_project_conflict_mixed_set,
             _test_uv_project_conflict_edge_split,
             _test_uv_project_conflict_redundant_edges,
+            _test_uv_project_conflict_asymmetric_edges,
             _test_uv_local_version_exact_matching,
             _test_uv_issue_1510_verbatim_lock,
         ],
