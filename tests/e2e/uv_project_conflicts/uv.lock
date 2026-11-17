@@ -24,8 +24,17 @@ dependencies = [
     { name = "iniconfig", version = "1.1.1", source = { registry = "https://pypi.org/simple" }, marker = "extra == 'project-1-a'" },
 ]
 
+[package.dev-dependencies]
+plain = [
+    { name = "iniconfig", version = "1.1.1", source = { registry = "https://pypi.org/simple" }, marker = "extra == 'project-1-a'" },
+    { name = "iniconfig", version = "2.0.0", source = { registry = "https://pypi.org/simple" }, marker = "extra == 'project-1-b' or extra != 'project-1-a'" },
+]
+
 [package.metadata]
 requires-dist = [{ name = "iniconfig", specifier = "==1.1.1" }]
+
+[package.metadata.requires-dev]
+plain = [{ name = "iniconfig", specifier = ">=1.0" }]
 
 [[package]]
 name = "b"

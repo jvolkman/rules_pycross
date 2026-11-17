@@ -35,6 +35,15 @@ uv.repo(
     workspace = "ws",
 )
 uv.repo(
+    name = "repo_a_plain",
+    dependency_groups = [
+        "default",
+        "group:plain",
+    ],
+    projects = ["a"],
+    workspace = "ws",
+)
+uv.repo(
     name = "repo_b",
     projects = ["b"],
     workspace = "ws",
@@ -52,4 +61,4 @@ uv.repo(
     projects = ["*"],
     workspace = "ws",
 )
-use_repo(uv, "all", "all_pinned_b", "repo_a", "repo_b")
+use_repo(uv, "all", "all_pinned_b", "repo_a", "repo_a_plain", "repo_b")

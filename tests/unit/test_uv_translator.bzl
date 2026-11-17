@@ -918,6 +918,70 @@ def _test_uv_project_conflicts_impl(env, target):
     env.expect.that_dict(result["pins"]["iniconfig"]).contains_exactly({"package_a": "iniconfig@1.1.1"})
     env.expect.that_str(result["variants"][0].get("repo_pin", "")).equals("package_a")
 
+# buildifier: disable=unused-variable
+def _test_uv_project_conflict_mixed_set_impl(env, target):
+    """A `{package}` item conflicting with another project's group: pin only when the repo owns just the project."""
+    lock = _lock(
+        [
+            _pkg("a", "0", source = {"virtual": "a"}, deps = [_dep("iniconfig", "1.1.1")]),
+            dict(_pkg("b", "0", source = {"virtual": "b"}, deps = [_dep("six", "1.17.0")]), **{"dev-dependencies": {"g": [_dep("iniconfig", "2.0.0")]}}),
+            _pkg("iniconfig", "1.1.1", wheels = [_whl("iniconfig-1.1.1-py2.py3-none-any.whl", "aaa")]),
+            _pkg("iniconfig", "2.0.0", wheels = [_whl("iniconfig-2.0.0-py3-none-any.whl", "bbb")]),
+            _pkg("six", "1.17.0", wheels = [_whl("six-1.17.0-py2.py3-none-any.whl", "ccc")]),
+        ],
+        conflicts = [[{"package": "a"}, {"package": "b", "group": "g"}]],
+    )
+
+    # Spanning both: no pin (a `group_g` flag must still work), but `a` is the default.
+    result = translate_uv(_project(name = "root"), lock, _lock_model(dependency_groups = ["default", "group:g"]))
+    vs = result["variants"][0]
+    env.expect.that_str(vs.get("repo_pin", "")).equals("")
+    env.expect.that_str(vs.get("repo_default", "")).equals("package_a")
+
+    # Only `a`: pinned.
+    result = translate_uv(_project(name = "a"), lock, _lock_model(projects = ["a"]))
+    env.expect.that_str(result["variants"][0].get("repo_pin", "")).equals("package_a")
+
+# buildifier: disable=unused-variable
+def _test_uv_project_conflict_edge_split_impl(env, target):
+    """A group of a conflicted project whose edge splits by conflict markers keeps both versions apart."""
+    lock = _lock(
+        [
+            dict(
+                _pkg("a", "0", source = {"virtual": "a"}, deps = [_dep("iniconfig", "1.1.1", marker = "extra == 'project-1-a'")]),
+                **{"dev-dependencies": {"plain": [
+                    _dep("iniconfig", "1.1.1", marker = "extra == 'project-1-a'"),
+                    _dep("iniconfig", "2.0.0", marker = "extra == 'project-1-b' or extra != 'project-1-a'"),
+                ]}}
+            ),
+            _pkg("b", "0", source = {"virtual": "b"}, deps = [_dep("iniconfig", "2.0.0", marker = "extra == 'project-1-b'")]),
+            _pkg("iniconfig", "1.1.1", wheels = [_whl("iniconfig-1.1.1-py2.py3-none-any.whl", "aaa")]),
+            _pkg("iniconfig", "2.0.0", wheels = [_whl("iniconfig-2.0.0-py3-none-any.whl", "bbb")]),
+        ],
+        conflicts = [[{"package": "a"}, {"package": "b"}]],
+    )
+    result = translate_uv(_project(name = "a"), lock, _lock_model(projects = ["a"], dependency_groups = ["default", "group:plain"]))
+    pin = result["pins"]["iniconfig"]
+    exprs = result["resolution_marker_exprs"]
+
+    # Before the fix, `package_a` mapped to the last edge's version (2.0.0).
+    env.expect.that_collection(pin.keys()).not_contains("package_a")
+    by_version = {v: k for k, v in pin.items()}
+    env.expect.that_collection(by_version.keys()).contains_exactly(["iniconfig@1.1.1", "iniconfig@2.0.0"])
+    one = exprs[by_version["iniconfig@1.1.1"]]
+    env.expect.that_str(one["variant"]).equals("package_a")
+    env.expect.that_str(exprs[one["marker"]]).equals("extra == '__variant_package_a'")
+    two = exprs[by_version["iniconfig@2.0.0"]]
+    env.expect.that_str(exprs[two["marker"]]).equals("extra == '__variant_package_b' or extra != '__variant_package_a'")
+
+def _test_uv_project_conflict_mixed_set(name):
+    util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
+    analysis_test(name = name, target = name + "_subject", impl = _test_uv_project_conflict_mixed_set_impl)
+
+def _test_uv_project_conflict_edge_split(name):
+    util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
+    analysis_test(name = name, target = name + "_subject", impl = _test_uv_project_conflict_edge_split_impl)
+
 def _test_uv_project_conflicts(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
     analysis_test(name = name, target = name + "_subject", impl = _test_uv_project_conflicts_impl)
@@ -1601,6 +1665,8 @@ def uv_translator_test_suite(name):
             _test_uv_same_named_groups_across_members,
             _test_uv_repo_defaults,
             _test_uv_project_conflicts,
+            _test_uv_project_conflict_mixed_set,
+            _test_uv_project_conflict_edge_split,
             _test_uv_local_version_exact_matching,
             _test_uv_issue_1510_verbatim_lock,
         ],

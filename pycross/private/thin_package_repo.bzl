@@ -609,9 +609,16 @@ def _thin_package_repo_impl(rctx):
     for set_suffix, vset in variant_info.sets.items():
         for qname in vset.qnames:
             no_variant_fallbacks[qname] = set_suffix
+    variant_qnames = list(no_variant_fallbacks.keys())
     for cname, expr in lock.get("resolution_marker_exprs", {}).items():
         if type(expr) == "dict" and expr.get("variant") in no_variant_fallbacks:
             no_variant_fallbacks[cname] = no_variant_fallbacks[expr["variant"]]
+        elif type(expr) == "string" and "__variant_" in expr:
+            # An edge-marker constraint gated on a variant (e.g. `extra == '__variant_package_a'`).
+            for qname in variant_qnames:
+                if "'__variant_{}'".format(qname) in expr or "\"__variant_{}\"".format(qname) in expr:
+                    no_variant_fallbacks[cname] = no_variant_fallbacks[qname]
+                    break
 
     # Conflicts dict: pkg_key -> [member_names...] for packages with
     # differing annotations across workspace members.

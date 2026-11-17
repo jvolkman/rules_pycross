@@ -12,6 +12,19 @@ py_test(
     deps = ["@repo_a//iniconfig"],
 )
 
+# a's `plain` group: uv splits its iniconfig edge into 1.1.1 (with a) and
+# 2.0.0 (without a); the repo selects a, so it gets 1.1.1.
+py_test(
+    name = "test_repo_a_plain",
+    srcs = ["test_version.py"],
+    args = [
+        "iniconfig",
+        "1.1.1",
+    ],
+    main = "test_version.py",
+    deps = ["@repo_a_plain//iniconfig"],
+)
+
 py_test(
     name = "test_repo_b",
     srcs = ["test_version.py"],
