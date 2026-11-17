@@ -520,7 +520,7 @@ def _compute_reachable_keys(pins, packages_by_package_key):
 def _add_ungated_fallbacks(pins, lock_model_data):
     """Add an unconditional ("") branch to pins whose branches are all conflict-variant gated.
 
-    A build tools repo serves sdist builds from every repo of the workspace, so a tool
+    The `<ws>__build` repo serves sdist builds from every repo of the workspace, so a tool
     that the lock only pins under one variant (e.g. a direct dependency of one of two
     conflicting projects) must still resolve when another variant, or none, is selected.
     The fallback is the pin's single version, or its highest one.
@@ -574,8 +574,8 @@ def resolve(
         include_transitive: Whether to include transitive dependencies.
         transitive_testonly: Whether to perform reachability analysis to assign testonly status.
         ungated_fallback: Give every pin that only has uv conflict-variant branches an
-            unconditional fallback (for build tools repos: sdist builds need their tools
-            whichever variant, if any, is selected).
+            unconditional fallback (for the workspace's `<ws>__build` repo: sdist builds
+            need their tools whichever variant, if any, is selected).
 
     Returns:
         Dictionary of resolved packages.
