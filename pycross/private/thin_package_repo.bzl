@@ -12,7 +12,7 @@ The file structure is:
 - _variants/BUILD.bazel    - Aliases for bool_flag and config_setting targets for variant selection.
 """
 
-load(":util.bzl", "is_platform_specific", "parse_package_key", "underscore_name", "variant_item_qname")
+load(":util.bzl", "is_platform_specific", "parse_package_key", "underscore_name", "variant_item_alias", "variant_item_qname")
 
 _requirement_func = """\
 load("@pypackaging.bzl", "pypackaging")
@@ -98,6 +98,9 @@ def _safe_name(pin_name, name):
 
 _NO_MATCH_ERROR_TARGET = "@rules_pycross//pycross/private:no_match_error"
 
+# Per-repo "no variant selected" targets, emitted in _variants/BUILD.bazel with this repo's flag names.
+_NO_VARIANT_PREFIX = "//_variants:_no_variant_"
+
 def _aggregated_key(pkg_key, aggregated_keys):
     """Return the [_all_] aggregate key for pkg_key, unless aggregated_keys says it has no extras."""
     parts = parse_package_key(pkg_key)
@@ -156,10 +159,10 @@ def _target_select(target_dict, prefix, suffix, workspace_repo, is_aggregated = 
             unselected_set = _no_variant_set_for(effective_all.keys(), no_variant_fallbacks)
             if unselected_set:
                 lines.append(
-                    '        "@{}//_lock:_unselected_{}": "@{}//_lock:_no_variant_{}",'.format(
+                    '        "@{}//_lock:_unselected_{}": "{}{}",'.format(
                         workspace_repo,
                         unselected_set,
-                        workspace_repo,
+                        _NO_VARIANT_PREFIX,
                         unselected_set,
                     ),
                 )
@@ -266,10 +269,10 @@ def _emit_maybe_alias(lines, maybe_name, pkg_target, target_dict, available_keys
             unselected_set = _no_variant_set_for(branch_targets.keys(), no_variant_fallbacks)
             if unselected_set:
                 lines.append(
-                    '        "@{}//_lock:_unselected_{}": "@{}//_lock:_no_variant_{}",'.format(
+                    '        "@{}//_lock:_unselected_{}": "{}{}",'.format(
                         workspace_repo,
                         unselected_set,
-                        workspace_repo,
+                        _NO_VARIANT_PREFIX,
                         unselected_set,
                     ),
                 )
@@ -476,21 +479,23 @@ def _thin_package_repo_impl(rctx):
     # targets for conflict sets without a default variant.
     # When a VariantItem has default=True, its target becomes //conditions:default
     # in the select(), so builds without explicit flags use the default variant.
-    variant_items = {}  # qualified_name -> True
+    variant_items = {}  # qualified_name -> user-facing _variants alias
     default_variants = {}  # qualified_name -> True
     no_variant_fallbacks = {}  # constraint -> conflict set suffix (sorted qnames joined by "_")
+    no_variant_sets = {}  # conflict set suffix -> [user-facing aliases]
     for variant_set in lock.get("variants", []):
         set_qnames = []
         has_default = False
         for item in variant_set["items"]:
             qname = variant_item_qname(item)
-            variant_items[qname] = True
+            variant_items[qname] = variant_item_alias(item)
             set_qnames.append(qname)
             if item.get("default", False):
                 default_variants[qname] = True
                 has_default = True
         if not has_default and set_qnames:
             set_suffix = "_".join(sorted(set_qnames))
+            no_variant_sets[set_suffix] = [variant_items[q] for q in set_qnames]
             for qname in set_qnames:
                 no_variant_fallbacks[qname] = set_suffix
     for cname, expr in lock.get("resolution_marker_exprs", {}).items():
@@ -877,16 +882,23 @@ pycross_transitioning_file_proxy = rule(
     # _variants/ BUILD: alias bool_flag and config_setting targets
     # from the workspace repo so users can reference @<thin_repo>//_variants:<name>
     # in platform(flags=[...]) and transitions without needing the workspace repo directly.
+    # The workspace repo's flags are package-qualified (e.g. `extra_my-app_cpu`); the
+    # aliases use this repo's names (`extra_cpu` for its own projects' items).
     if variant_items:
         variant_lines = [
             'package(default_visibility = ["//visibility:public"])',
             "",
         ]
-        for qname in sorted(variant_items.keys()):
+        if no_variant_sets:
+            variant_lines.extend([
+                'load("@rules_pycross//pycross/private:variant_resolver.bzl", "pycross_no_variant_selected")',
+                "",
+            ])
+        for qname, alias in sorted(variant_items.items(), key = lambda kv: kv[1]):
             # Alias the bool_flag itself (for --@repo//_variants:extra_cpu)
             variant_lines.extend([
                 "alias(",
-                '    name = "{}",'.format(qname),
+                '    name = "{}",'.format(alias),
                 '    actual = "@{}//_lock:{}",'.format(workspace_repo, qname),
                 ")",
                 "",
@@ -895,8 +907,22 @@ pycross_transitioning_file_proxy = rule(
             # Alias the config_setting (for select() references)
             variant_lines.extend([
                 "alias(",
-                '    name = "is_{}",'.format(qname),
+                '    name = "is_{}",'.format(alias),
                 '    actual = "@{}//_lock:is_{}",'.format(workspace_repo, qname),
+                ")",
+                "",
+            ])
+
+        repo_name = getattr(rctx, "original_name", "") or "<repo>"
+        for set_suffix, aliases in sorted(no_variant_sets.items()):
+            variant_lines.extend([
+                "pycross_no_variant_selected(",
+                '    name = "_no_variant_{}",'.format(set_suffix),
+                '    message = "No uv conflict variant selected. Set one of the _variants flags on your pycross repo: {} (e.g. --@{}//_variants:{}=True)",'.format(
+                    ", ".join(aliases),
+                    repo_name,
+                    aliases[0],
+                ),
                 ")",
                 "",
             ])

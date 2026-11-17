@@ -725,7 +725,7 @@ conflicts = [
 ]
 ```
 
-The generated flags follow the pattern `group_<name>` (e.g., `--@pypi//_variants:group_test-fast=True`). If conflicting items in different workspace members share a name (for example, each member declares its own conflicting `test` group), their flags include the member name: `group_<member>_<name>` (e.g., `--@pypi//_variants:group_app-a_test=True`). The same applies to extras.
+The generated flags follow the pattern `group_<name>` (e.g., `--@pypi//_variants:group_test-fast=True`). Flag names are scoped to each repo's projects: in a workspace where each member declares its own conflicting `test` group, a repo for `app-a` (`projects = ["app-a"]`) exposes app-a's group as `group_test`. Items from other projects, or same-named items from several projects in one repo (e.g. `projects = ["*"]`), include the project name: `group_<project>_<name>` (e.g., `--@pypi//_variants:group_app-a_test=True`). The same applies to extras.
 
 ### Platform Transitions
 

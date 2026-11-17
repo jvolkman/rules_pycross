@@ -208,12 +208,8 @@ def _package_repo_impl(rctx):
         "",
     ]
     if variant_items:
-        has_unselected_fallback = any([not vset["default"] for vset in variant_sets])
         lock_build_lines.append('load("@bazel_skylib//rules:common_settings.bzl", "bool_flag")')
-        if has_unselected_fallback:
-            lock_build_lines.append('load("@rules_pycross//pycross/private:variant_resolver.bzl", "pycross_no_variant_selected", "variant_resolver")')
-        else:
-            lock_build_lines.append('load("@rules_pycross//pycross/private:variant_resolver.bzl", "variant_resolver")')
+        lock_build_lines.append('load("@rules_pycross//pycross/private:variant_resolver.bzl", "variant_resolver")')
         lock_build_lines.append("")
 
     # Check if we need config_setting_group for items in multiple sets.
@@ -233,7 +229,8 @@ def _package_repo_impl(rctx):
         "",
     ])
 
-    # Emit bool_flags (user-facing UX, unchanged).
+    # Emit bool_flags. Their names are package-qualified; thin repos alias them
+    # under user-facing names in @<repo>//_variants.
     for qname in sorted(variant_items.keys()):
         lock_build_lines.extend([
             "bool_flag(",
@@ -274,14 +271,6 @@ def _package_repo_impl(rctx):
                 "config_setting(",
                 '    name = "_unselected_{}",'.format(set_suffix),
                 '    flag_values = {{":{resolver}": ""}},'.format(resolver = resolver_name),
-                ")",
-                "",
-                "pycross_no_variant_selected(",
-                '    name = "_no_variant_{}",'.format(set_suffix),
-                '    message = "No uv conflict variant selected. Set one of the _variants flags on your pycross repo: {} (e.g. --@<repo>//_variants:{}=True)",'.format(
-                    ", ".join(vset["qnames"]),
-                    vset["qnames"][0],
-                ),
                 ")",
                 "",
             ])

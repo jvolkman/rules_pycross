@@ -240,7 +240,7 @@ def translate_uv(project_dict, lock_dict, lock_model):
     for variant_list in uv_conflicts:
         items = []
         for c in variant_list:
-            package = c["package"]
+            package = canonicalize_name(c["package"])
             if "extra" in c:
                 kind, vname = "extra", c["extra"]
             elif "group" in c:
@@ -258,24 +258,6 @@ def translate_uv(project_dict, lock_dict, lock_model):
             items.append(variant_items_by_key[key])
         variant_sets.append({"items": items})
 
-    # Variant flags are named `<kind>_<name>` (e.g. `group_test`). If two conflict
-    # items share a kind and name but belong to different packages (e.g. two
-    # workspace members that each declare a `test` group), qualify those with the
-    # package (`group_app-a_test`) so each gets its own flag. Canonical package
-    # names have no underscores, so the qualified names can't collide.
-    packages_by_short_name = {}
-    for item in variant_items_by_key.values():
-        if item["kind"] == "project":
-            continue
-        short = "{}_{}".format(item["kind"], item["name"])
-        packages_by_short_name.setdefault(short, {})[canonicalize_name(item["package"])] = True
-    for item in variant_items_by_key.values():
-        if item["kind"] == "project":
-            continue
-        short = "{}_{}".format(item["kind"], item["name"])
-        if len(packages_by_short_name[short]) > 1:
-            item["qname"] = "{}_{}_{}".format(item["kind"], canonicalize_name(item["package"]), item["name"])
-
     # Build constraint lookup from variants, keyed by (package, name) so a
     # conflict declared on one project's extra/group doesn't apply to a
     # same-named extra/group of another project.
@@ -285,7 +267,7 @@ def translate_uv(project_dict, lock_dict, lock_model):
     for item in variant_items_by_key.values():
         kind = item["kind"]
         vname = item.get("name", "")
-        lookup_key = (canonicalize_name(item["package"]), vname)
+        lookup_key = (item["package"], vname)
         qualified = variant_item_qname(item)
         if kind == "extra":
             extra_variant_values[lookup_key] = qualified
@@ -336,6 +318,23 @@ def translate_uv(project_dict, lock_dict, lock_model):
                 break
         if p not in workspace_members:
             fail("Project '{}' not found in uv.lock workspace members.".format(p))
+
+    # User-facing `_variants` names for this repo. Items declared by this repo's
+    # projects use the short `<kind>_<name>` (e.g. `extra_cpu`), unless two of
+    # them share it (e.g. a repo covering two members that each declare a
+    # `test` group); everything else keeps the package-qualified name.
+    target_projects_set = {p: True for p in target_projects}
+    owned_short_names = {}
+    for item in variant_items_by_key.values():
+        if item["kind"] != "project" and item["package"] in target_projects_set:
+            short = "{}_{}".format(item["kind"], item["name"])
+            owned_short_names[short] = owned_short_names.get(short, 0) + 1
+    for item in variant_items_by_key.values():
+        short = "{}_{}".format(item["kind"], item.get("name", ""))
+        if owned_short_names.get(short, 0) == 1 and item["package"] in target_projects_set:
+            item["alias"] = short
+        else:
+            item["alias"] = variant_item_qname(item)
 
     # Pre-scan: detect resolution-marker forks.
     # A fork exists when the same package name has multiple versions with

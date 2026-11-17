@@ -52,19 +52,19 @@ uv.package(
     workspace = "shared",
 )
 
-# Both members declare a conflicting `test` group with the same name, so their
-# variant flags are package-qualified. Each test repo pins its member's variant.
+# Both members declare a conflicting `test` group with the same name. Each
+# member repo exposes its own as `group_test` and pins it.
 uv.repo(
     name = "lock_a_test",
     dependency_groups = ["group:test;testonly"],
-    flags = ["--@lock_a_test//_variants:group_project-a_test=True"],
+    flags = ["--@lock_a_test//_variants:group_test=True"],
     projects = ["project-a"],
     workspace = "shared",
 )
 uv.repo(
     name = "lock_b_test",
     dependency_groups = ["group:test;testonly"],
-    flags = ["--@lock_b_test//_variants:group_project-b_test=True"],
+    flags = ["--@lock_b_test//_variants:group_test=True"],
     projects = ["project-b"],
     workspace = "shared",
 )
