@@ -240,11 +240,11 @@ def translate_uv(project_dict, lock_dict, lock_model):
     for variant_list in uv_conflicts:
         items = []
         for c in variant_list:
-            package = c["package"]
+            package = canonicalize_name(c["package"])
             if "extra" in c:
-                kind, vname = "extra", c["extra"]
+                kind, vname = "extra", canonicalize_name(c["extra"])
             elif "group" in c:
-                kind, vname = "group", c["group"]
+                kind, vname = "group", canonicalize_name(c["group"])
             else:
                 kind, vname = "project", ""
             key = (package, kind, vname)
@@ -252,8 +252,6 @@ def translate_uv(project_dict, lock_dict, lock_model):
                 item = {"package": package, "kind": kind}
                 if vname:
                     item["name"] = vname
-                if kind == "group" and vname in uv_default_groups:
-                    item["default"] = True
                 variant_items_by_key[key] = item
             items.append(variant_items_by_key[key])
         variant_sets.append({"items": items})
@@ -267,15 +265,14 @@ def translate_uv(project_dict, lock_dict, lock_model):
     for item in variant_items_by_key.values():
         kind = item["kind"]
         vname = item.get("name", "")
-        lookup_key = (canonicalize_name(item["package"]), vname)
+        lookup_key = (item["package"], vname)
+        qualified = variant_item_qname(item)
         if kind == "extra":
-            qualified = "extra_{}".format(vname)
             extra_variant_values[lookup_key] = qualified
         elif kind == "group":
-            qualified = "group_{}".format(vname)
             group_variant_values[lookup_key] = qualified
         uv_tok = _uv_conflict_token(item)
-        var_tok = "__variant_{}".format(variant_item_qname(item))
+        var_tok = "__variant_{}".format(qualified)
         token_replacements.append(("'{}'".format(uv_tok), "'{}'".format(var_tok)))
         token_replacements.append(('"{}"'.format(uv_tok), '"{}"'.format(var_tok)))
 
@@ -320,6 +317,25 @@ def translate_uv(project_dict, lock_dict, lock_model):
         if p not in workspace_members:
             fail("Project '{}' not found in uv.lock workspace members.".format(p))
 
+    # User-facing `_variants` flags for this repo, for items declared by its own
+    # projects (other projects' items get none):
+    #   - `<kind>_<name>` (e.g. `group_test`) covers that extra/group in every
+    #     project of the repo, like `uv --group test` across selected packages.
+    #   - `<kind>_<project>_<name>` (e.g. `group_app-a_test`) covers one project,
+    #     like `uv --package app-a --group test`.
+    # Names are normalized (`-` only), so the two forms can't collide.
+    target_projects_set = {p: True for p in target_projects}
+    for item in variant_items_by_key.values():
+        if item["package"] not in target_projects_set:
+            continue
+        if item["kind"] == "project":
+            item["flags"] = ["package_{}".format(item["package"])]
+        else:
+            item["flags"] = [
+                "{}_{}".format(item["kind"], item["name"]),
+                "{}_{}_{}".format(item["kind"], item["package"], item["name"]),
+            ]
+
     # Pre-scan: detect resolution-marker forks.
     # A fork exists when the same package name has multiple versions with
     # resolution-markers (i.e. uv resolved different versions for different
@@ -358,6 +374,12 @@ def translate_uv(project_dict, lock_dict, lock_model):
     # base package marker. See record_root_marker.
     root_dependency_markers = {}
 
+    # In a repo spanning several projects, a requested extra/group applies to the
+    # projects that declare it (like `uv --all-packages --group test`); it only
+    # has to exist in one of them.
+    multi_project = len(target_projects) > 1
+    groups_seen = {"default": True}
+    requested_by_project = {}  # project -> requested groups dict
     for project_name in target_projects:
         project_info = workspace_members[project_name]
 
@@ -366,18 +388,23 @@ def translate_uv(project_dict, lock_dict, lock_model):
         development_dependencies = project_info.get("dev-dependencies", {})
 
         # Parse groups
+        available_groups = (
+            ["default"] +
+            ["optional:" + g for g in optional_dependencies.keys()] +
+            ["group:" + g for g in development_dependencies.keys()]
+        )
+        for g in available_groups:
+            groups_seen[g] = True
         requested_groups_dict = compute_requested_dependency_groups(
             dependency_groups = dependency_groups,
             testonly_groups = testonly_groups,
             non_testonly_groups = non_testonly_groups,
             wildcard_testonly = wildcard_testonly,
-            available_groups = (
-                ["default"] +
-                ["optional:" + g for g in optional_dependencies.keys()] +
-                ["group:" + g for g in development_dependencies.keys()]
-            ),
+            available_groups = available_groups,
             project_name = project_name,
+            allow_missing = multi_project,
         )
+        requested_by_project[project_name] = requested_groups_dict
 
         group_batches = []
         if "default" in requested_groups_dict:
@@ -428,6 +455,34 @@ def translate_uv(project_dict, lock_dict, lock_model):
                     requirements.append((dep_name, specifier, effective_constraint, is_testonly))
 
     # End collect requirements
+
+    if multi_project:
+        for group in dependency_groups:
+            kind, sep, name = group.partition(":")
+            if sep and name != "*" and group not in groups_seen:
+                fail("None of the projects {} has group '{}'.".format(sorted(target_projects), group))
+
+    # This repo's default variants, from the selected pyproject's
+    # `[tool.uv] default-groups`. As in uv, a project's default-groups name its
+    # own groups, and the pyproject is the member's for a single-project repo
+    # (`uv sync --package <member>`) or the root's otherwise (`uv sync
+    # --all-packages`). Only groups this repo actually requests count, and a
+    # conflict set gets a default only if exactly one of its items qualifies.
+    # The repo's transition sets `_default_<set>`; the workspace repo has no
+    # static defaults.
+    default_owner = canonicalize_name(project_dict.get("project", {}).get("name", ""))
+    for variant_set in variant_sets:
+        candidates = []
+        for item in variant_set["items"]:
+            if item["kind"] != "group" or item["package"] != default_owner:
+                continue
+            if uv_default_groups != "all" and item["name"] not in [canonicalize_name(g) for g in uv_default_groups]:
+                continue
+            if "group:" + item["name"] not in requested_by_project.get(item["package"], {}):
+                continue
+            candidates.append(item)
+        if len(candidates) == 1:
+            variant_set["repo_default"] = variant_item_qname(candidates[0])
 
     # Build pinned specs
     pinned_package_specs = {}

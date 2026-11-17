@@ -51,7 +51,43 @@ uv.package(
     install_exclude_globs = ["test_regex.py"],
     workspace = "shared",
 )
-use_repo(uv, "lock_a", "lock_all", "lock_project_b")
+
+# Both members declare a conflicting `test` group with the same name. Each
+# member repo exposes its own as `group_test` and pins it.
+uv.repo(
+    name = "lock_a_test",
+    dependency_groups = ["group:test;testonly"],
+    flags = ["--@lock_a_test//_variants:group_test=True"],
+    projects = ["project-a"],
+    workspace = "shared",
+)
+uv.repo(
+    name = "lock_b_test",
+    dependency_groups = ["group:test;testonly"],
+    flags = ["--@lock_b_test//_variants:group_test=True"],
+    projects = ["project-b"],
+    workspace = "shared",
+)
+
+# A repo covering both members: `group_test` would enable both (conflicting)
+# `test` groups, so pick one member's with its per-project flag.
+uv.repo(
+    name = "lock_all_test",
+    dependency_groups = ["group:test;testonly"],
+    flags = ["--@lock_all_test//_variants:group_project-a_test=True"],
+    projects = ["*"],
+    workspace = "shared",
+)
+
+# No flags: project-a's `default-groups = ["test"]` makes its `test` group this
+# repo's default (applied by the repo's transition).
+uv.repo(
+    name = "lock_a_test_default",
+    dependency_groups = ["group:test;testonly"],
+    projects = ["project-a"],
+    workspace = "shared",
+)
+use_repo(uv, "lock_a", "lock_a_test", "lock_a_test_default", "lock_all", "lock_all_test", "lock_b_test", "lock_project_b")
 
 # Test standalone members (no uv_all_members)
 uv.workspace(

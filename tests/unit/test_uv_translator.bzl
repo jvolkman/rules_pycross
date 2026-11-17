@@ -346,7 +346,14 @@ def _test_uv_extra_variants_impl(env, target):
 
     # Pins should have variant keys
     torch_pin = result["pins"]["torch"]
-    env.expect.that_collection(torch_pin.keys()).contains_at_least(["extra_cpu", "extra_cu124"])
+    env.expect.that_collection(torch_pin.keys()).contains_at_least(["extra_my-app_cpu", "extra_my-app_cu124"])
+
+    # The repo's own items get `<kind>_<name>` and `<kind>_<project>_<name>` flags.
+    flags = {item["name"]: item["flags"] for item in vs["items"]}
+    env.expect.that_dict(flags).contains_exactly({
+        "cpu": ["extra_cpu", "extra_my-app_cpu"],
+        "cu124": ["extra_cu124", "extra_my-app_cu124"],
+    })
 
 def _test_uv_extra_variants(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
@@ -564,13 +571,13 @@ def _test_uv_resolution_marker_fork_optional_group_impl(env, target):
     # Pin should have compound constraint names.
     numpy_pin = result["pins"]["numpy"]
     env.expect.that_int(len(numpy_pin)).equals(2)
-    env.expect.that_str(numpy_pin["extra_science_res_numpy_2_3_4"]).equals("numpy@2.3.4")
-    env.expect.that_str(numpy_pin["extra_science_res_numpy_2_3_3"]).equals("numpy@2.3.3")
+    env.expect.that_str(numpy_pin["extra_my-app_science_res_numpy_2_3_4"]).equals("numpy@2.3.4")
+    env.expect.that_str(numpy_pin["extra_my-app_science_res_numpy_2_3_3"]).equals("numpy@2.3.3")
 
     # Compound entries should store component info.
     exprs = result["resolution_marker_exprs"]
-    compound_2_3_4 = exprs["extra_science_res_numpy_2_3_4"]
-    env.expect.that_str(compound_2_3_4["variant"]).equals("extra_science")
+    compound_2_3_4 = exprs["extra_my-app_science_res_numpy_2_3_4"]
+    env.expect.that_str(compound_2_3_4["variant"]).equals("extra_my-app_science")
     env.expect.that_str(compound_2_3_4["marker"]).equals("res_numpy_2_3_4")
 
     # Simple entries should still be strings.
@@ -801,6 +808,93 @@ def _test_uv_variants_scoped_to_project(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
     analysis_test(name = name, target = name + "_subject", impl = _test_uv_variants_scoped_to_project_impl)
 
+# --- test_same_named_groups_across_members ---
+
+_MEMBER_GROUP_CONFLICT_LOCK = _lock(
+    [
+        _pkg("app-a", "0.1.0", source = {"editable": "apps/app-a"}),
+        _pkg("app-b", "0.1.0", source = {"editable": "apps/app-b"}),
+        # No `test` group: a `group:test` repo spanning all members still works.
+        _pkg("common", "0.1.0", source = {"editable": "libs/common"}),
+        _pkg("pytest", "7.4.4", wheels = [_whl("pytest-7.4.4-py3-none-any.whl", "aaa")]),
+        _pkg("pytest", "9.2.0", wheels = [_whl("pytest-9.2.0-py3-none-any.whl", "bbb")]),
+    ],
+    conflicts = [[{"package": "app-a", "group": "test"}, {"package": "app-b", "group": "test"}]],
+)
+
+def _member_group_conflict_lock():
+    lock = dict(_MEMBER_GROUP_CONFLICT_LOCK)
+    packages = [dict(p) for p in lock["package"]]
+    packages[0]["dev-dependencies"] = {"test": [_dep("pytest", "7.4.4")]}
+    packages[1]["dev-dependencies"] = {"test": [_dep("pytest", "9.2.0")]}
+    lock["package"] = packages
+    return lock
+
+# buildifier: disable=unused-variable
+def _test_uv_same_named_groups_across_members_impl(env, target):
+    """Two members' conflicting `test` groups stay distinct internally; each repo's `group_test` covers its projects."""
+    lock = _member_group_conflict_lock()
+    result = translate_uv(_project(name = "monorepo"), lock, _lock_model(dependency_groups = ["group:test"]))
+    env.expect.that_int(len(result.get("variants", []))).equals(1)
+    items = result["variants"][0]["items"]
+
+    # In a repo covering both members, `group_test` enables both members' `test`
+    # groups, and `group_<member>_test` enables one.
+    env.expect.that_dict({item["package"]: item["flags"] for item in items}).contains_exactly({
+        "app-a": ["group_test", "group_app-a_test"],
+        "app-b": ["group_test", "group_app-b_test"],
+    })
+
+    # Each member's pytest is pinned under its own (package-qualified) variant.
+    pytest_pin = result["pins"]["pytest"]
+    env.expect.that_dict(pytest_pin).contains_exactly({
+        "group_app-a_test": "pytest@7.4.4",
+        "group_app-b_test": "pytest@9.2.0",
+    })
+
+    # A repo for one member has a `group_test` flag for that member only.
+    result_a = translate_uv(_project(name = "app-a"), lock, _lock_model(projects = ["app-a"], dependency_groups = ["group:test"]))
+    flags_a = {item["package"]: item.get("flags") for item in result_a["variants"][0]["items"]}
+    env.expect.that_dict(flags_a).contains_exactly({"app-a": ["group_test", "group_app-a_test"], "app-b": None})
+    env.expect.that_dict(result_a["pins"]["pytest"]).contains_exactly({"group_app-a_test": "pytest@7.4.4"})
+
+# buildifier: disable=unused-variable
+def _test_uv_repo_defaults_impl(env, target):
+    """default-groups apply per repo: the selected project's own groups, if the repo requests them."""
+    lock = _member_group_conflict_lock()
+    app_a = {"project": {"name": "app-a"}, "tool": {"uv": {"default-groups": ["test"]}}}
+
+    # A test repo for app-a defaults to app-a's group.
+    result = translate_uv(app_a, lock, _lock_model(projects = ["app-a"], dependency_groups = ["group:test"]))
+    env.expect.that_str(result["variants"][0].get("repo_default", "")).equals("group_app-a_test")
+
+    # A prod repo for app-a doesn't request `test`, so no default (and no transition).
+    result = translate_uv(app_a, lock, _lock_model(projects = ["app-a"], dependency_groups = ["default"]))
+    env.expect.that_str(result["variants"][0].get("repo_default", "")).equals("")
+
+    # app-b's repo uses app-b's pyproject, which has no default-groups.
+    app_b = {"project": {"name": "app-b"}}
+    result = translate_uv(app_b, lock, _lock_model(projects = ["app-b"], dependency_groups = ["group:test"]))
+    env.expect.that_str(result["variants"][0].get("repo_default", "")).equals("")
+
+    # A repo spanning all members uses the root pyproject, as `uv sync --all-packages` does.
+    root = {"project": {"name": "monorepo"}, "tool": {"uv": {"default-groups": ["test"]}}}
+    result = translate_uv(root, lock, _lock_model(dependency_groups = ["group:test"]))
+    env.expect.that_str(result["variants"][0].get("repo_default", "")).equals("")
+
+    # `default-groups = "all"` is not a substring match.
+    app_a_all = {"project": {"name": "app-a"}, "tool": {"uv": {"default-groups": "all"}}}
+    result = translate_uv(app_a_all, lock, _lock_model(projects = ["app-a"], dependency_groups = ["group:test"]))
+    env.expect.that_str(result["variants"][0].get("repo_default", "")).equals("group_app-a_test")
+
+def _test_uv_repo_defaults(name):
+    util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
+    analysis_test(name = name, target = name + "_subject", impl = _test_uv_repo_defaults_impl)
+
+def _test_uv_same_named_groups_across_members(name):
+    util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
+    analysis_test(name = name, target = name + "_subject", impl = _test_uv_same_named_groups_across_members_impl)
+
 # --- test_local_version_exact_matching ---
 
 # buildifier: disable=unused-variable
@@ -856,9 +950,9 @@ def _test_uv_local_version_exact_matching_impl(env, target):
 
     # Root pins: 2.12.0 -> torch@2.12.0 (not +cpu), 2.12.0+cpu -> torch@2.12.0+cpu
     env.expect.that_str(result["pins"]["helper"]).equals("helper@1.0.0")
-    env.expect.that_str(result["pins"]["torch"]["extra_cuda"]).equals("torch@2.12.0")
-    env.expect.that_str(result["pins"]["torch"]["extra_cpu"]).equals("torch@2.12.0+cpu")
-    env.expect.that_str(result["pins"]["torch[opt]"]["extra_cuda"]).equals("torch[opt]@2.12.0")
+    env.expect.that_str(result["pins"]["torch"]["extra_my-app_cuda"]).equals("torch@2.12.0")
+    env.expect.that_str(result["pins"]["torch"]["extra_my-app_cpu"]).equals("torch@2.12.0+cpu")
+    env.expect.that_str(result["pins"]["torch[opt]"]["extra_my-app_cuda"]).equals("torch[opt]@2.12.0")
 
     # Package dependency edge with explicit version 2.12.0 resolves to 2.12.0 (not 2.12.0+cpu)
     helper_deps = result["packages"]["helper@1.0.0"]["dependencies"]
@@ -1300,33 +1394,33 @@ def _test_uv_issue_1510_verbatim_lock_impl(env, target):
     torch_pins = raw["pins"]["torch"]
     exprs = raw["resolution_marker_exprs"]
     env.expect.that_dict(torch_pins).contains_exactly({
-        "group_cpu_res_torch_2_12_0__group_cpu": "torch@2.12.0",
-        "group_cpu_res_torch_2_12_0_cpu__group_cpu": "torch@2.12.0+cpu",
-        "group_cuda_res_torch_2_12_0__group_cuda": "torch@2.12.0",
+        "group_native-torch-probe_cpu_res_torch_2_12_0__group_native-torch-probe_cpu": "torch@2.12.0",
+        "group_native-torch-probe_cpu_res_torch_2_12_0_cpu__group_native-torch-probe_cpu": "torch@2.12.0+cpu",
+        "group_native-torch-probe_cuda_res_torch_2_12_0__group_native-torch-probe_cuda": "torch@2.12.0",
     })
-    env.expect.that_dict(exprs["group_cpu_res_torch_2_12_0__group_cpu"]).contains_exactly({
-        "variant": "group_cpu",
-        "marker": "res_torch_2_12_0__group_cpu",
+    env.expect.that_dict(exprs["group_native-torch-probe_cpu_res_torch_2_12_0__group_native-torch-probe_cpu"]).contains_exactly({
+        "variant": "group_native-torch-probe_cpu",
+        "marker": "res_torch_2_12_0__group_native-torch-probe_cpu",
     })
-    env.expect.that_dict(exprs["group_cpu_res_torch_2_12_0_cpu__group_cpu"]).contains_exactly({
-        "variant": "group_cpu",
-        "marker": "res_torch_2_12_0_cpu__group_cpu",
+    env.expect.that_dict(exprs["group_native-torch-probe_cpu_res_torch_2_12_0_cpu__group_native-torch-probe_cpu"]).contains_exactly({
+        "variant": "group_native-torch-probe_cpu",
+        "marker": "res_torch_2_12_0_cpu__group_native-torch-probe_cpu",
     })
-    env.expect.that_dict(exprs["group_cuda_res_torch_2_12_0__group_cuda"]).contains_exactly({
-        "variant": "group_cuda",
-        "marker": "res_torch_2_12_0__group_cuda",
+    env.expect.that_dict(exprs["group_native-torch-probe_cuda_res_torch_2_12_0__group_native-torch-probe_cuda"]).contains_exactly({
+        "variant": "group_native-torch-probe_cuda",
+        "marker": "res_torch_2_12_0__group_native-torch-probe_cuda",
     })
-    env.expect.that_str(exprs["res_torch_2_12_0__group_cpu"]).contains("extra == '__variant_group_cpu'")
-    env.expect.that_str(exprs["res_torch_2_12_0_cpu__group_cpu"]).contains("extra == '__variant_group_cpu'")
-    env.expect.that_str(exprs["res_torch_2_12_0__group_cuda"]).equals("platform_machine == 'x86_64' and sys_platform == 'linux'")
+    env.expect.that_str(exprs["res_torch_2_12_0__group_native-torch-probe_cpu"]).contains("extra == '__variant_group_native-torch-probe_cpu'")
+    env.expect.that_str(exprs["res_torch_2_12_0_cpu__group_native-torch-probe_cpu"]).contains("extra == '__variant_group_native-torch-probe_cpu'")
+    env.expect.that_str(exprs["res_torch_2_12_0__group_native-torch-probe_cuda"]).equals("platform_machine == 'x86_64' and sys_platform == 'linux'")
 
     # 2. Run resolve() and check torch's availability markers reference __variant_ tokens.
     resolved = resolve(raw, include_transitive = True)
     torch_avail = resolved.packages["torch@2.12.0"]["availability_markers"]
     env.expect.that_int(len(torch_avail)).equals(3)
-    env.expect.that_bool(any(["extra == '__variant_group_cpu'" in m for m in torch_avail])).equals(True)
+    env.expect.that_bool(any(["extra == '__variant_group_native-torch-probe_cpu'" in m for m in torch_avail])).equals(True)
 
-    # 3. Render lock.bzl and verify variants = [":_resolver_group_cpu_group_cuda"] on evaluators.
+    # 3. Render lock.bzl and verify variants = [":_resolver_group_native-torch-probe_cpu_group_native-torch-probe_cuda"] on evaluators.
     repo_map = {k: "@repo//" + k + ":file" for k in resolved.remote_files.keys()}
     rendered_lock = render_lock_bzl(
         {
@@ -1336,7 +1430,7 @@ def _test_uv_issue_1510_verbatim_lock_impl(env, target):
         },
         repo_map,
         "ws",
-        variant_resolvers = [":_resolver_group_cpu_group_cuda"],
+        variant_resolvers = [":_resolver_group_native-torch-probe_cpu_group_native-torch-probe_cuda"],
     )
 
     for extra_name in ["cudart", "cufft", "cufile", "cupti", "curand", "cusolver", "cusparse", "nvjitlink", "nvrtc", "nvtx"]:
@@ -1348,7 +1442,7 @@ def _test_uv_issue_1510_verbatim_lock_impl(env, target):
     ]
     for block in eval_blocks:
         if "__variant_" in block.split('expr = "')[1].split('",')[0]:
-            env.expect.that_str(block).contains('variants = [":_resolver_group_cpu_group_cuda"]')
+            env.expect.that_str(block).contains('variants = [":_resolver_group_native-torch-probe_cpu_group_native-torch-probe_cuda"]')
         else:
             env.expect.that_bool("variants =" in block).equals(False)
 
@@ -1473,6 +1567,8 @@ def uv_translator_test_suite(name):
             _test_uv_virtual_and_directory_members,
             _test_uv_local_member_deps_keep_forks,
             _test_uv_variants_scoped_to_project,
+            _test_uv_same_named_groups_across_members,
+            _test_uv_repo_defaults,
             _test_uv_local_version_exact_matching,
             _test_uv_issue_1510_verbatim_lock,
         ],

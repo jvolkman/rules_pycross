@@ -1,5 +1,6 @@
 """Shared helpers for lock import/resolution extensions."""
 
+load("@bazel_skylib//lib:paths.bzl", "paths")
 load("@toml.bzl//toml:toml.bzl", "decode")
 
 def validate_transition_attrs(tag, tag_name):
@@ -134,34 +135,37 @@ def discover_pylock_all_members(_mctx, _lock_file_label):
     return [struct(name = "root", path = "")]
 
 def resolve_member_project_file(lock_file_label, member_path):
-    """Resolve a member's pyproject.toml label relative to the lock file.
+    """Resolve a member's pyproject.toml label relative to the lock file's directory.
+
+    The result stays in the lock file's package when it can (e.g. `//:project/uv.lock` with
+    member `apps/a` gives `//:project/apps/a/pyproject.toml`), so member directories don't
+    need to be Bazel packages. Labels that cross into subpackages are fine for
+    `module_ctx.path()`/`repository_ctx.path()`.
 
     Args:
-        lock_file_label: Label of the uv.lock file.
-        member_path: Relative path from lock file to member directory (e.g. "./packages/lib-a").
+        lock_file_label: Label of the lock file.
+        member_path: Relative path from the lock file's directory to the member directory
+            (e.g. "./packages/lib-a"). Use "" or "." for the lock file's own directory.
 
     Returns:
         A Label pointing to the member's pyproject.toml.
     """
+    if paths.is_absolute(member_path):
+        fail("Workspace member path '{}' (relative to {}) must be relative".format(member_path, lock_file_label))
+    lock_dir = paths.dirname(lock_file_label.name)
+    rel = paths.normalize(paths.join(lock_dir, member_path, "pyproject.toml"))
+    if not paths.starts_with(rel, ".."):
+        return lock_file_label.same_package_label(rel)
 
-    # Strip leading "./" if present
-    clean_path = member_path
-    if clean_path.startswith("./"):
-        clean_path = clean_path[2:]
-    if clean_path == ".":
-        clean_path = ""
+    # The member is outside the lock file's package: resolve from the repo root.
+    repo_rel = paths.normalize(paths.join(lock_file_label.package, rel))
+    if paths.starts_with(repo_rel, ".."):
+        fail("Workspace member path '{}' (relative to {}) is outside the repository".format(member_path, lock_file_label))
+    return lock_file_label.relative("//:" + repo_rel)
 
-    # Build the package path relative to the lock file's package
-    lock_package = lock_file_label.package
-    if lock_package:
-        member_package = lock_package + ("/" + clean_path if clean_path else "")
-    else:
-        member_package = clean_path
-
-    if member_package:
-        return lock_file_label.relative("//{}:pyproject.toml".format(member_package))
-    else:
-        return lock_file_label.relative("//:pyproject.toml")
+def sibling_project_file(lock_file_label):
+    """Return the label of the pyproject.toml next to a lock file."""
+    return resolve_member_project_file(lock_file_label, "")
 
 def get_member_transition_attrs(tag):
     """Extract normalized transition attributes from a repo tag."""
@@ -384,16 +388,23 @@ def process_workspaces(
     for name, ws_info in workspaces.items():
         ws_tag = ws_info.tag
 
-        # Always start with auto-discovered project files from workspace members.
+        # The pyproject.toml next to the lock comes first: it's the workspace root
+        # (whose settings, such as default-groups, apply to repos spanning several
+        # projects), even when the root is a virtual project that isn't discovered
+        # as a member. Then the auto-discovered workspace members.
         project_files = []
+        sibling = sibling_project_file(ws_tag.lock_file)
+        if module_ctx.path(sibling).exists:
+            project_files.append(sibling)
         discovered = workspace_discovered_members[name]
         for member_info in discovered.values():
             label = resolve_member_project_file(ws_tag.lock_file, member_info.path)
-            project_files.append(label)
+            if label not in project_files:
+                project_files.append(label)
 
         if not project_files:
-            # No workspace members discovered; fall back to sibling pyproject.toml.
-            project_files.append(ws_tag.lock_file.relative(":pyproject.toml"))
+            # Nothing found; keep the sibling pyproject.toml as the (missing) default.
+            project_files.append(sibling)
 
         # Append any user-specified extra_project_files, deduplicating.
         for f in getattr(ws_tag, "extra_project_files", []):

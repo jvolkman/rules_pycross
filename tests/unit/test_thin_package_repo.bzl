@@ -10,11 +10,13 @@ load("//pycross/private:package_repo.bzl", "backend_tool_deps_labels_for_testing
 load(
     "//pycross/private:thin_package_repo.bzl",
     "cargo_build_for_testing",
+    "collect_variants_for_testing",
     "flag_values_for_testing",
     "is_platform_specific_for_testing",
     "packages_bzl_for_testing",
     "pin_build_for_testing",
     "requirements_bzl_for_testing",
+    "variants_build_for_testing",
 )
 
 # buildifier: disable=bzl-visibility
@@ -185,7 +187,6 @@ def _test_pin_build_variants_with_platform_impl(env, target):
         workspace_repo = "my_workspace",
         has_aggregated_variant = True,
         extras_dict = {"extra1": {"cpu": "numpy[extra1]@1.26.0", "gpu": "numpy[extra1]@1.26.0+gpu"}},
-        default_variants = {"cpu": True},
         target_platform = "@my//platform:linux",
     )
     res = res_struct.build + "\n" + (res_struct.actual_build or "")
@@ -213,8 +214,8 @@ def _test_pin_build_variants_with_platform_impl(env, target):
     extra_section = (res_struct.actual_build or "").split('name = "extra_extra1"')[1].split(")")[0]
     env.expect.that_bool("select({" in extra_section).equals(True)
 
-    # //conditions:default should be set to the default variant (cpu)
-    env.expect.that_bool('"//conditions:default":' in res).equals(True)
+    # Variant defaults come from the repo's transition, not from //conditions:default.
+    env.expect.that_bool('"//conditions:default": ":numpy@1.26.0' in res).equals(False)
 
 def _test_pin_build_variants_with_platform(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
@@ -312,7 +313,6 @@ def _test_pin_build_transition_bzl_variants_impl(env, target):
         workspace_repo = "my_workspace",
         has_aggregated_variant = True,
         extras_dict = {"extra1": {"cpu": "numpy[extra1]@1.26.0", "gpu": "numpy[extra1]@1.26.0+gpu"}},
-        default_variants = {"cpu": True},
         target_platform = "//:_internal_platform",
         transition_bzl = "//:_transition.bzl",
     )
@@ -873,11 +873,11 @@ def _test_pin_build_no_variant_fallback_impl(env, target):
     pkg_section = res.split('name = "pkg"')[1].split(")")[0]
     env.expect.that_bool('"@ws//_lock:is_extra_variant-a": "@ws//_lock:typing-extensions@4.11.0"' in pkg_section).equals(True)
     env.expect.that_bool('"@ws//_lock:is_extra_variant-b": "@ws//_lock:typing-extensions@4.12.0"' in pkg_section).equals(True)
-    env.expect.that_bool('"@ws//_lock:_unselected_extra_variant-a_extra_variant-b": "@ws//_lock:_no_variant_extra_variant-a_extra_variant-b"' in pkg_section).equals(True)
+    env.expect.that_bool('"@ws//_lock:_unselected_extra_variant-a_extra_variant-b": "//_variants:_no_variant_extra_variant-a_extra_variant-b"' in pkg_section).equals(True)
     env.expect.that_bool('"//conditions:default": "@rules_pycross//pycross/private:no_match_error"' in pkg_section).equals(True)
 
     maybe_section = res.split('name = "maybe"')[1].split(")")[0]
-    env.expect.that_bool('"@ws//_lock:_unselected_extra_variant-a_extra_variant-b": "@ws//_lock:_no_variant_extra_variant-a_extra_variant-b"' in maybe_section).equals(True)
+    env.expect.that_bool('"@ws//_lock:_unselected_extra_variant-a_extra_variant-b": "//_variants:_no_variant_extra_variant-a_extra_variant-b"' in maybe_section).equals(True)
     env.expect.that_bool('"//conditions:default": "//:_empty_library"' in maybe_section).equals(True)
 
 def _test_pin_build_no_variant_fallback(name):
@@ -886,10 +886,68 @@ def _test_pin_build_no_variant_fallback(name):
 
 # ── Test suite ─────────────────────────────────────────────────────
 
+# ── Test: _variants/BUILD.bazel generation ────────────────────────
+
+_SHARED_TEST_VARIANTS = [{
+    "items": [
+        {"package": "app-a", "kind": "group", "name": "test", "flags": ["group_test", "group_app-a_test"]},
+        {"package": "app-b", "kind": "group", "name": "test", "flags": ["group_test", "group_app-b_test"]},
+    ],
+}]
+
+# buildifier: disable=unused-variable
+def _test_variants_build_shared_flag_impl(env, target):
+    """A flag covering two items is match_all, and is left out of the no-variant message."""
+    info = collect_variants_for_testing(_SHARED_TEST_VARIANTS)
+    env.expect.that_dict(info.flags).contains_exactly({
+        "group_test": ["group_app-a_test", "group_app-b_test"],
+        "group_app-a_test": ["group_app-a_test"],
+        "group_app-b_test": ["group_app-b_test"],
+    })
+    build = variants_build_for_testing(info, "ws__pkgs", "lock_all")
+    group_test = build.split('name = "is_group_test"')[1].split(")")[0]
+    env.expect.that_bool("match_all" in group_test).equals(True)
+    env.expect.that_bool('"@ws__pkgs//_lock:is_group_app-a_test"' in group_test).equals(True)
+    env.expect.that_bool('"@ws__pkgs//_lock:is_group_app-b_test"' in group_test).equals(True)
+    env.expect.that_bool('alias(\n    name = "is_group_app-a_test",' in build).equals(True)
+    env.expect.that_bool(
+        "Set one of the _variants flags on your pycross repo: group_app-a_test, group_app-b_test (e.g. --@lock_all//_variants:group_app-a_test=True)" in build,
+    ).equals(True)
+
+def _test_variants_build_shared_flag(name):
+    util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
+    analysis_test(name = name, target = name + "_subject", impl = _test_variants_build_shared_flag_impl)
+
+# buildifier: disable=unused-variable
+def _test_variants_build_repo_default_impl(env, target):
+    """The repo default's is_<flag> also matches when nothing in the set is selected."""
+    info = collect_variants_for_testing([{
+        "items": [
+            {"package": "my-app", "kind": "group", "name": "a", "flags": ["group_a", "group_my-app_a"]},
+            {"package": "my-app", "kind": "group", "name": "b", "flags": ["group_b", "group_my-app_b"]},
+        ],
+        "repo_default": "group_my-app_a",
+    }])
+    build = variants_build_for_testing(info, "ws__pkgs", "pypi")
+    unselected = '"@ws__pkgs//_lock:_unselected_group_my-app_a_group_my-app_b"'
+    is_a = build.split('name = "is_group_a"')[1].split(")")[0]
+    env.expect.that_bool("match_any" in is_a and unselected in is_a).equals(True)
+    is_b = build.split('name = "is_group_b"')[1].split(")")[0]
+    env.expect.that_bool(unselected in is_b).equals(False)
+
+    # The message lists one flag per item: the short names, since they're unambiguous.
+    env.expect.that_bool("pycross repo: group_a, group_b (e.g. --@pypi//_variants:group_a=True)" in build).equals(True)
+
+def _test_variants_build_repo_default(name):
+    util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
+    analysis_test(name = name, target = name + "_subject", impl = _test_variants_build_repo_default_impl)
+
 def thin_package_repo_test_suite(name):
     test_suite(
         name = name,
         tests = [
+            _test_variants_build_shared_flag,
+            _test_variants_build_repo_default,
             _test_pin_build_no_transition,
             _test_pin_build_with_platform,
             _test_pin_build_transition_loads,

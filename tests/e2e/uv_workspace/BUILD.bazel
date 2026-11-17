@@ -1,4 +1,8 @@
 load("@lock_a//:requirements.bzl", requirement_a = "requirement")
+load("@lock_a_test//:requirements.bzl", requirement_a_test = "requirement")
+load("@lock_a_test_default//:requirements.bzl", requirement_a_test_default = "requirement")
+load("@lock_all_test//:requirements.bzl", requirement_all_test = "requirement")
+load("@lock_b_test//:requirements.bzl", requirement_b_test = "requirement")
 load("@lock_project_b//:requirements.bzl", requirement_b = "requirement")
 load("@lock_standalone_a//:requirements.bzl", requirement_standalone_a = "requirement")
 load("@lock_standalone_b//:requirements.bzl", requirement_standalone_b = "requirement")
@@ -61,4 +65,54 @@ py_test(
         requirement_standalone_a("six"),
         requirement_standalone_b("attrs"),
     ],
+)
+
+# Test: same-named conflicting `test` groups in two members resolve to each
+# member's own pin.
+py_test(
+    name = "test_member_group_a",
+    srcs = ["test_version.py"],
+    args = [
+        "iniconfig",
+        "1.1.1",
+    ],
+    main = "test_version.py",
+    deps = [requirement_a_test("iniconfig")],
+)
+
+py_test(
+    name = "test_member_group_b",
+    srcs = ["test_version.py"],
+    args = [
+        "iniconfig",
+        "2.0.0",
+    ],
+    main = "test_version.py",
+    deps = [requirement_b_test("iniconfig")],
+)
+
+# Test: in a repo covering both members, the per-project flag selects one
+# member's group.
+py_test(
+    name = "test_member_group_a_from_all",
+    srcs = ["test_version.py"],
+    args = [
+        "iniconfig",
+        "1.1.1",
+    ],
+    main = "test_version.py",
+    deps = [requirement_all_test("iniconfig")],
+)
+
+# Test: a repo default from the member's default-groups, with no flags. It
+# builds alongside lock_b_test's pin of the conflicting group.
+py_test(
+    name = "test_member_group_a_default",
+    srcs = ["test_version.py"],
+    args = [
+        "iniconfig",
+        "1.1.1",
+    ],
+    main = "test_version.py",
+    deps = [requirement_a_test_default("iniconfig")],
 )

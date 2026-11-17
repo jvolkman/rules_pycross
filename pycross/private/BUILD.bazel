@@ -64,6 +64,7 @@ bzl_library(
     name = "translator_common",
     srcs = ["translator_common.bzl"],
     deps = [
+        ":lock_common",
         "@pypackaging.bzl//:pypackaging",
     ],
 )
@@ -370,6 +371,7 @@ bzl_library(
     srcs = ["lock_common.bzl"],
     deps = [
         ":util",
+        "@bazel_skylib//lib:paths",
         "@toml.bzl//toml:toml",
     ],
 )

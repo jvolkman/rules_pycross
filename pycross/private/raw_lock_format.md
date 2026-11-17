@@ -90,6 +90,7 @@ Represents a set of mutually exclusive variant items (conflicts).
 ### Fields
 
 - `items`: (Array of VariantItem Objects) List of items participating in the conflict.
+- `repo_default`: (String, Optional) The internal name (`<kind>_<package>_<name>`) of the item the repo generated from this lock selects by default, from the selected pyproject's `[tool.uv] default-groups`. The repo's transition applies it.
 
 ---
 
@@ -100,4 +101,4 @@ Represents a set of mutually exclusive variant items (conflicts).
 - `package`: (String) The workspace member name this variant belongs to.
 - `kind`: (String) One of `"extra"`, `"group"`, or `"project"`.
 - `name`: (String, Optional) The extra or group name. Empty for project-level variants.
-- `default`: (Boolean, Optional) True if this item is a default selection.
+- `flags`: (Array of Strings, Optional) The `@<repo>//_variants` flags that enable this item in the repo generated from this lock: `<kind>_<name>` (e.g. `group_test`, shared by all of the repo's projects that declare that extra/group) and `<kind>_<package>_<name>` (e.g. `group_app-a_test`, this item only), or `package_<package>` for project items. Only set for items declared by the repo's own projects.
