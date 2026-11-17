@@ -15,6 +15,8 @@ All notable changes to this project will be documented in this file.
   pyproject as in uv, and only to groups the repo requests.
 - **Variants pinned with `uv.repo(flags/settings)`** win over command-line
   `_variants` flags for the same conflict set.
+- **`uv` project conflicts** (`{package = ...}`) gate each project's
+  dependencies; a repo with one of the projects selects it automatically.
 - **`pyproject.toml` lookup for workspace members** is relative to the lock
   file's directory, so member directories no longer need to be Bazel packages.
 

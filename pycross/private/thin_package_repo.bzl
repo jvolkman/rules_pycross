@@ -455,7 +455,7 @@ def _collect_variants(variant_sets):
     Returns:
         struct(
             flags = {flag: [qnames]},  # this repo's _variants flags and the items they enable
-            sets = {set_suffix: struct(qnames, flags, default)},
+            sets = {set_suffix: struct(qnames, flags, default, pin)},
         )
     """
     flags = {}
@@ -489,6 +489,7 @@ def _collect_variants(variant_sets):
                 qnames = qnames,
                 flags = usable,
                 default = variant_set.get("repo_default", ""),
+                pin = variant_set.get("repo_pin", ""),
             )
     return struct(flags = flags, sets = sets)
 
@@ -513,10 +514,10 @@ def _variants_build(variant_info, workspace_repo, repo_name):
     if not variant_info.flags and not variant_info.sets:
         return None
 
-    defaults = {}  # qname -> [set suffixes where it's this repo's default]
+    defaults = {}  # qname -> [set suffixes where this repo selects it by default or pins it]
     for set_suffix, vset in variant_info.sets.items():
-        if vset.default:
-            defaults.setdefault(vset.default, []).append(set_suffix)
+        if vset.pin or vset.default:
+            defaults.setdefault(vset.pin or vset.default, []).append(set_suffix)
 
     body = []
     needs_selects = False
@@ -652,6 +653,12 @@ def _thin_package_repo_impl(rctx):
     for set_suffix, qname in sorted(rctx.attr.variant_pins.items()):
         fixed_settings["@{}//_lock:_pin_{}".format(workspace_repo, set_suffix)] = qname
     for set_suffix, vset in sorted(variant_info.sets.items()):
+        if vset.pin:
+            # The repo's own project in a `{package = ...}` conflict.
+            pin_label = "@{}//_lock:_pin_{}".format(workspace_repo, set_suffix)
+            if fixed_settings.get(pin_label, vset.pin) != vset.pin:
+                fail("{}: flags select {}, but the repo's project is {}".format(rctx.attr.member_name, fixed_settings[pin_label], vset.pin))
+            fixed_settings[pin_label] = vset.pin
         if vset.default:
             fixed_settings["@{}//_lock:_default_{}".format(workspace_repo, set_suffix)] = vset.default
     has_flags = bool(rctx.attr.flags) or bool(rctx.attr.settings) or bool(fixed_settings)

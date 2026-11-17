@@ -1,0 +1,11 @@
+[project]
+name="root"
+version="0"
+requires-python=">=3.12"
+dependencies=[]
+[tool.uv]
+package=false
+# Package-level conflicts are a uv preview feature.
+conflicts=[[{package="a"},{package="b"}]]
+[tool.uv.workspace]
+members=["a","b"]

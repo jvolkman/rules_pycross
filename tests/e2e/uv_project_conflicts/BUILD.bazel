@@ -1,0 +1,48 @@
+load("@rules_python//python:defs.bzl", "py_test")
+
+# Each project's repo gets that project's iniconfig, in the same build.
+py_test(
+    name = "test_repo_a",
+    srcs = ["test_version.py"],
+    args = [
+        "iniconfig",
+        "1.1.1",
+    ],
+    main = "test_version.py",
+    deps = ["@repo_a//iniconfig"],
+)
+
+py_test(
+    name = "test_repo_b",
+    srcs = ["test_version.py"],
+    args = [
+        "iniconfig",
+        "2.0.0",
+    ],
+    main = "test_version.py",
+    deps = ["@repo_b//iniconfig"],
+)
+
+py_test(
+    name = "test_all_pinned_b",
+    srcs = ["test_version.py"],
+    args = [
+        "iniconfig",
+        "2.0.0",
+    ],
+    main = "test_version.py",
+    deps = ["@all_pinned_b//iniconfig"],
+)
+
+# Needs --@all//_variants:package_a=True (see run.sh).
+py_test(
+    name = "test_all_a",
+    srcs = ["test_version.py"],
+    args = [
+        "iniconfig",
+        "1.1.1",
+    ],
+    main = "test_version.py",
+    tags = ["manual"],
+    deps = ["@all//iniconfig"],
+)

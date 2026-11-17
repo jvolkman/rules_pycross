@@ -891,6 +891,37 @@ def _test_uv_repo_defaults(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
     analysis_test(name = name, target = name + "_subject", impl = _test_uv_repo_defaults_impl)
 
+# buildifier: disable=unused-variable
+def _test_uv_project_conflicts_impl(env, target):
+    """`{package = ...}` conflicts gate each project's deps; single-project repos pin their project."""
+    lock = _lock(
+        [
+            _pkg("a", "0", source = {"virtual": "a"}, deps = [_dep("iniconfig", "1.1.1", marker = "extra == 'project-1-a'")]),
+            _pkg("b", "0", source = {"virtual": "b"}, deps = [_dep("iniconfig", "2.0.0", marker = "extra == 'project-1-b'")]),
+            _pkg("iniconfig", "1.1.1", wheels = [_whl("iniconfig-1.1.1-py2.py3-none-any.whl", "aaa")]),
+            _pkg("iniconfig", "2.0.0", wheels = [_whl("iniconfig-2.0.0-py3-none-any.whl", "bbb")]),
+        ],
+        conflicts = [[{"package": "a"}, {"package": "b"}]],
+    )
+
+    # A repo with both projects pins each project's version under its variant, and
+    # has to select one with a flag (no repo pin).
+    result = translate_uv(_project(name = "root"), lock, _lock_model())
+    env.expect.that_dict(result["pins"]["iniconfig"]).contains_exactly({
+        "package_a": "iniconfig@1.1.1",
+        "package_b": "iniconfig@2.0.0",
+    })
+    env.expect.that_str(result["variants"][0].get("repo_pin", "")).equals("")
+
+    # A repo with one project pins that project's variant.
+    result = translate_uv(_project(name = "a"), lock, _lock_model(projects = ["a"]))
+    env.expect.that_dict(result["pins"]["iniconfig"]).contains_exactly({"package_a": "iniconfig@1.1.1"})
+    env.expect.that_str(result["variants"][0].get("repo_pin", "")).equals("package_a")
+
+def _test_uv_project_conflicts(name):
+    util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
+    analysis_test(name = name, target = name + "_subject", impl = _test_uv_project_conflicts_impl)
+
 def _test_uv_same_named_groups_across_members(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
     analysis_test(name = name, target = name + "_subject", impl = _test_uv_same_named_groups_across_members_impl)
@@ -1569,6 +1600,7 @@ def uv_translator_test_suite(name):
             _test_uv_variants_scoped_to_project,
             _test_uv_same_named_groups_across_members,
             _test_uv_repo_defaults,
+            _test_uv_project_conflicts,
             _test_uv_local_version_exact_matching,
             _test_uv_issue_1510_verbatim_lock,
         ],

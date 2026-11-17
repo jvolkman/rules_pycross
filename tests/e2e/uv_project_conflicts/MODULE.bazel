@@ -1,0 +1,55 @@
+bazel_dep(name = "rules_pycross", version = "0.0.0")
+bazel_dep(name = "rules_pycross_e2e_shared", version = "0.0.0")
+bazel_dep(name = "rules_python", version = "2.0.0")
+
+local_path_override(
+    module_name = "rules_pycross",
+    path = "../../..",
+)
+
+local_path_override(
+    module_name = "rules_pycross_e2e_shared",
+    path = "../shared",
+)
+
+python = use_extension("@rules_python//python/extensions:python.bzl", "python")
+python.toolchain(
+    is_default = True,
+    python_version = "3.14.2",
+)
+use_repo(python, "python_versions")
+
+# Workspace members `a` and `b` conflict as whole projects
+# (`conflicts = [[{package = "a"}, {package = "b"}]]`), pinning different
+# iniconfig versions.
+uv = use_extension("@rules_pycross//pycross/extensions:uv.bzl", "uv")
+uv.workspace(
+    name = "ws",
+    lock_file = "//:uv.lock",
+)
+
+# One project each: the repo selects its own project, like `uv sync --package`.
+uv.repo(
+    name = "repo_a",
+    projects = ["a"],
+    workspace = "ws",
+)
+uv.repo(
+    name = "repo_b",
+    projects = ["b"],
+    workspace = "ws",
+)
+
+# Both projects, like `uv sync --all-packages`: select one with a flag.
+uv.repo(
+    name = "all",
+    projects = ["*"],
+    workspace = "ws",
+)
+uv.repo(
+    name = "all_pinned_b",
+    flags = ["--@all_pinned_b//_variants:package_b=True"],
+    projects = ["*"],
+    workspace = "ws",
+)
+use_repo(uv, "all", "all_pinned_b", "repo_a", "repo_b")

@@ -261,6 +261,7 @@ def translate_uv(project_dict, lock_dict, lock_model):
     # same-named extra/group of another project.
     extra_variant_values = {}
     group_variant_values = {}
+    project_variant_values = {}  # package -> qname, for `{package = ...}` conflicts
     token_replacements = []
     for item in variant_items_by_key.values():
         kind = item["kind"]
@@ -271,6 +272,8 @@ def translate_uv(project_dict, lock_dict, lock_model):
             extra_variant_values[lookup_key] = qualified
         elif kind == "group":
             group_variant_values[lookup_key] = qualified
+        elif kind == "project":
+            project_variant_values[item["package"]] = qualified
         uv_tok = _uv_conflict_token(item)
         var_tok = "__variant_{}".format(qualified)
         token_replacements.append(("'{}'".format(uv_tok), "'{}'".format(var_tok)))
@@ -406,9 +409,13 @@ def translate_uv(project_dict, lock_dict, lock_model):
         )
         requested_by_project[project_name] = requested_groups_dict
 
+        # A project in a `{package = ...}` conflict has all of its edges gated on
+        # its project variant (uv marks them `extra == 'project-<n>-<name>'`).
+        # Extras/groups with their own conflict variant use that instead.
+        project_constraint = project_variant_values.get(project_name, "")
         group_batches = []
         if "default" in requested_groups_dict:
-            group_batches.append(("", default_dependencies, requested_groups_dict["default"]))
+            group_batches.append((project_constraint, default_dependencies, requested_groups_dict["default"]))
         for kind, groups_dict, constraint_dict in [
             ("optional", optional_dependencies, extra_variant_values),
             ("group", development_dependencies, group_variant_values),
@@ -418,7 +425,7 @@ def translate_uv(project_dict, lock_dict, lock_model):
                 if key not in requested_groups_dict:
                     continue
                 group_batches.append((
-                    constraint_dict.get((project_name, group_name), ""),
+                    constraint_dict.get((project_name, group_name), project_constraint),
                     deps_list,
                     requested_groups_dict[key],
                 ))
@@ -483,6 +490,18 @@ def translate_uv(project_dict, lock_dict, lock_model):
             candidates.append(item)
         if len(candidates) == 1:
             variant_set["repo_default"] = variant_item_qname(candidates[0])
+
+        # A repo with exactly one of a `{package = ...}` conflict's projects always
+        # selects that project, as `uv sync --package <project>` does; its
+        # transition pins `_pin_<set>`. A repo with several of them (like
+        # `uv sync --all-packages`) has to select one with a flag.
+        owned_projects = [
+            item
+            for item in variant_set["items"]
+            if item["kind"] == "project" and item["package"] in target_projects_set
+        ]
+        if len(owned_projects) == 1:
+            variant_set["repo_pin"] = variant_item_qname(owned_projects[0])
 
     # Build pinned specs
     pinned_package_specs = {}
