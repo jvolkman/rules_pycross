@@ -261,6 +261,7 @@ def translate_uv(project_dict, lock_dict, lock_model):
     # same-named extra/group of another project.
     extra_variant_values = {}
     group_variant_values = {}
+    project_variant_values = {}  # package -> qname, for `{package = ...}` conflicts
     token_replacements = []
     for item in variant_items_by_key.values():
         kind = item["kind"]
@@ -271,6 +272,8 @@ def translate_uv(project_dict, lock_dict, lock_model):
             extra_variant_values[lookup_key] = qualified
         elif kind == "group":
             group_variant_values[lookup_key] = qualified
+        elif kind == "project":
+            project_variant_values[item["package"]] = qualified
         uv_tok = _uv_conflict_token(item)
         var_tok = "__variant_{}".format(qualified)
         token_replacements.append(("'{}'".format(uv_tok), "'{}'".format(var_tok)))
@@ -406,9 +409,13 @@ def translate_uv(project_dict, lock_dict, lock_model):
         )
         requested_by_project[project_name] = requested_groups_dict
 
+        # A project in a `{package = ...}` conflict has all of its edges gated on
+        # its project variant (uv marks them `extra == 'project-<n>-<name>'`).
+        # Extras/groups with their own conflict variant use that instead.
+        project_constraint = project_variant_values.get(project_name, "")
         group_batches = []
         if "default" in requested_groups_dict:
-            group_batches.append(("", default_dependencies, requested_groups_dict["default"]))
+            group_batches.append((project_constraint, default_dependencies, requested_groups_dict["default"]))
         for kind, groups_dict, constraint_dict in [
             ("optional", optional_dependencies, extra_variant_values),
             ("group", development_dependencies, group_variant_values),
@@ -418,7 +425,7 @@ def translate_uv(project_dict, lock_dict, lock_model):
                 if key not in requested_groups_dict:
                     continue
                 group_batches.append((
-                    constraint_dict.get((project_name, group_name), ""),
+                    constraint_dict.get((project_name, group_name), project_constraint),
                     deps_list,
                     requested_groups_dict[key],
                 ))
@@ -446,13 +453,13 @@ def translate_uv(project_dict, lock_dict, lock_model):
                     for extra in dep_extras:
                         pin_name = "{}[{}]".format(dep_name, canonicalize_name(extra))
                         record_root_marker(root_dependency_markers, pin_name, dep_marker)
-                        requirements.append((pin_name, specifier, effective_constraint, is_testonly))
+                        requirements.append((pin_name, specifier, effective_constraint, is_testonly, dep_marker))
 
                 # An extras pin implies its base package, so the base records
                 # the same marker (an unmarked extras edge unlocks the base).
                 record_root_marker(root_dependency_markers, base_dep_name, dep_marker)
                 if not dep_extras:
-                    requirements.append((dep_name, specifier, effective_constraint, is_testonly))
+                    requirements.append((dep_name, specifier, effective_constraint, is_testonly, dep_marker))
 
     # End collect requirements
 
@@ -470,25 +477,77 @@ def translate_uv(project_dict, lock_dict, lock_model):
     # conflict set gets a default only if exactly one of its items qualifies.
     # The repo's transition sets `_default_<set>`; the workspace repo has no
     # static defaults.
+    #
+    # For `{package = ...}` conflicts (which cover a project's base dependencies,
+    # not its groups or extras): if the only item of the set this repo owns is a
+    # project, the repo always selects it, as `uv sync --package <project>` does,
+    # and its transition pins `_pin_<set>`. Otherwise a project whose default
+    # dependencies the repo requests is a default candidate too, so e.g.
+    # `[{package = "a"}, {package = "b", group = "g"}]` defaults to `a` in a repo
+    # spanning both (like `uv sync --all-packages`), while `[{package = "a"},
+    # {package = "b"}]` still needs a flag.
     default_owner = canonicalize_name(project_dict.get("project", {}).get("name", ""))
     for variant_set in variant_sets:
+        owned_items = [item for item in variant_set["items"] if item["package"] in target_projects_set]
+        if len(owned_items) == 1 and owned_items[0]["kind"] == "project":
+            variant_set["repo_pin"] = variant_item_qname(owned_items[0])
+            continue
+
         candidates = []
-        for item in variant_set["items"]:
+        for item in owned_items:
+            requested = requested_by_project.get(item["package"], {})
+            if item["kind"] == "project":
+                if "default" in requested:
+                    candidates.append(item)
+                continue
             if item["kind"] != "group" or item["package"] != default_owner:
                 continue
             if uv_default_groups != "all" and item["name"] not in [canonicalize_name(g) for g in uv_default_groups]:
                 continue
-            if "group:" + item["name"] not in requested_by_project.get(item["package"], {}):
+            if "group:" + item["name"] not in requested:
                 continue
             candidates.append(item)
         if len(candidates) == 1:
             variant_set["repo_default"] = variant_item_qname(candidates[0])
 
+    # uv can split one edge into several versions with conflict markers and no
+    # `resolution-markers` on the packages (e.g. a group of a conflicted project:
+    # `iniconfig 1.1.1; extra == 'project-1-a'` and `iniconfig 2.0.0;
+    # extra != 'project-1-a'`). Under one constraint those would overwrite each
+    # other, so give each version its own constraint from its edge markers.
+    edges = {}  # (pin_name, constraint) -> {specifier: [markers]}
+    for pin_name, specifier, constraint, _, dep_marker in requirements:
+        edges.setdefault((pin_name, constraint), {}).setdefault(specifier, []).append(dep_marker)
+    edge_constraints = {}  # (pin_name, constraint, specifier) -> constraint
+    for (pin_name, constraint), by_specifier in edges.items():
+        if len(by_specifier) <= 1:
+            continue
+        for specifier, markers in by_specifier.items():
+            if "" in markers:
+                continue  # an unmarked edge: can't narrow it
+            unique = sorted({m: True for m in markers}.keys())
+            marker = unique[0] if len(unique) == 1 else " or ".join(["({})".format(m) for m in unique])
+
+            # Keyed by the marker so repos (whose requested groups can OR in
+            # different edges) never map one name to different markers, and
+            # identical markers share an evaluator.
+            edge_constraint = "%s__edge_%x" % (
+                resolution_marker_constraint_name(pin_name.split("[")[0], specifier.lstrip("=")),
+                hash(marker) & 0xffffffff,
+            )
+            resolution_marker_exprs[edge_constraint] = marker
+            if constraint:
+                compound = "{}_{}".format(constraint, edge_constraint)
+                resolution_marker_exprs[compound] = {"variant": constraint, "marker": edge_constraint}
+                edge_constraint = compound
+            edge_constraints[(pin_name, constraint, specifier)] = edge_constraint
+
     # Build pinned specs
     pinned_package_specs = {}
     testonly_reqs = {}
     non_testonly_reqs = {}
-    for pin_name, specifier, constraint, is_testonly in requirements:
+    for pin_name, specifier, constraint, is_testonly, _ in requirements:
+        constraint = edge_constraints.get((pin_name, constraint, specifier), constraint)
         if pin_name not in pinned_package_specs:
             pinned_package_specs[pin_name] = {}
         pinned_package_specs[pin_name][constraint] = specifier
@@ -500,6 +559,50 @@ def translate_uv(project_dict, lock_dict, lock_model):
             non_testonly_reqs[base_pin_name] = True
 
     testonly_pin_names = [name for name in testonly_reqs if name not in non_testonly_reqs]
+
+    # A plain edge-split entry (from an edge outside the conflict, e.g. an
+    # unconflicted project's `iniconfig; extra != 'project-1-a'`) can sit in a
+    # pin next to entries for that conflict set's variants. With no variant
+    # selected it would match alongside the `_unselected_<set>` error branch and
+    # make the select() ambiguous.
+    #   - If every item of the set has its own (un-narrowed) entry, the edge entry
+    #     is redundant: uv resolves one version per fork, so it agrees with them
+    #     whenever a variant is selected. Drop it.
+    #   - Otherwise (e.g. `b` doesn't depend on the package at all), the edge
+    #     entry is still needed for the uncovered items: narrow it to "some
+    #     variant of the set is selected", so it's false when none is.
+    set_qnames = [[variant_item_qname(item) for item in vs["items"]] for vs in variant_sets]
+    for pin_name, specs in pinned_package_specs.items():
+        variant_qnames = {}
+        for key in specs.keys():
+            expr = resolution_marker_exprs.get(key)
+            variant_qnames[expr["variant"] if type(expr) == "dict" else key] = True
+        for key in list(specs.keys()):
+            expr = resolution_marker_exprs.get(key)
+            if type(expr) != "string" or "__edge_" not in key:
+                continue
+            guards = []
+            drop = False
+            for qnames in set_qnames:
+                if not [q for q in qnames if "'__variant_{}'".format(q) in expr]:
+                    continue
+                if not [q for q in qnames if q in variant_qnames]:
+                    continue
+                if all([q in specs for q in qnames]):
+                    drop = True
+                    break
+                guards.append("(" + " or ".join(["extra == '__variant_{}'".format(q) for q in qnames]) + ")")
+            if drop:
+                specs.pop(key)
+            elif guards:
+                specifier = specs.pop(key)
+                narrowed = " and ".join(guards + ["({})".format(expr)])
+                narrowed_key = "%s__edge_%x" % (
+                    resolution_marker_constraint_name(pin_name.split("[")[0], specifier.lstrip("=")),
+                    hash(narrowed) & 0xffffffff,
+                )
+                resolution_marker_exprs[narrowed_key] = narrowed
+                specs[narrowed_key] = specifier
 
     # Process all packages from lock
     packages = []

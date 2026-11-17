@@ -1,0 +1,99 @@
+load("@rules_python//python:defs.bzl", "py_test")
+
+# Each project's repo gets that project's iniconfig, in the same build.
+py_test(
+    name = "test_repo_a",
+    srcs = ["test_version.py"],
+    args = [
+        "iniconfig",
+        "1.1.1",
+    ],
+    main = "test_version.py",
+    deps = ["@repo_a//iniconfig"],
+)
+
+# a's `plain` group: uv splits its iniconfig edge into 1.1.1 (with a) and
+# 2.0.0 (without a); the repo selects a, so it gets 1.1.1.
+py_test(
+    name = "test_repo_a_plain",
+    srcs = ["test_version.py"],
+    args = [
+        "iniconfig",
+        "1.1.1",
+    ],
+    main = "test_version.py",
+    deps = ["@repo_a_plain//iniconfig"],
+)
+
+py_test(
+    name = "test_repo_b",
+    srcs = ["test_version.py"],
+    args = [
+        "iniconfig",
+        "2.0.0",
+    ],
+    main = "test_version.py",
+    deps = ["@repo_b//iniconfig"],
+)
+
+py_test(
+    name = "test_repo_c",
+    srcs = ["test_version.py"],
+    args = [
+        "iniconfig",
+        "2.0.0",
+    ],
+    main = "test_version.py",
+    deps = ["@repo_c//iniconfig"],
+)
+
+py_test(
+    name = "test_all_pinned_b",
+    srcs = ["test_version.py"],
+    args = [
+        "iniconfig",
+        "2.0.0",
+    ],
+    main = "test_version.py",
+    deps = ["@all_pinned_b//iniconfig"],
+)
+
+# Needs --@all//_variants:package_a=True (see run.sh).
+py_test(
+    name = "test_all_a",
+    srcs = ["test_version.py"],
+    args = [
+        "iniconfig",
+        "1.1.1",
+    ],
+    main = "test_version.py",
+    tags = ["manual"],
+    deps = ["@all//iniconfig"],
+)
+
+# Needs --@everything//_variants:package_a=True (see run.sh).
+py_test(
+    name = "test_everything_a",
+    srcs = ["test_version.py"],
+    args = [
+        "iniconfig",
+        "1.1.1",
+    ],
+    main = "test_version.py",
+    tags = ["manual"],
+    deps = ["@everything//iniconfig"],
+)
+
+# `b` doesn't depend on six but `c` does: with package_b, `everything` gets c's
+# six (needs --@everything//_variants:package_b=True; see run.sh).
+py_test(
+    name = "test_everything_b_six",
+    srcs = ["test_version.py"],
+    args = [
+        "six",
+        "1.17.0",
+    ],
+    main = "test_version.py",
+    tags = ["manual"],
+    deps = ["@everything//six"],
+)

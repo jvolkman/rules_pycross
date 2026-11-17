@@ -734,6 +734,10 @@ If several projects' groups with the same name conflict with each other, `group_
 
 In a repo with several projects, a group listed in `dependency_groups` only has to exist in one of them.
 
+### Project Conflicts
+
+uv can also declare whole workspace members as conflicting (`conflicts = [[{ package = "app-a" }, { package = "app-b" }]]`, a uv preview feature). A repo with one of those projects (`projects = ["app-a"]`) selects that project automatically, like `uv sync --package app-a`. A repo with several of them (e.g. `projects = ["*"]`) needs a flag such as `--@pypi//_variants:package_app-a=True`, or fails with a "No uv conflict variant selected" error, much as `uv sync --all-packages` refuses to install conflicting projects together.
+
 ### Platform Transitions
 
 When a workspace member needs to be built under a specific configuration—for example, to pin a variant flag or target a particular architecture—you can declare a transition on its `repo()` tag. All proxy targets in the thin repo then apply a Bazel transition, so the backing workspace targets are analyzed under the specified platform and flags.

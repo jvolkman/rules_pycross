@@ -37,6 +37,7 @@ def define_e2e_tests():
         "uv_forked_build_tools",
         "uv_forks",
         "uv_markers",
+        "uv_project_conflicts",
         "uv_workspace",
     ]:
         extra_tags = ["build"] if ws in _BUILD_WORKSPACES else []
