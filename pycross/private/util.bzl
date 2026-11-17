@@ -153,7 +153,13 @@ def is_platform_specific(pkg):
     return bool(pkg.get("wheel_candidates")) and not has_build_fallback(pkg)
 
 def variant_item_qname(item):
-    """Return the qualified name (e.g. 'package_foo' or 'extra_bar') for a variant item."""
+    """Return the qualified name (e.g. 'package_foo' or 'extra_bar') for a variant item.
+
+    Translators set `qname` when the short name would be ambiguous (for example, two
+    workspace members that both declare a conflicting `test` group).
+    """
+    if item.get("qname"):
+        return item["qname"]
     if item["kind"] == "project":
         return "package_{}".format(item["package"])
     return "{}_{}".format(item["kind"], item["name"])

@@ -133,35 +133,53 @@ def discover_poetry_all_members(_mctx, _lock_file_label):
 def discover_pylock_all_members(_mctx, _lock_file_label):
     return [struct(name = "root", path = "")]
 
+def _normalize_relpath(path):
+    """Collapse `.`/`..` segments in a `/`-separated relative path.
+
+    Leading `..` segments that would escape the root are kept.
+    """
+    parts = []
+    for seg in path.split("/"):
+        if seg in ("", "."):
+            continue
+        if seg == ".." and parts and parts[-1] != "..":
+            parts.pop()
+        else:
+            parts.append(seg)
+    return "/".join(parts)
+
 def resolve_member_project_file(lock_file_label, member_path):
-    """Resolve a member's pyproject.toml label relative to the lock file.
+    """Resolve a member's pyproject.toml label relative to the lock file's directory.
+
+    The result stays in the lock file's package when it can (e.g. `//:project/uv.lock` with
+    member `apps/a` gives `//:project/apps/a/pyproject.toml`), so member directories don't
+    need to be Bazel packages. Labels that cross into subpackages are fine for
+    `module_ctx.path()`/`repository_ctx.path()`.
 
     Args:
-        lock_file_label: Label of the uv.lock file.
-        member_path: Relative path from lock file to member directory (e.g. "./packages/lib-a").
+        lock_file_label: Label of the lock file.
+        member_path: Relative path from the lock file's directory to the member directory
+            (e.g. "./packages/lib-a"). Use "" or "." for the lock file's own directory.
 
     Returns:
         A Label pointing to the member's pyproject.toml.
     """
+    name = lock_file_label.name
+    lock_dir = name.rpartition("/")[0] if "/" in name else ""
+    rel = _normalize_relpath("/".join([p for p in [lock_dir, member_path, "pyproject.toml"] if p]))
+    if not rel.startswith("../"):
+        return lock_file_label.same_package_label(rel)
 
-    # Strip leading "./" if present
-    clean_path = member_path
-    if clean_path.startswith("./"):
-        clean_path = clean_path[2:]
-    if clean_path == ".":
-        clean_path = ""
+    # The member is outside the lock file's package: resolve from the repo root.
+    pkg = lock_file_label.package
+    repo_rel = _normalize_relpath("/".join([p for p in [pkg, rel] if p]))
+    if repo_rel.startswith("../"):
+        fail("Workspace member path '{}' (relative to {}) is outside the repository".format(member_path, lock_file_label))
+    return lock_file_label.relative("//:" + repo_rel)
 
-    # Build the package path relative to the lock file's package
-    lock_package = lock_file_label.package
-    if lock_package:
-        member_package = lock_package + ("/" + clean_path if clean_path else "")
-    else:
-        member_package = clean_path
-
-    if member_package:
-        return lock_file_label.relative("//{}:pyproject.toml".format(member_package))
-    else:
-        return lock_file_label.relative("//:pyproject.toml")
+def sibling_project_file(lock_file_label):
+    """Return the label of the pyproject.toml next to a lock file."""
+    return resolve_member_project_file(lock_file_label, "")
 
 def get_member_transition_attrs(tag):
     """Extract normalized transition attributes from a repo tag."""
@@ -393,7 +411,7 @@ def process_workspaces(
 
         if not project_files:
             # No workspace members discovered; fall back to sibling pyproject.toml.
-            project_files.append(ws_tag.lock_file.relative(":pyproject.toml"))
+            project_files.append(sibling_project_file(ws_tag.lock_file))
 
         # Append any user-specified extra_project_files, deduplicating.
         for f in getattr(ws_tag, "extra_project_files", []):

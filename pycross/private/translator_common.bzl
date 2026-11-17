@@ -6,6 +6,7 @@ Used by PDM, Poetry, UV, and Pylock translators.
 
 load("@pypackaging.bzl", "pypackaging")
 load("@toml.bzl//toml:toml.bzl", "decode")
+load(":lock_common.bzl", "sibling_project_file")
 
 def canonicalize_name(name):
     """Canonicalize a Python package name per PEP 503."""
@@ -91,7 +92,7 @@ def sha256_from_string(s):
 
 def _read_project_dict(rctx, extra_project_files, lock_file, lock_model):
     """Select and decode the relevant pyproject.toml as a dict."""
-    sibling_label = lock_file.relative(":pyproject.toml")
+    sibling_label = sibling_project_file(lock_file)
     if not extra_project_files:
         project_path = rctx.path(sibling_label)
         return decode(rctx.read(project_path)) if project_path.exists else {}

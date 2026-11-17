@@ -2,6 +2,16 @@
 
 All notable changes to this project will be documented in this file.
 
+## Unreleased
+
+### Fixed
+
+- **Same-named `uv` conflict groups in a workspace.** Conflicting extras or
+  groups that share a name across members (e.g. each member's `test` group) get
+  package-qualified variant flags, such as `group_app-a_test`.
+- **`pyproject.toml` lookup for workspace members** is relative to the lock
+  file's directory, so member directories no longer need to be Bazel packages.
+
 ## [2.0.1]
 
 ### Fixed

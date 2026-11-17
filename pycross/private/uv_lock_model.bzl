@@ -258,6 +258,24 @@ def translate_uv(project_dict, lock_dict, lock_model):
             items.append(variant_items_by_key[key])
         variant_sets.append({"items": items})
 
+    # Variant flags are named `<kind>_<name>` (e.g. `group_test`). If two conflict
+    # items share a kind and name but belong to different packages (e.g. two
+    # workspace members that each declare a `test` group), qualify those with the
+    # package (`group_app-a_test`) so each gets its own flag. Canonical package
+    # names have no underscores, so the qualified names can't collide.
+    packages_by_short_name = {}
+    for item in variant_items_by_key.values():
+        if item["kind"] == "project":
+            continue
+        short = "{}_{}".format(item["kind"], item["name"])
+        packages_by_short_name.setdefault(short, {})[canonicalize_name(item["package"])] = True
+    for item in variant_items_by_key.values():
+        if item["kind"] == "project":
+            continue
+        short = "{}_{}".format(item["kind"], item["name"])
+        if len(packages_by_short_name[short]) > 1:
+            item["qname"] = "{}_{}_{}".format(item["kind"], canonicalize_name(item["package"]), item["name"])
+
     # Build constraint lookup from variants, keyed by (package, name) so a
     # conflict declared on one project's extra/group doesn't apply to a
     # same-named extra/group of another project.
@@ -268,14 +286,13 @@ def translate_uv(project_dict, lock_dict, lock_model):
         kind = item["kind"]
         vname = item.get("name", "")
         lookup_key = (canonicalize_name(item["package"]), vname)
+        qualified = variant_item_qname(item)
         if kind == "extra":
-            qualified = "extra_{}".format(vname)
             extra_variant_values[lookup_key] = qualified
         elif kind == "group":
-            qualified = "group_{}".format(vname)
             group_variant_values[lookup_key] = qualified
         uv_tok = _uv_conflict_token(item)
-        var_tok = "__variant_{}".format(variant_item_qname(item))
+        var_tok = "__variant_{}".format(qualified)
         token_replacements.append(("'{}'".format(uv_tok), "'{}'".format(var_tok)))
         token_replacements.append(('"{}"'.format(uv_tok), '"{}"'.format(var_tok)))
 

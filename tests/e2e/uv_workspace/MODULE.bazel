@@ -51,7 +51,24 @@ uv.package(
     install_exclude_globs = ["test_regex.py"],
     workspace = "shared",
 )
-use_repo(uv, "lock_a", "lock_all", "lock_project_b")
+
+# Both members declare a conflicting `test` group with the same name, so their
+# variant flags are package-qualified. Each test repo pins its member's variant.
+uv.repo(
+    name = "lock_a_test",
+    dependency_groups = ["group:test;testonly"],
+    flags = ["--@lock_a_test//_variants:group_project-a_test=True"],
+    projects = ["project-a"],
+    workspace = "shared",
+)
+uv.repo(
+    name = "lock_b_test",
+    dependency_groups = ["group:test;testonly"],
+    flags = ["--@lock_b_test//_variants:group_project-b_test=True"],
+    projects = ["project-b"],
+    workspace = "shared",
+)
+use_repo(uv, "lock_a", "lock_a_test", "lock_all", "lock_b_test", "lock_project_b")
 
 # Test standalone members (no uv_all_members)
 uv.workspace(

@@ -101,3 +101,4 @@ Represents a set of mutually exclusive variant items (conflicts).
 - `kind`: (String) One of `"extra"`, `"group"`, or `"project"`.
 - `name`: (String, Optional) The extra or group name. Empty for project-level variants.
 - `default`: (Boolean, Optional) True if this item is a default selection.
+- `qname`: (String, Optional) The variant flag name to use instead of the default `<kind>_<name>` (or `package_<package>`). Set when the default would be ambiguous, e.g. `group_app-a_test` when two packages both declare a conflicting `test` group.

@@ -801,6 +801,50 @@ def _test_uv_variants_scoped_to_project(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
     analysis_test(name = name, target = name + "_subject", impl = _test_uv_variants_scoped_to_project_impl)
 
+# --- test_same_named_groups_across_members ---
+
+_MEMBER_GROUP_CONFLICT_LOCK = _lock(
+    [
+        _pkg("app-a", "0.1.0", source = {"editable": "apps/app-a"}),
+        _pkg("app-b", "0.1.0", source = {"editable": "apps/app-b"}),
+        _pkg("pytest", "7.4.4", wheels = [_whl("pytest-7.4.4-py3-none-any.whl", "aaa")]),
+        _pkg("pytest", "9.2.0", wheels = [_whl("pytest-9.2.0-py3-none-any.whl", "bbb")]),
+    ],
+    conflicts = [[{"package": "app-a", "group": "test"}, {"package": "app-b", "group": "test"}]],
+)
+
+def _member_group_conflict_lock():
+    lock = dict(_MEMBER_GROUP_CONFLICT_LOCK)
+    packages = [dict(p) for p in lock["package"]]
+    packages[0]["dev-dependencies"] = {"test": [_dep("pytest", "7.4.4")]}
+    packages[1]["dev-dependencies"] = {"test": [_dep("pytest", "9.2.0")]}
+    lock["package"] = packages
+    return lock
+
+# buildifier: disable=unused-variable
+def _test_uv_same_named_groups_across_members_impl(env, target):
+    """Two members' conflicting `test` groups get distinct, package-qualified variant names."""
+    lock = _member_group_conflict_lock()
+    result = translate_uv(_project(name = "monorepo"), lock, _lock_model(dependency_groups = ["group:test"]))
+    env.expect.that_int(len(result.get("variants", []))).equals(1)
+    qnames = [item.get("qname", "") for item in result["variants"][0]["items"]]
+    env.expect.that_collection(qnames).contains_exactly(["group_app-a_test", "group_app-b_test"])
+
+    # Each member's pytest is pinned under its own variant.
+    pytest_pin = result["pins"]["pytest"]
+    env.expect.that_dict(pytest_pin).contains_exactly({
+        "group_app-a_test": "pytest@7.4.4",
+        "group_app-b_test": "pytest@9.2.0",
+    })
+
+    # A single member keeps its own group's pin.
+    result_a = translate_uv(_project(name = "app-a"), lock, _lock_model(projects = ["app-a"], dependency_groups = ["group:test"]))
+    env.expect.that_dict(result_a["pins"]["pytest"]).contains_exactly({"group_app-a_test": "pytest@7.4.4"})
+
+def _test_uv_same_named_groups_across_members(name):
+    util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
+    analysis_test(name = name, target = name + "_subject", impl = _test_uv_same_named_groups_across_members_impl)
+
 # --- test_local_version_exact_matching ---
 
 # buildifier: disable=unused-variable
@@ -1473,6 +1517,7 @@ def uv_translator_test_suite(name):
             _test_uv_virtual_and_directory_members,
             _test_uv_local_member_deps_keep_forks,
             _test_uv_variants_scoped_to_project,
+            _test_uv_same_named_groups_across_members,
             _test_uv_local_version_exact_matching,
             _test_uv_issue_1510_verbatim_lock,
         ],

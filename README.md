@@ -725,7 +725,7 @@ conflicts = [
 ]
 ```
 
-The generated flags follow the pattern `group_<name>` (e.g., `--@pypi//_variants:group_test-fast=True`).
+The generated flags follow the pattern `group_<name>` (e.g., `--@pypi//_variants:group_test-fast=True`). If conflicting items in different workspace members share a name (for example, each member declares its own conflicting `test` group), their flags include the member name: `group_<member>_<name>` (e.g., `--@pypi//_variants:group_app-a_test=True`). The same applies to extras.
 
 ### Platform Transitions
 

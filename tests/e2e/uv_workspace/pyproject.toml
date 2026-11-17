@@ -7,6 +7,12 @@ dependencies = []
 
 [tool.uv]
 package = false
+conflicts = [
+    [
+        { package = "project-a", group = "test" },
+        { package = "project-b", group = "test" },
+    ],
+]
 
 [tool.uv.workspace]
 members = ["project_a", "project_b"]

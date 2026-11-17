@@ -8,6 +8,10 @@ dependencies = [
     "six>=1.17.0",
 ]
 
+[dependency-groups]
+# Conflicts with the other member's `test` group (same name, different version).
+test = ["iniconfig==1.1.1"]
+
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
