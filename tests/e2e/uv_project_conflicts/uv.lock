@@ -13,6 +13,7 @@ exclude-newer = "2026-10-10T00:00:00Z"
 members = [
     "a",
     "b",
+    "c",
     "root",
 ]
 
@@ -46,6 +47,18 @@ dependencies = [
 
 [package.metadata]
 requires-dist = [{ name = "iniconfig", specifier = "==2.0.0" }]
+
+[[package]]
+name = "c"
+version = "0"
+source = { virtual = "c" }
+dependencies = [
+    { name = "iniconfig", version = "1.1.1", source = { registry = "https://pypi.org/simple" }, marker = "extra == 'project-1-a'" },
+    { name = "iniconfig", version = "2.0.0", source = { registry = "https://pypi.org/simple" }, marker = "extra == 'project-1-b' or extra != 'project-1-a'" },
+]
+
+[package.metadata]
+requires-dist = [{ name = "iniconfig", specifier = ">=1.0" }]
 
 [[package]]
 name = "iniconfig"

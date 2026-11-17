@@ -43,22 +43,35 @@ uv.repo(
     projects = ["a"],
     workspace = "ws",
 )
+
+# `c` isn't in the conflict and needs no flag; its split edge resolves to 2.0.0.
+uv.repo(
+    name = "repo_c",
+    projects = ["c"],
+    workspace = "ws",
+)
 uv.repo(
     name = "repo_b",
     projects = ["b"],
     workspace = "ws",
 )
 
-# Both projects, like `uv sync --all-packages`: select one with a flag.
+# Both projects, like `uv sync --all-packages` without `c`: select one with a flag.
 uv.repo(
     name = "all",
-    projects = ["*"],
+    projects = [
+        "a",
+        "b",
+    ],
     workspace = "ws",
 )
 uv.repo(
     name = "all_pinned_b",
     flags = ["--@all_pinned_b//_variants:package_b=True"],
-    projects = ["*"],
+    projects = [
+        "a",
+        "b",
+    ],
     workspace = "ws",
 )
-use_repo(uv, "all", "all_pinned_b", "repo_a", "repo_a_plain", "repo_b")
+use_repo(uv, "all", "all_pinned_b", "repo_a", "repo_a_plain", "repo_b", "repo_c")

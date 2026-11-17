@@ -527,9 +527,13 @@ def translate_uv(project_dict, lock_dict, lock_model):
                 continue  # an unmarked edge: can't narrow it
             unique = sorted({m: True for m in markers}.keys())
             marker = unique[0] if len(unique) == 1 else " or ".join(["({})".format(m) for m in unique])
-            edge_constraint = "{}__edge{}".format(
+
+            # Keyed by the marker so repos (whose requested groups can OR in
+            # different edges) never map one name to different markers, and
+            # identical markers share an evaluator.
+            edge_constraint = "%s__edge_%x" % (
                 resolution_marker_constraint_name(pin_name.split("[")[0], specifier.lstrip("=")),
-                "__" + constraint if constraint else "",
+                hash(marker) & 0xffffffff,
             )
             resolution_marker_exprs[edge_constraint] = marker
             if constraint:

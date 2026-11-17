@@ -974,6 +974,16 @@ def _test_uv_project_conflict_edge_split_impl(env, target):
     two = exprs[by_version["iniconfig@2.0.0"]]
     env.expect.that_str(exprs[two["marker"]]).equals("extra == '__variant_package_b' or extra != '__variant_package_a'")
 
+    # Edge constraint names follow the marker, so repos whose groups OR in different
+    # edges don't map one name to different markers when the workspace merges them.
+    lock["package"][0]["dev-dependencies"]["linux_only"] = [
+        _dep("iniconfig", "1.1.1", marker = "extra == 'project-1-a' and sys_platform == 'linux'"),
+        _dep("iniconfig", "2.0.0", marker = "(extra == 'project-1-b' or extra != 'project-1-a') and sys_platform == 'linux'"),
+    ]
+    wider = translate_uv(_project(name = "a"), lock, _lock_model(projects = ["a"], dependency_groups = ["default", "group:plain", "group:linux_only"]))
+    wider_one = wider["resolution_marker_exprs"][{v: k for k, v in wider["pins"]["iniconfig"].items()}["iniconfig@1.1.1"]]
+    env.expect.that_bool(wider_one["marker"] != one["marker"]).equals(True)
+
 def _test_uv_project_conflict_mixed_set(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
     analysis_test(name = name, target = name + "_subject", impl = _test_uv_project_conflict_mixed_set_impl)

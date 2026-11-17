@@ -37,6 +37,17 @@ py_test(
 )
 
 py_test(
+    name = "test_repo_c",
+    srcs = ["test_version.py"],
+    args = [
+        "iniconfig",
+        "2.0.0",
+    ],
+    main = "test_version.py",
+    deps = ["@repo_c//iniconfig"],
+)
+
+py_test(
     name = "test_all_pinned_b",
     srcs = ["test_version.py"],
     args = [

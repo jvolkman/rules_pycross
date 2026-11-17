@@ -8,4 +8,4 @@ package=false
 # Package-level conflicts are a uv preview feature.
 conflicts=[[{package="a"},{package="b"}]]
 [tool.uv.workspace]
-members=["a","b"]
+members=["a","b","c"]
