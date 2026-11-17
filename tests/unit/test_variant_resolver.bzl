@@ -1,7 +1,7 @@
 """Tests for variant_resolver rule."""
 
 load("@bazel_skylib//lib:selects.bzl", "selects")
-load("@bazel_skylib//rules:common_settings.bzl", "bool_flag")
+load("@bazel_skylib//rules:common_settings.bzl", "bool_flag", "string_flag")
 load("@rules_testing//lib:analysis_test.bzl", "analysis_test", "test_suite")
 load("@rules_testing//lib:truth.bzl", "matching")
 
@@ -12,6 +12,14 @@ load("//pycross/private:pep508_evaluator.bzl", "pycross_pep508_evaluator")
 load("//pycross/private:variant_resolver.bzl", "variant_resolver")
 
 # ── Helpers ──────────────────────────────────────────────────────────
+
+def _setup_string(name, value):
+    """Create a string_flag helper target (for resolver pin/default settings)."""
+    string_flag(
+        name = name,
+        build_setting_default = value,
+    )
+    return ":" + name
 
 def _setup_flags(name, flag_names):
     """Create bool_flag helper targets for tests."""
@@ -57,7 +65,7 @@ def _test_default_when_no_flag(name):
     variant_resolver(
         name = name + "_resolver",
         flags = dict(zip(flag_refs, ["cpu", "gpu"])),
-        default = "cpu",
+        default_setting = _setup_string(name + "_resolver" + "_default", "cpu"),
         tags = ["manual"],
     )
     analysis_test(
@@ -98,7 +106,7 @@ def _test_mutual_exclusion_fails(name):
     variant_resolver(
         name = name + "_resolver",
         flags = dict(zip(flag_refs, ["x", "y"])),
-        default = "x",
+        default_setting = _setup_string(name + "_resolver" + "_default", "x"),
         tags = ["manual"],
     )
     analysis_test(
@@ -166,6 +174,106 @@ def _test_flags_sharing_item(name):
         },
     )
 
+# ── Test: pin / default precedence ─────────────────────────────────
+
+def _test_pin_beats_flags_impl(env, target):
+    # Would fail with "Conflicting variants" if the pin didn't win.
+    env.expect.that_target(target).default_outputs().contains_at_least([])
+
+def _test_pin_beats_flags(name):
+    """A repo pin wins over ambient flags, even conflicting ones."""
+    flag_refs = _setup_flags(name, ["a", "b"])
+    variant_resolver(
+        name = name + "_resolver",
+        flags = dict(zip(flag_refs, ["a", "b"])),
+        items = ["a", "b"],
+        pin = _setup_string(name + "_pin", "b"),
+        tags = ["manual"],
+    )
+    native.config_setting(
+        name = name + "_is_b",
+        flag_values = {":" + name + "_resolver": "b"},
+    )
+    analysis_test(
+        name = name,
+        target = name + "_resolver",
+        impl = _test_pin_beats_flags_impl,
+        config_settings = {
+            str(Label(":" + name + "_flag_a")): True,
+            str(Label(":" + name + "_flag_b")): True,
+        },
+    )
+
+def _test_flag_beats_default_impl(env, target):
+    env.expect.that_target(target).default_outputs().contains_at_least([])
+
+def _test_flag_beats_default(name):
+    """An ambient flag wins over a repo default, so the two never conflict."""
+    flag_refs = _setup_flags(name, ["a", "b"])
+    variant_resolver(
+        name = name + "_resolver",
+        flags = dict(zip(flag_refs, ["a", "b"])),
+        items = ["a", "b"],
+        default_setting = _setup_string(name + "_default", "a"),
+        tags = ["manual"],
+    )
+    analysis_test(
+        name = name,
+        target = name + "_resolver",
+        impl = _test_flag_beats_default_impl,
+        config_settings = {
+            str(Label(":" + name + "_flag_b")): True,
+        },
+    )
+
+def _test_unknown_pin_fails_impl(env, target):
+    env.expect.that_target(target).failures().contains_predicate(
+        matching.contains("selects unknown variant 'zzz'"),
+    )
+
+def _test_unknown_pin_fails(name):
+    flag_refs = _setup_flags(name, ["a", "b"])
+    variant_resolver(
+        name = name + "_resolver",
+        flags = dict(zip(flag_refs, ["a", "b"])),
+        items = ["a", "b"],
+        pin = _setup_string(name + "_pin", "zzz"),
+        tags = ["manual"],
+    )
+    analysis_test(
+        name = name,
+        target = name + "_resolver",
+        impl = _test_unknown_pin_fails_impl,
+        expect_failure = True,
+    )
+
+def _test_display_names_impl(env, target):
+    env.expect.that_target(target).failures().contains_predicate(
+        matching.contains("--@pypi//_variants:extra_cpu and --@pypi//_variants:extra_gpu"),
+    )
+
+def _test_display_names(name):
+    """Conflict errors use the display names, not canonical labels."""
+    flag_refs = _setup_flags(name, ["cpu", "gpu"])
+    variant_resolver(
+        name = name + "_resolver",
+        flags = {
+            flag_refs[0]: "@pypi//_variants:extra_cpu|extra_my-app_cpu",
+            flag_refs[1]: "@pypi//_variants:extra_gpu|extra_my-app_gpu",
+        },
+        tags = ["manual"],
+    )
+    analysis_test(
+        name = name,
+        target = name + "_resolver",
+        impl = _test_display_names_impl,
+        expect_failure = True,
+        config_settings = {
+            str(Label(":" + name + "_flag_cpu")): True,
+            str(Label(":" + name + "_flag_gpu")): True,
+        },
+    )
+
 # ── Test: mixed extra+group conflict set ─────────────────────────────
 
 def _test_mixed_extra_group_impl(env, target):
@@ -197,7 +305,7 @@ def _test_three_way_conflict(name):
     variant_resolver(
         name = name + "_resolver",
         flags = dict(zip(flag_refs, ["cpu", "cu118", "cu124"])),
-        default = "cpu",
+        default_setting = _setup_string(name + "_resolver" + "_default", "cpu"),
         tags = ["manual"],
     )
     analysis_test(
@@ -221,7 +329,7 @@ def _test_three_way_exclusion_fails(name):
     variant_resolver(
         name = name + "_resolver",
         flags = dict(zip(flag_refs, ["cpu", "cu118", "cu124"])),
-        default = "cpu",
+        default_setting = _setup_string(name + "_resolver" + "_default", "cpu"),
         tags = ["manual"],
     )
     analysis_test(
@@ -248,7 +356,7 @@ def _test_config_setting_matches_resolver(name):
     variant_resolver(
         name = name + "_resolver",
         flags = dict(zip(flag_refs, ["opt_a", "opt_b"])),
-        default = "opt_a",
+        default_setting = _setup_string(name + "_resolver" + "_default", "opt_a"),
         tags = ["manual"],
     )
     native.config_setting(
@@ -287,7 +395,7 @@ def _test_config_setting_explicit_flag(name):
     variant_resolver(
         name = name + "_resolver",
         flags = dict(zip(flag_refs, ["opt_a", "opt_b"])),
-        default = "opt_a",
+        default_setting = _setup_string(name + "_resolver" + "_default", "opt_a"),
         tags = ["manual"],
     )
     native.config_setting(
@@ -333,7 +441,7 @@ def _test_multi_set_overlap(name):
     variant_resolver(
         name = name + "_resolver_set1",
         flags = {flag_refs[0]: "extra_variant-a", flag_refs[1]: "group_group-a"},
-        default = "group_group-a",
+        default_setting = _setup_string(name + "_resolver_set1" + "_default", "group_group-a"),
         tags = ["manual"],
     )
 
@@ -341,7 +449,7 @@ def _test_multi_set_overlap(name):
     variant_resolver(
         name = name + "_resolver_set2",
         flags = {flag_refs[1]: "group_group-a", flag_refs[2]: "group_group-b"},
-        default = "group_group-a",
+        default_setting = _setup_string(name + "_resolver_set2" + "_default", "group_group-a"),
         tags = ["manual"],
     )
 
@@ -435,7 +543,7 @@ def _test_variants_with_evaluator(name):
     variant_resolver(
         name = name + "_resolver",
         flags = dict(zip(flag_refs, ["group_cpu", "group_cuda"])),
-        default = "group_cpu",
+        default_setting = _setup_string(name + "_resolver" + "_default", "group_cpu"),
         tags = ["manual"],
     )
     pycross_pep508_evaluator(
@@ -478,6 +586,10 @@ def variant_resolver_test_suite(name):
             _test_mutual_exclusion_fails,
             _test_shared_flag_conflict_fails,
             _test_flags_sharing_item,
+            _test_pin_beats_flags,
+            _test_flag_beats_default,
+            _test_unknown_pin_fails,
+            _test_display_names,
             _test_mixed_extra_group,
             _test_three_way_conflict,
             _test_three_way_exclusion_fails,

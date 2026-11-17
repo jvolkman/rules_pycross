@@ -858,6 +858,39 @@ def _test_uv_same_named_groups_across_members_impl(env, target):
     env.expect.that_dict(flags_a).contains_exactly({"app-a": ["group_test", "group_app-a_test"], "app-b": None})
     env.expect.that_dict(result_a["pins"]["pytest"]).contains_exactly({"group_app-a_test": "pytest@7.4.4"})
 
+# buildifier: disable=unused-variable
+def _test_uv_repo_defaults_impl(env, target):
+    """default-groups apply per repo: the selected project's own groups, if the repo requests them."""
+    lock = _member_group_conflict_lock()
+    app_a = {"project": {"name": "app-a"}, "tool": {"uv": {"default-groups": ["test"]}}}
+
+    # A test repo for app-a defaults to app-a's group.
+    result = translate_uv(app_a, lock, _lock_model(projects = ["app-a"], dependency_groups = ["group:test"]))
+    env.expect.that_str(result["variants"][0].get("repo_default", "")).equals("group_app-a_test")
+
+    # A prod repo for app-a doesn't request `test`, so no default (and no transition).
+    result = translate_uv(app_a, lock, _lock_model(projects = ["app-a"], dependency_groups = ["default"]))
+    env.expect.that_str(result["variants"][0].get("repo_default", "")).equals("")
+
+    # app-b's repo uses app-b's pyproject, which has no default-groups.
+    app_b = {"project": {"name": "app-b"}}
+    result = translate_uv(app_b, lock, _lock_model(projects = ["app-b"], dependency_groups = ["group:test"]))
+    env.expect.that_str(result["variants"][0].get("repo_default", "")).equals("")
+
+    # A repo spanning all members uses the root pyproject, as `uv sync --all-packages` does.
+    root = {"project": {"name": "monorepo"}, "tool": {"uv": {"default-groups": ["test"]}}}
+    result = translate_uv(root, lock, _lock_model(dependency_groups = ["group:test"]))
+    env.expect.that_str(result["variants"][0].get("repo_default", "")).equals("")
+
+    # `default-groups = "all"` is not a substring match.
+    app_a_all = {"project": {"name": "app-a"}, "tool": {"uv": {"default-groups": "all"}}}
+    result = translate_uv(app_a_all, lock, _lock_model(projects = ["app-a"], dependency_groups = ["group:test"]))
+    env.expect.that_str(result["variants"][0].get("repo_default", "")).equals("group_app-a_test")
+
+def _test_uv_repo_defaults(name):
+    util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
+    analysis_test(name = name, target = name + "_subject", impl = _test_uv_repo_defaults_impl)
+
 def _test_uv_same_named_groups_across_members(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
     analysis_test(name = name, target = name + "_subject", impl = _test_uv_same_named_groups_across_members_impl)
@@ -1535,6 +1568,7 @@ def uv_translator_test_suite(name):
             _test_uv_local_member_deps_keep_forks,
             _test_uv_variants_scoped_to_project,
             _test_uv_same_named_groups_across_members,
+            _test_uv_repo_defaults,
             _test_uv_local_version_exact_matching,
             _test_uv_issue_1510_verbatim_lock,
         ],

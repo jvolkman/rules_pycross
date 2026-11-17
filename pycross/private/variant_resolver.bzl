@@ -7,7 +7,7 @@ active variant. This lets config_setting targets reference the resolver
 rather than individual bool_flags, providing:
 
   1. Build-time enforcement of mutual exclusion (fail if >1 flag is set).
-  2. Clean default handling (return default variant when no flag is set).
+  2. Pins and defaults set by generated repos' transitions: pin > flags > default.
   3. A single point of indirection per conflict set.
 """
 
@@ -15,13 +15,29 @@ load("@bazel_skylib//rules:common_settings.bzl", "BuildSettingInfo")
 load("@rules_python//python:py_info.bzl", "PyInfo")
 load(":deferred_failure.bzl", "register_failure_action")
 
+def _setting_value(target):
+    return target[BuildSettingInfo].value if target else ""
+
+def _check_item(ctx, value, source):
+    if ctx.attr.items and value not in ctx.attr.items:
+        fail("{} selects unknown variant '{}' (expected one of: {})".format(source, value, ", ".join(ctx.attr.items)))
+    return value
+
 def _variant_resolver_impl(ctx):
+    # A repo pin (set by a pinned repo's transition) wins over everything.
+    pin = _setting_value(ctx.attr.pin)
+    if pin:
+        return [config_common.FeatureFlagInfo(value = _check_item(ctx, pin, str(ctx.attr.pin.label)))]
+
     active = []
     active_flags = []
-    for flag, names in ctx.attr.flags.items():
+    for flag, value in ctx.attr.flags.items():
         if not flag[BuildSettingInfo].value:
             continue
-        active_flags.append(str(flag.label))
+        display, sep, names = value.partition("|")
+        if not sep:
+            display, names = str(flag.label), value
+        active_flags.append(display)
         for name in names.split(" "):
             if name not in active:
                 active.append(name)
@@ -33,28 +49,37 @@ def _variant_resolver_impl(ctx):
                 " and ".join(active),
             ) + "Only one variant from each conflict set may be enabled at a time.",
         )
-
     if active:
-        value = active[0]
-    elif ctx.attr.default:
-        value = ctx.attr.default
-    else:
-        value = ""
+        return [config_common.FeatureFlagInfo(value = active[0])]
 
-    return [config_common.FeatureFlagInfo(value = value)]
+    # A repo default (set by a repo's transition from its project's default-groups)
+    # applies only when no flag selects a variant.
+    default = _setting_value(ctx.attr.default_setting)
+    if default:
+        return [config_common.FeatureFlagInfo(value = _check_item(ctx, default, str(ctx.attr.default_setting.label)))]
+
+    return [config_common.FeatureFlagInfo(value = "")]
 
 variant_resolver = rule(
     implementation = _variant_resolver_impl,
     provides = [config_common.FeatureFlagInfo],
     attrs = {
+        "default_setting": attr.label(
+            providers = [BuildSettingInfo],
+            doc = "A string setting naming the default variant, used when no flag or pin selects one.",
+        ),
         "flags": attr.label_keyed_string_dict(
             providers = [BuildSettingInfo],
-            doc = "Maps each bool_flag to the space-separated qualified names of the items it enables. " +
+            doc = "Maps each bool_flag to the space-separated qualified names of the items it enables, " +
+                  "optionally prefixed with a display name for error messages (`<display>|<names>`). " +
                   "A flag can enable several items (e.g. a repo-level `group_test` covering two projects).",
         ),
-        "default": attr.string(
-            default = "",
-            doc = "The default variant qualified name when no flag is set.",
+        "items": attr.string_list(
+            doc = "All qualified names in the conflict set, used to validate pin and default values.",
+        ),
+        "pin": attr.label(
+            providers = [BuildSettingInfo],
+            doc = "A string setting naming the pinned variant. When set, it overrides the flags.",
         ),
     },
 )

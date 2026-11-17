@@ -13,7 +13,7 @@ load("@rules_pycross//pycross/private:sdist_repo.bzl", "pycross_sdist_repo")
 load("//pycross/private:package_repo.bzl", "has_annotation_conflict", "package_repo")
 load("//pycross/private:pypi_file.bzl", "pypi_file")
 load("//pycross/private:thin_package_repo.bzl", "thin_package_repo")
-load("//pycross/private:util.bzl", "key_name", "parse_package_key", "sanitize_name", "sdist_builds_disallowed")
+load("//pycross/private:util.bzl", "key_name", "parse_package_key", "sanitize_name", "sdist_builds_disallowed", "variant_item_qname")
 load("//pycross/private:wheel_file.bzl", "pycross_wheel_file")
 load(":git_file.bzl", "pycross_git_file")
 
@@ -139,6 +139,74 @@ def _create_remote_file_repo(key, file, indexes):
     else:
         pypi_file(**pypi_file_attrs)
     return remote_file_label
+
+_TRUE_VALUES = ["true", "1", "yes"]
+
+def _variants_flag_ref(label):
+    """Return (repo name, flag) if label is a generated repo's `//_variants:<flag>`, else None."""
+    repo, sep, target = label.partition("//")
+    if not sep or not target.startswith("_variants:"):
+        return None
+    if repo.startswith("@@"):
+        # Canonical name, e.g. `@@rules_pycross++uv+lock_all`: the repo name follows the last `+`.
+        repo = repo[2:].rpartition("+")[2]
+    elif repo.startswith("@"):
+        repo = repo[1:]
+    else:
+        return None
+    return (repo, target[len("_variants:"):])
+
+def _compute_variant_pins(member, flags, settings, resolved_locks):
+    """Compute the variants a repo's `flags`/`settings` select, for its transition's `_pin_<set>`.
+
+    Args:
+        member: The repo name.
+        flags: The repo's flags (`--<label>[=<value>]` strings).
+        settings: The repo's settings ({label: value}).
+        resolved_locks: {repo name: resolved lock dict} for all repos of the workspace.
+
+    Returns:
+        {conflict set suffix: qualified name}.
+    """
+    entries = []
+    for f in flags:
+        label, sep, value = f[2:].partition("=")
+        entries.append((label, value if sep else "True"))
+    entries.extend(sorted(settings.items()))
+
+    # (repo, flag) -> [(set suffix, qname)], built lazily per referenced repo.
+    index = {}
+    selected = {}  # set suffix -> {qname: True}
+    for label, value in entries:
+        if value.lower() not in _TRUE_VALUES:
+            continue
+        ref = _variants_flag_ref(label)
+        if not ref or ref[0] not in resolved_locks:
+            continue
+        if ref[0] not in index:
+            repo_index = {}
+            for variant_set in resolved_locks[ref[0]].get("variants", []):
+                qnames = [variant_item_qname(item) for item in variant_set["items"]]
+                set_suffix = "_".join(sorted(qnames))
+                for item in variant_set["items"]:
+                    for flag in item.get("flags", []):
+                        repo_index.setdefault(flag, []).append((set_suffix, variant_item_qname(item)))
+            index[ref[0]] = repo_index
+        for set_suffix, qname in index[ref[0]].get(ref[1], []):
+            selected.setdefault(set_suffix, {})[qname] = True
+
+    pins = {}
+    for set_suffix, qnames in selected.items():
+        if len(qnames) > 1:
+            fail("repo '{}': its flags/settings select conflicting variants {}. Select one of them.".format(
+                member,
+                " and ".join(sorted(qnames.keys())),
+            ))
+        pins[set_suffix] = qnames.keys()[0]
+    return pins
+
+# Visible for testing
+compute_variant_pins_for_testing = _compute_variant_pins
 
 def create_repos(
         module_ctx,
@@ -383,6 +451,14 @@ def create_repos(
                 thin_repo_attrs["flags"] = json.decode(flags) if type(flags) == "string" else flags
             if member in repo_settings:
                 thin_repo_attrs["settings"] = repo_settings[member]
+            pins = _compute_variant_pins(
+                member,
+                thin_repo_attrs.get("flags", []),
+                thin_repo_attrs.get("settings", {}),
+                {m: per_repo_data[m].resolved_lock for m in member_repos},
+            )
+            if pins:
+                thin_repo_attrs["variant_pins"] = pins
             if member in repo_constraint_values:
                 constraints = repo_constraint_values[member]
                 thin_repo_attrs["constraint_values"] = json.decode(constraints) if type(constraints) == "string" else constraints

@@ -705,7 +705,7 @@ Then build with `--platforms=//:linux_cuda`.
 
 ### Default Groups
 
-If `uv`'s `default-groups` is set, the corresponding variant is used as the `select()` default—building without flags resolves to that variant. Extras never have a default; building without an explicit flag produces a build error, preventing accidental misresolution.
+If `uv`'s `default-groups` is set, a repo that requests one of those groups defaults to that variant, so building through it without flags resolves to that variant. As in uv, a project's `default-groups` names its own groups, and the pyproject that counts is the member's for a repo with one project (`uv sync --package <member>`) or the workspace root's otherwise (`uv sync --all-packages`). Each repo applies its own default through its transition, so two repos can default to different (even conflicting) groups in the same build. A command-line flag overrides a repo's default, and a repo's `flags`/`settings` pin overrides both. Extras never have a default; building without an explicit flag produces a build error, preventing accidental misresolution.
 
 ### Dependency Group Conflicts
 
@@ -804,7 +804,7 @@ uv.repo(
 
 Use `flags` for built-in options and labels `rules_pycross` can see (such as its generated repos), and `settings` for build settings from your own or other modules; list-valued settings split on commas.
 
-This is particularly useful for locking variant selections to a member without requiring `--flag` arguments on every `bazel build` invocation.
+This is particularly useful for locking variant selections to a member without requiring `--flag` arguments on every `bazel build` invocation. A variant pinned this way wins over any `_variants` flags set on the command line or in `.bazelrc` for that conflict set.
 
 The transition applies to the repo's whole closure, including sdist builds from the workspace: these read the configured `--copt`/`--linkopt`/`--compilation_mode`, so such flags reach native compiles. Each transitioned repo therefore builds its sdists in a separate configuration, with no sharing with the untransitioned build.
 

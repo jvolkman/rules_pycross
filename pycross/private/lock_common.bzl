@@ -388,16 +388,23 @@ def process_workspaces(
     for name, ws_info in workspaces.items():
         ws_tag = ws_info.tag
 
-        # Always start with auto-discovered project files from workspace members.
+        # The pyproject.toml next to the lock comes first: it's the workspace root
+        # (whose settings, such as default-groups, apply to repos spanning several
+        # projects), even when the root is a virtual project that isn't discovered
+        # as a member. Then the auto-discovered workspace members.
         project_files = []
+        sibling = sibling_project_file(ws_tag.lock_file)
+        if module_ctx.path(sibling).exists:
+            project_files.append(sibling)
         discovered = workspace_discovered_members[name]
         for member_info in discovered.values():
             label = resolve_member_project_file(ws_tag.lock_file, member_info.path)
-            project_files.append(label)
+            if label not in project_files:
+                project_files.append(label)
 
         if not project_files:
-            # No workspace members discovered; fall back to sibling pyproject.toml.
-            project_files.append(sibling_project_file(ws_tag.lock_file))
+            # Nothing found; keep the sibling pyproject.toml as the (missing) default.
+            project_files.append(sibling)
 
         # Append any user-specified extra_project_files, deduplicating.
         for f in getattr(ws_tag, "extra_project_files", []):

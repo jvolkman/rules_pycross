@@ -78,7 +78,16 @@ uv.repo(
     projects = ["*"],
     workspace = "shared",
 )
-use_repo(uv, "lock_a", "lock_a_test", "lock_all", "lock_all_test", "lock_b_test", "lock_project_b")
+
+# No flags: project-a's `default-groups = ["test"]` makes its `test` group this
+# repo's default (applied by the repo's transition).
+uv.repo(
+    name = "lock_a_test_default",
+    dependency_groups = ["group:test;testonly"],
+    projects = ["project-a"],
+    workspace = "shared",
+)
+use_repo(uv, "lock_a", "lock_a_test", "lock_a_test_default", "lock_all", "lock_all_test", "lock_b_test", "lock_project_b")
 
 # Test standalone members (no uv_all_members)
 uv.workspace(

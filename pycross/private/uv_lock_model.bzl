@@ -242,9 +242,9 @@ def translate_uv(project_dict, lock_dict, lock_model):
         for c in variant_list:
             package = canonicalize_name(c["package"])
             if "extra" in c:
-                kind, vname = "extra", c["extra"]
+                kind, vname = "extra", canonicalize_name(c["extra"])
             elif "group" in c:
-                kind, vname = "group", c["group"]
+                kind, vname = "group", canonicalize_name(c["group"])
             else:
                 kind, vname = "project", ""
             key = (package, kind, vname)
@@ -252,8 +252,6 @@ def translate_uv(project_dict, lock_dict, lock_model):
                 item = {"package": package, "kind": kind}
                 if vname:
                     item["name"] = vname
-                if kind == "group" and vname in uv_default_groups:
-                    item["default"] = True
                 variant_items_by_key[key] = item
             items.append(variant_items_by_key[key])
         variant_sets.append({"items": items})
@@ -381,6 +379,7 @@ def translate_uv(project_dict, lock_dict, lock_model):
     # has to exist in one of them.
     multi_project = len(target_projects) > 1
     groups_seen = {"default": True}
+    requested_by_project = {}  # project -> requested groups dict
     for project_name in target_projects:
         project_info = workspace_members[project_name]
 
@@ -405,6 +404,7 @@ def translate_uv(project_dict, lock_dict, lock_model):
             project_name = project_name,
             allow_missing = multi_project,
         )
+        requested_by_project[project_name] = requested_groups_dict
 
         group_batches = []
         if "default" in requested_groups_dict:
@@ -461,6 +461,28 @@ def translate_uv(project_dict, lock_dict, lock_model):
             kind, sep, name = group.partition(":")
             if sep and name != "*" and group not in groups_seen:
                 fail("None of the projects {} has group '{}'.".format(sorted(target_projects), group))
+
+    # This repo's default variants, from the selected pyproject's
+    # `[tool.uv] default-groups`. As in uv, a project's default-groups name its
+    # own groups, and the pyproject is the member's for a single-project repo
+    # (`uv sync --package <member>`) or the root's otherwise (`uv sync
+    # --all-packages`). Only groups this repo actually requests count, and a
+    # conflict set gets a default only if exactly one of its items qualifies.
+    # The repo's transition sets `_default_<set>`; the workspace repo has no
+    # static defaults.
+    default_owner = canonicalize_name(project_dict.get("project", {}).get("name", ""))
+    for variant_set in variant_sets:
+        candidates = []
+        for item in variant_set["items"]:
+            if item["kind"] != "group" or item["package"] != default_owner:
+                continue
+            if uv_default_groups != "all" and item["name"] not in [canonicalize_name(g) for g in uv_default_groups]:
+                continue
+            if "group:" + item["name"] not in requested_by_project.get(item["package"], {}):
+                continue
+            candidates.append(item)
+        if len(candidates) == 1:
+            variant_set["repo_default"] = variant_item_qname(candidates[0])
 
     # Build pinned specs
     pinned_package_specs = {}

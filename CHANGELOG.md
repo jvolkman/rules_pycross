@@ -11,6 +11,10 @@ All notable changes to this project will be documented in this file.
   `test` group of each of its projects; `group_<project>_test` enables one.
 - **`dependency_groups` in repos with several projects** only require each
   group to exist in one of them.
+- **`uv` `default-groups` apply per repo**, from the member's or root
+  pyproject as in uv, and only to groups the repo requests.
+- **Variants pinned with `uv.repo(flags/settings)`** win over command-line
+  `_variants` flags for the same conflict set.
 - **`pyproject.toml` lookup for workspace members** is relative to the lock
   file's directory, so member directories no longer need to be Bazel packages.
 

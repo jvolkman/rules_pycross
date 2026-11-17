@@ -117,7 +117,7 @@ def _no_variant_set_for(constraints, no_variant_fallbacks):
             return no_variant_fallbacks[constraint]
     return None
 
-def _target_select(target_dict, prefix, suffix, workspace_repo, is_aggregated = False, default_variants = {}, no_variant_fallbacks = {}, all_target_dict = None, fallback_target = _NO_MATCH_ERROR_TARGET, aggregated_keys = None):
+def _target_select(target_dict, prefix, suffix, workspace_repo, is_aggregated = False, no_variant_fallbacks = {}, all_target_dict = None, fallback_target = _NO_MATCH_ERROR_TARGET, aggregated_keys = None):
     effective_all = all_target_dict if all_target_dict != None else target_dict
     if len(effective_all) == 1 and "" in effective_all and "" in target_dict:
         t = target_dict[""]
@@ -126,7 +126,6 @@ def _target_select(target_dict, prefix, suffix, workspace_repo, is_aggregated = 
         return '"{}{}{}"'.format(prefix, t, suffix)
 
     lines = ["select({"]
-    default_target_label = None
     for constraint in effective_all.keys():
         if constraint in target_dict:
             t_base = target_dict[constraint]
@@ -144,35 +143,30 @@ def _target_select(target_dict, prefix, suffix, workspace_repo, is_aggregated = 
         else:
             lines.append('        "@{}//_lock:is_{}": "{}",'.format(workspace_repo, constraint, target_label))
 
-            # If this constraint is a default variant, also map //conditions:default to it.
-            if constraint in default_variants:
-                default_target_label = target_label
-
-    # Add //conditions:default for default variant or uncovered-branch fallback (only if not already present via "").
-    # When the select touches a conflict set without a default, also add an explicit
+    # Add the uncovered-branch fallback (only if not already present via "").
+    # When the select touches a conflict set, also add an explicit
     # _unselected_<set> condition -> _no_variant_<set> so unselected variants fail
     # clearly while platform-incompatible selected variants still fall through to default.
+    # Variant defaults come from this repo's transition (`_default_<set>`), not from
+    # //conditions:default.
     if "" not in effective_all:
-        if default_target_label:
-            lines.append('        "//conditions:default": "{}",'.format(default_target_label))
-        else:
-            unselected_set = _no_variant_set_for(effective_all.keys(), no_variant_fallbacks)
-            if unselected_set:
-                lines.append(
-                    '        "@{}//_lock:_unselected_{}": "{}{}",'.format(
-                        workspace_repo,
-                        unselected_set,
-                        _NO_VARIANT_PREFIX,
-                        unselected_set,
-                    ),
-                )
-            if fallback_target:
-                lines.append('        "//conditions:default": "{}",'.format(fallback_target))
+        unselected_set = _no_variant_set_for(effective_all.keys(), no_variant_fallbacks)
+        if unselected_set:
+            lines.append(
+                '        "@{}//_lock:_unselected_{}": "{}{}",'.format(
+                    workspace_repo,
+                    unselected_set,
+                    _NO_VARIANT_PREFIX,
+                    unselected_set,
+                ),
+            )
+        if fallback_target:
+            lines.append('        "//conditions:default": "{}",'.format(fallback_target))
 
     lines.append("    })")
     return "\n".join(lines)
 
-def _proxy_actual(actual_lines, target_dict, prefix, suffix, workspace_repo, alias_name, actual_pkg_ref, has_transition = False, is_aggregated = False, default_variants = {}, no_variant_fallbacks = {}, all_target_dict = None, fallback_target = _NO_MATCH_ERROR_TARGET, aggregated_keys = None):
+def _proxy_actual(actual_lines, target_dict, prefix, suffix, workspace_repo, alias_name, actual_pkg_ref, has_transition = False, is_aggregated = False, no_variant_fallbacks = {}, all_target_dict = None, fallback_target = _NO_MATCH_ERROR_TARGET, aggregated_keys = None):
     """Emit an intermediate select alias if needed, return the actual expression for the proxy.
 
     When transitions are active (has_transition is True) and target_dict has variants
@@ -187,7 +181,6 @@ def _proxy_actual(actual_lines, target_dict, prefix, suffix, workspace_repo, ali
         suffix,
         workspace_repo,
         is_aggregated = is_aggregated,
-        default_variants = default_variants,
         no_variant_fallbacks = no_variant_fallbacks,
         all_target_dict = all_target_dict,
         fallback_target = fallback_target,
@@ -204,7 +197,7 @@ def _proxy_actual(actual_lines, target_dict, prefix, suffix, workspace_repo, ali
         return '"{}:{}",'.format(actual_pkg_ref, alias_name)
     return "{},".format(actual)
 
-def _emit_maybe_alias(lines, maybe_name, pkg_target, target_dict, available_keys, workspace_repo, default_variants = {}, no_variant_fallbacks = {}, helper_prefix = "_maybe"):
+def _emit_maybe_alias(lines, maybe_name, pkg_target, target_dict, available_keys, workspace_repo, no_variant_fallbacks = {}, helper_prefix = "_maybe"):
     """Emit a `:maybe` or `:[extra]_maybe` alias supporting both single-branch and multi-branch pins."""
     available_set = {k: True for k in (available_keys or [])}
     if not available_set or not target_dict:
@@ -255,28 +248,24 @@ def _emit_maybe_alias(lines, maybe_name, pkg_target, target_dict, available_keys
         '    name = "{}",'.format(maybe_name),
         "    actual = select({",
     ])
-    default_target = None
     for constraint, branch_target in branch_targets.items():
         if constraint == "":
             lines.append('        "//conditions:default": "{}",'.format(branch_target))
         else:
             lines.append('        "@{}//_lock:is_{}": "{}",'.format(workspace_repo, constraint, branch_target))
-            if constraint in default_variants:
-                default_target = branch_target
 
     if "" not in branch_targets:
-        if not default_target:
-            unselected_set = _no_variant_set_for(branch_targets.keys(), no_variant_fallbacks)
-            if unselected_set:
-                lines.append(
-                    '        "@{}//_lock:_unselected_{}": "{}{}",'.format(
-                        workspace_repo,
-                        unselected_set,
-                        _NO_VARIANT_PREFIX,
-                        unselected_set,
-                    ),
-                )
-        lines.append('        "//conditions:default": "{}",'.format(default_target if default_target else "//:_empty_library"))
+        unselected_set = _no_variant_set_for(branch_targets.keys(), no_variant_fallbacks)
+        if unselected_set:
+            lines.append(
+                '        "@{}//_lock:_unselected_{}": "{}{}",'.format(
+                    workspace_repo,
+                    unselected_set,
+                    _NO_VARIANT_PREFIX,
+                    unselected_set,
+                ),
+            )
+        lines.append('        "//conditions:default": "//:_empty_library",')
 
     lines.extend([
         "    }),",
@@ -284,7 +273,7 @@ def _emit_maybe_alias(lines, maybe_name, pkg_target, target_dict, available_keys
         "",
     ])
 
-def _pin_build(target_name, pin_target_dict, package, workspace_repo, workspace_lock_target_dict = None, has_aggregated_variant = False, extras_dict = None, default_variants = {}, no_variant_fallbacks = {}, target_platform = None, transition_bzl = None, maybe_available_keys = None, extras_maybe_keys = None, testonly = False, sdist_target_dict = None, aggregated_keys = None):
+def _pin_build(target_name, pin_target_dict, package, workspace_repo, workspace_lock_target_dict = None, has_aggregated_variant = False, extras_dict = None, no_variant_fallbacks = {}, target_platform = None, transition_bzl = None, maybe_available_keys = None, extras_maybe_keys = None, testonly = False, sdist_target_dict = None, aggregated_keys = None):
     """Generates the BUILD file for a pin directory, pointing to the workspace."""
     lock_target_dict = workspace_lock_target_dict if workspace_lock_target_dict else pin_target_dict
     lock_ref = "@{}//_lock:".format(workspace_repo)
@@ -339,13 +328,13 @@ def _pin_build(target_name, pin_target_dict, package, workspace_repo, workspace_
             ")",
             "",
         ])
-        actual_pkg = _proxy_actual(actual_lines, lock_target_dict, lock_ref, "", workspace_repo, "pkg", actual_pkg_ref, has_transition = has_transition, is_aggregated = has_aggregated_variant, default_variants = default_variants, no_variant_fallbacks = no_variant_fallbacks, aggregated_keys = aggregated_keys)
+        actual_pkg = _proxy_actual(actual_lines, lock_target_dict, lock_ref, "", workspace_repo, "pkg", actual_pkg_ref, has_transition = has_transition, is_aggregated = has_aggregated_variant, no_variant_fallbacks = no_variant_fallbacks, aggregated_keys = aggregated_keys)
         _emit_proxy(lib_rule, _safe_name(target_name, "pkg"), actual_pkg, is_testonly = testonly)
 
-        actual_wheel = _proxy_actual(actual_lines, pin_target_dict, wheel_ref, "", workspace_repo, "wheel", actual_pkg_ref, has_transition = has_transition, default_variants = default_variants, no_variant_fallbacks = no_variant_fallbacks)
+        actual_wheel = _proxy_actual(actual_lines, pin_target_dict, wheel_ref, "", workspace_repo, "wheel", actual_pkg_ref, has_transition = has_transition, no_variant_fallbacks = no_variant_fallbacks)
         _emit_proxy(file_rule, _safe_name(target_name, "wheel"), actual_wheel)
 
-        actual_dist_info = _proxy_actual(actual_lines, lock_target_dict, lock_ref + "_dist_info_", "", workspace_repo, "dist_info", actual_pkg_ref, has_transition = has_transition, default_variants = default_variants, no_variant_fallbacks = no_variant_fallbacks)
+        actual_dist_info = _proxy_actual(actual_lines, lock_target_dict, lock_ref + "_dist_info_", "", workspace_repo, "dist_info", actual_pkg_ref, has_transition = has_transition, no_variant_fallbacks = no_variant_fallbacks)
         _emit_proxy(file_rule, _safe_name(target_name, "dist_info"), actual_dist_info)
         lines.extend([
             "alias(",
@@ -364,7 +353,7 @@ def _pin_build(target_name, pin_target_dict, package, workspace_repo, workspace_
                     "",
                 ])
             else:
-                actual_all = _proxy_actual(actual_lines, lock_target_dict, lock_ref, "", workspace_repo, "all", actual_pkg_ref, has_transition = has_transition, default_variants = default_variants, no_variant_fallbacks = no_variant_fallbacks)
+                actual_all = _proxy_actual(actual_lines, lock_target_dict, lock_ref, "", workspace_repo, "all", actual_pkg_ref, has_transition = has_transition, no_variant_fallbacks = no_variant_fallbacks)
                 _emit_proxy(lib_rule, "[]", actual_all, is_testonly = testonly)
 
         effective_sdist_dict = sdist_target_dict
@@ -380,7 +369,6 @@ def _pin_build(target_name, pin_target_dict, package, workspace_repo, workspace_
                 "sdist",
                 actual_pkg_ref,
                 has_transition = has_transition,
-                default_variants = default_variants,
                 no_variant_fallbacks = no_variant_fallbacks,
                 all_target_dict = pin_target_dict,
                 fallback_target = _NO_MATCH_ERROR_TARGET,
@@ -390,7 +378,7 @@ def _pin_build(target_name, pin_target_dict, package, workspace_repo, workspace_
     extras_dict = extras_dict or {}
     extras_maybe_keys = extras_maybe_keys or {}
     for extra_name, extra_target_dict in sorted(extras_dict.items()):
-        actual_extra = _proxy_actual(actual_lines, extra_target_dict, lock_ref, "", workspace_repo, "extra_{}".format(extra_name), actual_pkg_ref, has_transition = has_transition, default_variants = default_variants, no_variant_fallbacks = no_variant_fallbacks)
+        actual_extra = _proxy_actual(actual_lines, extra_target_dict, lock_ref, "", workspace_repo, "extra_{}".format(extra_name), actual_pkg_ref, has_transition = has_transition, no_variant_fallbacks = no_variant_fallbacks)
         _emit_proxy(lib_rule, "[{}]".format(extra_name), actual_extra, is_testonly = testonly)
         if extra_name in extras_maybe_keys and extras_maybe_keys[extra_name] and extra_target_dict:
             if has_transition:
@@ -402,7 +390,6 @@ def _pin_build(target_name, pin_target_dict, package, workspace_repo, workspace_
                     extra_target_dict,
                     extras_maybe_keys[extra_name],
                     workspace_repo,
-                    default_variants = default_variants,
                     no_variant_fallbacks = no_variant_fallbacks,
                     helper_prefix = "_maybe_extra_{}".format(extra_name),
                 )
@@ -415,7 +402,6 @@ def _pin_build(target_name, pin_target_dict, package, workspace_repo, workspace_
                     extra_target_dict,
                     extras_maybe_keys[extra_name],
                     workspace_repo,
-                    default_variants = default_variants,
                     no_variant_fallbacks = no_variant_fallbacks,
                     helper_prefix = "_maybe_extra_{}".format(extra_name),
                 )
@@ -431,7 +417,6 @@ def _pin_build(target_name, pin_target_dict, package, workspace_repo, workspace_
                 lock_target_dict,
                 maybe_available_keys,
                 workspace_repo,
-                default_variants = default_variants,
                 no_variant_fallbacks = no_variant_fallbacks,
                 helper_prefix = "_maybe",
             )
@@ -444,7 +429,6 @@ def _pin_build(target_name, pin_target_dict, package, workspace_repo, workspace_
                 lock_target_dict,
                 maybe_available_keys,
                 workspace_repo,
-                default_variants = default_variants,
                 no_variant_fallbacks = no_variant_fallbacks,
                 helper_prefix = "_maybe",
             )
@@ -461,6 +445,147 @@ def _pin_build(target_name, pin_target_dict, package, workspace_repo, workspace_
         build = "\n".join(lines) + "\n",
         actual_build = actual_build,
     )
+
+def _collect_variants(variant_sets):
+    """Collect this repo's variant flags, conflict sets and defaults from its lock.
+
+    Args:
+        variant_sets: The lock's `variants` list.
+
+    Returns:
+        struct(
+            flags = {flag: [qnames]},  # this repo's _variants flags and the items they enable
+            sets = {set_suffix: struct(qnames, flags, default)},
+        )
+    """
+    flags = {}
+    sets = {}
+    for variant_set in variant_sets:
+        qnames = []
+        set_flags = {}  # flag -> [qnames in this set]
+        item_flags = []  # (qname, [flags])
+        for item in variant_set["items"]:
+            qname = variant_item_qname(item)
+            qnames.append(qname)
+            item_flags.append((qname, item.get("flags", [])))
+            for flag in item.get("flags", []):
+                flag_qnames = flags.setdefault(flag, [])
+                if qname not in flag_qnames:
+                    flag_qnames.append(qname)
+                set_flags.setdefault(flag, []).append(qname)
+
+        # For messages: per item, the first of its flags that selects only that
+        # item in this set (e.g. `extra_cpu`, or `group_app-a_test` when
+        # `group_test` would enable two conflicting items).
+        usable = []
+        for _, item_flag_list in item_flags:
+            for flag in item_flag_list:
+                if len(set_flags[flag]) == 1:
+                    if flag not in usable:
+                        usable.append(flag)
+                    break
+        if qnames:
+            sets["_".join(sorted(qnames))] = struct(
+                qnames = qnames,
+                flags = usable,
+                default = variant_set.get("repo_default", ""),
+            )
+    return struct(flags = flags, sets = sets)
+
+def _variants_build(variant_info, workspace_repo, repo_name):
+    """Render _variants/BUILD.bazel: this repo's variant flags.
+
+    The workspace repo's variant resolvers read these bool_flags (see
+    package_repo.bzl), so one flag here can enable the same extra/group in
+    several projects. `is_<flag>` matches when all of the items the flag
+    enables are active. For this repo's default variant, it also matches when
+    nothing in the set is selected, so first-party select()s outside the repo's
+    transition see the default too.
+
+    Args:
+        variant_info: Result of _collect_variants.
+        workspace_repo: Name of the workspace (backing) repo.
+        repo_name: This repo's apparent name, for messages.
+
+    Returns:
+        The file content, or None if the repo has no variants.
+    """
+    if not variant_info.flags and not variant_info.sets:
+        return None
+
+    defaults = {}  # qname -> [set suffixes where it's this repo's default]
+    for set_suffix, vset in variant_info.sets.items():
+        if vset.default:
+            defaults.setdefault(vset.default, []).append(set_suffix)
+
+    body = []
+    needs_selects = False
+    for flag, qnames in sorted(variant_info.flags.items()):
+        body.extend([
+            "bool_flag(",
+            '    name = "{}",'.format(flag),
+            "    build_setting_default = False,",
+            ")",
+            "",
+        ])
+        conditions = ['"@{}//_lock:is_{}"'.format(workspace_repo, q) for q in qnames]
+        if len(qnames) == 1 and qnames[0] in defaults:
+            needs_selects = True
+            conditions.extend(['"@{}//_lock:_unselected_{}"'.format(workspace_repo, s) for s in defaults[qnames[0]]])
+            body.append("selects.config_setting_group(")
+            body.append('    name = "is_{}",'.format(flag))
+            body.append("    match_any = [")
+            body.extend(["        {},".format(c) for c in conditions])
+            body.extend(["    ],", ")", ""])
+        elif len(qnames) == 1:
+            body.extend([
+                "alias(",
+                '    name = "is_{}",'.format(flag),
+                "    actual = {},".format(conditions[0]),
+                ")",
+                "",
+            ])
+        else:
+            needs_selects = True
+            body.append("selects.config_setting_group(")
+            body.append('    name = "is_{}",'.format(flag))
+            body.append("    match_all = [")
+            body.extend(["        {},".format(c) for c in conditions])
+            body.extend(["    ],", ")", ""])
+
+    for set_suffix, vset in sorted(variant_info.sets.items()):
+        if vset.flags:
+            message = "No uv conflict variant selected. Set one of the _variants flags on your pycross repo: {} (e.g. --@{}//_variants:{}=True)".format(
+                ", ".join(vset.flags),
+                repo_name,
+                vset.flags[0],
+            )
+        else:
+            message = "No uv conflict variant selected, and @{} has no _variants flag for it ({}). Select it through a repo for the declaring project.".format(
+                repo_name,
+                set_suffix,
+            )
+        body.extend([
+            "pycross_no_variant_selected(",
+            '    name = "_no_variant_{}",'.format(set_suffix),
+            "    message = {},".format(json.encode(message)),
+            ")",
+            "",
+        ])
+
+    header = ['package(default_visibility = ["//visibility:public"])', ""]
+    if needs_selects:
+        header.append('load("@bazel_skylib//lib:selects.bzl", "selects")')
+    if variant_info.flags:
+        header.append('load("@bazel_skylib//rules:common_settings.bzl", "bool_flag")')
+    if variant_info.sets:
+        header.append('load("@rules_pycross//pycross/private:variant_resolver.bzl", "pycross_no_variant_selected")')
+    header.append("")
+    return "\n".join(header + body)
+
+# Visible for testing
+collect_variants_for_testing = _collect_variants
+variants_build_for_testing = _variants_build
 
 def _thin_package_repo_impl(rctx):
     workspace_repo = rctx.attr.workspace_repo
@@ -479,31 +604,11 @@ def _thin_package_repo_impl(rctx):
     # targets for conflict sets without a default variant.
     # When a VariantItem has default=True, its target becomes //conditions:default
     # in the select(), so builds without explicit flags use the default variant.
-    variant_flags = {}  # this repo's _variants flag -> [qualified names it enables]
-    default_variants = {}  # qualified_name -> True
+    variant_info = _collect_variants(lock.get("variants", []))
     no_variant_fallbacks = {}  # constraint -> conflict set suffix (sorted qnames joined by "_")
-    no_variant_sets = {}  # conflict set suffix -> [this repo's flags for the set]
-    for variant_set in lock.get("variants", []):
-        set_qnames = []
-        set_flags = []
-        has_default = False
-        for item in variant_set["items"]:
-            qname = variant_item_qname(item)
-            set_qnames.append(qname)
-            for flag in item.get("flags", []):
-                qnames = variant_flags.setdefault(flag, [])
-                if qname not in qnames:
-                    qnames.append(qname)
-                if flag not in set_flags:
-                    set_flags.append(flag)
-            if item.get("default", False):
-                default_variants[qname] = True
-                has_default = True
-        if not has_default and set_qnames:
-            set_suffix = "_".join(sorted(set_qnames))
-            no_variant_sets[set_suffix] = set_flags
-            for qname in set_qnames:
-                no_variant_fallbacks[qname] = set_suffix
+    for set_suffix, vset in variant_info.sets.items():
+        for qname in vset.qnames:
+            no_variant_fallbacks[qname] = set_suffix
     for cname, expr in lock.get("resolution_marker_exprs", {}).items():
         if type(expr) == "dict" and expr.get("variant") in no_variant_fallbacks:
             no_variant_fallbacks[cname] = no_variant_fallbacks[expr["variant"]]
@@ -540,7 +645,17 @@ def _thin_package_repo_impl(rctx):
 
     # Generate internal platform + transition if needed
     target_platform = rctx.attr.platform
-    has_flags = bool(rctx.attr.flags) or bool(rctx.attr.settings)
+
+    # Variant settings this repo's transition sets in the workspace repo:
+    # `_pin_<set>` from its flags/settings (computed by the extension) and
+    # `_default_<set>` from its projects' default-groups.
+    fixed_settings = {}
+    for set_suffix, qname in sorted(rctx.attr.variant_pins.items()):
+        fixed_settings["@{}//_lock:_pin_{}".format(workspace_repo, set_suffix)] = qname
+    for set_suffix, vset in sorted(variant_info.sets.items()):
+        if vset.default:
+            fixed_settings["@{}//_lock:_default_{}".format(workspace_repo, set_suffix)] = vset.default
+    has_flags = bool(rctx.attr.flags) or bool(rctx.attr.settings) or bool(fixed_settings)
     has_constraints = bool(rctx.attr.constraint_values)
 
     if not target_platform and has_constraints:
@@ -582,6 +697,11 @@ def _thin_package_repo_impl(rctx):
         for label, value in sorted(rctx.attr.settings.items()):
             outputs_lines.append('        "{}",'.format(label))
             settings_lines.append('    "{}": {},'.format(label, repr(value)))
+        fixed_lines = []
+        fixed_outputs_lines = []
+        for label, value in sorted(fixed_settings.items()):
+            fixed_outputs_lines.append('        "{}",'.format(label))
+            fixed_lines.append('    "{}": {},'.format(label, repr(value)))
 
         transition_bzl = """\
 \"\"\"Generated transition rules for {repo} with pinned flag values.\"\"\"
@@ -601,6 +721,11 @@ _SETTING_VALUES = {{
 {settings_dict}
 }}
 
+# Variant pins and defaults for the workspace repo's resolvers.
+_FIXED_VALUES = {{
+{fixed_dict}
+}}
+
 def _transition_impl(settings, attr):
     result = {{
         label: coerce_transition_values(settings[label], values)
@@ -608,6 +733,7 @@ def _transition_impl(settings, attr):
     }}
     for label, value in _SETTING_VALUES.items():
         result[label] = coerce_transition_values(settings[label], split_setting_value(settings[label], value))
+    result.update(_FIXED_VALUES)
     if attr.platform:
         result["//command_line_option:platforms"] = [str(attr.platform)]
     else:
@@ -623,6 +749,7 @@ _repo_transition = transition(
     outputs = [
         "//command_line_option:platforms",
 {outputs}
+{fixed_outputs}
     ],
 )
 
@@ -664,7 +791,9 @@ pycross_transitioning_file_proxy = rule(
             repo = rctx.attr.member_name,
             return_dict = "\n".join(return_lines),
             settings_dict = "\n".join(settings_lines),
+            fixed_dict = "\n".join(fixed_lines),
             outputs = "\n".join(outputs_lines),
+            fixed_outputs = "\n".join(fixed_outputs_lines),
         )
         rctx.file("_transition.bzl", transition_bzl)
 
@@ -865,7 +994,6 @@ pycross_transitioning_file_proxy = rule(
             workspace_lock_target_dict,
             has_aggregated_variant,
             extras_dict,
-            default_variants = default_variants,
             no_variant_fallbacks = no_variant_fallbacks,
             target_platform = target_platform,
             transition_bzl = "//:_transition.bzl" if has_flags else None,
@@ -888,64 +1016,10 @@ pycross_transitioning_file_proxy = rule(
     # _variants/ BUILD: alias bool_flag and config_setting targets
     # from the workspace repo so users can reference @<thin_repo>//_variants:<name>
     # in platform(flags=[...]) and transitions without needing the workspace repo directly.
-    # _variants/ BUILD: this repo's variant flags. The workspace repo's variant
-    # resolvers read them (see package_repo.bzl), so one flag here can enable the
-    # same extra/group in several projects. `is_<flag>` matches when any of them
-    # is the active variant.
-    if variant_flags or no_variant_sets:
-        variant_lines = [
-            'package(default_visibility = ["//visibility:public"])',
-            "",
-            'load("@bazel_skylib//lib:selects.bzl", "selects")',
-            'load("@bazel_skylib//rules:common_settings.bzl", "bool_flag")',
-            'load("@rules_pycross//pycross/private:variant_resolver.bzl", "pycross_no_variant_selected")',
-            "",
-        ]
-        for flag, qnames in sorted(variant_flags.items()):
-            variant_lines.extend([
-                "bool_flag(",
-                '    name = "{}",'.format(flag),
-                "    build_setting_default = False,",
-                ")",
-                "",
-            ])
-            if len(qnames) == 1:
-                variant_lines.extend([
-                    "alias(",
-                    '    name = "is_{}",'.format(flag),
-                    '    actual = "@{}//_lock:is_{}",'.format(workspace_repo, qnames[0]),
-                    ")",
-                    "",
-                ])
-            else:
-                variant_lines.append("selects.config_setting_group(")
-                variant_lines.append('    name = "is_{}",'.format(flag))
-                variant_lines.append("    match_any = [")
-                for qname in qnames:
-                    variant_lines.append('        "@{}//_lock:is_{}",'.format(workspace_repo, qname))
-                variant_lines.extend(["    ],", ")", ""])
-
-        repo_name = getattr(rctx, "original_name", "") or "<repo>"
-        for set_suffix, set_flags in sorted(no_variant_sets.items()):
-            if set_flags:
-                message = "No uv conflict variant selected. Set one of the _variants flags on your pycross repo: {} (e.g. --@{}//_variants:{}=True)".format(
-                    ", ".join(set_flags),
-                    repo_name,
-                    set_flags[0],
-                )
-            else:
-                message = "No uv conflict variant selected, and @{} has no _variants flag for it ({}). Select it through a repo for the declaring project.".format(
-                    repo_name,
-                    set_suffix,
-                )
-            variant_lines.extend([
-                "pycross_no_variant_selected(",
-                '    name = "_no_variant_{}",'.format(set_suffix),
-                "    message = {},".format(json.encode(message)),
-                ")",
-                "",
-            ])
-        rctx.file("_variants/BUILD.bazel", "\n".join(variant_lines))
+    # _variants/ BUILD: this repo's variant flags (see _variants_build).
+    variants_build = _variants_build(variant_info, workspace_repo, getattr(rctx, "original_name", "") or "<repo>")
+    if variants_build:
+        rctx.file("_variants/BUILD.bazel", variants_build)
 
     # _backend/ directory
     if rctx.attr.backend_configs:
@@ -978,7 +1052,6 @@ pycross_transitioning_file_proxy = rule(
             packages,
             override_configs,
             workspace_repo,
-            default_variants = default_variants,
             no_variant_fallbacks = no_variant_fallbacks,
         )
         if cargo_build:
@@ -1038,7 +1111,7 @@ def _packages_bzl(grouped_pins, packages):
     ])
     return "\n".join(packages_lines)
 
-def _cargo_build(grouped_pins, packages, override_configs, workspace_repo, default_variants = {}, no_variant_fallbacks = {}):
+def _cargo_build(grouped_pins, packages, override_configs, workspace_repo, no_variant_fallbacks = {}):
     """Render `_cargo/BUILD.bazel` aliases for packages with cargo lock overrides, or None."""
     cargo_lines = [
         'package(default_visibility = ["//visibility:public"])',
@@ -1070,7 +1143,6 @@ def _cargo_build(grouped_pins, packages, override_configs, workspace_repo, defau
             "@{}//_cargo:".format(workspace_repo),
             "",
             workspace_repo,
-            default_variants = default_variants,
             no_variant_fallbacks = no_variant_fallbacks,
             all_target_dict = base_target_dict,
             fallback_target = _NO_MATCH_ERROR_TARGET,
@@ -1126,6 +1198,10 @@ thin_package_repo = repository_rule(
         ),
         "platform": attr.string(
             doc = "Existing platform target to use directly.",
+        ),
+        "variant_pins": attr.string_dict(
+            doc = "Conflict set suffix -> qualified name of the variant this repo's flags/settings select. " +
+                  "Its transition sets the workspace repo's `_pin_<set>` to it.",
         ),
         "override_configs": attr.string(
             doc = "JSON-encoded dict of pkg_name -> {backend_name -> backend_attrs} for package repo hooks.",

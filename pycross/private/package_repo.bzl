@@ -115,7 +115,7 @@ def _package_repo_impl(rctx):
     cycle_groups = {}  # group_name -> [pkg_key, ...]
     resolution_marker_exprs = {}  # constraint_name -> marker_expr or compound dict
     variant_items = {}  # qualified_name -> True (dedup across members)
-    variant_sets = []  # list of {"qnames": [...], "default": "...", "flags": {flag label: [qnames]}}
+    variant_sets = []  # list of {"qnames": [...], "flags": {flag label: [qnames]}}
     variant_sets_seen = {}  # sorted qnames key -> variant set (dedup across members)
     for member in rctx.attr.member_lock_files.keys():
         if member in rctx.attr.member_lock_data:
@@ -126,19 +126,16 @@ def _package_repo_impl(rctx):
 
         for variant_set in member_lock.get("variants", []):
             set_qnames = []
-            set_default = ""
             set_flags = {}  # "@<member>//_variants:<flag>" -> [qnames]
             for item in variant_set["items"]:
                 qname = variant_item_qname(item)
                 variant_items[qname] = True
                 set_qnames.append(qname)
-                if item.get("default", False):
-                    set_default = qname
                 for flag in item.get("flags", []):
                     set_flags.setdefault("@{}//_variants:{}".format(member, flag), []).append(qname)
             set_key = "|".join(sorted(set_qnames))
             if set_key not in variant_sets_seen:
-                variant_sets_seen[set_key] = {"qnames": set_qnames, "default": set_default, "flags": {}}
+                variant_sets_seen[set_key] = {"qnames": set_qnames, "flags": {}}
                 variant_sets.append(variant_sets_seen[set_key])
             variant_sets_seen[set_key]["flags"].update(set_flags)
 
@@ -212,6 +209,7 @@ def _package_repo_impl(rctx):
         "",
     ]
     if variant_items:
+        lock_build_lines.append('load("@bazel_skylib//rules:common_settings.bzl", "string_flag")')
         lock_build_lines.append('load("@rules_pycross//pycross/private:variant_resolver.bzl", "variant_resolver")')
         lock_build_lines.append("")
 
@@ -232,37 +230,45 @@ def _package_repo_impl(rctx):
         "",
     ])
 
-    # Emit variant_resolver targets (one per conflict set).
+    # Emit variant_resolver targets (one per conflict set). There are no static
+    # defaults here: the thin repos select variants. Their _variants bool_flags
+    # feed the resolver directly (one flag can enable several items, e.g.
+    # `group_test` in a repo with two projects), and their transitions set
+    # `_pin_<set>` (from `uv.repo(flags/settings)`) or `_default_<set>` (from
+    # the repo's default-groups). Precedence: pin > flags > default.
     for vset in variant_sets:
         set_suffix = "_".join(sorted(vset["qnames"]))
         resolver_name = "_resolver_" + set_suffix
-
-        # The flags live in the thin repos' _variants packages. One flag can
-        # enable several items (e.g. `group_test` in a repo with two projects).
         lock_build_lines.extend([
+            "string_flag(",
+            '    name = "_pin_{}",'.format(set_suffix),
+            '    build_setting_default = "",',
+            ")",
+            "",
+            "string_flag(",
+            '    name = "_default_{}",'.format(set_suffix),
+            '    build_setting_default = "",',
+            ")",
+            "",
             "variant_resolver(",
             '    name = "{}",'.format(resolver_name),
+            '    pin = ":_pin_{}",'.format(set_suffix),
+            '    default_setting = ":_default_{}",'.format(set_suffix),
+            "    items = {},".format(json.encode(sorted(vset["qnames"]))),
             "    flags = {",
         ])
         for flag_label, qnames in sorted(vset["flags"].items()):
-            lock_build_lines.append('        "{}": "{}",'.format(flag_label, " ".join(qnames)))
+            lock_build_lines.append('        "{}": "{}|{}",'.format(flag_label, flag_label, " ".join(qnames)))
         lock_build_lines.extend([
             "    },",
-        ])
-        if vset["default"]:
-            lock_build_lines.append('    default = "{}",'.format(vset["default"]))
-        lock_build_lines.extend([
+            ")",
+            "",
+            "config_setting(",
+            '    name = "_unselected_{}",'.format(set_suffix),
+            '    flag_values = {{":{resolver}": ""}},'.format(resolver = resolver_name),
             ")",
             "",
         ])
-        if not vset["default"]:
-            lock_build_lines.extend([
-                "config_setting(",
-                '    name = "_unselected_{}",'.format(set_suffix),
-                '    flag_values = {{":{resolver}": ""}},'.format(resolver = resolver_name),
-                ")",
-                "",
-            ])
 
     # Emit config_settings referencing the resolver(s).
     for qname in sorted(variant_items.keys()):

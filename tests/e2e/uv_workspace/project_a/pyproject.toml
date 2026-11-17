@@ -15,3 +15,7 @@ test = ["iniconfig==1.1.1"]
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
+
+[tool.uv]
+# A per-member default: repos for project-a that request `test` default to it.
+default-groups = ["test"]

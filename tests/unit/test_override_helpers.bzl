@@ -8,7 +8,7 @@ load("@rules_testing//lib:util.bzl", "util")
 load("//pycross/private:format_extension.bzl", "normalize_flag_for_testing", "normalize_settings_for_testing")
 
 # buildifier: disable=bzl-visibility
-load("//pycross/private:lock_repo_creation.bzl", "normalize_override_name_for_testing", "validate_override_packages_for_testing")
+load("//pycross/private:lock_repo_creation.bzl", "compute_variant_pins_for_testing", "normalize_override_name_for_testing", "validate_override_packages_for_testing")
 
 # buildifier: disable=bzl-visibility
 load("//pycross/private:override_helpers.bzl", "encode_build_system_attrs", "merge_backend_overrides")
@@ -443,10 +443,38 @@ def _test_normalize_settings_rejects_duplicate(name):
         expect_failure = True,
     )
 
+# buildifier: disable=unused-variable
+def _test_compute_variant_pins_impl(env, target):
+    variants = [{
+        "items": [
+            {"package": "app-a", "kind": "group", "name": "test", "flags": ["group_test", "group_app-a_test"]},
+            {"package": "app-b", "kind": "group", "name": "test", "flags": ["group_test", "group_app-b_test"]},
+        ],
+    }]
+    locks = {
+        "lock_a_test": {"variants": [{"items": [variants[0]["items"][0], dict(variants[0]["items"][1], flags = [])]}]},
+        "lock_all": {"variants": variants},
+    }
+    set_suffix = "group_app-a_test_group_app-b_test"
+
+    # Apparent label, flag without a value.
+    env.expect.that_dict(compute_variant_pins_for_testing("lock_a_test", ["--@lock_a_test//_variants:group_test"], {}, locks)).contains_exactly({set_suffix: "group_app-a_test"})
+
+    # Canonical label from `settings`, and a sibling repo's per-project flag.
+    env.expect.that_dict(compute_variant_pins_for_testing("x", [], {"@@rules_pycross++uv+lock_all//_variants:group_app-b_test": "True"}, locks)).contains_exactly({set_suffix: "group_app-b_test"})
+
+    # `=False` and unrelated flags select nothing.
+    env.expect.that_dict(compute_variant_pins_for_testing("x", ["--@lock_all//_variants:group_test=False", "--compilation_mode=opt", "--//:foo"], {}, locks)).contains_exactly({})
+
+def _test_compute_variant_pins(name):
+    util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
+    analysis_test(name = name, target = name + "_subject", impl = _test_compute_variant_pins_impl)
+
 def override_helpers_test_suite(name):
     test_suite(
         name = name,
         tests = [
+            _test_compute_variant_pins,
             _test_encode_build_system_attrs,
             _test_normalize_flags,
             _test_normalize_flag_requires_dashes,
