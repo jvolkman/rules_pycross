@@ -487,6 +487,114 @@ class RegressionTest(_TreeTestCase):
             pycross_patch.apply_patch(self.root, self.write_patch(patch))
 
 
+class ReviewFindingsTest(_TreeTestCase):
+    """Cases from the second review of the engine."""
+
+    def _apply(self, patch, strip=0):
+        return pycross_patch.apply_patch(self.root, self.write_patch(patch), strip)
+
+    def test_contradictory_git_headers_are_parse_errors(self):
+        self.write_tree({"x.py": b"a\n"})
+        for patch in [
+            b"diff --git a/x.py b/x.py\nnew file mode 100644\ndeleted file mode 100644\n",
+            b"diff --git a/x.py b/x.py\nnew file mode 100644\n--- a/x.py\n+++ /dev/null\n@@ -0,0 +0,0 @@\n",
+            b"diff --git a/x.py b/y.py\nrename from x.py\nrename to y.py\ncopy from x.py\ncopy to y.py\n",
+            b"diff --git a/x.py b/y.py\ndeleted file mode 100644\nrename from x.py\nrename to y.py\n",
+        ]:
+            with self.subTest(patch=patch):
+                with self.assertRaises(SystemExit) as ctx:
+                    pycross_patch.apply_patch_or_exit(self.root, self.write_patch(patch))
+                self.assertIn("failed to parse patch file", str(ctx.exception))
+        self.assertEqual(self.snapshot(), {"x.py": b"a\n"})
+
+    def test_file_and_directory_conflicts_are_found_before_writing(self):
+        self.write_tree({"existing.py": b"a\n"})
+        patch = (
+            H(b"existing.py", b"existing.py")
+            + b"@@ -1 +1 @@\n-a\n+b\n"
+            + b"--- /dev/null\n+++ b/foo\n@@ -0,0 +1 @@\n+f\n"
+            + b"--- /dev/null\n+++ b/foo/bar.py\n@@ -0,0 +1 @@\n+g\n"
+        )
+        with self.assertRaisesRegex(pycross_patch.PatchError, "'foo' is a file"):
+            self._apply(patch)
+        self.assertEqual(self.snapshot(), {"existing.py": b"a\n"})
+
+    def test_file_replaced_by_directory(self):
+        self.write_tree({"foo": b"f\n"})
+        patch = (
+            b"diff --git a/foo b/foo\ndeleted file mode 100644\n--- a/foo\n+++ /dev/null\n@@ -1 +0,0 @@\n-f\n"
+            b"diff --git a/foo/bar.py b/foo/bar.py\nnew file mode 100644\n--- /dev/null\n+++ b/foo/bar.py\n"
+            b"@@ -0,0 +1 @@\n+g\n"
+        )
+        self._apply(patch)
+        self.assertEqual(self.snapshot(), {"foo/bar.py": b"g\n"})
+
+    def test_directory_replaced_by_file(self):
+        self.write_tree({"foo/bar.py": b"g\n", "keep/x.py": b"x\n"})
+        patch = (
+            b"diff --git a/foo/bar.py b/foo/bar.py\ndeleted file mode 100644\n--- a/foo/bar.py\n+++ /dev/null\n"
+            b"@@ -1 +0,0 @@\n-g\n"
+            b"diff --git a/foo b/foo\nnew file mode 100644\n--- /dev/null\n+++ b/foo\n@@ -0,0 +1 @@\n+f\n"
+        )
+        self._apply(patch)
+        self.assertEqual(self.snapshot(), {"foo": b"f\n", "keep/x.py": b"x\n"})
+
+    def test_directory_with_remaining_files_blocks_file_creation(self):
+        self.write_tree({"foo/a.py": b"a\n", "foo/b.py": b"b\n"})
+        patch = b"--- a/foo/a.py\n+++ /dev/null\n@@ -1 +0,0 @@\n-a\n--- /dev/null\n+++ b/foo\n@@ -0,0 +1 @@\n+f\n"
+        with self.assertRaisesRegex(pycross_patch.PatchError, "creates 'foo', which already exists"):
+            self._apply(patch)
+
+    def test_deleting_last_file_removes_empty_directory(self):
+        self.write_tree({"pkg/sub/x.py": b"x\n", "pkg/y.py": b"y\n"})
+        self._apply(b"--- a/pkg/sub/x.py\n+++ /dev/null\n@@ -1 +0,0 @@\n-x\n")
+        self.assertFalse((self.root / "pkg/sub").exists())
+        self.assertEqual(self.snapshot(), {"pkg/y.py": b"y\n"})
+
+    def test_symlinks_inside_root_are_not_followed(self):
+        self.write_tree({"target.py": b"a\n", "real/x.py": b"a\n"})
+        os.symlink("target.py", self.root / "alias.py")
+        os.symlink("real", self.root / "linkdir")
+        with self.assertRaisesRegex(pycross_patch.PatchError, "'alias.py' is not a regular file"):
+            self._apply(H(b"alias.py", b"alias.py") + b"@@ -1 +1 @@\n-a\n+b\n")
+        with self.assertRaisesRegex(pycross_patch.PatchError, "beyond a symbolic link"):
+            self._apply(H(b"linkdir/x.py", b"linkdir/x.py") + b"@@ -1 +1 @@\n-a\n+b\n")
+        with self.assertRaisesRegex(pycross_patch.PatchError, "'alias.py' is not a regular file"):
+            self._apply(b"diff --git a/alias.py b/alias.py\nold mode 100644\nnew mode 100755\n")
+        self.assertEqual(self.snapshot()["target.py"], b"a\n")
+        self.assertEqual(self.snapshot()["real/x.py"], b"a\n")
+
+    def test_symlink_update_without_mode_lines_is_rejected(self):
+        patch = b"diff --git a/lnk b/lnk\nindex 1111111..2222222 120000\n--- a/lnk\n+++ b/lnk\n@@ -1 +1 @@\n-t1\n+t2\n"
+        with self.assertRaisesRegex(pycross_patch.PatchParseError, "only regular files"):
+            self._apply(patch)
+
+    def test_recreated_file_gets_the_new_mode(self):
+        self.write_tree({"run.sh": b"old\n"})
+        os.chmod(self.root / "run.sh", 0o755)
+        patch = (
+            b"diff --git a/run.sh b/run.sh\ndeleted file mode 100755\n--- a/run.sh\n+++ /dev/null\n"
+            b"@@ -1 +0,0 @@\n-old\n"
+            b"diff --git a/run.sh b/run.sh\nnew file mode 100644\n--- /dev/null\n+++ b/run.sh\n"
+            b"@@ -0,0 +1 @@\n+new\n"
+        )
+        self._apply(patch)
+        self.assertEqual(self.snapshot(), {"run.sh": b"new\n"})
+        self.assertFalse(os.stat(self.root / "run.sh").st_mode & 0o111)
+
+    def test_plain_diff_against_new_copy_patches_the_original(self):
+        self.write_tree({"setup.py": b"a\n"})
+        touched = self._apply(b"--- setup.py\t2026-01-01\n+++ setup.py.new\t2026-01-02\n@@ -1 +1 @@\n-a\n+b\n")
+        self.assertEqual(touched, {"setup.py"})
+        self.assertEqual(self.snapshot(), {"setup.py": b"b\n"})
+
+    def test_git_header_name_edge_cases(self):
+        self.assertEqual(pycross_patch._git_header_name(b"a//x.py b//x.py", 1, 1), b"x.py")
+        self.assertIsNone(pycross_patch._git_header_name(b'"a/x" "b/x" extra', 1, 1))
+        self.assertIsNone(pycross_patch._git_header_name(b'a/x "b/x" extra', 1, 1))
+        self.assertEqual(pycross_patch._git_header_name(b'a/x "b/x"', 1, 1), b"x")
+
+
 class GitExtendedHeaderTest(_TreeTestCase):
     def test_rename_keeps_mode_and_applies_hunks(self):
         self.write_tree({"old.sh": b"#!/bin/sh\necho old\n"})

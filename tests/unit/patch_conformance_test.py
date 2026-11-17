@@ -78,8 +78,9 @@ GO_GITDIFF_FAILURES = {
     "text_fragment_error_short_src_extreme": CONTEXT,
 }
 
-# go-gitdiff and `git apply` reject an `@@ -0,0 +1,3 @@` hunk for a non-empty file.
-# pycross follows GNU patch and inserts the lines at the top, like any other `-U0` hunk.
+# go-gitdiff and plain `git apply` reject an `@@ -0,0 +1,3 @@` hunk for a non-empty file.
+# `git diff -U0` writes exactly that for lines added at the top, and GNU patch and
+# `git apply --unidiff-zero` insert them there. pycross does the same.
 GO_GITDIFF_INSERT_AT_TOP = {"text_fragment_error_new_file"}
 
 

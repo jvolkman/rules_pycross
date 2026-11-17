@@ -182,16 +182,21 @@ def _header_name(rest: bytes, line_no: int) -> bytes:
 
 
 def _skip_components(name: bytes, strip: int) -> Optional[bytes]:
-    """Drop `strip` leading path components, like git's `skip_tree_prefix`."""
+    """Drop `strip` leading path components, like git's `skip_tree_prefix`.
+
+    A run of slashes counts as one separator, as in `_clean_path`.
+    """
+    if name.startswith(b"/"):
+        return None
     if strip == 0:
-        return None if name.startswith(b"/") else name
+        return name
     remaining = strip
     for i, c in enumerate(name):
-        if c != ord("/"):
+        if c != ord("/") or name[i - 1] == ord("/"):
             continue
         remaining -= 1
         if remaining == 0:
-            return None if i == 0 else name[i + 1 :]
+            return name[i + 1 :].lstrip(b"/")
     return None
 
 
@@ -208,7 +213,12 @@ def _git_header_name(names: bytes, strip: int, line_no: int) -> Optional[bytes]:
         if first is None or not rest[:1].isspace():
             return None
         rest = rest[1:]
-        second = _unquote(rest, line_no)[0] if rest.startswith(b'"') else rest
+        if rest.startswith(b'"'):
+            second, tail = _unquote(rest, line_no)
+            if tail:
+                return None
+        else:
+            second = rest
         return first if _skip_components(second, strip) == first else None
 
     name = _skip_components(names, strip)
@@ -217,8 +227,9 @@ def _git_header_name(names: bytes, strip: int, line_no: int) -> Optional[bytes]:
     quote = name.find(b'"')
     if quote >= 0:
         # The first name is unquoted, so a quote starts the second name.
-        second = _skip_components(_unquote(name[quote:], line_no)[0], strip)
-        if second is None:
+        second, tail = _unquote(name[quote:], line_no)
+        second = _skip_components(second, strip)
+        if second is None or tail:
             return None
         first = name[:quote]
         return second if first[:-1] == second and first[-1:].isspace() else None
@@ -327,7 +338,13 @@ class _Parser:
                 fp.copy_from = _header_name(line[len(b"copy from ") :], line_no)
             elif line.startswith(b"copy to "):
                 fp.copy_to = _header_name(line[len(b"copy to ") :], line_no)
-            elif line.startswith((b"index ", b"similarity index ", b"dissimilarity index ")):
+            elif line.startswith(b"index "):
+                # `index <old>..<new> <mode>` carries the mode when it doesn't change. A
+                # symlink or submodule update has no other mode line.
+                fields = line.split()
+                if len(fields) > 2:
+                    _parse_mode(fields[2], line_no)
+            elif line.startswith((b"similarity index ", b"dissimilarity index ")):
                 pass
             else:
                 self._check_unsupported(line, i)
@@ -432,7 +449,7 @@ def _effective_strip(files: List[_FilePatch], strip: int) -> int:
 
 @dataclass
 class _Change:
-    """One file change, with names resolved to root-relative paths."""
+    """One file change, with names resolved to root-relative paths. At most one name is None."""
 
     fp: _FilePatch
     old: Optional[str]  # None when the file is created.
@@ -443,8 +460,16 @@ class _Change:
 
 def _resolve(fp: _FilePatch, strip: int) -> _Change:
     line_no = fp.line_no
-    if any(name is not None for name in (fp.rename_from, fp.rename_to, fp.copy_from, fp.copy_to)):
-        rename = fp.rename_from is not None or fp.rename_to is not None
+    rename = fp.rename_from is not None or fp.rename_to is not None
+    copy = fp.copy_from is not None or fp.copy_to is not None
+    if fp.created and fp.deleted:
+        raise PatchParseError(f"line {line_no}: file is both created and deleted")
+    if rename and copy:
+        raise PatchParseError(f"line {line_no}: file is both renamed and copied")
+    if (rename or copy) and (fp.created or fp.deleted):
+        raise PatchParseError(f"line {line_no}: a renamed or copied file can't be created or deleted")
+
+    if rename or copy:
         src, dst = (fp.rename_from, fp.rename_to) if rename else (fp.copy_from, fp.copy_to)
         if src is None or dst is None:
             raise PatchParseError(f"line {line_no}: incomplete rename or copy")
@@ -468,8 +493,12 @@ def _resolve(fp: _FilePatch, strip: int) -> _Change:
         old = new = _clean_path(name, 0, line_no)
 
     if fp.created:
+        if new is None:
+            raise PatchParseError(f"line {line_no}: new file mode, but the new name is /dev/null")
         old = None
     if fp.deleted:
+        if old is None:
+            raise PatchParseError(f"line {line_no}: deleted file mode, but the old name is /dev/null")
         new = None
     return _Change(fp, old, new)
 
@@ -547,7 +576,11 @@ def _apply_hunks(content: bytes, hunks: List[_Hunk], rel: str) -> bytes:
 
 
 class _Tree:
-    """The files under `root` as the patch changes them. Nothing is written until `commit`."""
+    """The files under `root` as the patch changes them. Nothing is written until `commit`.
+
+    Paths are root-relative POSIX strings. Symlinks are never followed or patched: a
+    symlink counts as an existing non-directory, and paths beyond one are rejected.
+    """
 
     def __init__(self, root: Path):
         self.root = root
@@ -556,7 +589,15 @@ class _Tree:
         self._executable: Dict[str, bool] = {}
         self._order: List[str] = []
 
+    @staticmethod
+    def _ancestors(rel: str) -> List[str]:
+        parts = rel.split("/")
+        return ["/".join(parts[:i]) for i in range(1, len(parts))]
+
     def _path(self, rel: str) -> Path:
+        for ancestor in self._ancestors(rel):
+            if (self.root / ancestor).is_symlink():
+                raise PatchError(f"'{rel}' is beyond a symbolic link")
         path = self.root / rel
         resolved = path.resolve()
         if resolved == self.root_resolved or not resolved.is_relative_to(self.root_resolved):
@@ -567,39 +608,83 @@ class _Tree:
         if rel not in self._content and rel not in self._executable:
             self._order.append(rel)
 
-    def exists(self, rel: str) -> bool:
+    def _under_planned_file(self, rel: str) -> bool:
+        return any(self._content.get(ancestor) is not None for ancestor in self._ancestors(rel))
+
+    def is_file(self, rel: str) -> bool:
+        """Whether `rel` will be a file (or symlink) after the changes planned so far."""
+        if self._under_planned_file(rel):
+            return False
         if rel in self._content:
             return self._content[rel] is not None
         path = self._path(rel)
-        return path.exists() or path.is_symlink()
+        return path.is_symlink() or (path.exists() and not path.is_dir())
+
+    def _is_dir(self, rel: str) -> bool:
+        """Whether `rel` will be a directory after the changes planned so far.
+
+        A directory whose files are all deleted goes away, as `commit` removes it.
+        """
+        if self._under_planned_file(rel) or self._content.get(rel) is not None:
+            return False
+        prefix = rel + "/"
+        if any(key.startswith(prefix) and content is not None for key, content in self._content.items()):
+            return True
+        path = self._path(rel)
+        if path.is_symlink() or not path.is_dir():
+            return False
+        if not any(key.startswith(prefix) for key, content in self._content.items() if content is None):
+            return True
+        for dirpath, dirnames, filenames in os.walk(path):
+            if not dirnames and not filenames:
+                return True  # An empty directory stays.
+            for name in filenames + [d for d in dirnames if os.path.islink(os.path.join(dirpath, d))]:
+                entry = Path(dirpath, name).relative_to(self.root).as_posix()
+                if entry not in self._content:
+                    return True
+        return False
+
+    def exists(self, rel: str) -> bool:
+        return self.is_file(rel) or self._is_dir(rel)
+
+    def check_file(self, rel: str) -> None:
+        if self.is_file(rel):
+            return
+        if self.exists(rel):
+            raise PatchError(f"'{rel}' is not a regular file")
+        raise PatchError(f"patch targets non-existent file '{rel}'")
+
+    def _check_disk_file(self, rel: str) -> Path:
+        path = self._path(rel)
+        if path.is_symlink() or not path.is_file():
+            raise PatchError(f"'{rel}' is not a regular file")
+        return path
 
     def read(self, rel: str) -> bytes:
+        self.check_file(rel)
         content = self._content.get(rel)
         if content is not None:
             return content
-        path = self._path(rel)
-        if not path.is_file():
-            raise PatchError(f"'{rel}' is not a regular file")
-        return path.read_bytes()
+        return self._check_disk_file(rel).read_bytes()
 
     def is_executable(self, rel: str) -> bool:
         if rel in self._executable:
             return self._executable[rel]
-        path = self._path(rel)
-        return path.exists() and bool(path.stat().st_mode & 0o111)
+        return bool(self._check_disk_file(rel).stat().st_mode & 0o111)
 
     def write(self, rel: str, content: bytes) -> None:
         self._touch(rel)
         self._content[rel] = content
 
-    def create(self, rel: str, content: bytes) -> None:
-        # Fail now, rather than halfway through `commit`, if a parent is a file.
-        parent = self._path(rel).parent
-        while parent != self.root and not parent.exists():
-            parent = parent.parent
-        if not parent.is_dir():
-            raise PatchError(f"can't create '{rel}': '{parent.relative_to(self.root)}' is not a directory")
+    def create(self, rel: str, content: bytes, executable: bool) -> None:
+        if self.exists(rel):
+            raise PatchError(f"patch creates '{rel}', which already exists")
+        for ancestor in self._ancestors(rel):
+            if self.is_file(ancestor):
+                raise PatchError(f"can't create '{rel}': '{ancestor}' is a file")
         self.write(rel, content)
+        # Always set the mode: the file may replace a deleted executable at the same path.
+        self.set_executable(rel, executable)
 
     def delete(self, rel: str) -> None:
         self._touch(rel)
@@ -607,18 +692,23 @@ class _Tree:
         self._executable.pop(rel, None)
 
     def set_executable(self, rel: str, executable: bool) -> None:
+        if rel not in self._content:
+            self._check_disk_file(rel)
         self._touch(rel)
         self._executable[rel] = executable
 
     def commit(self) -> None:
+        # Delete first, so a deleted file's path can become a directory and vice versa.
+        for rel in self._order:
+            if rel in self._content and self._content[rel] is None:
+                path = self.root / rel
+                if os.path.lexists(path):
+                    path.unlink()
+                self._remove_empty_parents(path.parent)
         for rel in self._order:
             path = self.root / rel
-            if rel in self._content:
-                content = self._content[rel]
-                if content is None:
-                    if path.exists() or path.is_symlink():
-                        path.unlink()
-                    continue
+            content = self._content.get(rel)
+            if content is not None:
                 path.parent.mkdir(parents=True, exist_ok=True)
                 path.write_bytes(content)
             if rel in self._executable:
@@ -629,47 +719,51 @@ class _Tree:
                     perm &= ~0o111
                 os.chmod(path, perm)
 
+    def _remove_empty_parents(self, directory: Path) -> None:
+        while directory != self.root:
+            try:
+                directory.rmdir()
+            except OSError:
+                return
+            directory = directory.parent
+
 
 def _apply_change(tree: _Tree, change: _Change) -> Set[str]:
     fp = change.fp
+    old, new = change.old, change.new
     new_executable = None if fp.new_mode is None else bool(fp.new_mode & 0o111)
 
-    if change.old is None:
-        assert change.new is not None
-        if tree.exists(change.new):
-            raise PatchError(f"patch creates '{change.new}', which already exists")
-        tree.create(change.new, _apply_hunks(b"", fp.hunks, change.new))
-        if new_executable:
-            tree.set_executable(change.new, True)
-        return {change.new}
+    if old is None:
+        assert new is not None  # Checked in _resolve.
+        tree.create(new, _apply_hunks(b"", fp.hunks, new), bool(new_executable))
+        return {new}
+
+    if new is None:
+        tree.check_file(old)
+        if _apply_hunks(tree.read(old), fp.hunks, old):
+            raise PatchError(f"patch deletes '{old}' but doesn't remove all of its lines")
+        tree.delete(old)
+        return {old}
 
     if change.rename or change.copy:
-        if not tree.exists(change.old):
-            raise PatchError(f"patch targets non-existent file '{change.old}'")
-        assert change.new is not None
-        if tree.exists(change.new):
-            raise PatchError(
-                f"patch {'renames' if change.rename else 'copies'} to '{change.new}', which already exists"
-            )
-        executable = tree.is_executable(change.old)
-        tree.create(change.new, _apply_hunks(tree.read(change.old), fp.hunks, change.old))
+        tree.check_file(old)
+        if tree.exists(new):
+            raise PatchError(f"patch {'renames' if change.rename else 'copies'} to '{new}', which already exists")
+        executable = tree.is_executable(old) if new_executable is None else new_executable
+        content = _apply_hunks(tree.read(old), fp.hunks, old)
         if change.rename:
-            tree.delete(change.old)
-        tree.set_executable(change.new, executable if new_executable is None else new_executable)
-        return {change.old, change.new}
+            tree.delete(old)
+        tree.create(new, content, executable)
+        return {old, new}
 
     # A modification patches the new name; the old one may be a backup such as `x.py.orig`.
-    target = change.old if change.new is None else change.new
-    if not tree.exists(target):
-        raise PatchError(f"patch targets non-existent file '{target}'")
-    content = _apply_hunks(tree.read(target), fp.hunks, target)
-    if change.new is None:
-        if content:
-            raise PatchError(f"patch deletes '{target}' but doesn't remove all of its lines")
-        tree.delete(target)
-        return {target}
+    # Like GNU patch, use the old name if only that file exists (`diff -u x.py x.py.new`).
+    target = new
+    if old != new and fp.git_names is None and not tree.is_file(new) and tree.is_file(old):
+        target = old
+    tree.check_file(target)
     if fp.hunks:
-        tree.write(target, content)
+        tree.write(target, _apply_hunks(tree.read(target), fp.hunks, target))
     if new_executable is not None:
         tree.set_executable(target, new_executable)
     return {target}
