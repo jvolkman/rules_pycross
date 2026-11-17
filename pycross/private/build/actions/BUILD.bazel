@@ -26,7 +26,9 @@ bzl_library(
     name = "repair_action",
     srcs = ["repair_action.bzl"],
     deps = [
+        "//pycross/private:providers",
         "//pycross/private/build:cc_toolchain_util",
+        "@bazel_skylib//lib:collections",
     ],
 )
 

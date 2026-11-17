@@ -32,11 +32,15 @@ bzl_library(
 )
 
 bzl_library(
-    name = "wheel_headers",
-    srcs = ["wheel_headers.bzl"],
+    name = "wheel_cc_import",
+    srcs = ["wheel_cc_import.bzl"],
     deps = [
         ":cc_toolchain_util",
         "//pycross/private:providers",
+        "//pycross/private/build/rules:common_attrs",
+        "@bazel_skylib//lib:paths",
+        "@rules_cc//cc:find_cc_toolchain_bzl",
+        "@rules_cc//cc/common",
     ],
 )
 

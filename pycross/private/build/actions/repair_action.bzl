@@ -1,7 +1,9 @@
 """Action logic for repairing wheels (bundling native libraries)."""
 
+load("@bazel_skylib//lib:collections.bzl", "collections")
 load("@rules_cc//cc/common:cc_info.bzl", "CcInfo")
 load("@rules_python//python:py_info.bzl", "PyInfo")
+load("//pycross/private:providers.bzl", "PycrossWheelSharedLibraryInfo")
 load("//pycross/private/build:cc_toolchain_util.bzl", "get_libraries")
 
 def register_repair_action(
@@ -18,7 +20,9 @@ def register_repair_action(
     Args:
         ctx: The rule context.
         input_wheel_dir: File, the input wheel directory TreeArtifact.
-        native_deps: list[Target], CcInfo deps whose shared libs to bundle.
+        native_deps: list[Target], CcInfo deps whose shared libs to bundle. Shared
+            libraries from `pycross_wheel_cc_import` targets belong to other wheels:
+            repair can find them, but excludes them from the repaired wheel.
         repair_tool: Target, the repair_wheel executable.
         target_environment: File (optional), the target environment JSON.
         repair_exclude_globs: list[str], shared library globs to leave unbundled.
@@ -42,11 +46,19 @@ def register_repair_action(
     # Extract library paths from CcInfo.
     lib_dirs = []
     data_inputs = []
+    wheel_lib_excludes = []
     for dep in native_deps:
         if CcInfo in dep:
             for lib in get_libraries(dep[CcInfo]):
                 lib_dirs.append(lib.dirname)
                 data_inputs.append(depset([lib]))
+        if PycrossWheelSharedLibraryInfo in dep:
+            # Another wheel ships these at runtime. Bundling a copy would load the library
+            # twice, with separate state.
+            for lib in dep[PycrossWheelSharedLibraryInfo].shared_libraries.to_list():
+                lib_dirs.append(lib.dirname)
+                data_inputs.append(depset([lib]))
+                wheel_lib_excludes.append(lib.basename)
 
     # Collect user-provided repair deps (e.g. repairwheel override).
     repair_dep_paths = []
@@ -76,7 +88,7 @@ def register_repair_action(
     for d in depset(lib_dirs).to_list():
         args.add("--lib-dir", d)
 
-    for pattern in repair_exclude_globs:
+    for pattern in repair_exclude_globs + collections.uniq(wheel_lib_excludes):
         args.add("--exclude", pattern)
 
     if target_environment:

@@ -25,7 +25,7 @@ bzl_library(
         "//pycross/private:wheel_zipimport_library",
         "//pycross/private/build:cc_pkg_config",
         "//pycross/private/build:repaired_wheel",
-        "//pycross/private/build:wheel_headers",
+        "//pycross/private/build:wheel_cc_import",
         "//pycross/private/build/rules:path_tool",
     ],
 )

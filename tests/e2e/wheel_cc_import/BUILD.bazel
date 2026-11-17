@@ -1,0 +1,99 @@
+# An sdist (pkgb) whose extension links against a shared library that ships in
+# another wheel (pkga), through pycross_wheel_cc_import in native_deps.
+
+load("@rules_cc//cc:cc_binary.bzl", "cc_binary")
+load("@rules_pycross//pycross:defs.bzl", "pycross_wheel_cc_import", "pycross_wheel_library")
+load("@rules_python//python:defs.bzl", "py_binary", "py_test")
+load("@uv//_backend:setuptools_build.bzl", "setuptools_build")
+
+cc_binary(
+    name = "libfoo.so",
+    srcs = [
+        "pkga/foo.c",
+        "pkga/foo.h",
+    ],
+    linkopts = ["-Wl,-soname,libfoo.so"],
+    linkshared = True,
+)
+
+py_binary(
+    name = "build_pkga_wheel",
+    srcs = ["tools/build_pkga_wheel.py"],
+)
+
+# pkga ships pkga/include/foo.h and pkga/lib/libfoo.so, like torch or pyarrow.
+genrule(
+    name = "pkga_wheel",
+    srcs = [
+        "pkga/__init__.py",
+        "pkga/foo.h",
+        ":libfoo.so",
+    ],
+    outs = ["pkga-0.1-py3-none-any.whl"],
+    cmd = "$(location :build_pkga_wheel) $@ $(location pkga/__init__.py) $(location pkga/foo.h) $(location :libfoo.so)",
+    tools = [":build_pkga_wheel"],
+)
+
+pycross_wheel_library(
+    name = "pkga",
+    package_name = "pkga",
+    package_version = "0.1",
+    site_paths = ["pkga"],
+    wheel = ":pkga_wheel",
+)
+
+pycross_wheel_cc_import(
+    name = "libfoo",
+    includes = ["pkga/include"],
+    shared_library = "pkga/lib/libfoo.so",
+    wheel_library = ":pkga",
+)
+
+py_binary(
+    name = "build_pkgb_sdist",
+    srcs = ["tools/build_pkgb_sdist.py"],
+)
+
+genrule(
+    name = "pkgb_sdist",
+    srcs = [
+        "pkgb/pyproject.toml",
+        "pkgb/setup.py",
+        "pkgb/pkgb/__init__.py",
+        "pkgb/pkgb/_ext.c",
+    ],
+    outs = ["pkgb-0.1.tar.gz"],
+    cmd = "$(location :build_pkgb_sdist) $@ $(location pkgb/pyproject.toml) $(location pkgb/setup.py) " +
+          "$(location pkgb/pkgb/__init__.py) $(location pkgb/pkgb/_ext.c)",
+    tools = [":build_pkgb_sdist"],
+)
+
+setuptools_build(
+    name = "pkgb_wheel",
+    build_deps = [
+        "@uv//setuptools:pkg",
+        "@uv//wheel:pkg",
+    ],
+    native_deps = [":libfoo"],
+    sdist = ":pkgb_sdist",
+)
+
+pycross_wheel_library(
+    name = "pkgb",
+    package_name = "pkgb",
+    package_version = "0.1",
+    site_paths = ["pkgb"],
+    wheel = ":pkgb_wheel",
+    deps = [":pkga"],
+)
+
+py_test(
+    name = "test_wheel_cc_import",
+    srcs = ["tests/test_wheel_cc_import.py"],
+    main = "tests/test_wheel_cc_import.py",
+    target_compatible_with = ["@platforms//os:linux"],
+    deps = [
+        ":pkga",
+        ":pkgb",
+    ],
+)

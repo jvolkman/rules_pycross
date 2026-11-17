@@ -7,6 +7,13 @@ PycrossExtractedWheelInfo = provider(
     },
 )
 
+PycrossWheelSharedLibraryInfo = provider(
+    doc = "Shared libraries that ship in another wheel. Wheel repair finds them but doesn't bundle copies.",
+    fields = {
+        "shared_libraries": "depset[File]: The libraries, copied out of the wheels that ship them.",
+    },
+)
+
 PycrossPackageInfo = provider(
     doc = "Information about a Python package (e.g. from a lockfile).",
     fields = {
