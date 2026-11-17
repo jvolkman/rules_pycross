@@ -348,9 +348,12 @@ def _test_uv_extra_variants_impl(env, target):
     torch_pin = result["pins"]["torch"]
     env.expect.that_collection(torch_pin.keys()).contains_at_least(["extra_my-app_cpu", "extra_my-app_cu124"])
 
-    # The repo's own items get `<kind>_<name>` flags.
-    flags = [item["flag"] for item in vs["items"]]
-    env.expect.that_collection(flags).contains_exactly(["extra_cpu", "extra_cu124"])
+    # The repo's own items get `<kind>_<name>` and `<kind>_<project>_<name>` flags.
+    flags = {item["name"]: item["flags"] for item in vs["items"]}
+    env.expect.that_dict(flags).contains_exactly({
+        "cpu": ["extra_cpu", "extra_my-app_cpu"],
+        "cu124": ["extra_cu124", "extra_my-app_cu124"],
+    })
 
 def _test_uv_extra_variants(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
@@ -811,6 +814,8 @@ _MEMBER_GROUP_CONFLICT_LOCK = _lock(
     [
         _pkg("app-a", "0.1.0", source = {"editable": "apps/app-a"}),
         _pkg("app-b", "0.1.0", source = {"editable": "apps/app-b"}),
+        # No `test` group: a `group:test` repo spanning all members still works.
+        _pkg("common", "0.1.0", source = {"editable": "libs/common"}),
         _pkg("pytest", "7.4.4", wheels = [_whl("pytest-7.4.4-py3-none-any.whl", "aaa")]),
         _pkg("pytest", "9.2.0", wheels = [_whl("pytest-9.2.0-py3-none-any.whl", "bbb")]),
     ],
@@ -833,8 +838,12 @@ def _test_uv_same_named_groups_across_members_impl(env, target):
     env.expect.that_int(len(result.get("variants", []))).equals(1)
     items = result["variants"][0]["items"]
 
-    # In a repo covering both members, `group_test` enables both members' `test` groups.
-    env.expect.that_collection([item["flag"] for item in items]).contains_exactly(["group_test", "group_test"])
+    # In a repo covering both members, `group_test` enables both members' `test`
+    # groups, and `group_<member>_test` enables one.
+    env.expect.that_dict({item["package"]: item["flags"] for item in items}).contains_exactly({
+        "app-a": ["group_test", "group_app-a_test"],
+        "app-b": ["group_test", "group_app-b_test"],
+    })
 
     # Each member's pytest is pinned under its own (package-qualified) variant.
     pytest_pin = result["pins"]["pytest"]
@@ -845,8 +854,8 @@ def _test_uv_same_named_groups_across_members_impl(env, target):
 
     # A repo for one member has a `group_test` flag for that member only.
     result_a = translate_uv(_project(name = "app-a"), lock, _lock_model(projects = ["app-a"], dependency_groups = ["group:test"]))
-    flags_a = {item["package"]: item.get("flag") for item in result_a["variants"][0]["items"]}
-    env.expect.that_dict(flags_a).contains_exactly({"app-a": "group_test", "app-b": None})
+    flags_a = {item["package"]: item.get("flags") for item in result_a["variants"][0]["items"]}
+    env.expect.that_dict(flags_a).contains_exactly({"app-a": ["group_test", "group_app-a_test"], "app-b": None})
     env.expect.that_dict(result_a["pins"]["pytest"]).contains_exactly({"group_app-a_test": "pytest@7.4.4"})
 
 def _test_uv_same_named_groups_across_members(name):

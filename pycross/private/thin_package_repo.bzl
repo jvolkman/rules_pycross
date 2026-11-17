@@ -490,8 +490,7 @@ def _thin_package_repo_impl(rctx):
         for item in variant_set["items"]:
             qname = variant_item_qname(item)
             set_qnames.append(qname)
-            flag = item.get("flag")
-            if flag:
+            for flag in item.get("flags", []):
                 qnames = variant_flags.setdefault(flag, [])
                 if qname not in qnames:
                     qnames.append(qname)

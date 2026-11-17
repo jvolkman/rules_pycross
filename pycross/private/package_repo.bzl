@@ -134,8 +134,8 @@ def _package_repo_impl(rctx):
                 set_qnames.append(qname)
                 if item.get("default", False):
                     set_default = qname
-                if item.get("flag"):
-                    set_flags.setdefault("@{}//_variants:{}".format(member, item["flag"]), []).append(qname)
+                for flag in item.get("flags", []):
+                    set_flags.setdefault("@{}//_variants:{}".format(member, flag), []).append(qname)
             set_key = "|".join(sorted(set_qnames))
             if set_key not in variant_sets_seen:
                 variant_sets_seen[set_key] = {"qnames": set_qnames, "default": set_default, "flags": {}}

@@ -319,18 +319,24 @@ def translate_uv(project_dict, lock_dict, lock_model):
         if p not in workspace_members:
             fail("Project '{}' not found in uv.lock workspace members.".format(p))
 
-    # User-facing `_variants` flags for this repo: items declared by this repo's
-    # projects get `<kind>_<name>` (e.g. `group_test`). One flag covers that
-    # extra/group in every project of the repo, like `uv --group test` across
-    # selected packages. Other projects' items get no flag in this repo.
+    # User-facing `_variants` flags for this repo, for items declared by its own
+    # projects (other projects' items get none):
+    #   - `<kind>_<name>` (e.g. `group_test`) covers that extra/group in every
+    #     project of the repo, like `uv --group test` across selected packages.
+    #   - `<kind>_<project>_<name>` (e.g. `group_app-a_test`) covers one project,
+    #     like `uv --package app-a --group test`.
+    # Names are normalized (`-` only), so the two forms can't collide.
     target_projects_set = {p: True for p in target_projects}
     for item in variant_items_by_key.values():
         if item["package"] not in target_projects_set:
             continue
         if item["kind"] == "project":
-            item["flag"] = "package_{}".format(item["package"])
+            item["flags"] = ["package_{}".format(item["package"])]
         else:
-            item["flag"] = "{}_{}".format(item["kind"], item["name"])
+            item["flags"] = [
+                "{}_{}".format(item["kind"], item["name"]),
+                "{}_{}_{}".format(item["kind"], item["package"], item["name"]),
+            ]
 
     # Pre-scan: detect resolution-marker forks.
     # A fork exists when the same package name has multiple versions with
@@ -370,6 +376,11 @@ def translate_uv(project_dict, lock_dict, lock_model):
     # base package marker. See record_root_marker.
     root_dependency_markers = {}
 
+    # In a repo spanning several projects, a requested extra/group applies to the
+    # projects that declare it (like `uv --all-packages --group test`); it only
+    # has to exist in one of them.
+    multi_project = len(target_projects) > 1
+    groups_seen = {"default": True}
     for project_name in target_projects:
         project_info = workspace_members[project_name]
 
@@ -378,17 +389,21 @@ def translate_uv(project_dict, lock_dict, lock_model):
         development_dependencies = project_info.get("dev-dependencies", {})
 
         # Parse groups
+        available_groups = (
+            ["default"] +
+            ["optional:" + g for g in optional_dependencies.keys()] +
+            ["group:" + g for g in development_dependencies.keys()]
+        )
+        for g in available_groups:
+            groups_seen[g] = True
         requested_groups_dict = compute_requested_dependency_groups(
             dependency_groups = dependency_groups,
             testonly_groups = testonly_groups,
             non_testonly_groups = non_testonly_groups,
             wildcard_testonly = wildcard_testonly,
-            available_groups = (
-                ["default"] +
-                ["optional:" + g for g in optional_dependencies.keys()] +
-                ["group:" + g for g in development_dependencies.keys()]
-            ),
+            available_groups = available_groups,
             project_name = project_name,
+            allow_missing = multi_project,
         )
 
         group_batches = []
@@ -440,6 +455,12 @@ def translate_uv(project_dict, lock_dict, lock_model):
                     requirements.append((dep_name, specifier, effective_constraint, is_testonly))
 
     # End collect requirements
+
+    if multi_project:
+        for group in dependency_groups:
+            kind, sep, name = group.partition(":")
+            if sep and name != "*" and group not in groups_seen:
+                fail("None of the projects {} has group '{}'.".format(sorted(target_projects), group))
 
     # Build pinned specs
     pinned_package_specs = {}

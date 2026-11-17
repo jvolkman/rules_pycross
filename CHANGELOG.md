@@ -8,7 +8,9 @@ All notable changes to this project will be documented in this file.
 
 - **Same-named `uv` conflict groups in a workspace** (e.g. each member's own
   `test` group) no longer collide. A repo's `group_test` flag enables the
-  `test` group of each of its projects.
+  `test` group of each of its projects; `group_<project>_test` enables one.
+- **`dependency_groups` in repos with several projects** only require each
+  group to exist in one of them.
 - **`pyproject.toml` lookup for workspace members** is relative to the lock
   file's directory, so member directories no longer need to be Bazel packages.
 

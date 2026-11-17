@@ -541,7 +541,8 @@ def compute_requested_dependency_groups(
         non_testonly_groups,
         wildcard_testonly,
         available_groups,
-        project_name = None):
+        project_name = None,
+        allow_missing = False):
     """Compute the definitive list of requested dependency groups and their testonly status.
 
     Processes wildcard group expansions and applies last-wins testonly resolution
@@ -559,6 +560,9 @@ def compute_requested_dependency_groups(
         available_groups: List of fully-prefixed available group names
             (e.g. ["optional:extras1", "group:dev", "group:test"]).
         project_name: Optional project name for error messages.
+        allow_missing: If True, skip requested groups that aren't in available_groups
+            instead of failing (for repos spanning several projects, where a group only
+            needs to exist in one of them).
 
     Returns:
         A dictionary mapping the group identifier (e.g. "optional:foo", "group:dev")
@@ -598,6 +602,8 @@ def compute_requested_dependency_groups(
 
         for target in targets:
             if target not in available_set:
+                if allow_missing:
+                    continue
                 if project_name:
                     fail("Project '{}' does not have group '{}'.".format(project_name, target))
                 fail("Dependency group '{}' not found.".format(target))

@@ -101,4 +101,4 @@ Represents a set of mutually exclusive variant items (conflicts).
 - `kind`: (String) One of `"extra"`, `"group"`, or `"project"`.
 - `name`: (String, Optional) The extra or group name. Empty for project-level variants.
 - `default`: (Boolean, Optional) True if this item is a default selection.
-- `flag`: (String, Optional) The `@<repo>//_variants` flag that enables this item in the repo generated from this lock: `<kind>_<name>` (e.g. `group_test`), or `package_<package>` for project items. Only set for items declared by the repo's own projects; a flag shared by several projects' items enables all of them.
+- `flags`: (Array of Strings, Optional) The `@<repo>//_variants` flags that enable this item in the repo generated from this lock: `<kind>_<name>` (e.g. `group_test`, shared by all of the repo's projects that declare that extra/group) and `<kind>_<package>_<name>` (e.g. `group_app-a_test`, this item only), or `package_<package>` for project items. Only set for items declared by the repo's own projects.

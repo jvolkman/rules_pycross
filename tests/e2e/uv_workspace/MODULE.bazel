@@ -68,7 +68,17 @@ uv.repo(
     projects = ["project-b"],
     workspace = "shared",
 )
-use_repo(uv, "lock_a", "lock_a_test", "lock_all", "lock_b_test", "lock_project_b")
+
+# A repo covering both members: `group_test` would enable both (conflicting)
+# `test` groups, so pick one member's with its per-project flag.
+uv.repo(
+    name = "lock_all_test",
+    dependency_groups = ["group:test;testonly"],
+    flags = ["--@lock_all_test//_variants:group_project-a_test=True"],
+    projects = ["*"],
+    workspace = "shared",
+)
+use_repo(uv, "lock_a", "lock_a_test", "lock_all", "lock_all_test", "lock_b_test", "lock_project_b")
 
 # Test standalone members (no uv_all_members)
 uv.workspace(

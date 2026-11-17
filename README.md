@@ -725,7 +725,14 @@ conflicts = [
 ]
 ```
 
-The generated flags follow the pattern `group_<name>` (e.g., `--@pypi//_variants:group_test-fast=True`). Each repo has flags for its own projects' conflict items. In a workspace where members each declare their own conflicting `test` group, a repo for `app-a` (`projects = ["app-a"]`) has a `group_test` flag for app-a's group. In a repo with several projects (e.g. `projects = ["*"]`), `group_test` enables the `test` group of every project in the repo that declares one, like `uv sync --all-packages --group test`. If those groups conflict with each other, that fails just as it does in uv; select them through per-project repos instead. The same applies to extras.
+The generated flags follow the pattern `group_<name>` (e.g., `--@pypi//_variants:group_test-fast=True`). Each repo has flags for its own projects' conflict items, in two forms:
+
+* `group_<name>` enables that group in every project of the repo that declares it, like `uv sync --all-packages --group <name>`. In a repo for one project (`projects = ["app-a"]`), that's just app-a's group.
+* `group_<project>_<name>` (e.g., `--@pypi//_variants:group_app-a_test=True`) enables one project's group, like `uv sync --package app-a --group <name>`.
+
+If several projects' groups with the same name conflict with each other, `group_<name>` fails in a repo that covers them, just as it does in uv; use the per-project flags instead. The same applies to extras (`extra_<name>`, `extra_<project>_<name>`).
+
+In a repo with several projects, a group listed in `dependency_groups` only has to exist in one of them.
 
 ### Platform Transitions
 
