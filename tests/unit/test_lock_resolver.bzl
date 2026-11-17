@@ -156,6 +156,39 @@ def _test_extra_build_tools_override_impl(env, target):
     foo_pkg = res.packages["foo@1.0"]
     env.expect.that_collection(foo_pkg["extra_build_tools"]).contains_exactly(["bar@1.0"])
 
+# buildifier: disable=unused-variable
+def _test_ungated_fallback_impl(env, target):
+    """Build tools repos get an unconditional branch for pins that only have variant branches."""
+    lock_model_data = {
+        "packages": {
+            "setuptools@75.8.0": _make_pkg("setuptools", "75.8.0", [_make_file("setuptools-75.8.0-py3-none-any.whl")]),
+            "six@1.16.0": _make_pkg("six", "1.16.0", [_make_file("six-1.16.0-py2.py3-none-any.whl")]),
+            "six@1.17.0": _make_pkg("six", "1.17.0", [_make_file("six-1.17.0-py2.py3-none-any.whl")]),
+            "idna@3.10": _make_pkg("idna", "3.10", [_make_file("idna-3.10-py3-none-any.whl")]),
+        },
+        "pins": {
+            # A direct dependency of one conflicting project only.
+            "setuptools": {"package_a": "setuptools@75.8.0"},
+            # Different versions per variant: the fallback is the highest.
+            "six": {"package_a": "six@1.16.0", "package_b": "six@1.17.0"},
+            # Already unconditional: unchanged.
+            "idna": {"": "idna@3.10"},
+        },
+        "variants": [{"items": [{"package": "a", "kind": "project"}, {"package": "b", "kind": "project"}]}],
+    }
+    res = resolve(lock_model_data, ungated_fallback = True)
+    env.expect.that_dict(res.pins["setuptools"]).contains_exactly({"package_a": "setuptools@75.8.0", "": "setuptools@75.8.0"})
+    env.expect.that_str(res.pins["six"][""]).equals("six@1.17.0")
+    env.expect.that_dict(res.pins["idna"]).contains_exactly({"": "idna@3.10"})
+
+    # Other repos keep variant-only pins, so an unselected variant still fails clearly.
+    res = resolve(lock_model_data)
+    env.expect.that_dict(res.pins["setuptools"]).contains_exactly({"package_a": "setuptools@75.8.0"})
+
+def _test_ungated_fallback(name):
+    util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
+    analysis_test(name = name, target = name + "_subject", impl = _test_ungated_fallback_impl)
+
 def _test_extra_build_tools_override(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
     analysis_test(name = name, target = name + "_subject", impl = _test_extra_build_tools_override_impl)
@@ -2251,6 +2284,7 @@ def lock_resolver_test_suite(name):
             _test_precompile_annotation,
             _test_create_transitive_aliases_with_extras,
             _test_extra_build_tools_override,
+            _test_ungated_fallback,
             _test_synthesized_deps,
             _test_multi_extra_pins,
             _test_cycle_two_nodes,

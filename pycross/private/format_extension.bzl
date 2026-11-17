@@ -234,6 +234,14 @@ def _normalize_settings(settings, flags):
         result[key] = value
     return result
 
+def _build_tools_repos(workspace, workspace_packages):
+    """Repos that serve sdist build tools for a workspace: `<ws>__build` and any `build_tools_repo`."""
+    repos = {"{}__build".format(workspace): True}
+    for pkg in workspace_packages.get(workspace, {}).values():
+        if getattr(pkg, "build_tools_repo", None):
+            repos[pkg.build_tools_repo] = True
+    return repos
+
 def _resolve_lock_inline(module_ctx, lock_info, lock_model, workspace_packages, repo_create_model_fn):
     """Run translator + resolver inline within module_ctx.
 
@@ -282,6 +290,7 @@ def _resolve_lock_inline(module_ctx, lock_info, lock_model, workspace_packages, 
         default_extra_build_tools_args = wildcard_pkg.extra_build_tools if wildcard_pkg else [],
         include_transitive = getattr(lock_model, "include_transitive", False),
         transitive_testonly = getattr(lock_model, "transitive_testonly", False),
+        ungated_fallback = lock_info.repo_name in _build_tools_repos(lock_info.workspace, workspace_packages),
     )
 
     return {

@@ -97,3 +97,17 @@ py_test(
     tags = ["manual"],
     deps = ["@everything//six"],
 )
+
+# The build tools repo serves sdist builds from every repo, so six (pinned only
+# under a's variant plus c's narrowed edge) must resolve with no variant
+# selected: it falls back to the highest version.
+py_test(
+    name = "test_build_tools_six",
+    srcs = ["test_version.py"],
+    args = [
+        "six",
+        "1.17.0",
+    ],
+    main = "test_version.py",
+    deps = ["@ws__build//six"],
+)
