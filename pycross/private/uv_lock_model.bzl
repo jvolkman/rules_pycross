@@ -560,6 +560,28 @@ def translate_uv(project_dict, lock_dict, lock_model):
 
     testonly_pin_names = [name for name in testonly_reqs if name not in non_testonly_reqs]
 
+    # A plain edge-split entry (from an edge outside the conflict, e.g. an
+    # unconflicted project's `iniconfig; extra != 'project-1-a'`) is redundant
+    # when the same pin also has entries for that conflict set's variants: uv
+    # resolves one version per fork, so it agrees with them whenever a variant
+    # is selected. With none selected, it would match alongside the
+    # `_unselected_<set>` error branch and make the select() ambiguous. Drop it.
+    set_qnames = [[variant_item_qname(item) for item in vs["items"]] for vs in variant_sets]
+    for pin_name, specs in pinned_package_specs.items():
+        variant_qnames = {}
+        for key in specs.keys():
+            expr = resolution_marker_exprs.get(key)
+            variant_qnames[expr["variant"] if type(expr) == "dict" else key] = True
+        for key in list(specs.keys()):
+            expr = resolution_marker_exprs.get(key)
+            if type(expr) != "string" or "__edge_" not in key:
+                continue
+            for qnames in set_qnames:
+                gated = [q for q in qnames if "'__variant_{}'".format(q) in expr]
+                if gated and [q for q in qnames if q in variant_qnames]:
+                    specs.pop(key)
+                    break
+
     # Process all packages from lock
     packages = []
     for lock_pkg in packages_list:

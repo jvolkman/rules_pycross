@@ -70,3 +70,16 @@ py_test(
     tags = ["manual"],
     deps = ["@all//iniconfig"],
 )
+
+# Needs --@everything//_variants:package_a=True (see run.sh).
+py_test(
+    name = "test_everything_a",
+    srcs = ["test_version.py"],
+    args = [
+        "iniconfig",
+        "1.1.1",
+    ],
+    main = "test_version.py",
+    tags = ["manual"],
+    deps = ["@everything//iniconfig"],
+)

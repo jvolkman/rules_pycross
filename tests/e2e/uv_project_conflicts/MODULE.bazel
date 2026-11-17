@@ -65,6 +65,13 @@ uv.repo(
     ],
     workspace = "ws",
 )
+
+# Every member, including the unconflicted `c` (like `uv sync --all-packages`).
+uv.repo(
+    name = "everything",
+    projects = ["*"],
+    workspace = "ws",
+)
 uv.repo(
     name = "all_pinned_b",
     flags = ["--@all_pinned_b//_variants:package_b=True"],
@@ -74,4 +81,4 @@ uv.repo(
     ],
     workspace = "ws",
 )
-use_repo(uv, "all", "all_pinned_b", "repo_a", "repo_a_plain", "repo_b", "repo_c")
+use_repo(uv, "all", "all_pinned_b", "everything", "repo_a", "repo_a_plain", "repo_b", "repo_c")

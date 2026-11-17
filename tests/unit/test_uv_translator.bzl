@@ -984,6 +984,39 @@ def _test_uv_project_conflict_edge_split_impl(env, target):
     wider_one = wider["resolution_marker_exprs"][{v: k for k, v in wider["pins"]["iniconfig"].items()}["iniconfig@1.1.1"]]
     env.expect.that_bool(wider_one["marker"] != one["marker"]).equals(True)
 
+# buildifier: disable=unused-variable
+def _test_uv_project_conflict_redundant_edges_impl(env, target):
+    """An unconflicted member's split edge is kept on its own, dropped next to the set's variants."""
+    lock = _lock(
+        [
+            _pkg("a", "0", source = {"virtual": "a"}, deps = [_dep("iniconfig", "1.1.1", marker = "extra == 'project-1-a'")]),
+            _pkg("b", "0", source = {"virtual": "b"}, deps = [_dep("iniconfig", "2.0.0", marker = "extra == 'project-1-b'")]),
+            _pkg("c", "0", source = {"virtual": "c"}, deps = [
+                _dep("iniconfig", "1.1.1", marker = "extra == 'project-1-a'"),
+                _dep("iniconfig", "2.0.0", marker = "extra == 'project-1-b' or extra != 'project-1-a'"),
+            ]),
+            _pkg("iniconfig", "1.1.1", wheels = [_whl("iniconfig-1.1.1-py2.py3-none-any.whl", "aaa")]),
+            _pkg("iniconfig", "2.0.0", wheels = [_whl("iniconfig-2.0.0-py3-none-any.whl", "bbb")]),
+        ],
+        conflicts = [[{"package": "a"}, {"package": "b"}]],
+    )
+
+    # Only `c`: its split edges are the pin (valid with no variant selected).
+    result = translate_uv(_project(name = "c"), lock, _lock_model(projects = ["c"]))
+    env.expect.that_collection(result["pins"]["iniconfig"].values()).contains_exactly(["iniconfig@1.1.1", "iniconfig@2.0.0"])
+    env.expect.that_collection(result["pins"]["iniconfig"].keys()).not_contains("package_a")
+
+    # All members: the variant entries cover it, so unselected is a clean error.
+    result = translate_uv(_project(name = "root"), lock, _lock_model())
+    env.expect.that_dict(result["pins"]["iniconfig"]).contains_exactly({
+        "package_a": "iniconfig@1.1.1",
+        "package_b": "iniconfig@2.0.0",
+    })
+
+def _test_uv_project_conflict_redundant_edges(name):
+    util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
+    analysis_test(name = name, target = name + "_subject", impl = _test_uv_project_conflict_redundant_edges_impl)
+
 def _test_uv_project_conflict_mixed_set(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
     analysis_test(name = name, target = name + "_subject", impl = _test_uv_project_conflict_mixed_set_impl)
@@ -1677,6 +1710,7 @@ def uv_translator_test_suite(name):
             _test_uv_project_conflicts,
             _test_uv_project_conflict_mixed_set,
             _test_uv_project_conflict_edge_split,
+            _test_uv_project_conflict_redundant_edges,
             _test_uv_local_version_exact_matching,
             _test_uv_issue_1510_verbatim_lock,
         ],
