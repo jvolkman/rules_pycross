@@ -2,7 +2,23 @@
 
 All notable changes to this project will be documented in this file.
 
-## Unreleased
+## [2.1.0]
+
+### Added
+
+- **Bazel 10 support.**
+- **`pycross_wheel_cc_import`** links an sdist against a library that ships in
+  another wheel, with `cc_import`-style fields. Wheel repair finds the library
+  without bundling a copy. `pycross_wheel_headers` is now a macro around it.
+- **Git patch headers** in `post_install_patches` and `pre_build_patches`: empty
+  new or deleted files, mode changes, renames and copies.
+
+### Changed
+
+- **Stricter patching.** A new strict engine replaces `patch_ng`. Patches that
+  applied cleanly before give the same result. Patches that `patch_ng` silently
+  got wrong (fuzzy context, partial deletes, unsafe paths, binary sections) now
+  fail with a reason, and a failed patch leaves files untouched.
 
 ### Fixed
 
@@ -17,27 +33,14 @@ All notable changes to this project will be documented in this file.
   `_variants` flags for the same conflict set.
 - **`uv` project conflicts** (`{package = ...}`) gate each project's
   dependencies; a repo with one of the projects selects it automatically.
+- **Build tools in workspaces with conflicts.** The `<workspace>__build` repo
+  resolves a tool that is pinned under only one conflict variant without a
+  `_variants` flag.
 - **`pyproject.toml` lookup for workspace members** is relative to the lock
   file's directory, so member directories no longer need to be Bazel packages.
 - **Python `sysconfig` probing in sdist builds** preserves the build
   environment without leaking `PYTHONPATH` or source-tree modules, with a 30s
   startup timeout.
-
-### Added
-
-- **Bazel 10 support.**
-- **`pycross_wheel_cc_import`** links an sdist against a library that ships in
-  another wheel, like `cc_import`. Wheel repair doesn't bundle a copy of it.
-  `pycross_wheel_headers` is now a macro around it.
-- **Git patch headers** in `post_install_patches` and `pre_build_patches`: empty
-  new or deleted files, mode changes, renames and copies.
-
-### Changed
-
-- **Stricter patching.** Patches are applied by a new strict engine instead of
-  `patch_ng`. Patches that `patch_ng` silently got wrong (fuzzy context, partial
-  deletes, unsafe paths, binary sections) now fail with a reason, and a failed
-  patch leaves files untouched.
 
 ## [2.0.1]
 
