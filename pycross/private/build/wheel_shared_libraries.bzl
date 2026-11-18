@@ -10,11 +10,9 @@ PycrossCollectedWheelLibrariesInfo = provider(
 )
 
 def _collect_wheel_shared_libraries_impl(target, ctx):
-    if PycrossWheelSharedLibraryInfo in target:
-        return [PycrossCollectedWheelLibrariesInfo(
-            shared_libraries = target[PycrossWheelSharedLibraryInfo].shared_libraries,
-        )]
     transitive = []
+    if PycrossWheelSharedLibraryInfo in target:
+        transitive.append(target[PycrossWheelSharedLibraryInfo].shared_libraries)
     for attr_name in ("deps", "implementation_deps"):
         deps = getattr(ctx.rule.attr, attr_name, None)
         if type(deps) != "list":

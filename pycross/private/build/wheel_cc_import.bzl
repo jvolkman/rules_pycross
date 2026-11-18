@@ -6,6 +6,7 @@ load("@rules_cc//cc/common:cc_common.bzl", "cc_common")
 load("@rules_cc//cc/common:cc_info.bzl", "CcInfo")
 load("//pycross/private:providers.bzl", "PycrossExtractedWheelInfo", "PycrossWheelSharedLibraryInfo")
 load("//pycross/private/build:cc_toolchain_util.bzl", "absolutize_path_in_str", "configure_features")
+load("//pycross/private/build:wheel_shared_libraries.bzl", "collect_wheel_shared_libraries", "wheel_shared_libraries")
 load("//pycross/private/build/rules:common_attrs.bzl", "CC_FRAGMENTS", "CC_TOOLCHAINS")
 
 def _wheel_path(attr_name, value):
@@ -83,11 +84,7 @@ def _pycross_wheel_cc_import_impl(ctx):
 
     shared_libraries = depset(
         [libraries["shared_library"]] if "shared_library" in libraries else [],
-        transitive = [
-            dep[PycrossWheelSharedLibraryInfo].shared_libraries
-            for dep in ctx.attr.deps
-            if PycrossWheelSharedLibraryInfo in dep
-        ],
+        transitive = [wheel_shared_libraries(ctx.attr.deps)],
     )
 
     providers = [
@@ -170,6 +167,7 @@ Use one target per library, as with `cc_import`, and connect them with
         "deps": attr.label_list(
             doc = "Other C/C++ targets this library depends on, such as other `pycross_wheel_cc_import` targets.",
             providers = [CcInfo],
+            aspects = [collect_wheel_shared_libraries],
         ),
         "make_variable": attr.string(
             doc = "If set, export a TemplateVariableInfo with this name mapped to the absolutized include " +

@@ -115,6 +115,39 @@ def _test_repaired_wheel_excludes_wheel_libraries_impl(env, target):
     action.argv().contains_predicate(matching.str_endswith("_libtorch"))
     action.inputs().contains_predicate(matching.file_basename_equals("libtorch.so"))
 
+def _test_repaired_wheel_excludes_nested_wheel_libraries(name):
+    # libtorch depends on libc10 through a cc_library, and the build wraps libtorch too.
+    util.helper_target(_mock_wheel, name = name + "_wheel")
+    util.helper_target(_mock_installed_wheel, name = name + "_torch")
+    util.helper_target(
+        pycross_wheel_cc_import,
+        name = name + "_libc10",
+        wheel_library = name + "_torch",
+        shared_library = "torch/lib/libc10.so",
+    )
+    util.helper_target(cc_library, name = name + "_c10_wrapped", deps = [name + "_libc10"])
+    util.helper_target(
+        pycross_wheel_cc_import,
+        name = name + "_libtorch",
+        wheel_library = name + "_torch",
+        shared_library = "torch/lib/libtorch.so",
+        deps = [name + "_c10_wrapped"],
+    )
+    util.helper_target(cc_library, name = name + "_torch_wrapped", deps = [name + "_libtorch"])
+    util.helper_target(
+        pycross_repaired_wheel,
+        name = name + "_subject",
+        wheel = name + "_wheel",
+        native_deps = [name + "_torch_wrapped"],
+    )
+    analysis_test(name = name, target = name + "_subject", impl = _test_repaired_wheel_excludes_nested_wheel_libraries_impl)
+
+def _test_repaired_wheel_excludes_nested_wheel_libraries_impl(env, target):
+    wheel_dir = target[DefaultInfo].files.to_list()[0]
+    action = env.expect.that_target(target).action_generating(wheel_dir.short_path)
+    action.argv().contains_at_least(["--exclude", "libtorch.so"]).in_order()
+    action.argv().contains_at_least(["--exclude", "libc10.so"]).in_order()
+
 def repaired_wheel_test_suite(name):
     test_suite(
         name = name,
@@ -123,5 +156,6 @@ def repaired_wheel_test_suite(name):
             _test_repaired_wheel_with_native_deps,
             _test_repaired_wheel_with_exclude_globs,
             _test_repaired_wheel_excludes_wheel_libraries,
+            _test_repaired_wheel_excludes_nested_wheel_libraries,
         ],
     )
