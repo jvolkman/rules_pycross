@@ -59,6 +59,12 @@ py_binary(
 )
 
 py_binary(
+    name = "extract_wheel_lib",
+    srcs = ["extract_wheel_lib.py"],
+    visibility = ["//visibility:public"],
+)
+
+py_binary(
     name = "copy_file",
     srcs = ["copy_file.py"],
     visibility = ["//visibility:public"],

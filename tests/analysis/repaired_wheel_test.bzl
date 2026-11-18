@@ -112,7 +112,7 @@ def _test_repaired_wheel_excludes_wheel_libraries_impl(env, target):
     wheel_dir = target[DefaultInfo].files.to_list()[0]
     action = env.expect.that_target(target).action_generating(wheel_dir.short_path)
     action.argv().contains_at_least(["--exclude", "libc10*.so", "--exclude", "libtorch.so"]).in_order()
-    action.argv().contains_predicate(matching.str_endswith("_libtorch"))
+    action.argv().contains_predicate(matching.str_endswith("_libtorch/shared_library"))
     action.inputs().contains_predicate(matching.file_basename_equals("libtorch.so"))
 
 def _test_repaired_wheel_excludes_nested_wheel_libraries(name):

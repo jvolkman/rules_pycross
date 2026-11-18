@@ -108,7 +108,7 @@ def _test_pycross_cc_pkg_config_versioned_library_impl(env, target):
     content = env.expect.that_target(target).action_generating("tests/analysis/cudart.pc").content()
 
     # `-lcudart` wouldn't find a file named only libcudart.so.12, so it's linked by path.
-    content.contains("_libcudart/libcudart.so.12")
+    content.contains("_libcudart/shared_library/libcudart.so.12")
     raw = [a.content for a in target.actions if a.mnemonic == "FileWrite"][0]
     env.expect.that_bool("-lcudart" in raw).equals(False)
 
