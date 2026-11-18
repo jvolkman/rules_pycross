@@ -1,6 +1,6 @@
 # `rules_pycross`
 
-`rules_pycross` imports Python lock files (`uv`, `PDM`, `Poetry`, and PEP 751 `pylock.toml`) into Bazel. It downloads pre-built wheels and builds source distributions, including C, C++, and Rust extensions, inside Bazel build actions rather than during repository setup.
+`rules_pycross` imports Python lock files (`uv`, `PDM`, `Poetry`, and PEP 751 `pylock.toml`) into Bazel. It downloads pre-built wheels and builds source distributions, including C, C++, and Rust extensions. Source builds run in Bazel build actions rather than during repository setup.
 
 Paired with [hermetic-llvm](https://github.com/hermeticbuild/hermetic-llvm) (`llvm` on the Bazel Central Registry), `rules_pycross` can cross-compile wheels between Linux and macOS from either host. Linux and macOS are tested in [CI](https://github.com/jvolkman/rules_pycross/actions/workflows/ci.yml); Windows is not tested.
 
@@ -137,7 +137,7 @@ uv.repo(
 )
 ```
 
-If the lock file has several versions of an indirect dependency, its alias chooses between them with a `select()` on the resolution markers. Otherwise `rules_pycross` warns and uses the highest version.
+If the lock file has several versions of an indirect dependency, its alias chooses between them with a `select()` on the resolution markers. When markers cannot tell them apart, `rules_pycross` warns and uses the highest version.
 
 ### Testonly dependencies and precedence
 
@@ -242,7 +242,7 @@ uv.workspace(
 )
 ```
 
-Lock entries without download URLs (common in Poetry and PDM) are looked up through the Simple Repository API (PEP 691/503), starting with the index that the lock file records for that entry. Otherwise `rules_pycross` tries `pypi_indexes` in order, defaulting to PyPI only:
+Lock entries without download URLs (common in Poetry and PDM) are looked up through the Simple Repository API (PEP 691/503) in the index that the lock file records for that entry, if any. Otherwise `rules_pycross` tries `pypi_indexes` in order, defaulting to PyPI only:
 
 ```python
 uv.workspace(
@@ -341,6 +341,8 @@ uv.repo(
 )
 ```
 
+An overridden `pypi__build` repository must still provide every required build tool. Keep `"transitive"` unless every build tool from `build-system.requires`, backend defaults, and `extra_build_tools` is pinned directly.
+
 ### Backend overrides and native libraries
 
 Use backend override extensions (`setuptools`, `meson`, `cmake`, `maturin`, `setuptools_rust`) to pass compiler flags, environment variables, native libraries, or `PATH` tools:
@@ -357,7 +359,7 @@ setuptools.override(
 )
 ```
 
-`name` accepts `"*"`, `"<pkg>"`, or `"<pkg>@<version>"`, merging per field from least to most specific.
+`name` accepts `"*"`, `"<pkg>"`, or `"<pkg>@<version>"`. When several entries match a package, more specific entries override less specific ones field by field.
 
 `path_tools` exposes binaries on `PATH` under their file basename. Wrap a binary in `pycross_path_tool` to rename it:
 
@@ -441,7 +443,7 @@ setuptools_build(
 
 Paths are relative to the wheel's `site-packages`. Versioned files such as `libcudart.so.12` still link with `-lcudart`. For headers alone, use `pycross_wheel_headers`.
 
-Wheel repair locates shared libraries from `pycross_wheel_cc_import` targets, including through `cc_library` wrappers, without bundling a duplicate copy. The built extension still needs to find the library at runtime, either because the other package loads it first or via an `$ORIGIN` RPATH.
+Wheel repair locates shared libraries from `pycross_wheel_cc_import` targets, including through `cc_library` wrappers, without bundling a duplicate copy. The built extension still needs to find the library at runtime, for example because the other package loads it first, or through an `$ORIGIN` RPATH.
 
 ### Rust packages (Maturin and setuptools-rust)
 
@@ -528,9 +530,9 @@ Conflict flags also cover dependency groups and conflicting workspace members:
 
 * `extra_<name>` and `group_<name>` enable that extra or group across every project in the repo that declares it.
 * `extra_<project>_<name>` and `group_<project>_<name>` target one project in a multi-project repo. Use these when same-named groups in two projects conflict.
-* `package_<project>` selects one member when whole projects conflict (`{ package = "app-a" }`, a `uv` preview feature). Single-project repos select their project automatically, while a repo covering multiple conflicting projects must set `package_<project>` or fails with `No uv conflict variant selected`.
+* `package_<project>` selects one member when whole projects conflict (`{ package = "app-a" }`, a `uv` preview feature). Single-project repos select their project automatically. A repo covering several conflicting projects must set `package_<project>`, or it fails with `No uv conflict variant selected`.
 
-If `[tool.uv] default-groups` names a conflicting group that a repo requests, that repo defaults to it when no flag is set. Single-project repos read the member's `pyproject.toml`, while multi-project repos read the workspace root's, so two repos can default to different groups in the same build.
+If `[tool.uv] default-groups` names a conflicting group that a repo requests, that repo defaults to it when no flag is set. Single-project repos read the member's `pyproject.toml`, and multi-project repos read the workspace root's. Each repo applies its own default, so two repos can default to different groups in the same build.
 
 Extras never have a default and fail if left unselected. Precedence from highest to lowest is: a `repo(flags / settings)` pin, command-line `_variants` flags, then `default-groups`.
 
@@ -570,7 +572,7 @@ uv.repo(
 | `constraint_values` | `@platforms` constraints for a generated platform (combinable with `flags` and `settings`). |
 | `platform` | Existing `platform()` target (mutually exclusive with the three attributes above). |
 
-Bazel ignores `platform(flags = [...])` on Starlark transitions, so pin variant or compiler flags with `repo(flags = ...)` or `repo(settings = ...)`.
+When a repo transitions to a `platform`, Bazel ignores that platform's `flags`, so pin variant or compiler flags with `repo(flags = ...)` or `repo(settings = ...)`.
 
 Transitions apply to the repository's whole dependency closure, including sdist builds, so each transitioned repository compiles its sdists in a separate configuration. See [`docs/ext_uv.md`](docs/ext_uv.md) for flag syntax details.
 
@@ -615,7 +617,7 @@ Generated repositories follow `rules_python`'s `@<repo>//<package>` layout.
 
 #### Virtual environments
 
-With `venvs_site_packages=yes`, `pycross_wheel_library` populates `site-packages` symlinks without adding wheel directories to `sys.path`. Namespace packages (PEP 420, `pkgutil`, and `nvidia`) link per subpackage so multiple wheels can share a namespace.
+With `--@rules_python//python/config_settings:venvs_site_packages=yes`, `pycross_wheel_library` populates `site-packages` symlinks without adding wheel directories to `sys.path`. Namespace packages (PEP 420, `pkgutil`, and `nvidia`) link per subpackage so multiple wheels can share a namespace.
 
 #### `.pyc` precompilation
 
@@ -637,6 +639,8 @@ Precompiled installs are tied to one Python version, and an interpreter patch re
 Each package exposes `:dist_info` for `rules_python`'s `py_console_script_binary`:
 
 ```python
+load("@rules_python//python/entry_points:py_console_script_binary.bzl", "py_console_script_binary")
+
 py_console_script_binary(
     name = "cython",
     pkg = "@pypi//cython",
