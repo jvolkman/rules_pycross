@@ -118,6 +118,32 @@ def _uv_conflict_token(item):
         return "project-{}-{}".format(len(pkg), pkg)
     fail("Unknown conflict item kind: {}".format(kind))
 
+def _canonicalize_group_key(key):
+    """Normalize the name in a requested group key (`optional:<name>`, `group:<name>`)."""
+    kind, sep, name = key.partition(":")
+    if not sep:
+        return key
+    return "{}:{}".format(kind, canonicalize_name(name))
+
+def _is_item_requested(item, requested_keys):
+    """Whether a repo requests a conflict item of one of its projects.
+
+    Args:
+        item: The conflict item.
+        requested_keys: The groups the repo requests from the item's project,
+            as canonicalized keys (`default`, `optional:<name>`, `group:<name>`).
+
+    Returns:
+        True if the item is active in the repo.
+    """
+    kind = item["kind"]
+    if kind == "project":
+        # A project variant gates all of the project's edges.
+        return bool(requested_keys)
+    if kind == "extra":
+        return "optional:" + item["name"] in requested_keys
+    return "group:" + item["name"] in requested_keys
+
 def _rewrite_conflict_markers(marker, token_replacements):
     if not marker or not token_replacements:
         return marker
@@ -469,33 +495,42 @@ def translate_uv(project_dict, lock_dict, lock_model):
             if sep and name != "*" and group not in groups_seen:
                 fail("None of the projects {} has group '{}'.".format(sorted(target_projects), group))
 
-    # This repo's default variants, from the selected pyproject's
-    # `[tool.uv] default-groups`. As in uv, a project's default-groups name its
-    # own groups, and the pyproject is the member's for a single-project repo
-    # (`uv sync --package <member>`) or the root's otherwise (`uv sync
-    # --all-packages`). Only groups this repo actually requests count, and a
-    # conflict set gets a default only if exactly one of its items qualifies.
-    # The repo's transition sets `_default_<set>`; the workspace repo has no
-    # static defaults.
+    # Pins and defaults for each conflict set in this repo.
     #
-    # For `{package = ...}` conflicts (which cover a project's base dependencies,
-    # not its groups or extras): if the only item of the set this repo owns is a
-    # project, the repo always selects it, as `uv sync --package <project>` does,
-    # and its transition pins `_pin_<set>`. Otherwise a project whose default
-    # dependencies the repo requests is a default candidate too, so e.g.
-    # `[{package = "a"}, {package = "b", group = "g"}]` defaults to `a` in a repo
-    # spanning both (like `uv sync --all-packages`), while `[{package = "a"},
-    # {package = "b"}]` still needs a flag.
+    # In uv, extras and groups are active only when requested, and a project
+    # item (`{package = ...}`, which covers the project's base dependencies) is
+    # active when the project is selected. So if this repo requests exactly one
+    # item of a set, that item is the selection, as with `uv sync --extra cpu`
+    # or `uv sync --package app-a --group test`. The repo's transition pins it
+    # through `_pin_<set>`. The workspace's `__build` repo serves sdist builds
+    # for every repo, so it never pins.
+    #
+    # When the repo requests several items of a set, its default comes from the
+    # selected pyproject's `[tool.uv] default-groups`. As in uv, a project's
+    # default-groups name its own groups. The pyproject is the member's for a
+    # single-project repo (`uv sync --package <member>`) and the root's
+    # otherwise (`uv sync --all-packages`). A project whose default
+    # dependencies the repo requests is a candidate too, so
+    # `[{package = "a"}, {package = "b", group = "g"}]` defaults to `a` in a
+    # repo that requests both. A set gets a default only if exactly one item
+    # qualifies; otherwise a flag must select one. The repo's transition sets
+    # `_default_<set>`, and the workspace repo has no static defaults.
+    is_build_tools_repo = getattr(lock_model, "is_build_tools_repo", False)
+    requested_keys = {
+        project: {_canonicalize_group_key(key): True for key in requested.keys()}
+        for project, requested in requested_by_project.items()
+    }
     default_owner = canonicalize_name(project_dict.get("project", {}).get("name", ""))
     for variant_set in variant_sets:
         owned_items = [item for item in variant_set["items"] if item["package"] in target_projects_set]
-        if len(owned_items) == 1 and owned_items[0]["kind"] == "project":
-            variant_set["repo_pin"] = variant_item_qname(owned_items[0])
+        requested_items = [item for item in owned_items if _is_item_requested(item, requested_keys[item["package"]])]
+        if len(requested_items) == 1 and not is_build_tools_repo:
+            variant_set["repo_pin"] = variant_item_qname(requested_items[0])
             continue
 
         candidates = []
         for item in owned_items:
-            requested = requested_by_project.get(item["package"], {})
+            requested = requested_keys[item["package"]]
             if item["kind"] == "project":
                 if "default" in requested:
                     candidates.append(item)

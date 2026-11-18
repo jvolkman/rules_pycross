@@ -18,13 +18,15 @@ def _lock_model(
         dependency_groups = ["default"],
         testonly_groups = [],
         non_testonly_groups = [],
-        wildcard_testonly = False):
+        wildcard_testonly = False,
+        is_build_tools_repo = False):
     return struct(
         projects = projects,
         dependency_groups = dependency_groups,
         testonly_groups = testonly_groups,
         non_testonly_groups = non_testonly_groups,
         wildcard_testonly = wildcard_testonly,
+        is_build_tools_repo = is_build_tools_repo,
     )
 
 def _project(name = "my-app", version = "0.1.0", deps = None, opt_deps = None, dep_groups = None, uv_conflicts = None, uv_default_groups = None):
@@ -859,33 +861,77 @@ def _test_uv_same_named_groups_across_members_impl(env, target):
     env.expect.that_dict(result_a["pins"]["pytest"]).contains_exactly({"group_app-a_test": "pytest@7.4.4"})
 
 # buildifier: disable=unused-variable
-def _test_uv_repo_defaults_impl(env, target):
-    """default-groups apply per repo: the selected project's own groups, if the repo requests them."""
+def _test_uv_auto_pin_impl(env, target):
+    """A repo that requests exactly one item of a conflict set pins it."""
     lock = _member_group_conflict_lock()
-    app_a = {"project": {"name": "app-a"}, "tool": {"uv": {"default-groups": ["test"]}}}
 
-    # A test repo for app-a defaults to app-a's group.
-    result = translate_uv(app_a, lock, _lock_model(projects = ["app-a"], dependency_groups = ["group:test"]))
-    env.expect.that_str(result["variants"][0].get("repo_default", "")).equals("group_app-a_test")
-
-    # A prod repo for app-a doesn't request `test`, so no default (and no transition).
-    result = translate_uv(app_a, lock, _lock_model(projects = ["app-a"], dependency_groups = ["default"]))
+    # A test repo for app-a requests only app-a's `test` group, as with
+    # `uv sync --package app-a --group test`.
+    result = translate_uv(_project(name = "app-a"), lock, _lock_model(projects = ["app-a"], dependency_groups = ["group:test"]))
+    env.expect.that_str(result["variants"][0].get("repo_pin", "")).equals("group_app-a_test")
     env.expect.that_str(result["variants"][0].get("repo_default", "")).equals("")
 
-    # app-b's repo uses app-b's pyproject, which has no default-groups.
-    app_b = {"project": {"name": "app-b"}}
-    result = translate_uv(app_b, lock, _lock_model(projects = ["app-b"], dependency_groups = ["group:test"]))
+    # A runtime repo for app-a requests no item of the set.
+    result = translate_uv(_project(name = "app-a"), lock, _lock_model(projects = ["app-a"], dependency_groups = ["default"]))
+    env.expect.that_str(result["variants"][0].get("repo_pin", "")).equals("")
+
+    # A repo spanning both members requests both items.
+    result = translate_uv(_project(name = "monorepo"), lock, _lock_model(dependency_groups = ["group:test"]))
+    env.expect.that_str(result["variants"][0].get("repo_pin", "")).equals("")
+
+    # The workspace's `__build` repo never pins.
+    result = translate_uv(_project(name = "app-a"), lock, _lock_model(projects = ["app-a"], dependency_groups = ["group:test"], is_build_tools_repo = True))
+    env.expect.that_str(result["variants"][0].get("repo_pin", "")).equals("")
+
+    # Extras work the same way, as with `uv sync --extra cpu`.
+    lock = _lock(
+        [
+            _pkg("trainer", "0.1.0", source = {"editable": "trainer"}, opt_deps = {"cpu": [_dep("six", "1.16.0")], "gpu": [_dep("six", "1.17.0")]}),
+            _pkg("six", "1.16.0", wheels = [_whl("six-1.16.0-py2.py3-none-any.whl", "aa")]),
+            _pkg("six", "1.17.0", wheels = [_whl("six-1.17.0-py2.py3-none-any.whl", "bb")]),
+        ],
+        conflicts = [[{"package": "trainer", "extra": "cpu"}, {"package": "trainer", "extra": "gpu"}]],
+    )
+    result = translate_uv(_project(name = "trainer"), lock, _lock_model(projects = ["trainer"], dependency_groups = ["default", "optional:cpu"]))
+    env.expect.that_str(result["variants"][0].get("repo_pin", "")).equals("extra_trainer_cpu")
+    result = translate_uv(_project(name = "trainer"), lock, _lock_model(projects = ["trainer"], dependency_groups = ["default", "optional:*"]))
+    env.expect.that_str(result["variants"][0].get("repo_pin", "")).equals("")
+
+def _test_uv_auto_pin(name):
+    util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
+    analysis_test(name = name, target = name + "_subject", impl = _test_uv_auto_pin_impl)
+
+# buildifier: disable=unused-variable
+def _test_uv_repo_defaults_impl(env, target):
+    """With several items of a set requested, the selected project's default-groups pick one."""
+    lock = _lock(
+        [
+            dict(
+                _pkg("app", "0.1.0", source = {"editable": "."}),
+                **{"dev-dependencies": {"cpu": [_dep("six", "1.16.0")], "gpu": [_dep("six", "1.17.0")]}}
+            ),
+            _pkg("six", "1.16.0", wheels = [_whl("six-1.16.0-py2.py3-none-any.whl", "aa")]),
+            _pkg("six", "1.17.0", wheels = [_whl("six-1.17.0-py2.py3-none-any.whl", "bb")]),
+        ],
+        conflicts = [[{"package": "app", "group": "cpu"}, {"package": "app", "group": "gpu"}]],
+    )
+    both = _lock_model(projects = ["app"], dependency_groups = ["group:cpu", "group:gpu"])
+
+    app = {"project": {"name": "app"}, "tool": {"uv": {"default-groups": ["cpu"]}}}
+    result = translate_uv(app, lock, both)
+    env.expect.that_str(result["variants"][0].get("repo_pin", "")).equals("")
+    env.expect.that_str(result["variants"][0].get("repo_default", "")).equals("group_app_cpu")
+
+    # `default-groups = "all"` names both groups, so neither is the default.
+    app_all = {"project": {"name": "app"}, "tool": {"uv": {"default-groups": "all"}}}
+    result = translate_uv(app_all, lock, both)
     env.expect.that_str(result["variants"][0].get("repo_default", "")).equals("")
 
-    # A repo spanning all members uses the root pyproject, as `uv sync --all-packages` does.
+    # A repo spanning all members uses the root pyproject, as `uv sync
+    # --all-packages` does, and its default-groups don't name members' groups.
     root = {"project": {"name": "monorepo"}, "tool": {"uv": {"default-groups": ["test"]}}}
-    result = translate_uv(root, lock, _lock_model(dependency_groups = ["group:test"]))
+    result = translate_uv(root, _member_group_conflict_lock(), _lock_model(dependency_groups = ["group:test"]))
     env.expect.that_str(result["variants"][0].get("repo_default", "")).equals("")
-
-    # `default-groups = "all"` is not a substring match.
-    app_a_all = {"project": {"name": "app-a"}, "tool": {"uv": {"default-groups": "all"}}}
-    result = translate_uv(app_a_all, lock, _lock_model(projects = ["app-a"], dependency_groups = ["group:test"]))
-    env.expect.that_str(result["variants"][0].get("repo_default", "")).equals("group_app-a_test")
 
 def _test_uv_repo_defaults(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
@@ -1738,6 +1784,7 @@ def uv_translator_test_suite(name):
             _test_uv_local_member_deps_keep_forks,
             _test_uv_variants_scoped_to_project,
             _test_uv_same_named_groups_across_members,
+            _test_uv_auto_pin,
             _test_uv_repo_defaults,
             _test_uv_project_conflicts,
             _test_uv_project_conflict_mixed_set,

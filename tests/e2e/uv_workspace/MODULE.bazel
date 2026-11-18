@@ -53,14 +53,15 @@ uv.package(
 )
 
 # Both members declare a conflicting `test` group with the same name. Each
-# member repo exposes its own as `group_test` and pins it.
+# member repo requests only its own, so it selects that group without flags.
 uv.repo(
     name = "lock_a_test",
     dependency_groups = ["group:test;testonly"],
-    flags = ["--@lock_a_test//_variants:group_test=True"],
     projects = ["project-a"],
     workspace = "shared",
 )
+
+# A flag that agrees with the automatic selection still works.
 uv.repo(
     name = "lock_b_test",
     dependency_groups = ["group:test;testonly"],
@@ -78,16 +79,7 @@ uv.repo(
     projects = ["*"],
     workspace = "shared",
 )
-
-# No flags: project-a's `default-groups = ["test"]` makes its `test` group this
-# repo's default (applied by the repo's transition).
-uv.repo(
-    name = "lock_a_test_default",
-    dependency_groups = ["group:test;testonly"],
-    projects = ["project-a"],
-    workspace = "shared",
-)
-use_repo(uv, "lock_a", "lock_a_test", "lock_a_test_default", "lock_all", "lock_all_test", "lock_b_test", "lock_project_b")
+use_repo(uv, "lock_a", "lock_a_test", "lock_all", "lock_all_test", "lock_b_test", "lock_project_b")
 
 # Test standalone members (no uv_all_members)
 uv.workspace(

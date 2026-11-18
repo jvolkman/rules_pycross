@@ -89,4 +89,15 @@ uv.repo(
     },
     workspace = "shared",
 )
-use_repo(uv, "project", "project_flags", "project_pinned", "project_settings")
+
+# Requests only `variant-a` of the extras conflict, so it selects it without flags.
+uv.repo(
+    name = "project_auto",
+    dependency_groups = [
+        "default",
+        "optional:variant-a",
+    ],
+    projects = ["project"],
+    workspace = "shared",
+)
+use_repo(uv, "project", "project_auto", "project_flags", "project_pinned", "project_settings")

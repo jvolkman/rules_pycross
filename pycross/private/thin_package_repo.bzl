@@ -658,10 +658,14 @@ def _thin_package_repo_impl(rctx):
         fixed_settings["@{}//_lock:_pin_{}".format(workspace_repo, set_suffix)] = qname
     for set_suffix, vset in sorted(variant_info.sets.items()):
         if vset.pin:
-            # The repo's own project in a `{package = ...}` conflict.
+            # The only item of the set that the repo requests.
             pin_label = "@{}//_lock:_pin_{}".format(workspace_repo, set_suffix)
             if fixed_settings.get(pin_label, vset.pin) != vset.pin:
-                fail("{}: flags select {}, but the repo's project is {}".format(rctx.attr.member_name, fixed_settings[pin_label], vset.pin))
+                fail("{}: flags select {}, but the repo requests only {} from that conflict set".format(
+                    rctx.attr.member_name,
+                    fixed_settings[pin_label],
+                    vset.pin,
+                ))
             fixed_settings[pin_label] = vset.pin
         if vset.default:
             fixed_settings["@{}//_lock:_default_{}".format(workspace_repo, set_suffix)] = vset.default

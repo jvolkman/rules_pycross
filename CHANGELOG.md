@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
+## Unreleased
+
+### Changed
+
+- **`uv` repos select their only requested conflict item.** A repo that requests
+  one item of a conflict set (such as `optional:cpu`) no longer needs a
+  `_variants` flag, as with `uv sync --extra cpu`.
+
 ## [2.1.0]
 
 ### Added
