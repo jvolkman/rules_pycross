@@ -1,0 +1,34 @@
+load("@rules_python//python:defs.bzl", "py_test")
+
+py_test(
+    name = "test_runtime_cpu",
+    srcs = ["tests/test_conflict_version.py"],
+    args = [
+        "iniconfig",
+        "1.1.1",
+    ],
+    main = "tests/test_conflict_version.py",
+    deps = ["@runtime//iniconfig"],
+)
+
+py_test(
+    name = "test_runtime_gpu",
+    srcs = ["tests/test_conflict_version.py"],
+    args = [
+        "iniconfig",
+        "2.0.0",
+    ],
+    main = "tests/test_conflict_version.py",
+    deps = ["@runtime//iniconfig"],
+)
+
+py_test(
+    name = "test_cpu_only",
+    srcs = ["tests/test_conflict_version.py"],
+    args = [
+        "iniconfig",
+        "1.1.1",
+    ],
+    main = "tests/test_conflict_version.py",
+    deps = ["@cpu_only//iniconfig"],
+)

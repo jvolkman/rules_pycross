@@ -1,0 +1,20 @@
+[project]
+name = "app"
+version = "0.1.0"
+requires-python = ">=3.11"
+dependencies = []
+
+[project.optional-dependencies]
+cpu = ["iniconfig==1.1.1"]
+gpu = ["iniconfig==2.0.0"]
+
+[dependency-groups]
+gpu-test = ["iniconfig==2.0.0", "six==1.17.0"]
+
+[tool.uv]
+package = false
+# Two overlapping conflict sets: `cpu` is in both.
+conflicts = [
+  [{ extra = "cpu" }, { extra = "gpu" }],
+  [{ extra = "cpu" }, { group = "gpu-test" }],
+]

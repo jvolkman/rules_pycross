@@ -1,0 +1,44 @@
+bazel_dep(name = "rules_pycross", version = "0.0.0")
+bazel_dep(name = "rules_python", version = "2.0.0")
+
+local_path_override(
+    module_name = "rules_pycross",
+    path = "../../..",
+)
+
+python = use_extension("@rules_python//python/extensions:python.bzl", "python")
+python.toolchain(
+    is_default = True,
+    python_version = "3.14.2",
+)
+
+uv = use_extension("@rules_pycross//pycross/extensions:uv.bzl", "uv")
+uv.workspace(
+    name = "ws",
+    lock_file = "//:uv.lock",
+)
+
+# Requests `cpu` and `gpu`: the first set needs a flag. The second set
+# (`cpu` vs `gpu-test`) must not pin `cpu`, which would conflict with `gpu`.
+uv.repo(
+    name = "runtime",
+    dependency_groups = [
+        "default",
+        "optional:cpu",
+        "optional:gpu",
+    ],
+    projects = ["app"],
+    workspace = "ws",
+)
+
+# Requests only `cpu`, so both sets select it without flags.
+uv.repo(
+    name = "cpu_only",
+    dependency_groups = [
+        "default",
+        "optional:cpu",
+    ],
+    projects = ["app"],
+    workspace = "ws",
+)
+use_repo(uv, "cpu_only", "runtime")

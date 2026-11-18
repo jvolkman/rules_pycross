@@ -951,6 +951,27 @@ def _test_uv_auto_pin_overlapping_sets_impl(env, target):
     env.expect.that_collection(pins(["default", "optional:cpu"])).contains_exactly(["extra_app_cpu", "extra_app_cpu"]).in_order()
     env.expect.that_collection(pins(["default", "optional:gpu", "group:gpu-test"])).contains_exactly(["extra_app_gpu", "group_app_gpu-test"]).in_order()
 
+    # Nor does it get a default there: with `default-groups = ["cpu"]` and both
+    # `cpu` and `gpu` requested, only the first set defaults to `cpu`.
+    lock = _lock(
+        [
+            dict(
+                _pkg("app", "0.1.0", source = {"editable": "."}),
+                **{"dev-dependencies": {"cpu": [_dep("six", "1.16.0")], "gpu": [_dep("six", "1.17.0")], "gpu-test": [_dep("six", "1.17.0")]}}
+            ),
+            _pkg("six", "1.16.0", wheels = [_whl("six-1.16.0-py2.py3-none-any.whl", "aa")]),
+            _pkg("six", "1.17.0", wheels = [_whl("six-1.17.0-py2.py3-none-any.whl", "bb")]),
+        ],
+        conflicts = [
+            [{"package": "app", "group": "cpu"}, {"package": "app", "group": "gpu"}],
+            [{"package": "app", "group": "cpu"}, {"package": "app", "group": "gpu-test"}],
+        ],
+    )
+    app = {"project": {"name": "app"}, "tool": {"uv": {"default-groups": ["cpu"]}}}
+    result = translate_uv(app, lock, _lock_model(projects = ["app"], dependency_groups = ["group:cpu", "group:gpu"]))
+    env.expect.that_collection([vs.get("repo_default", "") for vs in result["variants"]]).contains_exactly(["group_app_cpu", ""]).in_order()
+    env.expect.that_collection([vs.get("repo_pin", "") for vs in result["variants"]]).contains_exactly(["", ""]).in_order()
+
 def _test_uv_auto_pin_overlapping_sets(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
     analysis_test(name = name, target = name + "_subject", impl = _test_uv_auto_pin_overlapping_sets_impl)

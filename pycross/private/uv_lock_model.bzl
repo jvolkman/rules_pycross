@@ -550,11 +550,14 @@ def translate_uv(project_dict, lock_dict, lock_model):
         # An item can be in several sets (e.g. `[[cpu, gpu], [cpu, gpu-test]]`).
         # Pin it only if the repo requests none of its rivals in any of them;
         # otherwise the sets could select conflicting items at once.
-        if len(requested_items) == 1 and not is_build_tools_repo:
-            qname = variant_item_qname(requested_items[0])
-            if qname not in rival_requested:
-                variant_set["repo_pin"] = qname
-                continue
+        # A set with at most one requested item gets no default either: a rival
+        # elsewhere would make the default disagree with that set's selection.
+        if len(requested_items) <= 1:
+            if requested_items and not is_build_tools_repo:
+                qname = variant_item_qname(requested_items[0])
+                if qname not in rival_requested:
+                    variant_set["repo_pin"] = qname
+            continue
 
         candidates = []
         for item in owned_items:
