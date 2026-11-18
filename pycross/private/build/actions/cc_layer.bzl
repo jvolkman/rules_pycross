@@ -161,7 +161,7 @@ def extract_cc_layer(ctx, native_deps, copts, linkopts, meson_properties = {}):
         transitive_files.append(depset(libraries))
         for lib in libraries:
             lib_path = absolutize_path_in_str(ctx.workspace_name, "$$EXT_BUILD_ROOT$$/", lib.path, True)
-            if lib.path.endswith(".a"):
+            if lib.path.endswith((".a", ".lib")):
                 static_libs.append(lib_path)
             elif _is_shared_library(lib.path):
                 shared_libs.append(lib_path)

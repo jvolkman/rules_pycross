@@ -1,6 +1,6 @@
 """Module docstring for tests."""
 
-load("@rules_cc//cc:defs.bzl", "cc_library")
+load("@rules_cc//cc:defs.bzl", "cc_import", "cc_library")
 load("@rules_testing//lib:analysis_test.bzl", "analysis_test", "test_suite")
 load("@rules_testing//lib:util.bzl", "util")
 
@@ -115,6 +115,38 @@ def _test_extract_cc_layer_main_repo_includes_impl(env, target):
     for inc in include_dirs:
         env.expect.where(include_dir = inc).that_bool(inc.startswith("$$EXT_BUILD_ROOT$$/")).equals(True)
 
+def _test_extract_cc_layer_native_libraries(name):
+    # These imports only provide CcInfo for analysis; the placeholder files are
+    # never linked. Keep both library extensions in the same test so it runs
+    # independently of the host platform.
+    util.helper_target(cc_import, name = name + "_archive", static_library = "mock_native.a")
+    util.helper_target(cc_import, name = name + "_static_lib", static_library = "mock_native_static.lib")
+    util.helper_target(
+        cc_import,
+        name = name + "_interface_lib",
+        interface_library = "mock_native_interface.lib",
+        shared_library = "mock_native.dll",
+    )
+    util.helper_target(
+        _mock_cc_layer,
+        name = name + "_subject",
+        native_deps = [
+            name + "_archive",
+            name + "_static_lib",
+            name + "_interface_lib",
+        ],
+    )
+    analysis_test(name = name, target = name + "_subject", impl = _test_extract_cc_layer_native_libraries_impl)
+
+def _test_extract_cc_layer_native_libraries_impl(env, target):
+    static_libs = _cc_config(target)["static_libs"]
+    for path in [
+        "$$EXT_BUILD_ROOT$$//tests/analysis/mock_native.a",
+        "$$EXT_BUILD_ROOT$$//tests/analysis/mock_native_static.lib",
+        "$$EXT_BUILD_ROOT$$//tests/analysis/mock_native_interface.lib",
+    ]:
+        env.expect.that_collection(static_libs).contains(path)
+
 def extract_cc_layer_test_suite(name):
     test_suite(
         name = name,
@@ -122,5 +154,6 @@ def extract_cc_layer_test_suite(name):
             _test_extract_cc_layer_flags,
             _test_extract_cc_layer_user_flags,
             _test_extract_cc_layer_main_repo_includes,
+            _test_extract_cc_layer_native_libraries,
         ],
     )
