@@ -16,6 +16,7 @@ load(
     "packages_bzl_for_testing",
     "pin_build_for_testing",
     "requirements_bzl_for_testing",
+    "variant_fallbacks_for_testing",
     "variants_build_for_testing",
 )
 
@@ -854,10 +855,10 @@ def _test_pin_build_maybe_with_transition(name):
 # buildifier: disable=unused-variable
 def _test_pin_build_no_variant_fallback_impl(env, target):
     """Variant pins without a default variant emit _unselected_<set> -> _no_variant_<set> and preserve //conditions:default."""
-    no_variant_fallbacks = {
-        "extra_variant-a": "extra_variant-a_extra_variant-b",
-        "extra_variant-b": "extra_variant-a_extra_variant-b",
-    }
+    no_variant_fallbacks = variant_fallbacks_for_testing({
+        "extra_variant-a": ["extra_variant-a_extra_variant-b"],
+        "extra_variant-b": ["extra_variant-a_extra_variant-b"],
+    })
     res = pin_build_for_testing(
         target_name = "typing_extensions",
         pin_target_dict = {
@@ -930,17 +931,82 @@ def _test_variants_build_repo_default_impl(env, target):
     }])
     build = variants_build_for_testing(info, "ws__pkgs", "pypi")
     unselected = '"@ws__pkgs//_lock:_unselected_group_my-app_a_group_my-app_b"'
+    selected_a = build.split('name = "_selected_group_my-app_a"')[1].split(")")[0]
+    env.expect.that_bool("match_any" in selected_a and unselected in selected_a).equals(True)
     is_a = build.split('name = "is_group_a"')[1].split(")")[0]
-    env.expect.that_bool("match_any" in is_a and unselected in is_a).equals(True)
+    env.expect.that_str(is_a.strip()).contains('actual = ":_selected_group_my-app_a"')
     is_b = build.split('name = "is_group_b"')[1].split(")")[0]
     env.expect.that_bool(unselected in is_b).equals(False)
 
     # The message lists one flag per item: the short names, since they're unambiguous.
     env.expect.that_bool("pycross repo: group_a, group_b (e.g. --@pypi//_variants:group_a=True)" in build).equals(True)
 
+# buildifier: disable=unused-variable
+def _test_variants_build_shared_flag_pinned_impl(env, target):
+    """A shared flag over two pinned items matches outside the repo's transition too."""
+    variants = [
+        {
+            "items": [
+                {"package": pkg, "kind": "group", "name": "test", "flags": ["group_test", "group_{}_test".format(pkg)]},
+                {"package": pkg, "kind": "group", "name": "slow", "flags": ["group_slow", "group_{}_slow".format(pkg)]},
+            ],
+            "repo_pin": "group_{}_test".format(pkg),
+        }
+        for pkg in ["app-a", "app-b"]
+    ]
+    build = variants_build_for_testing(collect_variants_for_testing(variants), "ws__pkgs", "lock_all")
+    group_test = build.split('name = "is_group_test"')[1].split(")")[0]
+    env.expect.that_str(group_test).contains("match_all")
+    env.expect.that_str(group_test).contains('":_selected_group_app-a_test"')
+    env.expect.that_str(group_test).contains('":_selected_group_app-b_test"')
+
+def _test_variants_build_shared_flag_pinned(name):
+    util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
+    analysis_test(name = name, target = name + "_subject", impl = _test_variants_build_shared_flag_pinned_impl)
+
 def _test_variants_build_repo_default(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
     analysis_test(name = name, target = name + "_subject", impl = _test_variants_build_repo_default_impl)
+
+# buildifier: disable=unused-variable
+def _test_pin_build_overlapping_sets_impl(env, target):
+    """A select touching two conflict sets falls back only when both are unselected."""
+    s0 = "extra_cpu_extra_gpu"
+    s1 = "extra_cpu_group_gpu-test"
+    fallbacks = variant_fallbacks_for_testing({"extra_cpu": [s0, s1], "extra_gpu": [s0]})
+    res = pin_build_for_testing(
+        target_name = "iniconfig",
+        pin_target_dict = {"extra_cpu": "iniconfig@1.1.1", "extra_gpu": "iniconfig@2.0.0"},
+        package = {},
+        workspace_repo = "ws",
+        no_variant_fallbacks = fallbacks,
+    ).build
+    env.expect.that_int(len(fallbacks.groups)).equals(1)
+    group = fallbacks.groups.keys()[0]
+    env.expect.that_collection(fallbacks.groups[group]).contains_exactly([s0, s1]).in_order()
+
+    # The error names the set that covers both branches.
+    pkg_section = res.split('name = "pkg"')[1].split(")")[0]
+    env.expect.that_str(pkg_section).contains('"//_variants:{}": "//_variants:_no_variant_{}"'.format(group, s0))
+    env.expect.that_bool("@ws//_lock:_unselected_" in pkg_section).equals(False)
+
+    build = variants_build_for_testing(
+        collect_variants_for_testing([
+            {"items": [{"package": "app", "kind": "extra", "name": "cpu"}, {"package": "app", "kind": "extra", "name": "gpu"}]},
+            {"items": [{"package": "app", "kind": "extra", "name": "cpu"}, {"package": "app", "kind": "group", "name": "gpu-test"}]},
+        ]),
+        "ws",
+        "pypi",
+        unselected_groups = fallbacks.groups,
+    )
+    group_section = build.split('name = "{}"'.format(group))[1].split(")")[0]
+    env.expect.that_str(group_section).contains("match_all")
+    env.expect.that_str(group_section).contains('"@ws//_lock:_unselected_{}"'.format(s0))
+    env.expect.that_str(group_section).contains('"@ws//_lock:_unselected_{}"'.format(s1))
+
+def _test_pin_build_overlapping_sets(name):
+    util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
+    analysis_test(name = name, target = name + "_subject", impl = _test_pin_build_overlapping_sets_impl)
 
 def thin_package_repo_test_suite(name):
     test_suite(
@@ -948,6 +1014,8 @@ def thin_package_repo_test_suite(name):
         tests = [
             _test_variants_build_shared_flag,
             _test_variants_build_repo_default,
+            _test_variants_build_shared_flag_pinned,
+            _test_pin_build_overlapping_sets,
             _test_pin_build_no_transition,
             _test_pin_build_with_platform,
             _test_pin_build_transition_loads,

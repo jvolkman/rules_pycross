@@ -90,8 +90,8 @@ Represents a set of mutually exclusive variant items (conflicts).
 ### Fields
 
 - `items`: (Array of VariantItem Objects) List of items participating in the conflict.
-- `repo_pin`: (String, Optional) For a `{package = ...}` conflict, the internal name (`package_<package>`) of the project when it's the only item of the set that the repo generated from this lock contains. The repo's transition pins it, as `uv sync --package <package>` selects that project.
-- `repo_default`: (String, Optional) The internal name of the item the repo generated from this lock selects by default: a group from the selected pyproject's `[tool.uv] default-groups` (`group_<package>_<name>`), or, in a mixed `{package = ...}` set, the one project whose default dependencies the repo requests (`package_<package>`). The repo's transition applies it.
+- `repo_pin`: (String, Optional) The internal name of the only item of the set that the repo generated from this lock requests (e.g. `package_<package>`, `extra_<package>_<name>`, or `group_<package>_<name>`). The repo's transition pins it, as `uv sync --package <package>` or `uv sync --extra <name>` selects that item. Never set for the workspace's `__build` repo.
+- `repo_default`: (String, Optional) When the repo requests several items of the set, the internal name of the item it selects by default: a group from the selected pyproject's `[tool.uv] default-groups` (`group_<package>_<name>`), or, in a mixed `{package = ...}` set, the one project whose default dependencies the repo requests (`package_<package>`). The repo's transition applies it.
 
 ---
 

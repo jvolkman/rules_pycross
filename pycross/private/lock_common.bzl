@@ -226,6 +226,7 @@ def register_workspace_repo(
         wildcard_testonly = parsed.wildcard_testonly,
         include_transitive = parsed.include_transitive,
         transitive_testonly = parsed.transitive_testonly,
+        is_build_tools_repo = repo_name == "{}__build".format(ws_name),
     )
 
 def parse_dependency_group_entries(raw_groups):

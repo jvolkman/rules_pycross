@@ -108,16 +108,59 @@ def _aggregated_key(pkg_key, aggregated_keys):
         return pkg_key
     return "{}[_all_]@{}".format(parts.name, parts.version)
 
-def _no_variant_set_for(constraints, no_variant_fallbacks):
-    # Return the first conflict set suffix touched by constraints so at most one
-    # _unselected_<set> condition is added to a given select() (preventing select
-    # ambiguity if a single pin ever referenced two unselected conflict sets).
-    for constraint in constraints:
-        if constraint in no_variant_fallbacks:
-            return no_variant_fallbacks[constraint]
-    return None
+def _variant_fallbacks(sets_by_constraint):
+    """Build the no-variant fallback info for this repo's selects.
 
-def _target_select(target_dict, prefix, suffix, workspace_repo, is_aggregated = False, no_variant_fallbacks = {}, all_target_dict = None, fallback_target = _NO_MATCH_ERROR_TARGET, aggregated_keys = None):
+    Args:
+        sets_by_constraint: {constraint: [conflict set suffixes]} for each
+            constraint that needs a variant.
+
+    Returns:
+        struct(sets, groups). `groups` collects the `_unselected_all_<hash>`
+        targets that selects reference, for _variants_build to emit.
+    """
+    return struct(sets = sets_by_constraint, groups = {})
+
+def _unselected_all_name(set_suffixes):
+    return "_unselected_all_%x" % (hash("|".join(set_suffixes)) & 0xffffffff)
+
+def _unselected_branch(constraints, no_variant_fallbacks, workspace_repo):
+    """The select() branch for "no variant selected", or None.
+
+    It matches only when every conflict set that the constraints touch is
+    unselected. An item can be in several sets (`[[cpu, gpu], [cpu, gpu-test]]`),
+    and if any of them is selected, one of the select's own conditions decides.
+
+    Args:
+        constraints: The select's constraint keys.
+        no_variant_fallbacks: Result of _variant_fallbacks, or None.
+        workspace_repo: Name of the workspace (backing) repo.
+
+    Returns:
+        (condition label, conflict set for the error target), or None.
+    """
+    if not no_variant_fallbacks:
+        return None
+    counts = {}  # set suffix -> number of constraints in it
+    for constraint in constraints:
+        for set_suffix in no_variant_fallbacks.sets.get(constraint, []):
+            counts[set_suffix] = counts.get(set_suffix, 0) + 1
+    if not counts:
+        return None
+    set_suffixes = sorted(counts.keys())
+
+    # The error names the flags of the set that covers most of the constraints.
+    error_set = set_suffixes[0]
+    for set_suffix in set_suffixes:
+        if counts[set_suffix] > counts[error_set]:
+            error_set = set_suffix
+    if len(set_suffixes) == 1:
+        return ("@{}//_lock:_unselected_{}".format(workspace_repo, error_set), error_set)
+    name = _unselected_all_name(set_suffixes)
+    no_variant_fallbacks.groups[name] = set_suffixes
+    return ("//_variants:" + name, error_set)
+
+def _target_select(target_dict, prefix, suffix, workspace_repo, is_aggregated = False, no_variant_fallbacks = None, all_target_dict = None, fallback_target = _NO_MATCH_ERROR_TARGET, aggregated_keys = None):
     effective_all = all_target_dict if all_target_dict != None else target_dict
     if len(effective_all) == 1 and "" in effective_all and "" in target_dict:
         t = target_dict[""]
@@ -150,23 +193,16 @@ def _target_select(target_dict, prefix, suffix, workspace_repo, is_aggregated = 
     # Variant defaults come from this repo's transition (`_default_<set>`), not from
     # //conditions:default.
     if "" not in effective_all:
-        unselected_set = _no_variant_set_for(effective_all.keys(), no_variant_fallbacks)
-        if unselected_set:
-            lines.append(
-                '        "@{}//_lock:_unselected_{}": "{}{}",'.format(
-                    workspace_repo,
-                    unselected_set,
-                    _NO_VARIANT_PREFIX,
-                    unselected_set,
-                ),
-            )
+        unselected = _unselected_branch(effective_all.keys(), no_variant_fallbacks, workspace_repo)
+        if unselected:
+            lines.append('        "{}": "{}{}",'.format(unselected[0], _NO_VARIANT_PREFIX, unselected[1]))
         if fallback_target:
             lines.append('        "//conditions:default": "{}",'.format(fallback_target))
 
     lines.append("    })")
     return "\n".join(lines)
 
-def _proxy_actual(actual_lines, target_dict, prefix, suffix, workspace_repo, alias_name, actual_pkg_ref, has_transition = False, is_aggregated = False, no_variant_fallbacks = {}, all_target_dict = None, fallback_target = _NO_MATCH_ERROR_TARGET, aggregated_keys = None):
+def _proxy_actual(actual_lines, target_dict, prefix, suffix, workspace_repo, alias_name, actual_pkg_ref, has_transition = False, is_aggregated = False, no_variant_fallbacks = None, all_target_dict = None, fallback_target = _NO_MATCH_ERROR_TARGET, aggregated_keys = None):
     """Emit an intermediate select alias if needed, return the actual expression for the proxy.
 
     When transitions are active (has_transition is True) and target_dict has variants
@@ -197,7 +233,7 @@ def _proxy_actual(actual_lines, target_dict, prefix, suffix, workspace_repo, ali
         return '"{}:{}",'.format(actual_pkg_ref, alias_name)
     return "{},".format(actual)
 
-def _emit_maybe_alias(lines, maybe_name, pkg_target, target_dict, available_keys, workspace_repo, no_variant_fallbacks = {}, helper_prefix = "_maybe"):
+def _emit_maybe_alias(lines, maybe_name, pkg_target, target_dict, available_keys, workspace_repo, no_variant_fallbacks = None, helper_prefix = "_maybe"):
     """Emit a `:maybe` or `:[extra]_maybe` alias supporting both single-branch and multi-branch pins."""
     available_set = {k: True for k in (available_keys or [])}
     if not available_set or not target_dict:
@@ -255,16 +291,9 @@ def _emit_maybe_alias(lines, maybe_name, pkg_target, target_dict, available_keys
             lines.append('        "@{}//_lock:is_{}": "{}",'.format(workspace_repo, constraint, branch_target))
 
     if "" not in branch_targets:
-        unselected_set = _no_variant_set_for(branch_targets.keys(), no_variant_fallbacks)
-        if unselected_set:
-            lines.append(
-                '        "@{}//_lock:_unselected_{}": "{}{}",'.format(
-                    workspace_repo,
-                    unselected_set,
-                    _NO_VARIANT_PREFIX,
-                    unselected_set,
-                ),
-            )
+        unselected = _unselected_branch(branch_targets.keys(), no_variant_fallbacks, workspace_repo)
+        if unselected:
+            lines.append('        "{}": "{}{}",'.format(unselected[0], _NO_VARIANT_PREFIX, unselected[1]))
         lines.append('        "//conditions:default": "//:_empty_library",')
 
     lines.extend([
@@ -273,7 +302,7 @@ def _emit_maybe_alias(lines, maybe_name, pkg_target, target_dict, available_keys
         "",
     ])
 
-def _pin_build(target_name, pin_target_dict, package, workspace_repo, workspace_lock_target_dict = None, has_aggregated_variant = False, extras_dict = None, no_variant_fallbacks = {}, target_platform = None, transition_bzl = None, maybe_available_keys = None, extras_maybe_keys = None, testonly = False, sdist_target_dict = None, aggregated_keys = None):
+def _pin_build(target_name, pin_target_dict, package, workspace_repo, workspace_lock_target_dict = None, has_aggregated_variant = False, extras_dict = None, no_variant_fallbacks = None, target_platform = None, transition_bzl = None, maybe_available_keys = None, extras_maybe_keys = None, testonly = False, sdist_target_dict = None, aggregated_keys = None):
     """Generates the BUILD file for a pin directory, pointing to the workspace."""
     lock_target_dict = workspace_lock_target_dict if workspace_lock_target_dict else pin_target_dict
     lock_ref = "@{}//_lock:".format(workspace_repo)
@@ -493,7 +522,7 @@ def _collect_variants(variant_sets):
             )
     return struct(flags = flags, sets = sets)
 
-def _variants_build(variant_info, workspace_repo, repo_name):
+def _variants_build(variant_info, workspace_repo, repo_name, unselected_groups = None):
     """Render _variants/BUILD.bazel: this repo's variant flags.
 
     The workspace repo's variant resolvers read these bool_flags (see
@@ -507,6 +536,8 @@ def _variants_build(variant_info, workspace_repo, repo_name):
         variant_info: Result of _collect_variants.
         workspace_repo: Name of the workspace (backing) repo.
         repo_name: This repo's apparent name, for messages.
+        unselected_groups: {name: [set suffixes]} of `_unselected_all_*`
+            groups that the repo's selects reference.
 
     Returns:
         The file content, or None if the repo has no variants.
@@ -521,6 +552,37 @@ def _variants_build(variant_info, workspace_repo, repo_name):
 
     body = []
     needs_selects = False
+
+    # `_selected_<qname>` for each item this repo pins or defaults to: active,
+    # or nothing in its sets is selected (outside the repo's transition).
+    groups = dict(unselected_groups or {})
+    selected = {}  # qname -> condition label
+    for qname, set_suffixes in sorted(defaults.items()):
+        needs_selects = True
+        set_suffixes = sorted(set_suffixes)
+        if len(set_suffixes) == 1:
+            unselected = "@{}//_lock:_unselected_{}".format(workspace_repo, set_suffixes[0])
+        else:
+            name = _unselected_all_name(set_suffixes)
+            groups[name] = set_suffixes
+            unselected = ":" + name
+        selected[qname] = '":_selected_{}"'.format(qname)
+        body.append("selects.config_setting_group(")
+        body.append('    name = "_selected_{}",'.format(qname))
+        body.append("    match_any = [")
+        body.append('        "@{}//_lock:is_{}",'.format(workspace_repo, qname))
+        body.append('        "{}",'.format(unselected))
+        body.extend(["    ],", ")", ""])
+
+    # `_unselected_all_<hash>`: all of several conflict sets are unselected.
+    for name, set_suffixes in sorted(groups.items()):
+        needs_selects = True
+        body.append("selects.config_setting_group(")
+        body.append('    name = "{}",'.format(name))
+        body.append("    match_all = [")
+        body.extend(['        "@{}//_lock:_unselected_{}",'.format(workspace_repo, s) for s in set_suffixes])
+        body.extend(["    ],", ")", ""])
+
     for flag, qnames in sorted(variant_info.flags.items()):
         body.extend([
             "bool_flag(",
@@ -529,16 +591,8 @@ def _variants_build(variant_info, workspace_repo, repo_name):
             ")",
             "",
         ])
-        conditions = ['"@{}//_lock:is_{}"'.format(workspace_repo, q) for q in qnames]
-        if len(qnames) == 1 and qnames[0] in defaults:
-            needs_selects = True
-            conditions.extend(['"@{}//_lock:_unselected_{}"'.format(workspace_repo, s) for s in defaults[qnames[0]]])
-            body.append("selects.config_setting_group(")
-            body.append('    name = "is_{}",'.format(flag))
-            body.append("    match_any = [")
-            body.extend(["        {},".format(c) for c in conditions])
-            body.extend(["    ],", ")", ""])
-        elif len(qnames) == 1:
+        conditions = [selected.get(q, '"@{}//_lock:is_{}"'.format(workspace_repo, q)) for q in qnames]
+        if len(qnames) == 1:
             body.extend([
                 "alias(",
                 '    name = "is_{}",'.format(flag),
@@ -546,13 +600,13 @@ def _variants_build(variant_info, workspace_repo, repo_name):
                 ")",
                 "",
             ])
-        else:
-            needs_selects = True
-            body.append("selects.config_setting_group(")
-            body.append('    name = "is_{}",'.format(flag))
-            body.append("    match_all = [")
-            body.extend(["        {},".format(c) for c in conditions])
-            body.extend(["    ],", ")", ""])
+            continue
+        needs_selects = True
+        body.append("selects.config_setting_group(")
+        body.append('    name = "is_{}",'.format(flag))
+        body.append("    match_all = [")
+        body.extend(["        {},".format(c) for c in conditions])
+        body.extend(["    ],", ")", ""])
 
     for set_suffix, vset in sorted(variant_info.sets.items()):
         if vset.flags:
@@ -586,6 +640,7 @@ def _variants_build(variant_info, workspace_repo, repo_name):
 
 # Visible for testing
 collect_variants_for_testing = _collect_variants
+variant_fallbacks_for_testing = _variant_fallbacks
 variants_build_for_testing = _variants_build
 
 def _thin_package_repo_impl(rctx):
@@ -605,17 +660,18 @@ def _thin_package_repo_impl(rctx):
     # _unselected_<set> -> _no_variant_<set> fallback in selects; defaults come
     # from this repo's transition (`_default_<set>`), not //conditions:default.
     variant_info = _collect_variants(lock.get("variants", []))
-    no_variant_fallbacks = {}  # constraint -> conflict set suffix (sorted qnames joined by "_")
-    for set_suffix, vset in variant_info.sets.items():
+    sets_by_constraint = {}  # constraint -> [conflict set suffixes (sorted qnames joined by "_")]
+    for set_suffix, vset in sorted(variant_info.sets.items()):
         for qname in vset.qnames:
-            no_variant_fallbacks[qname] = set_suffix
+            sets_by_constraint.setdefault(qname, []).append(set_suffix)
 
     # Only compound {variant, marker} constraints need a variant. A plain marker
     # constraint (an unconflicted edge that uv split by conflict markers) is
     # valid with no variant selected, e.g. `extra != '__variant_package_a'`.
     for cname, expr in lock.get("resolution_marker_exprs", {}).items():
-        if type(expr) == "dict" and expr.get("variant") in no_variant_fallbacks:
-            no_variant_fallbacks[cname] = no_variant_fallbacks[expr["variant"]]
+        if type(expr) == "dict" and expr.get("variant") in sets_by_constraint:
+            sets_by_constraint[cname] = sets_by_constraint[expr["variant"]]
+    no_variant_fallbacks = _variant_fallbacks(sets_by_constraint)
 
     # Conflicts dict: pkg_key -> [member_names...] for packages with
     # differing annotations across workspace members.
@@ -658,10 +714,14 @@ def _thin_package_repo_impl(rctx):
         fixed_settings["@{}//_lock:_pin_{}".format(workspace_repo, set_suffix)] = qname
     for set_suffix, vset in sorted(variant_info.sets.items()):
         if vset.pin:
-            # The repo's own project in a `{package = ...}` conflict.
+            # The only item of the set that the repo requests.
             pin_label = "@{}//_lock:_pin_{}".format(workspace_repo, set_suffix)
             if fixed_settings.get(pin_label, vset.pin) != vset.pin:
-                fail("{}: flags select {}, but the repo's project is {}".format(rctx.attr.member_name, fixed_settings[pin_label], vset.pin))
+                fail("{}: flags/settings select {}, but the repo requests only {} from that conflict set".format(
+                    rctx.attr.member_name,
+                    fixed_settings[pin_label],
+                    vset.pin,
+                ))
             fixed_settings[pin_label] = vset.pin
         if vset.default:
             fixed_settings["@{}//_lock:_default_{}".format(workspace_repo, set_suffix)] = vset.default
@@ -1023,11 +1083,6 @@ pycross_transitioning_file_proxy = rule(
                 result.actual_build,
             )
 
-    # _variants/ BUILD: this repo's variant flags (see _variants_build).
-    variants_build = _variants_build(variant_info, workspace_repo, getattr(rctx, "original_name", "") or "<repo>")
-    if variants_build:
-        rctx.file("_variants/BUILD.bazel", variants_build)
-
     # _backend/ directory
     if rctx.attr.backend_configs:
         rctx.file(
@@ -1063,6 +1118,17 @@ pycross_transitioning_file_proxy = rule(
         )
         if cargo_build:
             rctx.file("_cargo/BUILD.bazel", cargo_build)
+
+    # _variants/ BUILD: this repo's variant flags (see _variants_build). Last,
+    # since the selects above collect the `_unselected_all_*` groups it emits.
+    variants_build = _variants_build(
+        variant_info,
+        workspace_repo,
+        getattr(rctx, "original_name", "") or "<repo>",
+        unselected_groups = no_variant_fallbacks.groups,
+    )
+    if variants_build:
+        rctx.file("_variants/BUILD.bazel", variants_build)
 
     # Generate pin_versions.json: a manifest of what each //dep:pkg pin resolves to.
     # Simple pins: name -> version string. Variant pins: name -> {variant -> version}.
@@ -1118,7 +1184,7 @@ def _packages_bzl(grouped_pins, packages):
     ])
     return "\n".join(packages_lines)
 
-def _cargo_build(grouped_pins, packages, override_configs, workspace_repo, no_variant_fallbacks = {}):
+def _cargo_build(grouped_pins, packages, override_configs, workspace_repo, no_variant_fallbacks = None):
     """Render `_cargo/BUILD.bazel` aliases for packages with cargo lock overrides, or None."""
     cargo_lines = [
         'package(default_visibility = ["//visibility:public"])',

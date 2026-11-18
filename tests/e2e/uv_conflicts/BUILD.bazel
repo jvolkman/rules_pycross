@@ -129,6 +129,19 @@ py_test(
     deps = ["@project_flags//typing_extensions"],
 )
 
+# Test that @project_auto selects variant-a, the only conflicting extra it
+# requests, without flags.
+py_test(
+    name = "test_auto_pin",
+    srcs = ["tests/test_conflict_version.py"],
+    args = [
+        "typing-extensions",
+        "4.11.0",
+    ],
+    main = "tests/test_conflict_version.py",
+    deps = ["@project_auto//typing_extensions"],
+)
+
 # Test that @project_settings pins the variant via `settings` (a label-keyed
 # dict resolved relative to this module) instead of `flags`.
 py_test(
