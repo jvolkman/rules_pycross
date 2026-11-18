@@ -19,9 +19,13 @@ All notable changes to this project will be documented in this file.
   dependencies; a repo with one of the projects selects it automatically.
 - **`pyproject.toml` lookup for workspace members** is relative to the lock
   file's directory, so member directories no longer need to be Bazel packages.
+- **Python `sysconfig` probing in sdist builds** preserves the build
+  environment without leaking `PYTHONPATH` or source-tree modules, with a 30s
+  startup timeout.
 
 ### Added
 
+- **Bazel 10 support.**
 - **`pycross_wheel_cc_import`** links an sdist against a library that ships in
   another wheel, like `cc_import`. Wheel repair doesn't bundle a copy of it.
   `pycross_wheel_headers` is now a macro around it.

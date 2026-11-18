@@ -1,9 +1,15 @@
+import os
 import sys
+import sysconfig
 import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from types import SimpleNamespace
 
+from pycross.private.build.tools.utils.env import make_clean_env
 from pycross.private.build.tools.utils.sysconfig_utils import _query_interpreter
+from pycross.private.build.tools.utils.sysconfig_utils import determine_target_path_from_exec
+from pycross.private.build.tools.utils.sysconfig_utils import load_target_sysconfig
 from pycross.private.build.tools.utils.venv_utils import write_base_prefix_pth
 
 
@@ -30,6 +36,111 @@ class QueryInterpreterTest(unittest.TestCase):
         # These are standard sysconfig vars that should always be present on Linux/macOS
         if sys.platform != "win32":
             self.assertIn("EXT_SUFFIX", result)
+
+
+class LoadTargetSysconfigTest(unittest.TestCase):
+    def setUp(self):
+        self.temp_dir = TemporaryDirectory()
+        self.temp_path = Path(self.temp_dir.name)
+        self.orig_cwd = Path.cwd()
+
+    def tearDown(self):
+        os.chdir(self.orig_cwd)
+        self.temp_dir.cleanup()
+
+    @unittest.skipIf(sys.platform == "win32", "POSIX shell wrapper test")
+    def test_primary_probe_preserves_env_and_isolates_imports(self):
+        """Primary probe forwards build_env while ignoring PYTHONPATH and sdist cwd."""
+        sdist_dir = self.temp_path / "sdist"
+        sdist_dir.mkdir()
+        (sdist_dir / "json.py").write_text('raise RuntimeError("poisoned cwd json")\n')
+
+        poison_pp = self.temp_path / "poison_pp"
+        poison_pp.mkdir()
+        (poison_pp / "json.py").write_text('raise RuntimeError("poisoned PYTHONPATH json")\n')
+
+        wrapper = self.temp_path / "target_python.sh"
+        wrapper.write_text(
+            "#!/bin/sh\n"
+            'test "$MY_TOOLCHAIN_VAR" = "expected" || exit 1\n'
+            'test -z "$PYTHONPATH" || exit 1\n'
+            'test "$PYTHONSAFEPATH" = "1" || exit 1\n'
+            f'exec "{sys.executable}" "$@"\n'
+        )
+        wrapper.chmod(0o755)
+
+        build_env = make_clean_env()
+        build_env["MY_TOOLCHAIN_VAR"] = "expected"
+        build_env["PYTHONPATH"] = str(poison_pp)
+        ctx = SimpleNamespace(
+            target_python=wrapper,
+            exec_python=Path(sys.executable),
+            build_env=build_env,
+        )
+
+        os.chdir(sdist_dir)
+        result = load_target_sysconfig(ctx)
+
+        self.assertIn("installed_base", result)
+        # ctx.build_env itself must not be mutated.
+        self.assertEqual(ctx.build_env["PYTHONPATH"], str(poison_pp))
+        self.assertNotIn("PYTHONSAFEPATH", ctx.build_env)
+
+    def _make_fake_target_layout(self) -> tuple[Path, Path]:
+        """Mirror the running Python's executable/stdlib layout under a temp root."""
+        real_exec = Path(sys.executable).resolve()
+        real_stdlib = Path(sysconfig.get_path("stdlib")).resolve()
+        common = Path(os.path.commonpath([real_exec, real_stdlib]))
+
+        target_root = self.temp_path / "target_py"
+        target_exe = target_root / real_exec.relative_to(common)
+        target_exe.parent.mkdir(parents=True, exist_ok=True)
+        target_exe.write_text("not an executable binary\n")
+
+        target_stdlib = target_root / real_stdlib.relative_to(common)
+        target_stdlib.mkdir(parents=True, exist_ok=True)
+        return target_exe, target_stdlib
+
+    def test_fallback_probe_ignores_pythonpath_and_cwd(self):
+        """When target_python cannot run, fallback maps exec sys.path cleanly."""
+        sdist_dir = self.temp_path / "sdist"
+        sdist_dir.mkdir()
+        (sdist_dir / "json.py").write_text('raise RuntimeError("poisoned cwd json")\n')
+
+        poison_pp = self.temp_path / "poison_pp"
+        poison_pp.mkdir()
+        (poison_pp / "json.py").write_text('raise RuntimeError("poisoned PYTHONPATH json")\n')
+
+        target_exe, target_stdlib = self._make_fake_target_layout()
+        (target_stdlib / "_sysconfigdata__test.py").write_text('build_time_vars = {"EXT_SUFFIX": ".fake-target.so"}\n')
+
+        build_env = make_clean_env()
+        build_env["PYTHONPATH"] = str(poison_pp)
+        ctx = SimpleNamespace(
+            target_python=target_exe,
+            exec_python=Path(sys.executable),
+            build_env=build_env,
+        )
+
+        os.chdir(sdist_dir)
+        result = load_target_sysconfig(ctx)
+
+        self.assertEqual(result, {"EXT_SUFFIX": ".fake-target.so"})
+        self.assertEqual(ctx.build_env["PYTHONPATH"], str(poison_pp))
+        self.assertNotIn("PYTHONSAFEPATH", ctx.build_env)
+
+    def test_determine_target_path_from_exec_excludes_cwd(self):
+        """Direct calls without PYTHONSAFEPATH still isolate cwd and omit empty entries."""
+        sdist_dir = self.temp_path / "sdist"
+        sdist_dir.mkdir()
+        (sdist_dir / "json.py").write_text('raise RuntimeError("poisoned cwd json")\n')
+
+        target_exe, target_stdlib = self._make_fake_target_layout()
+        os.chdir(sdist_dir)
+        paths = determine_target_path_from_exec(Path(sys.executable), target_exe, make_clean_env())
+
+        self.assertIn(target_stdlib.resolve(), paths)
+        self.assertNotIn(sdist_dir.resolve(), paths)
 
 
 class BasePrefixPthTest(unittest.TestCase):
