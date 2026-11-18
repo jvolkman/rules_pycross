@@ -521,6 +521,20 @@ def _variants_build(variant_info, workspace_repo, repo_name):
 
     body = []
     needs_selects = False
+
+    # `_selected_<qname>` for each item this repo pins or defaults to: active,
+    # or nothing in its sets is selected (outside the repo's transition).
+    selected = {}  # qname -> condition label
+    for qname, set_suffixes in sorted(defaults.items()):
+        needs_selects = True
+        selected[qname] = '":_selected_{}"'.format(qname)
+        body.append("selects.config_setting_group(")
+        body.append('    name = "_selected_{}",'.format(qname))
+        body.append("    match_any = [")
+        body.append('        "@{}//_lock:is_{}",'.format(workspace_repo, qname))
+        body.extend(['        "@{}//_lock:_unselected_{}",'.format(workspace_repo, s) for s in sorted(set_suffixes)])
+        body.extend(["    ],", ")", ""])
+
     for flag, qnames in sorted(variant_info.flags.items()):
         body.extend([
             "bool_flag(",
@@ -529,16 +543,8 @@ def _variants_build(variant_info, workspace_repo, repo_name):
             ")",
             "",
         ])
-        conditions = ['"@{}//_lock:is_{}"'.format(workspace_repo, q) for q in qnames]
-        if len(qnames) == 1 and qnames[0] in defaults:
-            needs_selects = True
-            conditions.extend(['"@{}//_lock:_unselected_{}"'.format(workspace_repo, s) for s in defaults[qnames[0]]])
-            body.append("selects.config_setting_group(")
-            body.append('    name = "is_{}",'.format(flag))
-            body.append("    match_any = [")
-            body.extend(["        {},".format(c) for c in conditions])
-            body.extend(["    ],", ")", ""])
-        elif len(qnames) == 1:
+        conditions = [selected.get(q, '"@{}//_lock:is_{}"'.format(workspace_repo, q)) for q in qnames]
+        if len(qnames) == 1:
             body.extend([
                 "alias(",
                 '    name = "is_{}",'.format(flag),
@@ -546,13 +552,13 @@ def _variants_build(variant_info, workspace_repo, repo_name):
                 ")",
                 "",
             ])
-        else:
-            needs_selects = True
-            body.append("selects.config_setting_group(")
-            body.append('    name = "is_{}",'.format(flag))
-            body.append("    match_all = [")
-            body.extend(["        {},".format(c) for c in conditions])
-            body.extend(["    ],", ")", ""])
+            continue
+        needs_selects = True
+        body.append("selects.config_setting_group(")
+        body.append('    name = "is_{}",'.format(flag))
+        body.append("    match_all = [")
+        body.extend(["        {},".format(c) for c in conditions])
+        body.extend(["    ],", ")", ""])
 
     for set_suffix, vset in sorted(variant_info.sets.items()):
         if vset.flags:
@@ -661,7 +667,7 @@ def _thin_package_repo_impl(rctx):
             # The only item of the set that the repo requests.
             pin_label = "@{}//_lock:_pin_{}".format(workspace_repo, set_suffix)
             if fixed_settings.get(pin_label, vset.pin) != vset.pin:
-                fail("{}: flags select {}, but the repo requests only {} from that conflict set".format(
+                fail("{}: flags/settings select {}, but the repo requests only {} from that conflict set".format(
                     rctx.attr.member_name,
                     fixed_settings[pin_label],
                     vset.pin,

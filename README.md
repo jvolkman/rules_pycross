@@ -532,7 +532,9 @@ Conflict flags also cover dependency groups and conflicting workspace members:
 * `extra_<project>_<name>` and `group_<project>_<name>` target one project in a multi-project repo. Use these when same-named groups in two projects conflict.
 * `package_<project>` selects one member when whole projects conflict (`{ package = "app-a" }`, a `uv` preview feature). A repo covering several conflicting projects must set `package_<project>`, or it fails with `No uv conflict variant selected`.
 
-A repo that requests exactly one item of a conflict set selects that item automatically, as `uv sync --extra cpu` or `uv sync --package app-a --group test` does. For example, a repo with `dependency_groups = ["default", "optional:cpu"]` always uses the `cpu` variant without any flag, and a single-project repo always selects its own project. The repo's targets transition to that selection, so a package shared with other repos may be built once per selection. The generated `<workspace>__build` repo never selects automatically.
+A repo that requests exactly one item of a conflict set selects that item automatically, as `uv sync --extra cpu` or `uv sync --package app-a --group test` does. For example, a repo with `dependency_groups = ["default", "optional:cpu"]` always uses the `cpu` variant without any flag, and a single-project repo always selects its own project.
+
+The repo's targets transition to that selection, so a package shared with other repos may be built once per selection. The generated `<workspace>__build` repo never selects automatically.
 
 If a repo requests several items of a set, and `[tool.uv] default-groups` names exactly one of them, that repo defaults to it when no flag is set. Single-project repos read the member's `pyproject.toml`, and multi-project repos read the workspace root's. Each repo applies its own default, so two repos can default to different groups in the same build.
 

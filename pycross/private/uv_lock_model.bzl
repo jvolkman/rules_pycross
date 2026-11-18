@@ -138,7 +138,7 @@ def _is_item_requested(item, requested_keys):
     """
     kind = item["kind"]
     if kind == "project":
-        # A project variant gates all of the project's edges.
+        # Here a project variant gates all of the project's edges.
         return bool(requested_keys)
     if kind == "extra":
         return "optional:" + item["name"] in requested_keys
@@ -416,12 +416,27 @@ def translate_uv(project_dict, lock_dict, lock_model):
         optional_dependencies = project_info.get("optional-dependencies", {})
         development_dependencies = project_info.get("dev-dependencies", {})
 
-        # Parse groups
-        available_groups = (
-            ["default"] +
-            ["optional:" + g for g in optional_dependencies.keys()] +
-            ["group:" + g for g in development_dependencies.keys()]
-        )
+        # Parse groups. uv.lock leaves empty extras and groups (e.g. `cpu = []`
+        # when only `[tool.uv.sources]` depends on it) out of
+        # `optional-dependencies` and `dev-dependencies`, so also read them from
+        # the package metadata and the conflict items.
+        metadata = project_info.get("metadata", {})
+        extra_names = list(optional_dependencies.keys()) + metadata.get("provides-extras", [])
+        group_names = list(development_dependencies.keys()) + list(metadata.get("requires-dev", {}).keys())
+        for item in variant_items_by_key.values():
+            if item["package"] != project_name:
+                continue
+            if item["kind"] == "extra":
+                extra_names.append(item["name"])
+            elif item["kind"] == "group":
+                group_names.append(item["name"])
+        available_groups = ["default"]
+        seen_canonical = {}
+        for g in ["optional:" + n for n in extra_names] + ["group:" + n for n in group_names]:
+            canonical = _canonicalize_group_key(g)
+            if canonical not in seen_canonical:
+                seen_canonical[canonical] = True
+                available_groups.append(g)
         for g in available_groups:
             groups_seen[g] = True
         requested_groups_dict = compute_requested_dependency_groups(
@@ -497,13 +512,13 @@ def translate_uv(project_dict, lock_dict, lock_model):
 
     # Pins and defaults for each conflict set in this repo.
     #
-    # In uv, extras and groups are active only when requested, and a project
-    # item (`{package = ...}`, which covers the project's base dependencies) is
-    # active when the project is selected. So if this repo requests exactly one
-    # item of a set, that item is the selection, as with `uv sync --extra cpu`
-    # or `uv sync --package app-a --group test`. The repo's transition pins it
-    # through `_pin_<set>`. The workspace's `__build` repo serves sdist builds
-    # for every repo, so it never pins.
+    # In uv, extras and groups are active only when requested. Here a project
+    # item's (`{package = ...}`) variant gates all of that project's edges, so
+    # it's active whenever the repo requests anything from the project. So if
+    # this repo requests exactly one item of a set, that item is the selection,
+    # as with `uv sync --extra cpu` or `uv sync --package app-a --group test`.
+    # The repo's transition pins it through `_pin_<set>`. The workspace's
+    # `__build` repo serves sdist builds for every repo, so it never pins.
     #
     # When the repo requests several items of a set, its default comes from the
     # selected pyproject's `[tool.uv] default-groups`. As in uv, a project's
@@ -521,12 +536,25 @@ def translate_uv(project_dict, lock_dict, lock_model):
         for project, requested in requested_by_project.items()
     }
     default_owner = canonicalize_name(project_dict.get("project", {}).get("name", ""))
+    requested_by_set = []
+    rival_requested = {}  # qname -> True if another requested item conflicts with it in some set
     for variant_set in variant_sets:
         owned_items = [item for item in variant_set["items"] if item["package"] in target_projects_set]
         requested_items = [item for item in owned_items if _is_item_requested(item, requested_keys[item["package"]])]
+        requested_by_set.append((owned_items, requested_items))
+        if len(requested_items) > 1:
+            for item in requested_items:
+                rival_requested[variant_item_qname(item)] = True
+
+    for variant_set, (owned_items, requested_items) in zip(variant_sets, requested_by_set):
+        # An item can be in several sets (e.g. `[[cpu, gpu], [cpu, gpu-test]]`).
+        # Pin it only if the repo requests none of its rivals in any of them;
+        # otherwise the sets could select conflicting items at once.
         if len(requested_items) == 1 and not is_build_tools_repo:
-            variant_set["repo_pin"] = variant_item_qname(requested_items[0])
-            continue
+            qname = variant_item_qname(requested_items[0])
+            if qname not in rival_requested:
+                variant_set["repo_pin"] = qname
+                continue
 
         candidates = []
         for item in owned_items:

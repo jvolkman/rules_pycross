@@ -611,3 +611,6 @@ def compute_requested_dependency_groups(
             requested[target] = is_testonly
 
     return requested
+
+# Visible for testing
+read_project_dict_for_testing = _read_project_dict

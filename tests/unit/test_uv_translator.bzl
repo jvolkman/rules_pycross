@@ -11,6 +11,9 @@ load("//pycross/private:lock_resolver.bzl", "resolve")
 load("//pycross/private:resolved_lock_renderer.bzl", "render_lock_bzl")
 
 # buildifier: disable=bzl-visibility
+load("//pycross/private:translator_common.bzl", "read_project_dict_for_testing")
+
+# buildifier: disable=bzl-visibility
 load("//pycross/private:uv_lock_model.bzl", "translate_uv")
 
 def _lock_model(
@@ -897,9 +900,91 @@ def _test_uv_auto_pin_impl(env, target):
     result = translate_uv(_project(name = "trainer"), lock, _lock_model(projects = ["trainer"], dependency_groups = ["default", "optional:*"]))
     env.expect.that_str(result["variants"][0].get("repo_pin", "")).equals("")
 
+# buildifier: disable=unused-variable
+def _test_uv_auto_pin_empty_extra_impl(env, target):
+    """uv.lock leaves empty extras out of optional-dependencies; they still count as requested."""
+    lock = _lock(
+        [
+            dict(
+                _pkg("app", "0.1.0", source = {"editable": "."}, opt_deps = {"gpu": [_dep("six", "1.17.0")]}),
+                metadata = {"provides-extras": ["cpu", "gpu"]},
+            ),
+            _pkg("six", "1.17.0", wheels = [_whl("six-1.17.0-py2.py3-none-any.whl", "bb")]),
+        ],
+        conflicts = [[{"package": "app", "extra": "cpu"}, {"package": "app", "extra": "gpu"}]],
+    )
+    result = translate_uv(_project(name = "app"), lock, _lock_model(projects = ["app"], dependency_groups = ["default", "optional:cpu"]))
+    env.expect.that_str(result["variants"][0].get("repo_pin", "")).equals("extra_app_cpu")
+
+    # `optional:*` requests both extras, so neither is pinned.
+    result = translate_uv(_project(name = "app"), lock, _lock_model(projects = ["app"], dependency_groups = ["default", "optional:*"]))
+    env.expect.that_str(result["variants"][0].get("repo_pin", "")).equals("")
+
+def _test_uv_auto_pin_empty_extra(name):
+    util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
+    analysis_test(name = name, target = name + "_subject", impl = _test_uv_auto_pin_empty_extra_impl)
+
+# buildifier: disable=unused-variable
+def _test_uv_auto_pin_overlapping_sets_impl(env, target):
+    """An item in several sets is pinned only if none of its rivals is requested."""
+    lock = _lock(
+        [
+            dict(
+                _pkg("app", "0.1.0", source = {"editable": "."}, opt_deps = {"cpu": [_dep("six", "1.16.0")], "gpu": [_dep("six", "1.17.0")]}),
+                **{"dev-dependencies": {"gpu-test": [_dep("six", "1.17.0")]}}
+            ),
+            _pkg("six", "1.16.0", wheels = [_whl("six-1.16.0-py2.py3-none-any.whl", "aa")]),
+            _pkg("six", "1.17.0", wheels = [_whl("six-1.17.0-py2.py3-none-any.whl", "bb")]),
+        ],
+        conflicts = [
+            [{"package": "app", "extra": "cpu"}, {"package": "app", "extra": "gpu"}],
+            [{"package": "app", "extra": "cpu"}, {"package": "app", "group": "gpu-test"}],
+        ],
+    )
+
+    def pins(groups):
+        result = translate_uv(_project(name = "app"), lock, _lock_model(projects = ["app"], dependency_groups = groups))
+        return [vs.get("repo_pin", "") for vs in result["variants"]]
+
+    # cpu and gpu are both requested: the second set must not pin cpu either.
+    env.expect.that_collection(pins(["default", "optional:cpu", "optional:gpu"])).contains_exactly(["", ""]).in_order()
+    env.expect.that_collection(pins(["default", "optional:cpu"])).contains_exactly(["extra_app_cpu", "extra_app_cpu"]).in_order()
+    env.expect.that_collection(pins(["default", "optional:gpu", "group:gpu-test"])).contains_exactly(["extra_app_gpu", "group_app_gpu-test"]).in_order()
+
+def _test_uv_auto_pin_overlapping_sets(name):
+    util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
+    analysis_test(name = name, target = name + "_subject", impl = _test_uv_auto_pin_overlapping_sets_impl)
+
 def _test_uv_auto_pin(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
     analysis_test(name = name, target = name + "_subject", impl = _test_uv_auto_pin_impl)
+
+# buildifier: disable=unused-variable
+def _test_read_project_dict_impl(env, target):
+    """A single-project repo reads its member's pyproject.toml; others read the root's."""
+    root = Label("//:pyproject.toml")
+    member = Label("//:apps/a/pyproject.toml")
+    files = {
+        str(root): 'project = { name = "monorepo" }',
+        str(member): 'project = { name = "App_A" }',
+    }
+    rctx = struct(
+        path = lambda label: struct(exists = str(label) in files, label = str(label)),
+        read = lambda path: files[path.label],
+    )
+
+    def project_name(projects):
+        p = read_project_dict_for_testing(rctx, [root, member], Label("//:uv.lock"), _lock_model(projects = projects))
+        return p["project"]["name"]
+
+    env.expect.that_str(project_name(["app-a"])).equals("App_A")
+    env.expect.that_str(project_name(["*"])).equals("monorepo")
+    env.expect.that_str(project_name(["app-a", "app-b"])).equals("monorepo")
+    env.expect.that_str(project_name(["app-b"])).equals("monorepo")
+
+def _test_read_project_dict(name):
+    util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
+    analysis_test(name = name, target = name + "_subject", impl = _test_read_project_dict_impl)
 
 # buildifier: disable=unused-variable
 def _test_uv_repo_defaults_impl(env, target):
@@ -1785,7 +1870,10 @@ def uv_translator_test_suite(name):
             _test_uv_variants_scoped_to_project,
             _test_uv_same_named_groups_across_members,
             _test_uv_auto_pin,
+            _test_uv_auto_pin_empty_extra,
+            _test_uv_auto_pin_overlapping_sets,
             _test_uv_repo_defaults,
+            _test_read_project_dict,
             _test_uv_project_conflicts,
             _test_uv_project_conflict_mixed_set,
             _test_uv_project_conflict_edge_split,

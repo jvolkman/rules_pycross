@@ -930,13 +930,38 @@ def _test_variants_build_repo_default_impl(env, target):
     }])
     build = variants_build_for_testing(info, "ws__pkgs", "pypi")
     unselected = '"@ws__pkgs//_lock:_unselected_group_my-app_a_group_my-app_b"'
+    selected_a = build.split('name = "_selected_group_my-app_a"')[1].split(")")[0]
+    env.expect.that_bool("match_any" in selected_a and unselected in selected_a).equals(True)
     is_a = build.split('name = "is_group_a"')[1].split(")")[0]
-    env.expect.that_bool("match_any" in is_a and unselected in is_a).equals(True)
+    env.expect.that_str(is_a.strip()).contains('actual = ":_selected_group_my-app_a"')
     is_b = build.split('name = "is_group_b"')[1].split(")")[0]
     env.expect.that_bool(unselected in is_b).equals(False)
 
     # The message lists one flag per item: the short names, since they're unambiguous.
     env.expect.that_bool("pycross repo: group_a, group_b (e.g. --@pypi//_variants:group_a=True)" in build).equals(True)
+
+# buildifier: disable=unused-variable
+def _test_variants_build_shared_flag_pinned_impl(env, target):
+    """A shared flag over two pinned items matches outside the repo's transition too."""
+    variants = [
+        {
+            "items": [
+                {"package": pkg, "kind": "group", "name": "test", "flags": ["group_test", "group_{}_test".format(pkg)]},
+                {"package": pkg, "kind": "group", "name": "slow", "flags": ["group_slow", "group_{}_slow".format(pkg)]},
+            ],
+            "repo_pin": "group_{}_test".format(pkg),
+        }
+        for pkg in ["app-a", "app-b"]
+    ]
+    build = variants_build_for_testing(collect_variants_for_testing(variants), "ws__pkgs", "lock_all")
+    group_test = build.split('name = "is_group_test"')[1].split(")")[0]
+    env.expect.that_str(group_test).contains("match_all")
+    env.expect.that_str(group_test).contains('":_selected_group_app-a_test"')
+    env.expect.that_str(group_test).contains('":_selected_group_app-b_test"')
+
+def _test_variants_build_shared_flag_pinned(name):
+    util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
+    analysis_test(name = name, target = name + "_subject", impl = _test_variants_build_shared_flag_pinned_impl)
 
 def _test_variants_build_repo_default(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
@@ -948,6 +973,7 @@ def thin_package_repo_test_suite(name):
         tests = [
             _test_variants_build_shared_flag,
             _test_variants_build_repo_default,
+            _test_variants_build_shared_flag_pinned,
             _test_pin_build_no_transition,
             _test_pin_build_with_platform,
             _test_pin_build_transition_loads,
