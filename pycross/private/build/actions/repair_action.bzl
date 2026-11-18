@@ -14,6 +14,7 @@ def register_repair_action(
         target_environment = None,
         repair_exclude_globs = [],
         repair_deps = [],
+        repair_runtime_files = [],
         resource_set = None):
     """Registers the repairwheel action to bundle native shared libs.
 
@@ -29,6 +30,8 @@ def register_repair_action(
         repair_deps: list[Target], optional PyInfo targets (e.g. user-provided
             repairwheel) whose site-packages are prepended to PYTHONPATH,
             shadowing the bundled version.
+        repair_runtime_files: declared action input files whose parent directories
+            are added to the wheel-repair search paths.
         resource_set: function or dict, resource requirements for the action.
 
     Returns:
@@ -52,6 +55,9 @@ def register_repair_action(
             for lib in get_libraries(dep[CcInfo]):
                 lib_dirs.append(lib.dirname)
                 data_inputs.append(depset([lib]))
+
+    for runtime_file in repair_runtime_files:
+        lib_dirs.append(runtime_file.dirname)
 
     # Another wheel ships these at runtime. Bundling a copy would load the library twice,
     # with separate state.
@@ -77,6 +83,7 @@ def register_repair_action(
 
     # Collect inputs.
     input_files = [input_wheel_dir]
+    input_files.extend(repair_runtime_files)
     if target_environment:
         input_files.append(target_environment)
 

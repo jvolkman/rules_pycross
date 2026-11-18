@@ -2,6 +2,7 @@
 
 load("@rules_cc//cc:defs.bzl", "cc_library")
 load("@rules_testing//lib:analysis_test.bzl", "analysis_test", "test_suite")
+load("@rules_testing//lib:truth.bzl", "matching")
 load("@rules_testing//lib:util.bzl", "util")
 
 # buildifier: disable=bzl-visibility
@@ -84,6 +85,30 @@ def _test_setuptools_build_with_repair_exclude_globs_impl(env, target):
         "libtorch*.so",
     ]).in_order()
 
+def _test_setuptools_build_with_repair_runtime_files(name):
+    util.helper_target(_mock_sdist, name = name + "_sdist")
+    util.helper_target(
+        setuptools_build,
+        name = name + "_subject",
+        sdist = name + "_sdist",
+        repair_runtime_files = ["//tests/analysis:setuptools_build_test.bzl", "//tests/analysis/repair_runtime_fixture:files"],
+    )
+    analysis_test(name = name, target = name + "_subject", impl = _test_setuptools_build_with_repair_runtime_files_impl)
+
+# buildifier: disable=unused-variable
+def _test_setuptools_build_with_repair_runtime_files_impl(env, target):
+    wheel_dir = target[DefaultInfo].files.to_list()[0]
+    action = env.expect.that_target(target).action_generating(wheel_dir.short_path)
+    action.mnemonic().equals("PycrossRepairWheel")
+    action.inputs().contains_predicate(matching.file_basename_equals("setuptools_build_test.bzl"))
+    action.inputs().contains_predicate(matching.file_basename_equals("runtime.dat"))
+    action.argv().contains_at_least([
+        "--lib-dir",
+        "tests/analysis",
+        "--lib-dir",
+        "tests/analysis/repair_runtime_fixture",
+    ]).in_order()
+
 def setuptools_build_test_suite(name):
     test_suite(
         name = name,
@@ -92,5 +117,6 @@ def setuptools_build_test_suite(name):
             _test_setuptools_build_with_repair,
             _test_setuptools_build_resources,
             _test_setuptools_build_with_repair_exclude_globs,
+            _test_setuptools_build_with_repair_runtime_files,
         ],
     )

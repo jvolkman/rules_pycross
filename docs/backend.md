@@ -352,7 +352,7 @@ struct(
 load("@rules_pycross//pycross:backend.bzl", "register_repair_action")
 
 register_repair_action(<a href="#register_repair_action-ctx">ctx</a>, <a href="#register_repair_action-input_wheel_dir">input_wheel_dir</a>, <a href="#register_repair_action-repair_tool">repair_tool</a>, <a href="#register_repair_action-native_deps">native_deps</a>, <a href="#register_repair_action-target_environment">target_environment</a>,
-                       <a href="#register_repair_action-repair_exclude_globs">repair_exclude_globs</a>, <a href="#register_repair_action-repair_deps">repair_deps</a>, <a href="#register_repair_action-resource_set">resource_set</a>)
+                       <a href="#register_repair_action-repair_exclude_globs">repair_exclude_globs</a>, <a href="#register_repair_action-repair_deps">repair_deps</a>, <a href="#register_repair_action-repair_runtime_files">repair_runtime_files</a>, <a href="#register_repair_action-resource_set">resource_set</a>)
 </pre>
 
 Registers the repairwheel action to bundle native shared libs.
@@ -369,6 +369,7 @@ Registers the repairwheel action to bundle native shared libs.
 | <a id="register_repair_action-target_environment"></a>target_environment |  File (optional), the target environment JSON.   |  `None` |
 | <a id="register_repair_action-repair_exclude_globs"></a>repair_exclude_globs |  list[str], shared library globs to leave unbundled.   |  `[]` |
 | <a id="register_repair_action-repair_deps"></a>repair_deps |  list[Target], optional PyInfo targets (e.g. user-provided repairwheel) whose site-packages are prepended to PYTHONPATH, shadowing the bundled version.   |  `[]` |
+| <a id="register_repair_action-repair_runtime_files"></a>repair_runtime_files |  declared action input files whose parent directories are added to the wheel-repair search paths.   |  `[]` |
 | <a id="register_repair_action-resource_set"></a>resource_set |  function or dict, resource requirements for the action.   |  `None` |
 
 **RETURNS**

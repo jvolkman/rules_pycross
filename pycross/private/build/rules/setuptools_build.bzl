@@ -52,6 +52,7 @@ def _setuptools_build_impl(ctx):
         target_environment = target_environment,
         repair_exclude_globs = ctx.attr.repair_exclude_globs,
         repair_deps = tool_deps.get("repairwheel", []),
+        repair_runtime_files = ctx.files.repair_runtime_files,
         resource_set = resources.resource_set,
     )
 
@@ -65,6 +66,11 @@ def _setuptools_build_impl(ctx):
 setuptools_build = rule(
     implementation = _setuptools_build_impl,
     attrs = COMMON_BUILD_ATTRS | CC_BUILD_ATTRS | CC_TOOLCHAIN_ATTRS | REPAIR_BUILD_ATTRS | {
+        "repair_runtime_files": attr.label_list(
+            doc = "Files or plain filegroups used by wheel repair; their directories are " +
+                  "library search paths. No CcInfo provider is required.",
+            allow_files = True,
+        ),
         "tool_deps": attr.label_list(
             doc = "Python build tool packages (`setuptools` and `wheel`). " +
                   "The generated `@<repo>//_backend` macro fills these in from the lock file.",
