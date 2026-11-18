@@ -126,10 +126,15 @@ copied out of the installed wheel so that it can be linked.
 
 A shared library from this rule belongs to the other wheel, so wheel repair
 doesn't bundle a copy of it. Repair finds it in this target's output directory
-and excludes it by file name. That works when the file name is the library's
-SONAME (or install name on macOS), which is the usual case for wheels. The
-built extension still has to find the library at runtime, for example through
-an `$ORIGIN`-relative RPATH or because the other package loads it first.
+and excludes it by file name, even when the target is wrapped in a
+`cc_library`. That works when the file name is the library's SONAME (or its
+`@rpath` install name on macOS), which is the usual case for wheels. Versioned
+files such as `libcudart.so.12` are fine: sdist builds can still link them with
+`-lcudart`.
+
+The built extension still has to find the library at runtime, for example
+through an `$ORIGIN`-relative RPATH or because the other package loads it
+first.
 
 Use one target per library, as with `cc_import`, and connect them with
 `deps`.
@@ -155,10 +160,12 @@ Use one target per library, as with `cc_import`, and connect them with
             doc = "An interface library for `shared_library` (e.g. a `.tbd` or `.lib` file), relative to site-packages.",
         ),
         "alwayslink": attr.bool(
-            doc = "Link every object file in `static_library`, as in `cc_import`.",
+            doc = "Link every object file in `static_library`, as in `cc_import`. This applies to " +
+                  "Bazel `cc_*` link actions; sdist builds link what the build system asks for.",
         ),
         "linkopts": attr.string_list(
-            doc = "Extra flags for linking against this library.",
+            doc = "Extra flags for Bazel `cc_*` targets that link against this library. sdist builds " +
+                  "don't read them; use the build rule's `linkopts` instead.",
         ),
         "deps": attr.label_list(
             doc = "Other C/C++ targets this library depends on, such as other `pycross_wheel_cc_import` targets.",

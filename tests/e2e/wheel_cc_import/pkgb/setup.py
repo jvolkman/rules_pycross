@@ -12,7 +12,6 @@ setup(
             "pkgb._ext",
             sources=["pkgb/_ext.c"],
             libraries=["foo"],
-            runtime_library_dirs=["$ORIGIN/../pkga/lib"],
         ),
     ],
 )

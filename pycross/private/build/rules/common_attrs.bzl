@@ -11,6 +11,7 @@ load(
 )
 load("//pycross/private/build:resource_sets.bzl", "RESOURCE_SET_ATTRS")
 load("//pycross/private/build:transitions.bzl", "pycross_exec_platform_transition")
+load("//pycross/private/build:wheel_shared_libraries.bzl", "collect_wheel_shared_libraries")
 
 def resolve_path_tools(ctx):
     """Resolve path_tools attr into a list of tool executable structs.
@@ -112,6 +113,7 @@ CC_BUILD_ATTRS = {
     "native_deps": attr.label_list(
         doc = "C/C++ libraries whose headers and libraries are made available to the build.",
         providers = [CcInfo],
+        aspects = [collect_wheel_shared_libraries],
     ),
     "copts": attr.string_list(
         doc = "Extra C/C++ compiler flags, appended after the toolchain flags.",

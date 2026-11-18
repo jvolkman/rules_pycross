@@ -39,6 +39,7 @@ def define_e2e_tests():
         "uv_markers",
         "uv_project_conflicts",
         "uv_workspace",
+        "wheel_cc_import",
     ]:
         extra_tags = ["build"] if ws in _BUILD_WORKSPACES else []
         sh_test(

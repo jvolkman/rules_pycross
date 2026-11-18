@@ -26,6 +26,7 @@ bzl_library(
     srcs = ["repaired_wheel.bzl"],
     deps = [
         ":cc_toolchain_util",
+        ":wheel_shared_libraries",
         "//pycross/private:providers",
         "//pycross/private/build/actions:repair_action",
     ],
@@ -62,4 +63,10 @@ bzl_library(
         "//pycross/private:pep508_marker_values",  # keep
         "@rules_pycross_internal_config//:defaults",
     ],
+)
+
+bzl_library(
+    name = "wheel_shared_libraries",
+    srcs = ["wheel_shared_libraries.bzl"],
+    deps = ["//pycross/private:providers"],
 )

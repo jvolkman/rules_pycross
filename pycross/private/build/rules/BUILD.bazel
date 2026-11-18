@@ -10,6 +10,7 @@ bzl_library(
         "//pycross/private:providers",
         "//pycross/private/build:resource_sets",
         "//pycross/private/build:transitions",
+        "//pycross/private/build:wheel_shared_libraries",
         "@rules_python//python:py_info_bzl",
     ],
 )

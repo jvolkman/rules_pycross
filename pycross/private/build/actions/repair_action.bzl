@@ -3,8 +3,8 @@
 load("@bazel_skylib//lib:collections.bzl", "collections")
 load("@rules_cc//cc/common:cc_info.bzl", "CcInfo")
 load("@rules_python//python:py_info.bzl", "PyInfo")
-load("//pycross/private:providers.bzl", "PycrossWheelSharedLibraryInfo")
 load("//pycross/private/build:cc_toolchain_util.bzl", "get_libraries")
+load("//pycross/private/build:wheel_shared_libraries.bzl", "wheel_shared_libraries")
 
 def register_repair_action(
         ctx,
@@ -52,13 +52,13 @@ def register_repair_action(
             for lib in get_libraries(dep[CcInfo]):
                 lib_dirs.append(lib.dirname)
                 data_inputs.append(depset([lib]))
-        if PycrossWheelSharedLibraryInfo in dep:
-            # Another wheel ships these at runtime. Bundling a copy would load the library
-            # twice, with separate state.
-            for lib in dep[PycrossWheelSharedLibraryInfo].shared_libraries.to_list():
-                lib_dirs.append(lib.dirname)
-                data_inputs.append(depset([lib]))
-                wheel_lib_excludes.append(lib.basename)
+
+    # Another wheel ships these at runtime. Bundling a copy would load the library twice,
+    # with separate state.
+    for lib in wheel_shared_libraries(native_deps).to_list():
+        lib_dirs.append(lib.dirname)
+        data_inputs.append(depset([lib]))
+        wheel_lib_excludes.append(lib.basename)
 
     # Collect user-provided repair deps (e.g. repairwheel override).
     repair_dep_paths = []

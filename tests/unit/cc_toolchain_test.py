@@ -9,6 +9,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 
 from pycross.private.build.tools.utils.cc_toolchain import setup_cc_layer
+from pycross.private.build.tools.utils.cc_toolchain import unversioned_library_name
 from pycross.private.build.tools.utils.cc_toolchain import wrap_compiler
 
 
@@ -214,6 +215,34 @@ class CcToolchainTest(unittest.TestCase):
         self.assertIn("LDSHARED", ctx.sysconfig_vars)
         self.assertIn("-shared", ctx.sysconfig_vars["LDSHARED"])
         self.assertNotIn("-bundle", ctx.sysconfig_vars["LDSHARED"])
+
+    def test_unversioned_library_name(self):
+        self.assertEqual(unversioned_library_name("libcudart.so.12"), "libcudart.so")
+        self.assertEqual(unversioned_library_name("libarrow.so.1900.1.0"), "libarrow.so")
+        self.assertEqual(unversioned_library_name("libarrow.1900.dylib"), "libarrow.dylib")
+        self.assertIsNone(unversioned_library_name("libfoo.so"))
+        self.assertIsNone(unversioned_library_name("libfoo.dylib"))
+        self.assertIsNone(unversioned_library_name("libfoo.a"))
+
+    def test_setup_cc_layer_links_unversioned_name(self):
+        ctx = MockBuildContext(self.temp_path)
+        versioned = self.temp_path / "libcudart.so.12"
+        versioned.touch()
+        cc_config = {
+            "shared_libs": [str(versioned)],
+            "CC": "/usr/bin/gcc",
+            "CXX": "/usr/bin/g++",
+            "CFLAGS": "",
+            "CXXFLAGS": "",
+            "LDFLAGS": "",
+            "LDSHAREDFLAGS": "-shared",
+            "AR": "/usr/bin/ar",
+            "ARFLAGS": "rcs",
+        }
+        setup_cc_layer(ctx, cc_config)
+        lib_dir = Path(ctx.build_env["PYCROSS_LIBRARY_PATH"])
+        self.assertEqual((lib_dir / "libcudart.so").resolve(), versioned.resolve())
+        self.assertEqual((lib_dir / "libcudart.so.12").resolve(), versioned.resolve())
 
     def test_setup_cc_layer_mac(self):
         ctx = MockBuildContext(self.temp_path)

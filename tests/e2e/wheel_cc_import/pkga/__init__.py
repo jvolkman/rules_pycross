@@ -5,7 +5,8 @@ _HERE = Path(__file__).resolve().parent
 _INCLUDE_DIR = _HERE / "include"
 _LIB_DIR = _HERE / "lib"
 
-_lib = ctypes.CDLL(str(_LIB_DIR / "libfoo.so"))
+# libfoo.so.1 on Linux, libfoo.1.dylib on macOS.
+_lib = ctypes.CDLL(str(next(_LIB_DIR.glob("libfoo.*"))))
 _lib.foo_value.restype = ctypes.c_int
 _lib.foo_inc.restype = ctypes.c_int
 _lib.foo_counter_addr.restype = ctypes.c_void_p

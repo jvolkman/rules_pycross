@@ -1,6 +1,7 @@
 """Rule for repairing wheels by bundling native shared libraries."""
 
 load("@rules_cc//cc/common:cc_info.bzl", "CcInfo")
+load("//pycross/private/build:wheel_shared_libraries.bzl", "collect_wheel_shared_libraries")
 load("//pycross/private/build/actions:repair_action.bzl", "register_repair_action")
 
 def _pycross_repaired_wheel_impl(ctx):
@@ -32,6 +33,7 @@ pycross_repaired_wheel = rule(
         "native_deps": attr.label_list(
             doc = "Native dependencies providing shared libraries to bundle.",
             providers = [CcInfo],
+            aspects = [collect_wheel_shared_libraries],
         ),
         "target_environment": attr.label(
             doc = "The target environment mapping JSON (resolved dynamically via alias filegroup).",

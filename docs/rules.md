@@ -143,10 +143,15 @@ copied out of the installed wheel so that it can be linked.
 
 A shared library from this rule belongs to the other wheel, so wheel repair
 doesn't bundle a copy of it. Repair finds it in this target's output directory
-and excludes it by file name. That works when the file name is the library's
-SONAME (or install name on macOS), which is the usual case for wheels. The
-built extension still has to find the library at runtime, for example through
-an `$ORIGIN`-relative RPATH or because the other package loads it first.
+and excludes it by file name, even when the target is wrapped in a
+`cc_library`. That works when the file name is the library's SONAME (or its
+`@rpath` install name on macOS), which is the usual case for wheels. Versioned
+files such as `libcudart.so.12` are fine: sdist builds can still link them with
+`-lcudart`.
+
+The built extension still has to find the library at runtime, for example
+through an `$ORIGIN`-relative RPATH or because the other package loads it
+first.
 
 Use one target per library, as with `cc_import`, and connect them with
 `deps`.
@@ -158,10 +163,10 @@ Use one target per library, as with `cc_import`, and connect them with
 | :------------- | :------------- | :------------- | :------------- | :------------- |
 | <a id="pycross_wheel_cc_import-name"></a>name |  A unique name for this target.   | <a href="https://bazel.build/concepts/labels#target-names">Name</a> | required |  |
 | <a id="pycross_wheel_cc_import-deps"></a>deps |  Other C/C++ targets this library depends on, such as other `pycross_wheel_cc_import` targets.   | <a href="https://bazel.build/concepts/labels">List of labels</a> | optional |  `[]`  |
-| <a id="pycross_wheel_cc_import-alwayslink"></a>alwayslink |  Link every object file in `static_library`, as in `cc_import`.   | Boolean | optional |  `False`  |
+| <a id="pycross_wheel_cc_import-alwayslink"></a>alwayslink |  Link every object file in `static_library`, as in `cc_import`. This applies to Bazel `cc_*` link actions; sdist builds link what the build system asks for.   | Boolean | optional |  `False`  |
 | <a id="pycross_wheel_cc_import-includes"></a>includes |  Include directories, relative to the wheel's site-packages (e.g. 'torch/include').   | List of strings | optional |  `[]`  |
 | <a id="pycross_wheel_cc_import-interface_library"></a>interface_library |  An interface library for `shared_library` (e.g. a `.tbd` or `.lib` file), relative to site-packages.   | String | optional |  `""`  |
-| <a id="pycross_wheel_cc_import-linkopts"></a>linkopts |  Extra flags for linking against this library.   | List of strings | optional |  `[]`  |
+| <a id="pycross_wheel_cc_import-linkopts"></a>linkopts |  Extra flags for Bazel `cc_*` targets that link against this library. sdist builds don't read them; use the build rule's `linkopts` instead.   | List of strings | optional |  `[]`  |
 | <a id="pycross_wheel_cc_import-make_variable"></a>make_variable |  If set, export a TemplateVariableInfo with this name mapped to the absolutized include path, for use in build configuration such as Meson cross files. Requires exactly one entry in `includes`.   | String | optional |  `""`  |
 | <a id="pycross_wheel_cc_import-shared_library"></a>shared_library |  A shared library (`.so` or `.dylib`) to link against, relative to site-packages (e.g. 'torch/lib/libtorch.so').   | String | optional |  `""`  |
 | <a id="pycross_wheel_cc_import-static_library"></a>static_library |  A static library (`.a`) to link against, relative to site-packages (e.g. 'numpy/_core/lib/libnpymath.a').   | String | optional |  `""`  |

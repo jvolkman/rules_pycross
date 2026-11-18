@@ -1,3 +1,4 @@
+import re
 import shlex
 import shutil
 import textwrap
@@ -5,6 +6,7 @@ from pathlib import Path
 from typing import Any
 from typing import Dict
 from typing import List
+from typing import Optional
 from typing import Tuple
 
 from pycross.private.build.tools.utils.context import BuildContext
@@ -168,6 +170,19 @@ def wrap_compiler(
     return wrapper_path
 
 
+_VERSIONED_DYLIB_RE = re.compile(r"^(lib.+?)\.\d[\d.]*\.dylib$")
+
+
+def unversioned_library_name(filename: str) -> Optional[str]:
+    """Return the name `-l` looks for (`libfoo.so` for `libfoo.so.1`), or None if unversioned."""
+    if ".so." in filename:
+        return filename.split(".so.", 1)[0] + ".so"
+    m = _VERSIONED_DYLIB_RE.match(filename)
+    if m:
+        return m.group(1) + ".dylib"
+    return None
+
+
 def setup_cc_layer(ctx: BuildContext, cc_config: Dict[str, Any]) -> None:
     """Populate environment parameters and wrappers for Bazel CC Toolchains."""
     layer_bin_dir = ctx.temp_dir / "cc_layer" / "bin"
@@ -182,6 +197,15 @@ def setup_cc_layer(ctx: BuildContext, cc_config: Dict[str, Any]) -> None:
         dest = layer_lib_dir / lib_path.name
         if not dest.exists():
             dest.symlink_to(lib_path.absolute())
+
+    # `-lfoo` only finds `libfoo.so` or `libfoo.dylib`. Wheels can't contain symlinks, so a
+    # library from a wheel is often only the versioned file (`libcudart.so.12`). Add the
+    # unversioned name; the linker still records the library's SONAME or install name.
+    for lib_path_str in cc_config.get("shared_libs", []):
+        lib_path = Path(replace_placeholder(ctx.prefix, lib_path_str))
+        linker_name = unversioned_library_name(lib_path.name)
+        if linker_name and not (layer_lib_dir / linker_name).exists():
+            (layer_lib_dir / linker_name).symlink_to(lib_path.absolute())
 
     orig_cc = replace_placeholder(ctx.prefix, cc_config["CC"])
     orig_cxx = replace_placeholder(ctx.prefix, cc_config["CXX"])

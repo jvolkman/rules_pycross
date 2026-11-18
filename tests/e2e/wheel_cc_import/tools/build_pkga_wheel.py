@@ -15,7 +15,8 @@ def main() -> None:
     out_whl = Path(sys.argv[1])
     init_py = Path(sys.argv[2]).read_bytes()
     foo_h = Path(sys.argv[3]).read_bytes()
-    libfoo_so = Path(sys.argv[4]).read_bytes()
+    libfoo = Path(sys.argv[4]).read_bytes()
+    libfoo_name = sys.argv[5]  # The library's SONAME or install name, e.g. libfoo.so.1.
 
     dist_info = "pkga-0.1.dist-info"
     metadata = ("Metadata-Version: 2.1\nName: pkga\nVersion: 0.1\n").encode("utf-8")
@@ -26,7 +27,7 @@ def main() -> None:
     files = [
         ("pkga/__init__.py", init_py),
         ("pkga/include/foo.h", foo_h),
-        ("pkga/lib/libfoo.so", libfoo_so),
+        (f"pkga/lib/{libfoo_name}", libfoo),
         (f"{dist_info}/METADATA", metadata),
         (f"{dist_info}/WHEEL", wheel_meta),
     ]
@@ -39,7 +40,7 @@ def main() -> None:
     with zipfile.ZipFile(out_whl, "w", compression=zipfile.ZIP_DEFLATED) as zf:
         for arcname, data in files:
             info = zipfile.ZipInfo(arcname)
-            info.external_attr = (0o755 if arcname.endswith(".so") else 0o644) << 16
+            info.external_attr = (0o755 if arcname.startswith("pkga/lib/") else 0o644) << 16
             zf.writestr(info, data)
 
 
