@@ -585,6 +585,29 @@ meson_build(
 )
 ```
 
+Linking against a library that ships in another wheel, such as torch's
+`libtorch.so`, with `pycross_wheel_cc_import`. It takes the same fields as
+`cc_import`, with paths relative to the wheel's site-packages. Wheel repair
+finds the library but doesn't bundle a copy, so both packages share the one in
+the torch wheel at runtime:
+
+```python
+load("@rules_pycross//pycross:defs.bzl", "pycross_wheel_cc_import")
+
+pycross_wheel_cc_import(
+    name = "libtorch",
+    wheel_library = "//deps/torch:wheel_library",  # a pycross_wheel_library
+    includes = ["torch/include"],
+    shared_library = "torch/lib/libtorch.so",
+)
+
+setuptools_build(
+    name = "wheel",
+    native_deps = [":libtorch"],
+    sdist = "@pypi//my-torch-extension:sdist",
+)
+```
+
 #### Maturin
 
 For Rust+Python packages, use the `rules_pycross_backend_maturin` module:

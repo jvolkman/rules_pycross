@@ -1,0 +1,15 @@
+[project]
+name = "rules-pycross-e2e-wheel-cc-import"
+version = "0.1.0"
+description = "E2E test for linking an sdist against a library in another wheel"
+authors = []
+dependencies = [
+    "setuptools==69.5.1",
+    "wheel==0.37.0",
+]
+requires-python = "~=3.14.0"
+license = {text = "MIT"}
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"

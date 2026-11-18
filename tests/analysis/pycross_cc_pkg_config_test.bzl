@@ -5,7 +5,13 @@ load("@rules_testing//lib:analysis_test.bzl", "analysis_test", "test_suite")
 load("@rules_testing//lib:util.bzl", "util")
 
 # buildifier: disable=bzl-visibility
+load("//pycross/private:providers.bzl", "PycrossExtractedWheelInfo")
+
+# buildifier: disable=bzl-visibility
 load("//pycross/private/build:cc_pkg_config.bzl", "pycross_cc_pkg_config")
+
+# buildifier: disable=bzl-visibility
+load("//pycross/private/build:wheel_cc_import.bzl", "pycross_wheel_cc_import")
 
 def _test_pycross_cc_pkg_config(name):
     util.helper_target(
@@ -74,10 +80,43 @@ def _test_pycross_cc_pkg_config_libprefix_impl(env, target):
     content = action.content()
     content.contains("-llibtest_pycross_cc_pkg_config_libprefix_foo")
 
+def _mock_installed_wheel_impl(ctx):
+    out = ctx.actions.declare_directory(ctx.label.name + "_dir")
+    ctx.actions.run_shell(outputs = [out], command = "mkdir -p $1", arguments = [out.path])
+    return [DefaultInfo(files = depset([out])), PycrossExtractedWheelInfo(site_packages = out)]
+
+_mock_installed_wheel = rule(implementation = _mock_installed_wheel_impl)
+
+def _test_pycross_cc_pkg_config_versioned_library(name):
+    util.helper_target(_mock_installed_wheel, name = name + "_wheel")
+    util.helper_target(
+        pycross_wheel_cc_import,
+        name = name + "_libcudart",
+        wheel_library = name + "_wheel",
+        shared_library = "nvidia/cuda_runtime/lib/libcudart.so.12",
+    )
+    util.helper_target(
+        pycross_cc_pkg_config,
+        name = name + "_subject",
+        dep = name + "_libcudart",
+        lib_name = "cudart",
+        version = "12.0",
+    )
+    analysis_test(name = name, target = name + "_subject", impl = _test_pycross_cc_pkg_config_versioned_library_impl)
+
+def _test_pycross_cc_pkg_config_versioned_library_impl(env, target):
+    content = env.expect.that_target(target).action_generating("tests/analysis/cudart.pc").content()
+
+    # `-lcudart` wouldn't find a file named only libcudart.so.12, so it's linked by path.
+    content.contains("_libcudart/shared_library/libcudart.so.12")
+    raw = [a.content for a in target.actions if a.mnemonic == "FileWrite"][0]
+    env.expect.that_bool("-lcudart" in raw).equals(False)
+
 def pycross_cc_pkg_config_test_suite(name):
     test_suite(
         name = name,
         tests = [
+            _test_pycross_cc_pkg_config_versioned_library,
             _test_pycross_cc_pkg_config,
             _test_pycross_cc_pkg_config_libprefix,
         ],

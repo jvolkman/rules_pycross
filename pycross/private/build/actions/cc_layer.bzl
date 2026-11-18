@@ -96,7 +96,7 @@ def _get_target_os_and_cpu(ctx):
 
 def _is_shared_library(path):
     filename = path.split("/")[-1]
-    if filename.endswith(".dylib"):
+    if filename.endswith(".dylib") or filename.endswith(".tbd"):
         return True
     if filename.endswith(".so"):
         return True

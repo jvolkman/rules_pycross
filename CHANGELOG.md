@@ -22,6 +22,9 @@ All notable changes to this project will be documented in this file.
 
 ### Added
 
+- **`pycross_wheel_cc_import`** links an sdist against a library that ships in
+  another wheel, like `cc_import`. Wheel repair doesn't bundle a copy of it.
+  `pycross_wheel_headers` is now a macro around it.
 - **Git patch headers** in `post_install_patches` and `pre_build_patches`: empty
   new or deleted files, mode changes, renames and copies.
 

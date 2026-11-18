@@ -18,6 +18,15 @@ def _get_lib_flag(file):
             break
     return "-l" + name
 
+def _is_versioned_shared_library(basename):
+    """Whether `basename` looks like `libfoo.so.1` or `libfoo.1.dylib`."""
+    if ".so." in basename:
+        return True
+    if basename.endswith(".dylib"):
+        parts = basename[:-len(".dylib")].split(".")
+        return len(parts) > 1 and parts[-1].isdigit()
+    return False
+
 def _pycross_cc_pkg_config_impl(ctx):
     cc_info = ctx.attr.dep[CcInfo]
 
@@ -39,6 +48,11 @@ def _pycross_cc_pkg_config_impl(ctx):
     lib_dirs = []
     lib_flags = []
     for lib in libs:
+        if _is_versioned_shared_library(lib.basename):
+            # `-l<name>` only finds an unversioned file, which wheels can't ship (no
+            # symlinks), so link by path. The linker still records the SONAME.
+            lib_flags.append(absolutize_path_in_str(ctx.workspace_name, "$$EXT_BUILD_ROOT$$/", lib.path))
+            continue
         lib_dirs.append(lib.dirname)
         lib_flags.append(_get_lib_flag(lib))
 

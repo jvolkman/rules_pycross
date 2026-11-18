@@ -365,7 +365,7 @@ Registers the repairwheel action to bundle native shared libs.
 | <a id="register_repair_action-ctx"></a>ctx |  The rule context.   |  none |
 | <a id="register_repair_action-input_wheel_dir"></a>input_wheel_dir |  File, the input wheel directory TreeArtifact.   |  none |
 | <a id="register_repair_action-repair_tool"></a>repair_tool |  Target, the repair_wheel executable.   |  none |
-| <a id="register_repair_action-native_deps"></a>native_deps |  list[Target], CcInfo deps whose shared libs to bundle.   |  `[]` |
+| <a id="register_repair_action-native_deps"></a>native_deps |  list[Target], CcInfo deps whose shared libs to bundle. Shared libraries from `pycross_wheel_cc_import` targets belong to other wheels: repair can find them, but excludes them from the repaired wheel.   |  `[]` |
 | <a id="register_repair_action-target_environment"></a>target_environment |  File (optional), the target environment JSON.   |  `None` |
 | <a id="register_repair_action-repair_exclude_globs"></a>repair_exclude_globs |  list[str], shared library globs to leave unbundled.   |  `[]` |
 | <a id="register_repair_action-repair_deps"></a>repair_deps |  list[Target], optional PyInfo targets (e.g. user-provided repairwheel) whose site-packages are prepended to PYTHONPATH, shadowing the bundled version.   |  `[]` |

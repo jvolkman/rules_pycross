@@ -121,33 +121,56 @@ pycross_repaired_wheel(<a href="#pycross_repaired_wheel-name">name</a>, <a href=
 | <a id="pycross_repaired_wheel-whldir_name"></a>whldir_name |  Name for the output .whldir TreeArtifact directory. If empty, defaults to '{name}.whldir'.   | String | optional |  `""`  |
 
 
-<a id="pycross_wheel_headers"></a>
+<a id="pycross_wheel_cc_import"></a>
 
-## pycross_wheel_headers
+## pycross_wheel_cc_import
 
 <pre>
-load("@rules_pycross//pycross:defs.bzl", "pycross_wheel_headers")
+load("@rules_pycross//pycross:defs.bzl", "pycross_wheel_cc_import")
 
-pycross_wheel_headers(<a href="#pycross_wheel_headers-name">name</a>, <a href="#pycross_wheel_headers-include_dir">include_dir</a>, <a href="#pycross_wheel_headers-make_variable">make_variable</a>, <a href="#pycross_wheel_headers-wheel_library">wheel_library</a>)
+pycross_wheel_cc_import(<a href="#pycross_wheel_cc_import-name">name</a>, <a href="#pycross_wheel_cc_import-deps">deps</a>, <a href="#pycross_wheel_cc_import-alwayslink">alwayslink</a>, <a href="#pycross_wheel_cc_import-includes">includes</a>, <a href="#pycross_wheel_cc_import-interface_library">interface_library</a>, <a href="#pycross_wheel_cc_import-linkopts">linkopts</a>,
+                        <a href="#pycross_wheel_cc_import-make_variable">make_variable</a>, <a href="#pycross_wheel_cc_import-shared_library">shared_library</a>, <a href="#pycross_wheel_cc_import-static_library">static_library</a>, <a href="#pycross_wheel_cc_import-wheel_library">wheel_library</a>)
 </pre>
 
-Extracts C/C++ headers from an installed wheel library.
+Exposes C/C++ headers and a prebuilt library from an installed wheel, like `cc_import`.
 
-Given a pycross_wheel_library target, this rule exposes the headers found at
-a specified include directory within the wheel's site-packages tree as CcInfo,
-so that downstream C/C++ compilation can find them. Optionally exports a Make
-variable pointing to the absolute include path for use in build system
-configuration (e.g., Meson cross files).
+Use this when an sdist builds native code against a wheel it depends on, such
+as torch, pyarrow, numpy or an `nvidia-*` wheel. Put the target in the build's
+`native_deps`.
+
+Paths are relative to the wheel's site-packages directory. The library is
+copied out of the installed wheel so that it can be linked.
+
+A shared library from this rule belongs to the other wheel, so wheel repair
+doesn't bundle a copy of it. Repair finds it in this target's output directory
+and excludes it by file name, even when the target is wrapped in a
+`cc_library`. That works when the file name is the library's SONAME (or its
+`@rpath` install name on macOS), which is the usual case for wheels. Versioned
+files such as `libcudart.so.12` are fine: sdist builds can still link them with
+`-lcudart`.
+
+The built extension still has to find the library at runtime, for example
+through an `$ORIGIN`-relative RPATH or because the other package loads it
+first.
+
+Use one target per library, as with `cc_import`, and connect them with
+`deps`.
 
 **ATTRIBUTES**
 
 
 | Name  | Description | Type | Mandatory | Default |
 | :------------- | :------------- | :------------- | :------------- | :------------- |
-| <a id="pycross_wheel_headers-name"></a>name |  A unique name for this target.   | <a href="https://bazel.build/concepts/labels#target-names">Name</a> | required |  |
-| <a id="pycross_wheel_headers-include_dir"></a>include_dir |  Relative path within the wheel's site-packages to the include directory (e.g. 'numpy/_core/include').   | String | required |  |
-| <a id="pycross_wheel_headers-make_variable"></a>make_variable |  If set, export a TemplateVariableInfo with this name mapped to the absolutized include path.   | String | optional |  `""`  |
-| <a id="pycross_wheel_headers-wheel_library"></a>wheel_library |  A pycross_wheel_library target containing the headers.   | <a href="https://bazel.build/concepts/labels">Label</a> | required |  |
+| <a id="pycross_wheel_cc_import-name"></a>name |  A unique name for this target.   | <a href="https://bazel.build/concepts/labels#target-names">Name</a> | required |  |
+| <a id="pycross_wheel_cc_import-deps"></a>deps |  Other C/C++ targets this library depends on, such as other `pycross_wheel_cc_import` targets.   | <a href="https://bazel.build/concepts/labels">List of labels</a> | optional |  `[]`  |
+| <a id="pycross_wheel_cc_import-alwayslink"></a>alwayslink |  Link every object file in `static_library`, as in `cc_import`. This applies to Bazel `cc_*` link actions; sdist builds link what the build system asks for.   | Boolean | optional |  `False`  |
+| <a id="pycross_wheel_cc_import-includes"></a>includes |  Include directories, relative to the wheel's site-packages (e.g. 'torch/include').   | List of strings | optional |  `[]`  |
+| <a id="pycross_wheel_cc_import-interface_library"></a>interface_library |  An interface library for `shared_library` (e.g. a `.tbd` or `.lib` file), relative to site-packages.   | String | optional |  `""`  |
+| <a id="pycross_wheel_cc_import-linkopts"></a>linkopts |  Extra flags for Bazel `cc_*` targets that link against this library. sdist builds don't read them; use the build rule's `linkopts` instead.   | List of strings | optional |  `[]`  |
+| <a id="pycross_wheel_cc_import-make_variable"></a>make_variable |  If set, export a TemplateVariableInfo with this name mapped to the absolutized include path, for use in build configuration such as Meson cross files. Requires exactly one entry in `includes`.   | String | optional |  `""`  |
+| <a id="pycross_wheel_cc_import-shared_library"></a>shared_library |  A shared library (`.so` or `.dylib`) to link against, relative to site-packages (e.g. 'torch/lib/libtorch.so').   | String | optional |  `""`  |
+| <a id="pycross_wheel_cc_import-static_library"></a>static_library |  A static library (`.a`) to link against, relative to site-packages (e.g. 'numpy/_core/lib/libnpymath.a').   | String | optional |  `""`  |
+| <a id="pycross_wheel_cc_import-wheel_library"></a>wheel_library |  A pycross_wheel_library target for the wheel that contains the headers and library.   | <a href="https://bazel.build/concepts/labels">Label</a> | required |  |
 
 
 <a id="pycross_wheel_library"></a>
@@ -250,5 +273,33 @@ Information about an extracted (installed) Python wheel.
 | Name  | Description |
 | :------------- | :------------- |
 | <a id="PycrossExtractedWheelInfo-site_packages"></a>site_packages |  File (TreeArtifact): The unzipped site-packages directory containing the wheel's installed files.    |
+
+
+<a id="pycross_wheel_headers"></a>
+
+## pycross_wheel_headers
+
+<pre>
+load("@rules_pycross//pycross:defs.bzl", "pycross_wheel_headers")
+
+pycross_wheel_headers(<a href="#pycross_wheel_headers-name">name</a>, <a href="#pycross_wheel_headers-wheel_library">wheel_library</a>, <a href="#pycross_wheel_headers-include_dir">include_dir</a>, <a href="#pycross_wheel_headers-make_variable">make_variable</a>, <a href="#pycross_wheel_headers-kwargs">**kwargs</a>)
+</pre>
+
+Exposes C/C++ headers from an installed wheel as CcInfo.
+
+A shorthand for `pycross_wheel_cc_import` with a single include directory
+and no library.
+
+
+**PARAMETERS**
+
+
+| Name  | Description | Default Value |
+| :------------- | :------------- | :------------- |
+| <a id="pycross_wheel_headers-name"></a>name |  The target name.   |  none |
+| <a id="pycross_wheel_headers-wheel_library"></a>wheel_library |  A pycross_wheel_library target containing the headers.   |  none |
+| <a id="pycross_wheel_headers-include_dir"></a>include_dir |  Relative path within the wheel's site-packages to the include directory (e.g. 'numpy/_core/include').   |  none |
+| <a id="pycross_wheel_headers-make_variable"></a>make_variable |  If set, export a TemplateVariableInfo with this name mapped to the absolutized include path, for use in build configuration such as Meson cross files.   |  `None` |
+| <a id="pycross_wheel_headers-kwargs"></a>kwargs |  Common attributes such as `visibility` and `tags`.   |  none |
 
 
