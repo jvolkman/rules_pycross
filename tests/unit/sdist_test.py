@@ -1,10 +1,16 @@
 import io
+import os
+import shutil
+import stat
 import tarfile
 import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from types import SimpleNamespace
+from unittest.mock import Mock
+from unittest.mock import patch
 
+from pycross.private.build.tools.utils import sdist
 from pycross.private.build.tools.utils.sdist import extract_sdist
 
 
@@ -49,6 +55,112 @@ class ExtractSdistTest(unittest.TestCase):
                 _write_sdist(self.ctx.sdist_path, mode)
                 extract_sdist(self.ctx)
                 self.assertEqual((self.ctx.sdist_root_dir / "new.txt").read_text(), "new")
+
+    @unittest.skipUnless(os.name == "nt", "requires Windows read-only file semantics")
+    def test_removes_readonly_file_from_stale_environment(self):
+        stale_file = self.ctx.temp_dir / "env" / "Scripts" / "activate"
+        stale_file.parent.mkdir(parents=True)
+        stale_file.write_text("stale activation script")
+        stale_file.chmod(stat.S_IREAD)
+        _write_sdist(self.ctx.sdist_path, "w:gz")
+
+        try:
+            extract_sdist(self.ctx)
+            self.assertEqual(list(self.ctx.temp_dir.iterdir()), [])
+            self.assertEqual((self.ctx.sdist_root_dir / "new.txt").read_text(), "new")
+        finally:
+            if stale_file.exists():
+                stale_file.chmod(stat.S_IREAD | stat.S_IWRITE)
+
+
+class ReadonlyCleanupTest(unittest.TestCase):
+    def setUp(self):
+        self.tmp = TemporaryDirectory()
+        self.root = Path(self.tmp.name)
+        self.addCleanup(self.tmp.cleanup)
+
+    def _windows_os(self):
+        # Model Windows file attributes on POSIX so CI exercises the traversal.
+        def lstat(path):
+            info = os.lstat(path)
+            attributes = 0
+            if not info.st_mode & stat.S_IWRITE:
+                attributes |= stat.FILE_ATTRIBUTE_READONLY
+            if stat.S_ISLNK(info.st_mode):
+                attributes |= stat.FILE_ATTRIBUTE_REPARSE_POINT
+            return SimpleNamespace(
+                st_mode=info.st_mode,
+                st_file_attributes=getattr(info, "st_file_attributes", attributes),
+            )
+
+        return SimpleNamespace(lstat=lstat, walk=os.walk, path=os.path, chmod=Mock(wraps=os.chmod))
+
+    def test_prepares_nested_readonly_files_for_deletion(self):
+        scratch = self.root / "scratch"
+        nested = scratch / "env" / "Scripts"
+        nested.mkdir(parents=True)
+        readonly = nested / "activate"
+        readonly.write_text("activation script")
+        readonly.chmod(stat.S_IREAD)
+        writable = scratch / "writable.txt"
+        writable.write_text("already writable")
+
+        platform_os = self._windows_os()
+        with patch.object(sdist, "os", platform_os):
+            sdist._clear_readonly_files(scratch)
+
+        self.assertTrue(readonly.stat().st_mode & stat.S_IWRITE)
+        self.assertEqual(readonly.read_text(), "activation script")
+        self.assertEqual(writable.read_text(), "already writable")
+        self.assertEqual(platform_os.chmod.call_count, 1)
+        shutil.rmtree(scratch)
+        self.assertFalse(scratch.exists())
+
+    def test_skips_reparse_points(self):
+        for mode in [stat.S_IFLNK, stat.S_IFDIR, stat.S_IFREG]:
+            with self.subTest(mode=mode):
+                platform_os = SimpleNamespace(
+                    lstat=Mock(
+                        return_value=SimpleNamespace(
+                            st_mode=mode,
+                            st_file_attributes=stat.FILE_ATTRIBUTE_REPARSE_POINT | stat.FILE_ATTRIBUTE_READONLY,
+                        )
+                    ),
+                    walk=Mock(),
+                    chmod=Mock(),
+                )
+                with patch.object(sdist, "os", platform_os):
+                    sdist._clear_readonly_files("link")
+                platform_os.walk.assert_not_called()
+                platform_os.chmod.assert_not_called()
+
+    def test_prunes_reparse_entries_from_traversal(self):
+        junction = self.root / "junction"
+        junction.mkdir()
+        target = junction / "target.txt"
+        target.write_text("outside scratch tree")
+        file_link = self.root / "file_link"
+        file_link.write_text("linked file")
+        target.chmod(stat.S_IREAD)
+        file_link.chmod(stat.S_IREAD)
+
+        platform_os = self._windows_os()
+        original_lstat = platform_os.lstat
+
+        def lstat(path):
+            info = original_lstat(path)
+            if Path(path) in [junction, file_link]:
+                info.st_file_attributes |= stat.FILE_ATTRIBUTE_REPARSE_POINT
+            return info
+
+        platform_os.lstat = lstat
+        try:
+            with patch.object(sdist, "os", platform_os):
+                sdist._clear_readonly_files(self.root)
+            platform_os.chmod.assert_not_called()
+        finally:
+            target.chmod(stat.S_IREAD | stat.S_IWRITE)
+            file_link.chmod(stat.S_IREAD | stat.S_IWRITE)
 
 
 if __name__ == "__main__":

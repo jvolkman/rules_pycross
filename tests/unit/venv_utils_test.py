@@ -49,6 +49,7 @@ class VenvUtilsTest(unittest.TestCase):
         # Assert PYTHONPATH
         self.assertIn('os.environ["PYTHONPATH"]', content)
         self.assertIn("site-packages", content)
+        self.assertIn(str(ctx.sdist_dir.absolute()), content)
 
     def test_build_crossenv_venv_writes_site_hooks(self):
         ctx = MockBuildContext(self.temp_path)
