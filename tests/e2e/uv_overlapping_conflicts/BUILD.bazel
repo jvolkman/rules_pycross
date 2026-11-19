@@ -32,3 +32,19 @@ py_test(
     main = "tests/test_conflict_version.py",
     deps = ["@cpu_only//iniconfig"],
 )
+
+# The same package through two repos in different configurations (`cpu_only`
+# is pinned, `runtime` isn't). The venv must still contain it.
+py_test(
+    name = "test_diamond",
+    srcs = ["tests/test_conflict_version.py"],
+    args = [
+        "iniconfig",
+        "1.1.1",
+    ],
+    main = "tests/test_conflict_version.py",
+    deps = [
+        "@cpu_only//iniconfig",
+        "@runtime//iniconfig",
+    ],
+)

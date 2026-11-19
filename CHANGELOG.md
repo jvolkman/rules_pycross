@@ -10,6 +10,11 @@ All notable changes to this project will be documented in this file.
   one item of a conflict set (such as `optional:cpu`) no longer needs a
   `_variants` flag, as with `uv sync --extra cpu`.
 
+### Fixed
+
+- **Packages missing from the venv** under `venvs_site_packages=yes` when a
+  binary reaches one package through repos in different configurations.
+
 ## [2.1.0]
 
 ### Added

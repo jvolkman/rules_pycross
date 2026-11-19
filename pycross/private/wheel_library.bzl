@@ -117,6 +117,28 @@ def _register_wheel_install_action(ctx, out, entry_points, dist_info_dir):
         progress_message = "Installing %s" % wheel_input.basename,
     )
 
+# A binary that reaches one package through two configurations gets two
+# `VenvSymlinkEntry`s for it. With `files = depset([out])` they differ, since
+# depsets compare by identity, so rules_python merges them as an overlap. Before
+# rules_python #4396 (which added `link_to_subpaths`), that merge skipped
+# entries backed by a directory artifact and dropped the package from the venv.
+# There, pass an empty depset so the two entries are identical and collapse to
+# one. rules_python reads `files` only when merging, and runfiles come from
+# `DefaultInfo`. With #4396, keep `depset([out])`: the merge then links the
+# first entry, and overlaps it can't merge fail loudly.
+_NO_FILES = depset()
+_MERGES_DIRECTORY_ENTRIES = hasattr(
+    VenvSymlinkEntry(
+        kind = VenvSymlinkKind.LIB,
+        venv_path = "",
+        link_to_path = "",
+        package = None,
+        version = None,
+        files = _NO_FILES,
+    ),
+    "link_to_subpaths",
+)
+
 def _build_venv_symlinks(
         venvs_site_packages_enabled,
         out,
@@ -131,6 +153,7 @@ def _build_venv_symlinks(
     if not (venvs_site_packages_enabled and site_paths):
         return []
 
+    entry_files = depset([out]) if _MERGES_DIRECTORY_ENTRIES else _NO_FILES
     venv_symlinks = []
     for tlp in site_paths:
         venv_symlinks.append(VenvSymlinkEntry(
@@ -139,7 +162,7 @@ def _build_venv_symlinks(
             package = package_name,
             version = package_version,
             venv_path = tlp,
-            files = depset([out]),
+            files = entry_files,
         ))
 
     # Also add .dist-info directory symlink so metadata is accessible.
@@ -150,7 +173,7 @@ def _build_venv_symlinks(
             package = package_name,
             version = package_version,
             venv_path = dist_info_dir,
-            files = depset([out]),
+            files = entry_files,
         ))
 
     # Add other directory symlinks if supported by the rules_python version.
@@ -164,7 +187,7 @@ def _build_venv_symlinks(
                 package = package_name,
                 version = package_version,
                 venv_path = p,
-                files = depset([out]),
+                files = entry_files,
             ))
 
     if hasattr(VenvSymlinkKind, "DATA"):
@@ -175,7 +198,7 @@ def _build_venv_symlinks(
                 package = package_name,
                 version = package_version,
                 venv_path = p,
-                files = depset([out]),
+                files = entry_files,
             ))
 
         # VenvSymlinkKind.INCLUDE existed in earlier versions of rules_python but was missing from venv_dir_map.
@@ -188,7 +211,7 @@ def _build_venv_symlinks(
                     package = package_name,
                     version = package_version,
                     venv_path = p,
-                    files = depset([out]),
+                    files = entry_files,
                 ))
 
     return venv_symlinks
