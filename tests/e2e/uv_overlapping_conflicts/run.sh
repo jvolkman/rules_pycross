@@ -6,7 +6,7 @@ bazel test "$@" //:test_cpu_only --test_output=errors
 
 # `runtime` selects with a flag. Selecting `gpu` leaves the second set
 # unselected, which must not make the select ambiguous.
-bazel test "$@" //:test_runtime_cpu --@runtime//_variants:extra_cpu=True --test_output=errors
+bazel test "$@" //:test_runtime_cpu //:test_gpu_only_pytest //:test_gpu_dev_pytest --@runtime//_variants:extra_cpu=True --test_output=errors
 
 # Two configurations of one package in one binary.
 bazel test "$@" //:test_diamond --@runtime//_variants:extra_cpu=True --test_output=errors

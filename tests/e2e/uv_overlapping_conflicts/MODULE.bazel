@@ -47,4 +47,31 @@ uv.repo(
     projects = ["app"],
     workspace = "ws",
 )
-use_repo(uv, "cpu_only", "runtime")
+
+# Requests only `gpu`, so it's pinned. A flag selecting `cpu` for another repo
+# must not reach the second set (`cpu` vs `gpu-test`) here.
+uv.repo(
+    name = "gpu_only",
+    dependency_groups = [
+        "default",
+        "optional:gpu",
+    ],
+    projects = ["app"],
+    workspace = "ws",
+)
+
+# Requests every item, and a flag pins `gpu`. `gpu-test` stays usable in the
+# second set, but `cpu` (a rival of the pin) must not be activated there.
+uv.repo(
+    name = "gpu_dev",
+    dependency_groups = [
+        "default",
+        "optional:cpu",
+        "optional:gpu",
+        "group:gpu-test",
+    ],
+    flags = ["--@gpu_dev//_variants:extra_gpu=True"],
+    projects = ["app"],
+    workspace = "ws",
+)
+use_repo(uv, "cpu_only", "gpu_dev", "gpu_only", "runtime")

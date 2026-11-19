@@ -16,6 +16,7 @@ load(
     "packages_bzl_for_testing",
     "pin_build_for_testing",
     "requirements_bzl_for_testing",
+    "transition_settings_for_testing",
     "variant_fallbacks_for_testing",
     "variants_build_for_testing",
 )
@@ -1008,6 +1009,68 @@ def _test_pin_build_overlapping_sets(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
     analysis_test(name = name, target = name + "_subject", impl = _test_pin_build_overlapping_sets_impl)
 
+_S0 = "extra_app_cpu_extra_app_gpu"
+_S1 = "extra_app_cpu_group_app_gpu-test"
+_S2 = "extra_app_x_extra_app_y"
+
+def _overlapping_variant_info(requested, pin = {}, default = {}):
+    sets = [
+        [{"package": "app", "kind": "extra", "name": "cpu"}, {"package": "app", "kind": "extra", "name": "gpu"}],
+        [{"package": "app", "kind": "extra", "name": "cpu"}, {"package": "app", "kind": "group", "name": "gpu-test"}],
+        [{"package": "app", "kind": "extra", "name": "x"}, {"package": "app", "kind": "extra", "name": "y"}],
+    ]
+    variants = []
+    for i, items in enumerate(sets):
+        vset = {"items": items, "repo_requested": requested.get(i, [])}
+        if i in pin:
+            vset["repo_pin"] = pin[i]
+        if i in default:
+            vset["repo_default"] = default[i]
+        variants.append(vset)
+    return collect_variants_for_testing(variants)
+
+# buildifier: disable=unused-variable
+def _test_transition_settings_impl(env, target):
+    """A transitioned repo limits unpinned sets to usable items and drops rival defaults."""
+
+    def settings(info, variant_pins = {}, has_other_flags = False):
+        return transition_settings_for_testing(info, variant_pins, "ws", "repo", has_other_flags).fixed_settings
+
+    # Auto-pinned to gpu. cpu (its rival) is all it requests from the second set,
+    # and it requests nothing from the third.
+    info = _overlapping_variant_info({0: ["extra_app_gpu"], 1: []}, pin = {0: "extra_app_gpu"})
+    env.expect.that_dict(settings(info)).contains_exactly({
+        "@ws//_lock:_pin_" + _S0: "extra_app_gpu",
+        "@ws//_lock:_usable_" + _S1: "",
+        "@ws//_lock:_usable_" + _S2: "",
+    })
+
+    # A flag pins gpu; the repo also requests cpu and gpu-test. Only gpu-test
+    # stays usable in the second set, and its cpu default is dropped.
+    info = _overlapping_variant_info(
+        {0: ["extra_app_cpu", "extra_app_gpu"], 1: ["extra_app_cpu", "group_app_gpu-test"], 2: ["extra_app_x", "extra_app_y"]},
+        default = {1: "extra_app_cpu"},
+    )
+    env.expect.that_dict(settings(info, variant_pins = {_S0: "extra_app_gpu"}, has_other_flags = True)).contains_exactly({
+        "@ws//_lock:_pin_" + _S0: "extra_app_gpu",
+        "@ws//_lock:_usable_" + _S1: "group_app_gpu-test",
+    })
+
+    # A repo with no transition sets nothing.
+    info = _overlapping_variant_info({0: ["extra_app_cpu", "extra_app_gpu"]})
+    env.expect.that_dict(settings(info)).contains_exactly({})
+
+    # Outside the transition, `is_<flag>` follows the flag pin, not the rival default.
+    info = _overlapping_variant_info({0: ["extra_app_cpu", "extra_app_gpu"], 1: ["extra_app_cpu"]}, default = {1: "extra_app_cpu"})
+    result = transition_settings_for_testing(info, {_S0: "extra_app_gpu"}, "ws", "repo", True)
+    build = variants_build_for_testing(info, "ws", "repo", pins_by_set = result.pins_by_set, excluded = result.excluded)
+    env.expect.that_str(build).contains('name = "_selected_extra_app_gpu"')
+    env.expect.that_bool('name = "_selected_extra_app_cpu"' in build).equals(False)
+
+def _test_transition_settings(name):
+    util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
+    analysis_test(name = name, target = name + "_subject", impl = _test_transition_settings_impl)
+
 def thin_package_repo_test_suite(name):
     test_suite(
         name = name,
@@ -1015,6 +1078,7 @@ def thin_package_repo_test_suite(name):
             _test_variants_build_shared_flag,
             _test_variants_build_repo_default,
             _test_variants_build_shared_flag_pinned,
+            _test_transition_settings,
             _test_pin_build_overlapping_sets,
             _test_pin_build_no_transition,
             _test_pin_build_with_platform,

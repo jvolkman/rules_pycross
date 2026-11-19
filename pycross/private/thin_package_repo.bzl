@@ -484,7 +484,7 @@ def _collect_variants(variant_sets):
     Returns:
         struct(
             flags = {flag: [qnames]},  # this repo's _variants flags and the items they enable
-            sets = {set_suffix: struct(qnames, flags, default, pin)},
+            sets = {set_suffix: struct(qnames, flags, default, pin, requested)},
         )
     """
     flags = {}
@@ -519,10 +519,99 @@ def _collect_variants(variant_sets):
                 flags = usable,
                 default = variant_set.get("repo_default", ""),
                 pin = variant_set.get("repo_pin", ""),
+                requested = variant_set.get("repo_requested", []),
             )
     return struct(flags = flags, sets = sets)
 
-def _variants_build(variant_info, workspace_repo, repo_name, unselected_groups = None):
+def _excluded_items(variant_info, pins_by_set):
+    """The items that conflict with an item the repo pins.
+
+    Args:
+        variant_info: Result of _collect_variants.
+        pins_by_set: {set suffix: pinned qname}.
+
+    Returns:
+        {qname: True}.
+    """
+    excluded = {}
+    pinned = pins_by_set.values()
+    for vset in variant_info.sets.values():
+        for qname in pinned:
+            if qname not in vset.qnames:
+                continue
+            for other in vset.qnames:
+                if other != qname:
+                    excluded[other] = True
+    return excluded
+
+def _usable_settings(variant_info, pins_by_set, excluded, workspace_repo):
+    """`_usable_<set>` settings for a transitioned repo.
+
+    Variant resolvers read every repo's flags. Inside a repo with its own
+    transition, a flag meant for another repo could otherwise activate an item
+    that this repo didn't request, or that conflicts with one it pins, and
+    switch versions in shared packages. Each unpinned set is limited to the
+    items the repo requests that aren't excluded.
+
+    Args:
+        variant_info: Result of _collect_variants.
+        pins_by_set: {set suffix: pinned qname}.
+        excluded: Result of _excluded_items.
+        workspace_repo: Name of the workspace (backing) repo.
+
+    Returns:
+        {label: space-separated usable qnames} for sets that aren't fully usable.
+    """
+    result = {}
+    for set_suffix, vset in sorted(variant_info.sets.items()):
+        if set_suffix in pins_by_set:
+            continue
+        usable = [q for q in vset.requested if q not in excluded]
+        if len(usable) < len(vset.qnames):
+            result["@{}//_lock:_usable_{}".format(workspace_repo, set_suffix)] = " ".join(sorted(usable))
+    return result
+
+def _transition_settings(variant_info, variant_pins, workspace_repo, member_name, has_other_flags):
+    """The `_lock` settings that a repo's transition sets.
+
+    Args:
+        variant_info: Result of _collect_variants.
+        variant_pins: {set suffix: qname} that the repo's flags/settings select.
+        workspace_repo: Name of the workspace (backing) repo.
+        member_name: The repo name, for messages.
+        has_other_flags: Whether the repo transitions for other reasons (its
+            own `flags` or `settings`).
+
+    Returns:
+        struct(fixed_settings = {label: value}, pins_by_set, excluded).
+    """
+    pins_by_set = dict(variant_pins)
+    for set_suffix, vset in sorted(variant_info.sets.items()):
+        if not vset.pin:
+            continue
+
+        # The only item of the set that the repo requests.
+        if pins_by_set.get(set_suffix, vset.pin) != vset.pin:
+            fail("{}: flags/settings select {}, but the repo requests only {} from that conflict set".format(
+                member_name,
+                pins_by_set[set_suffix],
+                vset.pin,
+            ))
+        pins_by_set[set_suffix] = vset.pin
+    excluded = _excluded_items(variant_info, pins_by_set)
+
+    fixed_settings = {}
+    for set_suffix, qname in sorted(pins_by_set.items()):
+        fixed_settings["@{}//_lock:_pin_{}".format(workspace_repo, set_suffix)] = qname
+    for set_suffix, vset in sorted(variant_info.sets.items()):
+        # A default that conflicts with a pin in another set would select both.
+        if set_suffix not in pins_by_set and vset.default and vset.default not in excluded:
+            fixed_settings["@{}//_lock:_default_{}".format(workspace_repo, set_suffix)] = vset.default
+    if has_other_flags or fixed_settings:
+        fixed_settings.update(_usable_settings(variant_info, pins_by_set, excluded, workspace_repo))
+    return struct(fixed_settings = fixed_settings, pins_by_set = pins_by_set, excluded = excluded)
+
+def _variants_build(variant_info, workspace_repo, repo_name, unselected_groups = None, pins_by_set = None, excluded = None):
     """Render _variants/BUILD.bazel: this repo's variant flags.
 
     The workspace repo's variant resolvers read these bool_flags (see
@@ -538,6 +627,8 @@ def _variants_build(variant_info, workspace_repo, repo_name, unselected_groups =
         repo_name: This repo's apparent name, for messages.
         unselected_groups: {name: [set suffixes]} of `_unselected_all_*`
             groups that the repo's selects reference.
+        pins_by_set: {set suffix: qname} this repo's transition pins.
+        excluded: {qname: True} of items that conflict with those pins.
 
     Returns:
         The file content, or None if the repo has no variants.
@@ -545,10 +636,15 @@ def _variants_build(variant_info, workspace_repo, repo_name, unselected_groups =
     if not variant_info.flags and not variant_info.sets:
         return None
 
+    pins_by_set = pins_by_set or {}
+    excluded = excluded or {}
     defaults = {}  # qname -> [set suffixes where this repo selects it by default or pins it]
     for set_suffix, vset in variant_info.sets.items():
-        if vset.pin or vset.default:
-            defaults.setdefault(vset.pin or vset.default, []).append(set_suffix)
+        selected = pins_by_set.get(set_suffix) or vset.pin
+        if not selected and vset.default not in excluded:
+            selected = vset.default
+        if selected:
+            defaults.setdefault(selected, []).append(set_suffix)
 
     body = []
     needs_selects = False
@@ -641,6 +737,7 @@ def _variants_build(variant_info, workspace_repo, repo_name, unselected_groups =
 # Visible for testing
 collect_variants_for_testing = _collect_variants
 variant_fallbacks_for_testing = _variant_fallbacks
+transition_settings_for_testing = _transition_settings
 variants_build_for_testing = _variants_build
 
 def _thin_package_repo_impl(rctx):
@@ -709,22 +806,16 @@ def _thin_package_repo_impl(rctx):
     # Variant settings this repo's transition sets in the workspace repo:
     # `_pin_<set>` from its flags/settings (computed by the extension) and
     # `_default_<set>` from its projects' default-groups.
-    fixed_settings = {}
-    for set_suffix, qname in sorted(rctx.attr.variant_pins.items()):
-        fixed_settings["@{}//_lock:_pin_{}".format(workspace_repo, set_suffix)] = qname
-    for set_suffix, vset in sorted(variant_info.sets.items()):
-        if vset.pin:
-            # The only item of the set that the repo requests.
-            pin_label = "@{}//_lock:_pin_{}".format(workspace_repo, set_suffix)
-            if fixed_settings.get(pin_label, vset.pin) != vset.pin:
-                fail("{}: flags/settings select {}, but the repo requests only {} from that conflict set".format(
-                    rctx.attr.member_name,
-                    fixed_settings[pin_label],
-                    vset.pin,
-                ))
-            fixed_settings[pin_label] = vset.pin
-        if vset.default:
-            fixed_settings["@{}//_lock:_default_{}".format(workspace_repo, set_suffix)] = vset.default
+    settings = _transition_settings(
+        variant_info,
+        rctx.attr.variant_pins,
+        workspace_repo,
+        rctx.attr.member_name,
+        has_other_flags = bool(rctx.attr.flags) or bool(rctx.attr.settings),
+    )
+    fixed_settings = settings.fixed_settings
+    pins_by_set = settings.pins_by_set
+    excluded = settings.excluded
     has_flags = bool(rctx.attr.flags) or bool(rctx.attr.settings) or bool(fixed_settings)
     has_constraints = bool(rctx.attr.constraint_values)
 
@@ -1126,6 +1217,8 @@ pycross_transitioning_file_proxy = rule(
         workspace_repo,
         getattr(rctx, "original_name", "") or "<repo>",
         unselected_groups = no_variant_fallbacks.groups,
+        pins_by_set = pins_by_set,
+        excluded = excluded,
     )
     if variants_build:
         rctx.file("_variants/BUILD.bazel", variants_build)

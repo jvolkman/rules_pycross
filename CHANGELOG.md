@@ -14,6 +14,9 @@ All notable changes to this project will be documented in this file.
 
 - **Packages missing from the venv** under `venvs_site_packages=yes` when a
   binary reaches one package through repos in different configurations.
+- **`_variants` flags no longer leak into transitioned repos.** A flag meant for
+  one repo could switch versions inside another repo with its own transition,
+  through items that repo didn't request or that conflict with its pins.
 
 ## [2.1.0]
 

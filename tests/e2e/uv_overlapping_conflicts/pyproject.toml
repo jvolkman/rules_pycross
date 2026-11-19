@@ -2,7 +2,8 @@
 name = "app"
 version = "0.1.0"
 requires-python = ">=3.11"
-dependencies = []
+# pytest gets conflict-gated edges to iniconfig 1.1.1 and 2.0.0.
+dependencies = ["pytest==7.4.4"]
 
 [project.optional-dependencies]
 cpu = ["iniconfig==1.1.1"]
