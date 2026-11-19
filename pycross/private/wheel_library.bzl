@@ -117,9 +117,16 @@ def _register_wheel_install_action(ctx, out, entry_points, dist_info_dir):
         progress_message = "Installing %s" % wheel_input.basename,
     )
 
+# `VenvSymlinkEntry.files` stays empty. rules_python only reads it when it
+# merges overlapping entries, and it can't merge files inside a directory
+# artifact anyway. A per-target `depset([out])` made the entries for one package
+# differ between configurations, since depsets compare by identity. A binary
+# that reached the package through two configurations then lost it from its
+# venv. Runfiles come from `DefaultInfo`, not from these entries.
+_NO_FILES = depset()
+
 def _build_venv_symlinks(
         venvs_site_packages_enabled,
-        out,
         imp,
         dist_info_dir,
         package_name,
@@ -139,7 +146,7 @@ def _build_venv_symlinks(
             package = package_name,
             version = package_version,
             venv_path = tlp,
-            files = depset([out]),
+            files = _NO_FILES,
         ))
 
     # Also add .dist-info directory symlink so metadata is accessible.
@@ -150,7 +157,7 @@ def _build_venv_symlinks(
             package = package_name,
             version = package_version,
             venv_path = dist_info_dir,
-            files = depset([out]),
+            files = _NO_FILES,
         ))
 
     # Add other directory symlinks if supported by the rules_python version.
@@ -164,7 +171,7 @@ def _build_venv_symlinks(
                 package = package_name,
                 version = package_version,
                 venv_path = p,
-                files = depset([out]),
+                files = _NO_FILES,
             ))
 
     if hasattr(VenvSymlinkKind, "DATA"):
@@ -175,7 +182,7 @@ def _build_venv_symlinks(
                 package = package_name,
                 version = package_version,
                 venv_path = p,
-                files = depset([out]),
+                files = _NO_FILES,
             ))
 
         # VenvSymlinkKind.INCLUDE existed in earlier versions of rules_python but was missing from venv_dir_map.
@@ -188,7 +195,7 @@ def _build_venv_symlinks(
                     package = package_name,
                     version = package_version,
                     venv_path = p,
-                    files = depset([out]),
+                    files = _NO_FILES,
                 ))
 
     return venv_symlinks
@@ -236,7 +243,6 @@ def _pycross_wheel_library_impl(ctx):
     # to the runfiles location <repo>/<pkg>/<name>/site-packages/<tlp>.
     venv_symlinks = _build_venv_symlinks(
         venvs_site_packages_enabled,
-        out,
         imp,
         dist_info_dir,
         package_name,
