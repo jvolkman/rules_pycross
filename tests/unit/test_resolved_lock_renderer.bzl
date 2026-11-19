@@ -968,6 +968,18 @@ def _test_reset_plan_impl(env, target):
             "post_install_patches": ["//:p.patch"],
         },
         "no-wheel@1.0": {"sdist_file": {"key": "no_wheel_sdist"}},
+        "above-no-wheel@1.0": {
+            "wheel_candidates": [_whl("above_nw_whl", "above_no_wheel-1.0-py3-none-any.whl")],
+            "marker_dependencies": [{"key": "no-wheel@1.0"}],
+        },
+        "cyc@1.0": {
+            "wheel_candidates": [_whl("cyc_whl", "cyc-1.0-py3-none-any.whl")],
+            "cycle_group": "cycle_group_x",
+        },
+        "above-cyc@1.0": {
+            "wheel_candidates": [_whl("above_cyc_whl", "above_cyc-1.0-py3-none-any.whl")],
+            "marker_dependencies": [{"key": "cyc@1.0"}],
+        },
     })
     env.expect.that_str(res).contains('load(":reset.bzl", "pycross_resettable_wheel_library")')
     env.expect.that_collection(_library(res, "leaf@1.0")).contains_exactly(["pycross_resettable_wheel_library", "None"]).in_order()
@@ -975,6 +987,11 @@ def _test_reset_plan_impl(env, target):
     env.expect.that_str(_library(res, "gated@1.0")[0]).equals("pycross_wheel_library")
     env.expect.that_str(_library(res, "above-gated@1.0")[0]).equals("pycross_wheel_library")
     env.expect.that_str(_library(res, "patched@1.0")[0]).equals("pycross_wheel_library")
+
+    # Packages without wheels and cycle members (and what depends on them) stay.
+    env.expect.that_str(_library(res, "above-no-wheel@1.0")[0]).equals("pycross_wheel_library")
+    env.expect.that_str(_library(res, "above-cyc@1.0")[0]).equals("pycross_wheel_library")
+    env.expect.that_bool("pycross_resettable_wheel_library(\n        name = \"_raw_cyc@1.0\"" in res).equals(False)
 
 def _test_reset_plan(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
@@ -994,6 +1011,12 @@ def _test_reset_gates_impl(env, target):
                 _whl("win_whl32", "win-1.0-cp312-cp312-win32.whl"),
             ],
             "sdist_file": {"key": "win_sdist"},
+        },
+        # An extras proxy forwards its base package's gate.
+        "one[ext]@1.0": {"marker_dependencies": [{"key": "one@1.0"}]},
+        "uses-extra@1.0": {
+            "wheel_candidates": [_whl("uses_extra_whl", "uses_extra-1.0-py3-none-any.whl")],
+            "marker_dependencies": [{"key": "one[ext]@1.0"}],
         },
         "top@1.0": {
             "wheel_candidates": [_whl("top_whl", "top-1.0-py3-none-any.whl")],
@@ -1015,6 +1038,7 @@ def _test_reset_gates_impl(env, target):
     env.expect.that_str(edge).contains("_nomatch")
     env.expect.that_str(edge).contains(":_reset_wheel_win@1.0")
     env.expect.that_str(res).contains('load("@bazel_skylib//lib:selects.bzl", "selects")')
+    env.expect.that_str(_library(res, "uses-extra@1.0")[1]).equals('":_wheel_cs_one@1.0_one_1_0_py3_none_any_whl"')
 
 def _test_reset_gates(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])

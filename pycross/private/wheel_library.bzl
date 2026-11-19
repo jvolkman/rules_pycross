@@ -376,7 +376,7 @@ def make_wheel_library_rule(cfg = None):
     kwargs = {}
     if cfg:
         attrs["_allowlist_function_transition"] = attr.label(
-            default = "@bazel_tools//tools/allowlists/function_transition_allowlist",
+            default = Label("@bazel_tools//tools/allowlists/function_transition_allowlist"),
         )
         kwargs["cfg"] = cfg
     return rule(
