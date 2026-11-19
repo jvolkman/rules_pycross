@@ -47,6 +47,7 @@ class VenvUtilsTest(unittest.TestCase):
         # Assert PYTHONPATH
         self.assertIn('os.environ["PYTHONPATH"]', content)
         self.assertIn("site-packages", content)
+        self.assertIn(str(ctx.sdist_dir.absolute()), content)
 
 
 if __name__ == "__main__":

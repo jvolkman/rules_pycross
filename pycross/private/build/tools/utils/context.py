@@ -1,3 +1,5 @@
+import base64
+import hashlib
 import json
 import os
 from dataclasses import dataclass
@@ -42,6 +44,17 @@ class BuildContext:
     config_settings: Dict[str, Any] = field(default_factory=dict)
 
 
+def _short_windows_sdist_root(prefix: Path, original_sdist_root: str) -> Path:
+    """Return a short, stable source directory inside the execroot.
+
+    Setuptools embeds the absolute source path in MSVC object paths,
+    which can exceed Windows' 260-character path limit.
+    """
+    digest = hashlib.sha256(original_sdist_root.encode("utf-8")).digest()
+    encoded_digest = base64.urlsafe_b64encode(digest).decode("ascii").rstrip("=")
+    return (prefix / "._ps" / encoded_digest).absolute()
+
+
 def load_build_context(config_path: str) -> BuildContext:
     """Loads Bazel configuration and initializes a typed BuildContext."""
     with open(config_path, "r") as f:
@@ -49,7 +62,11 @@ def load_build_context(config_path: str) -> BuildContext:
 
     prefix = Path.cwd().absolute()
     temp_dir = (prefix / Path(os.environ["PYCROSS_BUILD_ROOT"])).absolute()
-    sdist_root_dir = (prefix / Path(os.environ["PYCROSS_SDIST_DIR"])).absolute()
+    original_sdist_root = os.environ["PYCROSS_SDIST_DIR"]
+    if os.name == "nt":
+        sdist_root_dir = _short_windows_sdist_root(prefix, original_sdist_root)
+    else:
+        sdist_root_dir = (prefix / Path(original_sdist_root)).absolute()
     source_dir = bazel_config.get("source_dir")
     if source_dir:
         sdist_dir = sdist_root_dir / source_dir
