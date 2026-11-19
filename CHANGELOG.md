@@ -9,6 +9,9 @@ All notable changes to this project will be documented in this file.
 - **`uv` repos select their only requested conflict item.** A repo that requests
   one item of a conflict set (such as `optional:cpu`) no longer needs a
   `_variants` flag, as with `uv sync --extra cpu`.
+- **Shared installs across repo configurations.** A package whose install and
+  dependencies don't depend on `uv` conflict variants is installed once, even
+  when repos with different variant selections reach it.
 
 ### Fixed
 

@@ -309,66 +309,87 @@ def _pycross_wheel_library_impl(ctx):
 
     return providers
 
-pycross_wheel_library = rule(
-    implementation = _pycross_wheel_library_impl,
-    provides = [PyInfo, PycrossExtractedWheelInfo],
-    attrs = dict({
-        "deps": attr.label_list(
-            doc = "A list of this wheel's Python library dependencies.",
-            providers = [DefaultInfo, PyInfo],
-        ),
-        "wheel": attr.label(
-            doc = "The wheel file.",
-            allow_files = True,
-            mandatory = True,
-        ),
-        "install_exclude_globs": attr.string_list(
-            doc = "A list of globs for files to exclude during installation.",
-        ),
-        "post_install_patches": attr.label_list(
-            doc = "A list of patches to apply after installation.",
-            allow_files = True,
-        ),
-        "package_name": attr.string(
-            doc = "The name of the package. Used for providing PycrossPackageInfo.",
-        ),
-        "package_version": attr.string(
-            doc = "The version of the package. Used for providing PycrossPackageInfo.",
-        ),
-        "site_paths": attr.string_list(doc = "The list of site-packages paths provided by this wheel."),
-        "bin_paths": attr.string_list(doc = "The list of bin paths provided by this wheel."),
-        "data_paths": attr.string_list(doc = "The list of data paths provided by this wheel."),
-        "include_paths": attr.string_list(doc = "The list of include paths provided by this wheel."),
-        "precompile": attr.string(
-            default = "auto",
-            values = ["auto", "enabled", "disabled"],
-            doc = "Whether to compile Python source files to `.pyc` bytecode at wheel install time. `auto` (default) follows the `--@rules_python//python/config_settings:precompile` flag: compile only when it is `enabled` or `force_enabled`. `force_enabled`/`force_disabled` override `enabled`/`disabled` here. Unlike `py_library`, there is no `inherit`: a binary's `pyc_collection` does not apply to installed wheels.",
-        ),
-        "precompile_invalidation_mode": attr.string(
-            default = "auto",
-            values = ["auto", "checked_hash", "unchecked_hash"],
-            doc = "The PEP 552 hash invalidation mode for generated `.pyc` files. `auto` uses `unchecked_hash` when `--compilation_mode=opt` and `checked_hash` otherwise.",
-        ),
-        "precompile_optimize_level": attr.int(
-            default = 0,
-            doc = "The Python bytecode optimization level passed to `py_compile.compile(optimize=...)`.",
-        ),
-        "_tool": attr.label(
-            default = Label("//pycross/private/tools:wheel_installer"),
-            cfg = "exec",
-            executable = True,
-        ),
-        "_precompile": attr.label(
-            default = Label("@rules_python//python/config_settings:precompile"),
-        ),
-        "experimental_venvs_site_packages": attr.label(
-            default = Label("@rules_python//python/config_settings:venvs_site_packages"),
-        ),
-    }, **PY_COMMON_ATTRS),
-    toolchains = [
-        config_common.toolchain_type("//pycross:toolchain_type", mandatory = False),
-    ],
-)
+_WHEEL_LIBRARY_ATTRS = dict({
+    "deps": attr.label_list(
+        doc = "A list of this wheel's Python library dependencies.",
+        providers = [DefaultInfo, PyInfo],
+    ),
+    "wheel": attr.label(
+        doc = "The wheel file.",
+        allow_files = True,
+        mandatory = True,
+    ),
+    "install_exclude_globs": attr.string_list(
+        doc = "A list of globs for files to exclude during installation.",
+    ),
+    "post_install_patches": attr.label_list(
+        doc = "A list of patches to apply after installation.",
+        allow_files = True,
+    ),
+    "package_name": attr.string(
+        doc = "The name of the package. Used for providing PycrossPackageInfo.",
+    ),
+    "package_version": attr.string(
+        doc = "The version of the package. Used for providing PycrossPackageInfo.",
+    ),
+    "site_paths": attr.string_list(doc = "The list of site-packages paths provided by this wheel."),
+    "bin_paths": attr.string_list(doc = "The list of bin paths provided by this wheel."),
+    "data_paths": attr.string_list(doc = "The list of data paths provided by this wheel."),
+    "include_paths": attr.string_list(doc = "The list of include paths provided by this wheel."),
+    "precompile": attr.string(
+        default = "auto",
+        values = ["auto", "enabled", "disabled"],
+        doc = "Whether to compile Python source files to `.pyc` bytecode at wheel install time. `auto` (default) follows the `--@rules_python//python/config_settings:precompile` flag: compile only when it is `enabled` or `force_enabled`. `force_enabled`/`force_disabled` override `enabled`/`disabled` here. Unlike `py_library`, there is no `inherit`: a binary's `pyc_collection` does not apply to installed wheels.",
+    ),
+    "precompile_invalidation_mode": attr.string(
+        default = "auto",
+        values = ["auto", "checked_hash", "unchecked_hash"],
+        doc = "The PEP 552 hash invalidation mode for generated `.pyc` files. `auto` uses `unchecked_hash` when `--compilation_mode=opt` and `checked_hash` otherwise.",
+    ),
+    "precompile_optimize_level": attr.int(
+        default = 0,
+        doc = "The Python bytecode optimization level passed to `py_compile.compile(optimize=...)`.",
+    ),
+    "_tool": attr.label(
+        default = Label("//pycross/private/tools:wheel_installer"),
+        cfg = "exec",
+        executable = True,
+    ),
+    "_precompile": attr.label(
+        default = Label("@rules_python//python/config_settings:precompile"),
+    ),
+    "experimental_venvs_site_packages": attr.label(
+        default = Label("@rules_python//python/config_settings:venvs_site_packages"),
+    ),
+}, **PY_COMMON_ATTRS)
+
+def make_wheel_library_rule(cfg = None):
+    """Create the `pycross_wheel_library` rule, optionally with an incoming transition.
+
+    Args:
+        cfg: An incoming-edge transition, or None.
+
+    Returns:
+        The rule.
+    """
+    attrs = dict(_WHEEL_LIBRARY_ATTRS)
+    kwargs = {}
+    if cfg:
+        attrs["_allowlist_function_transition"] = attr.label(
+            default = "@bazel_tools//tools/allowlists/function_transition_allowlist",
+        )
+        kwargs["cfg"] = cfg
+    return rule(
+        implementation = _pycross_wheel_library_impl,
+        provides = [PyInfo, PycrossExtractedWheelInfo],
+        attrs = attrs,
+        toolchains = [
+            config_common.toolchain_type("//pycross:toolchain_type", mandatory = False),
+        ],
+        **kwargs
+    )
+
+pycross_wheel_library = make_wheel_library_rule()
 
 def _pycross_wheel_metadata_impl(ctx):
     return [

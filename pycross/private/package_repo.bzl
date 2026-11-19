@@ -17,7 +17,7 @@ The file structure is as follows:
 
 load("@pycross_backends//:package_repo_dispatch.bzl", "PACKAGE_REPO_HOOKS")
 load("@pypackaging.bzl", "pypackaging")
-load(":resolved_lock_renderer.bzl", "render_lock_bzl")
+load(":resolved_lock_renderer.bzl", "render_lock_bzl", "render_reset_bzl")
 load(":util.bzl", "parse_package_key", "underscore_name", "variant_item_qname")
 
 def _normalize_name(name):
@@ -199,8 +199,17 @@ def _package_repo_impl(rctx):
             rctx.attr.repo_map,
             rctx.name,
             variant_resolvers = [":" + r for r in resolver_names],
+            reset_conflict_sets = [vset["qnames"] for vset in variant_sets],
         ),
     )
+    if variant_sets:
+        rctx.file(
+            "_lock/reset.bzl",
+            render_reset_bzl(
+                ["_".join(sorted(vset["qnames"])) for vset in variant_sets],
+                [label for vset in variant_sets for label in vset["flags"].keys()],
+            ),
+        )
 
     lock_build_lines = [
         'package(default_visibility = ["//visibility:public"])',
