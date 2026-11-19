@@ -38,6 +38,7 @@ first="$output_bases/first/external"
 second="$output_bases/second/external"
 
 checked=0
+checked_sdist=0
 failed=0
 for marker in "$first"/@*.marker; do
   # A repo that runs an internal tool records a file from the internal repo.
@@ -54,9 +55,20 @@ for marker in "$first"/@*.marker; do
     echo "ERROR: $repo has different contents in each output base" >&2
     failed=1
   fi
+  if [[ "$repo" == *"_sdist_iniconfig_"* ]]; then
+    if ! grep -q 'iniconfig.patch' "$marker"; then
+      echo "ERROR: $repo did not record pre_build_patches file in $marker" >&2
+      failed=1
+    fi
+    checked_sdist=$((checked_sdist + 1))
+  fi
   checked=$((checked + 1))
 done
 
+if [ "$checked_sdist" -eq 0 ]; then
+  echo "ERROR: fetched no sdist repo" >&2
+  exit 1
+fi
 if [ "$checked" -eq 0 ]; then
   echo "ERROR: fetched no repo that runs an internal tool" >&2
   exit 1

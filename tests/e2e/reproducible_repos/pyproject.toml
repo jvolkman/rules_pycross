@@ -5,6 +5,7 @@ description = ""
 requires-python = ">=3.9, <3.15"
 dependencies = [
     "cowsay==6.1",
+    "iniconfig==2.0.0",
 ]
 
 [build-system]

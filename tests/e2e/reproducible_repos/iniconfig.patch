@@ -1,0 +1,6 @@
+diff --git a/marker.txt b/marker.txt
+new file mode 100644
+--- /dev/null
++++ b/marker.txt
+@@ -0,0 +1 @@
++patched

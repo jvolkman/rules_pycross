@@ -357,6 +357,10 @@ def create_repos(
                 "default_backend": DEFAULT_BACKEND,
                 "whldir_name": whldir_name,
             }
+            remote_file = resolved_lock.get("remote_files", {}).get(sdist_file_key, {})
+            sdist_urls = remote_file.get("urls", [])
+            if remote_file.get("sha256") and not (sdist_urls and sdist_urls[0].startswith("git+")):
+                sdist_repo_attrs["sdist_sha256"] = remote_file["sha256"]
             if "extra_build_tools" in pkg and pkg["extra_build_tools"] != None:
                 sdist_repo_attrs["extra_build_tools"] = pkg["extra_build_tools"]
 
