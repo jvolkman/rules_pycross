@@ -1023,7 +1023,18 @@ def _test_reset_gates_impl(env, target):
             "marker_dependencies": [
                 {"key": "one@1.0"},
                 {"key": "win@1.0", "marker": "sys_platform == 'win32'"},
+                {"key": "win@1.0", "marker": "sys_platform == 'cygwin'"},
             ],
+        },
+        # Blocked by a dep without wheels: must not leave a dead `_reset_wheel_` target.
+        "no-wheel@1.0": {"sdist_file": {"key": "no_wheel_sdist"}},
+        "blocked@1.0": {
+            "wheel_candidates": [
+                _whl("blk_whl1", "blocked-1.0-cp312-cp312-manylinux_2_17_x86_64.whl"),
+                _whl("blk_whl2", "blocked-1.0-cp312-cp312-win_amd64.whl"),
+            ],
+            "sdist_file": {"key": "blk_sdist"},
+            "marker_dependencies": [{"key": "no-wheel@1.0"}],
         },
     })
 
@@ -1031,14 +1042,23 @@ def _test_reset_gates_impl(env, target):
     env.expect.that_str(_library(res, "one@1.0")[1]).equals('":_wheel_cs_one@1.0_one_1_0_py3_none_any_whl"')
     env.expect.that_str(_library(res, "win@1.0")[1]).equals('":_reset_wheel_win@1.0"')
 
-    # The conditional edge only needs win's gate where it applies.
+    # Conditional edges only need win's gate where they apply, and two edges to
+    # the same dep with different markers get distinct target names.
     env.expect.that_str(_library(res, "top@1.0")[1]).equals('":_reset_ok_top@1.0"')
-    edge = res.split('name = "_reset_edge_top@1.0_win@1.0",')[1].split(")")[0]
+    edge_names = [
+        line.split('"')[1]
+        for line in res.split("\n")
+        if 'name = "_reset_edge_' in line and '_win@1.0",' in line
+    ]
+    env.expect.that_int(len(edge_names)).equals(2)
+    env.expect.that_bool(edge_names[0] != edge_names[1]).equals(True)
+    edge = res.split('name = "{}",'.format(edge_names[0]))[1].split(")")[0]
     env.expect.that_str(edge).contains("match_any")
     env.expect.that_str(edge).contains("_nomatch")
     env.expect.that_str(edge).contains(":_reset_wheel_win@1.0")
     env.expect.that_str(res).contains('load("@bazel_skylib//lib:selects.bzl", "selects")')
     env.expect.that_str(_library(res, "uses-extra@1.0")[1]).equals('":_wheel_cs_one@1.0_one_1_0_py3_none_any_whl"')
+    env.expect.that_bool("_reset_wheel_blocked@1.0" in res).equals(False)
 
 def _test_reset_gates(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])

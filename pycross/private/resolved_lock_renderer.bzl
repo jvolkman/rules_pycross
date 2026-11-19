@@ -727,6 +727,7 @@ def _compute_reset_plan(packages, repo_map, conflict_pairs, gate_lines):
     """
     plan = {}
     nomatch = {}  # marker evaluator names that need an `_nomatch` config_setting
+    edge_gates = {}  # (eval_name, dep_key) -> label, shared across packages
 
     def group(name, kind, labels):
         gate_lines.extend([
@@ -748,29 +749,32 @@ def _compute_reset_plan(packages, repo_map, conflict_pairs, gate_lines):
         is_extras_proxy = not pkg.get("wheel_candidates") and parts.extra
         if pkg.get("cycle_group") or pkg.get("post_install_patches") or pkg.get("build_target"):
             return no
-        deps = pkg.get("marker_dependencies", [])
-        for md in deps:
-            if md.get("marker") and _marker_depends_on_variants(md["marker"], conflict_pairs):
-                return no
-
-        items = []
+        base = None
         if is_extras_proxy:
             base = plan.get("{}@{}".format(parts.name, parts.version))
             if not base or not base.ok:
                 return no
-            if base.gate:
-                items.append(base.gate)
-        else:
-            if not resolved:
-                return no
-            if pkg.get("sdist_file") and has_build_fallback(pkg):
-                cs_names = [":_wheel_cs_{}_{}".format(key, _sanitize_name(c["filename"])) for c in resolved]
-                items.append(cs_names[0] if len(cs_names) == 1 else group("_reset_wheel_" + key, "match_any", cs_names))
+        elif not resolved:
+            return no
 
+        deps = pkg.get("marker_dependencies", [])
         for md in deps:
+            if md.get("marker") and _marker_depends_on_variants(md["marker"], conflict_pairs):
+                return no
             dep = plan.get(md["key"])
             if not dep or not dep.ok:
                 return no
+
+        items = []
+        if is_extras_proxy:
+            if base.gate:
+                items.append(base.gate)
+        elif pkg.get("sdist_file") and has_build_fallback(pkg):
+            cs_names = [":_wheel_cs_{}_{}".format(key, _sanitize_name(c["filename"])) for c in resolved]
+            items.append(cs_names[0] if len(cs_names) == 1 else group("_reset_wheel_" + key, "match_any", cs_names))
+
+        for md in deps:
+            dep = plan[md["key"]]
             if not dep.gate:
                 continue
             if not md.get("marker"):
@@ -781,11 +785,14 @@ def _compute_reset_plan(packages, repo_map, conflict_pairs, gate_lines):
             effective_extra = parts.extra if "extra" in md["marker"] else ""
             eval_name = marker_evaluator_name(md["marker"], effective_extra)
             nomatch[eval_name] = True
-            items.append(group(
-                "_reset_edge_{}_{}".format(key, md["key"]),
-                "match_any",
-                [":{}_nomatch".format(eval_name), dep.gate],
-            ))
+            edge_key = (eval_name, md["key"])
+            if edge_key not in edge_gates:
+                edge_gates[edge_key] = group(
+                    "_reset_edge_{}_{}".format(eval_name, md["key"]),
+                    "match_any",
+                    [":{}_nomatch".format(eval_name), dep.gate],
+                )
+            items.append(edge_gates[edge_key])
 
         items = {i: True for i in items}.keys()
         if not items:
