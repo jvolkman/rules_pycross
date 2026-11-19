@@ -176,46 +176,55 @@ def _test_flags_sharing_item(name):
 
 # ── Test: usable items ──────────────────────────────────────────────
 
-def _test_usable_filters_flags_and_default_impl(env, target):
-    # Would fail with "Conflicting variants" if `b` weren't filtered out.
-    env.expect.that_target(target).default_outputs().contains_at_least([])
-
-def _test_usable_filters_flags_and_default(name):
-    """Flags and the default for items outside `usable` are ignored."""
+def _usable_resolver(name, usable, default):
     flag_refs = _setup_flags(name, ["a", "b"])
     variant_resolver(
         name = name + "_resolver",
         flags = dict(zip(flag_refs, ["a", "b"])),
         items = ["a", "b", "c"],
-        usable = _setup_string(name + "_usable", "a c"),
-        default_setting = _setup_string(name + "_default", "b"),
+        usable = _setup_string(name + "_usable", usable),
+        default_setting = _setup_string(name + "_default", default),
         tags = ["manual"],
     )
+
+def _expect_value(value):
+    def impl(env, target):
+        env.expect.that_str(target[config_common.FeatureFlagInfo].value).equals(value)
+
+    return impl
+
+def _test_usable_filters_flags(name):
+    """A flag for an item outside `usable` doesn't conflict with a usable one."""
+    _usable_resolver(name, "a c", "b")
     analysis_test(
         name = name,
         target = name + "_resolver",
-        impl = _test_usable_filters_flags_and_default_impl,
+        impl = _expect_value("a"),
         config_settings = {
             str(Label(":" + name + "_flag_a")): True,
             str(Label(":" + name + "_flag_b")): True,
         },
     )
 
-def _test_usable_empty_selects_nothing(name):
-    """An empty `usable` selects nothing, even with conflicting flags and a default."""
-    flag_refs = _setup_flags(name, ["a", "b"])
-    variant_resolver(
-        name = name + "_resolver",
-        flags = dict(zip(flag_refs, ["a", "b"])),
-        items = ["a", "b"],
-        usable = _setup_string(name + "_usable", ""),
-        default_setting = _setup_string(name + "_default", "a"),
-        tags = ["manual"],
-    )
+def _test_usable_filters_default(name):
+    """A flag and a default outside `usable` both select nothing."""
+    _usable_resolver(name, "a c", "b")
     analysis_test(
         name = name,
         target = name + "_resolver",
-        impl = _test_usable_filters_flags_and_default_impl,
+        impl = _expect_value(""),
+        config_settings = {
+            str(Label(":" + name + "_flag_b")): True,
+        },
+    )
+
+def _test_usable_empty_selects_nothing(name):
+    """An empty `usable` selects nothing, even with conflicting flags and a default."""
+    _usable_resolver(name, "", "a")
+    analysis_test(
+        name = name,
+        target = name + "_resolver",
+        impl = _expect_value(""),
         config_settings = {
             str(Label(":" + name + "_flag_a")): True,
             str(Label(":" + name + "_flag_b")): True,
@@ -635,7 +644,8 @@ def variant_resolver_test_suite(name):
             _test_shared_flag_conflict_fails,
             _test_flags_sharing_item,
             _test_pin_beats_flags,
-            _test_usable_filters_flags_and_default,
+            _test_usable_filters_flags,
+            _test_usable_filters_default,
             _test_usable_empty_selects_nothing,
             _test_flag_beats_default,
             _test_unknown_pin_fails,

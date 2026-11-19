@@ -1061,8 +1061,8 @@ def _test_transition_settings_impl(env, target):
     env.expect.that_dict(settings(info)).contains_exactly({})
 
     # Outside the transition, `is_<flag>` follows the flag pin, not the rival default.
-    result = transition_settings_for_testing(info, {_S0: "extra_app_gpu"}, "ws", "repo", True)
     info = _overlapping_variant_info({0: ["extra_app_cpu", "extra_app_gpu"], 1: ["extra_app_cpu"]}, default = {1: "extra_app_cpu"})
+    result = transition_settings_for_testing(info, {_S0: "extra_app_gpu"}, "ws", "repo", True)
     build = variants_build_for_testing(info, "ws", "repo", pins_by_set = result.pins_by_set, excluded = result.excluded)
     env.expect.that_str(build).contains('name = "_selected_extra_app_gpu"')
     env.expect.that_bool('name = "_selected_extra_app_cpu"' in build).equals(False)
