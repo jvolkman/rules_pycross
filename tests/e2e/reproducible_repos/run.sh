@@ -2,8 +2,8 @@
 set -euo pipefail
 shopt -s nullglob
 
-# pycross_wheel_file repos are marked reproducible, so Bazel's repo contents
-# cache may share them across output bases and machines. It reuses an entry
+# pycross_wheel_file and pycross_sdist_repo repos are marked reproducible, so
+# Bazel's repo contents cache may share them across output bases and machines. It reuses an entry
 # only when every input the repo recorded matches, and reusing it is only
 # correct if the repo's contents match too. Fetch the same repos into two
 # output bases and check that every repo that runs an internal tool records
@@ -58,6 +58,10 @@ for marker in "$first"/@*.marker; do
   if [[ "$repo" == *"_sdist_iniconfig_"* ]]; then
     if ! grep -q 'iniconfig.patch' "$marker"; then
       echo "ERROR: $repo did not record pre_build_patches file in $marker" >&2
+      failed=1
+    fi
+    if grep -q 'iniconfig-2.0.0.tar.gz' "$marker"; then
+      echo "ERROR: $repo recorded verified remote sdist in $marker" >&2
       failed=1
     fi
     checked_sdist=$((checked_sdist + 1))

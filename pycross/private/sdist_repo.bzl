@@ -391,6 +391,7 @@ def _sdist_repo_common(rctx):
     )
 
     metadata = json.decode(rctx.read(output_json))
+    rctx.delete(output_json)
     warnings = list(metadata.get("warnings", [])) + _validate_requirements(
         metadata.get("build_requires", []),
         pin_versions,
