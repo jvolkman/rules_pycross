@@ -4,7 +4,7 @@ load("@rules_testing//lib:analysis_test.bzl", "analysis_test", "test_suite")
 load("@rules_testing//lib:util.bzl", "util")
 
 # buildifier: disable=bzl-visibility
-load("//pycross/private:resolved_lock_renderer.bzl", "render_lock_bzl")
+load("//pycross/private:resolved_lock_renderer.bzl", "render_lock_bzl", "render_reset_bzl")
 
 # buildifier: disable=unused-variable
 def _test_render_lock_impl(env, target):
@@ -919,11 +919,178 @@ def _test_conflict_state_rendering(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
     analysis_test(name = name, target = name + "_subject", impl = _test_conflict_state_rendering_impl)
 
+# --- Variant reset ---
+
+def _whl(name, filename):
+    return {"filename": filename, "file_reference": {"key": name}}
+
+_RESET_SETS = [["extra_app_cpu", "extra_app_gpu"]]
+
+def _reset_lock(packages):
+    repo_map = {}
+    for pkg in packages.values():
+        for c in pkg.get("wheel_candidates", []):
+            repo_map[c["file_reference"]["key"]] = "@r//{}:wheel".format(c["file_reference"]["key"])
+        if pkg.get("sdist_file"):
+            repo_map[pkg["sdist_file"]["key"]] = "@r//{}:sdist".format(pkg["sdist_file"]["key"])
+    return render_lock_bzl({"packages": packages}, repo_map, "ws__pkgs", reset_conflict_sets = _RESET_SETS)
+
+def _library(res, key):
+    """The rule kind and gate of a package's library target."""
+    for kind in ("pycross_resettable_wheel_library(", "pycross_wheel_library("):
+        marker = '{}\n        name = "{}",'.format(kind, key)
+        if marker in res:
+            body = res.split(marker)[1].split("\n    )")[0]
+            gate = body.split("reset_gate = ")[1].split(",")[0] if "reset_gate = " in body else None
+            return (kind[:-1], gate)
+    return (None, None)
+
+# buildifier: disable=unused-variable
+def _test_reset_plan_impl(env, target):
+    """Packages that don't depend on variants install with them reset; others don't."""
+    res = _reset_lock({
+        "leaf@1.0": {"wheel_candidates": [_whl("leaf_whl", "leaf-1.0-py3-none-any.whl")]},
+        # Two items of one conflict set can't both be active, so this edge isn't variant-gated.
+        "uses-leaf@1.0": {
+            "wheel_candidates": [_whl("uses_whl", "uses_leaf-1.0-py3-none-any.whl")],
+            "marker_dependencies": [{"key": "leaf@1.0", "marker": "sys_platform == 'win32' or (extra == '__variant_extra_app_cpu' and extra == '__variant_extra_app_gpu')"}],
+        },
+        "gated@1.0": {
+            "wheel_candidates": [_whl("gated_whl", "gated-1.0-py3-none-any.whl")],
+            "marker_dependencies": [{"key": "leaf@1.0", "marker": "extra == '__variant_extra_app_cpu'"}],
+        },
+        "above-gated@1.0": {
+            "wheel_candidates": [_whl("above_whl", "above_gated-1.0-py3-none-any.whl")],
+            "marker_dependencies": [{"key": "gated@1.0"}],
+        },
+        "patched@1.0": {
+            "wheel_candidates": [_whl("patched_whl", "patched-1.0-py3-none-any.whl")],
+            "post_install_patches": ["//:p.patch"],
+        },
+        "no-wheel@1.0": {"sdist_file": {"key": "no_wheel_sdist"}},
+        "above-no-wheel@1.0": {
+            "wheel_candidates": [_whl("above_nw_whl", "above_no_wheel-1.0-py3-none-any.whl")],
+            "marker_dependencies": [{"key": "no-wheel@1.0"}],
+        },
+        "cyc@1.0": {
+            "wheel_candidates": [_whl("cyc_whl", "cyc-1.0-py3-none-any.whl")],
+            "cycle_group": "cycle_group_x",
+        },
+        "above-cyc@1.0": {
+            "wheel_candidates": [_whl("above_cyc_whl", "above_cyc-1.0-py3-none-any.whl")],
+            "marker_dependencies": [{"key": "cyc@1.0"}],
+        },
+    })
+    env.expect.that_str(res).contains('load(":reset.bzl", "pycross_resettable_wheel_library")')
+    env.expect.that_collection(_library(res, "leaf@1.0")).contains_exactly(["pycross_resettable_wheel_library", "None"]).in_order()
+    env.expect.that_collection(_library(res, "uses-leaf@1.0")).contains_exactly(["pycross_resettable_wheel_library", "None"]).in_order()
+    env.expect.that_str(_library(res, "gated@1.0")[0]).equals("pycross_wheel_library")
+    env.expect.that_str(_library(res, "above-gated@1.0")[0]).equals("pycross_wheel_library")
+    env.expect.that_str(_library(res, "patched@1.0")[0]).equals("pycross_wheel_library")
+
+    # Packages without wheels and cycle members (and what depends on them) stay.
+    env.expect.that_str(_library(res, "above-no-wheel@1.0")[0]).equals("pycross_wheel_library")
+    env.expect.that_str(_library(res, "above-cyc@1.0")[0]).equals("pycross_wheel_library")
+    env.expect.that_bool("pycross_resettable_wheel_library(\n        name = \"_raw_cyc@1.0\"" in res).equals(False)
+
+def _test_reset_plan(name):
+    util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
+    analysis_test(name = name, target = name + "_subject", impl = _test_reset_plan_impl)
+
+# buildifier: disable=unused-variable
+def _test_reset_gates_impl(env, target):
+    """Packages that can fall back to an sdist only reset where a wheel matches."""
+    res = _reset_lock({
+        "one@1.0": {
+            "wheel_candidates": [_whl("one_whl", "one-1.0-py3-none-any.whl")],
+            "sdist_file": {"key": "one_sdist"},
+        },
+        "win@1.0": {
+            "wheel_candidates": [
+                _whl("win_whl", "win-1.0-cp312-cp312-win_amd64.whl"),
+                _whl("win_whl32", "win-1.0-cp312-cp312-win32.whl"),
+            ],
+            "sdist_file": {"key": "win_sdist"},
+        },
+        # An extras proxy forwards its base package's gate.
+        "one[ext]@1.0": {"marker_dependencies": [{"key": "one@1.0"}]},
+        "uses-extra@1.0": {
+            "wheel_candidates": [_whl("uses_extra_whl", "uses_extra-1.0-py3-none-any.whl")],
+            "marker_dependencies": [{"key": "one[ext]@1.0"}],
+        },
+        "top@1.0": {
+            "wheel_candidates": [_whl("top_whl", "top-1.0-py3-none-any.whl")],
+            "marker_dependencies": [
+                {"key": "one@1.0"},
+                {"key": "win@1.0", "marker": "sys_platform == 'win32'"},
+                {"key": "win@1.0", "marker": "sys_platform == 'cygwin'"},
+            ],
+        },
+        # Blocked by a dep without wheels: must not leave a dead `_reset_wheel_` target.
+        "no-wheel@1.0": {"sdist_file": {"key": "no_wheel_sdist"}},
+        "blocked@1.0": {
+            "wheel_candidates": [
+                _whl("blk_whl1", "blocked-1.0-cp312-cp312-manylinux_2_17_x86_64.whl"),
+                _whl("blk_whl2", "blocked-1.0-cp312-cp312-win_amd64.whl"),
+            ],
+            "sdist_file": {"key": "blk_sdist"},
+            "marker_dependencies": [{"key": "no-wheel@1.0"}],
+        },
+    })
+
+    # A single wheel reuses its config_setting; several get a match_any group.
+    env.expect.that_str(_library(res, "one@1.0")[1]).equals('":_wheel_cs_one@1.0_one_1_0_py3_none_any_whl"')
+    env.expect.that_str(_library(res, "win@1.0")[1]).equals('":_reset_wheel_win@1.0"')
+
+    # Conditional edges only need win's gate where they apply, and two edges to
+    # the same dep with different markers get distinct target names.
+    env.expect.that_str(_library(res, "top@1.0")[1]).equals('":_reset_ok_top@1.0"')
+    edge_names = [
+        line.split('"')[1]
+        for line in res.split("\n")
+        if 'name = "_reset_edge_' in line and '_win@1.0",' in line
+    ]
+    env.expect.that_int(len(edge_names)).equals(2)
+    env.expect.that_bool(edge_names[0] != edge_names[1]).equals(True)
+    edge = res.split('name = "{}",'.format(edge_names[0]))[1].split(")")[0]
+    env.expect.that_str(edge).contains("match_any")
+    env.expect.that_str(edge).contains("_nomatch")
+    env.expect.that_str(edge).contains(":_reset_wheel_win@1.0")
+    env.expect.that_str(res).contains('load("@bazel_skylib//lib:selects.bzl", "selects")')
+    env.expect.that_str(_library(res, "uses-extra@1.0")[1]).equals('":_wheel_cs_one@1.0_one_1_0_py3_none_any_whl"')
+    env.expect.that_bool("_reset_wheel_blocked@1.0" in res).equals(False)
+
+def _test_reset_gates(name):
+    util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
+    analysis_test(name = name, target = name + "_subject", impl = _test_reset_gates_impl)
+
+# buildifier: disable=unused-variable
+def _test_reset_bzl_impl(env, target):
+    """reset.bzl resets every variant setting and each flag once."""
+    res = render_reset_bzl(["a_b"], ["@r1//_variants:x", "@r1//_variants:x", "@r2//_variants:y"])
+    env.expect.that_str(res).contains('"//_lock:_pin_a_b": "",')
+    env.expect.that_str(res).contains('"//_lock:_default_a_b": "",')
+    env.expect.that_str(res).contains('"//_lock:_usable_a_b": "*",')
+    env.expect.that_int(res.count('"@r1//_variants:x": False,')).equals(1)
+    env.expect.that_str(res).contains('"@r2//_variants:y": False,')
+
+    # Without conflict sets nothing resets.
+    lock = {"packages": {"leaf@1.0": {"wheel_candidates": [_whl("leaf_whl", "leaf-1.0-py3-none-any.whl")]}}}
+    plain = render_lock_bzl(lock, {"leaf_whl": "@r//leaf:wheel"}, "ws__pkgs")
+    env.expect.that_bool("reset.bzl" in plain).equals(False)
+
+def _test_reset_bzl(name):
+    util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
+    analysis_test(name = name, target = name + "_subject", impl = _test_reset_bzl_impl)
+
 def resolved_lock_renderer_test_suite(name):
     test_suite(
         name = name,
         tests = [
             _test_render_lock,
+            _test_reset_plan,
+            _test_reset_gates,
+            _test_reset_bzl,
             _test_epoch_sdist_repo_name,
             _test_cycle_group_rendering,
             _test_cycle_group_marker_specific_rendering,
