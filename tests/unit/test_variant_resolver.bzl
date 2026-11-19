@@ -174,6 +174,33 @@ def _test_flags_sharing_item(name):
         },
     )
 
+# ── Test: "no variant" pin ──────────────────────────────────────────
+
+def _test_no_variant_pin_ignores_flags_impl(env, target):
+    # Would fail with "Conflicting variants" or "unknown variant" otherwise.
+    env.expect.that_target(target).default_outputs().contains_at_least([])
+
+def _test_no_variant_pin_ignores_flags(name):
+    """The `__none__` pin selects nothing, even with conflicting flags and a default set."""
+    flag_refs = _setup_flags(name, ["a", "b"])
+    variant_resolver(
+        name = name + "_resolver",
+        flags = dict(zip(flag_refs, ["a", "b"])),
+        items = ["a", "b"],
+        pin = _setup_string(name + "_pin", "__none__"),
+        default_setting = _setup_string(name + "_default", "a"),
+        tags = ["manual"],
+    )
+    analysis_test(
+        name = name,
+        target = name + "_resolver",
+        impl = _test_no_variant_pin_ignores_flags_impl,
+        config_settings = {
+            str(Label(":" + name + "_flag_a")): True,
+            str(Label(":" + name + "_flag_b")): True,
+        },
+    )
+
 # ── Test: pin / default precedence ─────────────────────────────────
 
 def _test_pin_beats_flags_impl(env, target):
@@ -587,6 +614,7 @@ def variant_resolver_test_suite(name):
             _test_shared_flag_conflict_fails,
             _test_flags_sharing_item,
             _test_pin_beats_flags,
+            _test_no_variant_pin_ignores_flags,
             _test_flag_beats_default,
             _test_unknown_pin_fails,
             _test_display_names,

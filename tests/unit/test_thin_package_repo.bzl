@@ -16,6 +16,7 @@ load(
     "packages_bzl_for_testing",
     "pin_build_for_testing",
     "requirements_bzl_for_testing",
+    "unusable_set_pins_for_testing",
     "variant_fallbacks_for_testing",
     "variants_build_for_testing",
 )
@@ -1008,6 +1009,38 @@ def _test_pin_build_overlapping_sets(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
     analysis_test(name = name, target = name + "_subject", impl = _test_pin_build_overlapping_sets_impl)
 
+# buildifier: disable=unused-variable
+def _test_unusable_set_pins_impl(env, target):
+    """A transitioned repo pins "no variant" on sets it can't use."""
+    s0 = "extra_app_cpu_extra_app_gpu"
+    s1 = "extra_app_cpu_group_app_gpu-test"
+    s2 = "extra_app_x_extra_app_y"
+
+    def info(requested):
+        return collect_variants_for_testing([
+            {"items": [{"package": "app", "kind": "extra", "name": "cpu"}, {"package": "app", "kind": "extra", "name": "gpu"}], "repo_requested": requested.get(0, [])},
+            {"items": [{"package": "app", "kind": "extra", "name": "cpu"}, {"package": "app", "kind": "group", "name": "gpu-test"}], "repo_requested": requested.get(1, [])},
+            {"items": [{"package": "app", "kind": "extra", "name": "x"}, {"package": "app", "kind": "extra", "name": "y"}], "repo_requested": requested.get(2, [])},
+        ])
+
+    pin0 = "@ws//_lock:_pin_" + s0
+
+    # Pins gpu. cpu (its rival) is the only item of s1 the repo requests, and s2
+    # has none, so both get "no variant".
+    result = unusable_set_pins_for_testing(info({0: ["extra_app_cpu", "extra_app_gpu"], 1: ["extra_app_cpu"]}), {pin0: "extra_app_gpu"}, "ws")
+    env.expect.that_dict(result).contains_exactly({
+        "@ws//_lock:_pin_" + s1: "__none__",
+        "@ws//_lock:_pin_" + s2: "__none__",
+    })
+
+    # A set with a usable requested item keeps taking flags.
+    result = unusable_set_pins_for_testing(info({0: ["extra_app_gpu"], 2: ["extra_app_x", "extra_app_y"]}), {pin0: "extra_app_gpu"}, "ws")
+    env.expect.that_dict(result).contains_exactly({"@ws//_lock:_pin_" + s1: "__none__"})
+
+def _test_unusable_set_pins(name):
+    util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
+    analysis_test(name = name, target = name + "_subject", impl = _test_unusable_set_pins_impl)
+
 def thin_package_repo_test_suite(name):
     test_suite(
         name = name,
@@ -1015,6 +1048,7 @@ def thin_package_repo_test_suite(name):
             _test_variants_build_shared_flag,
             _test_variants_build_repo_default,
             _test_variants_build_shared_flag_pinned,
+            _test_unusable_set_pins,
             _test_pin_build_overlapping_sets,
             _test_pin_build_no_transition,
             _test_pin_build_with_platform,

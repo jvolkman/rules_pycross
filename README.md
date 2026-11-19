@@ -538,7 +538,7 @@ The repo's targets transition to that selection, so a package shared with other 
 
 If a repo requests several items of a set, and `[tool.uv] default-groups` names exactly one of them, that repo defaults to it when no flag is set. Single-project repos read the member's `pyproject.toml`, and multi-project repos read the workspace root's. Each repo applies its own default, so two repos can default to different groups in the same build.
 
-Extras are never a default, so a repo that requests several conflicting extras fails unless a flag selects one. Precedence from highest to lowest is: the repo's automatic selection or a `repo(flags / settings)` pin, command-line `_variants` flags, then `default-groups`. A `repo(flags / settings)` pin that disagrees with the automatic selection is an error.
+Extras are never a default, so a repo that requests several conflicting extras fails unless a flag selects one. Precedence from highest to lowest is: the repo's automatic selection or a `repo(flags / settings)` pin, command-line `_variants` flags, then `default-groups`. A `repo(flags / settings)` pin that disagrees with the automatic selection is an error. Inside a repo that has its own transition, `_variants` flags meant for other repos don't activate items that the repo didn't request or that conflict with its pins.
 
 ### Repository transitions
 

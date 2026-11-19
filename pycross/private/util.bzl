@@ -328,3 +328,8 @@ def url_decode_filename(filename):
             result += filename[i]
             i += 1
     return result
+
+# A `_pin_<set>` value that selects nothing, ignoring flags and defaults. A
+# repo's transition sets it for conflict sets the repo can't use, so flags meant
+# for other repos don't activate items there.
+NO_VARIANT_PIN = "__none__"

@@ -542,6 +542,8 @@ def translate_uv(project_dict, lock_dict, lock_model):
         owned_items = [item for item in variant_set["items"] if item["package"] in target_projects_set]
         requested_items = [item for item in owned_items if _is_item_requested(item, requested_keys[item["package"]])]
         requested_by_set.append((owned_items, requested_items))
+        if requested_items:
+            variant_set["repo_requested"] = [variant_item_qname(item) for item in requested_items]
         if len(requested_items) > 1:
             for item in requested_items:
                 rival_requested[variant_item_qname(item)] = True

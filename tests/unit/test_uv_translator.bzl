@@ -949,6 +949,10 @@ def _test_uv_auto_pin_overlapping_sets_impl(env, target):
     # cpu and gpu are both requested: the second set must not pin cpu either.
     env.expect.that_collection(pins(["default", "optional:cpu", "optional:gpu"])).contains_exactly(["", ""]).in_order()
     env.expect.that_collection(pins(["default", "optional:cpu"])).contains_exactly(["extra_app_cpu", "extra_app_cpu"]).in_order()
+
+    # Each set records what the repo requests from it.
+    result = translate_uv(_project(name = "app"), lock, _lock_model(projects = ["app"], dependency_groups = ["default", "optional:gpu"]))
+    env.expect.that_collection([vs.get("repo_requested", []) for vs in result["variants"]]).contains_exactly([["extra_app_gpu"], []]).in_order()
     env.expect.that_collection(pins(["default", "optional:gpu", "group:gpu-test"])).contains_exactly(["extra_app_gpu", "group_app_gpu-test"]).in_order()
 
     # Nor does it get a default there: with `default-groups = ["cpu"]` and both

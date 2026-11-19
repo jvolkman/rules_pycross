@@ -14,6 +14,7 @@ rather than individual bool_flags, providing:
 load("@bazel_skylib//rules:common_settings.bzl", "BuildSettingInfo")
 load("@rules_python//python:py_info.bzl", "PyInfo")
 load(":deferred_failure.bzl", "register_failure_action")
+load(":util.bzl", "NO_VARIANT_PIN")
 
 def _setting_value(target):
     return target[BuildSettingInfo].value if target else ""
@@ -26,6 +27,8 @@ def _check_item(ctx, value, source):
 def _variant_resolver_impl(ctx):
     # A repo pin (set by a pinned repo's transition) wins over everything.
     pin = _setting_value(ctx.attr.pin)
+    if pin == NO_VARIANT_PIN:
+        return [config_common.FeatureFlagInfo(value = "")]
     if pin:
         return [config_common.FeatureFlagInfo(value = _check_item(ctx, pin, str(ctx.attr.pin.label)))]
 

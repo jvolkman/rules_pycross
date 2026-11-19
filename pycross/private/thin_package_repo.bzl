@@ -12,7 +12,7 @@ The file structure is:
 - _variants/BUILD.bazel    - This repo's variant bool_flags, is_<flag> config settings and no-variant errors.
 """
 
-load(":util.bzl", "is_platform_specific", "parse_package_key", "underscore_name", "variant_item_qname")
+load(":util.bzl", "NO_VARIANT_PIN", "is_platform_specific", "parse_package_key", "underscore_name", "variant_item_qname")
 
 _requirement_func = """\
 load("@pypackaging.bzl", "pypackaging")
@@ -484,7 +484,7 @@ def _collect_variants(variant_sets):
     Returns:
         struct(
             flags = {flag: [qnames]},  # this repo's _variants flags and the items they enable
-            sets = {set_suffix: struct(qnames, flags, default, pin)},
+            sets = {set_suffix: struct(qnames, flags, default, pin, requested)},
         )
     """
     flags = {}
@@ -519,8 +519,47 @@ def _collect_variants(variant_sets):
                 flags = usable,
                 default = variant_set.get("repo_default", ""),
                 pin = variant_set.get("repo_pin", ""),
+                requested = variant_set.get("repo_requested", []),
             )
     return struct(flags = flags, sets = sets)
+
+def _unusable_set_pins(variant_info, fixed_settings, workspace_repo):
+    """`_pin_<set>` settings that make a transitioned repo ignore sets it can't use.
+
+    Variant resolvers read every repo's flags. In a repo with its own
+    transition, a flag meant for another repo could otherwise activate an item
+    that this repo didn't request, or that conflicts with one it pins, and
+    switch versions in shared packages. Each unpinned set with no usable
+    requested item is pinned to "no variant".
+
+    Args:
+        variant_info: Result of _collect_variants.
+        fixed_settings: {label: value} the repo's transition already sets.
+        workspace_repo: Name of the workspace (backing) repo.
+
+    Returns:
+        {label: NO_VARIANT_PIN} for those sets.
+    """
+    pin_prefix = "@{}//_lock:_pin_".format(workspace_repo)
+    pinned = [v for k, v in fixed_settings.items() if k.startswith(pin_prefix) and v != NO_VARIANT_PIN]
+    excluded = {}  # qnames that conflict with an item this repo pins
+    for vset in variant_info.sets.values():
+        for qname in pinned:
+            if qname not in vset.qnames:
+                continue
+            for other in vset.qnames:
+                if other != qname:
+                    excluded[other] = True
+
+    result = {}
+    for set_suffix, vset in sorted(variant_info.sets.items()):
+        pin_label = pin_prefix + set_suffix
+        if pin_label in fixed_settings:
+            continue
+        if [q for q in vset.requested if q not in excluded]:
+            continue
+        result[pin_label] = NO_VARIANT_PIN
+    return result
 
 def _variants_build(variant_info, workspace_repo, repo_name, unselected_groups = None):
     """Render _variants/BUILD.bazel: this repo's variant flags.
@@ -641,6 +680,7 @@ def _variants_build(variant_info, workspace_repo, repo_name, unselected_groups =
 # Visible for testing
 collect_variants_for_testing = _collect_variants
 variant_fallbacks_for_testing = _variant_fallbacks
+unusable_set_pins_for_testing = _unusable_set_pins
 variants_build_for_testing = _variants_build
 
 def _thin_package_repo_impl(rctx):
@@ -726,6 +766,8 @@ def _thin_package_repo_impl(rctx):
         if vset.default:
             fixed_settings["@{}//_lock:_default_{}".format(workspace_repo, set_suffix)] = vset.default
     has_flags = bool(rctx.attr.flags) or bool(rctx.attr.settings) or bool(fixed_settings)
+    if has_flags:
+        fixed_settings.update(_unusable_set_pins(variant_info, fixed_settings, workspace_repo))
     has_constraints = bool(rctx.attr.constraint_values)
 
     if not target_platform and has_constraints:

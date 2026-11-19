@@ -48,3 +48,16 @@ py_test(
         "@runtime//iniconfig",
     ],
 )
+
+# pytest's edges to iniconfig are conflict-gated. In `gpu_only` it must get
+# 2.0.0, even when another repo's flag selects `cpu`.
+py_test(
+    name = "test_gpu_only_pytest",
+    srcs = ["tests/test_conflict_version.py"],
+    args = [
+        "iniconfig",
+        "2.0.0",
+    ],
+    main = "tests/test_conflict_version.py",
+    deps = ["@gpu_only//pytest"],
+)
