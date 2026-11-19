@@ -360,6 +360,15 @@ def _sdist_repo_common(rctx):
     _validate_build_backend(rctx.attr)
 
     sdist_path = rctx.path(rctx.attr.sdist)
+    if hasattr(rctx, "watch"):
+        # rctx.path() does not record file contents as repo inputs, so watch
+        # pre_build_patches explicitly. Verified remote sdists carry their
+        # sha256 in `sdist_sha256` (so cache hits don't need to materialize
+        # the archive repo); watch unpinned/local sdists directly.
+        if not rctx.attr.sdist_sha256:
+            rctx.watch(sdist_path)
+        for patch_label in rctx.attr.pre_build_patches:
+            rctx.watch(patch_label)
     output_json = rctx.path("build_metadata.json")
     pin_versions = json.decode(rctx.read(rctx.path(rctx.attr.pin_versions_json)))
 
@@ -382,6 +391,7 @@ def _sdist_repo_common(rctx):
     )
 
     metadata = json.decode(rctx.read(output_json))
+    rctx.delete(output_json)
     warnings = list(metadata.get("warnings", [])) + _validate_requirements(
         metadata.get("build_requires", []),
         pin_versions,
@@ -449,6 +459,11 @@ def _sdist_repo_impl(rctx):
 
 _SDIST_REPO_ATTRS = {
     "sdist": attr.label(mandatory = True),
+    "sdist_sha256": attr.string(
+        doc = "Verified SHA256 of `sdist`. When set, the repo rule relies on this attribute " +
+              "for cache invalidation instead of watching `sdist`, so repo contents cache hits " +
+              "do not need to materialize the archive repo.",
+    ),
     "deps": attr.string_list(doc = "Runtime dependencies from lock file."),
     "known_packages": attr.string_list(doc = "List of packages present in the lock file to filter build_requires."),
     "pin_versions_json": attr.label(doc = "The pin_versions.json file from the build tools thin repo.", mandatory = True),

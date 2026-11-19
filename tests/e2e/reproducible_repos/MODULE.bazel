@@ -17,6 +17,12 @@ uv.workspace(
     name = "uv",
     lock_file = "//:uv.lock",
 )
+uv.package(
+    name = "iniconfig",
+    build_mode = "always",
+    pre_build_patches = ["//:iniconfig.patch"],
+    workspace = "uv",
+)
 uv.repo(
     workspace = "uv",
 )

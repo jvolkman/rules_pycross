@@ -6,6 +6,9 @@ All notable changes to this project will be documented in this file.
 
 ### Changed
 
+- **Sdist repos are cached across output bases.** `pycross_sdist_repo` now marks
+  itself reproducible for Bazel's repo contents cache, watching
+  `pre_build_patches` and unpinned sdists for invalidation.
 - **`uv` repos select their only requested conflict item.** A repo that requests
   one item of a conflict set (such as `optional:cpu`) no longer needs a
   `_variants` flag, as with `uv sync --extra cpu`.
