@@ -174,27 +174,48 @@ def _test_flags_sharing_item(name):
         },
     )
 
-# ── Test: "no variant" pin ──────────────────────────────────────────
+# ── Test: usable items ──────────────────────────────────────────────
 
-def _test_no_variant_pin_ignores_flags_impl(env, target):
-    # Would fail with "Conflicting variants" or "unknown variant" otherwise.
+def _test_usable_filters_flags_and_default_impl(env, target):
+    # Would fail with "Conflicting variants" if `b` weren't filtered out.
     env.expect.that_target(target).default_outputs().contains_at_least([])
 
-def _test_no_variant_pin_ignores_flags(name):
-    """The `__none__` pin selects nothing, even with conflicting flags and a default set."""
+def _test_usable_filters_flags_and_default(name):
+    """Flags and the default for items outside `usable` are ignored."""
+    flag_refs = _setup_flags(name, ["a", "b"])
+    variant_resolver(
+        name = name + "_resolver",
+        flags = dict(zip(flag_refs, ["a", "b"])),
+        items = ["a", "b", "c"],
+        usable = _setup_string(name + "_usable", "a c"),
+        default_setting = _setup_string(name + "_default", "b"),
+        tags = ["manual"],
+    )
+    analysis_test(
+        name = name,
+        target = name + "_resolver",
+        impl = _test_usable_filters_flags_and_default_impl,
+        config_settings = {
+            str(Label(":" + name + "_flag_a")): True,
+            str(Label(":" + name + "_flag_b")): True,
+        },
+    )
+
+def _test_usable_empty_selects_nothing(name):
+    """An empty `usable` selects nothing, even with conflicting flags and a default."""
     flag_refs = _setup_flags(name, ["a", "b"])
     variant_resolver(
         name = name + "_resolver",
         flags = dict(zip(flag_refs, ["a", "b"])),
         items = ["a", "b"],
-        pin = _setup_string(name + "_pin", "__none__"),
+        usable = _setup_string(name + "_usable", ""),
         default_setting = _setup_string(name + "_default", "a"),
         tags = ["manual"],
     )
     analysis_test(
         name = name,
         target = name + "_resolver",
-        impl = _test_no_variant_pin_ignores_flags_impl,
+        impl = _test_usable_filters_flags_and_default_impl,
         config_settings = {
             str(Label(":" + name + "_flag_a")): True,
             str(Label(":" + name + "_flag_b")): True,
@@ -614,7 +635,8 @@ def variant_resolver_test_suite(name):
             _test_shared_flag_conflict_fails,
             _test_flags_sharing_item,
             _test_pin_beats_flags,
-            _test_no_variant_pin_ignores_flags,
+            _test_usable_filters_flags_and_default,
+            _test_usable_empty_selects_nothing,
             _test_flag_beats_default,
             _test_unknown_pin_fails,
             _test_display_names,

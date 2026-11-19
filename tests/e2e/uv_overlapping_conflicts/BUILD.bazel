@@ -61,3 +61,17 @@ py_test(
     main = "tests/test_conflict_version.py",
     deps = ["@gpu_only//pytest"],
 )
+
+py_test(
+    name = "test_gpu_dev_pytest",
+    srcs = ["tests/test_conflict_version.py"],
+    args = [
+        "iniconfig",
+        "2.0.0",
+    ],
+    main = "tests/test_conflict_version.py",
+    deps = [
+        "@gpu_dev//iniconfig",
+        "@gpu_dev//pytest",
+    ],
+)

@@ -14,7 +14,6 @@ rather than individual bool_flags, providing:
 load("@bazel_skylib//rules:common_settings.bzl", "BuildSettingInfo")
 load("@rules_python//python:py_info.bzl", "PyInfo")
 load(":deferred_failure.bzl", "register_failure_action")
-load(":util.bzl", "NO_VARIANT_PIN")
 
 def _setting_value(target):
     return target[BuildSettingInfo].value if target else ""
@@ -24,13 +23,28 @@ def _check_item(ctx, value, source):
         fail("{} selects unknown variant '{}' (expected one of: {})".format(source, value, ", ".join(ctx.attr.items)))
     return value
 
+def _usable_items(ctx):
+    """The items this configuration may select, or None for all of them."""
+    value = _setting_value(ctx.attr.usable) if ctx.attr.usable else "*"
+    if value == "*":
+        return None
+    usable = {}
+    for name in value.split(" "):
+        if name:
+            usable[_check_item(ctx, name, str(ctx.attr.usable.label))] = True
+    return usable
+
 def _variant_resolver_impl(ctx):
     # A repo pin (set by a pinned repo's transition) wins over everything.
     pin = _setting_value(ctx.attr.pin)
-    if pin == NO_VARIANT_PIN:
-        return [config_common.FeatureFlagInfo(value = "")]
     if pin:
         return [config_common.FeatureFlagInfo(value = _check_item(ctx, pin, str(ctx.attr.pin.label)))]
+
+    # A transitioned repo limits the set to the items it can use, so flags meant
+    # for other repos don't activate anything else here.
+    usable = _usable_items(ctx)
+    if usable != None and not usable:
+        return [config_common.FeatureFlagInfo(value = "")]
 
     active = []
     active_flags = []
@@ -40,8 +54,11 @@ def _variant_resolver_impl(ctx):
         display, sep, names = value.partition("|")
         if not sep:
             display, names = str(flag.label), value
+        enabled = [name for name in names.split(" ") if usable == None or name in usable]
+        if not enabled:
+            continue
         active_flags.append(display)
-        for name in names.split(" "):
+        for name in enabled:
             if name not in active:
                 active.append(name)
 
@@ -58,7 +75,7 @@ def _variant_resolver_impl(ctx):
     # A repo default (set by a repo's transition from its project's default-groups)
     # applies only when no flag selects a variant.
     default = _setting_value(ctx.attr.default_setting)
-    if default:
+    if default and (usable == None or default in usable):
         return [config_common.FeatureFlagInfo(value = _check_item(ctx, default, str(ctx.attr.default_setting.label)))]
 
     return [config_common.FeatureFlagInfo(value = "")]
@@ -83,6 +100,12 @@ variant_resolver = rule(
         "pin": attr.label(
             providers = [BuildSettingInfo],
             doc = "A string setting naming the pinned variant. When set, it overrides the flags.",
+        ),
+        "usable": attr.label(
+            providers = [BuildSettingInfo],
+            doc = "A string setting with the space-separated items that flags and the default may " +
+                  "select, `*` for all of them. A transitioned repo narrows it to the items it requests " +
+                  "that don't conflict with its pins.",
         ),
     },
 )

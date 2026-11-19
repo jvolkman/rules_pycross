@@ -235,7 +235,9 @@ def _package_repo_impl(rctx):
     # feed the resolver directly (one flag can enable several items, e.g.
     # `group_test` in a repo with two projects), and their transitions set
     # `_pin_<set>` (from `uv.repo(flags/settings)`) or `_default_<set>` (from
-    # the repo's default-groups). Precedence: pin > flags > default.
+    # the repo's default-groups). Precedence: pin > flags > default. A
+    # transitioned repo also sets `_usable_<set>` to the items it can use, so
+    # flags and defaults for other items are ignored there.
     for vset in variant_sets:
         set_suffix = "_".join(sorted(vset["qnames"]))
         resolver_name = "_resolver_" + set_suffix
@@ -250,10 +252,16 @@ def _package_repo_impl(rctx):
             '    build_setting_default = "",',
             ")",
             "",
+            "string_flag(",
+            '    name = "_usable_{}",'.format(set_suffix),
+            '    build_setting_default = "*",',
+            ")",
+            "",
             "variant_resolver(",
             '    name = "{}",'.format(resolver_name),
             '    pin = ":_pin_{}",'.format(set_suffix),
             '    default_setting = ":_default_{}",'.format(set_suffix),
+            '    usable = ":_usable_{}",'.format(set_suffix),
             "    items = {},".format(json.encode(sorted(vset["qnames"]))),
             "    flags = {",
         ])

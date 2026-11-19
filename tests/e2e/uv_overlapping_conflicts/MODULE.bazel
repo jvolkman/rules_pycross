@@ -59,4 +59,19 @@ uv.repo(
     projects = ["app"],
     workspace = "ws",
 )
-use_repo(uv, "cpu_only", "gpu_only", "runtime")
+
+# Requests every item, and a flag pins `gpu`. `gpu-test` stays usable in the
+# second set, but `cpu` (a rival of the pin) must not be activated there.
+uv.repo(
+    name = "gpu_dev",
+    dependency_groups = [
+        "default",
+        "optional:cpu",
+        "optional:gpu",
+        "group:gpu-test",
+    ],
+    flags = ["--@gpu_dev//_variants:extra_gpu=True"],
+    projects = ["app"],
+    workspace = "ws",
+)
+use_repo(uv, "cpu_only", "gpu_dev", "gpu_only", "runtime")
