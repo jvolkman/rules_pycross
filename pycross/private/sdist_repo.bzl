@@ -442,6 +442,9 @@ def _sdist_repo_impl(rctx):
 
     result.render(macro_attrs, backend_macro, extra_build_snippets)
 
+    if hasattr(rctx, "repo_metadata"):
+        return rctx.repo_metadata(reproducible = True)
+
 _SDIST_REPO_ATTRS = {
     "sdist": attr.label(mandatory = True),
     "deps": attr.string_list(doc = "Runtime dependencies from lock file."),
