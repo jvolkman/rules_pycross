@@ -11,7 +11,9 @@ def query(arg: str) -> Optional[str]:
     lib_dir = build_root / "lib"
 
     # Search for the actual postgresql include path.
-    include_paths = [Path(p) for p in os.environ.get("PYCROSS_INCLUDE_PATH", "").split(":") if p]
+    # Use the platform's path separator: ';' on Windows and ':' on Linux/macOS.
+    # Splitting on ':' would break Windows drive letters such as C:\MSVC\include.
+    include_paths = [Path(p) for p in os.environ.get("PYCROSS_INCLUDE_PATH", "").split(os.pathsep) if p]
     server_include_dir = ""
     for p in include_paths:
         if (p / "pg_config.h").is_file():

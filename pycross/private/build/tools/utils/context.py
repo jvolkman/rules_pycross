@@ -83,6 +83,11 @@ def load_build_context(config_path: str) -> BuildContext:
     # Merge user-supplied environment variables from the build_env attribute.
     # User vars take precedence over inherited environment.
     user_build_env = bazel_config.get("build_env", {})
+    if os.name == "nt":
+        # Windows treats Path and PATH as the same variable, but this dictionary
+        # treats them as different keys. Uppercase user keys so they replace
+        # inherited values instead of creating duplicates.
+        user_build_env = {key.upper(): value for key, value in user_build_env.items()}
     if user_build_env:
         build_env.update(user_build_env)
 

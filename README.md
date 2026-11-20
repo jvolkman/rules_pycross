@@ -89,6 +89,12 @@ register_toolchains("@llvm//toolchain:all")
 
 Pass `--platforms=@llvm//platforms:linux_aarch64` or `--platforms=@llvm//platforms:macos_aarch64` to cross-compile.
 
+For Windows targets built on Windows, the C/C++ build layer takes `PATH`,
+`INCLUDE`, and `LIB` from the selected MSVC toolchain. A `$PATH` entry expands to
+the build's existing `PATH`. Setuptools can use this environment to find MSVC
+and the Windows SDK. Pre-build hooks can adjust these values before the backend
+runs.
+
 ---
 
 ## Generated targets

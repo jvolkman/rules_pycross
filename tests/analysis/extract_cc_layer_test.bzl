@@ -329,6 +329,12 @@ def _test_absolutize_additional_input_paths_impl(env, target):
         got = absolutize_additional_input_paths_for_testing(flag, paths)
         env.expect.where(flag = flag).that_str(got).equals(expected)
 
+def _test_extract_cc_layer_msvc_environment(name):
+    native.test_suite(
+        name = name,
+        tests = ["//tests/analysis/msvc_env:tests"],
+    )
+
 def extract_cc_layer_test_suite(name):
     test_suite(
         name = name,
@@ -342,5 +348,6 @@ def extract_cc_layer_test_suite(name):
             _test_extract_cc_layer_template_vars,
             _test_extract_cc_layer_copts_no_shadowing,
             _test_convert_msvc_flags,
+            _test_extract_cc_layer_msvc_environment,
         ],
     )
