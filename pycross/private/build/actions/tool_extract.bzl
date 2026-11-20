@@ -19,9 +19,9 @@ def register_console_script_extract_action(ctx, site_packages, script_name):
     out_file = ctx.actions.declare_file(paths.join(ctx.attr.name + "_tools", script_name))
 
     args = ctx.actions.args()
-    args.add("--site-packages", site_packages.path)
+    args.add_all([site_packages], before_each = "--site-packages", expand_directories = False)
     args.add("--script", script_name)
-    args.add("--out", out_file.path)
+    args.add("--out", out_file)
 
     ctx.actions.run(
         executable = ctx.executable._extract_console_script,
@@ -29,6 +29,7 @@ def register_console_script_extract_action(ctx, site_packages, script_name):
         inputs = [site_packages],
         outputs = [out_file],
         mnemonic = "PycrossExtractConsoleScript",
+        execution_requirements = {"supports-path-mapping": "1"},
         progress_message = "Extracting console script %s" % script_name,
     )
 
@@ -54,9 +55,9 @@ def register_bin_extract_action(ctx, wheel_dir, binary_name):
     out_file = ctx.actions.declare_file(paths.join(ctx.attr.name + "_tools", binary_name))
 
     args = ctx.actions.args()
-    args.add(wheel_dir.path)
+    args.add_all([wheel_dir], expand_directories = False)
     args.add(binary_name)
-    args.add(out_file.path)
+    args.add(out_file)
 
     ctx.actions.run(
         inputs = [wheel_dir],
@@ -64,6 +65,7 @@ def register_bin_extract_action(ctx, wheel_dir, binary_name):
         executable = ctx.executable._extract_wheel_bin,
         arguments = [args],
         mnemonic = "PycrossExtractWheelBin",
+        execution_requirements = {"supports-path-mapping": "1"},
         progress_message = "Extracting binary %s" % binary_name,
     )
 

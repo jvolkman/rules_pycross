@@ -15,6 +15,11 @@ All notable changes to this project will be documented in this file.
 - **Shared installs across repo configurations.** A package whose install and
   dependencies don't depend on `uv` conflict variants is installed once, even
   when repos with different variant selections reach it.
+- **Path mapping for wheel install and extraction actions.** `PycrossWheelDir`,
+  `PycrossWheelInstall`, `PycrossExtractConsoleScript`, `PycrossExtractWheelBin`,
+  and `PycrossExtractWheelLib` now opt into Bazel path mapping
+  (`supports-path-mapping`) so remote and disk caches can share their outputs
+  across configurations.
 
 ### Fixed
 

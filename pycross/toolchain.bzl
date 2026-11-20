@@ -11,6 +11,7 @@ PycrossBuildExecRuntimeInfo = provider(
         "exec_python_compile_files": "A depset containing the subset of exec interpreter files needed for .pyc bytecode compilation.",
         "exec_python_files_to_run": "Optional FilesToRunProvider for the exec interpreter.",
         "exec_python_executable": "The path to the exec Python interpreter, either absolute or relative to execroot.",
+        "exec_python_executable_file": "Optional File for the exec Python interpreter, or None for a system interpreter_path.",
         "target_python_files": "A depset containing all files for the target interpreter.",
         "target_python_files_to_run": "Optional FilesToRunProvider for the target interpreter.",
         "target_python_executable": "The path to the target Python interpreter, either absolute or relative to execroot.",
@@ -58,6 +59,18 @@ def _is_compile_interpreter_path(path):
 # Visible for testing
 is_compile_interpreter_path_for_testing = _is_compile_interpreter_path
 
+def _python_executable_file(runtime):
+    """Resolve the Python executable File from a PyRuntimeInfo, if available.
+
+    Returns None when the runtime uses an external system interpreter_path.
+    """
+    files_to_run = getattr(runtime, "interpreter_files_to_run", None)
+    if files_to_run and files_to_run.executable:
+        return files_to_run.executable
+    if runtime.interpreter_path:
+        return None
+    return runtime.interpreter
+
 def _python_executable(runtime):
     """Resolve the Python executable path from a PyRuntimeInfo.
 
@@ -65,12 +78,10 @@ def _python_executable(runtime):
     interpreter_path and interpreter.path for runtimes that expose
     a launcher or wrapper executable.
     """
-    files_to_run = getattr(runtime, "interpreter_files_to_run", None)
-    if files_to_run and files_to_run.executable:
-        return files_to_run.executable.path
-    if runtime.interpreter_path:
-        return runtime.interpreter_path
-    return runtime.interpreter.path
+    exe_file = _python_executable_file(runtime)
+    if exe_file:
+        return exe_file.path
+    return runtime.interpreter_path
 
 def _pycross_hermetic_toolchain_impl(ctx):
     target_py_info = ctx.attr.target_interpreter[PyRuntimeInfo]
@@ -101,6 +112,7 @@ def _pycross_hermetic_toolchain_impl(ctx):
         exec_python_compile_files = exec_python_compile_files,
         exec_python_files_to_run = getattr(exec_py_info, "interpreter_files_to_run", None),
         exec_python_executable = _python_executable(exec_py_info),
+        exec_python_executable_file = _python_executable_file(exec_py_info),
         target_python_files = target_py_info.files,
         target_python_files_to_run = getattr(target_py_info, "interpreter_files_to_run", None),
         target_python_executable = _python_executable(target_py_info),

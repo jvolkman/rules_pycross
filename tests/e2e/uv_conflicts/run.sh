@@ -80,3 +80,74 @@ echo "Testing flags-only transition and modules_mapping..."
 bazel test "$@" //:test_transition_flags_only //:test_transition_settings //:test_auto_pin --test_output=errors
 bazel build "$@" //:transition_modules_mappings
 echo "Flags-only transition test passed."
+
+# Verify path mapping shares PycrossWheelDir and PycrossWheelInstall outputs
+# across compilation modes while keeping incompatible precompile modes separate.
+echo "Testing path mapping across compilation modes..."
+pm_cache="$(mktemp -d)"
+trap 'rm -rf "$pm_cache"' EXIT
+pm_flags=(
+  --experimental_output_paths=strip
+  --disk_cache="$pm_cache"
+  --remote_cache=
+  --nouse_action_cache
+  --@project//_variants:extra_variant-a=True
+)
+pm_targets=(@project//typing_extensions:wheel @project//typing_extensions:pkg)
+
+check_pm_log() {
+  local log="$1"
+  local want_dir="$2"
+  local want_install="$3"
+  python3 - "$log" "$want_dir" "$want_install" <<'PY'
+import json, sys
+
+log_path, want_dir, want_install = sys.argv[1], sys.argv[2] == "hit", sys.argv[3] == "hit"
+dec = json.JSONDecoder()
+text = open(log_path).read()
+seen = {}
+idx = 0
+while idx < len(text):
+    while idx < len(text) and text[idx].isspace():
+        idx += 1
+    if idx >= len(text):
+        break
+    obj, idx = dec.raw_decode(text, idx)
+    mnemonic = obj.get("mnemonic", "")
+    label = obj.get("targetLabel", "")
+    if mnemonic in ("PycrossWheelDir", "PycrossWheelInstall") and "typing-extensions" in label:
+        seen[mnemonic] = bool(obj.get("cacheHit", False))
+
+expected = {"PycrossWheelDir": want_dir, "PycrossWheelInstall": want_install}
+if seen != expected:
+    raise SystemExit(f"Path-mapping cache mismatch: expected {expected}, got {seen}")
+PY
+}
+
+# 1. fastbuild -> opt with precompile disabled: both actions hit the disk cache.
+bazel build "${pm_flags[@]}" -c fastbuild \
+  --@rules_python//python/config_settings:precompile=force_disabled \
+  "${pm_targets[@]}" >/dev/null
+bazel build "${pm_flags[@]}" -c opt \
+  --@rules_python//python/config_settings:precompile=force_disabled \
+  --execution_log_json_file="$pm_cache/opt_noprecompile.json" \
+  "${pm_targets[@]}" >/dev/null
+check_pm_log "$pm_cache/opt_noprecompile.json" hit hit
+
+# 2. Precompile enabled: opt (unchecked_hash) misses fastbuild (checked_hash)
+#    for PycrossWheelInstall, while dbg (checked_hash) hits fastbuild.
+bazel build "${pm_flags[@]}" -c fastbuild \
+  --@rules_python//python/config_settings:precompile=force_enabled \
+  "${pm_targets[@]}" >/dev/null
+bazel build "${pm_flags[@]}" -c opt \
+  --@rules_python//python/config_settings:precompile=force_enabled \
+  --execution_log_json_file="$pm_cache/opt_precompile.json" \
+  "${pm_targets[@]}" >/dev/null
+check_pm_log "$pm_cache/opt_precompile.json" hit miss
+
+bazel build "${pm_flags[@]}" -c dbg \
+  --@rules_python//python/config_settings:precompile=force_enabled \
+  --execution_log_json_file="$pm_cache/dbg_precompile.json" \
+  "${pm_targets[@]}" >/dev/null
+check_pm_log "$pm_cache/dbg_precompile.json" hit hit
+echo "Path mapping test passed."
