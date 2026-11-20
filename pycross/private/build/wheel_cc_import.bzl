@@ -24,7 +24,7 @@ def _copy_from_wheel(ctx, site_packages, attr_name, rel_path):
     out = ctx.actions.declare_file("_{}/{}/{}".format(ctx.label.name, attr_name, paths.basename(rel_path)))
 
     args = ctx.actions.args()
-    args.add(site_packages.path)
+    args.add_all([site_packages], expand_directories = False)
     args.add(rel_path)
     args.add(attr_name)
     args.add(out)
@@ -35,6 +35,7 @@ def _copy_from_wheel(ctx, site_packages, attr_name, rel_path):
         inputs = [site_packages],
         outputs = [out],
         mnemonic = "PycrossExtractWheelLib",
+        execution_requirements = {"supports-path-mapping": "1"},
         progress_message = "Extracting %s from %s" % (rel_path, ctx.attr.wheel_library.label),
     )
     return out

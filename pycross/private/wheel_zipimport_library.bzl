@@ -16,6 +16,9 @@ def _pycross_wheel_zipimport_library_impl(ctx):
     args.add(wheel_file.path)
     args.add(stable_wheel.path)
 
+    # Do not enable supports-path-mapping here: link_wheel.py writes a relative
+    # symlink from the output to the input wheel, so mapped paths would bake
+    # configuration-stripped paths into the symlink target.
     ctx.actions.run(
         inputs = [wheel_file],
         outputs = [stable_wheel],

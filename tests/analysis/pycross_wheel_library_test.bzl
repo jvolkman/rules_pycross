@@ -152,6 +152,31 @@ def _test_pycross_wheel_dir_no_match_deferred_impl(env, target):
     # The marker is forwarded so downstream rules can report the package too.
     env.expect.that_target(target).has_provider(PycrossUnsupportedWheelInfo)
 
+def _test_pycross_wheel_dir_basic(name):
+    util.helper_target(
+        native.filegroup,
+        name = name + "_wheel",
+        srcs = ["test-1.0-py3-none-any.whl"],
+    )
+    util.helper_target(
+        pycross_wheel_dir,
+        name = name + "_subject",
+        src = name + "_wheel",
+        whldir_name = "test-1.0.whldir",
+    )
+    analysis_test(
+        name = name,
+        target = name + "_subject",
+        impl = _test_pycross_wheel_dir_basic_impl,
+    )
+
+def _test_pycross_wheel_dir_basic_impl(env, target):
+    wheel_dir = target[DefaultInfo].files.to_list()[0]
+    env.expect.that_bool(wheel_dir.is_directory).equals(True)
+    action = env.expect.that_target(target).action_generating(wheel_dir.short_path)
+    action.mnemonic().equals("PycrossWheelDir")
+    action.argv().contains(wheel_dir.path)
+
 # ── no_match_error compatibility probe ──────────────────────────────
 #
 # An incompatible target cannot be the subject of an analysis test (the test
@@ -532,6 +557,7 @@ def pycross_wheel_library_test_suite(name):
             _test_pycross_wheel_library_basic,
             _test_pycross_wheel_library_no_package_name,
             _test_pycross_wheel_library_no_match_deferred,
+            _test_pycross_wheel_dir_basic,
             _test_pycross_wheel_dir_no_match_deferred,
             _test_no_match_error_incompatible_by_default,
             _test_no_match_error_compatible_when_deferred,

@@ -40,8 +40,8 @@ def _pycross_wheel_dir_impl(ctx):
     out = ctx.actions.declare_directory(ctx.attr.whldir_name)
 
     args = ctx.actions.args()
-    args.add(src.path)
-    args.add(out.path)
+    args.add(src)
+    args.add_all([out], expand_directories = False)
 
     ctx.actions.run(
         inputs = [src],
@@ -49,6 +49,7 @@ def _pycross_wheel_dir_impl(ctx):
         executable = ctx.executable._copy_file,
         arguments = [args],
         mnemonic = "PycrossWheelDir",
+        execution_requirements = {"supports-path-mapping": "1"},
         progress_message = "Creating wheel directory %s" % ctx.attr.whldir_name,
     )
     return [DefaultInfo(files = depset([out]))]

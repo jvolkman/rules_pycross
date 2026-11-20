@@ -46,16 +46,17 @@ def _register_wheel_install_action(ctx, out, entry_points, dist_info_dir):
 
     args = ctx.actions.args().use_param_file("--flagfile=%s")
     if type(wheel_input) == "File" and wheel_input.is_directory:
-        args.add("--wheel-dir", wheel_input.path)
+        args.add_all([wheel_input], before_each = "--wheel-dir", expand_directories = False)
     else:
         # Plain file (e.g., local override wheel) — pass directly as --wheel
-        args.add("--wheel", wheel_input.path)
-    args.add("--directory", out.path)
+        args.add("--wheel", wheel_input)
+    args.add_all([out], before_each = "--directory", expand_directories = False)
     args.add_all(ctx.files.post_install_patches, format_each = "--patch=%s")
 
     inputs = [wheel_input] + ctx.files.post_install_patches
     transitive_inputs = []
     tools = []
+    supports_path_mapping = True
 
     for install_exclude_glob in ctx.attr.install_exclude_globs:
         args.add("--install-exclude-glob", install_exclude_glob)
@@ -91,7 +92,18 @@ def _register_wheel_install_action(ctx, out, entry_points, dist_info_dir):
             )
         else:
             invalidation_mode = ctx.attr.precompile_invalidation_mode
-        args.add("--compile-python", pycross_info.exec_python_executable)
+        exec_py_file = getattr(pycross_info, "exec_python_executable_file", None)
+        if not exec_py_file and pycross_info.exec_python_files_to_run:
+            exec_py_file = pycross_info.exec_python_files_to_run.executable
+        if exec_py_file:
+            args.add("--compile-python", exec_py_file)
+        else:
+            args.add("--compile-python", pycross_info.exec_python_executable)
+
+            # A custom provider that hands us a raw bazel-out string cannot be
+            # rewritten by Bazel's path mapper, so opt out for that case.
+            if pycross_info.exec_python_executable.startswith("bazel-out/"):
+                supports_path_mapping = False
         args.add("--compile-invalidation-mode", invalidation_mode)
         args.add("--compile-optimize", str(ctx.attr.precompile_optimize_level))
         compile_files = getattr(
@@ -103,6 +115,8 @@ def _register_wheel_install_action(ctx, out, entry_points, dist_info_dir):
             transitive_inputs.append(compile_files)
         if pycross_info.exec_python_files_to_run:
             tools.append(pycross_info.exec_python_files_to_run)
+        elif exec_py_file:
+            tools.append(exec_py_file)
 
     ctx.actions.run(
         inputs = depset(inputs, transitive = transitive_inputs),
@@ -110,6 +124,7 @@ def _register_wheel_install_action(ctx, out, entry_points, dist_info_dir):
         executable = ctx.executable._tool,
         tools = tools,
         mnemonic = "PycrossWheelInstall",
+        execution_requirements = {"supports-path-mapping": "1"} if supports_path_mapping else {},
         arguments = [args],
         env = {
             "PYTHONHASHSEED": "0",
