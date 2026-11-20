@@ -22,6 +22,22 @@ def _write_sdist(path: Path, mode: str) -> None:
         tf.addfile(info, io.BytesIO(data))
 
 
+def _mock_windows_os():
+    def lstat(path):
+        info = os.lstat(path)
+        attributes = 0
+        if not info.st_mode & stat.S_IWRITE:
+            attributes |= stat.FILE_ATTRIBUTE_READONLY
+        if stat.S_ISLNK(info.st_mode):
+            attributes |= stat.FILE_ATTRIBUTE_REPARSE_POINT
+        return SimpleNamespace(
+            st_mode=info.st_mode,
+            st_file_attributes=getattr(info, "st_file_attributes", attributes),
+        )
+
+    return SimpleNamespace(name="nt", lstat=lstat, walk=os.walk, path=os.path, chmod=Mock(wraps=os.chmod))
+
+
 class ExtractSdistTest(unittest.TestCase):
     def setUp(self):
         self._tmp = TemporaryDirectory()
@@ -46,7 +62,8 @@ class ExtractSdistTest(unittest.TestCase):
         extract_sdist(self.ctx)
 
         self.assertEqual(sorted(p.name for p in self.ctx.sdist_root_dir.iterdir()), ["new.txt"])
-        self.assertEqual(list(self.ctx.temp_dir.iterdir()), [])
+        self.assertFalse((self.ctx.temp_dir / "env").exists())
+        self.assertFalse((self.ctx.temp_dir / "extracted").exists())
 
     def test_tar_formats(self):
         for name, mode in [("pkg-1.0.tgz", "w:gz"), ("pkg-1.0.tar.bz2", "w:bz2"), ("pkg-1.0.tar", "w")]:
@@ -55,6 +72,62 @@ class ExtractSdistTest(unittest.TestCase):
                 _write_sdist(self.ctx.sdist_path, mode)
                 extract_sdist(self.ctx)
                 self.assertEqual((self.ctx.sdist_root_dir / "new.txt").read_text(), "new")
+
+    def test_windows_uses_short_stage_and_cleans_stale_readonly_trees(self):
+        self.ctx.temp_dir = self.tmp / ("long-build-output-" * 8) / "_tmp"
+        self.ctx.sdist_root_dir = self.tmp / "bazel-out" / "_pcr" / "0123456789abcdef"
+        stage_dir = self.ctx.sdist_root_dir.with_name(self.ctx.sdist_root_dir.name + "_extract")
+        stale_trees = [self.ctx.temp_dir, self.ctx.sdist_root_dir, stage_dir]
+        for stale_tree in stale_trees:
+            stale_file = stale_tree / "stale.txt"
+            stale_file.parent.mkdir(parents=True)
+            stale_file.write_text("stale")
+            stale_file.chmod(stat.S_IREAD)
+        _write_sdist(self.ctx.sdist_path, "w:gz")
+
+        platform_os = _mock_windows_os()
+        original_move = shutil.move
+        with (
+            patch.object(sdist, "os", platform_os),
+            patch.object(
+                sdist.shutil,
+                "move",
+                side_effect=lambda source, destination: original_move(source, destination),
+            ) as move,
+        ):
+            extract_sdist(self.ctx)
+
+        self.assertEqual(Path(move.call_args.args[0]).parent, stage_dir)
+        self.assertTrue(str(stage_dir).startswith(str(self.ctx.sdist_root_dir.parent)))
+        self.assertFalse(self.ctx.temp_dir.exists())
+        self.assertFalse(stage_dir.exists())
+        self.assertEqual((self.ctx.sdist_root_dir / "new.txt").read_text(), "new")
+        self.assertGreaterEqual(platform_os.chmod.call_count, len(stale_trees))
+
+    def test_rejects_stage_left_by_failed_cleanup(self):
+        stage_dir = self.tmp / "sdist_extract"
+        stage_dir.mkdir()
+        _write_sdist(self.ctx.sdist_path, "w:gz")
+
+        with patch.object(sdist, "os", _mock_windows_os()), patch.object(sdist, "_remove_scratch_dir"):
+            with self.assertRaises(FileExistsError):
+                extract_sdist(self.ctx)
+
+        self.assertEqual(list(stage_dir.iterdir()), [])
+
+    @unittest.skipIf(os.name == "nt", "creating Windows symlinks requires extra privileges")
+    def test_rejects_stage_symlink_before_extracting(self):
+        outside = self.tmp / "outside"
+        outside.mkdir()
+        stage_dir = self.tmp / "sdist_extract"
+        stage_dir.symlink_to(outside, target_is_directory=True)
+        _write_sdist(self.ctx.sdist_path, "w:gz")
+
+        with patch.object(sdist, "os", _mock_windows_os()):
+            with self.assertRaises(FileExistsError):
+                extract_sdist(self.ctx)
+
+        self.assertEqual(list(outside.iterdir()), [])
 
     @unittest.skipUnless(os.name == "nt", "requires Windows read-only file semantics")
     def test_removes_readonly_file_from_stale_environment(self):
@@ -66,7 +139,7 @@ class ExtractSdistTest(unittest.TestCase):
 
         try:
             extract_sdist(self.ctx)
-            self.assertEqual(list(self.ctx.temp_dir.iterdir()), [])
+            self.assertFalse(self.ctx.temp_dir.exists())
             self.assertEqual((self.ctx.sdist_root_dir / "new.txt").read_text(), "new")
         finally:
             if stale_file.exists():
@@ -80,20 +153,8 @@ class ReadonlyCleanupTest(unittest.TestCase):
         self.addCleanup(self.tmp.cleanup)
 
     def _windows_os(self):
-        # Model Windows file attributes on POSIX so CI exercises the traversal.
-        def lstat(path):
-            info = os.lstat(path)
-            attributes = 0
-            if not info.st_mode & stat.S_IWRITE:
-                attributes |= stat.FILE_ATTRIBUTE_READONLY
-            if stat.S_ISLNK(info.st_mode):
-                attributes |= stat.FILE_ATTRIBUTE_REPARSE_POINT
-            return SimpleNamespace(
-                st_mode=info.st_mode,
-                st_file_attributes=getattr(info, "st_file_attributes", attributes),
-            )
-
-        return SimpleNamespace(lstat=lstat, walk=os.walk, path=os.path, chmod=Mock(wraps=os.chmod))
+        # Simulate Windows file attributes so this test also runs on other platforms.
+        return _mock_windows_os()
 
     def test_prepares_nested_readonly_files_for_deletion(self):
         scratch = self.root / "scratch"
