@@ -115,6 +115,12 @@ def _test_extract_cc_layer_main_repo_includes_impl(env, target):
     for inc in include_dirs:
         env.expect.where(include_dir = inc).that_bool(inc.startswith("$$EXT_BUILD_ROOT$$/")).equals(True)
 
+def _test_extract_cc_layer_msvc_environment(name):
+    native.test_suite(
+        name = name,
+        tests = ["//tests/analysis/msvc_env:tests"],
+    )
+
 def extract_cc_layer_test_suite(name):
     test_suite(
         name = name,
@@ -122,5 +128,6 @@ def extract_cc_layer_test_suite(name):
             _test_extract_cc_layer_flags,
             _test_extract_cc_layer_user_flags,
             _test_extract_cc_layer_main_repo_includes,
+            _test_extract_cc_layer_msvc_environment,
         ],
     )

@@ -78,8 +78,9 @@ def load_build_context(config_path: str) -> BuildContext:
     # Merge user-supplied environment variables from the build_env attribute.
     # User vars take precedence over inherited environment.
     user_build_env = bazel_config.get("build_env", {})
-    if user_build_env:
-        build_env.update(user_build_env)
+    if os.name == "nt":
+        user_build_env = {key.upper(): value for key, value in user_build_env.items()}
+    build_env.update(user_build_env)
 
     return BuildContext(
         bazel_config=bazel_config,

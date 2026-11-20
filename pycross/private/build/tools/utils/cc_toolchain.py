@@ -1,3 +1,4 @@
+import os
 import re
 import shlex
 import shutil
@@ -11,6 +12,7 @@ from typing import Tuple
 
 from pycross.private.build.tools.utils.context import BuildContext
 from pycross.private.build.tools.utils.context import replace_placeholder
+from pycross.private.build.tools.utils.context import resolve_sandbox_path
 
 
 def parse_ar_and_guess_ranlib(ar: str | None) -> Tuple[List[str], Path | None]:
@@ -183,6 +185,20 @@ def unversioned_library_name(filename: str) -> Optional[str]:
     return None
 
 
+def _resolve_msvc_environment(ctx: BuildContext, environment: Dict[str, str], inherited_path: str) -> Dict[str, str]:
+    """Resolve MSVC path lists against the Bazel execroot."""
+    result = {}
+    for key, value in environment.items():
+        entries = []
+        for entry in value.split(os.pathsep):
+            if key == "PATH" and entry == "$PATH":
+                entries.append(inherited_path)
+            else:
+                entries.append(resolve_sandbox_path(ctx.prefix, entry))
+        result[key] = os.pathsep.join(entries)
+    return result
+
+
 def setup_cc_layer(ctx: BuildContext, cc_config: Dict[str, Any]) -> None:
     """Populate environment parameters and wrappers for Bazel CC Toolchains."""
     layer_bin_dir = ctx.temp_dir / "cc_layer" / "bin"
@@ -290,10 +306,19 @@ def setup_cc_layer(ctx: BuildContext, cc_config: Dict[str, Any]) -> None:
     include_paths = [str(layer_include_dir.absolute())] + [
         str(Path(replace_placeholder(ctx.prefix, p)).absolute()) for p in cc_config.get("include_dirs", [])
     ]
+    inherited_path = ctx.build_env.get("PATH", "")
     ctx.build_env.update(
         {
-            "PATH": f"{layer_bin_dir.absolute()}:{ctx.build_env.get('PATH', '')}",
+            "PATH": os.pathsep.join((str(layer_bin_dir.absolute()), ctx.build_env.get("PATH", ""))),
             "PYCROSS_LIBRARY_PATH": str(layer_lib_dir.absolute()),
-            "PYCROSS_INCLUDE_PATH": ":".join(include_paths),
+            "PYCROSS_INCLUDE_PATH": os.pathsep.join(include_paths),
         }
     )
+
+    if os.name == "nt" and cc_config.get("msvc_env"):
+        msvc_env = _resolve_msvc_environment(ctx, cc_config["msvc_env"], inherited_path)
+        ctx.build_env.update(msvc_env)
+        # Custom toolchains can omit SDK variables. Tell setuptools to use the
+        # prepared SDK only when the full environment is available.
+        if all(key in msvc_env for key in ("PATH", "INCLUDE", "LIB")) and msvc_env["PATH"]:
+            ctx.build_env["DISTUTILS_USE_SDK"] = "1"

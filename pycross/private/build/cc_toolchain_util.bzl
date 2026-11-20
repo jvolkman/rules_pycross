@@ -190,6 +190,48 @@ def get_flags_info(ctx, copts = [], linkopts = [], link_output_file = None):
         ),
     )
 
+def get_msvc_environment(ctx, cc_toolchain, feature_configuration):
+    """Returns compile PATH/INCLUDE and shared-link LIB from the MSVC toolchain.
+
+    Args:
+        ctx: The rule context.
+        cc_toolchain: The selected C++ toolchain.
+        feature_configuration: The configured external-build features.
+
+    Returns:
+        Available MSVC tool and SDK paths.
+    """
+    compile_env = cc_common.get_environment_variables(
+        feature_configuration = feature_configuration,
+        action_name = ACTION_NAMES.cpp_compile,
+        variables = cc_common.create_compile_variables(
+            feature_configuration = feature_configuration,
+            cc_toolchain = cc_toolchain,
+            preprocessor_defines = _defines_from_deps(ctx),
+            add_legacy_cxx_options = True,
+        ),
+    )
+    link_env = cc_common.get_environment_variables(
+        feature_configuration = feature_configuration,
+        action_name = ACTION_NAMES.cpp_link_dynamic_library,
+        variables = cc_common.create_link_variables(
+            cc_toolchain = cc_toolchain,
+            feature_configuration = feature_configuration,
+            is_using_linker = True,
+            is_linking_dynamic_library = True,
+            must_keep_debug = False,
+        ),
+    )
+
+    # Custom toolchains may provide only part of the SDK environment. Normalize
+    # Windows' case-insensitive keys, then emit whichever paths are available.
+    compile_env = {key.upper(): value for key, value in compile_env.items()}
+    link_env = {key.upper(): value for key, value in link_env.items()}
+    environment = {key: compile_env[key] for key in ["PATH", "INCLUDE"] if key in compile_env}
+    if "LIB" in link_env:
+        environment["LIB"] = link_env["LIB"]
+    return environment
+
 def _convert_flags(compiler, flags):
     """ Rewrites flags depending on the provided compiler.
 
