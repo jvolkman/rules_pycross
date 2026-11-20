@@ -11,12 +11,12 @@ _TAR_SUFFIXES = (".tar.gz", ".tgz", ".tar.bz2", ".tar")
 
 
 def _clear_readonly_files(path) -> None:
-    """Prepare a Windows scratch tree for deletion without following reparse points."""
-    # Do not change symlink targets or descend into directory junctions.
+    """Clear read-only attributes on Windows files, skipping links and junctions."""
+    # Skip links and junctions to leave their targets unchanged.
     if os.lstat(path).st_file_attributes & stat.FILE_ATTRIBUTE_REPARSE_POINT:
         return
     for root, dirs, files in os.walk(path, followlinks=False):
-        # Prune in place so os.walk skips directory junctions.
+        # Update dirs in place so os.walk skips junction targets.
         dirs[:] = [
             name
             for name in dirs
@@ -31,17 +31,46 @@ def _clear_readonly_files(path) -> None:
                 os.chmod(file_path, info.st_mode | stat.S_IWRITE)
 
 
+def _get_extraction_dir(ctx: BuildContext):
+    """Return the temporary directory used to extract the sdist.
+
+    Use a short directory beside the source root on Windows to avoid long
+    paths during extraction.
+    """
+    if os.name == "nt":
+        return ctx.sdist_root_dir.with_name(ctx.sdist_root_dir.name + "_extract")
+    return ctx.temp_dir / "extracted"
+
+
+def _remove_scratch_dir(path) -> None:
+    """Remove a scratch directory and its contents.
+
+    Ignore a missing scratch directory and raise if cleanup fails.
+    On Windows, clear read-only attributes first so those files can be deleted.
+    """
+    try:
+        # Skip cleanup if the scratch directory is missing. Use lstat() to
+        # check the path itself: exists() follows symlinks and would also
+        # skip a link whose target is missing.
+        path.lstat()
+    except FileNotFoundError:
+        return
+
+    if os.name == "nt":
+        _clear_readonly_files(path)
+    shutil.rmtree(path)
+
+
 def extract_sdist(ctx: BuildContext) -> None:
     """Extracts the source distribution into the build sandbox."""
     # Without sandboxing, files from earlier builds can remain in these
     # directories. Remove them before extracting the source again.
-    if os.name == "nt" and ctx.temp_dir.exists():
-        _clear_readonly_files(ctx.temp_dir)
-    shutil.rmtree(ctx.temp_dir, ignore_errors=True)
-    shutil.rmtree(ctx.sdist_root_dir, ignore_errors=True)
+    extract_parent = _get_extraction_dir(ctx)
+    for scratch_dir in (ctx.temp_dir, ctx.sdist_root_dir, extract_parent):
+        _remove_scratch_dir(scratch_dir)
 
-    extract_parent = ctx.temp_dir / "extracted"
-    extract_parent.mkdir(parents=True, exist_ok=True)
+    # Require a fresh directory so extraction stays in the intended location.
+    extract_parent.mkdir(parents=True)
 
     if ctx.sdist_path.name.endswith(_TAR_SUFFIXES):
         with tarfile.open(ctx.sdist_path, "r") as f:

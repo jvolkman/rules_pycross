@@ -1,6 +1,6 @@
-import base64
 import hashlib
 import json
+import ntpath
 import os
 from dataclasses import dataclass
 from dataclasses import field
@@ -16,10 +16,11 @@ class BuildContext:
     # Main configuration loaded from Bazel JSON
     bazel_config: Dict[str, Any]
 
-    # Absolute sandbox paths
+    # Build paths. The original source path can be relative.
     prefix: Path
     temp_dir: Path
     sdist_root_dir: Path
+    original_sdist_root: str
     sdist_dir: Path
     env_dir: Path
     bin_dir: Path
@@ -45,14 +46,45 @@ class BuildContext:
 
 
 def _short_windows_sdist_root(prefix: Path, original_sdist_root: str) -> Path:
-    """Return a short, stable source directory inside the execroot.
+    """Return a short, stable source path under bazel-out.
 
-    Setuptools embeds the absolute source path in MSVC object paths,
-    which can exceed Windows' 260-character path limit.
+    Setuptools includes the full source path in MSVC object paths.
+    Shortening it helps avoid Windows' 260-character path limit.
     """
-    digest = hashlib.sha256(original_sdist_root.encode("utf-8")).digest()
-    encoded_digest = base64.urlsafe_b64encode(digest).decode("ascii").rstrip("=")
-    return (prefix / "._ps" / encoded_digest).absolute()
+    digest = hashlib.sha256(original_sdist_root.encode("utf-8")).hexdigest()[:16]
+    return (prefix / "bazel-out" / "_pcr" / digest).absolute()
+
+
+def remap_sdist_path(path: str, prefix: Path, original_sdist_root: str, sdist_root_dir: Path) -> str:
+    """Return a source path updated to use the shorter directory.
+
+    Windows builds extract sources into a shorter directory. Replace the old
+    source directory in the returned path and keep the rest of the path.
+    Return unrelated paths unchanged.
+    """
+    absolute_path = ntpath.normpath(ntpath.join(str(prefix), path))
+    original_root = ntpath.normpath(ntpath.join(str(prefix), original_sdist_root))
+    path_key = ntpath.normcase(absolute_path)
+    root_key = ntpath.normcase(original_root)
+    if path_key == root_key:
+        return str(sdist_root_dir)
+    if path_key.startswith(root_key + "\\"):
+        suffix = absolute_path[len(original_root) + 1 :]
+        return str(sdist_root_dir.joinpath(*suffix.split("\\")))
+    return path
+
+
+def remap_sdist_pythonpath(
+    value: str, prefix: Path, original_sdist_root: str, sdist_root_dir: Path, pathsep: str
+) -> str:
+    """Update source entries in PYTHONPATH to use the shorter directory.
+
+    Build processes use PYTHONPATH to find Python modules, including modules
+    in the extracted sources. Keep other entries and their order unchanged.
+    """
+    return pathsep.join(
+        remap_sdist_path(path, prefix, original_sdist_root, sdist_root_dir) for path in value.split(pathsep)
+    )
 
 
 def load_build_context(config_path: str) -> BuildContext:
@@ -100,14 +132,32 @@ def load_build_context(config_path: str) -> BuildContext:
     # Merge user-supplied environment variables from the build_env attribute.
     # User vars take precedence over inherited environment.
     user_build_env = bazel_config.get("build_env", {})
+    if os.name == "nt":
+        # Windows treats Path and PATH as the same variable, but this dictionary
+        # treats them as different keys. Uppercase user keys so they replace
+        # inherited values instead of creating duplicates.
+        user_build_env = {key.upper(): value for key, value in user_build_env.items()}
     if user_build_env:
         build_env.update(user_build_env)
+
+    if os.name == "nt":
+        build_env["PYCROSS_SDIST_DIR"] = str(sdist_root_dir)
+        build_env["PYCROSS_BUILD_ROOT"] = str(temp_dir)
+        if "PYTHONPATH" in build_env:
+            build_env["PYTHONPATH"] = remap_sdist_pythonpath(
+                build_env["PYTHONPATH"],
+                prefix,
+                original_sdist_root,
+                sdist_root_dir,
+                os.pathsep,
+            )
 
     return BuildContext(
         bazel_config=bazel_config,
         prefix=prefix,
         temp_dir=temp_dir,
         sdist_root_dir=sdist_root_dir,
+        original_sdist_root=original_sdist_root,
         sdist_dir=sdist_dir,
         env_dir=temp_dir / "env",
         bin_dir=temp_dir / "bin",
