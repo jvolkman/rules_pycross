@@ -2,49 +2,49 @@
 
 All notable changes to this project will be documented in this file.
 
-## Unreleased
+## [2.2.0]
 
 ### Added
 
 - **Per-repo `@<repo>//_variants` string flag.** Repos with `uv` conflict
-  variants now expose a `string_flag` at `@<repo>//_variants` accepting a
-  variant name or comma-separated list (e.g. `extra_cu124,group_test`), which
-  also works with `rules_python`'s per-target `config_settings` transitions.
+  variants expose a `string_flag` accepting one or more comma-separated variant
+  names (e.g. `extra_cu124,group_test`), enabling per-target `config_settings`
+  transitions with `rules_python`.
+- **Windows `.lib` static libraries** are extracted in `cc_layer` alongside `.a`
+  archives.
 
 ### Changed
 
-- **Sdist repos are cached across output bases.** `pycross_sdist_repo` now marks
-  itself reproducible for Bazel's repo contents cache, watching
+- **Sdist repos are cached across output bases.** `pycross_sdist_repo` marks
+  itself reproducible for Bazel's repo contents cache and watches
   `pre_build_patches` and unpinned sdists for invalidation.
 - **`uv` repos select their only requested conflict item.** A repo that requests
   one item of a conflict set (such as `optional:cpu`) no longer needs a
-  `_variants` flag, as with `uv sync --extra cpu`.
-- **Shared installs across repo configurations.** A package whose install and
-  dependencies don't depend on `uv` conflict variants is installed once, even
-  when repos with different variant selections reach it.
+  `_variants` flag, matching `uv sync --extra cpu`.
+- **Shared installs across repo configurations.** Packages whose install and
+  dependencies do not depend on `uv` conflict variants are installed once, even
+  when reached from repos with different variant selections.
 - **Path mapping for wheel install and extraction actions.** `PycrossWheelDir`,
   `PycrossWheelInstall`, `PycrossExtractConsoleScript`, `PycrossExtractWheelBin`,
-  and `PycrossExtractWheelLib` now opt into Bazel path mapping
-  (`supports-path-mapping`) so remote and disk caches can share their outputs
-  across configurations.
+  and `PycrossExtractWheelLib` opt into `supports-path-mapping` so caches can
+  share outputs across configurations.
+- **Reproducible sdist build environment defaults.** Source builds default
+  `SOURCE_DATE_EPOCH=315532800` and `PYTHONHASHSEED=0` unless overridden by
+  `build_env`.
 
 ### Fixed
 
-- **Empty `ARFLAGS` in sdist builds.** `extract_cc_layer` now passes a sentinel
-  output path when querying Bazel's `cpp_link_static_library` flags so
-  `ARFLAGS` preserves toolchain archiver flags (such as `rcsD` or `libtool`'s
-  `-static -o`), fixing `setuptools` `build_clib` builds.
-- **Meson `longdouble_format` on macOS x86_64.** `meson_utils` now sets
-  `INTEL_EXTENDED_16_BYTES_LE` for `darwin` `x86_64` (keeping `IEEE_DOUBLE_LE`
-  for `darwin` `aarch64` and `windows`).
-- **Reproducible sdist build environment defaults.** Source builds now default
-  `SOURCE_DATE_EPOCH=315532800` and `PYTHONHASHSEED=0` unless overridden by
-  `build_env`.
+- **Empty `ARFLAGS` in sdist builds.** `extract_cc_layer` preserves Bazel
+  toolchain archiver flags (such as `rcsD` or `libtool`'s `-static -o`), fixing
+  `setuptools` `build_clib` builds while keeping Rust `cc-rs` builds working.
+- **Meson `longdouble_format` on macOS x86_64** now uses
+  `INTEL_EXTENDED_16_BYTES_LE` (keeping `IEEE_DOUBLE_LE` on macOS `aarch64` and
+  Windows).
 - **Packages missing from the venv** under `venvs_site_packages=yes` when a
   binary reaches one package through repos in different configurations.
-- **`_variants` flags no longer leak into transitioned repos.** A flag meant for
-  one repo could switch versions inside another repo with its own transition,
-  through items that repo didn't request or that conflict with its pins.
+- **`_variants` flags no longer leak into transitioned repos.** Flags meant for
+  one repo no longer switch versions inside another repo with its own
+  transition.
 
 ## [2.1.0]
 
