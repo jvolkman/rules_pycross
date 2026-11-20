@@ -10,8 +10,8 @@ All notable changes to this project will be documented in this file.
   variants expose a `string_flag` accepting one or more comma-separated variant
   names (e.g. `extra_cu124,group_test`), enabling per-target `config_settings`
   transitions with `rules_python`.
-- **Windows `.lib` static libraries** are extracted in `cc_layer` alongside `.a`
-  archives.
+- **Windows `.lib` static and import libraries** in `native_deps` are collected
+  alongside `.a` archives.
 
 ### Changed
 
@@ -34,9 +34,9 @@ All notable changes to this project will be documented in this file.
 
 ### Fixed
 
-- **Empty `ARFLAGS` in sdist builds.** `extract_cc_layer` preserves Bazel
-  toolchain archiver flags (such as `rcsD` or `libtool`'s `-static -o`), fixing
-  `setuptools` `build_clib` builds while keeping Rust `cc-rs` builds working.
+- **Empty `ARFLAGS` in sdist builds.** Source builds preserve Bazel toolchain
+  archiver flags (such as `rcsD` or `libtool`'s `-static -o`), fixing
+  `setuptools` `build_clib` builds.
 - **Meson `longdouble_format` on macOS x86_64** now uses
   `INTEL_EXTENDED_16_BYTES_LE` (keeping `IEEE_DOUBLE_LE` on macOS `aarch64` and
   Windows).
