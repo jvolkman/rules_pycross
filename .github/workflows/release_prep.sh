@@ -45,9 +45,59 @@ tar --create --auto-compress \
     --directory "$(bazel --output_base="$docs" info bazel-bin)" \
     --file "$GITHUB_WORKSPACE/${ARCHIVE%.tar.gz}.docs.tar.gz" .
 
-cat << EOF
-See the [changelog](CHANGELOG.md).
+REPO="${GITHUB_REPOSITORY:-jvolkman/rules_pycross}"
+CHANGELOG_FILE="${EXTRACT}/${PREFIX}/CHANGELOG.md"
+CHANGELOG_URL="https://github.com/${REPO}/blob/${TAG}/CHANGELOG.md"
+CHANGELOG_HEADING=""
+CHANGELOG_SECTION=""
 
+if [[ -f "${CHANGELOG_FILE}" ]]; then
+  CHANGELOG_HEADING=$(
+    awk -v ver="${VERSION}" '
+      /^## / {
+        if ($0 == "## [" ver "]" || index($0, "## [" ver "] ") == 1 || $0 == "## " ver || index($0, "## " ver " ") == 1) {
+          print substr($0, 4)
+          exit
+        }
+      }
+    ' "${CHANGELOG_FILE}"
+  )
+  CHANGELOG_SECTION=$(
+    awk -v ver="${VERSION}" '
+      /^## / {
+        if (found) exit
+        if ($0 == "## [" ver "]" || index($0, "## [" ver "] ") == 1 || $0 == "## " ver || index($0, "## " ver " ") == 1) {
+          found = 1
+          next
+        }
+      }
+      found {
+        if (!started && $0 == "") next
+        started = 1
+        lines[++n] = $0
+      }
+      END {
+        while (n > 0 && lines[n] == "") n--
+        for (i = 1; i <= n; i++) print lines[i]
+      }
+    ' "${CHANGELOG_FILE}"
+  )
+fi
+
+if [[ -n "${CHANGELOG_HEADING}" ]]; then
+  ANCHOR=$(printf '%s' "${CHANGELOG_HEADING}" | tr '[:upper:] ' '[:lower:]-' | tr -cd 'a-z0-9_-')
+  CHANGELOG_URL="${CHANGELOG_URL}#${ANCHOR}"
+fi
+
+echo "See the [CHANGELOG](${CHANGELOG_URL})."
+echo ""
+if [[ -n "${CHANGELOG_SECTION}" ]]; then
+  echo "## Release Notes"
+  echo ""
+  printf '%s\n\n' "${CHANGELOG_SECTION}"
+fi
+
+cat << EOF
 ## Using Bzlmod:
 
 Add to your \`MODULE.bazel\` file:
