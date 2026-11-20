@@ -69,6 +69,10 @@ def _test_extract_cc_layer_flags_impl(env, target):
     content.contains("-fno-strict-aliasing")
     content.contains("-Wl,-strip-all")
 
+    arflags = _cc_config(target)["ARFLAGS"]
+    env.expect.that_bool(bool(arflags)).equals(True)
+    env.expect.that_bool("__PYCROSS_ARCHIVER_OUTPUT__" in arflags).equals(False)
+
 def _cc_config(target):
     for action in target.actions:
         for output in action.outputs.to_list():

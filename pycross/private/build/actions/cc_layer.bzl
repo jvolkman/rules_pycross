@@ -41,7 +41,11 @@ def _get_sysconfig_data(workspace_name, tools, flags):
     ar_flags = flags.cxx_linker_static
 
     if ar == "libtool" or ar.endswith("/libtool"):
+        if not ar_flags:
+            ar_flags = ["-static"]
         ar_flags = ar_flags + ["-o"]
+    elif not ar_flags and (ar == "ar" or ar.endswith("/ar") or ar.endswith("-ar")):
+        ar_flags = ["rcs"]
 
     vars = {
         "CC": cc,

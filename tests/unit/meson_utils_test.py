@@ -146,6 +146,20 @@ class MesonUtilsTest(unittest.TestCase):
         content = (self.temp_path / "cc_layer" / "cross.ini").read_text()
         self.assertIn("c_link_args = ['-Wl,-O1', '/abs/libc++.a']", content)
 
+    def test_generate_cross_ini_longdouble_format(self):
+        cases = [
+            ("darwin", "x86_64", "INTEL_EXTENDED_16_BYTES_LE"),
+            ("darwin", "aarch64", "IEEE_DOUBLE_LE"),
+            ("linux", "x86_64", "INTEL_EXTENDED_16_BYTES_LE"),
+            ("linux", "aarch64", "IEEE_QUAD_LE"),
+            ("windows", "x86_64", "IEEE_DOUBLE_LE"),
+        ]
+        for target_os, target_cpu, expected in cases:
+            with self.subTest(target_os=target_os, target_cpu=target_cpu):
+                generate_cross_ini(self.ctx, {"target_os": target_os, "target_cpu": target_cpu})
+                content = (self.temp_path / "cc_layer" / "cross.ini").read_text()
+                self.assertIn(f"longdouble_format = '{expected}'", content)
+
 
 if __name__ == "__main__":
     unittest.main()

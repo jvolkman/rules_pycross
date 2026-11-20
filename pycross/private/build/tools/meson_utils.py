@@ -155,12 +155,12 @@ def generate_cross_ini(ctx: BuildContext, cc_config: Optional[Dict[str, Any]] = 
     # Compute longdouble_format from target platform. Meson auto-detection
     # can't work in cross builds, so we always set this explicitly to keep
     # native and cross paths identical.
-    if target_system == "darwin":
+    if target_system == "windows" or (target_system == "darwin" and target_cpu == "aarch64"):
         longdouble_format = "IEEE_DOUBLE_LE"
     elif target_cpu == "aarch64":
         longdouble_format = "IEEE_QUAD_LE"
     else:
-        # x86_64 Linux: 80-bit extended stored in 16 bytes
+        # x86_64 Linux and macOS: 80-bit extended stored in 16 bytes
         longdouble_format = "INTEL_EXTENDED_16_BYTES_LE"
 
     cc_list = shlex.split(cc) if cc else []
