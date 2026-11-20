@@ -166,6 +166,13 @@ PACKAGE_ATTRS = dict(
         values = ["", "auto", "enabled", "disabled"],
         doc = "Whether to precompile `.pyc` files when installing this package's wheel (`\"auto\"`, `\"enabled\"`, or `\"disabled\"`). `\"auto\"` follows the `--@rules_python//python/config_settings:precompile` flag. Defaults to inheriting from `*` if set, or `\"auto\"`.",
     ),
+    visibility = attr.label_list(
+        doc = (
+            "Visibility of this package's targets in each repo of the workspace: `@<repo>//<package>:*` " +
+            "and the `@<repo>//:<package>` alias. Labels resolve in the module that declares the tag " +
+            "(e.g. `//my/pkg:__pkg__`). Defaults to inheriting from `*` if set, or public."
+        ),
+    ),
 )
 
 def _tag_to_annotation_data(pkg, wildcard_pkg = None):
@@ -196,6 +203,7 @@ def _tag_to_annotation_data(pkg, wildcard_pkg = None):
         include_paths = pkg.include_paths or (wildcard_pkg.include_paths if wildcard_pkg else []),
         wheel_library_tags = pkg.wheel_library_tags or (wildcard_pkg.wheel_library_tags if wildcard_pkg else []),
         precompile = pkg.precompile or (wildcard_pkg.precompile if wildcard_pkg else ""),
+        visibility = pkg.visibility or (wildcard_pkg.visibility if wildcard_pkg else []),
     )
 
 tag_to_annotation_data_for_testing = _tag_to_annotation_data

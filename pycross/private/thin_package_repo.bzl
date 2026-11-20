@@ -312,8 +312,14 @@ def _pin_build(target_name, pin_target_dict, package, workspace_repo, workspace_
     actual_lines = []
     actual_pkg_ref = "//__actual/{}".format(target_name)
 
+    visibility = package.get("visibility")
+    if visibility:
+        # The root alias `//:<name>` points here, so it must see these targets.
+        visibility = visibility + ["//:__pkg__"]
+    else:
+        visibility = ["//visibility:public"]
     lines = [
-        'package(default_visibility = ["//visibility:public"])',
+        "package(default_visibility = {})".format(repr(visibility)),
         "",
     ]
 
@@ -751,6 +757,18 @@ variant_fallbacks_for_testing = _variant_fallbacks
 transition_settings_for_testing = _transition_settings
 variants_build_for_testing = _variants_build
 
+def _base_target_dict(group):
+    """Return a pin group's base target dict, derived from an extra's lock key if only extras are pinned."""
+    if group["base_target"] or not group["extras"]:
+        return group["base_target"]
+    first_extra_target_dict = list(group["extras"].values())[0]
+    base_target_dict = {}
+    for constraint, extra_target in first_extra_target_dict.items():
+        parts = parse_package_key(extra_target)
+        if parts.extra:
+            base_target_dict[constraint] = "{}@{}".format(parts.name, parts.version)
+    return base_target_dict
+
 def _thin_package_repo_impl(rctx):
     workspace_repo = rctx.attr.workspace_repo
     lock_json_path = rctx.path(rctx.attr.resolved_lock_file)
@@ -1057,39 +1075,38 @@ pycross_transitioning_file_proxy = rule(
             us_name = underscore_name(base_pin_name)
             base_target = group["base_target"]
 
+            # A root alias has the same visibility as the pin package it points to.
+            base_target_dict = _base_target_dict(group)
+            visibility = packages.get(list(base_target_dict.values())[0], {}).get("visibility") if base_target_dict else None
+            alias_end = ["    visibility = {},".format(repr(visibility))] if visibility else []
+            alias_end = alias_end + [")", ""]
+
             if base_target:
                 root_build_lines.extend([
                     "alias(",
                     '    name = "{}",'.format(base_pin_name),
                     '    actual = "//{}:pkg",'.format(us_name),
-                    ")",
-                ])
+                ] + alias_end)
                 if group["extras"]:
                     root_build_lines.extend([
                         "alias(",
                         '    name = "{}[]",'.format(base_pin_name),
                         '    actual = "//{}:[]",'.format(us_name),
-                        ")",
-                        "",
-                    ])
+                    ] + alias_end)
             elif group["extras"]:
                 # If no base target was pinned, but extras were, point the base name at the extras union.
                 root_build_lines.extend([
                     "alias(",
                     '    name = "{}",'.format(base_pin_name),
                     '    actual = "//{}:pkg",'.format(us_name),
-                    ")",
-                    "",
-                ])
+                ] + alias_end)
 
-            for extra_name, extra_target in sorted(group["extras"].items()):
+            for extra_name in sorted(group["extras"].keys()):
                 root_build_lines.extend([
                     "alias(",
                     '    name = "{}[{}]",'.format(base_pin_name, extra_name),
                     '    actual = "//{}:[{}]",'.format(us_name, extra_name),
-                    ")",
-                    "",
-                ])
+                ] + alias_end)
     rctx.file("BUILD.bazel", "\n".join(root_build_lines))
 
     base_packages_with_extras = {}
@@ -1101,15 +1118,7 @@ pycross_transitioning_file_proxy = rule(
 
     # Pin directories: proxies pointing to @workspace//_lock targets
     for base_pin_name, group in sorted(grouped_pins.items()):
-        base_target_dict = group["base_target"]
-        if not base_target_dict and group["extras"]:
-            # If the user only pinned extras, derive the base target from an extra's lock key.
-            first_extra_target_dict = list(group["extras"].values())[0]
-            base_target_dict = {}
-            for constraint, extra_target in first_extra_target_dict.items():
-                parts = parse_package_key(extra_target)
-                if parts.extra:
-                    base_target_dict[constraint] = "{}@{}".format(parts.name, parts.version)
+        base_target_dict = _base_target_dict(group)
 
         package = {}
         if base_target_dict:

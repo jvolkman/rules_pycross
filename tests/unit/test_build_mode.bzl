@@ -29,6 +29,7 @@ def _pkg_tag(**kwargs):
         include_paths = [],
         wheel_library_tags = [],
         precompile = "",
+        visibility = [],
     )
     fields.update(kwargs)
     return struct(**fields)

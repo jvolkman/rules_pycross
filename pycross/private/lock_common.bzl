@@ -59,6 +59,7 @@ def normalize_package_tag(tag):
         include_paths = tag.include_paths,
         wheel_library_tags = tag.wheel_library_tags,
         precompile = tag.precompile,
+        visibility = [str(label) for label in tag.visibility],
     )
 
 def discover_uv_all_members(mctx, lock_file_label):

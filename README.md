@@ -281,6 +281,13 @@ uv.package(
     post_install_patches = ["//:matplotlib.patch"],
     workspace = "shared",
 )
+
+# Only code under //src/db can depend on psycopg2 directly:
+uv.package(
+    name = "psycopg2",
+    visibility = ["//src/db:__subpackages__"],
+    workspace = "shared",
+)
 ```
 
 Common `package()` attributes (see [`docs/ext_uv.md`](docs/ext_uv.md) for the full list):
@@ -293,6 +300,7 @@ Common `package()` attributes (see [`docs/ext_uv.md`](docs/ext_uv.md) for the fu
 | `install_exclude_globs` | File globs to skip during wheel installation. |
 | `site_paths`, `bin_paths`, `data_paths`, `include_paths` | Override auto-detected wheel paths. |
 | `precompile` | `"auto"`, `"enabled"`, or `"disabled"` for `.pyc` compilation. |
+| `visibility` | Who can depend on the package's targets (`@<repo>//<package>:*` and `@<repo>//:<package>`). Defaults to public. |
 | `extra_build_tools`, `build_backend`, `build_target`, `build_tools_repo` | Source-build configuration (see [Building from source](#building-from-source)). |
 
 ---
