@@ -30,6 +30,16 @@ All notable changes to this project will be documented in this file.
 
 ### Fixed
 
+- **Empty `ARFLAGS` in sdist builds.** `extract_cc_layer` now passes a sentinel
+  output path when querying Bazel's `cpp_link_static_library` flags so
+  `ARFLAGS` preserves toolchain archiver flags (such as `rcsD` or `libtool`'s
+  `-static -o`), fixing `setuptools` `build_clib` builds.
+- **Meson `longdouble_format` on macOS x86_64.** `meson_utils` now sets
+  `INTEL_EXTENDED_16_BYTES_LE` for `darwin` `x86_64` (keeping `IEEE_DOUBLE_LE`
+  for `darwin` `aarch64` and `windows`).
+- **Reproducible sdist build environment defaults.** Source builds now default
+  `SOURCE_DATE_EPOCH=315532800` and `PYTHONHASHSEED=0` unless overridden by
+  `build_env`.
 - **Packages missing from the venv** under `venvs_site_packages=yes` when a
   binary reaches one package through repos in different configurations.
 - **`_variants` flags no longer leak into transitioned repos.** A flag meant for

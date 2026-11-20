@@ -75,6 +75,11 @@ def load_build_context(config_path: str) -> BuildContext:
 
     scrub_bazel_env(build_env)
 
+    # Default reproducibility settings for wheel timestamps and Python hash ordering
+    # (user build_env below can still override either).
+    build_env.setdefault("SOURCE_DATE_EPOCH", "315532800")
+    build_env.setdefault("PYTHONHASHSEED", "0")
+
     # Merge user-supplied environment variables from the build_env attribute.
     # User vars take precedence over inherited environment.
     user_build_env = bazel_config.get("build_env", {})

@@ -268,6 +268,33 @@ class CcToolchainTest(unittest.TestCase):
         self.assertEqual(ldshared[-3:], ["-bundle", "-undefined", "dynamic_lookup"])
         self.assertEqual(ctx.sysconfig_vars["LDCXXSHARED"], ctx.sysconfig_vars["LDSHARED"])
 
+    def test_load_build_context_reproducibility_env_defaults(self):
+        import json
+        import os
+        from unittest import mock
+
+        from pycross.private.build.tools.utils.context import load_build_context
+
+        cfg = self.temp_path / "cfg.json"
+        base = {
+            "sdist": "pkg.tar.gz",
+            "exec_python": "/usr/bin/python3",
+            "target_python": "/usr/bin/python3",
+            "wheel_dir": "out",
+        }
+        cfg.write_text(json.dumps(base))
+        env = {"PYCROSS_BUILD_ROOT": str(self.temp_path / "root"), "PYCROSS_SDIST_DIR": str(self.temp_path / "sdist")}
+        with mock.patch.dict(os.environ, env, clear=True):
+            ctx = load_build_context(str(cfg))
+        self.assertEqual(ctx.build_env["SOURCE_DATE_EPOCH"], "315532800")
+        self.assertEqual(ctx.build_env["PYTHONHASHSEED"], "0")
+
+        cfg.write_text(json.dumps({**base, "build_env": {"SOURCE_DATE_EPOCH": "1700000000", "PYTHONHASHSEED": "42"}}))
+        with mock.patch.dict(os.environ, env, clear=True):
+            ctx = load_build_context(str(cfg))
+        self.assertEqual(ctx.build_env["SOURCE_DATE_EPOCH"], "1700000000")
+        self.assertEqual(ctx.build_env["PYTHONHASHSEED"], "42")
+
 
 if __name__ == "__main__":
     unittest.main()

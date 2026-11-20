@@ -97,6 +97,23 @@ def get_tools_info(ctx):
         ),
     )
 
+_ARCHIVER_OUTPUT_SENTINEL = "__PYCROSS_ARCHIVER_OUTPUT__"
+
+def _strip_archiver_output_sentinel(flags):
+    """Remove the sentinel output path from archiver flags, keeping any `-o` trailing."""
+    result = []
+    had_dash_o = False
+    for f in flags:
+        if _ARCHIVER_OUTPUT_SENTINEL in f:
+            if result and result[-1] == "-o":
+                result.pop()
+                had_dash_o = True
+            continue
+        result.append(f)
+    if had_dash_o:
+        result.append("-o")
+    return result
+
 def get_flags_info(ctx, copts = [], linkopts = [], link_output_file = None):
     """Takes information about flags from cc_toolchain, returns CxxFlagsInfo
 
@@ -161,7 +178,8 @@ def get_flags_info(ctx, copts = [], linkopts = [], link_output_file = None):
                 is_using_linker = False,
                 is_linking_dynamic_library = False,
                 must_keep_debug = False,
-                output_file = link_output_file,
+                # rules_cc gates archiver_flags (`rcsD` / `-static -o`) on output_execpath.
+                output_file = link_output_file or _ARCHIVER_OUTPUT_SENTINEL,
             ),
         ),
         cxx_linker_executable = cc_common.get_memory_inefficient_command_line(
@@ -177,13 +195,17 @@ def get_flags_info(ctx, copts = [], linkopts = [], link_output_file = None):
         ),
     )
 
+    cxx_linker_static = flags.cxx_linker_static
+    if not link_output_file:
+        cxx_linker_static = _strip_archiver_output_sentinel(cxx_linker_static)
+
     # User flags are appended verbatim (no dedup against toolchain tokens:
     # that would split pairs like `-isystem DIR`).
     return CxxFlagsInfo(
         cc = _convert_flags(cc_toolchain_.compiler, flags.cc + copts),
         cxx = _convert_flags(cc_toolchain_.compiler, flags.cxx + cxxopts),
         cxx_linker_shared = _convert_flags(cc_toolchain_.compiler, flags.cxx_linker_shared + linkopts),
-        cxx_linker_static = _convert_flags(cc_toolchain_.compiler, flags.cxx_linker_static),
+        cxx_linker_static = _convert_flags(cc_toolchain_.compiler, cxx_linker_static),
         cxx_linker_executable = _convert_flags(cc_toolchain_.compiler, flags.cxx_linker_executable + linkopts),
         needs_pic_for_dynamic_libraries = cc_toolchain_.needs_pic_for_dynamic_libraries(
             feature_configuration = feature_configuration,
