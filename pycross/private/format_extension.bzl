@@ -219,6 +219,15 @@ def _normalize_flag(flag, is_root):
         name = "@@" + name
     if name == "//command_line_option:platforms":
         fail("Invalid repo flag {}: use 'platform' or 'constraint_values' instead".format(repr(flag)))
+
+    # Expand package-default target shorthand (e.g. `@repo//_variants` ->
+    # `@repo//_variants:_variants`) so duplicate checks and transition inputs
+    # treat shorthand and explicit target syntax identically.
+    _, slash_sep, pkg = name.partition("//")
+    if slash_sep and ":" not in pkg:
+        leaf = pkg.rpartition("/")[2]
+        if leaf:
+            name = name + ":" + leaf
     return "--" + name + sep + value
 
 def _normalize_settings(settings, flags):

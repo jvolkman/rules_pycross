@@ -284,9 +284,10 @@ def _package_repo_impl(rctx):
         for flag_label, qnames in sorted(vset["flags"].items()):
             lock_build_lines.append('        "{}": "{}|{}",'.format(flag_label, flag_label, " ".join(qnames)))
         lock_build_lines.append("    },")
-        if vset["member_flags"]:
+        if member_variant_flags:
             lock_build_lines.append("    string_flags = {")
-            for member, flag_map in sorted(vset["member_flags"].items()):
+            for member in sorted(member_variant_flags.keys()):
+                flag_map = vset["member_flags"].get(member, {})
                 spec = {
                     "display": "@{}//_variants".format(member),
                     "valid": sorted(member_variant_flags[member].keys()),

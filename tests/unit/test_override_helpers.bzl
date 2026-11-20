@@ -341,6 +341,8 @@ def _test_normalize_flags_impl(env, target):
     env.expect.that_str(n("--//pkg:flag=1", False)).equals("--//pkg:flag=1")
     env.expect.that_str(n("--:flag", False)).equals("--:flag")
     env.expect.that_str(n("--@repo//_variants:x=True", True)).equals("--@repo//_variants:x=True")
+    env.expect.that_str(n("--@repo//_variants=extra_a", True)).equals("--@repo//_variants:_variants=extra_a")
+    env.expect.that_str(n("--//pkg/sub=1", True)).equals("--@@//pkg/sub:sub=1")
     env.expect.that_str(n("--@@//pkg:flag", True)).equals("--@@//pkg:flag")
     env.expect.that_str(n("--//command_line_option:copt=-O2", True)).equals("--//command_line_option:copt=-O2")
     env.expect.that_str(n("--compilation_mode=opt", True)).equals("--//command_line_option:compilation_mode=opt")
@@ -486,6 +488,14 @@ def _test_compute_variant_pins_impl(env, target):
     ).contains_exactly({extra_suffix: "extra_app-a_gpu"})
     env.expect.that_dict(
         compute_variant_pins_for_testing("x", ["--@lock_all//_variants=extra_cpu", "--@lock_all//_variants="], {}, multi_locks),
+    ).contains_exactly({})
+
+    # Shorthand, explicit `:_variants`, and canonical spellings deduplicate as the same setting.
+    env.expect.that_dict(
+        compute_variant_pins_for_testing("x", ["--@lock_all//_variants:_variants=extra_cpu", "--@lock_all//_variants=extra_gpu"], {}, multi_locks),
+    ).contains_exactly({extra_suffix: "extra_app-a_gpu"})
+    env.expect.that_dict(
+        compute_variant_pins_for_testing("x", ["--@lock_all//_variants=extra_cpu"], {"@@rules_pycross++uv+lock_all//_variants:_variants": ""}, multi_locks),
     ).contains_exactly({})
 
 def _test_compute_variant_pins(name):

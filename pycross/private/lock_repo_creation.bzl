@@ -176,23 +176,23 @@ def _compute_variant_pins(member, flags, settings, resolved_locks):
         {conflict set suffix: qualified name}.
     """
 
-    # Last value wins per label, as in the generated transition.
-    values = {}
+    # Last value wins per flag, across shorthand (`@repo//_variants`), explicit
+    # (`@repo//_variants:_variants`), and canonical (`@@...`) spellings.
+    values = {}  # (repo_name, flag_name) -> (label, value)
     for f in flags:
         label, sep, value = f[2:].partition("=")
-        values[label] = value if sep else "True"
+        ref = _variants_flag_ref(label)
+        if ref and ref[0] in resolved_locks:
+            values[ref] = (label, value if sep else "True")
     for label, value in settings.items():
-        values[label] = value
-    entries = sorted(values.items())
+        ref = _variants_flag_ref(label)
+        if ref and ref[0] in resolved_locks:
+            values[ref] = (label, value)
 
     # repo -> {flag: [(set suffix, qname)]}, built lazily per referenced repo.
     index = {}
     selected = {}  # set suffix -> {qname: True}
-    for label, value in entries:
-        ref = _variants_flag_ref(label)
-        if not ref or ref[0] not in resolved_locks:
-            continue
-        repo_name, flag_name = ref
+    for (repo_name, flag_name), (label, value) in sorted(values.items()):
         if flag_name == "_variants":
             if not value:
                 continue

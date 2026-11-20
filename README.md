@@ -544,6 +544,8 @@ py_test(
 )
 ```
 
+When pairing per-target `config_settings` with a default in `.bazelrc` or on the command line, set the default with `--@pypi//_variants=<flag>` rather than `--@pypi//_variants:<flag>=True` so the target's transition replaces it instead of conflicting with the `bool_flag`.
+
 Conflict flags also cover dependency groups and conflicting workspace members:
 
 * `extra_<name>` and `group_<name>` enable that extra or group across every project in the repo that declares it.
