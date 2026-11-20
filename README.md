@@ -526,6 +526,24 @@ platform(
 
 Then build with `--platforms=//:linux_cuda`. Each flag also has a matching `@<repo>//_variants:is_<flag>` `config_setting`, such as `@pypi//_variants:is_extra_cu124`, for `select()` expressions.
 
+Every repo with variants also exposes a `@<repo>//_variants` `string_flag` accepting a variant name or a comma-separated list across conflict sets (for example `--@pypi//_variants=extra_cu124` or `--@pypi//_variants=extra_cu124,group_test`). Because it is a string setting, it also works directly with `rules_python`'s per-target `config_settings` transition when you want targets in one build to pick different variants from the same repo:
+
+```python
+# MODULE.bazel
+config = use_extension("@rules_python//python/extensions:config.bzl", "config")
+config.add_transition_setting(setting = "@pypi//_variants")
+```
+
+```python
+# BUILD.bazel
+py_test(
+    name = "cuda_test",
+    srcs = ["cuda_test.py"],
+    config_settings = {"@pypi//_variants": "extra_cu124"},
+    deps = ["@pypi//torch"],
+)
+```
+
 Conflict flags also cover dependency groups and conflicting workspace members:
 
 * `extra_<name>` and `group_<name>` enable that extra or group across every project in the repo that declares it.

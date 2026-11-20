@@ -77,9 +77,51 @@ echo "Platform transition test passed."
 
 # Test flags-only and settings-only transitions (no constraint_values) and transitioned modules_mapping targets.
 echo "Testing flags-only transition and modules_mapping..."
-bazel test "$@" //:test_transition_flags_only //:test_transition_settings //:test_auto_pin --test_output=errors
+bazel test "$@" //:test_transition_flags_only //:test_transition_settings //:test_transition_str_flags //:test_transition_str_settings //:test_auto_pin --test_output=errors
 bazel build "$@" //:transition_modules_mappings
 echo "Flags-only transition test passed."
+
+# Test per-repo `//_variants` string_flag on the CLI and via rules_python's py_test(config_settings).
+echo "Testing @project//_variants string_flag (CLI and py_test config_settings)..."
+bazel test "$@" //:test_variant_a --@project//_variants=extra_variant-a --test_output=errors
+bazel test "$@" //:test_variant_b --@project//_variants=extra_variant-b --test_output=errors
+bazel test "$@" //:test_config_settings_variant_a //:test_config_settings_variant_b //:test_config_settings_multi_set --test_output=errors
+# Target config_settings cleanly overrides a CLI --@project//_variants value.
+bazel test "$@" //:test_config_settings_variant_b --@project//_variants=extra_variant-a --test_output=errors
+
+# Variant-independent packages install once across targets that transition @project//_variants.
+# (jinja2 has conflict-gated edges in uv.lock, so it stays per-configuration.)
+installs=$(bazel aquery "$@" 'mnemonic("PycrossWheelInstall", deps(//:test_config_settings_variant_a + //:test_config_settings_variant_b))' \
+  --output=text 2>/dev/null | grep "^  Outputs:")
+for pkg in idna@3.7 markupsafe@3.0.4; do
+  count=$(grep -c "_lock/\(_reset_\)\?${pkg} (TreeArtifact)" <<<"$installs" || true)
+  if [[ "$count" != 1 ]]; then
+    echo "Expected 1 install of ${pkg} across config_settings variants, got ${count}:"
+    echo "$installs"
+    exit 1
+  fi
+done
+
+# Unknown variant and conflicting variants in @project//_variants fail cleanly.
+if out=$(bazel build "$@" //:test_variant_a --@project//_variants=extra_typo 2>&1); then
+  echo "Expected unknown variant in --@project//_variants to fail!"
+  exit 1
+fi
+if [[ "$out" != *"selects unknown variant 'extra_typo'"* ]]; then
+  echo "Unexpected error for unknown variant:"
+  echo "$out"
+  exit 1
+fi
+if out=$(bazel build "$@" //:test_variant_a --@project//_variants=extra_variant-a,extra_variant-b 2>&1); then
+  echo "Expected conflicting variants in --@project//_variants to fail!"
+  exit 1
+fi
+if [[ "$out" != *"Conflicting variants are active simultaneously"* ]]; then
+  echo "Unexpected error for conflicting string_flag variants:"
+  echo "$out"
+  exit 1
+fi
+echo "@project//_variants string_flag tests passed."
 
 # Verify path mapping shares PycrossWheelDir and PycrossWheelInstall outputs
 # across compilation modes while keeping incompatible precompile modes separate.

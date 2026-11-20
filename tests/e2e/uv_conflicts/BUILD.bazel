@@ -155,6 +155,111 @@ py_test(
     deps = ["@project_settings//typing_extensions"],
 )
 
+# Test pinning via the per-repo `//_variants` string_flag in uv.repo(flags/settings).
+py_test(
+    name = "test_transition_str_flags",
+    srcs = ["tests/test_conflict_version.py"],
+    args = [
+        "typing-extensions",
+        "4.11.0",
+        "idna",
+        "3.10",
+    ],
+    main = "tests/test_conflict_version.py",
+    deps = [
+        "@project_str_flags//idna",
+        "@project_str_flags//typing_extensions",
+    ],
+)
+
+py_test(
+    name = "test_transition_str_settings",
+    srcs = ["tests/test_conflict_version.py"],
+    args = [
+        "typing-extensions",
+        "4.12.2",
+        "idna",
+        "3.7",
+    ],
+    main = "tests/test_conflict_version.py",
+    deps = [
+        "@project_str_settings//idna",
+        "@project_str_settings//typing_extensions",
+    ],
+)
+
+# Per-target transitions via rules_python's py_test(config_settings = ...) on
+# the `@project//_variants` string_flag (no separate uv.repo needed).
+py_test(
+    name = "test_config_settings_variant_a",
+    srcs = ["tests/test_conflict_version.py"],
+    args = [
+        "typing-extensions",
+        "4.11.0",
+        "jinja2",
+        "3.1.6",
+        "markupsafe",
+        "3.0.4",
+        "idna",
+        "3.7",
+    ],
+    config_settings = {
+        "@project//_variants": "extra_variant-a",
+    },
+    main = "tests/test_conflict_version.py",
+    deps = [
+        "@project//idna",
+        "@project//jinja2",
+        "@project//typing_extensions",
+    ],
+)
+
+# Tagged manual so `bazel build //... --@project//_variants:extra_variant-a=True`
+# doesn't trip the bool_flag vs string_flag mutual-exclusion check.
+py_test(
+    name = "test_config_settings_variant_b",
+    srcs = ["tests/test_conflict_version.py"],
+    args = [
+        "typing-extensions",
+        "4.12.2",
+        "jinja2",
+        "3.1.6",
+        "markupsafe",
+        "3.0.4",
+        "idna",
+        "3.7",
+    ],
+    config_settings = {
+        "@project//_variants": "extra_variant-b",
+    },
+    main = "tests/test_conflict_version.py",
+    tags = ["manual"],
+    deps = [
+        "@project//idna",
+        "@project//jinja2",
+        "@project//typing_extensions",
+    ],
+)
+
+py_test(
+    name = "test_config_settings_multi_set",
+    srcs = ["tests/test_conflict_version.py"],
+    args = [
+        "typing-extensions",
+        "4.11.0",
+        "idna",
+        "3.10",
+    ],
+    config_settings = {
+        "@project//_variants": "extra_variant-a,group_group-b",
+    },
+    main = "tests/test_conflict_version.py",
+    deps = [
+        "@project//idna",
+        "@project//typing_extensions",
+    ],
+)
+
 # The generated modules_mapping targets must be analyzed under the repo's
 # transition so their variant selects resolve without CLI flags.
 filegroup(

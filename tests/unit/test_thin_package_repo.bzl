@@ -911,9 +911,10 @@ def _test_variants_build_shared_flag_impl(env, target):
     env.expect.that_bool("match_all" in group_test).equals(True)
     env.expect.that_bool('"@ws__pkgs//_lock:is_group_app-a_test"' in group_test).equals(True)
     env.expect.that_bool('"@ws__pkgs//_lock:is_group_app-b_test"' in group_test).equals(True)
+    env.expect.that_bool('string_flag(\n    name = "_variants",\n    build_setting_default = "",\n)' in build).equals(True)
     env.expect.that_bool('alias(\n    name = "is_group_app-a_test",' in build).equals(True)
     env.expect.that_bool(
-        "Set one of the _variants flags on your pycross repo: group_app-a_test, group_app-b_test (e.g. --@lock_all//_variants:group_app-a_test=True)" in build,
+        "Set one of the _variants flags on your pycross repo: group_app-a_test, group_app-b_test (e.g. --@lock_all//_variants:group_app-a_test=True or --@lock_all//_variants=group_app-a_test)" in build,
     ).equals(True)
 
 def _test_variants_build_shared_flag(name):
@@ -940,7 +941,7 @@ def _test_variants_build_repo_default_impl(env, target):
     env.expect.that_bool(unselected in is_b).equals(False)
 
     # The message lists one flag per item: the short names, since they're unambiguous.
-    env.expect.that_bool("pycross repo: group_a, group_b (e.g. --@pypi//_variants:group_a=True)" in build).equals(True)
+    env.expect.that_bool("pycross repo: group_a, group_b (e.g. --@pypi//_variants:group_a=True or --@pypi//_variants=group_a)" in build).equals(True)
 
 # buildifier: disable=unused-variable
 def _test_variants_build_shared_flag_pinned_impl(env, target):

@@ -9,7 +9,7 @@ The file structure is:
 - requirements.bzl         - Provides requirement(), all_requirements and all_testonly_requirements.
 - modules_mapping.json     - Import-to-package mapping for Gazelle.
 - <package>/BUILD.bazel    - Pin proxies pointing to @workspace//_lock targets.
-- _variants/BUILD.bazel    - This repo's variant bool_flags, is_<flag> config settings and no-variant errors.
+- _variants/BUILD.bazel    - This repo's variant flags, is_<flag> config settings and no-variant errors.
 """
 
 load(":util.bzl", "is_platform_specific", "parse_package_key", "underscore_name", "variant_item_qname")
@@ -679,6 +679,15 @@ def _variants_build(variant_info, workspace_repo, repo_name, unselected_groups =
         body.extend(['        "@{}//_lock:_unselected_{}",'.format(workspace_repo, s) for s in set_suffixes])
         body.extend(["    ],", ")", ""])
 
+    if variant_info.flags:
+        body.extend([
+            "string_flag(",
+            '    name = "_variants",',
+            '    build_setting_default = "",',
+            ")",
+            "",
+        ])
+
     for flag, qnames in sorted(variant_info.flags.items()):
         body.extend([
             "bool_flag(",
@@ -706,8 +715,10 @@ def _variants_build(variant_info, workspace_repo, repo_name, unselected_groups =
 
     for set_suffix, vset in sorted(variant_info.sets.items()):
         if vset.flags:
-            message = "No uv conflict variant selected. Set one of the _variants flags on your pycross repo: {} (e.g. --@{}//_variants:{}=True)".format(
+            message = "No uv conflict variant selected. Set one of the _variants flags on your pycross repo: {} (e.g. --@{}//_variants:{}=True or --@{}//_variants={})".format(
                 ", ".join(vset.flags),
+                repo_name,
+                vset.flags[0],
                 repo_name,
                 vset.flags[0],
             )
@@ -728,7 +739,7 @@ def _variants_build(variant_info, workspace_repo, repo_name, unselected_groups =
     if needs_selects:
         header.append('load("@bazel_skylib//lib:selects.bzl", "selects")')
     if variant_info.flags:
-        header.append('load("@bazel_skylib//rules:common_settings.bzl", "bool_flag")')
+        header.append('load("@bazel_skylib//rules:common_settings.bzl", "bool_flag", "string_flag")')
     if variant_info.sets:
         header.append('load("@rules_pycross//pycross/private:variant_resolver.bzl", "pycross_no_variant_selected")')
     header.append("")
