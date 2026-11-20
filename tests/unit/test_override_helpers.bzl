@@ -341,6 +341,8 @@ def _test_normalize_flags_impl(env, target):
     env.expect.that_str(n("--//pkg:flag=1", False)).equals("--//pkg:flag=1")
     env.expect.that_str(n("--:flag", False)).equals("--:flag")
     env.expect.that_str(n("--@repo//_variants:x=True", True)).equals("--@repo//_variants:x=True")
+    env.expect.that_str(n("--@repo//_variants=extra_a", True)).equals("--@repo//_variants:_variants=extra_a")
+    env.expect.that_str(n("--//pkg/sub=1", True)).equals("--@@//pkg/sub:sub=1")
     env.expect.that_str(n("--@@//pkg:flag", True)).equals("--@@//pkg:flag")
     env.expect.that_str(n("--//command_line_option:copt=-O2", True)).equals("--//command_line_option:copt=-O2")
     env.expect.that_str(n("--compilation_mode=opt", True)).equals("--//command_line_option:compilation_mode=opt")
@@ -469,15 +471,73 @@ def _test_compute_variant_pins_impl(env, target):
     # `=False` and unrelated flags select nothing.
     env.expect.that_dict(compute_variant_pins_for_testing("x", ["--@lock_all//_variants:group_test=False", "--compilation_mode=opt", "--//:foo"], {}, locks)).contains_exactly({})
 
+    # Per-repo string_flag (`//_variants` shorthand and canonical `//_variants:_variants`), including comma-separated multi-set values.
+    extra_set = {
+        "items": [
+            {"package": "app-a", "kind": "extra", "name": "cpu", "flags": ["extra_cpu"]},
+            {"package": "app-a", "kind": "extra", "name": "gpu", "flags": ["extra_gpu"]},
+        ],
+    }
+    multi_locks = {"lock_all": {"variants": variants + [extra_set]}}
+    extra_suffix = "extra_app-a_cpu_extra_app-a_gpu"
+    env.expect.that_dict(
+        compute_variant_pins_for_testing("x", ["--@lock_all//_variants=group_app-a_test, extra_cpu"], {}, multi_locks),
+    ).contains_exactly({set_suffix: "group_app-a_test", extra_suffix: "extra_app-a_cpu"})
+    env.expect.that_dict(
+        compute_variant_pins_for_testing("x", [], {"@@rules_pycross++uv+lock_all//_variants:_variants": "extra_gpu"}, multi_locks),
+    ).contains_exactly({extra_suffix: "extra_app-a_gpu"})
+    env.expect.that_dict(
+        compute_variant_pins_for_testing("x", ["--@lock_all//_variants=extra_cpu", "--@lock_all//_variants="], {}, multi_locks),
+    ).contains_exactly({})
+
+    # Shorthand, explicit `:_variants`, and canonical spellings deduplicate as the same setting.
+    env.expect.that_dict(
+        compute_variant_pins_for_testing("x", ["--@lock_all//_variants:_variants=extra_cpu", "--@lock_all//_variants=extra_gpu"], {}, multi_locks),
+    ).contains_exactly({extra_suffix: "extra_app-a_gpu"})
+    env.expect.that_dict(
+        compute_variant_pins_for_testing("x", ["--@lock_all//_variants=extra_cpu"], {"@@rules_pycross++uv+lock_all//_variants:_variants": ""}, multi_locks),
+    ).contains_exactly({})
+
 def _test_compute_variant_pins(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
     analysis_test(name = name, target = name + "_subject", impl = _test_compute_variant_pins_impl)
+
+def _unknown_string_variant_pin_subject_impl(ctx):  # @unused
+    locks = {
+        "pypi": {
+            "variants": [{
+                "items": [
+                    {"package": "app", "kind": "extra", "name": "cpu", "flags": ["extra_cpu"]},
+                    {"package": "app", "kind": "extra", "name": "gpu", "flags": ["extra_gpu"]},
+                ],
+            }],
+        },
+    }
+    compute_variant_pins_for_testing("pypi", ["--@pypi//_variants=extra_typo"], {}, locks)
+    return []
+
+_unknown_string_variant_pin_subject = rule(implementation = _unknown_string_variant_pin_subject_impl)
+
+def _test_compute_variant_pins_unknown_string_fails_impl(env, target):
+    env.expect.that_target(target).failures().contains_predicate(
+        matching.contains("selects unknown variant 'extra_typo'"),
+    )
+
+def _test_compute_variant_pins_unknown_string_fails(name):
+    util.helper_target(_unknown_string_variant_pin_subject, name = name + "_subject")
+    analysis_test(
+        name = name,
+        target = name + "_subject",
+        impl = _test_compute_variant_pins_unknown_string_fails_impl,
+        expect_failure = True,
+    )
 
 def override_helpers_test_suite(name):
     test_suite(
         name = name,
         tests = [
             _test_compute_variant_pins,
+            _test_compute_variant_pins_unknown_string_fails,
             _test_encode_build_system_attrs,
             _test_normalize_flags,
             _test_normalize_flag_requires_dashes,

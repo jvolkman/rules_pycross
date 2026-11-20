@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### Added
+
+- **Per-repo `@<repo>//_variants` string flag.** Repos with `uv` conflict
+  variants now expose a `string_flag` at `@<repo>//_variants` accepting a
+  variant name or comma-separated list (e.g. `extra_cu124,group_test`), which
+  also works with `rules_python`'s per-target `config_settings` transitions.
+
 ### Changed
 
 - **Sdist repos are cached across output bases.** `pycross_sdist_repo` now marks

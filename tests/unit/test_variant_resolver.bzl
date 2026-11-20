@@ -631,6 +631,121 @@ def _test_variants_with_evaluator(name):
         },
     )
 
+# ── Test: per-repo string_flags (`@repo//_variants`) ─────────────────
+
+def _string_flag_resolver(name, usable = "*", default = ""):
+    flag_refs = _setup_flags(name, ["cpu", "gpu"])
+    str_flag = _setup_string(name + "_variants", "")
+    spec = json.encode({
+        "display": "@pypi//_variants",
+        "valid": ["extra_cpu", "extra_gpu", "group_test"],
+        "map": {
+            "extra_cpu": ["extra_app_cpu"],
+            "extra_gpu": ["extra_app_gpu"],
+        },
+    })
+    variant_resolver(
+        name = name + "_resolver",
+        flags = {
+            flag_refs[0]: "@pypi//_variants:extra_cpu|extra_app_cpu",
+            flag_refs[1]: "@pypi//_variants:extra_gpu|extra_app_gpu",
+        },
+        string_flags = {str_flag: spec},
+        items = ["extra_app_cpu", "extra_app_gpu"],
+        usable = _setup_string(name + "_usable", usable),
+        default_setting = _setup_string(name + "_default", default),
+        tags = ["manual"],
+    )
+
+def _test_string_flag_selects_and_ignores_other_set(name):
+    """Comma-separated string_flag selects this set's variant and ignores valid tokens for other sets."""
+    _string_flag_resolver(name, default = "extra_app_cpu")
+    analysis_test(
+        name = name,
+        target = name + "_resolver",
+        impl = _expect_value("extra_app_gpu"),
+        config_settings = {
+            str(Label(":" + name + "_variants")): "group_test, extra_gpu",
+        },
+    )
+
+def _test_string_flag_unknown_fails_impl(env, target):
+    env.expect.that_target(target).failures().contains_predicate(
+        matching.contains("@pypi//_variants selects unknown variant 'extra_typo'"),
+    )
+
+def _test_string_flag_unknown_fails(name):
+    _string_flag_resolver(name)
+    analysis_test(
+        name = name,
+        target = name + "_resolver",
+        impl = _test_string_flag_unknown_fails_impl,
+        expect_failure = True,
+        config_settings = {
+            str(Label(":" + name + "_variants")): "extra_cpu,extra_typo",
+        },
+    )
+
+def _test_string_flag_conflict_fails_impl(env, target):
+    env.expect.that_target(target).failures().contains_predicate(
+        matching.contains("--@pypi//_variants=extra_cpu and --@pypi//_variants=extra_gpu"),
+    )
+
+def _test_string_flag_conflict_fails(name):
+    _string_flag_resolver(name)
+    analysis_test(
+        name = name,
+        target = name + "_resolver",
+        impl = _test_string_flag_conflict_fails_impl,
+        expect_failure = True,
+        config_settings = {
+            str(Label(":" + name + "_variants")): "extra_cpu,extra_gpu",
+        },
+    )
+
+def _test_string_and_bool_flag_conflict_fails_impl(env, target):
+    env.expect.that_target(target).failures().contains_predicate(
+        matching.contains("--@pypi//_variants:extra_cpu and --@pypi//_variants=extra_gpu"),
+    )
+
+def _test_string_and_bool_flag_conflict_fails(name):
+    _string_flag_resolver(name)
+    analysis_test(
+        name = name,
+        target = name + "_resolver",
+        impl = _test_string_and_bool_flag_conflict_fails_impl,
+        expect_failure = True,
+        config_settings = {
+            str(Label(":" + name + "_flag_cpu")): True,
+            str(Label(":" + name + "_variants")): "extra_gpu",
+        },
+    )
+
+def _test_string_and_bool_flag_agree(name):
+    """Setting the same variant via both bool_flag and string_flag succeeds."""
+    _string_flag_resolver(name)
+    analysis_test(
+        name = name,
+        target = name + "_resolver",
+        impl = _expect_value("extra_app_cpu"),
+        config_settings = {
+            str(Label(":" + name + "_flag_cpu")): True,
+            str(Label(":" + name + "_variants")): "extra_cpu",
+        },
+    )
+
+def _test_string_flag_usable_filters(name):
+    """string_flag respects usable narrowing just like bool_flags."""
+    _string_flag_resolver(name, usable = "extra_app_cpu")
+    analysis_test(
+        name = name,
+        target = name + "_resolver",
+        impl = _expect_value("extra_app_cpu"),
+        config_settings = {
+            str(Label(":" + name + "_variants")): "extra_cpu,extra_gpu",
+        },
+    )
+
 # ── Suite ────────────────────────────────────────────────────────────
 
 def variant_resolver_test_suite(name):
@@ -658,5 +773,11 @@ def variant_resolver_test_suite(name):
             _test_multi_set_overlap,
             _test_multi_set_cross_exclusion_fails,
             _test_variants_with_evaluator,
+            _test_string_flag_selects_and_ignores_other_set,
+            _test_string_flag_unknown_fails,
+            _test_string_flag_conflict_fails,
+            _test_string_and_bool_flag_conflict_fails,
+            _test_string_and_bool_flag_agree,
+            _test_string_flag_usable_filters,
         ],
     )

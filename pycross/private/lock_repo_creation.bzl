@@ -144,9 +144,15 @@ def _create_remote_file_repo(key, file, indexes):
 _TRUE_VALUES = ["True", "true", "1"]
 
 def _variants_flag_ref(label):
-    """Return (repo name, flag) if label is a generated repo's `//_variants:<flag>`, else None."""
+    """Return (repo name, flag) if label is a generated repo's `//_variants` or `//_variants:<flag>`, else None."""
     repo, sep, target = label.partition("//")
-    if not sep or not target.startswith("_variants:"):
+    if not sep:
+        return None
+    if target == "_variants":
+        flag = "_variants"
+    elif target.startswith("_variants:"):
+        flag = target[len("_variants:"):]
+    else:
         return None
     if repo.startswith("@@"):
         # Canonical name, e.g. `@@rules_pycross++uv+lock_all`: the repo name follows the last `+`.
@@ -155,7 +161,7 @@ def _variants_flag_ref(label):
         repo = repo[1:]
     else:
         return None
-    return (repo, target[len("_variants:"):])
+    return (repo, flag)
 
 def _compute_variant_pins(member, flags, settings, resolved_locks):
     """Compute the variants a repo's `flags`/`settings` select, for its transition's `_pin_<set>`.
@@ -170,35 +176,59 @@ def _compute_variant_pins(member, flags, settings, resolved_locks):
         {conflict set suffix: qualified name}.
     """
 
-    # Last value wins per label, as in the generated transition.
-    values = {}
+    # Last value wins per flag, across shorthand (`@repo//_variants`), explicit
+    # (`@repo//_variants:_variants`), and canonical (`@@...`) spellings.
+    values = {}  # (repo_name, flag_name) -> (label, value)
     for f in flags:
         label, sep, value = f[2:].partition("=")
-        values[label] = value if sep else "True"
+        ref = _variants_flag_ref(label)
+        if ref and ref[0] in resolved_locks:
+            values[ref] = (label, value if sep else "True")
     for label, value in settings.items():
-        values[label] = value
-    entries = sorted(values.items())
+        ref = _variants_flag_ref(label)
+        if ref and ref[0] in resolved_locks:
+            values[ref] = (label, value)
 
-    # (repo, flag) -> [(set suffix, qname)], built lazily per referenced repo.
+    # repo -> {flag: [(set suffix, qname)]}, built lazily per referenced repo.
     index = {}
     selected = {}  # set suffix -> {qname: True}
-    for label, value in entries:
-        if value not in _TRUE_VALUES:
-            continue
-        ref = _variants_flag_ref(label)
-        if not ref or ref[0] not in resolved_locks:
-            continue
-        if ref[0] not in index:
+    for (repo_name, flag_name), (label, value) in sorted(values.items()):
+        if flag_name == "_variants":
+            if not value:
+                continue
+            tokens = [t.strip() for t in value.split(",") if t.strip()]
+            if not tokens:
+                continue
+        else:
+            if value not in _TRUE_VALUES:
+                continue
+            tokens = [flag_name]
+
+        if repo_name not in index:
             repo_index = {}
-            for variant_set in resolved_locks[ref[0]].get("variants", []):
+            for variant_set in resolved_locks[repo_name].get("variants", []):
                 qnames = [variant_item_qname(item) for item in variant_set["items"]]
                 set_suffix = "_".join(sorted(qnames))
                 for item in variant_set["items"]:
                     for flag in item.get("flags", []):
                         repo_index.setdefault(flag, []).append((set_suffix, variant_item_qname(item)))
-            index[ref[0]] = repo_index
-        for set_suffix, qname in index[ref[0]].get(ref[1], []):
-            selected.setdefault(set_suffix, {})[qname] = True
+            index[repo_name] = repo_index
+
+        repo_index = index[repo_name]
+        for token in tokens:
+            if flag_name == "_variants" and token not in repo_index:
+                if repo_index:
+                    detail = "expected one of: " + ", ".join(sorted(repo_index.keys()))
+                else:
+                    detail = "@{} has no variants".format(repo_name)
+                fail("repo '{}': {} selects unknown variant '{}' ({})".format(
+                    member,
+                    label,
+                    token,
+                    detail,
+                ))
+            for set_suffix, qname in repo_index.get(token, []):
+                selected.setdefault(set_suffix, {})[qname] = True
 
     pins = {}
     for set_suffix, qnames in selected.items():

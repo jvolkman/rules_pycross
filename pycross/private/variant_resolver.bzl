@@ -1,12 +1,13 @@
 """Variant resolver rule for conflict set mutual exclusion enforcement.
 
-Each variant resolver reads the bool_flags that enable the items in a single
-conflict set (a flag may enable more than one item). It validates that at most one flag is set, and returns
+Each variant resolver reads the bool_flags and per-repo `//_variants`
+string_flags that enable the items in a single conflict set (a flag may enable
+more than one item). It validates that at most one item is active, and returns
 a config_common.FeatureFlagInfo whose value is the qualified name of the
 active variant. This lets config_setting targets reference the resolver
-rather than individual bool_flags, providing:
+rather than individual flags, providing:
 
-  1. Build-time enforcement of mutual exclusion (fail if >1 flag is set).
+  1. Build-time enforcement of mutual exclusion (fail if >1 item is active).
   2. Pins and defaults set by generated repos' transitions: pin > flags > default.
   3. A single point of indirection per conflict set.
 """
@@ -62,6 +63,37 @@ def _variant_resolver_impl(ctx):
             if name not in active:
                 active.append(name)
 
+    for flag, spec_json in ctx.attr.string_flags.items():
+        raw = flag[BuildSettingInfo].value
+        if not raw:
+            continue
+        spec = json.decode(spec_json)
+        display = spec.get("display") or str(flag.label)
+        flag_map = spec.get("map", {})
+        valid = spec.get("valid", sorted(flag_map.keys()))
+        for token in raw.split(","):
+            token = token.strip()
+            if not token:
+                continue
+            if token not in valid:
+                fail("{} selects unknown variant '{}' (expected one of: {})".format(
+                    display,
+                    token,
+                    ", ".join(valid),
+                ))
+            names = flag_map.get(token)
+            if not names:
+                continue
+            enabled = [name for name in names if usable == None or name in usable]
+            if not enabled:
+                continue
+            flag_display = "{}={}".format(display, token)
+            if flag_display not in active_flags:
+                active_flags.append(flag_display)
+            for name in enabled:
+                if name not in active:
+                    active.append(name)
+
     if len(active) > 1:
         fail(
             "Conflicting variants are active simultaneously: {} (enabling {}). ".format(
@@ -100,6 +132,13 @@ variant_resolver = rule(
         "pin": attr.label(
             providers = [BuildSettingInfo],
             doc = "A string setting naming the pinned variant. When set, it overrides the flags.",
+        ),
+        "string_flags": attr.label_keyed_string_dict(
+            providers = [BuildSettingInfo],
+            doc = "Maps each repo's `//_variants` string_flag to a JSON-encoded spec " +
+                  "`{\"display\": str, \"valid\": [flag_name, ...], \"map\": {flag_name: [qname, ...]}}`. " +
+                  "Comma-separated tokens in the flag must appear in `valid`; tokens present in `map` " +
+                  "enable the listed items in this conflict set.",
         ),
         "usable": attr.label(
             providers = [BuildSettingInfo],

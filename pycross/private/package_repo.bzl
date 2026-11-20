@@ -115,8 +115,9 @@ def _package_repo_impl(rctx):
     cycle_groups = {}  # group_name -> [pkg_key, ...]
     resolution_marker_exprs = {}  # constraint_name -> marker_expr or compound dict
     variant_items = {}  # qualified_name -> True (dedup across members)
-    variant_sets = []  # list of {"qnames": [...], "flags": {flag label: [qnames]}}
+    variant_sets = []  # list of {"qnames": [...], "flags": {flag label: [qnames]}, "member_flags": {member: {flag: [qnames]}}}
     variant_sets_seen = {}  # sorted qnames key -> variant set (dedup across members)
+    member_variant_flags = {}  # member -> {flag_name: True} (all valid flags for that member)
     for member in rctx.attr.member_lock_files.keys():
         if member in rctx.attr.member_lock_data:
             member_lock = json.decode(rctx.attr.member_lock_data[member])
@@ -127,17 +128,22 @@ def _package_repo_impl(rctx):
         for variant_set in member_lock.get("variants", []):
             set_qnames = []
             set_flags = {}  # "@<member>//_variants:<flag>" -> [qnames]
+            set_member_flags = {}  # flag -> [qnames]
             for item in variant_set["items"]:
                 qname = variant_item_qname(item)
                 variant_items[qname] = True
                 set_qnames.append(qname)
                 for flag in item.get("flags", []):
                     set_flags.setdefault("@{}//_variants:{}".format(member, flag), []).append(qname)
+                    set_member_flags.setdefault(flag, []).append(qname)
+                    member_variant_flags.setdefault(member, {})[flag] = True
             set_key = "|".join(sorted(set_qnames))
             if set_key not in variant_sets_seen:
-                variant_sets_seen[set_key] = {"qnames": set_qnames, "flags": {}}
+                variant_sets_seen[set_key] = {"qnames": set_qnames, "flags": {}, "member_flags": {}}
                 variant_sets.append(variant_sets_seen[set_key])
             variant_sets_seen[set_key]["flags"].update(set_flags)
+            if set_member_flags:
+                variant_sets_seen[set_key]["member_flags"][member] = set_member_flags
 
         member_packages[member] = member_lock.get("packages", {})
 
@@ -208,6 +214,7 @@ def _package_repo_impl(rctx):
             render_reset_bzl(
                 ["_".join(sorted(vset["qnames"])) for vset in variant_sets],
                 [label for vset in variant_sets for label in vset["flags"].keys()],
+                string_flag_labels = ["@{}//_variants:_variants".format(m) for m in sorted(member_variant_flags.keys())],
             ),
         )
 
@@ -276,8 +283,19 @@ def _package_repo_impl(rctx):
         ])
         for flag_label, qnames in sorted(vset["flags"].items()):
             lock_build_lines.append('        "{}": "{}|{}",'.format(flag_label, flag_label, " ".join(qnames)))
+        lock_build_lines.append("    },")
+        if member_variant_flags:
+            lock_build_lines.append("    string_flags = {")
+            for member in sorted(member_variant_flags.keys()):
+                flag_map = vset["member_flags"].get(member, {})
+                spec = {
+                    "display": "@{}//_variants".format(member),
+                    "valid": sorted(member_variant_flags[member].keys()),
+                    "map": {k: v for k, v in sorted(flag_map.items())},
+                }
+                lock_build_lines.append('        "@{}//_variants:_variants": {},'.format(member, json.encode(json.encode(spec))))
+            lock_build_lines.append("    },")
         lock_build_lines.extend([
-            "    },",
             ")",
             "",
             "config_setting(",

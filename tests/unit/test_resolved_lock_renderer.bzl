@@ -1067,12 +1067,18 @@ def _test_reset_gates(name):
 # buildifier: disable=unused-variable
 def _test_reset_bzl_impl(env, target):
     """reset.bzl resets every variant setting and each flag once."""
-    res = render_reset_bzl(["a_b"], ["@r1//_variants:x", "@r1//_variants:x", "@r2//_variants:y"])
+    res = render_reset_bzl(
+        ["a_b"],
+        ["@r1//_variants:x", "@r1//_variants:x", "@r2//_variants:y"],
+        string_flag_labels = ["@r1//_variants:_variants", "@r1//_variants:_variants", "@r2//_variants:_variants"],
+    )
     env.expect.that_str(res).contains('"//_lock:_pin_a_b": "",')
     env.expect.that_str(res).contains('"//_lock:_default_a_b": "",')
     env.expect.that_str(res).contains('"//_lock:_usable_a_b": "*",')
     env.expect.that_int(res.count('"@r1//_variants:x": False,')).equals(1)
     env.expect.that_str(res).contains('"@r2//_variants:y": False,')
+    env.expect.that_int(res.count('"@r1//_variants:_variants": "",')).equals(1)
+    env.expect.that_str(res).contains('"@r2//_variants:_variants": "",')
 
     # Without conflict sets nothing resets.
     lock = {"packages": {"leaf@1.0": {"wheel_candidates": [_whl("leaf_whl", "leaf-1.0-py3-none-any.whl")]}}}

@@ -23,6 +23,9 @@ python.toolchain(python_version = "3.11.6")
 python.toolchain(python_version = "3.12.0")
 use_repo(python, "python_versions")
 
+config = use_extension("@rules_python//python/extensions:config.bzl", "config")
+config.add_transition_setting(setting = "@project//_variants")
+
 uv = use_extension("@rules_pycross//pycross/extensions:uv.bzl", "uv")
 uv.workspace(
     name = "shared",
@@ -89,6 +92,36 @@ uv.repo(
     },
     workspace = "shared",
 )
+uv.repo(
+    name = "project_str_flags",
+    dependency_groups = [
+        "default",
+        "group:group-a",
+        "group:group-b",
+        "optional:variant-a",
+        "optional:variant-b",
+    ],
+    flags = [
+        "--@project_str_flags//_variants=extra_variant-a,group_group-b",
+    ],
+    projects = ["project"],
+    workspace = "shared",
+)
+uv.repo(
+    name = "project_str_settings",
+    dependency_groups = [
+        "default",
+        "group:group-a",
+        "group:group-b",
+        "optional:variant-a",
+        "optional:variant-b",
+    ],
+    projects = ["project"],
+    settings = {
+        "@project_str_settings//_variants": "extra_variant-b",
+    },
+    workspace = "shared",
+)
 
 # Requests only `variant-a` of the extras conflict, so it selects it without flags.
 uv.repo(
@@ -100,4 +133,4 @@ uv.repo(
     projects = ["project"],
     workspace = "shared",
 )
-use_repo(uv, "project", "project_auto", "project_flags", "project_pinned", "project_settings")
+use_repo(uv, "project", "project_auto", "project_flags", "project_pinned", "project_settings", "project_str_flags", "project_str_settings")
