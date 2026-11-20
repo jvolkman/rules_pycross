@@ -339,7 +339,10 @@ def configure_rust_env(ctx, cargo_dir: Path, is_maturin: bool = False):
 
     ctx.build_env["CARGO_HOME"] = str(cargo_home.absolute())
 
-    for var_name in ("RUSTFLAGS", "CARGO_ENCODED_RUSTFLAGS"):
+    # Strip ARFLAGS from the subprocess environment: cc-rs prepends ARFLAGS before
+    # its own `cq` archiver flags, causing `ar` to treat `cq` as the output archive.
+    # sysconfig_vars["ARFLAGS"] stays intact for hybrid setuptools_rust C builds.
+    for var_name in ("RUSTFLAGS", "CARGO_ENCODED_RUSTFLAGS", "ARFLAGS"):
         ctx.build_env.pop(var_name, None)
 
     ctx.build_env["CARGO_TERM_VERBOSE"] = "true"

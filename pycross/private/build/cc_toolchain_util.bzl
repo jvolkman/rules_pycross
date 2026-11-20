@@ -100,14 +100,18 @@ def get_tools_info(ctx):
 _ARCHIVER_OUTPUT_SENTINEL = "__PYCROSS_ARCHIVER_OUTPUT__"
 
 def _strip_archiver_output_sentinel(flags):
-    """Remove the sentinel output path (and a preceding `-o`) from archiver flags."""
+    """Remove the sentinel output path from archiver flags, keeping any `-o` trailing."""
     result = []
+    had_dash_o = False
     for f in flags:
         if _ARCHIVER_OUTPUT_SENTINEL in f:
             if result and result[-1] == "-o":
                 result.pop()
+                had_dash_o = True
             continue
         result.append(f)
+    if had_dash_o:
+        result.append("-o")
     return result
 
 def get_flags_info(ctx, copts = [], linkopts = [], link_output_file = None):

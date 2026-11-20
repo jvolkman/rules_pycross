@@ -152,6 +152,8 @@ class MesonUtilsTest(unittest.TestCase):
             ("darwin", "aarch64", "IEEE_DOUBLE_LE"),
             ("linux", "x86_64", "INTEL_EXTENDED_16_BYTES_LE"),
             ("linux", "aarch64", "IEEE_QUAD_LE"),
+            ("linux", "arm", "IEEE_DOUBLE_LE"),
+            ("linux", "x86", "INTEL_EXTENDED_12_BYTES_LE"),
             ("windows", "x86_64", "IEEE_DOUBLE_LE"),
         ]
         for target_os, target_cpu, expected in cases:

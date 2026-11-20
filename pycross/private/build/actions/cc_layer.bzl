@@ -39,12 +39,14 @@ def _get_sysconfig_data(workspace_name, tools, flags):
     cxx = _absolute_tool_value(workspace_name, tools.cxx)
     ar = _absolute_tool_value(workspace_name, tools.cxx_linker_static)
     ar_flags = flags.cxx_linker_static
+    ar_name = ar.rsplit("/", 1)[-1]
 
-    if ar == "libtool" or ar.endswith("/libtool"):
+    if "libtool" in ar_name:
         if not ar_flags:
-            ar_flags = ["-static"]
-        ar_flags = ar_flags + ["-o"]
-    elif not ar_flags and (ar == "ar" or ar.endswith("/ar") or ar.endswith("-ar")):
+            ar_flags = ["-static", "-o"]
+        elif ar_flags[-1] != "-o":
+            ar_flags = ar_flags + ["-o"]
+    elif not ar_flags and (ar_name == "ar" or ar_name.endswith("-ar")):
         ar_flags = ["rcs"]
 
     vars = {
