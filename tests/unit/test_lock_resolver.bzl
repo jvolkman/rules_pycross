@@ -2029,6 +2029,30 @@ def _test_wheel_library_tags(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
     analysis_test(name = name, target = name + "_subject", impl = _test_wheel_library_tags_impl)
 
+# buildifier: disable=unused-variable
+def _test_visibility_annotation_impl(env, target):
+    lock_model_data = {
+        "packages": {
+            "foo@1.0": _make_pkg("foo", "1.0", [_make_file("foo-1.0-py3-none-any.whl")]),
+            "bar@1.0": _make_pkg("bar", "1.0", [_make_file("bar-1.0-py3-none-any.whl")]),
+        },
+        "pins": {
+            "foo": "foo@1.0",
+            "bar": "bar@1.0",
+        },
+    }
+    annotations_data = {
+        "foo": {"visibility": ["@@//allowed:__pkg__"]},
+    }
+
+    res = resolve(lock_model_data, annotations_data = annotations_data)
+    env.expect.that_collection(res.packages["foo@1.0"]["visibility"]).contains_exactly(["@@//allowed:__pkg__"])
+    env.expect.that_collection(res.packages["bar@1.0"]["visibility"]).contains_exactly([])
+
+def _test_visibility_annotation(name):
+    util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
+    analysis_test(name = name, target = name + "_subject", impl = _test_visibility_annotation_impl)
+
 # --- testonly tests ---
 
 # buildifier: disable=unused-variable
@@ -2346,6 +2370,7 @@ def lock_resolver_test_suite(name):
             _test_wildcard_install_exclude_globs_end_to_end,
             _test_wildcard_replace_semantics_exclude_globs_end_to_end,
             _test_wheel_library_tags,
+            _test_visibility_annotation,
             _test_testonly_passthrough_without_transitive,
             _test_testonly_exclusive_transitive,
             _test_testonly_shared_dep_not_testonly,

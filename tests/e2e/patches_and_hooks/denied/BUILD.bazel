@@ -1,0 +1,16 @@
+load("@rules_python//python:defs.bzl", "py_library")
+
+# setproctitle is visible only to //:__pkg__ and //tests:__pkg__ (see MODULE.bazel).
+# run.sh checks that these targets fail to build. They are manual so that //... skips them.
+
+py_library(
+    name = "via_pin_package",
+    tags = ["manual"],
+    deps = ["@uv//setproctitle:pkg"],
+)
+
+py_library(
+    name = "via_root_alias",
+    tags = ["manual"],
+    deps = ["@uv//:setproctitle"],
+)

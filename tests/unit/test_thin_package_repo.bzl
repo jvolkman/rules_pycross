@@ -54,6 +54,32 @@ def _test_pin_build_no_transition(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
     analysis_test(name = name, target = name + "_subject", impl = _test_pin_build_no_transition_impl)
 
+# ── Test: visibility annotation → package default_visibility ──────
+
+# buildifier: disable=unused-variable
+def _test_pin_build_visibility_impl(env, target):
+    """A `visibility` annotation replaces public, and keeps the root alias package."""
+    public = pin_build_for_testing(
+        target_name = "numpy",
+        pin_target_dict = {"": "numpy@1.26.0"},
+        package = {},
+        workspace_repo = "my_workspace",
+    ).build
+    env.expect.that_str(public).contains('package(default_visibility = ["//visibility:public"])')
+
+    restricted = pin_build_for_testing(
+        target_name = "numpy",
+        pin_target_dict = {"": "numpy@1.26.0"},
+        package = {"visibility": ["@@//allowed:__pkg__"]},
+        workspace_repo = "my_workspace",
+    ).build
+    env.expect.that_str(restricted).contains('package(default_visibility = ["@@//allowed:__pkg__", "//:__pkg__"])')
+    env.expect.that_bool("//visibility:public" not in restricted).equals(True)
+
+def _test_pin_build_visibility(name):
+    util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
+    analysis_test(name = name, target = name + "_subject", impl = _test_pin_build_visibility_impl)
+
 # ── Test: with platform → transitioning proxies ────────────────────
 
 # buildifier: disable=unused-variable
@@ -1082,6 +1108,7 @@ def thin_package_repo_test_suite(name):
             _test_transition_settings,
             _test_pin_build_overlapping_sets,
             _test_pin_build_no_transition,
+            _test_pin_build_visibility,
             _test_pin_build_with_platform,
             _test_pin_build_transition_loads,
             _test_pin_build_extras_with_platform,

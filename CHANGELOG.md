@@ -2,6 +2,15 @@
 
 All notable changes to this project will be documented in this file.
 
+## Unreleased
+
+### Added
+
+- **`visibility` on `package()` tags.** Restricts who can depend on a package's
+  targets (`@<repo>//<package>:*` and the `@<repo>//:<package>` alias) in every
+  repo of the workspace. Labels resolve in the declaring module. Packages
+  without it stay public.
+
 ## [2.2.0]
 
 ### Added
