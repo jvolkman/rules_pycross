@@ -41,6 +41,7 @@ py_binary(
     visibility = ["//visibility:public"],
     deps = [
         ":args",
+        ":inspect_package",
         ":installer",
         "//pycross/private/patching",
     ],

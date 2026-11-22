@@ -26,6 +26,10 @@ All notable changes to this project will be documented in this file.
 
 ### Changed
 
+- **Sdist-built package imports.** Under `venvs_site_packages=yes`, sdist-built
+  packages now stay on `sys.path` instead of using repo-time layout guesses for
+  venv symlinks unless `site_paths` is explicitly annotated; annotated and exact
+  `site_paths` are verified at wheel install time.
 - **Testonly propagation for local workspace members.** Third-party dependencies
   reached only through a testonly local member or path dependency become
   testonly pins (`all_testonly_requirements`), and `["*", "group:*;testonly"]`

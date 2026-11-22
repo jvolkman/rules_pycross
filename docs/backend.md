@@ -32,7 +32,8 @@ Information about an extracted (installed) Python wheel.
 <pre>
 load("@rules_pycross//pycross:backend.bzl", "PycrossPackageInfo")
 
-PycrossPackageInfo(<a href="#PycrossPackageInfo-package_name">package_name</a>, <a href="#PycrossPackageInfo-package_version">package_version</a>, <a href="#PycrossPackageInfo-site_paths">site_paths</a>, <a href="#PycrossPackageInfo-bin_paths">bin_paths</a>, <a href="#PycrossPackageInfo-data_paths">data_paths</a>, <a href="#PycrossPackageInfo-include_paths">include_paths</a>)
+PycrossPackageInfo(<a href="#PycrossPackageInfo-package_name">package_name</a>, <a href="#PycrossPackageInfo-package_version">package_version</a>, <a href="#PycrossPackageInfo-site_paths">site_paths</a>, <a href="#PycrossPackageInfo-site_paths_exact">site_paths_exact</a>, <a href="#PycrossPackageInfo-bin_paths">bin_paths</a>,
+                   <a href="#PycrossPackageInfo-data_paths">data_paths</a>, <a href="#PycrossPackageInfo-include_paths">include_paths</a>)
 </pre>
 
 Information about a Python package (e.g. from a lockfile).
@@ -44,6 +45,7 @@ Information about a Python package (e.g. from a lockfile).
 | <a id="PycrossPackageInfo-package_name"></a>package_name |  string: The normalized package name.    |
 | <a id="PycrossPackageInfo-package_version"></a>package_version |  string: The package version.    |
 | <a id="PycrossPackageInfo-site_paths"></a>site_paths |  list of strings: The site-packages paths provided by this package.    |
+| <a id="PycrossPackageInfo-site_paths_exact"></a>site_paths_exact |  bool: Whether site_paths is exact (from wheel inspection or explicit annotation) rather than a repo-time sdist guess.    |
 | <a id="PycrossPackageInfo-bin_paths"></a>bin_paths |  list of strings: The bin paths provided by this package.    |
 | <a id="PycrossPackageInfo-data_paths"></a>data_paths |  list of strings: The data paths provided by this package.    |
 | <a id="PycrossPackageInfo-include_paths"></a>include_paths |  list of strings: The include paths provided by this package.    |

@@ -20,6 +20,7 @@ PycrossPackageInfo = provider(
         "package_name": "string: The normalized package name.",
         "package_version": "string: The package version.",
         "site_paths": "list of strings: The site-packages paths provided by this package.",
+        "site_paths_exact": "bool: Whether site_paths is exact (from wheel inspection or explicit annotation) rather than a repo-time sdist guess.",
         "bin_paths": "list of strings: The bin paths provided by this package.",
         "data_paths": "list of strings: The data paths provided by this package.",
         "include_paths": "list of strings: The include paths provided by this package.",
