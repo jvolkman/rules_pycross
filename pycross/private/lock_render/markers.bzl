@@ -13,7 +13,7 @@ def format_variants_attr(resolvers):
     Returns:
         Attribute string `variants = ["...", ...],`.
     """
-    return "variants = [{}],".format(", ".join(['"{}"'.format(r) for r in resolvers]))
+    return "variants = [{}],".format(", ".join([json.encode(r) for r in resolvers]))
 
 def collect_unique_markers(packages):
     """Collect all unique `(marker, extra)` pairs across packages.
@@ -85,11 +85,11 @@ def _render_evaluator_and_setting(lines, eval_name, expr, setting_name, extra = 
     """Append a `pycross_pep508_evaluator` and its matching `native.config_setting`."""
     lines.extend([
         ind("pycross_pep508_evaluator("),
-        ind('name = "{}",'.format(eval_name), 2),
-        ind('expr = "{}",'.format(expr.replace('"', '\\"')), 2),
+        ind("name = {},".format(json.encode(eval_name)), 2),
+        ind("expr = {},".format(json.encode(expr)), 2),
     ])
     if extra:
-        lines.append(ind('extra = "{}",'.format(extra), 2))
+        lines.append(ind("extra = {},".format(json.encode(extra)), 2))
     if resolvers:
         lines.append(ind(format_variants_attr(resolvers), 2))
     lines.extend([

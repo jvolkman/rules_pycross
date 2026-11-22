@@ -56,5 +56,5 @@ def render_str_list_attr(lines, attr_name, values):
     if values:
         lines.append(ind("{} = [".format(attr_name), 2))
         for val in values:
-            lines.append(ind('"{}",'.format(val), 3))
+            lines.append(ind("{},".format(json.encode(val)), 3))
         lines.append(ind("],", 2))

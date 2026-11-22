@@ -65,8 +65,8 @@ def wheel_match_condition(lines, pkg_key, resolved_filenames, all_resolved, targ
         matched_name = "_wheel_matched_{}".format(pkg_key)
         lines.extend([
             ind("pycross_wheel_matched("),
-            ind('name = "{}",'.format(matched_name), 2),
-            ind('chooser = ":_wheel_chooser_{}",'.format(pkg_key), 2),
+            ind("name = {},".format(json.encode(matched_name)), 2),
+            ind("chooser = {},".format(json.encode(":_wheel_chooser_{}".format(pkg_key))), 2),
             ind(")"),
             "",
         ])
@@ -121,8 +121,8 @@ def render_marker_wheel_chooser(lines, pkg_key, pkg, repo_map, sdist_target = No
 
     lines.extend([
         ind("pycross_wheel_chooser("),
-        ind('name = "{}",'.format(chooser_name), 2),
-        ind("candidates = {},".format(filenames), 2),
+        ind("name = {},".format(json.encode(chooser_name)), 2),
+        ind("candidates = [{}],".format(", ".join([json.encode(f) for f in filenames])), 2),
         ind(")"),
         "",
     ])

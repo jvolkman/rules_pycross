@@ -96,9 +96,9 @@ def render_lock_bzl(lock, repo_map, rctx_name = "", variant_resolvers = None, re
         '"""Pycross-generated dependency targets."""',
         "",
     ] + [
-        'load("@rules_pycross//pycross/private:{}", {})'.format(
-            bzl,
-            ", ".join(['"{}"'.format(sym) for sym in symbols]),
+        "load({}, {})".format(
+            json.encode("@rules_pycross//pycross/private:" + bzl),
+            ", ".join([json.encode(sym) for sym in symbols]),
         )
         for bzl, symbols in sorted(pycross_loads.items())
     ]

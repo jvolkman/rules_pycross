@@ -21,12 +21,12 @@ def render_extras_aggregates(lines, packages):
         parts = parse_package_key(base_pkg_key)
         lines.extend([
             ind("pycross_library_proxy("),
-            ind('name = "{}[_all_]@{}",'.format(parts.name, parts.version), 2),
-            ind('actual = ":{}",'.format(base_pkg_key), 2),
+            ind("name = {},".format(json.encode("{}[_all_]@{}".format(parts.name, parts.version))), 2),
+            ind("actual = {},".format(json.encode(":" + base_pkg_key)), 2),
             ind("deps = [", 2),
         ])
         for extra_key in sorted(extra_keys):
-            lines.append(ind('":{}\",'.format(extra_key), 3))
+            lines.append(ind("{},".format(json.encode(":" + extra_key)), 3))
         lines.extend([
             ind("],", 2),
             ind(")"),
@@ -142,8 +142,8 @@ def render_marker_package(lines, pkg_key, pkg, packages, repo_map, rctx_name, re
 
         lines.extend([
             ind("pycross_library_proxy("),
-            ind('name = "{}",'.format(proxy_name), 2),
-            ind('actual = ":{}",'.format(base_actual), 2),
+            ind("name = {},".format(json.encode(proxy_name)), 2),
+            ind("actual = {},".format(json.encode(":" + base_actual)), 2),
             ind("deps = _{}_deps,".format(pkg_key_san) if has_marker_deps else "deps = [],", 2),
             ind(")"),
             "",
@@ -187,18 +187,18 @@ def render_marker_package(lines, pkg_key, pkg, packages, repo_map, rctx_name, re
     if reset and reset.ok:
         lines.extend([
             ind("pycross_resettable_wheel_library("),
-            ind('name = "{}",'.format(lib_name), 2),
-            ind("reset_gate = {},".format('"{}"'.format(reset.gate) if reset.gate else "None"), 2),
+            ind("name = {},".format(json.encode(lib_name)), 2),
+            ind("reset_gate = {},".format(json.encode(reset.gate) if reset.gate else "None"), 2),
         ])
     else:
         lines.extend([
             ind("pycross_wheel_library("),
-            ind('name = "{}",'.format(lib_name), 2),
+            ind("name = {},".format(json.encode(lib_name)), 2),
         ])
     lines.extend([
-        ind('package_name = "{}",'.format(package_name), 2),
-        ind('package_version = "{}",'.format(package_version), 2),
-        ind('wheel = ":_wheel_{}",'.format(pkg_key), 2),
+        ind("package_name = {},".format(json.encode(package_name)), 2),
+        ind("package_version = {},".format(json.encode(package_version)), 2),
+        ind("wheel = {},".format(json.encode(":_wheel_{}".format(pkg_key))), 2),
     ])
 
     for attr_name in ("site_paths", "bin_paths", "data_paths", "include_paths"):
@@ -215,7 +215,7 @@ def render_marker_package(lines, pkg_key, pkg, packages, repo_map, rctx_name, re
         render_str_list_attr(lines, attr_name, pkg.get(field))
 
     if pkg.get("precompile"):
-        lines.append(ind('precompile = "{}",'.format(pkg["precompile"]), 2))
+        lines.append(ind("precompile = {},".format(json.encode(pkg["precompile"])), 2))
 
     lines.extend([
         ind(")"),
@@ -230,8 +230,8 @@ def render_marker_package(lines, pkg_key, pkg, packages, repo_map, rctx_name, re
     # exec analysis doesn't pull in the entire cycle SCC and reachability evaluators)
     lines.extend([
         ind("pycross_dist_info("),
-        ind('name = "_dist_info_{}",'.format(pkg_key), 2),
-        ind('pkg = ":{lib}",'.format(lib = lib_name), 2),
+        ind("name = {},".format(json.encode("_dist_info_{}".format(pkg_key))), 2),
+        ind("pkg = {},".format(json.encode(":" + lib_name)), 2),
         ind(")"),
         "",
     ])
@@ -242,7 +242,7 @@ def render_marker_package(lines, pkg_key, pkg, packages, repo_map, rctx_name, re
     if has_sdist_repo and has_marker_deps:
         lines.extend([
             ind("pycross_library_proxy("),
-            ind('name = "_sdist_deps_{}",'.format(pkg_key), 2),
+            ind("name = {},".format(json.encode("_sdist_deps_{}".format(pkg_key))), 2),
             ind("deps = _{}_deps,".format(pkg_key_san), 2),
             ind(")"),
             "",
