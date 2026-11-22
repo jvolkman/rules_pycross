@@ -254,8 +254,14 @@ bzl_library(
     name = "thin_package_repo",
     srcs = ["thin_package_repo.bzl"],
     deps = [
-        ":override_helpers",
         ":util",
+        "//pycross/private/thin_repo:availability",
+        "//pycross/private/thin_repo:metadata",
+        "//pycross/private/thin_repo:modules_mapping_deps",
+        "//pycross/private/thin_repo:pins",
+        "//pycross/private/thin_repo:selects",
+        "//pycross/private/thin_repo:transition",
+        "//pycross/private/thin_repo:variants",
         "@pycross_backends//:package_repo_dispatch",
     ],
 )

@@ -1,0 +1,71 @@
+load("@bazel_skylib//:bzl_library.bzl", "bzl_library")
+
+package(default_visibility = ["//visibility:public"])
+
+bzl_library(
+    name = "common",
+    srcs = ["common.bzl"],
+    deps = ["//pycross/private:util"],
+)
+
+bzl_library(
+    name = "selects",
+    srcs = ["selects.bzl"],
+    deps = [":common"],
+)
+
+bzl_library(
+    name = "availability",
+    srcs = ["availability.bzl"],
+    deps = [
+        ":common",
+        ":selects",
+        "//pycross/private:util",
+    ],
+)
+
+bzl_library(
+    name = "pins",
+    srcs = ["pins.bzl"],
+    deps = [
+        ":availability",
+        ":common",
+        ":selects",
+        "//pycross/private:util",
+    ],
+)
+
+bzl_library(
+    name = "variants",
+    srcs = ["variants.bzl"],
+    deps = [
+        ":selects",
+        "//pycross/private:util",
+    ],
+)
+
+bzl_library(
+    name = "modules_mapping_deps",
+    srcs = ["modules_mapping_deps.bzl"],
+    deps = [
+        ":common",
+        ":selects",
+        "//pycross/private:util",
+    ],
+)
+
+bzl_library(
+    name = "metadata",
+    srcs = ["metadata.bzl"],
+    deps = [
+        ":common",
+        ":selects",
+        "//pycross/private:override_helpers",
+        "//pycross/private:util",
+    ],
+)
+
+bzl_library(
+    name = "transition",
+    srcs = ["transition.bzl"],
+)
