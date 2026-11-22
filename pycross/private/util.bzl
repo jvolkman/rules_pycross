@@ -146,11 +146,45 @@ def has_build_fallback(pkg):
         return True
     return bool(pkg.get("sdist_file")) and not sdist_builds_disallowed(pkg)
 
+def is_universal_py3_wheel(filename):
+    """Return True if filename is a wheel containing the universal `py3-none-any` tag.
+
+    A `py3-none-any` (or compressed `py2.py3-none-any`, etc.) wheel matches
+    every Python 3 target platform unconditionally.
+
+    Args:
+        filename: Candidate wheel filename.
+
+    Returns:
+        True if the wheel contains the `py3-none-any` tag, False otherwise.
+    """
+    if not filename.lower().endswith(".whl"):
+        return False
+    parts = filename[:-4].split("-")
+    if len(parts) not in (5, 6):
+        return False
+    py_tag, abi_tag, plat_tag = parts[-3].lower(), parts[-2].lower(), parts[-1].lower()
+    return (
+        "py3" in py_tag.split(".") and
+        "none" in abi_tag.split(".") and
+        "any" in plat_tag.split(".")
+    )
+
 def is_platform_specific(pkg):
-    """Whether a resolved package may be unavailable in some target environments."""
+    """Whether a resolved package may be unavailable in some target environments.
+
+    Args:
+        pkg: A resolved package dict.
+
+    Returns:
+        True if the package may be unavailable on some target platform.
+    """
     if pkg.get("availability_markers"):
         return True
-    return bool(pkg.get("wheel_candidates")) and not has_build_fallback(pkg)
+    candidates = pkg.get("wheel_candidates", [])
+    if not candidates or has_build_fallback(pkg):
+        return False
+    return not any([is_universal_py3_wheel(c["filename"]) for c in candidates])
 
 def variant_item_qname(item):
     """Return the internal name for a variant item.
@@ -258,15 +292,20 @@ def merge_py_providers(
 
     py_info = builder.build()
 
-    # Merge runfiles from all deps.
-    runfiles = base_runfiles
-    for dep in deps:
-        rf = dep[DefaultInfo].default_runfiles
-        if rf:
-            if runfiles == None:
-                runfiles = rf
-            else:
-                runfiles = runfiles.merge(rf)
+    # Merge runfiles from all deps in a single merge_all call.
+    dep_runfiles = [
+        dep[DefaultInfo].default_runfiles
+        for dep in deps
+        if dep[DefaultInfo].default_runfiles
+    ]
+    if base_runfiles != None:
+        runfiles = base_runfiles.merge_all(dep_runfiles) if dep_runfiles else base_runfiles
+    elif not dep_runfiles:
+        runfiles = None
+    elif len(dep_runfiles) == 1:
+        runfiles = dep_runfiles[0]
+    else:
+        runfiles = dep_runfiles[0].merge_all(dep_runfiles[1:])
 
     return struct(
         py_info = py_info,

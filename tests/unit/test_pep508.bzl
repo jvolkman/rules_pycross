@@ -10,10 +10,10 @@ load("//pycross/private:cycle_dep_needed.bzl", "is_reachable")
 load("//pycross/private:pep508_evaluator.bzl", "pycross_pep508_evaluator")
 
 # buildifier: disable=bzl-visibility
-load("//pycross/private:target_platform.bzl", "pycross_target_platform")
+load("//pycross/private:target_platform.bzl", "PycrossTargetPlatformInfo", "pycross_target_platform")
 
 # buildifier: disable=bzl-visibility
-load("//pycross/private:wheel_chooser.bzl", "pycross_wheel_chooser", "select_best_wheel")
+load("//pycross/private:wheel_chooser.bzl", "pycross_wheel_chooser", "pycross_wheel_matched", "select_best_wheel")
 
 _LINUX_MARKERS = {
     "os_name": "posix",
@@ -198,6 +198,7 @@ def _test_evaluator_rule(name):
 
 def _test_chooser_rule_impl(env, target):
     env.expect.that_target(target).default_outputs().contains_at_least([])
+    env.expect.that_str(target[config_common.FeatureFlagInfo].value).equals("pkg-1.0-py3-none-any.whl")
 
 def _test_chooser_rule(name):
     pycross_target_platform(
@@ -216,6 +217,91 @@ def _test_chooser_rule(name):
         name = name,
         target = name + "_chooser",
         impl = _test_chooser_rule_impl,
+    )
+
+def _test_wheel_priority_map_impl(env, target):
+    info = target[PycrossTargetPlatformInfo]
+    env.expect.that_bool(type(info.tag_priority) == "dict").equals(True)
+    env.expect.that_bool("py3-none-any" in info.tag_priority).equals(True)
+
+    # First-candidate-wins tie breaking when two candidates share the same best tag.
+    tied = [
+        "pkg-1.0-1-py3-none-any.whl",
+        "pkg-1.0-2-py3-none-any.whl",
+    ]
+    env.expect.that_str(select_best_wheel(tied, info.tag_priority)).equals(tied[0])
+
+    # Precomputed dict selects the higher-priority platform wheel over py3-none-any.
+    ranks = {
+        "cp311-cp311-manylinux_2_28_x86_64": 0,
+        "py3-none-any": 500,
+    }
+    env.expect.that_str(select_best_wheel(_WHEEL_CANDIDATES, ranks)).equals(
+        "pkg-1.0-cp311-cp311-manylinux_2_28_x86_64.whl",
+    )
+
+def _test_wheel_priority_map(name):
+    pycross_target_platform(
+        name = name + "_tags",
+        libc = "glibc",
+        tags = ["manual"],
+    )
+    analysis_test(
+        name = name,
+        target = name + "_tags",
+        impl = _test_wheel_priority_map_impl,
+    )
+
+def _test_wheel_matched_true_impl(env, target):
+    env.expect.that_str(target[config_common.FeatureFlagInfo].value).equals("true")
+
+def _test_wheel_matched_true(name):
+    pycross_target_platform(
+        name = name + "_tags",
+        libc = "glibc",
+        tags = ["manual"],
+    )
+    pycross_wheel_chooser(
+        name = name + "_chooser",
+        candidates = ["pkg-1.0-py3-none-any.whl"],
+        supported_tags = ":" + name + "_tags",
+        tags = ["manual"],
+    )
+    pycross_wheel_matched(
+        name = name + "_matched",
+        chooser = ":" + name + "_chooser",
+        tags = ["manual"],
+    )
+    analysis_test(
+        name = name,
+        target = name + "_matched",
+        impl = _test_wheel_matched_true_impl,
+    )
+
+def _test_wheel_matched_false_impl(env, target):
+    env.expect.that_str(target[config_common.FeatureFlagInfo].value).equals("false")
+
+def _test_wheel_matched_false(name):
+    pycross_target_platform(
+        name = name + "_tags",
+        platforms = ["manylinux_2_17_x86_64"],
+        tags = ["manual"],
+    )
+    pycross_wheel_chooser(
+        name = name + "_chooser",
+        candidates = ["pkg-1.0-cp311-cp311-win_amd64.whl"],
+        supported_tags = ":" + name + "_tags",
+        tags = ["manual"],
+    )
+    pycross_wheel_matched(
+        name = name + "_matched",
+        chooser = ":" + name + "_chooser",
+        tags = ["manual"],
+    )
+    analysis_test(
+        name = name,
+        target = name + "_matched",
+        impl = _test_wheel_matched_false_impl,
     )
 
 # ============================================================================
@@ -372,6 +458,9 @@ def pep508_test_suite(name):
             _test_wheel_compound_tags,
             _test_evaluator_rule,
             _test_chooser_rule,
+            _test_wheel_priority_map,
+            _test_wheel_matched_true,
+            _test_wheel_matched_false,
             _test_cycle_reachable,
             _test_cycle_marker_gated,
             _test_cycle_self_reachable,

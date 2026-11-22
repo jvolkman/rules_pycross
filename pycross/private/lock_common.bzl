@@ -27,7 +27,7 @@ def check_unique_repo_name(owners, module_name, repo_name):
         ))
     owners[repo_name] = module_name
 
-def workspace_lock_struct(ws_tag, repo_name, workspace_name, transition_attrs):
+def workspace_lock_struct(ws_tag, repo_name, workspace_name, transition_attrs, is_auto_build_repo = False):
     """Create a lock struct for a workspace member, inheriting workspace-level settings."""
     return struct(
         repo_name = repo_name,
@@ -37,6 +37,7 @@ def workspace_lock_struct(ws_tag, repo_name, workspace_name, transition_attrs):
         settings = transition_attrs.get("settings", {}),
         constraint_values = transition_attrs.get("constraint_values", []),
         platform = transition_attrs.get("platform"),
+        is_auto_build_repo = is_auto_build_repo,
     )
 
 def normalize_package_tag(tag):
@@ -212,7 +213,8 @@ def register_workspace_repo(
         raw_dependency_groups,
         transition_attrs,
         lock_module,
-        extra_project_files):
+        extra_project_files,
+        is_auto_build_repo = False):
     """Register a workspace lock repo.
 
     Args:
@@ -230,9 +232,17 @@ def register_workspace_repo(
         transition_attrs: Transition attributes dict.
         lock_module: The module owning this lock.
         extra_project_files: List of extra pyproject.toml files.
+        is_auto_build_repo: Whether this repo is the auto-generated `<ws>__build`
+            build-tools repo (not declared explicitly by the user).
     """
     check_unique_repo_name(lock_owners, lock_module.name, repo_name)
-    lock_repos[repo_name] = workspace_lock_struct(ws_tag, repo_name, ws_name, transition_attrs)
+    lock_repos[repo_name] = workspace_lock_struct(
+        ws_tag,
+        repo_name,
+        ws_name,
+        transition_attrs,
+        is_auto_build_repo = is_auto_build_repo,
+    )
     if lock_module.is_root:
         root_direct_deps.append(repo_name)
 
@@ -541,4 +551,5 @@ def process_workspaces(
             ),
             lock_module = ws_info.module,
             extra_project_files = workspace_extra_project_files[ws_name],
+            is_auto_build_repo = True,
         )

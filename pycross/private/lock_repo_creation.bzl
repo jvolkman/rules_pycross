@@ -253,7 +253,8 @@ def create_repos(
         workspace_pypi_indexes = {},
         repo_settings = {},
         resolved_locks = None,
-        resolved_locks_json = None):
+        resolved_locks_json = None,
+        auto_build_repos = None):
     """Create all Bazel repos from resolved lock data.
 
     Args:
@@ -270,10 +271,13 @@ def create_repos(
             all_locks is still used for passing labels to package_repo/thin_package_repo.
         resolved_locks_json: Optional dict of repo_name -> pre-encoded JSON string for
             package_repo.member_lock_data, avoiding duplicate json.encode() calls.
+        auto_build_repos: Optional list of auto-generated `<ws>__build` repo names whose
+            `_variants` flags should not be wired into workspace resolvers or emitted.
 
     Returns:
         None. Creates repos as a side effect.
     """
+    auto_build_set = {r: True for r in (auto_build_repos or [])}
     all_remote_files = {}
 
     # Build per-workspace, per-package override configs from registered override files.
@@ -460,6 +464,7 @@ def create_repos(
         ws_overrides = override_configs.get(workspace_name)
         ws_overrides_json = json.encode(ws_overrides) if ws_overrides else None
 
+        skip_variant_members = [m for m in member_repos if m in auto_build_set]
         package_repo_attrs = dict(
             name = workspace_repo_name,
             build_repo = "{}__build".format(workspace_name),
@@ -467,6 +472,8 @@ def create_repos(
             backend_configs = backend_configs_json,
             member_lock_files = member_lock_files,
         )
+        if skip_variant_members:
+            package_repo_attrs["skip_variant_members"] = skip_variant_members
         if ws_overrides_json:
             package_repo_attrs["override_configs"] = ws_overrides_json
         if resolved_locks_json:
@@ -492,6 +499,8 @@ def create_repos(
                 backend_configs = backend_configs_json,
             )
             thin_repo_attrs["generate_root_aliases"] = True
+            if member in auto_build_set:
+                thin_repo_attrs["expose_variant_flags"] = False
 
             if member in repo_flags:
                 flags = repo_flags[member]

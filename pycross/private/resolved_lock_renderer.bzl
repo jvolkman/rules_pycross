@@ -15,7 +15,7 @@ Naming conventions for generated targets:
 """
 
 load("@pypackaging.bzl", "pypackaging")
-load(":util.bzl", "has_build_fallback", "is_platform_specific", "marker_evaluator_name", "parse_package_key", "sanitize_name")
+load(":util.bzl", "has_build_fallback", "is_platform_specific", "is_universal_py3_wheel", "marker_evaluator_name", "parse_package_key", "sanitize_name")
 
 def _ind(text, tabs = 1):
     if not text:
@@ -87,16 +87,51 @@ def _collect_unique_markers(packages):
             markers[(marker, "")] = True
     return markers.keys()
 
+def _matching_variant_resolvers(markers, variant_resolvers):
+    """Return the subset of variant_resolvers referenced by markers.
+
+    Args:
+        markers: Iterable of PEP 508 marker strings.
+        variant_resolvers: Either a list of resolver target labels (all returned
+            when any marker references `__variant_`) or a dict mapping
+            resolver target label -> list of item qualified names.
+    """
+    if not variant_resolvers:
+        return []
+    variant_markers = [m for m in markers if m and "__variant_" in m]
+    if not variant_markers:
+        return []
+    if type(variant_resolvers) != "dict":
+        return variant_resolvers
+
+    matched = []
+    for label, qnames in sorted(variant_resolvers.items()):
+        found = False
+        for q in qnames:
+            sq = "'__variant_{}'".format(q)
+            dq = '"__variant_{}"'.format(q)
+            for m in variant_markers:
+                if sq in m or dq in m:
+                    found = True
+                    break
+            if found:
+                break
+        if found:
+            matched.append(label)
+    return matched if matched else sorted(variant_resolvers.keys())
+
 def _render_marker_evaluators(lines, unique_markers, variant_resolvers = None):
     """Render deduped pycross_pep508_evaluator and config_setting targets.
 
     Args:
         lines: Output lines list.
         unique_markers: Iterable of (marker_str, extra) tuples.
-        variant_resolvers: Optional list of variant_resolver target labels.
+        variant_resolvers: Optional list of variant_resolver target labels, or
+            dict mapping resolver label -> list of item qualified names.
     """
     for marker_str, extra in sorted(unique_markers):
         eval_name = marker_evaluator_name(marker_str, extra)
+        resolvers = _matching_variant_resolvers([marker_str], variant_resolvers)
 
         # Evaluator rule — returns FeatureFlagInfo("true"/"false")
         lines.extend([
@@ -106,8 +141,8 @@ def _render_marker_evaluators(lines, unique_markers, variant_resolvers = None):
         ])
         if extra:
             lines.append(_ind('extra = "{}",'.format(extra), 2))
-        if variant_resolvers and "__variant_" in marker_str:
-            lines.append(_ind("variants = [{}],".format(", ".join(['"{}"'.format(r) for r in variant_resolvers])), 2))
+        if resolvers:
+            lines.append(_ind("variants = [{}],".format(", ".join(['"{}"'.format(r) for r in resolvers])), 2))
         lines.extend([
             _ind(")"),
             "",
@@ -136,7 +171,8 @@ def _render_resolution_marker_evaluators(lines, resolution_marker_exprs, variant
         lines: Output lines list.
         resolution_marker_exprs: Dict mapping constraint_name to either a
             PEP 508 marker expression string or a compound dict.
-        variant_resolvers: Optional list of variant_resolver target labels.
+        variant_resolvers: Optional list of variant_resolver target labels, or
+            dict mapping resolver label -> list of item qualified names.
     """
     for constraint_name, entry in sorted(resolution_marker_exprs.items()):
         if type(entry) == "dict":
@@ -155,13 +191,14 @@ def _render_resolution_marker_evaluators(lines, resolution_marker_exprs, variant
         else:
             # Simple fork: evaluator + config_setting.
             eval_name = "_res_eval_{}".format(constraint_name)
+            resolvers = _matching_variant_resolvers([entry], variant_resolvers)
             lines.extend([
                 _ind("pycross_pep508_evaluator("),
                 _ind('name = "{}",'.format(eval_name), 2),
                 _ind('expr = "{}",'.format(entry.replace('"', '\\"')), 2),
             ])
-            if variant_resolvers and "__variant_" in entry:
-                lines.append(_ind("variants = [{}],".format(", ".join(['"{}"'.format(r) for r in variant_resolvers])), 2))
+            if resolvers:
+                lines.append(_ind("variants = [{}],".format(", ".join(['"{}"'.format(r) for r in resolvers])), 2))
             lines.extend([
                 _ind(")"),
                 "",
@@ -242,15 +279,13 @@ def _render_marker_cycle_member_deps(lines, cycle_groups, packages, variant_reso
             continue
 
         edges = _build_cycle_edges_dict(scc, packages)
-        edges_need_variants = False
-        if variant_resolvers:
-            for edge_list in edges.values():
-                for entry in edge_list:
-                    if "__variant_" in entry.get("marker", ""):
-                        edges_need_variants = True
-                        break
-                if edges_need_variants:
-                    break
+        edge_markers = [
+            entry.get("marker", "")
+            for edge_list in edges.values()
+            for entry in edge_list
+            if entry.get("marker")
+        ]
+        resolvers = _matching_variant_resolvers(edge_markers, variant_resolvers)
 
         sanitized_group_name = _sanitize_name(group_name).upper()
         edges_var_name = "_{}_EDGES".format(sanitized_group_name)
@@ -268,8 +303,8 @@ def _render_marker_cycle_member_deps(lines, cycle_groups, packages, variant_reso
             lines.append(_ind('raw_name = "_raw_{}",'.format(pkg_key), 2))
             lines.append(_ind('member = "{}",'.format(pkg_key), 2))
             lines.append(_ind("edges = {},".format(edges_var_name), 2))
-            if edges_need_variants:
-                lines.append(_ind("variants = [{}],".format(", ".join(['"{}"'.format(r) for r in variant_resolvers])), 2))
+            if resolvers:
+                lines.append(_ind("variants = [{}],".format(", ".join(['"{}"'.format(r) for r in resolvers])), 2))
             lines.append(_ind(")"))
             lines.append("")
 
@@ -285,6 +320,28 @@ def _render_marker_wheel_chooser(lines, pkg_key, pkg, repo_map, sdist_target = N
     if not candidates:
         return False
 
+    # Resolve candidate targets first so a sole universal py3-none-any wheel can
+    # bypass pycross_wheel_chooser, config_setting, and select() completely.
+    resolved_candidates = []
+    for candidate in candidates:
+        target = _wheel_target(candidate.get("file_reference", {}), repo_map)
+        if target:
+            resolved_candidates.append((candidate, target))
+
+    if (
+        len(candidates) == 1 and
+        len(resolved_candidates) == 1 and
+        is_universal_py3_wheel(resolved_candidates[0][0]["filename"])
+    ):
+        lines.extend([
+            _ind("native.alias("),
+            _ind('name = "_wheel_{}",'.format(pkg_key), 2),
+            _ind('actual = "{}",'.format(resolved_candidates[0][1]), 2),
+            _ind(")"),
+            "",
+        ])
+        return False
+
     filenames = [c["filename"] for c in candidates]
     chooser_name = "_wheel_chooser_{}".format(pkg_key)
 
@@ -295,13 +352,6 @@ def _render_marker_wheel_chooser(lines, pkg_key, pkg, repo_map, sdist_target = N
         _ind(")"),
         "",
     ])
-
-    # Config setting per wheel candidate (skip candidates with no target)
-    resolved_candidates = []
-    for candidate in candidates:
-        target = _wheel_target(candidate.get("file_reference", {}), repo_map)
-        if target:
-            resolved_candidates.append((candidate, target))
 
     for candidate, _target in resolved_candidates:
         filename = candidate["filename"]
@@ -337,33 +387,62 @@ def _render_marker_wheel_chooser(lines, pkg_key, pkg, repo_map, sdist_target = N
         "",
     ])
 
-    # Availability config_setting_group: ORs all per-wheel config_settings.
-    # Only emitted for packages that would fall to no_match_error (no sdist),
-    # so that all_requirements can use select() to exclude them on incompatible
-    # platforms. When the package also carries availability markers, the group
-    # is named _wheel_available_ so _render_marker_availability can compose it
-    # with the marker-based group into the final _available_ group.
-    if sdist_target or not resolved_candidates:
+    # Availability config_setting: matches when any wheel matches. Only emitted
+    # for packages that could fall to no_match_error (no sdist fallback and no
+    # universal py3-none-any candidate), so that all_requirements can exclude
+    # them on incompatible platforms. When the package also carries availability
+    # markers, the setting is named _wheel_available_ so _render_marker_availability
+    # can compose it with the marker-based group into _available_.
+    has_universal = (
+        len(resolved_candidates) == len(candidates) and
+        any([is_universal_py3_wheel(c["filename"]) for c, _ in resolved_candidates])
+    )
+    if sdist_target or not resolved_candidates or has_universal:
         return False
 
     wheel_gated = bool(pkg.get("availability_markers"))
     group_name = "_wheel_available_{}".format(pkg_key) if wheel_gated else "_available_{}".format(pkg_key)
-    cs_names = []
-    for candidate, _target in resolved_candidates:
-        filename = candidate["filename"]
-        cs_names.append(":_wheel_cs_{}_{}".format(pkg_key, _sanitize_name(filename)))
-    lines.extend([
-        _ind("selects.config_setting_group("),
-        _ind('name = "{}",'.format(group_name), 2),
-        _ind("match_any = [", 2),
-    ])
-    for cs in cs_names:
-        lines.append(_ind('"{}",'.format(cs), 3))
-    lines.extend([
-        _ind("],", 2),
-        _ind(")"),
-        "",
-    ])
+    cs_names = [
+        ":_wheel_cs_{}_{}".format(pkg_key, _sanitize_name(candidate["filename"]))
+        for candidate, _target in resolved_candidates
+    ]
+    if len(cs_names) == 1:
+        lines.extend([
+            _ind("native.alias("),
+            _ind('name = "{}",'.format(group_name), 2),
+            _ind('actual = "{}",'.format(cs_names[0]), 2),
+            _ind(")"),
+            "",
+        ])
+    elif len(cs_names) >= 3 and len(resolved_candidates) == len(candidates):
+        matched_name = "_wheel_matched_{}".format(pkg_key)
+        lines.extend([
+            _ind("pycross_wheel_matched("),
+            _ind('name = "{}",'.format(matched_name), 2),
+            _ind('chooser = ":{}",'.format(chooser_name), 2),
+            _ind(")"),
+            "",
+            _ind("native.config_setting("),
+            _ind('name = "{}",'.format(group_name), 2),
+            _ind("flag_values = {", 2),
+            _ind('":{}": "true",'.format(matched_name), 3),
+            _ind("},", 2),
+            _ind(")"),
+            "",
+        ])
+    else:
+        lines.extend([
+            _ind("selects.config_setting_group("),
+            _ind('name = "{}",'.format(group_name), 2),
+            _ind("match_any = [", 2),
+        ])
+        for cs in cs_names:
+            lines.append(_ind('"{}",'.format(cs), 3))
+        lines.extend([
+            _ind("],", 2),
+            _ind(")"),
+            "",
+        ])
     return wheel_gated
 
 def _render_marker_package_deps(lines, pkg_key, pkg_key_san, pkg, packages):
@@ -388,12 +467,16 @@ def _render_marker_package_deps(lines, pkg_key, pkg_key_san, pkg, packages):
     lines.append(_ind("]"))
 
     if conditional:
-        # Each conditional dep gets its own select()
-        for md in sorted(conditional, key = lambda m: m["key"]):
+        # Group conditional deps sharing the same marker evaluator into one select().
+        by_eval = {}
+        for md in conditional:
             effective_extra = extra if "extra" in md["marker"] else ""
             eval_name = marker_evaluator_name(md["marker"], effective_extra)
+            by_eval.setdefault(eval_name, {})[md["key"]] = True
+        for eval_name in sorted(by_eval.keys()):
+            dep_list = ", ".join(['":{}"'.format(k) for k in sorted(by_eval[eval_name].keys())])
             lines[-1] = lines[-1] + " + select({"
-            lines.append(_ind('":{}_match": [":{}"],'.format(eval_name, md["key"]), 2))
+            lines.append(_ind('":{}_match": [{}],'.format(eval_name, dep_list), 2))
             lines.append(_ind('"//conditions:default": [],', 2))
             lines.append(_ind("})", 1))
 
@@ -581,11 +664,12 @@ def _render_marker_package(lines, pkg_key, pkg, packages, repo_map, rctx_name, r
     # by the pycross_cycle_member_marker_deps macro call (rendered separately).
     # The pycross_wheel_library above is named _raw_<pkg_key> in that case.
 
-    # dist_info
+    # dist_info (point directly at _raw_<pkg> for cycle members so console script
+    # exec analysis doesn't pull in the entire cycle SCC and reachability evaluators)
     lines.extend([
         _ind("pycross_dist_info("),
         _ind('name = "_dist_info_{}",'.format(pkg_key), 2),
-        _ind('pkg = ":{lib}",'.format(lib = pkg_key), 2),
+        _ind('pkg = ":{lib}",'.format(lib = lib_name), 2),
         _ind(")"),
         "",
     ])
@@ -763,18 +847,48 @@ def _compute_reset_plan(packages, repo_map, conflict_pairs, gate_lines):
                 return no
             dep = plan.get(md["key"])
             if not dep or not dep.ok:
-                return no
+                if not md.get("marker"):
+                    return no
 
         items = []
         if is_extras_proxy:
             if base.gate:
                 items.append(base.gate)
-        elif pkg.get("sdist_file") and has_build_fallback(pkg):
-            cs_names = [":_wheel_cs_{}_{}".format(key, _sanitize_name(c["filename"])) for c in resolved]
-            items.append(cs_names[0] if len(cs_names) == 1 else group("_reset_wheel_" + key, "match_any", cs_names))
+        elif pkg.get("sdist_file") and pkg["sdist_file"].get("key") and has_build_fallback(pkg):
+            all_resolved = len(resolved) == len(pkg.get("wheel_candidates", []))
+            if not (all_resolved and any([is_universal_py3_wheel(c["filename"]) for c in resolved])):
+                if len(resolved) >= 3 and all_resolved:
+                    matched_name = "_wheel_matched_{}".format(key)
+                    gate_name = "_reset_wheel_{}".format(key)
+                    gate_lines.extend([
+                        _ind("pycross_wheel_matched("),
+                        _ind('name = "{}",'.format(matched_name), 2),
+                        _ind('chooser = ":_wheel_chooser_{}",'.format(key), 2),
+                        _ind(")"),
+                        "",
+                        _ind("native.config_setting("),
+                        _ind('name = "{}",'.format(gate_name), 2),
+                        _ind("flag_values = {", 2),
+                        _ind('":{}": "true",'.format(matched_name), 3),
+                        _ind("},", 2),
+                        _ind(")"),
+                        "",
+                    ])
+                    items.append(":" + gate_name)
+                else:
+                    cs_names = [":_wheel_cs_{}_{}".format(key, _sanitize_name(c["filename"])) for c in resolved]
+                    items.append(cs_names[0] if len(cs_names) == 1 else group("_reset_wheel_" + key, "match_any", cs_names))
 
         for md in deps:
-            dep = plan[md["key"]]
+            dep = plan.get(md["key"])
+            if not dep or not dep.ok:
+                # Conditional non-variant edge to a non-resettable dep: safe to
+                # reset whenever the marker does not match.
+                effective_extra = parts.extra if "extra" in md["marker"] else ""
+                eval_name = marker_evaluator_name(md["marker"], effective_extra)
+                nomatch[eval_name] = True
+                items.append(":{}_nomatch".format(eval_name))
+                continue
             if not dep.gate:
                 continue
             if not md.get("marker"):
@@ -922,7 +1036,8 @@ def render_lock_bzl(lock, repo_map, rctx_name = "", variant_resolvers = None, re
         lock: The parsed lock.json dict.
         repo_map: A dict mapping file keys to repo labels.
         rctx_name: The name of the package repository.
-        variant_resolvers: Optional list of variant_resolver target labels.
+        variant_resolvers: Optional list of variant_resolver target labels, or
+            dict mapping resolver label -> list of item qualified names.
         reset_conflict_sets: The workspace's conflict sets (lists of qualified
             names). When given, packages that don't depend on the variant
             settings install with them reset (see render_reset_bzl).
@@ -935,28 +1050,14 @@ def render_lock_bzl(lock, repo_map, rctx_name = "", variant_resolvers = None, re
 
     # Generated code loads from //pycross/private so these rules don't have to be public API.
     pycross_loads = {
-        "dist_info.bzl": "pycross_dist_info",
-        "pep508_evaluator.bzl": "pycross_pep508_evaluator",
-        "proxy.bzl": "pycross_library_proxy",
-        "wheel_chooser.bzl": "pycross_wheel_chooser",
-        "wheel_library.bzl": "pycross_wheel_library",
+        "dist_info.bzl": ["pycross_dist_info"],
+        "pep508_evaluator.bzl": ["pycross_pep508_evaluator"],
+        "proxy.bzl": ["pycross_library_proxy"],
+        "wheel_chooser.bzl": ["pycross_wheel_chooser"],
+        "wheel_library.bzl": ["pycross_wheel_library"],
     }
     if cycle_groups:
-        pycross_loads["cycle_member_marker_deps.bzl"] = "pycross_cycle_member_marker_deps"
-
-    # Check if selects.bzl is needed (for config_setting_group).
-    # True for: packages with wheel candidates but no sdist fallback,
-    # marker-restricted availability, or compound resolution-marker constraints.
-    needs_selects = False
-    for pkg_data in packages.values():
-        if is_platform_specific(pkg_data):
-            needs_selects = True
-            break
-    if not needs_selects:
-        for entry in lock.get("resolution_marker_exprs", {}).values():
-            if type(entry) == "dict":
-                needs_selects = True
-                break
+        pycross_loads["cycle_member_marker_deps.bzl"] = ["pycross_cycle_member_marker_deps"]
 
     reset_plan = None
     gate_lines = []
@@ -965,8 +1066,42 @@ def render_lock_bzl(lock, repo_map, rctx_name = "", variant_resolvers = None, re
         if not [p for p in reset_plan.values() if p.ok]:
             reset_plan = None
             gate_lines = []
-    if [line for line in gate_lines if "selects.config_setting_group(" in line]:
-        needs_selects = True
+
+    body_lines = []
+
+    # 1. Marker evaluators for dependency markers (deduped)
+    unique_markers = _collect_unique_markers(packages)
+    _render_marker_evaluators(body_lines, unique_markers, variant_resolvers = variant_resolvers)
+
+    # 1b. Resolution-marker evaluators for pin forks
+    resolution_marker_exprs = lock.get("resolution_marker_exprs", {})
+    _render_resolution_marker_evaluators(body_lines, resolution_marker_exprs, variant_resolvers = variant_resolvers)
+
+    # 2. Per-member cycle deps (marker-aware)
+    _render_marker_cycle_member_deps(body_lines, cycle_groups, packages, variant_resolvers = variant_resolvers)
+
+    # 2b. Variant reset gates
+    body_lines.extend(gate_lines)
+
+    # 3. Packages
+    for pkg_key, pkg in sorted(packages.items()):
+        _render_marker_package(body_lines, pkg_key, pkg, packages, repo_map, rctx_name, reset_plan = reset_plan)
+
+    # 4. Extras aggregates ([_all_] targets)
+    _render_extras_aggregates(body_lines, packages)
+
+    needs_selects = False
+    needs_wheel_matched = False
+    for line in body_lines:
+        if "selects.config_setting_group(" in line:
+            needs_selects = True
+        elif "pycross_wheel_matched(" in line:
+            needs_wheel_matched = True
+        if needs_selects and needs_wheel_matched:
+            break
+
+    if needs_wheel_matched:
+        pycross_loads["wheel_chooser.bzl"].append("pycross_wheel_matched")
 
     lines = [
         "# This file is generated by rules_pycross.",
@@ -974,8 +1109,11 @@ def render_lock_bzl(lock, repo_map, rctx_name = "", variant_resolvers = None, re
         '"""Pycross-generated dependency targets."""',
         "",
     ] + [
-        'load("@rules_pycross//pycross/private:{}", "{}")'.format(bzl, symbol)
-        for bzl, symbol in sorted(pycross_loads.items())
+        'load("@rules_pycross//pycross/private:{}", {})'.format(
+            bzl,
+            ", ".join(['"{}"'.format(sym) for sym in symbols]),
+        )
+        for bzl, symbols in sorted(pycross_loads.items())
     ]
 
     if reset_plan:
@@ -990,26 +1128,6 @@ def render_lock_bzl(lock, repo_map, rctx_name = "", variant_resolvers = None, re
         _ind('"""Generated package targets."""'),
         "",
     ])
-
-    # 1. Marker evaluators for dependency markers (deduped)
-    unique_markers = _collect_unique_markers(packages)
-    _render_marker_evaluators(lines, unique_markers, variant_resolvers = variant_resolvers)
-
-    # 1b. Resolution-marker evaluators for pin forks
-    resolution_marker_exprs = lock.get("resolution_marker_exprs", {})
-    _render_resolution_marker_evaluators(lines, resolution_marker_exprs, variant_resolvers = variant_resolvers)
-
-    # 2. Per-member cycle deps (marker-aware)
-    _render_marker_cycle_member_deps(lines, cycle_groups, packages, variant_resolvers = variant_resolvers)
-
-    # 2b. Variant reset gates
-    lines.extend(gate_lines)
-
-    # 3. Packages
-    for pkg_key, pkg in sorted(packages.items()):
-        _render_marker_package(lines, pkg_key, pkg, packages, repo_map, rctx_name, reset_plan = reset_plan)
-
-    # 4. Extras aggregates ([_all_] targets)
-    _render_extras_aggregates(lines, packages)
+    lines.extend(body_lines)
 
     return "\n".join(lines) + "\n"

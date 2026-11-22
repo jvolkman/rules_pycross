@@ -457,10 +457,13 @@ def make_format_extension(
         repo_settings = {}
         repo_constraint_values = {}
         repo_platforms = {}
+        auto_build_repos = []
 
         for repo_info in lock_repos.values():
             workspace_memberships[repo_info.repo_name] = repo_info.workspace
 
+            if getattr(repo_info, "is_auto_build_repo", False):
+                auto_build_repos.append(repo_info.repo_name)
             if repo_info.flags:
                 repo_flags[repo_info.repo_name] = json.encode(repo_info.flags)
             if repo_info.settings:
@@ -481,6 +484,7 @@ def make_format_extension(
             workspace_pypi_indexes = workspace_pypi_indexes,
             resolved_locks = resolved_locks,
             resolved_locks_json = resolved_locks_json,
+            auto_build_repos = auto_build_repos,
         )
 
         if bazel_features.external_deps.extension_metadata_has_reproducible:

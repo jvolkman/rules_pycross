@@ -394,6 +394,34 @@ def _test_is_platform_specific_impl(env, target):
         "wheel_candidates": [{"filename": "pkg-1.0-cp310-win_amd64.whl"}],
     })).equals(True)
 
+    # Package with universal py3-none-any (or py2.py3-none-any, or with build tag)
+    # wheel and no availability_markers → NOT platform-specific even without sdist
+    env.expect.that_bool(is_platform_specific_for_testing({
+        "wheel_candidates": [{"filename": "pkg-1.0-py3-none-any.whl"}],
+    })).equals(False)
+    env.expect.that_bool(is_platform_specific_for_testing({
+        "wheel_candidates": [{"filename": "pkg-1.0-py2.py3-none-any.whl"}],
+    })).equals(False)
+    env.expect.that_bool(is_platform_specific_for_testing({
+        "wheel_candidates": [{"filename": "pkg-1.0-1-py3-none-any.whl"}],
+    })).equals(False)
+
+    # Malformed 7-part filename does not take the universal fast path
+    env.expect.that_bool(is_platform_specific_for_testing({
+        "wheel_candidates": [{"filename": "bad-pkg-1.0-1-py3-none-any.whl"}],
+    })).equals(True)
+
+    # Universal wheel WITH availability_markers → still platform-specific
+    env.expect.that_bool(is_platform_specific_for_testing({
+        "wheel_candidates": [{"filename": "pkg-1.0-py3-none-any.whl"}],
+        "availability_markers": ["sys_platform != 'win32'"],
+    })).equals(True)
+
+    # Version-constrained pure wheel (py311-none-any) → platform-specific
+    env.expect.that_bool(is_platform_specific_for_testing({
+        "wheel_candidates": [{"filename": "pkg-1.0-py311-none-any.whl"}],
+    })).equals(True)
+
     # Package with wheels AND sdist → NOT platform-specific
     env.expect.that_bool(is_platform_specific_for_testing({
         "wheel_candidates": [{"filename": "pkg-1.0-cp310-win_amd64.whl"}],
@@ -1072,6 +1100,27 @@ def _test_transition_settings(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
     analysis_test(name = name, target = name + "_subject", impl = _test_transition_settings_impl)
 
+def _test_variants_build_hidden_flags_impl(env, _target):
+    """Auto-generated __build repos omit _variants flags while keeping _no_variant_ targets."""
+    info = collect_variants_for_testing([{
+        "items": [
+            {"package": "app", "kind": "extra", "name": "cpu", "flags": ["extra_cpu"]},
+            {"package": "app", "kind": "extra", "name": "gpu", "flags": ["extra_gpu"]},
+        ],
+        "repo_default": "extra_app_cpu",
+    }])
+    build = variants_build_for_testing(info, "ws__pkgs", "ws__build", expose_variant_flags = False)
+    env.expect.that_bool("bool_flag(" in build).equals(False)
+    env.expect.that_bool("string_flag(" in build).equals(False)
+    env.expect.that_bool("is_extra_cpu" in build).equals(False)
+    env.expect.that_bool("_selected_" in build).equals(False)
+    env.expect.that_str(build).contains('name = "_no_variant_extra_app_cpu_extra_app_gpu"')
+    env.expect.that_str(build).contains("has no _variants flag for it")
+
+def _test_variants_build_hidden_flags(name):
+    util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
+    analysis_test(name = name, target = name + "_subject", impl = _test_variants_build_hidden_flags_impl)
+
 def thin_package_repo_test_suite(name):
     test_suite(
         name = name,
@@ -1079,6 +1128,7 @@ def thin_package_repo_test_suite(name):
             _test_variants_build_shared_flag,
             _test_variants_build_repo_default,
             _test_variants_build_shared_flag_pinned,
+            _test_variants_build_hidden_flags,
             _test_transition_settings,
             _test_pin_build_overlapping_sets,
             _test_pin_build_no_transition,

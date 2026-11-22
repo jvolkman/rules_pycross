@@ -118,6 +118,7 @@ def _package_repo_impl(rctx):
     variant_sets = []  # list of {"qnames": [...], "flags": {flag label: [qnames]}, "member_flags": {member: {flag: [qnames]}}}
     variant_sets_seen = {}  # sorted qnames key -> variant set (dedup across members)
     member_variant_flags = {}  # member -> {flag_name: True} (all valid flags for that member)
+    skip_variant_members = {m: True for m in rctx.attr.skip_variant_members}
     for member in rctx.attr.member_lock_files.keys():
         if member in rctx.attr.member_lock_data:
             member_lock = json.decode(rctx.attr.member_lock_data[member])
@@ -125,6 +126,7 @@ def _package_repo_impl(rctx):
             lock_label = rctx.attr.member_lock_files[member]
             member_lock = json.decode(rctx.read(rctx.path(Label(lock_label))))
 
+        skip_member_variants = member in skip_variant_members
         for variant_set in member_lock.get("variants", []):
             set_qnames = []
             set_flags = {}  # "@<member>//_variants:<flag>" -> [qnames]
@@ -133,10 +135,11 @@ def _package_repo_impl(rctx):
                 qname = variant_item_qname(item)
                 variant_items[qname] = True
                 set_qnames.append(qname)
-                for flag in item.get("flags", []):
-                    set_flags.setdefault("@{}//_variants:{}".format(member, flag), []).append(qname)
-                    set_member_flags.setdefault(flag, []).append(qname)
-                    member_variant_flags.setdefault(member, {})[flag] = True
+                if not skip_member_variants:
+                    for flag in item.get("flags", []):
+                        set_flags.setdefault("@{}//_variants:{}".format(member, flag), []).append(qname)
+                        set_member_flags.setdefault(flag, []).append(qname)
+                        member_variant_flags.setdefault(member, {})[flag] = True
             set_key = "|".join(sorted(set_qnames))
             if set_key not in variant_sets_seen:
                 variant_sets_seen[set_key] = {"qnames": set_qnames, "flags": {}, "member_flags": {}}
@@ -190,10 +193,11 @@ def _package_repo_impl(rctx):
 
     # Map each variant item to the resolver(s) it participates in.
     qname_to_resolvers = {}  # qname -> [resolver_name, ...]
-    resolver_names = []  # ordered list of resolver target names
+    resolver_qnames = {}  # ":<resolver_name>" -> sorted [qname, ...]
     for vset in variant_sets:
-        resolver_name = "_resolver_" + "_".join(sorted(vset["qnames"]))
-        resolver_names.append(resolver_name)
+        sorted_qnames = sorted(vset["qnames"])
+        resolver_name = "_resolver_" + "_".join(sorted_qnames)
+        resolver_qnames[":" + resolver_name] = sorted_qnames
         for qname in vset["qnames"]:
             qname_to_resolvers.setdefault(qname, []).append(resolver_name)
 
@@ -204,7 +208,7 @@ def _package_repo_impl(rctx):
             lock,
             rctx.attr.repo_map,
             rctx.name,
-            variant_resolvers = [":" + r for r in resolver_names],
+            variant_resolvers = resolver_qnames,
             reset_conflict_sets = [vset["qnames"] for vset in variant_sets],
         ),
     )
@@ -520,6 +524,10 @@ package_repo = repository_rule(
         ),
         "override_configs": attr.string(
             doc = "JSON-encoded dict of pkg_name -> {backend_name -> backend_attrs} for package repo hooks.",
+        ),
+        "skip_variant_members": attr.string_list(
+            doc = "Member repo names whose `_variants` flags should not be wired into workspace resolvers or reset.bzl (e.g. auto-generated `<ws>__build`).",
+            default = [],
         ),
     },
 )
