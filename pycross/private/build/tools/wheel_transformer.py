@@ -1,5 +1,4 @@
 import argparse
-import glob
 import os
 import subprocess
 import sys
@@ -8,6 +7,7 @@ from pathlib import Path
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Run a wheel transform tool with proper staging and collection.")
+    parser.add_argument("--in-wheel", help="Path to the input .whl file.")
     parser.add_argument("--in-wheel-dir", help="Path to the input wheel directory.")
     parser.add_argument(
         "--out-wheel-dir", required=True, help="Directory where the transform tool writes the output wheel."
@@ -20,14 +20,19 @@ def main() -> None:
     args = parser.parse_args()
 
     # Determine the wheel file for the transform tool.
-    if args.in_wheel_dir:
-        whl_files = glob.glob(os.path.join(args.in_wheel_dir, "*.whl"))
-        if not whl_files:
-            print("ERROR: No .whl file found in wheel directory: " + args.in_wheel_dir, file=sys.stderr)
+    if args.in_wheel:
+        wheel_file = args.in_wheel
+    elif args.in_wheel_dir:
+        whl_files = sorted(Path(args.in_wheel_dir).glob("*.whl"))
+        if len(whl_files) != 1:
+            print(
+                f"ERROR: Expected 1 .whl file in wheel directory {args.in_wheel_dir}, found {len(whl_files)}",
+                file=sys.stderr,
+            )
             sys.exit(1)
-        wheel_file = whl_files[0]
+        wheel_file = str(whl_files[0])
     else:
-        print("ERROR: --in-wheel-dir is required", file=sys.stderr)
+        print("ERROR: --in-wheel or --in-wheel-dir is required", file=sys.stderr)
         sys.exit(1)
 
     # Build the environment for the transform tool.
@@ -47,11 +52,14 @@ def main() -> None:
     # Run the user's transform tool.
     subprocess.check_call([args.tool], env=env)
 
-    # Collect output: find the transformed wheel in the output directory.
+    # Collect output: verify the transform tool produced exactly one wheel.
     output_dir = Path(args.out_wheel_dir)
     whl_files = sorted(output_dir.glob("*.whl"))
-    if not whl_files:
-        print("ERROR: No .whl file found in transform output", file=sys.stderr)
+    if len(whl_files) != 1:
+        print(
+            f"ERROR: Expected 1 .whl file in transform output, found {len(whl_files)}",
+            file=sys.stderr,
+        )
         sys.exit(1)
 
 

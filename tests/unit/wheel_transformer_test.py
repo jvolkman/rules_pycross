@@ -102,6 +102,82 @@ class WheelTransformerArgsTest(unittest.TestCase):
                 main()
             self.assertNotEqual(cm.exception.code, 0)
 
+    @patch("subprocess.check_call")
+    def test_in_wheel_file_sets_env(self, mock_check_call):
+        """--in-wheel should pass a plain .whl file directly without scanning a directory."""
+        whl = self._create_dummy_wheel(self.in_wheel_dir)
+
+        from pycross.private.build.tools.wheel_transformer import main
+
+        def create_output(*args, **kwargs):
+            self.out_wheel_dir.mkdir(exist_ok=True)
+            self._create_dummy_wheel(self.out_wheel_dir, "foo-1.0-py3-none-any.whl")
+
+        mock_check_call.side_effect = create_output
+        with patch(
+            "sys.argv",
+            [
+                "wheel_transformer",
+                "--in-wheel",
+                str(whl),
+                "--out-wheel-dir",
+                str(self.out_wheel_dir),
+                "--tool",
+                "/bin/true",
+            ],
+        ):
+            main()
+
+        env = mock_check_call.call_args[1]["env"]
+        self.assertEqual(env["PYCROSS_WHEEL_FILE"], str(whl))
+
+    @patch("subprocess.check_call")
+    def test_multiple_wheels_in_input_or_output_dir_errors(self, mock_check_call):
+        """Input and output directories with more than one .whl file must fail."""
+        from pycross.private.build.tools.wheel_transformer import main
+
+        self._create_dummy_wheel(self.in_wheel_dir, "a-1.0-py3-none-any.whl")
+        self._create_dummy_wheel(self.in_wheel_dir, "b-1.0-py3-none-any.whl")
+
+        with patch(
+            "sys.argv",
+            [
+                "wheel_transformer",
+                "--in-wheel-dir",
+                str(self.in_wheel_dir),
+                "--out-wheel-dir",
+                str(self.out_wheel_dir),
+                "--tool",
+                "/bin/true",
+            ],
+        ):
+            with self.assertRaises(SystemExit) as cm:
+                main()
+            self.assertNotEqual(cm.exception.code, 0)
+
+        # Single input wheel, two output wheels must also fail.
+        def create_two_outputs(*args, **kwargs):
+            self.out_wheel_dir.mkdir(exist_ok=True)
+            self._create_dummy_wheel(self.out_wheel_dir, "a-1.0-py3-none-any.whl")
+            self._create_dummy_wheel(self.out_wheel_dir, "b-1.0-py3-none-any.whl")
+
+        mock_check_call.side_effect = create_two_outputs
+        with patch(
+            "sys.argv",
+            [
+                "wheel_transformer",
+                "--in-wheel",
+                str(self.in_wheel_dir / "a-1.0-py3-none-any.whl"),
+                "--out-wheel-dir",
+                str(self.out_wheel_dir),
+                "--tool",
+                "/bin/true",
+            ],
+        ):
+            with self.assertRaises(SystemExit) as cm:
+                main()
+            self.assertNotEqual(cm.exception.code, 0)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -40,7 +40,7 @@ def _register_wheel_install_action(ctx, out, entry_points, dist_info_dir):
             mnemonic = "PycrossUnsupportedWheel",
             progress_message = "Rejecting unsupported wheel %s" % pkg_id,
         )
-        return
+        return None
 
     wheel_input = ctx.files.wheel[0]
 
@@ -80,12 +80,14 @@ def _register_wheel_install_action(ctx, out, entry_points, dist_info_dir):
     else:
         effective_precompile = ctx.attr.precompile
 
+    precompile_cache_tag = None
     if (
         effective_precompile == "enabled" and
         _PYCROSS_TOOLCHAIN_TYPE in ctx.toolchains and
         ctx.toolchains[_PYCROSS_TOOLCHAIN_TYPE]
     ):
         pycross_info = ctx.toolchains[_PYCROSS_TOOLCHAIN_TYPE].pycross_info
+        precompile_cache_tag = getattr(pycross_info, "bytecode_cache_tag", None)
         if ctx.attr.precompile_invalidation_mode != "auto":
             invalidation_mode = ctx.attr.precompile_invalidation_mode
         else:
@@ -136,6 +138,8 @@ def _register_wheel_install_action(ctx, out, entry_points, dist_info_dir):
         progress_message = "Installing %s" % wheel_input.basename,
     )
 
+    return precompile_cache_tag
+
 # A binary that reaches one package through two configurations gets two
 # `VenvSymlinkEntry`s for it. With `files = depset([out])` they differ, since
 # depsets compare by identity, so rules_python merges them as an overlap. Before
@@ -158,6 +162,13 @@ _MERGES_DIRECTORY_ENTRIES = hasattr(
     "link_to_subpaths",
 )
 
+def _pyc_rel_path(py_rel_path, cache_tag, optimize_level):
+    dirname = paths.dirname(py_rel_path)
+    stem = paths.basename(py_rel_path)[:-3]  # strip ".py"
+    opt_suffix = ".opt-{}".format(optimize_level) if optimize_level else ""
+    pyc_name = "{}.{}{}.pyc".format(stem, cache_tag, opt_suffix)
+    return paths.join(dirname, "__pycache__", pyc_name) if dirname else paths.join("__pycache__", pyc_name)
+
 def _build_venv_symlinks(
         venvs_site_packages_enabled,
         out,
@@ -168,8 +179,11 @@ def _build_venv_symlinks(
         site_paths,
         bin_paths,
         data_paths,
-        include_paths):
-    if not (venvs_site_packages_enabled and site_paths):
+        include_paths,
+        precompile_cache_tag = None,
+        precompile_optimize_level = 0):
+    has_venv_paths = bool(site_paths or bin_paths or data_paths or include_paths)
+    if not (venvs_site_packages_enabled and has_venv_paths):
         return []
 
     entry_files = depset([out]) if _MERGES_DIRECTORY_ENTRIES else _NO_FILES
@@ -183,6 +197,16 @@ def _build_venv_symlinks(
             venv_path = tlp,
             files = entry_files,
         ))
+        if precompile_cache_tag and tlp.endswith(".py") and paths.basename(tlp) != ".py":
+            pyc_rel = _pyc_rel_path(tlp, precompile_cache_tag, precompile_optimize_level)
+            venv_symlinks.append(VenvSymlinkEntry(
+                kind = VenvSymlinkKind.LIB,
+                link_to_path = paths.join(imp, pyc_rel),
+                package = package_name,
+                version = package_version,
+                venv_path = pyc_rel,
+                files = entry_files,
+            ))
 
     # Also add .dist-info directory symlink so metadata is accessible.
     if dist_info_dir:
@@ -245,7 +269,7 @@ def _pycross_wheel_library_impl(ctx):
             ctx.attr.package_version,
         )
 
-    _register_wheel_install_action(ctx, out, entry_points, dist_info_dir)
+    precompile_cache_tag = _register_wheel_install_action(ctx, out, entry_points, dist_info_dir)
 
     # TODO: Is there a more correct way to get this runfiles-relative import path?
     imp = paths.join(
@@ -287,10 +311,13 @@ def _pycross_wheel_library_impl(ctx):
         bin_paths,
         data_paths,
         include_paths,
+        precompile_cache_tag = precompile_cache_tag,
+        precompile_optimize_level = ctx.attr.precompile_optimize_level,
     )
 
     # With venvs_site_packages, the wheel is linked into the venv's site-packages, so (like rules_python)
-    # don't also put its own site-packages dir on sys.path.
+    # don't also put its own site-packages dir on sys.path. Keep [imp] when site_paths is empty so
+    # sdists whose Python modules are generated at build time (even if bin_paths is populated) stay importable.
     merged = merge_py_providers(
         ctx,
         ctx.attr.deps,
@@ -313,6 +340,9 @@ def _pycross_wheel_library_impl(ctx):
             dist_info = depset([entry_points]),
         ),
     ]
+
+    if PycrossUnsupportedWheelInfo in ctx.attr.wheel:
+        providers.append(ctx.attr.wheel[PycrossUnsupportedWheelInfo])
 
     if ctx.attr.package_name:
         providers.append(
@@ -367,6 +397,7 @@ _WHEEL_LIBRARY_ATTRS = dict({
     ),
     "precompile_optimize_level": attr.int(
         default = 0,
+        values = [0, 1, 2],
         doc = "The Python bytecode optimization level passed to `py_compile.compile(optimize=...)`.",
     ),
     "_tool": attr.label(

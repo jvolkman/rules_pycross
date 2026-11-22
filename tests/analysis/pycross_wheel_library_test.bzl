@@ -116,6 +116,7 @@ def _test_pycross_wheel_library_no_match_deferred(name):
 def _test_pycross_wheel_library_no_match_deferred_impl(env, target):
     env.expect.that_target(target).has_provider(PycrossExtractedWheelInfo)
     env.expect.that_target(target).has_provider(PycrossPackageInfo)
+    env.expect.that_target(target).has_provider(PycrossUnsupportedWheelInfo)
 
     extracted_info = target[PycrossExtractedWheelInfo]
     action = env.expect.that_target(target).action_generating(extracted_info.site_packages.short_path)
@@ -630,6 +631,72 @@ def _test_pycross_wheel_zipimport_library_dir_uses_link_wheel_impl(env, target):
     action = env.expect.that_target(target).action_named("PycrossLinkWheel")
     action.argv().contains_predicate(matching.str_endswith("test-1.0.whldir"))
 
+def _test_pycross_wheel_library_precompile_single_file_pyc_symlinks(name):
+    _define_precompile_subject(
+        name,
+        precompile = "enabled",
+        precompile_optimize_level = 1,
+        site_paths = ["six.py", "google/cloud/foo.py", "pkg"],
+    )
+    analysis_test(
+        name = name,
+        target = name + "_subject",
+        config_settings = {
+            str(Label("@rules_python//python/config_settings:venvs_site_packages")): "yes",
+        },
+        impl = _test_pycross_wheel_library_precompile_single_file_pyc_symlinks_impl,
+    )
+
+def _test_pycross_wheel_library_precompile_single_file_pyc_symlinks_impl(env, target):
+    venv_paths = [e.venv_path for e in target[PyInfo].venv_symlinks.to_list()]
+    env.expect.that_collection(venv_paths).contains_at_least([
+        "six.py",
+        "google/cloud/foo.py",
+        "pkg",
+    ])
+    env.expect.that_collection(venv_paths).contains_predicate(
+        matching.str_matches("__pycache__/six.cpython-*.opt-1.pyc"),
+    )
+    env.expect.that_collection(venv_paths).contains_predicate(
+        matching.str_matches("google/cloud/__pycache__/foo.cpython-*.opt-1.pyc"),
+    )
+    env.expect.that_collection(venv_paths).not_contains_predicate(
+        matching.str_matches("*pkg*.pyc"),
+    )
+
+def _test_pycross_wheel_library_bin_only_venv_symlinks(name):
+    util.helper_target(
+        native.filegroup,
+        name = name + "_wheel",
+        srcs = ["test-1.0-py3-none-any.whl"],
+    )
+    util.helper_target(
+        pycross_wheel_library,
+        name = name + "_subject",
+        wheel = name + "_wheel",
+        package_name = "mytool",
+        package_version = "1.0",
+        bin_paths = ["mytool"],
+    )
+    analysis_test(
+        name = name,
+        target = name + "_subject",
+        config_settings = {
+            str(Label("@rules_python//python/config_settings:venvs_site_packages")): "yes",
+        },
+        impl = _test_pycross_wheel_library_bin_only_venv_symlinks_impl,
+    )
+
+def _test_pycross_wheel_library_bin_only_venv_symlinks_impl(env, target):
+    venv_paths = [e.venv_path for e in target[PyInfo].venv_symlinks.to_list()]
+    env.expect.that_collection(venv_paths).contains("mytool")
+    env.expect.that_collection(venv_paths).contains("mytool-1.0.dist-info")
+
+    # Empty site_paths still keeps site-packages on sys.path for build-time generated modules.
+    env.expect.that_collection(target[PyInfo].imports.to_list()).contains_predicate(
+        matching.str_endswith("/site-packages"),
+    )
+
 def pycross_wheel_library_test_suite(name):
     test_suite(
         name = name,
@@ -662,5 +729,7 @@ def pycross_wheel_library_test_suite(name):
             _test_pycross_wheel_library_precompile_invalidation_mode_attr_overrides_flag,
             _test_pycross_wheel_zipimport_library_file_uses_symlink,
             _test_pycross_wheel_zipimport_library_dir_uses_link_wheel,
+            _test_pycross_wheel_library_precompile_single_file_pyc_symlinks,
+            _test_pycross_wheel_library_bin_only_venv_symlinks,
         ],
     )

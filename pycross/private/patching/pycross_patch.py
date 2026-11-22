@@ -37,6 +37,7 @@ from __future__ import annotations
 import os
 import re
 import stat
+import tempfile
 from dataclasses import dataclass
 from dataclasses import field
 from pathlib import Path
@@ -186,7 +187,7 @@ def _skip_components(name: bytes, strip: int) -> Optional[bytes]:
 
     A run of slashes counts as one separator, as in `_clean_path`.
     """
-    if name.startswith(b"/"):
+    if name.startswith(b"/") or b".." in name.split(b"/"):
         return None
     if strip == 0:
         return name
@@ -421,10 +422,12 @@ def _clean_path(name: bytes, strip: int, line_no: int) -> str:
     if path.startswith("/") or "\\" in path or "\0" in path or _DRIVE_RE.match(path):
         raise PatchError(f"line {line_no}: unsafe file name: {path!r}")
     parts = [part for part in path.split("/") if part]
+    if ".." in parts:
+        raise PatchError(f"line {line_no}: unsafe file name: {path!r}")
     if strip >= len(parts):
         raise PatchError(f"line {line_no}: can't strip {strip} components from file name {path!r}")
     parts = [part for part in parts[strip:] if part != "."]
-    if not parts or ".." in parts:
+    if not parts or _DRIVE_RE.match(parts[0]):
         raise PatchError(f"line {line_no}: unsafe file name: {path!r}")
     return "/".join(parts)
 
@@ -703,15 +706,50 @@ class _Tree:
             if rel in self._content and self._content[rel] is None:
                 path = self.root / rel
                 if os.path.lexists(path):
+                    if os.name == "nt":
+                        try:
+                            os.chmod(path, stat.S_IWRITE | stat.S_IREAD)
+                        except OSError:
+                            pass
                     path.unlink()
                 self._remove_empty_parents(path.parent)
+        default_mode: Optional[int] = None
         for rel in self._order:
             path = self.root / rel
             content = self._content.get(rel)
             if content is not None:
                 path.parent.mkdir(parents=True, exist_ok=True)
-                path.write_bytes(content)
-            if rel in self._executable:
+                orig_mode = stat.S_IMODE(path.stat().st_mode) if path.exists() else None
+                fd, tmp_name = tempfile.mkstemp(dir=path.parent, prefix=".pycross_patch_")
+                try:
+                    with os.fdopen(fd, "wb") as f:
+                        f.write(content)
+                    if orig_mode is not None:
+                        perm = orig_mode
+                    else:
+                        if default_mode is None:
+                            umask = os.umask(0)
+                            os.umask(umask)
+                            default_mode = 0o666 & ~umask
+                        perm = default_mode
+                    if rel in self._executable:
+                        if self._executable[rel]:
+                            perm |= (perm & 0o444) >> 2
+                        else:
+                            perm &= ~0o111
+                    os.chmod(tmp_name, perm)
+                    if os.name == "nt" and orig_mode is not None and not (orig_mode & stat.S_IWUSR):
+                        os.chmod(path, orig_mode | stat.S_IWUSR)
+                    os.replace(tmp_name, path)
+                except BaseException:
+                    try:
+                        if os.name == "nt":
+                            os.chmod(tmp_name, stat.S_IWRITE | stat.S_IREAD)
+                        os.unlink(tmp_name)
+                    except OSError:
+                        pass
+                    raise
+            elif rel in self._executable:
                 perm = stat.S_IMODE(path.stat().st_mode)
                 if self._executable[rel]:
                     perm |= (perm & 0o444) >> 2

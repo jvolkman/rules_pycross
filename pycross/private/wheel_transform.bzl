@@ -11,18 +11,25 @@ def _pycross_wheel_transform_impl(ctx):
     for key, value in ctx.attr.env.items():
         env[key] = ctx.expand_make_variables("env", ctx.expand_location(value, ctx.attr.data), {})
 
-    # Collect inputs.
+    # Collect inputs (including runfiles and executables of data deps).
     input_files = [wheel_input]
-    data_inputs = [dep[DefaultInfo].files for dep in ctx.attr.data]
+    data_inputs = []
+    tools = [ctx.attr.transform[DefaultInfo].files_to_run]
+    for dep in ctx.attr.data:
+        data_inputs.append(dep[DefaultInfo].files)
+        if dep[DefaultInfo].default_runfiles:
+            data_inputs.append(dep[DefaultInfo].default_runfiles.files)
+        if dep[DefaultInfo].files_to_run and dep[DefaultInfo].files_to_run.executable:
+            tools.append(dep[DefaultInfo].files_to_run)
 
     # Build arguments for the wheel transformer wrapper.
     args = ctx.actions.args()
     if type(wheel_input) == "File" and wheel_input.is_directory:
-        args.add("--in-wheel-dir", wheel_input.path)
+        args.add_all([wheel_input], before_each = "--in-wheel-dir", expand_directories = False)
     else:
-        # Plain file (e.g., local override wheel) — pass its directory
-        args.add("--in-wheel-dir", wheel_input.dirname)
-    args.add("--out-wheel-dir", out_wheel_dir.path)
+        # Plain file (e.g., local override wheel) — pass directly as --in-wheel.
+        args.add("--in-wheel", wheel_input)
+    args.add_all([out_wheel_dir], before_each = "--out-wheel-dir", expand_directories = False)
     args.add("--tool", ctx.executable.transform)
 
     for key, value in env.items():
@@ -35,7 +42,7 @@ def _pycross_wheel_transform_impl(ctx):
         arguments = [args],
         inputs = depset(input_files, transitive = data_inputs),
         outputs = outputs,
-        tools = [ctx.attr.transform[DefaultInfo].files_to_run],
+        tools = tools,
         mnemonic = "PycrossWheelTransform",
         progress_message = "Transforming %s" % wheel_input.basename,
     )

@@ -31,8 +31,9 @@ pycross_hermetic_toolchain(<a href="#pycross_hermetic_toolchain-name">name</a>, 
 <pre>
 load("@rules_pycross//pycross:toolchain.bzl", "PycrossBuildExecRuntimeInfo")
 
-PycrossBuildExecRuntimeInfo(<a href="#PycrossBuildExecRuntimeInfo-exec_python_files">exec_python_files</a>, <a href="#PycrossBuildExecRuntimeInfo-exec_python_compile_files">exec_python_compile_files</a>, <a href="#PycrossBuildExecRuntimeInfo-exec_python_files_to_run">exec_python_files_to_run</a>,
-                            <a href="#PycrossBuildExecRuntimeInfo-exec_python_executable">exec_python_executable</a>, <a href="#PycrossBuildExecRuntimeInfo-exec_python_executable_file">exec_python_executable_file</a>, <a href="#PycrossBuildExecRuntimeInfo-target_python_files">target_python_files</a>,
+PycrossBuildExecRuntimeInfo(<a href="#PycrossBuildExecRuntimeInfo-bytecode_cache_tag">bytecode_cache_tag</a>, <a href="#PycrossBuildExecRuntimeInfo-exec_python_files">exec_python_files</a>, <a href="#PycrossBuildExecRuntimeInfo-exec_python_compile_files">exec_python_compile_files</a>,
+                            <a href="#PycrossBuildExecRuntimeInfo-exec_python_files_to_run">exec_python_files_to_run</a>, <a href="#PycrossBuildExecRuntimeInfo-exec_python_executable">exec_python_executable</a>,
+                            <a href="#PycrossBuildExecRuntimeInfo-exec_python_executable_file">exec_python_executable_file</a>, <a href="#PycrossBuildExecRuntimeInfo-target_python_files">target_python_files</a>,
                             <a href="#PycrossBuildExecRuntimeInfo-target_python_files_to_run">target_python_files_to_run</a>, <a href="#PycrossBuildExecRuntimeInfo-target_python_executable">target_python_executable</a>)
 </pre>
 
@@ -42,6 +43,7 @@ Extended information about a (exec, target) Python interpreter pair.
 
 | Name  | Description |
 | :------------- | :------------- |
+| <a id="PycrossBuildExecRuntimeInfo-bytecode_cache_tag"></a>bytecode_cache_tag |  Optional PEP 3147 bytecode cache tag for the target interpreter (e.g. 'cpython-314'), or None.    |
 | <a id="PycrossBuildExecRuntimeInfo-exec_python_files"></a>exec_python_files |  A depset containing all files for the exec interpreter.    |
 | <a id="PycrossBuildExecRuntimeInfo-exec_python_compile_files"></a>exec_python_compile_files |  A depset containing the subset of exec interpreter files needed for .pyc bytecode compilation.    |
 | <a id="PycrossBuildExecRuntimeInfo-exec_python_files_to_run"></a>exec_python_files_to_run |  Optional FilesToRunProvider for the exec interpreter.    |

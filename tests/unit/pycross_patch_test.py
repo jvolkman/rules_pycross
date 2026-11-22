@@ -594,6 +594,23 @@ class ReviewFindingsTest(_TreeTestCase):
         self.assertIsNone(pycross_patch._git_header_name(b'a/x "b/x" extra', 1, 1))
         self.assertEqual(pycross_patch._git_header_name(b'a/x "b/x"', 1, 1), b"x")
 
+    def test_patches_read_only_file_preserving_mode(self):
+        self.write_tree({"readonly.py": b"old = 1\n"})
+        target = self.root / "readonly.py"
+        os.chmod(target, 0o444)
+        self.addCleanup(lambda: os.chmod(target, 0o644) if target.exists() else None)
+
+        self._apply(H(b"readonly.py", b"readonly.py") + b"@@ -1 +1 @@\n-old = 1\n+new = 2\n")
+        self.assertEqual(target.read_bytes(), b"new = 2\n")
+        self.assertEqual(stat.S_IMODE(target.stat().st_mode), 0o444)
+
+    def test_clean_path_rejects_dot_dot_before_strip_and_drive_after_strip(self):
+        with self.assertRaisesRegex(pycross_patch.PatchError, "unsafe file name"):
+            pycross_patch._clean_path(b"../x.py", strip=1, line_no=1)
+        with self.assertRaisesRegex(pycross_patch.PatchError, "unsafe file name"):
+            pycross_patch._clean_path(b"a/C:/Windows/x.py", strip=1, line_no=1)
+        self.assertIsNone(pycross_patch._skip_components(b"../x.py", strip=1))
+
 
 class GitExtendedHeaderTest(_TreeTestCase):
     def test_rename_keeps_mode_and_applies_hunks(self):

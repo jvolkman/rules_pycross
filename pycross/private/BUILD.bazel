@@ -222,7 +222,10 @@ bzl_library(
 bzl_library(
     name = "modules_mapping",
     srcs = ["modules_mapping.bzl"],
-    deps = [":providers"],
+    deps = [
+        ":providers",
+        ":util",
+    ],
 )
 
 bzl_library(

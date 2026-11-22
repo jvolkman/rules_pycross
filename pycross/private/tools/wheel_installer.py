@@ -24,6 +24,7 @@ from installer.records import RecordEntry
 from installer.sources import WheelContentElement
 from installer.sources import WheelFile
 from installer.utils import Scheme
+from installer.utils import construct_record_file
 from installer.utils import parse_wheel_filename
 from pycross.private.tools.args import FlagFileArgumentParser
 from pycross_patch import apply_patch_or_exit
@@ -105,14 +106,14 @@ def compile_bytecode(
     )
 
 
-class NormalizedDistInfoDestination(SchemeDictionaryDestination):
-    """SchemeDictionaryDestination that remaps the wheel's .dist-info directory name."""
+class PycrossWheelDestination(SchemeDictionaryDestination):
+    """SchemeDictionaryDestination with portable POSIX relative RECORD paths and optional .dist-info normalization."""
 
     def __init__(
         self,
         *args: Any,
-        src_dist_info_dir: str,
-        dst_dist_info_dir: str,
+        src_dist_info_dir: str | None = None,
+        dst_dist_info_dir: str | None = None,
         **kwargs: Any,
     ) -> None:
         super().__init__(*args, **kwargs)
@@ -120,6 +121,8 @@ class NormalizedDistInfoDestination(SchemeDictionaryDestination):
         self._dst_dist_info_dir = dst_dist_info_dir
 
     def _remap_dist_info_path(self, path: str) -> str:
+        if not self._src_dist_info_dir or not self._dst_dist_info_dir:
+            return path
         if path == self._src_dist_info_dir:
             return self._dst_dist_info_dir
         prefix = self._src_dist_info_dir + "/"
@@ -155,7 +158,25 @@ class NormalizedDistInfoDestination(SchemeDictionaryDestination):
             )
             for scheme_, record in records
         ]
-        super().finalize_installation(scheme, remapped_record_file_path, remapped_records)
+
+        # Always emit POSIX relative paths between schemes (even on Windows, where
+        # pypa/installer otherwise writes machine-specific os.path.abspath() paths).
+        def prefix_for_scheme(file_scheme: str) -> str | None:
+            if file_scheme == scheme:
+                return None
+            rel = os.path.relpath(
+                self.scheme_dict[file_scheme],
+                start=self.scheme_dict[scheme],
+            ).replace("\\", "/")
+            if rel == ".":
+                return None
+            return rel + "/"
+
+        with construct_record_file(remapped_records, prefix_for_scheme) as record_stream:
+            self.write_to_fs(scheme, remapped_record_file_path, record_stream, is_executable=False)
+
+
+NormalizedDistInfoDestination = PycrossWheelDestination
 
 
 class FilteredWheelFile(WheelFile):
@@ -179,7 +200,7 @@ class FilteredWheelFile(WheelFile):
 
     def should_install(self, filename: str) -> bool:
         for install_exclude_glob in self._install_exclude_globs:
-            if fnmatch.fnmatch(filename, install_exclude_glob):
+            if fnmatch.fnmatchcase(filename, install_exclude_glob):
                 return False
         return True
 
@@ -256,22 +277,15 @@ def main(args: Any) -> None:
 
     with FilteredWheelFile.open_filtered(wheel_path, args.install_exclude_globs) as source:
         dist_info_dir = getattr(args, "dist_info_dir", None)
-        if dist_info_dir and dist_info_dir != source.dist_info_dir:
-            destination: SchemeDictionaryDestination = NormalizedDistInfoDestination(
-                scheme_dict=scheme_dict,
-                interpreter="python",  # Generic; it's not feasible to run these scripts directly.
-                script_kind="posix",
-                bytecode_optimization_levels=[],  # Setting to empty list to disable generation of .pyc files.
-                src_dist_info_dir=source.dist_info_dir,
-                dst_dist_info_dir=dist_info_dir,
-            )
-        else:
-            destination = SchemeDictionaryDestination(
-                scheme_dict=scheme_dict,
-                interpreter="python",  # Generic; it's not feasible to run these scripts directly.
-                script_kind="posix",
-                bytecode_optimization_levels=[],  # Setting to empty list to disable generation of .pyc files.
-            )
+        remap = bool(dist_info_dir and dist_info_dir != source.dist_info_dir)
+        destination: SchemeDictionaryDestination = PycrossWheelDestination(
+            scheme_dict=scheme_dict,
+            interpreter="python",  # Generic; it's not feasible to run these scripts directly.
+            script_kind="posix",
+            bytecode_optimization_levels=[],  # Setting to empty list to disable generation of .pyc files.
+            src_dist_info_dir=source.dist_info_dir if remap else None,
+            dst_dist_info_dir=dist_info_dir if remap else None,
+        )
         install(
             source=source,
             destination=destination,
@@ -392,6 +406,7 @@ def parse_flags(argv: list[str] | None = None) -> Any:
     parser.add_argument(
         "--compile-optimize",
         type=int,
+        choices=[0, 1, 2],
         required=False,
         default=0,
         help="Optimization level for .pyc precompilation.",

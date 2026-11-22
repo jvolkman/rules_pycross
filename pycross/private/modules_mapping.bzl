@@ -1,6 +1,7 @@
 """Rules for Gazelle modules mapping."""
 
 load(":providers.bzl", "PycrossPackageInfo")
+load(":util.bzl", "underscore_name")
 
 def _is_valid_identifier(s):
     """Checks if a given string is a valid Python identifier.
@@ -26,12 +27,20 @@ def _strip_extensions(module_name):
         if not module_name.endswith(ext):
             continue
         module_name = module_name[:-len(ext)]
-        if ".cpython-" in module_name:
-            module_name = module_name.split(".cpython-")[0]
-        elif ".abi3-" in module_name:
-            module_name = module_name.split(".abi3-")[0]
-        elif module_name.endswith(".abi3"):
-            module_name = module_name[:-5]
+        if ext in (".so", ".pyd"):
+            dot_idx = module_name.find(".")
+            if dot_idx > 0:
+                tag = module_name[dot_idx + 1:]
+                if (
+                    tag.startswith("cpython-") or
+                    (tag.startswith("cp") and len(tag) > 2 and tag[2].isdigit()) or
+                    tag == "abi3" or
+                    tag.startswith("abi3-") or
+                    tag == "abi3t" or
+                    tag.startswith("abi3t-") or
+                    tag.startswith("pypy")
+                ):
+                    module_name = module_name[:dot_idx]
         break
     return module_name
 
@@ -53,7 +62,7 @@ def _get_module_name(tlp):
 def _build_modules_mapping(pkg_infos):
     mapping = {}
     for pkg_info in pkg_infos:
-        pkg_name = pkg_info.package_name.replace("-", "_")
+        pkg_name = underscore_name(pkg_info.package_name)
         for tlp in pkg_info.site_paths:
             module_name = _get_module_name(tlp)
             if not module_name:
