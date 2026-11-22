@@ -650,14 +650,16 @@ def _test_pylock_graphless_impl(env, target):
             _graphless_pkg("requests", "2.32.3"),
             _graphless_pkg("urllib3", "2.2.0"),
             _graphless_pkg("certifi", "2024.8.30"),
-            _graphless_pkg("colorama", "0.4.6", 'sys_platform == "win32" and "dev" in dependency_groups'),
+            _graphless_pkg("colorama", "0.4.6", 'sys_platform == "win32" and "default" in dependency_groups'),
+            _graphless_pkg("pytest", "8.3.3", '"dev" in dependency_groups'),
             _graphless_pkg("greenlet", "3.2.5", 'python_version < "3.10"'),
             _graphless_pkg("greenlet", "3.5.3", 'python_version >= "3.10"'),
         ],
     }
     result = translate_pylock(lock, project, _lock_model())
 
-    # Every package is kept, but only the declared root is pinned.
+    # Every package matching requested groups is kept (unrequested "dev" group
+    # is pruned), and only the declared root is pinned.
     env.expect.that_collection(result["packages"].keys()).contains_exactly([
         "requests@2.32.3",
         "urllib3@2.2.0",
@@ -757,10 +759,11 @@ def _test_pylock_pdm_orphan_impl(env, target):
         "idna@3.10": "",
         "urllib3@2.2.3": "",
     })
-    env.expect.that_collection(result["pins"].keys()).contains_exactly(["requests"])
+    env.expect.that_collection(result["pins"].keys()).contains_exactly(["requests", "requests[socks]"])
 
+    base_keys = list(result["packages"].keys())
     resolved = resolve(result)
-    env.expect.that_collection(resolved.cycle_groups.values()[0]).contains_exactly(result["packages"].keys())
+    env.expect.that_collection(resolved.cycle_groups.values()[0]).contains_exactly(base_keys)
 
 def _test_pylock_pdm_orphan(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
@@ -786,6 +789,220 @@ def _test_pylock_pdm_reachable_no_hub_impl(env, target):
 def _test_pylock_pdm_reachable_no_hub(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
     analysis_test(name = name, target = name + "_subject", impl = _test_pylock_pdm_reachable_no_hub_impl)
+
+# --- test_pylock_selection_marker_boolean_pruning ---
+
+# buildifier: disable=unused-variable
+def _test_pylock_selection_marker_boolean_pruning_impl(env, target):
+    project = {
+        "project": {"name": "my-project", "dependencies": ["a"]},
+        "dependency-groups": {"dev": ["a"], "lint": ["b"]},
+    }
+    lock = {
+        "lock-version": "1.0",
+        "packages": [
+            {
+                "name": "a",
+                "version": "1.0.0",
+                "marker": '(sys_platform == "win32" and "default" in dependency_groups) or (sys_platform == "linux" and "dev" in dependency_groups)',
+                "wheels": [_whl("a-1.0.0-py3-none-any.whl", "aaa")],
+            },
+            {
+                "name": "b",
+                "version": "1.0.0",
+                "marker": '"lint" in dependency_groups',
+                "wheels": [_whl("b-1.0.0-py3-none-any.whl", "bbb")],
+            },
+            {
+                "name": "c",
+                "version": "1.0.0",
+                "wheels": [_whl("c-1.0.0-py3-none-any.whl", "ccc")],
+            },
+        ],
+    }
+
+    default_res = translate_pylock(lock, project, _lock_model(dependency_groups = ["default"]))
+    env.expect.that_collection(default_res["packages"].keys()).contains_exactly(["a@1.0.0", "c@1.0.0"])
+    env.expect.that_dict(_edges(default_res, "c@1.0.0")).contains_exactly({"a@1.0.0": 'sys_platform == "win32"'})
+
+    dev_res = translate_pylock(lock, project, _lock_model(dependency_groups = ["group:dev"]))
+    env.expect.that_collection(dev_res["packages"].keys()).contains_exactly(["a@1.0.0", "c@1.0.0"])
+    env.expect.that_dict(_edges(dev_res, "c@1.0.0")).contains_exactly({"a@1.0.0": 'sys_platform == "linux"'})
+
+def _test_pylock_selection_marker_boolean_pruning(name):
+    util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
+    analysis_test(name = name, target = name + "_subject", impl = _test_pylock_selection_marker_boolean_pruning_impl)
+
+# --- test_pylock_transitive_include_group_and_index ---
+
+# buildifier: disable=unused-variable
+def _test_pylock_transitive_include_group_and_index_impl(env, target):
+    project = {
+        "project": {"name": "my-project", "dependencies": []},
+        "dependency-groups": {
+            "base": ["pkg-a"],
+            "mid": [{"include-group": "Base"}],
+            "top": [{"include-group": "mid"}],
+        },
+    }
+    lock = {
+        "lock-version": "1.0",
+        "packages": [
+            {
+                "name": "pkg-a",
+                "version": "1.0.0",
+                "index": "https://private.example.com/simple",
+                "wheels": [
+                    _whl("pkg_a-1.0.0-py3-none-any.whl", "aaa"),
+                    _whl("pkg_a-1.0.0-cp312-cp312-manylinux_2_17_x86_64.whl", "bbb", url = "https://cdn.example.com/pkg_a.whl"),
+                ],
+                "dependencies": [],
+            },
+        ],
+    }
+    result = translate_pylock(lock, project, _lock_model(dependency_groups = ["group:top"]))
+    env.expect.that_collection(result["pins"].keys()).contains_exactly(["pkg-a"])
+    files_by_name = {f["name"]: f for f in result["packages"]["pkg-a@1.0.0"]["files"]}
+    env.expect.that_str(files_by_name["pkg_a-1.0.0-py3-none-any.whl"].get("index", "")).equals("https://private.example.com/simple")
+    env.expect.that_bool("index" in files_by_name["pkg_a-1.0.0-cp312-cp312-manylinux_2_17_x86_64.whl"]).equals(False)
+
+def _test_pylock_transitive_include_group_and_index(name):
+    util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
+    analysis_test(name = name, target = name + "_subject", impl = _test_pylock_transitive_include_group_and_index_impl)
+
+# --- test_pylock_multiversion_fork_edges_and_unmarked_branch ---
+
+# buildifier: disable=unused-variable
+def _test_pylock_multiversion_fork_edges_and_unmarked_branch_impl(env, target):
+    project = {
+        "project": {
+            "name": "my-project",
+            "dependencies": ["app", "greenlet[extra1]", "compound-lib", "compat-lib"],
+        },
+    }
+    lock = {
+        "lock-version": "1.0",
+        "packages": [
+            {
+                "name": "app",
+                "version": "1.0.0",
+                "wheels": [_whl("app-1.0.0-py3-none-any.whl", "app")],
+                "dependencies": [
+                    _dep("greenlet"),
+                    {"name": "pinned-fork", "version": "1.0.0"},
+                    # Explicit version pruned by selection markers must be skipped, not rewritten to 2.0.0.
+                    {"name": "pruned-fork", "version": "1.0.0"},
+                ],
+            },
+            {
+                "name": "greenlet",
+                "version": "3.2.5",
+                "marker": 'python_version < "3.10"',
+                "wheels": [_whl("greenlet-3.2.5-py3-none-any.whl", "g1")],
+            },
+            {
+                "name": "greenlet",
+                "version": "3.5.3",
+                # Unmarked fallback branch alongside negatable marked sibling.
+                "wheels": [_whl("greenlet-3.5.3-py3-none-any.whl", "g2")],
+            },
+            {
+                "name": "pinned-fork",
+                "version": "1.0.0",
+                "marker": 'sys_platform == "linux"',
+                "wheels": [_whl("pinned_fork-1.0.0-py3-none-any.whl", "p1")],
+            },
+            {
+                "name": "pinned-fork",
+                "version": "2.0.0",
+                "marker": 'sys_platform == "darwin"',
+                "wheels": [_whl("pinned_fork-2.0.0-py3-none-any.whl", "p2")],
+            },
+            {
+                "name": "pruned-fork",
+                "version": "1.0.0",
+                "marker": '"dev" in dependency_groups',
+                "wheels": [_whl("pruned_fork-1.0.0-py3-none-any.whl", "pf1")],
+            },
+            {
+                "name": "pruned-fork",
+                "version": "2.0.0",
+                "wheels": [_whl("pruned_fork-2.0.0-py3-none-any.whl", "pf2")],
+            },
+            {
+                "name": "compound-lib",
+                "version": "1.0.0",
+                # Compound `and` marker is negated via De Morgan's law -> `!= or >=`.
+                "marker": 'sys_platform == "win32" and python_version < "3.11"',
+                "wheels": [_whl("compound_lib-1.0.0-py3-none-any.whl", "c1")],
+            },
+            {
+                "name": "compound-lib",
+                "version": "2.0.0",
+                "wheels": [_whl("compound_lib-2.0.0-py3-none-any.whl", "c2")],
+            },
+            {
+                "name": "compat-lib",
+                "version": "1.0.0",
+                # `~=` is not invertible -> unmarked fallback stays "".
+                "marker": 'python_version ~= "3.10"',
+                "wheels": [_whl("compat_lib-1.0.0-py3-none-any.whl", "f1")],
+            },
+            {
+                "name": "compat-lib",
+                "version": "2.0.0",
+                "wheels": [_whl("compat_lib-2.0.0-py3-none-any.whl", "f2")],
+            },
+            {
+                "name": "unrelated-negated",
+                "version": "1.0.0",
+                # Unreachable package with `not in` must NOT trigger PDM orphan hub linking.
+                "marker": 'sys_platform == "linux" and "dev" not in dependency_groups',
+                "wheels": [_whl("unrelated_negated-1.0.0-py3-none-any.whl", "u1")],
+                "dependencies": [],
+            },
+        ],
+    }
+    result = translate_pylock(lock, project, _lock_model())
+
+    # Unmarked greenlet@3.5.3 gets synthesized complement `python_version >= "3.10"`.
+    res_exprs = result["resolution_marker_exprs"]
+    env.expect.that_str(res_exprs["res_greenlet_3_2_5"]).equals('python_version < "3.10"')
+    env.expect.that_str(res_exprs["res_greenlet_3_5_3"]).equals('python_version >= "3.10"')
+
+    # Compound `and` sibling synthesizes De Morgan complement on unmarked branch.
+    env.expect.that_str(res_exprs["res_compound_lib_2_0_0"]).equals('sys_platform != "win32" or python_version >= "3.11"')
+
+    # Both base and base[extra] pins receive conditional fork entries.
+    env.expect.that_dict(result["pins"]["greenlet"]).contains_exactly({
+        "res_greenlet_3_2_5": "greenlet@3.2.5",
+        "res_greenlet_3_5_3": "greenlet@3.5.3",
+    })
+    env.expect.that_dict(result["pins"]["greenlet[extra1]"]).contains_exactly({
+        "res_greenlet_3_2_5": "greenlet[extra1]@3.2.5",
+        "res_greenlet_3_5_3": "greenlet[extra1]@3.5.3",
+    })
+
+    # app emits both forked greenlet edges gated by their markers, only the explicit pinned-fork version,
+    # and drops the pruned explicit pruned-fork@1.0.0 edge without rewriting it to 2.0.0.
+    env.expect.that_dict(_edges(result, "app@1.0.0")).contains_exactly({
+        "greenlet@3.2.5": 'python_version < "3.10"',
+        "greenlet@3.5.3": 'python_version >= "3.10"',
+        "pinned-fork@1.0.0": "",
+    })
+
+    # Non-invertible `~=` sibling keeps unmarked fallback under "".
+    env.expect.that_dict(result["pins"]["compat-lib"]).contains_exactly({
+        "res_compat_lib_1_0_0": "compat-lib@1.0.0",
+        "": "compat-lib@2.0.0",
+    })
+
+    # Unreachable `not in` package did not trigger orphan hub linking.
+    env.expect.that_collection(result["packages"].keys()).contains_none_of(["unrelated-negated@1.0.0"])
+
+def _test_pylock_multiversion_fork_edges_and_unmarked_branch(name):
+    util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
+    analysis_test(name = name, target = name + "_subject", impl = _test_pylock_multiversion_fork_edges_and_unmarked_branch_impl)
 
 # --- Test suite ---
 
@@ -816,5 +1033,8 @@ def pylock_translator_test_suite(name):
             _test_pylock_graphless_single_package,
             _test_pylock_pdm_orphan,
             _test_pylock_pdm_reachable_no_hub,
+            _test_pylock_selection_marker_boolean_pruning,
+            _test_pylock_transitive_include_group_and_index,
+            _test_pylock_multiversion_fork_edges_and_unmarked_branch,
         ],
     )

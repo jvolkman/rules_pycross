@@ -6,6 +6,9 @@ load("@rules_testing//lib:util.bzl", "util")
 # buildifier: disable=bzl-visibility
 load("//pycross/private:pdm_lock_model.bzl", "translate_pdm")
 
+# buildifier: disable=bzl-visibility
+load("//pycross/private:translator_common.bzl", "read_project_dicts_for_testing")
+
 def _lock_model(
         projects = ["*"],
         dependency_groups = ["default"]):
@@ -384,6 +387,214 @@ def _test_pdm_git_dependency(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
     analysis_test(name = name, target = name + "_subject", impl = _test_pdm_git_dependency_impl)
 
+# --- test_pdm_transitive_include_group_and_root_extra_pin ---
+
+# buildifier: disable=unused-variable
+def _test_pdm_transitive_include_group_and_root_extra_pin_impl(env, target):
+    project = {
+        "project": {
+            "name": "my-app",
+            "dependencies": [
+                "requests[socks]==2.32.3",
+                "flex",
+                'flex>=2.0 ; python_version >= "3.10"',
+            ],
+        },
+        # Diamond include-group DAG: all -> [dev, extra-g, tail], dev -> [extra-g, leaf], extra-g -> [leaf].
+        "dependency-groups": {
+            "leaf": [],
+            "extra-g": [{"include-group": "leaf"}],
+            "dev": [{"include-group": "extra-g"}, {"include-group": "leaf"}],
+            "tail": ["ruff==0.5.0"],
+            "all": [{"include-group": "dev"}, {"include-group": "extra-g"}, {"include-group": "tail"}],
+        },
+    }
+    lock = _minimal_lock([
+        {
+            "name": "requests",
+            "version": "2.32.3",
+            "extras": ["socks"],
+            "dependencies": ['pysocks==1.7.1 ; extra == "socks"'],
+            "files": [_whl("requests-2.32.3-py3-none-any.whl", "r")],
+        },
+        {
+            "name": "pysocks",
+            "version": "1.7.1",
+            "files": [_whl("PySocks-1.7.1-py3-none-any.whl", "p")],
+        },
+        {
+            "name": "flex",
+            "version": "1.5.0",
+            "files": [_whl("flex-1.5.0-py3-none-any.whl", "f")],
+        },
+        {
+            "name": "ruff",
+            "version": "0.5.0",
+            "files": [_whl("ruff-0.5.0-py3-none-any.whl", "u")],
+        },
+    ])
+    model = struct(
+        projects = ["*"],
+        dependency_groups = ["default", "group:all"],
+        testonly_groups = ["group:all"],
+        non_testonly_groups = [],
+        wildcard_testonly = False,
+    )
+    result = translate_pdm(project, lock, model)
+    env.expect.that_collection(result["pins"].keys()).contains_exactly(["flex", "requests", "requests[socks]", "ruff"])
+    env.expect.that_str(result["pins"]["flex"]).equals("flex@1.5.0")
+    env.expect.that_str(result["pins"]["requests[socks]"]).equals("requests[socks]@2.32.3")
+    env.expect.that_collection(result["testonly_pins"]).contains_exactly(["ruff"])
+
+def _test_pdm_transitive_include_group_and_root_extra_pin(name):
+    util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
+    analysis_test(name = name, target = name + "_subject", impl = _test_pdm_transitive_include_group_and_root_extra_pin_impl)
+
+# --- test_pdm_multi_project_workspace ---
+
+# buildifier: disable=unused-variable
+def _test_pdm_multi_project_workspace_impl(env, target):
+    root_label = Label("//:pyproject.toml")
+    proj_a_label = Label("//:project_a/pyproject.toml")
+    proj_b_label = Label("//:project_b/pyproject.toml")
+    files = {
+        str(root_label): '[project]\nname = "workspace-root"\nrequires-python = ">=3.10"\n',
+        str(proj_a_label): '[project]\nname = "project-a"\ndependencies = ["six>=1.17.0", "regex>=2024.11.6"]\n',
+        str(proj_b_label): '[project]\nname = "project-b"\ndependencies = ["attrs>=24.2.0", "regex>=2024.10.0"]\n',
+    }
+    rctx = struct(
+        path = lambda label: struct(exists = str(label) in files, label = str(label)),
+        read = lambda path: files[path.label],
+    )
+    all_dicts = read_project_dicts_for_testing(
+        rctx,
+        [proj_a_label, root_label, proj_b_label],
+        Label("//:pdm.lock"),
+        _lock_model(projects = ["*"]),
+    )
+    env.expect.that_collection([d["project"]["name"] for d in all_dicts]).contains_exactly([
+        "workspace-root",
+        "project-a",
+        "project-b",
+    ]).in_order()
+
+    subset_dicts = read_project_dicts_for_testing(
+        rctx,
+        [root_label, proj_a_label, proj_b_label],
+        Label("//:pdm.lock"),
+        _lock_model(projects = ["project-a", "project-b"]),
+    )
+    env.expect.that_collection([d["project"]["name"] for d in subset_dicts]).contains_exactly([
+        "project-a",
+        "project-b",
+    ]).in_order()
+
+    lock = _minimal_lock([
+        {"name": "six", "version": "1.17.0", "files": [_whl("six-1.17.0-py2.py3-none-any.whl", "1")]},
+        {"name": "attrs", "version": "24.2.0", "files": [_whl("attrs-24.2.0-py3-none-any.whl", "2")]},
+        {"name": "regex", "version": "2024.11.6", "files": [_whl("regex-2024.11.6-py3-none-any.whl", "3")]},
+    ])
+    result = translate_pdm(all_dicts, lock, _lock_model(projects = ["*"]))
+    env.expect.that_collection(result["pins"].keys()).contains_exactly(["attrs", "regex", "six"])
+    env.expect.that_str(result["python_versions"]).equals(">=3.10")
+
+def _test_pdm_multi_project_workspace(name):
+    util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
+    analysis_test(name = name, target = name + "_subject", impl = _test_pdm_multi_project_workspace_impl)
+
+# --- test_pdm_forked_transitive_dep ---
+
+# buildifier: disable=unused-variable
+def _test_pdm_forked_transitive_dep_impl(env, target):
+    project = _minimal_project(deps = ["app==1.0.0"])
+    lock = _minimal_lock([
+        {
+            "name": "app",
+            "version": "1.0.0",
+            "dependencies": ["lib>=1.0"],
+            "files": [_whl("app-1.0.0-py3-none-any.whl", "a")],
+        },
+        {
+            "name": "lib",
+            "version": "1.5.0",
+            "marker": 'python_version < "3.10"',
+            "files": [_whl("lib-1.5.0-py3-none-any.whl", "1")],
+        },
+        {
+            "name": "lib",
+            "version": "2.0.0",
+            "marker": 'python_version >= "3.10"',
+            "files": [_whl("lib-2.0.0-py3-none-any.whl", "2")],
+        },
+    ])
+    result = translate_pdm(project, lock, _lock_model())
+    edges = {d["name"] + "@" + d["version"]: d["marker"] for d in result["packages"]["app@1.0.0"]["dependencies"]}
+    env.expect.that_dict(edges).contains_exactly({
+        "lib@1.5.0": 'python_version < "3.10"',
+        "lib@2.0.0": 'python_version >= "3.10"',
+    })
+
+def _test_pdm_forked_transitive_dep(name):
+    util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
+    analysis_test(name = name, target = name + "_subject", impl = _test_pdm_forked_transitive_dep_impl)
+
+# --- test_pdm_extra_package_entry_markers ---
+
+# buildifier: disable=unused-variable
+def _test_pdm_extra_package_entry_markers_impl(env, target):
+    project = _minimal_project(deps = ["foo[bar,qux]==1.0", "foo[solo]==1.0"])
+    lock = _minimal_lock([
+        {
+            "name": "foo",
+            "version": "1.0",
+            "dependencies": ["base-dep==1.0"],
+            "files": [_whl("foo-1.0-py3-none-any.whl", "f")],
+        },
+        {
+            "name": "foo",
+            "version": "1.0",
+            "extras": ["solo"],
+            "dependencies": [
+                "foo==1.0",
+                "solo-dep==1.0",
+                'solo-win==1.0 ; sys_platform == "win32"',
+            ],
+            "files": [_whl("foo-1.0-py3-none-any.whl", "f")],
+        },
+        {
+            "name": "foo",
+            "version": "1.0",
+            "extras": ["bar", "qux"],
+            "dependencies": [
+                "foo==1.0",
+                "combo-dep==1.0",
+                'combo-py310==1.0 ; python_version >= "3.10"',
+                'explicit-bar==1.0 ; extra == "bar"',
+            ],
+            "files": [_whl("foo-1.0-py3-none-any.whl", "f")],
+        },
+        {"name": "base-dep", "version": "1.0", "files": [_whl("base_dep-1.0-py3-none-any.whl", "1")]},
+        {"name": "solo-dep", "version": "1.0", "files": [_whl("solo_dep-1.0-py3-none-any.whl", "2")]},
+        {"name": "solo-win", "version": "1.0", "files": [_whl("solo_win-1.0-py3-none-any.whl", "3")]},
+        {"name": "combo-dep", "version": "1.0", "files": [_whl("combo_dep-1.0-py3-none-any.whl", "4")]},
+        {"name": "combo-py310", "version": "1.0", "files": [_whl("combo_py310-1.0-py3-none-any.whl", "5")]},
+        {"name": "explicit-bar", "version": "1.0", "files": [_whl("explicit_bar-1.0-py3-none-any.whl", "6")]},
+    ])
+    result = translate_pdm(project, lock, _lock_model())
+    edges = {d["name"]: d["marker"] for d in result["packages"]["foo@1.0"]["dependencies"]}
+    env.expect.that_dict(edges).contains_exactly({
+        "base-dep": "",
+        "solo-dep": 'extra == "solo"',
+        "solo-win": '(sys_platform == "win32") and extra == "solo"',
+        "combo-dep": 'extra == "bar" or extra == "qux"',
+        "combo-py310": '(python_version >= "3.10") and (extra == "bar" or extra == "qux")',
+        "explicit-bar": 'extra == "bar"',
+    })
+
+def _test_pdm_extra_package_entry_markers(name):
+    util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
+    analysis_test(name = name, target = name + "_subject", impl = _test_pdm_extra_package_entry_markers_impl)
+
 # --- Test suite ---
 
 def pdm_translator_test_suite(name):
@@ -402,5 +613,9 @@ def pdm_translator_test_suite(name):
             _test_pdm_resolution_forks,
             _test_pdm_root_dependency_markers,
             _test_pdm_git_dependency,
+            _test_pdm_transitive_include_group_and_root_extra_pin,
+            _test_pdm_multi_project_workspace,
+            _test_pdm_forked_transitive_dep,
+            _test_pdm_extra_package_entry_markers,
         ],
     )

@@ -89,8 +89,112 @@ def sha256_from_string(s):
         result = result + s
     return result[:64]
 
+def expand_pep735_group(dev_deps, group_name):
+    """Expand a PEP 735 dependency group transitively, resolving `{include-group = ...}` entries.
+
+    Preserves declaration order, allows diamond include DAGs, and fails on
+    unknown or cyclic `include-group` references per PEP 735.
+
+    Args:
+        dev_deps: Dict mapping group name -> list of PEP 508 strings or `{include-group = ...}` dicts.
+        group_name: Name of the group to expand.
+
+    Returns:
+        List of PEP 508 requirement strings in declaration order.
+    """
+    norm_groups = {canonicalize_name(k): v for k, v in dev_deps.items()}
+    total_entries = 0
+    for entries in norm_groups.values():
+        total_entries += len(entries)
+    max_iters = 2 * len(norm_groups) + total_entries + 2
+
+    deps = []
+    visiting = {}
+    visited = {}
+    stack = [("enter", canonicalize_name(group_name))]
+    for _ in range(max_iters):
+        if not stack:
+            break
+        kind, payload = stack.pop()
+        if kind == "dep":
+            deps.append(payload)
+            continue
+        if kind == "exit":
+            visiting.pop(payload)
+            visited[payload] = True
+            continue
+        if payload in visiting:
+            fail("Circular include-group detected involving dependency group '{}'".format(payload))
+        if payload in visited:
+            continue
+        visiting[payload] = True
+        stack.append(("exit", payload))
+        entries = norm_groups.get(payload, [])
+        for entry in reversed(entries):
+            if type(entry) == "string":
+                stack.append(("dep", entry))
+            elif type(entry) == "dict" and "include-group" in entry:
+                inc = canonicalize_name(entry["include-group"])
+                if inc not in norm_groups:
+                    fail("Dependency group '{}' includes unknown group '{}'".format(payload, entry["include-group"]))
+                stack.append(("enter", inc))
+    if stack:
+        fail("expand_pep735_group exceeded max iterations for group '{}'; this is a bug in pycross".format(group_name))
+    return deps
+
+def _read_project_dicts(rctx, extra_project_files, lock_file, lock_model, toml_cache = None):
+    """Select and decode all matching pyproject.toml files as a list of dicts."""
+    sibling_label = sibling_project_file(lock_file)
+    if not extra_project_files:
+        return [read_toml_cached(rctx, sibling_label, toml_cache) or {}]
+
+    projects = getattr(lock_model, "projects", [])
+    if not projects or "*" in projects:
+        # Order root/sibling file first (for requires-python and workspace metadata),
+        # followed by all other member pyproject.toml files.
+        ordered = []
+        seen = {}
+        if sibling_label in extra_project_files:
+            ordered.append(sibling_label)
+            seen[sibling_label] = True
+        for f in extra_project_files:
+            if f not in seen:
+                ordered.append(f)
+                seen[f] = True
+        dicts = []
+        for f in ordered:
+            p_dict = read_toml_cached(rctx, f, toml_cache)
+            if p_dict != None:
+                dicts.append(p_dict)
+        return dicts or [{}]
+
+    target_names = {canonicalize_name(p): True for p in projects}
+    matched = []
+    matched_names = {}
+    for f in extra_project_files:
+        p_dict = read_toml_cached(rctx, f, toml_cache)
+        if p_dict == None:
+            continue
+        p_name = p_dict.get("project", {}).get("name")
+        if p_name and canonicalize_name(p_name) in target_names:
+            matched.append(p_dict)
+            matched_names[canonicalize_name(p_name)] = True
+    if matched:
+        missing = [p for p in projects if canonicalize_name(p) not in matched_names]
+        if missing:
+            fail("Project(s) {} not found in workspace pyproject.toml files".format(missing))
+        return matched
+
+    project_file = sibling_label if sibling_label in extra_project_files else extra_project_files[0]
+    return [read_toml_cached(rctx, project_file, toml_cache) or {}]
+
 def _read_project_dict(rctx, extra_project_files, lock_file, lock_model, toml_cache = None):
-    """Select and decode the relevant pyproject.toml as a dict."""
+    """Select and decode the relevant pyproject.toml as a dict.
+
+    A single-project repo reads its member's pyproject.toml; multi-project and
+    wildcard repos read the root/sibling pyproject.toml (used e.g. by uv for
+    workspace-level `default-groups`).
+    """
     sibling_label = sibling_project_file(lock_file)
     if not extra_project_files:
         return read_toml_cached(rctx, sibling_label, toml_cache) or {}
@@ -109,6 +213,29 @@ def _read_project_dict(rctx, extra_project_files, lock_file, lock_model, toml_ca
     project_file = sibling_label if sibling_label in extra_project_files else extra_project_files[0]
     return read_toml_cached(rctx, project_file, toml_cache) or {}
 
+def _read_lock_dict(rctx, lock_file, lock_label_hint, toml_cache = None):
+    lock_dict = read_toml_cached(rctx, lock_file, toml_cache)
+    if lock_dict == None:
+        fail("Lock file not found: {}. Ensure {} exists at the expected location.".format(lock_file, lock_label_hint))
+    return lock_dict
+
+def read_projects_and_lock(rctx, extra_project_files, lock_file, lock_model, lock_label_hint, toml_cache = None):
+    """Select and decode all matching pyproject.toml files and the lock file.
+
+    Args:
+        rctx: The repository_ctx or module_ctx object.
+        extra_project_files: List of pyproject.toml labels.
+        lock_file: The lock file label.
+        lock_model: Struct with lock model attributes (including optional `projects`).
+        lock_label_hint: Human-readable lock file name for error messages (e.g. "pdm.lock").
+        toml_cache: Optional dict caching decoded TOML files by label.
+
+    Returns:
+        A tuple of (project_dicts, lock_dict).
+    """
+    project_dicts = _read_project_dicts(rctx, extra_project_files, lock_file, lock_model, toml_cache)
+    return project_dicts, _read_lock_dict(rctx, lock_file, lock_label_hint, toml_cache)
+
 def read_project_and_lock(rctx, extra_project_files, lock_file, lock_model, lock_label_hint, toml_cache = None):
     """Select and decode pyproject.toml and the lock file.
 
@@ -124,12 +251,7 @@ def read_project_and_lock(rctx, extra_project_files, lock_file, lock_model, lock
         A tuple of (project_dict, lock_dict).
     """
     project_dict = _read_project_dict(rctx, extra_project_files, lock_file, lock_model, toml_cache)
-
-    lock_dict = read_toml_cached(rctx, lock_file, toml_cache)
-    if lock_dict == None:
-        fail("Lock file not found: {}. Ensure {} exists at the expected location.".format(lock_file, lock_label_hint))
-
-    return project_dict, lock_dict
+    return project_dict, _read_lock_dict(rctx, lock_file, lock_label_hint, toml_cache)
 
 def detect_package_marker_forks(packages, pinned_package_specs):
     """Detect resolution-marker forks (same package name with multiple marked versions) and update pins.
@@ -401,12 +523,21 @@ def resolve_lock_graph(packages, pinned_package_specs, requires_python, strict_d
 
             candidates = packages_by_name.get(dep_name, [])
             parsed_spec = _parse_specifier_parts(dep_specifier) if candidates else None
+            marked_candidates = [
+                True
+                for c in candidates
+                if c.get("markers") or resolution_marker_constraint_name(c["name"], c["version"]) in resolution_marker_exprs
+            ]
+            is_forked = len(marked_candidates) > 1 and not _is_simple_arbitrary_eq(dep_specifier)
 
             for req_extra in dep_extras:
                 norm_req_extra = canonicalize_name(req_extra) if req_extra else ""
                 display_name = _dependency_name_str(dep_name, norm_req_extra)
 
-                # Find matching package
+                # Find matching package(s). For resolution-marker forked packages
+                # (multiple versions gated by package-level markers), emit all
+                # satisfying branches gated by their markers instead of breaking
+                # on the newest version.
                 found = False
                 for cand in candidates:
                     if norm_req_extra:
@@ -415,13 +546,25 @@ def resolve_lock_graph(packages, pinned_package_specs, requires_python, strict_d
                             continue
                     if not _parsed_specifier_contains_version(parsed_spec, cand["version"]):
                         continue
+                    edge_marker = dep_marker
+                    if is_forked:
+                        cand_marker = cand.get("markers", "")
+                        if not cand_marker:
+                            cname = resolution_marker_constraint_name(cand["name"], cand["version"])
+                            expr = resolution_marker_exprs.get(cname)
+                            if type(expr) == "string":
+                                cand_marker = expr
+                        if dep_marker and cand_marker:
+                            edge_marker = dep_marker if dep_marker == cand_marker else "({}) and ({})".format(dep_marker, cand_marker)
+                        elif cand_marker:
+                            edge_marker = cand_marker
                     pkg_resolved.append({
                         "name": display_name,
                         "version": cand["version"],
-                        "marker": dep_marker,
+                        "marker": edge_marker,
                     })
                     found = True
-                    if dep_specifier:
+                    if dep_specifier and not is_forked:
                         break
 
                 if not found and strict_dependencies:
@@ -697,3 +840,4 @@ def compute_requested_dependency_groups(
 
 # Visible for testing
 read_project_dict_for_testing = _read_project_dict
+read_project_dicts_for_testing = _read_project_dicts

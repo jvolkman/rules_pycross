@@ -10,8 +10,9 @@ load(
     "canonicalize_name",
     "compute_requested_dependency_groups",
     "detect_package_marker_forks",
+    "expand_pep735_group",
     "parse_pep508_requirement",
-    "read_project_and_lock",
+    "read_projects_and_lock",
     "record_root_marker",
     "resolve_lock_graph",
     "sha256_from_string",
@@ -62,13 +63,28 @@ def _parse_file_info(file_info, package_name, package_version):
         result["urls"] = urls
     return result
 
+def _merge_pin_spec(existing_spec, new_spec, existing_marked, new_marked):
+    """Merge two root pin specifiers for the same package."""
+    if existing_marked or new_marked:
+        if not existing_spec or not new_spec:
+            return ""
+        if existing_spec == new_spec:
+            return new_spec
+        return existing_spec + " || " + new_spec
+    if not new_spec:
+        return existing_spec
+    if not existing_spec or existing_spec == new_spec:
+        return new_spec
+    return existing_spec + "," + new_spec
+
 def translate_pdm(project_dict, lock_dict, lock_model):
     """Translates PDM project and lock data to raw_lock_data dict.
 
     This is a pure function with no I/O, suitable for direct testing.
 
     Args:
-        project_dict: Parsed pyproject.toml as a dict.
+        project_dict: Parsed pyproject.toml dict, or list of parsed pyproject.toml dicts
+            when translating multiple workspace projects.
         lock_dict: Parsed pdm.lock as a dict.
         lock_model: A struct containing the lock model attributes.
 
@@ -86,88 +102,123 @@ def translate_pdm(project_dict, lock_dict, lock_model):
     if len(v_parts) < 1 or v_parts[0] != "4":
         fail("PDM lock file version {} not in supported range ~=4.0".format(lock_version))
 
-    project_section = project_dict.get("project", {})
-    project_name = project_section.get("name")
+    project_dicts = project_dict if type(project_dict) == "list" else [project_dict]
+    multi_project = len(project_dicts) > 1
 
-    # Parse project dependencies
-    default_deps = project_section.get("dependencies", [])
-    optional_deps = project_section.get("optional-dependencies", {})
-
-    # Development dependencies: dependency-groups + legacy tool.pdm.dev-dependencies
-    dev_deps = dict(project_dict.get("dependency-groups", {}))
-    legacy_dev_deps = project_dict.get("tool", {}).get("pdm", {}).get("dev-dependencies", {})
-    if legacy_dev_deps:
-        for group_name, deps in legacy_dev_deps.items():
-            if group_name in dev_deps:
-                fail("PDM error: group '{}' cannot appear in both [dependency-groups] and [tool.pdm.dev-dependencies]".format(group_name))
-            dev_deps[group_name] = deps
-
-    # Enforce PDM PEP 735 rule
-    for group_name in dev_deps:
-        if group_name in optional_deps:
-            fail("PDM error: the same group name '{}' MUST NOT appear in both development groups and [project.optional-dependencies]".format(group_name))
-
-    requires_python = project_dict.get("project", {}).get("requires-python", "")
-
-    # Collect requirements based on group selection
-    requirements = []
+    requires_python = ""
+    for p_dict in project_dicts:
+        rp = p_dict.get("project", {}).get("requires-python", "")
+        if rp:
+            requires_python = rp
+            break
 
     dependency_groups = getattr(lock_model, "dependency_groups", ["default"])
-
     testonly_groups = getattr(lock_model, "testonly_groups", [])
     non_testonly_groups = getattr(lock_model, "non_testonly_groups", [])
     wildcard_testonly = getattr(lock_model, "wildcard_testonly", False)
 
-    requested_groups_dict = compute_requested_dependency_groups(
-        dependency_groups = dependency_groups,
-        testonly_groups = testonly_groups,
-        non_testonly_groups = non_testonly_groups,
-        wildcard_testonly = wildcard_testonly,
+    # Collect requirements based on group selection across all selected projects.
+    requirements = []
+    groups_seen = {}
+    project_names = []
+
+    for p_dict in project_dicts:
+        project_section = p_dict.get("project", {})
+        project_name = project_section.get("name")
+        if project_name:
+            project_names.append(project_name)
+
+        default_deps = project_section.get("dependencies", [])
+        optional_deps = project_section.get("optional-dependencies", {})
+
+        # Development dependencies: dependency-groups + legacy tool.pdm.dev-dependencies
+        dev_deps = dict(p_dict.get("dependency-groups", {}))
+        legacy_dev_deps = p_dict.get("tool", {}).get("pdm", {}).get("dev-dependencies", {})
+        if legacy_dev_deps:
+            for group_name, deps in legacy_dev_deps.items():
+                if group_name in dev_deps:
+                    fail("PDM error: group '{}' cannot appear in both [dependency-groups] and [tool.pdm.dev-dependencies]".format(group_name))
+                dev_deps[group_name] = deps
+
+        # Enforce PDM PEP 735 rule
+        for group_name in dev_deps:
+            if group_name in optional_deps:
+                fail("PDM error: the same group name '{}' MUST NOT appear in both development groups and [project.optional-dependencies]".format(group_name))
+
         available_groups = (
             ["default"] +
             ["optional:" + g for g in optional_deps.keys()] +
             ["group:" + g for g in dev_deps.keys()]
-        ),
-        project_name = project_name,
-    )
+        )
+        for g in available_groups:
+            groups_seen[g] = True
 
-    if "default" in requested_groups_dict:
-        default_is_testonly = requested_groups_dict["default"]
-        for dep_str in default_deps:
-            requirements.append((parse_pep508_requirement(dep_str), default_is_testonly))
+        requested_groups_dict = compute_requested_dependency_groups(
+            dependency_groups = dependency_groups,
+            testonly_groups = testonly_groups,
+            non_testonly_groups = non_testonly_groups,
+            wildcard_testonly = wildcard_testonly,
+            available_groups = available_groups,
+            project_name = project_name,
+            allow_missing = multi_project,
+        )
 
-    for kind, groups_dict in [("optional", optional_deps), ("group", dev_deps)]:
-        for target_name in groups_dict.keys():
-            key = "{}:{}".format(kind, target_name)
+        if "default" in requested_groups_dict:
+            default_is_testonly = requested_groups_dict["default"]
+            for dep_str in default_deps:
+                requirements.append((parse_pep508_requirement(dep_str), default_is_testonly))
+
+        for target_name in optional_deps.keys():
+            key = "optional:{}".format(target_name)
             if key not in requested_groups_dict:
                 continue
             is_testonly = requested_groups_dict[key]
-
-            for dep_str in groups_dict[target_name]:
+            for dep_str in optional_deps[target_name]:
                 if type(dep_str) == "string":
                     requirements.append((parse_pep508_requirement(dep_str), is_testonly))
-                elif type(dep_str) == "dict" and "include-group" in dep_str:
-                    inc_group = dep_str["include-group"]
-                    for inc_dep in dev_deps.get(inc_group, []):
-                        if type(inc_dep) == "string":
-                            requirements.append((parse_pep508_requirement(inc_dep), is_testonly))
+
+        for target_name in dev_deps.keys():
+            key = "group:{}".format(target_name)
+            if key not in requested_groups_dict:
+                continue
+            is_testonly = requested_groups_dict[key]
+            for dep_str in expand_pep735_group(dev_deps, target_name):
+                requirements.append((parse_pep508_requirement(dep_str), is_testonly))
+
+    if multi_project:
+        for group in dependency_groups:
+            _, sep, name = group.partition(":")
+            if sep and name != "*" and group not in groups_seen:
+                fail("None of the projects {} has group '{}'.".format(sorted(project_names), group))
 
     # Build pinned specs from requirements
     pinned_package_specs = {}
+    pinned_has_marker = {}
     testonly_reqs = {}
     non_testonly_reqs = {}
     root_dependency_markers = {}
     for req, is_testonly in requirements:
-        pinned_package_specs[req.name] = {"": req.specifier}
-        if req.extras:
-            for extra in req.extras:
-                pin_name = "{}[{}]".format(req.name, canonicalize_name(extra))
-                record_root_marker(root_dependency_markers, pin_name, req.marker)
-        record_root_marker(root_dependency_markers, req.name, req.marker)
-        if is_testonly:
-            testonly_reqs[req.name] = True
-        else:
-            non_testonly_reqs[req.name] = True
+        # name[extra] pins resolve to the base version; lock_resolver
+        # synthesizes the extra package from the base's extra-gated edges.
+        for pin_name in [req.name] + ["{}[{}]".format(req.name, canonicalize_name(e)) for e in req.extras]:
+            if pin_name not in pinned_package_specs:
+                pinned_package_specs[pin_name] = {"": req.specifier}
+            else:
+                existing_spec = pinned_package_specs[pin_name].get("", "")
+                merged_spec = _merge_pin_spec(
+                    existing_spec,
+                    req.specifier,
+                    pinned_has_marker.get(pin_name, False),
+                    bool(req.marker),
+                )
+                pinned_package_specs[pin_name] = {"": merged_spec}
+            if req.marker:
+                pinned_has_marker[pin_name] = True
+            record_root_marker(root_dependency_markers, pin_name, req.marker)
+            if is_testonly:
+                testonly_reqs[pin_name] = True
+            else:
+                non_testonly_reqs[pin_name] = True
 
     testonly_pin_names = [name for name in testonly_reqs if name not in non_testonly_reqs]
 
@@ -185,14 +236,30 @@ def translate_pdm(project_dict, lock_dict, lock_model):
         # Read package-level markers (PDM multi-target lock files)
         package_markers = lock_pkg.get("marker", "")
 
-        # Parse dependencies as PEP 508 requirement strings
+        # Parse dependencies as PEP 508 requirement strings.
+        # PDM models extra combinations as separate [[package]] entries with
+        # `extras = [...]` whose dependencies omit `; extra == "..."` markers
+        # and include a self-edge to the base package. Synthesize the extra
+        # marker (when not already present) and drop the base self-edge so
+        # merging into the base package keeps bare `pkg` free of extra deps.
+        norm_extras = list({canonicalize_name(e): True for e in pkg_extras}.keys())
+        extra_marker = " or ".join(['extra == "{}"'.format(e) for e in norm_extras])
         deps = []
         for dep_str in lock_pkg.get("dependencies", []):
             parsed = parse_pep508_requirement(dep_str)
+            if norm_extras and parsed.name == name and not parsed.extras:
+                continue
+            dep_marker = parsed.marker
+            if extra_marker and "extra" not in dep_marker:
+                if dep_marker:
+                    wrapped_extra = "({})".format(extra_marker) if len(norm_extras) > 1 else extra_marker
+                    dep_marker = "({}) and {}".format(dep_marker, wrapped_extra)
+                else:
+                    dep_marker = extra_marker
             deps.append({
                 "name": parsed.name,
                 "specifier": parsed.specifier,
-                "marker": parsed.marker,
+                "marker": dep_marker,
                 "extras": parsed.extras if parsed.extras else [None],
             })
 
@@ -223,7 +290,7 @@ def translate_pdm(project_dict, lock_dict, lock_model):
             "dependencies": deps,
             "files": files,
             "is_local": is_local,
-            "extras": [e.lower() for e in pkg_extras],
+            "extras": norm_extras,
             "markers": package_markers,
         }
         if lock_pkg.get("subdirectory"):
@@ -244,5 +311,5 @@ def translate_pdm(project_dict, lock_dict, lock_model):
 
 def repo_create_pdm_model(rctx, extra_project_files, lock_file, lock_model, toml_cache = None):
     """Run the PDM translator in pure Starlark."""
-    project_dict, lock_dict = read_project_and_lock(rctx, extra_project_files, lock_file, lock_model, "pdm.lock", toml_cache)
-    return translate_pdm(project_dict, lock_dict, lock_model)
+    project_dicts, lock_dict = read_projects_and_lock(rctx, extra_project_files, lock_file, lock_model, "pdm.lock", toml_cache)
+    return translate_pdm(project_dicts, lock_dict, lock_model)

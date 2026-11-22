@@ -699,6 +699,145 @@ def _test_poetry_git_subdirectory(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
     analysis_test(name = name, target = name + "_subject", impl = _test_poetry_git_subdirectory_impl)
 
+# --- test_poetry_caret_tilde_prerelease_and_epoch ---
+
+# buildifier: disable=unused-variable
+def _test_poetry_caret_tilde_prerelease_and_epoch_impl(env, target):
+    project = {
+        "tool": {"poetry": {"dependencies": {
+            "python": "^3.9",
+            "pkg-a": "1.0.0",
+        }}},
+    }
+    lock = {
+        "metadata": {"lock-version": "2.1"},
+        "package": [
+            _pkg(
+                "pkg-a",
+                "1.0.0",
+                deps = {
+                    "pre-caret": "^1.2.3a1",
+                    "local-caret": "^1.2.3+build",
+                    "epoch-caret": "^1!2.3.4",
+                    "epoch-tilde": "~1!2.3.4rc1",
+                },
+                files = [_whl("pkg_a-1.0.0-py3-none-any.whl", "a")],
+            ),
+            _pkg("pre-caret", "1.2.3a1", files = [_whl("pre_caret-1.2.3a1-py3-none-any.whl", "1")]),
+            _pkg("local-caret", "1.5.0", files = [_whl("local_caret-1.5.0-py3-none-any.whl", "1b")]),
+            _pkg("epoch-caret", "1!3.0.0", files = [_whl("epoch_caret-1!3.0.0-py3-none-any.whl", "2")]),
+            _pkg("epoch-caret", "1!2.5.0", files = [_whl("epoch_caret-1!2.5.0-py3-none-any.whl", "3")]),
+            _pkg("epoch-caret", "2.5.0", files = [_whl("epoch_caret-2.5.0-py3-none-any.whl", "4")]),
+            _pkg("epoch-tilde", "1!2.4.0", files = [_whl("epoch_tilde-1!2.4.0-py3-none-any.whl", "5")]),
+            _pkg("epoch-tilde", "1!2.3.4rc1", files = [_whl("epoch_tilde-1!2.3.4rc1-py3-none-any.whl", "6")]),
+        ],
+    }
+    result = translate_poetry(project, lock, _lock_model())
+    pkg_a_deps = [d["name"] + "@" + d["version"] for d in result["packages"]["pkg-a@1.0.0"]["dependencies"]]
+    env.expect.that_collection(pkg_a_deps).contains_exactly([
+        "epoch-caret@1!2.5.0",
+        "epoch-tilde@1!2.3.4rc1",
+        "local-caret@1.5.0",
+        "pre-caret@1.2.3a1",
+    ])
+
+def _test_poetry_caret_tilde_prerelease_and_epoch(name):
+    util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
+    analysis_test(name = name, target = name + "_subject", impl = _test_poetry_caret_tilde_prerelease_and_epoch_impl)
+
+# --- test_poetry_transitive_include_group_and_extras ---
+
+# buildifier: disable=unused-variable
+def _test_poetry_transitive_include_group_and_extras_impl(env, target):
+    project = {
+        "project": {
+            "name": "my-app",
+            "dependencies": ['foo>=1.0 ; sys_platform == "linux"'],
+        },
+        "dependency-groups": {
+            "lint": ["ruff>=0.1"],
+            "dev": [{"include-group": "lint"}],
+            "all": [{"include-group": "dev"}],
+        },
+        "tool": {"poetry": {
+            "dependencies": {
+                "python": "^3.9",
+                "foo": {"source": "private"},
+                "psycopg2": {"version": "^2.9", "optional": True},
+            },
+            "extras": {
+                "db": ["psycopg2"],
+            },
+        }},
+    }
+    lock = {
+        "metadata": {"lock-version": "2.1"},
+        "package": [
+            _pkg("foo", "1.0.0", files = [_whl("foo-1.0.0-py3-none-any.whl", "1")]),
+            _pkg("ruff", "0.5.0", files = [_whl("ruff-0.5.0-py3-none-any.whl", "2")]),
+            _pkg("psycopg2", "2.9.9", files = [_whl("psycopg2-2.9.9-py3-none-any.whl", "3")], optional = True),
+        ],
+    }
+
+    # Default only: foo keeps its root marker despite tool.poetry.dependencies enrichment, and optional psycopg2 is omitted.
+    default_res = translate_poetry(project, lock, _lock_model(dependency_groups = ["default"]))
+    env.expect.that_collection(default_res["pins"].keys()).contains_exactly(["foo"])
+    env.expect.that_collection(default_res["root_dependency_markers"]["foo"]).contains_exactly(['sys_platform == "linux"'])
+
+    # With optional:db and group:all: psycopg2 and transitively included ruff are pinned.
+    full_res = translate_poetry(project, lock, _lock_model(dependency_groups = ["default", "optional:db", "group:all"]))
+    env.expect.that_collection(full_res["pins"].keys()).contains_exactly(["foo", "psycopg2", "ruff"])
+
+def _test_poetry_transitive_include_group_and_extras(name):
+    util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
+    analysis_test(name = name, target = name + "_subject", impl = _test_poetry_transitive_include_group_and_extras_impl)
+
+# --- test_poetry_url_decoded_filename_and_unnormalized_version ---
+
+# buildifier: disable=unused-variable
+def _test_poetry_url_decoded_filename_and_unnormalized_version_impl(env, target):
+    project = {"tool": {"poetry": {"dependencies": {"python": "^3.9", "torch": "*", "alpha-pkg": "*"}}}}
+    lock = {
+        "metadata": {"lock-version": "2.1"},
+        "package": [
+            _pkg("torch", "2.0.0+cpu", files = [_whl("torch-2.0.0%2Bcpu-py3-none-any.whl", "1")]),
+            _pkg("alpha-pkg", "1.0.0-alpha.1", files = [_whl("alpha_pkg-1.0.0a1-py3-none-any.whl", "2")]),
+        ],
+    }
+    result = translate_poetry(project, lock, _lock_model())
+    torch_files = result["packages"]["torch@2.0.0+cpu"]["files"]
+    env.expect.that_collection([f["name"] for f in torch_files]).contains_exactly(["torch-2.0.0+cpu-py3-none-any.whl"])
+    alpha_files = result["packages"]["alpha-pkg@1.0.0-alpha.1"]["files"]
+    env.expect.that_collection([f["name"] for f in alpha_files]).contains_exactly(["alpha_pkg-1.0.0a1-py3-none-any.whl"])
+
+def _test_poetry_url_decoded_filename_and_unnormalized_version(name):
+    util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
+    analysis_test(name = name, target = name + "_subject", impl = _test_poetry_url_decoded_filename_and_unnormalized_version_impl)
+
+# --- test_poetry_forked_transitive_dep ---
+
+# buildifier: disable=unused-variable
+def _test_poetry_forked_transitive_dep_impl(env, target):
+    project = {"tool": {"poetry": {"dependencies": {"python": "^3.9", "app": "1.0.0"}}}}
+    lock = {
+        "metadata": {"lock-version": "2.1"},
+        "package": [
+            _pkg("app", "1.0.0", files = [_whl("app-1.0.0-py3-none-any.whl", "a")], deps = {"lib": ">=1.0"}),
+            _pkg("lib", "1.5.0", files = [_whl("lib-1.5.0-py3-none-any.whl", "1")], markers = 'python_version < "3.10"'),
+            _pkg("lib", "2.0.0", files = [_whl("lib-2.0.0-py3-none-any.whl", "2")], markers = 'python_version >= "3.10"'),
+        ],
+    }
+    result = translate_poetry(project, lock, _lock_model())
+    edges = {d["name"] + "@" + d["version"]: d["marker"] for d in result["packages"]["app@1.0.0"]["dependencies"]}
+    env.expect.that_dict(edges).contains_exactly({
+        "lib@1.5.0": 'python_version < "3.10"',
+        "lib@2.0.0": 'python_version >= "3.10"',
+    })
+
+def _test_poetry_forked_transitive_dep(name):
+    util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
+    analysis_test(name = name, target = name + "_subject", impl = _test_poetry_forked_transitive_dep_impl)
+
 # --- Test suite ---
 
 def poetry_translator_test_suite(name):
@@ -724,5 +863,9 @@ def poetry_translator_test_suite(name):
             _test_poetry_dependency_extras,
             _test_poetry_tool_dependency_extras_and_python,
             _test_poetry_git_subdirectory,
+            _test_poetry_caret_tilde_prerelease_and_epoch,
+            _test_poetry_transitive_include_group_and_extras,
+            _test_poetry_url_decoded_filename_and_unnormalized_version,
+            _test_poetry_forked_transitive_dep,
         ],
     )
