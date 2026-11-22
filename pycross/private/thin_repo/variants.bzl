@@ -1,7 +1,8 @@
 """Variant flag collection, transition settings, and `_variants/BUILD.bazel` generation."""
 
+load("//pycross/private:build_text.bzl", "alias", "config_setting_group")
 load("//pycross/private:util.bzl", "variant_item_qname")
-load(":selects.bzl", "unselected_all_name")
+load(":selects.bzl", "unselected_condition")
 
 def collect_variants(variant_sets):
     """Collect this repo's variant flags, conflict sets and defaults from its lock.
@@ -207,29 +208,22 @@ def variants_build(variant_info, workspace_repo, repo_name, unselected_groups = 
     selected = {}  # qname -> condition label
     for qname, set_suffixes in sorted(defaults.items()):
         needs_selects = True
-        set_suffixes = sorted(set_suffixes)
-        if len(set_suffixes) == 1:
-            unselected = "@{}//_lock:_unselected_{}".format(workspace_repo, set_suffixes[0])
-        else:
-            name = unselected_all_name(set_suffixes)
-            groups[name] = set_suffixes
-            unselected = ":" + name
-        selected[qname] = '":_selected_{}"'.format(qname)
-        body.append("selects.config_setting_group(")
-        body.append('    name = "_selected_{}",'.format(qname))
-        body.append("    match_any = [")
-        body.append('        "@{}//_lock:is_{}",'.format(workspace_repo, qname))
-        body.append('        "{}",'.format(unselected))
-        body.extend(["    ],", ")", ""])
+        unselected = unselected_condition(sorted(set_suffixes), workspace_repo, groups, local_prefix = ":")
+        selected[qname] = ":_selected_{}".format(qname)
+        body.extend(config_setting_group(
+            "_selected_{}".format(qname),
+            "match_any",
+            ["@{}//_lock:is_{}".format(workspace_repo, qname), unselected],
+        ))
 
     # `_unselected_all_<hash>`: all of several conflict sets are unselected.
     for name, set_suffixes in sorted(groups.items()):
         needs_selects = True
-        body.append("selects.config_setting_group(")
-        body.append('    name = "{}",'.format(name))
-        body.append("    match_all = [")
-        body.extend(['        "@{}//_lock:_unselected_{}",'.format(workspace_repo, s) for s in set_suffixes])
-        body.extend(["    ],", ")", ""])
+        body.extend(config_setting_group(
+            name,
+            "match_all",
+            ["@{}//_lock:_unselected_{}".format(workspace_repo, s) for s in set_suffixes],
+        ))
 
     if flags:
         body.extend([
@@ -248,22 +242,12 @@ def variants_build(variant_info, workspace_repo, repo_name, unselected_groups = 
             ")",
             "",
         ])
-        conditions = [selected.get(q, '"@{}//_lock:is_{}"'.format(workspace_repo, q)) for q in qnames]
+        conditions = [selected.get(q, "@{}//_lock:is_{}".format(workspace_repo, q)) for q in qnames]
         if len(qnames) == 1:
-            body.extend([
-                "alias(",
-                '    name = "is_{}",'.format(flag),
-                "    actual = {},".format(conditions[0]),
-                ")",
-                "",
-            ])
+            body.extend(alias("is_{}".format(flag), conditions[0]))
             continue
         needs_selects = True
-        body.append("selects.config_setting_group(")
-        body.append('    name = "is_{}",'.format(flag))
-        body.append("    match_all = [")
-        body.extend(["        {},".format(c) for c in conditions])
-        body.extend(["    ],", ")", ""])
+        body.extend(config_setting_group("is_{}".format(flag), "match_all", conditions))
 
     for set_suffix, vset in sorted(variant_info.sets.items()):
         if expose_variant_flags and vset.flags:

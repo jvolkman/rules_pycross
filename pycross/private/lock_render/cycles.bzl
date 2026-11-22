@@ -1,8 +1,8 @@
 """Cycle SCC edge-map rendering and `pycross_cycle_member_marker_deps` emission."""
 
-load("//pycross/private:util.bzl", "parse_package_key", "sanitize_name")
+load("//pycross/private:util.bzl", "base_package_key", "parse_package_key", "sanitize_name")
 load(":common.bzl", "ind")
-load(":markers.bzl", "matching_variant_resolvers")
+load(":markers.bzl", "format_variants_attr", "matching_variant_resolvers")
 
 def build_cycle_edges_dict(scc, packages):
     """Builds the in-cycle edge map for marker mode.
@@ -19,7 +19,7 @@ def build_cycle_edges_dict(scc, packages):
     for pkg_key in sorted(scc):
         pkg = packages.get(pkg_key, {})
         parts = parse_package_key(pkg_key)
-        base_key = "{}@{}".format(parts.name, parts.version) if parts.extra else None
+        base_key = base_package_key(pkg_key) if parts.extra else None
         edge_list = []
         has_unconditional_base = False
         for md in pkg.get("marker_dependencies", []):
@@ -111,6 +111,6 @@ def render_marker_cycle_member_deps(lines, cycle_groups, packages, variant_resol
             lines.append(ind('member = "{}",'.format(pkg_key), 2))
             lines.append(ind("edges = {},".format(edges_var_name), 2))
             if resolvers:
-                lines.append(ind("variants = [{}],".format(", ".join(['"{}"'.format(r) for r in resolvers])), 2))
+                lines.append(ind(format_variants_attr(resolvers), 2))
             lines.append(ind(")"))
             lines.append("")

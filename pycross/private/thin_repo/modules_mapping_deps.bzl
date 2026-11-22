@@ -1,8 +1,9 @@
 """Conditional deps computation for `pycross_modules_mapping` in thin package repos."""
 
+load("//pycross/private:build_text.bzl", "config_setting_group", "deps_plus_selects")
 load("//pycross/private:util.bzl", "sanitize_name")
 load(":common.bzl", "is_key_platform_specific")
-load(":selects.bzl", "unselected_all_name")
+load(":selects.bzl", "unselected_condition")
 
 def modules_mapping_deps(pins, packages, workspace_repo, variant_info = None, no_variant_fallbacks = None, pins_by_set = None, excluded = None, resolution_marker_exprs = None):
     """Compute conditional `deps` lines and helper config_setting_groups for `pycross_modules_mapping`.
@@ -101,28 +102,17 @@ def modules_mapping_deps(pins, packages, workspace_repo, variant_info = None, no
             if has_pin_or_default:
                 continue
 
-            unpinned_sets = sorted(v_sets)
-            if len(unpinned_sets) == 1:
-                unselected_cond = "@{}//_lock:_unselected_{}".format(workspace_repo, unpinned_sets[0])
-            else:
-                group_name = unselected_all_name(unpinned_sets)
-                no_variant_fallbacks.groups[group_name] = unpinned_sets
-                unselected_cond = "//_variants:{}".format(group_name)
+            unselected_cond = unselected_condition(sorted(v_sets), workspace_repo, no_variant_fallbacks.groups)
 
             if marker_cname:
                 comp_name = "_mm_unselected_{}".format(sanitize_name(constraint))
                 if comp_name not in emitted_unselected_compounds:
                     emitted_unselected_compounds[comp_name] = True
-                    extra_target_lines.extend([
-                        "selects.config_setting_group(",
-                        '    name = "{}",'.format(comp_name),
-                        "    match_all = [",
-                        '        "{}",'.format(unselected_cond),
-                        '        "@{}//_lock:is_{}",'.format(workspace_repo, marker_cname),
-                        "    ],",
-                        ")",
-                        "",
-                    ])
+                    extra_target_lines.extend(config_setting_group(
+                        comp_name,
+                        "match_all",
+                        [unselected_cond, "@{}//_lock:is_{}".format(workspace_repo, marker_cname)],
+                    ))
                 conds_set[":{}".format(comp_name)] = True
             else:
                 conds_set[unselected_cond] = True
@@ -135,34 +125,18 @@ def modules_mapping_deps(pins, packages, workspace_repo, variant_info = None, no
             if conds_key not in emitted_any_groups:
                 any_name = "_mm_any_%x" % (hash("|".join(conds)) & 0xffffffff)
                 emitted_any_groups[conds_key] = any_name
-                extra_target_lines.extend([
-                    "selects.config_setting_group(",
-                    '    name = "{}",'.format(any_name),
-                    "    match_any = [",
-                ])
-                for cond in conds:
-                    extra_target_lines.append('        "{}",'.format(cond))
-                extra_target_lines.extend([
-                    "    ],",
-                    ")",
-                    "",
-                ])
+                extra_target_lines.extend(config_setting_group(any_name, "match_any", conds))
             group_cond = ":{}".format(emitted_any_groups[conds_key])
         by_cond.setdefault(group_cond, []).append(dep_label)
 
-    deps_lines = ["    deps = ["]
-    for dep_label in sorted(unconditional.keys()):
-        deps_lines.append('        "{}",'.format(dep_label))
-    deps_lines.append("    ]")
-    for cond in sorted(by_cond.keys()):
-        deps_lines[-1] = deps_lines[-1] + " + select({"
-        deps_lines.append('        "{}": ['.format(cond))
-        for dep_label in sorted(by_cond[cond]):
-            deps_lines.append('            "{}",'.format(dep_label))
-        deps_lines.append("        ],")
-        deps_lines.append('        "//conditions:default": [],')
-        deps_lines.append("    })")
-    deps_lines[-1] = deps_lines[-1] + ","
+    deps_lines = deps_plus_selects(
+        "deps",
+        sorted(unconditional.keys()),
+        by_cond,
+        indent = 1,
+        inline_values = False,
+        trailing_comma = True,
+    )
 
     return struct(
         deps_lines = deps_lines,

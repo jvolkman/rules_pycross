@@ -11,9 +11,9 @@ in the caller's configuration, and so does everything that depends on them.
 """
 
 load("@pypackaging.bzl", "pypackaging")
-load("//pycross/private:util.bzl", "has_build_fallback", "is_universal_py3_wheel", "marker_evaluator_name", "parse_package_key", "sanitize_name")
-load(":common.bzl", "ind")
-load(":wheels.bzl", "resolved_wheel_candidates")
+load("//pycross/private:build_text.bzl", "config_setting_group", "flag_setting")
+load("//pycross/private:util.bzl", "base_package_key", "has_build_fallback", "is_universal_py3_wheel", "marker_evaluator_name", "parse_package_key")
+load(":wheels.bzl", "resolved_wheel_candidates", "wheel_match_condition")
 
 _VARIANT_TOKEN_PREFIX = "-variant-"  # `__variant_<qname>` after PEP 685 normalization
 
@@ -133,7 +133,7 @@ def marker_depends_on_variants(marker, conflict_pairs):
         stack[-1][2].append(folded)
     fail("marker too deeply nested: " + marker)
 
-def compute_reset_plan(packages, repo_map, conflict_pairs, gate_lines):
+def compute_reset_plan(packages, repo_map, conflict_pairs, gate_lines, loads = None):
     """Decides which packages install with reset variant settings, and their gates.
 
     Args:
@@ -141,6 +141,7 @@ def compute_reset_plan(packages, repo_map, conflict_pairs, gate_lines):
         repo_map: File key -> label.
         conflict_pairs: {(token, token): True} (see fold_marker).
         gate_lines: Output lines for the gate config_setting(_group)s.
+        loads: Optional dict tracking emitted helper loads (`"selects"`, `"wheel_matched"`).
 
     Returns:
         {pkg_key: struct(ok, gate)}. `gate` is a label that must match for the
@@ -151,15 +152,9 @@ def compute_reset_plan(packages, repo_map, conflict_pairs, gate_lines):
     edge_gates = {}  # (eval_name, dep_key) -> label, shared across packages
 
     def group(name, kind, labels):
-        gate_lines.extend([
-            ind("selects.config_setting_group("),
-            ind('name = "{}",'.format(name), 2),
-            ind("{} = [".format(kind), 2),
-        ] + [ind('"{}",'.format(label), 3) for label in labels] + [
-            ind("],", 2),
-            ind(")"),
-            "",
-        ])
+        gate_lines.extend(config_setting_group(name, kind, labels, indent = 1))
+        if loads != None:
+            loads["selects"] = True
         return ":" + name
 
     def compute(key):
@@ -172,7 +167,7 @@ def compute_reset_plan(packages, repo_map, conflict_pairs, gate_lines):
             return no
         base = None
         if is_extras_proxy:
-            base = plan.get("{}@{}".format(parts.name, parts.version))
+            base = plan.get(base_package_key(key))
             if not base or not base.ok:
                 return no
         elif not resolved:
@@ -194,27 +189,15 @@ def compute_reset_plan(packages, repo_map, conflict_pairs, gate_lines):
         elif pkg.get("sdist_file") and pkg["sdist_file"].get("key") and has_build_fallback(pkg):
             all_resolved = len(resolved) == len(pkg.get("wheel_candidates", []))
             if not (all_resolved and any([is_universal_py3_wheel(c["filename"]) for c in resolved])):
-                if len(resolved) >= 3 and all_resolved:
-                    matched_name = "_wheel_matched_{}".format(key)
-                    gate_name = "_reset_wheel_{}".format(key)
-                    gate_lines.extend([
-                        ind("pycross_wheel_matched("),
-                        ind('name = "{}",'.format(matched_name), 2),
-                        ind('chooser = ":_wheel_chooser_{}",'.format(key), 2),
-                        ind(")"),
-                        "",
-                        ind("native.config_setting("),
-                        ind('name = "{}",'.format(gate_name), 2),
-                        ind("flag_values = {", 2),
-                        ind('":{}": "true",'.format(matched_name), 3),
-                        ind("},", 2),
-                        ind(")"),
-                        "",
-                    ])
-                    items.append(":" + gate_name)
-                else:
-                    cs_names = [":_wheel_cs_{}_{}".format(key, sanitize_name(c["filename"])) for c in resolved]
-                    items.append(cs_names[0] if len(cs_names) == 1 else group("_reset_wheel_" + key, "match_any", cs_names))
+                items.append(wheel_match_condition(
+                    gate_lines,
+                    key,
+                    [c["filename"] for c in resolved],
+                    all_resolved,
+                    "_reset_wheel_" + key,
+                    require_target = False,
+                    loads = loads,
+                ))
 
         for md in deps:
             dep = plan.get(md["key"])
@@ -275,21 +258,13 @@ def compute_reset_plan(packages, repo_map, conflict_pairs, gate_lines):
             stack.append((key, True))
             parts = parse_package_key(key)
             if not packages[key].get("wheel_candidates") and parts.extra:
-                stack.append(("{}@{}".format(parts.name, parts.version), False))
+                stack.append((base_package_key(key), False))
             for md in packages[key].get("marker_dependencies", []):
                 if md["key"] not in plan and md["key"] not in visiting:
                     stack.append((md["key"], False))
 
     for eval_name in sorted(nomatch):
-        gate_lines.extend([
-            ind("native.config_setting("),
-            ind('name = "{}_nomatch",'.format(eval_name), 2),
-            ind("flag_values = {", 2),
-            ind('":{}": "false",'.format(eval_name), 3),
-            ind("},", 2),
-            ind(")"),
-            "",
-        ])
+        gate_lines.extend(flag_setting("{}_nomatch".format(eval_name), ":" + eval_name, "false", indent = 1, use_native = True))
     return plan
 
 def conflict_pairs(conflict_sets):

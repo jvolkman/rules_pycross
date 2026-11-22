@@ -122,6 +122,35 @@ def parse_package_key(key):
         version = version,
     )
 
+def base_package_key(pkg_key):
+    """Return the base `name@version` key for a package key (stripping any `[extra]`).
+
+    Args:
+        pkg_key: Package key string (e.g. `foo[bar]@1.0` or `foo@1.0`).
+
+    Returns:
+        Base package key string `name@version`.
+    """
+    parts = parse_package_key(pkg_key)
+    return "{}@{}".format(parts.name, parts.version)
+
+def base_packages_with_extras(packages):
+    """Group extra package keys in `packages` by their base `name@version` key.
+
+    Args:
+        packages: Lock packages dict keyed by package key.
+
+    Returns:
+        Dict mapping base package key (`name@version`) -> list of extra package keys.
+    """
+    result = {}
+    for pkg_key in packages.keys():
+        parts = parse_package_key(pkg_key)
+        if not parts.extra:
+            continue
+        result.setdefault("{}@{}".format(parts.name, parts.version), []).append(pkg_key)
+    return result
+
 def sdist_builds_disallowed(pkg):
     """Whether build_mode = "never" forbids building this resolved package's sdist.
 

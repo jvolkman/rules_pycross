@@ -20,7 +20,7 @@ load("//pycross/private/thin_repo:pins.bzl", "append_root_aliases", "emit_pin_di
 load("//pycross/private/thin_repo:selects.bzl", "variant_fallbacks")
 load("//pycross/private/thin_repo:transition.bzl", "flag_values", "render_transition_bzl")
 load("//pycross/private/thin_repo:variants.bzl", "collect_variants", "transition_settings", "variants_build")
-load(":util.bzl", "is_platform_specific", "parse_package_key")
+load(":util.bzl", "base_packages_with_extras", "is_platform_specific", "parse_package_key")
 
 def _thin_package_repo_impl(rctx):
     workspace_repo = rctx.attr.workspace_repo
@@ -157,22 +157,17 @@ def _thin_package_repo_impl(rctx):
     if mm.maybe_mapping_targets:
         rctx.file("__maybe/BUILD.bazel", render_maybe_build(mm.maybe_mapping_targets, packages, workspace_repo))
 
-    base_packages_with_extras = {}
-    for pkg_key in packages.keys():
-        parts = parse_package_key(pkg_key)
-        if not parts.extra:
-            continue
-        base_packages_with_extras["{}@{}".format(parts.name, parts.version)] = True
+    extras_by_base = base_packages_with_extras(packages)
 
     if rctx.attr.generate_root_aliases:
-        append_root_aliases(root_build_lines, grouped_pins, base_packages_with_extras)
+        append_root_aliases(root_build_lines, grouped_pins, extras_by_base)
     rctx.file("BUILD.bazel", "\n".join(root_build_lines))
 
     emit_pin_directories(
         rctx,
         grouped_pins,
         packages,
-        base_packages_with_extras,
+        extras_by_base,
         workspace_repo,
         no_variant_fallbacks,
         target_platform,

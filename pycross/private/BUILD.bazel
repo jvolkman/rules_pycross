@@ -138,6 +138,7 @@ bzl_library(
     name = "package_repo",
     srcs = ["package_repo.bzl"],
     deps = [
+        ":build_text",
         ":resolved_lock_renderer",
         ":util",
         ":variant_resolver",
@@ -494,6 +495,11 @@ bzl_library(
 bzl_library(
     name = "backend_registry_repo",
     srcs = ["backend_registry_repo.bzl"],
+)
+
+bzl_library(
+    name = "build_text",
+    srcs = ["build_text.bzl"],
 )
 
 bzl_library(

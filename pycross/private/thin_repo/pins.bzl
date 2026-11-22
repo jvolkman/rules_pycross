@@ -1,5 +1,6 @@
 """Per-pin BUILD.bazel, `__actual/`, and root alias generation for thin package repos."""
 
+load("//pycross/private:build_text.bzl", "alias")
 load("//pycross/private:util.bzl", "is_platform_specific", "underscore_name")
 load(":availability.bzl", "emit_maybe_alias")
 load(":common.bzl", "NO_MATCH_ERROR_TARGET", "effective_base_target_dict", "is_key_platform_specific", "safe_name")
@@ -32,6 +33,8 @@ def pin_build(target_name, pin_target_dict, workspace_repo, has_aggregated_varia
     sdist_ref = "@{}//_sdist:".format(workspace_repo)
 
     actual_lines = []
+    used_main = {}
+    used_actual = {}
     actual_pkg_ref = "//__actual/{}".format(target_name)
 
     if transition_bzl:
@@ -68,13 +71,7 @@ def pin_build(target_name, pin_target_dict, workspace_repo, has_aggregated_varia
 
     actual_pkg = None
     if pin_target_dict:
-        lines.extend([
-            "alias(",
-            "    name = {},".format(json.encode(target_name)),
-            "    actual = {},".format(json.encode(":" + safe_name(target_name, "pkg"))),
-            ")",
-            "",
-        ])
+        lines.extend(alias(target_name, ":" + safe_name(target_name, "pkg")))
         actual_pkg = proxy_actual(actual_lines, pin_target_dict, lock_ref, workspace_repo, "pkg", actual_pkg_ref, has_transition = has_transition, is_aggregated = has_aggregated_variant, no_variant_fallbacks = no_variant_fallbacks, aggregated_keys = aggregated_keys)
         _emit_proxy(lib_rule, safe_name(target_name, "pkg"), actual_pkg, is_testonly = testonly)
 
@@ -83,22 +80,11 @@ def pin_build(target_name, pin_target_dict, workspace_repo, has_aggregated_varia
 
         actual_dist_info = proxy_actual(actual_lines, pin_target_dict, lock_ref + "_dist_info_", workspace_repo, "dist_info", actual_pkg_ref, has_transition = has_transition, no_variant_fallbacks = no_variant_fallbacks)
         _emit_proxy(file_rule, safe_name(target_name, "dist_info"), actual_dist_info)
-        lines.extend([
-            "alias(",
-            "    name = {},".format(json.encode(safe_name(target_name, "data"))),
-            "    actual = {},".format(json.encode(":" + safe_name(target_name, "pkg"))),
-            ")",
-        ])
+        lines.extend(alias(safe_name(target_name, "data"), ":" + safe_name(target_name, "pkg"), trailing_blank = False))
 
         if extras_dict or has_aggregated_variant:
             if not has_aggregated_variant:
-                lines.extend([
-                    "alias(",
-                    '    name = "[]",',
-                    "    actual = {},".format(json.encode(":" + safe_name(target_name, "pkg"))),
-                    ")",
-                    "",
-                ])
+                lines.extend(alias("[]", ":" + safe_name(target_name, "pkg")))
             else:
                 actual_all = proxy_actual(actual_lines, pin_target_dict, lock_ref, workspace_repo, "all", actual_pkg_ref, has_transition = has_transition, no_variant_fallbacks = no_variant_fallbacks)
                 _emit_proxy(lib_rule, "[]", actual_all, is_testonly = testonly)
@@ -137,6 +123,7 @@ def pin_build(target_name, pin_target_dict, workspace_repo, has_aggregated_varia
                     no_variant_fallbacks = no_variant_fallbacks,
                     helper_prefix = "_maybe_extra_{}".format(extra_name),
                     packages = packages,
+                    used = used_actual,
                 )
                 _emit_proxy(lib_rule, "[{}]_maybe".format(extra_name), "{},".format(json.encode("{}:{}".format(actual_pkg_ref, actual_extra_maybe))), is_testonly = testonly)
             else:
@@ -150,6 +137,7 @@ def pin_build(target_name, pin_target_dict, workspace_repo, has_aggregated_varia
                     no_variant_fallbacks = no_variant_fallbacks,
                     helper_prefix = "_maybe_extra_{}".format(extra_name),
                     packages = packages,
+                    used = used_main,
                 )
 
     if pin_target_dict and (maybe_available_keys or "" not in pin_target_dict):
@@ -166,6 +154,7 @@ def pin_build(target_name, pin_target_dict, workspace_repo, has_aggregated_varia
                 no_variant_fallbacks = no_variant_fallbacks,
                 helper_prefix = "_maybe",
                 packages = packages,
+                used = used_actual,
             )
             _emit_proxy(lib_rule, maybe_name, "{},".format(json.encode("{}:maybe".format(actual_pkg_ref))), is_testonly = testonly)
         else:
@@ -179,10 +168,11 @@ def pin_build(target_name, pin_target_dict, workspace_repo, has_aggregated_varia
                 no_variant_fallbacks = no_variant_fallbacks,
                 helper_prefix = "_maybe",
                 packages = packages,
+                used = used_main,
             )
 
     header_lines = [proxy_load]
-    if any(["selects.config_setting_group(" in line for line in lines]):
+    if used_main.get("selects"):
         header_lines.append('load("@bazel_skylib//lib:selects.bzl", "selects")')
     header_lines.extend([
         "",
@@ -193,7 +183,7 @@ def pin_build(target_name, pin_target_dict, workspace_repo, has_aggregated_varia
     actual_build = None
     if actual_lines:
         actual_header = []
-        if any(["selects.config_setting_group(" in line for line in actual_lines]):
+        if used_actual.get("selects"):
             actual_header.extend(['load("@bazel_skylib//lib:selects.bzl", "selects")', ""])
         actual_header.extend([
             'package(default_visibility = ["//{}:__pkg__"])'.format(target_name),
@@ -220,42 +210,19 @@ def append_root_aliases(root_build_lines, grouped_pins, base_packages_with_extra
         base_target = group["base_target"]
 
         if base_target:
-            root_build_lines.extend([
-                "alias(",
-                "    name = {},".format(json.encode(base_pin_name)),
-                "    actual = {},".format(json.encode("//{}:pkg".format(us_name))),
-                ")",
-            ])
+            root_build_lines.extend(alias(base_pin_name, "//{}:pkg".format(us_name), trailing_blank = False))
             has_aggregated_variant = any([
                 t in base_packages_with_extras
                 for t in base_target.values()
             ])
             if group["extras"] or has_aggregated_variant:
-                root_build_lines.extend([
-                    "alias(",
-                    "    name = {},".format(json.encode("{}[]".format(base_pin_name))),
-                    "    actual = {},".format(json.encode("//{}:[]".format(us_name))),
-                    ")",
-                    "",
-                ])
+                root_build_lines.extend(alias("{}[]".format(base_pin_name), "//{}:[]".format(us_name)))
         elif group["extras"]:
             # If no base target was pinned, but extras were, point the base name at the extras union.
-            root_build_lines.extend([
-                "alias(",
-                "    name = {},".format(json.encode(base_pin_name)),
-                "    actual = {},".format(json.encode("//{}:pkg".format(us_name))),
-                ")",
-                "",
-            ])
+            root_build_lines.extend(alias(base_pin_name, "//{}:pkg".format(us_name)))
 
         for extra_name, _extra_target in sorted(group["extras"].items()):
-            root_build_lines.extend([
-                "alias(",
-                "    name = {},".format(json.encode("{}[{}]".format(base_pin_name, extra_name))),
-                "    actual = {},".format(json.encode("//{}:[{}]".format(us_name, extra_name))),
-                ")",
-                "",
-            ])
+            root_build_lines.extend(alias("{}[{}]".format(base_pin_name, extra_name), "//{}:[{}]".format(us_name, extra_name)))
 
 def emit_pin_directories(rctx, grouped_pins, packages, base_packages_with_extras, workspace_repo, no_variant_fallbacks, target_platform, has_flags, testonly_pins_set):
     """Generate `<pkg>/BUILD.bazel` (and `__actual/<pkg>/BUILD.bazel`) for each pinned package.

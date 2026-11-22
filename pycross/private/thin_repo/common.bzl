@@ -1,6 +1,6 @@
 """Shared constants and small helpers for thin package repo generation."""
 
-load("//pycross/private:util.bzl", "is_platform_specific", "parse_package_key")
+load("//pycross/private:util.bzl", "base_package_key", "is_platform_specific", "parse_package_key")
 
 NO_MATCH_ERROR_TARGET = "@rules_pycross//pycross/private:no_match_error"
 
@@ -25,7 +25,7 @@ def is_key_platform_specific(packages, pkg_key):
         return True
     parts = parse_package_key(pkg_key)
     if parts.extra:
-        return is_platform_specific(packages.get("{}@{}".format(parts.name, parts.version), {}))
+        return is_platform_specific(packages.get(base_package_key(pkg_key), {}))
     return False
 
 def aggregated_key(pkg_key, aggregated_keys):
@@ -58,6 +58,5 @@ def effective_base_target_dict(group):
     derived = {}
     for _extra_name, extra_target_dict in sorted(group["extras"].items()):
         for constraint, extra_target in extra_target_dict.items():
-            parts = parse_package_key(extra_target)
-            derived.setdefault(constraint, "{}@{}".format(parts.name, parts.version))
+            derived.setdefault(constraint, base_package_key(extra_target))
     return derived
