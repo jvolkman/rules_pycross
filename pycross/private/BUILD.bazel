@@ -102,6 +102,7 @@ bzl_library(
     srcs = ["pdm_lock_model.bzl"],
     deps = [
         ":translator_common",
+        ":util",
         "@toml.bzl//toml:toml",
     ],
 )
@@ -121,6 +122,7 @@ bzl_library(
     srcs = ["poetry_lock_model.bzl"],
     deps = [
         ":translator_common",
+        ":util",
         "@pypackaging.bzl//:pypackaging",
         "@toml.bzl//toml:toml",
     ],

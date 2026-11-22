@@ -16,12 +16,14 @@ load(
     "canonicalize_name",
     "compute_requested_dependency_groups",
     "detect_package_marker_forks",
+    "expand_pep735_group",
     "parse_pep508_requirement",
     "read_project_and_lock",
     "record_root_marker",
     "resolve_lock_graph",
     "sha256_from_string",
 )
+load(":util.bzl", "url_decode_filename")
 
 def _poetry_single_constraint_to_pep440(constraint):
     """Convert a single Poetry version constraint part to PEP 440."""
@@ -89,27 +91,6 @@ def _poetry_constraint_to_pep440(constraint):
 
     return " || ".join(clauses)
 
-def _parse_version_part(part):
-    """Parse an integer from a version part, stripping pre-release suffixes.
-
-    Handles parts like "3", "3-alpha", "3rc1", "3+build".
-
-    Args:
-        part: A version part string.
-
-    Returns:
-        The integer portion of the version part.
-    """
-    digits = ""
-    for c in part.elems():
-        if c.isdigit():
-            digits += c
-        else:
-            break
-    if not digits:
-        return 0
-    return int(digits)
-
 def _expand_caret(version_str):
     """Expand Poetry caret constraint to PEP 440.
 
@@ -118,37 +99,45 @@ def _expand_caret(version_str):
         If X == 0 and Y > 0: >=0.Y.Z, <0.(Y+1).0
         If X == 0 and Y == 0: >=0.0.Z, <0.0.(Z+1)
 
+    Preserves PEP 440 epochs and pre-release suffixes on the lower bound and
+    carries any epoch onto the upper bound.
+
     Args:
         version_str: The version string after ^.
 
     Returns:
         PEP 440 specifier string.
     """
-    parts = [_parse_version_part(p) for p in version_str.split(".")]
-
-    # Pad to at least 1 part
-    if len(parts) == 0:
+    parsed = pypackaging.version.try_parse(version_str)
+    if parsed == None or not parsed.release:
         return ">=" + version_str
 
+    parts = list(parsed.release)
     if parts[0] > 0:
         upper = [parts[0] + 1] + [0] * (len(parts) - 1)
     elif len(parts) >= 2 and parts[1] > 0:
         upper = [0, parts[1] + 1] + [0] * (len(parts) - 2)
     elif len(parts) >= 3:
         upper = [0, 0, parts[2] + 1] + [0] * (len(parts) - 3)
+    elif len(parts) == 2:
+        upper = [0, 1]
     else:
         upper = [parts[0] + 1]
 
-    lower = ".".join([str(p) for p in parts])
-    upper_str = ".".join([str(p) for p in upper])
+    epoch_prefix = "{}!".format(parsed.epoch) if parsed.epoch else ""
+    lower = pypackaging.version.to_string(parsed).split("+")[0]
+    upper_str = epoch_prefix + ".".join([str(p) for p in upper])
 
     return ">={},<{}".format(lower, upper_str)
 
 def _expand_tilde(version_str):
     """Expand Poetry tilde constraint to PEP 440.
 
-    ~X.Y.Z → >=X.Y.Z, <X.(Y+1).0
+    ~X.Y.Z → >=X.Y.Z, <X.(Y+1)
     ~X.Y   → >=X.Y, <X.(Y+1)
+
+    Preserves PEP 440 epochs and pre-release suffixes on the lower bound and
+    carries any epoch onto the upper bound.
 
     Args:
         version_str: The version string after ~.
@@ -156,18 +145,21 @@ def _expand_tilde(version_str):
     Returns:
         PEP 440 specifier string.
     """
-    parts = [_parse_version_part(p) for p in version_str.split(".")]
+    parsed = pypackaging.version.try_parse(version_str)
+    if parsed == None or not parsed.release:
+        return ">=" + version_str
+
+    parts = list(parsed.release)
+    epoch_prefix = "{}!".format(parsed.epoch) if parsed.epoch else ""
+    lower = pypackaging.version.to_string(parsed).split("+")[0]
 
     if len(parts) < 2:
         # ~X → >=X, <(X+1) (unusual but handle it)
-        return ">={},<{}".format(version_str, str(parts[0] + 1))
+        return ">={},<{}{}".format(lower, epoch_prefix, str(parts[0] + 1))
 
-    # Increment second-to-last part
-    upper = list(parts[:2])
-    upper[1] = upper[1] + 1
-
-    lower = ".".join([str(p) for p in parts])
-    upper_str = ".".join([str(p) for p in upper])
+    # Increment minor part
+    upper = [parts[0], parts[1] + 1]
+    upper_str = epoch_prefix + ".".join([str(p) for p in upper])
 
     return ">={},<{}".format(lower, upper_str)
 
@@ -212,6 +204,9 @@ def _get_files_for_package(files, package_name, package_version):
     Returns:
         Filtered list of file dicts.
     """
+    parsed_pkg_ver = pypackaging.version.try_parse(package_version)
+    normalized_pkg_version = pypackaging.version.to_string(parsed_pkg_ver) if parsed_pkg_ver != None else package_version
+
     result = []
     for f in files:
         filename = f["name"]
@@ -225,7 +220,7 @@ def _get_files_for_package(files, package_name, package_version):
             result.append(f)
             continue
 
-        if parsed.name == package_name and pypackaging.version.to_string(parsed.version) == package_version:
+        if parsed.name == package_name and pypackaging.version.to_string(parsed.version) == normalized_pkg_version:
             result.append(f)
 
     return result
@@ -267,7 +262,7 @@ def _extract_poetry_marker(info_dict):
         return "({}) and ({})".format(marker, python_marker)
     return marker or python_marker
 
-def _parse_poetry_pin(pin, pin_info, pinned_package_specs, track_pin, enrich_only = False):
+def _parse_poetry_pin(pin, pin_info, pinned_package_specs, track_pin, enrich_only = False, allow_optional = False):
     """Parse a Poetry dependency pin into pinned_package_specs.
 
     Handles three formats:
@@ -280,7 +275,9 @@ def _parse_poetry_pin(pin, pin_info, pinned_package_specs, track_pin, enrich_onl
         pin_info: The dependency value from pyproject.toml (string, dict, or list).
         pinned_package_specs: Dict to check for existing specs.
         track_pin: Callback to track pin.
-        enrich_only: If True, only replace existing pin specifiers if the new one is not empty/wildcard.
+        enrich_only: If True, only replace existing pin specifiers if the new one is not empty/wildcard,
+            and do not overwrite existing root markers when this entry has no marker.
+        allow_optional: If True, include entries marked `optional = true` (used for `[tool.poetry.extras]`).
     """
     existing_spec = pinned_package_specs.get(pin, {}).get("")
 
@@ -290,7 +287,9 @@ def _parse_poetry_pin(pin, pin_info, pinned_package_specs, track_pin, enrich_onl
     def track_spec(spec, marker = "", extras = []):
         # Do not overwrite a specific existing constraint with a wildcard if enrich_only is set.
         if enrich_only and existing_spec and not spec:
-            return
+            if not marker and not extras:
+                return
+            spec = existing_spec
         track_pin(pin, spec, marker, extras)
 
     if type(pin_info) == "string":
@@ -298,7 +297,7 @@ def _parse_poetry_pin(pin, pin_info, pinned_package_specs, track_pin, enrich_onl
         return
     entries = [pin_info] if type(pin_info) == "dict" else (pin_info if type(pin_info) == "list" else [])
     for entry in entries:
-        if type(entry) != "dict" or "path" in entry or entry.get("optional"):
+        if type(entry) != "dict" or "path" in entry or (entry.get("optional") and not allow_optional):
             continue
         track_spec(
             _poetry_constraint_to_pep440(entry.get("version", "*")),
@@ -345,8 +344,10 @@ def translate_poetry(project_dict, lock_dict, lock_model):
     has_project_deps = len(project_deps) > 0
 
     # Then, check for [tool.poetry.dependencies] (Poetry format)
-    poetry_deps = project_dict.get("tool", {}).get("poetry", {}).get("dependencies", {})
-    poetry_groups = project_dict.get("tool", {}).get("poetry", {}).get("group", {})
+    poetry_section = project_dict.get("tool", {}).get("poetry", {})
+    poetry_deps = poetry_section.get("dependencies", {})
+    poetry_groups = poetry_section.get("group", {})
+    poetry_extras = poetry_section.get("extras", {})
 
     dependency_groups = getattr(lock_model, "dependency_groups", ["default"])
 
@@ -358,9 +359,10 @@ def translate_poetry(project_dict, lock_dict, lock_model):
     non_testonly_reqs = {}
     root_dependency_markers = {}
 
-    def track_pin(pin_name, specifier, is_testonly, marker = "", extras = []):
+    def track_pin(pin_name, specifier, is_testonly, marker = "", extras = [], preserve_empty_marker = False):
         # name[extra] pins resolve to the base version; lock_resolver
         # synthesizes the extra package from the base's extra-gated edges.
+        base_markers = root_dependency_markers.get(pin_name) if preserve_empty_marker and not marker else None
         for name in [pin_name] + ["{}[{}]".format(pin_name, canonicalize_name(e)) for e in extras]:
             pinned_package_specs.setdefault(name, {})
             pinned_package_specs[name][""] = specifier
@@ -368,11 +370,18 @@ def translate_poetry(project_dict, lock_dict, lock_model):
                 testonly_reqs[name] = True
             else:
                 non_testonly_reqs[name] = True
+            if preserve_empty_marker and not marker:
+                if name in root_dependency_markers:
+                    continue
+                if base_markers != None:
+                    root_dependency_markers[name] = list(base_markers)
+                    continue
             record_root_marker(root_dependency_markers, name, marker)
 
     project_optional_deps = project_dict.get("project", {}).get("optional-dependencies", {})
     pep735_groups = project_dict.get("dependency-groups", {})
 
+    available_optional_groups = list({k: True for k in list(project_optional_deps.keys()) + list(poetry_extras.keys())}.keys())
     available_dev_groups = list({k: True for k in list(poetry_groups.keys()) + list(pep735_groups.keys())}.keys())
 
     requested_groups_dict = compute_requested_dependency_groups(
@@ -382,7 +391,7 @@ def translate_poetry(project_dict, lock_dict, lock_model):
         wildcard_testonly = wildcard_testonly,
         available_groups = (
             ["default"] +
-            ["optional:" + g for g in project_optional_deps.keys()] +
+            ["optional:" + g for g in available_optional_groups] +
             ["group:" + g for g in available_dev_groups]
         ),
         project_name = project_name,
@@ -411,20 +420,45 @@ def translate_poetry(project_dict, lock_dict, lock_model):
                     pin,
                     pin_info,
                     pinned_package_specs,
-                    track_pin = lambda p, spec, marker, extras: track_pin(p, spec, default_is_testonly, marker, extras),
+                    track_pin = lambda p, spec, marker, extras: track_pin(
+                        p,
+                        spec,
+                        default_is_testonly,
+                        marker,
+                        extras,
+                        preserve_empty_marker = has_project_deps,
+                    ),
                     enrich_only = has_project_deps,
                 )
 
-    for group_name in project_optional_deps.keys():
+    canonical_poetry_deps = {canonicalize_name(k): v for k, v in poetry_deps.items()}
+    for group_name in available_optional_groups:
         key = "optional:{}".format(group_name)
         if key not in requested_groups_dict:
             continue
         is_testonly = requested_groups_dict[key]
-        for dep_str in project_optional_deps[group_name]:
-            req = parse_pep508_requirement(dep_str)
-            if req.name == "python":
-                continue
-            track_pin(req.name, req.specifier, is_testonly, req.marker, req.extras)
+        if group_name in project_optional_deps:
+            for dep_str in project_optional_deps[group_name]:
+                req = parse_pep508_requirement(dep_str)
+                if req.name == "python":
+                    continue
+                track_pin(req.name, req.specifier, is_testonly, req.marker, req.extras)
+        if group_name in poetry_extras:
+            for dep_name in poetry_extras[group_name]:
+                pin = canonicalize_name(dep_name)
+                if pin == "python":
+                    continue
+                if pin in canonical_poetry_deps:
+                    _parse_poetry_pin(
+                        pin,
+                        canonical_poetry_deps[pin],
+                        pinned_package_specs,
+                        track_pin = lambda p, spec, marker, extras: track_pin(p, spec, is_testonly, marker, extras),
+                        allow_optional = True,
+                    )
+                else:
+                    existing_spec = pinned_package_specs.get(pin, {}).get("", "")
+                    track_pin(pin, existing_spec, is_testonly, preserve_empty_marker = pin in root_dependency_markers)
 
     for group_name in available_dev_groups:
         key = "group:{}".format(group_name)
@@ -434,7 +468,7 @@ def translate_poetry(project_dict, lock_dict, lock_model):
 
         # Poetry merges PEP 735 and legacy groups (union, not fallback).
         if group_name in pep735_groups:
-            for dep_str in pep735_groups[group_name]:
+            for dep_str in expand_pep735_group(pep735_groups, group_name):
                 req = parse_pep508_requirement(dep_str)
                 if req.name == "python":
                     continue
@@ -462,7 +496,7 @@ def translate_poetry(project_dict, lock_dict, lock_model):
 
     # Parse file info helper
     def parse_file_info(file_info, registry = None):
-        filename = file_info["file"]
+        filename = url_decode_filename(file_info["file"])
         file_hash = file_info["hash"]
         if not file_hash.startswith("sha256:"):
             fail("Expected sha256: prefix on hash: {}".format(file_hash))
