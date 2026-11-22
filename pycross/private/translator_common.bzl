@@ -330,44 +330,28 @@ def _package_key_str(name, version):
     """Format a package key string."""
     return "{}@{}".format(name, version)
 
-def _is_simple_arbitrary_eq(spec):
-    if not spec.startswith("===") or "," in spec or "||" in spec:
-        return False
-    val = spec[3:].strip()
-    if not val:
-        return False
-    return " " not in val and "\t" not in val and ";" not in val and ")" not in val
-
 def _parse_specifier_parts(specifier_str):
     """Pre-parse a specifier string (possibly with `||` unions) once for repeated checks.
 
     Returns None when the specifier matches any version, otherwise a list of
-    `("===", lower_ver)` or `("set", parsed_spec_set)` tuples.
+    `pypackaging.specifiers` SpecifierSet structs.
     """
     if not specifier_str or specifier_str == "*":
         return None
-    if _is_simple_arbitrary_eq(specifier_str):
-        return [("===", specifier_str[3:].strip().lower())]
     parts = []
     for part in specifier_str.split("||"):
         part = part.strip()
         if not part or part == "*":
             return None
-        if _is_simple_arbitrary_eq(part):
-            parts.append(("===", part[3:].strip().lower()))
-        else:
-            parts.append(("set", pypackaging.specifiers.parse_set(part)))
+        parts.append(pypackaging.specifiers.parse_set(part))
     return parts
 
 def _parsed_specifier_contains_version(parsed_parts, version_str):
     """Check whether version_str satisfies pre-parsed specifier parts."""
     if parsed_parts == None:
         return True
-    for kind, matcher in parsed_parts:
-        if kind == "===":
-            if version_str.lower() == matcher:
-                return True
-        elif pypackaging.specifiers.set_contains(matcher, version_str):
+    for spec_set in parsed_parts:
+        if pypackaging.specifiers.set_contains(spec_set, version_str):
             return True
     return False
 
@@ -528,7 +512,13 @@ def resolve_lock_graph(packages, pinned_package_specs, requires_python, strict_d
                 for c in candidates
                 if c.get("markers") or resolution_marker_constraint_name(c["name"], c["version"]) in resolution_marker_exprs
             ]
-            is_forked = len(marked_candidates) > 1 and not _is_simple_arbitrary_eq(dep_specifier)
+            is_exact_pin = (
+                parsed_spec != None and
+                len(parsed_spec) == 1 and
+                len(parsed_spec[0].specs) == 1 and
+                parsed_spec[0].specs[0].operator == "==="
+            )
+            is_forked = len(marked_candidates) > 1 and not is_exact_pin
 
             for req_extra in dep_extras:
                 norm_req_extra = canonicalize_name(req_extra) if req_extra else ""
@@ -677,8 +667,37 @@ def resolve_lock_graph(packages, pinned_package_specs, requires_python, strict_d
         for k in keys_to_delete:
             pinned_keys.pop(k)
 
+    # Packages reachable at runtime from non-testonly pins through third-party
+    # dependency edges must not be marked testonly solely because a testonly
+    # local member also depends on them. Explicitly listed testonly_pins entries
+    # in `testonly_set` are left untouched.
+    runtime_reachable = {}
+    if expanded_testonly:
+        queue = []
+        visited = {}
+        for pin_name, constraints in pinned_keys.items():
+            pin_base = pin_name.split("[")[0]
+            if pin_base in non_testonly_set:
+                for key in constraints.values():
+                    if key not in visited:
+                        visited[key] = True
+                        queue.append(key)
+        head = 0
+        for _ in range(len(distinct_packages) + len(queue) + 1):
+            if head >= len(queue):
+                break
+            cur = queue[head]
+            head += 1
+            for dep in resolved_deps.get(cur, []):
+                dep_base = dep["name"].split("[")[0]
+                runtime_reachable[dep_base] = True
+                for dep_key in (_package_key_str(dep["name"], dep["version"]), _package_key_str(dep_base, dep["version"])):
+                    if dep_key in distinct_packages and dep_key not in visited:
+                        visited[dep_key] = True
+                        queue.append(dep_key)
+
     for name in sorted(expanded_testonly.keys()):
-        if name not in non_testonly_set and name not in testonly_set:
+        if name not in non_testonly_set and name not in runtime_reachable and name not in testonly_set:
             testonly_set[name] = True
     testonly_pins = sorted([
         name

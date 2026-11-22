@@ -12,7 +12,7 @@ The file structure is:
 - _variants/BUILD.bazel    - This repo's variant flags, is_<flag> config settings and no-variant errors.
 """
 
-load("@pycross_backends//:package_repo_dispatch.bzl", "PACKAGE_REPO_HOOKS")
+load("@pycross_backends//:package_repo_dispatch.bzl", "PACKAGE_REPO_HOOKS", "PACKAGE_REPO_HOOK_SUBDIRS")
 load(":override_helpers.bzl", "merge_backend_overrides")
 load(":util.bzl", "is_platform_specific", "is_wheel_platform_specific", "marker_evaluator_name", "parse_package_key", "sanitize_name", "underscore_name", "variant_item_qname")
 
@@ -246,7 +246,7 @@ def _availability_condition(lines, helper_prefix, lock_key, packages, workspace_
     each other in the shared `@ws//_lock` package.
     """
     if packages == None:
-        return "@{}//_lock:_available_{}".format(workspace_repo, lock_key)
+        return "@{}//_lock:_wheel_available_{}".format(workspace_repo, lock_key)
 
     pkg = packages.get(lock_key, {})
     parts = parse_package_key(lock_key)
@@ -301,7 +301,7 @@ def _availability_condition(lines, helper_prefix, lock_key, packages, workspace_
             _add_cond(":{}".format(group_name))
 
     if not all_conditions:
-        return "@{}//_lock:_available_{}".format(workspace_repo, lock_key)
+        return "@{}//_lock:_wheel_available_{}".format(workspace_repo, lock_key)
     if len(all_conditions) == 1:
         return all_conditions[0]
 
@@ -320,7 +320,7 @@ def _availability_condition(lines, helper_prefix, lock_key, packages, workspace_
     ])
     return ":{}".format(combined_name)
 
-def _emit_maybe_alias(lines, maybe_name, pkg_target, target_dict, available_keys, workspace_repo, no_variant_fallbacks = None, helper_prefix = "_maybe", packages = None, is_testonly = False):
+def _emit_maybe_alias(lines, maybe_name, pkg_target, target_dict, available_keys, workspace_repo, no_variant_fallbacks = None, helper_prefix = "_maybe", packages = None):
     """Emit a `:maybe` or `:[extra]_maybe` alias supporting both single-branch and multi-branch pins."""
     available_set = {k: True for k in (available_keys or [])}
     if not target_dict or (not available_set and "" in target_dict):
@@ -338,10 +338,9 @@ def _emit_maybe_alias(lines, maybe_name, pkg_target, target_dict, available_keys
             '        "{}": "{}",'.format(avail_cond, pkg_target),
             '        "//conditions:default": "//:_empty_library",',
             "    }),",
+            ")",
+            "",
         ])
-        if is_testonly:
-            lines.append("    testonly = True,")
-        lines.extend([")", ""])
         return
 
     emitted_helpers = {}
@@ -364,10 +363,9 @@ def _emit_maybe_alias(lines, maybe_name, pkg_target, target_dict, available_keys
                 '        "{}": "{}",'.format(avail_cond, pkg_target),
                 '        "//conditions:default": "//:_empty_library",',
                 "    }),",
+                ")",
+                "",
             ])
-            if is_testonly:
-                lines.append("    testonly = True,")
-            lines.extend([")", ""])
         branch_targets[constraint] = ":{}".format(emitted_helpers[pkg_key])
 
     lines.extend([
@@ -387,10 +385,11 @@ def _emit_maybe_alias(lines, maybe_name, pkg_target, target_dict, available_keys
             lines.append('        "{}": "{}{}",'.format(unselected[0], _NO_VARIANT_PREFIX, unselected[1]))
         lines.append('        "//conditions:default": "//:_empty_library",')
 
-    lines.append("    }),")
-    if is_testonly:
-        lines.append("    testonly = True,")
-    lines.extend([")", ""])
+    lines.extend([
+        "    }),",
+        ")",
+        "",
+    ])
 
 def _pin_build(target_name, pin_target_dict, workspace_repo, has_aggregated_variant = False, extras_dict = None, no_variant_fallbacks = None, target_platform = None, transition_bzl = None, maybe_available_keys = None, extras_maybe_keys = None, testonly = False, sdist_target_dict = None, aggregated_keys = None, packages = None):
     """Generates the BUILD file for a pin directory, pointing to the workspace."""
@@ -517,7 +516,6 @@ def _pin_build(target_name, pin_target_dict, workspace_repo, has_aggregated_vari
                     no_variant_fallbacks = no_variant_fallbacks,
                     helper_prefix = "_maybe_extra_{}".format(extra_name),
                     packages = packages,
-                    is_testonly = testonly,
                 )
 
     if pin_target_dict and (maybe_available_keys or "" not in pin_target_dict):
@@ -547,7 +545,6 @@ def _pin_build(target_name, pin_target_dict, workspace_repo, has_aggregated_vari
                 no_variant_fallbacks = no_variant_fallbacks,
                 helper_prefix = "_maybe",
                 packages = packages,
-                is_testonly = testonly,
             )
 
     header_lines = [proxy_load]
@@ -1278,19 +1275,28 @@ def _thin_package_repo_impl(rctx):
 
     rctx.file("_packages.bzl", _packages_bzl(grouped_pins, packages))
 
-    cargo_hook_backends = [b for b in _CARGO_HOOK_BACKENDS if b in PACKAGE_REPO_HOOKS]
-    if rctx.attr.override_configs and cargo_hook_backends:
+    hook_backends_by_subdir = {}
+    for backend_name, subdir in sorted(PACKAGE_REPO_HOOK_SUBDIRS.items()):
+        if subdir and backend_name in PACKAGE_REPO_HOOKS:
+            hook_backends_by_subdir.setdefault(subdir, []).append(backend_name)
+    for legacy_backend in _LEGACY_CARGO_HOOK_BACKENDS:
+        if legacy_backend in PACKAGE_REPO_HOOKS and legacy_backend not in PACKAGE_REPO_HOOK_SUBDIRS:
+            hook_backends_by_subdir.setdefault("_cargo", []).append(legacy_backend)
+
+    if rctx.attr.override_configs and hook_backends_by_subdir:
         override_configs = json.decode(rctx.attr.override_configs)
-        cargo_build = _cargo_build(
-            grouped_pins,
-            packages,
-            override_configs,
-            workspace_repo,
-            no_variant_fallbacks = no_variant_fallbacks,
-            cargo_backends = cargo_hook_backends,
-        )
-        if cargo_build:
-            rctx.file("_cargo/BUILD.bazel", cargo_build)
+        for subdir, hook_backends in sorted(hook_backends_by_subdir.items()):
+            hook_build = _hook_subdir_build(
+                grouped_pins,
+                packages,
+                override_configs,
+                workspace_repo,
+                no_variant_fallbacks = no_variant_fallbacks,
+                hook_backends = hook_backends,
+                subdir = subdir,
+            )
+            if hook_build:
+                rctx.file("{}/BUILD.bazel".format(subdir), hook_build)
 
     # _variants/ BUILD: this repo's variant flags (see _variants_build). Last,
     # since the selects above collect the `_unselected_all_*` groups it emits.
@@ -1527,27 +1533,29 @@ def _packages_bzl(grouped_pins, packages):
     ])
     return "\n".join(packages_lines)
 
-_CARGO_HOOK_BACKENDS = ("maturin_build", "setuptools_rust_build")
+# Backwards-compat fallback for older backend_maturin releases registered before
+# `package_repo_hook_subdir` existed on `backends.register`.
+_LEGACY_CARGO_HOOK_BACKENDS = ("maturin_build", "setuptools_rust_build")
 
-def _cargo_build(grouped_pins, packages, override_configs, workspace_repo, no_variant_fallbacks = None, cargo_backends = None):
-    """Render `_cargo/BUILD.bazel` aliases for packages with cargo lock overrides, or None."""
-    effective_backends = _CARGO_HOOK_BACKENDS if cargo_backends == None else cargo_backends
+def _hook_subdir_build(grouped_pins, packages, override_configs, workspace_repo, no_variant_fallbacks = None, hook_backends = None, subdir = "_cargo"):
+    """Render `<subdir>/BUILD.bazel` aliases for packages with hook-backed overrides, or None."""
+    effective_backends = _LEGACY_CARGO_HOOK_BACKENDS if hook_backends == None else hook_backends
     if not effective_backends:
         return None
 
-    cargo_lines = [
+    lines = [
         'package(default_visibility = ["//visibility:public"])',
         "",
     ]
 
-    has_cargo_targets = False
+    has_targets = False
     for base_pin_name in sorted(grouped_pins.keys()):
         us_name = underscore_name(base_pin_name)
         target_dict = _effective_base_target_dict(grouped_pins[base_pin_name])
         if not target_dict:
             continue
 
-        cargo_target_dict = {}
+        matched_target_dict = {}
         for constraint, pkg_key in target_dict.items():
             parts = parse_package_key(pkg_key)
             base_key = "{}@{}".format(parts.name, parts.version)
@@ -1556,31 +1564,42 @@ def _cargo_build(grouped_pins, packages, override_configs, workspace_repo, no_va
             merged = merge_backend_overrides(override_configs, parts.name, parts.version)
             if not any([b in merged for b in effective_backends]):
                 continue
-            cargo_target_dict[constraint] = base_key
-        if not cargo_target_dict:
+            matched_target_dict[constraint] = base_key
+        if not matched_target_dict:
             continue
 
-        actual_cargo = _target_select(
-            cargo_target_dict,
-            "@{}//_cargo:".format(workspace_repo),
+        actual_target = _target_select(
+            matched_target_dict,
+            "@{}//{}:".format(workspace_repo, subdir),
             workspace_repo,
             no_variant_fallbacks = no_variant_fallbacks,
             all_target_dict = target_dict,
             fallback_target = _NO_MATCH_ERROR_TARGET,
         )
 
-        cargo_lines.extend([
+        lines.extend([
             "alias(",
             '    name = "{}",'.format(us_name),
-            "    actual = {},".format(actual_cargo),
+            "    actual = {},".format(actual_target),
             ")",
             "",
         ])
-        has_cargo_targets = True
+        has_targets = True
 
-    if not has_cargo_targets:
+    if not has_targets:
         return None
-    return "\n".join(cargo_lines)
+    return "\n".join(lines)
+
+def _cargo_build(grouped_pins, packages, override_configs, workspace_repo, no_variant_fallbacks = None, cargo_backends = None):
+    return _hook_subdir_build(
+        grouped_pins,
+        packages,
+        override_configs,
+        workspace_repo,
+        no_variant_fallbacks = no_variant_fallbacks,
+        hook_backends = cargo_backends,
+        subdir = "_cargo",
+    )
 
 thin_package_repo = repository_rule(
     implementation = _thin_package_repo_impl,
@@ -1639,5 +1658,6 @@ packages_bzl_for_testing = _packages_bzl
 pin_versions_for_testing = _pin_versions
 modules_mapping_deps_for_testing = _modules_mapping_deps
 cargo_build_for_testing = _cargo_build
+hook_subdir_build_for_testing = _hook_subdir_build
 render_transition_bzl_for_testing = _render_transition_bzl
 render_maybe_build_for_testing = _render_maybe_build

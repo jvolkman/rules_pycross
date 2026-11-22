@@ -302,8 +302,8 @@ def _path_tool_propagates_files_to_run_test(name):
 def _proxy_unsupported_wheel_names_package_impl(env, target):
     actions = [a for a in target.actions if a.mnemonic == "PycrossUnsupportedPackage"]
     env.expect.that_int(len(actions)).equals(1)
-    env.expect.that_str(actions[0].env.get("PYCROSS_ERROR", "")).contains(target.label.name)
-    env.expect.that_str(actions[0].env.get("PYCROSS_ERROR", "")).contains("no matching platform marker, wheel, or variant branch")
+    env.expect.that_str(actions[0].env.get("PYCROSS_ERROR", "")).contains(str(target.label))
+    env.expect.that_str(actions[0].env.get("PYCROSS_ERROR", "")).contains("no matching platform marker, artifact, or variant branch")
 
 def _proxy_library_unsupported_wheel_test(name):
     pycross_unsupported_wheel(name = name + "_no_match", tags = ["manual"])

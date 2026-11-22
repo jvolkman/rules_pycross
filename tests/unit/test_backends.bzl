@@ -16,7 +16,10 @@ def _tag(
         default = False,
         override_json = None,
         sdist_hook_bzl = None,
-        sdist_hook_fn = ""):
+        sdist_hook_fn = "",
+        package_repo_hook_bzl = None,
+        package_repo_hook_fn = "",
+        package_repo_hook_subdir = ""):
     return struct(
         name = name,
         rule_bzl = rule_bzl,
@@ -26,8 +29,9 @@ def _tag(
         override_json = override_json,
         sdist_hook_bzl = sdist_hook_bzl,
         sdist_hook_fn = sdist_hook_fn,
-        package_repo_hook_bzl = None,
-        package_repo_hook_fn = "",
+        package_repo_hook_bzl = package_repo_hook_bzl,
+        package_repo_hook_fn = package_repo_hook_fn,
+        package_repo_hook_subdir = package_repo_hook_subdir,
     )
 
 def _module(name, tags, is_root = False):
@@ -169,6 +173,41 @@ def _test_render_hook_dispatch_suffix_replacement_impl(env, target):
     env.expect.that_str(rendered).contains('load("@t2//:hook.bzl", _sdist_hook_my_build_tool = "my_build_tool_sdist_hook")')
     env.expect.that_str(rendered).contains('load("@c//:hook.bzl", _sdist_hook_custom_backend = "custom_backend_sdist_hook")')
     env.expect.that_str(rendered).contains('load("@e//:hook.bzl", _sdist_hook_explicit_build = "custom_fn_name")')
+
+    # Package repo hook dispatch emits PACKAGE_REPO_HOOK_SUBDIRS for backends declaring a subdir.
+    pkg_rendered = render_hook_dispatch_for_testing(
+        "package repo hook",
+        "package repo hook",
+        "PACKAGE_REPO_HOOKS",
+        {
+            "maturin_build": "@m//:pkg_hook.bzl",
+            "custom_rust_build": "@cr//:pkg_hook.bzl",
+            "no_subdir_build": "@ns//:pkg_hook.bzl",
+        },
+        {},
+        "_package_repo_hook",
+        ["maturin_build", "custom_rust_build", "no_subdir_build"],
+        subdir_map = {
+            "maturin_build": "_cargo",
+            "custom_rust_build": "_custom_rust",
+        },
+    )
+    env.expect.that_str(pkg_rendered).contains('PACKAGE_REPO_HOOK_SUBDIRS = {\n    "custom_rust_build": "_custom_rust",\n    "maturin_build": "_cargo",\n}')
+
+    # _collect_registrations records package_repo_hook_subdir and clears it when root omits it.
+    root = _module("my_project", [
+        _tag(
+            "custom_rust_build",
+            "//:custom_rust.bzl",
+            package_repo_hook_bzl = "//:hook.bzl",
+            package_repo_hook_subdir = "_cargo",
+        ),
+        _tag("pep517_build", "@rules_pycross//pycross/backends:pep517.bzl", default = True),
+    ], is_root = True)
+    res = collect_registrations_for_testing([root], warn = lambda _: None)
+    env.expect.that_dict(res.package_repo_hook_subdir).contains_exactly({
+        "custom_rust_build": "_cargo",
+    })
 
 def _test_render_hook_dispatch_suffix_replacement(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])

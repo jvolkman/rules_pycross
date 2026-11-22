@@ -49,18 +49,14 @@ def register_bin_extract_action(ctx, wheel_dir, binary_name):
 
 # Known build tool packages whose executables are extracted once on the tool
 # target itself rather than re-extracted per sdist build target.
-_WHEEL_TOOL_NAMES = {
-    "cmake": "cmake",
-    "meson": "meson",
-    "ninja": "ninja",
-}
+_WHEEL_TOOL_NAMES = ("cmake", "meson", "ninja")
 
 def _extract_wheel_tool_aspect_impl(target, ctx):
     if PycrossPackageInfo not in target or PycrossExtractedWheelInfo not in target:
         return []
 
-    tool_name = _WHEEL_TOOL_NAMES.get(target[PycrossPackageInfo].package_name)
-    if not tool_name:
+    tool_name = target[PycrossPackageInfo].package_name
+    if tool_name not in _WHEEL_TOOL_NAMES:
         return []
 
     wheel_dir = target[PycrossExtractedWheelInfo].site_packages

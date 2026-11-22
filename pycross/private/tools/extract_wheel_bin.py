@@ -33,22 +33,15 @@ def main():
     # executable instead of failing with `python: bad interpreter`.
     with open(src, "rb") as src_f:
         header = src_f.read(11)
-        if header.startswith(b"#!python\n"):
-            remainder = header[len(b"#!python\n") :]
-            with open(out_file, "wb") as dst_f:
-                dst_f.write(b"#!/usr/bin/env python3\n")
-                dst_f.write(remainder)
-                shutil.copyfileobj(src_f, dst_f)
-            os.chmod(out_file, 0o755)
-            return
-        if header.startswith(b"#!python\r\n"):
-            remainder = header[len(b"#!python\r\n") :]
-            with open(out_file, "wb") as dst_f:
-                dst_f.write(b"#!/usr/bin/env python3\n")
-                dst_f.write(remainder)
-                shutil.copyfileobj(src_f, dst_f)
-            os.chmod(out_file, 0o755)
-            return
+        for shebang in (b"#!python\n", b"#!python\r\n"):
+            if header.startswith(shebang):
+                remainder = header[len(shebang) :]
+                with open(out_file, "wb") as dst_f:
+                    dst_f.write(b"#!/usr/bin/env python3\n")
+                    dst_f.write(remainder)
+                    shutil.copyfileobj(src_f, dst_f)
+                os.chmod(out_file, 0o755)
+                return
 
     shutil.copyfile(src, out_file)
     os.chmod(out_file, 0o755)

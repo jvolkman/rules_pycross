@@ -340,9 +340,9 @@ def make_format_extension(
         model_type: The lock model type string (e.g. "uv", "pdm", "poetry", "pylock").
         workspace_attrs: Format-specific attrs for workspace tags.
             Merged with WORKSPACE_COMMON_ATTRS.
-        discover_members_fn: Required function(mctx, lock_file_label) -> [struct(name, path)]
+        discover_members_fn: Required function(module_ctx, lock_file_label, toml_cache) -> [struct(name, path)]
             that auto-discovers workspace members from the project configuration.
-        repo_create_model_fn: Required function(rctx, extra_project_files, lock_file, lock_model) -> dict
+        repo_create_model_fn: Required function(module_ctx, extra_project_files, lock_file, lock_model, toml_cache = ...) -> dict
             that runs the format-specific translator to produce raw lock data.
 
     Returns:

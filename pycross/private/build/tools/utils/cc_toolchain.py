@@ -155,15 +155,11 @@ def wrap_compiler(
                 set -f
                 is_link=1
                 is_shared=0
-                argc=$#
-                if [ "$argc" -eq 0 ]; then
+                needs_filter=0
+                if [ "$#" -eq 0 ]; then
                     is_link=0
                 fi
-                i=0
-                while [ "$i" -lt "$argc" ]; do
-                    arg=$1
-                    shift
-                    i=$((i + 1))
+                for arg in "$@"; do
                     case "$arg" in
                         {non_link_pattern})
                             is_link=0
@@ -172,11 +168,25 @@ def wrap_compiler(
                             is_shared=1
                             ;;
                         {filtered_pattern})
-                            continue
+                            needs_filter=1
                             ;;
                     esac
-                    set -- "$@" "$arg"
                 done
+                if [ "$needs_filter" -eq 1 ]; then
+                    argc=$#
+                    i=0
+                    while [ "$i" -lt "$argc" ]; do
+                        arg=$1
+                        shift
+                        i=$((i + 1))
+                        case "$arg" in
+                            {filtered_pattern})
+                                continue
+                                ;;
+                        esac
+                        set -- "$@" "$arg"
+                    done
+                fi
                 if [ "$#" -eq 1 ] && [ "$1" = "-v" ]; then
                     is_link=0
                 fi

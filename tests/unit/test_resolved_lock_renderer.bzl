@@ -543,12 +543,13 @@ def _test_available_config_setting_group_impl(env, target):
     }
     res = render_lock_bzl(lock, repo_map, "my_rctx")
 
-    # Platform-specific package (no sdist) should get _available_ group.
-    env.expect.that_bool("_available_platform_pkg@1.0" in res).equals(True)
+    # Platform-specific package (no sdist) should get _wheel_available_ group, not dead _available_.
+    env.expect.that_bool("_wheel_available_platform_pkg@1.0" in res).equals(True)
+    env.expect.that_bool('"_available_' in res).equals(False)
     env.expect.that_bool("config_setting_group(" in res).equals(True)
 
-    # Package with sdist should NOT get _available_ group.
-    env.expect.that_bool("_available_sdist_pkg@2.0" in res).equals(False)
+    # Package with sdist should NOT get _wheel_available_ group.
+    env.expect.that_bool("_wheel_available_sdist_pkg@2.0" in res).equals(False)
 
     # Selects load should be present (at least one platform-specific package).
     env.expect.that_bool("selects" in res).equals(True)
@@ -557,11 +558,11 @@ def _test_available_config_setting_group(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
     analysis_test(name = name, target = name + "_subject", impl = _test_available_config_setting_group_impl)
 
-# ── Test: no _available_ when all have sdist ──────────────────────
+# ── Test: no _wheel_available_ when all have sdist ────────────────
 
 # buildifier: disable=unused-variable
 def _test_no_available_when_all_have_sdist_impl(env, target):
-    """Verify no selects load and no _available_ when all packages have sdist."""
+    """Verify no selects load and no _wheel_available_ when all packages have sdist."""
     lock = {
         "packages": {
             "pkg@1.0": {
@@ -590,7 +591,7 @@ def _test_no_available_when_all_have_sdist(name):
 
 # buildifier: disable=unused-variable
 def _test_extras_inherit_base_available_impl(env, target):
-    """Extras of a wheel-only package are gated by the base's _available_ group."""
+    """Extras of a wheel-only package rely on the base's _wheel_available_ group (no dead _available_ alias)."""
     lock = {
         "packages": {
             "plat@1.0": {
@@ -607,8 +608,8 @@ def _test_extras_inherit_base_available_impl(env, target):
     repo_map = {"plat_win": "@repo//plat:win_wheel"}
     res = render_lock_bzl(lock, repo_map, rctx_name = "my_rctx")
 
-    alias = res.split('name = "_available_plat[extra]@1.0"')[1].split(")", 1)[0]
-    env.expect.that_str(alias).contains('actual = ":_available_plat@1.0"')
+    env.expect.that_str(res).contains('name = "_wheel_available_plat@1.0"')
+    env.expect.that_bool('"_available_' in res).equals(False)
 
 def _test_extras_inherit_base_available(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
@@ -616,7 +617,7 @@ def _test_extras_inherit_base_available(name):
 
 # buildifier: disable=unused-variable
 def _test_build_mode_never_no_sdist_fallback_impl(env, target):
-    """build_mode = "never" packages don't fall back to the sdist build and get _available_."""
+    """build_mode = "never" packages don't fall back to the sdist build and get _wheel_available_."""
     lock = {
         "packages": {
             "pkg@1.0": {
@@ -639,7 +640,7 @@ def _test_build_mode_never_no_sdist_fallback_impl(env, target):
 
     env.expect.that_bool("my_rctx_sdist_" in res).equals(False)
     env.expect.that_str(res).contains("@rules_pycross//pycross/private:no_match_error")
-    env.expect.that_str(res).contains('name = "_available_pkg@1.0"')
+    env.expect.that_str(res).contains('name = "_wheel_available_pkg@1.0"')
 
 def _test_build_mode_never_no_sdist_fallback(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
@@ -1199,13 +1200,13 @@ def _test_scoped_variants_and_grouped_deps_impl(env, target):
     # dep_a and dep_b share the same sys_platform == 'win32' marker -> single select().
     env.expect.that_str(res).contains('[":dep_a@1.0", ":dep_b@1.0"]')
 
-    # Mixed native + universal keeps chooser (to prefer native) but emits no _available_ group.
+    # Mixed native + universal keeps chooser (to prefer native) but emits no _wheel_available_ group.
     env.expect.that_str(res).contains('name = "_wheel_chooser_app@1.0"')
-    env.expect.that_bool("_available_app@1.0" in res).equals(False)
+    env.expect.that_bool("_wheel_available_app@1.0" in res).equals(False)
 
-    # 3+ platform-specific wheel-only package uses pycross_wheel_matched for _available_.
+    # 3+ platform-specific wheel-only package uses pycross_wheel_matched for _wheel_available_.
     env.expect.that_str(res).contains('name = "_wheel_matched_dep_c@1.0"')
-    env.expect.that_str(res).contains('name = "_available_dep_c@1.0"')
+    env.expect.that_str(res).contains('name = "_wheel_available_dep_c@1.0"')
     env.expect.that_bool("selects.config_setting_group(" in res).equals(False)
 
     # Each variant evaluator receives ONLY the resolver whose items appear in its marker.
@@ -1396,11 +1397,10 @@ def _test_wheel_available_always_emitted_impl(env, target):
         "ws__pkgs",
     )
     env.expect.that_str(res).contains('name = "_wheel_available_nomarker@1.0",')
-    env.expect.that_str(res).contains('name = "_available_nomarker@1.0",\n        actual = ":_wheel_available_nomarker@1.0",')
     env.expect.that_str(res).contains('name = "_wheel_available_withmarker@1.0",')
-    env.expect.that_str(res).contains('name = "_marker_available_withmarker@1.0",')
-    env.expect.that_str(res).contains('name = "_available_withmarker@1.0",')
     env.expect.that_str(res).contains('name = "_wheel_available_merged_sdist@1.0",\n        actual = "@rules_pycross//pycross/private:always_true",')
+    env.expect.that_bool('"_available_' in res).equals(False)
+    env.expect.that_bool('"_marker_available_' in res).equals(False)
 
 def _test_wheel_available_always_emitted(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])

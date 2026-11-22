@@ -11,7 +11,7 @@ def _default_hook_fn(rule_name, hook_suffix):
     base = rule_name[:-len("_build")] if rule_name.endswith("_build") else rule_name
     return base + hook_suffix
 
-def _render_hook_dispatch(doc_title, hook_desc, var_name, bzl_map, fn_map, hook_suffix, rule_names):
+def _render_hook_dispatch(doc_title, hook_desc, var_name, bzl_map, fn_map, hook_suffix, rule_names, subdir_map = None):
     lines = [
         '"""Generated {} dispatch table. Do not edit."""'.format(doc_title),
         "",
@@ -36,6 +36,19 @@ def _render_hook_dispatch(doc_title, hook_desc, var_name, bzl_map, fn_map, hook_
         "}",
         "",
     ])
+    if subdir_map != None:
+        lines.extend([
+            "# Maps backend rule names to their thin-repo alias subdirectory (e.g. '_cargo').",
+            "PACKAGE_REPO_HOOK_SUBDIRS = {",
+        ])
+        for rule_name in sorted(rule_names):
+            subdir = subdir_map.get(rule_name)
+            if rule_name in load_aliases and subdir:
+                lines.append('    "{}": {},'.format(rule_name, json.encode(subdir)))
+        lines.extend([
+            "}",
+            "",
+        ])
     return "\n".join(lines)
 
 def _backend_registry_repo_impl(rctx):
@@ -95,6 +108,7 @@ def _backend_registry_repo_impl(rctx):
         rctx.attr.package_repo_hook_fn,
         "_package_repo_hook",
         rctx.attr.backend_configs.keys(),
+        subdir_map = rctx.attr.package_repo_hook_subdir,
     ))
     rctx.file("BUILD.bazel", """\
 load("@bazel_skylib//:bzl_library.bzl", "bzl_library")
@@ -150,6 +164,9 @@ backend_registry_repo = repository_rule(
         ),
         "package_repo_hook_fn": attr.string_dict(
             doc = "Maps backend rule names to the function name in the package repo hook .bzl file.",
+        ),
+        "package_repo_hook_subdir": attr.string_dict(
+            doc = "Maps backend rule names to the thin-repo alias subdirectory (e.g. '_cargo').",
         ),
     },
 )

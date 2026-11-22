@@ -23,17 +23,17 @@ load(
 load(":util.bzl", "PY_COMMON_ATTRS", "merge_py_providers")
 
 def _register_unsupported_proxy_failure(ctx):
-    pkg_id = "{}:{}".format(ctx.label.package, ctx.label.name) if ctx.label.package else ctx.label.name
-    out = ctx.actions.declare_file("_unsupported_%x.whl" % (hash(ctx.label.name) & 0xffffffff))
+    pkg_id = str(ctx.label)
+    out = ctx.actions.declare_file("_unsupported_%x.out" % (hash(ctx.label.name) & 0xffffffff))
     register_failure_action(
         ctx,
         outputs = [out],
         message = (
-            "Package {} is not available for the selected target environment " +
-            "(no matching platform marker, wheel, or variant branch)."
+            "Target {} is not available for the selected target environment " +
+            "(no matching platform marker, artifact, or variant branch)."
         ).format(pkg_id),
         mnemonic = "PycrossUnsupportedPackage",
-        progress_message = "Rejecting unavailable package %s" % pkg_id,
+        progress_message = "Rejecting unavailable target %s" % pkg_id,
     )
     return out, pkg_id
 

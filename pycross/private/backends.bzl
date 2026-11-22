@@ -21,6 +21,7 @@ def _collect_registrations(modules, warn = _print_warn):
     sdist_hook_fn = {}  # rule name -> custom sdist hook function name
     package_repo_hook_bzl = {}  # rule name -> custom package repo hook .bzl file
     package_repo_hook_fn = {}  # rule name -> custom package repo hook function name
+    package_repo_hook_subdir = {}  # rule name -> thin repo alias subdir (e.g. "_cargo")
     default_backend = None
     default_backend_module = None
     backend_order = []
@@ -89,6 +90,10 @@ def _collect_registrations(modules, warn = _print_warn):
                 package_repo_hook_fn[name] = tag.package_repo_hook_fn
             else:
                 package_repo_hook_fn.pop(name, None)
+            if tag.package_repo_hook_subdir:
+                package_repo_hook_subdir[name] = tag.package_repo_hook_subdir
+            else:
+                package_repo_hook_subdir.pop(name, None)
 
             for pyproject_backend in tag.pyproject_backends:
                 if pyproject_backend in backend_to_rule and not module.is_root:
@@ -142,6 +147,7 @@ def _collect_registrations(modules, warn = _print_warn):
         sdist_hook_fn = sdist_hook_fn,
         package_repo_hook_bzl = package_repo_hook_bzl,
         package_repo_hook_fn = package_repo_hook_fn,
+        package_repo_hook_subdir = package_repo_hook_subdir,
         override_files = override_files,
     )
 
@@ -156,6 +162,7 @@ def _backends_impl(module_ctx):
         sdist_hook_fn = registry.sdist_hook_fn,
         package_repo_hook_bzl = registry.package_repo_hook_bzl,
         package_repo_hook_fn = registry.package_repo_hook_fn,
+        package_repo_hook_subdir = registry.package_repo_hook_subdir,
         override_files = registry.override_files,
     )
 
@@ -211,6 +218,10 @@ backends = module_extension(
                 "package_repo_hook_fn": attr.string(
                     doc = "Optional function name in package_repo_hook_bzl. Defaults to " +
                           "'<name>_package_repo_hook' (replacing '_build' suffix).",
+                ),
+                "package_repo_hook_subdir": attr.string(
+                    doc = "Optional subpackage directory (e.g. '_cargo') whose targets emitted by " +
+                          "package_repo_hook_bzl in the workspace repo should be aliased in thin repos.",
                 ),
                 "override_json": attr.label(
                     doc = "Optional label of a generated JSON file containing overrides for this backend.",
