@@ -236,14 +236,30 @@ def translate_pdm(project_dict, lock_dict, lock_model):
         # Read package-level markers (PDM multi-target lock files)
         package_markers = lock_pkg.get("marker", "")
 
-        # Parse dependencies as PEP 508 requirement strings
+        # Parse dependencies as PEP 508 requirement strings.
+        # PDM models extra combinations as separate [[package]] entries with
+        # `extras = [...]` whose dependencies omit `; extra == "..."` markers
+        # and include a self-edge to the base package. Synthesize the extra
+        # marker (when not already present) and drop the base self-edge so
+        # merging into the base package keeps bare `pkg` free of extra deps.
+        norm_extras = list({canonicalize_name(e): True for e in pkg_extras}.keys())
+        extra_marker = " or ".join(['extra == "{}"'.format(e) for e in norm_extras])
         deps = []
         for dep_str in lock_pkg.get("dependencies", []):
             parsed = parse_pep508_requirement(dep_str)
+            if norm_extras and parsed.name == name and not parsed.extras:
+                continue
+            dep_marker = parsed.marker
+            if extra_marker and "extra" not in dep_marker:
+                if dep_marker:
+                    wrapped_extra = "({})".format(extra_marker) if len(norm_extras) > 1 else extra_marker
+                    dep_marker = "({}) and {}".format(dep_marker, wrapped_extra)
+                else:
+                    dep_marker = extra_marker
             deps.append({
                 "name": parsed.name,
                 "specifier": parsed.specifier,
-                "marker": parsed.marker,
+                "marker": dep_marker,
                 "extras": parsed.extras if parsed.extras else [None],
             })
 
@@ -274,7 +290,7 @@ def translate_pdm(project_dict, lock_dict, lock_model):
             "dependencies": deps,
             "files": files,
             "is_local": is_local,
-            "extras": [canonicalize_name(e) for e in pkg_extras],
+            "extras": norm_extras,
             "markers": package_markers,
         }
         if lock_pkg.get("subdirectory"):

@@ -538,6 +538,63 @@ def _test_pdm_forked_transitive_dep(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
     analysis_test(name = name, target = name + "_subject", impl = _test_pdm_forked_transitive_dep_impl)
 
+# --- test_pdm_extra_package_entry_markers ---
+
+# buildifier: disable=unused-variable
+def _test_pdm_extra_package_entry_markers_impl(env, target):
+    project = _minimal_project(deps = ["foo[bar,qux]==1.0", "foo[solo]==1.0"])
+    lock = _minimal_lock([
+        {
+            "name": "foo",
+            "version": "1.0",
+            "dependencies": ["base-dep==1.0"],
+            "files": [_whl("foo-1.0-py3-none-any.whl", "f")],
+        },
+        {
+            "name": "foo",
+            "version": "1.0",
+            "extras": ["solo"],
+            "dependencies": [
+                "foo==1.0",
+                "solo-dep==1.0",
+                'solo-win==1.0 ; sys_platform == "win32"',
+            ],
+            "files": [_whl("foo-1.0-py3-none-any.whl", "f")],
+        },
+        {
+            "name": "foo",
+            "version": "1.0",
+            "extras": ["bar", "qux"],
+            "dependencies": [
+                "foo==1.0",
+                "combo-dep==1.0",
+                'combo-py310==1.0 ; python_version >= "3.10"',
+                'explicit-bar==1.0 ; extra == "bar"',
+            ],
+            "files": [_whl("foo-1.0-py3-none-any.whl", "f")],
+        },
+        {"name": "base-dep", "version": "1.0", "files": [_whl("base_dep-1.0-py3-none-any.whl", "1")]},
+        {"name": "solo-dep", "version": "1.0", "files": [_whl("solo_dep-1.0-py3-none-any.whl", "2")]},
+        {"name": "solo-win", "version": "1.0", "files": [_whl("solo_win-1.0-py3-none-any.whl", "3")]},
+        {"name": "combo-dep", "version": "1.0", "files": [_whl("combo_dep-1.0-py3-none-any.whl", "4")]},
+        {"name": "combo-py310", "version": "1.0", "files": [_whl("combo_py310-1.0-py3-none-any.whl", "5")]},
+        {"name": "explicit-bar", "version": "1.0", "files": [_whl("explicit_bar-1.0-py3-none-any.whl", "6")]},
+    ])
+    result = translate_pdm(project, lock, _lock_model())
+    edges = {d["name"]: d["marker"] for d in result["packages"]["foo@1.0"]["dependencies"]}
+    env.expect.that_dict(edges).contains_exactly({
+        "base-dep": "",
+        "solo-dep": 'extra == "solo"',
+        "solo-win": '(sys_platform == "win32") and extra == "solo"',
+        "combo-dep": 'extra == "bar" or extra == "qux"',
+        "combo-py310": '(python_version >= "3.10") and (extra == "bar" or extra == "qux")',
+        "explicit-bar": 'extra == "bar"',
+    })
+
+def _test_pdm_extra_package_entry_markers(name):
+    util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
+    analysis_test(name = name, target = name + "_subject", impl = _test_pdm_extra_package_entry_markers_impl)
+
 # --- Test suite ---
 
 def pdm_translator_test_suite(name):
@@ -559,5 +616,6 @@ def pdm_translator_test_suite(name):
             _test_pdm_transitive_include_group_and_root_extra_pin,
             _test_pdm_multi_project_workspace,
             _test_pdm_forked_transitive_dep,
+            _test_pdm_extra_package_entry_markers,
         ],
     )
