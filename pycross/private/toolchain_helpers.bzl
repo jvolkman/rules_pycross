@@ -182,6 +182,9 @@ def _pycross_toolchain_repo_impl(rctx):
         toolchains_build_sections.append(_TOOLCHAIN_TEMPLATE.format(**{k: repr(v) for k, v in tc.items()}))
 
     rctx.file(rctx.path("BUILD.bazel"), "\n".join(toolchains_build_sections))
+    if hasattr(rctx, "repo_metadata"):
+        return rctx.repo_metadata(reproducible = True)
+    return None
 
 pycross_toolchains_repo = repository_rule(
     implementation = _pycross_toolchain_repo_impl,

@@ -309,22 +309,21 @@ def url_decode_filename(filename):
     Returns:
         The decoded filename string.
     """
-    result = ""
+    if "%" not in filename:
+        return filename
+    parts = []
     i = 0
-    for _ in range(len(filename)):
-        if i >= len(filename):
+    n = len(filename)
+    for _ in range(n):
+        if i >= n:
             break
-        if filename[i] == "%" and i + 2 < len(filename):
+        if filename[i] == "%" and i + 2 < n:
             hex_str = filename[i + 1:i + 3].upper()
             replacement = _URL_HEX_MAP.get(hex_str)
             if replacement:
-                result += replacement
+                parts.append(replacement)
                 i += 3
-            else:
-                # Unknown %XX sequence, keep literal
-                result += filename[i]
-                i += 1
-        else:
-            result += filename[i]
-            i += 1
-    return result
+                continue
+        parts.append(filename[i])
+        i += 1
+    return "".join(parts)

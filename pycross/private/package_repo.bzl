@@ -494,6 +494,10 @@ def _package_repo_impl(rctx):
         for path, contents in hook_files.items():
             rctx.file(path, "\n".join(contents))
 
+    if hasattr(rctx, "repo_metadata"):
+        return rctx.repo_metadata(reproducible = True)
+    return None
+
 package_repo = repository_rule(
     implementation = _package_repo_impl,
     attrs = {

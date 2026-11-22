@@ -1258,6 +1258,10 @@ pycross_transitioning_file_proxy = rule(
 
     rctx.file("pin_versions.json", json.encode(pin_versions))
 
+    if hasattr(rctx, "repo_metadata"):
+        return rctx.repo_metadata(reproducible = True)
+    return None
+
 def _packages_bzl(grouped_pins, packages):
     """Render `_packages.bzl` metadata for all packages in a thin repo."""
     packages_lines = [

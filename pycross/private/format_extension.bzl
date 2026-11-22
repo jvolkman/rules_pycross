@@ -243,7 +243,7 @@ def _normalize_settings(settings, flags):
         result[key] = value
     return result
 
-def _resolve_lock_inline(module_ctx, lock_info, lock_model, workspace_packages, repo_create_model_fn):
+def _resolve_lock_inline(module_ctx, lock_info, lock_model, workspace_packages, repo_create_model_fn, toml_cache = None):
     """Run translator + resolver inline within module_ctx.
 
     Args:
@@ -252,6 +252,7 @@ def _resolve_lock_inline(module_ctx, lock_info, lock_model, workspace_packages, 
         lock_model: The lock model struct.
         workspace_packages: Dict of workspace_name -> {pkg_name -> normalized_tag}.
         repo_create_model_fn: The format-specific translator function.
+        toml_cache: Optional dict caching decoded TOML files by label.
 
     Returns:
         A dict containing the resolved lock data (packages, pins, remote_files, etc.).
@@ -265,6 +266,7 @@ def _resolve_lock_inline(module_ctx, lock_info, lock_model, workspace_packages, 
         extra_project_files,
         lock_file,
         lock_model,
+        toml_cache = toml_cache,
     )
 
     # Compute annotations from package tags.
@@ -365,6 +367,7 @@ def make_format_extension(
                 )
                 member_tags.append(struct(tag = member_tag, module = module))
 
+        toml_cache = {}
         process_workspaces(
             module_ctx,
             lock_owners,
@@ -375,6 +378,7 @@ def make_format_extension(
             discover_members_fn,
             model_type,
             root_direct_deps,
+            toml_cache = toml_cache,
         )
 
         # Track which workspaces each module declares for validation
@@ -419,6 +423,7 @@ def make_format_extension(
 
         # Run translators + resolver inline for each lock repo.
         resolved_locks = {}
+        resolved_locks_json = {}
         all_locks = {}
 
         for repo_name, repo_info in lock_repos.items():
@@ -428,14 +433,21 @@ def make_format_extension(
                 lock_model_structs[repo_name],
                 workspace_packages,
                 repo_create_model_fn,
+                toml_cache = toml_cache,
             )
             resolved_locks[repo_info.repo_name] = resolved_data
+
+            # package_repo and thin_package_repo don't read remote_files; omit it
+            # from the serialized JSON and reuse the encoded string for both.
+            repo_lock_data = {k: v for k, v in resolved_data.items() if k != "remote_files"}
+            encoded_lock = json.encode(repo_lock_data)
+            resolved_locks_json[repo_info.repo_name] = encoded_lock
 
             # Write the resolved lock JSON to a repo.
             lock_repo_name = "{}_lock_json".format(repo_info.repo_name)
             json_file_repo(
                 name = lock_repo_name,
-                content = json.encode(resolved_data),
+                content = encoded_lock,
             )
             all_locks[repo_info.repo_name] = "@{}//:data.json".format(lock_repo_name)
 
@@ -468,6 +480,7 @@ def make_format_extension(
             repo_platforms = repo_platforms,
             workspace_pypi_indexes = workspace_pypi_indexes,
             resolved_locks = resolved_locks,
+            resolved_locks_json = resolved_locks_json,
         )
 
         if bazel_features.external_deps.extension_metadata_has_reproducible:

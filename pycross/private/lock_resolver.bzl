@@ -118,9 +118,12 @@ def _collect_package_annotations(annotations_data, versions_by_name, all_package
 
     wildcard_only_keys = {}
     if wildcard_annotation:
+        resolved_wildcard = None
         for pkg_key in all_package_keys:
             if pkg_key not in specific_keys:
-                annotations[pkg_key] = _apply_annotation(wildcard_annotation, versions_by_name, all_package_keys)
+                if resolved_wildcard == None:
+                    resolved_wildcard = _apply_annotation(wildcard_annotation, versions_by_name, all_package_keys)
+                annotations[pkg_key] = resolved_wildcard
                 wildcard_only_keys[pkg_key] = True
 
     return annotations, wildcard_only_keys
@@ -215,14 +218,12 @@ def _create_package_resolver(pkg_key, pkg, ann, default_extra_build_tools, conte
                 extra_build_tools.append(dep_key)
                 all_dependency_keys.append(dep_key)
 
-    dependencies = []
     marker_dependencies = []
     for dep in pkg.get("dependencies", []):
         dep_name = dep["name"]
         if dep_name in ann_ignore_deps:
             continue
         dep_key = "{}@{}".format(dep_name, dep["version"])
-        dependencies.append(dep)
         marker_dependencies.append({
             "key": dep_key,
             "marker": dep.get("marker", ""),
@@ -264,14 +265,9 @@ def _create_package_resolver(pkg_key, pkg, ann, default_extra_build_tools, conte
     availability_markers = context.root_dependency_markers.get(root_pin_name, [])
 
     resolved_pkg = {
-        "key": pkg_key,
         "name": pkg_name,
         "version": pkg_version,
-        "extra": pkg_extra,
-        "python_versions": pkg.get("python_versions", ""),
-        "dependencies": dependencies,
         "marker_dependencies": marker_dependencies,
-        "files": pkg.get("files", []),
         "sdist_file": sdist_file,
         "build_target": build_target,
         "build_tools_repo": ann.build_tools_repo if ann else None,
@@ -620,7 +616,7 @@ def resolve(
     )
 
     lock_model_packages = lock_model_data.get("packages", {})
-    all_package_keys = lock_model_packages.keys()
+    all_package_keys = lock_model_packages
 
     versions_by_name = {}
     locked_versions_by_simple_name = {}

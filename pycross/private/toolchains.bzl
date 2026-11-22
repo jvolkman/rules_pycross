@@ -46,6 +46,12 @@ toolchains = module_extension(
     },
 )
 
+def _empty_repo_impl(rctx):
+    rctx.file("BUILD.bazel")
+    if hasattr(rctx, "repo_metadata"):
+        return rctx.repo_metadata(reproducible = True)
+    return None
+
 _empty_repo = repository_rule(
-    implementation = lambda repository_ctx: repository_ctx.file("BUILD.bazel"),
+    implementation = _empty_repo_impl,
 )

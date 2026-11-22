@@ -116,6 +116,9 @@ bzl_library(
 )
 """)
     rctx.file("REPO.bazel", "")
+    if hasattr(rctx, "repo_metadata"):
+        return rctx.repo_metadata(reproducible = True)
+    return None
 
 backend_registry_repo = repository_rule(
     implementation = _backend_registry_repo_impl,

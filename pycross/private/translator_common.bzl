@@ -5,8 +5,7 @@ Used by PDM, Poetry, UV, and Pylock translators.
 """
 
 load("@pypackaging.bzl", "pypackaging")
-load("@toml.bzl//toml:toml.bzl", "decode")
-load(":lock_common.bzl", "sibling_project_file")
+load(":lock_common.bzl", "read_toml_cached", "sibling_project_file")
 
 def canonicalize_name(name):
     """Canonicalize a Python package name per PEP 503."""
@@ -90,30 +89,27 @@ def sha256_from_string(s):
         result = result + s
     return result[:64]
 
-def _read_project_dict(rctx, extra_project_files, lock_file, lock_model):
+def _read_project_dict(rctx, extra_project_files, lock_file, lock_model, toml_cache = None):
     """Select and decode the relevant pyproject.toml as a dict."""
     sibling_label = sibling_project_file(lock_file)
     if not extra_project_files:
-        project_path = rctx.path(sibling_label)
-        return decode(rctx.read(project_path)) if project_path.exists else {}
+        return read_toml_cached(rctx, sibling_label, toml_cache) or {}
 
     projects = getattr(lock_model, "projects", [])
     if len(projects) == 1 and projects[0] != "*":
         target_name = canonicalize_name(projects[0])
         for f in extra_project_files:
-            path = rctx.path(f)
-            if not path.exists:
+            p_dict = read_toml_cached(rctx, f, toml_cache)
+            if p_dict == None:
                 continue
-            p_dict = decode(rctx.read(path))
             p_name = p_dict.get("project", {}).get("name")
             if p_name and canonicalize_name(p_name) == target_name:
                 return p_dict
 
     project_file = sibling_label if sibling_label in extra_project_files else extra_project_files[0]
-    project_path = rctx.path(project_file)
-    return decode(rctx.read(project_path)) if project_path.exists else {}
+    return read_toml_cached(rctx, project_file, toml_cache) or {}
 
-def read_project_and_lock(rctx, extra_project_files, lock_file, lock_model, lock_label_hint):
+def read_project_and_lock(rctx, extra_project_files, lock_file, lock_model, lock_label_hint, toml_cache = None):
     """Select and decode pyproject.toml and the lock file.
 
     Args:
@@ -122,17 +118,17 @@ def read_project_and_lock(rctx, extra_project_files, lock_file, lock_model, lock
         lock_file: The lock file label.
         lock_model: Struct with lock model attributes (including optional `projects`).
         lock_label_hint: Human-readable lock file name for error messages (e.g. "uv.lock").
+        toml_cache: Optional dict caching decoded TOML files by label.
 
     Returns:
         A tuple of (project_dict, lock_dict).
     """
-    project_dict = _read_project_dict(rctx, extra_project_files, lock_file, lock_model)
+    project_dict = _read_project_dict(rctx, extra_project_files, lock_file, lock_model, toml_cache)
 
-    lock_path = rctx.path(lock_file)
-    if not lock_path.exists:
+    lock_dict = read_toml_cached(rctx, lock_file, toml_cache)
+    if lock_dict == None:
         fail("Lock file not found: {}. Ensure {} exists at the expected location.".format(lock_file, lock_label_hint))
 
-    lock_dict = decode(rctx.read(lock_path))
     return project_dict, lock_dict
 
 def detect_package_marker_forks(packages, pinned_package_specs):
@@ -212,24 +208,44 @@ def _package_key_str(name, version):
     """Format a package key string."""
     return "{}@{}".format(name, version)
 
-def _specifier_contains_version(specifier_str, version_str):
-    """Check if a PEP 440 specifier set (or ||-separated union) contains a version.
+def _is_simple_arbitrary_eq(spec):
+    if not spec.startswith("===") or "," in spec or "||" in spec:
+        return False
+    val = spec[3:].strip()
+    if not val:
+        return False
+    return " " not in val and "\t" not in val and ";" not in val and ")" not in val
 
-    Args:
-        specifier_str: The specifier string (e.g. ">=1.0,<2.0" or "<2.0 || >2.0") or "*" or "".
-        version_str: The version string (e.g. "1.5.0").
+def _parse_specifier_parts(specifier_str):
+    """Pre-parse a specifier string (possibly with `||` unions) once for repeated checks.
 
-    Returns:
-        True if the version satisfies the specifier.
+    Returns None when the specifier matches any version, otherwise a list of
+    `("===", lower_ver)` or `("set", parsed_spec_set)` tuples.
     """
     if not specifier_str or specifier_str == "*":
-        return True
+        return None
+    if _is_simple_arbitrary_eq(specifier_str):
+        return [("===", specifier_str[3:].strip().lower())]
+    parts = []
     for part in specifier_str.split("||"):
         part = part.strip()
         if not part or part == "*":
-            return True
-        spec_set = pypackaging.specifiers.parse_set(part)
-        if pypackaging.specifiers.set_contains(spec_set, version_str):
+            return None
+        if _is_simple_arbitrary_eq(part):
+            parts.append(("===", part[3:].strip().lower()))
+        else:
+            parts.append(("set", pypackaging.specifiers.parse_set(part)))
+    return parts
+
+def _parsed_specifier_contains_version(parsed_parts, version_str):
+    """Check whether version_str satisfies pre-parsed specifier parts."""
+    if parsed_parts == None:
+        return True
+    for kind, matcher in parsed_parts:
+        if kind == "===":
+            if version_str.lower() == matcher:
+                return True
+        elif pypackaging.specifiers.set_contains(matcher, version_str):
             return True
     return False
 
@@ -347,6 +363,13 @@ def resolve_lock_graph(packages, pinned_package_specs, requires_python, strict_d
             reverse = True,
         )
 
+    # Precompute canonicalized extras sets per package key to avoid re-allocating in inner loops.
+    cand_extras_by_key = {
+        pkg_key: {canonicalize_name(e): True for e in pkg.get("extras", [])}
+        for pkg_key, pkg in distinct_packages.items()
+        if pkg.get("extras")
+    }
+
     # Resolve dependencies
     resolved_deps = {}  # pkg_key -> list of resolved dep dicts
 
@@ -363,17 +386,21 @@ def resolve_lock_graph(packages, pinned_package_specs, requires_python, strict_d
             if not dep_extras:
                 dep_extras = [None]
 
+            candidates = packages_by_name.get(dep_name, [])
+            parsed_spec = _parse_specifier_parts(dep_specifier) if candidates else None
+
             for req_extra in dep_extras:
-                display_name = _dependency_name_str(dep_name, canonicalize_name(req_extra) if req_extra else "")
+                norm_req_extra = canonicalize_name(req_extra) if req_extra else ""
+                display_name = _dependency_name_str(dep_name, norm_req_extra)
 
                 # Find matching package
-                candidates = packages_by_name.get(dep_name, [])
                 found = False
                 for cand in candidates:
-                    cand_extras = [canonicalize_name(e) for e in cand.get("extras", [])]
-                    if req_extra and canonicalize_name(req_extra) not in cand_extras:
-                        continue
-                    if not _specifier_contains_version(dep_specifier, cand["version"]):
+                    if norm_req_extra:
+                        cand_key = _package_key_str(cand["name"], cand["version"])
+                        if norm_req_extra not in cand_extras_by_key.get(cand_key, {}):
+                            continue
+                    if not _parsed_specifier_contains_version(parsed_spec, cand["version"]):
                         continue
                     pkg_resolved.append({
                         "name": display_name,
@@ -402,9 +429,10 @@ def resolve_lock_graph(packages, pinned_package_specs, requires_python, strict_d
         pin_packages = pin_packages or []
         pinned_keys[pin_name] = {}
         for constraint, pin_specifier in pin_specs.items():
+            parsed_pin_spec = _parse_specifier_parts(pin_specifier) if pin_packages else None
             found = False
             for pin_pkg in pin_packages:
-                if not _specifier_contains_version(pin_specifier, pin_pkg["version"]):
+                if not _parsed_specifier_contains_version(parsed_pin_spec, pin_pkg["version"]):
                     continue
                 pinned_keys[pin_name][constraint] = _package_key_str(key_name or pin_pkg["name"], pin_pkg["version"])
                 found = True
