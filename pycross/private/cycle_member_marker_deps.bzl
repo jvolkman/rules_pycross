@@ -24,11 +24,7 @@ Usage in generated lock.bzl:
 
 load("//pycross/private:cycle_dep_needed.bzl", "pycross_cycle_dep_needed")
 load("//pycross/private:proxy.bzl", "pycross_library_proxy")
-load("//pycross/private:util.bzl", "marker_evaluator_name", "parse_package_key")
-
-def _sanitize(name):
-    """Sanitize a package key for use in target names."""
-    return name.replace("@", "_").replace(".", "_").replace("-", "_").replace("[", "_").replace("]", "_")
+load("//pycross/private:util.bzl", "marker_evaluator_name", "parse_package_key", "sanitize_name")
 
 def find_unconditional_deps(member, other_members, edges):
     """Finds all members unconditionally reachable from member within the cycle.
@@ -317,8 +313,8 @@ def plan_cycle_member_deps(member, edges):
             marker_evaluator_name(single_marker, single_extra) + "_match" if single_gate else None
         )
         pair_name = "_cycle_needed_{}_{}".format(
-            _sanitize(source),
-            _sanitize(representative),
+            sanitize_name(source),
+            sanitize_name(representative),
         )
         conditional_groups.append(struct(
             representative = representative,

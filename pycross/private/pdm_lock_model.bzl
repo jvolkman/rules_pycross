@@ -17,7 +17,7 @@ load(
     "resolve_lock_graph",
     "sha256_from_string",
 )
-load(":util.bzl", "url_decode_filename")
+load(":util.bzl", "url_filename")
 
 def _parse_file_info(file_info, package_name, package_version):
     """Parse a PDM lock file entry into a file dict.
@@ -35,16 +35,7 @@ def _parse_file_info(file_info, package_name, package_version):
         urls = []
     elif "url" in file_info:
         url = file_info["url"]
-
-        # Extract filename from URL path
-        path_part = url
-        if "?" in path_part:
-            path_part = path_part.split("?")[0]
-        if "#" in path_part:
-            path_part = path_part.split("#")[0]
-        filename = path_part.split("/")[-1]
-
-        filename = url_decode_filename(filename)
+        filename = url_filename(url)
         urls = [url]
     else:
         fail("PDM file entry has no 'file' or 'url' member")

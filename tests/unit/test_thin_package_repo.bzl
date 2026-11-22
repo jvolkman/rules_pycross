@@ -17,6 +17,8 @@ load(
     "packages_bzl_for_testing",
     "pin_build_for_testing",
     "pin_versions_for_testing",
+    "render_maybe_build_for_testing",
+    "render_transition_bzl_for_testing",
     "requirements_bzl_for_testing",
     "transition_settings_for_testing",
     "variant_fallbacks_for_testing",
@@ -24,7 +26,7 @@ load(
 )
 
 # buildifier: disable=bzl-visibility
-load("//pycross/private:util.bzl", "coerce_transition_values", "marker_evaluator_name", "split_setting_value")
+load("//pycross/private:util.bzl", "coerce_transition_values", "marker_evaluator_name", "split_setting_value", "url_filename")
 
 # ── Test: no platform → non-transitioning proxies ──────────────────
 
@@ -34,7 +36,6 @@ def _test_pin_build_no_transition_impl(env, target):
     res = pin_build_for_testing(
         target_name = "numpy",
         pin_target_dict = {"": "numpy@1.26.0"},
-        package = {},
         workspace_repo = "my_workspace",
     ).build
 
@@ -64,7 +65,6 @@ def _test_pin_build_with_platform_impl(env, target):
     res = pin_build_for_testing(
         target_name = "numpy",
         pin_target_dict = {"": "numpy@1.26.0"},
-        package = {},
         workspace_repo = "my_workspace",
         target_platform = "@my//platform:linux",
     ).build
@@ -94,13 +94,11 @@ def _test_pin_build_transition_loads_impl(env, target):
     res_no_platform = pin_build_for_testing(
         target_name = "foo",
         pin_target_dict = {"": "foo@1.0"},
-        package = {},
         workspace_repo = "ws",
     ).build
     res_with_platform = pin_build_for_testing(
         target_name = "foo",
         pin_target_dict = {"": "foo@1.0"},
-        package = {},
         workspace_repo = "ws",
         target_platform = "//:my_platform",
     ).build
@@ -128,7 +126,6 @@ def _test_pin_build_extras_with_platform_impl(env, target):
     res = pin_build_for_testing(
         target_name = "numpy",
         pin_target_dict = {"": "numpy@1.26.0"},
-        package = {},
         workspace_repo = "my_workspace",
         extras_dict = {"gpu": {"": "numpy[gpu]@1.26.0"}},
         target_platform = "@my//platform:linux",
@@ -157,7 +154,7 @@ def _test_pin_build_sdist_with_platform_impl(env, target):
     res = pin_build_for_testing(
         target_name = "numpy",
         pin_target_dict = {"": "numpy@1.26.0"},
-        package = {"sdist_file": {"key": "numpy_sdist"}},
+        sdist_target_dict = {"": "numpy@1.26.0"},
         workspace_repo = "my_workspace",
         target_platform = "@my//platform:linux",
     ).build
@@ -187,7 +184,6 @@ def _test_pin_build_variants_with_platform_impl(env, target):
             "cpu": "numpy@1.26.0",
             "gpu": "numpy@1.26.0+gpu",
         },
-        package = {},
         workspace_repo = "my_workspace",
         has_aggregated_variant = True,
         extras_dict = {"extra1": {"cpu": "numpy[extra1]@1.26.0", "gpu": "numpy[extra1]@1.26.0+gpu"}},
@@ -233,7 +229,6 @@ def _test_pin_build_basic_structure_impl(env, target):
     res = pin_build_for_testing(
         target_name = "requests",
         pin_target_dict = {"": "requests@2.31.0"},
-        package = {},
         workspace_repo = "ws",
     ).build
 
@@ -271,7 +266,7 @@ def _test_pin_build_with_transition_bzl_impl(env, target):
     result = pin_build_for_testing(
         target_name = "numpy",
         pin_target_dict = {"": "numpy@1.26.0"},
-        package = {"sdist_file": {"key": "numpy_sdist"}},
+        sdist_target_dict = {"": "numpy@1.26.0"},
         workspace_repo = "my_workspace",
         extras_dict = {"gpu": {"": "numpy[gpu]@1.26.0"}},
         target_platform = "//:_internal_platform",
@@ -313,7 +308,6 @@ def _test_pin_build_transition_bzl_variants_impl(env, target):
             "cpu": "numpy@1.26.0",
             "gpu": "numpy@1.26.0+gpu",
         },
-        package = {},
         workspace_repo = "my_workspace",
         has_aggregated_variant = True,
         extras_dict = {"extra1": {"cpu": "numpy[extra1]@1.26.0", "gpu": "numpy[extra1]@1.26.0+gpu"}},
@@ -543,7 +537,6 @@ def _test_pin_build_multi_branch_maybe_impl(env, target):
             "res_foo_1_0": "foo@1.0",
             "res_foo_2_0": "foo@2.0",
         },
-        package = {},
         workspace_repo = "ws",
         extras_dict = {
             "bar": {
@@ -655,7 +648,6 @@ def _test_pin_build_aggregated_only_branches_with_extras_impl(env, target):
             "res_foo_1_0": "foo@1.0",
             "res_foo_2_0": "foo@2.0",
         },
-        package = {},
         workspace_repo = "ws",
         has_aggregated_variant = True,
         aggregated_keys = {"foo@1.0": True},
@@ -688,7 +680,6 @@ def _test_pin_build_multi_branch_sdist_impl(env, target):
     res = pin_build_for_testing(
         target_name = "foo",
         pin_target_dict = pin_target_dict,
-        package = packages["foo@1.0"],
         workspace_repo = "ws",
         sdist_target_dict = {"res_foo_2_0": "foo@2.0"},
     ).build
@@ -795,7 +786,6 @@ def _test_pin_build_multi_branch_no_match_fallback_impl(env, target):
             "res_setuptools_68_0_0": "setuptools@68.0.0",
             "res_setuptools_75_1_0": "setuptools@75.1.0",
         },
-        package = {},
         workspace_repo = "ws",
     ).build
 
@@ -821,7 +811,6 @@ def _test_pin_build_maybe_with_transition_impl(env, target):
     single = pin_build_for_testing(
         target_name = "pywin32",
         pin_target_dict = {"": "pywin32@312"},
-        package = {},
         workspace_repo = "ws",
         target_platform = "@my//platform:linux",
         maybe_available_keys = ["pywin32@312"],
@@ -840,7 +829,6 @@ def _test_pin_build_maybe_with_transition_impl(env, target):
             "res_foo_1_0": "foo@1.0",
             "res_foo_2_0": "foo@2.0",
         },
-        package = {},
         workspace_repo = "ws",
         extras_dict = {
             "bar": {
@@ -895,7 +883,6 @@ def _test_pin_build_no_variant_fallback_impl(env, target):
             "extra_variant-a": "typing-extensions@4.11.0",
             "extra_variant-b": "typing-extensions@4.12.0",
         },
-        package = {},
         workspace_repo = "ws",
         no_variant_fallbacks = no_variant_fallbacks,
         maybe_available_keys = ["typing-extensions@4.11.0"],
@@ -1008,7 +995,6 @@ def _test_pin_build_overlapping_sets_impl(env, target):
     res = pin_build_for_testing(
         target_name = "iniconfig",
         pin_target_dict = {"extra_cpu": "iniconfig@1.1.1", "extra_gpu": "iniconfig@2.0.0"},
-        package = {},
         workspace_repo = "ws",
         no_variant_fallbacks = fallbacks,
     ).build
@@ -1132,7 +1118,6 @@ def _test_pin_build_member_availability_markers_impl(env, target):
     wheel_only = pin_build_for_testing(
         target_name = "native_pkg",
         pin_target_dict = {"": "native-pkg@1.0"},
-        package = {},
         workspace_repo = "ws",
         maybe_available_keys = ["native-pkg@1.0"],
         packages = {
@@ -1148,7 +1133,6 @@ def _test_pin_build_member_availability_markers_impl(env, target):
     marked = pin_build_for_testing(
         target_name = "linux_only",
         pin_target_dict = {"": "linux-only@1.0"},
-        package = {},
         workspace_repo = "ws",
         maybe_available_keys = ["linux-only@1.0"],
         packages = {
@@ -1165,7 +1149,6 @@ def _test_pin_build_member_availability_markers_impl(env, target):
     combined = pin_build_for_testing(
         target_name = "combo",
         pin_target_dict = {"": "combo@1.0"},
-        package = {},
         workspace_repo = "ws",
         extras_dict = {"ext": {"": "combo[ext]@1.0"}},
         maybe_available_keys = ["combo@1.0"],
@@ -1192,7 +1175,6 @@ def _test_pin_build_member_availability_markers_impl(env, target):
     untransitioned = pin_build_for_testing(
         target_name = "combo",
         pin_target_dict = {"": "combo@1.0"},
-        package = {},
         workspace_repo = "ws",
         extras_dict = {"ext": {"": "combo[ext]@1.0"}},
         maybe_available_keys = ["combo@1.0"],
@@ -1483,7 +1465,6 @@ def _test_partial_fork_maybe_and_testonly_impl(env, target):
     res = pin_build_for_testing(
         target_name = "tomli",
         pin_target_dict = {"res_py311": "tomli@2.0.1"},
-        package = packages["tomli@2.0.1"],
         workspace_repo = "ws",
         extras_dict = {"dev": {"res_py311": "tomli[dev]@2.0.1"}},
         testonly = True,
@@ -1501,7 +1482,6 @@ def _test_partial_fork_maybe_and_testonly_impl(env, target):
     single_testonly = pin_build_for_testing(
         target_name = "pywin32",
         pin_target_dict = {"": "pywin32@312"},
-        package = {},
         workspace_repo = "ws",
         maybe_available_keys = ["pywin32@312"],
         testonly = True,
@@ -1513,7 +1493,6 @@ def _test_partial_fork_maybe_and_testonly_impl(env, target):
     multi_testonly = pin_build_for_testing(
         target_name = "foo",
         pin_target_dict = {"res_1": "foo@1.0", "res_2": "foo@2.0"},
-        package = {},
         workspace_repo = "ws",
         maybe_available_keys = ["foo@1.0"],
         testonly = True,
@@ -1525,7 +1504,6 @@ def _test_partial_fork_maybe_and_testonly_impl(env, target):
     trans_partial = pin_build_for_testing(
         target_name = "tomli",
         pin_target_dict = {"res_py311": "tomli@2.0.1"},
-        package = packages["tomli@2.0.1"],
         workspace_repo = "ws",
         target_platform = "@my//platform:linux",
         testonly = True,
@@ -1581,7 +1559,6 @@ def _test_pin_build_emits_empty_brackets_when_aggregated_without_extras_impl(env
     result = pin_build_for_testing(
         "foo",
         {"": "foo@1.0"},
-        {},
         "ws__pkgs",
         has_aggregated_variant = True,
         extras_dict = {},
@@ -1610,6 +1587,37 @@ def _test_pin_build_emits_empty_brackets_when_aggregated_without_extras(name):
         impl = _test_pin_build_emits_empty_brackets_when_aggregated_without_extras_impl,
     )
 
+def _test_render_transition_bzl_and_maybe_build_impl(env, _target):
+    bzl = render_transition_bzl_for_testing(
+        "pypi",
+        ["--@rules_python//python/config_settings:python_version=3.12"],
+        {},
+        {"@ws//_lock:_pin_set": "extra_a"},
+    )
+    env.expect.that_str(bzl).contains('load("@rules_pycross//pycross/private:proxy.bzl", "make_file_proxy_rule", "make_library_proxy_rule")')
+    env.expect.that_str(bzl).contains("pycross_transitioning_library_proxy = make_library_proxy_rule(cfg = _repo_transition)")
+    env.expect.that_str(bzl).contains("pycross_transitioning_file_proxy = make_file_proxy_rule(cfg = _repo_transition)")
+
+    maybe = render_maybe_build_for_testing(
+        {"pywin32_312": ("pywin32@312", "@ws//_lock:pywin32@312")},
+        {"pywin32@312": {"wheel_candidates": [{"filename": "pywin32-312-cp312-cp312-win_amd64.whl"}]}},
+        "ws",
+    )
+    env.expect.that_str(maybe).contains('"//conditions:default": "//:_empty_library",')
+    env.expect.that_bool("py_library(" not in maybe).equals(True)
+
+    env.expect.that_str(url_filename("https://example.com/files/torch-2.5.0%2Bcu124-cp312-cp312-linux_x86_64.whl?token=abc#sha256=dead")).equals(
+        "torch-2.5.0+cu124-cp312-cp312-linux_x86_64.whl",
+    )
+
+def _test_render_transition_bzl_and_maybe_build(name):
+    util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
+    analysis_test(
+        name = name,
+        target = name + "_subject",
+        impl = _test_render_transition_bzl_and_maybe_build_impl,
+    )
+
 def thin_package_repo_test_suite(name):
     test_suite(
         name = name,
@@ -1624,6 +1632,7 @@ def thin_package_repo_test_suite(name):
             _test_partial_fork_maybe_and_testonly,
             _test_requirement_extra_canon_and_extras_only_metadata,
             _test_pin_build_emits_empty_brackets_when_aggregated_without_extras,
+            _test_render_transition_bzl_and_maybe_build,
             _test_transition_settings,
             _test_pin_build_overlapping_sets,
             _test_pin_build_no_transition,

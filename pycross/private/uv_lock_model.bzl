@@ -19,7 +19,7 @@ load(
     "resolve_lock_graph",
     "sha256_from_string",
 )
-load(":util.bzl", "url_decode_filename", "variant_item_qname")
+load(":util.bzl", "url_decode_filename", "url_filename", "variant_item_qname")
 
 def _parse_file_info(file_info, package_name, package_version, registry = None):
     """Parse a UV lock file entry into a file dict.
@@ -41,14 +41,7 @@ def _parse_file_info(file_info, package_name, package_version, registry = None):
         urls = []
     elif "url" in file_info:
         url = file_info["url"]
-
-        # Extract filename from URL path
-        path_part = url
-        if "?" in path_part:
-            path_part = path_part.split("?")[0]
-        if "#" in path_part:
-            path_part = path_part.split("#")[0]
-        filename = url_decode_filename(path_part.split("/")[-1])
+        filename = url_filename(url)
         urls = [url]
     elif "path" in file_info:
         fail("Package {}=={}: local path distributions ({}) are not supported".format(package_name, package_version, file_info["path"]))

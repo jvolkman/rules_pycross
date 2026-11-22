@@ -18,7 +18,7 @@ load(
     "resolution_marker_constraint_name",
     "sha256_from_string",
 )
-load(":util.bzl", "parse_package_key", "url_decode_filename")
+load(":util.bzl", "parse_package_key", "url_filename")
 
 _INVERT_OP = {
     "==": "!=",
@@ -579,7 +579,7 @@ def translate_pylock(lock_dict, project_dict, lock_model):
                 continue
             filename = artifact.get("name", artifact.get("file", ""))
             if not filename and "url" in artifact:
-                filename = url_decode_filename(artifact["url"].split("?")[0].split("#")[0].split("/")[-1])
+                filename = url_filename(artifact["url"])
             url = artifact.get("url", "")
             hash_str = artifact.get("hash", "")
             if hash_str and hash_str.startswith("sha256:"):

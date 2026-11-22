@@ -112,54 +112,64 @@ def _pycross_library_proxy_impl(ctx):
 
     return providers
 
+def make_library_proxy_rule(cfg = None, platform_mandatory = False, doc = None):
+    """Create a library proxy rule forwarding PyInfo and pycross providers with an optional transition.
+
+    Args:
+        cfg: Optional transition to attach to the `actual` attribute.
+        platform_mandatory: Whether the `platform` attribute is mandatory when `cfg` is set.
+        doc: Optional rule documentation string.
+
+    Returns:
+        A `rule` value.
+    """
+    actual_kwargs = {
+        "providers": [PyInfo],
+        "doc": (
+            "The primary target to forward providers from. When omitted, only merges `deps`." if cfg == None else "The primary target to forward providers from (analyzed under the transition)."
+        ),
+    }
+    if cfg != None:
+        actual_kwargs["mandatory"] = True
+        actual_kwargs["cfg"] = cfg
+    attrs = dict({
+        "actual": attr.label(**actual_kwargs),
+        "deps": attr.label_list(
+            default = [],
+            providers = [PyInfo],
+            doc = "Additional dependencies to merge into the PyInfo provider.",
+        ),
+    }, **PY_COMMON_ATTRS)
+    if cfg != None:
+        attrs["platform"] = attr.label(
+            mandatory = platform_mandatory,
+            doc = "The target platform to transition to.",
+        )
+        attrs["_allowlist_function_transition"] = attr.label(
+            default = Label("@bazel_tools//tools/allowlists/function_transition_allowlist"),
+        )
+    return rule(
+        implementation = _pycross_library_proxy_impl,
+        doc = doc or "Forwards PyInfo and pycross-specific providers from a target, optionally merging additional deps.",
+        attrs = attrs,
+        provides = [DefaultInfo, PyInfo],
+    )
+
 # Non-transitioning variant (used in lock repos and thin repos without platform).
-pycross_library_proxy = rule(
-    implementation = _pycross_library_proxy_impl,
+pycross_library_proxy = make_library_proxy_rule(
     doc = """Forwards PyInfo and pycross-specific providers from a target, optionally merging additional deps.
 
 Replaces py_library wrappers in generated lock repos, preserving PycrossExtractedWheelInfo,
 PycrossPackageInfo, and OutputGroupInfo that py_library would drop.""",
-    attrs = dict({
-        "actual": attr.label(
-            providers = [PyInfo],
-            doc = "The primary target to forward providers from. When omitted, only merges `deps`.",
-        ),
-        "deps": attr.label_list(
-            default = [],
-            providers = [PyInfo],
-            doc = "Additional dependencies to merge into the PyInfo provider.",
-        ),
-    }, **PY_COMMON_ATTRS),
-    provides = [DefaultInfo, PyInfo],
 )
 
 # Transitioning variant (used in thin repos with platform override).
-pycross_transitioning_library_proxy = rule(
-    implementation = _pycross_library_proxy_impl,
+pycross_transitioning_library_proxy = make_library_proxy_rule(
+    cfg = _platform_transition,
+    platform_mandatory = True,
     doc = """Like pycross_library_proxy, but applies a platform transition to the actual target.
 
 Used in thin package repos when a repo() tag specifies `platform` or `constraint_values`.""",
-    attrs = dict({
-        "actual": attr.label(
-            mandatory = True,
-            providers = [PyInfo],
-            cfg = _platform_transition,
-            doc = "The primary target to forward providers from (analyzed under the target platform).",
-        ),
-        "deps": attr.label_list(
-            default = [],
-            providers = [PyInfo],
-            doc = "Additional dependencies to merge into the PyInfo provider.",
-        ),
-        "platform": attr.label(
-            mandatory = True,
-            doc = "The target platform to transition to.",
-        ),
-        "_allowlist_function_transition": attr.label(
-            default = "@bazel_tools//tools/allowlists/function_transition_allowlist",
-        ),
-    }, **PY_COMMON_ATTRS),
-    provides = [DefaultInfo, PyInfo],
 )
 
 # ---- pycross_file_proxy ------------------------------------------------------
@@ -183,40 +193,50 @@ def _pycross_file_proxy_impl(ctx):
         providers.append(actual[PycrossUnsupportedWheelInfo])
     return providers
 
-# Non-transitioning variant.
-pycross_file_proxy = rule(
-    implementation = _pycross_file_proxy_impl,
-    doc = """Forwards DefaultInfo from a target. Used for raw file targets (wheels, sdists, dist_info).""",
-    attrs = {
-        "actual": attr.label(
-            mandatory = True,
-            allow_single_file = True,
-            doc = "The target to forward DefaultInfo from.",
+def make_file_proxy_rule(cfg = None, platform_mandatory = False, doc = None):
+    """Create a file proxy rule forwarding DefaultInfo with an optional transition.
+
+    Args:
+        cfg: Optional transition to attach to the `actual` attribute.
+        platform_mandatory: Whether the `platform` attribute is mandatory when `cfg` is set.
+        doc: Optional rule documentation string.
+
+    Returns:
+        A `rule` value.
+    """
+    actual_kwargs = {
+        "mandatory": True,
+        "allow_single_file": True,
+        "doc": (
+            "The target to forward DefaultInfo from." if cfg == None else "The target to forward DefaultInfo from (analyzed under the transition)."
         ),
-    },
-)
+    }
+    if cfg != None:
+        actual_kwargs["cfg"] = cfg
+    attrs = {
+        "actual": attr.label(**actual_kwargs),
+    }
+    if cfg != None:
+        attrs["platform"] = attr.label(
+            mandatory = platform_mandatory,
+            doc = "The target platform to transition to.",
+        )
+        attrs["_allowlist_function_transition"] = attr.label(
+            default = Label("@bazel_tools//tools/allowlists/function_transition_allowlist"),
+        )
+    return rule(
+        implementation = _pycross_file_proxy_impl,
+        doc = doc or "Forwards DefaultInfo from a target. Used for raw file targets (wheels, sdists, dist_info).",
+        attrs = attrs,
+        provides = [DefaultInfo],
+    )
+
+# Non-transitioning variant.
+pycross_file_proxy = make_file_proxy_rule()
 
 # Transitioning variant.
-pycross_transitioning_file_proxy = rule(
-    implementation = _pycross_file_proxy_impl,
+pycross_transitioning_file_proxy = make_file_proxy_rule(
+    cfg = _platform_transition,
+    platform_mandatory = True,
     doc = """Like pycross_file_proxy, but applies a platform transition to the actual target.""",
-    attrs = {
-        "actual": attr.label(
-            mandatory = True,
-            cfg = _platform_transition,
-            allow_single_file = True,
-            doc = "The target to forward DefaultInfo from (analyzed under the target platform).",
-        ),
-        "platform": attr.label(
-            mandatory = True,
-            doc = "The target platform to transition to.",
-        ),
-        "_allowlist_function_transition": attr.label(
-            default = "@bazel_tools//tools/allowlists/function_transition_allowlist",
-        ),
-    },
 )
-
-# Exported for generated _transition.bzl in thin repos with custom flag transitions.
-pycross_library_proxy_impl = _pycross_library_proxy_impl
-pycross_file_proxy_impl = _pycross_file_proxy_impl
