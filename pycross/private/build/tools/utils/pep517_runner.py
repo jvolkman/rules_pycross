@@ -1,4 +1,5 @@
 import os
+import shlex
 import subprocess
 import sys
 import traceback
@@ -30,35 +31,67 @@ def run_pep517_build(ctx: BuildContext) -> str:
         print("To preserve this directory after the build, use Bazel's --sandbox_debug flag.", file=sys.stderr)
         print("==================================================", file=sys.stderr)
 
+    wrote_failure_log = False
+
     def _subprocess_runner(cmd, cwd=None, extra_environ=None):
+        nonlocal wrote_failure_log
         env = ctx.build_env.copy()
         if extra_environ:
             env.update(extra_environ)
 
+        effective_cwd = cwd or os.getcwd()
+        cmd_str = shlex.join(str(c) for c in cmd)
         if is_debug:
-            print(f"\n[DEBUG] Running command: {' '.join(cmd)}", file=sys.stderr)
-            print(f"[DEBUG] Working directory: {cwd or ctx.sdist_dir}", file=sys.stderr)
+            print(f"\n[DEBUG] Running command: {cmd_str}", file=sys.stderr)
+            print(f"[DEBUG] Working directory: {effective_cwd}", file=sys.stderr)
+            sys.stderr.flush()
 
-        try:
-            output = subprocess.check_output(cmd, cwd=cwd, env=env, stderr=subprocess.STDOUT)
-            if is_debug and output:
-                print(output.decode("utf-8", "replace"), file=sys.stderr)
-        except subprocess.CalledProcessError as cpe:
-            print("===== BUILD FAILED =====", file=sys.stderr)
-            if cpe.output:
-                print(cpe.output.decode("utf-8", "replace"), file=sys.stderr)
-            with open(ctx.temp_dir / "build_failed.log", "w") as f:
-                if cpe.output:
-                    f.write(cpe.output.decode("utf-8", "replace"))
-            raise RuntimeError("Build failed")
+            chunks = []
+            with subprocess.Popen(
+                cmd,
+                cwd=cwd,
+                env=env,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+            ) as proc:
+                assert proc.stdout is not None
+                for raw_line in proc.stdout:
+                    decoded = raw_line.decode("utf-8", "replace")
+                    chunks.append(decoded)
+                    sys.stderr.write(decoded)
+                    sys.stderr.flush()
+                returncode = proc.wait()
+            output_text = "".join(chunks)
+        else:
+            res = subprocess.run(
+                cmd,
+                cwd=cwd,
+                env=env,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+            )
+            returncode = res.returncode
+            output_text = res.stdout.decode("utf-8", "replace") if res.stdout else ""
+
+        if returncode != 0:
+            header = (
+                f"===== BUILD FAILED (exit code {returncode}) =====\n"
+                f"Command: {cmd_str}\n"
+                f"Working directory: {effective_cwd}\n"
+            )
+            print(header, end="", file=sys.stderr)
+            if not is_debug and output_text:
+                print(output_text, file=sys.stderr)
+            ctx.temp_dir.mkdir(parents=True, exist_ok=True)
+            with open(ctx.temp_dir / "build_failed.log", "w", encoding="utf-8") as f:
+                f.write(header)
+                if output_text:
+                    f.write("\n")
+                    f.write(output_text)
+            wrote_failure_log = True
+            raise RuntimeError(f"Build command exited with status {returncode}")
 
     from build._builder import ProjectBuilder
-
-    builder = ProjectBuilder(
-        source_dir=ctx.sdist_dir,
-        python_executable=str(ctx.env_dir / "bin" / "python"),
-        runner=_subprocess_runner,
-    )
 
     ctx.wheel_dir.mkdir(parents=True, exist_ok=True)
 
@@ -101,6 +134,11 @@ def run_pep517_build(ctx: BuildContext) -> str:
             importlib.machinery.EXTENSION_SUFFIXES = target_extension_suffixes
 
     try:
+        builder = ProjectBuilder(
+            source_dir=ctx.sdist_dir,
+            python_executable=str(ctx.env_dir / "bin" / "python"),
+            runner=_subprocess_runner,
+        )
         wheel_file = builder.build(
             distribution="wheel",
             output_directory=ctx.wheel_dir,
@@ -109,7 +147,8 @@ def run_pep517_build(ctx: BuildContext) -> str:
 
         return wheel_file
     except Exception:
-        ctx.temp_dir.mkdir(parents=True, exist_ok=True)
-        with open(ctx.temp_dir / "build_failed.log", "w") as f:
-            f.write(traceback.format_exc())
+        if not wrote_failure_log:
+            ctx.temp_dir.mkdir(parents=True, exist_ok=True)
+            with open(ctx.temp_dir / "build_failed.log", "w", encoding="utf-8") as f:
+                f.write(traceback.format_exc())
         raise

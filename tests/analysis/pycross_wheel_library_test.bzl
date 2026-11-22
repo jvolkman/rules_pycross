@@ -9,7 +9,7 @@ load("@rules_testing//lib:util.bzl", "util")
 load("//pycross/private:providers.bzl", "PycrossExtractedWheelInfo", "PycrossPackageInfo", "PycrossUnsupportedWheelInfo")
 
 # buildifier: disable=bzl-visibility
-load("//pycross/private:proxy.bzl", "pycross_library_proxy")
+load("//pycross/private:proxy.bzl", "pycross_file_proxy", "pycross_library_proxy")
 
 # buildifier: disable=bzl-visibility
 load("//pycross/private:variant_resolver.bzl", "pycross_no_variant_selected")
@@ -267,7 +267,69 @@ def _test_pycross_library_proxy_no_match_deferred_impl(env, target):
     # fall through to no_match_error triggers the deferred failure action at
     # build time instead of succeeding with an empty environment.
     runfile_names = [f.basename for f in target[DefaultInfo].default_runfiles.files.to_list()]
-    env.expect.that_collection(runfile_names).contains("no_match_error.whl")
+    env.expect.that_bool(any([n.startswith("_unsupported_") and n.endswith(".whl") for n in runfile_names])).equals(True)
+
+    # The inner _proxy already contextualized the sentinel, so _subject forwards it
+    # without registering a duplicate PycrossUnsupportedPackage action.
+    env.expect.that_str(target[PycrossUnsupportedWheelInfo].package).contains("_proxy")
+    actions = [a for a in target.actions if a.mnemonic == "PycrossUnsupportedPackage"]
+    env.expect.that_int(len(actions)).equals(0)
+
+def _test_pycross_file_proxy_preserves_wheel_dir_unsupported(name):
+    util.helper_target(
+        pycross_wheel_dir,
+        name = name + "_whldir",
+        src = "//pycross/private:no_match_error",
+        whldir_name = name + ".whldir",
+    )
+    util.helper_target(
+        pycross_file_proxy,
+        name = name + "_subject",
+        actual = ":" + name + "_whldir",
+    )
+    analysis_test(
+        name = name,
+        target = name + "_subject",
+        config_settings = {
+            str(Label("//pycross/settings:unavailable_package_mode")): "fail_at_execution",
+        },
+        impl = _test_pycross_file_proxy_preserves_wheel_dir_unsupported_impl,
+    )
+
+def _test_pycross_file_proxy_preserves_wheel_dir_unsupported_impl(env, target):
+    env.expect.that_target(target).has_provider(PycrossUnsupportedWheelInfo)
+    env.expect.that_str(target[PycrossUnsupportedWheelInfo].package).contains("_whldir")
+    out_files = target[DefaultInfo].files.to_list()
+    env.expect.that_int(len(out_files)).equals(1)
+    env.expect.that_bool(out_files[0].is_directory).equals(True)
+    env.expect.that_int(len([a for a in target.actions if a.mnemonic == "PycrossUnsupportedPackage"])).equals(0)
+
+def _test_pycross_library_proxy_preserves_wheel_library_unsupported(name):
+    util.helper_target(
+        pycross_wheel_library,
+        name = name + "_lib",
+        wheel = "//pycross/private:no_match_error",
+    )
+    util.helper_target(
+        pycross_library_proxy,
+        name = name + "_subject",
+        actual = ":" + name + "_lib",
+    )
+    analysis_test(
+        name = name,
+        target = name + "_subject",
+        config_settings = {
+            str(Label("//pycross/settings:unavailable_package_mode")): "fail_at_execution",
+        },
+        impl = _test_pycross_library_proxy_preserves_wheel_library_unsupported_impl,
+    )
+
+def _test_pycross_library_proxy_preserves_wheel_library_unsupported_impl(env, target):
+    env.expect.that_target(target).has_provider(PycrossUnsupportedWheelInfo)
+    env.expect.that_target(target).has_provider(PycrossExtractedWheelInfo)
+    env.expect.that_target(target).has_provider(OutputGroupInfo)
+    env.expect.that_str(target[PycrossUnsupportedWheelInfo].package).contains("_lib")
+    env.expect.that_int(len([a for a in target.actions if a.mnemonic == "PycrossUnsupportedPackage"])).equals(0)
 
 def _test_no_variant_selected_fails_by_default(name):
     util.helper_target(
@@ -732,6 +794,8 @@ def pycross_wheel_library_test_suite(name):
             _test_no_match_error_incompatible_by_default,
             _test_no_match_error_compatible_when_deferred,
             _test_pycross_library_proxy_no_match_deferred,
+            _test_pycross_file_proxy_preserves_wheel_dir_unsupported,
+            _test_pycross_library_proxy_preserves_wheel_library_unsupported,
             _test_no_variant_selected_fails_by_default,
             _test_no_variant_selected_deferred,
             _test_no_variant_selected_long_name_deferred,

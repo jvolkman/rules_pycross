@@ -85,6 +85,10 @@ COMMON_BUILD_ATTRS = {
         doc = "Environment variables passed to the sdist build. " +
               "Values are subject to $(location) expansion.",
     ),
+    "config_settings": attr.string_list_dict(
+        doc = "PEP 517 `config_settings` passed to the build backend. " +
+              "Values are subject to $(location) expansion.",
+    ),
     "data": attr.label_list(
         doc = "Additional data and dependencies used by the build. " +
               "These files are made available in the sandbox and can be referenced " +
@@ -121,10 +125,6 @@ CC_BUILD_ATTRS = {
     ),
     "linkopts": attr.string_list(
         doc = "Extra linker flags, appended after the toolchain flags.",
-    ),
-    "config_settings": attr.string_list_dict(
-        doc = "PEP 517 `config_settings` passed to the build backend. " +
-              "Values are subject to $(location) expansion.",
     ),
     "pkg_config_files": attr.label_list(
         doc = "pkg-config `.pc` files made available to the build (e.g. from `pycross_cc_pkg_config`).",

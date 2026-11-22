@@ -88,6 +88,7 @@ def _test_pep517_build_basic(name):
         pep517_build,
         name = name + "_subject",
         sdist = name + "_sdist",
+        config_settings = {"--build-option": ["--pure"]},
     )
     analysis_test(name = name, target = name + "_subject", impl = _test_pep517_build_basic_impl)
 
@@ -98,6 +99,11 @@ def _test_pep517_build_basic_impl(env, target):
 
     wheel_dir = target[DefaultInfo].files.to_list()[0]
     env.expect.that_bool(wheel_dir.is_directory).equals(True)
+
+    cs_actions = [a for a in target.actions if a.mnemonic == "FileWrite" and any([o.basename == "config_settings.json" for o in a.outputs.to_list()])]
+    env.expect.that_int(len(cs_actions)).equals(1)
+    env.expect.that_str(cs_actions[0].content).contains("--build-option")
+    env.expect.that_str(cs_actions[0].content).contains("--pure")
 
 def _test_pep517_build_resources(name):
     util.helper_target(_mock_sdist, name = name + "_sdist")

@@ -262,6 +262,7 @@ bzl_library(
     name = "proxy",
     srcs = ["proxy.bzl"],
     deps = [
+        ":deferred_failure",
         ":providers",
         ":util",
         "@rules_python//python:py_info_bzl",

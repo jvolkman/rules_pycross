@@ -57,6 +57,7 @@ def _pycross_wheel_zipimport_library_impl(ctx):
     ]
 
 pycross_wheel_zipimport_library = rule(
+    doc = "Exposes a Python wheel directly on `PYTHONPATH` for zipimport without extracting it.",
     implementation = _pycross_wheel_zipimport_library_impl,
     provides = [PyInfo],
     attrs = dict({

@@ -614,6 +614,43 @@ def _test_normalize_settings_rejects_apparent_vs_canonical_dup(name):
         impl = _test_normalize_settings_rejects_apparent_vs_canonical_dup_impl,
     )
 
+def _test_encode_custom_backend_attrs_impl(env, _target):
+    lbl = Label("//tests/unit:BUILD.bazel")
+    tag = struct(
+        name = "demo",
+        workspace = "pypi",
+        copts = ["-O2"],
+        custom_str = "hello",
+        custom_bool = True,
+        custom_int = 7,
+        custom_label = lbl,
+        custom_label_list = [lbl],
+        custom_label_dict = {"k": lbl},
+        custom_label_keyed_dict = {lbl: "val"},
+        custom_string_list_dict = {"opt": ["a", "b"]},
+        empty_list = [],
+        falsy_bool = False,
+        zero_int = 0,
+    )
+    encoded = encode_build_system_attrs(tag)
+    env.expect.that_bool("name" not in encoded).equals(True)
+    env.expect.that_bool("workspace" not in encoded).equals(True)
+    env.expect.that_bool("empty_list" not in encoded).equals(True)
+    env.expect.that_bool("falsy_bool" not in encoded).equals(True)
+    env.expect.that_bool("zero_int" not in encoded).equals(True)
+    env.expect.that_str(json.decode(encoded["custom_str"])).equals("hello")
+    env.expect.that_bool(json.decode(encoded["custom_bool"])).equals(True)
+    env.expect.that_int(json.decode(encoded["custom_int"])).equals(7)
+    env.expect.that_str(json.decode(encoded["custom_label"])).contains("//tests/unit:BUILD.bazel")
+    env.expect.that_int(len(json.decode(encoded["custom_label_list"]))).equals(1)
+    env.expect.that_str(json.decode(encoded["custom_label_dict"])["k"]).contains("//tests/unit:BUILD.bazel")
+    env.expect.that_str(json.decode(encoded["custom_label_keyed_dict"])[str(lbl)]).equals("val")
+    env.expect.that_collection(json.decode(encoded["custom_string_list_dict"])["opt"]).contains_exactly(["a", "b"])
+
+def _test_encode_custom_backend_attrs(name):
+    util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
+    analysis_test(name = name, target = name + "_subject", impl = _test_encode_custom_backend_attrs_impl)
+
 def override_helpers_test_suite(name):
     test_suite(
         name = name,
@@ -621,6 +658,7 @@ def override_helpers_test_suite(name):
             _test_compute_variant_pins,
             _test_compute_variant_pins_unknown_string_fails,
             _test_encode_build_system_attrs,
+            _test_encode_custom_backend_attrs,
             _test_collect_module_overrides_root_wins,
             _test_collect_module_overrides_same_module_dup_fails,
             _test_normalize_settings_rejects_apparent_vs_canonical_dup,

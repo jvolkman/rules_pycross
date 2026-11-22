@@ -1,6 +1,8 @@
 """Implementation of the pycross_wheel_transform rule."""
 
 def _pycross_wheel_transform_impl(ctx):
+    if not ctx.files.wheel:
+        fail("Expected at least one wheel file or directory in 'wheel' attribute of {}".format(ctx.label))
     wheel_input = ctx.files.wheel[0]
 
     # Declare outputs.
@@ -50,6 +52,7 @@ def _pycross_wheel_transform_impl(ctx):
     return [DefaultInfo(files = depset([out_wheel_dir]))]
 
 pycross_wheel_transform = rule(
+    doc = "Runs a custom transform executable over a wheel file or wheel directory TreeArtifact to produce a new wheel directory.",
     implementation = _pycross_wheel_transform_impl,
     attrs = {
         "wheel": attr.label(

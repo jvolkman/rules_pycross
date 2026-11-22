@@ -889,6 +889,90 @@ def _test_overlapping_stage2_explicit_and_usable(name):
         },
     )
 
+def _test_string_flag_unknown_fails_when_pinned_impl(env, target):
+    env.expect.that_target(target).failures().contains_predicate(
+        matching.contains("selects unknown variant 'extra_typo'"),
+    )
+
+def _test_string_flag_unknown_fails_when_pinned(name):
+    """Unknown tokens in //_variants fail even when the conflict set is pinned."""
+    sf = _setup_string(name + "_variants", "")
+    pin = _setup_string(name + "_pin", "extra_cpu")
+    variant_resolver(
+        name = name + "_resolver",
+        items = ["extra_cpu", "extra_gpu"],
+        pin = pin,
+        string_flags = {
+            sf: json.encode({
+                "display": "@repo//_variants",
+                "valid": ["extra_cpu", "extra_gpu"],
+                "map": {"extra_cpu": ["extra_cpu"], "extra_gpu": ["extra_gpu"]},
+            }),
+        },
+        tags = ["manual"],
+    )
+    analysis_test(
+        name = name,
+        target = name + "_resolver",
+        impl = _test_string_flag_unknown_fails_when_pinned_impl,
+        expect_failure = True,
+        config_settings = {str(Label(sf)): "extra_typo"},
+    )
+
+def _test_string_flag_unknown_fails_when_unusable(name):
+    """Unknown tokens in //_variants fail even when usable is empty."""
+    sf = _setup_string(name + "_variants", "")
+    usable = _setup_string(name + "_usable", "")
+    variant_resolver(
+        name = name + "_resolver",
+        items = ["extra_cpu", "extra_gpu"],
+        usable = usable,
+        string_flags = {
+            sf: json.encode({
+                "display": "@repo//_variants",
+                "valid": ["extra_cpu", "extra_gpu"],
+                "map": {"extra_cpu": ["extra_cpu"], "extra_gpu": ["extra_gpu"]},
+            }),
+        },
+        tags = ["manual"],
+    )
+    analysis_test(
+        name = name,
+        target = name + "_resolver",
+        impl = _test_string_flag_unknown_fails_when_pinned_impl,
+        expect_failure = True,
+        config_settings = {str(Label(sf)): "extra_typo"},
+    )
+
+def _test_multi_flag_conflict_omits_internal_qnames_impl(env, target):
+    env.expect.that_target(target).failures().contains_predicate(
+        matching.contains("Conflicting variants are active simultaneously: --@repo//_variants=extra_cpu and --@repo//_variants=extra_gpu. Only one"),
+    )
+
+def _test_multi_flag_conflict_omits_internal_qnames(name):
+    sf = _setup_string(name + "_variants", "")
+    variant_resolver(
+        name = name + "_resolver",
+        string_flags = {
+            sf: json.encode({
+                "display": "@repo//_variants",
+                "valid": ["extra_cpu", "extra_gpu"],
+                "map": {
+                    "extra_cpu": ["extra_my-app_cpu"],
+                    "extra_gpu": ["extra_my-app_gpu"],
+                },
+            }),
+        },
+        tags = ["manual"],
+    )
+    analysis_test(
+        name = name,
+        target = name + "_resolver",
+        impl = _test_multi_flag_conflict_omits_internal_qnames_impl,
+        expect_failure = True,
+        config_settings = {str(Label(sf)): "extra_cpu,extra_gpu"},
+    )
+
 # ── Suite ────────────────────────────────────────────────────────────
 
 def variant_resolver_test_suite(name):
@@ -929,5 +1013,8 @@ def variant_resolver_test_suite(name):
             _test_overlapping_rival_shared_pin_suppresses_non_shared_default,
             _test_overlapping_rival_same_item_pin_keeps_default,
             _test_overlapping_stage2_explicit_and_usable,
+            _test_string_flag_unknown_fails_when_pinned,
+            _test_string_flag_unknown_fails_when_unusable,
+            _test_multi_flag_conflict_omits_internal_qnames,
         ],
     )

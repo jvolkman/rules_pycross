@@ -13,6 +13,7 @@ provided, the `actual` target is analyzed under that platform configuration.
 """
 
 load("@rules_python//python:py_info.bzl", "PyInfo")
+load(":deferred_failure.bzl", "register_failure_action")
 load(
     ":providers.bzl",
     "PycrossExtractedWheelInfo",
@@ -20,6 +21,21 @@ load(
     "PycrossUnsupportedWheelInfo",
 )
 load(":util.bzl", "PY_COMMON_ATTRS", "merge_py_providers")
+
+def _register_unsupported_proxy_failure(ctx):
+    pkg_id = "{}:{}".format(ctx.label.package, ctx.label.name) if ctx.label.package else ctx.label.name
+    out = ctx.actions.declare_file("_unsupported_%x.whl" % (hash(ctx.label.name) & 0xffffffff))
+    register_failure_action(
+        ctx,
+        outputs = [out],
+        message = (
+            "Package {} is not available for the selected target environment " +
+            "(no matching platform marker, wheel, or variant branch)."
+        ).format(pkg_id),
+        mnemonic = "PycrossUnsupportedPackage",
+        progress_message = "Rejecting unavailable package %s" % pkg_id,
+    )
+    return out, pkg_id
 
 # ---- Platform transition -----------------------------------------------------
 
@@ -51,6 +67,16 @@ def _pycross_library_proxy_impl(ctx):
         return [
             DefaultInfo(runfiles = merged.runfiles),
             merged.py_info,
+        ]
+
+    # When actual is the generic no_match_error sentinel (empty `package`),
+    # replace it with a failure action naming this proxy's package.
+    if PycrossUnsupportedWheelInfo in actual and not actual[PycrossUnsupportedWheelInfo].package:
+        out, pkg_id = _register_unsupported_proxy_failure(ctx)
+        return [
+            DefaultInfo(files = depset([out]), runfiles = ctx.runfiles(files = [out])),
+            PyInfo(transitive_sources = depset()),
+            PycrossUnsupportedWheelInfo(package = pkg_id),
         ]
 
     if deps:
@@ -140,6 +166,13 @@ Used in thin package repos when a repo() tag specifies `platform` or `constraint
 
 def _pycross_file_proxy_impl(ctx):
     actual = ctx.attr.actual[0] if type(ctx.attr.actual) == "list" else ctx.attr.actual
+
+    if PycrossUnsupportedWheelInfo in actual and not actual[PycrossUnsupportedWheelInfo].package:
+        out, pkg_id = _register_unsupported_proxy_failure(ctx)
+        return [
+            DefaultInfo(files = depset([out]), runfiles = ctx.runfiles(files = [out])),
+            PycrossUnsupportedWheelInfo(package = pkg_id),
+        ]
 
     # Return a new DefaultInfo to avoid carrying over executable status if not intended.
     providers = [DefaultInfo(

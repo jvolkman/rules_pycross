@@ -42,6 +42,8 @@ def _register_wheel_install_action(ctx, out, entry_points, dist_info_dir):
         )
         return None
 
+    if not ctx.files.wheel:
+        fail("Expected at least one wheel file or directory in 'wheel' attribute of {}".format(ctx.label))
     wheel_input = ctx.files.wheel[0]
 
     args = ctx.actions.args().use_param_file("--flagfile=%s")
@@ -342,7 +344,11 @@ def _pycross_wheel_library_impl(ctx):
     ]
 
     if PycrossUnsupportedWheelInfo in ctx.attr.wheel:
-        providers.append(ctx.attr.wheel[PycrossUnsupportedWheelInfo])
+        pkg_id = "{}{}".format(
+            ctx.attr.package_name or ctx.label.name,
+            "@{}".format(ctx.attr.package_version) if ctx.attr.package_version else "",
+        )
+        providers.append(PycrossUnsupportedWheelInfo(package = pkg_id))
 
     if ctx.attr.package_name:
         providers.append(
@@ -433,6 +439,7 @@ def make_wheel_library_rule(cfg = None):
         )
         kwargs["cfg"] = cfg
     return rule(
+        doc = "Installs a Python wheel into a TreeArtifact directory and exposes it as a `PyInfo` library.",
         implementation = _pycross_wheel_library_impl,
         provides = [PyInfo, PycrossExtractedWheelInfo],
         attrs = attrs,
@@ -458,12 +465,17 @@ def _pycross_wheel_metadata_impl(ctx):
     ]
 
 pycross_wheel_metadata = rule(
+    doc = "Wraps a wheel target to provide `PycrossPackageInfo` metadata without installing the wheel.",
     implementation = _pycross_wheel_metadata_impl,
     provides = [PycrossPackageInfo],
     attrs = {
-        "wheel": attr.label(allow_files = True, mandatory = True),
-        "package_name": attr.string(),
-        "package_version": attr.string(),
+        "wheel": attr.label(
+            doc = "The wheel file or wheel directory target.",
+            allow_files = True,
+            mandatory = True,
+        ),
+        "package_name": attr.string(doc = "The normalized package name."),
+        "package_version": attr.string(doc = "The package version."),
         "site_paths": attr.string_list(doc = "The list of site-packages paths provided by this wheel."),
         "bin_paths": attr.string_list(doc = "The list of bin paths provided by this wheel."),
         "data_paths": attr.string_list(doc = "The list of data paths provided by this wheel."),
@@ -486,10 +498,11 @@ def _pycross_unsupported_wheel_impl(ctx):
             runfiles = ctx.runfiles(files = [wheel]),
         ),
         PyInfo(transitive_sources = depset()),
-        PycrossUnsupportedWheelInfo(),
+        PycrossUnsupportedWheelInfo(package = ""),
     ]
 
 pycross_unsupported_wheel = rule(
+    doc = "Sentinel target used when no compatible wheel or branch matches the target environment under `fail_at_execution`.",
     implementation = _pycross_unsupported_wheel_impl,
     provides = [PyInfo, PycrossUnsupportedWheelInfo],
 )
