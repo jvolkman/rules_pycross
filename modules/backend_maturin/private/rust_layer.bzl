@@ -30,6 +30,56 @@ def get_executable_file(val):
         return val[DefaultInfo].files_to_run.executable
     return None
 
+def _find_rustlib_dir(toolchain, triple_str):
+    """Finds the execroot path to lib/rustlib/<triple>/lib from a rust_toolchain."""
+    if not toolchain:
+        return None
+    marker = "/lib/rustlib/{}/lib".format(triple_str) if triple_str else "/lib/rustlib/"
+    rust_std_paths = getattr(toolchain, "rust_std_paths", None)
+    if rust_std_paths:
+        for d in rust_std_paths.to_list():
+            if d.endswith(marker):
+                return d
+            if marker + "/" in d:
+                prefix, _, _ = d.partition(marker)
+                return prefix + marker
+    rust_std = getattr(toolchain, "rust_std", None)
+    if rust_std:
+        for f in rust_std.to_list():
+            if marker in f.path:
+                prefix, _, _ = f.path.partition(marker)
+                return prefix + marker
+    sysroot_val = getattr(toolchain, "sysroot", None)
+    if sysroot_val and triple_str:
+        sysroot_str = sysroot_val if type(sysroot_val) == "string" else getattr(sysroot_val, "path", None)
+        if sysroot_str:
+            return "{}/lib/rustlib/{}/lib".format(sysroot_str.rstrip("/"), triple_str)
+    return None
+
+def _resolve_vendored_crates_dir(vendored_target, vendored_files):
+    """Resolves the execroot vendor directory path from vendored_crates files."""
+    best_vendor_dir = None
+    best_depth = None
+    for f in vendored_files:
+        if f.basename == ".cargo-checksum.json":
+            vendor_dir, _, _ = f.dirname.rpartition("/")
+            if vendor_dir:
+                depth = vendor_dir.count("/")
+                if best_depth == None or depth < best_depth:
+                    best_depth = depth
+                    best_vendor_dir = vendor_dir
+    if best_vendor_dir:
+        return best_vendor_dir
+    for f in vendored_files:
+        if "/vendor/" in f.path:
+            return f.path.split("/vendor/", 1)[0] + "/vendor"
+        if f.path.startswith("vendor/"):
+            return "vendor"
+    ws_root = vendored_target.label.workspace_root
+    pkg = vendored_target.label.package
+    parts = [p for p in [ws_root, pkg, "vendor"] if p]
+    return "/".join(parts)
+
 def extract_rust_layer(ctx):
     """Extracts Rust toolchain info into a JSON file.
 
@@ -85,8 +135,14 @@ def extract_rust_layer(ctx):
     transitive_files = []
     if hasattr(rust_toolchain, "all_files"):
         transitive_files.append(rust_toolchain.all_files)
+    exec_rust_toolchain = None
     if ctx.attr._exec_rust_toolchain:
         transitive_files.append(ctx.attr._exec_rust_toolchain[DefaultInfo].files)
+        if platform_common.ToolchainInfo in ctx.attr._exec_rust_toolchain:
+            exec_rust_toolchain = ctx.attr._exec_rust_toolchain[platform_common.ToolchainInfo]
+
+    target_rustlib_dir = _find_rustlib_dir(rust_toolchain, target_triple_str)
+    host_rustlib_dir = _find_rustlib_dir(exec_rust_toolchain, host_triple_str) if exec_rust_toolchain else None
 
     rust_config = {
         "rustc": rustc_path,
@@ -94,6 +150,8 @@ def extract_rust_layer(ctx):
         "sysroot": sysroot_path,
         "host_triple": host_triple_str,
         "target_triple": target_triple_str,
+        "host_rustlib_dir": host_rustlib_dir,
+        "target_rustlib_dir": target_rustlib_dir,
     }
 
     config_json = ctx.actions.declare_file(ctx.label.name + "_rust_config.json")
@@ -178,11 +236,10 @@ def run_rust_pep517_build(ctx, tool_deps, tool_executables, tool_pkg_names):
 
     cargo_vendored_sources = None
     if ctx.attr.vendored_crates:
-        workspace_name = ctx.label.workspace_name
-        if workspace_name:
-            cargo_vendored_sources = "external/{}/vendor".format(workspace_name)
-        else:
-            cargo_vendored_sources = "vendor"
+        cargo_vendored_sources = _resolve_vendored_crates_dir(
+            ctx.attr.vendored_crates,
+            ctx.files.vendored_crates,
+        )
 
     resources = get_resource_set(ctx.attr)
     env = {}

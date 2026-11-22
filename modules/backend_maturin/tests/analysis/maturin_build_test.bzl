@@ -61,6 +61,17 @@ def _test_maturin_build_basic_impl(env, target):
     env.expect.that_target(target).has_provider(DefaultInfo)
     env.expect.that_target(target).has_provider(OutputGroupInfo)
 
+    rust_cfg_action = [
+        a
+        for a in target.actions
+        if any([o.basename.endswith("_rust_config.json") for o in a.outputs.to_list()])
+    ][0]
+    rust_cfg = json.decode(rust_cfg_action.content)
+    env.expect.that_bool(bool(rust_cfg.get("host_rustlib_dir"))).equals(True)
+    env.expect.that_bool(bool(rust_cfg.get("target_rustlib_dir"))).equals(True)
+    env.expect.that_str(rust_cfg["host_rustlib_dir"]).contains("/lib/rustlib/")
+    env.expect.that_str(rust_cfg["target_rustlib_dir"]).contains("/lib/rustlib/")
+
 def _test_maturin_build_resources(name):
     util.helper_target(
         native.filegroup,
@@ -154,6 +165,39 @@ def _test_maturin_build_tool_deps_aspect_impl(env, target):
     build_action = env.expect.that_target(target).action_named("PycrossPep517Build")
     build_action.inputs().contains_predicate(matching.file_path_matches("*_maturin_tools/maturin"))
 
+def _mock_vendored_crates_impl(ctx):
+    # Include a deeply nested fixture .cargo-checksum.json before the shallow crate one
+    # to verify _resolve_vendored_crates_dir picks the shallowest vendor root.
+    nested = ctx.actions.declare_file(ctx.label.name + "/custom_vendor/cargo-0.70/tests/fixtures/f/.cargo-checksum.json")
+    top = ctx.actions.declare_file(ctx.label.name + "/custom_vendor/serde-1.0/.cargo-checksum.json")
+    ctx.actions.write(nested, "{}")
+    ctx.actions.write(top, "{}")
+    return [DefaultInfo(files = depset([nested, top]))]
+
+_mock_vendored_crates = rule(implementation = _mock_vendored_crates_impl)
+
+def _test_maturin_build_vendored_crates_path(name):
+    util.helper_target(native.filegroup, name = name + "_sdist", srcs = ["test-sdist.tar.gz"])
+    util.helper_target(_mock_executable, name = name + "_mock_maturin")
+    util.helper_target(_mock_vendored_crates, name = name + "_vendor")
+    util.helper_target(
+        maturin_build,
+        name = name + "_subject",
+        sdist = name + "_sdist",
+        path_tools = [name + "_mock_maturin"],
+        vendored_crates = name + "_vendor",
+    )
+    analysis_test(
+        name = name,
+        target = name + "_subject",
+        impl = _test_maturin_build_vendored_crates_path_impl,
+    )
+
+def _test_maturin_build_vendored_crates_path_impl(env, target):
+    build_action = env.expect.that_target(target).action_named("PycrossPep517Build")
+    vendor_env = build_action.actual.env.get("CARGO_VENDORED_SOURCES", "")
+    env.expect.that_bool(vendor_env.endswith("/custom_vendor")).equals(True)
+
 def maturin_build_test_suite(name):
     test_suite(
         name = name,
@@ -162,5 +206,6 @@ def maturin_build_test_suite(name):
             _test_maturin_build_resources,
             _test_maturin_build_missing_tools,
             _test_maturin_build_tool_deps_aspect,
+            _test_maturin_build_vendored_crates_path,
         ],
     )
