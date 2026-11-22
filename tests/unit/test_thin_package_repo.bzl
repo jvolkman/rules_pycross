@@ -4,7 +4,7 @@ load("@rules_testing//lib:analysis_test.bzl", "analysis_test", "test_suite")
 load("@rules_testing//lib:util.bzl", "util")
 
 # buildifier: disable=bzl-visibility
-load("//pycross/private:package_repo.bzl", "backend_tool_deps_labels_for_testing", "compute_rival_specs_for_testing", "run_package_repo_hooks_for_testing")
+load("//pycross/private:package_repo.bzl", "backend_tool_deps_labels_for_testing", "overlapping_rivals_for_testing", "run_package_repo_hooks_for_testing")
 
 # buildifier: disable=bzl-visibility
 load(
@@ -1454,27 +1454,13 @@ def _test_modules_mapping_deps_selection_impl(env, target):
     env.expect.that_str(overlap_vbuild).contains('"@ws//_lock:_unselected_{}"'.format(s1))
     env.expect.that_str(overlap_vbuild).contains('"@ws//_lock:_unselected_{}"'.format(s2))
 
-    # 6. compute_rival_specs_for_testing wires rival_bool_flags, rival_member_tokens, and rival_usables
-    #    and skips rival_usables when an overlapping set contributes no flags.
-    vset_s1 = {
-        "qnames": ["a", "b"],
-        "flags": {"@r//_variants:b": ["b"], "@r//_variants:a": ["a"]},
-        "member_flags": {"r": {"b": ["b"], "a": ["a"]}},
-    }
-    vset_s2 = {
-        "qnames": ["a", "c"],
-        "flags": {"@r//_variants:a": ["a"], "@r//_variants:c": ["c"]},
-        "member_flags": {"r": {"a": ["a"], "c": ["c"]}},
-    }
-    vset_s3_empty = {
-        "qnames": ["a", "d"],
-        "flags": {},
-        "member_flags": {},
-    }
-    rivals = compute_rival_specs_for_testing(vset_s2, [vset_s1, vset_s2, vset_s3_empty])
-    env.expect.that_dict(rivals.rival_bool_flags).contains_exactly({"@r//_variants:b": [["a", "b", "a_b"]]})
-    env.expect.that_dict(rivals.rival_member_tokens).contains_exactly({"r": {"b": [["a", "b", "a_b"]]}})
-    env.expect.that_collection(rivals.rival_usables).contains_exactly(["a_b"])
+    # 6. overlapping_rivals_for_testing maps overlapping conflict sets to their shared qnames
+    #    (including multi-item overlaps) and ignores disjoint sets.
+    vset_s1 = {"qnames": ["a", "b"]}
+    vset_s2 = {"qnames": ["a", "b", "c"]}
+    vset_s3_disjoint = {"qnames": ["d", "e"]}
+    rivals = overlapping_rivals_for_testing(vset_s2, [vset_s1, vset_s2, vset_s3_disjoint])
+    env.expect.that_dict(rivals).contains_exactly({"a_b": ["a", "b"]})
 
 def _test_modules_mapping_deps_selection(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])

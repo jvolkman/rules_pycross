@@ -121,78 +121,21 @@ def _merge_dependencies(first_data, entries):
 # Visible for testing
 merge_dependencies_for_testing = _merge_dependencies
 
-def _compute_rival_specs(vset, variant_sets):
-    """Collect rival flags from overlapping conflict sets for a single variant_resolver.
-
-    When an active CLI flag selects a rival item in an overlapping conflict set,
-    `variant_resolver` uses these mappings to suppress `default_setting` fallback
-    for the conflicting item in `vset`.
-
-    Args:
-        vset: Conflict set dict with `qnames`, `flags`, and `member_flags`.
-        variant_sets: All conflict sets in the workspace.
-
-    Returns:
-        struct(
-            rival_bool_flags = {flag_label: [[item, rival_qname, other_suffix], ...]},
-            rival_member_tokens = {member: {token: [[item, rival_qname, other_suffix], ...]}},
-            rival_usables = [other_suffix, ...],
-        )
-    """
+def _overlapping_rivals(vset, variant_sets):
+    """Return {other_suffix: sorted_shared_qnames} for conflict sets overlapping `vset`."""
     set_suffix = "_".join(sorted(vset["qnames"]))
-    vset_qnames_set = {q: True for q in vset["qnames"]}
-    rival_bool_flags = {}
-    rival_member_tokens = {}
-    rival_usables = {}
-
+    rivals = {}
     for other_vset in variant_sets:
         other_suffix = "_".join(sorted(other_vset["qnames"]))
         if other_suffix == set_suffix:
             continue
-        shared_items = [q for q in sorted(vset["qnames"]) if q in other_vset["qnames"]]
-        if not shared_items:
-            continue
-        rival_pairs = []
-        for shared_item in shared_items:
-            for rival_qname in sorted(other_vset["qnames"]):
-                if rival_qname != shared_item and rival_qname not in vset_qnames_set:
-                    rival_pairs.append((shared_item, rival_qname))
-        if not rival_pairs:
-            continue
-
-        contributed = False
-        for flag_label, qnames in sorted(other_vset["flags"].items()):
-            qset = {q: True for q in qnames}
-            matched = [
-                [shared_item, rival_qname, other_suffix]
-                for shared_item, rival_qname in rival_pairs
-                if rival_qname in qset
-            ]
-            if matched:
-                rival_bool_flags.setdefault(flag_label, []).extend(matched)
-                contributed = True
-        for member, flag_map in sorted(other_vset["member_flags"].items()):
-            for token, qnames in sorted(flag_map.items()):
-                qset = {q: True for q in qnames}
-                matched = [
-                    [shared_item, rival_qname, other_suffix]
-                    for shared_item, rival_qname in rival_pairs
-                    if rival_qname in qset
-                ]
-                if matched:
-                    rival_member_tokens.setdefault(member, {}).setdefault(token, []).extend(matched)
-                    contributed = True
-        if contributed:
-            rival_usables[other_suffix] = True
-
-    return struct(
-        rival_bool_flags = rival_bool_flags,
-        rival_member_tokens = rival_member_tokens,
-        rival_usables = sorted(rival_usables.keys()),
-    )
+        shared = [q for q in sorted(vset["qnames"]) if q in other_vset["qnames"]]
+        if shared:
+            rivals[other_suffix] = shared
+    return rivals
 
 # Visible for testing
-compute_rival_specs_for_testing = _compute_rival_specs
+overlapping_rivals_for_testing = _overlapping_rivals
 
 def _run_package_repo_hooks(hooks, packages_info, override_configs):
     """Run registered package_repo hooks, deduplicating backends that share a hook function."""
@@ -384,8 +327,9 @@ def _package_repo_impl(rctx):
         "",
     ])
 
-    # Emit variant_resolver targets (one per conflict set). There are no static
-    # defaults here: the thin repos select variants. Their _variants bool_flags
+    # Emit variant_resolver targets for each conflict set (two stages for
+    # overlapping sets so defaults can check rival explicit selections without
+    # cycles). There are no static defaults here: the thin repos select variants. Their _variants bool_flags
     # feed the resolver directly (one flag can enable several items, e.g.
     # `group_test` in a repo with two projects), and their transitions set
     # `_pin_<set>` (from `uv.repo(flags/settings)`) or `_default_<set>` (from
@@ -395,10 +339,7 @@ def _package_repo_impl(rctx):
     for vset in variant_sets:
         set_suffix = "_".join(sorted(vset["qnames"]))
         resolver_name = "_resolver_" + set_suffix
-        rivals = _compute_rival_specs(vset, variant_sets)
-        rival_bool_flags = rivals.rival_bool_flags
-        rival_member_tokens = rivals.rival_member_tokens
-        rival_usables = rivals.rival_usables
+        rivals = _overlapping_rivals(vset, variant_sets)
 
         lock_build_lines.extend([
             "string_flag(",
@@ -416,10 +357,19 @@ def _package_repo_impl(rctx):
             '    build_setting_default = "*",',
             ")",
             "",
+        ])
+
+        # Overlapping sets split into two stages so `_resolver_<set>` can check
+        # rival sets' explicit selections without creating a target cycle.
+        flag_resolver_name = "_explicit_" + set_suffix if rivals else resolver_name
+        lock_build_lines.extend([
             "variant_resolver(",
-            '    name = "{}",'.format(resolver_name),
+            '    name = "{}",'.format(flag_resolver_name),
             '    pin = ":_pin_{}",'.format(set_suffix),
-            '    default_setting = ":_default_{}",'.format(set_suffix),
+        ])
+        if not rivals:
+            lock_build_lines.append('    default_setting = ":_default_{}",'.format(set_suffix))
+        lock_build_lines.extend([
             '    usable = ":_usable_{}",'.format(set_suffix),
             "    items = {},".format(json.encode(sorted(vset["qnames"]))),
             "    flags = {",
@@ -427,16 +377,6 @@ def _package_repo_impl(rctx):
         for flag_label, qnames in sorted(vset["flags"].items()):
             lock_build_lines.append('        "{}": "{}|{}",'.format(flag_label, flag_label, " ".join(qnames)))
         lock_build_lines.append("    },")
-        if rival_bool_flags:
-            lock_build_lines.append("    rival_flags = {")
-            for flag_label, entries in sorted(rival_bool_flags.items()):
-                lock_build_lines.append('        "{}": {},'.format(flag_label, json.encode(json.encode(entries))))
-            lock_build_lines.append("    },")
-        if rival_usables:
-            lock_build_lines.append("    rival_usables = {")
-            for other_suffix in rival_usables:
-                lock_build_lines.append('        ":_usable_{}": "{}",'.format(other_suffix, other_suffix))
-            lock_build_lines.append("    },")
         if member_variant_flags:
             lock_build_lines.append("    string_flags = {")
             for member in sorted(member_variant_flags.keys()):
@@ -446,14 +386,32 @@ def _package_repo_impl(rctx):
                     "valid": sorted(member_variant_flags[member].keys()),
                     "map": {k: v for k, v in sorted(flag_map.items())},
                 }
-                member_rivals = rival_member_tokens.get(member)
-                if member_rivals:
-                    spec["rivals"] = {k: v for k, v in sorted(member_rivals.items())}
                 lock_build_lines.append('        "@{}//_variants:_variants": {},'.format(member, json.encode(json.encode(spec))))
             lock_build_lines.append("    },")
         lock_build_lines.extend([
             ")",
             "",
+        ])
+
+        if rivals:
+            lock_build_lines.extend([
+                "variant_resolver(",
+                '    name = "{}",'.format(resolver_name),
+                '    explicit = ":_explicit_{}",'.format(set_suffix),
+                '    default_setting = ":_default_{}",'.format(set_suffix),
+                '    usable = ":_usable_{}",'.format(set_suffix),
+                "    items = {},".format(json.encode(sorted(vset["qnames"]))),
+                "    rival_resolvers = {",
+            ])
+            for other_suffix, shared in sorted(rivals.items()):
+                lock_build_lines.append('        ":_explicit_{}": "{}",'.format(other_suffix, " ".join(shared)))
+            lock_build_lines.extend([
+                "    },",
+                ")",
+                "",
+            ])
+
+        lock_build_lines.extend([
             "config_setting(",
             '    name = "_unselected_{}",'.format(set_suffix),
             '    flag_values = {{":{resolver}": ""}},'.format(resolver = resolver_name),

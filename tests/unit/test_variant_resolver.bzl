@@ -746,25 +746,47 @@ def _test_string_flag_usable_filters(name):
         },
     )
 
-def _overlapping_rival_resolver(name, other_usable = "*"):
-    """Helper for overlapping sets S1=[a, b] and S2=[a, c] where S2 defaults to a."""
+def _overlapping_rival_resolver(name, other_usable = "*", s2_default = "a", s1_pin = "", s2_usable = "*"):
+    """Helper for overlapping sets S1=[a, b] and S2=[a, c] with configurable defaults/pins/usable."""
     flag_refs = _setup_flags(name, ["a", "b", "c"])
     string_flag = _setup_string(name + "_variants", "")
     other_usable_flag = _setup_string(name + "_usable_s1", other_usable)
-    spec = {
+    s2_usable_flag = _setup_string(name + "_usable_s2", s2_usable)
+    s1_pin_flag = _setup_string(name + "_pin_s1", s1_pin)
+    spec_s1 = {
+        "display": "@repo//_variants",
+        "valid": ["a", "b", "c"],
+        "map": {"a": ["a"], "b": ["b"]},
+    }
+    spec_s2 = {
         "display": "@repo//_variants",
         "valid": ["a", "b", "c"],
         "map": {"a": ["a"], "c": ["c"]},
-        "rivals": {"b": [["a", "b", "a_b"]]},
     }
     variant_resolver(
-        name = name + "_resolver_s2",
+        name = name + "_explicit_s1",
+        items = ["a", "b"],
+        pin = s1_pin_flag,
+        usable = other_usable_flag,
+        flags = {flag_refs[0]: "a", flag_refs[1]: "b"},
+        string_flags = {string_flag: json.encode(spec_s1)},
+        tags = ["manual"],
+    )
+    variant_resolver(
+        name = name + "_explicit_s2",
         items = ["a", "c"],
-        default_setting = _setup_string(name + "_default_s2", "a"),
+        usable = s2_usable_flag,
         flags = {flag_refs[0]: "a", flag_refs[2]: "c"},
-        rival_flags = {flag_refs[1]: json.encode([["a", "b", "a_b"]])},
-        rival_usables = {other_usable_flag: "a_b"},
-        string_flags = {string_flag: json.encode(spec)},
+        string_flags = {string_flag: json.encode(spec_s2)},
+        tags = ["manual"],
+    )
+    variant_resolver(
+        name = name + "_resolver_s2",
+        explicit = ":" + name + "_explicit_s2",
+        items = ["a", "c"],
+        usable = s2_usable_flag,
+        default_setting = _setup_string(name + "_default_s2", s2_default),
+        rival_resolvers = {":" + name + "_explicit_s1": "a"},
         tags = ["manual"],
     )
 
@@ -804,6 +826,69 @@ def _test_overlapping_rival_ignored_when_not_usable(name):
         },
     )
 
+def _test_overlapping_rival_unrelated_shared_item_keeps_default(name):
+    """A rival in S3=[c, d] (sharing c, not a) does not suppress S2's default a."""
+    flag_refs = _setup_flags(name, ["a", "c", "d"])
+    variant_resolver(
+        name = name + "_explicit_s3",
+        items = ["c", "d"],
+        flags = {flag_refs[1]: "c", flag_refs[2]: "d"},
+        tags = ["manual"],
+    )
+    variant_resolver(
+        name = name + "_explicit_s2",
+        items = ["a", "c"],
+        flags = {flag_refs[0]: "a", flag_refs[1]: "c"},
+        tags = ["manual"],
+    )
+    variant_resolver(
+        name = name + "_resolver_s2",
+        explicit = ":" + name + "_explicit_s2",
+        items = ["a", "c"],
+        default_setting = _setup_string(name + "_default_s2", "a"),
+        rival_resolvers = {":" + name + "_explicit_s3": "c"},
+        tags = ["manual"],
+    )
+    analysis_test(
+        name = name,
+        target = name + "_resolver_s2",
+        impl = _expect_value("a"),
+        config_settings = {
+            str(Label(":" + name + "_flag_d")): True,
+        },
+    )
+
+def _test_overlapping_rival_shared_pin_suppresses_non_shared_default(name):
+    """Pinning shared item a in S1 suppresses S2's non-shared default c."""
+    _overlapping_rival_resolver(name, s2_default = "c", s1_pin = "a")
+    analysis_test(
+        name = name,
+        target = name + "_resolver_s2",
+        impl = _expect_value(""),
+    )
+
+def _test_overlapping_rival_same_item_pin_keeps_default(name):
+    """Pinning shared item a in S1 does not suppress S2's matching default a."""
+    _overlapping_rival_resolver(name, s2_default = "a", s1_pin = "a")
+    analysis_test(
+        name = name,
+        target = name + "_resolver_s2",
+        impl = _expect_value("a"),
+    )
+
+def _test_overlapping_stage2_explicit_and_usable(name):
+    """Stage-2 resolver forwards explicit selection even when a rival is active."""
+    _overlapping_rival_resolver(name, s2_default = "a", s2_usable = "c")
+    analysis_test(
+        name = name,
+        target = name + "_resolver_s2",
+        impl = _expect_value("c"),
+        config_settings = {
+            str(Label(":" + name + "_flag_b")): True,
+            str(Label(":" + name + "_flag_c")): True,
+        },
+    )
+
 # ── Suite ────────────────────────────────────────────────────────────
 
 def variant_resolver_test_suite(name):
@@ -840,5 +925,9 @@ def variant_resolver_test_suite(name):
             _test_overlapping_rival_bool_flag_suppresses_default,
             _test_overlapping_rival_string_flag_suppresses_default,
             _test_overlapping_rival_ignored_when_not_usable,
+            _test_overlapping_rival_unrelated_shared_item_keeps_default,
+            _test_overlapping_rival_shared_pin_suppresses_non_shared_default,
+            _test_overlapping_rival_same_item_pin_keeps_default,
+            _test_overlapping_stage2_explicit_and_usable,
         ],
     )
