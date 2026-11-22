@@ -71,6 +71,7 @@ py_test(
     main = "wheel_installer_test.py",
     tags = ["unit"],
     deps = [
+        "//pycross/private/tools:extract_wheel_bin",
         "//pycross/private/tools:wheel_installer",
     ],
 )

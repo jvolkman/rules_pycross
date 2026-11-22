@@ -347,8 +347,6 @@ def build_env(
             "stdlib": stdlib,
             "dynload": dynload,
             "disable_frozen_modules": disable_frozen_modules,
-            "platform_tags": context.target.manylinux_tags,
-            "host_machine": context.target.uname_machine,
         }
     )
 
@@ -362,8 +360,6 @@ def build_env(
         "platform-patch.py",
         "sysconfig-patch.py",
         "distutils-sysconfig-patch.py",
-        "packaging-tags-patch.py",
-        "subprocess-patch.py",
     ]
 
     for script in site_scripts:

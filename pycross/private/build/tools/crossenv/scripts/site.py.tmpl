@@ -13,7 +13,6 @@ import os
 import importlib.machinery
 import importlib.abc
 import importlib.util
-import traceback  # used in sys-patch.py.tmpl; needs to be in sys.modules
 
 # To prevent the above scenario from playing out every time run a script that
 # starts with #!/usr/bin/python, we need to remove the environment variables so
@@ -141,7 +140,7 @@ class CrossenvFinder(importlib.abc.MetaPathFinder):
         return spec
 
     def manually_patch_loaded(self):
-        for name, module in sys.modules.items():
+        for name, module in list(sys.modules.items()):
             if name in self.PATCHES:
                 _patch_module(module, self.PATCHES[name])
 

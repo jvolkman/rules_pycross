@@ -23,40 +23,15 @@ load(":util.bzl", "is_wheel_platform_specific", "parse_package_key", "underscore
 def _normalize_name(name):
     return pypackaging.utils.canonicalize_name(name)
 
-# Annotation fields that affect pycross_wheel_library targets.
-# If these differ between members for the same pkg_key, the package
-# is "conflicting" and gets per-member variant targets.
-ANNOTATION_FIELDS = ["post_install_patches", "install_exclude_globs", "wheel_library_tags", "precompile"]
-
-def has_annotation_conflict(entries):
-    """Return True if any entry in [(member, pkg_data), ...] differs on ANNOTATION_FIELDS.
-
-    Args:
-        entries: List of (member_name, pkg_data) tuples for the same package key.
-
-    Returns:
-        True if any annotation field differs across members, False otherwise.
-    """
-    if len(entries) <= 1:
-        return False
-    _, first_data = entries[0]
-    for _, other_data in entries[1:]:
-        for field in ANNOTATION_FIELDS:
-            if (first_data.get(field) or None) != (other_data.get(field) or None):
-                return True
-    return False
-
 def _backend_tool_deps_labels(tool_packages, packages, build_repo):
     """Resolve backend tool_packages to `@<build_repo>//<pkg>:pkg` labels for packages present in `packages`.
 
-    Ignores extra keys (`pkg[extra]@version`) and conflict variants (`__via_`).
+    Ignores extra keys (`pkg[extra]@version`).
     Pointing at `@<build_repo>//<pkg>:pkg` ensures the macro default follows
     resolution-marker forks and variants via the build thin repo's `select()`.
     """
     known_base_packages = {}
     for k in packages.keys():
-        if "__via_" in k:
-            continue
         parts = parse_package_key(k)
         if parts.extra:
             continue
@@ -239,7 +214,7 @@ def _package_repo_impl(rctx):
                 fail("Resolution marker '{}' conflicts between workspace members ({} vs {})".format(cname, resolution_marker_exprs[cname], expr))
             resolution_marker_exprs[cname] = expr
 
-    # Second pass: detect conflicts and build merged package set.
+    # Second pass: build merged package set across workspace members.
     all_pkg_keys = {}  # pkg_key -> list of (member, pkg_data)
     for member, pkgs in member_packages.items():
         for pkg_key, pkg_data in pkgs.items():
@@ -247,17 +222,9 @@ def _package_repo_impl(rctx):
 
     for pkg_key, entries in all_pkg_keys.items():
         if len(entries) <= 1:
-            # Only in one member — no conflict possible.
             packages[pkg_key] = dict(entries[0][1])
             continue
-
-        if has_annotation_conflict(entries):
-            # Conflicting annotations: create per-member variant packages.
-            for member, pkg_data in entries:
-                variant_key = "{}__via_{}".format(pkg_key, member)
-                packages[variant_key] = dict(pkg_data)
-        else:
-            packages[pkg_key] = _merge_dependencies(entries[0][1], entries)
+        packages[pkg_key] = _merge_dependencies(entries[0][1], entries)
 
     # Workspace repos have no pins — each thin repo has its own.
     lock = {
@@ -483,9 +450,6 @@ def _package_repo_impl(rctx):
     ]
 
     for pkg_key in sorted(packages.keys()):
-        # Skip variant packages (they use __via_ suffix for conflict resolution)
-        if "__via_" in pkg_key:
-            continue
         parts = parse_package_key(pkg_key)
 
         # Skip extra packages (e.g. foo[test]@1.0.0). They do not have their
@@ -572,8 +536,6 @@ def _package_repo_impl(rctx):
         # Include version and sdist info so hooks can generate versioned targets.
         packages_info = {}
         for pkg_key in sorted(packages.keys()):
-            if "__via_" in pkg_key:
-                continue
             parts = parse_package_key(pkg_key)
             if parts.extra:
                 continue

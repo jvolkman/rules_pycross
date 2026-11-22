@@ -6,7 +6,6 @@ py_library(
     name = "crossenv_lib",
     srcs = [
         "__init__.py",
-        "template.py",
         "utils.py",
     ],
     data = [

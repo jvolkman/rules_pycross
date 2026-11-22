@@ -154,11 +154,6 @@ REPAIR_BUILD_ATTRS = {
 }
 
 TOOL_EXTRACT_ATTRS = {
-    "_extract_console_script": attr.label(
-        default = Label("//pycross/private/tools:extract_console_script"),
-        executable = True,
-        cfg = "exec",
-    ),
     "_extract_wheel_bin": attr.label(
         default = Label("//pycross/private/tools:extract_wheel_bin"),
         executable = True,

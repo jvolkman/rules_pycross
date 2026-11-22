@@ -621,6 +621,36 @@ class WheelInstallerDestinationAndFlagsTest(unittest.TestCase):
         self.assertEqual(cm.exception.code, 0)
         self.assertIn("--name", stdout.getvalue())
 
+    def test_extract_wheel_bin_rewrites_placeholder_shebang(self):
+        from unittest import mock
+
+        from pycross.private.tools import extract_wheel_bin
+
+        wheel_dir = Path(self.temp_dir) / "wheel"
+        bin_dir = wheel_dir / "bin"
+        bin_dir.mkdir(parents=True)
+
+        # Console script with placeholder `#!python` shebang (LF and CRLF).
+        (bin_dir / "meson").write_bytes(b"#!python\nimport sys\nsys.exit(0)\n")
+        (bin_dir / "cmake").write_bytes(b"#!python\r\nimport sys\r\n")
+        # Native binary and .exe fallback should pass through unmodified.
+        (bin_dir / "ninja").write_bytes(b"\x7fELF\x02\x01binary")
+        (bin_dir / "win_tool.exe").write_bytes(b"MZbinary")
+
+        out_dir = Path(self.temp_dir) / "out"
+        out_dir.mkdir()
+
+        for name, expected in [
+            ("meson", b"#!/usr/bin/env python3\nimport sys\nsys.exit(0)\n"),
+            ("cmake", b"#!/usr/bin/env python3\nimport sys\r\n"),
+            ("ninja", b"\x7fELF\x02\x01binary"),
+            ("win_tool", b"MZbinary"),
+        ]:
+            out_file = out_dir / name
+            with mock.patch("sys.argv", ["extract_wheel_bin.py", str(wheel_dir), name, str(out_file)]):
+                extract_wheel_bin.main()
+            self.assertEqual(out_file.read_bytes(), expected, msg=name)
+
 
 if __name__ == "__main__":
     unittest.main()

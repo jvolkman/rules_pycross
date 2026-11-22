@@ -57,7 +57,6 @@ def _test_meson_build_basic_impl(env, target):
 
     # Tool extraction runs once via aspect on the tool targets, not per sdist build target.
     mnemonics = [a.mnemonic for a in target.actions]
-    env.expect.that_collection(mnemonics).not_contains("PycrossExtractConsoleScript")
     env.expect.that_collection(mnemonics).not_contains("PycrossExtractWheelBin")
 
     build_action = env.expect.that_target(target).action_named("PycrossPep517Build")

@@ -1,6 +1,5 @@
 """Internal repo"""
 
-load("@bazel_skylib//lib:shell.bzl", "shell")
 load(":lock_attrs.bzl", "CONFIGURE_TOOLCHAINS_ATTRS")
 
 INTERNAL_REPO_NAME = "rules_pycross_internal"
@@ -21,7 +20,7 @@ py_library = _py_library
 py_test = _py_test
 """
 
-def exec_internal_tool(rctx, tool, args, *, flagfile_param = "--flagfile", flagfile_threshold = 1000, quiet = False, include_patch_module = False):
+def exec_internal_tool(rctx, tool, args, *, quiet = False, include_patch_module = False):
     """
     Execute a script under //pycross/private/tools.
 
@@ -29,8 +28,6 @@ def exec_internal_tool(rctx, tool, args, *, flagfile_param = "--flagfile", flagf
       rctx: repository context
       tool: the script to execute
       args: a list of args to pass to the script
-      flagfile_param: the parameter name used when dumping arguments to a flag file
-      flagfile_threshold: use a flag file if len(args) >= this value
       quiet: The quiet value to pass to rctx.execute.
       include_patch_module: Whether to add //pycross/private/patching to sys.path
         and watch pycross_patch.py as a repo input.
@@ -49,16 +46,6 @@ def exec_internal_tool(rctx, tool, args, *, flagfile_param = "--flagfile", flagf
     rctx.read(interpreter_identity_file)
     interpreter_path_file = interpreter_identity_file.dirname.get_child("interpreter_path.txt")
     python_exe = rctx.read(interpreter_path_file, watch = "no").strip()
-
-    # Setup the flagfile if necessary
-    flagfile = None
-    if flagfile_param and len(args) >= flagfile_threshold:
-        flagfile_data = "\n".join([shell.quote(str(arg)) for arg in args])
-        flagfile = rctx.path("_internal_flagfile_%s.params" % hash(flagfile_data))
-        if flagfile.exists:
-            rctx.delete(flagfile)
-        rctx.file(flagfile, flagfile_data)
-        args = [flagfile_param, str(flagfile)]
 
     # rctx.path() doesn't record its file as an input, so changes to the tool (or to the patch
     # module when needed) wouldn't re-run the calling repo rule, and the repo contents cache
@@ -95,11 +82,9 @@ runpy.run_path(tool_path, run_name="__main__")
         quiet = quiet,
     )
 
-    # These files embed host-specific paths and are not needed after execution;
-    # leaving them behind would make the calling repo's contents host-specific.
+    # This file embeds host-specific paths and is not needed after execution;
+    # leaving it behind would make the calling repo's contents host-specific.
     rctx.delete(wrapper_file)
-    if flagfile:
-        rctx.delete(flagfile)
 
     if result.return_code != 0:
         fail("Failed to execute internal tool: {}\n{}".format(tool, result.stderr))

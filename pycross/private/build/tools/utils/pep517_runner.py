@@ -4,7 +4,6 @@ import subprocess
 import sys
 import traceback
 
-from pycross.private.build.tools.crossenv import utils as crossenv_utils
 from pycross.private.build.tools.utils.context import BuildContext
 
 
@@ -94,44 +93,6 @@ def run_pep517_build(ctx: BuildContext) -> str:
     from build._builder import ProjectBuilder
 
     ctx.wheel_dir.mkdir(parents=True, exist_ok=True)
-
-    is_cross = ctx.exec_python != ctx.target_python
-    if is_cross or ctx.bazel_config.get("always_use_crossenv"):
-        import sysconfig
-
-        target_suffix = ctx.sysconfig_vars.get("EXT_SUFFIX")
-        target_soabi = ctx.sysconfig_vars.get("SOABI")
-
-        _real_get_config_var = sysconfig.get_config_var
-
-        def _get_config_var(name):
-            if name == "EXT_SUFFIX" and target_suffix:
-                return target_suffix
-            elif name == "SOABI" and target_soabi:
-                return target_soabi
-            return _real_get_config_var(name)
-
-        sysconfig.get_config_var = _get_config_var
-
-        _real_get_config_vars = sysconfig.get_config_vars
-
-        def _get_config_vars(*args, **kwargs):
-            res = _real_get_config_vars(*args, **kwargs)
-            if isinstance(res, dict):
-                if "EXT_SUFFIX" in res and target_suffix:
-                    res["EXT_SUFFIX"] = target_suffix
-                if "SOABI" in res and target_soabi:
-                    res["SOABI"] = target_soabi
-            return res
-
-        sysconfig.get_config_vars = _get_config_vars
-
-        # Limited-API suffixes come from this list (e.g. Python 3.15's ".abi3-<platform>.so").
-        target_extension_suffixes = crossenv_utils.target_extension_suffixes(ctx.sysconfig_vars)
-        if target_extension_suffixes is not None:
-            import importlib.machinery
-
-            importlib.machinery.EXTENSION_SUFFIXES = target_extension_suffixes
 
     try:
         builder = ProjectBuilder(
