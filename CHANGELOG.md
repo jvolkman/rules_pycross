@@ -2,6 +2,93 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.3.0]
+
+### Added
+
+- **`//pycross/settings:precompile_invalidation_mode` flag.** Controls PEP 552
+  `.pyc` invalidation (`"auto"`, `"checked_hash"`, or `"unchecked_hash"`) so
+  target fastbuild and exec opt installs share one cache entry under path
+  mapping.
+- **Custom backend override helpers.** `pycross/backend.bzl` exports
+  `CORE_OVERRIDE_ATTRS` and `CC_OVERRIDE_ATTRS`, and `encode_build_system_attrs`
+  now forwards custom override attributes dynamically.
+- **`config_settings` on `pep517_build`** joins the common build attributes
+  shared by all backends.
+- **`PycrossBuildExecRuntimeInfo.bytecode_cache_tag`** exposes the target
+  interpreter's PEP 3147 bytecode cache tag (e.g. `cpython-314`).
+- **Lock translator support** for transitive PEP 735 `{include-group = ...}`,
+  Poetry `[tool.poetry.extras]`, and PDM multi-project `projects = ["*"]`.
+- **`null` values in `PYCROSS_ENV_VARS_FILE`** let pre-build hooks delete
+  environment keys without dropping unrelated entries.
+- **Optional `rules_rust` toolchain in `pycross_generate_cargo_lock`**, plus
+  `setuptools-rust` and `.zip` sdist support.
+
+### Changed
+
+- **Testonly propagation for local workspace members.** Third-party dependencies
+  reached only through a testonly local member or path dependency become
+  testonly pins (`all_testonly_requirements`), and `["*", "group:*;testonly"]`
+  now honors `;testonly`.
+- **PDM bare package targets exclude extras.** `@repo//pkg` no longer pulls in
+  `pkg[extra]` dependencies when a root pins `pkg[extra]`; depend on
+  `@repo//pkg:[extra]`, matching `uv` and Poetry.
+- **Native `linux_<arch>` wheel preference (`pypackaging.bzl` 0.4.0).**
+  `linux_<arch>` wheels now rank ahead of `manylinux_*` and `musllinux_*` tags
+  (matching upstream `packaging`). Also bumped `toml.bzl` to `0.6.0`.
+- **Root-wins override precedence.** Root-module backend overrides now win over
+  dependency modules, and duplicate overrides in the same module fail instead of
+  silently shadowing.
+- **Stricter configuration validation.** `ignore_dependencies`, `package()`,
+  `--@repo//_variants` (including on pinned or unusable repos), and
+  `precompile_optimize_level` (`[0, 1, 2]`) now reject invalid values up front.
+- **Custom backend override defaults.** Because `encode_build_system_attrs`
+  forwards every truthy attribute, custom attributes must default to falsy
+  values (`""`, `[]`, `{}`, `None`, `False`, `0`); `False` and `0` cannot be
+  expressed as override values.
+- **`pycross_generate_cargo_lock` prefers registered `rules_rust` `cargo`.**
+  Pass `-- --cargo cargo` to invoke `cargo` from `PATH` instead.
+- **`dev_dependency = True` lock repos** register in
+  `root_module_direct_dev_deps` so `bazel mod tidy` places them under dev
+  dependencies.
+- **Repo and analysis performance.** Lockfiles and `pyproject.toml` files parse
+  once per workspace, pure repo rules are `reproducible = True`, and universal
+  `py3-none-any` wheels bypass wheel chooser targets.
+- **Build and repair execution performance.** `PycrossRepairWheel` enables
+  `supports-path-mapping` and skips pure-Python wheels, extracted build tools
+  are shared across sdist targets, and POSIX `/bin/sh` wrappers replace
+  per-compile Python wrappers.
+- **Trimmed internal lock metadata.** Auto-generated `<workspace>__build` repos
+  omit `//_variants` unless declared, and `@<repo>_lock_json//:data.json` drops
+  unused `files` and `remote_files` fields.
+
+### Fixed
+
+- **Sdist builds and CC layer.** Fixed `CXXFLAGS` flag shadowing, `native_deps`
+  defines and PIC archives, `pkg_config_files` across all builders, user
+  `build_env` preservation, `meson`/`cmake` edge cases, and native musl builds.
+- **Maturin and `setuptools-rust` builds.** Fixed `rustc` wrapper metadata
+  hashes, probe detection, `rustlib` and `vendored_crates` paths, and workspace
+  `Cargo.lock` handling.
+- **Generated repos, variants, and cycles.** Fixed multi-member availability
+  markers, extras in dependency cycles, `_cargo` alias filtering,
+  `modules_mapping` fork selection, overlapping `uv` conflict defaults, and
+  extras canonicalization.
+- **Lock translators and package inspection.** Fixed marker-gated sdist `deps`,
+  Windows `ARM64`/`x86_32`/PyPy markers, `pylock` selection pruning and edge
+  markers, Poetry caret/tilde epochs, quote-aware PEP 503 parsing, and
+  `inspect_package` single-file, `.pyd`, script, and file-only sdist layouts.
+- **Wheel rules, installer, and patching.** Fixed single-file `.pyc` venv
+  symlinks, plain `.whl` inputs to `pycross_wheel_transform`, Windows `RECORD`
+  paths, `modules_mapping` Windows/PyPy ABI stripping, and atomic patching of
+  read-only files.
+- **Build and variant diagnostics.** Preserved `build_failed.log` on PEP 517
+  failures (with live output under `RULES_PYCROSS_DEBUG=1`), included package
+  names in thin-repo `no_match_error` failures, and cleaned up `_variants` error
+  messages.
+
+See #407 for the full list of fixes and improvements.
+
 ## [2.2.0]
 
 ### Added

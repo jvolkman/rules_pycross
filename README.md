@@ -656,7 +656,7 @@ uv.package(
 )
 ```
 
-Precompiled installs are tied to one Python version, and an interpreter patch release re-runs them. Uncompiled pure-Python installs are shared across Python versions. Enable `precompile` on the large packages that need it rather than globally to limit that rebuild cost. See [`pycross_wheel_library`](docs/rules.md#pycross_wheel_library) for invalidation details.
+Precompiled installs are tied to one Python version, and an interpreter patch release re-runs them. Uncompiled pure-Python installs are shared across Python versions. Enable `precompile` on the large packages that need it rather than globally to limit that rebuild cost. Pass `--@rules_pycross//pycross/settings:precompile_invalidation_mode=unchecked_hash` to share precompiled installs between target fastbuild and exec opt builds under path mapping. See [`pycross_wheel_library`](docs/rules.md#pycross_wheel_library) for invalidation details.
 
 #### Console scripts
 
