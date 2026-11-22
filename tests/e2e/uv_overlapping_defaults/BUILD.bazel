@@ -1,0 +1,148 @@
+load("@rules_python//python:defs.bzl", "py_test")
+
+# Default group `g-a` applies in both set 1 ([g-a, g-b]) and set 2 ([g-a, x]) with no flags.
+py_test(
+    name = "test_default_a",
+    srcs = ["tests/test_conflict_version.py"],
+    args = [
+        "iniconfig",
+        "1.1.1",
+    ],
+    main = "tests/test_conflict_version.py",
+    deps = [
+        "@app_default//iniconfig",
+        "@app_default//pytest",
+    ],
+)
+
+# Identical variant state to test_default_a (from a second thin repo) for aquery dedup check.
+py_test(
+    name = "test_default_dup_a",
+    srcs = ["tests/test_conflict_version.py"],
+    args = [
+        "iniconfig",
+        "1.1.1",
+    ],
+    main = "tests/test_conflict_version.py",
+    deps = [
+        "@app_default_dup//iniconfig",
+        "@app_default_dup//pytest",
+    ],
+)
+
+# Selecting `g-b` drops default `g-a` in set 2 instead of activating `g-a` and `g-b` together.
+py_test(
+    name = "test_flag_b",
+    srcs = ["tests/test_conflict_version.py"],
+    args = [
+        "iniconfig",
+        "2.0.0",
+    ],
+    main = "tests/test_conflict_version.py",
+    deps = [
+        "@app_default//iniconfig",
+        "@app_default//pytest",
+    ],
+)
+
+# Selecting `x` suppresses default `g-a` in set 1 and selects `x` in sets 2 & 3.
+py_test(
+    name = "test_flag_x",
+    srcs = ["tests/test_conflict_version.py"],
+    args = [
+        "iniconfig",
+        "2.0.0",
+        "typing-extensions",
+        "4.11.0",
+    ],
+    main = "tests/test_conflict_version.py",
+    deps = [
+        "@app_default//iniconfig",
+        "@app_default//pytest",
+        "@app_default//typing_extensions",
+    ],
+)
+
+# Selecting `y` (set 3 endpoint) keeps default `g-a` in sets 1 & 2.
+py_test(
+    name = "test_default_a_with_y",
+    srcs = ["tests/test_conflict_version.py"],
+    args = [
+        "iniconfig",
+        "1.1.1",
+        "typing-extensions",
+        "4.12.2",
+    ],
+    main = "tests/test_conflict_version.py",
+    deps = [
+        "@app_default//iniconfig",
+        "@app_default//pytest",
+        "@app_default//typing_extensions",
+    ],
+)
+
+# Selecting chain endpoints `g-b` + `y` suppresses default `g-a` in set 2 and picks `y` in set 3.
+py_test(
+    name = "test_chain_b_and_y",
+    srcs = ["tests/test_conflict_version.py"],
+    args = [
+        "iniconfig",
+        "2.0.0",
+        "typing-extensions",
+        "4.12.2",
+    ],
+    main = "tests/test_conflict_version.py",
+    deps = [
+        "@app_default//iniconfig",
+        "@app_default//pytest",
+        "@app_default//typing_extensions",
+    ],
+)
+
+# Pinned repo (`g-b` pinned via flags): ignores sibling flags.
+py_test(
+    name = "test_pinned_b",
+    srcs = ["tests/test_conflict_version.py"],
+    args = [
+        "iniconfig",
+        "2.0.0",
+    ],
+    main = "tests/test_conflict_version.py",
+    deps = [
+        "@pinned_b//iniconfig",
+        "@pinned_b//pytest",
+    ],
+)
+
+# Auto-pinned repo (requests only `g-a`): ignores sibling flags.
+py_test(
+    name = "test_only_a",
+    srcs = ["tests/test_conflict_version.py"],
+    args = [
+        "iniconfig",
+        "1.1.1",
+    ],
+    main = "tests/test_conflict_version.py",
+    deps = [
+        "@only_a//iniconfig",
+        "@only_a//pytest",
+    ],
+)
+
+# Transitioned repo pinning `y`: keeps default `g-a` and ignores sibling `extra_x`.
+py_test(
+    name = "test_transitioned_y",
+    srcs = ["tests/test_conflict_version.py"],
+    args = [
+        "iniconfig",
+        "1.1.1",
+        "typing-extensions",
+        "4.12.2",
+    ],
+    main = "tests/test_conflict_version.py",
+    deps = [
+        "@transitioned_y//iniconfig",
+        "@transitioned_y//pytest",
+        "@transitioned_y//typing_extensions",
+    ],
+)

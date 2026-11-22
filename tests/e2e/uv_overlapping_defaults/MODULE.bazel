@@ -1,0 +1,99 @@
+bazel_dep(name = "rules_pycross", version = "0.0.0")
+bazel_dep(name = "rules_pycross_e2e_shared", version = "0.0.0")
+bazel_dep(name = "rules_python", version = "2.0.0")
+
+local_path_override(
+    module_name = "rules_pycross",
+    path = "../../..",
+)
+
+local_path_override(
+    module_name = "rules_pycross_e2e_shared",
+    path = "../shared",
+)
+
+python = use_extension("@rules_python//python/extensions:python.bzl", "python")
+python.toolchain(
+    is_default = True,
+    python_version = "3.14.2",
+)
+
+uv = use_extension("@rules_pycross//pycross/extensions:uv.bzl", "uv")
+uv.workspace(
+    name = "ws",
+    lock_file = "//:uv.lock",
+)
+
+# Requests all items with default-groups = ["g-a"]. With no flags, g-a is the
+# default in sets 1 ([g-a, g-b]) and 2 ([g-a, x]); selecting g-b or x must
+# suppress the overlapping set's g-a default instead of colliding with it.
+uv.repo(
+    name = "app_default",
+    dependency_groups = [
+        "default",
+        "group:g-a",
+        "group:g-b",
+        "optional:x",
+        "optional:y",
+    ],
+    projects = ["app"],
+    workspace = "ws",
+)
+
+# Second thin repo with identical derived variant state, used to verify
+# PycrossWheelInstall deduplication across repos with matching state.
+uv.repo(
+    name = "app_default_dup",
+    dependency_groups = [
+        "default",
+        "group:g-a",
+        "group:g-b",
+        "optional:x",
+        "optional:y",
+    ],
+    projects = ["app"],
+    workspace = "ws",
+)
+
+# Pinned to g-b via flags: must suppress g-a in set 2 and ignore sibling flags.
+uv.repo(
+    name = "pinned_b",
+    dependency_groups = [
+        "default",
+        "group:g-a",
+        "group:g-b",
+        "optional:x",
+        "optional:y",
+    ],
+    flags = ["--@pinned_b//_variants:group_g-b=True"],
+    projects = ["app"],
+    workspace = "ws",
+)
+
+# Requests only g-a (auto-pinned): ignores sibling flags selecting g-b or x.
+uv.repo(
+    name = "only_a",
+    dependency_groups = [
+        "default",
+        "group:g-a",
+    ],
+    projects = ["app"],
+    workspace = "ws",
+)
+
+# Transitioned repo pinning y (set 3 endpoint): keeps g-a default in sets 1 & 2
+# and excludes rival x from set 2 so a sibling extra_x flag cannot leak in.
+uv.repo(
+    name = "transitioned_y",
+    dependency_groups = [
+        "default",
+        "group:g-a",
+        "group:g-b",
+        "optional:x",
+        "optional:y",
+    ],
+    flags = ["--@transitioned_y//_variants:extra_y=True"],
+    projects = ["app"],
+    workspace = "ws",
+)
+use_repo(uv, "app_default", "app_default_dup", "only_a", "pinned_b", "transitioned_y")

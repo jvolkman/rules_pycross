@@ -112,6 +112,174 @@ def _overlapping_rivals(vset, variant_sets):
 # Visible for testing
 overlapping_rivals_for_testing = _overlapping_rivals
 
+def _render_lock_build(variant_items, variant_sets, qname_to_resolvers, member_variant_flags):
+    """Render `_lock/BUILD.bazel` for a workspace package repo."""
+    lock_build_lines = [
+        'package(default_visibility = ["//visibility:public"])',
+        "",
+        'load(":lock.bzl", "targets")',
+        "",
+    ]
+    if variant_items:
+        lock_build_lines.append('load("@bazel_skylib//rules:common_settings.bzl", "string_flag")')
+        lock_build_lines.append('load("@rules_pycross//pycross/private:variant_resolver.bzl", "variant_resolver")')
+        lock_build_lines.append("")
+
+    # Check if we need config_setting_group for items in multiple sets.
+    needs_config_setting_group = False
+    for _qname, resolvers in qname_to_resolvers.items():
+        if len(resolvers) > 1:
+            needs_config_setting_group = True
+            break
+    if needs_config_setting_group:
+        lock_build_lines.extend([
+            'load("@bazel_skylib//lib:selects.bzl", "selects")',
+            "",
+        ])
+
+    lock_build_lines.extend([
+        "targets()",
+        "",
+    ])
+
+    # Emit variant_resolver targets for each conflict set (two stages for
+    # overlapping sets so defaults can check rival explicit selections without
+    # cycles). There are no static defaults here: the thin repos select variants. Their _variants bool_flags
+    # feed the resolver directly (one flag can enable several items, e.g.
+    # `group_test` in a repo with two projects), and their transitions set
+    # `_pin_<set>` (from `uv.repo(flags/settings)`) or `_default_<set>` (from
+    # the repo's default-groups). Precedence: pin > flags > default. A
+    # transitioned repo also sets `_usable_<set>` to the items it can use, so
+    # flags and defaults for other items are ignored there.
+    for vset in variant_sets:
+        set_suffix = "_".join(sorted(vset["qnames"]))
+        resolver_name = "_resolver_" + set_suffix
+        rivals = _overlapping_rivals(vset, variant_sets)
+
+        lock_build_lines.extend([
+            "string_flag(",
+            '    name = "_pin_{}",'.format(set_suffix),
+            '    build_setting_default = "",',
+            ")",
+            "",
+            "string_flag(",
+            '    name = "_default_{}",'.format(set_suffix),
+            '    build_setting_default = "",',
+            ")",
+            "",
+            "string_flag(",
+            '    name = "_usable_{}",'.format(set_suffix),
+            '    build_setting_default = "*",',
+            ")",
+            "",
+        ])
+
+        # Overlapping sets split into two stages so `_resolver_<set>` can check
+        # rival sets' explicit selections without creating a target cycle.
+        flag_resolver_name = "_explicit_" + set_suffix if rivals else resolver_name
+        lock_build_lines.extend([
+            "variant_resolver(",
+            '    name = "{}",'.format(flag_resolver_name),
+            '    pin = ":_pin_{}",'.format(set_suffix),
+        ])
+        if not rivals:
+            lock_build_lines.append('    default_setting = ":_default_{}",'.format(set_suffix))
+        lock_build_lines.extend([
+            '    usable = ":_usable_{}",'.format(set_suffix),
+            "    items = {},".format(json.encode(sorted(vset["qnames"]))),
+            "    flags = {",
+        ])
+        for flag_label, qnames in sorted(vset["flags"].items()):
+            lock_build_lines.append('        "{}": "{}|{}",'.format(flag_label, flag_label, " ".join(qnames)))
+        lock_build_lines.append("    },")
+        if member_variant_flags:
+            lock_build_lines.append("    string_flags = {")
+            for member in sorted(member_variant_flags.keys()):
+                flag_map = vset["member_flags"].get(member, {})
+                spec = {
+                    "display": "@{}//_variants".format(member),
+                    "valid": sorted(member_variant_flags[member].keys()),
+                    "map": {k: v for k, v in sorted(flag_map.items())},
+                }
+                lock_build_lines.append('        "@{}//_variants:_variants": {},'.format(member, json.encode(json.encode(spec))))
+            lock_build_lines.append("    },")
+        lock_build_lines.extend([
+            ")",
+            "",
+        ])
+
+        if rivals:
+            lock_build_lines.extend([
+                "variant_resolver(",
+                '    name = "{}",'.format(resolver_name),
+                '    explicit = ":_explicit_{}",'.format(set_suffix),
+                '    default_setting = ":_default_{}",'.format(set_suffix),
+                '    usable = ":_usable_{}",'.format(set_suffix),
+                "    items = {},".format(json.encode(sorted(vset["qnames"]))),
+                "    rival_resolvers = {",
+            ])
+            for other_suffix, shared in sorted(rivals.items()):
+                lock_build_lines.append('        ":_explicit_{}": "{}",'.format(other_suffix, " ".join(shared)))
+            lock_build_lines.extend([
+                "    },",
+                ")",
+                "",
+            ])
+
+        lock_build_lines.extend([
+            "config_setting(",
+            '    name = "_unselected_{}",'.format(set_suffix),
+            '    flag_values = {{":{resolver}": ""}},'.format(resolver = resolver_name),
+            ")",
+            "",
+        ])
+
+    # Emit config_settings referencing the resolver(s).
+    for qname in sorted(variant_items.keys()):
+        resolvers = qname_to_resolvers.get(qname, [])
+        if len(resolvers) == 1:
+            # Simple case: item is in exactly one conflict set.
+            lock_build_lines.extend([
+                "config_setting(",
+                '    name = "is_{}",'.format(qname),
+                '    flag_values = {{":{resolver}": "{value}"}},'.format(
+                    resolver = resolvers[0],
+                    value = qname,
+                ),
+                ")",
+                "",
+            ])
+        elif len(resolvers) > 1:
+            # Item appears in multiple conflict sets: OR them together.
+            for j, resolver in enumerate(resolvers):
+                lock_build_lines.extend([
+                    "config_setting(",
+                    '    name = "_is_{}_via_{}",'.format(qname, j),
+                    '    flag_values = {{":{resolver}": "{value}"}},'.format(
+                        resolver = resolver,
+                        value = qname,
+                    ),
+                    ")",
+                    "",
+                ])
+            lock_build_lines.extend([
+                "selects.config_setting_group(",
+                '    name = "is_{}",'.format(qname),
+                "    match_any = [",
+            ])
+            for j in range(len(resolvers)):
+                lock_build_lines.append('        ":_is_{}_via_{}",'.format(qname, j))
+            lock_build_lines.extend([
+                "    ],",
+                ")",
+                "",
+            ])
+
+    return "\n".join(lock_build_lines)
+
+# Visible for testing
+render_lock_build_for_testing = _render_lock_build
+
 def _run_package_repo_hooks(hooks, packages_info, override_configs):
     """Run registered package_repo hooks, deduplicating backends that share a hook function."""
 
@@ -266,168 +434,10 @@ def _package_repo_impl(rctx):
             ),
         )
 
-    lock_build_lines = [
-        'package(default_visibility = ["//visibility:public"])',
-        "",
-        'load(":lock.bzl", "targets")',
-        "",
-    ]
-    if variant_items:
-        lock_build_lines.append('load("@bazel_skylib//rules:common_settings.bzl", "string_flag")')
-        lock_build_lines.append('load("@rules_pycross//pycross/private:variant_resolver.bzl", "variant_resolver")')
-        lock_build_lines.append("")
-
-    # Check if we need config_setting_group for items in multiple sets.
-    needs_config_setting_group = False
-    for qname, resolvers in qname_to_resolvers.items():
-        if len(resolvers) > 1:
-            needs_config_setting_group = True
-            break
-    if needs_config_setting_group:
-        lock_build_lines.extend([
-            'load("@bazel_skylib//lib:selects.bzl", "selects")',
-            "",
-        ])
-
-    lock_build_lines.extend([
-        "targets()",
-        "",
-    ])
-
-    # Emit variant_resolver targets for each conflict set (two stages for
-    # overlapping sets so defaults can check rival explicit selections without
-    # cycles). There are no static defaults here: the thin repos select variants. Their _variants bool_flags
-    # feed the resolver directly (one flag can enable several items, e.g.
-    # `group_test` in a repo with two projects), and their transitions set
-    # `_pin_<set>` (from `uv.repo(flags/settings)`) or `_default_<set>` (from
-    # the repo's default-groups). Precedence: pin > flags > default. A
-    # transitioned repo also sets `_usable_<set>` to the items it can use, so
-    # flags and defaults for other items are ignored there.
-    for vset in variant_sets:
-        set_suffix = "_".join(sorted(vset["qnames"]))
-        resolver_name = "_resolver_" + set_suffix
-        rivals = _overlapping_rivals(vset, variant_sets)
-
-        lock_build_lines.extend([
-            "string_flag(",
-            '    name = "_pin_{}",'.format(set_suffix),
-            '    build_setting_default = "",',
-            ")",
-            "",
-            "string_flag(",
-            '    name = "_default_{}",'.format(set_suffix),
-            '    build_setting_default = "",',
-            ")",
-            "",
-            "string_flag(",
-            '    name = "_usable_{}",'.format(set_suffix),
-            '    build_setting_default = "*",',
-            ")",
-            "",
-        ])
-
-        # Overlapping sets split into two stages so `_resolver_<set>` can check
-        # rival sets' explicit selections without creating a target cycle.
-        flag_resolver_name = "_explicit_" + set_suffix if rivals else resolver_name
-        lock_build_lines.extend([
-            "variant_resolver(",
-            '    name = "{}",'.format(flag_resolver_name),
-            '    pin = ":_pin_{}",'.format(set_suffix),
-        ])
-        if not rivals:
-            lock_build_lines.append('    default_setting = ":_default_{}",'.format(set_suffix))
-        lock_build_lines.extend([
-            '    usable = ":_usable_{}",'.format(set_suffix),
-            "    items = {},".format(json.encode(sorted(vset["qnames"]))),
-            "    flags = {",
-        ])
-        for flag_label, qnames in sorted(vset["flags"].items()):
-            lock_build_lines.append('        "{}": "{}|{}",'.format(flag_label, flag_label, " ".join(qnames)))
-        lock_build_lines.append("    },")
-        if member_variant_flags:
-            lock_build_lines.append("    string_flags = {")
-            for member in sorted(member_variant_flags.keys()):
-                flag_map = vset["member_flags"].get(member, {})
-                spec = {
-                    "display": "@{}//_variants".format(member),
-                    "valid": sorted(member_variant_flags[member].keys()),
-                    "map": {k: v for k, v in sorted(flag_map.items())},
-                }
-                lock_build_lines.append('        "@{}//_variants:_variants": {},'.format(member, json.encode(json.encode(spec))))
-            lock_build_lines.append("    },")
-        lock_build_lines.extend([
-            ")",
-            "",
-        ])
-
-        if rivals:
-            lock_build_lines.extend([
-                "variant_resolver(",
-                '    name = "{}",'.format(resolver_name),
-                '    explicit = ":_explicit_{}",'.format(set_suffix),
-                '    default_setting = ":_default_{}",'.format(set_suffix),
-                '    usable = ":_usable_{}",'.format(set_suffix),
-                "    items = {},".format(json.encode(sorted(vset["qnames"]))),
-                "    rival_resolvers = {",
-            ])
-            for other_suffix, shared in sorted(rivals.items()):
-                lock_build_lines.append('        ":_explicit_{}": "{}",'.format(other_suffix, " ".join(shared)))
-            lock_build_lines.extend([
-                "    },",
-                ")",
-                "",
-            ])
-
-        lock_build_lines.extend([
-            "config_setting(",
-            '    name = "_unselected_{}",'.format(set_suffix),
-            '    flag_values = {{":{resolver}": ""}},'.format(resolver = resolver_name),
-            ")",
-            "",
-        ])
-
-    # Emit config_settings referencing the resolver(s).
-    for qname in sorted(variant_items.keys()):
-        resolvers = qname_to_resolvers.get(qname, [])
-        if len(resolvers) == 1:
-            # Simple case: item is in exactly one conflict set.
-            lock_build_lines.extend([
-                "config_setting(",
-                '    name = "is_{}",'.format(qname),
-                '    flag_values = {{":{resolver}": "{value}"}},'.format(
-                    resolver = resolvers[0],
-                    value = qname,
-                ),
-                ")",
-                "",
-            ])
-        elif len(resolvers) > 1:
-            # Item appears in multiple conflict sets: OR them together.
-            for j, resolver in enumerate(resolvers):
-                lock_build_lines.extend([
-                    "config_setting(",
-                    '    name = "_is_{}_via_{}",'.format(qname, j),
-                    '    flag_values = {{":{resolver}": "{value}"}},'.format(
-                        resolver = resolver,
-                        value = qname,
-                    ),
-                    ")",
-                    "",
-                ])
-            lock_build_lines.extend([
-                "selects.config_setting_group(",
-                '    name = "is_{}",'.format(qname),
-                "    match_any = [",
-            ])
-            for j in range(len(resolvers)):
-                lock_build_lines.append('        ":_is_{}_via_{}",'.format(qname, j))
-            lock_build_lines.extend([
-                "    ],",
-                ")",
-                "",
-            ])
-
-    rctx.file("_lock/BUILD.bazel", "\n".join(lock_build_lines))
+    rctx.file(
+        "_lock/BUILD.bazel",
+        _render_lock_build(variant_items, variant_sets, qname_to_resolvers, member_variant_flags),
+    )
 
     # 2. Root BUILD.bazel
     root_build_lines = [

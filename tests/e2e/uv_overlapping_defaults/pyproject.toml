@@ -1,0 +1,25 @@
+[project]
+name = "app"
+version = "0.1.0"
+requires-python = ">=3.11"
+# pytest gets conflict-gated edges to iniconfig 1.1.1 and 2.0.0.
+dependencies = ["pytest==7.4.4"]
+
+[project.optional-dependencies]
+x = ["iniconfig==2.0.0", "typing-extensions==4.11.0"]
+y = ["typing-extensions==4.12.2"]
+
+[dependency-groups]
+g-a = ["iniconfig==1.1.1"]
+g-b = ["iniconfig==2.0.0"]
+
+[tool.uv]
+package = false
+default-groups = ["g-a"]
+# 3-set overlapping chain: g-b -- g-a -- x -- y, with default-groups = ["g-a"]
+# shared by sets 1 and 2.
+conflicts = [
+  [{ group = "g-a" }, { group = "g-b" }],
+  [{ group = "g-a" }, { extra = "x" }],
+  [{ extra = "x" }, { extra = "y" }],
+]

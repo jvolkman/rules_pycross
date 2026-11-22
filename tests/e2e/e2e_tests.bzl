@@ -38,6 +38,7 @@ def define_e2e_tests():
         "uv_forks",
         "uv_markers",
         "uv_overlapping_conflicts",
+        "uv_overlapping_defaults",
         "uv_project_conflicts",
         "uv_workspace",
         "wheel_cc_import",
