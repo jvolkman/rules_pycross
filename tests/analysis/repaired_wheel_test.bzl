@@ -1,6 +1,6 @@
 """Tests for pycross_repaired_wheel."""
 
-load("@rules_cc//cc:defs.bzl", "cc_library")
+load("@rules_cc//cc:defs.bzl", "cc_import", "cc_library")
 load("@rules_testing//lib:analysis_test.bzl", "analysis_test", "test_suite")
 load("@rules_testing//lib:truth.bzl", "matching")
 load("@rules_testing//lib:util.bzl", "util")
@@ -148,6 +148,49 @@ def _test_repaired_wheel_excludes_nested_wheel_libraries_impl(env, target):
     action.argv().contains_at_least(["--exclude", "libtorch.so"]).in_order()
     action.argv().contains_at_least(["--exclude", "libc10.so"]).in_order()
 
+def _mock_file_impl(ctx):
+    out = ctx.actions.declare_file(ctx.attr.filename)
+    ctx.actions.write(out, "")
+    return [DefaultInfo(files = depset([out]))]
+
+_mock_file = rule(
+    implementation = _mock_file_impl,
+    attrs = {"filename": attr.string(mandatory = True)},
+)
+
+def _test_repaired_wheel_skips_static_libs(name):
+    util.helper_target(_mock_wheel, name = name + "_wheel")
+    util.helper_target(_mock_file, name = name + "_static_a", filename = name + "_libs/libstatic.a")
+    util.helper_target(_mock_file, name = name + "_dyn_so", filename = name + "_libs/libdyn.so")
+    util.helper_target(_mock_file, name = name + "_iface_lib", filename = name + "_libs/libdyn.ifso")
+    util.helper_target(
+        cc_import,
+        name = name + "_mixed_cc",
+        static_library = name + "_static_a",
+        shared_library = name + "_dyn_so",
+        interface_library = name + "_iface_lib",
+    )
+    util.helper_target(
+        pycross_repaired_wheel,
+        name = name + "_subject",
+        wheel = name + "_wheel",
+        native_deps = [name + "_mixed_cc"],
+    )
+    analysis_test(
+        name = name,
+        target = name + "_subject",
+        impl = _test_repaired_wheel_skips_static_libs_impl,
+    )
+
+def _test_repaired_wheel_skips_static_libs_impl(env, target):
+    wheel_dir = target[DefaultInfo].files.to_list()[0]
+    action = env.expect.that_target(target).action_generating(wheel_dir.short_path)
+    action.mnemonic().equals("PycrossRepairWheel")
+    action.inputs().contains_predicate(matching.file_basename_equals("libdyn.so"))
+    action.inputs().not_contains_predicate(matching.file_basename_equals("libstatic.a"))
+    action.inputs().not_contains_predicate(matching.file_basename_equals("libdyn.ifso"))
+    action.argv().contains_predicate(matching.str_endswith("_libs"))
+
 def repaired_wheel_test_suite(name):
     test_suite(
         name = name,
@@ -157,5 +200,6 @@ def repaired_wheel_test_suite(name):
             _test_repaired_wheel_with_exclude_globs,
             _test_repaired_wheel_excludes_wheel_libraries,
             _test_repaired_wheel_excludes_nested_wheel_libraries,
+            _test_repaired_wheel_skips_static_libs,
         ],
     )

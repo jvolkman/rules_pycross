@@ -3,6 +3,7 @@
 load("@rules_cc//cc:defs.bzl", "cc_library")
 load("@rules_python//python:defs.bzl", "PyInfo")
 load("@rules_testing//lib:analysis_test.bzl", "analysis_test", "test_suite")
+load("@rules_testing//lib:truth.bzl", "matching")
 load("@rules_testing//lib:util.bzl", "util")
 
 # buildifier: disable=bzl-visibility
@@ -53,6 +54,15 @@ def _test_cmake_build_basic_impl(env, target):
     env.expect.that_target(target).has_provider(OutputGroupInfo)
     out_group = target[OutputGroupInfo]
     env.expect.that_bool(hasattr(out_group, "raw_wheel")).equals(True)
+
+    # Tool extraction runs once via aspect on the tool targets, not per sdist build target.
+    mnemonics = [a.mnemonic for a in target.actions]
+    env.expect.that_collection(mnemonics).not_contains("PycrossExtractConsoleScript")
+    env.expect.that_collection(mnemonics).not_contains("PycrossExtractWheelBin")
+
+    build_action = env.expect.that_target(target).action_named("PycrossPep517Build")
+    build_action.inputs().contains_predicate(matching.file_path_matches("*_cmake_tools/cmake"))
+    build_action.inputs().contains_predicate(matching.file_path_matches("*_ninja_tools/ninja"))
 
 def _test_cmake_build_resources(name):
     util.helper_target(_mock_sdist, name = name + "_sdist")

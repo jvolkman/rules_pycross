@@ -86,12 +86,16 @@ def _register_wheel_install_action(ctx, out, entry_points, dist_info_dir):
         ctx.toolchains[_PYCROSS_TOOLCHAIN_TYPE]
     ):
         pycross_info = ctx.toolchains[_PYCROSS_TOOLCHAIN_TYPE].pycross_info
-        if ctx.attr.precompile_invalidation_mode == "auto":
-            invalidation_mode = (
-                "unchecked_hash" if ctx.var.get("COMPILATION_MODE") == "opt" else "checked_hash"
-            )
-        else:
+        if ctx.attr.precompile_invalidation_mode != "auto":
             invalidation_mode = ctx.attr.precompile_invalidation_mode
+        else:
+            flag_mode = ctx.attr._precompile_invalidation_mode[BuildSettingInfo].value
+            if flag_mode != "auto":
+                invalidation_mode = flag_mode
+            else:
+                invalidation_mode = (
+                    "unchecked_hash" if ctx.var.get("COMPILATION_MODE") == "opt" else "checked_hash"
+                )
         exec_py_file = getattr(pycross_info, "exec_python_executable_file", None)
         if not exec_py_file and pycross_info.exec_python_files_to_run:
             exec_py_file = pycross_info.exec_python_files_to_run.executable
@@ -359,7 +363,7 @@ _WHEEL_LIBRARY_ATTRS = dict({
     "precompile_invalidation_mode": attr.string(
         default = "auto",
         values = ["auto", "checked_hash", "unchecked_hash"],
-        doc = "The PEP 552 hash invalidation mode for generated `.pyc` files. `auto` uses `unchecked_hash` when `--compilation_mode=opt` and `checked_hash` otherwise.",
+        doc = "The PEP 552 hash invalidation mode for generated `.pyc` files. `auto` follows `--@rules_pycross//pycross/settings:precompile_invalidation_mode` (defaulting to `unchecked_hash` when `--compilation_mode=opt` and `checked_hash` otherwise).",
     ),
     "precompile_optimize_level": attr.int(
         default = 0,
@@ -372,6 +376,9 @@ _WHEEL_LIBRARY_ATTRS = dict({
     ),
     "_precompile": attr.label(
         default = Label("@rules_python//python/config_settings:precompile"),
+    ),
+    "_precompile_invalidation_mode": attr.label(
+        default = Label("//pycross/settings:precompile_invalidation_mode"),
     ),
     "experimental_venvs_site_packages": attr.label(
         default = Label("@rules_python//python/config_settings:venvs_site_packages"),

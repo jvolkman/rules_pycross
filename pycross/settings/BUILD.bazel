@@ -81,3 +81,20 @@ config_setting(
     name = "unavailable_package_fail_at_execution",
     flag_values = {":unavailable_package_mode": "fail_at_execution"},
 )
+
+# Precompile Invalidation Mode
+# Controls the PEP 552 hash invalidation mode for .pyc bytecode compiled during
+# wheel installation when the rule attribute is "auto":
+# - "auto" (default): "unchecked_hash" under --compilation_mode=opt, "checked_hash" otherwise.
+# - "checked_hash": always use CHECKED_HASH.
+# - "unchecked_hash": always use UNCHECKED_HASH (lets target fastbuild and exec opt
+#   wheel installs share a single cache entry under path mapping).
+string_flag(
+    name = "precompile_invalidation_mode",
+    build_setting_default = "auto",
+    values = [
+        "auto",
+        "checked_hash",
+        "unchecked_hash",
+    ],
+)

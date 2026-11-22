@@ -292,7 +292,7 @@ Extracts a native binary from a wheel's bin/ directory.
 
 | Name  | Description | Default Value |
 | :------------- | :------------- | :------------- |
-| <a id="register_bin_extract_action-ctx"></a>ctx |  The rule context.   |  none |
+| <a id="register_bin_extract_action-ctx"></a>ctx |  The rule or aspect context.   |  none |
 | <a id="register_bin_extract_action-wheel_dir"></a>wheel_dir |  File, the tree artifact of the unzipped wheel.   |  none |
 | <a id="register_bin_extract_action-binary_name"></a>binary_name |  str, name of the binary.   |  none |
 

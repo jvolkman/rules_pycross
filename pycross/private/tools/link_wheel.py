@@ -1,4 +1,4 @@
-"""Link or copy a wheel file to a stable destination.
+"""Copy a wheel file to a stable destination.
 
 If the source is a directory, it scans for a single .whl file inside.
 If the source is a file, it uses it directly.
@@ -35,14 +35,11 @@ def main():
     if dst_dir:
         os.makedirs(dst_dir, exist_ok=True)
 
-    # Try to symlink first, fallback to copy
-    try:
-        if os.path.lexists(dst):
-            os.unlink(dst)
-        rel_src = os.path.relpath(src_file, os.path.dirname(dst))
-        os.symlink(rel_src, dst)
-    except OSError:
-        shutil.copy2(src_file, dst)
+    # Copy rather than symlink so Bazel path mapping does not bake
+    # configuration-stripped paths into a relative symlink target.
+    if os.path.lexists(dst):
+        os.unlink(dst)
+    shutil.copy2(src_file, dst)
 
 
 if __name__ == "__main__":

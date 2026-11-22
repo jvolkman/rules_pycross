@@ -41,7 +41,6 @@ def _pep517_build_impl(ctx):
         repair_tool = ctx.executable._repair_tool,
         target_environment = target_environment,
         repair_exclude_globs = ctx.attr.repair_exclude_globs,
-        resource_set = resources.resource_set,
     )
 
     return [

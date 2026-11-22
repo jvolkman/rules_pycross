@@ -21,7 +21,7 @@ class RepairWheelHookArgsTest(unittest.TestCase):
     def tearDown(self):
         shutil.rmtree(self.temp_dir)
 
-    def _create_dummy_wheel(self, directory, name="foo-1.0-py3-none-any.whl"):
+    def _create_dummy_wheel(self, directory, name="foo-1.0-cp312-cp312-linux_x86_64.whl"):
         wheel_path = directory / name
         with zipfile.ZipFile(wheel_path, "w") as zf:
             zf.writestr("foo-1.0.dist-info/METADATA", "Name: foo\nVersion: 1.0\n")
@@ -162,6 +162,85 @@ class RepairWheelHookArgsTest(unittest.TestCase):
             [call_args[i + 1] for i in exclude_indices],
             ["libtorch*.so", "libc10*.so"],
         )
+
+    @patch("subprocess.check_call")
+    def test_pure_python_wheel_skips_repairwheel_and_validates_tags(self, mock_check_call):
+        """Pure-Python -none-any.whl copies directly without spawning repairwheel, and still checks tags."""
+        import io
+        import json
+        import os
+
+        self._create_dummy_wheel(self.wheel_dir, name="foo-1.0-py3-none-any.whl")
+        target_env = Path(self.temp_dir) / "target.json"
+        target_env.write_text(json.dumps({"compatibility_tags": ["cp312-cp312-linux_x86_64", "py3-none-any"]}))
+
+        from pycross.private.build.tools.repair_wheel_hook import main
+
+        argv = [
+            "repair_wheel_hook",
+            "--wheel-dir",
+            str(self.wheel_dir),
+            "--out-wheel-dir",
+            str(self.out_wheel_dir),
+            "--target-environment",
+            str(target_env),
+        ]
+        with patch("sys.argv", argv), patch.dict(os.environ, {}, clear=False):
+            os.environ.pop("REPAIRWHEEL_PYTHONPATH", None)
+            main()
+
+        mock_check_call.assert_not_called()
+        out_wheel = self.out_wheel_dir / "foo-1.0-py3-none-any.whl"
+        self.assertTrue(out_wheel.is_file())
+        with zipfile.ZipFile(out_wheel) as zf:
+            record = zf.read("foo-1.0.dist-info/RECORD").decode("utf-8")
+            self.assertIn("foo/__init__.py,sha256=", record)
+            self.assertEqual(zf.getinfo("foo/__init__.py").date_time, (1980, 1, 1, 0, 0, 0))
+
+        # Incompatible target tags still fail and print sample expected tags.
+        target_env.write_text(
+            json.dumps(
+                {
+                    "compatibility_tags": [
+                        "cp312-cp312-linux_x86_64",
+                        "cp312-abi3-linux_x86_64",
+                        "cp312-none-linux_x86_64",
+                        "py312-none-linux_x86_64",
+                        "py3-none-linux_x86_64",
+                        "cp311-abi3-linux_x86_64",
+                    ]
+                }
+            )
+        )
+        stderr = io.StringIO()
+        with patch("sys.argv", argv), patch("sys.stderr", stderr), patch.dict(os.environ, {}, clear=False):
+            os.environ.pop("REPAIRWHEEL_PYTHONPATH", None)
+            with self.assertRaises(SystemExit) as cm:
+                main()
+        self.assertNotEqual(cm.exception.code, 0)
+        self.assertIn("cp312-cp312-linux_x86_64", stderr.getvalue())
+        self.assertIn("6 total", stderr.getvalue())
+
+    @patch("subprocess.check_call")
+    def test_pure_python_wheel_runs_repairwheel_with_custom_pythonpath(self, mock_check_call):
+        """REPAIRWHEEL_PYTHONPATH disables the pure-Python fast path so custom overrides run."""
+        import os
+
+        self._create_dummy_wheel(self.wheel_dir, name="foo-1.0-py3-none-any.whl")
+
+        from pycross.private.build.tools.repair_wheel_hook import main
+
+        argv = [
+            "repair_wheel_hook",
+            "--wheel-dir",
+            str(self.wheel_dir),
+            "--out-wheel-dir",
+            str(self.out_wheel_dir),
+        ]
+        with patch("sys.argv", argv), patch.dict(os.environ, {"REPAIRWHEEL_PYTHONPATH": "/custom/site-packages"}):
+            main()
+
+        mock_check_call.assert_called_once()
 
 
 class AuditwheelPlatTest(unittest.TestCase):

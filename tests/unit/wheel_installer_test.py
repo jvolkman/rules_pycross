@@ -522,6 +522,23 @@ class WheelInstallerPrecompileTest(unittest.TestCase):
             code_obj = marshal.loads(opt1_pyc.read_bytes()[16:])
             self.assertEqual(code_obj.co_filename, rel_mod)
 
+    def test_compile_bytecode_skips_subprocess_without_py_files(self):
+        import sys
+        from unittest import mock
+
+        from pycross.private.tools import wheel_installer
+
+        lib_dir = Path(self.temp_dir) / "data_only_site_packages"
+        (lib_dir / "nvidia" / "lib").mkdir(parents=True)
+        (lib_dir / "nvidia" / "lib" / "libcublas.so").write_bytes(b"\x7fELF")
+        (lib_dir / "pkg-1.0.dist-info").mkdir()
+        (lib_dir / "pkg-1.0.dist-info" / "METADATA").write_text("Name: pkg\n")
+
+        with mock.patch.object(wheel_installer.subprocess, "run") as run_mock:
+            wheel_installer.compile_bytecode(lib_dir, sys.executable, "checked_hash", 0)
+
+        run_mock.assert_not_called()
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -132,10 +132,11 @@ RUST_BUILD_TOOLCHAINS = [
 
 RUST_BUILD_FRAGMENTS = CC_FRAGMENTS
 
-def rust_tool_deps_attr(doc):
+def rust_tool_deps_attr(doc, aspects = []):
     return attr.label_list(
         doc = doc,
         cfg = pycross_exec_platform_transition,
+        aspects = aspects,
     )
 
 def run_rust_pep517_build(ctx, tool_deps, tool_executables, tool_pkg_names):
@@ -212,7 +213,6 @@ def run_rust_pep517_build(ctx, tool_deps, tool_executables, tool_pkg_names):
         target_environment = target_environment,
         repair_exclude_globs = ctx.attr.repair_exclude_globs,
         repair_deps = tool_deps.get("repairwheel", []),
-        resource_set = resources.resource_set,
     )
 
     return [
