@@ -291,6 +291,8 @@ def _test_local_chain_cycle_testonly_and_dep_merge_impl(env, target):
         ]},
         {"name": "pytest", "version": "8.0.0", "files": [{"name": "pytest-8.0.0-py3-none-any.whl", "sha256": "a" * 64}], "dependencies": []},
         {"name": "click", "version": "8.1.0", "extras": ["color"], "files": [{"name": "click-8.1.0-py3-none-any.whl", "sha256": "c" * 64}], "dependencies": []},
+        {"name": "urllib3", "version": "2.2.0", "files": [{"name": "urllib3-2.2.0-py3-none-any.whl", "sha256": "e" * 64}], "dependencies": []},
+        {"name": "explicit-dev", "version": "1.0.0", "files": [{"name": "explicit_dev-1.0.0-py3-none-any.whl", "sha256": "f" * 64}], "dependencies": []},
         # Non-testonly local chain also reaching shared-lib (reached as testonly too) and directly-pinned testonly click.
         {"name": "app-local", "version": "0.1.0", "is_local": True, "files": [], "dependencies": [
             {"name": "click", "specifier": "==8.1.0"},
@@ -300,14 +302,19 @@ def _test_local_chain_cycle_testonly_and_dep_merge_impl(env, target):
             {"name": "shared-tp", "specifier": "==1.0.0"},
         ]},
         {"name": "shared-tp", "version": "1.0.0", "files": [{"name": "shared_tp-1.0.0-py3-none-any.whl", "sha256": "d" * 64}], "dependencies": []},
+        # Testonly local helper also depending on urllib3 (which non-testonly appdep reaches transitively).
+        {"name": "test-helper", "version": "0.1.0", "is_local": True, "files": [], "dependencies": [
+            {"name": "urllib3", "specifier": "==2.2.0"},
+        ]},
         # Duplicate package entry with distinct markers and distinct extras on the same dep name.
         {
             "name": "appdep",
             "version": "1.0.0",
             "files": [{"name": "appdep-1.0.0-py3-none-any.whl", "sha256": "b" * 64}],
             "dependencies": [
-                {"name": "pytest", "specifier": "==8.0.0", "marker": "sys_platform == 'linux'"},
+                {"name": "urllib3", "specifier": "==2.2.0", "marker": "sys_platform == 'linux'"},
                 {"name": "click", "specifier": "==8.1.0", "extras": []},
+                {"name": "explicit-dev", "specifier": "==1.0.0"},
             ],
         },
         {
@@ -315,7 +322,7 @@ def _test_local_chain_cycle_testonly_and_dep_merge_impl(env, target):
             "version": "1.0.0",
             "files": [{"name": "appdep-1.0.0-py3-none-any.whl", "sha256": "b" * 64}],
             "dependencies": [
-                {"name": "pytest", "specifier": "==8.0.0", "marker": "sys_platform == 'win32'"},
+                {"name": "urllib3", "specifier": "==2.2.0", "marker": "sys_platform == 'win32'"},
                 {"name": "click", "specifier": "==8.1.0", "extras": ["color"]},
             ],
         },
@@ -326,25 +333,29 @@ def _test_local_chain_cycle_testonly_and_dep_merge_impl(env, target):
             "lib-a": {"": "==0.1.0"},
             "shared-local": {"": "==0.1.0"},
             "app-local": {"": "==0.1.0"},
+            "test-helper": {"": "==0.1.0"},
             "click": {"": "==8.1.0"},
+            "explicit-dev": {"": "==1.0.0"},
             "appdep": {"": "==1.0.0"},
         },
         requires_python = ">=3.10",
         strict_dependencies = True,
-        testonly_pins = ["lib-a", "shared-local", "click"],
+        testonly_pins = ["lib-a", "shared-local", "test-helper", "click", "explicit-dev"],
     )
     env.expect.that_str(raw["pins"]["pytest"]).equals("pytest@8.0.0")
     env.expect.that_str(raw["pins"]["shared-tp"]).equals("shared-tp@1.0.0")
+    env.expect.that_str(raw["pins"]["urllib3"]).equals("urllib3@2.2.0")
     env.expect.that_bool("lib-a" in raw["pins"]).equals(False)
     env.expect.that_bool("lib-b" in raw["pins"]).equals(False)
     env.expect.that_bool("lib-c" in raw["pins"]).equals(False)
 
-    # Only pytest stays testonly; click and shared-tp are also reached via non-testonly app-local.
-    env.expect.that_collection(raw["testonly_pins"]).contains_exactly(["pytest"])
+    # pytest (only via testonly local lib-a) and explicit-dev (explicitly listed in testonly_pins)
+    # stay testonly; click, shared-tp, and urllib3 (reachable at runtime via third-party appdep) do not.
+    env.expect.that_collection(raw["testonly_pins"]).contains_exactly(["explicit-dev", "pytest"])
 
     # Both linux/win32 marker edges and base/extra edges survived distinct_packages merge.
     appdep_deps = raw["packages"]["appdep@1.0.0"]["dependencies"]
-    markers = sorted([d["marker"] for d in appdep_deps if d["name"] == "pytest"])
+    markers = sorted([d["marker"] for d in appdep_deps if d["name"] == "urllib3"])
     env.expect.that_collection(markers).contains_exactly([
         "sys_platform == 'linux'",
         "sys_platform == 'win32'",

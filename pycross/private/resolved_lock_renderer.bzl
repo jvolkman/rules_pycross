@@ -15,7 +15,7 @@ Naming conventions for generated targets:
 """
 
 load("@pypackaging.bzl", "pypackaging")
-load(":util.bzl", "has_build_fallback", "is_platform_specific", "is_universal_py3_wheel", "marker_evaluator_name", "parse_package_key", "sanitize_name")
+load(":util.bzl", "has_build_fallback", "is_universal_py3_wheel", "marker_evaluator_name", "parse_package_key", "sanitize_name")
 
 def _ind(text, tabs = 1):
     if not text:
@@ -317,8 +317,8 @@ def _render_marker_wheel_chooser(lines, pkg_key, pkg, repo_map, sdist_target = N
     """Render a wheel chooser target and per-wheel config_settings + alias.
 
     Returns True when a wheel-only availability target was emitted under the
-    name _wheel_available_<pkg>; the caller must then expose _available_<pkg>
-    via _render_marker_availability(wheel_gated = True).
+    name `_wheel_available_<pkg>` for thin repos to compose with per-member
+    availability markers.
     """
     candidates = pkg.get("wheel_candidates", [])
     if not candidates:
@@ -393,9 +393,7 @@ def _render_marker_wheel_chooser(lines, pkg_key, pkg, repo_map, sdist_target = N
 
     # Wheel-only availability config_setting: matches when any wheel matches.
     # Always emitted under _wheel_available_<pkg> so thin repos can compose it
-    # with their own per-member availability_markers. When the package carries
-    # no availability_markers in _lock, _render_marker_availability aliases
-    # _available_<pkg> -> _wheel_available_<pkg> for direct consumers.
+    # with their own per-member availability_markers.
     has_universal = (
         len(resolved_candidates) == len(candidates) and
         any([is_universal_py3_wheel(c["filename"]) for c, _ in resolved_candidates])
@@ -519,61 +517,6 @@ def _render_marker_package_deps(lines, pkg_key, pkg_key_san, pkg, packages):
 
     lines.append("")
 
-def _render_marker_availability(lines, pkg_key, pkg, wheel_gated = False, base_available = None):
-    """Render an _available_<pkg> config_setting_group from availability markers.
-
-    No-op unless the package carries availability_markers, wheel_gated, or
-    base_available is given. With wheel_gated, the marker group is ANDed with
-    the chooser's _wheel_available_<pkg> group (or aliased directly when no
-    markers exist); with base_available (extras packages), it is ANDed with
-    the base package's _available_ group; otherwise the markers alone gate the
-    package.
-    """
-    markers = pkg.get("availability_markers", [])
-    gate = None
-    if wheel_gated:
-        gate = "_wheel_available_{}".format(pkg_key)
-    elif base_available:
-        gate = base_available
-
-    if not markers:
-        if gate:
-            lines.extend([
-                _ind("native.alias("),
-                _ind('name = "_available_{}",'.format(pkg_key), 2),
-                _ind('actual = ":{}",'.format(gate), 2),
-                _ind(")"),
-                "",
-            ])
-        return
-    marker_group = "_available_{}".format(pkg_key)
-    if gate:
-        marker_group = "_marker_available_{}".format(pkg_key)
-    lines.extend([
-        _ind("selects.config_setting_group("),
-        _ind('name = "{}",'.format(marker_group), 2),
-        _ind("match_any = [", 2),
-    ])
-    for marker in markers:
-        eval_name = marker_evaluator_name(marker, "")
-        lines.append(_ind('":{}_match",'.format(eval_name), 3))
-    lines.extend([
-        _ind("],", 2),
-        _ind(")"),
-        "",
-    ])
-    if gate:
-        lines.extend([
-            _ind("selects.config_setting_group("),
-            _ind('name = "_available_{}",'.format(pkg_key), 2),
-            _ind("match_all = [", 2),
-            _ind('":{}",'.format(gate), 3),
-            _ind('":{}",'.format(marker_group), 3),
-            _ind("],", 2),
-            _ind(")"),
-            "",
-        ])
-
 def _render_str_list_attr(lines, attr_name, values):
     if values:
         lines.append(_ind("{} = [".format(attr_name), 2))
@@ -600,14 +543,7 @@ def _render_marker_package(lines, pkg_key, pkg, packages, repo_map, rctx_name, r
         _render_marker_package_deps(lines, pkg_key, pkg_key_san, pkg, packages)
 
     if not has_wheel_candidates and extra:
-        # Extras packages wrap the base package plus their own deps, so they
-        # are only available where the base package is.
         base_pkg_key = "{}@{}".format(package_name, package_version)
-        base_available = None
-        if is_platform_specific(packages.get(base_pkg_key, {})):
-            base_available = "_available_{}".format(base_pkg_key)
-        _render_marker_availability(lines, pkg_key, pkg, base_available = base_available)
-
         proxy_name = "_raw_{}".format(pkg_key) if pkg.get("cycle_group") else pkg_key
         base_actual = "_raw_{}".format(base_pkg_key) if _is_in_same_cycle(base_pkg_key, pkg, packages) else base_pkg_key
 
@@ -666,8 +602,6 @@ def _render_marker_package(lines, pkg_key, pkg, packages, repo_map, rctx_name, r
             _ind(")"),
             "",
         ])
-
-    _render_marker_availability(lines, pkg_key, pkg, wheel_gated = wheel_gated)
 
     # Library
     lib_name = pkg_key

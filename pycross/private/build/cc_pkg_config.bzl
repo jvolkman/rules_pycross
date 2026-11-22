@@ -11,14 +11,11 @@ def _get_lib_flag(file):
     else:
         name = basename
 
-    if name.endswith(".pic.a"):
-        name = name[:-len(".pic.a")]
-    else:
-        parts = name.split(".")
-        for i, part in enumerate(parts):
-            if part in ("so", "a", "dylib", "lib", "dll"):
-                name = ".".join(parts[:i])
-                break
+    parts = name.split(".")
+    for i, part in enumerate(parts):
+        if part in ("so", "a", "dylib", "lib", "dll"):
+            name = ".".join(parts[:i])
+            break
     return "-l" + name
 
 def _is_versioned_shared_library(basename):

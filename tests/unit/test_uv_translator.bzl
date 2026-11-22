@@ -1795,8 +1795,9 @@ def _test_uv_issue_1510_verbatim_lock_impl(env, target):
         else:
             env.expect.that_bool("variants =" in block).equals(False)
 
-    avail_torch_block = rendered_lock.split('name = "_marker_available_torch@2.12.0"')[1].split("\n    )")[0]
-    env.expect.that_str(avail_torch_block).contains("_marker_eval_")
+    env.expect.that_str(rendered_lock).contains('name = "_wheel_available_torch@2.12.0"')
+    env.expect.that_bool(len(resolved.packages["torch@2.12.0"].get("availability_markers", [])) > 0).equals(True)
+    env.expect.that_str(rendered_lock).contains("_marker_eval_")
 
 def _test_uv_issue_1510_verbatim_lock(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])

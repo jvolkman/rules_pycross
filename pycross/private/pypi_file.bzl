@@ -281,9 +281,6 @@ def get_pypi_file_url(rctx, netrc, indexes, package_name, filename, sha256, keep
             return found.url
         tried.append("{}: {}".format(index_url, found.reason))
 
-    if not keep_metadata:
-        rctx.delete("simple_index")
-
     fail(
         ("File {} of package {} was not found in any index. Index URLs must be " +
          "Simple Repository API roots, e.g. {}. Tried:\n  {}").format(

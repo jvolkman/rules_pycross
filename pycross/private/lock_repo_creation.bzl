@@ -299,11 +299,6 @@ def create_repos(
                 norm_pkg = _normalize_override_name(pkg_name, backend_name, key)
                 override_configs.setdefault(key, {}).setdefault(norm_pkg, {})[backend_name] = backend_attrs
 
-    # Pre-pathify all lock files to minimize restart time (only when reading from files).
-    if not resolved_locks:
-        for lock_file in all_locks.values():
-            module_ctx.path(lock_file)
-
     # Serialize backend configs for passing to package_repo and sdist_repo.
     backend_configs_json = {name: json.encode(config) for name, config in BACKEND_CONFIGS.items()}
     backend_tool_packages = {
@@ -311,13 +306,10 @@ def create_repos(
         for name, config in BACKEND_CONFIGS.items()
     }
 
-    all_resolved_locks = {}
-    for repo_name, lock_file in all_locks.items():
-        if resolved_locks and repo_name in resolved_locks:
-            all_resolved_locks[repo_name] = resolved_locks[repo_name]
-        else:
-            resolved_lock_file = module_ctx.path(lock_file)
-            all_resolved_locks[repo_name] = json.decode(module_ctx.read(resolved_lock_file))
+    all_resolved_locks = {
+        repo_name: resolved_locks[repo_name]
+        for repo_name in all_locks.keys()
+    }
 
     known_packages_by_repo = {
         repo_name: [key_name(key) for key in rlock.get("packages", {})]
@@ -466,16 +458,10 @@ def create_repos(
             package_repo_attrs["skip_variant_members"] = skip_variant_members
         if ws_overrides_json:
             package_repo_attrs["override_configs"] = ws_overrides_json
-        if resolved_locks_json:
-            package_repo_attrs["member_lock_data"] = {
-                member: resolved_locks_json[member]
-                for member in member_repos
-            }
-        elif resolved_locks:
-            package_repo_attrs["member_lock_data"] = {
-                member: json.encode(per_repo_data[member].resolved_lock)
-                for member in member_repos
-            }
+        package_repo_attrs["member_lock_data"] = {
+            member: resolved_locks_json[member]
+            for member in member_repos
+        }
         package_repo(**package_repo_attrs)
 
         # Create thin repos for each workspace member.

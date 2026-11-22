@@ -31,6 +31,7 @@ backends.register(
     override_json = "@maturin_overrides//:overrides.json",
     package_repo_hook_bzl = "@rules_pycross_backend_maturin//private:cargo_lock_package_repo_hook.bzl",
     package_repo_hook_fn = "cargo_lock_package_repo_hook",
+    package_repo_hook_subdir = "_cargo",
     pyproject_backends = ["maturin"],
     rule_bzl = "@rules_pycross_backend_maturin//rules:maturin_build.bzl",
     sdist_hook_bzl = "@rules_pycross_backend_maturin//private:rust_common_sdist_hook.bzl",
@@ -42,6 +43,7 @@ backends.register(
     override_json = "@setuptools_rust_overrides//:overrides.json",
     package_repo_hook_bzl = "@rules_pycross_backend_maturin//private:cargo_lock_package_repo_hook.bzl",
     package_repo_hook_fn = "cargo_lock_package_repo_hook",
+    package_repo_hook_subdir = "_cargo",
     pyproject_backends = [
         "setuptools.build_meta[setuptools-rust]",
         "setuptools.build_meta:__legacy__[setuptools-rust]",

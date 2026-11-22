@@ -130,6 +130,22 @@ class CcToolchainTest(unittest.TestCase):
             with self.subTest(case=case):
                 self.assertEqual(run_wrapper(*case), expected_prefix + case)
 
+    def test_wrap_compiler_large_arg_list_fast_path(self):
+        """A multi-thousand-arg link line without filtered flags takes the linear fast path."""
+        bin_dir = self.temp_path / "bin"
+        bin_dir.mkdir(exist_ok=True)
+        fake_cc = self._make_fake_cc()
+
+        wrapper = wrap_compiler("cc", str(fake_cc), "-O2", Path(sys.executable), bin_dir, ldflags="-lpthread")
+        # Confirm the wrapper checks needs_filter before rebuilding "$@".
+        content = wrapper.read_text()
+        self.assertIn("needs_filter=0", content)
+        self.assertIn('if [ "$needs_filter" -eq 1 ]; then', content)
+
+        obj_args = [f"obj_{i}.o" for i in range(3000)] + ["-o", "big_bin"]
+        result = json.loads(subprocess.check_output([str(wrapper), *obj_args], text=True, timeout=5))
+        self.assertEqual(result, obj_args + ["-lpthread"])
+
     def test_wrap_compiler_shared_links_use_shared_flags(self):
         bin_dir = self.temp_path / "bin"
         bin_dir.mkdir(exist_ok=True)

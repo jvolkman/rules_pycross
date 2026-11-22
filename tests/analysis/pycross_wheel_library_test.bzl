@@ -262,12 +262,12 @@ def _test_pycross_library_proxy_no_match_deferred(name):
 def _test_pycross_library_proxy_no_match_deferred_impl(env, target):
     env.expect.that_target(target).has_provider(PycrossUnsupportedWheelInfo)
 
-    # The failing .whl must be present in default_runfiles so a downstream
+    # The failing output must be present in default_runfiles so a downstream
     # py_binary / py_test depending on a fork-select proxy whose branches all
     # fall through to no_match_error triggers the deferred failure action at
     # build time instead of succeeding with an empty environment.
     runfile_names = [f.basename for f in target[DefaultInfo].default_runfiles.files.to_list()]
-    env.expect.that_bool(any([n.startswith("_unsupported_") and n.endswith(".whl") for n in runfile_names])).equals(True)
+    env.expect.that_bool(any([n.startswith("_unsupported_") and n.endswith(".out") for n in runfile_names])).equals(True)
 
     # The inner _proxy already contextualized the sentinel, so _subject forwards it
     # without registering a duplicate PycrossUnsupportedPackage action.

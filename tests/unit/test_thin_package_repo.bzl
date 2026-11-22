@@ -12,6 +12,7 @@ load(
     "cargo_build_for_testing",
     "collect_variants_for_testing",
     "flag_values_for_testing",
+    "hook_subdir_build_for_testing",
     "is_platform_specific_for_testing",
     "modules_mapping_deps_for_testing",
     "packages_bzl_for_testing",
@@ -551,7 +552,7 @@ def _test_pin_build_multi_branch_maybe_impl(env, target):
     # Base maybe: foo@1.0 is platform-specific (uses helper _maybe_foo_1_0),
     # while foo@2.0 is unconditional (maps directly to :pkg).
     env.expect.that_bool('name = "_maybe_foo_1_0"' in res).equals(True)
-    env.expect.that_bool('"@ws//_lock:_available_foo@1.0": ":pkg"' in res).equals(True)
+    env.expect.that_bool('"@ws//_lock:_wheel_available_foo@1.0": ":pkg"' in res).equals(True)
     env.expect.that_bool('"@ws//_lock:is_res_foo_1_0": ":_maybe_foo_1_0"' in res).equals(True)
     env.expect.that_bool('"@ws//_lock:is_res_foo_2_0": ":pkg"' in res).equals(True)
 
@@ -820,7 +821,7 @@ def _test_pin_build_maybe_with_transition_impl(env, target):
     env.expect.that_bool('actual = "//__actual/pywin32:maybe"' in single.build).equals(True)
     env.expect.that_bool(single.actual_build != None).equals(True)
     env.expect.that_bool('name = "maybe"' in single.actual_build).equals(True)
-    env.expect.that_bool('"@ws//_lock:_available_pywin32@312": "@ws//_lock:pywin32@312"' in single.actual_build).equals(True)
+    env.expect.that_bool('"@ws//_lock:_wheel_available_pywin32@312": "@ws//_lock:pywin32@312"' in single.actual_build).equals(True)
 
     # 2. Multi-branch pin and extra with transition_bzl + target_platform + testonly
     multi = pin_build_for_testing(
@@ -855,13 +856,13 @@ def _test_pin_build_maybe_with_transition_impl(env, target):
     env.expect.that_bool('platform = "//:_internal_platform"' in extra_maybe_section).equals(True)
 
     env.expect.that_bool('name = "_maybe_foo_1_0"' in multi.actual_build).equals(True)
-    env.expect.that_bool('"@ws//_lock:_available_foo@1.0": "//__actual/foo:pkg"' in multi.actual_build).equals(True)
+    env.expect.that_bool('"@ws//_lock:_wheel_available_foo@1.0": "//__actual/foo:pkg"' in multi.actual_build).equals(True)
     env.expect.that_bool('"@ws//_lock:is_res_foo_1_0": ":_maybe_foo_1_0"' in multi.actual_build).equals(True)
     env.expect.that_bool('"@ws//_lock:is_res_foo_2_0": "//__actual/foo:pkg"' in multi.actual_build).equals(True)
 
     env.expect.that_bool('name = "_maybe_extra_bar_foo_bar__1_0"' in multi.actual_build).equals(True)
     env.expect.that_bool('name = "_maybe_extra_bar_foo_bar__2_0"' in multi.actual_build).equals(True)
-    env.expect.that_bool('"@ws//_lock:_available_foo[bar]@1.0": "//__actual/foo:extra_bar"' in multi.actual_build).equals(True)
+    env.expect.that_bool('"@ws//_lock:_wheel_available_foo[bar]@1.0": "//__actual/foo:extra_bar"' in multi.actual_build).equals(True)
     env.expect.that_bool('name = "extra_bar_maybe"' in multi.actual_build).equals(True)
 
 def _test_pin_build_maybe_with_transition(name):
@@ -1252,6 +1253,18 @@ def _test_cargo_build_filters_backends_and_wildcards_impl(env, target):
     env.expect.that_str(res).contains('name = "extra_rust"')
     env.expect.that_str(res).contains('actual = "@ws//_cargo:extra-rust@1.0"')
 
+    # Third-party backend registering a custom package_repo_hook_subdir gets aliases under that subdir.
+    custom_subdir = hook_subdir_build_for_testing(
+        grouped_pins,
+        packages,
+        {"rust-v1@1.0": {"my_third_party_rust": {}}},
+        "ws",
+        hook_backends = ["my_third_party_rust"],
+        subdir = "_custom_cargo",
+    )
+    env.expect.that_str(custom_subdir).contains('name = "rust_v1"')
+    env.expect.that_str(custom_subdir).contains('actual = "@ws//_custom_cargo:rust-v1@1.0"')
+
     # Wildcard "*" maturin_build override matches all sdist packages.
     wild = cargo_build_for_testing(
         grouped_pins,
@@ -1461,7 +1474,9 @@ def _test_partial_fork_maybe_and_testonly_impl(env, target):
     env.expect.that_str(req_bzl).contains('"@@my_repo//tomli:maybe"')
     env.expect.that_str(req_bzl).contains('"@@my_repo//triton:[cuda]_maybe"')
 
-    # _pin_build emits :maybe even when maybe_available_keys is empty, and forwards testonly = True.
+    # _pin_build emits :maybe even when maybe_available_keys is empty; untransitioned
+    # :maybe targets are alias() rules (Bazel ignores testonly on alias(), inheriting
+    # testonly from :pkg / :[extra]), so they omit redundant testonly = True.
     res = pin_build_for_testing(
         target_name = "tomli",
         pin_target_dict = {"res_py311": "tomli@2.0.1"},
@@ -1472,35 +1487,13 @@ def _test_partial_fork_maybe_and_testonly_impl(env, target):
     maybe_block = res.split('name = "maybe"')[1].split("\n)")[0]
     env.expect.that_str(maybe_block).contains('"@ws//_lock:is_res_py311": ":pkg"')
     env.expect.that_str(maybe_block).contains('"//conditions:default": "//:_empty_library"')
-    env.expect.that_str(maybe_block).contains("testonly = True,")
+    env.expect.that_bool("testonly = True," in maybe_block).equals(False)
 
     extra_maybe_block = res.split('name = "[dev]_maybe"')[1].split("\n)")[0]
     env.expect.that_str(extra_maybe_block).contains('"@ws//_lock:is_res_py311": ":[dev]"')
-    env.expect.that_str(extra_maybe_block).contains("testonly = True,")
+    env.expect.that_bool("testonly = True," in extra_maybe_block).equals(False)
 
-    # Single-branch untransitioned platform-specific testonly pin also carries testonly = True on :maybe.
-    single_testonly = pin_build_for_testing(
-        target_name = "pywin32",
-        pin_target_dict = {"": "pywin32@312"},
-        workspace_repo = "ws",
-        maybe_available_keys = ["pywin32@312"],
-        testonly = True,
-    ).build
-    single_maybe = single_testonly.split('name = "maybe"')[1].split("\n)")[0]
-    env.expect.that_str(single_maybe).contains("testonly = True,")
-
-    # Multi-branch untransitioned testonly pin with maybe_available_keys forwards testonly to per-branch helper.
-    multi_testonly = pin_build_for_testing(
-        target_name = "foo",
-        pin_target_dict = {"res_1": "foo@1.0", "res_2": "foo@2.0"},
-        workspace_repo = "ws",
-        maybe_available_keys = ["foo@1.0"],
-        testonly = True,
-    ).build
-    helper_block = multi_testonly.split('name = "_maybe_foo_1_0"')[1].split("\n)")[0]
-    env.expect.that_str(helper_block).contains("testonly = True,")
-
-    # Transitioned partial-fork pin emits :maybe in actual_build wrapped by transitioning proxy.
+    # Transitioned partial-fork pin emits :maybe in actual_build wrapped by transitioning proxy (with testonly = True).
     trans_partial = pin_build_for_testing(
         target_name = "tomli",
         pin_target_dict = {"res_py311": "tomli@2.0.1"},
@@ -1509,6 +1502,8 @@ def _test_partial_fork_maybe_and_testonly_impl(env, target):
         testonly = True,
     )
     env.expect.that_str(trans_partial.build).contains('actual = "//__actual/tomli:maybe"')
+    trans_maybe_block = trans_partial.build.split('name = "maybe"')[1].split("\n)")[0]
+    env.expect.that_str(trans_maybe_block).contains("testonly = True,")
     env.expect.that_str(trans_partial.actual_build).contains('name = "maybe"')
     env.expect.that_str(trans_partial.actual_build).contains('"@ws//_lock:is_res_py311": "//__actual/tomli:pkg"')
 
