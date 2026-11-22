@@ -761,7 +761,7 @@ def _test_cargo_build_multi_branch(name):
 
 # buildifier: disable=unused-variable
 def _test_backend_tool_deps_labels_impl(env, target):
-    """_backend_tool_deps_labels skips extras/__via_ keys and emits @<build_repo>//<pkg>:pkg labels."""
+    """_backend_tool_deps_labels skips extra keys and emits @<build_repo>//<pkg>:pkg labels."""
     packages = {
         "setuptools[core]@68.0.0": {},
         "setuptools@9.0.0": {},
@@ -769,7 +769,6 @@ def _test_backend_tool_deps_labels_impl(env, target):
         "setuptools@75.1.0": {},
         "scikit-build-core@0.10.0": {},
         "wheel[testing]@0.45.0": {},
-        "flit-core@3.9.0__via_other": {},
     }
     labels = backend_tool_deps_labels_for_testing(
         ["setuptools", "scikit-build-core", "wheel", "flit-core"],
@@ -1189,15 +1188,14 @@ def _test_pin_build_member_availability_markers_impl(env, target):
     env.expect.that_str(combined.actual_build).contains("match_any = [")
     env.expect.that_str(combined.actual_build).contains("match_all = [")
 
-    # 4. Non-transitioned multi-marker pin loads selects before package() and remaps conflicts.
+    # 4. Non-transitioned multi-marker pin loads selects before package().
     untransitioned = pin_build_for_testing(
         target_name = "combo",
         pin_target_dict = {"": "combo@1.0"},
-        workspace_lock_target_dict = {"": "combo@1.0__via_app_a"},
         package = {},
         workspace_repo = "ws",
         extras_dict = {"ext": {"": "combo[ext]@1.0"}},
-        maybe_available_keys = ["combo@1.0__via_app_a"],
+        maybe_available_keys = ["combo@1.0"],
         extras_maybe_keys = {"ext": ["combo[ext]@1.0"]},
         packages = {
             "combo@1.0": {
@@ -1206,13 +1204,11 @@ def _test_pin_build_member_availability_markers_impl(env, target):
             },
             "combo[ext]@1.0": {},
         },
-        conflicts = {"combo@1.0": ["app_a", "app_b"]},
-        member_name = "app_a",
     ).build
     selects_idx = untransitioned.find('load("@bazel_skylib//lib:selects.bzl", "selects")')
     pkg_idx = untransitioned.find("package(")
     env.expect.that_bool(selects_idx > 0 and selects_idx < pkg_idx).equals(True)
-    env.expect.that_str(untransitioned).contains('"@ws//_lock:_wheel_available_combo@1.0__via_app_a"')
+    env.expect.that_str(untransitioned).contains('"@ws//_lock:_wheel_available_combo@1.0"')
 
 def _test_pin_build_member_availability_markers(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])

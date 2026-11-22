@@ -47,14 +47,9 @@ py_binary(
 )
 
 py_binary(
-    name = "extract_console_script",
-    srcs = ["extract_console_script.py"],
-    visibility = ["//visibility:public"],
-)
-
-py_binary(
     name = "extract_wheel_bin",
     srcs = ["extract_wheel_bin.py"],
+    imports = ["../../.."],
     visibility = ["//visibility:public"],
 )
 

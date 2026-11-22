@@ -73,7 +73,6 @@ bzl_library(
     srcs = ["internal_repo.bzl"],
     deps = [
         ":lock_attrs",
-        "@bazel_skylib//lib:shell",
     ],
 )
 
@@ -198,13 +197,6 @@ bzl_library(
         "@bazel_skylib//lib:paths",
         "@rules_python//python:py_info_bzl",
     ],
-)
-
-# This is the environment we advertise for what should be pure-python
-# dependencies used by Pycross
-pycross_target_platform(
-    name = "rules_pycross_deps_target_env",
-    python_version = "3.13",
 )
 
 bzl_library(

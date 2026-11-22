@@ -292,7 +292,7 @@ load("@rules_pycross//pycross:backend.bzl", "register_bin_extract_action")
 register_bin_extract_action(<a href="#register_bin_extract_action-ctx">ctx</a>, <a href="#register_bin_extract_action-wheel_dir">wheel_dir</a>, <a href="#register_bin_extract_action-binary_name">binary_name</a>)
 </pre>
 
-Extracts a native binary from a wheel's bin/ directory.
+Extracts an executable (native binary or console script) from a wheel's bin/ directory.
 
 **PARAMETERS**
 
@@ -300,8 +300,8 @@ Extracts a native binary from a wheel's bin/ directory.
 | Name  | Description | Default Value |
 | :------------- | :------------- | :------------- |
 | <a id="register_bin_extract_action-ctx"></a>ctx |  The rule or aspect context.   |  none |
-| <a id="register_bin_extract_action-wheel_dir"></a>wheel_dir |  File, the tree artifact of the unzipped wheel.   |  none |
-| <a id="register_bin_extract_action-binary_name"></a>binary_name |  str, name of the binary.   |  none |
+| <a id="register_bin_extract_action-wheel_dir"></a>wheel_dir |  File, the tree artifact of the installed wheel directory.   |  none |
+| <a id="register_bin_extract_action-binary_name"></a>binary_name |  str, name of the binary or console script.   |  none |
 
 **RETURNS**
 

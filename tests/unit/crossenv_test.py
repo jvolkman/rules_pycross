@@ -153,5 +153,56 @@ class DetermineGlibcVersionTest(unittest.TestCase):
             self.assertIsNone(determine_glibc_version({"CC": "/usr/bin/cc"}))
 
 
+class SysPatchTest(unittest.TestCase):
+    def test_sys_patch_uses_getframe_for_caller_platform(self):
+        import pkgutil
+        import types
+
+        from pycross.private.build.tools.crossenv.utils import TemplateContext
+
+        tmpl = TemplateContext()
+        tmpl.update(
+            {
+                "lib_path": "/mock/lib",
+                "exec_stdlib": "/mock/stdlib",
+                "target": types.SimpleNamespace(abiflags=None, multiarch=None, uname_sysname="Darwin"),
+            }
+        )
+        raw = pkgutil.get_data("pycross.private.build.tools.crossenv", "scripts/sys-patch.py.tmpl")
+        assert raw is not None
+        src = tmpl.expand(raw.decode("utf-8"))
+
+        depths = []
+
+        def fake_getframe(depth):
+            depths.append(depth)
+            if current_filename is None:
+                raise ValueError("call stack is not deep enough")
+            return types.SimpleNamespace(f_code=types.SimpleNamespace(co_filename=current_filename))
+
+        fake_sys = {
+            "implementation": types.SimpleNamespace(_multiarch="x86_64-linux-gnu"),
+            "path": ["/mock/lib", "/mock/stdlib"],
+            "platform": "linux",
+            "_getframe": fake_getframe,
+        }
+        exec(src, fake_sys, fake_sys)
+        getter = fake_sys["__getattr__"]
+
+        for current_filename, expected in [
+            ("<frozen importlib._bootstrap>", "linux"),
+            ("/usr/lib/python3/distutils/sysconfig.py", "darwin"),
+            ("setup.py", "darwin"),
+            ("/usr/lib/python3/site-packages/pkg.py", "linux"),
+            (None, "linux"),
+        ]:
+            self.assertEqual(getter("platform"), expected, msg=current_filename)
+
+        self.assertEqual(depths, [1, 1, 1, 1, 1])
+
+        with self.assertRaises(AttributeError):
+            getter("not_platform")
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -4,7 +4,6 @@ load("@bazel_features//:features.bzl", "bazel_features")
 load(
     "@rules_pycross_internal_config//:defaults.bzl",
     "register_toolchains",
-    default_platforms = "platforms",
     default_python_versions = "python_versions",
 )
 load("//pycross/private:toolchain_helpers.bzl", "pycross_toolchains_repo")
@@ -39,7 +38,6 @@ toolchains = module_extension(
             attrs = {
                 "name": attr.string(),
                 "python_versions": attr.string_list(default = default_python_versions),
-                "platforms": attr.string_list(default = default_platforms),
             },
         ),
     },

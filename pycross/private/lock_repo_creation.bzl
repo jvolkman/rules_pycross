@@ -10,27 +10,12 @@ load("@pycross_backends//:registry.bzl", "BACKEND_CONFIGS", "BACKEND_TO_RULE", "
 load("@pypackaging.bzl", "pypackaging")
 load("@rules_pycross//pycross/private:override_helpers.bzl", "merge_backend_overrides")
 load("@rules_pycross//pycross/private:sdist_repo.bzl", "pycross_sdist_repo")
-load("//pycross/private:package_repo.bzl", "has_annotation_conflict", "package_repo")
+load("//pycross/private:package_repo.bzl", "package_repo")
 load("//pycross/private:pypi_file.bzl", "pypi_file")
 load("//pycross/private:thin_package_repo.bzl", "thin_package_repo")
 load("//pycross/private:util.bzl", "key_name", "parse_package_key", "sanitize_name", "sdist_builds_disallowed", "variant_item_qname")
 load("//pycross/private:wheel_file.bzl", "pycross_wheel_file")
 load(":git_file.bzl", "pycross_git_file")
-
-def _disallowed_sdist_repo_impl(rctx):
-    fail(
-        "Package '{}' requires building from source (sdist), ".format(rctx.attr.package_name) +
-        "but its build_mode is \"never\" (lock import '{}'). ".format(rctx.attr.lock_name) +
-        "Provide a pre-built wheel or set a different build_mode for this package.",
-    )
-
-pycross_disallowed_sdist_repo = repository_rule(
-    implementation = _disallowed_sdist_repo_impl,
-    attrs = {
-        "package_name": attr.string(mandatory = True),
-        "lock_name": attr.string(mandatory = True),
-    },
-)
 
 sdist_builds_disallowed_for_testing = sdist_builds_disallowed
 
@@ -369,7 +354,7 @@ def create_repos(
 
         # Instantiate sdist repos for packages requiring source builds.
         for pkg_key, pkg in resolved_lock.get("packages", {}).items():
-            if pkg.get("build_target"):
+            if pkg.get("build_target") or sdist_builds_disallowed(pkg):
                 continue
 
             sdist_file = pkg.get("sdist_file")
@@ -438,14 +423,7 @@ def create_repos(
                 if pkg_overrides:
                     sdist_repo_attrs["override_backend_configs"] = json.encode(pkg_overrides)
 
-            if sdist_builds_disallowed(pkg):
-                pycross_disallowed_sdist_repo(
-                    name = sdist_repo_name,
-                    package_name = pkg_key,
-                    lock_name = repo_name,
-                )
-            else:
-                pycross_sdist_repo(**sdist_repo_attrs)
+            pycross_sdist_repo(**sdist_repo_attrs)
 
         # Save per-repo data for workspace processing
         per_repo_data[repo_name] = struct(
@@ -470,18 +448,6 @@ def create_repos(
         member_lock_files = {
             member: str(per_repo_data[member].lock_file)
             for member in member_repos
-        }
-
-        # Detect annotation conflicts using cached resolved lock data.
-        all_pkg_keys = {}  # pkg_key -> list of (member, pkg_data)
-        for member in member_repos:
-            for pkg_key, pkg_data in per_repo_data[member].resolved_lock.get("packages", {}).items():
-                all_pkg_keys.setdefault(pkg_key, []).append((member, pkg_data))
-
-        conflicts = {
-            pkg_key: [m for m, _ in entries]
-            for pkg_key, entries in all_pkg_keys.items()
-            if has_annotation_conflict(entries)
         }
 
         # Compute per-package override configs for package and thin repo hooks.
@@ -512,14 +478,13 @@ def create_repos(
             }
         package_repo(**package_repo_attrs)
 
-        # Create thin repos for each workspace member, passing conflict info.
+        # Create thin repos for each workspace member.
         for member in member_repos:
             thin_repo_attrs = dict(
                 name = member,
                 resolved_lock_file = per_repo_data[member].lock_file,
                 workspace_repo = workspace_repo_name,
                 member_name = member,
-                conflicts = conflicts,
                 backend_configs = backend_configs_json,
             )
             thin_repo_attrs["generate_root_aliases"] = True
