@@ -35,134 +35,102 @@ def _usable_items(ctx):
             usable[_check_item(ctx, name, str(ctx.attr.usable.label))] = True
     return usable
 
-def _parse_usable_value(value):
-    """Parse a `_usable_<set>` string_flag value into None (`*`) or `{qname: True}`."""
-    if value == "*":
-        return None
-    usable = {}
-    for name in value.split(" "):
-        if name:
-            usable[name] = True
-    return usable
-
-def _rival_blocks_default(ctx, default):
-    """Return True if an active CLI flag selects a rival of `default` in an overlapping set."""
-    if not ctx.attr.rival_flags and not ctx.attr.string_flags:
-        return False
-
-    usable_by_set = {
-        set_suffix: _parse_usable_value(flag[BuildSettingInfo].value)
-        for flag, set_suffix in ctx.attr.rival_usables.items()
-    }
-
-    def _entry_active(entries):
-        for entry in entries:
-            item, rival_qname, other_suffix = entry[0], entry[1], entry[2]
-            if item != default:
-                continue
-            other_usable = usable_by_set.get(other_suffix)
-            if other_usable == None or rival_qname in other_usable:
-                return True
-        return False
-
-    for flag, spec_json in ctx.attr.rival_flags.items():
-        if not flag[BuildSettingInfo].value:
-            continue
-        if _entry_active(json.decode(spec_json)):
-            return True
-
-    for flag, spec_json in ctx.attr.string_flags.items():
-        raw = flag[BuildSettingInfo].value
-        if not raw:
-            continue
-        spec = json.decode(spec_json)
-        rivals = spec.get("rivals")
-        if not rivals:
-            continue
-        for token in raw.split(","):
-            token = token.strip()
-            if token and token in rivals and _entry_active(rivals[token]):
-                return True
-
-    return False
-
 def _variant_resolver_impl(ctx):
-    # A repo pin (set by a pinned repo's transition) wins over everything.
-    pin = _setting_value(ctx.attr.pin)
-    if pin:
-        return [config_common.FeatureFlagInfo(value = _check_item(ctx, pin, str(ctx.attr.pin.label)))]
+    if ctx.attr.explicit:
+        if ctx.attr.pin or ctx.attr.flags or ctx.attr.string_flags:
+            fail("variant_resolver with `explicit` must not also set `pin`, `flags`, or `string_flags`")
 
-    # A transitioned repo limits the set to the items it can use, so flags meant
-    # for other repos don't activate anything else here.
-    usable = _usable_items(ctx)
-    if usable != None and not usable:
-        return [config_common.FeatureFlagInfo(value = "")]
+        # Second-stage resolver for an overlapping conflict set: pins and CLI
+        # flags are evaluated by `explicit`; only `default_setting` remains.
+        explicit_val = ctx.attr.explicit[config_common.FeatureFlagInfo].value
+        if explicit_val:
+            return [config_common.FeatureFlagInfo(value = explicit_val)]
+        usable = _usable_items(ctx)
+        if usable != None and not usable:
+            return [config_common.FeatureFlagInfo(value = "")]
+    else:
+        # A repo pin (set by a pinned repo's transition) wins over everything.
+        pin = _setting_value(ctx.attr.pin)
+        if pin:
+            return [config_common.FeatureFlagInfo(value = _check_item(ctx, pin, str(ctx.attr.pin.label)))]
 
-    active = []
-    active_flags = []
-    for flag, value in ctx.attr.flags.items():
-        if not flag[BuildSettingInfo].value:
-            continue
-        display, sep, names = value.partition("|")
-        if not sep:
-            display, names = str(flag.label), value
-        enabled = [name for name in names.split(" ") if usable == None or name in usable]
-        if not enabled:
-            continue
-        active_flags.append(display)
-        for name in enabled:
-            if name not in active:
-                active.append(name)
+        # A transitioned repo limits the set to the items it can use, so flags meant
+        # for other repos don't activate anything else here.
+        usable = _usable_items(ctx)
+        if usable != None and not usable:
+            return [config_common.FeatureFlagInfo(value = "")]
 
-    for flag, spec_json in ctx.attr.string_flags.items():
-        raw = flag[BuildSettingInfo].value
-        if not raw:
-            continue
-        spec = json.decode(spec_json)
-        display = spec.get("display") or str(flag.label)
-        flag_map = spec.get("map", {})
-        valid = spec.get("valid", sorted(flag_map.keys()))
-        for token in raw.split(","):
-            token = token.strip()
-            if not token:
+        active = []
+        active_flags = []
+        for flag, value in ctx.attr.flags.items():
+            if not flag[BuildSettingInfo].value:
                 continue
-            if token not in valid:
-                fail("{} selects unknown variant '{}' (expected one of: {})".format(
-                    display,
-                    token,
-                    ", ".join(valid),
-                ))
-            names = flag_map.get(token)
-            if not names:
-                continue
-            enabled = [name for name in names if usable == None or name in usable]
+            display, sep, names = value.partition("|")
+            if not sep:
+                display, names = str(flag.label), value
+            enabled = [name for name in names.split(" ") if usable == None or name in usable]
             if not enabled:
                 continue
-            flag_display = "{}={}".format(display, token)
-            if flag_display not in active_flags:
-                active_flags.append(flag_display)
+            active_flags.append(display)
             for name in enabled:
                 if name not in active:
                     active.append(name)
 
-    if len(active) > 1:
-        fail(
-            "Conflicting variants are active simultaneously: {} (enabling {}). ".format(
-                " and ".join(["--" + f for f in active_flags]),
-                " and ".join(active),
-            ) + "Only one variant from each conflict set may be enabled at a time.",
-        )
-    if active:
-        return [config_common.FeatureFlagInfo(value = active[0])]
+        for flag, spec_json in ctx.attr.string_flags.items():
+            raw = flag[BuildSettingInfo].value
+            if not raw:
+                continue
+            spec = json.decode(spec_json)
+            display = spec.get("display") or str(flag.label)
+            flag_map = spec.get("map", {})
+            valid = spec.get("valid", sorted(flag_map.keys()))
+            for token in raw.split(","):
+                token = token.strip()
+                if not token:
+                    continue
+                if token not in valid:
+                    fail("{} selects unknown variant '{}' (expected one of: {})".format(
+                        display,
+                        token,
+                        ", ".join(valid),
+                    ))
+                names = flag_map.get(token)
+                if not names:
+                    continue
+                enabled = [name for name in names if usable == None or name in usable]
+                if not enabled:
+                    continue
+                flag_display = "{}={}".format(display, token)
+                if flag_display not in active_flags:
+                    active_flags.append(flag_display)
+                for name in enabled:
+                    if name not in active:
+                        active.append(name)
+
+        if len(active) > 1:
+            fail(
+                "Conflicting variants are active simultaneously: {} (enabling {}). ".format(
+                    " and ".join(["--" + f for f in active_flags]),
+                    " and ".join(active),
+                ) + "Only one variant from each conflict set may be enabled at a time.",
+            )
+        if active:
+            return [config_common.FeatureFlagInfo(value = active[0])]
 
     # A repo default (set by a repo's transition from its project's default-groups)
-    # applies only when no flag selects a variant in this set and no active CLI
-    # flag selects a conflicting rival in an overlapping conflict set.
+    # applies only when no flag/pin selects a variant in this set and no rival
+    # overlapping conflict set explicitly selects a conflicting item.
     default = _setting_value(ctx.attr.default_setting)
     if default and (usable == None or default in usable):
         checked_default = _check_item(ctx, default, str(ctx.attr.default_setting.label))
-        if not _rival_blocks_default(ctx, checked_default):
-            return [config_common.FeatureFlagInfo(value = checked_default)]
+        for rival_resolver, shared_str in ctx.attr.rival_resolvers.items():
+            rival_val = rival_resolver[config_common.FeatureFlagInfo].value
+            if not rival_val or rival_val == checked_default:
+                continue
+            shared = shared_str.split(" ")
+            if checked_default in shared or rival_val in shared:
+                return [config_common.FeatureFlagInfo(value = "")]
+        return [config_common.FeatureFlagInfo(value = checked_default)]
 
     return [config_common.FeatureFlagInfo(value = "")]
 
@@ -173,6 +141,10 @@ variant_resolver = rule(
         "default_setting": attr.label(
             providers = [BuildSettingInfo],
             doc = "A string setting naming the default variant, used when no flag or pin selects one.",
+        ),
+        "explicit": attr.label(
+            providers = [config_common.FeatureFlagInfo],
+            doc = "Optional first-stage variant_resolver evaluating pins and CLI flags without defaults.",
         ),
         "flags": attr.label_keyed_string_dict(
             providers = [BuildSettingInfo],
@@ -187,26 +159,19 @@ variant_resolver = rule(
             providers = [BuildSettingInfo],
             doc = "A string setting naming the pinned variant. When set, it overrides the flags.",
         ),
-        "rival_flags": attr.label_keyed_string_dict(
-            providers = [BuildSettingInfo],
+        "rival_resolvers": attr.label_keyed_string_dict(
+            providers = [config_common.FeatureFlagInfo],
             default = {},
-            doc = "Maps bool_flags from overlapping conflict sets to JSON-encoded lists of " +
-                  "`[item_in_this_set, rival_qname, other_set_suffix]` entries that suppress " +
-                  "`default_setting` when active.",
-        ),
-        "rival_usables": attr.label_keyed_string_dict(
-            providers = [BuildSettingInfo],
-            default = {},
-            doc = "Maps `_usable_<other_set>` string settings to `other_set_suffix` so rival " +
-                  "flags ignored by an overlapping set's usable scope do not suppress `default_setting`.",
+            doc = "Maps overlapping conflict sets' explicit-only variant_resolvers to space-separated " +
+                  "shared item qualified names; when a rival selects a different item that conflicts " +
+                  "with `default_setting` via the shared items, `default_setting` is suppressed.",
         ),
         "string_flags": attr.label_keyed_string_dict(
             providers = [BuildSettingInfo],
             doc = "Maps each repo's `//_variants` string_flag to a JSON-encoded spec " +
-                  "`{\"display\": str, \"valid\": [flag_name, ...], \"map\": {flag_name: [qname, ...]}, " +
-                  "\"rivals\": {flag_name: [[item, rival_qname, other_set_suffix], ...]}}`. " +
+                  "`{\"display\": str, \"valid\": [flag_name, ...], \"map\": {flag_name: [qname, ...]}}`. " +
                   "Comma-separated tokens in the flag must appear in `valid`; tokens present in `map` " +
-                  "enable the listed items in this conflict set, and tokens in `rivals` suppress `default_setting`.",
+                  "enable the listed items in this conflict set.",
         ),
         "usable": attr.label(
             providers = [BuildSettingInfo],
