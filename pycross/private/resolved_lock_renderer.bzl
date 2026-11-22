@@ -22,9 +22,6 @@ def _ind(text, tabs = 1):
         return ""
     return ("    " * tabs) + text
 
-def _sanitize_name(name):
-    return sanitize_name(name)
-
 def _is_in_same_cycle(dep_key, pkg, packages):
     cycle_group = pkg.get("cycle_group")
     if not cycle_group:
@@ -295,7 +292,7 @@ def _render_marker_cycle_member_deps(lines, cycle_groups, packages, variant_reso
         ]
         resolvers = _matching_variant_resolvers(edge_markers, variant_resolvers)
 
-        sanitized_group_name = _sanitize_name(group_name).upper()
+        sanitized_group_name = sanitize_name(group_name).upper()
         edges_var_name = "_{}_EDGES".format(sanitized_group_name)
 
         edges_lines = _render_edges_dict(edges, base_indent = 1)
@@ -362,7 +359,7 @@ def _render_marker_wheel_chooser(lines, pkg_key, pkg, repo_map, sdist_target = N
 
     for candidate, _target in resolved_candidates:
         filename = candidate["filename"]
-        cs_name = "_wheel_cs_{}_{}".format(pkg_key, _sanitize_name(filename))
+        cs_name = "_wheel_cs_{}_{}".format(pkg_key, sanitize_name(filename))
         lines.extend([
             _ind("native.config_setting("),
             _ind('name = "{}",'.format(cs_name), 2),
@@ -384,7 +381,7 @@ def _render_marker_wheel_chooser(lines, pkg_key, pkg, repo_map, sdist_target = N
     ])
     for candidate, target in resolved_candidates:
         filename = candidate["filename"]
-        cs_name = "_wheel_cs_{}_{}".format(pkg_key, _sanitize_name(filename))
+        cs_name = "_wheel_cs_{}_{}".format(pkg_key, sanitize_name(filename))
         lines.append(_ind('":{}": "{}",'.format(cs_name, target), 3))
     no_match_target = sdist_target if sdist_target else "@rules_pycross//pycross/private:no_match_error"
     lines.append(_ind('"//conditions:default": "{}",'.format(no_match_target), 3))
@@ -408,7 +405,7 @@ def _render_marker_wheel_chooser(lines, pkg_key, pkg, repo_map, sdist_target = N
 
     group_name = "_wheel_available_{}".format(pkg_key)
     cs_names = [
-        ":_wheel_cs_{}_{}".format(pkg_key, _sanitize_name(candidate["filename"]))
+        ":_wheel_cs_{}_{}".format(pkg_key, sanitize_name(candidate["filename"]))
         for candidate, _target in resolved_candidates
     ]
     if len(cs_names) == 1:
@@ -586,7 +583,7 @@ def _render_str_list_attr(lines, attr_name, values):
 
 def _render_marker_package(lines, pkg_key, pkg, packages, repo_map, rctx_name, reset_plan = None):
     """Renders all targets for a single package using marker-based deps and wheel selection."""
-    pkg_key_san = _sanitize_name(pkg_key)
+    pkg_key_san = sanitize_name(pkg_key)
     parts = parse_package_key(pkg_key)
     package_name = parts.name
     package_version = parts.version
@@ -944,7 +941,7 @@ def _compute_reset_plan(packages, repo_map, conflict_pairs, gate_lines):
                     ])
                     items.append(":" + gate_name)
                 else:
-                    cs_names = [":_wheel_cs_{}_{}".format(key, _sanitize_name(c["filename"])) for c in resolved]
+                    cs_names = [":_wheel_cs_{}_{}".format(key, sanitize_name(c["filename"])) for c in resolved]
                     items.append(cs_names[0] if len(cs_names) == 1 else group("_reset_wheel_" + key, "match_any", cs_names))
 
         for md in deps:

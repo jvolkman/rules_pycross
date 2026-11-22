@@ -2,7 +2,7 @@
 
 load("@bazel_tools//tools/build_defs/repo:utils.bzl", "read_user_netrc", "update_attrs", "use_netrc")
 load("@pypackaging.bzl", "pypackaging")
-load(":util.bzl", "url_decode_filename")
+load(":util.bzl", "url_filename")
 
 _PYPI_FILE_BUILD = """\
 package(default_visibility = ["//visibility:public"])
@@ -222,7 +222,7 @@ def find_simple_index_file(content, page_url, filename, sha256):
     """
     mismatch = None
     for f in parse_simple_index(content):
-        url_name = url_decode_filename(f["url"].split("#", 1)[0].split("?", 1)[0].split("/")[-1])
+        url_name = url_filename(f["url"])
         if filename not in (f["filename"], url_name):
             continue
         if f["sha256"] and sha256 and f["sha256"] != sha256.lower():
@@ -276,8 +276,13 @@ def get_pypi_file_url(rctx, netrc, indexes, package_name, filename, sha256, keep
         if not keep_metadata:
             rctx.delete(output)
         if found.url:
+            if not keep_metadata:
+                rctx.delete("simple_index")
             return found.url
         tried.append("{}: {}".format(index_url, found.reason))
+
+    if not keep_metadata:
+        rctx.delete("simple_index")
 
     fail(
         ("File {} of package {} was not found in any index. Index URLs must be " +
@@ -333,10 +338,6 @@ _pypi_file_attrs = {
     ),
     "package_name": attr.string(
         doc = "The package name.",
-        mandatory = True,
-    ),
-    "package_version": attr.string(
-        doc = "The package version.",
         mandatory = True,
     ),
     "filename": attr.string(

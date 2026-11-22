@@ -121,7 +121,6 @@ def _create_remote_file_repo(remote_file_repo, file, indexes):
     pypi_file_attrs = dict(
         name = remote_file_repo,
         package_name = file["package_name"],
-        package_version = file["package_version"],
         filename = file["name"],
         sha256 = file["sha256"],
     )
@@ -133,6 +132,7 @@ def _create_remote_file_repo(remote_file_repo, file, indexes):
     elif indexes:
         pypi_file_attrs["indexes"] = indexes
     if is_wheel:
+        pypi_file_attrs["package_version"] = file["package_version"]
         pycross_wheel_file(**pypi_file_attrs)
     else:
         pypi_file(**pypi_file_attrs)
@@ -269,9 +269,9 @@ def create_repos(
         module_ctx: The module_ctx or similar context object (needs .path(), .read()).
         all_locks: Dict of repo_name -> lock file Label (pointing to lock.json).
         workspace_memberships: Dict of repo_name -> workspace_name.
-        repo_flags: Dict of repo_name -> JSON-encoded flags list.
+        repo_flags: Dict of repo_name -> flags string list.
         repo_settings: Dict of repo_name -> {setting label: value} dict.
-        repo_constraint_values: Dict of repo_name -> JSON-encoded constraint_values list.
+        repo_constraint_values: Dict of repo_name -> constraint_values string list.
         repo_platforms: Dict of repo_name -> platform string.
         workspace_pypi_indexes: Dict of workspace_name -> list of string index URLs.
         resolved_locks: Optional dict of repo_name -> parsed lock JSON dict. When provided,
@@ -492,8 +492,7 @@ def create_repos(
                 thin_repo_attrs["expose_variant_flags"] = False
 
             if member in repo_flags:
-                flags = repo_flags[member]
-                thin_repo_attrs["flags"] = json.decode(flags) if type(flags) == "string" else flags
+                thin_repo_attrs["flags"] = repo_flags[member]
             if member in repo_settings:
                 thin_repo_attrs["settings"] = repo_settings[member]
             pins = _compute_variant_pins(
@@ -505,8 +504,7 @@ def create_repos(
             if pins:
                 thin_repo_attrs["variant_pins"] = pins
             if member in repo_constraint_values:
-                constraints = repo_constraint_values[member]
-                thin_repo_attrs["constraint_values"] = json.decode(constraints) if type(constraints) == "string" else constraints
+                thin_repo_attrs["constraint_values"] = repo_constraint_values[member]
             if member in repo_platforms:
                 thin_repo_attrs["platform"] = repo_platforms[member]
 

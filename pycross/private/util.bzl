@@ -382,3 +382,8 @@ def url_decode_filename(filename):
         parts.append(filename[i])
         i += 1
     return "".join(parts)
+
+def url_filename(url):
+    """Extract and percent-decode the filename component from a URL."""
+    path_part = url.split("#", 1)[0].split("?", 1)[0]
+    return url_decode_filename(path_part.split("/")[-1])

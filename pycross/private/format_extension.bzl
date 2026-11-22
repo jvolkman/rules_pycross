@@ -498,11 +498,11 @@ def make_format_extension(
             if getattr(repo_info, "is_auto_build_repo", False):
                 auto_build_repos.append(repo_info.repo_name)
             if repo_info.flags:
-                repo_flags[repo_info.repo_name] = json.encode(repo_info.flags)
+                repo_flags[repo_info.repo_name] = repo_info.flags
             if repo_info.settings:
                 repo_settings[repo_info.repo_name] = repo_info.settings
             if repo_info.constraint_values:
-                repo_constraint_values[repo_info.repo_name] = json.encode(repo_info.constraint_values)
+                repo_constraint_values[repo_info.repo_name] = repo_info.constraint_values
             if repo_info.platform:
                 repo_platforms[repo_info.repo_name] = repo_info.platform
 
