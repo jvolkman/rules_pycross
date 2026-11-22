@@ -7,7 +7,10 @@ load("@rules_testing//lib:analysis_test.bzl", "analysis_test", "test_suite")
 load("//pycross/private:providers.bzl", "PycrossExtractedWheelInfo", "PycrossPackageInfo")
 
 # buildifier: disable=bzl-visibility
-load("//pycross/private:proxy.bzl", "pycross_library_proxy")
+load("//pycross/private:proxy.bzl", "pycross_file_proxy", "pycross_library_proxy")
+
+# buildifier: disable=bzl-visibility
+load("//pycross/private:wheel_library.bzl", "pycross_unsupported_wheel")
 
 # buildifier: disable=bzl-visibility
 load("//pycross/private/build/rules:common_attrs.bzl", "get_unzipped_wheel", "group_tool_deps", "resolve_path_tools")
@@ -296,6 +299,30 @@ def _path_tool_propagates_files_to_run_test(name):
         impl = _path_tool_propagates_files_to_run_impl,
     )
 
+def _proxy_unsupported_wheel_names_package_impl(env, target):
+    actions = [a for a in target.actions if a.mnemonic == "PycrossUnsupportedPackage"]
+    env.expect.that_int(len(actions)).equals(1)
+    env.expect.that_str(actions[0].env.get("PYCROSS_ERROR", "")).contains(target.label.name)
+    env.expect.that_str(actions[0].env.get("PYCROSS_ERROR", "")).contains("no matching platform marker, wheel, or variant branch")
+
+def _proxy_library_unsupported_wheel_test(name):
+    pycross_unsupported_wheel(name = name + "_no_match", tags = ["manual"])
+    pycross_library_proxy(name = name + "_subject", actual = ":" + name + "_no_match", tags = ["manual"])
+    analysis_test(
+        name = name,
+        target = ":" + name + "_subject",
+        impl = _proxy_unsupported_wheel_names_package_impl,
+    )
+
+def _proxy_file_unsupported_wheel_test(name):
+    pycross_unsupported_wheel(name = name + "_no_match", tags = ["manual"])
+    pycross_file_proxy(name = name + "_subject", actual = ":" + name + "_no_match", tags = ["manual"])
+    analysis_test(
+        name = name,
+        target = ":" + name + "_subject",
+        impl = _proxy_unsupported_wheel_names_package_impl,
+    )
+
 def common_attrs_test_suite(name):
     test_suite(
         name = name,
@@ -310,5 +337,7 @@ def common_attrs_test_suite(name):
             _proxy_deps_only_single_test,
             _proxy_deps_only_multi_test,
             _path_tool_propagates_files_to_run_test,
+            _proxy_library_unsupported_wheel_test,
+            _proxy_file_unsupported_wheel_test,
         ],
     )

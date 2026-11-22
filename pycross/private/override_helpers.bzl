@@ -53,42 +53,64 @@ create_overrides_repo = repository_rule(
     attrs = {"content": attr.string()},
 )
 
+_OVERRIDE_METADATA_ATTRS = {
+    "name": True,
+    "workspace": True,
+}
+
+_JSONABLE_ATTR_TYPES = {
+    "bool": True,
+    "int": True,
+    "string": True,
+    "Label": True,
+    "list": True,
+    "dict": True,
+}
+
+def _to_jsonable_scalar(val):
+    return str(val) if type(val) == "Label" else val
+
+def _to_jsonable(val):
+    t = type(val)
+    if t == "Label":
+        return str(val)
+    if t == "list":
+        return [_to_jsonable_scalar(item) for item in val]
+    if t == "dict":
+        out = {}
+        for k, v in val.items():
+            key = str(k) if type(k) == "Label" else k
+            if type(v) == "list":
+                out[key] = [_to_jsonable_scalar(item) for item in v]
+            else:
+                out[key] = _to_jsonable_scalar(v)
+        return out
+    return val
+
 def encode_build_system_attrs(tag):
-    """Encode BUILD_SYSTEM_ATTRS from a tag into a backend_attrs dict.
+    """Encode override attributes from a tag into a backend_attrs dict.
+
+    Serializes every truthy attribute on `tag` (excluding routing keys `name`
+    and `workspace`), converting `Label` values (including inside lists and
+    dicts) to strings before JSON encoding. Falsy defaults (`""`, `[]`, `{}`,
+    `None`, `False`, `0`) are omitted so unset tag attributes do not overwrite
+    less-specific wildcard overrides during merging.
 
     Args:
-        tag: A module tag with optional copts, linkopts, native_deps,
-            config_settings, and tool_deps attributes.
+        tag: A module tag carrying backend override attributes.
 
     Returns:
         A dict of JSON-encoded backend attribute values.
     """
     backend_attrs = {}
 
-    for attr_name, kind in (
-        ("copts", "raw"),
-        ("linkopts", "raw"),
-        ("native_deps", "label_list"),
-        ("config_settings", "raw"),
-        ("tool_deps", "label_dict"),
-        ("build_env", "raw"),
-        ("data", "label_list"),
-        ("pre_build_hooks", "label_list"),
-        ("post_build_hooks", "label_list"),
-        ("path_tools", "label_list"),
-        ("repair_exclude_globs", "raw"),
-        ("cargo_lock", "label"),
-    ):
-        val = getattr(tag, attr_name, None)
-        if not val:
+    for attr_name in dir(tag):
+        if attr_name.startswith("_") or attr_name in _OVERRIDE_METADATA_ATTRS:
             continue
-        if kind == "label_list":
-            val = [str(dep) for dep in val]
-        elif kind == "label_dict":
-            val = {name: str(label) for name, label in val.items()}
-        elif kind == "label":
-            val = str(val)
-        backend_attrs[attr_name] = json.encode(val)
+        val = getattr(tag, attr_name, None)
+        if not val or type(val) not in _JSONABLE_ATTR_TYPES:
+            continue
+        backend_attrs[attr_name] = json.encode(_to_jsonable(val))
 
     return backend_attrs
 

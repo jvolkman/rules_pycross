@@ -9,6 +9,8 @@ load(
     "//pycross/private:lock_attrs.bzl",
     _BUILD_SYSTEM_ATTRS = "BUILD_SYSTEM_ATTRS",
     _CC_BUILD_SYSTEM_ATTRS = "CC_BUILD_SYSTEM_ATTRS",
+    _CC_OVERRIDE_ATTRS = "CC_OVERRIDE_ATTRS",
+    _CORE_OVERRIDE_ATTRS = "CORE_OVERRIDE_ATTRS",
 )
 load(
     "//pycross/private:override_helpers.bzl",
@@ -97,3 +99,5 @@ create_overrides_repo = _create_overrides_repo
 encode_build_system_attrs = _encode_build_system_attrs
 BUILD_SYSTEM_ATTRS = _BUILD_SYSTEM_ATTRS
 CC_BUILD_SYSTEM_ATTRS = _CC_BUILD_SYSTEM_ATTRS
+CORE_OVERRIDE_ATTRS = _CORE_OVERRIDE_ATTRS
+CC_OVERRIDE_ATTRS = _CC_OVERRIDE_ATTRS

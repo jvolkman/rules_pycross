@@ -5,6 +5,8 @@ which expects a :dist_info target providing entry_points.txt as a file.
 """
 
 def _pycross_dist_info_impl(ctx):
+    if OutputGroupInfo not in ctx.attr.pkg or not hasattr(ctx.attr.pkg[OutputGroupInfo], "dist_info"):
+        fail("Target {} does not provide a `dist_info` output group. Make sure it is a pycross_wheel_library.".format(ctx.attr.pkg.label))
     return [DefaultInfo(
         files = ctx.attr.pkg[OutputGroupInfo].dist_info,
     )]

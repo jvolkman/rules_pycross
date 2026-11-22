@@ -35,6 +35,32 @@ def _usable_items(ctx):
             usable[_check_item(ctx, name, str(ctx.attr.usable.label))] = True
     return usable
 
+def _parse_string_flags(ctx):
+    """Validate all string_flags tokens and return decoded (display, flag_map, tokens) tuples."""
+    parsed = []
+    for flag, spec_json in ctx.attr.string_flags.items():
+        raw = flag[BuildSettingInfo].value
+        if not raw:
+            continue
+        spec = json.decode(spec_json)
+        display = spec.get("display") or str(flag.label)
+        flag_map = spec.get("map", {})
+        valid = spec.get("valid", sorted(flag_map.keys()))
+        tokens = []
+        for token in raw.split(","):
+            token = token.strip()
+            if not token:
+                continue
+            if token not in valid:
+                fail("{} selects unknown variant '{}' (expected one of: {})".format(
+                    display,
+                    token,
+                    ", ".join(valid),
+                ))
+            tokens.append(token)
+        parsed.append((display, flag_map, tokens))
+    return parsed
+
 def _variant_resolver_impl(ctx):
     if ctx.attr.explicit:
         if ctx.attr.pin or ctx.attr.flags or ctx.attr.string_flags:
@@ -49,6 +75,10 @@ def _variant_resolver_impl(ctx):
         if usable != None and not usable:
             return [config_common.FeatureFlagInfo(value = "")]
     else:
+        # Validate unknown tokens in `//_variants` string_flags before returning
+        # early on pins or unusable sets so typos fail loudly everywhere.
+        parsed_string_flags = _parse_string_flags(ctx)
+
         # A repo pin (set by a pinned repo's transition) wins over everything.
         pin = _setting_value(ctx.attr.pin)
         if pin:
@@ -76,24 +106,8 @@ def _variant_resolver_impl(ctx):
                 if name not in active:
                     active.append(name)
 
-        for flag, spec_json in ctx.attr.string_flags.items():
-            raw = flag[BuildSettingInfo].value
-            if not raw:
-                continue
-            spec = json.decode(spec_json)
-            display = spec.get("display") or str(flag.label)
-            flag_map = spec.get("map", {})
-            valid = spec.get("valid", sorted(flag_map.keys()))
-            for token in raw.split(","):
-                token = token.strip()
-                if not token:
-                    continue
-                if token not in valid:
-                    fail("{} selects unknown variant '{}' (expected one of: {})".format(
-                        display,
-                        token,
-                        ", ".join(valid),
-                    ))
+        for display, flag_map, tokens in parsed_string_flags:
+            for token in tokens:
                 names = flag_map.get(token)
                 if not names:
                     continue
@@ -108,10 +122,11 @@ def _variant_resolver_impl(ctx):
                         active.append(name)
 
         if len(active) > 1:
+            detail = " (enabling {})".format(" and ".join(active)) if len(active_flags) == 1 else ""
             fail(
-                "Conflicting variants are active simultaneously: {} (enabling {}). ".format(
+                "Conflicting variants are active simultaneously: {}{}. ".format(
                     " and ".join(["--" + f for f in active_flags]),
-                    " and ".join(active),
+                    detail,
                 ) + "Only one variant from each conflict set may be enabled at a time.",
             )
         if active:

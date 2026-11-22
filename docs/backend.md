@@ -22,7 +22,7 @@ Information about an extracted (installed) Python wheel.
 
 | Name  | Description |
 | :------------- | :------------- |
-| <a id="PycrossExtractedWheelInfo-site_packages"></a>site_packages |  File (TreeArtifact): The unzipped site-packages directory containing the wheel's installed files.    |
+| <a id="PycrossExtractedWheelInfo-site_packages"></a>site_packages |  File (TreeArtifact): The wheel installation root directory containing `site-packages/` (and any `bin/`, `data/`, or `include/` directories).    |
 
 
 <a id="PycrossPackageInfo"></a>
@@ -93,14 +93,21 @@ load("@rules_pycross//pycross:backend.bzl", "encode_build_system_attrs")
 encode_build_system_attrs(<a href="#encode_build_system_attrs-tag">tag</a>)
 </pre>
 
-Encode BUILD_SYSTEM_ATTRS from a tag into a backend_attrs dict.
+Encode override attributes from a tag into a backend_attrs dict.
+
+Serializes every truthy attribute on `tag` (excluding routing keys `name`
+and `workspace`), converting `Label` values (including inside lists and
+dicts) to strings before JSON encoding. Falsy defaults (`""`, `[]`, `{}`,
+`None`, `False`, `0`) are omitted so unset tag attributes do not overwrite
+less-specific wildcard overrides during merging.
+
 
 **PARAMETERS**
 
 
 | Name  | Description | Default Value |
 | :------------- | :------------- | :------------- |
-| <a id="encode_build_system_attrs-tag"></a>tag |  A module tag with optional copts, linkopts, native_deps, config_settings, and tool_deps attributes.   |  none |
+| <a id="encode_build_system_attrs-tag"></a>tag |  A module tag carrying backend override attributes.   |  none |
 
 **RETURNS**
 

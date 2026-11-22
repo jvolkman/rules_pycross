@@ -469,7 +469,7 @@ def _pin_build(target_name, pin_target_dict, package, workspace_repo, workspace_
             ")",
         ])
 
-        if extras_dict:
+        if extras_dict or has_aggregated_variant:
             if not has_aggregated_variant:
                 lines.extend([
                     "alias(",
@@ -615,11 +615,23 @@ def _collect_variants(variant_sets):
     sets = {}
     for variant_set in variant_sets:
         qnames = []
+        display_items = []
         set_flags = {}  # flag -> [qnames in this set]
         item_flags = []  # (qname, [flags])
         for item in variant_set["items"]:
             qname = variant_item_qname(item)
             qnames.append(qname)
+            pkg = item.get("package", "")
+            kind = item.get("kind", "")
+            iname = item.get("name", "")
+            if kind == "extra" and iname:
+                display_items.append("{}[{}]".format(pkg, iname) if pkg else "extra '{}'".format(iname))
+            elif kind == "group" and iname:
+                display_items.append("{}:{}".format(pkg, iname) if pkg else "group '{}'".format(iname))
+            elif kind == "project" and pkg:
+                display_items.append(pkg)
+            else:
+                display_items.append(qname)
             item_flags.append((qname, item.get("flags", [])))
             for flag in item.get("flags", []):
                 flag_qnames = flags.setdefault(flag, [])
@@ -640,6 +652,7 @@ def _collect_variants(variant_sets):
         if qnames:
             sets["_".join(sorted(qnames))] = struct(
                 qnames = qnames,
+                display_items = display_items,
                 flags = usable,
                 default = variant_set.get("repo_default", ""),
                 pin = variant_set.get("repo_pin", ""),
@@ -858,9 +871,10 @@ def _variants_build(variant_info, workspace_repo, repo_name, unselected_groups =
                 vset.flags[0],
             )
         else:
+            readable_items = ", ".join(vset.display_items)
             message = "No uv conflict variant selected, and @{} has no _variants flag for it ({}). Select it through a repo for the declaring project.".format(
                 repo_name,
-                set_suffix,
+                readable_items,
             )
         body.extend([
             "pycross_no_variant_selected(",
@@ -1201,6 +1215,13 @@ pycross_transitioning_file_proxy = rule(
         ])
         rctx.file("__maybe/BUILD.bazel", "\n".join(maybe_header_lines + maybe_body_lines))
 
+    base_packages_with_extras = {}
+    for pkg_key in packages.keys():
+        parts = parse_package_key(pkg_key)
+        if not parts.extra:
+            continue
+        base_packages_with_extras["{}@{}".format(parts.name, parts.version)] = True
+
     if rctx.attr.generate_root_aliases:
         for base_pin_name in sorted(grouped_pins.keys()):
             group = grouped_pins[base_pin_name]
@@ -1214,7 +1235,11 @@ pycross_transitioning_file_proxy = rule(
                     '    actual = "//{}:pkg",'.format(us_name),
                     ")",
                 ])
-                if group["extras"]:
+                has_aggregated_variant = any([
+                    t in base_packages_with_extras
+                    for t in base_target.values()
+                ])
+                if group["extras"] or has_aggregated_variant:
                     root_build_lines.extend([
                         "alias(",
                         '    name = "{}[]",'.format(base_pin_name),
@@ -1241,13 +1266,6 @@ pycross_transitioning_file_proxy = rule(
                     "",
                 ])
     rctx.file("BUILD.bazel", "\n".join(root_build_lines))
-
-    base_packages_with_extras = {}
-    for pkg_key in packages.keys():
-        parts = parse_package_key(pkg_key)
-        if not parts.extra:
-            continue
-        base_packages_with_extras["{}@{}".format(parts.name, parts.version)] = True
 
     # Pin directories: proxies pointing to @workspace//_lock targets
     for base_pin_name, group in sorted(grouped_pins.items()):

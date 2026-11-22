@@ -3,7 +3,7 @@
 PycrossExtractedWheelInfo = provider(
     doc = "Information about an extracted (installed) Python wheel.",
     fields = {
-        "site_packages": "File (TreeArtifact): The unzipped site-packages directory containing the wheel's installed files.",
+        "site_packages": "File (TreeArtifact): The wheel installation root directory containing `site-packages/` (and any `bin/`, `data/`, or `include/` directories).",
     },
 )
 
@@ -36,6 +36,8 @@ PycrossPathToolInfo = provider(
 )
 
 PycrossUnsupportedWheelInfo = provider(
-    doc = "Marker provider indicating a wheel target has no compatible wheel for the selected target environment.",
-    fields = {},
+    doc = "Marker provider indicating a target has no compatible wheel or branch for the selected target environment.",
+    fields = {
+        "package": "string: Package identifier already named by a contextualized deferred failure action, or empty string for the generic `no_match_error` sentinel.",
+    },
 )

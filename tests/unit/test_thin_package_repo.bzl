@@ -1580,6 +1580,40 @@ def _test_requirement_extra_canon_and_extras_only_metadata(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
     analysis_test(name = name, target = name + "_subject", impl = _test_requirement_extra_canon_and_extras_only_metadata_impl)
 
+# buildifier: disable=unused-variable
+def _test_pin_build_emits_empty_brackets_when_aggregated_without_extras_impl(env, target):
+    result = pin_build_for_testing(
+        "foo",
+        {"": "foo@1.0"},
+        {},
+        "ws__pkgs",
+        has_aggregated_variant = True,
+        extras_dict = {},
+    )
+    env.expect.that_str(result.build).contains('actual = "@ws__pkgs//_lock:foo[_all_]@1.0",')
+    env.expect.that_str(result.build).contains('name = "[]",')
+    env.expect.that_str(result.build).contains('actual = "@ws__pkgs//_lock:foo@1.0",')
+
+    # Also check hidden-flag no-variant message uses readable item names instead of raw set_suffix.
+    vinfo = collect_variants_for_testing([
+        {
+            "items": [
+                {"kind": "extra", "package": "app-a", "name": "cpu"},
+                {"kind": "extra", "package": "app-a", "name": "gpu"},
+            ],
+        },
+    ])
+    vbuild = variants_build_for_testing(vinfo, "ws__pkgs", "pypi", expose_variant_flags = False)
+    env.expect.that_str(vbuild).contains("has no _variants flag for it (app-a[cpu], app-a[gpu])")
+
+def _test_pin_build_emits_empty_brackets_when_aggregated_without_extras(name):
+    util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
+    analysis_test(
+        name = name,
+        target = name + "_subject",
+        impl = _test_pin_build_emits_empty_brackets_when_aggregated_without_extras_impl,
+    )
+
 def thin_package_repo_test_suite(name):
     test_suite(
         name = name,
@@ -1593,6 +1627,7 @@ def thin_package_repo_test_suite(name):
             _test_modules_mapping_deps_selection,
             _test_partial_fork_maybe_and_testonly,
             _test_requirement_extra_canon_and_extras_only_metadata,
+            _test_pin_build_emits_empty_brackets_when_aggregated_without_extras,
             _test_transition_settings,
             _test_pin_build_overlapping_sets,
             _test_pin_build_no_transition,

@@ -186,7 +186,7 @@ pycross_wheel_library(<a href="#pycross_wheel_library-name">name</a>, <a href="#
                       <a href="#pycross_wheel_library-precompile_optimize_level">precompile_optimize_level</a>, <a href="#pycross_wheel_library-site_paths">site_paths</a>, <a href="#pycross_wheel_library-wheel">wheel</a>)
 </pre>
 
-
+Installs a Python wheel into a TreeArtifact directory and exposes it as a `PyInfo` library.
 
 **ATTRIBUTES**
 
@@ -220,7 +220,7 @@ load("@rules_pycross//pycross:defs.bzl", "pycross_wheel_transform")
 pycross_wheel_transform(<a href="#pycross_wheel_transform-name">name</a>, <a href="#pycross_wheel_transform-data">data</a>, <a href="#pycross_wheel_transform-env">env</a>, <a href="#pycross_wheel_transform-transform">transform</a>, <a href="#pycross_wheel_transform-wheel">wheel</a>)
 </pre>
 
-
+Runs a custom transform executable over a wheel file or wheel directory TreeArtifact to produce a new wheel directory.
 
 **ATTRIBUTES**
 
@@ -244,7 +244,7 @@ load("@rules_pycross//pycross:defs.bzl", "pycross_wheel_zipimport_library")
 pycross_wheel_zipimport_library(<a href="#pycross_wheel_zipimport_library-name">name</a>, <a href="#pycross_wheel_zipimport_library-deps">deps</a>, <a href="#pycross_wheel_zipimport_library-wheel">wheel</a>)
 </pre>
 
-
+Exposes a Python wheel directly on `PYTHONPATH` for zipimport without extracting it.
 
 **ATTRIBUTES**
 
@@ -272,7 +272,7 @@ Information about an extracted (installed) Python wheel.
 
 | Name  | Description |
 | :------------- | :------------- |
-| <a id="PycrossExtractedWheelInfo-site_packages"></a>site_packages |  File (TreeArtifact): The unzipped site-packages directory containing the wheel's installed files.    |
+| <a id="PycrossExtractedWheelInfo-site_packages"></a>site_packages |  File (TreeArtifact): The wheel installation root directory containing `site-packages/` (and any `bin/`, `data/`, or `include/` directories).    |
 
 
 <a id="pycross_wheel_headers"></a>

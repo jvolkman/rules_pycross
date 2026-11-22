@@ -9,9 +9,9 @@ PEP 517 build backend for rules_pycross.
 <pre>
 load("@rules_pycross//pycross/backends:pep517.bzl", "pep517_build")
 
-pep517_build(<a href="#pep517_build-name">name</a>, <a href="#pep517_build-deps">deps</a>, <a href="#pep517_build-data">data</a>, <a href="#pep517_build-build_deps">build_deps</a>, <a href="#pep517_build-build_env">build_env</a>, <a href="#pep517_build-post_build_hooks">post_build_hooks</a>, <a href="#pep517_build-pre_build_hooks">pre_build_hooks</a>,
-             <a href="#pep517_build-pre_build_patches">pre_build_patches</a>, <a href="#pep517_build-repair_exclude_globs">repair_exclude_globs</a>, <a href="#pep517_build-required_build_packages">required_build_packages</a>, <a href="#pep517_build-resource_size">resource_size</a>, <a href="#pep517_build-sdist">sdist</a>,
-             <a href="#pep517_build-site_hooks">site_hooks</a>, <a href="#pep517_build-source_dir">source_dir</a>, <a href="#pep517_build-target_environment">target_environment</a>, <a href="#pep517_build-whldir_name">whldir_name</a>)
+pep517_build(<a href="#pep517_build-name">name</a>, <a href="#pep517_build-deps">deps</a>, <a href="#pep517_build-data">data</a>, <a href="#pep517_build-build_deps">build_deps</a>, <a href="#pep517_build-build_env">build_env</a>, <a href="#pep517_build-config_settings">config_settings</a>, <a href="#pep517_build-post_build_hooks">post_build_hooks</a>,
+             <a href="#pep517_build-pre_build_hooks">pre_build_hooks</a>, <a href="#pep517_build-pre_build_patches">pre_build_patches</a>, <a href="#pep517_build-repair_exclude_globs">repair_exclude_globs</a>, <a href="#pep517_build-required_build_packages">required_build_packages</a>,
+             <a href="#pep517_build-resource_size">resource_size</a>, <a href="#pep517_build-sdist">sdist</a>, <a href="#pep517_build-site_hooks">site_hooks</a>, <a href="#pep517_build-source_dir">source_dir</a>, <a href="#pep517_build-target_environment">target_environment</a>, <a href="#pep517_build-whldir_name">whldir_name</a>)
 </pre>
 
 
@@ -26,6 +26,7 @@ pep517_build(<a href="#pep517_build-name">name</a>, <a href="#pep517_build-deps"
 | <a id="pep517_build-data"></a>data |  Additional data and dependencies used by the build. These files are made available in the sandbox and can be referenced via $(location) in build_env and config_settings values.   | <a href="https://bazel.build/concepts/labels">List of labels</a> | optional |  `[]`  |
 | <a id="pep517_build-build_deps"></a>build_deps |  Build-time Python packages (e.g. `build-system.requires`), available on the build's Python path.   | <a href="https://bazel.build/concepts/labels">List of labels</a> | optional |  `[]`  |
 | <a id="pep517_build-build_env"></a>build_env |  Environment variables passed to the sdist build. Values are subject to $(location) expansion.   | <a href="https://bazel.build/rules/lib/dict">Dictionary: String -> String</a> | optional |  `{}`  |
+| <a id="pep517_build-config_settings"></a>config_settings |  PEP 517 `config_settings` passed to the build backend. Values are subject to $(location) expansion.   | <a href="https://bazel.build/rules/lib/dict">Dictionary: String -> List of strings</a> | optional |  `{}`  |
 | <a id="pep517_build-post_build_hooks"></a>post_build_hooks |  Executables to run after the wheel is built. Each hook receives PYCROSS_WHEEL_FILE pointing to the built wheel.   | <a href="https://bazel.build/concepts/labels">List of labels</a> | optional |  `[]`  |
 | <a id="pep517_build-pre_build_hooks"></a>pre_build_hooks |  Executables to run before building the wheel. Each hook receives PYCROSS_CONFIG_SETTINGS_FILE and PYCROSS_ENV_VARS_FILE environment variables pointing to JSON files it may read and modify (set an env key to null in PYCROSS_ENV_VARS_FILE to unset it).   | <a href="https://bazel.build/concepts/labels">List of labels</a> | optional |  `[]`  |
 | <a id="pep517_build-pre_build_patches"></a>pre_build_patches |  Patch files to apply to the sdist source tree before building.   | <a href="https://bazel.build/concepts/labels">List of labels</a> | optional |  `[]`  |

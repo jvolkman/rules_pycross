@@ -1,5 +1,6 @@
 import json
 import os
+import sys
 import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -10,6 +11,7 @@ from pycross.private.build.tools.utils.lifecycle import BackendStrategy
 from pycross.private.build.tools.utils.lifecycle import _apply_pre_build_patches
 from pycross.private.build.tools.utils.lifecycle import run_standard_build_lifecycle
 from pycross.private.build.tools.utils.lifecycle import setup_pkg_config
+from pycross.private.build.tools.utils.pep517_runner import run_pep517_build
 
 
 class LifecycleTest(unittest.TestCase):
@@ -151,6 +153,86 @@ class SetupPkgConfigTest(unittest.TestCase):
         setup_pkg_config(ctx)
         self.assertEqual(dest.read_text(), "prefix=/hook/override\n")
         self.assertNotIn("PKG_CONFIG_PATH", ctx.build_env)
+
+
+class Pep517RunnerTest(unittest.TestCase):
+    def setUp(self):
+        self.temp_dir = TemporaryDirectory()
+        self.root = Path(self.temp_dir.name)
+        self.sdist_dir = self.root / "sdist"
+        self.sdist_dir.mkdir()
+        (self.sdist_dir / "pyproject.toml").write_text(
+            '[build-system]\nrequires = []\nbuild-backend = "fake_backend"\nbackend-path = ["."]\n'
+        )
+        (self.sdist_dir / "fake_backend.py").write_text(
+            "import sys\n"
+            "def build_wheel(wheel_directory, config_settings=None, metadata_directory=None):\n"
+            '    print("COMPILER_ERROR_SENTINEL: missing foo.h", flush=True)\n'
+            "    sys.exit(42)\n"
+        )
+        self.env_dir = self.root / "env"
+        (self.env_dir / "bin").mkdir(parents=True)
+        (self.env_dir / "bin" / "python").symlink_to(sys.executable)
+        self.temp_build = self.root / "tmp"
+        self.temp_build.mkdir()
+        self.wheel_dir = self.root / "wheel"
+        self.tools_dir = self.root / "tools"
+        self.tools_dir.mkdir()
+        self.bin_dir = self.root / "bin"
+        self.bin_dir.mkdir()
+
+    def tearDown(self):
+        self.temp_dir.cleanup()
+
+    def _ctx(self):
+        return SimpleNamespace(
+            prefix=self.root,
+            temp_dir=self.temp_build,
+            sdist_dir=self.sdist_dir,
+            env_dir=self.env_dir,
+            wheel_dir=self.wheel_dir,
+            tools_dir=self.tools_dir,
+            bin_dir=self.bin_dir,
+            exec_python=Path(sys.executable),
+            target_python=Path(sys.executable),
+            sysconfig_vars={},
+            config_settings={},
+            build_env={"PATH": os.environ.get("PATH", ""), "PYTHONPATH": str(self.sdist_dir)},
+            bazel_config={},
+        )
+
+    def test_build_failed_log_preserves_subprocess_output_and_metadata(self):
+        import io
+
+        for debug_val in ("0", "1"):
+            with self.subTest(debug=debug_val):
+                log_file = self.temp_build / "build_failed.log"
+                log_file.unlink(missing_ok=True)
+                stderr_buf = io.StringIO()
+                with (
+                    patch.dict(os.environ, {"RULES_PYCROSS_DEBUG": debug_val}),
+                    patch("sys.stderr", stderr_buf),
+                ):
+                    with self.assertRaises(Exception):
+                        run_pep517_build(self._ctx())
+
+                self.assertTrue(log_file.exists())
+                log_text = log_file.read_text()
+                self.assertIn("exit code 42", log_text)
+                self.assertIn("Command:", log_text)
+                self.assertIn("Working directory:", log_text)
+                self.assertIn("COMPILER_ERROR_SENTINEL: missing foo.h", log_text)
+                self.assertNotIn("Traceback (most recent call last):\n  File", log_text)
+                # Ensure output is printed once to stderr (streamed in debug mode, dumped on error otherwise).
+                self.assertEqual(stderr_buf.getvalue().count("COMPILER_ERROR_SENTINEL: missing foo.h"), 1)
+
+    def test_build_failed_log_captures_non_subprocess_exception(self):
+        (self.sdist_dir / "pyproject.toml").write_text("[invalid toml\n")
+        log_file = self.temp_build / "build_failed.log"
+        with self.assertRaises(Exception):
+            run_pep517_build(self._ctx())
+        self.assertTrue(log_file.exists())
+        self.assertIn("Traceback (most recent call last):", log_file.read_text())
 
 
 if __name__ == "__main__":

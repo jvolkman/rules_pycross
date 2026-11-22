@@ -27,7 +27,7 @@ def _pycross_wheel_dir_impl(ctx):
         )
         return [
             DefaultInfo(files = depset([out])),
-            ctx.attr.src[PycrossUnsupportedWheelInfo],
+            PycrossUnsupportedWheelInfo(package = package),
         ]
 
     src = ctx.files.src[0]
