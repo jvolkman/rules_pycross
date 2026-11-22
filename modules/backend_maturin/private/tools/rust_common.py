@@ -270,13 +270,27 @@ def configure_rust_env(ctx, cargo_dir: Path, is_maturin: bool = False):
                 return token.split("=", 1)[1]
         return None
 
+    def _parse_crate_name(argv):
+        for idx, token in enumerate(argv):
+            if token == "--crate-name" and idx + 1 < len(argv):
+                return argv[idx + 1]
+            if token.startswith("--crate-name="):
+                return token.split("=", 1)[1]
+        return None
+
     has_sysroot = any(arg == "--sysroot" or arg.startswith("--sysroot=") for arg in args)
     explicit_target = _parse_target(args)
+    explicit_crate_name = _parse_crate_name(args)
     is_target = (explicit_target == target_triple) or (explicit_target is None and is_native)
-    is_probe = not args or any(
-        arg in ("-V", "-vV", "-Vv", "--version", "-h", "--help", "--print", "--explain")
-        or arg.startswith(("--print=", "--explain="))
-        for arg in args
+    has_print = any(arg == "--print" or arg.startswith("--print=") for arg in args)
+    is_probe = (
+        not args
+        or any(
+            arg in ("-V", "-vV", "-Vv", "--version", "-h", "--help", "--explain")
+            or arg.startswith("--explain=")
+            for arg in args
+        )
+        or (has_print and explicit_crate_name in (None, "___"))
     )
 
     final_args = []
@@ -394,10 +408,16 @@ def configure_rust_env(ctx, cargo_dir: Path, is_maturin: bool = False):
 
     ctx.build_env["CARGO_HOME"] = str(cargo_home.absolute())
 
-    # Strip ARFLAGS from the subprocess environment: cc-rs prepends ARFLAGS before
-    # its own `cq` archiver flags, causing `ar` to treat `cq` as the output archive.
+    # Strip inherited RUSTFLAGS / CARGO_ENCODED_RUSTFLAGS (e.g. from --action_env)
+    # so ambient flags don't override an sdist's .cargo/config.toml rustflags,
+    # while preserving values explicitly set via rule build_env or pre-build hooks.
+    # Also strip ARFLAGS: cc-rs prepends ARFLAGS before its own `cq` archiver
+    # flags, causing `ar` to treat `cq` as the output archive.
     # sysconfig_vars["ARFLAGS"] stays intact for hybrid setuptools_rust C builds.
-    # Preserve user-provided RUSTFLAGS / CARGO_ENCODED_RUSTFLAGS.
+    user_build_env = ctx.bazel_config.get("build_env", {})
+    for var_name in ("RUSTFLAGS", "CARGO_ENCODED_RUSTFLAGS"):
+        if var_name not in user_build_env and ctx.build_env.get(var_name) == os.environ.get(var_name):
+            ctx.build_env.pop(var_name, None)
     ctx.build_env.pop("ARFLAGS", None)
 
     ctx.build_env.setdefault("CARGO_TERM_VERBOSE", "true")

@@ -890,6 +890,9 @@ def _test_pylock_multiversion_fork_edges_and_unmarked_branch_impl(env, target):
                 "dependencies": [
                     _dep("greenlet"),
                     {"name": "pinned-fork", "version": "1.0.0"},
+                    {"name": "dual-explicit", "version": "1.0.0"},
+                    {"name": "dual-explicit", "version": "2.0.0"},
+                    _dep("pywin32"),
                     # Explicit version pruned by selection markers must be skipped, not rewritten to 2.0.0.
                     {"name": "pruned-fork", "version": "1.0.0"},
                 ],
@@ -917,6 +920,24 @@ def _test_pylock_multiversion_fork_edges_and_unmarked_branch_impl(env, target):
                 "version": "2.0.0",
                 "marker": 'sys_platform == "darwin"',
                 "wheels": [_whl("pinned_fork-2.0.0-py3-none-any.whl", "p2")],
+            },
+            {
+                "name": "dual-explicit",
+                "version": "1.0.0",
+                "marker": 'sys_platform == "linux"',
+                "wheels": [_whl("dual_explicit-1.0.0-py3-none-any.whl", "d1")],
+            },
+            {
+                "name": "dual-explicit",
+                "version": "2.0.0",
+                "marker": 'sys_platform == "darwin"',
+                "wheels": [_whl("dual_explicit-2.0.0-py3-none-any.whl", "d2")],
+            },
+            {
+                "name": "pywin32",
+                "version": "306",
+                "marker": 'sys_platform == "win32"',
+                "wheels": [_whl("pywin32-306-py3-none-any.whl", "w1")],
             },
             {
                 "name": "pruned-fork",
@@ -983,12 +1004,16 @@ def _test_pylock_multiversion_fork_edges_and_unmarked_branch_impl(env, target):
         "res_greenlet_3_5_3": "greenlet[extra1]@3.5.3",
     })
 
-    # app emits both forked greenlet edges gated by their markers, only the explicit pinned-fork version,
-    # and drops the pruned explicit pruned-fork@1.0.0 edge without rewriting it to 2.0.0.
+    # app emits both forked greenlet edges gated by their markers, propagates the target package's
+    # own marker onto explicit-version and single-version edges, and drops the pruned explicit
+    # pruned-fork@1.0.0 edge without rewriting it to 2.0.0.
     env.expect.that_dict(_edges(result, "app@1.0.0")).contains_exactly({
         "greenlet@3.2.5": 'python_version < "3.10"',
         "greenlet@3.5.3": 'python_version >= "3.10"',
-        "pinned-fork@1.0.0": "",
+        "pinned-fork@1.0.0": 'sys_platform == "linux"',
+        "dual-explicit@1.0.0": 'sys_platform == "linux"',
+        "dual-explicit@2.0.0": 'sys_platform == "darwin"',
+        "pywin32@306": 'sys_platform == "win32"',
     })
 
     # Non-invertible `~=` sibling keeps unmarked fallback under "".

@@ -6,6 +6,7 @@ import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from types import SimpleNamespace
+from unittest import mock
 
 from private.tools import rust_common
 
@@ -41,7 +42,7 @@ class RustCommonTest(unittest.TestCase):
         os.chdir(self.orig_cwd)
         self.temp_dir.cleanup()
 
-    def _make_ctx(self, *, extra_files=None, build_env=None, is_cross=True):
+    def _make_ctx(self, *, extra_files=None, build_env=None, user_build_env=None, is_cross=True):
         target_triple = "aarch64-unknown-linux-gnu" if is_cross else "x86_64-unknown-linux-gnu"
         target_rustlib = self.target_rustlib if is_cross else self.host_rustlib
         rust_layer_json = self.root / "rust_layer.json"
@@ -58,6 +59,14 @@ class RustCommonTest(unittest.TestCase):
                 }
             )
         )
+        effective_build_env = dict(build_env or {})
+        bazel_config = {
+            "layers": [str(rust_layer_json.relative_to(self.root))],
+            "extra_files": dict(extra_files or {}),
+        }
+        if user_build_env is not None:
+            bazel_config["build_env"] = dict(user_build_env)
+            effective_build_env.update(user_build_env)
         return SimpleNamespace(
             prefix=self.root,
             temp_dir=self.temp_build,
@@ -71,27 +80,41 @@ class RustCommonTest(unittest.TestCase):
                 "CXX": "/usr/bin/c++",
                 "LDFLAGS": "-L/layer/lib -Wl,-rpath,$ORIGIN",
             },
-            build_env=dict(build_env or {}),
-            bazel_config={
-                "layers": [str(rust_layer_json.relative_to(self.root))],
-                "extra_files": dict(extra_files or {}),
-            },
+            build_env=effective_build_env,
+            bazel_config=bazel_config,
         )
 
-    def test_preserves_user_rustflags_and_symlinks_rustlib_dirs(self):
+    def test_preserves_user_rustflags_and_strips_inherited_rustflags(self):
         os.chdir(self.sdist_dir)
-        ctx = self._make_ctx(
-            build_env={
-                "RUSTFLAGS": "-C target-feature=+crt-static",
-                "CARGO_ENCODED_RUSTFLAGS": "-C\x1ftarget-cpu=generic",
-                "ARFLAGS": "rcsD",
-            }
-        )
-        rust_common.configure_rust_env(ctx, Path("."), is_maturin=True)
+        # Inherited RUSTFLAGS / CARGO_ENCODED_RUSTFLAGS (e.g. from --action_env) are stripped
+        # unless explicitly set in rule build_env or modified by a pre-build hook.
+        inherited = {
+            "RUSTFLAGS": "-C opt-level=0",
+            "CARGO_ENCODED_RUSTFLAGS": "-C\x1fopt-level=0",
+        }
+        with mock.patch.dict(os.environ, inherited, clear=False):
+            ctx_inherited = self._make_ctx(build_env={**inherited, "ARFLAGS": "rcsD"})
+            rust_common.configure_rust_env(ctx_inherited, Path("."), is_maturin=True)
+            self.assertNotIn("RUSTFLAGS", ctx_inherited.build_env)
+            self.assertNotIn("CARGO_ENCODED_RUSTFLAGS", ctx_inherited.build_env)
+            self.assertNotIn("ARFLAGS", ctx_inherited.build_env)
 
-        self.assertEqual(ctx.build_env["RUSTFLAGS"], "-C target-feature=+crt-static")
-        self.assertEqual(ctx.build_env["CARGO_ENCODED_RUSTFLAGS"], "-C\x1ftarget-cpu=generic")
-        self.assertNotIn("ARFLAGS", ctx.build_env)
+            # Explicit rule build_env values are preserved even when os.environ also sets them.
+            ctx_user = self._make_ctx(
+                build_env=inherited,
+                user_build_env={
+                    "RUSTFLAGS": "-C target-feature=+crt-static",
+                    "CARGO_ENCODED_RUSTFLAGS": "-C\x1ftarget-cpu=generic",
+                },
+            )
+            rust_common.configure_rust_env(ctx_user, Path("."), is_maturin=True)
+            self.assertEqual(ctx_user.build_env["RUSTFLAGS"], "-C target-feature=+crt-static")
+            self.assertEqual(ctx_user.build_env["CARGO_ENCODED_RUSTFLAGS"], "-C\x1ftarget-cpu=generic")
+
+            # Pre-build hook mutations (value differs from os.environ) are preserved.
+            ctx_hook = self._make_ctx(build_env={"RUSTFLAGS": "-C link-arg=-lm"})
+            rust_common.configure_rust_env(ctx_hook, Path("."), is_maturin=True)
+            self.assertEqual(ctx_hook.build_env["RUSTFLAGS"], "-C link-arg=-lm")
 
         host_dst = self.temp_build / "sysroot" / "lib" / "rustlib" / "x86_64-unknown-linux-gnu" / "lib"
         target_dst = self.temp_build / "sysroot" / "lib" / "rustlib" / "aarch64-unknown-linux-gnu" / "lib"
@@ -145,11 +168,31 @@ class RustCommonTest(unittest.TestCase):
             out = subprocess.check_output([str(wrapper), str(self.fake_rustc)] + args, env=env, text=True)
             return json.loads(out)
 
-        # Probes (-vV, -Vv, --print=...) must not receive link-arg or codegen-units=1.
-        for probe in (["-vV"], ["-Vv"], ["--print=file-names", "--target", "aarch64-unknown-linux-gnu"]):
+        # Probes (-vV, -Vv, --print=... without a real crate name) must not receive link-arg or codegen-units=1.
+        for probe in (
+            ["-vV"],
+            ["-Vv"],
+            ["--print=file-names", "--target", "aarch64-unknown-linux-gnu"],
+            ["--crate-name", "___", "--print=file-names", "--target", "aarch64-unknown-linux-gnu"],
+        ):
             probe_args = run_wrapper(probe)
             self.assertNotIn("codegen-units=1", probe_args)
             self.assertFalse(any(a.startswith("link-arg=") for a in probe_args))
+
+        # A real compile with --print=link-args or --print=native-static-libs is NOT a probe.
+        for print_flag in ("--print=link-args", "--print=native-static-libs"):
+            print_compile = run_wrapper(
+                [
+                    "--crate-name",
+                    "demo",
+                    "--target=aarch64-unknown-linux-gnu",
+                    print_flag,
+                    "-Cmetadata=orig",
+                ]
+            )
+            self.assertIn("codegen-units=1", print_compile)
+            self.assertIn("link-arg=-L/layer/lib", print_compile)
+            self.assertFalse(any(a == "-Cmetadata=orig" for a in print_compile))
 
         # -v is --verbose (normal compile flag), NOT a version probe.
         verbose_compile = run_wrapper(

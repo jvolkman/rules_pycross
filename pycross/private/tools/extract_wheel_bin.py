@@ -7,6 +7,7 @@ Usage: extract_wheel_bin.py <wheel_dir> <binary_name> <out_file>
 """
 
 import os
+import shutil
 import sys
 
 
@@ -26,20 +27,30 @@ def main():
             pass
         os.unlink(out_file)
 
-    with open(src, "rb") as f:
-        data = f.read()
-
     # wheel_installer.py installs POSIX console scripts with the placeholder
     # shebang `#!python`. Rewrite it to `#!/usr/bin/env python3` so tools that
     # re-invoke themselves by sys.argv[0] (e.g. meson via ninja) remain directly
     # executable instead of failing with `python: bad interpreter`.
-    if data.startswith(b"#!python\n"):
-        data = b"#!/usr/bin/env python3\n" + data[len(b"#!python\n") :]
-    elif data.startswith(b"#!python\r\n"):
-        data = b"#!/usr/bin/env python3\n" + data[len(b"#!python\r\n") :]
+    with open(src, "rb") as src_f:
+        header = src_f.read(11)
+        if header.startswith(b"#!python\n"):
+            remainder = header[len(b"#!python\n") :]
+            with open(out_file, "wb") as dst_f:
+                dst_f.write(b"#!/usr/bin/env python3\n")
+                dst_f.write(remainder)
+                shutil.copyfileobj(src_f, dst_f)
+            os.chmod(out_file, 0o755)
+            return
+        if header.startswith(b"#!python\r\n"):
+            remainder = header[len(b"#!python\r\n") :]
+            with open(out_file, "wb") as dst_f:
+                dst_f.write(b"#!/usr/bin/env python3\n")
+                dst_f.write(remainder)
+                shutil.copyfileobj(src_f, dst_f)
+            os.chmod(out_file, 0o755)
+            return
 
-    with open(out_file, "wb") as f:
-        f.write(data)
+    shutil.copyfile(src, out_file)
     os.chmod(out_file, 0o755)
 
 

@@ -96,7 +96,12 @@ def _test_duplicate_registration_does_not_leak_override_json_impl(env, target):
     res = collect_registrations_for_testing([root, dep, other], warn = warnings.append)
 
     env.expect.that_collection(warnings).has_size(1)
+
+    # Root re-registered meson_build without override_json, so it inherits dep's
+    # @meson_overrides//:overrides.json (while dropping root's replaced first_overrides.json).
+    # Non-root duplicate pep517_build from other_module must NOT leak @other_overrides//:overrides.json.
     env.expect.that_collection(res.override_files).contains_exactly([
+        "@meson_overrides//:overrides.json",
         "@shared//:overrides.json",
         "@pep517_overrides//:overrides.json",
     ]).in_order()
@@ -109,6 +114,34 @@ def _test_duplicate_registration_does_not_leak_override_json_impl(env, target):
 def _test_duplicate_registration_does_not_leak_override_json(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
     analysis_test(name = name, target = name + "_subject", impl = _test_duplicate_registration_does_not_leak_override_json_impl)
+
+# buildifier: disable=unused-variable
+def _test_root_reregistration_override_json_inheritance_impl(env, target):
+    """Root re-registration inherits built-in override_json when omitted, or replaces it when set."""
+    root = _module("my_project", [
+        _tag("setuptools_build", "//:custom_setuptools.bzl", ["setuptools.build_meta"]),
+        _tag("cmake_build", "//:custom_cmake.bzl", ["scikit_build_core.build"], override_json = "//:custom_cmake_overrides.json"),
+    ], is_root = True)
+    dep = _module("rules_pycross", [
+        _tag("setuptools_build", "@rules_pycross//pycross/backends:setuptools.bzl", ["setuptools.build_meta"], override_json = "@setuptools_overrides//:overrides.json"),
+        _tag("cmake_build", "@rules_pycross//pycross/backends:cmake.bzl", ["scikit_build_core.build"], override_json = "@cmake_overrides//:overrides.json"),
+        _tag("pep517_build", "@rules_pycross//pycross/backends:pep517.bzl", default = True),
+    ])
+    other = _module("other_module", [
+        _tag("setuptools_build", "@other//:setuptools.bzl", override_json = "@other_setuptools//:overrides.json"),
+    ])
+    warnings = []
+    res = collect_registrations_for_testing([root, dep, other], warn = warnings.append)
+
+    env.expect.that_collection(warnings).contains_exactly([])
+    env.expect.that_collection(res.override_files).contains_exactly([
+        "@setuptools_overrides//:overrides.json",
+        "//:custom_cmake_overrides.json",
+    ]).in_order()
+
+def _test_root_reregistration_override_json_inheritance(name):
+    util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
+    analysis_test(name = name, target = name + "_subject", impl = _test_root_reregistration_override_json_inheritance_impl)
 
 # buildifier: disable=unused-variable
 def _test_render_hook_dispatch_suffix_replacement_impl(env, target):
@@ -148,6 +181,7 @@ def backends_test_suite(name):
             _test_root_overrides_are_silent,
             _test_non_root_duplicates_warn,
             _test_duplicate_registration_does_not_leak_override_json,
+            _test_root_reregistration_override_json_inheritance,
             _test_render_hook_dispatch_suffix_replacement,
         ],
     )
