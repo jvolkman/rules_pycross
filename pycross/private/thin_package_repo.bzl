@@ -994,7 +994,8 @@ def _thin_package_repo_impl(rctx):
 
         # Build the transition settings list and the label -> raw values dicts.
         # Values are coerced at analysis time based on the setting's type.
-        # The extension guarantees flags and settings don't overlap.
+        # Overlap is checked eagerly in the extension and again in _transition.bzl
+        # using the generated repo's mapping (which also sees sibling extension repos).
         outputs_lines = []
         return_lines = []
         for label, values in sorted(flag_settings.items()):
@@ -1009,6 +1010,19 @@ def _thin_package_repo_impl(rctx):
         for label, value in sorted(fixed_settings.items()):
             fixed_outputs_lines.append('        "{}",'.format(label))
             fixed_lines.append('    "{}": {},'.format(label, repr(value)))
+
+        duplicate_check = ""
+        if flag_settings and rctx.attr.settings:
+            duplicate_check = (
+                "\n_CANONICAL_FLAG_LABELS = {\n" +
+                "    Label(label): True\n" +
+                "    for label in _FLAG_VALUES\n" +
+                '    if not label.startswith("//command_line_option:")\n' +
+                "}\n" +
+                "for _setting_label in _SETTING_VALUES:\n" +
+                "    if Label(_setting_label) in _CANONICAL_FLAG_LABELS:\n" +
+                '        fail("Build setting {} is set in both flags and settings".format(_setting_label))\n'
+            )
 
         transition_bzl = """\
 \"\"\"Generated transition rules for {repo} with pinned flag values.\"\"\"
@@ -1032,7 +1046,7 @@ _SETTING_VALUES = {{
 _FIXED_VALUES = {{
 {fixed_dict}
 }}
-
+{duplicate_check}
 def _transition_impl(settings, attr):
     result = {{
         label: coerce_transition_values(settings[label], values)
@@ -1099,6 +1113,7 @@ pycross_transitioning_file_proxy = rule(
             return_dict = "\n".join(return_lines),
             settings_dict = "\n".join(settings_lines),
             fixed_dict = "\n".join(fixed_lines),
+            duplicate_check = duplicate_check,
             outputs = "\n".join(outputs_lines),
             fixed_outputs = "\n".join(fixed_outputs_lines),
         )

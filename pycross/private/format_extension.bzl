@@ -244,48 +244,20 @@ def _canonicalize_package_tag_name(name):
         return "{}@{}".format(base, parts.version)
     return base
 
-def _flag_matches_label(flag_label, label):
-    """Return True if a normalized flag label refers to the same target as a canonical Label."""
-    if flag_label == str(label):
-        return True
-    if flag_label.startswith("//command_line_option:"):
-        return False
-
-    # Compare package:name first.
-    expected_pkg_target = "{}:{}".format(label.package, label.name) if label.package else ":{}".format(label.name)
-    if flag_label.startswith("@@"):
-        flag_repo, sep, flag_pkg_target = flag_label[2:].partition("//")
-        return bool(sep) and flag_repo == label.repo_name and flag_pkg_target == expected_pkg_target
-    if flag_label.startswith("@"):
-        flag_repo, sep, flag_pkg_target = flag_label[1:].partition("//")
-        if not sep or flag_pkg_target != expected_pkg_target:
-            return False
-        repo = label.repo_name
-        if not flag_repo:
-            return repo == ""
-        return (
-            repo == flag_repo or
-            (repo.startswith(flag_repo + "+") and "+" not in repo[len(flag_repo) + 1:]) or
-            repo.endswith("+" + flag_repo) or
-            (repo.startswith(flag_repo + "~") and "~" not in repo[len(flag_repo) + 1:]) or
-            repo.endswith("~" + flag_repo)
-        )
-    if flag_label.startswith("//"):
-        return label.repo_name == "" and flag_label[2:] == expected_pkg_target
-    return False
-
 def _normalize_settings(settings, flags):
     """Stringify `settings` labels, rejecting built-in options and settings also set in `flags`."""
-    flag_labels = [f[2:].partition("=")[0] for f in flags]
+    flag_labels = {}
+    for f in flags:
+        flag_label = f[2:].partition("=")[0]
+        if flag_label.startswith("@"):
+            flag_labels[Label(flag_label)] = True
     result = {}
     for label, value in settings.items():
         if label.package == "command_line_option":
             fail("repo settings key {} is a built-in option; use flags = [\"--{}=...\"] instead".format(label, label.name))
-        key = str(label)
-        for flag_label in flag_labels:
-            if _flag_matches_label(flag_label, label):
-                fail("Build setting {} is set in both flags and settings".format(key))
-        result[key] = value
+        if label in flag_labels:
+            fail("Build setting {} is set in both flags and settings".format(label))
+        result[str(label)] = value
     return result
 
 canonicalize_package_tag_name_for_testing = _canonicalize_package_tag_name
