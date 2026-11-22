@@ -321,6 +321,53 @@ class CcToolchainTest(unittest.TestCase):
         out = subprocess.check_output([str(wrapper), "a b", "", "*.txt"], text=True)
         self.assertEqual(json.loads(out), ["a b", "", "*.txt"])
 
+    def test_setup_path_tools_preserves_bazel_runfiles_binary(self):
+        tools_dir = self.temp_path / "tools"
+        env_dir = self.temp_path / "venv"
+        (env_dir / "bin").mkdir(parents=True)
+        # Deliberately poison venv python so hijacking would fail.
+        venv_python = env_dir / "bin" / "python"
+        venv_python.write_text("#!/bin/sh\necho HIJACKED >&2\nexit 99\n")
+        venv_python.chmod(0o755)
+
+        tool_dir = self.temp_path / "bin"
+        tool_dir.mkdir()
+        tool = tool_dir / "real_py_bin"
+        tool.write_text(
+            "#!/usr/bin/env python3\n"
+            "import json, os, sys\n"
+            "print(json.dumps({"
+            "'argv0': sys.argv[0], "
+            "'args': sys.argv[1:], "
+            "'rf': os.environ.get('RUNFILES_DIR'), "
+            "'sysconfig': os.environ.get('_PYTHON_SYSCONFIGDATA_NAME')"
+            "}))\n"
+        )
+        tool.chmod(0o755)
+        (tool_dir / "real_py_bin.runfiles").mkdir()
+
+        ctx = MockBuildContext(self.temp_path)
+        ctx.tools_dir = tools_dir
+        ctx.env_dir = env_dir
+        ctx.path_tools = [{"name": "renamed-tool", "path": tool}]
+
+        setup_path_tools(ctx)
+        wrapper = tools_dir / "renamed-tool"
+        self.assertTrue(wrapper.exists())
+        py_bin_dir = str(Path(sys.executable).parent)
+        env = dict(
+            os.environ,
+            PATH=f"{py_bin_dir}{os.pathsep}{os.environ.get('PATH', '')}",
+            RUNFILES_DIR="/stale/runfiles",
+            _PYTHON_SYSCONFIGDATA_NAME="_sysconfigdata_pycross",
+        )
+        out = subprocess.check_output([str(wrapper), "x y"], env=env, text=True)
+        data = json.loads(out)
+        self.assertEqual(data["argv0"], str(tool.absolute()))
+        self.assertEqual(data["args"], ["x y"])
+        self.assertIsNone(data["rf"])
+        self.assertIsNone(data["sysconfig"])
+
     def test_load_build_context_reproducibility_env_defaults(self):
         import json
         import os

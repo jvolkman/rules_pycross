@@ -125,6 +125,26 @@ def load_target_sysconfig(ctx: BuildContext) -> Dict[str, Any]:
     return find_sysconfig_data(target_sys_path)
 
 
+def _arch_from_host_gnu_type(host_gnu_type: str) -> str:
+    """Extract Python/Linux target architecture name from HOST_GNU_TYPE."""
+    if not host_gnu_type:
+        return "x86_64"
+    cpu = host_gnu_type.split("-", 1)[0].lower()
+    if cpu in ("aarch64", "arm64"):
+        return "aarch64"
+    if cpu in ("x86_64", "amd64"):
+        return "x86_64"
+    if cpu in ("i386", "i486", "i586", "i686", "x86", "x86_32"):
+        return "i686"
+    if cpu in ("ppc64le", "powerpc64le"):
+        return "ppc64le"
+    if cpu in ("s390x", "riscv64"):
+        return cpu
+    if cpu.startswith("arm"):
+        return "armv7l" if cpu in ("arm", "armv7", "armv7a") else cpu
+    return cpu
+
+
 def derive_platform_overrides(sysconfig_vars: Dict[str, Any]) -> tuple[Optional[str], Optional[str]]:
     """Derive _PYTHON_HOST_PLATFORM and MACOSX_DEPLOYMENT_TARGET dynamically from target sysconfig."""
     machdep = sysconfig_vars.get("MACHDEP")
@@ -133,12 +153,7 @@ def derive_platform_overrides(sysconfig_vars: Dict[str, Any]) -> tuple[Optional[
     if not machdep:
         return None, None
 
-    # Resolve target architecture from HOST_GNU_TYPE (e.g. aarch64-apple-darwin -> arm64)
-    arch = "x86_64"
-    if "aarch64" in host_gnu_type or "arm64" in host_gnu_type:
-        arch = "aarch64"
-    elif "x86_64" in host_gnu_type:
-        arch = "x86_64"
+    arch = _arch_from_host_gnu_type(host_gnu_type)
 
     if machdep == "darwin":
         if arch == "aarch64":
@@ -168,7 +183,8 @@ def apply_sysconfig_overrides(ctx: BuildContext) -> None:
        ``MACOSX_DEPLOYMENT_TARGET`` directly in the build environment
        (``ctx.build_env``) so they are naturally inherited by the underlying
        build backend subprocesses (like setuptools) without needing
-       late-binding monkeypatches.
+       late-binding monkeypatches. User-provided values in ``ctx.build_env``
+       are preserved.
     """
     site_dir = find_site_dir(ctx.env_dir)
     with open(site_dir / "_sysconfigdata_pycross.py", "w") as f:
@@ -177,9 +193,13 @@ def apply_sysconfig_overrides(ctx: BuildContext) -> None:
         f.write('import os; os.environ["_PYTHON_SYSCONFIGDATA_NAME"] = "_sysconfigdata_pycross"\n')
     ctx.build_env["_PYTHON_SYSCONFIGDATA_NAME"] = "_sysconfigdata_pycross"
 
-    target_platform, macosx_deployment_target = derive_platform_overrides(ctx.sysconfig_vars)
+    effective_vars = ctx.sysconfig_vars
+    if ctx.build_env.get("MACOSX_DEPLOYMENT_TARGET"):
+        effective_vars = dict(ctx.sysconfig_vars)
+        effective_vars["MACOSX_DEPLOYMENT_TARGET"] = ctx.build_env["MACOSX_DEPLOYMENT_TARGET"]
+    target_platform, macosx_deployment_target = derive_platform_overrides(effective_vars)
 
     if macosx_deployment_target:
-        ctx.build_env["MACOSX_DEPLOYMENT_TARGET"] = macosx_deployment_target
+        ctx.build_env.setdefault("MACOSX_DEPLOYMENT_TARGET", macosx_deployment_target)
     if target_platform:
-        ctx.build_env["_PYTHON_HOST_PLATFORM"] = target_platform
+        ctx.build_env.setdefault("_PYTHON_HOST_PLATFORM", target_platform)

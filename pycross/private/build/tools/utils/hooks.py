@@ -21,6 +21,8 @@ def run_pre_build_hook(ctx: BuildContext, hook_config: Dict[str, Any]) -> None:
 
     The hook receives the current build environment and config settings
     via JSON files. It may mutate both by writing back to those files.
+    Entries written to ``PYCROSS_ENV_VARS_FILE`` are merged into
+    ``ctx.build_env``; set a key's value to ``null`` to delete it.
     """
     hook_exe = (ctx.prefix / Path(hook_config["executable"])).absolute()
 
@@ -57,11 +59,16 @@ def run_pre_build_hook(ctx: BuildContext, hook_config: Dict[str, Any]) -> None:
             print(cpe.output.decode("utf-8", "replace"), file=sys.stderr)
         raise
 
-    # Read back any mutations the hook made
+    # Read back any mutations the hook made. Explicit null values delete keys
+    # without breaking hooks that write only a partial dict of additions.
     if env_file.exists():
         with open(env_file, "r") as f:
             updated_env = json.load(f)
-            ctx.build_env.update(updated_env)
+            for key, value in updated_env.items():
+                if value is None:
+                    ctx.build_env.pop(key, None)
+                else:
+                    ctx.build_env[key] = value
 
     if config_settings_file.exists():
         with open(config_settings_file, "r") as f:

@@ -101,6 +101,26 @@ py_test(
 )
 
 py_test(
+    name = "cmake_builder_test",
+    srcs = ["cmake_builder_test.py"],
+    main = "cmake_builder_test.py",
+    tags = ["unit"],
+    deps = [
+        "//pycross/private/build/tools:cmake_builder",
+    ],
+)
+
+py_test(
+    name = "scrub_build_paths_test",
+    srcs = ["scrub_build_paths_test.py"],
+    main = "scrub_build_paths_test.py",
+    tags = ["unit"],
+    deps = [
+        "//pycross/private/build/tools:scrub_build_paths",
+    ],
+)
+
+py_test(
     name = "crossenv_test",
     srcs = ["crossenv_test.py"],
     main = "crossenv_test.py",

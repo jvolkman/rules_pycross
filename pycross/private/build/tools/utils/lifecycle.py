@@ -9,6 +9,7 @@ from pycross.private.build.tools.utils.cc_toolchain import setup_cc_layer
 from pycross.private.build.tools.utils.context import BuildContext
 from pycross.private.build.tools.utils.context import load_build_context
 from pycross.private.build.tools.utils.context import load_layers
+from pycross.private.build.tools.utils.context import replace_placeholder
 from pycross.private.build.tools.utils.hooks import run_post_build_hooks
 from pycross.private.build.tools.utils.hooks import run_pre_build_hooks_from_config
 from pycross.private.build.tools.utils.path_tools import setup_path_tools
@@ -41,6 +42,32 @@ class BackendStrategy:
     pre_build: Callable[[BuildContext], None] = lambda ctx: None
     prepare_env: Callable[[BuildContext], None] = lambda ctx: None
     post_build: Callable[["BuildContext", Path], Path] = lambda ctx, whl: whl
+
+
+def setup_pkg_config(ctx: BuildContext) -> Path:
+    """Materialize declared pkg-config .pc files and expose them via PKG_CONFIG_PATH."""
+    pkgconfig_dir = ctx.temp_dir / "pkgconfig"
+    pkgconfig_dir.mkdir(parents=True, exist_ok=True)
+    if getattr(ctx, "_pkg_config_initialized", False):
+        return pkgconfig_dir
+
+    for pc_file in ctx.pkg_config_files:
+        dest_pc = pkgconfig_dir / pc_file.name
+        shutil.copy2(pc_file.absolute(), dest_pc)
+        dest_pc.chmod(0o644)
+        content = dest_pc.read_text()
+        dest_pc.write_text(replace_placeholder(ctx.prefix, content))
+
+    if ctx.pkg_config_files and hasattr(ctx, "build_env"):
+        abs_pkgconfig_dir = pkgconfig_dir.resolve().as_posix()
+        existing = ctx.build_env.get("PKG_CONFIG_PATH", "")
+        parts = [p for p in existing.split(os.pathsep) if p] if existing else []
+        if abs_pkgconfig_dir not in parts:
+            parts.insert(0, abs_pkgconfig_dir)
+        ctx.build_env["PKG_CONFIG_PATH"] = os.pathsep.join(parts)
+
+    ctx._pkg_config_initialized = True
+    return pkgconfig_dir
 
 
 def _apply_pre_build_patches(ctx: BuildContext) -> None:
@@ -84,6 +111,9 @@ def run_standard_build_lifecycle(config_path: str, strategy: BackendStrategy) ->
 
     if cc_config:
         setup_cc_layer(ctx, cc_config)
+
+    if ctx.pkg_config_files:
+        setup_pkg_config(ctx)
 
     strategy.setup_venv(ctx)
 

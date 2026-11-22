@@ -8,6 +8,8 @@ from types import SimpleNamespace
 
 from pycross.private.build.tools.utils.env import make_clean_env
 from pycross.private.build.tools.utils.sysconfig_utils import _query_interpreter
+from pycross.private.build.tools.utils.sysconfig_utils import apply_sysconfig_overrides
+from pycross.private.build.tools.utils.sysconfig_utils import derive_platform_overrides
 from pycross.private.build.tools.utils.sysconfig_utils import determine_target_path_from_exec
 from pycross.private.build.tools.utils.sysconfig_utils import load_target_sysconfig
 from pycross.private.build.tools.utils.venv_utils import write_base_prefix_pth
@@ -215,6 +217,62 @@ class BasePrefixPthTest(unittest.TestCase):
         content = self.pth_file.read_text()
         self.assertIn("sys.base_prefix", content)
         self.assertNotIn("sys.base_exec_prefix", content)
+
+
+class PlatformOverridesTest(unittest.TestCase):
+    def test_derive_platform_overrides_architectures(self):
+        cases = [
+            ({"MACHDEP": "linux", "HOST_GNU_TYPE": "x86_64-pc-linux-gnu"}, ("linux-x86_64", None)),
+            ({"MACHDEP": "linux", "HOST_GNU_TYPE": "aarch64-unknown-linux-gnu"}, ("linux-aarch64", None)),
+            ({"MACHDEP": "linux", "HOST_GNU_TYPE": "arm-unknown-linux-gnueabihf"}, ("linux-armv7l", None)),
+            ({"MACHDEP": "linux", "HOST_GNU_TYPE": "armv7l-unknown-linux-gnueabihf"}, ("linux-armv7l", None)),
+            ({"MACHDEP": "linux", "HOST_GNU_TYPE": "i686-pc-linux-gnu"}, ("linux-i686", None)),
+            ({"MACHDEP": "linux", "HOST_GNU_TYPE": "i386-pc-linux-gnu"}, ("linux-i686", None)),
+            ({"MACHDEP": "linux", "HOST_GNU_TYPE": "powerpc64le-unknown-linux-gnu"}, ("linux-ppc64le", None)),
+            ({"MACHDEP": "linux", "HOST_GNU_TYPE": "ppc64le-unknown-linux-gnu"}, ("linux-ppc64le", None)),
+            ({"MACHDEP": "linux", "HOST_GNU_TYPE": "s390x-ibm-linux-gnu"}, ("linux-s390x", None)),
+            ({"MACHDEP": "linux", "HOST_GNU_TYPE": "riscv64-unknown-linux-gnu"}, ("linux-riscv64", None)),
+            (
+                {"MACHDEP": "darwin", "HOST_GNU_TYPE": "aarch64-apple-darwin", "MACOSX_DEPLOYMENT_TARGET": "13.0"},
+                ("macosx-13.0-arm64", "13.0"),
+            ),
+            (
+                {"MACHDEP": "darwin", "HOST_GNU_TYPE": "x86_64-apple-darwin"},
+                ("macosx-11.0-x86_64", "11.0"),
+            ),
+        ]
+        for sysconfig_vars, expected in cases:
+            with self.subTest(sysconfig_vars=sysconfig_vars):
+                self.assertEqual(derive_platform_overrides(sysconfig_vars), expected)
+
+    def test_apply_sysconfig_overrides_preserves_user_build_env(self):
+        with TemporaryDirectory() as tmp:
+            env_dir = Path(tmp) / "env"
+            (env_dir / "lib" / "python3.12" / "site-packages").mkdir(parents=True)
+
+            ctx = SimpleNamespace(
+                env_dir=env_dir,
+                sysconfig_vars={
+                    "MACHDEP": "darwin",
+                    "HOST_GNU_TYPE": "aarch64-apple-darwin",
+                    "MACOSX_DEPLOYMENT_TARGET": "11.0",
+                },
+                build_env={"MACOSX_DEPLOYMENT_TARGET": "14.0"},
+            )
+            apply_sysconfig_overrides(ctx)
+            self.assertEqual(ctx.build_env["MACOSX_DEPLOYMENT_TARGET"], "14.0")
+            self.assertEqual(ctx.build_env["_PYTHON_HOST_PLATFORM"], "macosx-14.0-arm64")
+
+            ctx2 = SimpleNamespace(
+                env_dir=env_dir,
+                sysconfig_vars={
+                    "MACHDEP": "linux",
+                    "HOST_GNU_TYPE": "x86_64-pc-linux-gnu",
+                },
+                build_env={"_PYTHON_HOST_PLATFORM": "linux-custom"},
+            )
+            apply_sysconfig_overrides(ctx2)
+            self.assertEqual(ctx2.build_env["_PYTHON_HOST_PLATFORM"], "linux-custom")
 
 
 if __name__ == "__main__":

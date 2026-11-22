@@ -39,12 +39,13 @@ sys.modules["sys"] = SysWrapper(sys)
 
 _real_get_platform = sysconfig.get_platform
 def _get_platform():
+    import os as _os
     import sys as _sys
     try:
         f = _sys._getframe(1)
         while f:
             if "packaging/tags" in f.f_code.co_filename or "mesonpy" in f.f_code.co_filename:
-                return %s
+                return _os.environ.get("_PYTHON_HOST_PLATFORM") or %s
             f = f.f_back
     except Exception:
         pass

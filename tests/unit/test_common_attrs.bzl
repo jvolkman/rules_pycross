@@ -10,7 +10,10 @@ load("//pycross/private:providers.bzl", "PycrossExtractedWheelInfo", "PycrossPac
 load("//pycross/private:proxy.bzl", "pycross_library_proxy")
 
 # buildifier: disable=bzl-visibility
-load("//pycross/private/build/rules:common_attrs.bzl", "get_unzipped_wheel", "group_tool_deps")
+load("//pycross/private/build/rules:common_attrs.bzl", "get_unzipped_wheel", "group_tool_deps", "resolve_path_tools")
+
+# buildifier: disable=bzl-visibility
+load("//pycross/private/build/rules:path_tool.bzl", "pycross_path_tool")
 
 TestingInfo = provider(doc = "TestingInfo", fields = ["result", "site_packages"])
 
@@ -240,6 +243,59 @@ def _proxy_deps_only_multi_test(name):
     pycross_library_proxy(name = name + "_subject", deps = [":" + name + "_a", ":" + name + "_b"])
     analysis_test(name = name, target = ":" + name + "_subject", impl = _proxy_deps_only_multi_impl)
 
+_PathToolResultInfo = provider(doc = "Resolved path tool info", fields = ["tools"])
+
+def _mock_exec_tool_impl(ctx):
+    exe = ctx.actions.declare_file(ctx.label.name + "_bin")
+    data = ctx.actions.declare_file(ctx.label.name + "_data.txt")
+    ctx.actions.write(exe, "#!/bin/sh\n", is_executable = True)
+    ctx.actions.write(data, "payload")
+    return [
+        DefaultInfo(
+            executable = exe,
+            files = depset([exe]),
+            runfiles = ctx.runfiles(files = [data]),
+        ),
+    ]
+
+_mock_exec_tool = rule(
+    implementation = _mock_exec_tool_impl,
+    executable = True,
+)
+
+def _resolve_path_tools_subject_impl(ctx):
+    return [_PathToolResultInfo(tools = resolve_path_tools(ctx))]
+
+_resolve_path_tools_subject = rule(
+    implementation = _resolve_path_tools_subject_impl,
+    attrs = {"path_tools": attr.label_list()},
+)
+
+def _path_tool_propagates_files_to_run_impl(env, target):
+    tools = target[_PathToolResultInfo].tools
+    env.expect.that_int(len(tools)).equals(1)
+    env.expect.that_str(tools[0].name).equals("custom_name")
+    env.expect.that_bool(tools[0].files_to_run.executable != None).equals(True)
+    env.expect.that_str(tools[0].files_to_run.executable.basename).contains("_bin")
+    env.expect.that_bool(tools[0].files_to_run.runfiles_manifest != None).equals(True)
+
+def _path_tool_propagates_files_to_run_test(name):
+    _mock_exec_tool(name = name + "_raw_tool")
+    pycross_path_tool(
+        name = name + "_wrapped_tool",
+        tool = ":" + name + "_raw_tool",
+        executable_name = "custom_name",
+    )
+    _resolve_path_tools_subject(
+        name = name + "_subject",
+        path_tools = [":" + name + "_wrapped_tool"],
+    )
+    analysis_test(
+        name = name,
+        target = ":" + name + "_subject",
+        impl = _path_tool_propagates_files_to_run_impl,
+    )
+
 def common_attrs_test_suite(name):
     test_suite(
         name = name,
@@ -253,5 +309,6 @@ def common_attrs_test_suite(name):
             _proxy_deps_only_empty_test,
             _proxy_deps_only_single_test,
             _proxy_deps_only_multi_test,
+            _path_tool_propagates_files_to_run_test,
         ],
     )

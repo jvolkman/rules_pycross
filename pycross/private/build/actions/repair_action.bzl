@@ -4,6 +4,11 @@ load("@bazel_skylib//lib:collections.bzl", "collections")
 load("@rules_cc//cc/common:cc_info.bzl", "CcInfo")
 load("@rules_python//python:py_info.bzl", "PyInfo")
 load("//pycross/private/build:wheel_shared_libraries.bzl", "wheel_shared_libraries")
+load(
+    "//pycross/private/build/actions:pep517_action.bzl",
+    "is_sibling_repository_layout_enabled",
+    "resolve_import_path_fn",
+)
 
 def _file_dirname(f):
     return f.dirname
@@ -71,18 +76,33 @@ def register_repair_action(
 
     # Collect user-provided repair deps (e.g. repairwheel override).
     repair_dep_paths = []
+    seen_repair_paths = {}
+    sibling_layout = is_sibling_repository_layout_enabled()
     for dep in repair_deps:
         if PyInfo in dep:
             py_info = dep[PyInfo]
             data_inputs.append(py_info.transitive_sources)
+            dep_sources = py_info.transitive_sources.to_list()
+            root_paths = collections.uniq([src.root.path for src in dep_sources]) or [ctx.bin_dir.path]
+            map_fns = [
+                resolve_import_path_fn(ctx.workspace_name, root_path, sibling_layout)
+                for root_path in root_paths
+            ]
             for imp in py_info.imports.to_list():
-                repair_dep_paths.append(imp)
+                for map_fn in map_fns:
+                    resolved = map_fn(imp)
+                    if resolved not in seen_repair_paths:
+                        seen_repair_paths[resolved] = True
+                        repair_dep_paths.append(resolved)
 
             # Installed wheels don't list their site-packages in PyInfo.imports under
             # venvs_site_packages (see pep517_action.bzl).
-            for src in py_info.transitive_sources.to_list():
+            for src in dep_sources:
                 if src.is_directory:
-                    repair_dep_paths.append(src.path + "/site-packages")
+                    site_packages = src.path + "/site-packages"
+                    if site_packages not in seen_repair_paths:
+                        seen_repair_paths[site_packages] = True
+                        repair_dep_paths.append(site_packages)
 
     # Collect inputs.
     input_files = [input_wheel_dir] + lib_files

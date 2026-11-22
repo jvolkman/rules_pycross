@@ -30,6 +30,7 @@ PycrossPathToolInfo = provider(
     doc = "Information about a tool placed on PATH with a custom name.",
     fields = {
         "executable": "File: The executable file.",
+        "files_to_run": "FilesToRunProvider: The wrapped executable's files_to_run (including runfiles).",
         "name": "string: The name to use on PATH.",
     },
 )

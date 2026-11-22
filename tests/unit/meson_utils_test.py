@@ -162,6 +162,47 @@ class MesonUtilsTest(unittest.TestCase):
                 content = (self.temp_path / "cc_layer" / "cross.ini").read_text()
                 self.assertIn(f"longdouble_format = '{expected}'", content)
 
+    def test_generate_cross_ini_filters_and_dedups_include_dirs(self):
+        native_inc = (self.temp_path / "native_inc").absolute()
+        libcxx_inc = (self.temp_path / "libcxx" / "include").absolute()
+        extra_inc = (self.temp_path / "extra_inc").absolute()
+        self.ctx.sysconfig_vars["CFLAGS"] = f"-nostdlibinc -I{native_inc}"
+        self.ctx.sysconfig_vars["CXXFLAGS"] = f"-nostdlibinc -I{native_inc}"
+        cc_config = {
+            "target_os": "linux",
+            "target_cpu": "x86_64",
+            "include_dirs": [str(native_inc), str(libcxx_inc), str(extra_inc)],
+        }
+        generate_cross_ini(self.ctx, cc_config)
+
+        content = (self.temp_path / "cc_layer" / "cross.ini").read_text()
+        self.assertNotIn("-isystem", content)
+        self.assertNotIn("libcxx", content)
+        self.assertEqual(content.count(f"-I{native_inc}"), 2)  # once in c_args, once in cpp_args
+        self.assertEqual(content.count(f"-I{extra_inc}"), 2)
+
+    def test_generate_cross_ini_preserves_spaces_escapes_and_build_dir(self):
+        self.ctx.sysconfig_vars["CFLAGS"] = '-I"/path/with spaces/inc" -DNAME="o\'reilly\\x"'
+        self.ctx.config_settings["build-dir"] = "custom_build"
+        pc_file = self.temp_path / "demo.pc"
+        pc_file.write_text("prefix=$$EXT_BUILD_ROOT$$/demo\n")
+        self.ctx.pkg_config_files = [pc_file]
+
+        cc_config = {
+            "target_os": "linux",
+            "target_cpu": "x86_64",
+            "meson_properties": {"custom_prop": "a'b\\c"},
+        }
+        generate_cross_ini(self.ctx, cc_config)
+
+        content = (self.temp_path / "cc_layer" / "cross.ini").read_text()
+        self.assertIn("'-I/path/with spaces/inc'", content)
+        self.assertIn("'-DNAME=o\\'reilly\\\\x'", content)
+        self.assertIn("custom_prop = 'a\\'b\\\\c'", content)
+        self.assertEqual(self.ctx.config_settings["build-dir"], "custom_build")
+        self.assertTrue((self.temp_path / "pkgconfig" / "demo.pc").exists())
+        self.assertFalse((self.ctx.sdist_dir / "pkgconfig").exists())
+
 
 if __name__ == "__main__":
     unittest.main()

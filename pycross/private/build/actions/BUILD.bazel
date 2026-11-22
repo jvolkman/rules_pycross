@@ -26,6 +26,7 @@ bzl_library(
     name = "repair_action",
     srcs = ["repair_action.bzl"],
     deps = [
+        ":pep517_action",
         "//pycross/private/build:wheel_shared_libraries",
         "@bazel_skylib//lib:collections",
         "@rules_cc//cc/common",

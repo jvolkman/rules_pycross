@@ -1,8 +1,11 @@
 import importlib.machinery
+import subprocess
 import sys
 import sysconfig
 import unittest
+from unittest.mock import patch
 
+from pycross.private.build.tools.crossenv import determine_glibc_version
 from pycross.private.build.tools.crossenv import guess_uname
 from pycross.private.build.tools.crossenv.utils import target_extension_suffixes
 
@@ -118,6 +121,36 @@ class TargetExtensionSuffixesTest(unittest.TestCase):
     def test_non_cpython(self):
         self.assertIsNone(target_extension_suffixes({"SOABI": "pypy311-pp73-x86_64-linux-gnu", "VERSION": "3.11"}))
         self.assertIsNone(target_extension_suffixes({}))
+
+
+class DetermineGlibcVersionTest(unittest.TestCase):
+    def test_uses_c_source_and_fsyntax_only(self):
+        captured = {}
+
+        def fake_check_output(cmd, **kwargs):
+            captured["cmd"] = cmd
+            return b"note: #pragma message: GLIBC=2.39\n"
+
+        with (
+            patch("pycross.private.build.tools.crossenv.shutil.which", return_value="/usr/bin/cc"),
+            patch("pycross.private.build.tools.crossenv.subprocess.check_output", side_effect=fake_check_output),
+        ):
+            version = determine_glibc_version({"CC": "/usr/bin/cc", "CFLAGS": "-O2"})
+
+        self.assertEqual(version, "2.39")
+        self.assertIn("-fsyntax-only", captured["cmd"])
+        self.assertNotIn("-c", captured["cmd"])
+        self.assertTrue(captured["cmd"][-1].endswith("teller.c"))
+
+    def test_returns_none_on_compiler_error(self):
+        with (
+            patch("pycross.private.build.tools.crossenv.shutil.which", return_value="/usr/bin/cc"),
+            patch(
+                "pycross.private.build.tools.crossenv.subprocess.check_output",
+                side_effect=subprocess.CalledProcessError(1, ["cc"]),
+            ),
+        ):
+            self.assertIsNone(determine_glibc_version({"CC": "/usr/bin/cc"}))
 
 
 if __name__ == "__main__":

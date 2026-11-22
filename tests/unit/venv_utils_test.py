@@ -1,7 +1,9 @@
 import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from unittest.mock import patch
 
+from pycross.private.build.tools.utils.venv_utils import build_crossenv_venv
 from pycross.private.build.tools.utils.venv_utils import inject_python_wrapper
 
 
@@ -47,6 +49,25 @@ class VenvUtilsTest(unittest.TestCase):
         # Assert PYTHONPATH
         self.assertIn('os.environ["PYTHONPATH"]', content)
         self.assertIn("site-packages", content)
+
+    def test_build_crossenv_venv_writes_site_hooks(self):
+        ctx = MockBuildContext(self.temp_path)
+        ctx.target_python = Path("/target/bin/python3")
+        ctx.build_env = {}
+        ctx.bazel_config = {}
+        ctx.python_paths = []
+        ctx.site_hooks = ["import os; os.environ['FROM_SITE_HOOK'] = '1'"]
+
+        with patch("pycross.private.build.tools.utils.venv_utils.subprocess.check_output") as mock_run:
+            build_crossenv_venv(ctx)
+            mock_run.assert_called_once()
+
+        hooks_py = ctx.env_dir / "_pycross_hooks.py"
+        hooks_pth = ctx.env_dir / "lib" / "python3.10" / "site-packages" / "_pycross_hooks.pth"
+        self.assertTrue(hooks_py.exists())
+        self.assertTrue(hooks_pth.exists())
+        self.assertIn("FROM_SITE_HOOK", hooks_py.read_text())
+        self.assertIn("_pycross_hooks", hooks_pth.read_text())
 
 
 if __name__ == "__main__":

@@ -1,7 +1,6 @@
 """Meson-specific utilities and cross.ini generation for rules_pycross PEP 517 builds."""
 
 import shlex
-import shutil
 import textwrap
 from pathlib import Path
 from typing import Any
@@ -12,22 +11,28 @@ from typing import Optional
 from pycross.private.build.tools.utils.cc_toolchain import parse_ar_and_guess_ranlib
 from pycross.private.build.tools.utils.context import BuildContext
 from pycross.private.build.tools.utils.context import replace_placeholder
+from pycross.private.build.tools.utils.lifecycle import setup_pkg_config
+
+
+def _escape_meson_str(value: str) -> str:
+    """Escape backslashes and single quotes for Meson single-quoted INI strings."""
+    return value.replace("\\", "\\\\").replace("'", "\\'")
 
 
 def format_meson_list(items: List[str]) -> str:
-    return "[" + ", ".join(f"'{item}'" for item in items) + "]"
+    return "[" + ", ".join(f"'{_escape_meson_str(item)}'" for item in items) + "]"
 
 
 def _split_flags(flags: str) -> List[str]:
-    """Split a flags string, dropping shell quoting inside tokens.
+    """Split a flags string, dropping double quotes inside tokens.
 
     The cc layer shell-quotes tokens such as -D__DATE__="redacted". Meson
     passes c_args to the compiler verbatim, but projects embed them in
     generated sources (numpy writes them into a raw string in
-    numpy/__config__.py), where a literal `"` breaks the file. Keep the
-    pre-quoting token semantics for Meson.
+    numpy/__config__.py), where a literal `"` breaks the file. Strip inner
+    double quotes without re-splitting so paths containing spaces stay intact.
     """
-    return shlex.split(" ".join(shlex.split(flags))) if flags else []
+    return [tok.replace('"', "") for tok in shlex.split(flags)] if flags else []
 
 
 def generate_cross_ini(ctx: BuildContext, cc_config: Optional[Dict[str, Any]] = None) -> None:
@@ -74,13 +79,24 @@ def generate_cross_ini(ctx: BuildContext, cc_config: Optional[Dict[str, Any]] = 
     c_link_args = _split_flags(ldflags)
     c_link_args.extend(leaked_link_args)
 
-    # Dynamically append all sandboxed C/C++ includes to c_args and cpp_args inside cross.ini
+    # setup_cc_layer already adds filtered include_dirs to CFLAGS/CXXFLAGS.
+    # Only add any missing non-stdlib include_dirs here (e.g. when called
+    # directly without setup_cc_layer), applying the same -nostdlibinc guard
+    # so libc++/libc++abi headers never break #include_next chains.
+    toolchain_provides_cxx_headers = "-nostdlibinc" in c_args or "-nostdlibinc" in cxx_args
     if cc_config and "include_dirs" in cc_config:
+        existing_c = set(c_args)
+        existing_cxx = set(cxx_args)
         for inc_dir_str in cc_config["include_dirs"]:
-            inc_dir = replace_placeholder(ctx.prefix, inc_dir_str)
-            # Add as standard -isystem includes
-            c_args.append(f"-isystem{inc_dir}")
-            cxx_args.append(f"-isystem{inc_dir}")
+            inc_dir = str(Path(replace_placeholder(ctx.prefix, inc_dir_str)).absolute())
+            if toolchain_provides_cxx_headers and ("libcxx" in inc_dir or "libcxxabi" in inc_dir):
+                continue
+            if f"-I{inc_dir}" not in existing_c and f"-isystem{inc_dir}" not in existing_c:
+                c_args.append(f"-I{inc_dir}")
+                existing_c.add(f"-I{inc_dir}")
+            if f"-I{inc_dir}" not in existing_cxx and f"-isystem{inc_dir}" not in existing_cxx:
+                cxx_args.append(f"-I{inc_dir}")
+                existing_cxx.add(f"-I{inc_dir}")
 
     # Locate target Python library directory and add it to linker search path
     target_python_lib_dir = ctx.target_python.parent.parent / "lib"
@@ -117,21 +133,10 @@ def generate_cross_ini(ctx: BuildContext, cc_config: Optional[Dict[str, Any]] = 
             c_args.append(f"-mcpu={mcpu}")
             cxx_args.append(f"-mcpu={mcpu}")
 
-    # Locate or create pkgconfig directory inside the build environment
-    pkgconfig_dir = ctx.sdist_dir / "pkgconfig"
-    pkgconfig_dir.mkdir(exist_ok=True)
-
-    # Copy all declared pkg-config files into the sdist pkgconfig directory
-    for pc_file in ctx.pkg_config_files:
-        dest_pc = pkgconfig_dir / pc_file.name
-        shutil.copy2(pc_file.absolute(), dest_pc)
-        dest_pc.chmod(0o644)
-
-        # Replace $$EXT_BUILD_ROOT$$ with prefix inside the .pc file content
-        content = dest_pc.read_text()
-        dest_pc.write_text(replace_placeholder(ctx.prefix, content))
-
-    abs_pkgconfig_dir = pkgconfig_dir.resolve().as_posix()
+    # Materialize declared pkg-config files in temp_dir/pkgconfig (shared with
+    # lifecycle.setup_pkg_config) so the sdist source tree stays clean.
+    pkgconfig_dir = setup_pkg_config(ctx)
+    abs_pkgconfig_dir = _escape_meson_str(pkgconfig_dir.resolve().as_posix())
 
     is_cross = ctx.exec_python != ctx.target_python
 
@@ -182,26 +187,26 @@ def generate_cross_ini(ctx: BuildContext, cc_config: Optional[Dict[str, Any]] = 
         ar_list, ranlib_path = parse_ar_and_guess_ranlib(ar)
         binaries_lines.append(f"ar = {format_meson_list(ar_list)}")
         if ranlib_path:
-            binaries_lines.append(f"ranlib = '{ranlib_path.as_posix()}'")
+            binaries_lines.append(f"ranlib = '{_escape_meson_str(ranlib_path.as_posix())}'")
 
     # Cython: only inject if present in the build virtualenv.
     # Meson does NOT inherently require Cython; it is only needed for
     # packages that contain .pyx sources.
     cython_path = ctx.tools_dir / "cython"
     if cython_path.exists():
-        binaries_lines.append(f"cython = '{cython_path.as_posix()}'")
+        binaries_lines.append(f"cython = '{_escape_meson_str(cython_path.as_posix())}'")
 
     # pkg-config: use the tools_dir copy if available. If not present,
     # omit it and let Meson fall back to its built-in dependency lookup.
     pkgconfig_path = ctx.tools_dir / "pkg-config"
     if pkgconfig_path.exists():
-        binaries_lines.append(f"pkgconfig = '{pkgconfig_path.as_posix()}'")
+        binaries_lines.append(f"pkgconfig = '{_escape_meson_str(pkgconfig_path.as_posix())}'")
 
     pybind11_config_path = ctx.tools_dir / "pybind11-config"
     if pybind11_config_path.exists():
-        binaries_lines.append(f"pybind11-config = '{pybind11_config_path.as_posix()}'")
+        binaries_lines.append(f"pybind11-config = '{_escape_meson_str(pybind11_config_path.as_posix())}'")
 
-    binaries_lines.append(f"python = '{(ctx.env_dir / 'bin' / 'python').as_posix()}'")
+    binaries_lines.append(f"python = '{_escape_meson_str((ctx.env_dir / 'bin' / 'python').as_posix())}'")
 
     binaries_section = "\n".join(binaries_lines)
 
@@ -216,7 +221,7 @@ def generate_cross_ini(ctx: BuildContext, cc_config: Optional[Dict[str, Any]] = 
             resolved = Path(replace_placeholder(ctx.prefix, value)).absolute().as_posix()
         else:
             resolved = value
-        extra_properties_lines.append(f"{key} = '{resolved}'")
+        extra_properties_lines.append(f"{key} = '{_escape_meson_str(resolved)}'")
     extra_properties_str = "\n".join(extra_properties_lines)
 
     cross_ini = f"""\
@@ -233,14 +238,14 @@ pkg_config_path = '{abs_pkgconfig_dir}'
 [properties]
 needs_exe_wrapper = {str(needs_exe_wrapper).lower()}
 skip_sanity_check = {str(skip_sanity_check).lower()}
-longdouble_format = '{longdouble_format}'
+longdouble_format = '{_escape_meson_str(longdouble_format)}'
 pkg_config_libdir = '{abs_pkgconfig_dir}'
 {extra_properties_str}
 
 [host_machine]
-system = '{target_system}'
-cpu_family = '{target_cpu}'
-cpu = '{target_cpu}'
+system = '{_escape_meson_str(target_system)}'
+cpu_family = '{_escape_meson_str(target_cpu)}'
+cpu = '{_escape_meson_str(target_cpu)}'
 endian = 'little'
 """
 
@@ -251,7 +256,7 @@ endian = 'little'
         f.write(textwrap.dedent(cross_ini))
 
     # Always use --cross-file so native and cross follow the same path.
-    setup_args = ctx.config_settings.get("setup-args", [])
+    setup_args = list(ctx.config_settings.get("setup-args", []))
     setup_args.append(f"--cross-file={cross_ini_path.as_posix()}")
     ctx.config_settings["setup-args"] = setup_args
-    ctx.config_settings["build-dir"] = "build"
+    ctx.config_settings.setdefault("build-dir", "build")

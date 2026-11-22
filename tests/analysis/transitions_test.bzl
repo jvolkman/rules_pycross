@@ -149,7 +149,8 @@ def _test_transitions_resets_target_settings_impl(env, target):
     env.expect.that_str(info.target_settings.py_linux_libc).equals("musl")
 
     # pycross_exec_platform_transition resets all target settings to their defaults,
-    # while preserving action_env and native C/C++ flags when platforms == [host_platform].
+    # while preserving action_env, native py_linux_libc, and native C/C++ flags
+    # when platforms == [host_platform].
     env.expect.that_str(info.transitioned_settings.glibc_version).equals("2.28")
     env.expect.that_str(info.transitioned_settings.macos_version).equals("15.0")
     env.expect.that_str(info.transitioned_settings.musl_version).equals("1.2")
@@ -157,7 +158,7 @@ def _test_transitions_resets_target_settings_impl(env, target):
     env.expect.that_str(info.transitioned_settings.pep508_platform_python_implementation).equals("CPython")
     env.expect.that_str(info.transitioned_settings.pep508_platform_release).equals("")
     env.expect.that_str(info.transitioned_settings.pep508_platform_version).equals("")
-    env.expect.that_str(info.transitioned_settings.py_linux_libc).equals("glibc")
+    env.expect.that_str(info.transitioned_settings.py_linux_libc).equals("musl")
     env.expect.that_str(info.transitioned_settings.default_shell_env.get("PYCROSS_TEST_ENV", "")).equals("1")
     env.expect.that_collection(info.transitioned_settings.copts).contains_exactly(["-DNATIVE_COPT=1"])
 
@@ -186,6 +187,7 @@ def _test_transitions_cross_resets_cc_flags(name):
         target = name + "_subject",
         config_settings = {
             "//command_line_option:platforms": [str(Label(":" + name + "_cross_platform"))],
+            str(Label("@rules_python//python/config_settings:py_linux_libc")): "musl",
             "//command_line_option:copt": ["-DCROSS_COPT=1"],
             "//command_line_option:conlyopt": ["-DCROSS_CONLYOPT=1"],
             "//command_line_option:cxxopt": ["-DCROSS_CXXOPT=1"],
@@ -201,15 +203,17 @@ def _test_transitions_cross_resets_cc_flags(name):
 def _test_transitions_cross_resets_cc_flags_impl(env, target):
     info = target[_SubjectInfo]
 
-    # Target config sees the cross C/C++ flags and features.
+    # Target config sees the cross C/C++ flags, features, and py_linux_libc.
+    env.expect.that_str(info.target_settings.py_linux_libc).equals("musl")
     env.expect.that_collection(info.target_settings.copts).contains_exactly(["-DCROSS_COPT=1"])
     env.expect.that_collection(info.target_settings.conlyopts).contains_exactly(["-DCROSS_CONLYOPT=1"])
     env.expect.that_collection(info.target_settings.cxxopts).contains_exactly(["-DCROSS_CXXOPT=1"])
     env.expect.that_collection(info.target_settings.linkopts).contains_exactly(["-Wl,--cross-linkopt"])
     env.expect.that_collection(info.target_settings.features).contains("cross_only_feature")
 
-    # Transitioned config resets C/C++ flags and features to host_*, while
-    # preserving compilation_mode and action_env.
+    # Transitioned config resets py_linux_libc and C/C++ flags/features to host_*,
+    # while preserving compilation_mode and action_env.
+    env.expect.that_str(info.transitioned_settings.py_linux_libc).equals("glibc")
     env.expect.that_collection(info.transitioned_settings.copts).contains_exactly(["-DHOST_COPT=1"])
     env.expect.that_collection(info.transitioned_settings.conlyopts).contains_exactly([])
     env.expect.that_collection(info.transitioned_settings.cxxopts).contains_exactly([])

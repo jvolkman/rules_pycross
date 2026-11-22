@@ -169,20 +169,24 @@ def determine_glibc_version(sysconfig_vars: Dict[str, Any]) -> Optional[str]:
     cmd = cc_parts + shlex.split(sysconfig_vars.get("CFLAGS", ""))
     with tempfile.TemporaryDirectory() as tmp:
         tmp = Path(tmp)
-        teller_src = tmp / "teller.cc"
-        teller_out = tmp / "teller"
+        teller_src = tmp / "teller.c"
 
         with open(teller_src, "w") as f:
             f.write(GLIBC_TELLER)
 
-        cmd += ["-c", "-o", str(teller_out), str(teller_src)]
+        cmd += ["-fsyntax-only", str(teller_src)]
         # Run the compiler and capture its output
-        out = subprocess.check_output(cmd, env=os.environ, stderr=subprocess.STDOUT)
-        out = out.decode("utf-8")
+        try:
+            out = subprocess.check_output(cmd, env=os.environ, stderr=subprocess.STDOUT)
+        except (subprocess.CalledProcessError, OSError) as e:
+            print(f"WARNING: Could not determine glibc version using {cc_parts[0]}: {e}", file=sys.stderr)
+            return None
+        out = out.decode("utf-8", errors="replace")
 
         m = re.search("GLIBC=([0-9.]+)", out)
         if m:
             return m.group(1)
+    return None
 
 
 def build_context(
