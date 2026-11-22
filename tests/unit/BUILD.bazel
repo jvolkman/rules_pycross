@@ -23,6 +23,7 @@ load(":test_thin_package_repo.bzl", "thin_package_repo_test_suite")
 load(":test_toolchain.bzl", "toolchain_test_suite")
 load(":test_uv_translator.bzl", "uv_translator_test_suite")
 load(":test_variant_resolver.bzl", "variant_resolver_test_suite")
+load(":test_variant_semantics.bzl", "variant_semantics_test_suite")
 
 pep508_test_suite(
     name = "test_pep508",
@@ -220,6 +221,8 @@ backends_test_suite(name = "test_backends")
 build_mode_test_suite(name = "test_build_mode")
 
 variant_resolver_test_suite(name = "test_variant_resolver")
+
+variant_semantics_test_suite(name = "test_variant_semantics")
 
 sdist_dedup_test_suite(name = "test_sdist_dedup")
 
