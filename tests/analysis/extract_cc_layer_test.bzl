@@ -5,6 +5,9 @@ load("@rules_testing//lib:analysis_test.bzl", "analysis_test", "test_suite")
 load("@rules_testing//lib:util.bzl", "util")
 
 # buildifier: disable=bzl-visibility
+load("//pycross/private/build:cc_toolchain_util.bzl", "convert_flags_for_testing")
+
+# buildifier: disable=bzl-visibility
 load("//pycross/private/build/actions:cc_layer.bzl", "extract_cc_layer")
 
 # buildifier: disable=bzl-visibility
@@ -25,8 +28,6 @@ def _mock_cc_layer_impl(ctx):
 _mock_cc_layer = rule(
     implementation = _mock_cc_layer_impl,
     attrs = dict(CC_TOOLCHAIN_ATTRS, **{
-        # Defines from `deps` end up in the toolchain flags.
-        "deps": attr.label_list(),
         "native_deps": attr.label_list(),
         "copts": attr.string_list(),
         "linkopts": attr.string_list(),
@@ -85,7 +86,7 @@ def _test_extract_cc_layer_user_flags(name):
     util.helper_target(
         _mock_cc_layer,
         name = name + "_subject",
-        deps = [name + "_defines"],
+        native_deps = [name + "_defines"],
         copts = ["-DPYCROSS_TEST_DUP", "-DPYCROSS_TEST_STR=\"a b\"", "-isystem", "/opt/userinc"],
         linkopts = ["-Wl,-rpath,$$ORIGIN"],
     )
@@ -115,15 +116,22 @@ def _test_extract_cc_layer_main_repo_includes(name):
 
 def _test_extract_cc_layer_main_repo_includes_impl(env, target):
     include_dirs = _cc_config(target)["include_dirs"]
-    env.expect.that_collection(include_dirs).contains("$$EXT_BUILD_ROOT$$//tests/analysis")
+    env.expect.that_collection(include_dirs).contains("$$EXT_BUILD_ROOT$$/tests/analysis")
     for inc in include_dirs:
         env.expect.where(include_dir = inc).that_bool(inc.startswith("$$EXT_BUILD_ROOT$$/")).equals(True)
+        env.expect.where(include_dir = inc).that_bool("//" in inc).equals(False)
 
 def _test_extract_cc_layer_native_libraries(name):
     # These imports only provide CcInfo for analysis; the placeholder files are
     # never linked. Keep both library extensions in the same test so it runs
     # independently of the host platform.
     util.helper_target(cc_import, name = name + "_archive", static_library = "mock_native.a")
+    util.helper_target(
+        cc_import,
+        name = name + "_pic_archive",
+        static_library = "mock_both.a",
+        pic_static_library = "mock_both.pic.a",
+    )
     util.helper_target(cc_import, name = name + "_static_lib", static_library = "mock_native_static.lib")
     util.helper_target(
         cc_import,
@@ -136,6 +144,7 @@ def _test_extract_cc_layer_native_libraries(name):
         name = name + "_subject",
         native_deps = [
             name + "_archive",
+            name + "_pic_archive",
             name + "_static_lib",
             name + "_interface_lib",
         ],
@@ -145,11 +154,73 @@ def _test_extract_cc_layer_native_libraries(name):
 def _test_extract_cc_layer_native_libraries_impl(env, target):
     static_libs = _cc_config(target)["static_libs"]
     for path in [
-        "$$EXT_BUILD_ROOT$$//tests/analysis/mock_native.a",
-        "$$EXT_BUILD_ROOT$$//tests/analysis/mock_native_static.lib",
-        "$$EXT_BUILD_ROOT$$//tests/analysis/mock_native_interface.lib",
+        "$$EXT_BUILD_ROOT$$/tests/analysis/mock_native.a",
+        "$$EXT_BUILD_ROOT$$/tests/analysis/mock_both.pic.a",
+        "$$EXT_BUILD_ROOT$$/tests/analysis/mock_native_static.lib",
+        "$$EXT_BUILD_ROOT$$/tests/analysis/mock_native_interface.lib",
     ]:
         env.expect.that_collection(static_libs).contains(path)
+    env.expect.that_collection(static_libs).contains_none_of(["$$EXT_BUILD_ROOT$$/tests/analysis/mock_both.a"])
+
+def _mock_template_var_impl(_ctx):
+    return [platform_common.TemplateVariableInfo({"CUSTOM_CC_FLAG": "-DCUSTOM_VAR_OK"})]
+
+_mock_template_var = rule(implementation = _mock_template_var_impl)
+
+def _test_extract_cc_layer_template_vars(name):
+    util.helper_target(_mock_template_var, name = name + "_vars")
+    util.helper_target(
+        _mock_cc_layer,
+        name = name + "_subject",
+        native_deps = [name + "_vars"],
+        copts = ["$(CUSTOM_CC_FLAG)"],
+        linkopts = ["-Wl,$(CUSTOM_CC_FLAG)"],
+    )
+    analysis_test(name = name, target = name + "_subject", impl = _test_extract_cc_layer_template_vars_impl)
+
+def _test_extract_cc_layer_template_vars_impl(env, target):
+    cfg = _cc_config(target)
+    env.expect.that_str(cfg["CFLAGS"]).contains("-DCUSTOM_VAR_OK")
+    env.expect.that_str(cfg["LDFLAGS"]).contains("-Wl,-DCUSTOM_VAR_OK")
+
+def _test_extract_cc_layer_copts_no_shadowing(name):
+    util.helper_target(
+        _mock_cc_layer,
+        name = name + "_subject",
+        copts = ["-DUSER_COPT"],
+    )
+    analysis_test(
+        name = name,
+        target = name + "_subject",
+        config_settings = {
+            "//command_line_option:copt": ["-DCMD_COPT"],
+            "//command_line_option:conlyopt": ["-DCMD_CONLY"],
+            "//command_line_option:cxxopt": ["-DCMD_CXX"],
+        },
+        impl = _test_extract_cc_layer_copts_no_shadowing_impl,
+    )
+
+def _test_extract_cc_layer_copts_no_shadowing_impl(env, target):
+    cfg = _cc_config(target)
+    cflags = cfg["CFLAGS"]
+    cxxflags = cfg["CXXFLAGS"]
+    env.expect.that_int(cflags.count("-DCMD_COPT")).equals(1)
+    env.expect.that_int(cflags.count("-DCMD_CONLY")).equals(1)
+    env.expect.that_int(cflags.count("-DCMD_CXX")).equals(0)
+    env.expect.that_int(cxxflags.count("-DCMD_COPT")).equals(1)
+    env.expect.that_int(cxxflags.count("-DCMD_CONLY")).equals(0)
+    env.expect.that_int(cxxflags.count("-DCMD_CXX")).equals(1)
+    env.expect.that_int(cxxflags.count("-DUSER_COPT")).equals(1)
+
+def _test_convert_msvc_flags(name):
+    util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
+    analysis_test(name = name, target = name + "_subject", impl = _test_convert_msvc_flags_impl)
+
+# buildifier: disable=unused-variable
+def _test_convert_msvc_flags_impl(env, target):
+    # Verify MSVC flag conversion rewrites only the leading `/` without corrupting paths.
+    converted = convert_flags_for_testing("msvc-cl", ["/nologo", "/IC:/Users/foo/include", "-O2"])
+    env.expect.that_collection(converted).contains_exactly(["-nologo", "-IC:/Users/foo/include", "-O2"]).in_order()
 
 def extract_cc_layer_test_suite(name):
     test_suite(
@@ -159,5 +230,8 @@ def extract_cc_layer_test_suite(name):
             _test_extract_cc_layer_user_flags,
             _test_extract_cc_layer_main_repo_includes,
             _test_extract_cc_layer_native_libraries,
+            _test_extract_cc_layer_template_vars,
+            _test_extract_cc_layer_copts_no_shadowing,
+            _test_convert_msvc_flags,
         ],
     )

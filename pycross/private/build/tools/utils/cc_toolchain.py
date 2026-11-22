@@ -1,3 +1,4 @@
+import os
 import re
 import shlex
 import shutil
@@ -58,8 +59,8 @@ _FILTERED_LINKER_ARGS = (
     "-Wl,-O1",
 )
 
-# Compiler driver modes that stop before linking, plus relocatable partial
-# links (-r, which conflicts with LDFLAGS like --gc-sections / -l*).
+# Compiler driver modes and probes that stop before linking, plus relocatable
+# partial links (-r, which conflicts with LDFLAGS like --gc-sections / -l*).
 _NON_LINK_ARGS = (
     "-c",
     "-E",
@@ -68,6 +69,11 @@ _NON_LINK_ARGS = (
     "-MM",
     "-fsyntax-only",
     "-r",
+    "--version",
+    "-dumpmachine",
+    "-dumpversion",
+    "-dumpfullversion",
+    "--help",
 )
 
 # Driver flags that make a link produce a shared object/bundle instead of an
@@ -90,21 +96,29 @@ def get_wrapper_flags(cflags: str) -> List[str]:
             continue
         if sep:
             result.append(f"{flag_name}={value}")
-        else:
+        elif i + 1 < len(split_cflags):
             result.extend([flag_name, split_cflags[i + 1]])
     return result
+
+
+def _format_exec_cmd(cc_exe: str, prefix_flags: List[str], tail_flags: List[str]) -> str:
+    parts = (
+        [shlex.quote(cc_exe)] + [shlex.quote(f) for f in prefix_flags] + ['"$@"'] + [shlex.quote(f) for f in tail_flags]
+    )
+    return "exec " + " ".join(parts)
 
 
 def wrap_compiler(
     lang: str,
     cc_exe: str,
     cflags: str,
-    python_exe: Path,
+    python_exe: Path | None,
     bin_dir: Path,
     ldflags: str = "",
     ldsharedflags: str | None = None,
 ) -> Path:
-    """Generate custom compiler wrapper scripts to filter incompatible linker flags."""
+    """Generate POSIX /bin/sh compiler wrapper scripts to filter incompatible linker flags."""
+    del python_exe  # Kept for signature compatibility; wrappers use POSIX /bin/sh directly.
     assert lang in ("cc", "cxx")
 
     cc_path = Path(cc_exe)
@@ -125,43 +139,56 @@ def wrap_compiler(
     ]
     wrapper_path = bin_dir / wrapper_name
 
+    non_link_pattern = "|".join(_NON_LINK_ARGS) + "|-print-*|--print-*|--help=*"
+    shared_link_pattern = "|".join(_SHARED_LINK_ARGS)
+    filtered_pattern = "|".join(_FILTERED_LINKER_ARGS)
+
+    exec_shared = _format_exec_cmd(cc_exe, wrapper_flags, shared_linker_flags)
+    exec_link = _format_exec_cmd(cc_exe, wrapper_flags, linker_flags)
+    exec_non_link = _format_exec_cmd(cc_exe, wrapper_flags, [])
+
     with open(wrapper_path, "w") as f:
         f.write(
             textwrap.dedent(
                 f"""\
                 #!/bin/sh
-                "exec" "{python_exe.absolute()}" "-S" "$0" "$@"
-                import os
-                import sys
-
-                cc_exe = {repr(cc_exe)}
-                wrapper_flags = {repr(wrapper_flags)}
-                linker_flags = {repr(linker_flags)}
-                shared_linker_flags = {repr(shared_linker_flags)}
-                filtered_linker_args = {repr(_FILTERED_LINKER_ARGS)}
-                non_link_args = {repr(_NON_LINK_ARGS)}
-                shared_link_args = {repr(_SHARED_LINK_ARGS)}
-
-                filtered_args = []
-                is_link = bool(sys.argv[1:])
-                is_shared = False
-                for arg in sys.argv[1:]:
-                    if arg in non_link_args:
-                        is_link = False
-                    if arg in shared_link_args:
-                        is_shared = True
-                    if arg in filtered_linker_args:
-                        continue
-                    filtered_args.append(arg)
-
-                if filtered_args == ["-v"]:
-                    is_link = False
-
-                extra_link_flags = []
-                if is_link:
-                    extra_link_flags = shared_linker_flags if is_shared else linker_flags
-
-                os.execv(cc_exe, [cc_exe] + wrapper_flags + filtered_args + extra_link_flags)
+                set -f
+                is_link=1
+                is_shared=0
+                argc=$#
+                if [ "$argc" -eq 0 ]; then
+                    is_link=0
+                fi
+                i=0
+                while [ "$i" -lt "$argc" ]; do
+                    arg=$1
+                    shift
+                    i=$((i + 1))
+                    case "$arg" in
+                        {non_link_pattern})
+                            is_link=0
+                            ;;
+                        {shared_link_pattern})
+                            is_shared=1
+                            ;;
+                        {filtered_pattern})
+                            continue
+                            ;;
+                    esac
+                    set -- "$@" "$arg"
+                done
+                if [ "$#" -eq 1 ] && [ "$1" = "-v" ]; then
+                    is_link=0
+                fi
+                if [ "$is_link" -eq 1 ]; then
+                    if [ "$is_shared" -eq 1 ]; then
+                        {exec_shared}
+                    else
+                        {exec_link}
+                    fi
+                else
+                    {exec_non_link}
+                fi
                 """
             )
         )
@@ -192,19 +219,27 @@ def setup_cc_layer(ctx: BuildContext, cc_config: Dict[str, Any]) -> None:
     layer_include_dir.mkdir(parents=True, exist_ok=True)
     layer_lib_dir.mkdir(parents=True, exist_ok=True)
 
-    for lib_path_str in cc_config.get("static_libs", []) + cc_config.get("shared_libs", []):
+    for lib_path_str in cc_config.get("static_libs", []):
         lib_path = Path(replace_placeholder(ctx.prefix, lib_path_str))
         dest = layer_lib_dir / lib_path.name
-        if not dest.exists():
+        if not os.path.lexists(dest):
             dest.symlink_to(lib_path.absolute())
+        # Linkers look for `libfoo.a` when given `-lfoo`, so alias `libfoo.pic.a`.
+        if lib_path.name.endswith(".pic.a"):
+            unpic_dest = layer_lib_dir / (lib_path.name[: -len(".pic.a")] + ".a")
+            if not os.path.lexists(unpic_dest):
+                unpic_dest.symlink_to(lib_path.absolute())
 
     # `-lfoo` only finds `libfoo.so` or `libfoo.dylib`. Wheels can't contain symlinks, so a
     # library from a wheel is often only the versioned file (`libcudart.so.12`). Add the
     # unversioned name; the linker still records the library's SONAME or install name.
     for lib_path_str in cc_config.get("shared_libs", []):
         lib_path = Path(replace_placeholder(ctx.prefix, lib_path_str))
+        dest = layer_lib_dir / lib_path.name
+        if not os.path.lexists(dest):
+            dest.symlink_to(lib_path.absolute())
         linker_name = unversioned_library_name(lib_path.name)
-        if linker_name and not (layer_lib_dir / linker_name).exists():
+        if linker_name and not os.path.lexists(layer_lib_dir / linker_name):
             (layer_lib_dir / linker_name).symlink_to(lib_path.absolute())
 
     orig_cc = replace_placeholder(ctx.prefix, cc_config["CC"])
@@ -264,8 +299,8 @@ def setup_cc_layer(ctx: BuildContext, cc_config: Dict[str, Any]) -> None:
             + f" -I{layer_include_dir.absolute()}"
             + (f" {extra_includes_str}" if extra_includes_str else ""),
             "LDFLAGS": ldflags,
-            # Bazel's shared-library link flags (with -shared), for LDSHARED. Only
-            # shared links use them, so they can come straight from Bazel.
+            # Bazel's shared-library link flags, exposed for downstream builders
+            # (LDSHARED/LDCXXSHARED rely on the compiler wrappers instead).
             "LDSHAREDFLAGS": raw_ldsharedflags,
             "AR": replace_placeholder(ctx.prefix, cc_config["AR"]),
             "ARFLAGS": replace_placeholder(ctx.prefix, cc_config["ARFLAGS"]),
@@ -283,9 +318,14 @@ def setup_cc_layer(ctx: BuildContext, cc_config: Dict[str, Any]) -> None:
         ctx.sysconfig_vars["LDSHARED"] = " ".join(
             [ctx.sysconfig_vars["CC"], ctx.sysconfig_vars["LDFLAGS"], "-bundle -undefined dynamic_lookup"]
         )
+        ctx.sysconfig_vars["LDCXXSHARED"] = " ".join(
+            [ctx.sysconfig_vars["CXX"], ctx.sysconfig_vars["LDFLAGS"], "-bundle -undefined dynamic_lookup"]
+        )
     else:
-        ctx.sysconfig_vars["LDSHARED"] = " ".join([ctx.sysconfig_vars["CC"], ctx.sysconfig_vars["LDSHAREDFLAGS"]])
-    ctx.sysconfig_vars["LDCXXSHARED"] = ctx.sysconfig_vars["LDSHARED"]
+        # The compiler wrappers already append the toolchain's shared-library
+        # link flags when `-shared` is present, so only pass `-shared` here.
+        ctx.sysconfig_vars["LDSHARED"] = " ".join([ctx.sysconfig_vars["CC"], "-shared"])
+        ctx.sysconfig_vars["LDCXXSHARED"] = " ".join([ctx.sysconfig_vars["CXX"], "-shared"])
 
     include_paths = [str(layer_include_dir.absolute())] + [
         str(Path(replace_placeholder(ctx.prefix, p)).absolute()) for p in cc_config.get("include_dirs", [])

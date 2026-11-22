@@ -11,11 +11,14 @@ def _get_lib_flag(file):
     else:
         name = basename
 
-    parts = name.split(".")
-    for i, part in enumerate(parts):
-        if part in ("so", "a", "dylib", "lib", "dll"):
-            name = ".".join(parts[:i])
-            break
+    if name.endswith(".pic.a"):
+        name = name[:-len(".pic.a")]
+    else:
+        parts = name.split(".")
+        for i, part in enumerate(parts):
+            if part in ("so", "a", "dylib", "lib", "dll"):
+                name = ".".join(parts[:i])
+                break
     return "-l" + name
 
 def _is_versioned_shared_library(basename):
@@ -40,7 +43,7 @@ def _pycross_cc_pkg_config_impl(ctx):
     unique_includes = collections.uniq(raw_includes)
     cflags = []
     for inc in unique_includes:
-        abs_inc = absolutize_path_in_str(ctx.workspace_name, "$$EXT_BUILD_ROOT$$/", inc)
+        abs_inc = absolutize_path_in_str(ctx.workspace_name, "$$EXT_BUILD_ROOT$$/", inc, True)
         cflags.append("-I" + abs_inc)
 
     # 2. Gather and resolve library paths
@@ -48,10 +51,11 @@ def _pycross_cc_pkg_config_impl(ctx):
     lib_dirs = []
     lib_flags = []
     for lib in libs:
-        if _is_versioned_shared_library(lib.basename):
-            # `-l<name>` only finds an unversioned file, which wheels can't ship (no
-            # symlinks), so link by path. The linker still records the SONAME.
-            lib_flags.append(absolutize_path_in_str(ctx.workspace_name, "$$EXT_BUILD_ROOT$$/", lib.path))
+        if _is_versioned_shared_library(lib.basename) or lib.basename.endswith(".pic.a"):
+            # `-l<name>` only finds an unversioned file (`libfoo.so`, `libfoo.a`),
+            # not versioned wheel libraries (`libcudart.so.12`) or Bazel `.pic.a`
+            # archives, so link by path directly.
+            lib_flags.append(absolutize_path_in_str(ctx.workspace_name, "$$EXT_BUILD_ROOT$$/", lib.path, True))
             continue
         lib_dirs.append(lib.dirname)
         lib_flags.append(_get_lib_flag(lib))
@@ -61,7 +65,7 @@ def _pycross_cc_pkg_config_impl(ctx):
 
     libs_field_parts = []
     for lib_dir in unique_lib_dirs:
-        abs_lib_dir = absolutize_path_in_str(ctx.workspace_name, "$$EXT_BUILD_ROOT$$/", lib_dir)
+        abs_lib_dir = absolutize_path_in_str(ctx.workspace_name, "$$EXT_BUILD_ROOT$$/", lib_dir, True)
         libs_field_parts.append("-L" + abs_lib_dir)
     libs_field_parts.extend(unique_lib_flags)
 

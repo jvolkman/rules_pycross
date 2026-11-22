@@ -62,12 +62,13 @@ def _get_sysconfig_data(workspace_name, tools, flags):
     }
     return vars
 
-def _expand_locations_and_vars(attribute_name, ctx, val, deps):
+def _expand_locations_and_vars(attribute_name, ctx, val, deps, make_vars = {}):
     rule_dir = ctx.bin_dir.path + "/" + ctx.label.workspace_root + "/" + ctx.label.package
-    additional_substitutions = {
+    additional_substitutions = dict(make_vars)
+    additional_substitutions.update({
         "RULEDIR": rule_dir,
         "WORKSPACE": ctx.workspace_name,
-    }
+    })
     val = val.replace("$(abspath ", "$$$$EXT_BUILD_ROOT$$$$/$(execpath ")
     val = ctx.expand_location(val, deps)
     val = ctx.expand_make_variables(attribute_name, val, additional_substitutions)
@@ -133,10 +134,29 @@ def extract_cc_layer(ctx, native_deps, copts, linkopts, meson_properties = {}):
             make_vars = dict,        # template variables from deps
         )
     """
-    copts = [_expand_locations_and_vars("copts", ctx, copt, native_deps) for copt in copts]
-    linkopts = [_expand_locations_and_vars("linkopts", ctx, linkopt, native_deps) for linkopt in linkopts]
-    flags = get_flags_info(ctx, copts, linkopts)
-    tools = get_tools_info(ctx)
+    make_vars = {}
+    for dep in native_deps:
+        if platform_common.TemplateVariableInfo in dep:
+            make_vars.update(dep[platform_common.TemplateVariableInfo].variables)
+
+    cpp_toolchain = find_cpp_toolchain(ctx)
+    feature_configuration = configure_features(ctx, cpp_toolchain)
+
+    copts = [_expand_locations_and_vars("copts", ctx, copt, native_deps, make_vars) for copt in copts]
+    linkopts = [_expand_locations_and_vars("linkopts", ctx, linkopt, native_deps, make_vars) for linkopt in linkopts]
+    flags = get_flags_info(
+        ctx,
+        copts,
+        linkopts,
+        native_deps = native_deps,
+        cc_toolchain = cpp_toolchain,
+        feature_configuration = feature_configuration,
+    )
+    tools = get_tools_info(
+        ctx,
+        cc_toolchain = cpp_toolchain,
+        feature_configuration = feature_configuration,
+    )
     sysconfig_vars = _get_sysconfig_data(ctx.workspace_name, tools, flags)
 
     include_dirs = []
@@ -144,7 +164,6 @@ def extract_cc_layer(ctx, native_deps, copts, linkopts, meson_properties = {}):
     shared_libs = []
     transitive_files = []
 
-    cpp_toolchain = find_cpp_toolchain(ctx)
     target_os, target_cpu = _get_target_os_and_cpu(ctx)
     if cpp_toolchain.all_files:
         transitive_files.append(cpp_toolchain.all_files)
@@ -172,17 +191,11 @@ def extract_cc_layer(ctx, native_deps, copts, linkopts, meson_properties = {}):
             elif _is_shared_library(lib.path):
                 shared_libs.append(lib_path)
 
-    make_vars = {}
-    for dep in native_deps:
-        if platform_common.TemplateVariableInfo in dep:
-            make_vars.update(dep[platform_common.TemplateVariableInfo].variables)
-
     expanded_meson_properties = {}
     for key, value in meson_properties.items():
         expanded_meson_properties[key] = ctx.expand_make_variables("meson_properties", value, make_vars)
 
     runtime_libs = []
-    feature_configuration = configure_features(ctx, cpp_toolchain)
     runtime_depset = cpp_toolchain.static_runtime_lib(
         feature_configuration = feature_configuration,
     )

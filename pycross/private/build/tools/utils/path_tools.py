@@ -1,4 +1,4 @@
-import textwrap
+import shlex
 from pathlib import Path
 
 from pycross.private.build.tools.utils.context import BuildContext
@@ -36,19 +36,11 @@ def setup_path_tools(ctx: BuildContext) -> None:
             continue
 
         venv_python = ctx.env_dir / "bin" / "python"
-        py_script_path = ctx.tools_dir / (name + ".py")
-        # We use a 4-hop chain (bash -> python wrapper -> execv -> venv python -> tool script)
-        # to execute tools. This bypasses Linux's 127 character shebang limit while
-        # ensuring the tool is executed hermetically using the venv's python environment.
-        script_content = textwrap.dedent(f"""
-            import os, sys
-            os.execv({repr(str(venv_python.absolute()))}, [{repr(str(venv_python.absolute()))}, {repr(str(abs_tool_path))}] + sys.argv[1:])
-        """).lstrip()
-        py_script_path.write_text(script_content)
-
-        bash_wrapper = textwrap.dedent(f"""
-            #!/bin/sh
-            exec "{ctx.exec_python.absolute()}" "{py_script_path.absolute()}" "$@"
-        """).lstrip()
-        dest_path.write_text(bash_wrapper)
+        # Use a POSIX /bin/sh wrapper directly exec'ing the venv Python. This
+        # bypasses Linux's 127-character shebang limit without spawning an
+        # intermediate Python process.
+        sh_wrapper = (
+            f'#!/bin/sh\nexec {shlex.quote(str(venv_python.absolute()))} {shlex.quote(str(abs_tool_path))} "$@"\n'
+        )
+        dest_path.write_text(sh_wrapper)
         dest_path.chmod(0o755)

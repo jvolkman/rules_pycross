@@ -1,6 +1,6 @@
 """Module docstring for tests."""
 
-load("@rules_cc//cc:defs.bzl", "cc_library")
+load("@rules_cc//cc:defs.bzl", "cc_import", "cc_library")
 load("@rules_testing//lib:analysis_test.bzl", "analysis_test", "test_suite")
 load("@rules_testing//lib:util.bzl", "util")
 
@@ -49,14 +49,21 @@ def _test_pycross_cc_pkg_config_impl(env, target):
     content.contains("Name: mock_lib")
     content.contains("Version: 1.2.3")
     content.contains("Description: Mock description")
-    content.contains("-ltest_pycross_cc_pkg_config_mock_lib")
-    content.contains("-Itests/analysis/include/mock")
+    content.contains("-I$$EXT_BUILD_ROOT$$/tests/analysis/include/mock")
+    raw = [a.content for a in target.actions if a.mnemonic == "FileWrite"][0]
+
+    # On PIC platforms (Linux), cc_library emits a .pic.a archive which is linked
+    # directly by path; on non-PIC platforms (macOS/Windows), it emits -l<name>.
+    has_pic_path = "libtest_pycross_cc_pkg_config_mock_lib.pic.a" in raw
+    has_lib_flag = "-ltest_pycross_cc_pkg_config_mock_lib" in raw
+    env.expect.that_bool(has_pic_path or has_lib_flag).equals(True)
+    env.expect.that_bool("-ltest_pycross_cc_pkg_config_mock_lib.pic" in raw).equals(False)
 
 def _test_pycross_cc_pkg_config_libprefix(name):
     util.helper_target(
-        cc_library,
+        cc_import,
         name = "lib" + name + "_foo",
-        srcs = ["foo.cc"],
+        static_library = "liblib" + name + "_foo.a",
     )
 
     util.helper_target(
@@ -78,7 +85,34 @@ def _test_pycross_cc_pkg_config_libprefix(name):
 def _test_pycross_cc_pkg_config_libprefix_impl(env, target):
     action = env.expect.that_target(target).action_generating("tests/analysis/libfoo.pc")
     content = action.content()
+    content.contains("-L$$EXT_BUILD_ROOT$$/tests/analysis")
     content.contains("-llibtest_pycross_cc_pkg_config_libprefix_foo")
+
+def _test_pycross_cc_pkg_config_pic_static_library(name):
+    util.helper_target(
+        cc_import,
+        name = name + "_pic",
+        static_library = "libmock_pic.a",
+        pic_static_library = "libmock_pic.pic.a",
+    )
+    util.helper_target(
+        pycross_cc_pkg_config,
+        name = name + "_subject",
+        dep = name + "_pic",
+        lib_name = "mock_pic",
+        version = "1.0.0",
+    )
+    analysis_test(
+        name = name,
+        target = name + "_subject",
+        impl = _test_pycross_cc_pkg_config_pic_static_library_impl,
+    )
+
+def _test_pycross_cc_pkg_config_pic_static_library_impl(env, target):
+    content = env.expect.that_target(target).action_generating("tests/analysis/mock_pic.pc").content()
+    content.contains("$$EXT_BUILD_ROOT$$/tests/analysis/libmock_pic.pic.a")
+    raw = [a.content for a in target.actions if a.mnemonic == "FileWrite"][0]
+    env.expect.that_bool("-lmock_pic" in raw).equals(False)
 
 def _mock_installed_wheel_impl(ctx):
     out = ctx.actions.declare_directory(ctx.label.name + "_dir")
@@ -119,5 +153,6 @@ def pycross_cc_pkg_config_test_suite(name):
             _test_pycross_cc_pkg_config_versioned_library,
             _test_pycross_cc_pkg_config,
             _test_pycross_cc_pkg_config_libprefix,
+            _test_pycross_cc_pkg_config_pic_static_library,
         ],
     )

@@ -8,9 +8,11 @@ import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
+from pycross.private.build.tools.utils.cc_toolchain import get_wrapper_flags
 from pycross.private.build.tools.utils.cc_toolchain import setup_cc_layer
 from pycross.private.build.tools.utils.cc_toolchain import unversioned_library_name
 from pycross.private.build.tools.utils.cc_toolchain import wrap_compiler
+from pycross.private.build.tools.utils.path_tools import setup_path_tools
 
 
 class MockBuildContext:
@@ -60,15 +62,18 @@ class CcToolchainTest(unittest.TestCase):
 
         content = wrapper.read_text()
         self.assertTrue(content.startswith("#!/bin/sh"))
+        self.assertNotIn("import os", content)
 
-        self.assertIn("'-target'", content)
-        self.assertIn("'x86_64-linux-gnu'", content)
-        self.assertIn("'--sysroot=/tmp/sysroot'", content)
-        self.assertIn("linker_flags = ['-fuse-ld=lld', '-B/tmp/crt', '-L/tmp/glibc', '-lpthread']", content)
+        self.assertIn("-target x86_64-linux-gnu --sysroot=/tmp/sysroot", content)
+        self.assertIn("-fuse-ld=lld -B/tmp/crt -L/tmp/glibc -lpthread", content)
 
         self.assertIn("-Wl,--start-group", content)
         self.assertIn("-Wl,--end-group", content)
         self.assertIn("-Wl,--as-needed", content)
+
+    def test_get_wrapper_flags_trailing_flag(self):
+        self.assertEqual(get_wrapper_flags("-O2 -target"), [])
+        self.assertEqual(get_wrapper_flags("-O2 --sysroot=/tmp/s -isysroot"), ["--sysroot=/tmp/s"])
 
     def test_wrap_compiler_link_vs_non_link_invocations(self):
         bin_dir = self.temp_path / "bin"
@@ -76,7 +81,7 @@ class CcToolchainTest(unittest.TestCase):
         fake_cc = self._make_fake_cc()
 
         cflags = "-O2 -target x86_64-linux-gnu --sysroot=/dev/null"
-        ldflags = "-fuse-ld=lld -B/tmp/crt -L/tmp/glibc -Wl,--as-needed -Wl,-O1 -lpthread"
+        ldflags = "-fuse-ld=lld -B/tmp/crt -L/tmp/glibc -Wl,-rpath,$ORIGIN -Wl,--as-needed -Wl,-O1 -lpthread"
         wrapper = wrap_compiler("cc", str(fake_cc), cflags, Path(sys.executable), bin_dir, ldflags=ldflags)
 
         def run_wrapper(*args: str) -> list[str]:
@@ -84,16 +89,23 @@ class CcToolchainTest(unittest.TestCase):
             return json.loads(out)
 
         expected_prefix = ["-target", "x86_64-linux-gnu", "--sysroot=/dev/null"]
-        expected_linker_tail = ["-fuse-ld=lld", "-B/tmp/crt", "-L/tmp/glibc", "-lpthread"]
+        expected_linker_tail = ["-fuse-ld=lld", "-B/tmp/crt", "-L/tmp/glibc", "-Wl,-rpath,$ORIGIN", "-lpthread"]
 
-        # Real link: LDFLAGS appended after caller args, incompatible flags filtered from both.
+        # Real link: LDFLAGS appended after caller args, incompatible flags filtered from both,
+        # and `$ORIGIN` is preserved literally without shell expansion.
         self.assertEqual(
             run_wrapper("probe.o", "-Wl,--as-needed", "-Wl,--start-group", "-lm", "-Wl,--end-group", "-o", "probe"),
             expected_prefix + ["probe.o", "-lm", "-o", "probe"] + expected_linker_tail,
         )
 
-        # Compile / preprocess / assemble / dependency-gen / syntax-only / partial link (-r) / bare -v:
-        # LDFLAGS must NOT be appended.
+        # Spaces, single/double quotes, empty args, leading dashes, and glob chars survive POSIX /bin/sh intact.
+        self.assertEqual(
+            run_wrapper("-c", '-DFOO="a b"', "-DBAR='c d'", "", "-n", "--", "*.c", "-o", "probe.o"),
+            expected_prefix + ["-c", '-DFOO="a b"', "-DBAR='c d'", "", "-n", "--", "*.c", "-o", "probe.o"],
+        )
+
+        # Compile / preprocess / assemble / dependency-gen / syntax-only / partial link (-r) /
+        # compiler probes / bare -v: LDFLAGS must NOT be appended.
         non_link_cases = [
             ["-c", "probe.c", "-o", "probe.o"],
             ["-E", "probe.c"],
@@ -102,6 +114,15 @@ class CcToolchainTest(unittest.TestCase):
             ["-MM", "probe.c"],
             ["-fsyntax-only", "probe.c"],
             ["-r", "a.o", "b.o", "-o", "combined.o"],
+            ["--version"],
+            ["-dumpmachine"],
+            ["-dumpversion"],
+            ["-dumpfullversion"],
+            ["--help"],
+            ["--help=common"],
+            ["-print-search-dirs"],
+            ["--print-search-dirs"],
+            ["-print-file-name=libc.a"],
             ["-v"],
             [],
         ]
@@ -162,18 +183,19 @@ class CcToolchainTest(unittest.TestCase):
         layer_lib = self.temp_path / "cc_layer" / "lib"
         self.assertEqual(ctx.sysconfig_vars["LDFLAGS"], f"-L{layer_lib}")
         self.assertEqual(ctx.build_env["LDFLAGS"], ctx.sysconfig_vars["LDFLAGS"])
-        # LDSHARED uses Bazel's shared-library set directly.
-        self.assertEqual(ctx.sysconfig_vars["LDSHARED"], f"{ctx.sysconfig_vars['CC']} -fuse-ld=lld -shared -Wl,-S")
+        # LDSHARED / LDCXXSHARED pass only -shared (wrapper appends shared_linker_flags once).
+        self.assertEqual(ctx.sysconfig_vars["LDSHARED"], f"{ctx.sysconfig_vars['CC']} -shared")
+        self.assertEqual(ctx.sysconfig_vars["LDCXXSHARED"], f"{ctx.sysconfig_vars['CXX']} -shared")
 
         def run_wrapper(*args: str) -> list[str]:
             return json.loads(subprocess.check_output([ctx.sysconfig_vars["CC"], *args], text=True))
 
-        # distutils-style shared link (LDSHARED + $LDFLAGS): only shared-valid flags (the
-        # wrapper re-appends the shared set), and no executable-only ones.
+        # distutils-style shared link (LDSHARED + $LDFLAGS): shared-valid flags appear once,
+        # and no executable-only ones (-no-pie).
         ldshared = shlex.split(ctx.sysconfig_vars["LDSHARED"])[1:]
         self.assertEqual(
             run_wrapper(*ldshared, *shlex.split(ctx.sysconfig_vars["LDFLAGS"]), "a.o", "-o", "a.so"),
-            ["-fuse-ld=lld", "-shared", "-Wl,-S", f"-L{layer_lib}", "a.o", "-o", "a.so", "-fuse-ld=lld", "-Wl,-S"],
+            ["-shared", f"-L{layer_lib}", "a.o", "-o", "a.so", "-fuse-ld=lld", "-Wl,-S"],
         )
         # Executable links get the executable set, including -no-pie.
         self.assertEqual(run_wrapper("a.o", "-o", "a"), ["a.o", "-o", "a", "-fuse-ld=lld", "-no-pie", "-Wl,-S"])
@@ -181,7 +203,7 @@ class CcToolchainTest(unittest.TestCase):
     def test_setup_cc_layer(self):
         ctx = MockBuildContext(self.temp_path)
 
-        lib_foo = self.temp_path / "libfoo.a"
+        lib_foo = self.temp_path / "libfoo.pic.a"
         lib_foo.touch()
         lib_bar = self.temp_path / "libbar.so"
         lib_bar.touch()
@@ -206,15 +228,21 @@ class CcToolchainTest(unittest.TestCase):
         self.assertIn("PYCROSS_INCLUDE_PATH", ctx.build_env)
         self.assertTrue(ctx.build_env["PYCROSS_LIBRARY_PATH"].endswith("cc_layer/lib"))
 
+        # PIC archive gets both libfoo.pic.a and libfoo.a symlinks so -lfoo resolves.
+        lib_dir = Path(ctx.build_env["PYCROSS_LIBRARY_PATH"])
+        self.assertEqual((lib_dir / "libfoo.pic.a").resolve(), lib_foo.resolve())
+        self.assertEqual((lib_dir / "libfoo.a").resolve(), lib_foo.resolve())
+
         # Assert wrapper received placeholder-expanded, filtered LDFLAGS
         cc_wrapper_content = Path(ctx.sysconfig_vars["CC"]).read_text()
-        self.assertIn(f"'-B{self.temp_path}/crt'", cc_wrapper_content)
-        self.assertIn("'-fuse-ld=lld'", cc_wrapper_content)
+        self.assertIn(f"-B{self.temp_path}/crt", cc_wrapper_content)
+        self.assertIn("-fuse-ld=lld", cc_wrapper_content)
 
-        # Assert LDSHARED
+        # Assert LDSHARED and LDCXXSHARED
         self.assertIn("LDSHARED", ctx.sysconfig_vars)
         self.assertIn("-shared", ctx.sysconfig_vars["LDSHARED"])
         self.assertNotIn("-bundle", ctx.sysconfig_vars["LDSHARED"])
+        self.assertTrue(ctx.sysconfig_vars["LDCXXSHARED"].startswith(ctx.sysconfig_vars["CXX"]))
 
     def test_unversioned_library_name(self):
         self.assertEqual(unversioned_library_name("libcudart.so.12"), "libcudart.so")
@@ -266,7 +294,32 @@ class CcToolchainTest(unittest.TestCase):
         self.assertNotIn("-Wl,-O1", ldshared)
         self.assertNotIn("-shared", ldshared)
         self.assertEqual(ldshared[-3:], ["-bundle", "-undefined", "dynamic_lookup"])
-        self.assertEqual(ctx.sysconfig_vars["LDCXXSHARED"], ctx.sysconfig_vars["LDSHARED"])
+        self.assertTrue(ctx.sysconfig_vars["LDSHARED"].startswith(ctx.sysconfig_vars["CC"]))
+        self.assertTrue(ctx.sysconfig_vars["LDCXXSHARED"].startswith(ctx.sysconfig_vars["CXX"]))
+        self.assertEqual(ctx.sysconfig_vars["LDCXXSHARED"].split()[-3:], ["-bundle", "-undefined", "dynamic_lookup"])
+
+    def test_setup_path_tools_posix_wrapper(self):
+        tools_dir = self.temp_path / "tools"
+        env_dir = self.temp_path / "venv"
+        (env_dir / "bin").mkdir(parents=True)
+        (env_dir / "bin" / "python").symlink_to(sys.executable)
+
+        spaced_dir = self.temp_path / "dir with spaces"
+        spaced_dir.mkdir()
+        tool_script = spaced_dir / "my_tool.py"
+        tool_script.write_text("import json, sys; print(json.dumps(sys.argv[1:]))\n")
+
+        ctx = MockBuildContext(self.temp_path)
+        ctx.tools_dir = tools_dir
+        ctx.env_dir = env_dir
+        ctx.path_tools = [{"name": "my-tool", "path": tool_script}]
+
+        setup_path_tools(ctx)
+        wrapper = tools_dir / "my-tool"
+        self.assertTrue(wrapper.exists())
+        self.assertFalse((tools_dir / "my-tool.py").exists())
+        out = subprocess.check_output([str(wrapper), "a b", "", "*.txt"], text=True)
+        self.assertEqual(json.loads(out), ["a b", "", "*.txt"])
 
     def test_load_build_context_reproducibility_env_defaults(self):
         import json
