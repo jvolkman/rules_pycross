@@ -5,13 +5,13 @@ load("@rules_testing//lib:truth.bzl", "matching")
 load("@rules_testing//lib:util.bzl", "util")
 
 # buildifier: disable=bzl-visibility
-load("//pycross/private:format_extension.bzl", "normalize_flag_for_testing", "normalize_settings_for_testing")
+load("//pycross/private:format_extension.bzl", "canonicalize_package_tag_name_for_testing", "normalize_flag_for_testing", "normalize_settings_for_testing")
 
 # buildifier: disable=bzl-visibility
 load("//pycross/private:lock_repo_creation.bzl", "compute_variant_pins_for_testing", "normalize_override_name_for_testing", "validate_override_packages_for_testing")
 
 # buildifier: disable=bzl-visibility
-load("//pycross/private:override_helpers.bzl", "encode_build_system_attrs", "merge_backend_overrides")
+load("//pycross/private:override_helpers.bzl", "collect_module_overrides_for_testing", "encode_build_system_attrs", "merge_backend_overrides")
 
 # buildifier: disable=unused-variable
 def _test_encode_build_system_attrs_impl(env, target):
@@ -532,6 +532,88 @@ def _test_compute_variant_pins_unknown_string_fails(name):
         expect_failure = True,
     )
 
+# buildifier: disable=unused-variable
+def _test_collect_module_overrides_root_wins_impl(env, target):
+    """Root module (first in module_ctx.modules) overrides transitive dependency modules."""
+    root_mod = struct(
+        name = "root",
+        tags = struct(override = [
+            struct(workspace = "uv", name = "pyyaml", copts = ["-O3"]),
+        ]),
+    )
+    dep_mod = struct(
+        name = "dep",
+        tags = struct(override = [
+            struct(workspace = "uv", name = "PyYAML", copts = ["-O0"]),
+            struct(workspace = "uv", name = "other", copts = ["-O1"]),
+        ]),
+    )
+    res = collect_module_overrides_for_testing([root_mod, dep_mod], "setuptools_build")
+    env.expect.that_str(res["uv"]["pyyaml"]["backend_attrs"]["copts"]).equals(json.encode(["-O3"]))
+    env.expect.that_str(res["uv"]["other"]["backend_attrs"]["copts"]).equals(json.encode(["-O1"]))
+
+    # Package tag name canonicalization handles case, underscores, extras, versions, and wildcard.
+    env.expect.that_str(canonicalize_package_tag_name_for_testing("*")).equals("*")
+    env.expect.that_str(canonicalize_package_tag_name_for_testing("PyYAML")).equals("pyyaml")
+    env.expect.that_str(canonicalize_package_tag_name_for_testing("Foo_Bar[My_Extra]@1.0")).equals("foo-bar[my-extra]@1.0")
+
+    # Main-repo @//pkg:flag does NOT falsely collide with external @rules_python//pkg:flag.
+    main_flag = [normalize_flag_for_testing("--@//python/config_settings:python_version=3.12", True)]
+    non_dup = normalize_settings_for_testing({Label("@rules_python//python/config_settings:python_version"): "3.13"}, main_flag)
+    env.expect.that_int(len(non_dup)).equals(1)
+
+def _test_collect_module_overrides_root_wins(name):
+    util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
+    analysis_test(name = name, target = name + "_subject", impl = _test_collect_module_overrides_root_wins_impl)
+
+def _dup_module_override_subject_impl(_ctx):
+    mod = struct(
+        name = "root",
+        tags = struct(override = [
+            struct(workspace = "uv", name = "PyYAML", copts = ["-O2"]),
+            struct(workspace = "uv", name = "pyyaml", copts = ["-O3"]),
+        ]),
+    )
+    collect_module_overrides_for_testing([mod], "setuptools_build")
+    return []
+
+_dup_module_override_subject = rule(implementation = _dup_module_override_subject_impl)
+
+def _test_collect_module_overrides_same_module_dup_fails_impl(env, target):
+    env.expect.that_target(target).failures().contains_predicate(
+        matching.contains("Duplicate setuptools_build override for package 'pyyaml'"),
+    )
+
+def _test_collect_module_overrides_same_module_dup_fails(name):
+    util.helper_target(_dup_module_override_subject, name = name + "_subject")
+    analysis_test(
+        name = name,
+        target = name + "_subject",
+        expect_failure = True,
+        impl = _test_collect_module_overrides_same_module_dup_fails_impl,
+    )
+
+def _canonical_dup_setting_subject_impl(_ctx):
+    flags = [normalize_flag_for_testing("--@rules_python//python/config_settings:python_version=3.12", True)]
+    normalize_settings_for_testing({Label("@rules_python//python/config_settings:python_version"): "3.13"}, flags)
+    return []
+
+_canonical_dup_setting_subject = rule(implementation = _canonical_dup_setting_subject_impl)
+
+def _test_normalize_settings_rejects_apparent_vs_canonical_dup_impl(env, target):
+    env.expect.that_target(target).failures().contains_predicate(
+        matching.contains("set in both flags and settings"),
+    )
+
+def _test_normalize_settings_rejects_apparent_vs_canonical_dup(name):
+    util.helper_target(_canonical_dup_setting_subject, name = name + "_subject")
+    analysis_test(
+        name = name,
+        target = name + "_subject",
+        expect_failure = True,
+        impl = _test_normalize_settings_rejects_apparent_vs_canonical_dup_impl,
+    )
+
 def override_helpers_test_suite(name):
     test_suite(
         name = name,
@@ -539,6 +621,9 @@ def override_helpers_test_suite(name):
             _test_compute_variant_pins,
             _test_compute_variant_pins_unknown_string_fails,
             _test_encode_build_system_attrs,
+            _test_collect_module_overrides_root_wins,
+            _test_collect_module_overrides_same_module_dup_fails,
+            _test_normalize_settings_rejects_apparent_vs_canonical_dup,
             _test_normalize_flags,
             _test_normalize_flag_requires_dashes,
             _test_normalize_flag_rejects_platforms,

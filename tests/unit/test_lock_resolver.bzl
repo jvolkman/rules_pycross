@@ -2275,11 +2275,100 @@ def _test_precompile_annotation(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
     analysis_test(name = name, target = name + "_subject", impl = _test_precompile_annotation_impl)
 
+# buildifier: disable=unused-variable
+def _test_lock_resolver_edge_cases_impl(env, target):
+    """Verify versioned ignore_dependencies, wildcard self-dep skip, resolved cycles, and worklist dedup."""
+
+    # 1. Versioned ignore_dependencies drops only the matching version and breaks cycles;
+    #    extra_dependencies creates a cycle detected by _compute_cycle_groups.
+    lock_model_data = {
+        "packages": {
+            "a@1.0": _make_pkg("a", "1.0", [_make_file("a-1.0.tar.gz")], deps = [_make_dep("b", "1.0"), _make_dep("b", "2.0")]),
+            "b@1.0": _make_pkg("b", "1.0", [_make_file("b-1.0.tar.gz")], deps = [_make_dep("a", "1.0")]),
+            "b@2.0": _make_pkg("b", "2.0", [_make_file("b-2.0.tar.gz")]),
+            "c@1.0": _make_pkg("c", "1.0", [_make_file("c-1.0.tar.gz")], deps = [_make_dep("d", "1.0")]),
+            "d@1.0": _make_pkg("d", "1.0", [_make_file("d-1.0.tar.gz")]),
+            "tool@1.0": _make_pkg("tool", "1.0", [_make_file("tool-1.0.tar.gz")]),
+            "multi@1.0": _make_pkg(
+                "multi",
+                "1.0",
+                [_make_file("multi-1.0.tar.gz")],
+                deps = [_make_dep("c", "1.0"), _make_dep("d", "1.0")],
+            ),
+        },
+        "pins": {
+            "a": "a@1.0",
+            "c": "c@1.0",
+            "tool": "tool@1.0",
+            "multi[e1]": "multi[e1]@1.0",
+            "multi[e2]": "multi[e2]@1.0",
+            "multi[e3]": "multi[e3]@1.0",
+            "multi[e4]": "multi[e4]@1.0",
+        },
+    }
+    annotations_data = {
+        "*": {"extra_build_tools": ["TOOL"]},
+        "A": {"ignore_dependencies": ["B@1.0"]},
+        "D": {"extra_dependencies": ["C"]},
+    }
+    res = resolve(lock_model_data, annotations_data = annotations_data, default_extra_build_tools_args = ["TOOL"])
+
+    # a@1.0 ignored b@1.0 (keeping b@2.0), so (a@1.0, b@1.0) is NO LONGER a cycle!
+    a_deps = [md["key"] for md in res.packages["a@1.0"]["marker_dependencies"]]
+    env.expect.that_collection(a_deps).contains_exactly(["b@2.0"])
+    env.expect.that_bool("cycle_group" in res.packages["a@1.0"]).equals(False)
+
+    # d@1.0 added extra_dependencies = ["C"], so (c@1.0, d@1.0) IS detected as a cycle!
+    env.expect.that_bool("cycle_group" in res.packages["c@1.0"]).equals(True)
+    env.expect.that_str(res.packages["c@1.0"]["cycle_group"]).equals(res.packages["d@1.0"]["cycle_group"])
+
+    # Wildcard extra_build_tools = ["TOOL"] does NOT inject tool@1.0 into itself.
+    env.expect.that_collection(res.packages["tool@1.0"]["extra_build_tools"]).contains_exactly([])
+    env.expect.that_collection(res.packages["b@2.0"]["extra_build_tools"]).contains_exactly(["tool@1.0"])
+
+    # 4 synthesized extras + wildcard extra_build_tools do not overflow max_iters.
+    env.expect.that_bool("multi[e4]@1.0" in res.packages).equals(True)
+
+def _test_lock_resolver_edge_cases(name):
+    util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
+    analysis_test(name = name, target = name + "_subject", impl = _test_lock_resolver_edge_cases_impl)
+
+def _bad_ignore_version_subject_impl(_ctx):
+    resolve(
+        {
+            "packages": {
+                "foo@1.0": _make_pkg("foo", "1.0", [_make_file("foo-1.0.tar.gz")], deps = [_make_dep("bar", "1.0")]),
+                "bar@1.0": _make_pkg("bar", "1.0", [_make_file("bar-1.0.tar.gz")]),
+            },
+            "pins": {"foo": "foo@1.0"},
+        },
+        annotations_data = {"foo": {"ignore_dependencies": ["bar@9.9.9"]}},
+    )
+    return []
+
+_bad_ignore_version_subject = rule(implementation = _bad_ignore_version_subject_impl)
+
+def _test_ignore_dependencies_bogus_version_fails_impl(env, target):
+    env.expect.that_target(target).failures().contains_predicate(
+        matching.contains('ignore_dependencies entry "bar@9.9.9" matches no packages'),
+    )
+
+def _test_ignore_dependencies_bogus_version_fails(name):
+    util.helper_target(_bad_ignore_version_subject, name = name + "_subject")
+    analysis_test(
+        name = name,
+        target = name + "_subject",
+        expect_failure = True,
+        impl = _test_ignore_dependencies_bogus_version_fails_impl,
+    )
+
 def lock_resolver_test_suite(name):
     test_suite(
         name = name,
         tests = [
             _test_basic_resolution,
+            _test_lock_resolver_edge_cases,
+            _test_ignore_dependencies_bogus_version_fails,
             _test_source_dir_and_synthesized_extra_pin,
             _test_precompile_annotation,
             _test_create_transitive_aliases_with_extras,

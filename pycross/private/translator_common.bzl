@@ -321,9 +321,22 @@ def resolve_lock_graph(packages, pinned_package_specs, requires_python, strict_d
         # Merge: combine deps, files, extras
         existing = distinct_packages[pkg_key]
         merged_deps = list(existing["dependencies"])
-        existing_dep_keys = {"{}/{}".format(d["name"], d.get("specifier", "")): True for d in merged_deps}
+        existing_dep_keys = {
+            (
+                d["name"],
+                d.get("specifier", ""),
+                d.get("marker", ""),
+                tuple(sorted([e for e in (d.get("extras") or []) if e])),
+            ): True
+            for d in merged_deps
+        }
         for d in pkg["dependencies"]:
-            dk = "{}/{}".format(d["name"], d.get("specifier", ""))
+            dk = (
+                d["name"],
+                d.get("specifier", ""),
+                d.get("marker", ""),
+                tuple(sorted([e for e in (d.get("extras") or []) if e])),
+            )
             if dk not in existing_dep_keys:
                 merged_deps.append(d)
                 existing_dep_keys[dk] = True
@@ -453,7 +466,15 @@ def resolve_lock_graph(packages, pinned_package_specs, requires_python, strict_d
     for name in pinned_package_specs.keys():
         direct_pin_names[name] = True
         direct_pin_names[name.split("[")[0]] = True
-    for _ in range(len(pinned_keys) + 1):
+    testonly_set = {name: True for name in testonly_pins}
+    non_testonly_set = {}
+    for name in pinned_keys.keys():
+        base = name.split("[")[0]
+        if name not in testonly_set and base not in testonly_set:
+            non_testonly_set[base] = True
+    expanded_testonly = {}
+    expanded_local = {}  # (constraint, key) -> bool (True = expanded only as testonly, False = expanded as non-testonly)
+    for _ in range(2 * len(distinct_packages) + 1):
         local_pins = []
         for pin_name, constraints in pinned_keys.items():
             for constraint, key in constraints.items():
@@ -463,20 +484,37 @@ def resolve_lock_graph(packages, pinned_package_specs, requires_python, strict_d
         if not local_pins:
             break
         for pin_name, constraint, key in local_pins:
+            pin_base = pin_name.split("[")[0]
+            pin_is_testonly = (pin_name in testonly_set or pin_base in testonly_set or pin_base in expanded_testonly) and pin_base not in non_testonly_set
+            pinned_keys[pin_name].pop(constraint)
+            visit_key = (constraint, key)
+            if visit_key in expanded_local and (pin_is_testonly or not expanded_local[visit_key]):
+                continue
+            expanded_local[visit_key] = pin_is_testonly
             pkg_deps = resolved_deps.get(key, [])
             for dep in pkg_deps:
                 dep_base_name = dep["name"].split("[")[0]
                 dep_pin_name = dep["name"]
-                if _package_key_str(dep_pin_name, dep["version"]) not in distinct_packages:
+                dep_key = _package_key_str(dep_pin_name, dep["version"])
+                if dep_key not in distinct_packages:
                     dep_pin_name = dep_base_name
+                    dep_key = _package_key_str(dep_pin_name, dep["version"])
 
-                # Keep resolution-marker forks of the dependency distinct.
+                if pin_is_testonly:
+                    expanded_testonly[dep_base_name] = True
+                else:
+                    non_testonly_set[dep_base_name] = True
+
+                # Skip re-adding an already-expanded local member unless upgrading from testonly to non-testonly.
                 dep_constraint = _resolve_local_dep_constraint(
                     constraint,
                     dep_base_name,
                     dep["version"],
                     resolution_marker_exprs,
                 )
+                dep_visit_key = (dep_constraint, dep_key)
+                if distinct_packages.get(dep_key, {}).get("is_local", False) and dep_visit_key in expanded_local and (pin_is_testonly or not expanded_local[dep_visit_key]):
+                    continue
 
                 # The dependency is requested under the local package's edge
                 # marker. A directly pinned name absent from
@@ -489,13 +527,25 @@ def resolve_lock_graph(packages, pinned_package_specs, requires_python, strict_d
 
                 if dep_pin_name not in pinned_keys:
                     pinned_keys[dep_pin_name] = {}
-                pinned_keys[dep_pin_name][dep_constraint] = _package_key_str(dep_pin_name, dep["version"])
-            pinned_keys[pin_name].pop(constraint)
+                pinned_keys[dep_pin_name][dep_constraint] = dep_key
 
         # Cleanup empty dicts
         keys_to_delete = [k for k, v in pinned_keys.items() if not v]
         for k in keys_to_delete:
             pinned_keys.pop(k)
+
+    for name in sorted(expanded_testonly.keys()):
+        if name not in non_testonly_set and name not in testonly_set:
+            testonly_set[name] = True
+    testonly_pins = sorted([
+        name
+        for name in testonly_set.keys()
+        if (
+            name not in non_testonly_set and
+            name.split("[")[0] not in non_testonly_set and
+            (name in pinned_keys or any([p.split("[")[0] == name for p in pinned_keys.keys()]))
+        )
+    ])
 
     # Build output
     lock_packages = {}
@@ -604,14 +654,19 @@ def compute_requested_dependency_groups(
     requested = {}
 
     for group in effective_groups:
+        kind, sep, name = group.partition(":")
+        kind_wildcard = kind + ":*" if sep and kind in _GROUP_KINDS else ""
         if group in testonly_groups:
             is_testonly = True
         elif group in non_testonly_groups:
             is_testonly = False
+        elif kind_wildcard and kind_wildcard in testonly_groups:
+            is_testonly = True
+        elif kind_wildcard and kind_wildcard in non_testonly_groups:
+            is_testonly = False
         else:
             is_testonly = wildcard_testonly
 
-        kind, sep, name = group.partition(":")
         if not sep or kind not in _GROUP_KINDS:
             if group not in available_set:
                 fail("Unknown dependency group '{}'. Expected '*', 'default', 'transitive', or one of: {}.".format(

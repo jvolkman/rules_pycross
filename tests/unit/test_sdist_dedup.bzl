@@ -502,6 +502,56 @@ def _test_validate_requirements_impl(env, target):
         "WARNING: The build tools repo pins 'numpy==1.26.4', but 'my_pkg-1.0.tar.gz' requires 'oldest-supported-numpy>=2022.1' in pyproject.toml.",
     ])
 
+    # 6. Marker-gated build-system.requires are skipped so non-matching env bounds do not warn.
+    w_marker = validate_requirements_for_testing(
+        ["tomli>=2.0; python_version < '3.11'"],
+        {"tomli": "1.2.3"},
+        "my_pkg-1.0.tar.gz",
+    )
+    env.expect.that_collection(w_marker).contains_exactly([])
+
+    # 7. Explicit-only registered backend (present only in backend_tool_packages, not backend_to_rule),
+    #    bracketed requires canonicalization, and repr() escaping on string override attrs.
+    cfg_explicit = compute_sdist_build_config_for_testing(
+        _make_attr(
+            known_packages = ["setuptools"],
+            build_backend = "custom_explicit_build",
+            backend_tool_packages = {"custom_explicit_build": []},
+            override_backend_configs = json.encode({
+                "custom_explicit_build": {
+                    "custom_flag": json.encode('-DFOO="bar"'),
+                },
+            }),
+        ),
+        {"build_backend": "setuptools.build_meta", "build_requires": ["setuptools"]},
+    )
+    env.expect.that_str(cfg_explicit.backend_macro).equals("custom_explicit_build")
+    env.expect.that_str(cfg_explicit.macro_attrs["custom_flag"]).equals(repr('-DFOO="bar"'))
+
+    cfg_bracket = compute_sdist_build_config_for_testing(
+        struct(
+            sdist = "@test_sdist//:file",
+            deps = [],
+            known_packages = ["setuptools", "setuptools-rust"],
+            thin_repo = "pypi",
+            build_backend = "",
+            backend_to_rule = {
+                "setuptools.build_meta": "setuptools_build",
+                "setuptools.build_meta[setuptools_rust]": "setuptools_rust_build",
+            },
+            backend_tool_packages = {},
+            default_backend = "pep517_build",
+            extra_build_tools = [],
+            override_backend_configs = "",
+            pre_build_patches = [],
+            site_hooks = [],
+            whldir_name = "test-1.0.whldir",
+            source_dir = "",
+        ),
+        {"build_backend": "setuptools.build_meta", "build_requires": ["setuptools", "setuptools-rust>=1.0"]},
+    )
+    env.expect.that_str(cfg_bracket.backend_macro).equals("setuptools_rust_build")
+
 def _test_validate_requirements(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
     analysis_test(name = name, target = name + "_subject", impl = _test_validate_requirements_impl)

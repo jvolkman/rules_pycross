@@ -10,6 +10,7 @@ Each backend extension follows the same pattern:
 """
 
 load("@bazel_features//:features.bzl", "bazel_features")
+load("@pypackaging.bzl", "pypackaging")
 
 def merge_backend_overrides(scope, pkg_name, version = ""):
     """Merge wildcard, package-specific, and version-specific backend overrides.
@@ -91,6 +92,47 @@ def encode_build_system_attrs(tag):
 
     return backend_attrs
 
+def _canonicalize_override_key(pkg_name):
+    if pkg_name == "*":
+        return pkg_name
+    name, sep, version = pkg_name.partition("@")
+    if not name or name == "*" or (sep and not version):
+        # Preserve malformed input so lock_repo_creation's validation reports the original string.
+        return pkg_name
+    norm = pypackaging.utils.canonicalize_name(name)
+    return "{}@{}".format(norm, version) if sep else norm
+
+def _collect_module_overrides(modules, build_backend):
+    """Collect override tags across Bzlmod modules with root-module-wins precedence.
+
+    `module_ctx.modules` yields the root module first, so iterate in reverse
+    order so the root module overrides transitive dependency modules. Duplicate
+    overrides for the same (workspace, package) within a single module fail.
+    """
+    overrides = {}
+    for module in reversed(modules):
+        seen_in_module = {}
+        for tag in module.tags.override:
+            key = tag.workspace
+            norm_name = _canonicalize_override_key(tag.name)
+            dup_key = (key, norm_name)
+            if dup_key in seen_in_module:
+                fail("Duplicate {} override for package '{}' in workspace '{}' (module '{}')".format(
+                    build_backend,
+                    tag.name,
+                    key,
+                    module.name,
+                ))
+            seen_in_module[dup_key] = True
+            backend_attrs = encode_build_system_attrs(tag)
+            overrides.setdefault(key, {})[norm_name] = {
+                "build_backend": build_backend,
+                "backend_attrs": backend_attrs,
+            }
+    return overrides
+
+collect_module_overrides_for_testing = _collect_module_overrides
+
 def make_override_extension(backend_name, build_backend, override_attrs):
     """Create a module extension for a build-system backend.
 
@@ -106,15 +148,7 @@ def make_override_extension(backend_name, build_backend, override_attrs):
     """
 
     def _impl(module_ctx):
-        overrides = {}
-        for module in module_ctx.modules:
-            for tag in module.tags.override:
-                backend_attrs = encode_build_system_attrs(tag)
-                key = tag.workspace
-                overrides.setdefault(key, {})[tag.name] = {
-                    "build_backend": build_backend,
-                    "backend_attrs": backend_attrs,
-                }
+        overrides = _collect_module_overrides(module_ctx.modules, build_backend)
 
         create_overrides_repo(
             name = backend_name + "_overrides",

@@ -4,7 +4,7 @@ load("@rules_testing//lib:analysis_test.bzl", "analysis_test", "test_suite")
 load("@rules_testing//lib:util.bzl", "util")
 
 # buildifier: disable=bzl-visibility
-load("//pycross/private:lock_common.bzl", "read_toml_cached", "resolve_member_project_file", "sibling_project_file")
+load("//pycross/private:lock_common.bzl", "process_workspaces", "read_toml_cached", "register_workspace_repo", "resolve_member_project_file", "sibling_project_file")
 
 # buildifier: disable=unused-variable
 def _test_member_project_files_impl(env, target):
@@ -67,11 +67,103 @@ def _test_read_toml_cached(name):
     util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
     analysis_test(name = name, target = name + "_subject", impl = _test_read_toml_cached_impl)
 
+# buildifier: disable=unused-variable
+def _test_register_workspace_repo_dev_dependency_impl(env, target):
+    """Verify dev_dependency = True tags route to root_direct_dev_deps while non-dev route to root_direct_deps."""
+    lock_owners = {}
+    lock_repos = {}
+    lock_model_structs = {}
+    root_direct_deps = []
+    root_direct_dev_deps = []
+    ws_tag = struct(lock_file = Label("//:uv.lock"), local_wheels = [])
+    root_mod = struct(name = "root", is_root = True)
+    dep_mod = struct(name = "dep", is_root = False)
+    transition = dict(flags = [], settings = {}, constraint_values = [], platform = None)
+
+    register_workspace_repo(
+        lock_owners,
+        lock_repos,
+        lock_model_structs,
+        root_direct_deps,
+        ws_tag,
+        "ws",
+        "uv",
+        "prod_repo",
+        ["app"],
+        ["default"],
+        transition,
+        root_mod,
+        [],
+        root_direct_dev_deps = root_direct_dev_deps,
+        is_dev_dependency = False,
+    )
+    register_workspace_repo(
+        lock_owners,
+        lock_repos,
+        lock_model_structs,
+        root_direct_deps,
+        ws_tag,
+        "ws",
+        "uv",
+        "dev_repo",
+        ["app"],
+        ["default"],
+        transition,
+        root_mod,
+        [],
+        root_direct_dev_deps = root_direct_dev_deps,
+        is_dev_dependency = True,
+    )
+    register_workspace_repo(
+        lock_owners,
+        lock_repos,
+        lock_model_structs,
+        root_direct_deps,
+        ws_tag,
+        "ws",
+        "uv",
+        "dep_repo",
+        ["app"],
+        ["default"],
+        transition,
+        dep_mod,
+        [],
+        root_direct_dev_deps = root_direct_dev_deps,
+        is_dev_dependency = True,
+    )
+
+    env.expect.that_collection(root_direct_deps).contains_exactly(["prod_repo"])
+    env.expect.that_collection(root_direct_dev_deps).contains_exactly(["dev_repo"])
+
+    # process_workspaces propagates is_dev_dependency from a single-project workspace to its implicit repo.
+    ws_direct = []
+    ws_dev = []
+    fake_mctx = struct(path = lambda _lbl: struct(exists = True))
+    process_workspaces(
+        fake_mctx,
+        {},
+        {},
+        {},
+        [struct(tag = ws_tag, module = root_mod, ws_name = "dev_ws", is_dev_dependency = True)],
+        [],
+        lambda _mctx, _lock, _cache: [struct(name = "app", path = "")],
+        "uv",
+        ws_direct,
+        root_direct_dev_deps = ws_dev,
+    )
+    env.expect.that_collection(ws_direct).contains_exactly([])
+    env.expect.that_collection(ws_dev).contains_exactly(["dev_ws"])
+
+def _test_register_workspace_repo_dev_dependency(name):
+    util.helper_target(native.filegroup, name = name + "_subject", srcs = [])
+    analysis_test(name = name, target = name + "_subject", impl = _test_register_workspace_repo_dev_dependency_impl)
+
 def lock_common_test_suite(name):
     test_suite(
         name = name,
         tests = [
             _test_member_project_files,
             _test_read_toml_cached,
+            _test_register_workspace_repo_dev_dependency,
         ],
     )
